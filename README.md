@@ -1,5 +1,51 @@
 # fakebubble
 
+[![check](https://github.com/DreamingPlace/fakebubble/actions/workflows/check.yml/badge.svg)](https://github.com/DreamingPlace/fakebubble/actions/workflows/check.yml)
+
+## English
+
+fakebubble is the web source for FAKE Bubble: browsing characters, text and voice conversations, a guest trial, invite-based upgrades, and administrator email sign-in with character profile management. It runs on Cloudflare Workers and Durable Objects (edge, business, budget and generation Workers), with an offline local server and fixture-based tests for development.
+
+<!-- screenshot: docs/screenshot.png -->
+
+**Status:** source preview. Real-device acceptance is incomplete, and publishing the source is not a release or a production deployment. See [docs/STATUS.md](docs/STATUS.md).
+
+### Quick start
+
+Requires Node 24.19+ (24.x) and pnpm 11.19.0.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm check
+pnpm web:player:build
+pnpm web:preview
+```
+
+Then open <http://127.0.0.1:18530/>. This is a static interactive preview: no real AI replies, generated voice or admin account.
+
+### Verify
+
+```sh
+pnpm check                    # format, types, and all unit/integration/E2E/load/component tests
+pnpm web:player:build         # build browser assets and the hash manifest
+pnpm check:web:local-http     # standalone local HTTPS instance
+pnpm check:web:restart        # persistence and restart recovery
+```
+
+Tests use synthetic fixtures and never call real providers or send email. OpenSSL is required.
+
+### Docs
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Deployment and configuration](docs/DEPLOYMENT.md)
+- [Status and known limitations](docs/STATUS.md)
+- [Security](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+
+---
+
+## 中文
+
 FAKE 泡泡的网页源码：人物浏览、文字与语音对话、游客体验、邀请升级，以及管理员邮箱登录和角色资料管理。
 
 > **源码预览 · 真机验收未完成。** 公开源码不等于正式发布或生产部署。
