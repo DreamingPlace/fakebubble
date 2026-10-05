@@ -16,9 +16,12 @@
     "web:preview": "node scripts/preview-web.ts",
     "web:cloudflare:package": "node scripts/web-cloudflare-package.ts",
     "check:web:local-http": "node scripts/test-web-local-http.ts",
-    "check:web:restart": "node scripts/test-web-data-lifecycle-restart.ts"
+    "check:web:restart": "node scripts/test-web-data-lifecycle-restart.ts",
+    "format": "biome format --write .",
+    "format:check": "biome format ."
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/node": "24.10.1",
     "miniflare": "4.20260730.0",
     "typescript": "5.9.3"
