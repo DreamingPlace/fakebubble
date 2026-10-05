@@ -26,12 +26,20 @@ export class WebProviderExecutor {
   private readonly activity: { hold(task: Promise<void>): void; settled(): Promise<void> } | undefined;
   lastError: string | null = null;
 
-  constructor(store: Store, clock: Clock, runner: WebProviderRunner,
-    activity?: { hold(task: Promise<void>): void; settled(): Promise<void> }) {
+  constructor(
+    store: Store,
+    clock: Clock,
+    runner: WebProviderRunner,
+    activity?: { hold(task: Promise<void>): void; settled(): Promise<void> },
+  ) {
     requireWebRuntime(store, 'provider');
-    ensure(store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113,
-      'WEB_PROVIDER_RUNTIME_NOT_AUTHORIZED');
-    this.store = store; this.clock = clock; this.runner = runner;
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113,
+      'WEB_PROVIDER_RUNTIME_NOT_AUTHORIZED',
+    );
+    this.store = store;
+    this.clock = clock;
+    this.runner = runner;
     this.activity = activity;
     this.queue = new WebStageQueue(store as WebStore, clock, randomUUID);
     this.ledger = new WebDispatchLedger(store as WebStore, clock);
@@ -41,27 +49,50 @@ export class WebProviderExecutor {
   private acquire(owner: string, configured = true) {
     ensure(!this.coordinator, 'WEB_COORDINATOR_BUSY');
     // A missing or expired bound is a closed gate, never an implicit free provider.
-    if (configured) for (const [provider, stage, phase] of [
-      ['deepseek','text','draft'], ['deepseek','text','review'], ['fish','audio','speech']
-    ] as const) {
-      ensure(this.store.get(`SELECT 1 FROM web_external_budgets WHERE provider=? AND stage=?
-        AND phase=? AND capacity>0`, provider, stage, phase) &&
-        this.store.get(`SELECT 1 FROM web_provider_spending WHERE provider=? AND limit_micros>0`, provider) &&
-        this.store.get(`SELECT 1 FROM web_provider_prices WHERE provider=? AND phase=?
-          AND valid_from<=? AND valid_until>?`, provider, phase, this.clock.now(), this.clock.now()),
-      'WEB_PROVIDER_NOT_CONFIGURED');
-    }
+    if (configured)
+      for (const [provider, stage, phase] of [
+        ['deepseek', 'text', 'draft'],
+        ['deepseek', 'text', 'review'],
+        ['fish', 'audio', 'speech'],
+      ] as const) {
+        ensure(
+          this.store.get(
+            `SELECT 1 FROM web_external_budgets WHERE provider=? AND stage=?
+        AND phase=? AND capacity>0`,
+            provider,
+            stage,
+            phase,
+          ) &&
+            this.store.get(`SELECT 1 FROM web_provider_spending WHERE provider=? AND limit_micros>0`, provider) &&
+            this.store.get(
+              `SELECT 1 FROM web_provider_prices WHERE provider=? AND phase=?
+          AND valid_from<=? AND valid_until>?`,
+              provider,
+              phase,
+              this.clock.now(),
+              this.clock.now(),
+            ),
+          'WEB_PROVIDER_NOT_CONFIGURED',
+        );
+      }
     this.coordinator = this.queue.acquireCoordinator(owner);
   }
 
   start() {
     ensure(!this.managed, 'WEB_COORDINATOR_BUSY');
     this.acquire(`provider-${process.pid}`);
-    try { this.pump(); }
-    catch (error) { this.stop(); throw error; }
+    try {
+      this.pump();
+    } catch (error) {
+      this.stop();
+      throw error;
+    }
     this.timer = setInterval(() => {
-      try { this.pump(); }
-      catch (error) { this.error(error); }
+      try {
+        this.pump();
+      } catch (error) {
+        this.error(error);
+      }
     }, 25);
     this.timer.unref();
   }
@@ -94,8 +125,11 @@ export class WebProviderExecutor {
     this.timer = null;
     for (const controller of this.controllers) controller.abort();
     if (this.coordinator) {
-      try { this.queue.releaseCoordinator(this.coordinator); }
-      catch { /* A newer coordinator owns the lease. */ }
+      try {
+        this.queue.releaseCoordinator(this.coordinator);
+      } catch {
+        /* A newer coordinator owns the lease. */
+      }
     }
     this.coordinator = null;
   }
@@ -118,8 +152,11 @@ export class WebProviderExecutor {
     ensure(this.activity && !this.timer, 'WEB_MANAGED_EXECUTOR_REQUIRED');
     const idle = !this.coordinator;
     if (idle) this.acquire('web-cloud-cancel', false);
-    try { return this.cancel(operationId, principalId); }
-    finally { if (idle) this.stop(); }
+    try {
+      return this.cancel(operationId, principalId);
+    } finally {
+      if (idle) this.stop();
+    }
   }
 
   private error(error: unknown) {
@@ -129,10 +166,14 @@ export class WebProviderExecutor {
   private schedule(claim: WebStageClaim) {
     const controller = new AbortController();
     this.controllers.add(controller);
-    const task = (claim.stage === 'text' ? this.runner.runText(claim, controller.signal) :
-      this.runner.runSpeech(claim, controller.signal)).then(() => {});
-    const timeout = this.managed ? setTimeout(() => controller.abort(),
-      Math.max(1, claim.leaseExpiresAt - this.clock.now())) : undefined;
+    const task = (
+      claim.stage === 'text'
+        ? this.runner.runText(claim, controller.signal)
+        : this.runner.runSpeech(claim, controller.signal)
+    ).then(() => {});
+    const timeout = this.managed
+      ? setTimeout(() => controller.abort(), Math.max(1, claim.leaseExpiresAt - this.clock.now()))
+      : undefined;
     this.track(task, () => {
       if (timeout) clearTimeout(timeout);
       this.controllers.delete(controller);
@@ -140,12 +181,18 @@ export class WebProviderExecutor {
   }
 
   private track(task: Promise<void>, cleanup: () => void) {
-    const tracked = task.catch(error => this.error(error)).finally(async () => {
-      this.tasks.delete(tracked); cleanup();
-      if (this.managed && this.tasks.size === 0) this.stop();
-      try { await this.activity?.settled(); }
-      catch (error) { this.error(error); } // The pre-persisted alarm remains the crash watchdog.
-    });
+    const tracked = task
+      .catch((error) => this.error(error))
+      .finally(async () => {
+        this.tasks.delete(tracked);
+        cleanup();
+        if (this.managed && this.tasks.size === 0) this.stop();
+        try {
+          await this.activity?.settled();
+        } catch (error) {
+          this.error(error);
+        } // The pre-persisted alarm remains the crash watchdog.
+      });
     this.tasks.add(tracked);
     this.activity?.hold(tracked);
   }
@@ -168,38 +215,60 @@ export class WebProviderExecutor {
     ensure(this.coordinator, 'WEB_COORDINATOR_STALE');
     this.renew();
     const lease = this.coordinator;
-    for (const row of this.store.all<{ id: string; status: string }>(`SELECT id,status FROM web_operations
+    for (const row of this.store.all<{ id: string; status: string }>(
+      `SELECT id,status FROM web_operations
       WHERE status IN ('text_running','audio_running','ready_to_publish')
-        AND (lease_epoch<>? OR lease_expires_at<=?) LIMIT 16`, lease.epoch, this.clock.now())) {
+        AND (lease_epoch<>? OR lease_expires_at<=?) LIMIT 16`,
+      lease.epoch,
+      this.clock.now(),
+    )) {
       try {
         if (row.status === 'ready_to_publish') this.publisher.recover(lease, row.id);
         else if (row.status === 'text_running') {
-          try { this.schedule(this.queue.resumeKnownText(lease, row.id, 'provider-text-resume')); }
-          catch { this.ledger.recover(lease, this.ledger.fence(row.id)); }
+          try {
+            this.schedule(this.queue.resumeKnownText(lease, row.id, 'provider-text-resume'));
+          } catch {
+            this.ledger.recover(lease, this.ledger.fence(row.id));
+          }
         } else this.ledger.recover(lease, this.ledger.fence(row.id));
-      } catch (error) { this.error(error); }
+      } catch (error) {
+        this.error(error);
+      }
     }
-    for (const row of this.store.all<{ id: string }>(`SELECT id FROM web_operations WHERE
+    for (const row of this.store.all<{ id: string }>(
+      `SELECT id FROM web_operations WHERE
       status NOT IN ('published','cancelled','failed') AND
       (deadline_at<=? OR status='queued' AND text_queued_at+?<=? OR
         status IN ('text_ready','audio_pending') AND audio_wait_started_at IS NOT NULL AND
         audio_wait_used_ms+?-audio_wait_started_at>=?) LIMIT 16`,
-    this.clock.now(), WEB_LIMITS.queueWaitMs, this.clock.now(), this.clock.now(),
-    WEB_LIMITS.queueWaitMs)) {
+      this.clock.now(),
+      WEB_LIMITS.queueWaitMs,
+      this.clock.now(),
+      this.clock.now(),
+      WEB_LIMITS.queueWaitMs,
+    )) {
       try {
         const fence = this.ledger.fence(row.id);
         this.ledger.terminate(lease, fence, fence.principalId, 'failed', 'expired');
-      } catch (error) { this.error(error); }
+      } catch (error) {
+        this.error(error);
+      }
     }
     const text = this.queue.claimText(lease, 'provider-text');
     if (text) this.schedule(text);
     const audio = this.queue.claimAudio(lease, 'provider-audio');
     if (audio) this.schedule(audio);
-    for (const row of this.store.all<{ id: string }>(`SELECT id FROM web_operations WHERE
+    for (const row of this.store.all<{ id: string }>(
+      `SELECT id FROM web_operations WHERE
       status='audio_pending' AND audio_wait_started_at IS NULL AND quota_state='reserved'
-      AND deadline_at>? LIMIT 16`, this.clock.now())) {
-      try { this.publish(lease, row.id); }
-      catch (error) { this.error(error); }
+      AND deadline_at>? LIMIT 16`,
+      this.clock.now(),
+    )) {
+      try {
+        this.publish(lease, row.id);
+      } catch (error) {
+        this.error(error);
+      }
     }
   }
 }

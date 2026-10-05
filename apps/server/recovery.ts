@@ -10,14 +10,27 @@ import { parseRecoveryPoint } from './recovery-protocol.ts';
 
 /** Immutable for a Store lifetime. Restoring a running instance in place is unsupported. */
 export function loadRecoveryPoint(runtime: string): RecoveryPoint | null {
-  try { lstatSync(join(runtime, RESTORE_INCOMPLETE)); ensure(false, 'RESTORE_INCOMPLETE'); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  try {
+    lstatSync(join(runtime, RESTORE_INCOMPLETE));
+    ensure(false, 'RESTORE_INCOMPLETE');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
   let fd: number;
-  try { fd = openSync(join(runtime, RECOVERY_FILE), constants.O_RDONLY | constants.O_NOFOLLOW); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error; }
+  try {
+    fd = openSync(join(runtime, RECOVERY_FILE), constants.O_RDONLY | constants.O_NOFOLLOW);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
   try {
     const stat = fstatSync(fd);
-    ensure(stat.isFile() && stat.nlink === 1 && (stat.mode & 0o077) === 0 && stat.size <= 4096, 'INVALID_RECOVERY_POINT');
+    ensure(
+      stat.isFile() && stat.nlink === 1 && (stat.mode & 0o077) === 0 && stat.size <= 4096,
+      'INVALID_RECOVERY_POINT',
+    );
     return parseRecoveryPoint(JSON.parse(readFileSync(fd, 'utf8')));
-  } finally { closeSync(fd); }
+  } finally {
+    closeSync(fd);
+  }
 }

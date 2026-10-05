@@ -13,8 +13,14 @@ const activePlayers = `SELECT w.owner_id playerId FROM text_attempts a
 export function canStartBetaText(store: Store, now: number, playerId?: string): boolean {
   if (!store.beta) return true;
   const active = store.all<{ playerId: string }>(activePlayers, now);
-  const previews = store.get<{ n: number }>("SELECT count(*) n FROM admin_previews WHERE status='generating' AND lease_until>?", now)!.n;
-  return active.length + previews < 2 && (playerId === undefined ? previews === 0 : !active.some(row => row.playerId === playerId));
+  const previews = store.get<{ n: number }>(
+    "SELECT count(*) n FROM admin_previews WHERE status='generating' AND lease_until>?",
+    now,
+  )!.n;
+  return (
+    active.length + previews < 2 &&
+    (playerId === undefined ? previews === 0 : !active.some((row) => row.playerId === playerId))
+  );
 }
 
 /** Internal SQL only: candidates expose queuedAt and a complete CharacterScope. */

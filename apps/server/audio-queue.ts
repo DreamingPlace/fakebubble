@@ -5,7 +5,9 @@ import { runningAudioCount } from './audio-validation.ts';
 export function betaAudioQueue(store: Store): string[] {
   const available = Math.max(0, 2 - runningAudioCount(store));
   if (!available) return [];
-  return store.all<{ media_id: string }>(`WITH served AS (
+  return store
+    .all<{ media_id: string }>(
+      `WITH served AS (
     SELECT w.owner_id playerId,max(t.dispatch_seq) lastTurn FROM speech_tasks t JOIN worlds w ON w.id=t.world_id GROUP BY w.owner_id
   ), candidates AS (
     SELECT t.media_id,t.created_at,t.rowid enqueueOrder,w.owner_id playerId,
@@ -19,5 +21,8 @@ export function betaAudioQueue(store: Store): string[] {
         WHERE earlier.world_id=t.world_id AND earlier.conversation_id=t.conversation_id AND earlier.character_id=t.character_id
           AND earlier.job_id=t.job_id AND earlier.ordinal<t.ordinal AND earlier.state IN ('queued','generating')))
   ) SELECT media_id FROM candidates LEFT JOIN served USING(playerId) WHERE queueRank=1
-    ORDER BY coalesce(lastTurn,0),created_at,enqueueOrder LIMIT ?`, available).map(row => row.media_id);
+    ORDER BY coalesce(lastTurn,0),created_at,enqueueOrder LIMIT ?`,
+      available,
+    )
+    .map((row) => row.media_id);
 }

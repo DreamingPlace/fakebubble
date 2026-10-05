@@ -6,7 +6,11 @@ import type { ProviderDeclaration, ProviderMeter } from './provider-calls.ts';
 export type { AutonomyPolicy } from './autonomy.ts';
 export const CONTRACT_VERSION = 1 as const;
 export type RelationshipPreset = 'new' | 'friend' | 'close_friend' | 'lover';
-export interface CharacterSelection { characterId: string; relationship: RelationshipPreset; association?: Association }
+export interface CharacterSelection {
+  characterId: string;
+  relationship: RelationshipPreset;
+  association?: Association;
+}
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export interface ScheduleSlot {
   startMinute: number;
@@ -34,9 +38,22 @@ export interface CharacterTemplate {
   authorCanon?: { kind: 'author_canon'; settings: Record<string, JsonValue> };
 }
 // Trusted application context, resolved from credentials by the future HTTP layer.
-export interface PlayerContext { playerId: string; worldId: string }
-export interface CharacterScope extends PlayerContext { conversationId: string; characterId: string }
-export interface MessageQuote { expired?: true; id: string; authorKind: 'player' | 'character'; authorId: string; text: string; delivery: 'text' | 'voice' }
+export interface PlayerContext {
+  playerId: string;
+  worldId: string;
+}
+export interface CharacterScope extends PlayerContext {
+  conversationId: string;
+  characterId: string;
+}
+export interface MessageQuote {
+  expired?: true;
+  id: string;
+  authorKind: 'player' | 'character';
+  authorId: string;
+  text: string;
+  delivery: 'text' | 'voice';
+}
 export interface MessageDTO {
   id: string;
   worldId: string;
@@ -66,9 +83,23 @@ export interface ReplyCandidate {
   mediaId?: string;
   endsSession?: boolean;
 }
-export const EXPRESSIONS = ['neutral', 'upbeat', 'soft', 'hesitant', 'serious', 'playful', 'mock_annoyed', 'excited', 'sad', 'surprised'] as const;
-export type Expression = typeof EXPRESSIONS[number];
-export interface DialogueBubble { text: string; expression: Expression }
+export const EXPRESSIONS = [
+  'neutral',
+  'upbeat',
+  'soft',
+  'hesitant',
+  'serious',
+  'playful',
+  'mock_annoyed',
+  'excited',
+  'sad',
+  'surprised',
+] as const;
+export type Expression = (typeof EXPRESSIONS)[number];
+export interface DialogueBubble {
+  text: string;
+  expression: Expression;
+}
 export interface TopicCandidate {
   key: string;
   // Set only after resolving an authorized existing memory in the reviewed request.
@@ -96,11 +127,21 @@ export interface TopicMemory {
   playerMentions: number;
   recallWeight: number;
   lastSeenAt: number;
-  episodes: { summary: string; sourceKind: TopicCandidate['sourceKind']; messageIds: string[]; at: number;
+  episodes: {
+    summary: string;
+    sourceKind: TopicCandidate['sourceKind'];
+    messageIds: string[];
+    at: number;
     sources?: ContextEvidence[];
-    excerpts: { id: string; authorKind: 'player' | 'character'; authorId?: string; text: string; at: number }[] }[];
+    excerpts: { id: string; authorKind: 'player' | 'character'; authorId?: string; text: string; at: number }[];
+  }[];
 }
-export interface ContextEvidence { id: string; kind: string; text: string; observedAt: number }
+export interface ContextEvidence {
+  id: string;
+  kind: string;
+  text: string;
+  observedAt: number;
+}
 export interface ShortTermTurn {
   id: string;
   at: number;
@@ -120,7 +161,10 @@ export interface TextGenerationRequest {
   deliveryMode?: 'text' | 'voice';
   requiredMessageIds: string[];
   character: CharacterTemplate;
-  conversation?: ({ kind: 'group' } | { kind: 'moment'; postMessageId: string } | { kind: 'moment_post' }) & { name: string; members: { id: string; name: string }[] };
+  conversation?: ({ kind: 'group' } | { kind: 'moment'; postMessageId: string } | { kind: 'moment_post' }) & {
+    name: string;
+    members: { id: string; name: string }[];
+  };
   messages: MessageDTO[];
   mustClose: boolean;
   // Untrusted source/memory records, never interpolated as developer instructions.
@@ -140,7 +184,13 @@ export interface TextGenerationResult {
   reportedModel?: string;
   requestId: string | null;
   elapsedMs: number;
-  usage: { inputTokens: number; outputTokens: number; totalTokens: number; cacheHitInputTokens?: number; cacheMissInputTokens?: number } | null;
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cacheHitInputTokens?: number;
+    cacheMissInputTokens?: number;
+  } | null;
   stages?: TextGenerationStage[];
 }
 export interface TextGenerationStage {
@@ -170,8 +220,20 @@ export interface BubblePresentationCheck {
   bubbleCount: number | null;
   charactersPerBubble: (number | null)[];
   totalCharacters: number | null;
-  issues: { code: 'not_array' | 'bubble_count' | 'bubble_shape' | 'text_type' | 'empty_text' |
-    'text_length' | 'line_break' | 'control_character' | 'expression' | 'total_length'; bubbleIndex?: number }[];
+  issues: {
+    code:
+      | 'not_array'
+      | 'bubble_count'
+      | 'bubble_shape'
+      | 'text_type'
+      | 'empty_text'
+      | 'text_length'
+      | 'line_break'
+      | 'control_character'
+      | 'expression'
+      | 'total_length';
+    bubbleIndex?: number;
+  }[];
 }
 export interface TextGenerator extends ProviderDeclaration {
   readonly policyHash?: string;
@@ -188,5 +250,9 @@ export interface AudioRequest {
 export type AudioResult =
   | { jobId: string; status: 'ready'; mediaId: string; mime: string; durationMs: number }
   | { jobId: string; status: 'failed'; code: string };
-export interface Clock { now(): number }
-export interface RandomSource { next(): number }
+export interface Clock {
+  now(): number;
+}
+export interface RandomSource {
+  next(): number;
+}

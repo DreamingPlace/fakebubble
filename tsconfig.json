@@ -14,5 +14,15 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["packages/**/*.ts", "apps/server/**/*.ts", "apps/player-web/src/services/**/*.ts", "apps/player-web/src/data/**/*.ts", "apps/player-web/src/session/**/*.ts", "apps/player-web/src/media/**/*.ts", "workers/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "packages/**/*.ts",
+    "apps/server/**/*.ts",
+    "apps/player-web/src/services/**/*.ts",
+    "apps/player-web/src/data/**/*.ts",
+    "apps/player-web/src/session/**/*.ts",
+    "apps/player-web/src/media/**/*.ts",
+    "workers/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts"
+  ]
 }

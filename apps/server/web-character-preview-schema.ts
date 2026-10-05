@@ -33,16 +33,23 @@ const statements = [
   `CREATE TRIGGER web_character_preview_known BEFORE UPDATE OF state,outcome,charged_micros,receipt_json,
     output_json,output_hash,metadata_json,settled_at ON web_character_preview_attempts WHEN OLD.state='known'
     BEGIN SELECT RAISE(ABORT,'WEB_PREVIEW_IMMUTABLE'); END`,
-  ...['web_character_preview_jobs','web_character_preview_attempts'].map(table =>
-    `CREATE TRIGGER ${table}_retain BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'WEB_PREVIEW_IMMUTABLE'); END`),
+  ...['web_character_preview_jobs', 'web_character_preview_attempts'].map(
+    (table) =>
+      `CREATE TRIGGER ${table}_retain BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'WEB_PREVIEW_IMMUTABLE'); END`,
+  ),
 ];
 export function installWebCharacterPreviews(store: BusinessStore) {
   const digest = createHash('sha256').update(statements.join(';\n')).digest('hex');
   store.transaction(() => {
     if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_preview_schema'")) {
-      ensure(!store.get("SELECT 1 FROM sqlite_master WHERE name GLOB 'web_character_preview_*'"), 'WEB_PREVIEW_SCHEMA_MISMATCH');
+      ensure(
+        !store.get("SELECT 1 FROM sqlite_master WHERE name GLOB 'web_character_preview_*'"),
+        'WEB_PREVIEW_SCHEMA_MISMATCH',
+      );
       for (const sql of statements) store.all(sql);
-      store.all('CREATE TABLE web_character_preview_schema(version INTEGER PRIMARY KEY CHECK(version=1),sha256 TEXT NOT NULL) STRICT');
+      store.all(
+        'CREATE TABLE web_character_preview_schema(version INTEGER PRIMARY KEY CHECK(version=1),sha256 TEXT NOT NULL) STRICT',
+      );
       store.run('INSERT INTO web_character_preview_schema VALUES (1,?)', digest);
     }
     const rows = store.all<{ version: number; sha256: string }>('SELECT * FROM web_character_preview_schema');

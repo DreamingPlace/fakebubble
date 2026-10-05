@@ -3,8 +3,12 @@ import { LocalSession } from './local-session.ts';
 
 /** Password remains only in the caller's memory; requestId is non-secret receipt evidence. */
 export class LocalIdentityController {
-  private readonly api: LocalApi; private readonly session: LocalSession;
-  constructor(api: LocalApi, session: LocalSession) { this.api = api; this.session = session; }
+  private readonly api: LocalApi;
+  private readonly session: LocalSession;
+  constructor(api: LocalApi, session: LocalSession) {
+    this.api = api;
+    this.session = session;
+  }
   async register(requestId: string, username: string, password: string) {
     const previous = this.session.scope;
     if (!previous) throw new Error('no session');
@@ -13,9 +17,11 @@ export class LocalIdentityController {
     if (!current()) throw new StaleLocalIdentityError();
     const next = await this.api.bootstrap(undefined, current);
     if (!current()) throw new StaleLocalIdentityError();
-    if (next.bootstrap.access.kind !== 'account' ||
-        next.bootstrap.access.principalId !== previous.principalId ||
-        next.bootstrap.access.worldId !== previous.worldId)
+    if (
+      next.bootstrap.access.kind !== 'account' ||
+      next.bootstrap.access.principalId !== previous.principalId ||
+      next.bootstrap.access.worldId !== previous.worldId
+    )
       throw new Error('identity scope mismatch');
     this.session.install(next);
     return next;
@@ -41,9 +47,13 @@ export class LocalIdentityController {
       next = await this.api.bootstrap(undefined, current);
     }
     if (!current()) throw new StaleLocalIdentityError();
-    if (next.bootstrap.access.kind !== 'account' ||
-        receipt.principalId !== previous.principalId || receipt.principalId !== next.bootstrap.access.principalId ||
-        next.bootstrap.access.worldId !== previous.worldId) throw new Error('identity recovery mismatch');
+    if (
+      next.bootstrap.access.kind !== 'account' ||
+      receipt.principalId !== previous.principalId ||
+      receipt.principalId !== next.bootstrap.access.principalId ||
+      next.bootstrap.access.worldId !== previous.worldId
+    )
+      throw new Error('identity recovery mismatch');
     this.session.install(next);
     return next;
   }

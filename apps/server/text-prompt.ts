@@ -60,8 +60,12 @@ proactiveTopic对象存在时，这是已经获准的主动联系，不再抽回
 responseConstraints.interactionKind为proactive_private_contact时，调度器已经允许你主动开聊；requiredMessageIds为空是正常的，不是没有任务，不输出空白气泡。围绕一个此刻的小日常或所选话题给可接续的短内容，不猜玩家正在干什么、不催促玩家来陪你。reply表示回应已提供的玩家输入，不能凭空补出不存在的前一句。
 expression是封闭的协议枚举：只选${EXPRESSIONS.join('/')}。neutral日常自然，upbeat活泼，soft温柔而非一律耳语，hesitant犹豫，serious认真真诚，playful玩笑，mock_annoyed嗔怪假怒而非暴怒，excited兴奋，sad低落，surprised惊讶。结合当前年龄、性格、关系和对话选语气，不总用neutral或soft，不为了变化强行轮换；情绪应由措辞和标签共同体现，不能改变声音身份。疑问句不必一律犹豫。不把括号语气说明写入text。格式上限统一按responseConstraints.bubbleLimits中当前mode执行；这是服务端为本轮文字或语音选定的上限，不是应达到的字数或条数。每条不含换行。`;
 
-export const TEXT_SYSTEM_PROMPT = TEXT_CONTENT_RULES + TIME_CONTEXT_TASK + `
-你只负责起草角色回复，通过submit_dialogue_draft严格按本轮工具schema提交表达内容与mode、endsSession。文字用bubbles，语音按末尾口头表达任务填写。只写角色对玩家说的话，不生成覆盖分类、记忆、审核意见或推理。这些由独立审核阶段处理；本次草稿尚未发布。` + CHAT_PRESENTATION_TASK;
+export const TEXT_SYSTEM_PROMPT =
+  TEXT_CONTENT_RULES +
+  TIME_CONTEXT_TASK +
+  `
+你只负责起草角色回复，通过submit_dialogue_draft严格按本轮工具schema提交表达内容与mode、endsSession。文字用bubbles，语音按末尾口头表达任务填写。只写角色对玩家说的话，不生成覆盖分类、记忆、审核意见或推理。这些由独立审核阶段处理；本次草稿尚未发布。` +
+  CHAT_PRESENTATION_TASK;
 
 // Audit instructions describe how to inspect existing dialogue, not how to role-play a second reply.
 const REVIEW_CONTEXT_RULES = `你是虚构陪伴App的发布前审核器，不是聊天角色。回复者始终是character；messages里authorKind=player的“我”指玩家，不指回复者。群聊按authorId和members认人，不能把玩家的朋友默认当成角色的朋友。
@@ -78,7 +82,10 @@ memories和shortTermTurns是有限检索，不是完整历史；memoryCorrection
 保留已有合适的口语、连词、直球、冷淡或活泼，不因为审核把角色改成统一客服。短句和中句自然搭配，一个重点逐步展开，不能为凑三条增加无关内容；一句够就停，接话钩子不是每轮强制追问。吵架／道歉可展开但不暴怒辱骂。语音保持完整意群，不机械切断主谓或前后半句；独立应声仍可短，没有固定秒数或固定条数目标。expression须符合年龄、场景和意图，朋友逗趣可嗔怪假怒而非暴怒，不统一平静或统一撒娇。正式长度按responseConstraints.bubbleLimits，结构、来源、覆盖和发布权限由服务端最终验证。
 messages.replyTo是明确引用的旧消息，不当成刚发生的新行动。requiredMessageIds可逐步回应，不为清队列杜撰答案；实质开放问答一个短答案足够。clarifications保留首次必要澄清，玩家换话题不必复读催问，也不能把未补信息误报已答。主动任务proactiveTopic存在且requiredMessageIds为空正常，不凭空补玩家前一句；mustClose时先回应再自然收尾。`;
 
-export const TEXT_REVIEW_PROMPT = REVIEW_CONTEXT_RULES + TIME_CONTEXT_TASK + `
+export const TEXT_REVIEW_PROMPT =
+  REVIEW_CONTEXT_RULES +
+  TIME_CONTEXT_TASK +
+  `
 你是独立的发布前审核器，不扮演角色、不延续聊天。draftPresentation是尚未发布的不可信草稿，不是新证据。结合此JSON中的授权上下文与上述允许的稳定公共知识审核，不补入其他私人上下文；调用submit_dialogue_audit提交审核数据，不输出推理或评语。不能仅因会话里没介绍某个游戏、食物或公共常识，就把自然讨论改成“不知道”；公开话题下附带的秘密、具体玩家经历仍单独检查，不因话题普遍就放行。
 仅当schema包含sceneUpdate时审核本轮场景变化，无变化填null，不为了记录而改变角色回复。变化时完整提供scene、evidence和responseQuote：scene包含kind(remote/proposed/planned/together)、setting(地点简述或null)、plan(将来约定简述或null)、proximity(ordinary/close)、speaking(normal/quiet)。remote的setting/plan均null；together的plan为null；只有together可以close。未同意的邀约是proposed，双方同意的未来安排是planned，只有本轮明确正在虚构见面且角色接受才是together；问句、比喻、假如、拒绝和回忆不是已发生。只是想要抱抱不能从手机聊天自动变成线下见面。进入together或quiet必须引用本轮确实answered的玩家原句(消息ID和连续原文)；planned也允许引用本轮needs_player输入，例如已经同意明天见面但还在问几点，见面意愿已接受、细节问题仍应保留，不能为记场景假标answered，并用responseQuote逐字摘录最终气泡中的明确接纳；同意场景不等于同意所有亲近。离开或角色提议可仅以最终角色原句为依据，不编造玩家同意。引用最多4条各240字，responseQuote最多160字、必须来自一个最终气泡。拒绝只保留remote或已有场景，不伪记接纳。角色单方面声称已经抱住、玩家没有当下许可时，修正气泡而不是只把sceneUpdate留空；保留本人表达，不制造统一拒绝口吻。失效场景要用本轮实际同意才能重新确认，不因时钟到了就自动发生；player_control之后不得拿更早的玩家消息恢复亲近。即便kind仍为remote，speaking从normal到quiet也是变化：玩家说“轻声说”，角色答“好，我轻点说”时应记录quiet及两方原文，不能只标气泡expression=soft而漏掉场景更新；后来明确恢复正常音量也要记录normal。普通亲密称呼不等于close。身体接触只在已经建立的虚构见面中体现，不能声称现实在场。
 仅当schema包含relationshipEvents时提出至多2个关系事件。有具体证据则记录，没有则[]，既不凑数也不一律留空；没有已答玩家输入时必须为空。不能因聊天变长、寒暄、泛泛加油、说喜欢、索要抱抱或模型自行讲故事加分。事件必须有早于本轮全部待答输入的messages原文anchor，以及本轮确实answered的玩家原文evidence；responseQuote逐字摘录最终气泡中对此事的接纳或澄清，不能用它单独证明玩家做了什么。最终气泡将在成功发布时成为角色这一轮的反应证据，不必已经在旧messages中出现。接纳不等于必须说“谢谢”或热烈感谢：顺着具体安慰放松、采纳建议、允许换话题并自然接续都可能成立，冷淡角色的简短认可也算；仍需原文，而非仅凭审核器猜心理。key沿用已有同件事的键，重述或换说法不变成新事件；同一先前锚点最多一件事。不能为取得事件而改写角色回复。
@@ -104,64 +111,165 @@ sourceUsage必须逐条填写evidence的完整id，每条值是实际用到此�
 2. 先确定最终气泡，再从中直接复制每个supportQuote和responseQuote的一处连续原文。不能凭记忆改写代词、补标点、拼接不同气泡或把审核器自己的话当作角色原话。改了replacementBubbles就同步核对全部引用与topics；格式通过不等于已经答完问题。`;
 
 function promptTimestamp(at: number, now: number, timeZone: string) {
-  const local = localTime(at, timeZone), current = localTime(now, timeZone);
+  const local = localTime(at, timeZone),
+    current = localTime(now, timeZone);
   const minutes = Math.floor((now - at) / 60_000);
   return {
     localTime: `${local.date} ${String(Math.floor(local.minute / 60)).padStart(2, '0')}:${String(local.minute % 60).padStart(2, '0')}`,
     calendarDaysAgo: (Date.parse(current.date + 'T00:00:00Z') - Date.parse(local.date + 'T00:00:00Z')) / 86_400_000,
-    elapsed: minutes < 0 ? '时间晚于当前时钟，间隔未知' : minutes < 1 ? '不足1分钟' : minutes < 60 ? `${minutes}分钟` : `${Math.floor(minutes / 60)}小时${minutes % 60}分钟`,
+    elapsed:
+      minutes < 0
+        ? '时间晚于当前时钟，间隔未知'
+        : minutes < 1
+          ? '不足1分钟'
+          : minutes < 60
+            ? `${minutes}分钟`
+            : `${Math.floor(minutes / 60)}小时${minutes % 60}分钟`,
   };
 }
 
-export const textPromptHash = () => createHash('sha256').update(JSON.stringify([
-  TEXT_SYSTEM_PROMPT, TEXT_REVIEW_PROMPT, MOMENT_POST_TASK, SPEECH_DRAFT_TASK, SPEECH_REVIEW_TASK, PLAYER_INPUT_KINDS, protocolFingerprint(),
-])).digest('hex');
+export const textPromptHash = () =>
+  createHash('sha256')
+    .update(
+      JSON.stringify([
+        TEXT_SYSTEM_PROMPT,
+        TEXT_REVIEW_PROMPT,
+        MOMENT_POST_TASK,
+        SPEECH_DRAFT_TASK,
+        SPEECH_REVIEW_TASK,
+        PLAYER_INPUT_KINDS,
+        protocolFingerprint(),
+      ]),
+    )
+    .digest('hex');
 
 export function promptMessages(request: TextGenerationRequest) {
-  ensure(request.character.id === request.scope.characterId && request.character.fictional === true, 'INVALID_TEXT_SCOPE');
-  ensure(Number.isSafeInteger(request.now) && request.now >= 0 && typeof request.mustClose === 'boolean', 'INVALID_TEXT_REQUEST');
-  ensure(request.priorServiceFailure === undefined || typeof request.priorServiceFailure === 'boolean', 'INVALID_TEXT_REQUEST');
+  ensure(
+    request.character.id === request.scope.characterId && request.character.fictional === true,
+    'INVALID_TEXT_SCOPE',
+  );
+  ensure(
+    Number.isSafeInteger(request.now) && request.now >= 0 && typeof request.mustClose === 'boolean',
+    'INVALID_TEXT_REQUEST',
+  );
+  ensure(
+    request.priorServiceFailure === undefined || typeof request.priorServiceFailure === 'boolean',
+    'INVALID_TEXT_REQUEST',
+  );
   ensure(['new', 'friend', 'close_friend', 'lover'].includes(request.relationship), 'INVALID_RELATIONSHIP');
-  ensure(Array.isArray(request.requiredMessageIds) && request.requiredMessageIds.length <= 32 &&
-    new Set(request.requiredMessageIds).size === request.requiredMessageIds.length &&
-    request.requiredMessageIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 128), 'INVALID_COVERAGE');
+  ensure(
+    Array.isArray(request.requiredMessageIds) &&
+      request.requiredMessageIds.length <= 32 &&
+      new Set(request.requiredMessageIds).size === request.requiredMessageIds.length &&
+      request.requiredMessageIds.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 128),
+    'INVALID_COVERAGE',
+  );
   ensure(Array.isArray(request.messages) && request.messages.length <= 64, 'INVALID_TEXT_REQUEST');
-  ensure(Array.isArray(request.evidence) && request.evidence.length <= 12 &&
-    new Set(request.evidence.map(item => item.id)).size === request.evidence.length && request.evidence.every(item =>
-      typeof item.id === 'string' && item.id.length > 0 && item.id.length <= 128 && typeof item.kind === 'string' &&
-      typeof item.text === 'string' && item.text.length <= 8000 && Number.isSafeInteger(item.observedAt) && item.observedAt >= 0), 'INVALID_SOURCE_EVIDENCE');
+  ensure(
+    Array.isArray(request.evidence) &&
+      request.evidence.length <= 12 &&
+      new Set(request.evidence.map((item) => item.id)).size === request.evidence.length &&
+      request.evidence.every(
+        (item) =>
+          typeof item.id === 'string' &&
+          item.id.length > 0 &&
+          item.id.length <= 128 &&
+          typeof item.kind === 'string' &&
+          typeof item.text === 'string' &&
+          item.text.length <= 8000 &&
+          Number.isSafeInteger(item.observedAt) &&
+          item.observedAt >= 0,
+      ),
+    'INVALID_SOURCE_EVIDENCE',
+  );
   const conversation = request.conversation;
   if (conversation) {
-    ensure(['group', 'moment', 'moment_post'].includes(conversation.kind) && typeof conversation.name === 'string' && conversation.name.length <= 80 &&
-      Array.isArray(conversation.members) && conversation.members.length >= (conversation.kind === 'group' ? 2 : 1) && conversation.members.length <= 32 &&
-      conversation.members.every(member => typeof member.id === 'string' && member.id.length > 0 && member.id.length <= 128 && typeof member.name === 'string' && member.name.length <= 100) &&
-      new Set(conversation.members.map(member => member.id)).size === conversation.members.length &&
-      conversation.members.some(member => member.id === request.character.id), 'INVALID_TEXT_SCOPE');
-    if (conversation.kind === 'moment') ensure(typeof conversation.postMessageId === 'string' &&
-      request.messages.some(message => message.id === conversation.postMessageId), 'INVALID_TEXT_SCOPE');
-    if (conversation.kind === 'moment_post') ensure(request.requiredMessageIds.length === 0 && request.messages.length === 0 &&
-      !request.playerIntroduction && !request.relationshipContext && !request.sceneContext && !request.proactiveTopic &&
-      request.deliveryMode === 'text' && !request.mustClose, 'INVALID_TEXT_SCOPE');
+    ensure(
+      ['group', 'moment', 'moment_post'].includes(conversation.kind) &&
+        typeof conversation.name === 'string' &&
+        conversation.name.length <= 80 &&
+        Array.isArray(conversation.members) &&
+        conversation.members.length >= (conversation.kind === 'group' ? 2 : 1) &&
+        conversation.members.length <= 32 &&
+        conversation.members.every(
+          (member) =>
+            typeof member.id === 'string' &&
+            member.id.length > 0 &&
+            member.id.length <= 128 &&
+            typeof member.name === 'string' &&
+            member.name.length <= 100,
+        ) &&
+        new Set(conversation.members.map((member) => member.id)).size === conversation.members.length &&
+        conversation.members.some((member) => member.id === request.character.id),
+      'INVALID_TEXT_SCOPE',
+    );
+    if (conversation.kind === 'moment')
+      ensure(
+        typeof conversation.postMessageId === 'string' &&
+          request.messages.some((message) => message.id === conversation.postMessageId),
+        'INVALID_TEXT_SCOPE',
+      );
+    if (conversation.kind === 'moment_post')
+      ensure(
+        request.requiredMessageIds.length === 0 &&
+          request.messages.length === 0 &&
+          !request.playerIntroduction &&
+          !request.relationshipContext &&
+          !request.sceneContext &&
+          !request.proactiveTopic &&
+          request.deliveryMode === 'text' &&
+          !request.mustClose,
+        'INVALID_TEXT_SCOPE',
+      );
   }
-  const authors = new Set(conversation?.members.map(member => member.id) ?? [request.character.id]);
+  const authors = new Set(conversation?.members.map((member) => member.id) ?? [request.character.id]);
   for (const message of request.messages) {
-    ensure(message.worldId === request.scope.worldId && message.conversationId === request.scope.conversationId, 'INVALID_TEXT_SCOPE');
-    ensure((message.authorKind === 'player' || (message.authorKind === 'character' && authors.has(message.authorId))) &&
-      typeof message.text === 'string' && message.text.length <= 8000, 'INVALID_TEXT_SCOPE');
+    ensure(
+      message.worldId === request.scope.worldId && message.conversationId === request.scope.conversationId,
+      'INVALID_TEXT_SCOPE',
+    );
+    ensure(
+      (message.authorKind === 'player' || (message.authorKind === 'character' && authors.has(message.authorId))) &&
+        typeof message.text === 'string' &&
+        message.text.length <= 8000,
+      'INVALID_TEXT_SCOPE',
+    );
   }
-  const ids = new Set(request.messages.map(message => message.id));
-  const playerIds = new Set(request.messages.filter(message => message.authorKind === 'player').map(message => message.id));
-  ensure(ids.size === request.messages.length && request.requiredMessageIds.every(id => playerIds.has(id)), 'INVALID_COVERAGE');
+  const ids = new Set(request.messages.map((message) => message.id));
+  const playerIds = new Set(
+    request.messages.filter((message) => message.authorKind === 'player').map((message) => message.id),
+  );
+  ensure(
+    ids.size === request.messages.length && request.requiredMessageIds.every((id) => playerIds.has(id)),
+    'INVALID_COVERAGE',
+  );
   const clarifications = request.clarifications ?? [];
-  ensure(Array.isArray(clarifications) && clarifications.length <= 32 &&
-    new Set(clarifications.map(item => item.messageId)).size === clarifications.length &&
-    clarifications.every(item => request.requiredMessageIds.includes(item.messageId) && Array.isArray(item.messages) &&
-      item.messages.length >= 1 && item.messages.length <= 6 && item.messages.every(message =>
-        typeof message.id === 'string' && message.id.length > 0 && message.id.length <= 128 &&
-        typeof message.text === 'string' && [...message.text].length <= 160)), 'INVALID_CLARIFICATION_CONTEXT');
+  ensure(
+    Array.isArray(clarifications) &&
+      clarifications.length <= 32 &&
+      new Set(clarifications.map((item) => item.messageId)).size === clarifications.length &&
+      clarifications.every(
+        (item) =>
+          request.requiredMessageIds.includes(item.messageId) &&
+          Array.isArray(item.messages) &&
+          item.messages.length >= 1 &&
+          item.messages.length <= 6 &&
+          item.messages.every(
+            (message) =>
+              typeof message.id === 'string' &&
+              message.id.length > 0 &&
+              message.id.length <= 128 &&
+              typeof message.text === 'string' &&
+              [...message.text].length <= 160,
+          ),
+      ),
+    'INVALID_CLARIFICATION_CONTEXT',
+  );
   const local = localTime(request.now, request.character.schedule.timeZone);
   const describeTime = (at: number) => promptTimestamp(at, request.now, request.character.schedule.timeZone);
-  const coveredTimes = request.messages.filter(message => request.requiredMessageIds.includes(message.id)).map(message => message.createdAt);
+  const coveredTimes = request.messages
+    .filter((message) => request.requiredMessageIds.includes(message.id))
+    .map((message) => message.createdAt);
   let age: number | null = null;
   if (request.character.birthDate !== undefined) {
     ensure(validBirthDate(request.character.birthDate), 'INVALID_BIRTH_DATE');
@@ -170,32 +278,86 @@ export function promptMessages(request: TextGenerationRequest) {
     ensure(age >= 0 && age <= 150, 'INVALID_BIRTH_DATE');
   }
   const content = JSON.stringify({
-    responseConstraints: { playerInputKinds: PLAYER_INPUT_KINDS, expressionEnum: EXPRESSIONS, deliveryMode: request.deliveryMode ?? 'text', interactionKind: conversation?.kind === 'moment_post' ? 'moment_post' : request.proactiveTopic ? 'proactive_private_contact' : 'reply',
+    responseConstraints: {
+      playerInputKinds: PLAYER_INPUT_KINDS,
+      expressionEnum: EXPRESSIONS,
+      deliveryMode: request.deliveryMode ?? 'text',
+      interactionKind:
+        conversation?.kind === 'moment_post'
+          ? 'moment_post'
+          : request.proactiveTopic
+            ? 'proactive_private_contact'
+            : 'reply',
       bubbleLimits: bubbleLimits(request.deliveryMode),
-      contextCoverage: { messages: 'bounded_excerpt', groupEvidence: 'observed_excerpt_only' } },
-    currentTime: new Date(request.now).toISOString(), characterTimeZone: request.character.schedule.timeZone,
+      contextCoverage: { messages: 'bounded_excerpt', groupEvidence: 'observed_excerpt_only' },
+    },
+    currentTime: new Date(request.now).toISOString(),
+    characterTimeZone: request.character.schedule.timeZone,
     currentLocalTime: `${local.date} ${String(Math.floor(local.minute / 60)).padStart(2, '0')}:${String(local.minute % 60).padStart(2, '0')}`,
     localWeekday: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][local.day],
-    responseTiming: { oldestCoveredInput: coveredTimes.length ? describeTime(Math.min(...coveredTimes)) : null,
-      newestCoveredInput: coveredTimes.length ? describeTime(Math.max(...coveredTimes)) : null, priorServiceFailure: request.priorServiceFailure ?? null },
-    sceneContext: request.sceneContext ?? null, relationship: conversation ? null : request.relationship, relationshipContext: request.relationshipContext ?? null, playerIntroduction: request.playerIntroduction ?? null, age, character: { id: request.character.id, name: request.character.name,
-      persona: request.character.persona, authorCanon: request.character.authorCanon ?? null },
+    responseTiming: {
+      oldestCoveredInput: coveredTimes.length ? describeTime(Math.min(...coveredTimes)) : null,
+      newestCoveredInput: coveredTimes.length ? describeTime(Math.max(...coveredTimes)) : null,
+      priorServiceFailure: request.priorServiceFailure ?? null,
+    },
+    sceneContext: request.sceneContext ?? null,
+    relationship: conversation ? null : request.relationship,
+    relationshipContext: request.relationshipContext ?? null,
+    playerIntroduction: request.playerIntroduction ?? null,
+    age,
+    character: {
+      id: request.character.id,
+      name: request.character.name,
+      persona: request.character.persona,
+      authorCanon: request.character.authorCanon ?? null,
+    },
     conversation: conversation ?? null,
-    requiredMessageIds: request.requiredMessageIds, mustClose: request.mustClose,
-    messages: request.messages.map(({ id, authorKind, authorId, text, createdAt, mentionedCharacterIds, replyTo }) =>
-      ({ id, authorKind, text, ...(authorKind === 'player' && (!conversation || conversation.kind === 'group') ? dialogueParts(text) : {}), createdAt, sentTime: describeTime(createdAt), ...(replyTo ? { replyTo } : {}), ...(conversation ? { authorId, mentionedCharacterIds: mentionedCharacterIds ?? [] } : {}) })),
-    evidence: request.evidence.map(item => ({ ...item, observedTime: describeTime(item.observedAt) })),
+    requiredMessageIds: request.requiredMessageIds,
+    mustClose: request.mustClose,
+    messages: request.messages.map(({ id, authorKind, authorId, text, createdAt, mentionedCharacterIds, replyTo }) => ({
+      id,
+      authorKind,
+      text,
+      ...(authorKind === 'player' && (!conversation || conversation.kind === 'group') ? dialogueParts(text) : {}),
+      createdAt,
+      sentTime: describeTime(createdAt),
+      ...(replyTo ? { replyTo } : {}),
+      ...(conversation ? { authorId, mentionedCharacterIds: mentionedCharacterIds ?? [] } : {}),
+    })),
+    evidence: request.evidence.map((item) => ({ ...item, observedTime: describeTime(item.observedAt) })),
     memoryReferences: memoryReferences(request),
-    memories: (request.memories ?? []).map(memory => ({ ...memory, lastMentionTime: describeTime(memory.lastSeenAt), episodes: memory.episodes.map(({ sources, ...episode }) =>
-      ({ ...episode, recordedTime: describeTime(episode.at), excerpts: episode.excerpts.map(excerpt => ({ ...excerpt, sentTime: describeTime(excerpt.at) })),
-        ...(sources?.length ? { sourceEvidenceIds: sources.map(source => source.id) } : {}) })) })),
-    memoryCorrections: (request.memoryCorrections ?? []).map(item => ({ ...item, recordedTime: describeTime(item.recordedAt) })),
-    shortTermTurns: (request.shortTermTurns ?? []).map(turn => ({ ...turn, publishedTime: describeTime(turn.at) })),
+    memories: (request.memories ?? []).map((memory) => ({
+      ...memory,
+      lastMentionTime: describeTime(memory.lastSeenAt),
+      episodes: memory.episodes.map(({ sources, ...episode }) => ({
+        ...episode,
+        recordedTime: describeTime(episode.at),
+        excerpts: episode.excerpts.map((excerpt) => ({ ...excerpt, sentTime: describeTime(excerpt.at) })),
+        ...(sources?.length ? { sourceEvidenceIds: sources.map((source) => source.id) } : {}),
+      })),
+    })),
+    memoryCorrections: (request.memoryCorrections ?? []).map((item) => ({
+      ...item,
+      recordedTime: describeTime(item.recordedAt),
+    })),
+    shortTermTurns: (request.shortTermTurns ?? []).map((turn) => ({ ...turn, publishedTime: describeTime(turn.at) })),
     clarifications,
     proactiveTopic: request.proactiveTopic ?? null,
   });
   ensure(content.length <= 200_000, 'TEXT_CONTEXT_TOO_LARGE');
-  return [{ role: 'system' as const, content: TEXT_SYSTEM_PROMPT + (conversation?.kind === 'moment_post' ? MOMENT_POST_TASK : request.deliveryMode === 'voice' ? SPEECH_DRAFT_TASK : '') }, { role: 'user' as const, content }];
+  return [
+    {
+      role: 'system' as const,
+      content:
+        TEXT_SYSTEM_PROMPT +
+        (conversation?.kind === 'moment_post'
+          ? MOMENT_POST_TASK
+          : request.deliveryMode === 'voice'
+            ? SPEECH_DRAFT_TASK
+            : ''),
+    },
+    { role: 'user' as const, content },
+  ];
 }
 
 const SPEECH_DRAFT_TASK = `
@@ -203,14 +365,23 @@ const SPEECH_DRAFT_TASK = `
 utterance先自然说完当前这一层意思，可含几句短话、逗号和停顿。一声“嗯”也是独立应声，不必补全书面主谓句。说完就停；不把前半句放utterance再到afterthoughts接后半句。afterthoughts只用于说完以后另想到的独立补充或真实的情绪转折，没有就用[]；不能为了有这个字段而填写它。人物资料里的“短句、多回复”在此指自然口语节奏，不要求每个短句单独录音，也不取消本人连词、中文能力或冷淡风格。不要列素材清单、串多件事、加无关问句来凑长语音；也不要为一个固定的长短／条数分布写话。`;
 const SPEECH_REVIEW_TASK = `
 本次审核的是口头表达：draftPresentation.bubbles[0]来自utterance，其余来自afterthoughts。检查是否把一口气自然会说完的同一个意思拆成多条：若后一条只是前一句的延续、解释尾巴、主谓下半句，应在最终replacementBubbles中合并，保留原有停顿及主导语气，不朗读字段名。独立的应声、说完后新补的一句或明显情绪转折可以分开；不是无条件合并成一条。口语可以省略成分，不以“完整句”之名写成作文。未改动的正确短应声仍用[]保留。`;
-const MOMENT_POST_TASK = '\n本次唯一任务：写一条朋友圈正文，不是聊天。即使角色聊天习惯是多气泡，这里仍只能提交一个完整气泡（最多60字），mode=casual，endsSession=false。审核也必须检查数量：草稿若有多个气泡，将同一件事自然合并为一个气泡放入replacementBubbles，不可原样accept空替换。不得把不同事情硬合并来凑字数。';
+const MOMENT_POST_TASK =
+  '\n本次唯一任务：写一条朋友圈正文，不是聊天。即使角色聊天习惯是多气泡，这里仍只能提交一个完整气泡（最多60字），mode=casual，endsSession=false。审核也必须检查数量：草稿若有多个气泡，将同一件事自然合并为一个气泡放入replacementBubbles，不可原样accept空替换。不得把不同事情硬合并来凑字数。';
 
 export function reviewPromptMessages(request: TextGenerationRequest, draft: TextDraft) {
   const messages = promptMessages(request);
-  messages[0]!.content = TEXT_REVIEW_PROMPT + (request.conversation?.kind === 'moment_post' ? MOMENT_POST_TASK : request.deliveryMode === 'voice' ? SPEECH_REVIEW_TASK : '');
-  messages[1]!.content = JSON.stringify({ ...JSON.parse(messages[1]!.content),
+  messages[0]!.content =
+    TEXT_REVIEW_PROMPT +
+    (request.conversation?.kind === 'moment_post'
+      ? MOMENT_POST_TASK
+      : request.deliveryMode === 'voice'
+        ? SPEECH_REVIEW_TASK
+        : '');
+  messages[1]!.content = JSON.stringify({
+    ...JSON.parse(messages[1]!.content),
     draftPresentationCheck: inspectBubbles(draft.bubbles, bubbleLimits(request.deliveryMode)[draft.mode]),
-    draftPresentation: { mode: draft.mode, bubbles: draft.bubbles, endsSession: draft.endsSession } });
+    draftPresentation: { mode: draft.mode, bubbles: draft.bubbles, endsSession: draft.endsSession },
+  });
   ensure(messages[1]!.content.length <= 210_000, 'TEXT_CONTEXT_TOO_LARGE');
   return messages;
 }

@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { chmodSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -9,9 +20,12 @@ import { Worker } from 'node:worker_threads';
 import { Store, WebStore } from '../../../apps/server/store.ts';
 
 const digest = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
-const files = (root: string) => readdirSync(root).sort().map(name => [name, digest(join(root, name))]);
+const files = (root: string) =>
+  readdirSync(root)
+    .sort()
+    .map((name) => [name, digest(join(root, name))]);
 
-test('web store initializes only an explicit new root and reopens the same instance', t => {
+test('web store initializes only an explicit new root and reopens the same instance', (t) => {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-store-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
   const root = join(parent, 'instance');
@@ -32,10 +46,11 @@ test('web store initializes only an explicit new root and reopens the same insta
   assert.throws(() => new WebStore(root, { create: true, instanceId }), /WEB_INSTANCE_ALREADY_EXISTS/);
 });
 
-test('schema101 and 102 are explicit, survive reopen and roll back interrupted migration', t => {
+test('schema101 and 102 are explicit, survive reopen and roll back interrupted migration', (t) => {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-stage-migration-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
-  const root = join(parent, 'instance'), id = randomUUID();
+  const root = join(parent, 'instance'),
+    id = randomUUID();
   const store = new WebStore(root, { create: true, instanceId: id });
   assert.equal(store.get<{ user_version: number }>('PRAGMA user_version')?.user_version, 100);
   store.migrateStages();
@@ -53,25 +68,33 @@ test('schema101 and 102 are explicit, survive reopen and roll back interrupted m
   reopenedAgain.close();
   assert.throws(() => new Store(join(root, 'web.sqlite')), /WEB_SEPARATE_INSTANCE_REQUIRED/);
 
-  const brokenRoot = join(parent, 'broken'), brokenId = randomUUID();
+  const brokenRoot = join(parent, 'broken'),
+    brokenId = randomUUID();
   const broken = new WebStore(brokenRoot, { create: true, instanceId: brokenId });
   broken.db.exec('CREATE TABLE web_scheduler_state(x INTEGER)');
   assert.throws(() => broken.migrateStages());
   assert.equal(broken.get<{ user_version: number }>('PRAGMA user_version')?.user_version, 100);
-  assert.equal(broken.get<{ name: string }>("SELECT name FROM pragma_table_info('web_operations') WHERE name='stage_version'"), undefined);
+  assert.equal(
+    broken.get<{ name: string }>("SELECT name FROM pragma_table_info('web_operations') WHERE name='stage_version'"),
+    undefined,
+  );
   broken.close();
 
-  const orderRoot = join(parent, 'broken-order'), orderId = randomUUID();
+  const orderRoot = join(parent, 'broken-order'),
+    orderId = randomUUID();
   const order = new WebStore(orderRoot, { create: true, instanceId: orderId });
   order.migrateStages();
   order.db.exec('CREATE TABLE web_admission_counter(x INTEGER)');
   assert.throws(() => order.migrateAdmissionOrder());
   assert.equal(order.get<{ user_version: number }>('PRAGMA user_version')?.user_version, 101);
-  assert.equal(order.get<{ name: string }>("SELECT name FROM pragma_table_info('web_operations') WHERE name='admission_seq'"), undefined);
+  assert.equal(
+    order.get<{ name: string }>("SELECT name FROM pragma_table_info('web_operations') WHERE name='admission_seq'"),
+    undefined,
+  );
   order.close();
 });
 
-test('two creators that both saw a missing root cannot claim different instance IDs', async t => {
+test('two creators that both saw a missing root cannot claim different instance IDs', async (t) => {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-store-create-race-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
   const root = join(parent, 'instance');
@@ -102,26 +125,42 @@ test('two creators that both saw a missing root cannot claim different instance 
       } catch (error) { parentPort.postMessage({ ok: false, code: error.code, message: error.message }); }
     })().catch(error => parentPort.postMessage({ ok: false, message: error.message }));
   `;
-  const workers = ids.map(id => new Worker(script, { eval: true, workerData: {
-    root, id, barrier: barrier.buffer, moduleUrl: new URL('../../../apps/server/store.ts', import.meta.url).href,
-  } }));
-  t.after(async () => { await Promise.all(workers.map(worker => worker.terminate())); });
-  const results = workers.map(worker => new Promise<{ ok: boolean; requested?: string; actual?: string; code?: string; message?: string }>((resolve, reject) => {
-    worker.once('message', resolve);
-    worker.once('error', reject);
-  }));
+  const workers = ids.map(
+    (id) =>
+      new Worker(script, {
+        eval: true,
+        workerData: {
+          root,
+          id,
+          barrier: barrier.buffer,
+          moduleUrl: new URL('../../../apps/server/store.ts', import.meta.url).href,
+        },
+      }),
+  );
+  t.after(async () => {
+    await Promise.all(workers.map((worker) => worker.terminate()));
+  });
+  const results = workers.map(
+    (worker) =>
+      new Promise<{ ok: boolean; requested?: string; actual?: string; code?: string; message?: string }>(
+        (resolve, reject) => {
+          worker.once('message', resolve);
+          worker.once('error', reject);
+        },
+      ),
+  );
   const until = Date.now() + 10000;
-  while (Atomics.load(barrier, 0) < 2 && Date.now() < until) await new Promise(resolve => setTimeout(resolve, 10));
+  while (Atomics.load(barrier, 0) < 2 && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(Atomics.load(barrier, 0), 2, 'both creators reached the missing-root check');
   Atomics.store(barrier, 1, 1);
   Atomics.notify(barrier, 1, 2);
   const settled = await Promise.all(results);
-  assert.deepEqual(settled.map(result => result.ok).sort(), [false, true]);
-  assert.equal(settled.find(result => result.ok)?.actual, settled.find(result => result.ok)?.requested);
-  assert.equal(settled.find(result => !result.ok)?.code, 'WEB_INSTANCE_ALREADY_EXISTS');
+  assert.deepEqual(settled.map((result) => result.ok).sort(), [false, true]);
+  assert.equal(settled.find((result) => result.ok)?.actual, settled.find((result) => result.ok)?.requested);
+  assert.equal(settled.find((result) => !result.ok)?.code, 'WEB_INSTANCE_ALREADY_EXISTS');
 });
 
-test('web store rejects original, beta, wrong identity and symlink aliases before writing', t => {
+test('web store rejects original, beta, wrong identity and symlink aliases before writing', (t) => {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-store-isolation-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
   const id = randomUUID();
@@ -130,7 +169,8 @@ test('web store rejects original, beta, wrong identity and symlink aliases befor
     const legacy = new Store(join(root, 'state.sqlite'), { beta: mode === 'beta' });
     legacy.close();
     renameSync(join(root, 'state.sqlite'), join(root, 'web.sqlite'));
-    const path = join(root, 'web.sqlite'), before = digest(path);
+    const path = join(root, 'web.sqlite'),
+      before = digest(path);
     assert.throws(() => new WebStore(root, { create: false, instanceId: id }), /WEB_MARKER_MISSING/);
     assert.equal(digest(path), before);
     assert.throws(() => new WebStore(root, { create: true, instanceId: id }), /WEB_INSTANCE_ALREADY_EXISTS/);
@@ -139,7 +179,8 @@ test('web store rejects original, beta, wrong identity and symlink aliases befor
 
   const root = join(parent, 'web');
   new WebStore(root, { create: true, instanceId: id }).close();
-  const path = join(root, 'web.sqlite'), before = digest(path);
+  const path = join(root, 'web.sqlite'),
+    before = digest(path);
   const beforeFiles = files(root);
   assert.throws(() => new WebStore(root, { create: false, instanceId: randomUUID() }), /WEB_INSTANCE_MISMATCH/);
   assert.deepEqual(files(root), beforeFiles);
@@ -168,13 +209,15 @@ test('web store rejects original, beta, wrong identity and symlink aliases befor
   assert.equal(digest(unknownPath), unknownBefore);
 });
 
-test('web marker rejects incomplete and malformed roots before SQLite opens', t => {
+test('web marker rejects incomplete and malformed roots before SQLite opens', (t) => {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-marker-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
-  const root = join(parent, 'instance'), id = randomUUID();
+  const root = join(parent, 'instance'),
+    id = randomUUID();
   new WebStore(root, { create: true, instanceId: id }).close();
   const path = join(root, '.web-instance.json');
-  const ready = readFileSync(path, 'utf8'), before = digest(join(root, 'web.sqlite'));
+  const ready = readFileSync(path, 'utf8'),
+    before = digest(join(root, 'web.sqlite'));
   unlinkSync(path);
   assert.throws(() => new WebStore(root, { create: false, instanceId: id }), /WEB_MARKER_MISSING/);
   assert.throws(() => new Store(join(root, 'web.sqlite')), /WEB_MARKER_MISSING/);
@@ -191,10 +234,11 @@ test('web marker rejects incomplete and malformed roots before SQLite opens', t 
   assert.deepEqual(readdirSync(root).sort(), ['.web-instance.json', 'web.sqlite']);
 });
 
-test('wrong caller identity and mode do not touch active WAL or sidecars', t => {
+test('wrong caller identity and mode do not touch active WAL or sidecars', (t) => {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-marker-active-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
-  const root = join(parent, 'instance'), id = randomUUID();
+  const root = join(parent, 'instance'),
+    id = randomUUID();
   const active = new WebStore(root, { create: true, instanceId: id });
   t.after(() => active.close());
   const before = files(root);
@@ -203,10 +247,11 @@ test('wrong caller identity and mode do not touch active WAL or sidecars', t => 
   assert.deepEqual(files(root), before);
 });
 
-test('marker is only a preflight: matching marker cannot authorize a mismatched database', t => {
+test('marker is only a preflight: matching marker cannot authorize a mismatched database', (t) => {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-marker-db-mismatch-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
-  const root = join(parent, 'instance'), id = randomUUID();
+  const root = join(parent, 'instance'),
+    id = randomUUID();
   new WebStore(root, { create: true, instanceId: id }).close();
   const db = new DatabaseSync(join(root, 'web.sqlite'));
   db.prepare('UPDATE web_instance SET instance_id=?').run(randomUUID());
@@ -216,7 +261,7 @@ test('marker is only a preflight: matching marker cannot authorize a mismatched 
   assert.equal(digest(join(root, 'web.sqlite')), before);
 });
 
-test('marker I/O failures preserve a non-adopted root until the durable ready switch', async t => {
+test('marker I/O failures preserve a non-adopted root until the durable ready switch', async (t) => {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-marker-fault-'));
   t.after(() => rmSync(parent, { recursive: true, force: true }));
   const script = `
@@ -238,12 +283,20 @@ test('marker I/O failures preserve a non-adopted root until the durable ready sw
     })().catch(error => parentPort.postMessage({ ok: false, count, message: error.message }));
   `;
   for (const failAt of [1, 2, 5, 7, 8]) {
-    const root = join(parent, `instance-${failAt}`), id = randomUUID();
-    const worker = new Worker(script, { eval: true, workerData: {
-      root, id, failAt, moduleUrl: new URL('../../../apps/server/store.ts', import.meta.url).href,
-    } });
+    const root = join(parent, `instance-${failAt}`),
+      id = randomUUID();
+    const worker = new Worker(script, {
+      eval: true,
+      workerData: {
+        root,
+        id,
+        failAt,
+        moduleUrl: new URL('../../../apps/server/store.ts', import.meta.url).href,
+      },
+    });
     const result = await new Promise<{ ok: boolean; count: number; message?: string }>((resolve, reject) => {
-      worker.once('message', resolve); worker.once('error', reject);
+      worker.once('message', resolve);
+      worker.once('error', reject);
     });
     await worker.terminate();
     assert.equal(result.ok, false);

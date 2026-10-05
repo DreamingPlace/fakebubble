@@ -1,6 +1,11 @@
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../store-contract.ts';
-import { budgetAttempt, type BudgetAttemptKey, type Provider, type WebAttemptBudget } from '../web-provider-budget-contract.ts';
+import {
+  budgetAttempt,
+  type BudgetAttemptKey,
+  type Provider,
+  type WebAttemptBudget,
+} from '../web-provider-budget-contract.ts';
 import type { CloudBudgetEntry, WebCloudBudget } from './web-budget.ts';
 
 export interface WebBudgetRPC {
@@ -14,7 +19,9 @@ export interface WebBudgetStatusRPC extends WebBudgetRPC {
 /** Private service binding only. No caller-supplied authority/URL or default USD3 namespace. */
 export class WebCloudBudgetClient implements WebAttemptBudget {
   private readonly rpc: WebBudgetRPC;
-  constructor(rpc: WebBudgetRPC) { this.rpc = rpc; }
+  constructor(rpc: WebBudgetRPC) {
+    this.rpc = rpc;
+  }
   async beginAttempt(store: BusinessStore, key: BudgetAttemptKey) {
     const { row, id, fingerprint } = budgetAttempt(store, key);
     ensure(row.state === 'not_sent', 'WEB_SHARED_ATTEMPT_UNRESOLVED');

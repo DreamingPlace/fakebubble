@@ -7,6 +7,7 @@ export const WEB_EDGE_PEER_HEADER = 'x-internal-web-peer';
 export function trustedWebRequest(request: Request) {
   const peer = request.headers.get(WEB_EDGE_PEER_HEADER);
   ensure(peer && peer.length <= 128 && /^[0-9a-fA-F:.]+$/.test(peer), 'WEB_EDGE_PEER_REQUIRED');
-  const headers = new Headers(request.headers); headers.delete(WEB_EDGE_PEER_HEADER);
+  const headers = new Headers(request.headers);
+  headers.delete(WEB_EDGE_PEER_HEADER);
   return { request: new Request(request, { headers }), peer };
 }

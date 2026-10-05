@@ -7,4 +7,6 @@ const store = new WebStore(root, { create: false, instanceId });
 try {
   const publisher = new WebVerticalPublisher(store, { now: () => Number(time) });
   process.stdout.write(JSON.stringify(publisher.publish(JSON.parse(serializedClaim) as WebPublicationClaim)));
-} finally { store.close(); }
+} finally {
+  store.close();
+}

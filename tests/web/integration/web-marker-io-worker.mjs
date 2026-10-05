@@ -27,7 +27,12 @@ const fsync = fs.fsyncSync;
 fs.fsyncSync = function (fd) {
   fsyncCount++;
   let path = opened.get(fd);
-  if (!path) try { path = fs.readlinkSync(`/dev/fd/${fd}`); } catch { path = '<unknown>'; }
+  if (!path)
+    try {
+      path = fs.readlinkSync(`/dev/fd/${fd}`);
+    } catch {
+      path = '<unknown>';
+    }
   events.push({ event: 'fsync', path, ordinal: fsyncCount });
   if (failAt === `fsync:${fsyncCount}`) throw new Error(`INJECTED_FSYNC_${fsyncCount}`);
   return fsync(fd);

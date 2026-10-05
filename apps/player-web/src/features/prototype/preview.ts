@@ -7,9 +7,33 @@ import { providerPeople, escapeCardText, type Person } from './provider-catalog-
 type Phase = 'browse' | 'hover' | 'expanding' | 'chat' | 'collapsing';
 
 const knownPeople: Person[] = [
-  { id: 'preview-guagua', name: '瓜瓜', mark: '瓜', color: '#D7C8B9', ink: '#614C3C', transcript: '我才放学回来，让你等久了', characterId: 'wei-guagua' },
-  { id: 'preview-jojo', name: 'JOJO', mark: 'J', color: '#C7D1D3', ink: '#405C61', transcript: 'Thanks Kobe，你终于来了', characterId: 'jojo' },
-  { id: 'preview-chen-jimi', name: '陈吉米', mark: '吉', color: '#C8C6D7', ink: '#535271', transcript: '打瓦请按1，王者请按2，其他事请挂断', characterId: 'chen-jimi' },
+  {
+    id: 'preview-guagua',
+    name: '瓜瓜',
+    mark: '瓜',
+    color: '#D7C8B9',
+    ink: '#614C3C',
+    transcript: '我才放学回来，让你等久了',
+    characterId: 'wei-guagua',
+  },
+  {
+    id: 'preview-jojo',
+    name: 'JOJO',
+    mark: 'J',
+    color: '#C7D1D3',
+    ink: '#405C61',
+    transcript: 'Thanks Kobe，你终于来了',
+    characterId: 'jojo',
+  },
+  {
+    id: 'preview-chen-jimi',
+    name: '陈吉米',
+    mark: '吉',
+    color: '#C8C6D7',
+    ink: '#535271',
+    transcript: '打瓦请按1，王者请按2，其他事请挂断',
+    characterId: 'chen-jimi',
+  },
 ];
 const reserveColors = ['#C8D4CB', '#D6CED4', '#C9D3DC', '#D9D0C5', '#CFD7D2', '#D4CDDB'];
 const reserve = (index: number): Person => ({
@@ -39,11 +63,12 @@ const icon = (name: 'sound' | 'back' | 'send' | 'play') => {
 function blend(a: string, b: string, t: number): string {
   const n = (s: string, i: number) => Number.parseInt(s.slice(i, i + 2), 16);
   const h = (v: number) => Math.round(v).toString(16).padStart(2, '0');
-  return `#${[1, 3, 5].map(i => h(n(a, i) + (n(b, i) - n(a, i)) * t)).join('')}`;
+  return `#${[1, 3, 5].map((i) => h(n(a, i) + (n(b, i) - n(a, i)) * t)).join('')}`;
 }
 
 function createCard(person: Person) {
-  const name = escapeCardText(person.name), mark = escapeCardText(person.mark);
+  const name = escapeCardText(person.name),
+    mark = escapeCardText(person.mark);
   const configured = person.transcript !== undefined;
   const card = document.createElement('article');
   card.className = 'card-slot';
@@ -57,7 +82,9 @@ function createCard(person: Person) {
       </div>
       <div class="chat-body" role="log" aria-label="${name}的消息">
         ${configured ? `<p class="friend-notice">${name}已添加了你，来打个招呼吧</p>` : ''}
-        ${configured ? `
+        ${
+          configured
+            ? `
         <div class="welcome-row message-row incoming">
           <span class="avatar message-avatar" aria-hidden="true">${mark}</span>
           <div class="voice-stack">
@@ -68,7 +95,9 @@ function createCard(person: Person) {
             <p class="transcript" hidden></p>
           </div>
         </div>
-        ` : '<div class="reserve-state" aria-label="尚未开放"><span class="reserve-symbol" aria-hidden="true"></span><p>新朋友还未到来</p></div>'}
+        `
+            : '<div class="reserve-state" aria-label="尚未开放"><span class="reserve-symbol" aria-hidden="true"></span><p>新朋友还未到来</p></div>'
+        }
         <div class="sent-messages"></div>
       </div>
       <div class="composer" ${configured ? '' : 'hidden'}>
@@ -120,9 +149,12 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
   let toastTimer = 0;
   const previousOffsets = new Map<HTMLElement, number>();
   const drafts = new Map<string, { value: string; start: number; end: number; scroll: number }>();
-  const cardWidth = () => window.innerWidth <= 360 ? window.innerWidth - 64
-    : window.innerWidth <= 600 ? Math.min(360, window.innerWidth - 96)
-      : Math.min(376, window.innerWidth - 108);
+  const cardWidth = () =>
+    window.innerWidth <= 360
+      ? window.innerWidth - 64
+      : window.innerWidth <= 600
+        ? Math.min(360, window.innerWidth - 96)
+        : Math.min(376, window.innerWidth - 108);
 
   const say = (message: string) => {
     toast.textContent = message;
@@ -135,7 +167,9 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     const wrapped = ((position % n) + n) % n;
     const lower = Math.floor(wrapped);
     const next = (lower + 1) % n;
-    const color = reduced.matches ? people[active]!.color : blend(people[lower]!.color, people[next]!.color, wrapped - lower);
+    const color = reduced.matches
+      ? people[active]!.color
+      : blend(people[lower]!.color, people[next]!.color, wrapped - lower);
     page.style.setProperty('--page-bg', color);
     document.documentElement.style.backgroundColor = color;
     document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', color);
@@ -143,7 +177,12 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
   const saveEditor = (index: number) => {
     const textarea = cards[index]!.querySelector('textarea')!;
     const scroll = cards[index]!.querySelector<HTMLElement>('.chat-body')!.scrollTop;
-    drafts.set(people[index]!.id, { value: textarea.value, start: textarea.selectionStart, end: textarea.selectionEnd, scroll });
+    drafts.set(people[index]!.id, {
+      value: textarea.value,
+      start: textarea.selectionStart,
+      end: textarea.selectionEnd,
+      scroll,
+    });
   };
   const restoreEditor = (index: number) => {
     const state = drafts.get(people[index]!.id);
@@ -175,21 +214,25 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
       card.style.setProperty('--wash', orbit.wash);
       card.style.zIndex = String(orbit.z);
       card.classList.toggle('is-active', index === active);
-      card.classList.toggle('is-chat', index === active && (phase === 'expanding' || phase === 'chat' || phase === 'collapsing'));
+      card.classList.toggle(
+        'is-chat',
+        index === active && (phase === 'expanding' || phase === 'chat' || phase === 'collapsing'),
+      );
       const hidden = chatting;
-      const inaccessible = ((hidden || window.innerWidth <= 600) && index !== active) || (!hidden && Math.abs(offset) > 2);
+      const inaccessible =
+        ((hidden || window.innerWidth <= 600) && index !== active) || (!hidden && Math.abs(offset) > 2);
       card.inert = inaccessible;
       card.setAttribute('aria-hidden', inaccessible ? 'true' : 'false');
       const reply = card.querySelector<HTMLTextAreaElement>('textarea')!;
       reply.tabIndex = index === active ? 0 : -1;
-      card.querySelectorAll<HTMLButtonElement>('button').forEach(button => {
+      card.querySelectorAll<HTMLButtonElement>('button').forEach((button) => {
         if (!button.classList.contains('send-button')) button.tabIndex = index === active ? 0 : -1;
       });
     });
     nav.querySelectorAll<HTMLButtonElement>('button').forEach((button, index) => {
       const offset = ringOffset(index, active, people.length);
       const orbit = orbitStyle(offset, people.length);
-      button.style.setProperty('--avatar-x', `${orbit.avatarX * Math.min(window.innerWidth * .44, 218)}px`);
+      button.style.setProperty('--avatar-x', `${orbit.avatarX * Math.min(window.innerWidth * 0.44, 218)}px`);
       button.style.setProperty('--avatar-chat-x', `${orbit.avatarX * 118}px`);
       button.style.setProperty('--avatar-y', `${orbit.avatarY}px`);
       button.style.setProperty('--avatar-scale', String(orbit.avatarScale));
@@ -220,25 +263,41 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     animation?.cancel();
     if (reduced.matches) return;
     const after = card.getBoundingClientRect();
-    const dx = (before.left + before.width / 2) - (after.left + after.width / 2);
-    const dy = (before.top + before.height / 2) - (after.top + after.height / 2);
-    animation = card.animate([
-      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${before.width / after.width}, ${before.height / after.height})` },
-      { transform: 'translate(-50%, -50%) scale(1)' },
-    ], { duration: 340, easing: 'cubic-bezier(.2,.82,.24,1)' });
+    const dx = before.left + before.width / 2 - (after.left + after.width / 2);
+    const dy = before.top + before.height / 2 - (after.top + after.height / 2);
+    animation = card.animate(
+      [
+        {
+          transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${before.width / after.width}, ${before.height / after.height})`,
+        },
+        { transform: 'translate(-50%, -50%) scale(1)' },
+      ],
+      { duration: 340, easing: 'cubic-bezier(.2,.82,.24,1)' },
+    );
   };
   const openChat = (focus = false) => {
     if (phase === 'chat' || phase === 'expanding') return;
-    if (!people[active]!.transcript) { say('这个位置还没有新朋友'); return; }
-    if (dragStart && carousel.hasPointerCapture(dragStart.pointerId)) carousel.releasePointerCapture(dragStart.pointerId);
+    if (!people[active]!.transcript) {
+      say('这个位置还没有新朋友');
+      return;
+    }
+    if (dragStart && carousel.hasPointerCapture(dragStart.pointerId))
+      carousel.releasePointerCapture(dragStart.pointerId);
     dragStart = undefined;
     dragged = false;
     carousel.classList.remove('is-dragging');
     deck.style.setProperty('--drag-x', '0px');
     const card = cards[active]!;
     const before = card.getBoundingClientRect();
-    phase = 'expanding'; render(); spatial(card, before);
-    const settle = () => { if (phase === 'expanding') { phase = 'chat'; render(); } };
+    phase = 'expanding';
+    render();
+    spatial(card, before);
+    const settle = () => {
+      if (phase === 'expanding') {
+        phase = 'chat';
+        render();
+      }
+    };
     const opened = people[active]!.characterId;
     if (live && opened) void live.open(opened, card);
     if (reduced.matches) settle();
@@ -253,8 +312,11 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     saveEditor(active);
     const wasFocused = document.activeElement === card.querySelector('textarea');
     const before = card.getBoundingClientRect();
-    phase = 'collapsing'; render();
-    phase = 'browse'; render(); spatial(card, before);
+    phase = 'collapsing';
+    render();
+    phase = 'browse';
+    render();
+    spatial(card, before);
     if (wasFocused) carousel.focus({ preventScroll: true });
   };
 
@@ -269,9 +331,17 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     button.addEventListener('click', () => switchTo(index));
     nav.append(button);
   });
-  nav.addEventListener('keydown', event => {
-    if (event.key === 'ArrowRight') { event.preventDefault(); switchTo(active + 1); nav.querySelector<HTMLButtonElement>('.selected')?.focus(); }
-    if (event.key === 'ArrowLeft') { event.preventDefault(); switchTo(active - 1); nav.querySelector<HTMLButtonElement>('.selected')?.focus(); }
+  nav.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      switchTo(active + 1);
+      nav.querySelector<HTMLButtonElement>('.selected')?.focus();
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      switchTo(active - 1);
+      nav.querySelector<HTMLButtonElement>('.selected')?.focus();
+    }
   });
 
   cards.forEach((card, index) => {
@@ -279,19 +349,34 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     const send = card.querySelector<HTMLButtonElement>('.send-button')!;
     const transcriptButton = card.querySelector<HTMLButtonElement>('.transcript-toggle');
     const transcript = card.querySelector<HTMLElement>('.transcript');
-    card.addEventListener('click', event => {
-      if (dragged) { event.preventDefault(); return; }
-      if (index !== active && (phase === 'browse' || phase === 'hover')) {
-        event.stopPropagation();
-        switchTo(index);
-        openChat(event.target instanceof Element && !!event.target.closest('textarea'));
-        return;
+    card.addEventListener(
+      'click',
+      (event) => {
+        if (dragged) {
+          event.preventDefault();
+          return;
+        }
+        if (index !== active && (phase === 'browse' || phase === 'hover')) {
+          event.stopPropagation();
+          switchTo(index);
+          openChat(event.target instanceof Element && !!event.target.closest('textarea'));
+          return;
+        }
+        if (event.target instanceof Element && event.target.closest('button,textarea')) return;
+        if (phase === 'browse' || phase === 'hover') openChat(false);
+      },
+      true,
+    );
+    card.addEventListener('pointerenter', () => {
+      if (phase === 'browse') {
+        phase = 'hover';
+        card.classList.add('is-hovered');
       }
-      if (event.target instanceof Element && event.target.closest('button,textarea')) return;
-      if (phase === 'browse' || phase === 'hover') openChat(false);
-    }, true);
-    card.addEventListener('pointerenter', () => { if (phase === 'browse') { phase = 'hover'; card.classList.add('is-hovered'); } });
-    card.addEventListener('pointerleave', () => { card.classList.remove('is-hovered'); if (phase === 'hover') phase = 'browse'; });
+    });
+    card.addEventListener('pointerleave', () => {
+      card.classList.remove('is-hovered');
+      if (phase === 'hover') phase = 'browse';
+    });
     card.querySelector<HTMLButtonElement>('.back-button')!.addEventListener('click', closeChat);
     card.querySelector<HTMLButtonElement>('.play-button')?.addEventListener('click', () => {
       const characterId = people[index]!.characterId;
@@ -306,25 +391,34 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
       transcriptButton.textContent = visible ? '收起文字' : '转文字';
       transcriptButton.setAttribute('aria-expanded', String(visible));
     });
-    reply.addEventListener('focus', () => { if (index === active) openChat(false); });
+    reply.addEventListener('focus', () => {
+      if (index === active) openChat(false);
+    });
     reply.addEventListener('input', () => {
       send.disabled = !reply.value.trim();
       const characterId = people[index]!.characterId;
       if (live && characterId) live.updateComposer(characterId);
       saveEditor(index);
     });
-    reply.addEventListener('keydown', event => {
-      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); send.click(); }
+    reply.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+        event.preventDefault();
+        send.click();
+      }
       if (event.key === 'Escape' && !event.isComposing) closeChat();
     });
     send.addEventListener('click', () => {
-      const draft = reply.value, value = draft.trim();
+      const draft = reply.value,
+        value = draft.trim();
       if (!value) return;
       const characterId = people[index]!.characterId;
       if (live && characterId) {
         void live.send(characterId, value, card, () => {
           // Clear only the acknowledged draft, never newer typing during the request.
-          if (reply.value === draft) { reply.value = ''; saveEditor(index); }
+          if (reply.value === draft) {
+            reply.value = '';
+            saveEditor(index);
+          }
           live.updateComposer(characterId);
         });
         reply.focus({ preventScroll: true });
@@ -337,7 +431,8 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
       bubble.textContent = value;
       row.append(bubble);
       card.querySelector('.sent-messages')!.append(row);
-      reply.value = ''; send.disabled = true;
+      reply.value = '';
+      send.disabled = true;
       const body = card.querySelector<HTMLElement>('.chat-body')!;
       body.scrollTop = body.scrollHeight;
       saveEditor(index);
@@ -346,34 +441,47 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     });
   });
 
-  carousel.addEventListener('keydown', event => {
+  carousel.addEventListener('keydown', (event) => {
     if (event.target !== carousel || (phase !== 'browse' && phase !== 'hover')) return;
-    if (event.key === 'ArrowRight') { event.preventDefault(); switchTo(active + 1); }
-    if (event.key === 'ArrowLeft') { event.preventDefault(); switchTo(active - 1); }
-    if (event.key === 'Enter') { event.preventDefault(); openChat(true); }
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      switchTo(active + 1);
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      switchTo(active - 1);
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      openChat(true);
+    }
   });
-  carousel.addEventListener('wheel', event => {
-    if (phase === 'chat' || phase === 'expanding' || phase === 'collapsing') return;
-    if (event.target instanceof Element && event.target.closest('textarea,button,[contenteditable="true"]')) return;
-    if (window.getSelection()?.toString()) return;
-    // Wheel deltas describe content motion, pointer deltas describe finger motion.
-    // Do not turn vertical browser scrolling into a reversed horizontal swipe.
-    if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
-    const dominant = event.deltaX;
-    if (Math.abs(dominant) < 4) return;
-    event.preventDefault();
-    const now = performance.now();
-    if (now - lastWheel < 310) return;
-    lastWheel = now;
-    switchTo(active + Math.sign(dominant));
-  }, { passive: false });
-  carousel.addEventListener('pointerdown', event => {
+  carousel.addEventListener(
+    'wheel',
+    (event) => {
+      if (phase === 'chat' || phase === 'expanding' || phase === 'collapsing') return;
+      if (event.target instanceof Element && event.target.closest('textarea,button,[contenteditable="true"]')) return;
+      if (window.getSelection()?.toString()) return;
+      // Wheel deltas describe content motion, pointer deltas describe finger motion.
+      // Do not turn vertical browser scrolling into a reversed horizontal swipe.
+      if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+      const dominant = event.deltaX;
+      if (Math.abs(dominant) < 4) return;
+      event.preventDefault();
+      const now = performance.now();
+      if (now - lastWheel < 310) return;
+      lastWheel = now;
+      switchTo(active + Math.sign(dominant));
+    },
+    { passive: false },
+  );
+  carousel.addEventListener('pointerdown', (event) => {
     if (phase === 'chat' || phase === 'expanding' || phase === 'collapsing') return;
     if (event.target instanceof Element && event.target.closest('textarea,button')) return;
     dragStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     dragged = false;
   });
-  carousel.addEventListener('pointermove', event => {
+  carousel.addEventListener('pointermove', (event) => {
     if (phase !== 'browse' && phase !== 'hover') return;
     if (!dragStart || event.pointerId !== dragStart.pointerId) return;
     const dx = event.clientX - dragStart.x;
@@ -382,30 +490,37 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     dragged = true;
     carousel.classList.add('is-dragging');
     if (event.pointerType === 'mouse') carousel.setPointerCapture(event.pointerId);
-    deck.style.setProperty('--drag-x', `${Math.max(-110, Math.min(110, dx * .45))}px`);
+    deck.style.setProperty('--drag-x', `${Math.max(-110, Math.min(110, dx * 0.45))}px`);
     updateBackground(active - Math.max(-1, Math.min(1, dx / 320)));
   });
   const endDrag = (event: PointerEvent) => {
     if (!dragStart || event.pointerId !== dragStart.pointerId) return;
-    const dx = event.clientX - dragStart.x, dy = event.clientY - dragStart.y;
+    const dx = event.clientX - dragStart.x,
+      dy = event.clientY - dragStart.y;
     const step = swipeStep(dx, dy, event.type === 'pointercancel');
     dragStart = undefined;
     carousel.classList.remove('is-dragging');
     deck.style.setProperty('--drag-x', '0px');
     if (dragged && step) switchTo(active + step);
     else updateBackground();
-    if (dragged) setTimeout(() => { dragged = false; }, 0);
+    if (dragged)
+      setTimeout(() => {
+        dragged = false;
+      }, 0);
   };
   carousel.addEventListener('pointerup', endDrag);
   carousel.addEventListener('pointercancel', endDrag);
-  document.addEventListener('keydown', event => {
+  document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !(event.target instanceof HTMLTextAreaElement)) closeChat();
   });
   reduced.addEventListener('change', () => updateBackground());
   window.addEventListener('resize', render);
   render();
-  live?.attach({ say, head: root.querySelector<HTMLElement>('.site-head')!,
-    card: characterId => cards[people.findIndex(person => person.characterId === characterId)]!,
-    mark: characterId => people.find(person => person.characterId === characterId)!.mark,
-    name: characterId => people.find(person => person.characterId === characterId)!.name });
+  live?.attach({
+    say,
+    head: root.querySelector<HTMLElement>('.site-head')!,
+    card: (characterId) => cards[people.findIndex((person) => person.characterId === characterId)]!,
+    mark: (characterId) => people.find((person) => person.characterId === characterId)!.mark,
+    name: (characterId) => people.find((person) => person.characterId === characterId)!.name,
+  });
 }

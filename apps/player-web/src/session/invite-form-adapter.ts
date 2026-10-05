@@ -9,14 +9,20 @@ export type InviteFormResult =
 
 function failure(error: unknown): InviteFormResult {
   if (error instanceof InviteLocalApiError) {
-    if (error.code === 'SESSION_EXPIRED' || error.code === 'AUTH_REQUIRED' ||
-        error.code === 'TRIAL_EXPIRED' || error.status === 401)
+    if (
+      error.code === 'SESSION_EXPIRED' ||
+      error.code === 'AUTH_REQUIRED' ||
+      error.code === 'TRIAL_EXPIRED' ||
+      error.status === 401
+    )
       return { kind: 'rejected', code: 'lost-session' };
-    if (error.code === 'RECEIPT_UNAVAILABLE' || error.code === 'WEB_INVITE_ACCESS_REQUIRED' ||
-        error.code === 'WEB_INVITE_RECOVERY_UNAVAILABLE')
+    if (
+      error.code === 'RECEIPT_UNAVAILABLE' ||
+      error.code === 'WEB_INVITE_ACCESS_REQUIRED' ||
+      error.code === 'WEB_INVITE_RECOVERY_UNAVAILABLE'
+    )
       return { kind: 'rejected', code: 'recovery-unavailable' };
-    if (error.code === 'WEB_INVITE_UNAVAILABLE')
-      return { kind: 'rejected', code: 'invalid-code' };
+    if (error.code === 'WEB_INVITE_UNAVAILABLE') return { kind: 'rejected', code: 'invalid-code' };
   }
   if (error instanceof Error && error.message === 'WEB_INVITE_GUEST_REQUIRED')
     return { kind: 'rejected', code: 'lost-session' };
@@ -29,12 +35,18 @@ function failure(error: unknown): InviteFormResult {
 export function inviteFormPort(controller: Pick<LocalInviteController, 'redeem' | 'recover'>) {
   return {
     async redeem(input: { code: string; requestId: string }): Promise<InviteFormResult> {
-      try { return { kind: 'accepted', ...await controller.redeem(input.code, input.requestId) }; }
-      catch (error) { return failure(error); }
+      try {
+        return { kind: 'accepted', ...(await controller.redeem(input.code, input.requestId)) };
+      } catch (error) {
+        return failure(error);
+      }
     },
     async recover(input: { code: string; requestId: string }): Promise<InviteFormResult> {
-      try { return { kind: 'accepted', ...await controller.recover(input.code, input.requestId) }; }
-      catch (error) { return failure(error); }
+      try {
+        return { kind: 'accepted', ...(await controller.recover(input.code, input.requestId)) };
+      } catch (error) {
+        return failure(error);
+      }
     },
   };
 }
