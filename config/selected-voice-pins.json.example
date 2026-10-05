@@ -1,0 +1,22 @@
+{
+  "directory": "REVIEWED_MATERIAL_DIRECTORY",
+  "selectionSHA256": "REPLACE_WITH_SHA256",
+  "publicationSHA256": "REPLACE_WITH_SHA256",
+  "characters": {
+    "chen-jimi": {
+      "voiceSHA256": "REPLACE_WITH_SHA256",
+      "draftSHA256": "REPLACE_WITH_SHA256",
+      "publishedSHA256": "REPLACE_WITH_SHA256"
+    },
+    "wei-guagua": {
+      "voiceSHA256": "REPLACE_WITH_SHA256",
+      "draftSHA256": "REPLACE_WITH_SHA256",
+      "publishedSHA256": "REPLACE_WITH_SHA256"
+    },
+    "jojo": {
+      "voiceSHA256": "REPLACE_WITH_SHA256",
+      "draftSHA256": "REPLACE_WITH_SHA256",
+      "publishedSHA256": "REPLACE_WITH_SHA256"
+    }
+  }
+}

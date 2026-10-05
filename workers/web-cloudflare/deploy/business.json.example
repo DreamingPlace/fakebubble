@@ -1,0 +1,29 @@
+{
+  "name": "fakebubble-business",
+  "main": "../business.ts",
+  "compatibility_date": "2026-07-30",
+  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "vars": {
+    "INSTANCE_ID": "CONFIGURE_BEFORE_DEPLOY",
+    "RECOVERY_EPOCH": "CONFIGURE_BEFORE_DEPLOY",
+    "BUSINESS_OBJECT_ID": "CONFIGURE_BEFORE_DEPLOY",
+    "ORIGIN": "https://fakebubble.example",
+    "COOKIE_NAME": "__Host-paopao",
+    "MATERIAL_PACKAGE_SHA256": "CONFIGURE_BEFORE_DEPLOY",
+    "BUDGET_GRANT_HASHES": "CONFIGURE_BEFORE_DEPLOY",
+    "BUDGET_POLICY": "test-cumulative",
+    "PUBLIC_ENABLED": "false",
+    "EXTERNAL_CALLS": "false",
+    "OPERATOR_ENABLED": "false"
+  },
+  "durable_objects": { "bindings": [{ "name": "BUSINESS", "class_name": "WebBusinessObject" }] },
+  "migrations": [{ "tag": "web113-v1", "new_sqlite_classes": ["WebBusinessObject"] }],
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "configure-before-deploy" }],
+  "services": [
+    { "binding": "BUDGET", "service": "fakebubble-budget", "entrypoint": "WebBudgetService" },
+    { "binding": "GENERATION", "service": "fakebubble-generation", "entrypoint": "WebGenerationService" }
+  ]
+}

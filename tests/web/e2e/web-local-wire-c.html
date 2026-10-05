@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh"><meta charset="utf-8"><title>C local-2 wired page fixture</title>
+<style>body{font:16px system-ui;margin:20px;background:#eef2ef}#app{max-width:440px;margin:auto}.local-card{background:white;padding:16px;border-radius:14px}.local-messages{min-height:100px}.local-composer{display:flex;gap:8px}.local-composer textarea{flex:1}.local-error{color:#a22}button{cursor:pointer}.controls{margin:20px auto;max-width:440px}pre{white-space:pre-wrap}</style>
+<div id="app"></div>
+<div class="controls"><button id="snapshot" type="button">记录测试状态</button>
+<button id="old-error" type="button">投递旧流 401</button>
+<button id="expire" type="button">模拟本地到期</button><pre id="telemetry">READY</pre></div>
+<script type="module">
+import { startLocalPage } from '/apps/player-web/src/features/local/local-page.js';
+import { LocalSession } from '/apps/player-web/src/session/local-session.js';
+import { LocalApiError } from '/apps/player-web/src/services/local-api.js';
+import { parseBootstrap } from '/packages/contracts/web-local-client.js';
+
+const root = document.getElementById('app');
+const telemetry = document.getElementById('telemetry');
+const session = new LocalSession(() => 1000);
+const sinks = [];
+let boots = 0, recoverCalls = 0, sends = 0, syncStops = 0;
+const view = (principalId, guest = false) => parseBootstrap({ contractVersion: 'web-v1-local-2', mode: 'synthetic-local',
+  region: 'local-test', instanceId: 'c-wire-instance', recoveryEpoch: 'c-wire-epoch', csrf: 'c-csrf',
+  access: { kind: guest ? 'guest' : 'account', principalId, playerId: `${principalId}-player`,
+    worldId: `${principalId}-world`, revision: 1, trialCharacterId: guest ? 'c-character' : null,
+    trialRemaining: guest ? 2 : null, trialReserved: guest ? 0 : null,
+    canSend: true, canChooseText: false, trialExpiresAt: guest ? 9999999 : null,
+    retentionState: guest ? 'active' : 'protected' },
+  characters: [{ characterId: 'c-character', name: 'C 合成人物', synthetic: true,
+    audition: { state: 'unavailable', reason: 'not_approved' } }],
+  conversations: [{ conversationId: 'c-conversation', characterId: 'c-character' }],
+  activeOperations: [], syncCursor: 'c-cursor', unsupported: ['invite'] });
+const oldPending = { requestId: 'c-lost-request', text: 'C previous uncertain input' };
+const deps = {
+  session,
+  api: { bootstrap: async () => view(++boots === 1 ? 'c-old-account' :
+    boots === 2 ? 'c-new-account' : 'c-expiring-guest', boots >= 3),
+    history: async () => ({ conversationId: 'c-conversation', messages: [{
+      messageId: 'c-message', conversationId: 'c-conversation', characterId: 'c-character',
+      operationId: 'c-operation', replyOrdinal: 0, author: 'character', origin: 'narrative',
+      text: 'C 合成转写文本', createdAt: 1, audio: null }], before: null, hasMore: false }),
+    operation: async () => { throw Error('unexpected operation'); } },
+  sender: { send: async () => ({ kind: 'network_uncertain', requestId: `c-new-request-${++sends}` }),
+    lookup: async () => ({ kind: 'network_uncertain', requestId: oldPending.requestId }),
+    recoverPending: async () => { recoverCalls++; return [{ kind: 'network_uncertain',
+      requestId: oldPending.requestId }]; } },
+  pending: { get: async (_scope, id) => id === oldPending.requestId ? oldPending : null },
+  access: { refresh: async () => true },
+  audio: { selectCharacter() {}, stop() {}, play: async () => 'needs_user_gesture' },
+  cache: { draft: async () => null, putDraft: async () => {}, putMessages: async () => {} },
+  createSync(sink) { sinks.push(sink); return { start: async () => {}, stop() { syncStops++; },
+    visible: async () => {} }; }
+};
+startLocalPage(root, deps);
+const snapshot = () => {
+  const result = { boots, recoverCalls, sends, syncStops, capturedSinks: sinks.length,
+    oldPendingRequestId: oldPending.requestId, principal: session.scope?.principalId ?? null,
+    lookupHidden: root.querySelector('.local-lookup').hidden,
+    replyDisabled: root.querySelector('#local-reply').disabled,
+    operationText: root.querySelector('.local-operation').textContent,
+    errorText: root.querySelector('.local-error').hidden ? '' : root.querySelector('.local-error').textContent };
+  telemetry.textContent = JSON.stringify(result);
+};
+document.getElementById('snapshot').addEventListener('click', snapshot);
+document.getElementById('old-error').addEventListener('click', () => {
+  sinks[0]?.onError?.(new LocalApiError(401, 'AUTH_REQUIRED'));
+  snapshot();
+});
+document.getElementById('expire').addEventListener('click', () => { session.denyContent(); snapshot(); });
+</script>
+</html>

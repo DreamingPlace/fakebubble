@@ -1,0 +1,17 @@
+{
+  "name": "fakebubble-budget",
+  "main": "../budget.ts",
+  "compatibility_date": "2026-07-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "vars": {
+    "ACCOUNT_ID": "CONFIGURE_BEFORE_DEPLOY",
+    "BUDGET_NAMESPACE_ID": "CONFIGURE_BEFORE_DEPLOY",
+    "BUDGET_OBJECT_ID": "CONFIGURE_BEFORE_DEPLOY",
+    "OPERATOR_ENABLED": "false"
+  },
+  "durable_objects": { "bindings": [{ "name": "BUDGET", "class_name": "WebBudgetObject" }] },
+  "migrations": [{ "tag": "web-budget-v1", "new_sqlite_classes": ["WebBudgetObject"] }]
+}

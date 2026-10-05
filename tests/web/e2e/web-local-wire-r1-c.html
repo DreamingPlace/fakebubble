@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>C local-2 scoped wire R1 fixture</title>
+<link rel="stylesheet" href="/apps/player-web/src/styles/main.css">
+<style>
+.c-controls{max-width:440px;margin:8px auto;padding:8px;background:#fff;font:12px system-ui}
+.c-controls button{margin:2px;min-height:32px}.c-controls pre{white-space:pre-wrap;overflow-wrap:anywhere}
+</style>
+<div id="app"></div>
+<div class="c-controls"><strong id="scenario"></strong>
+<button id="snapshot">状态</button><button id="release">放行恢复</button>
+<button id="force-send">尝试新发</button><button id="old-401">旧流401</button>
+<button id="old-410">旧流410</button><button id="visible">旧visibility开始</button>
+<button id="visible-401">旧visibility拒401</button><button id="visible-410">旧visibility拒410</button>
+<button id="current-401">当前流401</button><button id="current-410">当前流410</button>
+<pre id="telemetry">READY</pre></div>
+<script type="module">
+import { startLocalPage } from '/apps/player-web/src/features/local/local-page.js';
+import { LocalSession } from '/apps/player-web/src/session/local-session.js';
+import { LocalApiError } from '/apps/player-web/src/services/local-api.js';
+import { parseBootstrap } from '/packages/contracts/web-local-client.js';
+
+const mode = new URLSearchParams(location.search).get('scenario') || 'recovery';
+if (!['recovery', 'late', 'normal', 'expiry', 'first', 'first-stale', 'first-reconnect'].includes(mode))
+  throw Error('unsupported fixture scenario');
+document.getElementById('scenario').textContent = 'C scoped fixture · ' + mode;
+const root = document.getElementById('app'), telemetry = document.getElementById('telemetry');
+const session = new LocalSession(() => 1000);
+const sinks = [], pendingByScope = new Map(), lookupCounts = new Map(), draftByScope = new Map();
+const calls = { boots: 0, recover: [], pendingGets: [], lookups: [], history: [], sends: [], syncStops: 0,
+  draftWrites: [], visible: 0 };
+let delayedRecovery, lateVisibility;
+const scopeKey = s => [s.instanceId, s.recoveryEpoch, s.principalId, s.worldId].join('|');
+const accountKey = id => ['c-wire-instance', 'c-wire-epoch', id, id + '-world'].join('|');
+const oldKey = accountKey('c-old-account');
+const operation = (requestId, status = 'queued') => ({
+  operationId: 'operation-' + requestId, requestId, conversationId: 'c-conversation',
+  status, revision: 1, acceptedAt: 1, deadlineAt: 999999, errorCode: null,
+  canCancel: false, publication: null });
+const pending = (id, state = 'network_uncertain') => ({
+  requestId: id, text: id + '-original-text', characterId: 'c-character',
+  delivery: 'voice', state });
+if (mode === 'recovery' || mode === 'late') {
+  pendingByScope.set(oldKey, new Map([
+    ['c-old-1', pending('c-old-1')], ['c-old-2', pending('c-old-2')],
+    ['c-old-accepted', pending('c-old-accepted', 'accepted')] ]));
+  draftByScope.set(oldKey, 'C 新草稿应保留');
+}
+if (mode.startsWith('first')) {
+  pendingByScope.set(oldKey, new Map([['c-first', pending('c-first', 'accepted')]]));
+  draftByScope.set(oldKey, 'C 首发后新草稿');
+}
+const view = (principalId, guest = false) => parseBootstrap({
+  contractVersion: 'web-v1-local-2', mode: 'synthetic-local', region: 'local-test',
+  instanceId: 'c-wire-instance', recoveryEpoch: 'c-wire-epoch', csrf: 'c-csrf',
+  access: { kind: guest ? 'guest' : 'account', principalId, playerId: principalId + '-player',
+    worldId: principalId + '-world', revision: 1, trialCharacterId: guest ? 'c-character' : null,
+    trialRemaining: guest ? 2 : null, trialReserved: guest ? 0 : null,
+    canSend: true, canChooseText: false, trialExpiresAt: guest ? 9999999 : null,
+    retentionState: guest ? 'active' : 'protected' },
+  characters: [{ characterId: 'c-character', name: 'C 合成人物', synthetic: true,
+    audition: { state: 'unavailable', reason: 'not_approved' } }],
+  conversations: mode.startsWith('first') ? [] :
+    [{ conversationId: 'c-conversation', characterId: 'c-character' }],
+  activeOperations: mode === 'first-stale' ? [{
+    ...operation('c-first', 'queued'), conversationId: 'c-first-conversation', revision: 1 }] : [],
+  syncCursor: 'c-cursor', unsupported: ['invite'] });
+const deps = {
+  session,
+  api: {
+    bootstrap: async () => view(++calls.boots === 1 || mode !== 'late' && mode !== 'first-reconnect' ?
+      mode === 'expiry' ? 'c-expiring-guest' : 'c-old-account' : 'c-new-account', mode === 'expiry'),
+    history: async id => {
+      calls.history.push({ scope: scopeKey(session.scope), id });
+      return { conversationId: id, messages: [{
+      messageId: 'c-message', conversationId: id, characterId: 'c-character',
+      operationId: 'c-history-operation', replyOrdinal: 0, author: 'character',
+      origin: 'narrative', text: mode.startsWith('first') ? 'C 首发恢复历史' : 'C 合成转写文本',
+      createdAt: 1, audio: null }], before: null, hasMore: false };
+    },
+    operation: async id => operation(id),
+  },
+  sender: {
+    async send(characterId, text) {
+      calls.sends.push({ scope: scopeKey(session.scope), characterId, text });
+      return { kind: 'accepted', operation: operation('c-new-send-' + calls.sends.length) };
+    },
+    async lookup(item) {
+      const key = scopeKey(session.scope), count = (lookupCounts.get(item.requestId) || 0) + 1;
+      lookupCounts.set(item.requestId, count);
+      calls.lookups.push({ scope: key, requestId: item.requestId, count });
+      if (key !== oldKey || !pendingByScope.get(key)?.has(item.requestId))
+        throw Error('fixture scope mismatch');
+      if (item.requestId !== 'c-old-accepted' && item.requestId !== 'c-first' && count === 1)
+        return { kind: 'network_uncertain', requestId: item.requestId };
+      pendingByScope.get(key).delete(item.requestId);
+      return { kind: 'accepted', operation: item.requestId === 'c-first' ? {
+        ...operation(item.requestId, 'audio_pending'), conversationId: 'c-first-conversation', revision: 2,
+      } : operation(item.requestId) };
+    },
+    async recoverPending() {
+      const scope = session.scope, key = scopeKey(scope);
+      calls.recover.push(key);
+      if (mode === 'recovery' && calls.recover.length === 1)
+        await new Promise(resolve => { delayedRecovery = resolve; });
+      if (scopeKey(session.scope) !== key) return [{ kind: 'stale_generation' }];
+      const results = [];
+      for (const item of pendingByScope.get(key)?.values() || []) results.push(await this.lookup(item));
+      return results;
+    },
+  },
+  pending: { async get(scope, id) {
+    const key = scopeKey(scope); calls.pendingGets.push({ scope: key, id });
+    return pendingByScope.get(key)?.get(id) || null;
+  } },
+  access: { refresh: async () => true },
+  audio: { selectCharacter() {}, stop() {}, play: async () => 'needs_user_gesture' },
+  cache: {
+    draft: async scope => draftByScope.get(scopeKey(scope)) ?? null,
+    async putDraft(scope, characterId, text) {
+      const key = scopeKey(scope); calls.draftWrites.push({ scope: key, characterId, text });
+      draftByScope.set(key, text);
+    },
+    putMessages: async () => {},
+  },
+  createSync(sink) {
+    sinks.push(sink);
+    return { start: async () => {}, stop() { calls.syncStops++; },
+      visible() { calls.visible++; return new Promise((resolve, reject) => {
+        lateVisibility = { resolve, reject };
+      }); } };
+  },
+};
+startLocalPage(root, deps);
+const snapshot = () => {
+  const reply = root.querySelector('#local-reply'), lookup = root.querySelector('.local-lookup');
+  telemetry.textContent = JSON.stringify({ mode, ...calls, pendingOld: [...(pendingByScope.get(oldKey)?.keys() || [])],
+    sinks: sinks.length, principal: session.scope?.principalId ?? null, reply: reply.value,
+    replyDisabled: reply.disabled, lookupHidden: lookup.hidden, lookupDisabled: lookup.disabled,
+    operation: root.querySelector('.local-operation').textContent,
+    error: root.querySelector('.local-error').hidden ? '' : root.querySelector('.local-error').textContent });
+};
+const bind = (id, action) => document.getElementById(id).addEventListener('click', () => { action(); snapshot(); });
+bind('snapshot', () => {});
+bind('release', () => { delayedRecovery?.(); delayedRecovery = null; });
+bind('force-send', () => root.querySelector('.local-composer').requestSubmit());
+bind('old-401', () => sinks[0]?.onError?.(new LocalApiError(401, 'AUTH_REQUIRED')));
+bind('old-410', () => sinks[0]?.onError?.(new LocalApiError(410, 'TRIAL_EXPIRED')));
+bind('visible', () => document.dispatchEvent(new Event('visibilitychange')));
+bind('visible-401', () => lateVisibility?.reject(new LocalApiError(401, 'AUTH_REQUIRED')));
+bind('visible-410', () => lateVisibility?.reject(new LocalApiError(410, 'TRIAL_EXPIRED')));
+bind('current-401', () => sinks.at(-1)?.onError?.(new LocalApiError(401, 'AUTH_REQUIRED')));
+bind('current-410', () => sinks.at(-1)?.onError?.(new LocalApiError(410, 'TRIAL_EXPIRED')));
+</script>
+</html>

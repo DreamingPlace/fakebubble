@@ -1,0 +1,4 @@
+{
+  "budgetPath": "/ABSOLUTE/PRIVATE/DIRECTORY/shared-provider-budget.sqlite",
+  "historyRoots": ["/ABSOLUTE/PRIVATE/DIRECTORY/existing-provider-instance"]
+}

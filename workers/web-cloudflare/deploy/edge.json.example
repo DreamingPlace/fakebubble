@@ -1,0 +1,28 @@
+{
+  "name": "fakebubble-edge",
+  "main": "../edge.ts",
+  "compatibility_date": "2026-07-30",
+  "compatibility_flags": ["nodejs_compat", "enable_request_signal"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "vars": {
+    "ORIGIN": "https://fakebubble.example",
+    "BUSINESS_OBJECT_ID": "CONFIGURE_BEFORE_DEPLOY",
+    "ASSET_MANIFEST_SHA256": "CONFIGURE_BEFORE_DEPLOY"
+  },
+  "durable_objects": {
+    "bindings": [{
+      "name": "BUSINESS",
+      "class_name": "WebBusinessObject",
+      "script_name": "fakebubble-business"
+    }]
+  },
+  "assets": {
+    "directory": "../../../apps/player-web/dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "html_handling": "none",
+    "not_found_handling": "none"
+  }
+}

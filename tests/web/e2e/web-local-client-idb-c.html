@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>C local-2 native IndexedDB fixture</title>
+<pre id="result">RUNNING</pre>
+<script type="module">
+import { IndexedDbLocalCache } from '/apps/player-web/src/data/local-cache.js';
+import { IndexedDbPendingStore } from '/apps/player-web/src/data/pending-operations.js';
+import { LocalSession } from '/apps/player-web/src/session/local-session.js';
+import { parseBootstrap } from '/packages/contracts/web-local-client.js';
+
+const out = document.getElementById('result');
+const assert = (condition, message) => { if (!condition) throw Error(message); };
+const waitUntil = async (condition) => {
+  for (let i = 0; i < 100; i++) {
+    if (await condition()) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw Error('guest legacy cache was not purged');
+};
+const id = `c-native-idb-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const guest = { instanceId: id, recoveryEpoch: 'c-epoch', principalId: `${id}-guest`,
+  worldId: `${id}-guest-world`, generation: 1, contractVersion: 'web-v1-local-1' };
+const account = { ...guest, principalId: `${id}-account`, worldId: `${id}-account-world`,
+  accessKind: 'account', contractVersion: 'web-v1-local-2', retentionState: 'protected', guestExpiresAt: null };
+const message = { messageId: 'c-message', conversationId: 'c-conversation', characterId: 'c-character',
+  operationId: 'c-operation', replyOrdinal: 0, author: 'character', origin: 'narrative',
+  text: 'C legacy guest body', createdAt: 1, audio: null };
+const pending = scope => ({ scope, characterId: 'c-character', requestId: 'c-request',
+  text: 'C legacy pending body', delivery: 'voice', state: 'stored', operationId: null });
+const session = new LocalSession(() => 1000);
+const cache = new IndexedDbLocalCache(indexedDB, session);
+const intents = new IndexedDbPendingStore(indexedDB, () => 1000);
+try {
+  await cache.putDraft(guest, 'c-character', 'C legacy guest draft');
+  await cache.putMessages(guest, [message]);
+  await cache.putDraft(account, 'c-character', 'C account draft');
+  await intents.put(pending(guest));
+  await intents.put(pending(account));
+  const boot = parseBootstrap({ contractVersion: 'web-v1-local-2', mode: 'synthetic-local',
+    region: 'local-test', instanceId: id, recoveryEpoch: 'c-epoch', csrf: 'c-csrf',
+    access: { kind: 'guest', principalId: guest.principalId, playerId: `${id}-player`,
+      worldId: guest.worldId, revision: 1, trialCharacterId: null, trialRemaining: 3,
+      trialReserved: 0, canSend: true, canChooseText: false, trialExpiresAt: 2000,
+      retentionState: 'active' }, characters: [], conversations: [], activeOperations: [],
+    syncCursor: 'c-cursor', unsupported: ['invite'] });
+  session.install(boot);
+  const current = session.scope;
+  assert(await cache.draft(current, 'c-character') === null, 'local-2 guest draft was readable');
+  assert(await cache.message(current, 'c-conversation', 'c-message') === null,
+    'local-2 guest message was readable');
+  await cache.putDraft(current, 'c-character', 'C forbidden new guest draft');
+  await cache.putMessages(current, [message]);
+  await waitUntil(async () => (await cache.draft(guest, 'c-character')) === null &&
+    (await cache.message(guest, 'c-conversation', 'c-message')) === null);
+  assert(await cache.draft(account, 'c-character') === 'C account draft',
+    'account draft was erroneously removed');
+  const expired = { ...current, retentionState: 'expired', guestExpiresAt: 1000 };
+  assert(await intents.get(expired, 'c-request') === null, 'expired pending intent was readable');
+  assert((await intents.list(expired)).length === 0, 'expired pending list was nonempty');
+  assert(await intents.get(guest, 'c-request') === null, 'legacy guest pending intent remained');
+  assert((await intents.get(account, 'c-request'))?.text === 'C legacy pending body',
+    'account pending intent was erroneously removed');
+  out.textContent = JSON.stringify({ status: 'PASS', browserIndexedDb: true,
+    guestLegacyCachePurged: true, guestPendingPurged: true, accountUnchanged: true });
+} catch (error) {
+  out.textContent = JSON.stringify({ status: 'FAIL', error: String(error) });
+} finally {
+  await Promise.allSettled([cache.purgeScope(guest), cache.purgeScope(account),
+    intents.purgeScope(guest), intents.purgeScope(account)]);
+  session.invalidate();
+}
+</script>
+</html>

@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>C isolated invite form DOM verification</title>
+<link rel="stylesheet" href="./main.css">
+<style>
+body{margin:0;min-height:100dvh;background:#c7d1d3;font-family:system-ui,sans-serif}
+main{max-width:520px;margin:0 auto;padding:24px 8px}
+#results{background:#fff;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.5 ui-monospace,monospace}
+#visual{margin:16px auto;max-width:440px}
+details{margin:16px 8px;color:#24302f}
+@media(max-width:600px){main{padding:8px 0}#results{margin:8px}}
+</style>
+<main><div id="visual"></div><details><summary>C browser assertions</summary><pre id="results" role="status">RUNNING</pre></details></main>
+<script type="module">
+import { startInviteForm } from './invite-form.js';
+const results = document.querySelector('#results');
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+function gate() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
+function check(ok, why) { if (!ok) throw Error(why); }
+function equal(actual, expected, why) { check(actual === expected, `${why}: ${actual} !== ${expected}`); }
+function mount(port, newRequestId = () => 'c-request-1') {
+  const root = document.createElement('div'); document.body.append(root);
+  const dispose = startInviteForm(root, { synthetic: true, newRequestId, port });
+  const input = root.querySelector('input'), form = root.querySelector('form');
+  const submit = () => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  const code = value => { input.value = value; input.dispatchEvent(new InputEvent('input', { bubbles: true })); };
+  const close = () => { dispose(); root.remove(); };
+  return { root, input, form, code, submit, close, recover: () => root.querySelector('.invite-form-recover'),
+    cancel: () => root.querySelector('.invite-form-cancel'), status: () => root.querySelector('.invite-form-status') };
+}
+const cases = [];
+async function run(name, body) {
+  try { await body(); cases.push({ name, result: 'PASS' }); }
+  catch (error) { cases.push({ name, result: 'FAIL', error: String(error) }); }
+}
+
+await run('original intent, busy dedupe and repeated uncertain recovery', async () => {
+  const first = gate(), second = gate(), third = gate(), redeemed = [], recovered = [];
+  let ids = 0;
+  const c = mount({ redeem: input => { redeemed.push(input); return first.promise; },
+    recover: input => { recovered.push(input); return recovered.length === 1 ? second.promise : third.promise; } },
+  () => `c-request-${++ids}`);
+  try {
+    check(c.root.textContent.includes('未连接真实兑换服务'), 'synthetic label absent');
+    c.code('  C-CODE  '); c.submit(); c.submit();
+    equal(ids, 1, 'duplicate request IDs'); equal(redeemed.length, 1, 'duplicate redeem');
+    equal(redeemed[0].code, 'C-CODE', 'trimmed code');
+    equal(c.form.getAttribute('aria-busy'), 'true', 'busy state');
+    first.resolve({ kind: 'uncertain' }); await tick();
+    equal(c.recover().hidden, false, 'recover visible');
+    equal(document.activeElement, c.recover(), 'recover keyboard focus');
+    c.submit(); equal(redeemed.length, 1, 'redeem from uncertain');
+    c.recover().click(); c.recover().click(); equal(recovered.length, 1, 'duplicate recover');
+    second.resolve({ kind: 'uncertain' }); await tick();
+    c.recover().click(); equal(recovered.length, 2, 'second explicit recover');
+    check(recovered.every(item => item.code === 'C-CODE' && item.requestId === 'c-request-1'),
+      'recover changed original intent');
+    third.resolve({ kind: 'accepted', principalId: 'c-principal', grantId: 'c-grant' }); await tick();
+    equal(c.input.value, '', 'accepted secret cleared');
+    equal(c.root.querySelector('.invite-form-submit').hidden, true, 'accepted terminal');
+    c.submit(); equal(redeemed.length, 1, 'post-accept redeem');
+  } finally { c.close(); }
+});
+
+await run('terminal rejection, generic rejection and missing trusted identity', async () => {
+  for (const code of ['lost-session', 'recovery-unavailable']) {
+    let redeemCount = 0, recoverCount = 0;
+    const c = mount({ redeem: async () => { redeemCount++; return { kind: 'uncertain' }; },
+      recover: async () => { recoverCount++; return { kind: 'rejected', code }; } });
+    try {
+      c.code('PRIVATE-CODE'); c.submit(); await tick(); c.recover().click(); await tick();
+      equal(c.input.value, '', `${code} cleared`);
+      equal(c.recover().hidden, true, `${code} terminal recovery hidden`);
+      check(!c.root.textContent.includes('PRIVATE-CODE') && !c.root.textContent.includes(code),
+        `${code} leaked code/error`);
+      c.submit(); equal(redeemCount, 1, `${code} post-terminal redeem`);
+      equal(recoverCount, 1, `${code} post-terminal recover`);
+    } finally { c.close(); }
+  }
+  const c = mount({ redeem: async () => ({ kind: 'rejected', code: 'INTERNAL_SECRET_ERROR' }),
+    recover: async () => ({ kind: 'uncertain' }) });
+  try {
+    c.code('BAD-CODE'); c.submit(); await tick();
+    check(c.status().textContent.includes('请检查后再试'), 'generic rejection feedback');
+    check(!c.root.textContent.includes('INTERNAL_SECRET_ERROR'), 'server code echoed');
+    equal(document.activeElement, c.input, 'generic reject focus');
+  } finally { c.close(); }
+  const malformed = mount({ redeem: async () => ({ kind: 'accepted', principalId: '', grantId: '' }),
+    recover: async () => ({ kind: 'uncertain' }) });
+  try {
+    malformed.code('BAD-RECEIPT'); malformed.submit(); await tick();
+    equal(malformed.input.value, '', 'untrusted accepted cleared');
+    check(malformed.status().textContent.includes('无法确认'), 'untrusted accepted blocked');
+    malformed.submit(); equal(malformed.root.querySelector('.invite-form-submit').hidden, true,
+      'untrusted accepted terminal');
+  } finally { malformed.close(); }
+});
+
+await run('cancel and unmount ignore late success and clear secret', async () => {
+  const first = gate(), c = mount({ redeem: () => first.promise, recover: async () => ({ kind: 'uncertain' }) });
+  c.code('PRIVATE-1'); c.submit(); c.cancel().click();
+  equal(c.input.value, '', 'cancel secret cleared');
+  check(c.status().textContent.includes('不撤销'), 'cancel does not claim server rollback');
+  first.resolve({ kind: 'accepted', principalId: 'p', grantId: 'g' }); await tick();
+  check(!c.status().textContent.includes('已确认'), 'late cancelled success visible');
+  c.submit(); equal(c.root.querySelector('.invite-form-submit').hidden, true, 'cancel terminal');
+  c.close();
+  const second = gate(), u = mount({ redeem: async () => ({ kind: 'uncertain' }),
+    recover: () => second.promise });
+  u.code('PRIVATE-2'); u.submit(); await tick(); u.recover().click();
+  u.close(); equal(u.input.value, '', 'unmount secret cleared');
+  second.resolve({ kind: 'accepted', principalId: 'p', grantId: 'g' }); await tick();
+  equal(u.root.childElementCount, 0, 'late unmounted success rendered');
+  u.submit(); equal(u.root.childElementCount, 0, 'old detached listener wrote DOM');
+});
+
+await run('IME composition and empty input do not submit', async () => {
+  let count = 0, ids = 0;
+  const c = mount({ redeem: async () => { count++; return { kind: 'uncertain' }; },
+    recover: async () => ({ kind: 'uncertain' }) }, () => `id-${++ids}`);
+  try {
+    c.submit(); equal(count, 0, 'empty submitted');
+    c.code('中文码'); c.input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    c.submit(); equal(count, 0, 'composing submitted'); equal(ids, 0, 'composing allocated ID');
+    c.input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+    c.submit(); equal(count, 1, 'committed IME not submitted'); equal(ids, 1, 'request ID after commit');
+  } finally { c.close(); }
+});
+
+await run('100 mount/dispose cycles do not leave active handlers', async () => {
+  let calls = 0;
+  for (let i = 0; i < 100; i++) {
+    const c = mount({ redeem: async () => { calls++; return { kind: 'uncertain' }; },
+      recover: async () => ({ kind: 'uncertain' }) });
+    c.code(`C-${i}`); c.close(); c.submit();
+  }
+  equal(calls, 0, 'disposed form retained submit handler');
+});
+
+results.dataset.result = cases.every(item => item.result === 'PASS') ? 'PASS' : 'FAIL';
+results.textContent = JSON.stringify({ fixed: 'ecbd3f8c88a15568493962b31f8f95f06760abbd',
+  cases, viewport: { width: innerWidth, height: innerHeight,
+    documentScrollWidth: document.documentElement.scrollWidth } }, null, 2);
+const visual = document.querySelector('#visual');
+const visualEvents = [];
+for (const name of ['click', 'submit', 'invalid']) visual.addEventListener(name, event => {
+  visualEvents.push(`${name}:${event.target?.className || event.target?.tagName}`);
+  visual.dataset.events = visualEvents.join('|');
+}, true);
+window.__cVisualCalls = { redeem: [], recover: [] };
+startInviteForm(visual, { synthetic: true, newRequestId: () => 'visual-request-1',
+  port: { redeem: async input => { window.__cVisualCalls.redeem.push(input); return { kind: 'uncertain' }; },
+    recover: async input => { window.__cVisualCalls.recover.push(input);
+      return { kind: 'accepted', principalId: 'c-principal', grantId: 'c-grant' }; } } });
+</script>
