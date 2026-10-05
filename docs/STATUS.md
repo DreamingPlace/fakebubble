@@ -27,3 +27,13 @@
 - Gitleaks 扫描通过（两处明确标注的固定离线测试密码为已审核误报）；已配置秘密及常见编码比对零命中。
 
 这些结果仅证明该源码快照的上述离线范围，不代表真实手机或新生产部署验收完成。
+
+## Baseline (Part 1)
+
+Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, in a fresh checkout:
+
+- Node 24.19.0 / pnpm 11.19.0, `pnpm install --frozen-lockfile` clean.
+- `pnpm check` (typecheck + tests): **688 tests, 688 passed, 0 failed, 0 skipped**.
+- Total wall-clock time of `pnpm check`: **7m38s** (reported test duration 445 s).
+- Note: on Node 22.22.0 the same run gives 501 passed / 187 failed (`WEB_NATIVE_ALTER_COLUMN_REQUIRED`), so the
+  required Node 24.19+ is a hard prerequisite, not a recommendation.
