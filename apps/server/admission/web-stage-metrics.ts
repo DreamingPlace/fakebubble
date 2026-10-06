@@ -15,6 +15,14 @@ export function metricsEnabled(store: Db): boolean {
   if (present) known.set(store, true);
   return present;
 }
+/**
+ * The operation has sent (or completed) at least one audio segment to the provider: those segments are paid, so the
+ * wait-time fallback no longer applies and the operation continues as voice. A segment returned to pending after an
+ * HTTP 429 was never executed and does not count.
+ */
+export const audioStartedSql = (alias: string) =>
+  `EXISTS (SELECT 1 FROM web_provider_voice_segments seg WHERE seg.operation_id=${alias}.id AND seg.state IN ('running','complete'))`;
+
 function ensureRow(store: Db, operationId: string, now: number) {
   store.run('INSERT OR IGNORE INTO web_operation_metrics(operation_id,day) VALUES (?,?)', operationId, dayOf(now));
 }
@@ -74,13 +82,23 @@ export function recordRateLimitRetry(store: Db, operationId: string, stage: 'tex
   );
 }
 /** Durable decision: publish the reviewed text as text. The publication itself marks fallback_used. */
-export function requestFallback(store: Db, operationId: string, reason: FallbackReason, now: number, waitMs?: number) {
+export function requestFallback(
+  store: Db,
+  operationId: string,
+  reason: FallbackReason,
+  now: number,
+  waitMs?: number,
+  discardedAudioSegments = 0,
+) {
   ensureRow(store, operationId, now);
   store.run(
     `UPDATE web_operation_metrics SET fallback_reason=coalesce(fallback_reason,?),
-      audio_queue_wait_ms=coalesce(?,audio_queue_wait_ms) WHERE operation_id=?`,
+      audio_queue_wait_ms=coalesce(?,audio_queue_wait_ms),
+      discarded_audio_segments=CASE WHEN fallback_reason IS NULL THEN ? ELSE discarded_audio_segments END
+      WHERE operation_id=?`,
     reason,
     waitMs ?? null,
+    discardedAudioSegments,
     operationId,
   );
 }

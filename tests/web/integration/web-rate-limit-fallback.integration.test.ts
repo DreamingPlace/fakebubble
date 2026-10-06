@@ -623,3 +623,49 @@ test('the Cloudflare alarm wakes at the backoff end and at the fallback wait, no
   await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
   assert.equal(webProviderNextDue(store, f.clock.now(), true), f.clock.now() + 4_000);
 });
+
+test('once the first audio segment was sent the wait fallback never applies: the operation keeps waiting and ends as voice', async (t) => {
+  const f = stage(t, { fish: (_call, request) => fishOk(request) });
+  await f.readyForAudio();
+  await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+  assert.equal(f.operation().status, 'audio_pending', 'segment 0 is paid and finished; segment 1 waits for a slot');
+  f.advance(8_000);
+  assert.deepEqual(f.ledger.fallbackDue(f.clock.now()), [], 'a started operation is exempt from the wait fallback');
+  f.advance(20_000);
+  assert.deepEqual(f.ledger.fallbackDue(f.clock.now()), [], 'however long it waits');
+  await assert.rejects(f.runner.beginTextFallback('operation'), /WEB_FALLBACK_NOT_DUE/);
+  assert.equal(f.metrics().fallback_reason, null);
+  await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+  const receipt = f.runner.publish(f.lease, 'operation');
+  assert.equal(receipt.messageIds.length, 2);
+  assert.deepEqual(
+    f.store
+      .all<{ origin: string }>(
+        "SELECT origin FROM web_publication_items WHERE operation_id='operation' ORDER BY ordinal",
+      )
+      .map((item) => item.origin),
+    ['narrative', 'narrative'],
+  );
+  assert.equal(f.metrics().fallback_used, 0);
+  assert.equal(f.metrics().discarded_audio_segments, 0);
+  assert.equal(f.calls.fish, 2);
+});
+
+test('429 retries exhausted after an earlier segment was generated: the discarded paid segment is counted', async (t) => {
+  const f = stage(t, {
+    fish: (call, request) => {
+      if (call === 1) return fishOk(request);
+      throw rateLimited();
+    },
+  });
+  await f.readyForAudio();
+  await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+  for (const backoff of [2000, 4000, 8000, 0]) {
+    await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+    f.advance(backoff);
+  }
+  assert.equal(f.metrics().fallback_reason, 'rate_limited');
+  assert.equal(f.metrics().discarded_audio_segments, 1, 'segment 0 was generated and paid, then dropped for text');
+  await f.runner.publishTextFallback(f.lease, 'operation');
+  assert.equal(f.metrics().fallback_used, 1);
+});

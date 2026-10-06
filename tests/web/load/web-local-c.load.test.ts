@@ -606,6 +606,34 @@ test('C load: 30 players, 20/4 slots, 10% Fish 429: nothing fails, voice or text
     fallback,
   );
 
+  // Paid audio is never discarded for waiting: an operation that fell back after waiting for a slot had not started
+  // a single audio segment, so no successful speech attempt belongs to it.
+  const waitDiscarded = store.get<{ n: number }>(
+    `SELECT count(*) n FROM web_provider_attempts a JOIN web_operation_metrics m ON m.operation_id=a.operation_id
+    WHERE m.fallback_reason='audio_wait' AND a.phase='speech' AND a.state IN ('sent','unknown','known')
+      AND (a.state<>'known' OR a.outcome='succeeded')`,
+  )!.n;
+  assert.equal(waitDiscarded, 0, 'zero audio segments are discarded by the wait-time fallback');
+  const waitFallbacks = store.get<{ n: number }>(
+    "SELECT count(*) n FROM web_operation_metrics WHERE fallback_reason='audio_wait'",
+  )!.n;
+  const rateLimitDiscarded = store.get<{ n: number }>(
+    'SELECT coalesce(sum(discarded_audio_segments),0) n FROM web_operation_metrics',
+  )!.n;
+  assert.equal(
+    store.get<{ n: number }>(
+      "SELECT count(*) n FROM web_operation_metrics WHERE fallback_reason='audio_wait' AND discarded_audio_segments<>0",
+    )!.n,
+    0,
+    'the wait fallback records no discarded segment',
+  );
+  assert.equal(
+    waitFallbacks +
+      store.get<{ n: number }>("SELECT count(*) n FROM web_operation_metrics WHERE fallback_reason='rate_limited'")!.n,
+    fallback,
+    'every fallback has a recorded reason',
+  );
+
   // Budget reconciles exactly: nothing held, nothing unknown, every reservation settled once.
   const attempts = store.all<{ provider: string; state: string; charged_micros: number | null }>(
     'SELECT provider,state,charged_micros FROM web_provider_attempts',
@@ -647,6 +675,9 @@ test('C load: 30 players, 20/4 slots, 10% Fish 429: nothing fails, voice or text
       elapsedMs,
       voice,
       textFallback: fallback,
+      waitFallbacks,
+      waitDiscardedAudio: waitDiscarded,
+      rateLimitDiscardedAudio: rateLimitDiscarded,
       audioCalls: live.audioCalls,
       rejected429: live.rejected,
       maxAudioInFlight: live.maxAudio,

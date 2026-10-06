@@ -14,6 +14,7 @@ import {
   recordAudioProgress,
   recordRateLimitRetry,
   recordTextDone,
+  audioStartedSql,
   requestFallback,
 } from '../admission/web-stage-metrics.ts';
 import { inspectPCM } from '../../../workers/audio/wav.ts';
@@ -804,7 +805,12 @@ export class WebProviderOffline {
           ).changes === 1,
         'WEB_PROVIDER_CLAIM_STALE',
       );
-      requestFallback(this.store, key.operationId, 'rate_limited', now);
+      // Segments finished before this one were paid for and are discarded by the text publication: count them.
+      const paid = this.store.get<{ n: number }>(
+        "SELECT count(*) n FROM web_provider_voice_segments WHERE operation_id=? AND state='complete'",
+        key.operationId,
+      )!.n;
+      requestFallback(this.store, key.operationId, 'rate_limited', now, undefined, paid);
       recordAudioProgress(this.store, key.operationId, now);
     });
   }
@@ -821,6 +827,7 @@ export class WebProviderOffline {
         AND o.audio_wait_used_ms IS NOT NULL AND o.audio_wait_started_at<=?
         AND o.audio_wait_used_ms+?-o.audio_wait_started_at>=?
         AND NOT EXISTS (SELECT 1 FROM web_operation_metrics m WHERE m.operation_id=o.id AND m.fallback_reason IS NOT NULL)
+        AND NOT ${audioStartedSql('o')}
         ORDER BY o.admission_seq LIMIT ?`,
         now,
         now,
@@ -867,6 +874,11 @@ export class WebProviderOffline {
           'SELECT 1 FROM web_operation_metrics WHERE operation_id=? AND fallback_reason IS NOT NULL',
           operationId,
         ),
+        'WEB_FALLBACK_NOT_DUE',
+      );
+      // Paid audio is never discarded for waiting: once any segment started, the operation waits for slots as voice.
+      ensure(
+        !this.store.get(`SELECT 1 FROM web_operations o WHERE o.id=? AND ${audioStartedSql('o')}`, operationId),
         'WEB_FALLBACK_NOT_DUE',
       );
       const scope: Scope = {
