@@ -26,7 +26,6 @@ export async function syntheticCharacterReview(store: BusinessStore, now: number
   }));
   const generator = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
-    textProtocol: 'accepted-v7',
     fetch: async (_url, init) => {
       const body = JSON.parse(String(init!.body));
       return Response.json(

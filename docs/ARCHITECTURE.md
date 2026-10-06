@@ -11,6 +11,7 @@ Browser → edge → business Durable Object → generation Worker → DeepSeek 
 - `apps/server/web-*`：网页身份、游客额度、邀请、角色资料版本与发布、任务调度、请求幂等、预算预占和语音私有访问。
 - `apps/server/cloudflare/web-*`：持久化、HTTP、安全边界和服务绑定适配。
 - `workers/web-cloudflare`：四个 Worker 入口与关闭状态的部署模板。
+- `scripts/web-provider.ts`、`scripts/web-cloudflare-operator.ts`：手动运维工具（保留，见 DEPLOYMENT.md）。
 - `packages/contracts`、`packages/domain`、共享 server/audio 模块：Web 实际引用的契约、生成、记忆与数据库基础设施。
 - `tests/web`、`apps/player-web/tests/components`：离线回归；fixtures 仅用于测试，不是供应商验收材料。
 

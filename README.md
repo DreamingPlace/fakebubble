@@ -4,7 +4,7 @@
 
 ## English
 
-fakebubble is the web source for FAKE Bubble: browsing characters, text and voice conversations, a guest trial, invite-based upgrades, and administrator email sign-in with character profile management. It runs on Cloudflare Workers and Durable Objects (edge, business, budget and generation Workers), with an offline local server and fixture-based tests for development.
+fakebubble is the web source for FAKE Bubble: browsing characters, text and voice conversations, a guest trial, invite-based upgrades, and administrator email sign-in with character profile management. It runs on Cloudflare Workers and Durable Objects (edge, business, budget and generation Workers), with an offline local server and fixture-based tests for development. The native iOS app is discontinued and is not part of this repository; text generation uses a single protocol, accepted-v7 (the experimental v10 protocol has been removed).
 
 <!-- screenshot: docs/screenshot.png -->
 
@@ -56,9 +56,10 @@ FAKE 泡泡的网页源码：人物浏览、文字与语音对话、游客体验
 - 玩家网页与网页管理员界面。
 - Cloudflare 的 edge / business / budget / generation 四个 Worker。
 - 本地离线测试服务、共享业务逻辑、接口契约、必要数据库迁移和回归测试。
-- 不包含原生 App、旧管理前端、旧 Git 历史、真实角色资料、声音样本、数据库、密钥或线上配置。
+- 不包含原生 App（iOS 版已停止）、旧管理前端、旧 Git 历史、真实角色资料、声音样本、数据库、密钥或线上配置。
+- 文字生成只有 accepted-v7 一种协议；实验性的 v10 协议已移除。
 
-部分共享模块及迁移保留历史命名，因为网页的数据结构、生成链路和隔离回归仍依赖它们；这不表示网页开放了旧版所有功能。
+部分共享模块及迁移（001–033）保留历史命名，因为网页的数据结构、生成链路和隔离回归仍依赖它们；这不表示网页开放了旧版所有功能。旧 iOS 时代的服务端模块（Engine、自主消息、媒体队列等）已删除。
 
 ## 快速查看网页
 

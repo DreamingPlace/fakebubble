@@ -64,7 +64,7 @@ function meterCallbacks(meter: ProviderMeter, signal: AbortSignal): ProviderMete
 /** Business retains the existing stage callbacks and ledger; the provider Worker cannot write SQL. */
 export class WebCloudTextGenerator {
   readonly textProtocol = 'accepted-v7' as const;
-  readonly policyHash = textPolicyHash({ textProtocol: 'accepted-v7' });
+  readonly policyHash = textPolicyHash();
   private readonly binding: WebGenerationBinding;
   constructor(binding: WebGenerationBinding) {
     this.binding = binding;

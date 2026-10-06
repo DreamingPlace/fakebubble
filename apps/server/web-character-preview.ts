@@ -11,7 +11,7 @@ import { characterProfileHash, type WebCharacterProfile } from './web-character-
 import { installWebCharacterPreviews } from './web-character-preview-schema.ts';
 
 export const previewDigest = (value: string) => createHash('sha256').update(value).digest('hex');
-export const previewPolicy = textPolicyHash({ textProtocol: 'accepted-v7' });
+export const previewPolicy = textPolicyHash();
 export interface PreviewActor {
   memberId: string;
   sessionId: string;

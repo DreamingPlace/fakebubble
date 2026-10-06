@@ -16,7 +16,6 @@ import { readWebV7Request } from '../../../apps/server/web-v7-request.ts';
 import { WebSyntheticPrivateAudio } from '../../../apps/server/web-private-audio.ts';
 import { WebVerticalPublisher } from '../../../apps/server/web-vertical-publisher.ts';
 import { tone } from '../../audio-fixtures.ts';
-import { setup } from '../../helpers.ts';
 import { dialogueCandidate } from '../../../packages/domain/dialogue.ts';
 
 const origin = 'https://web.example.test';
@@ -994,40 +993,4 @@ test('108 two local processes race one publication and converge on one receipt',
   assert.deepEqual(second, first);
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_publications')?.n, 1);
   assert.equal(f.store.get<{ n: number }>("SELECT count(*) n FROM messages WHERE author_kind='character'")?.n, 1);
-});
-
-test('legacy proactive scene with no player input retains its legitimate seq-zero context', (t) => {
-  const f = setup(t, '2026-09-07T11:30:00+08:00', [0]);
-  const intent = f.engine.requestProactive(f.scope, 'synthetic-proposal');
-  const job = f.engine.claimProactive(f.scope, intent);
-  assert(job);
-  const request = f.engine.textRequest(f.scope, job.id);
-  assert.deepEqual(request.requiredMessageIds, []);
-  assert.equal(
-    f.store.get<{ last_input_seq: number }>('SELECT last_input_seq FROM scene_job_contexts WHERE job_id=?', job.id)
-      ?.last_input_seq,
-    0,
-  );
-  const candidate = dialogueCandidate(
-    {
-      mode: 'casual',
-      bubbles: [{ text: '要不要一起去河边？', expression: 'neutral' }],
-      coveredMessageIds: [],
-      deferredMessageIds: [],
-      endsSession: false,
-      topics: [],
-      sceneUpdate: {
-        scene: { kind: 'proposed', setting: '虚构河边', plan: null, proximity: 'ordinary', speaking: 'normal' },
-        evidence: [],
-        responseQuote: '去河边',
-      },
-    },
-    [],
-    false,
-  );
-  assert.equal(f.engine.sceneDelivery(f.scope, job.id, candidate), 'conversational');
-  f.store.run('UPDATE scene_job_contexts SET last_input_seq=-1 WHERE job_id=?', job.id);
-  assert.throws(() => f.engine.sceneDelivery(f.scope, job.id, candidate), /SCENE_CONTEXT_MISSING/);
-  f.store.run('DELETE FROM scene_job_contexts WHERE job_id=?', job.id);
-  assert.throws(() => f.engine.sceneDelivery(f.scope, job.id, candidate), /SCENE_CONTEXT_MISSING/);
 });

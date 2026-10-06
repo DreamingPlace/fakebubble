@@ -9,13 +9,19 @@ import type {
   TextGenerator,
 } from '../../packages/contracts/index.ts';
 import { DomainError, ensure } from '../../packages/domain/errors.ts';
-import { promptMessages, reviewPromptMessages } from './text-prompt.ts';
 import { dialogueCandidate } from '../../packages/domain/dialogue.ts';
 import { bubbleLimits, BubbleValidationError, inspectBubbles } from '../../packages/domain/bubbles.ts';
 import { groupEvidenceSource } from './context-evidence.ts';
 import { TextGenerationFailure } from './text-generation-error.ts';
-import { applyTextReview, draftTool, parseTextDraft, reviewTool, validateDialogueEvidence } from './text-protocol.ts';
-import type { TextDraft } from './text-protocol.ts';
+import {
+  applyTextReview,
+  draftTool,
+  parseTextDraft,
+  reviewTool,
+  validateDialogueEvidence,
+} from './accepted-text-protocol.ts';
+import type { TextDraft } from './accepted-text-protocol.ts';
+import { promptMessages, reviewPromptMessages } from './accepted-text-prompt.ts';
 import { createTextGenerationPolicy, generationPolicyHash, textRequestParameters } from './text-generation-policy.ts';
 import type { TextGenerationPolicy, TextGenerationPolicyOptions } from './text-generation-policy.ts';
 import type {
@@ -24,8 +30,6 @@ import type {
   ProviderReservation,
 } from '../../packages/contracts/provider-calls.ts';
 import { DEEPSEEK_INPUT_RESERVATION, deepSeekObservation, deepSeekUsage } from './deepseek-usage.ts';
-import * as acceptedPrompt from './accepted-text-prompt.ts';
-import * as acceptedProtocol from './accepted-text-protocol.ts';
 
 function object(value: unknown): asserts value is Record<string, unknown> {
   ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_TEXT_RESPONSE');
@@ -267,7 +271,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
     accept: (stage: AcceptedV7StageOutput) => Promise<void>,
     meter?: ProviderMeter,
   ): Promise<TextGenerationResult> {
-    ensure(this.textProtocol === 'accepted-v7' && typeof accept === 'function', 'TEXT_STAGE_PROTOCOL_REQUIRED');
+    ensure(typeof accept === 'function', 'TEXT_STAGE_PROTOCOL_REQUIRED');
     return this.run(request, signal, meter, accept);
   }
 
@@ -279,7 +283,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
     accept: (stage: AcceptedV7StageOutput) => Promise<void>,
     meter?: ProviderMeter,
   ): Promise<TextGenerationResult> {
-    ensure(this.textProtocol === 'accepted-v7' && typeof accept === 'function', 'TEXT_STAGE_PROTOCOL_REQUIRED');
+    ensure(typeof accept === 'function', 'TEXT_STAGE_PROTOCOL_REQUIRED');
     return this.run(request, signal, meter, accept, known);
   }
 
@@ -294,11 +298,6 @@ export class DeepSeekTextGenerator implements TextGenerator {
     // A caller changing its request while draft generation awaits cannot broaden the review's scope.
     const frozen = structuredClone(request);
     const requestDigest = createHash('sha256').update(JSON.stringify(frozen)).digest('hex');
-    const prompts = this.textProtocol === 'accepted-v7' ? acceptedPrompt : { promptMessages, reviewPromptMessages };
-    const protocol =
-      this.textProtocol === 'accepted-v7'
-        ? acceptedProtocol
-        : { draftTool, reviewTool, parseTextDraft, applyTextReview };
     if (knownDraft)
       ensure(
         knownDraft.requestDigest === requestDigest &&
@@ -308,8 +307,8 @@ export class DeepSeekTextGenerator implements TextGenerator {
           knownDraft.metadata.model === this.model,
         'TEXT_STAGE_RESUME_INVALID',
       );
-    const knownParsedDraft = knownDraft ? protocol.parseTextDraft(structuredClone(knownDraft.payload), frozen) : null;
-    const messages = prompts.promptMessages(frozen);
+    const knownParsedDraft = knownDraft ? parseTextDraft(structuredClone(knownDraft.payload), frozen) : null;
+    const messages = promptMessages(frozen);
     const timeout = AbortSignal.timeout(this.timeoutMs);
     const combined = AbortSignal.any([signal, timeout]);
     const started = performance.now();
@@ -492,14 +491,9 @@ export class DeepSeekTextGenerator implements TextGenerator {
         if (knownDraft) stages.push(structuredClone(knownDraft.metadata));
         const draft =
           knownParsedDraft ??
-          (await call('draft', messages, protocol.draftTool(frozen.deliveryMode), (value) =>
-            protocol.parseTextDraft(value, frozen),
-          ));
-        const reply = await call(
-          'review',
-          prompts.reviewPromptMessages(frozen, draft),
-          protocol.reviewTool(frozen, draft),
-          (value) => protocol.applyTextReview(value, draft, frozen),
+          (await call('draft', messages, draftTool(frozen.deliveryMode), (value) => parseTextDraft(value, frozen)));
+        const reply = await call('review', reviewPromptMessages(frozen, draft), reviewTool(frozen), (value) =>
+          applyTextReview(value, draft, frozen),
         );
         return { ...metadata(), reply };
       } finally {

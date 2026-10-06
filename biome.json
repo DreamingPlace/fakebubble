@@ -3,7 +3,7 @@
   "vcs": { "enabled": false },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!pnpm-lock.yaml", "!**/*.sql", "!runtime", "!apps/player-web/dist", "!node_modules"]
+    "includes": ["**", "!pnpm-lock.yaml", "!**/*.sql", "!runtime", "!apps/player-web/dist", "!node_modules", "!work"]
   },
   "formatter": {
     "enabled": true,

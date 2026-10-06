@@ -1,69 +1,69 @@
-# Dead code inventory (Part 2)
+# Dead code inventory (Part 2b)
 
-Generated from a throwaway static import graph (TypeScript AST; `import`, `export … from`, dynamic `import()`, `import('…')` type references, `new URL(…, import.meta.url)`). Script kept outside the repo (`work/`, gitignored). Nothing was deleted on the basis of this document alone; see the Part 2 report.
+Regenerated after Part 2b from a throwaway static import graph (TypeScript AST; `import`, `export … from`, dynamic `import()`, `import('…')` type references, `new URL(…, import.meta.url)`, and relative `.ts`/`.mjs` path strings such as forked workers). The script is kept outside the repo (`work/`, gitignored). Part 2b deleted the iOS-era modules and the experimental-v10 text protocol listed in the Part 2 inventory; this file describes the tree that remains.
 
-**Entry points:** `workers/web-cloudflare/{edge,business,budget,generation}.ts`, `apps/player-web/src/app/main.ts`, and every `scripts/*.ts` named in a `package.json` script: `scripts/web-v1.ts`, `scripts/build-web-player.ts`, `scripts/preview-web.ts`, `scripts/web-cloudflare-package.ts`, `scripts/test-web-local-http.ts`, `scripts/test-web-data-lifecycle-restart.ts`.
+**Entry points:** `workers/web-cloudflare/{edge,business,budget,generation}.ts`, `apps/player-web/src/app/main.ts`, every `scripts/*.ts` named in a `package.json` script (`scripts/web-v1.ts`, `scripts/build-web-player.ts`, `scripts/preview-web.ts`, `scripts/web-cloudflare-package.ts`, `scripts/test-web-local-http.ts`, `scripts/test-web-data-lifecycle-restart.ts`), and the two kept manual operator tools `scripts/web-provider.ts` and `scripts/web-cloudflare-operator.ts` (documented in `docs/DEPLOYMENT.md`).
 
-**Also treated as live:** `workers/cloudflare/runtime.d.ts` (ambient declarations picked up by `tsconfig.json`), and every `.sql` file read by a migration runner (`apps/server/store.ts` via `readFileSync`, `workers/cloudflare/migrations.ts` and `workers/web-cloudflare/migrations.ts` via text imports).
+**Also treated as live:** `workers/cloudflare/runtime.d.ts` (ambient declarations picked up by `tsconfig.json`), and every `.sql` file read by a migration runner. No `.sql` file and neither migration runner changed in Part 2b.
 
-## (a) Source files not reachable from any entry point (or from tests)
+## (a) Source files not reachable from any entry point or test
 
-**None.** 215 non-test source files were analysed; every one is reachable from an entry point or from a test.
-
-A first pass without type-only `import('…')` handling flagged two files; both are live and were kept:
-
-- `packages/contracts/character-requests.ts`: referenced as `import('./character-requests.ts').CharacterRequestCounts` in `packages/contracts/player-api.ts`, which `apps/server` (store, recovery) imports. `apps/player-web` does not import it, so the keep-contracts-for-player-web rule is not what protects it; the type reference keeps it in the compile graph, so it was left alone.
-- `workers/cloudflare/runtime.d.ts`: ambient `cloudflare:workers` and `*.sql` module declarations required by `pnpm typecheck`.
-
-Consequently Part 2 step 3 (delete unreachable files) deletes nothing. The Cloudflare package therefore contains the same 215 files as before.
+None. 194 non-test `.ts` files were analysed; the graph orphans are `workers/cloudflare/runtime.d.ts` (ambient types, live as above) and, in `apps/player-web`, `src/app/local-mode.ts` and `src/features/prototype/preview.ts` (not imported by any file or test; not touched in Part 2b, candidates for a later Part).
 
 ## (c) Files reachable only from tests
 
-Not deleted (outside step 3, and several are live in the local server or documented operator tooling). `docs/DEPLOYMENT.md` documents `scripts/web-cloudflare-operator.ts` and `scripts/web-provider.ts`; they are manual operator tools, not dead code.
+Outside Part 2b's scope and not deleted. All are in `apps/player-web` or are the `web-local*` contracts used by the player-web component tests:
 
+- `apps/player-web/src/app/admin-mode.ts`
+- `apps/player-web/src/data/local-cache.ts`
+- `apps/player-web/src/data/pending-operations.ts`
+- `apps/player-web/src/data/send-controller.ts`
+- `apps/player-web/src/data/sync-controller.ts`
+- `apps/player-web/src/features/admin/account-admin-page.ts`
+- `apps/player-web/src/features/admin/character-form.ts`
+- `apps/player-web/src/features/admin/character-workbench.ts`
+- `apps/player-web/src/features/admin/invite-admin-page.ts`
+- `apps/player-web/src/features/admin/invite-records.ts`
+- `apps/player-web/src/features/admin/permission-editor.ts`
+- `apps/player-web/src/features/invite/invite-form.ts`
+- `apps/player-web/src/features/local/local-page.ts`
+- `apps/player-web/src/features/local/local-state.ts`
+- `apps/player-web/src/features/prototype/mobile-layout.ts`
+- `apps/player-web/src/features/prototype/orbit.ts`
+- `apps/player-web/src/features/prototype/provider-binding.ts`
+- `apps/player-web/src/features/prototype/provider-catalog-view.ts`
+- `apps/player-web/src/features/prototype/provider-start-error.ts`
+- `apps/player-web/src/features/prototype/reply-presentation.ts`
+- `apps/player-web/src/media/audio-controller.ts`
+- `apps/player-web/src/services/account-admin-api.ts`
+- `apps/player-web/src/services/character-admin-api.ts`
+- `apps/player-web/src/services/invite-admin-api.ts`
+- `apps/player-web/src/services/invite-local-api.ts`
+- `apps/player-web/src/services/local-api.ts`
+- `apps/player-web/src/services/provider-api.ts`
+- `apps/player-web/src/session/access-controller.ts`
 - `apps/player-web/src/session/identity-controller.ts`
-- `apps/server/audio-files.ts`
-- `apps/server/audio-queue.ts`
-- `apps/server/audio-storage.ts`
-- `apps/server/autonomy.ts`
-- `apps/server/beta-access-transactions.ts`
-- `apps/server/beta-accounts.ts`
-- `apps/server/credentials.ts`
-- `apps/server/engine.ts`
-- `apps/server/group-knowledge.ts`
-- `apps/server/media-core.ts`
-- `apps/server/media.ts`
-- `apps/server/moment-autonomy.ts`
-- `apps/server/player-generation-error.ts`
-- `apps/server/provider-meter.ts`
-- `apps/server/relationship-test.ts`
-- `apps/server/text-queue.ts`
-- `apps/server/web-provider-assets.ts`
-- `apps/server/web-provider-budget.ts`
-- `apps/server/web-provider-live-budget.ts`
-- `apps/server/web-provider-migration.ts`
-- `apps/server/web-provider-server.ts`
-- `packages/contracts/moment-autonomy.ts`
-- `packages/domain/delivery.ts`
-- `scripts/web-cloudflare-operator.ts`
-- `scripts/web-provider.ts`
+- `apps/player-web/src/session/invite-controller.ts`
+- `apps/player-web/src/session/invite-form-adapter.ts`
+- `apps/player-web/src/session/local-session.ts`
+- `apps/player-web/src/session/provider-invite-controller.ts`
+- `packages/contracts/web-local-client.ts`
+- `packages/contracts/web-local-invite.ts`
+- `packages/contracts/web-local.ts`
+
+Operator tools (`scripts/web-provider.ts`, `scripts/web-cloudflare-operator.ts`) and the modules only they use (`apps/server/web-provider-{assets,budget,live-budget,migration,server}.ts`) are entry-point-reachable and therefore live.
+
+Removed in Part 2b: `apps/server/{engine,autonomy,moment-autonomy,media,media-core,group-knowledge,relationship-test,beta-accounts,beta-access-transactions,credentials,text-queue,audio-queue,audio-files,audio-storage,player-generation-error,provider-meter,memory-links,text-protocol,text-prompt}.ts`, `packages/contracts/moment-autonomy.ts`, `packages/domain/delivery.ts`. `memory-links.ts` became unreachable once `text-prompt.ts` was gone. The two env-file loaders from `credentials.ts` that `scripts/web-provider.ts` needs now live in that script.
 
 ## (b) Exported symbols never imported by another file
 
-Heuristic: counts named imports/re-exports across all files including tests; ignores same-file use and namespace imports (`import * as`, which count as importing every export of that module). Many are exported types or helpers used inside their own module, so this list is **candidates for review, not a deletion list**.
+Heuristic: counts named imports/re-exports across all files including tests; ignores same-file use; a namespace import, `export *` or `import('…')` type reference counts as importing every export of that module. Many are exported types or helpers used inside their own module, so this list is **candidates for review, not a deletion list**.
 
-### In files reachable from entry points (197)
+### In files reachable from entry points (196)
 
-- `apps/player-web/src/data/pending-operations.ts`: `PendingState`
-- `apps/player-web/src/features/admin/account-admin-page.ts`: `adminAccountError`
-- `apps/player-web/src/features/admin/invite-admin-page.ts`: `InviteAdminPort`
-- `apps/player-web/src/features/invite/invite-form.ts`: `InviteFormDeps`
-- `apps/player-web/src/features/prototype/mobile-layout.ts`: `VisibleViewport`
-- `apps/player-web/src/media/audio-controller.ts`: `PlayResult`
-- `apps/player-web/src/services/account-admin-api.ts`: `AdminGrant`
-- `apps/player-web/src/services/character-admin-api.ts`: `CharacterDraft`, `CharacterSummary`, `PreviewJob`, `DeleteImpact`
-- `apps/player-web/src/session/invite-form-adapter.ts`: `InviteFormResult`
-- `apps/server/beta-costs.ts`: `costUsage`, `estimateCost`, `validateCostLedger`
+- `apps/server/accepted-text-prompt.ts`: `TEXT_SYSTEM_PROMPT`, `TEXT_REVIEW_PROMPT`, `textPolicyHash`
+- `apps/server/audio-validation.ts`: `safeAudioError`, `runningAudioCount`, `speechMetadata`, `validateSpeech`
+- `apps/server/beta-costs.ts`: `costUsage`, `estimateCost`, `BetaCosts`, `validateCostLedger`
 - `apps/server/characters.ts`: `compileApprovedCharacter`
 - `apps/server/cloudflare/admin-assets.ts`: `AdminAsset`, `adminAssetType`, `CloudAdminAssets`
 - `apps/server/cloudflare/guard-access-state.ts`: `GuardAccount`, `GuardDevice`, `GuardInvite`, `snapshotGuardAccess`
@@ -74,86 +74,73 @@ Heuristic: counts named imports/re-exports across all files including tests; ign
 - `apps/server/cloudflare/schema.ts`: `cloudScreenshotSchema`, `cloudRateSchema`, `cloudAdminIdentitySchema`, `cloudAccessCoordinatorSchema`, `cloudCostOutboxSchema`, `cloudReconciliationOutboxSchema`, `cloudRetentionSchema`, `cloudAlertSchema`, `cloudWorkerHealthSchema`, `cloudBackupCatalogSchema`
 - `apps/server/cloudflare/web-http.ts`: `WebHTTPExecution`
 - `apps/server/cloudflare/web-setup.ts`: `WebCloudFixedAsset`
-- `apps/server/config.ts`: `TextGenerationLimits`
+- `apps/server/context-evidence.ts`: `freezeContextEvidence`
 - `apps/server/deepseek.ts`: `parseDeepSeekResponse`, `parseDeepSeekToolResponse`
 - `apps/server/feedback-png.ts`: `maximumScreenshotPixels`, `normalizeFeedbackPNG`
-- `apps/server/memory-review.ts`: `correctionInput`
+- `apps/server/memory-review.ts`: `listMemoryTopics`, `readMemoryDetail`, `listCorrections`, `correctionInput`, `correctMemory`
+- `apps/server/memory.ts`: `recallMemories`, `recentTurns`, `selectProactiveTopic`
 - `apps/server/player-profile.ts`: `validateAssociation`, `validatedProfile`, `playerProfile`, `initializeAssociation`, `createPlayerProfile`, `savePlayerProfile`
 - `apps/server/recovery.ts`: `RECOVERY_FILE`, `RESTORE_INCOMPLETE`
-- `apps/server/relationships.ts`: `listRelationshipEvents`, `correctRelationshipEvent`, `resetRelationshipState`
-- `apps/server/scenes.ts`: `readScene`, `endScene`
-- `apps/server/store-contract.ts`: `SQLOutputValue`
-- `apps/server/text-prompt.ts`: `TEXT_SYSTEM_PROMPT`, `TEXT_REVIEW_PROMPT`
-- `apps/server/text-protocol.ts`: `DRAFT_REVIEW_ISSUES`
-- `apps/server/voices.ts`: `validateVoiceProfile`
+- `apps/server/relationships.ts`: `freezeRelationshipMessages`, `listRelationshipEvents`, `correctRelationshipEvent`, `resetRelationshipState`
+- `apps/server/scenes.ts`: `freezeSceneContext`, `frozenSceneInputs`, `readScene`, `endScene`
+- `apps/server/voices.ts`: `validateVoiceProfile`, `VoiceCatalog`
 - `apps/server/web-account-admin.ts`: `ADMIN_PERMISSIONS`, `AdminMember`
 - `apps/server/web-character-catalog.ts`: `WebCharacterPresentation`, `CatalogEntry`
 - `apps/server/web-character-materials.ts`: `MaterialKind`, `MaterialRow`, `materialAssets`, `materialManifest`
 - `apps/server/web-character-preview.ts`: `PreviewActor`, `WebPreviewJob`, `requirePreviewActor`
 - `apps/server/web-data-policy-preflight.ts`: `DataPolicyPreflight`
 - `apps/server/web-dispatch-ledger.ts`: `WebOperationFence`
+- `apps/server/web-identity.ts`: `WebIdentityKeys`, `WebIdentityOptions`
 - `apps/server/web-input-snapshot.ts`: `WebInputSnapshot`
 - `apps/server/web-provider-materials.ts`: `VoiceMaterialEvidence`, `SelectedVoiceFiles`
 - `apps/server/web-provider-media.ts`: `ProviderAudioScope`
-- `packages/contracts/admin-costs.ts`: `CostMicros`, `CostUnit`, `CostStage`, `CostBudgetInput`, `CostReconciliationInput`, `CostGrouping`, `CostFilters`, `CostQuantityTotal`, `CostTotals`, `CostReportGroup`, `CostPage`, `CostReport`, `CostCallPage`, `CostEvent`
+- `packages/contracts/admin-costs.ts`: `CostMicros`, `CostUnit`, `CostStage`, `CostFunction`, `CostBudgetInput`, `CostReconciliationInput`, `CostGrouping`, `CostFilters`, `CostQuantityTotal`, `CostTotals`, `CostReportGroup`, `CostPage`, `CostReport`, `CostCallPage`, `CostEvent`
 - `packages/contracts/audio.ts`: `VoiceIdentity`, `VoiceBenchmarkCase`, `VOICE_BASELINE_CASES`, `VOICE_QUALITY_CASES`, `VOICE_BENCHMARK_CASES`
-- `packages/contracts/beta.ts`: `ReplyGroup`, `ReplyGroupPage`
-- `packages/contracts/character-requests.ts`: `CharacterRequest`, `CharacterRequestCounts`, `CharacterRequestPage`, `CharacterRequestAction`, `CharacterRequestReceipt`
+- `packages/contracts/beta.ts`: `BetaPairInput`, `AdminPlayerAccount`, `AccountStatusInput`, `ReplyGroup`, `ReplyGroupPage`
 - `packages/contracts/generation-rpc.ts`: `GenerationResult`, `GenerationSession`, `GenerationBinding`
 - `packages/contracts/groups.ts`: `CreateGroupInput`, `GroupMember`, `CreateGroupReceipt`, `SendGroupInput`, `GroupRouting`, `SendGroupReceipt`
-- `packages/contracts/index.ts`: `CONTRACT_VERSION`, `MessageQuote`, `MemoryCandidate`, `AudioRequest`, `AudioResult`
-- `packages/contracts/media.ts`: `VoiceRetryInput`
+- `packages/contracts/media.ts`: `VoiceMessageState`, `VoiceRetryInput`, `VoiceRetryReceipt`
 - `packages/contracts/player-api.ts`: `PairingDescriptor`, `PairInput`, `PairResult`, `WorldSetupInput`, `SendMessageInput`, `ConversationSummary`, `BootstrapResult`, `SyncPage`, `HistoryPage`
-- `packages/contracts/playtest-social.ts`: `CreateFriendInput`, `CreateFriendReceipt`, `ReadConversationInput`, `ReadConversationReceipt`
 - `packages/contracts/profile.ts`: `SavePlayerProfileInput`
-- `packages/contracts/provider-calls.ts`: `SynchronousProviderReservation`
-- `packages/contracts/relationships.ts`: `RelationshipCorrectionInput`
-- `packages/contracts/scenes.ts`: `SceneProof`, `EndSceneInput`
-- `packages/contracts/web-local-client.ts`: `LocalSendAction`, `LocalError`
-- `packages/contracts/web-local-invite.ts`: `WebInviteBootstrap`, `WebInviteRecoveryResult`, `WebInviteCredential`
-- `packages/contracts/web-local.ts`: `WebLocalError`
+- `packages/contracts/provider-calls.ts`: `SynchronousProviderReservation`, `SynchronousProviderMeter`
 - `packages/contracts/web-provider.ts`: `WebProviderUnavailableReason`, `WebProviderMedia`, `WebProviderCharacter`, `WebProviderSlot`, `WebProviderConversation`, `WebProviderEvent`, `WebProviderError`
 - `packages/contracts/web-v1.ts`: `WebId`, `WebAccessKind`, `WebAccess`, `WebCharacter`, `WebConversation`, `WebAudio`, `WebMessage`, `WebSendInput`, `WebSendDraft`, `WebSendAction`, `WebRegisterInput`, `WebLoginInput`, `WebInviteRedeemInput`, `WebRecoverInput`, `WebPendingTrialClaim`, `WebIdentityReceipt`, `WebTrialArchive`, `WebSaveTrialInput`, `WebTrialArchivePage`, `WebTrialArchiveHistory`, `WebReadReceipt`, `WebListenedReceipt`, `WebMemorySummary`, `WebMemoryPage`, `WebMemoryCorrectionInput`, `WebMemoryCorrectionReceipt`, `WebSyncEvent`, `WebApiError`
-- `packages/domain/autonomy.ts`: `DailyOpportunity`
+- `packages/domain/autonomy.ts`: `DailyOpportunity`, `planDailyOpportunity`
+- `packages/domain/defaults.ts`: `testCharacters`
 - `packages/domain/directions.ts`: `DialogueParts`
-- `packages/domain/schedule.ts`: `firstProbabilityDrop`
+- `packages/domain/schedule.ts`: `slotAt`, `catchUpAt`, `firstProbabilityDrop`, `SessionState`, `closeSession`, `advanceSession`
 - `scripts/build-web-player.ts`: `PlayerBuildOptions`
+- `scripts/web-cloudflare-operator.ts`: `WebOperatorArguments`
+- `scripts/web-provider.ts`: `readSelectedVoiceFiles`, `liveTransports`, `renderAssets`, `lanNetwork`
 - `workers/audio/fish.ts`: `speechPayload`
 - `workers/audio/validation-error.ts`: `AudioGeneration`
 - `workers/audio/wav.ts`: `slicePCM`
 - `workers/web-cloudflare/budget.ts`: `BudgetEnvironment`, `WebBudgetService`, `WebBudgetOperatorService`
-- `workers/web-cloudflare/business.ts`: `default`
 - `workers/web-cloudflare/edge.ts`: `WebBusinessEndpoint`
-- `workers/web-cloudflare/generation.ts`: `WebGenerationEnvironment`, `WebGenerationService`, `default`
+- `workers/web-cloudflare/generation.ts`: `WebGenerationEnvironment`, `WebGenerationService`
 
-### In test-only files (34)
+### In test-only files (23)
 
-- `apps/server/audio-storage.ts`: `AudioIntegrity`, `LocalAudioStorage`, `ExternalAudioStorage`, `ExternalAuditionStorage`, `AuditionStorage`
-- `apps/server/autonomy.ts`: `PROACTIVE_DEFERRALS`, `PROACTIVE_CANCELLATIONS`, `AutonomyScheduler`
-- `apps/server/beta-access-transactions.ts`: `AccessTransaction`, `bindBetaAccessTransactions`
-- `apps/server/beta-accounts.ts`: `BetaAccounts`
-- `apps/server/credentials.ts`: `sourceEnvironment`
-- `apps/server/engine.ts`: `WorldPolicy`, `WorkItem`
-- `apps/server/media.ts`: `MediaService`
-- `apps/server/moment-autonomy.ts`: `MOMENT_POST_DEFERRALS`, `MOMENT_POST_CANCELLATIONS`, `momentSettings`, `listMomentSettings`, `saveMomentSettings`, `momentActivities`, `MomentScheduler`
-- `apps/server/provider-meter.ts`: `providerCallId`, `playerCostFunction`, `assertProviderTaskActive`, `providerMeter`
-- `apps/server/relationship-test.ts`: `readRelationshipTest`, `saveRelationshipTest`
-- `apps/server/text-queue.ts`: `canStartBetaText`
-- `scripts/web-cloudflare-operator.ts`: `WebOperatorArguments`
-- `scripts/web-provider.ts`: `readSelectedVoiceFiles`, `liveTransports`, `renderAssets`, `lanNetwork`
+- `apps/player-web/src/app/admin-mode.ts`: `startAdminMode`
+- `apps/player-web/src/app/local-mode.ts`: `startLocalMode`, `startLocal3Mode`
+- `apps/player-web/src/data/pending-operations.ts`: `PendingState`
+- `apps/player-web/src/features/admin/account-admin-page.ts`: `adminAccountError`
+- `apps/player-web/src/features/admin/invite-admin-page.ts`: `InviteAdminPort`
+- `apps/player-web/src/features/invite/invite-form.ts`: `InviteFormDeps`
+- `apps/player-web/src/features/prototype/mobile-layout.ts`: `VisibleViewport`
+- `apps/player-web/src/features/prototype/preview.ts`: `startPrototype`
+- `apps/player-web/src/features/prototype/provider-catalog-view.ts`: `Person`
+- `apps/player-web/src/media/audio-controller.ts`: `PlayResult`
+- `apps/player-web/src/services/account-admin-api.ts`: `AdminGrant`
+- `apps/player-web/src/services/character-admin-api.ts`: `CharacterDraft`, `CharacterSummary`, `PreviewJob`, `DeleteImpact`
+- `apps/player-web/src/session/invite-form-adapter.ts`: `InviteFormResult`
+- `packages/contracts/web-local-client.ts`: `LocalSendAction`, `LocalError`
+- `packages/contracts/web-local-invite.ts`: `WebInviteBootstrap`, `WebInviteRecoveryResult`, `WebInviteCredential`
+- `packages/contracts/web-local.ts`: `WebLocalError`
 
-## Text protocols: which one is live
+## Text protocols
 
-**accepted-v7 is the live web path; strict_draft_audit_v10 is not.** Per the Part 2 rule, neither was removed.
-
-Evidence:
-
-- `workers/web-cloudflare/generation.ts` constructs `DeepSeekTextGenerator({ textProtocol: 'accepted-v7' })` and asserts the policy hash matches.
-- `apps/server/cloudflare/web-generators.ts` declares `textProtocol = 'accepted-v7'` and `policyHash = textPolicyHash({ textProtocol: 'accepted-v7' })`.
-- `apps/server/web-provider-runner.ts` and `web-character-preview-runner.ts` `ensure(… textProtocol === 'accepted-v7')`; `provider-meter.ts` throws `BETA_TEXT_PROTOCOL_REQUIRED` for anything else; `web-character-publication.ts` only accepts reviews with the accepted-v7 policy hash; `scripts/web-provider.ts` also passes `accepted-v7`.
-- The `experimental-v10` default exists only in `createTextGenerationPolicy`/`DeepSeekTextGenerator` when no option is passed; no web caller omits it. The deploy templates (`workers/web-cloudflare/deploy/*.json.example`) contain no protocol setting.
-
-So `text-protocol.ts` and `text-prompt.ts` (v10) are the candidates for a later removal, and `accepted-text-protocol.ts`, `accepted-text-prompt.ts`, `web-v7-request.ts` must stay.
+**accepted-v7 is the only protocol.** The `experimental-v10` protocol (`text-protocol.ts`, `text-prompt.ts`, the `textProtocol` option and every v10 branch) was removed. `createTextGenerationPolicy` still serializes `textProtocol: 'accepted-v7'` in the resolved policy because the approval hash covers the full serialized policy; `tests/web/unit/web-text-policy.test.ts` pins the hash (`58ba3f99…b7b8`), prompt hash and protocol fingerprint to the pre-removal values.
 
 ## Legacy migrations 001–033: table usage by web code
 
