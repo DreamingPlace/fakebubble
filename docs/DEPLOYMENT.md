@@ -51,7 +51,7 @@ pnpm web:cloudflare:package "$PWD/runtime/cloud-package"
 
 供应商返回 HTTP 429 表示请求在执行前被拒绝，是**已知未执行**：同一阶段退回待处理，按 2s、4s、8s 退避重试（最多三次，且不越过操作截止时间），重试沿用同一笔预占，不重复预占也不提前释放。超时、网络错误和 5xx 仍是 UNKNOWN，绝不重发。语音重试用尽，或 8 秒内没有语音名额时，已审核的文字原样作为文字气泡发布（`deliveryFallback: "text"`，不生成新文字）；为未使用的语音阶段预占的金额按零成本结算释放。
 
-`114_stage_metrics.sql` 是独立的第 114 版迁移，在 113 之后按顺序执行，并把 `user_version`（Cloudflare 为迁移账本的最大版本）置为 114；113 这一步与 main 上逐字节相同（有哈希测试）。它为每个操作记录文字/语音排队与阶段耗时、限流重试、是否降级，以及降级时被丢弃的已生成语音段数（`discarded_audio_segments`）。Node：新的 provider-* 实例由 `migrate` 一路执行到 114；已在 113 的实例用 `scripts/web-provider.ts migrate-metrics <root>` 升级（`migrate` 只接受全新的 100 版实例，所以这个入口仍然需要）。Cloudflare：Durable Object 启动时校验已应用迁移的哈希，并按顺序补上账本里缺少的步骤，因此已在 113 的现有权威（内联与 R2）会自动升到 114；账本超前于代码或哈希不一致仍然拒绝启动。主管理员可通过 `POST /api/web/local/admin/metrics/stage-latency`（`{"days":1..31}`）查看每日 p50/p95。
+`114_stage_metrics.sql` 是独立的第 114 版迁移，在 113 之后按顺序执行，并把 `user_version`（Cloudflare 为迁移账本的最大版本）置为 114；113 这一步与 main 上逐字节相同（有哈希测试）。它为每个操作记录文字/语音排队与阶段耗时、限流重试、是否降级，以及降级时被丢弃的已生成语音段数（`discarded_audio_segments`）。Node：新的 provider-* 实例由 `migrate` 一路执行到 114；已在 113 的实例用 `scripts/web-provider.ts migrate-metrics <root>` 升级（`migrate` 只接受全新的 100 版实例，所以这个入口仍然需要）。Cloudflare：Durable Object 启动时校验已应用迁移的哈希，并按顺序补上账本里缺少的步骤，因此已在 113 的现有权威（内联与 R2）会自动升到 114；账本超前于代码或哈希不一致仍然拒绝启动。主管理员可通过 `POST /api/web/local/admin/metrics/stage-latency`（`{"days":1..31}`）查看每日 p50/p95，以及起草/审核两次调用各自的 DeepSeek 提示缓存命中率（`cache.draft` / `cache.review`：`hitTokens`、`missTokens`、`hitRatio` = hit / (hit + miss)；数据来自每次成功文字阶段已保存的 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens`，无需新迁移；供应商没返回时不计样本、比率为 null）。预算预占仍按完整未缓存价格，保持保守上界。
 
 默认 `PUBLIC_ENABLED`、`EXTERNAL_CALLS`、`OPERATOR_ENABLED` 关闭；`workers_dev`、预览域名关闭，`routes` 为空。部署不是安装脚本的副作用。本仓库不附带一键开启付费调用的命令。
 

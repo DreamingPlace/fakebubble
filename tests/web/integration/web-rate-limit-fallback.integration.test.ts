@@ -23,6 +23,7 @@ import { WebProviderRunner, type FakeFish } from '../../../apps/server/generatio
 import { WebVerticalPublisher } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import type { WebAttemptBudget } from '../../../apps/server/budget/web-provider-budget-contract.ts';
 import { MemoryBudget } from '../fixtures/memory-budget.ts';
+import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
 import { webProviderNextDue } from '../../../apps/server/cloudflare/web-executor.ts';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -668,4 +669,65 @@ test('429 retries exhausted after an earlier segment was generated: the discarde
   assert.equal(f.metrics().discarded_audio_segments, 1, 'segment 0 was generated and paid, then dropped for text');
   await f.runner.publishTextFallback(f.lease, 'operation');
   assert.equal(f.metrics().fallback_used, 1);
+});
+
+test('both text calls store DeepSeek cache hit/miss tokens and the owner view reports the daily hit ratio per stage', async (t) => {
+  const s = stage(t, { fish: (_call, request) => fishOk(request) });
+  await s.readyForAudio();
+  const usage = (phase: string) =>
+    JSON.parse(
+      s.row<{ metadata_json: string }>(
+        "SELECT metadata_json FROM web_provider_attempts WHERE operation_id='operation' AND phase=?",
+        phase,
+      ).metadata_json,
+    ).usage;
+  assert.deepEqual(usage('draft'), {
+    inputTokens: 10,
+    outputTokens: 5,
+    totalTokens: 15,
+    cacheHitInputTokens: 6,
+    cacheMissInputTokens: 4,
+  });
+  assert.deepEqual(usage('review'), {
+    inputTokens: 10,
+    outputTokens: 5,
+    totalTokens: 15,
+    cacheHitInputTokens: 8,
+    cacheMissInputTokens: 2,
+  });
+  const origin = 'https://admin.fixture.invalid';
+  const admin = new WebAccountAdmin(s.store, s.clock, origin);
+  const owner = admin.login(admin.issueLoginGrant().token, origin);
+  const view = admin.stageLatency(owner.cookie, owner.csrf, origin, 7) as { days: { day: string; cache: unknown }[] };
+  assert.equal(view.days.length, 1);
+  assert.deepEqual(view.days[0]!.cache, {
+    draft: { calls: 1, hitTokens: 6, missTokens: 4, hitRatio: 0.6 },
+    review: { calls: 1, hitTokens: 8, missTokens: 2, hitRatio: 0.8 },
+  });
+});
+
+test('a provider that reports no cache counters adds no cache sample (ratio null, never a guess)', async (t) => {
+  let request: ReturnType<typeof textRequest> | undefined;
+  const s = stage(t, {
+    fish: (_call, request) => fishOk(request),
+    fetch: (_call, tool) => {
+      const envelope = tool === 'submit_dialogue_draft' ? draftEnvelope(request) : acceptedAuditEnvelope(request);
+      if (tool !== 'submit_dialogue_draft') {
+        const call = envelope.choices[0]!.message.tool_calls[0]!.function;
+        const audit = JSON.parse(call.arguments);
+        audit.replacementBubbles = bubbles;
+        audit.coverage.input.supportQuote = bubbles[0]!.text;
+        call.arguments = JSON.stringify(audit);
+      }
+      return Response.json({ ...envelope, usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } });
+    },
+  });
+  request = s.request;
+  await s.readyForAudio();
+  const origin = 'https://admin.fixture.invalid';
+  const admin = new WebAccountAdmin(s.store, s.clock, origin);
+  const owner = admin.login(admin.issueLoginGrant().token, origin);
+  const view = admin.stageLatency(owner.cookie, owner.csrf, origin, 7) as { days: { cache: unknown }[] };
+  const none = { calls: 0, hitTokens: 0, missTokens: 0, hitRatio: null };
+  assert.deepEqual(view.days[0]!.cache, { draft: none, review: none });
 });

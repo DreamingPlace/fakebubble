@@ -22,6 +22,17 @@ export function approvedProfile(id = 'text-fixture') {
     referencePerson: { name: 'EXCLUDE_REFERENCE_IDENTITY' },
   };
 }
+/** DeepSeek usage as reported on the wire: 10 prompt tokens split into cache hits and misses (draft 6/4, review 8/2). */
+export function fixtureUsage(tool: string) {
+  const hit = tool === 'submit_dialogue_draft' ? 6 : 8;
+  return {
+    prompt_tokens: 10,
+    completion_tokens: 5,
+    total_tokens: 15,
+    prompt_cache_hit_tokens: hit,
+    prompt_cache_miss_tokens: 10 - hit,
+  };
+}
 export function textRequest(): TextGenerationRequest {
   const now = Date.parse('2026-09-09T12:00:00+08:00');
   const scope = { worldId: 'text-world', conversationId: 'text-conversation', characterId: 'text-fixture' };
@@ -100,7 +111,7 @@ export function envelope(request = textRequest()) {
         },
       },
     ],
-    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    usage: fixtureUsage('submit_dialogue_draft'),
   };
 }
 
@@ -162,7 +173,7 @@ export function toolEnvelope(name: string, argumentsValue: unknown) {
         },
       },
     ],
-    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    usage: fixtureUsage(name),
   };
 }
 export const draftEnvelope = (request = textRequest()) => toolEnvelope('submit_dialogue_draft', draftWire(request));

@@ -87,6 +87,8 @@ function emailAddress(value: unknown) {
 }
 
 type Percentiles = { samples: number; p50Ms: number | null; p95Ms: number | null };
+/** DeepSeek prompt-cache usage of the day's successful text calls; ratio is hit / (hit + miss), null without data. */
+type CacheUsage = { calls: number; hitTokens: number; missTokens: number; hitRatio: number | null };
 export interface StageLatencyDay {
   day: string;
   operations: number;
@@ -96,6 +98,7 @@ export interface StageLatencyDay {
   audioStage: Percentiles;
   rateLimitRetries: number;
   fallbacks: number;
+  cache: { draft: CacheUsage; review: CacheUsage };
 }
 
 /** Provider-only durable administrator identity. Players never enter this account namespace. */
@@ -267,6 +270,35 @@ export class WebAccountAdmin extends WebInviteAdmin {
     );
     const byDay = new Map<string, typeof rows>();
     for (const row of rows) byDay.set(row.day, [...(byDay.get(row.day) ?? []), row]);
+    // The cache split is already part of each succeeded text stage's stored metadata; only usable when the provider
+    // ledger exists and the provider reported both counters (otherwise the call has no data and is not counted).
+    const cache = new Map<string, CacheUsage>();
+    if (this.db.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_provider_attempts'"))
+      for (const row of this.db.all<{
+        day: string;
+        phase: 'draft' | 'review';
+        calls: number;
+        hit: number;
+        miss: number;
+      }>(
+        `SELECT m.day,a.phase,count(*) calls,
+          sum(json_extract(a.metadata_json,'$.usage.cacheHitInputTokens')) hit,
+          sum(json_extract(a.metadata_json,'$.usage.cacheMissInputTokens')) miss
+        FROM web_provider_attempts a JOIN web_operation_metrics m ON m.operation_id=a.operation_id
+        WHERE a.phase IN ('draft','review') AND a.state='known' AND a.outcome='succeeded'
+          AND json_type(a.metadata_json,'$.usage.cacheHitInputTokens')='integer'
+          AND json_type(a.metadata_json,'$.usage.cacheMissInputTokens')='integer'
+          AND m.day IN (SELECT day FROM web_operation_metrics GROUP BY day ORDER BY day DESC LIMIT ?)
+        GROUP BY m.day,a.phase`,
+        days as number,
+      ))
+        cache.set(`${row.day}:${row.phase}`, {
+          calls: row.calls,
+          hitTokens: row.hit,
+          missTokens: row.miss,
+          hitRatio: row.hit + row.miss > 0 ? row.hit / (row.hit + row.miss) : null,
+        });
+    const noCache: CacheUsage = { calls: 0, hitTokens: 0, missTokens: 0, hitRatio: null };
     const percentiles = (values: (number | null)[]) => {
       const sorted = values.filter((v): v is number => v !== null).sort((a, b) => a - b);
       const at = (q: number) => (sorted.length ? sorted[Math.max(0, Math.ceil(q * sorted.length) - 1)]! : null);
@@ -282,6 +314,7 @@ export class WebAccountAdmin extends WebInviteAdmin {
         audioStage: percentiles(items.map((r) => r.audio_stage_ms)),
         rateLimitRetries: items.reduce((n, r) => n + r.retries, 0),
         fallbacks: items.reduce((n, r) => n + r.fallback_used, 0),
+        cache: { draft: cache.get(`${day}:draft`) ?? noCache, review: cache.get(`${day}:review`) ?? noCache },
       })),
     };
   }
