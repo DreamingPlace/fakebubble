@@ -44,3 +44,12 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - `pnpm check`: **688 tests, 688 passed, 0 failed, 0 skipped** (688 baseline + 3 new policy-hash tests − 3 deleted legacy Engine scene tests). It also passes when run immediately after `pnpm web:player:build`.
 - Four-Worker package: **212** files (was 215).
 - No `.sql` migration or migration runner changed.
+
+## Part 4 (concurrency, 429, fallback, metrics)
+
+- `maxTextRunning` / `maxAudioRunning` are deployment configuration (Worker vars `MAX_TEXT_RUNNING`, `MAX_AUDIO_RUNNING`, `MAX_WAITING_OPERATIONS`, `AUDIO_FALLBACK_WAIT_MS`; local `local-config.json` `concurrency`), validated at start (1–64 / 1–48), defaults 20 / 4 / 8000 ms. A store built without configuration (offline fixtures) keeps 4 / 4 / 120 because the stage-queue tests are written against it. Global tickets = text + audio + waiting = 128 for both defaults.
+- Provider HTTP 429 is known not-executed: the stage claim returns to pending (2s, 4s, 8s, at most three retries, never past the deadline) on one budget reservation; timeouts, network errors and 5xx are unchanged (UNKNOWN, never resent).
+- Voice falls back to the reviewed text as text bubbles (`deliveryFallback: "text"`) after `audioFallbackWaitMs` without a slot, or when 429 retries are exhausted; the unused voice reservation is settled at zero. The wait fallback applies only while no audio segment has been started: once one is sent, the operation is exempt and keeps waiting for slots as voice. A 429-exhausted fallback after earlier segments records them in `web_operation_metrics.discarded_audio_segments`.
+- `114_stage_metrics.sql` (stage timings, retries, fallback; 429 bookkeeping; `web_publication_items.media_id` nullable). It is its own migration step: version 114 on the local runner (`migrateWebProviderMetrics`, `user_version=114`) and on the Cloudflare runner (inline and R2); the 113 step is byte-for-byte as on main (hash test). The Cloudflare runner now applies missing trailing steps, so an authority already at 113 upgrades to 114. Every `schema === 113` check became `>= 113`.
+- `pnpm check`: **721 tests, 721 passed, 0 failed, 0 skipped** (691 + 30 new), about 7m45s. 30-player load: 15 voice, 15 text fallback (all wait fallbacks), 0 wait-discarded audio, 0 429-discarded audio.
+- Four-Worker package: **216** files (was 213: `config/web-concurrency.ts`, `admission/web-stage-metrics.ts` and the 114 SQL).

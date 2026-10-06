@@ -54,11 +54,19 @@ export function auditWebLifecycleWorld(
   if (provider)
     ensure(
       store.providerAudio &&
-        store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113 &&
+        (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 113 &&
         store.get("SELECT 1 FROM sqlite_master WHERE name='cf_web_audio_objects'"),
       'WEB_RETENTION_SCOPE_UNSAFE',
     );
-  const providerShells = new Set(['web_provider_attempts', 'cf_web_audio_objects', 'web_character_deletion_scopes']);
+  // web_operation_metrics and web_attempt_rejections hold only counters and timings keyed by operation (no content),
+  // like the attempt shells that outlive a purge.
+  const providerShells = new Set([
+    'web_provider_attempts',
+    'cf_web_audio_objects',
+    'web_character_deletion_scopes',
+    'web_operation_metrics',
+    'web_attempt_rejections',
+  ]);
   const operationContent = new Set([
     'web_provider_outputs',
     'web_provider_candidates',

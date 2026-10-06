@@ -21,6 +21,10 @@ Browser → edge → business Durable Object → generation Worker → DeepSeek 
 - `packages/contracts`、`packages/domain`、共享 server/audio 模块：Web 实际引用的契约、生成、记忆与数据库基础设施。
 - `tests/web`、`apps/player-web/tests/components`：离线回归；fixtures 仅用于测试，不是供应商验收材料。
 
+## 并发与降级
+
+文本与语音的并发上限来自部署配置（`config/web-concurrency.ts`，Worker vars / 本地实例配置，启动时校验），所有阶段调度器读取同一个值。供应商 429 = 已知未执行：阶段退回待处理并按 2/4/8 秒退避，沿用同一笔预占。超时、网络错误、5xx 仍为 UNKNOWN。语音拿不到名额（`audioFallbackWaitMs`）或 429 重试用尽时，已审核文字以文字气泡发布，并按零成本结算未使用的语音预占。每个操作的阶段耗时、重试与降级写入 `web_operation_metrics`（业务对象是唯一写入方）。
+
 ## 不变量
 
 业务服务是状态的唯一写入方。生成进程不直接写业务库。私人访问必须绑定身份、世界和会话；预算在发出调用前预占。已发送但结果未知的调用保留占款，不能因超时、重启或创建新实例而重发或释放。

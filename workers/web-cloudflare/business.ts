@@ -22,6 +22,7 @@ import { WebCloudRetention } from '../../apps/server/cloudflare/web-retention.ts
 import { WebProviderHTTP } from '../../apps/server/cloudflare/web-http.ts';
 import { trustedWebRequest } from '../../apps/server/cloudflare/web-edge-request.ts';
 import { webR2Migrations } from './migrations.ts';
+import { webConcurrencyFromEnv } from '../../config/web-concurrency.ts';
 import type { WebBudgetPolicy } from '../../apps/server/budget/web-provider-budget-contract.ts';
 import { cloudAdminMailer, type AdminEmailBinding } from '../../apps/server/cloudflare/web-admin-mail.ts';
 
@@ -46,6 +47,11 @@ export interface WebBusinessEnvironment {
   PUBLIC_ENABLED?: string;
   EXTERNAL_CALLS?: string;
   OPERATOR_ENABLED?: string;
+  /** Stage concurrency (decimal strings); validated at construction, absent means the deployment default. */
+  MAX_TEXT_RUNNING?: string;
+  MAX_AUDIO_RUNNING?: string;
+  MAX_WAITING_OPERATIONS?: string;
+  AUDIO_FALLBACK_WAIT_MS?: string;
   ADMIN_EMAIL_ENABLED?: string;
   ADMIN_EMAIL_FROM?: string;
   ADMIN_EMAIL?: AdminEmailBinding;
@@ -118,6 +124,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       recoveryEpoch: env.RECOVERY_EPOCH,
       keys: { ipKey: Buffer.from(env.IP_KEY, 'base64url'), requestKey: Buffer.from(env.REQUEST_KEY, 'base64url') },
       providerAudio: new PrivateMediaObjects(env.MEDIA),
+      concurrency: webConcurrencyFromEnv(env as unknown as Record<string, unknown>),
     });
     const configHash = createHash('sha256')
       .update(

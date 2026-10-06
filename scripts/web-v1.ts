@@ -39,6 +39,7 @@ if (action === 'init') {
   const store = new WebStore(root, {
     create: false,
     instanceId: config.instanceId,
+    concurrency: config.concurrency,
     ...(dataLifecycleTest ? { dataLifecycleTest: true as const } : {}),
     ...(inviteTest ? { inviteTest: true as const } : {}),
   });

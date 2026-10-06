@@ -16,6 +16,7 @@ import { basename, dirname, isAbsolute, join, parse, resolve, sep } from 'node:p
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { parseWebConcurrency, type WebConcurrency } from '../../../config/web-concurrency.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { preflightWebDataPolicyInTransaction } from './web-data-policy-preflight.ts';
 import { auditWebLifecycleWorld } from '../admission/web-lifecycle-audit.ts';
@@ -32,6 +33,7 @@ interface WebStoreOptions {
   dataLifecycleTest?: true;
   inviteTest?: true;
   providerRuntime?: true;
+  concurrency?: WebConcurrency;
 }
 const WEB_SCHEMA = 100;
 const WEB_STAGE_SCHEMA = 101;
@@ -47,6 +49,7 @@ const WEB_DATA_SCHEMA = 110;
 const WEB_INVITE_CORE_SCHEMA = 111;
 const WEB_INVITE_IDENTITY_SCHEMA = 112;
 const WEB_PROVIDER_SCHEMA = 113;
+const WEB_METRICS_SCHEMA = 114;
 const webDbName = 'web.sqlite';
 const webMarkerName = '.web-instance.json';
 type WebMarker = {
@@ -197,7 +200,7 @@ function webIdentity(
       WEB_LOCAL_SCHEMA,
       ...(dataLifecycleTest ? [WEB_DATA_SCHEMA] : []),
       ...(inviteTest ? [WEB_INVITE_CORE_SCHEMA, WEB_INVITE_IDENTITY_SCHEMA] : []),
-      ...(providerRuntime ? [WEB_PROVIDER_SCHEMA] : []),
+      ...(providerRuntime ? [WEB_PROVIDER_SCHEMA, WEB_METRICS_SCHEMA] : []),
     ].includes(version),
     'WEB_SCHEMA_MISMATCH',
   );
@@ -255,7 +258,7 @@ function preflightWeb(path: string, options: WebStoreOptions) {
         version >= WEB_SCHEMA &&
           version <=
             (options.providerRuntime
-              ? WEB_PROVIDER_SCHEMA
+              ? WEB_METRICS_SCHEMA
               : options.inviteTest
                 ? WEB_INVITE_IDENTITY_SCHEMA
                 : WEB_DATA_SCHEMA),
@@ -382,7 +385,7 @@ export class Store {
                   WEB_LOCAL_SCHEMA,
                   ...(options.web?.dataLifecycleTest ? [WEB_DATA_SCHEMA] : []),
                   ...(options.web?.inviteTest ? [WEB_INVITE_CORE_SCHEMA, WEB_INVITE_IDENTITY_SCHEMA] : []),
-                  ...(options.web?.providerRuntime ? [WEB_PROVIDER_SCHEMA] : []),
+                  ...(options.web?.providerRuntime ? [WEB_PROVIDER_SCHEMA, WEB_METRICS_SCHEMA] : []),
                 ].includes(version)
               : version <= (this.beta ? 33 : 24)),
           'UNSUPPORTED_SCHEMA',
@@ -555,6 +558,8 @@ export class WebStore extends Store {
   private readonly dataLifecycleTest: boolean;
   private readonly inviteTest: boolean;
   readonly providerRuntime: boolean;
+  /** Validated deployment concurrency; absent means the library default (see config/web-concurrency.ts). */
+  readonly concurrency?: WebConcurrency;
   /** A persisted invite runtime must have passed the role/root/config preflight on open. */
   requireInviteTest() {
     ensure(
@@ -562,7 +567,7 @@ export class WebStore extends Store {
         this.inviteTest &&
         (this.get<{ user_version: number }>('PRAGMA user_version')?.user_version === WEB_INVITE_IDENTITY_SCHEMA ||
           (this.providerRuntime &&
-            this.get<{ user_version: number }>('PRAGMA user_version')?.user_version === WEB_PROVIDER_SCHEMA)),
+            (this.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= WEB_PROVIDER_SCHEMA)),
       'WEB_INVITE_TEST_NOT_AUTHORIZED',
     );
   }
@@ -571,7 +576,7 @@ export class WebStore extends Store {
       this.providerRuntime &&
         this.dataLifecycleTest &&
         this.inviteTest &&
-        this.get<{ user_version: number }>('PRAGMA user_version')?.user_version === WEB_PROVIDER_SCHEMA,
+        (this.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= WEB_PROVIDER_SCHEMA,
       'WEB_PROVIDER_RUNTIME_NOT_AUTHORIZED',
     );
   }
@@ -583,9 +588,11 @@ export class WebStore extends Store {
       dataLifecycleTest?: true;
       inviteTest?: true;
       providerRuntime?: true;
+      concurrency?: WebConcurrency;
     },
   ) {
     super(join(root, webDbName), { web: { root, ...options } });
+    if (options.concurrency) this.concurrency = parseWebConcurrency(options.concurrency);
     this.instanceId = options.instanceId;
     this.root = root;
     this.dataLifecycleTest = options.dataLifecycleTest === true;

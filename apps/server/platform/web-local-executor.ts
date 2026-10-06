@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { webConcurrency } from '../../../config/web-concurrency.ts';
 import type { WebStore } from './store.ts';
 import { WebStageQueue, type WebCoordinatorLease, type WebStageClaim } from '../admission/web-stage-queue.ts';
 import { WebDispatchLedger } from '../budget/web-dispatch-ledger.ts';
@@ -125,6 +126,8 @@ export class WebLocalExecutor {
   }
 
   private ensureBudget(stage: 'text' | 'audio', phase: 'draft' | 'review' | 'speech') {
+    const limits = webConcurrency(this.store);
+    const capacity = stage === 'text' ? limits.maxTextRunning : limits.maxAudioRunning;
     if (
       this.store.get(
         'SELECT 1 FROM web_external_budgets WHERE provider=? AND stage=? AND phase=?',
@@ -132,14 +135,11 @@ export class WebLocalExecutor {
         stage,
         phase,
       )
-    )
+    ) {
+      this.ledger.alignBudget({ provider: 'synthetic-local', stage, phase, capacity });
       return;
-    this.ledger.configureBudget({
-      provider: 'synthetic-local',
-      stage,
-      phase,
-      capacity: stage === 'text' ? WEB_LIMITS.maxTextRunning : WEB_LIMITS.maxAudioRunning,
-    });
+    }
+    this.ledger.configureBudget({ provider: 'synthetic-local', stage, phase, capacity });
   }
 
   private failInvalid(operationId: string, error: unknown) {

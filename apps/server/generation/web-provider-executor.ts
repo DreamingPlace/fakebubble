@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { webConcurrency } from '../../../config/web-concurrency.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import { requireWebRuntime, type WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
@@ -8,6 +9,8 @@ import { WebStageQueue, type WebCoordinatorLease, type WebStageClaim } from '../
 import { WebDispatchLedger } from '../budget/web-dispatch-ledger.ts';
 import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts';
 import { WebProviderRunner } from './web-provider-runner.ts';
+import { fallbackRequested, metricsEnabled } from '../admission/web-stage-metrics.ts';
+import { WebProviderOffline } from './web-provider-offline.ts';
 
 /** Separate schema113 scheduler. No synthetic output, default budget or footer is installed. */
 export class WebProviderExecutor {
@@ -22,6 +25,7 @@ export class WebProviderExecutor {
   private readonly controllers = new Set<AbortController>();
   private readonly tasks = new Set<Promise<void>>();
   private readonly publishing = new Set<string>();
+  private readonly falling = new Set<string>();
   private managed = false;
   private readonly activity: { hold(task: Promise<void>): void; settled(): Promise<void> } | undefined;
   lastError: string | null = null;
@@ -34,7 +38,7 @@ export class WebProviderExecutor {
   ) {
     requireWebRuntime(store, 'provider');
     ensure(
-      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113,
+      (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 113,
       'WEB_PROVIDER_RUNTIME_NOT_AUTHORIZED',
     );
     this.store = store;
@@ -75,6 +79,15 @@ export class WebProviderExecutor {
           'WEB_PROVIDER_NOT_CONFIGURED',
         );
       }
+    if (configured) {
+      const limits = webConcurrency(this.store);
+      for (const [provider, stage, phase, capacity] of [
+        ['deepseek', 'text', 'draft', limits.maxTextRunning],
+        ['deepseek', 'text', 'review', limits.maxTextRunning],
+        ['fish', 'audio', 'speech', limits.maxAudioRunning],
+      ] as const)
+        this.ledger.alignBudget({ provider, stage, phase, capacity });
+    }
     this.coordinator = this.queue.acquireCoordinator(owner);
   }
 
@@ -108,7 +121,8 @@ export class WebProviderExecutor {
     }
     try {
       this.lastError = null;
-      for (let i = 0; i < Math.max(WEB_LIMITS.maxTextRunning, WEB_LIMITS.maxAudioRunning); i++) this.pump();
+      const limits = webConcurrency(this.store);
+      for (let i = 0; i < Math.max(limits.maxTextRunning, limits.maxAudioRunning); i++) this.pump();
     } catch (error) {
       this.error(error);
       if (error instanceof DomainError && error.code === 'WEB_COORDINATOR_STALE') this.stop();
@@ -210,6 +224,25 @@ export class WebProviderExecutor {
     this.track(task, () => this.publishing.delete(operationId));
   }
 
+  private offlineLedger: WebProviderOffline | undefined;
+  private offline() {
+    return (this.offlineLedger ??= new WebProviderOffline(this.store, this.clock));
+  }
+
+  /** Voice gave up (no audio slot in time, or HTTP 429 retries used up): publish the reviewed text as text. */
+  private fallback(lease: WebCoordinatorLease, operationId: string, decide: boolean) {
+    if (this.falling.has(operationId)) return;
+    this.falling.add(operationId);
+    const task = (async () => {
+      if (decide) await this.runner.beginTextFallback(operationId);
+      await this.runner.publishTextFallback(lease, operationId);
+    })();
+    this.track(
+      task.then(() => {}),
+      () => this.falling.delete(operationId),
+    );
+  }
+
   /** Bounded pass; all provider calls are scheduled outside SQLite transactions. */
   pump() {
     ensure(this.coordinator, 'WEB_COORDINATOR_STALE');
@@ -233,6 +266,28 @@ export class WebProviderExecutor {
         } else this.ledger.recover(lease, this.ledger.fence(row.id));
       } catch (error) {
         this.error(error);
+      }
+    }
+    if (metricsEnabled(this.store)) {
+      // Decided earlier (audio_wait or rate_limited) and not yet published; survives a restart because it is durable.
+      for (const row of this.store.all<{ id: string }>(
+        `SELECT o.id FROM web_operations o JOIN web_operation_metrics m ON m.operation_id=o.id
+        WHERE m.fallback_reason IS NOT NULL AND m.fallback_used=0 AND o.status IN ('text_ready','audio_pending')
+          AND o.quota_state='reserved' AND o.audio_wait_started_at IS NULL AND o.deadline_at>? LIMIT 16`,
+        this.clock.now(),
+      )) {
+        try {
+          this.fallback(lease, row.id, false);
+        } catch (error) {
+          this.error(error);
+        }
+      }
+      for (const id of this.offline().fallbackDue(this.clock.now())) {
+        try {
+          this.fallback(lease, id, true);
+        } catch (error) {
+          this.error(error);
+        }
       }
     }
     for (const row of this.store.all<{ id: string }>(
@@ -261,6 +316,7 @@ export class WebProviderExecutor {
     for (const row of this.store.all<{ id: string }>(
       `SELECT id FROM web_operations WHERE
       status='audio_pending' AND audio_wait_started_at IS NULL AND quota_state='reserved'
+      ${metricsEnabled(this.store) ? 'AND NOT EXISTS (SELECT 1 FROM web_operation_metrics m WHERE m.operation_id=id AND m.fallback_reason IS NOT NULL)' : ''}
       AND deadline_at>? LIMIT 16`,
       this.clock.now(),
     )) {

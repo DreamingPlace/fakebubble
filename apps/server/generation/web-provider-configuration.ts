@@ -4,6 +4,7 @@ import { WebProviderOffline } from './web-provider-offline.ts';
 import { WebDispatchLedger } from '../budget/web-dispatch-ledger.ts';
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { webConcurrency } from '../../../config/web-concurrency.ts';
 import type { WebBudgetPolicy } from '../budget/web-provider-budget-contract.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 
@@ -58,19 +59,19 @@ export function configureWebProvider(
       provider: 'deepseek',
       stage: 'text',
       phase: 'draft',
-      capacity: WEB_LIMITS.maxTextRunning,
+      capacity: webConcurrency(store).maxTextRunning,
     });
     capacity.configureBudget({
       provider: 'deepseek',
       stage: 'text',
       phase: 'review',
-      capacity: WEB_LIMITS.maxTextRunning,
+      capacity: webConcurrency(store).maxTextRunning,
     });
     capacity.configureBudget({
       provider: 'fish',
       stage: 'audio',
       phase: 'speech',
-      capacity: WEB_LIMITS.maxAudioRunning,
+      capacity: webConcurrency(store).maxAudioRunning,
     });
   });
 }

@@ -80,6 +80,9 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
     'web_guest_retention',
     'web_retention_file_cleanup',
     'web_invite_grants',
+    // counters and timings keyed by operation, no content
+    'web_operation_metrics',
+    'web_attempt_rejections',
   ]);
   if (!cleared)
     for (const name of [

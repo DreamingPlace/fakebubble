@@ -686,3 +686,57 @@ test('incoming presentation does not drag a reader away from earlier messages', 
   assert.equal(f.list.children.length, 4);
   assert.equal(f.body.scrollTop, 40);
 });
+
+test('a voice reply delivered as text fallback renders as an ordinary text bubble: no play button, no error', async (t) => {
+  const f = await fixture(t, async () => {});
+  const base = {
+    conversationId: 'c',
+    characterId: 'wei-guagua',
+    operationId: 'op',
+    createdAt: 1,
+    audio: null,
+  } as const;
+  f.handlers.history = async () => ({
+    messages: [
+      { ...base, messageId: 'in', replyOrdinal: null, author: 'player', origin: 'input', text: '你好' },
+      {
+        ...base,
+        messageId: 'fb0',
+        replyOrdinal: 0,
+        author: 'character',
+        origin: 'narrative',
+        text: '回复第一段',
+        deliveryFallback: 'text',
+      },
+      {
+        ...base,
+        messageId: 'fb1',
+        replyOrdinal: 1,
+        author: 'character',
+        origin: 'narrative',
+        text: '回复第二段',
+        deliveryFallback: 'text',
+      },
+    ] as WebProviderMessage[],
+  });
+  await f.send();
+  const rows = f.list.children;
+  assert.deepEqual(
+    rows.map((row) => row.dataset.messageId),
+    ['in', 'fb0', 'fb1'],
+  );
+  for (const row of rows.slice(1)) {
+    assert.equal(row.className, 'message-row incoming');
+    assert.equal(row.innerHTML, '', 'no voice stack, play button or transcript toggle');
+    const bubble = row.children.find((node) => node.className.includes('text-bubble'))!;
+    assert.ok(bubble, 'a text bubble');
+    assert.ok(!bubble.className.includes('error') && !bubble.className.includes('not-sent'));
+  }
+  assert.deepEqual(
+    rows.slice(1).map((row) => row.children.find((node) => node.className.includes('text-bubble'))!.textContent),
+    ['回复第一段', '回复第二段'],
+  );
+  assert.deepEqual(f.messages, [], 'nothing was announced as an error');
+  assert.equal(f.title.textContent, '合成人物');
+  assert.equal(f.calls().submits, 1);
+});

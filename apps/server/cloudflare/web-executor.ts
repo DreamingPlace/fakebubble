@@ -6,12 +6,15 @@ import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
 import type { WebProviderRunner } from '../generation/web-provider-runner.ts';
 import { WebProviderExecutor } from '../generation/web-provider-executor.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { webConcurrency } from '../../../config/web-concurrency.ts';
+import { audioStartedSql, metricsEnabled } from '../admission/web-stage-metrics.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
 import { CloudQueueAlarm, type AlarmStorage } from './queue-alarm.ts';
 
 /** A deadline for uncertain work is a classification wake, never a permission to resend it. */
 export function webProviderNextDue(store: WebRuntimeStore, now: number, ownsCoordinator = false): number | null {
   const operations = store.all<{
+    id: string;
     status: string;
     deadline_at: number;
     text_queued_at: number;
@@ -19,6 +22,17 @@ export function webProviderNextDue(store: WebRuntimeStore, now: number, ownsCoor
     audio_wait_used_ms: number | null;
   }>("SELECT * FROM web_operations WHERE status NOT IN ('published','cancelled','failed')");
   if (!operations.length) return null;
+  const fallbackWaitMs = metricsEnabled(store) ? webConcurrency(store).audioFallbackWaitMs : null;
+  // Operations that already started audio are exempt from the wait fallback, so it never schedules a wake for them.
+  const audioStarted = new Set(
+    fallbackWaitMs === null
+      ? []
+      : store
+          .all<{ id: string }>(
+            `SELECT o.id FROM web_operations o WHERE o.status IN ('text_ready','audio_pending') AND ${audioStartedSql('o')}`,
+          )
+          .map((row) => row.id),
+  );
   const coordinatorUntil = store.get<{ coordinator_expires_at: number }>(
     'SELECT coordinator_expires_at FROM web_scheduler_state WHERE singleton=1',
   )!.coordinator_expires_at;
@@ -41,10 +55,29 @@ export function webProviderNextDue(store: WebRuntimeStore, now: number, ownsCoor
           'ready_to_publish',
         ].includes(row.status);
         const ready = ['queued', 'text_ready', 'audio_pending'].includes(row.status);
+        // A stage returned after an HTTP 429 becomes claimable only at its backoff end (text_queued_at or
+        // audio_wait_started_at in the future); waiting for an audio slot ends in a text fallback after the wait.
+        const readyAt =
+          row.status === 'queued'
+            ? row.text_queued_at
+            : ['text_ready', 'audio_pending'].includes(row.status)
+              ? (row.audio_wait_started_at ?? 0)
+              : 0;
+        const fallbackDue =
+          fallbackWaitMs !== null &&
+          !audioStarted.has(row.id) &&
+          ['text_ready', 'audio_pending'].includes(row.status) &&
+          row.audio_wait_started_at !== null
+            ? Math.max(
+                row.audio_wait_started_at,
+                row.audio_wait_started_at + fallbackWaitMs - (row.audio_wait_used_ms ?? 0),
+              )
+            : Infinity;
         return Math.min(
           row.deadline_at,
           queueDeadline,
-          work ? (ownsCoordinator && ready ? now : Math.max(now, coordinatorUntil)) : Infinity,
+          fallbackDue,
+          work ? (ownsCoordinator && ready ? Math.max(now, readyAt) : Math.max(now, coordinatorUntil)) : Infinity,
         );
       }),
     ),

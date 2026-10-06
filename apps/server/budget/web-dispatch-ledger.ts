@@ -65,7 +65,7 @@ export class WebDispatchLedger {
     const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
     ensure(
       [104, 105, 106, 107, 108, 109, 110, 112].includes(schema) ||
-        (schema === 113 && webDataLifecycleEnabled(this.store)),
+        (schema >= 113 && webDataLifecycleEnabled(this.store)),
       'WEB_DISPATCH_MIGRATION_REQUIRED',
     );
   }
@@ -102,6 +102,29 @@ export class WebDispatchLedger {
     });
   }
 
+  /**
+   * A persisted provider capacity row follows the configured stage limit. It is never lowered below the tickets
+   * still reserved, so an in-flight or UNKNOWN call keeps its ticket; a later pass retries the alignment.
+   */
+  alignBudget(input: { provider: string; stage: Stage; phase: Phase; capacity: number }) {
+    ensure(Number.isSafeInteger(input.capacity) && input.capacity > 0, 'WEB_EXTERNAL_BUDGET_INVALID');
+    return this.store.transaction(() => {
+      this.schema();
+      return (
+        this.store.run(
+          `UPDATE web_external_budgets SET capacity=? WHERE provider=? AND stage=? AND phase=?
+          AND capacity<>? AND reserved<=?`,
+          input.capacity,
+          input.provider,
+          input.stage,
+          input.phase,
+          input.capacity,
+          input.capacity,
+        ).changes === 1
+      );
+    });
+  }
+
   /** Budget reservation and not-sent intent are one short transaction after a live stage claim. */
   reserve(claim: WebStageClaim, input: { phase: Phase; ordinal: number; provider: string; providerRequestId: string }) {
     ensure(
@@ -125,7 +148,7 @@ export class WebDispatchLedger {
             typeof claim.voiceVersion === 'string',
           'WEB_VOICE_SEGMENT_STALE',
         );
-        const table = schema === 113 ? 'web_provider_voice_segments' : 'web_synthetic_voice_segments';
+        const table = schema >= 113 ? 'web_provider_voice_segments' : 'web_synthetic_voice_segments';
         ensure(
           this.store.get(
             `SELECT 1 FROM ${table}
@@ -202,7 +225,7 @@ export class WebDispatchLedger {
         (this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 105
       ) {
         const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
-        const table = schema === 113 ? 'web_provider_voice_segments' : 'web_synthetic_voice_segments';
+        const table = schema >= 113 ? 'web_provider_voice_segments' : 'web_synthetic_voice_segments';
         ensure(
           key.ordinal === claim.ordinal &&
             typeof claim.textDigest === 'string' &&
@@ -254,7 +277,7 @@ export class WebDispatchLedger {
     return this.store.transaction(() => {
       this.schema();
       ensure(
-        this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113,
+        (this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 113,
         'WEB_DISPATCH_MIGRATION_REQUIRED',
       );
       const row = this.store.get<
@@ -293,6 +316,32 @@ export class WebDispatchLedger {
     });
   }
 
+  /**
+   * A provider rejected the request with HTTP 429 and the retries are over: settle the capacity ticket as a known,
+   * zero-usage failure. Unlike confirm(), this never fails the operation (a voice request falls back to text).
+   */
+  settleRejected(key: AttemptKey) {
+    return this.store.transaction(() => {
+      this.schema();
+      const row = this.attempt(key);
+      ensure(row && (row.dispatch_state === 'sent' || row.dispatch_state === 'not_sent'), 'WEB_DISPATCH_STALE');
+      ensure(
+        this.store.run(
+          `UPDATE web_external_attempts SET dispatch_state='known',outcome='failed',receipt_json='{"rateLimited":true}',
+          usage_json='{}',settled_at=? WHERE operation_id=? AND stage=? AND phase=? AND ordinal=?
+          AND dispatch_state IN ('sent','not_sent')`,
+          this.now(),
+          key.operationId,
+          key.stage,
+          key.phase,
+          key.ordinal,
+        ).changes === 1,
+        'WEB_DISPATCH_STALE',
+      );
+      this.releaseBudget(row);
+    });
+  }
+
   /** On-time fake audio success advances only synthetic metadata; late receipts settle external cost only. */
   confirm(
     key: AttemptKey,
@@ -314,7 +363,7 @@ export class WebDispatchLedger {
       const lifecycle =
         schema === 110 ||
         schema === 112 ||
-        (schema === 113 && (!!this.store.providerAudio || webOperationDeleted(this.store, key.operationId)));
+        (schema >= 113 && (!!this.store.providerAudio || webOperationDeleted(this.store, key.operationId)));
       const synthetic = [109, 110, 112].includes(schema);
       const purging =
         webOperationDeleted(this.store, key.operationId) ||
@@ -482,7 +531,7 @@ export class WebDispatchLedger {
         key.stage === 'audio' &&
         result.outcome === 'succeeded' &&
         (this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 105 &&
-        (this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) !== 113
+        (this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) < 113
       )
         this.completeSyntheticAudio(key, now);
       return { duplicate: false as const };
@@ -976,7 +1025,7 @@ export class WebDispatchLedger {
         fence.operationId,
       );
       if (
-        this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113 &&
+        (this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 113 &&
         row.status === 'audio_running' &&
         open.length === 0
       ) {

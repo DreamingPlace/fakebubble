@@ -10,6 +10,7 @@ import {
   type WebProviderAccess,
   type WebProviderBootstrap,
   type WebProviderCharacterId,
+  type WebProviderMessage,
   type WebProviderOperation,
 } from '../../../packages/contracts/web-provider.ts';
 import { installWebCharacterCatalog, publishedWebCharacters } from '../characters/web-character-catalog.ts';
@@ -44,6 +45,39 @@ export interface WebProviderApplicationConfig {
 }
 
 /** Shared schema113 application/projections. Transports alone own headers, trusted peer and streams. */
+export interface ProviderHistoryRow {
+  id: string;
+  body: string;
+  created_at: number;
+  operation_id: string;
+  origin: 'input' | 'narrative' | 'trial_footer' | 'text_fallback';
+  ordinal: number | null;
+  media_id: string | null;
+  duration_ms: number | null;
+}
+/** One history row as the player sees it. A text fallback is an ordinary narrative text bubble; no error is shown. */
+export function providerHistoryMessage(
+  row: ProviderHistoryRow,
+  conversationId: string,
+  character: WebProviderCharacterId,
+): WebProviderMessage {
+  return {
+    messageId: row.id,
+    conversationId,
+    characterId: character,
+    operationId: row.operation_id,
+    replyOrdinal: row.origin === 'narrative' || row.origin === 'text_fallback' ? row.ordinal : null,
+    author: row.origin === 'input' ? 'player' : 'character',
+    origin: row.origin === 'text_fallback' ? 'narrative' : row.origin,
+    ...(row.origin === 'text_fallback' ? { deliveryFallback: 'text' as const } : {}),
+    text: row.body,
+    createdAt: row.created_at,
+    audio: row.media_id
+      ? { revision: 1, status: 'ready', mediaId: row.media_id, durationMs: row.duration_ms, errorCode: null }
+      : null,
+  };
+}
+
 export class WebProviderApplication {
   readonly store: WebRuntimeStore;
   readonly clock: Clock;
@@ -464,7 +498,7 @@ export class WebProviderApplication {
       body: string;
       created_at: number;
       operation_id: string;
-      origin: 'input' | 'narrative' | 'trial_footer';
+      origin: 'input' | 'narrative' | 'trial_footer' | 'text_fallback';
       ordinal: number | null;
       media_id: string | null;
       duration_ms: number | null;
@@ -498,26 +532,7 @@ export class WebProviderApplication {
     return {
       characterId: character,
       conversationId,
-      messages: page.map((row) => ({
-        messageId: row.id,
-        conversationId,
-        characterId: character,
-        operationId: row.operation_id,
-        replyOrdinal: row.origin === 'narrative' ? row.ordinal : null,
-        author: row.origin === 'input' ? ('player' as const) : ('character' as const),
-        origin: row.origin,
-        text: row.body,
-        createdAt: row.created_at,
-        audio: row.media_id
-          ? {
-              revision: 1,
-              status: 'ready' as const,
-              mediaId: row.media_id,
-              durationMs: row.duration_ms,
-              errorCode: null,
-            }
-          : null,
-      })),
+      messages: page.map((row) => providerHistoryMessage(row, conversationId, character)),
       before: page.length ? this.cursor(principal.principalId, page[0]!.seq, conversationId) : null,
       hasMore: rows.length > 50,
     };

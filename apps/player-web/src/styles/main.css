@@ -337,6 +337,11 @@ svg {
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+.message-row.incoming .incoming-text {
+  background: #fff;
+  border-radius: 4px 15px 15px 15px;
+  max-width: calc(100% - 47px);
+}
 .composer {
   flex: none;
   min-height: 72px;
