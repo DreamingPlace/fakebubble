@@ -20,6 +20,7 @@ interface TopicRow {
   tier: 'short' | 'long';
   player_mentions: number;
   last_seen: number;
+  importance: number;
 }
 interface EpisodeRow {
   row_seq: number;
@@ -28,6 +29,11 @@ interface EpisodeRow {
   source_kind: TopicMemory['episodes'][number]['sourceKind'];
   evidence_ids_json: string;
   created_at: number;
+}
+
+/** memory_topics.importance exists from schema 115; an older database records and ranks as if every topic were 3. */
+function hasImportance(store: Store, scope: CharacterScope) {
+  return !!store.get(scope, "SELECT 1 FROM pragma_table_info('memory_topics') WHERE name='importance'");
 }
 
 export function validateDialogueMemoryEvidence(
@@ -77,6 +83,7 @@ export function recordDialogueMemories(
   currentInputIds: string[],
   now: number,
 ): void {
+  const importanceColumn = hasImportance(store, scope);
   for (const topic of candidate.topics) {
     const evidence = topic.evidenceMessageIds.map((id) => {
       const row = store.get<{ id: string; author_kind: string }>(
@@ -94,16 +101,30 @@ export function recordDialogueMemories(
         (evidence.length > 0 && evidence.every((row) => row.author_kind === 'player')),
       'INVALID_MEMORY_EVIDENCE',
     );
-    store.run(
-      scope,
-      `INSERT INTO memory_topics(world_id,conversation_id,character_id,topic_key,tier,player_mentions,last_seen,active_until)
-      VALUES (?,?,?,?,'short',0,?,?) ON CONFLICT(world_id,conversation_id,character_id,topic_key)
-      DO UPDATE SET last_seen=excluded.last_seen,active_until=excluded.active_until`,
-      ...params(scope),
-      topic.key,
-      now,
-      now + DIALOGUE.shortMemoryMs,
-    );
+    if (importanceColumn)
+      store.run(
+        scope,
+        `INSERT INTO memory_topics(world_id,conversation_id,character_id,topic_key,tier,player_mentions,last_seen,active_until,importance)
+        VALUES (?,?,?,?,'short',0,?,?,?) ON CONFLICT(world_id,conversation_id,character_id,topic_key)
+        DO UPDATE SET last_seen=excluded.last_seen,active_until=excluded.active_until,importance=max(importance,?)`,
+        ...params(scope),
+        topic.key,
+        now,
+        now + DIALOGUE.shortMemoryMs,
+        topic.importance ?? DIALOGUE.defaultImportance,
+        topic.importance ?? 1,
+      );
+    else
+      store.run(
+        scope,
+        `INSERT INTO memory_topics(world_id,conversation_id,character_id,topic_key,tier,player_mentions,last_seen,active_until)
+        VALUES (?,?,?,?,'short',0,?,?) ON CONFLICT(world_id,conversation_id,character_id,topic_key)
+        DO UPDATE SET last_seen=excluded.last_seen,active_until=excluded.active_until`,
+        ...params(scope),
+        topic.key,
+        now,
+        now + DIALOGUE.shortMemoryMs,
+      );
     store.run(
       scope,
       'INSERT OR IGNORE INTO memory_catalog(id,world_id,conversation_id,character_id,topic_key) VALUES (?,?,?,?,?)',
@@ -204,6 +225,7 @@ export function recallMemories(
     key: topic.topic_key,
     tier: topic.tier,
     playerMentions: topic.player_mentions,
+    importance: topic.importance ?? DIALOGUE.defaultImportance,
     lastSeenAt: topic.last_seen,
     recallWeight:
       1 +

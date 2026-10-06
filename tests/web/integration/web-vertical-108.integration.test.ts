@@ -99,6 +99,8 @@ function fixture(t: test.TestContext, migrate = true) {
       topics: [
         {
           key: '港口',
+          memoryId: null,
+          importance: 3,
           summary: `玩家谈到港口：${input}`,
           sourceKind: 'conversation',
           evidenceMessageIds: [claim.inputMessageId],

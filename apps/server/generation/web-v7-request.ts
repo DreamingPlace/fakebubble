@@ -9,7 +9,7 @@ import { DIALOGUE } from '../../../packages/domain/dialogue.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { protocolFingerprint } from './accepted-text-protocol.ts';
 import { textPromptHash } from './accepted-text-prompt.ts';
-import { recallMemories } from '../memory/accepted-memory.ts';
+import { recallMemories } from '../memory/memory.ts';
 import { memoryVersion, recallCorrections } from '../memory/memory-review.ts';
 import { playerContextKey, playerIntroduction } from '../conversation/player-profile.ts';
 import { relationshipContext, relationshipVersion } from '../conversation/relationships.ts';

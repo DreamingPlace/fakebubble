@@ -150,7 +150,7 @@ export function auditReply(request = textRequest(), draft = draftPresentation(re
           ),
         }
       : {}),
-    topics: wireReply(request).topics.map((topic) => ({ ...topic, memoryId: null as string | null })),
+    topics: wireReply(request).topics.map((topic) => ({ ...topic, memoryId: null as string | null, importance: 3 })),
     ...(request.evidence.length
       ? { sourceUsage: Object.fromEntries(request.evidence.map((source) => [source.id, [] as string[]])) }
       : {}),
@@ -179,9 +179,6 @@ export function toolEnvelope(name: string, argumentsValue: unknown) {
 export const draftEnvelope = (request = textRequest()) => toolEnvelope('submit_dialogue_draft', draftWire(request));
 export const auditEnvelope = (request = textRequest()) => toolEnvelope('submit_dialogue_audit', auditReply(request));
 export function acceptedAuditEnvelope(request = textRequest()) {
-  const { bubbleChecks: _checks, topics, ...audit } = auditReply(request);
-  return toolEnvelope('submit_dialogue_audit', {
-    ...audit,
-    topics: topics.map(({ memoryId: _id, ...topic }) => topic),
-  });
+  const { bubbleChecks: _checks, ...audit } = auditReply(request);
+  return toolEnvelope('submit_dialogue_audit', audit);
 }

@@ -8,6 +8,8 @@ export const DIALOGUE = Object.freeze({
   continuationMs: 60_000,
   shortMemoryMs: 48 * 60 * 60_000,
   promotionMentions: 2,
+  // A topic without a review importance (older candidates) is recorded as ordinary small talk.
+  defaultImportance: 3,
   recallStep: 0.01,
   maxRecallBonus: 0.03,
 });
@@ -23,6 +25,8 @@ function ids(value: unknown): asserts value is string[] {
     'INCOMPLETE_COVERAGE',
   );
 }
+export const importanceValue = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 10;
 export function topicKey(value: string): string {
   return value.normalize('NFKC').trim().toLowerCase().replace(/\s+/gu, ' ');
 }
@@ -63,7 +67,7 @@ export function dialogueCandidate(
   const topics = value.topics.map((topic) => {
     object(topic);
     const keys = Object.keys(topic)
-      .filter((key) => key !== 'linkedMemoryId')
+      .filter((key) => key !== 'linkedMemoryId' && key !== 'importance')
       .sort()
       .join(',');
     ensure(
@@ -83,6 +87,7 @@ export function dialogueCandidate(
         typeof topic.linkedMemoryId === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(topic.linkedMemoryId),
         'INVALID_MEMORY_LINK',
       );
+    if (Object.hasOwn(topic, 'importance')) ensure(importanceValue(topic.importance), 'INVALID_TOPICS');
     ids(topic.evidenceMessageIds);
     ensure(topic.evidenceMessageIds.length <= 8, 'INVALID_TOPICS');
     if (Object.hasOwn(topic, 'sourceEvidenceIds')) {
@@ -96,6 +101,7 @@ export function dialogueCandidate(
       evidenceMessageIds: topic.evidenceMessageIds,
       ...(Object.hasOwn(topic, 'sourceEvidenceIds') ? { sourceEvidenceIds: topic.sourceEvidenceIds as string[] } : {}),
       ...(Object.hasOwn(topic, 'linkedMemoryId') ? { linkedMemoryId: topic.linkedMemoryId as string } : {}),
+      ...(Object.hasOwn(topic, 'importance') ? { importance: topic.importance as number } : {}),
     };
   });
   ensure(new Set(topics.map((topic) => topic.key)).size === topics.length, 'INVALID_TOPICS');

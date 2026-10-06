@@ -113,6 +113,8 @@ function readyToPublish(
     topics: [
       {
         key: '问候',
+        memoryId: null,
+        importance: 3,
         summary: '玩家先说 ready，角色回应。',
         sourceKind: 'conversation',
         evidenceMessageIds: [textClaim.inputMessageId],
@@ -527,6 +529,8 @@ test('108 publishes a complete audited synthetic voice turn atomically and repla
     topics: [
       {
         key: '问候',
+        memoryId: null,
+        importance: 3,
         summary: '玩家先说 first，角色回应。',
         sourceKind: 'conversation',
         evidenceMessageIds: [textClaim.inputMessageId],
@@ -649,6 +653,8 @@ test('108 publishes a complete audited synthetic voice turn atomically and repla
           ? [
               {
                 key: '问候',
+                memoryId: null,
+                importance: 3,
                 summary: '玩家第二次问候。',
                 sourceKind: 'conversation',
                 evidenceMessageIds: [claim.inputMessageId],

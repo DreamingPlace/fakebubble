@@ -1,7 +1,7 @@
 // Accepted v7 baseline from 初v.0.0.0911; kept separate from the deferred v8–v10 experiment.
 import type { DialogueCandidate, TextGenerationRequest } from '../../../packages/contracts/index.ts';
 import { EXPRESSIONS } from '../../../packages/contracts/index.ts';
-import { dialogueCandidate, topicKey } from '../../../packages/domain/dialogue.ts';
+import { dialogueCandidate, importanceValue, topicKey } from '../../../packages/domain/dialogue.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import {
   BUBBLE_LIMITS,
@@ -65,12 +65,17 @@ export const draftTool = (delivery: 'text' | 'voice' = 'text') =>
       : '提交尚未发布的角色短气泡，仅用于结构化输出。',
     delivery === 'voice' ? speechDraftSchema : draftSchema,
   );
+const importanceSchema = { type: 'integer', enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] };
+// A topic either continues one of the memories recalled for this request (its catalog id) or starts a new one (null).
+const memoryIdSchema = (ids: string[]): Schema =>
+  ids.length ? { anyOf: [{ type: 'string', enum: ids }, { type: 'null' }] } : { type: 'null' };
 function reviewSchema(
   requiredIds: string[],
   localIds: string[],
   sourceIds: string[],
   relationships = false,
   scenes = false,
+  memoryIds: string[] = [],
 ) {
   const proof = objectSchema({
     messageId: localIds.length ? { type: 'string', enum: localIds } : string,
@@ -86,7 +91,9 @@ function reviewSchema(
     topics: array(
       objectSchema({
         key: string,
+        memoryId: memoryIdSchema(memoryIds),
         summary: string,
+        importance: importanceSchema,
         sourceKind: sourceKindSchema,
         evidenceMessageIds: idArray(localIds),
       }),
@@ -132,6 +139,9 @@ function reviewSchema(
       : {}),
   });
 }
+/** Catalog ids of the memories recalled for this request: the only ids a review topic may link to. */
+export const recalledMemoryIds = (request: TextGenerationRequest) =>
+  (request.memories ?? []).flatMap((memory) => (memory.id === undefined ? [] : [memory.id]));
 export function reviewTool(request: TextGenerationRequest) {
   const localIds = [
     ...new Set([
@@ -148,6 +158,7 @@ export function reviewTool(request: TextGenerationRequest) {
       request.evidence.map((source) => source.id),
       request.relationshipContext?.auditEnabled,
       !!request.sceneContext,
+      recalledMemoryIds(request),
     ),
   );
 }
@@ -160,7 +171,7 @@ export const protocolFingerprint = () => [
   DRAFT_BUBBLE_LIMITS,
   draftSchema,
   speechDraftSchema,
-  reviewSchema(['required-id'], ['local-id'], ['source-id'], true, true),
+  reviewSchema(['required-id'], ['local-id'], ['source-id'], true, true, ['memory-id']),
   reviewSchema([], [], []),
 ];
 
@@ -221,6 +232,12 @@ export function validateDialogueEvidence(candidate: DialogueCandidate, request: 
       'INVALID_MEMORY_EVIDENCE',
     );
     ensure(topic.sourceKind !== 'player_statement' || topic.evidenceMessageIds.length > 0, 'INVALID_MEMORY_EVIDENCE');
+    // A link is valid only to a memory recalled for THIS request, under that memory's own key.
+    ensure(
+      topic.linkedMemoryId === undefined ||
+        (request.memories ?? []).some((memory) => memory.id === topic.linkedMemoryId && memory.key === topic.key),
+      'INVALID_MEMORY_LINK',
+    );
     ensure(
       (topic.sourceEvidenceIds ?? []).every((id) => request.evidence.some((source) => source.id === id)),
       'INVALID_SOURCE_EVIDENCE',
@@ -297,16 +314,37 @@ export function applyTextReview(value: unknown, draft: TextDraft, request: TextG
       deferredMessageIds.push(id);
     }
   }
-  ensure(Array.isArray(value.topics), 'INVALID_TOPICS');
-  for (const topic of value.topics)
-    exact(topic, ['key', 'summary', 'sourceKind', 'evidenceMessageIds'], 'INVALID_TOPICS');
+  ensure(Array.isArray(value.topics) && value.topics.length <= 3, 'INVALID_TOPICS');
+  // A topic with a memoryId continues that recalled memory under its existing key; null starts (or restates) a topic.
+  const recalled = new Map((request.memories ?? []).flatMap((memory) => (memory.id ? [[memory.id, memory.key]] : [])));
+  const recalledByKey = new Map([...recalled].map(([id, key]) => [key, id]));
+  const aliases = new Map<string, string>();
+  const topics = value.topics.map((topic: unknown) => {
+    exact(topic, ['key', 'memoryId', 'summary', 'importance', 'sourceKind', 'evidenceMessageIds'], 'INVALID_TOPICS');
+    ensure(typeof topic.key === 'string' && importanceValue(topic.importance), 'INVALID_TOPICS');
+    ensure(
+      topic.memoryId === null || (typeof topic.memoryId === 'string' && recalled.has(topic.memoryId)),
+      'INVALID_MEMORY_LINK',
+    );
+    const named = topicKey(topic.key),
+      { memoryId, ...rest } = topic;
+    const canonical = memoryId === null ? named : recalled.get(memoryId as string)!;
+    // The wording the model chose must not name a different recalled memory, nor two memories share one wording.
+    ensure(
+      (memoryId === null || (recalledByKey.get(named) ?? memoryId) === memoryId) &&
+        (aliases.get(named) ?? canonical) === canonical,
+      'INVALID_MEMORY_LINK',
+    );
+    aliases.set(named, canonical);
+    return { ...rest, key: canonical, ...(memoryId === null ? {} : { linkedMemoryId: memoryId }) };
+  });
   const candidate = dialogueCandidate(
     {
       ...presentation,
       coveredMessageIds,
       deferredMessageIds,
       awaitingPlayerMessageIds,
-      topics: value.topics,
+      topics,
       ...(request.sceneContext ? { sceneUpdate: value.sceneUpdate } : {}),
       ...(request.relationshipContext?.auditEnabled ? { relationshipEvents: value.relationshipEvents } : {}),
     },
@@ -320,7 +358,7 @@ export function applyTextReview(value: unknown, draft: TextDraft, request: TextG
       Array.isArray(keys) && keys.length <= 3 && keys.every((key) => typeof key === 'string'),
       'INVALID_SOURCE_EVIDENCE',
     );
-    const normalized = (keys as string[]).map(topicKey);
+    const normalized = (keys as string[]).map((key) => aliases.get(topicKey(key)) ?? topicKey(key));
     ensure(
       new Set(normalized).size === normalized.length && normalized.every((key) => sourcesByTopic.has(key)),
       'INVALID_SOURCE_EVIDENCE',

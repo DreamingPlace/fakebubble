@@ -9,10 +9,12 @@ import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server
 // Stored preview and publication approvals embed these hashes. Captured on main (66e2c6b) before the
 // experimental-v10 protocol was removed: policy 58ba3f99…, prompt 8a49da0d…. Part 6a step 4 added the text-only
 // player-channel rule on purpose, which changed both (policy ddbd9315…, prompt 687b0960…). Part 7a step A made the
-// prompt hash cover every prompts/v7 file (policy ea400177…, prompt c0eaa2ff…); the protocol fingerprint is unchanged.
-const POLICY_HASH = 'ea40017753b2ca8b499ece2001346ba4d4b7744017ff3eb70ae29e18dafab555';
-const PROMPT_HASH = 'c0eaa2fff1ebdc30be2d883ca2e59e86d800a5653d2182483ff61e56981b6790';
-const FINGERPRINT_DIGEST = '6fa114401ba3d72474893e83cf449c8edb9f5ea84d8ffda9fd223e2b18067418';
+// prompt hash cover every prompts/v7 file (policy ea400177…, prompt c0eaa2ff…); the protocol fingerprint was unchanged (6fa11440…).
+// Part 7a step D added importance and memoryId to the review topics and their prompt text: policy 40d4c60d…, prompt
+// dba98588…, fingerprint 4811a5ed….
+const POLICY_HASH = '40d4c60d19480a617be06029138aa56238596e9e425b8ddc3852f754b237a6a1';
+const PROMPT_HASH = 'dba985887bf77d73fde0a67c2fc190202a6a112e4e036f3356bc72f39da86db2';
+const FINGERPRINT_DIGEST = '4811a5edcd649e4a3e1bd4719e1b7783f39c0a96b58d21d359c2e56653226ef5';
 
 test('accepted-v7 policy hash, prompt hash and protocol fingerprint are pinned', () => {
   const policy = createTextGenerationPolicy();

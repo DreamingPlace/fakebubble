@@ -716,6 +716,14 @@ export class WebVerticalPublisher {
           ),
         'WEB_PUBLICATION_CANDIDATE_INVALID',
       );
+      ensure(
+        candidate.topics.every(
+          (topic) =>
+            topic.linkedMemoryId === undefined ||
+            (request.memories ?? []).some((memory) => memory.id === topic.linkedMemoryId && memory.key === topic.key),
+        ),
+        'INVALID_MEMORY_LINK',
+      );
       if (!fallback) this.completeAssets(claim.operationId);
       for (const [ordinal, asset] of checked.assets.entries()) {
         const current = this.assets(claim.operationId)[ordinal];

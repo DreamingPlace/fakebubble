@@ -108,6 +108,8 @@ export interface TopicCandidate {
   sourceKind: 'fictional_daily' | 'player_statement' | 'conversation';
   evidenceMessageIds: string[];
   sourceEvidenceIds?: string[];
+  // The review's 1–10 importance; absent in candidates stored before it existed.
+  importance?: number;
 }
 export interface DialogueCandidate extends ReplyCandidate {
   sceneUpdate?: import('./scenes.ts').SceneUpdate | null;
@@ -128,6 +130,8 @@ export interface TopicMemory {
   tier: 'short' | 'long';
   playerMentions: number;
   recallWeight: number;
+  // 1 (small talk) to 10 (identity, relationships, health, major life events); absent in older fixtures.
+  importance?: number;
   lastSeenAt: number;
   episodes: {
     summary: string;
