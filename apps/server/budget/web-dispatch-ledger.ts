@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { audioStartedExpr } from '../admission/web-stage-metrics.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import type { WebCoordinatorLease, WebStageClaim } from '../admission/web-stage-queue.ts';
 import { readInputSnapshot, requireCurrentInputSnapshot } from '../generation/web-input-snapshot.ts';
@@ -938,7 +939,12 @@ export class WebDispatchLedger {
               ? current.audioWaitUsedMs !== null &&
                 current.audioWaitStartedAt !== null &&
                 now >= current.audioWaitStartedAt &&
-                current.audioWaitUsedMs + now - current.audioWaitStartedAt >= WEB_LIMITS.queueWaitMs
+                current.audioWaitUsedMs + now - current.audioWaitStartedAt >= WEB_LIMITS.queueWaitMs &&
+                // An operation that already started audio is paid for: only its deadline may end it.
+                !this.store.get(
+                  `SELECT 1 FROM web_operations o WHERE o.id=? AND ${audioStartedExpr(this.store, 'o')}`,
+                  current.operationId,
+                )
               : current.audioQueuedAt !== null && now >= current.audioQueuedAt + WEB_LIMITS.queueWaitMs));
         ensure(now >= current.deadlineAt || queueExpired, 'WEB_OPERATION_NOT_EXPIRED');
       }

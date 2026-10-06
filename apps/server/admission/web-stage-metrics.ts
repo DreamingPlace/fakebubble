@@ -23,6 +23,12 @@ export function metricsEnabled(store: Db): boolean {
 export const audioStartedSql = (alias: string) =>
   `EXISTS (SELECT 1 FROM web_provider_voice_segments seg WHERE seg.operation_id=${alias}.id AND seg.state IN ('running','complete'))`;
 
+/**
+ * SQL fragment, empty before the metrics schema: true for an operation that has started audio. Such an operation is paid
+ * for and is never expired by the summed queue wait (WEB_LIMITS.queueWaitMs); only its operation deadline ends it.
+ */
+export const audioStartedExpr = (store: Db, alias: string) => (metricsEnabled(store) ? audioStartedSql(alias) : '0');
+
 function ensureRow(store: Db, operationId: string, now: number) {
   store.run('INSERT OR IGNORE INTO web_operation_metrics(operation_id,day) VALUES (?,?)', operationId, dayOf(now));
 }

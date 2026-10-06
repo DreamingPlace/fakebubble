@@ -25,6 +25,8 @@ import type { WebAttemptBudget } from '../../../apps/server/budget/web-provider-
 import { MemoryBudget } from '../fixtures/memory-budget.ts';
 import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
 import { webProviderNextDue } from '../../../apps/server/cloudflare/web-executor.ts';
+import { WebProviderExecutor } from '../../../apps/server/generation/web-provider-executor.ts';
+import { WEB_LIMITS } from '../../../config/web-v1.ts';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const now = 1_700_000_000_000;
@@ -277,6 +279,7 @@ function stage(
     queue,
     lease,
     ledger,
+    capacity,
     readyForAudio,
     attempt,
     operation,
@@ -730,4 +733,80 @@ test('a provider that reports no cache counters adds no cache sample (ratio null
   const view = admin.stageLatency(owner.cookie, owner.csrf, origin, 7) as { days: { cache: unknown }[] };
   const none = { calls: 0, hitTokens: 0, missTokens: 0, hitRatio: null };
   assert.deepEqual(view.days[0]!.cache, { draft: none, review: none });
+});
+
+test('an operation that started audio is not expired by the summed 60 s queue wait; it finishes as voice within its deadline', async (t) => {
+  const f = stage(t, { fish: (_call, request) => fishOk(request), deadlineMs: 300_000 });
+  await f.readyForAudio();
+  await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+  assert.equal(f.operation().status, 'audio_pending', 'segment 0 is paid and finished; segment 1 waits for a slot');
+  // Wait far longer than queueWaitMs in total for the next slot, still well inside the operation deadline.
+  for (let waited = 0; waited < WEB_LIMITS.queueWaitMs + 30_000; waited += 10_000) f.advance(10_000);
+  assert.ok(f.clock.now() - now > WEB_LIMITS.queueWaitMs);
+  assert.ok(f.clock.now() < now + 300_000);
+  const lease = f.queue.acquireCoordinator('coordinator');
+  const fence = f.capacity.fence('operation');
+  assert.throws(
+    () => f.capacity.terminate(lease, fence, fence.principalId, 'failed', 'expired'),
+    /WEB_OPERATION_NOT_EXPIRED/,
+    'the wait alone no longer ends a started operation',
+  );
+  assert.equal(f.operation().status, 'audio_pending');
+  assert.equal(f.operation().quota_state, 'reserved');
+  await f.runner.runSpeech(f.queue.claimAudio(lease, 'audio-worker')!, signal());
+  const receipt = f.runner.publish(lease, 'operation');
+  assert.equal(receipt.messageIds.length, 2);
+  assert.deepEqual(
+    f.store
+      .all<{ origin: string }>(
+        "SELECT origin FROM web_publication_items WHERE operation_id='operation' ORDER BY ordinal",
+      )
+      .map((item) => item.origin),
+    ['narrative', 'narrative'],
+    'published as voice, nothing paid is discarded',
+  );
+  assert.equal(f.metrics().fallback_used, 0);
+  assert.equal(f.metrics().discarded_audio_segments, 0);
+  assert.equal(f.calls.fish, 2);
+});
+
+test('an operation that has not started audio still expires through the summed queue wait', async (t) => {
+  const f = stage(t, { fish: (_call, request) => fishOk(request) });
+  await f.readyForAudio();
+  f.advance(WEB_LIMITS.queueWaitMs + 1_000);
+  const lease = f.queue.acquireCoordinator('coordinator');
+  const fence = f.capacity.fence('operation');
+  f.capacity.terminate(lease, fence, fence.principalId, 'failed', 'expired');
+  assert.equal(f.operation().status, 'failed');
+  assert.equal(f.calls.fish, 0);
+});
+
+test('the scheduler sweep does not expire a started operation either; the executor finishes it as voice', async (t) => {
+  const f = stage(t, { fish: (_call, request) => fishOk(request), deadlineMs: 300_000 });
+  await f.readyForAudio();
+  await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+  const executor = new WebProviderExecutor(f.store as WebStore, f.clock, f.runner, {
+    hold: () => {},
+    settled: async () => {},
+  });
+  t.after(() => executor.close());
+  for (let waited = 0; waited < WEB_LIMITS.queueWaitMs + 30_000; waited += 10_000) f.advance(10_000);
+  const started = Date.now();
+  while (f.operation().status !== 'published' && Date.now() - started < 10_000) {
+    executor.managedPass('sweep');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  await executor.close();
+  assert.equal(f.operation().status, 'published');
+  assert.equal(f.calls.fish, 2);
+  assert.equal(f.metrics().fallback_used, 0);
+  assert.equal(f.metrics().discarded_audio_segments, 0);
+  assert.deepEqual(
+    f.store
+      .all<{ origin: string }>(
+        "SELECT origin FROM web_publication_items WHERE operation_id='operation' ORDER BY ordinal",
+      )
+      .map((item) => item.origin),
+    ['narrative', 'narrative'],
+  );
 });
