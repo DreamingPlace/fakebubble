@@ -216,9 +216,16 @@ export function lanNetwork(root: string, host: string): ProviderNetwork {
 if (fileURLToPath(import.meta.url) === process.argv[1]) {
   const [action, root = '', extra] = process.argv.slice(2);
   ensure(
-    ['init', 'migrate', 'render-assets', 'admin-grant', 'serve', 'budget-init', 'budget-status'].includes(
-      action ?? '',
-    ) &&
+    [
+      'init',
+      'migrate',
+      'migrate-metrics',
+      'render-assets',
+      'admin-grant',
+      'serve',
+      'budget-init',
+      'budget-status',
+    ].includes(action ?? '') &&
       (action?.startsWith('budget-') || root.length > 0),
     'WEB_PROVIDER_USAGE',
   );
@@ -267,6 +274,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
         ...migrateProvider(root, verifySelectedVoiceSetup(readSelectedVoiceFiles(extra, pins), pins)),
       }) + '\n',
     );
+  } else if (action === 'migrate-metrics') {
+    // An existing provider-* instance at schema 113 gains the stage metrics and 429 bookkeeping tables.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderMetrics(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 113, metrics: true }) + '\n');
+    } finally {
+      store.close();
+    }
   } else if (action === 'render-assets') {
     ensure(typeof extra === 'string', 'WEB_PROVIDER_USAGE');
     const log = (await renderAssets(root, extra)) as { kind: string; characterId: string; billedBytes: number }[];

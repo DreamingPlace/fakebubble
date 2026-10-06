@@ -51,7 +51,7 @@ pnpm web:cloudflare:package "$PWD/runtime/cloud-package"
 
 供应商返回 HTTP 429 表示请求在执行前被拒绝，是**已知未执行**：同一阶段退回待处理，按 2s、4s、8s 退避重试（最多三次，且不越过操作截止时间），重试沿用同一笔预占，不重复预占也不提前释放。超时、网络错误和 5xx 仍是 UNKNOWN，绝不重发。语音重试用尽，或 8 秒内没有语音名额时，已审核的文字原样作为文字气泡发布（`deliveryFallback: "text"`，不生成新文字）；为未使用的语音阶段预占的金额按零成本结算释放。
 
-`114_stage_metrics.sql` 为每个操作记录文字/语音排队与阶段耗时、限流重试和是否降级。它不提升 `user_version`（仍为 113）：Node 用 `migrateWebProviderMetrics` 追加，Cloudflare 把同一文件并入最后一步 113（全新空权威）。主管理员可通过 `POST /api/web/local/admin/metrics/stage-latency`（`{"days":1..31}`）查看每日 p50/p95。
+`114_stage_metrics.sql` 为每个操作记录文字/语音排队与阶段耗时、限流重试和是否降级。它不提升 `user_version`（仍为 113）：Node 用 `migrateWebProviderMetrics` 追加（新的 provider-* 实例由 `migrate` 自动完成；已有实例执行 `scripts/web-provider.ts migrate-metrics <root>`；没有这些表时 429 仍按旧规则视为 UNKNOWN），Cloudflare 把同一文件并入最后一步 113（全新空权威）。主管理员可通过 `POST /api/web/local/admin/metrics/stage-latency`（`{"days":1..31}`）查看每日 p50/p95。
 
 默认 `PUBLIC_ENABLED`、`EXTERNAL_CALLS`、`OPERATOR_ENABLED` 关闭；`workers_dev`、预览域名关闭，`routes` 为空。部署不是安装脚本的副作用。本仓库不附带一键开启付费调用的命令。
 
