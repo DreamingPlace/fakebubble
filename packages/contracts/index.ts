@@ -111,6 +111,14 @@ export interface TopicCandidate {
   // The review's 1–10 importance; absent in candidates stored before it existed.
   importance?: number;
 }
+/** A stable fact the player stated about themselves; written only from player-authored messages of the request. */
+export interface FactOp {
+  op: 'add' | 'update' | 'retire';
+  factKey: string;
+  statement: string;
+  importance: number;
+  evidenceMessageIds: string[];
+}
 export interface DialogueCandidate extends ReplyCandidate {
   sceneUpdate?: import('./scenes.ts').SceneUpdate | null;
   relationshipEvents?: import('./relationships.ts').RelationshipEventCandidate[];
@@ -119,6 +127,7 @@ export interface DialogueCandidate extends ReplyCandidate {
   deferredMessageIds: string[];
   awaitingPlayerMessageIds: string[];
   topics: TopicCandidate[];
+  factOps?: FactOp[];
   endsSession: boolean;
   // Set by the review step, never by the model's draft: true when the review replaced the draft's bubbles.
   reviewChanged?: boolean;

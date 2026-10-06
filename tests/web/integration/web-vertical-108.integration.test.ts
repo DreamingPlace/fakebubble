@@ -96,6 +96,7 @@ function fixture(t: test.TestContext, migrate = true) {
     const review = {
       decision: 'accept',
       replacementBubbles: [],
+      factOps: [],
       topics: [
         {
           key: '港口',

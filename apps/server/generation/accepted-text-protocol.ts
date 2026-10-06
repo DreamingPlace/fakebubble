@@ -134,6 +134,15 @@ function reviewSchema(
           ),
         }
       : {}),
+    factOps: array(
+      objectSchema({
+        op: { type: 'string', enum: ['add', 'update', 'retire'] },
+        factKey: string,
+        statement: string,
+        importance: importanceSchema,
+        evidenceMessageIds: idArray(localIds),
+      }),
+    ),
     ...(sourceIds.length
       ? { sourceUsage: objectSchema(Object.fromEntries(sourceIds.map((id) => [id, array(string)]))) }
       : {}),
@@ -219,6 +228,14 @@ export function validateDialogueEvidence(candidate: DialogueCandidate, request: 
   const clarificationIds = new Set(
     (request.clarifications ?? []).flatMap((item) => item.messages.map((message) => message.id)),
   );
+  // A player fact comes only from player-authored messages of this very request (never a character's or a clarification).
+  for (const op of candidate.factOps ?? [])
+    ensure(
+      op.evidenceMessageIds.every((id) =>
+        request.messages.some((message) => message.id === id && message.authorKind === 'player'),
+      ),
+      'INVALID_MEMORY_EVIDENCE',
+    );
   for (const topic of candidate.topics) {
     ensure(
       topic.evidenceMessageIds.every(
@@ -252,6 +269,7 @@ export function applyTextReview(value: unknown, draft: TextDraft, request: TextG
       'decision',
       'replacementBubbles',
       'topics',
+      'factOps',
       ...(request.requiredMessageIds.length ? ['coverage'] : []),
       ...(request.evidence.length ? ['sourceUsage'] : []),
       ...(request.relationshipContext?.auditEnabled ? ['relationshipEvents'] : []),
@@ -345,6 +363,7 @@ export function applyTextReview(value: unknown, draft: TextDraft, request: TextG
       deferredMessageIds,
       awaitingPlayerMessageIds,
       topics,
+      factOps: value.factOps,
       ...(request.sceneContext ? { sceneUpdate: value.sceneUpdate } : {}),
       ...(request.relationshipContext?.auditEnabled ? { relationshipEvents: value.relationshipEvents } : {}),
     },

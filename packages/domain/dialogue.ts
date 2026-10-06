@@ -1,4 +1,4 @@
-import type { DialogueCandidate } from '../contracts/index.ts';
+import type { DialogueCandidate, FactOp } from '../contracts/index.ts';
 import { ensure } from './errors.ts';
 import { bubbleLimits, validatedBubbles } from './bubbles.ts';
 import { sceneUpdate } from './scenes.ts';
@@ -30,6 +30,54 @@ export const importanceValue = (value: unknown): value is number =>
 export function topicKey(value: string): string {
   return value.normalize('NFKC').trim().toLowerCase().replace(/\s+/gu, ' ');
 }
+const FACT_OPS = ['add', 'update', 'retire'];
+/**
+ * The review's player-fact operations: at most 3, each exactly {op, factKey, statement, importance, evidenceMessageIds}.
+ * add/update need a non-empty statement; retire ignores statement and importance but still bounds them. Every op names
+ * evidence (player-authored messages of the request, checked against the request and the store by the callers).
+ */
+export function factOps(value: unknown): FactOp[] {
+  ensure(Array.isArray(value) && value.length <= 3, 'INVALID_FACTS');
+  const ops = value.map((item) => {
+    ensure(
+      item !== null &&
+        typeof item === 'object' &&
+        !Array.isArray(item) &&
+        Object.keys(item).sort().join(',') === 'evidenceMessageIds,factKey,importance,op,statement',
+      'INVALID_FACTS',
+    );
+    const op = item as Record<string, unknown>;
+    ensure(
+      FACT_OPS.includes(String(op.op)) &&
+        typeof op.factKey === 'string' &&
+        typeof op.statement === 'string' &&
+        [...op.statement].length <= 240 &&
+        !/[\r\n]/u.test(op.statement) &&
+        (op.op === 'retire' || op.statement.trim().length > 0) &&
+        importanceValue(op.importance),
+      'INVALID_FACTS',
+    );
+    const factKey = topicKey(op.factKey);
+    ensure(/^[\p{L}\p{N} _.-]{1,64}$/u.test(factKey), 'INVALID_FACTS');
+    ensure(
+      Array.isArray(op.evidenceMessageIds) &&
+        op.evidenceMessageIds.length >= 1 &&
+        op.evidenceMessageIds.length <= 8 &&
+        op.evidenceMessageIds.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 128) &&
+        new Set(op.evidenceMessageIds).size === op.evidenceMessageIds.length,
+      'INVALID_FACTS',
+    );
+    return {
+      op: op.op as FactOp['op'],
+      factKey,
+      statement: op.statement.trim(),
+      importance: op.importance as number,
+      evidenceMessageIds: op.evidenceMessageIds as string[],
+    };
+  });
+  ensure(new Set(ops.map((op) => op.factKey)).size === ops.length, 'INVALID_FACTS');
+  return ops;
+}
 /** Parse the model's v2 wire format; derived legacy text is never accepted from the model. */
 export function dialogueCandidate(
   value: unknown,
@@ -39,7 +87,7 @@ export function dialogueCandidate(
 ): DialogueCandidate {
   object(value);
   const keys = Object.keys(value)
-    .filter((key) => key !== 'relationshipEvents' && key !== 'sceneUpdate')
+    .filter((key) => key !== 'relationshipEvents' && key !== 'sceneUpdate' && key !== 'factOps')
     .sort()
     .join(',');
   ensure(
@@ -115,6 +163,7 @@ export function dialogueCandidate(
     awaitingPlayerMessageIds,
     endsSession: value.endsSession,
     topics,
+    ...(Object.hasOwn(value, 'factOps') ? { factOps: factOps(value.factOps) } : {}),
     ...(Object.hasOwn(value, 'sceneUpdate') ? { sceneUpdate: sceneUpdate(value.sceneUpdate) } : {}),
     ...(Object.hasOwn(value, 'relationshipEvents')
       ? { relationshipEvents: relationshipCandidates(value.relationshipEvents) }
@@ -132,6 +181,7 @@ export function dialogueWire(candidate: DialogueCandidate) {
     awaitingPlayerMessageIds,
     endsSession,
     topics,
+    ...(candidate.factOps ? { factOps: candidate.factOps } : {}),
     ...(Object.hasOwn(candidate, 'sceneUpdate') ? { sceneUpdate: candidate.sceneUpdate } : {}),
     ...(candidate.relationshipEvents ? { relationshipEvents: candidate.relationshipEvents } : {}),
   };

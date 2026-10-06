@@ -167,6 +167,7 @@ function setup(t: TestContext) {
       output: {
         decision: 'accept',
         replacementBubbles: [],
+        factOps: [],
         topics: [],
         coverage: { 'c-input': { status: 'answered', supportQuote: spokenText, missingInformation: '' } },
         sceneUpdate: null,

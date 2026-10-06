@@ -151,6 +151,7 @@ export function auditReply(request = textRequest(), draft = draftPresentation(re
         }
       : {}),
     topics: wireReply(request).topics.map((topic) => ({ ...topic, memoryId: null as string | null, importance: 3 })),
+    factOps: [] as unknown[],
     ...(request.evidence.length
       ? { sourceUsage: Object.fromEntries(request.evidence.map((source) => [source.id, [] as string[]])) }
       : {}),

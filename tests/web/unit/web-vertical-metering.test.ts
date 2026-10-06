@@ -110,6 +110,7 @@ function readyToPublish(
   const review = {
     decision: 'accept',
     replacementBubbles: [],
+    factOps: [],
     topics: [
       {
         key: '问候',
@@ -412,6 +413,7 @@ test('108 freezes the v7 request and releases text only for two known audited fa
   const review = {
     decision: 'accept',
     replacementBubbles: [],
+    factOps: [],
     topics: [],
     coverage: { [claim.inputMessageId]: { status: 'answered', supportQuote: 'first', missingInformation: '' } },
     relationshipEvents: [],
@@ -526,6 +528,7 @@ test('108 publishes a complete audited synthetic voice turn atomically and repla
   const review = {
     decision: 'accept',
     replacementBubbles: [],
+    factOps: [],
     topics: [
       {
         key: '问候',
@@ -648,6 +651,7 @@ test('108 publishes a complete audited synthetic voice turn atomically and repla
     const nextReview = {
       decision: 'accept',
       replacementBubbles: [],
+      factOps: [],
       topics:
         requestId === 'second'
           ? [

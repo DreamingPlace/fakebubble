@@ -717,6 +717,14 @@ export class WebVerticalPublisher {
         'WEB_PUBLICATION_CANDIDATE_INVALID',
       );
       ensure(
+        (candidate.factOps ?? []).every((op) =>
+          op.evidenceMessageIds.every((id) =>
+            request.messages.some((message) => message.id === id && message.authorKind === 'player'),
+          ),
+        ),
+        'INVALID_MEMORY_EVIDENCE',
+      );
+      ensure(
         candidate.topics.every(
           (topic) =>
             topic.linkedMemoryId === undefined ||

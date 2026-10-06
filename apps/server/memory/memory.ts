@@ -36,12 +36,87 @@ function hasImportance(store: Store, scope: CharacterScope) {
   return !!store.get(scope, "SELECT 1 FROM pragma_table_info('memory_topics') WHERE name='importance'");
 }
 
+/** The messages a fact cites must exist in this conversation and be player-authored (the player_statement rule). */
+function playerEvidence(store: Store, scope: CharacterScope, ids: string[]) {
+  const rows = ids.map((id) =>
+    store.get<{ author_kind: string }>(
+      scope,
+      'SELECT author_kind FROM messages WHERE world_id=? AND conversation_id=? AND id=?',
+      scope.worldId,
+      scope.conversationId,
+      id,
+    ),
+  );
+  ensure(ids.length > 0 && rows.every((row) => row?.author_kind === 'player'), 'INVALID_MEMORY_EVIDENCE');
+}
+const activeFact = (store: Store, scope: CharacterScope, factKey: string) =>
+  store.get<{ id: string }>(
+    scope,
+    `SELECT id FROM memory_facts WHERE ${where} AND fact_key=? AND retired_at IS NULL`,
+    ...params(scope),
+    factKey,
+  );
+function requireFactsTable(store: Store, scope: CharacterScope) {
+  ensure(
+    store.get(scope, "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_facts'"),
+    'WEB_MEMORY_MIGRATION_REQUIRED',
+  );
+}
+
+/** Before any write: every fact op cites player messages of this conversation; update/retire need an active fact. */
+function validatePlayerFacts(store: Store, scope: CharacterScope, candidate: DialogueCandidate): void {
+  if (!candidate.factOps?.length) return;
+  requireFactsTable(store, scope);
+  for (const op of candidate.factOps) {
+    playerEvidence(store, scope, op.evidenceMessageIds);
+    ensure(op.op === 'add' || activeFact(store, scope, op.factKey), 'INVALID_FACT_REFERENCE');
+  }
+}
+
+/**
+ * Apply fact ops inside the publication transaction. An update (or an add of a key that is already active) retires the
+ * old row, pointing at its successor, and inserts the new statement, so history stays and one fact per key is active.
+ */
+function recordPlayerFacts(store: Store, scope: CharacterScope, candidate: DialogueCandidate, now: number): void {
+  for (const op of candidate.factOps ?? []) {
+    const current = activeFact(store, scope, op.factKey);
+    if (op.op === 'retire') {
+      store.run(scope, 'UPDATE memory_facts SET retired_at=?,updated_at=? WHERE id=?', now, now, current!.id);
+      continue;
+    }
+    const id = randomUUID();
+    if (current)
+      store.run(
+        scope,
+        'UPDATE memory_facts SET retired_at=?,updated_at=?,superseded_by=? WHERE id=?',
+        now,
+        now,
+        id,
+        current.id,
+      );
+    store.run(
+      scope,
+      `INSERT INTO memory_facts(world_id,conversation_id,character_id,id,fact_key,statement,importance,
+      evidence_message_ids_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      ...params(scope),
+      id,
+      op.factKey,
+      op.statement,
+      op.importance,
+      JSON.stringify(op.evidenceMessageIds),
+      now,
+      now,
+    );
+  }
+}
+
 export function validateDialogueMemoryEvidence(
   store: Store,
   scope: CharacterScope,
   jobId: string,
   candidate: DialogueCandidate,
 ): void {
+  validatePlayerFacts(store, scope, candidate);
   for (const topic of candidate.topics) {
     if (topic.linkedMemoryId !== undefined)
       ensure(
@@ -83,6 +158,7 @@ export function recordDialogueMemories(
   currentInputIds: string[],
   now: number,
 ): void {
+  validatePlayerFacts(store, scope, candidate);
   const importanceColumn = hasImportance(store, scope);
   for (const topic of candidate.topics) {
     const evidence = topic.evidenceMessageIds.map((id) => {
@@ -174,6 +250,7 @@ export function recordDialogueMemories(
     );
     recordEpisodeSources(store, scope, jobId, topic.key, topic.sourceEvidenceIds ?? []);
   }
+  recordPlayerFacts(store, scope, candidate, now);
 }
 
 /** Expiry removes short topics from default recall, not from a relevant explicit search. */
