@@ -205,5 +205,5 @@ These are installed by schema helpers at open time and sit next to the tables ab
 ## Notes for later Parts
 
 - Retention tables carry `principal_id` but are classified global because the retention cleaner is a cross-principal job that must outlive the principal's rows. A later Part may split them.
-- User tables keyed only by `world_id` rely on the 1:1 `web_principals.world_id` link; a principal-scoped context should carry both `playerId` and `worldId` (see `UserContext` in `platform/user-store.ts`).
+- User tables keyed only by `world_id` rely on the 1:1 `web_principals.world_id` link; `UserContext` (`platform/store-boundary.ts`) therefore carries only `worldId`.
 - Nothing enforces these classes in SQL yet; `UserStore` and `GlobalStore` are thin wrappers over the same connection.
