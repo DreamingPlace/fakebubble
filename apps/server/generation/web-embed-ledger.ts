@@ -3,13 +3,7 @@ import type { CharacterScope, Clock } from '../../../packages/contracts/index.ts
 import { ensure } from '../../../packages/domain/errors.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
-import {
-  currentTopicText,
-  embeddingHash,
-  embeddingText,
-  packVector,
-  scopeHasVectors,
-} from '../memory/memory-embeddings.ts';
+import { currentTopicText, embeddingHash, packVector, scopeHasVectors } from '../memory/memory-embeddings.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { userStore } from '../platform/store-boundary.ts';
 import {
@@ -31,6 +25,8 @@ export const EMBED_LIMIT_MICROS = 1_000_000;
 export const INDEX_BATCH = EMBEDDING_MAX_TEXTS;
 /** A known failure leaves its scope's topics pending, but not before this long has passed. */
 export const INDEX_RETRY_MS = 60_000;
+/** With nothing pending, the scan over every scope is not repeated sooner than this unless a publication committed. */
+export const INDEX_IDLE_MS = 60_000;
 /** The runner aborts an index call after this; the attempt lease covers a crash, never a live call. */
 export const INDEX_CALL_TIMEOUT_MS = 20_000;
 export const INDEX_LEASE_MS = 30_000;
@@ -649,5 +645,3 @@ export function webEmbedNextDue(store: BusinessStore, now: number): number | nul
   const times = [open, retry == null ? null : retry + INDEX_RETRY_MS].filter((value): value is number => value != null);
   return times.length ? Math.max(now, Math.min(...times)) : null;
 }
-
-export { embeddingText };

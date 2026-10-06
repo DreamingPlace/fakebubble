@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { WEB_EMBED_DEFAULT, parseWebEmbedConfig } from '../../../config/web-embeddings.ts';
 import { OfflineEmbeddings, type OfflineEmbeddingOptions } from '../../../apps/server/generation/embedding-provider.ts';
-import { INDEX_RETRY_MS } from '../../../apps/server/generation/web-embed-ledger.ts';
+import { INDEX_IDLE_MS, INDEX_RETRY_MS } from '../../../apps/server/generation/web-embed-ledger.ts';
 import { WebProviderExecutor } from '../../../apps/server/generation/web-provider-executor.ts';
 import { WebProviderRunner } from '../../../apps/server/generation/web-provider-runner.ts';
 import { T0, TestClock, addPlayer, addTopic, embedStore, spending } from '../fixtures/embed-store.ts';
@@ -63,7 +63,7 @@ test('a scheduler pass indexes pending topics in a tracked task and wakes the sc
   assert.equal(h.executor.lastError, null);
 });
 
-test('an idle scan is not repeated for 5 s unless something changed; a finished call re-arms the next scan', async (t) => {
+test('an idle scan is not repeated for a minute unless something changed; a finished call re-arms the next scan', async (t) => {
   const h = harness(t);
   const a = addPlayer(h.store, 1);
   addTopic(h.store, a, '猫', '玩家养了一只猫');
@@ -71,7 +71,7 @@ test('an idle scan is not repeated for 5 s unless something changed; a finished 
   await h.pass(); // finds nothing and starts the idle wait
   addTopic(h.store, a, '天气', '玩家问了天气');
   assert.equal(await h.pass(), 0, 'within the idle wait nothing scans');
-  h.clock.advance(5_001);
+  h.clock.advance(INDEX_IDLE_MS + 1);
   assert.equal(await h.pass(), 1);
   assert.equal(h.rows().length, 2);
   assert.equal(h.provider.calls.length, 2);
@@ -92,7 +92,7 @@ test('a known failure is retried only after the retry delay; an UNKNOWN call is 
   addTopic(unknown.store, addPlayer(unknown.store, 1), '猫', '玩家养了一只猫');
   await unknown.pass();
   assert.deepEqual(unknown.rows(), [{ topic_key: '猫', state: 'unknown' }]);
-  for (const wait of [0, 5_001, INDEX_RETRY_MS + 1, 3_600_000]) {
+  for (const wait of [0, INDEX_IDLE_MS + 1, INDEX_RETRY_MS + 1, 3_600_000]) {
     unknown.clock.advance(wait);
     assert.equal(await unknown.pass(), 0, `no retry after ${wait} ms`);
   }
@@ -134,7 +134,7 @@ test('embedding concurrency is its own configured limit: with 3 slots two index 
   assert.equal(h.store.all("SELECT 1 FROM web_embed_attempts WHERE state='sent'").length, 2);
   release();
   await Promise.all(h.held);
-  h.clock.advance(5_001);
+  h.clock.advance(INDEX_IDLE_MS + 1);
   await h.pass();
   assert.equal(h.provider.calls.length, 3);
   assert.equal(h.rows().length, 3);

@@ -11,7 +11,7 @@ import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts'
 import { WebProviderRunner } from './web-provider-runner.ts';
 import { audioStartedExpr, fallbackRequested, metricsEnabled } from '../admission/web-stage-metrics.ts';
 import { WebProviderOffline } from './web-provider-offline.ts';
-import type { IndexBatch, QueryClaim } from './web-embed-ledger.ts';
+import { INDEX_IDLE_MS, type IndexBatch, type QueryClaim } from './web-embed-ledger.ts';
 import type { QueryVector } from './web-embed-runner.ts';
 
 /** Separate schema113 scheduler. No synthetic output, default budget or footer is installed. */
@@ -29,7 +29,7 @@ export class WebProviderExecutor {
   private readonly publishing = new Set<string>();
   private readonly falling = new Set<string>();
   private managed = false;
-  /** Indexing scans every scope, so an idle pass is not repeated for this long unless a publication committed. */
+  /** Indexing scans every scope, so an idle pass is not repeated for INDEX_IDLE_MS unless a publication committed. */
   private indexDirty = true;
   private indexScanAt = 0;
   private indexPausedUntil = 0;
@@ -286,7 +286,7 @@ export class WebProviderExecutor {
         if (batch === 'busy') return;
         if (batch === null) {
           this.indexDirty = false;
-          this.indexScanAt = now + 5_000;
+          this.indexScanAt = now + INDEX_IDLE_MS;
           return;
         }
         this.index(batch);
