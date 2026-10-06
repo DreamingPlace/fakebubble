@@ -12,7 +12,7 @@ Generated from a throwaway static import graph (TypeScript AST; `import`, `expor
 
 A first pass without type-only `import('…')` handling flagged two files; both are live and were kept:
 
-- `packages/contracts/character-requests.ts`: referenced as `import('./character-requests.ts').CharacterRequestCounts` in `packages/contracts/player-api.ts`, which the player app consumes (contract types are kept when `apps/player-web` imports them).
+- `packages/contracts/character-requests.ts`: referenced as `import('./character-requests.ts').CharacterRequestCounts` in `packages/contracts/player-api.ts`, which `apps/server` (store, recovery) imports. `apps/player-web` does not import it, so the keep-contracts-for-player-web rule is not what protects it; the type reference keeps it in the compile graph, so it was left alone.
 - `workers/cloudflare/runtime.d.ts`: ambient `cloudflare:workers` and `*.sql` module declarations required by `pnpm typecheck`.
 
 Consequently Part 2 step 3 (delete unreachable files) deletes nothing. The Cloudflare package therefore contains the same 215 files as before.
