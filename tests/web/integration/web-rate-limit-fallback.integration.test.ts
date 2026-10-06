@@ -23,6 +23,7 @@ import { WebProviderRunner, type FakeFish } from '../../../apps/server/generatio
 import { WebVerticalPublisher } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import type { WebAttemptBudget } from '../../../apps/server/budget/web-provider-budget-contract.ts';
 import { MemoryBudget } from '../fixtures/memory-budget.ts';
+import { webProviderNextDue } from '../../../apps/server/cloudflare/web-executor.ts';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const now = 1_700_000_000_000;
@@ -601,4 +602,24 @@ test('the audio slot limit counts a backing-off attempt, so a retry never compet
     1,
     'the rewound attempt keeps its provider capacity ticket',
   );
+});
+
+test('the Cloudflare alarm wakes at the backoff end and at the fallback wait, not in a busy loop', async (t) => {
+  const f = stage(t, {
+    fish: () => {
+      throw rateLimited();
+    },
+  });
+  await f.readyForAudio();
+  const store = f.store as WebStore;
+  // Waiting for an audio slot: the next wake is the fallback decision, 8s after the wait started.
+  assert.equal(webProviderNextDue(store, f.clock.now(), false), now + 8_000);
+  await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+  const retryAt = f.clock.now() + 2_000;
+  assert.equal(f.operation().audio_wait_started_at, retryAt);
+  assert.equal(webProviderNextDue(store, f.clock.now(), true), retryAt, 'the retry is due at the backoff end');
+  f.advance(2_000);
+  assert.equal(webProviderNextDue(store, f.clock.now(), true), f.clock.now(), 'claimable now');
+  await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+  assert.equal(webProviderNextDue(store, f.clock.now(), true), f.clock.now() + 4_000);
 });

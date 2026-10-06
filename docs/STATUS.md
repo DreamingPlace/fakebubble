@@ -44,3 +44,12 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - `pnpm check`: **688 tests, 688 passed, 0 failed, 0 skipped** (688 baseline + 3 new policy-hash tests − 3 deleted legacy Engine scene tests). It also passes when run immediately after `pnpm web:player:build`.
 - Four-Worker package: **212** files (was 215).
 - No `.sql` migration or migration runner changed.
+
+## Part 4 (concurrency, 429, fallback, metrics)
+
+- `maxTextRunning` / `maxAudioRunning` are deployment configuration (Worker vars `MAX_TEXT_RUNNING`, `MAX_AUDIO_RUNNING`, `MAX_WAITING_OPERATIONS`, `AUDIO_FALLBACK_WAIT_MS`; local `local-config.json` `concurrency`), validated at start (1–64 / 1–48), defaults 20 / 4 / 8000 ms. A store built without configuration (offline fixtures) keeps 4 / 4 / 120 because the stage-queue tests are written against it. Global tickets = text + audio + waiting = 128 for both defaults.
+- Provider HTTP 429 is known not-executed: the stage claim returns to pending (2s, 4s, 8s, at most three retries, never past the deadline) on one budget reservation; timeouts, network errors and 5xx are unchanged (UNKNOWN, never resent).
+- Voice falls back to the reviewed text as text bubbles (`deliveryFallback: "text"`) after `audioFallbackWaitMs` without a slot, or when 429 retries are exhausted; the unused voice reservation is settled at zero.
+- `114_stage_metrics.sql` (stage timings, retries, fallback; 429 bookkeeping; `web_publication_items.media_id` nullable). `user_version` stays 113: the existing workerd schema test pins 113 over the whole migration directory.
+- `pnpm check`: **716 tests, 716 passed, 0 failed, 0 skipped** (691 + 25 new), about 7m50s.
+- Four-Worker package: see the Part 4 hand-off (three new source modules and the 114 SQL are bundled).
