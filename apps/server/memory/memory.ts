@@ -264,6 +264,8 @@ export function recallMemories(
   now: number,
   query = '',
   limit = 12,
+  /** The query embedding (see generation/web-v7-request.ts); ranking uses it from the next step. */
+  _semantic?: { model: string; vector: Float32Array },
 ): TopicMemory[] {
   ensure(Number.isInteger(limit) && limit >= 1 && limit <= 12, 'INVALID_MEMORY_LIMIT');
   const words = [

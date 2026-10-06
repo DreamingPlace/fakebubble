@@ -10,6 +10,8 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import { protocolFingerprint } from './accepted-text-protocol.ts';
 import { textPromptHash } from './accepted-text-prompt.ts';
 import { recallMemories, recallPlayerFacts } from '../memory/memory.ts';
+import { embeddingHash } from '../memory/memory-embeddings.ts';
+import { queryText } from './web-embed-ledger.ts';
 import { memoryVersion, recallCorrections } from '../memory/memory-review.ts';
 import { playerContextKey, playerIntroduction } from '../conversation/player-profile.ts';
 import { relationshipContext, relationshipVersion } from '../conversation/relationships.ts';
@@ -69,8 +71,20 @@ function dto(row: MessageRow): MessageDTO {
   };
 }
 
-/** Caller owns the first text-claim transaction. Never scans unproven messages as context. */
-export function freezeWebV7Request(store: WebStore, operationId: string, now: number) {
+/** The player's input embedded for this reply: in memory only, produced before the freeze and never stored. */
+export interface QueryEmbedding {
+  model: string;
+  vector: Float32Array;
+  /** sha256 of the exact text that was embedded */
+  digest: string;
+}
+
+/**
+ * Caller owns the first text-claim transaction. Never scans unproven messages as context. The optional query
+ * embedding was computed BEFORE this call (the claim waits for it, up to its short timeout), so the recall result frozen
+ * here is final and the request stays immutable; without it recall is lexical only.
+ */
+export function freezeWebV7Request(store: WebStore, operationId: string, now: number, queryEmbedding?: QueryEmbedding) {
   ensure(!store.get('SELECT 1 FROM web_v7_requests WHERE operation_id=?', operationId), 'WEB_V7_REQUEST_EXISTS');
   const operation = store.get<{
     id: string;
@@ -257,7 +271,12 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     'WEB_V7_MEMORY_ENTITLEMENT_REQUIRED',
   );
   const query = input.input_body;
-  const memories = access.kind !== 'guest' ? recallMemories(userStore(store), scope, now, query) : [];
+  // A vector counts only for exactly the text that was embedded: the frozen input.
+  const semantic =
+    queryEmbedding && queryEmbedding.digest === embeddingHash(queryText(query))
+      ? { model: queryEmbedding.model, vector: queryEmbedding.vector }
+      : undefined;
+  const memories = access.kind !== 'guest' ? recallMemories(userStore(store), scope, now, query, 12, semantic) : [];
   const corrections =
     access.kind !== 'guest'
       ? recallCorrections(

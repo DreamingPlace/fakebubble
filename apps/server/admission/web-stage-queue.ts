@@ -16,6 +16,7 @@ import { readWebV7Request } from '../generation/web-v7-request.ts';
 import { applyTextReview, parseTextDraft } from '../generation/accepted-text-protocol.ts';
 import type { SnapshotScope } from '../generation/web-input-snapshot.ts';
 import { audioStartedExpr, metricsEnabled, recordAudioClaim, recordTextClaim } from './web-stage-metrics.ts';
+import type { QueryVector } from '../generation/web-embed-runner.ts';
 
 type Stage = 'text' | 'audio';
 export interface WebCoordinatorLease {
@@ -87,10 +88,16 @@ export class WebStageQueue {
   private readonly store: WebStore;
   private readonly clock: Clock;
   private readonly nextId: () => string;
-  constructor(store: WebStore, clock: Clock, nextId: () => string) {
+  /**
+   * Query embeddings computed for operations that are not frozen yet, by operation id. In memory only: the vector
+   * lives exactly until the request that needs it is frozen, and is never written to the database.
+   */
+  private readonly queryVectors: Map<string, QueryVector> | undefined;
+  constructor(store: WebStore, clock: Clock, nextId: () => string, queryVectors?: Map<string, QueryVector>) {
     this.store = store;
     this.clock = clock;
     this.nextId = nextId;
+    this.queryVectors = queryVectors;
   }
 
   /**
@@ -198,7 +205,10 @@ export class WebStageQueue {
   }
 
   claimText(coordinator: WebCoordinatorLease, owner: string): WebStageClaim | null {
-    return this.claim('text', coordinator, owner);
+    const claim = this.claim('text', coordinator, owner);
+    // The claim committed: its request is frozen (with or without the vector), so the vector has served its purpose.
+    if (claim) this.queryVectors?.delete(claim.operationId);
+    return claim;
   }
 
   /** Reclaims only trusted known output; already sent phases are never resent. */
@@ -472,8 +482,15 @@ export class WebStageQueue {
       const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
       const statuses = stage === 'text' ? "o.status='queued'" : "o.status IN ('text_ready','audio_pending')";
       const queuedAt = stage === 'text' ? 'o.text_queued_at' : 'o.audio_queued_at';
+      // An operation whose query embedding is in flight is not claimed yet: the request is frozen with the final recall
+      // result. The embedding has its own short timeout, after which it is no longer in flight.
+      const embedGate =
+        schema >= 116
+          ? `AND NOT EXISTS (SELECT 1 FROM web_embed_attempts q WHERE q.operation_id=o.id AND q.kind='query'
+        AND q.state IN ('not_sent','sent'))`
+          : '';
       const candidate =
-        stage === 'text' ? '' : 'AND EXISTS (SELECT 1 FROM web_reviewed_candidates c WHERE c.operation_id=o.id)';
+        stage === 'text' ? embedGate : 'AND EXISTS (SELECT 1 FROM web_reviewed_candidates c WHERE c.operation_id=o.id)';
       const retention = claimRetention(schema, now);
       // A principal's earlier operation waiting out a provider 429 backoff keeps its place: later ones do not jump it.
       const backoffGuard = `AND NOT EXISTS (SELECT 1 FROM web_operations earlier WHERE earlier.principal_id=o.principal_id
@@ -513,7 +530,7 @@ export class WebStageQueue {
         schema >= 108 &&
         !this.store.get('SELECT 1 FROM web_v7_requests WHERE operation_id=?', operation.id)
       )
-        freezeWebV7Request(this.store, operation.id, now);
+        freezeWebV7Request(this.store, operation.id, now, this.queryVectors?.get(operation.id));
       const token = this.nextId(),
         leaseExpiresAt = Math.min(
           now + (stage === 'text' ? WEB_LIMITS.textLeaseMs : WEB_LIMITS.audioLeaseMs),

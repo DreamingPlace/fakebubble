@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import type { CharacterScope } from '../../../packages/contracts/index.ts';
 import { Store } from '../../../apps/server/platform/store.ts';
+import { textRequest } from '../../text-fixtures.ts';
 import {
   migrateWebProviderEmbeddings,
   migrateWebProviderMemory,
@@ -80,6 +81,14 @@ export function addPlayer(store: Store, n: number, kind: 'guest' | 'account' = '
     kind === 'guest' ? T0 + 999_999_999 : null,
     kind === 'guest' ? 'active' : 'protected',
   );
+  if (kind === 'account')
+    store.run(
+      `INSERT INTO web_accounts(id,principal_id,username_norm,password_salt,password_tag,created_at) VALUES (?,?,?,x'00',x'00',?)`,
+      `account${n}`,
+      `principal${n}`,
+      `user${n}`,
+      T0,
+    );
   return {
     n,
     principalId: `principal${n}`,
@@ -89,7 +98,10 @@ export function addPlayer(store: Store, n: number, kind: 'guest' | 'account' = '
 }
 
 let sequence = 0;
-/** A topic with one episode (a job per episode); calling it again for the same key adds a NEWER episode. */
+/**
+ * A topic with one episode (a job per episode); calling it again for the same key adds a NEWER episode. Every episode
+ * comes from a published prior operation of this player, so a later request freeze accepts it as trusted memory.
+ */
 export function addTopic(
   store: Store,
   player: Player,
@@ -99,7 +111,36 @@ export function addTopic(
 ) {
   const at = options.at ?? T0;
   const { worldId, conversationId } = player.scope;
-  const job = `job${++sequence}`;
+  const k = ++sequence;
+  const job = `job${k}`;
+  const prior = `prior-op${k}`;
+  const message = `prior-input${k}`;
+  store.run(
+    `INSERT INTO messages(id,world_id,conversation_id,author_kind,author_id,body,created_at,delivery,proactive)
+    VALUES (?,?,?,'player',?,?,?,'text',0)`,
+    message,
+    worldId,
+    conversationId,
+    player.playerId,
+    `之前的话${k}`,
+    at,
+  );
+  store.run(
+    `INSERT INTO web_operations(id,principal_id,request_id,payload_hash,world_id,conversation_id,character_id,
+    input_message_id,ip_window_id,status,quota_state,created_at,deadline_at,text_queued_at,admission_seq,metering_type)
+    VALUES (?,?,?,?,?,?,'character',?,NULL,'published','used',?,?,?,?,'entitled')`,
+    prior,
+    player.principalId,
+    `prior-request${k}`,
+    `prior-payload${k}`,
+    worldId,
+    conversationId,
+    message,
+    at,
+    at + 300_000,
+    at,
+    1000 + k,
+  );
   store.run(
     `INSERT INTO jobs(id,world_id,conversation_id,character_id,kind,epoch,status,created_at,lease_until,
     covered_ids_json,requested_delivery) VALUES (?,?,?,'character','reply',1,'published',?,?,'[]','voice')`,
@@ -107,6 +148,21 @@ export function addTopic(
     worldId,
     conversationId,
     at,
+    at,
+  );
+  store.run(
+    `INSERT INTO web_publications(operation_id,principal_id,player_id,world_id,conversation_id,character_id,
+    input_message_id,job_id,request_digest,candidate_digest,published_at,receipt_json)
+    VALUES (?,?,?,?,?,'character',?,?,?,?,?,'{}')`,
+    prior,
+    player.principalId,
+    player.playerId,
+    worldId,
+    conversationId,
+    message,
+    job,
+    'a'.repeat(64),
+    'b'.repeat(64),
     at,
   );
   store.run(
@@ -122,18 +178,19 @@ export function addTopic(
   );
   store.run(
     "INSERT OR IGNORE INTO memory_catalog(id,world_id,conversation_id,character_id,topic_key) VALUES (?,?,?,'character',?)",
-    `catalog${++sequence}`,
+    `catalog${k}`,
     worldId,
     conversationId,
     key,
   );
   store.run(
-    "INSERT INTO memory_episodes VALUES (?,?,'character',?,?,?,'conversation','[]',?)",
+    "INSERT INTO memory_episodes VALUES (?,?,'character',?,?,?,'conversation',?,?)",
     worldId,
     conversationId,
     key,
     job,
     summary,
+    JSON.stringify([message]),
     at,
   );
 }
@@ -146,3 +203,55 @@ export const spending = (store: Store) =>
   )!;
 export const metrics = (store: Store) =>
   store.all<Record<string, number | string>>('SELECT * FROM web_embed_metrics ORDER BY day');
+
+let operations = 0;
+/**
+ * A queued, entitled operation with its player input message, ready for the first text claim (which freezes the input
+ * snapshot and the v7 request). Also makes sure the character has a valid template and an approved voice binding.
+ */
+export function addOperation(
+  store: Store,
+  player: Player,
+  body: string,
+  options: { id?: string; queuedAt?: number; template?: string } = {},
+) {
+  const n = ++operations;
+  const id = options.id ?? `operation${n}`;
+  const { worldId, conversationId } = player.scope;
+  store.run(
+    'UPDATE character_templates SET config_json=? WHERE id=?',
+    options.template ?? JSON.stringify({ ...textRequest().character, id: 'character' }),
+    'character',
+  );
+  if (!store.get('SELECT 1 FROM web_provider_voice_bindings WHERE character_id=?', 'character'))
+    store.run(
+      "INSERT INTO web_provider_voice_bindings VALUES ('character','voice:v1',1,'profile','reference','s2.1-pro','synthetic_fixture',1,NULL)",
+    );
+  store.run(
+    `INSERT INTO messages(id,world_id,conversation_id,author_kind,author_id,body,created_at,delivery,proactive)
+    VALUES (?,?,?,'player',?,?,?,'text',0)`,
+    `input${n}`,
+    worldId,
+    conversationId,
+    player.playerId,
+    body,
+    options.queuedAt ?? T0,
+  );
+  store.run(
+    `INSERT INTO web_operations(id,principal_id,request_id,payload_hash,world_id,conversation_id,character_id,
+    input_message_id,ip_window_id,status,quota_state,created_at,deadline_at,text_queued_at,admission_seq,metering_type)
+    VALUES (?,?,?,?,?,?,'character',?,NULL,'queued','reserved',?,?,?,?,'entitled')`,
+    id,
+    player.principalId,
+    `request${n}`,
+    `payload${n}`,
+    worldId,
+    conversationId,
+    `input${n}`,
+    options.queuedAt ?? T0,
+    (options.queuedAt ?? T0) + 300_000,
+    options.queuedAt ?? T0,
+    n,
+  );
+  return { id, messageId: `input${n}` };
+}
