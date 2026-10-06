@@ -110,7 +110,7 @@ export class WebVerticalPublisher {
     this.nextId = nextId;
     this.files =
       files ??
-      ((store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0) >= 113
+      (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113
         ? null
         : store.webPrivateAudioFiles());
   }
@@ -125,7 +125,7 @@ export class WebVerticalPublisher {
   private coordinator(lease: WebCoordinatorLease, now: number) {
     ensure(
       [108, 109, 110, 112].includes(this.schema()) ||
-        (this.schema() >= 113 &&
+        (this.schema() === 113 &&
           (this.store.providerRuntime === true ||
             this.store.get<{ file: string }>('PRAGMA database_list')?.file === '') &&
           !!this.store.get("SELECT 1 FROM sqlite_master WHERE name='web_provider_attempts'")),
@@ -140,7 +140,7 @@ export class WebVerticalPublisher {
     );
   }
   private assets(operationId: string): Asset[] {
-    if (this.schema() >= 113)
+    if (this.schema() === 113)
       return this.store.all<Asset>(
         `SELECT a.ordinal,a.media_id,a.text_digest,
       a.voice_version,a.byte_length,a.sha256,a.duration_ms,'provider_verified' AS state,
@@ -159,7 +159,7 @@ export class WebVerticalPublisher {
     );
   }
   private completeAssets(operationId: string) {
-    if (this.schema() >= 113) {
+    if (this.schema() === 113) {
       const row = this.store.get<{ total: number; complete: number }>(
         `SELECT count(*) AS total,
         coalesce(sum(CASE WHEN s.state='complete' AND a.origin='provider'
@@ -240,7 +240,7 @@ export class WebVerticalPublisher {
       );
       requireWebContent(this.store, this.clock, op.principal_id, op.world_id);
       this.completeAssets(operationId);
-      const candidateTable = this.schema() >= 113 ? 'web_provider_candidates' : 'web_v7_candidates';
+      const candidateTable = this.schema() === 113 ? 'web_provider_candidates' : 'web_v7_candidates';
       ensure(
         this.store.get(`SELECT 1 FROM ${candidateTable} WHERE operation_id=?`, operationId) &&
           !this.store.get(
@@ -412,7 +412,7 @@ export class WebVerticalPublisher {
     const assets = this.assets(claim.operationId);
     this.completeAssets(claim.operationId);
     for (const asset of assets) {
-      if (this.schema() >= 113) {
+      if (this.schema() === 113) {
         const row = this.store.get<ProviderAudioRow>(
           `SELECT *
           FROM web_provider_media_assets WHERE operation_id=? AND ordinal=? AND media_id=?`,
@@ -444,7 +444,7 @@ export class WebVerticalPublisher {
     ensure(op, 'WEB_OPERATION_NOT_FOUND');
     const footer =
       principal.kind === 'guest' && op.metering_type === 'trial' && principal.trial_used === 2
-        ? this.schema() >= 113
+        ? this.schema() === 113
           ? this.store.get<Footer>(
               `SELECT media_id,body,origin,'wav_pcm16' AS format,
         byte_length,sha256,duration_ms FROM web_provider_footer_assets
@@ -456,12 +456,12 @@ export class WebVerticalPublisher {
         : undefined;
     if (principal.kind === 'guest' && op.metering_type === 'trial' && principal.trial_used === 2)
       ensure(
-        footer?.origin === (this.schema() >= 113 ? 'operator_approved' : 'synthetic_test') &&
+        footer?.origin === (this.schema() === 113 ? 'operator_approved' : 'synthetic_test') &&
           footer.body === SYNTHETIC_TRIAL_FOOTER,
         'WEB_FOOTER_NOT_READY',
       );
     if (footer) {
-      if (this.schema() >= 113) {
+      if (this.schema() === 113) {
         const row = this.store.get<ProviderAudioRow>(
           'SELECT * FROM web_provider_footer_assets WHERE media_id=?',
           footer.media_id,
@@ -607,7 +607,7 @@ export class WebVerticalPublisher {
             (principal.kind === 'account' &&
               this.store.get('SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1', claim.principalId)) ||
             (principal.kind === 'invite' &&
-              [111, 112, 113, 114].includes(
+              [111, 112, 113].includes(
                 this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
               ) &&
               requireWebContent(this.store, this.clock, claim.principalId, claim.worldId))),
@@ -691,7 +691,7 @@ export class WebVerticalPublisher {
         candidate_digest: string;
         origin: string;
       }>(
-        this.schema() >= 113
+        this.schema() === 113
           ? `SELECT *, 'provider' AS origin FROM web_provider_candidates
           WHERE operation_id=?`
           : 'SELECT * FROM web_v7_candidates WHERE operation_id=?',
@@ -699,7 +699,7 @@ export class WebVerticalPublisher {
       );
       ensure(
         stored &&
-          stored.origin === (this.schema() >= 113 ? 'provider' : 'synthetic_test') &&
+          stored.origin === (this.schema() === 113 ? 'provider' : 'synthetic_test') &&
           stored.request_digest === row.request_digest &&
           sha256(stored.candidate_json) === stored.candidate_digest,
         'WEB_PUBLICATION_CANDIDATE_INVALID',
@@ -726,8 +726,8 @@ export class WebVerticalPublisher {
             current.sha256 === asset.sha256 &&
             current.byte_length === asset.byte_length &&
             current.duration_ms === asset.duration_ms &&
-            current.state === (this.schema() >= 113 ? 'provider_verified' : 'synthetic_asset_verified') &&
-            current.segment_state === (this.schema() >= 113 ? 'complete' : 'synthetic_complete') &&
+            current.state === (this.schema() === 113 ? 'provider_verified' : 'synthetic_asset_verified') &&
+            current.segment_state === (this.schema() === 113 ? 'complete' : 'synthetic_complete') &&
             current.asset_eligible === 1 &&
             current.text_digest === sha256(candidate.bubbles[ordinal]!.text) &&
             current.voice_version === row.voice_version,
@@ -745,18 +745,18 @@ export class WebVerticalPublisher {
           (fallback ||
             this.store.get<{ n: number }>(
               `SELECT count(*) n FROM ${
-                this.schema() >= 113 ? 'web_provider_attempts' : 'web_external_attempts'
+                this.schema() === 113 ? 'web_provider_attempts' : 'web_external_attempts'
               } WHERE operation_id=?
-          AND ${this.schema() >= 113 ? '' : "stage='audio' AND"} phase='speech' AND
-          ${this.schema() >= 113 ? "state='known'" : "dispatch_state='known'"} AND outcome='succeeded'`,
+          AND ${this.schema() === 113 ? '' : "stage='audio' AND"} phase='speech' AND
+          ${this.schema() === 113 ? "state='known'" : "dispatch_state='known'"} AND outcome='succeeded'`,
               claim.operationId,
             )?.n === checked.assets.length),
         'WEB_PUBLICATION_RECEIPTS_INCOMPLETE',
       );
       const speech = this.store.all<{ ordinal: number; receipt_json: string }>(
         `SELECT ordinal,receipt_json
-        FROM ${this.schema() >= 113 ? 'web_provider_attempts' : 'web_external_attempts'}
-        WHERE operation_id=? AND ${this.schema() >= 113 ? '' : "stage='audio' AND"} phase='speech'
+        FROM ${this.schema() === 113 ? 'web_provider_attempts' : 'web_external_attempts'}
+        WHERE operation_id=? AND ${this.schema() === 113 ? '' : "stage='audio' AND"} phase='speech'
         ORDER BY ordinal`,
         claim.operationId,
       );
@@ -766,7 +766,7 @@ export class WebVerticalPublisher {
             if (attempt.ordinal !== ordinal) return false;
             try {
               return (
-                this.schema() >= 113 ||
+                this.schema() === 113 ||
                 (JSON.parse(attempt.receipt_json) as { origin?: string }).origin === 'synthetic_test'
               );
             } catch {
@@ -779,7 +779,7 @@ export class WebVerticalPublisher {
       const footerRequired =
         !fallback && principal.kind === 'guest' && op.metering_type === 'trial' && principal.trial_used === 2;
       const footer = footerRequired
-        ? this.schema() >= 113
+        ? this.schema() === 113
           ? this.store.get<Footer>(
               `SELECT media_id,body,origin,'wav_pcm16' AS format,byte_length,sha256,
           duration_ms FROM web_provider_footer_assets WHERE character_id=? AND voice_version=?`,
@@ -1068,7 +1068,7 @@ export class WebVerticalPublisher {
   readPublishedAudio(scope: PublishedAudioScope, mediaId: string, audio?: ProviderAudioCache) {
     ensure(!webCharacterDeleted(this.store, scope.characterId), 'NOT_FOUND');
     requireWebContent(this.store, this.clock, scope.principalId, scope.worldId);
-    if (this.schema() >= 113) {
+    if (this.schema() === 113) {
       const row = this.providerAudioRow(scope, mediaId);
       const bytes = row ? providerAudioBytes(row, audio) : null;
       ensure(

@@ -1,3 +1,4 @@
+import { metricsEnabled } from '../admission/web-stage-metrics.ts';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
@@ -83,6 +84,18 @@ function emailAddress(value: unknown) {
     'ADMIN_EMAIL_INVALID',
   );
   return email;
+}
+
+type Percentiles = { samples: number; p50Ms: number | null; p95Ms: number | null };
+export interface StageLatencyDay {
+  day: string;
+  operations: number;
+  textQueueWait: Percentiles;
+  audioQueueWait: Percentiles;
+  textStage: Percentiles;
+  audioStage: Percentiles;
+  rateLimitRetries: number;
+  fallbacks: number;
 }
 
 /** Provider-only durable administrator identity. Players never enter this account namespace. */
@@ -227,6 +240,50 @@ export class WebAccountAdmin extends WebInviteAdmin {
       this.audit(grant.member_id, 'grant-login', grant.member_id);
       return { ...login, ...this.session(login.cookie) };
     });
+  }
+  /**
+   * Stage latency per UTC day (p50/p95 by nearest rank), rate-limit retries and fallbacks. Owner only: it reads
+   * operational counters of all players, never content, and needs the session, CSRF and origin checks like any
+   * administrator write.
+   */
+  stageLatency(cookie: unknown, csrf: unknown, origin: unknown, days: unknown) {
+    this.owner(cookie, csrf, origin);
+    ensure(Number.isSafeInteger(days) && (days as number) >= 1 && (days as number) <= 31, 'INVALID_REQUEST');
+    if (!metricsEnabled(this.db)) return { days: [] as StageLatencyDay[] };
+    const rows = this.db.all<{
+      day: string;
+      text_queue_wait_ms: number | null;
+      audio_queue_wait_ms: number | null;
+      text_stage_ms: number | null;
+      audio_stage_ms: number | null;
+      retries: number;
+      fallback_used: number;
+    }>(
+      `SELECT day,text_queue_wait_ms,audio_queue_wait_ms,text_stage_ms,audio_stage_ms,
+        text_rate_limit_retries+audio_rate_limit_retries retries,fallback_used
+      FROM web_operation_metrics WHERE day IN (SELECT day FROM web_operation_metrics GROUP BY day ORDER BY day DESC LIMIT ?)
+      ORDER BY day DESC`,
+      days as number,
+    );
+    const byDay = new Map<string, typeof rows>();
+    for (const row of rows) byDay.set(row.day, [...(byDay.get(row.day) ?? []), row]);
+    const percentiles = (values: (number | null)[]) => {
+      const sorted = values.filter((v): v is number => v !== null).sort((a, b) => a - b);
+      const at = (q: number) => (sorted.length ? sorted[Math.max(0, Math.ceil(q * sorted.length) - 1)]! : null);
+      return { samples: sorted.length, p50Ms: at(0.5), p95Ms: at(0.95) };
+    };
+    return {
+      days: [...byDay.entries()].map(([day, items]) => ({
+        day,
+        operations: items.length,
+        textQueueWait: percentiles(items.map((r) => r.text_queue_wait_ms)),
+        audioQueueWait: percentiles(items.map((r) => r.audio_queue_wait_ms)),
+        textStage: percentiles(items.map((r) => r.text_stage_ms)),
+        audioStage: percentiles(items.map((r) => r.audio_stage_ms)),
+        rateLimitRetries: items.reduce((n, r) => n + r.retries, 0),
+        fallbacks: items.reduce((n, r) => n + r.fallback_used, 0),
+      })),
+    };
   }
   inviteRecords(cookie: unknown, csrf: unknown, origin: unknown, beforeId: unknown) {
     const actor = this.authorize(cookie, csrf, origin),

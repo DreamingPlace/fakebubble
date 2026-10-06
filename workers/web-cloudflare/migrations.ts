@@ -35,20 +35,22 @@ const cloud110 = replaceOnce(m110, 'ALTER TABLE web_operations ALTER COLUMN inpu
 /** Only for a new, empty web authority. Never upgrade/adopt the old beta DO. */
 export const webMigrations = [
   ...base.slice(0, 24),
-  ...[cloud100, m101, m102, m103, m104, m105, m106, m107, cloud108, m109, cloud110, m111, m112, m113, m114].map(
-    (sql, i) => ({
-      version: 100 + i,
-      sql:
-        i === 5
-          ? sql +
-            `
+  ...[cloud100, m101, m102, m103, m104, m105, m106, m107, cloud108, m109, cloud110, m111, m112, m113].map((sql, i) => ({
+    version: 100 + i,
+    sql:
+      i === 5
+        ? sql +
+          `
       DROP TABLE web_external_attempts;
       ALTER TABLE web_external_attempts_next RENAME TO web_external_attempts;
       CREATE INDEX web_external_attempts_state ON web_external_attempts(dispatch_state,operation_id);
     `
+        : i === 13
+          ? // 114_stage_metrics.sql (stage metrics, 429 bookkeeping) rides with the final provider step: the cloud
+            // authority is created empty in one pass and its ledger version stays 113 (see docs/DEPLOYMENT.md).
+            sql + '\n' + m114
           : sql,
-    }),
-  ),
+  })),
 ];
 
 // Separate EMPTY R2 authority. Keep Node113 and the inline workerd comparison fixture intact.
@@ -100,4 +102,6 @@ cloud113 += `
 CREATE TABLE cf_http_rates(key TEXT PRIMARY KEY,until_ms INTEGER NOT NULL,count INTEGER NOT NULL CHECK(count>0)) STRICT;
 CREATE INDEX cf_http_rates_expiry ON cf_http_rates(until_ms);
 `;
-export const webR2Migrations = webMigrations.map((m) => (m.version === 113 ? { ...m, sql: cloud113 + retention } : m));
+export const webR2Migrations = webMigrations.map((m) =>
+  m.version === 113 ? { ...m, sql: cloud113 + retention + m114 } : m,
+);

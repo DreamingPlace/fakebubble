@@ -250,9 +250,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       (access.kind === 'guest' ||
         (access.kind === 'account' && access.active === 1) ||
         (access.kind === 'invite' &&
-          [111, 112, 113, 114].includes(
-            store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
-          ) &&
+          [111, 112, 113].includes(store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) &&
           requireWebContent(store, { now: () => now }, operation.principal_id, scope.worldId))),
     'WEB_V7_MEMORY_ENTITLEMENT_REQUIRED',
   );
@@ -323,7 +321,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     requestDigest = digest(serialized),
     protocolDigest = digest(JSON.stringify(protocolFingerprint()));
   const voiceVersion =
-    (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0) >= 113
+    store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113
       ? store.get<{ voice_version: string }>(
           `SELECT voice_version FROM web_provider_voice_bindings
       WHERE character_id=? AND approved=1
@@ -384,7 +382,7 @@ export function readWebV7Request(
 export function checkWebV7SceneAtDispatch(store: WebStore, operationId: string, now: number) {
   const { request, row } = readWebV7Request(store, operationId);
   const stored = store.get<{ candidate_json: string; candidate_digest: string; request_digest: string }>(
-    (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0) >= 113
+    store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113
       ? 'SELECT * FROM web_provider_candidates WHERE operation_id=?'
       : 'SELECT * FROM web_v7_candidates WHERE operation_id=?',
     operationId,

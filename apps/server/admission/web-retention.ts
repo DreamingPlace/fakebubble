@@ -37,13 +37,13 @@ export function webDataLifecycleEnabled(store: Store) {
       Number.isInteger(schema) &&
       schema >= 100 &&
       (schema <= 112 ||
-        (schema >= 113 &&
+        (schema === 113 &&
           ((store as WebStore).providerRuntime === true ||
             store.get<{ file: string }>('PRAGMA database_list')?.file === '') &&
           !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_provider_attempts'"))),
     'WEB_SCHEMA_UNSUPPORTED',
   );
-  return schema === 110 || schema === 111 || schema === 112 || schema >= 113;
+  return schema === 110 || schema === 111 || schema === 112 || schema === 113;
 }
 
 /** Keyed audit evidence cannot be reversed into private provider receipts after T2. */
@@ -78,7 +78,7 @@ export function requireWebContent(store: Store, clock: Clock, principalId: strin
   if (
     principal.kind === 'invite' &&
     row.state === 'protected' &&
-    [111, 112, 113, 114].includes(store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1)
+    [111, 112, 113].includes(store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1)
   ) {
     const grant = store.get<{ id: string }>(
       `SELECT id FROM web_invite_grants

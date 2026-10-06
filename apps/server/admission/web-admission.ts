@@ -109,10 +109,10 @@ export class WebAdmission {
       const trial = principal.kind === 'guest';
       ensure(
         trial ||
-          ([108, 109, 110, 111, 112, 113, 114].includes(webSchema) &&
+          ([108, 109, 110, 111, 112, 113].includes(webSchema) &&
             ((principal.kind === 'account' &&
               this.store.get(`SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1`, principal.id)) ||
-              (principal.kind === 'invite' && [111, 112, 113, 114].includes(webSchema) && retention !== null))),
+              (principal.kind === 'invite' && [111, 112, 113].includes(webSchema) && retention !== null))),
         'WEB_ADMISSION_ENTITLEMENT_REQUIRED',
       );
       ensure(
@@ -290,7 +290,7 @@ export class WebAdmission {
         now,
         now + WEB_LIMITS.operationDeadlineMs,
       ];
-      if (webSchema >= 102 && webSchema <= 114) {
+      if (webSchema >= 102 && webSchema <= 113) {
         const sequence = this.store.get<{ last_seq: number }>(`UPDATE web_admission_counter
           SET last_seq=last_seq+1 WHERE singleton=1 RETURNING last_seq`)?.last_seq;
         ensure(sequence !== undefined, 'WEB_ADMISSION_ORDER_MISSING');
@@ -330,7 +330,7 @@ export class WebAdmission {
   finalize(operationId: string, terminal: Terminal) {
     return this.store.transaction(() => {
       ensure(
-        ![104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114].includes(
+        ![104, 105, 106, 107, 108, 109, 110, 111, 112, 113].includes(
           this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
         ),
         'WEB_DISPATCH_FENCE_REQUIRED',

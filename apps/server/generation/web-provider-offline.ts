@@ -125,7 +125,7 @@ export class WebProviderOffline {
   private check() {
     requireWebRuntime(this.store, 'provider');
     ensure(
-      (this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0) >= 113,
+      this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113,
       'WEB_PROVIDER_MIGRATION_REQUIRED',
     );
   }
@@ -589,7 +589,7 @@ export class WebProviderOffline {
       );
     });
   }
-  /** True once a provider answered HTTP 429 for this attempt (schema 114+). */
+  /** True once a provider answered HTTP 429 for this attempt (stage metrics tables present). */
   supportsRateLimitRetry() {
     return metricsEnabled(this.store);
   }
@@ -809,7 +809,7 @@ export class WebProviderOffline {
     });
   }
   /**
-   * Operations that have waited for an audio slot for audioFallbackWaitMs (schema 114+), oldest first. Waiting
+   * Operations that have waited for an audio slot for audioFallbackWaitMs (stage metrics tables present), oldest first. Waiting
    * is time spent unclaimed; an operation inside a 429 backoff has not started waiting again yet.
    */
   fallbackDue(now: number, limit = 16) {

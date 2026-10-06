@@ -173,6 +173,11 @@ export async function routeWebAccountAdmin(
     const value = body(['beforeId']);
     return { status: 200, body: admin.inviteRecords(req.adminCookie, req.csrf, req.origin, value.beforeId) };
   }
+  if (path === `${base}/metrics/stage-latency`) {
+    auth();
+    const value = body(['days']);
+    return { status: 200, body: admin.stageLatency(req.adminCookie, req.csrf, req.origin, value.days) };
+  }
   if (path === `${base}/members/list`) {
     auth();
     body([]);

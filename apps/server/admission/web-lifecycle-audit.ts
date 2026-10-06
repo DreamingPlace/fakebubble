@@ -54,7 +54,7 @@ export function auditWebLifecycleWorld(
   if (provider)
     ensure(
       store.providerAudio &&
-        (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0) >= 113 &&
+        store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113 &&
         store.get("SELECT 1 FROM sqlite_master WHERE name='cf_web_audio_objects'"),
       'WEB_RETENTION_SCOPE_UNSAFE',
     );

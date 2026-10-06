@@ -1,14 +1,22 @@
 import type { BusinessStore } from '../platform/store-contract.ts';
 
-/** Per-operation stage metrics (schema 114+). Written only by the business object; absent before 114. */
+/** Per-operation stage metrics. Written only by the business object; absent until 114_stage_metrics.sql is applied. */
 type Db = Pick<BusinessStore, 'get' | 'run'>;
 export type FallbackReason = 'audio_wait' | 'rate_limited';
 
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const gap = (from: number | null, now: number) => (from === null ? 0 : Math.max(0, now - from));
 
+/**
+ * The metrics tables exist (114_stage_metrics.sql applied). The migration does not bump user_version, so presence of
+ * the table is the signal; a database without it behaves exactly as before.
+ */
+const known = new WeakMap<object, boolean>();
 export function metricsEnabled(store: Db): boolean {
-  return (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0) >= 114;
+  if (known.get(store)) return true;
+  const present = !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_operation_metrics'");
+  if (present) known.set(store, true);
+  return present;
 }
 function ensureRow(store: Db, operationId: string, now: number) {
   store.run('INSERT OR IGNORE INTO web_operation_metrics(operation_id,day) VALUES (?,?)', operationId, dayOf(now));

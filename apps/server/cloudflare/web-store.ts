@@ -7,7 +7,7 @@ import type { PrivateMediaObjects } from './media-objects.ts';
 import { parseWebConcurrency, type WebConcurrency } from '../../../config/web-concurrency.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-const versions = [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 15 }, (_, i) => 100 + i)];
+const versions = [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 14 }, (_, i) => 100 + i)];
 
 /** A separate schema113 authority. No beta namespace, filesystem, implicit seed or paid default. */
 export class WebDurableStore implements BusinessStore, WebRuntimeStore {
@@ -120,7 +120,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
   }
   requireProviderRuntime() {
     ensure(
-      (this.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0) >= 113 &&
+      this.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113 &&
         !!this.get("SELECT 1 FROM sqlite_master WHERE name='web_provider_attempts'"),
       'WEB_PROVIDER_RUNTIME_NOT_AUTHORIZED',
     );
