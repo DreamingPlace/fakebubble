@@ -9,6 +9,7 @@ import { WebStore } from '../apps/server/platform/store.ts';
 import { initProviderInstance, readLocalConfig } from '../apps/server/platform/web-local-config.ts';
 import {
   migrateWebProviderMetrics,
+  migrateWebProviderMemory,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -68,7 +69,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→114 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→115 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -98,8 +99,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderOffline(store);
     configureWebProvider(store, selected, now);
     migrateWebProviderMetrics(store);
+    migrateWebProviderMemory(store);
     return {
-      schema: 114,
+      schema: 115,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -220,6 +222,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'init',
       'migrate',
       'migrate-metrics',
+      'migrate-memory',
       'render-assets',
       'admin-grant',
       'serve',
@@ -280,6 +283,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderMetrics(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 114, metrics: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-memory') {
+    // An existing provider-* instance at schema 114 gains memory importance, player facts and review_changed.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderMemory(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 115, memory: true }) + '\n');
     } finally {
       store.close();
     }

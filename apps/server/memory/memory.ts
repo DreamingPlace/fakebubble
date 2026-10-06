@@ -96,7 +96,8 @@ export function recordDialogueMemories(
     );
     store.run(
       scope,
-      `INSERT INTO memory_topics VALUES (?,?,?,?,'short',0,?,?) ON CONFLICT(world_id,conversation_id,character_id,topic_key)
+      `INSERT INTO memory_topics(world_id,conversation_id,character_id,topic_key,tier,player_mentions,last_seen,active_until)
+      VALUES (?,?,?,?,'short',0,?,?) ON CONFLICT(world_id,conversation_id,character_id,topic_key)
       DO UPDATE SET last_seen=excluded.last_seen,active_until=excluded.active_until`,
       ...params(scope),
       topic.key,

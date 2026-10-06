@@ -318,8 +318,13 @@ export class WebCharacterDeletion {
         );
       for (const table of operationContent)
         this.store.run(`DELETE FROM ${table} WHERE operation_id IN (${operationScope})`, ...scopeArgs(s));
+      // memory_facts exists from schema 115; an older database has nothing to purge there.
       for (const table of conversationContent)
-        this.store.run(`DELETE FROM ${table} WHERE world_id=? AND conversation_id=?`, s.world_id, s.conversation_id);
+        if (
+          table !== 'memory_facts' ||
+          this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", table)
+        )
+          this.store.run(`DELETE FROM ${table} WHERE world_id=? AND conversation_id=?`, s.world_id, s.conversation_id);
       for (const table of worldCharacterContent)
         this.store.run(`DELETE FROM ${table} WHERE world_id=? AND character_id=?`, s.world_id, s.character_id);
       this.store.run(

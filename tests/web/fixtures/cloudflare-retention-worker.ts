@@ -88,6 +88,26 @@ export class WebRetentionFixture extends WebBusinessFixture {
       else if (path === '/retention/release') {
         this.control.release?.();
         value = { released: true };
+      } else if (path === '/retention/seed-fact') {
+        // One active player fact in the principal's private conversation (the scope retention and deletion purge).
+        const scope = this.store.get<{ world_id: string; conversation_id: string; character_id: string }>(
+          'SELECT world_id,conversation_id,character_id FROM web_operations WHERE principal_id=? LIMIT 1',
+          input.principalId,
+        )!;
+        this.store.run(
+          `INSERT INTO memory_facts VALUES (?,?,?,?,?,?,?,?,?,?,NULL,NULL)`,
+          scope.world_id,
+          scope.conversation_id,
+          scope.character_id,
+          `fact-${input.principalId}`,
+          '宠物',
+          '玩家养了一只猫',
+          8,
+          '[]',
+          this.clock.now(),
+          this.clock.now(),
+        );
+        value = { seeded: true };
       } else if (path === '/retention/unsafe-delete') {
         this.store.run(
           'DELETE FROM web_provider_outputs WHERE operation_id IN (SELECT id FROM web_operations WHERE principal_id=?)',
@@ -162,6 +182,10 @@ export class WebRetentionFixture extends WebBusinessFixture {
           ),
           messages: this.store.get<{ n: number }>(
             'SELECT count(*) n FROM messages WHERE world_id=?',
+            principal!.world_id,
+          )!.n,
+          facts: this.store.get<{ n: number }>(
+            'SELECT count(*) n FROM memory_facts WHERE world_id=?',
             principal!.world_id,
           )!.n,
           outputs: this.store.get<{ n: number }>(

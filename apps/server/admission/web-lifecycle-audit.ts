@@ -21,6 +21,7 @@ const handled = new Set([
   'web_publications',
   'messages',
   'jobs',
+  'memory_facts',
   'memory_episode_sources',
   'memory_mentions',
   'memory_episodes',

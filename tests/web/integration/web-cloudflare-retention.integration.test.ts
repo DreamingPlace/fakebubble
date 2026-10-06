@@ -7,6 +7,7 @@ type Guest = { principalId: string; csrf: string; issuedToken: string };
 type State = {
   retention: { state: string; db_cleared_at: number | null };
   messages: number;
+  facts: number;
   outputs: number;
   attempts: { phase: string; state: string; outcome: string; charged_micros: number }[];
   operations: { status: string; quota_state: string }[];
@@ -36,6 +37,7 @@ const cleared = (state: State) => {
   assert.equal(state.retention.state, 'purged');
   assert.ok(state.retention.db_cleared_at);
   assert.equal(state.messages, 0);
+  assert.equal(state.facts, 0);
   assert.equal(state.outputs, 0);
   assert.ok(state.objects.every((row) => row.erased && row.size === 0 && row.type === 'application/x-web-erased'));
 };
@@ -62,9 +64,13 @@ test('cloud retention erases guest SQL/R2 content, preserves bills/IP quota, fix
     ipHash: 'a'.repeat(64),
     input: { code: issued.code, requestId: 'retain-redeem' },
   });
+  // A stated player fact is user content: the guest's is purged with the rest, the protected invite's stays.
+  for (const actor of [guest, invited]) await f.call('/retention/seed-fact', actor);
   const protectedState = await f.call<State>('/retention/state', invited);
   const counts = await f.call('/counts'),
     before = await f.call<State>('/retention/state', guest);
+  assert.equal(before.facts, 1);
+  assert.equal(protectedState.facts, 1);
   await f.call('/retention/capture-replay', guest);
   const denied = await f.call<{ error: string }>('/retention/unsafe-delete', guest, 409);
   assert.match(denied.error, /WEB_PROVIDER_OUTPUT_IMMUTABLE/);

@@ -207,6 +207,7 @@ export class WebCloudRetention {
       ])
         this.store.run(`DELETE FROM ${table} WHERE operation_id IN (${operations})`, principalId, world);
       for (const table of [
+        'memory_facts',
         'memory_episode_sources',
         'memory_mentions',
         'memory_episodes',

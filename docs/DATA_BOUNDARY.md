@@ -1,6 +1,6 @@
 # Data boundary
 
-Every SQLite table created by the two migration trees (`apps/server/migrations/001–033` and `apps/server/web-migrations/100–114`), sorted into three classes. This is the reference for the `UserStore` / `GlobalStore` split in `apps/server/platform/` (see `docs/ARCHITECTURE.md`); nothing in this file changes behaviour.
+Every SQLite table created by the two migration trees (`apps/server/migrations/001–033` and `apps/server/web-migrations/100–115`), sorted into three classes. This is the reference for the `UserStore` / `GlobalStore` split in `apps/server/platform/` (see `docs/ARCHITECTURE.md`); nothing in this file changes behaviour.
 
 - **user** – every row belongs to exactly one player principal (identity sessions, conversations, messages, `memory_*`, relationships, that player's operations and attempts, private audio references). The *Owner* column names the column that identifies the principal, or says `needs join via …` when ownership is only reachable through another table.
 - **global** – shared by all players: invite codes, character catalog and versions, admin accounts and sessions, quotas, scheduler state, budget and prices, per-character shared assets, retention bookkeeping.
@@ -19,7 +19,7 @@ Each table name was searched (whole word) in all non-test source under `apps/`, 
 - Web stores cannot be beta stores (`WEB_BETA_MODE_CONFLICT`); the Node store stops at migration 24 unless `beta` is set, so migrations 025–033 are never applied to a web instance.
 - A "must be empty" probe or a purge-list entry alone does not make a table used; a table the cleaner deletes from and that another web path writes is used.
 
-Result: 64 user, 24 global, 76 legacy-unused (164 tables including four transient rename targets; Part 4 added the two `114_stage_metrics.sql` tables, both user). Legacy-unused tables still exist in a web database; nothing here drops them.
+Result: 65 user, 24 global, 76 legacy-unused (165 tables including four transient rename targets; Part 4 added the two `114_stage_metrics.sql` tables, both user; Part 7a added `memory_facts` in `115_memory_importance.sql`, user). Legacy-unused tables still exist in a web database; nothing here drops them.
 
 ## Tables
 
@@ -40,6 +40,7 @@ Result: 64 user, 24 global, 76 legacy-unused (164 tables including four transien
 | `media` | migrations/001_core.sql | legacy-unused | — | only an "must be empty" probe in admission/web-retention-cleaner.ts; never written; web audio lives in `web_private_audio_assets` / `web_provider_media_assets` |
 | `outbox` | migrations/001_core.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | admission/web-admission.ts, conversation/web-vertical-publisher.ts, memory/, conversation/, generation/web-v7-request.ts, purge in admission/web-retention-cleaner.ts |
 | `dialogue_bubbles` | migrations/002_dialogue_memory.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | admission/web-admission.ts, conversation/web-vertical-publisher.ts, memory/, conversation/, generation/web-v7-request.ts, purge in admission/web-retention-cleaner.ts |
+| `memory_facts` | web-migrations/115_memory_importance.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts (facts written in the publication transaction through `UserStore`), generation/web-v7-request.ts (read for the prompt); purge in admission/web-retention-cleaner.ts, cloudflare/web-retention.ts and characters/web-character-deletion.ts; audited in admission/web-lifecycle-audit.ts and characters/web-character-deletion-audit.ts |
 | `memory_topics` | migrations/002_dialogue_memory.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/accepted-memory.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
 | `memory_episodes` | migrations/002_dialogue_memory.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/accepted-memory.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
 | `memory_mentions` | migrations/002_dialogue_memory.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/accepted-memory.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
