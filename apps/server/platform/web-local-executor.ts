@@ -13,6 +13,7 @@ import { readKnownAudioOutput, readKnownTextOutput } from './web-local-output.ts
 import { syntheticText, syntheticTone } from './web-local-fake.ts';
 import { requireWebContent, webDataLifecycleEnabled } from '../admission/web-retention.ts';
 import { WebRetentionCleaner } from '../admission/web-retention-cleaner.ts';
+import { audioStartedExpr } from '../admission/web-stage-metrics.ts';
 
 const digest = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
 
@@ -348,7 +349,7 @@ export class WebLocalExecutor {
       status NOT IN ('published','cancelled','failed') AND
       (deadline_at<=? OR status='queued' AND text_queued_at+?<=? OR
         status IN ('text_ready','audio_pending') AND audio_wait_started_at IS NOT NULL AND
-        audio_wait_used_ms+?-audio_wait_started_at>=?) LIMIT 16`,
+        audio_wait_used_ms+?-audio_wait_started_at>=? AND NOT (${audioStartedExpr(this.store, 'web_operations')})) LIMIT 16`,
       this.clock.now(),
       WEB_LIMITS.queueWaitMs,
       this.clock.now(),

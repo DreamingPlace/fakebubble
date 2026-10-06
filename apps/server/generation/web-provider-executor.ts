@@ -9,7 +9,7 @@ import { WebStageQueue, type WebCoordinatorLease, type WebStageClaim } from '../
 import { WebDispatchLedger } from '../budget/web-dispatch-ledger.ts';
 import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts';
 import { WebProviderRunner } from './web-provider-runner.ts';
-import { fallbackRequested, metricsEnabled } from '../admission/web-stage-metrics.ts';
+import { audioStartedExpr, fallbackRequested, metricsEnabled } from '../admission/web-stage-metrics.ts';
 import { WebProviderOffline } from './web-provider-offline.ts';
 
 /** Separate schema113 scheduler. No synthetic output, default budget or footer is installed. */
@@ -295,7 +295,7 @@ export class WebProviderExecutor {
       status NOT IN ('published','cancelled','failed') AND
       (deadline_at<=? OR status='queued' AND text_queued_at+?<=? OR
         status IN ('text_ready','audio_pending') AND audio_wait_started_at IS NOT NULL AND
-        audio_wait_used_ms+?-audio_wait_started_at>=?) LIMIT 16`,
+        audio_wait_used_ms+?-audio_wait_started_at>=? AND NOT (${audioStartedExpr(this.store, 'web_operations')})) LIMIT 16`,
       this.clock.now(),
       WEB_LIMITS.queueWaitMs,
       this.clock.now(),

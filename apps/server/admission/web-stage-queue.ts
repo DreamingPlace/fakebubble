@@ -15,7 +15,7 @@ import { freezeWebV7Request } from '../generation/web-v7-request.ts';
 import { readWebV7Request } from '../generation/web-v7-request.ts';
 import { applyTextReview, parseTextDraft } from '../generation/accepted-text-protocol.ts';
 import type { SnapshotScope } from '../generation/web-input-snapshot.ts';
-import { metricsEnabled, recordAudioClaim, recordTextClaim } from './web-stage-metrics.ts';
+import { audioStartedExpr, metricsEnabled, recordAudioClaim, recordTextClaim } from './web-stage-metrics.ts';
 
 type Stage = 'text' | 'audio';
 export interface WebCoordinatorLease {
@@ -365,7 +365,8 @@ export class WebStageQueue {
               WHERE other.operation_id=o.id AND other.state='pending')
           WHERE o.status IN ('text_ready','audio_pending') AND o.quota_state='reserved'
             AND o.audio_wait_started_at IS NOT NULL AND o.audio_wait_used_ms IS NOT NULL
-            AND o.audio_wait_started_at<=? AND o.audio_wait_used_ms+?-o.audio_wait_started_at<?
+            AND o.audio_wait_started_at<=?
+            AND (o.audio_wait_used_ms+?-o.audio_wait_started_at<? OR ${audioStartedExpr(this.store, 'o')})
             AND o.deadline_at>?
             ${retention.sql}
             ${

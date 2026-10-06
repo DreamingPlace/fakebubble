@@ -10,7 +10,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit && tsc -p apps/player-web/tsconfig.build.json --noEmit && tsc -p apps/player-web/tsconfig.tests.json",
     "test": "node --test --test-concurrency=1 tests/web/unit/*.test.ts tests/web/integration/*.test.ts tests/web/e2e/*.test.ts tests/web/load/*.test.ts apps/player-web/tests/components/*.test.ts",
-    "check": "pnpm format:check && pnpm typecheck && pnpm test",
+    "prompts:build": "node scripts/build-prompts.ts",
+    "prompts:check": "node scripts/build-prompts.ts --check",
+    "check": "pnpm format:check && pnpm prompts:check && pnpm typecheck && pnpm test",
     "web:local": "node scripts/web-v1.ts",
     "web:player:build": "node scripts/build-web-player.ts",
     "web:preview": "node scripts/preview-web.ts",

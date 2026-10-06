@@ -43,7 +43,9 @@ export function webProviderNextDue(store: WebRuntimeStore, now: number, ownsCoor
         const queueDeadline =
           row.status === 'queued'
             ? row.text_queued_at + WEB_LIMITS.queueWaitMs
-            : ['text_ready', 'audio_pending'].includes(row.status) && row.audio_wait_started_at !== null
+            : ['text_ready', 'audio_pending'].includes(row.status) &&
+                row.audio_wait_started_at !== null &&
+                !audioStarted.has(row.id)
               ? row.audio_wait_started_at + WEB_LIMITS.queueWaitMs - (row.audio_wait_used_ms ?? 0)
               : Infinity;
         const work = [

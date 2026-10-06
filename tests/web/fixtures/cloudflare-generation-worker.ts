@@ -40,7 +40,6 @@ class SyntheticWebSession extends WebIsolatedGenerationSession {
         return Response.json({
           ...(draft ? draftEnvelope(input.request!) : acceptedAuditEnvelope(input.request!)),
           id: draft ? 'offline-draft' : 'offline-review',
-          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
         });
       },
     );

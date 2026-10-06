@@ -23,7 +23,10 @@ import { WebProviderRunner, type FakeFish } from '../../../apps/server/generatio
 import { WebVerticalPublisher } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import type { WebAttemptBudget } from '../../../apps/server/budget/web-provider-budget-contract.ts';
 import { MemoryBudget } from '../fixtures/memory-budget.ts';
+import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
 import { webProviderNextDue } from '../../../apps/server/cloudflare/web-executor.ts';
+import { WebProviderExecutor } from '../../../apps/server/generation/web-provider-executor.ts';
+import { WEB_LIMITS } from '../../../config/web-v1.ts';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const now = 1_700_000_000_000;
@@ -276,6 +279,7 @@ function stage(
     queue,
     lease,
     ledger,
+    capacity,
     readyForAudio,
     attempt,
     operation,
@@ -668,4 +672,141 @@ test('429 retries exhausted after an earlier segment was generated: the discarde
   assert.equal(f.metrics().discarded_audio_segments, 1, 'segment 0 was generated and paid, then dropped for text');
   await f.runner.publishTextFallback(f.lease, 'operation');
   assert.equal(f.metrics().fallback_used, 1);
+});
+
+test('both text calls store DeepSeek cache hit/miss tokens and the owner view reports the daily hit ratio per stage', async (t) => {
+  const s = stage(t, { fish: (_call, request) => fishOk(request) });
+  await s.readyForAudio();
+  const usage = (phase: string) =>
+    JSON.parse(
+      s.row<{ metadata_json: string }>(
+        "SELECT metadata_json FROM web_provider_attempts WHERE operation_id='operation' AND phase=?",
+        phase,
+      ).metadata_json,
+    ).usage;
+  assert.deepEqual(usage('draft'), {
+    inputTokens: 10,
+    outputTokens: 5,
+    totalTokens: 15,
+    cacheHitInputTokens: 6,
+    cacheMissInputTokens: 4,
+  });
+  assert.deepEqual(usage('review'), {
+    inputTokens: 10,
+    outputTokens: 5,
+    totalTokens: 15,
+    cacheHitInputTokens: 8,
+    cacheMissInputTokens: 2,
+  });
+  const origin = 'https://admin.fixture.invalid';
+  const admin = new WebAccountAdmin(s.store, s.clock, origin);
+  const owner = admin.login(admin.issueLoginGrant().token, origin);
+  const view = admin.stageLatency(owner.cookie, owner.csrf, origin, 7) as { days: { day: string; cache: unknown }[] };
+  assert.equal(view.days.length, 1);
+  assert.deepEqual(view.days[0]!.cache, {
+    draft: { calls: 1, hitTokens: 6, missTokens: 4, hitRatio: 0.6 },
+    review: { calls: 1, hitTokens: 8, missTokens: 2, hitRatio: 0.8 },
+  });
+});
+
+test('a provider that reports no cache counters adds no cache sample (ratio null, never a guess)', async (t) => {
+  let request: ReturnType<typeof textRequest> | undefined;
+  const s = stage(t, {
+    fish: (_call, request) => fishOk(request),
+    fetch: (_call, tool) => {
+      const envelope = tool === 'submit_dialogue_draft' ? draftEnvelope(request) : acceptedAuditEnvelope(request);
+      if (tool !== 'submit_dialogue_draft') {
+        const call = envelope.choices[0]!.message.tool_calls[0]!.function;
+        const audit = JSON.parse(call.arguments);
+        audit.replacementBubbles = bubbles;
+        audit.coverage.input.supportQuote = bubbles[0]!.text;
+        call.arguments = JSON.stringify(audit);
+      }
+      return Response.json({ ...envelope, usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } });
+    },
+  });
+  request = s.request;
+  await s.readyForAudio();
+  const origin = 'https://admin.fixture.invalid';
+  const admin = new WebAccountAdmin(s.store, s.clock, origin);
+  const owner = admin.login(admin.issueLoginGrant().token, origin);
+  const view = admin.stageLatency(owner.cookie, owner.csrf, origin, 7) as { days: { cache: unknown }[] };
+  const none = { calls: 0, hitTokens: 0, missTokens: 0, hitRatio: null };
+  assert.deepEqual(view.days[0]!.cache, { draft: none, review: none });
+});
+
+test('an operation that started audio is not expired by the summed 60 s queue wait; it finishes as voice within its deadline', async (t) => {
+  const f = stage(t, { fish: (_call, request) => fishOk(request), deadlineMs: 300_000 });
+  await f.readyForAudio();
+  await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+  assert.equal(f.operation().status, 'audio_pending', 'segment 0 is paid and finished; segment 1 waits for a slot');
+  // Wait far longer than queueWaitMs in total for the next slot, still well inside the operation deadline.
+  for (let waited = 0; waited < WEB_LIMITS.queueWaitMs + 30_000; waited += 10_000) f.advance(10_000);
+  assert.ok(f.clock.now() - now > WEB_LIMITS.queueWaitMs);
+  assert.ok(f.clock.now() < now + 300_000);
+  const lease = f.queue.acquireCoordinator('coordinator');
+  const fence = f.capacity.fence('operation');
+  assert.throws(
+    () => f.capacity.terminate(lease, fence, fence.principalId, 'failed', 'expired'),
+    /WEB_OPERATION_NOT_EXPIRED/,
+    'the wait alone no longer ends a started operation',
+  );
+  assert.equal(f.operation().status, 'audio_pending');
+  assert.equal(f.operation().quota_state, 'reserved');
+  await f.runner.runSpeech(f.queue.claimAudio(lease, 'audio-worker')!, signal());
+  const receipt = f.runner.publish(lease, 'operation');
+  assert.equal(receipt.messageIds.length, 2);
+  assert.deepEqual(
+    f.store
+      .all<{ origin: string }>(
+        "SELECT origin FROM web_publication_items WHERE operation_id='operation' ORDER BY ordinal",
+      )
+      .map((item) => item.origin),
+    ['narrative', 'narrative'],
+    'published as voice, nothing paid is discarded',
+  );
+  assert.equal(f.metrics().fallback_used, 0);
+  assert.equal(f.metrics().discarded_audio_segments, 0);
+  assert.equal(f.calls.fish, 2);
+});
+
+test('an operation that has not started audio still expires through the summed queue wait', async (t) => {
+  const f = stage(t, { fish: (_call, request) => fishOk(request) });
+  await f.readyForAudio();
+  f.advance(WEB_LIMITS.queueWaitMs + 1_000);
+  const lease = f.queue.acquireCoordinator('coordinator');
+  const fence = f.capacity.fence('operation');
+  f.capacity.terminate(lease, fence, fence.principalId, 'failed', 'expired');
+  assert.equal(f.operation().status, 'failed');
+  assert.equal(f.calls.fish, 0);
+});
+
+test('the scheduler sweep does not expire a started operation either; the executor finishes it as voice', async (t) => {
+  const f = stage(t, { fish: (_call, request) => fishOk(request), deadlineMs: 300_000 });
+  await f.readyForAudio();
+  await f.runner.runSpeech(f.queue.claimAudio(f.lease, 'audio-worker')!, signal());
+  const executor = new WebProviderExecutor(f.store as WebStore, f.clock, f.runner, {
+    hold: () => {},
+    settled: async () => {},
+  });
+  t.after(() => executor.close());
+  for (let waited = 0; waited < WEB_LIMITS.queueWaitMs + 30_000; waited += 10_000) f.advance(10_000);
+  const started = Date.now();
+  while (f.operation().status !== 'published' && Date.now() - started < 10_000) {
+    executor.managedPass('sweep');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  await executor.close();
+  assert.equal(f.operation().status, 'published');
+  assert.equal(f.calls.fish, 2);
+  assert.equal(f.metrics().fallback_used, 0);
+  assert.equal(f.metrics().discarded_audio_segments, 0);
+  assert.deepEqual(
+    f.store
+      .all<{ origin: string }>(
+        "SELECT origin FROM web_publication_items WHERE operation_id='operation' ORDER BY ordinal",
+      )
+      .map((item) => item.origin),
+    ['narrative', 'narrative'],
+  );
 });
