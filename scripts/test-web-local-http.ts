@@ -5,9 +5,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import type { IncomingHttpHeaders } from 'node:http';
 import { resolve } from 'node:path';
-import { localRuntime } from '../apps/server/web-local-config.ts';
-import { readLocalConfig } from '../apps/server/web-local-config.ts';
-import { WebStore } from '../apps/server/store.ts';
+import { localRuntime } from '../apps/server/platform/web-local-config.ts';
+import { readLocalConfig } from '../apps/server/platform/web-local-config.ts';
+import { WebStore } from '../apps/server/platform/store.ts';
 
 const runtime = localRuntime();
 const root = resolve(runtime.parent, `local-check-${randomUUID().slice(0, 8)}`);

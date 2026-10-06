@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { localRuntime } from '../../cloudflare/runtime.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
-import { SYNTHETIC_TRIAL_FOOTER } from '../../../apps/server/web-vertical-publisher.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
+import { SYNTHETIC_TRIAL_FOOTER } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 
 type Guest = { principalId: string; csrf: string; issuedToken: string };
 type State = {

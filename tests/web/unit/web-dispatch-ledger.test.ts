@@ -4,11 +4,11 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebStore } from '../../../apps/server/store.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
 
 function fixture(t: test.TestContext, migrate = true) {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-ledger-'));

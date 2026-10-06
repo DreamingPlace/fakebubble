@@ -1,8 +1,8 @@
 import { createHash, createHmac } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { BusinessStore, SQLInputValue } from '../store-contract.ts';
+import type { BusinessStore, SQLInputValue } from '../platform/store-contract.ts';
 import type { DurableSQLStorage, SQLMigration } from './store.ts';
-import { registerWebRuntime, type WebRuntimeStore } from '../web-store-contract.ts';
+import { registerWebRuntime, type WebRuntimeStore } from '../platform/web-store-contract.ts';
 import type { PrivateMediaObjects } from './media-objects.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');

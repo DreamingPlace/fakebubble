@@ -2,7 +2,7 @@ import { cloudRecoveryPoint } from './recovery-point.ts';
 import { cloudPlatformMigrations } from './schema.ts';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { BusinessStore, ReadDatabase, SQLInputValue, SQLRow } from '../store-contract.ts';
+import type { BusinessStore, ReadDatabase, SQLInputValue, SQLRow } from '../platform/store-contract.ts';
 
 export interface DurableSQLStorage {
   sql: {

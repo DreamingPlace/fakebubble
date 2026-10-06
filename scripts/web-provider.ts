@@ -1,32 +1,36 @@
-import { WebCharacterPreviewRunner } from '../apps/server/web-character-preview-runner.ts';
+import { WebCharacterPreviewRunner } from '../apps/server/characters/web-character-preview-runner.ts';
 import { chmodSync, existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
 import { parseEnv } from 'node:util';
 import { networkInterfaces } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { WebStore } from '../apps/server/store.ts';
-import { initProviderInstance, readLocalConfig } from '../apps/server/web-local-config.ts';
-import { migrateWebProviderOffline } from '../apps/server/web-provider-migration.ts';
+import { WebStore } from '../apps/server/platform/store.ts';
+import { initProviderInstance, readLocalConfig } from '../apps/server/platform/web-local-config.ts';
+import { migrateWebProviderOffline } from '../apps/server/generation/web-provider-migration.ts';
 import {
   validateSelectedVoicePins,
   verifySelectedVoiceSetup,
   type SelectedVoicePins,
   type SelectedCharacterId,
-} from '../apps/server/web-provider-materials.ts';
-import { configureWebProvider } from '../apps/server/web-provider-configuration.ts';
-export { PROVIDER_PRICES, PROVIDER_LIMIT_MICROS } from '../apps/server/web-provider-configuration.ts';
+} from '../apps/server/generation/web-provider-materials.ts';
+import { configureWebProvider } from '../apps/server/generation/web-provider-configuration.ts';
+export { PROVIDER_PRICES, PROVIDER_LIMIT_MICROS } from '../apps/server/generation/web-provider-configuration.ts';
 import { DomainError, ensure } from '../packages/domain/errors.ts';
-import { textConfiguration } from '../apps/server/config.ts';
-import { DeepSeekTextGenerator } from '../apps/server/deepseek.ts';
-import { fishTransport, WebProviderRunner } from '../apps/server/web-provider-runner.ts';
-import { privateIPv4, WebProviderServer, type ProviderNetwork } from '../apps/server/web-provider-server.ts';
-import { WebAccountAdmin } from '../apps/server/web-account-admin.ts';
+import { textConfiguration } from '../apps/server/platform/config.ts';
+import { DeepSeekTextGenerator } from '../apps/server/generation/deepseek.ts';
+import { fishTransport, WebProviderRunner } from '../apps/server/generation/web-provider-runner.ts';
+import { privateIPv4, WebProviderServer, type ProviderNetwork } from '../apps/server/generation/web-provider-server.ts';
+import { WebAccountAdmin } from '../apps/server/admin/web-account-admin.ts';
 import { FishAudio } from '../workers/audio/fish.ts';
 import { randomUUID } from 'node:crypto';
-import { WebProviderBudget } from '../apps/server/web-provider-budget.ts';
-import { liveBudgetPath, openLiveBudget, readLiveBudgetHistory } from '../apps/server/web-provider-live-budget.ts';
-import { renderProviderAssets } from '../apps/server/web-provider-assets.ts';
+import { WebProviderBudget } from '../apps/server/budget/web-provider-budget.ts';
+import {
+  liveBudgetPath,
+  openLiveBudget,
+  readLiveBudgetHistory,
+} from '../apps/server/budget/web-provider-live-budget.ts';
+import { renderProviderAssets } from '../apps/server/generation/web-provider-assets.ts';
 
 export function readSelectedVoiceFiles(setupRoot: string, pinned: SelectedVoicePins) {
   validateSelectedVoicePins(pinned);

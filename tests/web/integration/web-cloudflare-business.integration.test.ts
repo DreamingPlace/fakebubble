@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { localRuntime } from '../../cloudflare/runtime.ts';
 import { createHash } from 'node:crypto';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 
 const origin = 'https://fixture.invalid',
   ipHash = 'a'.repeat(64);

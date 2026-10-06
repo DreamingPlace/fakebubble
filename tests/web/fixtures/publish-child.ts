@@ -1,5 +1,8 @@
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebVerticalPublisher, type WebPublicationClaim } from '../../../apps/server/web-vertical-publisher.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import {
+  WebVerticalPublisher,
+  type WebPublicationClaim,
+} from '../../../apps/server/conversation/web-vertical-publisher.ts';
 
 const [root, instanceId, serializedClaim, time] = process.argv.slice(2);
 if (!root || !instanceId || !serializedClaim || !time) throw new Error('Missing offline publish fixture arguments');

@@ -4,9 +4,9 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebStore } from '../../../apps/server/store.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
 
 const characterId = 'fixture-character';

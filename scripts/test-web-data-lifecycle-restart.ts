@@ -4,8 +4,8 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { resolve } from 'node:path';
-import { WebStore } from '../apps/server/store.ts';
-import { localRuntime, readLocalConfig } from '../apps/server/web-local-config.ts';
+import { WebStore } from '../apps/server/platform/store.ts';
+import { localRuntime, readLocalConfig } from '../apps/server/platform/web-local-config.ts';
 
 const { parent, port } = localRuntime();
 const root = resolve(parent, `local-restart-${randomUUID().slice(0, 12)}`);

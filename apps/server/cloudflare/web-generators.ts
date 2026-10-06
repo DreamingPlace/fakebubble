@@ -6,10 +6,10 @@ import type {
 } from '../../../packages/contracts/web-generation-rpc.ts';
 import type { ProviderMeter } from '../../../packages/contracts/provider-calls.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
-import { textPolicyHash } from '../text-generation-policy.ts';
-import { TextGenerationFailure } from '../text-generation-error.ts';
+import { textPolicyHash } from '../generation/text-generation-policy.ts';
+import { TextGenerationFailure } from '../generation/text-generation-error.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
-import type { FakeFish } from '../web-provider-runner.ts';
+import type { FakeFish } from '../generation/web-provider-runner.ts';
 
 async function session<T>(
   binding: WebGenerationBinding,

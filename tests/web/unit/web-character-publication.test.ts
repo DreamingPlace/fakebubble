@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Store } from '../../../apps/server/store.ts';
-import { WebAccountAdmin } from '../../../apps/server/web-account-admin.ts';
-import { WebCharacterAdmin } from '../../../apps/server/web-character-admin.ts';
-import { installWebCharacterCatalog, publishedWebCharacters } from '../../../apps/server/web-character-catalog.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
+import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
+import { WebCharacterAdmin } from '../../../apps/server/characters/web-character-admin.ts';
+import {
+  installWebCharacterCatalog,
+  publishedWebCharacters,
+} from '../../../apps/server/characters/web-character-catalog.ts';
 import { WEB_PROVIDER_CATALOG, WEB_PROVIDER_WELCOME } from '../../../config/web-v1.ts';
 import { defaultSchedule } from '../../../packages/domain/defaults.ts';
 import { syntheticCharacterReview } from '../fixtures/character-review.ts';

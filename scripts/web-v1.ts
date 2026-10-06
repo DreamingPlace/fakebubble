@@ -1,10 +1,10 @@
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
-import { WebStore } from '../apps/server/store.ts';
-import { WebLocalServer } from '../apps/server/web-local-server.ts';
-import { WebInviteAdmin } from '../apps/server/web-invite-admin.ts';
-import { initLocalInstance, readLocalConfig } from '../apps/server/web-local-config.ts';
+import { WebStore } from '../apps/server/platform/store.ts';
+import { WebLocalServer } from '../apps/server/platform/web-local-server.ts';
+import { WebInviteAdmin } from '../apps/server/invites/web-invite-admin.ts';
+import { initLocalInstance, readLocalConfig } from '../apps/server/platform/web-local-config.ts';
 import { defaultSchedule } from '../packages/domain/defaults.ts';
 import { ensure } from '../packages/domain/errors.ts';
 

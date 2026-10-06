@@ -3,12 +3,12 @@ import type { Clock } from '../../../packages/contracts/index.ts';
 import { WEB_PROVIDER_CHARACTER_IDS } from '../../../packages/contracts/web-provider.ts';
 import { WEB_PROVIDER_WELCOME } from '../../../config/web-v1.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { WebRuntimeStore } from '../web-store-contract.ts';
-import type { verifySelectedVoiceSetup } from '../web-provider-materials.ts';
-import { configureWebProvider } from '../web-provider-configuration.ts';
-import { WebProviderOffline } from '../web-provider-offline.ts';
-import { SYNTHETIC_TRIAL_FOOTER } from '../web-vertical-publisher.ts';
-import type { WebBudgetPolicy } from '../web-provider-budget-contract.ts';
+import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
+import type { verifySelectedVoiceSetup } from '../generation/web-provider-materials.ts';
+import { configureWebProvider } from '../generation/web-provider-configuration.ts';
+import { WebProviderOffline } from '../generation/web-provider-offline.ts';
+import { SYNTHETIC_TRIAL_FOOTER } from '../conversation/web-vertical-publisher.ts';
+import type { WebBudgetPolicy } from '../budget/web-provider-budget-contract.ts';
 
 export interface WebCloudFixedAsset {
   kind: 'welcome' | 'footer';

@@ -3,11 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebLocalExecutor } from '../../../apps/server/web-local-executor.ts';
-import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/web-local-config.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebLocalExecutor } from '../../../apps/server/platform/web-local-executor.ts';
+import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
 import { defaultSchedule } from '../../../packages/domain/defaults.ts';
 
 function fixture(t: TestContext) {

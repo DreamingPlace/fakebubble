@@ -3,21 +3,24 @@ import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts
 import { WebDurableStore } from '../../../apps/server/cloudflare/web-store.ts';
 import { webMigrations, webR2Migrations } from '../../../workers/web-cloudflare/migrations.ts';
 import { PrivateMediaObjects, type PrivateBucket } from '../../../apps/server/cloudflare/media-objects.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebInviteAdmin } from '../../../apps/server/web-invite-admin.ts';
-import { WebInvites } from '../../../apps/server/web-invites.ts';
-import { WebInviteActions } from '../../../apps/server/web-invite-actions.ts';
-import { requireWebContent } from '../../../apps/server/web-retention.ts';
-import { configureWebProvider } from '../../../apps/server/web-provider-configuration.ts';
-import { WebProviderOffline } from '../../../apps/server/web-provider-offline.ts';
-import { WebProviderRunner } from '../../../apps/server/web-provider-runner.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
-import { WebVerticalPublisher, SYNTHETIC_TRIAL_FOOTER } from '../../../apps/server/web-vertical-publisher.ts';
-import { DeepSeekTextGenerator } from '../../../apps/server/deepseek.ts';
-import { readWebV7Request } from '../../../apps/server/web-v7-request.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebInviteAdmin } from '../../../apps/server/invites/web-invite-admin.ts';
+import { WebInvites } from '../../../apps/server/invites/web-invites.ts';
+import { WebInviteActions } from '../../../apps/server/invites/web-invite-actions.ts';
+import { requireWebContent } from '../../../apps/server/admission/web-retention.ts';
+import { configureWebProvider } from '../../../apps/server/generation/web-provider-configuration.ts';
+import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
+import { WebProviderRunner } from '../../../apps/server/generation/web-provider-runner.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
+import {
+  WebVerticalPublisher,
+  SYNTHETIC_TRIAL_FOOTER,
+} from '../../../apps/server/conversation/web-vertical-publisher.ts';
+import { DeepSeekTextGenerator } from '../../../apps/server/generation/deepseek.ts';
+import { readWebV7Request } from '../../../apps/server/generation/web-v7-request.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { draftEnvelope, acceptedAuditEnvelope } from '../../text-fixtures.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
 import { syntheticSelection } from './provider-selection.ts';

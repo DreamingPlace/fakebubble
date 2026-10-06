@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { liveBudgetAuthority } from '../../../apps/server/web-provider-live-budget.ts';
-import { validateSelectedVoicePins } from '../../../apps/server/web-provider-materials.ts';
+import { liveBudgetAuthority } from '../../../apps/server/budget/web-provider-live-budget.ts';
+import { validateSelectedVoicePins } from '../../../apps/server/generation/web-provider-materials.ts';
 import { webOperatorConfig } from '../../../scripts/web-cloudflare-operator.ts';
 
 test('public source has no implicit account, material approval or budget authority', (t) => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { assertLocalRoot, localRuntime } from '../../../apps/server/web-local-config.ts';
+import { assertLocalRoot, localRuntime } from '../../../apps/server/platform/web-local-config.ts';
 
 test('local root and port belong only to this checkout', () => {
   const { parent, port } = localRuntime();

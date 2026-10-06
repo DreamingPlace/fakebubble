@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { privateIPv4 } from '../../../apps/server/web-provider-server.ts';
+import { privateIPv4 } from '../../../apps/server/generation/web-provider-server.ts';
 
 test('LAN test listener accepts only RFC1918 IPv4 clients', () => {
   for (const ok of ['10.0.0.8', '172.16.0.1', '172.31.255.254', '192.168.31.22', '::ffff:192.168.1.5'])

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebStore } from '../../../apps/server/store.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
 
 // Isolated child process used only by C's concurrent SQLite admission checks.
 const [mode, root, instanceId, principalId, requestId, text, ipHash] = process.argv.slice(2);

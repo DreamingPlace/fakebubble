@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHash, randomBytes, scryptSync } from 'node:crypto';
-import { Store } from '../../../apps/server/store.ts';
-import { WebInviteAdmin } from '../../../apps/server/web-invite-admin.ts';
-import { WebAccountAdmin, type AdminMailer } from '../../../apps/server/web-account-admin.ts';
-import { requireWebAdminMembership } from '../../../apps/server/web-admin-schema.ts';
-import { adminPasswords, validateAdminPassword } from '../../../apps/server/web-admin-password.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
+import { WebInviteAdmin } from '../../../apps/server/invites/web-invite-admin.ts';
+import { WebAccountAdmin, type AdminMailer } from '../../../apps/server/admin/web-account-admin.ts';
+import { requireWebAdminMembership } from '../../../apps/server/admin/web-admin-schema.ts';
+import { adminPasswords, validateAdminPassword } from '../../../apps/server/admin/web-admin-password.ts';
 import { ADMIN_CHARACTER_ACTIONS, ADMIN_PERMISSION_LIMIT } from '../../../packages/contracts/web-admin-permissions.ts';
 import { cloudAdminMailer } from '../../../apps/server/cloudflare/web-admin-mail.ts';
 

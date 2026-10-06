@@ -1,5 +1,5 @@
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebLocalExecutor } from '../../../apps/server/web-local-executor.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebLocalExecutor } from '../../../apps/server/platform/web-local-executor.ts';
 
 const [root, instanceId, nowRaw, mode] = process.argv.slice(2);
 if (!root || !instanceId || !nowRaw || !['sent', 'known'].includes(mode)) process.exit(70);

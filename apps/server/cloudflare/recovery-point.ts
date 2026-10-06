@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { DurableStore } from './store.ts';
 import type { GuardRecoveryReceipt } from './guard-recovery.ts';
-import { parseRecoveryPoint } from '../recovery-protocol.ts';
+import { parseRecoveryPoint } from '../platform/recovery-protocol.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 

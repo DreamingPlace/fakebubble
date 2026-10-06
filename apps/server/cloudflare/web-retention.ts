@@ -1,11 +1,11 @@
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { emptySession } from '../../../packages/domain/schedule.ts';
-import type { WebRuntimeStore } from '../web-store-contract.ts';
-import { auditWebLifecycleWorld } from '../web-lifecycle-audit.ts';
-import { WebProviderOffline } from '../web-provider-offline.ts';
-import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../web-retention.ts';
-import { checkAudioReference, speechObjectScope } from '../web-provider-media.ts';
+import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
+import { auditWebLifecycleWorld } from '../admission/web-lifecycle-audit.ts';
+import { WebProviderOffline } from '../generation/web-provider-offline.ts';
+import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
+import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
 import type { MediaObjectReference } from './media-objects.ts';
 
 type Retention = WebRetentionRow & { db_cleared_at: number | null };

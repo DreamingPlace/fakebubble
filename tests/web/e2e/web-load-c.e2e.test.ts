@@ -7,9 +7,9 @@ import type { IncomingMessage } from 'node:http';
 import { join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import test from 'node:test';
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { localRuntime, readLocalConfig } from '../../../apps/server/web-local-config.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
 
 const pause = (ms: number) => new Promise((resolvePause) => setTimeout(resolvePause, ms));
 const summary = (samples: number[]) => {

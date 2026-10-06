@@ -4,14 +4,14 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
 import { textRequest } from '../../text-fixtures.ts';
-import { readWebV7Request } from '../../../apps/server/web-v7-request.ts';
-import { syntheticText, syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { readWebV7Request } from '../../../apps/server/generation/web-v7-request.ts';
+import { syntheticText, syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 
 test('109 explicit migration preserves 108 rows and emits new admission in its transaction', () => {
   const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-local-migration-'));

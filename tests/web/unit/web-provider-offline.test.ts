@@ -1,14 +1,14 @@
-import { installWebCharacterDeletion } from '../../../apps/server/web-character-deletion-schema.ts';
-import { WebAccountAdmin } from '../../../apps/server/web-account-admin.ts';
-import type { WebRuntimeStore } from '../../../apps/server/web-store-contract.ts';
+import { installWebCharacterDeletion } from '../../../apps/server/characters/web-character-deletion-schema.ts';
+import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
+import type { WebRuntimeStore } from '../../../apps/server/platform/web-store-contract.ts';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import test, { type TestContext } from 'node:test';
-import { Store } from '../../../apps/server/store.ts';
-import { WebProviderOffline } from '../../../apps/server/web-provider-offline.ts';
-import { migrateWebProviderOffline } from '../../../apps/server/web-provider-migration.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
+import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
+import { migrateWebProviderOffline } from '../../../apps/server/generation/web-provider-migration.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import {
   acceptedAuditEnvelope,
   draftEnvelope,
@@ -16,19 +16,19 @@ import {
   draftWire,
   textRequest,
 } from '../../text-fixtures.ts';
-import { protocolFingerprint } from '../../../apps/server/accepted-text-protocol.ts';
-import { textPromptHash } from '../../../apps/server/accepted-text-prompt.ts';
-import { freezeInputSnapshot } from '../../../apps/server/web-input-snapshot.ts';
-import type { WebStore } from '../../../apps/server/store.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebVerticalPublisher } from '../../../apps/server/web-vertical-publisher.ts';
-import { sceneState } from '../../../apps/server/scenes.ts';
-import { DeepSeekTextGenerator } from '../../../apps/server/deepseek.ts';
-import { fishTransport, WebProviderRunner } from '../../../apps/server/web-provider-runner.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
+import { protocolFingerprint } from '../../../apps/server/generation/accepted-text-protocol.ts';
+import { textPromptHash } from '../../../apps/server/generation/accepted-text-prompt.ts';
+import { freezeInputSnapshot } from '../../../apps/server/generation/web-input-snapshot.ts';
+import type { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebVerticalPublisher } from '../../../apps/server/conversation/web-vertical-publisher.ts';
+import { sceneState } from '../../../apps/server/conversation/scenes.ts';
+import { DeepSeekTextGenerator } from '../../../apps/server/generation/deepseek.ts';
+import { fishTransport, WebProviderRunner } from '../../../apps/server/generation/web-provider-runner.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
 import { fishSpeechRequest } from '../../../workers/audio/fish.ts';
 import { FishAudio } from '../../../workers/audio/fish.ts';
-import { WebProviderExecutor } from '../../../apps/server/web-provider-executor.ts';
+import { WebProviderExecutor } from '../../../apps/server/generation/web-provider-executor.ts';
 import { WebCloudBudgetClient } from '../../../apps/server/cloudflare/web-budget-client.ts';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');

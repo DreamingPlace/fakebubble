@@ -2,7 +2,13 @@ import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import type { CostCall, CostCallInput, CostObservation, CostPrice } from '../../../packages/contracts/admin-costs.ts';
-import { costCallInput, costReconciliation, costObservation, costPrice, costReservation } from '../beta-costs.ts';
+import {
+  costCallInput,
+  costReconciliation,
+  costObservation,
+  costPrice,
+  costReservation,
+} from '../budget/beta-costs.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { DurableSQLStorage } from './store.ts';
 import type { GuardFence, GuardIdentity } from './recovery-guard.ts';

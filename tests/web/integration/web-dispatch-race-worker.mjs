@@ -1,5 +1,5 @@
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
 
 const [root, instanceId, claimJson, requestId, nowText] = process.argv.slice(2);
 const store = new WebStore(root, { create: false, instanceId });

@@ -5,12 +5,12 @@ import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync } from 'node:
 import { request as httpsRequest } from 'node:https';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebLocalExecutor } from '../../../apps/server/web-local-executor.ts';
-import { WebRetentionCleaner } from '../../../apps/server/web-retention-cleaner.ts';
-import { WebPrivateAudioFiles } from '../../../apps/server/web-private-audio-files.ts';
-import { localRuntime, readLocalConfig } from '../../../apps/server/web-local-config.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebLocalExecutor } from '../../../apps/server/platform/web-local-executor.ts';
+import { WebRetentionCleaner } from '../../../apps/server/admission/web-retention-cleaner.ts';
+import { WebPrivateAudioFiles } from '../../../apps/server/audio/web-private-audio-files.ts';
+import { localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
 
 type Client = { cookie: string; csrf: string };
 type Reply = { status: number; data: any; bytes: Buffer; headers: Record<string, unknown> };

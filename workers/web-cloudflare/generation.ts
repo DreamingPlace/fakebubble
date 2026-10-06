@@ -1,7 +1,7 @@
 import { WorkerEntrypoint, RpcTarget } from 'cloudflare:workers';
 import { DomainError, ensure } from '../../packages/domain/errors.ts';
-import { DeepSeekTextGenerator } from '../../apps/server/deepseek.ts';
-import { TextGenerationFailure } from '../../apps/server/text-generation-error.ts';
+import { DeepSeekTextGenerator } from '../../apps/server/generation/deepseek.ts';
+import { TextGenerationFailure } from '../../apps/server/generation/text-generation-error.ts';
 import { FishAudio, fishSpeechRequest } from '../audio/fish.ts';
 import { SpeechFailure } from '../audio/validation-error.ts';
 import type { AcceptedV7StageOutput, TextGenerationRequest } from '../../packages/contracts/index.ts';

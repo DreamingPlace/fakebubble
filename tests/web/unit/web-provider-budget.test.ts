@@ -5,7 +5,7 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { WebProviderBudget, type BudgetHistory } from '../../../apps/server/web-provider-budget.ts';
+import { WebProviderBudget, type BudgetHistory } from '../../../apps/server/budget/web-provider-budget.ts';
 
 const clock = { now: () => 1234 };
 const fingerprint = 'a'.repeat(64);
@@ -66,7 +66,7 @@ test('known settlement is idempotent, bounded, and keeps durable material bytes'
 
 test('two independent processes competing for the last shared allowance admit exactly one', async (t) => {
   const { path } = fixture(t, 2_999_900);
-  const module = new URL('../../../apps/server/web-provider-budget.ts', import.meta.url).href;
+  const module = new URL('../../../apps/server/budget/web-provider-budget.ts', import.meta.url).href;
   const children = [0, 1].map((index) =>
     spawn(
       process.execPath,
@@ -112,7 +112,7 @@ test('provider CLI defaults reject live serve and asset rendering before any fil
 
 test('cloud allocation and a concurrent local send cannot spend the same last allowance', async (t) => {
   const { path } = fixture(t, 2_999_900);
-  const module = new URL('../../../apps/server/web-provider-budget.ts', import.meta.url).href;
+  const module = new URL('../../../apps/server/budget/web-provider-budget.ts', import.meta.url).href;
   const target = { accountId: 'a'.repeat(32), namespaceId: 'b'.repeat(32), objectId: 'c'.repeat(64) };
   const children = [0, 1].map((index) =>
     spawn(

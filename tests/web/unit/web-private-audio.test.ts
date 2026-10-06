@@ -18,12 +18,12 @@ import { tmpdir } from 'node:os';
 import { syncBuiltinESMExports } from 'node:module';
 import { join } from 'node:path';
 import test from 'node:test';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
-import { WebSyntheticPrivateAudio, type PrivateAudioScope } from '../../../apps/server/web-private-audio.ts';
-import { WebPrivateAudioFiles } from '../../../apps/server/web-private-audio-files.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebStore } from '../../../apps/server/store.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
+import { WebSyntheticPrivateAudio, type PrivateAudioScope } from '../../../apps/server/audio/web-private-audio.ts';
+import { WebPrivateAudioFiles } from '../../../apps/server/audio/web-private-audio-files.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
 import { tone } from '../../audio-fixtures.ts';
 
 function fixture(t: test.TestContext, migrate = true) {

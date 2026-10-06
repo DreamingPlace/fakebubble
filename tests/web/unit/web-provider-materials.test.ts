@@ -5,7 +5,7 @@ import {
   verifySelectedVoiceSetup,
   verifyVoiceMaterialEvidence,
   type SelectedCharacterId,
-} from '../../../apps/server/web-provider-materials.ts';
+} from '../../../apps/server/generation/web-provider-materials.ts';
 
 const bytes = (value: unknown) => Buffer.from(JSON.stringify(value));
 const sha = (value: Uint8Array) => createHash('sha256').update(value).digest('hex');

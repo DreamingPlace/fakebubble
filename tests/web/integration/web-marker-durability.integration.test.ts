@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { WebStore } from '../../../apps/server/store.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
 
 const worker = fileURLToPath(new URL('./web-marker-io-worker.mjs', import.meta.url));
 type Event = { event: string; path?: string; ordinal?: number; state?: string; flush?: boolean };

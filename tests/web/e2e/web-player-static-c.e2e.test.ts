@@ -14,7 +14,7 @@ import {
 import { request as httpsRequest } from 'node:https';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { localRuntime } from '../../../apps/server/web-local-config.ts';
+import { localRuntime } from '../../../apps/server/platform/web-local-config.ts';
 import { buildWebPlayer } from '../../../scripts/build-web-player.ts';
 
 const runtime = localRuntime();

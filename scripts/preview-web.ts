@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
-import { serveLocalStatic } from '../apps/server/web-local-static.ts';
+import { serveLocalStatic } from '../apps/server/platform/web-local-static.ts';
 
 // Static UI only: no database, credentials, provider calls, or externally bound port.
 const root = fileURLToPath(new URL('../apps/player-web/dist/', import.meta.url));

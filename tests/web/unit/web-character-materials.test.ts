@@ -1,21 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
-import { Store } from '../../../apps/server/store.ts';
-import { migrateWebProviderOffline } from '../../../apps/server/web-provider-migration.ts';
-import type { WebRuntimeStore } from '../../../apps/server/web-store-contract.ts';
-import { configureWebProvider } from '../../../apps/server/web-provider-configuration.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
+import { migrateWebProviderOffline } from '../../../apps/server/generation/web-provider-migration.ts';
+import type { WebRuntimeStore } from '../../../apps/server/platform/web-store-contract.ts';
+import { configureWebProvider } from '../../../apps/server/generation/web-provider-configuration.ts';
 import { syntheticSelection } from '../fixtures/provider-selection.ts';
-import { WebAccountAdmin } from '../../../apps/server/web-account-admin.ts';
-import { WebCharacterAdmin } from '../../../apps/server/web-character-admin.ts';
-import { installWebCharacterCatalog, publishedWebCharacters } from '../../../apps/server/web-character-catalog.ts';
-import { installWebCharacterMaterials } from '../../../apps/server/web-character-material-schema.ts';
-import { WebCharacterMaterials } from '../../../apps/server/web-character-materials.ts';
-import { WebProviderOffline } from '../../../apps/server/web-provider-offline.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
+import { WebCharacterAdmin } from '../../../apps/server/characters/web-character-admin.ts';
+import {
+  installWebCharacterCatalog,
+  publishedWebCharacters,
+} from '../../../apps/server/characters/web-character-catalog.ts';
+import { installWebCharacterMaterials } from '../../../apps/server/characters/web-character-material-schema.ts';
+import { WebCharacterMaterials } from '../../../apps/server/characters/web-character-materials.ts';
+import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { syntheticCharacterReview } from '../fixtures/character-review.ts';
 import { PrivateMediaObjects, type PrivateBucket } from '../../../apps/server/cloudflare/media-objects.ts';
-import { SYNTHETIC_TRIAL_FOOTER } from '../../../apps/server/web-vertical-publisher.ts';
+import { SYNTHETIC_TRIAL_FOOTER } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 
 function fixture(t: test.TestContext) {
   const store = Object.assign(new Store(':memory:'), { instanceId: 'material-unit' });

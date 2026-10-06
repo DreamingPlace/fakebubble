@@ -1,8 +1,8 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
-import { maximumScreenshotBytes } from '../feedback-png.ts';
-import { maximumAudioBytes } from '../audio-validation.ts';
+import { maximumScreenshotBytes } from '../audio/feedback-png.ts';
+import { maximumAudioBytes } from '../audio/audio-validation.ts';
 
 interface ObjectInfo {
   size: number;

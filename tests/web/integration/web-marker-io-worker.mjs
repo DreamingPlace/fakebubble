@@ -67,7 +67,7 @@ DatabaseSync.prototype.close = function () {
 };
 
 try {
-  const { WebStore } = await import('../../../apps/server/store.ts');
+  const { WebStore } = await import('../../../apps/server/platform/store.ts');
   const store = new WebStore(root, { create: true, instanceId });
   store.close();
   process.stdout.write(JSON.stringify({ ok: true, fsyncCount, events }));

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { localRuntime } from '../../cloudflare/runtime.ts';
 import { readFileSync, readdirSync } from 'node:fs';
-import { Store } from '../../../apps/server/store.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
 
 test('web schema113 initializes in actual workerd SQLite without beta adoption', async (t) => {
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-schema-worker.ts', { STATE: 'WebSchemaFixture' });

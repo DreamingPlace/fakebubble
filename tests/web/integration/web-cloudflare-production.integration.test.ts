@@ -8,11 +8,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { Miniflare } from 'miniflare';
 import { testModules } from '../../cloudflare/modules.ts';
 import { syntheticSelection } from '../fixtures/provider-selection.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { WEB_PROVIDER_WELCOME } from '../../../config/web-v1.ts';
-import { SYNTHETIC_TRIAL_FOOTER } from '../../../apps/server/web-vertical-publisher.ts';
+import { SYNTHETIC_TRIAL_FOOTER } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import { webMaterialHash, type WebCloudMaterialPackage } from '../../../apps/server/cloudflare/web-setup.ts';
-import { budgetHash, type CloudBudgetAuthorization } from '../../../apps/server/web-provider-budget-contract.ts';
+import { budgetHash, type CloudBudgetAuthorization } from '../../../apps/server/budget/web-provider-budget-contract.ts';
 import { parseWebProviderBootstrap } from '../../../packages/contracts/web-provider.ts';
 
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');

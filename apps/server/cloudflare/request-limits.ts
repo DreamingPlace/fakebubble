@@ -1,5 +1,5 @@
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { BusinessStore } from '../store-contract.ts';
+import type { BusinessStore } from '../platform/store-contract.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 
 /** Authoritative per-instance limits survive object eviction/restart. Keys never come directly from the JSON body. */

@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import type { BusinessStore } from '../../../apps/server/store-contract.ts';
-import { contentHash } from '../../../apps/server/admin-content-hash.ts';
-import { DeepSeekTextGenerator } from '../../../apps/server/deepseek.ts';
+import type { BusinessStore } from '../../../apps/server/platform/store-contract.ts';
+import { contentHash } from '../../../apps/server/characters/admin-content-hash.ts';
+import { DeepSeekTextGenerator } from '../../../apps/server/generation/deepseek.ts';
 import { acceptedAuditEnvelope, draftEnvelope, textRequest } from '../../text-fixtures.ts';
-import type { WebCharacterProfile } from '../../../apps/server/web-character-catalog.ts';
+import type { WebCharacterProfile } from '../../../apps/server/characters/web-character-catalog.ts';
 
 /** Simulated trusted preview evidence. Never in a deployment graph; no real provider or budget claim. */
 export async function syntheticCharacterReview(store: BusinessStore, now: number, id: string) {
