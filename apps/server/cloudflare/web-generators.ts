@@ -6,6 +6,14 @@ import type {
 } from '../../../packages/contracts/web-generation-rpc.ts';
 import type { ProviderMeter } from '../../../packages/contracts/provider-calls.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
+import {
+  EMBEDDING_DIMS,
+  EMBEDDING_MODEL,
+  EmbeddingFailure,
+  checkEmbeddingInput,
+  parseEmbeddingVectors,
+  type EmbeddingProvider,
+} from '../generation/embedding-provider.ts';
 import { textPolicyHash } from '../generation/text-generation-policy.ts';
 import { TextGenerationFailure } from '../generation/text-generation-error.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
@@ -134,5 +142,30 @@ export function webCloudSpeech(binding: WebGenerationBinding): FakeFish {
         },
       };
     });
+  };
+}
+
+/** Embeddings through the isolated generation Worker; vectors come back to the business object, which alone stores them. */
+export function webCloudEmbeddings(binding: WebGenerationBinding): EmbeddingProvider {
+  return {
+    model: EMBEDDING_MODEL,
+    dims: EMBEDDING_DIMS,
+    embed: (texts, signal, authorize) => {
+      checkEmbeddingInput(texts);
+      return session(binding, signal, async (remote) => {
+        const result = await remote.embed({ texts: [...texts], model: EMBEDDING_MODEL }, () =>
+          callback(async () => {
+            ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
+            await authorize?.();
+          }),
+        );
+        if (!result.ok) throw new EmbeddingFailure(result.code, result.known);
+        return {
+          vectors: parseEmbeddingVectors(result.value.vectors, texts.length),
+          usageTokens: result.value.usageTokens,
+          requestId: result.value.requestId,
+        };
+      });
+    },
   };
 }

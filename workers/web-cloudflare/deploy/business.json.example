@@ -21,7 +21,10 @@
     "MAX_TEXT_RUNNING": "20",
     "MAX_AUDIO_RUNNING": "4",
     "MAX_WAITING_OPERATIONS": "104",
-    "AUDIO_FALLBACK_WAIT_MS": "8000"
+    "AUDIO_FALLBACK_WAIT_MS": "8000",
+    "EMBEDDINGS_ENABLED": "false",
+    "MAX_EMBED_RUNNING": "2",
+    "EMBED_QUERY_TIMEOUT_MS": "3000"
   },
   "durable_objects": { "bindings": [{ "name": "BUSINESS", "class_name": "WebBusinessObject" }] },
   "migrations": [{ "tag": "web113-v1", "new_sqlite_classes": ["WebBusinessObject"] }],
