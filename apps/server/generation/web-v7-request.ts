@@ -14,6 +14,7 @@ import { memoryVersion, recallCorrections } from '../memory/memory-review.ts';
 import { playerContextKey, playerIntroduction } from '../conversation/player-profile.ts';
 import { relationshipContext, relationshipVersion } from '../conversation/relationships.ts';
 import { projectedSceneStyle, sceneRevision, sceneState } from '../conversation/scenes.ts';
+import { userStore } from '../platform/store-boundary.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { readInputSnapshot } from './web-input-snapshot.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
@@ -254,18 +255,18 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     'WEB_V7_MEMORY_ENTITLEMENT_REQUIRED',
   );
   const query = input.input_body;
-  const memories = access.kind !== 'guest' ? recallMemories(store, scope, now, query) : [];
+  const memories = access.kind !== 'guest' ? recallMemories(userStore(store), scope, now, query) : [];
   const corrections =
     access.kind !== 'guest'
       ? recallCorrections(
-          store,
+          userStore(store),
           scope,
           query,
           memories.map((memory) => memory.key),
         )
       : [];
-  const relationshipState = relationshipContext(store, scope, relationship);
-  const scene = sceneState(store, scope, now);
+  const relationshipState = relationshipContext(userStore(store), scope, relationship);
+  const scene = sceneState(userStore(store), scope, now);
   const shortTermTurns = priorJobs.size
     ? store
         .all<{ job_id: string; at: number }>(
@@ -286,7 +287,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
         .reverse()
         .map((row) => ({ job_id: row.job_id, at: row.at }))
     : [];
-  const introduction = playerIntroduction(store, scope);
+  const introduction = playerIntroduction(userStore(store), scope);
   const request: TextGenerationRequest = {
     jobId: operation.id,
     scope: { worldId: scope.worldId, conversationId: scope.conversationId, characterId: scope.characterId },
@@ -342,10 +343,10 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     requestDigest,
     protocolDigest,
     textPromptHash(),
-    memoryVersion(store, scope),
-    playerContextKey(store, scope),
-    relationshipVersion(store, scope),
-    sceneRevision(store, scope),
+    memoryVersion(userStore(store), scope),
+    playerContextKey(userStore(store), scope),
+    relationshipVersion(userStore(store), scope),
+    sceneRevision(userStore(store), scope),
     voiceVersion,
     now,
   );
@@ -405,9 +406,9 @@ export function checkWebV7SceneAtDispatch(store: WebStore, operationId: string, 
     conversationId: row.conversation_id,
     characterId: row.character_id,
   };
-  ensure(sceneRevision(store, scope) === row.scene_revision, 'SCENE_CONTEXT_CHANGED');
+  ensure(sceneRevision(userStore(store), scope) === row.scene_revision, 'SCENE_CONTEXT_CHANGED');
   return projectedSceneStyle(
-    store,
+    userStore(store),
     scope,
     operationId,
     JSON.parse(stored.candidate_json) as DialogueCandidate,

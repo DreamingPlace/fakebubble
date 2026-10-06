@@ -13,7 +13,7 @@ import type {
 } from '../../../packages/contracts/memory.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { topicKey } from '../../../packages/domain/dialogue.ts';
-import type { BusinessStore as Store } from '../platform/store-contract.ts';
+import type { UserStore as Store } from '../platform/store-boundary.ts';
 import { episodeSources } from './context-evidence.ts';
 
 const where = 'world_id=? AND conversation_id=? AND character_id=?';
@@ -44,7 +44,7 @@ function identifier(value: unknown): asserts value is string {
 }
 function catalog(store: Store, scope: CharacterScope, id: string): Catalog {
   identifier(id);
-  const found = store.get<Catalog>(`SELECT * FROM memory_catalog WHERE ${where} AND id=?`, ...params(scope), id);
+  const found = store.get<Catalog>(scope, `SELECT * FROM memory_catalog WHERE ${where} AND id=?`, ...params(scope), id);
   ensure(found, 'NOT_FOUND');
   return found;
 }
@@ -63,6 +63,7 @@ function correctionDTO(row: CorrectionRow, memory: Catalog): MemoryCorrection {
 }
 function latestRow(store: Store, scope: CharacterScope, key: string) {
   return store.get<CorrectionRow>(
+    scope,
     `SELECT * FROM memory_corrections WHERE ${where} AND topic_key=? ORDER BY revision DESC LIMIT 1`,
     ...params(scope),
     key,
@@ -70,6 +71,7 @@ function latestRow(store: Store, scope: CharacterScope, key: string) {
 }
 function topicDTO(store: Store, scope: CharacterScope, memory: Catalog, now: number): MemoryTopicDTO {
   const row = store.get<{ tier: 'short' | 'long'; player_mentions: number; last_seen: number; active_until: number }>(
+    scope,
     `SELECT * FROM memory_topics WHERE ${where} AND topic_key=?`,
     ...params(scope),
     memory.topic_key,
@@ -90,8 +92,11 @@ function topicDTO(store: Store, scope: CharacterScope, memory: Catalog, now: num
 }
 export function memoryVersion(store: Store, scope: CharacterScope): number {
   return (
-    store.get<{ version: number }>(`SELECT version FROM memory_context_versions WHERE ${where}`, ...params(scope))
-      ?.version ?? 0
+    store.get<{ version: number }>(
+      scope,
+      `SELECT version FROM memory_context_versions WHERE ${where}`,
+      ...params(scope),
+    )?.version ?? 0
   );
 }
 
@@ -104,6 +109,7 @@ export function listMemoryTopics(
 ): MemoryTopicPage {
   const seq = before === null ? Number.MAX_SAFE_INTEGER : catalog(store, scope, before).seq;
   const rows = store.all<Catalog>(
+    scope,
     `SELECT * FROM memory_catalog WHERE ${where} AND seq<? ORDER BY seq DESC LIMIT 26`,
     ...params(scope),
     seq,
@@ -123,6 +129,7 @@ export function readMemoryDetail(
   if (before !== null) {
     identifier(before);
     const found = store.get<{ seq: number }>(
+      scope,
       `SELECT rowid seq FROM memory_episodes WHERE ${where} AND topic_key=? AND job_id=?`,
       ...params(scope),
       memory.topic_key,
@@ -138,6 +145,7 @@ export function readMemoryDetail(
     created_at: number;
     evidence_ids_json: string;
   }>(
+    scope,
     `SELECT * FROM memory_episodes WHERE ${where} AND topic_key=? AND rowid<? ORDER BY rowid DESC LIMIT 26`,
     ...params(scope),
     memory.topic_key,
@@ -148,6 +156,7 @@ export function readMemoryDetail(
     const excerpts = messageIds.length
       ? store
           .all<MemoryEpisodeDTO['excerpts'][number]>(
+            scope,
             `SELECT id,author_kind AS authorKind,author_id AS authorId,body AS text,created_at AS at FROM messages WHERE body!='' AND world_id=? AND conversation_id=? AND
         id IN (${messageIds.map(() => '?').join(',')}) ORDER BY seq DESC LIMIT 4`,
             scope.worldId,
@@ -187,6 +196,7 @@ export function listCorrections(
   if (before !== null) {
     identifier(before);
     const found = store.get<{ seq: number }>(
+      scope,
       `SELECT seq FROM memory_corrections WHERE ${where} AND topic_key=? AND id=?`,
       ...params(scope),
       memory.topic_key,
@@ -196,6 +206,7 @@ export function listCorrections(
     seq = found.seq;
   }
   const rows = store.all<CorrectionRow>(
+    scope,
     `SELECT * FROM memory_corrections WHERE ${where} AND topic_key=? AND seq<? ORDER BY seq DESC LIMIT 26`,
     ...params(scope),
     memory.topic_key,
@@ -261,6 +272,7 @@ export function correctMemory(
     topic_key: string;
     request_hash: string;
   }>(
+    scope,
     'SELECT id,conversation_id,character_id,topic_key,request_hash FROM memory_corrections WHERE world_id=? AND request_id=?',
     scope.worldId,
     input.requestId,
@@ -274,6 +286,7 @@ export function correctMemory(
       'IDEMPOTENCY_CONFLICT',
     );
     const receipt = store.get<CorrectionRow>(
+      scope,
       `SELECT * FROM memory_corrections WHERE ${where} AND id=?`,
       ...params(scope),
       previous.id,
@@ -292,6 +305,7 @@ export function correctMemory(
   for (const messageId of input.evidenceMessageIds)
     ensure(
       store.get(
+        scope,
         'SELECT 1 FROM messages WHERE world_id=? AND conversation_id=? AND id=?',
         scope.worldId,
         scope.conversationId,
@@ -301,6 +315,7 @@ export function correctMemory(
     );
   const correctionId = randomUUID();
   store.run(
+    scope,
     `INSERT INTO memory_corrections(id,world_id,conversation_id,character_id,topic_key,revision,request_id,request_hash,summary,reason,evidence_ids_json,recorded_at)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
     correctionId,
@@ -315,6 +330,7 @@ export function correctMemory(
     now,
   );
   store.run(
+    scope,
     `INSERT INTO memory_context_versions VALUES (?,?,?,1) ON CONFLICT(world_id,conversation_id,character_id)
     DO UPDATE SET version=version+1`,
     ...params(scope),
@@ -341,6 +357,7 @@ export function recallCorrections(
     ? words.map(() => '(CASE WHEN instr(c.topic_key,?)>0 OR instr(c.summary,?)>0 THEN 1 ELSE 0 END)').join('+')
     : '0';
   const latest = store.all<CorrectionRow>(
+    scope,
     `SELECT c.*,(${score}) relevance FROM memory_corrections c WHERE ${where} AND NOT EXISTS
     (SELECT 1 FROM memory_corrections n WHERE n.world_id=c.world_id AND n.conversation_id=c.conversation_id AND n.character_id=c.character_id
       AND n.topic_key=c.topic_key AND n.revision>c.revision) ORDER BY relevance DESC,c.seq DESC LIMIT 12`,
@@ -357,6 +374,7 @@ export function recallCorrections(
   );
   return chosen.map((row) => {
     const memory = store.get<Catalog>(
+      scope,
       `SELECT * FROM memory_catalog WHERE ${where} AND topic_key=?`,
       ...params(scope),
       row.topic_key,

@@ -23,6 +23,7 @@ import type { WebStore } from '../../../apps/server/platform/store.ts';
 import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
 import { WebVerticalPublisher } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import { sceneState } from '../../../apps/server/conversation/scenes.ts';
+import { userStore } from '../../../apps/server/platform/store-boundary.ts';
 import { DeepSeekTextGenerator } from '../../../apps/server/generation/deepseek.ts';
 import { fishTransport, WebProviderRunner } from '../../../apps/server/generation/web-provider-runner.ts';
 import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
@@ -134,7 +135,7 @@ function fixture(t: TestContext) {
   ];
   request.deliveryMode = 'voice';
   request.sceneContext = sceneState(
-    store,
+    userStore(store),
     { playerId: 'player', worldId: 'world', conversationId: 'conversation', characterId: 'character' },
     now,
   );

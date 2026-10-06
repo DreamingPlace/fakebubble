@@ -2,7 +2,7 @@
 import type { CharacterScope, TopicMemory } from '../../../packages/contracts/index.ts';
 import { DIALOGUE, topicKey } from '../../../packages/domain/dialogue.ts';
 import { episodeSources } from './context-evidence.ts';
-import type { BusinessStore as Store } from '../platform/store-contract.ts';
+import type { UserStore as Store } from '../platform/store-boundary.ts';
 const where = 'world_id=? AND conversation_id=? AND character_id=?';
 const params = (scope: CharacterScope) => [scope.worldId, scope.conversationId, scope.characterId] as const;
 interface TopicRow {
@@ -28,6 +28,7 @@ export function recallMemories(
   limit = 12,
 ): TopicMemory[] {
   const topics = store.all<TopicRow>(
+    scope,
     `SELECT * FROM memory_topics WHERE ${where} AND (tier='long' OR active_until>?)
     ORDER BY last_seen DESC,topic_key LIMIT 128`,
     ...params(scope),
@@ -53,6 +54,7 @@ export function recallMemories(
         100,
     episodes: store
       .all<EpisodeRow>(
+        scope,
         `SELECT * FROM memory_episodes WHERE ${where} AND topic_key=? ORDER BY created_at DESC,rowid DESC LIMIT 3`,
         ...params(scope),
         topic.topic_key,
@@ -69,6 +71,7 @@ export function recallMemories(
             body: string;
             created_at: number;
           }>(
+            scope,
             `SELECT id,author_kind,author_id,body,created_at FROM messages WHERE world_id=? AND conversation_id=?
             AND id IN (${ids.map(() => '?').join(',')}) ORDER BY seq DESC LIMIT 4`,
             scope.worldId,

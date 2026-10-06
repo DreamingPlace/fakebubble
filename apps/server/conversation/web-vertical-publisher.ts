@@ -9,6 +9,7 @@ import { memoryVersion } from '../memory/memory-review.ts';
 import { playerContextKey } from './player-profile.ts';
 import { recordRelationshipEvents, relationshipVersion } from './relationships.ts';
 import { recordSceneBubble, sceneRevision, sceneState, touchScene } from './scenes.ts';
+import { userStore, type UserStore } from '../platform/store-boundary.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireCurrentInputSnapshot } from '../generation/web-input-snapshot.ts';
 import type { WebPrivateAudioFiles, PrivateAudioExpectation } from '../audio/web-private-audio-files.ts';
@@ -93,6 +94,7 @@ export interface WebPublicationClaim {
 export class WebVerticalPublisher {
   private readonly files: Pick<WebPrivateAudioFiles, 'read' | 'write'> | null;
   private readonly store: WebStore;
+  private readonly user: UserStore;
   private readonly clock: Clock;
   private readonly nextId: () => string;
   constructor(
@@ -102,6 +104,7 @@ export class WebVerticalPublisher {
     files?: Pick<WebPrivateAudioFiles, 'read' | 'write'>,
   ) {
     this.store = store;
+    this.user = userStore(store);
     this.clock = clock;
     this.nextId = nextId;
     this.files =
@@ -597,11 +600,11 @@ export class WebVerticalPublisher {
         row.principal_id === claim.principalId &&
           row.player_id === claim.playerId &&
           row.voice_version.length > 0 &&
-          row.memory_version === memoryVersion(this.store, scope) &&
-          row.player_context_key === playerContextKey(this.store, scope) &&
-          row.relationship_version === relationshipVersion(this.store, scope) &&
-          row.scene_revision === sceneRevision(this.store, scope) &&
-          JSON.stringify(request.sceneContext) === JSON.stringify(sceneState(this.store, scope, now)),
+          row.memory_version === memoryVersion(this.user, scope) &&
+          row.player_context_key === playerContextKey(this.user, scope) &&
+          row.relationship_version === relationshipVersion(this.user, scope) &&
+          row.scene_revision === sceneRevision(this.user, scope) &&
+          JSON.stringify(request.sceneContext) === JSON.stringify(sceneState(this.user, scope, now)),
         'WEB_PUBLICATION_MATERIAL_CHANGED',
       );
       const stored = this.store.get<{
@@ -755,7 +758,7 @@ export class WebVerticalPublisher {
         JSON.stringify(context),
         snapshot.input_seq,
       );
-      validateDialogueMemoryEvidence(this.store, scope, claim.operationId, candidate);
+      validateDialogueMemoryEvidence(this.user, scope, claim.operationId, candidate);
       const published: MessageDTO[] = [],
         messageIds: string[] = [];
       for (const [ordinal, bubble] of candidate.bubbles.entries()) {
@@ -805,10 +808,10 @@ export class WebVerticalPublisher {
         });
       }
       this.store.run('UPDATE jobs SET published_message_id=? WHERE id=?', messageIds[0]!, claim.operationId);
-      recordSceneBubble(this.store, scope, claim.operationId, candidate, published, now);
-      touchScene(this.store, scope, claim.operationId, now);
-      recordDialogueMemories(this.store, scope, claim.operationId, candidate, published, [claim.inputMessageId], now);
-      recordRelationshipEvents(this.store, scope, claim.operationId, candidate, published, now);
+      recordSceneBubble(this.user, scope, claim.operationId, candidate, published, now);
+      touchScene(this.user, scope, claim.operationId, now);
+      recordDialogueMemories(this.user, scope, claim.operationId, candidate, published, [claim.inputMessageId], now);
+      recordRelationshipEvents(this.user, scope, claim.operationId, candidate, published, now);
       let footerMessageId: string | null = null;
       if (footerRequired && footer) {
         footerMessageId = this.nextId();

@@ -9,7 +9,7 @@ import type {
 } from '../../../packages/contracts/index.ts';
 import { DIALOGUE, topicKey } from '../../../packages/domain/dialogue.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { BusinessStore as Store } from '../platform/store-contract.ts';
+import type { UserStore as Store } from '../platform/store-boundary.ts';
 import { episodeSources, recordEpisodeSources, validateEpisodeSources } from './context-evidence.ts';
 
 const where = 'world_id=? AND conversation_id=? AND character_id=?';
@@ -40,6 +40,7 @@ export function validateDialogueMemoryEvidence(
     if (topic.linkedMemoryId !== undefined)
       ensure(
         store.get(
+          scope,
           `SELECT 1 FROM memory_catalog WHERE ${where} AND id=? AND topic_key=?`,
           ...params(scope),
           topic.linkedMemoryId,
@@ -49,6 +50,7 @@ export function validateDialogueMemoryEvidence(
       );
     const evidence = topic.evidenceMessageIds.map((id) =>
       store.get<{ author_kind: string }>(
+        scope,
         'SELECT author_kind FROM messages WHERE world_id=? AND conversation_id=? AND id=?',
         scope.worldId,
         scope.conversationId,
@@ -78,6 +80,7 @@ export function recordDialogueMemories(
   for (const topic of candidate.topics) {
     const evidence = topic.evidenceMessageIds.map((id) => {
       const row = store.get<{ id: string; author_kind: string }>(
+        scope,
         'SELECT id,author_kind FROM messages WHERE world_id=? AND conversation_id=? AND id=?',
         scope.worldId,
         scope.conversationId,
@@ -92,6 +95,7 @@ export function recordDialogueMemories(
       'INVALID_MEMORY_EVIDENCE',
     );
     store.run(
+      scope,
       `INSERT INTO memory_topics VALUES (?,?,?,?,'short',0,?,?) ON CONFLICT(world_id,conversation_id,character_id,topic_key)
       DO UPDATE SET last_seen=excluded.last_seen,active_until=excluded.active_until`,
       ...params(scope),
@@ -100,6 +104,7 @@ export function recordDialogueMemories(
       now + DIALOGUE.shortMemoryMs,
     );
     store.run(
+      scope,
       'INSERT OR IGNORE INTO memory_catalog(id,world_id,conversation_id,character_id,topic_key) VALUES (?,?,?,?,?)',
       randomUUID(),
       ...params(scope),
@@ -115,15 +120,17 @@ export function recordDialogueMemories(
     ]);
     for (const id of mentionIds) {
       if (currentInputIds.includes(id)) {
-        store.run('INSERT OR IGNORE INTO memory_mentions VALUES (?,?,?,?,?)', ...params(scope), topic.key, id);
+        store.run(scope, 'INSERT OR IGNORE INTO memory_mentions VALUES (?,?,?,?,?)', ...params(scope), topic.key, id);
       }
     }
     const count = store.get<{ n: number }>(
+      scope,
       `SELECT count(*) AS n FROM memory_mentions WHERE ${where} AND topic_key=?`,
       ...params(scope),
       topic.key,
     )!.n;
     store.run(
+      scope,
       `UPDATE memory_topics SET player_mentions=?,tier=CASE WHEN ?>=? THEN 'long' ELSE tier END WHERE ${where} AND topic_key=?`,
       count,
       count,
@@ -133,6 +140,7 @@ export function recordDialogueMemories(
     );
     const ids = [...new Set([...topic.evidenceMessageIds, ...turnIds, ...published.map((message) => message.id)])];
     store.run(
+      scope,
       'INSERT INTO memory_episodes VALUES (?,?,?,?,?,?,?,?,?)',
       ...params(scope),
       topic.key,
@@ -177,6 +185,7 @@ export function recallMemories(
     : '0';
   // Rank inside the full authorized scope before limiting; a newer unrelated topic cannot hide an older match.
   const topics = store.all<TopicRow>(
+    scope,
     `WITH ranked AS (SELECT t.*,c.id,(${score}) relevance FROM memory_topics t
     JOIN memory_catalog c ON c.world_id=t.world_id AND c.conversation_id=t.conversation_id AND c.character_id=t.character_id AND c.topic_key=t.topic_key
     WHERE t.world_id=? AND t.conversation_id=? AND t.character_id=?) SELECT * FROM ranked
@@ -203,6 +212,7 @@ export function recallMemories(
         100,
     episodes: store
       .all<EpisodeRow>(
+        scope,
         `SELECT *,rowid row_seq,(${episodeScore}) relevance FROM memory_episodes WHERE ${where} AND topic_key=?
       ORDER BY relevance DESC,created_at DESC,rowid DESC LIMIT 3`,
         ...words,
@@ -222,6 +232,7 @@ export function recallMemories(
             body: string;
             created_at: number;
           }>(
+            scope,
             `SELECT id,author_kind,author_id,body,created_at FROM messages WHERE body!='' AND world_id=? AND conversation_id=?
             AND id IN (${ids.map(() => '?').join(',')}) ORDER BY seq DESC LIMIT 4`,
             scope.worldId,
@@ -252,6 +263,7 @@ export function recallMemories(
 /** Every published dialogue has exact short-term memory, even a greeting with no semantic topic yet. */
 export function recentTurns(store: Store, scope: CharacterScope, now: number): ShortTermTurn[] {
   const turns = store.all<{ id: string; at: number }>(
+    scope,
     `SELECT j.id,min(m.created_at) AS at FROM jobs j
     JOIN dialogue_bubbles b ON b.job_id=j.id AND b.world_id=j.world_id AND b.conversation_id=j.conversation_id
     JOIN messages m ON m.id=b.message_id AND m.world_id=b.world_id AND m.conversation_id=b.conversation_id
@@ -263,6 +275,7 @@ export function recentTurns(store: Store, scope: CharacterScope, now: number): S
   return turns.reverse().map((turn) => ({
     ...turn,
     messages: store.all<{ id: string; text: string; expression: ShortTermTurn['messages'][number]['expression'] }>(
+      scope,
       `SELECT m.id,m.body AS text,b.expression FROM dialogue_bubbles b JOIN messages m ON m.id=b.message_id
         WHERE b.world_id=? AND b.conversation_id=? AND b.job_id=? AND m.world_id=? AND m.conversation_id=? AND m.author_id=?
         ORDER BY b.ordinal`,
@@ -284,7 +297,8 @@ export function selectProactiveTopic(
   now: number,
   random: RandomSource,
 ): void {
-  if (store.get(`SELECT 1 FROM proactive_topics WHERE ${where} AND intent_id=?`, ...params(scope), intentId)) return;
+  if (store.get(scope, `SELECT 1 FROM proactive_topics WHERE ${where} AND intent_id=?`, ...params(scope), intentId))
+    return;
   const pool: { key: string | null; weight: number }[] = [
     { key: null, weight: 1 },
     ...recallMemories(store, scope, now).map((topic) => ({ key: topic.key, weight: topic.recallWeight })),
@@ -301,6 +315,7 @@ export function selectProactiveTopic(
     }
   }
   store.run(
+    scope,
     'INSERT INTO proactive_topics VALUES (?,?,?,?,?,?,?,?)',
     ...params(scope),
     intentId,

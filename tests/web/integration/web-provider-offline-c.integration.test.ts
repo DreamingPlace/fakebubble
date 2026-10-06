@@ -18,6 +18,7 @@ import { DeepSeekTextGenerator } from '../../../apps/server/generation/deepseek.
 import { FishAudio, fishSpeechRequest } from '../../../workers/audio/fish.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
 import { sceneState } from '../../../apps/server/conversation/scenes.ts';
+import { userStore } from '../../../apps/server/platform/store-boundary.ts';
 import { WebVerticalPublisher } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import { WebCloudBudgetClient } from '../../../apps/server/cloudflare/web-budget-client.ts';
 import type { WebAttemptBudget } from '../../../apps/server/budget/web-provider-budget-contract.ts';
@@ -87,7 +88,7 @@ function setup(t: TestContext) {
   ];
   request.deliveryMode = 'voice';
   request.sceneContext = sceneState(
-    store,
+    userStore(store),
     { playerId: 'c-player', worldId: 'c-world', conversationId: 'c-conversation', characterId: 'c-character' },
     now,
   );

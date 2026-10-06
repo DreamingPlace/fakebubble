@@ -23,7 +23,7 @@ import {
 import { ensure } from '../../../packages/domain/errors.ts';
 import { localTime } from '../../../packages/domain/schedule.ts';
 import { characterAssociation } from './player-profile.ts';
-import type { BusinessStore as Store } from '../platform/store-contract.ts';
+import type { UserStore as Store } from '../platform/store-boundary.ts';
 
 const where = 'world_id=? AND conversation_id=? AND character_id=?';
 const params = (scope: CharacterScope) => [scope.worldId, scope.conversationId, scope.characterId] as const;
@@ -61,7 +61,7 @@ const eventQuery = `SELECT e.*,c.reason,c.recorded_at corrected_at FROM relation
   WHERE e.world_id=? AND e.conversation_id=? AND e.character_id=?`;
 const proposal = (row: EventRow): RelationshipEventCandidate => JSON.parse(row.candidate_json);
 function rows(store: Store, scope: CharacterScope) {
-  return store.all<EventRow>(`${eventQuery} ORDER BY e.seq`, ...params(scope));
+  return store.all<EventRow>(scope, `${eventQuery} ORDER BY e.seq`, ...params(scope));
 }
 function effects(events: EventRow[]) {
   const changes = new Map<string, { trust: number; familiarity: number }>();
@@ -99,6 +99,7 @@ function rebuild(store: Store, scope: CharacterScope) {
     }
   }
   store.run(
+    scope,
     `INSERT INTO relationship_states VALUES (?,?,1,?,?,?,?) ON CONFLICT(world_id,character_id)
     DO UPDATE SET revision=revision+1,trust_delta=excluded.trust_delta,familiarity_delta=excluded.familiarity_delta,
       positive_days=excluded.positive_days,kinds_json=excluded.kinds_json`,
@@ -114,6 +115,7 @@ export function relationshipVersion(store: Store, scope: CharacterScope) {
   if (!isPrivate(store, scope)) return 0;
   return (
     store.get<State>(
+      scope,
       'SELECT * FROM relationship_states WHERE world_id=? AND character_id=?',
       scope.worldId,
       scope.characterId,
@@ -122,13 +124,14 @@ export function relationshipVersion(store: Store, scope: CharacterScope) {
 }
 function isPrivate(store: Store, scope: CharacterScope) {
   return !!store.get(
+    scope,
     "SELECT 1 FROM conversations WHERE world_id=? AND id=? AND kind='private' AND private_character_id=?",
     ...params(scope),
   );
 }
 function authorizePrivate(store: Store, scope: CharacterScope) {
   ensure(
-    store.get('SELECT 1 FROM worlds WHERE id=? AND owner_id=?', scope.worldId, scope.playerId) &&
+    store.get(scope, 'SELECT 1 FROM worlds WHERE id=? AND owner_id=?', scope.worldId, scope.playerId) &&
       isPrivate(store, scope),
     'NOT_FOUND',
   );
@@ -141,6 +144,7 @@ export function relationshipContext(
 ): RelationshipContext {
   authorizePrivate(store, scope);
   const state = store.get<State>(
+    scope,
     'SELECT * FROM relationship_states WHERE world_id=? AND character_id=?',
     scope.worldId,
     scope.characterId,
@@ -160,7 +164,7 @@ export function relationshipContext(
     (positiveDays >= 6 && eventKinds.length >= 3 && trust >= 35 && familiarity >= 25);
   const auditEnabled = isPrivate(store, scope);
   const recent = auditEnabled
-    ? store.all<EventRow>(`${eventQuery} ORDER BY e.seq DESC LIMIT 12`, ...params(scope))
+    ? store.all<EventRow>(scope, `${eventQuery} ORDER BY e.seq DESC LIMIT 12`, ...params(scope))
     : [];
   const allEvents = recent.some((event) => proposal(event).kind === 'trust_damage') ? rows(store, scope) : [];
   const allEffects = effects(allEvents);
@@ -195,6 +199,7 @@ export function relationshipContext(
 export function freezeRelationshipMessages(store: Store, scope: CharacterScope, jobId: string, messages: MessageDTO[]) {
   if (!isPrivate(store, scope)) return messages;
   store.run(
+    scope,
     `INSERT OR IGNORE INTO relationship_job_contexts VALUES (?,?,?,?,?)`,
     ...params(scope),
     jobId,
@@ -204,6 +209,7 @@ export function freezeRelationshipMessages(store: Store, scope: CharacterScope, 
 }
 function frozenMessages(store: Store, scope: CharacterScope, jobId: string): MessageDTO[] {
   const context = store.get<{ messages_json: string }>(
+    scope,
     `SELECT messages_json FROM relationship_job_contexts WHERE ${where} AND job_id=?`,
     ...params(scope),
     jobId,
@@ -275,6 +281,7 @@ function verdict(
   const key = candidate.key.normalize('NFKC').trim().toLowerCase().replace(/\s+/gu, ' ');
   if (
     store.get(
+      scope,
       `SELECT 1 FROM relationship_events WHERE ${where} AND (event_key=? OR anchor_id=? OR input_fingerprint=?)`,
       ...params(scope),
       key,
@@ -297,6 +304,7 @@ export function recordRelationshipEvents(
   const candidates = dialogue.relationshipEvents ?? [];
   if (!candidates.length) return;
   const timeZone = store.get<{ time_zone: string }>(
+    scope,
     'SELECT time_zone FROM worlds WHERE id=? AND owner_id=?',
     scope.worldId,
     scope.playerId,
@@ -311,6 +319,7 @@ export function recordRelationshipEvents(
     let outcome = result.rejection ?? 'recorded';
     if (!result.rejection && 'response' in result && result.response) {
       const used = store.get<{ positive_used: number; negative_used: number }>(
+        scope,
         'SELECT * FROM relationship_daily_budgets WHERE world_id=? AND character_id=? AND local_day=?',
         scope.worldId,
         scope.characterId,
@@ -326,6 +335,7 @@ export function recordRelationshipEvents(
         familiarity = points.familiarity ? amount : 0;
       if (!amount) outcome = 'daily_cap';
       store.run(
+        scope,
         `INSERT INTO relationship_events(id,world_id,conversation_id,character_id,job_id,event_key,anchor_id,input_fingerprint,
         candidate_json,response_id,trust_delta,familiarity_delta,local_day,policy_version,review_version,recorded_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         randomUUID(),
@@ -344,6 +354,7 @@ export function recordRelationshipEvents(
         now,
       );
       store.run(
+        scope,
         `INSERT INTO relationship_daily_budgets VALUES (?,?,?,?,?) ON CONFLICT(world_id,character_id,local_day)
         DO UPDATE SET positive_used=positive_used+excluded.positive_used,negative_used=negative_used+excluded.negative_used`,
         scope.worldId,
@@ -355,6 +366,7 @@ export function recordRelationshipEvents(
       changed = true;
     }
     store.run(
+      scope,
       'INSERT INTO relationship_reviews VALUES (?,?,?,?,?,?,?,?)',
       ...params(scope),
       jobId,
@@ -391,6 +403,7 @@ export function listRelationshipEvents(
   if (before !== null) {
     identifier(before);
     const cursor = store.get<{ seq: number }>(
+      scope,
       `SELECT seq FROM relationship_events WHERE ${where} AND id=?`,
       ...params(scope),
       before,
@@ -398,7 +411,12 @@ export function listRelationshipEvents(
     ensure(cursor, 'INVALID_CURSOR');
     seq = cursor.seq;
   }
-  const page = store.all<EventRow>(`${eventQuery} AND e.seq<? ORDER BY e.seq DESC LIMIT 26`, ...params(scope), seq);
+  const page = store.all<EventRow>(
+    scope,
+    `${eventQuery} AND e.seq<? ORDER BY e.seq DESC LIMIT 26`,
+    ...params(scope),
+    seq,
+  );
   const items = page.slice(0, 25).map(item);
   return { scope: publicScope(scope), items, before: items.at(-1)?.id ?? before, hasMore: page.length > 25 };
 }
@@ -431,7 +449,7 @@ export function correctRelationshipEvent(
   const reason = value.reason.trim(),
     requestId = value.requestId;
   const digest = hash(JSON.stringify([scope.conversationId, scope.characterId, id, reason]));
-  return store.transaction(() => {
+  return store.transaction(scope, () => {
     authorizePrivate(store, scope);
     const previous = store.get<{
       event_id: string;
@@ -439,6 +457,7 @@ export function correctRelationshipEvent(
       character_id: string;
       request_hash: string;
     }>(
+      scope,
       'SELECT event_id,conversation_id,character_id,request_hash FROM relationship_corrections WHERE world_id=? AND request_id=?',
       scope.worldId,
       requestId,
@@ -452,6 +471,7 @@ export function correctRelationshipEvent(
         'IDEMPOTENCY_CONFLICT',
       );
       const receipt = store.get<{ reason: string; recorded_at: number }>(
+        scope,
         `SELECT reason,recorded_at FROM relationship_corrections WHERE ${where} AND event_id=?`,
         ...params(scope),
         id,
@@ -465,10 +485,11 @@ export function correctRelationshipEvent(
         duplicate: true,
       };
     }
-    const event = store.get<EventRow>(`${eventQuery} AND e.id=?`, ...params(scope), id);
+    const event = store.get<EventRow>(scope, `${eventQuery} AND e.id=?`, ...params(scope), id);
     ensure(event, 'NOT_FOUND');
     ensure(event.reason === null, 'RELATIONSHIP_REVISION_CONFLICT');
     store.run(
+      scope,
       'INSERT INTO relationship_corrections VALUES (?,?,?,?,?,?,?,?)',
       ...params(scope),
       id,
@@ -484,6 +505,7 @@ export function correctRelationshipEvent(
 export function resetRelationshipState(store: Store, worldId: string, characterId: string) {
   // Daily budgets deliberately survive the test reset; they contain no dialogue or relationship evidence.
   store.run(
+    { worldId },
     `INSERT INTO relationship_states VALUES (?,?,1,0,0,0,'[]') ON CONFLICT(world_id,character_id)
     DO UPDATE SET revision=revision+1,trust_delta=0,familiarity_delta=0,positive_days=0,kinds_json='[]'`,
     worldId,

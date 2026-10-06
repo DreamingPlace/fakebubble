@@ -12,7 +12,7 @@ import type {
 } from '../../../packages/contracts/profile.ts';
 import { associationBaseline } from '../../../packages/domain/association.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { BusinessStore as Store } from '../platform/store-contract.ts';
+import type { UserStore as Store } from '../platform/store-boundary.ts';
 
 function exact(value: unknown, fields: string[]): asserts value is Record<string, unknown> {
   ensure(
@@ -76,6 +76,7 @@ function selections(value: unknown): AssociationSelection[] {
 /** Internal accessors: callers must resolve the authenticated owner or authorize the job's scope first. */
 export function playerProfile(store: Store, worldId: string): PlayerProfileState | null {
   const row = store.get<{ revision: number; profile_json: string; updated_at: number }>(
+    { worldId },
     'SELECT * FROM player_profile_versions WHERE world_id=? ORDER BY revision DESC LIMIT 1',
     worldId,
   );
@@ -83,6 +84,7 @@ export function playerProfile(store: Store, worldId: string): PlayerProfileState
 }
 export function characterAssociation(store: Store, worldId: string, characterId: string): CharacterAssociation | null {
   const row = store.get<{ association_json: string }>(
+    { worldId },
     'SELECT association_json FROM character_association_versions WHERE world_id=? AND character_id=? ORDER BY revision DESC LIMIT 1',
     worldId,
     characterId,
@@ -99,6 +101,7 @@ export function initializeAssociation(
   validateAssociation(association);
   const current = characterAssociation(store, worldId, characterId);
   const row = store.get<{ relationship: RelationshipPreset }>(
+    { worldId },
     'SELECT relationship FROM world_characters WHERE world_id=? AND character_id=?',
     worldId,
     characterId,
@@ -110,6 +113,7 @@ export function initializeAssociation(
     ...associationBaseline(row.relationship, association),
   };
   store.run(
+    { worldId },
     'INSERT INTO character_association_versions VALUES (?,?,?,?,?)',
     worldId,
     characterId,
@@ -127,7 +131,7 @@ export function createPlayerProfile(
   now: number,
 ) {
   const ids = store
-    .all<{ character_id: string }>('SELECT character_id FROM world_characters WHERE world_id=?', worldId)
+    .all<{ character_id: string }>({ worldId }, 'SELECT character_id FROM world_characters WHERE world_id=?', worldId)
     .map((row) => row.character_id);
   ensure(
     profile.sharedCharacterIds.every((id) => ids.includes(id)),
@@ -140,7 +144,14 @@ export function createPlayerProfile(
   );
   for (const item of associations) initializeAssociation(store, worldId, item.characterId, item.association, now);
   const revision = (playerProfile(store, worldId)?.revision ?? 0) + 1;
-  store.run('INSERT INTO player_profile_versions VALUES (?,?,?,?)', worldId, revision, JSON.stringify(profile), now);
+  store.run(
+    { worldId },
+    'INSERT INTO player_profile_versions VALUES (?,?,?,?)',
+    worldId,
+    revision,
+    JSON.stringify(profile),
+    now,
+  );
   return revision;
 }
 export function savePlayerProfile(
@@ -158,9 +169,13 @@ export function savePlayerProfile(
   const hash = createHash('sha256')
     .update(JSON.stringify([value.expectedRevision, profile, associations]))
     .digest('hex');
-  return store.transaction(() => {
-    ensure(store.get('SELECT 1 FROM worlds WHERE id=? AND owner_id=?', context.worldId, context.playerId), 'FORBIDDEN');
+  return store.transaction(context, () => {
+    ensure(
+      store.get(context, 'SELECT 1 FROM worlds WHERE id=? AND owner_id=?', context.worldId, context.playerId),
+      'FORBIDDEN',
+    );
     const previous = store.get<{ request_hash: string; revision: number; updated_at: number }>(
+      context,
       `SELECT r.request_hash,r.revision,v.updated_at FROM player_profile_requests r JOIN player_profile_versions v
        ON v.world_id=r.world_id AND v.revision=r.revision WHERE r.world_id=? AND r.request_id=?`,
       context.worldId,
@@ -176,6 +191,7 @@ export function savePlayerProfile(
     );
     const revision = createPlayerProfile(store, context.worldId, profile, associations, now);
     store.run(
+      context,
       'INSERT INTO player_profile_requests VALUES (?,?,?,?)',
       context.worldId,
       value.requestId as string,
@@ -191,6 +207,7 @@ export function playerContextKey(store: Store, scope: CharacterScope): string {
 }
 export function playerIntroduction(store: Store, scope: CharacterScope): PlayerIntroductionContext | undefined {
   const conversation = store.get<{ kind: string }>(
+    scope,
     `SELECT c.kind FROM conversations c JOIN participants p
     ON p.world_id=c.world_id AND p.conversation_id=c.id WHERE c.world_id=? AND c.id=? AND p.character_id=?`,
     scope.worldId,

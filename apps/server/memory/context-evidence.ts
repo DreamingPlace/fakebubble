@@ -1,6 +1,6 @@
 import type { CharacterScope, ContextEvidence } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { BusinessStore as Store } from '../platform/store-contract.ts';
+import type { UserStore as Store } from '../platform/store-boundary.ts';
 
 const where = 'world_id=? AND conversation_id=? AND character_id=?';
 const params = (scope: CharacterScope) => [scope.worldId, scope.conversationId, scope.characterId] as const;
@@ -33,6 +33,7 @@ export function freezeContextEvidence(
   candidates: ContextEvidence[],
 ): ContextEvidence[] {
   const existing = store.get<{ evidence_json: string }>(
+    scope,
     `SELECT evidence_json FROM job_evidence_snapshots WHERE ${where} AND job_id=?`,
     ...params(scope),
     jobId,
@@ -45,6 +46,7 @@ export function freezeContextEvidence(
     const table = evidence.kind === 'observed_moment_message' ? 'moment_threads' : 'group_conversations';
     ensure(
       store.get(
+        scope,
         `SELECT 1 FROM ${table} WHERE world_id=? AND conversation_id=?`,
         scope.worldId,
         source.sourceConversationId,
@@ -53,6 +55,7 @@ export function freezeContextEvidence(
     );
     ensure(
       store.get(
+        scope,
         `SELECT 1 FROM group_message_knowledge WHERE world_id=? AND conversation_id=? AND character_id=? AND message_id=?`,
         scope.worldId,
         source.sourceConversationId,
@@ -62,12 +65,19 @@ export function freezeContextEvidence(
       'INVALID_SOURCE_EVIDENCE',
     );
   }
-  store.run('INSERT INTO job_evidence_snapshots VALUES (?,?,?,?,?)', ...params(scope), jobId, JSON.stringify(selected));
+  store.run(
+    scope,
+    'INSERT INTO job_evidence_snapshots VALUES (?,?,?,?,?)',
+    ...params(scope),
+    jobId,
+    JSON.stringify(selected),
+  );
   return selected;
 }
 export function validateEpisodeSources(store: Store, scope: CharacterScope, jobId: string, ids: string[]) {
   if (ids.length === 0) return;
   const snapshot = store.get<{ evidence_json: string }>(
+    scope,
     `SELECT evidence_json FROM job_evidence_snapshots WHERE ${where} AND job_id=?`,
     ...params(scope),
     jobId,
@@ -83,6 +93,7 @@ export function recordEpisodeSources(store: Store, scope: CharacterScope, jobId:
   validateEpisodeSources(store, scope, jobId, ids);
   if (!ids.length) return;
   store.run(
+    scope,
     'INSERT INTO memory_episode_sources VALUES (?,?,?,?,?,?)',
     ...params(scope),
     topic,
@@ -92,6 +103,7 @@ export function recordEpisodeSources(store: Store, scope: CharacterScope, jobId:
 }
 export function episodeSources(store: Store, scope: CharacterScope, topic: string, jobId: string): ContextEvidence[] {
   const row = store.get<{ evidence_ids_json: string; evidence_json: string }>(
+    scope,
     `SELECT s.evidence_ids_json,j.evidence_json FROM memory_episode_sources s
     JOIN job_evidence_snapshots j ON j.job_id=s.job_id AND j.world_id=s.world_id AND j.conversation_id=s.conversation_id AND j.character_id=s.character_id
     WHERE s.world_id=? AND s.conversation_id=? AND s.character_id=? AND s.topic_key=? AND s.job_id=?`,
