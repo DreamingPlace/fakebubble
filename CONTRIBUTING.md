@@ -2,7 +2,9 @@
 
 ## Setup and checks
 
-Requires Node 24.19+ (24.x) and pnpm 11.19.0.
+Requires Node 24.19+ (24.x) and pnpm 11.19.0. The Node range is enforced: `engineStrict: true` in
+`pnpm-workspace.yaml` makes `pnpm install` fail on any Node version outside `engines` in `package.json` (for example Node 22,
+on which many tests fail). Switch to Node 24.19+ instead of working around it.
 
 ```sh
 pnpm install --frozen-lockfile
