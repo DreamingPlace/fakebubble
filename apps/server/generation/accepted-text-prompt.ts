@@ -21,11 +21,22 @@ const {
   momentPostTask: MOMENT_POST_TASK,
 } = PROMPTS_V7;
 
+// The app accepts text only from players; the draft and review prompts both state this (responseConstraints.playerInputKinds).
+const PLAYER_INPUT_KINDS = ['text'] as const;
+const PLAYER_CHANNEL_RULES = PROMPTS_V7.playerChannelRules;
+
 export const TEXT_SYSTEM_PROMPT =
-  TEXT_CONTENT_RULES + PROMPTS_V7.draftSystemBody + CHAT_PRESENTATION_TASK + TIME_CONTEXT_TASK;
+  TEXT_CONTENT_RULES +
+  '\n' +
+  PLAYER_CHANNEL_RULES +
+  PROMPTS_V7.draftSystemBody +
+  CHAT_PRESENTATION_TASK +
+  TIME_CONTEXT_TASK;
 
 export const TEXT_REVIEW_PROMPT =
   TEXT_CONTENT_RULES +
+  '\n' +
+  PLAYER_CHANNEL_RULES +
   PROMPTS_V7.reviewSystemBody +
   CHAT_PRESENTATION_TASK +
   PROMPTS_V7.reviewFinalCheck +
@@ -51,7 +62,15 @@ function promptTimestamp(at: number, now: number, timeZone: string) {
 
 export const textPromptHash = () =>
   createHash('sha256')
-    .update(JSON.stringify([TEXT_SYSTEM_PROMPT, TEXT_REVIEW_PROMPT, MOMENT_POST_TASK, protocolFingerprint()]))
+    .update(
+      JSON.stringify([
+        TEXT_SYSTEM_PROMPT,
+        TEXT_REVIEW_PROMPT,
+        MOMENT_POST_TASK,
+        PLAYER_INPUT_KINDS,
+        protocolFingerprint(),
+      ]),
+    )
     .digest('hex');
 export const textPolicyHash = (models: { draft: string; review: string } = DEFAULT_TEXT_MODELS) =>
   createHash('sha256')
@@ -194,6 +213,7 @@ export function promptMessages(request: TextGenerationRequest) {
   }
   const content = JSON.stringify({
     responseConstraints: {
+      playerInputKinds: PLAYER_INPUT_KINDS,
       expressionEnum: EXPRESSIONS,
       deliveryMode: request.deliveryMode ?? 'text',
       interactionKind:

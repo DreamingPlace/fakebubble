@@ -4,13 +4,14 @@ import test from 'node:test';
 import { protocolFingerprint } from '../../../apps/server/generation/accepted-text-protocol.ts';
 import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server/generation/text-generation-policy.ts';
 
-// Values captured on main (66e2c6b) before the experimental-v10 protocol was removed. Stored preview and
-// publication approvals embed this hash, so it must stay byte-identical.
-const POLICY_HASH = '58ba3f9912037b6b3d6e3c2c8555ff4e951ada2df840ca6490ee54fac850b7b8';
-const PROMPT_HASH = '8a49da0d49aa53b16d42ed216005569412a31761003fb26c5c35df2e42c9ce9e';
+// Stored preview and publication approvals embed these hashes. Captured on main (66e2c6b) before the
+// experimental-v10 protocol was removed: policy 58ba3f99…, prompt 8a49da0d…. Part 6a step 4 added the text-only
+// player-channel rule on purpose, which changed both; the protocol fingerprint is unchanged.
+const POLICY_HASH = 'ddbd93155c9dded0483dc09f6295efef8dc484fc486062b9a1feadedd8946291';
+const PROMPT_HASH = '687b0960997ffd8a7adfcbd3339e08041fc8579332e95740a25ce666bf8dcdb2';
 const FINGERPRINT_DIGEST = '6fa114401ba3d72474893e83cf449c8edb9f5ea84d8ffda9fd223e2b18067418';
 
-test('accepted-v7 policy hash, prompt hash and protocol fingerprint are unchanged by removing v10', () => {
+test('accepted-v7 policy hash, prompt hash and protocol fingerprint are pinned', () => {
   const policy = createTextGenerationPolicy();
   assert.equal(textPolicyHash(), POLICY_HASH);
   assert.equal(policy.textProtocol, 'accepted-v7');

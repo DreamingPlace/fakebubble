@@ -55,6 +55,14 @@ pnpm web:cloudflare:package "$PWD/runtime/cloud-package"
 
 默认 `PUBLIC_ENABLED`、`EXTERNAL_CALLS`、`OPERATOR_ENABLED` 关闭；`workers_dev`、预览域名关闭，`routes` 为空。部署不是安装脚本的副作用。本仓库不附带一键开启付费调用的命令。
 
+### 提示词文件与缓存友好顺序（Part 6a）
+
+accepted-v7 的提示词正文在 `prompts/v7/*.md`（每块一个文件）。Worker 没有文件系统，所以 `scripts/build-prompts.ts`（`pnpm prompts:build`）把它们生成进提交的 `apps/server/generation/prompts.generated.ts`；`pnpm prompts:check` 和一个单元测试会在生成物过期时失败。修改提示词时先改 `.md`，再运行 `pnpm prompts:build`。
+
+DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一角色多轮之间不变的字段放在前面，每轮都变的字段（`messages`、`currentTime` 等）放在最后；审核调用的用户消息同理，`draftPresentation*` 在最末。内容与取值不变，只改键顺序。
+
+**提示词哈希变化，需要重跑角色预览。** 第 4 步新增“玩家只能发文字”规则（`prompts/v7/player-channel-rules.md`，同时进入起草与审核提示词，并在 `responseConstraints.playerInputKinds` 声明），所以策略哈希与提示词哈希都变了（`web-text-policy.test.ts` 记录了新旧值）。哈希包含在预览批准与发布批准里：升级前批准的角色预览在发布前必须重新运行并重新批准。第 3 步只改变发送给供应商的请求字节（`wireRequestHash`），不改变这两个哈希（哈希覆盖系统提示词与协议指纹，不含用户消息的字段顺序）。
+
 ## 私有运维工具
 
 `scripts/web-cloudflare-operator.ts` 需要显式 `CLOUDFLARE_ACCOUNT_ID`，以及指向已安装 Wrangler 模块的绝对路径 `FAKE_WEB_WRANGLER_MODULE`。它只使用绑定到 `fakebubble-business` / `fakebubble-budget` 的认证 RPC。部署时若改服务名，必须同步审查此工具。

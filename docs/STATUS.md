@@ -53,3 +53,10 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - `114_stage_metrics.sql` (stage timings, retries, fallback; 429 bookkeeping; `web_publication_items.media_id` nullable). It is its own migration step: version 114 on the local runner (`migrateWebProviderMetrics`, `user_version=114`) and on the Cloudflare runner (inline and R2); the 113 step is byte-for-byte as on main (hash test). The Cloudflare runner now applies missing trailing steps, so an authority already at 113 upgrades to 114. Every `schema === 113` check became `>= 113`.
 - `pnpm check`: **721 tests, 721 passed, 0 failed, 0 skipped** (691 + 30 new), about 7m45s. 30-player load: 15 voice, 15 text fallback (all wait fallbacks), 0 wait-discarded audio, 0 429-discarded audio.
 - Four-Worker package: **216** files (was 213: `config/web-concurrency.ts`, `admission/web-stage-metrics.ts` and the 114 SQL).
+
+## Part 6a (prompts as files, cache-friendly order, text-only rule)
+
+- Step 1: byte-for-byte snapshots of `promptMessages()` and `reviewPromptMessages()` for six fixed requests (`tests/web/fixtures/prompt-snapshots/`, regenerate with `UPDATE_PROMPT_SNAPSHOTS=1`).
+- Step 2: every prompt block lives in `prompts/v7/*.md`; `scripts/build-prompts.ts` generates `apps/server/generation/prompts.generated.ts` (`pnpm prompts:build`, `pnpm prompts:check`, part of `pnpm check`). Byte-identical: the snapshots and the policy/prompt hashes did not change.
+- Step 3: the user-message JSON is ordered stable-first, per-turn fields last. **Existing hashes are unchanged** (they cover system prompts and the protocol fingerprint, not user-message layout), but the wire request bytes change.
+- Step 4: text-only player input rule restored from the removed v10 (`player-channel-rules.md`, `responseConstraints.playerInputKinds`). **This changes the policy hash and the prompt hash**: character previews approved before this change must be re-run and re-approved before publishing (see `docs/DEPLOYMENT.md`).
