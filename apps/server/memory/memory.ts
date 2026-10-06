@@ -11,6 +11,7 @@ import { DIALOGUE, RECALL, topicKey } from '../../../packages/domain/dialogue.ts
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { UserStore as Store } from '../platform/store-boundary.ts';
 import { episodeSources, recordEpisodeSources, validateEpisodeSources } from './context-evidence.ts';
+import { semanticCosines, semanticRelevance } from './memory-embeddings.ts';
 
 const where = 'world_id=? AND conversation_id=? AND character_id=?';
 const params = (scope: CharacterScope) => [scope.worldId, scope.conversationId, scope.characterId] as const;
@@ -257,15 +258,19 @@ export function recordDialogueMemories(
   recordPlayerFacts(store, scope, candidate, now);
 }
 
-/** Expiry removes short topics from default recall, not from a relevant explicit search. */
+/**
+ * Expiry removes short topics from default recall, not from a relevant explicit search. relevance = max(lexical,
+ * semantic): lexical is the shared-words score below normalized by RECALL.relevanceSaturation; semantic is the cosine of
+ * the query embedding with the topic's vector, rescaled above RECALL_SEMANTIC.tau. The query embedding (if any) was
+ * produced before the request was frozen; without it recall is exactly the lexical one.
+ */
 export function recallMemories(
   store: Store,
   scope: CharacterScope,
   now: number,
   query = '',
   limit = 12,
-  /** The query embedding (see generation/web-v7-request.ts); ranking uses it from the next step. */
-  _semantic?: { model: string; vector: Float32Array },
+  semantic?: { model: string; vector: Float32Array },
 ): TopicMemory[] {
   ensure(Number.isInteger(limit) && limit >= 1 && limit <= 12, 'INVALID_MEMORY_LIMIT');
   const words = [
@@ -288,22 +293,34 @@ export function recallMemories(
         )
         .join('+')
     : '0';
+  // Semantic relevance per topic key, from this scope's ready vectors only (at most the 500 most recently seen topics).
+  const related = new Map<string, number>();
+  if (semantic)
+    for (const [key, cosine] of semanticCosines(store, scope, semantic)) {
+      const relevance = semanticRelevance(cosine);
+      if (relevance > 0) related.set(key, relevance);
+    }
+  const relatedKeys = [...related.keys()];
   // Rank inside the full authorized scope before limiting; a newer unrelated topic cannot hide an older match.
   const topics = store.all<TopicRow>(
     scope,
     `WITH ranked AS (SELECT t.*,c.id,(${score}) relevance FROM memory_topics t
     JOIN memory_catalog c ON c.world_id=t.world_id AND c.conversation_id=t.conversation_id AND c.character_id=t.character_id AND c.topic_key=t.topic_key
     WHERE t.world_id=? AND t.conversation_id=? AND t.character_id=?) SELECT * FROM ranked
-    WHERE tier='long' OR active_until>? OR relevance>0`,
+    WHERE tier='long' OR active_until>? OR relevance>0${
+      relatedKeys.length ? ` OR topic_key IN (${relatedKeys.map(() => '?').join(',')})` : ''
+    }`,
     ...words.flatMap((word) => [word, word, word]),
     ...params(scope),
     now,
+    ...relatedKeys,
   );
   const ranked = topics
     .map((topic) => {
       const ageHours = Math.max(0, now - topic.last_seen) / 3_600_000;
+      const lexical = Math.min(1, (topic.relevance ?? 0) / RECALL.relevanceSaturation);
       const score =
-        RECALL.weightRelevance * Math.min(1, (topic.relevance ?? 0) / RECALL.relevanceSaturation) +
+        RECALL.weightRelevance * Math.max(lexical, related.get(topic.topic_key) ?? 0) +
         RECALL.weightImportance * ((topic.importance ?? DIALOGUE.defaultImportance) / 10) +
         RECALL.weightRecency * Math.exp(-ageHours / RECALL.recencyHours);
       return { topic, score };
