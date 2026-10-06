@@ -8,10 +8,23 @@ export const DIALOGUE = Object.freeze({
   continuationMs: 60_000,
   shortMemoryMs: 48 * 60 * 60_000,
   promotionMentions: 2,
+  // A topic is long-term after this many player mentions OR when its importance reaches the promotion threshold.
+  promotionImportance: 7,
   // A topic without a review importance (older candidates) is recorded as ordinary small talk.
   defaultImportance: 3,
-  recallStep: 0.01,
-  maxRecallBonus: 0.03,
+});
+/**
+ * Recall ranking: score = weightRelevance*relevance + weightImportance*importance/10 + weightRecency*recency.
+ * relevance is the lexical score (4 per query word in the topic key, 1 per word in an episode summary, 2 per word in the
+ * newest correction) scaled to 0–1 by relevanceSaturation (two strong matches already count as fully relevant);
+ * recency = exp(-ageHours / recencyHours).
+ */
+export const RECALL = Object.freeze({
+  weightRelevance: 0.5,
+  weightImportance: 0.3,
+  weightRecency: 0.2,
+  recencyHours: 72,
+  relevanceSaturation: 8,
 });
 function object(value: unknown): asserts value is Record<string, unknown> {
   ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_REPLY_SCHEMA');

@@ -7,7 +7,7 @@ import type {
   ShortTermTurn,
   TopicMemory,
 } from '../../../packages/contracts/index.ts';
-import { DIALOGUE, topicKey } from '../../../packages/domain/dialogue.ts';
+import { DIALOGUE, RECALL, topicKey } from '../../../packages/domain/dialogue.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { UserStore as Store } from '../platform/store-boundary.ts';
 import { episodeSources, recordEpisodeSources, validateEpisodeSources } from './context-evidence.ts';
@@ -20,7 +20,8 @@ interface TopicRow {
   tier: 'short' | 'long';
   player_mentions: number;
   last_seen: number;
-  importance: number;
+  importance?: number;
+  relevance?: number;
 }
 interface EpisodeRow {
   row_seq: number;
@@ -227,12 +228,15 @@ export function recordDialogueMemories(
       ...params(scope),
       topic.key,
     )!.n;
+    // Promotion to long-term: enough player mentions OR an important topic (importance only exists from schema 115).
     store.run(
       scope,
-      `UPDATE memory_topics SET player_mentions=?,tier=CASE WHEN ?>=? THEN 'long' ELSE tier END WHERE ${where} AND topic_key=?`,
+      `UPDATE memory_topics SET player_mentions=?,tier=CASE WHEN ?>=?${importanceColumn ? ' OR importance>=?' : ''} THEN 'long' ELSE tier END
+      WHERE ${where} AND topic_key=?`,
       count,
       count,
       DIALOGUE.promotionMentions,
+      ...(importanceColumn ? [DIALOGUE.promotionImportance] : []),
       ...params(scope),
       topic.key,
     );
@@ -288,28 +292,39 @@ export function recallMemories(
     `WITH ranked AS (SELECT t.*,c.id,(${score}) relevance FROM memory_topics t
     JOIN memory_catalog c ON c.world_id=t.world_id AND c.conversation_id=t.conversation_id AND c.character_id=t.character_id AND c.topic_key=t.topic_key
     WHERE t.world_id=? AND t.conversation_id=? AND t.character_id=?) SELECT * FROM ranked
-    WHERE tier='long' OR active_until>? OR relevance>0 ORDER BY relevance DESC,last_seen DESC,topic_key LIMIT ?`,
+    WHERE tier='long' OR active_until>? OR relevance>0`,
     ...words.flatMap((word) => [word, word, word]),
     ...params(scope),
     now,
-    limit,
   );
+  const ranked = topics
+    .map((topic) => {
+      const ageHours = Math.max(0, now - topic.last_seen) / 3_600_000;
+      const score =
+        RECALL.weightRelevance * Math.min(1, (topic.relevance ?? 0) / RECALL.relevanceSaturation) +
+        RECALL.weightImportance * ((topic.importance ?? DIALOGUE.defaultImportance) / 10) +
+        RECALL.weightRecency * Math.exp(-ageHours / RECALL.recencyHours);
+      return { topic, score };
+    })
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.topic.last_seen - a.topic.last_seen ||
+        (a.topic.topic_key < b.topic.topic_key ? -1 : a.topic.topic_key > b.topic.topic_key ? 1 : 0),
+    )
+    .slice(0, limit);
   const episodeScore = words.length
     ? words.map(() => '(CASE WHEN instr(lower(summary),?)>0 THEN 1 ELSE 0 END)').join('+')
     : '0';
-  return topics.map((topic) => ({
+  return ranked.map(({ topic, score }) => ({
     id: topic.id,
     key: topic.topic_key,
     tier: topic.tier,
     playerMentions: topic.player_mentions,
     importance: topic.importance ?? DIALOGUE.defaultImportance,
     lastSeenAt: topic.last_seen,
-    recallWeight:
-      1 +
-      Math.round(
-        Math.min(DIALOGUE.maxRecallBonus, Math.max(0, topic.player_mentions - 1) * DIALOGUE.recallStep) * 100,
-      ) /
-        100,
+    // A proactive pick weights each memory by the same score that ranked it.
+    recallWeight: 1 + Math.round(score * 100) / 100,
     episodes: store
       .all<EpisodeRow>(
         scope,
