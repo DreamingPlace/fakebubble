@@ -11,6 +11,7 @@
       "!apps/player-web/dist",
       "!node_modules",
       "!work",
+      "!apps/server/generation/prompts.generated.ts",
       "!tests/web/fixtures/prompt-snapshots"
     ]
   },

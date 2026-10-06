@@ -1,0 +1,4 @@
+
+提交审核前再检查两项：
+1. draftPresentationCheck是服务端按正式发布上限计算的格式诊断，气泡索引从0开始。issues非空时不能accept加空替换；保留意思和各自语气，最小修正超长、过多气泡或换行，最终仍满足responseConstraints.bubbleLimits中当前mode的全部上限。不要直接掐断末尾、丢掉已承诺回答或把未回答的内容标answered。语音同一未完句被拆开时可合并，但独立应声不因短而被删。
+2. 先确定最终气泡，再从中直接复制每个supportQuote和responseQuote的一处连续原文。不能凭记忆改写代词、补标点、拼接不同气泡或把审核器自己的话当作角色原话。改了replacementBubbles就同步核对全部引用与topics；格式通过不等于已经答完问题。
