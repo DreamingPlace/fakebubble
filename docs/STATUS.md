@@ -52,4 +52,4 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - Voice falls back to the reviewed text as text bubbles (`deliveryFallback: "text"`) after `audioFallbackWaitMs` without a slot, or when 429 retries are exhausted; the unused voice reservation is settled at zero.
 - `114_stage_metrics.sql` (stage timings, retries, fallback; 429 bookkeeping; `web_publication_items.media_id` nullable). `user_version` stays 113: the existing workerd schema test pins 113 over the whole migration directory.
 - `pnpm check`: **716 tests, 716 passed, 0 failed, 0 skipped** (691 + 25 new), about 7m50s.
-- Four-Worker package: see the Part 4 hand-off (three new source modules and the 114 SQL are bundled).
+- Four-Worker package: **216** files (was 213: `config/web-concurrency.ts`, `admission/web-stage-metrics.ts` and the 114 SQL).
