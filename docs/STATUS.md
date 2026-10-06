@@ -23,7 +23,7 @@
 - `pnpm check`：三组类型检查通过；Web 单元、集成、E2E、负载及组件共 **688/688** 通过，无跳过。
 - 玩家构建 **53** 个文件；静态 HTTP 内容逐文件匹配构建哈希，私人路径拒绝访问；实际桌面浏览器加载无脚本错误。
 - 独立本地 HTTPS 四轮合成对话、私有音频、同 IP 限额与重启检查通过；数据生命周期重启专项通过。
-- 四 Worker 关闭状态包 **215** 个文件；测试加载真实 workerd 入口，网络边界使用离线替身。
+- 四 Worker 关闭状态包 **215** 个文件（Part 2b 之后为 212 个）；测试加载真实 workerd 入口，网络边界使用离线替身。
 - Gitleaks 扫描通过（两处明确标注的固定离线测试密码为已审核误报）；已配置秘密及常见编码比对零命中。
 
 这些结果仅证明该源码快照的上述离线范围，不代表真实手机或新生产部署验收完成。
@@ -37,3 +37,10 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - Total wall-clock time of `pnpm check`: **7m38s** (reported test duration 445 s).
 - Note: on Node 22.22.0 the same run gives 501 passed / 187 failed (`WEB_NATIVE_ALTER_COLUMN_REQUIRED`), so the
   required Node 24.19+ is a hard prerequisite, not a recommendation.
+
+## Part 2b (legacy removal)
+
+- Removed the abandoned experimental-v10 text protocol (accepted-v7 hashes unchanged and pinned by a test), the iOS-era `apps/server` modules reachable only from tests, and the `Engine`-based test helper. The native iOS app is discontinued.
+- `pnpm check`: **688 tests, 688 passed, 0 failed, 0 skipped** (688 baseline + 3 new policy-hash tests − 3 deleted legacy Engine scene tests). It also passes when run immediately after `pnpm web:player:build`.
+- Four-Worker package: **212** files (was 215).
+- No `.sql` migration or migration runner changed.
