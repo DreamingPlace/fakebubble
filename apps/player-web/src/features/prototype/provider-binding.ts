@@ -361,6 +361,19 @@ export class LiveBinding {
       row.append(bubble);
       return row;
     }
+    if (message.deliveryFallback === 'text') {
+      // Voice was busy or unavailable: the reply arrives as an ordinary text bubble. No error, retry or notice.
+      row.className = 'message-row incoming';
+      const avatar = document.createElement('span');
+      avatar.className = 'avatar message-avatar';
+      avatar.setAttribute('aria-hidden', 'true');
+      avatar.textContent = shell.mark(characterId);
+      const bubble = document.createElement('p');
+      bubble.className = 'text-bubble incoming-text';
+      bubble.textContent = message.text;
+      row.append(avatar, bubble);
+      return row;
+    }
     row.className = 'message-row incoming';
     const seconds = message.audio?.durationMs ? Math.max(1, Math.round(message.audio.durationMs / 1000)) : null;
     row.innerHTML = `<span class="avatar message-avatar" aria-hidden="true"></span>
