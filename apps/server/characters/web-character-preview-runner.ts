@@ -12,6 +12,7 @@ import type {
 } from '../../../packages/contracts/provider-calls.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { webConcurrency } from '../../../config/web-concurrency.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { DeepSeekTextGenerator } from '../generation/deepseek.ts';
 import { applyTextReview, parseTextDraft } from '../generation/accepted-text-protocol.ts';
@@ -129,7 +130,7 @@ export class WebCharacterPreviewRunner {
       if (
         webCharacterPreviewsRunning(this.store) >= 1 ||
         this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='text_running'")!.n >=
-          WEB_LIMITS.maxTextRunning
+          webConcurrency(this.store).maxTextRunning
       )
         return null;
       const next = this.store.get<{ id: string }>(

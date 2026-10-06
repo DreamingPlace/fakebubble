@@ -21,3 +21,22 @@ export function migrateWebProviderOffline(store: Store) {
     store.db.exec('PRAGMA user_version = 113');
   });
 }
+
+/** Node-only 113→114 migration (stage metrics and 429 bookkeeping); the Cloudflare runner applies 114 in its ordered list. */
+export function migrateWebProviderMetrics(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_provider_attempts'"),
+      'WEB_PROVIDER_METRICS_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/114_stage_metrics.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 114');
+  });
+}

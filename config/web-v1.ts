@@ -7,10 +7,14 @@ export const WEB_LIMITS = Object.freeze({
   maxPrincipalActive: 1,
   maxConversationActive: 1,
   maxPrincipalWaiting: 2,
-  maxGlobalReservedOperations: 128, // one ticket per nonterminal operation, including running stages
+  // One ticket per nonterminal operation, including running stages. For configured deployments the value is
+  // maxGlobalReservedOperations = maxTextRunning + maxAudioRunning + maxWaitingOperations (config/web-concurrency.ts);
+  // both defaults (20+4+104 and the library 4+4+120) give 128, which is what this constant keeps.
+  maxGlobalReservedOperations: 128,
   operationDeadlineMs: 300_000,
-  maxTextRunning: 4,
-  maxAudioRunning: 4,
+  // maxTextRunning / maxAudioRunning / audioFallbackWaitMs are deployment configuration: config/web-concurrency.ts.
+  // A provider rejects with HTTP 429 before running the request: retry the same stage after 2s, 4s, 8s, then give up.
+  rateLimitBackoffMs: Object.freeze([2_000, 4_000, 8_000]),
   queueWaitMs: 60_000,
   textLeaseMs: 90_000,
   audioLeaseMs: 120_000,

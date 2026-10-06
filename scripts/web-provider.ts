@@ -7,7 +7,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebStore } from '../apps/server/platform/store.ts';
 import { initProviderInstance, readLocalConfig } from '../apps/server/platform/web-local-config.ts';
-import { migrateWebProviderOffline } from '../apps/server/generation/web-provider-migration.ts';
+import {
+  migrateWebProviderMetrics,
+  migrateWebProviderOffline,
+} from '../apps/server/generation/web-provider-migration.ts';
 import {
   validateSelectedVoicePins,
   verifySelectedVoiceSetup,
@@ -60,11 +63,12 @@ export function openProviderStore(root: string) {
       dataLifecycleTest: true,
       inviteTest: true,
       providerRuntime: true,
+      concurrency: config.concurrency,
     }),
   };
 }
 
-/** 100→113 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→114 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -93,8 +97,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     store.migrateInviteIdentity();
     migrateWebProviderOffline(store);
     configureWebProvider(store, selected, now);
+    migrateWebProviderMetrics(store);
     return {
-      schema: 113,
+      schema: 114,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,

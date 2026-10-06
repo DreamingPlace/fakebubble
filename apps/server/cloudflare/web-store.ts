@@ -4,9 +4,10 @@ import type { BusinessStore, SQLInputValue } from '../platform/store-contract.ts
 import type { DurableSQLStorage, SQLMigration } from './store.ts';
 import { registerWebRuntime, type WebRuntimeStore } from '../platform/web-store-contract.ts';
 import type { PrivateMediaObjects } from './media-objects.ts';
+import { parseWebConcurrency, type WebConcurrency } from '../../../config/web-concurrency.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-const versions = [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 14 }, (_, i) => 100 + i)];
+const versions = [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 15 }, (_, i) => 100 + i)];
 
 /** A separate schema113 authority. No beta namespace, filesystem, implicit seed or paid default. */
 export class WebDurableStore implements BusinessStore, WebRuntimeStore {
@@ -18,6 +19,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
   readonly instanceId: string;
   readonly recoveryEpoch: string;
   readonly providerAudio?: PrivateMediaObjects;
+  readonly concurrency: WebConcurrency;
   private readonly storage: DurableSQLStorage;
   private closed = false;
   private readonly keys: { ipKey: Buffer; requestKey: Buffer } | null;
@@ -30,6 +32,8 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
       recoveryEpoch: string;
       keys?: { ipKey: Buffer; requestKey: Buffer };
       providerAudio?: PrivateMediaObjects;
+      /** Validated Worker vars; absent means the deployment default (20 text, 4 audio). */
+      concurrency?: WebConcurrency;
     },
   ) {
     ensure(
@@ -42,6 +46,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
       'WEB_CLOUD_MIGRATIONS_REQUIRED',
     );
     this.storage = storage;
+    this.concurrency = parseWebConcurrency(identity.concurrency);
     this.instanceId = identity.instanceId;
     this.recoveryEpoch = identity.recoveryEpoch;
     if (identity.providerAudio) this.providerAudio = identity.providerAudio;
@@ -115,7 +120,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
   }
   requireProviderRuntime() {
     ensure(
-      this.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113 &&
+      (this.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0) >= 113 &&
         !!this.get("SELECT 1 FROM sqlite_master WHERE name='web_provider_attempts'"),
       'WEB_PROVIDER_RUNTIME_NOT_AUTHORIZED',
     );

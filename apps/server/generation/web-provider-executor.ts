@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { webConcurrency } from '../../../config/web-concurrency.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import { requireWebRuntime, type WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
@@ -34,7 +35,7 @@ export class WebProviderExecutor {
   ) {
     requireWebRuntime(store, 'provider');
     ensure(
-      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113,
+      (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? 0) >= 113,
       'WEB_PROVIDER_RUNTIME_NOT_AUTHORIZED',
     );
     this.store = store;
@@ -75,6 +76,15 @@ export class WebProviderExecutor {
           'WEB_PROVIDER_NOT_CONFIGURED',
         );
       }
+    if (configured) {
+      const limits = webConcurrency(this.store);
+      for (const [provider, stage, phase, capacity] of [
+        ['deepseek', 'text', 'draft', limits.maxTextRunning],
+        ['deepseek', 'text', 'review', limits.maxTextRunning],
+        ['fish', 'audio', 'speech', limits.maxAudioRunning],
+      ] as const)
+        this.ledger.alignBudget({ provider, stage, phase, capacity });
+    }
     this.coordinator = this.queue.acquireCoordinator(owner);
   }
 
@@ -108,7 +118,8 @@ export class WebProviderExecutor {
     }
     try {
       this.lastError = null;
-      for (let i = 0; i < Math.max(WEB_LIMITS.maxTextRunning, WEB_LIMITS.maxAudioRunning); i++) this.pump();
+      const limits = webConcurrency(this.store);
+      for (let i = 0; i < Math.max(limits.maxTextRunning, limits.maxAudioRunning); i++) this.pump();
     } catch (error) {
       this.error(error);
       if (error instanceof DomainError && error.code === 'WEB_COORDINATOR_STALE') this.stop();

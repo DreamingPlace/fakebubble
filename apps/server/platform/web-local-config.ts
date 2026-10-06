@@ -5,6 +5,11 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { WebStore } from './store.ts';
+import {
+  parseWebConcurrency,
+  WEB_CONCURRENCY_DEPLOYMENT_DEFAULT,
+  type WebConcurrency,
+} from '../../../config/web-concurrency.ts';
 
 export interface WebLocalConfig {
   mode: 'synthetic-local' | 'provider-local';
@@ -18,6 +23,8 @@ export interface WebLocalConfig {
   requestKey: string;
   ipKey: string;
   cursorKey: string;
+  /** Stage concurrency and the voice-to-text fallback wait; validated on every read (invalid refuses to start). */
+  concurrency: WebConcurrency;
 }
 const configName = 'local-config.json';
 const certName = 'local-cert.pem';
@@ -84,6 +91,13 @@ function initInstance(root: string, mode: WebLocalConfig['mode']) {
     requestKey: randomBytes(32).toString('base64url'),
     ipKey: randomBytes(32).toString('base64url'),
     cursorKey: randomBytes(32).toString('base64url'),
+    concurrency: {
+      maxTextRunning: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.maxTextRunning,
+      maxAudioRunning: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.maxAudioRunning,
+      maxWaitingOperations: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.maxWaitingOperations,
+      maxGlobalReservedOperations: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.maxGlobalReservedOperations,
+      audioFallbackWaitMs: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.audioFallbackWaitMs,
+    },
   };
   const store = new WebStore(root, { create: true, instanceId });
   store.close();
@@ -126,6 +140,10 @@ export function readLocalConfig(root: string): WebLocalConfig {
   }
   ensure(parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed), 'WEB_LOCAL_CONFIG_INVALID');
   const config = parsed as WebLocalConfig;
+  // An absent block (an older instance) takes the deployment default; a present but invalid one refuses to start.
+  config.concurrency = parseWebConcurrency(
+    (parsed as { concurrency?: Parameters<typeof parseWebConcurrency>[0] }).concurrency,
+  );
   ensure(
     (config.mode === 'synthetic-local' || config.mode === 'provider-local') &&
       config.region === 'local-test' &&

@@ -1,4 +1,5 @@
 import { ensure } from '../../../packages/domain/errors.ts';
+import type { WebConcurrency } from '../../../config/web-concurrency.ts';
 import type { BusinessStore } from './store-contract.ts';
 import type { WebPrivateAudioFiles } from '../audio/web-private-audio-files.ts';
 import type { PrivateMediaObjects } from '../cloudflare/media-objects.ts';
@@ -7,6 +8,7 @@ import type { PrivateMediaObjects } from '../cloudflare/media-objects.ts';
 export interface WebRuntimeStore extends BusinessStore {
   readonly instanceId: string;
   readonly providerRuntime: boolean;
+  readonly concurrency?: WebConcurrency;
   readonly providerAudio?: PrivateMediaObjects;
   requireInviteTest(): void;
   requireProviderRuntime(): void;

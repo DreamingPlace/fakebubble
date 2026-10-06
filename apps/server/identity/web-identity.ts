@@ -196,7 +196,7 @@ export class WebIdentity {
       'WEB_IDENTITY_ORIGIN_INVALID',
     );
     ensure(
-      [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113].includes(
+      [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114].includes(
         store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       ),
       'WEB_IDENTITY_MIGRATION_REQUIRED',
@@ -448,7 +448,7 @@ export class WebIdentity {
     grantId: string;
   }) {
     ensure(
-      [112, 113].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) &&
+      [112, 113, 114].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) &&
         /^[A-Za-z0-9_.-]{1,128}$/.test(input.requestId) &&
         /^[a-f0-9]{64}$/.test(input.codeDigest),
       'WEB_INVITE_IDENTITY_SCHEMA_REQUIRED',
@@ -1250,7 +1250,7 @@ export class WebIdentity {
         now,
         session.id,
       );
-      if ([112, 113].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1))
+      if ([112, 113, 114].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1))
         this.store.run(
           `UPDATE web_invite_identity_receipts SET revoked_at=?
           WHERE new_session_id=? AND revoked_at IS NULL`,

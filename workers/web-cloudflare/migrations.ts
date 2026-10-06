@@ -13,6 +13,7 @@ import m110 from '../../apps/server/web-migrations/110_data_lifecycle.sql';
 import m111 from '../../apps/server/web-migrations/111_invite_core.sql';
 import m112 from '../../apps/server/web-migrations/112_invite_identity.sql';
 import m113 from '../../apps/server/web-migrations/113_provider_offline.sql';
+import m114 from '../../apps/server/web-migrations/114_stage_metrics.sql';
 import retention from './retention.sql';
 import { ensure } from '../../packages/domain/errors.ts';
 
@@ -34,18 +35,20 @@ const cloud110 = replaceOnce(m110, 'ALTER TABLE web_operations ALTER COLUMN inpu
 /** Only for a new, empty web authority. Never upgrade/adopt the old beta DO. */
 export const webMigrations = [
   ...base.slice(0, 24),
-  ...[cloud100, m101, m102, m103, m104, m105, m106, m107, cloud108, m109, cloud110, m111, m112, m113].map((sql, i) => ({
-    version: 100 + i,
-    sql:
-      i === 5
-        ? sql +
-          `
+  ...[cloud100, m101, m102, m103, m104, m105, m106, m107, cloud108, m109, cloud110, m111, m112, m113, m114].map(
+    (sql, i) => ({
+      version: 100 + i,
+      sql:
+        i === 5
+          ? sql +
+            `
       DROP TABLE web_external_attempts;
       ALTER TABLE web_external_attempts_next RENAME TO web_external_attempts;
       CREATE INDEX web_external_attempts_state ON web_external_attempts(dispatch_state,operation_id);
     `
-        : sql,
-  })),
+          : sql,
+    }),
+  ),
 ];
 
 // Separate EMPTY R2 authority. Keep Node113 and the inline workerd comparison fixture intact.
