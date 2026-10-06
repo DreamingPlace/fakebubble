@@ -10,7 +10,11 @@ import { PrivateMediaObjects, type PrivateBucket } from '../../apps/server/cloud
 import type { DurableSQLStorage } from '../../apps/server/cloudflare/store.ts';
 import type { AlarmStorage } from '../../apps/server/cloudflare/queue-alarm.ts';
 import { WebCloudBudgetClient, type WebBudgetStatusRPC } from '../../apps/server/cloudflare/web-budget-client.ts';
-import { WebCloudTextGenerator, webCloudSpeech } from '../../apps/server/cloudflare/web-generators.ts';
+import {
+  WebCloudTextGenerator,
+  webCloudEmbeddings,
+  webCloudSpeech,
+} from '../../apps/server/cloudflare/web-generators.ts';
 import { WebCloudSetup, type WebCloudMaterialPackage } from '../../apps/server/cloudflare/web-setup.ts';
 import { WebProviderRunner } from '../../apps/server/generation/web-provider-runner.ts';
 import {
@@ -23,6 +27,7 @@ import { WebProviderHTTP } from '../../apps/server/cloudflare/web-http.ts';
 import { trustedWebRequest } from '../../apps/server/cloudflare/web-edge-request.ts';
 import { webR2Migrations } from './migrations.ts';
 import { webConcurrencyFromEnv } from '../../config/web-concurrency.ts';
+import { embeddingsEnabled, webEmbedConfigFromEnv, type WebEmbedConfig } from '../../config/web-embeddings.ts';
 import type { WebBudgetPolicy } from '../../apps/server/budget/web-provider-budget-contract.ts';
 import { cloudAdminMailer, type AdminEmailBinding } from '../../apps/server/cloudflare/web-admin-mail.ts';
 
@@ -52,6 +57,10 @@ export interface WebBusinessEnvironment {
   MAX_AUDIO_RUNNING?: string;
   MAX_WAITING_OPERATIONS?: string;
   AUDIO_FALLBACK_WAIT_MS?: string;
+  /** Memory embeddings: off unless 'true' (the generation Worker's AI binding repeats the gate). */
+  EMBEDDINGS_ENABLED?: string;
+  MAX_EMBED_RUNNING?: string;
+  EMBED_QUERY_TIMEOUT_MS?: string;
   ADMIN_EMAIL_ENABLED?: string;
   ADMIN_EMAIL_FROM?: string;
   ADMIN_EMAIL?: AdminEmailBinding;
@@ -71,6 +80,8 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
   private readonly retention: WebCloudRetention;
   private readonly grantHashes: Record<'deepseek' | 'fish', string>;
   private readonly budgetPolicy: WebBudgetPolicy;
+  /** Validated at construction (invalid refuses to start); null while embeddings are disabled. */
+  private readonly embedConfig: WebEmbedConfig | null;
   private app?: WebProviderApplication;
   private services: Promise<{ execution: WebCloudExecutor; http: WebProviderHTTP }> | undefined;
   constructor(ctx: BusinessContext, env: WebBusinessEnvironment) {
@@ -80,6 +91,9 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     const policy = env.BUDGET_POLICY ?? 'test-cumulative';
     ensure(policy === 'test-cumulative' || policy === 'production-unlimited', 'WEB_CLOUD_BUDGET_POLICY_INVALID');
     this.budgetPolicy = policy;
+    this.embedConfig = embeddingsEnabled(env as unknown as Record<string, unknown>)
+      ? webEmbedConfigFromEnv(env as unknown as Record<string, unknown>)
+      : null;
     ensure(
       /^[a-f0-9]{64}$/.test(env.BUSINESS_OBJECT_ID) && ctx.id.toString() === env.BUSINESS_OBJECT_ID,
       'WEB_CLOUD_OBJECT_MISMATCH',
@@ -212,6 +226,9 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           new WebCloudTextGenerator(this.env.GENERATION),
           webCloudSpeech(this.env.GENERATION),
           new WebCloudBudgetClient(this.env.BUDGET),
+          this.embedConfig
+            ? { provider: webCloudEmbeddings(this.env.GENERATION), config: this.embedConfig }
+            : undefined,
         );
         await runner.whenReady();
         app.characterAdmin.enablePreviews(new WebCharacterPreviews(this.store, this.clock));

@@ -11,6 +11,7 @@ import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts'
 import { WebProviderRunner } from './web-provider-runner.ts';
 import { audioStartedExpr, fallbackRequested, metricsEnabled } from '../admission/web-stage-metrics.ts';
 import { WebProviderOffline } from './web-provider-offline.ts';
+import type { IndexBatch } from './web-embed-ledger.ts';
 
 /** Separate schema113 scheduler. No synthetic output, default budget or footer is installed. */
 export class WebProviderExecutor {
@@ -27,6 +28,10 @@ export class WebProviderExecutor {
   private readonly publishing = new Set<string>();
   private readonly falling = new Set<string>();
   private managed = false;
+  /** Indexing scans every scope, so an idle pass is not repeated for this long unless a publication committed. */
+  private indexDirty = true;
+  private indexScanAt = 0;
+  private indexPausedUntil = 0;
   private readonly activity: { hold(task: Promise<void>): void; settled(): Promise<void> } | undefined;
   lastError: string | null = null;
 
@@ -220,7 +225,10 @@ export class WebProviderExecutor {
   private publish(lease: WebCoordinatorLease, operationId: string) {
     if (this.publishing.has(operationId)) return;
     this.publishing.add(operationId);
-    const task = this.runner.publishAsync(lease, operationId).then(() => {});
+    // The publication committed: its memory topics may now need an embedding (never done inside that transaction).
+    const task = this.runner.publishAsync(lease, operationId).then(() => {
+      this.indexDirty = true;
+    });
     this.track(task, () => this.publishing.delete(operationId));
   }
 
@@ -236,11 +244,52 @@ export class WebProviderExecutor {
     const task = (async () => {
       if (decide) await this.runner.beginTextFallback(operationId);
       await this.runner.publishTextFallback(lease, operationId);
+      this.indexDirty = true;
     })();
     this.track(
       task.then(() => {}),
       () => this.falling.delete(operationId),
     );
+  }
+
+  /**
+   * Memory indexing, claimed after publications have committed. The claim (money held, call recorded) is one short
+   * transaction; the provider call runs outside it, as a tracked task under the stage coordinator like text and audio.
+   * A failed or UNKNOWN call never blocks anything else: topics simply stay lexical.
+   */
+  private embedPass() {
+    const embed = this.runner.embedding;
+    if (!embed) return;
+    try {
+      embed.ledger.recover();
+      if (!embed.ready()) return;
+      const now = this.clock.now();
+      if (now < this.indexPausedUntil || (!this.indexDirty && now < this.indexScanAt)) return;
+      for (let i = 0; i < embed.config.maxEmbedRunning; i++) {
+        const batch = embed.ledger.claimIndexBatch(embed.config.maxEmbedRunning);
+        if (batch === 'busy') return;
+        if (batch === null) {
+          this.indexDirty = false;
+          this.indexScanAt = now + 5_000;
+          return;
+        }
+        this.index(batch);
+      }
+    } catch (error) {
+      // An exhausted allowance or any claim failure pauses indexing; replies and everything else are unaffected.
+      this.indexPausedUntil = this.clock.now() + 60_000;
+      this.error(error);
+    }
+  }
+
+  private index(batch: IndexBatch) {
+    const embed = this.runner.embedding!;
+    const controller = new AbortController();
+    this.controllers.add(controller);
+    const task = embed.index(batch, controller.signal).then(() => {
+      this.indexDirty = true;
+    });
+    this.track(task, () => this.controllers.delete(controller));
   }
 
   /** Bounded pass; all provider calls are scheduled outside SQLite transactions. */
@@ -309,6 +358,7 @@ export class WebProviderExecutor {
         this.error(error);
       }
     }
+    this.embedPass();
     const text = this.queue.claimText(lease, 'provider-text');
     if (text) this.schedule(text);
     const audio = this.queue.claimAudio(lease, 'provider-audio');

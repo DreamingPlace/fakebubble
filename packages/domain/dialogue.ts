@@ -26,6 +26,12 @@ export const RECALL = Object.freeze({
   recencyHours: 72,
   relevanceSaturation: 8,
 });
+/**
+ * Semantic recall (embeddings), kept beside RECALL rather than inside it because the weights above are pinned as one
+ * exact object. relevance = max(lexical, semantic) with semantic = clamp((cosine - tau) / (1 - tau), 0, 1): a cosine at
+ * or below tau is "unrelated". Only the `topics` most recently seen topics of the scope are compared.
+ */
+export const RECALL_SEMANTIC = Object.freeze({ tau: 0.35, topics: 500 });
 function object(value: unknown): asserts value is Record<string, unknown> {
   ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_REPLY_SCHEMA');
 }

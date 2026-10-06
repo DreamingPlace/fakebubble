@@ -22,6 +22,9 @@ import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts'
 import { requireWebContent } from '../admission/web-retention.ts';
 import type { WebAttemptBudget } from '../budget/web-provider-budget-contract.ts';
 import type { ProviderAudioCache } from '../audio/web-provider-media.ts';
+import type { WebEmbedConfig } from '../../../config/web-embeddings.ts';
+import type { EmbeddingProvider } from './embedding-provider.ts';
+import { WebEmbedRunner } from './web-embed-runner.ts';
 
 type Phase = 'draft' | 'review';
 type Scope = {
@@ -81,13 +84,26 @@ export class WebProviderRunner {
   private readonly budget: WebAttemptBudget | undefined;
   private readonly recovery: Promise<void>;
   private recovered: boolean;
-  constructor(store: Store, clock: Clock, text: WebTextGenerator, fish: FakeFish, budget?: WebAttemptBudget) {
+  /** Memory embeddings (indexing and reply-time query embedding); absent unless the deployment enables them. */
+  readonly embedding: WebEmbedRunner | undefined;
+  constructor(
+    store: Store,
+    clock: Clock,
+    text: WebTextGenerator,
+    fish: FakeFish,
+    budget?: WebAttemptBudget,
+    embed?: { provider: EmbeddingProvider; config?: WebEmbedConfig },
+  ) {
     this.store = store;
     this.clock = clock;
     this.text = text;
     this.fish = fish;
     this.ledger = new WebProviderOffline(store, clock);
     this.budget = budget;
+    if (embed) {
+      this.embedding = new WebEmbedRunner(store, clock, embed.provider, embed.config);
+      this.embedding.ledger.ensureBudget();
+    }
     const recovery = budget?.recoverKnown(store);
     this.recovered = recovery === undefined;
     this.recovery = Promise.resolve(recovery).then(() => {

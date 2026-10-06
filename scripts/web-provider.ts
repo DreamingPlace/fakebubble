@@ -36,6 +36,8 @@ import {
   readLiveBudgetHistory,
 } from '../apps/server/budget/web-provider-live-budget.ts';
 import { renderProviderAssets } from '../apps/server/generation/web-provider-assets.ts';
+import { WorkersAiRestEmbeddings } from '../apps/server/generation/embedding-provider.ts';
+import { parseWebEmbedConfig } from '../config/web-embeddings.ts';
 
 export function readSelectedVoiceFiles(setupRoot: string, pinned: SelectedVoicePins) {
   validateSelectedVoicePins(pinned);
@@ -128,6 +130,11 @@ function voiceEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.e
   return selectedEnvironment(path, ['FISH_API_KEY', 'FISH_MODEL'], inherited);
 }
 
+/** Workers AI REST credentials for memory embeddings (.env.embed, same private-file rules as .env and .env.voice). */
+function embedEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return selectedEnvironment(path, ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'], inherited);
+}
+
 function selectedEnvironment(path: string, allowed: string[], inherited: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   let values: NodeJS.ProcessEnv = {};
   try {
@@ -152,7 +159,17 @@ export function liveTransports(envDir: string) {
   const voiceEnv = voiceEnvironment(join(envDir, '.env.voice'), {});
   const text = textConfiguration(textEnv);
   ensure(text.credentialConfigured && Boolean(voiceEnv.FISH_API_KEY?.trim()), 'WEB_PROVIDER_CREDENTIAL_MISSING');
+  // Embeddings are optional: without both Cloudflare values there is simply no semantic recall (lexical stays as is).
+  const embedEnv = embedEnvironment(join(envDir, '.env.embed'), {});
+  const embeddings =
+    embedEnv.CLOUDFLARE_ACCOUNT_ID && embedEnv.CLOUDFLARE_API_TOKEN
+      ? new WorkersAiRestEmbeddings({
+          accountId: embedEnv.CLOUDFLARE_ACCOUNT_ID,
+          apiToken: embedEnv.CLOUDFLARE_API_TOKEN,
+        })
+      : undefined;
   return {
+    embeddings,
     text: new DeepSeekTextGenerator({
       apiKey: textEnv.DEEPSEEK_API_KEY!,
       baseUrl: text.baseUrl,
@@ -339,7 +356,21 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       store,
       config,
       clock,
-      new WebProviderRunner(store, clock, live.text, fishTransport(live.fish), budget),
+      new WebProviderRunner(
+        store,
+        clock,
+        live.text,
+        fishTransport(live.fish),
+        budget,
+        live.embeddings
+          ? {
+              provider: live.embeddings,
+              config: parseWebEmbedConfig(
+                (JSON.parse(readFileSync(join(root, 'local-config.json'), 'utf8')) as { embedding?: object }).embedding,
+              ),
+            }
+          : undefined,
+      ),
       network,
       new WebCharacterPreviewRunner(store, clock, live.text, budget),
     );
