@@ -250,7 +250,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       (access.kind === 'guest' ||
         (access.kind === 'account' && access.active === 1) ||
         (access.kind === 'invite' &&
-          [111, 112, 113, 114, 115].includes(
+          [111, 112, 113, 114, 115, 116].includes(
             store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
           ) &&
           requireWebContent(store, { now: () => now }, operation.principal_id, scope.worldId))),

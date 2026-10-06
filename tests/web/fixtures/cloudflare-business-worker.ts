@@ -323,7 +323,8 @@ export class WebBusinessFixture {
           grants: this.store.get('SELECT count(*) n FROM web_invite_grants'),
           accounts: this.store.get('SELECT count(*) n FROM web_accounts'),
           operations: this.store.get('SELECT count(*) n FROM web_operations'),
-          budgets: this.store.all('SELECT * FROM web_provider_spending ORDER BY provider'),
+          // The embedding budget (provider 'cloudflare') has its own checks; these counts are the text/audio bills.
+          budgets: this.store.all("SELECT * FROM web_provider_spending WHERE provider<>'cloudflare' ORDER BY provider"),
           quota: this.store.all('SELECT used_total,reserved_total FROM web_ip_lifetime_quota'),
         };
       else return new Response('Not found', { status: 404 });

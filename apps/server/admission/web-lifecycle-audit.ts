@@ -22,6 +22,8 @@ const handled = new Set([
   'messages',
   'jobs',
   'memory_facts',
+  'memory_embeddings',
+  'web_embed_attempts',
   'memory_episode_sources',
   'memory_mentions',
   'memory_episodes',

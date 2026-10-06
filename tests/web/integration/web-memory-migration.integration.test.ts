@@ -151,9 +151,11 @@ test('Cloudflare runner: an existing authority at 114 upgrades to 115 through th
     assert.equal(result.before.length, 39, mode);
     assert.equal(result.before.at(-1)?.startsWith('114:'), true, mode);
     assert.deepEqual(result.after.slice(0, 39), result.before, `${mode}: applied steps are untouched`);
-    assert.equal(result.after.length, 40, mode);
-    assert.equal(result.after.at(-1)?.startsWith('115:'), true, mode);
-    assert.deepEqual(result.version, { user_version: 115 }, mode);
+    // Opening the authority applies every newer step in order: 115, then 116 (see web-embedding-migration).
+    assert.equal(result.after.length, 41, mode);
+    assert.equal(result.after.at(-2)?.startsWith('115:'), true, mode);
+    assert.equal(result.after.at(-1)?.startsWith('116:'), true, mode);
+    assert.deepEqual(result.version, { user_version: 116 }, mode);
     assert.deepEqual(result.review, { importance: true, facts: true, reviewChanged: true }, mode);
   }
 });

@@ -10,6 +10,7 @@ import { initProviderInstance, readLocalConfig } from '../apps/server/platform/w
 import {
   migrateWebProviderMetrics,
   migrateWebProviderMemory,
+  migrateWebProviderEmbeddings,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -69,7 +70,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→115 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→116 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -100,8 +101,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     configureWebProvider(store, selected, now);
     migrateWebProviderMetrics(store);
     migrateWebProviderMemory(store);
+    migrateWebProviderEmbeddings(store);
     return {
-      schema: 115,
+      schema: 116,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -223,6 +225,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate',
       'migrate-metrics',
       'migrate-memory',
+      'migrate-embeddings',
       'render-assets',
       'admin-grant',
       'serve',
@@ -292,6 +295,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderMemory(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 115, memory: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-embeddings') {
+    // An existing provider-* instance at schema 115 gains memory embeddings, their dispatch ledger and counters.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderEmbeddings(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 116, embeddings: true }) + '\n');
     } finally {
       store.close();
     }

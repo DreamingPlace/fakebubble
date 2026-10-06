@@ -8,6 +8,8 @@ type State = {
   retention: { state: string; db_cleared_at: number | null };
   messages: number;
   facts: number;
+  embeddings: number;
+  embedAttempts: number;
   outputs: number;
   attempts: { phase: string; state: string; outcome: string; charged_micros: number }[];
   operations: { status: string; quota_state: string }[];
@@ -38,6 +40,8 @@ const cleared = (state: State) => {
   assert.ok(state.retention.db_cleared_at);
   assert.equal(state.messages, 0);
   assert.equal(state.facts, 0);
+  assert.equal(state.embeddings, 0);
+  assert.equal(state.embedAttempts, 0);
   assert.equal(state.outputs, 0);
   assert.ok(state.objects.every((row) => row.erased && row.size === 0 && row.type === 'application/x-web-erased'));
 };
@@ -66,17 +70,31 @@ test('cloud retention erases guest SQL/R2 content, preserves bills/IP quota, fix
   });
   // A stated player fact is user content: the guest's is purged with the rest, the protected invite's stays.
   for (const actor of [guest, invited]) await f.call('/retention/seed-fact', actor);
+  // Embeddings are user content too: the guest's vector and embedding calls go, the protected invite's stay.
+  for (const actor of [guest, invited]) await f.call('/retention/seed-embedding', actor);
   const protectedState = await f.call<State>('/retention/state', invited);
   const counts = await f.call('/counts'),
     before = await f.call<State>('/retention/state', guest);
   assert.equal(before.facts, 1);
   assert.equal(protectedState.facts, 1);
+  assert.deepEqual([before.embeddings, before.embedAttempts], [1, 2]);
+  assert.deepEqual([protectedState.embeddings, protectedState.embedAttempts], [1, 2]);
+  assert.deepEqual(
+    await f.call('/retention/embed-held', {}),
+    { held: 16 },
+    'two scopes hold 5 (not sent) + 3 (in flight) each',
+  );
   await f.call('/retention/capture-replay', guest);
   const denied = await f.call<{ error: string }>('/retention/unsafe-delete', guest, 409);
   assert.match(denied.error, /WEB_PROVIDER_OUTPUT_IMMUTABLE/);
   await f.call('/retention/expire', guest);
   assert.deepEqual(await f.call('/retention/sweep'), { processed: 1, failed: 0, error: null });
   cleared(await f.call<State>('/retention/state', guest));
+  assert.deepEqual(
+    await f.call('/retention/embed-held', {}),
+    { held: 11 },
+    "the purged guest's never-sent call returned its hold; its in-flight call keeps it, and the invite is untouched",
+  );
   const replay = await f.call<{ same: { duplicate: boolean }; conflict: string }>('/retention/replay');
   assert.equal(replay.same.duplicate, true);
   assert.equal(replay.conflict, 'WEB_PROVIDER_RECEIPT_CONFLICT');

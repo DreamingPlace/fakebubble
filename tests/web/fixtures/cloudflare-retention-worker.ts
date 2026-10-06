@@ -108,6 +108,65 @@ export class WebRetentionFixture extends WebBusinessFixture {
           this.clock.now(),
         );
         value = { seeded: true };
+      } else if (path === '/retention/seed-embedding') {
+        // A topic with a ready vector, plus one embedding call that never left (hold 5) and one that is in flight
+        // (hold 3): purging must remove the rows, return the first hold and keep the second.
+        const scope = this.store.get<{ world_id: string; conversation_id: string; character_id: string }>(
+          'SELECT world_id,conversation_id,character_id FROM web_operations WHERE principal_id=? LIMIT 1',
+          input.principalId,
+        )!;
+        const now = this.clock.now();
+        this.store.run(
+          "INSERT INTO memory_topics VALUES (?,?,?,'猫','long',2,?,?,5)",
+          scope.world_id,
+          scope.conversation_id,
+          scope.character_id,
+          now,
+          now,
+        );
+        this.store.run(
+          "INSERT INTO memory_embeddings VALUES (?,?,?,'猫','@cf/baai/bge-m3',1024,?,?,1,'ready',?)",
+          scope.world_id,
+          scope.conversation_id,
+          scope.character_id,
+          new Uint8Array(4096),
+          'a'.repeat(64),
+          now,
+        );
+        this.store.run(
+          "INSERT OR IGNORE INTO web_provider_spending(provider,currency,limit_micros) VALUES ('cloudflare','USD',1000000)",
+        );
+        for (const [id, state, held] of [
+          [`index-${input.principalId}`, 'not_sent', 5],
+          [`flight-${input.principalId}`, 'sent', 3],
+        ] as const) {
+          this.store.run(
+            `INSERT INTO web_embed_attempts(id,kind,world_id,conversation_id,character_id,model,texts,max_units,
+            price_micros_per_million,held_micros,state,sent_at,lease_expires_at,created_at)
+            VALUES (?,'index',?,?,?,'@cf/baai/bge-m3',1,10,11800,?,?,?,?,?)`,
+            id,
+            scope.world_id,
+            scope.conversation_id,
+            scope.character_id,
+            held,
+            state,
+            state === 'sent' ? now : null,
+            now + 1000,
+            now,
+          );
+          this.store.run(
+            "UPDATE web_provider_spending SET held_micros=held_micros+? WHERE provider='cloudflare'",
+            held,
+          );
+        }
+        value = { seeded: true };
+      } else if (path === '/retention/embed-held') {
+        value = {
+          held:
+            this.store.get<{ held_micros: number }>(
+              "SELECT held_micros FROM web_provider_spending WHERE provider='cloudflare'",
+            )?.held_micros ?? 0,
+        };
       } else if (path === '/retention/unsafe-delete') {
         this.store.run(
           'DELETE FROM web_provider_outputs WHERE operation_id IN (SELECT id FROM web_operations WHERE principal_id=?)',
@@ -188,6 +247,15 @@ export class WebRetentionFixture extends WebBusinessFixture {
             'SELECT count(*) n FROM memory_facts WHERE world_id=?',
             principal!.world_id,
           )!.n,
+          embeddings: this.store.get<{ n: number }>(
+            'SELECT count(*) n FROM memory_embeddings WHERE world_id=?',
+            principal!.world_id,
+          )!.n,
+          embedAttempts: this.store.get<{ n: number }>(
+            'SELECT count(*) n FROM web_embed_attempts WHERE world_id=?',
+            principal!.world_id,
+          )!.n,
+
           outputs: this.store.get<{ n: number }>(
             `SELECT count(*) n FROM web_provider_outputs WHERE operation_id IN
             (SELECT id FROM web_operations WHERE principal_id=?)`,
