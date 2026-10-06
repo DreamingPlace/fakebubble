@@ -22,7 +22,7 @@ import { DeepSeekTextGenerator } from '../../../apps/server/generation/deepseek.
 import { WebProviderRunner, type FakeFish } from '../../../apps/server/generation/web-provider-runner.ts';
 import { WebVerticalPublisher } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import type { WebAttemptBudget } from '../../../apps/server/budget/web-provider-budget-contract.ts';
-import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { MemoryBudget } from '../fixtures/memory-budget.ts';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const now = 1_700_000_000_000;
@@ -149,37 +149,6 @@ function fixture(t: TestContext) {
     maxUnits: 1000,
   });
   return { store, ledger, scope, price, input, request, requestDigest, policyHash, voiceVersion };
-}
-
-/** Mirrors the shared budget authority: one reservation per attempt id, settled once, never released. */
-class MemoryBudget implements WebAttemptBudget {
-  readonly calls: string[] = [];
-  readonly entries = new Map<string, { settled: boolean; charged: number | null }>();
-  private id(key: { phase: string; ordinal: number }) {
-    return `${key.phase}:${key.ordinal}`;
-  }
-  beginAttempt(_store: unknown, key: { operationId: string; phase: string; ordinal: number }, resume = false) {
-    const id = this.id(key);
-    if (resume) {
-      assert.equal(this.entries.get(id)?.settled, false, 'a retry reuses the still-held reservation');
-      this.calls.push(`resume:${id}`);
-      return;
-    }
-    assert.equal(this.entries.has(id), false, 'a reservation is never made twice');
-    this.entries.set(id, { settled: false, charged: null });
-    this.calls.push(`begin:${id}`);
-  }
-  settleAttempt(store: Store, key: { operationId: string; phase: string; ordinal: number }) {
-    const row = store.get<{ charged_micros: number }>(
-      'SELECT charged_micros FROM web_provider_attempts WHERE operation_id=? AND phase=? AND ordinal=?',
-      key.operationId,
-      key.phase,
-      key.ordinal,
-    )!;
-    this.entries.set(this.id(key), { settled: true, charged: row.charged_micros });
-    this.calls.push(`settle:${this.id(key)}`);
-  }
-  recoverKnown() {}
 }
 
 const bubbles = [
@@ -409,7 +378,7 @@ test('Fish 429 retries exhausted: text fallback publishes the reviewed text as t
     f.budget.calls.filter((c) => c.endsWith(':speech:0') || c.includes(':speech:')),
     ['begin:speech:0', 'resume:speech:0', 'resume:speech:0', 'resume:speech:0', 'settle:speech:0'],
   );
-  assert.equal(f.budget.entries.get('speech:0')?.charged, 0);
+  assert.equal(f.budget.entries.get('operation:speech:0')?.charged, 0);
   assert.equal(
     f.row<{ reserved: number }>("SELECT reserved FROM web_external_budgets WHERE provider='fish'").reserved,
     0,

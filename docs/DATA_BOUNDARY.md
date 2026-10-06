@@ -1,6 +1,6 @@
 # Data boundary
 
-Every SQLite table created by the two migration trees (`apps/server/migrations/001–033` and `apps/server/web-migrations/100–113`), sorted into three classes. This is the reference for the `UserStore` / `GlobalStore` split in `apps/server/platform/` (see `docs/ARCHITECTURE.md`); nothing in this file changes behaviour.
+Every SQLite table created by the two migration trees (`apps/server/migrations/001–033` and `apps/server/web-migrations/100–114`), sorted into three classes. This is the reference for the `UserStore` / `GlobalStore` split in `apps/server/platform/` (see `docs/ARCHITECTURE.md`); nothing in this file changes behaviour.
 
 - **user** – every row belongs to exactly one player principal (identity sessions, conversations, messages, `memory_*`, relationships, that player's operations and attempts, private audio references). The *Owner* column names the column that identifies the principal, or says `needs join via …` when ownership is only reachable through another table.
 - **global** – shared by all players: invite codes, character catalog and versions, admin accounts and sessions, quotas, scheduler state, budget and prices, per-character shared assets, retention bookkeeping.
@@ -19,7 +19,7 @@ Each table name was searched (whole word) in all non-test source under `apps/`, 
 - Web stores cannot be beta stores (`WEB_BETA_MODE_CONFLICT`); the Node store stops at migration 24 unless `beta` is set, so migrations 025–033 are never applied to a web instance.
 - A "must be empty" probe or a purge-list entry alone does not make a table used; a table the cleaner deletes from and that another web path writes is used.
 
-Result: 62 user, 24 global, 76 legacy-unused (162 tables including four transient rename targets). Legacy-unused tables still exist in a web database; nothing here drops them.
+Result: 64 user, 24 global, 76 legacy-unused (164 tables including four transient rename targets; Part 4 added the two `114_stage_metrics.sql` tables, both user). Legacy-unused tables still exist in a web database; nothing here drops them.
 
 ## Tables
 
@@ -187,6 +187,8 @@ Result: 62 user, 24 global, 76 legacy-unused (162 tables including four transien
 | `web_provider_footer_assets` | web-migrations/113_provider_offline.sql | global | — | per-character shared assets (keyed by `character_id`): conversation/web-vertical-publisher.ts, characters/web-character-materials.ts |
 | `web_provider_voice_bindings` | web-migrations/113_provider_offline.sql | global | — | per-character shared assets (keyed by `character_id`): conversation/web-vertical-publisher.ts, characters/web-character-materials.ts |
 | `web_provider_welcome_assets` | web-migrations/113_provider_offline.sql | global | — | per-character shared assets (keyed by `character_id`): conversation/web-vertical-publisher.ts, characters/web-character-materials.ts |
+| `web_operation_metrics` | web-migrations/114_stage_metrics.sql | user | needs join via `web_operations.principal_id` (`operation_id`) | per-operation stage timings, rate-limit retries and fallback flag: admission/web-stage-metrics.ts; read by the owner-only `admin.stageLatency` |
+| `web_attempt_rejections` | web-migrations/114_stage_metrics.sql | user | needs join via `web_operations.principal_id` (`operation_id`) | attempts a provider rejected with HTTP 429 before running them: generation/web-provider-offline.ts |
 
 ## Tables created in TypeScript, not in a migration tree
 
