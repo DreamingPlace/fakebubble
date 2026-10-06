@@ -60,7 +60,11 @@ function promptTimestamp(at: number, now: number, timeZone: string) {
   };
 }
 
-export const textPromptHash = () =>
+/** Every prompts/v7 file, in file-name order, so editing any block (including the voice tasks) changes the hash. */
+export const promptBlocks = (blocks: Record<string, string> = PROMPTS_V7) =>
+  Object.entries(blocks).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
+export const textPromptHash = (blocks: Record<string, string> = PROMPTS_V7) =>
   createHash('sha256')
     .update(
       JSON.stringify([
@@ -69,6 +73,7 @@ export const textPromptHash = () =>
         MOMENT_POST_TASK,
         PLAYER_INPUT_KINDS,
         protocolFingerprint(),
+        promptBlocks(blocks),
       ]),
     )
     .digest('hex');

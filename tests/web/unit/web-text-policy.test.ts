@@ -2,13 +2,16 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import { protocolFingerprint } from '../../../apps/server/generation/accepted-text-protocol.ts';
+import { PROMPTS_V7 } from '../../../apps/server/generation/prompts.generated.ts';
+import { textPromptHash } from '../../../apps/server/generation/accepted-text-prompt.ts';
 import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server/generation/text-generation-policy.ts';
 
 // Stored preview and publication approvals embed these hashes. Captured on main (66e2c6b) before the
 // experimental-v10 protocol was removed: policy 58ba3f99…, prompt 8a49da0d…. Part 6a step 4 added the text-only
-// player-channel rule on purpose, which changed both; the protocol fingerprint is unchanged.
-const POLICY_HASH = 'ddbd93155c9dded0483dc09f6295efef8dc484fc486062b9a1feadedd8946291';
-const PROMPT_HASH = '687b0960997ffd8a7adfcbd3339e08041fc8579332e95740a25ce666bf8dcdb2';
+// player-channel rule on purpose, which changed both (policy ddbd9315…, prompt 687b0960…). Part 7a step A made the
+// prompt hash cover every prompts/v7 file (policy ea400177…, prompt c0eaa2ff…); the protocol fingerprint is unchanged.
+const POLICY_HASH = 'ea40017753b2ca8b499ece2001346ba4d4b7744017ff3eb70ae29e18dafab555';
+const PROMPT_HASH = 'c0eaa2fff1ebdc30be2d883ca2e59e86d800a5653d2182483ff61e56981b6790';
 const FINGERPRINT_DIGEST = '6fa114401ba3d72474893e83cf449c8edb9f5ea84d8ffda9fd223e2b18067418';
 
 test('accepted-v7 policy hash, prompt hash and protocol fingerprint are pinned', () => {
@@ -31,4 +34,15 @@ test('the removed textProtocol option cannot select another protocol', () => {
   const policy = createTextGenerationPolicy({ textProtocol: 'experimental-v10' } as never);
   assert.equal(policy.textProtocol, 'accepted-v7');
   assert.equal(textPolicyHash({ textProtocol: 'experimental-v10' } as never), POLICY_HASH);
+});
+
+test('the prompt hash covers every prompts/v7 block, including the voice tasks', () => {
+  const base = textPromptHash();
+  for (const name of Object.keys(PROMPTS_V7)) {
+    assert.notEqual(
+      textPromptHash({ ...PROMPTS_V7, [name]: `${PROMPTS_V7[name as keyof typeof PROMPTS_V7]}x` }),
+      base,
+      name,
+    );
+  }
 });
