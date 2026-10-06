@@ -39,10 +39,20 @@ export function installWebAdminSchema(store: BusinessStore) {
 }
 
 /** Legacy synthetic/original stores have no account extension. Provider sessions must be mapped. */
-export function requireWebAdminMembership(store: BusinessStore, sessionId: string, permission: InviteAdminPermission | 'invites.revoke') {
+export function requireWebAdminMembership(
+  store: BusinessStore,
+  sessionId: string,
+  permission: InviteAdminPermission | 'invites.revoke',
+) {
   if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_admin_schema'")) return;
-  const row = store.get<{ role: string; permissions_json: string }>(`SELECT m.role,m.permissions_json
-    FROM web_admin_session_members s JOIN web_admin_members m ON m.id=s.member_id WHERE s.session_id=?`, sessionId);
+  const row = store.get<{ role: string; permissions_json: string }>(
+    `SELECT m.role,m.permissions_json
+    FROM web_admin_session_members s JOIN web_admin_members m ON m.id=s.member_id WHERE s.session_id=?`,
+    sessionId,
+  );
   ensure(row, 'ADMIN_UNAUTHORIZED');
-  ensure(row.role === 'owner' || hasInvitePermission(JSON.parse(row.permissions_json) as string[], permission), 'ADMIN_PERMISSION_REQUIRED');
+  ensure(
+    row.role === 'owner' || hasInvitePermission(JSON.parse(row.permissions_json) as string[], permission),
+    'ADMIN_PERMISSION_REQUIRED',
+  );
 }

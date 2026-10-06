@@ -4,7 +4,11 @@ import { DomainError, ensure } from '../../packages/domain/errors.ts';
 
 /** Explicit CLI-only load. Tests and configuration diagnostics never call this implicitly. */
 export function deepSeekEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return selectedEnvironment(path, ['TEXT_PROVIDER', 'DEEPSEEK_BASE_URL', 'DEEPSEEK_MODEL', 'DEEPSEEK_REVIEW_MODEL', 'DEEPSEEK_API_KEY'], inherited);
+  return selectedEnvironment(
+    path,
+    ['TEXT_PROVIDER', 'DEEPSEEK_BASE_URL', 'DEEPSEEK_MODEL', 'DEEPSEEK_REVIEW_MODEL', 'DEEPSEEK_API_KEY'],
+    inherited,
+  );
 }
 
 export function voiceEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {

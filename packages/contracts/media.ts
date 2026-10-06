@@ -1,7 +1,9 @@
 import type { FishModel } from './audio.ts';
 
 export interface VoiceBinding {
-  profileId: string; version: number; speed: number;
+  profileId: string;
+  version: number;
+  speed: number;
   /** Per-character channel preference, not voice identity. Omitted legacy bindings retain voice-only delivery. */
   messageProbability?: number;
 }
@@ -35,5 +37,10 @@ export interface VoiceMessageState {
   mime: 'audio/wav';
   errorCode: string | null;
 }
-export interface VoiceRetryInput { requestId: string }
-export interface VoiceRetryReceipt { voice: VoiceMessageState; duplicate: boolean }
+export interface VoiceRetryInput {
+  requestId: string;
+}
+export interface VoiceRetryReceipt {
+  voice: VoiceMessageState;
+  duplicate: boolean;
+}

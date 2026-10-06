@@ -11,12 +11,38 @@ export interface PairingDescriptor {
   expiresAt: number;
   release?: BetaRelease;
 }
-export interface PairInput { inviteToken: string; deviceSecret: string; deviceName: string }
-export interface PairResult { deviceId: string; release?: BetaRelease }
-export interface RecoveryPoint { version: 1; epoch: string; snapshotAt: number; restoredAt: number }
-export interface WorldSetupInput { requestId: string; timeZone: string; selections: CharacterSelection[]; profile?: PlayerProfile }
-export interface SendMessageInput { requestId: string; text: string; replyToMessageId?: string }
-export interface CharacterSummary { id: string; name: string; version: number; fictional: true }
+export interface PairInput {
+  inviteToken: string;
+  deviceSecret: string;
+  deviceName: string;
+}
+export interface PairResult {
+  deviceId: string;
+  release?: BetaRelease;
+}
+export interface RecoveryPoint {
+  version: 1;
+  epoch: string;
+  snapshotAt: number;
+  restoredAt: number;
+}
+export interface WorldSetupInput {
+  requestId: string;
+  timeZone: string;
+  selections: CharacterSelection[];
+  profile?: PlayerProfile;
+}
+export interface SendMessageInput {
+  requestId: string;
+  text: string;
+  replyToMessageId?: string;
+}
+export interface CharacterSummary {
+  id: string;
+  name: string;
+  version: number;
+  fictional: true;
+}
 export interface ConversationSummary {
   id: string;
   characterId: string;
@@ -47,7 +73,37 @@ export interface BootstrapResult {
   conversations: ConversationSummary[];
   groups?: GroupSummary[];
   characterRequests?: import('./character-requests.ts').CharacterRequestCounts;
-  capabilities: { textGeneration: boolean; voice: boolean; social: false; groups?: boolean; moments?: boolean; momentAudienceGroups?: boolean; autonomousMoments?: boolean; feedback?: boolean; structuredFeedback?: boolean; feedbackWorkflow?: boolean; characterReset?: boolean; playerProfile?: boolean; relationshipJournal?: boolean; scenes?: boolean; friends?: boolean; readReceipts?: boolean; relationshipTest?: boolean; batchFeedback?: boolean; replyGroups?: boolean; evaluations?: boolean; push: false };
+  capabilities: {
+    textGeneration: boolean;
+    voice: boolean;
+    social: false;
+    groups?: boolean;
+    moments?: boolean;
+    momentAudienceGroups?: boolean;
+    autonomousMoments?: boolean;
+    feedback?: boolean;
+    structuredFeedback?: boolean;
+    feedbackWorkflow?: boolean;
+    characterReset?: boolean;
+    playerProfile?: boolean;
+    relationshipJournal?: boolean;
+    scenes?: boolean;
+    friends?: boolean;
+    readReceipts?: boolean;
+    relationshipTest?: boolean;
+    batchFeedback?: boolean;
+    replyGroups?: boolean;
+    evaluations?: boolean;
+    push: false;
+  };
 }
-export interface SyncPage { messages: MessageDTO[]; cursor: string | null; hasMore: boolean }
-export interface HistoryPage { messages: MessageDTO[]; before: string | null; hasMore: boolean }
+export interface SyncPage {
+  messages: MessageDTO[];
+  cursor: string | null;
+  hasMore: boolean;
+}
+export interface HistoryPage {
+  messages: MessageDTO[];
+  before: string | null;
+  hasMore: boolean;
+}

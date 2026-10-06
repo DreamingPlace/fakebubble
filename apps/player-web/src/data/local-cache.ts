@@ -18,29 +18,38 @@ export class IndexedDbLocalCache {
   private readonly session: LocalSession | undefined;
   lastPurgeError: unknown = null;
   constructor(indexed: IDBFactory = indexedDB, session?: LocalSession) {
-    this.indexed = indexed; this.session = session;
+    this.indexed = indexed;
+    this.session = session;
     const purgePrivate = (scope: LocalScope) => {
-      if (scope.contractVersion === 'web-v1-local-2' && scope.accessKind === 'guest' ||
-          scope.contractVersion === 'web-v1-local-3' && scope.accessKind === 'invite')
-        void this.purgeScope(scope).catch(error => { this.lastPurgeError = error; });
+      if (
+        (scope.contractVersion === 'web-v1-local-2' && scope.accessKind === 'guest') ||
+        (scope.contractVersion === 'web-v1-local-3' && scope.accessKind === 'invite')
+      )
+        void this.purgeScope(scope).catch((error) => {
+          this.lastPurgeError = error;
+        });
     };
-    session?.onInstall(scope => {
+    session?.onInstall((scope) => {
       if (scope.accessKind === 'guest') purgePrivate(scope);
     });
     session?.onContentExpired(purgePrivate);
   }
   private unavailable(scope: LocalScope) {
-    return scope.contractVersion === 'web-v1-local-2' && scope.accessKind === 'guest' ||
-      scope.contractVersion === 'web-v1-local-3' && scope.accessKind === 'invite' &&
-        (!this.session || !this.session.contentAvailable(scope));
+    return (
+      (scope.contractVersion === 'web-v1-local-2' && scope.accessKind === 'guest') ||
+      (scope.contractVersion === 'web-v1-local-3' &&
+        scope.accessKind === 'invite' &&
+        (!this.session || !this.session.contentAvailable(scope)))
+    );
   }
   private open(): Promise<IDBDatabase> {
-    if (!this.database) this.database = new Promise((resolve, reject) => {
-      const request = this.indexed.open('fake-bubble-web-local-cache', 1);
-      request.onupgradeneeded = () => request.result.createObjectStore('entries');
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    if (!this.database)
+      this.database = new Promise((resolve, reject) => {
+        const request = this.indexed.open('fake-bubble-web-local-cache', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('entries');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
     return this.database;
   }
   async putDraft(scope: LocalScope, characterId: string, text: string) {
@@ -71,12 +80,18 @@ export class IndexedDbLocalCache {
     return message.conversationId === conversationId && message.messageId === messageId ? message : null;
   }
   async purgeScope(scope: LocalScope) {
-    const db = await this.open(), key = scopeKey(scope);
+    const db = await this.open(),
+      key = scopeKey(scope);
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction('entries', 'readwrite');
       for (const prefix of [`draft\u001f${key}\u001f`, `message\u001f${key}\u001f`]) {
         const cursor = tx.objectStore('entries').openCursor(IDBKeyRange.bound(prefix, `${prefix}\uffff`));
-        cursor.onsuccess = () => { if (cursor.result) { cursor.result.delete(); cursor.result.continue(); } };
+        cursor.onsuccess = () => {
+          if (cursor.result) {
+            cursor.result.delete();
+            cursor.result.continue();
+          }
+        };
       }
       tx.oncomplete = () => resolve();
       tx.onabort = () => reject(tx.error ?? new Error('cache purge aborted'));

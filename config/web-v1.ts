@@ -19,9 +19,13 @@ export const WEB_LIMITS = Object.freeze({
 
 /** Public Web transport only; scoped application quotas still authorize every send. */
 export const WEB_HTTP_LIMITS = Object.freeze({
-  requestsPerIpPerMinute: 600, writesPerIpPerMinute: 60,
-  welcomePerIpPerMinute: 60, welcomeGlobalPerMinute: 300,
-  requestsGlobalPerMinute: 6000, streamMaxMs: 30_000, streamPollMs: 1000,
+  requestsPerIpPerMinute: 600,
+  writesPerIpPerMinute: 60,
+  welcomePerIpPerMinute: 60,
+  welcomeGlobalPerMinute: 300,
+  requestsGlobalPerMinute: 6000,
+  streamMaxMs: 30_000,
+  streamPollMs: 1000,
 });
 
 /** Internal identity defaults; no HTTP service uses these until its own security gate is approved. */

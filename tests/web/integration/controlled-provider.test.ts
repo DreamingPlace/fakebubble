@@ -3,13 +3,17 @@ import assert from 'node:assert/strict';
 import { ControlledProvider, ManualClock } from './controlled-provider.ts';
 
 test('fixture self-check: a held audio call does not block a different text call', async () => {
-  const clock = new ManualClock(10), provider = new ControlledProvider(clock);
+  const clock = new ManualClock(10),
+    provider = new ControlledProvider(clock);
   provider.script('a', 'audio', 0, { kind: 'ok', value: 'clip-a' }, true);
   const slow = provider.invoke('a', 'audio');
   provider.script('b', 'text', 0, { kind: 'ok', value: 'draft-b' });
   clock.advance(7);
   assert.deepEqual(await provider.invoke('b', 'text'), { kind: 'ok', value: 'draft-b' });
-  assert.deepEqual(provider.calls.map(call => call.atMs), [10, 17]);
+  assert.deepEqual(
+    provider.calls.map((call) => call.atMs),
+    [10, 17],
+  );
   provider.release('a', 'audio');
   assert.deepEqual(await slow, { kind: 'ok', value: 'clip-a' });
 });

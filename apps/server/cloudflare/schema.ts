@@ -56,4 +56,15 @@ export const cloudBackupCatalogSchema = `
 CREATE TABLE cf_backup_catalog(snapshot_id TEXT PRIMARY KEY,identity_json TEXT NOT NULL,snapshot_at INTEGER NOT NULL,
  state TEXT NOT NULL CHECK(state IN ('writing','complete','deleting','deleted')),receipt_json TEXT) STRICT;
 `;
-export const cloudPlatformMigrations = [cloudScreenshotSchema, cloudRateSchema, cloudAdminIdentitySchema, cloudAccessCoordinatorSchema, cloudCostOutboxSchema, cloudReconciliationOutboxSchema, cloudRetentionSchema, cloudAlertSchema, cloudWorkerHealthSchema, cloudBackupCatalogSchema] as const;
+export const cloudPlatformMigrations = [
+  cloudScreenshotSchema,
+  cloudRateSchema,
+  cloudAdminIdentitySchema,
+  cloudAccessCoordinatorSchema,
+  cloudCostOutboxSchema,
+  cloudReconciliationOutboxSchema,
+  cloudRetentionSchema,
+  cloudAlertSchema,
+  cloudWorkerHealthSchema,
+  cloudBackupCatalogSchema,
+] as const;

@@ -1,12 +1,20 @@
 /** Connects the approved visual shell to the provider-local server. No visual redesign here. */
-import type { WebProviderBootstrap, WebProviderCharacterId,
-  WebProviderMessage } from '../../../../../packages/contracts/web-provider.ts';
+import type {
+  WebProviderBootstrap,
+  WebProviderCharacterId,
+  WebProviderMessage,
+} from '../../../../../packages/contracts/web-provider.ts';
 import { ProviderApi, ProviderApiError } from '../../services/provider-api.ts';
 import { replyPauseMs } from './reply-presentation.ts';
 import { ProviderInviteController } from '../../session/provider-invite-controller.ts';
 
-type Shell = { say(message: string): void; head: HTMLElement; card(id: WebProviderCharacterId): HTMLElement;
-  mark(id: WebProviderCharacterId): string; name(id: WebProviderCharacterId): string };
+type Shell = {
+  say(message: string): void;
+  head: HTMLElement;
+  card(id: WebProviderCharacterId): HTMLElement;
+  mark(id: WebProviderCharacterId): string;
+  name(id: WebProviderCharacterId): string;
+};
 
 const errorText: Record<string, string> = {
   TRIAL_CHARACTER_LOCKED: '体验期间只能和第一个聊天的人物继续聊哦',
@@ -24,8 +32,10 @@ const errorText: Record<string, string> = {
   CATALOG_CHANGED: '人物资料已更新，请先保留输入草稿，再刷新页面。未自动发送。',
   CHARACTER_UNAVAILABLE: '这个人物暂未开放，不能发送消息。',
 };
-const sound = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4m4-7v10m4-14v18m4-15v12m4-8v4"/></svg>';
-const play = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 9 6-9 6V6Z"/></svg>';
+const sound =
+  '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4m4-7v10m4-14v18m4-15v12m4-8v4"/></svg>';
+const play =
+  '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 9 6-9 6V6Z"/></svg>';
 
 export class LiveBinding {
   private view: WebProviderBootstrap;
@@ -49,21 +59,40 @@ export class LiveBinding {
 
   private constructor(api: ProviderApi, view: WebProviderBootstrap, wait: (ms: number) => Promise<void>) {
     this.wait = wait;
-    this.api = api; this.view = view;
-    this.invitation = new ProviderInviteController(api, () => this.view, next => { this.updateView(next); },
-      () => { this.renderAccess(); this.renderInvite?.(); });
+    this.api = api;
+    this.view = view;
+    this.invitation = new ProviderInviteController(
+      api,
+      () => this.view,
+      (next) => {
+        this.updateView(next);
+      },
+      () => {
+        this.renderAccess();
+        this.renderInvite?.();
+      },
+    );
   }
-  static async connect(api = new ProviderApi(), wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))) {
+  static async connect(
+    api = new ProviderApi(),
+    wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  ) {
     return new LiveBinding(api, await api.bootstrap(), wait);
   }
-  catalog() { return structuredClone({ characters: this.view.characters, slots: this.view.slots }); }
+  catalog() {
+    return structuredClone({ characters: this.view.characters, slots: this.view.slots });
+  }
 
   attach(shell: Shell) {
     this.shell = shell;
     for (const character of this.view.characters) {
       const button = shell.card(character.characterId).querySelector<HTMLButtonElement>('.welcome-row .play-button');
-      button?.setAttribute('aria-label', character.welcome.audio.state === 'available' ?
-        `播放${shell.name(character.characterId)}的语音` : `播放${shell.name(character.characterId)}的语音，当前没有音频素材`);
+      button?.setAttribute(
+        'aria-label',
+        character.welcome.audio.state === 'available'
+          ? `播放${shell.name(character.characterId)}的语音`
+          : `播放${shell.name(character.characterId)}的语音，当前没有音频素材`,
+      );
     }
     this.renderAccess();
     const onReturn = () => {
@@ -77,34 +106,59 @@ export class LiveBinding {
   }
 
   private renderAccess() {
-    const shell = this.shell; if (!shell) return;
+    const shell = this.shell;
+    if (!shell) return;
     const note = shell.head.querySelector<HTMLElement>('.head-note')!;
     const access = this.view.access;
     for (const character of this.view.characters) this.updateComposer(character.characterId);
-    if (this.catalogChanged) { note.textContent = '人物资料已更新，请保留草稿后刷新'; return; }
-    shell.head.querySelector('.invite-entry')?.remove();
-    if (access.kind === 'invite' && !this.invitation.locked) {
-      note.textContent = !this.accessKnown ? '访问权限暂无法确认' :
-        access.status === 'active' ? '邀请已解锁' : '邀请已失效';
+    if (this.catalogChanged) {
+      note.textContent = '人物资料已更新，请保留草稿后刷新';
       return;
     }
-    note.textContent = this.invitation.locked ? '邀请兑换待核对' : !this.accessKnown ? '额度暂无法确认' :
-      access.remainingReplies === 0 || access.canSend ? `体验剩余 ${access.remainingReplies} 次` : '体验已结束';
+    shell.head.querySelector('.invite-entry')?.remove();
+    if (access.kind === 'invite' && !this.invitation.locked) {
+      note.textContent = !this.accessKnown
+        ? '访问权限暂无法确认'
+        : access.status === 'active'
+          ? '邀请已解锁'
+          : '邀请已失效';
+      return;
+    }
+    note.textContent = this.invitation.locked
+      ? '邀请兑换待核对'
+      : !this.accessKnown
+        ? '额度暂无法确认'
+        : access.remainingReplies === 0 || access.canSend
+          ? `体验剩余 ${access.remainingReplies} 次`
+          : '体验已结束';
     const entry = document.createElement('button');
-    entry.type = 'button'; entry.className = 'invite-entry'; entry.textContent = this.invitation.locked ? '核对邀请' : '邀请码';
+    entry.type = 'button';
+    entry.className = 'invite-entry';
+    entry.textContent = this.invitation.locked ? '核对邀请' : '邀请码';
     entry.addEventListener('click', () => this.inviteDialog());
     shell.head.append(entry);
   }
 
   updateComposer(characterId: WebProviderCharacterId) {
-    const card = this.shell?.card(characterId); if (!card) return;
+    const card = this.shell?.card(characterId);
+    if (!card) return;
     const access = this.view.access;
-    const locked = access.kind === 'guest' && access.lockedCharacterId !== null &&
-      access.lockedCharacterId !== characterId;
+    const locked =
+      access.kind === 'guest' && access.lockedCharacterId !== null && access.lockedCharacterId !== characterId;
     const button = card.querySelector<HTMLButtonElement>('.send-button');
-    const available = this.view.characters.find(character => character.characterId === characterId)?.availability.state === 'available';
-    if (button) button.disabled = this.busy || this.invitation.locked || !this.accessKnown || this.catalogChanged || !available || !access.canSend || locked ||
-      !card.querySelector<HTMLTextAreaElement>('textarea')?.value.trim();
+    const available =
+      this.view.characters.find((character) => character.characterId === characterId)?.availability.state ===
+      'available';
+    if (button)
+      button.disabled =
+        this.busy ||
+        this.invitation.locked ||
+        !this.accessKnown ||
+        this.catalogChanged ||
+        !available ||
+        !access.canSend ||
+        locked ||
+        !card.querySelector<HTMLTextAreaElement>('textarea')?.value.trim();
   }
 
   private async refreshAccess() {
@@ -114,35 +168,52 @@ export class LiveBinding {
       this.renderAccess();
       if (changed) throw new ProviderApiError(401, 'IDENTITY_CHANGED');
     })();
-    try { await this.refreshing; }
-    catch (error) {
-      this.accessKnown = false; this.renderAccess(); throw error;
-    } finally { this.refreshing = null; }
+    try {
+      await this.refreshing;
+    } catch (error) {
+      this.accessKnown = false;
+      this.renderAccess();
+      throw error;
+    } finally {
+      this.refreshing = null;
+    }
   }
 
   private updateView(next: WebProviderBootstrap) {
     const prior = this.view;
-    const changed = next.instanceId !== prior.instanceId || next.recoveryEpoch !== prior.recoveryEpoch ||
-      next.access.principalId !== prior.access.principalId || next.access.playerId !== prior.access.playerId || next.access.worldId !== prior.access.worldId;
-    this.catalogChanged ||= JSON.stringify([prior.characters, prior.slots]) !== JSON.stringify([next.characters, next.slots]);
+    const changed =
+      next.instanceId !== prior.instanceId ||
+      next.recoveryEpoch !== prior.recoveryEpoch ||
+      next.access.principalId !== prior.access.principalId ||
+      next.access.playerId !== prior.access.playerId ||
+      next.access.worldId !== prior.access.worldId;
+    this.catalogChanged ||=
+      JSON.stringify([prior.characters, prior.slots]) !== JSON.stringify([next.characters, next.slots]);
     if (changed || this.catalogChanged) {
       this.viewRevision++;
-      this.stopAudio(); this.loaded.clear(); this.shown.clear();
+      this.stopAudio();
+      this.loaded.clear();
+      this.shown.clear();
       for (const character of prior.characters)
         this.shell?.card(character.characterId)?.querySelector('.sent-messages')?.replaceChildren();
     }
     // Do not point a mounted old shell at new IDs or silently erase an unsent editor draft.
     if (this.catalogChanged) {
-      this.accessKnown = false; this.renderAccess(); throw new ProviderApiError(409, 'CATALOG_CHANGED');
+      this.accessKnown = false;
+      this.renderAccess();
+      throw new ProviderApiError(409, 'CATALOG_CHANGED');
     }
-    this.view = next; this.accessKnown = true;
+    this.view = next;
+    this.accessKnown = true;
     return changed;
   }
 
   private inviteDialog() {
     if (this.dialog) return;
-    const dialog = document.createElement('dialog'); this.dialog = dialog;
-    dialog.className = 'invite-dialog'; dialog.setAttribute('aria-labelledby', 'invite-label');
+    const dialog = document.createElement('dialog');
+    this.dialog = dialog;
+    dialog.className = 'invite-dialog';
+    dialog.setAttribute('aria-labelledby', 'invite-label');
     dialog.innerHTML = `<form method="dialog"><label id="invite-label" for="invite-code">输入邀请码</label>
       <input id="invite-code" name="code" autocomplete="one-time-code" maxlength="64" required aria-describedby="invite-state">
       <p id="invite-state" class="invite-state" role="status" aria-live="polite"></p>
@@ -154,40 +225,79 @@ export class LiveBinding {
     const recover = dialog.querySelector<HTMLButtonElement>('.invite-recover')!;
     const cancel = dialog.querySelector<HTMLButtonElement>('.invite-cancel')!;
     const status = dialog.querySelector<HTMLElement>('.invite-state')!;
-    const close = () => { input.value = ''; this.dialog = null; this.renderInvite = null; dialog.close(); dialog.remove(); };
-    const finish = (ok: boolean) => { if (ok && this.dialog === dialog) close(); };
+    const close = () => {
+      input.value = '';
+      this.dialog = null;
+      this.renderInvite = null;
+      dialog.close();
+      dialog.remove();
+    };
+    const finish = (ok: boolean) => {
+      if (ok && this.dialog === dialog) close();
+    };
     this.renderInvite = () => {
       const { phase, errorCode } = this.invitation.state;
-      if (phase === 'accepted') { close(); return; }
-      input.readOnly = phase !== 'entry'; input.required = phase === 'entry';
-      if (phase !== 'entry') { input.value = ''; input.placeholder = '本次邀请码已保留，请勿重复兑换'; }
-      else input.placeholder = '';
+      if (phase === 'accepted') {
+        close();
+        return;
+      }
+      input.readOnly = phase !== 'entry';
+      input.required = phase === 'entry';
+      if (phase !== 'entry') {
+        input.value = '';
+        input.placeholder = '本次邀请码已保留，请勿重复兑换';
+      } else input.placeholder = '';
       submit.hidden = phase === 'uncertain' || phase === 'recovering' || phase === 'blocked';
-      submit.disabled = phase !== 'entry'; submit.textContent = phase === 'submitting' ? '正在解锁…' : '解锁';
-      recover.hidden = phase !== 'uncertain' && phase !== 'recovering'; recover.disabled = phase !== 'uncertain';
+      submit.disabled = phase !== 'entry';
+      submit.textContent = phase === 'submitting' ? '正在解锁…' : '解锁';
+      recover.hidden = phase !== 'uncertain' && phase !== 'recovering';
+      recover.disabled = phase !== 'uncertain';
       recover.textContent = phase === 'recovering' ? '正在核对…' : '核对原请求';
       cancel.textContent = this.invitation.locked ? '关闭' : '取消';
-      status.textContent = phase === 'entry' ? (errorCode === 'INVALID_CODE' ? '请填写完整的 43 位邀请码。' :
-        errorCode === 'WEB_INVITE_UNAVAILABLE' ? '邀请码无效或已被使用，请核对后再输入。' : '') :
-        phase === 'submitting' ? '正在兑换，请勿重复提交。' :
-        phase === 'recovering' ? '只核对原请求，不会再次兑换。' :
-        phase === 'blocked' ? '当前身份或人物资料已变化，已停止兑换。请联系管理员核对，勿重复提交。' :
-        '结果尚未确认。请核对原请求，不要刷新页面或再次兑换；关闭后可从“核对邀请”继续。';
+      status.textContent =
+        phase === 'entry'
+          ? errorCode === 'INVALID_CODE'
+            ? '请填写完整的 43 位邀请码。'
+            : errorCode === 'WEB_INVITE_UNAVAILABLE'
+              ? '邀请码无效或已被使用，请核对后再输入。'
+              : ''
+          : phase === 'submitting'
+            ? '正在兑换，请勿重复提交。'
+            : phase === 'recovering'
+              ? '只核对原请求，不会再次兑换。'
+              : phase === 'blocked'
+                ? '当前身份或人物资料已变化，已停止兑换。请联系管理员核对，勿重复提交。'
+                : '结果尚未确认。请核对原请求，不要刷新页面或再次兑换；关闭后可从“核对邀请”继续。';
     };
     cancel.addEventListener('click', close);
-    dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
-    recover.addEventListener('click', () => { void this.invitation.recover().then(ok => {
-      if (ok) this.shell?.say('邀请已解锁，可以和所有人聊天了'); finish(ok);
-    }); });
-    dialog.querySelector('form')!.addEventListener('submit', event => {
-      event.preventDefault(); void this.redeem(input.value.trim()).then(finish);
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      close();
     });
-    document.body.append(dialog); this.renderInvite(); dialog.showModal();
+    recover.addEventListener('click', () => {
+      void this.invitation.recover().then((ok) => {
+        if (ok) this.shell?.say('邀请已解锁，可以和所有人聊天了');
+        finish(ok);
+      });
+    });
+    dialog.querySelector('form')!.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void this.redeem(input.value.trim()).then(finish);
+    });
+    document.body.append(dialog);
+    this.renderInvite();
+    dialog.showModal();
   }
 
   private async redeem(code: string) {
-    if (this.busy || this.refreshing) { this.shell?.say('上一条回复或访问状态仍在核对，请稍后兑换'); return false; }
-    if (this.catalogChanged || !this.accessKnown) { this.shell?.say('当前访问状态尚未确认，请先核对页面状态'); return false; }
+    if (this.busy || this.refreshing) {
+      this.shell?.say('上一条回复或访问状态仍在核对，请稍后兑换');
+      return false;
+    }
+    if (this.catalogChanged || !this.accessKnown) {
+      this.shell?.say('当前访问状态尚未确认，请先核对页面状态');
+      return false;
+    }
     const ok = await this.invitation.redeem(code);
     if (ok) this.shell?.say('邀请已解锁，可以和所有人聊天了');
     return ok;
@@ -201,18 +311,23 @@ export class LiveBinding {
   private stopAudio() {
     this.audio?.pause();
     if (this.audioUrl?.startsWith('blob:')) URL.revokeObjectURL(this.audioUrl);
-    this.audio = null; this.audioUrl = null;
+    this.audio = null;
+    this.audioUrl = null;
   }
 
   private start(url: string) {
     this.stopAudio();
-    this.audioUrl = url; this.audio = new Audio(url);
+    this.audioUrl = url;
+    this.audio = new Audio(url);
     void this.audio.play().catch(() => this.shell?.say('点一下再播放语音'));
   }
 
   playWelcome(characterId: WebProviderCharacterId) {
-    if (this.catalogChanged) { this.fail(new ProviderApiError(409, 'CATALOG_CHANGED')); return; }
-    const audio = this.view.characters.find(item => item.characterId === characterId)?.welcome.audio;
+    if (this.catalogChanged) {
+      this.fail(new ProviderApiError(409, 'CATALOG_CHANGED'));
+      return;
+    }
+    const audio = this.view.characters.find((item) => item.characterId === characterId)?.welcome.audio;
     if (audio?.state === 'available') this.start(audio.url);
     else this.shell?.say('这段语音暂时无法播放');
   }
@@ -221,11 +336,17 @@ export class LiveBinding {
     if (!message.audio?.mediaId || this.catalogChanged) return;
     const revision = this.viewRevision;
     try {
-      const bytes = await this.api.audio({ characterId, conversationId: message.conversationId,
-        messageId: message.messageId, mediaId: message.audio.mediaId });
+      const bytes = await this.api.audio({
+        characterId,
+        conversationId: message.conversationId,
+        messageId: message.messageId,
+        mediaId: message.audio.mediaId,
+      });
       if (this.catalogChanged || revision !== this.viewRevision) return;
       this.start(URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })));
-    } catch (error) { this.fail(error); }
+    } catch (error) {
+      this.fail(error);
+    }
   }
 
   private row(characterId: WebProviderCharacterId, message: WebProviderMessage) {
@@ -235,7 +356,8 @@ export class LiveBinding {
     if (message.author === 'player') {
       row.className = 'message-row outgoing';
       const bubble = document.createElement('p');
-      bubble.className = 'text-bubble'; bubble.textContent = message.text;
+      bubble.className = 'text-bubble';
+      bubble.textContent = message.text;
       row.append(bubble);
       return row;
     }
@@ -244,7 +366,8 @@ export class LiveBinding {
     row.innerHTML = `<span class="avatar message-avatar" aria-hidden="true"></span>
       <div class="voice-stack"><div class="voice-bubble">
         <button class="play-button" type="button">${play}<span class="sound-bars">${sound}</span>${
-          seconds ? `<span class="voice-seconds">${seconds}″</span>` : ''}</button>
+          seconds ? `<span class="voice-seconds">${seconds}″</span>` : ''
+        }</button>
         <button class="transcript-toggle" type="button" aria-expanded="false">转文字</button>
       </div><p class="transcript" hidden></p></div>`;
     row.querySelector('.message-avatar')!.textContent = shell.mark(characterId);
@@ -256,7 +379,8 @@ export class LiveBinding {
     const transcript = row.querySelector<HTMLElement>('.transcript')!;
     toggle.addEventListener('click', () => {
       const visible = transcript.hidden;
-      transcript.hidden = !visible; transcript.textContent = visible ? message.text : '';
+      transcript.hidden = !visible;
+      transcript.textContent = visible ? message.text : '';
       toggle.textContent = visible ? '收起文字' : '转文字';
       toggle.setAttribute('aria-expanded', String(visible));
     });
@@ -280,12 +404,19 @@ export class LiveBinding {
     if (title) title.textContent = active ? '正在讲话中' : this.shell!.name(characterId);
   }
 
-  private async present(characterId: WebProviderCharacterId, card: HTMLElement, messages: WebProviderMessage[], operationId: string, revision: number) {
+  private async present(
+    characterId: WebProviderCharacterId,
+    card: HTMLElement,
+    messages: WebProviderMessage[],
+    operationId: string,
+    revision: number,
+  ) {
     let previous: WebProviderMessage | undefined;
     for (const message of messages) {
       if (this.shown.has(message.messageId)) continue;
       const incoming = message.operationId === operationId && message.author !== 'player';
-      if (previous && incoming && !document.hidden && card.classList.contains('is-chat')) await this.wait(replyPauseMs(previous));
+      if (previous && incoming && !document.hidden && card.classList.contains('is-chat'))
+        await this.wait(replyPauseMs(previous));
       if (revision !== this.viewRevision || this.catalogChanged) return;
       this.append(characterId, card, [message]);
       if (incoming) previous = message;
@@ -293,7 +424,7 @@ export class LiveBinding {
   }
 
   private conversation(characterId: WebProviderCharacterId) {
-    return this.view.conversations.find(item => item.characterId === characterId)?.conversationId ?? null;
+    return this.view.conversations.find((item) => item.characterId === characterId)?.conversationId ?? null;
   }
 
   async open(characterId: WebProviderCharacterId, card: HTMLElement) {
@@ -306,47 +437,82 @@ export class LiveBinding {
       const page = await this.api.history({ characterId, conversationId, before: null });
       if (this.catalogChanged || revision !== this.viewRevision || this.sendingCharacter === characterId) return;
       this.append(characterId, card, page.messages);
-    } catch (error) { this.loaded.delete(conversationId); this.fail(error); }
+    } catch (error) {
+      this.loaded.delete(conversationId);
+      this.fail(error);
+    }
   }
 
   async send(characterId: WebProviderCharacterId, text: string, card: HTMLElement, onAccepted?: () => void) {
-    if (this.invitation.locked) { this.shell?.say('请先核对邀请兑换结果，未发送消息'); return; }
-    if (this.busy) { this.shell?.say('上一条还在回复中'); return; }
-    this.busy = true; this.sendingCharacter = characterId;
+    if (this.invitation.locked) {
+      this.shell?.say('请先核对邀请兑换结果，未发送消息');
+      return;
+    }
+    if (this.busy) {
+      this.shell?.say('上一条还在回复中');
+      return;
+    }
+    this.busy = true;
+    this.sendingCharacter = characterId;
     const revision = this.viewRevision;
     this.renderAccess();
     const list = card.querySelector<HTMLElement>('.sent-messages')!;
     const echo = document.createElement('div');
     echo.className = 'message-row outgoing';
     const bubble = document.createElement('p');
-    bubble.className = 'text-bubble'; bubble.textContent = text;
+    bubble.className = 'text-bubble';
+    bubble.textContent = text;
     echo.append(bubble);
     const requestId = crypto.randomUUID();
-    let accepted = false, uncertain = false;
+    let accepted = false,
+      uncertain = false;
     try {
       // IP quota can be consumed by another tab/session after this page was opened.
       await this.refreshAccess();
-      if (this.view.characters.find(character => character.characterId === characterId)?.availability.state !== 'available')
+      if (
+        this.view.characters.find((character) => character.characterId === characterId)?.availability.state !==
+        'available'
+      )
         throw new ProviderApiError(409, 'CHARACTER_UNAVAILABLE');
       const access = this.view.access;
-      if (!access.canSend) throw new ProviderApiError(403, access.kind === 'guest' ?
-        (access.remainingReplies === 0 ? 'TRIAL_EXHAUSTED' : 'TRIAL_EXPIRED') : 'ACCESS_UNAVAILABLE');
+      if (!access.canSend)
+        throw new ProviderApiError(
+          403,
+          access.kind === 'guest'
+            ? access.remainingReplies === 0
+              ? 'TRIAL_EXHAUSTED'
+              : 'TRIAL_EXPIRED'
+            : 'ACCESS_UNAVAILABLE',
+        );
       if (access.kind === 'guest' && access.lockedCharacterId !== null && access.lockedCharacterId !== characterId)
         throw new ProviderApiError(403, 'TRIAL_CHARACTER_LOCKED');
       list.append(echo);
       this.speaking(characterId, card, true);
-      card.querySelector<HTMLElement>('.chat-body')!.scrollTop = card.querySelector<HTMLElement>('.chat-body')!.scrollHeight;
+      card.querySelector<HTMLElement>('.chat-body')!.scrollTop =
+        card.querySelector<HTMLElement>('.chat-body')!.scrollHeight;
       let operation;
-      try { operation = (await this.api.submit({ requestId, characterId, text, delivery: 'voice' })).operation; }
-      catch (error) {
+      try {
+        operation = (await this.api.submit({ requestId, characterId, text, delivery: 'voice' })).operation;
+      } catch (error) {
         // Uncertain receipt: the same requestId tells us whether the server accepted it.
-        if (error instanceof ProviderApiError && error.status >= 400 && error.status < 500 &&
-          error.status !== 408 && error.code !== 'PROTOCOL_INVALID') throw error;
+        if (
+          error instanceof ProviderApiError &&
+          error.status >= 400 &&
+          error.status < 500 &&
+          error.status !== 408 &&
+          error.code !== 'PROTOCOL_INVALID'
+        )
+          throw error;
         uncertain = true;
-        try { operation = await this.api.byRequest(requestId); }
-        catch { throw new ProviderApiError(0, 'SEND_UNKNOWN'); }
+        try {
+          operation = await this.api.byRequest(requestId);
+        } catch {
+          throw new ProviderApiError(0, 'SEND_UNKNOWN');
+        }
       }
-      accepted = true; uncertain = false; onAccepted?.();
+      accepted = true;
+      uncertain = false;
+      onAccepted?.();
       operation = await this.api.waitForOperation(operation);
       await this.refreshAccess();
       if (operation.status === 'unknown') throw new ProviderApiError(409, 'REPLY_UNKNOWN');
@@ -357,26 +523,37 @@ export class LiveBinding {
       echo.remove();
       await this.present(characterId, card, page.messages, operation.operationId, revision);
       if (revision !== this.viewRevision || this.catalogChanged) return;
-      const first = page.messages.find(message => message.operationId === operation.operationId &&
-        message.author === 'character' && message.audio?.mediaId);
+      const first = page.messages.find(
+        (message) =>
+          message.operationId === operation.operationId && message.author === 'character' && message.audio?.mediaId,
+      );
       if (first && !document.hidden && card.classList.contains('is-chat')) void this.playMessage(characterId, first);
     } catch (error) {
-      if (revision !== this.viewRevision) { this.fail(error); return; }
+      if (revision !== this.viewRevision) {
+        this.fail(error);
+        return;
+      }
       // A definite rejection is not an accepted operation, nor an uncertain receipt.
       if (echo.isConnected) {
         echo.classList.add(accepted || uncertain ? 'delivery-unconfirmed' : 'not-sent');
-        const state = document.createElement('span'); state.className = 'message-send-state';
+        const state = document.createElement('span');
+        state.className = 'message-send-state';
         state.setAttribute('role', 'status');
-        state.textContent = accepted ? '已发送 · 回复未完成，请勿重复发送' :
-          uncertain ? '发送结果待确认，请勿重复发送' : '未发送 · 草稿已保留';
+        state.textContent = accepted
+          ? '已发送 · 回复未完成，请勿重复发送'
+          : uncertain
+            ? '发送结果待确认，请勿重复发送'
+            : '未发送 · 草稿已保留';
         echo.append(state);
         // Never retain the old "3" after the server has rejected quota/access.
         await this.refreshAccess().catch(() => {});
       }
       this.fail(error);
     } finally {
-      this.speaking(characterId, card, false); this.sendingCharacter = null;
-      this.busy = false; this.renderAccess();
+      this.speaking(characterId, card, false);
+      this.sendingCharacter = null;
+      this.busy = false;
+      this.renderAccess();
     }
   }
 }

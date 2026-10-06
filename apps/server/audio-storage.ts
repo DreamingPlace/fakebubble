@@ -1,7 +1,10 @@
 import type { Buffer } from 'node:buffer';
 import type { CharacterScope } from '../../packages/contracts/index.ts';
 
-export interface AudioIntegrity { byteLength: number | null; sha256: string | null }
+export interface AudioIntegrity {
+  byteLength: number | null;
+  sha256: string | null;
+}
 export interface LocalAudioStorage {
   kind: 'local';
   write(id: string, bytes: Uint8Array): void;

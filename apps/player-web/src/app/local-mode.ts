@@ -23,8 +23,16 @@ export function startLocalMode(root: HTMLElement) {
   const sender = new LocalSendController(api, session, pending);
   const audio = new LocalAudioController(session);
   const access = new LocalAccessController(api, session);
-  startLocalPage(root, { api, session, pending, cache, sender, audio, access,
-    createSync: sink => new LocalSyncController(api, session, sink) });
+  startLocalPage(root, {
+    api,
+    session,
+    pending,
+    cache,
+    sender,
+    audio,
+    access,
+    createSync: (sink) => new LocalSyncController(api, session, sink),
+  });
 }
 
 /** Separate local-3 invitation route; default visual prototype and local-2 stay unchanged. */
@@ -41,7 +49,16 @@ export function startLocal3Mode(root: HTMLElement) {
   const sender = new LocalSendController(api, session, pending);
   const audio = new LocalAudioController(session);
   const access = new LocalAccessController(api, session, inviteApi);
-  startLocalPage(root, { api, session, pending, cache, sender, audio, access, mode: 'local-3',
+  startLocalPage(root, {
+    api,
+    session,
+    pending,
+    cache,
+    sender,
+    audio,
+    access,
+    mode: 'local-3',
     invitePort: inviteFormPort(new LocalInviteController(inviteApi, session)),
-    createSync: sink => new LocalSyncController(api, session, sink) });
+    createSync: (sink) => new LocalSyncController(api, session, sink),
+  });
 }

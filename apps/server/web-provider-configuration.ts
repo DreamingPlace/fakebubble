@@ -17,25 +17,60 @@ export const PROVIDER_LIMIT_MICROS = 3_000_000;
 const PRICE_VALID_MS = 30 * 86_400_000;
 
 /** Local instance ceilings are not spending authorization; live calls also need the shared ledger. */
-export function configureWebProvider(store: WebRuntimeStore,
-  selected: ReturnType<typeof verifySelectedVoiceSetup>, now: number, policy: WebBudgetPolicy = 'test-cumulative') {
+export function configureWebProvider(
+  store: WebRuntimeStore,
+  selected: ReturnType<typeof verifySelectedVoiceSetup>,
+  now: number,
+  policy: WebBudgetPolicy = 'test-cumulative',
+) {
   ensure(policy === 'test-cumulative' || policy === 'production-unlimited', 'WEB_PROVIDER_BUDGET_INVALID');
   store.transaction(() => {
-    const clock = { now: () => now }, ledger = new WebProviderOffline(store, clock);
-    for (const item of selected) ledger.configureSelectedVoice({ characterId: item.characterId,
-      voiceVersion: item.voice.voiceVersion, voiceRevision: item.voice.revision,
-      profileId: item.voice.profileId, referenceId: item.voice.referenceId, model: item.voice.model,
-      evidence: item.evidence as unknown as Record<string, string> });
+    const clock = { now: () => now },
+      ledger = new WebProviderOffline(store, clock);
+    for (const item of selected)
+      ledger.configureSelectedVoice({
+        characterId: item.characterId,
+        voiceVersion: item.voice.voiceVersion,
+        voiceRevision: item.voice.revision,
+        profileId: item.voice.profileId,
+        referenceId: item.voice.referenceId,
+        model: item.voice.model,
+        evidence: item.evidence as unknown as Record<string, string>,
+      });
     for (const provider of ['deepseek', 'fish'])
       ledger.configureBudget(provider, policy === 'production-unlimited' ? null : PROVIDER_LIMIT_MICROS);
-    for (const price of PROVIDER_PRICES) ledger.configurePrice({
-      id: `${price.provider}-${price.phase}-${now}`, provider: price.provider, model: price.model,
-      phase: price.phase, currency: 'USD', unit: price.unit, upperMicrosPerUnit: price.upper,
-      validFrom: now, validUntil: now + PRICE_VALID_MS, version: 1 });
+    for (const price of PROVIDER_PRICES)
+      ledger.configurePrice({
+        id: `${price.provider}-${price.phase}-${now}`,
+        provider: price.provider,
+        model: price.model,
+        phase: price.phase,
+        currency: 'USD',
+        unit: price.unit,
+        upperMicrosPerUnit: price.upper,
+        validFrom: now,
+        validUntil: now + PRICE_VALID_MS,
+        version: 1,
+      });
     const capacity = new WebDispatchLedger(store, clock);
     // UNKNOWN calls retain their ticket; use the configured stage limits, not one global ticket.
-    capacity.configureBudget({ provider: 'deepseek', stage: 'text', phase: 'draft', capacity: WEB_LIMITS.maxTextRunning });
-    capacity.configureBudget({ provider: 'deepseek', stage: 'text', phase: 'review', capacity: WEB_LIMITS.maxTextRunning });
-    capacity.configureBudget({ provider: 'fish', stage: 'audio', phase: 'speech', capacity: WEB_LIMITS.maxAudioRunning });
+    capacity.configureBudget({
+      provider: 'deepseek',
+      stage: 'text',
+      phase: 'draft',
+      capacity: WEB_LIMITS.maxTextRunning,
+    });
+    capacity.configureBudget({
+      provider: 'deepseek',
+      stage: 'text',
+      phase: 'review',
+      capacity: WEB_LIMITS.maxTextRunning,
+    });
+    capacity.configureBudget({
+      provider: 'fish',
+      stage: 'audio',
+      phase: 'speech',
+      capacity: WEB_LIMITS.maxAudioRunning,
+    });
   });
 }

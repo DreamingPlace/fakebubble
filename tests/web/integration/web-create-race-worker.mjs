@@ -16,7 +16,7 @@ function wait(file) {
   }
 }
 const mkdir = fs.mkdirSync;
-fs.mkdirSync = function(path, ...args) {
+fs.mkdirSync = function (path, ...args) {
   if (path === root) {
     fs.writeFileSync(`${flags}/mkdir-${name}`, 'ready');
     wait(`${flags}/release-mkdir`);
@@ -25,7 +25,7 @@ fs.mkdirSync = function(path, ...args) {
 };
 syncBuiltinESMExports();
 const exec = DatabaseSync.prototype.exec;
-DatabaseSync.prototype.exec = function(sql) {
+DatabaseSync.prototype.exec = function (sql) {
   if (sql === 'PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;') {
     fs.writeFileSync(`${flags}/wal-${name}`, 'zero-checked');
     wait(`${flags}/release-wal-${name}`);

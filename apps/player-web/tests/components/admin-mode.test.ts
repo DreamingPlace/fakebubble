@@ -16,12 +16,16 @@ test('public provider admin can render on HTTPS; synthetic admin remains loopbac
 test('rendering the public admin does not authorize issuing an invite or substitute a local API', async () => {
   let calls = 0;
   const api = new InviteAdminApi(async (url, init) => {
-    calls++; assert.equal(url, '/api/web/provider/admin/session');
-    assert.equal(init?.credentials, 'same-origin'); assert.equal(init?.cache, 'no-store');
+    calls++;
+    assert.equal(url, '/api/web/provider/admin/session');
+    assert.equal(init?.credentials, 'same-origin');
+    assert.equal(init?.cache, 'no-store');
     return Response.json({ error: { code: 'ADMIN_UNAUTHORIZED' } }, { status: 401 });
   }, '/api/web/provider/admin');
   await assert.rejects(api.restore(), /ADMIN_UNAUTHORIZED/);
-  await assert.rejects(api.issue({ requestId: 'not-sent', redeemBy: null, batch: 'offline', note: null }),
-    /WEB_INVITE_ADMIN_SESSION_REQUIRED/);
+  await assert.rejects(
+    api.issue({ requestId: 'not-sent', redeemBy: null, batch: 'offline', note: null }),
+    /WEB_INVITE_ADMIN_SESSION_REQUIRED/,
+  );
   assert.equal(calls, 1);
 });

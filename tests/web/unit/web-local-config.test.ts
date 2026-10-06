@@ -10,6 +10,8 @@ test('local root and port belong only to this checkout', () => {
   assertLocalRoot(join(parent, 'local-b-unit'));
   assert.throws(() => assertLocalRoot(resolve(parent, '..', 'web.sqlite')), /WEB_LOCAL_ROOT_REQUIRED/);
   const otherRole = parent.includes('/control/') ? 'build' : 'control';
-  assert.throws(() => assertLocalRoot(resolve(parent, '..', '..', otherRole, 'db', 'local-other-unit')),
-    /WEB_LOCAL_ROOT_REQUIRED/);
+  assert.throws(
+    () => assertLocalRoot(resolve(parent, '..', '..', otherRole, 'db', 'local-other-unit')),
+    /WEB_LOCAL_ROOT_REQUIRED/,
+  );
 });

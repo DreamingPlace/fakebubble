@@ -18,35 +18,46 @@ export class CloudQueueAlarm {
   readonly pump: () => Promise<void>;
   readonly nextDue: () => number | null;
   constructor(storage: AlarmStorage, clock: Clock, pump: () => Promise<void>, nextDue: () => number | null) {
-    this.storage = storage; this.clock = clock; this.pump = pump; this.nextDue = nextDue;
+    this.storage = storage;
+    this.clock = clock;
+    this.pump = pump;
+    this.nextDue = nextDue;
   }
   private schedule(work: () => Promise<void>) {
-    const pending = this.#serial.then(work); this.#serial = pending.catch(() => {}); return pending;
+    const pending = this.#serial.then(work);
+    this.#serial = pending.catch(() => {});
+    return pending;
   }
   wake() {
     if (this.#stopped) return Promise.resolve();
     this.#revision++;
     return this.schedule(async () => {
       if (this.#stopped) return;
-      const at = this.clock.now() + 1000, prior = await this.storage.getAlarm();
+      const at = this.clock.now() + 1000,
+        prior = await this.storage.getAlarm();
       if (prior === null || prior > at) await this.storage.setAlarm(at);
     });
   }
   async stop() {
-    this.#stopped = true; this.#revision++;
+    this.#stopped = true;
+    this.#revision++;
     await this.schedule(() => this.storage.deleteAlarm());
   }
   async alarm() {
     if (this.#stopped || this.#running) return;
-    this.#running = true; const revision = this.#revision;
+    this.#running = true;
+    const revision = this.#revision;
     try {
       // Persist a watchdog BEFORE processing; a crash cannot depend on a successful finally block.
-      await this.schedule(async () => { if (!this.#stopped) await this.storage.setAlarm(this.clock.now() + 30_000); });
+      await this.schedule(async () => {
+        if (!this.#stopped) await this.storage.setAlarm(this.clock.now() + 30_000);
+      });
       if (this.#stopped) return;
       await this.pump();
       await this.schedule(async () => {
         if (this.#stopped) return;
-        const due = this.nextDue(), current = await this.storage.getAlarm();
+        const due = this.nextDue(),
+          current = await this.storage.getAlarm();
         if (due !== null) {
           ensure(Number.isSafeInteger(due) && due >= 0, 'INVALID_ALARM_TIME');
           const at = Math.max(this.clock.now() + 1000, due);
@@ -54,7 +65,9 @@ export class CloudQueueAlarm {
           await this.storage.setAlarm(revision !== this.#revision && current !== null ? Math.min(current, at) : at);
         } else if (revision === this.#revision) await this.storage.deleteAlarm();
       });
-    } finally { this.#running = false; }
+    } finally {
+      this.#running = false;
+    }
   }
 }
 
@@ -74,6 +87,8 @@ export function cloudQueueNextDue(store: BusinessStore, now: number): number | n
     "SELECT 0 due FROM speech_tasks WHERE state='queued' AND retry=1 LIMIT 1",
     'SELECT min(coalesce(preparation_until,0)) due FROM beta_reviewed_replies',
   ];
-  const times = queries.map(sql => store.get<{ due: number | null }>(sql)?.due).filter((value): value is number => value != null);
+  const times = queries
+    .map((sql) => store.get<{ due: number | null }>(sql)?.due)
+    .filter((value): value is number => value != null);
   return times.length ? Math.max(now, Math.min(...times)) : null;
 }

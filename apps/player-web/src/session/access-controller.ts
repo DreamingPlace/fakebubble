@@ -8,7 +8,9 @@ export class LocalAccessController {
   private readonly inviteApi: InviteLocalApi;
   private readonly session: LocalSession;
   constructor(api: LocalApi, session: LocalSession, inviteApi: InviteLocalApi = new InviteLocalApi()) {
-    this.api = api; this.session = session; this.inviteApi = inviteApi;
+    this.api = api;
+    this.session = session;
+    this.inviteApi = inviteApi;
   }
 
   async refresh(scope: LocalScope | null = this.session.scope): Promise<boolean> {

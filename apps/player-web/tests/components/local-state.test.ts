@@ -23,7 +23,11 @@ test('operation labels distinguish waiting, published, unknown and failed', () =
 });
 
 test('only published character synthetic audio gets a play control', () => {
-  const message = { author: 'character', origin: 'narrative', audio: { status: 'ready', mediaId: 'm', synthetic: true } } as WebLocalMessage;
+  const message = {
+    author: 'character',
+    origin: 'narrative',
+    audio: { status: 'ready', mediaId: 'm', synthetic: true },
+  } as WebLocalMessage;
   assert.equal(playable(message), true);
   assert.equal(playable({ ...message, origin: 'trial_footer' }), true);
   assert.equal(playable({ ...message, author: 'player' }), false);

@@ -62,38 +62,57 @@ export function startInviteForm(root: HTMLElement, deps: InviteFormDeps): () => 
     cancel.disabled = false;
     form.setAttribute('aria-busy', String(phase === 'redeeming' || phase === 'recovering'));
   };
-  const setStatus = (message: string) => { status.textContent = message; };
-  const clearCode = () => { codeInput.value = ''; intent = null; };
+  const setStatus = (message: string) => {
+    status.textContent = message;
+  };
+  const clearCode = () => {
+    codeInput.value = '';
+    intent = null;
+  };
   const applyResult = (result: InviteFormResult, ticket: number) => {
     if (disposed || ticket !== generation) return;
-    if (result.kind === 'accepted' && typeof result.principalId === 'string' && result.principalId &&
-        typeof result.grantId === 'string' && result.grantId) {
-      phase = 'accepted'; clearCode();
+    if (
+      result.kind === 'accepted' &&
+      typeof result.principalId === 'string' &&
+      result.principalId &&
+      typeof result.grantId === 'string' &&
+      result.grantId
+    ) {
+      phase = 'accepted';
+      clearCode();
       setStatus('邀请码已确认，可以继续体验。');
       try {
         void Promise.resolve(deps.onAccepted?.()).catch(() => {
-          if (!disposed && ticket === generation)
-            setStatus('邀请码已确认；页面未能切换，请刷新后继续。');
+          if (!disposed && ticket === generation) setStatus('邀请码已确认；页面未能切换，请刷新后继续。');
         });
       } catch {
         setStatus('邀请码已确认；页面未能切换，请刷新后继续。');
       }
     } else if (result.kind === 'accepted') {
-      phase = 'blocked'; clearCode();
+      phase = 'blocked';
+      clearCode();
       setStatus('无法确认兑换后的可信身份，请停止重试并联系管理员核对。');
     } else if (result.kind === 'uncertain') {
       phase = 'uncertain';
       setStatus('兑换结果尚未确认。只能核对这一次请求，不要重新兑换。');
-      queueMicrotask(() => { if (!disposed && ticket === generation) recover.focus({ preventScroll: true }); });
+      queueMicrotask(() => {
+        if (!disposed && ticket === generation) recover.focus({ preventScroll: true });
+      });
     } else if (result.code === 'lost-session' || result.code === 'recovery-unavailable') {
-      phase = 'blocked'; clearCode();
-      setStatus(result.code === 'lost-session' ?
-        '原会话已失效，无法证明兑换结果。请勿再次使用该码，联系管理员核对。' :
-        '本次兑换回执无法恢复。请勿再次使用该码，联系管理员核对。');
+      phase = 'blocked';
+      clearCode();
+      setStatus(
+        result.code === 'lost-session'
+          ? '原会话已失效，无法证明兑换结果。请勿再次使用该码，联系管理员核对。'
+          : '本次兑换回执无法恢复。请勿再次使用该码，联系管理员核对。',
+      );
     } else {
-      phase = 'entry'; intent = null;
+      phase = 'entry';
+      intent = null;
       setStatus('邀请码未通过，请检查后再试。');
-      queueMicrotask(() => { if (!disposed && ticket === generation) codeInput.focus({ preventScroll: true }); });
+      queueMicrotask(() => {
+        if (!disposed && ticket === generation) codeInput.focus({ preventScroll: true });
+      });
     }
     render();
   };
@@ -103,12 +122,14 @@ export function startInviteForm(root: HTMLElement, deps: InviteFormDeps): () => 
     phase = kind === 'redeem' ? 'redeeming' : 'recovering';
     setStatus(kind === 'redeem' ? '正在确认邀请码…' : '正在核对原请求…');
     render();
-    void deps.port[kind]({ ...intent }).then(result => applyResult(result, ticket)).catch(() => {
-      if (disposed || ticket !== generation) return;
-      phase = 'uncertain';
-      setStatus('连接中断，结果未确认。请只核对原请求，不要重新兑换。');
-      render();
-    });
+    void deps.port[kind]({ ...intent })
+      .then((result) => applyResult(result, ticket))
+      .catch(() => {
+        if (disposed || ticket !== generation) return;
+        phase = 'uncertain';
+        setStatus('连接中断，结果未确认。请只核对原请求，不要重新兑换。');
+        render();
+      });
   };
   const onSubmit = (event: SubmitEvent) => {
     event.preventDefault();
@@ -118,7 +139,9 @@ export function startInviteForm(root: HTMLElement, deps: InviteFormDeps): () => 
     intent = { code, requestId: (deps.newRequestId ?? (() => crypto.randomUUID()))() };
     run('redeem');
   };
-  const onRecover = () => { if (phase === 'uncertain' && intent) run('recover'); };
+  const onRecover = () => {
+    if (phase === 'uncertain' && intent) run('recover');
+  };
   const onCancel = () => {
     if (disposed || phase === 'accepted' || phase === 'blocked' || phase === 'abandoned') return;
     const submitted = intent !== null;
@@ -130,8 +153,14 @@ export function startInviteForm(root: HTMLElement, deps: InviteFormDeps): () => 
     if (!submitted) codeInput.focus({ preventScroll: true });
   };
   const onInput = () => render();
-  const onCompositionStart = () => { composing = true; render(); };
-  const onCompositionEnd = () => { composing = false; render(); };
+  const onCompositionStart = () => {
+    composing = true;
+    render();
+  };
+  const onCompositionEnd = () => {
+    composing = false;
+    render();
+  };
   form.addEventListener('submit', onSubmit);
   recover.addEventListener('click', onRecover);
   cancel.addEventListener('click', onCancel);
@@ -140,7 +169,9 @@ export function startInviteForm(root: HTMLElement, deps: InviteFormDeps): () => 
   codeInput.addEventListener('compositionend', onCompositionEnd);
   render();
   return () => {
-    disposed = true; generation++; clearCode();
+    disposed = true;
+    generation++;
+    clearCode();
     form.removeEventListener('submit', onSubmit);
     recover.removeEventListener('click', onRecover);
     cancel.removeEventListener('click', onCancel);

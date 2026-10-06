@@ -11,8 +11,12 @@ type Plan = { outcome: Outcome; release?: Promise<void> };
 
 export class ManualClock {
   private currentMs: number;
-  constructor(initialMs = 0) { this.currentMs = initialMs; }
-  now(): number { return this.currentMs; }
+  constructor(initialMs = 0) {
+    this.currentMs = initialMs;
+  }
+  now(): number {
+    return this.currentMs;
+  }
   advance(ms: number): void {
     if (!Number.isFinite(ms) || ms < 0) throw new RangeError('advance must be finite and nonnegative');
     this.currentMs += ms;
@@ -25,14 +29,16 @@ export class ControlledProvider {
   private readonly releases = new Map<string, Array<() => void>>();
   private readonly clock: ManualClock;
 
-  constructor(clock: ManualClock) { this.clock = clock; }
+  constructor(clock: ManualClock) {
+    this.clock = clock;
+  }
 
   script(operationId: string, stage: Stage, segment: number, outcome: Outcome, held = false): void {
     const key = this.key(operationId, stage, segment);
     const queue = this.plans.get(key) ?? [];
     let release: Promise<void> | undefined;
     if (held) {
-      release = new Promise<void>(resolve => {
+      release = new Promise<void>((resolve) => {
         const waiters = this.releases.get(key) ?? [];
         waiters.push(resolve);
         this.releases.set(key, waiters);
@@ -59,8 +65,12 @@ export class ControlledProvider {
   }
 
   count(operationId: string, stage?: Stage, segment?: number): number {
-    return this.calls.filter(call => call.operationId === operationId &&
-      (stage === undefined || call.stage === stage) && (segment === undefined || call.segment === segment)).length;
+    return this.calls.filter(
+      (call) =>
+        call.operationId === operationId &&
+        (stage === undefined || call.stage === stage) &&
+        (segment === undefined || call.segment === segment),
+    ).length;
   }
 
   private key(operationId: string, stage: Stage, segment: number): string {

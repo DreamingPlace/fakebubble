@@ -2,14 +2,35 @@
 export type WebId = string;
 export type WebAccessKind = 'guest' | 'account' | 'invite';
 export type WebOperationStatus =
-  | 'queued' | 'text_running' | 'text_ready' | 'audio_pending' | 'audio_running'
-  | 'ready_to_publish' | 'published' | 'retryable_failed' | 'failed' | 'cancelled' | 'unknown';
+  | 'queued'
+  | 'text_running'
+  | 'text_ready'
+  | 'audio_pending'
+  | 'audio_running'
+  | 'ready_to_publish'
+  | 'published'
+  | 'retryable_failed'
+  | 'failed'
+  | 'cancelled'
+  | 'unknown';
 export type WebAudioStatus = 'pending' | 'generating' | 'ready' | 'failed' | 'unknown';
 export type WebErrorCode =
-  | 'INVALID_REQUEST' | 'IDEMPOTENCY_CONFLICT' | 'TRIAL_EXHAUSTED' | 'TRIAL_CHARACTER_LOCKED'
-  | 'QUEUE_FULL' | 'REGION_UNAVAILABLE' | 'AUTH_REQUIRED' | 'SESSION_EXPIRED'
-  | 'OPERATION_EXPIRED' | 'OPERATION_UNKNOWN' | 'VOICE_UNAVAILABLE' | 'READ_ONLY_ARCHIVE'
-  | 'NOT_FOUND' | 'INVALID_CURSOR' | 'MEMORY_CONFLICT' | 'INTERNAL_ERROR';
+  | 'INVALID_REQUEST'
+  | 'IDEMPOTENCY_CONFLICT'
+  | 'TRIAL_EXHAUSTED'
+  | 'TRIAL_CHARACTER_LOCKED'
+  | 'QUEUE_FULL'
+  | 'REGION_UNAVAILABLE'
+  | 'AUTH_REQUIRED'
+  | 'SESSION_EXPIRED'
+  | 'OPERATION_EXPIRED'
+  | 'OPERATION_UNKNOWN'
+  | 'VOICE_UNAVAILABLE'
+  | 'READ_ONLY_ARCHIVE'
+  | 'NOT_FOUND'
+  | 'INVALID_CURSOR'
+  | 'MEMORY_CONFLICT'
+  | 'INTERNAL_ERROR';
 
 export interface WebAccess {
   kind: WebAccessKind;
@@ -47,7 +68,15 @@ export interface WebCharacter {
   description: string;
   imageUrl: string | null;
   /** Public approved-material snapshot only; never a source voice sample or license file. */
-  audition: { state: 'available'; url: string; mediaId: WebId; voiceVersion: string; sha256: string; durationMs: number | null }
+  audition:
+    | {
+        state: 'available';
+        url: string;
+        mediaId: WebId;
+        voiceVersion: string;
+        sha256: string;
+        durationMs: number | null;
+      }
     | { state: 'unavailable'; reason: 'not_approved' | 'missing' | 'region_unavailable' };
   theme: WebTheme;
 }
@@ -120,17 +149,33 @@ export interface WebSendInput {
 
 /** E calls B's data action, not fetch. B persists one requestId before network send. */
 export type WebSendDraft = Omit<WebSendInput, 'requestId'>;
-export interface WebSendAction { send(characterId: WebId, draft: WebSendDraft): Promise<WebSendReceipt> }
+export interface WebSendAction {
+  send(characterId: WebId, draft: WebSendDraft): Promise<WebSendReceipt>;
+}
 
 export interface WebSendReceipt {
   operation: WebOperation;
   duplicate: boolean;
 }
 
-export interface WebRegisterInput { requestId: WebId; username: string; password: string }
-export interface WebLoginInput { requestId: WebId; username: string; password: string }
-export interface WebInviteRedeemInput { requestId: WebId; code: string }
-export interface WebRecoverInput { requestId: WebId; recoveryCode: string }
+export interface WebRegisterInput {
+  requestId: WebId;
+  username: string;
+  password: string;
+}
+export interface WebLoginInput {
+  requestId: WebId;
+  username: string;
+  password: string;
+}
+export interface WebInviteRedeemInput {
+  requestId: WebId;
+  code: string;
+}
+export interface WebRecoverInput {
+  requestId: WebId;
+  recoveryCode: string;
+}
 export interface WebPendingTrialClaim {
   claimId: WebId;
   characterId: WebId;
@@ -162,18 +207,58 @@ export interface WebTrialArchive {
   lastMessageId: WebId | null;
 }
 
-export interface WebSaveTrialInput { requestId: WebId; claimId: WebId }
-export interface WebSaveTrialReceipt { archive: WebTrialArchive; targetConversationId: WebId; duplicate: boolean }
-export interface WebTrialArchivePage { archives: WebTrialArchive[]; before: string | null; hasMore: boolean }
-export interface WebTrialArchiveHistory extends WebHistoryPage { archiveId: WebId; readOnly: true }
+export interface WebSaveTrialInput {
+  requestId: WebId;
+  claimId: WebId;
+}
+export interface WebSaveTrialReceipt {
+  archive: WebTrialArchive;
+  targetConversationId: WebId;
+  duplicate: boolean;
+}
+export interface WebTrialArchivePage {
+  archives: WebTrialArchive[];
+  before: string | null;
+  hasMore: boolean;
+}
+export interface WebTrialArchiveHistory extends WebHistoryPage {
+  archiveId: WebId;
+  readOnly: true;
+}
 
-export interface WebReadReceipt { conversationId: WebId; throughMessageId: WebId; readAt: number }
-export interface WebListenedReceipt { conversationId: WebId; messageId: WebId; listenedAt: number }
+export interface WebReadReceipt {
+  conversationId: WebId;
+  throughMessageId: WebId;
+  readAt: number;
+}
+export interface WebListenedReceipt {
+  conversationId: WebId;
+  messageId: WebId;
+  listenedAt: number;
+}
 
-export interface WebMemorySummary { memoryId: WebId; conversationId: WebId; characterId: WebId; summary: string; revision: number }
-export interface WebMemoryPage { conversationId: WebId; memories: WebMemorySummary[]; before: string | null; hasMore: boolean }
-export interface WebMemoryCorrectionInput { requestId: WebId; expectedRevision: number; correction: string }
-export interface WebMemoryCorrectionReceipt { memory: WebMemorySummary; duplicate: boolean }
+export interface WebMemorySummary {
+  memoryId: WebId;
+  conversationId: WebId;
+  characterId: WebId;
+  summary: string;
+  revision: number;
+}
+export interface WebMemoryPage {
+  conversationId: WebId;
+  memories: WebMemorySummary[];
+  before: string | null;
+  hasMore: boolean;
+}
+export interface WebMemoryCorrectionInput {
+  requestId: WebId;
+  expectedRevision: number;
+  correction: string;
+}
+export interface WebMemoryCorrectionReceipt {
+  memory: WebMemorySummary;
+  duplicate: boolean;
+}
 
 export type WebSyncEvent =
   | { eventId: string; conversationId: WebId; kind: 'message'; message: WebMessage }

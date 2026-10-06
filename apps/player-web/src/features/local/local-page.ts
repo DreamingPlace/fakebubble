@@ -1,6 +1,10 @@
 import type { LocalAccess, LocalView } from '../../../../../packages/contracts/web-local-client.ts';
 import type { WebInviteView } from '../../../../../packages/contracts/web-local-invite.ts';
-import type { WebLocalMessage, WebLocalOperation, WebLocalSyncEvent } from '../../../../../packages/contracts/web-local.ts';
+import type {
+  WebLocalMessage,
+  WebLocalOperation,
+  WebLocalSyncEvent,
+} from '../../../../../packages/contracts/web-local.ts';
 import { LocalApi, LocalApiError } from '../../services/local-api.ts';
 import type { IndexedDbLocalCache } from '../../data/local-cache.ts';
 import type { IndexedDbPendingStore } from '../../data/pending-operations.ts';
@@ -94,45 +98,64 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
   let disposed = false;
   let disposeInvite: (() => void) | null = null;
 
-  const current = (scope: LocalScope) => !disposed && sameScope(deps.session.scope, scope) &&
-    deps.session.contentAvailable(scope);
+  const current = (scope: LocalScope) =>
+    !disposed && sameScope(deps.session.scope, scope) && deps.session.contentAvailable(scope);
   const firstUncertain = () => uncertainRequestIds[0] ?? null;
   const holdUncertain = (requestId: string) => {
     if (!uncertainRequestIds.includes(requestId)) uncertainRequestIds.push(requestId);
-    renderOperation(); renderAccess();
+    renderOperation();
+    renderAccess();
   };
   const privateClear = () => {
-    sync?.stop(); sync = null; deps.audio.stop();
-    conversationId = null; operation = null; messages = []; uncertainRequestIds = [];
-    reply.value = ''; sending = false; accessUnconfirmed = false; recoveringPending = false; lookingUp = false;
-    messagesNode.replaceChildren(); operationNode.textContent = '';
-    lookupButton.hidden = true; lookupButton.disabled = false;
+    sync?.stop();
+    sync = null;
+    deps.audio.stop();
+    conversationId = null;
+    operation = null;
+    messages = [];
+    uncertainRequestIds = [];
+    reply.value = '';
+    sending = false;
+    accessUnconfirmed = false;
+    recoveringPending = false;
+    lookingUp = false;
+    messagesNode.replaceChildren();
+    operationNode.textContent = '';
+    lookupButton.hidden = true;
+    lookupButton.disabled = false;
     renderAccess();
   };
   const showError = (error: unknown) => {
-    if (error instanceof LocalApiError && (error.code === 'TRIAL_EXPIRED' || error.status === 410)) deps.session.denyContent();
+    if (error instanceof LocalApiError && (error.code === 'TRIAL_EXPIRED' || error.status === 410))
+      deps.session.denyContent();
     if (error instanceof LocalApiError && (error.code === 'AUTH_REQUIRED' || error.code === 'SESSION_EXPIRED'))
       deps.session.invalidate();
-    errorNode.textContent = error instanceof UnsupportedLocalModeError && inviteMode ?
-      '本机服务不是 local-3 邀请测试模式；此入口不会回退到旧协议。' : errorText(error);
+    errorNode.textContent =
+      error instanceof UnsupportedLocalModeError && inviteMode
+        ? '本机服务不是 local-3 邀请测试模式；此入口不会回退到旧协议。'
+        : errorText(error);
     errorNode.hidden = false;
     renderAccess();
   };
-  const clearError = () => { errorNode.textContent = ''; errorNode.hidden = true; };
+  const clearError = () => {
+    errorNode.textContent = '';
+    errorNode.hidden = true;
+  };
   const renderAccess = () => {
     const access: LocalAccess | WebInviteView['bootstrap']['access'] | undefined =
       deps.session.currentInviteView?.bootstrap.access ?? deps.session.currentView?.bootstrap.access;
     const scope = deps.session.scope;
-    const available = !!scope && deps.session.contentAvailable(scope) &&
-      (!inviteMode || access?.kind === 'invite');
+    const available = !!scope && deps.session.contentAvailable(scope) && (!inviteMode || access?.kind === 'invite');
     if (!access || !characterId) accessLine.textContent = '等待合成服务';
     else if (inviteMode && access.kind === 'guest') accessLine.textContent = '输入邀请码后开始体验';
-    else if (access.kind === 'invite') accessLine.textContent = available ? '本机合成邀请体验' : '邀请访问已失效；私人内容已隐藏';
+    else if (access.kind === 'invite')
+      accessLine.textContent = available ? '本机合成邀请体验' : '邀请访问已失效；私人内容已隐藏';
     else if (!available || access.retentionState === 'expired') accessLine.textContent = '试聊已到期；私人内容已隐藏';
     else if (access.kind === 'account') accessLine.textContent = '本机合成账号 · 可继续';
-    else accessLine.textContent = `剩余可接纳次数：${access.trialRemaining ?? '—'}${access.trialExpiresAt ? ' · 试聊已有固定截止时间' : ''}`;
-    reply.disabled = !available || !access?.canSend || !characterId || !!firstUncertain() ||
-      accessUnconfirmed || recoveringPending;
+    else
+      accessLine.textContent = `剩余可接纳次数：${access.trialRemaining ?? '—'}${access.trialExpiresAt ? ' · 试聊已有固定截止时间' : ''}`;
+    reply.disabled =
+      !available || !access?.canSend || !characterId || !!firstUncertain() || accessUnconfirmed || recoveringPending;
     reply.readOnly = sending;
     sendButton.disabled = reply.disabled || sending || !reply.value.trim();
     lookupButton.hidden = !firstUncertain() || !available;
@@ -145,45 +168,66 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
     for (const message of messages) {
       const row = document.createElement('div');
       row.className = `local-message ${message.author === 'player' ? 'is-player' : 'is-character'}`;
-      const avatar = document.createElement('span'); avatar.className = 'local-avatar';
+      const avatar = document.createElement('span');
+      avatar.className = 'local-avatar';
       avatar.textContent = message.author === 'player' ? '我' : '测';
       avatar.setAttribute('aria-hidden', 'true');
       if (message.author === 'player') {
-        const text = document.createElement('p'); text.textContent = message.text; row.append(text, avatar);
+        const text = document.createElement('p');
+        text.textContent = message.text;
+        row.append(text, avatar);
       } else {
-        const voice = document.createElement('div'); voice.className = 'local-voice';
+        const voice = document.createElement('div');
+        voice.className = 'local-voice';
         if (message.origin === 'trial_footer') {
-          const label = document.createElement('span'); label.className = 'local-footer-label';
-          label.textContent = '固定收尾'; voice.append(label);
+          const label = document.createElement('span');
+          label.className = 'local-footer-label';
+          label.textContent = '固定收尾';
+          voice.append(label);
         }
-        const play = document.createElement('button'); play.type = 'button';
+        const play = document.createElement('button');
+        play.type = 'button';
         play.textContent = playable(message) ? '播放合成语音' : '语音不可用';
         play.disabled = !playable(message);
-        if (playable(message)) play.addEventListener('click', () => {
-          const playScope = deps.session.scope;
-          if (!playScope || !current(playScope)) return;
-          void deps.audio.play(message).then(result => {
-            if (!current(playScope)) return;
-            if (result === 'needs_user_gesture') operationNode.textContent = '浏览器需要再次点击后播放。';
-          }).catch(error => { if (current(playScope)) showError(error); });
-        });
-        const toggle = document.createElement('button'); toggle.type = 'button';
-        toggle.textContent = '转文字'; toggle.setAttribute('aria-expanded', 'false');
-        const transcript = document.createElement('p'); transcript.textContent = message.text; transcript.hidden = true;
+        if (playable(message))
+          play.addEventListener('click', () => {
+            const playScope = deps.session.scope;
+            if (!playScope || !current(playScope)) return;
+            void deps.audio
+              .play(message)
+              .then((result) => {
+                if (!current(playScope)) return;
+                if (result === 'needs_user_gesture') operationNode.textContent = '浏览器需要再次点击后播放。';
+              })
+              .catch((error) => {
+                if (current(playScope)) showError(error);
+              });
+          });
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.textContent = '转文字';
+        toggle.setAttribute('aria-expanded', 'false');
+        const transcript = document.createElement('p');
+        transcript.textContent = message.text;
+        transcript.hidden = true;
         toggle.addEventListener('click', () => {
           transcript.hidden = !transcript.hidden;
           toggle.textContent = transcript.hidden ? '转文字' : '收起文字';
           toggle.setAttribute('aria-expanded', String(!transcript.hidden));
         });
-        voice.append(play, toggle, transcript); row.append(avatar, voice);
+        voice.append(play, toggle, transcript);
+        row.append(avatar, voice);
       }
       messagesNode.append(row);
     }
     messagesNode.scrollTop = messagesNode.scrollHeight;
   };
   const renderOperation = () => {
-    operationNode.textContent = firstUncertain() ? '发送回执待核对；不会自动重发。' :
-      operation ? operationLabel(operation) : '';
+    operationNode.textContent = firstUncertain()
+      ? '发送回执待核对；不会自动重发。'
+      : operation
+        ? operationLabel(operation)
+        : '';
   };
   const history = async (scope: LocalScope) => {
     if (!conversationId || !current(scope)) return;
@@ -191,27 +235,37 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
     try {
       const page = await deps.api.history(id, undefined, deps.session.signal);
       if (!current(scope) || conversationId !== id) return;
-      messages = page.messages.filter(message => message.conversationId === id && message.characterId === characterId);
-      try { await deps.cache.putMessages(scope, messages); }
-      catch { /* Server history is authoritative; cache failure must not hide a valid reply. */ }
+      messages = page.messages.filter(
+        (message) => message.conversationId === id && message.characterId === characterId,
+      );
+      try {
+        await deps.cache.putMessages(scope, messages);
+      } catch {
+        /* Server history is authoritative; cache failure must not hide a valid reply. */
+      }
       if (current(scope)) renderMessages();
-    } catch (error) { if (current(scope)) showError(error); }
+    } catch (error) {
+      if (current(scope)) showError(error);
+    }
   };
   const receiveOperation = async (next: WebLocalOperation, scope: LocalScope) => {
     if (!current(scope) || !characterId) return;
     if (operation?.operationId === next.operationId && next.revision < operation.revision) return;
-    operation = next; conversationId = next.conversationId;
+    operation = next;
+    conversationId = next.conversationId;
     renderOperation();
     if (next.status === 'published') await history(scope);
   };
   const refreshAccess = async (scope: LocalScope) => {
     if (!current(scope)) return;
-    accessUnconfirmed = true; renderAccess();
+    accessUnconfirmed = true;
+    renderAccess();
     try {
       const applied = await deps.access.refresh(scope);
       if (!current(scope)) return;
       if (!applied) throw new Error('access refresh was not applied');
-      accessUnconfirmed = false; renderAccess();
+      accessUnconfirmed = false;
+      renderAccess();
     } catch (error) {
       if (sameScope(deps.session.scope, scope)) showError(error);
       throw error;
@@ -228,29 +282,39 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
         } else if (event.kind === 'publication') await history(scope);
         if (owns(scope)) renderAccess();
       },
-      async refreshAccess(scope) { if (owns(scope)) await refreshAccess(scope); },
+      async refreshAccess(scope) {
+        if (owns(scope)) await refreshAccess(scope);
+      },
       async refetchOperation(id, scope) {
         if (!owns(scope)) throw new Error('stale sync scope');
         const next = await deps.api.operation(id, deps.session.signal);
         if (owns(scope)) await receiveOperation(next, scope);
         return next;
       },
-      async cursor(_cursor, _scope) { /* Bootstrap is authoritative after reload. */ },
-      onError(error) { if (owns(ownedScope)) showError(error); },
+      async cursor(_cursor, _scope) {
+        /* Bootstrap is authoritative after reload. */
+      },
+      onError(error) {
+        if (owns(ownedScope)) showError(error);
+      },
     };
   };
 
   const accepted = async (result: SendResult, scope: LocalScope, clearDraft: boolean) => {
     if (!current(scope)) return;
     if (result.kind === 'network_uncertain') {
-      holdUncertain(result.requestId); return;
+      holdUncertain(result.requestId);
+      return;
     }
     if (result.kind !== 'accepted') return;
-    uncertainRequestIds = uncertainRequestIds.filter(id => id !== result.operation.requestId);
+    uncertainRequestIds = uncertainRequestIds.filter((id) => id !== result.operation.requestId);
     if (clearDraft) {
       reply.value = '';
-      try { await deps.cache.putDraft(scope, characterId!, ''); }
-      catch { /* The accepted operation remains authoritative. */ }
+      try {
+        await deps.cache.putDraft(scope, characterId!, '');
+      } catch {
+        /* The accepted operation remains authoritative. */
+      }
     }
     if (!current(scope)) return;
     renderOperation();
@@ -260,49 +324,89 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
   };
   const onSubmit = (event: SubmitEvent) => {
     event.preventDefault();
-    const scope = deps.session.scope, id = characterId, text = reply.value.trim();
-    if (!scope || !id || !current(scope) || inviteMode && !deps.session.currentInviteView ||
-        sending || firstUncertain() || recoveringPending ||
-        accessUnconfirmed || !text ||
-        !(deps.session.currentInviteView?.bootstrap.access.canSend ??
-          deps.session.currentView?.bootstrap.access.canSend)) return;
-    sending = true; clearError(); renderAccess();
-    void deps.sender.send(id, text).then(result => accepted(result, scope, true)).catch(error => {
-      if (sameScope(deps.session.scope, scope)) showError(error);
-    }).finally(() => { if (sameScope(deps.session.scope, scope)) { sending = false; renderAccess(); } });
+    const scope = deps.session.scope,
+      id = characterId,
+      text = reply.value.trim();
+    if (
+      !scope ||
+      !id ||
+      !current(scope) ||
+      (inviteMode && !deps.session.currentInviteView) ||
+      sending ||
+      firstUncertain() ||
+      recoveringPending ||
+      accessUnconfirmed ||
+      !text ||
+      !(deps.session.currentInviteView?.bootstrap.access.canSend ?? deps.session.currentView?.bootstrap.access.canSend)
+    )
+      return;
+    sending = true;
+    clearError();
+    renderAccess();
+    void deps.sender
+      .send(id, text)
+      .then((result) => accepted(result, scope, true))
+      .catch((error) => {
+        if (sameScope(deps.session.scope, scope)) showError(error);
+      })
+      .finally(() => {
+        if (sameScope(deps.session.scope, scope)) {
+          sending = false;
+          renderAccess();
+        }
+      });
   };
   const onLookup = () => {
-    const scope = deps.session.scope, requestId = firstUncertain();
+    const scope = deps.session.scope,
+      requestId = firstUncertain();
     if (!scope || !requestId || !current(scope) || lookingUp || recoveringPending) return;
-    clearError(); lookingUp = true; renderAccess();
-    void deps.pending.get(scope, requestId).then(item => {
-      if (!item || !current(scope)) throw new Error('pending request unavailable');
-      return deps.sender.lookup(item).then(result => ({ result, text: item.text }));
-    }).then(({ result, text }) => accepted(result, scope, reply.value.trim() === text)).catch(error => {
-      if (sameScope(deps.session.scope, scope)) showError(error);
-    }).finally(() => { if (current(scope)) { lookingUp = false; renderAccess(); } });
+    clearError();
+    lookingUp = true;
+    renderAccess();
+    void deps.pending
+      .get(scope, requestId)
+      .then((item) => {
+        if (!item || !current(scope)) throw new Error('pending request unavailable');
+        return deps.sender.lookup(item).then((result) => ({ result, text: item.text }));
+      })
+      .then(({ result, text }) => accepted(result, scope, reply.value.trim() === text))
+      .catch((error) => {
+        if (sameScope(deps.session.scope, scope)) showError(error);
+      })
+      .finally(() => {
+        if (current(scope)) {
+          lookingUp = false;
+          renderAccess();
+        }
+      });
   };
   const onInput = () => {
     renderAccess();
-    const scope = deps.session.scope, id = characterId;
-    if (scope && id && current(scope)) void deps.cache.putDraft(scope, id, reply.value).catch(error => {
-      if (current(scope)) showError(error);
-    });
+    const scope = deps.session.scope,
+      id = characterId;
+    if (scope && id && current(scope))
+      void deps.cache.putDraft(scope, id, reply.value).catch((error) => {
+        if (current(scope)) showError(error);
+      });
   };
   const onKeydown = (event: KeyboardEvent) => {
     if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-      event.preventDefault(); form.requestSubmit();
+      event.preventDefault();
+      form.requestSubmit();
     }
   };
   const onVisibility = () => {
-    const ownedSync = sync, ownedScope = deps.session.scope, ticket = bootTicket;
+    const ownedSync = sync,
+      ownedScope = deps.session.scope,
+      ticket = bootTicket;
     if (!ownedSync || !ownedScope) return;
-    void ownedSync.visible(!document.hidden).catch(error => {
+    void ownedSync.visible(!document.hidden).catch((error) => {
       if (ticket === bootTicket && sync === ownedSync && current(ownedScope)) showError(error);
     });
   };
   const mountInvite = (guest: boolean, ticket: number) => {
-    disposeInvite?.(); disposeInvite = null;
+    disposeInvite?.();
+    disposeInvite = null;
     inviteMount.hidden = !guest;
     card.hidden = guest;
     reconnectButton.hidden = guest;
@@ -311,22 +415,26 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
       inviteMount.textContent = '当前合成服务未开放邀请码兑换。';
       return;
     }
-    disposeInvite = startInviteForm(inviteMount, { port: deps.invitePort, synthetic: false,
+    disposeInvite = startInviteForm(inviteMount, {
+      port: deps.invitePort,
+      synthetic: false,
       onAccepted: async () => {
         const invited = deps.session.currentInviteView;
         if (!invited || disposed || ticket !== bootTicket) return;
         const ownedScope = deps.session.scope;
         clearError();
         mountInvite(false, ticket);
-        try { await activate(invited, ticket, true); }
-        catch (error) {
-          if (!ownedScope || disposed || ticket !== bootTicket ||
-              !sameScope(deps.session.scope, ownedScope)) return;
-          sync?.stop(); sync = null;
+        try {
+          await activate(invited, ticket, true);
+        } catch (error) {
+          if (!ownedScope || disposed || ticket !== bootTicket || !sameScope(deps.session.scope, ownedScope)) return;
+          sync?.stop();
+          sync = null;
           accessUnconfirmed = true;
           showError(error);
         }
-      } });
+      },
+    });
   };
   const activate = async (next: LocalView | WebInviteView, ticket: number, installed = false) => {
     if (disposed || ticket !== bootTicket) return;
@@ -337,8 +445,12 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
     version.textContent = '本机合成';
     const guest = inviteMode && next.bootstrap.contractVersion === 'web-v1-local-2';
     mountInvite(guest, ticket);
-    if (guest) { renderAccess(); return; }
-    recoveringPending = true; renderAccess();
+    if (guest) {
+      renderAccess();
+      return;
+    }
+    recoveringPending = true;
+    renderAccess();
     const recovered = await deps.sender.recoverPending();
     if (!current(scope) || ticket !== bootTicket) return;
     for (const result of recovered) {
@@ -347,18 +459,26 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
       else await accepted(result, scope, false);
       if (!current(scope) || ticket !== bootTicket) return;
     }
-    recoveringPending = false; renderAccess();
+    recoveringPending = false;
+    renderAccess();
     if (characterId) {
       deps.audio.selectCharacter(characterId);
       const draft = await deps.cache.draft(scope, characterId).catch(() => null);
       if (current(scope) && draft !== null) reply.value = draft;
     }
-    if (!current(scope)) { renderAccess(); return; }
-    conversationId ??= next.bootstrap.conversations.find(row => row.characterId === characterId)?.conversationId ?? null;
-    const activeOperation = next.bootstrap.activeOperations.find(row =>
-      conversationId ? row.conversationId === conversationId : !!characterId);
+    if (!current(scope)) {
+      renderAccess();
+      return;
+    }
+    conversationId ??=
+      next.bootstrap.conversations.find((row) => row.characterId === characterId)?.conversationId ?? null;
+    const activeOperation = next.bootstrap.activeOperations.find((row) =>
+      conversationId ? row.conversationId === conversationId : !!characterId,
+    );
     if (!operation && activeOperation) {
-      operation = activeOperation; conversationId = activeOperation.conversationId; renderOperation();
+      operation = activeOperation;
+      conversationId = activeOperation.conversationId;
+      renderOperation();
     }
     renderAccess();
     if (conversationId) await history(scope);
@@ -368,25 +488,41 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
   };
   const boot = async () => {
     const ticket = ++bootTicket;
-    deps.session.invalidate(); characterId = null;
-    disposeInvite?.(); disposeInvite = null; inviteMount.hidden = true; card.hidden = false;
-    clearError(); reconnectButton.disabled = true; name.textContent = '正在连接';
-    version.textContent = ''; renderAccess();
+    deps.session.invalidate();
+    characterId = null;
+    disposeInvite?.();
+    disposeInvite = null;
+    inviteMount.hidden = true;
+    card.hidden = false;
+    clearError();
+    reconnectButton.disabled = true;
+    name.textContent = '正在连接';
+    version.textContent = '';
+    renderAccess();
     try {
       const next = inviteMode ? await deps.api.bootstrapAny?.() : await deps.api.bootstrap();
       if (disposed || ticket !== bootTicket) return;
-      if (!next || next.kind !== 'synthetic-local' ||
-          (inviteMode ? next.bootstrap.contractVersion !== 'web-v1-local-2' &&
-            next.bootstrap.contractVersion !== 'web-v1-local-3' :
-            next.bootstrap.contractVersion !== 'web-v1-local-2'))
+      if (
+        !next ||
+        next.kind !== 'synthetic-local' ||
+        (inviteMode
+          ? next.bootstrap.contractVersion !== 'web-v1-local-2' && next.bootstrap.contractVersion !== 'web-v1-local-3'
+          : next.bootstrap.contractVersion !== 'web-v1-local-2')
+      )
         throw new UnsupportedLocalModeError();
       await activate(next, ticket);
-    } catch (error) { if (!disposed && ticket === bootTicket) showError(error); }
-    finally { if (!disposed && ticket === bootTicket) reconnectButton.disabled = false; }
+    } catch (error) {
+      if (!disposed && ticket === bootTicket) showError(error);
+    } finally {
+      if (!disposed && ticket === bootTicket) reconnectButton.disabled = false;
+    }
   };
 
   const onInvalidated = deps.session.onInvalidate(privateClear);
-  const onExpired = deps.session.onContentExpired(() => { privateClear(); renderAccess(); });
+  const onExpired = deps.session.onContentExpired(() => {
+    privateClear();
+    renderAccess();
+  });
   form.addEventListener('submit', onSubmit);
   reply.addEventListener('input', onInput);
   reply.addEventListener('keydown', onKeydown);
@@ -395,10 +531,14 @@ export function startLocalPage(root: HTMLElement, deps: LocalPageDeps) {
   document.addEventListener('visibilitychange', onVisibility);
   void boot();
   return () => {
-    disposed = true; bootTicket++;
-    disposeInvite?.(); disposeInvite = null;
-    sync?.stop(); deps.audio.stop();
-    onInvalidated(); onExpired();
+    disposed = true;
+    bootTicket++;
+    disposeInvite?.();
+    disposeInvite = null;
+    sync?.stop();
+    deps.audio.stop();
+    onInvalidated();
+    onExpired();
     form.removeEventListener('submit', onSubmit);
     reply.removeEventListener('input', onInput);
     reply.removeEventListener('keydown', onKeydown);

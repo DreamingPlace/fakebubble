@@ -6,10 +6,10 @@ export function swipeStep(dx: number, dy: number, canceled = false): number {
 export type VisibleViewport = { width: number; height: number; offsetTop: number; offsetLeft: number; scale: number };
 export function chatViewport(viewport: VisibleViewport | null, width: number, height: number) {
   // Leave native pinch zoom alone rather than shrinking the UI to defeat magnification.
-  if (viewport && Math.abs(viewport.scale - 1) > .01) return null;
-  const w = viewport?.width ?? width, h = viewport?.height ?? height;
-  return { width: w, height: h, top: (viewport?.offsetTop ?? 0) + h / 2,
-    left: (viewport?.offsetLeft ?? 0) + w / 2 };
+  if (viewport && Math.abs(viewport.scale - 1) > 0.01) return null;
+  const w = viewport?.width ?? width,
+    h = viewport?.height ?? height;
+  return { width: w, height: h, top: (viewport?.offsetTop ?? 0) + h / 2, left: (viewport?.offsetLeft ?? 0) + w / 2 };
 }
 
 export function followChatViewport(page: HTMLElement) {
