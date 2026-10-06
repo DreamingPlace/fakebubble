@@ -98,7 +98,7 @@ export function publishWebCharacter(
         review.finished_at !== null &&
         review.finished_at <= now &&
         review.error_code === null &&
-        review.prompt_hash === textPolicyHash({ textProtocol: 'accepted-v7' }) &&
+        review.prompt_hash === textPolicyHash() &&
         review.content_hash === contentHash(template) &&
         contentHash(JSON.parse(review.template_json)) === contentHash(template),
       'VALID_PREVIEW_REQUIRED',

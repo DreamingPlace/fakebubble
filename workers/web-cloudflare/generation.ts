@@ -67,7 +67,6 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
       this.begin();
       const text = new DeepSeekTextGenerator({
         apiKey: this.env.DEEPSEEK_API_KEY,
-        textProtocol: 'accepted-v7',
         fetch: this.fetcher,
       });
       ensure(text.policyHash === policyHash, 'WEB_PROVIDER_WIRE_MISMATCH');

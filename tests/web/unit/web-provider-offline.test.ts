@@ -212,7 +212,6 @@ test('provider scheduler does not start with implicit spending or capacity', (t)
     clock = { now: () => now };
   const text = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
-    textProtocol: 'accepted-v7',
     fetch: async () => {
       throw new Error('unexpected fetch');
     },
@@ -752,7 +751,6 @@ test('113 fake protocol runner completes scoped text, Fish WAV, publication and 
     fishCalls = 0;
   const generator = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
-    textProtocol: 'accepted-v7',
     fetch: async (_url, init) => {
       textCalls++;
       const tool = JSON.parse(String(init?.body)).tools[0].function.name;
@@ -1052,7 +1050,6 @@ test('text phases await remote holds and known settlement before review and text
   });
   const generator = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
-    textProtocol: 'accepted-v7',
     fetch: async (_url, init) => {
       const draft = JSON.parse(String(init?.body)).tools[0].function.name === 'submit_dialogue_draft';
       steps.push(draft ? 'send-draft' : 'send-review');
@@ -1141,7 +1138,6 @@ test('113 runner resumes one confirmed draft with review-only fake request', asy
   let calls = 0;
   const generator = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
-    textProtocol: 'accepted-v7',
     fetch: async (_url, init) => {
       calls++;
       assert.equal(JSON.parse(String(init?.body)).tools[0].function.name, 'submit_dialogue_audit');
@@ -1246,7 +1242,6 @@ test('113 runner does not resend an UNKNOWN text attempt', async (t) => {
   let calls = 0;
   const generator = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
-    textProtocol: 'accepted-v7',
     fetch: async () => {
       calls++;
       throw new Error('must not resend');

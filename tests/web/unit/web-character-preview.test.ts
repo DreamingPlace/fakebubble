@@ -79,7 +79,6 @@ function fixture(t: test.TestContext) {
     onCall: (() => void | Promise<void>) | undefined;
   const generator = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
-    textProtocol: 'accepted-v7',
     fetch: async (_url, init) => {
       const name = JSON.parse(String(init!.body)).tools[0].function.name;
       calls.push(name);

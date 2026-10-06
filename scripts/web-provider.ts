@@ -111,7 +111,6 @@ export function liveTransports(envDir: string) {
   return {
     text: new DeepSeekTextGenerator({
       apiKey: textEnv.DEEPSEEK_API_KEY!,
-      textProtocol: 'accepted-v7',
       baseUrl: text.baseUrl,
       model: text.model,
       reviewModel: text.reviewModel,

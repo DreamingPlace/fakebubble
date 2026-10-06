@@ -255,7 +255,6 @@ function audioFixture(t: TestContext) {
       clock,
       new DeepSeekTextGenerator({
         apiKey: 'offline-only',
-        textProtocol: 'accepted-v7',
         fetch: async () => {
           throw new Error('C_TEXT_NOT_CALLED');
         },

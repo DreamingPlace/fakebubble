@@ -237,7 +237,7 @@ export interface BubblePresentationCheck {
 }
 export interface TextGenerator extends ProviderDeclaration {
   readonly policyHash?: string;
-  readonly textProtocol?: 'accepted-v7' | 'experimental-v10';
+  readonly textProtocol?: 'accepted-v7';
   generate(request: TextGenerationRequest, signal: AbortSignal, meter?: ProviderMeter): Promise<TextGenerationResult>;
 }
 export interface AudioRequest {

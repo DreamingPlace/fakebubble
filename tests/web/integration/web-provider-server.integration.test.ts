@@ -83,7 +83,6 @@ test('provider-local 113 over HTTPS: catalog, guest lock, three turns + footer, 
     )!.id;
   const text = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
-    textProtocol: 'accepted-v7',
     fetch: async (_url, init) => {
       textCalls++;
       if (stallText)

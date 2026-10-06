@@ -137,7 +137,6 @@ export class WebBusinessFixture {
       );
     const text = new DeepSeekTextGenerator({
       apiKey: 'offline-only',
-      textProtocol: 'accepted-v7',
       fetch: async (_url, init) => {
         called('text');
         const body = JSON.parse(String(init?.body));
