@@ -1,5 +1,5 @@
 import type { WebCloudMaterialPackage } from '../../../apps/server/cloudflare/web-setup.ts';
-import type { CloudBudgetAuthorization } from '../../../apps/server/web-provider-budget-contract.ts';
+import type { CloudBudgetAuthorization } from '../../../apps/server/budget/web-provider-budget-contract.ts';
 interface Environment {
   OPERATOR: {
     initialize(value: WebCloudMaterialPackage): Promise<unknown>;

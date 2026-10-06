@@ -33,7 +33,7 @@ DatabaseSync.prototype.exec = function (sql) {
   return exec.call(this, sql);
 };
 try {
-  const { WebStore } = await import('../../../apps/server/store.ts');
+  const { WebStore } = await import('../../../apps/server/platform/store.ts');
   const store = new WebStore(root, { create: true, instanceId });
   const actual = store.get('SELECT instance_id FROM web_instance').instance_id;
   store.close();

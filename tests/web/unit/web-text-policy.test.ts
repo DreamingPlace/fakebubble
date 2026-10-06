@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
-import { protocolFingerprint } from '../../../apps/server/accepted-text-protocol.ts';
-import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server/text-generation-policy.ts';
+import { protocolFingerprint } from '../../../apps/server/generation/accepted-text-protocol.ts';
+import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server/generation/text-generation-policy.ts';
 
 // Values captured on main (66e2c6b) before the experimental-v10 protocol was removed. Stored preview and
 // publication approvals embed this hash, so it must stay byte-identical.

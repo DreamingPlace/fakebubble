@@ -1,5 +1,5 @@
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { AdminMailer } from '../web-account-admin.ts';
+import type { AdminMailer } from '../admin/web-account-admin.ts';
 
 /** Cloudflare's structured Email Sending binding. No SMTP secret, HTML, tracking or raw MIME. */
 export interface AdminEmailBinding {

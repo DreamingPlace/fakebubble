@@ -1,10 +1,10 @@
 import { WebRetentionFixture } from './cloudflare-retention-worker.ts';
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
 import type { PrivateBucket } from '../../../apps/server/cloudflare/media-objects.ts';
-import { WebAccountAdmin } from '../../../apps/server/web-account-admin.ts';
-import { installWebCharacterCatalog } from '../../../apps/server/web-character-catalog.ts';
-import { installWebCharacterDeletion } from '../../../apps/server/web-character-deletion-schema.ts';
-import { WebCharacterDeletion } from '../../../apps/server/web-character-deletion.ts';
+import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
+import { installWebCharacterCatalog } from '../../../apps/server/characters/web-character-catalog.ts';
+import { installWebCharacterDeletion } from '../../../apps/server/characters/web-character-deletion-schema.ts';
+import { WebCharacterDeletion } from '../../../apps/server/characters/web-character-deletion.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
 
 /** Offline operators for destructive/racing tests; never reachable through a deployable entry. */

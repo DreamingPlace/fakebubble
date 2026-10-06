@@ -4,13 +4,16 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebLocalExecutor } from '../../../apps/server/web-local-executor.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
-import { preflightWebDataPolicy, type DataPolicyKeySource } from '../../../apps/server/web-data-policy-preflight.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebLocalExecutor } from '../../../apps/server/platform/web-local-executor.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
+import {
+  preflightWebDataPolicy,
+  type DataPolicyKeySource,
+} from '../../../apps/server/platform/web-data-policy-preflight.ts';
 import { defaultSchedule } from '../../../packages/domain/defaults.ts';
 
 const origin = 'https://127.0.0.1:18451';

@@ -1,5 +1,5 @@
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebSyntheticPrivateAudio } from '../../../apps/server/web-private-audio.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebSyntheticPrivateAudio } from '../../../apps/server/audio/web-private-audio.ts';
 import { tone } from '../../audio-fixtures.ts';
 
 const [root, instanceId, scopeJson, leaseJson, nowText] = process.argv.slice(2);

@@ -1,10 +1,10 @@
-import { WebCharacterDeletion } from '../web-character-deletion.ts';
-import { WebCharacterPreviewExecutor } from '../web-character-preview-executor.ts';
-import type { WebCharacterPreviewRunner } from '../web-character-preview-runner.ts';
+import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
+import { WebCharacterPreviewExecutor } from '../characters/web-character-preview-executor.ts';
+import type { WebCharacterPreviewRunner } from '../characters/web-character-preview-runner.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
-import type { WebRuntimeStore } from '../web-store-contract.ts';
-import type { WebProviderRunner } from '../web-provider-runner.ts';
-import { WebProviderExecutor } from '../web-provider-executor.ts';
+import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
+import type { WebProviderRunner } from '../generation/web-provider-runner.ts';
+import { WebProviderExecutor } from '../generation/web-provider-executor.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
 import { CloudQueueAlarm, type AlarmStorage } from './queue-alarm.ts';

@@ -3,11 +3,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
-import { localRuntime, initProviderInstance } from '../../../apps/server/web-local-config.ts';
+import { localRuntime, initProviderInstance } from '../../../apps/server/platform/web-local-config.ts';
 import { migrateProvider, openProviderStore } from '../../../scripts/web-provider.ts';
-import { renderProviderAssets } from '../../../apps/server/web-provider-assets.ts';
-import { WebProviderBudget } from '../../../apps/server/web-provider-budget.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { renderProviderAssets } from '../../../apps/server/generation/web-provider-assets.ts';
+import { WebProviderBudget } from '../../../apps/server/budget/web-provider-budget.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { FishAudio } from '../../../workers/audio/fish.ts';
 import { syntheticSelection } from '../fixtures/provider-selection.ts';
 

@@ -5,9 +5,9 @@ import { readFileSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { localRuntime, readLocalConfig } from '../../../apps/server/web-local-config.ts';
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
+import { localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
 
 const runtime = localRuntime(),
   origin = `https://127.0.0.1:${runtime.port}`;

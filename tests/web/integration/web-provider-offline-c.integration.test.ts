@@ -2,25 +2,26 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import test, { type TestContext } from 'node:test';
-import { Store } from '../../../apps/server/store.ts';
-import { WebProviderOffline } from '../../../apps/server/web-provider-offline.ts';
-import { migrateWebProviderOffline } from '../../../apps/server/web-provider-migration.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
-import { protocolFingerprint } from '../../../apps/server/accepted-text-protocol.ts';
-import { textPromptHash } from '../../../apps/server/accepted-text-prompt.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
+import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
+import { migrateWebProviderOffline } from '../../../apps/server/generation/web-provider-migration.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
+import { protocolFingerprint } from '../../../apps/server/generation/accepted-text-protocol.ts';
+import { textPromptHash } from '../../../apps/server/generation/accepted-text-prompt.ts';
 import { textRequest, draftWire, draftPresentation } from '../../text-fixtures.ts';
-import { freezeInputSnapshot } from '../../../apps/server/web-input-snapshot.ts';
-import type { WebStore } from '../../../apps/server/store.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
-import { WebProviderRunner, fishTransport } from '../../../apps/server/web-provider-runner.ts';
-import { DeepSeekTextGenerator } from '../../../apps/server/deepseek.ts';
+import { freezeInputSnapshot } from '../../../apps/server/generation/web-input-snapshot.ts';
+import type { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
+import { WebProviderRunner, fishTransport } from '../../../apps/server/generation/web-provider-runner.ts';
+import { DeepSeekTextGenerator } from '../../../apps/server/generation/deepseek.ts';
 import { FishAudio, fishSpeechRequest } from '../../../workers/audio/fish.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
-import { sceneState } from '../../../apps/server/scenes.ts';
-import { WebVerticalPublisher } from '../../../apps/server/web-vertical-publisher.ts';
+import { sceneState } from '../../../apps/server/conversation/scenes.ts';
+import { userStore } from '../../../apps/server/platform/store-boundary.ts';
+import { WebVerticalPublisher } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import { WebCloudBudgetClient } from '../../../apps/server/cloudflare/web-budget-client.ts';
-import type { WebAttemptBudget } from '../../../apps/server/web-provider-budget-contract.ts';
+import type { WebAttemptBudget } from '../../../apps/server/budget/web-provider-budget-contract.ts';
 import type { CloudBudgetEntry } from '../../../apps/server/cloudflare/web-budget.ts';
 
 const now = 1_800_000_000_000;
@@ -87,7 +88,7 @@ function setup(t: TestContext) {
   ];
   request.deliveryMode = 'voice';
   request.sceneContext = sceneState(
-    store,
+    userStore(store),
     { playerId: 'c-player', worldId: 'c-world', conversationId: 'c-conversation', characterId: 'c-character' },
     now,
   );

@@ -3,20 +3,23 @@ import test from 'node:test';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Store } from '../../../apps/server/store.ts';
-import { migrateWebProviderOffline } from '../../../apps/server/web-provider-migration.ts';
-import type { WebRuntimeStore } from '../../../apps/server/web-store-contract.ts';
-import { configureWebProvider } from '../../../apps/server/web-provider-configuration.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
+import { migrateWebProviderOffline } from '../../../apps/server/generation/web-provider-migration.ts';
+import type { WebRuntimeStore } from '../../../apps/server/platform/web-store-contract.ts';
+import { configureWebProvider } from '../../../apps/server/generation/web-provider-configuration.ts';
 import { syntheticSelection } from '../fixtures/provider-selection.ts';
-import { WebAccountAdmin } from '../../../apps/server/web-account-admin.ts';
-import { WebCharacterAdmin } from '../../../apps/server/web-character-admin.ts';
-import { installWebCharacterCatalog } from '../../../apps/server/web-character-catalog.ts';
-import { WebCharacterPreviews, readWebPreview } from '../../../apps/server/web-character-preview.ts';
-import { WebCharacterPreviewExecutor } from '../../../apps/server/web-character-preview-executor.ts';
-import { installWebCharacterPreviews } from '../../../apps/server/web-character-preview-schema.ts';
-import { WebCharacterPreviewRunner, type WebPreviewBudget } from '../../../apps/server/web-character-preview-runner.ts';
-import { WebProviderBudget } from '../../../apps/server/web-provider-budget.ts';
-import { DeepSeekTextGenerator } from '../../../apps/server/deepseek.ts';
+import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
+import { WebCharacterAdmin } from '../../../apps/server/characters/web-character-admin.ts';
+import { installWebCharacterCatalog } from '../../../apps/server/characters/web-character-catalog.ts';
+import { WebCharacterPreviews, readWebPreview } from '../../../apps/server/characters/web-character-preview.ts';
+import { WebCharacterPreviewExecutor } from '../../../apps/server/characters/web-character-preview-executor.ts';
+import { installWebCharacterPreviews } from '../../../apps/server/characters/web-character-preview-schema.ts';
+import {
+  WebCharacterPreviewRunner,
+  type WebPreviewBudget,
+} from '../../../apps/server/characters/web-character-preview-runner.ts';
+import { WebProviderBudget } from '../../../apps/server/budget/web-provider-budget.ts';
+import { DeepSeekTextGenerator } from '../../../apps/server/generation/deepseek.ts';
 import { acceptedAuditEnvelope, draftEnvelope } from '../../text-fixtures.ts';
 
 function fixture(t: test.TestContext) {

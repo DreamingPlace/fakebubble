@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebStore } from '../../../apps/server/store.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
 import { WEB_IDENTITY_LIMITS } from '../../../config/web-v1.ts';
 
 const origin = 'https://verify.example.test';

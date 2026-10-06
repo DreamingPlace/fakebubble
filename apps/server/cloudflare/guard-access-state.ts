@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { BusinessStore } from '../store-contract.ts';
+import type { BusinessStore } from '../platform/store-contract.ts';
 
 export interface GuardAccount {
   id: string;

@@ -7,7 +7,7 @@ import type { WebCloudMaterialPackage } from '../apps/server/cloudflare/web-setu
 import {
   validateCloudBudgetAuthorization,
   type CloudBudgetAuthorization,
-} from '../apps/server/web-provider-budget-contract.ts';
+} from '../apps/server/budget/web-provider-budget-contract.ts';
 import { WEB_PROVIDER_CATALOG } from '../config/web-v1.ts';
 
 const actions = [

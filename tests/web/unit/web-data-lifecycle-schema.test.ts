@@ -3,17 +3,17 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebRetentionCleaner } from '../../../apps/server/web-retention-cleaner.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
-import { WebStageQueue } from '../../../apps/server/web-stage-queue.ts';
-import { WebLocalExecutor } from '../../../apps/server/web-local-executor.ts';
-import { webReceiptDigest } from '../../../apps/server/web-retention.ts';
-import { WebPrivateAudioFiles } from '../../../apps/server/web-private-audio-files.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
-import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/web-local-config.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebRetentionCleaner } from '../../../apps/server/admission/web-retention-cleaner.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
+import { WebStageQueue } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebLocalExecutor } from '../../../apps/server/platform/web-local-executor.ts';
+import { webReceiptDigest } from '../../../apps/server/admission/web-retention.ts';
+import { WebPrivateAudioFiles } from '../../../apps/server/audio/web-private-audio-files.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
+import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
 import { defaultSchedule } from '../../../packages/domain/defaults.ts';
 
 test('INCOMPLETE 110 schema candidate is explicit, scoped, and does not make ordinary reopen runnable', async (t) => {

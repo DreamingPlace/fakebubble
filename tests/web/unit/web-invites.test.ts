@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { Store } from '../../../apps/server/store.ts';
-import { WebAccountAdmin } from '../../../apps/server/web-account-admin.ts';
-import { WebInvites } from '../../../apps/server/web-invites.ts';
-import { requireWebContent, webDataLifecycleEnabled } from '../../../apps/server/web-retention.ts';
-import type { WebStore } from '../../../apps/server/store.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
+import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
+import { WebInvites } from '../../../apps/server/invites/web-invites.ts';
+import { requireWebContent, webDataLifecycleEnabled } from '../../../apps/server/admission/web-retention.ts';
+import type { WebStore } from '../../../apps/server/platform/store.ts';
 
 function fixture(t: import('node:test').TestContext) {
   const store = new Store(':memory:');

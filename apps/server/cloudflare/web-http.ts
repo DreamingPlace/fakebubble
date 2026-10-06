@@ -6,12 +6,12 @@ import {
   WEB_PROVIDER_API as API,
   providerCharacterId,
   type WebProviderPrincipal,
-} from '../web-provider-application.ts';
-import { WebProviderOffline } from '../web-provider-offline.ts';
-import { webProviderHTTPError } from '../web-provider-http-error.ts';
-import { routeWebInvite } from '../web-invite-routes.ts';
-import { routeWebAccountAdmin } from '../web-account-admin-routes.ts';
-import { requireWebContent } from '../web-retention.ts';
+} from '../generation/web-provider-application.ts';
+import { WebProviderOffline } from '../generation/web-provider-offline.ts';
+import { webProviderHTTPError } from '../platform/web-provider-http-error.ts';
+import { routeWebInvite } from '../invites/web-invite-routes.ts';
+import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
+import { requireWebContent } from '../admission/web-retention.ts';
 import { CloudRequestLimits } from './request-limits.ts';
 import { cloudJSON } from './json.ts';
 

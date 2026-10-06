@@ -1,5 +1,8 @@
 import { createHash } from 'node:crypto';
-import { verifySelectedVoiceSetup, type SelectedCharacterId } from '../../../apps/server/web-provider-materials.ts';
+import {
+  verifySelectedVoiceSetup,
+  type SelectedCharacterId,
+} from '../../../apps/server/generation/web-provider-materials.ts';
 import { textRequest } from '../../text-fixtures.ts';
 const sha = (value: Uint8Array) => createHash('sha256').update(value).digest('hex');
 const bytes = (value: unknown) => Buffer.from(JSON.stringify(value));

@@ -6,7 +6,7 @@ import type {
   CloudBudgetTarget,
   CloudBudgetAuthorization,
   Provider,
-} from '../../apps/server/web-provider-budget-contract.ts';
+} from '../../apps/server/budget/web-provider-budget-contract.ts';
 import type { WebBudgetRPC, WebBudgetStatusRPC } from '../../apps/server/cloudflare/web-budget-client.ts';
 
 export interface BudgetEnvironment {

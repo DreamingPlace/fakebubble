@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { buildWebPlayer } from '../../../scripts/build-web-player.ts';
-import { serveLocalStatic } from '../../../apps/server/web-local-static.ts';
+import { serveLocalStatic } from '../../../apps/server/platform/web-local-static.ts';
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'web-player-build-'));

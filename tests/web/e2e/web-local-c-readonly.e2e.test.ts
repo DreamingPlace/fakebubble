@@ -6,8 +6,8 @@ import { request as httpsRequest } from 'node:https';
 import test from 'node:test';
 import { setTimeout as pause } from 'node:timers/promises';
 import { join, resolve } from 'node:path';
-import { localRuntime, readLocalConfig } from '../../../apps/server/web-local-config.ts';
-import { WebStore } from '../../../apps/server/store.ts';
+import { localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
 
 const runtime = localRuntime(),
   script = resolve('scripts/web-v1.ts');

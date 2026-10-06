@@ -5,10 +5,10 @@ import { join, resolve } from 'node:path';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebInvites } from '../../../apps/server/web-invites.ts';
-import { WebInviteActions } from '../../../apps/server/web-invite-actions.ts';
-import type { WebStore, Store } from '../../../apps/server/store.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebInvites } from '../../../apps/server/invites/web-invites.ts';
+import { WebInviteActions } from '../../../apps/server/invites/web-invite-actions.ts';
+import type { WebStore, Store } from '../../../apps/server/platform/store.ts';
 
 const sourceRoot = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const origin = 'https://synthetic.local',

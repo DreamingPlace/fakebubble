@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
-import { Store, WebStore } from '../../../apps/server/store.ts';
+import { Store, WebStore } from '../../../apps/server/platform/store.ts';
 
 const digest = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
 const files = (root: string) =>
@@ -133,7 +133,7 @@ test('two creators that both saw a missing root cannot claim different instance 
           root,
           id,
           barrier: barrier.buffer,
-          moduleUrl: new URL('../../../apps/server/store.ts', import.meta.url).href,
+          moduleUrl: new URL('../../../apps/server/platform/store.ts', import.meta.url).href,
         },
       }),
   );
@@ -291,7 +291,7 @@ test('marker I/O failures preserve a non-adopted root until the durable ready sw
         root,
         id,
         failAt,
-        moduleUrl: new URL('../../../apps/server/store.ts', import.meta.url).href,
+        moduleUrl: new URL('../../../apps/server/platform/store.ts', import.meta.url).href,
       },
     });
     const result = await new Promise<{ ok: boolean; count: number; message?: string }>((resolve, reject) => {

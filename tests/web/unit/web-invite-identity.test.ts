@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { Store, type WebStore } from '../../../apps/server/store.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebInvites } from '../../../apps/server/web-invites.ts';
-import { WebInviteActions } from '../../../apps/server/web-invite-actions.ts';
-import { WebInviteAdmin } from '../../../apps/server/web-invite-admin.ts';
-import { routeWebInvite } from '../../../apps/server/web-invite-routes.ts';
+import { Store, type WebStore } from '../../../apps/server/platform/store.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebInvites } from '../../../apps/server/invites/web-invites.ts';
+import { WebInviteActions } from '../../../apps/server/invites/web-invite-actions.ts';
+import { WebInviteAdmin } from '../../../apps/server/invites/web-invite-admin.ts';
+import { routeWebInvite } from '../../../apps/server/invites/web-invite-routes.ts';
 
 const origin = 'https://synthetic.local';
 function fixture(t: test.TestContext) {

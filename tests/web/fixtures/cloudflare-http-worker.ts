@@ -1,5 +1,5 @@
-import { WebCharacterPreviews } from '../../../apps/server/web-character-preview.ts';
-import { WebCharacterPreviewRunner } from '../../../apps/server/web-character-preview-runner.ts';
+import { WebCharacterPreviews } from '../../../apps/server/characters/web-character-preview.ts';
+import { WebCharacterPreviewRunner } from '../../../apps/server/characters/web-character-preview-runner.ts';
 import { WebCloudTextGenerator } from '../../../apps/server/cloudflare/web-generators.ts';
 import type { WebGenerationBinding } from '../../../packages/contracts/web-generation-rpc.ts';
 import type { WebBudgetStatusRPC } from '../../../apps/server/cloudflare/web-budget-client.ts';
@@ -45,15 +45,15 @@ import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts
 import type { AlarmStorage } from '../../../apps/server/cloudflare/queue-alarm.ts';
 import type { PrivateBucket } from '../../../apps/server/cloudflare/media-objects.ts';
 import { WebCloudExecutor } from '../../../apps/server/cloudflare/web-executor.ts';
-import { WebProviderApplication } from '../../../apps/server/web-provider-application.ts';
+import { WebProviderApplication } from '../../../apps/server/generation/web-provider-application.ts';
 import { WebProviderHTTP } from '../../../apps/server/cloudflare/web-http.ts';
 import {
   publishedWebCharacters,
   characterProfileHash,
   type WebCharacterProfile,
-} from '../../../apps/server/web-character-catalog.ts';
-import { WebProviderOffline } from '../../../apps/server/web-provider-offline.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+} from '../../../apps/server/characters/web-character-catalog.ts';
+import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { syntheticCharacterReview } from './character-review.ts';
 
 /** Real HTTP, SQL, R2 and Alarm with synthetic transports; these operator routes never ship. */

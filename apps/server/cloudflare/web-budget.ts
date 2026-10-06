@@ -8,7 +8,7 @@ import {
   type CloudBudgetAuthorization,
   type CloudBudgetTarget,
   type Provider,
-} from '../web-provider-budget-contract.ts';
+} from '../budget/web-provider-budget-contract.ts';
 
 const schema = `CREATE TABLE cf_web_budget_grants(provider TEXT PRIMARY KEY,manifest_json TEXT NOT NULL,
   micros INTEGER CHECK(micros IS NULL OR (micros>0 AND micros<=3000000))) STRICT;

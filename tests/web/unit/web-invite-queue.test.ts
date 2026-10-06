@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Store } from '../../../apps/server/store.ts';
-import { claimRetention } from '../../../apps/server/web-stage-queue.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
+import { claimRetention } from '../../../apps/server/admission/web-stage-queue.ts';
 
 test('112 queue invite predicate preserves 110 account/guest rules and excludes invalid grants', (t) => {
   const store = new Store(':memory:');

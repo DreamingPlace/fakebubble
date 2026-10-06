@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { Store } from '../../../apps/server/store.ts';
+import { Store } from '../../../apps/server/platform/store.ts';
 import { defaultSchedule } from '../../../packages/domain/defaults.ts';
-import { WebAccountAdmin } from '../../../apps/server/web-account-admin.ts';
-import { WebCharacterAdmin } from '../../../apps/server/web-character-admin.ts';
+import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
+import { WebCharacterAdmin } from '../../../apps/server/characters/web-character-admin.ts';
 import {
   installWebCharacterCatalog,
   publishedWebCharacters,
   requirePublishedWebCharacter,
   characterProfileHash,
   type WebCharacterProfile,
-} from '../../../apps/server/web-character-catalog.ts';
+} from '../../../apps/server/characters/web-character-catalog.ts';
 import { WEB_PROVIDER_CATALOG } from '../../../config/web-v1.ts';
 
 function fixture(t: test.TestContext) {

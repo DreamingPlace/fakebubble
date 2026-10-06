@@ -4,7 +4,7 @@ import type { TextGenerationRequest, AcceptedV7StageOutput } from '../../../pack
 import type { WebKnownDraft } from '../../../packages/contracts/web-generation-rpc.ts';
 import type { ProviderMeter } from '../../../packages/contracts/provider-calls.ts';
 import { draftEnvelope, acceptedAuditEnvelope } from '../../text-fixtures.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 
 let mode = '',
   calls: string[] = [];

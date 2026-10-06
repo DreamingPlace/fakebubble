@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { Miniflare } from 'miniflare';
 import { testModules } from '../../cloudflare/modules.ts';
 import { draftEnvelope, acceptedAuditEnvelope } from '../../text-fixtures.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 
 test('production generation entry uses the real fetch path across RPC, with outbound replaced only at the network boundary', async (t) => {
   const calls: string[] = [];

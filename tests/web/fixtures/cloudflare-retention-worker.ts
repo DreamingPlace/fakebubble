@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { WebBusinessFixture } from './cloudflare-business-worker.ts';
 import { WebCloudRetention } from '../../../apps/server/cloudflare/web-retention.ts';
-import { WebProviderOffline } from '../../../apps/server/web-provider-offline.ts';
+import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
 import type { PrivateBucket, MediaObjectReference } from '../../../apps/server/cloudflare/media-objects.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 
 /** Test-only fault injection around actual R2 operations. Never a production entrypoint. */
 export class WebRetentionFixture extends WebBusinessFixture {

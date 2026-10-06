@@ -22,8 +22,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { Store, WebStore } from '../../../apps/server/store.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { Store, WebStore } from '../../../apps/server/platform/store.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
 
 const CHARACTER = 'fixture-character';

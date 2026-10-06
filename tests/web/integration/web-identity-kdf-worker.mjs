@@ -16,8 +16,8 @@ crypto.argon2 = function (...args) {
 };
 syncBuiltinESMExports();
 
-const { WebStore } = await import('../../../apps/server/store.ts');
-const { WebIdentity } = await import('../../../apps/server/web-identity.ts');
+const { WebStore } = await import('../../../apps/server/platform/store.ts');
+const { WebIdentity } = await import('../../../apps/server/identity/web-identity.ts');
 const parent = mkdtempSync(join(realpathSync(tmpdir()), 'web-c-kdf-'));
 const root = join(parent, 'web'),
   instanceId = crypto.randomUUID();

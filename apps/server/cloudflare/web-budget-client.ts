@@ -1,11 +1,11 @@
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { BusinessStore } from '../store-contract.ts';
+import type { BusinessStore } from '../platform/store-contract.ts';
 import {
   budgetAttempt,
   type BudgetAttemptKey,
   type Provider,
   type WebAttemptBudget,
-} from '../web-provider-budget-contract.ts';
+} from '../budget/web-provider-budget-contract.ts';
 import type { CloudBudgetEntry, WebCloudBudget } from './web-budget.ts';
 
 export interface WebBudgetRPC {

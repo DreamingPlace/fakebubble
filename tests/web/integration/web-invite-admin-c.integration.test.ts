@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { test } from 'node:test';
-import { WebInviteAdmin } from '../../../apps/server/web-invite-admin.ts';
-import { routeWebInvite } from '../../../apps/server/web-invite-routes.ts';
+import { WebInviteAdmin } from '../../../apps/server/invites/web-invite-admin.ts';
+import { routeWebInvite } from '../../../apps/server/invites/web-invite-routes.ts';
 const origin = 'https://127.0.0.1:18452';
 
 type Admin = {

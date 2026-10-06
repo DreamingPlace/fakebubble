@@ -4,9 +4,9 @@ import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebLocalServer } from '../../../apps/server/web-local-server.ts';
-import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/web-local-config.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebLocalServer } from '../../../apps/server/platform/web-local-server.ts';
+import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
 import { defaultSchedule } from '../../../packages/domain/defaults.ts';
 
 test('INCOMPLETE same-process local-2 TLS revokes history, sync, replay, SSE and media at 2h', async () => {

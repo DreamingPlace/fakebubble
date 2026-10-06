@@ -6,11 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebDispatchLedger } from '../../../apps/server/web-dispatch-ledger.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebStageQueue, type WebStageClaim } from '../../../apps/server/web-stage-queue.ts';
-import { WebStore } from '../../../apps/server/store.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledger.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebStageQueue, type WebStageClaim } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
 
 const worker = fileURLToPath(new URL('./web-failed-receipt-worker.mjs', import.meta.url));
 const base = 1_700_000_000_000;

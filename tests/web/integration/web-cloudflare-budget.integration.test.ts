@@ -4,12 +4,12 @@ import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { localRuntime } from '../../cloudflare/runtime.ts';
-import { WebProviderBudget } from '../../../apps/server/web-provider-budget.ts';
+import { WebProviderBudget } from '../../../apps/server/budget/web-provider-budget.ts';
 import {
   budgetHash,
   type CloudBudgetTarget,
   type CloudProductionBudgetAuthorization,
-} from '../../../apps/server/web-provider-budget-contract.ts';
+} from '../../../apps/server/budget/web-provider-budget-contract.ts';
 
 test('local → workerd allowance is irrevocably held, target-bound, shared and restart-safe', async (t) => {
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-budget-worker.ts', {

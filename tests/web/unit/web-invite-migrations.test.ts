@@ -3,12 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebIdentity } from '../../../apps/server/web-identity.ts';
-import { WebAdmission } from '../../../apps/server/web-admission.ts';
-import { WebStageQueue, claimRetention } from '../../../apps/server/web-stage-queue.ts';
-import { WebRetentionCleaner } from '../../../apps/server/web-retention-cleaner.ts';
-import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/web-local-config.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
+import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
+import { WebStageQueue, claimRetention } from '../../../apps/server/admission/web-stage-queue.ts';
+import { WebRetentionCleaner } from '../../../apps/server/admission/web-retention-cleaner.ts';
+import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
 import { defaultSchedule } from '../../../packages/domain/defaults.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
 

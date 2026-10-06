@@ -1,5 +1,5 @@
-import { WebStore } from '../../../apps/server/store.ts';
-import { WebVerticalPublisher } from '../../../apps/server/web-vertical-publisher.ts';
+import { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebVerticalPublisher } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 
 const [root, instanceId, claimJson, nowText] = process.argv.slice(2);
 const store = new WebStore(root, { create: false, instanceId });

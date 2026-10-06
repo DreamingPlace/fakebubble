@@ -1,6 +1,6 @@
-import { WebCharacterDeletion } from '../../apps/server/web-character-deletion.ts';
-import { WebCharacterPreviews } from '../../apps/server/web-character-preview.ts';
-import { WebCharacterPreviewRunner } from '../../apps/server/web-character-preview-runner.ts';
+import { WebCharacterDeletion } from '../../apps/server/characters/web-character-deletion.ts';
+import { WebCharacterPreviews } from '../../apps/server/characters/web-character-preview.ts';
+import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-character-preview-runner.ts';
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -12,17 +12,17 @@ import type { AlarmStorage } from '../../apps/server/cloudflare/queue-alarm.ts';
 import { WebCloudBudgetClient, type WebBudgetStatusRPC } from '../../apps/server/cloudflare/web-budget-client.ts';
 import { WebCloudTextGenerator, webCloudSpeech } from '../../apps/server/cloudflare/web-generators.ts';
 import { WebCloudSetup, type WebCloudMaterialPackage } from '../../apps/server/cloudflare/web-setup.ts';
-import { WebProviderRunner } from '../../apps/server/web-provider-runner.ts';
+import { WebProviderRunner } from '../../apps/server/generation/web-provider-runner.ts';
 import {
   WebProviderApplication,
   type WebProviderApplicationConfig,
-} from '../../apps/server/web-provider-application.ts';
+} from '../../apps/server/generation/web-provider-application.ts';
 import { WebCloudExecutor } from '../../apps/server/cloudflare/web-executor.ts';
 import { WebCloudRetention } from '../../apps/server/cloudflare/web-retention.ts';
 import { WebProviderHTTP } from '../../apps/server/cloudflare/web-http.ts';
 import { trustedWebRequest } from '../../apps/server/cloudflare/web-edge-request.ts';
 import { webR2Migrations } from './migrations.ts';
-import type { WebBudgetPolicy } from '../../apps/server/web-provider-budget-contract.ts';
+import type { WebBudgetPolicy } from '../../apps/server/budget/web-provider-budget-contract.ts';
 import { cloudAdminMailer, type AdminEmailBinding } from '../../apps/server/cloudflare/web-admin-mail.ts';
 
 interface BusinessContext {

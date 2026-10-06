@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { localRuntime } from '../../cloudflare/runtime.ts';
-import { syntheticTone } from '../../../apps/server/web-local-fake.ts';
+import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { parseWebProviderBootstrap } from '../../../packages/contracts/web-provider.ts';
 
 const API = '/api/web/provider',
