@@ -12,9 +12,10 @@ import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server
 // prompt hash cover every prompts/v7 file (policy ea400177…, prompt c0eaa2ff…); the protocol fingerprint was unchanged (6fa11440…).
 // Part 7a step D added importance and memoryId to the review topics and their prompt text: policy 40d4c60d…, prompt
 // dba98588…, fingerprint 4811a5ed…. Step E added factOps to the review output and its prompt text: policy 481388d9…,
-// prompt dc5db072…, fingerprint b42431c9….
-const POLICY_HASH = '481388d9fb3aa9c9ba1a827b520418ac753f9ce3812aba7a3e2150611d549c09';
-const PROMPT_HASH = 'dc5db0721bc3fef707660ffc6dbbe5fb8490ee66f2da8e62d420292e697f4e0f';
+// prompt dc5db072…, fingerprint b42431c9…. Step G added playerFacts to the prompt JSON and a content rule
+// (prompt only; the fingerprint is unchanged): policy 9342e2c9…, prompt 619d6011….
+const POLICY_HASH = '9342e2c96bd5faff12f554d1a7fd20f5bde81ba1d004a3880ec8501ac9890250';
+const PROMPT_HASH = '619d601143d65f3a7a79f277988a5789eacb72a568dcc595358e5b5454fc07fb';
 const FINGERPRINT_DIGEST = 'b42431c97a4cc92b10d8c7c215ead160884d9248397736216b5fc9273883ef99';
 
 test('accepted-v7 policy hash, prompt hash and protocol fingerprint are pinned', () => {

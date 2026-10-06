@@ -375,6 +375,22 @@ export function recallMemories(
   }));
 }
 
+/**
+ * The active facts the player stated, most important first (ties: newest, then key), at most 20. The order is a pure
+ * function of the stored facts so the prompt prefix stays byte-stable until a fact actually changes.
+ */
+export function recallPlayerFacts(store: Store, scope: CharacterScope): { factKey: string; statement: string }[] {
+  if (!store.get(scope, "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_facts'")) return [];
+  return store
+    .all<{ fact_key: string; statement: string }>(
+      scope,
+      `SELECT fact_key,statement FROM memory_facts WHERE ${where} AND retired_at IS NULL
+      ORDER BY importance DESC,updated_at DESC,fact_key LIMIT 20`,
+      ...params(scope),
+    )
+    .map((row) => ({ factKey: row.fact_key, statement: row.statement }));
+}
+
 /** Every published dialogue has exact short-term memory, even a greeting with no semantic topic yet. */
 export function recentTurns(store: Store, scope: CharacterScope, now: number): ShortTermTurn[] {
   const turns = store.all<{ id: string; at: number }>(

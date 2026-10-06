@@ -123,6 +123,14 @@ export function promptSnapshotCases(): PromptSnapshotCase[] {
       },
     ],
   };
+  const facts: TextGenerationRequest = {
+    ...base(),
+    playerIntroduction: { source: 'player_setup', revision: 2, name: '小测', age: 14 },
+    playerFacts: [
+      { factKey: '宠物', statement: '玩家养了一只叫团子的猫。' },
+      { factKey: '职业', statement: '玩家是一名护士。' },
+    ],
+  };
   const evidence: TextGenerationRequest = {
     ...base(),
     conversation: {
@@ -148,6 +156,7 @@ export function promptSnapshotCases(): PromptSnapshotCase[] {
     { name: 'moment-post', request: moment, draft: draft('今天的云像棉花糖。') },
     { name: 'proactive-contact', request: proactive, draft: draft('突然想起测试甜点了。') },
     { name: 'memories-corrections', request: memories, draft: draft('那我记住啦，更喜欢测试饮料。') },
+    { name: 'player-facts', request: facts, draft: draft('团子今天乖不乖？') },
     { name: 'evidence-group', request: evidence, draft: draft('周末的测试公园我也想去。') },
   ];
 }

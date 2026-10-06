@@ -9,7 +9,7 @@ import { DIALOGUE } from '../../../packages/domain/dialogue.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { protocolFingerprint } from './accepted-text-protocol.ts';
 import { textPromptHash } from './accepted-text-prompt.ts';
-import { recallMemories } from '../memory/memory.ts';
+import { recallMemories, recallPlayerFacts } from '../memory/memory.ts';
 import { memoryVersion, recallCorrections } from '../memory/memory-review.ts';
 import { playerContextKey, playerIntroduction } from '../conversation/player-profile.ts';
 import { relationshipContext, relationshipVersion } from '../conversation/relationships.ts';
@@ -290,6 +290,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
         .map((row) => ({ job_id: row.job_id, at: row.at }))
     : [];
   const introduction = playerIntroduction(userStore(store), scope);
+  const facts = access.kind !== 'guest' ? recallPlayerFacts(userStore(store), scope) : [];
   const request: TextGenerationRequest = {
     jobId: operation.id,
     scope: { worldId: scope.worldId, conversationId: scope.conversationId, characterId: scope.characterId },
@@ -298,6 +299,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     relationshipContext: relationshipState,
     sceneContext: scene,
     ...(introduction ? { playerIntroduction: introduction } : {}),
+    ...(facts.length ? { playerFacts: facts } : {}),
     deliveryMode: 'voice',
     requiredMessageIds: [input.input_message_id],
     character: template,

@@ -172,6 +172,8 @@ export interface TextGenerationRequest {
   sceneContext?: import('./scenes.ts').SceneState;
   relationshipContext?: import('./relationships.ts').RelationshipContext;
   playerIntroduction?: PlayerIntroductionContext;
+  // Active stable facts the player stated about themselves (at most 20, most important first); omitted for guests.
+  playerFacts?: { factKey: string; statement: string }[];
   // Speech still returns text for review, but each bubble must form a complete spoken unit.
   deliveryMode?: 'text' | 'voice';
   requiredMessageIds: string[];
