@@ -16,6 +16,7 @@ export function syntheticText(request: TextGenerationRequest) {
     decision: 'accept',
     replacementBubbles: [],
     topics: [],
+    factOps: [],
     ...(request.requiredMessageIds.length ? { coverage } : {}),
     ...(request.evidence.length
       ? { sourceUsage: Object.fromEntries(request.evidence.map((source) => [source.id, []])) }

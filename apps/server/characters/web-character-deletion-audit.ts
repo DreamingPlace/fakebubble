@@ -18,6 +18,7 @@ export const operationContent = [
   'web_stage_attempts',
 ];
 export const conversationContent = [
+  'memory_facts',
   'memory_episode_sources',
   'memory_mentions',
   'memory_episodes',

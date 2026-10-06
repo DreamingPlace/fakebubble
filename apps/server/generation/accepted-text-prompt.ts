@@ -60,7 +60,11 @@ function promptTimestamp(at: number, now: number, timeZone: string) {
   };
 }
 
-export const textPromptHash = () =>
+/** Every prompts/v7 file, in file-name order, so editing any block (including the voice tasks) changes the hash. */
+export const promptBlocks = (blocks: Record<string, string> = PROMPTS_V7) =>
+  Object.entries(blocks).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
+export const textPromptHash = (blocks: Record<string, string> = PROMPTS_V7) =>
   createHash('sha256')
     .update(
       JSON.stringify([
@@ -69,6 +73,7 @@ export const textPromptHash = () =>
         MOMENT_POST_TASK,
         PLAYER_INPUT_KINDS,
         protocolFingerprint(),
+        promptBlocks(blocks),
       ]),
     )
     .digest('hex');
@@ -169,6 +174,20 @@ export function promptMessages(request: TextGenerationRequest) {
       'INVALID_TEXT_SCOPE',
     );
   }
+  const playerFacts = request.playerFacts ?? [];
+  ensure(
+    Array.isArray(playerFacts) &&
+      playerFacts.length <= 20 &&
+      playerFacts.every(
+        (fact) =>
+          typeof fact.factKey === 'string' &&
+          fact.factKey.length > 0 &&
+          [...fact.factKey].length <= 64 &&
+          typeof fact.statement === 'string' &&
+          [...fact.statement].length <= 240,
+      ),
+    'INVALID_TEXT_REQUEST',
+  );
   const ids = new Set(request.messages.map((message) => message.id));
   const playerIds = new Set(
     request.messages.filter((message) => message.authorKind === 'player').map((message) => message.id),
@@ -235,6 +254,7 @@ export function promptMessages(request: TextGenerationRequest) {
     relationship: conversation ? null : request.relationship,
     relationshipContext: request.relationshipContext ?? null,
     playerIntroduction: request.playerIntroduction ?? null,
+    playerFacts: playerFacts.map(({ factKey, statement }) => ({ factKey, statement })),
     conversation: conversation ?? null,
     memories: (request.memories ?? []).map((memory) => ({
       ...memory,

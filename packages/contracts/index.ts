@@ -108,6 +108,16 @@ export interface TopicCandidate {
   sourceKind: 'fictional_daily' | 'player_statement' | 'conversation';
   evidenceMessageIds: string[];
   sourceEvidenceIds?: string[];
+  // The review's 1–10 importance; absent in candidates stored before it existed.
+  importance?: number;
+}
+/** A stable fact the player stated about themselves; written only from player-authored messages of the request. */
+export interface FactOp {
+  op: 'add' | 'update' | 'retire';
+  factKey: string;
+  statement: string;
+  importance: number;
+  evidenceMessageIds: string[];
 }
 export interface DialogueCandidate extends ReplyCandidate {
   sceneUpdate?: import('./scenes.ts').SceneUpdate | null;
@@ -117,7 +127,10 @@ export interface DialogueCandidate extends ReplyCandidate {
   deferredMessageIds: string[];
   awaitingPlayerMessageIds: string[];
   topics: TopicCandidate[];
+  factOps?: FactOp[];
   endsSession: boolean;
+  // Set by the review step, never by the model's draft: true when the review replaced the draft's bubbles.
+  reviewChanged?: boolean;
 }
 export interface TopicMemory {
   // Only the deferred memory-link experiment adds a catalog ID to model recall.
@@ -126,6 +139,8 @@ export interface TopicMemory {
   tier: 'short' | 'long';
   playerMentions: number;
   recallWeight: number;
+  // 1 (small talk) to 10 (identity, relationships, health, major life events); absent in older fixtures.
+  importance?: number;
   lastSeenAt: number;
   episodes: {
     summary: string;
@@ -157,6 +172,8 @@ export interface TextGenerationRequest {
   sceneContext?: import('./scenes.ts').SceneState;
   relationshipContext?: import('./relationships.ts').RelationshipContext;
   playerIntroduction?: PlayerIntroductionContext;
+  // Active stable facts the player stated about themselves (at most 20, most important first); omitted for guests.
+  playerFacts?: { factKey: string; statement: string }[];
   // Speech still returns text for review, but each bubble must form a complete spoken unit.
   deliveryMode?: 'text' | 'voice';
   requiredMessageIds: string[];

@@ -96,9 +96,12 @@ function fixture(t: test.TestContext, migrate = true) {
     const review = {
       decision: 'accept',
       replacementBubbles: [],
+      factOps: [],
       topics: [
         {
           key: '港口',
+          memoryId: null,
+          importance: 3,
           summary: `玩家谈到港口：${input}`,
           sourceKind: 'conversation',
           evidenceMessageIds: [claim.inputMessageId],
@@ -487,6 +490,59 @@ test('C-S3-006 real account upgrade retains same world and unlocks promoted memo
   assert(request.memories?.some((memory) => memory.tier === 'long' && memory.key === '港口'));
   assert(request.messages.some((message) => message.id === first.receipt.messageIds[0]));
   assert(request.messages.some((message) => message.id === second.receipt.messageIds[0]));
+});
+
+/** memory_facts exists from schema 115; this 108-era fixture only needs the table to prove who is given facts. */
+function seedFact(f: ReturnType<typeof fixture>) {
+  const sql = readFileSync(
+    new URL('../../../apps/server/web-migrations/115_memory_importance.sql', import.meta.url),
+    'utf8',
+  );
+  const start = sql.indexOf('CREATE TABLE memory_facts');
+  f.store.db.exec(sql.slice(start, sql.indexOf('STRICT;', start) + 'STRICT;'.length));
+  const scope = f.store.get<{ world_id: string; conversation_id: string; character_id: string }>(
+    'SELECT world_id,conversation_id,character_id FROM contacts LIMIT 1',
+  )!;
+  f.store.run(
+    `INSERT INTO memory_facts(world_id,conversation_id,character_id,id,fact_key,statement,importance,
+    evidence_message_ids_json,created_at,updated_at) VALUES (?,?,?,'fact-1','宠物','玩家养了一只叫团子的猫。',8,'[]',1,1)`,
+    scope.world_id,
+    scope.conversation_id,
+    scope.character_id,
+  );
+}
+
+test('player facts reach an account request but never a guest request', async (t) => {
+  const f = fixture(t);
+  f.publish('first');
+  f.publish('second');
+  seedFact(f);
+  const guestOp = f.admit('third-guest');
+  assert.equal(f.queue.claimText(f.coordinator, 'guest-text')!.operationId, guestOp.operationId);
+  assert.equal(readWebV7Request(f.store, guestOp.operationId).request.playerFacts, undefined);
+  const registered = await f.identity.register(f.token, f.guest.csrf, origin, {
+    requestId: randomUUID(),
+    username: 'c_facts_account',
+    password: 'synthetic-password',
+  });
+  assert.equal(f.identity.authenticate(registered.issuedToken).kind, 'account');
+});
+
+test('player facts are part of the frozen request of an entitled account', async (t) => {
+  const f = fixture(t);
+  f.publish('first');
+  f.publish('second');
+  seedFact(f);
+  await f.identity.register(f.token, f.guest.csrf, origin, {
+    requestId: randomUUID(),
+    username: 'c_facts_account2',
+    password: 'synthetic-password',
+  });
+  const op = f.admit('third-account');
+  assert.equal(f.queue.claimText(f.coordinator, 'account-text')!.operationId, op.operationId);
+  assert.deepEqual(readWebV7Request(f.store, op.operationId).request.playerFacts, [
+    { factKey: '宠物', statement: '玩家养了一只叫团子的猫。' },
+  ]);
 });
 
 test('C-S3-006 R1 third guest reply adds exactly one synthetic footer, never narrative context', async (t) => {

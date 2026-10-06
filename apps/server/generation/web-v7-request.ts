@@ -9,7 +9,7 @@ import { DIALOGUE } from '../../../packages/domain/dialogue.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { protocolFingerprint } from './accepted-text-protocol.ts';
 import { textPromptHash } from './accepted-text-prompt.ts';
-import { recallMemories } from '../memory/accepted-memory.ts';
+import { recallMemories, recallPlayerFacts } from '../memory/memory.ts';
 import { memoryVersion, recallCorrections } from '../memory/memory-review.ts';
 import { playerContextKey, playerIntroduction } from '../conversation/player-profile.ts';
 import { relationshipContext, relationshipVersion } from '../conversation/relationships.ts';
@@ -250,7 +250,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       (access.kind === 'guest' ||
         (access.kind === 'account' && access.active === 1) ||
         (access.kind === 'invite' &&
-          [111, 112, 113, 114].includes(
+          [111, 112, 113, 114, 115].includes(
             store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
           ) &&
           requireWebContent(store, { now: () => now }, operation.principal_id, scope.worldId))),
@@ -290,6 +290,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
         .map((row) => ({ job_id: row.job_id, at: row.at }))
     : [];
   const introduction = playerIntroduction(userStore(store), scope);
+  const facts = access.kind !== 'guest' ? recallPlayerFacts(userStore(store), scope) : [];
   const request: TextGenerationRequest = {
     jobId: operation.id,
     scope: { worldId: scope.worldId, conversationId: scope.conversationId, characterId: scope.characterId },
@@ -298,6 +299,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     relationshipContext: relationshipState,
     sceneContext: scene,
     ...(introduction ? { playerIntroduction: introduction } : {}),
+    ...(facts.length ? { playerFacts: facts } : {}),
     deliveryMode: 'voice',
     requiredMessageIds: [input.input_message_id],
     character: template,

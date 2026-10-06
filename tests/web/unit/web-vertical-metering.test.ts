@@ -110,9 +110,12 @@ function readyToPublish(
   const review = {
     decision: 'accept',
     replacementBubbles: [],
+    factOps: [],
     topics: [
       {
         key: '问候',
+        memoryId: null,
+        importance: 3,
         summary: '玩家先说 ready，角色回应。',
         sourceKind: 'conversation',
         evidenceMessageIds: [textClaim.inputMessageId],
@@ -410,6 +413,7 @@ test('108 freezes the v7 request and releases text only for two known audited fa
   const review = {
     decision: 'accept',
     replacementBubbles: [],
+    factOps: [],
     topics: [],
     coverage: { [claim.inputMessageId]: { status: 'answered', supportQuote: 'first', missingInformation: '' } },
     relationshipEvents: [],
@@ -524,9 +528,12 @@ test('108 publishes a complete audited synthetic voice turn atomically and repla
   const review = {
     decision: 'accept',
     replacementBubbles: [],
+    factOps: [],
     topics: [
       {
         key: '问候',
+        memoryId: null,
+        importance: 3,
         summary: '玩家先说 first，角色回应。',
         sourceKind: 'conversation',
         evidenceMessageIds: [textClaim.inputMessageId],
@@ -644,11 +651,14 @@ test('108 publishes a complete audited synthetic voice turn atomically and repla
     const nextReview = {
       decision: 'accept',
       replacementBubbles: [],
+      factOps: [],
       topics:
         requestId === 'second'
           ? [
               {
                 key: '问候',
+                memoryId: null,
+                importance: 3,
                 summary: '玩家第二次问候。',
                 sourceKind: 'conversation',
                 evidenceMessageIds: [claim.inputMessageId],

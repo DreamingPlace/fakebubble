@@ -297,7 +297,9 @@ export class WebRetentionCleaner {
         'web_stage_attempts',
       ])
         this.store.run(`DELETE FROM ${table} WHERE operation_id IN (${operationScope})`, principalId, world);
+      // memory_facts exists from schema 115; an older database has nothing to purge there.
       for (const table of [
+        'memory_facts',
         'memory_episode_sources',
         'memory_mentions',
         'memory_episodes',
@@ -319,7 +321,11 @@ export class WebRetentionCleaner {
         'dialogue_bubbles',
         'outbox',
       ])
-        this.store.run(`DELETE FROM ${table} WHERE world_id=?`, world);
+        if (
+          table !== 'memory_facts' ||
+          this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", table)
+        )
+          this.store.run(`DELETE FROM ${table} WHERE world_id=?`, world);
       this.store.run('UPDATE jobs SET published_message_id=NULL WHERE world_id=?', world);
       this.store.run('DELETE FROM jobs WHERE world_id=?', world);
       // Preserve immutable metering/identity IDs, but no longer retain a naked hash of the input.

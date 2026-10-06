@@ -7,6 +7,7 @@ import { localRuntime } from '../../cloudflare/runtime.ts';
 type Guest = { principalId: string; csrf: string; issuedToken: string };
 type State = {
   messages: number;
+  facts: number;
   outputs: number;
   attempts: { phase: string; state: string; charged_micros: number }[];
   operations: { status: string; quota_state: string }[];
@@ -43,6 +44,7 @@ async function waitHeld(f: ReturnType<typeof setup>) {
 }
 const cleared = (state: State) => {
   assert.equal(state.messages, 0);
+  assert.equal(state.facts, 0);
   assert.equal(state.outputs, 0);
   assert.ok(state.objects.every((r) => r.erased && r.size === 0 && r.type === 'application/x-web-erased'));
 };
@@ -52,7 +54,13 @@ test('character deletion guards immutable SQL, clears two scoped guests and pres
     fixed = await f.call<string[]>('/assets');
   const guests = [await f.call<Guest>('/bootstrap', {}), await f.call<Guest>('/bootstrap', {})];
   for (const guest of guests) await f.call('/run', await admit(f, guest));
+  // Each scoped guest has a stated player fact; deleting the character must remove it with the rest.
+  for (const guest of guests) await f.call('/retention/seed-fact', guest);
   const before = await Promise.all(guests.map((g) => f.call<State>('/retention/state', g)));
+  assert.deepEqual(
+    before.map((state) => state.facts),
+    [1, 1],
+  );
   const counts = await f.call('/counts');
   await f.call('/retention/capture-replay', guests[0]);
   assert.match(

@@ -300,6 +300,7 @@ test('known review and speech output pass pre-publication gate only with exact s
   const review = {
     decision: 'accept',
     replacementBubbles: [],
+    factOps: [],
     topics: [],
     coverage: { input: { status: 'answered', supportQuote: spokenText, missingInformation: '' } },
     sceneUpdate: null,
@@ -455,6 +456,7 @@ test('publication derives complete speech ordinals and exact spoken text from ac
   const review = {
     decision: 'accept',
     replacementBubbles: bubbles,
+    factOps: [],
     topics: [],
     coverage: { input: { status: 'answered', supportQuote: bubbles[0]!.text, missingInformation: '' } },
     sceneUpdate: null,
@@ -620,6 +622,7 @@ test('accepted known stages freeze provider candidate and ordered voice segments
   const review = {
     decision: 'accept',
     replacementBubbles: [],
+    factOps: [],
     topics: [],
     coverage: { input: { status: 'answered', supportQuote: speech, missingInformation: '' } },
     sceneUpdate: null,

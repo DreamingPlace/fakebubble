@@ -7,7 +7,7 @@ import type {
   ShortTermTurn,
   TopicMemory,
 } from '../../../packages/contracts/index.ts';
-import { DIALOGUE, topicKey } from '../../../packages/domain/dialogue.ts';
+import { DIALOGUE, RECALL, topicKey } from '../../../packages/domain/dialogue.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { UserStore as Store } from '../platform/store-boundary.ts';
 import { episodeSources, recordEpisodeSources, validateEpisodeSources } from './context-evidence.ts';
@@ -20,6 +20,8 @@ interface TopicRow {
   tier: 'short' | 'long';
   player_mentions: number;
   last_seen: number;
+  importance?: number;
+  relevance?: number;
 }
 interface EpisodeRow {
   row_seq: number;
@@ -30,12 +32,92 @@ interface EpisodeRow {
   created_at: number;
 }
 
+/** memory_topics.importance exists from schema 115; an older database records and ranks as if every topic were 3. */
+function hasImportance(store: Store, scope: CharacterScope) {
+  return !!store.get(scope, "SELECT 1 FROM pragma_table_info('memory_topics') WHERE name='importance'");
+}
+
+/** The messages a fact cites must exist in this conversation and be player-authored (the player_statement rule). */
+function playerEvidence(store: Store, scope: CharacterScope, ids: string[]) {
+  const rows = ids.map((id) =>
+    store.get<{ author_kind: string }>(
+      scope,
+      'SELECT author_kind FROM messages WHERE world_id=? AND conversation_id=? AND id=?',
+      scope.worldId,
+      scope.conversationId,
+      id,
+    ),
+  );
+  ensure(ids.length > 0 && rows.every((row) => row?.author_kind === 'player'), 'INVALID_MEMORY_EVIDENCE');
+}
+const activeFact = (store: Store, scope: CharacterScope, factKey: string) =>
+  store.get<{ id: string }>(
+    scope,
+    `SELECT id FROM memory_facts WHERE ${where} AND fact_key=? AND retired_at IS NULL`,
+    ...params(scope),
+    factKey,
+  );
+function requireFactsTable(store: Store, scope: CharacterScope) {
+  ensure(
+    store.get(scope, "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_facts'"),
+    'WEB_MEMORY_MIGRATION_REQUIRED',
+  );
+}
+
+/** Before any write: every fact op cites player messages of this conversation; update/retire need an active fact. */
+function validatePlayerFacts(store: Store, scope: CharacterScope, candidate: DialogueCandidate): void {
+  if (!candidate.factOps?.length) return;
+  requireFactsTable(store, scope);
+  for (const op of candidate.factOps) {
+    playerEvidence(store, scope, op.evidenceMessageIds);
+    ensure(op.op === 'add' || activeFact(store, scope, op.factKey), 'INVALID_FACT_REFERENCE');
+  }
+}
+
+/**
+ * Apply fact ops inside the publication transaction. An update (or an add of a key that is already active) retires the
+ * old row, pointing at its successor, and inserts the new statement, so history stays and one fact per key is active.
+ */
+function recordPlayerFacts(store: Store, scope: CharacterScope, candidate: DialogueCandidate, now: number): void {
+  for (const op of candidate.factOps ?? []) {
+    const current = activeFact(store, scope, op.factKey);
+    if (op.op === 'retire') {
+      store.run(scope, 'UPDATE memory_facts SET retired_at=?,updated_at=? WHERE id=?', now, now, current!.id);
+      continue;
+    }
+    const id = randomUUID();
+    if (current)
+      store.run(
+        scope,
+        'UPDATE memory_facts SET retired_at=?,updated_at=?,superseded_by=? WHERE id=?',
+        now,
+        now,
+        id,
+        current.id,
+      );
+    store.run(
+      scope,
+      `INSERT INTO memory_facts(world_id,conversation_id,character_id,id,fact_key,statement,importance,
+      evidence_message_ids_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      ...params(scope),
+      id,
+      op.factKey,
+      op.statement,
+      op.importance,
+      JSON.stringify(op.evidenceMessageIds),
+      now,
+      now,
+    );
+  }
+}
+
 export function validateDialogueMemoryEvidence(
   store: Store,
   scope: CharacterScope,
   jobId: string,
   candidate: DialogueCandidate,
 ): void {
+  validatePlayerFacts(store, scope, candidate);
   for (const topic of candidate.topics) {
     if (topic.linkedMemoryId !== undefined)
       ensure(
@@ -77,6 +159,8 @@ export function recordDialogueMemories(
   currentInputIds: string[],
   now: number,
 ): void {
+  validatePlayerFacts(store, scope, candidate);
+  const importanceColumn = hasImportance(store, scope);
   for (const topic of candidate.topics) {
     const evidence = topic.evidenceMessageIds.map((id) => {
       const row = store.get<{ id: string; author_kind: string }>(
@@ -94,15 +178,30 @@ export function recordDialogueMemories(
         (evidence.length > 0 && evidence.every((row) => row.author_kind === 'player')),
       'INVALID_MEMORY_EVIDENCE',
     );
-    store.run(
-      scope,
-      `INSERT INTO memory_topics VALUES (?,?,?,?,'short',0,?,?) ON CONFLICT(world_id,conversation_id,character_id,topic_key)
-      DO UPDATE SET last_seen=excluded.last_seen,active_until=excluded.active_until`,
-      ...params(scope),
-      topic.key,
-      now,
-      now + DIALOGUE.shortMemoryMs,
-    );
+    if (importanceColumn)
+      store.run(
+        scope,
+        `INSERT INTO memory_topics(world_id,conversation_id,character_id,topic_key,tier,player_mentions,last_seen,active_until,importance)
+        VALUES (?,?,?,?,'short',0,?,?,?) ON CONFLICT(world_id,conversation_id,character_id,topic_key)
+        DO UPDATE SET last_seen=excluded.last_seen,active_until=excluded.active_until,importance=max(importance,?)`,
+        ...params(scope),
+        topic.key,
+        now,
+        now + DIALOGUE.shortMemoryMs,
+        topic.importance ?? DIALOGUE.defaultImportance,
+        topic.importance ?? 1,
+      );
+    else
+      store.run(
+        scope,
+        `INSERT INTO memory_topics(world_id,conversation_id,character_id,topic_key,tier,player_mentions,last_seen,active_until)
+        VALUES (?,?,?,?,'short',0,?,?) ON CONFLICT(world_id,conversation_id,character_id,topic_key)
+        DO UPDATE SET last_seen=excluded.last_seen,active_until=excluded.active_until`,
+        ...params(scope),
+        topic.key,
+        now,
+        now + DIALOGUE.shortMemoryMs,
+      );
     store.run(
       scope,
       'INSERT OR IGNORE INTO memory_catalog(id,world_id,conversation_id,character_id,topic_key) VALUES (?,?,?,?,?)',
@@ -129,12 +228,15 @@ export function recordDialogueMemories(
       ...params(scope),
       topic.key,
     )!.n;
+    // Promotion to long-term: enough player mentions OR an important topic (importance only exists from schema 115).
     store.run(
       scope,
-      `UPDATE memory_topics SET player_mentions=?,tier=CASE WHEN ?>=? THEN 'long' ELSE tier END WHERE ${where} AND topic_key=?`,
+      `UPDATE memory_topics SET player_mentions=?,tier=CASE WHEN ?>=?${importanceColumn ? ' OR importance>=?' : ''} THEN 'long' ELSE tier END
+      WHERE ${where} AND topic_key=?`,
       count,
       count,
       DIALOGUE.promotionMentions,
+      ...(importanceColumn ? [DIALOGUE.promotionImportance] : []),
       ...params(scope),
       topic.key,
     );
@@ -152,6 +254,7 @@ export function recordDialogueMemories(
     );
     recordEpisodeSources(store, scope, jobId, topic.key, topic.sourceEvidenceIds ?? []);
   }
+  recordPlayerFacts(store, scope, candidate, now);
 }
 
 /** Expiry removes short topics from default recall, not from a relevant explicit search. */
@@ -189,27 +292,39 @@ export function recallMemories(
     `WITH ranked AS (SELECT t.*,c.id,(${score}) relevance FROM memory_topics t
     JOIN memory_catalog c ON c.world_id=t.world_id AND c.conversation_id=t.conversation_id AND c.character_id=t.character_id AND c.topic_key=t.topic_key
     WHERE t.world_id=? AND t.conversation_id=? AND t.character_id=?) SELECT * FROM ranked
-    WHERE tier='long' OR active_until>? OR relevance>0 ORDER BY relevance DESC,last_seen DESC,topic_key LIMIT ?`,
+    WHERE tier='long' OR active_until>? OR relevance>0`,
     ...words.flatMap((word) => [word, word, word]),
     ...params(scope),
     now,
-    limit,
   );
+  const ranked = topics
+    .map((topic) => {
+      const ageHours = Math.max(0, now - topic.last_seen) / 3_600_000;
+      const score =
+        RECALL.weightRelevance * Math.min(1, (topic.relevance ?? 0) / RECALL.relevanceSaturation) +
+        RECALL.weightImportance * ((topic.importance ?? DIALOGUE.defaultImportance) / 10) +
+        RECALL.weightRecency * Math.exp(-ageHours / RECALL.recencyHours);
+      return { topic, score };
+    })
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.topic.last_seen - a.topic.last_seen ||
+        (a.topic.topic_key < b.topic.topic_key ? -1 : a.topic.topic_key > b.topic.topic_key ? 1 : 0),
+    )
+    .slice(0, limit);
   const episodeScore = words.length
     ? words.map(() => '(CASE WHEN instr(lower(summary),?)>0 THEN 1 ELSE 0 END)').join('+')
     : '0';
-  return topics.map((topic) => ({
+  return ranked.map(({ topic, score }) => ({
     id: topic.id,
     key: topic.topic_key,
     tier: topic.tier,
     playerMentions: topic.player_mentions,
+    importance: topic.importance ?? DIALOGUE.defaultImportance,
     lastSeenAt: topic.last_seen,
-    recallWeight:
-      1 +
-      Math.round(
-        Math.min(DIALOGUE.maxRecallBonus, Math.max(0, topic.player_mentions - 1) * DIALOGUE.recallStep) * 100,
-      ) /
-        100,
+    // A proactive pick weights each memory by the same score that ranked it.
+    recallWeight: 1 + Math.round(score * 100) / 100,
     episodes: store
       .all<EpisodeRow>(
         scope,
@@ -258,6 +373,22 @@ export function recallMemories(
         };
       }),
   }));
+}
+
+/**
+ * The active facts the player stated, most important first (ties: newest, then key), at most 20. The order is a pure
+ * function of the stored facts so the prompt prefix stays byte-stable until a fact actually changes.
+ */
+export function recallPlayerFacts(store: Store, scope: CharacterScope): { factKey: string; statement: string }[] {
+  if (!store.get(scope, "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_facts'")) return [];
+  return store
+    .all<{ fact_key: string; statement: string }>(
+      scope,
+      `SELECT fact_key,statement FROM memory_facts WHERE ${where} AND retired_at IS NULL
+      ORDER BY importance DESC,updated_at DESC,fact_key LIMIT 20`,
+      ...params(scope),
+    )
+    .map((row) => ({ factKey: row.fact_key, statement: row.statement }));
 }
 
 /** Every published dialogue has exact short-term memory, even a greeting with no semantic topic yet. */

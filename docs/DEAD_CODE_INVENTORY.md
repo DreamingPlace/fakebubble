@@ -2,6 +2,8 @@
 
 **Correction (Part 3).** The player app imports TypeScript files with `.js` extensions (for example `main.ts` imports `'../features/prototype/preview.js'` and `import('./local-mode.js')`), and those files are used. The script behind this inventory did not map `.js` specifiers to `.ts`, so it wrongly reported `apps/player-web/src/app/local-mode.ts` and `apps/player-web/src/features/prototype/preview.ts` as unused and listed almost all of `apps/player-web` as reachable only from tests. Re-resolving the graph from `apps/player-web/src/app/main.ts` with `.js` mapped to `.ts` leaves one player-web source file outside it (see (a) and (c)). Entries under `apps/player-web/` in section (b) came from the same unmapped resolution and must be re-derived before anyone acts on them. Do not delete `local-mode.ts` or `preview.ts`. Server paths below were updated for the Part 3 folder layout.
 
+**Update (Part 7a).** `memory/accepted-memory.ts` (a second, simpler `recallMemories` the live request builder used) was removed; `generation/web-v7-request.ts` now calls `recallMemories` in `memory/memory.ts`, so that function and `recallPlayerFacts` are live (`selectProactiveTopic` still has no caller). `115_memory_importance.sql` adds the `memory_facts` table (read and written by `memory/memory.ts`, purged by the retention and deletion paths); the tables below are otherwise as of Part 2b.
+
 Regenerated after Part 2b from a throwaway static import graph (TypeScript AST; `import`, `export … from`, dynamic `import()`, `import('…')` type references, `new URL(…, import.meta.url)`, and relative `.ts`/`.mjs` path strings such as forked workers). The script is kept outside the repo (`work/`, gitignored). Part 2b deleted the iOS-era modules and the experimental-v10 text protocol listed in the Part 2 inventory; this file describes the tree that remains.
 
 **Entry points:** `workers/web-cloudflare/{edge,business,budget,generation}.ts`, `apps/player-web/src/app/main.ts`, every `scripts/*.ts` named in a `package.json` script (`scripts/web-v1.ts`, `scripts/build-web-player.ts`, `scripts/preview-web.ts`, `scripts/web-cloudflare-package.ts`, `scripts/test-web-local-http.ts`, `scripts/test-web-data-lifecycle-restart.ts`), and the two kept manual operator tools `scripts/web-provider.ts` and `scripts/web-cloudflare-operator.ts` (documented in `docs/DEPLOYMENT.md`).
@@ -124,8 +126,8 @@ Information only; no `.sql` file was touched. Superseded by `docs/DATA_BOUNDARY.
 |  | media | mention +sql | `apps/player-web/src/app/local-mode.ts`, `apps/player-web/src/features/local/local-page.ts`, `cloudflare/admin-assets.ts` |
 |  | outbox | W | `admission/web-admission.ts`, `conversation/web-vertical-publisher.ts`, `cloudflare/web-retention.ts` |
 | 002_dialogue_memory.sql | dialogue_bubbles | W+R | `conversation/web-vertical-publisher.ts`, `memory/memory.ts`, `generation/web-v7-request.ts` |
-|  | memory_topics | W+R | `memory/memory.ts`, `memory/accepted-memory.ts`, `memory/memory-review.ts` |
-|  | memory_episodes | W+R | `memory/memory.ts`, `memory/accepted-memory.ts`, `memory/memory-review.ts` |
+|  | memory_topics | W+R | `memory/memory.ts`, `memory/memory-review.ts` |
+|  | memory_episodes | W+R | `memory/memory.ts`, `memory/memory-review.ts` |
 |  | memory_mentions | W+R | `memory/memory.ts`, `cloudflare/web-retention.ts`, `characters/web-character-deletion-audit.ts` |
 | 003_proactive_topics.sql | proactive_topics | W+R | `memory/memory.ts` |
 | 004_player_api.sql | api_players | W+R +sql | `identity/web-identity.ts`, `platform/store.ts`, `admission/web-admission.ts` |

@@ -11,7 +11,7 @@ import { recordRelationshipEvents, relationshipVersion } from './relationships.t
 import { recordSceneBubble, sceneRevision, sceneState, touchScene } from './scenes.ts';
 import { userStore, type UserStore } from '../platform/store-boundary.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
-import { metricsEnabled, recordFallbackPublished } from '../admission/web-stage-metrics.ts';
+import { metricsEnabled, recordFallbackPublished, recordReviewChanged } from '../admission/web-stage-metrics.ts';
 import { requireCurrentInputSnapshot } from '../generation/web-input-snapshot.ts';
 import type { WebPrivateAudioFiles, PrivateAudioExpectation } from '../audio/web-private-audio-files.ts';
 import type { WebCoordinatorLease } from '../admission/web-stage-queue.ts';
@@ -607,7 +607,7 @@ export class WebVerticalPublisher {
             (principal.kind === 'account' &&
               this.store.get('SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1', claim.principalId)) ||
             (principal.kind === 'invite' &&
-              [111, 112, 113, 114].includes(
+              [111, 112, 113, 114, 115].includes(
                 this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
               ) &&
               requireWebContent(this.store, this.clock, claim.principalId, claim.worldId))),
@@ -715,6 +715,22 @@ export class WebVerticalPublisher {
             topic.evidenceMessageIds.every((id) => request.messages.some((message) => message.id === id)),
           ),
         'WEB_PUBLICATION_CANDIDATE_INVALID',
+      );
+      ensure(
+        (candidate.factOps ?? []).every((op) =>
+          op.evidenceMessageIds.every((id) =>
+            request.messages.some((message) => message.id === id && message.authorKind === 'player'),
+          ),
+        ),
+        'INVALID_MEMORY_EVIDENCE',
+      );
+      ensure(
+        candidate.topics.every(
+          (topic) =>
+            topic.linkedMemoryId === undefined ||
+            (request.memories ?? []).some((memory) => memory.id === topic.linkedMemoryId && memory.key === topic.key),
+        ),
+        'INVALID_MEMORY_LINK',
       );
       if (!fallback) this.completeAssets(claim.operationId);
       for (const [ordinal, asset] of checked.assets.entries()) {
@@ -1004,6 +1020,7 @@ export class WebVerticalPublisher {
         JSON.stringify(receipt),
         now,
       );
+      recordReviewChanged(this.store, claim.operationId, candidate.reviewChanged, now);
       if (fallback) recordFallbackPublished(this.store, claim.operationId);
       return receipt;
     });

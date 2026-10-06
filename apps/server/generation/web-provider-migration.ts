@@ -40,3 +40,22 @@ export function migrateWebProviderMetrics(store: Store) {
     store.db.exec('PRAGMA user_version = 114');
   });
 }
+
+/** Node-only 114→115: memory importance, player facts and the review_changed metric (115_memory_importance.sql). */
+export function migrateWebProviderMemory(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 114 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_operation_metrics'"),
+      'WEB_PROVIDER_MEMORY_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/115_memory_importance.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 115');
+  });
+}

@@ -45,15 +45,18 @@ export class WebMetricsFixture {
       return Response.json({ errors, tables: names() });
     }
     if (path === '/upgrade') {
-      // An authority created before 114 existed: the first 14 steps exactly as the constructor applied them.
-      const r2Mode = new URL(request.url).searchParams.get('mode') === 'r2';
+      // An authority created before a later step existed: the steps up to `through` (default 113) exactly as the
+      // constructor applied them; opening it applies every newer step.
+      const params = new URL(request.url).searchParams;
+      const r2Mode = params.get('mode') === 'r2';
+      const through = Number(params.get('through') ?? 113);
       const list = r2Mode ? webR2Migrations : webMigrations;
       const sha = async (sql: string) =>
         [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sql)))]
           .map((byte) => byte.toString(16).padStart(2, '0'))
           .join('');
       storage.sql.exec('CREATE TABLE cf_web_migrations(version INTEGER PRIMARY KEY,sha256 TEXT NOT NULL) STRICT');
-      for (const m of list.slice(0, -1)) {
+      for (const m of list.filter((step) => step.version <= through)) {
         storage.sql.exec(m.sql);
         storage.sql.exec('INSERT INTO cf_web_migrations VALUES (?,?)', m.version, await sha(m.sql));
       }
@@ -80,6 +83,17 @@ export class WebMetricsFixture {
         after: ledger(),
         version: store.get('PRAGMA user_version'),
         metrics: names().includes('web_operation_metrics'),
+        review: {
+          importance: storage.sql
+            .exec('PRAGMA table_info(memory_topics)')
+            .toArray()
+            .some((column) => column.name === 'importance'),
+          facts: names().includes('memory_facts'),
+          reviewChanged: storage.sql
+            .exec('PRAGMA table_info(web_operation_metrics)')
+            .toArray()
+            .some((column) => column.name === 'review_changed'),
+        },
         discardedColumn: storage.sql
           .exec('PRAGMA table_info(web_operation_metrics)')
           .toArray()
