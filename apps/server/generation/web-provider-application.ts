@@ -464,7 +464,7 @@ export class WebProviderApplication {
       body: string;
       created_at: number;
       operation_id: string;
-      origin: 'input' | 'narrative' | 'trial_footer';
+      origin: 'input' | 'narrative' | 'trial_footer' | 'text_fallback';
       ordinal: number | null;
       media_id: string | null;
       duration_ms: number | null;
@@ -503,9 +503,11 @@ export class WebProviderApplication {
         conversationId,
         characterId: character,
         operationId: row.operation_id,
-        replyOrdinal: row.origin === 'narrative' ? row.ordinal : null,
+        replyOrdinal: row.origin === 'narrative' || row.origin === 'text_fallback' ? row.ordinal : null,
         author: row.origin === 'input' ? ('player' as const) : ('character' as const),
-        origin: row.origin,
+        // A text fallback is an ordinary narrative text bubble to the player; only deliveryFallback tells it apart.
+        origin: row.origin === 'text_fallback' ? ('narrative' as const) : row.origin,
+        ...(row.origin === 'text_fallback' ? { deliveryFallback: 'text' as const } : {}),
         text: row.body,
         createdAt: row.created_at,
         audio: row.media_id

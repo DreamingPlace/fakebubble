@@ -13,7 +13,8 @@ CREATE TABLE web_operation_metrics (
   audio_rate_limit_retries INTEGER NOT NULL DEFAULT 0 CHECK(audio_rate_limit_retries BETWEEN 0 AND 3),
   fallback_used INTEGER NOT NULL DEFAULT 0 CHECK(fallback_used IN (0,1)),
   fallback_reason TEXT CHECK(fallback_reason IN ('audio_wait','rate_limited')),
-  CHECK((fallback_used=0 AND fallback_reason IS NULL) OR (fallback_used=1 AND fallback_reason IS NOT NULL))
+  -- A reason without fallback_used=1 means "decided, text publication still pending".
+  CHECK(fallback_used=0 OR fallback_reason IS NOT NULL)
 ) STRICT;
 CREATE INDEX web_operation_metrics_day ON web_operation_metrics(day);
 
@@ -30,3 +31,24 @@ CREATE TABLE web_attempt_rejections (
   PRIMARY KEY(operation_id,phase,ordinal),
   FOREIGN KEY(operation_id,phase,ordinal) REFERENCES web_provider_attempts(operation_id,phase,ordinal)
 ) STRICT;
+
+-- A voice request that falls back publishes the reviewed text candidate as text bubbles: no audio asset, so
+-- media_id is NULL for origin 'text_fallback' only. Same immutability triggers as 108/110.
+CREATE TABLE web_publication_items_114 (
+  operation_id TEXT NOT NULL REFERENCES web_publications(operation_id),
+  ordinal INTEGER NOT NULL CHECK(ordinal>=0), message_id TEXT NOT NULL UNIQUE REFERENCES messages(id),
+  media_id TEXT, origin TEXT NOT NULL CHECK(origin IN ('narrative','trial_footer','text_fallback')),
+  PRIMARY KEY(operation_id,ordinal),
+  CHECK((origin='text_fallback' AND media_id IS NULL) OR (origin<>'text_fallback' AND media_id IS NOT NULL))
+) STRICT;
+INSERT INTO web_publication_items_114 SELECT * FROM web_publication_items;
+DROP TABLE web_publication_items;
+ALTER TABLE web_publication_items_114 RENAME TO web_publication_items;
+CREATE TRIGGER web_publication_items_no_update BEFORE UPDATE ON web_publication_items
+BEGIN SELECT RAISE(ABORT,'WEB_PUBLICATION_ITEM_IMMUTABLE'); END;
+CREATE TRIGGER web_publication_items_no_delete BEFORE DELETE ON web_publication_items
+WHEN NOT EXISTS (SELECT 1 FROM web_operations o JOIN web_retention_purge_gate g
+  ON g.principal_id=o.principal_id AND g.world_id=o.world_id
+  JOIN web_guest_retention r ON r.principal_id=g.principal_id AND r.world_id=g.world_id
+  WHERE o.id=OLD.operation_id AND r.state='purging' AND r.revision=g.retention_revision)
+BEGIN SELECT RAISE(ABORT,'WEB_PUBLICATION_ITEM_IMMUTABLE'); END;

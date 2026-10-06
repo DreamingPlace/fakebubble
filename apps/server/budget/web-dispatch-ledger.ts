@@ -316,6 +316,32 @@ export class WebDispatchLedger {
     });
   }
 
+  /**
+   * A provider rejected the request with HTTP 429 and the retries are over: settle the capacity ticket as a known,
+   * zero-usage failure. Unlike confirm(), this never fails the operation (a voice request falls back to text).
+   */
+  settleRejected(key: AttemptKey) {
+    return this.store.transaction(() => {
+      this.schema();
+      const row = this.attempt(key);
+      ensure(row && (row.dispatch_state === 'sent' || row.dispatch_state === 'not_sent'), 'WEB_DISPATCH_STALE');
+      ensure(
+        this.store.run(
+          `UPDATE web_external_attempts SET dispatch_state='known',outcome='failed',receipt_json='{"rateLimited":true}',
+          usage_json='{}',settled_at=? WHERE operation_id=? AND stage=? AND phase=? AND ordinal=?
+          AND dispatch_state IN ('sent','not_sent')`,
+          this.now(),
+          key.operationId,
+          key.stage,
+          key.phase,
+          key.ordinal,
+        ).changes === 1,
+        'WEB_DISPATCH_STALE',
+      );
+      this.releaseBudget(row);
+    });
+  }
+
   /** On-time fake audio success advances only synthetic metadata; late receipts settle external cost only. */
   confirm(
     key: AttemptKey,

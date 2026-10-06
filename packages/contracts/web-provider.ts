@@ -112,6 +112,8 @@ export interface WebProviderMessage {
   origin: 'input' | 'narrative' | 'trial_footer' | 'admin_character';
   text: string;
   createdAt: number;
+  /** Present only when the voice reply was delivered as text because voice was unavailable or busy. */
+  deliveryFallback?: 'text';
   audio: {
     revision: number;
     status: WebAudioStatus;

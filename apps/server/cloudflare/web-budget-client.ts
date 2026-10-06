@@ -22,9 +22,14 @@ export class WebCloudBudgetClient implements WebAttemptBudget {
   constructor(rpc: WebBudgetRPC) {
     this.rpc = rpc;
   }
-  async beginAttempt(store: BusinessStore, key: BudgetAttemptKey) {
+  async beginAttempt(store: BusinessStore, key: BudgetAttemptKey, resume = false) {
     const { row, id, fingerprint } = budgetAttempt(store, key);
     ensure(row.state === 'not_sent', 'WEB_SHARED_ATTEMPT_UNRESOLVED');
+    if (resume) {
+      const held = await this.rpc.read(id, fingerprint);
+      ensure(held?.charged_micros === null && held.held_micros === row.held_micros, 'WEB_SHARED_ATTEMPT_UNRESOLVED');
+      return;
+    }
     await this.rpc.reserve(id, row.provider, fingerprint, row.held_micros);
   }
   async settleAttempt(store: BusinessStore, key: BudgetAttemptKey) {

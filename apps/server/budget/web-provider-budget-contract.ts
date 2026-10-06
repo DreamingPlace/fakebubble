@@ -5,7 +5,12 @@ import type { BusinessStore } from '../platform/store-contract.ts';
 export type Provider = 'deepseek' | 'fish';
 export type BudgetAttemptKey = { operationId: string; phase: string; ordinal: number };
 export interface WebAttemptBudget {
-  beginAttempt(store: BusinessStore, key: BudgetAttemptKey): void | Promise<void>;
+  /**
+   * Persist the possible-send boundary. With resume=true the attempt was rejected by the provider (HTTP 429)
+   * before it ran and is being retried: the shared reservation made for it must still exist and is reused, never
+   * duplicated and never released.
+   */
+  beginAttempt(store: BusinessStore, key: BudgetAttemptKey, resume?: boolean): void | Promise<void>;
   settleAttempt(store: BusinessStore, key: BudgetAttemptKey): void | Promise<void>;
   recoverKnown(store: BusinessStore): void | Promise<void>;
 }

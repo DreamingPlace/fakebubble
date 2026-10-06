@@ -7,6 +7,15 @@ import type {
   TextGenerationStage,
 } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
+import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { webConcurrency } from '../../../config/web-concurrency.ts';
+import {
+  metricsEnabled,
+  recordAudioProgress,
+  recordRateLimitRetry,
+  recordTextDone,
+  requestFallback,
+} from '../admission/web-stage-metrics.ts';
 import { inspectPCM } from '../../../workers/audio/wav.ts';
 import { parseTextDraft, applyTextReview, protocolFingerprint } from './accepted-text-protocol.ts';
 import { textPromptHash } from './accepted-text-prompt.ts';
@@ -436,6 +445,7 @@ export class WebProviderOffline {
     return this.store.transaction(() => {
       this.liveClaim(claim, input);
       const reserved = this.reserve(input);
+      if (reserved.duplicate && this.isRewound(input)) this.rebindRewound(claim, input);
       if (!reserved.duplicate) {
         this.capacity.reserve(claim, {
           phase: input.phase,
@@ -577,6 +587,324 @@ export class WebProviderOffline {
         ).changes === 1,
         'WEB_PROVIDER_BUDGET_CONFLICT',
       );
+    });
+  }
+  /** True once a provider answered HTTP 429 for this attempt (schema 114+). */
+  supportsRateLimitRetry() {
+    return metricsEnabled(this.store);
+  }
+  /** The attempt was rejected before execution at least once; it keeps its single budget reservation. */
+  isRewound(key: Key) {
+    return (
+      metricsEnabled(this.store) &&
+      !!this.store.get(
+        'SELECT 1 FROM web_attempt_rejections WHERE operation_id=? AND phase=? AND ordinal=?',
+        key.operationId,
+        key.phase,
+        key.ordinal,
+      )
+    );
+  }
+  private rebindRewound(claim: WebStageClaim, key: Key) {
+    this.store.run(
+      `UPDATE web_provider_attempts SET stage_version=?,lease_epoch=?,lease_token=?
+      WHERE operation_id=? AND phase=? AND ordinal=? AND state='not_sent'`,
+      claim.stageVersion,
+      claim.epoch,
+      claim.token,
+      key.operationId,
+      key.phase,
+      key.ordinal,
+    );
+    this.store.run(
+      `UPDATE web_external_attempts SET stage_version=?,lease_epoch=?,lease_token=?
+      WHERE operation_id=? AND stage=? AND phase=? AND ordinal=? AND dispatch_state='not_sent'`,
+      claim.stageVersion,
+      claim.epoch,
+      claim.token,
+      key.operationId,
+      claim.stage,
+      key.phase,
+      key.ordinal,
+    );
+  }
+  /**
+   * The provider answered HTTP 429: it rejected the request before running it, a KNOWN not-executed outcome.
+   * Within the retry limit the stage claim returns to pending (backoff 2s, 4s, 8s, never past the operation
+   * deadline). The attempt goes back to not_sent and keeps its one money hold and capacity ticket, so the
+   * shared budget is neither released nor charged twice; the retry sends the same frozen wire request.
+   * Beyond the limit the caller settles the rejected attempt at zero (see settleRejected*).
+   */
+  rejectForRetry(claim: WebStageClaim, key: Key, scope: Scope, code: 'DEEPSEEK_RATE_LIMITED' | 'FISH_RATE_LIMITED') {
+    this.check();
+    ensure(this.supportsRateLimitRetry(), 'WEB_PROVIDER_MIGRATION_REQUIRED');
+    return this.store.transaction(() => {
+      this.liveClaim(claim, scope);
+      const row = this.attempt(key);
+      ensure(
+        sameScope(row, scope) &&
+          row.state === 'sent' &&
+          row.stage_version === claim.stageVersion &&
+          row.lease_epoch === claim.epoch &&
+          row.lease_token === claim.token,
+        'WEB_PROVIDER_CLAIM_STALE',
+      );
+      const rejections =
+        this.store.get<{ rejections: number }>(
+          'SELECT rejections FROM web_attempt_rejections WHERE operation_id=? AND phase=? AND ordinal=?',
+          key.operationId,
+          key.phase,
+          key.ordinal,
+        )?.rejections ?? 0;
+      const now = this.now();
+      const delay = WEB_LIMITS.rateLimitBackoffMs[rejections];
+      const deadline = this.store.get<{ deadline_at: number }>(
+        'SELECT deadline_at FROM web_operations WHERE id=?',
+        key.operationId,
+      )!.deadline_at;
+      if (delay === undefined || now + delay >= deadline) return { action: 'exhausted' as const };
+      const notBefore = now + delay;
+      ensure(
+        this.store.run(
+          `UPDATE web_provider_attempts SET state='not_sent',sent_at=NULL
+          WHERE operation_id=? AND phase=? AND ordinal=? AND state='sent'`,
+          key.operationId,
+          key.phase,
+          key.ordinal,
+        ).changes === 1 &&
+          this.store.run(
+            `UPDATE web_external_attempts SET dispatch_state='not_sent',sent_at=NULL
+            WHERE operation_id=? AND stage=? AND phase=? AND ordinal=? AND dispatch_state='sent'`,
+            key.operationId,
+            claim.stage,
+            key.phase,
+            key.ordinal,
+          ).changes === 1,
+        'WEB_PROVIDER_ATTEMPT_STALE',
+      );
+      this.store.run(
+        `INSERT INTO web_attempt_rejections(operation_id,phase,ordinal,rejections,last_rejected_at,last_code)
+        VALUES (?,?,?,1,?,?) ON CONFLICT(operation_id,phase,ordinal) DO UPDATE SET
+        rejections=rejections+1,last_rejected_at=excluded.last_rejected_at,last_code=excluded.last_code`,
+        key.operationId,
+        key.phase,
+        key.ordinal,
+        now,
+        code,
+      );
+      recordRateLimitRetry(this.store, key.operationId, claim.stage, now);
+      const released =
+        claim.stage === 'text'
+          ? this.store.run(
+              `UPDATE web_operations SET status='queued',stage_version=stage_version+1,text_queued_at=?,
+              lease_epoch=NULL,lease_token=NULL,lease_owner=NULL,lease_expires_at=NULL
+              WHERE id=? AND status='text_running' AND stage_version=? AND lease_epoch=? AND lease_token=?`,
+              notBefore,
+              key.operationId,
+              claim.stageVersion,
+              claim.epoch,
+              claim.token,
+            ).changes
+          : this.store.run(
+              `UPDATE web_operations SET status='audio_pending',stage_version=stage_version+1,audio_wait_started_at=?,
+              lease_epoch=NULL,lease_token=NULL,lease_owner=NULL,lease_expires_at=NULL
+              WHERE id=? AND status='audio_running' AND stage_version=? AND lease_epoch=? AND lease_token=?`,
+              notBefore,
+              key.operationId,
+              claim.stageVersion,
+              claim.epoch,
+              claim.token,
+            ).changes;
+      ensure(released === 1, 'WEB_PROVIDER_CLAIM_STALE');
+      if (claim.stage === 'audio')
+        ensure(
+          this.store.run(
+            `UPDATE web_provider_voice_segments SET state='pending',
+            claim_stage_version=NULL,claim_epoch=NULL,claim_token=NULL
+            WHERE operation_id=? AND ordinal=? AND state='running' AND claim_stage_version=?`,
+            key.operationId,
+            key.ordinal,
+            claim.stageVersion,
+          ).changes === 1,
+          'WEB_VOICE_SEGMENT_STALE',
+        );
+      return { action: 'retry' as const, notBefore, retries: rejections + 1 };
+    });
+  }
+  /** Zero-charge settlement of an attempt the provider rejected before running it; never ends the operation. */
+  private settleRejectedInTransaction(key: Key, scope: Scope, receipt: unknown) {
+    const row = this.attempt(key);
+    ensure(sameScope(row, scope) && (row.state === 'sent' || row.state === 'not_sent'), 'WEB_PROVIDER_ATTEMPT_STALE');
+    ensure(
+      this.store.run(
+        `UPDATE web_provider_attempts SET state='known',outcome='failed',usage_units=0,charged_micros=0,
+        receipt_json=?,settled_at=? WHERE operation_id=? AND phase=? AND ordinal=? AND state IN ('sent','not_sent')`,
+        JSON.stringify(receipt),
+        this.now(),
+        key.operationId,
+        key.phase,
+        key.ordinal,
+      ).changes === 1,
+      'WEB_PROVIDER_ATTEMPT_STALE',
+    );
+    ensure(
+      this.store.run(
+        `UPDATE web_provider_spending SET held_micros=held_micros-? WHERE provider=? AND held_micros>=?`,
+        row.held_micros,
+        row.provider,
+        row.held_micros,
+      ).changes === 1,
+      'WEB_PROVIDER_BUDGET_CONFLICT',
+    );
+    this.capacity.settleRejected({
+      operationId: key.operationId,
+      stage: key.phase === 'speech' ? 'audio' : 'text',
+      phase: key.phase,
+      ordinal: key.ordinal,
+    });
+  }
+  /** Rate-limit retries are exhausted for a voice segment: settle at zero and ask for the text publication. */
+  exhaustAudioToFallback(
+    claim: WebStageClaim,
+    key: Key,
+    scope: Scope,
+    code: 'DEEPSEEK_RATE_LIMITED' | 'FISH_RATE_LIMITED',
+  ) {
+    this.check();
+    ensure(claim.stage === 'audio' && key.phase === 'speech', 'WEB_PROVIDER_CLAIM_STALE');
+    return this.store.transaction(() => {
+      this.liveClaim(claim, scope);
+      const row = this.attempt(key);
+      ensure(
+        row.state === 'sent' &&
+          row.stage_version === claim.stageVersion &&
+          row.lease_epoch === claim.epoch &&
+          row.lease_token === claim.token,
+        'WEB_PROVIDER_CLAIM_STALE',
+      );
+      const now = this.now();
+      this.settleRejectedInTransaction(key, scope, { rateLimited: true, code, exhausted: true });
+      ensure(
+        this.store.run(
+          `UPDATE web_operations SET status='audio_pending',stage_version=stage_version+1,audio_wait_started_at=NULL,
+          lease_epoch=NULL,lease_token=NULL,lease_owner=NULL,lease_expires_at=NULL
+          WHERE id=? AND status='audio_running' AND stage_version=? AND lease_epoch=? AND lease_token=?`,
+          key.operationId,
+          claim.stageVersion,
+          claim.epoch,
+          claim.token,
+        ).changes === 1 &&
+          this.store.run(
+            `UPDATE web_provider_voice_segments SET state='pending',
+            claim_stage_version=NULL,claim_epoch=NULL,claim_token=NULL
+            WHERE operation_id=? AND ordinal=? AND state='running' AND claim_stage_version=?`,
+            key.operationId,
+            key.ordinal,
+            claim.stageVersion,
+          ).changes === 1,
+        'WEB_PROVIDER_CLAIM_STALE',
+      );
+      requestFallback(this.store, key.operationId, 'rate_limited', now);
+      recordAudioProgress(this.store, key.operationId, now);
+    });
+  }
+  /**
+   * Operations that have waited for an audio slot for audioFallbackWaitMs (schema 114+), oldest first. Waiting
+   * is time spent unclaimed; an operation inside a 429 backoff has not started waiting again yet.
+   */
+  fallbackDue(now: number, limit = 16) {
+    if (!metricsEnabled(this.store)) return [] as string[];
+    return this.store
+      .all<{ id: string }>(
+        `SELECT o.id FROM web_operations o WHERE o.status IN ('text_ready','audio_pending')
+        AND o.quota_state='reserved' AND o.deadline_at>? AND o.audio_wait_started_at IS NOT NULL
+        AND o.audio_wait_used_ms IS NOT NULL AND o.audio_wait_started_at<=?
+        AND o.audio_wait_used_ms+?-o.audio_wait_started_at>=?
+        AND NOT EXISTS (SELECT 1 FROM web_operation_metrics m WHERE m.operation_id=o.id AND m.fallback_reason IS NOT NULL)
+        ORDER BY o.admission_seq LIMIT ?`,
+        now,
+        now,
+        now,
+        webConcurrency(this.store).audioFallbackWaitMs,
+        limit,
+      )
+      .map((row) => row.id);
+  }
+  /**
+   * No audio slot freed up in time: decide the text fallback and release every attempt this operation still
+   * holds for the unused audio stage (an attempt a provider rejected earlier) by zero-charge settlement.
+   * Returns the settled attempts so the caller can settle the shared budget for exactly those.
+   */
+  beginWaitFallback(operationId: string) {
+    this.check();
+    ensure(this.supportsRateLimitRetry(), 'WEB_PROVIDER_MIGRATION_REQUIRED');
+    return this.store.transaction(() => {
+      const now = this.now();
+      const op = this.store.get<{
+        principal_id: string;
+        world_id: string;
+        conversation_id: string;
+        character_id: string;
+        input_message_id: string;
+        status: string;
+        stage_version: number;
+        audio_wait_used_ms: number | null;
+        audio_wait_started_at: number | null;
+      }>(
+        `SELECT * FROM web_operations WHERE id=? AND status IN ('text_ready','audio_pending')
+        AND quota_state='reserved' AND deadline_at>? AND audio_wait_started_at IS NOT NULL`,
+        operationId,
+        now,
+      );
+      ensure(op && op.audio_wait_used_ms !== null && op.audio_wait_started_at !== null, 'WEB_FALLBACK_NOT_DUE');
+      const waited = op.audio_wait_used_ms + now - op.audio_wait_started_at;
+      ensure(
+        op.audio_wait_started_at <= now && waited >= webConcurrency(this.store).audioFallbackWaitMs,
+        'WEB_FALLBACK_NOT_DUE',
+      );
+      ensure(
+        !this.store.get(
+          'SELECT 1 FROM web_operation_metrics WHERE operation_id=? AND fallback_reason IS NOT NULL',
+          operationId,
+        ),
+        'WEB_FALLBACK_NOT_DUE',
+      );
+      const scope: Scope = {
+        principalId: op.principal_id,
+        playerId: this.store.get<{ player_id: string }>(
+          'SELECT player_id FROM web_principals WHERE id=? AND world_id=?',
+          op.principal_id,
+          op.world_id,
+        )!.player_id,
+        worldId: op.world_id,
+        conversationId: op.conversation_id,
+        characterId: op.character_id,
+        inputMessageId: op.input_message_id,
+      };
+      const settled: Key[] = [];
+      for (const attempt of this.store.all<Attempt>(
+        `SELECT a.* FROM web_provider_attempts a JOIN web_attempt_rejections r
+          ON r.operation_id=a.operation_id AND r.phase=a.phase AND r.ordinal=a.ordinal
+        WHERE a.operation_id=? AND a.phase='speech' AND a.state='not_sent'`,
+        operationId,
+      )) {
+        const key = { operationId, phase: 'speech' as const, ordinal: attempt.ordinal };
+        this.settleRejectedInTransaction(key, scope, { rateLimited: true, released: 'audio_wait_fallback' });
+        settled.push(key);
+      }
+      ensure(
+        this.store.run(
+          `UPDATE web_operations SET stage_version=stage_version+1,audio_wait_used_ms=?,audio_wait_started_at=NULL
+          WHERE id=? AND stage_version=? AND status IN ('text_ready','audio_pending') AND quota_state='reserved'`,
+          waited,
+          operationId,
+          op.stage_version,
+        ).changes === 1,
+        'WEB_STAGE_STALE',
+      );
+      requestFallback(this.store, operationId, 'audio_wait', now, waited);
+      recordAudioProgress(this.store, operationId, now);
+      return settled;
     });
   }
   confirm(
@@ -984,6 +1312,7 @@ export class WebProviderOffline {
         ).changes === 1,
         'WEB_PROVIDER_CLAIM_STALE',
       );
+      recordTextDone(this.store, claim.operationId, now);
       return candidate;
     });
   }
@@ -1071,6 +1400,7 @@ export class WebProviderOffline {
         ).changes === 1,
         'WEB_PROVIDER_CLAIM_STALE',
       );
+      recordAudioProgress(this.store, claim.operationId, now);
       return mediaId;
     });
   }

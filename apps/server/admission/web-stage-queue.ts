@@ -15,6 +15,7 @@ import { freezeWebV7Request } from '../generation/web-v7-request.ts';
 import { readWebV7Request } from '../generation/web-v7-request.ts';
 import { applyTextReview, parseTextDraft } from '../generation/accepted-text-protocol.ts';
 import type { SnapshotScope } from '../generation/web-input-snapshot.ts';
+import { metricsEnabled, recordAudioClaim, recordTextClaim } from './web-stage-metrics.ts';
 
 type Stage = 'text' | 'audio';
 export interface WebCoordinatorLease {
@@ -57,6 +58,7 @@ interface OperationRow {
   input_message_id: string;
   stage_version: number;
   deadline_at: number;
+  text_queued_at?: number;
   audio_wait_used_ms?: number | null;
   audio_wait_started_at?: number | null;
 }
@@ -89,6 +91,19 @@ export class WebStageQueue {
     this.store = store;
     this.clock = clock;
     this.nextId = nextId;
+  }
+
+  /**
+   * Attempts a provider rejected with HTTP 429 and that wait out a backoff still hold their provider slot, so a
+   * retry never has to compete for capacity it already counted against.
+   */
+  private backingOff(stage: Stage) {
+    if (!metricsEnabled(this.store)) return 0;
+    return this.store.get<{ n: number }>(
+      `SELECT count(*) n FROM web_attempt_rejections r JOIN web_provider_attempts a
+        ON a.operation_id=r.operation_id AND a.phase=r.phase AND a.ordinal=r.ordinal
+      WHERE a.state='not_sent' AND ${stage === 'text' ? "r.phase IN ('draft','review')" : "r.phase='speech'"}`,
+    )!.n;
   }
 
   private now() {
@@ -338,7 +353,8 @@ export class WebStageQueue {
       const table = schema >= 113 ? 'web_provider_voice_segments' : 'web_synthetic_voice_segments';
       const retention = claimRetention(schema, now);
       if (
-        this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='audio_running'")!.n >=
+        this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='audio_running'")!.n +
+          this.backingOff('audio') >=
         webConcurrency(this.store).maxAudioRunning
       )
         return null;
@@ -352,6 +368,11 @@ export class WebStageQueue {
             AND o.audio_wait_started_at<=? AND o.audio_wait_used_ms+?-o.audio_wait_started_at<?
             AND o.deadline_at>?
             ${retention.sql}
+            ${
+              metricsEnabled(this.store)
+                ? 'AND NOT EXISTS (SELECT 1 FROM web_operation_metrics f WHERE f.operation_id=o.id AND f.fallback_reason IS NOT NULL)'
+                : ''
+            }
             AND (SELECT count(*) FROM web_operations other WHERE other.principal_id=o.principal_id
               AND other.id<>o.id AND other.status IN
               ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed','unknown'))<?
@@ -408,6 +429,12 @@ export class WebStageQueue {
         operation.principal_id,
         coordinator.epoch,
       );
+      recordAudioClaim(
+        this.store,
+        operation.id,
+        now,
+        (operation.audio_wait_used_ms ?? 0) + now - (operation.audio_wait_started_at ?? now),
+      );
       return {
         operationId: operation.id,
         stage: 'audio',
@@ -438,7 +465,8 @@ export class WebStageQueue {
       const limit =
         stage === 'text' ? webConcurrency(this.store).maxTextRunning : webConcurrency(this.store).maxAudioRunning;
       const count = this.store.get<{ n: number }>('SELECT count(*) n FROM web_operations WHERE status=?', running)!.n;
-      if (count + (stage === 'text' ? webCharacterPreviewsRunning(this.store) : 0) >= limit) return null;
+      if (count + (stage === 'text' ? webCharacterPreviewsRunning(this.store) : 0) + this.backingOff(stage) >= limit)
+        return null;
       const cursor = stage === 'text' ? scheduler.text_last_principal_id : scheduler.audio_last_principal_id;
       const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
       const statuses = stage === 'text' ? "o.status='queued'" : "o.status IN ('text_ready','audio_pending')";
@@ -446,11 +474,14 @@ export class WebStageQueue {
       const candidate =
         stage === 'text' ? '' : 'AND EXISTS (SELECT 1 FROM web_reviewed_candidates c WHERE c.operation_id=o.id)';
       const retention = claimRetention(schema, now);
+      // A principal's earlier operation waiting out a provider 429 backoff keeps its place: later ones do not jump it.
+      const backoffGuard = `AND NOT EXISTS (SELECT 1 FROM web_operations earlier WHERE earlier.principal_id=o.principal_id
+        AND earlier.admission_seq<o.admission_seq AND earlier.status='queued' AND earlier.text_queued_at>?)`;
       const operation = this.store.get<OperationRow>(
         `SELECT o.* FROM web_operations o WHERE ${statuses}
         AND o.quota_state='reserved' AND ${queuedAt} IS NOT NULL
         AND ${queuedAt}<=? AND ?<min(${queuedAt}+?,o.deadline_at)
-        ${candidate} ${retention.sql}
+        ${candidate} ${retention.sql} ${stage === 'text' ? backoffGuard : ''}
         AND (SELECT count(*) FROM web_operations other WHERE other.principal_id=o.principal_id
           AND other.id<>o.id AND other.status IN
           ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed','unknown'))<?
@@ -462,14 +493,26 @@ export class WebStageQueue {
         now,
         WEB_LIMITS.queueWaitMs,
         ...retention.args,
+        ...(stage === 'text' ? [now] : []),
         WEB_LIMITS.maxPrincipalActive,
         WEB_LIMITS.maxConversationActive,
         cursor ?? '',
       );
       if (!operation) return null;
       requireWebContent(this.store, this.clock, operation.principal_id, operation.world_id);
-      if (stage === 'text' && schema >= 106) freezeInputSnapshot(this.store, operation.id, now);
-      if (stage === 'text' && schema >= 108) freezeWebV7Request(this.store, operation.id, now);
+      // A stage returned after an HTTP 429 is claimed again against the same frozen input and request.
+      if (
+        stage === 'text' &&
+        schema >= 106 &&
+        !this.store.get('SELECT 1 FROM web_input_snapshots WHERE operation_id=?', operation.id)
+      )
+        freezeInputSnapshot(this.store, operation.id, now);
+      if (
+        stage === 'text' &&
+        schema >= 108 &&
+        !this.store.get('SELECT 1 FROM web_v7_requests WHERE operation_id=?', operation.id)
+      )
+        freezeWebV7Request(this.store, operation.id, now);
       const token = this.nextId(),
         leaseExpiresAt = Math.min(
           now + (stage === 'text' ? WEB_LIMITS.textLeaseMs : WEB_LIMITS.audioLeaseMs),
@@ -497,6 +540,7 @@ export class WebStageQueue {
         operation.principal_id,
         coordinator.epoch,
       );
+      if (stage === 'text') recordTextClaim(this.store, operation.id, operation.text_queued_at ?? now, now);
       return {
         operationId: operation.id,
         stage,

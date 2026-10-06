@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Clock } from '../../../packages/contracts/index.ts';
+import type { Clock, DialogueCandidate } from '../../../packages/contracts/index.ts';
 import type {
   ProviderCallSpec,
   ProviderMeter,
@@ -111,7 +111,7 @@ export class WebProviderRunner {
     };
     return { request, row, scope };
   }
-  async runText(claim: WebStageClaim, signal: AbortSignal) {
+  async runText(claim: WebStageClaim, signal: AbortSignal): Promise<DialogueCandidate | null> {
     await this.whenReady();
     ensure(claim.stage === 'text' && this.text.textProtocol === 'accepted-v7', 'WEB_PROVIDER_STAGE_INVALID');
     const { request, row, scope } = this.frozen(claim.operationId);
@@ -119,9 +119,12 @@ export class WebProviderRunner {
     const reviewKey = { operationId: claim.operationId, phase: 'review' as const, ordinal: -1 };
     const draftState = this.ledger.attemptState(draftKey, scope);
     const reviewState = this.ledger.attemptState(reviewKey, scope);
+    // not_sent is acceptable only for an attempt a provider rejected with HTTP 429 (it is retried, never resent blind).
+    const retryable = (state: string | null, key: { operationId: string; phase: Phase; ordinal: number }) =>
+      state === null || state === 'known' || (state === 'not_sent' && this.ledger.isRewound(key));
     ensure(
-      (draftState === null || draftState === 'known') &&
-        (reviewState === null || reviewState === 'known') &&
+      retryable(draftState, draftKey) &&
+        retryable(reviewState, reviewKey) &&
         (reviewState === null || draftState === 'known'),
       'WEB_PROVIDER_RECOVERY_UNKNOWN',
     );
@@ -134,6 +137,8 @@ export class WebProviderRunner {
     const specs = new Map<Phase, ProviderCallSpec>();
     const observations = new Map<Phase, ProviderObservation>();
     const started = new Set<Phase>();
+    // Set when the provider answered HTTP 429 and the stage claim went back to pending for a backoff retry.
+    let returnedForRetry = false;
     const meter: ProviderMeter = {
       reserve: (calls) => {
         for (const call of calls) {
@@ -173,7 +178,7 @@ export class WebProviderRunner {
               model: spec.model,
               maxUnits,
             });
-            await this.budget?.beginAttempt(this.store, key);
+            await this.budget?.beginAttempt(this.store, key, this.ledger.isRewound(key));
             ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
             this.ledger.markSentForClaim(claim, key, scope);
             started.add(stage);
@@ -189,6 +194,18 @@ export class WebProviderRunner {
                       usageUnits: usage.inputTokens + usage.outputTokens,
                     });
                     await this.budget?.settleAttempt(this.store, key);
+                  } else if (
+                    observation.outcome === 'failed' &&
+                    observation.errorCode === 'DEEPSEEK_RATE_LIMITED' &&
+                    this.ledger.supportsRateLimitRetry()
+                  ) {
+                    // HTTP 429: the provider rejected the request before running it (known not executed).
+                    const verdict = this.ledger.rejectForRetry(claim, key, scope, 'DEEPSEEK_RATE_LIMITED');
+                    if (verdict.action === 'retry') returnedForRetry = true;
+                    else {
+                      this.ledger.confirm(key, scope, { outcome: 'failed', receipt: observation, usageUnits: 0 });
+                      await this.budget?.settleAttempt(this.store, key);
+                    }
                   } else this.ledger.markUnknown(key, scope);
                 }
               },
@@ -231,6 +248,7 @@ export class WebProviderRunner {
       if (knownDraft) await this.text.generateAcceptedReviewFromKnownDraft(request, signal, knownDraft, accept, meter);
       else await this.text.generateAcceptedStages(request, signal, accept, meter);
     } catch (error) {
+      if (returnedForRetry) return null;
       for (const phase of started) {
         const key = { operationId: claim.operationId, phase, ordinal: -1 };
         if (this.ledger.attemptState(key, scope) === 'sent') this.ledger.markUnknown(key, scope);
@@ -239,7 +257,7 @@ export class WebProviderRunner {
     }
     return this.ledger.commitReviewed(claim, scope);
   }
-  async runSpeech(claim: WebStageClaim, signal: AbortSignal) {
+  async runSpeech(claim: WebStageClaim, signal: AbortSignal): Promise<string | null> {
     await this.whenReady();
     ensure(claim.stage === 'audio' && Number.isSafeInteger(claim.ordinal), 'WEB_PROVIDER_STAGE_INVALID');
     const { row, scope } = this.frozen(claim.operationId);
@@ -262,7 +280,10 @@ export class WebProviderRunner {
     );
     const key = { operationId: claim.operationId, phase: 'speech' as const, ordinal: claim.ordinal! };
     const state = this.ledger.attemptState(key, scope);
-    ensure(state === null || state === 'known', 'WEB_PROVIDER_RECOVERY_UNKNOWN');
+    ensure(
+      state === null || state === 'known' || (state === 'not_sent' && this.ledger.isRewound(key)),
+      'WEB_PROVIDER_RECOVERY_UNKNOWN',
+    );
     const audioCache: ProviderAudioCache = new Map();
     if (state === 'known') {
       if ((this.store as WebStore).providerAudio) await this.ledger.loadKnownAudio(key, scope, audioCache);
@@ -308,7 +329,7 @@ export class WebProviderRunner {
       model: voice.model,
       maxUnits,
     });
-    await this.budget?.beginAttempt(this.store, key);
+    await this.budget?.beginAttempt(this.store, key, this.ledger.isRewound(key));
     ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
     // markSentForClaim rechecks lease, entitlement, input and scene after the remote await.
     this.ledger.markSentForClaim(claim, key, scope);
@@ -344,6 +365,21 @@ export class WebProviderRunner {
       });
       await this.budget?.settleAttempt(this.store, key);
     } catch (error) {
+      // HTTP 429 means the provider rejected the request before running it: known not executed, never UNKNOWN.
+      // A timeout, network error or 5xx has a different code and still falls through to UNKNOWN below.
+      if (
+        error instanceof DomainError &&
+        error.code === 'FISH_RATE_LIMITED' &&
+        this.ledger.supportsRateLimitRetry() &&
+        this.ledger.attemptState(key, scope) === 'sent'
+      ) {
+        const verdict = this.ledger.rejectForRetry(claim, key, scope, 'FISH_RATE_LIMITED');
+        if (verdict.action === 'exhausted') {
+          this.ledger.exhaustAudioToFallback(claim, key, scope, 'FISH_RATE_LIMITED');
+          await this.budget?.settleAttempt(this.store, key);
+        }
+        return null;
+      }
       // A complete but rejected provider response is still a known bill. Network failures
       // without bounded usage remain UNKNOWN; neither case permits regeneration.
       if (
@@ -373,6 +409,25 @@ export class WebProviderRunner {
     }
     if ((this.store as WebStore).providerAudio) await this.ledger.loadKnownAudio(key, scope, audioCache);
     return this.ledger.attachKnownSpeech(claim, scope, audioCache);
+  }
+  /**
+   * No audio slot freed up within audioFallbackWaitMs: record the decision and settle, at zero charge, whatever
+   * this operation still holds for the unused audio stage (an attempt a provider rejected earlier).
+   */
+  async beginTextFallback(operationId: string) {
+    await this.whenReady();
+    const settled = this.ledger.beginWaitFallback(operationId);
+    for (const key of settled) await this.budget?.settleAttempt(this.store, key);
+    return settled.length;
+  }
+  /** Publish the already-reviewed text candidate as text bubbles. No new text is generated and no provider is called. */
+  async publishTextFallback(coordinator: WebCoordinatorLease, operationId: string) {
+    await this.whenReady();
+    ensure(this.recovered, 'WEB_SHARED_RECOVERY_PENDING');
+    const { scope } = this.frozen(operationId);
+    requireWebContent(this.store, this.clock, scope.principalId, scope.worldId);
+    const publisher = new WebVerticalPublisher(this.store as WebStore, this.clock, randomUUID);
+    return publisher.publishTextFallback(publisher.claimTextFallback(coordinator, operationId, 'provider-publisher'));
   }
   private publication(operationId: string) {
     ensure(this.recovered, 'WEB_SHARED_RECOVERY_PENDING');
