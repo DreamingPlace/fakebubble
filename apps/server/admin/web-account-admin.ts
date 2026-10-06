@@ -98,8 +98,15 @@ export interface StageLatencyDay {
   audioStage: Percentiles;
   rateLimitRetries: number;
   fallbacks: number;
+  // Reviewed operations whose review rewrote the draft (review_changed): samples exclude operations with no value.
+  review: { samples: number; changed: number; rate: number | null };
   cache: { draft: CacheUsage; review: CacheUsage };
 }
+const reviewRate = (values: (number | null)[]) => {
+  const known = values.filter((v): v is number => v !== null);
+  const changed = known.reduce((n, v) => n + v, 0);
+  return { samples: known.length, changed, rate: known.length ? changed / known.length : null };
+};
 
 /** Provider-only durable administrator identity. Players never enter this account namespace. */
 export class WebAccountAdmin extends WebInviteAdmin {
@@ -253,6 +260,12 @@ export class WebAccountAdmin extends WebInviteAdmin {
     this.owner(cookie, csrf, origin);
     ensure(Number.isSafeInteger(days) && (days as number) >= 1 && (days as number) <= 31, 'INVALID_REQUEST');
     if (!metricsEnabled(this.db)) return { days: [] as StageLatencyDay[] };
+    // review_changed exists from schema 115; a 114 database reports no review samples.
+    const reviewChanged = this.db.get(
+      "SELECT 1 FROM pragma_table_info('web_operation_metrics') WHERE name='review_changed'",
+    )
+      ? 'review_changed'
+      : 'NULL';
     const rows = this.db.all<{
       day: string;
       text_queue_wait_ms: number | null;
@@ -261,9 +274,10 @@ export class WebAccountAdmin extends WebInviteAdmin {
       audio_stage_ms: number | null;
       retries: number;
       fallback_used: number;
+      review_changed: number | null;
     }>(
       `SELECT day,text_queue_wait_ms,audio_queue_wait_ms,text_stage_ms,audio_stage_ms,
-        text_rate_limit_retries+audio_rate_limit_retries retries,fallback_used
+        text_rate_limit_retries+audio_rate_limit_retries retries,fallback_used,${reviewChanged} review_changed
       FROM web_operation_metrics WHERE day IN (SELECT day FROM web_operation_metrics GROUP BY day ORDER BY day DESC LIMIT ?)
       ORDER BY day DESC`,
       days as number,
@@ -314,6 +328,7 @@ export class WebAccountAdmin extends WebInviteAdmin {
         audioStage: percentiles(items.map((r) => r.audio_stage_ms)),
         rateLimitRetries: items.reduce((n, r) => n + r.retries, 0),
         fallbacks: items.reduce((n, r) => n + r.fallback_used, 0),
+        review: reviewRate(items.map((r) => r.review_changed)),
         cache: { draft: cache.get(`${day}:draft`) ?? noCache, review: cache.get(`${day}:review`) ?? noCache },
       })),
     };

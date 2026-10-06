@@ -6,6 +6,7 @@ import { DomainError } from '../../../packages/domain/errors.ts';
 import { Store, type WebStore } from '../../../apps/server/platform/store.ts';
 import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
 import {
+  migrateWebProviderMemory,
   migrateWebProviderMetrics,
   migrateWebProviderOffline,
 } from '../../../apps/server/generation/web-provider-migration.ts';
@@ -115,6 +116,7 @@ function fixture(t: TestContext) {
   );
   migrateWebProviderOffline(store);
   migrateWebProviderMetrics(store);
+  migrateWebProviderMemory(store);
   const ledger = new WebProviderOffline(store, { now: () => now });
   const scope = {
     principalId: 'principal',
@@ -809,4 +811,43 @@ test('the scheduler sweep does not expire a started operation either; the execut
       .map((item) => item.origin),
     ['narrative', 'narrative'],
   );
+});
+
+test('review_changed is recorded at publication (1 when the review replaced the bubbles) and the owner view reports its daily rate', async (t) => {
+  const changed = stage(t, { fish: (_call, request) => fishOk(request) });
+  await changed.readyForAudio();
+  assert.equal(changed.metrics().review_changed, null, 'nothing is recorded before publication');
+  while (changed.operation().status !== 'audio_ready') {
+    const claim = changed.queue.claimAudio(changed.lease, 'audio-worker');
+    if (!claim) break;
+    await changed.runner.runSpeech(claim, signal());
+  }
+  changed.runner.publish(changed.lease, 'operation');
+  assert.equal(changed.metrics().review_changed, 1);
+  const origin = 'https://admin.fixture.invalid';
+  const admin = new WebAccountAdmin(changed.store, changed.clock, origin);
+  const owner = admin.login(admin.issueLoginGrant().token, origin);
+  const view = admin.stageLatency(owner.cookie, owner.csrf, origin, 7) as {
+    days: { review: { samples: number; changed: number; rate: number | null } }[];
+  };
+  assert.deepEqual(view.days[0]!.review, { samples: 1, changed: 1, rate: 1 });
+});
+
+test('review_changed is 0 when the review accepts the draft unchanged', async (t) => {
+  const f = stage(t, {
+    fish: (_call, request) => fishOk(request),
+    fetch: (_call, tool) => {
+      const envelope = tool === 'submit_dialogue_draft' ? draftEnvelope(f.request) : acceptedAuditEnvelope(f.request);
+      return Response.json(envelope);
+    },
+  });
+  await f.readyForAudio();
+  for (
+    let claim = f.queue.claimAudio(f.lease, 'audio-worker');
+    claim;
+    claim = f.queue.claimAudio(f.lease, 'audio-worker')
+  )
+    await f.runner.runSpeech(claim, signal());
+  f.runner.publish(f.lease, 'operation');
+  assert.equal(f.metrics().review_changed, 0);
 });

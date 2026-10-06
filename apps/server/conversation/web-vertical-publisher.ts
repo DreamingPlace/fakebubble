@@ -11,7 +11,7 @@ import { recordRelationshipEvents, relationshipVersion } from './relationships.t
 import { recordSceneBubble, sceneRevision, sceneState, touchScene } from './scenes.ts';
 import { userStore, type UserStore } from '../platform/store-boundary.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
-import { metricsEnabled, recordFallbackPublished } from '../admission/web-stage-metrics.ts';
+import { metricsEnabled, recordFallbackPublished, recordReviewChanged } from '../admission/web-stage-metrics.ts';
 import { requireCurrentInputSnapshot } from '../generation/web-input-snapshot.ts';
 import type { WebPrivateAudioFiles, PrivateAudioExpectation } from '../audio/web-private-audio-files.ts';
 import type { WebCoordinatorLease } from '../admission/web-stage-queue.ts';
@@ -1004,6 +1004,7 @@ export class WebVerticalPublisher {
         JSON.stringify(receipt),
         now,
       );
+      recordReviewChanged(this.store, claim.operationId, candidate.reviewChanged, now);
       if (fallback) recordFallbackPublished(this.store, claim.operationId);
       return receipt;
     });

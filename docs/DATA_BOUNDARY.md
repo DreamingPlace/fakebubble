@@ -188,7 +188,7 @@ Result: 65 user, 24 global, 76 legacy-unused (165 tables including four transien
 | `web_provider_footer_assets` | web-migrations/113_provider_offline.sql | global | — | per-character shared assets (keyed by `character_id`): conversation/web-vertical-publisher.ts, characters/web-character-materials.ts |
 | `web_provider_voice_bindings` | web-migrations/113_provider_offline.sql | global | — | per-character shared assets (keyed by `character_id`): conversation/web-vertical-publisher.ts, characters/web-character-materials.ts |
 | `web_provider_welcome_assets` | web-migrations/113_provider_offline.sql | global | — | per-character shared assets (keyed by `character_id`): conversation/web-vertical-publisher.ts, characters/web-character-materials.ts |
-| `web_operation_metrics` | web-migrations/114_stage_metrics.sql | user | needs join via `web_operations.principal_id` (`operation_id`) | per-operation stage timings, rate-limit retries and fallback flag: admission/web-stage-metrics.ts; read by the owner-only `admin.stageLatency` |
+| `web_operation_metrics` | web-migrations/114_stage_metrics.sql | user | needs join via `web_operations.principal_id` (`operation_id`) | per-operation stage timings, rate-limit retries, fallback flag and (115) `review_changed`: admission/web-stage-metrics.ts, written in the publication transaction by conversation/web-vertical-publisher.ts; read by the owner-only `admin.stageLatency` |
 | `web_attempt_rejections` | web-migrations/114_stage_metrics.sql | user | needs join via `web_operations.principal_id` (`operation_id`) | attempts a provider rejected with HTTP 429 before running them: generation/web-provider-offline.ts |
 
 ## Tables created in TypeScript, not in a migration tree

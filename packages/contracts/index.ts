@@ -118,6 +118,8 @@ export interface DialogueCandidate extends ReplyCandidate {
   awaitingPlayerMessageIds: string[];
   topics: TopicCandidate[];
   endsSession: boolean;
+  // Set by the review step, never by the model's draft: true when the review replaced the draft's bubbles.
+  reviewChanged?: boolean;
 }
 export interface TopicMemory {
   // Only the deferred memory-link experiment adds a catalog ID to model recall.

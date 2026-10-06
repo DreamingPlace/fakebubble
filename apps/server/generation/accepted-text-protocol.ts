@@ -340,5 +340,6 @@ export function applyTextReview(value: unknown, draft: TextDraft, request: TextG
     request.messages.find((message) => message.authorKind === 'player')?.authorId ?? '',
   );
   validateDialogueEvidence(candidate, request);
+  candidate.reviewChanged = value.replacementBubbles.length > 0;
   return candidate;
 }

@@ -108,6 +108,22 @@ export function requestFallback(
     operationId,
   );
 }
+/** review_changed exists from schema 115 (115_memory_importance.sql); an older database records nothing. */
+const reviewKnown = new WeakMap<object, boolean>();
+function reviewColumn(store: Db): boolean {
+  if (reviewKnown.get(store)) return true;
+  const present =
+    metricsEnabled(store) &&
+    !!store.get("SELECT 1 FROM pragma_table_info('web_operation_metrics') WHERE name='review_changed'");
+  if (present) reviewKnown.set(store, true);
+  return present;
+}
+/** Metric only, written in the publication transaction: 1 when the review returned replacement bubbles. */
+export function recordReviewChanged(store: Db, operationId: string, changed: boolean | undefined, now: number) {
+  if (changed === undefined || !reviewColumn(store)) return;
+  ensureRow(store, operationId, now);
+  store.run('UPDATE web_operation_metrics SET review_changed=? WHERE operation_id=?', changed ? 1 : 0, operationId);
+}
 export function recordFallbackPublished(store: Db, operationId: string) {
   store.run(
     'UPDATE web_operation_metrics SET fallback_used=1 WHERE operation_id=? AND fallback_reason IS NOT NULL',
