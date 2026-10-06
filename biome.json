@@ -3,7 +3,16 @@
   "vcs": { "enabled": false },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!pnpm-lock.yaml", "!**/*.sql", "!runtime", "!apps/player-web/dist", "!node_modules", "!work"]
+    "includes": [
+      "**",
+      "!pnpm-lock.yaml",
+      "!**/*.sql",
+      "!runtime",
+      "!apps/player-web/dist",
+      "!node_modules",
+      "!work",
+      "!tests/web/fixtures/prompt-snapshots"
+    ]
   },
   "formatter": {
     "enabled": true,
