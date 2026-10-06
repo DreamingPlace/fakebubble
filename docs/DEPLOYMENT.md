@@ -65,6 +65,14 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **提示词哈希变化，需要重跑角色预览。** 第 4 步新增“玩家只能发文字”规则（`prompts/v7/player-channel-rules.md`，同时进入起草与审核提示词，并在 `responseConstraints.playerInputKinds` 声明），所以策略哈希与提示词哈希都变了（`web-text-policy.test.ts` 记录了新旧值）。哈希包含在预览批准与发布批准里：升级前批准的角色预览在发布前必须重新运行并重新批准。第 3 步只改变发送给供应商的请求字节（`wireRequestHash`），不改变这两个哈希（哈希覆盖系统提示词与协议指纹，不含用户消息的字段顺序）。
 
+### 记忆：重要度、玩家事实与召回排序（Part 7a）
+
+`115_memory_importance.sql` 是独立的第 115 版迁移，在 114 之后按顺序执行（Node：`user_version=115`；Cloudflare 内联与 R2：账本版本 115，已在 114 的权威启动时自动补上）。它新增 `memory_topics.importance`（1–10，旧话题默认 3）、`memory_facts`（玩家亲口讲过的稳定事实，每个范围每个 `fact_key` 至多一条有效）和 `web_operation_metrics.review_changed`。Node：新的 provider-* 实例由 `migrate` 一路执行到 115；已在 114 的实例用 `scripts/web-provider.ts migrate-memory <root>` 升级。`memory_facts` 属于用户数据：访客保留清理、角色删除、生命周期审计都会覆盖它。
+
+审核输出新增：每个话题的 `importance` 与 `memoryId`（本次请求召回的记忆 id 或 null，用来把同一件事的另一种说法并入已有记忆）；以及最多 3 条 `factOps`（add/update/retire，证据只能是本次请求里玩家自己的消息，角色的话永远不能生成事实）。起草与审核的用户消息在 `playerIntroduction` 之后新增 `playerFacts`（最多 20 条，重要度高者在前）。召回按 `0.5×相关度 + 0.3×重要度/10 + 0.2×exp(-小时/72)` 排序（`packages/domain/dialogue.ts` 的 `RECALL`），重要度 ≥ 7 或玩家提及 ≥ 2 次升为长期记忆。
+
+**提示词哈希与协议指纹变化，需要重跑角色预览。** 第 A 步让提示词哈希覆盖 `prompts/v7/` 的每个文件；第 D、E 步改变审核工具 schema 与审核提示词；第 G 步改变提示词内容（`web-text-policy.test.ts` 记录各步的新旧值）。升级前批准的角色预览在发布前必须重新运行并重新批准。管理员的阶段延迟接口按日新增 `review`（`samples`/`changed`/`rate`：审核改写草稿的比例）。
+
 ## 私有运维工具
 
 `scripts/web-cloudflare-operator.ts` 需要显式 `CLOUDFLARE_ACCOUNT_ID`，以及指向已安装 Wrangler 模块的绝对路径 `FAKE_WEB_WRANGLER_MODULE`。它只使用绑定到 `fakebubble-business` / `fakebubble-budget` 的认证 RPC。部署时若改服务名，必须同步审查此工具。
