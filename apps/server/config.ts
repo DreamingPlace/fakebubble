@@ -4,17 +4,6 @@ import { ensure } from '../../packages/domain/errors.ts';
 // Retain the older alias for existing explicit configurations; no temporary expiry IDs.
 export const SUPPORTED_TEXT_MODELS = ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-pro'] as const;
 export const DEFAULT_TEXT_MODELS = Object.freeze({ draft: 'deepseek-flash', review: 'deepseek-v4-pro' });
-export interface TextGenerationLimits {
-  draft: number;
-  review: number;
-  timeoutMs: number;
-}
-export const DEFAULT_TEXT_LIMITS: Readonly<TextGenerationLimits> = Object.freeze({
-  draft: 4096,
-  review: 16384,
-  timeoutMs: 90_000,
-});
-
 /** Safe diagnostics only: never return the API key or auto-load an env file. */
 export function textConfiguration(env: NodeJS.ProcessEnv = process.env) {
   const provider = env.TEXT_PROVIDER || 'deepseek';

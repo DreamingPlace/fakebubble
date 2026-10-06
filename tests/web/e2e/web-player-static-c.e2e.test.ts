@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -68,7 +77,9 @@ async function stop(child: ChildProcess): Promise<void> {
 }
 
 test('C fixed A-S4-002: independent TLS static boundary with synthetic build only', async () => {
-  assert.equal(existsSync(dist), false, 'do not overwrite an existing E build');
+  // The local server serves this fixed path, so move any real build aside and restore it afterwards.
+  const preserved = existsSync(dist) ? `${dist}.preserved-${randomUUID().slice(0, 8)}` : null;
+  if (preserved) renameSync(dist, preserved);
   const instance = join(runtime.parent, `local-c-static-${randomUUID().slice(0, 8)}`);
   const fixture = mkdtempSync(join(runtime.parent, 'fixture-c-static-'));
   let child: ChildProcess | null = null;
@@ -163,6 +174,7 @@ test('C fixed A-S4-002: independent TLS static boundary with synthetic build onl
   } finally {
     if (child) await stop(child);
     rmSync(dist, { recursive: true, force: true });
+    if (preserved) renameSync(preserved, dist);
     rmSync(fixture, { recursive: true, force: true });
   }
 });

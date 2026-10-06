@@ -1,5 +1,6 @@
 import { WebCharacterPreviewRunner } from '../apps/server/web-character-preview-runner.ts';
 import { chmodSync, existsSync, lstatSync, readFileSync, writeFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
 import { networkInterfaces } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
@@ -15,9 +16,8 @@ import {
 } from '../apps/server/web-provider-materials.ts';
 import { configureWebProvider } from '../apps/server/web-provider-configuration.ts';
 export { PROVIDER_PRICES, PROVIDER_LIMIT_MICROS } from '../apps/server/web-provider-configuration.ts';
-import { ensure } from '../packages/domain/errors.ts';
+import { DomainError, ensure } from '../packages/domain/errors.ts';
 import { textConfiguration } from '../apps/server/config.ts';
-import { deepSeekEnvironment, voiceEnvironment } from '../apps/server/credentials.ts';
 import { DeepSeekTextGenerator } from '../apps/server/deepseek.ts';
 import { fishTransport, WebProviderRunner } from '../apps/server/web-provider-runner.ts';
 import { privateIPv4, WebProviderServer, type ProviderNetwork } from '../apps/server/web-provider-server.ts';
@@ -100,6 +100,37 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
   } finally {
     store.close();
   }
+}
+
+/** Explicit CLI-only load. Tests and configuration diagnostics never call this implicitly. */
+function deepSeekEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return selectedEnvironment(
+    path,
+    ['TEXT_PROVIDER', 'DEEPSEEK_BASE_URL', 'DEEPSEEK_MODEL', 'DEEPSEEK_REVIEW_MODEL', 'DEEPSEEK_API_KEY'],
+    inherited,
+  );
+}
+
+function voiceEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return selectedEnvironment(path, ['FISH_API_KEY', 'FISH_MODEL'], inherited);
+}
+
+function selectedEnvironment(path: string, allowed: string[], inherited: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  let values: NodeJS.ProcessEnv = {};
+  try {
+    const stat = lstatSync(path);
+    ensure(stat.isFile() && stat.size <= 16_384 && (stat.mode & 0o077) === 0, 'INSECURE_ENV_FILE');
+    values = parseEnv(readFileSync(path, 'utf8'));
+  } catch (error) {
+    if (error instanceof DomainError) throw error;
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw new DomainError('ENV_FILE_UNREADABLE');
+  }
+  const selected: NodeJS.ProcessEnv = {};
+  for (const key of allowed) {
+    if (inherited[key] !== undefined) selected[key] = inherited[key];
+    else if (values[key] !== undefined) selected[key] = values[key];
+  }
+  return selected;
 }
 
 /** Live transports from an explicitly named key directory (.env / .env.voice); never logged. */
