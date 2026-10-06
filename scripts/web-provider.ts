@@ -68,7 +68,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→113 (+ stage metrics tables) on a new provider-* root, importing only digest-verified user selections. */
+/** 100→114 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -99,7 +99,7 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     configureWebProvider(store, selected, now);
     migrateWebProviderMetrics(store);
     return {
-      schema: 113,
+      schema: 114,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -279,7 +279,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     const { store } = openProviderStore(root);
     try {
       migrateWebProviderMetrics(store);
-      process.stdout.write(JSON.stringify({ action, root, schema: 113, metrics: true }) + '\n');
+      process.stdout.write(JSON.stringify({ action, root, schema: 114, metrics: true }) + '\n');
     } finally {
       store.close();
     }

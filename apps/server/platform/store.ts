@@ -49,6 +49,7 @@ const WEB_DATA_SCHEMA = 110;
 const WEB_INVITE_CORE_SCHEMA = 111;
 const WEB_INVITE_IDENTITY_SCHEMA = 112;
 const WEB_PROVIDER_SCHEMA = 113;
+const WEB_METRICS_SCHEMA = 114;
 const webDbName = 'web.sqlite';
 const webMarkerName = '.web-instance.json';
 type WebMarker = {
@@ -199,7 +200,7 @@ function webIdentity(
       WEB_LOCAL_SCHEMA,
       ...(dataLifecycleTest ? [WEB_DATA_SCHEMA] : []),
       ...(inviteTest ? [WEB_INVITE_CORE_SCHEMA, WEB_INVITE_IDENTITY_SCHEMA] : []),
-      ...(providerRuntime ? [WEB_PROVIDER_SCHEMA] : []),
+      ...(providerRuntime ? [WEB_PROVIDER_SCHEMA, WEB_METRICS_SCHEMA] : []),
     ].includes(version),
     'WEB_SCHEMA_MISMATCH',
   );
@@ -257,7 +258,7 @@ function preflightWeb(path: string, options: WebStoreOptions) {
         version >= WEB_SCHEMA &&
           version <=
             (options.providerRuntime
-              ? WEB_PROVIDER_SCHEMA
+              ? WEB_METRICS_SCHEMA
               : options.inviteTest
                 ? WEB_INVITE_IDENTITY_SCHEMA
                 : WEB_DATA_SCHEMA),
@@ -384,7 +385,7 @@ export class Store {
                   WEB_LOCAL_SCHEMA,
                   ...(options.web?.dataLifecycleTest ? [WEB_DATA_SCHEMA] : []),
                   ...(options.web?.inviteTest ? [WEB_INVITE_CORE_SCHEMA, WEB_INVITE_IDENTITY_SCHEMA] : []),
-                  ...(options.web?.providerRuntime ? [WEB_PROVIDER_SCHEMA] : []),
+                  ...(options.web?.providerRuntime ? [WEB_PROVIDER_SCHEMA, WEB_METRICS_SCHEMA] : []),
                 ].includes(version)
               : version <= (this.beta ? 33 : 24)),
           'UNSUPPORTED_SCHEMA',
@@ -566,7 +567,7 @@ export class WebStore extends Store {
         this.inviteTest &&
         (this.get<{ user_version: number }>('PRAGMA user_version')?.user_version === WEB_INVITE_IDENTITY_SCHEMA ||
           (this.providerRuntime &&
-            this.get<{ user_version: number }>('PRAGMA user_version')?.user_version === WEB_PROVIDER_SCHEMA)),
+            (this.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= WEB_PROVIDER_SCHEMA)),
       'WEB_INVITE_TEST_NOT_AUTHORIZED',
     );
   }
@@ -575,7 +576,7 @@ export class WebStore extends Store {
       this.providerRuntime &&
         this.dataLifecycleTest &&
         this.inviteTest &&
-        this.get<{ user_version: number }>('PRAGMA user_version')?.user_version === WEB_PROVIDER_SCHEMA,
+        (this.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= WEB_PROVIDER_SCHEMA,
       'WEB_PROVIDER_RUNTIME_NOT_AUTHORIZED',
     );
   }

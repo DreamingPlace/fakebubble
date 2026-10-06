@@ -38,7 +38,7 @@ export class WebProviderExecutor {
   ) {
     requireWebRuntime(store, 'provider');
     ensure(
-      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113,
+      (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 113,
       'WEB_PROVIDER_RUNTIME_NOT_AUTHORIZED',
     );
     this.store = store;

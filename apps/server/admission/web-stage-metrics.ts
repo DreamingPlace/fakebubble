@@ -1,16 +1,13 @@
 import type { BusinessStore } from '../platform/store-contract.ts';
 
-/** Per-operation stage metrics. Written only by the business object; absent until 114_stage_metrics.sql is applied. */
+/** Per-operation stage metrics. Written only by the business object; schema 114 (114_stage_metrics.sql). */
 type Db = Pick<BusinessStore, 'get' | 'run'>;
 export type FallbackReason = 'audio_wait' | 'rate_limited';
 
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const gap = (from: number | null, now: number) => (from === null ? 0 : Math.max(0, now - from));
 
-/**
- * The metrics tables exist (114_stage_metrics.sql applied). The migration does not bump user_version, so presence of
- * the table is the signal; a database without it behaves exactly as before.
- */
+/** The metrics tables exist (114_stage_metrics.sql applied); a database without them behaves exactly as before. */
 const known = new WeakMap<object, boolean>();
 export function metricsEnabled(store: Db): boolean {
   if (known.get(store)) return true;

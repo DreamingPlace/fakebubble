@@ -125,7 +125,7 @@ export class WebProviderOffline {
   private check() {
     requireWebRuntime(this.store, 'provider');
     ensure(
-      this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 113,
+      (this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 113,
       'WEB_PROVIDER_MIGRATION_REQUIRED',
     );
   }

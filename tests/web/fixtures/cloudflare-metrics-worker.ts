@@ -44,6 +44,48 @@ export class WebMetricsFixture {
         }
       return Response.json({ errors, tables: names() });
     }
+    if (path === '/upgrade') {
+      // An authority created before 114 existed: the first 14 steps exactly as the constructor applied them.
+      const r2Mode = new URL(request.url).searchParams.get('mode') === 'r2';
+      const list = r2Mode ? webR2Migrations : webMigrations;
+      const sha = async (sql: string) =>
+        [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sql)))]
+          .map((byte) => byte.toString(16).padStart(2, '0'))
+          .join('');
+      storage.sql.exec('CREATE TABLE cf_web_migrations(version INTEGER PRIMARY KEY,sha256 TEXT NOT NULL) STRICT');
+      for (const m of list.slice(0, -1)) {
+        storage.sql.exec(m.sql);
+        storage.sql.exec('INSERT INTO cf_web_migrations VALUES (?,?)', m.version, await sha(m.sql));
+      }
+      storage.sql.exec(
+        'INSERT INTO web_instance(singleton,instance_id,recovery_epoch) VALUES (1,?,?)',
+        identity.instanceId,
+        identity.recoveryEpoch,
+      );
+      const ledger = () =>
+        storage.sql
+          .exec('SELECT version,sha256 FROM cf_web_migrations ORDER BY version')
+          .toArray()
+          .map((row) => `${row.version}:${row.sha256}`);
+      const before = ledger();
+      const store = new WebDurableStore(
+        storage,
+        list,
+        r2Mode
+          ? { ...identity, providerAudio: new PrivateMediaObjects({ get: unavailable, put: unavailable }) }
+          : identity,
+      );
+      return Response.json({
+        before,
+        after: ledger(),
+        version: store.get('PRAGMA user_version'),
+        metrics: names().includes('web_operation_metrics'),
+        discardedColumn: storage.sql
+          .exec('PRAGMA table_info(web_operation_metrics)')
+          .toArray()
+          .some((column) => column.name === 'discarded_audio_segments'),
+      });
+    }
     const r2 = path === '/r2';
     const store = new WebDurableStore(
       storage,
@@ -72,6 +114,10 @@ export class WebMetricsFixture {
         .exec('SELECT version FROM cf_web_migrations ORDER BY version')
         .toArray()
         .map((row) => row.version),
+      hashes: storage.sql
+        .exec('SELECT version,sha256 FROM cf_web_migrations ORDER BY version')
+        .toArray()
+        .map((row) => `${row.version}:${row.sha256}`),
       concurrency: store.concurrency,
     });
   }

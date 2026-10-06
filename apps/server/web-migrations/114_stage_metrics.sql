@@ -13,6 +13,9 @@ CREATE TABLE web_operation_metrics (
   audio_rate_limit_retries INTEGER NOT NULL DEFAULT 0 CHECK(audio_rate_limit_retries BETWEEN 0 AND 3),
   fallback_used INTEGER NOT NULL DEFAULT 0 CHECK(fallback_used IN (0,1)),
   fallback_reason TEXT CHECK(fallback_reason IN ('audio_wait','rate_limited')),
+  -- Paid audio segments already generated when a fallback to text discarded them (HTTP 429 retries exhausted
+  -- after earlier segments finished). The wait-time fallback never applies once audio started, so it adds none.
+  discarded_audio_segments INTEGER NOT NULL DEFAULT 0 CHECK(discarded_audio_segments>=0),
   -- A reason without fallback_used=1 means "decided, text publication still pending".
   CHECK(fallback_used=0 OR fallback_reason IS NOT NULL)
 ) STRICT;

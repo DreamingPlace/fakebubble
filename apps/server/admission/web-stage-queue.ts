@@ -64,7 +64,7 @@ interface OperationRow {
 }
 
 export function claimRetention(schema: number, now: number) {
-  if (schema !== 110 && schema !== 111 && schema !== 112 && schema !== 113) return { sql: '', args: [] as number[] };
+  if (schema !== 110 && schema !== 111 && schema !== 112 && schema < 113) return { sql: '', args: [] as number[] };
   return {
     sql: `AND EXISTS (SELECT 1 FROM web_guest_retention r
       JOIN web_principals p ON p.id=r.principal_id WHERE r.principal_id=o.principal_id
@@ -116,7 +116,7 @@ export class WebStageQueue {
     const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
     ensure(
       [102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112].includes(schema) ||
-        (schema === 113 && webDataLifecycleEnabled(this.store)),
+        (schema >= 113 && webDataLifecycleEnabled(this.store)),
       'WEB_ADMISSION_ORDER_MIGRATION_REQUIRED',
     );
     const row = this.store.get<SchedulerRow>('SELECT * FROM web_scheduler_state WHERE singleton=1');
@@ -206,7 +206,7 @@ export class WebStageQueue {
     const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
     ensure(
       owner.length > 0 &&
-        ([109, 110, 111, 112].includes(schema) || (schema === 113 && webDataLifecycleEnabled(this.store))),
+        ([109, 110, 111, 112].includes(schema) || (schema >= 113 && webDataLifecycleEnabled(this.store))),
       'WEB_LOCAL_MIGRATION_REQUIRED',
     );
     return this.store.transaction(() => {
@@ -224,7 +224,7 @@ export class WebStageQueue {
       );
       requireWebContent(this.store, this.clock, op.principal_id, op.world_id);
       const request = readWebV7Request(this.store, operationId);
-      if (schema === 113) {
+      if (schema >= 113) {
         const known = this.store.all<{
           phase: string;
           request_digest: string;
@@ -281,7 +281,7 @@ export class WebStageQueue {
       );
       ensure(
         !this.store.get(
-          schema === 113
+          schema >= 113
             ? `SELECT 1 FROM web_external_attempts a
         LEFT JOIN web_provider_outputs x ON x.operation_id=a.operation_id AND x.phase=a.phase
         WHERE a.operation_id=? AND a.stage='text' AND a.dispatch_state='known'
@@ -331,7 +331,7 @@ export class WebStageQueue {
 
   claimAudio(coordinator: WebCoordinatorLease, owner: string): WebStageClaim | null {
     if (
-      [105, 106, 107, 108, 109, 110, 111, 112, 113].includes(
+      [105, 106, 107, 108, 109, 110, 111, 112, 113, 114].includes(
         this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       )
     )
@@ -346,11 +346,11 @@ export class WebStageQueue {
         scheduler = this.validateCoordinator(coordinator, now);
       const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
       ensure(
-        [105, 106, 107, 108, 109, 110, 111, 112, 113].includes(schema) &&
-          (schema !== 113 || webDataLifecycleEnabled(this.store)),
+        [105, 106, 107, 108, 109, 110, 111, 112, 113, 114].includes(schema) &&
+          (schema < 113 || webDataLifecycleEnabled(this.store)),
         'WEB_SYNTHETIC_VOICE_MIGRATION_REQUIRED',
       );
-      const table = schema === 113 ? 'web_provider_voice_segments' : 'web_synthetic_voice_segments';
+      const table = schema >= 113 ? 'web_provider_voice_segments' : 'web_synthetic_voice_segments';
       const retention = claimRetention(schema, now);
       if (
         this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='audio_running'")!.n +
