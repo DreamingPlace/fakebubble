@@ -17,13 +17,21 @@ const actions = [
   'asset',
   'budget-initialize',
   'status',
+  'inspect',
   'budget-summary',
   'admin-grant',
   'admin-recovery-grant',
   'invite-grants',
 ] as const;
 type Action = (typeof actions)[number];
-export interface WebOperatorArguments {
+export const DEFAULT_BUSINESS_SERVICE = 'fakebubble-business';
+export const DEFAULT_BUDGET_SERVICE = 'fakebubble-budget';
+const serviceName = /^[a-z0-9-]{1,63}$/;
+export interface WebOperatorTarget {
+  businessService: string;
+  budgetService: string;
+}
+export interface WebOperatorArguments extends WebOperatorTarget {
   action: Action;
   receiptFile: string;
   inputFile?: string;
@@ -34,6 +42,8 @@ interface Operator {
   initialize(value: WebCloudMaterialPackage | CloudBudgetAuthorization[]): Promise<unknown>;
   importFixed(kind: 'welcome' | 'footer', characterId: string, bytes: Uint8Array): Promise<unknown>;
   status(): Promise<unknown>;
+  /** Optional only so an older binding fails closed with a clear code instead of a TypeError. */
+  inspect?(): Promise<unknown>;
   summary(): Promise<unknown>;
   adminGrant(): Promise<unknown>;
   inviteGrants(inviteId: string): Promise<unknown>;
@@ -50,7 +60,12 @@ interface Prepared {
   asset?: { kind: 'welcome' | 'footer'; characterId: string; bytes: Uint8Array };
 }
 const budgetAction = (action: Action) => action.startsWith('budget-');
-const target = (action: Action) => (budgetAction(action) ? 'fakebubble-budget' : 'fakebubble-business');
+const defaultTarget: WebOperatorTarget = {
+  businessService: DEFAULT_BUSINESS_SERVICE,
+  budgetService: DEFAULT_BUDGET_SERVICE,
+};
+const target = (action: Action, services: WebOperatorTarget) =>
+  budgetAction(action) ? services.budgetService : services.businessService;
 function privateFile(path: string, maximum: number) {
   ensure(isAbsolute(path), 'WEB_OPERATOR_ABSOLUTE_PATH_REQUIRED');
   const stat = lstatSync(path);
@@ -72,7 +87,7 @@ export function webOperatorArguments(argv: string[]): WebOperatorArguments {
   }
   const action = values.get('action') as Action;
   ensure(actions.includes(action), 'WEB_OPERATOR_ACTION_REQUIRED');
-  const allowed = ['action', 'receipt-file'];
+  const allowed = ['action', 'receipt-file', 'business-service', 'budget-service'];
   if (['initialize', 'asset', 'budget-initialize'].includes(action)) allowed.push('input-file');
   if (action.endsWith('-object-id') || action === 'invite-grants' || action === 'admin-recovery-grant')
     allowed.push('name');
@@ -82,7 +97,10 @@ export function webOperatorArguments(argv: string[]): WebOperatorArguments {
   );
   const receiptFile = values.get('receipt-file');
   ensure(receiptFile && isAbsolute(receiptFile), 'WEB_OPERATOR_RECEIPT_REQUIRED');
-  const result: WebOperatorArguments = { action, receiptFile: resolve(receiptFile) };
+  const businessService = values.get('business-service') ?? DEFAULT_BUSINESS_SERVICE,
+    budgetService = values.get('budget-service') ?? DEFAULT_BUDGET_SERVICE;
+  ensure(serviceName.test(businessService) && serviceName.test(budgetService), 'WEB_OPERATOR_SERVICE_INVALID');
+  const result: WebOperatorArguments = { action, receiptFile: resolve(receiptFile), businessService, budgetService };
   if (allowed.includes('input-file')) {
     const inputFile = values.get('input-file');
     ensure(inputFile && isAbsolute(inputFile), 'WEB_OPERATOR_INPUT_REQUIRED');
@@ -95,7 +113,15 @@ export function webOperatorArguments(argv: string[]): WebOperatorArguments {
   }
   return result;
 }
-export function webOperatorConfig(action: Action, accountId = process.env.CLOUDFLARE_ACCOUNT_ID) {
+export function webOperatorConfig(
+  action: Action,
+  accountId = process.env.CLOUDFLARE_ACCOUNT_ID,
+  services: WebOperatorTarget = defaultTarget,
+) {
+  ensure(
+    serviceName.test(services.businessService) && serviceName.test(services.budgetService),
+    'WEB_OPERATOR_SERVICE_INVALID',
+  );
   ensure(typeof accountId === 'string' && /^[a-f0-9]{32}$/.test(accountId), 'WEB_OPERATOR_ACCOUNT_REQUIRED');
   return {
     name: 'fakebubble-local-operator',
@@ -108,7 +134,7 @@ export function webOperatorConfig(action: Action, accountId = process.env.CLOUDF
     services: [
       {
         binding: 'OPERATOR',
-        service: target(action),
+        service: target(action, services),
         entrypoint: budgetAction(action) ? 'WebBudgetOperatorService' : 'WebOperatorService',
         remote: true,
       },
@@ -156,6 +182,27 @@ export function prepareWebOperation(args: WebOperatorArguments): Prepared {
     );
   return { args, input: value };
 }
+/**
+ * An existing receipt is never continued or overwritten (the exclusive create below still fails with EEXIST), but
+ * one that was written for a different target is refused first, by name, so the operator is not pointed at the
+ * wrong deployment's history. Receipts from before targets were recorded are compared by their worker name.
+ */
+function refuseForeignReceipt(args: WebOperatorArguments) {
+  let first: { action?: unknown; worker?: unknown; target?: unknown };
+  try {
+    first = JSON.parse(readFileSync(args.receiptFile, 'utf8').split('\n', 1)[0]!);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return;
+    throw new Error('WEB_OPERATOR_RECEIPT_UNREADABLE');
+  }
+  const recorded = first?.target as Partial<WebOperatorTarget> | undefined;
+  ensure(
+    recorded
+      ? recorded.businessService === args.businessService && recorded.budgetService === args.budgetService
+      : first?.worker === target(args.action, args),
+    'WEB_OPERATOR_RECEIPT_TARGET_MISMATCH',
+  );
+}
 /** Authenticated service binding only; never opens a public operator HTTP route or logs RPC results. */
 export async function runWebOperator(prepared: Prepared, getProxy: GetProxy, configPath: string) {
   const { args } = prepared,
@@ -164,9 +211,19 @@ export async function runWebOperator(prepared: Prepared, getProxy: GetProxy, con
     dir.isDirectory() && !dir.isSymbolicLink() && (dir.mode & 0o077) === 0,
     'WEB_OPERATOR_PRIVATE_RECEIPT_DIRECTORY_REQUIRED',
   );
+  refuseForeignReceipt(args);
   const fd = openSync(args.receiptFile, 'wx', 0o600);
   const record = (state: string, detail: unknown) => {
-    writeFileSync(fd, JSON.stringify({ state, action: args.action, worker: target(args.action), detail }) + '\n');
+    writeFileSync(
+      fd,
+      JSON.stringify({
+        state,
+        action: args.action,
+        worker: target(args.action, args),
+        target: { businessService: args.businessService, budgetService: args.budgetService },
+        detail,
+      }) + '\n',
+    );
     fsyncSync(fd);
   };
   let platform: Proxy | undefined;
@@ -190,6 +247,10 @@ export async function runWebOperator(prepared: Prepared, getProxy: GetProxy, con
         break;
       case 'status':
         result = await operator.status();
+        break;
+      case 'inspect':
+        ensure(operator.inspect, 'WEB_OPERATOR_INSPECT_UNSUPPORTED');
+        result = await operator.inspect();
         break;
       case 'budget-summary':
         result = await operator.summary();
@@ -221,7 +282,22 @@ export async function runWebOperator(prepared: Prepared, getProxy: GetProxy, con
     }
   }
 }
+/** Offline: no network, no Cloudflare binding. Hashes exactly what the business object hashes and verifies. */
+export async function expectedMigrationsReport() {
+  const { registerSqlTextLoader } = await import('./web-sql-text.ts');
+  registerSqlTextLoader();
+  const { expectedWebMigrations } = await import('../workers/web-cloudflare/migrations.ts');
+  return expectedWebMigrations();
+}
 async function main() {
+  if (process.argv[2] === 'expected-migrations') {
+    ensure(process.argv.length === 3, 'WEB_OPERATOR_ARGUMENT_INVALID');
+    const report = await expectedMigrationsReport();
+    const list = (rows: { version: number; sha256: string }[]) =>
+      '[\n' + rows.map((row) => '    ' + JSON.stringify(row)).join(',\n') + '\n  ]';
+    console.log(`{\n  "inline": ${list(report.inline)},\n  "r2": ${list(report.r2)}\n}`);
+    return;
+  }
   const prepared = prepareWebOperation(webOperatorArguments(process.argv.slice(2)));
   const modulePath = process.env.FAKE_WEB_WRANGLER_MODULE;
   ensure(modulePath && isAbsolute(modulePath), 'WEB_OPERATOR_WRANGLER_MODULE_REQUIRED');
@@ -235,7 +311,10 @@ async function main() {
       'export default { fetch() { return new Response(null,{status:404}); } };',
       { flag: 'wx', mode: 0o600 },
     );
-    writeFileSync(configPath, JSON.stringify(webOperatorConfig(prepared.args.action)), { flag: 'wx', mode: 0o600 });
+    writeFileSync(configPath, JSON.stringify(webOperatorConfig(prepared.args.action, undefined, prepared.args)), {
+      flag: 'wx',
+      mode: 0o600,
+    });
     console.log(JSON.stringify(await runWebOperator(prepared, module.getPlatformProxy, configPath)));
   } finally {
     rmSync(root, { recursive: true, force: true });

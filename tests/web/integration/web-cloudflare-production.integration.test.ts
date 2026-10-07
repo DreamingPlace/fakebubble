@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -506,4 +507,150 @@ test('uncapped production policy crosses the test ceiling in the real business S
   f.business.bindings.BUDGET_POLICY = 'production-unlimited';
   await f.restart();
   await f.call({ action: 'edge', path: api + '/bootstrap', headers: { cookie } });
+});
+
+test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, UNKNOWN ids only, no content, same gate as status', async (t) => {
+  const f = await fixture(t, true),
+    api = '/api/web/provider';
+  const inspect = async () => (await (await f.call({ action: 'inspect' })).json()) as any;
+  const snapshot = async () =>
+    (await (await f.call({ action: 'business-http', path: '/__test/snapshot' })).json()) as any;
+  // Before setup: works, reports an unavailable budget as a bounded code and no admin.
+  const bare = await inspect();
+  assert.equal(bare.schemaVersion, 116);
+  assert.equal(bare.migrations.matches, true);
+  assert.equal(bare.migrations.applied.length, 41);
+  assert.deepEqual(bare.budget, { available: false, error: 'WEB_CLOUD_BUDGET_NOT_INITIALIZED' });
+  assert.equal(bare.ownerAdminExists, false);
+  await f.install();
+  const initial = await f.call({ action: 'edge', path: api + '/bootstrap' });
+  const cookie = initial.headers.get('set-cookie')!.split(';')[0]!,
+    boot = parseWebProviderBootstrap(await initial.json());
+  const text = '只读检查不得泄露的玩家消息';
+  const sent = (await (
+    await f.call(
+      {
+        action: 'edge',
+        path: api + '/characters/wei-guagua/operations',
+        method: 'POST',
+        headers: {
+          cookie,
+          origin: 'https://fixture.invalid',
+          'x-csrf-token': boot.csrf,
+          'content-type': 'application/json',
+        },
+        body: { requestId: randomUUID(), text, delivery: 'voice' },
+      },
+      202,
+    )
+  ).json()) as any;
+  let last: any;
+  for (const deadline = Date.now() + 25_000; Date.now() < deadline; ) {
+    last = await (
+      await f.call({ action: 'edge', path: api + '/operations/' + sent.operation.operationId, headers: { cookie } })
+    ).json();
+    if (['published', 'failed', 'cancelled'].includes(last.status)) break;
+    await sleep(100);
+  }
+  assert.equal(last.status, 'published');
+  await f.call({ action: 'grant' });
+  const seeded = (await (await f.call({ action: 'business-http', path: '/__test/seed-unknown' })).json()) as {
+    provider: string[];
+  };
+  assert.equal(seeded.provider.length, 2);
+  const budgets = await (await f.call({ action: 'budget-summary' })).json();
+  const before = await snapshot();
+  assert.ok(before.tables.length > 100 && before.totalChanges > 0);
+  const report = await inspect();
+  const again = await inspect();
+  assert.deepEqual(await snapshot(), before, 'full table snapshot, schema and write counter are unchanged');
+  assert.deepEqual(await (await f.call({ action: 'budget-summary' })).json(), budgets);
+  assert.deepEqual(again, report);
+  // Facts.
+  assert.equal(report.schemaVersion, 116);
+  assert.equal(report.migrations.matches, true);
+  assert.equal(report.migrations.expected.active, 'r2');
+  assert.deepEqual(report.migrations.applied, report.migrations.expected.r2);
+  assert.equal(report.migrations.expected.inline.length, 41);
+  assert.deepEqual(report.instance, {
+    instanceId: f.business.bindings.INSTANCE_ID,
+    recoveryEpoch: f.business.bindings.RECOVERY_EPOCH,
+  });
+  assert.deepEqual(
+    report.budget.providers.map((row: any) => row.provider),
+    ['deepseek', 'fish'],
+  );
+  for (const row of report.budget.providers) {
+    assert.deepEqual(Object.keys(row).sort(), ['heldMicros', 'provider', 'spentMicros']);
+    assert.ok(row.spentMicros > 0 && row.heldMicros >= 0);
+  }
+  assert.equal(report.unknownAttempts.webProvider.count, 2);
+  assert.deepEqual(report.unknownAttempts.webProvider.ids, seeded.provider);
+  assert.deepEqual(report.unknownAttempts.embed.ids, ['embed-unknown-1']);
+  assert.equal(report.unknownAttempts.external.count, 0);
+  assert.equal(report.ownerAdminExists, true);
+  assert.deepEqual(report.flags, {
+    PUBLIC_ENABLED: 'true',
+    EXTERNAL_CALLS: 'true',
+    OPERATOR_ENABLED: 'true',
+    EMBEDDINGS_ENABLED: null,
+  });
+  // Nothing sensitive: not the message, not any key, hash or origin binding.
+  const body = JSON.stringify(report);
+  const secrets = [
+    text,
+    cookie,
+    boot.csrf,
+    f.business.bindings.IP_KEY,
+    f.business.bindings.SEAL_KEY,
+    f.business.bindings.REQUEST_KEY,
+    f.business.bindings.CURSOR_KEY,
+    f.business.bindings.MATERIAL_PACKAGE_SHA256,
+    ...Object.values(JSON.parse(f.business.bindings.BUDGET_GRANT_HASHES) as Record<string, string>),
+    f.business.bindings.ORIGIN,
+    f.business.bindings.COOKIE_NAME,
+    '@',
+  ];
+  for (const secret of secrets) assert.ok(!body.includes(secret), secret);
+  // The same authentication as status: both refuse while the operator gate is closed, and both work again when open.
+  f.business.bindings.OPERATOR_ENABLED = 'false';
+  f.budget.bindings.OPERATOR_ENABLED = 'false';
+  await f.restart();
+  await f.call({ action: 'status' }, 409);
+  await f.call({ action: 'inspect' }, 409);
+  f.business.bindings.OPERATOR_ENABLED = 'true';
+  f.business.bindings.PUBLIC_ENABLED = 'false';
+  await f.restart();
+  await f.call({ action: 'status' });
+  assert.deepEqual((await inspect()).flags, {
+    PUBLIC_ENABLED: 'false',
+    EXTERNAL_CALLS: 'true',
+    OPERATOR_ENABLED: 'true',
+    EMBEDDINGS_ENABLED: null,
+  });
+});
+
+test('offline expected-migrations output equals the steps the deployed business object computes', async (t) => {
+  const f = await fixture(t, true);
+  // No account, no Wrangler module, no proxy: the command is local and needs none of them.
+  const run = spawnSync(process.execPath, ['scripts/web-cloudflare-operator.ts', 'expected-migrations'], {
+    env: { PATH: process.env.PATH ?? '', HTTPS_PROXY: 'http://127.0.0.1:9', HTTP_PROXY: 'http://127.0.0.1:9' },
+    encoding: 'utf8',
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.stderr, '');
+  const offline = JSON.parse(run.stdout) as { inline: unknown[]; r2: unknown[] };
+  assert.deepEqual(Object.keys(offline), ['inline', 'r2']);
+  const live = (await (await f.call({ action: 'inspect' })).json()) as any;
+  assert.deepEqual(offline.inline, live.migrations.expected.inline);
+  assert.deepEqual(offline.r2, live.migrations.expected.r2);
+  // And the deployed object's applied ledger is exactly the offline R2 list.
+  assert.deepEqual(live.migrations.applied, offline.r2);
+  assert.equal(live.migrations.matches, true);
+  assert.equal(offline.r2.length, 41);
+  const extra = spawnSync(process.execPath, ['scripts/web-cloudflare-operator.ts', 'expected-migrations', '--x=1'], {
+    encoding: 'utf8',
+  });
+  assert.notEqual(extra.status, 0);
+  assert.equal(extra.stdout, '');
 });

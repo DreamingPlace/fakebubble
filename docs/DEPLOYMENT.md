@@ -91,9 +91,30 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 ## 私有运维工具
 
-`scripts/web-cloudflare-operator.ts` 需要显式 `CLOUDFLARE_ACCOUNT_ID`，以及指向已安装 Wrangler 模块的绝对路径 `FAKE_WEB_WRANGLER_MODULE`。它只使用绑定到 `fakebubble-business` / `fakebubble-budget` 的认证 RPC。部署时若改服务名，必须同步审查此工具。
+`scripts/web-cloudflare-operator.ts` 需要显式 `CLOUDFLARE_ACCOUNT_ID`，以及指向已安装 Wrangler 模块的绝对路径 `FAKE_WEB_WRANGLER_MODULE`。它只使用绑定到业务/预算 Worker 的认证 RPC。服务名默认为 `fakebubble-business` / `fakebubble-budget`；部署使用其他名称（例如 `fake-paopao-web-business` / `fake-paopao-web-budget`）时，必须显式传入 `--business-service=<名称>` 与 `--budget-service=<名称>`（均须匹配 `/^[a-z0-9-]{1,63}$/`，任何操作都可携带，缺省即默认名称）。每条收据都会记录目标服务名（`target.businessService` / `target.budgetService`，以及本次操作实际使用的 `worker`）；收据永远不会被续写或覆盖（独占创建，已存在即 `EEXIST`），而且若已存在的收据记录的目标与当前参数不同，工具会先以 `WEB_OPERATOR_RECEIPT_TARGET_MISMATCH` 拒绝，不会打开任何绑定。记录目标之前写下的旧收据按其 `worker` 名称比较。
 
 调用必须指定 `--action`、绝对路径 `--receipt-file`，部分操作还需要 `--input-file` / `--name`。收据目录权限 0700，输入/收据文件 0600。工具先持久化准备状态，再调用；未知结果应核查收据及服务端状态，**不要盲目重试**。首次主管理员入口只在受控初始化阶段启用，完成后关闭。
+
+### `inspect`（只读检查）
+
+`--action=inspect` 通过与 `status` 完全相同的认证服务绑定调用业务对象的只读 RPC，结果只写入私有收据。认证与 `status` 一致：业务 Worker 的 `OPERATOR_ENABLED` 不是 `true` 时两者都以 `WEB_CLOUD_OPERATOR_DISABLED` 拒绝（`status` 在关闭时同样不可用，因此 `inspect` 不开例外）。它只执行 `SELECT` 和一次预算 `summary()` 读取，测试用完整表快照与写入计数器证明执行前后不变。
+
+只返回：架构版本；已应用的迁移账本（版本 + sha256）与本版代码期望的步骤（内联与 R2 两份列表），以及布尔 `matches`（与对象实际使用的 R2 列表逐步比较）；`web_instance` 的实例 ID 与恢复纪元；各供应商的已花费/占用额度；三个派发账本（web provider、external、embed）中 `unknown` 尝试的数量及其 ID（最多 200 个，数量精确，不含任何内容）；是否存在 owner 管理员（仅布尔，无邮箱）；`PUBLIC_ENABLED` / `EXTERNAL_CALLS` / `OPERATOR_ENABLED` / `EMBEDDINGS_ENABLED` 当前值（仅 `true`/`false`/未设置，其他值显示为 `other`）。不返回密钥、邮箱、邀请码、消息文本或记忆。
+
+**限制：** 迁移的哈希校验与升级发生在业务对象的构造函数里，早于任何 RPC。新代码上的第一次任何调用（包括 `inspect`、HTTP、闹钟）都会先把 113 升级到 116；若某一步哈希不一致，构造函数抛出 `WEB_CLOUD_MIGRATION_MISMATCH`，`inspect` 同样失败，而不是返回 `matches:false`。所以 `inspect` 用于**部署之后**核对结果，不能预演升级；升级前请用下面的 `expected-migrations` 离线取得期望摘要。
+
+```
+node scripts/web-cloudflare-operator.ts --action=inspect --receipt-file=/abs/private/inspect.json \
+  --business-service=fake-paopao-web-business --budget-service=fake-paopao-web-budget
+```
+
+### `expected-migrations`（离线期望摘要）
+
+```
+node scripts/web-cloudflare-operator.ts expected-migrations
+```
+
+纯本地命令：不需要 `CLOUDFLARE_ACCOUNT_ID`、Wrangler 模块或网络，也不写收据。它输出本版代码期望的每个 Cloudflare 迁移步骤的版本与 sha256（`inline` 与 `r2` 两份列表；已部署的业务对象使用 `r2`，两者只在 113 一步不同），哈希方式与业务对象校验已应用步骤时完全相同（对步骤 SQL 文本取 sha256）。测试把它的输出与 workerd 中业务对象自己算出的结果逐项比对。升级前可用它与现有账本核对；部署后用 `inspect` 对照实际账本。
 
 ## 本地真实供应商适配（非默认预览）
 
