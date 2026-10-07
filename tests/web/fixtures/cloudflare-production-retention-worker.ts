@@ -65,6 +65,44 @@ export class WebBusinessObject extends ProductionObject {
         sql.exec('SELECT provider,limit_micros,spent_micros,held_micros FROM web_provider_spending').toArray(),
       );
     }
+    if (path === '/__test/snapshot') {
+      // Every table (blobs as hex) plus the schema text and this connection's write counter.
+      const hex = (_key: string, value: unknown) =>
+        value instanceof ArrayBuffer ? Buffer.from(value).toString('hex') : value;
+      const tables = sql
+        .exec(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB '_cf_*' AND name NOT GLOB 'sqlite_*' ORDER BY name",
+        )
+        .toArray()
+        .map((row) => row.name as string);
+      return new Response(
+        JSON.stringify(
+          {
+            schema: sql.exec('SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY name').toArray(),
+            tables: tables.map((name) => [name, sql.exec(`SELECT * FROM "${name}" ORDER BY rowid`).toArray()]),
+            totalChanges: sql.exec('SELECT total_changes() AS n').toArray()[0]!.n,
+          },
+          hex,
+        ),
+      );
+    }
+    if (path === '/__test/seed-unknown') {
+      // Real rows from a completed operation, moved to the UNKNOWN dispatch state the way a lost response leaves them.
+      sql.exec(
+        "UPDATE web_provider_attempts SET state='unknown',settled_at=NULL,outcome=NULL,usage_units=NULL,charged_micros=NULL WHERE rowid IN (SELECT rowid FROM web_provider_attempts ORDER BY operation_id,phase,ordinal LIMIT 2)",
+      );
+      sql.exec(
+        "INSERT INTO web_embed_attempts(id,kind,world_id,conversation_id,character_id,model,texts,max_units,price_micros_per_million,held_micros,state,lease_expires_at,created_at,sent_at) VALUES ('embed-unknown-1','index','w','c','ch','m',1,10,5,5,'unknown',1,1,1),('embed-sent-1','index','w','c','ch','m',1,10,5,5,'sent',1,1,1)",
+      );
+      return Response.json({
+        provider: sql
+          .exec(
+            "SELECT operation_id||'/'||phase||'/'||ordinal AS id FROM web_provider_attempts WHERE state='unknown' ORDER BY 1",
+          )
+          .toArray()
+          .map((r) => r.id),
+      });
+    }
     if (path === '/__test/state')
       return Response.json({
         alarm: await this.inspectStorage.getAlarm(),

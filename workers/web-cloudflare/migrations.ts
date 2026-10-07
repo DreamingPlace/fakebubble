@@ -17,6 +17,7 @@ import m114 from '../../apps/server/web-migrations/114_stage_metrics.sql';
 import m115 from '../../apps/server/web-migrations/115_memory_importance.sql';
 import m116 from '../../apps/server/web-migrations/116_memory_embeddings.sql';
 import retention from './retention.sql';
+import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
 
 function replaceOnce(source: string, from: string, to: string) {
@@ -119,3 +120,8 @@ CREATE TABLE cf_http_rates(key TEXT PRIMARY KEY,until_ms INTEGER NOT NULL,count 
 CREATE INDEX cf_http_rates_expiry ON cf_http_rates(until_ms);
 `;
 export const webR2Migrations = webMigrations.map((m) => (m.version === 113 ? { ...m, sql: cloud113 + retention } : m));
+
+/** version + sha256 of every step, hashed exactly as the store hashes the SQL it applies and later verifies. */
+const digests = (list: readonly { version: number; sql: string }[]) =>
+  list.map((m) => ({ version: m.version, sha256: createHash('sha256').update(m.sql).digest('hex') }));
+export const expectedWebMigrations = () => ({ inline: digests(webMigrations), r2: digests(webR2Migrations) });

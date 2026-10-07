@@ -25,7 +25,13 @@ import { WebCloudExecutor } from '../../apps/server/cloudflare/web-executor.ts';
 import { WebCloudRetention } from '../../apps/server/cloudflare/web-retention.ts';
 import { WebProviderHTTP } from '../../apps/server/cloudflare/web-http.ts';
 import { trustedWebRequest } from '../../apps/server/cloudflare/web-edge-request.ts';
-import { webR2Migrations } from './migrations.ts';
+import { expectedWebMigrations, webR2Migrations } from './migrations.ts';
+import {
+  inspectBudget,
+  inspectErrorCode,
+  inspectWebAuthority,
+  type WebInspectBudget,
+} from '../../apps/server/cloudflare/web-inspect.ts';
 import { webConcurrencyFromEnv } from '../../config/web-concurrency.ts';
 import { embeddingsEnabled, webEmbedConfigFromEnv, type WebEmbedConfig } from '../../config/web-embeddings.ts';
 import type { WebBudgetPolicy } from '../../apps/server/budget/web-provider-budget-contract.ts';
@@ -204,6 +210,27 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     this.operator();
     return { instanceId: this.store.instanceId, setup: this.setup.status(), budget: await this.budget() };
   }
+  /** Read-only: SELECTs and one budget summary read. The constructor has already applied and verified migrations. */
+  async inspect() {
+    this.operator();
+    let budget: WebInspectBudget;
+    try {
+      budget = inspectBudget(await this.env.BUDGET.summary());
+    } catch (error) {
+      budget = { available: false, error: inspectErrorCode(error) };
+    }
+    return inspectWebAuthority(
+      { all: (sql, ...params) => this.store.all(sql, ...params) },
+      { active: 'r2', ...expectedWebMigrations() },
+      {
+        PUBLIC_ENABLED: this.env.PUBLIC_ENABLED,
+        EXTERNAL_CALLS: this.env.EXTERNAL_CALLS,
+        OPERATOR_ENABLED: this.env.OPERATOR_ENABLED,
+        EMBEDDINGS_ENABLED: this.env.EMBEDDINGS_ENABLED,
+      },
+      budget,
+    );
+  }
   private async budget() {
     const summary = await this.env.BUDGET.summary();
     ensure(
@@ -300,6 +327,7 @@ interface OperatorEnvironment {
       adminRecoveryGrant(memberId: string): Promise<unknown>;
       inviteGrants(inviteId: string): Promise<unknown>;
       status(): Promise<unknown>;
+      inspect(): Promise<unknown>;
     };
   };
 }
@@ -334,6 +362,9 @@ export class WebOperatorService extends WorkerEntrypoint<OperatorEnvironment> {
   }
   async status() {
     return this.authority().status();
+  }
+  async inspect() {
+    return this.authority().inspect();
   }
   fetch() {
     return new Response(null, { status: 404 });

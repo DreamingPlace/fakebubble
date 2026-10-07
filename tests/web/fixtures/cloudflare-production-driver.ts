@@ -5,6 +5,7 @@ interface Environment {
     initialize(value: WebCloudMaterialPackage): Promise<unknown>;
     importFixed(kind: 'welcome' | 'footer', id: string, wav: Uint8Array): Promise<unknown>;
     status(): Promise<unknown>;
+    inspect(): Promise<unknown>;
     adminGrant(): Promise<unknown>;
     inviteGrants(id: string): Promise<unknown>;
     objectId(name: string): Promise<string>;
@@ -37,6 +38,8 @@ export default {
           );
         case 'status':
           return Response.json(await env.OPERATOR.status());
+        case 'inspect':
+          return Response.json(await env.OPERATOR.inspect());
         case 'grant':
           return Response.json(await env.OPERATOR.adminGrant());
         case 'invite-grants':

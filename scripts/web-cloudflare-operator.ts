@@ -17,6 +17,7 @@ const actions = [
   'asset',
   'budget-initialize',
   'status',
+  'inspect',
   'budget-summary',
   'admin-grant',
   'admin-recovery-grant',
@@ -41,6 +42,8 @@ interface Operator {
   initialize(value: WebCloudMaterialPackage | CloudBudgetAuthorization[]): Promise<unknown>;
   importFixed(kind: 'welcome' | 'footer', characterId: string, bytes: Uint8Array): Promise<unknown>;
   status(): Promise<unknown>;
+  /** Optional only so an older binding fails closed with a clear code instead of a TypeError. */
+  inspect?(): Promise<unknown>;
   summary(): Promise<unknown>;
   adminGrant(): Promise<unknown>;
   inviteGrants(inviteId: string): Promise<unknown>;
@@ -244,6 +247,10 @@ export async function runWebOperator(prepared: Prepared, getProxy: GetProxy, con
         break;
       case 'status':
         result = await operator.status();
+        break;
+      case 'inspect':
+        ensure(operator.inspect, 'WEB_OPERATOR_INSPECT_UNSUPPORTED');
+        result = await operator.inspect();
         break;
       case 'budget-summary':
         result = await operator.summary();

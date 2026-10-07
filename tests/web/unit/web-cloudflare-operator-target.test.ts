@@ -98,3 +98,37 @@ test('every receipt records the target and a receipt for a different target is r
   await assert.rejects(runWebOperator(args(garbage), proxy, '/c'), /WEB_OPERATOR_RECEIPT_UNREADABLE/);
   assert.equal(proxies, 1);
 });
+
+test('inspect action is read-only RPC on the business service and its result is recorded only in the private receipt', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'web-operator-inspect-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const receipt = join(dir, 'inspect.jsonl');
+  const args = webOperatorArguments([
+    '--action=inspect',
+    `--receipt-file=${receipt}`,
+    `--business-service=${business}`,
+  ]);
+  assert.equal(webOperatorConfig('inspect', 'a'.repeat(32), args).services[0]!.service, business);
+  assert.equal(webOperatorConfig('inspect', 'a'.repeat(32), args).services[0]!.entrypoint, 'WebOperatorService');
+  assert.throws(
+    () => webOperatorArguments(['--action=inspect', `--receipt-file=${receipt}`, '--name=x']),
+    /WEB_OPERATOR_ARGUMENT_INVALID/,
+  );
+  const result = await runWebOperator(
+    prepareWebOperation(args),
+    async () => ({
+      env: {
+        OPERATOR: {
+          inspect: async () => ({ schemaVersion: 116 }),
+          status: async () => assert.fail('inspect must not call status'),
+        } as never,
+      },
+      dispose: async () => {},
+    }),
+    '/c',
+  );
+  assert.deepEqual(result, { action: 'inspect', receiptFile: receipt });
+  const last = JSON.parse(readFileSync(receipt, 'utf8').trim().split('\n').at(-1)!);
+  assert.deepEqual(last.detail, { schemaVersion: 116 });
+  assert.equal(last.worker, business);
+});
