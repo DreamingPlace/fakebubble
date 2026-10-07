@@ -7,16 +7,27 @@ import { SpeechFailure } from '../audio/validation-error.ts';
 import type { AcceptedV7StageOutput, TextGenerationRequest } from '../../packages/contracts/index.ts';
 import type { ProviderMeter } from '../../packages/contracts/provider-calls.ts';
 import type {
+  WebEmbedRPCResult,
+  WebEmbedWire,
   WebGenerationSession,
   WebKnownDraft,
   WebSpeechWire,
 } from '../../packages/contracts/web-generation-rpc.ts';
+import {
+  EMBEDDING_MODEL,
+  EmbeddingFailure,
+  WorkersAiEmbeddings,
+  type WorkersAiBinding,
+} from '../../apps/server/generation/embedding-provider.ts';
 import type { TextRPCResult, SpeechRPCResult } from '../../packages/contracts/generation-rpc.ts';
 
 export interface WebGenerationEnvironment {
   EXTERNAL_CALLS?: string;
   DEEPSEEK_API_KEY: string;
   FISH_API_KEY: string;
+  /** Workers AI binding for memory embeddings; used only when EMBEDDINGS_ENABLED is 'true'. */
+  AI?: WorkersAiBinding;
+  EMBEDDINGS_ENABLED?: string;
 }
 // Workers rejects redirect:'error' before dispatch. Manual mode preserves the
 // adapters' fail-closed non-2xx checks without forwarding credentials elsewhere.
@@ -140,6 +151,39 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
       return { ok: true, value };
     } catch (error) {
       return { ok: false, code: safeCode(error), generation: error instanceof SpeechFailure ? error.generation : null };
+    }
+  }
+  /** One bge-m3 call. The business object has already reserved budget; it stores the vectors this returns. */
+  async embed(wire: WebEmbedWire, authorize: () => Promise<void>): Promise<WebEmbedRPCResult> {
+    let gate: unknown;
+    let crossed = false;
+    try {
+      this.begin();
+      ensure(this.env.EMBEDDINGS_ENABLED === 'true' && this.env.AI, 'WEB_EMBEDDINGS_DISABLED');
+      wire = structuredClone(wire);
+      ensure(wire.model === EMBEDDING_MODEL && Array.isArray(wire.texts), 'WEB_PROVIDER_WIRE_MISMATCH');
+      const result = await new WorkersAiEmbeddings(this.env.AI).embed(wire.texts, this.controller.signal, async () => {
+        try {
+          await callback(authorize);
+        } catch (error) {
+          gate = error;
+          throw error;
+        }
+        crossed = true;
+      });
+      return {
+        ok: true,
+        value: {
+          vectors: result.vectors.map((vector) => Array.from(vector)),
+          usageTokens: result.usageTokens,
+          requestId: result.requestId,
+        },
+      };
+    } catch (error) {
+      // A refused gate or a disabled/misconfigured Worker means nothing was sent; only a provider answer decides the rest.
+      if (gate !== undefined) return { ok: false, code: safeCode(gate), known: true };
+      if (error instanceof EmbeddingFailure) return { ok: false, code: error.code, known: error.known };
+      return { ok: false, code: safeCode(error), known: !crossed };
     }
   }
 }

@@ -51,6 +51,7 @@ const WEB_INVITE_IDENTITY_SCHEMA = 112;
 const WEB_PROVIDER_SCHEMA = 113;
 const WEB_METRICS_SCHEMA = 114;
 const WEB_MEMORY_SCHEMA = 115;
+const WEB_EMBEDDING_SCHEMA = 116;
 const webDbName = 'web.sqlite';
 const webMarkerName = '.web-instance.json';
 type WebMarker = {
@@ -201,7 +202,7 @@ function webIdentity(
       WEB_LOCAL_SCHEMA,
       ...(dataLifecycleTest ? [WEB_DATA_SCHEMA] : []),
       ...(inviteTest ? [WEB_INVITE_CORE_SCHEMA, WEB_INVITE_IDENTITY_SCHEMA] : []),
-      ...(providerRuntime ? [WEB_PROVIDER_SCHEMA, WEB_METRICS_SCHEMA, WEB_MEMORY_SCHEMA] : []),
+      ...(providerRuntime ? [WEB_PROVIDER_SCHEMA, WEB_METRICS_SCHEMA, WEB_MEMORY_SCHEMA, WEB_EMBEDDING_SCHEMA] : []),
     ].includes(version),
     'WEB_SCHEMA_MISMATCH',
   );
@@ -259,7 +260,7 @@ function preflightWeb(path: string, options: WebStoreOptions) {
         version >= WEB_SCHEMA &&
           version <=
             (options.providerRuntime
-              ? WEB_MEMORY_SCHEMA
+              ? WEB_EMBEDDING_SCHEMA
               : options.inviteTest
                 ? WEB_INVITE_IDENTITY_SCHEMA
                 : WEB_DATA_SCHEMA),
@@ -386,7 +387,9 @@ export class Store {
                   WEB_LOCAL_SCHEMA,
                   ...(options.web?.dataLifecycleTest ? [WEB_DATA_SCHEMA] : []),
                   ...(options.web?.inviteTest ? [WEB_INVITE_CORE_SCHEMA, WEB_INVITE_IDENTITY_SCHEMA] : []),
-                  ...(options.web?.providerRuntime ? [WEB_PROVIDER_SCHEMA, WEB_METRICS_SCHEMA, WEB_MEMORY_SCHEMA] : []),
+                  ...(options.web?.providerRuntime
+                    ? [WEB_PROVIDER_SCHEMA, WEB_METRICS_SCHEMA, WEB_MEMORY_SCHEMA, WEB_EMBEDDING_SCHEMA]
+                    : []),
                 ].includes(version)
               : version <= (this.beta ? 33 : 24)),
           'UNSUPPORTED_SCHEMA',

@@ -7,6 +7,7 @@ import { readLocalConfig } from '../platform/web-local-config.ts';
 import { WebPrivateAudioFiles } from '../audio/web-private-audio-files.ts';
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from './web-retention.ts';
 import { auditWebLifecycleWorld } from './web-lifecycle-audit.ts';
+import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 
 type Operation = {
   id: string;
@@ -297,9 +298,12 @@ export class WebRetentionCleaner {
         'web_stage_attempts',
       ])
         this.store.run(`DELETE FROM ${table} WHERE operation_id IN (${operationScope})`, principalId, world);
-      // memory_facts exists from schema 115; an older database has nothing to purge there.
+      // memory_facts exists from schema 115 and the embedding tables from 116; an older database has nothing there.
+      releaseUnsentEmbedHolds(this.store, world);
       for (const table of [
         'memory_facts',
+        'memory_embeddings',
+        'web_embed_attempts',
         'memory_episode_sources',
         'memory_mentions',
         'memory_episodes',
@@ -321,10 +325,7 @@ export class WebRetentionCleaner {
         'dialogue_bubbles',
         'outbox',
       ])
-        if (
-          table !== 'memory_facts' ||
-          this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", table)
-        )
+        if (!LATE_TABLES.has(table) || embeddingTableExists(this.store, table))
           this.store.run(`DELETE FROM ${table} WHERE world_id=?`, world);
       this.store.run('UPDATE jobs SET published_message_id=NULL WHERE world_id=?', world);
       this.store.run('DELETE FROM jobs WHERE world_id=?', world);

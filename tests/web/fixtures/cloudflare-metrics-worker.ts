@@ -94,6 +94,11 @@ export class WebMetricsFixture {
             .toArray()
             .some((column) => column.name === 'review_changed'),
         },
+        embeddings: {
+          vectors: names().includes('memory_embeddings'),
+          attempts: names().includes('web_embed_attempts'),
+          metrics: names().includes('web_embed_metrics'),
+        },
         discardedColumn: storage.sql
           .exec('PRAGMA table_info(web_operation_metrics)')
           .toArray()

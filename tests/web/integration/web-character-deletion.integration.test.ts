@@ -8,6 +8,8 @@ type Guest = { principalId: string; csrf: string; issuedToken: string };
 type State = {
   messages: number;
   facts: number;
+  embeddings: number;
+  embedAttempts: number;
   outputs: number;
   attempts: { phase: string; state: string; charged_micros: number }[];
   operations: { status: string; quota_state: string }[];
@@ -45,6 +47,8 @@ async function waitHeld(f: ReturnType<typeof setup>) {
 const cleared = (state: State) => {
   assert.equal(state.messages, 0);
   assert.equal(state.facts, 0);
+  assert.equal(state.embeddings, 0);
+  assert.equal(state.embedAttempts, 0);
   assert.equal(state.outputs, 0);
   assert.ok(state.objects.every((r) => r.erased && r.size === 0 && r.type === 'application/x-web-erased'));
 };
@@ -56,11 +60,21 @@ test('character deletion guards immutable SQL, clears two scoped guests and pres
   for (const guest of guests) await f.call('/run', await admit(f, guest));
   // Each scoped guest has a stated player fact; deleting the character must remove it with the rest.
   for (const guest of guests) await f.call('/retention/seed-fact', guest);
+  // The same for each scope's topic vector and embedding calls (one never sent, one in flight).
+  for (const guest of guests) await f.call('/retention/seed-embedding', guest);
   const before = await Promise.all(guests.map((g) => f.call<State>('/retention/state', g)));
   assert.deepEqual(
     before.map((state) => state.facts),
     [1, 1],
   );
+  assert.deepEqual(
+    before.map((state) => [state.embeddings, state.embedAttempts]),
+    [
+      [1, 2],
+      [1, 2],
+    ],
+  );
+  assert.deepEqual(await f.call('/retention/embed-held', {}), { held: 16 });
   const counts = await f.call('/counts');
   await f.call('/retention/capture-replay', guests[0]);
   assert.match(
@@ -80,6 +94,11 @@ test('character deletion guards immutable SQL, clears two scoped guests and pres
   );
   const done = await f.call<any>('/deletion/sweep');
   assert.equal(done.state, 'deleted', JSON.stringify(done));
+  assert.deepEqual(
+    await f.call('/retention/embed-held', {}),
+    { held: 6 },
+    'never-sent embedding calls returned their holds; in-flight calls keep theirs',
+  );
   for (const [i, guest] of guests.entries()) {
     const after = await f.call<State>('/retention/state', guest);
     cleared(after);

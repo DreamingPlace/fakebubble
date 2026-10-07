@@ -89,6 +89,23 @@ function emailAddress(value: unknown) {
 type Percentiles = { samples: number; p50Ms: number | null; p95Ms: number | null };
 /** DeepSeek prompt-cache usage of the day's successful text calls; ratio is hit / (hit + miss), null without data. */
 type CacheUsage = { calls: number; hitTokens: number; missTokens: number; hitRatio: number | null };
+/** Memory-embedding calls of the day (web_embed_metrics, schema 116): counters only, no content and no scope. */
+type EmbeddingDay = {
+  calls: number;
+  texts: number;
+  failures: number;
+  unknowns: number;
+  queryFallbacks: number;
+  queryTimeouts: number;
+};
+const noEmbedding = (): EmbeddingDay => ({
+  calls: 0,
+  texts: 0,
+  failures: 0,
+  unknowns: 0,
+  queryFallbacks: 0,
+  queryTimeouts: 0,
+});
 export interface StageLatencyDay {
   day: string;
   operations: number;
@@ -101,6 +118,7 @@ export interface StageLatencyDay {
   // Reviewed operations whose review rewrote the draft (review_changed): samples exclude operations with no value.
   review: { samples: number; changed: number; rate: number | null };
   cache: { draft: CacheUsage; review: CacheUsage };
+  embedding: EmbeddingDay;
 }
 const reviewRate = (values: (number | null)[]) => {
   const known = values.filter((v): v is number => v !== null);
@@ -313,24 +331,66 @@ export class WebAccountAdmin extends WebInviteAdmin {
           hitRatio: row.hit + row.miss > 0 ? row.hit / (row.hit + row.miss) : null,
         });
     const noCache: CacheUsage = { calls: 0, hitTokens: 0, missTokens: 0, hitRatio: null };
+    // Embedding counters per day; a day can have embedding calls (indexing) and no reply at all.
+    const embedding = new Map<string, EmbeddingDay>();
+    if (this.db.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_embed_metrics'"))
+      for (const row of this.db.all<{
+        day: string;
+        calls: number;
+        texts: number;
+        failures: number;
+        unknowns: number;
+        query_fallbacks: number;
+        query_timeouts: number;
+      }>('SELECT * FROM web_embed_metrics ORDER BY day DESC LIMIT ?', days as number))
+        embedding.set(row.day, {
+          calls: row.calls,
+          texts: row.texts,
+          failures: row.failures,
+          unknowns: row.unknowns,
+          queryFallbacks: row.query_fallbacks,
+          queryTimeouts: row.query_timeouts,
+        });
     const percentiles = (values: (number | null)[]) => {
       const sorted = values.filter((v): v is number => v !== null).sort((a, b) => a - b);
       const at = (q: number) => (sorted.length ? sorted[Math.max(0, Math.ceil(q * sorted.length) - 1)]! : null);
       return { samples: sorted.length, p50Ms: at(0.5), p95Ms: at(0.95) };
     };
+    const empty = { samples: 0, p50Ms: null, p95Ms: null };
+    const noDay = (day: string): StageLatencyDay => ({
+      day,
+      operations: 0,
+      textQueueWait: empty,
+      audioQueueWait: empty,
+      textStage: empty,
+      audioStage: empty,
+      rateLimitRetries: 0,
+      fallbacks: 0,
+      review: reviewRate([]),
+      cache: { draft: noCache, review: noCache },
+      embedding: noEmbedding(),
+    });
+    const operationDays: StageLatencyDay[] = [...byDay.entries()].map(([day, items]) => ({
+      day,
+      operations: items.length,
+      textQueueWait: percentiles(items.map((r) => r.text_queue_wait_ms)),
+      audioQueueWait: percentiles(items.map((r) => r.audio_queue_wait_ms)),
+      textStage: percentiles(items.map((r) => r.text_stage_ms)),
+      audioStage: percentiles(items.map((r) => r.audio_stage_ms)),
+      rateLimitRetries: items.reduce((n, r) => n + r.retries, 0),
+      fallbacks: items.reduce((n, r) => n + r.fallback_used, 0),
+      review: reviewRate(items.map((r) => r.review_changed)),
+      cache: { draft: cache.get(`${day}:draft`) ?? noCache, review: cache.get(`${day}:review`) ?? noCache },
+      embedding: embedding.get(day) ?? noEmbedding(),
+    }));
+    const known = new Set(operationDays.map((day) => day.day));
+    const extra = [...embedding.keys()]
+      .filter((day) => !known.has(day))
+      .map((day) => ({ ...noDay(day), embedding: embedding.get(day)! }));
     return {
-      days: [...byDay.entries()].map(([day, items]) => ({
-        day,
-        operations: items.length,
-        textQueueWait: percentiles(items.map((r) => r.text_queue_wait_ms)),
-        audioQueueWait: percentiles(items.map((r) => r.audio_queue_wait_ms)),
-        textStage: percentiles(items.map((r) => r.text_stage_ms)),
-        audioStage: percentiles(items.map((r) => r.audio_stage_ms)),
-        rateLimitRetries: items.reduce((n, r) => n + r.retries, 0),
-        fallbacks: items.reduce((n, r) => n + r.fallback_used, 0),
-        review: reviewRate(items.map((r) => r.review_changed)),
-        cache: { draft: cache.get(`${day}:draft`) ?? noCache, review: cache.get(`${day}:review`) ?? noCache },
-      })),
+      days: [...operationDays, ...extra]
+        .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
+        .slice(0, days as number),
     };
   }
   inviteRecords(cookie: unknown, csrf: unknown, origin: unknown, beforeId: unknown) {

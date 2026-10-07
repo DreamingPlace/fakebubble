@@ -19,6 +19,8 @@ export const operationContent = [
 ];
 export const conversationContent = [
   'memory_facts',
+  'memory_embeddings',
+  'web_embed_attempts',
   'memory_episode_sources',
   'memory_mentions',
   'memory_episodes',

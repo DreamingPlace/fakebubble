@@ -73,6 +73,22 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **提示词哈希与协议指纹变化，需要重跑角色预览。** 第 A 步让提示词哈希覆盖 `prompts/v7/` 的每个文件；第 D、E 步改变审核工具 schema 与审核提示词；第 G 步改变提示词内容（`web-text-policy.test.ts` 记录各步的新旧值）。升级前批准的角色预览在发布前必须重新运行并重新批准。管理员的阶段延迟接口按日新增 `review`（`samples`/`changed`/`rate`：审核改写草稿的比例）。
 
+### 记忆：按含义召回（Part 7b）
+
+`116_memory_embeddings.sql` 是独立的第 116 版迁移，在 115 之后按顺序执行（Node：`user_version=116`，已有 provider 实例运行 `migrate-embeddings`；Cloudflare 内联与 R2：账本版本 116，已在 115 的权威启动时自动补上）。它新增 `memory_embeddings`（每个范围、话题、模型一条 float32 小端向量，`state` 为 `ready` 或 `unknown`）、`web_embed_attempts`（嵌入调用的派发账本，阶段 `embed`）和 `web_embed_metrics`（每日计数，无内容）。向量存在现有 SQLite（业务对象）里，不使用 Vectorize 或任何外部存储；相似度在代码里、只在同一范围内计算。
+
+- **只嵌入记忆话题**（键 + 最新一条摘要）。玩家事实不嵌入：最多 20 条有效事实本来就进每个提示词。
+- **模型**：Workers AI `@cf/baai/bge-m3`（多语言，1024 维，一次请求可传文本数组）。预算价格 **USD 0.0118 / 百万输入 token**；预占按保守估计（UTF-8 字节 ÷ 2，向上取整），结算以供应商返回的用量为准，没有用量则按估计，且不超过预占。
+- **绑定与开关**：`AI` 绑定只在 generation Worker 上（见 `workers/web-cloudflare/deploy/generation.json.example` 的 `ai`）。业务对象没有这个绑定，也读不到密钥。默认全部关闭：generation Worker 的 `EMBEDDINGS_ENABLED=false`，业务对象的 `EMBEDDINGS_ENABLED=false`；只有两处都为 `true` 且 `EXTERNAL_CALLS=true`，嵌入才会发生。业务对象另有 `MAX_EMBED_RUNNING`（同时进行的嵌入调用数，默认 2，1–16，与文本、语音并发分开计）和 `EMBED_QUERY_TIMEOUT_MS`（回复等待查询嵌入的上限，默认 3000，200–10000）；无效值拒绝启动。
+- **本地 provider 模式**：Workers AI REST。`CLOUDFLARE_ACCOUNT_ID` 与 `CLOUDFLARE_API_TOKEN` 放在与 `.env`、`.env.voice` 同一目录的 `.env.embed`（0600，不进 GitHub）；缺任何一个就没有语义召回，词面召回照旧。并发与超时可写在实例 `local-config.json` 的 `embedding: { "maxEmbedRunning": 2, "queryTimeoutMs": 3000 }`。
+- **预算**：嵌入费用是 Cloudflare 的，记在 `web_provider_spending` 的 `cloudflare` 一行（安全上限 USD 1，不是目标值），与 DeepSeek / Fish 的累计账本互相独立。每次调用先写入账本并预占，再发送；已知失败释放预占；结果未知的调用（超时、网络错误、5xx、无法解析的响应）保留预占，永远不重发。
+
+流程：发布提交**之后**（绝不在发布事务里），调度器把当前文本还没有 `ready` 向量的话题（同一 `content_hash`）算作待处理；一次最多取同一范围的 16 个话题，用**一次**请求发送文本数组，由业务对象写入向量。已知失败释放预占，话题 60 秒后再试；结果未知的话题标记为 `unknown`，只用词面召回，直到文本变化（新的 `content_hash`）才产生新工作。回复请求冻结前，用同样的账本规则对玩家当前输入做一次嵌入（有超时），请求冻结时包含最终召回结果，冻结后保持不可变；失败、超时或结果未知时按词面召回冻结并继续，不重试、不阻塞，且不保存玩家输入的向量。游客不做记忆召回，也不嵌入。
+
+排序：`relevance = max(词面, 语义)`，语义 = clamp((cosine − τ) / (1 − τ), 0, 1)，τ = 0.35（`RECALL_SEMANTIC`，与固定的 `RECALL` 权重放在一起），在同一范围内最多比较最近见到的 500 个话题；重要度与时间衰减权重不变。
+
+管理员的阶段延迟接口（仅 owner）按日增加 `embedding`：调用数、嵌入文本数、失败、结果未知、查询嵌入回退与超时。
+
 ## 私有运维工具
 
 `scripts/web-cloudflare-operator.ts` 需要显式 `CLOUDFLARE_ACCOUNT_ID`，以及指向已安装 Wrangler 模块的绝对路径 `FAKE_WEB_WRANGLER_MODULE`。它只使用绑定到 `fakebubble-business` / `fakebubble-budget` 的认证 RPC。部署时若改服务名，必须同步审查此工具。
@@ -85,6 +101,6 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 - `selected-voice-pins.json`：0600 私有指纹清单；结构见 `config/selected-voice-pins.json.example`。`directory` 指向同一材料根下的已审核目录。该目录需包含 `USER-SELECTION.json`、`PUBLICATION.json` 和每个角色的 `*-VOICE.json` / `*-DRAFT.json` / `*-PUBLISHED.json`。指纹文件只绑定字节，不能代替使用权或听感审核。
 - `FAKEBUBBLE_BUDGET_AUTHORITY`：指向 0600 绝对路径配置，结构见 `config/budget-authority.json.example`。同一供应商账户下的所有本地实例必须使用同一个 `budgetPath` 和完整 `historyRoots`。只有确实不存在历史调用的新环境才可填空历史列表。路径不能按实例临时变化。
-- 供应商 `.env` / `.env.voice` 不随源码分发。禁止把生产运营预算作为任意测试许可；禁止自动重发 UNKNOWN 调用。
+- 供应商 `.env` / `.env.voice` / `.env.embed` 不随源码分发。禁止把生产运营预算作为任意测试许可；禁止自动重发 UNKNOWN 调用。
 
 不要把 `runtime/`、Secrets、材料目录、邮件、收据、真实数据库或构建产物提交到 GitHub。

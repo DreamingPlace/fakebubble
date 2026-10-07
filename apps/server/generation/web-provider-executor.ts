@@ -11,6 +11,8 @@ import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts'
 import { WebProviderRunner } from './web-provider-runner.ts';
 import { audioStartedExpr, fallbackRequested, metricsEnabled } from '../admission/web-stage-metrics.ts';
 import { WebProviderOffline } from './web-provider-offline.ts';
+import { INDEX_IDLE_MS, type IndexBatch, type QueryClaim } from './web-embed-ledger.ts';
+import type { QueryVector } from './web-embed-runner.ts';
 
 /** Separate schema113 scheduler. No synthetic output, default budget or footer is installed. */
 export class WebProviderExecutor {
@@ -27,6 +29,12 @@ export class WebProviderExecutor {
   private readonly publishing = new Set<string>();
   private readonly falling = new Set<string>();
   private managed = false;
+  /** Indexing scans every scope, so an idle pass is not repeated for INDEX_IDLE_MS unless a publication committed. */
+  private indexDirty = true;
+  private indexScanAt = 0;
+  private indexPausedUntil = 0;
+  /** Query embeddings waiting for their operation's claim; in memory only (see WebStageQueue). */
+  private readonly queryVectors = new Map<string, QueryVector>();
   private readonly activity: { hold(task: Promise<void>): void; settled(): Promise<void> } | undefined;
   lastError: string | null = null;
 
@@ -45,7 +53,7 @@ export class WebProviderExecutor {
     this.clock = clock;
     this.runner = runner;
     this.activity = activity;
-    this.queue = new WebStageQueue(store as WebStore, clock, randomUUID);
+    this.queue = new WebStageQueue(store as WebStore, clock, randomUUID, this.queryVectors);
     this.ledger = new WebDispatchLedger(store as WebStore, clock);
     this.publisher = new WebVerticalPublisher(store as WebStore, clock);
   }
@@ -220,7 +228,10 @@ export class WebProviderExecutor {
   private publish(lease: WebCoordinatorLease, operationId: string) {
     if (this.publishing.has(operationId)) return;
     this.publishing.add(operationId);
-    const task = this.runner.publishAsync(lease, operationId).then(() => {});
+    // The publication committed: its memory topics may now need an embedding (never done inside that transaction).
+    const task = this.runner.publishAsync(lease, operationId).then(() => {
+      this.indexDirty = true;
+    });
     this.track(task, () => this.publishing.delete(operationId));
   }
 
@@ -236,11 +247,75 @@ export class WebProviderExecutor {
     const task = (async () => {
       if (decide) await this.runner.beginTextFallback(operationId);
       await this.runner.publishTextFallback(lease, operationId);
+      this.indexDirty = true;
     })();
     this.track(
       task.then(() => {}),
       () => this.falling.delete(operationId),
     );
+  }
+
+  /**
+   * Embedding work of one scheduler pass. First the reply-time query embeddings: an operation that is still queued and
+   * whose scope has vectors gets ONE embedding call, and its claim waits for it (see the claim's gate) so the request is
+   * frozen with the final recall result; a failed, timed-out or UNKNOWN call frees the operation to continue with lexical
+   * recall, and nothing is retried. Then memory indexing, claimed after publications have committed. Claims (money
+   * held, call recorded) are short transactions; the provider calls run outside them as tracked tasks under the stage
+   * coordinator like text and audio. No failure here can fail or hold back a reply beyond the query timeout.
+   */
+  private embedPass() {
+    const embed = this.runner.embedding;
+    if (!embed) return;
+    try {
+      embed.ledger.recover();
+      if (!embed.ready()) return;
+      const now = this.clock.now();
+      for (const [id, vector] of this.queryVectors) if (now - vector.at > 60_000) this.queryVectors.delete(id);
+      for (const id of embed.ledger.queryCandidates(embed.config.maxEmbedRunning)) {
+        const claim = embed.ledger.claimQuery(id, embed.config.maxEmbedRunning, embed.config.queryTimeoutMs);
+        if (claim) this.embedQuery(claim);
+      }
+    } catch (error) {
+      this.error(error);
+    }
+    try {
+      const now = this.clock.now();
+      if (now < this.indexPausedUntil || (!this.indexDirty && now < this.indexScanAt)) return;
+      for (let i = 0; i < embed.config.maxEmbedRunning; i++) {
+        const batch = embed.ledger.claimIndexBatch(embed.config.maxEmbedRunning);
+        if (batch === 'busy') return;
+        if (batch === null) {
+          this.indexDirty = false;
+          this.indexScanAt = now + INDEX_IDLE_MS;
+          return;
+        }
+        this.index(batch);
+      }
+    } catch (error) {
+      // An exhausted allowance or any claim failure pauses indexing; replies and everything else are unaffected.
+      this.indexPausedUntil = this.clock.now() + 60_000;
+      this.error(error);
+    }
+  }
+
+  private embedQuery(claim: QueryClaim) {
+    const embed = this.runner.embedding!;
+    const controller = new AbortController();
+    this.controllers.add(controller);
+    const task = embed.query(claim, controller.signal).then((vector) => {
+      if (vector) this.queryVectors.set(claim.operationId, vector);
+    });
+    this.track(task, () => this.controllers.delete(controller));
+  }
+
+  private index(batch: IndexBatch) {
+    const embed = this.runner.embedding!;
+    const controller = new AbortController();
+    this.controllers.add(controller);
+    const task = embed.index(batch, controller.signal).then(() => {
+      this.indexDirty = true;
+    });
+    this.track(task, () => this.controllers.delete(controller));
   }
 
   /** Bounded pass; all provider calls are scheduled outside SQLite transactions. */
@@ -309,6 +384,7 @@ export class WebProviderExecutor {
         this.error(error);
       }
     }
+    this.embedPass();
     const text = this.queue.claimText(lease, 'provider-text');
     if (text) this.schedule(text);
     const audio = this.queue.claimAudio(lease, 'provider-audio');

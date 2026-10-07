@@ -10,6 +10,7 @@ import { webConcurrency } from '../../../config/web-concurrency.ts';
 import { audioStartedSql, metricsEnabled } from '../admission/web-stage-metrics.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
 import { CloudQueueAlarm, type AlarmStorage } from './queue-alarm.ts';
+import { webEmbedNextDue } from '../generation/web-embed-ledger.ts';
 
 /** A deadline for uncertain work is a classification wake, never a permission to resend it. */
 export function webProviderNextDue(store: WebRuntimeStore, now: number, ownsCoordinator = false): number | null {
@@ -131,6 +132,7 @@ export class WebCloudExecutor {
           due ?? Infinity,
           heartbeat ?? Infinity,
           maintenanceDue?.() ?? Infinity,
+          webEmbedNextDue(store, clock.now()) ?? Infinity,
           this.previews?.nextDue() ?? Infinity,
           deletion?.nextDue() ?? Infinity,
         );

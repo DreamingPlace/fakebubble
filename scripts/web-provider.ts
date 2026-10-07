@@ -10,6 +10,7 @@ import { initProviderInstance, readLocalConfig } from '../apps/server/platform/w
 import {
   migrateWebProviderMetrics,
   migrateWebProviderMemory,
+  migrateWebProviderEmbeddings,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -35,6 +36,8 @@ import {
   readLiveBudgetHistory,
 } from '../apps/server/budget/web-provider-live-budget.ts';
 import { renderProviderAssets } from '../apps/server/generation/web-provider-assets.ts';
+import { WorkersAiRestEmbeddings } from '../apps/server/generation/embedding-provider.ts';
+import { parseWebEmbedConfig } from '../config/web-embeddings.ts';
 
 export function readSelectedVoiceFiles(setupRoot: string, pinned: SelectedVoicePins) {
   validateSelectedVoicePins(pinned);
@@ -69,7 +72,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→115 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→116 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -100,8 +103,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     configureWebProvider(store, selected, now);
     migrateWebProviderMetrics(store);
     migrateWebProviderMemory(store);
+    migrateWebProviderEmbeddings(store);
     return {
-      schema: 115,
+      schema: 116,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -124,6 +128,11 @@ function deepSeekEnvironment(path: string, inherited: NodeJS.ProcessEnv = proces
 
 function voiceEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return selectedEnvironment(path, ['FISH_API_KEY', 'FISH_MODEL'], inherited);
+}
+
+/** Workers AI REST credentials for memory embeddings (.env.embed, same private-file rules as .env and .env.voice). */
+function embedEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return selectedEnvironment(path, ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'], inherited);
 }
 
 function selectedEnvironment(path: string, allowed: string[], inherited: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -150,7 +159,17 @@ export function liveTransports(envDir: string) {
   const voiceEnv = voiceEnvironment(join(envDir, '.env.voice'), {});
   const text = textConfiguration(textEnv);
   ensure(text.credentialConfigured && Boolean(voiceEnv.FISH_API_KEY?.trim()), 'WEB_PROVIDER_CREDENTIAL_MISSING');
+  // Embeddings are optional: without both Cloudflare values there is simply no semantic recall (lexical stays as is).
+  const embedEnv = embedEnvironment(join(envDir, '.env.embed'), {});
+  const embeddings =
+    embedEnv.CLOUDFLARE_ACCOUNT_ID && embedEnv.CLOUDFLARE_API_TOKEN
+      ? new WorkersAiRestEmbeddings({
+          accountId: embedEnv.CLOUDFLARE_ACCOUNT_ID,
+          apiToken: embedEnv.CLOUDFLARE_API_TOKEN,
+        })
+      : undefined;
   return {
+    embeddings,
     text: new DeepSeekTextGenerator({
       apiKey: textEnv.DEEPSEEK_API_KEY!,
       baseUrl: text.baseUrl,
@@ -223,6 +242,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate',
       'migrate-metrics',
       'migrate-memory',
+      'migrate-embeddings',
       'render-assets',
       'admin-grant',
       'serve',
@@ -295,6 +315,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     } finally {
       store.close();
     }
+  } else if (action === 'migrate-embeddings') {
+    // An existing provider-* instance at schema 115 gains memory embeddings, their dispatch ledger and counters.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderEmbeddings(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 116, embeddings: true }) + '\n');
+    } finally {
+      store.close();
+    }
   } else if (action === 'render-assets') {
     ensure(typeof extra === 'string', 'WEB_PROVIDER_USAGE');
     const log = (await renderAssets(root, extra)) as { kind: string; characterId: string; billedBytes: number }[];
@@ -327,7 +356,21 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       store,
       config,
       clock,
-      new WebProviderRunner(store, clock, live.text, fishTransport(live.fish), budget),
+      new WebProviderRunner(
+        store,
+        clock,
+        live.text,
+        fishTransport(live.fish),
+        budget,
+        live.embeddings
+          ? {
+              provider: live.embeddings,
+              config: parseWebEmbedConfig(
+                (JSON.parse(readFileSync(join(root, 'local-config.json'), 'utf8')) as { embedding?: object }).embedding,
+              ),
+            }
+          : undefined,
+      ),
       network,
       new WebCharacterPreviewRunner(store, clock, live.text, budget),
     );

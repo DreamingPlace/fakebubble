@@ -16,7 +16,7 @@ test('web schema113 initializes in actual workerd SQLite without beta adoption',
       ALTER TABLE web_external_attempts_next RENAME TO web_external_attempts;
       CREATE INDEX web_external_attempts_state ON web_external_attempts(dispatch_state,operation_id);`);
   }
-  node.db.exec('PRAGMA user_version=115');
+  node.db.exec('PRAGMA user_version=116');
   const tables = node.all<{ name: string }>(`SELECT name FROM sqlite_master
     WHERE type='table' AND name NOT GLOB 'sqlite_*' ORDER BY name`);
   const expected = {

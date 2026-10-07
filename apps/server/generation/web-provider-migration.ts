@@ -59,3 +59,22 @@ export function migrateWebProviderMemory(store: Store) {
     store.db.exec('PRAGMA user_version = 115');
   });
 }
+
+/** Node-only 115→116: memory topic embeddings, the embedding dispatch ledger and its daily counters (116_memory_embeddings.sql). */
+export function migrateWebProviderEmbeddings(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 115 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_facts'"),
+      'WEB_PROVIDER_EMBEDDING_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/116_memory_embeddings.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 116');
+  });
+}

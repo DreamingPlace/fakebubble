@@ -3,6 +3,7 @@ import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { emptySession } from '../../../packages/domain/schedule.ts';
 import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
 import { auditWebLifecycleWorld } from '../admission/web-lifecycle-audit.ts';
+import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
@@ -206,8 +207,11 @@ export class WebCloudRetention {
         'web_stage_attempts',
       ])
         this.store.run(`DELETE FROM ${table} WHERE operation_id IN (${operations})`, principalId, world);
+      releaseUnsentEmbedHolds(this.store, world);
       for (const table of [
         'memory_facts',
+        'memory_embeddings',
+        'web_embed_attempts',
         'memory_episode_sources',
         'memory_mentions',
         'memory_episodes',
@@ -229,7 +233,8 @@ export class WebCloudRetention {
         'dialogue_bubbles',
         'outbox',
       ])
-        this.store.run(`DELETE FROM ${table} WHERE world_id=?`, world);
+        if (!LATE_TABLES.has(table) || embeddingTableExists(this.store, table))
+          this.store.run(`DELETE FROM ${table} WHERE world_id=?`, world);
       this.store.run('UPDATE jobs SET published_message_id=NULL WHERE world_id=?', world);
       this.store.run('DELETE FROM jobs WHERE world_id=?', world);
       for (const operation of this.store.all<{ id: string; payload_hash: string }>(
