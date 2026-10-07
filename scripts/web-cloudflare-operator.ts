@@ -282,7 +282,22 @@ export async function runWebOperator(prepared: Prepared, getProxy: GetProxy, con
     }
   }
 }
+/** Offline: no network, no Cloudflare binding. Hashes exactly what the business object hashes and verifies. */
+export async function expectedMigrationsReport() {
+  const { registerSqlTextLoader } = await import('./web-sql-text.ts');
+  registerSqlTextLoader();
+  const { expectedWebMigrations } = await import('../workers/web-cloudflare/migrations.ts');
+  return expectedWebMigrations();
+}
 async function main() {
+  if (process.argv[2] === 'expected-migrations') {
+    ensure(process.argv.length === 3, 'WEB_OPERATOR_ARGUMENT_INVALID');
+    const report = await expectedMigrationsReport();
+    const list = (rows: { version: number; sha256: string }[]) =>
+      '[\n' + rows.map((row) => '    ' + JSON.stringify(row)).join(',\n') + '\n  ]';
+    console.log(`{\n  "inline": ${list(report.inline)},\n  "r2": ${list(report.r2)}\n}`);
+    return;
+  }
   const prepared = prepareWebOperation(webOperatorArguments(process.argv.slice(2)));
   const modulePath = process.env.FAKE_WEB_WRANGLER_MODULE;
   ensure(modulePath && isAbsolute(modulePath), 'WEB_OPERATOR_WRANGLER_MODULE_REQUIRED');

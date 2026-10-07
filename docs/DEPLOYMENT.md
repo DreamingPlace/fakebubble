@@ -108,6 +108,14 @@ node scripts/web-cloudflare-operator.ts --action=inspect --receipt-file=/abs/pri
   --business-service=fake-paopao-web-business --budget-service=fake-paopao-web-budget
 ```
 
+### `expected-migrations`（离线期望摘要）
+
+```
+node scripts/web-cloudflare-operator.ts expected-migrations
+```
+
+纯本地命令：不需要 `CLOUDFLARE_ACCOUNT_ID`、Wrangler 模块或网络，也不写收据。它输出本版代码期望的每个 Cloudflare 迁移步骤的版本与 sha256（`inline` 与 `r2` 两份列表；已部署的业务对象使用 `r2`，两者只在 113 一步不同），哈希方式与业务对象校验已应用步骤时完全相同（对步骤 SQL 文本取 sha256）。测试把它的输出与 workerd 中业务对象自己算出的结果逐项比对。升级前可用它与现有账本核对；部署后用 `inspect` 对照实际账本。
+
 ## 本地真实供应商适配（非默认预览）
 
 `scripts/web-provider.ts` 保留受控本地适配，`serve` / `render-assets` 必须显式 `--live`；这不是供应商付费授权。真实材料和凭据仍需独立准备。

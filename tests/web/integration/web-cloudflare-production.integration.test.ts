@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -627,4 +628,29 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
     OPERATOR_ENABLED: 'true',
     EMBEDDINGS_ENABLED: null,
   });
+});
+
+test('offline expected-migrations output equals the steps the deployed business object computes', async (t) => {
+  const f = await fixture(t, true);
+  // No account, no Wrangler module, no proxy: the command is local and needs none of them.
+  const run = spawnSync(process.execPath, ['scripts/web-cloudflare-operator.ts', 'expected-migrations'], {
+    env: { PATH: process.env.PATH ?? '', HTTPS_PROXY: 'http://127.0.0.1:9', HTTP_PROXY: 'http://127.0.0.1:9' },
+    encoding: 'utf8',
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(run.stderr, '');
+  const offline = JSON.parse(run.stdout) as { inline: unknown[]; r2: unknown[] };
+  assert.deepEqual(Object.keys(offline), ['inline', 'r2']);
+  const live = (await (await f.call({ action: 'inspect' })).json()) as any;
+  assert.deepEqual(offline.inline, live.migrations.expected.inline);
+  assert.deepEqual(offline.r2, live.migrations.expected.r2);
+  // And the deployed object's applied ledger is exactly the offline R2 list.
+  assert.deepEqual(live.migrations.applied, offline.r2);
+  assert.equal(live.migrations.matches, true);
+  assert.equal(offline.r2.length, 41);
+  const extra = spawnSync(process.execPath, ['scripts/web-cloudflare-operator.ts', 'expected-migrations', '--x=1'], {
+    encoding: 'utf8',
+  });
+  assert.notEqual(extra.status, 0);
+  assert.equal(extra.stdout, '');
 });
