@@ -46,6 +46,12 @@ const tables = [
       `CREATE TRIGGER ${table}_retain BEFORE DELETE ON ${table} BEGIN SELECT RAISE(ABORT,'WEB_DELETION_IMMUTABLE'); END`,
   ),
 ];
+/** The guarded trigger as it exists before this schema installs (and as migration 114 recreates one). */
+const preDeletionTrigger = (store: WebRuntimeStore, [table, name, error]: (typeof guarded)[number]) => {
+  const provider = table.startsWith('web_provider_');
+  return `CREATE TRIGGER ${name} BEFORE DELETE ON ${table} ${provider && !store.providerAudio ? '' : `WHEN NOT ${oldGate(provider)}`}
+          BEGIN SELECT RAISE(ABORT,'${error}'); END`;
+};
 export function installWebCharacterDeletion(store: WebRuntimeStore) {
   const triggers = guarded.map(
     ([table, name, error]) => `CREATE TRIGGER ${name} BEFORE DELETE ON ${table}
@@ -62,12 +68,12 @@ export function installWebCharacterDeletion(store: WebRuntimeStore) {
         ),
         'WEB_DELETION_SCHEMA_MISMATCH',
       );
-      for (const [table, name, error] of guarded) {
-        const provider = table.startsWith('web_provider_'),
-          current = store.get<{ sql: string }>('SELECT sql FROM sqlite_master WHERE name=?', name);
-        const expected = `CREATE TRIGGER ${name} BEFORE DELETE ON ${table} ${provider && !store.providerAudio ? '' : `WHEN NOT ${oldGate(provider)}`}
-          BEGIN SELECT RAISE(ABORT,'${error}'); END`;
-        ensure(current && normalize(current.sql) === normalize(expected), 'WEB_DELETION_SCHEMA_MISMATCH');
+      for (const entry of guarded) {
+        const current = store.get<{ sql: string }>('SELECT sql FROM sqlite_master WHERE name=?', entry[1]);
+        ensure(
+          current && normalize(current.sql) === normalize(preDeletionTrigger(store, entry)),
+          'WEB_DELETION_SCHEMA_MISMATCH',
+        );
       }
       for (const sql of tables) store.all(sql);
       for (const [index, [, name]] of guarded.entries()) {
@@ -106,11 +112,18 @@ export function installWebCharacterDeletion(store: WebRuntimeStore) {
       versions.length === 1 && versions[0]!.version === 1 && versions[0]!.sha256 === digest,
       'WEB_DELETION_SCHEMA_MISMATCH',
     );
-    for (const [i, [, name]] of guarded.entries())
+    for (const [i, entry] of guarded.entries()) {
+      const name = entry[1],
+        current = store.get<{ sql: string }>('SELECT sql FROM sqlite_master WHERE name=?', name)?.sql ?? '';
+      if (normalize(current) === normalize(triggers[i]!)) continue;
+      // Named repair: a later migration that rebuilds a guarded table (114 rebuilds web_publication_items) recreates
+      // its trigger in the pre-deletion form. Only that exact form is replaced; anything else is still a mismatch.
       ensure(
-        normalize(store.get<{ sql: string }>('SELECT sql FROM sqlite_master WHERE name=?', name)?.sql ?? '') ===
-          normalize(triggers[i]!),
+        current && normalize(current) === normalize(preDeletionTrigger(store, entry)),
         'WEB_DELETION_SCHEMA_MISMATCH',
       );
+      store.all(`DROP TRIGGER ${name}`);
+      store.all(triggers[i]!);
+    }
   });
 }
