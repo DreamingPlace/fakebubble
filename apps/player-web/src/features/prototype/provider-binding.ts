@@ -381,7 +381,7 @@ export class LiveBinding {
   }
 
   private advance(entry: VoiceEntry) {
-    const list = this.replies.get(entry.message.operationId) ?? [];
+    const list = this.replies.get(entry.message.operationId ?? entry.message.messageId) ?? [];
     const next = list.slice(list.indexOf(entry) + 1).find((item) => !item.played);
     if (!next) {
       this.queueIdle = true;
@@ -392,7 +392,7 @@ export class LiveBinding {
   }
 
   private register(entry: VoiceEntry) {
-    const operationId = entry.message.operationId;
+    const operationId = entry.message.operationId ?? entry.message.messageId;
     this.voices.set(entry.message.messageId, entry);
     this.replies.set(operationId, [...(this.replies.get(operationId) ?? []), entry]);
     // A clip arriving after the queue ran dry joins the same reply's queue.
@@ -413,7 +413,13 @@ export class LiveBinding {
 
   private async playMessage(characterId: WebProviderCharacterId, message: WebProviderMessage) {
     if (!message.audio?.mediaId || this.catalogChanged) return;
-    const entry = this.voices.get(message.messageId) ?? { message, characterId, card: null, button: null, played: false };
+    const entry = this.voices.get(message.messageId) ?? {
+      message,
+      characterId,
+      card: null,
+      button: null,
+      played: false,
+    };
     await this.playEntry(entry);
   }
 
@@ -422,7 +428,7 @@ export class LiveBinding {
     if (!message.audio?.mediaId || this.catalogChanged) return;
     const revision = this.viewRevision;
     const generation = ++this.generation;
-    this.voiceReply = message.operationId;
+    this.voiceReply = message.operationId ?? message.messageId;
     this.queueIdle = false;
     this.stopAudio();
     try {

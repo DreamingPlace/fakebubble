@@ -809,7 +809,8 @@ async function voiceFixture(t: test.TestContext, kinds: Array<'voice' | 'text'>)
       }) as WebProviderMessage,
   );
   f.handlers.history = async () => ({ messages: replies });
-  const button = (id: string) => f.list.children.find((row) => row.dataset.messageId === id)!.querySelector('.play-button')!;
+  const button = (id: string) =>
+    f.list.children.find((row) => row.dataset.messageId === id)!.querySelector('.play-button')!;
   return { ...f, fetched, revoked, button, audios: () => FakeAudio.all };
 }
 
