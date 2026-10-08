@@ -296,6 +296,12 @@ svg {
   width: 38px;
   color: #6c9688;
 }
+.play-button[data-playing="true"] {
+  background: #e3efe8;
+}
+.play-button[data-playing="true"] .sound-bars svg {
+  color: #3a7667;
+}
 .transcript-toggle {
   border: 0;
   background: transparent;
