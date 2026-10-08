@@ -17,7 +17,12 @@ import { budgetHash, type CloudBudgetAuthorization } from '../../../apps/server/
 import { parseWebProviderBootstrap } from '../../../packages/contracts/web-provider.ts';
 
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
-async function fixture(t: test.TestContext, retentionInspector = false, unlimitedProduction = false) {
+async function fixture(
+  t: test.TestContext,
+  retentionInspector = false,
+  unlimitedProduction = false,
+  runtimeLogs?: string[],
+) {
   const root = mkdtempSync(join(tmpdir(), 'web-production-'));
   const wav = syntheticTone(),
     selected = syntheticSelection();
@@ -107,6 +112,13 @@ async function fixture(t: test.TestContext, retentionInspector = false, unlimite
     },
   };
   const options = {
+    ...(runtimeLogs
+      ? {
+          handleRuntimeStdio: (out: import('node:stream').Readable, err: import('node:stream').Readable) => {
+            for (const stream of [out, err]) stream.on('data', (chunk: Buffer) => runtimeLogs.push(String(chunk)));
+          },
+        }
+      : {}),
     durableObjectsPersist: root,
     r2Persist: join(root, 'r2'),
     workers: [
@@ -653,4 +665,32 @@ test('offline expected-migrations output equals the steps the deployed business 
   });
   assert.notEqual(extra.status, 0);
   assert.equal(extra.stdout, '');
+});
+
+test('startup failure is diagnosable from logs while the 503 response is unchanged', async (t) => {
+  const logs: string[] = [];
+  const f = await fixture(t, false, false, logs);
+  await f.call({ action: 'initialize', body: f.material });
+  for (const asset of f.material.assets) await f.call({ action: 'asset', body: { ...asset, bytes: [...f.wav] } });
+  // The budget grants are deliberately not installed: start() fails in the budget RPC. The error crosses the
+  // service binding as a plain Error (the DomainError class is lost), so its code is logged as the message.
+  const response = await f.call(
+    { action: 'edge', path: '/api/web/provider/bootstrap', headers: { cookie: 'secret-cookie' } },
+    503,
+  );
+  assert.deepEqual(await response.json(), {
+    error: { code: 'SERVICE_UNAVAILABLE', requestId: null, retryAfterMs: null },
+  });
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  await sleep(200);
+  const text = logs.join('');
+  const records = [...text.matchAll(/\{"event":"web_[a-z_]+"[^\n]*\}/g)].map(
+    (m) => JSON.parse(m[0]) as Record<string, string>,
+  );
+  const started = records.find((r) => r.event === 'web_business_start_failed');
+  const unavailable = records.find((r) => r.event === 'web_business_unavailable');
+  assert.equal(started?.message, 'WEB_CLOUD_BUDGET_NOT_INITIALIZED', text);
+  assert.equal(unavailable?.message, 'WEB_CLOUD_BUDGET_NOT_INITIALIZED');
+  assert.equal(unavailable?.stage, 'start');
+  assert.ok(!text.includes('secret-cookie'));
 });

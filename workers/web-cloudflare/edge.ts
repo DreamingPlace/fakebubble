@@ -1,6 +1,7 @@
 import { DomainError, ensure } from '../../packages/domain/errors.ts';
 import { CloudWebAssets } from '../../apps/server/cloudflare/web-assets.ts';
 import type { AssetBinding } from '../../apps/server/cloudflare/admin-assets.ts';
+import { safeError } from '../../apps/server/cloudflare/safe-error.ts';
 import { WEB_EDGE_PEER_HEADER } from '../../apps/server/cloudflare/web-edge-request.ts';
 
 export const WEB_CLOUD_COMPATIBILITY_FLAGS = ['nodejs_compat', 'enable_request_signal'] as const;
@@ -100,6 +101,7 @@ export default {
       }
     } catch (error) {
       const missing = error instanceof DomainError && error.code === 'NOT_FOUND';
+      if (!missing) console.error(JSON.stringify({ event: 'web_edge_unavailable', ...safeError(error) }));
       response = Response.json(
         { error: { code: missing ? 'NOT_FOUND' : 'SERVICE_UNAVAILABLE', requestId: null, retryAfterMs: null } },
         { status: missing ? 404 : 503 },

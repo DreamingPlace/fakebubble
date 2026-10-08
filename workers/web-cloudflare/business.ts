@@ -4,6 +4,7 @@ import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-char
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
+import { safeError } from '../../apps/server/cloudflare/safe-error.ts';
 import type { WebGenerationBinding } from '../../packages/contracts/web-generation-rpc.ts';
 import { WebDurableStore } from '../../apps/server/cloudflare/web-store.ts';
 import { PrivateMediaObjects, type PrivateBucket } from '../../apps/server/cloudflare/media-objects.ts';
@@ -280,7 +281,8 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         return { execution, http };
       })();
       this.services = pending;
-      void pending.catch(() => {
+      void pending.catch((error: unknown) => {
+        console.error(JSON.stringify({ event: 'web_business_start_failed', ...safeError(error) }));
         if (this.services === pending) this.services = undefined;
       });
     }
@@ -294,18 +296,33 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       ? new WebCharacterDeletion(this.store, this.clock)
       : null;
     await deletion?.sweep();
-    if (this.env.EXTERNAL_CALLS === 'true') return (await this.start()).execution.alarm();
+    if (this.env.EXTERNAL_CALLS === 'true') {
+      let services: Awaited<ReturnType<typeof this.start>>;
+      try {
+        services = await this.start();
+      } catch (error) {
+        console.error(JSON.stringify({ event: 'web_business_alarm_start_failed', ...safeError(error) }));
+        throw error;
+      }
+      return services.execution.alarm();
+    }
     const next = Math.min(this.retention.nextDue() ?? Infinity, deletion?.nextDue() ?? Infinity);
     const due = Number.isFinite(next) ? next : null;
     if (due === null) await this.context.storage.deleteAlarm();
     else await this.context.storage.setAlarm(Math.max(this.clock.now() + 1000, due));
   }
   async fetch(incoming: Request) {
+    let stage: 'public-disabled' | 'edge-request' | 'start' | 'unknown' = 'public-disabled';
     try {
       ensure(this.env.PUBLIC_ENABLED === 'true', 'WEB_CLOUD_PUBLIC_DISABLED');
+      stage = 'edge-request';
       const { request, peer } = trustedWebRequest(incoming);
-      return (await this.start()).http.fetch(request, peer);
-    } catch {
+      stage = 'start';
+      const services = await this.start();
+      stage = 'unknown';
+      return services.http.fetch(request, peer);
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'web_business_unavailable', stage, ...safeError(error) }));
       return Response.json(
         { error: { code: 'SERVICE_UNAVAILABLE', requestId: null, retryAfterMs: null } },
         { status: 503, headers: { 'cache-control': 'no-store' } },
