@@ -740,3 +740,184 @@ test('a voice reply delivered as text fallback renders as an ordinary text bubbl
   assert.equal(f.title.textContent, '合成人物');
   assert.equal(f.calls().submits, 1);
 });
+
+class FakeAudio {
+  static all: FakeAudio[] = [];
+  static reject = false;
+  paused = false;
+  played = false;
+  listeners = new Map<string, Array<() => void>>();
+  url: string;
+  constructor(url: string) {
+    this.url = url;
+    FakeAudio.all.push(this);
+  }
+  addEventListener(name: string, listener: () => void) {
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
+  }
+  play() {
+    if (FakeAudio.reject) return Promise.reject(new Error('NotAllowedError'));
+    this.played = true;
+    return Promise.resolve();
+  }
+  pause() {
+    this.paused = true;
+  }
+  end() {
+    for (const listener of this.listeners.get('ended') ?? []) listener();
+  }
+}
+
+async function voiceFixture(t: test.TestContext, kinds: Array<'voice' | 'text'>) {
+  const f = await fixture(t, async () => {});
+  FakeAudio.all = [];
+  FakeAudio.reject = false;
+  const previous = { Audio: (globalThis as { Audio?: unknown }).Audio, createObjectURL: URL.createObjectURL };
+  const revoked: string[] = [];
+  let urls = 0;
+  Object.assign(globalThis, { Audio: FakeAudio });
+  URL.createObjectURL = () => `blob:clip-${urls++}`;
+  const revoke = URL.revokeObjectURL;
+  URL.revokeObjectURL = (url: string) => void revoked.push(url);
+  t.after(() => {
+    Object.assign(globalThis, { Audio: previous.Audio });
+    URL.createObjectURL = previous.createObjectURL;
+    URL.revokeObjectURL = revoke;
+  });
+  const fetched: string[] = [];
+  (f.binding as unknown as { api: { audio(input: { messageId: string }): Promise<ArrayBuffer> } }).api.audio = async (
+    input,
+  ) => {
+    fetched.push(input.messageId);
+    return new ArrayBuffer(4);
+  };
+  const base = { conversationId: 'c', characterId: 'wei-guagua', operationId: 'op', createdAt: 1 } as const;
+  const replies = kinds.map(
+    (kind, i) =>
+      ({
+        ...base,
+        messageId: 'v' + i,
+        replyOrdinal: i,
+        author: 'character',
+        origin: 'narrative',
+        text: '语音' + i,
+        audio:
+          kind === 'voice'
+            ? { revision: 1, status: 'ready', mediaId: 'media' + i, durationMs: 1000, errorCode: null }
+            : null,
+        ...(kind === 'text' ? { deliveryFallback: 'text' } : {}),
+      }) as WebProviderMessage,
+  );
+  f.handlers.history = async () => ({ messages: replies });
+  const button = (id: string) =>
+    f.list.children.find((row) => row.dataset.messageId === id)!.querySelector('.play-button')!;
+  return { ...f, fetched, revoked, button, audios: () => FakeAudio.all };
+}
+
+test('voice queue: the second clip starts when the first ends, in display order, and blobs are revoked', async (t) => {
+  const f = await voiceFixture(t, ['voice', 'voice']);
+  await f.send();
+  await flush();
+  assert.equal(f.audios().length, 1);
+  assert.equal(f.button('v0').attributes.get('data-playing'), 'true');
+  f.audios()[0]!.end();
+  await flush();
+  assert.equal(f.audios().length, 2);
+  assert.deepEqual(f.fetched, ['v0', 'v1']);
+  assert.deepEqual(f.revoked, ['blob:clip-0']);
+  assert.equal(f.button('v0').attributes.get('data-playing'), 'false');
+  assert.equal(f.button('v1').attributes.get('data-playing'), 'true');
+  f.audios()[1]!.end();
+  await flush();
+  assert.equal(f.audios().length, 2, 'queue ends after the last clip');
+  assert.deepEqual(f.revoked, ['blob:clip-0', 'blob:clip-1']);
+});
+
+test('voice queue: tapping a bubble mid-queue plays it, then continues with the unplayed ones after it', async (t) => {
+  const f = await voiceFixture(t, ['voice', 'voice', 'voice']);
+  await f.send();
+  await flush();
+  f.button('v1').dispatch('click');
+  await flush();
+  assert.equal(f.audios()[0]!.paused, true);
+  assert.equal(f.audios().length, 2);
+  assert.deepEqual(f.fetched, ['v0', 'v1']);
+  f.audios()[1]!.end();
+  await flush();
+  assert.deepEqual(f.fetched, ['v0', 'v1', 'v2']);
+  f.audios()[2]!.end();
+  await flush();
+  assert.equal(f.audios().length, 3);
+  assert.deepEqual(f.revoked, ['blob:clip-0', 'blob:clip-1', 'blob:clip-2']);
+});
+
+test('voice queue: leaving the chat stops it and revokes the blob; a late end does not continue', async (t) => {
+  const f = await voiceFixture(t, ['voice', 'voice']);
+  await f.send();
+  await flush();
+  f.binding.stopVoice();
+  assert.equal(f.audios()[0]!.paused, true);
+  assert.deepEqual(f.revoked, ['blob:clip-0']);
+  assert.equal(f.button('v0').attributes.get('data-playing'), 'false');
+  f.audios()[0]!.end();
+  await flush();
+  assert.equal(f.audios().length, 1);
+});
+
+test('voice queue: a hidden page stops it; a card that left chat does not continue', async (t) => {
+  const f = await voiceFixture(t, ['voice', 'voice', 'voice']);
+  await f.send();
+  await flush();
+  f.card.className = '';
+  f.audios()[0]!.end();
+  await flush();
+  assert.equal(f.audios().length, 1, 'card no longer in chat');
+  f.card.className = 'is-chat';
+  f.button('v1').dispatch('click');
+  await flush();
+  assert.equal(f.audios().length, 2);
+  Object.assign(f.document, { hidden: true });
+  f.document.dispatch('visibilitychange');
+  assert.equal(f.audios()[1]!.paused, true);
+  f.audios()[1]!.end();
+  await flush();
+  assert.equal(f.audios().length, 2);
+});
+
+test('voice queue: text-fallback bubbles are skipped', async (t) => {
+  const f = await voiceFixture(t, ['voice', 'text', 'voice']);
+  await f.send();
+  await flush();
+  f.audios()[0]!.end();
+  await flush();
+  assert.deepEqual(f.fetched, ['v0', 'v2']);
+  assert.equal(f.audios().length, 2);
+});
+
+test('voice queue: blocked autoplay keeps the notice, and a tap continues the queue from that bubble', async (t) => {
+  const f = await voiceFixture(t, ['voice', 'voice']);
+  FakeAudio.reject = true;
+  await f.send();
+  await flush();
+  assert.match(f.messages.at(-1)!, /点一下再播放语音/);
+  assert.deepEqual(f.revoked, ['blob:clip-0'], 'rejected clip is released');
+  FakeAudio.reject = false;
+  f.button('v0').dispatch('click');
+  await flush();
+  f.audios()[1]!.end();
+  await flush();
+  assert.deepEqual(f.fetched, ['v0', 'v0', 'v1']);
+});
+
+test('voice queue: sending a new message stops the old queue', async (t) => {
+  const f = await voiceFixture(t, ['voice', 'voice']);
+  await f.send();
+  await flush();
+  const first = f.audios()[0]!;
+  f.handlers.history = async () => ({ messages: [] });
+  await f.send();
+  assert.equal(first.paused, true);
+  first.end();
+  await flush();
+  assert.equal(f.audios().length, 1);
+});

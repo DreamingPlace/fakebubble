@@ -37,12 +37,27 @@ const sound =
 const play =
   '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 9 6-9 6V6Z"/></svg>';
 
+/** One playable voice bubble; bubbles of the same reply (operationId) form a WeChat-style queue. */
+type VoiceEntry = {
+  message: WebProviderMessage;
+  characterId: WebProviderCharacterId;
+  card: HTMLElement | null;
+  button: HTMLElement | null;
+  played: boolean;
+};
+
 export class LiveBinding {
   private view: WebProviderBootstrap;
   private readonly api: ProviderApi;
   private shell: Shell | null = null;
   private audio: HTMLAudioElement | null = null;
   private audioUrl: string | null = null;
+  private readonly voices = new Map<string, VoiceEntry>();
+  private readonly replies = new Map<string, VoiceEntry[]>();
+  private nowPlaying: VoiceEntry | null = null;
+  private voiceReply: string | null = null;
+  private queueIdle = false;
+  private generation = 0;
   private readonly loaded = new Set<string>();
   private readonly shown = new Set<string>();
   private busy = false;
@@ -99,6 +114,9 @@ export class LiveBinding {
       if (!document.hidden && !this.busy && !this.invitation.locked) void this.refreshAccess().catch(() => {});
     };
     document.addEventListener('visibilitychange', onReturn);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.stopVoice();
+    });
     window.addEventListener('focus', onReturn);
     // Browse cards show the existing conversation, not just the welcome bubble.
     for (const conversation of this.view.conversations)
@@ -191,7 +209,9 @@ export class LiveBinding {
       JSON.stringify([prior.characters, prior.slots]) !== JSON.stringify([next.characters, next.slots]);
     if (changed || this.catalogChanged) {
       this.viewRevision++;
-      this.stopAudio();
+      this.stopVoice();
+      this.voices.clear();
+      this.replies.clear();
       this.loaded.clear();
       this.shown.clear();
       for (const character of prior.characters)
@@ -313,13 +333,70 @@ export class LiveBinding {
     if (this.audioUrl?.startsWith('blob:')) URL.revokeObjectURL(this.audioUrl);
     this.audio = null;
     this.audioUrl = null;
+    this.mark(this.nowPlaying, false);
+    this.nowPlaying = null;
   }
 
-  private start(url: string) {
+  /** Stops the current clip and drops the whole voice queue (leaving the chat, new message, page hidden). */
+  stopVoice() {
+    this.generation++;
+    this.voiceReply = null;
+    this.queueIdle = false;
     this.stopAudio();
+  }
+
+  private mark(entry: VoiceEntry | null, playing: boolean) {
+    entry?.button?.setAttribute('data-playing', String(playing));
+  }
+
+  private start(url: string, entry: VoiceEntry | null = null) {
+    this.stopAudio();
+    const audio = new Audio(url);
+    this.audio = audio;
     this.audioUrl = url;
-    this.audio = new Audio(url);
-    void this.audio.play().catch(() => this.shell?.say('点一下再播放语音'));
+    this.nowPlaying = entry;
+    if (entry) {
+      entry.played = true;
+      this.mark(entry, true);
+    }
+    const finish = () => {
+      if (this.audio !== audio) return;
+      this.stopAudio();
+      if (entry) this.advance(entry);
+    };
+    audio.addEventListener('ended', finish);
+    audio.addEventListener('error', finish);
+    void audio.play().catch(() => {
+      if (this.audio === audio) {
+        // Blocked autoplay: release the clip; a tap on the bubble resumes the queue from there.
+        if (entry) entry.played = false;
+        this.stopAudio();
+      }
+      this.shell?.say('点一下再播放语音');
+    });
+  }
+
+  private canContinue(entry: VoiceEntry) {
+    return !document.hidden && !!entry.card?.classList.contains('is-chat');
+  }
+
+  private advance(entry: VoiceEntry) {
+    const list = this.replies.get(entry.message.operationId ?? entry.message.messageId) ?? [];
+    const next = list.slice(list.indexOf(entry) + 1).find((item) => !item.played);
+    if (!next) {
+      this.queueIdle = true;
+      return;
+    }
+    if (this.canContinue(next)) void this.playEntry(next);
+    else this.stopVoice();
+  }
+
+  private register(entry: VoiceEntry) {
+    const operationId = entry.message.operationId ?? entry.message.messageId;
+    this.voices.set(entry.message.messageId, entry);
+    this.replies.set(operationId, [...(this.replies.get(operationId) ?? []), entry]);
+    // A clip arriving after the queue ran dry joins the same reply's queue.
+    if (this.voiceReply === operationId && this.queueIdle && this.canContinue(entry)) void this.playEntry(entry);
   }
 
   playWelcome(characterId: WebProviderCharacterId) {
@@ -328,13 +405,32 @@ export class LiveBinding {
       return;
     }
     const audio = this.view.characters.find((item) => item.characterId === characterId)?.welcome.audio;
-    if (audio?.state === 'available') this.start(audio.url);
-    else this.shell?.say('这段语音暂时无法播放');
+    if (audio?.state === 'available') {
+      this.stopVoice();
+      this.start(audio.url);
+    } else this.shell?.say('这段语音暂时无法播放');
   }
 
   private async playMessage(characterId: WebProviderCharacterId, message: WebProviderMessage) {
     if (!message.audio?.mediaId || this.catalogChanged) return;
+    const entry = this.voices.get(message.messageId) ?? {
+      message,
+      characterId,
+      card: null,
+      button: null,
+      played: false,
+    };
+    await this.playEntry(entry);
+  }
+
+  private async playEntry(entry: VoiceEntry) {
+    const { message, characterId } = entry;
+    if (!message.audio?.mediaId || this.catalogChanged) return;
     const revision = this.viewRevision;
+    const generation = ++this.generation;
+    this.voiceReply = message.operationId ?? message.messageId;
+    this.queueIdle = false;
+    this.stopAudio();
     try {
       const bytes = await this.api.audio({
         characterId,
@@ -342,14 +438,16 @@ export class LiveBinding {
         messageId: message.messageId,
         mediaId: message.audio.mediaId,
       });
-      if (this.catalogChanged || revision !== this.viewRevision) return;
-      this.start(URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })));
+      if (this.catalogChanged || revision !== this.viewRevision || generation !== this.generation) return;
+      this.start(URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })), entry);
     } catch (error) {
+      if (generation !== this.generation) return;
+      this.voiceReply = null;
       this.fail(error);
     }
   }
 
-  private row(characterId: WebProviderCharacterId, message: WebProviderMessage) {
+  private row(characterId: WebProviderCharacterId, message: WebProviderMessage, card: HTMLElement) {
     const shell = this.shell!;
     const row = document.createElement('div');
     row.dataset.messageId = message.messageId;
@@ -386,8 +484,10 @@ export class LiveBinding {
     row.querySelector('.message-avatar')!.textContent = shell.mark(characterId);
     const playButton = row.querySelector<HTMLButtonElement>('.play-button')!;
     playButton.setAttribute('aria-label', `播放${shell.name(characterId)}的语音`);
-    if (message.audio?.mediaId) playButton.addEventListener('click', () => void this.playMessage(characterId, message));
-    else playButton.disabled = true;
+    if (message.audio?.mediaId) {
+      playButton.addEventListener('click', () => void this.playMessage(characterId, message));
+      this.register({ message, characterId, card, button: playButton, played: false });
+    } else playButton.disabled = true;
     const toggle = row.querySelector<HTMLButtonElement>('.transcript-toggle')!;
     const transcript = row.querySelector<HTMLElement>('.transcript')!;
     toggle.addEventListener('click', () => {
@@ -407,7 +507,7 @@ export class LiveBinding {
     for (const message of messages) {
       if (this.shown.has(message.messageId)) continue;
       this.shown.add(message.messageId);
-      list.append(this.row(characterId, message));
+      list.append(this.row(characterId, message, card));
     }
     if (follow) body.scrollTop = body.scrollHeight;
   }
@@ -465,6 +565,7 @@ export class LiveBinding {
       this.shell?.say('上一条还在回复中');
       return;
     }
+    this.stopVoice();
     this.busy = true;
     this.sendingCharacter = characterId;
     const revision = this.viewRevision;

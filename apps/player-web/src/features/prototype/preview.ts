@@ -249,6 +249,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
   const switchTo = (index: number) => {
     const next = ((index % people.length) + people.length) % people.length;
     if (next === active) return;
+    live?.stopVoice();
     if (phase === 'chat' && !people[next]!.transcript) {
       closeChat();
     }
@@ -308,6 +309,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     if (phase !== 'chat' && phase !== 'expanding') return;
     clearTimeout(settleTimer);
     settleTimer = 0;
+    live?.stopVoice();
     const card = cards[active]!;
     saveEditor(active);
     const wasFocused = document.activeElement === card.querySelector('textarea');
