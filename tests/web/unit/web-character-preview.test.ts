@@ -430,3 +430,26 @@ test('late old worker cannot mark the successor review UNKNOWN after a known-dra
   assert.equal(f.calls.length, 2);
   assert.equal(f.budget.summary()[0]!.heldMicros, 0);
 });
+
+test('admin preview list and status return the stored input text and send time, nothing else new', (t) => {
+  const f = fixture(t),
+    started = f.start();
+  assert.equal(started.input, '今天好吗');
+  const [listed] = f.chars.detail(f.auth, 'wei-guagua').previews as Array<typeof started>;
+  assert.equal(listed!.input, '今天好吗');
+  assert.equal(listed!.createdAt, 1_800_000_000_000);
+  assert.deepEqual(Object.keys(listed!).sort(), [
+    'characterId',
+    'createdAt',
+    'draftRevision',
+    'errorCode',
+    'input',
+    'previewId',
+    'profileHash',
+    'result',
+    'status',
+  ]);
+  const status = f.chars.previewStatus(f.auth, 'wei-guagua', started.previewId) as typeof started;
+  assert.equal(status.input, '今天好吗');
+  assert.equal(readWebPreview(f.store, started.previewId).request_json.includes('今天好吗'), true);
+});

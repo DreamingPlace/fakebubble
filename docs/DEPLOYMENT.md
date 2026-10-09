@@ -142,3 +142,7 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 - 每次成功 bootstrap（以及兑换、恢复）都会重新下发会话 cookie，`Max-Age=34560000`（400 天，浏览器上限）；`__Host-`、`Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/` 不变。
 - 管理员在邀请记录里撤销授权（`revoke-grant`）时，同一事务内结束该主体的全部会话并停用其恢复码；撤销未兑换的邀请码仍只阻止今后兑换。
 - 玩家兑换成功后页面一次性显示恢复码（`POST /invites/credential-regenerate`，需要 CSRF、Origin 与有效受邀会话；旧码立即失效）。凭恢复码调用 `POST /invites/recover`（沿用每个 IP 哈希每分钟 20 次的失败限额）可在新浏览器里恢复同一主体、同样的聊天与记忆，并轮换出一个新码；每个码只能用一次，错误或已用过的码返回同一个中性错误。恢复码只存摘要，页面不写入 localStorage 或 cookie，也不记录日志。
+
+### 提示词变更（Part 11e）
+
+- Part 11e 修改了角色语气、时间克制、审核保留角色语气及 AI 诚实表述的提示词，因此 `POLICY_HASH` 与 `PROMPT_HASH` 已变化（协议指纹不变）。下一次角色发布之前，必须重新运行角色预演（预演测试），不能沿用旧哈希下通过的预演结果。

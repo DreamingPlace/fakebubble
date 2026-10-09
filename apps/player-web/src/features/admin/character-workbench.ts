@@ -5,6 +5,7 @@ import type {
   CharacterDetail,
   DeletionStatus,
   Material,
+  PreviewJob,
 } from '../../services/character-admin-api.ts';
 import {
   canCreateCharacter,
@@ -19,7 +20,24 @@ type Host = {
   run: (work: () => Promise<void>) => Promise<void>;
   status: (text: string) => void;
   disposed: () => boolean;
+  /** Status-poll interval for submitted previews; tests shorten it. */
+  previewPollMs?: number;
 };
+/** One client-side submission. The body (including requestId) is fixed when it is created. */
+type QueueItem = {
+  n: number;
+  characterId: string;
+  key: string;
+  body: { requestId: string; draftRevision: number; profileHash: string; relationship: string; message: string };
+  sentAt: number;
+  state: 'waiting' | 'sending' | 'uncertain' | 'rejected';
+  holdUntil: number;
+  error: string;
+};
+export const PREVIEW_MAX_IN_FLIGHT = 3;
+export const PREVIEW_BATCH_MAX = 20;
+const PREVIEW_INPUT_MAX = 4000;
+const when = (ms: number) => new Date(ms).toLocaleString('zh-CN', { hour12: false });
 type Control = {
   node: HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
   locked: () => boolean;
@@ -28,7 +46,7 @@ type Control = {
 const sameDraft = (value: { draftRevision: number; profileHash: string }, detail: CharacterDetail) =>
   !!detail.draft && value.draftRevision === detail.draft.revision && value.profileHash === detail.draft.contentHash;
 const previewLabel = (value: string) =>
-  (({ queued: '排队中', generating: '生成与审核中', succeeded: '已通过', failed: '未通过' }) as Record<string, string>)[
+  (({ queued: '排队中', generating: '运行中', succeeded: '已通过', failed: '失败' }) as Record<string, string>)[
     value
   ] ?? value;
 const stringify = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value, null, 2));
@@ -64,7 +82,7 @@ export function characterAdminError(error: unknown): string | null {
   );
 }
 
-/** All mutations are explicit buttons. No storage, polling, implicit generation, or player-content queries. */
+/** All mutations are explicit buttons. No storage, implicit generation, or player-content queries; the only timer polls the status of previews this admin already submitted. */
 export function characterWorkbench(root: HTMLElement, host: Host) {
   let disposed = false,
     busy = false,
@@ -77,6 +95,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   let protectedRows: Array<{ characterId: string; node: HTMLElement }> = [];
   const urls = new Set<string>();
   const pending = new Map<string, { input: unknown; uncertain: boolean; send: () => Promise<unknown> }>();
+  const items: QueueItem[] = [];
+  const live = new Map<string, PreviewJob>();
+  let itemSeq = 0,
+    pollTimer: ReturnType<typeof setTimeout> | null = null,
+    paintResults: (() => void) | null = null,
+    previewsChanged: (() => void) | null = null;
   const can = (action: CharacterAdminAction, target = id ?? '') => {
     const m = host.member();
     return !!m && (m.role === 'owner' || hasCharacterPermission(m.permissions, action, target));
@@ -145,6 +169,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     controls = [];
     protectedRows = [];
     editor = null;
+    paintResults = null;
+    previewsChanged = null;
     root.replaceChildren();
   };
   async function exact<I, T>(key: string, input: I, send: (input: I) => Promise<T>): Promise<T> {
@@ -302,6 +328,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       ),
     );
     if (snapshot && !can('edit')) root.append(el('p', '当前只有被授予的操作可用；资料编辑只读。'));
+    if (snapshot) for (const job of snapshot.previews) mergeLive(job);
+    if (snapshot?.draft) previewPanel(root, snapshot);
     editor = characterForm(root, profile, !snapshot, setDirty, (e) =>
       host.status(characterAdminError(e) ?? '请核对资料字段。'),
     );
@@ -357,7 +385,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       root.append(flow);
       if (snapshot.draft) {
         profileDiff(flow, snapshot);
-        review(flow, snapshot);
         materials(flow, snapshot);
       }
       publication(flow, snapshot);
@@ -421,14 +448,141 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       true,
     );
   }
-  function review(parent: HTMLElement, snapshot: CharacterDetail) {
-    const section = disclosure(parent, '文字预演与审核结果'),
-      saved = snapshot.draft!,
-      key = `preview:${snapshot.characterId}`;
+  const isOpenJob = (job: PreviewJob) => job.status === 'queued' || job.status === 'generating';
+  const jobsOf = (characterId: string) => [...live.values()].filter((j) => j.characterId === characterId);
+  function mergeLive(job: PreviewJob) {
+    const old = live.get(job.previewId);
+    live.set(job.previewId, {
+      ...(old?.input !== undefined ? { input: old.input } : {}),
+      ...(old?.createdAt !== undefined ? { createdAt: old.createdAt } : {}),
+      ...job,
+    });
+  }
+  const inFlight = (characterId: string) =>
+    items.filter((i) => i.characterId === characterId && (i.state === 'sending' || i.state === 'uncertain')).length +
+    jobsOf(characterId).filter(isOpenJob).length;
+  // A provider call whose outcome is UNKNOWN is never retried or released; it also pauses new submissions on that draft.
+  const unknownOn = (characterId: string, draftRevision: number, profileHash: string) =>
+    jobsOf(characterId).some(
+      (j) => j.draftRevision === draftRevision && j.profileHash === profileHash && !!j.errorCode?.includes('UNKNOWN'),
+    );
+  const uncertainItem = (characterId: string) =>
+    items.find((i) => i.characterId === characterId && i.state === 'uncertain');
+  const paint = () => {
+    if (gone()) return;
+    paintResults?.();
+    previewsChanged?.();
+    sync();
+  };
+  function schedulePoll() {
+    if (pollTimer !== null || gone()) return;
+    if (!items.some((i) => i.state === 'waiting') && ![...live.values()].some(isOpenJob)) return;
+    pollTimer = setTimeout(() => {
+      pollTimer = null;
+      void tick();
+    }, host.previewPollMs ?? 2500);
+  }
+  async function tick() {
+    const open = [...live.values()].filter(isOpenJob);
+    const results = await Promise.allSettled(open.map((j) => host.api.previewStatus(j.characterId, j.previewId)));
+    if (gone()) return;
+    for (const r of results) if (r.status === 'fulfilled') mergeLive(r.value);
+    for (const characterId of new Set(items.filter((i) => i.state === 'waiting').map((i) => i.characterId)))
+      pump(characterId);
+    paint();
+    schedulePoll();
+  }
+  function pump(characterId: string) {
+    if (gone()) return;
+    let slots = PREVIEW_MAX_IN_FLIGHT - inFlight(characterId);
+    const now = Date.now();
+    for (const item of items.filter((i) => i.characterId === characterId && i.state === 'waiting')) {
+      if (slots <= 0) break;
+      if (item.holdUntil > now || unknownOn(characterId, item.body.draftRevision, item.body.profileHash)) continue;
+      slots--;
+      void dispatch(item);
+    }
+    paint();
+    schedulePoll();
+  }
+  async function dispatch(item: QueueItem) {
+    item.state = 'sending';
+    paint();
+    try {
+      const job = await exact(item.key, item.body, (body) => host.api.startPreview(item.characterId, body));
+      if (gone()) return;
+      items.splice(items.indexOf(item), 1);
+      mergeLive({
+        ...job,
+        input: job.input ?? item.body.message,
+        createdAt: job.createdAt ?? item.sentAt,
+      });
+      host.status(
+        `预演 ${job.previewId}：${previewLabel(job.status)}。最多 ${PREVIEW_MAX_IN_FLIGHT} 条同时运行，其余自动排队。`,
+      );
+    } catch (error) {
+      if (gone()) return;
+      const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+      if (code === 'PREVIEW_QUEUE_FULL') {
+        // Rejected before any job or reservation exists, so the same requestId may safely be offered again later.
+        pending.delete(item.key);
+        item.state = 'waiting';
+        item.holdUntil = Date.now() + (host.previewPollMs ?? 2500);
+        host.status('服务器预演队列已满，该条保持排队，稍后自动继续。');
+      } else if (pending.has(item.key)) {
+        item.state = 'uncertain';
+      } else {
+        item.state = 'rejected';
+        item.error = code || (error instanceof Error ? error.message : '请求失败');
+        host.status(characterAdminError(error) ?? `预演未发起：${item.error}`);
+      }
+    }
+    pump(item.characterId);
+  }
+  function enqueue(snapshot: CharacterDetail, relationship: string, lines: string[]) {
+    const saved = snapshot.draft!;
+    for (const message of lines) {
+      const n = ++itemSeq;
+      items.push({
+        n,
+        characterId: snapshot.characterId,
+        key: `preview:${snapshot.characterId}:${n}`,
+        body: {
+          requestId: crypto.randomUUID(),
+          draftRevision: saved.revision,
+          profileHash: saved.contentHash,
+          relationship,
+          message,
+        },
+        sentAt: Date.now(),
+        state: 'waiting',
+        holdUntil: 0,
+        error: '',
+      });
+    }
+    host.status(`已加入 ${lines.length} 条预演；最多 ${PREVIEW_MAX_IN_FLIGHT} 条同时运行，其余自动排队。`);
+    pump(snapshot.characterId);
+  }
+  const bubbleTexts = (result: unknown): string[] => {
+    const bubbles = (result as { reply?: { bubbles?: unknown } } | null)?.reply?.bubbles;
+    if (!Array.isArray(bubbles)) return [];
+    return bubbles.flatMap((b) =>
+      b && typeof b === 'object' && 'text' in b && typeof b.text === 'string' ? [b.text] : [],
+    );
+  };
+  /** Always-open "预演测试" section: submit, queue and results never re-render the page or collapse. */
+  function previewPanel(parent: HTMLElement, snapshot: CharacterDetail) {
+    const saved = snapshot.draft!,
+      cid = snapshot.characterId,
+      section = el('section'),
+      token = view;
+    section.className = 'preview-panel';
+    parent.append(section);
     section.append(
+      el('h3', '预演测试'),
       el(
         'p',
-        `只发送本角色草稿修订 ${saved.revision} 和下方合成输入，不读取玩家私聊。真实文字供应商会产生费用；页面不会自动重发。`,
+        `只发送本角色草稿修订 ${saved.revision} 和下方合成输入，不读取玩家私聊。真实文字供应商会产生费用；每条预演单独扣预算、单独成卡，页面不会自动重发。可连续提交多条：每个角色最多同时运行 ${PREVIEW_MAX_IN_FLIGHT} 条，其余在本页排队。`,
       ),
     );
     const relationLabel = el('label'),
@@ -445,42 +599,82 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       option.value = value!;
       relationship.append(option);
     }
-    const message = field(section, '预演输入（不是玩家消息）', '', { area: true, max: 4000 }),
+    const message = field(section, '预演输入（不是玩家消息）', '', { area: true, max: PREVIEW_INPUT_MAX }),
       ack = check(section, '我确认发起真实付费文字预演，并已核对当前草稿与输入');
-    const unresolved = snapshot.previews.some(
-      (p) =>
-        sameDraft(p, snapshot) &&
-        (p.status === 'queued' || p.status === 'generating' || p.errorCode?.includes('UNKNOWN')),
-    );
     if (!snapshot.previewAvailable) section.append(el('p', '当前运行未开启预演，不能通过静态比较绕过发布审核。'));
-    if (unresolved) section.append(el('p', '当前草稿已有处理中或未知的预演。先刷新核对原任务，不另发新任务。'));
-    const readonly = () => dirty || pending.has(key) || !can('preview');
-    for (const input of [relationship, message, ack]) guarded(input, readonly);
-    button(
-      section,
-      () => (pending.has(key) ? '按原请求核对预演回执' : '发起付费文字预演'),
-      () =>
-        dirty ||
-        !can('preview') ||
-        !snapshot.previewAvailable ||
-        (!pending.has(key) && (unresolved || !ack.checked || !message.value.trim())),
-      async () => {
-        const result = await exact(
-          key,
-          {
-            requestId: crypto.randomUUID(),
-            draftRevision: saved.revision,
-            profileHash: saved.contentHash,
-            relationship: relationship.value,
-            message: message.value,
-          },
-          (input) => host.api.startPreview(snapshot.characterId, input),
+    const unknownNote = el('p');
+    section.append(unknownNote);
+    const blocked = () => unknownOn(cid, saved.revision, saved.contentHash);
+    const readonly = () => dirty || !can('preview') || !!uncertainItem(cid);
+    const batch = field(section, '每行一条，批量预演', '', { area: true });
+    const hint = el('p');
+    section.append(hint);
+    const lines = () =>
+      batch.value
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+    const showHint = () => {
+      const n = lines().length;
+      hint.textContent =
+        `约 ${n} 次调用。每条预演都是一次付费调用（内部含草稿与审核两个阶段），提交前单独预留预算；最多 ${PREVIEW_BATCH_MAX} 条。` +
+        (n > PREVIEW_BATCH_MAX ? ` 当前 ${n} 条，超过上限。` : '');
+    };
+    showHint();
+    for (const input of [relationship, message, ack, batch]) guarded(input, readonly);
+    const sendLocked = () =>
+      dirty ||
+      !can('preview') ||
+      !snapshot.previewAvailable ||
+      (!uncertainItem(cid) && (blocked() || !ack.checked || !message.value.trim()));
+    const send = el('button', '发起付费文字预演');
+    send.type = 'button';
+    section.append(send);
+    controls.push({
+      node: send,
+      locked: sendLocked,
+      text: () => (uncertainItem(cid) ? '按原请求核对预演回执' : '发起付费文字预演'),
+    });
+    send.addEventListener('click', () => {
+      if (busy || sendLocked()) return;
+      const stuck = uncertainItem(cid);
+      if (stuck) {
+        void dispatch(stuck);
+        return;
+      }
+      const text = message.value;
+      // The box is emptied synchronously, so a second click of the same press has nothing left to submit.
+      message.value = '';
+      enqueue(snapshot, relationship.value, [text]);
+    });
+    const sendBatch = el('button', '批量发起付费文字预演');
+    sendBatch.type = 'button';
+    section.append(sendBatch);
+    controls.push({
+      node: sendBatch,
+      locked: () => {
+        const n = lines().length;
+        return (
+          dirty ||
+          !can('preview') ||
+          !snapshot.previewAvailable ||
+          !!uncertainItem(cid) ||
+          blocked() ||
+          !ack.checked ||
+          n === 0 ||
+          n > PREVIEW_BATCH_MAX ||
+          lines().some((l) => l.length > PREVIEW_INPUT_MAX)
         );
-        if (gone()) return;
-        await open(snapshot.characterId);
-        host.status(`预演 ${result.previewId}：${previewLabel(result.status)}。请刷新状态；不会自动另发。`);
       },
-    );
+    });
+    sendBatch.addEventListener('click', () => {
+      if (busy || sendBatch.disabled) return;
+      const batchLines = lines();
+      if (!batchLines.length || batchLines.length > PREVIEW_BATCH_MAX) return;
+      batch.value = '';
+      showHint();
+      enqueue(snapshot, relationship.value, batchLines);
+    });
     section.append(
       el('p', '遇到未确认回执时，按钮改为核对上次完整请求；若首次未到达服务，核对可能执行原请求，不会新建另一任务。'),
     );
@@ -488,27 +682,109 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       section,
       '刷新预演状态',
       () => dirty || !can('read'),
-      () => open(snapshot.characterId),
+      async () => {
+        const next = await host.api.detail(cid);
+        if (gone() || token !== view) return;
+        if (next.draft?.revision !== saved.revision || next.draft.contentHash !== saved.contentHash) {
+          await open(cid);
+          return;
+        }
+        for (const job of next.previews) mergeLive(job);
+        detail = next;
+        pump(cid);
+        paint();
+        schedulePoll();
+        host.status('预演状态已更新。');
+      },
       true,
     );
-    for (const job of snapshot.previews) {
-      const item = disclosure(
-        section,
-        `${job.previewId} · ${previewLabel(job.status)}${sameDraft(job, snapshot) ? ' · 当前草稿' : ' · 旧修订'}`,
-      );
-      if (job.errorCode) item.append(el('p', `预演未通过：${job.errorCode}。未知调用不能重发或释放。`));
-      if (job.result !== null) {
-        const result = job.result as { reply?: { bubbles?: unknown } };
-        if (result && typeof result === 'object' && Array.isArray(result.reply?.bubbles)) {
-          for (const bubble of result.reply.bubbles) {
-            if (bubble && typeof bubble === 'object' && 'text' in bubble && typeof bubble.text === 'string')
-              item.append(el('p', bubble.text));
-          }
-        }
-        disclosure(item, '完整预演与审核数据').append(el('pre', stringify(job.result)));
-      }
-    }
-    for (const input of [ack, message]) input.addEventListener('input', sync);
+    const results = el('div');
+    results.className = 'preview-results';
+    section.append(results);
+    paintResults = () => {
+      controls = controls.filter((c) => !results.contains(c.node));
+      results.replaceChildren();
+      blocked();
+      unknownNote.textContent = blocked()
+        ? '当前草稿有结果未知的预演：不会重发、不会释放预算，并暂停新的提交与排队。先核对原任务。'
+        : '';
+      const cards: Array<{ at: number; order: number; build: () => void }> = [];
+      const card = () => {
+        const node = el('section');
+        node.className = 'preview-card';
+        results.append(node);
+        return node;
+      };
+      for (const item of items.filter((i) => i.characterId === cid))
+        cards.push({
+          at: item.sentAt,
+          order: item.n,
+          build: () => {
+            const node = card();
+            node.append(
+              el('p', '输入'),
+              el('pre', item.body.message),
+              el('p', `发送时间：${when(item.sentAt)}`),
+              el(
+                'p',
+                `状态：${
+                  item.state === 'waiting'
+                    ? '排队中'
+                    : item.state === 'sending'
+                      ? '运行中'
+                      : item.state === 'uncertain'
+                        ? '运行中（回执未确认，可按原请求核对）'
+                        : `失败：${item.error}`
+                }`,
+              ),
+            );
+            if (item.state === 'waiting' || item.state === 'rejected')
+              button(
+                node,
+                item.state === 'waiting' ? '取消排队' : '移除此条',
+                () => false,
+                () => {
+                  items.splice(items.indexOf(item), 1);
+                  paint();
+                },
+                true,
+              );
+          },
+        });
+      let order = 0;
+      for (const job of jobsOf(cid))
+        cards.push({
+          at: job.createdAt ?? 0,
+          order: --order,
+          build: () => {
+            const node = card();
+            node.append(
+              el('p', '输入'),
+              el('pre', job.input ?? '（输入文本不可用）'),
+              el('p', `发送时间：${job.createdAt === undefined ? '未知' : when(job.createdAt)}`),
+              el(
+                'p',
+                `状态：${previewLabel(job.status)}${job.status === 'failed' ? `：${job.errorCode ?? '未知原因'}` : ''} · ${job.previewId}${sameDraft(job, snapshot) ? ' · 当前草稿' : ' · 旧修订'}`,
+              ),
+            );
+            if (job.errorCode && job.status !== 'failed') node.append(el('p', `预演未通过：${job.errorCode}。`));
+            if (job.errorCode) node.append(el('p', '未知调用不能重发或释放。'));
+            for (const text of bubbleTexts(job.result)) node.append(el('p', text));
+            if (job.result !== null && job.result !== undefined)
+              disclosure(node, '完整预演与审核数据').append(el('pre', stringify(job.result)));
+          },
+        });
+      cards.sort((a, b) => b.at - a.at || b.order - a.order);
+      for (const c of cards) c.build();
+    };
+    paintResults();
+    for (const input of [ack, message, relationship]) input.addEventListener('input', sync);
+    ack.addEventListener('change', sync);
+    batch.addEventListener('input', () => {
+      showHint();
+      sync();
+    });
+    schedulePoll();
   }
   function materials(parent: HTMLElement, snapshot: CharacterDetail) {
     const section = disclosure(parent, '声音成品版本'),
@@ -688,7 +964,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     section.append(
       el('p', '发布会将已存资料和批准成品提供给玩家。不会自动生成审核或声音；在途玩家任务／未知调用不被取消或重发。'),
     );
-    const previews = snapshot.previews.filter((p) => p.status === 'succeeded' && sameDraft(p, snapshot));
+    const previews = () =>
+      jobsOf(target)
+        .filter((p) => p.status === 'succeeded' && sameDraft(p, snapshot))
+        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
     if (!saved && !pending.has(key)) {
       section.append(el('p', '当前没有未发布草稿。'));
       return;
@@ -697,11 +976,20 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       preview = el('select');
     label.append(el('span', '已查看且匹配当前草稿的预演'), preview);
     section.append(label);
-    for (const job of previews) {
-      const option = el('option', job.previewId);
-      option.value = job.previewId;
-      preview.append(option);
-    }
+    const noProof = el('p', '尚无匹配当前草稿的成功预演，不能发布。');
+    const fillPreviews = () => {
+      const keep = preview.value;
+      preview.replaceChildren();
+      for (const job of previews()) {
+        const option = el('option', job.previewId);
+        option.value = job.previewId;
+        preview.append(option);
+      }
+      if (keep && previews().some((p) => p.previewId === keep)) preview.value = keep;
+      noProof.textContent = !previews().length && !pending.has(key) ? '尚无匹配当前草稿的成功预演，不能发布。' : '';
+    };
+    fillPreviews();
+    previewsChanged = fillPreviews;
     const materialLabel = el('label'),
       material = el('select');
     materialLabel.append(el('span', '发布使用的成品版本'), material);
@@ -729,14 +1017,14 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     );
     const ack = check(section, '我已查看资料差异和该预演结果，确认将本版本发布给玩家');
     for (const input of [preview, material, ack]) guarded(input, () => dirty || pending.has(key) || !can('publish'));
-    if (!previews.length && !pending.has(key)) section.append(el('p', '尚无匹配当前草稿的成功预演，不能发布。'));
+    section.append(noProof);
     button(
       section,
       () => (pending.has(key) ? '按原请求核对发布回执' : '确认发布此版本'),
       () =>
         dirty ||
         !can('publish') ||
-        (!pending.has(key) && (!saved || !ack.checked || !previews.some((p) => p.previewId === preview.value))),
+        (!pending.has(key) && (!saved || !ack.checked || !previews().some((p) => p.previewId === preview.value))),
       async () => {
         const result = await exact(
           key,
@@ -857,12 +1145,20 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       id = null;
       detail = null;
       pending.clear();
+      items.length = 0;
+      live.clear();
+      if (pollTimer !== null) clearTimeout(pollTimer);
+      pollTimer = null;
       clearView();
     },
     dispose: () => {
       disposed = true;
       revokeAudio();
       pending.clear();
+      items.length = 0;
+      live.clear();
+      if (pollTimer !== null) clearTimeout(pollTimer);
+      pollTimer = null;
       window.removeEventListener('beforeunload', beforeUnload);
       root.replaceChildren();
     },

@@ -33,6 +33,8 @@ export type PreviewJob = {
   profileHash: string;
   status: string;
   errorCode: string | null;
+  input?: string;
+  createdAt?: number;
   result: unknown;
 };
 export type CharacterDetail = {
@@ -122,6 +124,8 @@ function preview(v: unknown): PreviewJob {
     profileHash: string(r.profileHash),
     status: string(r.status),
     errorCode: nullable(r.errorCode),
+    ...(typeof r.input === 'string' ? { input: r.input } : {}),
+    ...(typeof r.createdAt === 'number' ? { createdAt: r.createdAt } : {}),
     result: r.result,
   };
 }

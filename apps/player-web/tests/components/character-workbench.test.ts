@@ -568,3 +568,186 @@ test('directory metadata disappears when read authority is removed, without dest
   assert.ok(!f.root.textContent.includes('合成人物'));
   assert.equal(f.member().id, 'owner');
 });
+
+// Preview panel: always open, several inputs at once, at most 3 in flight per character.
+function previewHarness(t: test.TestContext) {
+  const f = fixture(t);
+  const started: Array<Record<string, unknown>> = [];
+  const gates: Array<() => void> = [];
+  let seq = 0;
+  const job = (body: Record<string, unknown>, status = 'queued') => ({
+    previewId: 'p' + ++seq,
+    characterId: 'jojo',
+    draftRevision: body.draftRevision as number,
+    profileHash: body.profileHash as string,
+    status,
+    errorCode: null,
+    input: body.message as string,
+    createdAt: 1_700_000_000_000 + seq * 1000,
+    result: null,
+  });
+  f.respond(async (path, body) => {
+    if (path === 'list')
+      return {
+        characters: [{ characterId: 'jojo', displayName: '合成人物', publishedVersion: 1, draftRevision: 3 }],
+        deletions: [],
+      };
+    if (path === 'jojo/detail') return structuredClone(f.detail);
+    if (path === 'jojo/review-start') {
+      started.push(body);
+      const created = job(body);
+      f.detail.previews = [created, ...f.detail.previews];
+      await new Promise<void>((r) => gates.push(r));
+      return created;
+    }
+    throw Error('unexpected ' + path);
+  });
+  const ack = () => {
+    const box = f.input('我确认发起真实付费文字预演，并已核对当前草稿与输入');
+    box.checked = true;
+    box.fire('input');
+  };
+  const batch = (text: string) => {
+    const box = f.input('每行一条，批量预演');
+    box.value = text;
+    box.fire('input');
+  };
+  const panel = () => f.root.children.find((n) => n.className === 'preview-panel')!;
+  return { f, started, gates, ack, batch, panel, flush };
+}
+
+test('preview test panel sits above the profile form, stays open and keeps the same node after submit and results', async (t) => {
+  const { f, started, gates, ack, panel } = previewHarness(t);
+  await f.open();
+  const first = panel();
+  assert.ok(first, 'panel exists');
+  assert.ok(first.textContent.startsWith('预演测试'));
+  assert.ok(f.root.children.indexOf(first) < f.root.children.findIndex((n) => n.tagName === 'form'));
+  ack();
+  f.input('预演输入（不是玩家消息）').value = '第一问';
+  f.input('预演输入（不是玩家消息）').fire('input');
+  await f.click('发起付费文字预演');
+  assert.equal(started.length, 1);
+  assert.equal(panel(), first, 'submit does not re-render the panel');
+  assert.ok(first.textContent.includes('第一问'), 'input shown while running');
+  assert.ok(first.textContent.includes('运行中'));
+  gates.shift()!();
+  await flush();
+  assert.equal(panel(), first);
+  assert.ok(first.textContent.includes('第一问') && first.textContent.includes('排队中'));
+  assert.equal(
+    first.children.some((n) => n.tagName === 'details' && n.textContent.startsWith('预演测试')),
+    false,
+  );
+});
+
+test('inputs can be sent while others run; at most 3 are in flight per character and the rest queue client-side', async (t) => {
+  const { f, started, gates, ack, batch } = previewHarness(t);
+  await f.open();
+  ack();
+  batch('一\n二\n三\n四\n五');
+  await f.click('批量发起付费文字预演');
+  assert.equal(started.length, 3, 'only 3 start');
+  assert.ok(f.root.textContent.includes('排队中'));
+  // A single input is accepted while three are still running, and queues behind them.
+  f.input('预演输入（不是玩家消息）').value = '六';
+  f.input('预演输入（不是玩家消息）').fire('input');
+  await f.click('发起付费文字预演');
+  assert.equal(started.length, 3);
+  for (const g of gates.splice(0)) g();
+  await flush();
+  assert.equal(started.length, 3, 'started jobs are still queued/generating server-side');
+  f.detail.previews = f.detail.previews.map((p, i) =>
+    i >= f.detail.previews.length - 2 ? { ...p, status: 'succeeded' } : p,
+  );
+  await f.click('刷新预演状态');
+  assert.equal(started.length, 5, 'two finished -> two more start');
+  assert.deepEqual(
+    started.map((b) => b.message),
+    ['一', '二', '三', '四', '五'],
+  );
+  assert.equal(new Set(started.map((b) => b.requestId)).size, 5, 'unique requestId per submission');
+});
+
+test('every result card shows its input text, send time, status and bubbles, newest first, and survives a reload', async (t) => {
+  const f = fixture(t);
+  const at = 1_700_000_000_000;
+  const base = { characterId: 'jojo', draftRevision: 3, profileHash: 'a'.repeat(64) };
+  f.detail.previews = [
+    {
+      ...base,
+      previewId: 'new',
+      status: 'succeeded',
+      errorCode: null,
+      input: '较新的输入',
+      createdAt: at + 5000,
+      result: { reply: { bubbles: [{ text: '气泡甲' }, { text: '气泡乙' }] } },
+    },
+    {
+      ...base,
+      previewId: 'old',
+      status: 'failed',
+      errorCode: 'PROVIDER_REJECTED',
+      input: '较旧的输入',
+      createdAt: at,
+      result: null,
+    },
+  ];
+  await f.open();
+  const text = f.root.textContent;
+  assert.ok(text.includes('较新的输入') && text.includes('较旧的输入'));
+  assert.ok(text.indexOf('较新的输入') < text.indexOf('较旧的输入'), 'newest first');
+  assert.ok(text.includes(new Date(at + 5000).toLocaleString('zh-CN', { hour12: false })));
+  assert.ok(text.includes('已通过') && text.includes('失败：PROVIDER_REJECTED'));
+  assert.ok(text.includes('气泡甲') && text.includes('气泡乙'));
+  const full = all(f.root).find((n) => n.tagName === 'details' && n.textContent.startsWith('完整预演与审核数据'));
+  assert.ok(full, 'full data stays available');
+  assert.equal(full.dataset.open, undefined, 'collapsed by default');
+  await f.click('返回人物目录');
+  await f.click('打开资料');
+  assert.ok(f.root.textContent.includes('较新的输入'), 'input text comes back from the server after reload');
+});
+
+test('batch mode skips blank lines, shows the call hint, and refuses more than 20 lines', async (t) => {
+  const { f, started, gates, ack, batch } = previewHarness(t);
+  await f.open();
+  ack();
+  batch(Array.from({ length: 21 }, (_, i) => '行' + i).join('\n'));
+  assert.ok(f.root.textContent.includes('约 21 次调用'));
+  assert.equal(f.button('批量发起付费文字预演').disabled, true, '21 lines refused');
+  batch(Array.from({ length: 20 }, (_, i) => '行' + i).join('\n'));
+  assert.equal(f.button('批量发起付费文字预演').disabled, false, '20 lines accepted');
+  batch('  甲  \n\n   \r\n乙\n');
+  assert.ok(f.root.textContent.includes('约 2 次调用'));
+  await f.click('批量发起付费文字预演');
+  assert.deepEqual(
+    started.map((b) => b.message),
+    ['甲', '乙'],
+  );
+  assert.equal(f.input('每行一条，批量预演').value, '');
+  gates.splice(0).forEach((g) => g());
+});
+
+test('double click never double-submits a single or batch preview', async (t) => {
+  const { f, started, gates, ack, batch } = previewHarness(t);
+  await f.open();
+  ack();
+  f.input('预演输入（不是玩家消息）').value = '只发一次';
+  f.input('预演输入（不是玩家消息）').fire('input');
+  const send = f.button('发起付费文字预演');
+  send.fire();
+  send.fire();
+  await flush();
+  assert.equal(started.length, 1);
+  batch('甲\n乙');
+  const sendBatch = f.button('批量发起付费文字预演');
+  sendBatch.fire();
+  sendBatch.fire();
+  await flush();
+  assert.equal(started.length, 3, 'one single + two batch lines, no duplicates');
+  assert.deepEqual(
+    started.map((b) => b.message),
+    ['只发一次', '甲', '乙'],
+  );
+  gates.splice(0).forEach((g) => g());
+});
