@@ -24,11 +24,15 @@ const {
 // The app accepts text only from players; the draft and review prompts both state this (responseConstraints.playerInputKinds).
 const PLAYER_INPUT_KINDS = ['text'] as const;
 const PLAYER_CHANNEL_RULES = PROMPTS_V7.playerChannelRules;
+// Help vs. tool abuse, in-character deflection, distress carve-out and slang; both stages share it (Part 11b).
+const CHAT_BOUNDARY_RULES = PROMPTS_V7.chatBoundaryRules;
 
 export const TEXT_SYSTEM_PROMPT =
   TEXT_CONTENT_RULES +
   '\n' +
   PLAYER_CHANNEL_RULES +
+  '\n' +
+  CHAT_BOUNDARY_RULES +
   PROMPTS_V7.draftSystemBody +
   CHAT_PRESENTATION_TASK +
   TIME_CONTEXT_TASK;
@@ -37,6 +41,8 @@ export const TEXT_REVIEW_PROMPT =
   TEXT_CONTENT_RULES +
   '\n' +
   PLAYER_CHANNEL_RULES +
+  '\n' +
+  CHAT_BOUNDARY_RULES +
   PROMPTS_V7.reviewSystemBody +
   CHAT_PRESENTATION_TASK +
   PROMPTS_V7.reviewFinalCheck +
