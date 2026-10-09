@@ -1,4 +1,4 @@
-import { DomainError } from '../../../packages/domain/errors.ts';
+import { DomainError, RetryAfterError } from '../../../packages/domain/errors.ts';
 
 /** Same redacted failure contract for Node and Cloudflare transports. */
 export function webProviderHTTPError(error: unknown) {
@@ -7,6 +7,7 @@ export function webProviderHTTPError(error: unknown) {
     (
       {
         WEB_USER_QUEUE_FULL: 'QUEUE_FULL',
+        WEB_DAILY_LIMIT_REACHED: 'WEB_DAILY_LIMIT_REACHED',
         WEB_CHARACTER_UNAVAILABLE: 'NOT_FOUND',
         WEB_GUEST_RATE_LIMITED: 'RATE_LIMITED',
         WEB_STREAM_LIMITED: 'RATE_LIMITED',
@@ -53,10 +54,13 @@ export function webProviderHTTPError(error: unknown) {
                   publicCode === 'ADMIN_PASSWORD_INVALID' ||
                   publicCode === 'ADMIN_CODE_INVALID'
                 ? 400
-                : publicCode === 'QUEUE_FULL' || publicCode === 'RATE_LIMITED'
+                : publicCode === 'QUEUE_FULL' ||
+                    publicCode === 'RATE_LIMITED' ||
+                    publicCode === 'WEB_DAILY_LIMIT_REACHED'
                   ? 429
                   : publicCode === 'INTERNAL_ERROR'
                     ? 500
                     : 409;
-  return { status, body: { error: { code: publicCode, requestId: null, retryAfterMs: null } } };
+  const retryAfterMs = error instanceof RetryAfterError ? error.retryAfterMs : null;
+  return { status, body: { error: { code: publicCode, requestId: null, retryAfterMs } } };
 }

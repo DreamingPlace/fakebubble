@@ -33,7 +33,7 @@ import {
   inspectWebAuthority,
   type WebInspectBudget,
 } from '../../apps/server/cloudflare/web-inspect.ts';
-import { webConcurrencyFromEnv } from '../../config/web-concurrency.ts';
+import { webConcurrencyFromEnv, webDailyReplyLimitFromEnv } from '../../config/web-concurrency.ts';
 import { embeddingsEnabled, webEmbedConfigFromEnv, type WebEmbedConfig } from '../../config/web-embeddings.ts';
 import type { WebBudgetPolicy } from '../../apps/server/budget/web-provider-budget-contract.ts';
 import { cloudAdminMailer, type AdminEmailBinding } from '../../apps/server/cloudflare/web-admin-mail.ts';
@@ -64,6 +64,8 @@ export interface WebBusinessEnvironment {
   MAX_AUDIO_RUNNING?: string;
   MAX_WAITING_OPERATIONS?: string;
   AUDIO_FALLBACK_WAIT_MS?: string;
+  /** Player-initiated replies per invited player per rolling 24 hours (1–10000, default 100). */
+  DAILY_REPLY_LIMIT?: string;
   /** Memory embeddings: off unless 'true' (the generation Worker's AI binding repeats the gate). */
   EMBEDDINGS_ENABLED?: string;
   MAX_EMBED_RUNNING?: string;
@@ -146,6 +148,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       keys: { ipKey: Buffer.from(env.IP_KEY, 'base64url'), requestKey: Buffer.from(env.REQUEST_KEY, 'base64url') },
       providerAudio: new PrivateMediaObjects(env.MEDIA),
       concurrency: webConcurrencyFromEnv(env as unknown as Record<string, unknown>),
+      dailyReplyLimit: webDailyReplyLimitFromEnv(env as unknown as Record<string, unknown>),
     });
     const configHash = createHash('sha256')
       .update(

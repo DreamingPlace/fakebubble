@@ -1833,3 +1833,40 @@ svg {
   align-self: stretch;
   white-space: nowrap;
 }
+
+/* One-time recovery code sheet and entry. */
+.recovery-dialog form,
+.recovery-manage-dialog form {
+  display: grid;
+  gap: 12px;
+}
+.recovery-notice {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.recovery-code {
+  display: block;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f1f1ee;
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  word-break: break-all;
+  user-select: all;
+}
+.provider-start-error button.recovery-have {
+  margin-left: 12px;
+  background: transparent;
+  color: #294b40;
+  border: 1px solid #294b40;
+}
+.invite-have-code {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+}

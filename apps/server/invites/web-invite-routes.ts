@@ -128,6 +128,11 @@ export function routeWebInvite(
     object(req.body, []);
     return { status: 201, body: actions.createRecoveryCredential(auth.token, auth.csrf, auth.origin) };
   }
+  if (req.path === '/api/web/local/invites/credential-regenerate') {
+    const auth = player(req);
+    object(req.body, []);
+    return { status: 201, body: actions.regenerateRecoveryCredential(auth.token, auth.csrf, auth.origin) };
+  }
   if (req.path === '/api/web/local/invites/recover') {
     const body = object(req.body, ['requestId', 'secret']);
     ensure(typeof req.origin === 'string' && typeof req.trustedIpHash === 'string', 'INVALID_REQUEST');

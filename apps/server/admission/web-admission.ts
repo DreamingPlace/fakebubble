@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { emptySession } from '../../../packages/domain/schedule.ts';
-import { ensure } from '../../../packages/domain/errors.ts';
+import { ensure, RetryAfterError } from '../../../packages/domain/errors.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
-import { webConcurrency } from '../../../config/web-concurrency.ts';
+import { webConcurrency, webDailyReplyLimit } from '../../../config/web-concurrency.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireWebContent, webDataLifecycleEnabled } from './web-retention.ts';
 import { requirePublishedWebCharacter } from '../characters/web-character-catalog.ts';
@@ -125,6 +125,7 @@ export class WebAdmission {
         ),
         'WEB_CHARACTER_UNAVAILABLE',
       );
+      if (principal.kind === 'invite') this.dailyLimit(principal.id);
       if (trial) {
         ensure(
           principal.trial_character_id === null || principal.trial_character_id === input.characterId,
@@ -326,6 +327,31 @@ export class WebAdmission {
         duplicate: false as const,
       };
     });
+  }
+
+  /**
+   * Rolling 24h cap on accepted player-initiated operations for an entitled principal. It runs at admission, before any
+   * budget reservation or provider call; proactive character messages are not operations and the guest trial has its own cap.
+   */
+  private dailyLimit(principalId: string) {
+    const now = this.clock.now();
+    ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
+    const limit = webDailyReplyLimit(this.store);
+    const since = now - 86_400_000;
+    const count = this.store.get<{ count: number }>(
+      `SELECT count(*) count FROM web_operations WHERE principal_id=? AND created_at>? AND quota_state<>'released'`,
+      principalId,
+      since,
+    )!.count;
+    if (count < limit) return;
+    const edge = this.store.get<{ created_at: number }>(
+      `SELECT created_at FROM web_operations WHERE principal_id=? AND created_at>? AND quota_state<>'released'
+      ORDER BY created_at,id LIMIT 1 OFFSET ?`,
+      principalId,
+      since,
+      count - limit,
+    );
+    throw new RetryAfterError('WEB_DAILY_LIMIT_REACHED', Math.max(1, (edge?.created_at ?? now) + 86_400_000 - now));
   }
 
   /** Only confirmed termination is available until an atomic voice publisher is implemented. */

@@ -161,7 +161,8 @@ test('revoked grant disables both old-cookie recovery and new-cookie status', (t
   );
   assert.throws(
     () => f.invites.inviteReceiptStatus(result.identity!.issuedToken, result.identity!.csrf, origin, 'redeem'),
-    /RECEIPT_UNAVAILABLE/,
+    // Revoking a grant now also ends the player's sessions, so the new cookie is rejected before any receipt lookup.
+    /SESSION_EXPIRED/,
   );
 });
 

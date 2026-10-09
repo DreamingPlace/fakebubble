@@ -201,7 +201,7 @@ export class WebInvites {
     });
   }
 
-  /** A separate administrator decision; all future entitlement reads must check the grant. */
+  /** A separate administrator decision: ends the grant, all of the principal's sessions and its recovery credential. */
   revokeGrant(adminSessionId: string, grantId: string) {
     return this.store.transaction(() => {
       const now = this.now();
@@ -215,6 +215,24 @@ export class WebInvites {
           .changes === 1,
         'WEB_INVITE_GRANT_UNAVAILABLE',
       );
+      // Same transaction: the player's every session and recovery credential end with the grant.
+      this.store.run(
+        'UPDATE web_sessions SET revoked_at=? WHERE principal_id=? AND revoked_at IS NULL',
+        now,
+        grant.principal_id,
+      );
+      if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_invite_credentials'"))
+        this.store.run(
+          'UPDATE web_invite_credentials SET revoked_at=? WHERE grant_id=? AND revoked_at IS NULL',
+          now,
+          grantId,
+        );
+      if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_invite_identity_receipts'"))
+        this.store.run(
+          'UPDATE web_invite_identity_receipts SET revoked_at=? WHERE grant_id=? AND revoked_at IS NULL',
+          now,
+          grantId,
+        );
       return { grantId, duplicate: false as const };
     });
   }

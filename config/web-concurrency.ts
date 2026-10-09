@@ -83,3 +83,21 @@ export function webConcurrencyFromEnv(env: Record<string, unknown>): WebConcurre
 export function webConcurrency(store: object): WebConcurrency {
   return (store as { concurrency?: WebConcurrency }).concurrency ?? WEB_CONCURRENCY_LIBRARY_DEFAULT;
 }
+
+/**
+ * Player-initiated replies one invited player may have accepted per rolling 24 hours (Worker var DAILY_REPLY_LIMIT,
+ * local-config.json `dailyReplyLimit`). Kept apart from WebConcurrency: it is an admission quota, not a stage slot.
+ */
+export const WEB_DAILY_REPLY_LIMIT = Object.freeze({ min: 1, max: 10_000, default: 100 });
+
+/** Absent takes the default; anything present but not an integer in range refuses to start. */
+export function parseWebDailyReplyLimit(raw: unknown): number {
+  return integer('DAILY_REPLY_LIMIT', raw, WEB_DAILY_REPLY_LIMIT, WEB_DAILY_REPLY_LIMIT.default);
+}
+export function webDailyReplyLimitFromEnv(env: Record<string, unknown>): number {
+  return parseWebDailyReplyLimit(env.DAILY_REPLY_LIMIT);
+}
+/** The one reader admission uses. A store without configuration keeps the default. */
+export function webDailyReplyLimit(store: object): number {
+  return (store as { dailyReplyLimit?: number }).dailyReplyLimit ?? WEB_DAILY_REPLY_LIMIT.default;
+}

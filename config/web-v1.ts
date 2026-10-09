@@ -35,6 +35,8 @@ export const WEB_HTTP_LIMITS = Object.freeze({
 /** Internal identity defaults; no HTTP service uses these until its own security gate is approved. */
 export const WEB_IDENTITY_LIMITS = Object.freeze({
   guestAbsoluteMs: 24 * 60 * 60_000,
+  /** Invited players keep their cookie for the browser maximum (400 days); the server never expires the session. */
+  inviteCookieMaxAgeSeconds: 400 * 24 * 60 * 60,
   accountIdleMs: 30 * 60_000,
   accountAbsoluteMs: 24 * 60 * 60_000,
   receiptMs: 300_000,

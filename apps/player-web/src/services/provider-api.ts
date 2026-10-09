@@ -1,4 +1,9 @@
-import { parseWebInviteReceipt, parseWebInviteStatus } from '../../../../packages/contracts/web-local-invite.ts';
+import {
+  parseWebInviteCredential,
+  parseWebInviteReceipt,
+  parseWebInviteRecovery,
+  parseWebInviteStatus,
+} from '../../../../packages/contracts/web-local-invite.ts';
 import {
   parseWebProviderBootstrap,
   type WebProviderActions,
@@ -13,11 +18,13 @@ import {
 export class ProviderApiError extends Error {
   readonly status: number;
   readonly code: string;
-  constructor(status: number, code: string) {
+  readonly retryAfterMs: number | null;
+  constructor(status: number, code: string, retryAfterMs: number | null = null) {
     super(code);
     this.name = 'ProviderApiError';
     this.status = status;
     this.code = code;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -58,8 +65,14 @@ export class ProviderApi implements WebProviderActions {
       throw new ProviderApiError(response.status, 'PROTOCOL_INVALID');
     }
     if (!response.ok) {
-      const code = (record(payload).error as Record<string, unknown> | undefined)?.code;
-      throw new ProviderApiError(response.status, typeof code === 'string' ? code : 'INTERNAL_ERROR');
+      const failure = record(payload).error as Record<string, unknown> | undefined;
+      const code = failure?.code;
+      const retryAfter = failure?.retryAfterMs;
+      throw new ProviderApiError(
+        response.status,
+        typeof code === 'string' ? code : 'INTERNAL_ERROR',
+        typeof retryAfter === 'number' && Number.isFinite(retryAfter) ? retryAfter : null,
+      );
     }
     return payload;
   }
@@ -113,6 +126,33 @@ export class ProviderApi implements WebProviderActions {
       this.csrf = receipt.csrf;
       return receipt;
     } catch {
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    }
+  }
+  /** Replaces the recovery code of the signed-in invited player; the returned code is shown once. */
+  async regenerateRecoveryCode() {
+    try {
+      return parseWebInviteCredential(
+        await this.request('/invites/credential-regenerate', { method: 'POST', body: '{}' }),
+      ).secret;
+    } catch (error) {
+      if (error instanceof ProviderApiError) throw error;
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    }
+  }
+  /** Restores the invited principal behind a recovery code and returns the rotated code. */
+  async recoverWithRecoveryCode(input: { secret: string; requestId: string }) {
+    try {
+      const result = parseWebInviteRecovery(
+        await this.request('/invites/recover', {
+          method: 'POST',
+          body: JSON.stringify({ secret: input.secret, requestId: input.requestId }),
+        }),
+      );
+      this.csrf = result.csrf;
+      return result.recoverySecret;
+    } catch (error) {
+      if (error instanceof ProviderApiError) throw error;
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
     }
   }
