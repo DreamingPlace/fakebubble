@@ -15,8 +15,8 @@ import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server
 // prompt dc5db072…, fingerprint b42431c9…. Step G added playerFacts to the prompt JSON and a content rule
 // (prompt only; the fingerprint is unchanged): policy 9342e2c9…, prompt 619d6011…. Part 11b added the chat-boundary rules
 // (help vs. tool abuse, in-character deflection, distress carve-out, slang) to both prompts plus the review's coverage
-// mapping (prompt only; fingerprint unchanged): policy e967c119…, prompt 7d0b0795….
-const POLICY_HASH = 'e967c119353af4d3b50e8e86ee3630d3695302830ba677477fe351d23b420601';
+// mapping (prompt only; fingerprint unchanged): policy 2202ad5e…, prompt 7d0b0795….
+const POLICY_HASH = '2202ad5ed03b31f2efc0fc53ff4a71a3c2b6cf63f2ad0d48206b36b58b034561';
 const PROMPT_HASH = '7d0b0795b87e511233f1f6875dba40fc4e320c7ef425e8f1c91a9a40f2068367';
 const FINGERPRINT_DIGEST = 'b42431c97a4cc92b10d8c7c215ead160884d9248397736216b5fc9273883ef99';
 
