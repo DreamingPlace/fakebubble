@@ -31,6 +31,7 @@ export interface WebPreviewJob extends PreviewActor {
   retry_at: number;
   result_json: string | null;
   error_code: string | null;
+  created_at: number;
 }
 export function readWebPreview(store: BusinessStore, id: string) {
   const row = store.get<WebPreviewJob>(
@@ -88,6 +89,15 @@ export function currentWebPreview(store: BusinessStore, now: number, row: WebPre
   );
   return request;
 }
+/** The admin's own synthetic input, read back from the immutable stored request; admin-only routes. */
+function previewInput(requestJson: string): string | null {
+  try {
+    const text = (JSON.parse(requestJson) as { messages?: Array<{ text?: unknown }> }).messages?.[0]?.text;
+    return typeof text === 'string' ? text : null;
+  } catch {
+    return null;
+  }
+}
 export function webPreviewDTO(row: WebPreviewJob) {
   return {
     previewId: row.id,
@@ -96,6 +106,8 @@ export function webPreviewDTO(row: WebPreviewJob) {
     profileHash: row.profile_hash,
     status: row.status,
     errorCode: row.error_code,
+    input: previewInput(row.request_json),
+    createdAt: row.created_at,
     result: row.result_json ? JSON.parse(row.result_json) : null,
   };
 }
