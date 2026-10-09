@@ -367,11 +367,8 @@ test('private invite lookup returns only the selected grant ID after restart; re
     headers,
     body: { id: receipt.grantId },
   });
-  const after = parseWebProviderBootstrap(
-    await (await f.call({ action: 'edge', path: api + '/bootstrap', headers: { cookie: invitedCookie } })).json(),
-  );
-  assert.equal(after.access.kind, 'invite');
-  assert.equal(after.access.canSend, false);
+  // Revoking the grant ends every session of the player: the old "invite, canSend=false" bootstrap is now signed out.
+  await f.call({ action: 'edge', path: api + '/bootstrap', headers: { cookie: invitedCookie } }, 401);
   await f.call({ action: 'edge', path: api + '/admin/logout', method: 'POST', headers, body: {} });
   await f.call({ action: 'edge', path: api + '/admin/session', headers }, 401);
 });

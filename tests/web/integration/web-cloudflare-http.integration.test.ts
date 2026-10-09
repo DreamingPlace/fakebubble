@@ -573,7 +573,8 @@ test('cloud HTTP invites use actual admin login, in-place upgrade, recovery rota
   assert.equal((await f.boot(recovered)).access.worldId, original.access.worldId);
   await f.call(`${API}/sync`, guest, undefined, 401);
   await f.call(`${API}/admin/invites/revoke-grant`, admin, { id: redeemed.grantId });
-  await f.call(`${API}/sync`, recovered, undefined, 410);
+  // Revoking the grant ends every session of the player at once (it used to leave a 410 "access revoked" read).
+  await f.call(`${API}/sync`, recovered, undefined, 401);
   await f.call(`${API}/admin/logout`, admin, {});
   await f.call(`${API}/admin/session`, admin, undefined, 401);
 });
@@ -916,13 +917,19 @@ test('bootstrap never clears active, unknown, rotated or invited cookies', async
     201,
   );
   const old = { ...guest };
-  await f.call(`${API}/invites/redeem`, guest, { requestId: randomUUID(), code: issued.code }, 201);
+  const redeemed = await f.call(`${API}/invites/redeem`, guest, { requestId: randomUUID(), code: issued.code }, 201);
   const invited = await f.boot(guest);
   const rotated = await f.request(`${API}/bootstrap`, old);
   assert.notEqual(rotated.status, 200);
   assert.equal(rotated.headers.get('set-cookie'), null);
   await f.fixture('/fixture/session-expire', { principalId: invited.access.principalId });
   await f.restart();
+  // An invited session past its old 24h deadline stays alive (and renews its long-lived cookie) while the grant is active.
+  const revived = await f.request(`${API}/bootstrap`, guest);
+  assert.equal(revived.status, 200);
+  assert.match(revived.headers.get('set-cookie')!, /; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=34560000$/);
+  // Only an administrator ends it; the failed bootstrap still never clears the cookie.
+  await f.call(`${API}/admin/invites/revoke-grant`, owner, { id: redeemed.grantId });
   const expired = await f.request(`${API}/bootstrap`, guest);
   assert.equal(expired.status, 401);
   assert.equal(((await expired.json()) as any).error.code, 'SESSION_EXPIRED');

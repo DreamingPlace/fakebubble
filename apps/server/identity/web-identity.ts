@@ -236,12 +236,30 @@ export class WebIdentity {
   private sessionFor(token: string) {
     return this.store.get<SessionRow>('SELECT * FROM web_sessions WHERE token_digest=?', this.digest(token));
   }
+  /** An invited player's session never expires by time: only an administrator revoking the grant ends it. */
+  private hasActiveInviteGrant(principalId: string, now: number) {
+    // Schemas before the invite core (111) have no grants: only guest and account sessions exist.
+    if (!this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_invite_grants'")) return false;
+    return !!this.store.get(
+      `SELECT 1 FROM web_invite_grants g
+      JOIN web_principals p ON p.id=g.principal_id WHERE g.principal_id=?
+        AND g.player_id=p.player_id AND g.world_id=p.world_id AND p.kind='invite'
+        AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at>?)`,
+      principalId,
+      now,
+    );
+  }
+  private withinLifetime(row: SessionRow, now: number) {
+    return (
+      now < row.absolute_expires_at || (row.account_id === null && this.hasActiveInviteGrant(row.principal_id, now))
+    );
+  }
   private activeSession(token: string, now: number) {
     const row = this.sessionFor(token);
     ensure(
       row &&
         row.revoked_at === null &&
-        now < row.absolute_expires_at &&
+        this.withinLifetime(row, now) &&
         row.recovery_epoch === this.epoch() &&
         (row.account_id === null || now - row.last_active_at < LIMITS.accountIdleMs),
       'SESSION_EXPIRED',
@@ -350,6 +368,13 @@ export class WebIdentity {
       row.absolute_expires_at <= this.now() &&
       !!this.store.get("SELECT 1 FROM web_principals WHERE id=? AND kind='guest'", row.principal_id)
     );
+  }
+
+  /** True for a live session of a player holding an active invite grant: the transport keeps its cookie long-lived. */
+  isInvitedSession(token: string) {
+    const now = this.now(),
+      row = this.activeSession(token, now);
+    return row.account_id === null && this.hasActiveInviteGrant(row.principal_id, now);
   }
 
   /** An existing tab receives its stable CSRF; a rotated old token is never overwritten with a fresh guest. */
@@ -731,6 +756,46 @@ export class WebIdentity {
         this.inviteSecretDigest(secret),
         now,
       );
+      return { grantId: grant.id, secret, expiresAt: grant.expires_at };
+    });
+  }
+
+  /**
+   * Signed-in invited player replaces the recovery secret (creating it when none exists). The old secret stops
+   * working at once; sessions stay as they are. The new secret is shown once and is never stored in the clear.
+   */
+  regenerateInviteCredential(token: string, csrf: string, origin: string) {
+    return this.store.transaction(() => {
+      const now = this.now(),
+        session = this.activeSession(token, now);
+      this.writeAuth(session, csrf, origin);
+      ensure(session.account_id === null, 'WEB_GUEST_REQUIRED');
+      const grant = this.activeInviteGrant(session.principal_id, now);
+      const secret = this.random(32).toString('base64url'),
+        digest = this.inviteSecretDigest(secret);
+      const existing = this.store.get<{ revision: number }>(
+        'SELECT revision FROM web_invite_credentials WHERE grant_id=?',
+        grant.id,
+      );
+      if (existing)
+        ensure(
+          this.store.run(
+            `UPDATE web_invite_credentials SET secret_digest=?,revision=revision+1,rotated_at=?,revoked_at=NULL
+            WHERE grant_id=? AND revision=?`,
+            digest,
+            now,
+            grant.id,
+            existing.revision,
+          ).changes === 1,
+          'WEB_INVITE_RECOVERY_UNAVAILABLE',
+        );
+      else
+        this.store.run(
+          'INSERT INTO web_invite_credentials(grant_id,secret_digest,created_at) VALUES (?,?,?)',
+          grant.id,
+          digest,
+          now,
+        );
       return { grantId: grant.id, secret, expiresAt: grant.expires_at };
     });
   }

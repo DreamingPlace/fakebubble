@@ -1,4 +1,5 @@
-import { ProviderApiError } from '../../services/provider-api.ts';
+import { ProviderApi, ProviderApiError } from '../../services/provider-api.ts';
+import { openRecoveryEntry, recoveryCopy } from './recovery-code.ts';
 
 export function providerStartFailure(error: unknown) {
   if (error instanceof ProviderApiError && error.status === 401 && error.code === 'GUEST_SESSION_EXPIRED')
@@ -21,7 +22,12 @@ export function providerStartFailure(error: unknown) {
 }
 
 /** A failed bootstrap never silently retries, sends, or replaces an invited identity. */
-export function renderProviderStartError(root: HTMLElement, error: unknown, reload = () => location.reload()) {
+export function renderProviderStartError(
+  root: HTMLElement,
+  error: unknown,
+  reload = () => location.reload(),
+  api: Pick<ProviderApi, 'regenerateRecoveryCode' | 'recoverWithRecoveryCode'> = new ProviderApi(),
+) {
   const content = providerStartFailure(error),
     panel = document.createElement('main');
   panel.className = 'provider-start-error';
@@ -38,5 +44,13 @@ export function renderProviderStartError(root: HTMLElement, error: unknown, relo
     reload();
   });
   panel.append(title, detail, button);
+  if (content.title === '访问会话需要恢复') {
+    const have = document.createElement('button');
+    have.type = 'button';
+    have.className = 'recovery-have';
+    have.textContent = recoveryCopy.have;
+    have.addEventListener('click', () => openRecoveryEntry(api, reload));
+    panel.append(have);
+  }
   root.replaceChildren(panel);
 }

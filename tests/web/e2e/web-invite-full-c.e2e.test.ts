@@ -335,9 +335,10 @@ test('C fixed 112: independent synthetic HTTPS invite, isolation, cleanup and re
   );
   const revoke = await call('POST', '/api/web/local/admin/invites/revoke-grant', admin, { id: redeemed.data.grantId });
   assert.equal(revoke.status, 200);
-  assert.equal((await call('GET', '/api/web/local/access', invitee)).data.status, 'revoked');
-  assert.equal((await call('GET', invitedMedia, invitee)).status, 410);
-  assert.equal((await call('GET', historyPath(invitedOp.conversationId), invitee)).status, 410);
+  // Revoking the grant ends every session of the player, so each private read and write is now signed out (401).
+  assert.equal((await call('GET', '/api/web/local/access', invitee)).status, 401);
+  assert.equal((await call('GET', invitedMedia, invitee)).status, 401);
+  assert.equal((await call('GET', historyPath(invitedOp.conversationId), invitee)).status, 401);
   assert.equal(
     (
       await call('POST', '/api/web/local/characters/synthetic-local/operations', invitee, {
@@ -346,7 +347,7 @@ test('C fixed 112: independent synthetic HTTPS invite, isolation, cleanup and re
         delivery: 'voice',
       })
     ).status,
-    410,
+    401,
   );
   assert.equal((await call('GET', historyPath(accountOp.conversationId), account)).status, 200);
   assert.equal((await call('POST', '/api/web/local/admin/logout', admin, {})).status, 200);
@@ -444,7 +445,7 @@ test('C fixed 112: independent synthetic HTTPS invite, isolation, cleanup and re
   );
   assert.equal((await call('GET', historyPath(accountOp.conversationId), account)).status, 200);
   assert.equal((await call('GET', accountMedia, account)).bytes.toString('ascii', 0, 4), 'RIFF');
-  assert.equal((await call('GET', invitedMedia, invitee)).status, 410);
+  assert.equal((await call('GET', invitedMedia, invitee)).status, 401);
   assert.equal((await call('GET', historyPath(expiringOp.conversationId), expiring)).status, 410);
   assert.equal(
     (await call('GET', `/api/web/local/operations/by-request/c-account-message`, account)).data.status,

@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
-import { WEB_HTTP_LIMITS as LIMITS } from '../../../config/web-v1.ts';
+import { WEB_HTTP_LIMITS as LIMITS, WEB_IDENTITY_LIMITS } from '../../../config/web-v1.ts';
 import {
   WebProviderApplication,
   WEB_PROVIDER_API as API,
@@ -52,10 +52,11 @@ export class WebProviderHTTP {
     ensure(found.length <= 1, 'INVALID_REQUEST');
     return found[0]?.slice(name.length + 1);
   }
-  private setCookie(response: Response, token: string, admin = false, clear = false) {
+  private setCookie(response: Response, token: string, admin = false, clear = false, invited = false) {
+    const maxAge = clear ? '; Max-Age=0' : invited ? `; Max-Age=${WEB_IDENTITY_LIMITS.inviteCookieMaxAgeSeconds}` : '';
     response.headers.append(
       'set-cookie',
-      `${this.app.config.cookieName}${admin ? '_admin' : ''}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax${clear ? '; Max-Age=0' : ''}`,
+      `${this.app.config.cookieName}${admin ? '_admin' : ''}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax${maxAge}`,
     );
   }
   private write(request: Request) {
@@ -85,7 +86,11 @@ export class WebProviderHTTP {
     } catch (error) {
       const failure = webProviderHTTPError(error);
       response = Response.json(failure.body, { status: failure.status });
-      if (failure.status === 429) response.headers.set('retry-after', '60');
+      if (failure.status === 429)
+        response.headers.set(
+          'retry-after',
+          String(failure.body.error.retryAfterMs ? Math.ceil(failure.body.error.retryAfterMs / 1000) : 60),
+        );
     }
     for (const [key, value] of Object.entries(privateHeaders)) response.headers.set(key, value);
     return response;
@@ -201,7 +206,7 @@ export class WebProviderHTTP {
         body = { ...(body as Record<string, unknown>), grantId: grant?.id ?? null, duplicate: false };
       }
       const response = Response.json(body, { status: result.status });
-      if (result.issuedToken) this.setCookie(response, result.issuedToken);
+      if (result.issuedToken) this.setCookie(response, result.issuedToken, false, false, true);
       if (result.issuedAdminCookie) this.setCookie(response, result.issuedAdminCookie, true);
       if (localPath === '/api/web/local/admin/logout') this.setCookie(response, '', true, true);
       return response;
@@ -210,7 +215,9 @@ export class WebProviderHTTP {
       try {
         const result = app.bootstrap(this.cookie(request), ipHash),
           response = Response.json(result.body);
+        const current = this.cookie(request);
         if (result.issuedToken) this.setCookie(response, result.issuedToken);
+        else if (result.invited && current) this.setCookie(response, current, false, false, true);
         return response;
       } catch (error) {
         if (!(error instanceof DomainError) || error.code !== 'GUEST_SESSION_EXPIRED') throw error;

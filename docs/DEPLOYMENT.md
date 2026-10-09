@@ -46,6 +46,9 @@ pnpm web:cloudflare:package "$PWD/runtime/cloud-package"
 | `MAX_AUDIO_RUNNING` | 4 | 1–48 | 同时运行的语音阶段（Fish 入门档账户 5 个并发，留 1 个余量） |
 | `MAX_WAITING_OPERATIONS` | 104 | 1–4096 | 运行之外可排队的操作；全局票数 = 文本 + 语音 + 排队 |
 | `AUDIO_FALLBACK_WAIT_MS` | 8000 | 1000–60000 | 语音在这段时间内拿不到名额就改发文字 |
+| `DAILY_REPLY_LIMIT` | 100 | 1–10000 | 每位受邀玩家在滚动 24 小时内可被接纳的主动发起回复数（本地实例在 `local-config.json` 顶层的 `dailyReplyLimit`） |
+
+`DAILY_REPLY_LIMIT` 在操作接纳（admission）处执行，早于任何预算预占和供应商调用：只统计该玩家自己发起、仍占用配额的操作（预占已释放的不计），不含角色主动/定时消息；访客试用仍是 3 次，不受它影响。达到上限返回 `429 WEB_DAILY_LIMIT_REACHED`，`retryAfterMs` 为最早一条计入的操作滑出窗口所需的时间，页面只显示一句“今天聊得够多啦，明天再来找我吧～”，不是错误页。
 
 缺省取默认值；已设置但不合法（非整数、越界）则 Durable Object / 本地服务拒绝启动。没有任何配置的库内存储（离线夹具）保持 4/4/120。
 
@@ -131,3 +134,11 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 - 供应商 `.env` / `.env.voice` / `.env.embed` 不随源码分发。禁止把生产运营预算作为任意测试许可；禁止自动重发 UNKNOWN 调用。
 
 不要把 `runtime/`、Secrets、材料目录、邮件、收据、真实数据库或构建产物提交到 GitHub。
+
+
+### 受邀玩家保持登录与恢复码（Part 11d）
+
+- 持有未撤销邀请授权的玩家，其会话不受 24 小时绝对期限和空闲期限约束（访客仍是 24 小时，管理员与账号会话不变）；恢复纪元、`revoked_at` 等其他检查照旧。无需迁移：判断在 `activeSession` 中按主体的有效授权做出，因此已经“过期”的受邀会话在授权仍有效时会自行恢复。
+- 每次成功 bootstrap（以及兑换、恢复）都会重新下发会话 cookie，`Max-Age=34560000`（400 天，浏览器上限）；`__Host-`、`Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/` 不变。
+- 管理员在邀请记录里撤销授权（`revoke-grant`）时，同一事务内结束该主体的全部会话并停用其恢复码；撤销未兑换的邀请码仍只阻止今后兑换。
+- 玩家兑换成功后页面一次性显示恢复码（`POST /invites/credential-regenerate`，需要 CSRF、Origin 与有效受邀会话；旧码立即失效）。凭恢复码调用 `POST /invites/recover`（沿用每个 IP 哈希每分钟 20 次的失败限额）可在新浏览器里恢复同一主体、同样的聊天与记忆，并轮换出一个新码；每个码只能用一次，错误或已用过的码返回同一个中性错误。恢复码只存摘要，页面不写入 localStorage 或 cookie，也不记录日志。

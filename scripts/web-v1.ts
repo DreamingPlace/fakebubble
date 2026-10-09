@@ -40,6 +40,7 @@ if (action === 'init') {
     create: false,
     instanceId: config.instanceId,
     concurrency: config.concurrency,
+    dailyReplyLimit: config.dailyReplyLimit,
     ...(dataLifecycleTest ? { dataLifecycleTest: true as const } : {}),
     ...(inviteTest ? { inviteTest: true as const } : {}),
   });

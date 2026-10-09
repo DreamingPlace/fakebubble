@@ -7,6 +7,7 @@ import { connect } from 'node:net';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import type { Clock } from '../../../packages/contracts/index.ts';
+import { WEB_IDENTITY_LIMITS } from '../../../config/web-v1.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import {
   isWebProviderCharacterId,
@@ -198,8 +199,13 @@ export class WebProviderServer {
     return found[0]?.slice(name.length + 1);
   }
 
-  private setCookie(res: ServerResponse, token: string) {
-    res.setHeader('Set-Cookie', `${this.config.cookieName}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax`);
+  private setCookie(res: ServerResponse, token: string, invited = false) {
+    res.setHeader(
+      'Set-Cookie',
+      `${this.config.cookieName}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax${
+        invited ? `; Max-Age=${WEB_IDENTITY_LIMITS.inviteCookieMaxAgeSeconds}` : ''
+      }`,
+    );
   }
 
   private authorizeWrite(req: IncomingMessage) {
@@ -274,7 +280,9 @@ export class WebProviderServer {
   private bootstrap(req: IncomingMessage, res: ServerResponse) {
     try {
       const result = this.application.bootstrap(this.cookie(req), this.ipHash(req));
+      const token = this.cookie(req);
       if (result.issuedToken) this.setCookie(res, result.issuedToken);
+      else if (result.invited && token) this.setCookie(res, token, true);
       this.json(res, 200, result.body);
     } catch (error) {
       if (error instanceof DomainError && error.code === 'GUEST_SESSION_EXPIRED')
@@ -438,7 +446,7 @@ export class WebProviderServer {
         const result =
           (await routeWebAccountAdmin(this.inviteAdmin, input, this.application.characterAdmin)) ??
           routeWebInvite(this.inviteActions, input, this.inviteAdmin);
-        if (result.issuedToken) this.setCookie(res, result.issuedToken);
+        if (result.issuedToken) this.setCookie(res, result.issuedToken, true);
         if (result.issuedAdminCookie)
           res.setHeader(
             'Set-Cookie',

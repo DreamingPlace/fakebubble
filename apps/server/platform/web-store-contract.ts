@@ -9,6 +9,7 @@ export interface WebRuntimeStore extends BusinessStore {
   readonly instanceId: string;
   readonly providerRuntime: boolean;
   readonly concurrency?: WebConcurrency;
+  readonly dailyReplyLimit?: number;
   readonly providerAudio?: PrivateMediaObjects;
   requireInviteTest(): void;
   requireProviderRuntime(): void;

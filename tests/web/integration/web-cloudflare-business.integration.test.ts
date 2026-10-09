@@ -62,8 +62,9 @@ test('workerd guest/invite identity: sealed rotation, restart recovery, scope an
   assert.equal(duplicate.code, null);
   assert.equal(duplicate.duplicate, true);
   await f.call('/revoke', { ...admin, origin, grantId: redeemed.grantId });
+  // Revoking the grant also ends the player's sessions, so the session itself is rejected first.
   assert.deepEqual(await f.call('/content', { token: restored.issuedToken }, 409), {
-    error: 'WEB_INVITE_ACCESS_REQUIRED',
+    error: 'SESSION_EXPIRED',
   });
 });
 

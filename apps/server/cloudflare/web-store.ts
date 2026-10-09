@@ -4,7 +4,7 @@ import type { BusinessStore, SQLInputValue } from '../platform/store-contract.ts
 import type { DurableSQLStorage, SQLMigration } from './store.ts';
 import { registerWebRuntime, type WebRuntimeStore } from '../platform/web-store-contract.ts';
 import type { PrivateMediaObjects } from './media-objects.ts';
-import { parseWebConcurrency, type WebConcurrency } from '../../../config/web-concurrency.ts';
+import { parseWebConcurrency, parseWebDailyReplyLimit, type WebConcurrency } from '../../../config/web-concurrency.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 const versions = [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 17 }, (_, i) => 100 + i)];
@@ -20,6 +20,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
   readonly recoveryEpoch: string;
   readonly providerAudio?: PrivateMediaObjects;
   readonly concurrency: WebConcurrency;
+  readonly dailyReplyLimit: number;
   private readonly storage: DurableSQLStorage;
   private closed = false;
   private readonly keys: { ipKey: Buffer; requestKey: Buffer } | null;
@@ -34,6 +35,8 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
       providerAudio?: PrivateMediaObjects;
       /** Validated Worker vars; absent means the deployment default (20 text, 4 audio). */
       concurrency?: WebConcurrency;
+      /** Validated DAILY_REPLY_LIMIT; absent means 100. */
+      dailyReplyLimit?: number;
     },
   ) {
     ensure(
@@ -47,6 +50,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
     );
     this.storage = storage;
     this.concurrency = parseWebConcurrency(identity.concurrency);
+    this.dailyReplyLimit = parseWebDailyReplyLimit(identity.dailyReplyLimit);
     this.instanceId = identity.instanceId;
     this.recoveryEpoch = identity.recoveryEpoch;
     if (identity.providerAudio) this.providerAudio = identity.providerAudio;

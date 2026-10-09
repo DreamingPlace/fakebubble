@@ -68,6 +68,7 @@ export function openProviderStore(root: string) {
       inviteTest: true,
       providerRuntime: true,
       concurrency: config.concurrency,
+      dailyReplyLimit: config.dailyReplyLimit,
     }),
   };
 }

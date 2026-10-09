@@ -140,6 +140,7 @@ export class WebProviderApplication {
 
   bootstrap(token: string | undefined, ipHash: string) {
     let issued: string | null = null;
+    let invited = false;
     const body = this.store.transaction((): WebProviderBootstrap => {
       if (!token) {
         const start = Math.floor(this.clock.now() / 86_400_000) * 86_400_000;
@@ -173,6 +174,7 @@ export class WebProviderApplication {
         throw error;
       }
       issued = boot.issuedToken;
+      invited = this.identity.isInvitedSession(token ?? boot.issuedToken!);
       const principal = this.identity.authenticate(token ?? boot.issuedToken!);
       const { inaccessible, ...access } = this.access(principal, ipHash);
       const characters = this.characters(),
@@ -225,7 +227,7 @@ export class WebProviderApplication {
         syncCursor: this.cursor(principal.principalId, high),
       };
     });
-    return { body, issuedToken: issued };
+    return { body, issuedToken: issued, invited };
   }
 
   cursor(principalId: string, seq: number, conversationId?: string) {

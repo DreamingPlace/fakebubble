@@ -101,6 +101,9 @@ export class WebInviteActions {
   createRecoveryCredential(token: string, csrf: string, origin: string) {
     return this.identity.createInviteCredential(token, csrf, origin);
   }
+  regenerateRecoveryCredential(token: string, csrf: string, origin: string) {
+    return this.identity.regenerateInviteCredential(token, csrf, origin);
+  }
   recoverInvite(origin: string, trustedIpHash: string, body: { secret: string; requestId: string }) {
     return this.identity.recoverInviteCredential({ origin, ipHash: trustedIpHash, ...body });
   }

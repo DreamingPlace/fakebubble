@@ -16,7 +16,7 @@ import { basename, dirname, isAbsolute, join, parse, resolve, sep } from 'node:p
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
-import { parseWebConcurrency, type WebConcurrency } from '../../../config/web-concurrency.ts';
+import { parseWebConcurrency, parseWebDailyReplyLimit, type WebConcurrency } from '../../../config/web-concurrency.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { preflightWebDataPolicyInTransaction } from './web-data-policy-preflight.ts';
 import { auditWebLifecycleWorld } from '../admission/web-lifecycle-audit.ts';
@@ -34,6 +34,7 @@ interface WebStoreOptions {
   inviteTest?: true;
   providerRuntime?: true;
   concurrency?: WebConcurrency;
+  dailyReplyLimit?: number;
 }
 const WEB_SCHEMA = 100;
 const WEB_STAGE_SCHEMA = 101;
@@ -564,6 +565,8 @@ export class WebStore extends Store {
   readonly providerRuntime: boolean;
   /** Validated deployment concurrency; absent means the library default (see config/web-concurrency.ts). */
   readonly concurrency?: WebConcurrency;
+  /** Validated daily reply cap per invited player; absent means the default of 100. */
+  readonly dailyReplyLimit?: number;
   /** A persisted invite runtime must have passed the role/root/config preflight on open. */
   requireInviteTest() {
     ensure(
@@ -593,10 +596,12 @@ export class WebStore extends Store {
       inviteTest?: true;
       providerRuntime?: true;
       concurrency?: WebConcurrency;
+      dailyReplyLimit?: number;
     },
   ) {
     super(join(root, webDbName), { web: { root, ...options } });
     if (options.concurrency) this.concurrency = parseWebConcurrency(options.concurrency);
+    if (options.dailyReplyLimit !== undefined) this.dailyReplyLimit = parseWebDailyReplyLimit(options.dailyReplyLimit);
     this.instanceId = options.instanceId;
     this.root = root;
     this.dataLifecycleTest = options.dataLifecycleTest === true;

@@ -187,19 +187,18 @@ test('112 isolated HTTPS invite exchange, private publication and revoked access
     login.data.csrf,
   );
   assert.equal(revoke.status, 200);
+  // Revoking the grant ends every session of the player: all private reads and writes now fail as signed out.
   const after = await call('GET', '/api/web/local/access', undefined, redeem.cookie);
-  assert.equal(after.status, 200);
-  assert.equal(after.data.status, 'revoked');
+  assert.equal(after.status, 401);
   const forbidden = await call(
     'GET',
     `/api/web/local/conversations/${operation.conversationId}/history`,
     undefined,
     redeem.cookie,
   );
-  assert.equal(forbidden.status, 410);
-  assert.equal(forbidden.data.error.code, 'WEB_INVITE_ACCESS_REQUIRED');
+  assert.equal(forbidden.status, 401);
   const forbiddenSync = await call('GET', '/api/web/local/sync', undefined, redeem.cookie);
-  assert.equal(forbiddenSync.status, 410);
+  assert.equal(forbiddenSync.status, 401);
   const forbiddenSend = await call(
     'POST',
     '/api/web/local/characters/synthetic-local/operations',
@@ -207,7 +206,7 @@ test('112 isolated HTTPS invite exchange, private publication and revoked access
     redeem.cookie,
     invited.data.csrf,
   );
-  assert.equal(forbiddenSend.status, 410);
+  assert.equal(forbiddenSend.status, 401);
   assert.equal(store.get('SELECT 1 FROM web_operations WHERE request_id=?', 'send-after-revoke'), undefined);
   const logout = await call('POST', '/api/web/local/admin/logout', {}, login.cookie, login.data.csrf);
   assert.equal(logout.status, 200);

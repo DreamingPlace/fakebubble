@@ -7,6 +7,8 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import { WebStore } from './store.ts';
 import {
   parseWebConcurrency,
+  parseWebDailyReplyLimit,
+  WEB_DAILY_REPLY_LIMIT,
   WEB_CONCURRENCY_DEPLOYMENT_DEFAULT,
   type WebConcurrency,
 } from '../../../config/web-concurrency.ts';
@@ -25,6 +27,8 @@ export interface WebLocalConfig {
   cursorKey: string;
   /** Stage concurrency and the voice-to-text fallback wait; validated on every read (invalid refuses to start). */
   concurrency: WebConcurrency;
+  /** Player-initiated replies per invited player per rolling 24h (1–10000, default 100); invalid refuses to start. */
+  dailyReplyLimit: number;
 }
 const configName = 'local-config.json';
 const certName = 'local-cert.pem';
@@ -98,6 +102,7 @@ function initInstance(root: string, mode: WebLocalConfig['mode']) {
       maxGlobalReservedOperations: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.maxGlobalReservedOperations,
       audioFallbackWaitMs: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.audioFallbackWaitMs,
     },
+    dailyReplyLimit: WEB_DAILY_REPLY_LIMIT.default,
   };
   const store = new WebStore(root, { create: true, instanceId });
   store.close();
@@ -144,6 +149,7 @@ export function readLocalConfig(root: string): WebLocalConfig {
   config.concurrency = parseWebConcurrency(
     (parsed as { concurrency?: Parameters<typeof parseWebConcurrency>[0] }).concurrency,
   );
+  config.dailyReplyLimit = parseWebDailyReplyLimit((parsed as { dailyReplyLimit?: unknown }).dailyReplyLimit);
   ensure(
     (config.mode === 'synthetic-local' || config.mode === 'provider-local') &&
       config.region === 'local-test' &&

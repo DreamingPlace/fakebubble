@@ -267,9 +267,10 @@ test('rotated old cookie recovers only its sealed receipt with bounded requests 
   assert.ok(!sealed.includes(next.issuedToken) && !sealed.includes(issued.code!));
   f.invites.revokeGrant('c-admin', redeemed.grantId);
   assert.throws(() => f.actions.redemptionChallenge(f.first.issuedToken, origin), code('RECEIPT_UNAVAILABLE'));
+  // The grant's sessions end with it, so the new cookie is rejected before any receipt is consulted.
   assert.throws(
     () => f.actions.redemptionStatus(next.issuedToken, next.csrf, origin, 'c-redeem-receipt'),
-    code('RECEIPT_UNAVAILABLE'),
+    code('SESSION_EXPIRED'),
   );
 
   const expiry = fixture(t),

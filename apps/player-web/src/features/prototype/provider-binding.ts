@@ -7,6 +7,7 @@ import type {
 import { ProviderApi, ProviderApiError } from '../../services/provider-api.ts';
 import { replyPauseMs } from './reply-presentation.ts';
 import { ProviderInviteController } from '../../session/provider-invite-controller.ts';
+import { openRecoveryEntry, openRecoveryManage, recoveryCopy, showRecoveryCode } from './recovery-code.ts';
 
 type Shell = {
   say(message: string): void;
@@ -16,11 +17,12 @@ type Shell = {
   name(id: WebProviderCharacterId): string;
 };
 
-const errorText: Record<string, string> = {
+export const errorText: Record<string, string> = {
   TRIAL_CHARACTER_LOCKED: '体验期间只能和第一个聊天的人物继续聊哦',
   TRIAL_EXHAUSTED: '体验次数已用完（同一网络累计），输入邀请码可以继续聊',
   TRIAL_EXPIRED: '体验时间已结束，输入邀请码可以继续聊',
   QUEUE_FULL: '现在聊天的人有点多，稍后再试试',
+  WEB_DAILY_LIMIT_REACHED: '今天聊得够多啦，明天再来找我吧～',
   RATE_LIMITED: '操作太频繁了，稍后再试试',
   WEB_INVITE_UNAVAILABLE: '邀请码无效或已被使用',
   INVALID_TEXT: '这条消息发不出去，换个说法试试',
@@ -134,7 +136,16 @@ export class LiveBinding {
       return;
     }
     shell.head.querySelector('.invite-entry')?.remove();
+    shell.head.querySelector('.recovery-entry')?.remove();
     if (access.kind === 'invite' && !this.invitation.locked) {
+      if (access.status === 'active' && this.accessKnown) {
+        const manage = document.createElement('button');
+        manage.type = 'button';
+        manage.className = 'invite-entry recovery-entry';
+        manage.textContent = recoveryCopy.manage;
+        manage.addEventListener('click', () => openRecoveryManage(this.api, (message) => this.shell?.say(message)));
+        shell.head.append(manage);
+      }
       note.textContent = !this.accessKnown
         ? '访问权限暂无法确认'
         : access.status === 'active'
@@ -239,7 +250,8 @@ export class LiveBinding {
       <p id="invite-state" class="invite-state" role="status" aria-live="polite"></p>
       <div class="invite-actions"><button type="button" class="invite-cancel">取消</button>
       <button type="button" class="invite-recover" hidden>核对原请求</button>
-      <button type="submit">解锁</button></div></form>`;
+      <button type="submit">解锁</button></div>
+      <button type="button" class="invite-have-code">${recoveryCopy.have}</button></form>`;
     const input = dialog.querySelector<HTMLInputElement>('input')!;
     const submit = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     const recover = dialog.querySelector<HTMLButtonElement>('.invite-recover')!;
@@ -290,13 +302,21 @@ export class LiveBinding {
                 : '结果尚未确认。请核对原请求，不要刷新页面或再次兑换；关闭后可从“核对邀请”继续。';
     };
     cancel.addEventListener('click', close);
+    dialog.querySelector('.invite-have-code')?.addEventListener('click', () => {
+      if (this.invitation.locked) return;
+      close();
+      openRecoveryEntry(this.api, () => location.reload());
+    });
     dialog.addEventListener('cancel', (event) => {
       event.preventDefault();
       close();
     });
     recover.addEventListener('click', () => {
       void this.invitation.recover().then((ok) => {
-        if (ok) this.shell?.say('邀请已解锁，可以和所有人聊天了');
+        if (ok) {
+          this.shell?.say('邀请已解锁，可以和所有人聊天了');
+          void this.issueRecoveryCode();
+        }
         finish(ok);
       });
     });
@@ -319,8 +339,20 @@ export class LiveBinding {
       return false;
     }
     const ok = await this.invitation.redeem(code);
-    if (ok) this.shell?.say('邀请已解锁，可以和所有人聊天了');
+    if (ok) {
+      this.shell?.say('邀请已解锁，可以和所有人聊天了');
+      void this.issueRecoveryCode();
+    }
     return ok;
+  }
+
+  /** Right after redemption: create the player's recovery code and show it once. Never persisted or logged. */
+  private async issueRecoveryCode() {
+    try {
+      showRecoveryCode(await this.api.regenerateRecoveryCode());
+    } catch {
+      this.shell?.say(`${recoveryCopy.regenerateFailed}。可点右上角“${recoveryCopy.manage}”重新生成`);
+    }
   }
 
   private fail(error: unknown) {
