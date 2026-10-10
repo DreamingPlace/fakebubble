@@ -8,14 +8,14 @@ import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
 import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
 import { WebRetentionCleaner } from '../../../apps/server/admission/web-retention-cleaner.ts';
 import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
+import { requireWebContent } from '../../../apps/server/admission/web-retention.ts';
 import { defaultSchedule } from '../../../packages/domain/defaults.ts';
 
 /**
- * The Node retention cleaner (synthetic local mode) removes a purged guest's email login, challenges and nickname 名片
- * (schema 118). It runs on a schema-110 database here, so the 118 tables are added by hand: the cleaner decides by
- * table existence, not by schema number.
+ * Fix-up 11f on the Node cleaner (same schema-110 setup as web-player-logins-retention-node.test.ts): a guest with a
+ * login is kept when its trial ends and purged after 180 idle days; a guest without a login purges at trial end.
  */
-test("Node guest retention removes a guest's login, challenges and nickname and keeps another world's", (t) => {
+test('Node guest retention keeps a guest with a login at trial end and purges it after 180 idle days', (t) => {
   const { parent } = localRuntime();
   mkdirSync(parent, { recursive: true });
   const root = join(parent, `local-login-${randomUUID().slice(0, 12)}`);
@@ -77,7 +77,7 @@ test("Node guest retention removes a guest's login, challenges and nickname and 
   store.db.exec(
     readFileSync(new URL('../../../apps/server/web-migrations/118_player_logins.sql', import.meta.url), 'utf8'),
   );
-  for (const [i, { guest, scope }] of worlds.entries()) {
+  for (const [i, { guest, scope }] of worlds.entries().filter(([i]) => i === 0)) {
     const email = `guest${i}@example.com`;
     store.run(
       'INSERT INTO web_player_logins VALUES (?,?,?,?,?,?)',
@@ -86,9 +86,7 @@ test("Node guest retention removes a guest's login, challenges and nickname and 
       'scrypt-16384-8-5$x$y',
       now,
       now,
-      // Fix-up 11f: a guest with a login is kept at trial end and purged only after 180 idle days. This test is about
-      // what the purge removes, so its logins were last seen long ago; the keep-at-trial-end rule has its own tests.
-      now - 181 * 24 * 60 * 60_000,
+      now,
     );
     store.run(
       `INSERT INTO web_email_challenges(id,purpose,email_norm,principal_id,code_digest,ip_hash,created_at,expires_at)
@@ -113,29 +111,44 @@ test("Node guest retention removes a guest's login, challenges and nickname and 
     );
     store.run('INSERT INTO player_profile_versions VALUES (?,1,?,?)', scope.world_id, '{"name":"昵称"}', now);
   }
-  const [first, second] = worlds;
-  const state = (world: (typeof worlds)[number]) => ({
-    logins: store.get<{ n: number }>(
-      'SELECT count(*) n FROM web_player_logins WHERE principal_id=?',
+  const [kept, plain] = worlds;
+  const count = (sql: string, ...params: string[]) => store.get<{ n: number }>(sql, ...params)!.n;
+  const dataOf = (world: (typeof worlds)[number]) => ({
+    messages: count('SELECT count(*) n FROM messages WHERE world_id=?', world.scope.world_id),
+    logins: count('SELECT count(*) n FROM web_player_logins WHERE principal_id=?', world.guest.principalId),
+    state: store.get<{ state: string }>(
+      'SELECT state FROM web_guest_retention WHERE principal_id=?',
       world.guest.principalId,
-    )!.n,
-    challenges: store.get<{ n: number }>(
-      'SELECT count(*) n FROM web_email_challenges WHERE principal_id=? OR email_norm=(SELECT email_norm FROM web_player_logins WHERE principal_id=?)',
-      world.guest.principalId,
-      world.guest.principalId,
-    )!.n,
-    cards: store.get<{ n: number }>(
-      'SELECT count(*) n FROM player_profile_versions WHERE world_id=?',
-      world.scope.world_id,
-    )!.n,
+    )!.state,
   });
-  assert.deepEqual(state(first!), { logins: 1, challenges: 2, cards: 1 });
-  // Both worlds are guests; expire the first one only.
+  const before = dataOf(kept!);
+  assert.ok(before.messages > 0);
+  // Trial end: the guest without a login is purged exactly as before, the one with a login is untouched.
   now += 2 * 60 * 60_000 + 1;
   const cleaner = new WebRetentionCleaner(store, clock);
-  cleaner.markExpired(first!.guest.principalId);
-  cleaner.clearDatabase(first!.guest.principalId);
-  assert.deepEqual(state(first!), { logins: 0, challenges: 0, cards: 0 });
-  assert.deepEqual(state(second!), { logins: 1, challenges: 2, cards: 1 }, 'the other guest is untouched');
+  assert.equal(cleaner.sweep(), 1);
+  assert.equal(dataOf(plain!).state, 'purged');
+  assert.deepEqual(dataOf(kept!), before);
+  assert.throws(() => cleaner.markExpired(kept!.guest.principalId), /WEB_RETENTION_NOT_EXPIRED/);
+  assert.throws(
+    () =>
+      admission.admit({
+        principalId: kept!.guest.principalId,
+        requestId: 'after-trial',
+        characterId: 'synthetic-login',
+        text: 'synthetic only',
+        ipHash: 'f'.repeat(64),
+      }),
+    /TRIAL_EXPIRED/,
+  );
+  assert.equal(requireWebContent(store, clock, kept!.guest.principalId, kept!.scope.world_id, 'read').state, 'active');
+  assert.throws(() => requireWebContent(store, clock, kept!.guest.principalId, kept!.scope.world_id), /TRIAL_EXPIRED/);
+  // 179 idle days: still kept. 181: purged through the audited path (clearDatabase audits before and after).
+  now += 179 * 24 * 60 * 60_000;
+  assert.equal(cleaner.sweep(), 0);
+  now += 2 * 24 * 60 * 60_000;
+  assert.equal(cleaner.sweep(), 1);
+  assert.deepEqual(dataOf(kept!), { messages: 0, logins: 0, state: 'purged' });
+  assert.equal(count('SELECT count(*) n FROM player_profile_versions WHERE world_id=?', kept!.scope.world_id), 0);
   assert.equal(store.get('PRAGMA foreign_key_check'), undefined);
 });

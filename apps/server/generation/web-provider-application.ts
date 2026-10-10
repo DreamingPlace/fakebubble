@@ -25,6 +25,7 @@ import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts
 import { WebInvites } from '../invites/web-invites.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { WebCocreation } from '../cocreation/web-cocreation.ts';
+import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
 import { PLAYER_LIMITS, WebPlayerAccounts, type PlayerMailer } from '../identity/web-player-accounts.ts';
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
 
@@ -238,6 +239,8 @@ export class WebProviderApplication {
       issued = boot.issuedToken;
       invited = this.identity.isDurableSession(token ?? boot.issuedToken!);
       const principal = this.identity.authenticate(token ?? boot.issuedToken!);
+      // Activity for the 180-day inactivity purge (at most one write per UTC day).
+      this.playerAccounts?.touch(principal.principalId);
       const { inaccessible, ...access } = this.access(principal, ipHash);
       const characters = this.characters(),
         ids = new Set(characters.map((entry) => entry.characterId));
@@ -395,6 +398,9 @@ export class WebProviderApplication {
     const expired =
       retention.state !== 'unstarted' &&
       (retention.state !== 'active' || retention.expires_at === null || now >= retention.expires_at);
+    // A guest with an email login keeps reading after the trial ended (requireWebContent 'read'); it still cannot send.
+    const retained =
+      expired && retention.state === 'active' && playerLoginRetainsGuest(this.store, principal.principalId);
     const remaining = Math.max(
       0,
       Math.min(3 - row.trial_used - row.trial_reserved, 3 - (quota?.used_total ?? 0) - (quota?.reserved_total ?? 0)),
@@ -409,7 +415,7 @@ export class WebProviderApplication {
       reservedReplies: row.trial_reserved,
       trialExpiresAt: retention.expires_at ?? null,
       canSend: !expired && remaining > 0 && (locked === null || !webCharacterDeleted(this.store, locked)),
-      inaccessible: expired,
+      inaccessible: expired && !retained,
     };
   }
 
@@ -460,7 +466,7 @@ export class WebProviderApplication {
   }
 
   operation(principal: Principal, operationId: string): WebProviderOperation {
-    requireWebContent(this.store, this.clock, principal.principalId, principal.world_id);
+    requireWebContent(this.store, this.clock, principal.principalId, principal.world_id, 'read');
     const row = this.store.get<{
       id: string;
       request_id: string;
@@ -505,7 +511,7 @@ export class WebProviderApplication {
   }
 
   events(principal: Principal, after: number, limit = 100) {
-    requireWebContent(this.store, this.clock, principal.principalId, principal.world_id);
+    requireWebContent(this.store, this.clock, principal.principalId, principal.world_id, 'read');
     const high = this.eventHighWater();
     ensure(after <= high && limit >= 1 && limit <= 100, 'INVALID_CURSOR');
     const rows = this.store.all<{
@@ -543,7 +549,7 @@ export class WebProviderApplication {
   }
 
   history(principal: Principal, conversationId: string, before: number | null) {
-    requireWebContent(this.store, this.clock, principal.principalId, principal.world_id);
+    requireWebContent(this.store, this.clock, principal.principalId, principal.world_id, 'read');
     const conversation = this.store.get<{ private_character_id: string }>(
       `SELECT private_character_id
       FROM conversations WHERE world_id=? AND id=? AND kind='private'`,

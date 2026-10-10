@@ -12,6 +12,7 @@ import {
 import { routeWebPlayerAccounts } from '../../../apps/server/identity/web-player-routes.ts';
 import { maskEmail, normalizeEmail } from '../../../apps/server/identity/email-address.ts';
 import { playerMailText } from '../../../apps/server/cloudflare/web-player-mail.ts';
+import { requireWebContent } from '../../../apps/server/admission/web-retention.ts';
 import { purgePlayerLogins, playerLoginsRemain } from '../../../apps/server/identity/web-player-purge.ts';
 import { WebInvites } from '../../../apps/server/invites/web-invites.ts';
 import { WebInviteActions } from '../../../apps/server/invites/web-invite-actions.ts';
@@ -1268,4 +1269,269 @@ test('routes: every account path is POST with exact bodies, and the signed-out o
     }),
     code('NOT_FOUND'),
   );
+});
+
+// ---- Fix-up 11f: wrong codes per email across all challenges, and signed-up guests keeping their account ----
+
+const wrongOf = (right: string) => (right.endsWith('0') ? `${right.slice(0, 5)}1` : `${right.slice(0, 5)}0`);
+const outcome = (run: () => unknown) => {
+  try {
+    run();
+    return 'ok';
+  } catch (error) {
+    return error instanceof RetryAfterError
+      ? `${error.code}@${error.retryAfterMs}`
+      : error instanceof DomainError
+        ? error.code
+        : String(error);
+  }
+};
+
+test('wrong codes: ten per email per rolling 24 h over ALL challenges and purposes, then every purpose refuses', async (t) => {
+  const f = fixture(t);
+  const email = 'target@example.com';
+  // A legacy invited player has a live bind challenge for the address from before the budget is spent.
+  const invited = f.guest();
+  const redeemed = f.invites.redeem({
+    token: invited.token,
+    csrf: invited.csrf,
+    origin,
+    code: f.issueInvite().code!,
+    requestId: 'redeem-limit',
+  });
+  if (redeemed.duplicate) throw new Error('unexpected duplicate');
+  const bindSession = { token: redeemed.identity!.issuedToken, csrf: redeemed.identity!.csrf, origin };
+  const bind = f.accounts.requestCode({ purpose: 'bind', email, ipHash: IP, origin, session: bindSession });
+  await f.flush();
+  const bindCode = f.latestCode().code!;
+  // Two more challenges (reset, then signup) for the same address; five wrong codes each = ten.
+  f.advance(61_000);
+  const reset = f.accounts.requestCode({ purpose: 'reset', email, ipHash: IP, origin });
+  f.advance(61_000);
+  const guest = f.guest();
+  const signup = f.accounts.requestCode({ purpose: 'signup', email, ipHash: IP, origin, session: guest.session });
+  await f.flush();
+  const guess = (challengeId: string, session?: typeof guest.session) =>
+    outcome(() => f.accounts.verifyCode({ challengeId, code: '000000', origin, session }));
+  for (let i = 0; i < PLAYER_LIMITS.codeAttempts; i++) assert.equal(guess(reset.challengeId), 'PLAYER_CODE_INVALID');
+  for (let i = 0; i < PLAYER_LIMITS.codeAttempts; i++)
+    assert.equal(guess(signup.challengeId, guest.session), 'PLAYER_CODE_INVALID');
+  // The tenth wrong code was an ordinary wrong code; from now on the address is refused everywhere, even the RIGHT code.
+  const verifyBind = () =>
+    f.accounts.verifyCode({ challengeId: bind.challengeId, code: bindCode, origin, session: bindSession });
+  assert.throws(
+    verifyBind,
+    (error: unknown) =>
+      error instanceof RetryAfterError && error.code === 'PLAYER_RATE_LIMITED' && error.retryAfterMs > 0,
+  );
+  f.advance(61_000);
+  for (const purpose of ['reset', 'signup', 'bind'] as const) {
+    const session = purpose === 'reset' ? undefined : purpose === 'signup' ? f.guest().session : bindSession;
+    assert.match(
+      outcome(() => f.accounts.requestCode({ purpose, email, ipHash: OTHER_IP, origin, session })),
+      /^PLAYER_RATE_LIMITED@\d+$/,
+      purpose,
+    );
+  }
+  // The budget belongs to the address: another address is unaffected, and nothing was sent for the refused requests.
+  const sentBefore = f.sent.length;
+  f.accounts.requestCode({ purpose: 'reset', email: 'someone-else@example.com', ipHash: OTHER_IP, origin });
+  await f.flush();
+  assert.equal(f.sent.length, sentBefore, 'an unknown reset address gets nothing; the refused ones sent nothing');
+  // The counter holds no address: only HMAC keys.
+  const keys = f.store.all<{ scope: string; key: string }>(
+    "SELECT scope,key FROM web_player_throttle WHERE scope='code-email'",
+  );
+  assert.ok(keys.length >= 1 && keys.every((row) => /^[a-f0-9]{64}$/.test(row.key)));
+});
+
+test('wrong codes: the limit is rolling, the sweep keeps the 24 h counter, and it expires exactly when promised', async (t) => {
+  const f = fixture(t);
+  const email = 'rolling@example.com';
+  const wrong = async (count: number, fresh: boolean) => {
+    if (fresh) f.advance(61_000);
+    const challenge = f.accounts.requestCode({ purpose: 'reset', email, ipHash: IP, origin });
+    await f.flush();
+    for (let i = 0; i < count; i++)
+      assert.equal(
+        outcome(() => f.accounts.verifyCode({ challengeId: challenge.challengeId, code: '000000', origin })),
+        'PLAYER_CODE_INVALID',
+      );
+  };
+  await wrong(4, false); // slot T0
+  f.advance(6 * 3_600_000);
+  await wrong(5, false); // slot T0+6h (the sweep of this request runs while the first four are 6 h old)
+  await wrong(1, true); // the tenth, a minute later
+  const now = T0 + 6 * 3_600_000 + 61_000;
+  // The first four leave when their hour slot is 24 h old: T0 + 1 h + 24 h.
+  const wait = T0 + 25 * 3_600_000 - now;
+  const ask = () => outcome(() => f.accounts.requestCode({ purpose: 'reset', email, ipHash: IP, origin }));
+  f.advance(61_000);
+  assert.match(ask(), /^PLAYER_RATE_LIMITED@\d+$/);
+  f.set(T0 + 25 * 3_600_000 - 1);
+  assert.equal(
+    ask(),
+    `PLAYER_RATE_LIMITED@1000`,
+    'one millisecond early is still limited (at least one second is promised)',
+  );
+  f.set(T0 + 25 * 3_600_000);
+  assert.equal(ask(), 'ok', 'the first four dropped out: six wrong codes remain, the budget is open again');
+  assert.ok(wait > 0);
+  // Six remain (slot T0+6h); four more fit, the fifth is refused again.
+  for (let i = 0; i < 4; i++) {
+    f.advance(61_000);
+    const challenge = f.accounts.requestCode({ purpose: 'reset', email, ipHash: IP, origin });
+    assert.equal(
+      outcome(() => f.accounts.verifyCode({ challengeId: challenge.challengeId, code: '000000', origin })),
+      'PLAYER_CODE_INVALID',
+    );
+  }
+  f.advance(61_000);
+  assert.match(ask(), /^PLAYER_RATE_LIMITED@\d+$/);
+  // A whole day and an hour later nothing is left, and the sweep deletes the rows.
+  f.advance(25 * 3_600_000 + 1);
+  assert.equal(ask(), 'ok');
+  assert.equal(
+    f.store.get(
+      "SELECT 1 FROM web_player_throttle WHERE scope='code-email' AND window_at<?",
+      T0 + 30 * 3_600_000 - 25 * 3_600_000,
+    ),
+    undefined,
+  );
+});
+
+test('wrong codes: a registered and an unknown address are refused identically, for every purpose and at the same moment', async (t) => {
+  const transcript = async (registered: boolean) => {
+    const f = fixture(t);
+    if (registered) await f.signUp('known@example.com');
+    else await f.signUp('someone@example.com');
+    const email = registered ? 'known@example.com' : 'ghost@example.com';
+    f.advance(120_000);
+    const steps: string[] = [];
+    const reset = f.accounts.requestCode({ purpose: 'reset', email, ipHash: IP, origin });
+    f.advance(61_000);
+    const guest = f.guest();
+    const signup = f.accounts.requestCode({ purpose: 'signup', email, ipHash: IP, origin, session: guest.session });
+    await f.flush();
+    for (let i = 0; i < 5; i++)
+      steps.push(outcome(() => f.accounts.verifyCode({ challengeId: reset.challengeId, code: '000000', origin })));
+    for (let i = 0; i < 5; i++)
+      steps.push(
+        outcome(() =>
+          f.accounts.verifyCode({ challengeId: signup.challengeId, code: '000000', origin, session: guest.session }),
+        ),
+      );
+    f.advance(61_000);
+    steps.push(outcome(() => f.accounts.requestCode({ purpose: 'reset', email, ipHash: OTHER_IP, origin })));
+    steps.push(
+      outcome(() =>
+        f.accounts.requestCode({ purpose: 'signup', email, ipHash: OTHER_IP, origin, session: f.guest().session }),
+      ),
+    );
+    return steps;
+  };
+  const known = await transcript(true),
+    unknown = await transcript(false);
+  assert.deepEqual(known, unknown);
+  assert.match(known.at(-1)!, /^PLAYER_RATE_LIMITED@\d+$/);
+  assert.match(known.at(-2)!, /^PLAYER_RATE_LIMITED@\d+$/);
+});
+
+test('last_seen_at: set at signup and login, refreshed by bootstrap at most once per UTC day', async (t) => {
+  const f = fixture(t);
+  const seen = (principalId: string) =>
+    f.store.get<{ last_seen_at: number }>(
+      'SELECT last_seen_at FROM web_player_logins WHERE principal_id=?',
+      principalId,
+    )!.last_seen_at;
+  const player = await f.signUp('seen@example.com');
+  const principalId = f.principalOf(player.token).principalId;
+  assert.equal(seen(principalId), T0);
+  // Bootstrap (touch) on the same UTC day writes nothing.
+  f.advance(3_600_000);
+  f.accounts.touch(principalId);
+  assert.equal(seen(principalId), T0);
+  // The first one of the next UTC day writes; the next ones that day do not.
+  f.advance(16 * 3_600_000);
+  f.accounts.touch(principalId);
+  const day2 = f.clock.now();
+  assert.equal(seen(principalId), day2);
+  f.advance(3_600_000);
+  f.accounts.touch(principalId);
+  assert.equal(seen(principalId), day2);
+  // A login counts as activity; a principal without a login is simply not touched.
+  f.advance(24 * 3_600_000);
+  await f.accounts.login({ email: 'seen@example.com', password: PASSWORD, origin, ipHash: IP });
+  assert.equal(seen(principalId), f.clock.now());
+  f.accounts.touch(f.principalOf(f.guest().token).principalId);
+});
+
+test('a signed-up guest after the trial: reads, logs in, edits the nickname and redeems an invite; a plain guest cannot', async (t) => {
+  const f = fixture(t);
+  const player = await f.signUp('kept@example.com');
+  const principal = f.principalOf(player.token);
+  const plain = f.guest();
+  const plainPrincipal = f.principalOf(plain.token);
+  for (const who of [principal, plainPrincipal])
+    f.store.run(
+      "UPDATE web_guest_retention SET state='active',started_at=?,expires_at=? WHERE principal_id=?",
+      T0 - 7_300_000,
+      T0 - 100_000,
+      who.principalId,
+    );
+  // Retention design: the row is untouched (active + expired). 'read' passes for the login, 'live' (admission) does not.
+  assert.equal(requireWebContent(f.store, f.clock, principal.principalId, principal.world_id, 'read')?.state, 'active');
+  assert.throws(
+    () => requireWebContent(f.store, f.clock, principal.principalId, principal.world_id),
+    code('TRIAL_EXPIRED'),
+  );
+  assert.throws(
+    () => requireWebContent(f.store, f.clock, principal.principalId, principal.world_id, 'live'),
+    code('TRIAL_EXPIRED'),
+  );
+  assert.throws(
+    () => requireWebContent(f.store, f.clock, plainPrincipal.principalId, plainPrincipal.world_id, 'read'),
+    code('TRIAL_EXPIRED'),
+  );
+  // Login and nickname still work.
+  const again = await f.accounts.login({ email: 'kept@example.com', password: PASSWORD, origin, ipHash: IP });
+  assert.ok(again.issuedToken);
+  assert.deepEqual(f.accounts.setNickname({ nickname: '新昵称', session: player.session }).nickname, '新昵称');
+  // A new signup cannot start on an ended trial.
+  assert.throws(
+    () =>
+      f.accounts.requestCode({
+        purpose: 'signup',
+        email: 'late@example.com',
+        ipHash: IP,
+        origin,
+        session: plain.session,
+      }),
+    code('TRIAL_EXPIRED'),
+  );
+  // Redemption: the signed-up guest may, the plain expired guest may not; afterwards the invited rules apply.
+  const invite = f.issueInvite();
+  assert.throws(
+    () =>
+      f.invites.redeem({ token: plain.token, csrf: plain.csrf, origin, code: invite.code!, requestId: 'late-plain' }),
+    code('TRIAL_EXPIRED'),
+  );
+  const redeemed = f.invites.redeem({
+    token: player.token,
+    csrf: player.csrf,
+    origin,
+    code: invite.code!,
+    requestId: 'late-kept',
+  });
+  assert.equal(redeemed.duplicate, false);
+  assert.equal(
+    f.store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principal.principalId)?.kind,
+    'invite',
+  );
+  assert.equal(
+    f.store.get<{ state: string }>('SELECT state FROM web_guest_retention WHERE principal_id=?', principal.principalId)
+      ?.state,
+    'protected',
+  );
+  assert.equal(requireWebContent(f.store, f.clock, principal.principalId, principal.world_id)?.state, 'protected');
 });

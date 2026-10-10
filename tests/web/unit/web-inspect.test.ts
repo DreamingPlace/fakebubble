@@ -258,3 +258,40 @@ test('inspect is strictly read-only and never returns secrets, emails, invite co
   assert.equal(inspectErrorCode(new Error('contains ' + SECRET.email)), 'WEB_INSPECT_BUDGET_UNAVAILABLE');
   assert.equal(inspectErrorCode('nope'), 'WEB_INSPECT_BUDGET_UNAVAILABLE');
 });
+
+test('inspect reports the player-account configuration: signup flag, daily cap and whether the mail binding exists, never an address', () => {
+  const { reader } = authority();
+  const players = (input: Parameters<typeof inspectWebAuthority>[4]) =>
+    inspectWebAuthority(reader, expected, flags, budget, input).players;
+  assert.deepEqual(players(undefined), {
+    PLAYER_SIGNUP_ENABLED: null,
+    PLAYER_EMAIL_DAILY_CAP: null,
+    PLAYER_EMAIL_BINDING_PRESENT: false,
+  });
+  assert.deepEqual(
+    players({ PLAYER_SIGNUP_ENABLED: 'true', PLAYER_EMAIL_DAILY_CAP: '250', emailBindingPresent: true }),
+    {
+      PLAYER_SIGNUP_ENABLED: 'true',
+      PLAYER_EMAIL_DAILY_CAP: 250,
+      PLAYER_EMAIL_BINDING_PRESENT: true,
+    },
+  );
+  assert.deepEqual(
+    players({ PLAYER_SIGNUP_ENABLED: 'false', PLAYER_EMAIL_DAILY_CAP: '0', emailBindingPresent: false }),
+    {
+      PLAYER_SIGNUP_ENABLED: 'false',
+      PLAYER_EMAIL_DAILY_CAP: 'other',
+      PLAYER_EMAIL_BINDING_PRESENT: false,
+    },
+  );
+  // Any other value is only ever reported as 'other': an address or secret pasted into a variable cannot leak.
+  const leaked = JSON.stringify(
+    players({
+      PLAYER_SIGNUP_ENABLED: SECRET.email,
+      PLAYER_EMAIL_DAILY_CAP: SECRET.passwordHash,
+      emailBindingPresent: true,
+    }),
+  );
+  assert.ok(!leaked.includes(SECRET.email) && !leaked.includes(SECRET.passwordHash));
+  assert.ok(leaked.includes('"PLAYER_SIGNUP_ENABLED":"other"') && leaked.includes('"PLAYER_EMAIL_DAILY_CAP":"other"'));
+});
