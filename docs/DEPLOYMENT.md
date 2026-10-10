@@ -82,6 +82,10 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **提示词哈希与协议指纹变化，需要重跑角色预览。** 第 A 步让提示词哈希覆盖 `prompts/v7/` 的每个文件；第 D、E 步改变审核工具 schema 与审核提示词；第 G 步改变提示词内容（`web-text-policy.test.ts` 记录各步的新旧值）。升级前批准的角色预览在发布前必须重新运行并重新批准。管理员的阶段延迟接口按日新增 `review`（`samples`/`changed`/`rate`：审核改写草稿的比例）。
 
+### 共创收件箱（Part 12）
+
+`117_cocreation.sql` 是独立的第 117 版迁移（Node：`user_version=117`，已有 provider 实例运行 `migrate-cocreation`；Cloudflare 内联与 R2：账本版本 117，已在 116 的权威启动时自动补上）。新增 `web_cocreation_submissions` 与 `web_cocreation_answers`（均为用户数据）。受邀玩家通过 `POST /api/web/provider/cocreation/submit` 为官方角色留下想法（每答案 ≤300 字，自由卡 ≤1000，对话卡每句 ≤120；每次 ≤12 条；每玩家每角色滚动 24 小时 ≤5 次；按 requestId 幂等；不计入 DAILY_REPLY_LIMIT；不调用任何供应商、不预占预算）。管理员权限 `cocreation.read`（查看）与 `cocreation.manage`（处理）由主管理员在权限编辑器的“角色 · 共创收件箱”中授予，不包含在四个功能类别里。收件箱只显示稳定的匿名代号（`玩家#` + 4 位十六进制，来自 requestKey 派生密钥的 HMAC）和邀请批次名。内容只有在管理员“加入草稿”并经现有预览与发布流程后才会进入提示词。角色删除与玩家数据清理会一并删除这些行。
+
 ### 记忆：按含义召回（Part 7b）
 
 `116_memory_embeddings.sql` 是独立的第 116 版迁移，在 115 之后按顺序执行（Node：`user_version=116`，已有 provider 实例运行 `migrate-embeddings`；Cloudflare 内联与 R2：账本版本 116，已在 115 的权威启动时自动补上）。它新增 `memory_embeddings`（每个范围、话题、模型一条 float32 小端向量，`state` 为 `ready` 或 `unknown`）、`web_embed_attempts`（嵌入调用的派发账本，阶段 `embed`）和 `web_embed_metrics`（每日计数，无内容）。向量存在现有 SQLite（业务对象）里，不使用 Vectorize 或任何外部存储；相似度在代码里、只在同一范围内计算。
@@ -110,7 +114,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 只返回：架构版本；已应用的迁移账本（版本 + sha256）与本版代码期望的步骤（内联与 R2 两份列表），以及布尔 `matches`（与对象实际使用的 R2 列表逐步比较）；`web_instance` 的实例 ID 与恢复纪元；各供应商的已花费/占用额度；三个派发账本（web provider、external、embed）中 `unknown` 尝试的数量及其 ID（最多 200 个，数量精确，不含任何内容）；是否存在 owner 管理员（仅布尔，无邮箱）；`PUBLIC_ENABLED` / `EXTERNAL_CALLS` / `OPERATOR_ENABLED` / `EMBEDDINGS_ENABLED` 当前值（仅 `true`/`false`/未设置，其他值显示为 `other`）。不返回密钥、邮箱、邀请码、消息文本或记忆。
 
-**限制：** 迁移的哈希校验与升级发生在业务对象的构造函数里，早于任何 RPC。新代码上的第一次任何调用（包括 `inspect`、HTTP、闹钟）都会先把 113 升级到 116；若某一步哈希不一致，构造函数抛出 `WEB_CLOUD_MIGRATION_MISMATCH`，`inspect` 同样失败，而不是返回 `matches:false`。所以 `inspect` 用于**部署之后**核对结果，不能预演升级；升级前请用下面的 `expected-migrations` 离线取得期望摘要。
+**限制：** 迁移的哈希校验与升级发生在业务对象的构造函数里，早于任何 RPC。新代码上的第一次任何调用（包括 `inspect`、HTTP、闹钟）都会先把 113 升级到 117；若某一步哈希不一致，构造函数抛出 `WEB_CLOUD_MIGRATION_MISMATCH`，`inspect` 同样失败，而不是返回 `matches:false`。所以 `inspect` 用于**部署之后**核对结果，不能预演升级；升级前请用下面的 `expected-migrations` 离线取得期望摘要。
 
 ```
 node scripts/web-cloudflare-operator.ts --action=inspect --receipt-file=/abs/private/inspect.json \

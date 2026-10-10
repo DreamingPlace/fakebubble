@@ -1,6 +1,8 @@
 import {
   ADMIN_PERMISSION_CATEGORIES,
+  isCocreationPermission,
   permissionCategory,
+  type CocreationAdminPermission,
   type AdminPermission,
   type AdminPermissionCategory,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
@@ -15,6 +17,17 @@ const labels: Record<AdminPermissionCategory, [string, string]> = {
   ],
   'category.materials': ['声音成品', '查看、上传、试听和批准角色成品音频。不自动上传原始声音，不创建或克隆音色。'],
   'category.invites': ['玩家邀请', '查看、生成和撤销玩家邀请码及已兑换的体验授权。不删除账号和聊天。'],
+};
+/** 角色 · 共创收件箱: two explicit permissions, deliberately not part of the character categories. */
+const cocreationLabels: Record<CocreationAdminPermission, [string, string]> = {
+  'cocreation.read': [
+    '共创收件箱 · 查看',
+    '阅读玩家为官方角色写下的想法。只显示匿名代号和邀请批次，不显示邮箱或身份；不能修改状态，也不能写入草稿。',
+  ],
+  'cocreation.manage': [
+    '共创收件箱 · 处理',
+    '包含查看，并可标记已处理／归档、加星、写备注、标记“已采用”。把内容加入角色草稿，另需“角色资料”类权限。',
+  ],
 };
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) => {
   const node = document.createElement(tag);
@@ -32,7 +45,9 @@ export function permissionEditor(root: HTMLElement, initial: readonly AdminPermi
     const [name, help] = labels[category],
       label = el('label'),
       input = el('input'),
-      legacy = initial.filter((p) => permissionCategory(p) === category && p !== category);
+      legacy = initial.filter(
+        (p) => !isCocreationPermission(p) && permissionCategory(p) === category && p !== category,
+      );
     input.type = 'checkbox';
     input.checked = initial.includes(category) || legacy.length > 0;
     input.indeterminate = !initial.includes(category) && legacy.length > 0;
@@ -57,13 +72,54 @@ export function permissionEditor(root: HTMLElement, initial: readonly AdminPermi
     value: () => {
       const result: AdminPermission[] = [];
       for (const [category, { input, changed }] of choices) {
-        if (!changed) result.push(...initial.filter((p) => permissionCategory(p) === category));
+        if (!changed)
+          result.push(...initial.filter((p) => !isCocreationPermission(p) && permissionCategory(p) === category));
         else if (input.checked) result.push(category);
       }
       return [...new Set(result)].sort();
     },
     setDisabled: (disabled: boolean) => {
       for (const { input } of choices.values()) input.disabled = disabled;
+    },
+  };
+}
+
+/**
+ * 角色 · 共创收件箱: two explicit permissions beside (not inside) the four categories. Kept as its own control so the
+ * category editor still contains exactly its four categories; the page combines both values.
+ */
+export function cocreationPermissionEditor(root: HTMLElement, initial: readonly AdminPermission[]) {
+  const boxes = new Map<CocreationAdminPermission, HTMLInputElement>();
+  const group = el('fieldset');
+  group.append(el('legend', '角色 · 共创收件箱'));
+  root.append(group);
+  for (const permission of ['cocreation.read', 'cocreation.manage'] as const) {
+    const [name, help] = cocreationLabels[permission],
+      label = el('label'),
+      input = el('input');
+    input.type = 'checkbox';
+    input.checked =
+      initial.includes(permission) || (permission === 'cocreation.read' && initial.includes('cocreation.manage'));
+    input.setAttribute('data-permission', permission);
+    label.append(input, el('span', name));
+    group.append(label, el('p', help));
+    boxes.set(permission, input);
+  }
+  // Handling includes viewing: ticking handling ticks viewing, unticking viewing unticks handling.
+  boxes.get('cocreation.manage')!.addEventListener('change', () => {
+    if (boxes.get('cocreation.manage')!.checked) boxes.get('cocreation.read')!.checked = true;
+  });
+  boxes.get('cocreation.read')!.addEventListener('change', () => {
+    if (!boxes.get('cocreation.read')!.checked) boxes.get('cocreation.manage')!.checked = false;
+  });
+  return {
+    value: (): AdminPermission[] => {
+      const result: AdminPermission[] = [];
+      for (const [permission, input] of boxes) if (input.checked) result.push(permission);
+      return result.sort();
+    },
+    setDisabled: (disabled: boolean) => {
+      for (const input of boxes.values()) input.disabled = disabled;
     },
   };
 }

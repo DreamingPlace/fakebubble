@@ -26,6 +26,7 @@ import { serveLocalStatic } from '../platform/web-local-static.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
+import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { routeWebInvite } from '../invites/web-invite-routes.ts';
 import { WebProviderApplication } from './web-provider-application.ts';
@@ -410,6 +411,7 @@ export class WebProviderServer {
         req.method === 'POST' &&
         (path.startsWith(`${API}/invites/`) ||
           path.startsWith(`${API}/admin/`) ||
+          path.startsWith(`${API}/cocreation/`) ||
           path.startsWith(`${API}/identity/invite-`))
       ) {
         const localPath = `/api/web/local${path.slice(API.length)}`;
@@ -441,10 +443,25 @@ export class WebProviderServer {
           playerToken: this.cookie(req),
           adminCookie: this.cookie(req, `${this.config.cookieName}_admin`),
           trustedIpHash: this.ipHash(req),
-          body: await this.body(req, materialUpload ? 8_001_024 : characterWrite ? 131072 : 8192),
+          body: await this.body(
+            req,
+            materialUpload
+              ? 8_001_024
+              : characterWrite
+                ? 131072
+                : path.startsWith(`${API}/cocreation/`)
+                  ? COCREATION_BODY_LIMIT
+                  : 8192,
+          ),
         };
         const result =
-          (await routeWebAccountAdmin(this.inviteAdmin, input, this.application.characterAdmin)) ??
+          (await routeWebAccountAdmin(
+            this.inviteAdmin,
+            input,
+            this.application.characterAdmin,
+            this.application.cocreation,
+          )) ??
+          routeWebCocreation(this.application.cocreation, input) ??
           routeWebInvite(this.inviteActions, input, this.inviteAdmin);
         if (result.issuedToken) this.setCookie(res, result.issuedToken, true);
         if (result.issuedAdminCookie)

@@ -2,11 +2,13 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { WebAccountAdmin } from './web-account-admin.ts';
 import type { WebInviteRequest, WebInviteResult } from '../invites/web-invite-routes.ts';
 import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
+import type { WebCocreation } from '../cocreation/web-cocreation.ts';
 
 export async function routeWebAccountAdmin(
   admin: WebAccountAdmin,
   req: WebInviteRequest,
   characters?: WebCharacterAdmin,
+  cocreation?: WebCocreation,
 ): Promise<WebInviteResult | null> {
   const base = '/api/web/local/admin',
     path = req.path;
@@ -33,6 +35,39 @@ export async function routeWebAccountAdmin(
     const { cookie, ...session } = result;
     return { status: 200, body: session, issuedAdminCookie: cookie };
   };
+  if (path.startsWith(`${base}/cocreation/`)) {
+    auth();
+    ensure(cocreation, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/cocreation/`.length);
+    if (action === 'counts') {
+      body([]);
+      return { status: 200, body: cocreation.counts(actor) };
+    }
+    if (action === 'list')
+      return {
+        status: 200,
+        body: cocreation.list(actor, body(['characterId', 'status', 'starred', 'query', 'before']) as never),
+      };
+    if (action === 'detail') return { status: 200, body: cocreation.detail(actor, body(['id']).id) };
+    if (action === 'set-status') {
+      const value = body(['ids', 'status']);
+      return { status: 200, body: cocreation.setStatus(actor, value.ids, value.status) };
+    }
+    if (action === 'star') {
+      const value = body(['id', 'starred']);
+      return { status: 200, body: cocreation.star(actor, value.id, value.starred) };
+    }
+    if (action === 'note') {
+      const value = body(['id', 'note']);
+      return { status: 200, body: cocreation.note(actor, value.id, value.note) };
+    }
+    if (action === 'adopt') {
+      const value = body(['id', 'ordinal']);
+      return { status: 200, body: cocreation.markAdopted(actor, value.id, value.ordinal) };
+    }
+    ensure(false, 'NOT_FOUND');
+  }
   if (path.startsWith(`${base}/characters/`)) {
     auth();
     ensure(characters, 'NOT_FOUND');

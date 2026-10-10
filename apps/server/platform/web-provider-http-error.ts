@@ -1,5 +1,13 @@
 import { DomainError, RetryAfterError } from '../../../packages/domain/errors.ts';
 
+/** Co-creation submit failures that are the player's input (400) rather than state (409). */
+const cocreationInvalid = new Set([
+  'COCREATION_EMPTY',
+  'COCREATION_TOO_MANY_ANSWERS',
+  'COCREATION_CARD_INVALID',
+  'COCREATION_TEXT_INVALID',
+]);
+
 /** Same redacted failure contract for Node and Cloudflare transports. */
 export function webProviderHTTPError(error: unknown) {
   const code = error instanceof DomainError ? error.code : 'INTERNAL_ERROR';
@@ -45,18 +53,21 @@ export function webProviderHTTPError(error: unknown) {
                 publicCode === 'ADMIN_CSRF_REQUIRED' ||
                 publicCode === 'ADMIN_PERMISSION_REQUIRED' ||
                 publicCode === 'ADMIN_OWNER_REQUIRED' ||
-                publicCode === 'ADMIN_OWNER_PROTECTED'
+                publicCode === 'ADMIN_OWNER_PROTECTED' ||
+                publicCode === 'COCREATION_INVITE_REQUIRED'
               ? 403
               : publicCode === 'INVALID_CURSOR' ||
                   publicCode === 'INVALID_REQUEST' ||
                   publicCode === 'INVALID_TEXT' ||
                   publicCode === 'ADMIN_EMAIL_INVALID' ||
                   publicCode === 'ADMIN_PASSWORD_INVALID' ||
-                  publicCode === 'ADMIN_CODE_INVALID'
+                  publicCode === 'ADMIN_CODE_INVALID' ||
+                  cocreationInvalid.has(publicCode)
                 ? 400
                 : publicCode === 'QUEUE_FULL' ||
                     publicCode === 'RATE_LIMITED' ||
-                    publicCode === 'WEB_DAILY_LIMIT_REACHED'
+                    publicCode === 'WEB_DAILY_LIMIT_REACHED' ||
+                    publicCode === 'COCREATION_RATE_LIMITED'
                   ? 429
                   : publicCode === 'INTERNAL_ERROR'
                     ? 500

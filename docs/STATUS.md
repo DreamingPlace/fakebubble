@@ -81,3 +81,9 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - 5: `relevance = max(lexical, semantic)`, semantic = clamp((cosine − τ) / (1 − τ), 0, 1), τ = 0.35, over the scope's ready vectors, at most the 500 most recently seen topics. Importance and recency weights are unchanged and ranking is still over the whole authorized scope before the limit.
 - 6: the owner-only stage-latency view reports per UTC day embedding calls, texts embedded, failures, UNKNOWNs, query-embedding fallbacks and timeouts.
 - `pnpm check`: **826 tests, 826 passed, 0 failed, 0 skipped** (767 baseline + 59 new), about 7m46s on Node 24.21.0 / pnpm 11.19.0. `pnpm web:player:build`, `check:web:local-http`, `check:web:restart` pass. Four-Worker package: **224** files (was 217: the provider, ledger, runner, purge helper, memory-embeddings and web-embeddings modules; the 116 SQL is bundled into the Workers).
+
+## Part 12 (player co-creation inbox)
+
+- `117_cocreation.sql` (own version on both runners; `migrateWebProviderCocreation` / `migrate-cocreation`). Players write ideas on "灵感卡片" (shared list in `packages/contracts/cocreation-cards.ts`); administrators read them in 共创收件箱, adopt answers into the character draft through the existing draft save (pure merge in `packages/contracts/cocreation-adopt.ts`), and publish through the existing flow. No provider calls, no automatic review, no prompt or tool-schema change.
+- Permissions `cocreation.read` / `cocreation.manage`; submitter shown only as a keyed pseudonym plus invite batch.
+- Purged with the character (deletion start and scope purge, audited) and with the player (retention, lifecycle audit).

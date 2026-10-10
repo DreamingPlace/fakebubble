@@ -1,5 +1,6 @@
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
+import { cocreationRemains } from '../cocreation/web-cocreation-purge.ts';
 export const operationContent = [
   'web_publication_items',
   'web_publications',
@@ -153,4 +154,7 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
       ),
       'CHARACTER_DELETION_UNHANDLED_CONTENT',
     );
+  // Players' co-creation ideas (117) are keyed by character, not by conversation: none may survive the purge.
+  if (cleared)
+    ensure(!cocreationRemains(store, { characterId: s.character_id }), 'CHARACTER_DELETION_UNHANDLED_CONTENT');
 }

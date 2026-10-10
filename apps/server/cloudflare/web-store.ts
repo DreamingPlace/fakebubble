@@ -7,7 +7,7 @@ import type { PrivateMediaObjects } from './media-objects.ts';
 import { parseWebConcurrency, parseWebDailyReplyLimit, type WebConcurrency } from '../../../config/web-concurrency.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-const versions = [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 17 }, (_, i) => 100 + i)];
+const versions = [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 18 }, (_, i) => 100 + i)];
 
 /** A separate schema113 authority. No beta namespace, filesystem, implicit seed or paid default. */
 export class WebDurableStore implements BusinessStore, WebRuntimeStore {
@@ -80,7 +80,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
       }
       let applied = this.all<{ version: number; sha256: string }>('SELECT * FROM cf_web_migrations ORDER BY version');
       // Every applied step must be hash-identical to the code's step of that version; steps the ledger lacks are
-      // the newer ones and run in order (an authority at 115 gains 116). A ledger ahead of the code is a mismatch.
+      // the newer ones and run in order (an authority at 116 gains 117). A ledger ahead of the code is a mismatch.
       ensure(
         applied.length <= migrations.length &&
           applied.every((m, i) => m.version === migrations[i]!.version && m.sha256 === digest(migrations[i]!.sql)),

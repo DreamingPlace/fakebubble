@@ -8,6 +8,8 @@ import { ProviderApi, ProviderApiError } from '../../services/provider-api.ts';
 import { replyPauseMs } from './reply-presentation.ts';
 import { ProviderInviteController } from '../../session/provider-invite-controller.ts';
 import { openRecoveryEntry, openRecoveryManage, recoveryCopy, showRecoveryCode } from './recovery-code.ts';
+import { mountChatMenu } from '../cocreation/chat-menu.ts';
+import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
 
 type Shell = {
   say(message: string): void;
@@ -112,6 +114,7 @@ export class LiveBinding {
       );
     }
     this.renderAccess();
+    this.mountChatMenus(shell);
     const onReturn = () => {
       if (!document.hidden && !this.busy && !this.invitation.locked) void this.refreshAccess().catch(() => {});
     };
@@ -123,6 +126,43 @@ export class LiveBinding {
     // Browse cards show the existing conversation, not just the welcome bubble.
     for (const conversation of this.view.conversations)
       void this.open(conversation.characterId, shell.card(conversation.characterId));
+  }
+
+  /** An invited player with a live grant may take part in co-creation; a guest sees the entry, disabled. */
+  private cocreationAllowed() {
+    const access = this.view.access;
+    return access.kind === 'invite' && access.status === 'active' && this.accessKnown && !this.invitation.locked;
+  }
+
+  /** The "⋯" menu in each chat header. Its items are read when it opens, so they follow the current access. */
+  private mountChatMenus(shell: Shell) {
+    for (const character of this.view.characters) {
+      const card = shell.card(character.characterId);
+      const more = card?.querySelector<HTMLElement>('.chat-more');
+      const head = card?.querySelector<HTMLElement>('.chat-head');
+      if (!more || !head) continue;
+      const name = shell.name(character.characterId);
+      mountChatMenu(more, head, () => {
+        const allowed = this.cocreationAllowed();
+        return [
+          {
+            label: cocreationCopy.title(name),
+            sub: allowed ? cocreationCopy.sub(name) : cocreationCopy.guestSub,
+            disabled: !allowed,
+            onSelect: () =>
+              openCocreationSheet({
+                api: this.api,
+                characterId: character.characterId,
+                name,
+                mark: shell.mark(character.characterId),
+                color: card.style.getPropertyValue('--avatar-bg'),
+                ink: card.style.getPropertyValue('--avatar-ink'),
+                say: (message) => shell.say(message),
+              }),
+          },
+        ];
+      });
+    }
   }
 
   private renderAccess() {

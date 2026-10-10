@@ -16,6 +16,7 @@ import m113 from '../../apps/server/web-migrations/113_provider_offline.sql';
 import m114 from '../../apps/server/web-migrations/114_stage_metrics.sql';
 import m115 from '../../apps/server/web-migrations/115_memory_importance.sql';
 import m116 from '../../apps/server/web-migrations/116_memory_embeddings.sql';
+import m117 from '../../apps/server/web-migrations/117_cocreation.sql';
 import retention from './retention.sql';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -56,6 +57,7 @@ export const webMigrations = [
     m114,
     m115,
     m116,
+    m117,
   ].map((sql, i) => ({
     version: 100 + i,
     sql:

@@ -8,6 +8,7 @@ import { identifier, keys, record } from './template-validation.ts';
 import { publishedWebCharacters, characterProfileHash } from './web-character-catalog.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
+import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
 import {
   auditCharacterDeletionScope,
   operationContent,
@@ -143,6 +144,8 @@ export class WebCharacterDeletion {
         );
       this.store.run('DELETE FROM web_character_catalog WHERE character_id=?', id);
       this.store.run('DELETE FROM web_character_drafts WHERE character_id=?', id);
+      // Players' co-creation ideas for this character go at once, including those of players who never opened a chat.
+      purgeCocreation(this.store, { characterId: id });
       this.store.run(
         'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',
         actor.memberId,
@@ -321,6 +324,8 @@ export class WebCharacterDeletion {
         this.store.run(`DELETE FROM ${table} WHERE operation_id IN (${operationScope})`, ...scopeArgs(s));
       // memory_facts exists from schema 115 and the embedding tables from 116; an older database has nothing there.
       releaseUnsentEmbedHolds(this.store, s.world_id, s.conversation_id);
+      // A submission that arrived between the start and this scope's purge is removed with it.
+      purgeCocreation(this.store, { characterId: s.character_id });
       for (const table of conversationContent)
         if (!LATE_TABLES.has(table) || embeddingTableExists(this.store, table))
           this.store.run(`DELETE FROM ${table} WHERE world_id=? AND conversation_id=?`, s.world_id, s.conversation_id);

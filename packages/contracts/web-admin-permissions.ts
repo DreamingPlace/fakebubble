@@ -6,6 +6,11 @@ export const ADMIN_INVITE_PERMISSIONS = [
   'invites.revoke-access',
 ] as const;
 export type InviteAdminPermission = (typeof ADMIN_INVITE_PERMISSIONS)[number];
+/** 角色 · 共创收件箱: read the players' ideas, or also change status, star, note and mark answers adopted. */
+export const ADMIN_COCREATION_PERMISSIONS = ['cocreation.read', 'cocreation.manage'] as const;
+export type CocreationAdminPermission = (typeof ADMIN_COCREATION_PERMISSIONS)[number];
+export const isCocreationPermission = (value: string): value is CocreationAdminPermission =>
+  (ADMIN_COCREATION_PERMISSIONS as readonly string[]).includes(value);
 // Read legacy scoped grants without silently migrating them. New UI grants only four categories.
 export const ADMIN_PERMISSION_LIMIT = 128;
 export const ADMIN_CHARACTER_ACTIONS = [
@@ -29,6 +34,7 @@ export type AdminPermissionCategory = (typeof ADMIN_PERMISSION_CATEGORIES)[numbe
 export type AdminPermission =
   | AdminPermissionCategory
   | InviteAdminPermission
+  | CocreationAdminPermission
   | 'invites.revoke'
   | 'characters.create'
   | `characters.${CharacterAdminAction}:${string}`;
@@ -38,6 +44,7 @@ export function isAdminPermission(value: unknown): value is AdminPermission {
   return (
     (ADMIN_PERMISSION_CATEGORIES as readonly string[]).includes(value) ||
     (ADMIN_INVITE_PERMISSIONS as readonly string[]).includes(value) ||
+    (ADMIN_COCREATION_PERMISSIONS as readonly string[]).includes(value) ||
     value === 'invites.revoke' ||
     value === 'characters.create' ||
     /^characters\.(read|edit|discard|preview|publish|materials|approve-materials|delete):(?:\*|[A-Za-z0-9_-]{1,128})$/.test(
@@ -71,6 +78,11 @@ export function hasInvitePermission(grants: readonly string[], permission: Invit
     ((permission === 'invites.revoke-code' || permission === 'invites.revoke-access') &&
       grants.includes('invites.revoke'))
   );
+}
+
+/** Only an explicit grant (or the owner role, checked by the caller) opens the inbox: player text is not part of character editing. */
+export function hasCocreationPermission(grants: readonly string[], permission: CocreationAdminPermission) {
+  return grants.includes('cocreation.manage') || grants.includes(permission);
 }
 
 export function canCreateCharacter(grants: readonly string[]) {

@@ -1,11 +1,16 @@
 import type { AccountAdminApi, AccountAdminSession } from '../../services/account-admin-api.ts';
 import { characterWorkbench, characterAdminError } from './character-workbench.ts';
-import { permissionEditor } from './permission-editor.ts';
+import { cocreationPermissionEditor, permissionEditor } from './permission-editor.ts';
+import { cocreationInbox } from './cocreation-inbox.ts';
+import type { CocreationAdminClient } from '../../services/cocreation-admin-api.ts';
 import { inviteRecords } from './invite-records.ts';
 import {
   ADMIN_PERMISSION_LIMIT,
   permissionCategory,
   hasInvitePermission,
+  hasCocreationPermission,
+  type AdminPermission,
+  type CocreationAdminPermission,
   type InviteAdminPermission,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { InviteLocalApiError } from '../../services/invite-local-api.ts';
@@ -28,7 +33,10 @@ type Port = Pick<
   | 'revokeInvite'
   | 'inviteRecords'
   | 'characters'
->;
+> & {
+  /** 共创收件箱. Optional: a page without it simply has no inbox tab. */
+  cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'>;
+};
 export function adminAccountError(error: unknown) {
   const characterError = characterAdminError(error);
   if (characterError) return characterError;
@@ -60,7 +68,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <h1 tabindex="-1">管理员登录</h1>
     <p class="admin-identity"></p>
     <nav class="admin-nav" aria-label="管理页面" hidden>
-      <button type="button" data-page="characters">角色资料</button><button type="button" data-page="invites">邀请码</button><button type="button" data-page="account">我的账号</button>
+      <button type="button" data-page="characters">角色资料</button><button type="button" data-page="cocreation" hidden>共创收件箱</button><button type="button" data-page="invites">邀请码</button><button type="button" data-page="account">我的账号</button>
       <button type="button" data-page="members">管理员权限</button><button type="button" id="admin-logout">退出登录</button>
     </nav>
     <section data-panel="login" hidden>
@@ -96,6 +104,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         <label><input id="admin-revoke-confirm" type="checkbox" required>我已核对记录和范围；此操作不会删除账号或聊天。</label><button type="submit">确认撤销该记录</button></form></details>
     </section>
     <section data-panel="characters" hidden><div id="admin-characters"></div></section>
+    <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
     <section data-panel="members" hidden><h2>管理员权限</h2><p>调整功能权限不退出对方账号，也不影响玩家会话或存档。</p>
       <details class="admin-new-member"><summary>添加管理员 · 签发一次性登录凭据</summary><form id="admin-member-issue"><label for="admin-member-label">管理员备注（便于识别，不是职位）</label><input id="admin-member-label" maxlength="80" required>
         <p>勾选需要的功能类别，再签发一次性登录凭据。使用凭据后立即获得所选权限；邮箱绑定可稍后完成。</p><div id="admin-new-permissions"></div>
@@ -122,7 +131,39 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const can = (permission: InviteAdminPermission) =>
     session?.member.role === 'owner' || (!!session && hasInvitePermission(session.member.permissions, permission));
   let workbench: ReturnType<typeof characterWorkbench> | null = null;
-  let newPermissions: ReturnType<typeof permissionEditor> | null = null;
+  let inbox: ReturnType<typeof cocreationInbox> | null = null;
+  // New (unread) co-creation submissions per character: the badge in the character workbench.
+  let unread: Record<string, number> = {};
+  /** The four categories, plus the two inbox permissions when this page has an inbox. */
+  const permissionControls = (host: HTMLElement, initial: readonly AdminPermission[]) => {
+    const base = permissionEditor(host, initial);
+    if (!port.cocreation) return base;
+    const extra = cocreationPermissionEditor(host, initial);
+    return {
+      value: () => [...new Set([...base.value(), ...extra.value()])].sort() as AdminPermission[],
+      setDisabled: (disabled: boolean) => {
+        base.setDisabled(disabled);
+        extra.setDisabled(disabled);
+      },
+    };
+  };
+  const canCocreation = (permission: CocreationAdminPermission) =>
+    !!port.cocreation &&
+    (session?.member.role === 'owner' ||
+      (!!session && hasCocreationPermission(session.member.permissions, permission)));
+  const refreshCounts = async () => {
+    if (!port.cocreation || !canCocreation('cocreation.read')) {
+      unread = {};
+      return;
+    }
+    try {
+      const counts = await port.cocreation.counts();
+      if (!disposed) unread = counts;
+    } catch {
+      /* The badge is a convenience; the inbox itself reports real errors. */
+    }
+  };
+  let newPermissions: ReturnType<typeof permissionControls> | null = null;
   const reissueUnknown = new Set<string>();
   const passwordIds = ['admin-password', 'admin-bind-password', 'admin-reset-password'];
   const concealPassword = (id: string) => {
@@ -147,6 +188,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       : '';
     q<HTMLElement>('.admin-nav').hidden = !session;
     q<HTMLButtonElement>('[data-page="members"]').hidden = session?.member.role !== 'owner';
+    q<HTMLButtonElement>('[data-page="cocreation"]').hidden = !canCocreation('cocreation.read');
+    if (page === 'cocreation') inbox?.activate();
+    else inbox?.deactivate();
     q<HTMLElement>('#admin-account-continue').textContent = session?.member.email ? '进入管理' : '稍后绑定，进入管理';
     q<HTMLElement>('#admin-bind-start').hidden = !!session?.member.email || !!bindId;
     q<HTMLElement>('#admin-bind-finish').hidden = !bindId;
@@ -273,7 +317,21 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       if (!disposed) status.textContent = text;
     },
     disposed: () => disposed,
+    badges: () => unread,
   });
+  inbox = port.cocreation
+    ? cocreationInbox(q('#admin-cocreation'), {
+        api: port.cocreation,
+        characters: port.characters,
+        canManage: () => canCocreation('cocreation.manage'),
+        run,
+        status: (text) => {
+          if (!disposed) status.textContent = text;
+        },
+        disposed: () => disposed,
+        onChanged: () => void refreshCounts(),
+      })
+    : null;
   const records = inviteRecords(q('#admin-invite-records'), port, can, run, () => disposed);
   const clearMemberControls = () => {
     q('#admin-members-list').replaceChildren();
@@ -284,6 +342,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     records.clear();
     clearMemberControls();
     workbench?.clear();
+    inbox?.clear();
+    unread = {};
   };
   const adoptSession = (current: AccountAdminSession) => {
     if (session && (session.member.id !== current.member.id || session.csrf !== current.csrf)) {
@@ -304,7 +364,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (disposed) return;
     const selected = newPermissions?.value() ?? [];
     q('#admin-new-permissions').replaceChildren();
-    newPermissions = permissionEditor(q('#admin-new-permissions'), selected);
+    newPermissions = permissionControls(q('#admin-new-permissions'), selected);
     const list = q<HTMLElement>('#admin-members-list');
     list.replaceChildren();
     for (const member of result.members) {
@@ -323,7 +383,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       } else {
         const controls = document.createElement('div');
         item.append(controls);
-        const editor = permissionEditor(controls, member.permissions);
+        const editor = permissionControls(controls, member.permissions);
         const save = document.createElement('button');
         save.type = 'button';
         save.textContent = `保存 ${member.label} 的权限`;
@@ -406,7 +466,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     listen(button, 'click', () => {
       if (busy || disposed) return;
       if (!navigate(button.dataset.page!)) return;
-      if (page === 'characters') void run(() => workbench!.load());
+      if (page === 'characters')
+        void run(async () => {
+          await refreshCounts();
+          await workbench!.load();
+        });
+      else if (page === 'cocreation' && inbox && canCocreation('cocreation.read')) void run(() => inbox!.load());
       else if (page === 'members') void run(loadMembers);
       else if (page === 'invites' && can('invites.read')) void run(() => records.load());
     });
@@ -566,6 +631,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     clearSecrets();
     session = null;
     workbench?.dispose();
+    inbox?.dispose();
     for (const cleanup of cleanups) cleanup();
     root.replaceChildren();
   };

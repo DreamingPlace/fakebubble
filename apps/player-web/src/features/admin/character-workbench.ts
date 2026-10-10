@@ -22,6 +22,8 @@ type Host = {
   disposed: () => boolean;
   /** Status-poll interval for submitted previews; tests shorten it. */
   previewPollMs?: number;
+  /** Unread (new) co-creation submissions per character, shown as a badge on the character's row. */
+  badges?: () => Record<string, number>;
 };
 /** One client-side submission. The body (including requestId) is fixed when it is created. */
 type QueueItem = {
@@ -265,8 +267,17 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       row.className = 'character-directory-row';
       roles.append(row);
       protectedRows.push({ characterId: c.characterId, node: row });
+      const heading = el('h3', c.displayName),
+        unread = host.badges?.()[c.characterId] ?? 0;
+      if (unread > 0) {
+        const badge = el('span', String(unread));
+        badge.className = 'cocreation-badge';
+        badge.setAttribute('aria-label', `有 ${unread} 条新的共创`);
+        badge.setAttribute('title', `共创收件箱里有 ${unread} 条新的玩家想法`);
+        heading.append(badge);
+      }
       row.append(
-        el('h3', c.displayName),
+        heading,
         el(
           'p',
           `${c.characterId} · ${c.publishedVersion === null ? '未发布' : `正式 v${c.publishedVersion}`}${c.draftRevision === null ? '' : ` · 草稿修订 ${c.draftRevision}`}`,

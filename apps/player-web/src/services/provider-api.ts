@@ -4,6 +4,7 @@ import {
   parseWebInviteRecovery,
   parseWebInviteStatus,
 } from '../../../../packages/contracts/web-local-invite.ts';
+import type { CocreationAnswer } from '../../../../packages/contracts/cocreation-cards.ts';
 import {
   parseWebProviderBootstrap,
   type WebProviderActions,
@@ -155,6 +156,22 @@ export class ProviderApi implements WebProviderActions {
       if (error instanceof ProviderApiError) throw error;
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
     }
+  }
+  /** An invited player's ideas for one official character; idempotent on requestId, so an uncertain send is retried as is. */
+  async submitCocreation(input: { characterId: string; requestId: string; answers: CocreationAnswer[] }) {
+    const value = record(
+      await this.request('/cocreation/submit', {
+        method: 'POST',
+        body: JSON.stringify({ characterId: input.characterId, requestId: input.requestId, answers: input.answers }),
+      }),
+    );
+    if (
+      typeof value.submissionId !== 'string' ||
+      !Number.isSafeInteger(value.answered) ||
+      typeof value.duplicate !== 'boolean'
+    )
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return { submissionId: value.submissionId, answered: value.answered as number, duplicate: value.duplicate };
   }
   async byRequest(requestId: string) {
     return operation(await this.request(`/operations/by-request/${encodeURIComponent(requestId)}`));
