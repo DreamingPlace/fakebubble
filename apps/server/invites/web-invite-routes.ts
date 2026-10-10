@@ -12,7 +12,14 @@ export type WebInviteRequest = {
   trustedIpHash?: string | undefined;
   body?: unknown;
 };
-export type WebInviteResult = { status: number; body: unknown; issuedToken?: string; issuedAdminCookie?: string };
+export type WebInviteResult = {
+  status: number;
+  body: unknown;
+  issuedToken?: string;
+  issuedAdminCookie?: string;
+  /** The transport expires the player cookie (log-out / abandoning a dead session). */
+  clearPlayerCookie?: boolean;
+};
 function object(value: unknown, keys: string[]) {
   ensure(
     value !== null &&

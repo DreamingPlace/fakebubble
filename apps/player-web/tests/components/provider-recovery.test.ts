@@ -215,17 +215,15 @@ test('regenerating shows the replacement once and reports a failure without expo
   assert.equal(d.body.children.at(-1)!.querySelector('.recovery-code').textContent, NEXT);
 });
 
-test('the recovery entry is offered on the "访问会话需要恢复" error page only', (t) => {
+// Part 11f replaced the "访问会话需要恢复" dead-end page: the 我有恢复码 link now lives on the signed-out first page
+// (covered in account-sheet.test.ts), and no error page carries it any more.
+test('no error page carries the recovery entry any more; a dead session is the signed-out first page', (t) => {
   dom(t);
   const api = { recoverWithRecoveryCode: async () => CODE, regenerateRecoveryCode: async () => NEXT };
-  const root = new Node();
-  renderProviderStartError(root as unknown as HTMLElement, new ProviderApiError(401, 'SESSION_EXPIRED'), () => {}, api);
-  const panel = root.children[0]!;
-  assert.equal(providerStartFailure(new ProviderApiError(401, 'SESSION_EXPIRED')).title, '访问会话需要恢复');
-  const have = panel.children[3]!;
-  assert.equal(have.textContent, '我有恢复码');
-  have.fire('click');
-  assert.match((globalThis.document.body as unknown as Node).children.at(-1)!.html, /输入恢复码/);
+  assert.equal(providerStartFailure(new ProviderApiError(401, 'SESSION_EXPIRED')).title, '你还没有登录');
+  const network = new Node();
+  renderProviderStartError(network as unknown as HTMLElement, new Error('offline'), () => {}, api);
+  assert.equal(network.children[0]!.children.length, 3);
   const guest = new Node();
   renderProviderStartError(
     guest as unknown as HTMLElement,

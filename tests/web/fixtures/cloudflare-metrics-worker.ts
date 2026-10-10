@@ -103,6 +103,12 @@ export class WebMetricsFixture {
           submissions: names().includes('web_cocreation_submissions'),
           answers: names().includes('web_cocreation_answers'),
         },
+        logins: {
+          logins: names().includes('web_player_logins'),
+          challenges: names().includes('web_email_challenges'),
+          daily: names().includes('web_player_email_daily'),
+          throttle: names().includes('web_player_throttle'),
+        },
         discardedColumn: storage.sql
           .exec('PRAGMA table_info(web_operation_metrics)')
           .toArray()

@@ -196,7 +196,7 @@ export class WebIdentity {
       'WEB_IDENTITY_ORIGIN_INVALID',
     );
     ensure(
-      [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117].includes(
+      [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118].includes(
         store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       ),
       'WEB_IDENTITY_MIGRATION_REQUIRED',
@@ -249,6 +249,20 @@ export class WebIdentity {
       now,
     );
   }
+  /** Schema 118: an email login bound to the principal. Older schemas have none. */
+  hasLogin(principalId: string) {
+    return (
+      !!this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'") &&
+      !!this.store.get('SELECT 1 FROM web_player_logins WHERE principal_id=?', principalId)
+    );
+  }
+  /** A guest principal with a login gets the same long-lived cookie an invited player does (the trial itself is unchanged). */
+  private hasGuestLogin(principalId: string) {
+    return (
+      this.hasLogin(principalId) &&
+      !!this.store.get("SELECT 1 FROM web_principals WHERE id=? AND kind='guest'", principalId)
+    );
+  }
   private withinLifetime(row: SessionRow, now: number) {
     return (
       now < row.absolute_expires_at || (row.account_id === null && this.hasActiveInviteGrant(row.principal_id, now))
@@ -280,7 +294,7 @@ export class WebIdentity {
     ensure(/^[A-Za-z0-9_-]{43}$/.test(csrf), 'CSRF_INVALID');
     ensure(fixedTimeEqual(Buffer.from(csrf), Buffer.from(this.csrf(row, 'active'))), 'CSRF_INVALID');
   }
-  private newSession(principalId: string, accountId: string | null, now: number) {
+  private newSession(principalId: string, accountId: string | null, now: number, durable = false) {
     const token = this.random(32).toString('base64url');
     const row: SessionRow = {
       id: this.id(),
@@ -291,7 +305,13 @@ export class WebIdentity {
       csrf_seed: this.random(32),
       created_at: now,
       last_active_at: now,
-      absolute_expires_at: now + (accountId ? LIMITS.accountAbsoluteMs : LIMITS.guestAbsoluteMs),
+      absolute_expires_at:
+        now +
+        (accountId
+          ? LIMITS.accountAbsoluteMs
+          : durable
+            ? LIMITS.inviteCookieMaxAgeSeconds * 1000
+            : LIMITS.guestAbsoluteMs),
       revoked_at: null,
     };
     this.store.run(
@@ -375,6 +395,92 @@ export class WebIdentity {
     const now = this.now(),
       row = this.activeSession(token, now);
     return row.account_id === null && this.hasActiveInviteGrant(row.principal_id, now);
+  }
+  /** Invited or signed up with an email login: the transport gives the cookie the 400-day lifetime. */
+  isDurableSession(token: string) {
+    const now = this.now(),
+      row = this.activeSession(token, now);
+    return (
+      row.account_id === null &&
+      (this.hasActiveInviteGrant(row.principal_id, now) || this.hasGuestLogin(row.principal_id))
+    );
+  }
+
+  /**
+   * True when a cookie names nothing a page could still use or recover: unknown, revoked, rotated, expired or malformed,
+   * and no live sealed redemption receipt that an uncertain redeem might still fetch. Only then may bootstrap clear it.
+   */
+  isDeadCookie(token: string) {
+    try {
+      this.activeSession(token, this.now());
+      return false;
+    } catch {
+      // fall through
+    }
+    for (const challenge of [(t: string) => this.inviteReceiptChallenge(t), (t: string) => this.receiptChallenge(t)])
+      try {
+        challenge(token);
+        return false;
+      } catch {
+        // no live receipt of this kind
+      }
+    return true;
+  }
+
+  /** Transport write authorization that also names the session (for per-session actions such as "log out other devices"). */
+  authorizeSessionWrite(token: string, csrf: string, origin: string) {
+    const session = this.activeSession(token, this.now());
+    this.writeAuth(session, csrf, origin);
+    const principal = this.authenticate(token);
+    ensure(session.account_id === null, 'WEB_GUEST_REQUIRED');
+    return {
+      sessionId: session.id,
+      principalId: principal.principalId,
+      playerId: principal.player_id,
+      worldId: principal.world_id,
+      kind: principal.kind,
+    };
+  }
+  /** A signed-in-or-not read of the current session; never throws for a dead cookie. */
+  peekSession(token: string | undefined) {
+    if (!token) return null;
+    try {
+      const row = this.activeSession(token, this.now());
+      const principal = this.authenticate(token);
+      return {
+        sessionId: row.id,
+        principalId: principal.principalId,
+        playerId: principal.player_id,
+        worldId: principal.world_id,
+        kind: principal.kind,
+      };
+    } catch {
+      return null;
+    }
+  }
+  /** Signup: the session that did it becomes as long-lived as a login session (400 days), never shorter than it was. */
+  extendToLoginLifetime(sessionId: string) {
+    this.store.run(
+      'UPDATE web_sessions SET absolute_expires_at=max(absolute_expires_at,?) WHERE id=? AND revoked_at IS NULL',
+      this.now() + LIMITS.inviteCookieMaxAgeSeconds * 1000,
+      sessionId,
+    );
+  }
+  /** Login: a fresh long-lived session for the login's principal. Other sessions stay as they are. */
+  issueLoginSession(principalId: string) {
+    ensure(this.hasLogin(principalId), 'PLAYER_LOGIN_REQUIRED');
+    const session = this.newSession(principalId, null, this.now(), true);
+    return { issuedToken: session.token, csrf: this.csrf(session.row, 'active'), sessionId: session.row.id };
+  }
+  /** Ends every live session of the principal, or every one except `exceptSessionId`. Returns how many ended. */
+  revokeSessions(principalId: string, exceptSessionId: string | null = null) {
+    return this.store.run(
+      `UPDATE web_sessions SET revoked_at=? WHERE principal_id=? AND revoked_at IS NULL AND (? IS NULL OR id<>?)`,
+      this.now(),
+      principalId,
+      exceptSessionId,
+      exceptSessionId,
+    ).changes;
   }
 
   /** An existing tab receives its stable CSRF; a rotated old token is never overwritten with a fresh guest. */
@@ -473,7 +579,7 @@ export class WebIdentity {
     grantId: string;
   }) {
     ensure(
-      [112, 113, 114, 115, 116, 117].includes(
+      [112, 113, 114, 115, 116, 117, 118].includes(
         this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       ) &&
         /^[A-Za-z0-9_.-]{1,128}$/.test(input.requestId) &&
@@ -743,6 +849,7 @@ export class WebIdentity {
         session = this.activeSession(token, now);
       this.writeAuth(session, csrf, origin);
       ensure(session.account_id === null, 'WEB_GUEST_REQUIRED');
+      ensure(!this.hasLogin(session.principal_id), 'PLAYER_LOGIN_EXISTS');
       const grant = this.activeInviteGrant(session.principal_id, now);
       ensure(
         !this.store.get('SELECT 1 FROM web_invite_credentials WHERE grant_id=?', grant.id),
@@ -770,6 +877,8 @@ export class WebIdentity {
         session = this.activeSession(token, now);
       this.writeAuth(session, csrf, origin);
       ensure(session.account_id === null, 'WEB_GUEST_REQUIRED');
+      // A player with an email login has no recovery code to keep: the login is their way back.
+      ensure(!this.hasLogin(session.principal_id), 'PLAYER_LOGIN_EXISTS');
       const grant = this.activeInviteGrant(session.principal_id, now);
       const secret = this.random(32).toString('base64url'),
         digest = this.inviteSecretDigest(secret);
@@ -1318,7 +1427,7 @@ export class WebIdentity {
         session.id,
       );
       if (
-        [112, 113, 114, 115, 116, 117].includes(
+        [112, 113, 114, 115, 116, 117, 118].includes(
           this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
         )
       )

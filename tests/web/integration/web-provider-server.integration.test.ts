@@ -296,7 +296,10 @@ test('provider-local 113 over HTTPS: catalog, guest lock, three turns + footer, 
   });
   assert.equal(unknownGuest.status, 401);
   assert.equal(unknownGuest.data.error.code, 'SESSION_EXPIRED');
-  assert.equal(unknownGuest.headers['set-cookie'], undefined);
+  // Part 11f: an unknown cookie is cleared (the page starts signed out) and never replaced by a fresh guest.
+  assert.deepEqual(unknownGuest.headers['set-cookie'], [
+    `${config.cookieName}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`,
+  ]);
 
   // Invite: admin issues a code; a fresh guest redeems and may talk to any character.
   const legacyGrant = new WebInviteAdmin(store, clock, config.origin).issueLoginGrant();

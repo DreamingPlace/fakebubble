@@ -3,14 +3,15 @@ import assert from 'node:assert/strict';
 import { ProviderApiError } from '../../src/services/provider-api.ts';
 import { providerStartFailure, renderProviderStartError } from '../../src/features/prototype/provider-start-error.ts';
 
-test('startup distinguishes expired guest, protected identity and network failure without exposing raw errors', () => {
+// Part 11f replaced the dead-end "访问会话需要恢复" page: a dead session now leads to the signed-out first page.
+test('startup distinguishes expired guest, dead session and network failure without exposing raw errors', () => {
   const guest = providerStartFailure(new ProviderApiError(401, 'GUEST_SESSION_EXPIRED'));
   assert.equal(guest.action, '重新进入访客页面');
   assert.match(guest.detail, /不会重置/);
   for (const code of ['SESSION_EXPIRED', 'SESSION_ROTATED_RECOVERABLE']) {
     const identity = providerStartFailure(new ProviderApiError(401, code));
-    assert.equal(identity.title, '访问会话需要恢复');
-    assert.match(identity.detail, /没有将受邀身份替换/);
+    assert.equal(identity.title, '你还没有登录');
+    assert.match(identity.detail, /登录后可以继续之前的聊天/);
   }
   const network = providerStartFailure(new Error('private debug data'));
   assert.equal(network.action, '重新连接');

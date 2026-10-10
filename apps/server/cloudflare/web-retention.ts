@@ -5,6 +5,7 @@ import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
 import { auditWebLifecycleWorld } from '../admission/web-lifecycle-audit.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
+import { purgePlayerLogins } from '../identity/web-player-purge.ts';
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
@@ -211,6 +212,8 @@ export class WebCloudRetention {
       releaseUnsentEmbedHolds(this.store, world);
       // Co-creation ideas (schema 117) are the player's data and go with the player.
       purgeCocreation(this.store, { principalId });
+      // The email login (schema 118) and the nickname 名片 revisions it wrote are the player's data too.
+      purgePlayerLogins(this.store, { principalId, worldId: world });
       for (const table of [
         'memory_facts',
         'memory_embeddings',

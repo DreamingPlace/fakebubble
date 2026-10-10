@@ -890,7 +890,9 @@ test('scoped role deletion over actual HTTP keeps another role, identities and u
   assert.equal((await f.call(`${base}/delete-status`, owner, {})).state, 'deleted');
 });
 
-test('bootstrap never clears active, unknown, rotated or invited cookies', async (t) => {
+// Part 11f changed this deliberately: a dead (unknown / revoked) cookie is now cleared so the page starts signed out;
+// active, invited and still-recoverable rotated cookies are still never cleared.
+test('bootstrap clears only dead cookies and never an active, recoverable-rotated or invited one', async (t) => {
   const f = setup(t),
     owner = client(),
     guest = client();
@@ -901,7 +903,10 @@ test('bootstrap never clears active, unknown, rotated or invited cookies', async
   assert.equal(active.headers.get('set-cookie'), null);
   const unknown = await f.request(`${API}/bootstrap`, { cookie: '__Host-fixture=' + 'z'.repeat(43), csrf: '' });
   assert.equal(unknown.status, 401);
-  assert.equal(unknown.headers.get('set-cookie'), null);
+  assert.match(
+    unknown.headers.get('set-cookie')!,
+    /^__Host-fixture=; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=0$/,
+  );
   const grant = await f.fixture<any>('/fixture/grant');
   await f.call(`${API}/admin/login`, owner, { token: grant.token });
   const issued = await f.call(
@@ -928,10 +933,10 @@ test('bootstrap never clears active, unknown, rotated or invited cookies', async
   const revived = await f.request(`${API}/bootstrap`, guest);
   assert.equal(revived.status, 200);
   assert.match(revived.headers.get('set-cookie')!, /; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=34560000$/);
-  // Only an administrator ends it; the failed bootstrap still never clears the cookie.
+  // Only an administrator ends it; once it is ended the cookie is dead and the failed bootstrap clears it (11f).
   await f.call(`${API}/admin/invites/revoke-grant`, owner, { id: redeemed.grantId });
   const expired = await f.request(`${API}/bootstrap`, guest);
   assert.equal(expired.status, 401);
   assert.equal(((await expired.json()) as any).error.code, 'SESSION_EXPIRED');
-  assert.equal(expired.headers.get('set-cookie'), null);
+  assert.match(expired.headers.get('set-cookie')!, /Max-Age=0$/);
 });

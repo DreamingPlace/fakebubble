@@ -124,15 +124,15 @@ function seedUnknowns(db: DatabaseSync) {
 test('inspect reports the deployed ledger next to the expected steps and matches only when every step is identical', () => {
   const { reader } = authority();
   const report = inspectWebAuthority(reader, expected, flags, budget);
-  // Extended for migration 117: schema 117, 42 steps.
-  assert.equal(report.schemaVersion, 117);
-  assert.equal(report.migrations.applied.length, 42);
+  // Extended for migration 118: schema 118, 43 steps.
+  assert.equal(report.schemaVersion, 118);
+  assert.equal(report.migrations.applied.length, 43);
   assert.deepEqual(
     report.migrations.applied,
     webR2Migrations.map((m) => ({ version: m.version, sha256: sha(m.sql) })),
   );
   assert.deepEqual(report.migrations.expected.r2, report.migrations.applied);
-  assert.equal(report.migrations.expected.inline.length, 42);
+  assert.equal(report.migrations.expected.inline.length, 43);
   assert.deepEqual(
     report.migrations.expected.inline.map((m, i) => m.sha256 === report.migrations.expected.r2[i]!.sha256),
     report.migrations.expected.inline.map((m) => m.version !== 113),
@@ -175,7 +175,7 @@ test('inspect reports the deployed ledger next to the expected steps and matches
     false,
   );
   assert.equal(
-    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (118,'" + 'a'.repeat(64) + "')")),
+    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (119,'" + 'a'.repeat(64) + "')")),
     false,
   );
   assert.equal(

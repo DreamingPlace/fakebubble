@@ -29,6 +29,21 @@ export class ProviderApiError extends Error {
   }
 }
 
+/** What the page knows about the player's account (GET /account). Signed-out pages only learn whether signup is open. */
+export type AccountInfo =
+  | { signupEnabled: boolean; signedIn: false }
+  | {
+      signupEnabled: boolean;
+      signedIn: true;
+      kind: string;
+      hasLogin: boolean;
+      emailMasked: string | null;
+      nickname: string | null;
+      canBind: boolean;
+    };
+export type EmailPurpose = 'signup' | 'reset' | 'bind';
+export type CodeChallenge = { challengeId: string; expiresAt: number; resendAfterMs: number };
+
 const record = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ProviderApiError(0, 'PROTOCOL_INVALID');
   return value as Record<string, unknown>;
@@ -172,6 +187,76 @@ export class ProviderApi implements WebProviderActions {
     )
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
     return { submissionId: value.submissionId, answered: value.answered as number, duplicate: value.duplicate };
+  }
+  /** Signup / reset / bind step 1: ask for the emailed code. The answer is the same for registered and unknown addresses. */
+  async requestEmailCode(input: { purpose: EmailPurpose; email: string }): Promise<CodeChallenge> {
+    const value = record(await this.request('/account/request-code', { method: 'POST', body: JSON.stringify(input) }));
+    if (
+      typeof value.challengeId !== 'string' ||
+      !Number.isSafeInteger(value.expiresAt) ||
+      !Number.isSafeInteger(value.resendAfterMs)
+    )
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return value as unknown as CodeChallenge;
+  }
+  async verifyEmailCode(input: { challengeId: string; code: string }) {
+    await this.request('/account/verify-code', { method: 'POST', body: JSON.stringify(input) });
+  }
+  /** Step 3 for a guest (注册) or a legacy invited player (绑定邮箱): password + nickname after a verified code. */
+  async finishAccount(input: { purpose: 'signup' | 'bind'; challengeId: string; password: string; nickname: string }) {
+    const value = record(
+      await this.request(`/account/${input.purpose}`, {
+        method: 'POST',
+        body: JSON.stringify({ challengeId: input.challengeId, password: input.password, nickname: input.nickname }),
+      }),
+    );
+    if (typeof value.nickname !== 'string' || typeof value.emailMasked !== 'string')
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return { nickname: value.nickname, emailMasked: value.emailMasked };
+  }
+  /** A new session for that login's principal. Other sessions are untouched. */
+  async login(input: { email: string; password: string }) {
+    const value = record(await this.request('/account/login', { method: 'POST', body: JSON.stringify(input) }));
+    if (typeof value.csrf !== 'string') throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    this.csrf = value.csrf;
+  }
+  async resetPassword(input: { challengeId: string; password: string }) {
+    const value = record(await this.request('/account/reset', { method: 'POST', body: JSON.stringify(input) }));
+    if (typeof value.csrf !== 'string') throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    this.csrf = value.csrf;
+  }
+  async changePassword(input: { current: string; next: string; logoutOthers: boolean }) {
+    await this.request('/account/password', { method: 'POST', body: JSON.stringify(input) });
+  }
+  async setNickname(nickname: string) {
+    await this.request('/account/nickname', { method: 'POST', body: JSON.stringify({ nickname }) });
+  }
+  async logoutOthers() {
+    await this.request('/account/logout-others', { method: 'POST', body: '{}' });
+  }
+  async logout() {
+    await this.request('/account/logout', { method: 'POST', body: '{}' });
+  }
+  /** Only the browser forgets its cookie (nothing is revoked): the next visit starts from the first page. */
+  async abandonSession() {
+    await this.request('/account/signed-out', { method: 'POST', body: '{}' });
+  }
+  async account(): Promise<AccountInfo> {
+    const value = record(await this.request('/account'));
+    if (typeof value.signupEnabled !== 'boolean' || typeof value.signedIn !== 'boolean')
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    if (!value.signedIn) return { signupEnabled: value.signupEnabled, signedIn: false };
+    if (typeof value.hasLogin !== 'boolean' || typeof value.canBind !== 'boolean' || typeof value.kind !== 'string')
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return {
+      signupEnabled: value.signupEnabled,
+      signedIn: true,
+      kind: value.kind,
+      hasLogin: value.hasLogin,
+      emailMasked: typeof value.emailMasked === 'string' ? value.emailMasked : null,
+      nickname: typeof value.nickname === 'string' ? value.nickname : null,
+      canBind: value.canBind,
+    };
   }
   async byRequest(requestId: string) {
     return operation(await this.request(`/operations/by-request/${encodeURIComponent(requestId)}`));

@@ -1,6 +1,7 @@
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { cocreationRemains } from '../cocreation/web-cocreation-purge.ts';
+import { playerLoginsRemain } from '../identity/web-player-purge.ts';
 
 const shells = new Set([
   'web_principals',
@@ -45,6 +46,9 @@ const handled = new Set([
   'job_evidence_snapshots',
   'dialogue_bubbles',
   'outbox',
+  // Nickname 名片 revisions written at signup; the cleaners delete them with the player (schema 118).
+  'player_profile_versions',
+  'player_profile_requests',
 ]);
 
 /** Check the actual schema, not merely the list of tables current code knows to delete. */
@@ -167,6 +171,15 @@ export function auditWebLifecycleWorld(
           .all<{ id: string }>('SELECT id FROM web_principals WHERE world_id=?', worldId)
           .map((row) => row.id),
       }),
+      'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
+    );
+  // The email login (118) carries the principal too: a cleared world leaves none of its players' logins or challenges.
+  if (phase === 'cleared')
+    ensure(
+      !playerLoginsRemain(
+        store,
+        store.all<{ id: string }>('SELECT id FROM web_principals WHERE world_id=?', worldId).map((row) => row.id),
+      ),
       'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
     );
   if (phase === 'source') {
