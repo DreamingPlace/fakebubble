@@ -1,6 +1,7 @@
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
+import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 
 export type WebRetentionRow = {
@@ -51,8 +52,23 @@ export function webReceiptDigest(store: WebStore, kind: 'receipt' | 'usage', jso
   return store.webReceiptDigest(kind, json);
 }
 
-/** One server-side predicate for lifecycle private content. Legacy schemas keep their old contract. */
-export function requireWebContent(store: Store, clock: Clock, principalId: string, worldId: string) {
+/**
+ * One server-side predicate for lifecycle private content. Legacy schemas keep their old contract.
+ *
+ * access 'live' (the default; admission, queues, publishers, provider calls, signup, redemption of the same kind of
+ * work): a guest's content is available only inside the trial. access 'read' (history, events, an operation's status,
+ * published audio): additionally a guest WITH an email login keeps reading after the trial ended, because the cleaner
+ * keeps that guest's data (see web-player-purge.ts). The retention row is not changed: it stays 'active' and expired,
+ * so every 'live' caller, and therefore admission, still answers TRIAL_EXPIRED and no new reply or provider call can
+ * start. Only a caller that names 'read' can see the difference.
+ */
+export function requireWebContent(
+  store: Store,
+  clock: Clock,
+  principalId: string,
+  worldId: string,
+  access: 'live' | 'read' = 'live',
+) {
   if (!webDataLifecycleEnabled(store)) return null;
   const now = clock.now();
   ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
@@ -73,6 +89,13 @@ export function requireWebContent(store: Store, clock: Clock, principalId: strin
   if (
     principal.kind === 'guest' &&
     (row.state === 'unstarted' || (row.state === 'active' && row.expires_at !== null && now < row.expires_at))
+  )
+    return row;
+  if (
+    access === 'read' &&
+    principal.kind === 'guest' &&
+    row.state === 'active' &&
+    playerLoginRetainsGuest(store, principalId)
   )
     return row;
   if (

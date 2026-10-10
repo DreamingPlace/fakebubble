@@ -10,8 +10,12 @@ CREATE TABLE web_player_logins (
   email_norm TEXT NOT NULL UNIQUE CHECK(length(email_norm) BETWEEN 3 AND 254),
   password_hash TEXT NOT NULL CHECK(length(password_hash) BETWEEN 1 AND 256),
   created_at INTEGER NOT NULL,
-  password_changed_at INTEGER NOT NULL
+  password_changed_at INTEGER NOT NULL,
+  -- Last activity: set at signup / login and refreshed by bootstrap at most once per UTC day. The inactivity purge
+  -- (180 days, see web-player-purge.ts) reads it; a signed-up guest is otherwise kept after the trial ends.
+  last_seen_at INTEGER NOT NULL
 ) STRICT;
+CREATE INDEX web_player_logins_seen ON web_player_logins(last_seen_at);
 
 -- One-time email codes. code_digest is an HMAC under a REQUEST_KEY-derived key (never the code itself). A new challenge
 -- supersedes the previous live one for the same email and purpose (consumed_at set); rows double as the send ledger
@@ -45,10 +49,12 @@ CREATE TABLE web_player_email_daily (
   sends INTEGER NOT NULL CHECK(sends>=0)
 ) STRICT;
 
--- Fixed-window failure counters for login and password checks. key is an HMAC (of the email or of the IP hash):
--- no address and no IP is stored here, and rows carry no principal.
+-- Failure counters for login, password and code checks. key is an HMAC (of the email, the IP hash or an email + hour
+-- slot): no address and no IP is stored here, and rows carry no principal. login-* / password-* rows are fixed 15-minute
+-- windows; 'code-email' rows are one-hour slots (window_at = slot start) whose failures are summed over the last
+-- 24 hours, so the wrong-code limit per email is rolling and spans every challenge and purpose.
 CREATE TABLE web_player_throttle (
-  scope TEXT NOT NULL CHECK(scope IN ('login-email','login-ip','password-principal')),
+  scope TEXT NOT NULL CHECK(scope IN ('login-email','login-ip','password-principal','code-email')),
   key TEXT NOT NULL CHECK(length(key)=64),
   window_at INTEGER NOT NULL,
   failures INTEGER NOT NULL CHECK(failures>=0),

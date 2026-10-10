@@ -605,6 +605,12 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
     OPERATOR_ENABLED: 'true',
     EMBEDDINGS_ENABLED: null,
   });
+  // Fix-up 11f: the player-account configuration is reported without any address (the fixture sets none of it).
+  assert.deepEqual(report.players, {
+    PLAYER_SIGNUP_ENABLED: null,
+    PLAYER_EMAIL_DAILY_CAP: null,
+    PLAYER_EMAIL_BINDING_PRESENT: false,
+  });
   // Nothing sensitive: not the message, not any key, hash or origin binding.
   const body = JSON.stringify(report);
   const secrets = [
