@@ -13,9 +13,9 @@ const MAIN_113 = {
   inline: 'c007e0ae9e96c8e9022184634dfa46f248e8f0f4cd7c3467bc743a47f4945572',
   r2: '9b77476087f7f99de14252af68469029404e0532c032cc44ef048788ed8400ca',
 };
-// Extended for migration 117: the ledger now runs 100..117 (18 steps).
+// Extended for migration 118: the ledger now runs 100..118 (19 steps).
 const ledgerVersions = Array.from({ length: 24 }, (_, i) => i + 1).concat(
-  Array.from({ length: 18 }, (_, i) => 100 + i),
+  Array.from({ length: 19 }, (_, i) => 100 + i),
 );
 
 function nodeAt113() {
