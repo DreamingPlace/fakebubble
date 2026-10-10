@@ -43,6 +43,7 @@ export function webProviderHTTPError(error: unknown) {
               publicCode === 'SESSION_EXPIRED' ||
               publicCode === 'GUEST_SESSION_EXPIRED' ||
               publicCode === 'ADMIN_UNAUTHORIZED' ||
+              publicCode === 'PLAYER_LOGIN_INVALID' ||
               publicCode === 'ADMIN_LOGIN_INVALID'
             ? 401
             : publicCode === 'CSRF_INVALID' ||
@@ -54,7 +55,9 @@ export function webProviderHTTPError(error: unknown) {
                 publicCode === 'ADMIN_PERMISSION_REQUIRED' ||
                 publicCode === 'ADMIN_OWNER_REQUIRED' ||
                 publicCode === 'ADMIN_OWNER_PROTECTED' ||
-                publicCode === 'COCREATION_INVITE_REQUIRED'
+                publicCode === 'COCREATION_INVITE_REQUIRED' ||
+                publicCode === 'PLAYER_SIGNUP_DISABLED' ||
+                publicCode === 'PLAYER_ACCESS_REVOKED'
               ? 403
               : publicCode === 'INVALID_CURSOR' ||
                   publicCode === 'INVALID_REQUEST' ||
@@ -62,12 +65,18 @@ export function webProviderHTTPError(error: unknown) {
                   publicCode === 'ADMIN_EMAIL_INVALID' ||
                   publicCode === 'ADMIN_PASSWORD_INVALID' ||
                   publicCode === 'ADMIN_CODE_INVALID' ||
+                  publicCode === 'PLAYER_EMAIL_INVALID' ||
+                  publicCode === 'PLAYER_PASSWORD_INVALID' ||
+                  publicCode === 'PLAYER_NICKNAME_INVALID' ||
+                  publicCode === 'PLAYER_CODE_INVALID' ||
                   cocreationInvalid.has(publicCode)
                 ? 400
                 : publicCode === 'QUEUE_FULL' ||
                     publicCode === 'RATE_LIMITED' ||
                     publicCode === 'WEB_DAILY_LIMIT_REACHED' ||
-                    publicCode === 'COCREATION_RATE_LIMITED'
+                    publicCode === 'COCREATION_RATE_LIMITED' ||
+                    publicCode === 'PLAYER_RATE_LIMITED' ||
+                    publicCode === 'PLAYER_EMAIL_DAILY_CAP'
                   ? 429
                   : publicCode === 'INTERNAL_ERROR'
                     ? 500

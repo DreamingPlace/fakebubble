@@ -26,10 +26,15 @@ import { serveLocalStatic } from '../platform/web-local-static.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
+import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { routeWebInvite } from '../invites/web-invite-routes.ts';
-import { WebProviderApplication } from './web-provider-application.ts';
+import {
+  SessionClearedError,
+  WebProviderApplication,
+  type WebPlayerAccountsConfig,
+} from './web-provider-application.ts';
 import { webProviderHTTPError } from '../platform/web-provider-http-error.ts';
 
 const privateHeaders = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
@@ -79,6 +84,7 @@ export class WebProviderServer {
     runner: WebProviderRunner,
     network?: ProviderNetwork,
     previews?: WebCharacterPreviewRunner,
+    players?: WebPlayerAccountsConfig,
   ) {
     store.requireProviderRuntime();
     ensure(
@@ -94,7 +100,13 @@ export class WebProviderServer {
     this.store = store;
     this.config = config;
     this.clock = clock;
-    this.application = new WebProviderApplication(store, clock, { ...config, mode: 'provider-local' });
+    this.application = new WebProviderApplication(
+      store,
+      clock,
+      { ...config, mode: 'provider-local' },
+      undefined,
+      players,
+    );
     if (previews) {
       this.application.characterAdmin.enablePreviews(new WebCharacterPreviews(store, clock));
       this.previews = new WebCharacterPreviewExecutor(previews);
@@ -286,7 +298,10 @@ export class WebProviderServer {
       else if (result.invited && token) this.setCookie(res, token, true);
       this.json(res, 200, result.body);
     } catch (error) {
-      if (error instanceof DomainError && error.code === 'GUEST_SESSION_EXPIRED')
+      if (
+        error instanceof DomainError &&
+        (error.code === 'GUEST_SESSION_EXPIRED' || error instanceof SessionClearedError)
+      )
         res.setHeader('Set-Cookie', `${this.config.cookieName}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`);
       throw error;
     }
@@ -412,6 +427,7 @@ export class WebProviderServer {
         (path.startsWith(`${API}/invites/`) ||
           path.startsWith(`${API}/admin/`) ||
           path.startsWith(`${API}/cocreation/`) ||
+          path.startsWith(`${API}/account/`) ||
           path.startsWith(`${API}/identity/invite-`))
       ) {
         const localPath = `/api/web/local${path.slice(API.length)}`;
@@ -455,6 +471,10 @@ export class WebProviderServer {
           ),
         };
         const result =
+          (await routeWebPlayerAccounts(
+            path.startsWith(`${API}/account/`) ? this.application.playerAccounts : null,
+            input,
+          )) ??
           (await routeWebAccountAdmin(
             this.inviteAdmin,
             input,
@@ -464,6 +484,8 @@ export class WebProviderServer {
           routeWebCocreation(this.application.cocreation, input) ??
           routeWebInvite(this.inviteActions, input, this.inviteAdmin);
         if (result.issuedToken) this.setCookie(res, result.issuedToken, true);
+        else if (result.clearPlayerCookie)
+          res.setHeader('Set-Cookie', `${this.config.cookieName}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`);
         if (result.issuedAdminCookie)
           res.setHeader(
             'Set-Cookie',
@@ -487,6 +509,14 @@ export class WebProviderServer {
           body = { ...(result.body as Record<string, unknown>), grantId: grant?.id ?? null, duplicate: false };
         }
         this.json(res, result.status, body);
+        return;
+      }
+      if (req.method === 'GET' && path === `${API}/account`) {
+        this.json(
+          res,
+          200,
+          this.application.playerAccounts?.info(this.cookie(req)) ?? { signupEnabled: false, signedIn: false },
+        );
         return;
       }
       if (req.method === 'GET' && path === `${API}/bootstrap`) {

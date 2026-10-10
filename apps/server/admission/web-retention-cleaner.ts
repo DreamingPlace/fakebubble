@@ -9,6 +9,7 @@ import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } 
 import { auditWebLifecycleWorld } from './web-lifecycle-audit.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
+import { purgePlayerLogins } from '../identity/web-player-purge.ts';
 
 type Operation = {
   id: string;
@@ -270,14 +271,7 @@ export class WebRetentionCleaner {
       );
       auditWebLifecycleWorld(this.store, world, 'source');
       // Non-Web rows require an explicit, separately audited cleanup graph.
-      for (const table of [
-        'proactive_intents',
-        'media',
-        'moment_threads',
-        'group_conversations',
-        'speech_tasks',
-        'player_profile_versions',
-      ]) {
+      for (const table of ['proactive_intents', 'media', 'moment_threads', 'group_conversations', 'speech_tasks']) {
         if (this.store.get(`SELECT 1 FROM ${table} WHERE world_id=? LIMIT 1`, world))
           ensure(false, 'WEB_RETENTION_UNEXPECTED_WORLD_DATA');
       }
@@ -303,6 +297,8 @@ export class WebRetentionCleaner {
       releaseUnsentEmbedHolds(this.store, world);
       // Co-creation ideas (schema 117) are the player's data and go with the player.
       purgeCocreation(this.store, { principalId });
+      // The email login (schema 118) and the nickname 名片 revisions it wrote are the player's data too.
+      purgePlayerLogins(this.store, { principalId, worldId: world });
       for (const table of [
         'memory_facts',
         'memory_embeddings',

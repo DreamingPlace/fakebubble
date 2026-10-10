@@ -5,6 +5,7 @@ import type { Clock } from '../../../packages/contracts/index.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { WebInviteAdmin } from '../invites/web-invite-admin.ts';
 import { installWebAdminSchema } from './web-admin-schema.ts';
+import { normalizeEmail, maskEmail } from '../identity/email-address.ts';
 import { adminPasswords, validateAdminPassword, validateAdminLoginPassword } from './web-admin-password.ts';
 
 import {
@@ -70,21 +71,7 @@ function permissions(value: unknown): AdminPermission[] {
 }
 const identifier = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
-function emailAddress(value: unknown) {
-  ensure(typeof value === 'string' && value.length <= 254, 'ADMIN_EMAIL_INVALID');
-  const email = value.trim().toLowerCase();
-  ensure(
-    /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(
-      email,
-    ) &&
-      !email.startsWith('.') &&
-      !email.includes('..') &&
-      !email.includes('.@') &&
-      email.split('@')[0]!.length <= 64,
-    'ADMIN_EMAIL_INVALID',
-  );
-  return email;
-}
+const emailAddress = (value: unknown) => normalizeEmail(value, 'ADMIN_EMAIL_INVALID');
 
 type Percentiles = { samples: number; p50Ms: number | null; p95Ms: number | null };
 /** DeepSeek prompt-cache usage of the day's successful text calls; ratio is hit / (hit + miss), null without data. */
@@ -406,6 +393,8 @@ export class WebAccountAdmin extends WebInviteAdmin {
         ? null
         : this.db.get<{ created_at: number }>('SELECT created_at FROM web_invite_codes WHERE id=?', beforeId);
     ensure(beforeId === null || before, 'INVALID_CURSOR');
+    // The player's login (schema 118) shows an administrator only a masked address, never the full one.
+    const hasLogins = !!this.db.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'");
     const rows = this.db.all<{
       inviteId: string;
       batch: string;
@@ -418,17 +407,26 @@ export class WebAccountAdmin extends WebInviteAdmin {
       redeemedAt: number | null;
       accessRevokedAt: number | null;
       accessExpiresAt: number | null;
+      loginEmail: string | null;
     }>(
       `
       SELECT c.id inviteId,c.batch,c.note,c.created_at createdAt,c.redeem_by redeemBy,c.status,c.redeemed_count redeemed,
-        g.id grantId,g.redeemed_at redeemedAt,g.revoked_at accessRevokedAt,g.expires_at accessExpiresAt FROM web_invite_codes c LEFT JOIN web_invite_grants g ON g.invite_id=c.id
+        g.id grantId,g.redeemed_at redeemedAt,g.revoked_at accessRevokedAt,g.expires_at accessExpiresAt,
+        ${hasLogins ? 'l.email_norm' : 'NULL'} loginEmail FROM web_invite_codes c LEFT JOIN web_invite_grants g ON g.invite_id=c.id
+        ${hasLogins ? 'LEFT JOIN web_player_logins l ON l.principal_id=g.principal_id' : ''}
       WHERE (? IS NULL OR c.created_at<? OR c.created_at=? AND c.id<?) ORDER BY c.created_at DESC,c.id DESC LIMIT 51`,
       beforeId,
       before?.created_at ?? null,
       before?.created_at ?? null,
       beforeId,
     );
-    return { records: rows.slice(0, 50), next: rows.length > 50 ? rows[49]!.inviteId : null };
+    return {
+      records: rows.slice(0, 50).map(({ loginEmail, ...row }) => ({
+        ...row,
+        ...(hasLogins ? { loginEmailMasked: loginEmail === null ? null : maskEmail(loginEmail) } : {}),
+      })),
+      next: rows.length > 50 ? rows[49]!.inviteId : null,
+    };
   }
   private newSession(memberId: string) {
     this.member(memberId);

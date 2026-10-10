@@ -97,3 +97,22 @@ export function migrateWebProviderCocreation(store: Store) {
     store.db.exec('PRAGMA user_version = 117');
   });
 }
+
+/** Node-only 117→118: player email logins, email challenges and send counters (118_player_logins.sql). */
+export function migrateWebProviderLogins(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 117 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_cocreation_submissions'"),
+      'WEB_PROVIDER_LOGIN_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/118_player_logins.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 118');
+  });
+}

@@ -2,6 +2,7 @@ import { createHmac } from 'node:crypto';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { WEB_HTTP_LIMITS as LIMITS, WEB_IDENTITY_LIMITS } from '../../../config/web-v1.ts';
 import {
+  SessionClearedError,
   WebProviderApplication,
   WEB_PROVIDER_API as API,
   providerCharacterId,
@@ -11,6 +12,7 @@ import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { webProviderHTTPError } from '../platform/web-provider-http-error.ts';
 import { routeWebInvite } from '../invites/web-invite-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
+import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import { CloudRequestLimits } from './request-limits.ts';
@@ -157,6 +159,7 @@ export class WebProviderHTTP {
       (path.startsWith(`${API}/invites/`) ||
         path.startsWith(`${API}/admin/`) ||
         path.startsWith(`${API}/cocreation/`) ||
+        path.startsWith(`${API}/account/`) ||
         path.startsWith(`${API}/identity/invite-`))
     ) {
       const localPath = `/api/web/local${path.slice(API.length)}`;
@@ -200,6 +203,7 @@ export class WebProviderHTTP {
         ),
       };
       const result =
+        (await routeWebPlayerAccounts(path.startsWith(`${API}/account/`) ? app.playerAccounts : null, input)) ??
         (await routeWebAccountAdmin(app.inviteAdmin, input, app.characterAdmin, app.cocreation)) ??
         routeWebCocreation(app.cocreation, input) ??
         routeWebInvite(app.inviteActions, input, app.inviteAdmin);
@@ -219,10 +223,13 @@ export class WebProviderHTTP {
       }
       const response = Response.json(body, { status: result.status });
       if (result.issuedToken) this.setCookie(response, result.issuedToken, false, false, true);
+      else if (result.clearPlayerCookie) this.setCookie(response, '', false, true);
       if (result.issuedAdminCookie) this.setCookie(response, result.issuedAdminCookie, true);
       if (localPath === '/api/web/local/admin/logout') this.setCookie(response, '', true, true);
       return response;
     }
+    if (method === 'GET' && path === `${API}/account`)
+      return Response.json(app.playerAccounts?.info(this.cookie(request)) ?? { signupEnabled: false, signedIn: false });
     if (method === 'GET' && path === `${API}/bootstrap`) {
       try {
         const result = app.bootstrap(this.cookie(request), ipHash),
@@ -232,7 +239,11 @@ export class WebProviderHTTP {
         else if (result.invited && current) this.setCookie(response, current, false, false, true);
         return response;
       } catch (error) {
-        if (!(error instanceof DomainError) || error.code !== 'GUEST_SESSION_EXPIRED') throw error;
+        if (
+          !(error instanceof DomainError) ||
+          (error.code !== 'GUEST_SESSION_EXPIRED' && !(error instanceof SessionClearedError))
+        )
+          throw error;
         const failure = webProviderHTTPError(error),
           response = Response.json(failure.body, { status: failure.status });
         this.setCookie(response, '', false, true);

@@ -1,5 +1,9 @@
 import { ProviderApi, ProviderApiError } from '../../services/provider-api.ts';
-import { openRecoveryEntry, recoveryCopy } from './recovery-code.ts';
+import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
+
+/** A dead cookie (revoked, rotated, unknown): the page shows the normal signed-out first page, not an error. */
+export const isSignedOutError = (error: unknown) =>
+  error instanceof ProviderApiError && ['SESSION_EXPIRED', 'SESSION_ROTATED_RECOVERABLE'].includes(error.code);
 
 export function providerStartFailure(error: unknown) {
   if (error instanceof ProviderApiError && error.status === 401 && error.code === 'GUEST_SESSION_EXPIRED')
@@ -8,11 +12,11 @@ export function providerStartFailure(error: unknown) {
       detail: '已清理失效的访客登录状态。重新进入不会恢复过期聊天，也不会重置同一网络累计的体验次数。',
       action: '重新进入访客页面',
     };
-  if (error instanceof ProviderApiError && ['SESSION_EXPIRED', 'SESSION_ROTATED_RECOVERABLE'].includes(error.code))
+  if (isSignedOutError(error))
     return {
-      title: '访问会话需要恢复',
-      detail: '当前身份不能继续使用。请回到原邀请兑换或恢复页面核对结果；系统没有将受邀身份替换为新访客。',
-      action: '刷新核对访问状态',
+      title: '你还没有登录',
+      detail: '登录后可以继续之前的聊天，也可以先以访客试聊。',
+      action: '以访客继续',
     };
   return {
     title: '暂时无法连接',
@@ -26,8 +30,13 @@ export function renderProviderStartError(
   root: HTMLElement,
   error: unknown,
   reload = () => location.reload(),
-  api: Pick<ProviderApi, 'regenerateRecoveryCode' | 'recoverWithRecoveryCode'> = new ProviderApi(),
+  api: Pick<ProviderApi, 'regenerateRecoveryCode' | 'recoverWithRecoveryCode'> &
+    Partial<SignedOutApi> = new ProviderApi(),
 ) {
+  if (isSignedOutError(error)) {
+    renderSignedOut(root, { api: api as SignedOutApi, reload });
+    return;
+  }
   const content = providerStartFailure(error),
     panel = document.createElement('main');
   panel.className = 'provider-start-error';
@@ -44,13 +53,5 @@ export function renderProviderStartError(
     reload();
   });
   panel.append(title, detail, button);
-  if (content.title === '访问会话需要恢复') {
-    const have = document.createElement('button');
-    have.type = 'button';
-    have.className = 'recovery-have';
-    have.textContent = recoveryCopy.have;
-    have.addEventListener('click', () => openRecoveryEntry(api, reload));
-    panel.append(have);
-  }
   root.replaceChildren(panel);
 }

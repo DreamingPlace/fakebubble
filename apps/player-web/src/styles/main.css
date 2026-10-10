@@ -2584,3 +2584,167 @@ html.cc-open body {
   display: grid;
   gap: 8px;
 }
+
+/* Account sheets (注册 / 登录 / 忘记密码 / 绑定邮箱 / 我的昵称 / 修改密码) and the signed-out first page. */
+.acct-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: max(16px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+  background: #f6f4ef;
+  color: #24302f;
+  overflow-y: auto;
+  animation: cc-sheet-in 240ms cubic-bezier(0.2, 0.82, 0.24, 1);
+}
+.acct-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 auto 8px;
+  width: min(420px, 100%);
+}
+.acct-title {
+  font-size: 20px;
+}
+.acct-close {
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 24px;
+}
+.acct-body,
+.acct-status {
+  width: min(420px, 100%);
+  margin: 0 auto;
+}
+.acct-form {
+  display: grid;
+  gap: 14px;
+}
+.acct-intro {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.acct-field {
+  display: grid;
+  gap: 6px;
+}
+.acct-label {
+  font-size: 14px;
+}
+.acct-hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+.acct-input {
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid #b9c4bf;
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  font-size: 16px;
+}
+.acct-input:focus-visible {
+  outline: 3px solid #24584e;
+  outline-offset: 2px;
+}
+.acct-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 14px;
+}
+.acct-primary {
+  min-height: 48px;
+  padding: 12px 20px;
+  border: 0;
+  border-radius: 12px;
+  background: #294b40;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.acct-primary:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.acct-link {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: #294b40;
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.acct-link:disabled {
+  opacity: 0.55;
+  text-decoration: none;
+  cursor: default;
+}
+.acct-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.acct-notice {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ece8dd;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.acct-notice p {
+  margin: 4px 0 0;
+}
+.acct-status {
+  min-height: 24px;
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #7a2f2f;
+}
+.acct-done,
+.acct-closed {
+  margin: 24px 0;
+  font-size: 16px;
+  line-height: 1.7;
+  text-align: center;
+}
+.signed-out-page .signed-out-actions {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.signed-out-page .signed-out-secondary {
+  background: transparent;
+  color: #294b40;
+  border: 1px solid #294b40;
+}
+.signed-out-page .signed-out-notice {
+  min-height: 24px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #7a2f2f;
+}
+.signed-out-page .signed-out-more {
+  display: flex;
+  justify-content: center;
+}
+.signed-out-page .signed-out-recovery {
+  margin: 0;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: #5a6b66;
+  font-size: 13px;
+  text-decoration: underline;
+}

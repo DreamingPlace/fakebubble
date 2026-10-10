@@ -37,6 +37,8 @@ import { webConcurrencyFromEnv, webDailyReplyLimitFromEnv } from '../../config/w
 import { embeddingsEnabled, webEmbedConfigFromEnv, type WebEmbedConfig } from '../../config/web-embeddings.ts';
 import type { WebBudgetPolicy } from '../../apps/server/budget/web-provider-budget-contract.ts';
 import { cloudAdminMailer, type AdminEmailBinding } from '../../apps/server/cloudflare/web-admin-mail.ts';
+import { cloudPlayerMailer } from '../../apps/server/cloudflare/web-player-mail.ts';
+import { PLAYER_LIMITS } from '../../apps/server/identity/web-player-accounts.ts';
 
 interface BusinessContext {
   id: { toString(): string };
@@ -73,6 +75,12 @@ export interface WebBusinessEnvironment {
   ADMIN_EMAIL_ENABLED?: string;
   ADMIN_EMAIL_FROM?: string;
   ADMIN_EMAIL?: AdminEmailBinding;
+  /** Player email logins (schema 118). Off unless 'true'; then PLAYER_EMAIL (send_email binding) and PLAYER_EMAIL_FROM are required. */
+  PLAYER_SIGNUP_ENABLED?: string;
+  PLAYER_EMAIL_FROM?: string;
+  PLAYER_EMAIL?: AdminEmailBinding;
+  /** Emails per UTC day, all players together (1–100000, default 200). */
+  PLAYER_EMAIL_DAILY_CAP?: string;
   MEDIA: PrivateBucket;
   BUDGET: WebBudgetStatusRPC;
   GENERATION: WebGenerationBinding;
@@ -180,6 +188,10 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     if (!this.app) {
       const enabled = this.env.ADMIN_EMAIL_ENABLED === 'true';
       ensure(!enabled || (this.env.ADMIN_EMAIL && this.env.ADMIN_EMAIL_FROM), 'WEB_ADMIN_MAIL_CONFIG_INVALID');
+      const players = this.env.PLAYER_SIGNUP_ENABLED === 'true';
+      ensure(!players || (this.env.PLAYER_EMAIL && this.env.PLAYER_EMAIL_FROM), 'WEB_PLAYER_MAIL_CONFIG_INVALID');
+      const cap = this.env.PLAYER_EMAIL_DAILY_CAP;
+      ensure(cap === undefined || /^[1-9][0-9]{0,5}$/.test(cap), 'WEB_PLAYER_MAIL_CONFIG_INVALID');
       this.app = new WebProviderApplication(
         this.store,
         this.clock,
@@ -187,6 +199,15 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         enabled
           ? cloudAdminMailer(this.env.ADMIN_EMAIL!, this.env.ADMIN_EMAIL_FROM!, (task) => this.context.waitUntil(task))
           : undefined,
+        {
+          signupEnabled: players,
+          mailer: players
+            ? cloudPlayerMailer(this.env.PLAYER_EMAIL!, this.env.PLAYER_EMAIL_FROM!, (task) =>
+                this.context.waitUntil(task),
+              )
+            : undefined,
+          dailyCap: cap === undefined ? PLAYER_LIMITS.defaultDailyCap : Number(cap),
+        },
       );
     }
     return this.app;

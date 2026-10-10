@@ -25,8 +25,12 @@
     "DAILY_REPLY_LIMIT": "100",
     "EMBEDDINGS_ENABLED": "false",
     "MAX_EMBED_RUNNING": "2",
-    "EMBED_QUERY_TIMEOUT_MS": "3000"
+    "EMBED_QUERY_TIMEOUT_MS": "3000",
+    "PLAYER_SIGNUP_ENABLED": "false",
+    "PLAYER_EMAIL_FROM": "CONFIGURE_BEFORE_ENABLING_SIGNUP",
+    "PLAYER_EMAIL_DAILY_CAP": "200"
   },
+  "send_email": [{ "name": "PLAYER_EMAIL" }],
   "durable_objects": { "bindings": [{ "name": "BUSINESS", "class_name": "WebBusinessObject" }] },
   "migrations": [{ "tag": "web113-v1", "new_sqlite_classes": ["WebBusinessObject"] }],
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "configure-before-deploy" }],

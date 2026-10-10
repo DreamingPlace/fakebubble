@@ -87,3 +87,11 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - `117_cocreation.sql` (own version on both runners; `migrateWebProviderCocreation` / `migrate-cocreation`). Players write ideas on "灵感卡片" (shared list in `packages/contracts/cocreation-cards.ts`); administrators read them in 共创收件箱, adopt answers into the character draft through the existing draft save (pure merge in `packages/contracts/cocreation-adopt.ts`), and publish through the existing flow. No provider calls, no automatic review, no prompt or tool-schema change.
 - Permissions `cocreation.read` / `cocreation.manage`; submitter shown only as a keyed pseudonym plus invite batch.
 - Purged with the character (deletion start and scope purge, audited) and with the player (retention, lifecycle audit).
+
+## Part 11f (email accounts, multi-device login, nickname, no dead-end session screen)
+
+- `118_player_logins.sql` (own version on both runners; `migrateWebProviderLogins` / `migrate-logins`). A login is a credential bound 1:1 to a principal: principal kinds, admission and entitlement are unchanged, sessions it creates keep `account_id` NULL, and the legacy `web_accounts`/Argon2 path is not used. Passwords use the scrypt format of `web-admin-password.ts` (8–128 bytes for players).
+- Email one-time codes (6 digits, 10 minutes, 5 attempts, supersede) with per-email, per-IP and daily limits checked before sending; identical answers for registered and unknown addresses; plain-Chinese mail through the new `PLAYER_EMAIL` `send_email` binding; `PLAYER_SIGNUP_ENABLED` defaults to false (login always works).
+- Flows: 注册 (binds to the current guest, writes the nickname as a new 名片 revision), 登录 (new session, others untouched, never merges), 忘记密码 (ends other sessions), 我的昵称, 修改密码, 退出登录, 退出其他设备, 绑定邮箱 for legacy invited players (revokes their recovery code). Redeeming requires a login while signup is open.
+- A dead cookie leads to the normal signed-out first page (登录 / 注册 / 以访客继续); the old "访问会话需要恢复" dead end is gone.
+- Login rows, challenges and nickname 名片 revisions are purged with the player; the lifecycle audit fails closed on leftovers. No prompt or tool-schema change: `POLICY_HASH` / `PROMPT_HASH` are unchanged.

@@ -198,7 +198,8 @@ test('cloud: revoking the grant ends every session at once and disables the reco
   await f.call(`${API}/admin/invites/revoke-grant`, owner, { id: redeemed.grantId });
   const dead = await f.request(`${API}/bootstrap`, player);
   assert.equal(dead.status, 401);
-  assert.equal(dead.headers.get('set-cookie'), null, 'the cookie is not silently replaced by a guest');
+  // Part 11f: the dead cookie is cleared (the page shows the signed-out first page); it is still never replaced by a guest.
+  assert.match(dead.headers.get('set-cookie')!, /^__Host-fixture=; .*Max-Age=0$/, 'cleared, not replaced by a guest');
   await f.call(`${API}/sync`, player, undefined, 401);
   await f.call(`${API}/invites/credential-regenerate`, player, {}, 401);
   const refused = await f.call(`${API}/invites/recover`, client(), { requestId: randomUUID(), secret: code }, 409);

@@ -526,10 +526,10 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
     (await (await f.call({ action: 'business-http', path: '/__test/snapshot' })).json()) as any;
   // Before setup: works, reports an unavailable budget as a bounded code and no admin.
   const bare = await inspect();
-  // Schema 117 and 42 steps since migration 117 (co-creation) was added.
-  assert.equal(bare.schemaVersion, 117);
+  // Schema 118 and 43 steps since migration 118 (player logins) was added.
+  assert.equal(bare.schemaVersion, 118);
   assert.equal(bare.migrations.matches, true);
-  assert.equal(bare.migrations.applied.length, 42);
+  assert.equal(bare.migrations.applied.length, 43);
   assert.deepEqual(bare.budget, { available: false, error: 'WEB_CLOUD_BUDGET_NOT_INITIALIZED' });
   assert.equal(bare.ownerAdminExists, false);
   await f.install();
@@ -577,11 +577,11 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
   assert.deepEqual(await (await f.call({ action: 'budget-summary' })).json(), budgets);
   assert.deepEqual(again, report);
   // Facts.
-  assert.equal(report.schemaVersion, 117);
+  assert.equal(report.schemaVersion, 118);
   assert.equal(report.migrations.matches, true);
   assert.equal(report.migrations.expected.active, 'r2');
   assert.deepEqual(report.migrations.applied, report.migrations.expected.r2);
-  assert.equal(report.migrations.expected.inline.length, 42);
+  assert.equal(report.migrations.expected.inline.length, 43);
   assert.deepEqual(report.instance, {
     instanceId: f.business.bindings.INSTANCE_ID,
     recoveryEpoch: f.business.bindings.RECOVERY_EPOCH,
@@ -657,7 +657,7 @@ test('offline expected-migrations output equals the steps the deployed business 
   // And the deployed object's applied ledger is exactly the offline R2 list.
   assert.deepEqual(live.migrations.applied, offline.r2);
   assert.equal(live.migrations.matches, true);
-  assert.equal(offline.r2.length, 42);
+  assert.equal(offline.r2.length, 43);
   const extra = spawnSync(process.execPath, ['scripts/web-cloudflare-operator.ts', 'expected-migrations', '--x=1'], {
     encoding: 'utf8',
   });

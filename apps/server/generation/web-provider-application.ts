@@ -25,7 +25,22 @@ import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts
 import { WebInvites } from '../invites/web-invites.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { WebCocreation } from '../cocreation/web-cocreation.ts';
+import { PLAYER_LIMITS, WebPlayerAccounts, type PlayerMailer } from '../identity/web-player-accounts.ts';
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
+
+/** A cookie that names nothing recoverable: the transport expires it so the next visit starts from the signed-out page. */
+export class SessionClearedError extends DomainError {
+  constructor() {
+    super('SESSION_EXPIRED');
+    this.name = 'SessionClearedError';
+  }
+}
+/** Email logins (schema 118): flag, mailer and daily cap come from the Worker environment. */
+export interface WebPlayerAccountsConfig {
+  mailer?: PlayerMailer | undefined;
+  signupEnabled?: boolean | undefined;
+  dailyCap?: number | undefined;
+}
 
 export const WEB_PROVIDER_API = '/api/web/provider';
 const API = WEB_PROVIDER_API;
@@ -91,7 +106,15 @@ export class WebProviderApplication {
   readonly characterAdmin: WebCharacterAdmin;
   readonly inviteActions: WebInviteActions;
   readonly cocreation: WebCocreation;
-  constructor(store: WebRuntimeStore, clock: Clock, config: WebProviderApplicationConfig, mailer?: AdminMailer) {
+  /** Null on a database older than schema 118. */
+  readonly playerAccounts: WebPlayerAccounts | null;
+  constructor(
+    store: WebRuntimeStore,
+    clock: Clock,
+    config: WebProviderApplicationConfig,
+    mailer?: AdminMailer,
+    players: WebPlayerAccountsConfig = {},
+  ) {
     store.requireProviderRuntime();
     ensure(
       store.instanceId === config.instanceId &&
@@ -137,7 +160,25 @@ export class WebProviderApplication {
       authorize: this.identity.authorizeInviteAction.bind(this.identity),
       identity: this.identity,
     });
-    this.inviteActions = new WebInviteActions(store, clock, config.origin, invites, this.identity);
+    this.playerAccounts = store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'")
+      ? new WebPlayerAccounts(store, this.identity, {
+          origin: config.origin,
+          requestKey: Buffer.from(config.requestKey, 'base64url'),
+          clock,
+          mailer: players.mailer ?? null,
+          signupEnabled: players.signupEnabled === true && !!players.mailer,
+          dailyCap: players.dailyCap ?? PLAYER_LIMITS.defaultDailyCap,
+        })
+      : null;
+    const accounts = this.playerAccounts;
+    this.inviteActions = new WebInviteActions(store, clock, config.origin, invites, this.identity, {
+      // While accounts can be opened, a redemption belongs to a signed-in login; with signup closed nobody could
+      // ever satisfy that, so redemption stays as it was.
+      requireLogin: accounts?.signupEnabled
+        ? (token) =>
+            ensure(this.identity.hasLogin(this.identity.authenticate(token).principalId), 'PLAYER_LOGIN_REQUIRED')
+        : undefined,
+    });
     this.cocreation = new WebCocreation(
       store,
       clock,
@@ -183,10 +224,19 @@ export class WebProviderApplication {
           this.identity.expiredGuest(token)
         )
           throw new DomainError('GUEST_SESSION_EXPIRED');
+        // A revoked / rotated / unknown cookie leaves the page signed out: the transport clears it. A cookie whose
+        // uncertain invite redemption can still be recovered keeps its place until that is settled.
+        if (
+          token &&
+          error instanceof DomainError &&
+          error.code === 'SESSION_EXPIRED' &&
+          this.identity.isDeadCookie(token)
+        )
+          throw new SessionClearedError();
         throw error;
       }
       issued = boot.issuedToken;
-      invited = this.identity.isInvitedSession(token ?? boot.issuedToken!);
+      invited = this.identity.isDurableSession(token ?? boot.issuedToken!);
       const principal = this.identity.authenticate(token ?? boot.issuedToken!);
       const { inaccessible, ...access } = this.access(principal, ipHash);
       const characters = this.characters(),

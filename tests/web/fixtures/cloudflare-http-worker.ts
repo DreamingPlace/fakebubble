@@ -58,8 +58,11 @@ import { syntheticCharacterReview } from './character-review.ts';
 
 /** Real HTTP, SQL, R2 and Alarm with synthetic transports; these operator routes never ship. */
 export class WebHTTPFixture extends WebBusinessFixture {
-  private readonly app: WebProviderApplication;
-  private readonly http: WebProviderHTTP;
+  private app: WebProviderApplication;
+  private http: WebProviderHTTP;
+  private readonly appConfig: ConstructorParameters<typeof WebProviderApplication>[2];
+  private readonly adminMailer: ConstructorParameters<typeof WebProviderApplication>[3];
+  private readonly waitUntil: (task: Promise<void>) => void;
   private readonly execution: WebCloudExecutor;
   private revokeOnRead: string | null = null;
   private readonly previewBudget: WebBudgetStatusRPC | undefined;
@@ -96,27 +99,28 @@ export class WebHTTPFixture extends WebBusinessFixture {
     this.store.all(
       'CREATE TABLE IF NOT EXISTS cf_fixture_admin_mail(id TEXT PRIMARY KEY,payload TEXT NOT NULL) STRICT',
     );
-    this.app = new WebProviderApplication(
-      this.store,
-      this.clock,
-      {
-        mode: 'provider-cloud',
-        origin: 'https://fixture.invalid',
-        cookieName: '__Host-fixture',
-        instanceId: this.store.instanceId,
-        recoveryEpoch: '00000000-0000-4000-8000-000000000002',
-        ipKey: Buffer.alloc(32, 1).toString('base64url'),
-        requestKey: Buffer.alloc(32, 2).toString('base64url'),
-        sealKey: Buffer.alloc(32, 3).toString('base64url'),
-        cursorKey: Buffer.alloc(32, 4).toString('base64url'),
+    this.waitUntil = (task) => ctx.waitUntil(task);
+    this.appConfig = {
+      mode: 'provider-cloud',
+      origin: 'https://fixture.invalid',
+      cookieName: '__Host-fixture',
+      instanceId: this.store.instanceId,
+      recoveryEpoch: '00000000-0000-4000-8000-000000000002',
+      ipKey: Buffer.alloc(32, 1).toString('base64url'),
+      requestKey: Buffer.alloc(32, 2).toString('base64url'),
+      sealKey: Buffer.alloc(32, 3).toString('base64url'),
+      cursorKey: Buffer.alloc(32, 4).toString('base64url'),
+    };
+    this.adminMailer = {
+      send: async (message) => {
+        this.store.run('INSERT INTO cf_fixture_admin_mail VALUES (?,?)', message.id, JSON.stringify(message));
       },
-      {
-        send: async (message) => {
-          this.store.run('INSERT INTO cf_fixture_admin_mail VALUES (?,?)', message.id, JSON.stringify(message));
-        },
-        waitUntil: (task) => ctx.waitUntil(task),
-      },
+      waitUntil: (task) => ctx.waitUntil(task),
+    };
+    this.store.all(
+      'CREATE TABLE IF NOT EXISTS cf_fixture_player_mail(id TEXT PRIMARY KEY,payload TEXT NOT NULL) STRICT',
     );
+    this.app = new WebProviderApplication(this.store, this.clock, this.appConfig, this.adminMailer);
     let previews: WebCharacterPreviewRunner | undefined;
     if (env.PREVIEW_BUDGET && env.GENERATION) {
       this.previewBudget = env.PREVIEW_BUDGET.get(env.PREVIEW_BUDGET.idFromName('budget'));
@@ -138,11 +142,30 @@ export class WebHTTPFixture extends WebBusinessFixture {
       });
     }
     this.execution = new WebCloudExecutor(ctx, this.store, this.clock, this.createRunner(), undefined, previews);
-    this.http = new WebProviderHTTP(this.app, {
+    this.http = this.transport();
+  }
+  private transport() {
+    return new WebProviderHTTP(this.app, {
       wake: () => this.execution.wake(),
       cancel: (id, principal) => this.execution.executor.cancelManaged(id, principal),
     });
   }
+  /** Opens player signup with a mailer that records every message (codes included: a fixture, never shipped). */
+  private enablePlayers(signupEnabled: boolean, dailyCap: number | undefined) {
+    this.app = new WebProviderApplication(this.store, this.clock, this.appConfig, this.adminMailer, {
+      signupEnabled,
+      dailyCap,
+      mailer: {
+        send: async (message) => {
+          if (this.failPlayerMail) throw new Error('fixture mail failure');
+          this.store.run('INSERT INTO cf_fixture_player_mail VALUES (?,?)', message.id, JSON.stringify(message));
+        },
+        waitUntil: this.waitUntil,
+      },
+    });
+    this.http = this.transport();
+  }
+  private failPlayerMail = false;
   private revoke(principal: string) {
     this.store.run('UPDATE web_sessions SET revoked_at=? WHERE principal_id=?', this.clock.now(), principal);
   }
@@ -213,6 +236,24 @@ export class WebHTTPFixture extends WebBusinessFixture {
       });
       return Response.json({ characterId: id });
     }
+    if (path === '/fixture/players') {
+      const body = (await request.json()) as { signupEnabled: boolean; dailyCap?: number; failMail?: boolean };
+      this.failPlayerMail = body.failMail === true;
+      this.enablePlayers(body.signupEnabled, body.dailyCap);
+      return Response.json({ configured: true });
+    }
+    if (path === '/fixture/age-challenges') {
+      // Moves every email challenge into the past so the 60-second cooldown has passed (the fixture clock is real).
+      const { ms } = (await request.json()) as { ms: number };
+      this.store.run('UPDATE web_email_challenges SET created_at=created_at-?,expires_at=expires_at-?', ms, ms);
+      return Response.json({ configured: true });
+    }
+    if (path === '/fixture/player-mail')
+      return Response.json(
+        this.store
+          .all<{ payload: string }>('SELECT payload FROM cf_fixture_player_mail ORDER BY rowid')
+          .map((row) => JSON.parse(row.payload)),
+      );
     if (path === '/fixture/grant') return Response.json(this.app.inviteAdmin.issueLoginGrant());
     if (path === '/fixture/admin-mail')
       return Response.json(

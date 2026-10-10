@@ -17,7 +17,16 @@ export class WebInviteActions {
   private readonly origin: string;
   private readonly invites: WebInvites;
   private readonly identity: WebIdentity;
-  constructor(store: Store, clock: Clock, origin: string, invites: WebInvites, identity: WebIdentity) {
+  private readonly requireLogin: ((token: string) => void) | undefined;
+  constructor(
+    store: Store,
+    clock: Clock,
+    origin: string,
+    invites: WebInvites,
+    identity: WebIdentity,
+    options: { requireLogin?: ((token: string) => void) | undefined } = {},
+  ) {
+    this.requireLogin = options.requireLogin;
     this.store = store;
     this.clock = clock;
     this.origin = origin;
@@ -86,6 +95,7 @@ export class WebInviteActions {
     body: { code: string; requestId: string },
   ) {
     this.charge(trustedIpHash);
+    this.requireLogin?.(token);
     return this.invites.redeem({ token, csrf, origin, ...body });
   }
   redemptionChallenge(oldToken: string, origin: string) {

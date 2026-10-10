@@ -4,12 +4,13 @@ import type {
   WebProviderCharacterId,
   WebProviderMessage,
 } from '../../../../../packages/contracts/web-provider.ts';
-import { ProviderApi, ProviderApiError } from '../../services/provider-api.ts';
+import { ProviderApi, ProviderApiError, type AccountInfo } from '../../services/provider-api.ts';
 import { replyPauseMs } from './reply-presentation.ts';
 import { ProviderInviteController } from '../../session/provider-invite-controller.ts';
 import { openRecoveryEntry, openRecoveryManage, recoveryCopy, showRecoveryCode } from './recovery-code.ts';
 import { mountChatMenu } from '../cocreation/chat-menu.ts';
 import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
+import { accountCopy, openAccountSheet, type AccountSheetMode } from '../account/account-sheet.ts';
 
 type Shell = {
   say(message: string): void;
@@ -35,6 +36,9 @@ export const errorText: Record<string, string> = {
   ACCESS_UNAVAILABLE: '当前访问权限不可用，请核对邀请状态。',
   CATALOG_CHANGED: '人物资料已更新，请先保留输入草稿，再刷新页面。未自动发送。',
   CHARACTER_UNAVAILABLE: '这个人物暂未开放，不能发送消息。',
+  PLAYER_LOGIN_REQUIRED: '请先注册或登录，再输入邀请码',
+  SESSION_EXPIRED: '登录状态已失效，请刷新页面回到首页',
+  AUTH_REQUIRED: '登录状态已失效，请刷新页面回到首页',
 };
 const sound =
   '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4m4-7v10m4-14v18m4-15v12m4-8v4"/></svg>';
@@ -72,6 +76,8 @@ export class LiveBinding {
   private refreshing: Promise<void> | null = null;
   private catalogChanged = false;
 
+  /** Email account state (GET /account); unknown until loaded, and a failed read leaves the guest defaults. */
+  private account: AccountInfo = { signupEnabled: false, signedIn: false };
   private readonly invitation: ProviderInviteController;
   private dialog: HTMLDialogElement | null = null;
   private renderInvite: (() => void) | null = null;
@@ -96,7 +102,24 @@ export class LiveBinding {
     api = new ProviderApi(),
     wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
   ) {
-    return new LiveBinding(api, await api.bootstrap(), wait);
+    const binding = new LiveBinding(api, await api.bootstrap(), wait);
+    await binding.loadAccount();
+    return binding;
+  }
+  /** Best effort: the chat works without it, the account entries just stay at their guest defaults. */
+  private async loadAccount() {
+    if (typeof this.api.account !== 'function') return;
+    try {
+      this.account = await this.api.account();
+    } catch {
+      /* keep the defaults */
+    }
+  }
+  private get hasLogin() {
+    return this.account.signedIn && this.account.hasLogin;
+  }
+  private get signupOpen() {
+    return this.account.signupEnabled;
   }
   catalog() {
     return structuredClone({ characters: this.view.characters, slots: this.view.slots });
@@ -160,9 +183,72 @@ export class LiveBinding {
                 say: (message) => shell.say(message),
               }),
           },
+          ...this.accountMenu(),
         ];
       });
     }
+  }
+
+  /** Chats the current guest has: a login switches to another principal and never merges them. */
+  private guestHasChats() {
+    return this.view.access.kind === 'guest' && this.view.conversations.some((entry) => entry.lastMessageId !== null);
+  }
+
+  private openAccount(mode: AccountSheetMode, after?: () => void) {
+    return openAccountSheet({
+      api: this.api,
+      mode,
+      signupEnabled: this.signupOpen,
+      nickname: this.account.signedIn ? this.account.nickname : null,
+      hasGuestChats: this.guestHasChats(),
+      onDone: (done) => {
+        if (after) after();
+        // A login or reset replaces the session cookie, a signup or bind changes who the page belongs to: start clean.
+        else if (done === 'login' || done === 'reset' || done === 'signup' || done === 'bind') location.reload();
+        else void this.loadAccount();
+      },
+      onSwitch: (to) => this.openAccount(to),
+    });
+  }
+
+  /** The account entries of the ⋯ menu, after 共创: they follow what this player has (a login, a bindable invite, nothing). */
+  private accountMenu() {
+    const say = (message: string) => this.shell?.say(message);
+    if (this.hasLogin)
+      return [
+        { label: '我的昵称', sub: '角色怎么称呼你', onSelect: () => void this.openAccount('nickname') },
+        { label: '修改密码', sub: '需要当前密码', onSelect: () => void this.openAccount('password') },
+        {
+          label: '退出其他设备',
+          sub: '其他浏览器和手机需要重新登录',
+          onSelect: () =>
+            void this.api.logoutOthers().then(
+              () => say('已退出其他设备'),
+              () => say('没能退出其他设备，稍后再试试'),
+            ),
+        },
+        {
+          label: '退出登录',
+          sub: '这台设备回到首页',
+          onSelect: () =>
+            void this.api.logout().then(
+              () => location.reload(),
+              () => say('没能退出登录，稍后再试试'),
+            ),
+        },
+      ];
+    if (this.account.signedIn && this.account.canBind)
+      return [{ label: '绑定邮箱', sub: '换设备也能登录你的聊天', onSelect: () => void this.openAccount('bind') }];
+    if (this.view.access.kind === 'guest')
+      return [
+        { label: '登录', sub: '用邮箱和密码进入已有的聊天', onSelect: () => void this.openAccount('login') },
+        {
+          label: '注册',
+          sub: this.signupOpen ? '用邮箱保存你的聊天' : accountCopy.closed,
+          onSelect: () => void this.openAccount('signup'),
+        },
+      ];
+    return [];
   }
 
   private renderAccess() {
@@ -178,7 +264,7 @@ export class LiveBinding {
     shell.head.querySelector('.invite-entry')?.remove();
     shell.head.querySelector('.recovery-entry')?.remove();
     if (access.kind === 'invite' && !this.invitation.locked) {
-      if (access.status === 'active' && this.accessKnown) {
+      if (access.status === 'active' && this.accessKnown && !this.hasLogin) {
         const manage = document.createElement('button');
         manage.type = 'button';
         manage.className = 'invite-entry recovery-entry';
@@ -281,6 +367,13 @@ export class LiveBinding {
 
   private inviteDialog() {
     if (this.dialog) return;
+    // While accounts are open a redemption belongs to a login: a guest without one signs up first, then comes back here.
+    if (this.signupOpen && !this.hasLogin) {
+      this.openAccount('signup', () => {
+        void this.refreshLoginThenInvite();
+      });
+      return;
+    }
     const dialog = document.createElement('dialog');
     this.dialog = dialog;
     dialog.className = 'invite-dialog';
@@ -291,7 +384,7 @@ export class LiveBinding {
       <div class="invite-actions"><button type="button" class="invite-cancel">取消</button>
       <button type="button" class="invite-recover" hidden>核对原请求</button>
       <button type="submit">解锁</button></div>
-      <button type="button" class="invite-have-code">${recoveryCopy.have}</button></form>`;
+      ${this.hasLogin ? '' : `<button type="button" class="invite-have-code">${recoveryCopy.have}</button>`}</form>`;
     const input = dialog.querySelector<HTMLInputElement>('input')!;
     const submit = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     const recover = dialog.querySelector<HTMLButtonElement>('.invite-recover')!;
@@ -355,7 +448,7 @@ export class LiveBinding {
       void this.invitation.recover().then((ok) => {
         if (ok) {
           this.shell?.say('邀请已解锁，可以和所有人聊天了');
-          void this.issueRecoveryCode();
+          void this.afterRedeem();
         }
         finish(ok);
       });
@@ -367,6 +460,11 @@ export class LiveBinding {
     document.body.append(dialog);
     this.renderInvite();
     dialog.showModal();
+  }
+
+  private async refreshLoginThenInvite() {
+    await this.loadAccount();
+    if (this.hasLogin) this.inviteDialog();
   }
 
   private async redeem(code: string) {
@@ -381,9 +479,16 @@ export class LiveBinding {
     const ok = await this.invitation.redeem(code);
     if (ok) {
       this.shell?.say('邀请已解锁，可以和所有人聊天了');
-      void this.issueRecoveryCode();
+      void this.afterRedeem();
     }
     return ok;
+  }
+
+  /** A player with a login has no recovery code to keep; one without (accounts closed) still gets theirs, once. */
+  private async afterRedeem() {
+    await this.loadAccount();
+    this.renderAccess();
+    if (!this.hasLogin) await this.issueRecoveryCode();
   }
 
   /** Right after redemption: create the player's recovery code and show it once. Never persisted or logged. */

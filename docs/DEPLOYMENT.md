@@ -86,6 +86,29 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 `117_cocreation.sql` 是独立的第 117 版迁移（Node：`user_version=117`，已有 provider 实例运行 `migrate-cocreation`；Cloudflare 内联与 R2：账本版本 117，已在 116 的权威启动时自动补上）。新增 `web_cocreation_submissions` 与 `web_cocreation_answers`（均为用户数据）。受邀玩家通过 `POST /api/web/provider/cocreation/submit` 为官方角色留下想法（每答案 ≤300 字，自由卡 ≤1000，对话卡每句 ≤120；每次 ≤12 条；每玩家每角色滚动 24 小时 ≤5 次；按 requestId 幂等；不计入 DAILY_REPLY_LIMIT；不调用任何供应商、不预占预算）。管理员权限 `cocreation.read`（查看）与 `cocreation.manage`（处理）由主管理员在权限编辑器的“角色 · 共创收件箱”中授予，不包含在四个功能类别里。收件箱只显示稳定的匿名代号（`玩家#` + 4 位十六进制，来自 requestKey 派生密钥的 HMAC）和邀请批次名。内容只有在管理员“加入草稿”并经现有预览与发布流程后才会进入提示词。角色删除与玩家数据清理会一并删除这些行。
 
+### 邮箱账号与多设备登录（Part 11f）
+
+`118_player_logins.sql` 是独立的第 118 版迁移（Node：`user_version=118`，已有 provider 实例运行 `migrate-logins`；Cloudflare 内联与 R2：账本版本 118，已在 117 的权威启动时自动补上）。新增 `web_player_logins`（邮箱 + scrypt 密码哈希，与已有 principal 一对一绑定）、`web_email_challenges`（验证码摘要与发送账本）、`web_player_email_daily`（每个 UTC 日的发送计数）、`web_player_throttle`（登录失败计数，键为 HMAC）。登录只是 principal 的**凭据**：principal 种类、准入与权益不变；有登录但没有有效邀请的 principal 仍按访客试玩处理；登录创建的会话 `account_id` 仍为 NULL，不使用旧的 `web_accounts`/Argon2 路径。
+
+**业务 Worker 新增配置（`workers/web-cloudflare/deploy/business.json.example` 已列出）：**
+
+| 名称 | 类型 | 说明 |
+| --- | --- | --- |
+| `PLAYER_EMAIL` | `send_email` 绑定 | Cloudflare Email Service（Email Sending）发信绑定，只发纯中文文本，无链接、无 HTML、无追踪。 |
+| `PLAYER_EMAIL_FROM` | 变量 | 发件地址，必须属于已完成发信域名验证的域。 |
+| `PLAYER_SIGNUP_ENABLED` | 变量，默认 `false` | 开启注册、绑定邮箱与忘记密码。为 `false` 时这三个入口显示“注册暂未开放”，**登录照常可用**，邀请码兑换也照旧（不要求登录）。为 `true` 时必须同时配置 `PLAYER_EMAIL` 与 `PLAYER_EMAIL_FROM`，否则业务对象拒绝启动；并且兑换邀请码要求先登录。 |
+| `PLAYER_EMAIL_DAILY_CAP` | 变量，默认 `200` | 所有玩家合计每个 UTC 日最多发送的邮件数（1–100000）。 |
+
+**上线前：** (1) 在 Cloudflare Email Service 里为发件域名完成 **Sending Domain onboarding**（添加域名并按提示写入 SPF / DKIM / DMARC 的 DNS 记录，等待状态变为已验证）；(2) Email Service 的发信需要 **Workers Paid** 套餐；(3) 先保持 `PLAYER_SIGNUP_ENABLED=false` 部署，确认迁移账本 `matches:true` 后再改为 `true` 重新部署；(4) 用自己的邮箱走一遍注册、登录、忘记密码。
+
+**验证码：** 6 位数字，10 分钟有效，每个挑战最多 5 次错误尝试，新的请求使同邮箱同用途的上一个挑战失效。限制在发送之前检查：同一邮箱两次发送至少间隔 60 秒、每小时最多 5 次；同一 IP 每小时最多 10 次；全局每日上限 `PLAYER_EMAIL_DAILY_CAP`。发送超时或出错不会自动重试，玩家可在冷却后点“重新发送”（计入上述限制）。请求验证码的回应对已注册与未注册邮箱完全相同：已注册邮箱收到“你已注册，可直接登录或重置密码”，不含验证码；忘记密码遇到未注册邮箱不发邮件。验证码、密码和完整邮箱不进入日志、指标、回执或错误；管理员的玩家/邀请记录只显示打码邮箱（首字符 + `***` + 域名）。
+
+**登录与会话：** 邮箱 + 密码（8–128 字节）；同一邮箱 15 分钟内失败 10 次、同一 IP 失败 30 次后需要等待；错误提示一律为“邮箱或密码不正确”。登录只新建会话，其他设备的会话不受影响，永远不合并两个 principal；对已被撤销邀请的受邀 principal，输对密码后给出明确的拒绝，管理员“撤销授权”照旧一次性结束全部会话并阻止今后的登录。忘记密码会结束该 principal 的其他全部会话；修改密码可选择同时退出其他设备。登录会话与注册当下的会话使用与受邀玩家相同的 400 天 Cookie，服务端以 400 天为上限。已失效/被撤销/被轮换的 Cookie 在 `bootstrap` 时由服务端清除，页面回到“登录 / 注册 / 以访客继续”的首页；仅当一次未确认的邀请兑换回执仍可取回时保留 Cookie。
+
+**旧受邀玩家（只有恢复码）：** 在聊天页“⋯”里“绑定邮箱”，验证后设置密码与昵称，绑定成功即撤销其恢复码；恢复码接口与测试保持不变，未绑定的玩家仍可从首页的小链接使用。
+
+**数据清理：** 登录行与验证码挑战是玩家数据，随玩家清理一并删除（Node 与 Cloudflare 保留期清理器、生命周期审计在清理后仍有残留时失败关闭）；昵称写入的“名片”修订同样随之删除。
+
 ### 记忆：按含义召回（Part 7b）
 
 `116_memory_embeddings.sql` 是独立的第 116 版迁移，在 115 之后按顺序执行（Node：`user_version=116`，已有 provider 实例运行 `migrate-embeddings`；Cloudflare 内联与 R2：账本版本 116，已在 115 的权威启动时自动补上）。它新增 `memory_embeddings`（每个范围、话题、模型一条 float32 小端向量，`state` 为 `ready` 或 `unknown`）、`web_embed_attempts`（嵌入调用的派发账本，阶段 `embed`）和 `web_embed_metrics`（每日计数，无内容）。向量存在现有 SQLite（业务对象）里，不使用 Vectorize 或任何外部存储；相似度在代码里、只在同一范围内计算。
@@ -114,7 +137,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 只返回：架构版本；已应用的迁移账本（版本 + sha256）与本版代码期望的步骤（内联与 R2 两份列表），以及布尔 `matches`（与对象实际使用的 R2 列表逐步比较）；`web_instance` 的实例 ID 与恢复纪元；各供应商的已花费/占用额度；三个派发账本（web provider、external、embed）中 `unknown` 尝试的数量及其 ID（最多 200 个，数量精确，不含任何内容）；是否存在 owner 管理员（仅布尔，无邮箱）；`PUBLIC_ENABLED` / `EXTERNAL_CALLS` / `OPERATOR_ENABLED` / `EMBEDDINGS_ENABLED` 当前值（仅 `true`/`false`/未设置，其他值显示为 `other`）。不返回密钥、邮箱、邀请码、消息文本或记忆。
 
-**限制：** 迁移的哈希校验与升级发生在业务对象的构造函数里，早于任何 RPC。新代码上的第一次任何调用（包括 `inspect`、HTTP、闹钟）都会先把 113 升级到 117；若某一步哈希不一致，构造函数抛出 `WEB_CLOUD_MIGRATION_MISMATCH`，`inspect` 同样失败，而不是返回 `matches:false`。所以 `inspect` 用于**部署之后**核对结果，不能预演升级；升级前请用下面的 `expected-migrations` 离线取得期望摘要。
+**限制：** 迁移的哈希校验与升级发生在业务对象的构造函数里，早于任何 RPC。新代码上的第一次任何调用（包括 `inspect`、HTTP、闹钟）都会先把 113 升级到 118；若某一步哈希不一致，构造函数抛出 `WEB_CLOUD_MIGRATION_MISMATCH`，`inspect` 同样失败，而不是返回 `matches:false`。所以 `inspect` 用于**部署之后**核对结果，不能预演升级；升级前请用下面的 `expected-migrations` 离线取得期望摘要。
 
 ```
 node scripts/web-cloudflare-operator.ts --action=inspect --receipt-file=/abs/private/inspect.json \

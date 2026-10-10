@@ -209,6 +209,74 @@ export class WebRetentionFixture extends WebBusinessFixture {
             .map((row) => row.id),
           answers: this.store.get<{ n: number }>('SELECT count(*) n FROM web_cocreation_answers')!.n,
         };
+      } else if (path === '/retention/seed-logins') {
+        // An email login (schema 118) of this principal, a signup challenge, a reset challenge for its address and the
+        // nickname 名片 revision the signup wrote.
+        const now = this.clock.now();
+        const owner = this.store.get<{ world_id: string }>(
+          'SELECT world_id FROM web_principals WHERE id=?',
+          input.principalId,
+        )!;
+        const email = `seed-${input.principalId}@example.com`;
+        this.store.run(
+          'INSERT INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at) VALUES (?,?,?,?,?)',
+          input.principalId,
+          email,
+          'scrypt-16384-8-5$' + 'a'.repeat(32) + '$' + 'b'.repeat(64),
+          now,
+          now,
+        );
+        for (const [suffix, purpose, principal] of [
+          ['signup', 'signup', input.principalId],
+          ['reset', 'reset', null],
+        ] as const)
+          this.store.run(
+            `INSERT INTO web_email_challenges(id,purpose,email_norm,principal_id,code_digest,ip_hash,created_at,expires_at)
+            VALUES (?,?,?,?,?,?,?,?)`,
+            `challenge-${suffix}-${input.principalId}`,
+            purpose,
+            email,
+            principal,
+            'c'.repeat(64),
+            'd'.repeat(64),
+            now,
+            now + 600_000,
+          );
+        this.store.run(
+          'INSERT INTO player_profile_versions(world_id,revision,profile_json,updated_at) VALUES (?,1,?,?)',
+          owner.world_id,
+          JSON.stringify({
+            name: '昵称',
+            age: null,
+            city: '',
+            occupation: '',
+            familyBackground: '',
+            sharedCharacterIds: [],
+          }),
+          now,
+        );
+        value = { seeded: true };
+      } else if (path === '/retention/login-state') {
+        const owner = this.store.get<{ world_id: string }>(
+          'SELECT world_id FROM web_principals WHERE id=?',
+          input.principalId,
+        )!;
+        const email = `seed-${input.principalId}@example.com`;
+        value = {
+          logins: this.store.get<{ n: number }>(
+            'SELECT count(*) n FROM web_player_logins WHERE principal_id=?',
+            input.principalId,
+          )!.n,
+          challenges: this.store.get<{ n: number }>(
+            'SELECT count(*) n FROM web_email_challenges WHERE principal_id=? OR email_norm=?',
+            input.principalId,
+            email,
+          )!.n,
+          cards: this.store.get<{ n: number }>(
+            'SELECT count(*) n FROM player_profile_versions WHERE world_id=?',
+            owner.world_id,
+          )!.n,
+        };
       } else if (path === '/retention/unsafe-delete') {
         this.store.run(
           'DELETE FROM web_provider_outputs WHERE operation_id IN (SELECT id FROM web_operations WHERE principal_id=?)',

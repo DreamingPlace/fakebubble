@@ -132,9 +132,9 @@ test('Cloudflare runner: the 113 step is byte-for-byte what main applied; 114 is
   const r2 = await f.call<{ hashes: string[]; ledger: number[] }>('/r2?object=hash-r2');
   assert.ok(inline.hashes.includes(`113:${MAIN_113.inline}`), 'inline 113 step hash equals main');
   assert.ok(r2.hashes.includes(`113:${MAIN_113.r2}`), 'R2 113 step hash equals main');
-  // 114 is now fourth from last (115, 116 and 117 follow it).
-  assert.equal(inline.hashes.at(-4)?.startsWith('114:'), true);
-  assert.equal(r2.hashes.at(-4)?.startsWith('114:'), true);
+  // 114 is now fifth from last (115, 116, 117 and 118 follow it). Extended for migration 118.
+  assert.equal(inline.hashes.at(-5)?.startsWith('114:'), true);
+  assert.equal(r2.hashes.at(-5)?.startsWith('114:'), true);
   assert.deepEqual(inline.ledger, ledgerVersions);
   assert.deepEqual(r2.ledger, ledgerVersions);
 });
@@ -143,8 +143,8 @@ test('Cloudflare runner: both authorities create 114 after 113; Worker vars are 
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-metrics-worker.ts', { STATE: 'WebMetricsFixture' });
   const inline = await f.call<Record<string, unknown>>('/inline?object=inline');
   assert.equal(inline.metrics, true);
-  // user_version is 117 now that the co-creation step exists.
-  assert.deepEqual(inline.version, { user_version: 117 });
+  // user_version is 118 now that the player-login step exists (Extended for migration 118).
+  assert.deepEqual(inline.version, { user_version: 118 });
   assert.equal(inline.mediaIdNotNull, 0);
   assert.deepEqual(inline.concurrency, {
     maxTextRunning: 20,
@@ -155,7 +155,7 @@ test('Cloudflare runner: both authorities create 114 after 113; Worker vars are 
   });
   const r2 = await f.call<Record<string, unknown>>('/r2?object=r2');
   assert.equal(r2.metrics, true);
-  assert.deepEqual(r2.version, { user_version: 117 });
+  assert.deepEqual(r2.version, { user_version: 118 });
   assert.equal(r2.mediaIdNotNull, 0);
   assert.deepEqual(r2.itemTriggers, ['web_publication_items_no_delete', 'web_publication_items_no_update']);
   assert.deepEqual(r2.ledger, ledgerVersions);
@@ -192,13 +192,14 @@ test('Cloudflare runner: an existing authority at 113 upgrades to 114 through th
     assert.equal(result.before.length, 38, mode);
     assert.equal(result.before.at(-1)?.startsWith('113:'), true, mode);
     assert.deepEqual(result.after.slice(0, 38), result.before, `${mode}: applied steps are untouched`);
-    // Extended for migration 117: opening the authority also applies 116 and 117 after 114 and 115.
-    assert.equal(result.after.length, 42, mode);
-    assert.equal(result.after.at(-4)?.startsWith('114:'), true, mode);
-    assert.equal(result.after.at(-3)?.startsWith('115:'), true, mode);
-    assert.equal(result.after.at(-2)?.startsWith('116:'), true, mode);
-    assert.equal(result.after.at(-1)?.startsWith('117:'), true, mode);
-    assert.deepEqual(result.version, { user_version: 117 }, mode);
+    // Extended for migration 118: opening the authority also applies 116, 117 and 118 after 114 and 115.
+    assert.equal(result.after.length, 43, mode);
+    assert.equal(result.after.at(-5)?.startsWith('114:'), true, mode);
+    assert.equal(result.after.at(-4)?.startsWith('115:'), true, mode);
+    assert.equal(result.after.at(-3)?.startsWith('116:'), true, mode);
+    assert.equal(result.after.at(-2)?.startsWith('117:'), true, mode);
+    assert.equal(result.after.at(-1)?.startsWith('118:'), true, mode);
+    assert.deepEqual(result.version, { user_version: 118 }, mode);
     assert.equal(result.metrics && result.discardedColumn, true, mode);
   }
   await f.restart();
