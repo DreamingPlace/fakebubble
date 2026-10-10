@@ -77,7 +77,7 @@ test('Node guest retention keeps a guest with a login at trial end and purges it
   store.db.exec(
     readFileSync(new URL('../../../apps/server/web-migrations/118_player_logins.sql', import.meta.url), 'utf8'),
   );
-  for (const [i, { guest, scope }] of worlds.entries().filter(([i]) => i === 0)) {
+  for (const [i, { guest, scope }] of [...worlds.entries()].filter(([i]) => i === 0)) {
     const email = `guest${i}@example.com`;
     store.run(
       'INSERT INTO web_player_logins VALUES (?,?,?,?,?,?)',
@@ -141,7 +141,7 @@ test('Node guest retention keeps a guest with a login at trial end and purges it
       }),
     /TRIAL_EXPIRED/,
   );
-  assert.equal(requireWebContent(store, clock, kept!.guest.principalId, kept!.scope.world_id, 'read').state, 'active');
+  assert.equal(requireWebContent(store, clock, kept!.guest.principalId, kept!.scope.world_id, 'read')?.state, 'active');
   assert.throws(() => requireWebContent(store, clock, kept!.guest.principalId, kept!.scope.world_id), /TRIAL_EXPIRED/);
   // 179 idle days: still kept. 181: purged through the audited path (clearDatabase audits before and after).
   now += 179 * 24 * 60 * 60_000;
