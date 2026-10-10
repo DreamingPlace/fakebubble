@@ -181,9 +181,11 @@ test('Cloudflare runner: an existing authority at 115 upgrades to 116 through th
     assert.equal(result.before.length, 40, mode);
     assert.equal(result.before.at(-1)?.startsWith('115:'), true, mode);
     assert.deepEqual(result.after.slice(0, 40), result.before, `${mode}: applied steps are untouched`);
-    assert.equal(result.after.length, 41, mode);
-    assert.equal(result.after.at(-1)?.startsWith('116:'), true, mode);
-    assert.deepEqual(result.version, { user_version: 116 }, mode);
+    // Extended for migration 117: opening the authority applies 116 and then 117 (see web-cocreation-migration).
+    assert.equal(result.after.length, 42, mode);
+    assert.equal(result.after.at(-2)?.startsWith('116:'), true, mode);
+    assert.equal(result.after.at(-1)?.startsWith('117:'), true, mode);
+    assert.deepEqual(result.version, { user_version: 117 }, mode);
     assert.deepEqual(result.embeddings, { vectors: true, attempts: true, metrics: true }, mode);
   }
 });

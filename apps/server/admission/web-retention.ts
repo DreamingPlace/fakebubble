@@ -78,7 +78,7 @@ export function requireWebContent(store: Store, clock: Clock, principalId: strin
   if (
     principal.kind === 'invite' &&
     row.state === 'protected' &&
-    [111, 112, 113, 114, 115, 116].includes(
+    [111, 112, 113, 114, 115, 116, 117].includes(
       store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
     )
   ) {

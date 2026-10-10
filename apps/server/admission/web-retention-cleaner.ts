@@ -8,6 +8,7 @@ import { WebPrivateAudioFiles } from '../audio/web-private-audio-files.ts';
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from './web-retention.ts';
 import { auditWebLifecycleWorld } from './web-lifecycle-audit.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
+import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
 
 type Operation = {
   id: string;
@@ -300,6 +301,8 @@ export class WebRetentionCleaner {
         this.store.run(`DELETE FROM ${table} WHERE operation_id IN (${operationScope})`, principalId, world);
       // memory_facts exists from schema 115 and the embedding tables from 116; an older database has nothing there.
       releaseUnsentEmbedHolds(this.store, world);
+      // Co-creation ideas (schema 117) are the player's data and go with the player.
+      purgeCocreation(this.store, { principalId });
       for (const table of [
         'memory_facts',
         'memory_embeddings',

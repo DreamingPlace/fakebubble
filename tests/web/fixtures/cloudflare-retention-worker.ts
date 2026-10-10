@@ -167,6 +167,48 @@ export class WebRetentionFixture extends WebBusinessFixture {
               "SELECT held_micros FROM web_provider_spending WHERE provider='cloudflare'",
             )?.held_micros ?? 0,
         };
+      } else if (path === '/retention/seed-cocreation') {
+        // Co-creation ideas (schema 117) of this principal: one for the character it chatted with, one for another.
+        const now = this.clock.now();
+        const character = this.store.get<{ character_id: string }>(
+          'SELECT character_id FROM web_operations WHERE principal_id=? LIMIT 1',
+          input.principalId,
+        )!.character_id;
+        for (const [target, suffix] of [
+          [character, 'own'],
+          ['other-character', 'other'],
+        ] as const) {
+          const id = `co-${suffix}-${input.principalId}`;
+          this.store.run(
+            `INSERT INTO web_cocreation_submissions(id,character_id,principal_id,request_id,request_hash,created_at)
+            VALUES (?,?,?,?,?,?)`,
+            id,
+            target,
+            input.principalId,
+            `request-${suffix}`,
+            'b'.repeat(64),
+            now,
+          );
+          this.store.run(
+            `INSERT INTO web_cocreation_answers(submission_id,ordinal,card_id,target_field,kind,text_json)
+            VALUES (?,0,'catchphrase','speechStyle','text','"口头禅"')`,
+            id,
+          );
+        }
+        value = { seeded: true };
+      } else if (path === '/retention/cocreation-state') {
+        // Every submission id (optionally only one principal's) and the answer count of what remains.
+        const only = typeof input.principalId === 'string' ? input.principalId : null;
+        value = {
+          submissions: this.store
+            .all<{ id: string }>(
+              'SELECT id FROM web_cocreation_submissions WHERE (? IS NULL OR principal_id=?) ORDER BY id',
+              only,
+              only,
+            )
+            .map((row) => row.id),
+          answers: this.store.get<{ n: number }>('SELECT count(*) n FROM web_cocreation_answers')!.n,
+        };
       } else if (path === '/retention/unsafe-delete') {
         this.store.run(
           'DELETE FROM web_provider_outputs WHERE operation_id IN (SELECT id FROM web_operations WHERE principal_id=?)',

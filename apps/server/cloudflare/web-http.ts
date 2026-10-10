@@ -11,6 +11,7 @@ import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { webProviderHTTPError } from '../platform/web-provider-http-error.ts';
 import { routeWebInvite } from '../invites/web-invite-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
+import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import { CloudRequestLimits } from './request-limits.ts';
 import { cloudJSON } from './json.ts';
@@ -155,6 +156,7 @@ export class WebProviderHTTP {
       method === 'POST' &&
       (path.startsWith(`${API}/invites/`) ||
         path.startsWith(`${API}/admin/`) ||
+        path.startsWith(`${API}/cocreation/`) ||
         path.startsWith(`${API}/identity/invite-`))
     ) {
       const localPath = `/api/web/local${path.slice(API.length)}`;
@@ -186,10 +188,20 @@ export class WebProviderHTTP {
         playerToken: this.cookie(request),
         adminCookie: this.cookie(request, true),
         trustedIpHash: ipHash,
-        body: await this.body(request, materialUpload ? 8_001_024 : characterWrite ? 131072 : 8192),
+        body: await this.body(
+          request,
+          materialUpload
+            ? 8_001_024
+            : characterWrite
+              ? 131072
+              : path.startsWith(`${API}/cocreation/`)
+                ? COCREATION_BODY_LIMIT
+                : 8192,
+        ),
       };
       const result =
-        (await routeWebAccountAdmin(app.inviteAdmin, input, app.characterAdmin)) ??
+        (await routeWebAccountAdmin(app.inviteAdmin, input, app.characterAdmin, app.cocreation)) ??
+        routeWebCocreation(app.cocreation, input) ??
         routeWebInvite(app.inviteActions, input, app.inviteAdmin);
       if (/\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(review-start|delete-start)$/.test(localPath))
         await this.execution.wake();

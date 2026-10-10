@@ -24,6 +24,7 @@ import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts'
 import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts';
 import { WebInvites } from '../invites/web-invites.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
+import { WebCocreation } from '../cocreation/web-cocreation.ts';
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
 
 export const WEB_PROVIDER_API = '/api/web/provider';
@@ -89,6 +90,7 @@ export class WebProviderApplication {
   readonly characterDeletion: WebCharacterDeletion;
   readonly characterAdmin: WebCharacterAdmin;
   readonly inviteActions: WebInviteActions;
+  readonly cocreation: WebCocreation;
   constructor(store: WebRuntimeStore, clock: Clock, config: WebProviderApplicationConfig, mailer?: AdminMailer) {
     store.requireProviderRuntime();
     ensure(
@@ -136,6 +138,16 @@ export class WebProviderApplication {
       identity: this.identity,
     });
     this.inviteActions = new WebInviteActions(store, clock, config.origin, invites, this.identity);
+    this.cocreation = new WebCocreation(
+      store,
+      clock,
+      this.identity,
+      this.inviteAdmin,
+      createHmac('sha256', Buffer.from(config.requestKey, 'base64url'))
+        .update('web-cocreation-pseudonym-key-v1')
+        .digest(),
+      () => globalThis.crypto.randomUUID(),
+    );
   }
 
   bootstrap(token: string | undefined, ipHash: string) {

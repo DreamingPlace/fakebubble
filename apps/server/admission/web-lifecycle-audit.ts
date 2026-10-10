@@ -1,5 +1,6 @@
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
+import { cocreationRemains } from '../cocreation/web-cocreation-purge.ts';
 
 const shells = new Set([
   'web_principals',
@@ -157,6 +158,16 @@ export function auditWebLifecycleWorld(
         worldId,
       ),
       'WEB_RETENTION_EXTERNAL_INTENT_UNSAFE',
+    );
+  // Co-creation ideas (117) carry the principal, not the world: a cleared world has none left for its principals.
+  if (phase === 'cleared')
+    ensure(
+      !cocreationRemains(store, {
+        principalIds: store
+          .all<{ id: string }>('SELECT id FROM web_principals WHERE world_id=?', worldId)
+          .map((row) => row.id),
+      }),
+      'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
     );
   if (phase === 'source') {
     ensure(

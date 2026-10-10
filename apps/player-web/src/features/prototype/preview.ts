@@ -50,12 +50,13 @@ const people: Person[] = [
   ...Array.from({ length: 6 }, (_, i) => reserve(i + 7)),
 ];
 
-const icon = (name: 'sound' | 'back' | 'send' | 'play') => {
+const icon = (name: 'sound' | 'back' | 'send' | 'play' | 'more') => {
   const paths = {
     sound: '<path d="M3 10v4m4-7v10m4-14v18m4-15v12m4-8v4"/>',
     back: '<path d="m15 18-6-6 6-6"/>',
     send: '<path d="m4 12 16-8-5 16-3-7-8-1Zm8 1 8-9"/>',
     play: '<path d="m9 6 9 6-9 6V6Z"/>',
+    more: '<circle cx="5.5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.3" fill="currentColor" stroke="none"/>',
   };
   return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
 };
@@ -66,7 +67,7 @@ function blend(a: string, b: string, t: number): string {
   return `#${[1, 3, 5].map((i) => h(n(a, i) + (n(b, i) - n(a, i)) * t)).join('')}`;
 }
 
-function createCard(person: Person) {
+function createCard(person: Person, live = false) {
   const name = escapeCardText(person.name),
     mark = escapeCardText(person.mark);
   const configured = person.transcript !== undefined;
@@ -79,6 +80,7 @@ function createCard(person: Person) {
       <div class="chat-head">
         <button class="back-button icon-button" type="button" aria-label="返回人物浏览">${icon('back')}</button>
         <strong role="status" aria-live="polite">${name}</strong>
+        ${configured && live ? `<button class="chat-more icon-button" type="button" aria-label="更多" aria-haspopup="menu" aria-expanded="false">${icon('more')}</button>` : ''}
       </div>
       <div class="chat-body" role="log" aria-label="${name}的消息">
         ${configured ? `<p class="friend-notice">${name}已添加了你，来打个招呼吧</p>` : ''}
@@ -136,7 +138,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
   const deck = root.querySelector<HTMLElement>('.card-deck')!;
   const nav = root.querySelector<HTMLElement>('.avatar-nav')!;
   const toast = root.querySelector<HTMLElement>('.toast')!;
-  const cards = people.map(createCard);
+  const cards = people.map((person) => createCard(person, live !== undefined));
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   for (const card of cards) deck.append(card);
   let active = 7;

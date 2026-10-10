@@ -78,3 +78,22 @@ export function migrateWebProviderEmbeddings(store: Store) {
     store.db.exec('PRAGMA user_version = 116');
   });
 }
+
+/** Node-only 116→117: player co-creation submissions and their answers (117_cocreation.sql). */
+export function migrateWebProviderCocreation(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 116 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_embeddings'"),
+      'WEB_PROVIDER_COCREATION_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/117_cocreation.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 117');
+  });
+}

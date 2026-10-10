@@ -99,6 +99,10 @@ export class WebMetricsFixture {
           attempts: names().includes('web_embed_attempts'),
           metrics: names().includes('web_embed_metrics'),
         },
+        cocreation: {
+          submissions: names().includes('web_cocreation_submissions'),
+          answers: names().includes('web_cocreation_answers'),
+        },
         discardedColumn: storage.sql
           .exec('PRAGMA table_info(web_operation_metrics)')
           .toArray()
