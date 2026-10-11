@@ -26,14 +26,26 @@ import { WebInvites } from '../invites/web-invites.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { WebCocreation } from '../cocreation/web-cocreation.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
-import { PLAYER_LIMITS, WebPlayerAccounts, type PlayerMailer } from '../identity/web-player-accounts.ts';
+import {
+  PLAYER_LIMITS,
+  WebPlayerAccounts,
+  type AccountPurger,
+  type PlayerMailer,
+} from '../identity/web-player-accounts.ts';
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
 
 /** A cookie that names nothing recoverable: the transport expires it so the next visit starts from the signed-out page. */
 export class SessionClearedError extends DomainError {
-  constructor() {
-    super('SESSION_EXPIRED');
+  constructor(code = 'SESSION_EXPIRED') {
+    super(code);
     this.name = 'SessionClearedError';
+  }
+}
+/** Flag GUEST_GRACE_ENABLED: the guest's trial and grace period are over; the cookie is dead and the data is (being) purged. */
+export class GuestGraceEndedError extends SessionClearedError {
+  constructor() {
+    super('GUEST_GRACE_ENDED');
+    this.name = 'GuestGraceEndedError';
   }
 }
 /** Email logins (schema 118): flag, mailer and daily cap come from the Worker environment. */
@@ -41,6 +53,13 @@ export interface WebPlayerAccountsConfig {
   mailer?: PlayerMailer | undefined;
   signupEnabled?: boolean | undefined;
   dailyCap?: number | undefined;
+  /** Part 17 switches (all default off). graceMs 0 = GUEST_GRACE_ENABLED off. */
+  graceMs?: number | undefined;
+  accountDelete?: boolean | undefined;
+  legalPages?: boolean | undefined;
+  turnstileSiteKey?: string | null | undefined;
+  /** The audited purge path behind account deletion (absent = the delete route answers NOT_FOUND). */
+  purger?: AccountPurger | undefined;
 }
 
 export const WEB_PROVIDER_API = '/api/web/provider';
@@ -107,6 +126,8 @@ export class WebProviderApplication {
   readonly characterAdmin: WebCharacterAdmin;
   readonly inviteActions: WebInviteActions;
   readonly cocreation: WebCocreation;
+  /** GUEST_GRACE_ENABLED: 0 when off. */
+  readonly graceMs: number;
   /** Null on a database older than schema 118. */
   readonly playerAccounts: WebPlayerAccounts | null;
   constructor(
@@ -132,6 +153,7 @@ export class WebProviderApplication {
     );
     this.store = store;
     this.clock = clock;
+    this.graceMs = players.graceMs ?? 0;
     this.config = { ...config };
     this.identity = new WebIdentity(store, {
       origin: config.origin,
@@ -142,6 +164,7 @@ export class WebProviderApplication {
         requestKey: Buffer.from(config.requestKey, 'base64url'),
       },
       clock,
+      ...(players.graceMs ? { guestGraceMs: players.graceMs } : {}),
     });
     this.admission = new WebAdmission(store, clock, () => globalThis.crypto.randomUUID());
     this.publisher = new WebVerticalPublisher(store, clock);
@@ -169,6 +192,13 @@ export class WebProviderApplication {
           mailer: players.mailer ?? null,
           signupEnabled: players.signupEnabled === true && !!players.mailer,
           dailyCap: players.dailyCap ?? PLAYER_LIMITS.defaultDailyCap,
+          ...(players.graceMs ? { graceMs: players.graceMs } : {}),
+          ...(players.accountDelete && players.purger ? { purger: players.purger } : {}),
+          features: {
+            accountDelete: players.accountDelete === true && !!players.purger,
+            legal: players.legalPages === true,
+            turnstileSiteKey: players.turnstileSiteKey ?? null,
+          },
         })
       : null;
     const accounts = this.playerAccounts;
@@ -224,7 +254,9 @@ export class WebProviderApplication {
           error.code === 'SESSION_EXPIRED' &&
           this.identity.expiredGuest(token)
         )
-          throw new DomainError('GUEST_SESSION_EXPIRED');
+          // With the grace flag on, a dead guest cookie is a signed-out visit (the transport clears it and the page
+          // offers 登录 / 注册 / 以访客继续); with it off the old "访客会话已过期" answer is unchanged.
+          throw this.graceMs > 0 ? new GuestGraceEndedError() : new DomainError('GUEST_SESSION_EXPIRED');
         // A revoked / rotated / unknown cookie leaves the page signed out: the transport clears it. A cookie whose
         // uncertain invite redemption can still be recovered keeps its place until that is settled.
         if (

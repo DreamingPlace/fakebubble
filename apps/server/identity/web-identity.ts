@@ -103,6 +103,8 @@ export interface WebIdentityOptions {
   clock: Clock;
   nextId?: () => string;
   random?: (size: number) => Buffer;
+  /** GUEST_GRACE_ENABLED: how long past its trial a guest without a login keeps a usable session (0 = off). */
+  guestGraceMs?: number;
 }
 
 /** Bounds native Argon2 work before it reaches libuv; no cheaper test-only parameters. */
@@ -263,9 +265,29 @@ export class WebIdentity {
       !!this.store.get("SELECT 1 FROM web_principals WHERE id=? AND kind='guest'", principalId)
     );
   }
+  /**
+   * Grace (flag GUEST_GRACE_ENABLED): the session of a guest whose trial has ended stays usable until the end of the
+   * grace period so the player can still sign up. Usable is all it is: the content gates ('live' and 'read') still answer
+   * TRIAL_EXPIRED, so no reply starts and no history is read. A guest that never started a trial has no grace.
+   */
+  private inGrace(row: SessionRow, now: number) {
+    const grace = this.options.guestGraceMs ?? 0;
+    if (grace <= 0 || row.account_id !== null || !webDataLifecycleEnabled(this.store)) return false;
+    const retention = this.store.get<{ expires_at: number | null; state: string }>(
+      `SELECT r.expires_at,r.state FROM web_guest_retention r
+      JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id
+      WHERE r.principal_id=? AND p.kind='guest'`,
+      row.principal_id,
+    );
+    return (
+      !!retention && retention.state === 'active' && retention.expires_at !== null && now < retention.expires_at + grace
+    );
+  }
   private withinLifetime(row: SessionRow, now: number) {
     return (
-      now < row.absolute_expires_at || (row.account_id === null && this.hasActiveInviteGrant(row.principal_id, now))
+      now < row.absolute_expires_at ||
+      (row.account_id === null && this.hasActiveInviteGrant(row.principal_id, now)) ||
+      this.inGrace(row, now)
     );
   }
   private activeSession(token: string, now: number) {

@@ -108,6 +108,16 @@ export async function routeWebPlayerAccounts(
     const body = object(req.body, ['nickname']);
     return { status: 200, body: accounts.setNickname({ nickname: body.nickname, session: session(req) }) };
   }
+  if (action === 'delete') {
+    const body = object(req.body, ['password', 'confirm']);
+    const result = await accounts.deleteAccount({
+      password: body.password,
+      confirm: body.confirm,
+      session: session(req),
+      ipHash,
+    });
+    return { status: 200, clearPlayerCookie: true, body: result };
+  }
   if (action === 'logout-others') {
     object(req.body, []);
     return { status: 200, body: accounts.logoutOthers(session(req)) };

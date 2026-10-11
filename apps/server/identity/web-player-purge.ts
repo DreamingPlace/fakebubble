@@ -1,5 +1,7 @@
 import type { BusinessStore } from '../platform/store-contract.ts';
 
+export { GUEST_GRACE_MS } from '../../../config/web-public.ts';
+
 const tableExists = (store: Pick<BusinessStore, 'get'>, name: string) =>
   !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", name);
 /** Tables created by 118_player_logins.sql: an older database has nothing to purge there. */
@@ -39,16 +41,16 @@ export function playerLastSeenAt(store: Pick<BusinessStore, 'get'>, principalId:
  * The cleaners' "who is due" predicate over web_guest_retention `r` (state 'purging' always continues). Without the
  * 118 tables it is the old predicate unchanged.
  */
-export function guestPurgeDue(store: Pick<BusinessStore, 'get'>, now: number) {
+export function guestPurgeDue(store: Pick<BusinessStore, 'get'>, now: number, graceMs = 0) {
   if (!playerLoginsExist(store))
-    return { sql: "(r.state='purging' OR r.state='active' AND r.expires_at<=?)", args: [now] };
+    return { sql: "(r.state='purging' OR r.state='active' AND r.expires_at<=?)", args: [now - graceMs] };
   return {
     sql: `(r.state='purging'
       OR r.state='active' AND r.expires_at<=?
         AND NOT EXISTS (SELECT 1 FROM web_player_logins l WHERE l.principal_id=r.principal_id)
       OR r.state IN ('unstarted','active')
         AND EXISTS (SELECT 1 FROM web_player_logins l WHERE l.principal_id=r.principal_id AND l.last_seen_at<=?))`,
-    args: [now, now - PLAYER_INACTIVE_MS],
+    args: [now - graceMs, now - PLAYER_INACTIVE_MS],
   };
 }
 
@@ -83,5 +85,28 @@ export function playerLoginsRemain(store: Pick<BusinessStore, 'get'>, principalI
   return (
     !!store.get(`SELECT 1 FROM web_player_logins WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds) ||
     !!store.get(`SELECT 1 FROM web_email_challenges WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds)
+  );
+}
+
+/**
+ * True while a guest WITHOUT a login is past its trial but still inside the grace period (state 'active', expires_at
+ * <= now < expires_at + graceMs). Always false with graceMs 0 (flag off) and for a guest that already has a login (that
+ * one is a kept account, not in grace). Such a guest still cannot chat or read
+ * history; it can only sign up, which turns it into a kept account.
+ */
+export function guestInGrace(store: Pick<BusinessStore, 'get'>, principalId: string, now: number, graceMs: number) {
+  if (graceMs <= 0 || playerLoginRetainsGuest(store, principalId)) return false;
+  const row = store.get<{ state: string; expires_at: number | null; kind: string }>(
+    `SELECT r.state,r.expires_at,p.kind FROM web_guest_retention r
+    JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id WHERE r.principal_id=?`,
+    principalId,
+  );
+  return (
+    !!row &&
+    row.kind === 'guest' &&
+    row.state === 'active' &&
+    row.expires_at !== null &&
+    row.expires_at <= now &&
+    now < row.expires_at + graceMs
   );
 }

@@ -5,6 +5,7 @@ import { WEB_IDENTITY_LIMITS } from '../../../config/web-v1.ts';
 import { playerPasswords, validatePlayerPassword } from '../admin/web-admin-password.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
+import { guestInGrace } from './web-player-purge.ts';
 import { maskEmail, normalizeEmail } from './email-address.ts';
 import type { WebIdentity } from './web-identity.ts';
 
@@ -21,6 +22,15 @@ export interface PlayerMailer {
   }): Promise<void>;
   waitUntil?(task: Promise<void>): void;
 }
+/**
+ * The audited purge path as the account code needs it. begin() runs inside the deletion transaction (fences content,
+ * releases reservations: the retention T1); finish() runs after it (database clear, then file erase) and may fail, in
+ * which case the retention state stays 'purging' and the alarm completes it.
+ */
+export interface AccountPurger {
+  begin(principalId: string): void;
+  finish(principalId: string): Promise<void>;
+}
 export interface WebPlayerAccountsOptions {
   origin: string;
   /** REQUEST_KEY: code digests and throttle keys are HMACs under keys derived from it. */
@@ -32,6 +42,12 @@ export interface WebPlayerAccountsOptions {
   signupEnabled: boolean;
   /** PLAYER_EMAIL_DAILY_CAP (emails per UTC day). */
   dailyCap: number;
+  /** What GET /account tells the page about the Part 17 switches (all absent while every flag is off). */
+  features?: { accountDelete?: boolean; legal?: boolean; turnstileSiteKey?: string | null };
+  /** ACCOUNT_DELETE_ENABLED: the purge path behind 删除我的账号 / 清除本设备的体验数据 (absent = those routes do not exist). */
+  purger?: AccountPurger | undefined;
+  /** GUEST_GRACE_ENABLED: grace period in ms after a trial ended during which signup is still possible (0 = off). */
+  graceMs?: number;
   nextId?: () => string;
   random?: (size: number) => Buffer;
 }
@@ -308,7 +324,17 @@ export class WebPlayerAccounts {
   /** Who is asking: the signed-out sees only whether signup is open; a signed-in player sees their own login. */
   info(token: string | undefined) {
     const session = this.identity.peekSession(token);
-    const base = { signupEnabled: this.options.signupEnabled };
+    const f = this.options.features;
+    const features = {
+      ...(f?.accountDelete ? { accountDelete: true as const } : {}),
+      ...(f?.legal ? { legal: true as const } : {}),
+      ...(f?.turnstileSiteKey ? { turnstileSiteKey: f.turnstileSiteKey } : {}),
+      ...((this.options.graceMs ?? 0) > 0 ? { grace: true as const } : {}),
+    };
+    const base = {
+      signupEnabled: this.options.signupEnabled,
+      ...(Object.keys(features).length ? { features } : {}),
+    };
     if (!session) return { ...base, signedIn: false as const };
     const login = this.loginOf(session.principalId);
     const nickname = this.currentNickname(session.worldId);
@@ -319,9 +345,21 @@ export class WebPlayerAccounts {
       hasLogin: !!login,
       emailMasked: login ? maskEmail(login.email_norm) : null,
       nickname,
+      ...this.graceInfo(session.principalId),
       // A legacy invited player without a login may bind one.
       canBind: !login && session.kind === 'invite' && this.activeGrant(session.principalId, this.now()),
     };
+  }
+  /** { grace: { endsAt } } while a guest without a login is past its trial but inside the grace period. */
+  private graceInfo(principalId: string) {
+    const graceMs = this.options.graceMs ?? 0;
+    const now = this.now();
+    if (!guestInGrace(this.store, principalId, now, graceMs)) return {};
+    const row = this.store.get<{ expires_at: number }>(
+      'SELECT expires_at FROM web_guest_retention WHERE principal_id=?',
+      principalId,
+    );
+    return row ? { grace: { endsAt: row.expires_at + graceMs } } : {};
   }
   private currentNickname(worldId: string) {
     const row = this.store.get<{ profile_json: string }>(
@@ -405,8 +443,10 @@ export class WebPlayerAccounts {
     ensure(!this.loginOf(scope.principalId), 'PLAYER_LOGIN_EXISTS');
     if (purpose === 'signup') {
       ensure(scope.kind === 'guest', 'PLAYER_SIGNUP_UNAVAILABLE');
-      // Only a live trial can become a kept account: an ended one is already (being) purged.
-      requireWebContent(this.store, this.options.clock, scope.principalId, scope.worldId);
+      // Only a live trial can become a kept account: an ended one is already (being) purged. With the grace flag on, a
+      // guest whose trial ended is still signable for GUEST_GRACE_MS (its data has not been purged yet).
+      if (!guestInGrace(this.store, scope.principalId, now, this.options.graceMs ?? 0))
+        requireWebContent(this.store, this.options.clock, scope.principalId, scope.worldId);
     } else ensure(scope.kind === 'invite' && this.activeGrant(scope.principalId, now), 'PLAYER_BIND_UNAVAILABLE');
   }
   /** Old challenges and idle counters go; the send ledger keeps a full day. */
@@ -759,6 +799,89 @@ export class WebPlayerAccounts {
       ensure(this.loginOf(scope.principalId), 'PLAYER_LOGIN_REQUIRED');
       return { nickname, revision: this.writeNickname(scope.worldId, nickname, this.now()) };
     });
+  }
+
+  /**
+   * 删除我的账号 (a player with a login: password + typing 删除) and 清除本设备的体验数据 (a guest without one: a button,
+   * confirm '清除'). Both run the SAME audited purge path the retention cleaner uses (AccountPurger): chats, memories, audio,
+   * co-creation, 名片, the login, its challenges and every session go; an invited player's grant is revoked in the same
+   * transaction. Rate-limited like a password check. The audit row (web_admin_audit) holds an action name, a keyed
+   * pseudonym of the player and a time: no content, no address, no id. An invited player needs a login to do this.
+   */
+  async deleteAccount(input: { password: unknown; confirm: unknown; session: PlayerSessionInput; ipHash: string }) {
+    const purger = this.options.purger;
+    ensure(purger && this.options.features?.accountDelete, 'NOT_FOUND');
+    ensure(/^[a-f0-9]{64}$/.test(input.ipHash), 'WEB_TRUSTED_IP_REQUIRED');
+    ensure(typeof input.confirm === 'string' && typeof input.password === 'string', 'INVALID_REQUEST');
+    const confirm = input.confirm,
+      password = input.password;
+    const scope = this.identity.authorizeSessionWrite(input.session.token, input.session.csrf, input.session.origin);
+    ensure(scope.kind === 'guest' || scope.kind === 'invite', 'ACCOUNT_DELETE_UNAVAILABLE');
+    const login = this.loginOf(scope.principalId);
+    ensure(login || scope.kind === 'guest', 'PLAYER_LOGIN_REQUIRED');
+    ensure(confirm === (login ? '删除' : '清除'), 'ACCOUNT_DELETE_CONFIRM_INVALID');
+    const principalKey = this.key('delete-principal', scope.principalId),
+      ipKey = this.key('delete-ip', input.ipHash);
+    this.store.transaction(() => {
+      const now = this.now();
+      this.reserve('password-principal', principalKey, PLAYER_LIMITS.passwordPerPrincipal, now);
+      this.reserve('login-ip', ipKey, PLAYER_LIMITS.loginPerIp, now);
+    });
+    if (login) {
+      // The same cost and the same refusal as a wrong login password; the counter above bounds the guesses.
+      validatePlayerPassword(password);
+      const valid = await gate.run(() => playerPasswords.verify(password, login.password_hash));
+      ensure(valid, 'PLAYER_LOGIN_INVALID');
+    } else ensure(password === '', 'INVALID_REQUEST');
+    this.store.transaction(() => {
+      const now = this.now();
+      const again = this.identity.authorizeSessionWrite(input.session.token, input.session.csrf, input.session.origin);
+      ensure(again.sessionId === scope.sessionId && again.principalId === scope.principalId, 'SESSION_EXPIRED');
+      const current = this.loginOf(scope.principalId);
+      ensure(
+        !!current === !!login && (!current || current.password_hash === login!.password_hash),
+        'PLAYER_LOGIN_INVALID',
+      );
+      if (scope.kind === 'invite') {
+        this.store.run(
+          'UPDATE web_invite_grants SET revoked_at=? WHERE principal_id=? AND revoked_at IS NULL',
+          now,
+          scope.principalId,
+        );
+        for (const [table, where] of [
+          ['web_invite_credentials', 'grant_id IN (SELECT id FROM web_invite_grants WHERE principal_id=?)'],
+          ['web_invite_identity_receipts', 'grant_id IN (SELECT id FROM web_invite_grants WHERE principal_id=?)'],
+        ] as const)
+          if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", table))
+            this.store.run(
+              `UPDATE ${table} SET revoked_at=? WHERE revoked_at IS NULL AND ${where}`,
+              now,
+              scope.principalId,
+            );
+      }
+      this.identity.revokeSessions(scope.principalId);
+      if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_admin_audit'"))
+        this.store.run(
+          'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (NULL,?,?,?)',
+          login ? 'player-account-deleted' : 'guest-data-cleared',
+          createHmac('sha256', this.throttleKey)
+            .update('delete-audit\0')
+            .update(scope.principalId)
+            .digest('hex')
+            .slice(0, 16),
+          now,
+        );
+      purger.begin(scope.principalId);
+    });
+    // After the commit: the database clear and the file erase. A failure here is not the player's problem - the
+    // retention row is 'purging' and the alarm finishes it - and it must not turn a deletion into an error page.
+    let complete = true;
+    try {
+      await purger.finish(scope.principalId);
+    } catch {
+      complete = false;
+    }
+    return { deleted: true as const, complete };
   }
 
   /** 退出登录: this session ends; the cookie is cleared by the transport. */

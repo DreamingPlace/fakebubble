@@ -33,7 +33,7 @@ export function webProviderHTTPError(error: unknown) {
       } as Record<string, string>
     )[code] ?? (code.startsWith('WEB_') ? 'INTERNAL_ERROR' : code);
   const status =
-    publicCode === 'ADMIN_EMAIL_UNAVAILABLE'
+    publicCode === 'ADMIN_EMAIL_UNAVAILABLE' || publicCode === 'TURNSTILE_UNAVAILABLE'
       ? 503
       : publicCode === 'TRIAL_EXPIRED' || publicCode === 'WEB_INVITE_ACCESS_REQUIRED'
         ? 410
@@ -42,6 +42,7 @@ export function webProviderHTTPError(error: unknown) {
           : publicCode === 'AUTH_REQUIRED' ||
               publicCode === 'SESSION_EXPIRED' ||
               publicCode === 'GUEST_SESSION_EXPIRED' ||
+              publicCode === 'GUEST_GRACE_ENDED' ||
               publicCode === 'ADMIN_UNAUTHORIZED' ||
               publicCode === 'PLAYER_LOGIN_INVALID' ||
               publicCode === 'ADMIN_LOGIN_INVALID'
@@ -57,7 +58,10 @@ export function webProviderHTTPError(error: unknown) {
                 publicCode === 'ADMIN_OWNER_PROTECTED' ||
                 publicCode === 'COCREATION_INVITE_REQUIRED' ||
                 publicCode === 'PLAYER_SIGNUP_DISABLED' ||
-                publicCode === 'PLAYER_ACCESS_REVOKED'
+                publicCode === 'TURNSTILE_REQUIRED' ||
+                publicCode === 'TURNSTILE_FAILED' ||
+                publicCode === 'PLAYER_ACCESS_REVOKED' ||
+                publicCode === 'ACCOUNT_DELETE_UNAVAILABLE'
               ? 403
               : publicCode === 'INVALID_CURSOR' ||
                   publicCode === 'INVALID_REQUEST' ||
@@ -69,6 +73,7 @@ export function webProviderHTTPError(error: unknown) {
                   publicCode === 'PLAYER_PASSWORD_INVALID' ||
                   publicCode === 'PLAYER_NICKNAME_INVALID' ||
                   publicCode === 'PLAYER_CODE_INVALID' ||
+                  publicCode === 'ACCOUNT_DELETE_CONFIRM_INVALID' ||
                   cocreationInvalid.has(publicCode)
                 ? 400
                 : publicCode === 'QUEUE_FULL' ||

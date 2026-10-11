@@ -15,6 +15,7 @@ import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
+import type { HumanAction, TurnstileGate } from '../identity/web-turnstile.ts';
 import { CloudRequestLimits } from './request-limits.ts';
 import { cloudJSON } from './json.ts';
 
@@ -22,6 +23,14 @@ export interface WebHTTPExecution {
   wake(): Promise<void>;
   cancel(operationId: string, principalId: string): unknown;
 }
+/** Part 17 options of the transport: all absent = behaviour exactly as before. */
+export interface WebHTTPOptions {
+  /** TURNSTILE_ENABLED: required for a new guest, request-code and login. */
+  human?: TurnstileGate | undefined;
+  /** Called with no argument for every 5xx the transport answers (owner alerts count them; nothing else). */
+  onServerError?: (() => void) | undefined;
+}
+export const TURNSTILE_HEADER = 'x-turnstile-token';
 const privateHeaders = {
   'cache-control': 'no-store',
   'x-content-type-options': 'nosniff',
@@ -34,7 +43,9 @@ export class WebProviderHTTP {
   private readonly execution: WebHTTPExecution;
   private readonly limits: CloudRequestLimits;
   private readonly streams = new Map<string, () => void>();
-  constructor(app: WebProviderApplication, execution: WebHTTPExecution) {
+  private readonly options: WebHTTPOptions;
+  constructor(app: WebProviderApplication, execution: WebHTTPExecution, options: WebHTTPOptions = {}) {
+    this.options = options;
     ensure(app.config.mode === 'provider-cloud' && app.store.providerAudio, 'WEB_CLOUD_MEDIA_MODE_MISMATCH');
     this.app = app;
     this.execution = execution;
@@ -71,6 +82,10 @@ export class WebProviderHTTP {
     ensure(!request.signal.aborted, 'INVALID_REQUEST');
     return this.app.identity.authorizeWrite(token, csrf, origin);
   }
+  /** Turnstile (when enabled): the token travels in a header so no body schema changes; it is checked before any work. */
+  private async human(request: Request, action: HumanAction, peer: string) {
+    await this.options.human?.require(request.headers.get(TURNSTILE_HEADER), action, peer);
+  }
   private async body(request: Request, maximum = 8192) {
     ensure(request.headers.get('content-type') === 'application/json', 'INVALID_REQUEST');
     let value: unknown;
@@ -89,6 +104,7 @@ export class WebProviderHTTP {
     } catch (error) {
       const failure = webProviderHTTPError(error);
       response = Response.json(failure.body, { status: failure.status });
+      if (failure.status >= 500) this.options.onServerError?.();
       if (failure.status === 429)
         response.headers.set(
           'retry-after',
@@ -163,6 +179,8 @@ export class WebProviderHTTP {
         path.startsWith(`${API}/identity/invite-`))
     ) {
       const localPath = `/api/web/local${path.slice(API.length)}`;
+      if (localPath === '/api/web/local/account/request-code') await this.human(request, 'code', trustedPeer);
+      else if (localPath === '/api/web/local/account/login') await this.human(request, 'login', trustedPeer);
       const materialUpload = path.match(
         /^\/api\/web\/provider\/admin\/characters\/([A-Za-z0-9_-]{1,128})\/material-upload$/,
       );
@@ -237,6 +255,8 @@ export class WebProviderHTTP {
     if (method === 'GET' && path === `${API}/account`)
       return Response.json(app.playerAccounts?.info(this.cookie(request)) ?? { signupEnabled: false, signedIn: false });
     if (method === 'GET' && path === `${API}/bootstrap`) {
+      // A first visit without a cookie creates a guest: that is the one bootstrap Turnstile guards.
+      if (!this.cookie(request)) await this.human(request, 'guest', trustedPeer);
       try {
         const result = app.bootstrap(this.cookie(request), ipHash),
           response = Response.json(result.body);

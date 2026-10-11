@@ -32,7 +32,14 @@ export class WebCloudRetention {
   private readonly store: WebRuntimeStore;
   private readonly clock: Clock;
   lastError: string | null = null;
-  constructor(store: WebRuntimeStore, clock: Clock) {
+  /** GUEST_GRACE_ENABLED: a guest without a login is purged at expires_at + graceMs (0 = at expires_at, as before). */
+  private readonly graceMs: number;
+  constructor(store: WebRuntimeStore, clock: Clock, graceMs = 0) {
+    ensure(
+      Number.isSafeInteger(graceMs) && graceMs >= 0 && graceMs <= 30 * 24 * 60 * 60_000,
+      'WEB_RETENTION_GRACE_INVALID',
+    );
+    this.graceMs = graceMs;
     store.requireProviderRuntime();
     ensure(
       store.providerAudio && store.get("SELECT 1 FROM sqlite_master WHERE name='cf_web_audio_objects'"),
@@ -41,17 +48,27 @@ export class WebCloudRetention {
     this.store = store;
     this.clock = clock;
   }
-  private guest(principalId: string) {
+  /**
+   * The row of a principal this class may purge: a guest (no administrator account, no invite grant), or - only for an
+   * account deletion the player asked for (state 'purging'/'purged') - an invited player whose every grant was revoked
+   * in the same transaction that started the deletion (WebPlayerAccounts.deleteAccount).
+   */
+  private guest(principalId: string, deletion = false) {
     const row = this.store.get<Retention>('SELECT * FROM web_guest_retention WHERE principal_id=?', principalId);
+    const principalOk = (kind: 'guest' | 'invite') =>
+      !!row &&
+      !!this.store.get(
+        `SELECT 1 FROM web_principals p WHERE p.id=? AND p.world_id=? AND p.kind=?
+      AND NOT EXISTS (SELECT 1 FROM web_accounts a WHERE a.principal_id=p.id)
+      AND NOT EXISTS (SELECT 1 FROM web_invite_grants g WHERE g.principal_id=p.id${kind === 'invite' ? ' AND g.revoked_at IS NULL' : ''})`,
+        principalId,
+        row.world_id,
+        kind,
+      );
     ensure(
       row &&
-        this.store.get(
-          `SELECT 1 FROM web_principals p WHERE p.id=? AND p.world_id=? AND p.kind='guest'
-      AND NOT EXISTS (SELECT 1 FROM web_accounts a WHERE a.principal_id=p.id)
-      AND NOT EXISTS (SELECT 1 FROM web_invite_grants g WHERE g.principal_id=p.id)`,
-          principalId,
-          row.world_id,
-        ),
+        (principalOk('guest') ||
+          ((deletion || row.state === 'purging' || row.state === 'purged') && principalOk('invite'))),
       'WEB_RETENTION_SCOPE_UNSAFE',
     );
     return row;
@@ -62,10 +79,10 @@ export class WebCloudRetention {
     const row = this.store.get<{ due: number | null }>(
       `SELECT min(CASE WHEN r.state='purging' THEN ?
         ${logins ? 'WHEN l.principal_id IS NOT NULL THEN l.last_seen_at+?' : ''}
-        ELSE r.expires_at END) due
+        ELSE r.expires_at+${this.graceMs} END) due
       FROM web_guest_retention r JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id
       ${logins ? 'LEFT JOIN web_player_logins l ON l.principal_id=r.principal_id' : ''}
-      WHERE p.kind='guest' AND (r.state IN ('active','purging')${logins ? " OR r.state='unstarted' AND l.principal_id IS NOT NULL" : ''})`,
+      WHERE (p.kind='guest' OR p.kind='invite' AND r.state='purging') AND (r.state IN ('active','purging')${logins ? " OR r.state='unstarted' AND l.principal_id IS NOT NULL" : ''})`,
       this.clock.now() + 30_000,
       ...(logins ? [PLAYER_INACTIVE_MS] : []),
     );
@@ -73,10 +90,11 @@ export class WebCloudRetention {
   }
   async sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit > 0 && limit <= 16, 'WEB_RETENTION_SWEEP_INVALID');
-    const due = guestPurgeDue(this.store, this.clock.now());
+    const due = guestPurgeDue(this.store, this.clock.now(), this.graceMs);
     const rows = this.store.all<{ principal_id: string }>(
       `SELECT r.principal_id FROM web_guest_retention r
-      JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id WHERE p.kind='guest'
+      JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id
+      WHERE (p.kind='guest' OR p.kind='invite' AND r.state='purging')
       AND ${due.sql} ORDER BY r.expires_at,r.principal_id LIMIT ?`,
       ...due.args,
       limit,
@@ -94,19 +112,37 @@ export class WebCloudRetention {
       }
     return { processed: rows.length, failed };
   }
-  markExpired(principalId: string) {
+  /** The player's own deletion request, step 1 (fence + release): the caller is WebPlayerAccounts.deleteAccount. */
+  beginDeletion(principalId: string) {
+    this.markExpired(principalId, 'deleted');
+  }
+  /** Step 2 and 3 of the same audited path (T2 database clear, then F file erase). A failure leaves 'purging' for the alarm. */
+  async finishDeletion(principalId: string) {
+    this.clearDatabase(principalId);
+    await this.eraseAudio(principalId);
+  }
+  /**
+   * T1. reason 'deleted' is the player's own request (删除我的账号 / 清除本设备的体验数据): it replaces the time condition
+   * and nothing else, so the same fencing, release and audit steps run. It also covers an invited player whose grants the
+   * caller revoked in this transaction.
+   */
+  markExpired(principalId: string, reason: 'expired' | 'deleted' = 'expired') {
     this.store.transaction(() => {
-      const row = this.guest(principalId),
+      const row = this.guest(principalId, reason === 'deleted'),
         now = this.clock.now();
       if (['purging', 'purged'].includes(row.state)) return;
-      // A guest with an email login is purged for inactivity, not at trial end (web-player-purge.ts).
-      const lastSeen = playerLastSeenAt(this.store, principalId);
-      ensure(
-        lastSeen === null
-          ? row.state === 'active' && row.expires_at !== null && row.expires_at <= now
-          : (row.state === 'active' || row.state === 'unstarted') && lastSeen + PLAYER_INACTIVE_MS <= now,
-        'WEB_RETENTION_NOT_EXPIRED',
-      );
+      if (reason === 'deleted')
+        ensure(['unstarted', 'active', 'protected'].includes(row.state), 'WEB_RETENTION_NOT_EXPIRED');
+      else {
+        // A guest with an email login is purged for inactivity, not at trial end (web-player-purge.ts).
+        const lastSeen = playerLastSeenAt(this.store, principalId);
+        ensure(
+          lastSeen === null
+            ? row.state === 'active' && row.expires_at !== null && row.expires_at + this.graceMs <= now
+            : (row.state === 'active' || row.state === 'unstarted') && lastSeen + PLAYER_INACTIVE_MS <= now,
+          'WEB_RETENTION_NOT_EXPIRED',
+        );
+      }
       // The table only allows a purging row that has a trial window; a never-started guest gets a one-ms one.
       this.store.run(
         `UPDATE web_guest_retention SET state='purging',revision=revision+1,
@@ -129,6 +165,11 @@ export class WebCloudRetention {
           ).changes === 1,
           'WEB_RETENTION_STALE',
         );
+        if (operation.metering_type === 'entitled' && reason === 'deleted') {
+          // An invited player's reply has no trial slot to give back; the budget hold is settled below like any other.
+          ensure(operation.ip_window_id === null, 'WEB_RETENTION_SCOPE_UNSAFE');
+          continue;
+        }
         ensure(operation.metering_type === 'trial' && operation.ip_window_id, 'WEB_RETENTION_SCOPE_UNSAFE');
         ensure(
           this.store.run(

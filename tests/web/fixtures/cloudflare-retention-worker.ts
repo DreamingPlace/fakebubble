@@ -10,7 +10,7 @@ import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 
 /** Test-only fault injection around actual R2 operations. Never a production entrypoint. */
 export class WebRetentionFixture extends WebBusinessFixture {
-  private readonly cleaner: WebCloudRetention;
+  private cleaner: WebCloudRetention;
   private readonly rawBucket: PrivateBucket;
   private readonly control: { mode: string; waiting: boolean; release?: () => void };
   private replay: (() => unknown) | undefined;
@@ -65,7 +65,13 @@ export class WebRetentionFixture extends WebBusinessFixture {
     try {
       const input =
         request.method === 'POST'
-          ? ((await request.json()) as { principalId: string; mode?: string; lastSeenAgoMs?: number })
+          ? ((await request.json()) as {
+              principalId: string;
+              mode?: string;
+              lastSeenAgoMs?: number;
+              agoMs?: number;
+              graceMs?: number;
+            })
           : { principalId: '' };
       const principal = this.store.get<{ world_id: string }>(
         'SELECT world_id FROM web_principals WHERE id=?',
@@ -75,11 +81,15 @@ export class WebRetentionFixture extends WebBusinessFixture {
       if (path === '/retention/expire') {
         this.store.run(
           "UPDATE web_guest_retention SET started_at=?,expires_at=? WHERE principal_id=? AND state='active'",
-          this.clock.now() - 2,
-          this.clock.now() - 1,
+          this.clock.now() - (input.agoMs ?? 1) - 1,
+          this.clock.now() - (input.agoMs ?? 1),
           input.principalId,
         );
         value = { expired: true };
+      } else if (path === '/retention/grace') {
+        // Part 17: the cleaner of a deployment with GUEST_GRACE_ENABLED (graceMs > 0) or without it (0).
+        this.cleaner = new WebCloudRetention(this.store, this.clock, input.graceMs ?? 0);
+        value = { graceMs: input.graceMs ?? 0 };
       } else if (path === '/retention/sweep')
         value = { ...(await this.cleaner.sweep()), error: this.cleaner.lastError };
       else if (path === '/retention/mode') {

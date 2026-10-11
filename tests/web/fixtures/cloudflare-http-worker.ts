@@ -47,6 +47,10 @@ import type { PrivateBucket } from '../../../apps/server/cloudflare/media-object
 import { WebCloudExecutor } from '../../../apps/server/cloudflare/web-executor.ts';
 import { WebProviderApplication } from '../../../apps/server/generation/web-provider-application.ts';
 import { WebProviderHTTP } from '../../../apps/server/cloudflare/web-http.ts';
+import { auditWebLifecycleWorld } from '../../../apps/server/admission/web-lifecycle-audit.ts';
+import { playerLoginsRemain } from '../../../apps/server/identity/web-player-purge.ts';
+import { WebCloudRetention } from '../../../apps/server/cloudflare/web-retention.ts';
+import { TurnstileGate, type TurnstileVerifier } from '../../../apps/server/identity/web-turnstile.ts';
 import {
   publishedWebCharacters,
   characterProfileHash,
@@ -144,17 +148,61 @@ export class WebHTTPFixture extends WebBusinessFixture {
     this.execution = new WebCloudExecutor(ctx, this.store, this.clock, this.createRunner(), undefined, previews);
     this.http = this.transport();
   }
+  /** Part 17 test switches (set through /fixture/players). The Turnstile verifier is fake: no network, ever. */
+  private human: TurnstileGate | undefined;
+  private humanCalls: { token: string; remoteIp: string | null }[] = [];
+  private humanMode: 'normal' | 'down' = 'normal';
+  private serverErrors = 0;
   private transport() {
-    return new WebProviderHTTP(this.app, {
-      wake: () => this.execution.wake(),
-      cancel: (id, principal) => this.execution.executor.cancelManaged(id, principal),
-    });
+    return new WebProviderHTTP(
+      this.app,
+      {
+        wake: () => this.execution.wake(),
+        cancel: (id, principal) => this.execution.executor.cancelManaged(id, principal),
+      },
+      { human: this.human, onServerError: () => void this.serverErrors++ },
+    );
+  }
+  private fakeVerifier(): TurnstileVerifier {
+    return {
+      verify: async ({ token, remoteIp }) => {
+        this.humanCalls.push({ token, remoteIp });
+        if (this.humanMode === 'down') throw new Error('offline siteverify');
+        // "good…" tokens pass; the action travels in the token text ("good-guest-1") like Turnstile's own answer.
+        const match = /^good-([a-z]+)-/.exec(token);
+        return match
+          ? { success: true, hostname: 'fixture.invalid', action: match[1]! }
+          : { success: false, hostname: 'fixture.invalid' };
+      },
+    };
   }
   /** Opens player signup with a mailer that records every message (codes included: a fixture, never shipped). */
-  private enablePlayers(signupEnabled: boolean, dailyCap: number | undefined) {
+  private enablePlayers(
+    signupEnabled: boolean,
+    dailyCap: number | undefined,
+    pub: { graceMs?: number; accountDelete?: boolean; legalPages?: boolean; turnstile?: boolean } = {},
+  ) {
+    const retention = new WebCloudRetention(this.store, this.clock, pub.graceMs ?? 0);
+    this.human = pub.turnstile
+      ? new TurnstileGate({
+          siteKey: '1x00000000000000000000AA',
+          secret: 'fixture-secret-not-real',
+          origin: this.appConfig.origin,
+          verifier: this.fakeVerifier(),
+          clock: this.clock,
+        })
+      : undefined;
     this.app = new WebProviderApplication(this.store, this.clock, this.appConfig, this.adminMailer, {
       signupEnabled,
       dailyCap,
+      graceMs: pub.graceMs ?? 0,
+      accountDelete: pub.accountDelete === true,
+      legalPages: pub.legalPages === true,
+      turnstileSiteKey: this.human ? this.human.siteKey : null,
+      purger: {
+        begin: (principalId) => retention.beginDeletion(principalId),
+        finish: (principalId) => retention.finishDeletion(principalId),
+      },
       mailer: {
         send: async (message) => {
           if (this.failPlayerMail) throw new Error('fixture mail failure');
@@ -237,10 +285,95 @@ export class WebHTTPFixture extends WebBusinessFixture {
       return Response.json({ characterId: id });
     }
     if (path === '/fixture/players') {
-      const body = (await request.json()) as { signupEnabled: boolean; dailyCap?: number; failMail?: boolean };
+      const body = (await request.json()) as {
+        signupEnabled: boolean;
+        dailyCap?: number;
+        failMail?: boolean;
+        graceMs?: number;
+        accountDelete?: boolean;
+        legalPages?: boolean;
+        turnstile?: boolean;
+        turnstileDown?: boolean;
+      };
       this.failPlayerMail = body.failMail === true;
-      this.enablePlayers(body.signupEnabled, body.dailyCap);
+      this.humanMode = body.turnstileDown === true ? 'down' : 'normal';
+      this.enablePlayers(body.signupEnabled, body.dailyCap, body);
       return Response.json({ configured: true });
+    }
+    if (path === '/fixture/turnstile-calls')
+      return Response.json({ calls: this.humanCalls, serverErrors: this.serverErrors });
+    if (path === '/fixture/turnstile-mode') {
+      this.humanMode = ((await request.json()) as { down: boolean }).down ? 'down' : 'normal';
+      return Response.json({ configured: true });
+    }
+    if (path === '/fixture/retention-expire') {
+      // Part 17: end this player's trial `agoMs` ago (expires_at in the past) without touching anything else.
+      const { principalId, agoMs } = (await request.json()) as { principalId: string; agoMs: number };
+      this.store.run(
+        "UPDATE web_guest_retention SET state='active',started_at=?,expires_at=? WHERE principal_id=? AND state IN ('active','unstarted')",
+        this.clock.now() - agoMs - 1,
+        this.clock.now() - agoMs,
+        principalId,
+      );
+      return Response.json({ configured: true });
+    }
+    if (path === '/fixture/finish-deletion') {
+      // Debug aid: run the second half of the purge by hand and report the error code, if any.
+      const { principalId } = (await request.json()) as { principalId: string };
+      try {
+        await new WebCloudRetention(this.store, this.clock).finishDeletion(principalId);
+        return Response.json({ error: null });
+      } catch (error) {
+        const world = this.store.get<{ world_id: string }>(
+          'SELECT world_id FROM web_principals WHERE id=?',
+          principalId,
+        )!.world_id;
+        const left = this.store
+          .all<{ name: string }>(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '%sqlite%' AND name<>'_cf_METADATA'",
+          )
+          .filter(({ name }) => {
+            if (!this.store.all<{ name: string }>(`PRAGMA table_info("${name}")`).some((c) => c.name === 'world_id'))
+              return false;
+            return !!this.store.get(`SELECT 1 FROM "${name}" WHERE world_id=? LIMIT 1`, world);
+          })
+          .map((row) => row.name);
+        return Response.json({ error: (error as { code?: string }).code ?? String(error), left });
+      }
+    }
+    if (path === '/fixture/audit-world') {
+      // The same fail-closed lifecycle audit the cleaner ends with: it throws while anything private is left.
+      const { principalId } = (await request.json()) as { principalId: string };
+      const world = this.store.get<{ world_id: string }>(
+        'SELECT world_id FROM web_principals WHERE id=?',
+        principalId,
+      )!.world_id;
+      auditWebLifecycleWorld(this.store, world, 'cleared', 'provider');
+      return Response.json({ clean: true, loginsRemain: playerLoginsRemain(this.store, [principalId]) });
+    }
+    if (path === '/fixture/player-state') {
+      const { principalId } = (await request.json()) as { principalId: string };
+      const world = this.store.get<{ world_id: string }>(
+        'SELECT world_id FROM web_principals WHERE id=?',
+        principalId,
+      )!.world_id;
+      const n = (sql: string, ...args: string[]) => this.store.get<{ n: number }>(sql, ...args)!.n;
+      return Response.json({
+        retention: this.store.get(
+          'SELECT state,db_cleared_at FROM web_guest_retention WHERE principal_id=?',
+          principalId,
+        ),
+        messages: n('SELECT count(*) n FROM messages WHERE world_id=?', world),
+        logins: n('SELECT count(*) n FROM web_player_logins WHERE principal_id=?', principalId),
+        challenges: n('SELECT count(*) n FROM web_email_challenges WHERE principal_id=?', principalId),
+        cards: n('SELECT count(*) n FROM player_profile_versions WHERE world_id=?', world),
+        liveSessions: n('SELECT count(*) n FROM web_sessions WHERE principal_id=? AND revoked_at IS NULL', principalId),
+        grants: this.store.all(
+          'SELECT revoked_at IS NOT NULL AS revoked FROM web_invite_grants WHERE principal_id=?',
+          principalId,
+        ),
+        audit: this.store.all('SELECT actor_id,action,target_id FROM web_admin_audit ORDER BY seq'),
+      });
     }
     if (path === '/fixture/age-challenges') {
       // Moves every email challenge into the past so the 60-second cooldown has passed (the fixture clock is real).

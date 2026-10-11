@@ -34,3 +34,28 @@ export function cloudAdminMailer(
     },
   };
 }
+
+/**
+ * Owner alerts (Part 17): the same send_email binding as the administrator mails, plain text to ALERT_EMAIL_TO. A
+ * timeout or error is thrown to the caller, which records it and never retries inside the same window.
+ */
+export function cloudAlertMailer(binding: AdminEmailBinding, from: string, to: string) {
+  ensure(/^[a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(from), 'WEB_ADMIN_MAIL_CONFIG_INVALID');
+  ensure(/^[a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(to), 'WEB_ADMIN_MAIL_CONFIG_INVALID');
+  return {
+    async send(message: { subject: string; text: string }) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const result = await Promise.race([
+          binding.send({ from, to, subject: message.subject, text: message.text }),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('ALERT_EMAIL_TIMEOUT')), 10_000);
+          }),
+        ]);
+        ensure(typeof result?.messageId === 'string' && result.messageId.length > 0, 'WEB_ADMIN_MAIL_RECEIPT_INVALID');
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}

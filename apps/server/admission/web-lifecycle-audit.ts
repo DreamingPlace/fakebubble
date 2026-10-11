@@ -13,6 +13,9 @@ const shells = new Set([
   'conversations',
   'world_characters',
   'participants',
+  // Part 17 (删除我的账号): an invited player's REVOKED grant stays as a shell - ids and times only, no content, the
+  // record that a code was redeemed. A live grant never survives a cleared world (checked below).
+  'web_invite_grants',
 ]);
 const handled = new Set([
   'web_local_events',
@@ -162,6 +165,11 @@ export function auditWebLifecycleWorld(
         worldId,
       ),
       'WEB_RETENTION_EXTERNAL_INTENT_UNSAFE',
+    );
+  if (phase === 'cleared' && store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_invite_grants'"))
+    ensure(
+      !store.get('SELECT 1 FROM web_invite_grants WHERE world_id=? AND revoked_at IS NULL LIMIT 1', worldId),
+      'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
     );
   // Co-creation ideas (117) carry the principal, not the world: a cleared world has none left for its principals.
   if (phase === 'cleared')
