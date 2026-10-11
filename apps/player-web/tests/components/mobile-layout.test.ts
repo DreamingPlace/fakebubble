@@ -73,3 +73,49 @@ test('reply spacing is deterministic and bounded for silence, long content and a
   assert.equal(replyPauseMs(m('语音', 300000)), 4000);
   assert.equal(replyPauseMs(m('相同消息')), replyPauseMs(m('相同消息')));
 });
+
+test('phone card uses a bounded visible-viewport shell, internal scrolling and a non-shrinking composer', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../../src/styles/main.css', import.meta.url), 'utf8');
+  const mobile = css.slice(css.indexOf('/* Part 15:'));
+  assert.match(mobile, /@media \(max-width: 600px\)/);
+  assert.match(mobile, /height: var\(--chat-height, 100dvh\)/);
+  assert.match(mobile, /env\(safe-area-inset-bottom\)/);
+  assert.match(
+    mobile,
+    /\.page-shell\[data-phase\] \.card-slot\.is-chat \{[^}]*position: absolute;[^}]*width: calc\(100% - 32px\);[^}]*height: 100%/,
+  );
+  assert.match(mobile, /\.page-shell \.chat-body \{[^}]*min-height: 0;[^}]*overflow-y: auto/);
+  assert.match(css, /\.composer \{[^}]*flex: none/);
+  assert.match(mobile, /\.page-shell\[data-phase\] \.composer \{[^}]*padding: 8px/);
+  assert.match(mobile, /\.page-shell \.chat-head \{[^}]*height: 44px;[^}]*padding: 0 8px/);
+  assert.match(mobile, /\.page-shell \.chat-head strong \{[^}]*font-size: 15px/);
+  assert.match(mobile, /\.page-shell \.card-slot\.is-chat \.chat-body \{[^}]*padding-top: 12px/);
+  assert.doesNotMatch(mobile, /\.admin|\.account-admin/);
+});
+
+test('mobile-only chrome keeps actions on row one, count beneath, and smaller circles with full hit areas', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../../src/styles/main.css', import.meta.url), 'utf8').split('/* Part 15:')[1]!;
+  const mobile = css.slice(css.indexOf('@media (max-width: 600px)'));
+  assert.match(mobile, /grid-template-rows: 44px auto/);
+  assert.match(mobile, /\.page-shell \.head-actions \{[^}]*grid-row: 1/);
+  assert.match(mobile, /\.page-shell \.site-head \.head-note \{[^}]*grid-column: 2 \/ 4;[^}]*grid-row: 2/);
+  assert.match(mobile, /\.page-shell \.site-head \.head-hint \{[^}]*grid-row: 3/);
+  assert.match(mobile, /\.page-shell \.desktop-account \{\s*display: none/);
+  assert.match(mobile, /width: 45\.9px;\s*height: 45\.9px/);
+  assert.match(mobile, /width: 48px;\s*height: 48px/);
+  assert.match(mobile, /translateY\(calc\(var\(--avatar-y\) \* 0\.3\)\)/);
+});
+
+test('single-person chat hides the mobile carousel; only the home/browse surface has the switcher', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../../src/styles/main.css', import.meta.url), 'utf8').split('/* Part 15:')[1]!;
+  assert.match(
+    css,
+    /\.page-shell\[data-phase="chat"\] \.avatar-nav,[\s\S]*?\.page-shell\[data-phase="collapsing"\] \.avatar-nav \{\s*display: none;/,
+  );
+  const source = readFileSync(new URL('../../src/features/prototype/preview.ts', import.meta.url), 'utf8');
+  assert.match(source, /nav.inert = chatting;/);
+  assert.match(source, /nav.setAttribute\('aria-hidden', String\(chatting\)\)/);
+});

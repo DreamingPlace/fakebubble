@@ -151,12 +151,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
   let toastTimer = 0;
   const previousOffsets = new Map<HTMLElement, number>();
   const drafts = new Map<string, { value: string; start: number; end: number; scroll: number }>();
-  const cardWidth = () =>
-    window.innerWidth <= 360
-      ? window.innerWidth - 64
-      : window.innerWidth <= 600
-        ? Math.min(360, window.innerWidth - 96)
-        : Math.min(376, window.innerWidth - 108);
+  const cardWidth = () => (window.innerWidth <= 600 ? window.innerWidth - 32 : Math.min(376, window.innerWidth - 108));
 
   const say = (message: string) => {
     toast.textContent = message;
@@ -198,6 +193,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     page.dataset.phase = phase;
     const chatting = phase === 'expanding' || phase === 'chat' || phase === 'collapsing';
     document.documentElement.classList.toggle('chat-open', chatting);
+    const mobile = window.innerWidth <= 600;
     nav.inert = chatting;
     nav.setAttribute('aria-hidden', String(chatting));
     cards.forEach((card, index) => {
@@ -241,7 +237,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
       button.style.setProperty('--avatar-opacity', String(orbit.avatarOpacity));
       button.style.setProperty('--wash', orbit.wash);
       button.style.zIndex = String(orbit.z);
-      button.inert = Math.abs(offset) > 3;
+      button.inert = Math.abs(offset) > (mobile ? 2 : 3);
       button.tabIndex = index === active ? 0 : -1;
       button.classList.toggle('selected', index === active);
       button.setAttribute('aria-current', index === active ? 'true' : 'false');
@@ -260,6 +256,8 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     active = next;
     restoreEditor(active);
     render();
+    const selected = people[active]!.characterId;
+    if (live && selected) void live.open(selected, cards[active]!);
     if (phase === 'chat') cards[active]!.querySelector('textarea')!.focus({ preventScroll: true });
   };
   const spatial = (card: HTMLElement, before: DOMRect) => {

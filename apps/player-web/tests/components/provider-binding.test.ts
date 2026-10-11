@@ -6,6 +6,7 @@ import {
   syntheticProviderBootstrap,
   parseWebProviderBootstrap,
   type WebProviderOperation,
+  type WebProviderBootstrap,
   type WebProviderMessage,
 } from '../../../../packages/contracts/web-provider.ts';
 
@@ -920,4 +921,62 @@ test('voice queue: sending a new message stops the old queue', async (t) => {
   first.end();
   await flush();
   assert.equal(f.audios().length, 1);
+});
+
+test('welcome audio remains demand-only: connecting/attaching creates no audio, tapping plays only that welcome', async (t) => {
+  const f = await voiceFixture(t, []);
+  const boot = (f.binding as unknown as { view: WebProviderBootstrap }).view;
+  boot.characters[1]!.welcome.audio = {
+    state: 'available',
+    mediaId: 'welcome',
+    url: '/api/web/provider/public-audio/welcome',
+    version: 'v1',
+    sha256: 'a'.repeat(64),
+    durationMs: 1000,
+  };
+  assert.equal(f.audios().length, 0);
+  assert.deepEqual(f.fetched, []);
+  f.binding.playWelcome(boot.characters[1]!.characterId);
+  assert.equal(f.audios().length, 1);
+  assert.equal(f.audios()[0]!.played, true);
+  assert.equal(f.audios()[0]!.url, '/api/web/provider/public-audio/welcome');
+});
+
+test('initial attachment loads only the selected conversation; selecting another loads its history once', async (t) => {
+  const f = await fixture(t);
+  const boot = (f.binding as unknown as { view: WebProviderBootstrap }).view;
+  boot.conversations = boot.characters.map((c, i) => ({
+    characterId: c.characterId,
+    conversationId: `lazy-${i}`,
+    lastMessageId: null,
+    unreadCount: 0,
+  }));
+  const head = new NodeStub();
+  head.node('.head-note');
+  const cards = boot.characters.map(() => {
+    const card = new NodeStub();
+    card.node('.sent-messages');
+    card.node('.chat-body');
+    card.node('textarea');
+    card.node('.send-button');
+    return card;
+  });
+  cards[1]!.className = 'is-active';
+  let reads = 0;
+  f.handlers.history = async () => {
+    reads++;
+    return { messages: [] };
+  };
+  f.binding.attach({
+    head: head as unknown as HTMLElement,
+    say: () => {},
+    mark: () => '测',
+    name: () => '合成',
+    card: (id) => cards[boot.characters.findIndex((c) => c.characterId === id)] as unknown as HTMLElement,
+  });
+  await flush();
+  assert.equal(reads, 1, 'off-screen histories must not delay startup');
+  await f.binding.open(boot.characters[0]!.characterId, cards[0] as unknown as HTMLElement);
+  await f.binding.open(boot.characters[0]!.characterId, cards[0] as unknown as HTMLElement);
+  assert.equal(reads, 2, 'first selection loads history, revisiting does not refetch');
 });

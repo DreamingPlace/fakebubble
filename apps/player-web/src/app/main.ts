@@ -1,3 +1,4 @@
+import { LiveBinding } from '../features/prototype/provider-binding.js';
 import { startPrototype } from '../features/prototype/preview.js';
 import { renderProviderStartError } from '../features/prototype/provider-start-error.js';
 import { ProviderApi } from '../services/provider-api.js';
@@ -20,10 +21,8 @@ if (mode === 'local-2' || mode === 'local-3') {
 } else if (mode === 'provider') {
   // One API object for the whole page: its CSRF token follows bootstrap, login and the signed-out first page.
   const api = new ProviderApi();
-  void import('../features/prototype/provider-binding.js')
-    .then(async (module) => {
-      startPrototype(root, await module.LiveBinding.connect(api));
-    })
+  void LiveBinding.connect(api)
+    .then((binding) => startPrototype(root, binding))
     .catch((error) => {
       renderProviderStartError(root, error, undefined, api);
     });

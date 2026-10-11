@@ -15,6 +15,7 @@ import {
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { buildSync } from 'esbuild';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const compiler = join(repoRoot, 'node_modules/typescript/bin/tsc');
@@ -50,6 +51,7 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
     assertSourcePath(root, path);
     if (!lstatSync(path).isFile()) throw new Error('PLAYER_ENTRY_INVALID');
   }
+  if (lstatSync(html).size > 2_000_000) throw new Error('PLAYER_ASSET_UNSAFE');
   const stage = mkdtempSync(join(root, '.web-player-build-'));
   try {
     const config = join(stage, 'tsconfig.json');
@@ -116,18 +118,46 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
       };
       visit(source);
     }
+    // Bundle only the already typechecked, scope/import-validated browser graph.
+    const bundled = join(stage, 'bundled');
+    const bundle = buildSync({
+      entryPoints: [join(emitted, 'apps/player-web/src/app/main.js')],
+      outdir: bundled,
+      bundle: true,
+      splitting: true,
+      format: 'esm',
+      platform: 'browser',
+      target: ['safari16', 'chrome110'],
+      entryNames: 'assets/[name]-[hash]',
+      chunkNames: 'assets/[name]-[hash]',
+      minify: true,
+      legalComments: 'none',
+      metafile: true,
+      write: true,
+    });
+    const entry = Object.entries(bundle.metafile.outputs).find(([, value]) =>
+      value.entryPoint?.endsWith('/apps/player-web/src/app/main.js'),
+    )?.[0];
+    if (!entry) throw new Error('PLAYER_EMIT_MISSING');
+    const entryName = relative(bundled, resolve(entry)).split(sep).join('/');
+    files.length = 0;
+    walk(bundled, bundled, false);
+    let page = readFileSync(html, 'utf8').replace('/apps/player-web/src/app/main.js', '/' + entryName);
     const addAsset = (path: string, dest: string) => {
       if (!existsSync(path)) throw new Error('PLAYER_ASSET_MISSING');
       assertSourcePath(root, path);
       if (!lstatSync(path).isFile() || lstatSync(path).isSymbolicLink() || lstatSync(path).size > 2_000_000)
         throw new Error('PLAYER_ASSET_UNSAFE');
-      const target = join(emitted, dest);
-      mkdirSync(resolve(target, '..'), { recursive: true });
-      copyFileSync(path, target);
-      files.push(dest);
+      const bytes = readFileSync(path);
+      const digest = createHash('sha256').update(bytes).digest('hex');
+      const extension = dest.slice(dest.lastIndexOf('.'));
+      const name = `assets/static-${digest}${extension}`;
+      mkdirSync(join(bundled, 'assets'), { recursive: true });
+      copyFileSync(path, join(bundled, name));
+      page = page.replaceAll('/' + dest, '/' + name);
+      if (!files.includes(name)) files.push(name);
     };
-    addAsset(html, 'index.html');
-    // E requests additions to this B-owned allowlist. No implicit public/ or repo copy.
+    // Explicit source allowlist remains the only way non-JS assets enter the build.
     const assetList = join(source, 'player-assets.json');
     const assets: unknown = existsSync(assetList) ? JSON.parse(readFileSync(assetList, 'utf8')) : [];
     if (
@@ -142,6 +172,8 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
     )
       throw new Error('PLAYER_ASSET_LIST_INVALID');
     for (const name of assets as string[]) addAsset(join(source, name), `apps/player-web/${name}`);
+    writeFileSync(join(bundled, 'index.html'), page);
+    files.push('index.html');
     if (files.length > 256 || new Set(files).size !== files.length) throw new Error('PLAYER_ASSET_LIST_INVALID');
     if (existsSync(output) && (!lstatSync(output).isDirectory() || lstatSync(output).isSymbolicLink()))
       throw new Error('PLAYER_OUTPUT_UNSAFE');
@@ -161,7 +193,7 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
     };
     const manifest: Record<string, string> = {};
     for (const name of files.sort()) {
-      const src = join(emitted, name),
+      const src = join(bundled, name),
         dest = safeDestination(name);
       copyFileSync(src, dest);
       manifest[name] = createHash('sha256').update(readFileSync(dest)).digest('hex');

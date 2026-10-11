@@ -36,6 +36,7 @@ function staticAsset(request: Request, env: WebEdgeEnvironment) {
 export default {
   async fetch(request: Request, env: WebEdgeEnvironment): Promise<Response> {
     let response: Response;
+    let assetCache: string | null = null;
     try {
       const url = new URL(request.url),
         configured = new URL(env.ORIGIN);
@@ -94,9 +95,11 @@ export default {
             url.searchParams.set('mode', 'provider');
             response = new Response(null, { status: 302, headers: { location: url.pathname + url.search } });
           } else response = await staticAsset(request, env);
+          assetCache = response.headers.get('cache-control');
         } else {
           ensure(!url.search, 'NOT_FOUND');
           response = await staticAsset(request, env);
+          assetCache = response.headers.get('cache-control');
         }
       }
     } catch (error) {
@@ -110,6 +113,8 @@ export default {
     // Subrequest responses may carry immutable headers; preserve stream/cookies without buffering.
     response = new Response(response.body, response);
     for (const [key, value] of Object.entries(headers)) response.headers.set(key, value);
+    // Only the verified static branch may override no-store; never trust an API cache header.
+    if (assetCache && response.status === 200) response.headers.set('cache-control', assetCache);
     return response;
   },
 };

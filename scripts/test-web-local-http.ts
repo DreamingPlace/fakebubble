@@ -195,12 +195,19 @@ try {
       files: Record<string, string>;
     };
     assert.equal(manifest.version, 1);
-    for (const name of ['index.html', 'apps/player-web/src/app/main.js', 'apps/player-web/src/styles/main.css']) {
+    // Part 15 named exception: verify EVERY manifest-listed hashed output, not three obsolete paths.
+    assert.ok(Object.keys(manifest.files).some((name) => /^assets\/main-[A-Z0-9]{8}\.js$/.test(name)));
+    assert.ok(Object.keys(manifest.files).some((name) => name.endsWith('.css')));
+    for (const name of Object.keys(manifest.files)) {
       assert.match(manifest.files[name] ?? '', /^[a-f0-9]{64}$/, `${name} absent from real build`);
       const response = name === 'index.html' ? page : await alice.call('GET', `/${name}`);
       assert.equal(response.status, 200, `${name} must be served, not fallback/unavailable`);
       assert.equal(createHash('sha256').update(response.bytes).digest('hex'), manifest.files[name]);
       assert.equal(response.headers['x-content-type-options'], 'nosniff');
+      assert.equal(
+        response.headers['cache-control'],
+        name === 'index.html' ? 'no-store' : 'public, max-age=31536000, immutable',
+      );
     }
     assert.match(String(page.headers['content-type']), /^text\/html/);
   } else {

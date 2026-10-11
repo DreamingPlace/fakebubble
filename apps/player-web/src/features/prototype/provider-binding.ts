@@ -147,9 +147,11 @@ export class LiveBinding {
       if (document.hidden) this.stopVoice();
     });
     window.addEventListener('focus', onReturn);
-    // Browse cards show the existing conversation, not just the welcome bubble.
-    for (const conversation of this.view.conversations)
-      void this.open(conversation.characterId, shell.card(conversation.characterId));
+    // Fetch only visible history; switching/opening a card loads its own conversation.
+    for (const conversation of this.view.conversations) {
+      const card = shell.card(conversation.characterId);
+      if (card.classList.contains('is-active')) void this.open(conversation.characterId, card);
+    }
   }
 
   /** An invited player with a live grant may take part in co-creation; a guest sees the entry, disabled. */
@@ -291,8 +293,9 @@ export class LiveBinding {
       nick.setAttribute('aria-expanded', 'false');
       this.headMenu = mountChatMenu(nick, shell.head, () => this.accountMenu());
     } else if (access.kind === 'guest' && !this.invitation.locked) {
-      action('登录', 'head-account', () => void this.openAccount('login'));
-      action('注册', 'head-account', () => void this.openAccount('signup'));
+      action('登录', 'head-account desktop-account', () => void this.openAccount('login'));
+      action('注册', 'head-account desktop-account', () => void this.openAccount('signup'));
+      action('登录/注册', 'head-account mobile-account', () => void this.openAccount('login'));
     }
     if (access.kind === 'invite' && !this.invitation.locked) {
       if (access.status === 'active' && this.accessKnown && !this.hasLogin) {
@@ -569,7 +572,9 @@ export class LiveBinding {
 
   private start(url: string, entry: VoiceEntry | null = null) {
     this.stopAudio();
+    // No Audio instance or source exists until an explicit play / queued continuation.
     const audio = new Audio(url);
+    audio.preload = 'none';
     this.audio = audio;
     this.audioUrl = url;
     this.nowPlaying = entry;
