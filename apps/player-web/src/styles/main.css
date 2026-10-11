@@ -3872,3 +3872,102 @@ body:has(.admin-shell) {
     line-height: 14px;
   }
 }
+
+/* Part 17: consent line, erase sheets, grace hint, Turnstile box and the legal pages. */
+.acct-legal {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #3b4a45;
+}
+.acct-legal a,
+.legal-link,
+.signed-out-legal a {
+  color: #294b40;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.acct-expired,
+.signed-out-expired,
+.signed-out-erased {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ece8dd;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.acct-warning {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f4e4e1;
+  color: #5c2420;
+}
+.acct-danger {
+  background: #8a2f27;
+}
+.signed-out-legal {
+  margin: 12px 0 0;
+  font-size: 12px;
+  text-align: center;
+}
+.human-check {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 400;
+}
+.legal-doc {
+  box-sizing: border-box;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(40px, env(safe-area-inset-bottom));
+  background: #f6f4ef;
+  color: #24302f;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.85;
+}
+.legal-doc h1 {
+  font-size: 24px;
+  margin: 0 0 4px;
+}
+.legal-doc h2 {
+  font-size: 17px;
+  margin: 28px 0 6px;
+}
+.legal-doc p,
+.legal-doc li {
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+.legal-doc ul {
+  padding-left: 20px;
+}
+.legal-doc .legal-meta {
+  font-size: 13px;
+  color: #5a6762;
+}
+.legal-doc .legal-todo {
+  background: #fff1c2;
+  border-radius: 4px;
+  padding: 0 3px;
+}
+.legal-doc .legal-draft {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff1c2;
+  font-size: 13px;
+}
+.legal-doc nav {
+  margin-top: 32px;
+  font-size: 13px;
+}
+.legal-doc nav a {
+  color: #294b40;
+}
+body.legal-page {
+  margin: 0;
+  background: #f6f4ef;
+}

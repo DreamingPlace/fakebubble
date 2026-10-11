@@ -399,6 +399,11 @@ test('D: Turnstile guards a new guest, request-code and login; each token works 
   const down = await f.call(`${API}/bootstrap`, client(), undefined, 503, withToken('good-guest-3'));
   assert.equal(down.error.code, 'TURNSTILE_UNAVAILABLE');
   assert.equal(await stats(), 1);
+  assert.equal(
+    (await f.fixture<Calls>('/fixture/turnstile-calls')).serverErrors,
+    1,
+    'a 5xx is counted for the owner alerts',
+  );
   await f.fixture('/fixture/turnstile-mode', { down: false });
   await f.call(`${API}/bootstrap`, client(), undefined, 200, withToken('good-guest-3'));
   assert.equal(await stats(), 2);
@@ -416,4 +421,27 @@ test('D: with the flag off nobody is asked for a token', async (t) => {
     'PLAYER_LOGIN_INVALID',
   );
   assert.deepEqual((await f.fixture<{ calls: unknown[] }>('/fixture/turnstile-calls')).calls, []);
+});
+
+test('C: the alert state lives in the Durable Object storage: one mail per window, even across a restart', async (t) => {
+  const f = setup(t);
+  const hour = 60 * 60_000;
+  await f.fixture('/fixture/alerts/start', {});
+  await f.fixture('/fixture/alerts/error', {});
+  const first = await f.fixture<{ ran: boolean; sent: string[]; mails: number }>('/fixture/alerts/check', {});
+  assert.deepEqual([first.ran, first.sent, first.mails], [true, ['errors'], 1]);
+  // Two hours later a new error and a restarted object: the stored claim holds the 6-hour window.
+  await f.fixture('/fixture/alerts/skew', { ms: 2 * hour });
+  await f.fixture('/fixture/alerts/restart', {});
+  await f.fixture('/fixture/alerts/error', {});
+  const second = await f.fixture<{ ran: boolean; sent: string[]; mails: number }>('/fixture/alerts/check', {});
+  assert.deepEqual([second.ran, second.sent, second.mails], [true, [], 1]);
+  // And the hour gate survives the restart too.
+  await f.fixture('/fixture/alerts/restart', {});
+  assert.equal((await f.fixture<{ ran: boolean }>('/fixture/alerts/check', {})).ran, false);
+  // Six hours after the first mail the standing problem is reported again.
+  await f.fixture('/fixture/alerts/skew', { ms: 4 * hour });
+  await f.fixture('/fixture/alerts/error', {});
+  const third = await f.fixture<{ sent: string[]; mails: number }>('/fixture/alerts/check', {});
+  assert.deepEqual([third.sent, third.mails], [['errors'], 2]);
 });

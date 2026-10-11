@@ -49,6 +49,7 @@ import { WebProviderApplication } from '../../../apps/server/generation/web-prov
 import { WebProviderHTTP } from '../../../apps/server/cloudflare/web-http.ts';
 import { auditWebLifecycleWorld } from '../../../apps/server/admission/web-lifecycle-audit.ts';
 import { playerLoginsRemain } from '../../../apps/server/identity/web-player-purge.ts';
+import { WebAlerts, durableAlertState } from '../../../apps/server/cloudflare/web-alerts.ts';
 import { WebCloudRetention } from '../../../apps/server/cloudflare/web-retention.ts';
 import { TurnstileGate, type TurnstileVerifier } from '../../../apps/server/identity/web-turnstile.ts';
 import {
@@ -67,6 +68,10 @@ export class WebHTTPFixture extends WebBusinessFixture {
   private readonly appConfig: ConstructorParameters<typeof WebProviderApplication>[2];
   private readonly adminMailer: ConstructorParameters<typeof WebProviderApplication>[3];
   private readonly waitUntil: (task: Promise<void>) => void;
+  private readonly durableStorage: Parameters<typeof durableAlertState>[0];
+  private alerts: WebAlerts | undefined;
+  private alertMails: { subject: string; text: string }[] = [];
+  private alertSkew = 0;
   private readonly execution: WebCloudExecutor;
   private revokeOnRead: string | null = null;
   private readonly previewBudget: WebBudgetStatusRPC | undefined;
@@ -104,6 +109,7 @@ export class WebHTTPFixture extends WebBusinessFixture {
       'CREATE TABLE IF NOT EXISTS cf_fixture_admin_mail(id TEXT PRIMARY KEY,payload TEXT NOT NULL) STRICT',
     );
     this.waitUntil = (task) => ctx.waitUntil(task);
+    this.durableStorage = ctx.storage as unknown as Parameters<typeof durableAlertState>[0];
     this.appConfig = {
       mode: 'provider-cloud',
       origin: 'https://fixture.invalid',
@@ -316,6 +322,35 @@ export class WebHTTPFixture extends WebBusinessFixture {
         principalId,
       );
       return Response.json({ configured: true });
+    }
+    if (path.startsWith('/fixture/alerts/')) {
+      // Owner alerts over the REAL Durable Object key-value storage and SQL; the mailer only records.
+      const body = request.method === 'POST' ? ((await request.json()) as Record<string, number>) : {};
+      const build = () =>
+        new WebAlerts({
+          store: this.store,
+          clock: { now: () => Date.now() + this.alertSkew },
+          config: {
+            to: 'owner@example.com',
+            errorsPerHour: body.errorsPerHour ?? 1,
+            dailySpendMicros: 1_000_000_000,
+            budgetPercent: 80,
+            validationFailPercent: 20,
+            validationMinSamples: 10,
+            digestHourUtc: 23,
+          },
+          mail: { send: async (message) => void this.alertMails.push(message) },
+          state: durableAlertState(this.durableStorage),
+          budget: async () => [],
+          emailDailyCap: null,
+        });
+      const action = path.slice('/fixture/alerts/'.length);
+      if (action === 'start' || action === 'restart') this.alerts = build();
+      else if (action === 'error') await this.alerts!.recordError();
+      else if (action === 'skew') this.alertSkew += body.ms ?? 0;
+      else if (action === 'check')
+        return Response.json({ ...(await this.alerts!.check()), mails: this.alertMails.length });
+      return Response.json({ ok: true, mails: this.alertMails });
     }
     if (path === '/fixture/finish-deletion') {
       // Debug aid: run the second half of the purge by hand and report the error code, if any.

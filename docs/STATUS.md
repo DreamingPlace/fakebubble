@@ -82,6 +82,17 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - 6: the owner-only stage-latency view reports per UTC day embedding calls, texts embedded, failures, UNKNOWNs, query-embedding fallbacks and timeouts.
 - `pnpm check`: **826 tests, 826 passed, 0 failed, 0 skipped** (767 baseline + 59 new), about 7m46s on Node 24.21.0 / pnpm 11.19.0. `pnpm web:player:build`, `check:web:local-http`, `check:web:restart` pass. Four-Worker package: **224** files (was 217: the provider, ledger, runner, purge helper, memory-embeddings and web-embeddings modules; the 116 SQL is bundled into the Workers).
 
+## Part 17 (public readiness: grace period, account deletion, owner alerts, Turnstile, legal pages)
+
+All behind flags that default OFF; no migration, no prompt or tool-schema change (pinned hashes untouched). Details and the launch-day checklist: docs/DEPLOYMENT.md "公开上线准备（Part 17）"; retention and deletion: docs/DATA_BOUNDARY.md.
+
+- `GUEST_GRACE_ENABLED`: guest purge at `expires_at + 7 days` (only without a login); the session survives for signup only; signup inside grace keeps the history; after grace `GUEST_GRACE_ENDED` → signed-out page ("之前的体验聊天已过期").
+- `ACCOUNT_DELETE_ENABLED`: 删除我的账号 / 清除本设备的体验数据 through the audited purge path, rate-limited, audited without content, invited grant revoked in the same transaction.
+- `ALERTS_ENABLED` (+ `ALERT_*` thresholds): hourly check in the business alarm, one mail per alert type per 6 h, claim-before-send (never retried in a loop), daily digest; no player data in any mail.
+- `TURNSTILE_ENABLED` (+ site key, secret): new guest, request-code and login; server-side siteverify, one use per token, fail closed; CSP widened only when on.
+- `LEGAL_PAGES_ENABLED`: 隐私政策 / 用户协议 draft (every owner fact marked 【待确认：…】), footer and signup-screen links.
+- Known limits: the Node local server has no account deletion and no Turnstile; the validation-failure alert counts all `failed` operations (validation and expiry); the real trial window in code is 2 hours after the first message (the guest cookie lasts 24 h), which the policy marks for the owner to confirm; no Mainland China region rule exists yet (owner decision pending).
+
 ## Part 16 (time, topics, RPC rejected output, admin fixes)
 
 - Prompts changed on purpose: `characterLocalTime` (renamed; the UTC `currentTime` no longer reaches the models), the character's clock is not the player's, reviewer duty for assumed player time/sleep, no invented shared history, no claimed live games. POLICY_HASH `2bd7b236db8f307ac3a0a990c42647137efa6fb4f73b606004678b678563227d`, PROMPT_HASH `00448e452aa0172bcb5f69a6400690832d35fbd6ae32bfe7e2126cd9eb8b323b`; protocol fingerprint unchanged.

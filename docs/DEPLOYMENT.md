@@ -145,6 +145,48 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 管理员的阶段延迟接口（仅 owner）按日增加 `embedding`：调用数、嵌入文本数、失败、结果未知、查询嵌入回退与超时。
 
+### 公开上线准备（Part 17）
+
+本部分的**每一项新行为都有开关，默认全部关闭**；什么都不配置时，部署和以前逐字节一致（`GET /account`、CSP、静态文件、报错都不变）。没有新迁移：不新增表，不改提示词或工具 schema。
+
+**新增变量（业务 Worker，`business.json.example` 已列出）：**
+
+| 名称 | 默认 | 说明 |
+| --- | --- | --- |
+| `GUEST_GRACE_ENABLED` | `false` | 注册永远开放，并给没有登录的访客 **7 天宽限期**：试玩结束后数据再保留 7 天（清理时间由 `expires_at` 改为 `expires_at + 7 天`，只对没有登录的访客），期间不能聊天、不能读历史，但会话仍可用于注册；注册即成为保留账号（沿用 Part 11f 的 180 天不活跃规则），历史回来。宽限期结束后数据清除，旧 Cookie 返回 `GUEST_GRACE_ENDED`（401，清 Cookie），页面落到“登录 / 注册 / 以访客继续”，提示“之前的体验聊天已过期”，选 注册 会走正常首访流程创建新访客并以空历史注册。准入不变：没有邀请就没有新回复。 |
+| `ACCOUNT_DELETE_ENABLED` | `false` | 账号菜单里出现“删除我的账号”（有登录：密码 + 输入“删除”）和“清除本设备的体验数据”（访客：无需密码）。走原有、带审计、失败即关闭的清理路径，立即清除聊天、记忆、语音、共创、名片、登录、验证码挑战与全部会话；受邀玩家的授权在同一事务里撤销。 |
+| `LEGAL_PAGES_ENABLED` | `false` | **业务 Worker 与边缘 Worker 都要设**。开启后注册页显示“注册即表示你同意《用户协议》和《隐私政策》”，页脚和首页出现两个链接；边缘 Worker 才会提供 `/privacy.html`、`/terms.html`（关闭时 404）。**开启前先把两页里的 【待确认：…】 全部填好。** |
+| `ALERTS_ENABLED` | `false` | 开启给站长发邮件告警与日报。需要 `ALERT_EMAIL_TO`、`ADMIN_EMAIL`（`send_email` 绑定）和 `ADMIN_EMAIL_FROM`，缺任何一个业务对象拒绝启动。 |
+| `ALERT_EMAIL_TO` | — | 收件人，必须是 `ADMIN_EMAIL` 绑定允许送达的已验证地址。 |
+| `ALERT_ERRORS_PER_HOUR` | `20` | 最近一小时业务 5xx / 异常次数达到即告警（按 10 分钟桶累计）。 |
+| `ALERT_DAILY_SPEND_MICROS` | `5000000` | 当日（UTC）已结算的供应商花费（账本，微单位；5000000 = 5.00）。 |
+| `ALERT_BUDGET_PERCENT` | `80` | 累计花费（含占用）占预算上限（有上限的供应商合计）的百分比。`production-unlimited` 没有上限，不触发。 |
+| `ALERT_VALIDATION_FAIL_PERCENT` | `20` | 最近一小时失败回复占已结束回复的百分比（见下一行的样本下限）。 |
+| `ALERT_VALIDATION_MIN_SAMPLES` | `10` | 最近一小时至少有这么多条已结束回复才计算（避免 1 条失败 = 100%）。 |
+| `ALERT_DIGEST_HOUR_UTC` | `1` | 日报的 UTC 小时（默认北京时间 09:00）。 |
+| `TURNSTILE_ENABLED` | `false` | **业务 Worker 与边缘 Worker 都要设**（边缘用它放宽 CSP）。开启后创建新访客（无 Cookie 的首访）、请求验证码（注册 / 重置 / 绑定）和登录需要有效的 Turnstile 令牌。 |
+| `TURNSTILE_SITE_KEY` | — | 控制台里小组件的站点密钥（公开）。开启时必填。 |
+| `TURNSTILE_SECRET` | — | **机密**，只配给业务 Worker：`wrangler secret put TURNSTILE_SECRET`。绝不放进 vars、仓库或日志。 |
+
+**邮件告警（`ALERTS_ENABLED`）：** 业务对象闹钟每小时检查一次（检查时刻先写入再工作，30 秒一次的闹钟不会重复检查）。每种告警 **6 小时内最多一封**，发送前先记账，发送失败**不会循环重试**（下一次最早在 6 小时后）。六种告警：①最近一小时业务 5xx/异常 ≥ `ALERT_ERRORS_PER_HOUR`；②当日供应商花费 ≥ `ALERT_DAILY_SPEND_MICROS`；③出现新的 UNKNOWN 供应商 / 外部 / 嵌入调用（累计数超过上次已告警的数）；④累计花费 ≥ 预算上限的 `ALERT_BUDGET_PERCENT`%；⑤玩家验证邮件当日已达 `PLAYER_EMAIL_DAILY_CAP`；⑥最近一小时失败回复率 ≥ `ALERT_VALIDATION_FAIL_PERCENT`%（失败回复 = 状态为 `failed` 的操作，包括校验失败与超时，样本不少于 `ALERT_VALIDATION_MIN_SAMPLES`）。另有每日一封日报（回复、新注册、花费、失败、UNKNOWN、错误）。邮件是纯中文文本，**只含数字，不含玩家内容、邮箱或任何 id**。告警状态存放在业务对象的键值存储里（不是 SQL，不需要迁移）。
+
+**Turnstile 小组件设置（Cloudflare 控制台）：** Turnstile → Add widget → Hostname 填你的站点域名（只填这一个）→ Widget Mode 选 **Managed**（页面使用 `interaction-only` 外观：绝大多数人看不到任何东西，需要点击时才弹出小框）→ 创建后复制 Site Key 填 `TURNSTILE_SITE_KEY`，复制 Secret Key 用 `wrangler secret put TURNSTILE_SECRET` 配给业务 Worker。业务对象调用 `siteverify`，令牌只能用一次（摘要先占位再验证），令牌的主机名与动作（`guest` / `code` / `login`）必须匹配，`siteverify` 不可达时请求被拒（503 `TURNSTILE_UNAVAILABLE`），**失败即关闭**。令牌通过请求头 `X-Turnstile-Token` 携带，所以接口体不变；页面在第一次被拒（`TURNSTILE_REQUIRED`）时自动取令牌并重试同一请求，正常情况下无需额外点击，失败时显示“人机验证没通过，请再试一次”。CSP 只在 `TURNSTILE_ENABLED=true` 时变化：`script-src`、`connect-src` 增加 `https://challenges.cloudflare.com`，新增 `frame-src https://challenges.cloudflare.com`，其余不变。Node 本地服务器不启用 Turnstile。
+
+**玩家站点公开、只用 Access 保护管理接口：** 公开玩家站点前，在 Cloudflare Zero Trust 里把 Access 应用的路径从整站收窄到只保护 `/api/web/provider/admin/*`（页面 `/?mode=provider-admin` 本身只是静态壳，没有数据；它调用的接口全在该前缀下，且管理员仍有自己的邮箱 + 密码登录和 CSRF）。收窄之前先在预发布域名验证：未登录 Access 访问 `/api/web/provider/admin/session` 被拦，访问 `/`、`/api/web/provider/bootstrap` 不被拦。
+
+**上线当天清单：**
+1. 部署新版本，所有 Part 17 开关保持 `false`；确认 `inspect` 的迁移账本 `matches:true`、`pnpm check` 通过。
+2. 补全两份法律文本里所有 【待确认：…】（运营者名称、联系邮箱、适用法律与管辖地区、生效日期、跨境传输与单独同意、未成年人年龄门槛、供应商数据保留条款、体验时长表述），删除页首的“草稿”提示，重新构建并部署；然后在业务与边缘 Worker 同时设 `LEGAL_PAGES_ENABLED=true`。
+3. 创建 Turnstile 小组件，配置 `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET`，业务与边缘同时设 `TURNSTILE_ENABLED=true`；用无痕窗口走一遍首访、注册、登录。
+4. 配置 `ALERT_EMAIL_TO`，设 `ALERTS_ENABLED=true`；确认能收到次日 `ALERT_DIGEST_HOUR_UTC` 的日报。
+5. 设 `GUEST_GRACE_ENABLED=true`、`ACCOUNT_DELETE_ENABLED=true`；用测试账号走一遍：宽限期注册找回历史、删除我的账号、清除本设备的体验数据。
+6. 设 `PLAYER_SIGNUP_ENABLED=true`（若尚未开）并核对 `PLAYER_EMAIL_DAILY_CAP`；确认预算上限 / `BUDGET_POLICY` 符合预期（公开后访客每个网络累计 3 次免费回复，邀请码只发给选定的人）。
+7. 把 Access 收窄到 `/api/web/provider/admin/*`（见上），再把 `PUBLIC_ENABLED` / 路由对外开放。
+8. **站长待决定：大陆地区规则。** 目前没有任何地区限制代码（边缘对不在白名单地区的访问者的处理）：需要决定 ①是否对中国大陆访问者开放或屏蔽；②如果开放，是否需要 ICP 备案、跨境传输告知与单独同意、算法/生成式 AI 服务备案等合规动作（隐私政策里对应处有 【待确认】）。在这个决定做出之前，不要宣传公开。
+9. 观察第一天：告警邮件、`inspect`、预算、`GUEST_GRACE` 之后的清理（`web_guest_retention` 的 `purging/purged` 行）。回退：把对应开关改回 `false` 重新部署即可，无需迁移。
+
+**账号删除怎么保证安全（`ACCOUNT_DELETE_ENABLED`）：** `POST /account/delete`，体 `{ "password", "confirm" }`；有登录的玩家必须提供密码并输入“删除”，没有登录的访客 `password` 为空串、`confirm` 为“清除”；没有登录的受邀玩家不能用这个入口（先绑定邮箱）。CSRF / 来源检查、一次一用的会话校验与登录一致；错误密码计入与改密码相同的限流（每个玩家 15 分钟 5 次）并按 IP 限流（30 次）。在**一个事务**里：撤销受邀玩家的授权、凭据和回执，结束该玩家的全部会话，写一条审计（`web_admin_audit`：动作名 + 玩家的 HMAC 假名前 16 位 + 时间，不含内容、邮箱、昵称或 id），并开始清理的 T1（隔离内容、释放预占，运行中的操作按原规则收尾，UNKNOWN 的外部调用保持 UNKNOWN，不重试、不释放）。事务提交后同一请求继续 T2（清库）与 F（删 R2 语音）；这两步任何失败都不会让删除变成报错——保留状态是 `purging`，闹钟会接着完成。清理后的审计（`auditWebLifecycleWorld`）对受邀玩家额外要求：世界里不能留下未撤销的授权；已撤销的授权行只留 id 与时间，作为 `shells`。
+
 ## 私有运维工具
 
 `scripts/web-cloudflare-operator.ts` 需要显式 `CLOUDFLARE_ACCOUNT_ID`，以及指向已安装 Wrangler 模块的绝对路径 `FAKE_WEB_WRANGLER_MODULE`。它只使用绑定到业务/预算 Worker 的认证 RPC。服务名默认为 `fakebubble-business` / `fakebubble-budget`；部署使用其他名称（例如 `fake-paopao-web-business` / `fake-paopao-web-budget`）时，必须显式传入 `--business-service=<名称>` 与 `--budget-service=<名称>`（均须匹配 `/^[a-z0-9-]{1,63}$/`，任何操作都可携带，缺省即默认名称）。每条收据都会记录目标服务名（`target.businessService` / `target.budgetService`，以及本次操作实际使用的 `worker`）；收据永远不会被续写或覆盖（独占创建，已存在即 `EEXIST`），而且若已存在的收据记录的目标与当前参数不同，工具会先以 `WEB_OPERATOR_RECEIPT_TARGET_MISMATCH` 拒绝，不会打开任何绑定。记录目标之前写下的旧收据按其 `worker` 名称比较。

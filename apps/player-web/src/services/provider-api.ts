@@ -30,8 +30,18 @@ export class ProviderApiError extends Error {
 }
 
 /** What the page knows about the player's account (GET /account). Signed-out pages only learn whether signup is open. */
+export type AccountFeatures = {
+  /** 删除我的账号 / 清除本设备的体验数据 are available. */
+  accountDelete?: true;
+  /** The two legal pages are published. */
+  legal?: true;
+  /** Cloudflare Turnstile is on: the public site key. */
+  turnstileSiteKey?: string;
+  /** Signup stays open for 7 days after a trial ended. */
+  grace?: true;
+};
 export type AccountInfo =
-  | { signupEnabled: boolean; signedIn: false }
+  | { signupEnabled: boolean; signedIn: false; features?: AccountFeatures }
   | {
       signupEnabled: boolean;
       signedIn: true;
@@ -40,7 +50,34 @@ export type AccountInfo =
       emailMasked: string | null;
       nickname: string | null;
       canBind: boolean;
+      features?: AccountFeatures;
+      /** A guest past its trial and inside the grace period: signup is still possible until endsAt (ms). */
+      grace?: { endsAt: number };
     };
+/** The bot check: resolves one fresh Turnstile token for an action, or throws. Installed only on the real page. */
+export type HumanCheck = (siteKey: string, action: 'guest' | 'code' | 'login') => Promise<string>;
+const humanAction = (path: string) =>
+  path === '/bootstrap'
+    ? 'guest'
+    : path === '/account/request-code'
+      ? 'code'
+      : path === '/account/login'
+        ? 'login'
+        : null;
+
+function parseFeatures(value: unknown): AccountFeatures | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const features: AccountFeatures = {
+    ...(raw.accountDelete === true ? { accountDelete: true as const } : {}),
+    ...(raw.legal === true ? { legal: true as const } : {}),
+    ...(raw.grace === true ? { grace: true as const } : {}),
+    ...(typeof raw.turnstileSiteKey === 'string' && /^[0-9A-Za-z_-]{1,64}$/.test(raw.turnstileSiteKey)
+      ? { turnstileSiteKey: raw.turnstileSiteKey }
+      : {}),
+  };
+  return Object.keys(features).length ? features : undefined;
+}
 export type EmailPurpose = 'signup' | 'reset' | 'bind';
 export type CodeChallenge = { challengeId: string; expiresAt: number; resendAfterMs: number };
 
@@ -64,15 +101,47 @@ const operation = (value: unknown): WebProviderOperation => {
 export class ProviderApi implements WebProviderActions {
   private csrf = '';
   private readonly fetcher: typeof fetch;
+  private human: HumanCheck | null = null;
+  private siteKey: string | null = null;
   constructor(fetcher: typeof fetch = (input, init) => fetch(input, init)) {
     this.fetcher = fetcher;
   }
+  /** Turnstile (only when the server asks for it): the page installs the widget-backed check once. */
+  setHumanCheck(check: HumanCheck | null) {
+    this.human = check;
+  }
+  /**
+   * With Turnstile on, the server answers a new guest, a code request and a login without a token with
+   * TURNSTILE_REQUIRED. The page then gets a token (no click in the normal case) and repeats the SAME request once.
+   */
   private async request(path: string, init: RequestInit = {}, csrf = this.csrf): Promise<unknown> {
+    try {
+      return await this.send(path, init, csrf);
+    } catch (error) {
+      const action = humanAction(path);
+      if (!(error instanceof ProviderApiError) || error.code !== 'TURNSTILE_REQUIRED' || !action || !this.human)
+        throw error;
+      let token: string;
+      try {
+        const siteKey = (this.siteKey ??= (await this.account()).features?.turnstileSiteKey ?? null);
+        if (!siteKey) throw error;
+        token = await this.human(siteKey, action);
+      } catch (failure) {
+        if (failure === error) throw error;
+        throw new ProviderApiError(0, 'TURNSTILE_FAILED');
+      }
+      return this.send(path, init, csrf, token);
+    }
+  }
+  private async send(path: string, init: RequestInit, csrf: string, humanToken?: string): Promise<unknown> {
     const response = await this.fetcher(`/api/web/provider${path}`, {
       ...init,
       credentials: 'same-origin',
       cache: 'no-store',
-      headers: init.body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf } : {},
+      headers: {
+        ...(init.body ? { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf } : {}),
+        ...(humanToken ? { 'X-Turnstile-Token': humanToken } : {}),
+      },
     });
     let payload: unknown = null;
     try {
@@ -231,6 +300,12 @@ export class ProviderApi implements WebProviderActions {
   async setNickname(nickname: string) {
     await this.request('/account/nickname', { method: 'POST', body: JSON.stringify({ nickname }) });
   }
+  /** 删除我的账号 (password + the word 删除) or, for a guest without a login, 清除本设备的体验数据 (password '', word 清除). */
+  async deleteAccount(input: { password: string; confirm: string }) {
+    const value = record(await this.request('/account/delete', { method: 'POST', body: JSON.stringify(input) }));
+    if (value.deleted !== true) throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    this.csrf = '';
+  }
   async logoutOthers() {
     await this.request('/account/logout-others', { method: 'POST', body: '{}' });
   }
@@ -245,7 +320,9 @@ export class ProviderApi implements WebProviderActions {
     const value = record(await this.request('/account'));
     if (typeof value.signupEnabled !== 'boolean' || typeof value.signedIn !== 'boolean')
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    if (!value.signedIn) return { signupEnabled: value.signupEnabled, signedIn: false };
+    const features = parseFeatures(value.features);
+    if (!value.signedIn)
+      return { signupEnabled: value.signupEnabled, signedIn: false, ...(features ? { features } : {}) };
     if (typeof value.hasLogin !== 'boolean' || typeof value.canBind !== 'boolean' || typeof value.kind !== 'string')
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
     return {
@@ -256,6 +333,12 @@ export class ProviderApi implements WebProviderActions {
       emailMasked: typeof value.emailMasked === 'string' ? value.emailMasked : null,
       nickname: typeof value.nickname === 'string' ? value.nickname : null,
       canBind: value.canBind,
+      ...(features ? { features } : {}),
+      ...(value.grace &&
+      typeof value.grace === 'object' &&
+      Number.isSafeInteger((value.grace as { endsAt?: unknown }).endsAt)
+        ? { grace: { endsAt: (value.grace as { endsAt: number }).endsAt } }
+        : {}),
     };
   }
   async byRequest(requestId: string) {

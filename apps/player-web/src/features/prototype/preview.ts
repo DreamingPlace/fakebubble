@@ -1,5 +1,6 @@
 /** E visual shell. Without a live binding it is a pure local fixture and sends nothing. */
 import { orbitStyle, ringOffset } from './orbit.js';
+import { appendLegalLinks } from './legal-links.ts';
 import { followChatViewport, swipeStep } from './mobile-layout.js';
 import type { LiveBinding } from './provider-binding.js';
 import { providerPeople, escapeCardText, type Person } from './provider-catalog-view.js';
@@ -133,6 +134,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
       <div class="toast" role="status" aria-live="polite"></div>
     </div>`;
   const page = root.querySelector<HTMLElement>('.page-shell')!;
+  appendLegalLinks(root.querySelector('.preview-note'), live?.legalEnabled);
   followChatViewport(page);
   const carousel = root.querySelector<HTMLElement>('.carousel')!;
   const deck = root.querySelector<HTMLElement>('.card-deck')!;

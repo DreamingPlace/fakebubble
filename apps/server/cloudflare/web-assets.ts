@@ -16,15 +16,31 @@ const types: Record<string, string> = {
 };
 const hash = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const safePath = (path: string) => path.split('/').every((part) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(part));
-const csp =
-  "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+/** Hosts Cloudflare Turnstile needs, and only when TURNSTILE_ENABLED: its script, its challenge frame and its verify calls. */
+export const TURNSTILE_ORIGIN = 'https://challenges.cloudflare.com';
+export function playerCsp(turnstile: boolean) {
+  const extra = turnstile ? ` ${TURNSTILE_ORIGIN}` : '';
+  return (
+    `default-src 'none'; script-src 'self'${extra}; style-src 'self'; img-src 'self' data:; font-src 'self'; ` +
+    `connect-src 'self'${extra}; ${turnstile ? `frame-src ${TURNSTILE_ORIGIN}; ` : ''}media-src 'self' blob:; ` +
+    "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+  );
+}
+/** The two legal pages (Part 17). They exist in every build but are served only while LEGAL_PAGES_ENABLED is on. */
+export const LEGAL_PAGE_PATHS = ['privacy.html', 'terms.html'] as const;
+export interface CloudWebAssetsOptions {
+  turnstile?: boolean;
+  legalPages?: boolean;
+}
 
 /** Only the existing player build's hash allowlist. No SPA fallback, directory access or public manifest. */
 export class CloudWebAssets {
   private readonly binding: AssetBinding;
   private readonly manifestHash: string;
   private manifest: Promise<Record<string, string>> | undefined;
-  constructor(binding: AssetBinding, manifestHash: string) {
+  private readonly options: CloudWebAssetsOptions;
+  constructor(binding: AssetBinding, manifestHash: string, options: CloudWebAssetsOptions = {}) {
+    this.options = options;
     ensure(/^[a-f0-9]{64}$/.test(manifestHash), 'PLAYER_BUILD_UNAVAILABLE');
     this.binding = binding;
     this.manifestHash = manifestHash;
@@ -95,6 +111,7 @@ export class CloudWebAssets {
       path = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
     ensure(request.method === 'GET' || request.method === 'HEAD', 'NOT_FOUND');
     ensure(safePath(path) && !request.headers.has('range'), 'NOT_FOUND');
+    ensure(this.options.legalPages === true || !(LEGAL_PAGE_PATHS as readonly string[]).includes(path), 'NOT_FOUND');
     this.manifest ??= this.load(url.origin);
     const manifest = await this.manifest,
       expected = manifest[path];
@@ -106,7 +123,7 @@ export class CloudWebAssets {
         'content-type': types[path.split('.').at(-1)!]!,
         'content-length': String(bytes.byteLength),
         'cache-control': playerAssetCacheControl(path),
-        'content-security-policy': csp,
+        'content-security-policy': playerCsp(this.options.turnstile === true),
       },
     });
   }
