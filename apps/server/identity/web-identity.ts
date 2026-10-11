@@ -196,7 +196,7 @@ export class WebIdentity {
       'WEB_IDENTITY_ORIGIN_INVALID',
     );
     ensure(
-      [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118].includes(
+      [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119].includes(
         store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       ),
       'WEB_IDENTITY_MIGRATION_REQUIRED',
@@ -579,7 +579,7 @@ export class WebIdentity {
     grantId: string;
   }) {
     ensure(
-      [112, 113, 114, 115, 116, 117, 118].includes(
+      [112, 113, 114, 115, 116, 117, 118, 119].includes(
         this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       ) &&
         /^[A-Za-z0-9_.-]{1,128}$/.test(input.requestId) &&
@@ -1427,7 +1427,7 @@ export class WebIdentity {
         session.id,
       );
       if (
-        [112, 113, 114, 115, 116, 117, 118].includes(
+        [112, 113, 114, 115, 116, 117, 118, 119].includes(
           this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
         )
       )

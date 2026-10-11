@@ -176,7 +176,11 @@ export class WebProviderHTTP {
           materialUpload[1]!,
         );
       const characterWrite =
-        /^\/api\/web\/provider\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start)$/.test(path);
+        /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save)$/.test(
+          path,
+        );
+      // A run (up to 50 inputs of 4000 characters) and an eval set are larger than a profile save.
+      const bulkWrite = /\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/run-start|eval-sets\/save)$/.test(path);
       if (characterWrite)
         app.inviteAdmin.authorize(
           this.cookie(request, true),
@@ -195,11 +199,13 @@ export class WebProviderHTTP {
           request,
           materialUpload
             ? 8_001_024
-            : characterWrite
-              ? 131072
-              : path.startsWith(`${API}/cocreation/`)
-                ? COCREATION_BODY_LIMIT
-                : 8192,
+            : bulkWrite
+              ? 786_432
+              : characterWrite
+                ? 131072
+                : path.startsWith(`${API}/cocreation/`)
+                  ? COCREATION_BODY_LIMIT
+                  : 8192,
         ),
       };
       const result =
@@ -207,7 +213,7 @@ export class WebProviderHTTP {
         (await routeWebAccountAdmin(app.inviteAdmin, input, app.characterAdmin, app.cocreation)) ??
         routeWebCocreation(app.cocreation, input) ??
         routeWebInvite(app.inviteActions, input, app.inviteAdmin);
-      if (/\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(review-start|delete-start)$/.test(localPath))
+      if (/\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(review-start|run-start|delete-start)$/.test(localPath))
         await this.execution.wake();
       let body = result.body;
       if (localPath === '/api/web/local/invites/redeem' && result.issuedToken) {

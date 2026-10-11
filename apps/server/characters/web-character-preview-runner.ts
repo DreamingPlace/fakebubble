@@ -18,6 +18,7 @@ import type { DeepSeekTextGenerator } from '../generation/deepseek.ts';
 import { applyTextReview, parseTextDraft } from '../generation/accepted-text-protocol.ts';
 import { budgetHash } from '../budget/web-provider-budget-contract.ts';
 import { currentWebPreview, previewDigest, previewPolicy, readWebPreview } from './web-character-preview.ts';
+import { webCharacterDeleted } from './web-character-deleted.ts';
 import { webCharacterPreviewsRunning } from './web-character-preview-schema.ts';
 
 /** Same authority used by chat and material generation; no new allowance or budget reset. */
@@ -50,6 +51,8 @@ interface Attempt {
   metadata_json: string | null;
   shared_settled: number;
 }
+/** Rejected-output bound per stage (UTF-8 bytes), before the short truncation marker. */
+export const PREVIEW_REJECTED_MAX_BYTES = 32768;
 const natural = (n: unknown): n is number => Number.isSafeInteger(n) && Number(n) >= 0;
 
 /** One bounded isolated preview, sharing phase capacity and cumulative spend with player work. */
@@ -59,6 +62,7 @@ export class WebCharacterPreviewRunner {
   private readonly generator: Generator;
   private readonly budget: WebPreviewBudget;
   private readonly nextId: () => string;
+  private readonly hasRuns: boolean;
   constructor(
     store: BusinessStore,
     clock: Clock,
@@ -75,6 +79,47 @@ export class WebCharacterPreviewRunner {
     this.generator = generator;
     this.budget = budget;
     this.nextId = nextId;
+    this.hasRuns = !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_preview_rejected'");
+  }
+  /**
+   * Admin-only diagnosis (schema 119): keep the model's raw words of a stage that completed with usage but failed
+   * validation. Bounded, written after the known bill is durable and in its own transaction, so a failure here can
+   * never change how the bill is settled (it is swallowed).
+   */
+  private keepRejected(id: string, phase: Phase, rejected: { raw: string; errorCode: string } | undefined) {
+    if (!this.hasRuns || !rejected) return;
+    try {
+      const bytes = Buffer.from(rejected.raw, 'utf8');
+      const cut = bytes.length > PREVIEW_REJECTED_MAX_BYTES;
+      const kept =
+        (cut
+          ? bytes
+              .subarray(0, PREVIEW_REJECTED_MAX_BYTES)
+              .toString('utf8')
+              .replace(/\uFFFD+$/u, '')
+          : rejected.raw) + (cut ? `\n[truncated; original ${bytes.length} bytes]` : '');
+      this.store.transaction(() => {
+        // A character deleted while this call was in flight has already had its previews' diagnosis purged.
+        const owner = this.store.get<{ character_id: string }>(
+          'SELECT character_id FROM admin_previews WHERE id=?',
+          id,
+        );
+        if (!owner || webCharacterDeleted(this.store, owner.character_id)) return;
+        this.store.run(
+          `INSERT OR IGNORE INTO web_preview_rejected(preview_id,phase,error_code,raw_output,raw_bytes,truncated,created_at)
+          VALUES (?,?,?,?,?,?,?)`,
+          id,
+          phase,
+          rejected.errorCode.slice(0, 100) || 'UNKNOWN',
+          kept,
+          bytes.length,
+          cut ? 1 : 0,
+          this.now(),
+        );
+      });
+    } catch {
+      /* diagnosis only: never affects the bill or the preview's outcome */
+    }
   }
   private now() {
     const now = this.clock.now();
@@ -133,8 +178,13 @@ export class WebCharacterPreviewRunner {
           webConcurrency(this.store).maxTextRunning
       )
         return null;
+      // A run's previews share one created_at: they are taken in ordinal order (schema 119; older ones have no runs).
       const next = this.store.get<{ id: string }>(
-        `SELECT p.id FROM admin_previews p JOIN web_character_preview_jobs j ON j.preview_id=p.id
+        this.hasRuns
+          ? `SELECT p.id FROM admin_previews p JOIN web_character_preview_jobs j ON j.preview_id=p.id
+        LEFT JOIN web_preview_run_items i ON i.preview_id=p.id
+        WHERE p.status='queued' AND j.retry_at<=? ORDER BY p.created_at,coalesce(i.ordinal,0),p.id LIMIT 1`
+          : `SELECT p.id FROM admin_previews p JOIN web_character_preview_jobs j ON j.preview_id=p.id
         WHERE p.status='queued' AND j.retry_at<=? ORDER BY p.created_at,p.id LIMIT 1`,
         now,
       );
@@ -418,7 +468,8 @@ export class WebCharacterPreviewRunner {
   }
   async run(claim: { id: string; token: string }, signal: AbortSignal) {
     const { id, token } = claim,
-      observations = new Map<Phase, ProviderObservation>();
+      observations = new Map<Phase, ProviderObservation>(),
+      rejected = new Map<Phase, { raw: string; errorCode: string }>();
     try {
       const { request } = this.live(id, token);
       for (const attempt of this.attempts(id)) {
@@ -462,6 +513,9 @@ export class WebCharacterPreviewRunner {
                 );
               });
               return {
+                rejected: (output) => {
+                  rejected.set(phase, output);
+                },
                 finish: async (observation) => {
                   observations.set(phase, observation);
                   if (
@@ -469,8 +523,11 @@ export class WebCharacterPreviewRunner {
                     observation.usage.unit === 'tokens' &&
                     natural(observation.usage.inputTokens) &&
                     natural(observation.usage.outputTokens)
-                  )
-                    await this.settle(this.confirm(id, phase, observation));
+                  ) {
+                    const attempt = this.confirm(id, phase, observation);
+                    this.keepRejected(id, phase, rejected.get(phase));
+                    await this.settle(attempt);
+                  }
                 },
               };
             },
@@ -502,7 +559,9 @@ export class WebCharacterPreviewRunner {
           natural(observation.usage.outputTokens)
         ) {
           try {
-            await this.settle(this.confirm(id, attempt.phase, observation));
+            const confirmed = this.confirm(id, attempt.phase, observation);
+            this.keepRejected(id, attempt.phase, rejected.get(attempt.phase));
+            await this.settle(confirmed);
           } catch {
             /* Durable receipt/hold remains. */
           }

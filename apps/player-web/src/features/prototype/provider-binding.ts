@@ -115,6 +115,7 @@ export class LiveBinding {
       /* keep the defaults */
     }
   }
+  private headMenu: { close(): void } | null = null;
   private get hasLogin() {
     return this.account.signedIn && this.account.hasLogin;
   }
@@ -263,6 +264,36 @@ export class LiveBinding {
     }
     shell.head.querySelector('.invite-entry')?.remove();
     shell.head.querySelector('.recovery-entry')?.remove();
+    shell.head.querySelector('.head-actions')?.remove();
+    shell.head.querySelector('.head-hint')?.remove();
+    this.headMenu?.close();
+    this.headMenu = null;
+    // Account entries live in the top bar next to 邀请码: a guest gets 登录 / 注册, a signed-in player gets a nickname
+    // button that opens the same account menu as the ⋯ menu. The invite button keeps its class and place.
+    const actions = document.createElement('span');
+    actions.className = 'head-actions';
+    const action = (text: string, className: string, onClick: () => void) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = className;
+      button.textContent = text;
+      button.addEventListener('click', onClick);
+      actions.append(button);
+      return button;
+    };
+    if (this.hasLogin) {
+      const nick = action(
+        this.account.signedIn && this.account.nickname ? this.account.nickname : '我的账号',
+        'head-account',
+        () => {},
+      );
+      nick.setAttribute('aria-haspopup', 'menu');
+      nick.setAttribute('aria-expanded', 'false');
+      this.headMenu = mountChatMenu(nick, shell.head, () => this.accountMenu());
+    } else if (access.kind === 'guest' && !this.invitation.locked) {
+      action('登录', 'head-account', () => void this.openAccount('login'));
+      action('注册', 'head-account', () => void this.openAccount('signup'));
+    }
     if (access.kind === 'invite' && !this.invitation.locked) {
       if (access.status === 'active' && this.accessKnown && !this.hasLogin) {
         const manage = document.createElement('button');
@@ -277,6 +308,7 @@ export class LiveBinding {
         : access.status === 'active'
           ? '邀请已解锁'
           : '邀请已失效';
+      if (actions.children.length) shell.head.append(actions);
       return;
     }
     note.textContent = this.invitation.locked
@@ -286,12 +318,20 @@ export class LiveBinding {
         : access.remainingReplies === 0 || access.canSend
           ? `体验剩余 ${access.remainingReplies} 次`
           : '体验已结束';
+    // Trial used up: one short line says what to do next (a signed-up guest already has an account to keep chats in).
+    if (this.accessKnown && !this.invitation.locked && access.remainingReplies === 0) {
+      const hint = document.createElement('span');
+      hint.className = 'head-hint';
+      hint.textContent = this.hasLogin ? '输入邀请码继续' : '注册保存聊天，或输入邀请码继续';
+      shell.head.append(hint);
+    }
     const entry = document.createElement('button');
     entry.type = 'button';
     entry.className = 'invite-entry';
     entry.textContent = this.invitation.locked ? '核对邀请' : '邀请码';
     entry.addEventListener('click', () => this.inviteDialog());
-    shell.head.append(entry);
+    actions.append(entry);
+    shell.head.append(actions);
   }
 
   updateComposer(characterId: WebProviderCharacterId) {

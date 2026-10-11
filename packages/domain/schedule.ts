@@ -1,6 +1,6 @@
 import type { ScheduleSlot, Weekday, WeeklySchedule } from '../contracts/index.ts';
 import { MINUTE, RULES } from './defaults.ts';
-import { ensure } from './errors.ts';
+import { DomainError, ensure } from './errors.ts';
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
 const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -34,6 +34,24 @@ export function localTime(at: number, timeZone: string): { day: Weekday; minute:
     minute: Number(p.hour) * 60 + Number(p.minute),
     date: `${p.year}-${p.month}-${p.day}`,
   };
+}
+
+/**
+ * The UTC instant at which `timeZone` reads `minute` (minutes after midnight, whole minutes) on the calendar date that
+ * `at` falls on in that SAME zone. The zone is only ever read, never chosen by the caller; a wall-clock time that does
+ * not exist that day (a DST gap) is rejected rather than moved. Preview-only: live requests use the real clock.
+ */
+export function instantAtLocalMinute(at: number, timeZone: string, minute: number): number {
+  ensure(Number.isInteger(minute) && minute >= 0 && minute < 1440, 'INVALID_SIMULATED_TIME');
+  const here = localTime(at, timeZone);
+  const base = at - (at % 60_000);
+  for (const shift of [0, -60, 60, -120, 120]) {
+    const candidate = base + (minute - here.minute + shift) * 60_000;
+    if (candidate < 0) continue;
+    const local = localTime(candidate, timeZone);
+    if (local.date === here.date && local.minute === minute) return candidate;
+  }
+  throw new DomainError('INVALID_SIMULATED_TIME');
 }
 
 export function validateSchedule(schedule: WeeklySchedule): void {

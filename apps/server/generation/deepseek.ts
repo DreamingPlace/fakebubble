@@ -201,6 +201,19 @@ export function parseDeepSeekToolResponse(value: unknown, expectedName: string):
   }
 }
 
+/** The model's own words in a provider response (the tool-call arguments, else any text), for admin diagnosis only. */
+export function rawModelOutput(value: unknown): string {
+  try {
+    const message = (value as { choices?: Array<{ message?: Record<string, unknown> }> }).choices?.[0]?.message;
+    const calls = message?.tool_calls as Array<{ function?: { arguments?: unknown } }> | undefined;
+    const args = calls?.[0]?.function?.arguments;
+    if (typeof args === 'string') return args;
+    return typeof message?.content === 'string' ? message.content : '';
+  } catch {
+    return '';
+  }
+}
+
 export class DeepSeekTextGenerator implements TextGenerator {
   readonly providerCalls = 'external' as const;
   #apiKey: string;
@@ -448,11 +461,21 @@ export class DeepSeekTextGenerator implements TextGenerator {
               : null,
           ...(error instanceof BubbleValidationError ? { presentation: error.presentation } : {}),
         });
-        if (!recorded)
+        if (!recorded) {
+          // Complete response, failed validation: offer the model's raw words to an observer that wants them (a
+          // preview). Best effort and before finish(); it can neither change the observation nor throw.
+          if (value !== undefined && typeof observer?.rejected === 'function') {
+            try {
+              observer.rejected({ raw: rawModelOutput(value), errorCode: errorCode(error) });
+            } catch {
+              /* diagnosis only */
+            }
+          }
           await finishProviderCall(
             observer,
             deepSeekObservation(value, combined.aborted ? 'interrupted' : 'failed', errorCode(error)),
           );
+        }
         throw error;
       }
       if (handoff && accept) {

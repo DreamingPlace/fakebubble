@@ -68,6 +68,23 @@ export async function routeWebAccountAdmin(
     }
     ensure(false, 'NOT_FOUND');
   }
+  if (path.startsWith(`${base}/eval-sets/`)) {
+    auth();
+    ensure(characters, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/eval-sets/`.length);
+    if (action === 'list') {
+      body([]);
+      return { status: 200, body: characters.evalSetList(actor) };
+    }
+    if (action === 'save')
+      return { status: 200, body: characters.evalSetSave(actor, body(['id', 'expectedVersion', 'name', 'items'])) };
+    if (action === 'delete') {
+      const value = body(['id', 'expectedVersion']);
+      return { status: 200, body: characters.evalSetDelete(actor, value.id, value.expectedVersion) };
+    }
+    ensure(false, 'NOT_FOUND');
+  }
   if (path.startsWith(`${base}/characters/`)) {
     auth();
     ensure(characters, 'NOT_FOUND');
@@ -78,7 +95,7 @@ export async function routeWebAccountAdmin(
     }
     const match = path.match(
       new RegExp(
-        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(detail|save|discard|preview|publish|review-start|review-status|material-list|material-prepare|material-upload|material-audio|material-approve|delete-preview|delete-start|delete-status)$`,
+        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-audio|material-approve|delete-preview|delete-start|delete-status)$`,
       ),
     );
     ensure(match, 'NOT_FOUND');
@@ -156,9 +173,42 @@ export async function routeWebAccountAdmin(
         body: characters.startPreview(
           actor,
           id,
-          body(['requestId', 'draftRevision', 'profileHash', 'relationship', 'message']),
+          body([
+            'requestId',
+            'draftRevision',
+            'profileHash',
+            'relationship',
+            'message',
+            ...(req.body && Object.hasOwn(req.body, 'simulatedTime') ? ['simulatedTime'] : []),
+          ]),
         ),
       };
+    if (match[2] === 'run-start')
+      return {
+        status: 202,
+        body: characters.startRun(
+          actor,
+          id,
+          body([
+            'requestId',
+            'draftRevision',
+            'profileHash',
+            'relationship',
+            ...(req.body && Object.hasOwn(req.body, 'label') ? ['label'] : []),
+            ...(req.body && Object.hasOwn(req.body, 'simulatedTime') ? ['simulatedTime'] : []),
+            ...(req.body && Object.hasOwn(req.body, 'evalSetId') ? ['evalSetId'] : ['inputs']),
+          ]),
+        ),
+      };
+    if (match[2] === 'run-list') {
+      body([]);
+      return { status: 200, body: characters.runList(actor, id) };
+    }
+    if (match[2] === 'run-detail') return { status: 200, body: characters.runDetail(actor, id, body(['runId']).runId) };
+    if (match[2] === 'preview-detail')
+      return { status: 200, body: characters.previewDetail(actor, id, body(['previewId']).previewId) };
+    if (match[2] === 'previews-status')
+      return { status: 200, body: characters.previewsStatus(actor, id, body(['runId']).runId ?? null) };
     if (match[2] === 'review-status')
       return { status: 200, body: characters.previewStatus(actor, id, body(['previewId']).previewId) };
     const value = body(['expectedRevision']);

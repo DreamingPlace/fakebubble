@@ -109,6 +109,14 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **数据清理：** 登录行与验证码挑战是玩家数据，随玩家清理一并删除（Node 与 Cloudflare 保留期清理器、生命周期审计在清理后仍有残留时失败关闭）；昵称写入的“名片”修订同样随之删除。
 
+### 预演测试评测台（Part 13b）
+
+`119_preview_workbench.sql` 是独立的第 119 版迁移（Node：`user_version=119`，已有 provider 实例运行 `migrate-preview-workbench`；Cloudflare 内联与 R2：账本版本 119，已在 118 的权威启动时自动补上）。新增六张仅管理员可见的合成数据表：`web_preview_runs`（一次批量运行）、`web_preview_run_items`（运行与预演的归属，一条预演至多属于一次运行）、`web_preview_marks`（预演用的模拟当地时间）、`web_preview_rejected`（完成并有用量、但校验失败的阶段所返回的原始模型输出，每阶段至多 32 KiB）、`web_eval_sets` 与 `web_eval_set_versions`（评测集及其全部历史版本）。预演表与账本（`admin_previews`、`web_character_preview_*`）本身不变，也不新增外键指向由安装器创建的表。没有环境变量或绑定的变化；不改提示词或工具 schema。
+
+- 模拟时间只存在于预演：角色时区始终是角色自己的作息时区，不可更改；真实对话永远使用真实时钟。
+- 删除角色时，该角色的运行、模拟时间标记和被拒收的模型输出一并清除（预演行和不可变的计费账本按原设计保留；预演本来就没有独立的保留期，被拒收输出沿用这一点）。
+- 轮询：页面只调用一个批量状态端点（`previews-status`），2 秒起逐步退避到 10 秒，没有排队或运行中的预演时停止，页面隐藏时暂停。
+
 ### 记忆：按含义召回（Part 7b）
 
 `116_memory_embeddings.sql` 是独立的第 116 版迁移，在 115 之后按顺序执行（Node：`user_version=116`，已有 provider 实例运行 `migrate-embeddings`；Cloudflare 内联与 R2：账本版本 116，已在 115 的权威启动时自动补上）。它新增 `memory_embeddings`（每个范围、话题、模型一条 float32 小端向量，`state` 为 `ready` 或 `unknown`）、`web_embed_attempts`（嵌入调用的派发账本，阶段 `embed`）和 `web_embed_metrics`（每日计数，无内容）。向量存在现有 SQLite（业务对象）里，不使用 Vectorize 或任何外部存储；相似度在代码里、只在同一范围内计算。

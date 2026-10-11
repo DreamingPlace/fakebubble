@@ -274,12 +274,12 @@ test('production database at 113 with the deletion schema installed upgrades thr
   assert.ok(known.length >= 4);
 
   // Restart on the current code: 114 (rebuilds web_publication_items), 115, 116 and 117 apply to the live database.
-  // (Extended for migration 118.)
+  // (Extended for migration 119.)
   f.business.bindings.LEGACY_113 = 'false';
   await f.restart();
   await f.call({ action: 'edge', path: api + '/bootstrap' }, 200);
   const upgraded = await state();
-  assert.equal(upgraded.version, 118);
+  assert.equal(upgraded.version, 119);
   assert.ok(upgraded.schema.some((row) => row.name === 'web_operation_metrics'));
   assert.deepEqual(
     upgraded.triggers,

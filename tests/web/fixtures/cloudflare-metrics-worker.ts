@@ -109,6 +109,8 @@ export class WebMetricsFixture {
           daily: names().includes('web_player_email_daily'),
           throttle: names().includes('web_player_throttle'),
         },
+        // Part 13b (schema 119): the preview workbench tables.
+        workbench: names().filter((n) => /^web_(preview_(runs|run_items|marks|rejected)|eval_sets?)/.test(n)),
         discardedColumn: storage.sql
           .exec('PRAGMA table_info(web_operation_metrics)')
           .toArray()
@@ -148,6 +150,7 @@ export class WebMetricsFixture {
         .toArray()
         .map((row) => `${row.version}:${row.sha256}`),
       concurrency: store.concurrency,
+      workbench: tables.filter((n) => /^web_(preview_(runs|run_items|marks|rejected)|eval_sets?)/.test(n)),
     });
   }
 }

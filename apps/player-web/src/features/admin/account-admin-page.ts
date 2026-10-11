@@ -1,5 +1,7 @@
 import type { AccountAdminApi, AccountAdminSession } from '../../services/account-admin-api.ts';
 import { characterWorkbench, characterAdminError } from './character-workbench.ts';
+import { previewWorkbench } from './preview/preview-workbench.ts';
+import type { PreviewAdminClient } from '../../services/preview-admin-api.ts';
 import { permissionMatrixEditor } from './permission-matrix.ts';
 import { grantsView } from './grants-view.ts';
 import { opsView } from './ops-view.ts';
@@ -49,6 +51,8 @@ type Port = Pick<
   | 'inviteRecords'
   | 'characters'
 > & {
+  /** 预演测试 workbench (runs, eval sets, batched status). Without it the page keeps the single-preview panel. */
+  previews?: PreviewAdminClient;
   /** 运营数据 (owner only). Optional: a page without it has no such page in the nav. */
   stageLatency?: AccountAdminApi['stageLatency'];
   /** 共创收件箱. Optional: a page without it simply has no inbox tab. */
@@ -179,7 +183,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     (!!session && hasCharacterPermission(session.member.permissions, 'edit', characterId));
   const address = addressBar(window);
   let workbench: ReturnType<typeof characterWorkbench> | null = null;
-  let previewBench: ReturnType<typeof characterWorkbench> | null = null;
+  let previewBench: {
+    open(id: string): Promise<void>;
+    update(busy: boolean): void;
+    clear(): void;
+    dispose(): void;
+  } | null = null;
   let inbox: ReturnType<typeof cocreationInbox> | null = null;
   // New (unread) co-creation submissions per character: the badge in the character workbench.
   let unread: Record<string, number> = {};
@@ -478,7 +487,20 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       void run(() => previewBench!.open(characterId));
     },
   });
-  previewBench = characterWorkbench(previewSplit.detail, { ...workbenchHost, preview: 'only' });
+  previewBench = port.previews
+    ? previewWorkbench(previewSplit.detail, {
+        api: port.previews,
+        characters: port.characters,
+        member: () => session?.member ?? null,
+        run,
+        status: (text: string) => {
+          if (!disposed) status.textContent = text;
+        },
+        disposed: () => disposed,
+        toast: (text, tone) => toasts.show(text, tone ?? 'info'),
+        modalParent: () => q('main'),
+      })
+    : characterWorkbench(previewSplit.detail, { ...workbenchHost, preview: 'only' });
   inbox = port.cocreation
     ? cocreationInbox(q('#admin-cocreation'), {
         api: port.cocreation,

@@ -27,6 +27,12 @@ export interface ProviderObservation {
 }
 export interface ProviderCallObserver {
   finish(value: ProviderObservation): void | Promise<void>;
+  /**
+   * Optional, admin previews only: the raw model output of a response that came back complete but failed validation,
+   * offered BEFORE finish() so a preview can keep it for diagnosis. It is never part of the observation or the receipt,
+   * so billing and the wire are unchanged; an observer that does not implement it is simply not offered anything.
+   */
+  rejected?(output: { raw: string; errorCode: string }): void;
 }
 /** Generators supply the exact wire request digest. Optional only for legacy local ledger callers; cloud send gates must reject omission.
  * requestBytes is the exact UTF-8 size of the wire body; meters may use it to tighten token holds. */

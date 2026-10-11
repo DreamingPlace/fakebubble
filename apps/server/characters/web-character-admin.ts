@@ -13,6 +13,15 @@ import { identifier, keys, nonempty, record, validatedTemplate } from './templat
 import { characterProfileHash, publishedWebCharacters, type WebCharacterProfile } from './web-character-catalog.ts';
 import { WebCharacterPreviews, readWebPreview, webPreviewDTO } from './web-character-preview.ts';
 import { publishWebCharacter } from './web-character-publication.ts';
+import {
+  evalSetDelete,
+  evalSetList,
+  evalSetSave,
+  previewDetail,
+  previewsStatus,
+  runDetail,
+  runList,
+} from './web-character-preview-read.ts';
 
 import { WebCharacterMaterials } from './web-character-materials.ts';
 
@@ -284,6 +293,71 @@ export class WebCharacterAdmin {
     const row = readWebPreview(this.store, previewId);
     ensure(row.character_id === id, 'NOT_FOUND');
     return webPreviewDTO(row);
+  }
+  /** Part 13b: one batch = one run (idempotent by requestId). Same permission and queue as a single preview. */
+  startRun(auth: Auth, id: string, input: unknown) {
+    const actor = this.require(auth, 'preview', id);
+    ensure(this.previews, 'PREVIEW_UNAVAILABLE');
+    return this.previews.startRun(actor, id, input);
+  }
+  runList(auth: Auth, id: string) {
+    this.require(auth, 'read', id);
+    ensure(this.previews, 'PREVIEW_UNAVAILABLE');
+    return runList(this.store, id);
+  }
+  runDetail(auth: Auth, id: string, runId: unknown) {
+    this.require(auth, 'read', id);
+    identifier(runId);
+    ensure(this.previews, 'PREVIEW_UNAVAILABLE');
+    return runDetail(this.store, id, runId);
+  }
+  previewDetail(auth: Auth, id: string, previewId: unknown) {
+    this.require(auth, 'read', id);
+    identifier(previewId);
+    ensure(this.previews, 'PREVIEW_UNAVAILABLE');
+    return previewDetail(this.store, id, previewId);
+  }
+  /** The poller's single call: statuses of one run's previews, or of the character's recent ones when runId is null. */
+  previewsStatus(auth: Auth, id: string, runId: unknown) {
+    this.require(auth, 'read', id);
+    if (runId !== null) identifier(runId);
+    ensure(this.previews, 'PREVIEW_UNAVAILABLE');
+    return previewsStatus(this.store, id, runId);
+  }
+  /** Eval sets are global lists of synthetic inputs. Reading needs any preview grant; writing needs preview on every character. */
+  private evalActor(auth: Auth, write: boolean) {
+    const actor = this.actor(auth);
+    const grants = actor.member.permissions;
+    ensure(
+      actor.role === 'owner' ||
+        (write
+          ? hasCharacterPermission(grants, 'preview', '*')
+          : hasCharacterPermission(grants, 'preview', '*') || grants.some((p) => p.startsWith('characters.preview:'))),
+      'ADMIN_PERMISSION_REQUIRED',
+    );
+    return actor;
+  }
+  evalSetList(auth: Auth) {
+    this.evalActor(auth, false);
+    ensure(this.previews, 'PREVIEW_UNAVAILABLE');
+    return { sets: evalSetList(this.store) };
+  }
+  evalSetSave(auth: Auth, input: unknown) {
+    const actor = this.evalActor(auth, true);
+    ensure(this.previews, 'PREVIEW_UNAVAILABLE');
+    record(input);
+    const now = this.clock.now();
+    ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
+    const saved = evalSetSave(this.store, now, actor.memberId, input);
+    this.audit(actor.memberId, `eval-set-saved:${saved.version}`, saved.id, now);
+    return saved;
+  }
+  evalSetDelete(auth: Auth, id: unknown, expectedVersion: unknown) {
+    const actor = this.evalActor(auth, true);
+    ensure(this.previews, 'PREVIEW_UNAVAILABLE');
+    const result = evalSetDelete(this.store, id, expectedVersion);
+    this.audit(actor.memberId, 'eval-set-deleted', String(id), this.clock.now());
+    return result;
   }
   authorizeMaterialUpload(auth: Auth, id: string) {
     return this.require(auth, 'materials', id);

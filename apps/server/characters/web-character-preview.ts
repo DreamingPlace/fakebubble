@@ -7,6 +7,7 @@ import { contentHash } from './admin-content-hash.ts';
 import { identifier, keys, nonempty, record } from './template-validation.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
 import { textPolicyHash } from '../generation/text-generation-policy.ts';
+import { instantAtLocalMinute } from '../../../packages/domain/schedule.ts';
 import { characterProfileHash, type WebCharacterProfile } from './web-character-catalog.ts';
 import { installWebCharacterPreviews } from './web-character-preview-schema.ts';
 
@@ -112,6 +113,59 @@ export function webPreviewDTO(row: WebPreviewJob) {
   };
 }
 
+export const PREVIEW_INPUT_MAX = 4000;
+export const PREVIEW_RUN_MAX = 50;
+export const PREVIEW_NOTE_MAX = 300;
+const RELATIONSHIPS = ['new', 'friend', 'close_friend', 'lover'];
+/** "HH:MM" -> minutes after midnight; the only accepted spelling of a simulated time. */
+export function parseSimulatedTime(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const match = typeof value === 'string' ? /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value) : null;
+  ensure(match, 'INVALID_SIMULATED_TIME');
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+/**
+ * PREVIEW ONLY. The request clock of an admin preview: the real clock, or the UTC instant at which the character's OWN
+ * schedule zone reads the chosen wall-clock time on today's date there. The zone is read from the template, never
+ * supplied; the scope must be an isolated admin-preview scope, so no live (player) request can pass through here.
+ */
+export function previewInstant(
+  scope: Pick<TextGenerationRequest['scope'], 'worldId'>,
+  realNow: number,
+  timeZone: string,
+  simulatedMinute: number | null,
+) {
+  ensure(scope.worldId.startsWith('admin-preview-'), 'SIMULATED_TIME_PREVIEW_ONLY');
+  return simulatedMinute === null ? realNow : instantAtLocalMinute(realNow, timeZone, simulatedMinute);
+}
+interface QueuedInput {
+  requestId: string;
+  draftRevision: number;
+  profileHash: string;
+  relationship: string;
+  message: string;
+  simulatedMinute: number | null;
+  deadlineAt: (now: number) => number;
+}
+function startFields(input: Record<string, unknown>) {
+  identifier(input.requestId);
+  ensure(
+    Number.isSafeInteger(input.draftRevision) &&
+      Number(input.draftRevision) > 0 &&
+      typeof input.profileHash === 'string' &&
+      /^[a-f0-9]{64}$/.test(input.profileHash),
+    'INVALID_DRAFT_REVISION',
+  );
+  ensure(RELATIONSHIPS.includes(String(input.relationship)), 'INVALID_RELATIONSHIP');
+  return {
+    requestId: input.requestId as string,
+    draftRevision: Number(input.draftRevision),
+    profileHash: input.profileHash as string,
+    relationship: input.relationship as string,
+    simulatedMinute: parseSimulatedTime(input.simulatedTime),
+  };
+}
+
 /** Isolated operation scope, never a player world/conversation or a source of player memory. */
 export class WebCharacterPreviews {
   private readonly store: BusinessStore;
@@ -126,20 +180,9 @@ export class WebCharacterPreviews {
   start(actor: PreviewActor, characterId: string, input: unknown) {
     identifier(characterId);
     record(input);
-    keys(input, ['requestId', 'draftRevision', 'profileHash', 'relationship', 'message']);
-    identifier(input.requestId);
-    nonempty(input.message, 4000);
-    ensure(
-      Number.isSafeInteger(input.draftRevision) &&
-        Number(input.draftRevision) > 0 &&
-        typeof input.profileHash === 'string' &&
-        /^[a-f0-9]{64}$/.test(input.profileHash),
-      'INVALID_DRAFT_REVISION',
-    );
-    ensure(['new', 'friend', 'close_friend', 'lover'].includes(String(input.relationship)), 'INVALID_RELATIONSHIP');
-    const requestId = input.requestId,
-      revision = Number(input.draftRevision),
-      profileHash = input.profileHash;
+    keys(input, ['requestId', 'draftRevision', 'profileHash', 'relationship', 'message', 'simulatedTime']);
+    nonempty(input.message, PREVIEW_INPUT_MAX);
+    const fields = startFields(input);
     const digest = contentHash([actor.memberId, characterId, input]);
     return this.store.transaction(() => {
       const now = this.clock.now();
@@ -147,22 +190,12 @@ export class WebCharacterPreviews {
       requirePreviewActor(this.store, now, actor, characterId);
       const prior = this.store.get<{ id: string; request_hash: string }>(
         'SELECT id,request_hash FROM admin_previews WHERE request_id=?',
-        requestId,
+        fields.requestId,
       );
       if (prior) {
         ensure(prior.request_hash === digest, 'IDEMPOTENCY_CONFLICT');
         return webPreviewDTO(readWebPreview(this.store, prior.id));
       }
-      const draft = this.store.get<{ profile_json: string; content_hash: string; base_version: number | null }>(
-        `SELECT r.*
-        FROM web_character_revisions r JOIN web_character_drafts d ON d.character_id=r.character_id AND d.revision=r.revision
-        WHERE r.character_id=? AND r.revision=?`,
-        characterId,
-        revision,
-      );
-      ensure(draft?.content_hash === profileHash, 'DRAFT_CONFLICT');
-      const profile = JSON.parse(draft.profile_json) as WebCharacterProfile;
-      ensure(characterProfileHash(profile) === profileHash, 'DRAFT_CONFLICT');
       ensure(
         this.store.get<{
           n: number;
@@ -170,86 +203,240 @@ export class WebCharacterPreviews {
         WHERE p.status IN ('queued','generating')`)!.n < 8,
         'PREVIEW_QUEUE_FULL',
       );
-      const id = this.id(),
-        messageId = this.id();
-      identifier(id);
-      identifier(messageId);
-      const scope = { worldId: 'admin-preview-' + id, conversationId: id, characterId };
-      const request: TextGenerationRequest = {
-        jobId: id,
-        scope,
-        now,
-        character: profile.template,
-        relationship: input.relationship as RelationshipPreset,
-        requiredMessageIds: [messageId],
-        mustClose: false,
-        evidence: [],
-        deliveryMode: profile.template.voice ? 'voice' : 'text',
-        messages: [
-          {
-            id: messageId,
-            worldId: scope.worldId,
-            conversationId: id,
-            authorKind: 'player',
-            authorId: 'admin-preview',
-            text: input.message as string,
-            createdAt: now,
-            delivery: 'text',
-            voiceFallback: false,
-            mediaId: null,
-            proactive: false,
-          },
-        ],
-      };
-      promptMessages(request);
-      const legacyRevision = this.store.get<{ n: number }>(
-        'SELECT coalesce(max(revision),0)+1 n FROM character_draft_revisions WHERE character_id=?',
-        characterId,
-      )!.n;
-      this.store.run(
-        'INSERT INTO character_draft_revisions VALUES (?,?,?,?,?,?,?)',
-        characterId,
-        legacyRevision,
-        draft.base_version,
-        JSON.stringify(profile.template),
-        contentHash(profile.template),
-        now,
-        actor.sessionId,
+      const id = this.enqueue(actor, characterId, now, digest, {
+        ...fields,
+        message: input.message as string,
+        deadlineAt: (at) => at + 600_000,
+      });
+      return webPreviewDTO(readWebPreview(this.store, id));
+    });
+  }
+  /**
+   * One batch submission = one run: the run row and all its previews are written in ONE transaction, so a lost reply
+   * is replayed by requestId and can never leave half a run behind. The previews are queued exactly like single ones
+   * (same lease, ledger, reservation-before-send); the runner takes them one at a time, in ordinal order.
+   */
+  startRun(actor: PreviewActor, characterId: string, input: unknown) {
+    identifier(characterId);
+    record(input);
+    keys(input, [
+      'requestId',
+      'draftRevision',
+      'profileHash',
+      'relationship',
+      'label',
+      'simulatedTime',
+      'inputs',
+      'evalSetId',
+    ]);
+    const fields = startFields(input);
+    ensure(input.label === undefined || input.label === null || typeof input.label === 'string', 'INVALID_RUN_LABEL');
+    const label = typeof input.label === 'string' && input.label.trim() ? input.label.trim() : null;
+    ensure(label === null || [...label].length <= 60, 'INVALID_RUN_LABEL');
+    ensure((input.inputs === undefined) !== (input.evalSetId === undefined), 'INVALID_RUN_INPUTS');
+    if (input.evalSetId !== undefined) identifier(input.evalSetId);
+    const digest = contentHash([actor.memberId, characterId, 'run', input]);
+    return this.store.transaction(() => {
+      const now = this.clock.now();
+      ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
+      requirePreviewActor(this.store, now, actor, characterId);
+      const prior = this.store.get<{ id: string; request_hash: string }>(
+        'SELECT id,request_hash FROM web_preview_runs WHERE request_id=?',
+        fields.requestId,
       );
-      const json = JSON.stringify(request);
+      if (prior) {
+        ensure(prior.request_hash === digest, 'IDEMPOTENCY_CONFLICT');
+        return { runId: prior.id, replayed: true };
+      }
+      let lines: Array<{ text: string; note: string | null }>,
+        evalSet: { id: string; version: number } | null = null;
+      if (typeof input.evalSetId === 'string') {
+        const set = this.store.get<{ id: string; version: number; items_json: string }>(
+          'SELECT id,version,items_json FROM web_eval_sets WHERE id=?',
+          input.evalSetId,
+        );
+        ensure(set, 'EVAL_SET_NOT_FOUND');
+        evalSet = { id: set.id, version: set.version };
+        lines = (JSON.parse(set.items_json) as Array<{ text: string; note?: string | null }>).map((item) => ({
+          text: item.text,
+          note: item.note ?? null,
+        }));
+      } else {
+        ensure(Array.isArray(input.inputs), 'INVALID_RUN_INPUTS');
+        lines = input.inputs.map((item: unknown) => {
+          record(item);
+          keys(item, ['text', 'note']);
+          nonempty(item.text, PREVIEW_INPUT_MAX);
+          ensure(
+            item.note === undefined ||
+              item.note === null ||
+              (typeof item.note === 'string' && [...item.note].length <= PREVIEW_NOTE_MAX),
+            'INVALID_RUN_INPUTS',
+          );
+          return {
+            text: item.text as string,
+            note: typeof item.note === 'string' && item.note.trim() ? item.note : null,
+          };
+        });
+      }
+      ensure(lines.length >= 1 && lines.length <= PREVIEW_RUN_MAX, 'INVALID_RUN_INPUTS');
+      ensure(
+        this.store.get<{
+          n: number;
+        }>(`SELECT count(*) n FROM admin_previews p JOIN web_character_preview_jobs j ON j.preview_id=p.id
+        WHERE p.status IN ('queued','generating')`)!.n +
+          lines.length <=
+          64,
+        'PREVIEW_QUEUE_FULL',
+      );
+      const runId = this.id();
+      identifier(runId);
+      // The zone is read from the saved draft inside enqueue(); the run records what was actually used.
+      const first = this.draftProfile(characterId, fields.draftRevision, fields.profileHash).profile;
       this.store.run(
-        `INSERT INTO admin_previews(id,character_id,draft_revision,content_hash,prompt_hash,request_id,request_hash,
-        status,evidence_kind,request_json,created_at) VALUES (?,?,?,?,?,?,?,'queued','deepseek',?,?)`,
-        id,
-        characterId,
-        legacyRevision,
-        contentHash(profile.template),
-        previewPolicy,
-        requestId,
+        `INSERT INTO web_preview_runs(id,request_id,request_hash,character_id,label,draft_revision,profile_hash,
+        relationship,simulated_minute,time_zone,eval_set_id,eval_set_version,item_count,created_by,created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        runId,
+        fields.requestId,
         digest,
-        json,
-        now,
-      );
-      this.store.run(
-        'INSERT INTO web_character_preview_jobs VALUES (?,?,?,?,?,?,?,?,NULL,?)',
-        id,
         characterId,
-        revision,
-        profileHash,
-        previewDigest(json),
+        label,
+        fields.draftRevision,
+        fields.profileHash,
+        fields.relationship,
+        fields.simulatedMinute,
+        first.template.schedule.timeZone,
+        evalSet?.id ?? null,
+        evalSet?.version ?? null,
+        lines.length,
         actor.memberId,
-        actor.sessionId,
-        now + 600_000,
         now,
       );
+      lines.forEach((line, index) => {
+        const id = this.enqueue(actor, characterId, now, digest, {
+          ...fields,
+          requestId: `${fields.requestId}-${index + 1}`,
+          message: line.text,
+          deadlineAt: (at) => at + 600_000 + index * 120_000,
+        });
+        this.store.run(
+          'INSERT INTO web_preview_run_items(run_id,ordinal,preview_id,note) VALUES (?,?,?,?)',
+          runId,
+          index + 1,
+          id,
+          line.note,
+        );
+      });
       this.store.run(
         'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',
         actor.memberId,
-        'character-preview-queued',
-        id,
+        'character-preview-run-queued',
+        runId,
         now,
       );
-      return webPreviewDTO(readWebPreview(this.store, id));
+      return { runId, replayed: false };
     });
+  }
+  private draftProfile(characterId: string, revision: number, profileHash: string) {
+    const draft = this.store.get<{ profile_json: string; content_hash: string; base_version: number | null }>(
+      `SELECT r.*
+      FROM web_character_revisions r JOIN web_character_drafts d ON d.character_id=r.character_id AND d.revision=r.revision
+      WHERE r.character_id=? AND r.revision=?`,
+      characterId,
+      revision,
+    );
+    ensure(draft?.content_hash === profileHash, 'DRAFT_CONFLICT');
+    const profile = JSON.parse(draft.profile_json) as WebCharacterProfile;
+    ensure(characterProfileHash(profile) === profileHash, 'DRAFT_CONFLICT');
+    return { profile, baseVersion: draft.base_version };
+  }
+  /** Inside the caller's transaction. Returns the new preview id. */
+  private enqueue(actor: PreviewActor, characterId: string, now: number, digest: string, q: QueuedInput) {
+    const { profile, baseVersion } = this.draftProfile(characterId, q.draftRevision, q.profileHash);
+    const id = this.id(),
+      messageId = this.id();
+    identifier(id);
+    identifier(messageId);
+    const scope = { worldId: 'admin-preview-' + id, conversationId: id, characterId };
+    const zone = profile.template.schedule.timeZone;
+    const at = previewInstant(scope, now, zone, q.simulatedMinute);
+    const request: TextGenerationRequest = {
+      jobId: id,
+      scope,
+      now: at,
+      character: profile.template,
+      relationship: q.relationship as RelationshipPreset,
+      requiredMessageIds: [messageId],
+      mustClose: false,
+      evidence: [],
+      deliveryMode: profile.template.voice ? 'voice' : 'text',
+      messages: [
+        {
+          id: messageId,
+          worldId: scope.worldId,
+          conversationId: id,
+          authorKind: 'player',
+          authorId: 'admin-preview',
+          text: q.message,
+          createdAt: at,
+          delivery: 'text',
+          voiceFallback: false,
+          mediaId: null,
+          proactive: false,
+        },
+      ],
+    };
+    promptMessages(request);
+    const legacyRevision = this.store.get<{ n: number }>(
+      'SELECT coalesce(max(revision),0)+1 n FROM character_draft_revisions WHERE character_id=?',
+      characterId,
+    )!.n;
+    this.store.run(
+      'INSERT INTO character_draft_revisions VALUES (?,?,?,?,?,?,?)',
+      characterId,
+      legacyRevision,
+      baseVersion,
+      JSON.stringify(profile.template),
+      contentHash(profile.template),
+      now,
+      actor.sessionId,
+    );
+    const json = JSON.stringify(request);
+    this.store.run(
+      `INSERT INTO admin_previews(id,character_id,draft_revision,content_hash,prompt_hash,request_id,request_hash,
+      status,evidence_kind,request_json,created_at) VALUES (?,?,?,?,?,?,?,'queued','deepseek',?,?)`,
+      id,
+      characterId,
+      legacyRevision,
+      contentHash(profile.template),
+      previewPolicy,
+      q.requestId,
+      digest,
+      json,
+      now,
+    );
+    this.store.run(
+      'INSERT INTO web_character_preview_jobs VALUES (?,?,?,?,?,?,?,?,NULL,?)',
+      id,
+      characterId,
+      q.draftRevision,
+      q.profileHash,
+      previewDigest(json),
+      actor.memberId,
+      actor.sessionId,
+      q.deadlineAt(now),
+      now,
+    );
+    if (q.simulatedMinute !== null)
+      this.store.run('INSERT INTO web_preview_marks VALUES (?,?,?)', id, q.simulatedMinute, zone);
+    this.store.run(
+      'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',
+      actor.memberId,
+      'character-preview-queued',
+      id,
+      now,
+    );
+    return id;
   }
 }

@@ -13,6 +13,7 @@ import {
   migrateWebProviderEmbeddings,
   migrateWebProviderCocreation,
   migrateWebProviderLogins,
+  migrateWebProviderPreviewWorkbench,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -75,7 +76,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→118 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→119 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -109,8 +110,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderEmbeddings(store);
     migrateWebProviderCocreation(store);
     migrateWebProviderLogins(store);
+    migrateWebProviderPreviewWorkbench(store);
     return {
-      schema: 118,
+      schema: 119,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -250,6 +252,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-embeddings',
       'migrate-cocreation',
       'migrate-logins',
+      'migrate-preview-workbench',
       'render-assets',
       'admin-grant',
       'serve',
@@ -346,6 +349,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderLogins(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 118, logins: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-preview-workbench') {
+    // An existing provider-* instance at schema 118 gains preview runs, time marks, rejected output and eval sets.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderPreviewWorkbench(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 119, previewWorkbench: true }) + '\n');
     } finally {
       store.close();
     }
