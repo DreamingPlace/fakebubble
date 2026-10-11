@@ -330,8 +330,9 @@ export class LiveBinding {
     entry.className = 'invite-entry';
     entry.textContent = this.invitation.locked ? '核对邀请' : '邀请码';
     entry.addEventListener('click', () => this.inviteDialog());
-    actions.append(entry);
-    shell.head.append(actions);
+    // 邀请码 stays a direct child of the bar, right after the account entries.
+    if (actions.children.length) shell.head.append(actions);
+    shell.head.append(entry);
   }
 
   updateComposer(characterId: WebProviderCharacterId) {

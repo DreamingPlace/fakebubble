@@ -578,7 +578,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     );
     const draftTexts = p.draft?.bubbles?.map((b) => b.text) ?? [];
     const finalTexts = p.final?.bubbles.map((b) => b.text) ?? [];
-    if (p.draft?.bubbles || p.final) {
+    if (p.final) {
       const diff = h('div', { class: 'pw-diff' });
       for (const row of diffBubbles(draftTexts, finalTexts)) {
         const line = h('div', { class: 'pw-diff-row' });

@@ -860,7 +860,10 @@ test('chat: the login switch warns about a guest with chats; no chats, no warnin
 });
 
 // ---- Part 13b: account entries in the top bar ---------------------------------------------------------------------
-const topBar = (f: ReturnType<typeof chat>) => f.header.querySelectorAll('.head-actions button');
+const topBar = (f: ReturnType<typeof chat>) => [
+  ...f.header.querySelectorAll('.head-actions button'),
+  ...f.header.querySelectorAll('.invite-entry'),
+];
 const labelsOf = (nodes: FakeElement[]) => nodes.map((node) => node.textContent);
 const signedIn: AccountInfo = {
   signupEnabled: true,
@@ -973,6 +976,6 @@ test('top bar: an invited player with a login gets the nickname button too; one 
     account: { ...signedIn, kind: 'invite', hasLogin: false, canBind: true, nickname: null, emailMasked: null },
   });
   await legacy.attach();
-  assert.deepEqual(labelsOf(topBar(legacy)), []);
+  assert.deepEqual(labelsOf(legacy.header.querySelectorAll('.head-actions button')), []);
   assert.equal(legacy.header.querySelectorAll('.recovery-entry').length, 1);
 });
