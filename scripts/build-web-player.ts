@@ -23,6 +23,8 @@ const buildConfig = JSON.parse(
   readFileSync(new URL('../apps/player-web/tsconfig.build.json', import.meta.url), 'utf8'),
 ) as { compilerOptions: Record<string, unknown> };
 const allowedAsset = /\.(?:css|svg|png|jpe?g|webp|woff2)$/i;
+/** Browsers request this fixed path; it is a manifest-verified root file, not a content-addressed asset. */
+const rootFavicon = 'favicon.ico';
 const safeName = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 function assertSourcePath(root: string, path: string) {
@@ -172,6 +174,14 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
     )
       throw new Error('PLAYER_ASSET_LIST_INVALID');
     for (const name of assets as string[]) addAsset(join(source, name), `apps/player-web/${name}`);
+    // Optional so minimal fixture sites still build; the repository ships it.
+    const icon = join(source, 'src/assets/favicon.ico');
+    if (existsSync(icon)) {
+      assertSourcePath(root, icon);
+      if (!lstatSync(icon).isFile() || lstatSync(icon).size > 100_000) throw new Error('PLAYER_ASSET_UNSAFE');
+      copyFileSync(icon, join(bundled, rootFavicon));
+      files.push(rootFavicon);
+    }
     writeFileSync(join(bundled, 'index.html'), page);
     files.push('index.html');
     if (files.length > 256 || new Set(files).size !== files.length) throw new Error('PLAYER_ASSET_LIST_INVALID');

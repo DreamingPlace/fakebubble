@@ -15,6 +15,7 @@ import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
+import { isReadOnlyAdminPost } from './web-admin-read.ts';
 import { CloudRequestLimits } from './request-limits.ts';
 import { cloudJSON } from './json.ts';
 
@@ -135,7 +136,9 @@ export class WebProviderHTTP {
       .digest('hex');
     this.limits.rate('web:global', LIMITS.requestsGlobalPerMinute);
     this.limits.rate(`web:ip:${ipHash}`, LIMITS.requestsPerIpPerMinute);
-    if (method !== 'GET') this.limits.rate(`web:write:${ipHash}`, LIMITS.writesPerIpPerMinute);
+    if (method === 'POST' && path.startsWith(API) && isReadOnlyAdminPost(path.slice(API.length)))
+      this.limits.rate(`web:admin-read:${ipHash}`, LIMITS.adminReadsPerIpPerMinute);
+    else if (method !== 'GET') this.limits.rate(`web:write:${ipHash}`, LIMITS.writesPerIpPerMinute);
     const allowedQuery =
       path === `${API}/sync` || path === `${API}/events` ? 'cursor' : path.endsWith('/history') ? 'before' : null;
     ensure(

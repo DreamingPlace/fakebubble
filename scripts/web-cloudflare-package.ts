@@ -66,7 +66,7 @@ export function stageWebCloudflarePackage(output: string, assets: string) {
   );
   const staticFiles = entries.map(([path, digest]) => {
     ensure(
-      /\.(?:html|js|css|svg|png|jpe?g|webp|woff2)$/.test(path) && /^[a-f0-9]{64}$/.test(digest),
+      /\.(?:html|js|css|svg|png|ico|jpe?g|webp|woff2)$/.test(path) && /^[a-f0-9]{64}$/.test(digest),
       'WEB_PACKAGE_ASSET_INVALID',
     );
     const bytes = assetBytes(assets, path);
