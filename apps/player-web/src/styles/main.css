@@ -3439,3 +3439,6 @@ body:has(.admin-shell) {
   border: 1px solid var(--ad-border);
   border-radius: 8px;
 }
+.account-admin-page.admin-shell .admin-toolbar:empty {
+  display: none;
+}
