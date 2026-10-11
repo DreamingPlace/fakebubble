@@ -5,6 +5,7 @@ import { WebProviderOffline } from '../../../apps/server/generation/web-provider
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
 import type { PrivateBucket, MediaObjectReference } from '../../../apps/server/cloudflare/media-objects.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
+import { requireWebContent } from '../../../apps/server/admission/web-retention.ts';
 import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 
 /** Test-only fault injection around actual R2 operations. Never a production entrypoint. */
@@ -64,7 +65,7 @@ export class WebRetentionFixture extends WebBusinessFixture {
     try {
       const input =
         request.method === 'POST'
-          ? ((await request.json()) as { principalId: string; mode?: string })
+          ? ((await request.json()) as { principalId: string; mode?: string; lastSeenAgoMs?: number })
           : { principalId: '' };
       const principal = this.store.get<{ world_id: string }>(
         'SELECT world_id FROM web_principals WHERE id=?',
@@ -219,12 +220,15 @@ export class WebRetentionFixture extends WebBusinessFixture {
         )!;
         const email = `seed-${input.principalId}@example.com`;
         this.store.run(
-          'INSERT INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at) VALUES (?,?,?,?,?)',
+          // Fix-up 11f: seeded logins were last seen 181 days ago, so the purge tests that expire a guest still purge it
+          // (a guest with a login is otherwise kept at trial end; that rule has its own tests).
+          'INSERT INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at,last_seen_at) VALUES (?,?,?,?,?,?)',
           input.principalId,
           email,
           'scrypt-16384-8-5$' + 'a'.repeat(32) + '$' + 'b'.repeat(64),
           now,
           now,
+          now - (input.lastSeenAgoMs ?? 181 * 24 * 60 * 60_000),
         );
         for (const [suffix, purpose, principal] of [
           ['signup', 'signup', input.principalId],
@@ -256,6 +260,17 @@ export class WebRetentionFixture extends WebBusinessFixture {
           now,
         );
         value = { seeded: true };
+      } else if (path === '/retention/last-seen') {
+        // Fix-up 11f: age (or refresh) an existing login's last_seen_at.
+        this.store.run(
+          'UPDATE web_player_logins SET last_seen_at=? WHERE principal_id=?',
+          this.clock.now() - (input.lastSeenAgoMs ?? 0),
+          input.principalId,
+        );
+        value = { set: true };
+      } else if (path === '/retention/read') {
+        // The 'read' flavour of the content gate (history, events, audio); '/content' is the 'live' one.
+        value = requireWebContent(this.store, this.clock, input.principalId, principal!.world_id, 'read');
       } else if (path === '/retention/login-state') {
         const owner = this.store.get<{ world_id: string }>(
           'SELECT world_id FROM web_principals WHERE id=?',

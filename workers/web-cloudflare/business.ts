@@ -254,6 +254,11 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         EMBEDDINGS_ENABLED: this.env.EMBEDDINGS_ENABLED,
       },
       budget,
+      {
+        PLAYER_SIGNUP_ENABLED: this.env.PLAYER_SIGNUP_ENABLED,
+        PLAYER_EMAIL_DAILY_CAP: this.env.PLAYER_EMAIL_DAILY_CAP,
+        emailBindingPresent: this.env.PLAYER_EMAIL !== undefined && this.env.PLAYER_EMAIL !== null,
+      },
     );
   }
   private async budget() {

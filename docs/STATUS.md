@@ -96,3 +96,10 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - A dead cookie leads to the normal signed-out first page (登录 / 注册 / 以访客继续); the old "访问会话需要恢复" dead end is gone.
 - Login rows, challenges and nickname 名片 revisions are purged with the player; the lifecycle audit fails closed on leftovers. No prompt or tool-schema change: `POLICY_HASH` / `PROMPT_HASH` are unchanged.
 - `pnpm check`: **1016 tests, 1016 passed** (961 baseline + 55 new) on Node 24.21.0 / pnpm 11.19.0 (the three failures of the full run were the ledger-version list in `web-stage-metrics-migration`, fixed and re-run green). `pnpm web:player:build`, `check:web:local-http`, `check:web:restart` pass. Migration 118 sha256 `03845291fa69a047f0249d74737c0ac390673207f6f389d22422f8fb83e5f339`; expected-migrations: 43 steps (inline and R2).
+
+### Part 11f fix-ups (review of PR #16)
+
+- Wrong email codes: at most 10 per address per rolling 24 h over all challenges and purposes (`web_player_throttle` scope `code-email`, hour-slot rows keyed by an HMAC of address + slot); verify-code and every request-code purpose then refuse with `PLAYER_RATE_LIMITED` + retry-after, identically for registered and unknown addresses. The throttle sweep now ages each scope on its own window.
+- A guest with a login is kept at trial end (retention row stays `active`/expired; `requireWebContent(..., 'read')` lets read paths through, every other caller still answers `TRIAL_EXPIRED`); login, history, nickname and invite redemption keep working. A login with no activity for 180 days (`web_player_logins.last_seen_at`) goes through the existing audited purge. Guests without a login purge as before.
+- `inspect` reports `players`: `PLAYER_SIGNUP_ENABLED`, `PLAYER_EMAIL_DAILY_CAP`, `PLAYER_EMAIL_BINDING_PRESENT`.
+- `pnpm check`: **1026 tests, 1026 passed**. Migration 118 (edited in place, not deployed) sha256 `4c5f3beb3db1ef7d683e0bac332c0b37d9cea1d350ccb295267154a4ed777a9b`; expected-migrations: 43 steps.

@@ -88,6 +88,7 @@ test('a populated 117 database upgrades to 118 keeping every row; the new constr
       password_hash: 'scrypt-16384-8-5$x$y',
       created_at: now,
       password_changed_at: now,
+      last_seen_at: now, // Fix-up 11f: schema 118 gained last_seen_at NOT NULL.
       ...extra,
     };
     store.run(
@@ -161,7 +162,9 @@ test('the lifecycle audit knows the new tables, and the purge removes login, cha
   const now = 1_700_000_000_000;
   seed(store, now);
   store.run(
-    "INSERT INTO web_player_logins VALUES ('principal','gone@example.com','scrypt-16384-8-5$x$y',?,?)",
+    // Fix-up 11f: positional insert gained the new last_seen_at column (schema 118).
+    "INSERT INTO web_player_logins VALUES ('principal','gone@example.com','scrypt-16384-8-5$x$y',?,?,?)",
+    now,
     now,
     now,
   );
@@ -208,7 +211,9 @@ test('the lifecycle audit knows the new tables, and the purge removes login, cha
   auditWebLifecycleWorld(store as never, 'world', 'cleared');
   // A login that survives a cleared world fails the audit on its own, without any 名片.
   store.run(
-    "INSERT INTO web_player_logins VALUES ('principal','again@example.com','scrypt-16384-8-5$x$y',?,?)",
+    // Fix-up 11f: positional insert gained the new last_seen_at column (schema 118).
+    "INSERT INTO web_player_logins VALUES ('principal','again@example.com','scrypt-16384-8-5$x$y',?,?,?)",
+    now,
     now,
     now,
   );

@@ -4,6 +4,7 @@ import { DomainError, RetryAfterError, ensure } from '../../../packages/domain/e
 import { WEB_IDENTITY_LIMITS } from '../../../config/web-v1.ts';
 import { playerPasswords, validatePlayerPassword } from '../admin/web-admin-password.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
+import { requireWebContent } from '../admission/web-retention.ts';
 import { maskEmail, normalizeEmail } from './email-address.ts';
 import type { WebIdentity } from './web-identity.ts';
 
@@ -47,6 +48,10 @@ export const PLAYER_LIMITS = Object.freeze({
   loginPerEmail: 10,
   loginPerIp: 30,
   passwordPerPrincipal: 5,
+  /** Wrong codes per email over ALL challenges and purposes, rolling (hour slots, never expiring early). */
+  codeWrongPerEmail: 10,
+  codeWindowMs: 24 * 60 * 60_000,
+  codeSlotMs: 60 * 60_000,
   nicknameMax: 20,
   kdfConcurrent: 2,
   kdfWaiting: 8,
@@ -58,6 +63,7 @@ type LoginRow = {
   password_hash: string;
   created_at: number;
   password_changed_at: number;
+  last_seen_at: number;
 };
 type ChallengeRow = {
   id: string;
@@ -237,6 +243,68 @@ export class WebPlayerAccounts {
       );
   }
 
+  /**
+   * Wrong codes per email. One row per (email, hour slot); the total is the sum over the slots that cannot have left the
+   * 24 h window yet (a slot counts until its END is 24 h old, so a guess is never forgotten early).
+   */
+  private codeSlotKey(email: string, slot: number) {
+    return this.key('code-email', `${email}\0${slot}`);
+  }
+  private codeSlots(email: string, now: number) {
+    const last = Math.floor(now / PLAYER_LIMITS.codeSlotMs);
+    const first = last - Math.ceil(PLAYER_LIMITS.codeWindowMs / PLAYER_LIMITS.codeSlotMs);
+    const slots: number[] = [];
+    for (let slot = first; slot <= last; slot++) slots.push(slot);
+    return slots
+      .map((slot) => ({ slot, key: this.codeSlotKey(email, slot), start: slot * PLAYER_LIMITS.codeSlotMs }))
+      .filter((entry) => entry.start + PLAYER_LIMITS.codeSlotMs + PLAYER_LIMITS.codeWindowMs > now);
+  }
+  /** Refuses (PLAYER_RATE_LIMITED + retry-after) once the email has used up its wrong codes. Same answer for every email. */
+  private requireCodeBudget(email: string, now: number) {
+    const slots = this.codeSlots(email, now);
+    const rows = this.store.all<{ key: string; failures: number }>(
+      `SELECT key,failures FROM web_player_throttle WHERE scope='code-email' AND key IN (${slots.map(() => '?').join(',')})`,
+      ...slots.map((entry) => entry.key),
+    );
+    const byKey = new Map(rows.map((row) => [row.key, row.failures]));
+    let total = 0;
+    for (const entry of slots) total += byKey.get(entry.key) ?? 0;
+    if (total < PLAYER_LIMITS.codeWrongPerEmail) return;
+    // Oldest slots drop out first; the answer is when the total falls under the limit again.
+    let remaining = total;
+    for (const entry of slots) {
+      remaining -= byKey.get(entry.key) ?? 0;
+      if (remaining < PLAYER_LIMITS.codeWrongPerEmail)
+        throw new RetryAfterError(
+          'PLAYER_RATE_LIMITED',
+          Math.max(1000, entry.start + PLAYER_LIMITS.codeSlotMs + PLAYER_LIMITS.codeWindowMs - now),
+        );
+    }
+  }
+  private recordWrongCode(email: string, now: number) {
+    const slot = Math.floor(now / PLAYER_LIMITS.codeSlotMs);
+    this.store.run(
+      `INSERT INTO web_player_throttle(scope,key,window_at,failures) VALUES ('code-email',?,?,1)
+      ON CONFLICT(scope,key) DO UPDATE SET failures=failures+1`,
+      this.codeSlotKey(email, slot),
+      slot * PLAYER_LIMITS.codeSlotMs,
+    );
+  }
+
+  /**
+   * Activity for the 180-day inactivity purge: bootstrap calls this for the signed-in principal. The row is written
+   * only when its last_seen_at is before the start of the current UTC day, i.e. at most once per UTC day.
+   */
+  touch(principalId: string) {
+    const now = this.now();
+    this.store.run(
+      'UPDATE web_player_logins SET last_seen_at=? WHERE principal_id=? AND last_seen_at<?',
+      now,
+      principalId,
+      now - (now % 86_400_000),
+    );
+  }
+
   /** Who is asking: the signed-out sees only whether signup is open; a signed-in player sees their own login. */
   info(token: string | undefined) {
     const session = this.identity.peekSession(token);
@@ -296,6 +364,9 @@ export class WebPlayerAccounts {
       const now = this.now();
       this.sweep(now);
       if (scope && purpose !== 'reset') this.ensureEligible(purpose, scope, now);
+      // Before anything is charged or looked up, and before registration is consulted: the same refusal for every
+      // address and every purpose.
+      this.requireCodeBudget(email, now);
       this.chargeSend(email, input.ipHash, now);
       this.store.run(
         'UPDATE web_email_challenges SET consumed_at=? WHERE email_norm=? AND purpose=? AND consumed_at IS NULL',
@@ -332,13 +403,24 @@ export class WebPlayerAccounts {
   }
   private ensureEligible(purpose: 'signup' | 'bind', scope: Scope, now: number) {
     ensure(!this.loginOf(scope.principalId), 'PLAYER_LOGIN_EXISTS');
-    if (purpose === 'signup') ensure(scope.kind === 'guest', 'PLAYER_SIGNUP_UNAVAILABLE');
-    else ensure(scope.kind === 'invite' && this.activeGrant(scope.principalId, now), 'PLAYER_BIND_UNAVAILABLE');
+    if (purpose === 'signup') {
+      ensure(scope.kind === 'guest', 'PLAYER_SIGNUP_UNAVAILABLE');
+      // Only a live trial can become a kept account: an ended one is already (being) purged.
+      requireWebContent(this.store, this.options.clock, scope.principalId, scope.worldId);
+    } else ensure(scope.kind === 'invite' && this.activeGrant(scope.principalId, now), 'PLAYER_BIND_UNAVAILABLE');
   }
   /** Old challenges and idle counters go; the send ledger keeps a full day. */
   private sweep(now: number) {
     this.store.run('DELETE FROM web_email_challenges WHERE created_at<?', now - 24 * PLAYER_LIMITS.hourMs);
-    this.store.run('DELETE FROM web_player_throttle WHERE window_at<?', now - PLAYER_LIMITS.loginWindowMs);
+    // Each scope ages out on its own window: the 24 h code counter must outlive the 15 min login window.
+    this.store.run(
+      "DELETE FROM web_player_throttle WHERE scope<>'code-email' AND window_at<?",
+      now - PLAYER_LIMITS.loginWindowMs,
+    );
+    this.store.run(
+      "DELETE FROM web_player_throttle WHERE scope='code-email' AND window_at<?",
+      now - PLAYER_LIMITS.codeWindowMs - PLAYER_LIMITS.codeSlotMs,
+    );
     this.store.run(
       'DELETE FROM web_player_email_daily WHERE day<?',
       new Date(now - 2 * 24 * PLAYER_LIMITS.hourMs).toISOString().slice(0, 10),
@@ -442,10 +524,15 @@ export class WebPlayerAccounts {
         );
         if (scope.principalId !== row.principal_id) return false;
       }
+      // Spent wrong codes of this email, over every challenge: once used up, even the right code is not looked at.
+      this.requireCodeBudget(row.email_norm, now);
       this.store.run('UPDATE web_email_challenges SET attempts=attempts+1 WHERE id=?', row.id);
       const supplied = Buffer.from(this.codeDigest(row.id, row.email_norm, row.purpose, code));
       const expected = Buffer.from(row.code_digest);
-      if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return false;
+      if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+        this.recordWrongCode(row.email_norm, now);
+        return false;
+      }
       this.store.run('UPDATE web_email_challenges SET verified_at=? WHERE id=? AND verified_at IS NULL', now, row.id);
       return true;
     });
@@ -520,10 +607,12 @@ export class WebPlayerAccounts {
         'PLAYER_EMAIL_UNAVAILABLE',
       );
       this.store.run(
-        'INSERT INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at) VALUES (?,?,?,?,?)',
+        `INSERT INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at,last_seen_at)
+        VALUES (?,?,?,?,?,?)`,
         scope.principalId,
         challenge.email_norm,
         hash,
+        now,
         now,
         now,
       );
@@ -576,6 +665,7 @@ export class WebPlayerAccounts {
       this.ensureLoginUsable(row.principal_id, now);
       this.release('login-email', emailKey, true);
       this.release('login-ip', ipKey, false);
+      this.store.run('UPDATE web_player_logins SET last_seen_at=? WHERE principal_id=?', now, row.principal_id);
       return this.identity.issueLoginSession(row.principal_id);
     });
   }

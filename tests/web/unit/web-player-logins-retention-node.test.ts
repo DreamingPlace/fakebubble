@@ -80,12 +80,15 @@ test("Node guest retention removes a guest's login, challenges and nickname and 
   for (const [i, { guest, scope }] of worlds.entries()) {
     const email = `guest${i}@example.com`;
     store.run(
-      'INSERT INTO web_player_logins VALUES (?,?,?,?,?)',
+      'INSERT INTO web_player_logins VALUES (?,?,?,?,?,?)',
       guest.principalId,
       email,
       'scrypt-16384-8-5$x$y',
       now,
       now,
+      // Fix-up 11f: a guest with a login is kept at trial end and purged only after 180 idle days. This test is about
+      // what the purge removes, so its logins were last seen long ago; the keep-at-trial-end rule has its own tests.
+      now - 181 * 24 * 60 * 60_000,
     );
     store.run(
       `INSERT INTO web_email_challenges(id,purpose,email_norm,principal_id,code_digest,ip_hash,created_at,expires_at)

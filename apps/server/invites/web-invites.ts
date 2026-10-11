@@ -5,6 +5,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import { requireWebRuntime } from '../platform/web-store-contract.ts';
 import type { WebIdentity } from '../identity/web-identity.ts';
+import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
 import { requireWebAdminMembership } from '../admin/web-admin-schema.ts';
 
 type InviteScope = {
@@ -311,7 +312,10 @@ export class WebInvites {
         retention &&
           retention.world_id === actor.worldId &&
           (retention.state === 'unstarted' ||
-            (retention.state === 'active' && retention.expires_at !== null && now < retention.expires_at)),
+            (retention.state === 'active' &&
+              ((retention.expires_at !== null && now < retention.expires_at) ||
+                // A guest with an email login keeps its account after the trial and may still redeem an invite.
+                playerLoginRetainsGuest(this.store, actor.principalId)))),
         'TRIAL_EXPIRED',
       );
       const invite = this.store.get<InviteRow>('SELECT * FROM web_invite_codes WHERE code_digest=?', codeDigest);

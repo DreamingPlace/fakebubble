@@ -618,7 +618,7 @@ export class WebProviderServer {
         ),
       );
       if (req.method === 'GET' && audio) {
-        requireWebContent(this.store, this.clock, principal.principalId, principal.world_id);
+        requireWebContent(this.store, this.clock, principal.principalId, principal.world_id, 'read');
         const row = this.store.get<{ character_id: string }>(
           `SELECT p.character_id FROM web_publication_items i
           JOIN web_publications p ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.media_id=?

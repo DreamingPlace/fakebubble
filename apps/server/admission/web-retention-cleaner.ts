@@ -9,7 +9,12 @@ import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } 
 import { auditWebLifecycleWorld } from './web-lifecycle-audit.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
-import { purgePlayerLogins } from '../identity/web-player-purge.ts';
+import {
+  guestPurgeDue,
+  PLAYER_INACTIVE_MS,
+  playerLastSeenAt,
+  purgePlayerLogins,
+} from '../identity/web-player-purge.ts';
 
 type Operation = {
   id: string;
@@ -60,13 +65,15 @@ export class WebRetentionCleaner {
   sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit >= 1 && limit <= 64, 'WEB_RETENTION_SWEEP_INVALID');
     const now = this.now();
+    // A guest with an email login is kept at trial end and purged only when inactive (web-player-purge.ts).
+    const due = guestPurgeDue(this.store, now);
     const principals = this.store.all<{ principal_id: string }>(
       `SELECT r.principal_id
       FROM web_guest_retention r JOIN web_principals p ON p.id=r.principal_id
       WHERE p.kind='guest' AND p.world_id=r.world_id
-        AND (r.state='purging' OR r.state='active' AND r.expires_at<=?)
+        AND ${due.sql}
       ORDER BY r.expires_at,r.principal_id LIMIT ?`,
-      now,
+      ...due.args,
       limit,
     );
     let firstError: unknown = null;
@@ -100,14 +107,22 @@ export class WebRetentionCleaner {
         'WEB_RETENTION_SCOPE_INVALID',
       );
       if (row.state === 'purging' || row.state === 'purged') return { duplicate: true as const };
+      const lastSeen = playerLastSeenAt(this.store, principalId);
       ensure(
-        principal.kind === 'guest' && row.state === 'active' && row.expires_at !== null && now >= row.expires_at,
+        principal.kind === 'guest' &&
+          (lastSeen === null
+            ? row.state === 'active' && row.expires_at !== null && now >= row.expires_at
+            : (row.state === 'active' || row.state === 'unstarted') && lastSeen + PLAYER_INACTIVE_MS <= now),
         'WEB_RETENTION_NOT_EXPIRED',
       );
       ensure(
         this.store.run(
-          `UPDATE web_guest_retention SET state='purging',revision=revision+1
-        WHERE principal_id=? AND world_id=? AND state='active' AND revision=?`,
+          // The table only allows a purging row that has a trial window; a never-started guest gets a one-ms one.
+          `UPDATE web_guest_retention SET state='purging',revision=revision+1,
+        started_at=coalesce(started_at,?),expires_at=coalesce(expires_at,?)
+        WHERE principal_id=? AND world_id=? AND state IN ('active','unstarted') AND revision=?`,
+          now,
+          now + 1,
           principalId,
           row.world_id,
           row.revision,

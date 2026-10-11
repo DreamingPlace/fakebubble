@@ -18,6 +18,13 @@ export interface WebInspectFlags {
   OPERATOR_ENABLED?: string | undefined;
   EMBEDDINGS_ENABLED?: string | undefined;
 }
+/** Player email accounts (schema 118): configuration only. Never an address, a sender or a binding's contents. */
+export interface WebInspectPlayers {
+  PLAYER_SIGNUP_ENABLED?: string | undefined;
+  PLAYER_EMAIL_DAILY_CAP?: string | undefined;
+  /** Whether the PLAYER_EMAIL send binding exists. */
+  emailBindingPresent?: boolean | undefined;
+}
 export interface WebInspectBudgetRow {
   provider: string;
   spentMicros: number;
@@ -60,6 +67,7 @@ export function inspectWebAuthority(
   expected: WebInspectExpected,
   flags: WebInspectFlags,
   budget: WebInspectBudget,
+  players: WebInspectPlayers = {},
 ) {
   const has = (name: string) =>
     reader.all<{ n: number }>('SELECT 1 AS n FROM sqlite_master WHERE name=?', name).length > 0;
@@ -107,6 +115,18 @@ export function inspectWebAuthority(
     ownerAdminExists: has('web_admin_members')
       ? reader.all("SELECT 1 FROM web_admin_members WHERE role='owner' LIMIT 1").length > 0
       : false,
+    players: {
+      // true / false / null (unset) / 'other', like the flags below.
+      PLAYER_SIGNUP_ENABLED: flag(players.PLAYER_SIGNUP_ENABLED),
+      // The number when it is a valid cap (1..999999 digits as the Worker parses it), null when unset, else 'other'.
+      PLAYER_EMAIL_DAILY_CAP:
+        players.PLAYER_EMAIL_DAILY_CAP === undefined
+          ? null
+          : /^[1-9][0-9]{0,5}$/.test(players.PLAYER_EMAIL_DAILY_CAP)
+            ? Number(players.PLAYER_EMAIL_DAILY_CAP)
+            : 'other',
+      PLAYER_EMAIL_BINDING_PRESENT: players.emailBindingPresent === true,
+    },
     flags: {
       PUBLIC_ENABLED: flag(flags.PUBLIC_ENABLED),
       EXTERNAL_CALLS: flag(flags.EXTERNAL_CALLS),

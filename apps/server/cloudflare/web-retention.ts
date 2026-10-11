@@ -5,7 +5,13 @@ import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
 import { auditWebLifecycleWorld } from '../admission/web-lifecycle-audit.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
-import { purgePlayerLogins } from '../identity/web-player-purge.ts';
+import {
+  guestPurgeDue,
+  PLAYER_INACTIVE_MS,
+  playerLastSeenAt,
+  playerLoginsExist,
+  purgePlayerLogins,
+} from '../identity/web-player-purge.ts';
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
@@ -51,21 +57,28 @@ export class WebCloudRetention {
     return row;
   }
   nextDue() {
+    // A guest with a login is due when it has been inactive for 180 days, not when its trial ends.
+    const logins = playerLoginsExist(this.store);
     const row = this.store.get<{ due: number | null }>(
-      `SELECT min(CASE WHEN r.state='purging' THEN ? ELSE r.expires_at END) due
+      `SELECT min(CASE WHEN r.state='purging' THEN ?
+        ${logins ? 'WHEN l.principal_id IS NOT NULL THEN l.last_seen_at+?' : ''}
+        ELSE r.expires_at END) due
       FROM web_guest_retention r JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id
-      WHERE p.kind='guest' AND r.state IN ('active','purging')`,
+      ${logins ? 'LEFT JOIN web_player_logins l ON l.principal_id=r.principal_id' : ''}
+      WHERE p.kind='guest' AND (r.state IN ('active','purging')${logins ? " OR r.state='unstarted' AND l.principal_id IS NOT NULL" : ''})`,
       this.clock.now() + 30_000,
+      ...(logins ? [PLAYER_INACTIVE_MS] : []),
     );
     return row?.due ?? null;
   }
   async sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit > 0 && limit <= 16, 'WEB_RETENTION_SWEEP_INVALID');
+    const due = guestPurgeDue(this.store, this.clock.now());
     const rows = this.store.all<{ principal_id: string }>(
       `SELECT r.principal_id FROM web_guest_retention r
       JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id WHERE p.kind='guest'
-      AND (r.state='purging' OR r.state='active' AND r.expires_at<=?) ORDER BY r.expires_at,r.principal_id LIMIT ?`,
-      this.clock.now(),
+      AND ${due.sql} ORDER BY r.expires_at,r.principal_id LIMIT ?`,
+      ...due.args,
       limit,
     );
     this.lastError = null;
@@ -86,9 +99,20 @@ export class WebCloudRetention {
       const row = this.guest(principalId),
         now = this.clock.now();
       if (['purging', 'purged'].includes(row.state)) return;
-      ensure(row.state === 'active' && row.expires_at !== null && row.expires_at <= now, 'WEB_RETENTION_NOT_EXPIRED');
+      // A guest with an email login is purged for inactivity, not at trial end (web-player-purge.ts).
+      const lastSeen = playerLastSeenAt(this.store, principalId);
+      ensure(
+        lastSeen === null
+          ? row.state === 'active' && row.expires_at !== null && row.expires_at <= now
+          : (row.state === 'active' || row.state === 'unstarted') && lastSeen + PLAYER_INACTIVE_MS <= now,
+        'WEB_RETENTION_NOT_EXPIRED',
+      );
+      // The table only allows a purging row that has a trial window; a never-started guest gets a one-ms one.
       this.store.run(
-        "UPDATE web_guest_retention SET state='purging',revision=revision+1 WHERE principal_id=?",
+        `UPDATE web_guest_retention SET state='purging',revision=revision+1,
+        started_at=coalesce(started_at,?),expires_at=coalesce(expires_at,?) WHERE principal_id=?`,
+        now,
+        now + 1,
         principalId,
       );
       for (const operation of this.store.all<{ id: string; ip_window_id: string | null; metering_type: string }>(
