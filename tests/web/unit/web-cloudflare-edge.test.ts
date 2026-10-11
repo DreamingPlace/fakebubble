@@ -165,3 +165,40 @@ test('public edge fails closed on manifest substitution, encoding, oversized ass
     assert.equal((await response.text()).includes('secret'), false);
   }
 });
+
+test('hashed assets alone are immutable: manifest pin, tamper failures and API responses remain no-store', async () => {
+  const f = setup();
+  const path = 'assets/main-ABCDEFG2.js';
+  f.files[path] = 'export const fixture = 1;';
+  f.files['player-manifest.json'] = JSON.stringify({
+    version: 1,
+    files: Object.fromEntries(
+      Object.entries(f.files)
+        .filter(([name]) => name !== 'player-manifest.json')
+        .map(([name, body]) => [name, hash(body)]),
+    ),
+  });
+  f.env.ASSET_MANIFEST_SHA256 = hash(f.files['player-manifest.json']);
+  for (const method of ['GET', 'HEAD']) {
+    const asset = await f.call('/' + path, { method });
+    assert.equal(asset.status, 200);
+    assert.equal(asset.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+  }
+  for (const path of ['/app.js', '/player-manifest.json', '/assets/missing-ABCDEFG2.js', '/?mode=provider']) {
+    assert.equal((await f.call(path)).headers.get('cache-control'), 'no-store');
+  }
+  f.env.BUSINESS.get = () => ({
+    fetch: async () => new Response('private', { headers: { 'cache-control': 'public, max-age=31536000, immutable' } }),
+  });
+  const api = await f.call('/api/web/provider/bootstrap', { headers: { 'cf-connecting-ip': '192.0.2.1' } });
+  assert.equal(api.status, 200);
+  assert.equal(api.headers.get('cache-control'), 'no-store');
+  f.files[path] += 'tamper';
+  const corrupt = await f.call('/' + path);
+  assert.equal(corrupt.status, 503);
+  assert.equal(corrupt.headers.get('cache-control'), 'no-store');
+  f.files['player-manifest.json'] += ' ';
+  // A fresh binding must reject a substituted manifest before considering any hashed path.
+  f.env.ASSETS = { fetch: f.env.ASSETS.fetch.bind(f.env.ASSETS) };
+  assert.equal((await f.call('/' + path)).status, 503);
+});

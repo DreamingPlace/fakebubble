@@ -118,16 +118,16 @@ test('C fixed A-S4-002: independent TLS static boundary with synthetic build onl
     rmSync(join(styles, 'main.css'));
     writeFileSync(join(styles, 'main.css'), 'body { color: #123456; }');
     const built = buildWebPlayer({ root: fixture, output: dist });
-    assert.equal(built.files, 4);
+    // Part 15 named exception: dependency graph becomes one hashed bundle + CSS + HTML.
+    assert.equal(built.files, 3);
     const manifest = JSON.parse(readFileSync(join(dist, 'player-manifest.json'), 'utf8')) as {
       files: Record<string, string>;
     };
-    assert.deepEqual(Object.keys(manifest.files).sort(), [
-      'apps/player-web/src/app/label.js',
-      'apps/player-web/src/app/main.js',
-      'apps/player-web/src/styles/main.css',
-      'index.html',
-    ]);
+    const names = Object.keys(manifest.files);
+    const mainName = names.find((name) => /^assets\/main-[A-Z0-9]{8}\.js$/.test(name))!;
+    const cssName = names.find((name) => /^assets\/static-[a-f0-9]{64}\.css$/.test(name))!;
+    assert.ok(mainName && cssName);
+    assert.deepEqual(names.sort(), [mainName, cssName, 'index.html'].sort());
     for (const [name, hash] of Object.entries(manifest.files)) {
       assert.equal(
         createHash('sha256')
@@ -136,32 +136,34 @@ test('C fixed A-S4-002: independent TLS static boundary with synthetic build onl
         hash,
       );
     }
-    assert.match(readFileSync(join(dist, 'apps/player-web/src/app/main.js'), 'utf8'), /\.\/label\.js/);
+    assert.match(readFileSync(join(dist, mainName), 'utf8'), /C fixture/);
     const html = await call(ca, 'GET', '/');
     assert.equal(html.status, 200);
     assert.equal(html.headers['content-type'], 'text/html; charset=utf-8');
     assert.match(String(html.headers['content-security-policy']), /default-src 'none'/);
     assert.equal(html.headers['set-cookie'], undefined);
-    assert.match(html.body.toString(), /main\.js/);
+    assert.match(html.body.toString(), /main-[A-Z0-9]{8}\.js/);
     const head = await call(ca, 'HEAD', '/');
     assert.equal(head.status, 200);
     assert.equal(head.body.length, 0);
     assert.equal(head.headers['content-length'], String(html.body.length));
-    assert.equal((await call(ca, 'GET', '/apps/player-web/src/app/main.js')).status, 200);
-    const css = await call(ca, 'GET', '/apps/player-web/src/styles/main.css');
+    assert.equal((await call(ca, 'GET', '/' + mainName)).status, 200);
+    const css = await call(ca, 'GET', '/' + cssName);
     assert.equal(css.status, 200);
+    assert.equal(css.headers['cache-control'], 'public, max-age=31536000, immutable');
+    assert.equal(html.headers['cache-control'], 'no-store');
     assert.equal(css.headers['content-type'], 'text/css; charset=utf-8');
     assert.equal((await call(ca, 'GET', '/runtime/private.key')).status, 404);
     assert.equal((await call(ca, 'GET', '/%2e%2e/runtime/private.key')).status, 404);
     assert.equal((await call(ca, 'POST', '/')).status, 405);
     assert.equal((await call(ca, 'GET', '/api/web/local/missing')).status, 401);
-    writeFileSync(join(dist, 'apps/player-web/src/styles/main.css'), 'tampered');
-    assert.equal((await call(ca, 'GET', '/apps/player-web/src/styles/main.css')).status, 503);
+    writeFileSync(join(dist, cssName), 'tampered');
+    assert.equal((await call(ca, 'GET', '/' + cssName)).status, 503);
     assert.equal((await call(ca, 'GET', '/health')).status, 200);
-    const main = join(dist, 'apps/player-web/src/app/main.js');
+    const main = join(dist, mainName);
     rmSync(main);
     symlinkSync(join(fixture, 'runtime/private.key'), main);
-    assert.equal((await call(ca, 'GET', '/apps/player-web/src/app/main.js')).status, 503);
+    assert.equal((await call(ca, 'GET', '/' + mainName)).status, 503);
     console.log(
       JSON.stringify({
         cStatic: 'synthetic-local TLS',

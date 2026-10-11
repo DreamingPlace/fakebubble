@@ -3658,3 +3658,210 @@ body:has(.admin-shell) {
     gap: 4px;
   }
 }
+
+/* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
+.page-shell .mobile-account {
+  display: none;
+}
+@media (min-width: 601px) {
+  .page-shell .carousel {
+    height: min(840px, calc(100dvh - 220px));
+  }
+  .page-shell .card-slot {
+    height: min(794px, calc(100dvh - 240px));
+    min-height: 380px;
+  }
+  .page-shell .card-slot.is-chat {
+    width: min(376px, calc(100vw - 108px));
+    height: min(794px, calc(100dvh - 22px));
+  }
+}
+@media (max-width: 600px) {
+  /* Track the visible viewport (including Safari's keyboard pan), not the layout viewport. */
+  .page-shell,
+  .page-shell[data-phase] {
+    position: fixed;
+    width: var(--chat-width, 100vw);
+    height: var(--chat-height, 100dvh);
+    min-height: 0;
+    left: calc(var(--chat-left, 50vw) - var(--chat-width, 100vw) / 2);
+    top: calc(var(--chat-top, 50dvh) - var(--chat-height, 100dvh) / 2);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: var(--page-bg);
+  }
+  .page-shell[data-phase] .site-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: 44px auto;
+    column-gap: 4px;
+    row-gap: 0;
+    flex-wrap: nowrap;
+    height: auto;
+    min-height: 68px;
+    padding: 0 16px 6px;
+    visibility: visible;
+    align-items: center;
+  }
+  .page-shell .brand {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    gap: 6px;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .page-shell .brand-mark {
+    width: 24px;
+    height: 24px;
+    flex: none;
+  }
+  .page-shell .head-actions {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    gap: 0;
+    min-width: 0;
+  }
+  .page-shell .desktop-account {
+    display: none;
+  }
+  .page-shell .mobile-account {
+    display: block;
+  }
+  .page-shell .head-account,
+  .page-shell .site-head > .invite-entry {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 4px 8px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .page-shell .head-account {
+    max-width: 96px;
+  }
+  .page-shell .site-head > .invite-entry {
+    grid-column: 3;
+    grid-row: 1;
+    margin: 0;
+  }
+  .page-shell .site-head .head-note {
+    display: block;
+    grid-column: 2 / 4;
+    grid-row: 2;
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0;
+    line-height: 18px;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+  .page-shell .site-head .head-hint {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin: 4px -16px 0;
+    padding: 4px 16px;
+    text-align: center;
+    line-height: 18px;
+    background: rgba(255, 255, 255, 0.22);
+  }
+  .page-shell .main-area {
+    min-height: 0;
+    flex: 1;
+  }
+  .page-shell .carousel {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+  }
+  .page-shell[data-phase] .card-slot,
+  .page-shell[data-phase] .card-slot.is-chat {
+    position: absolute;
+    width: calc(100% - 32px);
+    height: 100%;
+    min-height: 0;
+    left: 50%;
+    top: 50%;
+  }
+  .page-shell[data-phase] .card-slot.is-chat .card-shell {
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(44, 51, 47, 0.16);
+  }
+  .page-shell .chat-head {
+    height: 44px;
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .page-shell .chat-head strong {
+    font-size: 15px;
+    line-height: 20px;
+  }
+  .page-shell .chat-head .back-button {
+    margin-left: 0;
+  }
+  .page-shell .chat-body {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 12px;
+  }
+  .page-shell .card-slot.is-chat .chat-body {
+    padding-top: 12px;
+  }
+  .page-shell .friend-notice {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    margin-bottom: 16px;
+  }
+  .page-shell[data-phase] .composer {
+    min-height: 60px;
+    padding: 8px;
+  }
+  .page-shell .play-button,
+  .page-shell .transcript-toggle {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .page-shell[data-phase] .avatar-nav {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 68px;
+    flex: none;
+    margin-top: 8px;
+    padding: 0;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    background: transparent;
+    box-shadow: none;
+  }
+  .page-shell[data-phase="chat"] .avatar-nav,
+  .page-shell[data-phase="expanding"] .avatar-nav,
+  .page-shell[data-phase="collapsing"] .avatar-nav {
+    display: none;
+  }
+  .page-shell[data-phase] .avatar-choice {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    transform: translate(-50%, 0) translateX(var(--avatar-x)) translateY(calc(var(--avatar-y) * 0.3));
+  }
+  .page-shell[data-phase] .avatar-choice-mark {
+    /* 54 px → 45.9 px: circles shrink 15%; hit targets remain 48 px. */
+    width: 45.9px;
+    height: 45.9px;
+    border-radius: 50%;
+    font-size: 18px;
+  }
+  .page-shell[data-phase="chat"] .preview-note,
+  .page-shell[data-phase="expanding"] .preview-note {
+    display: none;
+  }
+  .page-shell[data-phase="browse"] .preview-note,
+  .page-shell[data-phase="hover"] .preview-note {
+    display: block;
+    visibility: visible;
+    padding: 0 16px 4px;
+    margin: 0;
+    font-size: 10px;
+    line-height: 14px;
+  }
+}

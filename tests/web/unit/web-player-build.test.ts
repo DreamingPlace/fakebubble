@@ -21,6 +21,13 @@ test('missing E entry fails without inventing a player page', () => {
   assert.throws(() => buildWebPlayer(site), /PLAYER_ENTRY_MISSING/);
 });
 
+test('HTML keeps the source asset size bound before bundle rewriting', () => {
+  const site = fixture();
+  writeFileSync(join(site.app, 'main.ts'), 'export {};');
+  writeFileSync(join(site.app, 'index.html'), ' '.repeat(2_000_001));
+  assert.throws(() => buildWebPlayer(site), /PLAYER_ASSET_UNSAFE/);
+});
+
 test('fixture emits browser JS and explicit CSS only; unrelated files stay private', () => {
   const site = fixture();
   writeFileSync(join(site.app, 'main.ts'), "import { greeting } from './small.ts'; document.title = greeting;\n");
@@ -35,12 +42,16 @@ test('fixture emits browser JS and explicit CSS only; unrelated files stay priva
   mkdirSync(join(site.root, 'runtime'), { recursive: true });
   writeFileSync(join(site.root, 'runtime/private.key'), 'never public');
   const result = buildWebPlayer(site);
-  assert.equal(result.files, 4);
-  const js = readFileSync(join(site.output, 'apps/player-web/src/app/main.js'), 'utf8');
-  assert.match(js, /\.\/small\.js/);
+  // Part 15 named exception: main + dependency are now one bundle; keep the explicit CSS/HTML allowlist.
+  assert.equal(result.files, 3);
+  const names = Object.keys(JSON.parse(readFileSync(join(site.output, 'player-manifest.json'), 'utf8')).files);
+  const mainName = names.find((name) => /^assets\/main-[A-Z0-9]{8}\.js$/.test(name))!;
+  const js = readFileSync(join(site.output, mainName), 'utf8');
+  assert.match(js, /fixture/);
+  assert.doesNotMatch(js, /from[\s\S]*small/);
   assert.doesNotMatch(js, /small\.ts/);
   const manifest = JSON.parse(readFileSync(join(site.output, 'player-manifest.json'), 'utf8'));
-  assert.equal(Object.keys(manifest.files).length, 4);
+  assert.equal(Object.keys(manifest.files).length, 3);
   assert.equal(
     manifest.files['index.html'],
     createHash('sha256')
@@ -58,6 +69,10 @@ test('static manifest permits only exact GET/HEAD and keeps API outside SPA', as
   writeFileSync(join(site.root, 'apps/player-web/src/styles/main.css'), 'body{color:red}');
   writeFileSync(join(site.root, 'apps/player-web/player-assets.json'), '["src/styles/main.css"]');
   buildWebPlayer(site);
+  // Part 15 named exception: discover generated paths, never accept old unhashed endpoints.
+  const names = Object.keys(JSON.parse(readFileSync(join(site.output, 'player-manifest.json'), 'utf8')).files);
+  const mainName = names.find((name) => /^assets\/main-[A-Z0-9]{8}\.js$/.test(name))!;
+  const cssName = names.find((name) => name.endsWith('.css'))!;
   mkdirSync(join(site.root, 'runtime'), { recursive: true });
   writeFileSync(join(site.root, 'runtime/private.key'), 'private fixture');
   const server = createServer((req, res) => {
@@ -74,14 +89,19 @@ test('static manifest permits only exact GET/HEAD and keeps API outside SPA', as
     const get = (path: string, method = 'GET') => fetch(base + path, { method });
     const html = await get('/');
     assert.equal(html.status, 200);
+    assert.equal(html.headers.get('cache-control'), 'no-store');
+    assert.equal((await get('/player-manifest.json')).headers.get('cache-control'), 'no-store');
     assert.equal(html.headers.get('content-type'), 'text/html; charset=utf-8');
     assert.equal(html.headers.get('x-content-type-options'), 'nosniff');
     assert.match(await html.text(), /fixture/);
-    const js = await get('/apps/player-web/src/app/main.js');
+    const js = await get('/' + mainName);
     assert.equal(js.status, 200);
     assert.match(js.headers.get('content-type') ?? '', /text\/javascript/);
-    const css = await get('/apps/player-web/src/styles/main.css');
+    const css = await get('/' + cssName);
     assert.equal(css.status, 200);
+    for (const asset of [js, css])
+      assert.equal(asset.headers.get('cache-control'), 'public, max-age=31536000, immutable');
+    assert.equal((await get('/apps/player-web/src/app/main.js')).status, 404);
     assert.match(css.headers.get('content-type') ?? '', /text\/css/);
     assert.equal((await get('/', 'HEAD')).status, 200);
     assert.equal((await get('/missing')).status, 404);
@@ -96,15 +116,15 @@ test('static manifest permits only exact GET/HEAD and keeps API outside SPA', as
       req.end();
     });
     assert.equal(encoded, 404);
-    assert.equal((await get('/apps/player-web/src/app/main.js', 'POST')).status, 405);
-    symlinkSync(join(site.root, 'runtime/private.key'), join(site.output, 'apps/player-web/src/app/link.js'));
-    assert.equal((await get('/apps/player-web/src/app/link.js')).status, 404);
+    assert.equal((await get('/' + mainName, 'POST')).status, 405);
+    symlinkSync(join(site.root, 'runtime/private.key'), join(site.output, 'assets/link.js'));
+    assert.equal((await get('/assets/link.js')).status, 404);
     writeFileSync(join(site.output, 'index.html'), 'tampered');
     assert.equal((await get('/')).status, 503);
-    const main = join(site.output, 'apps/player-web/src/app/main.js');
+    const main = join(site.output, mainName);
     rmSync(main);
     symlinkSync(join(site.root, 'runtime/private.key'), main);
-    assert.equal((await get('/apps/player-web/src/app/main.js')).status, 503);
+    assert.equal((await get('/' + mainName)).status, 503);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
@@ -124,5 +144,40 @@ test('static absent build returns explicit unavailable', async () => {
     assert.equal(((await res.json()) as { error: { code: string } }).error.code, 'PLAYER_BUILD_UNAVAILABLE');
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
+
+test('bundles are content-addressed and admin code is reachable only through its lazy import', () => {
+  const site = fixture();
+  writeFileSync(join(site.app, 'index.html'), '<script type="module" src="/apps/player-web/src/app/main.js"></script>');
+  writeFileSync(
+    join(site.app, 'main.ts'),
+    "document.title='player'; if(location.search==='?admin') void import('./admin.ts');",
+  );
+  writeFileSync(join(site.app, 'admin.ts'), "document.title='ADMIN_ONLY_SENTINEL'; export {}; ");
+  buildWebPlayer(site);
+  const manifest = () =>
+    JSON.parse(readFileSync(join(site.output, 'player-manifest.json'), 'utf8')).files as Record<string, string>;
+  const before = manifest();
+  const entry = Object.keys(before).find((name) => name.includes('/main-'))!;
+  const admin = Object.keys(before).find((name) => name.includes('/admin-'))!;
+  assert.ok(admin);
+  const js = readFileSync(join(site.output, entry), 'utf8');
+  assert.match(js, /import\("\.\/admin-[A-Z0-9]{8}\.js"\)/);
+  assert.doesNotMatch(js, /ADMIN_ONLY_SENTINEL/);
+  assert.match(readFileSync(join(site.output, admin), 'utf8'), /ADMIN_ONLY_SENTINEL/);
+  assert.ok(
+    Object.keys(before).every((name) => name === 'index.html' || /^assets\/[\w-]+-[A-Z0-9]{8}\.js$/.test(name)),
+  );
+  writeFileSync(join(site.app, 'admin.ts'), "document.title='ADMIN_CHANGED_SENTINEL'; export {}; ");
+  buildWebPlayer(site);
+  const after = manifest();
+  assert.ok(!Object.hasOwn(after, admin), 'changed lazy code gets a different address');
+  assert.ok(!Object.hasOwn(after, entry), 'the referencing entry changes too');
+  for (const [name, digest] of Object.entries(after)) assert.equal(hashFile(name), digest);
+  function hashFile(name: string) {
+    return createHash('sha256')
+      .update(readFileSync(join(site.output, name)))
+      .digest('hex');
   }
 });

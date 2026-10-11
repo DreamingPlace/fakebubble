@@ -1,3 +1,4 @@
+import { playerAssetCacheControl } from '../platform/web-asset-cache.ts';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { AssetBinding } from './admin-assets.ts';
@@ -104,6 +105,7 @@ export class CloudWebAssets {
       headers: {
         'content-type': types[path.split('.').at(-1)!]!,
         'content-length': String(bytes.byteLength),
+        'cache-control': playerAssetCacheControl(path),
         'content-security-policy': csp,
       },
     });

@@ -861,7 +861,8 @@ test('chat: the login switch warns about a guest with chats; no chats, no warnin
 
 // ---- Part 13b: account entries in the top bar ---------------------------------------------------------------------
 const topBar = (f: ReturnType<typeof chat>) => [
-  ...f.header.querySelectorAll('.head-actions button'),
+  // Part 15 named exception: these legacy assertions cover desktop; mobile has its own test below.
+  ...f.header.querySelectorAll('.head-actions button').filter((node) => !node.classList.contains('mobile-account')),
   ...f.header.querySelectorAll('.invite-entry'),
 ];
 const labelsOf = (nodes: FakeElement[]) => nodes.map((node) => node.textContent);
@@ -978,4 +979,16 @@ test('top bar: an invited player with a login gets the nickname button too; one 
   await legacy.attach();
   assert.deepEqual(labelsOf(legacy.header.querySelectorAll('.head-actions button')), []);
   assert.equal(legacy.header.querySelectorAll('.recovery-entry').length, 1);
+});
+
+test('mobile top bar: one account entry opens the existing login sheet with a signup choice', async (t) => {
+  const f = chat(t, { kind: 'guest', account: { signupEnabled: true, signedIn: false }, remaining: 3 });
+  await f.attach();
+  const mobile = f.header.querySelectorAll('.mobile-account');
+  assert.equal(mobile.length, 1);
+  assert.equal(mobile[0]!.textContent, '登录/注册');
+  mobile[0]!.click();
+  const sheet = f.doc.body.querySelector('.acct-sheet')!;
+  assert.equal(sheet.querySelector('.acct-title')!.textContent, '登录');
+  assert.ok(sheet.textContent.includes('没有账号？注册'));
 });

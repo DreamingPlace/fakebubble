@@ -1,3 +1,4 @@
+import { playerAssetCacheControl } from './web-asset-cache.ts';
 import { createHash } from 'node:crypto';
 import { constants, existsSync, lstatSync, openSync, readFileSync, closeSync, fstatSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -97,7 +98,7 @@ export function serveLocalStatic(req: IncomingMessage, res: ServerResponse, root
     res.writeHead(200, {
       'Content-Type': contentType,
       'Content-Length': bytes.length,
-      'Cache-Control': 'no-store',
+      'Cache-Control': playerAssetCacheControl(name),
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy':
         "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
