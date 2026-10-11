@@ -108,11 +108,18 @@ function fixture(t: test.TestContext) {
       const request = JSON.parse(row.request_json);
       if (name === 'submit_dialogue_draft') return Response.json(draftEnvelope(request));
       const audit = JSON.parse(acceptedAuditEnvelope(request).choices[0]!.message.tool_calls[0]!.function.arguments);
+      // Part 16 (named exception): invalid topics alone no longer fail a review (they are dropped), so these modes also
+      // break the coverage, which still fails the stage; the raw output still carries the bad topics.
       if (mode === 'invalid-topics')
-        return Response.json(toolEnvelope('submit_dialogue_audit', { ...audit, topics: [1, 2, 3, 4] }));
+        return Response.json(toolEnvelope('submit_dialogue_audit', { ...audit, coverage: {}, topics: [1, 2, 3, 4] }));
       if (mode === 'huge-topics')
         return Response.json(
-          toolEnvelope('submit_dialogue_audit', { ...audit, topics: [1, 2, 3, 4], padding: '长'.repeat(40_000) }),
+          toolEnvelope('submit_dialogue_audit', {
+            ...audit,
+            coverage: {},
+            topics: [1, 2, 3, 4],
+            padding: '长'.repeat(40_000),
+          }),
         );
       return Response.json(acceptedAuditEnvelope(request));
     },
@@ -314,7 +321,7 @@ test('a stage that completes with usage but fails validation keeps its raw outpu
   await f.drain();
   const [p] = f.chars.runDetail(f.auth, 'wei-guagua', runId).previews;
   assert.equal(p!.status, 'failed');
-  assert.equal(p!.errorCode, 'INVALID_TOPICS');
+  assert.equal(p!.errorCode, 'INCOMPLETE_COVERAGE');
   // The failure is a KNOWN bill settled at actual usage, never an unknown call.
   assert.equal(p!.settlement, 'settled_known');
   assert.equal(p!.cost.heldMicros, 0);
@@ -324,7 +331,7 @@ test('a stage that completes with usage but fails validation keeps its raw outpu
   const detail = f.chars.previewDetail(f.auth, 'wei-guagua', p!.previewId);
   assert.equal(detail.rejected.length, 1);
   assert.equal(detail.rejected[0]!.phase, 'review');
-  assert.equal(detail.rejected[0]!.errorCode, 'INVALID_TOPICS');
+  assert.equal(detail.rejected[0]!.errorCode, 'INCOMPLETE_COVERAGE');
   assert.deepEqual(JSON.parse(detail.rejected[0]!.rawOutput).topics, [1, 2, 3, 4]);
   assert.equal(detail.rejected[0]!.truncated, false);
   // The bill is exactly what a rejected stage was charged before this feature: held back to zero, spent > 0.

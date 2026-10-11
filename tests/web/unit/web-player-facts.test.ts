@@ -78,7 +78,6 @@ test('fact ops are validated strictly: shape, op, bounds, evidence and duplicate
     ['not an array', {}],
     ['four ops', [1, 2, 3, 4].map((n) => op({ factKey: `k${n}` }))],
     ['unknown op', [op({ op: 'delete' })]],
-    ['extra key', [op({ extra: 1 })]],
     ['empty statement on add', [op({ statement: '  ' })]],
     ['empty statement on update', [op({ op: 'update', statement: '' })]],
     ['241 chars', [op({ statement: '字'.repeat(241) })]],
@@ -96,6 +95,14 @@ test('fact ops are validated strictly: shape, op, bounds, evidence and duplicate
   ];
   for (const [name, value] of bad) assert.throws(() => apply(value), /INVALID_FACTS/, name);
   assert.equal(apply([op({ statement: '字'.repeat(240) })]).factOps?.length, 1);
+  // Part 16 (named exception): an unknown extra key is dropped by normalization instead of failing the review.
+  assert.deepEqual(Object.keys(apply([op({ extra: 1 })]).factOps![0]!).sort(), [
+    'evidenceMessageIds',
+    'factKey',
+    'importance',
+    'op',
+    'statement',
+  ]);
 });
 
 test('facts are written through the store: add, update keeps history, retire, one active fact per key', (t) => {
