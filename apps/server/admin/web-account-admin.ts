@@ -13,6 +13,7 @@ import {
   ADMIN_PERMISSION_LIMIT,
   hasInvitePermission,
   isAdminPermission,
+  normalizePermissions,
   type AdminPermission,
 } from '../../../packages/contracts/web-admin-permissions.ts';
 export { type AdminPermission } from '../../../packages/contracts/web-admin-permissions.ts';
@@ -68,6 +69,12 @@ function permissions(value: unknown): AdminPermission[] {
     'INVALID_REQUEST',
   );
   return [...value].sort() as AdminPermission[];
+}
+/** A saved set always includes what each permission needs (共生项); the stored and audited value is the normalized one. */
+function grantedPermissions(value: unknown): AdminPermission[] {
+  const normalized = normalizePermissions(permissions(value));
+  ensure(normalized.length <= ADMIN_PERMISSION_LIMIT, 'INVALID_REQUEST');
+  return normalized;
 }
 const identifier = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -522,7 +529,7 @@ export class WebAccountAdmin extends WebInviteAdmin {
     );
     const label = input.label.trim(),
       memberId = input.memberId as string | null,
-      granted = permissions(input.permissions);
+      granted = grantedPermissions(input.permissions);
     const key = hash(`${actor.memberId}\0${input.requestId}`),
       fingerprint = hash(JSON.stringify([label, memberId, granted]));
     return this.db.transaction(() => {
@@ -587,7 +594,7 @@ export class WebAccountAdmin extends WebInviteAdmin {
     expectedValue?: unknown,
   ) {
     this.owner(cookie, csrf, origin);
-    const granted = permissions(value),
+    const granted = grantedPermissions(value),
       expected = expectedValue === undefined ? undefined : permissions(expectedValue);
     return this.db.transaction(() => {
       const actor = this.owner(cookie, csrf, origin);

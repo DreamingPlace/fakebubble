@@ -99,3 +99,102 @@ export function permissionCategory(permission: AdminPermission): AdminPermission
     return 'category.materials';
   return 'category.characters';
 }
+
+/**
+ * 共生项. One table, shared by the permission editor (ticking an item ticks what it needs; unticking a requirement
+ * unticks what depends on it) and the server (a saved set is normalized by adding what is required).
+ * An "item" is a permission as the editor shows it; characters items are granted for every character (`:*`).
+ */
+export type AdminPermissionItem =
+  | `characters.${CharacterAdminAction}`
+  | 'characters.create'
+  | InviteAdminPermission
+  | CocreationAdminPermission;
+/** Direct requirements only; the closure is computed. */
+export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, readonly AdminPermissionItem[]>> = {
+  'characters.read': [],
+  'characters.create': [],
+  'characters.edit': ['characters.read'],
+  'characters.discard': ['characters.read'],
+  'characters.preview': ['characters.read'],
+  'characters.materials': ['characters.read'],
+  'characters.delete': ['characters.read'],
+  'characters.publish': ['characters.preview', 'characters.read'],
+  'characters.approve-materials': ['characters.materials'],
+  'invites.read': [],
+  'invites.issue': ['invites.read'],
+  'invites.revoke-code': ['invites.read'],
+  'invites.revoke-access': ['invites.read'],
+  'cocreation.read': [],
+  'cocreation.manage': ['cocreation.read'],
+};
+export const ADMIN_PERMISSION_ITEMS = Object.keys(ADMIN_PERMISSION_REQUIRES) as AdminPermissionItem[];
+const closure = (item: AdminPermissionItem, next: (value: AdminPermissionItem) => readonly AdminPermissionItem[]) => {
+  const seen = new Set<AdminPermissionItem>(),
+    todo = [...next(item)];
+  for (let value = todo.pop(); value; value = todo.pop())
+    if (value !== item && !seen.has(value)) {
+      seen.add(value);
+      todo.push(...next(value));
+    }
+  return ADMIN_PERMISSION_ITEMS.filter((candidate) => seen.has(candidate));
+};
+/** Everything an item needs, transitively. */
+export const requiredItems = (item: AdminPermissionItem) => closure(item, (value) => ADMIN_PERMISSION_REQUIRES[value]);
+/** Everything that needs an item, transitively. */
+export const dependentItems = (item: AdminPermissionItem) =>
+  closure(item, (value) => ADMIN_PERMISSION_ITEMS.filter((other) => ADMIN_PERMISSION_REQUIRES[other].includes(value)));
+/** The stored form of an item. */
+export const itemPermission = (item: AdminPermissionItem): AdminPermission =>
+  item.startsWith('characters.') && item !== 'characters.create'
+    ? (`${item}:*` as AdminPermission)
+    : (item as AdminPermission);
+
+/**
+ * Adds every required permission (a scoped character grant adds the same scope) and returns a sorted, de-duplicated
+ * set. Categories already contain their own requirements. The legacy combined `invites.revoke` keeps meaning exactly its
+ * two old actions: it adds nothing.
+ */
+export function normalizePermissions(granted: readonly AdminPermission[]): AdminPermission[] {
+  const result = new Set<AdminPermission>(granted);
+  for (const permission of granted) {
+    const scoped = /^characters\.([a-z-]+):(.+)$/.exec(permission);
+    if (scoped && (ADMIN_CHARACTER_ACTIONS as readonly string[]).includes(scoped[1]!))
+      for (const need of requiredItems(`characters.${scoped[1]}` as AdminPermissionItem))
+        result.add(`${need}:${scoped[2]}` as AdminPermission);
+    else if ((ADMIN_PERMISSION_ITEMS as readonly string[]).includes(permission))
+      for (const need of requiredItems(permission as AdminPermissionItem)) result.add(itemPermission(need));
+  }
+  return [...result].sort();
+}
+
+export type AdminPermissionPreset = { id: string; label: string; items: readonly AdminPermissionItem[] };
+/** 共创写手 may read, edit and preview characters and read the inbox, but never publish. */
+export const ADMIN_PERMISSION_PRESETS: readonly AdminPermissionPreset[] = [
+  {
+    id: 'co-writer',
+    label: '共创写手',
+    items: ['characters.read', 'characters.edit', 'characters.preview', 'cocreation.read'],
+  },
+  {
+    id: 'operations',
+    label: '运营',
+    items: [
+      'invites.read',
+      'invites.issue',
+      'invites.revoke-code',
+      'invites.revoke-access',
+      'cocreation.read',
+      'cocreation.manage',
+    ],
+  },
+  { id: 'all', label: '全部', items: ADMIN_PERMISSION_ITEMS },
+];
+
+/** Does this administrator hold the action for at least one character? Used to show or hide navigation, never to authorize. */
+export function hasAnyCharacterPermission(grants: readonly string[], action: CharacterAdminAction) {
+  return hasCharacterPermission(grants, action, '') || grants.some((p) => p.startsWith(`characters.${action}:`));
+}
+export function hasAnyInvitePermission(grants: readonly string[]) {
+  return grants.includes('category.invites') || grants.some((p) => p.startsWith('invites.'));
+}

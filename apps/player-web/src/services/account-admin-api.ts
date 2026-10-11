@@ -29,6 +29,29 @@ export type AdminGrant = {
   consumed: boolean;
   revokedAt: number | null;
 };
+type Percentiles = { samples: number; p50Ms: number | null; p95Ms: number | null };
+type CacheUsage = { calls: number; hitTokens: number; missTokens: number; hitRatio: number | null };
+/** 运营数据: one UTC day of operation counters (owner only; no content, no player identity). */
+export type StageLatencyDay = {
+  day: string;
+  operations: number;
+  textQueueWait: Percentiles;
+  audioQueueWait: Percentiles;
+  textStage: Percentiles;
+  audioStage: Percentiles;
+  rateLimitRetries: number;
+  fallbacks: number;
+  review: { samples: number; changed: number; rate: number | null };
+  cache: { draft: CacheUsage; review: CacheUsage };
+  embedding: {
+    calls: number;
+    texts: number;
+    failures: number;
+    unknowns: number;
+    queryFallbacks: number;
+    queryTimeouts: number;
+  };
+};
 const invalid = () => new Error('WEB_INVITE_ADMIN_PROTOCOL_INVALID');
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid();
@@ -193,6 +216,16 @@ export class AccountAdminApi extends InviteAdminApi {
         };
       }),
     };
+  }
+  /** Owner-only; the server rejects everyone else. Days are newest first. */
+  async stageLatency(days = 14): Promise<StageLatencyDay[]> {
+    const row = object(await this.request('/metrics/stage-latency', { days }));
+    if (!Array.isArray(row.days)) throw invalid();
+    return row.days.map((value) => {
+      const day = object(value);
+      if (typeof day.day !== 'string' || !Number.isSafeInteger(day.operations)) throw invalid();
+      return day as unknown as StageLatencyDay;
+    });
   }
   async revokeInvite(kind: 'code' | 'grant', id: string) {
     await this.request(`/invites/revoke-${kind}`, { id });

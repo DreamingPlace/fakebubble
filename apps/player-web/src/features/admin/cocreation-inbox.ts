@@ -38,6 +38,8 @@ type Deps = {
   characters: Pick<CharacterAdminClient, 'list' | 'detail' | 'save'>;
   /** cocreation.manage (or the owner): status, star, note and adopting. Reading needs only cocreation.read. */
   canManage: () => boolean;
+  /** characters.edit for this role (or the owner): without it 加入草稿 is not shown at all. Default: shown. */
+  canEditCharacter?: (characterId: string) => boolean;
   run: (work: () => Promise<void>) => Promise<void>;
   status: (text: string) => void;
   disposed: () => boolean;
@@ -557,7 +559,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                 'div',
                 { class: 'cc-answer-actions' },
                 copy,
-                add,
+                deps.canEditCharacter && !deps.canEditCharacter(current.characterId) ? null : add,
                 answer.adoptedAt !== null ? h('span', { class: 'cc-chip cc-chip-adopted', text: '已采用' }) : null,
               ),
               adopting?.ordinal === answer.ordinal ? adoptEditor(current, answer) : null,
