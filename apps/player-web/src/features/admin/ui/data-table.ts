@@ -19,6 +19,8 @@ export type DataTableOptions<T> = {
   emptyText: string;
   caption?: string;
   onRowOpen?: (row: T) => void;
+  /** Which gesture opens a row: a double click (default) or a single click, which ignores clicks on controls inside the row. */
+  openOn?: 'dblclick' | 'click';
 };
 
 /**
@@ -139,7 +141,20 @@ export function dataTable<T>(options: DataTableOptions<T>) {
         else td.append(value);
         tr.append(td);
       }
-      if (options.onRowOpen) tr.addEventListener('dblclick', () => options.onRowOpen!(row));
+      if (options.onRowOpen) {
+        const gesture = options.openOn ?? 'dblclick';
+        tr.addEventListener(gesture, (event) => {
+          const tag = (event.target as { tagName?: string } | null)?.tagName;
+          if (gesture === 'click' && (tag === 'INPUT' || tag === 'BUTTON' || tag === 'A' || tag === 'SELECT')) return;
+          options.onRowOpen!(row);
+        });
+        if (gesture === 'click') {
+          tr.setAttribute('tabindex', '0');
+          tr.addEventListener('keydown', (event) => {
+            if ((event as KeyboardEvent).key === 'Enter') options.onRowOpen!(row);
+          });
+        }
+      }
       body.append(tr);
     }
     paintBar();

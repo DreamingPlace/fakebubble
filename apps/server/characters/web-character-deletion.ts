@@ -1,3 +1,4 @@
+import { purgePreviewWorkbench } from './web-character-preview-purge.ts';
 import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
@@ -146,6 +147,8 @@ export class WebCharacterDeletion {
       this.store.run('DELETE FROM web_character_drafts WHERE character_id=?', id);
       // Players' co-creation ideas for this character go at once, including those of players who never opened a chat.
       purgeCocreation(this.store, { characterId: id });
+      // The character's admin-only preview runs, time marks and rejected model output go at once as well.
+      purgePreviewWorkbench(this.store, id);
       this.store.run(
         'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',
         actor.memberId,

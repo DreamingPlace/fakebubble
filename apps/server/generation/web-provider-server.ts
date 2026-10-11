@@ -444,7 +444,11 @@ export class WebProviderServer {
             materialUpload[1]!,
           );
         const characterWrite =
-          /^\/api\/web\/provider\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start)$/.test(path);
+          /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save)$/.test(
+            path,
+          );
+        // A run (up to 50 inputs of 4000 characters) and an eval set are larger than a profile save.
+        const bulkWrite = /\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/run-start|eval-sets\/save)$/.test(path);
         if (characterWrite)
           this.inviteAdmin.authorize(
             this.cookie(req, `${this.config.cookieName}_admin`),
@@ -463,11 +467,13 @@ export class WebProviderServer {
             req,
             materialUpload
               ? 8_001_024
-              : characterWrite
-                ? 131072
-                : path.startsWith(`${API}/cocreation/`)
-                  ? COCREATION_BODY_LIMIT
-                  : 8192,
+              : bulkWrite
+                ? 786_432
+                : characterWrite
+                  ? 131072
+                  : path.startsWith(`${API}/cocreation/`)
+                    ? COCREATION_BODY_LIMIT
+                    : 8192,
           ),
         };
         const result =

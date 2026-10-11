@@ -1,5 +1,6 @@
 import { CharacterAdminClient } from './character-admin-api.ts';
 import { CocreationAdminClient } from './cocreation-admin-api.ts';
+import { PreviewAdminClient } from './preview-admin-api.ts';
 import { InviteAdminApi } from './invite-admin-api.ts';
 import {
   ADMIN_PERMISSION_LIMIT,
@@ -93,6 +94,10 @@ function challenge(value: unknown) {
 }
 export class AccountAdminApi extends InviteAdminApi {
   readonly characters = new CharacterAdminClient((path, body) => this.request('/characters/' + path, body));
+  readonly previews = new PreviewAdminClient(
+    (path, body) => this.request('/characters/' + path, body),
+    (path, body) => this.request('/eval-sets/' + path, body),
+  );
   readonly cocreation = new CocreationAdminClient((path, body) => this.request('/cocreation/' + path, body));
   constructor(fetcher?: typeof fetch) {
     super(fetcher, '/api/web/provider/admin');

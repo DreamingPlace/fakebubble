@@ -82,6 +82,15 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - 6: the owner-only stage-latency view reports per UTC day embedding calls, texts embedded, failures, UNKNOWNs, query-embedding fallbacks and timeouts.
 - `pnpm check`: **826 tests, 826 passed, 0 failed, 0 skipped** (767 baseline + 59 new), about 7m46s on Node 24.21.0 / pnpm 11.19.0. `pnpm web:player:build`, `check:web:local-http`, `check:web:restart` pass. Four-Worker package: **224** files (was 217: the provider, ledger, runner, purge helper, memory-embeddings and web-embeddings modules; the 116 SQL is bundled into the Workers).
 
+## Part 13b (预演测试 evaluation workbench)
+
+- `119_preview_workbench.sql` (own version on both runners; `migrateWebProviderPreviewWorkbench` / `migrate-preview-workbench`): runs, run items, simulated-time marks, rejected stage output, eval sets and their versions. Admin-only synthetic data; the preview rows and billing ledger are untouched.
+- A batch is one run (idempotent by requestId). A stage that completes with usage but fails validation keeps its raw output (<= 32 KiB, marker when cut) for admin diagnosis; billing is unchanged. Each preview reports `settled_known` / `held_unknown` / `released_unsent`, derived from the ledger; UI copy follows it.
+- Simulated local time is an HH:MM inside the character's own zone, applied only by `previewInstant` (refuses any non-admin-preview scope). No prompt or tool-schema change: pinned hashes unchanged.
+- One batched status endpoint; the client backs off 2 s -> 10 s, stops when idle and sleeps while hidden. Player top bar: 登录 / 注册, the trial-used-up line, nickname menu.
+- Known gaps: previews have no retention of their own, so rejected output is purged on character deletion only; the legacy per-preview polling panel stays in `character-workbench.ts` (pinned by its tests) but is no longer mounted.
+- `pnpm check`: **1113 tests, 1113 passed** (1077 + 36 new); `web:player:build`, `check:web:local-http`, `check:web:restart` pass. Migration 119 sha256 `16d1db76b4de5a28024a18008d7eb79a0b65dea8170c2c0da225b407dc155066`; expected-migrations: 44 steps (inline and R2).
+
 ## Part 12 (player co-creation inbox)
 
 - `117_cocreation.sql` (own version on both runners; `migrateWebProviderCocreation` / `migrate-cocreation`). Players write ideas on "灵感卡片" (shared list in `packages/contracts/cocreation-cards.ts`); administrators read them in 共创收件箱, adopt answers into the character draft through the existing draft save (pure merge in `packages/contracts/cocreation-adopt.ts`), and publish through the existing flow. No provider calls, no automatic review, no prompt or tool-schema change.

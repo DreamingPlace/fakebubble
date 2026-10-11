@@ -627,7 +627,13 @@ test('ProviderApi account calls use the exact routes, bodies and CSRF header, an
 // ---- the chat page ------------------------------------------------------------------------------------------------
 function chat(
   t: test.TestContext,
-  options: { kind: 'guest' | 'invite'; account?: AccountInfo | 'throws' | 'missing'; chats?: boolean } = {
+  options: {
+    kind: 'guest' | 'invite';
+    account?: AccountInfo | 'throws' | 'missing';
+    chats?: boolean;
+    /** Part 13b: replies the guest has left (default: whatever the fixture says). */
+    remaining?: number;
+  } = {
     kind: 'guest',
   },
 ) {
@@ -651,6 +657,10 @@ function chat(
   const boot = syntheticProviderBootstrap();
   boot.fixture = false;
   for (const character of boot.characters) character.availability = { state: 'available', personaVersion: 1 };
+  if (options.remaining !== undefined && boot.access.kind === 'guest') {
+    boot.access.remainingReplies = options.remaining;
+    boot.access.canSend = options.remaining > 0;
+  }
   if (options.kind === 'invite')
     boot.access = {
       kind: 'invite',
@@ -847,4 +857,125 @@ test('chat: the login switch warns about a guest with chats; no chats, no warnin
   await empty.attach();
   empty.menu()[1]!.click();
   assert.equal(empty.doc.body.querySelector('.acct-notice'), null);
+});
+
+// ---- Part 13b: account entries in the top bar ---------------------------------------------------------------------
+const topBar = (f: ReturnType<typeof chat>) => [
+  ...f.header.querySelectorAll('.head-actions button'),
+  ...f.header.querySelectorAll('.invite-entry'),
+];
+const labelsOf = (nodes: FakeElement[]) => nodes.map((node) => node.textContent);
+const signedIn: AccountInfo = {
+  signupEnabled: true,
+  signedIn: true,
+  kind: 'guest',
+  hasLogin: true,
+  emailMasked: 'p***@example.com',
+  nickname: '阿泡',
+  canBind: false,
+};
+
+test("top bar: a guest finds 登录 and 注册 next to 邀请码, not only inside a chat card's ⋯ menu", async (t) => {
+  const f = chat(t, { kind: 'guest', account: { signupEnabled: true, signedIn: false }, remaining: 3 });
+  await f.attach();
+  assert.deepEqual(labelsOf(topBar(f)), ['登录', '注册', '邀请码']);
+  assert.equal(f.header.querySelectorAll('.head-actions').length, 1);
+  assert.equal(f.header.querySelector('.head-hint'), null, 'replies left: no extra line');
+  assert.equal(f.header.querySelector('.head-note')!.textContent, '体验剩余 3 次');
+  topBar(f)[0]!.click();
+  assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '登录');
+  f.doc.body.querySelector('.acct-close')!.click();
+  topBar(f)[1]!.click();
+  assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '注册');
+  // The ⋯ menu still has them too.
+  assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜', '登录', '注册']);
+});
+
+test('top bar: while signup is off 注册 still opens and says 注册暂未开放; 登录 is never closed', async (t) => {
+  for (const account of [undefined, { signupEnabled: false, signedIn: false } as AccountInfo]) {
+    const f = chat(t, { kind: 'guest', ...(account ? { account } : {}) });
+    await f.attach();
+    assert.deepEqual(labelsOf(topBar(f)), ['登录', '注册', '邀请码']);
+    topBar(f)[1]!.click();
+    const sheet = f.doc.body.querySelector('.acct-sheet')!;
+    assert.equal(sheet.querySelector('.acct-closed')!.textContent, '注册暂未开放');
+    sheet.querySelector('.acct-close')!.click();
+    topBar(f)[0]!.click();
+    assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '登录');
+  }
+});
+
+test('top bar: the trial used up shows ONE short line saying what to do next, and only then', async (t) => {
+  const used = chat(t, { kind: 'guest', account: { signupEnabled: true, signedIn: false }, remaining: 0 });
+  await used.attach();
+  assert.equal(used.header.querySelector('.head-note')!.textContent, '体验剩余 0 次');
+  assert.equal(used.header.querySelectorAll('.head-hint').length, 1);
+  assert.equal(used.header.querySelector('.head-hint')!.textContent, '注册保存聊天，或输入邀请码继续');
+  assert.deepEqual(labelsOf(topBar(used)), ['登录', '注册', '邀请码']);
+  // Same line while signup is off: the buttons say 暂未开放 themselves.
+  const closed = chat(t, { kind: 'guest', remaining: 0 });
+  await closed.attach();
+  assert.equal(closed.header.querySelector('.head-hint')!.textContent, '注册保存聊天，或输入邀请码继续');
+  // A signed-up guest already has an account to keep chats in: the line only asks for the invite.
+  const login = chat(t, { kind: 'guest', account: signedIn, remaining: 0 });
+  await login.attach();
+  assert.equal(login.header.querySelector('.head-hint')!.textContent, '输入邀请码继续');
+  // Replies left, or an invited player: no line.
+  const left = chat(t, { kind: 'guest', remaining: 1 });
+  await left.attach();
+  assert.equal(left.header.querySelector('.head-hint'), null);
+  const invited = chat(t, { kind: 'invite' });
+  await invited.attach();
+  assert.equal(invited.header.querySelector('.head-hint'), null);
+});
+
+test('top bar: a signed-in player sees their nickname, which opens the account menu; 登录 / 注册 are gone', async (t) => {
+  const f = chat(t, { kind: 'guest', account: signedIn, remaining: 2 });
+  await f.attach();
+  assert.deepEqual(labelsOf(topBar(f)), ['阿泡', '邀请码']);
+  const nick = topBar(f)[0]!;
+  assert.equal(nick.getAttribute('aria-haspopup'), 'menu');
+  assert.equal(nick.getAttribute('aria-expanded'), 'false');
+  nick.click();
+  assert.equal(nick.getAttribute('aria-expanded'), 'true');
+  const items = f.header.querySelectorAll('.chat-menu-item');
+  assert.deepEqual(titles(items), ['我的昵称', '修改密码', '退出其他设备', '退出登录']);
+  items[0]!.click();
+  const sheet = f.doc.body.querySelector('.acct-sheet')!;
+  assert.equal(sheet.querySelector('.acct-title')!.textContent, '我的昵称');
+  assert.equal(sheet.querySelector('input[name="nickname"]')!.value, '阿泡');
+  sheet.querySelector('.acct-close')!.click();
+  nick.click();
+  f.header.querySelectorAll('.chat-menu-item')[2]!.click();
+  await flush();
+  assert.ok(f.calls.includes('logoutOthers'));
+  assert.equal(f.said.at(-1), '已退出其他设备');
+  nick.click();
+  f.header.querySelectorAll('.chat-menu-item')[3]!.click();
+  await flush();
+  assert.ok(f.calls.includes('logout'));
+  assert.deepEqual(f.reloads, ['reload']);
+  // The same menu is still in the chat cards' ⋯ menu.
+  assert.deepEqual(titles(f.menu()).slice(1), ['我的昵称', '修改密码', '退出其他设备', '退出登录']);
+  // A login without a nickname yet is still reachable.
+  const bare = chat(t, { kind: 'guest', account: { ...signedIn, nickname: null }, remaining: 2 });
+  await bare.attach();
+  assert.equal(topBar(bare)[0]!.textContent, '我的账号');
+});
+
+test('top bar: an invited player with a login gets the nickname button too; one without a login keeps 恢复码 and no account buttons', async (t) => {
+  const bound = chat(t, {
+    kind: 'invite',
+    account: { ...signedIn, kind: 'invite', nickname: '老玩家' },
+  });
+  await bound.attach();
+  assert.deepEqual(labelsOf(topBar(bound)), ['老玩家']);
+  assert.equal(bound.header.querySelectorAll('.recovery-entry').length, 0);
+  const legacy = chat(t, {
+    kind: 'invite',
+    account: { ...signedIn, kind: 'invite', hasLogin: false, canBind: true, nickname: null, emailMasked: null },
+  });
+  await legacy.attach();
+  assert.deepEqual(labelsOf(legacy.header.querySelectorAll('.head-actions button')), []);
+  assert.equal(legacy.header.querySelectorAll('.recovery-entry').length, 1);
 });
