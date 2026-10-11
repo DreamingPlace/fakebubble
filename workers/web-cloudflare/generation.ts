@@ -89,7 +89,18 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
               start: (stage, hash, bytes) =>
                 callback(async () => {
                   const observer = await reservation.start(stage, hash, bytes);
-                  return { finish: (value) => callback(() => observer.finish(value)) };
+                  return {
+                    finish: (value) => callback(() => observer.finish(value)),
+                    // Best effort: sent synchronously (calls on one RPC stub arrive in order, so the business side
+                    // sees it before finish()) but never awaited, so it cannot delay finish() or change the bill.
+                    rejected: (output) => {
+                      try {
+                        Promise.resolve(observer.rejected?.(output)).catch(() => {});
+                      } catch {
+                        /* diagnosis only */
+                      }
+                    },
+                  };
                 }),
               close: () => callback(() => reservation.close()),
             };

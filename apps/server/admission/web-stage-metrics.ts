@@ -124,6 +124,33 @@ export function recordReviewChanged(store: Db, operationId: string, changed: boo
   ensureRow(store, operationId, now);
   store.run('UPDATE web_operation_metrics SET review_changed=? WHERE operation_id=?', changed ? 1 : 0, operationId);
 }
+/** topics_dropped / facts_dropped exist from schema 120 (120_memory_metadata_metrics.sql); an older database records nothing. */
+const droppedKnown = new WeakMap<object, boolean>();
+function droppedColumns(store: Db): boolean {
+  if (droppedKnown.get(store)) return true;
+  const present =
+    metricsEnabled(store) &&
+    !!store.get("SELECT 1 FROM pragma_table_info('web_operation_metrics') WHERE name='topics_dropped'");
+  if (present) droppedKnown.set(store, true);
+  return present;
+}
+/** Metric only, written in the publication transaction: the reply's invalid topics / factOps were dropped, no memory stored. */
+export function recordMemoryDropped(
+  store: Db,
+  operationId: string,
+  dropped: { topicsDropped?: boolean; factsDropped?: boolean },
+  now: number,
+) {
+  if (!dropped.topicsDropped && !dropped.factsDropped) return;
+  if (!droppedColumns(store)) return;
+  ensureRow(store, operationId, now);
+  store.run(
+    'UPDATE web_operation_metrics SET topics_dropped=?,facts_dropped=? WHERE operation_id=?',
+    dropped.topicsDropped ? 1 : 0,
+    dropped.factsDropped ? 1 : 0,
+    operationId,
+  );
+}
 export function recordFallbackPublished(store: Db, operationId: string) {
   store.run(
     'UPDATE web_operation_metrics SET fallback_used=1 WHERE operation_id=? AND fallback_reason IS NOT NULL',

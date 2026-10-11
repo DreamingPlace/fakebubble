@@ -2334,6 +2334,13 @@ html.cc-open body {
   line-height: 1.6;
   text-align: center;
   vertical-align: middle;
+  text-decoration: none;
+  white-space: nowrap;
+}
+a.cocreation-badge:hover,
+a.cocreation-badge:focus-visible {
+  background: #8f3f21;
+  text-decoration: underline;
 }
 /* Inbox: list and detail are two separate scroll regions beside each other; the page itself does not scroll. */
 #admin-cocreation {

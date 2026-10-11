@@ -2,6 +2,7 @@ import { CharacterAdminClient } from './character-admin-api.ts';
 import { CocreationAdminClient } from './cocreation-admin-api.ts';
 import { PreviewAdminClient } from './preview-admin-api.ts';
 import { InviteAdminApi } from './invite-admin-api.ts';
+import { InviteLocalApiError } from './invite-local-api.ts';
 import {
   ADMIN_PERMISSION_LIMIT,
   isAdminPermission,
@@ -43,6 +44,7 @@ export type StageLatencyDay = {
   rateLimitRetries: number;
   fallbacks: number;
   review: { samples: number; changed: number; rate: number | null };
+  memoryDropped: { topics: number; facts: number };
   cache: { draft: CacheUsage; review: CacheUsage };
   embedding: {
     calls: number;
@@ -101,6 +103,32 @@ export class AccountAdminApi extends InviteAdminApi {
   readonly cocreation = new CocreationAdminClient((path, body) => this.request('/cocreation/' + path, body));
   constructor(fetcher?: typeof fetch) {
     super(fetcher, '/api/web/provider/admin');
+  }
+  /**
+   * The admin CSRF token is derived from the session cookie, which the browser shares between tabs. A login, email
+   * login or password change in one tab replaces the cookie, and every other open tab then still holds the previous
+   * token: its calls (the preview status poller above all) get 403 ADMIN_CSRF_REQUIRED although the session is fine.
+   * That check runs before anything is done, so one transparent re-sync and retry is safe. A session that is really
+   * gone answers 401 on the re-sync and surfaces as such; any other 403 (a missing permission) is never retried.
+   */
+  protected override async request(path: string, body?: Record<string, unknown>) {
+    try {
+      return await super.request(path, body);
+    } catch (error) {
+      if (
+        !body ||
+        !this.csrf ||
+        path === '/login' ||
+        !(error instanceof InviteLocalApiError) ||
+        error.status !== 403 ||
+        error.code !== 'ADMIN_CSRF_REQUIRED'
+      )
+        throw error;
+      const fresh = object(await super.request('/session'));
+      if (typeof fresh.csrf !== 'string' || !/^[a-f0-9]{64}$/.test(fresh.csrf)) throw invalid();
+      this.csrf = fresh.csrf;
+      return await super.request(path, body);
+    }
   }
   private active(value: unknown): AccountAdminSession {
     const row = object(value);

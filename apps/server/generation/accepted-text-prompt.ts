@@ -293,9 +293,8 @@ export function promptMessages(request: TextGenerationRequest) {
       ...(replyTo ? { replyTo } : {}),
       ...(conversation ? { authorId, mentionedCharacterIds: mentionedCharacterIds ?? [] } : {}),
     })),
-    currentTime: new Date(request.now).toISOString(),
     characterTimeZone: request.character.schedule.timeZone,
-    currentLocalTime: `${local.date} ${String(Math.floor(local.minute / 60)).padStart(2, '0')}:${String(local.minute % 60).padStart(2, '0')}`,
+    characterLocalTime: `${local.date} ${String(Math.floor(local.minute / 60)).padStart(2, '0')}:${String(local.minute % 60).padStart(2, '0')}`,
     localWeekday: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][local.day],
     responseTiming: {
       oldestCoveredInput: coveredTimes.length ? describeTime(Math.min(...coveredTimes)) : null,

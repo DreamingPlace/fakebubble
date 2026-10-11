@@ -61,7 +61,18 @@ function meterCallbacks(meter: ProviderMeter, signal: AbortSignal): ProviderMete
               const observer = await reservation.start(stage, hash, bytes);
               ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
               // Bill callbacks remain valid after cancellation and must not be dropped.
-              return { finish: (value) => callback(() => observer.finish(value)) };
+              return {
+                finish: (value) => callback(() => observer.finish(value)),
+                // Admin-preview diagnosis only: forwarded best effort, it can neither throw nor change the bill.
+                rejected: (output) => {
+                  try {
+                    if (typeof output?.raw === 'string' && typeof output.errorCode === 'string')
+                      observer.rejected?.({ raw: output.raw, errorCode: output.errorCode });
+                  } catch {
+                    /* diagnosis only */
+                  }
+                },
+              };
             }),
           close: () => callback(() => reservation.close()),
         };

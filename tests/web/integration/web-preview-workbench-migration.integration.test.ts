@@ -156,18 +156,19 @@ test('a populated 118 database upgrades to 119 keeping every existing row; the n
   );
 });
 
-test('Cloudflare runner: 119 is the same SQL on both authorities, 44 steps, and its ledger hash is stable', () => {
+test('Cloudflare runner: 119 is the same SQL on both authorities, 45 steps, and its ledger hash is stable', () => {
   const { inline, r2 } = expectedWebMigrations();
-  const last = (list: { version: number; sha256: string }[]) => list.at(-1)!;
-  assert.equal(inline.length, 44);
-  assert.equal(r2.length, 44);
+  // Extended for migration 120: 119 is now second from last and the ledger has 45 steps.
+  const last = (list: { version: number; sha256: string }[]) => list.at(-2)!;
+  assert.equal(inline.length, 45);
+  assert.equal(r2.length, 45);
   assert.equal(last(inline).version, 119);
   assert.equal(last(r2).version, 119);
   assert.equal(last(inline).sha256, sha(sql119()), 'the ledger hash is the sha256 of the SQL file as written');
   assert.equal(last(inline).sha256, last(r2).sha256, 'only the R2 schema-113 step differs between the lists');
   assert.deepEqual(
     inline.map((m) => m.version),
-    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 20 }, (_, i) => 100 + i)],
+    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 21 }, (_, i) => 100 + i)],
   );
   assert.deepEqual(
     inline.slice(0, 43).map((m) => m.version),
@@ -180,12 +181,13 @@ test('Cloudflare runner: a fresh install and an existing authority at 118 both r
   const fresh = await f.call<{ version: unknown; hashes: string[]; workbench: string[] }>(
     '/inline?object=wb-fresh-inline',
   );
-  assert.deepEqual(fresh.version, { user_version: 119 });
-  assert.equal(fresh.hashes.at(-1), `119:${sha(sql119())}`);
+  // Extended for migration 120: 119 is second from last.
+  assert.deepEqual(fresh.version, { user_version: 120 });
+  assert.equal(fresh.hashes.at(-2), `119:${sha(sql119())}`);
   assert.deepEqual(fresh.workbench, TABLES);
   const freshR2 = await f.call<{ version: unknown; hashes: string[]; workbench: string[] }>('/r2?object=wb-fresh-r2');
-  assert.deepEqual(freshR2.version, { user_version: 119 });
-  assert.equal(freshR2.hashes.at(-1), `119:${sha(sql119())}`);
+  assert.deepEqual(freshR2.version, { user_version: 120 });
+  assert.equal(freshR2.hashes.at(-2), `119:${sha(sql119())}`);
   assert.deepEqual(freshR2.workbench, TABLES);
   for (const mode of ['inline', 'r2']) {
     const result = await f.call<{
@@ -197,9 +199,10 @@ test('Cloudflare runner: a fresh install and an existing authority at 118 both r
     assert.equal(result.before.length, 43, mode);
     assert.equal(result.before.at(-1)?.startsWith('118:'), true, mode);
     assert.deepEqual(result.after.slice(0, 43), result.before, `${mode}: applied steps are untouched`);
-    assert.equal(result.after.length, 44, mode);
-    assert.equal(result.after.at(-1), `119:${sha(sql119())}`, mode);
-    assert.deepEqual(result.version, { user_version: 119 }, mode);
+    assert.equal(result.after.length, 45, mode);
+    assert.equal(result.after.at(-2), `119:${sha(sql119())}`, mode);
+    assert.equal(result.after.at(-1)?.startsWith('120:'), true, mode);
+    assert.deepEqual(result.version, { user_version: 120 }, mode);
     assert.deepEqual(result.workbench, TABLES, mode);
   }
 });

@@ -181,13 +181,14 @@ test('Cloudflare runner: an existing authority at 115 upgrades to 116 through th
     assert.equal(result.before.length, 40, mode);
     assert.equal(result.before.at(-1)?.startsWith('115:'), true, mode);
     assert.deepEqual(result.after.slice(0, 40), result.before, `${mode}: applied steps are untouched`);
-    // Extended for migration 119: opening the authority applies 116, 117, 118 and then 119 (see web-cocreation-migration).
-    assert.equal(result.after.length, 44, mode);
-    assert.equal(result.after.at(-4)?.startsWith('116:'), true, mode);
-    assert.equal(result.after.at(-3)?.startsWith('117:'), true, mode);
-    assert.equal(result.after.at(-2)?.startsWith('118:'), true, mode);
-    assert.equal(result.after.at(-1)?.startsWith('119:'), true, mode);
-    assert.deepEqual(result.version, { user_version: 119 }, mode);
+    // Extended for migration 120: opening the authority applies 116, 117, 118, 119 and then 120 (see web-cocreation-migration).
+    assert.equal(result.after.length, 45, mode);
+    assert.equal(result.after.at(-5)?.startsWith('116:'), true, mode);
+    assert.equal(result.after.at(-4)?.startsWith('117:'), true, mode);
+    assert.equal(result.after.at(-3)?.startsWith('118:'), true, mode);
+    assert.equal(result.after.at(-2)?.startsWith('119:'), true, mode);
+    assert.equal(result.after.at(-1)?.startsWith('120:'), true, mode);
+    assert.deepEqual(result.version, { user_version: 120 }, mode);
     assert.deepEqual(result.embeddings, { vectors: true, attempts: true, metrics: true }, mode);
   }
 });

@@ -64,7 +64,7 @@ pnpm web:cloudflare:package "$PWD/runtime/cloud-package"
 
 accepted-v7 的提示词正文在 `prompts/v7/*.md`（每块一个文件）。Worker 没有文件系统，所以 `scripts/build-prompts.ts`（`pnpm prompts:build`）把它们生成进提交的 `apps/server/generation/prompts.generated.ts`；`pnpm prompts:check` 和一个单元测试会在生成物过期时失败。修改提示词时先改 `.md`，再运行 `pnpm prompts:build`。
 
-DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一角色多轮之间不变的字段放在前面，每轮都变的字段（`messages`、`currentTime` 等）放在最后；审核调用的用户消息同理，`draftPresentation*` 在最末。内容与取值不变，只改键顺序。
+DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一角色多轮之间不变的字段放在前面，每轮都变的字段（`messages`、`characterLocalTime` 等）放在最后；审核调用的用户消息同理，`draftPresentation*` 在最末。内容与取值不变，只改键顺序。
 
 **提示词哈希变化，需要重跑角色预览。** 第 4 步新增“玩家只能发文字”规则（`prompts/v7/player-channel-rules.md`，同时进入起草与审核提示词，并在 `responseConstraints.playerInputKinds` 声明），所以策略哈希与提示词哈希都变了（`web-text-policy.test.ts` 记录了新旧值）。哈希包含在预览批准与发布批准里：升级前批准的角色预览在发布前必须重新运行并重新批准。第 3 步只改变发送给供应商的请求字节（`wireRequestHash`），不改变这两个哈希（哈希覆盖系统提示词与协议指纹，不含用户消息的字段顺序）。
 
@@ -108,6 +108,18 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 **旧受邀玩家（只有恢复码）：** 在聊天页“⋯”里“绑定邮箱”，验证后设置密码与昵称，绑定成功即撤销其恢复码；恢复码接口与测试保持不变，未绑定的玩家仍可从首页的小链接使用。
 
 **数据清理：** 登录行与验证码挑战是玩家数据，随玩家清理一并删除（Node 与 Cloudflare 保留期清理器、生命周期审计在清理后仍有残留时失败关闭）；昵称写入的“名片”修订同样随之删除。
+
+### 时间、记忆元数据与预演丢失输出（Part 16）
+
+**迁移：** `120_memory_metadata_metrics.sql` 是独立的第 120 版迁移（Node：`user_version=120`，已有 provider 实例运行 `migrate-memory-metrics`；Cloudflare 内联与 R2：账本版本 120，已在 119 的权威启动时自动补上，共 45 步）。只给 `web_operation_metrics` 增加 `topics_dropped`、`facts_dropped` 两列（0/1，默认 0），没有新表。
+
+**提示词（有意改动，策略/提示哈希已重新固定）：** 请求字段 `currentLocalTime` 改名为 `characterLocalTime`，并且不再把 UTC `currentTime` 发给草稿或审核模型（服务端仍用 `request.now`）。草稿与审核提示都明确：这是**角色自己的钟**，玩家的时间、时区和睡没睡未知，除非玩家在当前消息里说了；审核负责删改据此臆断玩家作息的句子。另加两条：没有历史或记忆支持的过去约定不确认；不声称看过具体的近期或正在进行的比赛并引用细节。聊天边界与场景／隐私规则未动。
+
+**记忆元数据不再拖垮回复：** 评审返回的 `topics` / `factOps` 先做无害规范化（缺失的 `memoryId` 视为 null、整数字符串的 `importance` 转为数字、丢弃未定义的多余键），语义检查（文字、重要度 1–10、`sourceKind`、证据 ID、记忆链接）保持严格。规范化后仍不合法、而回复其余部分（覆盖、气泡、格式、安全）都合法时，回复照常送出，该轮不写入记忆，并计入当日 `topics_dropped` / `facts_dropped`，在 运营数据 的“话题/事实丢弃”列显示。覆盖、气泡、格式、安全校验没有放宽。
+
+**预演的“没有保留模型输出”：** 生产里预演的生成器运行在 `fake-paopao-web-generation`，之前经 Worker RPC 重建观察者时只保留了 `finish`，`rejected` 丢失。现在两侧（`workers/web-cloudflare/generation.ts`、`apps/server/cloudflare/web-generators.ts`）都转发 `rejected`：尽力而为，不等待、不抛错、不影响 `finish()` 与账单。
+
+**管理端 403：** 管理员 CSRF 令牌由会话 cookie 推导，浏览器各标签页共享 cookie、令牌则各自保存。在另一个标签页重新登录会换掉 cookie，旧标签页仍带旧令牌，`previews-status` 轮询就会得到 403 `ADMIN_CSRF_REQUIRED`（会话本身没问题）。客户端现在遇到该码时用 `GET /session` 重新同步令牌并重试一次；会话真的失效时仍是 401。
 
 ### 预演测试评测台（Part 13b）
 

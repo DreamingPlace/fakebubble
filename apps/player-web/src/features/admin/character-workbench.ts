@@ -13,6 +13,7 @@ import {
   type CharacterAdminAction,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
+import { formatRoute } from './shell/admin-router.ts';
 import { AdminFormError, characterForm, check, disclosure, el, emptyCharacter, field } from './character-form.ts';
 
 type Host = {
@@ -25,6 +26,8 @@ type Host = {
   previewPollMs?: number;
   /** Unread (new) co-creation submissions per character, shown as a badge on the character's row. */
   badges?: () => Record<string, number>;
+  /** The badge on a card is a link to the 共创收件箱 filtered to that character. */
+  openInbox?: (characterId: string) => void;
   /**
    * Where the paid text preview lives. `inline` (default): inside the role's page. `none`: not rendered here, the
    * admin shell shows it on its own page. `only`: this instance is that page and renders nothing but the preview.
@@ -278,10 +281,17 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       const heading = el('h3', c.displayName),
         unread = host.badges?.()[c.characterId] ?? 0;
       if (unread > 0) {
-        const badge = el('span', String(unread));
+        // Visible text, not just a tooltip; a real link (the address names the filtered inbox), opened in place on click.
+        const badge = el('a', `${unread} 条新共创`);
         badge.className = 'cocreation-badge';
-        badge.setAttribute('aria-label', `有 ${unread} 条新的共创`);
-        badge.setAttribute('title', `共创收件箱里有 ${unread} 条新的玩家想法`);
+        badge.setAttribute('href', formatRoute({ page: 'cocreation', id: c.characterId }));
+        badge.setAttribute('title', `共创收件箱里有 ${unread} 条新的玩家想法，点击查看`);
+        badge.addEventListener('click', (event) => {
+          if (!host.openInbox) return;
+          event.preventDefault();
+          event.stopPropagation();
+          host.openInbox(c.characterId);
+        });
         heading.append(badge);
       }
       row.append(

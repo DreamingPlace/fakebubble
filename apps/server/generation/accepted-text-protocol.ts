@@ -2,7 +2,7 @@
 import type { DialogueCandidate, TextGenerationRequest } from '../../../packages/contracts/index.ts';
 import { EXPRESSIONS } from '../../../packages/contracts/index.ts';
 import { dialogueCandidate, importanceValue, topicKey } from '../../../packages/domain/dialogue.ts';
-import { ensure } from '../../../packages/domain/errors.ts';
+import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import {
   BUBBLE_LIMITS,
   VOICE_BUBBLE_LIMITS,
@@ -262,7 +262,21 @@ export function validateDialogueEvidence(candidate: DialogueCandidate, request: 
   }
 }
 
-export function applyTextReview(value: unknown, draft: TextDraft, request: TextGenerationRequest): DialogueCandidate {
+/**
+ * `dropInvalidMetadata` is what every production caller passes (generation, queue re-validation, previews): topics or
+ * factOps that are still invalid after normalization cost the turn its memory, not its reply. Without it the review is
+ * validated strictly end to end (the unit tests of the individual checks).
+ */
+export interface ReviewOptions {
+  dropInvalidMetadata?: boolean;
+}
+export const DROP_INVALID_METADATA: ReviewOptions = { dropInvalidMetadata: true };
+export function applyTextReview(
+  value: unknown,
+  draft: TextDraft,
+  request: TextGenerationRequest,
+  options: ReviewOptions = {},
+): DialogueCandidate {
   exact(
     value,
     [
@@ -332,71 +346,154 @@ export function applyTextReview(value: unknown, draft: TextDraft, request: TextG
       deferredMessageIds.push(id);
     }
   }
-  ensure(Array.isArray(value.topics) && value.topics.length <= 3, 'INVALID_TOPICS');
-  // A topic with a memoryId continues that recalled memory under its existing key; null starts (or restates) a topic.
-  const recalled = new Map((request.memories ?? []).flatMap((memory) => (memory.id ? [[memory.id, memory.key]] : [])));
-  const recalledByKey = new Map([...recalled].map(([id, key]) => [key, id]));
-  const aliases = new Map<string, string>();
-  const topics = value.topics.map((topic: unknown) => {
-    exact(topic, ['key', 'memoryId', 'summary', 'importance', 'sourceKind', 'evidenceMessageIds'], 'INVALID_TOPICS');
-    ensure(typeof topic.key === 'string' && importanceValue(topic.importance), 'INVALID_TOPICS');
-    ensure(
-      topic.memoryId === null || (typeof topic.memoryId === 'string' && recalled.has(topic.memoryId)),
-      'INVALID_MEMORY_LINK',
+  // Topics and factOps are memory metadata, not the reply: normalize the harmless wire slips first, validate strictly,
+  // and when only the metadata is still invalid deliver the reply without it (Part 16). Everything above this point
+  // (format, bubbles, coverage, safety) is untouched and still fails the whole reply.
+  const topicsWire = normalizeTopics(value.topics),
+    factsWire = normalizeFactOps(value.factOps);
+  const build = (dropTopics: boolean, dropFacts: boolean): DialogueCandidate => {
+    ensure(dropTopics || (Array.isArray(topicsWire) && topicsWire.length <= 3), 'INVALID_TOPICS');
+    // A topic with a memoryId continues that recalled memory under its existing key; null starts (or restates) a topic.
+    const recalled = new Map(
+      (request.memories ?? []).flatMap((memory) => (memory.id ? [[memory.id, memory.key]] : [])),
     );
-    const named = topicKey(topic.key),
-      { memoryId, ...rest } = topic;
-    const canonical = memoryId === null ? named : recalled.get(memoryId as string)!;
-    // The wording the model chose must not name a different recalled memory, nor two memories share one wording.
-    ensure(
-      (memoryId === null || (recalledByKey.get(named) ?? memoryId) === memoryId) &&
-        (aliases.get(named) ?? canonical) === canonical,
-      'INVALID_MEMORY_LINK',
+    const recalledByKey = new Map([...recalled].map(([id, key]) => [key, id]));
+    const aliases = new Map<string, string>();
+    const topics = (dropTopics ? [] : (topicsWire as unknown[])).map((topic: unknown) => {
+      exact(topic, ['key', 'memoryId', 'summary', 'importance', 'sourceKind', 'evidenceMessageIds'], 'INVALID_TOPICS');
+      ensure(typeof topic.key === 'string' && importanceValue(topic.importance), 'INVALID_TOPICS');
+      ensure(
+        topic.memoryId === null || (typeof topic.memoryId === 'string' && recalled.has(topic.memoryId)),
+        'INVALID_MEMORY_LINK',
+      );
+      const named = topicKey(topic.key),
+        { memoryId, ...rest } = topic;
+      const canonical = memoryId === null ? named : recalled.get(memoryId as string)!;
+      // The wording the model chose must not name a different recalled memory, nor two memories share one wording.
+      ensure(
+        (memoryId === null || (recalledByKey.get(named) ?? memoryId) === memoryId) &&
+          (aliases.get(named) ?? canonical) === canonical,
+        'INVALID_MEMORY_LINK',
+      );
+      aliases.set(named, canonical);
+      return { ...rest, key: canonical, ...(memoryId === null ? {} : { linkedMemoryId: memoryId }) };
+    });
+    const candidate = dialogueCandidate(
+      {
+        ...presentation,
+        coveredMessageIds,
+        deferredMessageIds,
+        awaitingPlayerMessageIds,
+        topics,
+        factOps: dropFacts ? [] : factsWire,
+        ...(request.sceneContext ? { sceneUpdate: value.sceneUpdate } : {}),
+        ...(request.relationshipContext?.auditEnabled ? { relationshipEvents: value.relationshipEvents } : {}),
+      },
+      request.requiredMessageIds,
+      request.mustClose,
+      request.deliveryMode,
     );
-    aliases.set(named, canonical);
-    return { ...rest, key: canonical, ...(memoryId === null ? {} : { linkedMemoryId: memoryId }) };
-  });
-  const candidate = dialogueCandidate(
-    {
-      ...presentation,
-      coveredMessageIds,
-      deferredMessageIds,
-      awaitingPlayerMessageIds,
-      topics,
-      factOps: value.factOps,
-      ...(request.sceneContext ? { sceneUpdate: value.sceneUpdate } : {}),
-      ...(request.relationshipContext?.auditEnabled ? { relationshipEvents: value.relationshipEvents } : {}),
-    },
-    request.requiredMessageIds,
-    request.mustClose,
-    request.deliveryMode,
-  );
-  const sourcesByTopic = new Map(candidate.topics.map((topic) => [topic.key, [] as string[]]));
-  for (const [sourceId, keys] of Object.entries(sourceUsage)) {
-    ensure(
-      Array.isArray(keys) && keys.length <= 3 && keys.every((key) => typeof key === 'string'),
-      'INVALID_SOURCE_EVIDENCE',
+    const sourcesByTopic = new Map(candidate.topics.map((topic) => [topic.key, [] as string[]]));
+    for (const [sourceId, keys] of dropTopics ? [] : Object.entries(sourceUsage)) {
+      ensure(
+        Array.isArray(keys) && keys.length <= 3 && keys.every((key) => typeof key === 'string'),
+        'INVALID_SOURCE_EVIDENCE',
+      );
+      const normalized = (keys as string[]).map((key) => aliases.get(topicKey(key)) ?? topicKey(key));
+      ensure(
+        new Set(normalized).size === normalized.length && normalized.every((key) => sourcesByTopic.has(key)),
+        'INVALID_SOURCE_EVIDENCE',
+      );
+      for (const key of normalized) sourcesByTopic.get(key)!.push(sourceId);
+    }
+    for (const topic of candidate.topics) {
+      topic.sourceEvidenceIds = sourcesByTopic.get(topic.key)!;
+      ensure(topic.sourceEvidenceIds.length <= 8, 'INVALID_SOURCE_EVIDENCE');
+    }
+    if (request.sceneContext) candidate.sceneUpdate = changedScene(candidate.sceneUpdate, request.sceneContext);
+    validateSceneEvidence(
+      candidate.sceneUpdate,
+      request.sceneContext,
+      request.messages,
+      candidate,
+      request.messages.find((message) => message.authorKind === 'player')?.authorId ?? '',
     );
-    const normalized = (keys as string[]).map((key) => aliases.get(topicKey(key)) ?? topicKey(key));
-    ensure(
-      new Set(normalized).size === normalized.length && normalized.every((key) => sourcesByTopic.has(key)),
-      'INVALID_SOURCE_EVIDENCE',
-    );
-    for (const key of normalized) sourcesByTopic.get(key)!.push(sourceId);
+    validateDialogueEvidence(candidate, request);
+    return candidate;
+  };
+  let candidate: DialogueCandidate;
+  try {
+    candidate = build(false, false);
+  } catch (error) {
+    const code = error instanceof DomainError ? error.code : '';
+    if (!options.dropInvalidMetadata || !(TOPIC_FAILURES.has(code) || FACT_FAILURES.has(code))) throw error;
+    // Drop only what is needed, and only if the rest of the review then validates; otherwise the original error stands.
+    candidate = retryWithoutMetadata(build, error);
   }
-  for (const topic of candidate.topics) {
-    topic.sourceEvidenceIds = sourcesByTopic.get(topic.key)!;
-    ensure(topic.sourceEvidenceIds.length <= 8, 'INVALID_SOURCE_EVIDENCE');
-  }
-  if (request.sceneContext) candidate.sceneUpdate = changedScene(candidate.sceneUpdate, request.sceneContext);
-  validateSceneEvidence(
-    candidate.sceneUpdate,
-    request.sceneContext,
-    request.messages,
-    candidate,
-    request.messages.find((message) => message.authorKind === 'player')?.authorId ?? '',
-  );
-  validateDialogueEvidence(candidate, request);
   candidate.reviewChanged = value.replacementBubbles.length > 0;
   return candidate;
+}
+
+// Memory metadata failures that may cost the metadata but never the reply. INVALID_MEMORY_EVIDENCE is raised for both
+// topics and facts; the retry order below tells them apart.
+const TOPIC_FAILURES = new Set([
+  'INVALID_TOPICS',
+  'INVALID_MEMORY_LINK',
+  'INVALID_SOURCE_EVIDENCE',
+  'INVALID_MEMORY_EVIDENCE',
+]);
+const FACT_FAILURES = new Set(['INVALID_FACTS', 'INVALID_MEMORY_EVIDENCE']);
+function retryWithoutMetadata(
+  build: (dropTopics: boolean, dropFacts: boolean) => DialogueCandidate,
+  original: unknown,
+): DialogueCandidate {
+  // The first error only names the first thing that failed: try topics alone, facts alone, then both.
+  const attempts: [boolean, boolean][] = [
+    [true, false],
+    [false, true],
+    [true, true],
+  ];
+  for (const [dropTopics, dropFacts] of attempts) {
+    try {
+      const candidate = build(dropTopics, dropFacts);
+      if (dropTopics) candidate.topicsDropped = true;
+      if (dropFacts) candidate.factsDropped = true;
+      return candidate;
+    } catch {
+      /* try the next, wider drop */
+    }
+  }
+  throw original;
+}
+
+const isPlain = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+const keepKeys = (value: Record<string, unknown>, keys: string[]) =>
+  Object.fromEntries(keys.filter((key) => Object.hasOwn(value, key)).map((key) => [key, value[key]]));
+/** An integer written as a string ("3") is the number; any other value is left for the strict check. */
+const integerString = (value: unknown) =>
+  typeof value === 'string' && /^[0-9]{1,2}$/.test(value) ? Number(value) : value;
+/**
+ * Harmless wire slips only: a missing memoryId is null, importance given as an integer string is the number, and keys
+ * the schema does not define are dropped. Text, importance range, sourceKind, evidence ids and memory links stay strict.
+ */
+function normalizeTopics(topics: unknown): unknown {
+  if (!Array.isArray(topics)) return topics;
+  return topics.map((topic) => {
+    if (!isPlain(topic)) return topic;
+    const kept = keepKeys(topic, ['key', 'memoryId', 'summary', 'importance', 'sourceKind', 'evidenceMessageIds']);
+    return {
+      ...kept,
+      memoryId: Object.hasOwn(kept, 'memoryId') && kept.memoryId !== undefined ? kept.memoryId : null,
+      ...(Object.hasOwn(kept, 'importance') ? { importance: integerString(kept.importance) } : {}),
+    };
+  });
+}
+function normalizeFactOps(ops: unknown): unknown {
+  if (!Array.isArray(ops)) return ops;
+  return ops.map((op) => {
+    if (!isPlain(op)) return op;
+    const kept = keepKeys(op, ['op', 'factKey', 'statement', 'importance', 'evidenceMessageIds']);
+    return Object.hasOwn(kept, 'importance') ? { ...kept, importance: integerString(kept.importance) } : kept;
+  });
 }

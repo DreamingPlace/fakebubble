@@ -82,6 +82,14 @@ Measured on the unmodified initial commit (`6f1f822`) before any Part 1 change, 
 - 6: the owner-only stage-latency view reports per UTC day embedding calls, texts embedded, failures, UNKNOWNs, query-embedding fallbacks and timeouts.
 - `pnpm check`: **826 tests, 826 passed, 0 failed, 0 skipped** (767 baseline + 59 new), about 7m46s on Node 24.21.0 / pnpm 11.19.0. `pnpm web:player:build`, `check:web:local-http`, `check:web:restart` pass. Four-Worker package: **224** files (was 217: the provider, ledger, runner, purge helper, memory-embeddings and web-embeddings modules; the 116 SQL is bundled into the Workers).
 
+## Part 16 (time, topics, RPC rejected output, admin fixes)
+
+- Prompts changed on purpose: `characterLocalTime` (renamed; the UTC `currentTime` no longer reaches the models), the character's clock is not the player's, reviewer duty for assumed player time/sleep, no invented shared history, no claimed live games. POLICY_HASH `2bd7b236db8f307ac3a0a990c42647137efa6fb4f73b606004678b678563227d`, PROMPT_HASH `00448e452aa0172bcb5f69a6400690832d35fbd6ae32bfe7e2126cd9eb8b323b`; protocol fingerprint unchanged.
+- `rejected` is forwarded across the Worker RPC bridge on both sides (best effort, never awaited); proven through the two-Worker workerd path.
+- Topics/factOps: normalize (missing memoryId -> null, integer-string importance, unknown keys dropped), keep semantics strict; still-invalid metadata on an otherwise valid review is dropped (reply delivered, no memory) and counted in `topics_dropped`/`facts_dropped` (`120_memory_metadata_metrics.sql`, sha256 `5fe0cf7c482aa39772024210b75cccfecb2c738d7ecaf0ee3022db3b84275cde`; 45 steps). Every production caller passes `DROP_INVALID_METADATA`; `applyTextReview` without it stays strict.
+- Admin: stale per-tab CSRF after a cookie swap (login in another tab) caused the 403s; the client re-syncs once via GET /session. Inbox badge is a link labelled "N 条新共创".
+- `pnpm check`: **1133 tests, 1133 passed** (1113 + 20 new); `web:player:build`, `check:web:local-http`, `check:web:restart` pass.
+
 ## Part 13b (预演测试 evaluation workbench)
 
 - `119_preview_workbench.sql` (own version on both runners; `migrateWebProviderPreviewWorkbench` / `migrate-preview-workbench`): runs, run items, simulated-time marks, rejected stage output, eval sets and their versions. Admin-only synthetic data; the preview rows and billing ledger are untouched.

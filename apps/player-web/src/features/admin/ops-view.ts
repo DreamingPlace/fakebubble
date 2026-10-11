@@ -41,6 +41,12 @@ export function opsView(
         render: (d) =>
           d.review.samples ? `${percent(d.review.rate)}（${d.review.changed}/${d.review.samples}）` : '—',
       },
+      {
+        key: 'memoryDropped',
+        label: '话题/事实丢弃',
+        align: 'end',
+        render: (d) => `${d.memoryDropped?.topics ?? 0}/${d.memoryDropped?.facts ?? 0}`,
+      },
       { key: 'rateLimitRetries', label: '限流重试', align: 'end', render: (d) => String(d.rateLimitRetries) },
       { key: 'fallbacks', label: '回退', align: 'end', render: (d) => String(d.fallbacks) },
       {
@@ -82,7 +88,7 @@ export function opsView(
     bar.root,
     h('p', {
       class: 'admin-hint',
-      text: '只含数量与耗时，不含玩家内容或身份。p50/p95 按最近排名计算，括号内是样本数。',
+      text: '只含数量与耗时，不含玩家内容或身份。p50/p95 按最近排名计算，括号内是样本数。“话题/事实丢弃”是回复正常送出、但话题或事实格式不合法而未存入记忆的次数。',
     }),
     table.root,
   );

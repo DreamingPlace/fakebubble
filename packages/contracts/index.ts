@@ -131,6 +131,10 @@ export interface DialogueCandidate extends ReplyCandidate {
   endsSession: boolean;
   // Set by the review step, never by the model's draft: true when the review replaced the draft's bubbles.
   reviewChanged?: boolean;
+  // Set by the review step: the model's topics / factOps were invalid after normalization and were dropped (the reply
+  // itself was valid), so no memory is stored for the turn. Counted in the daily metrics.
+  topicsDropped?: boolean;
+  factsDropped?: boolean;
 }
 export interface TopicMemory {
   // Only the deferred memory-link experiment adds a catalog ID to model recall.

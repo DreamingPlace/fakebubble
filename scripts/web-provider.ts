@@ -14,6 +14,7 @@ import {
   migrateWebProviderCocreation,
   migrateWebProviderLogins,
   migrateWebProviderPreviewWorkbench,
+  migrateWebProviderMemoryMetrics,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -76,7 +77,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→119 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→120 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -111,8 +112,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderCocreation(store);
     migrateWebProviderLogins(store);
     migrateWebProviderPreviewWorkbench(store);
+    migrateWebProviderMemoryMetrics(store);
     return {
-      schema: 119,
+      schema: 120,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -253,6 +255,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-cocreation',
       'migrate-logins',
       'migrate-preview-workbench',
+      'migrate-memory-metrics',
       'render-assets',
       'admin-grant',
       'serve',
@@ -358,6 +361,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderPreviewWorkbench(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 119, previewWorkbench: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-memory-metrics') {
+    // An existing provider-* instance at schema 119 gains the dropped-topics / dropped-facts daily counters.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderMemoryMetrics(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 120, memoryMetrics: true }) + '\n');
     } finally {
       store.close();
     }

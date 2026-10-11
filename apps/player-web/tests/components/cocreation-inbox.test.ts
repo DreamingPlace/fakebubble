@@ -667,8 +667,9 @@ test('the character workbench shows an unread badge per character, and none for 
   await bench.load();
   const rows = root.querySelectorAll('.character-directory-row');
   assert.equal(rows.length, 2);
-  assert.equal(rows[0]!.querySelector('.cocreation-badge')!.textContent, '3');
-  assert.equal(rows[0]!.querySelector('.cocreation-badge')!.getAttribute('aria-label'), '有 3 条新的共创');
+  // Part 16 (named exception): visible text "N 条新共创" and a link to the filtered inbox replace the bare number and its aria-label.
+  assert.equal(rows[0]!.querySelector('.cocreation-badge')!.textContent, '3 条新共创');
+  assert.equal(rows[0]!.querySelector('.cocreation-badge')!.getAttribute('href'), '#/cocreation/wei-guagua');
   assert.equal(rows[1]!.querySelector('.cocreation-badge'), null);
   bench.dispose();
 });

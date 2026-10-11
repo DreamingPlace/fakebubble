@@ -17,8 +17,10 @@ import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server
 // (help vs. tool abuse, in-character deflection, distress carve-out, slang) to both prompts plus the review's coverage
 // mapping (prompt only; fingerprint unchanged): policy 2202ad5e…, prompt 7d0b0795…. Part 11e: persona voice, time restraint,
 // reviewer keeps voice, AI-honesty line (prompt only; fingerprint unchanged): policy c1b35adf…, prompt 3e75a258….
-const POLICY_HASH = 'c1b35adf68c45088b7861f63c4647866b3ef6d73d1ed003db404a0a9f3f0e9cc';
-const PROMPT_HASH = '3e75a25831f35f9244a71e700f9505a1a04c1dcfc18356803e5fd352e7ad3277';
+// Part 16: characterLocalTime is the character's own clock (never the player's), no UTC currentTime in the model JSON, no invented
+// shared history or live-game claims (prompt only; fingerprint unchanged): policy 2bd7b236…, prompt 00448e45….
+const POLICY_HASH = '2bd7b236db8f307ac3a0a990c42647137efa6fb4f73b606004678b678563227d';
+const PROMPT_HASH = '00448e452aa0172bcb5f69a6400690832d35fbd6ae32bfe7e2126cd9eb8b323b';
 const FINGERPRINT_DIGEST = 'b42431c97a4cc92b10d8c7c215ead160884d9248397736216b5fc9273883ef99';
 
 test('accepted-v7 policy hash, prompt hash and protocol fingerprint are pinned', () => {

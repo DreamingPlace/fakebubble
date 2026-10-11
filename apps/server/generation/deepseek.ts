@@ -15,6 +15,7 @@ import { groupEvidenceSource } from '../memory/context-evidence.ts';
 import { TextGenerationFailure } from './text-generation-error.ts';
 import {
   applyTextReview,
+  DROP_INVALID_METADATA,
   draftTool,
   parseTextDraft,
   reviewTool,
@@ -516,7 +517,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
           knownParsedDraft ??
           (await call('draft', messages, draftTool(frozen.deliveryMode), (value) => parseTextDraft(value, frozen)));
         const reply = await call('review', reviewPromptMessages(frozen, draft), reviewTool(frozen), (value) =>
-          applyTextReview(value, draft, frozen),
+          applyTextReview(value, draft, frozen, DROP_INVALID_METADATA),
         );
         return { ...metadata(), reply };
       } finally {

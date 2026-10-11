@@ -15,7 +15,7 @@ import { WEB_LIMITS } from '../../../config/web-v1.ts';
 import { webConcurrency } from '../../../config/web-concurrency.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { DeepSeekTextGenerator } from '../generation/deepseek.ts';
-import { applyTextReview, parseTextDraft } from '../generation/accepted-text-protocol.ts';
+import { applyTextReview, DROP_INVALID_METADATA, parseTextDraft } from '../generation/accepted-text-protocol.ts';
 import { budgetHash } from '../budget/web-provider-budget-contract.ts';
 import { currentWebPreview, previewDigest, previewPolicy, readWebPreview } from './web-character-preview.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
@@ -367,7 +367,7 @@ export class WebCharacterPreviewRunner {
         if (phase === 'draft') parseTextDraft(stage.payload, request);
         else {
           const draft = this.known(id, 'draft');
-          applyTextReview(stage.payload, parseTextDraft(draft.payload, request), request);
+          applyTextReview(stage.payload, parseTextDraft(draft.payload, request), request, DROP_INVALID_METADATA);
         }
       }
       const price = this.store.get<{ upper_micros_per_unit: number }>(
@@ -439,7 +439,12 @@ export class WebCharacterPreviewRunner {
         this.attempts(id).every((a) => a.shared_settled === 1),
         'PREVIEW_BILL_UNCONFIRMED',
       );
-      const reply = applyTextReview(review.payload, parseTextDraft(draft.payload, request), request);
+      const reply = applyTextReview(
+        review.payload,
+        parseTextDraft(draft.payload, request),
+        request,
+        DROP_INVALID_METADATA,
+      );
       const stages = [draft.metadata, review.metadata];
       const usage = stages.reduce(
         (sum, stage) => ({

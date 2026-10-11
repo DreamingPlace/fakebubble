@@ -101,7 +101,7 @@ export function requireWebContent(
   if (
     principal.kind === 'invite' &&
     row.state === 'protected' &&
-    [111, 112, 113, 114, 115, 116, 117, 118, 119].includes(
+    [111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
       store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
     )
   ) {
