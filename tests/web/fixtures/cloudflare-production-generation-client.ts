@@ -8,12 +8,26 @@ import type { SpeechRequest } from '../../../packages/contracts/audio.ts';
 export default {
   async fetch(request: Request, env: { GENERATION: WebGenerationBinding }) {
     const starts: string[] = [],
-      stages: string[] = [];
+      stages: string[] = [],
+      events: string[] = [],
+      offered: { raw: string; errorCode: string }[] = [];
+    const diag = new URL(request.url).searchParams.has('diag');
+    const diagnostics = () => (diag ? { events, offered } : {});
     const meter: ProviderMeter = {
       reserve: () => ({
         start: (stage) => {
           starts.push(stage);
-          return { finish() {} };
+          return {
+            finish(value) {
+              events.push(
+                `finish:${value.outcome}:${value.errorCode}:${value.usage.unit === 'tokens' ? value.usage.outputTokens : 'n/a'}`,
+              );
+            },
+            rejected(output) {
+              offered.push(output);
+              events.push('rejected');
+            },
+          };
         },
         close() {},
       }),
@@ -52,9 +66,15 @@ export default {
         },
         meter,
       );
-      return Response.json({ ok: true, starts, stages });
+      return Response.json({ ok: true, starts, stages, ...diagnostics() });
     } catch (error) {
-      return Response.json({ ok: false, starts, stages, error: error instanceof Error ? error.message : 'UNKNOWN' });
+      return Response.json({
+        ok: false,
+        starts,
+        stages,
+        ...diagnostics(),
+        error: error instanceof Error ? error.message : 'UNKNOWN',
+      });
     }
   },
 };

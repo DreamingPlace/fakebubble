@@ -851,3 +851,70 @@ test('review_changed is 0 when the review accepts the draft unchanged', async (t
   f.runner.publish(f.lease, 'operation');
   assert.equal(f.metrics().review_changed, 0);
 });
+
+// Part 16: memory metadata (topics / factOps) never fails a reply. The same fixture with and without invalid topics.
+const memoryDropSql = readFileSync(
+  new URL('../../../apps/server/web-migrations/120_memory_metadata_metrics.sql', import.meta.url),
+  'utf8',
+);
+async function publishWithTopics(t: TestContext, patch: (audit: Record<string, unknown>) => void) {
+  const f = stage(t, {
+    fish: (_call, request) => fishOk(request),
+    fetch: (_call, tool) => {
+      const envelope = tool === 'submit_dialogue_draft' ? draftEnvelope(f.request) : acceptedAuditEnvelope(f.request);
+      if (tool !== 'submit_dialogue_draft') {
+        const call = envelope.choices[0]!.message.tool_calls[0]!.function;
+        const audit = JSON.parse(call.arguments);
+        patch(audit);
+        call.arguments = JSON.stringify(audit);
+      }
+      return Response.json(envelope);
+    },
+  });
+  f.store.db.exec(memoryDropSql);
+  await f.readyForAudio();
+  for (
+    let claim = f.queue.claimAudio(f.lease, 'audio-worker');
+    claim;
+    claim = f.queue.claimAudio(f.lease, 'audio-worker')
+  )
+    await f.runner.runSpeech(claim, signal());
+  f.runner.publish(f.lease, 'operation');
+  return f;
+}
+const memoryRows = (f: Awaited<ReturnType<typeof publishWithTopics>>) =>
+  f.store.get<{ n: number }>('SELECT count(*) n FROM memory_topics')!.n;
+
+test('invalid topics on an otherwise valid review: the reply is delivered, no memory is stored, the daily counter rises', async (t) => {
+  const control = await publishWithTopics(t, () => {});
+  assert.equal(control.operation().status, 'published');
+  assert.ok(memoryRows(control) > 0, 'control: the valid topics are stored');
+  assert.deepEqual([control.metrics().topics_dropped, control.metrics().facts_dropped], [0, 0]);
+
+  const f = await publishWithTopics(t, (audit) => {
+    audit.topics = [
+      { key: '解方程', summary: '', importance: '99', sourceKind: 'player_statement', evidenceMessageIds: [] },
+    ];
+    audit.factOps = 'none';
+  });
+  assert.equal(f.operation().status, 'published', 'the reply itself is delivered');
+  assert.equal(memoryRows(f), 0, 'no memory is stored for the turn');
+  assert.deepEqual([f.metrics().topics_dropped, f.metrics().facts_dropped], [1, 1]);
+  const origin = 'https://admin.fixture.invalid';
+  const admin = new WebAccountAdmin(f.store, f.clock, origin);
+  const owner = admin.login(admin.issueLoginGrant().token, origin);
+  const view = admin.stageLatency(owner.cookie, owner.csrf, origin, 7) as {
+    days: { memoryDropped: { topics: number; facts: number } }[];
+  };
+  assert.deepEqual(view.days[0]!.memoryDropped, { topics: 1, facts: 1 });
+});
+
+test('a coverage failure is still a failed stage even when the topics are also invalid', async (t) => {
+  await assert.rejects(
+    publishWithTopics(t, (audit) => {
+      audit.coverage = {};
+      audit.topics = 'none';
+    }),
+    /INCOMPLETE_COVERAGE/,
+  );
+});

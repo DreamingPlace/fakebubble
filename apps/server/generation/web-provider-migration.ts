@@ -135,3 +135,22 @@ export function migrateWebProviderPreviewWorkbench(store: Store) {
     store.db.exec('PRAGMA user_version = 119');
   });
 }
+
+/** Node-only 119→120: daily counters for dropped topics / factOps (120_memory_metadata_metrics.sql). */
+export function migrateWebProviderMemoryMetrics(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 119 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_preview_runs'"),
+      'WEB_PROVIDER_MEMORY_METRICS_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/120_memory_metadata_metrics.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 120');
+  });
+}

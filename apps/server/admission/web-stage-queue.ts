@@ -13,7 +13,7 @@ import {
 import { requireWebContent, webDataLifecycleEnabled } from './web-retention.ts';
 import { freezeWebV7Request } from '../generation/web-v7-request.ts';
 import { readWebV7Request } from '../generation/web-v7-request.ts';
-import { applyTextReview, parseTextDraft } from '../generation/accepted-text-protocol.ts';
+import { applyTextReview, DROP_INVALID_METADATA, parseTextDraft } from '../generation/accepted-text-protocol.ts';
 import type { SnapshotScope } from '../generation/web-input-snapshot.ts';
 import { audioStartedExpr, metricsEnabled, recordAudioClaim, recordTextClaim } from './web-stage-metrics.ts';
 import type { QueryVector } from '../generation/web-embed-runner.ts';
@@ -341,7 +341,7 @@ export class WebStageQueue {
 
   claimAudio(coordinator: WebCoordinatorLease, owner: string): WebStageClaim | null {
     if (
-      [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119].includes(
+      [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
         this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       )
     )
@@ -356,7 +356,7 @@ export class WebStageQueue {
         scheduler = this.validateCoordinator(coordinator, now);
       const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
       ensure(
-        [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119].includes(schema) &&
+        [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(schema) &&
           (schema < 113 || webDataLifecycleEnabled(this.store)),
         'WEB_SYNTHETIC_VOICE_MIGRATION_REQUIRED',
       );
@@ -596,7 +596,12 @@ export class WebStageQueue {
       'WEB_FULL_REVIEW_MIGRATION_REQUIRED',
     );
     const frozen = readWebV7Request(this.store, claim.operationId);
-    const candidate = applyTextReview(input.review, parseTextDraft(input.draft, frozen.request), frozen.request);
+    const candidate = applyTextReview(
+      input.review,
+      parseTextDraft(input.draft, frozen.request),
+      frozen.request,
+      DROP_INVALID_METADATA,
+    );
     const serialized = JSON.stringify(candidate),
       candidateDigest = createHash('sha256').update(serialized).digest('hex');
     const outputDigests = {

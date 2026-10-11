@@ -1,8 +1,8 @@
 import { isAdminPage, type AdminPage } from './admin-nav.ts';
 
-/** `#/characters/jojo` → { page: 'characters', id: 'jojo' }. Only characters and preview carry an id. */
+/** `#/characters/jojo` → { page: 'characters', id: 'jojo' }. Only characters, preview and cocreation (the inbox filtered to one character) carry an id. */
 export type AdminRoute = { page: AdminPage; id: string | null };
-const WITH_ID: readonly AdminPage[] = ['characters', 'preview'];
+const WITH_ID: readonly AdminPage[] = ['characters', 'preview', 'cocreation'];
 
 export function parseRoute(hash: string): AdminRoute | null {
   const match = /^#\/([a-z]+)(?:\/([A-Za-z0-9_-]{1,128}))?\/?$/.exec(hash);

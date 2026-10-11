@@ -306,7 +306,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       else nav.removeAttribute('aria-current');
     }
   };
-  const WITH_ID: readonly string[] = ['characters', 'preview'];
+  const WITH_ID: readonly string[] = ['characters', 'preview', 'cocreation'];
   const closeMenu = () => {
     q<HTMLElement>('#admin-account-menu').hidden = true;
     q<HTMLElement>('#admin-account-toggle').setAttribute('aria-expanded', 'false');
@@ -372,7 +372,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         if (routeId) await previewBench!.open(routeId);
         else previewSplit.detail.replaceChildren(previewHint());
       };
-    if (page === 'cocreation' && inbox && canCocreation('cocreation.read')) return () => inbox!.load();
+    if (page === 'cocreation' && inbox && canCocreation('cocreation.read'))
+      return () => {
+        // #/cocreation/<id> is the inbox filtered to that character (the badge on its card); plain #/cocreation keeps the filter.
+        if (routeId) inbox!.showCharacter(routeId);
+        return inbox!.load();
+      };
     if (page === 'members') return loadMembers;
     if (page === 'invites' && can('invites.read')) return () => records.load();
     if (page === 'grants' && can('invites.read')) return () => grants.load();
@@ -466,6 +471,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   workbench = characterWorkbench(q('#admin-characters'), {
     ...workbenchHost,
     badges: () => unread,
+    openInbox: (characterId) => {
+      if (busy || disposed || !navigate('cocreation', characterId)) return;
+      const load = loader();
+      if (load) void run(load);
+    },
     preview: 'none',
     onView: (id) => {
       if (quiet || page !== 'characters') return;

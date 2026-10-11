@@ -11,7 +11,12 @@ import { recordRelationshipEvents, relationshipVersion } from './relationships.t
 import { recordSceneBubble, sceneRevision, sceneState, touchScene } from './scenes.ts';
 import { userStore, type UserStore } from '../platform/store-boundary.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
-import { metricsEnabled, recordFallbackPublished, recordReviewChanged } from '../admission/web-stage-metrics.ts';
+import {
+  metricsEnabled,
+  recordFallbackPublished,
+  recordMemoryDropped,
+  recordReviewChanged,
+} from '../admission/web-stage-metrics.ts';
 import { requireCurrentInputSnapshot } from '../generation/web-input-snapshot.ts';
 import type { WebPrivateAudioFiles, PrivateAudioExpectation } from '../audio/web-private-audio-files.ts';
 import type { WebCoordinatorLease } from '../admission/web-stage-queue.ts';
@@ -607,7 +612,7 @@ export class WebVerticalPublisher {
             (principal.kind === 'account' &&
               this.store.get('SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1', claim.principalId)) ||
             (principal.kind === 'invite' &&
-              [111, 112, 113, 114, 115, 116, 117, 118, 119].includes(
+              [111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
                 this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
               ) &&
               requireWebContent(this.store, this.clock, claim.principalId, claim.worldId))),
@@ -1021,6 +1026,7 @@ export class WebVerticalPublisher {
         now,
       );
       recordReviewChanged(this.store, claim.operationId, candidate.reviewChanged, now);
+      recordMemoryDropped(this.store, claim.operationId, candidate, now);
       if (fallback) recordFallbackPublished(this.store, claim.operationId);
       return receipt;
     });

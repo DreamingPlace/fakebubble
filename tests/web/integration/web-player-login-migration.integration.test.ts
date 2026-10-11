@@ -225,17 +225,17 @@ test('the lifecycle audit knows the new tables, and the purge removes login, cha
 
 test('Cloudflare runner: 118 is the same SQL on both authorities and its ledger hash is stable', () => {
   const { inline, r2 } = expectedWebMigrations();
-  // Extended for migration 119: 118 is now second from last and the ledger has 44 steps.
-  const last = (list: { version: number; sha256: string }[]) => list.at(-2)!;
-  assert.equal(inline.length, 44);
-  assert.equal(r2.length, 44);
+  // Extended for migration 120: 118 is now third from last and the ledger has 45 steps.
+  const last = (list: { version: number; sha256: string }[]) => list.at(-3)!;
+  assert.equal(inline.length, 45);
+  assert.equal(r2.length, 45);
   assert.equal(last(inline).version, 118);
   assert.equal(last(r2).version, 118);
   assert.equal(last(inline).sha256, sha(sql118()), 'the ledger hash is the sha256 of the SQL file as written');
   assert.equal(last(inline).sha256, last(r2).sha256, 'only the R2 schema-113 step differs between the lists');
   assert.deepEqual(
     inline.map((m) => m.version),
-    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 20 }, (_, i) => 100 + i)],
+    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 21 }, (_, i) => 100 + i)],
   );
 });
 
@@ -251,11 +251,12 @@ test('Cloudflare runner: an existing authority at 117 upgrades to 118 through th
     assert.equal(result.before.length, 42, mode);
     assert.equal(result.before.at(-1)?.startsWith('117:'), true, mode);
     assert.deepEqual(result.after.slice(0, 42), result.before, `${mode}: applied steps are untouched`);
-    // Extended for migration 119: opening the authority applies 118 and then 119.
-    assert.equal(result.after.length, 44, mode);
-    assert.equal(result.after.at(-2), `118:${sha(sql118())}`, mode);
-    assert.equal(result.after.at(-1)?.startsWith('119:'), true, mode);
-    assert.deepEqual(result.version, { user_version: 119 }, mode);
+    // Extended for migration 120: opening the authority applies 118, 119 and then 120.
+    assert.equal(result.after.length, 45, mode);
+    assert.equal(result.after.at(-3), `118:${sha(sql118())}`, mode);
+    assert.equal(result.after.at(-2)?.startsWith('119:'), true, mode);
+    assert.equal(result.after.at(-1)?.startsWith('120:'), true, mode);
+    assert.deepEqual(result.version, { user_version: 120 }, mode);
     assert.deepEqual(result.logins, { logins: true, challenges: true, daily: true, throttle: true }, mode);
   }
 });

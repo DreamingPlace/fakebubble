@@ -635,6 +635,10 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     deactivate: () => {
       activated = false;
     },
+    /** Filters the list to one character (the badge link); the next load() applies it. */
+    showCharacter: (characterId: string | null) => {
+      filter = { ...filter, characterId };
+    },
     clear: () => {
       items = [];
       detail = null;

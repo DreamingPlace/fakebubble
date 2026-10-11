@@ -18,7 +18,12 @@ import {
   requestFallback,
 } from '../admission/web-stage-metrics.ts';
 import { inspectPCM } from '../../../workers/audio/wav.ts';
-import { parseTextDraft, applyTextReview, protocolFingerprint } from './accepted-text-protocol.ts';
+import {
+  parseTextDraft,
+  applyTextReview,
+  DROP_INVALID_METADATA,
+  protocolFingerprint,
+} from './accepted-text-protocol.ts';
 import { textPromptHash } from './accepted-text-prompt.ts';
 import { requireWebContent, webCloudContentExpired } from '../admission/web-retention.ts';
 import type { WebStageClaim } from '../admission/web-stage-queue.ts';
@@ -1273,7 +1278,7 @@ export class WebProviderOffline {
       );
       const draft = this.readKnown({ operationId: claim.operationId, phase: 'draft', ordinal: -1 }, scope);
       const review = this.readKnown({ operationId: claim.operationId, phase: 'review', ordinal: -1 }, scope);
-      const candidate = applyTextReview(review, parseTextDraft(draft, request), request);
+      const candidate = applyTextReview(review, parseTextDraft(draft, request), request, DROP_INVALID_METADATA);
       const candidateJson = JSON.stringify(candidate),
         candidateDigest = hash(candidateJson);
       const output = this.store.all<{ phase: string; output_digest: string }>(
@@ -1765,7 +1770,7 @@ export class WebProviderOffline {
     const reviewKey = { operationId, phase: 'review' as const, ordinal: -1 };
     const draft = this.readKnown(draftKey, scope);
     const review = this.readKnown(reviewKey, scope);
-    const candidate = applyTextReview(review, parseTextDraft(draft, request), request);
+    const candidate = applyTextReview(review, parseTextDraft(draft, request), request, DROP_INVALID_METADATA);
     ensure(candidate.bubbles.length === speechOrdinals.length, 'WEB_PROVIDER_PUBLICATION_INVALID');
     ensure(
       this.store.get<{ n: number }>(

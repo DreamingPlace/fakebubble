@@ -56,6 +56,7 @@ const WEB_EMBEDDING_SCHEMA = 116;
 const WEB_COCREATION_SCHEMA = 117;
 const WEB_PLAYER_LOGIN_SCHEMA = 118;
 const WEB_PREVIEW_WORKBENCH_SCHEMA = 119;
+const WEB_MEMORY_METRICS_SCHEMA = 120;
 const webDbName = 'web.sqlite';
 const webMarkerName = '.web-instance.json';
 type WebMarker = {
@@ -215,6 +216,7 @@ function webIdentity(
             WEB_COCREATION_SCHEMA,
             WEB_PLAYER_LOGIN_SCHEMA,
             WEB_PREVIEW_WORKBENCH_SCHEMA,
+            WEB_MEMORY_METRICS_SCHEMA,
           ]
         : []),
     ].includes(version),
@@ -274,7 +276,7 @@ function preflightWeb(path: string, options: WebStoreOptions) {
         version >= WEB_SCHEMA &&
           version <=
             (options.providerRuntime
-              ? WEB_PREVIEW_WORKBENCH_SCHEMA
+              ? WEB_MEMORY_METRICS_SCHEMA
               : options.inviteTest
                 ? WEB_INVITE_IDENTITY_SCHEMA
                 : WEB_DATA_SCHEMA),
@@ -410,6 +412,8 @@ export class Store {
                         WEB_COCREATION_SCHEMA,
                         WEB_PLAYER_LOGIN_SCHEMA,
                         WEB_PREVIEW_WORKBENCH_SCHEMA,
+                        WEB_MEMORY_METRICS_SCHEMA,
+                        WEB_MEMORY_METRICS_SCHEMA,
                       ]
                     : []),
                 ].includes(version)

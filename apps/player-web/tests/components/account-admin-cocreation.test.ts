@@ -116,8 +116,8 @@ function setup(t: test.TestContext, state: AccountAdminSession, withInbox = true
               calls.push('counts');
               return { 'wei-guagua': 2 };
             },
-            list: async () => {
-              calls.push('list');
+            list: async (filter?: { characterId?: string | null }) => {
+              calls.push(filter?.characterId ? `list:${filter.characterId}` : 'list');
               return { items: [], next: null };
             },
             detail: async () => {
@@ -198,7 +198,8 @@ test('the character list asks for the unread counts first and shows the badge', 
     (n) => n.className === 'cocreation-badge',
   );
   assert.equal(badge.length, 1, 'only 瓜瓜 has unread ideas');
-  assert.equal(badge[0]!.textContent, '2');
+  // Part 16 (named exception): the badge's visible text is now "N 条新共创" and it is a link, no longer a bare number.
+  assert.equal(badge[0]!.textContent, '2 条新共创');
 });
 
 test('a member without the permission never asks for counts and sees no badge', async (t) => {
@@ -211,5 +212,33 @@ test('a member without the permission never asks for counts and sees no badge', 
   assert.equal(
     descendants(f.root.querySelector('#admin-characters')).filter((n) => n.className === 'cocreation-badge').length,
     0,
+  );
+});
+
+test('the badge on a card is a link that opens the 共创收件箱 filtered to that character, not the profile', async (t) => {
+  const f = setup(t, session(['cocreation.read', 'category.characters']));
+  await f.mount();
+  f.root.querySelector('[data-page="characters"]').fire();
+  await flush();
+  await flush();
+  f.calls.length = 0;
+  const [badge] = descendants(f.root.querySelector('#admin-characters')).filter(
+    (n) => n.className === 'cocreation-badge',
+  );
+  assert.equal(badge!.textContent, '2 条新共创', 'visible text, not only a tooltip');
+  assert.equal(badge!.attributes.get('href'), '#/cocreation/wei-guagua');
+  let prevented = false;
+  badge!.addEventListener('click', (event) => {
+    prevented = event.defaultPrevented;
+  });
+  badge!.fire();
+  await flush();
+  await flush();
+  assert.equal(prevented, true, 'the click is handled in place');
+  assert.equal(f.root.querySelector('main').attributes.get('data-surface'), 'cocreation');
+  assert.deepEqual(
+    f.calls,
+    ['list:wei-guagua'],
+    'the inbox opened filtered to 瓜瓜; no character detail was requested',
   );
 });
