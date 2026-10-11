@@ -206,7 +206,10 @@ try {
       assert.equal(response.headers['x-content-type-options'], 'nosniff');
       assert.equal(
         response.headers['cache-control'],
-        name === 'index.html' ? 'no-store' : 'public, max-age=31536000, immutable',
+        // Part 17 named exception: the two legal pages are unhashed static HTML, so like index.html they are no-store.
+        ['index.html', 'privacy.html', 'terms.html'].includes(name)
+          ? 'no-store'
+          : 'public, max-age=31536000, immutable',
       );
     }
     assert.match(String(page.headers['content-type']), /^text\/html/);
