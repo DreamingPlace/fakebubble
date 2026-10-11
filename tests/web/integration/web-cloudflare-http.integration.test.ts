@@ -294,7 +294,8 @@ test('administrator email identity and granular permissions persist; removal nev
   const grant = await f.call(`${API}/admin/members/issue`, owner, input);
   const login = await f.call(`${API}/admin/login`, member, { token: grant.token });
   assert.equal(login.member.email, null);
-  assert.deepEqual(login.member.permissions, ['invites.issue']);
+  // Part 13a exception (共生项): the stored set is normalized, so issuing brings the read permission it needs.
+  assert.deepEqual(login.member.permissions, ['invites.issue', 'invites.read']);
   await f.call(`${API}/admin/members/list`, member, {}, 403);
   await f.call(
     `${API}/admin/email/register`,

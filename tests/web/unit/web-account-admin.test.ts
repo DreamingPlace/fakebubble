@@ -361,15 +361,19 @@ test('split invitation revocations are independent and legacy combined grants ex
   const f = fixture(t),
     { session } = f.create(),
     id = f.admin.authorize(session.cookie, session.csrf, origin).sessionId;
+  // Part 13a exception (共生项): the fixture's default set also holds invites.issue, which now brings invites.read, so
+  // the legacy-only check starts from the legacy combined grant alone. The legacy value itself still adds nothing.
+  f.admin.setPermissions(...f.auth, session.member.id, ['invites.revoke']);
   for (const permission of ['invites.revoke-code', 'invites.revoke-access'] as const)
     requireWebAdminMembership(f.store, id, permission);
   assert.throws(() => requireWebAdminMembership(f.store, id, 'invites.read'), /ADMIN_PERMISSION_REQUIRED/);
   for (const permission of ['invites.revoke-code', 'invites.revoke-access'] as const) {
     f.admin.setPermissions(...f.auth, session.member.id, [permission]);
     requireWebAdminMembership(f.store, id, permission);
+    // Part 13a exception (共生项): a split revocation now carries invites.read, stored by the server's normalization.
+    requireWebAdminMembership(f.store, id, 'invites.read');
     for (const other of [
       'invites.issue',
-      'invites.read',
       permission === 'invites.revoke-code' ? 'invites.revoke-access' : 'invites.revoke-code',
     ] as const)
       assert.throws(() => requireWebAdminMembership(f.store, id, other), /ADMIN_PERMISSION_REQUIRED/);
@@ -476,4 +480,67 @@ test('an in-flight legacy code still works only for its original challenge; no n
   const restarted = new WebAccountAdmin(f.store, f.clock, origin);
   const bound = await restarted.finishBinding(...f.auth, challenge.challengeId, legacy.toLowerCase(), password);
   assert.equal(bound.member.email, 'owner@example.com');
+});
+
+// ---- Part 13a: 共生项 (permission dependencies) are normalized by the server ---------------------------------------
+test('a saved permission set is normalized: scoped character grants add what they need in the same scope; the stored and audited set is the normalized one', (t) => {
+  const f = fixture(t),
+    { session } = f.create();
+  const saved = f.admin.setPermissions(...f.auth, session.member.id, [
+    'characters.publish:jojo',
+    'characters.approve-materials:*',
+    'characters.edit:wei-guagua',
+    'invites.revoke-access',
+    'cocreation.manage',
+  ]);
+  const expected = [
+    'characters.approve-materials:*',
+    'characters.edit:wei-guagua',
+    'characters.materials:*',
+    'characters.preview:jojo',
+    'characters.publish:jojo',
+    'characters.read:*',
+    'characters.read:jojo',
+    'characters.read:wei-guagua',
+    'cocreation.manage',
+    'cocreation.read',
+    'invites.read',
+    'invites.revoke-access',
+  ];
+  assert.deepEqual(saved.member.permissions, expected);
+  assert.deepEqual(f.admin.session(session.cookie).member.permissions, expected);
+  const audited = f.store
+    .all<{ action: string }>("SELECT action FROM web_admin_audit WHERE action LIKE 'permissions:%' ORDER BY rowid DESC")
+    .at(0)!.action;
+  assert.equal(audited, `permissions:${expected.join(',')}`);
+});
+
+test('normalization leaves categories and the legacy combined revocation exactly as granted, and is idempotent', (t) => {
+  const f = fixture(t),
+    { session } = f.create();
+  const legacy = ['category.publication', 'invites.revoke'];
+  assert.deepEqual(f.admin.setPermissions(...f.auth, session.member.id, legacy).member.permissions, legacy);
+  const once = f.admin.setPermissions(...f.auth, session.member.id, ['characters.delete:*']).member.permissions;
+  assert.deepEqual(once, ['characters.delete:*', 'characters.read:*']);
+  assert.deepEqual(f.admin.setPermissions(...f.auth, session.member.id, once, once).member.permissions, once);
+});
+
+test('a member issued with a dependent permission gets the normalized set on first login', (t) => {
+  const f = fixture(t);
+  const grant = f.admin.issueMember(...f.auth, {
+    requestId: 'dependent',
+    label: '共创写手',
+    memberId: null,
+    permissions: ['characters.edit:*', 'cocreation.read'],
+  });
+  const member = f.admin.login(grant.token!, origin);
+  assert.deepEqual(member.member.permissions, ['characters.edit:*', 'characters.read:*', 'cocreation.read']);
+});
+
+test('normalization cannot push a saved set past the permission limit', (t) => {
+  const f = fixture(t),
+    { session } = f.create();
+  // 127 distinct edit grants are valid input, but each needs its own read grant: 254 stored entries.
+  const edits = Array.from({ length: ADMIN_PERMISSION_LIMIT - 1 }, (_, i) => `characters.edit:role-${i}`);
+  assert.throws(() => f.admin.setPermissions(...f.auth, session.member.id, edits), /INVALID_REQUEST/);
 });

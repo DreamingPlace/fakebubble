@@ -1483,19 +1483,6 @@ svg {
   outline: 3px solid #24584e;
   outline-offset: 3px;
 }
-@media (max-width: 600px) {
-  .account-admin-page {
-    border-radius: 0;
-    min-height: 100dvh;
-  }
-  .admin-nav {
-    gap: 6px;
-  }
-  .admin-nav button {
-    font-size: 13px;
-    padding: 10px;
-  }
-}
 
 /* local-3 keeps the invite form outside the private chat surface until trusted install. */
 .local-invite-mount[hidden],
@@ -1762,8 +1749,6 @@ svg {
   gap: 20px;
 }
 .account-admin-page .profile-diff pre {
-  max-height: 360px;
-  overflow: auto;
   background: #e7ede8;
   padding: 12px;
   border-radius: 8px;
@@ -1771,15 +1756,6 @@ svg {
 .account-admin-page audio {
   width: min(420px, 100%);
   margin: 10px 0;
-}
-@media (max-width: 600px) {
-  .account-admin-page .profile-diff {
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-  .account-admin-page .admin-toolbar > button {
-    flex: 1 1 auto;
-  }
 }
 
 .provider-start-error {
@@ -2359,36 +2335,37 @@ html.cc-open body {
   text-align: center;
   vertical-align: middle;
 }
+/* Inbox: list and detail are two separate scroll regions beside each other; the page itself does not scroll. */
 #admin-cocreation {
   display: grid;
   gap: 10px 22px;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.3fr);
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
 }
-@media (min-width: 900px) {
-  #admin-cocreation {
-    grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.3fr);
-    grid-auto-flow: row;
-    align-items: start;
-  }
-  #admin-cocreation > h2,
-  #admin-cocreation > p,
-  #admin-cocreation > .cc-toolbar {
-    grid-column: 1 / -1;
-  }
-  #admin-cocreation > .cc-detail {
-    grid-column: 2;
-    grid-row: 4 / span 4;
-    position: sticky;
-    top: 12px;
-    max-height: calc(100dvh - 24px);
-    overflow: auto;
-  }
-  #admin-cocreation > .cc-bulk,
-  #admin-cocreation > .cc-empty,
-  #admin-cocreation > .cc-list,
-  #admin-cocreation > .cc-more {
-    grid-column: 1;
-  }
+#admin-cocreation > h2,
+#admin-cocreation > p,
+#admin-cocreation > .cc-toolbar {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+#admin-cocreation > .cc-detail {
+  grid-column: 2;
+  grid-row: 4 / span 4;
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+}
+#admin-cocreation > .cc-bulk,
+#admin-cocreation > .cc-empty,
+#admin-cocreation > .cc-more {
+  grid-column: 1;
+}
+#admin-cocreation > .cc-list {
+  grid-column: 1;
+  min-height: 0;
+  overflow: auto;
 }
 .cc-toolbar {
   display: flex;
@@ -2747,4 +2724,718 @@ html.cc-open body {
   color: #5a6b66;
   font-size: 13px;
   text-decoration: underline;
+}
+
+/*
+ * Admin console shell (desktop browsers, 1280–1920 px; below 1024 px only a notice is shown).
+ * Layout and information architecture follow common admin templates, and the design tokens (neutral greys, 4–8 px
+ * radii, 14 px base type, soft shadows) are borrowed in spirit from the MIT-licensed Tabler (https://tabler.io) and
+ * shadcn-admin (https://github.com/satnaing/shadcn-admin). No code or assets were copied; this is our own CSS.
+ * The page never scrolls: the top bar and status bar are fixed rows and each region (content, list, detail, table,
+ * sidebar) scrolls on its own. A scroll container never sits inside another one.
+ */
+html:has(.admin-shell),
+body:has(.admin-shell) {
+  height: 100%;
+  overflow: hidden;
+}
+.local-admin-root:has(.admin-shell) {
+  display: block;
+  height: 100dvh;
+  min-height: 0;
+  padding: 0;
+  background: #f4f6f5;
+}
+.account-admin-page.admin-shell {
+  --ad-bg: #f4f6f5;
+  --ad-surface: #fff;
+  --ad-border: #dde3df;
+  --ad-text: #1f2a26;
+  --ad-muted: #5b6b64;
+  --ad-primary: #294b40;
+  --ad-primary-soft: #e3ece7;
+  --ad-danger: #a33a2a;
+  --ad-radius: 6px;
+  --ad-nav-width: 232px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+  background: var(--ad-bg);
+  color: var(--ad-text);
+  font-size: 14px;
+}
+.admin-shell[data-nav="collapsed"] {
+  --ad-nav-width: 56px;
+}
+.admin-narrow-notice {
+  display: none;
+}
+@media (max-width: 1023px) {
+  .admin-shell > :not(.admin-narrow-notice) {
+    display: none !important;
+  }
+  .account-admin-page.admin-shell .admin-narrow-notice {
+    display: grid;
+    place-items: center;
+    height: 100dvh;
+    padding: 32px;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 600;
+  }
+}
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  padding: 0 20px;
+  background: var(--ad-surface);
+  border-bottom: 1px solid var(--ad-border);
+}
+.admin-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.admin-shell .admin-brand h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.admin-env {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+  font-size: 12px;
+}
+.admin-env:empty {
+  display: none;
+}
+.admin-account {
+  position: relative;
+}
+.account-admin-page.admin-shell .admin-account-toggle {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-border);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  border-radius: var(--ad-radius);
+}
+.admin-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(31, 42, 38, 0.14);
+}
+.account-admin-page.admin-shell .admin-menu .admin-identity {
+  margin: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .admin-menu-item {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  margin: 2px 0 0;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ad-text);
+  text-align: left;
+  text-decoration: none;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .admin-menu-item:hover,
+.account-admin-page.admin-shell .admin-menu-item:focus-visible {
+  background: var(--ad-primary-soft);
+  filter: none;
+}
+.admin-frame {
+  display: grid;
+  grid-template-columns: var(--ad-nav-width) minmax(0, 1fr);
+  min-height: 0;
+}
+.admin-shell[data-surface="login"] .admin-frame {
+  grid-template-columns: minmax(0, 1fr);
+}
+.admin-sidebar {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 8px;
+  background: var(--ad-surface);
+  border-right: 1px solid var(--ad-border);
+}
+.account-admin-page.admin-shell .admin-nav {
+  display: flex;
+  margin: 0;
+  border-bottom: 0;
+  flex-wrap: nowrap;
+}
+.admin-sidebar[hidden] {
+  display: none;
+}
+.admin-nav-title {
+  margin: 14px 10px 4px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .admin-nav-title {
+  font-size: 12px;
+  margin: 14px 10px 4px;
+}
+.admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: var(--ad-radius);
+  color: var(--ad-text);
+  text-decoration: none;
+}
+.admin-nav-item[hidden] {
+  display: none;
+}
+.admin-nav-item:hover {
+  background: var(--ad-bg);
+}
+.admin-nav-item[aria-current="page"] {
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+  font-weight: 650;
+}
+.admin-nav-item:focus-visible,
+.account-admin-page.admin-shell button:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 2px;
+}
+.admin-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+.account-admin-page.admin-shell .admin-nav-collapse {
+  min-height: 34px;
+  margin: 8px 0 0;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ad-muted);
+  align-self: stretch;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.admin-shell[data-nav="collapsed"] .admin-nav-title,
+.admin-shell[data-nav="collapsed"] .admin-nav-item span,
+.admin-shell[data-nav="collapsed"] .admin-nav-collapse-text {
+  display: none;
+}
+.admin-shell[data-nav="collapsed"] .admin-nav-item,
+.admin-shell[data-nav="collapsed"] .admin-nav-collapse {
+  justify-content: center;
+  padding: 0;
+}
+.admin-shell[data-nav="collapsed"] .admin-nav-collapse span[aria-hidden] {
+  transform: rotate(180deg);
+}
+.admin-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 28px 32px;
+  outline: none;
+}
+.admin-content > * {
+  flex: none;
+}
+.admin-shell[data-surface="preview"] .admin-content,
+.admin-shell[data-surface="cocreation"] .admin-content {
+  overflow: hidden;
+}
+.admin-shell[data-surface="preview"] .admin-content > section[data-panel]:not([hidden]),
+.admin-shell[data-surface="cocreation"] .admin-content > section[data-panel]:not([hidden]) {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.admin-shell[data-surface="cocreation"] #admin-cocreation,
+.admin-shell[data-surface="preview"] #admin-preview {
+  flex: 1 1 0;
+  min-height: 0;
+}
+.account-admin-page.admin-shell .admin-content h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+.account-admin-page.admin-shell .admin-content p {
+  color: var(--ad-muted);
+}
+.admin-content > section[data-panel] {
+  width: 100%;
+  max-width: 1280px;
+}
+.admin-content > section[data-panel="members"],
+.admin-content > section[data-panel="invites"],
+.admin-content > section[data-panel="account"] {
+  max-width: 960px;
+}
+.admin-shell[data-surface="login"] .admin-content {
+  align-items: center;
+  padding-top: 12vh;
+}
+.admin-shell[data-surface="login"] .admin-content > section[data-panel]:not([hidden]) {
+  max-width: 420px;
+  padding: 24px 28px;
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(31, 42, 38, 0.06);
+}
+.admin-statusbar,
+.account-admin-page.admin-shell .invite-admin-status {
+  min-height: 30px;
+  margin: 0;
+  padding: 6px 20px;
+  border-top: 1px solid var(--ad-border);
+  background: var(--ad-surface);
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+/* Controls: denser than the mobile-first originals. */
+.account-admin-page.admin-shell input:not([type="checkbox"]),
+.account-admin-page.admin-shell select {
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: var(--ad-radius);
+  border-color: #c6d0ca;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell textarea {
+  font-size: 14px;
+  border-radius: var(--ad-radius);
+  min-height: 90px;
+}
+.account-admin-page.admin-shell button {
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: var(--ad-radius);
+  font-size: 14px;
+}
+.account-admin-page.admin-shell form {
+  max-width: 560px;
+  margin: 14px 0;
+}
+.account-admin-page.admin-shell .character-profile-form {
+  max-width: 760px;
+}
+.account-admin-page.admin-shell fieldset {
+  border-radius: var(--ad-radius);
+}
+.account-admin-page.admin-shell .admin-danger {
+  background: var(--ad-danger);
+  color: #fff;
+}
+.admin-shell .admin-hint,
+.admin-shell .admin-empty {
+  color: var(--ad-muted);
+}
+.admin-shell .admin-empty {
+  padding: 24px 12px;
+  text-align: center;
+}
+/* Result banner for one-time codes stays visible while the page scrolls. */
+.account-admin-page.admin-shell .invite-admin-result {
+  position: sticky;
+  top: -20px;
+  z-index: 5;
+  margin: 0 0 14px;
+  max-width: 960px;
+}
+/* Sticky toolbars and in-page section index (inside the single content scroll region). */
+.admin-bar,
+.account-admin-page.admin-shell .admin-content .admin-toolbar {
+  position: sticky;
+  top: -20px;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 14px;
+  margin: 0 -28px 12px;
+  padding: 10px 28px;
+  background: var(--ad-bg);
+  border-bottom: 1px solid var(--ad-border);
+}
+.admin-bar-title {
+  align-self: center;
+  font-size: 16px;
+}
+.admin-bar-spacer {
+  flex: 1;
+}
+.admin-filter {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .admin-filter input,
+.account-admin-page.admin-shell .admin-filter select {
+  width: 200px;
+}
+.admin-section-index {
+  position: sticky;
+  top: 48px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 -28px 12px;
+  padding: 8px 28px;
+  background: var(--ad-bg);
+  border-bottom: 1px solid var(--ad-border);
+}
+.admin-section-index[hidden] {
+  display: none;
+}
+/* Data table: the wrapper is the one scroll region, the header row stays put. */
+.admin-table-region {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: 8px;
+}
+.admin-table-wrap {
+  min-height: 0;
+  overflow: auto;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+.admin-table[hidden] {
+  display: none;
+}
+.admin-table caption {
+  position: absolute;
+  left: -9999px;
+}
+.admin-table th,
+.admin-table td {
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--ad-border);
+  white-space: nowrap;
+}
+.admin-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #eef2ef;
+  color: var(--ad-muted);
+  font-weight: 600;
+}
+.admin-table .is-end {
+  text-align: right;
+}
+.admin-table .admin-select-col {
+  width: 36px;
+}
+.account-admin-page.admin-shell .admin-table .admin-sort {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: inherit;
+}
+.admin-table th[aria-sort="ascending"] .admin-sort::after {
+  content: " ↑";
+}
+.admin-table th[aria-sort="descending"] .admin-sort::after {
+  content: " ↓";
+}
+.admin-table tbody tr:hover {
+  background: #f7faf8;
+}
+.admin-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--ad-primary-soft);
+  border-bottom: 1px solid var(--ad-border);
+}
+.admin-bulk-bar[hidden] {
+  display: none;
+}
+.admin-bulk-count {
+  margin-right: auto;
+  font-weight: 600;
+}
+.admin-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #e8ecea;
+  color: #3d4d46;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.admin-badge[data-tone="ok"] {
+  background: #d9eee2;
+  color: #1c5a40;
+}
+.admin-badge[data-tone="warn"] {
+  background: #f6ebcf;
+  color: #7a5a10;
+}
+.admin-badge[data-tone="danger"] {
+  background: #f6dcd6;
+  color: #8a2f20;
+}
+.admin-badge[data-tone="info"] {
+  background: #dce8f4;
+  color: #1f4f7a;
+}
+.admin-kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 18px;
+  margin: 0;
+}
+.admin-kv dt {
+  color: var(--ad-muted);
+}
+.admin-kv dd {
+  margin: 0;
+}
+/* Split pane: list | detail, each its own scroll region. */
+.admin-fill {
+  height: 100%;
+  min-height: 0;
+}
+.admin-split {
+  display: grid;
+  grid-template-columns: var(--split-list-width, 320px) 8px minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+.admin-split-list,
+.admin-split-detail {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.admin-split-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-right: 4px;
+}
+.admin-split-detail {
+  padding-left: 12px;
+}
+.admin-split-divider {
+  cursor: col-resize;
+  border-radius: 4px;
+  background: transparent;
+  touch-action: none;
+}
+.admin-split-divider:hover,
+.admin-split-divider:focus-visible {
+  background: var(--ad-border);
+  outline: none;
+}
+.account-admin-page.admin-shell .admin-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ad-border);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  text-align: left;
+}
+.account-admin-page.admin-shell .admin-pick[aria-current="true"] {
+  border-color: var(--ad-primary);
+  box-shadow: 0 0 0 1px var(--ad-primary);
+}
+.admin-pick-meta {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--ad-muted);
+}
+/* Drawer, dialog, toast. */
+.admin-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(31, 42, 38, 0.32);
+}
+.admin-backdrop[hidden],
+.admin-drawer[hidden] {
+  display: none;
+}
+.admin-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 51;
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 90vw);
+  background: var(--ad-surface);
+  box-shadow: -8px 0 24px rgba(31, 42, 38, 0.18);
+}
+.admin-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ad-border);
+}
+.admin-drawer-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+.admin-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 52;
+  width: min(440px, 90vw);
+  padding: 20px 24px;
+  transform: translate(-50%, -50%);
+  background: var(--ad-surface);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(31, 42, 38, 0.28);
+}
+.admin-dialog h3 {
+  margin: 0 0 8px;
+}
+.admin-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+.admin-toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 44px;
+  z-index: 60;
+  display: grid;
+  gap: 8px;
+}
+.admin-toast {
+  padding: 10px 16px;
+  border-radius: var(--ad-radius);
+  background: #1f2a26;
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(31, 42, 38, 0.25);
+}
+.admin-toast[data-tone="ok"] {
+  background: #1c5a40;
+}
+.admin-toast[data-tone="danger"] {
+  background: var(--ad-danger);
+}
+/* Permission editor. */
+.permission-matrix {
+  display: grid;
+  gap: 4px 28px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 880px;
+}
+.permission-matrix > legend,
+.permission-matrix > .permission-presets,
+.permission-matrix > .permission-note {
+  grid-column: 1 / -1;
+}
+.permission-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.permission-group h4 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .permission-matrix label.permission-item {
+  min-height: 30px;
+}
+.account-admin-page.admin-shell .permission-matrix .permission-help {
+  margin: 0 0 6px 29px;
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .permission-note {
+  min-height: 20px;
+  margin: 6px 0 0;
+  color: #7a5a10;
+}
+.account-admin-page.admin-shell .admin-members-wide,
+.account-admin-page.admin-shell .admin-member .permission-matrix {
+  max-width: none;
+}
+/* Characters and the inbox: wide content, sticky bars sit inside the one content scroll region. */
+.account-admin-page.admin-shell .character-directory {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.account-admin-page.admin-shell .character-directory-row {
+  padding: 12px 14px;
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: 8px;
+}
+.account-admin-page.admin-shell .character-flow,
+.account-admin-page.admin-shell .preview-panel {
+  max-width: 920px;
+}
+.account-admin-page.admin-shell .preview-card {
+  margin: 10px 0;
+  padding: 10px 14px;
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: 8px;
 }

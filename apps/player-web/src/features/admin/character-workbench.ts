@@ -12,6 +12,7 @@ import {
   hasCharacterPermission,
   type CharacterAdminAction,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
+import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { AdminFormError, characterForm, check, disclosure, el, emptyCharacter, field } from './character-form.ts';
 
 type Host = {
@@ -24,6 +25,13 @@ type Host = {
   previewPollMs?: number;
   /** Unread (new) co-creation submissions per character, shown as a badge on the character's row. */
   badges?: () => Record<string, number>;
+  /**
+   * Where the paid text preview lives. `inline` (default): inside the role's page. `none`: not rendered here, the
+   * admin shell shows it on its own page. `only`: this instance is that page and renders nothing but the preview.
+   */
+  preview?: 'inline' | 'none' | 'only';
+  /** Tells the shell which view is showing (the role id, or null for the directory) so it can keep the URL in step. */
+  onView?: (id: string | null) => void;
 };
 /** One client-side submission. The body (including requestId) is fixed when it is created. */
 type QueueItem = {
@@ -298,6 +306,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     }
     host.status('目录已更新。');
     sync();
+    host.onView?.(null);
   }
   async function open(target: string) {
     if (dirty) throw new AdminFormError('请先保存草稿，或放弃本页修改。');
@@ -308,6 +317,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     detail = next;
     renderDetail();
     host.status('资料已读取；保存草稿与正式发布是分开的操作。');
+    host.onView?.(target);
   }
   function openNew() {
     id = '';
@@ -328,7 +338,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     const tools = el('div');
     tools.className = 'admin-toolbar';
     root.append(tools);
-    button(tools, '返回人物目录', () => dirty, list, true);
+    if (host.preview !== 'only') button(tools, '返回人物目录', () => dirty, list, true);
     root.append(
       el('h2', snapshot ? profile.presentation.displayName : '新建角色草稿'),
       el(
@@ -339,8 +349,19 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       ),
     );
     if (snapshot && !can('edit')) root.append(el('p', '当前只有被授予的操作可用；资料编辑只读。'));
+    // A long page gets an index instead of one long scroll; it is filled in once the sections exist.
+    const index = el('nav');
+    index.className = 'admin-section-index';
+    index.hidden = true;
+    root.append(index);
     if (snapshot) for (const job of snapshot.previews) mergeLive(job);
-    if (snapshot?.draft) previewPanel(root, snapshot);
+    if (host.preview === 'only') {
+      if (snapshot?.draft) previewPanel(root, snapshot);
+      else root.append(el('p', '此角色还没有已保存的草稿。请先在“角色资料”保存草稿，再回来预演。'));
+      sync();
+      return;
+    }
+    if (snapshot?.draft && host.preview !== 'none') previewPanel(root, snapshot);
     editor = characterForm(root, profile, !snapshot, setDirty, (e) =>
       host.status(characterAdminError(e) ?? '请核对资料字段。'),
     );
@@ -418,6 +439,17 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         );
       }
     }
+    const sections: IndexedSection[] = [];
+    for (const node of root.children as unknown as HTMLElement[]) {
+      const tag = node.tagName.toLowerCase();
+      if (node.className === 'preview-panel') sections.push({ label: '预演测试', node });
+      else if (tag === 'form') sections.push({ label: '资料表单', node });
+      else if (node.className === 'character-flow')
+        for (const part of node.children as unknown as HTMLElement[])
+          if (part.tagName.toLowerCase() === 'details')
+            sections.push({ label: part.children[0]?.textContent ?? '', node: part });
+    }
+    sectionIndex(index, sections);
     sync();
   }
   function profileDiff(parent: HTMLElement, snapshot: CharacterDetail) {
@@ -1136,6 +1168,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   window.addEventListener('beforeunload', beforeUnload);
   return {
     load: list,
+    open,
     canLeave: () => !dirty,
     update: (working: boolean) => {
       busy = working;
