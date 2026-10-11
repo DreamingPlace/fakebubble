@@ -1,97 +1,95 @@
-# fakebubble
+# Part 15 review evidence
 
-[![check](https://github.com/DreamingPlace/fakebubble/actions/workflows/check.yml/badge.svg)](https://github.com/DreamingPlace/fakebubble/actions/workflows/check.yml)
+Code-only review; no deployment, no remote Cloudflare action. Base: `b82aa73` (PR #19). Node 24.19.0, pnpm 11.19.0.
 
-## English
+## Changes
+- Build the validated player import graph with pinned esbuild 0.25.12: one main bundle, shared chunks, and separate lazy admin/local bundles. Initial player load uses 3 JS files; the build lists 8 files total. Admin UI code and desktop-only policy are unchanged.
+- Hash JS filenames at build time; use full SHA-256 names for allowlisted CSS/static assets. Only verified hashed static paths get `public, max-age=31536000, immutable`. HTML, private manifest endpoint, API responses and errors remain `no-store`.
+- Keep the exact-byte manifest SHA-256 pin (`ASSET_MANIFEST_SHA256`) and per-file SHA-256 validation before cache eligibility. API cache headers cannot override edge no-store. Source scope, relative-import validation, explicit asset allowlist, size bounds, traversal/symlink rejection and atomic manifest write remain enforced.
+- Load only selected conversation history, then load other history on selection. Welcome audio was already demand-driven; preserve that and explicitly set `preload=none`, with regression coverage. No startup welcome-audio downloads were observed before or after.
+- Player-only mobile layout: combined login/register plus invite on one row, remaining count directly beneath that action group; exhausted hint is a slim banner. 16 px card gutters, viewport/safe-area sizing, internal message scrolling and keyboard-visible composer.
+- Follow-up requirements: orbit only on home/browse, not single-person chat; mobile vertical orbit radius is 30% of the former radius, role circles 54 → 45.9 px (-15%), with 48 px hit areas. Compact card-internal title uses 44 px row, 15 px text and 8 px horizontal padding, with message top spacing 24 → 12 px. Outer logo/account header is not additionally compressed by this last change. Desktop card becomes taller; desktop header/orbit styling unchanged.
 
-fakebubble is the web source for FAKE Bubble: browsing characters, text and voice conversations, a guest trial, invite-based upgrades, and administrator email sign-in with character profile management. It runs on Cloudflare Workers and Durable Objects (edge, business, budget and generation Workers), with an offline local server and fixture-based tests for development. The native iOS app is discontinued and is not part of this repository; text generation uses a single protocol, accepted-v7 (the experimental v10 protocol has been removed).
+## Measurement (honest scope)
 
-<!-- screenshot: docs/screenshot.png -->
+| Cold guest load | Requests before ready | Encoded response body bytes | Ready time |
+| --- | ---: | ---: | ---: |
+| Before (`b82aa73`) | 24 | 247,748 | 2,553.5 ms |
+| After (final source) | 8 | 179,350 | 1,791.8 ms |
 
-**Status:** source preview. Real-device acceptance is incomplete, and publishing the source is not a release or a production deployment. See [docs/STATUS.md](docs/STATUS.md).
+These are single localhost Chromium/IAB measurements, **not Safari Web Inspector measurements**. A test-only synthetic preview reuses the repository static server and synthetic provider contract, adds 150 ms response latency and a shared 1.6 Mbps payload budget, and has no external provider or real account data. Separate ports/build snapshots give cold asset paths. A small identical test-only observer records ready after the wired player header appears plus two animation frames. Payload totals include the observer; exclude HTTP headers. The final run includes a favicon 404 request (zero payload). Input readiness was checked manually; this is a readiness proxy, not a standardized TTI metric. Both traces contain no admin bundle and no audio request. The reported one-minute production load was not reproduced locally. The ≤10 / <5s target is met only by this substitute profile; Safari 4G acceptance remains open.
 
-### Quick start
+## Visual evidence
 
-Requires Node 24.19+ (24.x) and pnpm 11.19.0.
+Screenshots live exclusively on `review/part-15-screens`, not the feature branch. All content is synthetic.
+- Native Safari: iPhone 17 Pro / iOS 26.5 before/after guest and final keyboard screenshot. User opened the keyboard because simulator input automation failed. Final composer is fully visible above Safari's native accessory toolbar, and chat has no orbit.
+- Chromium 360 px before/after: guest, exhausted trial, signed-in, account sheet, invite sheet, several bubbles. Final chat geometry/screens at 360, 390, 430 px: root width equals scroll width, card gutters 16 px, title/back target 44 px. Desktop 1440×1000 after screenshot included.
+- `interim/` keyboard screenshot documents the discovered orbit bug before its fix; it is NOT final acceptance evidence.
 
-```sh
-pnpm install --frozen-lockfile
-pnpm check
-pnpm web:player:build
-pnpm web:preview
-```
+## Deviations / acceptance still open
 
-Then open <http://127.0.0.1:18530/>. This is a static interactive preview: no real AI replies, generated voice or admin account.
+- User replaced the original SE/16/16 Pro Max simulator matrix with iPhone 17 Pro. Boundary widths were checked in Chromium, not additional iOS models.
+- Simulator screenshots work, but simulator clicks fail with “no available window”; Safari Develop detects the device, but inspector activation fails. Therefore Safari Inspector throttling and the complete native before/after state matrix (including a baseline keyboard screenshot) could not be completed. Actual Android Chrome was not available. This PR stays draft until those checks are completed.
+- Measurement uses an isolated synthetic fixture harness instead of the full repository provider-local startup; repository local HTTP and restart scripts are checked separately. This avoids real credentials/providers and makes the before/after workload identical.
+- Safari's native address/accessory/keyboard UI remains; CSS does not remove it. The web-owned orbit/footer space is removed in chat.
+- Narrow named test exceptions only replace obsolete unbundled output paths/file counts with hashed-bundle assertions; no tests are deleted/skipped and security assertions are retained/strengthened. `tests/web/unit/web-text-policy.test.ts` and its pinned hashes are untouched.
 
-### Verify
+## Checks
 
-```sh
-pnpm check                    # format, types, and all unit/integration/E2E/load/component tests
-pnpm web:player:build         # build browser assets and the hash manifest
-pnpm check:web:local-http     # standalone local HTTPS instance
-pnpm check:web:restart        # persistence and restart recovery
-```
+- `pnpm check`: **1122/1122 passed**, 0 failed/skipped/cancelled; 364.32 s test phase. Includes formatting, pinned prompt check and all TypeScript checks. Main had 1113: **+9 tests**.
+- `pnpm web:player:build`: PASS, 8 manifest-listed files.
+- `pnpm check:web:local-http`: PASS (4 rounds, restart, private audio, cursor and same-IP limit).
+- `pnpm check:web:restart`: PASS (synthetic local-2 restart TLS).
+- `git diff --check`: PASS. Tests ran serially; no concurrent suites.
 
-Tests use synthetic fixtures and never call real providers or send email. OpenSSL is required.
 
-### Docs
+## Files changed
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [Deployment and configuration](docs/DEPLOYMENT.md)
-- [Status and known limitations](docs/STATUS.md)
-- [Security](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
+- `apps/player-web/src/app/main.ts`
+- `apps/player-web/src/features/prototype/preview.ts`
+- `apps/player-web/src/features/prototype/provider-binding.ts`
+- `apps/player-web/src/styles/main.css`
+- `apps/player-web/tests/components/account-sheet.test.ts`
+- `apps/player-web/tests/components/mobile-layout.test.ts`
+- `apps/player-web/tests/components/provider-binding.test.ts`
+- `apps/server/cloudflare/web-assets.ts`
+- `apps/server/platform/web-local-static.ts`
+- `package.json`
+- `pnpm-lock.yaml`
+- `pnpm-workspace.yaml`
+- `scripts/build-web-player.ts`
+- `scripts/test-web-local-http.ts`
+- `tests/web/e2e/web-player-static-c.e2e.test.ts`
+- `tests/web/unit/web-cloudflare-edge.test.ts`
+- `tests/web/unit/web-player-build.test.ts`
+- `workers/web-cloudflare/edge.ts`
+- `apps/server/platform/web-asset-cache.ts`
 
----
+## Gallery
 
-## 中文
+### Native iPhone 17 Pro Safari
 
-FAKE 泡泡的网页源码：人物浏览、文字与语音对话、游客体验、邀请升级，以及管理员邮箱登录和角色资料管理。
+Before guest:
 
-> **源码预览 · 真机验收未完成。** 公开源码不等于正式发布或生产部署。
-> 手机布局、键盘定位、手势与分条回复的修复仍需真实设备复验；桌面移动视口不算真机验收。
+![Before guest](before/iphone17pro-guest.png)
 
-## 范围
+After guest:
 
-- 玩家网页与网页管理员界面。
-- Cloudflare 的 edge / business / budget / generation 四个 Worker。
-- 本地离线测试服务、共享业务逻辑、接口契约、必要数据库迁移和回归测试。
-- 不包含原生 App（iOS 版已停止）、旧管理前端、旧 Git 历史、真实角色资料、声音样本、数据库、密钥或线上配置。
-- 文字生成只有 accepted-v7 一种协议；实验性的 v10 协议已移除。
+![After guest](after/iphone17pro-guest.png)
 
-部分共享模块及迁移（001–033）保留历史命名，因为网页的数据结构、生成链路和隔离回归仍依赖它们；这不表示网页开放了旧版所有功能。旧 iOS 时代的服务端模块（Engine、自主消息、媒体队列等）已删除。
+Final keyboard-open chat (user-assisted; compact card title, no orbit):
 
-## 快速查看网页
+![After keyboard](after/iphone17pro-keyboard.png)
 
-需要 **Node 24.19+（24.x）** 和 **pnpm 11.19.0**。
+### Chromium phone-width evidence (not Safari/Android)
 
-```sh
-pnpm install --frozen-lockfile
-pnpm check
-pnpm web:player:build
-pnpm web:preview
-```
+| State | Before, 360 px | After, 360 px |
+| --- | --- | --- |
+| guest | ![Before guest](before/chromium-360-guest.jpg) | ![After guest](after/chromium-360-guest.jpg) |
+| exhausted | ![Before exhausted](before/chromium-360-exhausted.jpg) | ![After exhausted](after/chromium-360-exhausted.jpg) |
+| signed-in | ![Before signed-in](before/chromium-360-signed-in.jpg) | ![After signed-in](after/chromium-360-signed-in.jpg) |
+| account | ![Before account](before/chromium-360-account.jpg) | ![After account](after/chromium-360-account.jpg) |
+| invite | ![Before invite](before/chromium-360-invite.jpg) | ![After invite](after/chromium-360-invite.jpg) |
+| bubbles | ![Before bubbles](before/chromium-360-bubbles.jpg) | ![After bubbles](after/chromium-360-bubbles.jpg) |
 
-打开 <http://127.0.0.1:18530/>。这是**静态交互预览**，没有真实 AI 回复、生成语音或可登录的管理员账号。服务只监听本机，Ctrl-C 退出。
-
-## 验证
-
-```sh
-pnpm check                    # 类型、Web 单元/集成/E2E/负载与组件测试
-pnpm web:player:build          # 按依赖图构建浏览器产物，生成哈希清单
-pnpm check:web:local-http      # 独立本地 HTTPS 实例
-pnpm check:web:restart         # 持久化与重启恢复
-```
-
-测试使用合成材料和本地实例，不调用真实供应商或发送邮件。运行时需要 OpenSSL；Miniflare 测试使用本地 workerd。测试串行占用 `127.0.0.1:18491`，不要与本地业务服务同时运行。
-
-测试会检查缺失/损坏的静态构建，结束后需重新执行 `pnpm web:player:build` 再预览。运行数据位于忽略的 `runtime/`，不应提交。
-
-## 开发与部署
-
-- [架构与边界](docs/ARCHITECTURE.md)
-- [本地运行与生产配置](docs/DEPLOYMENT.md)
-- [验收状态与已知限制](docs/STATUS.md)
-- [安全与贡献约束](SECURITY.md)
-
-本仓库没有自动部署流程；配置模板默认关闭公网及真实调用。克隆仓库不会复制任何现有账号、人物资料或服务实例。
+Measurement JSON, final geometry JSON and the two test-only harness scripts accompany these images. Copy the harness scripts into `work/part15/` of the feature checkout to reproduce; the screenshot branch intentionally does not contain application source or build output.

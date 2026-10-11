@@ -1,0 +1,22 @@
+Node v24.19.0 / pnpm 11.19.0
+- `pnpm check`: **1122/1122 passed**, 0 failed/skipped/cancelled; 364.32 s test phase. Includes formatting, pinned prompt check and all TypeScript checks. Main had 1113: **+9 tests**.
+- `pnpm web:player:build`: PASS, 8 manifest-listed files.
+- `pnpm check:web:local-http`: PASS (4 rounds, restart, private audio, cursor and same-IP limit).
+- `pnpm check:web:restart`: PASS (synthetic local-2 restart TLS).
+- `git diff --check`: PASS. Tests ran serially; no concurrent suites.
+
+Final suite summary:
+ℹ tests 1122
+ℹ suites 0
+ℹ pass 1122
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 364319.89425
+$ node scripts/build-web-player.ts
+{"output":"<worktree>/apps/player-web/dist","files":8}
+$ node scripts/test-web-local-http.ts
+{"result":"ok","root":"<worktree>/runtime/web-v1/public/db/local-check-80f59315","rounds":4,"restarted":true,"privateAudio":true,"cursor":true,"sameIpLimit":true}
+$ node scripts/test-web-data-lifecycle-restart.ts
+synthetic local-2 restart TLS: PASS

@@ -1,0 +1,113 @@
+[
+  {
+    "width": 360,
+    "layout": {
+      "card": {
+        "bottom": 720,
+        "height": 652,
+        "left": 16,
+        "right": 344,
+        "top": 68,
+        "width": 328,
+        "x": 16,
+        "y": 68
+      },
+      "composer": {
+        "bottom": 720,
+        "height": 61.3984375,
+        "left": 16,
+        "right": 344,
+        "top": 658.6015625,
+        "width": 328,
+        "x": 16,
+        "y": 658.6015625
+      },
+      "header": {
+        "bottom": 112,
+        "height": 44,
+        "left": 16,
+        "right": 344,
+        "top": 68,
+        "width": 328,
+        "x": 16,
+        "y": 68
+      },
+      "rootWidth": 360,
+      "scrollWidth": 360
+    }
+  },
+  {
+    "width": 390,
+    "layout": {
+      "card": {
+        "bottom": 720,
+        "height": 652,
+        "left": 16,
+        "right": 374,
+        "top": 68,
+        "width": 358,
+        "x": 16,
+        "y": 68
+      },
+      "composer": {
+        "bottom": 720,
+        "height": 61.3984375,
+        "left": 16,
+        "right": 374,
+        "top": 658.6015625,
+        "width": 358,
+        "x": 16,
+        "y": 658.6015625
+      },
+      "header": {
+        "bottom": 112,
+        "height": 44,
+        "left": 16,
+        "right": 374,
+        "top": 68,
+        "width": 358,
+        "x": 16,
+        "y": 68
+      },
+      "rootWidth": 390,
+      "scrollWidth": 390
+    }
+  },
+  {
+    "width": 430,
+    "layout": {
+      "card": {
+        "bottom": 720,
+        "height": 652,
+        "left": 16,
+        "right": 414,
+        "top": 68,
+        "width": 398,
+        "x": 16,
+        "y": 68
+      },
+      "composer": {
+        "bottom": 720,
+        "height": 61.3984375,
+        "left": 16,
+        "right": 414,
+        "top": 658.6015625,
+        "width": 398,
+        "x": 16,
+        "y": 658.6015625
+      },
+      "header": {
+        "bottom": 112,
+        "height": 44,
+        "left": 16,
+        "right": 414,
+        "top": 68,
+        "width": 398,
+        "x": 16,
+        "y": 68
+      },
+      "rootWidth": 430,
+      "scrollWidth": 430
+    }
+  }
+]
