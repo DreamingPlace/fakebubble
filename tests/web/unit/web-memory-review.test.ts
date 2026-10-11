@@ -154,10 +154,13 @@ test('the review cannot link to an unrecalled memory, mix two memories under one
     /INVALID_TOPICS/,
     'two topics cannot continue the same memory',
   );
-  for (const bad of [0, 11, 5.5, '5', null])
+  // Part 16 (named exception): an integer string such as '5' is now normalized to 5, so it leaves this list; see
+  // web-memory-metadata-drop.test.ts. Everything that is not an integer 1-10 is still rejected.
+  for (const bad of [0, 11, 5.5, '5.5', 'x', null])
     assert.throws(() => apply([reviewTopic('猫', null, bad)]), /INVALID_TOPICS/, String(bad));
+  // Part 16 (named exception): a missing memoryId is normalized to null (starts a topic) instead of failing.
   const { memoryId: _unused, ...withoutMemoryId } = reviewTopic('猫', null);
-  assert.throws(() => apply([withoutMemoryId]), /INVALID_TOPICS/);
+  assert.equal(apply([withoutMemoryId]).topics[0]!.key, '猫');
   const { importance: _gone, ...withoutImportance } = reviewTopic('猫', null);
   assert.throws(() => apply([withoutImportance]), /INVALID_TOPICS/);
 });
