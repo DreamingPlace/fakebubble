@@ -69,12 +69,17 @@ export async function routeWebPlayerAccounts(
       nickname: body.nickname,
       session: session(req),
       purpose: action,
+      ipHash,
     });
     // The same token goes out again so the cookie gains the long (400-day) lifetime a login session has.
     return {
       status: 200,
       issuedToken: result.token,
-      body: { nickname: result.nickname, emailMasked: result.emailMasked },
+      body: {
+        nickname: result.nickname,
+        emailMasked: result.emailMasked,
+        ...('bonus' in result ? { bonus: result.bonus } : {}),
+      },
     };
   }
   if (action === 'login') {

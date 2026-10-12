@@ -6,6 +6,7 @@ import { playerPasswords, validatePlayerPassword } from '../admin/web-admin-pass
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import { guestInGrace } from './web-player-purge.ts';
+import { freeTier, signupBonusTablesExist } from '../admission/web-free-tier.ts';
 import { maskEmail, normalizeEmail } from './email-address.ts';
 import type { WebIdentity } from './web-identity.ts';
 
@@ -43,7 +44,7 @@ export interface WebPlayerAccountsOptions {
   /** PLAYER_EMAIL_DAILY_CAP (emails per UTC day). */
   dailyCap: number;
   /** What GET /account tells the page about the Part 17 switches (all absent while every flag is off). */
-  features?: { accountDelete?: boolean; legal?: boolean; turnstileSiteKey?: string | null };
+  features?: { accountDelete?: boolean; legal?: boolean; turnstileSiteKey?: string | null; signupBonus?: boolean };
   /** ACCOUNT_DELETE_ENABLED: the purge path behind 删除我的账号 / 清除本设备的体验数据 (absent = those routes do not exist). */
   purger?: AccountPurger | undefined;
   /** GUEST_GRACE_ENABLED: grace period in ms after a trial ended during which signup is still possible (0 = off). */
@@ -144,6 +145,7 @@ export class WebPlayerAccounts {
   private readonly options: WebPlayerAccountsOptions;
   private readonly codeKey: Buffer;
   private readonly throttleKey: Buffer;
+  private readonly bonusKey: Buffer;
 
   constructor(store: WebStore, identity: WebIdentity, options: WebPlayerAccountsOptions) {
     ensure(
@@ -164,6 +166,7 @@ export class WebPlayerAccounts {
     this.options = options;
     this.codeKey = createHmac('sha256', options.requestKey).update('web-player-email-code-v1').digest();
     this.throttleKey = createHmac('sha256', options.requestKey).update('web-player-throttle-v1').digest();
+    this.bonusKey = createHmac('sha256', options.requestKey).update('web-signup-bonus-email-v1').digest();
   }
 
   get signupEnabled() {
@@ -330,6 +333,7 @@ export class WebPlayerAccounts {
       ...(f?.legal ? { legal: true as const } : {}),
       ...(f?.turnstileSiteKey ? { turnstileSiteKey: f.turnstileSiteKey } : {}),
       ...((this.options.graceMs ?? 0) > 0 ? { grace: true as const } : {}),
+      ...(f?.signupBonus ? { signupBonus: freeTier(this.store).bonusReplies } : {}),
     };
     const base = {
       signupEnabled: this.options.signupEnabled,
@@ -392,6 +396,8 @@ export class WebPlayerAccounts {
     const purpose = input.purpose as EmailPurpose;
     this.requireSignupOpen();
     const email = normalizeEmail(input.email, 'PLAYER_EMAIL_INVALID');
+    // Part 17b: an IP that already completed its signups today is told so before a code is sent (flag SIGNUP_BONUS_ENABLED).
+    if (purpose === 'signup') this.requireSignupIpBudget(input.ipHash, this.now());
     let scope: Scope | null = null;
     if (purpose !== 'reset') {
       ensure(input.session, 'AUTH_REQUIRED');
@@ -438,6 +444,29 @@ export class WebPlayerAccounts {
     });
     if (created.kind !== null) this.dispatch(created.id, email, purpose, created.kind, created.code, created.expiresAt);
     return { challengeId: created.id, expiresAt: created.expiresAt, resendAfterMs: PLAYER_LIMITS.resendMs };
+  }
+  /** Part 17b: signups one IP may still complete today, or Infinity while the free tier is off. */
+  private signupsLeftToday(ipHash: string, now: number) {
+    const tier = freeTier(this.store);
+    if (!tier.on || !this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_signup_ip_daily'"))
+      return Number.POSITIVE_INFINITY;
+    const day = new Date(now).toISOString().slice(0, 10);
+    const done =
+      this.store.get<{ signups: number }>(
+        'SELECT signups FROM web_signup_ip_daily WHERE ip_hash=? AND day=?',
+        ipHash,
+        day,
+      )?.signups ?? 0;
+    return Math.max(0, tier.signupsPerIpPerDay - done);
+  }
+  private requireSignupIpBudget(ipHash: string, now: number) {
+    if (this.signupsLeftToday(ipHash, now) > 0) return;
+    const nextDay = Date.parse(`${new Date(now).toISOString().slice(0, 10)}T00:00:00.000Z`) + 24 * PLAYER_LIMITS.hourMs;
+    throw new RetryAfterError('PLAYER_SIGNUP_IP_LIMIT', Math.max(1000, nextDay - now));
+  }
+  /** The keyed digest of a normalized address: the only thing kept of a bonus grant after the account is deleted. */
+  private bonusEmailKey(emailNorm: string) {
+    return createHmac('sha256', this.bonusKey).update(emailNorm).digest('hex');
   }
   private ensureEligible(purpose: 'signup' | 'bind', scope: Scope, now: number) {
     ensure(!this.loginOf(scope.principalId), 'PLAYER_LOGIN_EXISTS');
@@ -625,6 +654,8 @@ export class WebPlayerAccounts {
     nickname: unknown;
     session: PlayerSessionInput;
     purpose: 'signup' | 'bind';
+    /** The trusted-peer hash; needed (and checked) for a signup while the free tier is on. */
+    ipHash?: string;
   }) {
     this.requireSignupOpen();
     ensure(identifier(input.challengeId), 'PLAYER_CODE_INVALID');
@@ -646,6 +677,26 @@ export class WebPlayerAccounts {
         !this.store.get('SELECT 1 FROM web_player_logins WHERE email_norm=?', challenge.email_norm),
         'PLAYER_EMAIL_UNAVAILABLE',
       );
+      // Part 17b (flag on): at most signupsPerIpPerDay successful signups per IP per UTC day, and the bonus at most once per
+      // verified address, ever. Both are decided in the same transaction as the login row they belong to.
+      const tier = freeTier(this.store);
+      let bonusGranted = false;
+      if (tier.on && input.purpose === 'signup' && signupBonusTablesExist(this.store)) {
+        ensure(typeof input.ipHash === 'string' && /^[a-f0-9]{64}$/.test(input.ipHash), 'WEB_TRUSTED_IP_REQUIRED');
+        this.requireSignupIpBudget(input.ipHash, now);
+        this.store.run(
+          `INSERT INTO web_signup_ip_daily(ip_hash,day,signups) VALUES (?,?,1)
+          ON CONFLICT(ip_hash,day) DO UPDATE SET signups=signups+1`,
+          input.ipHash,
+          new Date(now).toISOString().slice(0, 10),
+        );
+        bonusGranted =
+          this.store.run(
+            'INSERT INTO web_bonus_emails(email_hmac,granted_at) VALUES (?,?) ON CONFLICT(email_hmac) DO NOTHING',
+            this.bonusEmailKey(challenge.email_norm),
+            now,
+          ).changes === 1;
+      }
       this.store.run(
         `INSERT INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at,last_seen_at)
         VALUES (?,?,?,?,?,?)`,
@@ -656,6 +707,8 @@ export class WebPlayerAccounts {
         now,
         now,
       );
+      if (bonusGranted)
+        this.store.run('INSERT INTO web_signup_bonus(principal_id,granted_at) VALUES (?,?)', scope.principalId, now);
       this.writeNickname(scope.worldId, nickname, now);
       this.identity.extendToLoginLifetime(scope.sessionId);
       if (input.purpose === 'bind' && this.store.get("SELECT 1 FROM sqlite_master WHERE name='web_invite_credentials'"))
@@ -670,7 +723,12 @@ export class WebPlayerAccounts {
         now,
         challenge.email_norm,
       );
-      return { nickname, emailMasked: maskEmail(challenge.email_norm), token: input.session.token };
+      return {
+        nickname,
+        emailMasked: maskEmail(challenge.email_norm),
+        token: input.session.token,
+        ...(tier.on && input.purpose === 'signup' ? { bonus: bonusGranted ? tier.bonusReplies : 0 } : {}),
+      };
     });
   }
 

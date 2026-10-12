@@ -131,6 +131,10 @@ export class LiveBinding {
   private get grace() {
     return this.account.signedIn && !this.account.hasLogin ? (this.account.grace ?? null) : null;
   }
+  /** Free replies a signup gives (SIGNUP_BONUS_ENABLED), or 0 when the offer is not on. */
+  private get bonusOffer() {
+    return this.account.features?.signupBonus ?? 0;
+  }
   private get deleteEnabled() {
     return this.account.features?.accountDelete === true;
   }
@@ -215,6 +219,7 @@ export class LiveBinding {
       mode,
       signupEnabled: this.signupOpen,
       legal: this.legalEnabled,
+      ...(this.bonusOffer ? { bonus: this.bonusOffer } : {}),
       nickname: this.account.signedIn ? this.account.nickname : null,
       hasGuestChats: this.guestHasChats(),
       onDone: (done) => {
@@ -360,7 +365,11 @@ export class LiveBinding {
       : !this.accessKnown
         ? '额度暂无法确认'
         : access.remainingReplies === 0 || access.canSend
-          ? `体验剩余 ${access.remainingReplies} 次`
+          ? this.hasLogin && this.bonusOffer
+            ? access.remainingReplies === 0
+              ? '免费消息已用完'
+              : `免费消息剩余 ${access.remainingReplies} 条`
+            : `体验剩余 ${access.remainingReplies} 次`
           : '体验已结束';
     // A guest past its trial but inside the 7-day grace period: signing up saves the chats and brings them back.
     if (this.grace && this.accessKnown && !this.invitation.locked) {
@@ -372,7 +381,13 @@ export class LiveBinding {
       // Trial used up: one short line says what to do next (a signed-up guest already has an account to keep chats in).
       const hint = document.createElement('span');
       hint.className = 'head-hint';
-      hint.textContent = this.hasLogin ? '输入邀请码继续' : '注册保存聊天，或输入邀请码继续';
+      hint.textContent = this.bonusOffer
+        ? this.hasLogin
+          ? accountCopy.freeUsedUp
+          : accountCopy.signupForBonus(this.bonusOffer)
+        : this.hasLogin
+          ? '输入邀请码继续'
+          : '注册保存聊天，或输入邀请码继续';
       shell.head.append(hint);
     }
     const entry = document.createElement('button');
@@ -593,6 +608,11 @@ export class LiveBinding {
 
   private fail(error: unknown) {
     const code = error instanceof ProviderApiError ? error.code : 'NETWORK';
+    // With the signup bonus on, a used-up trial says what to do next: sign up for the bonus, or (signed up) enter an invite.
+    if (code === 'TRIAL_EXHAUSTED' && this.bonusOffer) {
+      this.shell?.say(this.hasLogin ? accountCopy.freeUsedUp : accountCopy.signupForBonus(this.bonusOffer));
+      return;
+    }
     this.shell?.say(errorText[code] ?? '网络不太稳定，稍后再试试');
   }
 

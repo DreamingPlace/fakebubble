@@ -39,6 +39,8 @@ export type AccountFeatures = {
   turnstileSiteKey?: string;
   /** Signup stays open for 7 days after a trial ended. */
   grace?: true;
+  /** Signing up gives this many free replies (any character, no time window). */
+  signupBonus?: number;
 };
 export type AccountInfo =
   | { signupEnabled: boolean; signedIn: false; features?: AccountFeatures }
@@ -72,6 +74,9 @@ function parseFeatures(value: unknown): AccountFeatures | undefined {
     ...(raw.accountDelete === true ? { accountDelete: true as const } : {}),
     ...(raw.legal === true ? { legal: true as const } : {}),
     ...(raw.grace === true ? { grace: true as const } : {}),
+    ...(Number.isSafeInteger(raw.signupBonus) && (raw.signupBonus as number) > 0 && (raw.signupBonus as number) <= 1000
+      ? { signupBonus: raw.signupBonus as number }
+      : {}),
     ...(typeof raw.turnstileSiteKey === 'string' && /^[0-9A-Za-z_-]{1,64}$/.test(raw.turnstileSiteKey)
       ? { turnstileSiteKey: raw.turnstileSiteKey }
       : {}),
@@ -281,7 +286,11 @@ export class ProviderApi implements WebProviderActions {
     );
     if (typeof value.nickname !== 'string' || typeof value.emailMasked !== 'string')
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    return { nickname: value.nickname, emailMasked: value.emailMasked };
+    return {
+      nickname: value.nickname,
+      emailMasked: value.emailMasked,
+      ...(Number.isSafeInteger(value.bonus) ? { bonus: value.bonus as number } : {}),
+    };
   }
   /** A new session for that login's principal. Other sessions are untouched. */
   async login(input: { email: string; password: string }) {

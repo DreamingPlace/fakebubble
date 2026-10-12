@@ -77,6 +77,9 @@ export function auditWebLifecycleWorld(
     'web_character_deletion_scopes',
     'web_operation_metrics',
     'web_attempt_rejections',
+    // Part 17b: one row per operation admitted on a free allowance: ids, a tier and (trial_extra) the keyed IP hash, no content.
+    // The 'bonus' rows are deleted with the player and checked gone by playerLoginsRemain; 'trial_extra' rows stay like the IP quota.
+    'web_free_operations',
   ]);
   const operationContent = new Set([
     'web_provider_outputs',

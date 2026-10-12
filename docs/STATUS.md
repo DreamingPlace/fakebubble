@@ -91,6 +91,7 @@ All behind flags that default OFF; no migration, no prompt or tool-schema change
 - `ALERTS_ENABLED` (+ `ALERT_*` thresholds): hourly check in the business alarm, one mail per alert type per 6 h, claim-before-send (never retried in a loop), daily digest; no player data in any mail.
 - `TURNSTILE_ENABLED` (+ site key, secret): new guest, request-code and login; server-side siteverify, one use per token, fail closed; CSP widened only when on.
 - `LEGAL_PAGES_ENABLED`: 隐私政策 / 用户协议 draft (every owner fact marked 【待确认：…】), footer and signup-screen links.
+- Part 17b `SIGNUP_BONUS_ENABLED` (owner decision; migration `121_signup_bonus.sql`, sha256 `f0fa334d…ef8d9`, 46 steps): 5 guest trial replies per guest and per IP (lifetime), 10 lifetime bonus replies for a verified-email signup (any character, no time window, off the IP quota, once per address ever via a kept HMAC), at most 3 signups per IP per UTC day. Replies 1-3 keep the CHECK-limited counters; replies 4-5 and the bonus are derived `entitled` operations (`web_free_operations`). Flag off = unchanged (3 replies).
 - Known limits: the Node local server has no account deletion and no Turnstile; the validation-failure alert counts all `failed` operations (validation and expiry); the real trial window in code is 2 hours after the first message (the guest cookie lasts 24 h), which the policy marks for the owner to confirm; no Mainland China region rule exists yet (owner decision pending).
 
 ## Part 16 (time, topics, RPC rejected output, admin fixes)

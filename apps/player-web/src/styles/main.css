@@ -3971,3 +3971,11 @@ body.legal-page {
   margin: 0;
   background: #f6f4ef;
 }
+.acct-bonus {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #e3efe6;
+  font-size: 14px;
+  line-height: 1.6;
+}

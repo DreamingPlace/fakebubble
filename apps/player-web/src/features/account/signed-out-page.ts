@@ -63,6 +63,7 @@ export function renderSignedOut(
     attrs: { type: 'button' },
   });
   let legal = false;
+  let bonus = 0;
   const legalLinks = h('p', { class: 'legal-links signed-out-legal', hidden: true });
   const have = h('button', {
     class: 'recovery-have signed-out-recovery',
@@ -89,6 +90,7 @@ export function renderSignedOut(
     (info: AccountInfo) => {
       signupEnabled = info.signupEnabled;
       legal = info.features?.legal === true;
+      bonus = info.features?.signupBonus ?? 0;
       if (legal)
         legalLinks.replaceChildren(
           h('a', { text: signedOutCopy.terms, attrs: { href: '/terms.html', target: '_blank', rel: 'noopener' } }),
@@ -111,6 +113,7 @@ export function renderSignedOut(
       mode,
       signupEnabled,
       legal,
+      ...(bonus ? { bonus } : {}),
       ...(mode === 'signup' && options.expired ? { notice: signedOutCopy.expired } : {}),
       onDone: extra.onDone ?? reload,
       ...(extra.onCancel ? { onCancel: extra.onCancel } : {}),

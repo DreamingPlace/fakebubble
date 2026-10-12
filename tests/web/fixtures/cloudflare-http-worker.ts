@@ -376,6 +376,35 @@ export class WebHTTPFixture extends WebBusinessFixture {
         return Response.json({ error: (error as { code?: string }).code ?? String(error), left });
       }
     }
+    if (path === '/fixture/bonus-state') {
+      const { principalId } = (await request.json()) as { principalId: string };
+      const n = (sql: string, ...args: string[]) => this.store.get<{ n: number }>(sql, ...args)!.n;
+      return Response.json({
+        grant: n('SELECT count(*) n FROM web_signup_bonus WHERE principal_id=?', principalId),
+        bonusOps: n("SELECT count(*) n FROM web_free_operations WHERE tier='bonus' AND principal_id=?", principalId),
+        extraOps: n(
+          "SELECT count(*) n FROM web_free_operations WHERE tier='trial_extra' AND principal_id=?",
+          principalId,
+        ),
+        bonusOpsLive: n(
+          `SELECT count(*) n FROM web_free_operations b JOIN web_operations o ON o.id=b.operation_id
+          WHERE b.tier='bonus' AND b.principal_id=? AND o.quota_state IN ('reserved','used')`,
+          principalId,
+        ),
+        entitledOps: n(
+          "SELECT count(*) n FROM web_operations WHERE principal_id=? AND metering_type='entitled'",
+          principalId,
+        ),
+        trialOps: n(
+          "SELECT count(*) n FROM web_operations WHERE principal_id=? AND metering_type='trial'",
+          principalId,
+        ),
+        principal: this.store.get('SELECT trial_used,trial_reserved FROM web_principals WHERE id=?', principalId),
+        ipQuota: this.store.all('SELECT used_total,reserved_total FROM web_ip_lifetime_quota'),
+        emails: this.store.all('SELECT email_hmac FROM web_bonus_emails'),
+        ipDaily: this.store.all('SELECT day,signups FROM web_signup_ip_daily'),
+      });
+    }
     if (path === '/fixture/audit-world') {
       // The same fail-closed lifecycle audit the cleaner ends with: it throws while anything private is left.
       const { principalId } = (await request.json()) as { principalId: string };
@@ -465,7 +494,10 @@ export class WebHTTPFixture extends WebBusinessFixture {
     const headers = new Headers(request.headers);
     headers.set('host', headers.get('x-fixture-host') ?? 'fixture.invalid');
     headers.delete('x-fixture-host');
-    return this.http.fetch(new Request(request, { headers }), '192.0.2.1');
+    // Part 17b: a test may pick the peer address (per-IP limits); otherwise every request comes from 192.0.2.1.
+    const peer = headers.get('x-fixture-peer') ?? '192.0.2.1';
+    headers.delete('x-fixture-peer');
+    return this.http.fetch(new Request(request, { headers }), peer);
   }
 }
 export default {

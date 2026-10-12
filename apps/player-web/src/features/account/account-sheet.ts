@@ -87,6 +87,10 @@ export const accountCopy = {
   save: '保存',
   done: '完成',
   doneSignup: '注册成功',
+  freeUsedUp: '免费消息已用完，输入邀请码继续',
+  signupForBonus: (n: number) => `注册即送 ${n} 条免费消息，可以和任何角色聊`,
+  doneSignupBonus: (n: number) => `注册成功，已送你 ${n} 条免费消息`,
+  signupBonusIntro: (n: number) => `注册即送 ${n} 条免费消息，可以和任何角色聊。`,
   doneBind: '邮箱已绑定',
   doneReset: '密码已重置，其他设备已退出登录',
   doneNickname: '昵称已更新',
@@ -166,6 +170,8 @@ export type AccountSheetOptions = {
   hasGuestChats?: boolean;
   /** The two legal pages are published: the signup sheet shows the consent line with both links. */
   legal?: boolean;
+  /** Free replies a signup gives (flag SIGNUP_BONUS_ENABLED): the signup sheet says so. */
+  bonus?: number;
   /** A line shown above the signup intro (the signed-out page says the earlier trial chats have expired). */
   notice?: string;
   /** Called after success (the page usually reloads or reopens what the player was doing). */
@@ -331,6 +337,9 @@ export function openAccountSheet(options: AccountSheetOptions) {
           ? h('p', { class: 'acct-expired', text: options.notice, attrs: { role: 'note' } })
           : null,
         h('p', { class: 'acct-intro', text: intro }),
+        purpose === 'signup' && options.bonus
+          ? h('p', { class: 'acct-bonus', text: accountCopy.signupBonusIntro(options.bonus) })
+          : null,
         field(accountCopy.email, email),
         legal,
         send,
@@ -430,17 +439,25 @@ export function openAccountSheet(options: AccountSheetOptions) {
           return;
         }
         void run(submit, accountCopy.working, label, async () => {
+          let bonus = 0;
           if (purpose === 'reset')
             await api.resetPassword({ challengeId: challenge!.challengeId, password: password.value });
           else
-            await api.finishAccount({
-              purpose,
-              challengeId: challenge!.challengeId,
-              password: password.value,
-              nickname: nickname.value.trim(),
-            });
+            bonus =
+              (
+                await api.finishAccount({
+                  purpose,
+                  challengeId: challenge!.challengeId,
+                  password: password.value,
+                  nickname: nickname.value.trim(),
+                })
+              )?.bonus ?? 0;
           password.value = '';
-          finish({ signup: accountCopy.doneSignup, bind: accountCopy.doneBind, reset: accountCopy.doneReset }[purpose]);
+          finish(
+            purpose === 'signup' && bonus > 0
+              ? accountCopy.doneSignupBonus(bonus)
+              : { signup: accountCopy.doneSignup, bind: accountCopy.doneBind, reset: accountCopy.doneReset }[purpose],
+          );
         });
       });
       body.replaceChildren(form);

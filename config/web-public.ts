@@ -33,6 +33,8 @@ export interface WebPublicConfig {
   readonly graceMs: number;
   readonly accountDelete: boolean;
   readonly legalPages: boolean;
+  /** SIGNUP_BONUS_ENABLED: 5-reply guest trial + 10-reply signup bonus + 3 signups per IP per UTC day (Part 17b). */
+  readonly signupBonus: boolean;
   readonly alerts: WebAlertConfig | null;
   readonly turnstile: WebTurnstileConfig | null;
 }
@@ -110,6 +112,7 @@ export function webPublicFromEnv(env: Record<string, unknown>): WebPublicConfig 
     graceMs: on(env.GUEST_GRACE_ENABLED) ? GUEST_GRACE_MS : 0,
     accountDelete: on(env.ACCOUNT_DELETE_ENABLED),
     legalPages: on(env.LEGAL_PAGES_ENABLED),
+    signupBonus: on(env.SIGNUP_BONUS_ENABLED),
     alerts,
     turnstile,
   });

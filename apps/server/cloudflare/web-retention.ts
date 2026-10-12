@@ -13,6 +13,7 @@ import {
   purgePlayerLogins,
 } from '../identity/web-player-purge.ts';
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
+import { signupBonusTablesExist } from '../admission/web-free-tier.ts';
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
 import type { MediaObjectReference } from './media-objects.ts';
@@ -165,8 +166,14 @@ export class WebCloudRetention {
           ).changes === 1,
           'WEB_RETENTION_STALE',
         );
-        if (operation.metering_type === 'entitled' && reason === 'deleted') {
-          // An invited player's reply has no trial slot to give back; the budget hold is settled below like any other.
+        // An entitled operation of a guest has no trial slot to give back: an invited player's (on request) or one admitted
+        // on a free allowance outside the counters (its row in web_free_operations: the signup bonus or trial replies 4-5); the budget hold is settled below like any other.
+        if (
+          operation.metering_type === 'entitled' &&
+          (reason === 'deleted' ||
+            (signupBonusTablesExist(this.store) &&
+              this.store.get('SELECT 1 FROM web_free_operations WHERE operation_id=?', operation.id)))
+        ) {
           ensure(operation.ip_window_id === null, 'WEB_RETENTION_SCOPE_UNSAFE');
           continue;
         }

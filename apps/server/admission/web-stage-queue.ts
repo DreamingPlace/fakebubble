@@ -64,13 +64,19 @@ interface OperationRow {
   audio_wait_started_at?: number | null;
 }
 
-export function claimRetention(schema: number, now: number) {
+export function claimRetention(schema: number, now: number, signupBonus = false) {
   if (schema !== 110 && schema !== 111 && schema !== 112 && schema < 113) return { sql: '', args: [] as number[] };
   return {
     sql: `AND EXISTS (SELECT 1 FROM web_guest_retention r
       JOIN web_principals p ON p.id=r.principal_id WHERE r.principal_id=o.principal_id
       AND r.world_id=o.world_id AND ((p.kind='account' AND r.state='protected') OR
       (p.kind='guest' AND r.state='active' AND r.expires_at>?)
+      ${
+        // Part 17b: a guest holding the signup bonus keeps working content after the trial window (flag SIGNUP_BONUS_ENABLED).
+        signupBonus && schema >= 121
+          ? "OR (p.kind='guest' AND r.state IN ('unstarted','active') AND EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=p.id))"
+          : ''
+      }
       ${
         schema >= 111
           ? `OR (p.kind='invite' AND r.state='protected' AND EXISTS
@@ -341,7 +347,7 @@ export class WebStageQueue {
 
   claimAudio(coordinator: WebCoordinatorLease, owner: string): WebStageClaim | null {
     if (
-      [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
+      [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(
         this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       )
     )
@@ -356,12 +362,12 @@ export class WebStageQueue {
         scheduler = this.validateCoordinator(coordinator, now);
       const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
       ensure(
-        [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(schema) &&
+        [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(schema) &&
           (schema < 113 || webDataLifecycleEnabled(this.store)),
         'WEB_SYNTHETIC_VOICE_MIGRATION_REQUIRED',
       );
       const table = schema >= 113 ? 'web_provider_voice_segments' : 'web_synthetic_voice_segments';
-      const retention = claimRetention(schema, now);
+      const retention = claimRetention(schema, now, this.store.publicFreeTier === true);
       if (
         this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='audio_running'")!.n +
           this.backingOff('audio') >=
@@ -491,7 +497,7 @@ export class WebStageQueue {
           : '';
       const candidate =
         stage === 'text' ? embedGate : 'AND EXISTS (SELECT 1 FROM web_reviewed_candidates c WHERE c.operation_id=o.id)';
-      const retention = claimRetention(schema, now);
+      const retention = claimRetention(schema, now, this.store.publicFreeTier === true);
       // A principal's earlier operation waiting out a provider 429 backoff keeps its place: later ones do not jump it.
       const backoffGuard = `AND NOT EXISTS (SELECT 1 FROM web_operations earlier WHERE earlier.principal_id=o.principal_id
         AND earlier.admission_seq<o.admission_seq AND earlier.status='queued' AND earlier.text_queued_at>?)`;

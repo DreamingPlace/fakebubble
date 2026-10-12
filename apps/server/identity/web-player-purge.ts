@@ -68,6 +68,13 @@ export function purgePlayerLogins(
       store.run('DELETE FROM player_profile_requests WHERE world_id=?', scope.worldId);
     store.run('DELETE FROM player_profile_versions WHERE world_id=?', scope.worldId);
   }
+  // Part 17b: the signup bonus entitlement and its operation markers go with the player. The email HMAC in
+  // web_bonus_emails is NOT removed: it is the only thing kept, so a deleted address cannot collect the bonus twice.
+  if (tableExists(store, 'web_signup_bonus')) {
+    // (the 'trial_extra' rows stay: they hold only the keyed IP hash, like web_ip_lifetime_quota, so a purge never resets an IP)
+    store.run("DELETE FROM web_free_operations WHERE tier='bonus' AND principal_id=?", scope.principalId);
+    store.run('DELETE FROM web_signup_bonus WHERE principal_id=?', scope.principalId);
+  }
   if (!playerLoginsExist(store)) return;
   const login = store.get<{ email_norm: string }>(
     'SELECT email_norm FROM web_player_logins WHERE principal_id=?',
@@ -80,8 +87,18 @@ export function purgePlayerLogins(
 
 /** True while a login or challenge of any of these principals remains: the audits fail closed on it. */
 export function playerLoginsRemain(store: Pick<BusinessStore, 'get'>, principalIds: string[]) {
-  if (!playerLoginsExist(store) || principalIds.length === 0) return false;
+  if (principalIds.length === 0) return false;
   const marks = principalIds.map(() => '?').join(',');
+  if (
+    tableExists(store, 'web_signup_bonus') &&
+    (store.get(`SELECT 1 FROM web_signup_bonus WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds) ||
+      store.get(
+        `SELECT 1 FROM web_free_operations WHERE tier='bonus' AND principal_id IN (${marks}) LIMIT 1`,
+        ...principalIds,
+      ))
+  )
+    return true;
+  if (!playerLoginsExist(store)) return false;
   return (
     !!store.get(`SELECT 1 FROM web_player_logins WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds) ||
     !!store.get(`SELECT 1 FROM web_email_challenges WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds)

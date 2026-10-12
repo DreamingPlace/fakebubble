@@ -2,6 +2,7 @@ import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
+import { hasSignupBonus } from './web-free-tier.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 
 export type WebRetentionRow = {
@@ -24,6 +25,8 @@ export function webCloudContentExpired(store: Store, now: number, principalId: s
     worldId,
   );
   ensure(row, 'WEB_RETENTION_SCOPE_INVALID');
+  // A guest holding the signup bonus is a kept account: its content does not expire with the trial window.
+  if (row.kind === 'guest' && row.state === 'active' && hasSignupBonus(store as WebStore, principalId)) return false;
   return (
     row.kind === 'guest' &&
     (['purging', 'purged'].includes(row.state) ||
@@ -91,6 +94,15 @@ export function requireWebContent(
     (row.state === 'unstarted' || (row.state === 'active' && row.expires_at !== null && now < row.expires_at))
   )
     return row;
+  // Part 17b: a guest that holds the signup bonus (flag SIGNUP_BONUS_ENABLED) keeps working content after the trial window
+  // ended - the bonus has no time window. ADMISSION still decides whether a reply may start (trial first, then the
+  // bonus, else TRIAL_EXHAUSTED); this gate only stops treating such an account as an expired trial.
+  if (
+    principal.kind === 'guest' &&
+    (row.state === 'unstarted' || row.state === 'active') &&
+    hasSignupBonus(store as WebStore, principalId)
+  )
+    return row;
   if (
     access === 'read' &&
     principal.kind === 'guest' &&
@@ -101,7 +113,7 @@ export function requireWebContent(
   if (
     principal.kind === 'invite' &&
     row.state === 'protected' &&
-    [111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
+    [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(
       store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
     )
   ) {

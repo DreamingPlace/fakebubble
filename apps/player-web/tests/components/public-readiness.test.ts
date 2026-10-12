@@ -400,7 +400,11 @@ test('a guest cookie that outlived its grace period lands on the signed-out page
 
 // ---- the chat page: menu entries, grace line, footer ------------------------------------------------------------------
 
-function chat(t: test.TestContext, account: AccountInfo, options: { expired?: boolean } = {}) {
+function chat(
+  t: test.TestContext,
+  account: AccountInfo,
+  options: { expired?: boolean; canSend?: boolean; remaining?: number } = {},
+) {
   const doc = installFakeDom(t);
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   Object.defineProperty(globalThis, 'window', { configurable: true, value: new EventTarget() });
@@ -421,6 +425,8 @@ function chat(t: test.TestContext, account: AccountInfo, options: { expired?: bo
   const boot = syntheticProviderBootstrap();
   boot.fixture = false;
   for (const character of boot.characters) character.availability = { state: 'available', personaVersion: 1 };
+  if (boot.access.kind === 'guest' && options.canSend !== undefined) boot.access.canSend = options.canSend;
+  if (boot.access.kind === 'guest' && options.remaining !== undefined) boot.access.remainingReplies = options.remaining;
   if (options.expired && boot.access.kind === 'guest') {
     boot.access.canSend = false;
     boot.access.trialExpiresAt = Date.now() - 3 * 86_400_000;
@@ -583,4 +589,64 @@ test('footer: the legal links appear only with the flag, in the footer line', (t
     if (!legal) assert.equal(note.textContent, '邀请体验 · 回复由AI生成', 'the footer is exactly as before');
   }
   appendLegalLinks(null, true);
+});
+
+// ---- Part 17b: the signup bonus ---------------------------------------------------------------------------------------
+
+test('GET /account: the signup bonus feature is a small positive integer, nothing else is trusted', async () => {
+  const reply = (features: unknown) =>
+    new ProviderApi(async () => Response.json({ signupEnabled: true, signedIn: false, features })).account();
+  assert.deepEqual(await reply({ signupBonus: 10 }), {
+    signupEnabled: true,
+    signedIn: false,
+    features: { signupBonus: 10 },
+  });
+  for (const bad of [0, -1, 10.5, '10', 1001, null])
+    assert.deepEqual(await reply({ signupBonus: bad }), { signupEnabled: true, signedIn: false }, String(bad));
+});
+
+test('signup sheet: says what the signup gives, and the done line names the bonus that was granted', async (t) => {
+  const on = sheet(t, 'signup', { bonus: 10 });
+  assert.equal(on.root.querySelector('.acct-bonus')!.textContent, '注册即送 10 条免费消息，可以和任何角色聊。');
+  assert.equal(sheet(t, 'signup').root.querySelector('.acct-bonus'), null);
+  assert.equal(sheet(t, 'login', { bonus: 10 }).root.querySelector('.acct-bonus'), null);
+  assert.equal(accountCopy.doneSignupBonus(10), '注册成功，已送你 10 条免费消息');
+});
+
+test('free replies: a signed-up player sees how many are left; used up says to enter an invite, a guest is offered the bonus', async (t) => {
+  const signedUp: AccountInfo = { ...login, features: { signupBonus: 10 } };
+  const f = chat(t, signedUp, { canSend: true, remaining: 12 });
+  await f.attach();
+  assert.equal(f.header.querySelector('.head-note')!.textContent, '免费消息剩余 12 条');
+  const guest = chat(t, { signupEnabled: true, signedIn: false, features: { signupBonus: 10 } }, { canSend: true });
+  await guest.attach();
+  assert.equal(
+    guest.header.querySelector('.head-note')!.textContent,
+    '体验剩余 3 次',
+    'a guest keeps the trial wording',
+  );
+  // Used up: a signed-up player is told to enter an invite; a guest is offered the bonus.
+  const spent = chat(t, signedUp, { canSend: false, remaining: 0 });
+  await spent.attach();
+  assert.equal(spent.header.querySelector('.head-note')!.textContent, '免费消息已用完');
+  assert.equal(spent.header.querySelector('.head-hint')!.textContent, '免费消息已用完，输入邀请码继续');
+  const guestSpent = chat(
+    t,
+    { signupEnabled: true, signedIn: false, features: { signupBonus: 10 } },
+    { canSend: false, remaining: 0 },
+  );
+  await guestSpent.attach();
+  assert.equal(guestSpent.header.querySelector('.head-hint')!.textContent, '注册即送 10 条免费消息，可以和任何角色聊');
+  // Without the offer the page is exactly as before.
+  const off = chat(t, login, { canSend: true });
+  await off.attach();
+  assert.equal(off.header.querySelector('.head-note')!.textContent, '体验剩余 3 次');
+  const offSpent = chat(t, login, { canSend: false, remaining: 0 });
+  await offSpent.attach();
+  assert.equal(offSpent.header.querySelector('.head-hint')!.textContent, '输入邀请码继续');
+});
+
+test('free replies used up: the two agreed lines, by who is asking', () => {
+  assert.equal(accountCopy.freeUsedUp, '免费消息已用完，输入邀请码继续');
+  assert.equal(accountCopy.signupForBonus(10), '注册即送 10 条免费消息，可以和任何角色聊');
 });

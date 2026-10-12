@@ -57,6 +57,7 @@ const WEB_COCREATION_SCHEMA = 117;
 const WEB_PLAYER_LOGIN_SCHEMA = 118;
 const WEB_PREVIEW_WORKBENCH_SCHEMA = 119;
 const WEB_MEMORY_METRICS_SCHEMA = 120;
+const WEB_SIGNUP_BONUS_SCHEMA = 121;
 const webDbName = 'web.sqlite';
 const webMarkerName = '.web-instance.json';
 type WebMarker = {
@@ -217,6 +218,7 @@ function webIdentity(
             WEB_PLAYER_LOGIN_SCHEMA,
             WEB_PREVIEW_WORKBENCH_SCHEMA,
             WEB_MEMORY_METRICS_SCHEMA,
+            WEB_SIGNUP_BONUS_SCHEMA,
           ]
         : []),
     ].includes(version),
@@ -276,7 +278,7 @@ function preflightWeb(path: string, options: WebStoreOptions) {
         version >= WEB_SCHEMA &&
           version <=
             (options.providerRuntime
-              ? WEB_MEMORY_METRICS_SCHEMA
+              ? WEB_SIGNUP_BONUS_SCHEMA
               : options.inviteTest
                 ? WEB_INVITE_IDENTITY_SCHEMA
                 : WEB_DATA_SCHEMA),
@@ -413,7 +415,7 @@ export class Store {
                         WEB_PLAYER_LOGIN_SCHEMA,
                         WEB_PREVIEW_WORKBENCH_SCHEMA,
                         WEB_MEMORY_METRICS_SCHEMA,
-                        WEB_MEMORY_METRICS_SCHEMA,
+                        WEB_SIGNUP_BONUS_SCHEMA,
                       ]
                     : []),
                 ].includes(version)
@@ -592,6 +594,7 @@ export class WebStore extends Store {
   readonly concurrency?: WebConcurrency;
   /** Validated daily reply cap per invited player; absent means the default of 100. */
   readonly dailyReplyLimit?: number;
+  readonly publicFreeTier?: boolean;
   /** A persisted invite runtime must have passed the role/root/config preflight on open. */
   requireInviteTest() {
     ensure(
@@ -622,11 +625,13 @@ export class WebStore extends Store {
       providerRuntime?: true;
       concurrency?: WebConcurrency;
       dailyReplyLimit?: number;
+      publicFreeTier?: boolean;
     },
   ) {
     super(join(root, webDbName), { web: { root, ...options } });
     if (options.concurrency) this.concurrency = parseWebConcurrency(options.concurrency);
     if (options.dailyReplyLimit !== undefined) this.dailyReplyLimit = parseWebDailyReplyLimit(options.dailyReplyLimit);
+    if (options.publicFreeTier === true) this.publicFreeTier = true;
     this.instanceId = options.instanceId;
     this.root = root;
     this.dataLifecycleTest = options.dataLifecycleTest === true;

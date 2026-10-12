@@ -72,7 +72,9 @@ test('the user agreement covers the service, accounts and invites, conduct, cont
   const terms = text(read('terms.html'));
   for (const topic of [
     '人工智能生成',
-    '最多 3 次',
+    '最多 5 条回复',
+    '再送 10 条免费消息',
+    '每天最多完成 3 次注册',
     '邀请码',
     '批量注册',
     '你的内容',

@@ -33,6 +33,7 @@ import {
   type PlayerMailer,
 } from '../identity/web-player-accounts.ts';
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
+import { bonusRemaining, extraTrialRemaining, freeTier, hasSignupBonus } from '../admission/web-free-tier.ts';
 
 /** A cookie that names nothing recoverable: the transport expires it so the next visit starts from the signed-out page. */
 export class SessionClearedError extends DomainError {
@@ -198,6 +199,7 @@ export class WebProviderApplication {
             accountDelete: players.accountDelete === true && !!players.purger,
             legal: players.legalPages === true,
             turnstileSiteKey: players.turnstileSiteKey ?? null,
+            signupBonus: freeTier(this.store).on,
           },
         })
       : null;
@@ -374,6 +376,7 @@ export class WebProviderApplication {
 
   access(principal: Principal, ipHash: string): WebProviderAccess & { inaccessible: boolean } {
     const now = this.clock.now();
+    const tier = freeTier(this.store);
     const row = this.store.get<{
       kind: string;
       trial_used: number;
@@ -433,20 +436,40 @@ export class WebProviderApplication {
     // A guest with an email login keeps reading after the trial ended (requireWebContent 'read'); it still cannot send.
     const retained =
       expired && retention.state === 'active' && playerLoginRetainsGuest(this.store, principal.principalId);
-    const remaining = Math.max(
+    const counterRemaining = Math.max(
       0,
-      Math.min(3 - row.trial_used - row.trial_reserved, 3 - (quota?.used_total ?? 0) - (quota?.reserved_total ?? 0)),
+      Math.min(
+        tier.counterReplies - row.trial_used - row.trial_reserved,
+        tier.counterReplies - (quota?.used_total ?? 0) - (quota?.reserved_total ?? 0),
+      ),
     );
     const locked = row.trial_character_id;
     ensure(locked === null || characterId(locked), 'WEB_PROVIDER_CATALOG_INVALID');
+    // Part 17b (flag on): trial replies 4-5 are outside the counters (see admission/web-free-tier.ts); they are open while the
+    // trial window is. The signup bonus is spent after the trial, works with any character and has no time window.
+    const extraLeft = tier.on && !expired ? extraTrialRemaining(this.store, principal.principalId, ipHash) : 0;
+    const remaining = counterRemaining + extraLeft;
+    const trialCanSend = !expired && remaining > 0 && (locked === null || !webCharacterDeleted(this.store, locked));
+    const bonusLeft = bonusRemaining(this.store, principal.principalId);
+    if (bonusLeft > 0)
+      return {
+        kind: 'guest',
+        ...base,
+        lockedCharacterId: null,
+        remainingReplies: (expired ? 0 : remaining) + bonusLeft,
+        reservedReplies: row.trial_reserved,
+        trialExpiresAt: retention.expires_at ?? null,
+        canSend: true,
+        inaccessible: expired && !retained,
+      };
     return {
       kind: 'guest',
       ...base,
       lockedCharacterId: locked,
-      remainingReplies: remaining,
+      remainingReplies: hasSignupBonus(this.store, principal.principalId) && expired ? 0 : remaining,
       reservedReplies: row.trial_reserved,
       trialExpiresAt: retention.expires_at ?? null,
-      canSend: !expired && remaining > 0 && (locked === null || !webCharacterDeleted(this.store, locked)),
+      canSend: trialCanSend,
       inaccessible: expired && !retained,
     };
   }

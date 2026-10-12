@@ -81,7 +81,8 @@ export function webProviderHTTPError(error: unknown) {
                     publicCode === 'WEB_DAILY_LIMIT_REACHED' ||
                     publicCode === 'COCREATION_RATE_LIMITED' ||
                     publicCode === 'PLAYER_RATE_LIMITED' ||
-                    publicCode === 'PLAYER_EMAIL_DAILY_CAP'
+                    publicCode === 'PLAYER_EMAIL_DAILY_CAP' ||
+                    publicCode === 'PLAYER_SIGNUP_IP_LIMIT'
                   ? 429
                   : publicCode === 'INTERNAL_ERROR'
                     ? 500

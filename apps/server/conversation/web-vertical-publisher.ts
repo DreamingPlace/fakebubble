@@ -22,6 +22,7 @@ import type { WebPrivateAudioFiles, PrivateAudioExpectation } from '../audio/web
 import type { WebCoordinatorLease } from '../admission/web-stage-queue.ts';
 import { checkWebV7SceneAtDispatch, readWebV7Request } from '../generation/web-v7-request.ts';
 import { requireWebContent, settleWebLifetimeReservation } from '../admission/web-retention.ts';
+import { freeTier } from '../admission/web-free-tier.ts';
 import {
   fixedObjectScope,
   loadProviderAudio,
@@ -448,7 +449,10 @@ export class WebVerticalPublisher {
     const op = this.store.get<Operation>('SELECT * FROM web_operations WHERE id=?', claim.operationId);
     ensure(op, 'WEB_OPERATION_NOT_FOUND');
     const footer =
-      principal.kind === 'guest' && op.metering_type === 'trial' && principal.trial_used === 2
+      principal.kind === 'guest' &&
+      op.metering_type === 'trial' &&
+      principal.trial_used === 2 &&
+      !freeTier(this.store).on
         ? this.schema() >= 113
           ? this.store.get<Footer>(
               `SELECT media_id,body,origin,'wav_pcm16' AS format,
@@ -459,7 +463,12 @@ export class WebVerticalPublisher {
             )
           : this.store.get<Footer>('SELECT * FROM web_footer_assets WHERE character_id=?', claim.characterId)
         : undefined;
-    if (principal.kind === 'guest' && op.metering_type === 'trial' && principal.trial_used === 2)
+    if (
+      principal.kind === 'guest' &&
+      op.metering_type === 'trial' &&
+      principal.trial_used === 2 &&
+      !freeTier(this.store).on
+    )
       ensure(
         footer?.origin === (this.schema() >= 113 ? 'operator_approved' : 'synthetic_test') &&
           footer.body === SYNTHETIC_TRIAL_FOOTER,
@@ -515,7 +524,12 @@ export class WebVerticalPublisher {
         claim.principalId,
       );
       const operation = this.store.get<Operation>('SELECT * FROM web_operations WHERE id=?', claim.operationId);
-      if (principal?.kind === 'guest' && principal.trial_used === 2 && operation?.metering_type === 'trial') {
+      if (
+        principal?.kind === 'guest' &&
+        principal.trial_used === 2 &&
+        !freeTier(this.store).on &&
+        operation?.metering_type === 'trial'
+      ) {
         const footer = this.store.get<ProviderAudioRow & { voice_version: string }>(
           `SELECT * FROM web_provider_footer_assets
           WHERE character_id=? AND voice_version=(SELECT voice_version FROM web_v7_requests WHERE operation_id=?)`,
@@ -612,7 +626,7 @@ export class WebVerticalPublisher {
             (principal.kind === 'account' &&
               this.store.get('SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1', claim.principalId)) ||
             (principal.kind === 'invite' &&
-              [111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
+              [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(
                 this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
               ) &&
               requireWebContent(this.store, this.clock, claim.principalId, claim.worldId))),
@@ -798,7 +812,11 @@ export class WebVerticalPublisher {
       );
       // A text fallback has no voice at all this round, so the prerecorded voice footer is not sent either.
       const footerRequired =
-        !fallback && principal.kind === 'guest' && op.metering_type === 'trial' && principal.trial_used === 2;
+        !fallback &&
+        principal.kind === 'guest' &&
+        op.metering_type === 'trial' &&
+        principal.trial_used === 2 &&
+        !freeTier(this.store).on;
       const footer = footerRequired
         ? this.schema() >= 113
           ? this.store.get<Footer>(

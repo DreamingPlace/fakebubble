@@ -147,13 +147,14 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 ### 公开上线准备（Part 17）
 
-本部分的**每一项新行为都有开关，默认全部关闭**；什么都不配置时，部署和以前逐字节一致（`GET /account`、CSP、静态文件、报错都不变）。没有新迁移：不新增表，不改提示词或工具 schema。
+本部分的**每一项新行为都有开关，默认全部关闭**；什么都不配置时，部署和以前逐字节一致（`GET /account`、CSP、静态文件、报错都不变）。唯一的迁移是 Part 17b 的第 121 版（见下，新表只在 `SIGNUP_BONUS_ENABLED` 打开后才被读写）；不改提示词或工具 schema。
 
 **新增变量（业务 Worker，`business.json.example` 已列出）：**
 
 | 名称 | 默认 | 说明 |
 | --- | --- | --- |
 | `GUEST_GRACE_ENABLED` | `false` | 注册永远开放，并给没有登录的访客 **7 天宽限期**：试玩结束后数据再保留 7 天（清理时间由 `expires_at` 改为 `expires_at + 7 天`，只对没有登录的访客），期间不能聊天、不能读历史，但会话仍可用于注册；注册即成为保留账号（沿用 Part 11f 的 180 天不活跃规则），历史回来。宽限期结束后数据清除，旧 Cookie 返回 `GUEST_GRACE_ENDED`（401，清 Cookie），页面落到“登录 / 注册 / 以访客继续”，提示“之前的体验聊天已过期”，选 注册 会走正常首访流程创建新访客并以空历史注册。准入不变：没有邀请就没有新回复。 |
+| `SIGNUP_BONUS_ENABLED` | `false` | 免费额度（Part 17b，见下）：访客试聊每人、每个网络（终身）5 条，注册并验证邮箱再送 10 条，同一 IP 每个 UTC 日最多完成 3 次注册。关闭时（默认）一切照旧：3 条、没有赠送、没有注册上限。 |
 | `ACCOUNT_DELETE_ENABLED` | `false` | 账号菜单里出现“删除我的账号”（有登录：密码 + 输入“删除”）和“清除本设备的体验数据”（访客：无需密码）。走原有、带审计、失败即关闭的清理路径，立即清除聊天、记忆、语音、共创、名片、登录、验证码挑战与全部会话；受邀玩家的授权在同一事务里撤销。 |
 | `LEGAL_PAGES_ENABLED` | `false` | **业务 Worker 与边缘 Worker 都要设**。开启后注册页显示“注册即表示你同意《用户协议》和《隐私政策》”，页脚和首页出现两个链接；边缘 Worker 才会提供 `/privacy.html`、`/terms.html`（关闭时 404）。**开启前先把两页里的 【待确认：…】 全部填好。** |
 | `ALERTS_ENABLED` | `false` | 开启给站长发邮件告警与日报。需要 `ALERT_EMAIL_TO`、`ADMIN_EMAIL`（`send_email` 绑定）和 `ADMIN_EMAIL_FROM`，缺任何一个业务对象拒绝启动。 |
@@ -184,6 +185,10 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 7. 把 Access 收窄到 `/api/web/provider/admin/*`（见上），再把 `PUBLIC_ENABLED` / 路由对外开放。
 8. **站长待决定：大陆地区规则。** 目前没有任何地区限制代码（边缘对不在白名单地区的访问者的处理）：需要决定 ①是否对中国大陆访问者开放或屏蔽；②如果开放，是否需要 ICP 备案、跨境传输告知与单独同意、算法/生成式 AI 服务备案等合规动作（隐私政策里对应处有 【待确认】）。在这个决定做出之前，不要宣传公开。
 9. 观察第一天：告警邮件、`inspect`、预算、`GUEST_GRACE` 之后的清理（`web_guest_retention` 的 `purging/purged` 行）。回退：把对应开关改回 `false` 重新部署即可，无需迁移。
+
+**免费额度与注册赠送（`SIGNUP_BONUS_ENABLED`，Part 17b）：** 关闭时一切照旧（访客 3 条，按玩家与按 IP 终身计数）。打开后：①访客试聊 **5 条**（`WEB_LIMITS.publicTrialReplies`），按 IP 的**终身**配额（`web_ip_lifetime_quota`）仍是终身而不是每日，同样是 5；②有邮箱登录、没有邀请授权的访客另有 **10 条终身赠送**（`WEB_LIMITS.signupBonusReplies`）：没有时间窗口，可以和任何角色聊（没有“首个人物锁”），排在试聊之后用，试聊窗口结束后（保留账号）仍可继续聊，**不占用也不检查按 IP 配额**；两者都用完时玩家看到“免费消息已用完，输入邀请码继续”（访客则是“注册即送 10 条免费消息，可以和任何角色聊”）；③赠送**每个已验证邮箱终身最多一次**：只保存规范化邮箱的带密钥 HMAC（`web_bonus_emails`），**删除账号后这一条仍然保留**（隐私政策里已写明），删除后用同一邮箱重新注册不再赠送；④同一 IP 每个 UTC 日最多 **3 次成功注册**（`WEB_LIMITS.signupsPerIpPerDay`）：请求验证码时先检查，完成注册时在同一事务里再检查并计数，超出返回 429 `PLAYER_SIGNUP_IP_LIMIT`（带 `retryAfterMs`，页面提示明天再试）；原有的邮箱/IP 限流和 Turnstile 不变。邀请玩家不受影响（不领赠送，限额与原来相同）。准入顺序：计数器试聊（第 1–3 条）→ 额外试聊（第 4–5 条）→ 注册赠送 → 否则原有的 `TRIAL_EXHAUSTED` / `TRIAL_EXPIRED`；预算预占、幂等与结算规则不变（赠送与额外试聊是 `entitled` 操作）。开启后不再给第 3 条试聊回复附带“试聊结束”页脚（它不再是最后一条）。**为什么分两种试聊：** `web_principals.trial_*` 与 IP 窗口表被迁移 100 的 CHECK 限制在 3，十二张表引用 `web_principals`，已部署的 Durable Object 无法关闭外键重建，所以前三条沿用原计数器，后两条和赠送用派生记账（`web_free_operations`：每条操作一行，剩余额度 = 上限 − 状态为 reserved/used 的行，失败或取消的操作 `released` 不计，没有会漂移的计数器）。`trial_extra` 行带有 IP 的带密钥哈希并在清理后保留（与 `web_ip_lifetime_quota` 一样，清理不能重置某个 IP 的终身额度），`bonus` 行随玩家删除。
+
+**迁移 121（`121_signup_bonus.sql`，sha256 `f0fa334dbb0ac155d5421792e612438b722b9882fc8ff11a145e34e705fef8d9`）：** 新增 `web_bonus_emails`、`web_signup_bonus`、`web_free_operations`、`web_signup_ip_daily`。Node：`user_version=121`，已有 provider 实例运行 `scripts/web-provider.ts migrate-signup-bonus <root>`（新实例的 `migrate` 一路到 121）；Cloudflare：账本版本 121，已在 120 的权威启动时自动补上，**共 46 步**（`expected-migrations`：inline 与 R2 各 46，121 在两边是同一份 SQL）。需要把 121 加进的版本白名单：`web-identity.ts`（三处）、`web-admission.ts`（四处）、`web-retention.ts`、`web-stage-queue.ts`（两处）、`web-vertical-publisher.ts`、`web-v7-request.ts`、`platform/store.ts`（`WEB_SIGNUP_BONUS_SCHEMA`，三处）、`cloudflare/web-store.ts`（版本列表 22 项）、`workers/web-cloudflare/migrations.ts`、`scripts/web-provider.ts`、`web-provider-migration.ts`（`migrateWebProviderSignupBonus`）。逐字节相同的旧步骤有哈希测试保护；先以 `SIGNUP_BONUS_ENABLED=false` 部署，确认账本 `matches:true`，再打开。
 
 **账号删除怎么保证安全（`ACCOUNT_DELETE_ENABLED`）：** `POST /account/delete`，体 `{ "password", "confirm" }`；有登录的玩家必须提供密码并输入“删除”，没有登录的访客 `password` 为空串、`confirm` 为“清除”；没有登录的受邀玩家不能用这个入口（先绑定邮箱）。CSRF / 来源检查、一次一用的会话校验与登录一致；错误密码计入与改密码相同的限流（每个玩家 15 分钟 5 次）并按 IP 限流（30 次）。在**一个事务**里：撤销受邀玩家的授权、凭据和回执，结束该玩家的全部会话，写一条审计（`web_admin_audit`：动作名 + 玩家的 HMAC 假名前 16 位 + 时间，不含内容、邮箱、昵称或 id），并开始清理的 T1（隔离内容、释放预占，运行中的操作按原规则收尾，UNKNOWN 的外部调用保持 UNKNOWN，不重试、不释放）。事务提交后同一请求继续 T2（清库）与 F（删 R2 语音）；这两步任何失败都不会让删除变成报错——保留状态是 `purging`，闹钟会接着完成。清理后的审计（`auditWebLifecycleWorld`）对受邀玩家额外要求：世界里不能留下未撤销的授权；已撤销的授权行只留 id 与时间，作为 `shells`。
 
