@@ -7,7 +7,7 @@ import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract
 import { requireWebContent } from '../admission/web-retention.ts';
 import { guestInGrace } from './web-player-purge.ts';
 import { freeTier, signupBonusTablesExist } from '../admission/web-free-tier.ts';
-import { maskEmail, normalizeEmail } from './email-address.ts';
+import { bonusCanonicalEmail, maskEmail, normalizeEmail } from './email-address.ts';
 import type { WebIdentity } from './web-identity.ts';
 
 export type EmailPurpose = 'signup' | 'reset' | 'bind';
@@ -466,7 +466,7 @@ export class WebPlayerAccounts {
   }
   /** The keyed digest of a normalized address: the only thing kept of a bonus grant after the account is deleted. */
   private bonusEmailKey(emailNorm: string) {
-    return createHmac('sha256', this.bonusKey).update(emailNorm).digest('hex');
+    return createHmac('sha256', this.bonusKey).update(bonusCanonicalEmail(emailNorm)).digest('hex');
   }
   private ensureEligible(purpose: 'signup' | 'bind', scope: Scope, now: number) {
     ensure(!this.loginOf(scope.principalId), 'PLAYER_LOGIN_EXISTS');

@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { peerIpHash } from '../admission/ip-key-input.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { WEB_HTTP_LIMITS as LIMITS, WEB_IDENTITY_LIMITS } from '../../../config/web-v1.ts';
 import {
@@ -146,10 +146,8 @@ export class WebProviderHTTP {
         /^[0-9a-fA-F:.]+$/.test(trustedPeer),
       'REGION_UNAVAILABLE',
     );
-    const ipHash = createHmac('sha256', Buffer.from(app.config.ipKey, 'base64url'))
-      .update('web-cloud-ip-v1\0')
-      .update(trustedPeer)
-      .digest('hex');
+    const ipHash = peerIpHash(app.config.ipKey, 'web-cloud-ip-v1', trustedPeer);
+    ensure(ipHash !== null, 'REGION_UNAVAILABLE');
     this.limits.rate('web:global', LIMITS.requestsGlobalPerMinute);
     this.limits.rate(`web:ip:${ipHash}`, LIMITS.requestsPerIpPerMinute);
     if (method === 'POST' && path.startsWith(API) && isReadOnlyAdminPost(path.slice(API.length)))

@@ -1,7 +1,6 @@
 import { WebCharacterPreviews } from '../characters/web-character-preview.ts';
 import type { WebCharacterPreviewRunner } from '../characters/web-character-preview-runner.ts';
 import { WebCharacterPreviewExecutor } from '../characters/web-character-preview-executor.ts';
-import { createHmac } from 'node:crypto';
 import { createServer, type Server } from 'node:https';
 import { connect } from 'node:net';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -36,6 +35,7 @@ import {
   type WebPlayerAccountsConfig,
 } from './web-provider-application.ts';
 import { webProviderHTTPError } from '../platform/web-provider-http-error.ts';
+import { peerIpHash } from '../admission/ip-key-input.ts';
 
 const privateHeaders = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 const API = '/api/web/provider';
@@ -237,11 +237,9 @@ export class WebProviderServer {
           ? '127.0.0.1'
           : null
         : privateIPv4(req.socket.remoteAddress);
-    ensure(client, 'REGION_UNAVAILABLE');
-    return createHmac('sha256', Buffer.from(this.config.ipKey, 'base64url'))
-      .update('web-local-ip-v1\0')
-      .update(client)
-      .digest('hex');
+    const hash = client === null ? null : peerIpHash(this.config.ipKey, 'web-local-ip-v1', client);
+    ensure(hash, 'REGION_UNAVAILABLE');
+    return hash;
   }
 
   private cursor(principalId: string, seq: number, conversationId?: string) {

@@ -233,6 +233,8 @@ No new table, no migration. What changed is *when* and *by whom* the existing au
 | Invited player | never purged | unchanged, except on request (below) |
 | Player's own request (`ACCOUNT_DELETE_ENABLED`) | not possible | guest (button) or login (password + typed 删除) or invited player with a login: same transaction revokes grant, credentials and receipts, ends every session, writes one audit row and runs T1 (`WebCloudRetention.markExpired(id, 'deleted')`), then T2 and F; the retention state stays `purging` if T2 or F fail and the alarm completes it |
 
+Part 17c: with `SIGNUP_BONUS_ENABLED` on, a guest's trial window is 7 days from its first reply (`WEB_LIMITS.publicTrialWindowMs`; 2 hours with the flag off), so retention (`expires_at`, the purge time and, with grace, `expires_at + 7 days`) moves accordingly; a guest session created while the flag is on lives at least 14 days (window + grace). The bonus-once key is the HMAC of a canonical form used only for the bonus (logins keep the normalized address): everything from the first `+` of the local part is dropped for every domain; for `gmail.com` and `googlemail.com` the dots of the local part are removed too and `googlemail.com` becomes `gmail.com`. Per-IP keys (`ip_hash`) hash the IPv4 text unchanged, an IPv4-mapped IPv6 address as its IPv4, and any other IPv6 address as its canonical /64 prefix (e.g. `2001:db8:1:2::/64`).
+
 Part 17b adds four tables (migration 121, written only while `SIGNUP_BONUS_ENABLED` is on):
 
 | Table | Class | Kept after deletion? |

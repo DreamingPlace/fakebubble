@@ -323,6 +323,36 @@ export class WebHTTPFixture extends WebBusinessFixture {
       );
       return Response.json({ configured: true });
     }
+    if (path === '/fixture/age-principal') {
+      // Part 17c: let `ms` pass for one player. The fixture clock is real, so the trial window and the sessions of that
+      // player move into the past instead; counters, ledgers and ip rows are untouched. Answers the retention window.
+      const { principalId, ms } = (await request.json()) as { principalId: string; ms: number };
+      this.store.run(
+        'UPDATE web_guest_retention SET started_at=started_at-?,expires_at=expires_at-? WHERE principal_id=? AND started_at IS NOT NULL',
+        ms,
+        ms,
+        principalId,
+      );
+      this.store.run(
+        'UPDATE web_sessions SET created_at=created_at-?,last_active_at=last_active_at-?,absolute_expires_at=absolute_expires_at-? WHERE principal_id=?',
+        ms,
+        ms,
+        ms,
+        principalId,
+      );
+      return Response.json(
+        this.store.get('SELECT state,started_at,expires_at FROM web_guest_retention WHERE principal_id=?', principalId),
+      );
+    }
+    if (path === '/fixture/session-lifetime') {
+      const { principalId } = (await request.json()) as { principalId: string };
+      return Response.json(
+        this.store.get(
+          'SELECT absolute_expires_at-created_at AS lifetime FROM web_sessions WHERE principal_id=? ORDER BY created_at DESC LIMIT 1',
+          principalId,
+        ),
+      );
+    }
     if (path.startsWith('/fixture/alerts/')) {
       // Owner alerts over the REAL Durable Object key-value storage and SQL; the mailer only records.
       const body = request.method === 'POST' ? ((await request.json()) as Record<string, number>) : {};

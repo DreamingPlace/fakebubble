@@ -3,6 +3,8 @@ import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID, 
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { WEB_IDENTITY_LIMITS as LIMITS } from '../../../config/web-v1.ts';
+import { GUEST_GRACE_MS } from '../../../config/web-public.ts';
+import { freeTier } from '../admission/web-free-tier.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { webDataLifecycleEnabled, type WebRetentionRow } from '../admission/web-retention.ts';
 
@@ -316,6 +318,14 @@ export class WebIdentity {
     ensure(/^[A-Za-z0-9_-]{43}$/.test(csrf), 'CSRF_INVALID');
     ensure(fixedTimeEqual(Buffer.from(csrf), Buffer.from(this.csrf(row, 'active'))), 'CSRF_INVALID');
   }
+  /**
+   * Part 17c: with the free tier on, a guest session created now outlives the 7 day trial and the grace period (14 days);
+   * otherwise LIMITS.guestAbsoluteMs (24 h). Sessions that already exist keep the lifetime they were created with.
+   */
+  private guestLifetimeMs() {
+    const tier = freeTier(this.store);
+    return tier.on ? Math.max(LIMITS.guestAbsoluteMs, tier.trialWindowMs + GUEST_GRACE_MS) : LIMITS.guestAbsoluteMs;
+  }
   private newSession(principalId: string, accountId: string | null, now: number, durable = false) {
     const token = this.random(32).toString('base64url');
     const row: SessionRow = {
@@ -333,7 +343,7 @@ export class WebIdentity {
           ? LIMITS.accountAbsoluteMs
           : durable
             ? LIMITS.inviteCookieMaxAgeSeconds * 1000
-            : LIMITS.guestAbsoluteMs),
+            : this.guestLifetimeMs()),
       revoked_at: null,
     };
     this.store.run(

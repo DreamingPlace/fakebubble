@@ -10,6 +10,8 @@ export const WEB_LIMITS = Object.freeze({
   signupBonusReplies: 10,
   /** Part 17b: successful signups one IP may complete per UTC day. */
   signupsPerIpPerDay: 3,
+  /** Part 17c (flag SIGNUP_BONUS_ENABLED): the guest trial window, counted from the first reply (2 h with the flag off). */
+  publicTrialWindowMs: 7 * 24 * 60 * 60_000,
   ipWindowMs: 24 * 60 * 60_000,
   maxInputCodePoints: 500,
   maxPrincipalPending: 3, // one active pipeline plus two additional waiting inputs

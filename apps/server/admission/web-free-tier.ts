@@ -29,7 +29,10 @@ export interface FreeTier {
   trialReplies: number;
   bonusReplies: number;
   signupsPerIpPerDay: number;
+  /** How long a guest's trial lasts from its first reply: publicTrialWindowMs (7 d) when on, 2 h when off. */
+  trialWindowMs: number;
 }
+const TRIAL_WINDOW_OFF_MS = 2 * 60 * 60_000;
 export function freeTier(store: { publicFreeTier?: boolean }): FreeTier {
   const counter = WEB_LIMITS.trialReplies;
   return store.publicFreeTier === true
@@ -40,6 +43,7 @@ export function freeTier(store: { publicFreeTier?: boolean }): FreeTier {
         trialReplies: WEB_LIMITS.publicTrialReplies,
         bonusReplies: WEB_LIMITS.signupBonusReplies,
         signupsPerIpPerDay: WEB_LIMITS.signupsPerIpPerDay,
+        trialWindowMs: WEB_LIMITS.publicTrialWindowMs,
       }
     : {
         on: false,
@@ -48,6 +52,7 @@ export function freeTier(store: { publicFreeTier?: boolean }): FreeTier {
         trialReplies: counter,
         bonusReplies: 0,
         signupsPerIpPerDay: Number.POSITIVE_INFINITY,
+        trialWindowMs: TRIAL_WINDOW_OFF_MS,
       };
 }
 

@@ -135,6 +135,7 @@ export class WebAdmission {
       );
       if (principal.kind === 'invite') this.dailyLimit(principal.id);
       const tier = freeTier(this.store);
+      const trialWindowMs = tier.trialWindowMs;
       // Part 17b: the signup bonus is one more entitlement, decided HERE, before any reservation or provider call.
       const free = trial && tier.on ? this.pickFreeEntitlement(principal, input, retention) : 'trial';
       const bonus = free === 'bonus',
@@ -160,7 +161,7 @@ export class WebAdmission {
 
       const now = this.clock.now();
       ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
-      if (lifecycle) ensure(now <= Number.MAX_SAFE_INTEGER - 2 * 60 * 60_000, 'INVALID_TIME');
+      if (lifecycle) ensure(now <= Number.MAX_SAFE_INTEGER - trialWindowMs, 'INVALID_TIME');
       let window: { id: string; used: number; reserved: number } | undefined;
       if (counted) {
         if (lifecycle) {
@@ -256,7 +257,7 @@ export class WebAdmission {
             SET started_at=?,expires_at=?,state='active',revision=revision+1
             WHERE principal_id=? AND world_id=? AND state='unstarted' AND revision=?`,
               now,
-              now + 2 * 60 * 60_000,
+              now + trialWindowMs,
               principal.id,
               principal.world_id,
               retention.revision,
@@ -280,7 +281,7 @@ export class WebAdmission {
             SET started_at=?,expires_at=?,state='active',revision=revision+1
             WHERE principal_id=? AND world_id=? AND state='unstarted' AND revision=?`,
                 now,
-                now + 2 * 60 * 60_000,
+                now + trialWindowMs,
                 principal.id,
                 principal.world_id,
                 retention.revision,
