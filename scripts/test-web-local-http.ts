@@ -206,7 +206,12 @@ try {
       assert.equal(response.headers['x-content-type-options'], 'nosniff');
       assert.equal(
         response.headers['cache-control'],
-        name === 'index.html' ? 'no-store' : 'public, max-age=31536000, immutable',
+        // Part 16b named exception: /favicon.ico is a fixed root path (not content-addressed), cached for one day.
+        name === 'index.html'
+          ? 'no-store'
+          : name === 'favicon.ico'
+            ? 'public, max-age=86400'
+            : 'public, max-age=31536000, immutable',
       );
     }
     assert.match(String(page.headers['content-type']), /^text\/html/);

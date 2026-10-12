@@ -25,6 +25,8 @@ export const WEB_LIMITS = Object.freeze({
 export const WEB_HTTP_LIMITS = Object.freeze({
   requestsPerIpPerMinute: 600,
   writesPerIpPerMinute: 60,
+  /** Read-only admin POSTs (status polls, lists, details); real writes keep writesPerIpPerMinute. */
+  adminReadsPerIpPerMinute: 300,
   welcomePerIpPerMinute: 60,
   welcomeGlobalPerMinute: 300,
   requestsGlobalPerMinute: 6000,
