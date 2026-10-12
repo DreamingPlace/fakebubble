@@ -197,6 +197,20 @@ function boundedText(value: unknown, limit: number): asserts value is string {
   ensure(typeof value === 'string' && [...value].length <= limit && !/[\r\n]/u.test(value), 'INVALID_REVIEW_COVERAGE');
 }
 
+/** A coverage quote may sit in one bubble or span 2+ consecutive bubbles (joined with "" or one space). */
+function quoteInBubbles(bubbles: readonly { text: string }[], quote: string): boolean {
+  for (let start = 0; start < bubbles.length; start++) {
+    let plain = '',
+      spaced = '';
+    for (let end = start; end < bubbles.length; end++) {
+      plain += bubbles[end]!.text;
+      spaced += (end > start ? ' ' : '') + bubbles[end]!.text;
+      if (plain.includes(quote) || spaced.includes(quote)) return true;
+    }
+  }
+  return false;
+}
+
 export function parseTextDraft(value: unknown, request: TextGenerationRequest): TextDraft {
   if (request.deliveryMode === 'voice') {
     exact(value, ['mode', 'utterance', 'afterthoughts', 'endsSession'], 'INVALID_DRAFT_SCHEMA');
@@ -324,7 +338,7 @@ export function applyTextReview(
     if (item.status === 'answered') {
       ensure(
         item.supportQuote.trim().length > 0 &&
-          presentation.bubbles.some((bubble) => bubble.text.includes(item.supportQuote as string)) &&
+          quoteInBubbles(presentation.bubbles, item.supportQuote) &&
           item.missingInformation === '',
         'INVALID_REVIEW_COVERAGE',
       );
@@ -334,7 +348,7 @@ export function applyTextReview(
       ensure(
         item.supportQuote.trim().length > 0 &&
           item.missingInformation.trim().length > 0 &&
-          [...presentation.bubbles, ...previous].some((message) => message.text.includes(item.supportQuote as string)),
+          (quoteInBubbles(presentation.bubbles, item.supportQuote) || quoteInBubbles(previous, item.supportQuote)),
         'INVALID_REVIEW_COVERAGE',
       );
       awaitingPlayerMessageIds.push(id);
