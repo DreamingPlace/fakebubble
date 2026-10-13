@@ -109,6 +109,7 @@ export const accountCopy = {
     PLAYER_SIGNUP_UNAVAILABLE: '当前身份不能注册。',
     PLAYER_BIND_UNAVAILABLE: '当前身份不需要绑定邮箱。',
     PLAYER_EMAIL_DAILY_CAP: '今天的验证码发送名额已经用完，请明天再试。',
+    PLAYER_SIGNUP_IP_LIMIT: '这个网络今天的注册次数已用完，请明天再试',
     ACCOUNT_DELETE_CONFIRM_INVALID: '确认文字不对，请按提示输入。',
     ACCOUNT_DELETE_UNAVAILABLE: '当前身份不能这样删除，请联系我们。',
     TURNSTILE_REQUIRED: '人机验证没通过，请再试一次。',
@@ -130,8 +131,8 @@ export const accountCopy = {
 export function accountError(error: unknown) {
   if (!(error instanceof ProviderApiError)) return accountCopy.errors.NETWORK!;
   if (error.status === 429 || error.code === 'RATE_LIMITED' || error.code === 'PLAYER_RATE_LIMITED')
-    return error.code === 'PLAYER_EMAIL_DAILY_CAP'
-      ? accountCopy.errors.PLAYER_EMAIL_DAILY_CAP!
+    return error.code === 'PLAYER_EMAIL_DAILY_CAP' || error.code === 'PLAYER_SIGNUP_IP_LIMIT'
+      ? accountCopy.errors[error.code]!
       : accountCopy.wait(error.retryAfterMs ?? 60_000);
   return accountCopy.errors[error.code] ?? accountCopy.errors.NETWORK!;
 }

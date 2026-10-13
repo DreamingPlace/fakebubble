@@ -9,6 +9,8 @@ type PreviewBudgetNamespace = {
   idFromName(name: string): { toString(): string };
   get(id: unknown): WebBudgetStatusRPC;
 };
+const ALERT_FIXTURE_BASE_MS = Date.parse('2026-01-05T02:00:00Z');
+
 export class PreviewBudgetFixture extends WebBudgetObject {
   constructor(
     ctx: { storage: DurableSQLStorage; id: { toString(): string } },
@@ -359,7 +361,10 @@ export class WebHTTPFixture extends WebBusinessFixture {
       const build = () =>
         new WebAlerts({
           store: this.store,
-          clock: { now: () => Date.now() + this.alertSkew },
+          // ALERT_FIXTURE_CLOCK: deterministic. A fixed base instant (02:00 UTC, well before digestHourUtc 23)
+          // plus the test's skew, never the wall clock - otherwise a 6 h skew crosses the digest hour
+          // whenever the suite happens to run between ~17:00 and 24:00 UTC.
+          clock: { now: () => ALERT_FIXTURE_BASE_MS + this.alertSkew },
           config: {
             to: 'owner@example.com',
             errorsPerHour: body.errorsPerHour ?? 1,

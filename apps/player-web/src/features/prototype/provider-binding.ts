@@ -127,6 +127,10 @@ export class LiveBinding {
   get legalEnabled() {
     return this.account.features?.legal === true;
   }
+  /** The free tier is on (SIGNUP_BONUS_ENABLED): the footer says 免费体验 instead of 邀请体验. */
+  get freeTierEnabled() {
+    return this.bonusOffer > 0;
+  }
   /** A guest past its trial and inside the 7-day grace period (GUEST_GRACE_ENABLED), or null. */
   private get grace() {
     return this.account.signedIn && !this.account.hasLogin ? (this.account.grace ?? null) : null;

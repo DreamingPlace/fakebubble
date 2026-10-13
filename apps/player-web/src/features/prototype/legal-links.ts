@@ -1,3 +1,8 @@
+/** The chat footer's first part: 免费体验 with the free tier on (SIGNUP_BONUS_ENABLED), 邀请体验 as before otherwise. */
+export function footerNote(freeTier: boolean | undefined) {
+  return `${freeTier ? '免费体验' : '邀请体验'} · 回复由AI生成`;
+}
+
 /** Part 17: with the legal pages published (LEGAL_PAGES_ENABLED) the footer line links them. Nothing is added otherwise. */
 export function appendLegalLinks(note: Element | null, enabled: boolean | undefined) {
   if (!enabled || !note) return;

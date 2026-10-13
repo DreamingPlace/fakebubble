@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LiveBinding } from '../../src/features/prototype/provider-binding.ts';
-import { appendLegalLinks } from '../../src/features/prototype/legal-links.ts';
+import { appendLegalLinks, footerNote } from '../../src/features/prototype/legal-links.ts';
 import { ProviderApi, ProviderApiError, type AccountInfo, type HumanCheck } from '../../src/services/provider-api.ts';
 import {
   accountCopy,
@@ -589,6 +589,21 @@ test('footer: the legal links appear only with the flag, in the footer line', (t
     if (!legal) assert.equal(note.textContent, '邀请体验 · 回复由AI生成', 'the footer is exactly as before');
   }
   appendLegalLinks(null, true);
+});
+
+test('footer: 免费体验 with the free tier on (legal links after it), the old 邀请体验 line with it off', (t) => {
+  for (const [freeTier, legal, expected] of [
+    [true, true, '免费体验 · 回复由AI生成 · 用户协议 · 隐私政策'],
+    [false, true, '邀请体验 · 回复由AI生成 · 用户协议 · 隐私政策'],
+    [true, false, '免费体验 · 回复由AI生成'],
+    [undefined, false, '邀请体验 · 回复由AI生成'],
+  ] as const) {
+    const doc = installFakeDom(t);
+    const note = doc.createElement('footer');
+    note.textContent = footerNote(freeTier);
+    appendLegalLinks(note as unknown as Element, legal);
+    assert.equal(note.textContent, expected);
+  }
 });
 
 // ---- Part 17b: the signup bonus ---------------------------------------------------------------------------------------
