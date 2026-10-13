@@ -592,7 +592,9 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
         diff.append(line);
       }
       section(
-        p.final?.reviewChanged ? '草稿与最终气泡（审核改动已标出）' : '草稿与最终气泡（审核未改动）',
+        p.final?.reviewChanged
+          ? `草稿与最终气泡（审核改动已标出${p.final.reviewDecisionNormalized ? '；审核写了 reject 但给出了可发布的替代气泡，已按 accept 处理' : ''}）`
+          : '草稿与最终气泡（审核未改动）',
         h(
           'div',
           { class: 'pw-sides' },

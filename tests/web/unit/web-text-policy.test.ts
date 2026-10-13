@@ -19,8 +19,11 @@ import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server
 // reviewer keeps voice, AI-honesty line (prompt only; fingerprint unchanged): policy c1b35adf…, prompt 3e75a258….
 // Part 16: characterLocalTime is the character's own clock (never the player's), no UTC currentTime in the model JSON, no invented
 // shared history or live-game claims (prompt only; fingerprint unchanged): policy 2bd7b236…, prompt 00448e45….
-const POLICY_HASH = '2bd7b236db8f307ac3a0a990c42647137efa6fb4f73b606004678b678563227d';
-const PROMPT_HASH = '00448e452aa0172bcb5f69a6400690832d35fbd6ae32bfe7e2126cd9eb8b323b';
+// Part 18c (named exception, the only change to this file): the review's accept/reject rule is stated unambiguously
+// (a rewrite is accept + replacementBubbles; reject only with no replacement) and both prompts carry the form-of-address
+// rule (prompt only; fingerprint unchanged): policy e31c3518…, prompt 6519b6a0….
+const POLICY_HASH = 'e31c3518fcf47ac3cb18a37b9cf42423b126977ccfd9258e2939c8b3d67652fb';
+const PROMPT_HASH = '6519b6a05e5369b5f223d26d6215cfd6c656386890a685c5276945eb860fcd6f';
 const FINGERPRINT_DIGEST = 'b42431c97a4cc92b10d8c7c215ead160884d9248397736216b5fc9273883ef99';
 
 test('accepted-v7 policy hash, prompt hash and protocol fingerprint are pinned', () => {
