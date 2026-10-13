@@ -1,6 +1,17 @@
 /** Initial web-only limits. Live tuning must update this single source and rerun load tests. */
 export const WEB_LIMITS = Object.freeze({
   trialReplies: 3,
+  /**
+   * Part 17b (flag SIGNUP_BONUS_ENABLED): with the flag on, the guest trial and the per-IP LIFETIME trial quota both use
+   * publicTrialReplies instead of trialReplies. With the flag off nothing changes (trialReplies stays 3).
+   */
+  publicTrialReplies: 5,
+  /** Part 17b: lifetime replies a guest gets for signing up with a verified email (once per address, ever). */
+  signupBonusReplies: 10,
+  /** Part 17b: successful signups one IP may complete per UTC day. */
+  signupsPerIpPerDay: 3,
+  /** Part 17c (flag SIGNUP_BONUS_ENABLED): the guest trial window, counted from the first reply (2 h with the flag off). */
+  publicTrialWindowMs: 7 * 24 * 60 * 60_000,
   ipWindowMs: 24 * 60 * 60_000,
   maxInputCodePoints: 500,
   maxPrincipalPending: 3, // one active pipeline plus two additional waiting inputs

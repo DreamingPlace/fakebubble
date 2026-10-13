@@ -3,6 +3,8 @@ import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID, 
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { WEB_IDENTITY_LIMITS as LIMITS } from '../../../config/web-v1.ts';
+import { GUEST_GRACE_MS } from '../../../config/web-public.ts';
+import { freeTier } from '../admission/web-free-tier.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { webDataLifecycleEnabled, type WebRetentionRow } from '../admission/web-retention.ts';
 
@@ -103,6 +105,8 @@ export interface WebIdentityOptions {
   clock: Clock;
   nextId?: () => string;
   random?: (size: number) => Buffer;
+  /** GUEST_GRACE_ENABLED: how long past its trial a guest without a login keeps a usable session (0 = off). */
+  guestGraceMs?: number;
 }
 
 /** Bounds native Argon2 work before it reaches libuv; no cheaper test-only parameters. */
@@ -196,7 +200,7 @@ export class WebIdentity {
       'WEB_IDENTITY_ORIGIN_INVALID',
     );
     ensure(
-      [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
+      [103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(
         store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       ),
       'WEB_IDENTITY_MIGRATION_REQUIRED',
@@ -263,9 +267,29 @@ export class WebIdentity {
       !!this.store.get("SELECT 1 FROM web_principals WHERE id=? AND kind='guest'", principalId)
     );
   }
+  /**
+   * Grace (flag GUEST_GRACE_ENABLED): the session of a guest whose trial has ended stays usable until the end of the
+   * grace period so the player can still sign up. Usable is all it is: the content gates ('live' and 'read') still answer
+   * TRIAL_EXPIRED, so no reply starts and no history is read. A guest that never started a trial has no grace.
+   */
+  private inGrace(row: SessionRow, now: number) {
+    const grace = this.options.guestGraceMs ?? 0;
+    if (grace <= 0 || row.account_id !== null || !webDataLifecycleEnabled(this.store)) return false;
+    const retention = this.store.get<{ expires_at: number | null; state: string }>(
+      `SELECT r.expires_at,r.state FROM web_guest_retention r
+      JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id
+      WHERE r.principal_id=? AND p.kind='guest'`,
+      row.principal_id,
+    );
+    return (
+      !!retention && retention.state === 'active' && retention.expires_at !== null && now < retention.expires_at + grace
+    );
+  }
   private withinLifetime(row: SessionRow, now: number) {
     return (
-      now < row.absolute_expires_at || (row.account_id === null && this.hasActiveInviteGrant(row.principal_id, now))
+      now < row.absolute_expires_at ||
+      (row.account_id === null && this.hasActiveInviteGrant(row.principal_id, now)) ||
+      this.inGrace(row, now)
     );
   }
   private activeSession(token: string, now: number) {
@@ -294,6 +318,14 @@ export class WebIdentity {
     ensure(/^[A-Za-z0-9_-]{43}$/.test(csrf), 'CSRF_INVALID');
     ensure(fixedTimeEqual(Buffer.from(csrf), Buffer.from(this.csrf(row, 'active'))), 'CSRF_INVALID');
   }
+  /**
+   * Part 17c: with the free tier on, a guest session created now outlives the 7 day trial and the grace period (14 days);
+   * otherwise LIMITS.guestAbsoluteMs (24 h). Sessions that already exist keep the lifetime they were created with.
+   */
+  private guestLifetimeMs() {
+    const tier = freeTier(this.store);
+    return tier.on ? Math.max(LIMITS.guestAbsoluteMs, tier.trialWindowMs + GUEST_GRACE_MS) : LIMITS.guestAbsoluteMs;
+  }
   private newSession(principalId: string, accountId: string | null, now: number, durable = false) {
     const token = this.random(32).toString('base64url');
     const row: SessionRow = {
@@ -311,7 +343,7 @@ export class WebIdentity {
           ? LIMITS.accountAbsoluteMs
           : durable
             ? LIMITS.inviteCookieMaxAgeSeconds * 1000
-            : LIMITS.guestAbsoluteMs),
+            : this.guestLifetimeMs()),
       revoked_at: null,
     };
     this.store.run(
@@ -579,7 +611,7 @@ export class WebIdentity {
     grantId: string;
   }) {
     ensure(
-      [112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
+      [112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(
         this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       ) &&
         /^[A-Za-z0-9_.-]{1,128}$/.test(input.requestId) &&
@@ -1427,7 +1459,7 @@ export class WebIdentity {
         session.id,
       );
       if (
-        [112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
+        [112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(
           this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
         )
       )

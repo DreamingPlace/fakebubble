@@ -33,10 +33,17 @@ import {
   inspectWebAuthority,
   type WebInspectBudget,
 } from '../../apps/server/cloudflare/web-inspect.ts';
+import { webPublicFromEnv, type WebPublicConfig } from '../../config/web-public.ts';
 import { webConcurrencyFromEnv, webDailyReplyLimitFromEnv } from '../../config/web-concurrency.ts';
 import { embeddingsEnabled, webEmbedConfigFromEnv, type WebEmbedConfig } from '../../config/web-embeddings.ts';
 import type { WebBudgetPolicy } from '../../apps/server/budget/web-provider-budget-contract.ts';
-import { cloudAdminMailer, type AdminEmailBinding } from '../../apps/server/cloudflare/web-admin-mail.ts';
+import {
+  cloudAdminMailer,
+  cloudAlertMailer,
+  type AdminEmailBinding,
+} from '../../apps/server/cloudflare/web-admin-mail.ts';
+import { WebAlerts, durableAlertState } from '../../apps/server/cloudflare/web-alerts.ts';
+import { TurnstileGate, siteverifyVerifier } from '../../apps/server/identity/web-turnstile.ts';
 import { cloudPlayerMailer } from '../../apps/server/cloudflare/web-player-mail.ts';
 import { PLAYER_LIMITS } from '../../apps/server/identity/web-player-accounts.ts';
 
@@ -81,6 +88,25 @@ export interface WebBusinessEnvironment {
   PLAYER_EMAIL?: AdminEmailBinding;
   /** Emails per UTC day, all players together (1–100000, default 200). */
   PLAYER_EMAIL_DAILY_CAP?: string;
+  /** Part 17 switches (each off unless the string 'true'); see docs/DEPLOYMENT.md. */
+  GUEST_GRACE_ENABLED?: string;
+  ACCOUNT_DELETE_ENABLED?: string;
+  LEGAL_PAGES_ENABLED?: string;
+  /** Part 17b: 5-reply guest trial, 10-reply signup bonus, 3 signups per IP per UTC day. Off unless 'true'. */
+  SIGNUP_BONUS_ENABLED?: string;
+  /** Owner alerts: off unless 'true'; then ALERT_EMAIL_TO, ADMIN_EMAIL and ADMIN_EMAIL_FROM are required. Thresholds are optional decimal strings. */
+  ALERTS_ENABLED?: string;
+  ALERT_EMAIL_TO?: string;
+  ALERT_ERRORS_PER_HOUR?: string;
+  ALERT_DAILY_SPEND_MICROS?: string;
+  ALERT_BUDGET_PERCENT?: string;
+  ALERT_VALIDATION_FAIL_PERCENT?: string;
+  ALERT_VALIDATION_MIN_SAMPLES?: string;
+  ALERT_DIGEST_HOUR_UTC?: string;
+  /** Cloudflare Turnstile: off unless 'true'; then TURNSTILE_SITE_KEY and the secret TURNSTILE_SECRET are required. */
+  TURNSTILE_ENABLED?: string;
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET?: string;
   MEDIA: PrivateBucket;
   BUDGET: WebBudgetStatusRPC;
   GENERATION: WebGenerationBinding;
@@ -99,6 +125,11 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
   private readonly budgetPolicy: WebBudgetPolicy;
   /** Validated at construction (invalid refuses to start); null while embeddings are disabled. */
   private readonly embedConfig: WebEmbedConfig | null;
+  /** Part 17: validated at construction; every switch defaults off. */
+  private readonly publicConfig: WebPublicConfig;
+  /** Owner alerts, null while ALERTS_ENABLED is off. */
+  private alerts: WebAlerts | null = null;
+  private human: TurnstileGate | null = null;
   private app?: WebProviderApplication;
   private services: Promise<{ execution: WebCloudExecutor; http: WebProviderHTTP }> | undefined;
   constructor(ctx: BusinessContext, env: WebBusinessEnvironment) {
@@ -108,6 +139,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     const policy = env.BUDGET_POLICY ?? 'test-cumulative';
     ensure(policy === 'test-cumulative' || policy === 'production-unlimited', 'WEB_CLOUD_BUDGET_POLICY_INVALID');
     this.budgetPolicy = policy;
+    this.publicConfig = webPublicFromEnv(env as unknown as Record<string, unknown>);
     this.embedConfig = embeddingsEnabled(env as unknown as Record<string, unknown>)
       ? webEmbedConfigFromEnv(env as unknown as Record<string, unknown>)
       : null;
@@ -157,6 +189,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       providerAudio: new PrivateMediaObjects(env.MEDIA),
       concurrency: webConcurrencyFromEnv(env as unknown as Record<string, unknown>),
       dailyReplyLimit: webDailyReplyLimitFromEnv(env as unknown as Record<string, unknown>),
+      publicFreeTier: this.publicConfig.signupBonus,
     });
     const configHash = createHash('sha256')
       .update(
@@ -170,7 +203,41 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       )
       .digest('hex');
     this.setup = new WebCloudSetup(this.store, this.clock, configHash, env.MATERIAL_PACKAGE_SHA256, this.budgetPolicy);
-    this.retention = new WebCloudRetention(this.store, this.clock);
+    this.retention = new WebCloudRetention(this.store, this.clock, this.publicConfig.graceMs);
+    const alertConfig = this.publicConfig.alerts;
+    if (alertConfig) {
+      ensure(env.ADMIN_EMAIL && env.ADMIN_EMAIL_FROM, 'WEB_ALERT_MAIL_CONFIG_INVALID');
+      const cap = env.PLAYER_EMAIL_DAILY_CAP;
+      this.alerts = new WebAlerts({
+        store: this.store,
+        clock: this.clock,
+        config: alertConfig,
+        mail: cloudAlertMailer(env.ADMIN_EMAIL, env.ADMIN_EMAIL_FROM, alertConfig.to),
+        state: durableAlertState(ctx.storage as unknown as Parameters<typeof durableAlertState>[0]),
+        budget: async () =>
+          (await this.env.BUDGET.summary()).map((row) => ({
+            provider: row.provider,
+            allowanceMicros: row.allowanceMicros,
+            spentMicros: row.spentMicros,
+            heldMicros: row.heldMicros,
+          })),
+        emailDailyCap:
+          env.PLAYER_SIGNUP_ENABLED === 'true'
+            ? cap === undefined
+              ? PLAYER_LIMITS.defaultDailyCap
+              : Number(cap)
+            : null,
+        report: (event) => console.error(JSON.stringify({ event })),
+      });
+    }
+    if (this.publicConfig.turnstile)
+      this.human = new TurnstileGate({
+        siteKey: this.publicConfig.turnstile.siteKey,
+        secret: this.publicConfig.turnstile.secret,
+        origin: env.ORIGIN,
+        verifier: siteverifyVerifier(),
+        clock: this.clock,
+      });
   }
   private operator() {
     ensure(this.env.OPERATOR_ENABLED === 'true', 'WEB_CLOUD_OPERATOR_DISABLED');
@@ -207,6 +274,14 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
               )
             : undefined,
           dailyCap: cap === undefined ? PLAYER_LIMITS.defaultDailyCap : Number(cap),
+          graceMs: this.publicConfig.graceMs,
+          purger: {
+            begin: (principalId) => this.retention.beginDeletion(principalId),
+            finish: (principalId) => this.retention.finishDeletion(principalId),
+          },
+          accountDelete: this.publicConfig.accountDelete,
+          legalPages: this.publicConfig.legalPages,
+          turnstileSiteKey: this.publicConfig.turnstile?.siteKey ?? null,
         },
       );
     }
@@ -300,13 +375,22 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           this.store,
           this.clock,
           runner,
-          () => this.retention.nextDue(),
+          () => this.maintenanceDue(),
           previews,
         );
-        const http = new WebProviderHTTP(app, {
-          wake: () => execution.wake(),
-          cancel: (id, principal) => execution.executor.cancelManaged(id, principal),
-        });
+        const http = new WebProviderHTTP(
+          app,
+          {
+            wake: () => execution.wake(),
+            cancel: (id, principal) => execution.executor.cancelManaged(id, principal),
+          },
+          {
+            human: this.human ?? undefined,
+            onServerError: this.alerts
+              ? () => this.context.waitUntil(this.alerts!.recordError().catch(() => {}))
+              : undefined,
+          },
+        );
         return { execution, http };
       })();
       this.services = pending;
@@ -317,10 +401,24 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     }
     return this.services;
   }
+  /** Retention and (when enabled) the hourly alert check decide when the alarm must wake without traffic. */
+  private maintenanceDue() {
+    const retention = this.retention.nextDue();
+    const alerts = this.alerts?.nextDue() ?? null;
+    return retention === null ? alerts : alerts === null ? retention : Math.min(retention, alerts);
+  }
   async alarm() {
     // Privacy cleanup must survive restart, disabled providers and unavailable budget RPC.
     await this.context.storage.setAlarm(this.clock.now() + 30_000);
     await this.retention.sweep();
+    // Owner alerts: gated to once an hour inside check(); a failure here never blocks cleanup or the queues.
+    if (this.alerts) {
+      try {
+        await this.alerts.check();
+      } catch (error) {
+        console.error(JSON.stringify({ event: 'web_alert_check_failed', ...safeError(error) }));
+      }
+    }
     const deletion = this.store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_deletion_schema'")
       ? new WebCharacterDeletion(this.store, this.clock)
       : null;
@@ -335,7 +433,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       }
       return services.execution.alarm();
     }
-    const next = Math.min(this.retention.nextDue() ?? Infinity, deletion?.nextDue() ?? Infinity);
+    const next = Math.min(this.maintenanceDue() ?? Infinity, deletion?.nextDue() ?? Infinity);
     const due = Number.isFinite(next) ? next : null;
     if (due === null) await this.context.storage.deleteAlarm();
     else await this.context.storage.setAlarm(Math.max(this.clock.now() + 1000, due));
@@ -352,6 +450,9 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       return services.http.fetch(request, peer);
     } catch (error) {
       console.error(JSON.stringify({ event: 'web_business_unavailable', stage, ...safeError(error) }));
+      // A stage past the disabled / edge checks is a business failure the owner wants to hear about.
+      if (this.alerts && stage !== 'public-disabled' && stage !== 'edge-request')
+        this.context.waitUntil(this.alerts.recordError().catch(() => {}));
       return Response.json(
         { error: { code: 'SERVICE_UNAVAILABLE', requestId: null, retryAfterMs: null } },
         { status: 503, headers: { 'cache-control': 'no-store' } },

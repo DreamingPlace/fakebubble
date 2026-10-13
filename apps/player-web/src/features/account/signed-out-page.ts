@@ -17,6 +17,12 @@ export const signedOutCopy = {
   guest: '以访客继续',
   working: '请稍候…',
   failed: '网络不太稳定，稍后再试试。',
+  /** Shown when the guest's trial AND its 7-day grace period are over (flag GUEST_GRACE_ENABLED). */
+  expired: '之前的体验聊天已过期',
+  humanFailed: '人机验证没通过，请再试一次。',
+  humanDown: '验证服务暂时不可用，请稍后再试。',
+  terms: '用户协议',
+  privacy: '隐私政策',
 } as const;
 
 export type SignedOutApi = AccountApi &
@@ -24,7 +30,17 @@ export type SignedOutApi = AccountApi &
 
 export function renderSignedOut(
   root: HTMLElement,
-  options: { api: SignedOutApi; reload?: () => void; timers?: Timers; mount?: HTMLElement; doneMs?: number },
+  options: {
+    api: SignedOutApi;
+    reload?: () => void;
+    timers?: Timers;
+    mount?: HTMLElement;
+    doneMs?: number;
+    /** The trial and its grace period ended: say that the earlier trial chats have expired. */
+    expired?: boolean;
+    /** The account was just erased on this page: the first page names that instead of "你还没有登录". */
+    erased?: string;
+  },
 ) {
   const { api } = options;
   const reload = options.reload ?? (() => location.reload());
@@ -46,6 +62,9 @@ export function renderSignedOut(
     text: signedOutCopy.guest,
     attrs: { type: 'button' },
   });
+  let legal = false;
+  let bonus = 0;
+  const legalLinks = h('p', { class: 'legal-links signed-out-legal', hidden: true });
   const have = h('button', {
     class: 'recovery-have signed-out-recovery',
     text: recoveryCopy.have,
@@ -55,16 +74,30 @@ export function renderSignedOut(
     'main',
     { class: 'provider-start-error signed-out-page' },
     h('h1', { text: signedOutCopy.title }),
+    options.erased ? h('p', { class: 'signed-out-erased', text: options.erased, attrs: { role: 'status' } }) : null,
+    options.expired
+      ? h('p', { class: 'signed-out-expired', text: signedOutCopy.expired, attrs: { role: 'status' } })
+      : null,
     h('p', { text: signedOutCopy.detail }),
     h('div', { class: 'signed-out-actions' }, loginButton, signupButton, guestButton),
     notice,
     h('div', { class: 'signed-out-more' }, have),
+    legalLinks,
   );
   root.replaceChildren(panel);
   // Whether signup is open decides what 注册 / 忘记密码 say; a failed read keeps it closed and login still works.
   const known = api.account().then(
     (info: AccountInfo) => {
       signupEnabled = info.signupEnabled;
+      legal = info.features?.legal === true;
+      bonus = info.features?.signupBonus ?? 0;
+      if (legal)
+        legalLinks.replaceChildren(
+          h('a', { text: signedOutCopy.terms, attrs: { href: '/terms.html', target: '_blank', rel: 'noopener' } }),
+          ' · ',
+          h('a', { text: signedOutCopy.privacy, attrs: { href: '/privacy.html', target: '_blank', rel: 'noopener' } }),
+        );
+      legalLinks.hidden = !legal;
     },
     () => {},
   );
@@ -79,6 +112,9 @@ export function renderSignedOut(
       ...shared,
       mode,
       signupEnabled,
+      legal,
+      ...(bonus ? { bonus } : {}),
+      ...(mode === 'signup' && options.expired ? { notice: signedOutCopy.expired } : {}),
       onDone: extra.onDone ?? reload,
       ...(extra.onCancel ? { onCancel: extra.onCancel } : {}),
       onSwitch: (to) => {
@@ -101,7 +137,12 @@ export function renderSignedOut(
       notice.textContent =
         error instanceof ProviderApiError && error.status === 429
           ? accountCopy.wait(error.retryAfterMs ?? 60_000)
-          : signedOutCopy.failed;
+          : error instanceof ProviderApiError &&
+              (error.code === 'TURNSTILE_FAILED' || error.code === 'TURNSTILE_REQUIRED')
+            ? signedOutCopy.humanFailed
+            : error instanceof ProviderApiError && error.code === 'TURNSTILE_UNAVAILABLE'
+              ? signedOutCopy.humanDown
+              : signedOutCopy.failed;
     } finally {
       busy = false;
     }

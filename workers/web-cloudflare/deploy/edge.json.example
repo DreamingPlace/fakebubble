@@ -9,7 +9,9 @@
   "vars": {
     "ORIGIN": "https://fakebubble.example",
     "BUSINESS_OBJECT_ID": "CONFIGURE_BEFORE_DEPLOY",
-    "ASSET_MANIFEST_SHA256": "CONFIGURE_BEFORE_DEPLOY"
+    "ASSET_MANIFEST_SHA256": "CONFIGURE_BEFORE_DEPLOY",
+    "TURNSTILE_ENABLED": "false",
+    "LEGAL_PAGES_ENABLED": "false"
   },
   "durable_objects": {
     "bindings": [{

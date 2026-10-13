@@ -21,6 +21,7 @@ export type AccountApi = Pick<
   | 'changePassword'
   | 'setNickname'
   | 'abandonSession'
+  | 'deleteAccount'
 >;
 
 export const accountCopy = {
@@ -36,6 +37,26 @@ export const accountCopy = {
   nicknameTitle: '我的昵称',
   nicknameIntro: '角色会用这个名字称呼你。',
   passwordTitle: '修改密码',
+  deleteTitle: '删除我的账号',
+  deleteIntro:
+    '这会立即永久删除你的账号、全部聊天记录、记忆、生成的语音、共创内容和昵称，无法恢复。若你是受邀玩家，邀请资格也会一并收回。',
+  deleteConfirm: '请输入“删除”二字确认',
+  deleteWord: '删除',
+  deleteSubmit: '永久删除',
+  deleting: '正在删除…',
+  doneDelete: '账号和聊天数据已删除。谢谢你来过。',
+  clearTitle: '清除本设备的体验数据',
+  clearIntro:
+    '这会立即永久清除这台设备上的体验聊天和记忆，无法恢复。清除后可以重新开始体验（同一网络的体验次数不会重置）。',
+  clearWord: '清除',
+  clearSubmit: '清除体验数据',
+  clearing: '正在清除…',
+  doneClear: '这台设备的体验数据已清除。',
+  graceHint: '体验已结束 · 注册即可保存并找回你的聊天（7 天内）',
+  legalLead: '注册即表示你同意',
+  legalTerms: '《用户协议》',
+  legalPrivacy: '《隐私政策》',
+  legalAnd: '和',
   email: '邮箱',
   sendCode: '发送验证码',
   sending: '正在发送…',
@@ -66,6 +87,10 @@ export const accountCopy = {
   save: '保存',
   done: '完成',
   doneSignup: '注册成功',
+  freeUsedUp: '免费消息已用完，输入邀请码继续',
+  signupForBonus: (n: number) => `注册即送 ${n} 条免费消息，可以和任何角色聊`,
+  doneSignupBonus: (n: number) => `注册成功，已送你 ${n} 条免费消息`,
+  signupBonusIntro: (n: number) => `注册即送 ${n} 条免费消息，可以和任何角色聊。`,
   doneBind: '邮箱已绑定',
   doneReset: '密码已重置，其他设备已退出登录',
   doneNickname: '昵称已更新',
@@ -84,6 +109,12 @@ export const accountCopy = {
     PLAYER_SIGNUP_UNAVAILABLE: '当前身份不能注册。',
     PLAYER_BIND_UNAVAILABLE: '当前身份不需要绑定邮箱。',
     PLAYER_EMAIL_DAILY_CAP: '今天的验证码发送名额已经用完，请明天再试。',
+    PLAYER_SIGNUP_IP_LIMIT: '这个网络今天的注册次数已用完，请明天再试',
+    ACCOUNT_DELETE_CONFIRM_INVALID: '确认文字不对，请按提示输入。',
+    ACCOUNT_DELETE_UNAVAILABLE: '当前身份不能这样删除，请联系我们。',
+    TURNSTILE_REQUIRED: '人机验证没通过，请再试一次。',
+    TURNSTILE_FAILED: '人机验证没通过，请再试一次。',
+    TURNSTILE_UNAVAILABLE: '验证服务暂时不可用，请稍后再试。',
     ORIGIN_INVALID: '页面状态已变化，请刷新后再试。',
     CSRF_INVALID: '页面状态已变化，请刷新后再试。',
     SESSION_EXPIRED: '登录状态已失效，请刷新页面。',
@@ -100,8 +131,8 @@ export const accountCopy = {
 export function accountError(error: unknown) {
   if (!(error instanceof ProviderApiError)) return accountCopy.errors.NETWORK!;
   if (error.status === 429 || error.code === 'RATE_LIMITED' || error.code === 'PLAYER_RATE_LIMITED')
-    return error.code === 'PLAYER_EMAIL_DAILY_CAP'
-      ? accountCopy.errors.PLAYER_EMAIL_DAILY_CAP!
+    return error.code === 'PLAYER_EMAIL_DAILY_CAP' || error.code === 'PLAYER_SIGNUP_IP_LIMIT'
+      ? accountCopy.errors[error.code]!
       : accountCopy.wait(error.retryAfterMs ?? 60_000);
   return accountCopy.errors[error.code] ?? accountCopy.errors.NETWORK!;
 }
@@ -128,7 +159,7 @@ const realTimers: Timers = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export type AccountSheetMode = 'signup' | 'bind' | 'reset' | 'login' | 'nickname' | 'password';
+export type AccountSheetMode = 'signup' | 'bind' | 'reset' | 'login' | 'nickname' | 'password' | 'delete' | 'clear';
 export type AccountSheetOptions = {
   api: AccountApi;
   mode: AccountSheetMode;
@@ -138,6 +169,12 @@ export type AccountSheetOptions = {
   nickname?: string | null;
   /** Login: this device holds a guest with chats, which a login never merges. */
   hasGuestChats?: boolean;
+  /** The two legal pages are published: the signup sheet shows the consent line with both links. */
+  legal?: boolean;
+  /** Free replies a signup gives (flag SIGNUP_BONUS_ENABLED): the signup sheet says so. */
+  bonus?: number;
+  /** A line shown above the signup intro (the signed-out page says the earlier trial chats have expired). */
+  notice?: string;
   /** Called after success (the page usually reloads or reopens what the player was doing). */
   onDone?: (mode: AccountSheetMode) => void;
   /** Called when the sheet closes without finishing. */
@@ -162,6 +199,8 @@ export function openAccountSheet(options: AccountSheetOptions) {
     login: accountCopy.loginTitle,
     nickname: accountCopy.nicknameTitle,
     password: accountCopy.passwordTitle,
+    delete: accountCopy.deleteTitle,
+    clear: accountCopy.clearTitle,
   };
   const title = h('strong', { class: 'acct-title', text: titles[mode], attrs: { id: 'acct-title' } });
   const closeButton = h('button', {
@@ -243,7 +282,8 @@ export function openAccountSheet(options: AccountSheetOptions) {
       sheet.remove();
       options.onDone?.(mode);
     };
-    const wait = options.doneMs ?? 900;
+    // An erasure keeps its final confirmation on screen a little longer: it is the last thing this page shows.
+    const wait = options.doneMs ?? (mode === 'delete' || mode === 'clear' ? 2200 : 900);
     if (wait <= 0) finishNow();
     else {
       let elapsed = 0;
@@ -274,11 +314,35 @@ export function openAccountSheet(options: AccountSheetOptions) {
 
     const stepEmail = () => {
       const send = button(accountCopy.sendCode, 'acct-primary', 'submit');
+      const legal =
+        purpose === 'signup' && options.legal
+          ? h(
+              'p',
+              { class: 'acct-legal' },
+              accountCopy.legalLead,
+              h('a', {
+                text: accountCopy.legalTerms,
+                attrs: { href: '/terms.html', target: '_blank', rel: 'noopener' },
+              }),
+              accountCopy.legalAnd,
+              h('a', {
+                text: accountCopy.legalPrivacy,
+                attrs: { href: '/privacy.html', target: '_blank', rel: 'noopener' },
+              }),
+            )
+          : null;
       const form = h(
         'form',
         { class: 'acct-form' },
+        purpose === 'signup' && options.notice
+          ? h('p', { class: 'acct-expired', text: options.notice, attrs: { role: 'note' } })
+          : null,
         h('p', { class: 'acct-intro', text: intro }),
+        purpose === 'signup' && options.bonus
+          ? h('p', { class: 'acct-bonus', text: accountCopy.signupBonusIntro(options.bonus) })
+          : null,
         field(accountCopy.email, email),
+        legal,
         send,
       );
       form.addEventListener('submit', (event) => {
@@ -376,17 +440,25 @@ export function openAccountSheet(options: AccountSheetOptions) {
           return;
         }
         void run(submit, accountCopy.working, label, async () => {
+          let bonus = 0;
           if (purpose === 'reset')
             await api.resetPassword({ challengeId: challenge!.challengeId, password: password.value });
           else
-            await api.finishAccount({
-              purpose,
-              challengeId: challenge!.challengeId,
-              password: password.value,
-              nickname: nickname.value.trim(),
-            });
+            bonus =
+              (
+                await api.finishAccount({
+                  purpose,
+                  challengeId: challenge!.challengeId,
+                  password: password.value,
+                  nickname: nickname.value.trim(),
+                })
+              )?.bonus ?? 0;
           password.value = '';
-          finish({ signup: accountCopy.doneSignup, bind: accountCopy.doneBind, reset: accountCopy.doneReset }[purpose]);
+          finish(
+            purpose === 'signup' && bonus > 0
+              ? accountCopy.doneSignupBonus(bonus)
+              : { signup: accountCopy.doneSignup, bind: accountCopy.doneBind, reset: accountCopy.doneReset }[purpose],
+          );
         });
       });
       body.replaceChildren(form);
@@ -499,7 +571,46 @@ export function openAccountSheet(options: AccountSheetOptions) {
     body.replaceChildren(form);
   };
 
+  // ---- 删除我的账号 / 清除本设备的体验数据 ---------------------------------------------------------------------------
+  const eraseForm = () => {
+    const withPassword = mode === 'delete';
+    const password = input('password', 'password', { autocomplete: 'current-password', maxlength: '128' });
+    const word = withPassword ? accountCopy.deleteWord : accountCopy.clearWord;
+    const confirm = input('confirm', 'text', { autocomplete: 'off', maxlength: '8' });
+    const label = withPassword ? accountCopy.deleteSubmit : accountCopy.clearSubmit;
+    const submit = button(label, 'acct-primary acct-danger', 'submit');
+    const form = h(
+      'form',
+      { class: 'acct-form acct-erase' },
+      h('p', {
+        class: 'acct-intro acct-warning',
+        text: withPassword ? accountCopy.deleteIntro : accountCopy.clearIntro,
+      }),
+      withPassword ? field(accountCopy.password, password) : null,
+      withPassword ? field(accountCopy.deleteConfirm, confirm) : null,
+      submit,
+    );
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (withPassword && !passwordOk(password.value)) {
+        say(accountCopy.errors.PLAYER_LOGIN_INVALID!);
+        return;
+      }
+      if (withPassword && confirm.value.trim() !== word) {
+        say(accountCopy.errors.ACCOUNT_DELETE_CONFIRM_INVALID!);
+        return;
+      }
+      void run(submit, withPassword ? accountCopy.deleting : accountCopy.clearing, label, async () => {
+        await api.deleteAccount({ password: withPassword ? password.value : '', confirm: word });
+        password.value = '';
+        finish(withPassword ? accountCopy.doneDelete : accountCopy.doneClear);
+      });
+    });
+    body.replaceChildren(form);
+  };
+
   if (flow) emailFlow();
+  else if (mode === 'delete' || mode === 'clear') eraseForm();
   else if (mode === 'login') loginForm();
   else if (mode === 'nickname') nicknameForm();
   else passwordForm();

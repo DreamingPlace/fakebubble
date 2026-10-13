@@ -10,6 +10,9 @@ import {
   migrateWebProviderOffline,
 } from '../../../apps/server/generation/web-provider-migration.ts';
 
+// Named exception (Part 17b, migration 121): the ledger now has 46 steps, so every step count, every position counted from the
+// end of the ledger and every expected user_version below moved by one. No assertion was weakened.
+
 function nodeAt114() {
   const store = new Store(':memory:');
   const folder = new URL('../../../apps/server/web-migrations/', import.meta.url);
@@ -153,14 +156,15 @@ test('Cloudflare runner: an existing authority at 114 upgrades to 115 through th
     assert.deepEqual(result.after.slice(0, 39), result.before, `${mode}: applied steps are untouched`);
     // Opening the authority applies every newer step in order: 115, 116, 117, 118, 119, then 120 (see web-embedding-migration
     // and web-cocreation-migration). Extended for migration 120.
-    assert.equal(result.after.length, 45, mode);
-    assert.equal(result.after.at(-6)?.startsWith('115:'), true, mode);
-    assert.equal(result.after.at(-5)?.startsWith('116:'), true, mode);
-    assert.equal(result.after.at(-4)?.startsWith('117:'), true, mode);
-    assert.equal(result.after.at(-3)?.startsWith('118:'), true, mode);
-    assert.equal(result.after.at(-2)?.startsWith('119:'), true, mode);
-    assert.equal(result.after.at(-1)?.startsWith('120:'), true, mode);
-    assert.deepEqual(result.version, { user_version: 120 }, mode);
+    assert.equal(result.after.length, 46, mode);
+    assert.equal(result.after.at(-7)?.startsWith('115:'), true, mode);
+    assert.equal(result.after.at(-6)?.startsWith('116:'), true, mode);
+    assert.equal(result.after.at(-5)?.startsWith('117:'), true, mode);
+    assert.equal(result.after.at(-4)?.startsWith('118:'), true, mode);
+    assert.equal(result.after.at(-3)?.startsWith('119:'), true, mode);
+    assert.equal(result.after.at(-2)?.startsWith('120:'), true, mode);
+    assert.equal(result.after.at(-1)?.startsWith('121:'), true, mode); // Extended for migration 121: the newest step is last.
+    assert.deepEqual(result.version, { user_version: 121 }, mode);
     assert.deepEqual(result.review, { importance: true, facts: true, reviewChanged: true }, mode);
   }
 });

@@ -145,6 +145,7 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
     files.length = 0;
     walk(bundled, bundled, false);
     let page = readFileSync(html, 'utf8').replace('/apps/player-web/src/app/main.js', '/' + entryName);
+    const replacements: [string, string][] = [];
     const addAsset = (path: string, dest: string) => {
       if (!existsSync(path)) throw new Error('PLAYER_ASSET_MISSING');
       assertSourcePath(root, path);
@@ -157,6 +158,7 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
       mkdirSync(join(bundled, 'assets'), { recursive: true });
       copyFileSync(path, join(bundled, name));
       page = page.replaceAll('/' + dest, '/' + name);
+      replacements.push([dest, name]);
       if (!files.includes(name)) files.push(name);
     };
     // Explicit source allowlist remains the only way non-JS assets enter the build.
@@ -184,6 +186,20 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
     }
     writeFileSync(join(bundled, 'index.html'), page);
     files.push('index.html');
+    // Part 17: two static legal pages. Plain HTML with no script; only the stylesheet reference is rewritten to the hashed
+    // asset. They are always built; the edge serves them only while LEGAL_PAGES_ENABLED is on.
+    for (const name of ['privacy.html', 'terms.html']) {
+      const path = join(source, 'src/legal', name);
+      // Optional: a source tree without them (the build unit-test fixtures) simply has no legal pages.
+      if (!existsSync(path)) continue;
+      assertSourcePath(root, path);
+      if (!lstatSync(path).isFile() || lstatSync(path).size > 200_000) throw new Error('PLAYER_ASSET_UNSAFE');
+      let legal = readFileSync(path, 'utf8');
+      if (/<script/i.test(legal)) throw new Error('PLAYER_ASSET_UNSAFE');
+      for (const [dest, hashed] of replacements) legal = legal.replaceAll('/' + dest, '/' + hashed);
+      writeFileSync(join(bundled, name), legal);
+      files.push(name);
+    }
     if (files.length > 256 || new Set(files).size !== files.length) throw new Error('PLAYER_ASSET_LIST_INVALID');
     if (existsSync(output) && (!lstatSync(output).isDirectory() || lstatSync(output).isSymbolicLink()))
       throw new Error('PLAYER_OUTPUT_UNSAFE');

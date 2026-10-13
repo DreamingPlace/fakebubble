@@ -191,6 +191,10 @@ test('a wrong code, a server refusal and a network failure each show a fixed lin
     accountError(new ProviderApiError(429, 'PLAYER_EMAIL_DAILY_CAP', 1000)),
     accountCopy.errors.PLAYER_EMAIL_DAILY_CAP,
   );
+  // The per-IP signup limit has its own line, not the generic "too frequent, wait N minutes".
+  const ipLimit = accountError(new ProviderApiError(429, 'PLAYER_SIGNUP_IP_LIMIT', 3_600_000));
+  assert.equal(ipLimit, '这个网络今天的注册次数已用完，请明天再试');
+  assert.doesNotMatch(ipLimit, /太频繁|分钟/);
 });
 
 test('重新发送 waits out the 60 s cooldown, then asks again (a new request, never an automatic one)', async (t) => {

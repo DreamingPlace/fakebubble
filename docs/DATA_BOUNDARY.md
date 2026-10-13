@@ -220,6 +220,34 @@ These are installed by schema helpers at open time and sit next to the tables ab
 | `cf_*`, `guard_*` | `cloudflare/` adapters | global (platform infrastructure) |
 | `history`, `calls`, `cloud_grants` | `budget/web-provider-budget.ts` (separate budget database) | global |
 
+## Part 17: retention changes and account deletion
+
+No new table, no migration. What changed is *when* and *by whom* the existing audited purge path (T1 fence and release, T2 database clear, F file erase; fail-closed `auditWebLifecycleWorld`) runs.
+
+| Case | Before | Now |
+|---|---|---|
+| Guest without a login | purged at `web_guest_retention.expires_at` | with `GUEST_GRACE_ENABLED`: purged at `expires_at + 7 days` (`GUEST_GRACE_MS`); with the flag off: unchanged |
+| Guest during grace | n/a | cannot chat (`requireWebContent` live → `TRIAL_EXPIRED`) and cannot read history or audio (`read` → `TRIAL_EXPIRED`, as the retained rule applies only to guests with a login); the session stays usable (`WebIdentity.inGrace`) so the player can sign up; the session never lasts past `expires_at + 7 days`; a guest that never started a trial has no grace |
+| Guest who signs up during grace | n/a | becomes a kept account (Part 11f): readable history, no new replies, purged only after 180 inactive days |
+| Guest with a login | purged after 180 inactive days | unchanged |
+| Invited player | never purged | unchanged, except on request (below) |
+| Player's own request (`ACCOUNT_DELETE_ENABLED`) | not possible | guest (button) or login (password + typed 删除) or invited player with a login: same transaction revokes grant, credentials and receipts, ends every session, writes one audit row and runs T1 (`WebCloudRetention.markExpired(id, 'deleted')`), then T2 and F; the retention state stays `purging` if T2 or F fail and the alarm completes it |
+
+Part 17c: with `SIGNUP_BONUS_ENABLED` on, a guest's trial window is 7 days from its first reply (`WEB_LIMITS.publicTrialWindowMs`; 2 hours with the flag off), so retention (`expires_at`, the purge time and, with grace, `expires_at + 7 days`) moves accordingly; a guest session created while the flag is on lives at least 14 days (window + grace). The bonus-once key is the HMAC of a canonical form used only for the bonus (logins keep the normalized address): everything from the first `+` of the local part is dropped for every domain; for `gmail.com` and `googlemail.com` the dots of the local part are removed too and `googlemail.com` becomes `gmail.com`. Per-IP keys (`ip_hash`) hash the IPv4 text unchanged, an IPv4-mapped IPv6 address as its IPv4, and any other IPv6 address as its canonical /64 prefix (e.g. `2001:db8:1:2::/64`).
+
+Part 17b adds four tables (migration 121, written only while `SIGNUP_BONUS_ENABLED` is on):
+
+| Table | Class | Kept after deletion? |
+|---|---|---|
+| `web_bonus_emails` (HMAC of the normalized address under a REQUEST_KEY-derived key, time) | global | **Yes, on purpose**: the only thing kept of a bonus grant, so deleting and re-signing-up with the same address does not grant the bonus twice. It is not the address and cannot be turned back into it; the privacy policy says so. |
+| `web_signup_bonus` (principal id, time: the entitlement) | user | No: removed with the player (`purgePlayerLogins`; the lifecycle audit's `playerLoginsRemain` fails closed on it). |
+| `web_free_operations` (operation id, principal id, tier `bonus` / `trial_extra`, keyed IP hash for `trial_extra`) | user (shell) | `bonus` rows: no (deleted with the player). `trial_extra` rows: yes, like `web_ip_lifetime_quota`: only ids and a keyed IP hash, so a purge cannot reset an IP's lifetime trial. The table is one of the audit's `providerShells`. |
+| `web_signup_ip_daily` (keyed IP hash, UTC day, count) | global | Yes (no principal; two days of use, counts successful signups per IP). |
+
+Deleted on request, exactly the set the retention cleaner deletes: messages and chats, memory (facts, topics, episodes, embeddings), generated voice (database rows and R2 objects), co-creation ideas, 名片 (nickname) revisions, the email login, its challenges, and every session. What stays, and why: the `web_principals` / `web_operations` / provider-attempt shells (ids, states and money; payloads and receipts are replaced by keyed digests, as in the existing purge), the `web_guest_retention` row (`purged`), and a *revoked* `web_invite_grants` row (ids and times, no content; `web_invite_grants` is now one of the audit's `shells`, and a cleared world may hold no unrevoked grant). The audit row (`web_admin_audit`: `actor_id` NULL, action `player-account-deleted` / `guest-data-cleared`, `target_id` the first 16 hex characters of an HMAC pseudonym, time) carries no content, address, nickname or id. Idempotency state of other kinds: `web_player_throttle` rows are HMAC keys with no principal and age out on their own.
+
+Not stored in SQL: owner-alert state (last check, last send per alert type, error buckets, the UNKNOWN high-water mark) lives in the business Durable Object's key-value storage; the Turnstile one-use ledger holds SHA-256 digests of tokens in memory for ten minutes. Neither holds player data. Turnstile also receives the visitor's IP address and browser signals from Cloudflare's own widget; the privacy policy names it as a processor.
+
 ## Notes for later Parts
 
 - Retention tables carry `principal_id` but are classified global because the retention cleaner is a cross-principal job that must outlive the principal's rows. A later Part may split them.

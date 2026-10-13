@@ -2,6 +2,7 @@ import { LiveBinding } from '../features/prototype/provider-binding.js';
 import { startPrototype } from '../features/prototype/preview.js';
 import { renderProviderStartError } from '../features/prototype/provider-start-error.js';
 import { ProviderApi } from '../services/provider-api.js';
+import { turnstileCheck } from '../services/turnstile-widget.js';
 
 const root = document.getElementById('app');
 if (!root) throw new Error('APP_ROOT_MISSING');
@@ -21,6 +22,8 @@ if (mode === 'local-2' || mode === 'local-3') {
 } else if (mode === 'provider') {
   // One API object for the whole page: its CSRF token follows bootstrap, login and the signed-out first page.
   const api = new ProviderApi();
+  // Only used when the server answers TURNSTILE_REQUIRED (the flag is off by default): then a token is fetched silently.
+  api.setHumanCheck(turnstileCheck());
   void LiveBinding.connect(api)
     .then((binding) => startPrototype(root, binding))
     .catch((error) => {

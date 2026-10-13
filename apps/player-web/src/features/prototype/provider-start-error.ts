@@ -3,7 +3,8 @@ import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.t
 
 /** A dead cookie (revoked, rotated, unknown): the page shows the normal signed-out first page, not an error. */
 export const isSignedOutError = (error: unknown) =>
-  error instanceof ProviderApiError && ['SESSION_EXPIRED', 'SESSION_ROTATED_RECOVERABLE'].includes(error.code);
+  error instanceof ProviderApiError &&
+  ['SESSION_EXPIRED', 'SESSION_ROTATED_RECOVERABLE', 'GUEST_GRACE_ENDED'].includes(error.code);
 
 export function providerStartFailure(error: unknown) {
   if (error instanceof ProviderApiError && error.status === 401 && error.code === 'GUEST_SESSION_EXPIRED')
@@ -12,6 +13,10 @@ export function providerStartFailure(error: unknown) {
       detail: '已清理失效的访客登录状态。重新进入不会恢复过期聊天，也不会重置同一网络累计的体验次数。',
       action: '重新进入访客页面',
     };
+  if (error instanceof ProviderApiError && ['TURNSTILE_FAILED', 'TURNSTILE_REQUIRED'].includes(error.code))
+    return { title: '人机验证没通过', detail: '请再试一次。没有创建任何聊天，也没有发送消息。', action: '重试' };
+  if (error instanceof ProviderApiError && error.code === 'TURNSTILE_UNAVAILABLE')
+    return { title: '验证服务暂时不可用', detail: '请稍后再试。没有创建任何聊天，也没有发送消息。', action: '重试' };
   if (isSignedOutError(error))
     return {
       title: '你还没有登录',
@@ -34,7 +39,12 @@ export function renderProviderStartError(
     Partial<SignedOutApi> = new ProviderApi(),
 ) {
   if (isSignedOutError(error)) {
-    renderSignedOut(root, { api: api as SignedOutApi, reload });
+    // The trial and its grace period are over (GUEST_GRACE_ENABLED): the first page says the earlier chats expired.
+    renderSignedOut(root, {
+      api: api as SignedOutApi,
+      reload,
+      ...(error instanceof ProviderApiError && error.code === 'GUEST_GRACE_ENDED' ? { expired: true } : {}),
+    });
     return;
   }
   const content = providerStartFailure(error),

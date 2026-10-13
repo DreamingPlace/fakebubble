@@ -37,6 +37,9 @@ const identityConfig = {
 };
 
 /** Offline workerd fixture only. The testing routes and fixed keys are never a deployment entry. */
+/** Part 17b: a fixture worker module may switch the free tier (5-reply trial + signup bonus) on before its objects are built. */
+export const fixtureOptions = { publicFreeTier: false };
+
 export class WebBusinessFixture {
   protected readonly store: WebDurableStore;
   protected readonly clock: Clock;
@@ -91,6 +94,7 @@ export class WebBusinessFixture {
     this.store = new WebDurableStore(ctx.storage, media ? webR2Migrations : webMigrations, {
       ...identityConfig,
       ...(media ? { providerAudio: media } : {}),
+      ...(fixtureOptions.publicFreeTier ? { publicFreeTier: true } : {}),
     });
     if (!this.store.get('SELECT 1 FROM character_templates'))
       this.store.transaction(() => {

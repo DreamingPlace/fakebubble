@@ -11,6 +11,7 @@ import { openRecoveryEntry, openRecoveryManage, recoveryCopy, showRecoveryCode }
 import { mountChatMenu } from '../cocreation/chat-menu.ts';
 import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
 import { accountCopy, openAccountSheet, type AccountSheetMode } from '../account/account-sheet.ts';
+import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
 
 type Shell = {
   say(message: string): void;
@@ -122,6 +123,25 @@ export class LiveBinding {
   private get signupOpen() {
     return this.account.signupEnabled;
   }
+  /** The two legal pages are published (LEGAL_PAGES_ENABLED): the footer and the signup sheet link them. */
+  get legalEnabled() {
+    return this.account.features?.legal === true;
+  }
+  /** The free tier is on (SIGNUP_BONUS_ENABLED): the footer says 免费体验 instead of 邀请体验. */
+  get freeTierEnabled() {
+    return this.bonusOffer > 0;
+  }
+  /** A guest past its trial and inside the 7-day grace period (GUEST_GRACE_ENABLED), or null. */
+  private get grace() {
+    return this.account.signedIn && !this.account.hasLogin ? (this.account.grace ?? null) : null;
+  }
+  /** Free replies a signup gives (SIGNUP_BONUS_ENABLED), or 0 when the offer is not on. */
+  private get bonusOffer() {
+    return this.account.features?.signupBonus ?? 0;
+  }
+  private get deleteEnabled() {
+    return this.account.features?.accountDelete === true;
+  }
   catalog() {
     return structuredClone({ characters: this.view.characters, slots: this.view.slots });
   }
@@ -202,10 +222,22 @@ export class LiveBinding {
       api: this.api,
       mode,
       signupEnabled: this.signupOpen,
+      legal: this.legalEnabled,
+      ...(this.bonusOffer ? { bonus: this.bonusOffer } : {}),
       nickname: this.account.signedIn ? this.account.nickname : null,
       hasGuestChats: this.guestHasChats(),
       onDone: (done) => {
-        if (after) after();
+        // After an erasure the cookie is gone: the last page this tab shows is the signed-out first page.
+        if (done === 'delete' || done === 'clear') {
+          const root = document.body.querySelector<HTMLElement>('#app');
+          if (root)
+            renderSignedOut(root, {
+              api: this.api as unknown as SignedOutApi,
+              reload: () => location.reload(),
+              erased: done === 'delete' ? accountCopy.doneDelete : accountCopy.doneClear,
+            });
+          else location.reload();
+        } else if (after) after();
         // A login or reset replaces the session cookie, a signup or bind changes who the page belongs to: start clean.
         else if (done === 'login' || done === 'reset' || done === 'signup' || done === 'bind') location.reload();
         else void this.loadAccount();
@@ -239,6 +271,15 @@ export class LiveBinding {
               () => say('没能退出登录，稍后再试试'),
             ),
         },
+        ...(this.deleteEnabled
+          ? [
+              {
+                label: accountCopy.deleteTitle,
+                sub: '永久删除聊天、记忆和账号',
+                onSelect: () => void this.openAccount('delete'),
+              },
+            ]
+          : []),
       ];
     if (this.account.signedIn && this.account.canBind)
       return [{ label: '绑定邮箱', sub: '换设备也能登录你的聊天', onSelect: () => void this.openAccount('bind') }];
@@ -250,6 +291,15 @@ export class LiveBinding {
           sub: this.signupOpen ? '用邮箱保存你的聊天' : accountCopy.closed,
           onSelect: () => void this.openAccount('signup'),
         },
+        ...(this.deleteEnabled
+          ? [
+              {
+                label: accountCopy.clearTitle,
+                sub: '立即清除这台设备上的体验聊天',
+                onSelect: () => void this.openAccount('clear'),
+              },
+            ]
+          : []),
       ];
     return [];
   }
@@ -319,13 +369,29 @@ export class LiveBinding {
       : !this.accessKnown
         ? '额度暂无法确认'
         : access.remainingReplies === 0 || access.canSend
-          ? `体验剩余 ${access.remainingReplies} 次`
+          ? this.hasLogin && this.bonusOffer
+            ? access.remainingReplies === 0
+              ? '免费消息已用完'
+              : `免费消息剩余 ${access.remainingReplies} 条`
+            : `体验剩余 ${access.remainingReplies} 次`
           : '体验已结束';
-    // Trial used up: one short line says what to do next (a signed-up guest already has an account to keep chats in).
-    if (this.accessKnown && !this.invitation.locked && access.remainingReplies === 0) {
+    // A guest past its trial but inside the 7-day grace period: signing up saves the chats and brings them back.
+    if (this.grace && this.accessKnown && !this.invitation.locked) {
+      const hint = document.createElement('span');
+      hint.className = 'head-hint grace-hint';
+      hint.textContent = accountCopy.graceHint;
+      shell.head.append(hint);
+    } else if (this.accessKnown && !this.invitation.locked && access.remainingReplies === 0) {
+      // Trial used up: one short line says what to do next (a signed-up guest already has an account to keep chats in).
       const hint = document.createElement('span');
       hint.className = 'head-hint';
-      hint.textContent = this.hasLogin ? '输入邀请码继续' : '注册保存聊天，或输入邀请码继续';
+      hint.textContent = this.bonusOffer
+        ? this.hasLogin
+          ? accountCopy.freeUsedUp
+          : accountCopy.signupForBonus(this.bonusOffer)
+        : this.hasLogin
+          ? '输入邀请码继续'
+          : '注册保存聊天，或输入邀请码继续';
       shell.head.append(hint);
     }
     const entry = document.createElement('button');
@@ -546,6 +612,11 @@ export class LiveBinding {
 
   private fail(error: unknown) {
     const code = error instanceof ProviderApiError ? error.code : 'NETWORK';
+    // With the signup bonus on, a used-up trial says what to do next: sign up for the bonus, or (signed up) enter an invite.
+    if (code === 'TRIAL_EXHAUSTED' && this.bonusOffer) {
+      this.shell?.say(this.hasLogin ? accountCopy.freeUsedUp : accountCopy.signupForBonus(this.bonusOffer));
+      return;
+    }
     this.shell?.say(errorText[code] ?? '网络不太稳定，稍后再试试');
   }
 

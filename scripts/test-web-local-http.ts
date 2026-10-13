@@ -206,8 +206,9 @@ try {
       assert.equal(response.headers['x-content-type-options'], 'nosniff');
       assert.equal(
         response.headers['cache-control'],
+        // Part 17 named exception: the two legal pages are unhashed static HTML, so like index.html they are no-store.
         // Part 16b named exception: /favicon.ico is a fixed root path (not content-addressed), cached for one day.
-        name === 'index.html'
+        ['index.html', 'privacy.html', 'terms.html'].includes(name)
           ? 'no-store'
           : name === 'favicon.ico'
             ? 'public, max-age=86400'

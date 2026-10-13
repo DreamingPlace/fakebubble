@@ -13,9 +13,12 @@ export interface WebEdgeEnvironment {
   BUSINESS_OBJECT_ID: string;
   ASSET_MANIFEST_SHA256: string;
   ASSETS: AssetBinding;
+  /** Part 17 switches, each off unless the string 'true'. TURNSTILE_ENABLED widens the CSP for Turnstile only. */
+  TURNSTILE_ENABLED?: string;
+  LEGAL_PAGES_ENABLED?: string;
   BUSINESS: { idFromString(id: string): unknown; get(id: unknown): WebBusinessEndpoint };
 }
-const assets = new WeakMap<AssetBinding, { hash: string; reader: CloudWebAssets }>();
+const assets = new WeakMap<AssetBinding, { key: string; reader: CloudWebAssets }>();
 const api = '/api/web/provider/';
 const headers = {
   'cache-control': 'no-store',
@@ -24,9 +27,15 @@ const headers = {
   'strict-transport-security': 'max-age=31536000',
 };
 function staticAsset(request: Request, env: WebEdgeEnvironment) {
+  const turnstile = env.TURNSTILE_ENABLED === 'true',
+    legalPages = env.LEGAL_PAGES_ENABLED === 'true';
+  const key = `${env.ASSET_MANIFEST_SHA256}:${turnstile}:${legalPages}`;
   let entry = assets.get(env.ASSETS);
-  if (!entry || entry.hash !== env.ASSET_MANIFEST_SHA256) {
-    entry = { hash: env.ASSET_MANIFEST_SHA256, reader: new CloudWebAssets(env.ASSETS, env.ASSET_MANIFEST_SHA256) };
+  if (!entry || entry.key !== key) {
+    entry = {
+      key,
+      reader: new CloudWebAssets(env.ASSETS, env.ASSET_MANIFEST_SHA256, { turnstile, legalPages }),
+    };
     assets.set(env.ASSETS, entry);
   }
   return entry.reader.fetch(request);

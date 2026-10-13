@@ -6,6 +6,14 @@ import { WEB_LIMITS } from '../../../config/web-v1.ts';
 import { webConcurrency, webDailyReplyLimit } from '../../../config/web-concurrency.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireWebContent, webDataLifecycleEnabled } from './web-retention.ts';
+import {
+  bonusRemaining,
+  bonusSpent,
+  extraTrialRemaining,
+  extraTrialSpent,
+  freeTier,
+  hasSignupBonus,
+} from './web-free-tier.ts';
 import { requirePublishedWebCharacter } from '../characters/web-character-catalog.ts';
 
 interface PrincipalRow {
@@ -109,11 +117,11 @@ export class WebAdmission {
       const trial = principal.kind === 'guest';
       ensure(
         trial ||
-          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(webSchema) &&
+          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(webSchema) &&
             ((principal.kind === 'account' &&
               this.store.get(`SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1`, principal.id)) ||
               (principal.kind === 'invite' &&
-                [111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(webSchema) &&
+                [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(webSchema) &&
                 retention !== null))),
         'WEB_ADMISSION_ENTITLEMENT_REQUIRED',
       );
@@ -126,7 +134,15 @@ export class WebAdmission {
         'WEB_CHARACTER_UNAVAILABLE',
       );
       if (principal.kind === 'invite') this.dailyLimit(principal.id);
-      if (trial) {
+      const tier = freeTier(this.store);
+      const trialWindowMs = tier.trialWindowMs;
+      // Part 17b: the signup bonus is one more entitlement, decided HERE, before any reservation or provider call.
+      const free = trial && tier.on ? this.pickFreeEntitlement(principal, input, retention) : 'trial';
+      const bonus = free === 'bonus',
+        extra = free === 'extra';
+      // Both outside-the-counters entitlements are 'entitled' operations with a web_free_operations row: no IP window, no trial counter.
+      const counted = trial && !bonus && !extra;
+      if (counted) {
         ensure(
           principal.trial_character_id === null || principal.trial_character_id === input.characterId,
           'TRIAL_CHARACTER_LOCKED',
@@ -145,9 +161,9 @@ export class WebAdmission {
 
       const now = this.clock.now();
       ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
-      if (lifecycle) ensure(now <= Number.MAX_SAFE_INTEGER - 2 * 60 * 60_000, 'INVALID_TIME');
+      if (lifecycle) ensure(now <= Number.MAX_SAFE_INTEGER - trialWindowMs, 'INVALID_TIME');
       let window: { id: string; used: number; reserved: number } | undefined;
-      if (trial) {
+      if (counted) {
         if (lifecycle) {
           ensure(this.ipKeyFingerprint, 'WEB_IP_KEY_REQUIRED');
           this.store.run(
@@ -231,7 +247,31 @@ export class WebAdmission {
         messageId,
         now,
       );
-      if (trial) {
+      if (extra && lifecycle) {
+        // The first reply of a guest may already be an extra one (its IP's counters are spent): the trial window starts now.
+        ensure(retention?.state === 'unstarted' || retention?.state === 'active', 'TRIAL_EXPIRED');
+        if (retention.state === 'unstarted')
+          ensure(
+            this.store.run(
+              `UPDATE web_guest_retention
+            SET started_at=?,expires_at=?,state='active',revision=revision+1
+            WHERE principal_id=? AND world_id=? AND state='unstarted' AND revision=?`,
+              now,
+              now + trialWindowMs,
+              principal.id,
+              principal.world_id,
+              retention.revision,
+            ).changes === 1,
+            'WEB_RETENTION_STALE',
+          );
+      }
+      if (extra)
+        this.store.run(
+          'UPDATE web_principals SET trial_character_id=coalesce(trial_character_id,?),revision=revision+1 WHERE id=?',
+          input.characterId,
+          principal.id,
+        );
+      if (counted) {
         if (lifecycle) {
           ensure(retention?.state === 'unstarted' || retention?.state === 'active', 'TRIAL_EXPIRED');
           if (retention.state === 'unstarted')
@@ -241,7 +281,7 @@ export class WebAdmission {
             SET started_at=?,expires_at=?,state='active',revision=revision+1
             WHERE principal_id=? AND world_id=? AND state='unstarted' AND revision=?`,
                 now,
-                now + 2 * 60 * 60_000,
+                now + trialWindowMs,
                 principal.id,
                 principal.world_id,
                 retention.revision,
@@ -293,7 +333,7 @@ export class WebAdmission {
         now,
         now + WEB_LIMITS.operationDeadlineMs,
       ];
-      if (webSchema >= 102 && webSchema <= 120) {
+      if (webSchema >= 102 && webSchema <= 121) {
         const sequence = this.store.get<{ last_seq: number }>(`UPDATE web_admission_counter
           SET last_seq=last_seq+1 WHERE singleton=1 RETURNING last_seq`)?.last_seq;
         ensure(sequence !== undefined, 'WEB_ADMISSION_ORDER_MISSING');
@@ -303,7 +343,7 @@ export class WebAdmission {
           ...operationValues,
           now,
           sequence,
-          ...(webSchema >= 108 ? [trial ? 'trial' : 'entitled'] : []),
+          ...(webSchema >= 108 ? [counted ? 'trial' : 'entitled'] : []),
         );
       } else if (webSchema === 101) {
         this.store.run(
@@ -319,6 +359,27 @@ export class WebAdmission {
           ...operationValues,
         );
       }
+      if (bonus) {
+        // The allowance is re-checked in the same transaction as the reservation it guards.
+        ensure(bonusSpent(this.store, principal.id) < tier.bonusReplies, 'TRIAL_EXHAUSTED');
+        this.store.run(
+          "INSERT INTO web_free_operations(operation_id,principal_id,tier,ip_hash) VALUES (?,?,'bonus',NULL)",
+          operationId,
+          principal.id,
+        );
+      } else if (extra) {
+        this.store.run(
+          "INSERT INTO web_free_operations(operation_id,principal_id,tier,ip_hash) VALUES (?,?,'trial_extra',?)",
+          operationId,
+          principal.id,
+          input.ipHash,
+        );
+        ensure(
+          extraTrialSpent(this.store, { principalId: principal.id }) <= tier.extraTrialReplies &&
+            extraTrialSpent(this.store, { ipHash: input.ipHash }) <= tier.extraTrialReplies,
+          'TRIAL_EXHAUSTED',
+        );
+      }
       return {
         operationId,
         conversationId: conversation.id,
@@ -327,6 +388,50 @@ export class WebAdmission {
         duplicate: false as const,
       };
     });
+  }
+
+  /**
+   * Which entitlement pays for this reply of a guest with the free tier on, in this order: 'trial' (the existing counters,
+   * replies 1-3 per guest and per IP), 'extra' (trial replies 4-5, derived accounting, per guest and per IP), 'bonus' (the
+   * signup bonus, only for a guest that holds it). 'trial' is also the answer when nothing is left: the checks that follow
+   * in admit() then refuse with the same codes as before (TRIAL_EXHAUSTED, TRIAL_CHARACTER_LOCKED). Only reads happen here.
+   */
+  private pickFreeEntitlement(
+    principal: PrincipalRow,
+    input: { characterId: string; ipHash: string },
+    retention: { state: string; expires_at: number | null } | null,
+  ): 'trial' | 'extra' | 'bonus' {
+    const now = this.clock.now();
+    const windowLive =
+      retention === null ||
+      retention.state === 'unstarted' ||
+      (retention.state === 'active' && retention.expires_at !== null && now < retention.expires_at);
+    const bonus = hasSignupBonus(this.store, principal.id);
+    const lockOk = principal.trial_character_id === null || principal.trial_character_id === input.characterId;
+    if (windowLive) {
+      let counterOk = lockOk && principal.trial_used + principal.trial_reserved < WEB_LIMITS.trialReplies;
+      if (counterOk) {
+        const quota = this.store.get<{ used_total: number; reserved_total: number }>(
+          'SELECT used_total,reserved_total FROM web_ip_lifetime_quota WHERE ip_hash=?',
+          input.ipHash,
+        );
+        const window = this.store.get<{ used: number; reserved: number }>(
+          'SELECT used,reserved FROM web_ip_windows WHERE ip_hash=? ORDER BY starts_at DESC,id DESC LIMIT 1',
+          input.ipHash,
+        );
+        counterOk =
+          !(quota && quota.used_total + quota.reserved_total >= WEB_LIMITS.trialReplies) &&
+          !(window && window.used + window.reserved >= WEB_LIMITS.trialReplies);
+      }
+      if (counterOk) return 'trial';
+      if (lockOk && extraTrialRemaining(this.store, principal.id, input.ipHash) > 0) return 'extra';
+    }
+    if (bonus) {
+      // Out of bonus too: with the window gone everything free is used up; with it open the checks below say why.
+      if (bonusRemaining(this.store, principal.id) > 0) return 'bonus';
+      ensure(windowLive, 'TRIAL_EXHAUSTED');
+    }
+    return 'trial';
   }
 
   /**
@@ -358,7 +463,7 @@ export class WebAdmission {
   finalize(operationId: string, terminal: Terminal) {
     return this.store.transaction(() => {
       ensure(
-        ![104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120].includes(
+        ![104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121].includes(
           this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
         ),
         'WEB_DISPATCH_FENCE_REQUIRED',
