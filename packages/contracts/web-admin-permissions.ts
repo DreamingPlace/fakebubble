@@ -11,6 +11,12 @@ export const ADMIN_COCREATION_PERMISSIONS = ['cocreation.read', 'cocreation.mana
 export type CocreationAdminPermission = (typeof ADMIN_COCREATION_PERMISSIONS)[number];
 export const isCocreationPermission = (value: string): value is CocreationAdminPermission =>
   (ADMIN_COCREATION_PERMISSIONS as readonly string[]).includes(value);
+/**
+ * 运营 · 测试对话 (Part 19, needs CHAT_REVIEW_ENABLED): read whole chat transcripts under an anonymous code. Held by the owner
+ * only unless it is granted explicitly: it is in no preset except 全部, which lists every item.
+ */
+export const ADMIN_CONVERSATION_PERMISSIONS = ['conversations.read'] as const;
+export type ConversationAdminPermission = (typeof ADMIN_CONVERSATION_PERMISSIONS)[number];
 // Read legacy scoped grants without silently migrating them. New UI grants only four categories.
 export const ADMIN_PERMISSION_LIMIT = 128;
 export const ADMIN_CHARACTER_ACTIONS = [
@@ -35,6 +41,7 @@ export type AdminPermission =
   | AdminPermissionCategory
   | InviteAdminPermission
   | CocreationAdminPermission
+  | ConversationAdminPermission
   | 'invites.revoke'
   | 'characters.create'
   | `characters.${CharacterAdminAction}:${string}`;
@@ -45,6 +52,7 @@ export function isAdminPermission(value: unknown): value is AdminPermission {
     (ADMIN_PERMISSION_CATEGORIES as readonly string[]).includes(value) ||
     (ADMIN_INVITE_PERMISSIONS as readonly string[]).includes(value) ||
     (ADMIN_COCREATION_PERMISSIONS as readonly string[]).includes(value) ||
+    (ADMIN_CONVERSATION_PERMISSIONS as readonly string[]).includes(value) ||
     value === 'invites.revoke' ||
     value === 'characters.create' ||
     /^characters\.(read|edit|discard|preview|publish|materials|approve-materials|delete):(?:\*|[A-Za-z0-9_-]{1,128})$/.test(
@@ -85,6 +93,11 @@ export function hasCocreationPermission(grants: readonly string[], permission: C
   return grants.includes('cocreation.manage') || grants.includes(permission);
 }
 
+/** Only an explicit grant (or the owner role, checked by the caller) opens the transcripts: they are the players' own words. */
+export function hasConversationsPermission(grants: readonly string[]) {
+  return grants.includes('conversations.read');
+}
+
 export function canCreateCharacter(grants: readonly string[]) {
   return grants.includes('category.characters') || grants.includes('characters.create');
 }
@@ -109,7 +122,8 @@ export type AdminPermissionItem =
   | `characters.${CharacterAdminAction}`
   | 'characters.create'
   | InviteAdminPermission
-  | CocreationAdminPermission;
+  | CocreationAdminPermission
+  | ConversationAdminPermission;
 /** Direct requirements only; the closure is computed. */
 export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, readonly AdminPermissionItem[]>> = {
   'characters.read': [],
@@ -127,6 +141,7 @@ export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, rea
   'invites.revoke-access': ['invites.read'],
   'cocreation.read': [],
   'cocreation.manage': ['cocreation.read'],
+  'conversations.read': [],
 };
 export const ADMIN_PERMISSION_ITEMS = Object.keys(ADMIN_PERMISSION_REQUIRES) as AdminPermissionItem[];
 const closure = (item: AdminPermissionItem, next: (value: AdminPermissionItem) => readonly AdminPermissionItem[]) => {

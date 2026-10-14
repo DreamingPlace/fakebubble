@@ -14,6 +14,12 @@ import {
 } from '../identity/web-player-purge.ts';
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { signupBonusTablesExist } from '../admission/web-free-tier.ts';
+import {
+  archivePlayerChats,
+  chatReviewTablesExist,
+  nextReviewArchiveExpiry,
+  sweepReviewArchive,
+} from '../review/web-chat-review.ts';
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
 import type { MediaObjectReference } from './media-objects.ts';
@@ -87,10 +93,14 @@ export class WebCloudRetention {
       this.clock.now() + 30_000,
       ...(logins ? [PLAYER_INACTIVE_MS] : []),
     );
-    return row?.due ?? null;
+    // Part 19: the anonymous review archive's rows expire on their own clock.
+    const archive = nextReviewArchiveExpiry(this.store);
+    return row?.due == null ? archive : archive === null ? row.due : Math.min(row.due, archive);
   }
   async sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit > 0 && limit <= 16, 'WEB_RETENTION_SWEEP_INVALID');
+    // Part 19: delete anonymous review archive rows past their 180 days (batched, idempotent; independent of the flag).
+    sweepReviewArchive(this.store, this.clock.now());
     const due = guestPurgeDue(this.store, this.clock.now(), this.graceMs);
     const rows = this.store.all<{ principal_id: string }>(
       `SELECT r.principal_id FROM web_guest_retention r
@@ -144,6 +154,11 @@ export class WebCloudRetention {
           'WEB_RETENTION_NOT_EXPIRED',
         );
       }
+      // Part 19 (flag CHAT_REVIEW_ENABLED): the anonymous transcript copy is made HERE, in the transaction that starts the
+      // purge and before anything is cleared, so a crash can neither lose the copy nor leave content without one. A purge
+      // resumed later finds state 'purging' above and returns before this line: it never archives twice.
+      if (this.store.chatReview === true && chatReviewTablesExist(this.store))
+        archivePlayerChats(this.store, principalId, row.world_id, now);
       // The table only allows a purging row that has a trial window; a never-started guest gets a one-ms one.
       this.store.run(
         `UPDATE web_guest_retention SET state='purging',revision=revision+1,

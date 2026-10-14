@@ -30,6 +30,16 @@ export class FakeNode {
   remove() {
     this.parent?.removeChild(this);
   }
+  /** ChildNode.before: puts the nodes in front of this one under the same parent. */
+  before(...nodes: FakeNode[]) {
+    const parent = this.parent;
+    if (!parent) return;
+    for (const node of nodes) {
+      node.remove();
+      node.parent = parent;
+      parent.children.splice(parent.children.indexOf(this as never), 0, node as never);
+    }
+  }
 }
 const parseSelector = (selector: string) =>
   selector.split(',').map((part) =>

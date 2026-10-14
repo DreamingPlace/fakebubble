@@ -73,6 +73,7 @@ export function webProviderHTTPError(error: unknown) {
                   publicCode === 'PLAYER_PASSWORD_INVALID' ||
                   publicCode === 'PLAYER_NICKNAME_INVALID' ||
                   publicCode === 'PLAYER_CODE_INVALID' ||
+                  publicCode === 'AGE_CONFIRMATION_REQUIRED' ||
                   publicCode === 'ACCOUNT_DELETE_CONFIRM_INVALID' ||
                   cocreationInvalid.has(publicCode)
                 ? 400

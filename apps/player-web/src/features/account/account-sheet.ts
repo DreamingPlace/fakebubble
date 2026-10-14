@@ -57,6 +57,8 @@ export const accountCopy = {
   legalTerms: '《用户协议》',
   legalPrivacy: '《隐私政策》',
   legalAnd: '和',
+  adult: '我已年满 18 周岁',
+  reviewRetention: '聊天文字会以匿名编号再保留 180 天，用于改进角色，之后自动删除。',
   email: '邮箱',
   sendCode: '发送验证码',
   sending: '正在发送…',
@@ -110,6 +112,7 @@ export const accountCopy = {
     PLAYER_BIND_UNAVAILABLE: '当前身份不需要绑定邮箱。',
     PLAYER_EMAIL_DAILY_CAP: '今天的验证码发送名额已经用完，请明天再试。',
     PLAYER_SIGNUP_IP_LIMIT: '这个网络今天的注册次数已用完，请明天再试',
+    AGE_CONFIRMATION_REQUIRED: '请先确认你已年满 18 周岁。',
     ACCOUNT_DELETE_CONFIRM_INVALID: '确认文字不对，请按提示输入。',
     ACCOUNT_DELETE_UNAVAILABLE: '当前身份不能这样删除，请联系我们。',
     TURNSTILE_REQUIRED: '人机验证没通过，请再试一次。',
@@ -171,6 +174,8 @@ export type AccountSheetOptions = {
   hasGuestChats?: boolean;
   /** The two legal pages are published: the signup sheet shows the consent line with both links. */
   legal?: boolean;
+  /** CHAT_REVIEW_ENABLED: the delete / clear warning adds the 180-day anonymous-transcript sentence. */
+  reviewRetention?: boolean;
   /** Free replies a signup gives (flag SIGNUP_BONUS_ENABLED): the signup sheet says so. */
   bonus?: number;
   /** A line shown above the signup intro (the signed-out page says the earlier trial chats have expired). */
@@ -308,10 +313,14 @@ export function openAccountSheet(options: AccountSheetOptions) {
       purpose
     ];
     const email = input('email', 'email', { autocomplete: 'email', inputmode: 'email', maxlength: '254' });
+    // LEGAL_PAGES_ENABLED: signing up needs the "我已年满 18 周岁" tick; it is sent once with the signup request, never stored.
+    const adult = input('adult', 'checkbox', { required: '' });
+    let adultTicked = false;
     let challenge: CodeChallenge | null = null;
     let sentAt = 0;
     let address = '';
 
+    const ageCheck = purpose === 'signup' && options.legal === true;
     const stepEmail = () => {
       const send = button(accountCopy.sendCode, 'acct-primary', 'submit');
       const legal =
@@ -343,6 +352,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
           : null,
         field(accountCopy.email, email),
         legal,
+        ageCheck ? h('label', { class: 'acct-check acct-adult' }, adult, h('span', { text: accountCopy.adult })) : null,
         send,
       );
       form.addEventListener('submit', (event) => {
@@ -351,6 +361,11 @@ export function openAccountSheet(options: AccountSheetOptions) {
           say(accountCopy.errors.PLAYER_EMAIL_INVALID!);
           return;
         }
+        if (ageCheck && !adult.checked) {
+          say(accountCopy.errors.AGE_CONFIRMATION_REQUIRED!);
+          return;
+        }
+        adultTicked = adult.checked;
         void run(send, accountCopy.sending, accountCopy.sendCode, async () => {
           address = email.value.trim();
           challenge = await api.requestEmailCode({ purpose, email: address });
@@ -451,6 +466,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
                   challengeId: challenge!.challengeId,
                   password: password.value,
                   nickname: nickname.value.trim(),
+                  ...(ageCheck ? { adult: adultTicked } : {}),
                 })
               )?.bonus ?? 0;
           password.value = '';
@@ -584,7 +600,9 @@ export function openAccountSheet(options: AccountSheetOptions) {
       { class: 'acct-form acct-erase' },
       h('p', {
         class: 'acct-intro acct-warning',
-        text: withPassword ? accountCopy.deleteIntro : accountCopy.clearIntro,
+        text:
+          (withPassword ? accountCopy.deleteIntro : accountCopy.clearIntro) +
+          (options.reviewRetention ? accountCopy.reviewRetention : ''),
       }),
       withPassword ? field(accountCopy.password, password) : null,
       withPassword ? field(accountCopy.deleteConfirm, confirm) : null,

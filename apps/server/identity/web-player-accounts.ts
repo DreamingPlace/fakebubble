@@ -44,7 +44,14 @@ export interface WebPlayerAccountsOptions {
   /** PLAYER_EMAIL_DAILY_CAP (emails per UTC day). */
   dailyCap: number;
   /** What GET /account tells the page about the Part 17 switches (all absent while every flag is off). */
-  features?: { accountDelete?: boolean; legal?: boolean; turnstileSiteKey?: string | null; signupBonus?: boolean };
+  features?: {
+    accountDelete?: boolean;
+    legal?: boolean;
+    turnstileSiteKey?: string | null;
+    signupBonus?: boolean;
+    /** CHAT_REVIEW_ENABLED (and the 122 tables exist): the one-time banner about anonymous transcript review. */
+    chatReview?: boolean;
+  };
   /** ACCOUNT_DELETE_ENABLED: the purge path behind 删除我的账号 / 清除本设备的体验数据 (absent = those routes do not exist). */
   purger?: AccountPurger | undefined;
   /** GUEST_GRACE_ENABLED: grace period in ms after a trial ended during which signup is still possible (0 = off). */
@@ -169,6 +176,10 @@ export class WebPlayerAccounts {
     this.bonusKey = createHmac('sha256', options.requestKey).update('web-signup-bonus-email-v1').digest();
   }
 
+  /** LEGAL_PAGES_ENABLED: the signup request must carry adult:true. */
+  get legalPagesOn() {
+    return this.options.features?.legal === true;
+  }
   get signupEnabled() {
     return this.options.signupEnabled;
   }
@@ -334,6 +345,7 @@ export class WebPlayerAccounts {
       ...(f?.turnstileSiteKey ? { turnstileSiteKey: f.turnstileSiteKey } : {}),
       ...((this.options.graceMs ?? 0) > 0 ? { grace: true as const } : {}),
       ...(f?.signupBonus ? { signupBonus: freeTier(this.store).bonusReplies } : {}),
+      ...(f?.chatReview ? { chatReview: true as const } : {}),
     };
     const base = {
       signupEnabled: this.options.signupEnabled,
@@ -349,10 +361,30 @@ export class WebPlayerAccounts {
       hasLogin: !!login,
       emailMasked: login ? maskEmail(login.email_norm) : null,
       nickname,
+      ...(f?.chatReview ? { reviewNoticeClosed: this.reviewNoticeClosed(session.principalId) } : {}),
       ...this.graceInfo(session.principalId),
       // A legacy invited player without a login may bind one.
       canBind: !login && session.kind === 'invite' && this.activeGrant(session.principalId, this.now()),
     };
+  }
+  private reviewNoticeClosed(principalId: string) {
+    return !!this.store.get('SELECT 1 FROM web_review_notice WHERE principal_id=?', principalId);
+  }
+  /**
+   * The × on the one-time chat banner (flag CHAT_REVIEW_ENABLED): remembered per principal on the server and removed with the
+   * player. A session write like any other (CSRF and Origin); it never touches sending.
+   */
+  closeReviewNotice(session: PlayerSessionInput) {
+    ensure(this.options.features?.chatReview === true, 'NOT_FOUND');
+    return this.store.transaction(() => {
+      const scope = this.identity.authorizeSessionWrite(session.token, session.csrf, session.origin);
+      this.store.run(
+        'INSERT INTO web_review_notice(principal_id,closed_at) VALUES (?,?) ON CONFLICT(principal_id) DO NOTHING',
+        scope.principalId,
+        this.now(),
+      );
+      return { closed: true as const };
+    });
   }
   /** { grace: { endsAt } } while a guest without a login is past its trial but inside the grace period. */
   private graceInfo(principalId: string) {
@@ -656,8 +688,12 @@ export class WebPlayerAccounts {
     purpose: 'signup' | 'bind';
     /** The trusted-peer hash; needed (and checked) for a signup while the free tier is on. */
     ipHash?: string;
+    /** The "我已年满 18 周岁" tick of the signup sheet; required for a signup while LEGAL_PAGES_ENABLED is on. Never stored. */
+    adult?: unknown;
   }) {
     this.requireSignupOpen();
+    if (input.purpose === 'signup' && this.options.features?.legal)
+      ensure(input.adult === true, 'AGE_CONFIRMATION_REQUIRED');
     ensure(identifier(input.challengeId), 'PLAYER_CODE_INVALID');
     validatePlayerPassword(input.password);
     const nickname = playerNickname(input.nickname),

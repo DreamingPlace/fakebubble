@@ -94,6 +94,7 @@ export interface WebBusinessEnvironment {
   LEGAL_PAGES_ENABLED?: string;
   /** Part 17b: 5-reply guest trial, 10-reply signup bonus, 3 signups per IP per UTC day. Off unless 'true'. */
   SIGNUP_BONUS_ENABLED?: string;
+  CHAT_REVIEW_ENABLED?: string;
   /** Owner alerts: off unless 'true'; then ALERT_EMAIL_TO, ADMIN_EMAIL and ADMIN_EMAIL_FROM are required. Thresholds are optional decimal strings. */
   ALERTS_ENABLED?: string;
   ALERT_EMAIL_TO?: string;
@@ -190,6 +191,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       concurrency: webConcurrencyFromEnv(env as unknown as Record<string, unknown>),
       dailyReplyLimit: webDailyReplyLimitFromEnv(env as unknown as Record<string, unknown>),
       publicFreeTier: this.publicConfig.signupBonus,
+      chatReview: this.publicConfig.chatReview,
     });
     const configHash = createHash('sha256')
       .update(

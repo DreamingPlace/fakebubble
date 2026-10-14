@@ -11,6 +11,7 @@ import { openRecoveryEntry, openRecoveryManage, recoveryCopy, showRecoveryCode }
 import { mountChatMenu } from '../cocreation/chat-menu.ts';
 import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
 import { accountCopy, openAccountSheet, type AccountSheetMode } from '../account/account-sheet.ts';
+import { mountReviewBanners } from './review-banner.ts';
 import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
 
 type Shell = {
@@ -139,6 +140,10 @@ export class LiveBinding {
   private get bonusOffer() {
     return this.account.features?.signupBonus ?? 0;
   }
+  /** CHAT_REVIEW_ENABLED: the delete / clear sheets say the chat text is kept anonymously for 180 more days. */
+  private get reviewRetention() {
+    return this.account.features?.chatReview === true;
+  }
   private get deleteEnabled() {
     return this.account.features?.accountDelete === true;
   }
@@ -159,6 +164,7 @@ export class LiveBinding {
     }
     this.renderAccess();
     this.mountChatMenus(shell);
+    this.mountReviewBanner(shell);
     const onReturn = () => {
       if (!document.hidden && !this.busy && !this.invitation.locked) void this.refreshAccess().catch(() => {});
     };
@@ -172,6 +178,16 @@ export class LiveBinding {
       const card = shell.card(conversation.characterId);
       if (card.classList.contains('is-active')) void this.open(conversation.characterId, card);
     }
+  }
+
+  /** The one-time banner about anonymous transcript review (CHAT_REVIEW_ENABLED), until the player closes it. */
+  private mountReviewBanner(shell: Shell) {
+    if (this.account.features?.chatReview !== true || typeof this.api.closeReviewNotice !== 'function') return;
+    const closed = this.account.signedIn && this.account.reviewNoticeClosed === true;
+    mountReviewBanners(
+      this.view.characters.map((character) => shell.card(character.characterId)),
+      { closed, persist: () => this.api.closeReviewNotice() },
+    );
   }
 
   /** An invited player with a live grant may take part in co-creation; a guest sees the entry, disabled. */
@@ -223,6 +239,7 @@ export class LiveBinding {
       mode,
       signupEnabled: this.signupOpen,
       legal: this.legalEnabled,
+      ...(this.reviewRetention ? { reviewRetention: true } : {}),
       ...(this.bonusOffer ? { bonus: this.bonusOffer } : {}),
       nickname: this.account.signedIn ? this.account.nickname : null,
       hasGuestChats: this.guestHasChats(),

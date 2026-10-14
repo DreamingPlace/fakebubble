@@ -35,6 +35,8 @@ export interface WebPublicConfig {
   readonly legalPages: boolean;
   /** SIGNUP_BONUS_ENABLED: 5-reply guest trial + 10-reply signup bonus + 3 signups per IP per UTC day (Part 17b). */
   readonly signupBonus: boolean;
+  /** CHAT_REVIEW_ENABLED: pseudonymous transcript review for the owner + 180-day anonymous archive (Part 19). */
+  readonly chatReview: boolean;
   readonly alerts: WebAlertConfig | null;
   readonly turnstile: WebTurnstileConfig | null;
 }
@@ -113,6 +115,7 @@ export function webPublicFromEnv(env: Record<string, unknown>): WebPublicConfig 
     accountDelete: on(env.ACCOUNT_DELETE_ENABLED),
     legalPages: on(env.LEGAL_PAGES_ENABLED),
     signupBonus: on(env.SIGNUP_BONUS_ENABLED),
+    chatReview: on(env.CHAT_REVIEW_ENABLED),
     alerts,
     turnstile,
   });

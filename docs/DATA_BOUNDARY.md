@@ -248,6 +248,24 @@ Deleted on request, exactly the set the retention cleaner deletes: messages and 
 
 Not stored in SQL: owner-alert state (last check, last send per alert type, error buckets, the UNKNOWN high-water mark) lives in the business Durable Object's key-value storage; the Turnstile one-use ledger holds SHA-256 digests of tokens in memory for ten minutes. Neither holds player data. Turnstile also receives the visitor's IP address and browser signals from Cloudflare's own widget; the privacy policy names it as a processor.
 
+## Part 19: tester chat review (migration 122, flag `CHAT_REVIEW_ENABLED`)
+
+During testing the owner reads whole chat transcripts to tune the characters' tone without being able to tell which account a transcript belongs to; removed chats stay readable, anonymously, for 180 days. Migration 122 (`122_chat_review.sql`, sha256 `5a81455c85a05c9095d66eb50803acefc1d2c2f6b0a478891e733d1471eec950`) adds three tables. The business object is the only writer; nothing here reaches a prompt or a provider.
+
+| Table | Class | Kept after deletion? |
+|---|---|---|
+| `web_review_codes` (principal id, 4-character code from an alphabet without 0/O, 1/I/L, time) | user | **No**: removed with the player by `purgePlayerLogins` (account deletion, guest clear, the guest purge after trial/grace and the 180-day inactivity purge), and also in the transaction that archives the transcript. The lifecycle audit's `playerLoginsRemain` fails closed if one remains for a cleared world. The code is drawn at random (never derived from an id, email, IP or invite), is the same across one player's characters, and is unique against live codes AND codes still present in the archive. |
+| `web_review_notice` (principal id, time the one-time banner was closed) | user | **No**: removed with the player (same path and same audit check). |
+| `web_review_archive` (label, review code, character id, line order, character-local time, speaker, text, status, error code, review_changed, archived_at, expires_at) | **anonymous review archive: content without identity, 180 days** | Yes, until `expires_at` (= `archived_at` + 180 days); then the alarm's retention sweep deletes it (batched, idempotent). Nothing else deletes or edits it and no player-facing route reads it. |
+
+The archive has no principal, player, world, conversation, session or operation id and no column, index or digest that joins to an account. `auditWebLifecycleWorld` checks the columns on every run (`archiveHasIdentityColumn`: no column naming a principal / player / world / conversation / session / operation / invite / email / account / IP, and no `*_id` column other than `character_id`) and fails closed. The player's nicknames - the current one and every past 名片 revision - are replaced by 〔昵称〕 (compatibility-folded, case-insensitive, ignoring spaces and invisible characters) before any text is written, and again in everything the admin screen and the CSV return.
+
+**When it is written.** Only while `CHAT_REVIEW_ENABLED` is on, and only in the transaction that STARTS a purge (`WebCloudRetention.markExpired` / `WebRetentionCleaner.markExpired`, T1), before any content is cleared and before the purge's own writes: a crash can neither lose the copy nor leave content without one. A purge resumed after a restart finds the retention state already `purging` and returns before the copy, so a principal is archived at most once. With the flag off nothing is archived and deletion is exactly as before. The same T1 covers all four paths: account deletion, 清除本设备的体验数据, the guest purge after trial/grace, and the 180-day inactivity purge.
+
+**Who can read what.** The live transcripts and the archive are read only through the admin routes `/admin/conversations/{list,detail,export}` (read-only budget, permission `conversations.read` = 查看测试对话, owner by default, in no preset except 全部; with the flag off the routes do not exist). Every list, detail and export call writes one `web_admin_audit` row (actor, action, label, time; no content). Never returned: email (even masked), nickname, any principal / player / world / session / operation id, IP hash, invite code, memories or facts, voice files.
+
+**Residual risk, stated plainly.** A reader who also sees the retained operation shells (ids, states, millisecond timestamps) could in principle correlate an archived line's minute-resolution local time with a shell's timestamp; the archive stores no digest of any id, so there is no key to join on, but timing is not hidden. The privacy policy also says that anything identifying a player may be recognised if the player typed it into the chat.
+
 ## Notes for later Parts
 
 - Retention tables carry `principal_id` but are classified global because the retention cleaner is a cross-principal job that must outlive the principal's rows. A later Part may split them.

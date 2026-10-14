@@ -3983,3 +3983,104 @@ body.legal-page {
   font-size: 14px;
   line-height: 1.6;
 }
+
+/* Part 19: the one-time chat-review banner (CHAT_REVIEW_ENABLED) and the 18+ tick of the signup sheet. */
+.review-banner {
+  display: none;
+  flex: none;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 8px 8px 18px;
+  background: #f2efe4;
+  border-bottom: 1px solid #e1ddd0;
+  color: #5a4c3f;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.card-slot.is-chat .review-banner {
+  display: flex;
+}
+.review-banner-text {
+  flex: 1;
+  margin: 0;
+}
+.review-banner-text a {
+  color: #294b40;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.review-banner-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+}
+.review-banner-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.acct-adult {
+  margin: 2px 0;
+}
+
+/* Part 19: 测试对话 (the owner's anonymous transcript review). */
+.review-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--ad-muted);
+}
+.review-state {
+  align-self: center;
+  font-size: 12px;
+  color: var(--ad-muted);
+}
+.review-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.review-line {
+  display: grid;
+  grid-template-columns: 9.5em 6.5em 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--ad-surface, #fff);
+  border: 1px solid var(--ad-border);
+  line-height: 1.6;
+}
+.review-line.is-player {
+  background: var(--ad-bg);
+}
+.review-line.is-failed {
+  border-color: #c98f86;
+  color: #8a3b30;
+}
+.review-time,
+.review-speaker {
+  font-size: 12px;
+  color: var(--ad-muted);
+  white-space: nowrap;
+}
+.review-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.review-changed {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+  white-space: nowrap;
+}

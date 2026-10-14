@@ -12,6 +12,7 @@ export interface WebRuntimeStore extends BusinessStore {
   readonly dailyReplyLimit?: number;
   /** SIGNUP_BONUS_ENABLED: the 5-reply trial and the signup bonus (see admission/web-free-tier.ts); absent = off. */
   readonly publicFreeTier?: boolean;
+  readonly chatReview?: boolean;
   readonly providerAudio?: PrivateMediaObjects;
   requireInviteTest(): void;
   requireProviderRuntime(): void;

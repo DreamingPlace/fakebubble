@@ -2,11 +2,21 @@ import {
   hasAnyCharacterPermission,
   hasAnyInvitePermission,
   hasCocreationPermission,
+  hasConversationsPermission,
   hasInvitePermission,
 } from '../../../../../../packages/contracts/web-admin-permissions.ts';
 
 /** Pages behind the sidebar plus 我的账号, which lives in the account menu rather than the first-level nav. */
-export type AdminPage = 'characters' | 'preview' | 'cocreation' | 'invites' | 'grants' | 'ops' | 'members' | 'account';
+export type AdminPage =
+  | 'characters'
+  | 'preview'
+  | 'cocreation'
+  | 'invites'
+  | 'grants'
+  | 'ops'
+  | 'conversations'
+  | 'members'
+  | 'account';
 export type NavItem = { page: Exclude<AdminPage, 'account'>; label: string; icon: string };
 export type NavGroup = { id: string; label: string; items: readonly NavItem[] };
 
@@ -33,14 +43,34 @@ export const NAV_TREE: readonly NavGroup[] = [
   { id: 'system', label: '系统', items: [{ page: 'members', label: '管理员与权限', icon: 'shield' }] },
 ];
 
+/**
+ * Pages that exist only while a deployment switch is on (Part 19: 运营 → 测试对话, CHAT_REVIEW_ENABLED). They are NOT part of
+ * NAV_TREE - the groups and pages every deployment has - and are appended to their group by `navTree()`. `canSeePage` hides
+ * them unless the session says the switch is on and the administrator holds the permission.
+ */
+export const OPTIONAL_NAV: ReadonlyArray<NavItem & { group: string }> = [
+  { group: 'ops', page: 'conversations', label: '测试对话', icon: 'chat' },
+];
+/** NAV_TREE plus the switch-gated pages, in their groups. */
+export const navTree = (): NavGroup[] =>
+  NAV_TREE.map((group) => ({
+    ...group,
+    items: [
+      ...group.items,
+      ...OPTIONAL_NAV.filter((item) => item.group === group.id).map(({ group: _group, ...item }) => item),
+    ],
+  }));
+
 /** What decides visibility. `inbox` and `metrics` say whether this page was given a client for them at all. */
 export type NavAccess = {
   owner: boolean;
   permissions: readonly string[];
   inbox: boolean;
   metrics: boolean;
+  /** CHAT_REVIEW_ENABLED and this page has the client for 测试对话. Absent = off. */
+  conversations?: boolean;
 };
-export const PAGES: readonly AdminPage[] = [...NAV_TREE.flatMap((g) => g.items.map((i) => i.page)), 'account'];
+export const PAGES: readonly AdminPage[] = [...navTree().flatMap((g) => g.items.map((i) => i.page)), 'account'];
 export const isAdminPage = (value: string): value is AdminPage => (PAGES as readonly string[]).includes(value);
 
 /** Hidden, never disabled. The server still checks every request; this only decides what is worth showing. */
@@ -63,14 +93,16 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
       return owner || hasInvitePermission(permissions, 'invites.read');
     case 'ops':
       return access.metrics && owner;
+    case 'conversations':
+      return access.conversations === true && (owner || hasConversationsPermission(permissions));
     case 'members':
       return owner;
   }
 }
 export const visibleNav = (access: NavAccess): NavGroup[] =>
-  NAV_TREE.map((group) => ({ ...group, items: group.items.filter((item) => canSeePage(item.page, access)) })).filter(
-    (group) => group.items.length > 0,
-  );
+  navTree()
+    .map((group) => ({ ...group, items: group.items.filter((item) => canSeePage(item.page, access)) }))
+    .filter((group) => group.items.length > 0);
 /** Where to land: the first sidebar page the administrator may use, else their account. */
 export const firstAllowedPage = (access: NavAccess): AdminPage => visibleNav(access)[0]?.items[0]?.page ?? 'account';
 
@@ -83,17 +115,20 @@ const ICON_PATHS: Record<string, string> = {
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
   chart: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
   shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
 };
 const icon = (name: string) =>
   `<svg class="admin-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] ?? ''}</svg>`;
 /** Static markup for every item; `render()` of the page then hides what the administrator may not use. */
 export const navMarkup = () =>
-  NAV_TREE.map(
-    (group) =>
-      `<div class="admin-nav-group" data-group="${group.id}"><p class="admin-nav-title">${group.label}</p>${group.items
-        .map(
-          (item) =>
-            `<a class="admin-nav-item" href="#/${item.page}" data-page="${item.page}" title="${item.label}">${icon(item.icon)}<span>${item.label}</span></a>`,
-        )
-        .join('')}</div>`,
-  ).join('');
+  navTree()
+    .map(
+      (group) =>
+        `<div class="admin-nav-group" data-group="${group.id}"><p class="admin-nav-title">${group.label}</p>${group.items
+          .map(
+            (item) =>
+              `<a class="admin-nav-item" href="#/${item.page}" data-page="${item.page}" title="${item.label}">${icon(item.icon)}<span>${item.label}</span></a>`,
+          )
+          .join('')}</div>`,
+    )
+    .join('');

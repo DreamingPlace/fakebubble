@@ -41,6 +41,8 @@ export type AccountFeatures = {
   grace?: true;
   /** Signing up gives this many free replies (any character, no time window). */
   signupBonus?: number;
+  /** Administrators may read chats under an anonymous code while testing: the one-time banner applies. */
+  chatReview?: true;
 };
 export type AccountInfo =
   | { signupEnabled: boolean; signedIn: false; features?: AccountFeatures }
@@ -53,6 +55,8 @@ export type AccountInfo =
       nickname: string | null;
       canBind: boolean;
       features?: AccountFeatures;
+      /** The player closed the one-time review banner (only present while chatReview is on). */
+      reviewNoticeClosed?: boolean;
       /** A guest past its trial and inside the grace period: signup is still possible until endsAt (ms). */
       grace?: { endsAt: number };
     };
@@ -74,6 +78,7 @@ function parseFeatures(value: unknown): AccountFeatures | undefined {
     ...(raw.accountDelete === true ? { accountDelete: true as const } : {}),
     ...(raw.legal === true ? { legal: true as const } : {}),
     ...(raw.grace === true ? { grace: true as const } : {}),
+    ...(raw.chatReview === true ? { chatReview: true as const } : {}),
     ...(Number.isSafeInteger(raw.signupBonus) && (raw.signupBonus as number) > 0 && (raw.signupBonus as number) <= 1000
       ? { signupBonus: raw.signupBonus as number }
       : {}),
@@ -277,11 +282,23 @@ export class ProviderApi implements WebProviderActions {
     await this.request('/account/verify-code', { method: 'POST', body: JSON.stringify(input) });
   }
   /** Step 3 for a guest (注册) or a legacy invited player (绑定邮箱): password + nickname after a verified code. */
-  async finishAccount(input: { purpose: 'signup' | 'bind'; challengeId: string; password: string; nickname: string }) {
+  async finishAccount(input: {
+    purpose: 'signup' | 'bind';
+    challengeId: string;
+    password: string;
+    nickname: string;
+    /** The signup sheet's 我已年满 18 周岁 tick (LEGAL_PAGES_ENABLED); sent for a signup only, never stored. */
+    adult?: boolean;
+  }) {
     const value = record(
       await this.request(`/account/${input.purpose}`, {
         method: 'POST',
-        body: JSON.stringify({ challengeId: input.challengeId, password: input.password, nickname: input.nickname }),
+        body: JSON.stringify({
+          challengeId: input.challengeId,
+          password: input.password,
+          nickname: input.nickname,
+          ...(input.adult === undefined ? {} : { adult: input.adult }),
+        }),
       }),
     );
     if (typeof value.nickname !== 'string' || typeof value.emailMasked !== 'string')
@@ -315,6 +332,10 @@ export class ProviderApi implements WebProviderActions {
     if (value.deleted !== true) throw new ProviderApiError(0, 'PROTOCOL_INVALID');
     this.csrf = '';
   }
+  /** The × on the one-time review banner; remembered for this player on the server. */
+  async closeReviewNotice() {
+    await this.request('/account/review-notice-close', { method: 'POST', body: '{}' });
+  }
   async logoutOthers() {
     await this.request('/account/logout-others', { method: 'POST', body: '{}' });
   }
@@ -343,6 +364,7 @@ export class ProviderApi implements WebProviderActions {
       nickname: typeof value.nickname === 'string' ? value.nickname : null,
       canBind: value.canBind,
       ...(features ? { features } : {}),
+      ...(typeof value.reviewNoticeClosed === 'boolean' ? { reviewNoticeClosed: value.reviewNoticeClosed } : {}),
       ...(value.grace &&
       typeof value.grace === 'object' &&
       Number.isSafeInteger((value.grace as { endsAt?: unknown }).endsAt)
