@@ -132,3 +132,32 @@ test('inspect action is read-only RPC on the business service and its result is 
   assert.deepEqual(last.detail, { schemaVersion: 116 });
   assert.equal(last.worker, business);
 });
+
+test('renew-prices action calls only renewPrices on the business service, with a private receipt', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'web-operator-renew-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const receipt = join(dir, 'renew.jsonl');
+  const args = webOperatorArguments([
+    '--action=renew-prices',
+    `--receipt-file=${receipt}`,
+    `--business-service=${business}`,
+  ]);
+  assert.equal(webOperatorConfig('renew-prices', 'a'.repeat(32), args).services[0]!.service, business);
+  assert.throws(
+    () => webOperatorArguments(['--action=renew-prices', `--receipt-file=${receipt}`, '--name=x']),
+    /WEB_OPERATOR_ARGUMENT_INVALID/,
+  );
+  const result = await runWebOperator(
+    prepareWebOperation(args),
+    async () => ({
+      env: {
+        OPERATOR: { renewPrices: async () => [{ result: 'not-due' }], status: async () => assert.fail('no') } as never,
+      },
+      dispose: async () => {},
+    }),
+    '/c',
+  );
+  assert.deepEqual(result, { action: 'renew-prices', receiptFile: receipt });
+  const last = JSON.parse(readFileSync(receipt, 'utf8').trim().split('\n').at(-1)!);
+  assert.deepEqual(last.detail, [{ result: 'not-due' }]);
+});

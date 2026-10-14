@@ -267,3 +267,38 @@ test('thresholds are Worker vars with safe defaults, validated, and everything i
       (error) => error instanceof DomainError,
     );
 });
+
+test('price-expiry alert: fires under 7 days (and when already expired), once per 6-hour window; the digest shows the earliest expiry', async () => {
+  const { PROVIDER_PRICES } = await import('../../../apps/server/generation/web-provider-configuration.ts');
+  const f = fixture({ digestHourUtc: 23 });
+  f.db.exec(
+    'CREATE TABLE web_provider_prices(id TEXT,provider TEXT,model TEXT,phase TEXT,valid_from INTEGER,valid_until INTEGER)',
+  );
+  const insert = f.db.prepare('INSERT INTO web_provider_prices VALUES (?,?,?,?,?,?)');
+  const DAY = 24 * HOUR_MS;
+  PROVIDER_PRICES.forEach((p, i) =>
+    insert.run(`row-${i}`, p.provider, p.model, p.phase, f.now() - DAY, f.now() + (i === 0 ? 8 : 40) * DAY),
+  );
+  assert.deepEqual((await f.alerts.check()).sent, [], '8 days left is outside the window');
+  f.advance(DAY + HOUR_MS); // 6.96 days left for the earliest price
+  assert.deepEqual((await f.alerts.check()).sent, ['price-expiry']);
+  quiet(f.mails.at(-1)!);
+  assert.match(f.mails.at(-1)!.text, /7 天内到期/);
+  for (let i = 0; i < 5; i++) {
+    f.advance(HOUR_MS);
+    assert.deepEqual((await f.alerts.check()).sent, [], 'no second mail inside the 6-hour window');
+  }
+  f.advance(HOUR_MS);
+  assert.deepEqual((await f.alerts.check()).sent, ['price-expiry'], 'a new window mails again');
+  // Digest: the earliest expiry.
+  const g = fixture({ digestHourUtc: 0 });
+  g.db.exec(
+    'CREATE TABLE web_provider_prices(id TEXT,provider TEXT,model TEXT,phase TEXT,valid_from INTEGER,valid_until INTEGER)',
+  );
+  g.db
+    .prepare('INSERT INTO web_provider_prices VALUES (?,?,?,?,?,?)')
+    .run('row', PROVIDER_PRICES[1].provider, PROVIDER_PRICES[1].model, PROVIDER_PRICES[1].phase, 0, g.now() - HOUR_MS);
+  const sent = (await g.alerts.check()).sent;
+  assert.deepEqual(sent.sort(), ['digest', 'price-expiry'], 'an already expired price alerts too');
+  assert.match(g.mails.find((m) => m.subject.includes('日报'))!.text, /最早的价格到期：UTC 2026-10-10/);
+});

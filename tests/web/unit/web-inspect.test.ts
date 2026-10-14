@@ -296,3 +296,24 @@ test('inspect reports the player-account configuration: signup flag, daily cap a
   assert.ok(!leaked.includes(SECRET.email) && !leaked.includes(SECRET.passwordHash));
   assert.ok(leaked.includes('"PLAYER_SIGNUP_ENABLED":"other"') && leaked.includes('"PLAYER_EMAIL_DAILY_CAP":"other"'));
 });
+
+test('inspect reports, per provider/model/phase, the price row in force now and the latest valid_until (numbers and ids only)', () => {
+  const { db, reader } = authority();
+  db.exec("INSERT INTO web_provider_spending VALUES ('deepseek','USD',NULL,0,0)");
+  const price = db.prepare("INSERT INTO web_provider_prices VALUES (?,'deepseek','m','draft','USD','token',2,?,?,?)");
+  price.run('p-1', 1000, 2000, 1);
+  price.run('p-2', 2000, 3000, 2);
+  const at = (now: number) => inspectWebAuthority(reader, expected, flags, budget, {}, now).prices;
+  assert.deepEqual(at(1500), [
+    {
+      provider: 'deepseek',
+      model: 'm',
+      phase: 'draft',
+      inForce: { id: 'p-1', validUntil: 2000 },
+      latestValidUntil: 3000,
+    },
+  ]);
+  assert.equal(at(2000)[0]!.inForce!.id, 'p-2', 'the boundary instant belongs to the next row');
+  assert.equal(at(3000)[0]!.inForce, null, 'expired: nothing in force, the latest valid_until is still shown');
+  assert.equal(at(3000)[0]!.latestValidUntil, 3000);
+});

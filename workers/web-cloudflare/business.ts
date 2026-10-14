@@ -306,6 +306,10 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       inviteId,
     );
   }
+  renewPrices() {
+    this.operator();
+    return this.setup.renewPrices();
+  }
   async status() {
     this.operator();
     return { instanceId: this.store.instanceId, setup: this.setup.status(), budget: await this.budget() };
@@ -334,6 +338,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         PLAYER_EMAIL_DAILY_CAP: this.env.PLAYER_EMAIL_DAILY_CAP,
         emailBindingPresent: this.env.PLAYER_EMAIL !== undefined && this.env.PLAYER_EMAIL !== null,
       },
+      this.clock.now(),
     );
   }
   private async budget() {
@@ -475,6 +480,7 @@ interface OperatorEnvironment {
       inviteGrants(inviteId: string): Promise<unknown>;
       status(): Promise<unknown>;
       inspect(): Promise<unknown>;
+      renewPrices(): Promise<unknown>;
     };
   };
 }
@@ -512,6 +518,9 @@ export class WebOperatorService extends WorkerEntrypoint<OperatorEnvironment> {
   }
   async inspect() {
     return this.authority().inspect();
+  }
+  async renewPrices() {
+    return this.authority().renewPrices();
   }
   fetch() {
     return new Response(null, { status: 404 });

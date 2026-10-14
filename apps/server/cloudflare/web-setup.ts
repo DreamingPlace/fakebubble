@@ -5,7 +5,7 @@ import { WEB_PROVIDER_WELCOME } from '../../../config/web-v1.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
 import type { verifySelectedVoiceSetup } from '../generation/web-provider-materials.ts';
-import { configureWebProvider } from '../generation/web-provider-configuration.ts';
+import { configureWebProvider, renewProviderPrices } from '../generation/web-provider-configuration.ts';
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { SYNTHETIC_TRIAL_FOOTER } from '../conversation/web-vertical-publisher.ts';
 import type { WebBudgetPolicy } from '../budget/web-provider-budget-contract.ts';
@@ -146,6 +146,11 @@ export class WebCloudSetup {
       'WEB_CLOUD_ASSET_MISMATCH',
     );
     return new WebProviderOffline(this.store, this.clock).registerFixedAudio(kind, { ...asset, wav: bytes });
+  }
+  /** Appends the next price rows; only after initialization, so the budgets the prices reference exist. */
+  renewPrices() {
+    this.ready();
+    return renewProviderPrices(this.store, this.clock.now());
   }
   status() {
     const assets = this.assets();
