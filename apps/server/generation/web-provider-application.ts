@@ -25,6 +25,8 @@ import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts
 import { WebInvites } from '../invites/web-invites.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { WebCocreation } from '../cocreation/web-cocreation.ts';
+import { chatReviewTablesExist } from '../review/web-chat-review.ts';
+import { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
 import {
   PLAYER_LIMITS,
@@ -127,6 +129,8 @@ export class WebProviderApplication {
   readonly characterAdmin: WebCharacterAdmin;
   readonly inviteActions: WebInviteActions;
   readonly cocreation: WebCocreation;
+  /** CHAT_REVIEW_ENABLED (Part 19): 测试对话. Null with the flag off (and on a database older than schema 122). */
+  readonly chatReview: WebChatReviewAdmin | null;
   /** GUEST_GRACE_ENABLED: 0 when off. */
   readonly graceMs: number;
   /** Null on a database older than schema 118. */
@@ -169,7 +173,12 @@ export class WebProviderApplication {
     });
     this.admission = new WebAdmission(store, clock, () => globalThis.crypto.randomUUID());
     this.publisher = new WebVerticalPublisher(store, clock);
-    this.inviteAdmin = new WebAccountAdmin(store, clock, config.origin, mailer ? { mailer } : {});
+    const chatReviewOn = store.chatReview === true && chatReviewTablesExist(store);
+    this.inviteAdmin = new WebAccountAdmin(store, clock, config.origin, {
+      ...(mailer ? { mailer } : {}),
+      ...(chatReviewOn ? { features: { chatReview: true } } : {}),
+    });
+    this.chatReview = chatReviewOn ? new WebChatReviewAdmin(store, clock, this.inviteAdmin) : null;
     installWebCharacterCatalog(store);
     installWebCharacterMaterials(store);
     installWebCharacterDeletion(store);
@@ -200,6 +209,7 @@ export class WebProviderApplication {
             legal: players.legalPages === true,
             turnstileSiteKey: players.turnstileSiteKey ?? null,
             signupBonus: freeTier(this.store).on,
+            chatReview: chatReviewOn,
           },
         })
       : null;

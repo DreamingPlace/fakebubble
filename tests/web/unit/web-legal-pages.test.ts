@@ -26,19 +26,52 @@ test('both legal pages are static Chinese documents with no script, linked to ea
   }
 });
 
-test('every fact the owner must confirm is marked 【待确认：…】, and the unfinished-draft banner is there', () => {
+// Named exception (Part 19): the test that stood here ("every fact the owner must confirm is marked 【待确认：…】, and the
+// unfinished-draft banner is there") described the DRAFT stage. The owner's facts are now in the pages, so it is replaced by
+// the checks below; every other legal-page test in this file is unchanged.
+test('legal pages finalized in Part 19: no 待确认, no draft banner, and the owner facts are in', () => {
+  const EMAIL = 'contact@4th-generation.fans';
   for (const name of ['privacy.html', 'terms.html']) {
     const html = read(name);
-    const marked = [...html.matchAll(/<span class="legal-todo">([^<]*)<\/span>/g)].map((m) => m[1]!);
-    assert.ok(marked.length >= 4, `${name} has marked items`);
-    for (const item of marked) assert.match(item, /^【待确认：[^【】]+】$/, item);
-    assert.match(html, /class="legal-draft"/);
-    // Any 待确认 outside a marked span would be an unmarked placeholder.
-    assert.equal((html.match(/待确认/g) ?? []).length, marked.length + (html.match(/“待确认”/g) ?? []).length);
+    assert.ok(!html.includes('待确认'), `${name} has no 待确认`);
+    assert.doesNotMatch(html, /legal-draft|legal-todo/, `${name} has no draft banner or marked placeholder`);
+    // The address is there, and every occurrence of it is the visible text of (or the target of) one mailto link.
+    assert.ok(html.includes(EMAIL), `${name} shows the contact address`);
+    assert.equal(
+      (html.match(new RegExp(EMAIL.replace(/\./g, '\\.'), 'g')) ?? []).length,
+      2 *
+        (
+          html.match(
+            new RegExp(`<a href="mailto:${EMAIL.replace(/\./g, '\\.')}">${EMAIL.replace(/\./g, '\\.')}</a>`, 'g'),
+          ) ?? []
+        ).length,
+      `${name}: every address is a mailto link`,
+    );
+    const plain = text(html);
+    assert.ok(plain.includes('最近更新：2026 年 10 月 13 日。自本页公开发布之日起生效。'), `${name} effective date`);
+    assert.ok(plain.includes('FAKE 泡泡开源项目（个人维护，非公司主体）'), `${name} operator`);
+    assert.ok(
+      plain.includes('本服务由个人维护的开源项目提供。与本服务有关的问题或争议，请先通过上面的邮箱联系我们协商解决。'),
+      `${name} governing law`,
+    );
   }
-  const joined = text(read('privacy.html')) + text(read('terms.html'));
-  for (const required of ['运营者名称', '联系邮箱', '适用法律与管辖地区', '生效日期'])
-    assert.ok(joined.includes(`【待确认：${required}`), `${required} is marked for the owner`);
+  const policy = text(read('privacy.html')),
+    terms = text(read('terms.html'));
+  assert.ok(policy.includes('本服务面向 18 周岁及以上用户，未满 18 周岁请勿使用。'), 'privacy: 18+');
+  assert.ok(policy.includes('我们会在 15 个工作日内回复。'), 'privacy: response time');
+  assert.ok(
+    policy.includes(
+      'DeepSeek 位于中国大陆；Cloudflare 和 Fish Audio 的服务器可能位于中国大陆以外。使用本服务即表示你同意你的消息被发送到这些地区处理。各处理方对数据的保留和使用以其自己的服务条款和隐私政策为准；我们不会授权任何一方用你的聊天内容训练模型。',
+    ),
+    'privacy: cross-border and no training',
+  );
+  assert.ok(
+    terms.includes(
+      '你的聊天内容不会用于训练任何 AI 模型。我们可能以匿名编号查看聊天内容，用于改进角色的说话方式（详见《隐私政策》）。',
+    ),
+    'terms: no training',
+  );
+  assert.ok(terms.includes('免责声明') && terms.includes('在法律允许的范围内'), 'terms: the disclaimer stays');
 });
 
 test('the privacy policy covers what is collected, why, the processors, AI replies, retention, minors and contact', () => {

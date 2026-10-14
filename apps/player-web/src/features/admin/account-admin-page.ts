@@ -11,7 +11,7 @@ import {
   firstAllowedPage,
   isAdminPage,
   navMarkup,
-  NAV_TREE,
+  navTree,
   type AdminPage,
   type NavAccess,
 } from './shell/admin-nav.ts';
@@ -19,6 +19,8 @@ import { addressBar, sameRoute, type AdminRoute } from './shell/admin-router.ts'
 import { splitPane } from './ui/split-pane.ts';
 import { toastHost } from './ui/toast.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
+import { conversationsView } from './conversations-view.ts';
+import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
 import type { CocreationAdminClient } from '../../services/cocreation-admin-api.ts';
 import { inviteRecords } from './invite-records.ts';
 import {
@@ -57,6 +59,8 @@ type Port = Pick<
   stageLatency?: AccountAdminApi['stageLatency'];
   /** 共创收件箱. Optional: a page without it simply has no inbox tab. */
   cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'>;
+  /** 测试对话 (CHAT_REVIEW_ENABLED; the page only appears when the session says the switch is on). */
+  conversations?: Pick<ConversationsAdminClient, 'list' | 'detail' | 'export'>;
 };
 export function adminAccountError(error: unknown) {
   const characterError = characterAdminError(error);
@@ -153,6 +157,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="preview" hidden><div id="admin-preview" class="admin-fill"></div></section>
     <section data-panel="grants" hidden><div id="admin-grants"></div></section>
     <section data-panel="ops" hidden><div id="admin-ops"></div></section>
+    <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
     </div>
     </div>
     <p class="invite-admin-status admin-statusbar" role="status" aria-live="polite">正在检查登录状态…</p>
@@ -177,6 +182,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     permissions: session?.member.permissions ?? [],
     inbox: !!port.cocreation,
     metrics: !!port.stageLatency,
+    conversations: !!port.conversations && session?.features?.chatReview === true,
   });
   const canEditCharacter = (characterId: string) =>
     session?.member.role === 'owner' ||
@@ -194,7 +200,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   let unread: Record<string, number> = {};
   /** Grouped permissions with 共生项 and presets; the inbox group only when this page has an inbox. */
   const permissionControls = (host: HTMLElement, initial: readonly AdminPermission[]) =>
-    permissionMatrixEditor(host, initial, { cocreation: !!port.cocreation });
+    permissionMatrixEditor(host, initial, {
+      cocreation: !!port.cocreation,
+      conversations: !!port.conversations && session?.features?.chatReview === true,
+    });
   const canCocreation = (permission: CocreationAdminPermission) =>
     !!port.cocreation &&
     (session?.member.role === 'owner' ||
@@ -253,7 +262,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     q<HTMLElement>('.admin-nav').hidden = !session;
     // Hidden, never disabled: an item the administrator may not use is simply not there.
     const visible = access();
-    for (const group of NAV_TREE) {
+    for (const group of navTree()) {
       let any = false;
       for (const item of group.items) {
         const show = !!session && canSeePage(item.page, visible);
@@ -382,6 +391,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (page === 'invites' && can('invites.read')) return () => records.load();
     if (page === 'grants' && can('invites.read')) return () => grants.load();
     if (page === 'ops' && session.member.role === 'owner' && port.stageLatency) return () => ops.load();
+    if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
     return null;
   };
   /** The newest load a click asked for while something else was running; it starts when that run ends. */
@@ -556,6 +566,19 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     run,
     disposed: () => disposed,
   });
+  const reviews = conversationsView(q('#admin-conversations'), {
+    api: port.conversations ?? {
+      list: () => Promise.reject(new Error('ADMIN_CONVERSATIONS_UNAVAILABLE')),
+      detail: () => Promise.reject(new Error('ADMIN_CONVERSATIONS_UNAVAILABLE')),
+      export: () => Promise.reject(new Error('ADMIN_CONVERSATIONS_UNAVAILABLE')),
+    },
+    run,
+    runLatest,
+    status: (text) => {
+      if (!disposed) status.textContent = text;
+    },
+    disposed: () => disposed,
+  });
   const clearMemberControls = () => {
     q('#admin-members-list').replaceChildren();
     q('#admin-new-permissions').replaceChildren();
@@ -570,6 +593,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     picker.clear();
     grants.clear();
     ops.clear();
+    reviews.clear();
     inbox?.clear();
     unread = {};
   };

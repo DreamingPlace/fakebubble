@@ -2,6 +2,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { cocreationRemains } from '../cocreation/web-cocreation-purge.ts';
 import { playerLoginsRemain } from '../identity/web-player-purge.ts';
+import { archiveHasIdentityColumn } from '../review/web-chat-review.ts';
 
 const shells = new Set([
   'web_principals',
@@ -193,6 +194,8 @@ export function auditWebLifecycleWorld(
       ),
       'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
     );
+  // Part 19: the anonymous review archive may never name an account: no principal / world / player / ... column at all.
+  ensure(!archiveHasIdentityColumn(store), 'WEB_RETENTION_UNEXPECTED_WORLD_DATA');
   if (phase === 'source') {
     ensure(
       !store.get(

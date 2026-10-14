@@ -155,8 +155,9 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 | --- | --- | --- |
 | `GUEST_GRACE_ENABLED` | `false` | 注册永远开放，并给没有登录的访客 **7 天宽限期**：试玩结束后数据再保留 7 天（清理时间由 `expires_at` 改为 `expires_at + 7 天`，只对没有登录的访客），期间不能聊天、不能读历史，但会话仍可用于注册；注册即成为保留账号（沿用 Part 11f 的 180 天不活跃规则），历史回来。宽限期结束后数据清除，旧 Cookie 返回 `GUEST_GRACE_ENDED`（401，清 Cookie），页面落到“登录 / 注册 / 以访客继续”，提示“之前的体验聊天已过期”，选 注册 会走正常首访流程创建新访客并以空历史注册。准入不变：没有邀请就没有新回复。 |
 | `SIGNUP_BONUS_ENABLED` | `false` | 免费额度（Part 17b，见下）：访客试聊每人、每个网络（终身）5 条，注册并验证邮箱再送 10 条，同一 IP 每个 UTC 日最多完成 3 次注册。关闭时（默认）一切照旧：3 条、没有赠送、没有注册上限。 |
+| `CHAT_REVIEW_ENABLED` | `false` | 测试对话（Part 19，见下）：站长可以用匿名编号阅读聊天全文；玩家被删除聊天时，文字以匿名编号再保留 180 天；聊天页出现一次性提示；删除账号／清除体验数据的确认单多一句 180 天说明。关闭时（默认）一切照旧：没有页面、没有存档、删除立即清空，审核相关路由和没有一样（404）。 |
 | `ACCOUNT_DELETE_ENABLED` | `false` | 账号菜单里出现“删除我的账号”（有登录：密码 + 输入“删除”）和“清除本设备的体验数据”（访客：无需密码）。走原有、带审计、失败即关闭的清理路径，立即清除聊天、记忆、语音、共创、名片、登录、验证码挑战与全部会话；受邀玩家的授权在同一事务里撤销。 |
-| `LEGAL_PAGES_ENABLED` | `false` | **业务 Worker 与边缘 Worker 都要设**。开启后注册页显示“注册即表示你同意《用户协议》和《隐私政策》”，页脚和首页出现两个链接；边缘 Worker 才会提供 `/privacy.html`、`/terms.html`（关闭时 404）。**开启前先把两页里的 【待确认：…】 全部填好。** |
+| `LEGAL_PAGES_ENABLED` | `false` | **业务 Worker 与边缘 Worker 都要设**。开启后注册页显示“注册即表示你同意《用户协议》和《隐私政策》”，页脚和首页出现两个链接；边缘 Worker 才会提供 `/privacy.html`、`/terms.html`（关闭时 404）。两页已在 Part 19 定稿（没有 【待确认】，没有“草稿”提示）；开启后注册弹窗还会多一个必选的“我已年满 18 周岁”勾选（见下）。 |
 | `ALERTS_ENABLED` | `false` | 开启给站长发邮件告警与日报。需要 `ALERT_EMAIL_TO`、`ADMIN_EMAIL`（`send_email` 绑定）和 `ADMIN_EMAIL_FROM`，缺任何一个业务对象拒绝启动。 |
 | `ALERT_EMAIL_TO` | — | 收件人，必须是 `ADMIN_EMAIL` 绑定允许送达的已验证地址。 |
 | `ALERT_ERRORS_PER_HOUR` | `20` | 最近一小时业务 5xx / 异常次数达到即告警（按 10 分钟桶累计）。 |
@@ -177,13 +178,13 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **上线当天清单：**
 1. 部署新版本，所有 Part 17 开关保持 `false`；确认 `inspect` 的迁移账本 `matches:true`、`pnpm check` 通过。
-2. 补全两份法律文本里所有 【待确认：…】（运营者名称、联系邮箱、适用法律与管辖地区、生效日期、跨境传输与单独同意、未成年人年龄门槛、供应商数据保留条款、体验时长表述），删除页首的“草稿”提示，重新构建并部署；然后在业务与边缘 Worker 同时设 `LEGAL_PAGES_ENABLED=true`。
+2. 两份法律文本已在 Part 19 定稿（运营者、联系邮箱、生效日期、跨境与训练条款、18 周岁、适用法律都已写入），部署时以最新构建为准；在业务与边缘 Worker 同时设 `LEGAL_PAGES_ENABLED=true`。
 3. 创建 Turnstile 小组件，配置 `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET`，业务与边缘同时设 `TURNSTILE_ENABLED=true`；用无痕窗口走一遍首访、注册、登录。
 4. 配置 `ALERT_EMAIL_TO`，设 `ALERTS_ENABLED=true`；确认能收到次日 `ALERT_DIGEST_HOUR_UTC` 的日报。
 5. 设 `GUEST_GRACE_ENABLED=true`、`ACCOUNT_DELETE_ENABLED=true`；用测试账号走一遍：宽限期注册找回历史、删除我的账号、清除本设备的体验数据。
 6. 设 `PLAYER_SIGNUP_ENABLED=true`（若尚未开）并核对 `PLAYER_EMAIL_DAILY_CAP`；确认预算上限 / `BUDGET_POLICY` 符合预期（公开后访客每个网络累计 3 次免费回复，邀请码只发给选定的人）。
 7. 把 Access 收窄到 `/api/web/provider/admin/*`（见上），再把 `PUBLIC_ENABLED` / 路由对外开放。
-8. **站长待决定：大陆地区规则。** 目前没有任何地区限制代码（边缘对不在白名单地区的访问者的处理）：需要决定 ①是否对中国大陆访问者开放或屏蔽；②如果开放，是否需要 ICP 备案、跨境传输告知与单独同意、算法/生成式 AI 服务备案等合规动作（隐私政策里对应处有 【待确认】）。在这个决定做出之前，不要宣传公开。
+8. **站长待决定：大陆地区规则。** 目前没有任何地区限制代码（边缘对不在白名单地区的访问者的处理）：需要决定 ①是否对中国大陆访问者开放或屏蔽；②如果开放，是否需要 ICP 备案、跨境传输告知与单独同意、算法/生成式 AI 服务备案等合规动作（隐私政策第 3 节已写明跨境处理并要求使用者同意，但这不替代上述合规判断）。在这个决定做出之前，不要宣传公开。
 9. 观察第一天：告警邮件、`inspect`、预算、`GUEST_GRACE` 之后的清理（`web_guest_retention` 的 `purging/purged` 行）。回退：把对应开关改回 `false` 重新部署即可，无需迁移。
 
 **免费额度与注册赠送（`SIGNUP_BONUS_ENABLED`，Part 17b）：** 关闭时一切照旧（访客 3 条，按玩家与按 IP 终身计数）。打开后：①访客试聊 **5 条**（`WEB_LIMITS.publicTrialReplies`），按 IP 的**终身**配额（`web_ip_lifetime_quota`）仍是终身而不是每日，同样是 5；②有邮箱登录、没有邀请授权的访客另有 **10 条终身赠送**（`WEB_LIMITS.signupBonusReplies`）：没有时间窗口，可以和任何角色聊（没有“首个人物锁”），排在试聊之后用，试聊窗口结束后（保留账号）仍可继续聊，**不占用也不检查按 IP 配额**；两者都用完时玩家看到“免费消息已用完，输入邀请码继续”（访客则是“注册即送 10 条免费消息，可以和任何角色聊”）；③赠送**每个已验证邮箱终身最多一次**：只保存规范化邮箱的带密钥 HMAC（`web_bonus_emails`），**删除账号后这一条仍然保留**（隐私政策里已写明），删除后用同一邮箱重新注册不再赠送；④同一 IP 每个 UTC 日最多 **3 次成功注册**（`WEB_LIMITS.signupsPerIpPerDay`）：请求验证码时先检查，完成注册时在同一事务里再检查并计数，超出返回 429 `PLAYER_SIGNUP_IP_LIMIT`（带 `retryAfterMs`，页面显示“这个网络今天的注册次数已用完，请明天再试”，而不是通用的“操作太频繁了”）；原有的邮箱/IP 限流和 Turnstile 不变。邀请玩家不受影响（不领赠送，限额与原来相同）。准入顺序：计数器试聊（第 1–3 条）→ 额外试聊（第 4–5 条）→ 注册赠送 → 否则原有的 `TRIAL_EXHAUSTED` / `TRIAL_EXPIRED`；预算预占、幂等与结算规则不变（赠送与额外试聊是 `entitled` 操作）。开启后不再给第 3 条试聊回复附带“试聊结束”页脚（它不再是最后一条）。**为什么分两种试聊：** `web_principals.trial_*` 与 IP 窗口表被迁移 100 的 CHECK 限制在 3，十二张表引用 `web_principals`，已部署的 Durable Object 无法关闭外键重建，所以前三条沿用原计数器，后两条和赠送用派生记账（`web_free_operations`：每条操作一行，剩余额度 = 上限 − 状态为 reserved/used 的行，失败或取消的操作 `released` 不计，没有会漂移的计数器）。`trial_extra` 行带有 IP 的带密钥哈希并在清理后保留（与 `web_ip_lifetime_quota` 一样，清理不能重置某个 IP 的终身额度），`bonus` 行随玩家删除。
@@ -196,6 +197,12 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 - **密钥轮换：** 轮换 `REQUEST_KEY` 会让所有邮箱重新有资格领取赠送；轮换 IP 密钥会重置所有按 IP 的配额。正常部署都不轮换这两个密钥。
 
 **迁移 121（`121_signup_bonus.sql`，sha256 `f0fa334dbb0ac155d5421792e612438b722b9882fc8ff11a145e34e705fef8d9`）：** 新增 `web_bonus_emails`、`web_signup_bonus`、`web_free_operations`、`web_signup_ip_daily`。Node：`user_version=121`，已有 provider 实例运行 `scripts/web-provider.ts migrate-signup-bonus <root>`（新实例的 `migrate` 一路到 121）；Cloudflare：账本版本 121，已在 120 的权威启动时自动补上，**共 46 步**（`expected-migrations`：inline 与 R2 各 46，121 在两边是同一份 SQL）。需要把 121 加进的版本白名单：`web-identity.ts`（三处）、`web-admission.ts`（四处）、`web-retention.ts`、`web-stage-queue.ts`（两处）、`web-vertical-publisher.ts`、`web-v7-request.ts`、`platform/store.ts`（`WEB_SIGNUP_BONUS_SCHEMA`，三处）、`cloudflare/web-store.ts`（版本列表 22 项）、`workers/web-cloudflare/migrations.ts`、`scripts/web-provider.ts`、`web-provider-migration.ts`（`migrateWebProviderSignupBonus`）。逐字节相同的旧步骤有哈希测试保护；先以 `SIGNUP_BONUS_ENABLED=false` 部署，确认账本 `matches:true`，再打开。
+
+**测试对话与匿名存档（`CHAT_REVIEW_ENABLED`，Part 19）：** 打开后：①后台侧边栏「运营 → 测试对话」（权限 `conversations.read` = 查看测试对话，默认只有主管理员，不在 共创写手／运营 预设里，只在 全部 里）列出每个“角色名-四位编号”的对话（进行中和已删除），可按角色、进行中／已删除筛选，按最近活动排序；点开看全文（玩家文字、角色最终气泡、角色主动消息、失败回复及错误码、“审核改动”标记，时间为角色当地时间，分页），可导出一个对话或一个角色全部对话的 CSV（列：label,time,speaker,text,status,error_code,审核改动）。只显示匿名编号：不返回邮箱（含掩码）、昵称、任何 principal／玩家／世界／会话／操作 id、IP 哈希、邀请码、记忆或语音；玩家的当前和曾用昵称在文字里一律替换为〔昵称〕。每次列表、详情、导出写一条 `web_admin_audit`（操作者、动作、标签、时间，不含内容）。路由在 `web-admin-read.ts` 的只读预算（每分钟 300 次）里。②编号 4 位，字母表去掉 0/O、1/I/L，随机分配（不由任何 id、邮箱、IP、邀请推导），同一玩家的各角色相同，与现用编号和仍在存档里的编号都不重复；第一次被列出时才分配，存档时缺则补。③玩家的聊天被删除时（删除账号、清除本设备的体验数据、访客试玩／宽限结束后的清理、180 天不活跃清理）：在**开始清理的同一个事务里**（T1，清除任何内容之前）把文字复制进匿名存档（昵称先替换），之后才清除；重启后接着做的清理不会重复存档；存档行 180 天后由闹钟里的清理任务批量删除，没有别的东西删除或修改它，玩家侧接口读不到它。关闭开关时什么都不存档，删除和以前一模一样。④玩家侧：聊天页顶部一次性提示（可关闭，关闭状态按玩家存在服务端，随玩家删除），隐私政策第 2、5 节和删除确认单的 180 天说明；发送从不受影响。静态隐私页无法随开关变化，所以两句隐私政策**无条件**写入（开关打开后即为事实，上线时会打开）；提示条和确认单里的句子随开关。
+
+**迁移 122（`122_chat_review.sql`，sha256 `5a81455c85a05c9095d66eb50803acefc1d2c2f6b0a478891e733d1471eec950`）：** 新增 `web_review_codes`、`web_review_notice`、`web_review_archive`。Node：`user_version=122`，已有 provider 实例运行 `scripts/web-provider.ts migrate-chat-review <root>`（新实例的 `migrate` 一路到 122）；Cloudflare：账本版本 122，已在 121 的权威启动时自动补上，**共 47 步**（`expected-migrations`：inline 与 R2 各 47，122 在两边是同一份 SQL，118–121 的哈希不变）。需要把 122 加进的版本白名单：`web-identity.ts`（三处）、`web-admission.ts`（四处）、`web-retention.ts`、`web-stage-queue.ts`（两处）、`web-vertical-publisher.ts`、`web-v7-request.ts`、`platform/store.ts`（`WEB_CHAT_REVIEW_SCHEMA`，三处）、`cloudflare/web-store.ts`（版本列表 23 项）、`workers/web-cloudflare/migrations.ts`、`scripts/web-provider.ts`、`web-provider-migration.ts`（`migrateWebProviderChatReview`）。先以 `CHAT_REVIEW_ENABLED=false` 部署，确认账本 `matches:true`，再打开。回退：把开关改回 `false`——存档里已有的行仍会在 180 天后被清理，不需要迁移。
+
+**注册时的 18 周岁勾选（`LEGAL_PAGES_ENABLED`，Part 19）：** 注册弹窗在“发送验证码”上方多一个必选的“我已年满 18 周岁”；注册请求带 `adult:true`，开关打开时服务端没有它就拒绝（400 `AGE_CONFIRMATION_REQUIRED`）。不存储，也不改变别处（首页、开始页、准入都不检查年龄）。开关关闭：没有勾选，注册和以前一样。
 
 **账号删除怎么保证安全（`ACCOUNT_DELETE_ENABLED`）：** `POST /account/delete`，体 `{ "password", "confirm" }`；有登录的玩家必须提供密码并输入“删除”，没有登录的访客 `password` 为空串、`confirm` 为“清除”；没有登录的受邀玩家不能用这个入口（先绑定邮箱）。CSRF / 来源检查、一次一用的会话校验与登录一致；错误密码计入与改密码相同的限流（每个玩家 15 分钟 5 次）并按 IP 限流（30 次）。在**一个事务**里：撤销受邀玩家的授权、凭据和回执，结束该玩家的全部会话，写一条审计（`web_admin_audit`：动作名 + 玩家的 HMAC 假名前 16 位 + 时间，不含内容、邮箱、昵称或 id），并开始清理的 T1（隔离内容、释放预占，运行中的操作按原规则收尾，UNKNOWN 的外部调用保持 UNKNOWN，不重试、不释放）。事务提交后同一请求继续 T2（清库）与 F（删 R2 语音）；这两步任何失败都不会让删除变成报错——保留状态是 `purging`，闹钟会接着完成。清理后的审计（`auditWebLifecycleWorld`）对受邀玩家额外要求：世界里不能留下未撤销的授权；已撤销的授权行只留 id 与时间，作为 `shells`。
 

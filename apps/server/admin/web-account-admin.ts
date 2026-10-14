@@ -131,6 +131,7 @@ export class WebAccountAdmin extends WebInviteAdmin {
   private readonly id: () => string;
   private readonly passwords: typeof adminPasswords;
   private readonly mail: AdminMailer | undefined;
+  private readonly chatReview: boolean;
   private hashing = false;
   constructor(
     store: BusinessStore,
@@ -141,6 +142,8 @@ export class WebAccountAdmin extends WebInviteAdmin {
       passwords?: typeof adminPasswords;
       random?: (size: number) => Buffer;
       nextId?: () => string;
+      /** What GET /admin/session tells the page about the Part 19 switch (absent while it is off). */
+      features?: { chatReview?: boolean };
     } = {},
   ) {
     super(store, clock, origin, options.random, options.nextId);
@@ -151,6 +154,7 @@ export class WebAccountAdmin extends WebInviteAdmin {
     this.id = options.nextId ?? randomUUID;
     this.passwords = options.passwords ?? adminPasswords;
     this.mail = options.mailer;
+    this.chatReview = options.features?.chatReview === true;
     installWebAdminSchema(store);
   }
   private at() {
@@ -186,7 +190,12 @@ export class WebAccountAdmin extends WebInviteAdmin {
   override session(cookie: unknown) {
     const session = super.session(cookie),
       member = this.current(cookie);
-    return { ...session, member: publicMember(member), emailDeliveryAvailable: !!this.mail };
+    return {
+      ...session,
+      member: publicMember(member),
+      emailDeliveryAvailable: !!this.mail,
+      ...(this.chatReview ? { features: { chatReview: true as const } } : {}),
+    };
   }
   override authorize(cookie: unknown, csrf: unknown, origin: unknown) {
     const auth = super.authorize(cookie, csrf, origin),

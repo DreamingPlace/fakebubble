@@ -1,5 +1,6 @@
 import { CharacterAdminClient } from './character-admin-api.ts';
 import { CocreationAdminClient } from './cocreation-admin-api.ts';
+import { ConversationsAdminClient } from './conversations-admin-api.ts';
 import { PreviewAdminClient } from './preview-admin-api.ts';
 import { InviteAdminApi } from './invite-admin-api.ts';
 import { InviteLocalApiError } from './invite-local-api.ts';
@@ -23,6 +24,8 @@ export type AccountAdminSession = {
   expiresAt: number;
   member: AdminMember;
   emailDeliveryAvailable: boolean;
+  /** CHAT_REVIEW_ENABLED: only present while the 测试对话 page exists. */
+  features?: { chatReview: true };
 };
 export type AdminGrant = {
   id: string;
@@ -101,6 +104,7 @@ export class AccountAdminApi extends InviteAdminApi {
     (path, body) => this.request('/eval-sets/' + path, body),
   );
   readonly cocreation = new CocreationAdminClient((path, body) => this.request('/cocreation/' + path, body));
+  readonly conversations = new ConversationsAdminClient((path, body) => this.request('/conversations/' + path, body));
   constructor(fetcher?: typeof fetch) {
     super(fetcher, '/api/web/provider/admin');
   }
@@ -143,6 +147,7 @@ export class AccountAdminApi extends InviteAdminApi {
       expiresAt: time(row.expiresAt),
       member: member(row.member),
       emailDeliveryAvailable: row.emailDeliveryAvailable,
+      ...(object(row.features ?? {}).chatReview === true ? { features: { chatReview: true as const } } : {}),
     };
     this.csrf = active.csrf;
     return active;

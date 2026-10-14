@@ -7,6 +7,8 @@ import type { PrivateBucket, MediaObjectReference } from '../../../apps/server/c
 import { DomainError } from '../../../packages/domain/errors.ts';
 import { requireWebContent } from '../../../apps/server/admission/web-retention.ts';
 import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
+import { reviewCodeFor } from '../../../apps/server/review/web-chat-review.ts';
+import { reviewState } from './review-state.ts';
 
 /** Test-only fault injection around actual R2 operations. Never a production entrypoint. */
 export class WebRetentionFixture extends WebBusinessFixture {
@@ -270,7 +272,44 @@ export class WebRetentionFixture extends WebBusinessFixture {
           now,
         );
         value = { seeded: true };
-      } else if (path === '/retention/last-seen') {
+      } else if (path === '/retention/review-seed') {
+        // Part 19: a second 名片 revision with this nickname, plus the player's review code and banner mark.
+        const seed = input as { name?: string };
+        const revision =
+          // Revisions from 100 up, so seed-logins (which writes revision 1) can run before or after this.
+          Math.max(
+            99,
+            this.store.get<{ r: number | null }>(
+              'SELECT max(revision) r FROM player_profile_versions WHERE world_id=?',
+              principal!.world_id,
+            )?.r ?? 0,
+          ) + 1;
+        this.store.run(
+          'INSERT INTO player_profile_versions(world_id,revision,profile_json,updated_at) VALUES (?,?,?,?)',
+          principal!.world_id,
+          revision,
+          JSON.stringify({
+            name: seed.name ?? '阿泡',
+            age: null,
+            city: '',
+            occupation: '',
+            familyBackground: '',
+            sharedCharacterIds: [],
+          }),
+          this.clock.now(),
+        );
+        value = { code: reviewCodeFor(this.store, input.principalId, this.clock.now()) };
+        this.store.run('INSERT INTO web_review_notice VALUES (?,?)', input.principalId, this.clock.now());
+      } else if (path === '/retention/begin-only') {
+        // Only the transaction that starts the purge (T1): the process "dies" before the world is cleared.
+        this.cleaner.markExpired(input.principalId);
+        value = { begun: true };
+      } else if (path === '/retention/restart') {
+        // A restarted object: a new cleaner over the same storage.
+        this.cleaner = new WebCloudRetention(this.store, this.clock);
+        value = { restarted: true };
+      } else if (path === '/retention/review-state') value = reviewState(this.store);
+      else if (path === '/retention/last-seen') {
         // Fix-up 11f: age (or refresh) an existing login's last_seen_at.
         this.store.run(
           'UPDATE web_player_logins SET last_seen_at=? WHERE principal_id=?',

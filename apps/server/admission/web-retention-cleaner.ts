@@ -9,6 +9,7 @@ import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } 
 import { auditWebLifecycleWorld } from './web-lifecycle-audit.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
+import { archivePlayerChats, chatReviewTablesExist, sweepReviewArchive } from '../review/web-chat-review.ts';
 import {
   guestPurgeDue,
   PLAYER_INACTIVE_MS,
@@ -65,6 +66,8 @@ export class WebRetentionCleaner {
   sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit >= 1 && limit <= 64, 'WEB_RETENTION_SWEEP_INVALID');
     const now = this.now();
+    // Part 19: anonymous review archive rows past their 180 days go (independent of the flag).
+    sweepReviewArchive(this.store, now);
     // A guest with an email login is kept at trial end and purged only when inactive (web-player-purge.ts).
     const due = guestPurgeDue(this.store, now);
     const principals = this.store.all<{ principal_id: string }>(
@@ -115,6 +118,10 @@ export class WebRetentionCleaner {
             : (row.state === 'active' || row.state === 'unstarted') && lastSeen + PLAYER_INACTIVE_MS <= now),
         'WEB_RETENTION_NOT_EXPIRED',
       );
+      // Part 19 (flag CHAT_REVIEW_ENABLED): the anonymous transcript copy is made in the transaction that starts the purge,
+      // before anything is cleared; a resumed purge returned above ('purging') and never archives twice.
+      if (this.store.chatReview === true && chatReviewTablesExist(this.store))
+        archivePlayerChats(this.store, principalId, row.world_id, now);
       ensure(
         this.store.run(
           // The table only allows a purging row that has a trial window; a never-started guest gets a one-ms one.

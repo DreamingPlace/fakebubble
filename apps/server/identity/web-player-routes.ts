@@ -62,7 +62,13 @@ export async function routeWebPlayerAccounts(
     };
   }
   if (action === 'signup' || action === 'bind') {
-    const body = object(req.body, ['challengeId', 'password', 'nickname']);
+    // With the legal pages on, the signup request also carries adult:true ("我已年满 18 周岁"); without them the body is as before.
+    const body = object(
+      req.body,
+      action === 'signup' && accounts.legalPagesOn
+        ? ['challengeId', 'password', 'nickname', ...(req.body && Object.hasOwn(req.body, 'adult') ? ['adult'] : [])]
+        : ['challengeId', 'password', 'nickname'],
+    );
     const result = await accounts.complete({
       challengeId: body.challengeId,
       password: body.password,
@@ -70,6 +76,7 @@ export async function routeWebPlayerAccounts(
       session: session(req),
       purpose: action,
       ipHash,
+      adult: body.adult,
     });
     // The same token goes out again so the cookie gains the long (400-day) lifetime a login session has.
     return {
@@ -122,6 +129,10 @@ export async function routeWebPlayerAccounts(
       ipHash,
     });
     return { status: 200, clearPlayerCookie: true, body: result };
+  }
+  if (action === 'review-notice-close') {
+    object(req.body, []);
+    return { status: 200, body: accounts.closeReviewNotice(session(req)) };
   }
   if (action === 'logout-others') {
     object(req.body, []);

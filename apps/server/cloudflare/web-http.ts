@@ -229,7 +229,7 @@ export class WebProviderHTTP {
       };
       const result =
         (await routeWebPlayerAccounts(path.startsWith(`${API}/account/`) ? app.playerAccounts : null, input)) ??
-        (await routeWebAccountAdmin(app.inviteAdmin, input, app.characterAdmin, app.cocreation)) ??
+        (await routeWebAccountAdmin(app.inviteAdmin, input, app.characterAdmin, app.cocreation, app.chatReview)) ??
         routeWebCocreation(app.cocreation, input) ??
         routeWebInvite(app.inviteActions, input, app.inviteAdmin);
       if (/\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(review-start|run-start|delete-start)$/.test(localPath))

@@ -3,12 +3,14 @@ import type { WebAccountAdmin } from './web-account-admin.ts';
 import type { WebInviteRequest, WebInviteResult } from '../invites/web-invite-routes.ts';
 import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
 import type { WebCocreation } from '../cocreation/web-cocreation.ts';
+import type { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 
 export async function routeWebAccountAdmin(
   admin: WebAccountAdmin,
   req: WebInviteRequest,
   characters?: WebCharacterAdmin,
   cocreation?: WebCocreation,
+  chatReview?: WebChatReviewAdmin | null,
 ): Promise<WebInviteResult | null> {
   const base = '/api/web/local/admin',
     path = req.path;
@@ -35,6 +37,22 @@ export async function routeWebAccountAdmin(
     const { cookie, ...session } = result;
     return { status: 200, body: session, issuedAdminCookie: cookie };
   };
+  // Part 19 (CHAT_REVIEW_ENABLED): with the flag off these paths are not routes at all - they fall through like any unknown path.
+  if (chatReview && path.startsWith(`${base}/conversations/`)) {
+    auth();
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/conversations/`.length);
+    if (action === 'list')
+      return { status: 200, body: chatReview.list(actor, body(['characterId', 'scope', 'page']) as never) };
+    if (action === 'detail')
+      return {
+        status: 200,
+        body: chatReview.detail(actor, body(['characterId', 'code', 'archived', 'page']) as never),
+      };
+    if (action === 'export')
+      return { status: 200, body: chatReview.export(actor, body(['characterId', 'code', 'archived']) as never) };
+    ensure(false, 'NOT_FOUND');
+  }
   if (path.startsWith(`${base}/cocreation/`)) {
     auth();
     ensure(cocreation, 'NOT_FOUND');

@@ -484,6 +484,7 @@ export class WebProviderServer {
             input,
             this.application.characterAdmin,
             this.application.cocreation,
+            this.application.chatReview,
           )) ??
           routeWebCocreation(this.application.cocreation, input) ??
           routeWebInvite(this.inviteActions, input, this.inviteAdmin);

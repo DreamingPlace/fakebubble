@@ -1,4 +1,5 @@
 import type { BusinessStore } from '../platform/store-contract.ts';
+import { purgeReviewRows, reviewRowsRemain } from '../review/web-chat-review.ts';
 
 export { GUEST_GRACE_MS } from '../../../config/web-public.ts';
 
@@ -75,6 +76,8 @@ export function purgePlayerLogins(
     store.run("DELETE FROM web_free_operations WHERE tier='bonus' AND principal_id=?", scope.principalId);
     store.run('DELETE FROM web_signup_bonus WHERE principal_id=?', scope.principalId);
   }
+  // Part 19: the player's live review code and banner mark go with the player (the archive copy carries no identity).
+  purgeReviewRows(store, scope.principalId);
   if (!playerLoginsExist(store)) return;
   const login = store.get<{ email_norm: string }>(
     'SELECT email_norm FROM web_player_logins WHERE principal_id=?',
@@ -89,6 +92,7 @@ export function purgePlayerLogins(
 export function playerLoginsRemain(store: Pick<BusinessStore, 'get'>, principalIds: string[]) {
   if (principalIds.length === 0) return false;
   const marks = principalIds.map(() => '?').join(',');
+  if (reviewRowsRemain(store, principalIds)) return true;
   if (
     tableExists(store, 'web_signup_bonus') &&
     (store.get(`SELECT 1 FROM web_signup_bonus WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds) ||

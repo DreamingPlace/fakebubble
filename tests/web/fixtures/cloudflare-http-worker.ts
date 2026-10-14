@@ -47,6 +47,7 @@ import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts
 import type { AlarmStorage } from '../../../apps/server/cloudflare/queue-alarm.ts';
 import type { PrivateBucket } from '../../../apps/server/cloudflare/media-objects.ts';
 import { WebCloudExecutor } from '../../../apps/server/cloudflare/web-executor.ts';
+import { reviewState } from './review-state.ts';
 import { WebProviderApplication } from '../../../apps/server/generation/web-provider-application.ts';
 import { WebProviderHTTP } from '../../../apps/server/cloudflare/web-http.ts';
 import { auditWebLifecycleWorld } from '../../../apps/server/admission/web-lifecycle-audit.ts';
@@ -439,6 +440,17 @@ export class WebHTTPFixture extends WebBusinessFixture {
         emails: this.store.all('SELECT email_hmac FROM web_bonus_emails'),
         ipDaily: this.store.all('SELECT day,signups FROM web_signup_ip_daily'),
       });
+    }
+    if (path === '/fixture/review-state') return Response.json(reviewState(this.store));
+    if (path === '/fixture/review-age') {
+      // Part 19: let `ms` pass for the anonymous archive (archived_at and expires_at move together, so the 180-day rule holds).
+      const { ms } = (await request.json()) as { ms: number };
+      this.store.run('UPDATE web_review_archive SET archived_at=archived_at-?,expires_at=expires_at-?', ms, ms);
+      return Response.json({ aged: true });
+    }
+    if (path === '/fixture/review-sweep') {
+      await new WebCloudRetention(this.store, this.clock).sweep();
+      return Response.json({ swept: true });
     }
     if (path === '/fixture/audit-world') {
       // The same fail-closed lifecycle audit the cleaner ends with: it throws while anything private is left.

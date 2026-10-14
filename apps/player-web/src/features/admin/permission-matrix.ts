@@ -61,6 +61,17 @@ export const PERMISSION_GROUPS: readonly Group[] = [
       },
     ],
   },
+  {
+    id: 'conversations',
+    title: '测试对话',
+    items: [
+      {
+        item: 'conversations.read',
+        name: '查看测试对话',
+        help: '阅读玩家与角色的聊天全文（只显示匿名编号，不显示邮箱和昵称）。默认只有主管理员；需要打开 CHAT_REVIEW_ENABLED。',
+      },
+    ],
+  },
 ];
 const NAMES = new Map(PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => [i.item, i.name] as const)));
 const named = (items: readonly AdminPermissionItem[]) => items.map((i) => `「${NAMES.get(i) ?? i}」`).join('、');
@@ -102,11 +113,13 @@ const sameSet = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => a.size === b.size &
 export function permissionMatrixEditor(
   root: HTMLElement,
   initial: readonly AdminPermission[],
-  options: { cocreation?: boolean } = {},
+  options: { cocreation?: boolean; conversations?: boolean } = {},
 ) {
   const base = decompose(initial);
   const state = new Set<AdminPermissionItem>(base.items);
-  const shown = (item: AdminPermissionItem) => options.cocreation !== false || !item.startsWith('cocreation.');
+  const shown = (item: AdminPermissionItem) =>
+    (options.cocreation !== false || !item.startsWith('cocreation.')) &&
+    (options.conversations === true || !item.startsWith('conversations.'));
   const boxes = new Map<AdminPermissionItem, HTMLInputElement>();
   const legacyBoxes = new Map<AdminPermission, HTMLInputElement>();
   let touched = false;

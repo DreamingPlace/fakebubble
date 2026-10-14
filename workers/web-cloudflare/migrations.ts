@@ -21,6 +21,7 @@ import m118 from '../../apps/server/web-migrations/118_player_logins.sql';
 import m119 from '../../apps/server/web-migrations/119_preview_workbench.sql';
 import m120 from '../../apps/server/web-migrations/120_memory_metadata_metrics.sql';
 import m121 from '../../apps/server/web-migrations/121_signup_bonus.sql';
+import m122 from '../../apps/server/web-migrations/122_chat_review.sql';
 import retention from './retention.sql';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -66,6 +67,7 @@ export const webMigrations = [
     m119,
     m120,
     m121,
+    m122,
   ].map((sql, i) => ({
     version: 100 + i,
     sql:

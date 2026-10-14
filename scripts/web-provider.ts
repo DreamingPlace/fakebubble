@@ -16,6 +16,7 @@ import {
   migrateWebProviderPreviewWorkbench,
   migrateWebProviderMemoryMetrics,
   migrateWebProviderSignupBonus,
+  migrateWebProviderChatReview,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -78,7 +79,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→121 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→122 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -115,8 +116,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderPreviewWorkbench(store);
     migrateWebProviderMemoryMetrics(store);
     migrateWebProviderSignupBonus(store);
+    migrateWebProviderChatReview(store);
     return {
-      schema: 121,
+      schema: 122,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -259,6 +261,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-preview-workbench',
       'migrate-memory-metrics',
       'migrate-signup-bonus',
+      'migrate-chat-review',
       'render-assets',
       'admin-grant',
       'serve',
@@ -382,6 +385,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderSignupBonus(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 121, signupBonus: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-chat-review') {
+    // An existing provider-* instance at schema 121 gains the tester chat review tables.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderChatReview(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 122, chatReview: true }) + '\n');
     } finally {
       store.close();
     }
