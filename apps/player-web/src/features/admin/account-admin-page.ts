@@ -384,6 +384,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (page === 'ops' && session.member.role === 'owner' && port.stageLatency) return () => ops.load();
     return null;
   };
+  /** The newest load a click asked for while something else was running; it starts when that run ends. */
+  let queuedLoad: (() => Promise<void>) | null = null;
   const run = async (work: () => Promise<void>) => {
     if (busy || disposed) return;
     busy = true;
@@ -409,7 +411,19 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     } finally {
       busy = false;
       if (!disposed) render();
+      const next = queuedLoad;
+      queuedLoad = null;
+      if (next && !disposed) void run(next);
     }
+  };
+  /**
+   * A click that opens something is never dropped: it runs now, or, when another run is in flight, waits for it (only
+   * the newest waiting load is kept, and never two run at once). The work itself must check it is still wanted.
+   */
+  const runLatest = (work: () => Promise<void>) => {
+    if (disposed) return;
+    if (busy) queuedLoad = work;
+    else void run(work);
   };
   const listen = (element: HTMLElement, event: string, callback: (event: Event) => void) => {
     element.addEventListener(event, callback);
@@ -493,8 +507,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const picker = rolePicker(previewSplit.list, {
     emptyText: '没有可预演的角色。预演需要“查看角色”和“预演测试”权限。',
     onPick: (characterId) => {
-      if (busy || disposed || !navigate('preview', characterId)) return;
-      void run(() => previewBench!.open(characterId));
+      if (disposed || !navigate('preview', characterId)) return;
+      // Still the picked role when its turn comes (a later pick, or leaving the page, replaces this one).
+      runLatest(async () => {
+        if (page === 'preview' && routeId === characterId) await previewBench!.open(characterId);
+      });
     },
   });
   previewBench = port.previews

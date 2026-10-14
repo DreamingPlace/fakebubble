@@ -306,7 +306,12 @@ export function applyTextReview(
     'INVALID_REVIEW_SCHEMA',
   );
   ensure(value.decision === 'accept' || value.decision === 'reject', 'INVALID_REVIEW_SCHEMA');
-  ensure(value.decision === 'accept', 'TEXT_REVIEW_REJECTED');
+  // A "reject" that still hands over publishable replacement bubbles is an "accept" of those bubbles: the model used the
+  // wrong word for a rewrite. Everything below (schema, presentation, coverage, topics, facts, ...) still applies to it
+  // unchanged, so a bad replacement fails with the same code as before. "reject" with no bubbles stays rejected.
+  const decisionNormalized =
+    value.decision === 'reject' && Array.isArray(value.replacementBubbles) && value.replacementBubbles.length > 0;
+  ensure(value.decision === 'accept' || decisionNormalized, 'TEXT_REVIEW_REJECTED');
   ensure(Array.isArray(value.replacementBubbles), 'INVALID_REVIEW_SCHEMA');
   const coverage = value.coverage ?? {},
     sourceUsage = value.sourceUsage ?? {};
@@ -445,6 +450,7 @@ export function applyTextReview(
     candidate = retryWithoutMetadata(build, error);
   }
   candidate.reviewChanged = value.replacementBubbles.length > 0;
+  if (decisionNormalized) candidate.reviewDecisionNormalized = true;
   return candidate;
 }
 

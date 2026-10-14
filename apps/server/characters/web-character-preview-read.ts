@@ -114,6 +114,7 @@ function finalOf(resultJson: string | null) {
     mode: reply.mode ?? null,
     endsSession: reply.endsSession === true,
     reviewChanged: reply.reviewChanged === true,
+    reviewDecisionNormalized: reply.reviewDecisionNormalized === true,
     coverage: [
       ...covered.map((messageId) => ({ messageId, status: 'answered' })),
       ...later.map((messageId) => ({ messageId, status: 'later' })),

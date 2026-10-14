@@ -28,6 +28,7 @@ export function mountChatMenu(button: HTMLElement, host: HTMLElement, items: () 
     if (!menu) return;
     menu.remove();
     menu = null;
+    host.classList?.remove('menu-open');
     button.setAttribute('aria-expanded', 'false');
     document.removeEventListener?.('pointerdown', onDocument);
     document.removeEventListener?.('keydown', onKey, true);
@@ -53,6 +54,8 @@ export function mountChatMenu(button: HTMLElement, host: HTMLElement, items: () 
       list.append(entry);
     }
     host.append(list);
+    // A host that is itself a stacking context (the top bar) is lifted above every card while its menu is open.
+    host.classList?.add('menu-open');
     menu = list;
     button.setAttribute('aria-expanded', 'true');
     document.addEventListener?.('pointerdown', onDocument);

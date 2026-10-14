@@ -36,6 +36,8 @@ export type PreviewRow = {
     mode: string | null;
     endsSession: boolean;
     reviewChanged: boolean;
+    /** The reviewer said reject but gave publishable bubbles; they were published as an accept. */
+    reviewDecisionNormalized?: boolean;
     coverage: { messageId: string; status: 'answered' | 'later' | 'needs_player' }[];
     topics: unknown[];
     factOps: unknown[];
@@ -185,6 +187,7 @@ export function previewRow(v: unknown): PreviewRow {
       mode: nstring(f.mode),
       endsSession: f.endsSession === true,
       reviewChanged: f.reviewChanged === true,
+      reviewDecisionNormalized: f.reviewDecisionNormalized === true,
       coverage: rows(f.coverage).map((c) => {
         const x = object(c);
         const s = string(x.status);

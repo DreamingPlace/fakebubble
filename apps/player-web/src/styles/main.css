@@ -65,6 +65,10 @@ textarea:focus-visible,
   position: relative;
   z-index: 2;
 }
+/* The bar is a stacking context below the cards (100+); while one of its menus is open it sits above all of them. */
+.site-head.menu-open {
+  z-index: 500;
+}
 .brand {
   display: flex;
   align-items: center;
