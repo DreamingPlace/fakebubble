@@ -18,6 +18,7 @@ const actions = [
   'budget-initialize',
   'status',
   'inspect',
+  'renew-prices',
   'budget-summary',
   'admin-grant',
   'admin-recovery-grant',
@@ -44,6 +45,8 @@ interface Operator {
   status(): Promise<unknown>;
   /** Optional only so an older binding fails closed with a clear code instead of a TypeError. */
   inspect?(): Promise<unknown>;
+  /** Optional for the same reason as inspect. */
+  renewPrices?(): Promise<unknown>;
   summary(): Promise<unknown>;
   adminGrant(): Promise<unknown>;
   inviteGrants(inviteId: string): Promise<unknown>;
@@ -251,6 +254,10 @@ export async function runWebOperator(prepared: Prepared, getProxy: GetProxy, con
       case 'inspect':
         ensure(operator.inspect, 'WEB_OPERATOR_INSPECT_UNSUPPORTED');
         result = await operator.inspect();
+        break;
+      case 'renew-prices':
+        ensure(operator.renewPrices, 'WEB_OPERATOR_RENEW_PRICES_UNSUPPORTED');
+        result = await operator.renewPrices();
         break;
       case 'budget-summary':
         result = await operator.summary();

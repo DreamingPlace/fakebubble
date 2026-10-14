@@ -1,5 +1,6 @@
 import type { Clock } from '../../../packages/contracts/index.ts';
 import type { WebAlertConfig } from '../../../config/web-public.ts';
+import { PROVIDER_PRICES } from '../generation/web-provider-configuration.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 
 /**
@@ -22,11 +23,15 @@ export const ALERT_TYPES = [
   'budget-cap',
   'email-cap',
   'validation-rate',
+  'price-expiry',
 ] as const;
 export type AlertType = (typeof ALERT_TYPES)[number];
 
 export const HOUR_MS = 3_600_000;
 export const ALERT_COOLDOWN_MS = 6 * HOUR_MS;
+const DAY_MS = 24 * HOUR_MS;
+const PRICE_WARNING_MS = 7 * DAY_MS;
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const BUCKET_MS = 600_000; // errors are counted in 10-minute buckets; "the last hour" is the last 6 buckets
 
 export interface AlertState {
@@ -143,6 +148,21 @@ export class WebAlerts {
       );
     return total;
   }
+  /** The earliest "latest valid_until" over the prices the current code uses; null before any price is stored. */
+  private earliestPriceExpiry(): number | null {
+    if (!this.has('web_provider_prices')) return null;
+    let earliest: number | null = null;
+    for (const price of PROVIDER_PRICES) {
+      const row = this.d.store.get<{ latest: number | null }>(
+        'SELECT MAX(valid_until) latest FROM web_provider_prices WHERE provider=? AND model=? AND phase=?',
+        price.provider,
+        price.model,
+        price.phase,
+      );
+      if (row?.latest != null && (earliest === null || row.latest < earliest)) earliest = row.latest;
+    }
+    return earliest;
+  }
   private unknownCounts() {
     const one = (table: string, column: string) =>
       this.has(table) ? this.count(`SELECT count(*) n FROM ${table} WHERE ${column}='unknown'`) : 0;
@@ -192,6 +212,7 @@ export class WebAlerts {
       'budget-cap': '预算接近上限',
       'email-cap': '验证邮件已达当日上限',
       'validation-rate': '回复失败率偏高',
+      'price-expiry': '供应商价格即将到期',
     };
 
     await attempt('errors', async () => {
@@ -259,6 +280,18 @@ export class WebAlerts {
         : null;
     });
 
+    await attempt('price-expiry', async () => {
+      const earliest = this.earliestPriceExpiry();
+      return earliest !== null && earliest - now < PRICE_WARNING_MS
+        ? {
+            text:
+              earliest <= now
+                ? `有供应商价格已过期（UTC ${isoDay(earliest)}），新的回复会因缺少价格而失败。请在临时开启 OPERATOR_ENABLED=true 后运行 renew-prices。`
+                : `有供应商价格将在 ${Math.max(1, Math.ceil((earliest - now) / DAY_MS))} 天内到期（UTC ${isoDay(earliest)}）。到期后新的回复会因缺少价格而失败。请在临时开启 OPERATOR_ENABLED=true 后运行 renew-prices。`,
+          }
+        : null;
+    });
+
     // The daily digest: once per UTC day, at or after the configured hour.
     if (new Date(now).getUTCHours() >= c.digestHourUtc) {
       try {
@@ -277,7 +310,8 @@ export class WebAlerts {
             : 0;
           const unknown = this.unknownCounts().total;
           const errors = await this.errorsLastHour(now);
-          const text = `FAKE 泡泡 日报（最近 24 小时）\n回复：${replies} 条\n新注册：${signups} 人\n供应商花费：约 ${money(this.spendSince(since))}\n失败回复：${failures} 条\n结果未知的调用（累计）：${unknown} 条\n最近一小时服务端错误：${errors} 次`;
+          const expiry = this.earliestPriceExpiry();
+          const text = `FAKE 泡泡 日报（最近 24 小时）\n回复：${replies} 条\n新注册：${signups} 人\n供应商花费：约 ${money(this.spendSince(since))}\n失败回复：${failures} 条\n结果未知的调用（累计）：${unknown} 条\n最近一小时服务端错误：${errors} 次${expiry === null ? '' : `\n最早的价格到期：UTC ${isoDay(expiry)}`}`;
           if (await this.deliver('FAKE 泡泡 日报', text)) sent.push('digest');
         }
       } catch {

@@ -30,6 +30,7 @@ import { WebDispatchLedger } from '../../../apps/server/budget/web-dispatch-ledg
 import { fishSpeechRequest } from '../../../workers/audio/fish.ts';
 import { FishAudio } from '../../../workers/audio/fish.ts';
 import { WebProviderExecutor } from '../../../apps/server/generation/web-provider-executor.ts';
+import { PROVIDER_PRICES, renewProviderPrices } from '../../../apps/server/generation/web-provider-configuration.ts';
 import { WebCloudBudgetClient } from '../../../apps/server/cloudflare/web-budget-client.ts';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -1356,4 +1357,131 @@ test('Node deletion migration backfills proof for preexisting known receipts wit
   assert.throws(() => f.store.run('DELETE FROM web_provider_outputs'), /OUTPUT_IMMUTABLE/);
   f.store.all('DROP TRIGGER web_provider_outputs_no_delete');
   assert.throws(() => installWebCharacterDeletion(store), /SCHEMA_MISMATCH/);
+});
+
+// Part 18b: provider price renewal. The first price rows (30 days) are written once at initialization; renew-prices
+// appends contiguous 90-day rows after them and never touches an existing row.
+const DAY = 86_400_000;
+function seedInitialPrices(f: ReturnType<typeof fixture>, validDays = 30) {
+  for (const provider of ['deepseek', 'fish']) f.ledger.configureBudget(provider, 3_000_000);
+  for (const price of PROVIDER_PRICES)
+    f.ledger.configurePrice({
+      id: `${price.provider}-${price.phase}-${now}`,
+      provider: price.provider,
+      model: price.model,
+      phase: price.phase,
+      currency: 'USD',
+      unit: price.unit,
+      upperMicrosPerUnit: price.upper,
+      validFrom: now,
+      validUntil: now + validDays * DAY,
+      version: 1,
+    });
+}
+const priceRows = (f: ReturnType<typeof fixture>) =>
+  f.store.all<{
+    id: string;
+    provider: string;
+    phase: string;
+    valid_from: number;
+    valid_until: number;
+    version: number;
+  }>('SELECT * FROM web_provider_prices ORDER BY provider,phase,valid_from');
+
+test('renew appends contiguous, non-overlapping rows, keeps the old rows byte for byte, and a retry adds nothing', (t) => {
+  const f = fixture(t);
+  seedInitialPrices(f);
+  const before = priceRows(f);
+  const first = renewProviderPrices(f.store as never, now + DAY);
+  assert.deepEqual(
+    first.map((r) => r.result),
+    ['renewed', 'renewed', 'renewed'],
+  );
+  const after = priceRows(f);
+  assert.equal(after.length, before.length * 2);
+  for (const row of before)
+    assert.deepEqual(
+      after.find((r) => r.id === row.id),
+      row,
+      'existing rows are untouched',
+    );
+  for (const old of before) {
+    const next = after.find((r) => r.provider === old.provider && r.phase === old.phase && r.version === 2)!;
+    assert.equal(next.valid_from, old.valid_until, 'contiguous');
+    assert.equal(next.valid_until, old.valid_until + 90 * DAY);
+    assert.match(next.id, new RegExp(`^${old.provider}-.+-${old.phase}-${next.valid_from}$`));
+  }
+  // A retry (even much later, still inside the new window) is not due and adds nothing.
+  assert.deepEqual(
+    renewProviderPrices(f.store as never, now + DAY).map((r) => r.result),
+    ['not-due', 'not-due', 'not-due'],
+  );
+  assert.deepEqual(
+    renewProviderPrices(f.store as never, now + 29 * DAY).map((r) => r.result),
+    ['not-due', 'not-due', 'not-due'],
+  );
+  assert.deepEqual(priceRows(f), after);
+});
+
+test('renew does nothing for a price that still runs more than 60 days ahead', (t) => {
+  const f = fixture(t);
+  seedInitialPrices(f, 100);
+  const before = priceRows(f);
+  const result = renewProviderPrices(f.store as never, now);
+  assert.ok(result.every((r) => r.result === 'not-due' && r.validFrom === null));
+  assert.deepEqual(priceRows(f), before);
+  // At exactly 60 days left it is due.
+  assert.ok(renewProviderPrices(f.store as never, now + 40 * DAY).every((r) => r.result === 'renewed'));
+});
+
+test('an already expired price gets a row that starts now, and the expired row is left as it was', (t) => {
+  const f = fixture(t);
+  seedInitialPrices(f);
+  const before = priceRows(f);
+  const later = now + 45 * DAY;
+  assert.ok(renewProviderPrices(f.store as never, later).every((r) => r.result === 'renewed' && r.validFrom === later));
+  const added = priceRows(f).filter((r) => r.version === 2);
+  assert.equal(added.length, 3);
+  assert.ok(added.every((r) => r.valid_from === later && r.valid_until === later + 90 * DAY));
+  assert.deepEqual(
+    priceRows(f).filter((r) => r.version === 1),
+    before,
+  );
+});
+
+test('a reply admitted just before the old row ends and one just after both price correctly; without renewal the later one fails', (t) => {
+  const draft = PROVIDER_PRICES[0];
+  const end = now + 50_000;
+  const reserveAt = (time: number, renew: boolean) => {
+    const f = fixture(t);
+    for (const provider of ['deepseek', 'fish']) f.ledger.configureBudget(provider, 3_000_000);
+    f.ledger.configurePrice({
+      id: 'old-draft',
+      provider: draft.provider,
+      model: draft.model,
+      phase: 'draft',
+      currency: 'USD',
+      unit: 'token',
+      upperMicrosPerUnit: draft.upper,
+      validFrom: now,
+      validUntil: end,
+      version: 1,
+    });
+    if (renew) renewProviderPrices(f.store as never, now + 10_000);
+    new WebProviderOffline(f.store, { now: () => time }).reserve({
+      ...f.input('draft'),
+      provider: draft.provider,
+      model: draft.model,
+    });
+    return f.store.get<{ price_id: string; held_micros: number }>(
+      'SELECT price_id,held_micros FROM web_provider_attempts',
+    )!;
+  };
+  const before = reserveAt(end - 1, true),
+    after = reserveAt(end, true);
+  assert.equal(before.price_id, 'old-draft');
+  assert.match(after.price_id, new RegExp(`^deepseek-.+-draft-${end}$`));
+  assert.equal(before.held_micros, after.held_micros, 'the renewed row carries the same upper price');
+  // Without a renewal the price has simply ended: the same failure as before this Part.
+  assert.throws(() => reserveAt(end, false), /WEB_PROVIDER_PRICE_REQUIRED/);
 });

@@ -40,6 +40,14 @@ export interface WebUnknownAttempts {
   ids: string[];
   truncated: boolean;
 }
+export interface WebInspectPrice {
+  provider: string;
+  model: string;
+  phase: string;
+  /** The row in force now, or null when none is (an expired price fails closed with WEB_PROVIDER_PRICE_REQUIRED). */
+  inForce: { id: string; validUntil: number } | null;
+  latestValidUntil: number;
+}
 const ID_LIMIT = 200;
 const flag = (value: unknown) => (value === undefined ? null : value === 'true' || value === 'false' ? value : 'other');
 const digestRows = (rows: { version: number; sha256: string }[]): WebMigrationDigest[] =>
@@ -68,6 +76,7 @@ export function inspectWebAuthority(
   flags: WebInspectFlags,
   budget: WebInspectBudget,
   players: WebInspectPlayers = {},
+  now: number = Date.now(),
 ) {
   const has = (name: string) =>
     reader.all<{ n: number }>('SELECT 1 AS n FROM sqlite_master WHERE name=?', name).length > 0;
@@ -112,6 +121,31 @@ export function inspectWebAuthority(
       ),
       embed: unknowns('web_embed_attempts', 'state', 'id'),
     },
+    prices: has('web_provider_prices')
+      ? reader
+          .all<{ provider: string; model: string; phase: string; latest: number }>(
+            'SELECT provider,model,phase,MAX(valid_until) AS latest FROM web_provider_prices GROUP BY provider,model,phase ORDER BY provider,model,phase',
+          )
+          .map(
+            (row): WebInspectPrice => ({
+              provider: row.provider,
+              model: row.model,
+              phase: row.phase,
+              inForce:
+                reader
+                  .all<{ id: string; valid_until: number }>(
+                    'SELECT id,valid_until FROM web_provider_prices WHERE provider=? AND model=? AND phase=? AND valid_from<=? AND valid_until>?',
+                    row.provider,
+                    row.model,
+                    row.phase,
+                    now,
+                    now,
+                  )
+                  .map((p) => ({ id: p.id, validUntil: p.valid_until }))[0] ?? null,
+              latestValidUntil: row.latest,
+            }),
+          )
+      : [],
     ownerAdminExists: has('web_admin_members')
       ? reader.all("SELECT 1 FROM web_admin_members WHERE role='owner' LIMIT 1").length > 0
       : false,

@@ -218,6 +218,17 @@ node scripts/web-cloudflare-operator.ts --action=inspect --receipt-file=/abs/pri
   --business-service=fake-paopao-web-business --budget-service=fake-paopao-web-budget
 ```
 
+### `renew-prices`（供应商价格续期）
+
+供应商价格行（DeepSeek 草稿/审阅、Fish 语音，`web_provider_prices`）有有效期：初始化写入的第一行只有 30 天，过期后所有回复都会以 `WEB_PROVIDER_PRICE_REQUIRED` 失败。`--action=renew-prices` 为当前代码价格表的每一项**追加**一行 90 天的新价格（上限单价与代码一致）：新行从该项最新一行的 `valid_until` 开始（没有行或已过期则从现在开始），行与行首尾相接、从不重叠；已有的行从不修改或删除。行 ID 由（供应商、模型、阶段、起点）派生，重试只会得到“重复”，不会多出一行。最新一行离到期还超过 60 天时什么都不做，报告 `not-due`。管理员预演使用同一张价格表，一并续期；向量（bge-m3）按自己的固定价格记账，不在此表中，不受影响。
+
+认证与 `inspect`、`status` 完全相同：需要**临时**把业务 Worker 的 `OPERATOR_ENABLED` 设为 `true`，用完立即改回 `false`。**每次部署检查清单都运行一次**（未到期时是空操作，所以每次都跑也无妨）。结果只写入私有收据。`inspect` 的 `prices` 一节列出每个（供应商、模型、阶段）当前生效的价格行 ID 与 `valid_until`，以及最新的 `valid_until`（只有数字与 ID）。开启 `ALERTS_ENABLED` 时，任何在用价格 7 天内到期（或已过期）会给 owner 发一封告警（沿用每类 6 小时一封的限制），日报里显示最早的到期日。
+
+```
+node scripts/web-cloudflare-operator.ts --action=renew-prices --receipt-file=/abs/private/renew-prices.json \
+  --business-service=fake-paopao-web-business --budget-service=fake-paopao-web-budget
+```
+
 ### `expected-migrations`（离线期望摘要）
 
 ```
