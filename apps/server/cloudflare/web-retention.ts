@@ -11,6 +11,7 @@ import {
   playerLastSeenAt,
   playerLoginsExist,
   purgePlayerLogins,
+  releasePlayerLogin,
 } from '../identity/web-player-purge.ts';
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { signupBonusTablesExist } from '../admission/web-free-tier.ts';
@@ -23,6 +24,16 @@ import {
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
 import type { MediaObjectReference } from './media-objects.ts';
+
+/** What a failed purge step reports: a fixed step name and a safe code, never an id, an address or an error text. */
+export type RetentionReport = {
+  event: 'web_retention_failed';
+  step: 'sweep' | 'deletion';
+  code: string;
+  failed: number;
+};
+const safeCode = (error: unknown) =>
+  error instanceof DomainError && /^[A-Z][A-Z0-9_]{2,63}$/.test(error.code) ? error.code : 'WEB_RETENTION_FAILED';
 
 type Retention = WebRetentionRow & { db_cleared_at: number | null };
 type ObjectIntent = {
@@ -41,7 +52,10 @@ export class WebCloudRetention {
   lastError: string | null = null;
   /** GUEST_GRACE_ENABLED: a guest without a login is purged at expires_at + graceMs (0 = at expires_at, as before). */
   private readonly graceMs: number;
-  constructor(store: WebRuntimeStore, clock: Clock, graceMs = 0) {
+  /** Part 17f: told (coarse code only) whenever a purge step fails, so it shows in the tail and counts for the owner alerts. */
+  private readonly report: ((report: RetentionReport) => void) | undefined;
+  constructor(store: WebRuntimeStore, clock: Clock, graceMs = 0, report?: (report: RetentionReport) => void) {
+    this.report = report;
     ensure(
       Number.isSafeInteger(graceMs) && graceMs >= 0 && graceMs <= 30 * 24 * 60 * 60_000,
       'WEB_RETENTION_GRACE_INVALID',
@@ -119,8 +133,9 @@ export class WebCloudRetention {
         await this.eraseAudio(principal_id);
       } catch (error) {
         failed++;
-        this.lastError ??= error instanceof DomainError ? error.code : 'WEB_RETENTION_FAILED';
+        this.lastError ??= safeCode(error);
       }
+    if (failed > 0) this.report?.({ event: 'web_retention_failed', step: 'sweep', code: this.lastError!, failed });
     return { processed: rows.length, failed };
   }
   /** The player's own deletion request, step 1 (fence + release): the caller is WebPlayerAccounts.deleteAccount. */
@@ -129,8 +144,14 @@ export class WebCloudRetention {
   }
   /** Step 2 and 3 of the same audited path (T2 database clear, then F file erase). A failure leaves 'purging' for the alarm. */
   async finishDeletion(principalId: string) {
-    this.clearDatabase(principalId);
-    await this.eraseAudio(principalId);
+    try {
+      this.clearDatabase(principalId);
+      await this.eraseAudio(principalId);
+    } catch (error) {
+      // The caller must not turn a deletion into an error page, so it swallows this; the alarm resumes the purge.
+      this.report?.({ event: 'web_retention_failed', step: 'deletion', code: safeCode(error), failed: 1 });
+      throw error;
+    }
   }
   /**
    * T1. reason 'deleted' is the player's own request (删除我的账号 / 清除本设备的体验数据): it replaces the time condition
@@ -167,6 +188,8 @@ export class WebCloudRetention {
         now + 1,
         principalId,
       );
+      // Part 17f: the address is free from here on, whatever happens to the heavier clear that follows.
+      releasePlayerLogin(this.store, principalId);
       for (const operation of this.store.all<{ id: string; ip_window_id: string | null; metering_type: string }>(
         "SELECT * FROM web_operations WHERE principal_id=? AND world_id=? AND quota_state='reserved'",
         principalId,

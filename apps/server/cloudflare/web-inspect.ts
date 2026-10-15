@@ -1,3 +1,5 @@
+import { purgeDiagnostics } from '../identity/web-player-purge.ts';
+
 /** Read-only operator view of the business authority: SELECT statements only, never content or secrets. */
 export interface WebInspectReader {
   all<T>(sql: string, ...params: (string | number)[]): T[];
@@ -146,6 +148,8 @@ export function inspectWebAuthority(
             }),
           )
       : [],
+    // Part 17f, numbers only: unfinished purges, the age of the oldest, and logins that outlived their purge (must be 0).
+    retention: purgeDiagnostics(reader, now),
     ownerAdminExists: has('web_admin_members')
       ? reader.all("SELECT 1 FROM web_admin_members WHERE role='owner' LIMIT 1").length > 0
       : false,

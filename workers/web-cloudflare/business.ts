@@ -205,7 +205,19 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       )
       .digest('hex');
     this.setup = new WebCloudSetup(this.store, this.clock, configHash, env.MATERIAL_PACKAGE_SHA256, this.budgetPolicy);
-    this.retention = new WebCloudRetention(this.store, this.clock, this.publicConfig.graceMs);
+    this.retention = new WebCloudRetention(this.store, this.clock, this.publicConfig.graceMs, (report) => {
+      // Part 17f: a failed purge step is visible in the tail (a fixed code, nothing else) and counts for the owner alerts.
+      console.error(JSON.stringify(report));
+      if (this.alerts) this.context.waitUntil(this.alerts.recordError().catch(() => {}));
+      // The alarm resumes it; make sure one is armed soon even when the deployment is otherwise idle.
+      this.context.waitUntil(
+        (async () => {
+          const at = this.clock.now() + 1000,
+            prior = await this.context.storage.getAlarm();
+          if (prior === null || prior > at) await this.context.storage.setAlarm(at);
+        })().catch(() => {}),
+      );
+    });
     const alertConfig = this.publicConfig.alerts;
     if (alertConfig) {
       ensure(env.ADMIN_EMAIL && env.ADMIN_EMAIL_FROM, 'WEB_ALERT_MAIL_CONFIG_INVALID');

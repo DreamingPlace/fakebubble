@@ -51,7 +51,7 @@ import { reviewState } from './review-state.ts';
 import { WebProviderApplication } from '../../../apps/server/generation/web-provider-application.ts';
 import { WebProviderHTTP } from '../../../apps/server/cloudflare/web-http.ts';
 import { auditWebLifecycleWorld } from '../../../apps/server/admission/web-lifecycle-audit.ts';
-import { playerLoginsRemain } from '../../../apps/server/identity/web-player-purge.ts';
+import { playerLoginsRemain, purgeDiagnostics } from '../../../apps/server/identity/web-player-purge.ts';
 import { WebAlerts, durableAlertState } from '../../../apps/server/cloudflare/web-alerts.ts';
 import { WebCloudRetention } from '../../../apps/server/cloudflare/web-retention.ts';
 import { TurnstileGate, type TurnstileVerifier } from '../../../apps/server/identity/web-turnstile.ts';
@@ -191,7 +191,10 @@ export class WebHTTPFixture extends WebBusinessFixture {
     dailyCap: number | undefined,
     pub: { graceMs?: number; accountDelete?: boolean; legalPages?: boolean; turnstile?: boolean } = {},
   ) {
-    const retention = new WebCloudRetention(this.store, this.clock, pub.graceMs ?? 0);
+    const retention = new WebCloudRetention(this.store, this.clock, pub.graceMs ?? 0, (report) =>
+      this.retentionReports.push(report),
+    );
+    this.retention = retention;
     this.human = pub.turnstile
       ? new TurnstileGate({
           siteKey: '1x00000000000000000000AA',
@@ -226,7 +229,11 @@ export class WebHTTPFixture extends WebBusinessFixture {
   private revoke(principal: string) {
     this.store.run('UPDATE web_sessions SET revoked_at=? WHERE principal_id=?', this.clock.now(), principal);
   }
-  alarm() {
+  /** Part 17f: what the production Durable Object's alarm does for retention - sweep first, then the queues. */
+  private retention: WebCloudRetention | undefined;
+  private retentionReports: unknown[] = [];
+  async alarm() {
+    await this.retention?.sweep();
     return this.execution.alarm();
   }
   handle(request: Request, peer: string) {
@@ -411,6 +418,23 @@ export class WebHTTPFixture extends WebBusinessFixture {
           .map((row) => row.name);
         return Response.json({ error: (error as { code?: string }).code ?? String(error), left });
       }
+    }
+    if (path === '/fixture/purge-diagnostics') return Response.json(purgeDiagnostics(this.store, this.clock.now()));
+    if (path === '/fixture/retention-reports') return Response.json(this.retentionReports);
+    if (path === '/fixture/purge-block') {
+      // Part 17f test fault: a leftover purge gate row makes every clearDatabase fail closed (WEB_RETENTION_SCOPE_UNSAFE).
+      const { principalId, on } = (await request.json()) as { principalId: string; on: boolean };
+      const world = this.store.get<{ world_id: string }>(
+        'SELECT world_id FROM web_principals WHERE id=?',
+        principalId,
+      )!.world_id;
+      if (on) this.store.run('INSERT INTO web_retention_purge_gate VALUES (?,?,1)', principalId, world);
+      else this.store.run('DELETE FROM web_retention_purge_gate WHERE principal_id=?', principalId);
+      return Response.json({ configured: true });
+    }
+    if (path === '/fixture/run-alarm') {
+      await this.alarm();
+      return Response.json({ ran: true });
     }
     if (path === '/fixture/bonus-state') {
       const { principalId } = (await request.json()) as { principalId: string };
