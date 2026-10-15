@@ -13,13 +13,17 @@ import { h } from '../cocreation/h.ts';
 export const modelCopy = {
   menuTitle: '写回复的模型',
   menuSub: (info: ModelChoiceInfo) =>
-    `${PLAYER_MODELS[info.selected].label} · ${modelCopy.perMessage(pointsOf(info, info.selected))}`,
+    info.metered
+      ? `${PLAYER_MODELS[info.selected].label} · ${modelCopy.perMessage(pointsOf(info, info.selected))}`
+      : PLAYER_MODELS[info.selected].label,
   perMessage: (points: number) => `约 ${points} 点/条`,
   voice: (points: number) => `语音 +${points}`,
   current: '当前',
   balance: (points: number, messages: number) => `剩余 ${points} 点 · 约可聊 ${messages} 条`,
   confirm: (label: string, points: number, voicePoints: number) =>
     `之后的消息用 ${label}，约 ${points} 点/条（语音 +${voicePoints}）。记忆和聊天记录不变。`,
+  /** Invited players are not charged: no prices. */
+  confirmFree: (label: string) => `之后的消息用 ${label}。记忆和聊天记录不变。`,
   confirmButton: '确认切换',
   cancelButton: '取消',
   close: '关闭',
@@ -90,7 +94,8 @@ export function openModelPicker(options: ModelPickerOptions) {
   }
 
   const list = () => {
-    balance.textContent = modelFooterNote(info);
+    balance.textContent = info.metered ? modelFooterNote(info) : '';
+    balance.hidden = !info.metered;
     status.textContent = '';
     body.replaceChildren(
       ...info.models.map((entry) => {
@@ -109,12 +114,14 @@ export function openModelPicker(options: ModelPickerOptions) {
             selected ? h('i', { class: 'mp-tag', text: modelCopy.current }) : null,
           ),
           h('span', { class: 'mp-blurb', text: model.blurb }),
-          h(
-            'span',
-            { class: 'mp-prices' },
-            h('b', { text: modelCopy.perMessage(entry.points) }),
-            h('b', { text: modelCopy.voice(entry.voicePoints) }),
-          ),
+          info.metered
+            ? h(
+                'span',
+                { class: 'mp-prices' },
+                h('b', { text: modelCopy.perMessage(entry.points) }),
+                h('b', { text: modelCopy.voice(entry.voicePoints) }),
+              )
+            : null,
         );
         card.addEventListener('click', () => {
           if (!selected && !busy) confirm(entry.id);
@@ -148,7 +155,9 @@ export function openModelPicker(options: ModelPickerOptions) {
     body.replaceChildren(
       h('p', {
         class: 'acct-intro mp-confirm',
-        text: modelCopy.confirm(PLAYER_MODELS[id].label, entry.points, entry.voicePoints),
+        text: info.metered
+          ? modelCopy.confirm(PLAYER_MODELS[id].label, entry.points, entry.voicePoints)
+          : modelCopy.confirmFree(PLAYER_MODELS[id].label),
         attrs: { role: 'status' },
       }),
       h('div', { class: 'acct-links' }, back, sure),

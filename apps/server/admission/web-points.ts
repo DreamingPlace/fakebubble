@@ -18,8 +18,14 @@ import { bonusSpent, hasSignupBonus } from './web-free-tier.ts';
  * reservation, and a refund here never releases one. The business object is the only writer of these tables.
  *
  * Who has points: a principal that holds the signup bonus (a guest that signed up with a verified email) while the feature
- * is on. Its balance is created LAZILY on first touch from the old accounting: 100 - 10 x bonus replies already spent. Guests
- * (the 5-reply DeepSeek-only trial), invited players and administrators are not touched and see no model picker.
+ * is on. Its balance is created LAZILY on first touch from the old accounting: 100 - 10 x bonus replies already spent.
+ * Invited players may choose a model too but are NOT charged: their rolling daily reply limit is untouched. Guests (the
+ * 5-reply DeepSeek-only trial) and administrators see no model picker.
+ *
+ * Allowance POLICY (web_points_policy: one_off | daily_refill | unlimited) is separate from the BALANCE (web_points_balance);
+ * every movement is an event with its `source` (bonus | grant | daily_refill | reset | spend | refund) and, for an
+ * administrator's action, the acting admin id. Only one_off (the signup bonus) and unlimited are acted on in this Part;
+ * daily_refill and the admin actions are the schema Part 22 builds on (no admin UI here).
  *
  * Charging is at admission. Nothing here hooks the many places an operation can end: `reconcilePoints` runs whenever the
  * balance is read or charged and settles, once per operation (unique index), every operation of the principal that ended
@@ -43,6 +49,24 @@ export function offeredModels(store: Pick<BusinessStore, 'get'> & Flagged): read
 /** True for a principal with a points account: feature on and the signup bonus held. */
 export const hasPoints = (store: Pick<BusinessStore, 'get'> & Flagged, principalId: string) =>
   offeredModels(store) !== null && hasSignupBonus(store, principalId);
+/** An invited principal: may choose a model, is never charged points (its daily reply limit is unchanged). */
+export const isInvited = (store: Pick<BusinessStore, 'get'> & Flagged, principalId: string) =>
+  offeredModels(store) !== null &&
+  store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind === 'invite';
+/** May this principal pick a model (points account or invited)? */
+export const canChooseModel = (store: Pick<BusinessStore, 'get'> & Flagged, principalId: string) =>
+  hasPoints(store, principalId) || isInvited(store, principalId);
+/** The allowance policy of a points account (one_off when none is stored yet). */
+export function policyKind(
+  store: Pick<BusinessStore, 'get'>,
+  principalId: string,
+): 'one_off' | 'daily_refill' | 'unlimited' {
+  const row = store.get<{ kind: 'one_off' | 'daily_refill' | 'unlimited' }>(
+    'SELECT kind FROM web_points_policy WHERE principal_id=?',
+    principalId,
+  );
+  return row?.kind ?? 'one_off';
+}
 
 /** The saved choice, as a model that is still offered: a model the owner has switched off becomes DeepSeek, once, with a notice. */
 export function effectiveModel(store: Writer & Flagged, now: number, principalId: string): PlayerModelId {
@@ -61,7 +85,7 @@ export function effectiveModel(store: Writer & Flagged, now: number, principalId
 
 export function setPlayerModel(store: Writer & Flagged, now: number, principalId: string, model: unknown) {
   const offered = offeredModels(store);
-  ensure(offered && hasPoints(store, principalId), 'NOT_FOUND');
+  ensure(offered && canChooseModel(store, principalId), 'NOT_FOUND');
   ensure(isPlayerModelId(model) && offered.includes(model), 'MODEL_NOT_AVAILABLE');
   store.run(
     `INSERT INTO web_player_model(principal_id,model,notice,updated_at) VALUES (?,?,NULL,?)
@@ -81,6 +105,14 @@ export function ensureBalance(store: Writer & Flagged, now: number, principalId:
   );
   if (row) return row.balance;
   const start = Math.max(0, POINTS.signupBalance - POINTS.perBonusReply * bonusSpent(store, principalId));
+  // The policy (what the principal is entitled to) and the balance (what is left) are created together, apart.
+  store.run(
+    "INSERT INTO web_points_policy(principal_id,kind,amount,created_at,updated_at) VALUES (?,'one_off',?,?,?) ON CONFLICT DO NOTHING",
+    principalId,
+    POINTS.signupBalance,
+    now,
+    now,
+  );
   store.run(
     'INSERT INTO web_points_balance(principal_id,balance,created_at,updated_at) VALUES (?,?,?,?)',
     principalId,
@@ -90,8 +122,8 @@ export function ensureBalance(store: Writer & Flagged, now: number, principalId:
   );
   if (start > 0)
     store.run(
-      `INSERT INTO web_points_events(principal_id,operation_id,kind,reason,points,price_version,created_at)
-      VALUES (?,NULL,'grant','signup_bonus_init',?,?,?)`,
+      `INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,price_version,created_at)
+      VALUES (?,NULL,'bonus',NULL,?,?,?)`,
       principalId,
       start,
       POINTS.version,
@@ -110,9 +142,9 @@ function refund(
   version: number,
 ) {
   if (points <= 0) return;
-  // The unique index (operation, kind, reason) makes a second settlement of the same fact a no-op.
+  // The unique index (operation, source, reason) makes a second settlement of the same fact a no-op.
   const inserted = store.run(
-    `INSERT INTO web_points_events(principal_id,operation_id,kind,reason,points,price_version,created_at)
+    `INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,price_version,created_at)
     VALUES (?,?,'refund',?,?,?,?) ON CONFLICT DO NOTHING`,
     principalId,
     operationId,
@@ -189,6 +221,7 @@ export type PointsDecision =
 export function quote(store: Writer & Flagged, now: number, principalId: string, model: PlayerModelId): PointsDecision {
   reconcilePoints(store, now, principalId);
   const balance = ensureBalance(store, now, principalId);
+  if (policyKind(store, principalId) === 'unlimited') return { ok: true, points: 0 };
   const price = replyPoints(model, true);
   if (balance >= price) return { ok: true, points: price };
   return {
@@ -205,26 +238,29 @@ export function chargeAdmission(
   operationId: string,
   model: PlayerModelId,
 ): number {
-  const price = replyPoints(model, true);
-  ensure(
+  // An 'unlimited' policy is never charged (and has no spend event); the operation row still freezes the model.
+  const price = policyKind(store, principalId) === 'unlimited' ? 0 : replyPoints(model, true);
+  if (price > 0) {
+    ensure(
+      store.run(
+        'UPDATE web_points_balance SET balance=balance-?,updated_at=? WHERE principal_id=? AND balance>=?',
+        price,
+        now,
+        principalId,
+        price,
+      ).changes === 1,
+      'TRIAL_EXHAUSTED',
+    );
     store.run(
-      'UPDATE web_points_balance SET balance=balance-?,updated_at=? WHERE principal_id=? AND balance>=?',
-      price,
-      now,
+      `INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,price_version,created_at)
+      VALUES (?,?,'spend','reply',?,?,?)`,
       principalId,
-      price,
-    ).changes === 1,
-    'TRIAL_EXHAUSTED',
-  );
-  store.run(
-    `INSERT INTO web_points_events(principal_id,operation_id,kind,reason,points,price_version,created_at)
-    VALUES (?,?,'spend','reply',?,?,?)`,
-    principalId,
-    operationId,
-    price,
-    POINTS.version,
-    now,
-  );
+      operationId,
+      -price,
+      POINTS.version,
+      now,
+    );
+  }
   store.run(
     `INSERT INTO web_operation_models(operation_id,chosen,voice,points_charged,price_version,created_at)
     VALUES (?,?,1,?,?,?)`,
@@ -237,6 +273,18 @@ export function chargeAdmission(
   return price;
 }
 
+/** An invited player's operation: the chosen model is frozen into it (routing and backup apply), nothing is charged. */
+export function recordUnmetered(store: Writer, now: number, operationId: string, model: PlayerModelId) {
+  store.run(
+    `INSERT INTO web_operation_models(operation_id,chosen,voice,points_charged,price_version,created_at)
+    VALUES (?,?,1,0,?,?)`,
+    operationId,
+    model,
+    POINTS.version,
+    now,
+  );
+}
+
 export type ModelChoiceState = ModelChoiceInfo;
 /** What the player page shows. Reads, but settles and creates the balance on the way; consumes the one-time notice. */
 export function modelChoiceState(
@@ -247,10 +295,14 @@ export function modelChoiceState(
   consumeNotice = true,
 ): ModelChoiceState | null {
   const offered = offeredModels(store);
-  if (!offered || !hasSignupBonus(store, principalId)) return null;
+  if (!offered || !canChooseModel(store, principalId)) return null;
+  const metered = hasSignupBonus(store, principalId);
   return store.transaction(() => {
-    reconcilePoints(store, now, principalId);
-    const balance = ensureBalance(store, now, principalId);
+    let balance = 0;
+    if (metered) {
+      reconcilePoints(store, now, principalId);
+      balance = ensureBalance(store, now, principalId);
+    }
     const selected = effectiveModel(store, now, principalId);
     const notice = store.get<{ notice: string | null }>(
       'SELECT notice FROM web_player_model WHERE principal_id=?',
@@ -264,8 +316,9 @@ export function modelChoiceState(
         voicePoints: POINTS.voice,
       })),
       selected,
+      metered,
       balance,
-      repliesLeft: repliesLeft(balance, selected),
+      repliesLeft: metered ? repliesLeft(balance, selected) : 0,
       version: POINTS.version,
       ...(notice === 'model_withdrawn' ? { notice } : {}),
     };

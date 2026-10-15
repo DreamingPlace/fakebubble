@@ -15,7 +15,7 @@ import {
   hasSignupBonus,
 } from './web-free-tier.ts';
 import { DEFAULT_PLAYER_MODEL, type PlayerModelId } from '../../../packages/contracts/player-models.ts';
-import { chargeAdmission, effectiveModel, hasPoints, quote } from './web-points.ts';
+import { chargeAdmission, effectiveModel, hasPoints, isInvited, quote, recordUnmetered } from './web-points.ts';
 import { requirePublishedWebCharacter } from '../characters/web-character-catalog.ts';
 
 interface PrincipalRow {
@@ -387,6 +387,9 @@ export class WebAdmission {
         );
       } else if (points) {
         chargeAdmission(this.store, now, principal.id, operationId, chosen);
+      } else if (isInvited(this.store, principal.id)) {
+        // Invited players may pick a model; nothing is charged and the rolling daily limit above is unchanged.
+        recordUnmetered(this.store, now, operationId, effectiveModel(this.store, now, principal.id));
       } else if (extra) {
         this.store.run(
           "INSERT INTO web_free_operations(operation_id,principal_id,tier,ip_hash) VALUES (?,?,'trial_extra',?)",

@@ -81,6 +81,7 @@ export function purgePlayerLogins(
   if (tableExists(store, 'web_points_balance')) {
     store.run('DELETE FROM web_points_events WHERE principal_id=?', scope.principalId);
     store.run('DELETE FROM web_points_balance WHERE principal_id=?', scope.principalId);
+    store.run('DELETE FROM web_points_policy WHERE principal_id=?', scope.principalId);
     store.run('DELETE FROM web_player_model WHERE principal_id=?', scope.principalId);
   }
   // Part 19: the player's live review code and banner mark go with the player (the archive copy carries no identity).
@@ -148,7 +149,7 @@ export function playerLoginsRemain(store: Pick<BusinessStore, 'get'>, principalI
   if (reviewRowsRemain(store, principalIds)) return true;
   if (
     tableExists(store, 'web_points_balance') &&
-    ['web_points_events', 'web_points_balance', 'web_player_model'].some((table) =>
+    ['web_points_events', 'web_points_balance', 'web_points_policy', 'web_player_model'].some((table) =>
       store.get(`SELECT 1 FROM ${table} WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds),
     )
   )

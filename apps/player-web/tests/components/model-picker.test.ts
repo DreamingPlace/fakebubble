@@ -14,6 +14,7 @@ const info: ModelChoiceInfo = {
     { id: 'xai', points: 40, voicePoints: 2 },
   ],
   selected: 'deepseek',
+  metered: true,
   balance: 100,
   repliesLeft: 8,
   version: 1,
@@ -295,4 +296,15 @@ test('page hook 3: a reply written by the backup model says so, once; an ordinar
   plain.setReply({ deliveryFallback: 'text', audio: null });
   await plain.attach();
   assert.equal([...plain.cards.values()].flatMap((card) => card.querySelectorAll('.backup-note')).length, 0);
+});
+
+test('an invited player picks a model without prices or balance: nothing is charged', (t) => {
+  const doc = installFakeDom(t);
+  const free: ModelChoiceInfo = { ...info, metered: false, balance: 0, repliesLeft: 0 };
+  openModelPicker({ info: free, api: { setModel: async () => free }, onChanged: () => {}, mount: doc.body as never });
+  assert.equal(doc.body.querySelectorAll('.mp-prices').length, 0);
+  assert.equal(doc.body.querySelector('.mp-balance')!.textContent, '');
+  doc.body.querySelector('[data-model="xai"]')!.click();
+  assert.equal(doc.body.querySelector('.mp-confirm')!.textContent, '之后的消息用 Grok 4.7。记忆和聊天记录不变。');
+  assert.equal(modelCopy.menuSub(free), 'DeepSeek');
 });

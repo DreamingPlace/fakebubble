@@ -13,6 +13,17 @@ CREATE TABLE web_player_model (
 ) STRICT;
 
 -- Points are player fairness only; the money ledger (budget reservations) is independent of them.
+-- The ALLOWANCE POLICY (what a principal is entitled to) is kept apart from the BALANCE (what is left), so a later Part can add
+-- tiers without rewriting either: kind 'one_off' (a bonus granted once; this Part), 'daily_refill' (topped up to `amount` at
+-- 00:00 UTC; `last_refill_day` is its cursor) and 'unlimited' (never charged). Only 'one_off' and 'unlimited' are acted on today.
+CREATE TABLE web_points_policy (
+  principal_id TEXT PRIMARY KEY REFERENCES web_principals(id),
+  kind TEXT NOT NULL CHECK(kind IN ('one_off','daily_refill','unlimited')),
+  amount INTEGER NOT NULL CHECK(amount>=0),
+  last_refill_day TEXT CHECK(last_refill_day IS NULL OR last_refill_day GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+) STRICT;
 CREATE TABLE web_points_balance (
   principal_id TEXT PRIMARY KEY REFERENCES web_principals(id),
   balance INTEGER NOT NULL CHECK(balance>=0),
@@ -20,25 +31,29 @@ CREATE TABLE web_points_balance (
   updated_at INTEGER NOT NULL
 ) STRICT;
 
--- Append-only: grant (the lazy initialisation), spend (charged at admission), refund (no reply / backup was cheaper).
--- balance == sum(grant) + sum(refund) - sum(spend); price_version names the price table the amount came from.
+-- Append-only. `source` says where the movement came from: bonus (the lazy initialisation from the signup bonus), grant (an
+-- administrator's gift), daily_refill, reset (an administrator set the balance), spend (charged at admission), refund (no reply,
+-- cheaper backup, no voice). `delta` is signed. `admin_id` names the acting administrator for grant/reset and is NULL otherwise.
+-- balance == sum(delta); price_version names the price table a spend/refund amount came from.
 CREATE TABLE web_points_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   principal_id TEXT NOT NULL REFERENCES web_principals(id),
   operation_id TEXT REFERENCES web_operations(id),
-  kind TEXT NOT NULL CHECK(kind IN ('grant','spend','refund')),
-  reason TEXT NOT NULL CHECK(reason IN ('signup_bonus_init','reply','no_reply','backup_cheaper','no_voice')),
-  points INTEGER NOT NULL CHECK(points>0),
+  source TEXT NOT NULL CHECK(source IN ('bonus','grant','daily_refill','reset','spend','refund')),
+  reason TEXT CHECK(reason IS NULL OR reason IN ('reply','no_reply','backup_cheaper','no_voice')),
+  delta INTEGER NOT NULL CHECK(delta<>0),
+  admin_id TEXT,
   price_version INTEGER NOT NULL CHECK(price_version>0),
   created_at INTEGER NOT NULL,
-  CHECK((kind='grant' AND operation_id IS NULL AND reason='signup_bonus_init') OR
-        (kind='spend' AND operation_id IS NOT NULL AND reason='reply') OR
-        (kind='refund' AND operation_id IS NOT NULL AND reason IN ('no_reply','backup_cheaper','no_voice')))
+  CHECK((source='spend' AND operation_id IS NOT NULL AND reason='reply' AND delta<0) OR
+        (source='refund' AND operation_id IS NOT NULL AND reason IN ('no_reply','backup_cheaper','no_voice') AND delta>0) OR
+        (source IN ('bonus','grant','daily_refill','reset') AND operation_id IS NULL AND reason IS NULL)),
+  CHECK(admin_id IS NULL OR source IN ('grant','reset'))
 ) STRICT;
 CREATE INDEX web_points_events_principal ON web_points_events(principal_id,id);
--- A charge or a refund of one reason happens at most once per operation: replays and retries are no-ops.
-CREATE UNIQUE INDEX web_points_events_once ON web_points_events(operation_id,kind,reason) WHERE operation_id IS NOT NULL;
-CREATE UNIQUE INDEX web_points_events_grant_once ON web_points_events(principal_id) WHERE kind='grant';
+-- A charge or a refund of one reason happens at most once per operation: replays and retries are no-ops. The signup bonus is once per principal.
+CREATE UNIQUE INDEX web_points_events_once ON web_points_events(operation_id,source,reason) WHERE operation_id IS NOT NULL;
+CREATE UNIQUE INDEX web_points_events_bonus_once ON web_points_events(principal_id) WHERE source='bonus';
 CREATE TRIGGER web_points_events_no_update BEFORE UPDATE ON web_points_events
 BEGIN SELECT RAISE(ABORT,'WEB_POINTS_EVENT_IMMUTABLE'); END;
 

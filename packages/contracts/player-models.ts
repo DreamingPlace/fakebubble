@@ -92,6 +92,8 @@ export function parsePlayerTextModels(value: unknown): readonly PlayerModelId[] 
 export interface ModelChoiceInfo {
   models: { id: PlayerModelId; points: number; voicePoints: number }[];
   selected: PlayerModelId;
+  /** False for an invited player: no points are charged, the page shows no prices or balance. */
+  metered: boolean;
   balance: number;
   repliesLeft: number;
   version: number;
@@ -115,6 +117,7 @@ export function parseModelChoice(value: unknown): ModelChoiceInfo | undefined {
   return {
     models,
     selected: raw.selected,
+    metered: raw.metered !== false,
     balance: raw.balance,
     repliesLeft: raw.repliesLeft,
     version: typeof raw.version === 'number' ? raw.version : POINTS_VERSION,

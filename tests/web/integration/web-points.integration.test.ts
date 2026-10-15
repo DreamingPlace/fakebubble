@@ -87,15 +87,20 @@ function fixture(
   const state = (principalId: string) => modelChoiceState(store, now, principalId);
   const events = (principalId: string) =>
     store
-      .all<{ kind: string; reason: string; points: number; operation_id: string | null }>(
-        'SELECT kind,reason,points,operation_id FROM web_points_events WHERE principal_id=? ORDER BY id',
+      .all<{
+        source: string;
+        reason: string | null;
+        delta: number;
+        operation_id: string | null;
+        admin_id: string | null;
+      }>(
+        'SELECT source,reason,delta,operation_id,admin_id FROM web_points_events WHERE principal_id=? ORDER BY id',
         principalId,
       )
       .map((row) => ({ ...row }));
   const balance = (principalId: string) =>
     store.get<{ balance: number }>('SELECT balance FROM web_points_balance WHERE principal_id=?', principalId)?.balance;
-  const sum = (principalId: string) =>
-    events(principalId).reduce((total, e) => total + (e.kind === 'spend' ? -e.points : e.points), 0);
+  const sum = (principalId: string) => events(principalId).reduce((total, e) => total + e.delta, 0);
   const admit = (principalId: string, requestId: string) =>
     admission.admit({ principalId, requestId, characterId, text: '你好', ipHash: ip('a') });
   const finish = (operationId: string, status: string) =>
@@ -133,7 +138,7 @@ test('the first touch creates the balance from the old bonus accounting: 100 - 1
   const first = f.state(f.principalId)!;
   assert.equal(first.balance, 70);
   assert.deepEqual(f.events(f.principalId), [
-    { kind: 'grant', reason: 'signup_bonus_init', points: 70, operation_id: null },
+    { source: 'bonus', reason: null, delta: 70, operation_id: null, admin_id: null },
   ]);
   f.history(f.principalId, 'published', 'bonus', 99);
   assert.equal(f.state(f.principalId)!.balance, 70, 'a second touch never initialises again');
@@ -170,9 +175,10 @@ test('a reply by a chosen model is charged at admission, once, and the model is 
   assert.equal(first.duplicate, false);
   assert.equal(f.balance(f.principalId), 100 - 42);
   assert.deepEqual(f.events(f.principalId).at(-1), {
-    kind: 'spend',
+    source: 'spend',
     reason: 'reply',
-    points: 42,
+    delta: -42,
+    admin_id: null,
     operation_id: first.operationId,
   });
   const row = f.store.get<Record<string, unknown>>(
@@ -267,8 +273,8 @@ test('no reply means the whole charge comes back: known failure, cancellation or
   });
   assert.equal(ops.length, 3);
   reconcilePoints(f.store, f.clock(), f.principalId);
-  const refunds = f.events(f.principalId).filter((e) => e.kind === 'refund');
-  assert.deepEqual(refunds.map((e) => [e.reason, e.points]).sort(), [
+  const refunds = f.events(f.principalId).filter((e) => e.source === 'refund');
+  assert.deepEqual(refunds.map((e) => [e.reason, e.delta]).sort(), [
     ['no_reply', 22],
     ['no_reply', 22],
     ['no_reply', 22],
@@ -277,7 +283,7 @@ test('no reply means the whole charge comes back: known failure, cancellation or
   reconcilePoints(f.store, f.clock(), f.principalId);
   reconcilePoints(f.store, f.clock(), f.principalId);
   assert.equal(
-    f.events(f.principalId).filter((e) => e.kind === 'refund').length,
+    f.events(f.principalId).filter((e) => e.source === 'refund').length,
     3,
     'a second settlement of the same fact is a no-op',
   );
@@ -298,8 +304,8 @@ test('answered by a backup model: the player pays the CHEAPER of the two models;
   const events = f.events(f.principalId);
   assert.deepEqual(
     events
-      .filter((e) => e.kind === 'refund')
-      .map((e) => [e.reason, e.points])
+      .filter((e) => e.source === 'refund')
+      .map((e) => [e.reason, e.delta])
       .sort(),
     [
       ['backup_cheaper', 30],
@@ -406,5 +412,100 @@ test('points data goes with the player, and the lifecycle audit sees nothing lef
 test('points events are append-only', (t) => {
   const f = fixture(t);
   f.state(f.principalId);
-  assert.throws(() => f.store.run('UPDATE web_points_events SET points=1'), /WEB_POINTS_EVENT_IMMUTABLE/);
+  assert.throws(() => f.store.run('UPDATE web_points_events SET delta=1'), /WEB_POINTS_EVENT_IMMUTABLE/);
+});
+
+test('the allowance POLICY is stored apart from the BALANCE, and every event names its source (admin id only for admin actions)', (t) => {
+  const f = fixture(t, { bonusSpent: 2 });
+  f.state(f.principalId);
+  const policy = f.store.get<Record<string, unknown>>(
+    'SELECT * FROM web_points_policy WHERE principal_id=?',
+    f.principalId,
+  )!;
+  assert.deepEqual([policy.kind, policy.amount, policy.last_refill_day], ['one_off', 100, null]);
+  assert.equal(f.balance(f.principalId), 80);
+  const ins = (source: string, reason: string | null, delta: number, op: string | null, admin: string | null) =>
+    f.store.run(
+      'INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,admin_id,price_version,created_at) VALUES (?,?,?,?,?,?,1,1)',
+      f.principalId,
+      op,
+      source,
+      reason,
+      delta,
+      admin,
+    );
+  // Part 22 can add these without a schema change.
+  ins('grant', null, 50, null, 'admin-1');
+  ins('daily_refill', null, 30, null, null);
+  ins('reset', null, 5, null, 'admin-1');
+  for (const kind of ['daily_refill', 'unlimited'])
+    f.store.run(
+      'UPDATE web_points_policy SET kind=?,last_refill_day=? WHERE principal_id=?',
+      kind,
+      kind === 'daily_refill' ? '2026-10-15' : null,
+      f.principalId,
+    );
+  // The rules the schema enforces.
+  assert.throws(
+    () => ins('daily_refill', null, 1, null, 'admin-1'),
+    /CHECK/,
+    'only an admin action carries an admin id',
+  );
+  assert.throws(() => ins('bonus', null, 1, null, null), /UNIQUE/, 'the signup bonus is once');
+  assert.throws(() => ins('spend', 'reply', 5, 'x', null), /CHECK|FOREIGN/, 'a spend is negative');
+  assert.throws(() => ins('made_up', null, 1, null, null), /CHECK/);
+});
+
+test('an unlimited policy is never charged; the operation still freezes the chosen model', (t) => {
+  const f = fixture(t);
+  f.state(f.principalId);
+  f.store.run("UPDATE web_points_policy SET kind='unlimited' WHERE principal_id=?", f.principalId);
+  setPlayerModel(f.store, f.clock(), f.principalId, 'xai');
+  const op = f.admit(f.principalId, 'u');
+  assert.equal(
+    f.store.get<{ points_charged: number; chosen: string }>(
+      'SELECT points_charged,chosen FROM web_operation_models WHERE operation_id=?',
+      op.operationId,
+    )!.chosen,
+    'xai',
+  );
+  assert.equal(f.balance(f.principalId), 100);
+  assert.equal(f.events(f.principalId).filter((e) => e.source === 'spend').length, 0);
+});
+
+test('invited players may choose a model, are never charged points, and keep their rolling daily limit', (t) => {
+  const f = fixture(t, { bonus: false });
+  // Turn the fixture principal into an invited player with an active grant.
+  f.store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", f.principalId);
+  f.store.run(
+    "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id=?",
+    f.principalId,
+  );
+  f.store.db.exec('PRAGMA foreign_keys=OFF'); // the grant's invite code row is not what this test is about
+  f.store.run(
+    'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at) VALUES (?,?,?,?,?,?)',
+    'grant',
+    'invite',
+    f.principalId,
+    'player-a',
+    'world-a',
+    1,
+  );
+  const s = f.state(f.principalId)!;
+  assert.equal(s.metered, false);
+  assert.equal(f.balance(f.principalId), undefined, 'no points account is created');
+  setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
+  assert.equal(f.state(f.principalId)!.selected, 'gemini');
+  const op = f.admit(f.principalId, 'i1');
+  const row = f.store.get<{ chosen: string; points_charged: number }>(
+    'SELECT chosen,points_charged FROM web_operation_models WHERE operation_id=?',
+    op.operationId,
+  )!;
+  assert.deepEqual([row.chosen, row.points_charged], ['gemini', 0]);
+  assert.equal(f.store.get('SELECT 1 FROM web_points_events'), undefined);
+  assert.equal(f.store.get('SELECT 1 FROM web_points_balance'), undefined);
+  // The existing rolling daily limit still applies, exactly as before.
+  f.finish(op.operationId, 'published');
+  Object.assign(f.store, { dailyReplyLimit: 1 });
+  assert.throws(() => f.admit(f.principalId, 'i2'), /WEB_DAILY_LIMIT_REACHED/);
 });

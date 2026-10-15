@@ -321,7 +321,10 @@ export class LiveBinding {
           : []),
       ];
     if (this.account.signedIn && this.account.canBind)
-      return [{ label: '绑定邮箱', sub: '换设备也能登录你的聊天', onSelect: () => void this.openAccount('bind') }];
+      return [
+        ...this.modelMenu(),
+        { label: '绑定邮箱', sub: '换设备也能登录你的聊天', onSelect: () => void this.openAccount('bind') },
+      ];
     if (this.view.access.kind === 'guest')
       return [
         { label: '登录', sub: '用邮箱和密码进入已有的聊天', onSelect: () => void this.openAccount('login') },
@@ -411,7 +414,7 @@ export class LiveBinding {
           ? this.hasLogin && this.bonusOffer
             ? access.remainingReplies === 0
               ? '免费消息已用完'
-              : this.account.signedIn && this.account.modelChoice
+              : this.account.signedIn && this.account.modelChoice?.metered
                 ? modelFooterNote(this.account.modelChoice)
                 : `免费消息剩余 ${access.remainingReplies} 条`
             : `体验剩余 ${access.remainingReplies} 次`
