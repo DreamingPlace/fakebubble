@@ -141,9 +141,12 @@ export function configureWebProvider(
         model: item.voice.model,
         evidence: item.evidence as unknown as Record<string, string>,
       });
-    for (const provider of ['deepseek', 'fish', 'xai', 'gemini'])
+    for (const provider of ['deepseek', 'fish'])
       ledger.configureBudget(provider, policy === 'production-unlimited' ? null : PROVIDER_LIMIT_MICROS);
-    for (const price of PROVIDER_PRICES)
+    // Part 21b: initialization seeds exactly what it always did. The optional writing models (xAI, Gemini) get their
+    // spending bound, capacity ticket and first prices from `renew-prices` (renewProviderPrices), the same step that
+    // seeds them on a deployment that was initialized before this Part: a model stays unavailable until that has run.
+    for (const price of PROVIDER_PRICES.filter((item) => item.provider === 'deepseek' || item.provider === 'fish'))
       ledger.configurePrice({
         id: `${price.provider}-${price.phase}-${now}`,
         provider: price.provider,
@@ -170,15 +173,6 @@ export function configureWebProvider(
       phase: 'review',
       capacity: webConcurrency(store).maxTextRunning,
     });
-    // Part 21b: the optional writing models get their own tickets; an unconfigured one is simply unavailable.
-    for (const price of PROVIDER_PRICES)
-      if (price.provider === 'xai' || price.provider === 'gemini')
-        capacity.configureBudget({
-          provider: price.provider,
-          stage: 'text',
-          phase: price.phase,
-          capacity: webConcurrency(store).maxTextRunning,
-        });
     capacity.configureBudget({
       provider: 'fish',
       stage: 'audio',
