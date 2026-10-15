@@ -27,17 +27,22 @@ export interface TurnstileVerifier {
 }
 
 export const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
-/** The real verifier. Tests inject a fake one: no test ever reaches the network. */
-export function siteverifyVerifier(fetchImpl: typeof fetch = fetch): TurnstileVerifier {
+/**
+ * The real verifier. Tests inject a fake one: no test ever reaches the network. `url` exists only so the workerd test can
+ * point the real fetch call at a local stub; the production caller never passes it.
+ */
+export function siteverifyVerifier(fetchImpl: typeof fetch = fetch, url: string = SITEVERIFY_URL): TurnstileVerifier {
   return {
     async verify({ secret, token, remoteIp }) {
       const body = new URLSearchParams({ secret, response: token });
       if (remoteIp) body.set('remoteip', remoteIp);
-      const response = await fetchImpl(SITEVERIFY_URL, {
+      const response = await fetchImpl(url, {
         method: 'POST',
         body,
         signal: AbortSignal.timeout(5000),
-        redirect: 'error',
+        // workerd rejects redirect:'error' before dispatch (every call became TURNSTILE_UNAVAILABLE). 'manual' hands a 3xx
+        // back as a non-200 answer, which throws below and fails closed.
+        redirect: 'manual',
       });
       if (response.status !== 200) throw new Error('TURNSTILE_HTTP');
       const value: unknown = await response.json();
