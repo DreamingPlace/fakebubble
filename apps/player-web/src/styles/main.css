@@ -3915,12 +3915,21 @@ body:has(.admin-shell) {
   font-size: 12px;
   text-align: center;
 }
+/* Part 17f: the check is centred on both axes (desktop and phone), not parked at the bottom. The wrapper covers the
+   viewport only to centre its child and lets every tap through except on the widget itself. */
 .human-check {
   position: fixed;
-  left: 50%;
-  bottom: max(16px, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  pointer-events: none;
   z-index: 400;
+}
+.human-check > * {
+  pointer-events: auto;
 }
 .legal-doc {
   box-sizing: border-box;

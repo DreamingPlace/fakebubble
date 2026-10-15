@@ -2,6 +2,7 @@ import type { Clock } from '../../../packages/contracts/index.ts';
 import type { WebAlertConfig } from '../../../config/web-public.ts';
 import { PROVIDER_PRICES } from '../generation/web-provider-configuration.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
+import { purgeDiagnostics } from '../identity/web-player-purge.ts';
 
 /**
  * Owner alerts (Part 17, flag ALERTS_ENABLED, default off). The business object's hourly alarm evaluates a handful of
@@ -311,7 +312,8 @@ export class WebAlerts {
           const unknown = this.unknownCounts().total;
           const errors = await this.errorsLastHour(now);
           const expiry = this.earliestPriceExpiry();
-          const text = `FAKE 泡泡 日报（最近 24 小时）\n回复：${replies} 条\n新注册：${signups} 人\n供应商花费：约 ${money(this.spendSince(since))}\n失败回复：${failures} 条\n结果未知的调用（累计）：${unknown} 条\n最近一小时服务端错误：${errors} 次${expiry === null ? '' : `\n最早的价格到期：UTC ${isoDay(expiry)}`}`;
+          const purging = this.has('web_guest_retention') ? purgeDiagnostics(this.d.store, now).purging : 0;
+          const text = `FAKE 泡泡 日报（最近 24 小时）\n回复：${replies} 条\n新注册：${signups} 人\n供应商花费：约 ${money(this.spendSince(since))}\n失败回复：${failures} 条\n结果未知的调用（累计）：${unknown} 条\n最近一小时服务端错误：${errors} 次${expiry === null ? '' : `\n最早的价格到期：UTC ${isoDay(expiry)}`}${purging > 0 ? `\n未完成的数据清理：${purging} 个` : ''}`;
           if (await this.deliver('FAKE 泡泡 日报', text)) sent.push('digest');
         }
       } catch {

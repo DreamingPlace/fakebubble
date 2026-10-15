@@ -3,7 +3,7 @@ import type { HumanCheck } from './provider-api.ts';
 /**
  * The page side of Cloudflare Turnstile (only used when GET /account names a site key). The widget is rendered on demand
  * in "interaction-only" mode: in the normal case it solves itself in the background and the player sees nothing; only if
- * Cloudflare wants a click does a small box appear at the bottom of the page. One widget per token, removed right after.
+ * Cloudflare wants a click does a small box appear, centred in the window (desktop and phone). One widget per token, removed right after.
  * Nothing is stored; a failure becomes a rejected promise and the caller shows its short retry line.
  */
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';

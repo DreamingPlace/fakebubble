@@ -88,6 +88,52 @@ export function purgePlayerLogins(
   store.run('DELETE FROM web_player_logins WHERE principal_id=?', scope.principalId);
 }
 
+/**
+ * Part 17f. The moment a purge starts (T1: the player's own deletion, or an expired/inactive guest) the address stops
+ * being registered: the login and every email challenge of the principal and of that address go in the SAME transaction
+ * as the fence. Registration must never depend on the later, heavier database clear (T2), which can fail closed on its
+ * own audits and is retried by the alarm. The rest of the player's data (名片, bonus entitlement, review rows) still goes
+ * with T2 through purgePlayerLogins; the bonus address digest is untouched, so a deleted address cannot collect it twice.
+ */
+export function releasePlayerLogin(store: Pick<BusinessStore, 'get' | 'run'>, principalId: string) {
+  if (!playerLoginsExist(store)) return;
+  const login = store.get<{ email_norm: string }>(
+    'SELECT email_norm FROM web_player_logins WHERE principal_id=?',
+    principalId,
+  );
+  store.run('DELETE FROM web_email_challenges WHERE principal_id=?', principalId);
+  if (login) {
+    store.run('DELETE FROM web_email_challenges WHERE email_norm=?', login.email_norm);
+    store.run('DELETE FROM web_player_logins WHERE principal_id=?', principalId);
+  }
+}
+
+/**
+ * Read-only numbers for the operator (inspect) and the daily digest; never an id or an address.
+ * oldestPurgingMinutes is the age of the oldest unfinished purge: the time its sessions were revoked (account deletion),
+ * else the end of its trial window. There is no purge-start column (and no migration), so this is that approximation.
+ */
+export function purgeDiagnostics(store: { all<T>(sql: string, ...params: (string | number)[]): T[] }, now: number) {
+  const has = (name: string) => store.all("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", name).length > 0;
+  if (!has('web_guest_retention')) return { purging: 0, oldestPurgingMinutes: null, loginsOfPurgedPrincipals: 0 };
+  const row = store.all<{ n: number; since: number | null }>(
+    `SELECT count(*) n, min(coalesce((SELECT max(s.revoked_at) FROM web_sessions s WHERE s.principal_id=r.principal_id),r.expires_at)) since
+    FROM web_guest_retention r WHERE r.state='purging'`,
+  )[0]!;
+  const logins = has('web_player_logins')
+    ? store.all<{ n: number }>(
+        `SELECT count(*) n FROM web_player_logins l
+        JOIN web_guest_retention r ON r.principal_id=l.principal_id WHERE r.state IN ('purging','purged')`,
+      )[0]!.n
+    : 0;
+  return {
+    purging: row.n,
+    oldestPurgingMinutes:
+      row.n === 0 || row.since === null ? null : Math.max(0, Math.floor((now - row.since) / 60_000)),
+    loginsOfPurgedPrincipals: logins,
+  };
+}
+
 /** True while a login or challenge of any of these principals remains: the audits fail closed on it. */
 export function playerLoginsRemain(store: Pick<BusinessStore, 'get'>, principalIds: string[]) {
   if (principalIds.length === 0) return false;
