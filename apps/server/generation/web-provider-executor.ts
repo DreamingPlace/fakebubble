@@ -92,6 +92,9 @@ export class WebProviderExecutor {
       for (const [provider, stage, phase, capacity] of [
         ['deepseek', 'text', 'draft', limits.maxTextRunning],
         ['deepseek', 'text', 'review', limits.maxTextRunning],
+        ['xai', 'text', 'draft', limits.maxTextRunning],
+        ['gemini', 'text', 'draft', limits.maxTextRunning],
+        ['gemini', 'text', 'review', limits.maxTextRunning],
         ['fish', 'audio', 'speech', limits.maxAudioRunning],
       ] as const)
         this.ledger.alignBudget({ provider, stage, phase, capacity });
