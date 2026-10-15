@@ -6,6 +6,7 @@ import { FishAudio, fishSpeechRequest } from '../audio/fish.ts';
 import { SpeechFailure } from '../audio/validation-error.ts';
 import type { AcceptedV7StageOutput, TextGenerationRequest } from '../../packages/contracts/index.ts';
 import type { ProviderMeter } from '../../packages/contracts/provider-calls.ts';
+import type { TextRoute } from '../../packages/contracts/text-route.ts';
 import type {
   WebEmbedRPCResult,
   WebEmbedWire,
@@ -25,6 +26,9 @@ export interface WebGenerationEnvironment {
   EXTERNAL_CALLS?: string;
   DEEPSEEK_API_KEY: string;
   FISH_API_KEY: string;
+  /** Part 21b: optional writing models. A missing key makes that model unavailable (the reply goes to the backup), never a crash. */
+  XAI_API_KEY?: string;
+  GEMINI_API_KEY?: string;
   /** Workers AI binding for memory embeddings; used only when EMBEDDINGS_ENABLED is 'true'. */
   AI?: WorkersAiBinding;
   EMBEDDINGS_ENABLED?: string;
@@ -73,12 +77,14 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
     known: WebKnownDraft | null,
     meter: ProviderMeter,
     accept: (stage: AcceptedV7StageOutput) => Promise<void>,
+    route?: TextRoute,
   ): Promise<TextRPCResult> {
     try {
       this.begin();
       const text = new DeepSeekTextGenerator({
         apiKey: this.env.DEEPSEEK_API_KEY,
         fetch: this.fetcher,
+        keys: { xai: this.env.XAI_API_KEY, gemini: this.env.GEMINI_API_KEY },
       });
       ensure(text.policyHash === policyHash, 'WEB_PROVIDER_WIRE_MISMATCH');
       const remote: ProviderMeter = {
@@ -108,8 +114,15 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
       };
       const confirmed = (stage: AcceptedV7StageOutput) => callback(() => accept(stage));
       const value = known
-        ? await text.generateAcceptedReviewFromKnownDraft(request, this.controller.signal, known, confirmed, remote)
-        : await text.generateAcceptedStages(request, this.controller.signal, confirmed, remote);
+        ? await text.generateAcceptedReviewFromKnownDraft(
+            request,
+            this.controller.signal,
+            known,
+            confirmed,
+            remote,
+            route,
+          )
+        : await text.generateAcceptedStages(request, this.controller.signal, confirmed, remote, route);
       return { ok: true, value };
     } catch (error) {
       return {

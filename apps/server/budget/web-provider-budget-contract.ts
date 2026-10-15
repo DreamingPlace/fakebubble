@@ -3,6 +3,15 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 
 export type Provider = 'deepseek' | 'fish';
+/**
+ * The shared (cross-instance) money authority knows two buckets: text and speech. Part 21b adds xAI and Gemini as text
+ * providers WITHOUT a new grant ceremony: their spend books against the 'deepseek' (text) bucket, so one cap and one
+ * unlimited/test policy cover all text providers together (never looser than before). The local per-provider ledger
+ * (web_provider_spending) still tracks each real provider separately.
+ */
+export const budgetBucket = (provider: string): Provider => (provider === 'fish' ? 'fish' : 'deepseek');
+export const bucketProviders = (bucket: Provider): readonly string[] =>
+  bucket === 'fish' ? ['fish'] : ['deepseek', 'xai', 'gemini'];
 export type BudgetAttemptKey = { operationId: string; phase: string; ordinal: number };
 export interface WebAttemptBudget {
   /**
@@ -27,7 +36,22 @@ export function budgetAttempt(store: BusinessStore, key: BudgetAttemptKey) {
   );
   const instance = store.get<{ instance_id: string }>('SELECT instance_id FROM web_instance WHERE singleton=1');
   ensure(row && instance, 'WEB_SHARED_INSTANCE_INVALID');
-  const id = JSON.stringify([instance.instance_id, key.operationId, key.phase, key.ordinal]);
+  // A text stage retried on the next model (Part 21b) is a new attempt under the same key: its shared reservation gets a
+  // generation suffix, so the abandoned (zero-settled) one is never reused. Generation 0 is the historical id.
+  const generation =
+    key.phase === 'speech' ||
+    !store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_provider_backups'")
+      ? 0
+      : (store.get<{ n: number }>(
+          'SELECT count(*) n FROM web_provider_backups WHERE operation_id=? AND phase=?',
+          key.operationId,
+          key.phase,
+        )?.n ?? 0);
+  const id = JSON.stringify(
+    generation === 0
+      ? [instance.instance_id, key.operationId, key.phase, key.ordinal]
+      : [instance.instance_id, key.operationId, key.phase, key.ordinal, generation],
+  );
   const fingerprint = budgetHash([
     row.principal_id,
     row.player_id,

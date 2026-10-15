@@ -2,6 +2,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import {
   budgetAttempt,
+  budgetBucket,
   type BudgetAttemptKey,
   type Provider,
   type WebAttemptBudget,
@@ -30,7 +31,7 @@ export class WebCloudBudgetClient implements WebAttemptBudget {
       ensure(held?.charged_micros === null && held.held_micros === row.held_micros, 'WEB_SHARED_ATTEMPT_UNRESOLVED');
       return;
     }
-    await this.rpc.reserve(id, row.provider, fingerprint, row.held_micros);
+    await this.rpc.reserve(id, budgetBucket(row.provider), fingerprint, row.held_micros);
   }
   async settleAttempt(store: BusinessStore, key: BudgetAttemptKey) {
     const { row, id, fingerprint } = budgetAttempt(store, key);

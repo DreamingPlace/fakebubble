@@ -10,16 +10,8 @@ import type { ProviderObservation, ProviderUsage } from '../../../packages/contr
  *
  * Sources and what was and was not confirmed are in docs/PROVIDERS.md.
  */
-export type TextProviderId = 'deepseek' | 'xai' | 'gemini';
-export interface ModelRef {
-  readonly provider: TextProviderId;
-  readonly model: string;
-}
-/** Draft and review model chains for one reply, best first. A later entry is used only after a definitely-not-billed failure. */
-export interface TextRoute {
-  readonly draft: readonly ModelRef[];
-  readonly review: readonly ModelRef[];
-}
+export type { ModelRef, TextProviderId, TextRoute } from '../../../packages/contracts/text-route.ts';
+import type { TextProviderId } from '../../../packages/contracts/text-route.ts';
 
 export const TEXT_ENDPOINTS: Readonly<Record<TextProviderId, string>> = Object.freeze({
   // DeepSeek keeps the endpoint of its pinned policy (text-generation-policy.ts); listed here for hashing only.

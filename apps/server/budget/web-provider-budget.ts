@@ -6,6 +6,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import {
   budgetAttempt,
+  budgetBucket,
   budgetHash as hash,
   validateCloudBudgetTarget,
   validateCloudBudgetGrant,
@@ -267,7 +268,7 @@ export class WebProviderBudget implements WebAttemptBudget {
       ensure(held?.state === 'sent' && held.held_micros === row.held_micros, 'WEB_SHARED_ATTEMPT_UNRESOLVED');
       return;
     }
-    this.reserve(id, row.provider, fingerprint, row.held_micros);
+    this.reserve(id, budgetBucket(row.provider), fingerprint, row.held_micros);
   }
   settleAttempt(store: Store, key: AttemptKey) {
     const { row, id, fingerprint } = budgetAttempt(store, key);

@@ -76,6 +76,13 @@ export function purgePlayerLogins(
     store.run("DELETE FROM web_free_operations WHERE tier='bonus' AND principal_id=?", scope.principalId);
     store.run('DELETE FROM web_signup_bonus WHERE principal_id=?', scope.principalId);
   }
+  // Part 21b: the player's model choice, points balance and points events go with the player. The per-operation
+  // rows (web_operation_models, web_provider_backups) and the usage aggregates hold ids/enums/counts only, no principal.
+  if (tableExists(store, 'web_points_balance')) {
+    store.run('DELETE FROM web_points_events WHERE principal_id=?', scope.principalId);
+    store.run('DELETE FROM web_points_balance WHERE principal_id=?', scope.principalId);
+    store.run('DELETE FROM web_player_model WHERE principal_id=?', scope.principalId);
+  }
   // Part 19: the player's live review code and banner mark go with the player (the archive copy carries no identity).
   purgeReviewRows(store, scope.principalId);
   if (!playerLoginsExist(store)) return;
@@ -139,6 +146,13 @@ export function playerLoginsRemain(store: Pick<BusinessStore, 'get'>, principalI
   if (principalIds.length === 0) return false;
   const marks = principalIds.map(() => '?').join(',');
   if (reviewRowsRemain(store, principalIds)) return true;
+  if (
+    tableExists(store, 'web_points_balance') &&
+    ['web_points_events', 'web_points_balance', 'web_player_model'].some((table) =>
+      store.get(`SELECT 1 FROM ${table} WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds),
+    )
+  )
+    return true;
   if (
     tableExists(store, 'web_signup_bonus') &&
     (store.get(`SELECT 1 FROM web_signup_bonus WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds) ||

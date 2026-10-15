@@ -1,3 +1,4 @@
+import { parsePlayerTextModels } from '../../packages/contracts/player-models.ts';
 import { WebCharacterDeletion } from '../../apps/server/characters/web-character-deletion.ts';
 import { WebCharacterPreviews } from '../../apps/server/characters/web-character-preview.ts';
 import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-character-preview-runner.ts';
@@ -95,6 +96,9 @@ export interface WebBusinessEnvironment {
   /** Part 17b: 5-reply guest trial, 10-reply signup bonus, 3 signups per IP per UTC day. Off unless 'true'. */
   SIGNUP_BONUS_ENABLED?: string;
   CHAT_REVIEW_ENABLED?: string;
+  /** Part 21b: players choose the model that writes their replies (and pay in points). Off unless 'true'; PLAYER_TEXT_MODELS lists the models offered. */
+  PLAYER_MODEL_CHOICE_ENABLED?: string;
+  PLAYER_TEXT_MODELS?: string;
   /** Owner alerts: off unless 'true'; then ALERT_EMAIL_TO, ADMIN_EMAIL and ADMIN_EMAIL_FROM are required. Thresholds are optional decimal strings. */
   ALERTS_ENABLED?: string;
   ALERT_EMAIL_TO?: string;
@@ -192,6 +196,9 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       dailyReplyLimit: webDailyReplyLimitFromEnv(env as unknown as Record<string, unknown>),
       publicFreeTier: this.publicConfig.signupBonus,
       chatReview: this.publicConfig.chatReview,
+      ...(env.PLAYER_MODEL_CHOICE_ENABLED === 'true'
+        ? { playerModelChoice: parsePlayerTextModels(env.PLAYER_TEXT_MODELS) }
+        : {}),
     });
     const configHash = createHash('sha256')
       .update(
