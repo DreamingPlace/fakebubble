@@ -1,3 +1,5 @@
+import { hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
+import { DEFAULT_PLAYER_MODEL, replyPoints } from '../../../packages/contracts/player-models.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
 import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
@@ -93,6 +95,8 @@ export interface ProviderHistoryRow {
   ordinal: number | null;
   media_id: string | null;
   duration_ms: number | null;
+  /** Part 21b: 1 when the draft of this reply was written by the backup model (web_operation_models.backup). */
+  via_backup?: number;
 }
 /** One history row as the player sees it. A text fallback is an ordinary narrative text bubble; no error is shown. */
 export function providerHistoryMessage(
@@ -109,6 +113,7 @@ export function providerHistoryMessage(
     author: row.origin === 'input' ? 'player' : 'character',
     origin: row.origin === 'text_fallback' ? 'narrative' : row.origin,
     ...(row.origin === 'text_fallback' ? { deliveryFallback: 'text' as const } : {}),
+    ...(row.via_backup === 1 && row.origin !== 'input' ? { viaBackup: true as const } : {}),
     text: row.body,
     createdAt: row.created_at,
     audio: row.media_id
@@ -460,6 +465,22 @@ export class WebProviderApplication {
     const extraLeft = tier.on && !expired ? extraTrialRemaining(this.store, principal.principalId, ipHash) : 0;
     const remaining = counterRemaining + extraLeft;
     const trialCanSend = !expired && remaining > 0 && (locked === null || !webCharacterDeleted(this.store, locked));
+    // Part 21b (flag PLAYER_MODEL_CHOICE_ENABLED): a player holding the signup bonus pays in points, so what it can still
+    // send follows the balance (after settling what finished), not the old bonus count. Free guest replies come first.
+    if (hasPoints(this.store, principal.principalId)) {
+      const state = modelChoiceState(this.store, now, principal.principalId, false)!;
+      const affordable = state.balance >= replyPoints(DEFAULT_PLAYER_MODEL, true);
+      return {
+        kind: 'guest',
+        ...base,
+        lockedCharacterId: affordable ? null : locked,
+        remainingReplies: (expired ? 0 : remaining) + state.repliesLeft,
+        reservedReplies: row.trial_reserved,
+        trialExpiresAt: retention.expires_at ?? null,
+        canSend: affordable || trialCanSend,
+        inaccessible: expired && !retained,
+      };
+    }
     const bonusLeft = bonusRemaining(this.store, principal.principalId);
     if (bonusLeft > 0)
       return {
@@ -637,15 +658,20 @@ export class WebProviderApplication {
       ordinal: number | null;
       media_id: string | null;
       duration_ms: number | null;
+      via_backup: number;
     }>(
       `
       SELECT m.seq,m.id,m.body,m.created_at,o.id operation_id,'input' origin,NULL ordinal,
-          NULL media_id,NULL duration_ms
+          NULL media_id,NULL duration_ms,0 via_backup
         FROM web_operations o JOIN messages m ON m.id=o.input_message_id
         WHERE o.principal_id=? AND o.world_id=? AND o.conversation_id=? AND m.seq<?
       UNION ALL
       SELECT m.seq,m.id,m.body,m.created_at,p.operation_id,i.origin,i.ordinal,i.media_id,
-          coalesce(a.duration_ms,f.duration_ms) duration_ms
+          coalesce(a.duration_ms,f.duration_ms) duration_ms,${
+            modelChoiceTablesExist(this.store)
+              ? '(SELECT backup FROM web_operation_models b WHERE b.operation_id=p.operation_id)'
+              : '0'
+          } via_backup
         FROM web_publication_items i JOIN web_publications p ON p.operation_id=i.operation_id
         JOIN messages m ON m.id=i.message_id
         LEFT JOIN web_provider_media_assets a ON a.media_id=i.media_id AND i.origin='narrative'

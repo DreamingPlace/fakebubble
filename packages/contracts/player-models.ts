@@ -87,3 +87,37 @@ export function parsePlayerTextModels(value: unknown): readonly PlayerModelId[] 
   );
   return PLAYER_MODEL_IDS.filter((id) => id === 'deepseek' || listed.has(id));
 }
+
+/** What GET /account tells a points holder about the picker (the server's `modelChoiceState`). */
+export interface ModelChoiceInfo {
+  models: { id: PlayerModelId; points: number; voicePoints: number }[];
+  selected: PlayerModelId;
+  balance: number;
+  repliesLeft: number;
+  version: number;
+  notice?: 'model_withdrawn';
+}
+/** Strict parse of the server's state: anything unexpected yields undefined and the page simply shows no picker. */
+export function parseModelChoice(value: unknown): ModelChoiceInfo | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const count = (n: unknown): n is number =>
+    Number.isSafeInteger(n) && (n as number) >= 0 && (n as number) <= 1_000_000;
+  if (!Array.isArray(raw.models) || !isPlayerModelId(raw.selected) || !count(raw.balance) || !count(raw.repliesLeft))
+    return undefined;
+  const models: ModelChoiceInfo['models'] = [];
+  for (const item of raw.models) {
+    const entry = item as Record<string, unknown> | null;
+    if (!entry || !isPlayerModelId(entry.id) || !count(entry.points) || !count(entry.voicePoints)) return undefined;
+    models.push({ id: entry.id, points: entry.points, voicePoints: entry.voicePoints });
+  }
+  if (models.length === 0 || !models.some((entry) => entry.id === raw.selected)) return undefined;
+  return {
+    models,
+    selected: raw.selected,
+    balance: raw.balance,
+    repliesLeft: raw.repliesLeft,
+    version: typeof raw.version === 'number' ? raw.version : POINTS_VERSION,
+    ...(raw.notice === 'model_withdrawn' ? { notice: 'model_withdrawn' as const } : {}),
+  };
+}

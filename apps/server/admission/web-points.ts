@@ -1,4 +1,5 @@
 import {
+  type ModelChoiceInfo,
   DEFAULT_PLAYER_MODEL,
   POINTS,
   isPlayerModelId,
@@ -236,16 +237,15 @@ export function chargeAdmission(
   return price;
 }
 
-export interface ModelChoiceState {
-  models: { id: PlayerModelId; points: number; voicePoints: number }[];
-  selected: PlayerModelId;
-  balance: number;
-  repliesLeft: number;
-  version: number;
-  notice?: 'model_withdrawn';
-}
+export type ModelChoiceState = ModelChoiceInfo;
 /** What the player page shows. Reads, but settles and creates the balance on the way; consumes the one-time notice. */
-export function modelChoiceState(store: Writer & Flagged, now: number, principalId: string): ModelChoiceState | null {
+export function modelChoiceState(
+  store: Writer & Flagged,
+  now: number,
+  principalId: string,
+  /** Only the account read that SHOWS the notice consumes it; the access check (every bootstrap) must not. */
+  consumeNotice = true,
+): ModelChoiceState | null {
   const offered = offeredModels(store);
   if (!offered || !hasSignupBonus(store, principalId)) return null;
   return store.transaction(() => {
@@ -256,7 +256,7 @@ export function modelChoiceState(store: Writer & Flagged, now: number, principal
       'SELECT notice FROM web_player_model WHERE principal_id=?',
       principalId,
     )?.notice;
-    if (notice) store.run('UPDATE web_player_model SET notice=NULL WHERE principal_id=?', principalId);
+    if (notice && consumeNotice) store.run('UPDATE web_player_model SET notice=NULL WHERE principal_id=?', principalId);
     return {
       models: offered.map((id) => ({
         id,

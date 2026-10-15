@@ -114,6 +114,8 @@ export interface WebProviderMessage {
   createdAt: number;
   /** Present only when the voice reply was delivered as text because voice was unavailable or busy. */
   deliveryFallback?: 'text';
+  /** Part 21b: present only when the backup model wrote this reply (the page shows 由备用模型回复). */
+  viaBackup?: true;
   audio: {
     revision: number;
     status: WebAudioStatus;

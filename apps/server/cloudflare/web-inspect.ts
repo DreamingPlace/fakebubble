@@ -165,6 +165,14 @@ export function inspectWebAuthority(
             : 'other',
       PLAYER_EMAIL_BINDING_PRESENT: players.emailBindingPresent === true,
     },
+    // Part 21b: the aggregate usage rows (UTC day, provider, model, phase; counts and micro-USD at list price). No id, no content.
+    usage: {
+      rows: has('web_provider_usage')
+        ? reader.all(
+            'SELECT day,provider,model,phase,calls,input_tokens,cached_input_tokens,output_tokens,bytes,cost_micros,replies FROM web_provider_usage ORDER BY day DESC,provider,model,phase LIMIT 2000',
+          )
+        : [],
+    },
     flags: {
       PUBLIC_ENABLED: flag(flags.PUBLIC_ENABLED),
       EXTERNAL_CALLS: flag(flags.EXTERNAL_CALLS),
