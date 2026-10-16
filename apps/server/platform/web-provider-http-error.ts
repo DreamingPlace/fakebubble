@@ -57,7 +57,6 @@ export function webProviderHTTPError(error: unknown) {
                 publicCode === 'ADMIN_PERMISSION_REQUIRED' ||
                 publicCode === 'ADMIN_OWNER_REQUIRED' ||
                 publicCode === 'ADMIN_OWNER_PROTECTED' ||
-                publicCode === 'COCREATION_INVITE_REQUIRED' ||
                 publicCode === 'PLAYER_SIGNUP_DISABLED' ||
                 publicCode === 'TURNSTILE_REQUIRED' ||
                 publicCode === 'TURNSTILE_FAILED' ||
@@ -82,7 +81,8 @@ export function webProviderHTTPError(error: unknown) {
                 : publicCode === 'QUEUE_FULL' ||
                     publicCode === 'RATE_LIMITED' ||
                     publicCode === 'WEB_DAILY_LIMIT_REACHED' ||
-                    publicCode === 'COCREATION_RATE_LIMITED' ||
+                    publicCode === 'COCREATION_DAILY_LIMIT' ||
+                    publicCode === 'COCREATION_IP_LIMIT' ||
                     publicCode === 'PLAYER_RATE_LIMITED' ||
                     publicCode === 'PLAYER_EMAIL_DAILY_CAP' ||
                     publicCode === 'PLAYER_SIGNUP_IP_LIMIT'

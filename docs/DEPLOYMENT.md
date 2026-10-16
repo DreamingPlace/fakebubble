@@ -84,7 +84,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 ### 共创收件箱（Part 12）
 
-`117_cocreation.sql` 是独立的第 117 版迁移（Node：`user_version=117`，已有 provider 实例运行 `migrate-cocreation`；Cloudflare 内联与 R2：账本版本 117，已在 116 的权威启动时自动补上）。新增 `web_cocreation_submissions` 与 `web_cocreation_answers`（均为用户数据）。受邀玩家通过 `POST /api/web/provider/cocreation/submit` 为官方角色留下想法（每答案 ≤300 字，自由卡 ≤1000，对话卡每句 ≤120；每次 ≤12 条；每玩家每角色滚动 24 小时 ≤5 次；按 requestId 幂等；不计入 DAILY_REPLY_LIMIT；不调用任何供应商、不预占预算）。管理员权限 `cocreation.read`（查看）与 `cocreation.manage`（处理）由主管理员在权限编辑器的“角色 · 共创收件箱”中授予，不包含在四个功能类别里。收件箱只显示稳定的匿名代号（`玩家#` + 4 位十六进制，来自 requestKey 派生密钥的 HMAC）和邀请批次名。内容只有在管理员“加入草稿”并经现有预览与发布流程后才会进入提示词。角色删除与玩家数据清理会一并删除这些行。
+`117_cocreation.sql` 是独立的第 117 版迁移（Node：`user_version=117`，已有 provider 实例运行 `migrate-cocreation`；Cloudflare 内联与 R2：账本版本 117，已在 116 的权威启动时自动补上）。新增 `web_cocreation_submissions` 与 `web_cocreation_answers`（均为用户数据）。任何持有有效会话的玩家（访客、已注册、账号、受邀；访客会话本身已通过 Turnstile）通过 `POST /api/web/provider/cocreation/submit` 为官方角色留下想法（每答案 ≤300 字，自由卡 ≤1000，对话卡每句 ≤120；每次 ≤12 条；**Part 21f：每玩家每角色每个 UTC 日 1 次**，第二次返回 `COCREATION_DAILY_LIMIT`（429，带到次日零点的 retryAfter）；另有防滥用上限：每个 IP 哈希每 UTC 日 10 次，返回 `COCREATION_IP_LIMIT`，计数放在既有的每 IP 每日计数表 `web_local_guest_budget`（键 `cocreation:<ip 哈希>`，因为提交行不记录地址，无需迁移）；`POST /cocreation/today { characterId }` 告诉玩家今天的名额是否已用，页面据此在输入前显示“今天已提交”；按 requestId 幂等；不计入 DAILY_REPLY_LIMIT；不调用任何供应商、不预占预算）。管理员权限 `cocreation.read`（查看）与 `cocreation.manage`（处理）由主管理员在权限编辑器的“角色 · 共创收件箱”中授予，不包含在四个功能类别里。收件箱只显示稳定的匿名代号（`玩家#` + 4 位十六进制，来自 requestKey 派生密钥的 HMAC）和邀请批次名。内容只有在管理员“加入草稿”并经现有预览与发布流程后才会进入提示词。角色删除与玩家数据清理会一并删除这些行。
 
 ### 邮箱账号与多设备登录（Part 11f）
 
@@ -105,7 +105,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **登录与会话：** 邮箱 + 密码（8–128 字节）；同一邮箱 15 分钟内失败 10 次、同一 IP 失败 30 次后需要等待；错误提示一律为“邮箱或密码不正确”。登录只新建会话，其他设备的会话不受影响，永远不合并两个 principal；对已被撤销邀请的受邀 principal，输对密码后给出明确的拒绝，管理员“撤销授权”照旧一次性结束全部会话并阻止今后的登录。忘记密码会结束该 principal 的其他全部会话；修改密码可选择同时退出其他设备。**保留期：** 已注册（有邮箱登录）的访客在试玩结束后**不会被保留清理删除**：聊天照常以“试玩已结束”拒绝（准入不变），但仍可登录、查看历史、修改昵称、兑换邀请码（兑换后按受邀玩家规则）。保留状态不新增：`web_guest_retention` 保持 `active` 且已过期，“有登录的访客”由服务端推导；只有显式声明 `read` 的读取路径（历史、事件、操作状态、已发布音频）放行，其余一律按 `live` 判断并返回 `TRIAL_EXPIRED`。没有邀请授权的登录若 **180 天**无活动（`web_player_logins.last_seen_at`，注册、登录时写入，`bootstrap` 每个 UTC 日最多刷新一次）则走原有的、带审计且失败即关闭的访客清理路径连同全部数据删除；没有登录的访客仍在试玩结束时清理。登录会话与注册当下的会话使用与受邀玩家相同的 400 天 Cookie，服务端以 400 天为上限。已失效/被撤销/被轮换的 Cookie 在 `bootstrap` 时由服务端清除，页面回到“登录 / 注册 / 以访客继续”的首页；仅当一次未确认的邀请兑换回执仍可取回时保留 Cookie。
 
-**旧受邀玩家（只有恢复码）：** 在聊天页“⋯”里“绑定邮箱”，验证后设置密码与昵称，绑定成功即撤销其恢复码；恢复码接口与测试保持不变，未绑定的玩家仍可从首页的小链接使用。
+**旧受邀玩家（只有恢复码）：** 在顶部账号菜单（“我的账号”）里“绑定邮箱”（Part 21f：聊天页“⋯”里只剩切换回复模型与共创），验证后设置密码与昵称，绑定成功即撤销其恢复码；恢复码接口与测试保持不变，未绑定的玩家仍可从首页的小链接使用。
 
 **数据清理：** 登录行与验证码挑战是玩家数据，随玩家清理一并删除（Node 与 Cloudflare 保留期清理器、生命周期审计在清理后仍有残留时失败关闭）；昵称写入的“名片”修订同样随之删除。
 
@@ -156,7 +156,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 | `GUEST_GRACE_ENABLED` | `false` | 注册永远开放，并给没有登录的访客 **7 天宽限期**：试玩结束后数据再保留 7 天（清理时间由 `expires_at` 改为 `expires_at + 7 天`，只对没有登录的访客），期间不能聊天、不能读历史，但会话仍可用于注册；注册即成为保留账号（沿用 Part 11f 的 180 天不活跃规则），历史回来。宽限期结束后数据清除，旧 Cookie 返回 `GUEST_GRACE_ENDED`（401，清 Cookie），页面落到“登录 / 注册 / 以访客继续”，提示“之前的体验聊天已过期”，选 注册 会走正常首访流程创建新访客并以空历史注册。准入不变：没有邀请就没有新回复。 |
 | `SIGNUP_BONUS_ENABLED` | `false` | 免费额度（Part 17b，见下）：访客试聊每人、每个网络（终身）5 条，注册并验证邮箱再送 10 条，同一 IP 每个 UTC 日最多完成 3 次注册。关闭时（默认）一切照旧：3 条、没有赠送、没有注册上限。 |
 | `CHAT_REVIEW_ENABLED` | `false` | 测试对话（Part 19，见下）：站长可以用匿名编号阅读聊天全文；玩家被删除聊天时，文字以匿名编号再保留 180 天；聊天页出现一次性提示；删除账号／清除体验数据的确认单多一句 180 天说明。关闭时（默认）一切照旧：没有页面、没有存档、删除立即清空，审核相关路由和没有一样（404）。 |
-| `ACCOUNT_DELETE_ENABLED` | `false` | 账号菜单里出现“删除我的账号”（有登录：密码 + 输入“删除”）和“清除本设备的体验数据”（访客：无需密码）。走原有、带审计、失败即关闭的清理路径，立即清除聊天、记忆、语音、共创、名片、登录、验证码挑战与全部会话；受邀玩家的授权在同一事务里撤销。 |
+| `ACCOUNT_DELETE_ENABLED` | `false` | 顶部账号菜单里出现“删除我的账号”（有登录：密码 + 输入“删除”）；访客的顶部栏出现“更多”，里面是“清除本设备的体验数据”（无需密码）。走原有、带审计、失败即关闭的清理路径，立即清除聊天、记忆、语音、共创、名片、登录、验证码挑战与全部会话；受邀玩家的授权在同一事务里撤销。 |
 | `LEGAL_PAGES_ENABLED` | `false` | **业务 Worker 与边缘 Worker 都要设**。开启后注册页显示“注册即表示你同意《用户协议》和《隐私政策》”，页脚和首页出现两个链接；边缘 Worker 才会提供 `/privacy.html`、`/terms.html`（关闭时 404）。两页已在 Part 19 定稿（没有 【待确认】，没有“草稿”提示）；开启后注册弹窗还会多一个必选的“我已年满 18 周岁”勾选（见下）。 |
 | `ALERTS_ENABLED` | `false` | 开启给站长发邮件告警与日报。需要 `ALERT_EMAIL_TO`、`ADMIN_EMAIL`（`send_email` 绑定）和 `ADMIN_EMAIL_FROM`，缺任何一个业务对象拒绝启动。 |
 | `ALERT_EMAIL_TO` | — | 收件人，必须是 `ADMIN_EMAIL` 绑定允许送达的已验证地址。 |
@@ -223,7 +223,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **新增密钥（只配给 generation Worker，缺哪个就是哪个模型不可用，不会崩溃）：** `wrangler secret put XAI_API_KEY`、`wrangler secret put GEMINI_API_KEY`。
 **新增变量（业务 Worker，`business.json.example` 已列出）：** `PLAYER_MODEL_CHOICE_ENABLED`（默认 `false`；需要同时 `SIGNUP_BONUS_ENABLED=true`）、`PLAYER_TEXT_MODELS`（如 `deepseek,gemini,xai`；DeepSeek 永远开启；不在列表里的模型对玩家隐藏，正在用它的玩家回到 DeepSeek 并收到一次性提示，也不再作为备用）。
-**迁移 123（`123_model_choice.sql`）：** 48 步；本地 `migrate-model-choice`；`expected-migrations` 与 `inspect` 会显示。不回填：点数余额在玩家首次接触时按 `100 − 10 × 已用赠送条数` 建立。
+**迁移 123（`123_model_choice.sql`）：** 48 步；本地 `migrate-model-choice`；`expected-migrations` 与 `inspect` 会显示。不回填：点数余额在玩家首次接触时建立（Part 21f 起：`100 − 10 × 已用赠送条数 + 10 × 没用完的体验回复`，写成唯一一条 `bonus` 事件；已建立的余额不再改动）。
 
 **启用顺序（先 staging）：**
 1. 部署代码（开关全关），确认 `expected-migrations` 与 `inspect` 一致（48 步）。
@@ -231,7 +231,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 3. staging 上把 `PLAYER_MODEL_CHOICE_ENABLED=true`，先只列 `PLAYER_TEXT_MODELS=deepseek,gemini`，再加 `xai`；每个模型发几条真实消息，检查回复、备用提示与 `pnpm usage:report`（用 `inspect` 的回执文件：`pnpm usage:report --receipt=/绝对路径`），据此校准 `packages/contracts/player-models.ts` 的点数表和 `REASONING_HEADROOM`（推理 token 按输出计费）。
 4. 生产同样顺序；出问题把模型从 `PLAYER_TEXT_MODELS` 删掉即可（无需迁移）。关掉总开关则立刻回到“免费消息”旧行为。
 
-**备用模型：** 明确未计费的失败（429、供应商文档中的过载/不可用 503、“地区/位置不支持”、缺少密钥、连接未建立）按 选择的模型 → DeepSeek → Gemini 顺序最多重试一次，零费用结算后重新预占；超时、重置、其他 5xx、无法解析一律 UNKNOWN，不重试、占款不释放。玩家按两者中较便宜的点数计费，回复下显示“由备用模型回复”。审核（安全与记忆）永远是 DeepSeek v4 pro（备用 Gemini），所以记忆始终由同一个模型写入。xAI/Gemini 的花费记入共享预算的文本桶（无需新的授权仪式）。**链路用尽（Part 21d）：** 链上最后一个模型也明确未计费地失败（或下一个模型根本无法发出：缺少密钥、请求过大）时，操作立即以 failed 结束（释放配额，点数由对账全额退回），不再等 5 分钟截止时间；链上最后一个模型返回 429 时，先按上面 DeepSeek 同样的 2s、4s、8s 退避重试，用尽后才结束。UNKNOWN 规则不变。
+**备用模型：** 明确未计费的失败（429、供应商文档中的过载/不可用 503、“地区/位置不支持”、缺少密钥、连接未建立）按 选择的模型 → DeepSeek → Gemini 顺序最多重试一次，零费用结算后重新预占；超时、重置、其他 5xx、无法解析一律 UNKNOWN，不重试、占款不释放。玩家按两者中较便宜的点数计费，回复下显示“{选的模型} 繁忙，由 {实际模型} 回复 · 按 {计费模型} 计费”（Part 21f；受邀玩家不计点，不显示计费一句）。审核（安全与记忆）永远是 DeepSeek v4 pro（备用 Gemini），所以记忆始终由同一个模型写入。xAI/Gemini 的花费记入共享预算的文本桶（无需新的授权仪式）。**链路用尽（Part 21d）：** 链上最后一个模型也明确未计费地失败（或下一个模型根本无法发出：缺少密钥、请求过大）时，操作立即以 failed 结束（释放配额，点数由对账全额退回），不再等 5 分钟截止时间；链上最后一个模型返回 429 时，先按上面 DeepSeek 同样的 2s、4s、8s 退避重试，用尽后才结束。UNKNOWN 规则不变。
 
 **出口地区（`generation.json.example` 的 `placement`）：** 我们设置了 Cloudflare 文档中的区域提示 `{"region": "aws:us-east-1"}`（wrangler 未在本仓库固定版本，官方文档也未给出最低版本；选区域提示而不是 Smart Placement，因为目标是固定的出口地区而不是靠探测上游）。**但官方文档明确写着：放置只影响 `fetch` 处理器，不影响 RPC 方法或命名入口，而 generation Worker 是被业务对象通过 RPC 调用的**，所以这条提示在当前架构下很可能不生效：出站请求实际从业务 Durable Object 所在的机房发出（RPC 与调用方同机房）。真正起作用的办法是新建 staging 的业务对象时用 `locationHint`（只在首次创建时有效，已有对象无法搬迁），或后续把供应商调用改成 `fetch` 服务绑定。在那之前由自动备用兜底：地区不被接受的回答会按“未计费”改用 DeepSeek，并计入 `web_provider_backups`。请在 staging 观察备用比例后再决定。
 
@@ -300,3 +300,10 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 ### 提示词变更（Part 11e）
 
 - Part 11e 修改了角色语气、时间克制、审核保留角色语气及 AI 诚实表述的提示词，因此 `POLICY_HASH` 与 `PROMPT_HASH` 已变化（协议指纹不变）。下一次角色发布之前，必须重新运行角色预演（预演测试），不能沿用旧哈希下通过的预演结果。
+
+### 玩家修复（Part 21f，无迁移）
+
+- **登录玩家一律付点数：** 开启点数的登录玩家不再走访客体验路径，任何模型每条都有 `web_operation_models` 与 spend 事件。没用完的体验回复折算进开场余额（每条 10 点）。
+- **价格：** `POINTS.version` = 2；xAI 25 点/条（DeepSeek 10、Gemini 20、语音 +2，仍在 `packages/contracts/player-models.ts` 一张表里）。旧事件保留 `price_version` = 1。
+- **消费记录：** 顶部账号菜单 → “消费记录”（登录玩家与受邀玩家；访客得到 404）。`POST /api/web/provider/billing/history { page?, tzOffsetMinutes? }`，只读本会话主体，先 `reconcilePoints`，最近 90 天、每页 50 条。只显示点数，不显示金额、供应商成本或任何 id。
+- **Grok 延迟：** 见 `docs/PROVIDERS.md`“Grok latency”；选择器按模型显示速度提示（`PLAYER_MODELS[*].speed`）。

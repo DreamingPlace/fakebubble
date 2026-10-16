@@ -7,7 +7,27 @@ export const COCREATION_SUBMIT_PATH = '/api/web/local/cocreation/submit';
 /** An answer set can carry 12 cards of up to 300 (one of 1000) code points: more than the 8 KiB default body. */
 export const COCREATION_BODY_LIMIT = 32_768;
 
+/** POST /cocreation/today { characterId }: has this player used today's entry for the character? (a read, as a POST for CSRF) */
+export const COCREATION_TODAY_PATH = '/api/web/local/cocreation/today';
+
 export function routeWebCocreation(cocreation: WebCocreation, req: WebInviteRequest): WebInviteResult | null {
+  if (req.path === COCREATION_TODAY_PATH) {
+    ensure(req.method === 'POST', 'NOT_FOUND');
+    const asked = req.body as Record<string, unknown> | null;
+    ensure(
+      asked !== null &&
+        typeof asked === 'object' &&
+        !Array.isArray(asked) &&
+        Object.keys(asked).join(',') === 'characterId',
+      'INVALID_REQUEST',
+    );
+    ensure(typeof req.playerToken === 'string' && req.playerToken !== '', 'AUTH_REQUIRED');
+    ensure(typeof req.csrf === 'string' && typeof req.origin === 'string', 'CSRF_INVALID');
+    return {
+      status: 200,
+      body: cocreation.usedToday(req.playerToken, req.csrf, req.origin, asked.characterId),
+    };
+  }
   if (req.path !== COCREATION_SUBMIT_PATH) return null;
   ensure(req.method === 'POST', 'NOT_FOUND');
   const body = req.body;
@@ -22,10 +42,13 @@ export function routeWebCocreation(cocreation: WebCocreation, req: WebInviteRequ
   ensure(typeof req.playerToken === 'string' && req.playerToken !== '', 'AUTH_REQUIRED');
   ensure(typeof req.csrf === 'string' && typeof req.origin === 'string', 'CSRF_INVALID');
   const value = body as Record<string, unknown>;
-  const result = cocreation.submit(req.playerToken, req.csrf, req.origin, {
-    characterId: value.characterId,
-    requestId: value.requestId,
-    answers: value.answers,
-  });
+  ensure(typeof req.trustedIpHash === 'string', 'WEB_TRUSTED_IP_REQUIRED');
+  const result = cocreation.submit(
+    req.playerToken,
+    req.csrf,
+    req.origin,
+    { characterId: value.characterId, requestId: value.requestId, answers: value.answers },
+    req.trustedIpHash,
+  );
   return { status: result.duplicate ? 200 : 201, body: result };
 }

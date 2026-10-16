@@ -49,7 +49,9 @@ function setup(t: test.TestContext) {
 }
 const answers = [{ cardId: 'catchphrase', text: '哎呀妈呀' }];
 
-test('co-creation over real HTTP: invited only, idempotent, limited, and an inbox that shows a pseudonym and nothing else', async (t) => {
+// Part 21f (named exception): co-creation is open to every session (the invite gate is gone) and limited to one entry per
+// player and character per UTC day, so the guest refusal and the five-per-day section became their opposites.
+test('co-creation over real HTTP: open to every session, idempotent, limited per day, and an inbox that shows a pseudonym and nothing else', async (t) => {
   const f = setup(t),
     owner = client(),
     reader = client(),
@@ -83,8 +85,6 @@ test('co-creation over real HTTP: invited only, idempotent, limited, and an inbo
     ...over,
   });
 
-  // A guest may not; nothing is stored.
-  assert.equal((await submit(guest, body(randomUUID()), 403)).error.code, 'COCREATION_INVITE_REQUIRED');
   // Without the session cookie, or with a wrong CSRF token, or from another origin: refused before any card is read.
   await f.call(`${API}/cocreation/submit`, client(), body('r0'), 401);
   const wrongCsrf = { ...invited, csrf: 'x'.repeat(43) };
@@ -115,20 +115,28 @@ test('co-creation over real HTTP: invited only, idempotent, limited, and an inbo
       : { cardId: card.id, text: '字'.repeat(card.id === 'free' ? 1000 : 300) },
   );
   assert.ok(Buffer.byteLength(JSON.stringify(largest)) > 8192 * 1.2);
-  assert.equal((await submit(invited, body('req-big', { answers: largest }))).answered, 12);
+  assert.equal((await submit(invited, body('req-big', { answers: largest, characterId: 'jojo' }))).answered, 12);
   // But there is a ceiling.
   await submit(invited, body('req-huge', { answers: [{ cardId: 'free', text: '字'.repeat(40_000) }] }), 400);
 
-  // Five per player and character in 24 hours: two have been accepted, three more fit, then the limit answers 429.
-  for (const n of [4, 5, 6]) await submit(invited, body(`req-${n}x`));
+  // One entry per player and character per UTC day: the second one for the same character answers 429.
   const limited = await submit(invited, body('req-7x'), 429);
-  assert.equal(limited.error.code, 'COCREATION_RATE_LIMITED');
+  assert.equal(limited.error.code, 'COCREATION_DAILY_LIMIT');
   assert.ok(limited.error.retryAfterMs > 0);
   assert.equal(
-    (await submit(invited, body('req-other', { characterId: 'jojo' }))).duplicate,
+    (await submit(invited, body('req-other', { characterId: 'chen-jimi' }))).duplicate,
     false,
-    'another character',
+    'another character has its own entry',
   );
+  // Today's entry, before typing: used for the two characters written to, free for the rest.
+  const today = (actor: Client, characterId: string) => f.call(`${API}/cocreation/today`, actor, { characterId });
+  assert.deepEqual(await today(invited, 'wei-guagua'), { used: true });
+  assert.deepEqual(await today(guest, 'wei-guagua'), { used: false });
+  await f.call(`${API}/cocreation/today`, client(), { characterId: 'jojo' }, 401);
+  // A guest session may submit too (Turnstile guards the guest session itself, as for chat).
+  assert.equal((await submit(guest, body(randomUUID()))).duplicate, false);
+  assert.deepEqual(await today(guest, 'wei-guagua'), { used: true });
+  assert.equal((await submit(guest, body(randomUUID()), 429)).error.code, 'COCREATION_DAILY_LIMIT');
 
   // Co-creation is not a reply: the player's reply allowance and every provider counter are untouched.
   const stats = await f.fixture<any>('/fixture/stats');
@@ -141,12 +149,16 @@ test('co-creation over real HTTP: invited only, idempotent, limited, and an inbo
   await list(nobody, 403);
   await list(client(), 401);
   const listing = await list(reader);
-  assert.equal(listing.items.length, 6);
+  assert.equal(listing.items.length, 4);
   assert.match(listing.items[0].pseudonym, /^玩家#[0-9a-f]{4}$/);
-  assert.equal(new Set(listing.items.map((i: any) => i.pseudonym)).size, 1, 'one player, one label');
+  assert.equal(new Set(listing.items.map((i: any) => i.pseudonym)).size, 2, 'two players, one label each');
   assert.ok(!JSON.stringify(listing).includes(principal), 'the principal id never leaves the server');
   const detail = await f.call(`${API}/admin/cocreation/detail`, reader, { id: listing.items.at(-1).id });
   assert.equal(detail.batch, '春季内测');
+  // A guest's entry carries no provenance at all: no batch, no identity.
+  const guestDetail = await f.call(`${API}/admin/cocreation/detail`, reader, { id: listing.items[0].id });
+  assert.equal(guestDetail.batch, null);
+  assert.ok(!/@|principal|player-|world-/.test(JSON.stringify([listing, guestDetail])), 'no email or id for a guest');
   assert.deepEqual(Object.keys(detail).sort(), [
     'adminNote',
     'answers',
@@ -159,7 +171,11 @@ test('co-creation over real HTTP: invited only, idempotent, limited, and an inbo
     'starred',
     'status',
   ]);
-  assert.deepEqual((await f.call(`${API}/admin/cocreation/counts`, reader, {})).counts, { 'wei-guagua': 5, jojo: 1 });
+  assert.deepEqual((await f.call(`${API}/admin/cocreation/counts`, reader, {})).counts, {
+    'wei-guagua': 2,
+    jojo: 1,
+    'chen-jimi': 1,
+  });
   // Read is not manage.
   await f.call(`${API}/admin/cocreation/star`, reader, { id: detail.id, starred: true }, 403);
   await f.call(`${API}/admin/cocreation/set-status`, reader, { ids: [detail.id], status: 'archived' }, 403);
