@@ -1,5 +1,6 @@
 import {
   WebBusinessObject as ProductionObject,
+  WebOperatorService as ProductionOperator,
   type WebBusinessEnvironment,
 } from '../../../workers/web-cloudflare/business.ts';
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
@@ -8,12 +9,24 @@ import { WebDurableStore } from '../../../apps/server/cloudflare/web-store.ts';
 import { PrivateMediaObjects } from '../../../apps/server/cloudflare/media-objects.ts';
 import { WebCloudRetention } from '../../../apps/server/cloudflare/web-retention.ts';
 import { webR2Migrations } from '../../../workers/web-cloudflare/migrations.ts';
-export { WebOperatorService } from '../../../workers/web-cloudflare/business.ts';
 type Context = {
   id: { toString(): string };
   storage: DurableSQLStorage & AlarmStorage;
   waitUntil(task: Promise<void>): void;
 };
+
+/**
+ * Test graph only: lets the entrypoint's switch differ from the business object's. OPERATOR_SWITCH (when bound) replaces
+ * OPERATOR_ENABLED in the entrypoint's env, while the object keeps the OPERATOR_ENABLED it was constructed with, which is the
+ * state after a vars-only deploy over a business object that is never evicted.
+ */
+export class WebOperatorService extends ProductionOperator {
+  constructor(ctx: never, env: never) {
+    const switched = (env as { OPERATOR_SWITCH?: string }).OPERATOR_SWITCH;
+    // @ts-expect-error The workers types declare a zero-argument constructor; the runtime passes (ctx, env).
+    super(ctx, (switched === undefined ? env : { ...(env as object), OPERATOR_ENABLED: switched }) as never);
+  }
+}
 
 /** Only the local test graph exports this inspector; the production class/Alarm are inherited unchanged. */
 export class WebBusinessObject extends ProductionObject {
@@ -125,7 +138,21 @@ export default {
       BUSINESS: { idFromString(id: string): unknown; get(id: unknown): { fetch(request: Request): Promise<Response> } };
     },
   ) {
-    if (!new URL(request.url).pathname.startsWith('/__test/')) return new Response(null, { status: 404 });
+    const path = new URL(request.url).pathname;
+    if (path.startsWith('/__operator/')) {
+      // A caller holding the BUSINESS binding but not the operator proof (what the edge worker is).
+      const stub = env.BUSINESS.get(env.BUSINESS.idFromString(env.BUSINESS_OBJECT_ID)) as unknown as Record<
+        string,
+        (...args: unknown[]) => Promise<unknown>
+      >;
+      const proof = request.headers.get('x-proof');
+      return Promise.resolve(stub[path.slice('/__operator/'.length)]!(...(proof === null ? [] : [proof]))).then(
+        (value) => Response.json(value),
+        (error: unknown) =>
+          Response.json({ error: error instanceof Error ? error.message : 'FAILED' }, { status: 409 }),
+      );
+    }
+    if (!path.startsWith('/__test/')) return new Response(null, { status: 404 });
     return env.BUSINESS.get(env.BUSINESS.idFromString(env.BUSINESS_OBJECT_ID)).fetch(request);
   },
 };
