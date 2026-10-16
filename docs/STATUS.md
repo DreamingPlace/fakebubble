@@ -148,7 +148,7 @@ No migration (still 48 steps, step 123 unchanged; 124 belongs to Part 21g). No p
 7. **Prices:** xAI 25 points; `POINTS.version` 2.
 8. **消费记录** (see DEPLOYMENT.md): per-reply rows with the model that wrote it, 繁忙/已改用 note, voice, net points, 不计点 for invited players, failed replies "回复失败，已退还 N 点", signup bonus, grants; summary with balance and this month by model and by character. Tests: scoping, backup row, failed refund, pagination/90 days, guest 404, deletion.
 - Test changes (named exceptions, each commented in the file): `web-points` (opening-balance fixture now signs up after the whole trial; trial-first test replaced; prices), `web-cocreation` unit/HTTP (guest allowed, 1/day, IP cap, status mapping), `account-sheet` / `public-readiness` / `cocreation-sheet` / `model-picker` component tests (account entries now in the top menu; new copy). No assertion was weakened.
-- Screenshots: branch `review/part-21f`.
+- `pnpm check` (format, prompts, typecheck, all tests): **1413 tests, 1413 passed** on Node 24.19.0 / pnpm 11.19.0; expected-migrations unchanged (48 steps, last step 123). Screenshots: branch `review/part-21f`.
 
 ## Part 21c (Fish Drama 3 reply voice, per-voice fallback, soundCue, listening script)
 
