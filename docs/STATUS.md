@@ -146,7 +146,7 @@ No migration (48 steps, step 123 = `432c1237…28db41`). No prompt, policy or to
 - **Health line:** `status.retentionHealth` and `inspect.retention.health`: `failing`, `oldestAgeBucket`, `lastSuccessAt` (counts and a time only).
 - **Limit:** `messageShape` removes quoted text, e-mail-like text, numbers, 8+ character tokens and non-ASCII; an unquoted ASCII word shorter than 8 characters is kept. No code path here puts player text in an error message; the test uses quoted and unquoted forms.
 - Tests: `web-retention-world-17g.integration.test.ts` (A expired plain guest; B guest with bonus + login + text-fallback reply; C guest that asked to clear; D and E invited players who deleted - with and without the blocked clear; every feature table seeded; CHAT_REVIEW, SIGNUP_BONUS and PLAYER_MODEL_CHOICE on; the sweep reports nothing; privacy of the report; backoff 1 min / 5 min / 30 min / 6 h; health), `web-retention-diagnostics.test.ts`. Named exception: `web-delete-resignup-17f` compared the whole report object; it now compares the four fields it always asserted (the new ones are asserted in the 17g test). The fixture `cloudflare-business-worker.ts` gained an optional `playerModelChoice`.
-- `pnpm check` (format, prompts, typecheck, all tests): __CHECK__ on Node 24.22.0 / pnpm 11.19.0; expected-migrations unchanged (48 steps, last step 123).
+- `pnpm check` (format, prompts, typecheck, all tests): **1421 tests, 1421 passed** on Node 24.22.0 / pnpm 11.19.0; expected-migrations unchanged (48 steps, last step 123).
 
 ## Part 21f (player fixes after the Part 21b staging test, billing page)
 
