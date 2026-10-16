@@ -164,6 +164,8 @@ export function modelFixture(
     seedNewProviders?: boolean;
     /** Earlier character messages of 8000 characters each (to build a request above the xAI size cap). */
     padMessages?: number;
+    /** Replaces the speech provider (default: a synthetic tone), e.g. to make voice fail so the text fallback runs. */
+    fish?: FakeFish;
     fetch: (call: FetchCall, n: number, request: ReturnType<typeof textRequest>) => Response | Promise<Response>;
   },
 ) {
@@ -273,11 +275,13 @@ export function modelFixture(
     },
   });
   const budget = new GenerationBudget();
-  const fish: FakeFish = async (request) => ({
-    audio: syntheticTone(),
-    receipt: { id: 'fake-fish' },
-    usageUnits: request.billedTextBytes,
-  });
+  const fish: FakeFish =
+    options.fish ??
+    (async (request) => ({
+      audio: syntheticTone(),
+      receipt: { id: 'fake-fish' },
+      usageUnits: request.billedTextBytes,
+    }));
   const runner = new WebProviderRunner(store, clock, generator, fish, budget);
   const ledger = new WebProviderOffline(store, clock);
   const capacity = new WebDispatchLedger(store as WebStore, clock);
@@ -331,6 +335,7 @@ export function modelFixture(
   const lease = queue.acquireCoordinator('coordinator');
   const signal = () => new AbortController().signal;
   /** A later message of the same conversation, queued like production leaves it; its request is frozen by the claim itself. */
+  let admissionSeq = 1;
   const addOperation = (id: string, text: string, chosen: PlayerModelId) => {
     const inputId = `input-${id}`;
     store.run(
@@ -349,7 +354,7 @@ export function modelFixture(
       NOW + 1,
       NOW + 400_000,
     );
-    store.run('UPDATE web_operations SET text_queued_at=?,admission_seq=2 WHERE id=?', NOW + 1, id);
+    store.run('UPDATE web_operations SET text_queued_at=?,admission_seq=? WHERE id=?', NOW + 1, ++admissionSeq, id);
     freezeInputSnapshot(store as WebStore, id, NOW + 1);
     store.run(
       `INSERT INTO web_operation_models(operation_id,chosen,voice,points_charged,price_version,created_at) VALUES (?,?,1,0,1,?)`,

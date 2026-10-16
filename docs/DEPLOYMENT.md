@@ -220,7 +220,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 3. staging 上把 `PLAYER_MODEL_CHOICE_ENABLED=true`，先只列 `PLAYER_TEXT_MODELS=deepseek,gemini`，再加 `xai`；每个模型发几条真实消息，检查回复、备用提示与 `pnpm usage:report`（用 `inspect` 的回执文件：`pnpm usage:report --receipt=/绝对路径`），据此校准 `packages/contracts/player-models.ts` 的点数表和 `REASONING_HEADROOM`（推理 token 按输出计费）。
 4. 生产同样顺序；出问题把模型从 `PLAYER_TEXT_MODELS` 删掉即可（无需迁移）。关掉总开关则立刻回到“免费消息”旧行为。
 
-**备用模型：** 明确未计费的失败（429、供应商文档中的过载/不可用 503、“地区/位置不支持”、缺少密钥、连接未建立）按 选择的模型 → DeepSeek → Gemini 顺序最多重试一次，零费用结算后重新预占；超时、重置、其他 5xx、无法解析一律 UNKNOWN，不重试、占款不释放。玩家按两者中较便宜的点数计费，回复下显示“由备用模型回复”。审核（安全与记忆）永远是 DeepSeek v4 pro（备用 Gemini），所以记忆始终由同一个模型写入。xAI/Gemini 的花费记入共享预算的文本桶（无需新的授权仪式）。
+**备用模型：** 明确未计费的失败（429、供应商文档中的过载/不可用 503、“地区/位置不支持”、缺少密钥、连接未建立）按 选择的模型 → DeepSeek → Gemini 顺序最多重试一次，零费用结算后重新预占；超时、重置、其他 5xx、无法解析一律 UNKNOWN，不重试、占款不释放。玩家按两者中较便宜的点数计费，回复下显示“由备用模型回复”。审核（安全与记忆）永远是 DeepSeek v4 pro（备用 Gemini），所以记忆始终由同一个模型写入。xAI/Gemini 的花费记入共享预算的文本桶（无需新的授权仪式）。**链路用尽（Part 21d）：** 链上最后一个模型也明确未计费地失败（或下一个模型根本无法发出：缺少密钥、请求过大）时，操作立即以 failed 结束（释放配额，点数由对账全额退回），不再等 5 分钟截止时间；链上最后一个模型返回 429 时，先按上面 DeepSeek 同样的 2s、4s、8s 退避重试，用尽后才结束。UNKNOWN 规则不变。
 
 **出口地区（`generation.json.example` 的 `placement`）：** 我们设置了 Cloudflare 文档中的区域提示 `{"region": "aws:us-east-1"}`（wrangler 未在本仓库固定版本，官方文档也未给出最低版本；选区域提示而不是 Smart Placement，因为目标是固定的出口地区而不是靠探测上游）。**但官方文档明确写着：放置只影响 `fetch` 处理器，不影响 RPC 方法或命名入口，而 generation Worker 是被业务对象通过 RPC 调用的**，所以这条提示在当前架构下很可能不生效：出站请求实际从业务 Durable Object 所在的机房发出（RPC 与调用方同机房）。真正起作用的办法是新建 staging 的业务对象时用 `locationHint`（只在首次创建时有效，已有对象无法搬迁），或后续把供应商调用改成 `fetch` 服务绑定。在那之前由自动备用兜底：地区不被接受的回答会按“未计费”改用 DeepSeek，并计入 `web_provider_backups`。请在 staging 观察备用比例后再决定。
 

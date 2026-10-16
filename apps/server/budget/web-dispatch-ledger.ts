@@ -566,6 +566,43 @@ export class WebDispatchLedger {
       key.ordinal,
     );
     if (!attempt) return;
+    this.failRunningOperation(key.operationId, key.stage, attempt, now);
+  }
+
+  /**
+   * Part 21d: every model of a text stage's chain failed definitely-not-billed and the next one could not even be started
+   * (no key, request too large), so nothing is in flight and nothing can succeed later. Fails the operation at once instead
+   * of at its deadline; reconcile then refunds the points. Only for the CURRENT, live text claim and only when no attempt is
+   * open (an UNKNOWN attempt keeps its reservation and the operation waits). A stale claim does nothing.
+   */
+  failChainExhausted(claim: WebStageClaim) {
+    return this.store.transaction(() => {
+      this.schema();
+      if (claim.stage !== 'text') return;
+      this.failRunningOperation(
+        claim.operationId,
+        'text',
+        { stage_version: claim.stageVersion, lease_epoch: claim.epoch, lease_token: claim.token },
+        this.now(),
+      );
+    });
+  }
+
+  private failRunningOperation(
+    operationId: string,
+    stage: 'text' | 'audio',
+    attempt: {
+      stage_version: number;
+      lease_epoch: number;
+      lease_token: string;
+      /** Present when the attempt row names the scope, which must then match the operation's. */
+      principal_id?: string;
+      world_id?: string;
+      conversation_id?: string;
+      input_message_id?: string;
+    },
+    now: number,
+  ) {
     const operation = this.store.get<{
       principal_id: string;
       world_id: string;
@@ -582,7 +619,7 @@ export class WebDispatchLedger {
       lease_expires_at: number | null;
       deadline_at: number;
       quota_state: string;
-    }>('SELECT * FROM web_operations WHERE id=?', key.operationId);
+    }>('SELECT * FROM web_operations WHERE id=?', operationId);
     const coordinator = this.store.get<{
       epoch: number;
       coordinator_token: string | null;
@@ -590,7 +627,7 @@ export class WebDispatchLedger {
     }>('SELECT epoch,coordinator_token,coordinator_expires_at FROM web_scheduler_state WHERE singleton=1');
     if (
       !operation ||
-      operation.status !== (key.stage === 'text' ? 'text_running' : 'audio_running') ||
+      operation.status !== (stage === 'text' ? 'text_running' : 'audio_running') ||
       operation.quota_state !== 'reserved' ||
       operation.stage_version !== attempt.stage_version ||
       operation.lease_epoch !== attempt.lease_epoch ||
@@ -602,13 +639,13 @@ export class WebDispatchLedger {
       coordinator?.epoch !== attempt.lease_epoch ||
       coordinator.coordinator_token === null ||
       coordinator.coordinator_expires_at <= now ||
-      operation.principal_id !== attempt.principal_id ||
-      operation.world_id !== attempt.world_id ||
-      operation.conversation_id !== attempt.conversation_id ||
-      operation.input_message_id !== attempt.input_message_id ||
+      (attempt.principal_id !== undefined && operation.principal_id !== attempt.principal_id) ||
+      (attempt.world_id !== undefined && operation.world_id !== attempt.world_id) ||
+      (attempt.conversation_id !== undefined && operation.conversation_id !== attempt.conversation_id) ||
+      (attempt.input_message_id !== undefined && operation.input_message_id !== attempt.input_message_id) ||
       this.store.get(
         `SELECT 1 FROM web_external_attempts WHERE operation_id=? AND dispatch_state!='known' LIMIT 1`,
-        key.operationId,
+        operationId,
       )
     )
       return;
@@ -616,7 +653,7 @@ export class WebDispatchLedger {
     let snapshot;
     try {
       snapshot = readInputSnapshot(this.store, {
-        operation_id: key.operationId,
+        operation_id: operationId,
         principal_id: operation.principal_id,
         world_id: operation.world_id,
         conversation_id: operation.conversation_id,
@@ -644,7 +681,7 @@ export class WebDispatchLedger {
         AND input_message_id=? AND ip_window_id IS ? AND status=? AND stage_version=?
         AND lease_epoch=? AND lease_token=? AND lease_owner IS NOT NULL
         AND lease_expires_at>? AND deadline_at>? AND quota_state='reserved'`,
-        key.operationId,
+        operationId,
         operation.principal_id,
         operation.world_id,
         operation.conversation_id,

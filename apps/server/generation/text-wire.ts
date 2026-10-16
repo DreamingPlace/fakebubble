@@ -188,7 +188,6 @@ const PREFIX: Record<TextProviderId, string> = { deepseek: 'DEEPSEEK', xai: 'XAI
 const NOT_ALLOWED = String.raw`(?:not\s+(?:supported|available|allowed)|unsupported|restricted|blocked)`;
 const PLACE = String.raw`(?:location|region|country|territor\w*)`;
 const REGION = new RegExp(`${PLACE}[^.]{0,80}${NOT_ALLOWED}|${NOT_ALLOWED}[^.]{0,80}${PLACE}`, 'i');
-/(location|region|country|territor)[^.]{0,60}(not\s+(supported|available|allowed)|unsupported|restricted)/i;
 
 /**
  * Failure codes by HTTP status. The suffixes decide billing certainty (see NOT_BILLED below). `text` is the start of an

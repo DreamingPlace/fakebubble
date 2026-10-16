@@ -28,6 +28,10 @@ import { WebEmbedRunner } from './web-embed-runner.ts';
 import { textRouteFor } from './web-text-routing.ts';
 import { isNotBilled } from './text-wire.ts';
 
+/** HTTP 429 of any text provider. */
+const isTextRateLimit = (code: string | null | undefined) =>
+  code === 'DEEPSEEK_RATE_LIMITED' || code === 'XAI_RATE_LIMITED' || code === 'GEMINI_RATE_LIMITED';
+
 type Phase = 'draft' | 'review';
 type Scope = {
   principalId: string;
@@ -234,10 +238,12 @@ export class WebProviderRunner {
                     position[stage] += 1;
                   } else if (
                     observation.outcome === 'failed' &&
-                    observation.errorCode === 'DEEPSEEK_RATE_LIMITED' &&
+                    isTextRateLimit(observation.errorCode) &&
                     this.ledger.supportsRateLimitRetry()
                   ) {
-                    // HTTP 429: the provider rejected the request before running it (known not executed).
+                    // HTTP 429 on the LAST model of the chain (or the only one, DeepSeek today): the provider rejected the
+                    // request before running it (known not executed), so it gets the same 2/4/8 s backoff before we give up.
+                    // The rejection counter's CHECK only names DEEPSEEK_RATE_LIMITED; it labels "text provider rate limit".
                     const verdict = this.ledger.rejectForRetry(claim, key, scope, 'DEEPSEEK_RATE_LIMITED');
                     if (verdict.action === 'retry') returnedForRetry = true;
                     else {
@@ -295,6 +301,16 @@ export class WebProviderRunner {
       for (const phase of started) {
         const key = { operationId: claim.operationId, phase, ordinal: -1 };
         if (this.ledger.attemptState(key, scope) === 'sent') this.ledger.markUnknown(key, scope);
+      }
+      // Part 21d: every model of the chain failed definitely-not-billed (the last one before it was ever sent, e.g. no key
+      // or too large; a last model that was sent has already ended the operation). Nothing is in flight and nothing can
+      // succeed later, so end it now instead of at the deadline. UNKNOWN attempts block this inside the ledger.
+      if (route && error instanceof DomainError && isNotBilled(error.code)) {
+        try {
+          this.ledger.failChainExhausted(claim);
+        } catch {
+          // The deadline still ends the operation; the original error is the one to report.
+        }
       }
       throw error;
     }

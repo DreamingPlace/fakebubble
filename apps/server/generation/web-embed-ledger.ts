@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { CharacterScope, Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
+import { recallsMemory } from '../admission/web-free-tier.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { currentTopicText, embeddingHash, packVector, scopeHasVectors } from '../memory/memory-embeddings.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
@@ -189,13 +190,18 @@ export class WebEmbedLedger {
     return id;
   }
 
-  /** Scopes whose principal may have content now: not a guest (guests are never recalled), not deleted, not purging. */
+  /** Scopes whose principal may have content now: not a plain trial guest (only account, invite and signup-bonus principals are recalled), not deleted, not purging. */
   private authorized(worldId: string, characterId: string) {
     const principal = this.store.get<{ id: string; kind: string }>(
       'SELECT id,kind FROM web_principals WHERE world_id=?',
       worldId,
     );
-    if (!principal || principal.kind === 'guest' || webCharacterDeleted(this.store, characterId)) return false;
+    if (
+      !principal ||
+      !recallsMemory(this.store, principal.kind, principal.id) ||
+      webCharacterDeleted(this.store, characterId)
+    )
+      return false;
     try {
       requireWebContent(this.store, this.clock, principal.id, worldId);
       return true;
@@ -336,7 +342,8 @@ export class WebEmbedLedger {
         operationId,
         now,
       );
-      if (!op || op.kind === 'guest' || !this.authorized(op.world_id, op.character_id)) return null;
+      if (!op || !recallsMemory(this.store, op.kind, op.principal_id) || !this.authorized(op.world_id, op.character_id))
+        return null;
       const scope: CharacterScope = {
         playerId: op.player_id,
         worldId: op.world_id,

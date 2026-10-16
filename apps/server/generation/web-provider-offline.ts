@@ -596,6 +596,11 @@ export class WebProviderOffline {
       );
     });
   }
+  /** Part 21d: the whole model chain failed definitely-not-billed before anything more could be sent; end the operation now. */
+  failChainExhausted(claim: WebStageClaim) {
+    this.check();
+    this.capacity.failChainExhausted(claim);
+  }
   /** True once a provider answered HTTP 429 for this attempt (stage metrics tables present). */
   supportsRateLimitRetry() {
     return metricsEnabled(this.store);
