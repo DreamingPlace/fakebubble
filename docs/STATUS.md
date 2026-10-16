@@ -155,3 +155,4 @@ No migration (still 48 steps; step 124 untouched, so Part 21c may claim it). No 
 - **Cleanups.** `review/part-21b/` removed (screenshots live on `review/*` branches, not `main`); the stray regex statement after `REGION` in `text-wire.ts` removed; the page footer says 免费体验 only to a trial guest (`LiveBinding.freeTierEnabled`), a signed-up player sees just 回复由AI生成. Screenshots: branch `review/part-21d`.
 - Test fixture `model-choice.ts` gained an optional `fish` override and a running admission sequence for extra operations (additive; no existing test edited).
 
+- `pnpm check` (format, prompts, typecheck, all tests): **1357 tests, 1357 passed** on Node 24.21.0 / pnpm 11.19.0; expected-migrations unchanged (last step 123, 48 steps).
