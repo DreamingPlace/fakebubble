@@ -1,4 +1,5 @@
 import { isVoiceModelBinding, type VoiceModelBinding } from '../../../packages/contracts/audio.ts';
+import { listPriceMicros, speechListMicrosPerByte } from './model-list-prices.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import type {
@@ -596,6 +597,11 @@ export class WebProviderOffline {
       );
     });
   }
+  /** Part 21d: the whole model chain failed definitely-not-billed before anything more could be sent; end the operation now. */
+  failChainExhausted(claim: WebStageClaim) {
+    this.check();
+    this.capacity.failChainExhausted(claim);
+  }
   /** True once a provider answered HTTP 429 for this attempt (stage metrics tables present). */
   supportsRateLimitRetry() {
     return metricsEnabled(this.store);
@@ -738,6 +744,101 @@ export class WebProviderOffline {
       return { action: 'retry' as const, notBefore, retries: rejections + 1 };
     });
   }
+  /** The Part 21b tables exist (schema 123). */
+  private modelChoiceSchema() {
+    return !!this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_provider_backups'");
+  }
+  /**
+   * First half of "retry once on the next model" (Part 21b). The provider proved it did not run the request (429, documented
+   * overload, region/location not supported, rejected credentials): the attempt is settled at ZERO and its money hold and
+   * capacity ticket are released, exactly like a rejected request. The caller then settles the shared budget (a zero
+   * charge) and calls `archiveNotBilled`. UNKNOWN attempts never come here: only a code in NOT_BILLED_CODES may.
+   */
+  settleNotBilled(claim: WebStageClaim, key: Key, scope: Scope, code: string) {
+    this.check();
+    ensure(
+      this.modelChoiceSchema() && claim.stage === 'text' && key.phase !== 'speech',
+      'WEB_PROVIDER_MIGRATION_REQUIRED',
+    );
+    return this.store.transaction(() => {
+      this.liveClaim(claim, scope);
+      const row = this.attempt(key);
+      ensure(
+        sameScope(row, scope) &&
+          row.state === 'sent' &&
+          row.stage_version === claim.stageVersion &&
+          row.lease_epoch === claim.epoch &&
+          row.lease_token === claim.token,
+        'WEB_PROVIDER_CLAIM_STALE',
+      );
+      this.settleRejectedInTransaction(key, scope, { notBilled: true, code });
+    });
+  }
+  /**
+   * Second half: the zero-settled attempt is recorded in web_provider_backups (its count is also the generation of the next
+   * shared reservation id) and its rows are removed, so the same stage can reserve, send and settle on the next model with
+   * every ordinary check of a fresh attempt. Only an attempt settled by `settleNotBilled` (known, failed, charged zero)
+   * can be archived.
+   */
+  archiveNotBilled(key: Key, scope: Scope, code: string) {
+    this.check();
+    return this.store.transaction(() => {
+      const row = this.attempt(key);
+      ensure(
+        sameScope(row, scope) &&
+          row.state === 'known' &&
+          row.outcome === 'failed' &&
+          row.charged_micros === 0 &&
+          row.usage_units === 0 &&
+          key.phase !== 'speech' &&
+          /"notBilled":true/.test(row.receipt_json ?? ''),
+        'WEB_PROVIDER_ATTEMPT_STALE',
+      );
+      const generation = this.store.get<{ n: number }>(
+        'SELECT count(*) n FROM web_provider_backups WHERE operation_id=? AND phase=?',
+        key.operationId,
+        key.phase,
+      )!.n;
+      this.store.run(
+        `INSERT INTO web_provider_backups(operation_id,phase,generation,provider,model,code,held_micros,abandoned_at)
+        VALUES (?,?,?,?,?,?,?,?)`,
+        key.operationId,
+        key.phase,
+        generation,
+        row.provider,
+        row.model,
+        code,
+        row.held_micros,
+        this.now(),
+      );
+      this.store.run(
+        'DELETE FROM web_external_attempts WHERE operation_id=? AND stage=? AND phase=? AND ordinal=?',
+        key.operationId,
+        'text',
+        key.phase,
+        key.ordinal,
+      );
+      this.store.run(
+        'DELETE FROM web_provider_attempts WHERE operation_id=? AND phase=? AND ordinal=?',
+        key.operationId,
+        key.phase,
+        key.ordinal,
+      );
+      return { generation: generation + 1 };
+    });
+  }
+  /** Providers already abandoned for this stage of this operation (the route never offers them again). */
+  abandonedProviders(operationId: string, phase: 'draft' | 'review') {
+    if (!this.modelChoiceSchema()) return [] as string[];
+    return this.store
+      .all<{ provider: string }>(
+        'SELECT provider FROM web_provider_backups WHERE operation_id=? AND phase=?',
+        operationId,
+        phase,
+      )
+      .map((item) => item.provider);
+  }
+
   /** Zero-charge settlement of an attempt the provider rejected before running it; never ends the operation. */
   private settleRejectedInTransaction(key: Key, scope: Scope, receipt: unknown) {
     const row = this.attempt(key);
@@ -1092,8 +1193,93 @@ export class WebProviderOffline {
           },
           { outcome: result.outcome, receipt: result.receipt, usage: { units: result.usageUnits } },
         );
+      this.recordUsage(row, result);
       return { duplicate: false as const, chargedMicros: charge };
     });
+  }
+  /**
+   * Part 21b E: one KNOWN provider call into the aggregate usage table (UTC day, provider, model, phase). No principal, no
+   * operation, no content. A call that cost nothing (rejected before it ran) records nothing. The cost is the LIST price,
+   * not the upper bound this ledger holds. Never changes a reservation or a settlement.
+   */
+  private recordUsage(row: Attempt, result: { receipt: unknown; usageUnits: number }) {
+    if (!this.modelChoiceSchema()) return;
+    let input = 0,
+      cached = 0,
+      output = 0,
+      bytes = 0,
+      cost = 0;
+    if (row.phase === 'speech') {
+      if (result.usageUnits <= 0) return;
+      bytes = result.usageUnits;
+      cost = bytes * speechListMicrosPerByte(row.model);
+    } else {
+      const usage = (result.receipt as { usage?: Record<string, unknown> } | null)?.usage;
+      const n = (value: unknown) =>
+        typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+      const inputTokens = n(usage?.inputTokens),
+        outputTokens = n(usage?.outputTokens);
+      if (inputTokens === null || outputTokens === null || inputTokens + outputTokens === 0) return;
+      input = inputTokens;
+      cached = Math.min(inputTokens, n(usage?.cacheHitInputTokens) ?? 0);
+      output = outputTokens;
+      cost = listPriceMicros(row.provider, row.model, { inputTokens, cachedInputTokens: cached, outputTokens });
+    }
+    this.store.run(
+      `INSERT INTO web_provider_usage(day,provider,model,phase,calls,input_tokens,cached_input_tokens,output_tokens,bytes,cost_micros)
+      VALUES (?,?,?,?,1,?,?,?,?,?) ON CONFLICT(day,provider,model,phase) DO UPDATE SET calls=calls+1,
+      input_tokens=input_tokens+excluded.input_tokens,cached_input_tokens=cached_input_tokens+excluded.cached_input_tokens,
+      output_tokens=output_tokens+excluded.output_tokens,bytes=bytes+excluded.bytes,cost_micros=cost_micros+excluded.cost_micros`,
+      new Date(this.now()).toISOString().slice(0, 10),
+      row.provider,
+      row.model,
+      row.phase,
+      input,
+      cached,
+      output,
+      bytes,
+      cost,
+    );
+  }
+  /**
+   * Part 21b B: what really wrote and reviewed the accepted reply, for the stats and the chat-review view, plus the reply
+   * counters behind `pnpm usage:report`. Written once, when the reviewed candidate commits.
+   */
+  private recordReplyModels(operationId: string) {
+    if (!this.modelChoiceSchema()) return;
+    const rows = this.store.all<{ phase: string; provider: string; model: string }>(
+      `SELECT phase,provider,model FROM web_provider_attempts
+      WHERE operation_id=? AND phase IN ('draft','review') AND state='known' AND outcome='succeeded'`,
+      operationId,
+    );
+    const draft = rows.find((r) => r.phase === 'draft'),
+      review = rows.find((r) => r.phase === 'review');
+    if (!draft || !review) return;
+    const day = new Date(this.now()).toISOString().slice(0, 10);
+    for (const r of [draft, review])
+      this.store.run(
+        `INSERT INTO web_provider_usage(day,provider,model,phase,replies) VALUES (?,?,?,?,1)
+        ON CONFLICT(day,provider,model,phase) DO UPDATE SET replies=replies+1`,
+        day,
+        r.provider,
+        r.model,
+        r.phase,
+      );
+    const backup =
+      this.store.get<{ n: number }>(
+        "SELECT count(*) n FROM web_provider_backups WHERE operation_id=? AND phase='draft'",
+        operationId,
+      )!.n > 0;
+    this.store.run(
+      `UPDATE web_operation_models SET draft_provider=?,draft_model=?,review_provider=?,review_model=?,backup=?
+      WHERE operation_id=? AND draft_provider IS NULL`,
+      draft.provider,
+      draft.model,
+      review.provider,
+      review.model,
+      backup ? 1 : 0,
+      operationId,
+    );
   }
   private knownOutput(key: Key, scope: Scope) {
     this.check();
@@ -1331,6 +1517,7 @@ export class WebProviderOffline {
         'WEB_PROVIDER_CLAIM_STALE',
       );
       recordTextDone(this.store, claim.operationId, now);
+      this.recordReplyModels(claim.operationId);
       return candidate;
     });
   }

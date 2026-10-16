@@ -5,6 +5,7 @@ import type {
   WebKnownDraft,
 } from '../../../packages/contracts/web-generation-rpc.ts';
 import type { ProviderMeter } from '../../../packages/contracts/provider-calls.ts';
+import type { TextRoute } from '../../../packages/contracts/text-route.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import {
   EMBEDDING_DIMS,
@@ -94,11 +95,17 @@ export class WebCloudTextGenerator {
     known: WebKnownDraft | null,
     accept: (stage: AcceptedV7StageOutput) => Promise<void>,
     meter?: ProviderMeter,
+    route?: TextRoute,
   ) {
     ensure(meter, 'WEB_SHARED_BUDGET_REQUIRED');
     return session(this.binding, signal, async (remote) => {
-      const result = await remote.text(request, this.policyHash, known, meterCallbacks(meter, signal), (stage) =>
-        callback(() => accept(stage)),
+      const result = await remote.text(
+        request,
+        this.policyHash,
+        known,
+        meterCallbacks(meter, signal),
+        (stage) => callback(() => accept(stage)),
+        ...(route ? [route] : []),
       );
       if (result.ok) return result.value;
       if (result.generation) throw new TextGenerationFailure(result.code, result.generation);
@@ -110,8 +117,9 @@ export class WebCloudTextGenerator {
     signal: AbortSignal,
     accept: (stage: AcceptedV7StageOutput) => Promise<void>,
     meter?: ProviderMeter,
+    route?: TextRoute,
   ) {
-    return this.generate(request, signal, null, accept, meter);
+    return this.generate(request, signal, null, accept, meter, route);
   }
   generateAcceptedReviewFromKnownDraft(
     request: TextGenerationRequest,
@@ -119,8 +127,9 @@ export class WebCloudTextGenerator {
     known: WebKnownDraft,
     accept: (stage: AcceptedV7StageOutput) => Promise<void>,
     meter?: ProviderMeter,
+    route?: TextRoute,
   ) {
-    return this.generate(request, signal, known, accept, meter);
+    return this.generate(request, signal, known, accept, meter, route);
   }
 }
 export function webCloudSpeech(binding: WebGenerationBinding): FakeFish {

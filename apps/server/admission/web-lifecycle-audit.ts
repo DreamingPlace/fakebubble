@@ -81,6 +81,10 @@ export function auditWebLifecycleWorld(
     // Part 17b: one row per operation admitted on a free allowance: ids, a tier and (trial_extra) the keyed IP hash, no content.
     // The 'bonus' rows are deleted with the player and checked gone by playerLoginsRemain; 'trial_extra' rows stay like the IP quota.
     'web_free_operations',
+    // Part 21b: per-operation model choice and the log of models a provider proved did not run: ids, enums and counts,
+    // no principal id and no content (the points events themselves are removed with the player, below).
+    'web_operation_models',
+    'web_provider_backups',
   ]);
   const operationContent = new Set([
     'web_provider_outputs',
@@ -100,6 +104,8 @@ export function auditWebLifecycleWorld(
     'web_local_audio_outputs',
     'web_local_events',
     'web_user_events',
+    // Part 21b: removed with the player by purgePlayerLogins; playerLoginsRemain checks they are gone.
+    'web_points_events',
   ]);
   const tables = store.all<{ name: string }>(`SELECT name FROM sqlite_master
     WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`);

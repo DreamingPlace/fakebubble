@@ -211,7 +211,7 @@ export interface TextGenerationRequest {
 }
 export interface TextGenerationResult {
   reply: DialogueCandidate;
-  provider: 'deepseek';
+  provider: 'deepseek' | 'xai' | 'gemini';
   model: string;
   // Provider-reported alias, not a verified immutable model version.
   reportedModel?: string;

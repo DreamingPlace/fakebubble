@@ -14,6 +14,7 @@ import { WEB_PROVIDER_WELCOME } from '../../../config/web-v1.ts';
 import { SYNTHETIC_TRIAL_FOOTER } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import { webMaterialHash, type WebCloudMaterialPackage } from '../../../apps/server/cloudflare/web-setup.ts';
 import { budgetHash, type CloudBudgetAuthorization } from '../../../apps/server/budget/web-provider-budget-contract.ts';
+import { operatorProof } from '../../../apps/server/cloudflare/operator-proof.ts';
 import { parseWebProviderBootstrap } from '../../../packages/contracts/web-provider.ts';
 
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
@@ -526,10 +527,10 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
     (await (await f.call({ action: 'business-http', path: '/__test/snapshot' })).json()) as any;
   // Before setup: works, reports an unavailable budget as a bounded code and no admin.
   const bare = await inspect();
-  // Schema 122 and 47 steps since migration 122 (chat review) was added. Extended for migration 122 (Part 19 named exception).
-  assert.equal(bare.schemaVersion, 122);
+  // Schema 123 and 48 steps since migration 123 (model choice) was added. Extended for migration 123 (Part 21b named exception).
+  assert.equal(bare.schemaVersion, 123);
   assert.equal(bare.migrations.matches, true);
-  assert.equal(bare.migrations.applied.length, 47);
+  assert.equal(bare.migrations.applied.length, 48);
   assert.deepEqual(bare.budget, { available: false, error: 'WEB_CLOUD_BUDGET_NOT_INITIALIZED' });
   assert.equal(bare.ownerAdminExists, false);
   await f.install();
@@ -577,11 +578,11 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
   assert.deepEqual(await (await f.call({ action: 'budget-summary' })).json(), budgets);
   assert.deepEqual(again, report);
   // Facts.
-  assert.equal(report.schemaVersion, 122); // Extended for migration 122.
+  assert.equal(report.schemaVersion, 123); // Extended for migration 123.
   assert.equal(report.migrations.matches, true);
   assert.equal(report.migrations.expected.active, 'r2');
   assert.deepEqual(report.migrations.applied, report.migrations.expected.r2);
-  assert.equal(report.migrations.expected.inline.length, 47);
+  assert.equal(report.migrations.expected.inline.length, 48);
   assert.deepEqual(report.instance, {
     instanceId: f.business.bindings.INSTANCE_ID,
     recoveryEpoch: f.business.bindings.RECOVERY_EPOCH,
@@ -663,7 +664,7 @@ test('offline expected-migrations output equals the steps the deployed business 
   // And the deployed object's applied ledger is exactly the offline R2 list.
   assert.deepEqual(live.migrations.applied, offline.r2);
   assert.equal(live.migrations.matches, true);
-  assert.equal(offline.r2.length, 47); // Extended for migration 122.
+  assert.equal(offline.r2.length, 48); // Extended for migration 123.
   const extra = spawnSync(process.execPath, ['scripts/web-cloudflare-operator.ts', 'expected-migrations', '--x=1'], {
     encoding: 'utf8',
   });
@@ -697,4 +698,57 @@ test('startup failure is diagnosable from logs while the 503 response is unchang
   assert.equal(unavailable?.message, 'WEB_CLOUD_BUDGET_NOT_INITIALIZED');
   assert.equal(unavailable?.stage, 'start');
   assert.ok(!text.includes('secret-cookie'));
+});
+
+test('operator gate: only the entrypoint decides on/off; the object demands a proof the edge cannot make', async (t) => {
+  const f = await fixture(t, true);
+  const errorOf = async (response: { json(): Promise<unknown> }) =>
+    ((await response.json()) as { error: string }).error;
+  const stub = (method: string, status: number, proof?: string) =>
+    f.call(
+      {
+        action: 'business-http',
+        path: `/__operator/${method}`,
+        headers: proof === undefined ? {} : { 'x-proof': proof },
+      },
+      status,
+    );
+  await f.install();
+  // Switch on: the entrypoint passes the proof and every call works.
+  await f.call({ action: 'status' });
+  await f.call({ action: 'inspect' });
+  // Straight to the object stub, which is all the edge worker can do (it has no SEAL_KEY): no proof, or a wrong one.
+  for (const method of ['status', 'inspect', 'adminGrant', 'renewPrices']) {
+    assert.match(await errorOf(await stub(method, 409)), /WEB_CLOUD_OPERATOR_PROOF_INVALID/, method);
+    assert.match(await errorOf(await stub(method, 409, 'x'.repeat(64))), /WEB_CLOUD_OPERATOR_PROOF_INVALID/, method);
+    assert.match(await errorOf(await stub(method, 409, '')), /WEB_CLOUD_OPERATOR_PROOF_INVALID/, method);
+  }
+  // The right proof (only the business worker can compute it) is accepted even with no entrypoint involved.
+  const proof = operatorProof(f.business.bindings.SEAL_KEY);
+  assert.ok(((await (await stub('status', 200, proof)).json()) as { instanceId: string }).instanceId);
+  // The proof is the HMAC of the label under SEAL_KEY: not the key, and another key makes a different proof.
+  assert.notEqual(proof, f.business.bindings.SEAL_KEY);
+  assert.notEqual(operatorProof(Buffer.alloc(32, 7).toString('base64url')), proof);
+  // Switch off (entrypoint env): DISABLED, a different code from the object's proof failure.
+  f.business.bindings.OPERATOR_ENABLED = 'false';
+  await f.restart();
+  assert.match(await errorOf(await f.call({ action: 'status' }, 409)), /WEB_CLOUD_OPERATOR_DISABLED/);
+  assert.match(await errorOf(await f.call({ action: 'inspect' }, 409)), /WEB_CLOUD_OPERATOR_DISABLED/);
+});
+
+test('operator gate regression: an object started while OPERATOR_ENABLED was "false" accepts operator calls once the entrypoint says "true"', async (t) => {
+  const f = await fixture(t, true);
+  // The object's env keeps "false" (it never restarts); the entrypoint's env is fresh per request and says "true".
+  f.business.bindings.OPERATOR_ENABLED = 'false';
+  (f.business.bindings as Record<string, string>).OPERATOR_SWITCH = 'true';
+  await f.restart();
+  await f.install();
+  await f.call({ action: 'status' });
+  const report = (await (await f.call({ action: 'inspect' })).json()) as { flags: { OPERATOR_ENABLED: string } };
+  // inspect reports the object's own env: proof the object really did start with the old value.
+  assert.equal(report.flags.OPERATOR_ENABLED, 'false');
+  // And the entrypoint turning it off is still honoured immediately, while the object's env stays what it was.
+  (f.business.bindings as Record<string, string>).OPERATOR_SWITCH = 'false';
+  await f.restart();
+  await f.call({ action: 'status' }, 409);
 });

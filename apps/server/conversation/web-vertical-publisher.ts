@@ -626,7 +626,7 @@ export class WebVerticalPublisher {
             (principal.kind === 'account' &&
               this.store.get('SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1', claim.principalId)) ||
             (principal.kind === 'invite' &&
-              [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122].includes(
+              [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123].includes(
                 this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
               ) &&
               requireWebContent(this.store, this.clock, claim.principalId, claim.worldId))),
@@ -669,7 +669,7 @@ export class WebVerticalPublisher {
             message.authorKind === 'character'
               ? this.store.get(
                   `SELECT 1 FROM web_publication_items i JOIN web_publications p
-            ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.origin='narrative'
+            ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.origin IN ('narrative','text_fallback')
             AND p.principal_id=? AND p.player_id=? AND p.world_id=? AND p.conversation_id=?
             AND p.character_id=?`,
                   message.id,

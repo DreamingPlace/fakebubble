@@ -217,12 +217,35 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 - **试听脚本：** `pnpm voice:samples <provider-root> <env-dir> <输出目录> --live [--model=s2.1-pro|drama-3]`。每个已批准角色音色 × 10 种 expression 各一条（固定文案，不读取任何玩家、对话或记忆数据，只读声音绑定与价格），写到 `<输出目录>/<角色>/<expression>.<model>.wav` 与 `manifest.<model>.json`。模型默认读 `.env.voice` 的 `FISH_VOICE_MODEL`。它花真钱：先预留共享预算再调用，UNKNOWN 不重发、占用不释放，已付费的片段重跑时直接复用；输出目录必须为空。
 - **声音提示 `soundCue`：** 语音草稿（utterance 与每条 afterthought）多一个可选枚举 `soundCue`（`none` / `small_laugh` / `shaky_breath`），由服务器渲染成文档里写明的 `[small laugh]` / `[shaky breath]`，仅 Drama 3 生效，s2.1 声音忽略。模型不写括号或标签；`[ ] < >` 在所有模型与玩家文字中仍被拒绝（`AUDIO_CONTROL_MARKER_FORBIDDEN`）；气泡显示文字从不含标签。复核阶段的替换气泡不带 `soundCue`。
 - **提示词哈希变更（有意）：** 语音草稿 schema 与 `speech-draft-task.md` 改动使 prompt 哈希 `6519b6a0…cd6f`→`53df95a8…133b`，policy 哈希 `e31c3518…52fb`→`a140e333…2c68`，协议指纹 `b42431c9…ef99`→`b753fb40…dae8`。已存的预演与发布批准内嵌这些哈希，**部署后需重新预演并批准**。
+### 玩家选模型、点数与备用模型（Part 21b）
+
+默认全部关闭；什么都不配置时与以前一致。说明与已核实的供应商参数见 `docs/PROVIDERS.md`。
+
+**新增密钥（只配给 generation Worker，缺哪个就是哪个模型不可用，不会崩溃）：** `wrangler secret put XAI_API_KEY`、`wrangler secret put GEMINI_API_KEY`。
+**新增变量（业务 Worker，`business.json.example` 已列出）：** `PLAYER_MODEL_CHOICE_ENABLED`（默认 `false`；需要同时 `SIGNUP_BONUS_ENABLED=true`）、`PLAYER_TEXT_MODELS`（如 `deepseek,gemini,xai`；DeepSeek 永远开启；不在列表里的模型对玩家隐藏，正在用它的玩家回到 DeepSeek 并收到一次性提示，也不再作为备用）。
+**迁移 123（`123_model_choice.sql`）：** 48 步；本地 `migrate-model-choice`；`expected-migrations` 与 `inspect` 会显示。不回填：点数余额在玩家首次接触时按 `100 − 10 × 已用赠送条数` 建立。
+
+**启用顺序（先 staging）：**
+1. 部署代码（开关全关），确认 `expected-migrations` 与 `inspect` 一致（48 步）。
+2. 配 `XAI_API_KEY`、`GEMINI_API_KEY`；运行 `renew-prices` 一次：它为 xAI、Gemini 创建支出上限、并发名额与首批价格行（已有行不动；首次初始化只写 DeepSeek 与 Fish）。`inspect` 的 `prices` 里应出现 `xai/grok-4.7` 与 `gemini/gemini-3.8-flash`。
+3. staging 上把 `PLAYER_MODEL_CHOICE_ENABLED=true`，先只列 `PLAYER_TEXT_MODELS=deepseek,gemini`，再加 `xai`；每个模型发几条真实消息，检查回复、备用提示与 `pnpm usage:report`（用 `inspect` 的回执文件：`pnpm usage:report --receipt=/绝对路径`），据此校准 `packages/contracts/player-models.ts` 的点数表和 `REASONING_HEADROOM`（推理 token 按输出计费）。
+4. 生产同样顺序；出问题把模型从 `PLAYER_TEXT_MODELS` 删掉即可（无需迁移）。关掉总开关则立刻回到“免费消息”旧行为。
+
+**备用模型：** 明确未计费的失败（429、供应商文档中的过载/不可用 503、“地区/位置不支持”、缺少密钥、连接未建立）按 选择的模型 → DeepSeek → Gemini 顺序最多重试一次，零费用结算后重新预占；超时、重置、其他 5xx、无法解析一律 UNKNOWN，不重试、占款不释放。玩家按两者中较便宜的点数计费，回复下显示“由备用模型回复”。审核（安全与记忆）永远是 DeepSeek v4 pro（备用 Gemini），所以记忆始终由同一个模型写入。xAI/Gemini 的花费记入共享预算的文本桶（无需新的授权仪式）。**链路用尽（Part 21d）：** 链上最后一个模型也明确未计费地失败（或下一个模型根本无法发出：缺少密钥、请求过大）时，操作立即以 failed 结束（释放配额，点数由对账全额退回），不再等 5 分钟截止时间；链上最后一个模型返回 429 时，先按上面 DeepSeek 同样的 2s、4s、8s 退避重试，用尽后才结束。UNKNOWN 规则不变。
+
+**出口地区（`generation.json.example` 的 `placement`）：** 我们设置了 Cloudflare 文档中的区域提示 `{"region": "aws:us-east-1"}`（wrangler 未在本仓库固定版本，官方文档也未给出最低版本；选区域提示而不是 Smart Placement，因为目标是固定的出口地区而不是靠探测上游）。**但官方文档明确写着：放置只影响 `fetch` 处理器，不影响 RPC 方法或命名入口，而 generation Worker 是被业务对象通过 RPC 调用的**，所以这条提示在当前架构下很可能不生效：出站请求实际从业务 Durable Object 所在的机房发出（RPC 与调用方同机房）。真正起作用的办法是新建 staging 的业务对象时用 `locationHint`（只在首次创建时有效，已有对象无法搬迁），或后续把供应商调用改成 `fetch` 服务绑定。在那之前由自动备用兜底：地区不被接受的回答会按“未计费”改用 DeepSeek，并计入 `web_provider_backups`。请在 staging 观察备用比例后再决定。
 
 ## 私有运维工具
 
 `scripts/web-cloudflare-operator.ts` 需要显式 `CLOUDFLARE_ACCOUNT_ID`，以及指向已安装 Wrangler 模块的绝对路径 `FAKE_WEB_WRANGLER_MODULE`。它只使用绑定到业务/预算 Worker 的认证 RPC。服务名默认为 `fakebubble-business` / `fakebubble-budget`；部署使用其他名称（例如 `fake-paopao-web-business` / `fake-paopao-web-budget`）时，必须显式传入 `--business-service=<名称>` 与 `--budget-service=<名称>`（均须匹配 `/^[a-z0-9-]{1,63}$/`，任何操作都可携带，缺省即默认名称）。每条收据都会记录目标服务名（`target.businessService` / `target.budgetService`，以及本次操作实际使用的 `worker`）；收据永远不会被续写或覆盖（独占创建，已存在即 `EEXIST`），而且若已存在的收据记录的目标与当前参数不同，工具会先以 `WEB_OPERATOR_RECEIPT_TARGET_MISMATCH` 拒绝，不会打开任何绑定。记录目标之前写下的旧收据按其 `worker` 名称比较。
 
 调用必须指定 `--action`、绝对路径 `--receipt-file`，部分操作还需要 `--input-file` / `--name`。收据目录权限 0700，输入/收据文件 0600。工具先持久化准备状态，再调用；未知结果应核查收据及服务端状态，**不要盲目重试**。首次主管理员入口只在受控初始化阶段启用，完成后关闭。
+
+### 运维开关（`OPERATOR_ENABLED`）的判定位置
+
+开关只在 `WebOperatorService`（每次请求都读取新的 env）里判定：不是 `true` 时以 `WEB_CLOUD_OPERATOR_DISABLED` 拒绝。业务 Durable Object 不再读取 `OPERATOR_ENABLED`（对象的 env 在实例启动时固定，而它每 30 秒重设一次 alarm，永远不会被回收，所以仅改 vars 的部署之后它会一直带着旧值）。对象的运维方法（`initialize`、`importFixed`、`adminGrant`、`adminRecoveryGrant`、`inviteGrants`、`status`、`inspect`、`renewPrices`）改为要求一个证明参数：`HMAC-SHA256("fakebubble-operator-v1")`，密钥为已有的 `SEAL_KEY`（只绑定在业务 Worker 上，edge Worker 虽有 BUSINESS 命名空间绑定却没有这个密钥，因此永远调不了运维方法），常量时间比较，失败为 `WEB_CLOUD_OPERATOR_PROOF_INVALID`。没有新密钥，部署步骤不变。
+
+因此 A/B 做法照旧可用：临时把 `OPERATOR_ENABLED` 设为 `true` 部署（A），用完改回 `false` 再部署（B），即使两次部署的代码完全相同、只改了 vars；**不需要再等待对象重启或回收**。
 
 ### `inspect`（只读检查）
 

@@ -12,6 +12,7 @@ import { mountChatMenu } from '../cocreation/chat-menu.ts';
 import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
 import { accountCopy, openAccountSheet, type AccountSheetMode } from '../account/account-sheet.ts';
 import { mountReviewBanners } from './review-banner.ts';
+import { backupNote, modelCopy, modelFooterNote, modelMenuItem, openModelPicker } from './model-picker.ts';
 import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
 
 type Shell = {
@@ -128,9 +129,14 @@ export class LiveBinding {
   get legalEnabled() {
     return this.account.features?.legal === true;
   }
-  /** The free tier is on (SIGNUP_BONUS_ENABLED): the footer says 免费体验 instead of 邀请体验. */
+  /** The free tier is on (SIGNUP_BONUS_ENABLED) and this is a trial guest: the footer says 免费体验 instead of 邀请体验. */
   get freeTierEnabled() {
-    return this.bonusOffer > 0;
+    if (this.bonusOffer <= 0) return false;
+    return !this.account.signedIn || (this.account.kind === 'guest' && !this.account.hasLogin);
+  }
+  /** A guest who signed up for the free tier (free replies or points): no longer a trial. */
+  get signedUpPlayer() {
+    return this.bonusOffer > 0 && this.hasLogin;
   }
   /** A guest past its trial and inside the 7-day grace period (GUEST_GRACE_ENABLED), or null. */
   private get grace() {
@@ -165,6 +171,7 @@ export class LiveBinding {
     this.renderAccess();
     this.mountChatMenus(shell);
     this.mountReviewBanner(shell);
+    if (this.account.signedIn && this.account.modelChoice?.notice === 'model_withdrawn') shell.say(modelCopy.withdrawn);
     const onReturn = () => {
       if (!document.hidden && !this.busy && !this.invitation.locked) void this.refreshAccess().catch(() => {});
     };
@@ -263,11 +270,31 @@ export class LiveBinding {
     });
   }
 
+  /** Part 21b: the model picker entry, only for a points account (PLAYER_MODEL_CHOICE_ENABLED). */
+  private modelMenu() {
+    const info = this.account.signedIn ? this.account.modelChoice : undefined;
+    if (!info) return [];
+    return [
+      modelMenuItem(info, () =>
+        openModelPicker({
+          info,
+          api: this.api,
+          say: (message) => this.shell?.say(message),
+          onChanged: (next) => {
+            if (this.account.signedIn) this.account = { ...this.account, modelChoice: next };
+            this.renderAccess();
+          },
+        }),
+      ),
+    ];
+  }
+
   /** The account entries of the ⋯ menu, after 共创: they follow what this player has (a login, a bindable invite, nothing). */
   private accountMenu() {
     const say = (message: string) => this.shell?.say(message);
     if (this.hasLogin)
       return [
+        ...this.modelMenu(),
         { label: '我的昵称', sub: '角色怎么称呼你', onSelect: () => void this.openAccount('nickname') },
         { label: '修改密码', sub: '需要当前密码', onSelect: () => void this.openAccount('password') },
         {
@@ -299,7 +326,10 @@ export class LiveBinding {
           : []),
       ];
     if (this.account.signedIn && this.account.canBind)
-      return [{ label: '绑定邮箱', sub: '换设备也能登录你的聊天', onSelect: () => void this.openAccount('bind') }];
+      return [
+        ...this.modelMenu(),
+        { label: '绑定邮箱', sub: '换设备也能登录你的聊天', onSelect: () => void this.openAccount('bind') },
+      ];
     if (this.view.access.kind === 'guest')
       return [
         { label: '登录', sub: '用邮箱和密码进入已有的聊天', onSelect: () => void this.openAccount('login') },
@@ -389,7 +419,9 @@ export class LiveBinding {
           ? this.hasLogin && this.bonusOffer
             ? access.remainingReplies === 0
               ? '免费消息已用完'
-              : `免费消息剩余 ${access.remainingReplies} 条`
+              : this.account.signedIn && this.account.modelChoice?.metered
+                ? modelFooterNote(this.account.modelChoice)
+                : `免费消息剩余 ${access.remainingReplies} 条`
             : `体验剩余 ${access.remainingReplies} 次`
           : '体验已结束';
     // A guest past its trial but inside the 7-day grace period: signing up saves the chats and brings them back.
@@ -780,7 +812,13 @@ export class LiveBinding {
       const bubble = document.createElement('p');
       bubble.className = 'text-bubble incoming-text';
       bubble.textContent = message.text;
-      row.append(avatar, bubble);
+      if (message.viaBackup === true && message.replyOrdinal === 0) {
+        // Part 21b: the bubble and its one-line note stay together as a single flex item.
+        const stack = document.createElement('div');
+        stack.className = 'text-with-note';
+        stack.append(bubble, backupNote());
+        row.append(avatar, stack);
+      } else row.append(avatar, bubble);
       return row;
     }
     row.className = 'message-row incoming';
@@ -808,6 +846,9 @@ export class LiveBinding {
       toggle.textContent = visible ? '收起文字' : '转文字';
       toggle.setAttribute('aria-expanded', String(visible));
     });
+    // Part 21b: a reply the backup model wrote says so, once, under its first voice bubble.
+    if (message.viaBackup === true && message.replyOrdinal === 0)
+      row.querySelector('.voice-stack')?.append(backupNote());
     return row;
   }
 

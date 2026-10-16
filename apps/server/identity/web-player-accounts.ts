@@ -7,6 +7,7 @@ import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract
 import { requireWebContent } from '../admission/web-retention.ts';
 import { guestInGrace } from './web-player-purge.ts';
 import { freeTier, signupBonusTablesExist } from '../admission/web-free-tier.ts';
+import { modelChoiceState, setPlayerModel } from '../admission/web-points.ts';
 import { bonusCanonicalEmail, maskEmail, normalizeEmail } from './email-address.ts';
 import type { WebIdentity } from './web-identity.ts';
 
@@ -362,10 +363,27 @@ export class WebPlayerAccounts {
       emailMasked: login ? maskEmail(login.email_norm) : null,
       nickname,
       ...(f?.chatReview ? { reviewNoticeClosed: this.reviewNoticeClosed(session.principalId) } : {}),
+      ...this.modelChoiceInfo(session.principalId),
       ...this.graceInfo(session.principalId),
       // A legacy invited player without a login may bind one.
       canBind: !login && session.kind === 'invite' && this.activeGrant(session.principalId, this.now()),
     };
+  }
+  /** { modelChoice } for a points holder while PLAYER_MODEL_CHOICE_ENABLED is on; nothing otherwise (guests see no picker). */
+  private modelChoiceInfo(principalId: string) {
+    const state = modelChoiceState(this.store, this.now(), principalId);
+    return state ? { modelChoice: state } : {};
+  }
+  /**
+   * 选择写回复的模型. A session write like any other (CSRF and Origin). Affects the NEXT message only: an operation already
+   * admitted keeps the model frozen into it. Answers with the whole state so the page shows the new price at once.
+   */
+  setModel(input: { model: unknown; session: PlayerSessionInput }) {
+    return this.store.transaction(() => {
+      const scope = this.identity.authorizeSessionWrite(input.session.token, input.session.csrf, input.session.origin);
+      setPlayerModel(this.store, this.now(), scope.principalId, input.model);
+      return { modelChoice: modelChoiceState(this.store, this.now(), scope.principalId) };
+    });
   }
   private reviewNoticeClosed(principalId: string) {
     return !!this.store.get('SELECT 1 FROM web_review_notice WHERE principal_id=?', principalId);

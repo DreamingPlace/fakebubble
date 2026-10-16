@@ -98,14 +98,14 @@ test('the tables only accept what the free tier writes: a keyed 64-hex digest, a
 
 test('Cloudflare runner: 121 is the same SQL on both authorities, second to last of 47 steps, and its ledger hash is stable', () => {
   const { inline, r2 } = expectedWebMigrations();
-  assert.equal(inline.length, 47);
-  assert.equal(r2.length, 47);
-  assert.equal(inline.at(-2)!.version, 121);
-  assert.equal(r2.at(-2)!.version, 121);
-  assert.equal(inline.at(-2)!.sha256, sha(sql121()), 'the ledger hash is the sha256 of the SQL file as written');
-  assert.equal(inline.at(-2)!.sha256, r2.at(-2)!.sha256);
+  assert.equal(inline.length, 48);
+  assert.equal(r2.length, 48);
+  assert.equal(inline.at(-3)!.version, 121);
+  assert.equal(r2.at(-3)!.version, 121);
+  assert.equal(inline.at(-3)!.sha256, sha(sql121()), 'the ledger hash is the sha256 of the SQL file as written');
+  assert.equal(inline.at(-3)!.sha256, r2.at(-3)!.sha256);
   assert.equal(
-    inline.at(-2)!.sha256,
+    inline.at(-3)!.sha256,
     'f0fa334dbb0ac155d5421792e612438b722b9882fc8ff11a145e34e705fef8d9',
     'pinned: a change to the file is a new migration',
   );
@@ -120,8 +120,8 @@ test('Cloudflare runner: an existing authority at 120 gains 121 untouched (inlin
     assert.equal(result.before.length, 45, mode);
     assert.equal(result.before.at(-1)?.startsWith('120:'), true, mode);
     assert.deepEqual(result.after.slice(0, 45), result.before, `${mode}: applied steps are untouched`);
-    assert.equal(result.after.length, 47, mode);
-    assert.equal(result.after.at(-2), `121:${sha(sql121())}`, mode);
-    assert.deepEqual(result.version, { user_version: 122 }, mode);
+    assert.equal(result.after.length, 48, mode);
+    assert.equal(result.after.at(-3), `121:${sha(sql121())}`, mode);
+    assert.deepEqual(result.version, { user_version: 123 }, mode);
   }
 });

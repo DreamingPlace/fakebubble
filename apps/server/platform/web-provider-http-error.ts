@@ -50,6 +50,7 @@ export function webProviderHTTPError(error: unknown) {
             : publicCode === 'CSRF_INVALID' ||
                 publicCode === 'ORIGIN_INVALID' ||
                 publicCode === 'TRIAL_EXHAUSTED' ||
+                publicCode === 'POINTS_INSUFFICIENT' ||
                 publicCode === 'TRIAL_CHARACTER_LOCKED' ||
                 publicCode === 'ADMIN_INVALID_GRANT' ||
                 publicCode === 'ADMIN_CSRF_REQUIRED' ||
@@ -74,6 +75,7 @@ export function webProviderHTTPError(error: unknown) {
                   publicCode === 'PLAYER_NICKNAME_INVALID' ||
                   publicCode === 'PLAYER_CODE_INVALID' ||
                   publicCode === 'AGE_CONFIRMATION_REQUIRED' ||
+                  publicCode === 'MODEL_NOT_AVAILABLE' ||
                   publicCode === 'ACCOUNT_DELETE_CONFIRM_INVALID' ||
                   cocreationInvalid.has(publicCode)
                 ? 400

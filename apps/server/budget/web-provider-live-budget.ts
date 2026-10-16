@@ -4,6 +4,7 @@ import { join, isAbsolute } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { WebProviderBudget, type BudgetHistory } from './web-provider-budget.ts';
+import { bucketProviders } from './web-provider-budget-contract.ts';
 
 /** One explicitly configured authority for every local instance using the same provider accounts.
  * Never defaults to a new instance-local ledger or silently resets prior spending. */
@@ -72,13 +73,20 @@ export function readLiveBudgetHistory(): BudgetHistory[] {
           };
         });
       for (const provider of ['deepseek', 'fish'] as const) {
+        // Part 21b: the text bucket also holds xAI and Gemini spend (see budgetBucket). With only DeepSeek rows the
+        // query result is the historical one.
+        const members = bucketProviders(provider);
+        const marks = members.map(() => '?').join(',');
         const total = db
-          .prepare('SELECT spent_micros,held_micros FROM web_provider_spending WHERE provider=?')
-          .get(provider) as { spent_micros: number; held_micros: number };
+          .prepare(
+            `SELECT sum(spent_micros) spent_micros,sum(held_micros) held_micros
+            FROM web_provider_spending WHERE provider IN (${marks}) HAVING count(*)>0`,
+          )
+          .get(...members) as { spent_micros: number; held_micros: number };
         const attempts = db
           .prepare(`SELECT operation_id,phase,ordinal,state,held_micros,charged_micros,
-          wire_request_hash FROM web_provider_attempts WHERE provider=? ORDER BY operation_id,phase,ordinal`)
-          .all(provider);
+          wire_request_hash FROM web_provider_attempts WHERE provider IN (${marks}) ORDER BY operation_id,phase,ordinal`)
+          .all(...members);
         ensure(
           total &&
             total.spent_micros === attempts.reduce((sum, r) => sum + Number(r.charged_micros ?? 0), 0) &&

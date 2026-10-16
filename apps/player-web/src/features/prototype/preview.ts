@@ -130,7 +130,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
         <div class="carousel" aria-label="人物聊天卡片，可滑动切换" tabindex="0"><div class="card-deck"></div></div>
         <nav class="avatar-nav" aria-label="选择人物"></nav>
       </main>
-      <footer class="preview-note">${live ? footerNote(live.freeTierEnabled) : '本地交互原型 · 合成数据 · 暂无真实语音或生成回复'}</footer>
+      <footer class="preview-note">${live ? footerNote(live.freeTierEnabled, live.signedUpPlayer) : '本地交互原型 · 合成数据 · 暂无真实语音或生成回复'}</footer>
       <div class="toast" role="status" aria-live="polite"></div>
     </div>`;
   const page = root.querySelector<HTMLElement>('.page-shell')!;

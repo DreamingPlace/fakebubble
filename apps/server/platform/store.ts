@@ -1,3 +1,4 @@
+import type { PlayerModelId } from '../../../packages/contracts/player-models.ts';
 import { DatabaseSync } from 'node:sqlite';
 import type { SQLInputValue } from 'node:sqlite';
 import {
@@ -59,6 +60,7 @@ const WEB_PREVIEW_WORKBENCH_SCHEMA = 119;
 const WEB_MEMORY_METRICS_SCHEMA = 120;
 const WEB_SIGNUP_BONUS_SCHEMA = 121;
 const WEB_CHAT_REVIEW_SCHEMA = 122;
+const WEB_MODEL_CHOICE_SCHEMA = 123;
 const webDbName = 'web.sqlite';
 const webMarkerName = '.web-instance.json';
 type WebMarker = {
@@ -221,6 +223,7 @@ function webIdentity(
             WEB_MEMORY_METRICS_SCHEMA,
             WEB_SIGNUP_BONUS_SCHEMA,
             WEB_CHAT_REVIEW_SCHEMA,
+            WEB_MODEL_CHOICE_SCHEMA,
           ]
         : []),
     ].includes(version),
@@ -280,7 +283,7 @@ function preflightWeb(path: string, options: WebStoreOptions) {
         version >= WEB_SCHEMA &&
           version <=
             (options.providerRuntime
-              ? WEB_CHAT_REVIEW_SCHEMA
+              ? WEB_MODEL_CHOICE_SCHEMA
               : options.inviteTest
                 ? WEB_INVITE_IDENTITY_SCHEMA
                 : WEB_DATA_SCHEMA),
@@ -419,6 +422,7 @@ export class Store {
                         WEB_MEMORY_METRICS_SCHEMA,
                         WEB_SIGNUP_BONUS_SCHEMA,
                         WEB_CHAT_REVIEW_SCHEMA,
+                        WEB_MODEL_CHOICE_SCHEMA,
                       ]
                     : []),
                 ].includes(version)
@@ -600,6 +604,8 @@ export class WebStore extends Store {
   readonly publicFreeTier?: boolean;
   /** CHAT_REVIEW_ENABLED: archive a transcript (anonymously, 180 days) whenever a player's chats are removed. */
   readonly chatReview?: boolean;
+  /** PLAYER_MODEL_CHOICE_ENABLED: the models a player may pick (PLAYER_TEXT_MODELS). Absent = the feature is off. */
+  readonly playerModelChoice?: readonly PlayerModelId[];
   /** A persisted invite runtime must have passed the role/root/config preflight on open. */
   requireInviteTest() {
     ensure(
@@ -632,9 +638,11 @@ export class WebStore extends Store {
       dailyReplyLimit?: number;
       publicFreeTier?: boolean;
       chatReview?: boolean;
+      playerModelChoice?: readonly PlayerModelId[];
     },
   ) {
     super(join(root, webDbName), { web: { root, ...options } });
+    if (options.playerModelChoice) this.playerModelChoice = Object.freeze([...options.playerModelChoice]);
     if (options.concurrency) this.concurrency = parseWebConcurrency(options.concurrency);
     if (options.dailyReplyLimit !== undefined) this.dailyReplyLimit = parseWebDailyReplyLimit(options.dailyReplyLimit);
     if (options.publicFreeTier === true) this.publicFreeTier = true;

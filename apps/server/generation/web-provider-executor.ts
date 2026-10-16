@@ -13,6 +13,7 @@ import { audioStartedExpr, fallbackRequested, metricsEnabled } from '../admissio
 import { WebProviderOffline } from './web-provider-offline.ts';
 import { INDEX_IDLE_MS, type IndexBatch, type QueryClaim } from './web-embed-ledger.ts';
 import type { QueryVector } from './web-embed-runner.ts';
+import { logWebReply } from './web-reply-telemetry.ts';
 
 /** Separate schema113 scheduler. No synthetic output, default budget or footer is installed. */
 export class WebProviderExecutor {
@@ -28,6 +29,8 @@ export class WebProviderExecutor {
   private readonly tasks = new Set<Promise<void>>();
   private readonly publishing = new Set<string>();
   private readonly falling = new Set<string>();
+  /** Operations this executor has worked on and not yet reported as finished (telemetry only; a restart forgets them). */
+  private readonly unreported = new Set<string>();
   private managed = false;
   /** Indexing scans every scope, so an idle pass is not repeated for INDEX_IDLE_MS unless a publication committed. */
   private indexDirty = true;
@@ -92,6 +95,9 @@ export class WebProviderExecutor {
       for (const [provider, stage, phase, capacity] of [
         ['deepseek', 'text', 'draft', limits.maxTextRunning],
         ['deepseek', 'text', 'review', limits.maxTextRunning],
+        ['xai', 'text', 'draft', limits.maxTextRunning],
+        ['gemini', 'text', 'draft', limits.maxTextRunning],
+        ['gemini', 'text', 'review', limits.maxTextRunning],
         ['fish', 'audio', 'speech', limits.maxAudioRunning],
       ] as const)
         this.ledger.alignBudget({ provider, stage, phase, capacity });
@@ -185,7 +191,13 @@ export class WebProviderExecutor {
     this.lastError = error instanceof DomainError ? error.code : 'INTERNAL_ERROR';
   }
 
+  /** One telemetry line per reply that reached published / failed / unknown while this executor was working on it. */
+  private reportFinished() {
+    for (const id of [...this.unreported]) if (logWebReply(this.store, id)) this.unreported.delete(id);
+  }
+
   private schedule(claim: WebStageClaim) {
+    this.unreported.add(claim.operationId);
     const controller = new AbortController();
     this.controllers.add(controller);
     const task = (
@@ -208,6 +220,7 @@ export class WebProviderExecutor {
       .finally(async () => {
         this.tasks.delete(tracked);
         cleanup();
+        this.reportFinished();
         if (this.managed && this.tasks.size === 0) this.stop();
         try {
           await this.activity?.settled();
@@ -228,6 +241,7 @@ export class WebProviderExecutor {
   private publish(lease: WebCoordinatorLease, operationId: string) {
     if (this.publishing.has(operationId)) return;
     this.publishing.add(operationId);
+    this.unreported.add(operationId);
     // The publication committed: its memory topics may now need an embedding (never done inside that transaction).
     const task = this.runner.publishAsync(lease, operationId).then(() => {
       this.indexDirty = true;
@@ -380,6 +394,7 @@ export class WebProviderExecutor {
       try {
         const fence = this.ledger.fence(row.id);
         this.ledger.terminate(lease, fence, fence.principalId, 'failed', 'expired');
+        this.unreported.add(row.id);
       } catch (error) {
         this.error(error);
       }
@@ -402,5 +417,6 @@ export class WebProviderExecutor {
         this.error(error);
       }
     }
+    this.reportFinished();
   }
 }

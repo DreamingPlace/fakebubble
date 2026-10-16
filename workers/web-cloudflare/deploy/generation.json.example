@@ -7,5 +7,6 @@
   "preview_urls": false,
   "routes": [],
   "vars": { "EXTERNAL_CALLS": "false", "EMBEDDINGS_ENABLED": "false" },
-  "ai": { "binding": "AI" }
+  "ai": { "binding": "AI" },
+  "placement": { "region": "aws:us-east-1" }
 }

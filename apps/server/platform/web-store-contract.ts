@@ -1,3 +1,4 @@
+import type { PlayerModelId } from '../../../packages/contracts/player-models.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { WebConcurrency } from '../../../config/web-concurrency.ts';
 import type { BusinessStore } from './store-contract.ts';
@@ -13,6 +14,8 @@ export interface WebRuntimeStore extends BusinessStore {
   /** SIGNUP_BONUS_ENABLED: the 5-reply trial and the signup bonus (see admission/web-free-tier.ts); absent = off. */
   readonly publicFreeTier?: boolean;
   readonly chatReview?: boolean;
+  /** PLAYER_MODEL_CHOICE_ENABLED: the models a player may pick (PLAYER_TEXT_MODELS). Absent = the feature is off. */
+  readonly playerModelChoice?: readonly PlayerModelId[];
   readonly providerAudio?: PrivateMediaObjects;
   requireInviteTest(): void;
   requireProviderRuntime(): void;

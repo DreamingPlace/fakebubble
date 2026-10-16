@@ -124,15 +124,15 @@ function seedUnknowns(db: DatabaseSync) {
 test('inspect reports the deployed ledger next to the expected steps and matches only when every step is identical', () => {
   const { reader } = authority();
   const report = inspectWebAuthority(reader, expected, flags, budget);
-  // Extended for migration 122: schema 122, 47 steps.
-  assert.equal(report.schemaVersion, 122);
-  assert.equal(report.migrations.applied.length, 47);
+  // Extended for migration 123 (Part 21b named exception): schema 123, 48 steps.
+  assert.equal(report.schemaVersion, 123);
+  assert.equal(report.migrations.applied.length, 48);
   assert.deepEqual(
     report.migrations.applied,
     webR2Migrations.map((m) => ({ version: m.version, sha256: sha(m.sql) })),
   );
   assert.deepEqual(report.migrations.expected.r2, report.migrations.applied);
-  assert.equal(report.migrations.expected.inline.length, 47);
+  assert.equal(report.migrations.expected.inline.length, 48);
   assert.deepEqual(
     report.migrations.expected.inline.map((m, i) => m.sha256 === report.migrations.expected.r2[i]!.sha256),
     report.migrations.expected.inline.map((m) => m.version !== 113),
@@ -175,8 +175,8 @@ test('inspect reports the deployed ledger next to the expected steps and matches
     false,
   );
   assert.equal(
-    // Extended for migration 122: 122 is a real step now, so the extra step is 123.
-    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (123,'" + 'a'.repeat(64) + "')")),
+    // Extended for migration 123 (Part 21b named exception): 123 is a real step now, so the extra step is 124.
+    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (124,'" + 'a'.repeat(64) + "')")),
     false,
   );
   assert.equal(

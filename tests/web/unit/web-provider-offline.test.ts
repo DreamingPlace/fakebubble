@@ -1362,9 +1362,16 @@ test('Node deletion migration backfills proof for preexisting known receipts wit
 // Part 18b: provider price renewal. The first price rows (30 days) are written once at initialization; renew-prices
 // appends contiguous 90-day rows after them and never touches an existing row.
 const DAY = 86_400_000;
+// Part 21b NAMED EXCEPTION (the only edit to these renewal tests): PROVIDER_PRICES gained xAI and Gemini rows. A deployment
+// initialized before this Part has initial prices for the providers below only, so the initial seeding stays exactly that
+// and the assertions say what renew adds for the providers that had no rows yet (see the "no rows yet" test further down).
+const INITIAL_PROVIDERS = new Set(['deepseek', 'fish']);
+const NEW_PROVIDER_ROWS = PROVIDER_PRICES.filter((price) => !INITIAL_PROVIDERS.has(price.provider)).length;
+const initialRows = <T extends { provider: string }>(rows: T[]) =>
+  rows.filter((row) => INITIAL_PROVIDERS.has(row.provider));
 function seedInitialPrices(f: ReturnType<typeof fixture>, validDays = 30) {
-  for (const provider of ['deepseek', 'fish']) f.ledger.configureBudget(provider, 3_000_000);
-  for (const price of PROVIDER_PRICES)
+  for (const provider of INITIAL_PROVIDERS) f.ledger.configureBudget(provider, 3_000_000);
+  for (const price of PROVIDER_PRICES.filter((item) => INITIAL_PROVIDERS.has(item.provider)))
     f.ledger.configurePrice({
       id: `${price.provider}-${price.model}-${price.phase}-${now}`,
       provider: price.provider,
@@ -1398,14 +1405,14 @@ test('renew appends contiguous, non-overlapping rows, keeps the old rows byte fo
     PROVIDER_PRICES.map(() => 'renewed'),
   );
   const after = priceRows(f);
-  assert.equal(after.length, before.length * 2);
+  assert.equal(after.length, before.length * 2 + NEW_PROVIDER_ROWS);
   for (const row of before)
     assert.deepEqual(
       after.find((r) => r.id === row.id),
       row,
       'existing rows are untouched',
     );
-  for (const old of before) {
+  for (const old of initialRows(before)) {
     const next = after.find((r) => r.provider === old.provider && r.phase === old.phase && r.version === 2)!;
     assert.equal(next.valid_from, old.valid_until, 'contiguous');
     assert.equal(next.valid_until, old.valid_until + 90 * DAY);
@@ -1428,8 +1435,12 @@ test('renew does nothing for a price that still runs more than 60 days ahead', (
   seedInitialPrices(f, 100);
   const before = priceRows(f);
   const result = renewProviderPrices(f.store as never, now);
-  assert.ok(result.every((r) => r.result === 'not-due' && r.validFrom === null));
-  assert.deepEqual(priceRows(f), before);
+  assert.ok(
+    result
+      .filter((r) => INITIAL_PROVIDERS.has(r.provider))
+      .every((r) => r.result === 'not-due' && r.validFrom === null),
+  );
+  assert.deepEqual(initialRows(priceRows(f)), before);
   // At exactly 60 days left it is due.
   assert.ok(renewProviderPrices(f.store as never, now + 40 * DAY).every((r) => r.result === 'renewed'));
 });
@@ -1444,9 +1455,47 @@ test('an already expired price gets a row that starts now, and the expired row i
   assert.equal(added.length, PROVIDER_PRICES.length);
   assert.ok(added.every((r) => r.valid_from === later && r.valid_until === later + 90 * DAY));
   assert.deepEqual(
-    priceRows(f).filter((r) => r.version === 1),
+    initialRows(priceRows(f)).filter((r) => r.version === 1),
     before,
   );
+});
+
+test('Part 21b: renew creates the spending bound, the capacity ticket and the first price rows for a model with no rows yet', (t) => {
+  const f = fixture(t);
+  seedInitialPrices(f);
+  const before = priceRows(f);
+  assert.equal(f.store.get("SELECT 1 FROM web_provider_spending WHERE provider='xai'"), undefined);
+  renewProviderPrices(f.store as never, now + DAY);
+  for (const price of PROVIDER_PRICES.filter((item) => !INITIAL_PROVIDERS.has(item.provider))) {
+    const rows = priceRows(f).filter((r) => r.provider === price.provider && r.phase === price.phase);
+    assert.equal(rows.length, 1, `${price.provider} ${price.phase}`);
+    assert.equal(rows[0]!.version, 1);
+    assert.equal(rows[0]!.valid_from, now + DAY, 'starts now: there was no row to continue from');
+    assert.equal(rows[0]!.valid_until, now + DAY + 90 * DAY);
+    assert.ok(f.store.get('SELECT 1 FROM web_provider_spending WHERE provider=?', price.provider));
+    assert.ok(
+      f.store.get(
+        "SELECT 1 FROM web_external_budgets WHERE provider=? AND stage='text' AND phase=?",
+        price.provider,
+        price.phase,
+      ),
+    );
+  }
+  // The same bound policy as DeepSeek, and the first renewal left every existing row alone.
+  assert.equal(
+    f.store.get<{ limit_micros: number }>("SELECT limit_micros FROM web_provider_spending WHERE provider='gemini'")!
+      .limit_micros,
+    3_000_000,
+  );
+  for (const row of before)
+    assert.deepEqual(
+      priceRows(f).find((r) => r.id === row.id),
+      row,
+    );
+  // And a second run adds nothing.
+  const after = priceRows(f);
+  renewProviderPrices(f.store as never, now + DAY);
+  assert.deepEqual(priceRows(f), after);
 });
 
 test('a reply admitted just before the old row ends and one just after both price correctly; without renewal the later one fails', (t) => {

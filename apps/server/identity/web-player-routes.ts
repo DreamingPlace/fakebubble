@@ -130,6 +130,10 @@ export async function routeWebPlayerAccounts(
     });
     return { status: 200, clearPlayerCookie: true, body: result };
   }
+  if (action === 'model') {
+    const body = object(req.body, ['model']);
+    return { status: 200, body: accounts.setModel({ model: body.model, session: session(req) }) };
+  }
   if (action === 'review-notice-close') {
     object(req.body, []);
     return { status: 200, body: accounts.closeReviewNotice(session(req)) };
