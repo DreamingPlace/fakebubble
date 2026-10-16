@@ -1,4 +1,5 @@
 import type { WebAudioStatus, WebErrorCode, WebOperationStatus, WebTheme } from './web-v1.ts';
+import type { PlayerModelId } from './player-models.ts';
 
 /** Separate provider-web protocol. Synthetic local-1/2/3 wire objects are not assignable. */
 export const WEB_PROVIDER_CONTRACT = 'web-v1-provider-2' as const;
@@ -114,8 +115,15 @@ export interface WebProviderMessage {
   createdAt: number;
   /** Present only when the voice reply was delivered as text because voice was unavailable or busy. */
   deliveryFallback?: 'text';
-  /** Part 21b: present only when the backup model wrote this reply (the page shows 由备用模型回复). */
-  viaBackup?: true;
+  /**
+   * Part 21b/21f: present only when a backup model wrote this reply instead of the chosen one; both are player-model ids
+   * (the page shows "{chosen} 繁忙，由 {actual} 回复"). Normal replies carry nothing.
+   */
+  viaBackup?: {
+    chosen: PlayerModelId;
+    actual: PlayerModelId /** The cheaper of the two at the operation's own price version (Part 21g). */;
+    billed?: PlayerModelId;
+  };
   audio: {
     revision: number;
     status: WebAudioStatus;

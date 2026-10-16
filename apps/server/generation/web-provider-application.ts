@@ -1,4 +1,6 @@
 import { cheapestReplyPoints, hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
+import { DEFAULT_PLAYER_MODEL, isPlayerModelId } from '../../../packages/contracts/player-models.ts';
+import { billedModelAt } from '../admission/web-model-settings.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
 import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
@@ -26,6 +28,7 @@ import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts
 import { WebInvites } from '../invites/web-invites.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { WebCocreation } from '../cocreation/web-cocreation.ts';
+import { WebBilling } from '../admission/web-billing.ts';
 import { chatReviewTablesExist } from '../review/web-chat-review.ts';
 import { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
@@ -96,6 +99,11 @@ export interface ProviderHistoryRow {
   duration_ms: number | null;
   /** Part 21b: 1 when the draft of this reply was written by the backup model (web_operation_models.backup). */
   via_backup?: number;
+  /** Part 21f: the chosen model and the model that wrote the draft (web_operation_models.chosen / draft_provider). */
+  chosen_model?: string | null;
+  actual_model?: string | null;
+  /** Part 21g: the model this reply is billed as, at the prices of the operation's own price version (computed by the server). */
+  billed_model?: string | null;
 }
 /** One history row as the player sees it. A text fallback is an ordinary narrative text bubble; no error is shown. */
 export function providerHistoryMessage(
@@ -112,7 +120,19 @@ export function providerHistoryMessage(
     author: row.origin === 'input' ? 'player' : 'character',
     origin: row.origin === 'text_fallback' ? 'narrative' : row.origin,
     ...(row.origin === 'text_fallback' ? { deliveryFallback: 'text' as const } : {}),
-    ...(row.via_backup === 1 && row.origin !== 'input' ? { viaBackup: true as const } : {}),
+    ...(row.via_backup === 1 &&
+    row.origin !== 'input' &&
+    isPlayerModelId(row.chosen_model) &&
+    isPlayerModelId(row.actual_model) &&
+    row.chosen_model !== row.actual_model
+      ? {
+          viaBackup: {
+            chosen: row.chosen_model,
+            actual: row.actual_model,
+            ...(isPlayerModelId(row.billed_model) ? { billed: row.billed_model } : {}),
+          },
+        }
+      : {}),
     text: row.body,
     createdAt: row.created_at,
     audio: row.media_id
@@ -133,6 +153,8 @@ export class WebProviderApplication {
   readonly characterAdmin: WebCharacterAdmin;
   readonly inviteActions: WebInviteActions;
   readonly cocreation: WebCocreation;
+  /** Part 21f: the player's own 消费记录. */
+  readonly billing: WebBilling;
   /** CHAT_REVIEW_ENABLED (Part 19): 测试对话. Null with the flag off (and on a database older than schema 122). */
   readonly chatReview: WebChatReviewAdmin | null;
   /** GUEST_GRACE_ENABLED: 0 when off. */
@@ -236,6 +258,7 @@ export class WebProviderApplication {
         .digest(),
       () => globalThis.crypto.randomUUID(),
     );
+    this.billing = new WebBilling(store, clock, this.identity);
   }
 
   bootstrap(token: string | undefined, ipHash: string) {
@@ -465,18 +488,19 @@ export class WebProviderApplication {
     const remaining = counterRemaining + extraLeft;
     const trialCanSend = !expired && remaining > 0 && (locked === null || !webCharacterDeleted(this.store, locked));
     // Part 21b (flag PLAYER_MODEL_CHOICE_ENABLED): a player holding the signup bonus pays in points, so what it can still
-    // send follows the balance (after settling what finished), not the old bonus count. Free guest replies come first.
+    // send follows the balance (after settling what finished). Part 21f: the guest trial is never spent by it (its unused
+    // replies were converted into the opening balance), so only the balance counts.
     if (hasPoints(this.store, principal.principalId)) {
       const state = modelChoiceState(this.store, now, principal.principalId, false)!;
       const affordable = state.balance >= cheapestReplyPoints(this.store, principal.principalId);
       return {
         kind: 'guest',
         ...base,
-        lockedCharacterId: affordable ? null : locked,
-        remainingReplies: (expired ? 0 : remaining) + state.repliesLeft,
+        lockedCharacterId: null,
+        remainingReplies: state.repliesLeft,
         reservedReplies: row.trial_reserved,
         trialExpiresAt: retention.expires_at ?? null,
-        canSend: affordable || trialCanSend,
+        canSend: affordable,
         inaccessible: expired && !retained,
       };
     }
@@ -658,10 +682,13 @@ export class WebProviderApplication {
       media_id: string | null;
       duration_ms: number | null;
       via_backup: number;
+      chosen_model: string | null;
+      actual_model: string | null;
+      price_version: number | null;
     }>(
       `
       SELECT m.seq,m.id,m.body,m.created_at,o.id operation_id,'input' origin,NULL ordinal,
-          NULL media_id,NULL duration_ms,0 via_backup
+          NULL media_id,NULL duration_ms,0 via_backup,NULL chosen_model,NULL actual_model,NULL price_version
         FROM web_operations o JOIN messages m ON m.id=o.input_message_id
         WHERE o.principal_id=? AND o.world_id=? AND o.conversation_id=? AND m.seq<?
       UNION ALL
@@ -670,7 +697,19 @@ export class WebProviderApplication {
             modelChoiceTablesExist(this.store)
               ? '(SELECT backup FROM web_operation_models b WHERE b.operation_id=p.operation_id)'
               : '0'
-          } via_backup
+          } via_backup,${
+            modelChoiceTablesExist(this.store)
+              ? '(SELECT chosen FROM web_operation_models b WHERE b.operation_id=p.operation_id)'
+              : 'NULL'
+          } chosen_model,${
+            modelChoiceTablesExist(this.store)
+              ? '(SELECT draft_provider FROM web_operation_models b WHERE b.operation_id=p.operation_id)'
+              : 'NULL'
+          } actual_model,${
+            modelChoiceTablesExist(this.store)
+              ? '(SELECT price_version FROM web_operation_models b WHERE b.operation_id=p.operation_id)'
+              : 'NULL'
+          } price_version
         FROM web_publication_items i JOIN web_publications p ON p.operation_id=i.operation_id
         JOIN messages m ON m.id=i.message_id
         LEFT JOIN web_provider_media_assets a ON a.media_id=i.media_id AND i.origin='narrative'
@@ -692,7 +731,19 @@ export class WebProviderApplication {
     return {
       characterId: character,
       conversationId,
-      messages: page.map((row) => providerHistoryMessage(row, conversationId, character)),
+      messages: page.map((row) =>
+        providerHistoryMessage(
+          {
+            ...row,
+            billed_model:
+              isPlayerModelId(row.chosen_model) && isPlayerModelId(row.actual_model)
+                ? billedModelAt(this.store, row.price_version, row.chosen_model, row.actual_model)
+                : null,
+          },
+          conversationId,
+          character,
+        ),
+      ),
       before: page.length ? this.cursor(principal.principalId, page[0]!.seq, conversationId) : null,
       hasMore: rows.length > 50,
     };

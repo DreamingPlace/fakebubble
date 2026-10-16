@@ -16,6 +16,7 @@ import type { BusinessStore } from '../platform/store-contract.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import type { WebIdentity } from '../identity/web-identity.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
+import { takeIpDaily } from '../admission/web-ip-daily.ts';
 import { cocreationTablesExist } from './web-cocreation-purge.ts';
 
 type Auth = { cookie: unknown; csrf: unknown; origin: unknown };
@@ -63,14 +64,14 @@ const likePattern = (query: string) => `%${query.replace(/[\\%_]/g, (c) => `\\${
 export class WebCocreation {
   private readonly store: BusinessStore;
   private readonly clock: Clock;
-  private readonly identity: Pick<WebIdentity, 'authorizeWrite' | 'isInvitedSession'>;
+  private readonly identity: Pick<WebIdentity, 'authorizeWrite'>;
   private readonly admin: WebAccountAdmin;
   private readonly key: Buffer;
   private readonly id: () => string;
   constructor(
     store: BusinessStore,
     clock: Clock,
-    identity: Pick<WebIdentity, 'authorizeWrite' | 'isInvitedSession'>,
+    identity: Pick<WebIdentity, 'authorizeWrite'>,
     admin: WebAccountAdmin,
     pseudonymKey: Buffer,
     nextId: () => string,
@@ -95,6 +96,8 @@ export class WebCocreation {
     csrf: string,
     origin: string,
     input: { characterId: unknown; requestId: unknown; answers: unknown },
+    /** The transport's keyed hash of the peer: the per-IP daily cap. Every transport passes it. */
+    ipHash?: string,
   ) {
     // Session, CSRF and Origin first, so an unauthenticated caller learns nothing about the card list.
     this.identity.authorizeWrite(token, csrf, origin);
@@ -109,8 +112,9 @@ export class WebCocreation {
         .digest('hex');
     return this.store.transaction(() => {
       ensure(cocreationTablesExist(this.store), 'COCREATION_UNAVAILABLE');
+      // Part 21f: any principal with a valid session may submit (guest, signed-up, account, invite). Guest sessions are
+      // Turnstile-verified when they are created, exactly as for chat.
       const principal = this.identity.authorizeWrite(token, csrf, origin);
-      ensure(principal.kind === 'invite' && this.identity.isInvitedSession(token), 'COCREATION_INVITE_REQUIRED');
       ensure(
         this.store.get('SELECT 1 FROM web_character_catalog WHERE character_id=?', characterId) &&
           !webCharacterDeleted(this.store, characterId),
@@ -127,18 +131,25 @@ export class WebCocreation {
       }
       const now = this.clock.now();
       ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
-      const recent = this.store.all<{ created_at: number }>(
-        `SELECT created_at FROM web_cocreation_submissions
-        WHERE principal_id=? AND character_id=? AND created_at>? ORDER BY created_at DESC`,
+      // One submission per player per character per UTC day, counted from the existing rows.
+      const dayStart = Math.floor(now / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs;
+      const untilTomorrow = Math.max(1, dayStart + COCREATION_LIMITS.dayMs - now);
+      const today = this.store.get<{ n: number }>(
+        `SELECT count(*) n FROM web_cocreation_submissions
+        WHERE principal_id=? AND character_id=? AND created_at>=? AND created_at<?`,
         principal.principalId,
         characterId,
-        now - COCREATION_LIMITS.windowMs,
-      );
-      if (recent.length >= COCREATION_LIMITS.submissionsPerDay)
-        throw new RetryAfterError(
-          'COCREATION_RATE_LIMITED',
-          Math.max(1, recent[COCREATION_LIMITS.submissionsPerDay - 1]!.created_at + COCREATION_LIMITS.windowMs - now),
-        );
+        dayStart,
+        dayStart + COCREATION_LIMITS.dayMs,
+      )!.n;
+      if (today >= COCREATION_LIMITS.perCharacterPerDay)
+        throw new RetryAfterError('COCREATION_DAILY_LIMIT', untilTomorrow);
+      // Anti-abuse: submissions per IP hash per UTC day (a submission row holds no address, so the counter is kept apart).
+      if (
+        ipHash !== undefined &&
+        !takeIpDaily(this.store, 'cocreation', ipHash, dayStart, COCREATION_LIMITS.perIpPerDay)
+      )
+        throw new RetryAfterError('COCREATION_IP_LIMIT', untilTomorrow);
       const submissionId = this.id();
       this.store.run(
         `INSERT INTO web_cocreation_submissions(id,character_id,principal_id,request_id,request_hash,created_at)
@@ -165,6 +176,28 @@ export class WebCocreation {
       });
       return { submissionId, answered: answers.length, duplicate: false };
     });
+  }
+
+  /**
+   * Has this player already used today's entry for this character? Same session/CSRF/Origin checks as a write, so the
+   * sheet can say "今天已提交" before the player starts typing. Reads only this principal's own rows.
+   */
+  usedToday(token: string, csrf: string, origin: string, characterIdInput: unknown) {
+    const principal = this.identity.authorizeWrite(token, csrf, origin);
+    ensure(identifier(characterIdInput), 'INVALID_REQUEST');
+    ensure(cocreationTablesExist(this.store), 'COCREATION_UNAVAILABLE');
+    const now = this.clock.now();
+    const dayStart = Math.floor(now / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs;
+    const used =
+      (this.store.get<{ n: number }>(
+        `SELECT count(*) n FROM web_cocreation_submissions
+        WHERE principal_id=? AND character_id=? AND created_at>=? AND created_at<?`,
+        principal.principalId,
+        characterIdInput,
+        dayStart,
+        dayStart + COCREATION_LIMITS.dayMs,
+      )?.n ?? 0) >= COCREATION_LIMITS.perCharacterPerDay;
+    return { used };
   }
 
   // ---- administrators -------------------------------------------------------------------------------------------

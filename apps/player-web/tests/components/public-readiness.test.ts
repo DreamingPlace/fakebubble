@@ -487,32 +487,39 @@ const login: AccountInfo = {
   canBind: false,
 };
 
+// Part 21f (named exception): the account entries left the chat's ⋯ menu (it is 共创 and the model picker only). 删除我的账号
+// is now an entry of the top account menu (the nickname button) and 清除本设备的体验数据 of the guest's 更多 button; the
+// assertions about WHEN they exist are unchanged.
+const topMenu = (f: ReturnType<typeof chat>, label?: string) => {
+  const button = f.header
+    .querySelectorAll('.head-actions button')
+    .find((node) => (label ? node.textContent === label : node.getAttribute('aria-haspopup') === 'menu'))!;
+  button.click();
+  return f.header.querySelectorAll('.chat-menu-item');
+};
 test('menu: 删除我的账号 / 清除本设备的体验数据 exist only when the server says account deletion is on', async (t) => {
   const off = chat(t, login);
   await off.attach();
-  assert.deepEqual(titles(off.menu()), ['共创 · 让瓜瓜更像瓜瓜', '我的昵称', '修改密码', '退出其他设备', '退出登录']);
+  assert.deepEqual(titles(off.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titles(topMenu(off)), ['我的昵称', '修改密码', '退出其他设备', '退出登录']);
   const on = chat(t, { ...login, features: { accountDelete: true } });
   await on.attach();
-  const items = on.menu();
-  assert.deepEqual(titles(items), [
-    '共创 · 让瓜瓜更像瓜瓜',
-    '我的昵称',
-    '修改密码',
-    '退出其他设备',
-    '退出登录',
-    '删除我的账号',
-  ]);
-  items[5]!.click();
+  assert.deepEqual(titles(on.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  const items = topMenu(on);
+  assert.deepEqual(titles(items), ['我的昵称', '修改密码', '退出其他设备', '退出登录', '删除我的账号']);
+  items[4]!.click();
   assert.equal(on.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '删除我的账号');
 
   const guestOff = chat(t, { signupEnabled: true, signedIn: false });
   await guestOff.attach();
-  assert.deepEqual(titles(guestOff.menu()), ['共创 · 让瓜瓜更像瓜瓜', '登录', '注册']);
+  assert.deepEqual(titles(guestOff.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  assert.equal(guestOff.header.querySelectorAll('.head-more').length, 0, 'no 更多 button without account deletion');
   const guest = chat(t, { signupEnabled: true, signedIn: false, features: { accountDelete: true } });
   await guest.attach();
-  const guestItems = guest.menu();
-  assert.deepEqual(titles(guestItems), ['共创 · 让瓜瓜更像瓜瓜', '登录', '注册', '清除本设备的体验数据']);
-  guestItems[3]!.click();
+  assert.deepEqual(titles(guest.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  const guestItems = topMenu(guest, '更多');
+  assert.deepEqual(titles(guestItems), ['清除本设备的体验数据']);
+  guestItems[0]!.click();
   assert.equal(
     guest.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent,
     '清除本设备的体验数据',
@@ -525,7 +532,7 @@ test('after 删除 the tab ends on the signed-out first page with the final conf
   app.setAttribute('id', 'app');
   f.doc.body.append(app);
   await f.attach();
-  f.menu()[5]!.click();
+  topMenu(f)[4]!.click();
   const sheetRoot = f.doc.body.querySelector('.acct-sheet')!;
   sheetRoot.querySelector('input[name="password"]')!.value = 'pw-pw-pw-pw';
   sheetRoot.querySelector('input[name="confirm"]')!.value = '删除';

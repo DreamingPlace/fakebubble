@@ -152,6 +152,19 @@ export function pricesAt(store: Reader, version: number): PriceTable | undefined
       }
     : undefined;
 }
+/**
+ * The model a reply is BILLED as when `actual` wrote what `chosen` was asked for: the cheaper of the two, at the prices of the
+ * price version the operation was admitted under (ties bill the model that wrote it). Same rule as `reconcilePoints`.
+ */
+export function billedModelAt(
+  store: Reader,
+  version: number | null | undefined,
+  chosen: PlayerModelId,
+  actual: PlayerModelId,
+): PlayerModelId {
+  const prices = (version ? pricesAt(store, version) : undefined) ?? currentPrices(store);
+  return prices.perReply[actual] <= prices.perReply[chosen] ? actual : chosen;
+}
 /** What one reply by `model` costs now, voice included. */
 export const replyPointsNow = (store: Reader, model: PlayerModelId, voice = true) => {
   const prices = currentPrices(store);

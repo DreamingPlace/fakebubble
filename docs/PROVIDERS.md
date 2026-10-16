@@ -126,6 +126,12 @@ tokens for xAI and Gemini (`REASONING_HEADROOM`), sent as the completion limit. 
 - The ledger holds one integer µ$/token per (provider, model, phase) at the dearer of input/output. Usage rows (`web_provider_usage`) use the real per-rate list prices.
 - New rows are created by `renew-prices` (see DEPLOYMENT.md): it also creates the spending bound and capacity ticket of a provider that has none. `configureWebProvider` (first initialization) still seeds only DeepSeek and Fish, so a new deployment runs `renew-prices` once to make xAI/Gemini available.
 
+## Grok latency (Part 21f) — checked 2026-10-16, nothing changed
+Staging measured Grok 4.7 at ~21 s per text reply against ~5 s for DeepSeek (already at `reasoning_effort: "low"`). Checked on docs.x.ai:
+- **Lower reasoning setting.** [Reasoning](https://docs.x.ai/docs/guides/reasoning): grok-4.7 and grok-4.6 accept `low` / `medium` / `high` (default) / `xhigh`; there is **no `none`**, and the page states "Reasoning cannot be disabled". `low` is already the floor, so there is nothing lower to send.
+- **Faster / non-reasoning model.** [Models](https://docs.x.ai/docs/models): the only text model labelled non-reasoning is `grok-4.20-0309-non-reasoning` ($1.25 in / $0.20 cached / $2.50 out below 200k prompt tokens). The page labels no model "fast". Its support for our strict forced-function output is **not documented**: [structured outputs](https://docs.x.ai/docs/guides/structured-outputs) names only the "Grok 4 family" and its examples use grok-4.7.
+- **Decision.** Not adopted: a model that may not honour the strict schema is not swapped in on paper (every reply would fail validation as a billed failure). To try it, record a live answer from `grok-4.20-0309-non-reasoning` with our tool schema on staging, add its price row (`PROVIDER_PRICES`, `model-list-prices.ts`) and change `PLAYER_MODELS.xai.model`. Until then the picker tells the player the truth: **较慢，约20秒** (`PLAYER_MODELS[*].speed`).
+
 ## Failure classes (what may be retried on the next model)
 DEFINITELY NOT BILLED → settled at zero, retried ONCE on the next model of chosen → DeepSeek → Gemini:
 HTTP 429 (all three); 503 (DeepSeek, Gemini: documented overload/unavailable; xAI documents none, so its 503 stays UNKNOWN); a response recognised as

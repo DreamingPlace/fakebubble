@@ -12,7 +12,7 @@ export type PlayerModelId = (typeof PLAYER_MODEL_IDS)[number];
 export const DEFAULT_PLAYER_MODEL: PlayerModelId = 'deepseek';
 
 /** Bump when any number below changes. Stored on every points event so an old charge stays explainable. */
-export const POINTS_VERSION = 1;
+export const POINTS_VERSION = 2;
 
 export const POINTS = Object.freeze({
   version: POINTS_VERSION,
@@ -21,7 +21,7 @@ export const POINTS = Object.freeze({
   /** One reply of the old signup bonus, used to convert replies already spent into points (100 - 10 x spent). */
   perBonusReply: 10,
   /** Points per reply, by the model that writes it. */
-  perReply: Object.freeze({ deepseek: 10, gemini: 20, xai: 40 }) as Readonly<Record<PlayerModelId, number>>,
+  perReply: Object.freeze({ deepseek: 10, gemini: 20, xai: 25 }) as Readonly<Record<PlayerModelId, number>>,
   /** Added when the reply includes voice. */
   voice: 2,
 });
@@ -35,6 +35,8 @@ export interface PlayerModelInfo {
   readonly label: string;
   /** One short line of character. */
   readonly blurb: string;
+  /** Speed hint shown in the picker (measured on staging, see docs/PROVIDERS.md). */
+  readonly speed: string;
 }
 
 export const PLAYER_MODELS: Readonly<Record<PlayerModelId, PlayerModelInfo>> = Object.freeze({
@@ -44,6 +46,7 @@ export const PLAYER_MODELS: Readonly<Record<PlayerModelId, PlayerModelInfo>> = O
     model: 'deepseek-flash',
     label: 'DeepSeek',
     blurb: '默认，自然稳妥，最省点',
+    speed: '较快',
   }),
   gemini: Object.freeze({
     id: 'gemini',
@@ -51,6 +54,7 @@ export const PLAYER_MODELS: Readonly<Record<PlayerModelId, PlayerModelInfo>> = O
     model: 'gemini-3.8-flash',
     label: 'Gemini 3.8 Flash',
     blurb: '反应快，语气灵动',
+    speed: '较快',
   }),
   xai: Object.freeze({
     id: 'xai',
@@ -58,6 +62,7 @@ export const PLAYER_MODELS: Readonly<Record<PlayerModelId, PlayerModelInfo>> = O
     model: 'grok-4.7',
     label: 'Grok 4.7',
     blurb: '更敢说，表达更鲜明',
+    speed: '较慢，约20秒',
   }),
 });
 
@@ -67,6 +72,13 @@ export const isPlayerModelId = (value: unknown): value is PlayerModelId =>
 /** Points for one reply written by `model`, with voice when the reply includes it. */
 export const replyPoints = (model: PlayerModelId, voice: boolean) =>
   POINTS.perReply[model] + (voice ? POINTS.voice : 0);
+
+/**
+ * The model a reply is BILLED as when `actual` wrote what `chosen` was asked for: the cheaper of the two (a backup that costs
+ * more than the chosen model never raises the price). Same rule as the server's settlement.
+ */
+export const billedModel = (chosen: PlayerModelId, actual: PlayerModelId): PlayerModelId =>
+  POINTS.perReply[actual] <= POINTS.perReply[chosen] ? actual : chosen;
 
 /** The "about N messages" figure: whole replies the balance still pays for with this model (voice included). */
 export const repliesLeft = (balance: number, model: PlayerModelId, voice = true) =>

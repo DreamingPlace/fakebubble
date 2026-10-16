@@ -43,6 +43,10 @@ function fixture(t: test.TestContext) {
   }
   // The identity-owned and invite tables the inbox reads; the real ones come from migrations 100-111.
   store.db.exec('CREATE TABLE web_principals(id TEXT PRIMARY KEY, player_id TEXT, world_id TEXT, kind TEXT) STRICT');
+  // The per-IP daily counter table (migration 109), which the anti-abuse cap of the service uses.
+  store.db.exec(
+    'CREATE TABLE web_local_guest_budget(ip_hash TEXT NOT NULL, window_start INTEGER NOT NULL, created INTEGER NOT NULL CHECK(created>=0 AND created<=32), PRIMARY KEY(ip_hash,window_start)) STRICT',
+  );
   for (const file of ['111_invite_core.sql', '117_cocreation.sql'])
     store.db.exec(readFileSync(new URL(`../../../apps/server/web-migrations/${file}`, import.meta.url), 'utf8'));
   let now = T0,
@@ -222,7 +226,9 @@ test('answers are validated against the card list: unknown, duplicate, empty, ov
   assert.equal(bad([...twelve, { cardId: 'quirk', text: 'a' }]), 'COCREATION_TOO_MANY_ANSWERS');
 });
 
-test('submit stores answers in order with the card’s own target field; only an invited player may submit', (t) => {
+// Part 21f (named exception): co-creation is open to every principal with a valid session, so the old assertion that a
+// guest is refused (COCREATION_INVITE_REQUIRED) became the opposite one below. Nothing else in this test changed.
+test('submit stores answers in order with the card’s own target field; any principal with a session may submit', (t) => {
   const f = fixture(t),
     ann = f.player('ann'),
     guest = f.player('guest', 'guest');
@@ -242,7 +248,7 @@ test('submit stores answers in order with the card’s own target field; only an
   assert.deepEqual((detail.answers[0] as { replies: string[] }).replies, ['才没有', '哼']);
   assert.equal(detail.status, 'new');
 
-  assert.throws(() => f.submit(guest, 'req-g'), /COCREATION_INVITE_REQUIRED/, 'a guest cannot submit');
+  assert.equal(f.submit(guest, 'req-g').duplicate, false, 'a guest may submit too (Part 21f)');
   assert.throws(() => f.submit({ ...ann, csrf: 'wrong' }, 'req-2'), /CSRF_INVALID/);
   assert.throws(() => f.submit({ token: 'token-unknown', csrf: 'csrf-ok' }, 'req-2'), /SESSION_EXPIRED/);
   assert.throws(
@@ -257,19 +263,23 @@ test('submit stores answers in order with the card’s own target field; only an
   assert.throws(() => f.submit(ann, 'req-3', undefined, 'no-such-character'), /NOT_FOUND/);
   assert.throws(() => f.submit(ann, 'bad id!'), /INVALID_REQUEST/);
   assert.throws(() => f.submit(ann, 'req-4', [{ cardId: 'quirk', text: 'a\nb' }]), /COCREATION_TEXT_INVALID/);
-  assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_cocreation_submissions')!.n, 1);
+  assert.equal(
+    f.store.get<{ n: number }>('SELECT count(*) n FROM web_cocreation_submissions')!.n,
+    2,
+    'ann and the guest; every refusal above wrote nothing',
+  );
 });
 
-test('a lapsed invite (no live grant) is refused even though its principal kind is invite', (t) => {
+// Part 21f (named exception): the invite-only gate is gone, so "a lapsed invite is refused by the service" no longer exists.
+// A revoked or expired session is refused by the identity (authorizeWrite) before the service runs; that is what is checked.
+test('no invite gate: guest and invite principals submit, and a session the identity refuses writes nothing', (t) => {
   const f = fixture(t);
-  const ann = f.player('ann');
-  // The identity reports the session as not invited: the grant was revoked or expired.
-  const principals = (f.cocreation as unknown as { identity: { isInvitedSession: (t: string) => boolean } }).identity;
-  const original = principals.isInvitedSession;
-  principals.isInvitedSession = () => false;
-  assert.throws(() => f.submit(ann, 'req-1'), /COCREATION_INVITE_REQUIRED/);
-  principals.isInvitedSession = original;
+  const ann = f.player('ann'),
+    guest = f.player('guest', 'guest');
   assert.equal(f.submit(ann, 'req-1').duplicate, false);
+  assert.equal(f.submit(guest, 'req-1').duplicate, false);
+  assert.throws(() => f.submit({ token: 'token-lapsed', csrf: 'csrf-ok' }, 'req-2'), /SESSION_EXPIRED/);
+  assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_cocreation_submissions')!.n, 2);
 });
 
 test('submit is idempotent on requestId: the same content replays, other content conflicts, nothing is written twice', (t) => {
@@ -290,43 +300,90 @@ test('submit is idempotent on requestId: the same content replays, other content
   assert.equal(f.submit(bob, 'same').duplicate, false, 'request ids are per player');
 });
 
-test('at most five submissions per player and character in a rolling 24 hours; replays and other scopes do not count', (t) => {
+// Part 21f (named exception): the limit changed from "5 per player and character in a rolling 24 hours" to "1 per player and
+// character per UTC day" (COCREATION_DAILY_LIMIT) plus an anti-abuse cap per IP hash per UTC day.
+test('one submission per player and character per UTC day; replays and other scopes do not count', (t) => {
   const f = fixture(t),
     ann = f.player('ann'),
     bob = f.player('bob');
-  for (let i = 0; i < 5; i++) {
-    f.submit(ann, `r${i}`);
-    f.advance(60_000);
-  }
-  f.submit(ann, 'r0'); // an idempotent replay is not a sixth submission
+  f.submit(ann, 'r0');
+  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'wei-guagua'), { used: true });
+  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'jojo'), { used: false });
+  assert.deepEqual(f.cocreation.usedToday(bob.token, bob.csrf, origin, 'wei-guagua'), { used: false });
+  f.submit(ann, 'r0'); // an idempotent replay is not a second submission
+  f.advance(60_000);
   let refusal: unknown;
   try {
-    f.submit(ann, 'r5');
+    f.submit(ann, 'r1');
   } catch (error) {
     refusal = error;
   }
-  assert.equal(code(refusal), 'COCREATION_RATE_LIMITED');
+  assert.equal(code(refusal), 'COCREATION_DAILY_LIMIT');
   const wait = (refusal as { retryAfterMs: number }).retryAfterMs;
-  assert.equal(
-    wait,
-    T0 + COCREATION_LIMITS.windowMs - f.clockNow(),
-    'retry-after is when the oldest leaves the window',
-  );
+  const midnight = (Math.floor(f.clockNow() / COCREATION_LIMITS.dayMs) + 1) * COCREATION_LIMITS.dayMs;
+  assert.equal(wait, midnight - f.clockNow(), 'retry-after is the next UTC midnight');
   assert.equal(webProviderHTTPError(refusal).status, 429);
-  assert.equal(f.submit(ann, 'jojo-1', undefined, 'jojo').duplicate, false, 'another character has its own allowance');
-  assert.equal(f.submit(bob, 'b1').duplicate, false, 'another player has their own allowance');
+  assert.equal(f.submit(ann, 'jojo-1', undefined, 'jojo').duplicate, false, 'another character has its own entry');
+  assert.equal(f.submit(bob, 'b1').duplicate, false, 'another player has their own entry');
   f.advance(wait);
-  assert.equal(f.submit(ann, 'r5').duplicate, false, 'the window rolls');
-  assert.throws(() => f.submit(ann, 'r6'), /COCREATION_RATE_LIMITED/);
+  assert.equal(f.submit(ann, 'r1').duplicate, false, 'the next UTC day');
+  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'wei-guagua'), { used: true });
+  assert.throws(() => f.submit(ann, 'r2'), /COCREATION_DAILY_LIMIT/);
+  assert.throws(() => f.cocreation.usedToday(ann.token, 'wrong', origin, 'wei-guagua'), /CSRF_INVALID/);
+  assert.throws(() => f.cocreation.usedToday(ann.token, ann.csrf, origin, "a'b"), /INVALID_REQUEST/);
 });
 
-test('HTTP status mapping: invalid input 400, not invited 403, limit 429', () => {
+test('at most ten submissions per IP hash per UTC day, across principals; the count rolls back with a refused submission', (t) => {
+  const f = fixture(t);
+  const ip = 'a'.repeat(64),
+    other = 'b'.repeat(64);
+  const send = (who: ReturnType<typeof f.player>, requestId: string, from = ip, character = 'wei-guagua') =>
+    f.cocreation.submit(
+      who.token,
+      who.csrf,
+      origin,
+      { characterId: character, requestId, answers: [{ cardId: 'catchphrase', text: '哎呀妈呀' }] },
+      from,
+    );
+  // Ten guests clearing cookies behind one address.
+  for (let i = 0; i < 10; i++) assert.equal(send(f.player(`g${i}`, 'guest'), 'r').duplicate, false);
+  const eleventh = f.player('g10', 'guest');
+  let refusal: unknown;
+  try {
+    send(eleventh, 'r');
+  } catch (error) {
+    refusal = error;
+  }
+  assert.equal(code(refusal), 'COCREATION_IP_LIMIT');
+  assert.equal(webProviderHTTPError(refusal).status, 429);
+  assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_cocreation_submissions')!.n, 10);
+  assert.equal(send(eleventh, 'r', other).duplicate, false, 'another address has its own count');
+  // A submission refused for another reason (the daily entry) does not use up the address.
+  const used = (from: string) =>
+    f.store.get<{ created: number }>('SELECT created FROM web_local_guest_budget WHERE ip_hash=?', `cocreation:${from}`)
+      ?.created;
+  assert.equal(used(other), 1);
+  assert.throws(() => send(eleventh, 'r2', other), /COCREATION_DAILY_LIMIT/);
+  assert.equal(used(other), 1, 'a refusal leaves the count alone');
+  f.advance(COCREATION_LIMITS.dayMs);
+  assert.equal(send(f.player('g11', 'guest'), 'r', ip).duplicate, false, 'the next UTC day');
+  // The guest-creation counter shares the table but not the key space.
+  assert.equal(
+    f.store.get('SELECT 1 FROM web_local_guest_budget WHERE ip_hash=?', ip),
+    undefined,
+    'a bare address key is never used',
+  );
+  assert.throws(() => send(f.player('g12', 'guest'), 'r', 'not-a-hash'), /WEB_TRUSTED_IP_REQUIRED/);
+});
+
+test('HTTP status mapping: invalid input 400, limits 429', () => {
   for (const [codeName, status] of [
     ['COCREATION_EMPTY', 400],
     ['COCREATION_TEXT_INVALID', 400],
     ['COCREATION_CARD_INVALID', 400],
     ['COCREATION_TOO_MANY_ANSWERS', 400],
-    ['COCREATION_INVITE_REQUIRED', 403],
+    ['COCREATION_DAILY_LIMIT', 429],
+    ['COCREATION_IP_LIMIT', 429],
   ] as const)
     assert.equal(webProviderHTTPError(new DomainError(codeName)).status, status, codeName);
 });
@@ -341,6 +398,7 @@ test('the player route: exact body keys, 201 then 200 on replay, and the limit a
       origin,
       csrf: ann.csrf,
       playerToken: ann.token,
+      trustedIpHash: 'c'.repeat(64),
       body,
       ...over,
     })!;
@@ -357,6 +415,24 @@ test('the player route: exact body keys, 201 then 200 on replay, and the limit a
     null,
   );
   assert.throws(() => post(body, { method: 'GET' }), /NOT_FOUND/);
+  assert.throws(() => post({ ...body, requestId: 'route-2' }, { trustedIpHash: undefined }), /WEB_TRUSTED_IP_REQUIRED/);
+  assert.throws(() => post({ ...body, requestId: 'route-3' }), /COCREATION_DAILY_LIMIT/);
+  const today = (over: Record<string, unknown> = {}) =>
+    routeWebCocreation(f.cocreation, {
+      method: 'POST',
+      path: '/api/web/local/cocreation/today',
+      origin,
+      csrf: ann.csrf,
+      playerToken: ann.token,
+      body: { characterId: 'wei-guagua' },
+      ...over,
+    })!;
+  assert.deepEqual(today().body, { used: true });
+  assert.deepEqual(today({ body: { characterId: 'jojo' } }).body, { used: false });
+  assert.throws(() => today({ body: { characterId: 'jojo', x: 1 } }), /INVALID_REQUEST/);
+  assert.throws(() => today({ playerToken: undefined }), /AUTH_REQUIRED/);
+  assert.throws(() => today({ csrf: undefined }), /CSRF_INVALID/);
+  assert.throws(() => today({ method: 'GET' }), /NOT_FOUND/);
 });
 
 test('the inbox needs the new permissions: read to view, manage to change; the owner has both; categories do not imply them', (t) => {
@@ -417,7 +493,7 @@ test('the inbox shows a stable pseudonym and the invite batch, and never an iden
     ann = f.player('ann', 'invite', '春季内测'),
     bob = f.player('bob');
   f.submit(ann, 'r1');
-  f.submit(ann, 'r2');
+  f.submit(ann, 'r2', undefined, 'jojo'); // (one entry per character per day since Part 21f)
   f.submit(bob, 'r3');
   const items = list(f, f.ownerAuth).items;
   assert.equal(items.length, 3);
@@ -447,11 +523,11 @@ test('the inbox shows a stable pseudonym and the invite batch, and never an iden
 });
 
 test('list: newest first, paged, with filters for character, status, star and text (answers, dialogue and notes)', (t) => {
-  const f = fixture(t),
-    ann = f.player('ann');
+  const f = fixture(t);
+  // Part 21f: one entry per player and character per day, so each submission here is from its own player.
   const make = (id: string, answers: unknown, character = 'wei-guagua') => {
     f.advance(1000);
-    return f.submit(ann, id, answers, character).submissionId;
+    return f.submit(f.player(`m-${id}`), id, answers, character).submissionId;
   };
   const a = make('a', [{ cardId: 'catchphrase', text: '百分之百 sure' }]);
   const b = make('b', [{ cardId: 'dialogue', player: '吃了吗', replies: ['吃过了啦'] }], 'jojo');
@@ -516,11 +592,11 @@ test('list: newest first, paged, with filters for character, status, star and te
 
 test('list pages by cursor without gaps or repeats, including submissions made in the same millisecond', (t) => {
   const f = fixture(t);
-  const players = Array.from({ length: 8 }, (_, i) => f.player(`p${i}`));
+  // Part 21f: one entry per player and character per day, so 40 players hand in one each.
+  const players = Array.from({ length: 40 }, (_, i) => f.player(`p${i}`));
   const made: string[] = [];
-  for (const p of players)
-    for (let k = 0; k < 5; k++)
-      if (made.length < 40) made.push(f.submit(p, `r${k}`, undefined, k % 2 ? 'jojo' : 'wei-guagua').submissionId);
+  for (const [k, p] of players.entries())
+    made.push(f.submit(p, `r${k}`, undefined, k % 2 ? 'jojo' : 'wei-guagua').submissionId);
   const seen: string[] = [];
   let before: unknown = null,
     pages = 0;
@@ -542,9 +618,8 @@ test('list pages by cursor without gaps or repeats, including submissions made i
 
 test('bulk status is all-or-nothing, records who processed it, and the new count follows', (t) => {
   const f = fixture(t),
-    ann = f.player('ann'),
     manager = f.member(['cocreation.manage'], 'Manager');
-  const ids = ['a', 'b', 'c'].map((r) => f.submit(ann, r).submissionId);
+  const ids = ['a', 'b', 'c'].map((r) => f.submit(f.player(`bulk-${r}`), r).submissionId);
   assert.deepEqual(f.cocreation.counts(f.ownerAuth), { counts: { 'wei-guagua': 3 } });
   assert.deepEqual(f.cocreation.setStatus(manager, ids.slice(0, 2), 'archived'), { updated: 2, status: 'archived' });
   assert.deepEqual(

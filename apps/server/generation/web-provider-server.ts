@@ -27,6 +27,7 @@ import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
+import { routeWebBilling } from '../admission/web-billing-routes.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { routeWebInvite } from '../invites/web-invite-routes.ts';
 import {
@@ -425,6 +426,7 @@ export class WebProviderServer {
         (path.startsWith(`${API}/invites/`) ||
           path.startsWith(`${API}/admin/`) ||
           path.startsWith(`${API}/cocreation/`) ||
+          path.startsWith(`${API}/billing/`) ||
           path.startsWith(`${API}/account/`) ||
           path.startsWith(`${API}/identity/invite-`))
       ) {
@@ -487,6 +489,7 @@ export class WebProviderServer {
             this.application.chatReview,
           )) ??
           routeWebCocreation(this.application.cocreation, input) ??
+          routeWebBilling(this.application.billing, input) ??
           routeWebInvite(this.inviteActions, input, this.inviteAdmin);
         if (result.issuedToken) this.setCookie(res, result.issuedToken, true);
         else if (result.clearPlayerCookie)

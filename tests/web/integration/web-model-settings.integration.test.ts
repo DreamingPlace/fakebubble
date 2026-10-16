@@ -20,6 +20,8 @@ import { textRouteFor } from '../../../apps/server/generation/web-text-routing.t
 import { DEFAULT_MODEL_SETTINGS, MODEL_TIERS, parseModelSave } from '../../../packages/contracts/model-settings.ts';
 import { hasModelsPermission, isAdminPermission } from '../../../packages/contracts/web-admin-permissions.ts';
 import { POINTS } from '../../../packages/contracts/player-models.ts';
+import { billedModelAt } from '../../../apps/server/admission/web-model-settings.ts';
+import { providerHistoryMessage } from '../../../apps/server/generation/web-provider-application.ts';
 import { modelSettingsFixture, origin, schema124 } from '../fixtures/model-settings.ts';
 
 const code = (error: unknown) => (error as { code?: string }).code;
@@ -270,7 +272,8 @@ test('a price change applies to the next admission only: the frozen operation ke
       first.operationId,
     )!;
   assert.deepEqual({ ...frozen() }, { chosen: 'gemini', points_charged: 22, price_version: 2 });
-  assert.equal(f.store.get<{ balance: number }>('SELECT balance FROM web_points_balance')!.balance, 78);
+  // Part 21f's opening balance: 100 + 10 x 5 unused trial replies = 150, then this reply's 22.
+  assert.equal(f.store.get<{ balance: number }>('SELECT balance FROM web_points_balance')!.balance, 128);
 
   // The owner makes Gemini dearer (and voice dearer): a new price version, nothing existing is re-priced.
   const result = f.save(f.owner, f.draft({ gemini: { points: 30 } }, 5));
@@ -625,4 +628,163 @@ test('the key probe fails closed: no method, an error or anything but `true` mea
     keys: { gemini: true, xai: false },
     ok: true,
   });
+});
+
+// ---- Part 21f x 21g: every points computation reads the owner's table ---------------------------------------------------------
+
+const spends = (f: ReturnType<typeof modelSettingsFixture>) =>
+  f.store
+    .all<{ delta: number; price_version: number }>(
+      "SELECT delta,price_version FROM web_points_events WHERE source='spend' ORDER BY id",
+    )
+    .map((row) => ({ ...row }));
+
+test('the owner raises Gemini 20 → 30: the next reply is charged 30 + voice at the new version, the one before keeps 22', (t) => {
+  const f = modelSettingsFixture(t);
+  const player = f.guest('r', 'registered');
+  setPlayerModel(f.store, f.clock(), player, 'gemini');
+  const before = f.admit(player, 'before');
+  assert.deepEqual(spends(f), [{ delta: -22, price_version: 2 }]);
+  f.save(f.owner, f.draft({ gemini: { points: 30 } }));
+  const after = f.admit(player, 'after', 'b');
+  assert.deepEqual(spends(f), [
+    { delta: -22, price_version: 2 },
+    { delta: -32, price_version: 3 },
+  ]);
+  const charged = (id: string) =>
+    f.store.get<{ points_charged: number }>('SELECT points_charged FROM web_operation_models WHERE operation_id=?', id)!
+      .points_charged;
+  assert.deepEqual([charged(before.operationId), charged(after.operationId)], [22, 32]);
+  // The picker's numbers and 约可聊 N 条 come from the same table: (150 - 22 - 32) / (30 + 2) = 3.
+  const state = modelChoiceState(f.store, f.clock(), player)!;
+  assert.equal(state.balance, 96);
+  assert.equal(state.models.find((m) => m.id === 'gemini')!.points, 30);
+  assert.equal(state.repliesLeft, 3);
+  // Deepseek (selected) at 10 + 2: switch and the figure follows that model's price.
+  setPlayerModel(f.store, f.clock(), player, 'deepseek');
+  assert.equal(modelChoiceState(f.store, f.clock(), player)!.repliesLeft, 8);
+});
+
+test('a reply admitted BEFORE a price change, answered by the backup model, is refunded with its OWN version’s prices', (t) => {
+  const f = modelSettingsFixture(t);
+  const player = f.guest('r', 'registered');
+  setPlayerModel(f.store, f.clock(), player, 'xai');
+  const op = f.admit(player, 'old'); // xai 25 + voice 2 = 27 at version 2
+  assert.deepEqual(spends(f), [{ delta: -27, price_version: 2 }]);
+  // Later the owner reprices everything: xai far cheaper than DeepSeek, voice dearer. Version 3.
+  f.save(f.owner, f.draft({ xai: { points: 5 }, deepseek: { points: 14 } }, 4));
+  assert.equal(currentPrices(f.store).version, 3);
+  // The old reply was drafted by the backup (DeepSeek) and carried no voice.
+  f.store.run(
+    "UPDATE web_operation_models SET draft_provider='deepseek',draft_model='deepseek-flash',backup=1 WHERE operation_id=?",
+    op.operationId,
+  );
+  f.finish(op.operationId, 'published');
+  reconcilePoints(f.store, f.clock(), player);
+  const refunds = f.store
+    .all<{ reason: string; delta: number; price_version: number }>(
+      "SELECT reason,delta,price_version FROM web_points_events WHERE source='refund' ORDER BY id",
+    )
+    .map((row) => ({ ...row }));
+  // Version 2's table: xai 25 - deepseek 10 = 15 back, and the frozen voice price 2. (Today's table would say 0 and 4.)
+  assert.deepEqual(refunds, [
+    { reason: 'backup_cheaper', delta: 15, price_version: 2 },
+    { reason: 'no_voice', delta: 2, price_version: 2 },
+  ]);
+  // The label "按 {billed} 计费" is named by the same frozen table: at version 2 DeepSeek was the cheaper, at 3 xAI would be.
+  assert.equal(billedModelAt(f.store, 2, 'xai', 'deepseek'), 'deepseek');
+  assert.equal(billedModelAt(f.store, 3, 'xai', 'deepseek'), 'xai');
+  assert.equal(billedModelAt(f.store, 2, 'deepseek', 'gemini'), 'deepseek', 'a dearer backup never raises the price');
+  const row = {
+    id: 'm1',
+    body: '回复',
+    created_at: 1,
+    operation_id: op.operationId,
+    origin: 'narrative' as const,
+    ordinal: 0,
+    media_id: null,
+    duration_ms: null,
+    via_backup: 1,
+    chosen_model: 'xai',
+    actual_model: 'deepseek',
+    billed_model: billedModelAt(f.store, 2, 'xai', 'deepseek'),
+  };
+  assert.deepEqual(providerHistoryMessage(row, 'c', 'wei-guagua' as never).viaBackup, {
+    chosen: 'xai',
+    actual: 'deepseek',
+    billed: 'deepseek',
+  });
+});
+
+test('21f’s opening balance keeps its fixed unit (100 − 10 × bonus spent + 10 × unused trial), whatever the table says', (t) => {
+  const f = modelSettingsFixture(t);
+  f.save(f.owner, f.draft({ deepseek: { points: 99 }, gemini: { points: 150 } }, 20));
+  const player = f.guest('r', 'registered');
+  const state = modelChoiceState(f.store, f.clock(), player)!;
+  assert.equal(state.balance, 150, '100 + 10 x 5 unused trial replies: the signup-bonus unit, not a table price');
+  assert.equal(
+    f.store.get<{ price_version: number }>("SELECT price_version FROM web_points_events WHERE source='bonus'")!
+      .price_version,
+    3,
+    'the bonus event names the table in force',
+  );
+  // And what a reply costs now is the table's, so the cheapest reply is DeepSeek at 99 + 20.
+  assert.equal(state.repliesLeft, Math.floor(150 / (99 + 20)));
+});
+
+test('an operation admitted under 21f’s constant v2 and one under the table’s v2 mean the same prices', (t) => {
+  assert.equal(POINTS.version, 2);
+  const f = modelSettingsFixture(t);
+  const prices = pricesAt(f.store, 2)!;
+  assert.deepEqual({ ...prices.perReply }, { ...POINTS.perReply });
+  assert.equal(prices.voice, POINTS.voice);
+  // Same player, same model, one store with the table and one with only the constant (a database before migration 124).
+  const withTable = modelSettingsFixture(t);
+  const constants = modelSettingsFixture(t);
+  constants.store.db.exec(
+    'DROP TABLE web_model_save_requests; DROP TABLE web_model_changes; DROP TABLE web_model_voice; DROP TABLE web_model_settings; DROP TABLE web_price_versions;',
+  );
+  const run = (x: ReturnType<typeof modelSettingsFixture>) => {
+    const player = x.guest('r', 'registered');
+    setPlayerModel(x.store, x.clock(), player, 'xai');
+    const op = x.admit(player, 'same');
+    x.finish(op.operationId, 'failed');
+    reconcilePoints(x.store, x.clock(), player);
+    return x.store
+      .all<{ source: string; reason: string | null; delta: number; price_version: number }>(
+        'SELECT source,reason,delta,price_version FROM web_points_events ORDER BY id',
+      )
+      .map((row) => ({ ...row }));
+  };
+  const a = run(withTable),
+    b = run(constants);
+  assert.deepEqual(a, b);
+  assert.deepEqual(
+    a.map((row) => [row.source, row.delta, row.price_version]),
+    [
+      ['bonus', 150, 2],
+      ['spend', -27, 2],
+      ['refund', 27, 2],
+    ],
+  );
+  // A later table change does not touch an old operation's version: it still resolves to the same numbers.
+  withTable.save(withTable.owner, withTable.draft({ xai: { points: 60 } }));
+  assert.equal(pricesAt(withTable.store, 2)!.perReply.xai, 25);
+});
+
+test('a guest gets the picker only when the guest tier has two or more models; the server state is the one the page reads', (t) => {
+  const f = modelSettingsFixture(t);
+  const guest = f.guest('g');
+  assert.equal(modelChoiceState(f.store, f.clock(), guest), null, 'one model: no picker');
+  f.save(f.owner, f.draft({ gemini: { guest: true } }));
+  const two = modelChoiceState(f.store, f.clock(), guest)!;
+  assert.deepEqual(
+    two.models.map((m) => m.id),
+    ['deepseek', 'gemini'],
+  );
+  assert.equal(two.metered, false);
+  // Back to one model (a different one): still no picker, and the guest is served by it.
+  f.save(f.owner, f.draft({ deepseek: { guest: false } }));
+  assert.equal(modelChoiceState(f.store, f.clock(), guest), null);
+  assert.equal(effectiveModel(f.store, f.clock(), guest), 'gemini');
 });

@@ -1,4 +1,5 @@
 import { purgeDiagnostics } from '../identity/web-player-purge.ts';
+import { currentPrices } from '../admission/web-model-settings.ts';
 
 /** Read-only operator view of the business authority: SELECT statements only, never content or secrets. */
 export interface WebInspectReader {
@@ -167,6 +168,11 @@ export function inspectWebAuthority(
     },
     // Part 21b: the aggregate usage rows (UTC day, provider, model, phase; counts and micro-USD at list price). No id, no content.
     usage: {
+      // Part 21g: the points table in force (owner's settings; prices only), so `usage:report` calibrates against the real one.
+      points: currentPrices({
+        all: (sql, ...params) => reader.all(sql, ...(params as (string | number)[])),
+        get: (sql, ...params) => reader.all(sql, ...(params as (string | number)[]))[0] as never,
+      }),
       rows: has('web_provider_usage')
         ? reader.all(
             'SELECT day,provider,model,phase,calls,input_tokens,cached_input_tokens,output_tokens,bytes,cost_micros,replies FROM web_provider_usage ORDER BY day DESC,provider,model,phase LIMIT 2000',
