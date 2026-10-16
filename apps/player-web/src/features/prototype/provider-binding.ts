@@ -9,6 +9,8 @@ import { replyPauseMs } from './reply-presentation.ts';
 import { ProviderInviteController } from '../../session/provider-invite-controller.ts';
 import { openRecoveryEntry, openRecoveryManage, recoveryCopy, showRecoveryCode } from './recovery-code.ts';
 import { mountChatMenu } from '../cocreation/chat-menu.ts';
+import { guideCopy, mountChatGuide } from '../cocreation/chat-guide.ts';
+import { openBillingSheet } from '../account/billing-sheet.ts';
 import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
 import { accountCopy, openAccountSheet, type AccountSheetMode } from '../account/account-sheet.ts';
 import { mountReviewBanners } from './review-banner.ts';
@@ -197,13 +199,7 @@ export class LiveBinding {
     );
   }
 
-  /** An invited player with a live grant may take part in co-creation; a guest sees the entry, disabled. */
-  private cocreationAllowed() {
-    const access = this.view.access;
-    return access.kind === 'invite' && access.status === 'active' && this.accessKnown && !this.invitation.locked;
-  }
-
-  /** The "⋯" menu in each chat header. Its items are read when it opens, so they follow the current access. */
+  /** The "⋯" menu in each chat header: 切换回复模型 (a player who can choose one) and 共创 (everyone). Nothing else. */
   private mountChatMenus(shell: Shell) {
     for (const character of this.view.characters) {
       const card = shell.card(character.characterId);
@@ -211,13 +207,20 @@ export class LiveBinding {
       const head = card?.querySelector<HTMLElement>('.chat-head');
       if (!more || !head) continue;
       const name = shell.name(character.characterId);
+      // The first-time guide points at the button; it appears when this chat is opened (see open()).
+      this.guides.set(
+        character.characterId,
+        mountChatGuide(more, head, () => (this.modelChoice ? guideCopy.withPicker : guideCopy.guest)),
+      );
       mountChatMenu(more, head, () => {
-        const allowed = this.cocreationAllowed();
+        const model = this.modelMenu();
         return [
+          ...model,
           {
             label: cocreationCopy.title(name),
-            sub: allowed ? cocreationCopy.sub(name) : cocreationCopy.guestSub,
-            disabled: !allowed,
+            sub: cocreationCopy.sub(name),
+            // Any principal with a valid session may submit; only a pending invitation check holds it back.
+            disabled: this.invitation.locked,
             onSelect: () =>
               openCocreationSheet({
                 api: this.api,
@@ -229,10 +232,14 @@ export class LiveBinding {
                 say: (message) => shell.say(message),
               }),
           },
-          ...this.accountMenu(),
         ];
       });
     }
+  }
+  private guides = new Map<WebProviderCharacterId, ReturnType<typeof mountChatGuide>>();
+  /** The model picker state of a player who can choose one (a points account or an invited player), else undefined. */
+  private get modelChoice() {
+    return this.account.signedIn ? this.account.modelChoice : undefined;
   }
 
   /** Chats the current guest has: a login switches to another principal and never merges them. */
@@ -270,7 +277,7 @@ export class LiveBinding {
     });
   }
 
-  /** Part 21b: the model picker entry, only for a points account (PLAYER_MODEL_CHOICE_ENABLED). */
+  /** Part 21b: the model picker entry of the chat's ⋯ menu, only for a player who can choose a model (PLAYER_MODEL_CHOICE_ENABLED). */
   private modelMenu() {
     const info = this.account.signedIn ? this.account.modelChoice : undefined;
     if (!info) return [];
@@ -289,12 +296,29 @@ export class LiveBinding {
     ];
   }
 
-  /** The account entries of the ⋯ menu, after 共创: they follow what this player has (a login, a bindable invite, nothing). */
+  /** 消费记录: only for a player with a points account or an invitation (the server answers 404 to anyone else). */
+  private billingMenu() {
+    if (!this.modelChoice) return [];
+    const shell = this.shell;
+    return [
+      {
+        label: '消费记录',
+        sub: '点数是怎么用的',
+        onSelect: () =>
+          openBillingSheet({
+            api: this.api,
+            name: (id) => (shell ? shell.name(id as WebProviderCharacterId) : ''),
+          }),
+      },
+    ];
+  }
+
+  /** The entries of the top account menu: they follow what this player has (a login, a bindable invite, nothing). */
   private accountMenu() {
     const say = (message: string) => this.shell?.say(message);
     if (this.hasLogin)
       return [
-        ...this.modelMenu(),
+        ...this.billingMenu(),
         { label: '我的昵称', sub: '角色怎么称呼你', onSelect: () => void this.openAccount('nickname') },
         { label: '修改密码', sub: '需要当前密码', onSelect: () => void this.openAccount('password') },
         {
@@ -327,28 +351,21 @@ export class LiveBinding {
       ];
     if (this.account.signedIn && this.account.canBind)
       return [
-        ...this.modelMenu(),
+        ...this.billingMenu(),
         { label: '绑定邮箱', sub: '换设备也能登录你的聊天', onSelect: () => void this.openAccount('bind') },
       ];
+    // A guest's 登录 / 注册 are buttons of the top bar; what is left to put in its menu is clearing the device.
     if (this.view.access.kind === 'guest')
-      return [
-        { label: '登录', sub: '用邮箱和密码进入已有的聊天', onSelect: () => void this.openAccount('login') },
-        {
-          label: '注册',
-          sub: this.signupOpen ? '用邮箱保存你的聊天' : accountCopy.closed,
-          onSelect: () => void this.openAccount('signup'),
-        },
-        ...(this.deleteEnabled
-          ? [
-              {
-                label: accountCopy.clearTitle,
-                sub: '立即清除这台设备上的体验聊天',
-                onSelect: () => void this.openAccount('clear'),
-              },
-            ]
-          : []),
-      ];
-    return [];
+      return this.deleteEnabled
+        ? [
+            {
+              label: accountCopy.clearTitle,
+              sub: '立即清除这台设备上的体验聊天',
+              onSelect: () => void this.openAccount('clear'),
+            },
+          ]
+        : [];
+    return this.billingMenu();
   }
 
   private renderAccess() {
@@ -389,10 +406,28 @@ export class LiveBinding {
       nick.setAttribute('aria-haspopup', 'menu');
       nick.setAttribute('aria-expanded', 'false');
       this.headMenu = mountChatMenu(nick, shell.head, () => this.accountMenu());
+    } else if (
+      access.kind === 'invite' &&
+      access.status === 'active' &&
+      this.accessKnown &&
+      (this.modelChoice || (this.account.signedIn && this.account.canBind))
+    ) {
+      // An invited player has no login but may have a spending history or an email to bind: the same top account menu.
+      const mine = action('我的账号', 'head-account', () => {});
+      mine.setAttribute('aria-haspopup', 'menu');
+      mine.setAttribute('aria-expanded', 'false');
+      this.headMenu = mountChatMenu(mine, shell.head, () => this.accountMenu());
     } else if (access.kind === 'guest' && !this.invitation.locked) {
       action('登录', 'head-account desktop-account', () => void this.openAccount('login'));
       action('注册', 'head-account desktop-account', () => void this.openAccount('signup'));
       action('登录/注册', 'head-account mobile-account', () => void this.openAccount('login'));
+      if (this.deleteEnabled) {
+        // Clearing this device's trial chats moved out of the chat's ⋯ menu: it lives in the top bar's menu.
+        const more = action('更多', 'head-account head-more', () => {});
+        more.setAttribute('aria-haspopup', 'menu');
+        more.setAttribute('aria-expanded', 'false');
+        this.headMenu = mountChatMenu(more, shell.head, () => this.accountMenu());
+      }
     }
     if (access.kind === 'invite' && !this.invitation.locked) {
       if (access.status === 'active' && this.accessKnown && !this.hasLogin) {
@@ -479,6 +514,8 @@ export class LiveBinding {
     if (this.refreshing) return this.refreshing;
     this.refreshing = (async () => {
       const changed = this.updateView(await this.api.bootstrap());
+      // The balance is settled server-side when a reply lands or fails: take the current figure, not the one from page load.
+      if (this.modelChoice) await this.loadAccount();
       this.renderAccess();
       if (changed) throw new ProviderApiError(401, 'IDENTITY_CHANGED');
     })();
@@ -812,11 +849,11 @@ export class LiveBinding {
       const bubble = document.createElement('p');
       bubble.className = 'text-bubble incoming-text';
       bubble.textContent = message.text;
-      if (message.viaBackup === true && message.replyOrdinal === 0) {
+      if (message.viaBackup && message.replyOrdinal === 0) {
         // Part 21b: the bubble and its one-line note stay together as a single flex item.
         const stack = document.createElement('div');
         stack.className = 'text-with-note';
-        stack.append(bubble, backupNote());
+        stack.append(bubble, backupNote(message.viaBackup, this.modelChoice?.metered !== false));
         row.append(avatar, stack);
       } else row.append(avatar, bubble);
       return row;
@@ -847,8 +884,8 @@ export class LiveBinding {
       toggle.setAttribute('aria-expanded', String(visible));
     });
     // Part 21b: a reply the backup model wrote says so, once, under its first voice bubble.
-    if (message.viaBackup === true && message.replyOrdinal === 0)
-      row.querySelector('.voice-stack')?.append(backupNote());
+    if (message.viaBackup && message.replyOrdinal === 0)
+      row.querySelector('.voice-stack')?.append(backupNote(message.viaBackup, this.modelChoice?.metered !== false));
     return row;
   }
 
@@ -893,6 +930,7 @@ export class LiveBinding {
   }
 
   async open(characterId: WebProviderCharacterId, card: HTMLElement) {
+    if (card.classList.contains('is-chat')) this.guides.get(characterId)?.show();
     if (this.catalogChanged || this.sendingCharacter === characterId) return;
     const revision = this.viewRevision;
     const conversationId = this.conversation(characterId);

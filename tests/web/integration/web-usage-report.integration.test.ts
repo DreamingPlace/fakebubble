@@ -68,7 +68,7 @@ test('every known provider call lands in the aggregate table at LIST price; the 
   assert.equal(xai.reviewMicros, review.cost_micros);
   assert.equal(xai.speechMicros, speech.cost_micros);
   assert.equal(xai.totalMicros, draft.cost_micros + review.cost_micros + speech.cost_micros);
-  assert.equal(xai.points, 42);
+  assert.equal(xai.points, 27, 'Part 21f: xAI is 25 points + 2 for voice (was 42 at 40 + 2)');
   assert.equal(
     report.models.find((m) => m.model === 'gemini')!.totalMicros,
     null,
@@ -76,7 +76,8 @@ test('every known provider call lands in the aggregate table at LIST price; the 
   );
   const text = formatUsageReport(rows);
   assert.match(text, /xai\s+1\s+\$/);
-  assert.match(text, /Points table v1: deepseek 10, gemini 20, xai 40, voice \+2/);
+  // Part 21f (named exception): the table is version 2 and xAI is 25 points.
+  assert.match(text, /Points table v2: deepseek 10, gemini 20, xai 25, voice \+2/);
   assert.doesNotMatch(text, /operation|principal|world/i, 'nothing but aggregates');
 
   // The same rows through the CLI readers: a local database, and the operator's inspect receipt.

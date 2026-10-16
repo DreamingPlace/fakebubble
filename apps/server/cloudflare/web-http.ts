@@ -14,6 +14,7 @@ import { routeWebInvite } from '../invites/web-invite-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
+import { routeWebBilling } from '../admission/web-billing-routes.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import type { HumanAction, TurnstileGate } from '../identity/web-turnstile.ts';
 import { isReadOnlyAdminPost } from './web-admin-read.ts';
@@ -176,6 +177,7 @@ export class WebProviderHTTP {
       (path.startsWith(`${API}/invites/`) ||
         path.startsWith(`${API}/admin/`) ||
         path.startsWith(`${API}/cocreation/`) ||
+        path.startsWith(`${API}/billing/`) ||
         path.startsWith(`${API}/account/`) ||
         path.startsWith(`${API}/identity/invite-`))
     ) {
@@ -231,6 +233,7 @@ export class WebProviderHTTP {
         (await routeWebPlayerAccounts(path.startsWith(`${API}/account/`) ? app.playerAccounts : null, input)) ??
         (await routeWebAccountAdmin(app.inviteAdmin, input, app.characterAdmin, app.cocreation, app.chatReview)) ??
         routeWebCocreation(app.cocreation, input) ??
+        routeWebBilling(app.billing, input) ??
         routeWebInvite(app.inviteActions, input, app.inviteAdmin);
       if (/\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(review-start|run-start|delete-start)$/.test(localPath))
         await this.execution.wake();

@@ -20,6 +20,8 @@ export interface CocreationApi {
     requestId: string;
     answers: CocreationAnswer[];
   }): Promise<{ submissionId: string; answered: number; duplicate: boolean }>;
+  /** Has today's entry for this character been used? Best effort: without it the sheet simply does not say. */
+  cocreationToday?(characterId: string): Promise<{ used: boolean }>;
 }
 export type CocreationSheetOptions = {
   api: CocreationApi;
@@ -43,7 +45,8 @@ export const BATCH_SIZE = 5;
 export const cocreationCopy = {
   title: (name: string) => `共创 · 让${name}更像${name}`,
   sub: (name: string) => `写下你心中的${name}`,
-  guestSub: '受邀后可参与',
+  /** Today's entry for this character is spent (one per player per character per UTC day). */
+  usedToday: '今天已提交',
   progress: (n: number) => (n === 0 ? '写几张都行，不用写完' : `已写 ${n} 张`),
   shuffle: '换一批',
   send: (name: string) => `交给${name}`,
@@ -62,8 +65,8 @@ export const cocreationCopy = {
   reply: (name: string) => `${name}会回：`,
   close: '关闭',
   errors: {
-    COCREATION_RATE_LIMITED: '今天已经交过好几张小纸条啦，明天再来吧。写的内容还在这里。',
-    COCREATION_INVITE_REQUIRED: '受邀后才能参与共创。',
+    COCREATION_DAILY_LIMIT: '今天已经给 TA 共创过啦，明天再来吧',
+    COCREATION_IP_LIMIT: '今天的共创次数用完了，明天再来吧',
     COCREATION_TEXT_INVALID: '有一张的内容不太合适，检查一下长度再试试。',
     COCREATION_EMPTY: '先写一张再交出去吧。',
     NOT_FOUND: '这个人物暂时不能共创。',
@@ -158,6 +161,14 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   });
   const dots = h('div', { class: 'cc-dots', attrs: { 'aria-hidden': 'true' } });
   const notice = h('p', { class: 'cc-notice', attrs: { role: 'status', 'aria-live': 'polite' }, hidden: true });
+  // Shown before the player starts typing when today's entry for this character is already used.
+  const usedBanner = h('p', {
+    class: 'cc-used',
+    text: cocreationCopy.usedToday,
+    attrs: { role: 'status', 'aria-live': 'polite' },
+    hidden: true,
+  });
+  let usedToday = false;
   const sendButton = h('button', { class: 'cc-send', attrs: { type: 'button' }, text: cocreationCopy.send(name) });
   const thanks = h(
     'div',
@@ -170,6 +181,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     'div',
     { class: 'cc-sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'cc-title' } },
     h('header', { class: 'cc-head' }, closeButton, h('div', { class: 'cc-heading' }, title, progress), shuffleButton),
+    usedBanner,
     deck,
     dots,
     h('footer', { class: 'cc-foot' }, notice, sendButton),
@@ -241,7 +253,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const refresh = () => {
     const n = writtenCount();
     progress.textContent = cocreationCopy.progress(n);
-    sendButton.disabled = busy || n === 0;
+    sendButton.disabled = busy || n === 0 || usedToday;
     shuffleButton.disabled = busy;
     for (const id of refs.keys()) refreshRefs(id);
   };
@@ -478,6 +490,10 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
       sendButton.textContent = cocreationCopy.send(name);
       const code = (error as { code?: string }).code ?? '';
       show(cocreationCopy.errors[code] ?? cocreationCopy.errors.unknown!);
+      if (code === 'COCREATION_DAILY_LIMIT') {
+        usedToday = true;
+        usedBanner.hidden = false;
+      }
       if (!closed) refresh();
       return;
     }
@@ -521,5 +537,15 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   renderDeck();
   mountPoint.append(sheet);
   deck.focus?.();
+  void api.cocreationToday?.(characterId).then(
+    (today) => {
+      if (closed || !today.used) return;
+      usedToday = true;
+      usedBanner.hidden = false;
+      show(cocreationCopy.errors.COCREATION_DAILY_LIMIT!);
+      refresh();
+    },
+    () => {},
+  );
   return { close, element: sheet, isOpen: () => !closed };
 }

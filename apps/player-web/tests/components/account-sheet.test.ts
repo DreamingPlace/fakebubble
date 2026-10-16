@@ -752,21 +752,24 @@ function chat(
 }
 const titles = (items: FakeElement[]) => items.map((item) => item.querySelector('.chat-menu-title')!.textContent);
 
-test('chat ⋯ menu: 共创 stays first; a guest gets 登录 / 注册 after it (注册 says 暂未开放 while closed)', async (t) => {
+// Part 21f (named exception): the chat's ⋯ menu holds only 切换回复模型 (for a player who can choose one) and 共创. A guest's
+// 登录 / 注册 are the top bar's buttons (their sheets are checked there); this test keeps its assertions about what they open.
+test('chat ⋯ menu: a guest sees 共创 only; 登录 / 注册 are in the top bar (注册 says 暂未开放 while closed)', async (t) => {
   const f = chat(t, { kind: 'guest' });
   await f.attach();
-  const items = f.menu();
-  assert.deepEqual(titles(items), ['共创 · 让瓜瓜更像瓜瓜', '登录', '注册']);
-  assert.equal(items[2]!.querySelector('.chat-menu-sub')!.textContent, '注册暂未开放');
-  assert.equal(items[1]!.disabled, false, 'login is never closed');
-  items[1]!.click();
+  assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  const [login, signup] = topBar(f);
+  assert.deepEqual(labelsOf([login!, signup!]), ['登录', '注册']);
+  login!.click();
   assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '登录');
-  const open = chat(t, { kind: 'guest', account: { signupEnabled: true, signedIn: false } });
-  await open.attach();
-  assert.equal(open.menu()[2]!.querySelector('.chat-menu-sub')!.textContent, '用邮箱保存你的聊天');
+  f.doc.body.querySelector('.acct-close')!.click();
+  signup!.click();
+  assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-closed')!.textContent, '注册暂未开放');
 });
 
-test('chat ⋯ menu for a signed-in login: 我的昵称 / 修改密码 / 退出其他设备 / 退出登录, and they do what they say', async (t) => {
+// Part 21f (named exception): the account entries left the chat's ⋯ menu; the same four actions are now run from the top
+// account menu (the nickname button), with the same assertions as before.
+test('top account menu for a signed-in login: 我的昵称 / 修改密码 / 退出其他设备 / 退出登录, and they do what they say; the chat menu has none', async (t) => {
   const account: AccountInfo = {
     signupEnabled: true,
     signedIn: true,
@@ -778,24 +781,30 @@ test('chat ⋯ menu for a signed-in login: 我的昵称 / 修改密码 / 退出�
   };
   const f = chat(t, { kind: 'guest', account });
   await f.attach();
-  let items = f.menu();
-  assert.deepEqual(titles(items), ['共创 · 让瓜瓜更像瓜瓜', '我的昵称', '修改密码', '退出其他设备', '退出登录']);
-  items[1]!.click();
+  assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜'], 'the chat menu: 共创 only');
+  const nick = topBar(f)[0]!;
+  const open = () => {
+    nick.click();
+    return f.header.querySelectorAll('.chat-menu-item');
+  };
+  let items = open();
+  assert.deepEqual(titles(items), ['我的昵称', '修改密码', '退出其他设备', '退出登录']);
+  items[0]!.click();
   const sheet = f.doc.body.querySelector('.acct-sheet')!;
   assert.equal(sheet.querySelector('.acct-title')!.textContent, '我的昵称');
   assert.equal(sheet.querySelector('input[name="nickname"]')!.value, '阿泡');
   sheet.querySelector('.acct-close')!.click();
-  items = f.menu();
-  items[2]!.click();
+  items = open();
+  items[1]!.click();
   assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '修改密码');
   f.doc.body.querySelector('.acct-close')!.click();
-  items = f.menu();
-  items[3]!.click();
+  items = open();
+  items[2]!.click();
   await flush();
   assert.ok(f.calls.includes('logoutOthers'));
   assert.deepEqual(f.said.at(-1), '已退出其他设备');
-  items = f.menu();
-  items[4]!.click();
+  items = open();
+  items[3]!.click();
   await flush();
   assert.ok(f.calls.includes('logout'));
   assert.deepEqual(f.reloads, ['reload']);
@@ -813,9 +822,14 @@ test('chat: a legacy invited player without a login sees 绑定邮箱 and keeps 
   };
   const f = chat(t, { kind: 'invite', account: bindable });
   await f.attach();
-  const items = f.menu();
-  assert.deepEqual(titles(items), ['共创 · 让瓜瓜更像瓜瓜', '绑定邮箱']);
-  items[1]!.click();
+  // Part 21f (named exception): 绑定邮箱 left the chat's ⋯ menu for the top account menu (一个 "我的账号" button).
+  assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  const mine = f.header.querySelectorAll('.head-actions button');
+  assert.deepEqual(labelsOf(mine), ['我的账号']);
+  mine[0]!.click();
+  const items = f.header.querySelectorAll('.chat-menu-item');
+  assert.deepEqual(titles(items), ['绑定邮箱']);
+  items[0]!.click();
   assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '绑定邮箱');
   assert.equal(f.header.querySelectorAll('.recovery-entry').length, 1, '恢复码 stays for unbound players');
   const bound = chat(t, {
@@ -828,7 +842,7 @@ test('chat: a legacy invited player without a login sees 绑定邮箱 and keeps 
     0,
     'no recovery code for a player with a login',
   );
-  assert.deepEqual(titles(bound.menu()).slice(1), ['我的昵称', '修改密码', '退出其他设备', '退出登录']);
+  assert.deepEqual(titles(bound.menu()), ['共创 · 让瓜瓜更像瓜瓜'], 'the chat menu has no account entries');
 });
 
 test('chat: with signup open, 邀请码 sends a guest without a login to 注册 first and comes back to the invite box after', async (t) => {
@@ -848,18 +862,18 @@ test('chat: with signup closed (or unknown), 邀请码 opens the invite box exac
     // The invite box is built from HTML, which this in-memory DOM refuses: reaching that refusal proves the old path ran.
     assert.throws(() => f.header.querySelectorAll('.invite-entry').at(-1)!.click(), /parse HTML/, String(account));
     assert.equal(f.doc.body.querySelector('.acct-sheet'), null, String(account));
-    assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜', '登录', '注册'], String(account));
+    assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜'], String(account));
   }
 });
 
 test('chat: the login switch warns about a guest with chats; no chats, no warning', async (t) => {
   const withChats = chat(t, { kind: 'guest', chats: true });
   await withChats.attach();
-  withChats.menu()[1]!.click();
+  topBar(withChats)[0]!.click(); // 登录 (a top bar button since Part 21f)
   assert.equal(withChats.doc.body.querySelector('.acct-notice strong')!.textContent, '当前访客的聊天不会合并');
   const empty = chat(t, { kind: 'guest' });
   await empty.attach();
-  empty.menu()[1]!.click();
+  topBar(empty)[0]!.click();
   assert.equal(empty.doc.body.querySelector('.acct-notice'), null);
 });
 
@@ -892,8 +906,8 @@ test("top bar: a guest finds 登录 and 注册 next to 邀请码, not only insid
   f.doc.body.querySelector('.acct-close')!.click();
   topBar(f)[1]!.click();
   assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '注册');
-  // The ⋯ menu still has them too.
-  assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜', '登录', '注册']);
+  // The ⋯ menu no longer repeats them.
+  assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
 });
 
 test('top bar: while signup is off 注册 still opens and says 注册暂未开放; 登录 is never closed', async (t) => {
@@ -960,15 +974,15 @@ test('top bar: a signed-in player sees their nickname, which opens the account m
   await flush();
   assert.ok(f.calls.includes('logout'));
   assert.deepEqual(f.reloads, ['reload']);
-  // The same menu is still in the chat cards' ⋯ menu.
-  assert.deepEqual(titles(f.menu()).slice(1), ['我的昵称', '修改密码', '退出其他设备', '退出登录']);
+  // The chat cards' ⋯ menu no longer carries them (Part 21f).
+  assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
   // A login without a nickname yet is still reachable.
   const bare = chat(t, { kind: 'guest', account: { ...signedIn, nickname: null }, remaining: 2 });
   await bare.attach();
   assert.equal(topBar(bare)[0]!.textContent, '我的账号');
 });
 
-test('top bar: an invited player with a login gets the nickname button too; one without a login keeps 恢复码 and no account buttons', async (t) => {
+test('top bar: an invited player with a login gets the nickname button too; one without a login keeps 恢复码 and gets one 我的账号 entry (绑定邮箱)', async (t) => {
   const bound = chat(t, {
     kind: 'invite',
     account: { ...signedIn, kind: 'invite', nickname: '老玩家' },
@@ -981,7 +995,8 @@ test('top bar: an invited player with a login gets the nickname button too; one 
     account: { ...signedIn, kind: 'invite', hasLogin: false, canBind: true, nickname: null, emailMasked: null },
   });
   await legacy.attach();
-  assert.deepEqual(labelsOf(legacy.header.querySelectorAll('.head-actions button')), []);
+  // Part 21f (named exception): 绑定邮箱 moved out of the chat menu into one top-bar entry, so this player now has it.
+  assert.deepEqual(labelsOf(legacy.header.querySelectorAll('.head-actions button')), ['我的账号']);
   assert.equal(legacy.header.querySelectorAll('.recovery-entry').length, 1);
 });
 

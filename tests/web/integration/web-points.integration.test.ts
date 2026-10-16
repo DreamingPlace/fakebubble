@@ -8,6 +8,9 @@ import {
   reconcilePoints,
   setPlayerModel,
 } from '../../../apps/server/admission/web-points.ts';
+import { BILLING_PAGE_SIZE, WebBilling, playerBilling } from '../../../apps/server/admission/web-billing.ts';
+import { routeWebBilling } from '../../../apps/server/admission/web-billing-routes.ts';
+import { parseBillingPage } from '../../../packages/contracts/player-billing.ts';
 import { purgePlayerLogins, playerLoginsRemain } from '../../../apps/server/identity/web-player-purge.ts';
 import { POINTS, replyPoints, repliesLeft, parsePlayerTextModels } from '../../../packages/contracts/player-models.ts';
 import type { PlayerModelId } from '../../../packages/contracts/player-models.ts';
@@ -21,7 +24,17 @@ const T0 = 1_700_000_000_000;
 /** A real schema-123 store with a guest that holds the signup bonus; the Part 21b flag is on unless `flag: false`. */
 function fixture(
   t: TestContext,
-  options: { flag?: boolean; offered?: readonly PlayerModelId[]; bonusSpent?: number; bonus?: boolean } = {},
+  options: {
+    flag?: boolean;
+    offered?: readonly PlayerModelId[];
+    bonusSpent?: number;
+    bonus?: boolean;
+    /**
+     * Trial replies (of the 5) the guest had used before signing up. Part 21f: unused ones are converted into points, so the
+     * default is the realistic "signed up after the whole trial" (5): 100 points, as before the change.
+     */
+    trialSpent?: number;
+  } = {},
 ) {
   const store = schema123();
   t.after(() => store.close());
@@ -47,7 +60,7 @@ function fixture(
     return principalId;
   };
   /** An operation that already exists in some state, optionally one of the 10 bonus replies of the old accounting. */
-  const history = (principalId: string, status: string, tier: 'bonus' | null, n: number) => {
+  const history = (principalId: string, status: string, tier: 'bonus' | 'trial_extra' | null, n: number) => {
     const world = principalId.replace('principal', 'world'),
       player = principalId.replace('principal', 'player');
     const messageId = `m-${n}-${principalId}`;
@@ -81,8 +94,15 @@ function fixture(
       now,
       now + 1000,
     );
-    if (tier)
+    if (tier === 'bonus')
       store.run("INSERT INTO web_free_operations VALUES (?,?,'bonus',NULL)", `old-${n}-${principalId}`, principalId);
+    if (tier === 'trial_extra')
+      store.run(
+        "INSERT INTO web_free_operations VALUES (?,?,'trial_extra',?)",
+        `old-${n}-${principalId}`,
+        principalId,
+        ip('a'),
+      );
   };
   const state = (principalId: string) => modelChoiceState(store, now, principalId);
   const events = (principalId: string) =>
@@ -110,10 +130,46 @@ function fixture(
       status === 'published' ? 'used' : 'released',
       operationId,
     );
+  /** The reply carried voice: one narrative publication item with media (what the points settlement looks for). */
+  const voiced = (operationId: string) => {
+    store.db.exec('PRAGMA foreign_keys=OFF'); // the publication's job and message rows are not what these tests are about
+    const op = store.get<{ principal_id: string; world_id: string; conversation_id: string; character_id: string }>(
+      'SELECT principal_id,world_id,conversation_id,character_id FROM web_operations WHERE id=?',
+      operationId,
+    )!;
+    store.run(
+      `INSERT INTO web_publications(operation_id,principal_id,player_id,world_id,conversation_id,character_id,
+      input_message_id,job_id,request_digest,candidate_digest,published_at,receipt_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      operationId,
+      op.principal_id,
+      op.principal_id.replace('principal', 'player'),
+      op.world_id,
+      op.conversation_id,
+      op.character_id,
+      'm',
+      `job-${operationId}`,
+      'd',
+      'd',
+      now,
+      '{}',
+    );
+    store.run(
+      'INSERT INTO web_publication_items VALUES (?,?,?,?,?)',
+      operationId,
+      0,
+      `msg-${operationId}`,
+      'media-1',
+      'narrative',
+    );
+  };
   const advance = (ms: number) => {
     now += ms;
   };
   const principalId = guest('a', options.bonus !== false);
+  // Trial replies already used: the first 3 are on the guest counters, replies 4-5 are "extra" (derived accounting).
+  const trialSpent = options.trialSpent ?? (options.bonus === false ? 0 : 5);
+  store.run('UPDATE web_principals SET trial_used=? WHERE id=?', Math.min(3, trialSpent), principalId);
+  for (let n = 3; n < trialSpent; n++) history(principalId, 'published', 'trial_extra', 100 + n);
   for (let n = 0; n < (options.bonusSpent ?? 0); n++) history(principalId, 'published', 'bonus', n);
   return {
     store,
@@ -124,6 +180,7 @@ function fixture(
     balance,
     sum,
     finish,
+    voiced,
     history,
     guest,
     principalId,
@@ -157,12 +214,13 @@ test('the first touch creates the balance from the old bonus accounting: 100 - 1
 });
 
 test('the displayed numbers come from one price table', () => {
-  assert.deepEqual({ ...POINTS.perReply }, { deepseek: 10, gemini: 20, xai: 40 });
+  assert.deepEqual({ ...POINTS.perReply }, { deepseek: 10, gemini: 20, xai: 25 });
+  assert.equal(POINTS.version, 2, 'the price change is a new version');
   assert.equal(POINTS.voice, 2);
-  assert.equal(replyPoints('xai', true), 42);
+  assert.equal(replyPoints('xai', true), 27);
   assert.equal(replyPoints('deepseek', false), 10);
   assert.equal(repliesLeft(100, 'deepseek'), 8);
-  assert.equal(repliesLeft(100, 'xai'), 2);
+  assert.equal(repliesLeft(100, 'xai'), 3);
   assert.deepEqual(parsePlayerTextModels('gemini'), ['deepseek', 'gemini'], 'DeepSeek is always on');
   assert.deepEqual(parsePlayerTextModels('xai, gemini'), ['deepseek', 'gemini', 'xai']);
   assert.deepEqual(parsePlayerTextModels(undefined), ['deepseek', 'gemini', 'xai']);
@@ -173,11 +231,11 @@ test('a reply by a chosen model is charged at admission, once, and the model is 
   setPlayerModel(f.store, f.clock(), f.principalId, 'xai');
   const first = f.admit(f.principalId, 'r1');
   assert.equal(first.duplicate, false);
-  assert.equal(f.balance(f.principalId), 100 - 42);
+  assert.equal(f.balance(f.principalId), 100 - 27);
   assert.deepEqual(f.events(f.principalId).at(-1), {
     source: 'spend',
     reason: 'reply',
-    delta: -42,
+    delta: -27,
     admin_id: null,
     operation_id: first.operationId,
   });
@@ -185,7 +243,7 @@ test('a reply by a chosen model is charged at admission, once, and the model is 
     'SELECT * FROM web_operation_models WHERE operation_id=?',
     first.operationId,
   )!;
-  assert.deepEqual([row.chosen, row.points_charged, row.voice, row.price_version, row.settled], ['xai', 42, 1, 1, 0]);
+  assert.deepEqual([row.chosen, row.points_charged, row.voice, row.price_version, row.settled], ['xai', 27, 1, 2, 0]);
   assert.equal(
     f.store.get('SELECT 1 FROM web_free_operations WHERE operation_id=?', first.operationId),
     undefined,
@@ -195,10 +253,11 @@ test('a reply by a chosen model is charged at admission, once, and the model is 
     'SELECT trial_reserved,trial_used FROM web_principals WHERE id=?',
     f.principalId,
   )!;
-  assert.deepEqual([principal.trial_reserved, principal.trial_used], [0, 0], 'the guest trial counters are untouched');
+  // (the fixture signed up after the whole trial: 3 on the counters, 2 extra; the charge touches none of them)
+  assert.deepEqual([principal.trial_reserved, principal.trial_used], [0, 3], 'the guest trial counters are untouched');
   // Idempotent replay: no second charge.
   assert.equal(f.admit(f.principalId, 'r1').duplicate, true);
-  assert.equal(f.balance(f.principalId), 58);
+  assert.equal(f.balance(f.principalId), 73);
   // Switching affects the NEXT message only.
   f.finish(first.operationId, 'published');
   setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
@@ -214,48 +273,83 @@ test('a reply by a chosen model is charged at admission, once, and the model is 
     'gemini',
   );
   // The first reply was settled when the balance was next touched: it carried no voice in this fixture, so its 2 voice points came back.
-  assert.equal(f.balance(f.principalId), 58 + 2 - 22);
+  assert.equal(f.balance(f.principalId), 73 + 2 - 22);
   assert.equal(f.balance(f.principalId), f.sum(f.principalId), 'balance == the sum of its events');
 });
 
-test('DeepSeek still uses the guest trial replies first (3 + 2); only when those are gone does it spend points; the picker model never uses them', (t) => {
-  const f = fixture(t);
-  for (let n = 0; n < 5; n++) {
-    const free = f.admit(f.principalId, `free-${n}`);
-    assert.equal(
-      f.store.get('SELECT 1 FROM web_operation_models WHERE operation_id=?', free.operationId),
-      undefined,
-      'a guest trial reply has no points row',
+// Part 21f (named exception): this test used to assert the opposite for DeepSeek ("uses the guest trial replies first, no
+// points row"). A signed-up player now ALWAYS pays points, whatever the model; the unused trial replies are converted into
+// the opening balance instead (next test).
+test('every reply, any model, creates a spend event and a model row; the guest trial path is never used', (t) => {
+  for (const model of ['deepseek', 'gemini', 'xai'] as const) {
+    const f = fixture(t);
+    setPlayerModel(f.store, f.clock(), f.principalId, model);
+    const before = f.store.get<{ trial_used: number; trial_reserved: number }>(
+      'SELECT trial_used,trial_reserved FROM web_principals WHERE id=?',
+      f.principalId,
+    )!;
+    const op = f.admit(f.principalId, 'r1');
+    const row = f.store.get<{ chosen: string; points_charged: number }>(
+      'SELECT chosen,points_charged FROM web_operation_models WHERE operation_id=?',
+      op.operationId,
+    )!;
+    assert.deepEqual([row.chosen, row.points_charged], [model, replyPoints(model, true)]);
+    const spend = f.events(f.principalId).filter((e) => e.source === 'spend');
+    assert.deepEqual(
+      spend.map((e) => [e.operation_id, e.delta]),
+      [[op.operationId, -replyPoints(model, true)]],
     );
-    f.finish(free.operationId, 'published');
+    assert.deepEqual(
+      f.store.get('SELECT trial_used,trial_reserved FROM web_principals WHERE id=?', f.principalId),
+      before,
+      'the trial counters are not touched',
+    );
+    assert.equal(f.store.get('SELECT 1 FROM web_free_operations WHERE operation_id=?', op.operationId), undefined);
   }
-  assert.equal(f.balance(f.principalId), undefined, 'nothing was charged, nothing was even initialised');
-  const sixth = f.admit(f.principalId, 'sixth');
+  // Even a player who signed up with an UNTOUCHED trial (all 5 replies unused) pays points from the first reply.
+  const fresh = fixture(t, { trialSpent: 0 });
+  const op = fresh.admit(fresh.principalId, 'first');
   assert.equal(
-    f.store.get<{ points_charged: number; chosen: string }>(
-      'SELECT points_charged,chosen FROM web_operation_models WHERE operation_id=?',
-      sixth.operationId,
+    fresh.store.get<{ points_charged: number }>(
+      'SELECT points_charged FROM web_operation_models WHERE operation_id=?',
+      op.operationId,
     )!.points_charged,
     12,
   );
-  assert.equal(f.balance(f.principalId), 88);
+  assert.equal(fresh.balance(fresh.principalId), 150 - 12);
+});
 
-  const g = fixture(t);
-  setPlayerModel(g.store, g.clock(), g.principalId, 'gemini');
-  const paid = g.admit(g.principalId, 'a');
-  assert.equal(
-    g.store.get<{ points_charged: number }>(
-      'SELECT points_charged FROM web_operation_models WHERE operation_id=?',
-      paid.operationId,
-    )!.points_charged,
-    22,
-    'the trial replies are kept for later DeepSeek messages',
-  );
-  assert.equal(
-    g.store.get<{ trial_reserved: number }>('SELECT trial_reserved FROM web_principals WHERE id=?', g.principalId)!
-      .trial_reserved,
-    0,
-  );
+test('the opening balance converts unused trial replies: signup after 2 -> 130, after 5 -> 100, after 0 -> 150', (t) => {
+  for (const [spent, expected] of [
+    [2, 130],
+    [5, 100],
+    [0, 150],
+    [3, 120],
+    [4, 110],
+  ] as const) {
+    const f = fixture(t, { trialSpent: spent });
+    const first = f.state(f.principalId)!;
+    assert.equal(first.balance, expected, `${spent} trial replies used`);
+    assert.deepEqual(f.events(f.principalId), [
+      { source: 'bonus', reason: null, delta: expected, operation_id: null, admin_id: null },
+    ]);
+    assert.equal(f.sum(f.principalId), f.balance(f.principalId));
+  }
+  // Bonus replies already spent count against it, and a reserved (in-flight) trial reply counts as used.
+  const mixed = fixture(t, { trialSpent: 2, bonusSpent: 3 });
+  assert.equal(mixed.state(mixed.principalId)!.balance, 100 - 30 + 30);
+  const reserved = fixture(t, { trialSpent: 0 });
+  reserved.store.run('UPDATE web_principals SET trial_reserved=2 WHERE id=?', reserved.principalId);
+  assert.equal(reserved.state(reserved.principalId)!.balance, 100 + 30);
+  // An already-initialised balance is never recomputed, whatever happens to the trial counters afterwards.
+  const done = fixture(t, { trialSpent: 2 });
+  assert.equal(done.state(done.principalId)!.balance, 130);
+  done.store.run('UPDATE web_principals SET trial_used=0 WHERE id=?', done.principalId);
+  assert.equal(done.state(done.principalId)!.balance, 130);
+  // A plain guest has no points: exactly as before.
+  const guest = fixture(t, { bonus: false, trialSpent: 2 });
+  assert.equal(guest.state(guest.principalId), null);
+  assert.equal(guest.balance(guest.principalId), undefined);
 });
 
 test('no reply means the whole charge comes back: known failure, cancellation or UNKNOWN; settled once', (t) => {
@@ -308,21 +402,42 @@ test('answered by a backup model: the player pays the CHEAPER of the two models;
       .map((e) => [e.reason, e.delta])
       .sort(),
     [
-      ['backup_cheaper', 30],
+      ['backup_cheaper', 15],
       ['no_voice', 2],
     ],
   );
-  assert.equal(state.balance, 100 - 42 + 32, 'xAI price 40 -> DeepSeek 10, and no voice in the reply');
+  assert.equal(state.balance, 100 - 27 + 17, 'xAI price 25 -> DeepSeek 10, and no voice in the reply');
 
-  // The backup is DEARER than the chosen model: the player still pays only the chosen (cheaper) price.
+  // Part 21f (named exception): this half asserted that a DeepSeek reply is a free trial reply with no model row. It now
+  // has one and is charged (12 points), like every reply of a signed-up player.
   const g = fixture(t);
   const op2 = g.admit(g.principalId, 'y');
-  setPlayerModel(g.store, g.clock(), g.principalId, 'deepseek');
   assert.equal(
-    g.store.get('SELECT 1 FROM web_operation_models WHERE operation_id=?', op2.operationId),
-    undefined,
-    'free trial reply',
+    g.store.get<{ points_charged: number }>(
+      'SELECT points_charged FROM web_operation_models WHERE operation_id=?',
+      op2.operationId,
+    )!.points_charged,
+    12,
   );
+});
+
+test('Gemini chosen, DeepSeek wrote it: the balance read right after the reply is start - 12, not start - 22', (t) => {
+  const f = fixture(t);
+  setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
+  const start = f.state(f.principalId)!.balance;
+  const op = f.admit(f.principalId, 'g');
+  assert.equal(f.balance(f.principalId), start - 22, 'charged at admission');
+  f.store.run(
+    "UPDATE web_operation_models SET draft_provider='deepseek',draft_model='deepseek-flash',review_provider='deepseek',review_model='deepseek-v4-pro',backup=1 WHERE operation_id=?",
+    op.operationId,
+  );
+  f.finish(op.operationId, 'published');
+  f.voiced(op.operationId); // a voiced reply: the voice points are not refunded
+  // The state the player page is given settles first (reconcile before returning), so the figure is already final.
+  const shown = f.state(f.principalId)!;
+  assert.equal(shown.balance, start - 12);
+  assert.equal(shown.balance, f.balance(f.principalId));
+  assert.equal(shown.balance, f.sum(f.principalId), 'balance == the sum of its events');
 });
 
 test('at 0 points: the same "free replies used up" answer as today; a dearer model than the balance asks for a cheaper one', (t) => {
@@ -334,11 +449,11 @@ test('at 0 points: the same "free replies used up" answer as today; a dearer mod
     'nothing affordable: the old copy and code',
   );
 
-  const some = fixture(t, { bonusSpent: 7 }); // 30 points
+  const some = fixture(t, { bonusSpent: 8 }); // 20 points (xAI is 27 with voice, Gemini 22)
   setPlayerModel(some.store, some.clock(), some.principalId, 'xai');
   assert.throws(() => some.admit(some.principalId, 'c'), /POINTS_INSUFFICIENT/);
-  assert.equal(some.state(some.principalId)!.balance, 30, 'a refused reply charged nothing');
-  setPlayerModel(some.store, some.clock(), some.principalId, 'gemini');
+  assert.equal(some.state(some.principalId)!.balance, 20, 'a refused reply charged nothing');
+  setPlayerModel(some.store, some.clock(), some.principalId, 'deepseek');
   some.admit(some.principalId, 'd');
   assert.equal(some.balance(some.principalId), 8);
 
@@ -392,9 +507,13 @@ test('owner kill switch: a model that is no longer offered is hidden and the pla
   assert.equal(after.notice, 'model_withdrawn');
   assert.equal(f.state(f.principalId)!.notice, undefined, 'shown once');
   assert.throws(() => setPlayerModel(f.store, f.clock(), f.principalId, 'gemini'), /MODEL_NOT_AVAILABLE/);
-  // The next admission uses DeepSeek (the trial replies first).
+  // The next admission uses DeepSeek, charged like every reply of a signed-up player (Part 21f: no trial path).
   const op = f.admit(f.principalId, 'a');
-  assert.equal(f.store.get('SELECT 1 FROM web_operation_models WHERE operation_id=?', op.operationId), undefined);
+  assert.equal(
+    f.store.get<{ chosen: string }>('SELECT chosen FROM web_operation_models WHERE operation_id=?', op.operationId)!
+      .chosen,
+    'deepseek',
+  );
 });
 
 test('points data goes with the player, and the lifecycle audit sees nothing left', (t) => {
@@ -508,4 +627,263 @@ test('invited players may choose a model, are never charged points, and keep the
   f.finish(op.operationId, 'published');
   Object.assign(f.store, { dailyReplyLimit: 1 });
   assert.throws(() => f.admit(f.principalId, 'i2'), /WEB_DAILY_LIMIT_REACHED/);
+});
+
+// ---- 消费记录 (Part 21f) -------------------------------------------------------------------------------------------------
+
+const DAY = 86_400_000;
+const publish = (
+  f: ReturnType<typeof fixture>,
+  operationId: string,
+  wrote: PlayerModelId,
+  backup = false,
+  voice = true,
+) => {
+  f.store.run(
+    'UPDATE web_operation_models SET draft_provider=?,draft_model=?,review_provider=?,review_model=?,backup=? WHERE operation_id=?',
+    wrote,
+    `${wrote}-model`,
+    'deepseek',
+    'deepseek-v4-pro',
+    backup ? 1 : 0,
+    operationId,
+  );
+  f.finish(operationId, 'published');
+  if (voice) f.voiced(operationId);
+};
+const billing = (f: ReturnType<typeof fixture>, principalId = f.principalId, page: unknown = 1, tz = 0) =>
+  playerBilling(f.store, f.clock(), principalId, { page, tzOffsetMinutes: tz });
+
+test('消费记录: newest first; a backup reply names the model that wrote it and its NET points; a failed reply shows the refund', (t) => {
+  const f = fixture(t);
+  setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
+  const r1 = f.admit(f.principalId, 'r1'); // Gemini asked, DeepSeek wrote it (voiced): 22 charged, 10 come back
+  publish(f, r1.operationId, 'deepseek', true, true);
+  f.advance(60_000);
+  setPlayerModel(f.store, f.clock(), f.principalId, 'xai');
+  const r2 = f.admit(f.principalId, 'r2'); // Grok wrote it, no voice (fell back to text): 27 - 2
+  publish(f, r2.operationId, 'xai', false, false);
+  f.advance(60_000);
+  setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
+  const r3 = f.admit(f.principalId, 'r3'); // failed: the whole charge comes back
+  f.finish(r3.operationId, 'failed');
+  f.advance(60_000);
+  setPlayerModel(f.store, f.clock(), f.principalId, 'deepseek');
+  f.admit(f.principalId, 'r4'); // still being written
+
+  const page = billing(f);
+  assert.equal(page.metered, true);
+  assert.equal(page.balance, 100 - 12 - 25 - 12, 'r1 12, r2 25, r3 refunded, r4 pending 12');
+  assert.equal(page.balance, f.sum(f.principalId), 'the shown balance is the sum of the events');
+  assert.deepEqual(
+    page.items.map((i) => i.kind),
+    ['pending', 'failed', 'reply', 'reply', 'bonus'],
+    'newest first',
+  );
+  const [pending, failed, second, first, bonus] = page.items as [any, any, any, any, any];
+  assert.deepEqual([pending.model, pending.points, pending.free], ['deepseek', 12, false]);
+  assert.deepEqual([failed.refunded, failed.free], [22, false], 'the failed reply shows what was refunded');
+  assert.deepEqual(
+    [second.model, second.backupFor, second.voice, second.points],
+    ['xai', undefined, false, 25],
+    'no-voice refund is netted',
+  );
+  assert.deepEqual(
+    [first.model, first.backupFor, first.voice, first.points, first.characterId],
+    ['deepseek', 'gemini', true, 12, characterId],
+    'DeepSeek wrote it for a Gemini player: 12 net, not 22',
+  );
+  assert.deepEqual([bonus.kind, bonus.points], ['bonus', 100]);
+  assert.ok(first.at < second.at && second.at < failed.at && failed.at < pending.at);
+  // This month, by the model that wrote the reply and by character: only published replies.
+  assert.deepEqual(page.month.byModel, [
+    { model: 'xai', points: 25, replies: 1 },
+    { model: 'deepseek', points: 12, replies: 1 },
+  ]);
+  assert.deepEqual(page.month.byCharacter, [{ characterId, points: 37, replies: 2 }]);
+  // The wire form parses, and carries no id of any kind.
+  const wire = JSON.parse(JSON.stringify(page));
+  assert.deepEqual(parseBillingPage(wire), page);
+  assert.doesNotMatch(JSON.stringify(page), /principal|player-|world-|id-\d+|old-|operation/);
+  assert.equal(parseBillingPage({ ...wire, items: [{ kind: 'reply', at: 1 }] }), undefined);
+});
+
+test("消费记录 is scoped to the session's own principal: player A never sees player B", (t) => {
+  const f = fixture(t);
+  const other = f.guest('b');
+  store_trial(f, other);
+  setPlayerModel(f.store, f.clock(), other, 'xai');
+  const b1 = f.admit(other, 'b1');
+  publish(f, b1.operationId, 'xai');
+  f.advance(1000);
+  const a1 = f.admit(f.principalId, 'a1');
+  publish(f, a1.operationId, 'deepseek');
+  const a = billing(f);
+  const b = billing(f, other);
+  assert.deepEqual(
+    a.items.map((i) => i.kind),
+    ['reply', 'bonus'],
+  );
+  assert.equal((a.items[0] as any).model, 'deepseek');
+  assert.equal((b.items[0] as any).model, 'xai');
+  assert.equal(a.balance, 100 - 12);
+  assert.equal(b.balance, 100 - 27 + 0);
+  assert.equal(a.month.byModel.length, 1);
+  assert.equal(b.month.byModel[0]!.model, 'xai');
+  // The transport takes the principal from the session, never from the body.
+  const billingService = new WebBilling(
+    f.store,
+    { now: f.clock },
+    {
+      authorizeWrite: (token) => ({ principalId: token === 'tok-a' ? f.principalId : other }),
+    },
+  );
+  const route = (token: string, body: unknown = {}) =>
+    routeWebBilling(billingService, {
+      method: 'POST',
+      path: '/api/web/local/billing/history',
+      origin: 'https://fixture.invalid',
+      csrf: 'c',
+      playerToken: token,
+      body,
+    })!;
+  assert.equal((route('tok-a').body as any).items[0].model, 'deepseek');
+  assert.equal((route('tok-b').body as any).items[0].model, 'xai');
+  assert.throws(() => route('tok-a', { principalId: other }), /INVALID_REQUEST/, 'no client-supplied scope');
+  assert.throws(() => route('tok-a', { page: 0 }), /INVALID_REQUEST/);
+  assert.throws(() => route('tok-a', { page: 1.5 }), /INVALID_REQUEST/);
+  assert.throws(() => route('tok-a', { tzOffsetMinutes: 99999 }), /INVALID_REQUEST/);
+  assert.throws(() => route('', {}), /AUTH_REQUIRED/);
+  assert.equal(route('tok-a', {}).status, 200);
+});
+/** The second player of a scoping test: trial used up, so its balance starts at 100 like the first. */
+function store_trial(f: ReturnType<typeof fixture>, principalId: string) {
+  f.store.run('UPDATE web_principals SET trial_used=3 WHERE id=?', principalId);
+  f.history(principalId, 'published', 'trial_extra', 201);
+  f.history(principalId, 'published', 'trial_extra', 202);
+}
+
+test('消费记录: a guest on the trial (or a deployment without the feature) gets 404; an invited player sees 不计点 rows', (t) => {
+  const guest = fixture(t, { bonus: false });
+  assert.throws(() => billing(guest), /NOT_FOUND/);
+  const off = fixture(t, { flag: false });
+  assert.throws(() => billing(off), /NOT_FOUND/);
+  const service = new WebBilling(
+    guest.store,
+    { now: guest.clock },
+    { authorizeWrite: () => ({ principalId: guest.principalId }) },
+  );
+  assert.throws(() => service.history('t', 'c', 'o', {}), /NOT_FOUND/);
+
+  const f = fixture(t, { bonus: false });
+  f.store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", f.principalId);
+  f.store.run(
+    "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id=?",
+    f.principalId,
+  );
+  f.store.db.exec('PRAGMA foreign_keys=OFF');
+  f.store.run(
+    'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at) VALUES (?,?,?,?,?,?)',
+    'grant',
+    'invite',
+    f.principalId,
+    'player-a',
+    'world-a',
+    1,
+  );
+  setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
+  const op = f.admit(f.principalId, 'i1');
+  publish(f, op.operationId, 'deepseek', true, true);
+  const page = billing(f);
+  assert.deepEqual([page.metered, page.balance], [false, null]);
+  assert.deepEqual(page.month, { byModel: [], byCharacter: [] });
+  assert.equal(page.items.length, 1);
+  const reply = page.items[0] as any;
+  assert.deepEqual(
+    [reply.kind, reply.free, reply.points, reply.model, reply.backupFor],
+    ['reply', true, 0, 'deepseek', 'gemini'],
+  );
+  assert.equal(
+    f.store.get('SELECT 1 FROM web_points_balance'),
+    undefined,
+    'reading the page creates no account for an invited player',
+  );
+});
+
+test('消费记录 pages by 50, newest first, only the last 90 days', (t) => {
+  const f = fixture(t);
+  f.state(f.principalId);
+  f.store.run("UPDATE web_points_policy SET kind='unlimited' WHERE principal_id=?", f.principalId);
+  const ops: string[] = [];
+  const old = f.admit(f.principalId, 'old');
+  publish(f, old.operationId, 'deepseek');
+  f.advance(91 * DAY);
+  for (let n = 0; n < 120; n++) {
+    f.advance(1000);
+    const op = f.admit(f.principalId, `n${n}`);
+    publish(f, op.operationId, 'deepseek', false, false);
+    ops.push(op.operationId);
+  }
+  const first = billing(f, f.principalId, 1);
+  const second = billing(f, f.principalId, 2);
+  const third = billing(f, f.principalId, 3);
+  assert.deepEqual(
+    [first.items.length, second.items.length, third.items.length],
+    [BILLING_PAGE_SIZE, BILLING_PAGE_SIZE, 20],
+  );
+  assert.deepEqual([first.hasMore, second.hasMore, third.hasMore], [true, true, false]);
+  const times = [...first.items, ...second.items, ...third.items].map((i) => i.at);
+  assert.deepEqual(
+    times,
+    [...times].sort((x, y) => y - x),
+    'newest first across pages',
+  );
+  assert.equal(new Set(times).size, 120, 'no row twice, none missing; the 91-day-old reply and the old bonus are gone');
+  assert.equal(billing(f, f.principalId, 4).items.length, 0);
+  assert.throws(() => billing(f, f.principalId, 0), /INVALID_REQUEST/);
+  assert.throws(() => billing(f, f.principalId, 1001), /INVALID_REQUEST/);
+  assert.throws(() => billing(f, f.principalId, '2'), /INVALID_REQUEST/);
+});
+
+test("消费记录: grants and refills are listed; the month boundary follows the player's clock", (t) => {
+  const f = fixture(t);
+  f.state(f.principalId);
+  f.store.run(
+    "INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,admin_id,price_version,created_at) VALUES (?,NULL,'grant',NULL,50,'admin-1',2,?)",
+    f.principalId,
+    f.clock(),
+  );
+  const page = billing(f);
+  assert.deepEqual(page.items.map((i) => [i.kind, (i as any).points]).sort(), [
+    ['bonus', 100],
+    ['grant', 50],
+  ]);
+  assert.doesNotMatch(JSON.stringify(page), /admin/, 'the acting administrator is never shown');
+  // A reply made at 23:30 UTC on the last day of the month is already next month for a player at UTC+8.
+  const g = fixture(t);
+  const end = Date.UTC(2026, 9, 31, 23, 30);
+  g.advance(end - g.clock());
+  const op = g.admit(g.principalId, 'late');
+  publish(g, op.operationId, 'deepseek');
+  g.advance(60_000);
+  assert.equal(billing(g, g.principalId, 1, 0).month.byModel.length, 1);
+  g.advance(DAY * 40);
+  const a = billing(g, g.principalId, 1, 0);
+  assert.equal(a.month.byModel.length, 0, 'a later month starts empty');
+});
+
+test('消费记录 after account deletion: the points data is gone and the page has nothing to show or to open', (t) => {
+  const f = fixture(t);
+  setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
+  const op = f.admit(f.principalId, 'a');
+  publish(f, op.operationId, 'deepseek', true, true);
+  assert.equal(billing(f).items.length > 1, true);
+  purgePlayerLogins(f.store, { principalId: f.principalId, worldId: 'world-a' });
+  assert.equal(f.store.get('SELECT 1 FROM web_points_balance'), undefined);
+  assert.equal(f.store.get('SELECT 1 FROM web_points_events'), undefined);
+  assert.equal(f.store.get('SELECT 1 FROM web_player_model'), undefined);
+  // No signup entitlement, no points account: the page answers 404 and never recreates a balance.
+  assert.throws(() => billing(f), /NOT_FOUND/);
+  assert.equal(f.store.get('SELECT 1 FROM web_points_balance'), undefined, 'reading after deletion creates nothing');
+  assert.equal(playerLoginsRemain(f.store, [f.principalId]), false);
 });

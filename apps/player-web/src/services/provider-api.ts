@@ -10,6 +10,7 @@ import {
   parseWebInviteStatus,
 } from '../../../../packages/contracts/web-local-invite.ts';
 import type { CocreationAnswer } from '../../../../packages/contracts/cocreation-cards.ts';
+import { parseBillingPage, type BillingPage } from '../../../../packages/contracts/player-billing.ts';
 import {
   parseWebProviderBootstrap,
   type WebProviderActions,
@@ -273,6 +274,23 @@ export class ProviderApi implements WebProviderActions {
     )
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
     return { submissionId: value.submissionId, answered: value.answered as number, duplicate: value.duplicate };
+  }
+  /** Has today's entry for this character been used (one per player per character per UTC day)? */
+  async cocreationToday(characterId: string): Promise<{ used: boolean }> {
+    const value = record(
+      await this.request('/cocreation/today', { method: 'POST', body: JSON.stringify({ characterId }) }),
+    );
+    if (typeof value.used !== 'boolean') throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return { used: value.used };
+  }
+  /** 消费记录: one page (50 rows, newest first, last 90 days) of this player's own spending. */
+  async billing(page: number): Promise<BillingPage> {
+    const tzOffsetMinutes = -new Date().getTimezoneOffset();
+    const parsed = parseBillingPage(
+      await this.request('/billing/history', { method: 'POST', body: JSON.stringify({ page, tzOffsetMinutes }) }),
+    );
+    if (!parsed) throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return parsed;
   }
   /** Signup / reset / bind step 1: ask for the emailed code. The answer is the same for registered and unknown addresses. */
   async requestEmailCode(input: { purpose: EmailPurpose; email: string }): Promise<CodeChallenge> {

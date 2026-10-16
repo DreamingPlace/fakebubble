@@ -9,7 +9,7 @@ import {
 } from '../../../packages/contracts/player-models.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { bonusSpent, hasSignupBonus } from './web-free-tier.ts';
+import { bonusSpent, extraTrialSpent, freeTier, hasSignupBonus } from './web-free-tier.ts';
 
 /**
  * Player model choice and points (Part 21b, flag PLAYER_MODEL_CHOICE_ENABLED, default off).
@@ -18,7 +18,7 @@ import { bonusSpent, hasSignupBonus } from './web-free-tier.ts';
  * reservation, and a refund here never releases one. The business object is the only writer of these tables.
  *
  * Who has points: a principal that holds the signup bonus (a guest that signed up with a verified email) while the feature
- * is on. Its balance is created LAZILY on first touch from the old accounting: 100 - 10 x bonus replies already spent.
+ * is on. Its balance is created LAZILY on first touch from the old accounting: 100 - 10 x bonus replies already spent + 10 x unused trial replies (a points account never uses the trial).
  * Invited players may choose a model too but are NOT charged: their rolling daily reply limit is untouched. Guests (the
  * 5-reply DeepSeek-only trial) and administrators see no model picker.
  *
@@ -97,6 +97,20 @@ export function setPlayerModel(store: Writer & Flagged, now: number, principalId
   return model;
 }
 
+/**
+ * Trial replies this principal has not used (Part 21f): a points account never takes the trial path, so each one is worth a
+ * bonus reply in the opening balance. Counter replies (trial_used + trial_reserved) and the extra trial replies (derived
+ * accounting, web_free_operations) are both subtracted from the trial allowance; floored at 0.
+ */
+function unusedTrial(store: Pick<BusinessStore, 'get'> & Flagged, principalId: string) {
+  const row = store.get<{ used: number; reserved: number }>(
+    'SELECT trial_used used,trial_reserved reserved FROM web_principals WHERE id=?',
+    principalId,
+  );
+  if (!row) return 0;
+  return Math.max(0, freeTier(store).trialReplies - row.used - row.reserved - extraTrialSpent(store, { principalId }));
+}
+
 /** Create the balance on first touch from the old bonus accounting (no backfill in the migration). */
 export function ensureBalance(store: Writer & Flagged, now: number, principalId: string) {
   const row = store.get<{ balance: number }>(
@@ -104,7 +118,12 @@ export function ensureBalance(store: Writer & Flagged, now: number, principalId:
     principalId,
   );
   if (row) return row.balance;
-  const start = Math.max(0, POINTS.signupBalance - POINTS.perBonusReply * bonusSpent(store, principalId));
+  const start = Math.max(
+    0,
+    POINTS.signupBalance -
+      POINTS.perBonusReply * bonusSpent(store, principalId) +
+      POINTS.perBonusReply * unusedTrial(store, principalId),
+  );
   // The policy (what the principal is entitled to) and the balance (what is left) are created together, apart.
   store.run(
     "INSERT INTO web_points_policy(principal_id,kind,amount,created_at,updated_at) VALUES (?,'one_off',?,?,?) ON CONFLICT DO NOTHING",

@@ -357,19 +357,19 @@ test('a failed send keeps the draft, explains itself, and a retry of the same co
   await flush();
   assert.equal(seen[2], 'request-2', 'other content is a new request');
 
-  fail = new ProviderApiError(429, 'COCREATION_RATE_LIMITED');
+  // Part 21f (named exception): the limits are COCREATION_DAILY_LIMIT / COCREATION_IP_LIMIT with new copy and there is no
+  // invite gate any more (COCREATION_RATE_LIMITED / COCREATION_INVITE_REQUIRED no longer exist).
+  fail = new ProviderApiError(429, 'COCREATION_IP_LIMIT');
   f.send().click();
   await flush();
-  assert.equal(f.root().querySelector('.cc-notice')!.textContent, cocreationCopy.errors.COCREATION_RATE_LIMITED);
-  fail = new ProviderApiError(403, 'COCREATION_INVITE_REQUIRED');
+  assert.equal(f.root().querySelector('.cc-notice')!.textContent, '今天的共创次数用完了，明天再来吧');
+  fail = new ProviderApiError(429, 'COCREATION_DAILY_LIMIT');
   f.send().click();
   await flush();
-  assert.equal(f.root().querySelector('.cc-notice')!.textContent, '受邀后才能参与共创。');
-  fail = null;
-  f.send().click();
-  await flush();
-  assert.equal(f.root().querySelector('.cc-thanks')!.hidden, false);
-  await new Promise((resolve) => setTimeout(resolve, 5)); // the sheet closes itself after the thank-you
+  assert.equal(f.root().querySelector('.cc-notice')!.textContent, '今天已经给 TA 共创过啦，明天再来吧');
+  assert.equal(f.root().querySelector('.cc-used')!.hidden, false, 'today is used: the sheet says so');
+  assert.equal(f.send().disabled, true, 'and does not offer another send today');
+  assert.equal(f.card(id)!.querySelector('textarea')!.value, '改了一点', 'the draft is still there');
 });
 
 test('player text is never parsed as markup: it only ever reaches the page through textContent', (t) => {
@@ -478,7 +478,8 @@ function binding(t: test.TestContext, access: 'guest' | 'invite' | 'revoked') {
   return { doc, api, cards, header, submitted };
 }
 
-test('in the live chat the ⋯ menu offers 共创 to an invited player and shows it disabled to a guest', async (t) => {
+// Part 21f (named exception): 共创 is open to everyone; the old test asserted it disabled for a guest ("受邀后可参与").
+test('in the live chat the ⋯ menu offers 共创 to every player: guest, invited and a revoked invite alike', async (t) => {
   for (const access of ['guest', 'invite', 'revoked'] as const) {
     const f = binding(t, access);
     const live = await LiveBinding.connect(f.api);
@@ -491,21 +492,63 @@ test('in the live chat the ⋯ menu offers 共创 to an invited player and shows
     });
     const card = f.cards.get('wei-guagua')!;
     card.querySelector('.chat-more')!.click();
-    const item = card.querySelector('.chat-menu-item')!;
+    const items = card.querySelectorAll('.chat-menu-item');
+    assert.equal(items.length, 1, `${access}: 共创 only (no picker without a points account, no account entries)`);
+    const item = items[0]!;
     assert.equal(item.querySelector('.chat-menu-title')!.textContent, '共创 · 让瓜瓜更像瓜瓜', access);
-    if (access === 'invite') {
-      assert.equal(item.disabled, false);
-      assert.equal(item.querySelector('.chat-menu-sub')!.textContent, '写下你心中的瓜瓜');
-      item.click();
-      assert.equal(f.doc.body.querySelectorAll('.cc-sheet').length, 1, 'the sheet opens');
-      assert.match(f.doc.body.querySelector('.cc-title')!.textContent, /让瓜瓜更像瓜瓜/);
-    } else {
-      assert.equal(item.disabled, true, access);
-      assert.equal(item.querySelector('.chat-menu-sub')!.textContent, '受邀后可参与');
-      item.click();
-      assert.equal(f.doc.body.querySelectorAll('.cc-sheet').length, 0, 'a guest cannot open the sheet');
-    }
+    assert.equal(item.disabled, false, access);
+    assert.equal(item.querySelector('.chat-menu-sub')!.textContent, '写下你心中的瓜瓜');
+    item.click();
+    assert.equal(f.doc.body.querySelectorAll('.cc-sheet').length, 1, `${access}: the sheet opens`);
+    assert.match(f.doc.body.querySelector('.cc-title')!.textContent, /让瓜瓜更像瓜瓜/);
+    f.doc.body.querySelector('.cc-close')!.click();
   }
+});
+
+test("the sheet says 今天已提交 before typing when today's entry for this character is used", async (t) => {
+  for (const used of [true, false]) {
+    const asked: string[] = [];
+    const f = setup(t, {
+      api: {
+        submitCocreation: async () => ({ submissionId: 's', answered: 1, duplicate: false }),
+        cocreationToday: async (characterId: string) => {
+          asked.push(characterId);
+          return { used };
+        },
+      },
+    });
+    await flush();
+    assert.equal(asked.length, 1);
+    const banner = f.root().querySelector('.cc-used')!;
+    assert.equal(banner.hidden, !used);
+    assert.equal(banner.textContent, '今天已提交');
+    f.write(firstTextCards(f.ids())[0]!, '想写');
+    assert.equal(f.send().disabled, used, used ? 'cannot send a second entry today' : 'free to send');
+  }
+  // A failing lookup changes nothing: the sheet works as before.
+  const broken = setup(t, {
+    api: {
+      submitCocreation: async () => ({ submissionId: 's', answered: 1, duplicate: false }),
+      cocreationToday: async () => {
+        throw new ProviderApiError(0, 'NETWORK');
+      },
+    },
+  });
+  await flush();
+  assert.equal(broken.root().querySelector('.cc-used')!.hidden, true);
+});
+
+test('ProviderApi.cocreationToday posts the character and parses the answer strictly', async () => {
+  const seen: { url: string; body: string }[] = [];
+  const api = new ProviderApi(async (url, init) => {
+    seen.push({ url: String(url), body: String(init?.body) });
+    return Response.json(String(url).endsWith('today') ? { used: true } : {});
+  });
+  assert.deepEqual(await api.cocreationToday('jojo'), { used: true });
+  assert.equal(seen[0]!.url, '/api/web/provider/cocreation/today');
+  assert.deepEqual(JSON.parse(seen[0]!.body), { characterId: 'jojo' });
+  const junk = new ProviderApi(async () => Response.json({ used: 'yes' }));
+  await assert.rejects(junk.cocreationToday('jojo'), /PROTOCOL_INVALID/);
 });
 
 test('ProviderApi.submitCocreation posts the exact body to the provider route with the CSRF header and checks the reply', async () => {
@@ -526,10 +569,10 @@ test('ProviderApi.submitCocreation posts the exact body to the provider route wi
   const bad = new ProviderApi(async () => Response.json({ nope: true }));
   await assert.rejects(bad.submitCocreation({ characterId: 'jojo', requestId: 'r', answers }), /PROTOCOL_INVALID/);
   const limited = new ProviderApi(async () =>
-    Response.json({ error: { code: 'COCREATION_RATE_LIMITED', retryAfterMs: 5 } }, { status: 429 }),
+    Response.json({ error: { code: 'COCREATION_DAILY_LIMIT', retryAfterMs: 5 } }, { status: 429 }),
   );
   await assert.rejects(
     limited.submitCocreation({ characterId: 'jojo', requestId: 'r', answers }),
-    (error: ProviderApiError) => error.code === 'COCREATION_RATE_LIMITED' && error.status === 429,
+    (error: ProviderApiError) => error.code === 'COCREATION_DAILY_LIMIT' && error.status === 429,
   );
 });
