@@ -1,4 +1,9 @@
 import {
+  parseModelChoice,
+  type ModelChoiceInfo,
+  type PlayerModelId,
+} from '../../../../packages/contracts/player-models.ts';
+import {
   parseWebInviteCredential,
   parseWebInviteReceipt,
   parseWebInviteRecovery,
@@ -59,6 +64,8 @@ export type AccountInfo =
       reviewNoticeClosed?: boolean;
       /** A guest past its trial and inside the grace period: signup is still possible until endsAt (ms). */
       grace?: { endsAt: number };
+      /** PLAYER_MODEL_CHOICE_ENABLED and a points account: the model picker state. Absent for everyone else. */
+      modelChoice?: ModelChoiceInfo;
     };
 /** The bot check: resolves one fresh Turnstile token for an action, or throws. Installed only on the real page. */
 export type HumanCheck = (siteKey: string, action: 'guest' | 'code' | 'login') => Promise<string>;
@@ -336,6 +343,13 @@ export class ProviderApi implements WebProviderActions {
   async closeReviewNotice() {
     await this.request('/account/review-notice-close', { method: 'POST', body: '{}' });
   }
+  /** 选择写回复的模型. Affects the next message only; answers with the picker state (new price, balance). */
+  async setModel(model: PlayerModelId): Promise<ModelChoiceInfo> {
+    const value = record(await this.request('/account/model', { method: 'POST', body: JSON.stringify({ model }) }));
+    const choice = parseModelChoice(value.modelChoice);
+    if (!choice) throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return choice;
+  }
   async logoutOthers() {
     await this.request('/account/logout-others', { method: 'POST', body: '{}' });
   }
@@ -365,6 +379,7 @@ export class ProviderApi implements WebProviderActions {
       canBind: value.canBind,
       ...(features ? { features } : {}),
       ...(typeof value.reviewNoticeClosed === 'boolean' ? { reviewNoticeClosed: value.reviewNoticeClosed } : {}),
+      ...(parseModelChoice(value.modelChoice) ? { modelChoice: parseModelChoice(value.modelChoice)! } : {}),
       ...(value.grace &&
       typeof value.grace === 'object' &&
       Number.isSafeInteger((value.grace as { endsAt?: unknown }).endsAt)

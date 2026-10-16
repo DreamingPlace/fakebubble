@@ -206,6 +206,24 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **账号删除怎么保证安全（`ACCOUNT_DELETE_ENABLED`）：** `POST /account/delete`，体 `{ "password", "confirm" }`；有登录的玩家必须提供密码并输入“删除”，没有登录的访客 `password` 为空串、`confirm` 为“清除”；没有登录的受邀玩家不能用这个入口（先绑定邮箱）。CSRF / 来源检查、一次一用的会话校验与登录一致；错误密码计入与改密码相同的限流（每个玩家 15 分钟 5 次）并按 IP 限流（30 次）。在**一个事务**里：撤销受邀玩家的授权、凭据和回执，结束该玩家的全部会话，写一条审计（`web_admin_audit`：动作名 + 玩家的 HMAC 假名前 16 位 + 时间，不含内容、邮箱、昵称或 id），并开始清理的 T1（隔离内容、释放预占，运行中的操作按原规则收尾，UNKNOWN 的外部调用保持 UNKNOWN，不重试、不释放）。事务提交后同一请求继续 T2（清库）与 F（删 R2 语音）；这两步任何失败都不会让删除变成报错——保留状态是 `purging`，闹钟会接着完成。清理后的审计（`auditWebLifecycleWorld`）对受邀玩家额外要求：世界里不能留下未撤销的授权；已撤销的授权行只留 id 与时间，作为 `shells`。
 
+### 玩家选模型、点数与备用模型（Part 21b）
+
+默认全部关闭；什么都不配置时与以前一致。说明与已核实的供应商参数见 `docs/PROVIDERS.md`。
+
+**新增密钥（只配给 generation Worker，缺哪个就是哪个模型不可用，不会崩溃）：** `wrangler secret put XAI_API_KEY`、`wrangler secret put GEMINI_API_KEY`。
+**新增变量（业务 Worker，`business.json.example` 已列出）：** `PLAYER_MODEL_CHOICE_ENABLED`（默认 `false`；需要同时 `SIGNUP_BONUS_ENABLED=true`）、`PLAYER_TEXT_MODELS`（如 `deepseek,gemini,xai`；DeepSeek 永远开启；不在列表里的模型对玩家隐藏，正在用它的玩家回到 DeepSeek 并收到一次性提示，也不再作为备用）。
+**迁移 123（`123_model_choice.sql`）：** 48 步；本地 `migrate-model-choice`；`expected-migrations` 与 `inspect` 会显示。不回填：点数余额在玩家首次接触时按 `100 − 10 × 已用赠送条数` 建立。
+
+**启用顺序（先 staging）：**
+1. 部署代码（开关全关），确认 `expected-migrations` 与 `inspect` 一致（48 步）。
+2. 配 `XAI_API_KEY`、`GEMINI_API_KEY`；运行 `renew-prices` 一次：它为 xAI、Gemini 创建支出上限、并发名额与首批价格行（已有行不动；首次初始化只写 DeepSeek 与 Fish）。`inspect` 的 `prices` 里应出现 `xai/grok-4.7` 与 `gemini/gemini-3.8-flash`。
+3. staging 上把 `PLAYER_MODEL_CHOICE_ENABLED=true`，先只列 `PLAYER_TEXT_MODELS=deepseek,gemini`，再加 `xai`；每个模型发几条真实消息，检查回复、备用提示与 `pnpm usage:report`（用 `inspect` 的回执文件：`pnpm usage:report --receipt=/绝对路径`），据此校准 `packages/contracts/player-models.ts` 的点数表和 `REASONING_HEADROOM`（推理 token 按输出计费）。
+4. 生产同样顺序；出问题把模型从 `PLAYER_TEXT_MODELS` 删掉即可（无需迁移）。关掉总开关则立刻回到“免费消息”旧行为。
+
+**备用模型：** 明确未计费的失败（429、供应商文档中的过载/不可用 503、“地区/位置不支持”、缺少密钥、连接未建立）按 选择的模型 → DeepSeek → Gemini 顺序最多重试一次，零费用结算后重新预占；超时、重置、其他 5xx、无法解析一律 UNKNOWN，不重试、占款不释放。玩家按两者中较便宜的点数计费，回复下显示“由备用模型回复”。审核（安全与记忆）永远是 DeepSeek v4 pro（备用 Gemini），所以记忆始终由同一个模型写入。xAI/Gemini 的花费记入共享预算的文本桶（无需新的授权仪式）。
+
+**出口地区（`generation.json.example` 的 `placement`）：** 我们设置了 Cloudflare 文档中的区域提示 `{"region": "aws:us-east-1"}`（wrangler 未在本仓库固定版本，官方文档也未给出最低版本；选区域提示而不是 Smart Placement，因为目标是固定的出口地区而不是靠探测上游）。**但官方文档明确写着：放置只影响 `fetch` 处理器，不影响 RPC 方法或命名入口，而 generation Worker 是被业务对象通过 RPC 调用的**，所以这条提示在当前架构下很可能不生效：出站请求实际从业务 Durable Object 所在的机房发出（RPC 与调用方同机房）。真正起作用的办法是新建 staging 的业务对象时用 `locationHint`（只在首次创建时有效，已有对象无法搬迁），或后续把供应商调用改成 `fetch` 服务绑定。在那之前由自动备用兜底：地区不被接受的回答会按“未计费”改用 DeepSeek，并计入 `web_provider_backups`。请在 staging 观察备用比例后再决定。
+
 ## 私有运维工具
 
 `scripts/web-cloudflare-operator.ts` 需要显式 `CLOUDFLARE_ACCOUNT_ID`，以及指向已安装 Wrangler 模块的绝对路径 `FAKE_WEB_WRANGLER_MODULE`。它只使用绑定到业务/预算 Worker 的认证 RPC。服务名默认为 `fakebubble-business` / `fakebubble-budget`；部署使用其他名称（例如 `fake-paopao-web-business` / `fake-paopao-web-budget`）时，必须显式传入 `--business-service=<名称>` 与 `--budget-service=<名称>`（均须匹配 `/^[a-z0-9-]{1,63}$/`，任何操作都可携带，缺省即默认名称）。每条收据都会记录目标服务名（`target.businessService` / `target.budgetService`，以及本次操作实际使用的 `worker`）；收据永远不会被续写或覆盖（独占创建，已存在即 `EEXIST`），而且若已存在的收据记录的目标与当前参数不同，工具会先以 `WEB_OPERATOR_RECEIPT_TARGET_MISMATCH` 拒绝，不会打开任何绑定。记录目标之前写下的旧收据按其 `worker` 名称比较。

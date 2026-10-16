@@ -17,6 +17,7 @@ import {
   migrateWebProviderMemoryMetrics,
   migrateWebProviderSignupBonus,
   migrateWebProviderChatReview,
+  migrateWebProviderModelChoice,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -79,7 +80,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→122 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→123 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -117,8 +118,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderMemoryMetrics(store);
     migrateWebProviderSignupBonus(store);
     migrateWebProviderChatReview(store);
+    migrateWebProviderModelChoice(store);
     return {
-      schema: 122,
+      schema: 123,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -262,6 +264,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-memory-metrics',
       'migrate-signup-bonus',
       'migrate-chat-review',
+      'migrate-model-choice',
       'render-assets',
       'admin-grant',
       'serve',
@@ -394,6 +397,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderChatReview(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 122, chatReview: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-model-choice') {
+    // An existing provider-* instance at schema 122 gains the player model choice, points and usage tables.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderModelChoice(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 123, modelChoice: true }) + '\n');
     } finally {
       store.close();
     }

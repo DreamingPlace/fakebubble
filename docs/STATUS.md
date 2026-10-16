@@ -134,3 +134,13 @@ All behind flags that default OFF; no migration, no prompt or tool-schema change
 - A guest with a login is kept at trial end (retention row stays `active`/expired; `requireWebContent(..., 'read')` lets read paths through, every other caller still answers `TRIAL_EXPIRED`); login, history, nickname and invite redemption keep working. A login with no activity for 180 days (`web_player_logins.last_seen_at`) goes through the existing audited purge. Guests without a login purge as before.
 - `inspect` reports `players`: `PLAYER_SIGNUP_ENABLED`, `PLAYER_EMAIL_DAILY_CAP`, `PLAYER_EMAIL_BINDING_PRESENT`.
 - `pnpm check`: **1026 tests, 1026 passed**. Migration 118 (edited in place, not deployed) sha256 `4c5f3beb3db1ef7d683e0bac332c0b37d9cea1d350ccb295267154a4ed777a9b`; expected-migrations: 43 steps.
+
+## Part 21b (player model choice, points, backup, usage)
+
+Flag `PLAYER_MODEL_CHOICE_ENABLED` (default off; requires `SIGNUP_BONUS_ENABLED`). Off = exactly today, including "免费消息" copy. Details: docs/PROVIDERS.md, docs/DEPLOYMENT.md "Part 21b", docs/DATA_BOUNDARY.md.
+
+- A: xAI (`grok-4.7`) and Gemini (`gemini-3.8-flash`) on one chat-completions adapter shape (`generation/text-wire.ts`); reasoning low, reasoning tokens reserved and billed; list-price rows in `PROVIDER_PRICES` (renew-prices seeds a provider with no rows). Pinned prompt/policy hashes unchanged.
+- B: draft = player's frozen choice, review = house reviewer. C: a definitely-not-billed failure is settled at zero and retried once on chosen → DeepSeek → Gemini (reply note 由备用模型回复, player pays the cheaper); UNKNOWN is never retried or released. Kill switch `PLAYER_TEXT_MODELS`. Placement hint added, **but Cloudflare says it does not apply to RPC** (see DEPLOYMENT.md).
+- D: migration `123_model_choice.sql` (48 steps), points (policy table separate from balance; events carry source and admin id; invited players choose models, no points, daily limit unchanged; no admin UI) (deepseek 10, gemini 20, xai 40, voice +2, one table: `packages/contracts/player-models.ts`). E: `web_provider_usage` + `pnpm usage:report`. F: model picker (new module + three hooks), screenshots in `review/part-21b/`.
+- Ledger/migration tests extended for 123 as named exceptions (step counts, positions from the end, user_version, `length: 24`), plus the renewal tests for the two new providers.
+- Known limits: when the whole chain fails definitely-not-billed the operation ends at its deadline (5 min), then points are refunded; a last-model 429 for xAI/Gemini does not use the old 2/4/8 s backoff (DeepSeek still does); the Node local server has no model choice; xAI/Gemini request details marked "assumed" in PROVIDERS.md need a staging check.

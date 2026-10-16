@@ -109,16 +109,17 @@ test('the tables only accept what the review writes: a 4-character code from the
   assert.throws(() => row({ line_order: -1 }));
 });
 
-test('Cloudflare runner: 122 is the same SQL on both authorities, last of 47 steps, and 118-121 are unchanged', () => {
+test('Cloudflare runner: 122 is the same SQL on both authorities, second to last of 48 steps, and 118-121 are unchanged', () => {
   const { inline, r2 } = expectedWebMigrations();
-  assert.equal(inline.length, 47);
-  assert.equal(r2.length, 47);
-  assert.equal(inline.at(-1)!.version, 122);
-  assert.equal(r2.at(-1)!.version, 122);
-  assert.equal(inline.at(-1)!.sha256, sha(sql122()), 'the ledger hash is the sha256 of the SQL file as written');
-  assert.equal(inline.at(-1)!.sha256, r2.at(-1)!.sha256);
+  // Named exception (Part 21b, migration 123): 48 steps, and 122 is now second to last. No assertion was weakened.
+  assert.equal(inline.length, 48);
+  assert.equal(r2.length, 48);
+  assert.equal(inline.at(-2)!.version, 122);
+  assert.equal(r2.at(-2)!.version, 122);
+  assert.equal(inline.at(-2)!.sha256, sha(sql122()), 'the ledger hash is the sha256 of the SQL file as written');
+  assert.equal(inline.at(-2)!.sha256, r2.at(-2)!.sha256);
   assert.equal(
-    inline.at(-1)!.sha256,
+    inline.at(-2)!.sha256,
     '5a81455c85a05c9095d66eb50803acefc1d2c2f6b0a478891e733d1471eec950',
     'pinned: a change to the file is a new migration',
   );
@@ -144,8 +145,10 @@ test('Cloudflare runner: an existing authority at 121 gains 122 untouched (inlin
     assert.equal(result.before.length, 46, mode);
     assert.equal(result.before.at(-1)?.startsWith('121:'), true, mode);
     assert.deepEqual(result.after.slice(0, 46), result.before, `${mode}: applied steps are untouched`);
-    assert.equal(result.after.length, 47, mode);
-    assert.equal(result.after.at(-1), `122:${sha(sql122())}`, mode);
-    assert.deepEqual(result.version, { user_version: 122 }, mode);
+    // Named exception (Part 21b, migration 123): the upgrade runs on to the newest step, so 122 is second to last of 48.
+    assert.equal(result.after.length, 48, mode);
+    assert.equal(result.after.at(-2), `122:${sha(sql122())}`, mode);
+    assert.equal(result.after.at(-1)?.startsWith('123:'), true, mode);
+    assert.deepEqual(result.version, { user_version: 123 }, mode);
   }
 });

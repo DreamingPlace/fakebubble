@@ -34,6 +34,8 @@
     "LEGAL_PAGES_ENABLED": "false",
     "SIGNUP_BONUS_ENABLED": "false",
     "CHAT_REVIEW_ENABLED": "false",
+    "PLAYER_MODEL_CHOICE_ENABLED": "false",
+    "PLAYER_TEXT_MODELS": "deepseek,gemini,xai",
     "ALERTS_ENABLED": "false",
     "ALERT_EMAIL_TO": "CONFIGURE_BEFORE_ENABLING_ALERTS",
     "ALERT_ERRORS_PER_HOUR": "20",

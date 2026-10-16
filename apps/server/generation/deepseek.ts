@@ -30,7 +30,22 @@ import type {
   ProviderMeter,
   ProviderReservation,
 } from '../../../packages/contracts/provider-calls.ts';
-import { DEEPSEEK_INPUT_RESERVATION, deepSeekObservation, deepSeekUsage } from './deepseek-usage.ts';
+import { DEEPSEEK_INPUT_RESERVATION } from './deepseek-usage.ts';
+import {
+  MAX_REQUEST_BYTES,
+  TEXT_ENDPOINTS,
+  chatBody,
+  chatObservation,
+  chatUsage,
+  connectFailure,
+  isNotBilled,
+  outputBound,
+  scopeUser,
+  statusFailure,
+} from './text-wire.ts';
+import type { ModelRef, TextProviderId, TextRoute } from './text-wire.ts';
+import { PLAYER_MODELS } from '../../../packages/contracts/player-models.ts';
+import { SUPPORTED_TEXT_MODELS } from '../platform/config.ts';
 
 function object(value: unknown): asserts value is Record<string, unknown> {
   ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_TEXT_RESPONSE');
@@ -144,24 +159,28 @@ export function parseDeepSeekResponse(
 function reportedModel(value: unknown): { reportedModel?: string } {
   return typeof value === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(value) ? { reportedModel: value } : {};
 }
-function responseMetadata(value: unknown, model: string, elapsedMs: number): Omit<TextGenerationResult, 'reply'> {
+function responseMetadata(
+  value: unknown,
+  model: string,
+  elapsedMs: number,
+  provider: TextProviderId = 'deepseek',
+): Omit<TextGenerationResult, 'reply'> {
   object(value);
   let usage: TextGenerationResult['usage'] = null;
   if (value.usage !== undefined && value.usage !== null) {
     object(value.usage);
-    const { prompt_tokens: inputTokens, completion_tokens: outputTokens, total_tokens: totalTokens } = value.usage;
-    ensure(integer(inputTokens) && integer(outputTokens) && integer(totalTokens), 'INVALID_TEXT_USAGE');
-    const split = deepSeekUsage(value);
+    const split = chatUsage(provider, value);
+    ensure(split.inputTokens !== null && split.outputTokens !== null, 'INVALID_TEXT_USAGE');
     usage = {
-      inputTokens,
-      outputTokens,
-      totalTokens,
+      inputTokens: split.inputTokens,
+      outputTokens: split.outputTokens,
+      totalTokens: split.inputTokens + split.outputTokens,
       ...(split.cacheHitInputTokens === null ? {} : { cacheHitInputTokens: split.cacheHitInputTokens }),
       ...(split.cacheMissInputTokens === null ? {} : { cacheMissInputTokens: split.cacheMissInputTokens }),
     };
   }
   return {
-    provider: 'deepseek',
+    provider,
     model,
     ...reportedModel(value.model),
     usage,
@@ -171,17 +190,28 @@ function responseMetadata(value: unknown, model: string, elapsedMs: number): Omi
 }
 
 /** Strict function calls carry output data only. There is no tool dispatcher or execution loop. */
-export function parseDeepSeekToolResponse(value: unknown, expectedName: string): unknown {
+export function parseDeepSeekToolResponse(
+  value: unknown,
+  expectedName: string,
+  provider: TextProviderId = 'deepseek',
+): unknown {
   object(value);
   ensure(Array.isArray(value.choices) && value.choices.length === 1, 'INVALID_TEXT_RESPONSE');
   const choice: unknown = value.choices[0];
   object(choice);
-  ensure(choice.finish_reason === 'tool_calls', 'TEXT_INCOMPLETE_RESPONSE');
+  // xAI and Gemini may report the forced function call as "stop"; the call itself is checked below either way.
+  ensure(
+    choice.finish_reason === 'tool_calls' || (provider !== 'deepseek' && choice.finish_reason === 'stop'),
+    'TEXT_INCOMPLETE_RESPONSE',
+  );
   object(choice.message);
   const message = choice.message;
   ensure(message.role === 'assistant', 'INVALID_TEXT_RESPONSE');
   ensure(
-    !message.refusal && (message.content == null || (typeof message.content === 'string' && !message.content.trim())),
+    !message.refusal &&
+      (provider !== 'deepseek' ||
+        message.content == null ||
+        (typeof message.content === 'string' && !message.content.trim())),
     'TEXT_CONTENT_REJECTED',
   );
   ensure(Array.isArray(message.tool_calls) && message.tool_calls.length === 1, 'INVALID_TEXT_TOOL_RESPONSE');
@@ -215,9 +245,16 @@ export function rawModelOutput(value: unknown): string {
   }
 }
 
+/** Every model id a draft may legitimately carry once a player can choose (a resumed review checks the stored draft's model). */
+const KNOWN_DRAFT_MODELS: ReadonlySet<string> = new Set([
+  ...SUPPORTED_TEXT_MODELS,
+  ...Object.values(PLAYER_MODELS).map((item) => item.model),
+]);
+
 export class DeepSeekTextGenerator implements TextGenerator {
   readonly providerCalls = 'external' as const;
   #apiKey: string;
+  #keys: Readonly<Partial<Record<Exclude<TextProviderId, 'deepseek'>, string>>>;
   #fetch: typeof fetch;
   #policy: TextGenerationPolicy;
   get policy() {
@@ -245,7 +282,15 @@ export class DeepSeekTextGenerator implements TextGenerator {
     return generationPolicyHash(this.#policy);
   }
 
-  constructor(options: TextGenerationPolicyOptions & { apiKey: string; baseUrl?: string; fetch?: typeof fetch }) {
+  constructor(
+    options: TextGenerationPolicyOptions & {
+      apiKey: string;
+      baseUrl?: string;
+      fetch?: typeof fetch;
+      /** xAI / Gemini keys. A missing key makes that model unavailable (answered as definitely-not-billed), never a crash. */
+      keys?: { xai?: string | undefined; gemini?: string | undefined };
+    },
+  ) {
     ensure(typeof options.apiKey === 'string' && options.apiKey.trim().length > 0, 'DEEPSEEK_KEY_MISSING');
     ensure(options.apiKey.length <= 512 && !/[\r\n]/.test(options.apiKey), 'INVALID_DEEPSEEK_KEY');
     let base: URL;
@@ -266,6 +311,16 @@ export class DeepSeekTextGenerator implements TextGenerator {
     // Strict Chat Completions is available on the official beta path, not /v1.
     // Existing approved root/v1 configuration stays valid without forwarding credentials elsewhere.
     this.#apiKey = options.apiKey.trim();
+    const optional = (key: string | undefined) => {
+      const value = typeof key === 'string' ? key.trim() : '';
+      return value.length > 0 && value.length <= 512 && !/[\r\n]/.test(value) ? value : undefined;
+    };
+    const keys: Partial<Record<'xai' | 'gemini', string>> = {};
+    const xai = optional(options.keys?.xai),
+      gemini = optional(options.keys?.gemini);
+    if (xai) keys.xai = xai;
+    if (gemini) keys.gemini = gemini;
+    this.#keys = Object.freeze(keys);
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#policy = createTextGenerationPolicy(options);
   }
@@ -284,9 +339,10 @@ export class DeepSeekTextGenerator implements TextGenerator {
     signal: AbortSignal,
     accept: (stage: AcceptedV7StageOutput) => Promise<void>,
     meter?: ProviderMeter,
+    route?: TextRoute,
   ): Promise<TextGenerationResult> {
     ensure(typeof accept === 'function', 'TEXT_STAGE_PROTOCOL_REQUIRED');
-    return this.run(request, signal, meter, accept);
+    return this.run(request, signal, meter, accept, undefined, route);
   }
 
   /** A trusted business ledger must supply an already-confirmed draft with its frozen bindings. */
@@ -296,9 +352,28 @@ export class DeepSeekTextGenerator implements TextGenerator {
     known: { payload: unknown; metadata: TextGenerationStage; requestDigest: string; policyHash: string },
     accept: (stage: AcceptedV7StageOutput) => Promise<void>,
     meter?: ProviderMeter,
+    route?: TextRoute,
   ): Promise<TextGenerationResult> {
     ensure(typeof accept === 'function', 'TEXT_STAGE_PROTOCOL_REQUIRED');
-    return this.run(request, signal, meter, accept, known);
+    return this.run(request, signal, meter, accept, known, route);
+  }
+
+  /** A route is data from the business object; refuse anything that is not exactly a supported provider/model pair. */
+  private checkRoute(route: TextRoute) {
+    for (const stage of ['draft', 'review'] as const) {
+      const chain = route[stage];
+      ensure(Array.isArray(chain) && chain.length > 0 && chain.length <= 3, 'TEXT_ROUTE_INVALID');
+      ensure(new Set(chain.map((ref) => ref.provider)).size === chain.length, 'TEXT_ROUTE_INVALID');
+      for (const ref of chain)
+        ensure(
+          ref.provider === 'deepseek'
+            ? ref.model === this.#policy.stages[stage].model
+            : ref.provider === 'xai'
+              ? ref.model === PLAYER_MODELS.xai.model
+              : ref.provider === 'gemini' && ref.model === PLAYER_MODELS.gemini.model,
+          'TEXT_ROUTE_INVALID',
+        );
+    }
   }
 
   private async run(
@@ -307,8 +382,16 @@ export class DeepSeekTextGenerator implements TextGenerator {
     meter?: ProviderMeter,
     accept?: (stage: AcceptedV7StageOutput) => Promise<void>,
     knownDraft?: { payload: unknown; metadata: TextGenerationStage; requestDigest: string; policyHash: string },
+    route?: TextRoute,
   ): Promise<TextGenerationResult> {
     ensure(!signal.aborted, 'TEXT_REQUEST_ABORTED');
+    // No route = exactly the historical behaviour: DeepSeek writes and reviews, nothing is retried elsewhere.
+    const chains: TextRoute = route ?? {
+      draft: [{ provider: 'deepseek', model: this.model }],
+      review: [{ provider: 'deepseek', model: this.reviewModel }],
+    };
+    this.checkRoute(chains);
+    const used: Partial<Record<'draft' | 'review', ModelRef>> = {};
     // A caller changing its request while draft generation awaits cannot broaden the review's scope.
     const frozen = structuredClone(request);
     const requestDigest = createHash('sha256').update(JSON.stringify(frozen)).digest('hex');
@@ -318,7 +401,9 @@ export class DeepSeekTextGenerator implements TextGenerator {
           knownDraft.policyHash === this.policyHash &&
           knownDraft.metadata.stage === 'draft' &&
           knownDraft.metadata.status === 'succeeded' &&
-          knownDraft.metadata.model === this.model,
+          (route
+            ? knownDraft.metadata.model !== undefined && KNOWN_DRAFT_MODELS.has(knownDraft.metadata.model)
+            : knownDraft.metadata.model === this.model),
         'TEXT_STAGE_RESUME_INVALID',
       );
     const knownParsedDraft = knownDraft ? parseTextDraft(structuredClone(knownDraft.payload), frozen) : null;
@@ -341,8 +426,8 @@ export class DeepSeekTextGenerator implements TextGenerator {
             )
           : null;
       return {
-        provider: 'deepseek',
-        model: this.model,
+        provider: used.draft?.provider ?? 'deepseek',
+        model: used.draft?.model ?? this.model,
         ...reportedModel(stages.find((stage) => stage.stage === 'draft')?.reportedModel),
         elapsedMs: Math.round(performance.now() - started),
         requestId: stages.at(-1)?.requestId ?? null,
@@ -360,61 +445,96 @@ export class DeepSeekTextGenerator implements TextGenerator {
             : error instanceof DomainError
               ? error.code
               : 'TEXT_NETWORK_ERROR';
-    const call = async <T extends TextDraft>(
+    const reservations: ProviderReservation[] = [];
+    const specFor = (stage: 'draft' | 'review', ref: ModelRef) => ({
+      provider: ref.provider,
+      model: ref.model,
+      stage,
+      bounds: {
+        unit: 'tokens' as const,
+        inputTokens: DEEPSEEK_INPUT_RESERVATION,
+        outputTokens: outputBound(ref.provider, stage === 'draft' ? this.maxTokens : this.reviewMaxTokens),
+      },
+    });
+    /** One provider call for one stage with one model. A failure that proves nothing was billed is reported to the observer first. */
+    const attemptCall = async <T extends TextDraft>(
       stage: TextGenerationStage['stage'],
+      ref: ModelRef,
+      reservationFor: ProviderReservation | undefined,
+      willRetry: (error: unknown) => boolean,
       messages: ReturnType<typeof promptMessages>,
       outputTool: ReturnType<typeof draftTool>,
       parse: (value: unknown) => T,
     ): Promise<T> => {
       ensure(!combined.aborted, errorCode(null));
       const stageStarted = performance.now();
-      const model = stage === 'draft' ? this.model : this.reviewModel;
+      const model = ref.model;
       let value: unknown;
       let observer: ProviderCallObserver | undefined,
         recorded = false;
       let parsed!: T;
       let handoff: AcceptedV7StageOutput | undefined;
       try {
-        const body = JSON.stringify({
-          ...textRequestParameters(this.#policy, stage, outputTool.function.name),
-          messages,
-          tools: [outputTool],
-          user_id: createHash('sha256')
-            .update(JSON.stringify([frozen.scope.worldId, frozen.scope.conversationId, frozen.scope.characterId]))
-            .digest('hex'),
-        });
-        const wireRequestHash = providerRequestHash(this.#policy.endpoint, model, body);
-        observer = await reservation?.start(stage, wireRequestHash, Buffer.byteLength(body, 'utf8'));
+        const body =
+          ref.provider === 'deepseek'
+            ? JSON.stringify({
+                ...textRequestParameters(this.#policy, stage, outputTool.function.name),
+                messages,
+                tools: [outputTool],
+                user_id: createHash('sha256')
+                  .update(JSON.stringify([frozen.scope.worldId, frozen.scope.conversationId, frozen.scope.characterId]))
+                  .digest('hex'),
+              })
+            : (() => {
+                // No key = this model is unavailable. Checked before anything is reserved or sent.
+                if (!this.#keys[ref.provider]) throw new DomainError('MODEL_UNAVAILABLE');
+                return chatBody(ref.provider, {
+                  model,
+                  messages,
+                  tool: outputTool,
+                  maxTokens: stage === 'draft' ? this.maxTokens : this.reviewMaxTokens,
+                  user: scopeUser([frozen.scope.worldId, frozen.scope.conversationId, frozen.scope.characterId]),
+                });
+              })();
+        const endpoint = ref.provider === 'deepseek' ? this.#policy.endpoint : TEXT_ENDPOINTS[ref.provider];
+        const bytes = Buffer.byteLength(body, 'utf8');
+        const cap = MAX_REQUEST_BYTES[ref.provider];
+        if (cap !== undefined && bytes > cap) throw new DomainError('MODEL_REQUEST_TOO_LARGE');
+        const wireRequestHash = providerRequestHash(endpoint, model, body);
+        observer = await reservationFor?.start(stage, wireRequestHash, bytes);
         ensure(!combined.aborted, errorCode(null));
-        const response = await this.#fetch(this.#policy.endpoint, {
-          method: 'POST',
-          redirect: 'error',
-          signal: combined,
-          headers: { Authorization: `Bearer ${this.#apiKey}`, 'Content-Type': 'application/json' },
-          body,
-        });
+        const key = ref.provider === 'deepseek' ? this.#apiKey : this.#keys[ref.provider]!;
+        let response: Response;
+        try {
+          response = await this.#fetch(endpoint, {
+            method: 'POST',
+            redirect: 'manual',
+            signal: combined,
+            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+            body,
+          });
+        } catch (error) {
+          throw connectFailure(error) ?? error;
+        }
         if (!response.ok) {
-          await response.body?.cancel();
-          const code =
-            response.status === 401
-              ? 'DEEPSEEK_AUTH_FAILED'
-              : response.status === 402
-                ? 'DEEPSEEK_BALANCE_REQUIRED'
-                : response.status === 429
-                  ? 'DEEPSEEK_RATE_LIMITED'
-                  : response.status >= 500
-                    ? 'DEEPSEEK_UNAVAILABLE'
-                    : 'DEEPSEEK_REQUEST_REJECTED';
-          throw new DomainError(code);
+          let text = '';
+          if (ref.provider === 'deepseek') await response.body?.cancel();
+          else
+            try {
+              text = (await response.text()).slice(0, 4096);
+            } catch {
+              /* classification hint only */
+            }
+          throw new DomainError(statusFailure(ref.provider, response.status, text));
         }
         value = await readBody(response);
         ensure(!combined.aborted, errorCode(null));
-        const payload = parseDeepSeekToolResponse(value, outputTool.function.name);
+        const payload = parseDeepSeekToolResponse(value, outputTool.function.name, ref.provider);
         const captured = accept ? structuredClone(payload) : undefined;
         parsed = parse(payload);
-        const meta = responseMetadata(value, model, Math.round(performance.now() - stageStarted));
+        const meta = responseMetadata(value, model, Math.round(performance.now() - stageStarted), ref.provider);
         recorded = true;
-        await finishProviderCall(observer, deepSeekObservation(value, 'succeeded', null));
+        await finishProviderCall(observer, chatObservation(ref.provider, value, 'succeeded', null));
         const stageMetadata: TextGenerationStage = {
           stage,
           model,
@@ -426,6 +546,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
           presentation: inspectBubbles(parsed.bubbles, bubbleLimits(frozen.deliveryMode)[parsed.mode]),
         };
         stages.push(stageMetadata);
+        used[stage] = ref;
         if (accept)
           handoff = {
             jobId: frozen.jobId,
@@ -438,30 +559,32 @@ export class DeepSeekTextGenerator implements TextGenerator {
           };
       } catch (error) {
         const response = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-        const reported =
-          response.usage && typeof response.usage === 'object' ? (response.usage as Record<string, unknown>) : {};
-        const { prompt_tokens: inputTokens, completion_tokens: outputTokens, total_tokens: totalTokens } = reported;
-        const split = deepSeekUsage(value);
-        stages.push({
-          stage,
-          model,
-          ...reportedModel(response.model),
-          status: 'failed',
-          errorCode: errorCode(error),
-          elapsedMs: Math.round(performance.now() - stageStarted),
-          requestId: typeof response.id === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(response.id) ? response.id : null,
-          usage:
-            integer(inputTokens) && integer(outputTokens) && integer(totalTokens)
-              ? {
-                  inputTokens,
-                  outputTokens,
-                  totalTokens,
-                  ...(split.cacheHitInputTokens === null ? {} : { cacheHitInputTokens: split.cacheHitInputTokens }),
-                  ...(split.cacheMissInputTokens === null ? {} : { cacheMissInputTokens: split.cacheMissInputTokens }),
-                }
-              : null,
-          ...(error instanceof BubbleValidationError ? { presentation: error.presentation } : {}),
-        });
+        const split = chatUsage(ref.provider, value);
+        // A definitely-not-billed failure that the next model will answer is not a stage of the reply.
+        if (!willRetry(error))
+          stages.push({
+            stage,
+            model,
+            ...reportedModel(response.model),
+            status: 'failed',
+            errorCode: errorCode(error),
+            elapsedMs: Math.round(performance.now() - stageStarted),
+            requestId:
+              typeof response.id === 'string' && /^[A-Za-z0-9_-]{1,256}$/.test(response.id) ? response.id : null,
+            usage:
+              split.inputTokens !== null && split.outputTokens !== null
+                ? {
+                    inputTokens: split.inputTokens,
+                    outputTokens: split.outputTokens,
+                    totalTokens: split.inputTokens + split.outputTokens,
+                    ...(split.cacheHitInputTokens === null ? {} : { cacheHitInputTokens: split.cacheHitInputTokens }),
+                    ...(split.cacheMissInputTokens === null
+                      ? {}
+                      : { cacheMissInputTokens: split.cacheMissInputTokens }),
+                  }
+                : null,
+            ...(error instanceof BubbleValidationError ? { presentation: error.presentation } : {}),
+          });
         if (!recorded) {
           // Complete response, failed validation: offer the model's raw words to an observer that wants them (a
           // preview). Best effort and before finish(); it can neither change the observation nor throw.
@@ -474,7 +597,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
           }
           await finishProviderCall(
             observer,
-            deepSeekObservation(value, combined.aborted ? 'interrupted' : 'failed', errorCode(error)),
+            chatObservation(ref.provider, value, combined.aborted ? 'interrupted' : 'failed', errorCode(error)),
           );
         }
         throw error;
@@ -488,30 +611,42 @@ export class DeepSeekTextGenerator implements TextGenerator {
       }
       return parsed;
     };
+    /** Walk the stage's model chain: only a definitely-not-billed failure moves on, and only to the next model. */
+    const call = async <T extends TextDraft>(
+      stage: TextGenerationStage['stage'],
+      messages: ReturnType<typeof promptMessages>,
+      outputTool: ReturnType<typeof draftTool>,
+      parse: (value: unknown) => T,
+    ): Promise<T> => {
+      const chain = chains[stage];
+      for (let index = 0; ; index++) {
+        const ref = chain[index]!;
+        const next = (error: unknown) =>
+          route !== undefined &&
+          index + 1 < chain.length &&
+          error instanceof DomainError &&
+          !combined.aborted &&
+          isNotBilled(error.code);
+        let current = index === 0 ? reservation : undefined;
+        if (index > 0 && meter) {
+          current = await meter.reserve([specFor(stage, ref)]);
+          reservations.push(current);
+        }
+        try {
+          return await attemptCall(stage, ref, current, next, messages, outputTool, parse);
+        } catch (error) {
+          if (next(error)) continue;
+          throw error;
+        }
+      }
+    };
     try {
       try {
         reservation = await meter?.reserve([
-          ...(!knownDraft
-            ? [
-                {
-                  provider: 'deepseek',
-                  model: this.model,
-                  stage: 'draft' as const,
-                  bounds: {
-                    unit: 'tokens' as const,
-                    inputTokens: DEEPSEEK_INPUT_RESERVATION,
-                    outputTokens: this.maxTokens,
-                  },
-                },
-              ]
-            : []),
-          {
-            provider: 'deepseek',
-            model: this.reviewModel,
-            stage: 'review',
-            bounds: { unit: 'tokens', inputTokens: DEEPSEEK_INPUT_RESERVATION, outputTokens: this.reviewMaxTokens },
-          },
+          ...(!knownDraft ? [specFor('draft', chains.draft[0]!)] : []),
+          specFor('review', chains.review[0]!),
         ]);
+        if (reservation) reservations.push(reservation);
         if (knownDraft) stages.push(structuredClone(knownDraft.metadata));
         const draft =
           knownParsedDraft ??
@@ -521,7 +656,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
         );
         return { ...metadata(), reply };
       } finally {
-        await closeProviderReservation(reservation);
+        for (const item of reservations) await closeProviderReservation(item);
       }
     } catch (error) {
       // No draft fallback or hidden third call; retain known first-stage usage if review fails.

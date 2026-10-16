@@ -1,6 +1,7 @@
 import type { AcceptedV7StageOutput, TextGenerationRequest, TextGenerationStage } from './index.ts';
 import type { FishModel, SpeechRequest } from './audio.ts';
 import type { ProviderMeter } from './provider-calls.ts';
+import type { TextRoute } from './text-route.ts';
 import type { TextRPCResult, SpeechRPCResult } from './generation-rpc.ts';
 
 export interface WebKnownDraft {
@@ -32,6 +33,8 @@ export interface WebGenerationSession {
     known: WebKnownDraft | null,
     meter: ProviderMeter,
     accept: (stage: AcceptedV7StageOutput) => Promise<void>,
+    /** Part 21b: absent = DeepSeek only, exactly as before. */
+    route?: TextRoute,
   ): Promise<TextRPCResult>;
   speech(wire: WebSpeechWire, authorize: () => Promise<void>): Promise<SpeechRPCResult>;
   embed(wire: WebEmbedWire, authorize: () => Promise<void>): Promise<WebEmbedRPCResult>;

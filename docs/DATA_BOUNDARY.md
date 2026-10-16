@@ -271,3 +271,19 @@ The archive has no principal, player, world, conversation, session or operation 
 - Retention tables carry `principal_id` but are classified global because the retention cleaner is a cross-principal job that must outlive the principal's rows. A later Part may split them.
 - User tables keyed only by `world_id` rely on the 1:1 `web_principals.world_id` link; `UserContext` (`platform/store-boundary.ts`) therefore carries only `worldId`.
 - Nothing enforces these classes in SQL yet; `UserStore` and `GlobalStore` are thin wrappers over the same connection.
+
+## Player model choice, points, backup log and usage (Part 21b, migration 123, flag `PLAYER_MODEL_CHOICE_ENABLED`)
+
+The player's chosen model only DRAFTS. REVIEW (safety, memory topics and `factOps`) always runs on the house reviewer (DeepSeek v4 pro, backup Gemini 3.8 Flash), so memory is written by one consistent model whatever the player picks; a switch mid-conversation changes the next draft only, and topics keep linking (tested). The chosen model is frozen into the operation at admission and is routing data: it is never put into any prompt or into the frozen request. Guests and administrators are untouched. Invited players may choose a model but are never charged points: no points rows are created for them, their rolling daily reply limit is unchanged, and their operations carry `web_operation_models` with `points_charged = 0`. There is no admin UI for points in this Part. (Existing behaviour worth knowing: `freezeWebV7Request` recalls memory only for non-guest principals, and a signed-up player with the bonus is still a `guest`-kind principal.)
+
+| Table | Class | Kept after deletion? |
+|---|---|---|
+| `web_player_model` (principal id, chosen model, one-time notice) | user | No: removed with the player (`purgePlayerLogins`). |
+| `web_points_policy` (principal id, kind `one_off` / `daily_refill` / `unlimited`, amount, last refill day) | user | No (same). The allowance POLICY, kept apart from the balance so Part 22 can add tiers without a rewrite; today only `one_off` (the signup bonus) and `unlimited` are acted on. |
+| `web_points_balance` (principal id, balance) | user | No (same). Created lazily on first touch: 100 − 10 × bonus replies already spent; no backfill. |
+| `web_points_events` (principal id, operation id, `source` = bonus / grant / daily_refill / reset / spend / refund, signed delta, reason, acting admin id for grant/reset only, price version) | user | No (same; append-only: updates are refused by a trigger; `playerLoginsRemain` fails closed on leftovers). |
+| `web_operation_models` (operation id, chosen model, voice, points charged, price version, settled, draft/review provider+model, backup flag) | user (shell) | Yes: ids, enums and counts, no principal id, no content (one of the audit's `providerShells`). |
+| `web_provider_backups` (operation id, phase, generation, abandoned provider/model, code, held micros) | user (shell) | Yes (same reasons; its row count is also the generation of the shared budget reservation id). |
+| `web_provider_usage` (UTC day, provider, model, phase, calls, tokens/bytes, cost at list price in micros, replies) | global | Yes: aggregates only, no principal id, no operation id, no content. Read by `pnpm usage:report` and the operator `inspect`. |
+
+Points are player fairness; the budget ledger is money safety; they are independent (a refund never releases a reservation). A charge happens at admission; an operation that ends with no reply (failed, cancelled, UNKNOWN) is refunded in full, and one answered by the backup model costs the cheaper of the two models, when the balance is next touched (`reconcilePoints`, once per fact by a unique index). xAI and Gemini spend books against the existing text bucket (`deepseek`) of the shared budget authority (no new grant ceremony); the local ledger tracks each provider separately.

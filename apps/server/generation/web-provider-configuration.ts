@@ -7,12 +7,22 @@ import { WEB_LIMITS } from '../../../config/web-v1.ts';
 import { webConcurrency } from '../../../config/web-concurrency.ts';
 import type { WebBudgetPolicy } from '../budget/web-provider-budget-contract.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
+import { PLAYER_MODELS } from '../../../packages/contracts/player-models.ts';
 
-/** Conservative USD upper bounds, checked against provider prices on 2026-09-28. */
+/**
+ * Conservative USD upper bounds, in whole micro-dollars per unit (a token is billed at the dearer of its input/output rate).
+ * DeepSeek and Fish checked against provider prices on 2026-09-28; xAI and Gemini on 2026-10-15 (docs/PROVIDERS.md).
+ * LIST prices only, never an introductory one: Gemini 3.8 Flash is $0.75/$3.75 per million tokens until 2026-12-31 and
+ * $1.50/$7.50 from 2027-01-01, so its bound is the 2027 output rate rounded up to 8; Grok 4.7 is $2/$6 below 200k prompt
+ * tokens (the $4/$12 tier is impossible: a request over 150000 bytes is refused before it is sent, see text-wire.ts).
+ */
 export const PROVIDER_PRICES = [
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.draft, phase: 'draft', unit: 'token', upper: 2 },
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.review, phase: 'review', unit: 'token', upper: 4 },
   { provider: 'fish', model: 's2.1-pro', phase: 'speech', unit: 'byte', upper: 15 },
+  { provider: 'xai', model: PLAYER_MODELS.xai.model, phase: 'draft', unit: 'token', upper: 6 },
+  { provider: 'gemini', model: PLAYER_MODELS.gemini.model, phase: 'draft', unit: 'token', upper: 8 },
+  { provider: 'gemini', model: PLAYER_MODELS.gemini.model, phase: 'review', unit: 'token', upper: 8 },
 ] as const;
 export const PROVIDER_LIMIT_MICROS = 3_000_000;
 const PRICE_VALID_MS = 30 * 86_400_000;
@@ -38,8 +48,9 @@ export interface PriceRenewal {
  */
 export function renewProviderPrices(store: WebRuntimeStore, now: number): PriceRenewal[] {
   const ledger = new WebProviderOffline(store, { now: () => now });
-  return store.transaction(() =>
-    PROVIDER_PRICES.map((price): PriceRenewal => {
+  return store.transaction(() => {
+    ensureModelProviders(store, now);
+    return PROVIDER_PRICES.map((price): PriceRenewal => {
       const latest = store.get<{ valid_until: number; version: number }>(
         'SELECT valid_until,version FROM web_provider_prices WHERE provider=? AND model=? AND phase=? ORDER BY valid_until DESC LIMIT 1',
         price.provider,
@@ -71,8 +82,42 @@ export function renewProviderPrices(store: WebRuntimeStore, now: number): PriceR
         version: (max?.v ?? 0) + 1,
       });
       return { ...base, result: 'renewed', validFrom, validUntil: validFrom + PRICE_RENEWAL_MS };
-    }),
+    });
+  });
+}
+
+/**
+ * Part 21b: a provider that appears in PROVIDER_PRICES but was added after the deployment was initialized (xAI, Gemini) has
+ * no spending bound and no capacity ticket yet, and a price row cannot reference a provider without them. This creates the
+ * missing ones, once, with the SAME bound policy as DeepSeek (unlimited stays unlimited, a test cap stays a cap) and the
+ * configured text concurrency. It only adds rows; it never changes one that exists. Before initialization (no DeepSeek
+ * spending row) it does nothing and the price step fails as it always did.
+ */
+function ensureModelProviders(store: WebRuntimeStore, now: number) {
+  const reference = store.get<{ limit_micros: number | null }>(
+    "SELECT limit_micros FROM web_provider_spending WHERE provider='deepseek'",
   );
+  if (!reference) return;
+  const ledger = new WebProviderOffline(store, { now: () => now });
+  const capacity = new WebDispatchLedger(store, { now: () => now });
+  for (const price of PROVIDER_PRICES) {
+    if (price.provider === 'deepseek' || price.provider === 'fish') continue;
+    if (!store.get('SELECT 1 FROM web_provider_spending WHERE provider=?', price.provider))
+      ledger.configureBudget(price.provider, reference.limit_micros);
+    if (
+      !store.get(
+        "SELECT 1 FROM web_external_budgets WHERE provider=? AND stage='text' AND phase=?",
+        price.provider,
+        price.phase,
+      )
+    )
+      capacity.configureBudget({
+        provider: price.provider,
+        stage: 'text',
+        phase: price.phase,
+        capacity: webConcurrency(store).maxTextRunning,
+      });
+  }
 }
 
 /** Local instance ceilings are not spending authorization; live calls also need the shared ledger. */
@@ -98,7 +143,10 @@ export function configureWebProvider(
       });
     for (const provider of ['deepseek', 'fish'])
       ledger.configureBudget(provider, policy === 'production-unlimited' ? null : PROVIDER_LIMIT_MICROS);
-    for (const price of PROVIDER_PRICES)
+    // Part 21b: initialization seeds exactly what it always did. The optional writing models (xAI, Gemini) get their
+    // spending bound, capacity ticket and first prices from `renew-prices` (renewProviderPrices), the same step that
+    // seeds them on a deployment that was initialized before this Part: a model stays unavailable until that has run.
+    for (const price of PROVIDER_PRICES.filter((item) => item.provider === 'deepseek' || item.provider === 'fish'))
       ledger.configurePrice({
         id: `${price.provider}-${price.phase}-${now}`,
         provider: price.provider,

@@ -19,6 +19,8 @@ import { registerSqlTextLoader } from '../../../scripts/web-sql-text.ts';
 // end of the ledger and every expected user_version below moved by one. No assertion was weakened.
 // Named exception (Part 19, migration 122): the ledger now has 47 steps and 122 is the newest, so every step count, every position
 // counted from the end of the ledger and every expected user_version below moved by one again. No assertion was weakened.
+// Named exception (Part 21b, migration 123): the ledger now has 48 steps and 123 is the newest, so every step count, every position
+// counted from the end of the ledger and every expected user_version below moved by one again. No assertion was weakened.
 
 registerSqlTextLoader();
 const { expectedWebMigrations } = await import('../../../workers/web-cloudflare/migrations.ts');
@@ -193,7 +195,7 @@ test('the lifecycle audit knows both tables, and the purge helper removes answer
 test('Cloudflare runner: 117 is the same SQL on both authorities and its ledger hash is stable', () => {
   const { inline, r2 } = expectedWebMigrations();
   // Extended for migration 120: 117 is now fourth from last (118, 119 and 120 follow it).
-  const last = (list: { version: number; sha256: string }[]) => list.at(-6)!;
+  const last = (list: { version: number; sha256: string }[]) => list.at(-7)!;
   assert.equal(last(inline).version, 117);
   assert.equal(last(r2).version, 117);
   assert.equal(last(inline).sha256, sha(sql117()), 'the ledger hash is the sha256 of the SQL file as written');
@@ -213,14 +215,15 @@ test('Cloudflare runner: an existing authority at 116 upgrades to 117 through th
     assert.equal(result.before.at(-1)?.startsWith('116:'), true, mode);
     assert.deepEqual(result.after.slice(0, 41), result.before, `${mode}: applied steps are untouched`);
     // Extended for migration 120: opening the authority applies 117, 118, 119 and then 120.
-    assert.equal(result.after.length, 47, mode);
-    assert.equal(result.after.at(-6), `117:${sha(sql117())}`, mode);
-    assert.equal(result.after.at(-5)?.startsWith('118:'), true, mode);
-    assert.equal(result.after.at(-4)?.startsWith('119:'), true, mode);
-    assert.equal(result.after.at(-3)?.startsWith('120:'), true, mode);
-    assert.equal(result.after.at(-2)?.startsWith('121:'), true, mode);
-    assert.equal(result.after.at(-1)?.startsWith('122:'), true, mode); // Extended for migration 122: the newest step is last.
-    assert.deepEqual(result.version, { user_version: 122 }, mode);
+    assert.equal(result.after.length, 48, mode);
+    assert.equal(result.after.at(-7), `117:${sha(sql117())}`, mode);
+    assert.equal(result.after.at(-6)?.startsWith('118:'), true, mode);
+    assert.equal(result.after.at(-5)?.startsWith('119:'), true, mode);
+    assert.equal(result.after.at(-4)?.startsWith('120:'), true, mode);
+    assert.equal(result.after.at(-3)?.startsWith('121:'), true, mode);
+    assert.equal(result.after.at(-2)?.startsWith('122:'), true, mode);
+    assert.equal(result.after.at(-1)?.startsWith('123:'), true, mode); // Extended for migration 123: the newest step is last.
+    assert.deepEqual(result.version, { user_version: 123 }, mode);
     assert.deepEqual(result.cocreation, { submissions: true, answers: true }, mode);
   }
 });

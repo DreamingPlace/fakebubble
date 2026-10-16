@@ -25,6 +25,8 @@ import type { ProviderAudioCache } from '../audio/web-provider-media.ts';
 import type { WebEmbedConfig } from '../../../config/web-embeddings.ts';
 import type { EmbeddingProvider } from './embedding-provider.ts';
 import { WebEmbedRunner } from './web-embed-runner.ts';
+import { textRouteFor } from './web-text-routing.ts';
+import { isNotBilled } from './text-wire.ts';
 
 type Phase = 'draft' | 'review';
 type Scope = {
@@ -150,6 +152,11 @@ export class WebProviderRunner {
       return this.ledger.commitReviewed(claim, scope);
     }
     const knownDraft = draftState === 'known' ? this.ledger.readKnownTextStage(draftKey, scope) : null;
+    // Part 21b: absent (feature off, or an operation without a frozen choice) = DeepSeek only, exactly as before.
+    const route = textRouteFor(this.store, claim.operationId, this.clock.now(), (phase) =>
+      this.ledger.abandonedProviders(claim.operationId, phase),
+    );
+    const position: Record<Phase, number> = { draft: 0, review: 0 };
     const specs = new Map<Phase, ProviderCallSpec>();
     const observations = new Map<Phase, ProviderObservation>();
     const started = new Set<Phase>();
@@ -160,7 +167,7 @@ export class WebProviderRunner {
         for (const call of calls) {
           ensure(
             (call.stage === 'draft' || call.stage === 'review') &&
-              call.provider === 'deepseek' &&
+              (call.provider === 'deepseek' || (route !== undefined && ['xai', 'gemini'].includes(call.provider))) &&
               call.bounds.unit === 'tokens',
             'WEB_PROVIDER_STAGE_INVALID',
           );
@@ -178,6 +185,12 @@ export class WebProviderRunner {
             );
             const spec = specs.get(stage);
             ensure(spec && spec.bounds.unit === 'tokens', 'WEB_PROVIDER_STAGE_INVALID');
+            if (route) {
+              // The generator walks the same chain: a call may only be for a model of it, never an earlier one.
+              const index = route[stage].findIndex((ref) => ref.provider === spec.provider && ref.model === spec.model);
+              ensure(index >= position[stage], 'WEB_PROVIDER_STAGE_INVALID');
+              position[stage] = index;
+            }
             const key = { operationId: claim.operationId, phase: stage, ordinal: -1 };
             // Byte-level BPE never yields more prompt tokens than wire bytes (tools and messages are
             // inside the body); the 2^20 context ceiling stays as the outer bound.
@@ -190,7 +203,7 @@ export class WebProviderRunner {
               policyHash: this.text.policyHash,
               wireRequestHash: requestHash,
               voiceVersion: row.voice_version,
-              provider: 'deepseek',
+              provider: spec.provider,
               model: spec.model,
               maxUnits,
             });
@@ -210,6 +223,15 @@ export class WebProviderRunner {
                       usageUnits: usage.inputTokens + usage.outputTokens,
                     });
                     await this.budget?.settleAttempt(this.store, key);
+                  } else if (route && isNotBilled(observation.errorCode) && position[stage] + 1 < route[stage].length) {
+                    // The provider proved it did not run the request: settle it at zero, then the generator retries ONCE
+                    // on the next model of the chain as a fresh attempt (new hold, new shared reservation).
+                    const code = observation.errorCode!;
+                    this.ledger.settleNotBilled(claim, key, scope, code);
+                    await this.budget?.settleAttempt(this.store, key);
+                    this.ledger.archiveNotBilled(key, scope, code);
+                    started.delete(stage);
+                    position[stage] += 1;
                   } else if (
                     observation.outcome === 'failed' &&
                     observation.errorCode === 'DEEPSEEK_RATE_LIMITED' &&
@@ -222,6 +244,10 @@ export class WebProviderRunner {
                       this.ledger.confirm(key, scope, { outcome: 'failed', receipt: observation, usageUnits: 0 });
                       await this.budget?.settleAttempt(this.store, key);
                     }
+                  } else if (route && isNotBilled(observation.errorCode)) {
+                    // Last model of the chain and the provider proved it did not run: a known zero charge, not UNKNOWN.
+                    this.ledger.confirm(key, scope, { outcome: 'failed', receipt: observation, usageUnits: 0 });
+                    await this.budget?.settleAttempt(this.store, key);
                   } else this.ledger.markUnknown(key, scope);
                 }
               },
@@ -261,8 +287,9 @@ export class WebProviderRunner {
       await this.budget?.settleAttempt(this.store, key);
     };
     try {
-      if (knownDraft) await this.text.generateAcceptedReviewFromKnownDraft(request, signal, knownDraft, accept, meter);
-      else await this.text.generateAcceptedStages(request, signal, accept, meter);
+      if (knownDraft)
+        await this.text.generateAcceptedReviewFromKnownDraft(request, signal, knownDraft, accept, meter, route);
+      else await this.text.generateAcceptedStages(request, signal, accept, meter, route);
     } catch (error) {
       if (returnedForRetry) return null;
       for (const phase of started) {
