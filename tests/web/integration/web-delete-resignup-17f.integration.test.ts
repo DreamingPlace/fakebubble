@@ -188,9 +188,17 @@ test('when the database clear fails after a deletion: the address is free at onc
   assert.deepEqual([stuck.purging, stuck.loginsOfPurgedPrincipals], [1, 0]);
   assert.ok(Number.isInteger(stuck.oldestPurgingMinutes) && stuck.oldestPurgingMinutes >= 0);
   // A failure is reported with a fixed code and nothing else.
-  assert.deepEqual(await f.fixture('/fixture/retention-reports'), [
-    { event: 'web_retention_failed', step: 'deletion', code: 'WEB_RETENTION_SCOPE_UNSAFE', failed: 1 },
-  ]);
+  // Part 17g (named exception): the report gained diagnostic fields (phase, sub, errorName, ... see web-retention.ts), so this
+  // compares the four fields it always asserted; the new fields are asserted in web-retention-world-17g.integration.test.ts.
+  assert.deepEqual(
+    (await f.fixture<Record<string, unknown>[]>('/fixture/retention-reports')).map(({ event, step, code, failed }) => ({
+      event,
+      step,
+      code,
+      failed,
+    })),
+    [{ event: 'web_retention_failed', step: 'deletion', code: 'WEB_RETENTION_SCOPE_UNSAFE', failed: 1 }],
+  );
 
   // A new guest asks for a code for the SAME address while the clear is still stuck: a code, not 你已经注册过.
   await f.fixture('/fixture/age-challenges', { ms: 120_000 });

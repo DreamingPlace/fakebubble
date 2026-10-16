@@ -50,6 +50,12 @@ export interface WebInspectPrice {
   inForce: { id: string; validUntil: number } | null;
   latestValidUntil: number;
 }
+/** Part 17g, counts and a time only: principals whose purge is failing now, how long the oldest has been due, when a purge last completed. */
+export interface WebInspectRetentionHealth {
+  failing: number;
+  oldestAgeBucket: '<1d' | '1-7d' | '7-30d' | '>30d' | null;
+  lastSuccessAt: number | null;
+}
 const ID_LIMIT = 200;
 const flag = (value: unknown) => (value === undefined ? null : value === 'true' || value === 'false' ? value : 'other');
 const digestRows = (rows: { version: number; sha256: string }[]): WebMigrationDigest[] =>
@@ -79,6 +85,7 @@ export function inspectWebAuthority(
   budget: WebInspectBudget,
   players: WebInspectPlayers = {},
   now: number = Date.now(),
+  retentionHealth: WebInspectRetentionHealth | null = null,
 ) {
   const has = (name: string) =>
     reader.all<{ n: number }>('SELECT 1 AS n FROM sqlite_master WHERE name=?', name).length > 0;
@@ -149,7 +156,7 @@ export function inspectWebAuthority(
           )
       : [],
     // Part 17f, numbers only: unfinished purges, the age of the oldest, and logins that outlived their purge (must be 0).
-    retention: purgeDiagnostics(reader, now),
+    retention: { ...purgeDiagnostics(reader, now), health: retentionHealth },
     ownerAdminExists: has('web_admin_members')
       ? reader.all("SELECT 1 FROM web_admin_members WHERE role='owner' LIMIT 1").length > 0
       : false,

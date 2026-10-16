@@ -63,7 +63,10 @@ export function guestPurgeDue(store: Pick<BusinessStore, 'get'>, now: number, gr
 export function purgePlayerLogins(
   store: Pick<BusinessStore, 'get' | 'run' | 'all'>,
   scope: { principalId: string; worldId: string },
+  /** Part 17g: told the fixed name of each statement group just before it runs (retention diagnostics). */
+  mark: (group: string) => void = () => {},
 ) {
+  mark('player_profiles');
   if (tableExists(store, 'player_profile_versions')) {
     if (tableExists(store, 'player_profile_requests'))
       store.run('DELETE FROM player_profile_requests WHERE world_id=?', scope.worldId);
@@ -71,6 +74,7 @@ export function purgePlayerLogins(
   }
   // Part 17b: the signup bonus entitlement and its operation markers go with the player. The email HMAC in
   // web_bonus_emails is NOT removed: it is the only thing kept, so a deleted address cannot collect the bonus twice.
+  mark('free_ops');
   if (tableExists(store, 'web_signup_bonus')) {
     // (the 'trial_extra' rows stay: they hold only the keyed IP hash, like web_ip_lifetime_quota, so a purge never resets an IP)
     store.run("DELETE FROM web_free_operations WHERE tier='bonus' AND principal_id=?", scope.principalId);
@@ -78,6 +82,7 @@ export function purgePlayerLogins(
   }
   // Part 21b: the player's model choice, points balance and points events go with the player. The per-operation
   // rows (web_operation_models, web_provider_backups) and the usage aggregates hold ids/enums/counts only, no principal.
+  mark('points');
   if (tableExists(store, 'web_points_balance')) {
     store.run('DELETE FROM web_points_events WHERE principal_id=?', scope.principalId);
     store.run('DELETE FROM web_points_balance WHERE principal_id=?', scope.principalId);
@@ -85,7 +90,9 @@ export function purgePlayerLogins(
     store.run('DELETE FROM web_player_model WHERE principal_id=?', scope.principalId);
   }
   // Part 19: the player's live review code and banner mark go with the player (the archive copy carries no identity).
+  mark('review_codes');
   purgeReviewRows(store, scope.principalId);
+  mark('player_logins');
   if (!playerLoginsExist(store)) return;
   const login = store.get<{ email_norm: string }>(
     'SELECT email_norm FROM web_player_logins WHERE principal_id=?',

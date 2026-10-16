@@ -247,6 +247,29 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 因此 A/B 做法照旧可用：临时把 `OPERATOR_ENABLED` 设为 `true` 部署（A），用完改回 `false` 再部署（B），即使两次部署的代码完全相同、只改了 vars；**不需要再等待对象重启或回收**。
 
+### 清除（retention）失败日志与健康行（Part 17g）
+
+清除某个玩家失败时，业务对象向尾日志（`wrangler tail`）写一行 JSON，`event` 为 `web_retention_failed`。Part 17g 起它说明**哪里坏了、是什么类型的错**，但永远不含 id、邮箱、IP 哈希、昵称或聊天内容：
+
+| 字段 | 含义 |
+| --- | --- |
+| `step` | `sweep`（闹钟扫描）或 `deletion`（玩家自己的删除请求，立刻尝试的那次） |
+| `code` | 抛出的是 `DomainError` 时为其固定错误码；**不是 DomainError 时恒为 `WEB_RETENTION_FAILED`**——此时看下面几项 |
+| `phase` | 哪个调用抛的：`markExpired`、`clearDatabase`、`eraseAudio`，或 `archive`（扫描开头的审阅存档清理） |
+| `sub` | 该调用里正在执行的语句组（固定标签）：`scope`、`audit_source`、`purge_gate`、各个表名（如 `web_provider_media_assets`、`memory_facts`）、`cocreation`、`free_ops`、`points`、`review_codes`、`player_logins`、`jobs`、`messages`、`foreign_key_check`、`audio_objects`、`retention_row` 等 |
+| `errorName` | 错误的构造函数名（`Error`、`TypeError`、`DomainError`、`SqliteError`……） |
+| `messageShape` | 错误信息，其中引号内文字→`<q>`、类邮箱文字→`<email>`、8 个及以上 `[A-Za-z0-9_-]` 的串（id、哈希、令牌；`snake_case` 标识符与表名除外）→`<tok>`、数字→`<n>`、非 ASCII→`<u>`，截断到 160 字符。`FOREIGN KEY constraint failed`、`no such table: x`、触发器的固定错误码（如 `WEB_PROVIDER_MEDIA_IMMUTABLE`）都会保留 |
+| `at` | 我们代码里第一个栈帧，仅 `文件名:行号` |
+| `principalKind` / `state` | 失败的主体种类（`guest`/`invite`/`account`）和清除状态（`active`/`purging`/`unstarted`） |
+| `failed` / `stuck` / `backedOff` | 本组相同原因的失败数 / 本次扫描失败的不同主体数 / 因退避被跳过的主体数 |
+| `oldestAgeBucket` | 失败行已到期多久的最老档：`<1d`、`1-7d`、`7-30d`、`>30d` |
+
+同一次扫描里原因相同的失败合并为一行，每次扫描最多四行。**读法：** 先看 `phase`+`sub` 定位语句组，再看 `errorName`/`messageShape`：`WEB_…_IMMUTABLE` 是触发器拒绝；`FOREIGN KEY constraint failed` 是还有子表引用着要删的行；`no such table` 是代码与账本不一致；`CHECK constraint failed` 是写入存档/行时违反约束。`principalKind` 为 `invite` 而 `guest` 正常，说明问题只在受邀玩家的清除路径上。
+
+**退避：** 清除失败的主体不会在每次闹钟（30 秒）都被重试，而是按连续失败次数等待 1 分钟、5 分钟、30 分钟，之后每 6 小时一次；成功即清零。闹钟本身照常运行，其他主体、队列与告警不受影响。退避状态（主体 id 与计数，仅存于对象内部）放在 Durable Object 的键值存储 `retention:ledger`，**没有新增迁移或列**（`web_guest_retention` 没有可用的列）。
+
+**健康行：** `status` 的 `retentionHealth` 与 `inspect` 的 `retention.health` 只含计数与时间：`failing`（当前处于失败状态、尚未清除完的主体数）、`oldestAgeBucket`（其中最老的到期档，没有则为 `null`）、`lastSuccessAt`（最近一次清除完成的时间，毫秒时间戳，没有则为 `null`）。`failing` 长期大于 0 就需要按上表排查。
+
 ### `inspect`（只读检查）
 
 `--action=inspect` 通过与 `status` 完全相同的认证服务绑定调用业务对象的只读 RPC，结果只写入私有收据。认证与 `status` 一致：业务 Worker 的 `OPERATOR_ENABLED` 不是 `true` 时两者都以 `WEB_CLOUD_OPERATOR_DISABLED` 拒绝（`status` 在关闭时同样不可用，因此 `inspect` 不开例外）。它只执行 `SELECT` 和一次预算 `summary()` 读取，测试用完整表快照与写入计数器证明执行前后不变。

@@ -38,7 +38,12 @@ const identityConfig = {
 
 /** Offline workerd fixture only. The testing routes and fixed keys are never a deployment entry. */
 /** Part 17b: a fixture worker module may switch the free tier (5-reply trial + signup bonus) on before its objects are built. */
-export const fixtureOptions = { publicFreeTier: false, chatReview: false };
+export const fixtureOptions: {
+  publicFreeTier: boolean;
+  chatReview: boolean;
+  /** Part 17g: PLAYER_MODEL_CHOICE_ENABLED with these models; absent = off. */
+  playerModelChoice?: readonly ('deepseek' | 'gemini' | 'xai')[];
+} = { publicFreeTier: false, chatReview: false };
 // Part 19: likewise for CHAT_REVIEW_ENABLED (pseudonymous transcript review and the anonymous archive).
 
 export class WebBusinessFixture {
@@ -97,6 +102,7 @@ export class WebBusinessFixture {
       ...(media ? { providerAudio: media } : {}),
       ...(fixtureOptions.publicFreeTier ? { publicFreeTier: true } : {}),
       ...(fixtureOptions.chatReview ? { chatReview: true } : {}),
+      ...(fixtureOptions.playerModelChoice ? { playerModelChoice: fixtureOptions.playerModelChoice } : {}),
     });
     if (!this.store.get('SELECT 1 FROM character_templates'))
       this.store.transaction(() => {
