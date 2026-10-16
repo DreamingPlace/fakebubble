@@ -17,7 +17,9 @@ test('web schema113 initializes in actual workerd SQLite without beta adoption',
       CREATE INDEX web_external_attempts_state ON web_external_attempts(dispatch_state,operation_id);`);
   }
   // Extended for migration 123 (the newest web-migrations file; Part 21b named exception).
-  node.db.exec('PRAGMA user_version=123');
+  // Named exception (Part 21g, migration 124): the ledger now has 49 steps and 124 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  node.db.exec('PRAGMA user_version=124');
   const tables = node.all<{ name: string }>(`SELECT name FROM sqlite_master
     WHERE type='table' AND name NOT GLOB 'sqlite_*' ORDER BY name`);
   const expected = {

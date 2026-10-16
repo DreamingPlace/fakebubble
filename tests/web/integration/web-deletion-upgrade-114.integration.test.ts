@@ -279,7 +279,9 @@ test('production database at 113 with the deletion schema installed upgrades thr
   await f.restart();
   await f.call({ action: 'edge', path: api + '/bootstrap' }, 200);
   const upgraded = await state();
-  assert.equal(upgraded.version, 123);
+  // Named exception (Part 21g, migration 124): the ledger now has 49 steps and 124 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(upgraded.version, 124);
   assert.ok(upgraded.schema.some((row) => row.name === 'web_operation_metrics'));
   assert.deepEqual(
     upgraded.triggers,

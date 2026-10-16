@@ -5,6 +5,8 @@ import type { PreviewAdminClient } from '../../services/preview-admin-api.ts';
 import { permissionMatrixEditor } from './permission-matrix.ts';
 import { grantsView } from './grants-view.ts';
 import { opsView } from './ops-view.ts';
+import { modelsView } from './models-view.ts';
+import { confirmDialog } from './ui/confirm-dialog.ts';
 import { rolePicker } from './shell/role-picker.ts';
 import {
   canSeePage,
@@ -57,6 +59,9 @@ type Port = Pick<
   previews?: PreviewAdminClient;
   /** 运营数据 (owner only). Optional: a page without it has no such page in the nav. */
   stageLatency?: AccountAdminApi['stageLatency'];
+  /** 系统 → 模型与价格 (any administrator may read; saving needs the owner role or models.manage). Optional: a page without it has no such page. */
+  modelSettings?: AccountAdminApi['modelSettings'];
+  saveModelSettings?: AccountAdminApi['saveModelSettings'];
   /** 共创收件箱. Optional: a page without it simply has no inbox tab. */
   cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'>;
   /** 测试对话 (CHAT_REVIEW_ENABLED; the page only appears when the session says the switch is on). */
@@ -69,6 +74,11 @@ export function adminAccountError(error: unknown) {
   return (
     (
       {
+        MODEL_TIER_EMPTY: '每一类玩家至少要保留一个已开启的模型，本次未保存。',
+        MODEL_SETTINGS_CONFLICT: '设置已被另一位管理员修改。请点“刷新”核对最新内容后再保存；本次未覆盖。',
+        MODEL_SETTINGS_UNAVAILABLE: '这个站点的数据库还没有升级到模型与价格（迁移 124）。',
+        IDEMPOTENCY_CONFLICT: '这次提交与之前的同一请求内容不一致，请刷新后重试。',
+        INVALID_REQUEST: '填写的内容不符合要求（每条点数 1–200，语音加点 0–20，均为整数）。',
         ADMIN_PERMISSIONS_CONFLICT: '权限已被另一页面修改。请刷新权限列表，核对后再保存；本次未覆盖新权限。',
         ADMIN_LOGIN_INVALID: '邮箱或密码不正确。',
         ADMIN_INVALID_GRANT: '凭据已使用、已过期或已撤销，请联系主管理员。',
@@ -158,6 +168,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="grants" hidden><div id="admin-grants"></div></section>
     <section data-panel="ops" hidden><div id="admin-ops"></div></section>
     <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
+    <section data-panel="models" hidden><div id="admin-models"></div></section>
     </div>
     </div>
     <p class="invite-admin-status admin-statusbar" role="status" aria-live="polite">正在检查登录状态…</p>
@@ -182,6 +193,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     permissions: session?.member.permissions ?? [],
     inbox: !!port.cocreation,
     metrics: !!port.stageLatency,
+    models: !!port.modelSettings,
     conversations: !!port.conversations && session?.features?.chatReview === true,
   });
   const canEditCharacter = (characterId: string) =>
@@ -306,6 +318,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     q<HTMLButtonElement>('#admin-member-issue button').disabled = busy || memberUnknown || !newPermissions;
     newPermissions?.setDisabled(busy || memberUnknown);
     q<HTMLElement>('main').setAttribute('data-surface', session ? page : 'login');
+    // 系统 → 模型与价格 is the one page that is usable on a phone: its route lifts the desktop-only notice (and the login in front of it).
+    if (window.location?.hash?.startsWith('#/models') === true)
+      q<HTMLElement>('main').setAttribute('data-mobile-ok', '');
+    else q<HTMLElement>('main').removeAttribute('data-mobile-ok');
     workbench?.update(busy);
     previewBench?.update(busy);
     q<HTMLElement>('main').setAttribute('data-nav', navCollapsed ? 'collapsed' : 'expanded');
@@ -392,6 +408,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (page === 'grants' && can('invites.read')) return () => grants.load();
     if (page === 'ops' && session.member.role === 'owner' && port.stageLatency) return () => ops.load();
     if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
+    if (page === 'models' && port.modelSettings) return () => models.load();
     return null;
   };
   /** The newest load a click asked for while something else was running; it starts when that run ends. */
@@ -566,6 +583,16 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     run,
     disposed: () => disposed,
   });
+  const models = modelsView(q('#admin-models'), {
+    load: () => (port.modelSettings ? port.modelSettings() : Promise.reject(new Error('ADMIN_MODELS_UNAVAILABLE'))),
+    save: (input) =>
+      port.saveModelSettings ? port.saveModelSettings(input) : Promise.reject(new Error('ADMIN_MODELS_UNAVAILABLE')),
+    run,
+    confirm: (options) => confirmDialog(q('main'), options),
+    toast: (text) => toasts.show(text, 'ok'),
+    newRequestId: () => globalThis.crypto.randomUUID(),
+    disposed: () => disposed,
+  });
   const reviews = conversationsView(q('#admin-conversations'), {
     api: port.conversations ?? {
       list: () => Promise.reject(new Error('ADMIN_CONVERSATIONS_UNAVAILABLE')),
@@ -594,6 +621,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     grants.clear();
     ops.clear();
     reviews.clear();
+    models.clear();
     inbox?.clear();
     unread = {};
   };

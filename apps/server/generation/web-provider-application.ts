@@ -1,5 +1,4 @@
-import { hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
-import { DEFAULT_PLAYER_MODEL, replyPoints } from '../../../packages/contracts/player-models.ts';
+import { cheapestReplyPoints, hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
 import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
@@ -469,7 +468,7 @@ export class WebProviderApplication {
     // send follows the balance (after settling what finished), not the old bonus count. Free guest replies come first.
     if (hasPoints(this.store, principal.principalId)) {
       const state = modelChoiceState(this.store, now, principal.principalId, false)!;
-      const affordable = state.balance >= replyPoints(DEFAULT_PLAYER_MODEL, true);
+      const affordable = state.balance >= cheapestReplyPoints(this.store, principal.principalId);
       return {
         kind: 'guest',
         ...base,

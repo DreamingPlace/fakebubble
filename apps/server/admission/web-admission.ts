@@ -15,7 +15,15 @@ import {
   hasSignupBonus,
 } from './web-free-tier.ts';
 import { DEFAULT_PLAYER_MODEL, type PlayerModelId } from '../../../packages/contracts/player-models.ts';
-import { chargeAdmission, effectiveModel, hasPoints, isInvited, quote, recordUnmetered } from './web-points.ts';
+import {
+  canChooseModel,
+  chargeAdmission,
+  effectiveModel,
+  hasPoints,
+  isInvited,
+  quote,
+  recordUnmetered,
+} from './web-points.ts';
 import { requirePublishedWebCharacter } from '../characters/web-character-catalog.ts';
 
 interface PrincipalRow {
@@ -119,11 +127,11 @@ export class WebAdmission {
       const trial = principal.kind === 'guest';
       ensure(
         trial ||
-          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123].includes(webSchema) &&
+          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124].includes(webSchema) &&
             ((principal.kind === 'account' &&
               this.store.get(`SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1`, principal.id)) ||
               (principal.kind === 'invite' &&
-                [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123].includes(webSchema) &&
+                [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124].includes(webSchema) &&
                 retention !== null))),
         'WEB_ADMISSION_ENTITLEMENT_REQUIRED',
       );
@@ -157,6 +165,13 @@ export class WebAdmission {
       const bonus = free === 'bonus',
         extra = free === 'extra',
         points = free === 'points';
+      // Part 21g: a trial guest may be allowed another model than DeepSeek (or several). The model is frozen into the operation like
+      // any other; the reply still costs exactly one trial reply, whatever the model. A DeepSeek-only guest keeps no row at all.
+      let guestModel: PlayerModelId | null = null;
+      if (trial && !pointsMode && !bonus) {
+        const effective = effectiveModel(this.store, this.clock.now(), principal.id);
+        if (effective !== DEFAULT_PLAYER_MODEL || canChooseModel(this.store, principal.id)) guestModel = effective;
+      }
       // Both outside-the-counters entitlements are 'entitled' operations with a web_free_operations row: no IP window, no trial counter.
       // A points reply is entitled too, with a points event (and web_operation_models row) instead.
       const counted = trial && !bonus && !extra && !points;
@@ -351,7 +366,7 @@ export class WebAdmission {
         now,
         now + WEB_LIMITS.operationDeadlineMs,
       ];
-      if (webSchema >= 102 && webSchema <= 123) {
+      if (webSchema >= 102 && webSchema <= 124) {
         const sequence = this.store.get<{ last_seq: number }>(`UPDATE web_admission_counter
           SET last_seq=last_seq+1 WHERE singleton=1 RETURNING last_seq`)?.last_seq;
         ensure(sequence !== undefined, 'WEB_ADMISSION_ORDER_MISSING');
@@ -403,6 +418,7 @@ export class WebAdmission {
           'TRIAL_EXHAUSTED',
         );
       }
+      if (guestModel) recordUnmetered(this.store, now, operationId, guestModel);
       return {
         operationId,
         conversationId: conversation.id,
@@ -489,9 +505,9 @@ export class WebAdmission {
   finalize(operationId: string, terminal: Terminal) {
     return this.store.transaction(() => {
       ensure(
-        ![104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123].includes(
-          this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
-        ),
+        ![
+          104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124,
+        ].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1),
         'WEB_DISPATCH_FENCE_REQUIRED',
       );
       const operation = this.store.get<OperationRow>('SELECT * FROM web_operations WHERE id=?', operationId);

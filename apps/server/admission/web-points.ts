@@ -3,13 +3,22 @@ import {
   DEFAULT_PLAYER_MODEL,
   POINTS,
   isPlayerModelId,
-  repliesLeft,
-  replyPoints,
   type PlayerModelId,
 } from '../../../packages/contracts/player-models.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { bonusSpent, hasSignupBonus } from './web-free-tier.ts';
+import {
+  currentPrices,
+  firstTierModel,
+  modelSettingsTablesExist,
+  offeredGlobally,
+  playerTier,
+  pricesAt,
+  replyPointsNow,
+  tierModels,
+  type ModelFlags,
+} from './web-model-settings.ts';
 
 /**
  * Player model choice and points (Part 21b, flag PLAYER_MODEL_CHOICE_ENABLED, default off).
@@ -33,7 +42,7 @@ import { bonusSpent, hasSignupBonus } from './web-free-tier.ts';
  */
 type Reader = Pick<BusinessStore, 'get' | 'all'>;
 type Writer = Pick<BusinessStore, 'get' | 'all' | 'run' | 'transaction'>;
-type Flagged = { playerModelChoice?: readonly PlayerModelId[]; publicFreeTier?: boolean };
+type Flagged = ModelFlags;
 
 const tableExists = (store: Pick<BusinessStore, 'get'>, name: string) =>
   !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", name);
@@ -41,21 +50,31 @@ const tableExists = (store: Pick<BusinessStore, 'get'>, name: string) =>
 export const modelChoiceTablesExist = (store: Pick<BusinessStore, 'get'>) =>
   tableExists(store, 'web_points_balance') && tableExists(store, 'web_operation_models');
 
-/** The models the owner currently offers (PLAYER_TEXT_MODELS), or null while the feature is off. DeepSeek is always in. */
-export function offeredModels(store: Pick<BusinessStore, 'get'> & Flagged): readonly PlayerModelId[] | null {
-  const list = store.playerModelChoice;
-  return list && list.length > 0 && modelChoiceTablesExist(store) ? list : null;
+/**
+ * The models offered at all right now, or null while the feature is off. Part 21g: PLAYER_TEXT_MODELS (and the provider key) is
+ * a ceiling and the owner's table decides the rest - a model that is outside the ceiling or switched off is not in this list.
+ * DeepSeek stays the internal backup and house reviewer whatever this says (routing never asks the table about it).
+ */
+export function offeredModels(store: Pick<BusinessStore, 'get' | 'all'> & Flagged): readonly PlayerModelId[] | null {
+  return modelChoiceTablesExist(store) ? offeredGlobally(store) : null;
 }
 /** True for a principal with a points account: feature on and the signup bonus held. */
-export const hasPoints = (store: Pick<BusinessStore, 'get'> & Flagged, principalId: string) =>
+export const hasPoints = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string) =>
   offeredModels(store) !== null && hasSignupBonus(store, principalId);
-/** An invited principal: may choose a model, is never charged points (its daily reply limit is unchanged). */
-export const isInvited = (store: Pick<BusinessStore, 'get'> & Flagged, principalId: string) =>
-  offeredModels(store) !== null &&
-  store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind === 'invite';
-/** May this principal pick a model (points account or invited)? */
-export const canChooseModel = (store: Pick<BusinessStore, 'get'> & Flagged, principalId: string) =>
-  hasPoints(store, principalId) || isInvited(store, principalId);
+/** An invited principal (an invite or an account): may choose a model, is never charged points. */
+export const isInvited = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string) =>
+  offeredModels(store) !== null && playerTier(store, principalId) === 'invited';
+/**
+ * May this principal pick a model? Registered and invited players whenever their tier is offered anything; a guest only when
+ * the owner allows its tier more than one model (a guest reply costs one trial reply whatever the model).
+ */
+export function canChooseModel(store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string) {
+  if (offeredModels(store) === null) return false;
+  const tier = playerTier(store, principalId);
+  if (!tier) return false;
+  const count = tierModels(store, tier).length;
+  return tier === 'guest' ? count > 1 : count > 0;
+}
 /** The allowance policy of a points account (one_off when none is stored yet). */
 export function policyKind(
   store: Pick<BusinessStore, 'get'>,
@@ -68,25 +87,43 @@ export function policyKind(
   return row?.kind ?? 'one_off';
 }
 
-/** The saved choice, as a model that is still offered: a model the owner has switched off becomes DeepSeek, once, with a notice. */
+/** The cheapest reply (voice included) the principal's tier offers: below it the old "free replies used up" answer applies. */
+export function cheapestReplyPoints(store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string) {
+  const tier = playerTier(store, principalId);
+  const prices = currentPrices(store);
+  const models = tier ? tierModels(store, tier) : [];
+  const cheapest = Math.min(...(models.length ? models : [DEFAULT_PLAYER_MODEL]).map((id) => prices.perReply[id]));
+  return cheapest + prices.voice;
+}
+
+/**
+ * The saved choice, as a model the player's tier still offers. A model the owner withdrew (globally or for the tier) moves the
+ * player to the tier's first allowed model on their next message, once, with the 'model_withdrawn' notice.
+ */
 export function effectiveModel(store: Writer & Flagged, now: number, principalId: string): PlayerModelId {
-  const offered = offeredModels(store);
-  if (!offered) return DEFAULT_PLAYER_MODEL;
+  if (!offeredModels(store)) return DEFAULT_PLAYER_MODEL;
+  const tier = playerTier(store, principalId);
+  const allowed = tier ? tierModels(store, tier) : [];
+  const first = firstTierModel(store, tier);
   const row = store.get<{ model: string }>('SELECT model FROM web_player_model WHERE principal_id=?', principalId);
-  if (!row || !isPlayerModelId(row.model)) return DEFAULT_PLAYER_MODEL;
-  if (offered.includes(row.model)) return row.model;
+  if (!row || !isPlayerModelId(row.model))
+    return allowed.length === 0 || allowed.includes(DEFAULT_PLAYER_MODEL) ? DEFAULT_PLAYER_MODEL : first;
+  if (allowed.includes(row.model)) return row.model;
+  if (allowed.length === 0) return DEFAULT_PLAYER_MODEL;
   store.run(
-    "UPDATE web_player_model SET model='deepseek',notice='model_withdrawn',updated_at=? WHERE principal_id=?",
+    "UPDATE web_player_model SET model=?,notice='model_withdrawn',updated_at=? WHERE principal_id=?",
+    first,
     now,
     principalId,
   );
-  return DEFAULT_PLAYER_MODEL;
+  return first;
 }
 
 export function setPlayerModel(store: Writer & Flagged, now: number, principalId: string, model: unknown) {
   const offered = offeredModels(store);
   ensure(offered && canChooseModel(store, principalId), 'NOT_FOUND');
-  ensure(isPlayerModelId(model) && offered.includes(model), 'MODEL_NOT_AVAILABLE');
+  const tier = playerTier(store, principalId)!;
+  ensure(isPlayerModelId(model) && tierModels(store, tier).includes(model), 'MODEL_NOT_AVAILABLE');
   store.run(
     `INSERT INTO web_player_model(principal_id,model,notice,updated_at) VALUES (?,?,NULL,?)
     ON CONFLICT(principal_id) DO UPDATE SET model=excluded.model,notice=NULL,updated_at=excluded.updated_at`,
@@ -184,6 +221,8 @@ export function reconcilePoints(store: Writer, now: number, principalId: string)
     principalId,
   );
   for (const row of rows) {
+    // The price table the operation was admitted under (Part 21g): a later price change never re-prices a refund.
+    const frozen = pricesAt(store, row.price_version) ?? currentPrices(store);
     if (row.status !== 'published') {
       refund(store, now, principalId, row.operation_id, 'no_reply', row.points_charged, row.price_version);
     } else {
@@ -195,7 +234,7 @@ export function reconcilePoints(store: Writer, now: number, principalId: string)
         principalId,
         row.operation_id,
         'backup_cheaper',
-        Math.max(0, POINTS.perReply[chosen] - POINTS.perReply[actual]),
+        Math.max(0, frozen.perReply[chosen] - frozen.perReply[actual]),
         row.price_version,
       );
       if (row.voice === 1) {
@@ -203,7 +242,7 @@ export function reconcilePoints(store: Writer, now: number, principalId: string)
           `SELECT 1 FROM web_publication_items WHERE operation_id=? AND origin='narrative' AND media_id IS NOT NULL LIMIT 1`,
           row.operation_id,
         );
-        if (!voiced) refund(store, now, principalId, row.operation_id, 'no_voice', POINTS.voice, row.price_version);
+        if (!voiced) refund(store, now, principalId, row.operation_id, 'no_voice', frozen.voice, row.price_version);
       }
     }
     store.run('UPDATE web_operation_models SET settled=1 WHERE operation_id=?', row.operation_id);
@@ -222,11 +261,11 @@ export function quote(store: Writer & Flagged, now: number, principalId: string,
   reconcilePoints(store, now, principalId);
   const balance = ensureBalance(store, now, principalId);
   if (policyKind(store, principalId) === 'unlimited') return { ok: true, points: 0 };
-  const price = replyPoints(model, true);
+  const price = replyPointsNow(store, model);
   if (balance >= price) return { ok: true, points: price };
   return {
     ok: false,
-    code: balance >= replyPoints(DEFAULT_PLAYER_MODEL, true) ? 'POINTS_INSUFFICIENT' : 'TRIAL_EXHAUSTED',
+    code: balance >= cheapestReplyPoints(store, principalId) ? 'POINTS_INSUFFICIENT' : 'TRIAL_EXHAUSTED',
   };
 }
 
@@ -239,7 +278,9 @@ export function chargeAdmission(
   model: PlayerModelId,
 ): number {
   // An 'unlimited' policy is never charged (and has no spend event); the operation row still freezes the model.
-  const price = policyKind(store, principalId) === 'unlimited' ? 0 : replyPoints(model, true);
+  // The price is read from the owner's table (Part 21g) and its version is stamped on the event and the operation.
+  const prices = currentPrices(store);
+  const price = policyKind(store, principalId) === 'unlimited' ? 0 : prices.perReply[model] + prices.voice;
   if (price > 0) {
     ensure(
       store.run(
@@ -257,7 +298,7 @@ export function chargeAdmission(
       principalId,
       operationId,
       -price,
-      POINTS.version,
+      prices.version,
       now,
     );
   }
@@ -267,7 +308,7 @@ export function chargeAdmission(
     operationId,
     model,
     price,
-    POINTS.version,
+    prices.version,
     now,
   );
   return price;
@@ -280,7 +321,7 @@ export function recordUnmetered(store: Writer, now: number, operationId: string,
     VALUES (?,?,1,0,?,?)`,
     operationId,
     model,
-    POINTS.version,
+    currentPrices(store).version,
     now,
   );
 }
@@ -297,6 +338,8 @@ export function modelChoiceState(
   const offered = offeredModels(store);
   if (!offered || !canChooseModel(store, principalId)) return null;
   const metered = hasSignupBonus(store, principalId);
+  const allowed = tierModels(store, playerTier(store, principalId)!);
+  const prices = currentPrices(store);
   return store.transaction(() => {
     let balance = 0;
     if (metered) {
@@ -310,16 +353,16 @@ export function modelChoiceState(
     )?.notice;
     if (notice && consumeNotice) store.run('UPDATE web_player_model SET notice=NULL WHERE principal_id=?', principalId);
     return {
-      models: offered.map((id) => ({
+      models: allowed.map((id) => ({
         id,
-        points: POINTS.perReply[id],
-        voicePoints: POINTS.voice,
+        points: prices.perReply[id],
+        voicePoints: prices.voice,
       })),
       selected,
       metered,
       balance,
-      repliesLeft: metered ? repliesLeft(balance, selected) : 0,
-      version: POINTS.version,
+      repliesLeft: metered ? Math.max(0, Math.floor(balance / (prices.perReply[selected] + prices.voice))) : 0,
+      version: prices.version,
       ...(notice === 'model_withdrawn' ? { notice } : {}),
     };
   });

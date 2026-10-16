@@ -281,6 +281,16 @@ export async function routeWebAccountAdmin(
     const value = body(['days']);
     return { status: 200, body: admin.stageLatency(req.adminCookie, req.csrf, req.origin, value.days) };
   }
+  if (path === `${base}/models/read`) {
+    auth();
+    body([]);
+    return { status: 200, body: admin.modelSettings(req.adminCookie, req.csrf, req.origin) };
+  }
+  if (path === `${base}/models/save`) {
+    auth();
+    ensure(req.body && typeof req.body === 'object' && !Array.isArray(req.body), 'INVALID_REQUEST');
+    return { status: 200, body: admin.saveModelSettings(req.adminCookie, req.csrf, req.origin, req.body) };
+  }
   if (path === `${base}/members/list`) {
     auth();
     body([]);

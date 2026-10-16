@@ -347,7 +347,7 @@ export class WebStageQueue {
 
   claimAudio(coordinator: WebCoordinatorLease, owner: string): WebStageClaim | null {
     if (
-      [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123].includes(
+      [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124].includes(
         this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       )
     )
@@ -362,7 +362,7 @@ export class WebStageQueue {
         scheduler = this.validateCoordinator(coordinator, now);
       const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
       ensure(
-        [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123].includes(
+        [105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124].includes(
           schema,
         ) &&
           (schema < 113 || webDataLifecycleEnabled(this.store)),

@@ -3670,6 +3670,124 @@ body:has(.admin-shell) {
   }
 }
 
+/* 系统 → 模型与价格 (Part 21g). The owner changes models and prices from a phone too, so this one route (#/models) opts out of the
+   desktop-only notice; every other page keeps it. */
+.models-table td.models-status,
+.models-table th[scope="row"] {
+  font-weight: 600;
+}
+.models-table input[type="number"] {
+  width: 84px;
+}
+.models-voice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 16px 0 8px;
+}
+.models-voice input[type="number"] {
+  width: 84px;
+}
+.models-actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 20px;
+}
+.models-problem {
+  margin: 8px 0 0;
+  color: var(--ad-danger) !important;
+}
+.models-recent {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.admin-dialog p {
+  white-space: pre-line;
+}
+@media (max-width: 1023px) {
+  .account-admin-page.admin-shell[data-mobile-ok] > .admin-narrow-notice {
+    display: none !important;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] > .admin-topbar {
+    display: flex !important;
+    height: auto;
+    min-height: 48px;
+    padding: 6px 12px;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] > .admin-frame {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .admin-sidebar {
+    display: none;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] > .admin-statusbar {
+    display: block !important;
+    padding: 6px 12px;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] > .admin-backdrop {
+    display: block !important;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] > .admin-dialog {
+    display: block !important;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] > .admin-toasts {
+    display: grid !important;
+    right: 12px;
+    bottom: 48px;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .admin-content {
+    padding: 14px 12px 28px;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .models-table thead {
+    position: absolute;
+    left: -9999px;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .models-table,
+  .account-admin-page.admin-shell[data-mobile-ok] .models-table tbody {
+    display: block;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .models-table tr {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 12px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--ad-border);
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .models-table tr > th[scope="row"] {
+    grid-column: 1 / -1;
+    padding: 4px 0;
+    border: 0;
+    font-size: 15px;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .models-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 40px;
+    padding: 4px 0;
+    border: 0;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .models-table td::before {
+    content: attr(data-label);
+    color: var(--ad-muted);
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .models-table input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+  }
+  .account-admin-page.admin-shell[data-mobile-ok] .models-actions button {
+    min-height: 44px;
+    flex: 1;
+  }
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

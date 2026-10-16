@@ -1,4 +1,5 @@
 import { parsePlayerTextModels } from '../../packages/contracts/player-models.ts';
+import { probeModelKeys } from '../../apps/server/admission/web-model-settings.ts';
 import { WebCharacterDeletion } from '../../apps/server/characters/web-character-deletion.ts';
 import { WebCharacterPreviews } from '../../apps/server/characters/web-character-preview.ts';
 import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-character-preview-runner.ts';
@@ -439,6 +440,19 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     const alerts = this.alerts?.nextDue() ?? null;
     return retention === null ? alerts : alerts === null ? retention : Math.min(retention, alerts);
   }
+  private modelKeysAt = 0;
+  /**
+   * Part 21g: the model ceiling includes "has its API key". The keys live only in the generation Worker, which answers booleans.
+   * Refreshed at most once a minute (5 s after a failure, which fails closed: no key known = xAI/Gemini not offered).
+   */
+  private async refreshModelKeys() {
+    if (this.env.PLAYER_MODEL_CHOICE_ENABLED !== 'true') return;
+    const now = this.clock.now();
+    if (this.store.playerModelKeys && now - this.modelKeysAt < 60_000) return;
+    const probed = await probeModelKeys(this.env.GENERATION);
+    this.store.playerModelKeys = probed.keys;
+    this.modelKeysAt = probed.ok ? now : now - 55_000;
+  }
   async alarm() {
     // Privacy cleanup must survive restart, disabled providers and unavailable budget RPC.
     await this.context.storage.setAlarm(this.clock.now() + 30_000);
@@ -463,6 +477,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         console.error(JSON.stringify({ event: 'web_business_alarm_start_failed', ...safeError(error) }));
         throw error;
       }
+      await this.refreshModelKeys();
       return services.execution.alarm();
     }
     const next = Math.min(this.maintenanceDue() ?? Infinity, deletion?.nextDue() ?? Infinity);
@@ -478,6 +493,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       const { request, peer } = trustedWebRequest(incoming);
       stage = 'start';
       const services = await this.start();
+      await this.refreshModelKeys();
       stage = 'unknown';
       return services.http.fetch(request, peer);
     } catch (error) {

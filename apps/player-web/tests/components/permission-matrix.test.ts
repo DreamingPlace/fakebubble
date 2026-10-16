@@ -38,13 +38,14 @@ test('permissions are grouped by area with every item present', (t) => {
   const f = mount(t);
   assert.deepEqual(
     f.host.querySelectorAll('.permission-group h4').map((h) => h.textContent),
-    ['角色资料', '预演与发布', '声音成品', '玩家邀请', '共创收件箱'],
+    // Named exception (Part 21g): the new 模型与价格 group (models.manage) is last; counts below are one higher. Nothing weakened.
+    ['角色资料', '预演与发布', '声音成品', '玩家邀请', '共创收件箱', '模型与价格'],
   );
-  assert.equal(f.host.querySelectorAll('[data-permission]').length, 15);
+  assert.equal(f.host.querySelectorAll('[data-permission]').length, 16);
   const without = mount(t, [], false);
   assert.equal(
     without.host.querySelectorAll('[data-permission]').length,
-    13,
+    14,
     'no inbox group on a page without an inbox',
   );
 });
@@ -121,7 +122,8 @@ test('presets: 共创写手 has no publish; 运营 is invites plus inbox; 全部
     'invites.revoke-code',
   ]);
   f.preset('all');
-  assert.equal(f.ticked().length, 15);
+  // Named exception (Part 21g): 全部 now also ticks models.manage (16 items).
+  assert.equal(f.ticked().length, 16);
   f.toggle('characters.read', false);
   assert.deepEqual(
     f.ticked().filter((x) => x.startsWith('characters')),

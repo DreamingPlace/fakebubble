@@ -15,6 +15,7 @@ export type AdminPage =
   | 'grants'
   | 'ops'
   | 'conversations'
+  | 'models'
   | 'members'
   | 'account';
 export type NavItem = { page: Exclude<AdminPage, 'account'>; label: string; icon: string };
@@ -40,7 +41,14 @@ export const NAV_TREE: readonly NavGroup[] = [
     ],
   },
   { id: 'ops', label: '运营', items: [{ page: 'ops', label: '运营数据', icon: 'chart' }] },
-  { id: 'system', label: '系统', items: [{ page: 'members', label: '管理员与权限', icon: 'shield' }] },
+  {
+    id: 'system',
+    label: '系统',
+    items: [
+      { page: 'models', label: '模型与价格', icon: 'sliders' },
+      { page: 'members', label: '管理员与权限', icon: 'shield' },
+    ],
+  },
 ];
 
 /**
@@ -69,6 +77,8 @@ export type NavAccess = {
   metrics: boolean;
   /** CHAT_REVIEW_ENABLED and this page has the client for 测试对话. Absent = off. */
   conversations?: boolean;
+  /** This page was given a client for 模型与价格. Any administrator may read it (saving is decided by the server and `canManage`). */
+  models?: boolean;
 };
 export const PAGES: readonly AdminPage[] = [...navTree().flatMap((g) => g.items.map((i) => i.page)), 'account'];
 export const isAdminPage = (value: string): value is AdminPage => (PAGES as readonly string[]).includes(value);
@@ -95,6 +105,8 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
       return access.metrics && owner;
     case 'conversations':
       return access.conversations === true && (owner || hasConversationsPermission(permissions));
+    case 'models':
+      return access.models === true;
     case 'members':
       return owner;
   }
@@ -116,6 +128,8 @@ const ICON_PATHS: Record<string, string> = {
   chart: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
   shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
   chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  sliders:
+    '<path d="M5 4v16M12 4v16M19 4v16"/><circle cx="5" cy="9" r="2"/><circle cx="12" cy="15" r="2"/><circle cx="19" cy="8" r="2"/>',
 };
 const icon = (name: string) =>
   `<svg class="admin-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] ?? ''}</svg>`;

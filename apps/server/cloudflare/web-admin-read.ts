@@ -1,6 +1,6 @@
 const id = '[A-Za-z0-9_-]{1,128}';
 const readOnlyAdmin = new RegExp(
-  `^/(?:admin/(?:characters/list|eval-sets/list|invites/list|members/list|metrics/stage-latency|cocreation/(?:counts|list|detail)|conversations/(?:list|detail|export)|characters/${id}/(?:detail|review-status|run-list|run-detail|preview-detail|previews-status|material-list|delete-status)))$`,
+  `^/(?:admin/(?:characters/list|eval-sets/list|invites/list|members/list|metrics/stage-latency|models/read|cocreation/(?:counts|list|detail)|conversations/(?:list|detail|export)|characters/${id}/(?:detail|review-status|run-list|run-detail|preview-detail|previews-status|material-list|delete-status)))$`,
 );
 
 /**

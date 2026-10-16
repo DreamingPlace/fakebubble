@@ -31,7 +31,8 @@ test('the nav tree is exactly the agreed groups and pages; 退出登录 and 我�
       ['角色', ['角色资料', '预演测试', '共创收件箱']],
       ['玩家', ['邀请码', '玩家授权']],
       ['运营', ['运营数据']],
-      ['系统', ['管理员与权限']],
+      // Named exception (Part 21g): 系统 → 模型与价格 is the new first page of the system group. No other assertion changed.
+      ['系统', ['模型与价格', '管理员与权限']],
     ],
   );
   assert.ok(!navMarkup().includes('退出登录') && !navMarkup().includes('我的账号'));

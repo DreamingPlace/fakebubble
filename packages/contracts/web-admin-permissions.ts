@@ -17,6 +17,12 @@ export const isCocreationPermission = (value: string): value is CocreationAdminP
  */
 export const ADMIN_CONVERSATION_PERMISSIONS = ['conversations.read'] as const;
 export type ConversationAdminPermission = (typeof ADMIN_CONVERSATION_PERMISSIONS)[number];
+/**
+ * 系统 · 模型与价格 (Part 21g): change which reply models are offered, to whom and at what points price. Reading the page needs
+ * no permission (any administrator); saving needs this one or the owner role.
+ */
+export const ADMIN_MODEL_PERMISSIONS = ['models.manage'] as const;
+export type ModelAdminPermission = (typeof ADMIN_MODEL_PERMISSIONS)[number];
 // Read legacy scoped grants without silently migrating them. New UI grants only four categories.
 export const ADMIN_PERMISSION_LIMIT = 128;
 export const ADMIN_CHARACTER_ACTIONS = [
@@ -42,6 +48,7 @@ export type AdminPermission =
   | InviteAdminPermission
   | CocreationAdminPermission
   | ConversationAdminPermission
+  | ModelAdminPermission
   | 'invites.revoke'
   | 'characters.create'
   | `characters.${CharacterAdminAction}:${string}`;
@@ -53,6 +60,7 @@ export function isAdminPermission(value: unknown): value is AdminPermission {
     (ADMIN_INVITE_PERMISSIONS as readonly string[]).includes(value) ||
     (ADMIN_COCREATION_PERMISSIONS as readonly string[]).includes(value) ||
     (ADMIN_CONVERSATION_PERMISSIONS as readonly string[]).includes(value) ||
+    (ADMIN_MODEL_PERMISSIONS as readonly string[]).includes(value) ||
     value === 'invites.revoke' ||
     value === 'characters.create' ||
     /^characters\.(read|edit|discard|preview|publish|materials|approve-materials|delete):(?:\*|[A-Za-z0-9_-]{1,128})$/.test(
@@ -98,6 +106,11 @@ export function hasConversationsPermission(grants: readonly string[]) {
   return grants.includes('conversations.read');
 }
 
+/** Saving 模型与价格 (the owner role is checked by the caller). Reading the page needs nothing. */
+export function hasModelsPermission(grants: readonly string[]) {
+  return grants.includes('models.manage');
+}
+
 export function canCreateCharacter(grants: readonly string[]) {
   return grants.includes('category.characters') || grants.includes('characters.create');
 }
@@ -123,7 +136,8 @@ export type AdminPermissionItem =
   | 'characters.create'
   | InviteAdminPermission
   | CocreationAdminPermission
-  | ConversationAdminPermission;
+  | ConversationAdminPermission
+  | ModelAdminPermission;
 /** Direct requirements only; the closure is computed. */
 export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, readonly AdminPermissionItem[]>> = {
   'characters.read': [],
@@ -142,6 +156,7 @@ export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, rea
   'cocreation.read': [],
   'cocreation.manage': ['cocreation.read'],
   'conversations.read': [],
+  'models.manage': [],
 };
 export const ADMIN_PERMISSION_ITEMS = Object.keys(ADMIN_PERMISSION_REQUIRES) as AdminPermissionItem[];
 const closure = (item: AdminPermissionItem, next: (value: AdminPermissionItem) => readonly AdminPermissionItem[]) => {

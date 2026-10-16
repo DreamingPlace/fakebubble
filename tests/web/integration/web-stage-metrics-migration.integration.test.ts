@@ -22,7 +22,7 @@ const MAIN_113 = {
 };
 // Extended for migration 120: the ledger now runs 100..122 (23 steps; Extended for migration 122).
 const ledgerVersions = Array.from({ length: 24 }, (_, i) => i + 1).concat(
-  Array.from({ length: 24 }, (_, i) => 100 + i),
+  Array.from({ length: 25 }, (_, i) => 100 + i),
 );
 
 function nodeAt113() {
@@ -140,8 +140,10 @@ test('Cloudflare runner: the 113 step is byte-for-byte what main applied; 114 is
   assert.ok(inline.hashes.includes(`113:${MAIN_113.inline}`), 'inline 113 step hash equals main');
   assert.ok(r2.hashes.includes(`113:${MAIN_113.r2}`), 'R2 113 step hash equals main');
   // 114 is now seventh from last (115, 116, 117, 118, 119 and 120 follow it). Extended for migration 120.
-  assert.equal(inline.hashes.at(-10)?.startsWith('114:'), true);
-  assert.equal(r2.hashes.at(-10)?.startsWith('114:'), true);
+  // Named exception (Part 21g, migration 124): the ledger now has 49 steps and 124 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(inline.hashes.at(-11)?.startsWith('114:'), true);
+  assert.equal(r2.hashes.at(-11)?.startsWith('114:'), true);
   assert.deepEqual(inline.ledger, ledgerVersions);
   assert.deepEqual(r2.ledger, ledgerVersions);
 });
@@ -151,7 +153,7 @@ test('Cloudflare runner: both authorities create 114 after 113; Worker vars are 
   const inline = await f.call<Record<string, unknown>>('/inline?object=inline');
   assert.equal(inline.metrics, true);
   // user_version is 120 now that the memory-metrics step exists (Extended for migration 120).
-  assert.deepEqual(inline.version, { user_version: 123 });
+  assert.deepEqual(inline.version, { user_version: 124 });
   assert.equal(inline.mediaIdNotNull, 0);
   assert.deepEqual(inline.concurrency, {
     maxTextRunning: 20,
@@ -162,7 +164,7 @@ test('Cloudflare runner: both authorities create 114 after 113; Worker vars are 
   });
   const r2 = await f.call<Record<string, unknown>>('/r2?object=r2');
   assert.equal(r2.metrics, true);
-  assert.deepEqual(r2.version, { user_version: 123 });
+  assert.deepEqual(r2.version, { user_version: 124 });
   assert.equal(r2.mediaIdNotNull, 0);
   assert.deepEqual(r2.itemTriggers, ['web_publication_items_no_delete', 'web_publication_items_no_update']);
   assert.deepEqual(r2.ledger, ledgerVersions);
@@ -200,18 +202,19 @@ test('Cloudflare runner: an existing authority at 113 upgrades to 114 through th
     assert.equal(result.before.at(-1)?.startsWith('113:'), true, mode);
     assert.deepEqual(result.after.slice(0, 38), result.before, `${mode}: applied steps are untouched`);
     // Extended for migration 120: opening the authority also applies 116 to 120 after 114 and 115.
-    assert.equal(result.after.length, 48, mode);
-    assert.equal(result.after.at(-10)?.startsWith('114:'), true, mode);
-    assert.equal(result.after.at(-9)?.startsWith('115:'), true, mode);
-    assert.equal(result.after.at(-8)?.startsWith('116:'), true, mode);
-    assert.equal(result.after.at(-7)?.startsWith('117:'), true, mode);
-    assert.equal(result.after.at(-6)?.startsWith('118:'), true, mode);
-    assert.equal(result.after.at(-5)?.startsWith('119:'), true, mode);
-    assert.equal(result.after.at(-4)?.startsWith('120:'), true, mode);
-    assert.equal(result.after.at(-3)?.startsWith('121:'), true, mode);
-    assert.equal(result.after.at(-2)?.startsWith('122:'), true, mode);
-    assert.equal(result.after.at(-1)?.startsWith('123:'), true, mode); // Extended for migration 123: the newest step is last.
-    assert.deepEqual(result.version, { user_version: 123 }, mode);
+    assert.equal(result.after.length, 49, mode);
+    assert.equal(result.after.at(-11)?.startsWith('114:'), true, mode);
+    assert.equal(result.after.at(-10)?.startsWith('115:'), true, mode);
+    assert.equal(result.after.at(-9)?.startsWith('116:'), true, mode);
+    assert.equal(result.after.at(-8)?.startsWith('117:'), true, mode);
+    assert.equal(result.after.at(-7)?.startsWith('118:'), true, mode);
+    assert.equal(result.after.at(-6)?.startsWith('119:'), true, mode);
+    assert.equal(result.after.at(-5)?.startsWith('120:'), true, mode);
+    assert.equal(result.after.at(-4)?.startsWith('121:'), true, mode);
+    assert.equal(result.after.at(-3)?.startsWith('122:'), true, mode);
+    assert.equal(result.after.at(-2)?.startsWith('123:'), true, mode);
+    assert.equal(result.after.at(-1)?.startsWith('124:'), true, mode); // Extended for migration 124: the newest step is last.
+    assert.deepEqual(result.version, { user_version: 124 }, mode);
     assert.equal(result.metrics && result.discardedColumn, true, mode);
   }
   await f.restart();

@@ -216,6 +216,10 @@ export class WebGenerationService extends WorkerEntrypoint<WebGenerationEnvironm
     ensure(this.env.EXTERNAL_CALLS === 'true', 'WEB_PROVIDER_LIVE_OPT_IN_REQUIRED');
     return new WebIsolatedGenerationSession(this.env);
   }
+  /** Presence of the optional text-provider keys, as booleans: the keys themselves never leave this Worker. */
+  modelKeys() {
+    return { xai: !!this.env.XAI_API_KEY?.trim(), gemini: !!this.env.GEMINI_API_KEY?.trim() };
+  }
   fetch() {
     return new Response(null, { status: 404 });
   }
