@@ -241,13 +241,15 @@ test('one world with every kind of principal and every feature table: sweep() an
 
   assert.deepEqual(await f.fixture<Sweep>('/fixture/world/sweep'), { processed: 4, failed: 0, error: null });
   assert.deepEqual(await f.fixture('/fixture/world/reports'), [], 'no sweep report');
-  // The only deletion reports are the two blocked ones above (C, D), each naming the fixed code and where it stopped.
+  // (The fixture's own alarm may also have retried the blocked C and D as 'sweep' reports.) The only deletion reports are the two blocked ones above (C, D), each naming the fixed code and where it stopped.
   assert.deepEqual(
     (
       await f.fixture<{ step: string; code: string; phase: string; sub: string; principalKind: string }[]>(
         '/fixture/retention-reports',
       )
-    ).map((r) => [r.step, r.code, r.phase, r.sub, r.principalKind]),
+    )
+      .filter((r) => r.step === 'deletion')
+      .map((r) => [r.step, r.code, r.phase, r.sub, r.principalKind]),
     [
       ['deletion', 'WEB_RETENTION_SCOPE_UNSAFE', 'clearDatabase', 'scope', 'guest'],
       ['deletion', 'WEB_RETENTION_SCOPE_UNSAFE', 'clearDatabase', 'scope', 'invite'],
