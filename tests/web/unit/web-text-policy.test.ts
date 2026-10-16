@@ -22,9 +22,12 @@ import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server
 // Part 18c (named exception, the only change to this file): the review's accept/reject rule is stated unambiguously
 // (a rewrite is accept + replacementBubbles; reject only with no replacement) and both prompts carry the form-of-address
 // rule (prompt only; fingerprint unchanged): policy e31c3518…, prompt 6519b6a0….
-const POLICY_HASH = 'e31c3518fcf47ac3cb18a37b9cf42423b126977ccfd9258e2939c8b3d67652fb';
-const PROMPT_HASH = '6519b6a05e5369b5f223d26d6215cfd6c656386890a685c5276945eb860fcd6f';
-const FINGERPRINT_DIGEST = 'b42431c97a4cc92b10d8c7c215ead160884d9248397736216b5fc9273883ef99';
+// Part 21c (intentional, Drama 3): the voice draft schema gained the optional enum `soundCue` (none | small_laugh |
+// shaky_breath) on utterance and afterthoughts, and speech-draft-task.md explains it: policy a140e333…, prompt
+// 53df95a8…, fingerprint b753fb40… (was b42431c9…). Replacement bubbles from the review stay cue-free.
+const POLICY_HASH = 'a140e333d7d52daa44090318f74de1609f731d2cbcda7e1eb5924baadd2c2c68';
+const PROMPT_HASH = '53df95a8f05b4b29e0513e21ba77fd695d287e6f4086abeb862fc71d8d7e133b';
+const FINGERPRINT_DIGEST = 'b753fb4057ca9e8a63884d5db6d29c7055c957202ede44759f13635619f1dae8';
 
 test('accepted-v7 policy hash, prompt hash and protocol fingerprint are pinned', () => {
   const policy = createTextGenerationPolicy();

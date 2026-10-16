@@ -7,7 +7,15 @@ import type {
 } from '../../../packages/contracts/provider-calls.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { providerRequestHash } from '../../../packages/domain/provider-request.ts';
-import type { FishModel, SpeechRequest } from '../../../packages/contracts/audio.ts';
+import {
+  DEFAULT_SITE_VOICE_MODEL,
+  isVoiceModelBinding,
+  resolveVoiceModel,
+  type FishModel,
+  type SpeechRequest,
+  type VoiceModelBinding,
+} from '../../../packages/contracts/audio.ts';
+import type { SoundCue } from '../../../packages/contracts/index.ts';
 import { FishAudio, fishSpeechRequest } from '../../../workers/audio/fish.ts';
 import { finalizeFishWav, inspectPCM, pcmLevels } from '../../../workers/audio/wav.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
@@ -82,6 +90,8 @@ export class WebProviderRunner {
   private readonly text: WebTextGenerator;
   private readonly fish: FakeFish;
   private readonly budget: WebAttemptBudget | undefined;
+  /** `FISH_VOICE_MODEL`: the model of every voice binding that is not pinned. */
+  private readonly siteVoiceModel: FishModel;
   private readonly recovery: Promise<void>;
   private recovered: boolean;
   /** Memory embeddings (indexing and reply-time query embedding); absent unless the deployment enables them. */
@@ -93,7 +103,9 @@ export class WebProviderRunner {
     fish: FakeFish,
     budget?: WebAttemptBudget,
     embed?: { provider: EmbeddingProvider; config?: WebEmbedConfig },
+    options: { voiceModel?: FishModel } = {},
   ) {
+    this.siteVoiceModel = options.voiceModel ?? DEFAULT_SITE_VOICE_MODEL;
     this.store = store;
     this.clock = clock;
     this.text = text;
@@ -282,14 +294,14 @@ export class WebProviderRunner {
       voice_revision: number;
       profile_id: string;
       reference_id: string;
-      model: FishModel;
+      model: VoiceModelBinding;
       approved: number;
       source: string;
     }>('SELECT * FROM web_provider_voice_bindings WHERE character_id=?', scope.characterId);
     ensure(
       voice?.approved === 1 &&
         ['synthetic_fixture', 'user_selected'].includes(voice.source) &&
-        ['s2.1-pro', 's2-pro'].includes(voice.model) &&
+        isVoiceModelBinding(voice.model) &&
         voice.voice_version === row.voice_version &&
         claim.voiceVersion === row.voice_version,
       'WEB_PROVIDER_VOICE_UNAPPROVED',
@@ -312,10 +324,12 @@ export class WebProviderRunner {
     ensure(candidate, 'WEB_PROVIDER_CANDIDATE_INVALID');
     const bubble = (
       JSON.parse(candidate.candidate_json) as {
-        bubbles: { text: string; expression: SpeechRequest['expression'] }[];
+        bubbles: { text: string; expression: SpeechRequest['expression']; soundCue?: SoundCue }[];
       }
     ).bubbles[key.ordinal];
     ensure(bubble && typeof bubble.text === 'string', 'WEB_PROVIDER_CANDIDATE_INVALID');
+    // The binding is a pin or "unpinned"; the model actually sent (and reserved, priced, hashed) is resolved once, here.
+    const model = resolveVoiceModel(voice.model, this.siteVoiceModel);
     const deliveryStyle = checkWebV7SceneAtDispatch(this.store as WebStore, claim.operationId, this.clock.now());
     const speech: SpeechRequest = {
       jobId: `${claim.operationId}-${key.ordinal}`,
@@ -323,12 +337,13 @@ export class WebProviderRunner {
       expression: bubble.expression,
       speed: 1,
       voice: { profileId: voice.profile_id, referenceId: voice.reference_id, version: voice.voice_revision },
-      model: voice.model,
+      model,
       // The user heard and selected these voices with Fish quality-guard on (verified on import).
       ...(voice.source === 'user_selected' ? { qualityGuard: true } : {}),
       deliveryStyle,
+      ...(bubble.soundCue === undefined ? {} : { soundCue: bubble.soundCue }),
     };
-    const prepared = fishSpeechRequest(speech, voice.model);
+    const prepared = fishSpeechRequest(speech, model);
     const { body, bytes: maxUnits, requestHash: wireRequestHash } = prepared;
     this.ledger.reserveForClaim(claim, {
       ...key,
@@ -336,13 +351,13 @@ export class WebProviderRunner {
       requestDigest: row.request_digest,
       policyHash: providerRequestHash(
         'fish://offline-policy',
-        voice.model,
+        model,
         JSON.stringify([voice.profile_id, voice.reference_id, voice.voice_version]),
       ),
       wireRequestHash,
       voiceVersion: row.voice_version,
       provider: 'fish',
-      model: voice.model,
+      model: model,
       maxUnits,
     });
     await this.budget?.beginAttempt(this.store, key, this.ledger.isRewound(key));
@@ -353,7 +368,7 @@ export class WebProviderRunner {
     let storingAudio = false;
     try {
       const result = await this.fish(
-        { body, wireRequestHash, model: voice.model, billedTextBytes: maxUnits, speech },
+        { body, wireRequestHash, model: model, billedTextBytes: maxUnits, speech },
         signal,
         () => {
           ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
@@ -400,7 +415,7 @@ export class WebProviderRunner {
       // without bounded usage remain UNKNOWN; neither case permits regeneration.
       if (
         error instanceof SpeechFailure &&
-        error.generation.model === voice.model &&
+        error.generation.model === model &&
         error.generation.inputUTF8Bytes === maxUnits &&
         error.generation.inputCharacters === [...bubble.text].length
       )

@@ -1,5 +1,5 @@
 import type { BubblePresentationCheck, DialogueBubble, DialogueCandidate } from '../contracts/index.ts';
-import { EXPRESSIONS } from '../contracts/index.ts';
+import { EXPRESSIONS, SOUND_CUES } from '../contracts/index.ts';
 import { DomainError, ensure } from './errors.ts';
 
 interface BubbleLimits {
@@ -57,7 +57,8 @@ export function inspectBubbles(value: unknown, limits: BubbleLimits): BubblePres
       issue('bubble_shape');
       continue;
     }
-    if (Object.keys(bubble).sort().join(',') !== 'expression,text') issue('bubble_shape');
+    const keys = Object.keys(bubble).sort().join(',');
+    if (keys !== 'expression,text' && keys !== 'expression,soundCue,text') issue('bubble_shape');
     if (typeof bubble.text !== 'string') {
       check.charactersPerBubble.push(null);
       issue('text_type');
@@ -70,6 +71,7 @@ export function inspectBubbles(value: unknown, limits: BubbleLimits): BubblePres
       if (/[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F]/u.test(bubble.text)) issue('control_character');
     }
     if (!EXPRESSIONS.some((expression) => expression === bubble.expression)) issue('expression');
+    if (Object.hasOwn(bubble, 'soundCue') && !SOUND_CUES.some((cue) => cue === bubble.soundCue)) issue('sound_cue');
   }
   if (value.length <= maxInspected && check.charactersPerBubble.every((length) => length !== null)) {
     check.totalCharacters = check.charactersPerBubble.reduce<number>((sum, length) => sum + length!, 0);
@@ -88,5 +90,9 @@ export class BubbleValidationError extends DomainError {
 export function validatedBubbles(value: unknown, limits: BubbleLimits): DialogueBubble[] {
   const check = inspectBubbles(value, limits);
   if (check.issues.length) throw new BubbleValidationError(check);
-  return (value as DialogueBubble[]).map(({ text, expression }) => ({ text, expression }));
+  return (value as DialogueBubble[]).map(({ text, expression, soundCue }) => ({
+    text,
+    expression,
+    ...(soundCue === undefined ? {} : { soundCue }),
+  }));
 }

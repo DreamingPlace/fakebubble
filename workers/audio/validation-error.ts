@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import type { SpeechResult } from '../../packages/contracts/audio.ts';
+import { isFishModel, type SpeechResult } from '../../packages/contracts/audio.ts';
 import { DomainError, ensure } from '../../packages/domain/errors.ts';
 
 export type AudioGeneration = Pick<
@@ -19,7 +19,7 @@ export function audioGeneration(value: unknown): AudioGeneration {
   const v = value as Record<string, unknown>;
   ensure(
     v.provider === 'fish' &&
-      (v.model === 's2.1-pro' || v.model === 's2-pro') &&
+      isFishModel(v.model) &&
       Number.isSafeInteger(v.elapsedMs) &&
       Number(v.elapsedMs) >= 0 &&
       Number(v.elapsedMs) <= 300_000 &&

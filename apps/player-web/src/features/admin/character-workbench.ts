@@ -855,6 +855,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       field(section, '已有 Fish 音色 referenceId', '', { max: 128 }),
       () => dirty || pending.has(key) || !can('materials'),
     );
+    // Replies follow the site voice model (FISH_VOICE_MODEL). Pin only when this clone sounds wrong on Drama 3.
+    const pinS21 = guarded(
+      check(section, '固定使用 s2.1-pro：这个克隆在 Drama 3 上听起来不对时勾选，不随站点语音模型切换'),
+      () => dirty || pending.has(key) || !can('materials'),
+    );
     button(
       section,
       () => (pending.has(key) ? '按原请求核对素材准备' : '准备新素材版本'),
@@ -867,7 +872,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
             draftRevision: saved.revision,
             profileHash: saved.contentHash,
             referenceId: reference.value.trim(),
-            model: 's2.1-pro',
+            model: pinS21.checked ? 'pin:s2.1-pro' : 's2.1-pro',
           },
           (input) => host.api.prepareMaterial(target, input),
         );

@@ -206,6 +206,18 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **账号删除怎么保证安全（`ACCOUNT_DELETE_ENABLED`）：** `POST /account/delete`，体 `{ "password", "confirm" }`；有登录的玩家必须提供密码并输入“删除”，没有登录的访客 `password` 为空串、`confirm` 为“清除”；没有登录的受邀玩家不能用这个入口（先绑定邮箱）。CSRF / 来源检查、一次一用的会话校验与登录一致；错误密码计入与改密码相同的限流（每个玩家 15 分钟 5 次）并按 IP 限流（30 次）。在**一个事务**里：撤销受邀玩家的授权、凭据和回执，结束该玩家的全部会话，写一条审计（`web_admin_audit`：动作名 + 玩家的 HMAC 假名前 16 位 + 时间，不含内容、邮箱、昵称或 id），并开始清理的 T1（隔离内容、释放预占，运行中的操作按原规则收尾，UNKNOWN 的外部调用保持 UNKNOWN，不重试、不释放）。事务提交后同一请求继续 T2（清库）与 F（删 R2 语音）；这两步任何失败都不会让删除变成报错——保留状态是 `purging`，闹钟会接着完成。清理后的审计（`auditWebLifecycleWorld`）对受邀玩家额外要求：世界里不能留下未撤销的授权；已撤销的授权行只留 id 与时间，作为 `shells`。
 
+### Drama 3 回复语音（Part 21c）
+
+- **开关：** 业务对象变量 `FISH_VOICE_MODEL`（`workers/web-cloudflare/deploy/business.json.example`），默认 `s2.1-pro`，即行为与之前完全一致；staging 设为 `drama-3`。只接受这两个值，其他值（包括 `drama`、`drama-3-preview`）在业务对象启动时直接拒绝（`INVALID_FISH_VOICE_MODEL`），因为 Fish 对无法识别的 `model` 头不报错而是悄悄改用 s2.1-pro。核实结果与链接见 `docs/PROVIDERS.md`：当前文档里的值是 `drama-3`，不是 `drama-3-preview`。
+- **逐角色：** 声音绑定里存的 `model`：`s2.1-pro`（含此前所有绑定）跟随站点默认；`pin:s2.1-pro` 固定回 s2.1-pro；`drama-3` 固定用 Drama 3。管理工作台“声音成品版本”里勾选“固定使用 s2.1-pro”即可把某个角色钉回去（克隆音色在 Drama 3 上不对时用）。这些值存进已有的自由文本 `model` 列，**没有新迁移**：`expected-migrations` 仍是 47 步（inline 与 R2 各 47），与 main 逐字节相同。
+- **欢迎／结束成品**始终以 s2.1-pro 渲染并保持原样，不随开关变化。
+- **价格：** `PROVIDER_PRICES` 新增 `fish / drama-3 / speech / byte`，上限 15 micros/字节（与 s2.1 相同；列表价 $10/百万字符，但悄悄回退到 s2.1-pro 时无法从返回得知）。**已部署的实例要先运行 `renew-prices` 才有 drama-3 的价格行**；没有价格行时 Drama 3 回复在预留阶段失败（`WEB_PROVIDER_PRICE_REQUIRED`），不会发出调用。新实例的 `migrate` 自动写入。
+- **打开顺序（staging）：** 1）`renew-prices`；2）用 `pnpm voice:samples` 在 staging 上各生成一份 s2.1-pro 与 drama-3 的试听，确认 24 kHz WAV 可用、克隆音色听起来正确（文档未明确说明克隆音色与采样率）；3）把 `FISH_VOICE_MODEL` 改为 `drama-3` 并部署；4）个别角色听起来不对就在工作台钉回 s2.1-pro。回退：把变量改回 `s2.1-pro`。
+- **本地真实供应商模式（`scripts/web-provider.ts serve --live`）仍只用 s2.1-pro**：它的 Fish 客户端固定为 s2.1-pro，遇到解析为 `drama-3` 的绑定会以 `WEB_PROVIDER_WIRE_MISMATCH` 关闭失败，不会调用。Drama 3 只在 Cloudflare 业务对象上通过 `FISH_VOICE_MODEL` 打开。
+- **试听脚本：** `pnpm voice:samples <provider-root> <env-dir> <输出目录> --live [--model=s2.1-pro|drama-3]`。每个已批准角色音色 × 10 种 expression 各一条（固定文案，不读取任何玩家、对话或记忆数据，只读声音绑定与价格），写到 `<输出目录>/<角色>/<expression>.<model>.wav` 与 `manifest.<model>.json`。模型默认读 `.env.voice` 的 `FISH_VOICE_MODEL`。它花真钱：先预留共享预算再调用，UNKNOWN 不重发、占用不释放，已付费的片段重跑时直接复用；输出目录必须为空。
+- **声音提示 `soundCue`：** 语音草稿（utterance 与每条 afterthought）多一个可选枚举 `soundCue`（`none` / `small_laugh` / `shaky_breath`），由服务器渲染成文档里写明的 `[small laugh]` / `[shaky breath]`，仅 Drama 3 生效，s2.1 声音忽略。模型不写括号或标签；`[ ] < >` 在所有模型与玩家文字中仍被拒绝（`AUDIO_CONTROL_MARKER_FORBIDDEN`）；气泡显示文字从不含标签。复核阶段的替换气泡不带 `soundCue`。
+- **提示词哈希变更（有意）：** 语音草稿 schema 与 `speech-draft-task.md` 改动使 prompt 哈希 `6519b6a0…cd6f`→`53df95a8…133b`，policy 哈希 `e31c3518…52fb`→`a140e333…2c68`，协议指纹 `b42431c9…ef99`→`b753fb40…dae8`。已存的预演与发布批准内嵌这些哈希，**部署后需重新预演并批准**。
+
 ## 私有运维工具
 
 `scripts/web-cloudflare-operator.ts` 需要显式 `CLOUDFLARE_ACCOUNT_ID`，以及指向已安装 Wrangler 模块的绝对路径 `FAKE_WEB_WRANGLER_MODULE`。它只使用绑定到业务/预算 Worker 的认证 RPC。服务名默认为 `fakebubble-business` / `fakebubble-budget`；部署使用其他名称（例如 `fake-paopao-web-business` / `fake-paopao-web-budget`）时，必须显式传入 `--business-service=<名称>` 与 `--budget-service=<名称>`（均须匹配 `/^[a-z0-9-]{1,63}$/`，任何操作都可携带，缺省即默认名称）。每条收据都会记录目标服务名（`target.businessService` / `target.budgetService`，以及本次操作实际使用的 `worker`）；收据永远不会被续写或覆盖（独占创建，已存在即 `EEXIST`），而且若已存在的收据记录的目标与当前参数不同，工具会先以 `WEB_OPERATOR_RECEIPT_TARGET_MISMATCH` 拒绝，不会打开任何绑定。记录目标之前写下的旧收据按其 `worker` 名称比较。

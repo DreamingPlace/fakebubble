@@ -13,6 +13,7 @@
     "prompts:build": "node scripts/build-prompts.ts",
     "prompts:check": "node scripts/build-prompts.ts --check",
     "check": "pnpm format:check && pnpm prompts:check && pnpm typecheck && pnpm test",
+    "voice:samples": "node scripts/voice-samples.ts",
     "web:local": "node scripts/web-v1.ts",
     "web:player:build": "node scripts/build-web-player.ts",
     "web:preview": "node scripts/preview-web.ts",

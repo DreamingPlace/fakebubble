@@ -96,9 +96,18 @@ export const EXPRESSIONS = [
   'surprised',
 ] as const;
 export type Expression = (typeof EXPRESSIONS)[number];
+/**
+ * Whitelist of one-shot sound cues the draft model may pick per spoken bubble. The server alone renders a cue into the
+ * speech payload (Drama 3 only); the model never writes brackets or tags. Only tags spelled out in the Drama 3 docs are
+ * listed (docs/PROVIDERS.md): add one only after verifying its spelling.
+ */
+export const SOUND_CUES = ['small_laugh', 'shaky_breath'] as const;
+export type SoundCue = (typeof SOUND_CUES)[number];
 export interface DialogueBubble {
   text: string;
   expression: Expression;
+  /** Optional; never part of the displayed text. */
+  soundCue?: SoundCue;
 }
 export interface TopicCandidate {
   key: string;
@@ -255,6 +264,7 @@ export interface BubblePresentationCheck {
       | 'line_break'
       | 'control_character'
       | 'expression'
+      | 'sound_cue'
       | 'total_length';
     bubbleIndex?: number;
   }[];

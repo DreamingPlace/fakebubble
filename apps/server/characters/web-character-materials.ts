@@ -1,3 +1,4 @@
+import { PINNED_S21_BINDING } from '../../../packages/contracts/audio.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { SYNTHETIC_TRIAL_FOOTER } from '../conversation/web-vertical-publisher.ts';
@@ -175,7 +176,7 @@ export class WebCharacterMaterials {
         Number(input.draftRevision) > 0 &&
         typeof input.profileHash === 'string' &&
         /^[a-f0-9]{64}$/.test(input.profileHash) &&
-        input.model === 's2.1-pro',
+        (input.model === 's2.1-pro' || input.model === PINNED_S21_BINDING || input.model === 'drama-3'),
       'INVALID_MATERIAL_REQUEST',
     );
     const requestId = input.requestId,

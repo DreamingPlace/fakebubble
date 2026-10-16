@@ -35,6 +35,7 @@ import {
 } from '../../apps/server/cloudflare/web-inspect.ts';
 import { webPublicFromEnv, type WebPublicConfig } from '../../config/web-public.ts';
 import { webConcurrencyFromEnv, webDailyReplyLimitFromEnv } from '../../config/web-concurrency.ts';
+import { siteVoiceModelFromEnv } from '../../config/web-voice-model.ts';
 import { embeddingsEnabled, webEmbedConfigFromEnv, type WebEmbedConfig } from '../../config/web-embeddings.ts';
 import type { WebBudgetPolicy } from '../../apps/server/budget/web-provider-budget-contract.ts';
 import {
@@ -67,6 +68,8 @@ export interface WebBusinessEnvironment {
   BUDGET_POLICY?: string;
   PUBLIC_ENABLED?: string;
   EXTERNAL_CALLS?: string;
+  /** Model of every voice that is not pinned: `s2.1-pro` (default) or `drama-3`. Invalid values refuse to start. */
+  FISH_VOICE_MODEL?: string;
   OPERATOR_ENABLED?: string;
   /** Stage concurrency (decimal strings); validated at construction, absent means the deployment default. */
   MAX_TEXT_RUNNING?: string;
@@ -380,6 +383,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           this.embedConfig
             ? { provider: webCloudEmbeddings(this.env.GENERATION), config: this.embedConfig }
             : undefined,
+          { voiceModel: siteVoiceModelFromEnv(this.env.FISH_VOICE_MODEL) },
         );
         await runner.whenReady();
         app.characterAdmin.enablePreviews(new WebCharacterPreviews(this.store, this.clock));

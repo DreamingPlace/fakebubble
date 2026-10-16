@@ -13,6 +13,9 @@ export const PROVIDER_PRICES = [
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.draft, phase: 'draft', unit: 'token', upper: 2 },
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.review, phase: 'review', unit: 'token', upper: 4 },
   { provider: 'fish', model: 's2.1-pro', phase: 'speech', unit: 'byte', upper: 15 },
+  // Drama 3 lists at $10/M characters, but an unrecognised model header silently serves s2.1-pro, so the ledger reserves
+  // the s2.1 upper bound.
+  { provider: 'fish', model: 'drama-3', phase: 'speech', unit: 'byte', upper: 15 },
 ] as const;
 export const PROVIDER_LIMIT_MICROS = 3_000_000;
 const PRICE_VALID_MS = 30 * 86_400_000;
@@ -100,7 +103,7 @@ export function configureWebProvider(
       ledger.configureBudget(provider, policy === 'production-unlimited' ? null : PROVIDER_LIMIT_MICROS);
     for (const price of PROVIDER_PRICES)
       ledger.configurePrice({
-        id: `${price.provider}-${price.phase}-${now}`,
+        id: `${price.provider}-${price.model}-${price.phase}-${now}`,
         provider: price.provider,
         model: price.model,
         phase: price.phase,

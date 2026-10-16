@@ -1366,7 +1366,7 @@ function seedInitialPrices(f: ReturnType<typeof fixture>, validDays = 30) {
   for (const provider of ['deepseek', 'fish']) f.ledger.configureBudget(provider, 3_000_000);
   for (const price of PROVIDER_PRICES)
     f.ledger.configurePrice({
-      id: `${price.provider}-${price.phase}-${now}`,
+      id: `${price.provider}-${price.model}-${price.phase}-${now}`,
       provider: price.provider,
       model: price.model,
       phase: price.phase,
@@ -1395,7 +1395,7 @@ test('renew appends contiguous, non-overlapping rows, keeps the old rows byte fo
   const first = renewProviderPrices(f.store as never, now + DAY);
   assert.deepEqual(
     first.map((r) => r.result),
-    ['renewed', 'renewed', 'renewed'],
+    PROVIDER_PRICES.map(() => 'renewed'),
   );
   const after = priceRows(f);
   assert.equal(after.length, before.length * 2);
@@ -1414,11 +1414,11 @@ test('renew appends contiguous, non-overlapping rows, keeps the old rows byte fo
   // A retry (even much later, still inside the new window) is not due and adds nothing.
   assert.deepEqual(
     renewProviderPrices(f.store as never, now + DAY).map((r) => r.result),
-    ['not-due', 'not-due', 'not-due'],
+    PROVIDER_PRICES.map(() => 'not-due'),
   );
   assert.deepEqual(
     renewProviderPrices(f.store as never, now + 29 * DAY).map((r) => r.result),
-    ['not-due', 'not-due', 'not-due'],
+    PROVIDER_PRICES.map(() => 'not-due'),
   );
   assert.deepEqual(priceRows(f), after);
 });
@@ -1441,7 +1441,7 @@ test('an already expired price gets a row that starts now, and the expired row i
   const later = now + 45 * DAY;
   assert.ok(renewProviderPrices(f.store as never, later).every((r) => r.result === 'renewed' && r.validFrom === later));
   const added = priceRows(f).filter((r) => r.version === 2);
-  assert.equal(added.length, 3);
+  assert.equal(added.length, PROVIDER_PRICES.length);
   assert.ok(added.every((r) => r.valid_from === later && r.valid_until === later + 90 * DAY));
   assert.deepEqual(
     priceRows(f).filter((r) => r.version === 1),

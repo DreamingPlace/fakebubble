@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
-import type { FishModel } from '../../../packages/contracts/audio.ts';
+import { isFishModel, type FishModel } from '../../../packages/contracts/audio.ts';
 
 const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const id = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -56,7 +56,7 @@ export function verifyVoiceMaterialEvidence(input: {
       id(selection.profile.referenceId) &&
       Number.isSafeInteger(selection.profile.version) &&
       selection.profile.version > 0 &&
-      ['s2.1-pro', 's2-pro'].includes(selection.profile.model) &&
+      isFishModel(selection.profile.model) &&
       /^[a-f0-9]{64}$/.test(selection.referenceSHA256) &&
       selection.boundaries?.newUpload === false &&
       selection.boundaries?.automaticallyBindOtherCharacters === false,
@@ -173,7 +173,7 @@ export function verifySelectedVoiceSetup(files: SelectedVoiceFiles, pinned: Sele
         id(profile.referenceId) &&
         Number.isSafeInteger(profile.version) &&
         profile.version > 0 &&
-        ['s2.1-pro', 's2-pro'].includes(profile.model) &&
+        isFishModel(profile.model) &&
         Number.isSafeInteger(voice.approvedAt) &&
         template?.id === characterId &&
         template.version === published.version &&

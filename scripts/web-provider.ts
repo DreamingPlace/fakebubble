@@ -139,8 +139,8 @@ function deepSeekEnvironment(path: string, inherited: NodeJS.ProcessEnv = proces
   );
 }
 
-function voiceEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return selectedEnvironment(path, ['FISH_API_KEY', 'FISH_MODEL'], inherited);
+export function voiceEnvironment(path: string, inherited: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return selectedEnvironment(path, ['FISH_API_KEY', 'FISH_MODEL', 'FISH_VOICE_MODEL'], inherited);
 }
 
 /** Workers AI REST credentials for memory embeddings (.env.embed, same private-file rules as .env and .env.voice). */

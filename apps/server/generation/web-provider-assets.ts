@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
-import type { SpeechRequest, SpeechResult } from '../../../packages/contracts/audio.ts';
+import { isVoiceModelBinding, type SpeechRequest, type SpeechResult } from '../../../packages/contracts/audio.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { fishSpeechRequest } from '../../../workers/audio/fish.ts';
 import { finalizeFishWav } from '../../../workers/audio/wav.ts';
@@ -38,7 +38,8 @@ export async function renderProviderAssets(
         )
       )
         continue;
-      ensure(binding.model === 's2.1-pro', 'WEB_PROVIDER_VOICE_UNAPPROVED');
+      // The welcome and footer clips stay as recorded: always s2.1-pro, whatever model replies use.
+      ensure(isVoiceModelBinding(binding.model), 'WEB_PROVIDER_VOICE_UNAPPROVED');
       const body = kind === 'welcome' ? WEB_PROVIDER_WELCOME[binding.character_id].text : SYNTHETIC_TRIAL_FOOTER;
       const speech: SpeechRequest = {
         jobId: `asset-${kind}-${binding.character_id}`,
@@ -48,9 +49,9 @@ export async function renderProviderAssets(
         qualityGuard: true,
         deliveryStyle: 'conversational',
         voice: { profileId: binding.profile_id, referenceId: binding.reference_id, version: binding.voice_revision },
-        model: binding.model,
+        model: 's2.1-pro',
       };
-      const prepared = fishSpeechRequest(speech, binding.model);
+      const prepared = fishSpeechRequest(speech, 's2.1-pro');
       const id = JSON.stringify([instance.instance_id, 'asset', binding.character_id, kind, binding.voice_version]);
       const fingerprint = createHash('sha256')
         .update(JSON.stringify([prepared.requestHash, binding.voice_version, prepared.bytes]))
@@ -65,7 +66,7 @@ export async function renderProviderAssets(
           `SELECT upper_micros_per_unit
           FROM web_provider_prices WHERE provider='fish' AND model=? AND phase='speech'
           AND unit='byte' AND currency='USD' AND valid_from<=? AND valid_until>?`,
-          binding.model,
+          's2.1-pro',
           clock.now(),
           clock.now(),
         );
@@ -73,10 +74,7 @@ export async function renderProviderAssets(
         budget.reserve(id, 'fish', fingerprint, prepared.bytes * price.upper_micros_per_unit);
         // Any error, including a missing/invalid receipt, keeps the hold and blocks a resend.
         const result = await generate(speech, new AbortController().signal);
-        ensure(
-          result.inputUTF8Bytes === prepared.bytes && result.model === binding.model,
-          'WEB_PROVIDER_USAGE_MISMATCH',
-        );
+        ensure(result.inputUTF8Bytes === prepared.bytes && result.model === 's2.1-pro', 'WEB_PROVIDER_USAGE_MISMATCH');
         audio = finalizeFishWav(result.audio).audio;
         budget.settle(
           id,

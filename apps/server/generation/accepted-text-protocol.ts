@@ -1,6 +1,6 @@
 // Accepted v7 baseline from 初v.0.0.0911; kept separate from the deferred v8–v10 experiment.
 import type { DialogueCandidate, TextGenerationRequest } from '../../../packages/contracts/index.ts';
-import { EXPRESSIONS } from '../../../packages/contracts/index.ts';
+import { EXPRESSIONS, SOUND_CUES } from '../../../packages/contracts/index.ts';
 import { dialogueCandidate, importanceValue, topicKey } from '../../../packages/domain/dialogue.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import {
@@ -33,14 +33,24 @@ const draftSchema = objectSchema({
   bubbles: array(bubbleSchema),
   endsSession: { type: 'boolean' },
 });
+// Strict structured output has no optional keys: "none" is the optional enum's absent value and is dropped on parse.
+const spokenBubbleSchema = objectSchema({
+  text: string,
+  expression: { type: 'string', enum: EXPRESSIONS },
+  soundCue: {
+    type: 'string',
+    enum: ['none', ...SOUND_CUES],
+    description: '可选的一个声音提示，整段话至多一次；不需要就填none。不要在text里写任何方括号或标签。',
+  },
+});
 const speechDraftSchema = objectSchema({
   mode: { type: 'string', enum: ['casual', 'conflict_apology'] },
   utterance: {
-    ...bubbleSchema,
+    ...spokenBubbleSchema,
     description: '这一刻自然说出口的一段话。完整表达当前意思；短应声也可以，不为分条截断句子。',
   },
   afterthoughts: {
-    ...array(bubbleSchema),
+    ...array(spokenBubbleSchema),
     description: '只有说完后确实另补一句或转换情绪才填写；没有补充用空数组，不续写上一条没说完的句子。',
   },
   endsSession: { type: 'boolean' },
@@ -218,11 +228,16 @@ export function parseTextDraft(value: unknown, request: TextGenerationRequest): 
       Array.isArray(value.afterthoughts) && value.afterthoughts.length < DRAFT_BUBBLE_LIMITS.maxBubbles,
       'INVALID_BUBBLES',
     );
-    return parsePresentation(
-      { mode: value.mode, bubbles: [value.utterance, ...value.afterthoughts], endsSession: value.endsSession },
-      request,
-      'draft',
+    // "none" only means no cue; any other value (or a key on a text-delivery bubble) is validated strictly downstream.
+    const spoken = [value.utterance, ...value.afterthoughts].map((bubble) =>
+      bubble &&
+      typeof bubble === 'object' &&
+      !Array.isArray(bubble) &&
+      (bubble as Record<string, unknown>).soundCue === 'none'
+        ? Object.fromEntries(Object.entries(bubble).filter(([key]) => key !== 'soundCue'))
+        : bubble,
     );
+    return parsePresentation({ mode: value.mode, bubbles: spoken, endsSession: value.endsSession }, request, 'draft');
   }
   return parsePresentation(value, request, 'draft');
 }
