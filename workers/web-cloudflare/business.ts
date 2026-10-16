@@ -5,6 +5,7 @@ import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-char
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
+import { operatorProof, requireOperatorProof } from '../../apps/server/cloudflare/operator-proof.ts';
 import { safeError } from '../../apps/server/cloudflare/safe-error.ts';
 import type { WebGenerationBinding } from '../../packages/contracts/web-generation-rpc.ts';
 import { WebDurableStore } from '../../apps/server/cloudflare/web-store.ts';
@@ -260,15 +261,16 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         clock: this.clock,
       });
   }
-  private operator() {
-    ensure(this.env.OPERATOR_ENABLED === 'true', 'WEB_CLOUD_OPERATOR_DISABLED');
+  /** The switch is NOT checked here: this object's env is fixed at instance start. See WebOperatorService. */
+  private operator(proof: string) {
+    requireOperatorProof(this.env.SEAL_KEY, proof);
   }
-  initialize(value: WebCloudMaterialPackage) {
-    this.operator();
+  initialize(proof: string, value: WebCloudMaterialPackage) {
+    this.operator(proof);
     return this.setup.initialize(value);
   }
-  importFixed(kind: 'welcome' | 'footer', characterId: string, bytes: Uint8Array) {
-    this.operator();
+  importFixed(proof: string, kind: 'welcome' | 'footer', characterId: string, bytes: Uint8Array) {
+    this.operator(proof);
     return this.setup.importFixed(kind, characterId, bytes);
   }
   private application() {
@@ -308,16 +310,16 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     }
     return this.app;
   }
-  adminGrant() {
-    this.operator();
+  adminGrant(proof: string) {
+    this.operator(proof);
     return this.application().inviteAdmin.issueLoginGrant();
   }
-  adminRecoveryGrant(memberId: string) {
-    this.operator();
+  adminRecoveryGrant(proof: string, memberId: string) {
+    this.operator(proof);
     return this.application().inviteAdmin.issueRecoveryGrant(memberId);
   }
-  inviteGrants(inviteId: string) {
-    this.operator();
+  inviteGrants(proof: string, inviteId: string) {
+    this.operator(proof);
     this.setup.ready();
     ensure(typeof inviteId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(inviteId), 'WEB_INVITE_UNAVAILABLE');
     ensure(this.store.get('SELECT 1 FROM web_invite_codes WHERE id=?', inviteId), 'WEB_INVITE_UNAVAILABLE');
@@ -327,17 +329,17 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       inviteId,
     );
   }
-  renewPrices() {
-    this.operator();
+  renewPrices(proof: string) {
+    this.operator(proof);
     return this.setup.renewPrices();
   }
-  async status() {
-    this.operator();
+  async status(proof: string) {
+    this.operator(proof);
     return { instanceId: this.store.instanceId, setup: this.setup.status(), budget: await this.budget() };
   }
   /** Read-only: SELECTs and one budget summary read. The constructor has already applied and verified migrations. */
-  async inspect() {
-    this.operator();
+  async inspect(proof: string) {
+    this.operator(proof);
     let budget: WebInspectBudget;
     try {
       budget = inspectBudget(await this.env.BUDGET.summary());
@@ -489,19 +491,20 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
 
 interface OperatorEnvironment {
   OPERATOR_ENABLED?: string;
+  SEAL_KEY: string;
   BUSINESS_OBJECT_ID: string;
   BUSINESS: {
     idFromName(name: string): { toString(): string };
     idFromString(id: string): unknown;
     get(id: unknown): {
-      initialize(value: WebCloudMaterialPackage): Promise<unknown>;
-      importFixed(kind: 'welcome' | 'footer', characterId: string, bytes: Uint8Array): Promise<string>;
-      adminGrant(): Promise<unknown>;
-      adminRecoveryGrant(memberId: string): Promise<unknown>;
-      inviteGrants(inviteId: string): Promise<unknown>;
-      status(): Promise<unknown>;
-      inspect(): Promise<unknown>;
-      renewPrices(): Promise<unknown>;
+      initialize(proof: string, value: WebCloudMaterialPackage): Promise<unknown>;
+      importFixed(proof: string, kind: 'welcome' | 'footer', characterId: string, bytes: Uint8Array): Promise<string>;
+      adminGrant(proof: string): Promise<unknown>;
+      adminRecoveryGrant(proof: string, memberId: string): Promise<unknown>;
+      inviteGrants(proof: string, inviteId: string): Promise<unknown>;
+      status(proof: string): Promise<unknown>;
+      inspect(proof: string): Promise<unknown>;
+      renewPrices(proof: string): Promise<unknown>;
     };
   };
 }
@@ -515,9 +518,21 @@ export class WebOperatorService extends WorkerEntrypoint<OperatorEnvironment> {
     ensure(/^[A-Za-z0-9_-]{1,128}$/.test(name), 'WEB_CLOUD_OBJECT_NAME_INVALID');
     return this.env.BUSINESS.idFromName(name).toString();
   }
+  /** The only place OPERATOR_ENABLED decides anything (this env is fresh per request); the object checks the proof. */
   private authority() {
     this.enabled();
-    return this.env.BUSINESS.get(this.env.BUSINESS.idFromString(this.env.BUSINESS_OBJECT_ID));
+    const stub = this.env.BUSINESS.get(this.env.BUSINESS.idFromString(this.env.BUSINESS_OBJECT_ID));
+    const proof = operatorProof(this.env.SEAL_KEY);
+    return {
+      initialize: (v: WebCloudMaterialPackage) => stub.initialize(proof, v),
+      importFixed: (k: 'welcome' | 'footer', c: string, b: Uint8Array) => stub.importFixed(proof, k, c, b),
+      adminGrant: () => stub.adminGrant(proof),
+      adminRecoveryGrant: (m: string) => stub.adminRecoveryGrant(proof, m),
+      inviteGrants: (i: string) => stub.inviteGrants(proof, i),
+      status: () => stub.status(proof),
+      inspect: () => stub.inspect(proof),
+      renewPrices: () => stub.renewPrices(proof),
+    };
   }
   async initialize(value: WebCloudMaterialPackage) {
     return this.authority().initialize(value);
