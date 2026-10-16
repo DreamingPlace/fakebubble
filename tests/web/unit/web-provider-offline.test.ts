@@ -1452,7 +1452,7 @@ test('an already expired price gets a row that starts now, and the expired row i
   const later = now + 45 * DAY;
   assert.ok(renewProviderPrices(f.store as never, later).every((r) => r.result === 'renewed' && r.validFrom === later));
   const added = priceRows(f).filter((r) => r.version === 2);
-  assert.equal(added.length, PROVIDER_PRICES.length);
+  assert.equal(added.length, initialRows([...PROVIDER_PRICES]).length, 'one new version per seeded price');
   assert.ok(added.every((r) => r.valid_from === later && r.valid_until === later + 90 * DAY));
   assert.deepEqual(
     initialRows(priceRows(f)).filter((r) => r.version === 1),
