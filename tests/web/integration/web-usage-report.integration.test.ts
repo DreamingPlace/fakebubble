@@ -9,6 +9,7 @@ import {
   TOKEN_LIST_PRICES,
   SPEECH_LIST_MICROS_PER_BYTE,
   listPriceMicros,
+  speechListMicrosPerByte,
 } from '../../../apps/server/generation/model-list-prices.ts';
 import { formatUsageReport, usageReport, type UsageRow } from '../../../apps/server/generation/usage-report.ts';
 import { readUsageRows } from '../../../scripts/usage-report.ts';
@@ -134,4 +135,36 @@ test('every known provider call lands in the aggregate table at LIST price; the 
     7.5,
     'the 2027 list price, not the introductory one',
   );
+});
+
+test('usage:report costs a drama-3 reply at its LIST price (10 micros/byte) while the budget ledger holds and charges the 15 upper bound', async (t) => {
+  const f = modelFixture(t, {
+    siteVoiceModel: 'drama-3',
+    fetch: (_call, _n, request) =>
+      Response.json(_call.tool === 'submit_dialogue_draft' ? draftEnvelope(request) : acceptedAuditEnvelope(request)),
+  });
+  await f.runText();
+  await f.finishReply('operation');
+  const rows = f.all<UsageRow>("SELECT * FROM web_provider_usage WHERE phase='speech'").map((row) => ({ ...row }));
+  assert.equal(rows.length, 1);
+  const [speech] = rows as [UsageRow];
+  assert.equal(speech.model, 'drama-3');
+  assert.ok(speech.bytes > 0);
+  assert.equal(speechListMicrosPerByte('drama-3'), 10);
+  assert.equal(speech.cost_micros, speech.bytes * 10, 'list price: USD 10 per million bytes');
+  const charged = f.all<{ model: string; charged_micros: number }>(
+    "SELECT model,charged_micros FROM web_provider_attempts WHERE phase='speech'",
+  );
+  assert.deepEqual(
+    charged.map((row) => [row.model, row.charged_micros]),
+    [['drama-3', speech.bytes * 15]],
+    'the ledger keeps the s2.1 upper bound',
+  );
+  // The report (what usage:report prints) attributes the voice cost of the reply to its model, at the list cost.
+  const all = f.all<UsageRow>('SELECT * FROM web_provider_usage').map((row) => ({ ...row }));
+  const model = usageReport(all).models.find((m) => m.model === 'deepseek')!;
+  assert.equal(model.replies, 1);
+  assert.equal(model.speechMicros, speech.bytes * 10);
+  assert.equal(speechListMicrosPerByte('s2.1-pro'), SPEECH_LIST_MICROS_PER_BYTE);
+  assert.equal(speechListMicrosPerByte('s2-pro'), 15, 'an unlisted speech model is costed at the dearer rate');
 });

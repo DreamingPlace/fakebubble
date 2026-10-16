@@ -70,7 +70,7 @@ function fixture(t: test.TestContext) {
       approved: true,
     });
   }
-  const draft = (id = 'wei-guagua') => {
+  const draft = (id = 'wei-guagua', model = 's2.1-pro') => {
     const profile = chars.detail(auth, 'wei-guagua').published!.profile;
     profile.template.id = id;
     profile.template.version = id === 'wei-guagua' ? profile.template.version + 1 : 1;
@@ -82,7 +82,7 @@ function fixture(t: test.TestContext) {
       draftRevision: saved.revision,
       profileHash: saved.contentHash,
       referenceId: 'selected-existing-reference',
-      model: 's2.1-pro',
+      model,
     };
     const material = chars.materialPrepare(auth, id, input);
     return { id, profile, saved, input, ...material };
@@ -410,4 +410,46 @@ test('permission revoked during private R2 stage leaves only an unreferenced pri
   };
   await assert.rejects(f.chars.materialApprove(auth, d.id, approval), /DRAFT_CONFLICT/);
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_character_material_approvals')!.n, 0);
+});
+
+test('material model: s2.1-pro (follows the site default), pin:s2.1-pro and drama-3 are accepted; anything else is refused', (t) => {
+  for (const model of ['s2.1-pro', 'pin:s2.1-pro', 'drama-3']) {
+    const f = fixture(t),
+      d = f.draft('wei-guagua', model);
+    assert.ok(d.materialId, model);
+    // the exact request id cannot be replayed with another model
+    assert.throws(
+      () => f.chars.materialPrepare(f.auth, d.id, { ...d.input, model: model === 'drama-3' ? 's2.1-pro' : 'drama-3' }),
+      /IDEMPOTENCY_CONFLICT/,
+    );
+  }
+  const f = fixture(t),
+    base = f.draft('wei-guagua');
+  for (const [index, model] of [
+    'drama-3-preview',
+    'drama',
+    'pin:drama-3',
+    's2-pro',
+    'pin:s2-pro',
+    '',
+    'S2.1-PRO',
+  ].entries())
+    assert.throws(
+      () => f.chars.materialPrepare(f.auth, base.id, { ...base.input, requestId: 'bad-' + index, model }),
+      /INVALID_MATERIAL_REQUEST/,
+      model,
+    );
+});
+
+test('a pinned material publishes a binding that stays on s2.1-pro; an unpinned one stays unpinned', async (t) => {
+  for (const model of ['pin:s2.1-pro', 's2.1-pro', 'drama-3']) {
+    const f = fixture(t),
+      d = f.draft('wei-guagua', model);
+    await f.approve(d);
+    f.chars.publish(f.auth, d.id, await f.publication(d));
+    assert.equal(
+      f.store.get<{ model: string }>('SELECT model FROM web_provider_voice_bindings WHERE character_id=?', d.id)?.model,
+      model,
+    );
+  }
 });

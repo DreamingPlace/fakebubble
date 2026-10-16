@@ -20,6 +20,9 @@ export const PROVIDER_PRICES = [
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.draft, phase: 'draft', unit: 'token', upper: 2 },
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.review, phase: 'review', unit: 'token', upper: 4 },
   { provider: 'fish', model: 's2.1-pro', phase: 'speech', unit: 'byte', upper: 15 },
+  // Drama 3 lists at $10/M characters, but an unrecognised model header silently serves s2.1-pro, so the ledger reserves
+  // the s2.1 upper bound.
+  { provider: 'fish', model: 'drama-3', phase: 'speech', unit: 'byte', upper: 15 },
   { provider: 'xai', model: PLAYER_MODELS.xai.model, phase: 'draft', unit: 'token', upper: 6 },
   { provider: 'gemini', model: PLAYER_MODELS.gemini.model, phase: 'draft', unit: 'token', upper: 8 },
   { provider: 'gemini', model: PLAYER_MODELS.gemini.model, phase: 'review', unit: 'token', upper: 8 },
@@ -148,7 +151,7 @@ export function configureWebProvider(
     // seeds them on a deployment that was initialized before this Part: a model stays unavailable until that has run.
     for (const price of PROVIDER_PRICES.filter((item) => item.provider === 'deepseek' || item.provider === 'fish'))
       ledger.configurePrice({
-        id: `${price.provider}-${price.phase}-${now}`,
+        id: `${price.provider}-${price.model}-${price.phase}-${now}`,
         provider: price.provider,
         model: price.model,
         phase: price.phase,

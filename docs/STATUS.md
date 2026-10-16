@@ -135,6 +135,18 @@ All behind flags that default OFF; no migration, no prompt or tool-schema change
 - `inspect` reports `players`: `PLAYER_SIGNUP_ENABLED`, `PLAYER_EMAIL_DAILY_CAP`, `PLAYER_EMAIL_BINDING_PRESENT`.
 - `pnpm check`: **1026 tests, 1026 passed**. Migration 118 (edited in place, not deployed) sha256 `4c5f3beb3db1ef7d683e0bac332c0b37d9cea1d350ccb295267154a4ed777a9b`; expected-migrations: 43 steps.
 
+## Part 21c (Fish Drama 3 reply voice, per-voice fallback, soundCue, listening script)
+
+- Reply voice can run on Fish Drama 3. Site default `FISH_VOICE_MODEL` (`s2.1-pro` default = behaviour unchanged; `drama-3`); a voice binding is unpinned (`s2.1-pro`, follows the default), `pin:s2.1-pro` (admin workbench checkbox) or `drama-3`. No migration (the free-text `model` columns hold the values); `expected-migrations` is byte-identical to main (47 steps, inline and R2).
+- **The model header is `drama-3`.** The brief said `drama-3-preview`; the current Drama 3 page, the TTS API reference enum and the launch post all say `drama-3`, and an unrecognised value silently serves s2.1-pro, so `drama-3-preview` is rejected everywhere (`docs/PROVIDERS.md` has the checked links and every unverified item).
+- `workers/audio/fish.ts`: Drama 3 cue tables (natural-language directions per expression and delivery style, `<whisper>` for `tender_whisper`, sound tags `[small laugh]`/`[shaky breath]`); the s2.x tables are untouched and covered by a snapshot generated from main's code. Drama 3 requests do not send `features: ['quality-guard']` (documented for s2 only).
+- `soundCue`: optional enum on spoken draft bubbles (`none | small_laugh | shaky_breath`, at most one per bubble), rendered by the server for Drama 3 only; the model never writes brackets or tags, `AUDIO_CONTROL_MARKER_FORBIDDEN` still guards all text, displayed text never has tags. Only the two sound tags the docs spell out are whitelisted; `sigh`/`gasp` are unverified.
+- Ledger: `fish / drama-3 / speech / byte` at 15 micros/byte (the s2.1 upper bound, because of the silent fallback). Price ids now include the model (`provider-model-phase-time`), since two fish speech rows share a phase.
+- Merged with 21b/21d/21e: `usage:report` costs speech per model at list price (`s2.1-pro` 15, `drama-3` 10 micros/byte; ledger bound stays 15); test `usage:report costs a drama-3 reply at its LIST price`.
+- Welcome/footer clips are always rendered as s2.1-pro.
+- `pnpm voice:samples` (`scripts/voice-samples.ts`, `apps/server/generation/web-voice-samples.ts`): one clip per approved voice per expression on the chosen model into a local folder; reads only bindings and prices, reserves budget first, never resends UNKNOWN.
+- Intentional hash change (text policy tests): prompt `6519b6a0…cd6f`→`53df95a8…133b`, policy `e31c3518…52fb`→`a140e333…2c68`, protocol fingerprint `b42431c9…ef99`→`b753fb40…dae8`; stored previews/approvals must be redone. Not verified live: Drama 3 with our cloned voices, and 24 kHz WAV output, are unconfirmed in the docs — listen on staging first.
+- Test-file changes (no assertion weakened): `web-text-policy.test.ts` pinned hashes; `prompt-snapshots/voice-reply.json` regenerated (only the new prompt paragraph); `web-provider-offline.test.ts` seed price id includes the model and the three renewal tests use `PROVIDER_PRICES.length` instead of a literal 3.
 ## Part 21b (player model choice, points, backup, usage)
 
 Flag `PLAYER_MODEL_CHOICE_ENABLED` (default off; requires `SIGNUP_BONUS_ENABLED`). Off = exactly today, including "免费消息" copy. Details: docs/PROVIDERS.md, docs/DEPLOYMENT.md "Part 21b", docs/DATA_BOUNDARY.md.

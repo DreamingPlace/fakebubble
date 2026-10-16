@@ -13,11 +13,14 @@ import type {
 import { DomainError, ensure } from '../../packages/domain/errors.ts';
 import { finalizeFishWav, inspectPCM, pcmLevels } from './wav.ts';
 import { AudioValidationFailure, SpeechFailure } from './validation-error.ts';
+import type { SoundCue } from '../../packages/contracts/index.ts';
+import { isFishModel } from '../../packages/contracts/audio.ts';
 import type { ProviderMeter } from '../../packages/contracts/provider-calls.ts';
 import { meteredSpeech } from './metering.ts';
 
 // S2 bracket cues are natural-language direction, not guaranteed emotion tokens.
-// Mock annoyance is deliberately not real anger or shouting.
+// Mock annoyance is deliberately not real anger or shouting. This table (and its delivery cues below) is the s2.x wire
+// format and must stay byte-for-byte what the s2.1-pro voices were approved with.
 const expressions = {
   neutral: '',
   upbeat: '[happy]',
@@ -30,10 +33,36 @@ const expressions = {
   sad: '[sad, subdued]',
   surprised: '[surprised]',
 } as const;
+// Drama 3 takes richer natural-language direction in square brackets before the words it applies to
+// (https://docs.fish.audio/features/text-to-speech/drama-3). Only brackets, the documented sound tags and the
+// documented <whisper> pair are produced here; language and phoneme tags are deliberately never used.
+const dramaExpressions = {
+  neutral: '',
+  upbeat: '[bright and upbeat, warm, a smile in the voice]',
+  soft: '[soft and gentle, unhurried, tender]',
+  hesitant: '[hesitant and unsure, a little halting, trailing off]',
+  serious: '[serious and sincere, steady, measured]',
+  playful: '[playful and teasing, smiling as they speak]',
+  mock_annoyed: '[mock-annoyed, playfully indignant and teasing, clearly not angry and not shouting]',
+  excited: '[excited, energetic, a little breathless with delight]',
+  sad: '[sad and subdued, low energy, a heavy heart]',
+  surprised: '[surprised, caught off guard, a quick lift in pitch]',
+} as const satisfies Record<keyof typeof expressions, string>;
+const dramaDeliveryCues = {
+  conversational: '',
+  quiet: '[speaking quietly, close and intimate, soft conversational tone]',
+  tender_whisper: '[tender, warm, gentle whisper]',
+} as const;
+// Only sound tags spelled out in the Drama 3 docs (docs/PROVIDERS.md).
+const dramaSoundTags = { small_laugh: '[small laugh]', shaky_breath: '[shaky breath]' } as const satisfies Record<
+  SoundCue,
+  string
+>;
 function id(value: unknown): asserts value is string {
   ensure(typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value), 'INVALID_VOICE_ID');
 }
-export function speechPayload(request: SpeechRequest) {
+export function speechPayload(request: SpeechRequest, model: FishModel = request.model ?? 's2.1-pro') {
+  ensure(isFishModel(model) && (request.model === undefined || request.model === model), 'VOICE_MODEL_MISMATCH');
   id(request.jobId);
   ensure(request.voice, 'VOICE_REQUIRED');
   id(request.voice.profileId);
@@ -57,8 +86,20 @@ export function speechPayload(request: SpeechRequest) {
     tender_whisper: '[whispering][warm, gentle, natural voice]',
   } as const;
   ensure(Object.hasOwn(deliveryCues, style), 'INVALID_SPEECH_STYLE');
+  ensure(request.soundCue === undefined || Object.hasOwn(dramaSoundTags, request.soundCue), 'INVALID_SOUND_CUE');
+  const drama = model === 'drama-3';
+  let text = `${expressions[request.expression]}${deliveryCues[style]}${request.text}`;
+  if (drama) {
+    const directions = [
+      dramaExpressions[request.expression],
+      dramaDeliveryCues[style],
+      request.soundCue ? dramaSoundTags[request.soundCue] : '',
+    ].filter(Boolean);
+    const spoken = style === 'tender_whisper' ? `<whisper>${request.text}</whisper>` : request.text;
+    text = [...directions, spoken].join(' ');
+  }
   return {
-    text: `${expressions[request.expression]}${deliveryCues[style]}${request.text}`,
+    text,
     reference_id: request.voice.referenceId,
     format: 'wav',
     sample_rate: 24000,
@@ -68,12 +109,13 @@ export function speechPayload(request: SpeechRequest) {
     chunk_length: 200,
     temperature: 0.7,
     top_p: 0.7,
-    ...(request.qualityGuard ? { features: ['quality-guard'] } : {}),
+    // quality-guard is documented for the s2 family only; Drama 3 requests do not send it.
+    ...(request.qualityGuard && !drama ? { features: ['quality-guard'] } : {}),
   };
 }
 /** Shared by direct and child-process transports: serialize once before the send gate. */
 export function fishSpeechRequest(request: SpeechRequest, model: FishModel) {
-  const payload = speechPayload(request),
+  const payload = speechPayload(request, model),
     body = JSON.stringify(payload);
   return {
     body,
@@ -148,7 +190,7 @@ export class FishAudio implements SpeechGenerator {
     this.#key = options.apiKey.trim();
     this.#fetch = options.fetch ?? globalThis.fetch;
     this.#model = options.model ?? 's2.1-pro';
-    ensure(['s2.1-pro', 's2-pro'].includes(this.model), 'UNSUPPORTED_FISH_MODEL');
+    ensure(isFishModel(this.model), 'UNSUPPORTED_FISH_MODEL');
     this.#timeoutMs = options.timeoutMs ?? 120_000;
     ensure(
       Number.isSafeInteger(this.#timeoutMs) && this.#timeoutMs > 0 && this.#timeoutMs <= 120_000,

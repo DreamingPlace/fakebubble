@@ -25,8 +25,20 @@ export const TOKEN_LIST_PRICES: Readonly<Record<string, TokenListPrice>> = Objec
   'gemini:gemini-3.8-flash': { input: 1.5, cachedInput: 0.15, output: 7.5 },
   'xai:grok-4.7': { input: 2, cachedInput: 0.5, output: 6 },
 });
-/** Fish speech: USD 15 per million UTF-8 bytes. */
+/** Fish speech s2.1-pro: USD 15 per million UTF-8 bytes. */
 export const SPEECH_LIST_MICROS_PER_BYTE = 15;
+/**
+ * Fish speech LIST price per UTF-8 byte (= micro-USD per byte at USD per million bytes) by the model the call was made
+ * with. Drama 3 lists at USD 10 per million (Fish bills characters; a byte count is never lower, so this does not understate);
+ * the budget ledger still holds 15 for it (PROVIDER_PRICES: a silent fallback to s2.1-pro cannot be seen in the reply).
+ */
+export const SPEECH_LIST_PRICES: Readonly<Record<string, number>> = Object.freeze({
+  's2.1-pro': SPEECH_LIST_MICROS_PER_BYTE,
+  'drama-3': 10,
+});
+/** An unlisted speech model is costed at the s2.1-pro rate, the dearer one. */
+export const speechListMicrosPerByte = (model: string): number =>
+  SPEECH_LIST_PRICES[model] ?? SPEECH_LIST_MICROS_PER_BYTE;
 
 /**
  * Cost of one known call at list price, in whole micro-USD, rounded UP (never understated). `cachedInputTokens` is the part of

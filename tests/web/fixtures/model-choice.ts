@@ -1,3 +1,4 @@
+import type { FishModel } from '../../../packages/contracts/audio.ts';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -166,6 +167,8 @@ export function modelFixture(
     padMessages?: number;
     /** Replaces the speech provider (default: a synthetic tone), e.g. to make voice fail so the text fallback runs. */
     fish?: FakeFish;
+    /** FISH_VOICE_MODEL: the site voice model (default s2.1-pro). */
+    siteVoiceModel?: FishModel;
     fetch: (call: FetchCall, n: number, request: ReturnType<typeof textRequest>) => Response | Promise<Response>;
   },
 ) {
@@ -282,7 +285,15 @@ export function modelFixture(
       receipt: { id: 'fake-fish' },
       usageUnits: request.billedTextBytes,
     }));
-  const runner = new WebProviderRunner(store, clock, generator, fish, budget);
+  const runner = new WebProviderRunner(
+    store,
+    clock,
+    generator,
+    fish,
+    budget,
+    undefined,
+    options.siteVoiceModel ? { voiceModel: options.siteVoiceModel } : undefined,
+  );
   const ledger = new WebProviderOffline(store, clock);
   const capacity = new WebDispatchLedger(store as WebStore, clock);
   // The state of a deployment initialized BEFORE this Part: DeepSeek and Fish only. renew-prices then seeds the new models.

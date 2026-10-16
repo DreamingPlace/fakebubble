@@ -1,5 +1,6 @@
 import type { Clock } from '../../../packages/contracts/index.ts';
 import type { VoiceBinding, VoiceProfile, VoiceProfileRecord } from '../../../packages/contracts/media.ts';
+import { isFishModel } from '../../../packages/contracts/audio.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 
@@ -55,7 +56,7 @@ export function validateVoiceProfile(value: unknown): asserts value is VoiceProf
       ['custom', 'preset'].includes(value.kind) &&
       value.provider === 'fish' &&
       typeof value.model === 'string' &&
-      ['s2.1-pro', 's2-pro'].includes(value.model),
+      isFishModel(value.model),
     'INVALID_VOICE_PROFILE',
   );
 }

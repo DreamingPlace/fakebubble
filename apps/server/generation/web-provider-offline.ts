@@ -1,4 +1,5 @@
-import { listPriceMicros, SPEECH_LIST_MICROS_PER_BYTE } from './model-list-prices.ts';
+import { isVoiceModelBinding, type VoiceModelBinding } from '../../../packages/contracts/audio.ts';
+import { listPriceMicros, speechListMicrosPerByte } from './model-list-prices.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import type {
@@ -292,7 +293,7 @@ export class WebProviderOffline {
     voiceRevision: number;
     profileId: string;
     referenceId: string;
-    model: 's2.1-pro' | 's2-pro';
+    model: VoiceModelBinding;
     approved: true;
   }) {
     this.check();
@@ -305,7 +306,7 @@ export class WebProviderOffline {
         input.voiceRevision > 0 &&
         /^[A-Za-z0-9_-]{1,128}$/.test(input.profileId) &&
         /^[A-Za-z0-9_-]{1,128}$/.test(input.referenceId) &&
-        ['s2.1-pro', 's2-pro'].includes(input.model),
+        isVoiceModelBinding(input.model),
       'WEB_PROVIDER_VOICE_UNAPPROVED',
     );
     this.store.transaction(() => {
@@ -1211,7 +1212,7 @@ export class WebProviderOffline {
     if (row.phase === 'speech') {
       if (result.usageUnits <= 0) return;
       bytes = result.usageUnits;
-      cost = bytes * SPEECH_LIST_MICROS_PER_BYTE;
+      cost = bytes * speechListMicrosPerByte(row.model);
     } else {
       const usage = (result.receipt as { usage?: Record<string, unknown> } | null)?.usage;
       const n = (value: unknown) =>
@@ -1615,7 +1616,7 @@ export class WebProviderOffline {
     voiceRevision: number;
     profileId: string;
     referenceId: string;
-    model: 's2.1-pro' | 's2-pro';
+    model: VoiceModelBinding;
     evidence: Record<string, string>;
   }) {
     this.check();
@@ -1625,7 +1626,7 @@ export class WebProviderOffline {
         input.voiceRevision > 0 &&
         /^[A-Za-z0-9_-]{1,128}$/.test(input.profileId) &&
         /^[A-Za-z0-9_-]{1,128}$/.test(input.referenceId) &&
-        ['s2.1-pro', 's2-pro'].includes(input.model) &&
+        isVoiceModelBinding(input.model) &&
         /^[a-f0-9]{64}$/.test(input.evidence.selectionSHA256 ?? '') &&
         /^[a-f0-9]{64}$/.test(input.evidence.voiceSHA256 ?? ''),
       'WEB_PROVIDER_VOICE_UNAPPROVED',

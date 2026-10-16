@@ -1,3 +1,4 @@
+import { isVoiceModelBinding, type VoiceModelBinding } from '../../../packages/contracts/audio.ts';
 import { createHash } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { WEB_PROVIDER_CHARACTER_IDS } from '../../../packages/contracts/web-provider.ts';
@@ -80,7 +81,7 @@ export class WebCloudSetup {
           template.persona.length > 0 &&
           template.name === selected.displayName &&
           template.schedule &&
-          selected.voice.model === 's2.1-pro',
+          isVoiceModelBinding(selected.voice.model),
         'WEB_CLOUD_MATERIAL_INVALID',
       );
       for (const kind of ['welcome', 'footer'] as const) {

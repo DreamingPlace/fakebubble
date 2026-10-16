@@ -17,6 +17,7 @@
     "BUDGET_POLICY": "test-cumulative",
     "PUBLIC_ENABLED": "false",
     "EXTERNAL_CALLS": "false",
+    "FISH_VOICE_MODEL": "s2.1-pro",
     "OPERATOR_ENABLED": "false",
     "MAX_TEXT_RUNNING": "20",
     "MAX_AUDIO_RUNNING": "4",
