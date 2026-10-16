@@ -19,6 +19,7 @@ import { projectedSceneStyle, sceneRevision, sceneState } from '../conversation/
 import { userStore } from '../platform/store-boundary.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { readInputSnapshot } from './web-input-snapshot.ts';
+import { recallsMemory } from '../admission/web-free-tier.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -129,7 +130,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     orderedIds.push(row.input_message_id);
     for (const item of store.all<{ message_id: string }>(
       `SELECT message_id FROM web_publication_items
-      WHERE operation_id=? AND origin='narrative' ORDER BY ordinal`,
+      WHERE operation_id=? AND origin IN ('narrative','text_fallback') ORDER BY ordinal`,
       row.operation_id,
     )) {
       allowed.add(item.message_id);
@@ -270,29 +271,30 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
           requireWebContent(store, { now: () => now }, operation.principal_id, scope.worldId))),
     'WEB_V7_MEMORY_ENTITLEMENT_REQUIRED',
   );
+  const recalls = recallsMemory(store, access.kind, operation.principal_id);
   const query = input.input_body;
   // A vector counts only for exactly the text that was embedded: the frozen input.
   const semantic =
     queryEmbedding && queryEmbedding.digest === embeddingHash(queryText(query))
       ? { model: queryEmbedding.model, vector: queryEmbedding.vector }
       : undefined;
-  const memories = access.kind !== 'guest' ? recallMemories(userStore(store), scope, now, query, 12, semantic) : [];
-  const corrections =
-    access.kind !== 'guest'
-      ? recallCorrections(
-          userStore(store),
-          scope,
-          query,
-          memories.map((memory) => memory.key),
-        )
-      : [];
+  const memories = recalls ? recallMemories(userStore(store), scope, now, query, 12, semantic) : [];
+  const corrections = recalls
+    ? recallCorrections(
+        userStore(store),
+        scope,
+        query,
+        memories.map((memory) => memory.key),
+      )
+    : [];
   const relationshipState = relationshipContext(userStore(store), scope, relationship);
   const scene = sceneState(userStore(store), scope, now);
   const shortTermTurns = priorJobs.size
     ? store
         .all<{ job_id: string; at: number }>(
           `SELECT p.job_id,min(m.created_at) at
-    FROM web_publications p JOIN web_publication_items i ON i.operation_id=p.operation_id AND i.origin='narrative'
+    FROM web_publications p JOIN web_publication_items i ON i.operation_id=p.operation_id
+      AND i.origin IN ('narrative','text_fallback')
       JOIN messages m ON m.id=i.message_id WHERE p.principal_id=? AND p.player_id=? AND p.world_id=?
       AND p.conversation_id=? AND p.character_id=? AND m.created_at>?
       AND p.job_id IN (${[...priorJobs].map(() => '?').join(',')})
@@ -309,7 +311,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
         .map((row) => ({ job_id: row.job_id, at: row.at }))
     : [];
   const introduction = playerIntroduction(userStore(store), scope);
-  const facts = access.kind !== 'guest' ? recallPlayerFacts(userStore(store), scope) : [];
+  const facts = recalls ? recallPlayerFacts(userStore(store), scope) : [];
   const request: TextGenerationRequest = {
     jobId: operation.id,
     scope: { worldId: scope.worldId, conversationId: scope.conversationId, characterId: scope.characterId },

@@ -669,7 +669,7 @@ export class WebVerticalPublisher {
             message.authorKind === 'character'
               ? this.store.get(
                   `SELECT 1 FROM web_publication_items i JOIN web_publications p
-            ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.origin='narrative'
+            ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.origin IN ('narrative','text_fallback')
             AND p.principal_id=? AND p.player_id=? AND p.world_id=? AND p.conversation_id=?
             AND p.character_id=?`,
                   message.id,

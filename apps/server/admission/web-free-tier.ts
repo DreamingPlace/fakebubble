@@ -71,6 +71,12 @@ export function hasSignupBonus(store: Flagged, principalId: string) {
     !!store.get('SELECT 1 FROM web_signup_bonus WHERE principal_id=?', principalId)
   );
 }
+/**
+ * Long-term memory (recall, and the embeddings that serve it) is for account and invite principals and for guests who hold
+ * the signup bonus. A plain trial guest keeps short-term context only. Writing is unconditional; only reading is gated.
+ */
+export const recallsMemory = (store: Flagged, kind: string, principalId: string) =>
+  kind !== 'guest' || hasSignupBonus(store, principalId);
 const live = "o.quota_state IN ('reserved','used')";
 /** Bonus replies reserved or used (an operation that failed or was cancelled is 'released' and not counted). */
 export function bonusSpent(store: Reader, principalId: string) {

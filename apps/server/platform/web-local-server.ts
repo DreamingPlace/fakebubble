@@ -611,7 +611,7 @@ export class WebLocalServer {
         conversationId,
         characterId: conversation.private_character_id,
         operationId: row.operation_id,
-        replyOrdinal: row.origin === 'narrative' ? row.ordinal : null,
+        replyOrdinal: row.origin === 'narrative' || row.origin === 'text_fallback' ? row.ordinal : null,
         author: row.origin === 'input' ? 'player' : 'character',
         origin: row.origin,
         text: row.body,
