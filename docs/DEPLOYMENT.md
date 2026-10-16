@@ -230,6 +230,12 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 调用必须指定 `--action`、绝对路径 `--receipt-file`，部分操作还需要 `--input-file` / `--name`。收据目录权限 0700，输入/收据文件 0600。工具先持久化准备状态，再调用；未知结果应核查收据及服务端状态，**不要盲目重试**。首次主管理员入口只在受控初始化阶段启用，完成后关闭。
 
+### 运维开关（`OPERATOR_ENABLED`）的判定位置
+
+开关只在 `WebOperatorService`（每次请求都读取新的 env）里判定：不是 `true` 时以 `WEB_CLOUD_OPERATOR_DISABLED` 拒绝。业务 Durable Object 不再读取 `OPERATOR_ENABLED`（对象的 env 在实例启动时固定，而它每 30 秒重设一次 alarm，永远不会被回收，所以仅改 vars 的部署之后它会一直带着旧值）。对象的运维方法（`initialize`、`importFixed`、`adminGrant`、`adminRecoveryGrant`、`inviteGrants`、`status`、`inspect`、`renewPrices`）改为要求一个证明参数：`HMAC-SHA256("fakebubble-operator-v1")`，密钥为已有的 `SEAL_KEY`（只绑定在业务 Worker 上，edge Worker 虽有 BUSINESS 命名空间绑定却没有这个密钥，因此永远调不了运维方法），常量时间比较，失败为 `WEB_CLOUD_OPERATOR_PROOF_INVALID`。没有新密钥，部署步骤不变。
+
+因此 A/B 做法照旧可用：临时把 `OPERATOR_ENABLED` 设为 `true` 部署（A），用完改回 `false` 再部署（B），即使两次部署的代码完全相同、只改了 vars；**不需要再等待对象重启或回收**。
+
 ### `inspect`（只读检查）
 
 `--action=inspect` 通过与 `status` 完全相同的认证服务绑定调用业务对象的只读 RPC，结果只写入私有收据。认证与 `status` 一致：业务 Worker 的 `OPERATOR_ENABLED` 不是 `true` 时两者都以 `WEB_CLOUD_OPERATOR_DISABLED` 拒绝（`status` 在关闭时同样不可用，因此 `inspect` 不开例外）。它只执行 `SELECT` 和一次预算 `summary()` 读取，测试用完整表快照与写入计数器证明执行前后不变。

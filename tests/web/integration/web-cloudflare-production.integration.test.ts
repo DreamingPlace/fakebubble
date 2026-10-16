@@ -14,6 +14,7 @@ import { WEB_PROVIDER_WELCOME } from '../../../config/web-v1.ts';
 import { SYNTHETIC_TRIAL_FOOTER } from '../../../apps/server/conversation/web-vertical-publisher.ts';
 import { webMaterialHash, type WebCloudMaterialPackage } from '../../../apps/server/cloudflare/web-setup.ts';
 import { budgetHash, type CloudBudgetAuthorization } from '../../../apps/server/budget/web-provider-budget-contract.ts';
+import { operatorProof } from '../../../apps/server/cloudflare/operator-proof.ts';
 import { parseWebProviderBootstrap } from '../../../packages/contracts/web-provider.ts';
 
 const hash = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
@@ -697,4 +698,57 @@ test('startup failure is diagnosable from logs while the 503 response is unchang
   assert.equal(unavailable?.message, 'WEB_CLOUD_BUDGET_NOT_INITIALIZED');
   assert.equal(unavailable?.stage, 'start');
   assert.ok(!text.includes('secret-cookie'));
+});
+
+test('operator gate: only the entrypoint decides on/off; the object demands a proof the edge cannot make', async (t) => {
+  const f = await fixture(t, true);
+  const errorOf = async (response: { json(): Promise<unknown> }) =>
+    ((await response.json()) as { error: string }).error;
+  const stub = (method: string, status: number, proof?: string) =>
+    f.call(
+      {
+        action: 'business-http',
+        path: `/__operator/${method}`,
+        headers: proof === undefined ? {} : { 'x-proof': proof },
+      },
+      status,
+    );
+  await f.install();
+  // Switch on: the entrypoint passes the proof and every call works.
+  await f.call({ action: 'status' });
+  await f.call({ action: 'inspect' });
+  // Straight to the object stub, which is all the edge worker can do (it has no SEAL_KEY): no proof, or a wrong one.
+  for (const method of ['status', 'inspect', 'adminGrant', 'renewPrices']) {
+    assert.match(await errorOf(await stub(method, 409)), /WEB_CLOUD_OPERATOR_PROOF_INVALID/, method);
+    assert.match(await errorOf(await stub(method, 409, 'x'.repeat(64))), /WEB_CLOUD_OPERATOR_PROOF_INVALID/, method);
+    assert.match(await errorOf(await stub(method, 409, '')), /WEB_CLOUD_OPERATOR_PROOF_INVALID/, method);
+  }
+  // The right proof (only the business worker can compute it) is accepted even with no entrypoint involved.
+  const proof = operatorProof(f.business.bindings.SEAL_KEY);
+  assert.ok(((await (await stub('status', 200, proof)).json()) as { instanceId: string }).instanceId);
+  // The proof is the HMAC of the label under SEAL_KEY: not the key, and another key makes a different proof.
+  assert.notEqual(proof, f.business.bindings.SEAL_KEY);
+  assert.notEqual(operatorProof(Buffer.alloc(32, 7).toString('base64url')), proof);
+  // Switch off (entrypoint env): DISABLED, a different code from the object's proof failure.
+  f.business.bindings.OPERATOR_ENABLED = 'false';
+  await f.restart();
+  assert.match(await errorOf(await f.call({ action: 'status' }, 409)), /WEB_CLOUD_OPERATOR_DISABLED/);
+  assert.match(await errorOf(await f.call({ action: 'inspect' }, 409)), /WEB_CLOUD_OPERATOR_DISABLED/);
+});
+
+test('operator gate regression: an object started while OPERATOR_ENABLED was "false" accepts operator calls once the entrypoint says "true"', async (t) => {
+  const f = await fixture(t, true);
+  // The object's env keeps "false" (it never restarts); the entrypoint's env is fresh per request and says "true".
+  f.business.bindings.OPERATOR_ENABLED = 'false';
+  (f.business.bindings as Record<string, string>).OPERATOR_SWITCH = 'true';
+  await f.restart();
+  await f.install();
+  await f.call({ action: 'status' });
+  const report = (await (await f.call({ action: 'inspect' })).json()) as { flags: { OPERATOR_ENABLED: string } };
+  // inspect reports the object's own env: proof the object really did start with the old value.
+  assert.equal(report.flags.OPERATOR_ENABLED, 'false');
+  // And the entrypoint turning it off is still honoured immediately, while the object's env stays what it was.
+  (f.business.bindings as Record<string, string>).OPERATOR_SWITCH = 'false';
+  await f.restart();
+  await f.call({ action: 'status' }, 409);
 });
