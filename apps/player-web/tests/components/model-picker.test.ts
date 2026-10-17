@@ -666,3 +666,73 @@ test('ProviderApi.billing posts the page and the clock offset, and parses strict
   const junk = new ProviderApi(async () => Response.json({ metered: true, items: [{ kind: 'reply' }] }));
   await assert.rejects(junk.billing(1), /PROTOCOL_INVALID/);
 });
+
+// ---- Part 21g: a trial guest whose tier allows more than one model gets the picker -------------------------------------------
+
+const trialGuest = (modelChoice?: ModelChoiceInfo): AccountInfo => ({
+  signupEnabled: true,
+  signedIn: true,
+  kind: 'guest',
+  hasLogin: false,
+  emailMasked: null,
+  nickname: null,
+  canBind: false,
+  ...(modelChoice ? { modelChoice } : {}),
+});
+const guestTwoModels: ModelChoiceInfo = {
+  ...info,
+  models: info.models.slice(0, 2),
+  metered: false,
+  balance: 0,
+  repliesLeft: 0,
+};
+
+test('guest ⋯ menu: 切换回复模型 appears (before 共创) only when the server sends the guest a picker; the guide says so', async (t) => {
+  const store = new Map<string, string>();
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
+  });
+  t.after(() => {
+    if (original) Object.defineProperty(globalThis, 'localStorage', original);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+  });
+  // The guest tier has two models: the picker entry (no prices, a guest reply costs a trial reply) and the guide text.
+  resetChatGuide();
+  const two = chat(t, trialGuest(guestTwoModels));
+  await two.openChat(await two.attach());
+  assert.equal(
+    two.cards.get('wei-guagua')!.querySelector('.chat-guide')!.textContent,
+    '点这里可以切换回复模型，或和角色一起共创',
+  );
+  const items = two.menu();
+  assert.deepEqual(titlesOf(items), ['切换回复模型', '共创 · 让瓜瓜更像瓜瓜']);
+  assert.ok(!/点/.test(items[0]!.querySelector('.chat-menu-sub')!.textContent), 'no points are named for a guest');
+  items[0]!.click();
+  assert.ok(two.doc.body.querySelector('.mp-sheet'), 'the picker opens for a guest');
+  // One model only (the server sends no picker): 共创 only, and the guide talks about 共创 only.
+  store.clear();
+  resetChatGuide();
+  const one = chat(t, trialGuest());
+  await one.openChat(await one.attach());
+  assert.equal(one.cards.get('wei-guagua')!.querySelector('.chat-guide')!.textContent, '点这里可以和角色一起共创');
+  assert.deepEqual(titlesOf(one.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  // A guest has no spending history: no 消费记录 anywhere.
+  assert.ok(!titlesOf(two.header.querySelectorAll('.chat-menu-item')).includes('消费记录'));
+});
+
+test('the backup note names the model the SERVER says was billed, not a constant rule', () => {
+  const note = (billed?: 'deepseek' | 'gemini' | 'xai') => modelCopy.backup('xai', 'deepseek', true, billed);
+  assert.equal(note('deepseek'), 'Grok 4.7 繁忙，由 DeepSeek 回复 · 按 DeepSeek 计费');
+  assert.equal(
+    note('xai'),
+    'Grok 4.7 繁忙，由 DeepSeek 回复 · 按 Grok 4.7 计费',
+    'a repriced table can bill the chosen model',
+  );
+  assert.equal(
+    modelCopy.backup('xai', 'deepseek', false, 'xai'),
+    'Grok 4.7 繁忙，由 DeepSeek 回复',
+    'unmetered: no billing clause',
+  );
+});

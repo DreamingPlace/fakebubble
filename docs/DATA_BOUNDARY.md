@@ -287,3 +287,17 @@ The player's chosen model only DRAFTS. REVIEW (safety, memory topics and `factOp
 | `web_provider_usage` (UTC day, provider, model, phase, calls, tokens/bytes, cost at list price in micros, replies) | global | Yes: aggregates only, no principal id, no operation id, no content. Read by `pnpm usage:report` and the operator `inspect`. |
 
 Points are player fairness; the budget ledger is money safety; they are independent (a refund never releases a reservation). A charge happens at admission; an operation that ends with no reply (failed, cancelled, UNKNOWN) is refunded in full, and one answered by the backup model costs the cheaper of the two models, when the balance is next touched (`reconcilePoints`, once per fact by a unique index). xAI and Gemini spend books against the existing text bucket (`deepseek`) of the shared budget authority (no new grant ceremony); the local ledger tracks each provider separately.
+
+## Owner-controlled models and prices (Part 21g, migration 124)
+
+The admin page 系统 → 模型与价格 is settings only: it holds no player data. The five tables below are global configuration written only by the business object (an owner or `models.manage` administrator, behind session + CSRF + origin). They carry no principal id, player id, world id, email, nickname or message content, and no column could (`web_model_changes` stores the acting administrator's member id, shown in the page only as the administrator's label).
+
+| Table | Class | Kept after deletion? |
+|---|---|---|
+| `web_model_settings` (model, enabled, allowed per tier: guest / registered / invited, points per reply, updated at, updating admin) | global | Yes: it is the site's configuration; nothing in it concerns a player. |
+| `web_model_voice` (voice points, revision of the page, updated at, updating admin) | global | Yes (same). |
+| `web_price_versions` (version, the three per-reply prices, voice price, created at, creating admin) | global | Yes: append-only (update and delete are refused by triggers). Points events and `web_operation_models` name a version, so an old charge stays explainable. |
+| `web_model_changes` (save id, admin member id, model or voice, field, old value, new value, price version, time) | global | Yes: append-only (triggers); the page lists the latest 30 with the administrator's label. |
+| `web_model_save_requests` (request id, content digest, save id, revision, time) | global | Yes: idempotency record of admin saves; request ids are random page-generated strings. |
+
+Tier of a player (`playerTier`): guest, registered (a guest holding the signup bonus) or invited (invite or account principal). It is derived from existing rows at request time and is never stored. Admitted operations keep their frozen model and price version (`web_operation_models`, unchanged); a player's own saved model (`web_player_model`) is still removed with the player. The change log and the admin view show no ids, emails or content (tested: the tables' JSON and the page's view are searched for principal, player, world and request ids and for message text).

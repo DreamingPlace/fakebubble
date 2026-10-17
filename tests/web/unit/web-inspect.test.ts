@@ -125,14 +125,16 @@ test('inspect reports the deployed ledger next to the expected steps and matches
   const { reader } = authority();
   const report = inspectWebAuthority(reader, expected, flags, budget);
   // Extended for migration 123 (Part 21b named exception): schema 123, 48 steps.
-  assert.equal(report.schemaVersion, 123);
-  assert.equal(report.migrations.applied.length, 48);
+  // Named exception (Part 21g, migration 124): the ledger now has 49 steps and 124 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(report.schemaVersion, 124);
+  assert.equal(report.migrations.applied.length, 49);
   assert.deepEqual(
     report.migrations.applied,
     webR2Migrations.map((m) => ({ version: m.version, sha256: sha(m.sql) })),
   );
   assert.deepEqual(report.migrations.expected.r2, report.migrations.applied);
-  assert.equal(report.migrations.expected.inline.length, 48);
+  assert.equal(report.migrations.expected.inline.length, 49);
   assert.deepEqual(
     report.migrations.expected.inline.map((m, i) => m.sha256 === report.migrations.expected.r2[i]!.sha256),
     report.migrations.expected.inline.map((m) => m.version !== 113),
@@ -175,8 +177,8 @@ test('inspect reports the deployed ledger next to the expected steps and matches
     false,
   );
   assert.equal(
-    // Extended for migration 123 (Part 21b named exception): 123 is a real step now, so the extra step is 124.
-    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (124,'" + 'a'.repeat(64) + "')")),
+    // Extended for migration 124 (Part 21g named exception): 124 is a real step now, so the extra step is 125.
+    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (125,'" + 'a'.repeat(64) + "')")),
     false,
   );
   assert.equal(

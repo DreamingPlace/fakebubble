@@ -528,9 +528,11 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
   // Before setup: works, reports an unavailable budget as a bounded code and no admin.
   const bare = await inspect();
   // Schema 123 and 48 steps since migration 123 (model choice) was added. Extended for migration 123 (Part 21b named exception).
-  assert.equal(bare.schemaVersion, 123);
+  // Named exception (Part 21g, migration 124): the ledger now has 49 steps and 124 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(bare.schemaVersion, 124);
   assert.equal(bare.migrations.matches, true);
-  assert.equal(bare.migrations.applied.length, 48);
+  assert.equal(bare.migrations.applied.length, 49);
   assert.deepEqual(bare.budget, { available: false, error: 'WEB_CLOUD_BUDGET_NOT_INITIALIZED' });
   assert.equal(bare.ownerAdminExists, false);
   await f.install();
@@ -578,11 +580,11 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
   assert.deepEqual(await (await f.call({ action: 'budget-summary' })).json(), budgets);
   assert.deepEqual(again, report);
   // Facts.
-  assert.equal(report.schemaVersion, 123); // Extended for migration 123.
+  assert.equal(report.schemaVersion, 124); // Extended for migration 123.
   assert.equal(report.migrations.matches, true);
   assert.equal(report.migrations.expected.active, 'r2');
   assert.deepEqual(report.migrations.applied, report.migrations.expected.r2);
-  assert.equal(report.migrations.expected.inline.length, 48);
+  assert.equal(report.migrations.expected.inline.length, 49);
   assert.deepEqual(report.instance, {
     instanceId: f.business.bindings.INSTANCE_ID,
     recoveryEpoch: f.business.bindings.RECOVERY_EPOCH,
@@ -664,7 +666,7 @@ test('offline expected-migrations output equals the steps the deployed business 
   // And the deployed object's applied ledger is exactly the offline R2 list.
   assert.deepEqual(live.migrations.applied, offline.r2);
   assert.equal(live.migrations.matches, true);
-  assert.equal(offline.r2.length, 48); // Extended for migration 123.
+  assert.equal(offline.r2.length, 49); // Extended for migration 123.
   const extra = spawnSync(process.execPath, ['scripts/web-cloudflare-operator.ts', 'expected-migrations', '--x=1'], {
     encoding: 'utf8',
   });

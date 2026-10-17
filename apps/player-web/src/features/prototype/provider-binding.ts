@@ -298,7 +298,9 @@ export class LiveBinding {
 
   /** 消费记录: only for a player with a points account or an invitation (the server answers 404 to anyone else). */
   private billingMenu() {
-    if (!this.modelChoice) return [];
+    // A guest on the trial may have a picker (Part 21g) but no points and no history: the server answers it 404.
+    const info = this.modelChoice;
+    if (!info || !(info.metered || (this.account.signedIn && this.account.kind === 'invite'))) return [];
     const shell = this.shell;
     return [
       {

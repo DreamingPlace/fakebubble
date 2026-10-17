@@ -3,6 +3,7 @@ import type { ModelRef, TextRoute } from '../../../packages/contracts/text-route
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { offeredModels } from '../admission/web-points.ts';
+import { ceilingModels, type ModelFlags } from '../admission/web-model-settings.ts';
 
 /**
  * Who drafts and who reviews one reply (Part 21b). DRAFT: the player's frozen choice, then DeepSeek, then Gemini. REVIEW
@@ -27,14 +28,18 @@ const REF: Record<'draft' | 'review', Record<'deepseek' | 'gemini' | 'xai', Mode
   },
 };
 
-type Reader = Pick<BusinessStore, 'get'> & { playerModelChoice?: readonly PlayerModelId[] };
+type Reader = Pick<BusinessStore, 'get' | 'all'> & ModelFlags;
 
-/** A model can be used when the owner offers it AND its price, spending bound and capacity ticket exist (renew-prices seeds them). */
-function usable(store: Reader, id: PlayerModelId, phase: 'draft' | 'review', now: number) {
+/**
+ * A model can be used when the owner offers it AND its price, spending bound and capacity ticket exist (renew-prices seeds
+ * them). `frozen` is the model an operation was admitted with: it keeps being used while the environment still allows it
+ * (ceiling), even if the owner has since switched it off for new messages.
+ */
+function usable(store: Reader, id: PlayerModelId, phase: 'draft' | 'review', now: number, frozen = false) {
   if (id === 'deepseek') return true;
   const ref = REF[phase][id];
   return (
-    !!offeredModels(store)?.includes(id) &&
+    !!(frozen ? ceilingModels(store) : offeredModels(store))?.includes(id) &&
     !!store.get(
       "SELECT 1 FROM web_provider_prices WHERE provider=? AND model=? AND phase=? AND currency='USD' AND valid_from<=? AND valid_until>?",
       ref.provider,
@@ -68,17 +73,18 @@ export function textRouteFor(
     operationId,
   );
   if (!row || !isPlayerModelId(row.chosen)) return undefined;
-  const chain = (phase: 'draft' | 'review', order: PlayerModelId[]) => {
+  const chain = (phase: 'draft' | 'review', order: PlayerModelId[], frozen?: PlayerModelId) => {
     const skip = new Set(abandoned(phase));
     const refs = [...new Set(order)]
-      .filter((id) => usable(store, id, phase, now) && !skip.has(REF[phase][id].provider))
+      .filter((id) => usable(store, id, phase, now, id === frozen) && !skip.has(REF[phase][id].provider))
       .map((id) => REF[phase][id]);
     // Everything abandoned or unavailable: fall back to DeepSeek rather than an empty chain (the call fails or succeeds on its own).
     return refs.length ? refs : [REF[phase].deepseek];
   };
-  const chosen: PlayerModelId = offeredModels(store)!.includes(row.chosen) ? row.chosen : 'deepseek';
+  // The frozen model stays while the environment allows it (Part 21g); outside the ceiling it falls back to DeepSeek as before.
+  const chosen: PlayerModelId = ceilingModels(store)?.includes(row.chosen) ? row.chosen : 'deepseek';
   return {
-    draft: chain('draft', [chosen, 'deepseek', 'gemini']),
+    draft: chain('draft', [chosen, 'deepseek', 'gemini'], chosen),
     review: chain('review', ['deepseek', 'gemini']),
   };
 }

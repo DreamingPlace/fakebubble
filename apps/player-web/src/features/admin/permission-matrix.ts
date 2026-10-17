@@ -62,6 +62,17 @@ export const PERMISSION_GROUPS: readonly Group[] = [
     ],
   },
   {
+    id: 'models',
+    title: '模型与价格',
+    items: [
+      {
+        item: 'models.manage',
+        name: '修改模型与价格',
+        help: '决定哪些回复模型对游客、注册玩家、受邀玩家开放，每条消息扣多少点，以及语音加点。任何管理员都能查看这个页面；保存需要此项。',
+      },
+    ],
+  },
+  {
     id: 'conversations',
     title: '测试对话',
     items: [

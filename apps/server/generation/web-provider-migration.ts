@@ -211,3 +211,22 @@ export function migrateWebProviderModelChoice(store: Store) {
     store.db.exec('PRAGMA user_version = 123');
   });
 }
+
+/** Node-only 123→124: owner-controlled reply models and prices (124_model_settings.sql). */
+export function migrateWebProviderModelSettings(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 123 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_operation_models'"),
+      'WEB_PROVIDER_MODEL_SETTINGS_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/124_model_settings.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 124');
+  });
+}

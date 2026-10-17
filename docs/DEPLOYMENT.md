@@ -222,11 +222,11 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 默认全部关闭；什么都不配置时与以前一致。说明与已核实的供应商参数见 `docs/PROVIDERS.md`。
 
 **新增密钥（只配给 generation Worker，缺哪个就是哪个模型不可用，不会崩溃）：** `wrangler secret put XAI_API_KEY`、`wrangler secret put GEMINI_API_KEY`。
-**新增变量（业务 Worker，`business.json.example` 已列出）：** `PLAYER_MODEL_CHOICE_ENABLED`（默认 `false`；需要同时 `SIGNUP_BONUS_ENABLED=true`）、`PLAYER_TEXT_MODELS`（如 `deepseek,gemini,xai`；DeepSeek 永远开启；不在列表里的模型对玩家隐藏，正在用它的玩家回到 DeepSeek 并收到一次性提示，也不再作为备用）。
+**新增变量（业务 Worker，`business.json.example` 已列出）：** `PLAYER_MODEL_CHOICE_ENABLED`（默认 `false`；需要同时 `SIGNUP_BONUS_ENABLED=true`）、`PLAYER_TEXT_MODELS`（如 `deepseek,gemini,xai`；DeepSeek 永远开启；不在列表里的模型对玩家隐藏，正在用它的玩家回到 DeepSeek 并收到一次性提示，也不再作为备用；**Part 21g 起它是“上限”，不再单独决定谁能选什么，见下一节“模型与价格”**）。
 **迁移 123（`123_model_choice.sql`）：** 48 步；本地 `migrate-model-choice`；`expected-migrations` 与 `inspect` 会显示。不回填：点数余额在玩家首次接触时建立（Part 21f 起：`100 − 10 × 已用赠送条数 + 10 × 没用完的体验回复`，写成唯一一条 `bonus` 事件；已建立的余额不再改动）。
 
 **启用顺序（先 staging）：**
-1. 部署代码（开关全关），确认 `expected-migrations` 与 `inspect` 一致（48 步）。
+1. 部署代码（开关全关），确认 `expected-migrations` 与 `inspect` 一致（Part 21g 起 49 步）。
 2. 配 `XAI_API_KEY`、`GEMINI_API_KEY`；运行 `renew-prices` 一次：它为 xAI、Gemini 创建支出上限、并发名额与首批价格行（已有行不动；首次初始化只写 DeepSeek 与 Fish）。`inspect` 的 `prices` 里应出现 `xai/grok-4.7` 与 `gemini/gemini-3.8-flash`。
 3. staging 上把 `PLAYER_MODEL_CHOICE_ENABLED=true`，先只列 `PLAYER_TEXT_MODELS=deepseek,gemini`，再加 `xai`；每个模型发几条真实消息，检查回复、备用提示与 `pnpm usage:report`（用 `inspect` 的回执文件：`pnpm usage:report --receipt=/绝对路径`），据此校准 `packages/contracts/player-models.ts` 的点数表和 `REASONING_HEADROOM`（推理 token 按输出计费）。
 4. 生产同样顺序；出问题把模型从 `PLAYER_TEXT_MODELS` 删掉即可（无需迁移）。关掉总开关则立刻回到“免费消息”旧行为。
@@ -234,6 +234,27 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 **备用模型：** 明确未计费的失败（429、供应商文档中的过载/不可用 503、“地区/位置不支持”、缺少密钥、连接未建立）按 选择的模型 → DeepSeek → Gemini 顺序最多重试一次，零费用结算后重新预占；超时、重置、其他 5xx、无法解析一律 UNKNOWN，不重试、占款不释放。玩家按两者中较便宜的点数计费，回复下显示“{选的模型} 繁忙，由 {实际模型} 回复 · 按 {计费模型} 计费”（Part 21f；受邀玩家不计点，不显示计费一句）。审核（安全与记忆）永远是 DeepSeek v4 pro（备用 Gemini），所以记忆始终由同一个模型写入。xAI/Gemini 的花费记入共享预算的文本桶（无需新的授权仪式）。**链路用尽（Part 21d）：** 链上最后一个模型也明确未计费地失败（或下一个模型根本无法发出：缺少密钥、请求过大）时，操作立即以 failed 结束（释放配额，点数由对账全额退回），不再等 5 分钟截止时间；链上最后一个模型返回 429 时，先按上面 DeepSeek 同样的 2s、4s、8s 退避重试，用尽后才结束。UNKNOWN 规则不变。
 
 **出口地区（`generation.json.example` 的 `placement`）：** 我们设置了 Cloudflare 文档中的区域提示 `{"region": "aws:us-east-1"}`（wrangler 未在本仓库固定版本，官方文档也未给出最低版本；选区域提示而不是 Smart Placement，因为目标是固定的出口地区而不是靠探测上游）。**但官方文档明确写着：放置只影响 `fetch` 处理器，不影响 RPC 方法或命名入口，而 generation Worker 是被业务对象通过 RPC 调用的**，所以这条提示在当前架构下很可能不生效：出站请求实际从业务 Durable Object 所在的机房发出（RPC 与调用方同机房）。真正起作用的办法是新建 staging 的业务对象时用 `locationHint`（只在首次创建时有效，已有对象无法搬迁），或后续把供应商调用改成 `fetch` 服务绑定。在那之前由自动备用兜底：地区不被接受的回答会按“未计费”改用 DeepSeek，并计入 `web_provider_backups`。请在 staging 观察备用比例后再决定。
+
+### 系统 → 模型与价格（Part 21g，迁移 124）
+
+站点所有者在管理页 **系统 → 模型与价格** 里不用部署就能决定：哪些回复模型可用、对谁可用、每条消息多少点。**这一页只在 `PLAYER_MODEL_CHOICE_ENABLED=true` 后才影响玩家**（关着时也能打开、先设置好，页面会说明）。
+
+**迁移 124（`124_model_settings.sql`）：** 49 步；本地 `migrate-model-settings`；`expected-migrations` 的最后一步（`version 124`）sha256 为 `5754ab5882783ac356527db8904fd2a4661c6b9ff98ee796a49a438ec1301d17`（123 仍是 `432c1237…28db41`，两个 authority 的 124 完全相同）。新建五张表，只有业务对象写入，**不含任何玩家数据**：`web_model_settings`（每个模型一行：总开关、游客/注册/受邀三类各自是否可用、每条点数、更新时间与管理员）、`web_model_voice`（语音加点与整页的修订号）、`web_price_versions`（每一张曾生效的价格表，只增不改）、`web_model_changes`（只增不改的修改记录：谁、何时、改了什么）、`web_model_save_requests`（保存请求的幂等记录）。迁移写入的默认值**等于现状**：三个模型全开；游客只有 DeepSeek；注册与受邀玩家三个都可选；DeepSeek 10、Gemini 20、Grok 25、语音 +2（价格版本 1 是 Part 21b 的旧表 Grok 40，版本 2 是这组默认值）。迁移不改变任何已有行为；不回填。 版本白名单与 122/123 相同的所有位置都已加上 124（`web-identity.ts`、`web-admission.ts`、`web-retention.ts`、`web-stage-queue.ts`、`web-vertical-publisher.ts`、`web-v7-request.ts`、`platform/store.ts`、`cloudflare/web-store.ts` 的版本列表 25 项、`workers/web-cloudflare/migrations.ts`、`scripts/web-provider.ts`、`web-provider-migration.ts`）。
+
+**`PLAYER_TEXT_MODELS` 现在是“上限”：** 一个模型要对玩家出现，必须同时 ① 在 `PLAYER_TEXT_MODELS` 里，② 它的 API 密钥存在，③ 这张表里总开关打开，④ 该类玩家被勾选。①② 任何一条不满足，不管表里怎么设置都不会出现，管理页该行显示 **未配置**。DeepSeek 是内部备用与固定审核模型，永远在上限之内，即使对所有玩家隐藏也照旧担任备用和审核。`PLAYER_MODEL_CHOICE_ENABLED` 仍是总开关。
+- **密钥探测：** 密钥只在 generation Worker。它新增了一个只返回布尔值的 RPC `modelKeys()`（`{ xai, gemini }`，不会返回密钥），业务对象每分钟最多问一次（失败 5 秒后重试），**失败时按“没有密钥”处理（宁可暂时不提供 xAI/Gemini）**。部署顺序：**先 generation，后 business**；反过来也安全，只是 business 先上线的那段时间 xAI/Gemini 会暂时显示“未配置”。本地（Node）运行不探测密钥，上限只看 `PLAYER_TEXT_MODELS`。
+
+**三类玩家（`playerTier`，只在一个函数里判定，Part 22 在这里拆“受邀”）：** 游客 = 试用游客；注册玩家 = 注册并持有点数的玩家；受邀玩家 = 受邀（invite）或 account 玩家。游客只有在所在类别可选超过一个模型时才看到选择器（聊天“⋯”菜单出现“切换回复模型”，首次引导文字也会提到；只有一个模型时仍只有“共创”）；游客的一条试用回复无论用哪个模型都只消耗一条试用回复，不扣点数。
+
+**规则：** 每一类至少保留一个“已开启且被勾选”的模型，否则保存被拒绝（`MODEL_TIER_EMPTY`，页面会说是哪一类）。关掉一个模型（总开关或某一类）后，受影响的玩家**下一条消息**起改用本类第一个可用模型，并收到一次性的“模型已下线”提示（`model_withdrawn`）。**已经受理的消息保留当时的模型与价格**（即使之后被关掉，只要环境上限仍允许它；上限之外则改回 DeepSeek，与以前一致）。
+
+**价格：** 每条点数是 1–200 的整数，语音加点 0–20。任何价格变化追加一个新的价格版本；点数事件、扣费与退款都记着自己的价格版本，**下一条消息才按新价格受理**，选择器马上显示新数字；之前受理的消息退款（失败全退、备用模型取较便宜者、没有语音退语音点）按**它受理时的那张表**计算。Part 21f 把代码里 `POINTS` 常量改为版本 2、Grok 25，与这里的价格版本 2（默认值）是同一组数字；之后**所有算点数的地方都读这张表**：受理时的扣费与可发送判断、选择器里的点数与“约可聊 N 条”、备用模型“按 {计费模型} 计费”（由服务器按该条消息受理时的价格版本给出）、退款（备用较便宜的差额与没有语音的语音点，用该操作自己的价格版本）、`usage:report`。常量只在没有迁移 124 的老库里作后备。21f 的开户余额规则不变（`100 − 10 × 已用赠送条数 + 10 × 没用完的体验回复`，10 是固定的赠送单位，不是表里的价格）。
+
+**权限与保存：** 任何管理员都能查看；保存需要主管理员或新权限 **`models.manage`**（权限矩阵里“模型与价格 → 修改模型与价格”，只在“全部”预设里）。保存要走会话、CSRF 与来源检查，带一次性的请求 ID（重放得到同一结果，同 ID 不同内容被拒绝）和页面修订号（别的管理员先改过就拒绝，不覆盖，请刷新）；保存前页面弹出确认并列出所有改动。页面还显示最近 30 条修改（管理员备注、模型、字段、前后值；不含任何 ID、邮箱或玩家内容）。
+
+**手机：** 这是后台唯一能在手机上用的页面（`#/models`；其他页面仍提示“请在电脑浏览器打开”）。
+
+**回退：** 在页面里把值改回去即可；迁移不需要回滚（无需部署）。想让所有人立刻回到“只有 DeepSeek”：关掉 `PLAYER_MODEL_CHOICE_ENABLED`，或把 xAI/Gemini 总开关关掉。
 
 ## 私有运维工具
 

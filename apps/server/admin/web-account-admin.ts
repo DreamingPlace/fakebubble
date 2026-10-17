@@ -1,4 +1,6 @@
 import { metricsEnabled } from '../admission/web-stage-metrics.ts';
+import { readAdminView, saveModelSettings, type ModelFlags } from '../admission/web-model-settings.ts';
+import { parseModelSave } from '../../../packages/contracts/model-settings.ts';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
@@ -12,6 +14,7 @@ import {
   ADMIN_INVITE_PERMISSIONS,
   ADMIN_PERMISSION_LIMIT,
   hasInvitePermission,
+  hasModelsPermission,
   isAdminPermission,
   normalizePermissions,
   type AdminPermission,
@@ -406,6 +409,34 @@ export class WebAccountAdmin extends WebInviteAdmin {
         .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0))
         .slice(0, days as number),
     };
+  }
+  /**
+   * 系统 → 模型与价格, read side: any administrator (settings and the change log only; no player data, no ids - an
+   * administrator is shown by label). `canManage` tells the page whether to offer 保存; the server checks again on save.
+   */
+  modelSettings(cookie: unknown, csrf: unknown, origin: unknown) {
+    const actor = this.authorize(cookie, csrf, origin),
+      member = this.current(cookie);
+    const canManage = actor.role === 'owner' || hasModelsPermission(JSON.parse(member.permissions_json));
+    const view = readAdminView(this.db as BusinessStore & ModelFlags, canManage);
+    ensure(view, 'NOT_FOUND');
+    return view;
+  }
+  /** The write side: the owner, or an administrator holding models.manage. Session, CSRF and origin as for every admin write. */
+  saveModelSettings(cookie: unknown, csrf: unknown, origin: unknown, body: unknown) {
+    const actor = this.authorize(cookie, csrf, origin),
+      member = this.current(cookie);
+    ensure(
+      actor.role === 'owner' || hasModelsPermission(JSON.parse(member.permissions_json)),
+      'ADMIN_PERMISSION_REQUIRED',
+    );
+    const input = parseModelSave(body);
+    ensure(input, 'INVALID_REQUEST');
+    return this.db.transaction(() => {
+      const result = saveModelSettings(this.db as BusinessStore & ModelFlags, this.at(), actor.memberId, input);
+      if (!result.duplicate && result.changes > 0) this.audit(actor.memberId, 'models-saved', 'models');
+      return result;
+    });
   }
   inviteRecords(cookie: unknown, csrf: unknown, origin: unknown, beforeId: unknown) {
     const actor = this.authorize(cookie, csrf, origin),

@@ -160,17 +160,20 @@ test('Cloudflare runner: an existing authority at 114 upgrades to 115 through th
     assert.deepEqual(result.after.slice(0, 39), result.before, `${mode}: applied steps are untouched`);
     // Opening the authority applies every newer step in order: 115, 116, 117, 118, 119, then 120 (see web-embedding-migration
     // and web-cocreation-migration). Extended for migration 120.
-    assert.equal(result.after.length, 48, mode);
-    assert.equal(result.after.at(-9)?.startsWith('115:'), true, mode);
-    assert.equal(result.after.at(-8)?.startsWith('116:'), true, mode);
-    assert.equal(result.after.at(-7)?.startsWith('117:'), true, mode);
-    assert.equal(result.after.at(-6)?.startsWith('118:'), true, mode);
-    assert.equal(result.after.at(-5)?.startsWith('119:'), true, mode);
-    assert.equal(result.after.at(-4)?.startsWith('120:'), true, mode);
-    assert.equal(result.after.at(-3)?.startsWith('121:'), true, mode);
-    assert.equal(result.after.at(-2)?.startsWith('122:'), true, mode);
-    assert.equal(result.after.at(-1)?.startsWith('123:'), true, mode); // Extended for migration 123: the newest step is last.
-    assert.deepEqual(result.version, { user_version: 123 }, mode);
+    // Named exception (Part 21g, migration 124): the ledger now has 49 steps and 124 is the newest, so step counts, positions
+    // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+    assert.equal(result.after.length, 49, mode);
+    assert.equal(result.after.at(-10)?.startsWith('115:'), true, mode);
+    assert.equal(result.after.at(-9)?.startsWith('116:'), true, mode);
+    assert.equal(result.after.at(-8)?.startsWith('117:'), true, mode);
+    assert.equal(result.after.at(-7)?.startsWith('118:'), true, mode);
+    assert.equal(result.after.at(-6)?.startsWith('119:'), true, mode);
+    assert.equal(result.after.at(-5)?.startsWith('120:'), true, mode);
+    assert.equal(result.after.at(-4)?.startsWith('121:'), true, mode);
+    assert.equal(result.after.at(-3)?.startsWith('122:'), true, mode);
+    assert.equal(result.after.at(-2)?.startsWith('123:'), true, mode);
+    assert.equal(result.after.at(-1)?.startsWith('124:'), true, mode); // Extended for migration 124: the newest step is last.
+    assert.deepEqual(result.version, { user_version: 124 }, mode);
     assert.deepEqual(result.review, { importance: true, facts: true, reviewChanged: true }, mode);
   }
 });

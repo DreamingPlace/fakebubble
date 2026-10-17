@@ -1,5 +1,6 @@
-import { hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
-import { DEFAULT_PLAYER_MODEL, isPlayerModelId, replyPoints } from '../../../packages/contracts/player-models.ts';
+import { cheapestReplyPoints, hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
+import { DEFAULT_PLAYER_MODEL, isPlayerModelId } from '../../../packages/contracts/player-models.ts';
+import { billedModelAt } from '../admission/web-model-settings.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
 import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
@@ -101,6 +102,8 @@ export interface ProviderHistoryRow {
   /** Part 21f: the chosen model and the model that wrote the draft (web_operation_models.chosen / draft_provider). */
   chosen_model?: string | null;
   actual_model?: string | null;
+  /** Part 21g: the model this reply is billed as, at the prices of the operation's own price version (computed by the server). */
+  billed_model?: string | null;
 }
 /** One history row as the player sees it. A text fallback is an ordinary narrative text bubble; no error is shown. */
 export function providerHistoryMessage(
@@ -122,7 +125,13 @@ export function providerHistoryMessage(
     isPlayerModelId(row.chosen_model) &&
     isPlayerModelId(row.actual_model) &&
     row.chosen_model !== row.actual_model
-      ? { viaBackup: { chosen: row.chosen_model, actual: row.actual_model } }
+      ? {
+          viaBackup: {
+            chosen: row.chosen_model,
+            actual: row.actual_model,
+            ...(isPlayerModelId(row.billed_model) ? { billed: row.billed_model } : {}),
+          },
+        }
       : {}),
     text: row.body,
     createdAt: row.created_at,
@@ -483,7 +492,7 @@ export class WebProviderApplication {
     // replies were converted into the opening balance), so only the balance counts.
     if (hasPoints(this.store, principal.principalId)) {
       const state = modelChoiceState(this.store, now, principal.principalId, false)!;
-      const affordable = state.balance >= replyPoints(DEFAULT_PLAYER_MODEL, true);
+      const affordable = state.balance >= cheapestReplyPoints(this.store, principal.principalId);
       return {
         kind: 'guest',
         ...base,
@@ -675,10 +684,11 @@ export class WebProviderApplication {
       via_backup: number;
       chosen_model: string | null;
       actual_model: string | null;
+      price_version: number | null;
     }>(
       `
       SELECT m.seq,m.id,m.body,m.created_at,o.id operation_id,'input' origin,NULL ordinal,
-          NULL media_id,NULL duration_ms,0 via_backup,NULL chosen_model,NULL actual_model
+          NULL media_id,NULL duration_ms,0 via_backup,NULL chosen_model,NULL actual_model,NULL price_version
         FROM web_operations o JOIN messages m ON m.id=o.input_message_id
         WHERE o.principal_id=? AND o.world_id=? AND o.conversation_id=? AND m.seq<?
       UNION ALL
@@ -695,7 +705,11 @@ export class WebProviderApplication {
             modelChoiceTablesExist(this.store)
               ? '(SELECT draft_provider FROM web_operation_models b WHERE b.operation_id=p.operation_id)'
               : 'NULL'
-          } actual_model
+          } actual_model,${
+            modelChoiceTablesExist(this.store)
+              ? '(SELECT price_version FROM web_operation_models b WHERE b.operation_id=p.operation_id)'
+              : 'NULL'
+          } price_version
         FROM web_publication_items i JOIN web_publications p ON p.operation_id=i.operation_id
         JOIN messages m ON m.id=i.message_id
         LEFT JOIN web_provider_media_assets a ON a.media_id=i.media_id AND i.origin='narrative'
@@ -717,7 +731,19 @@ export class WebProviderApplication {
     return {
       characterId: character,
       conversationId,
-      messages: page.map((row) => providerHistoryMessage(row, conversationId, character)),
+      messages: page.map((row) =>
+        providerHistoryMessage(
+          {
+            ...row,
+            billed_model:
+              isPlayerModelId(row.chosen_model) && isPlayerModelId(row.actual_model)
+                ? billedModelAt(this.store, row.price_version, row.chosen_model, row.actual_model)
+                : null,
+          },
+          conversationId,
+          character,
+        ),
+      ),
       before: page.length ? this.cursor(principal.principalId, page[0]!.seq, conversationId) : null,
       hasMore: rows.length > 50,
     };

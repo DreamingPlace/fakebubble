@@ -43,4 +43,9 @@ export interface WebGenerationSession {
 }
 export interface WebGenerationBinding {
   open(): Promise<WebGenerationSession>;
+  /**
+   * Part 21g: which optional text-provider keys the generation Worker holds (booleans only, never a key). The business object
+   * uses it as part of the model ceiling and for the 未配置 state on the admin page. Absent on an older generation Worker.
+   */
+  modelKeys?(): Promise<{ xai: boolean; gemini: boolean }>;
 }

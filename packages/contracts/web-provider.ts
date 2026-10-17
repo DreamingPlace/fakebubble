@@ -119,7 +119,11 @@ export interface WebProviderMessage {
    * Part 21b/21f: present only when a backup model wrote this reply instead of the chosen one; both are player-model ids
    * (the page shows "{chosen} 繁忙，由 {actual} 回复"). Normal replies carry nothing.
    */
-  viaBackup?: { chosen: PlayerModelId; actual: PlayerModelId };
+  viaBackup?: {
+    chosen: PlayerModelId;
+    actual: PlayerModelId /** The cheaper of the two at the operation's own price version (Part 21g). */;
+    billed?: PlayerModelId;
+  };
   audio: {
     revision: number;
     status: WebAudioStatus;

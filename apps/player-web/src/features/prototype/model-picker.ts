@@ -31,9 +31,10 @@ export const modelCopy = {
   cancelButton: '取消',
   close: '关闭',
   /** "{chosen} 繁忙，由 {actual} 回复 · 按 {billed} 计费"; an invited player is not billed, so no billing clause. */
-  backup: (chosen: PlayerModelId, actual: PlayerModelId, metered: boolean) =>
+  backup: (chosen: PlayerModelId, actual: PlayerModelId, metered: boolean, billed?: PlayerModelId) =>
     `${PLAYER_MODELS[chosen].label} 繁忙，由 ${PLAYER_MODELS[actual].label} 回复${
-      metered ? ` · 按 ${PLAYER_MODELS[billedModel(chosen, actual)].label} 计费` : ''
+      // The server names the billed model at the operation's own price version; the constant rule is only the fallback.
+      metered ? ` · 按 ${PLAYER_MODELS[billed ?? billedModel(chosen, actual)].label} 计费` : ''
     }`,
   withdrawn: '之前选的模型暂时不提供了，已改用 DeepSeek',
   switched: (label: string) => `已切换为 ${label}`,
@@ -52,8 +53,14 @@ export function modelMenuItem(info: ModelChoiceInfo, open: () => void) {
 }
 
 /** The small note under a reply that a backup model wrote. Plain text; no error, no retry. Ordinary replies get none. */
-export function backupNote(backup: { chosen: PlayerModelId; actual: PlayerModelId }, metered: boolean) {
-  return h('span', { class: 'backup-note', text: modelCopy.backup(backup.chosen, backup.actual, metered) });
+export function backupNote(
+  backup: { chosen: PlayerModelId; actual: PlayerModelId; billed?: PlayerModelId },
+  metered: boolean,
+) {
+  return h('span', {
+    class: 'backup-note',
+    text: modelCopy.backup(backup.chosen, backup.actual, metered, backup.billed),
+  });
 }
 
 export interface ModelPickerOptions {

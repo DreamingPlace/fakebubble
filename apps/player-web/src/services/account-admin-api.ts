@@ -5,6 +5,11 @@ import { PreviewAdminClient } from './preview-admin-api.ts';
 import { InviteAdminApi } from './invite-admin-api.ts';
 import { InviteLocalApiError } from './invite-local-api.ts';
 import {
+  parseModelAdminView,
+  type ModelAdminView,
+  type ModelSaveInput,
+} from '../../../../packages/contracts/model-settings.ts';
+import {
   ADMIN_PERMISSION_LIMIT,
   isAdminPermission,
   type AdminPermission,
@@ -264,6 +269,24 @@ export class AccountAdminApi extends InviteAdminApi {
       if (typeof day.day !== 'string' || !Number.isSafeInteger(day.operations)) throw invalid();
       return day as unknown as StageLatencyDay;
     });
+  }
+  /** 系统 → 模型与价格: any administrator may read. A response that is not exactly the documented shape is rejected. */
+  async modelSettings(): Promise<ModelAdminView> {
+    const view = parseModelAdminView(await this.request('/models/read', {}));
+    if (!view) throw invalid();
+    return view;
+  }
+  /** The owner, or an administrator holding models.manage; the server checks again. */
+  async saveModelSettings(input: ModelSaveInput) {
+    const row = object(await this.request('/models/save', input as unknown as Record<string, unknown>));
+    if (
+      !Number.isSafeInteger(row.revision) ||
+      !Number.isSafeInteger(row.priceVersion) ||
+      !Number.isSafeInteger(row.changes) ||
+      typeof row.duplicate !== 'boolean'
+    )
+      throw invalid();
+    return row as { revision: number; priceVersion: number; changes: number; duplicate: boolean };
   }
   async revokeInvite(kind: 'code' | 'grant', id: string) {
     await this.request(`/invites/revoke-${kind}`, { id });
