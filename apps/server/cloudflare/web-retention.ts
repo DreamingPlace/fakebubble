@@ -24,16 +24,90 @@ import {
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
 import type { MediaObjectReference } from './media-objects.ts';
+import {
+  ageBucket,
+  backoffDelay,
+  errorName,
+  firstFrame,
+  messageShape,
+  olderBucket,
+  type AgeBucket,
+  type RetentionPhase,
+} from './web-retention-diagnostics.ts';
 
-/** What a failed purge step reports: a fixed step name and a safe code, never an id, an address or an error text. */
+export type { AgeBucket, RetentionPhase } from './web-retention-diagnostics.ts';
+
+/**
+ * What a failed purge step reports: a fixed step name and a safe code, never an id, an address or an error text.
+ * Part 17g adds where it broke and what kind of failure it was - still only fixed labels, a class name, a message with its
+ * values taken out, `file:line` and counts. `code` stays WEB_RETENTION_FAILED when the error is not a DomainError.
+ */
 export type RetentionReport = {
   event: 'web_retention_failed';
   step: 'sweep' | 'deletion';
   code: string;
+  /** Principals whose purge failed in this group (a report is one group of identical failures). */
   failed: number;
+  /** The call that threw, and the fixed label of the statement group inside it. */
+  phase?: RetentionPhase;
+  sub?: string;
+  errorName?: string;
+  messageShape?: string;
+  at?: string;
+  principalKind?: 'guest' | 'invite' | 'account';
+  state?: string;
+  /** Distinct principals that failed in this whole sweep, and how many were left alone because they are in backoff. */
+  stuck?: number;
+  backedOff?: number;
+  oldestAgeBucket?: AgeBucket;
 };
 const safeCode = (error: unknown) =>
   error instanceof DomainError && /^[A-Z][A-Z0-9_]{2,63}$/.test(error.code) ? error.code : 'WEB_RETENTION_FAILED';
+
+/**
+ * Part 17g. The only thing the retention remembers between sweeps: per principal the number of failures in a row and the
+ * time of the last attempt (the backoff), and when a purge last completed (the health line). It lives in the Durable
+ * Object's key-value storage, not in SQL: web_guest_retention has no column for it and this Part adds no migration.
+ */
+export type RetentionLedger = { failures: Record<string, [number, number]>; lastSuccessAt: number | null };
+export type RetentionMemory = { load(): Promise<RetentionLedger>; save(ledger: RetentionLedger): Promise<void> };
+const emptyLedger = (): RetentionLedger => ({ failures: {}, lastSuccessAt: null });
+export function inMemoryRetention(): RetentionMemory {
+  let kept = emptyLedger();
+  return { load: async () => structuredClone(kept), save: async (ledger) => void (kept = structuredClone(ledger)) };
+}
+const LEDGER_KEY = 'retention:ledger';
+const LEDGER_MAX = 500;
+/** Durable Object key-value storage (the same API the owner alerts use). */
+export function durableRetentionMemory(storage: {
+  get(key: string): Promise<unknown>;
+  put(key: string, value: unknown): Promise<void>;
+}): RetentionMemory {
+  return {
+    load: async () => {
+      const value = (await storage.get(LEDGER_KEY)) as Partial<RetentionLedger> | undefined;
+      const failures: RetentionLedger['failures'] = {};
+      for (const [id, entry] of Object.entries(value?.failures ?? {}))
+        if (
+          Array.isArray(entry) &&
+          Number.isSafeInteger(entry[0]) &&
+          Number.isSafeInteger(entry[1]) &&
+          Object.keys(failures).length < LEDGER_MAX
+        )
+          failures[id] = [entry[0], entry[1]];
+      return {
+        failures,
+        lastSuccessAt: Number.isSafeInteger(value?.lastSuccessAt) ? (value!.lastSuccessAt as number) : null,
+      };
+    },
+    save: (ledger) => storage.put(LEDGER_KEY, ledger),
+  };
+}
+/** What the operator sees (counts and a time only). */
+export type RetentionHealth = { failing: number; oldestAgeBucket: AgeBucket | null; lastSuccessAt: number | null };
+/** Candidates looked at per sweep when some of them are in backoff (so a stuck few cannot hide the rest). */
+const SCAN_PAGE = 64;
+const SCAN_PAGES = 8;
 
 type Retention = WebRetentionRow & { db_cleared_at: number | null };
 type ObjectIntent = {
@@ -54,8 +128,20 @@ export class WebCloudRetention {
   private readonly graceMs: number;
   /** Part 17f: told (coarse code only) whenever a purge step fails, so it shows in the tail and counts for the owner alerts. */
   private readonly report: ((report: RetentionReport) => void) | undefined;
-  constructor(store: WebRuntimeStore, clock: Clock, graceMs = 0, report?: (report: RetentionReport) => void) {
+  /** Part 17g: which call and which statement group is running, so a failure can say where it broke. */
+  private phase: RetentionPhase = 'markExpired';
+  private sub = 'start';
+  /** Part 17g: durable per-principal failure bookkeeping (backoff + health); in memory when none is given. */
+  private readonly memory: RetentionMemory;
+  constructor(
+    store: WebRuntimeStore,
+    clock: Clock,
+    graceMs = 0,
+    report?: (report: RetentionReport) => void,
+    memory: RetentionMemory = inMemoryRetention(),
+  ) {
     this.report = report;
+    this.memory = memory;
     ensure(
       Number.isSafeInteger(graceMs) && graceMs >= 0 && graceMs <= 30 * 24 * 60 * 60_000,
       'WEB_RETENTION_GRACE_INVALID',
@@ -111,45 +197,221 @@ export class WebCloudRetention {
     const archive = nextReviewArchiveExpiry(this.store);
     return row?.due == null ? archive : archive === null ? row.due : Math.min(row.due, archive);
   }
+  /** What is known about a failing principal, as labels only: kind, retention state and how long it has been due. */
+  private describe(principalId: string): {
+    principalKind?: 'guest' | 'invite' | 'account';
+    state?: string;
+    oldestAgeBucket?: AgeBucket;
+  } {
+    try {
+      const row = this.store.get<{
+        kind: string;
+        state: string | null;
+        expires_at: number | null;
+        revoked: number | null;
+        last_seen: number | null;
+      }>(
+        `SELECT p.kind,r.state,r.expires_at,
+          (SELECT max(s.revoked_at) FROM web_sessions s WHERE s.principal_id=p.id) revoked,
+          ${playerLoginsExist(this.store) ? '(SELECT l.last_seen_at FROM web_player_logins l WHERE l.principal_id=p.id)' : 'NULL'} last_seen
+        FROM web_principals p LEFT JOIN web_guest_retention r ON r.principal_id=p.id WHERE p.id=?`,
+        principalId,
+      );
+      if (!row) return {};
+      // The same approximation as purgeDiagnostics: there is no purge-start column, so a purge counts from the moment its
+      // sessions were revoked, a retained player from the end of its inactivity window, a guest from the end of its trial.
+      const since =
+        row.state === 'purging'
+          ? (row.revoked ?? row.expires_at)
+          : row.last_seen !== null
+            ? row.last_seen + PLAYER_INACTIVE_MS
+            : row.expires_at === null
+              ? null
+              : row.expires_at + this.graceMs;
+      return {
+        principalKind:
+          row.kind === 'invite'
+            ? ('invite' as const)
+            : row.kind === 'account'
+              ? ('account' as const)
+              : ('guest' as const),
+        ...(row.state
+          ? {
+              state:
+                row.state === 'active' || row.state === 'purging' || row.state === 'unstarted' ? row.state : 'other',
+            }
+          : {}),
+        ...(since === null ? {} : { oldestAgeBucket: ageBucket(Math.max(0, this.clock.now() - since)) }),
+      };
+    } catch {
+      return {};
+    }
+  }
+  private schemaNames() {
+    try {
+      return new Set(
+        this.store.all<{ name: string }>("SELECT name FROM sqlite_master WHERE type='table'").map((r) => r.name),
+      );
+    } catch {
+      return new Set<string>();
+    }
+  }
+  /** One failed purge, read at the catch site (the call and statement group that was running, the error's shape). */
+  private failure(error: unknown, principalId: string | null, names: ReadonlySet<string>) {
+    const info = principalId === null ? {} : this.describe(principalId);
+    return {
+      code: safeCode(error),
+      phase: this.phase,
+      sub: this.sub,
+      errorName: errorName(error),
+      messageShape: messageShape(
+        error instanceof Error ? error.message : typeof error === 'string' ? error : '',
+        names,
+      ),
+      ...(firstFrame(error) ? { at: firstFrame(error)! } : {}),
+      ...info,
+    };
+  }
   async sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit > 0 && limit <= 16, 'WEB_RETENTION_SWEEP_INVALID');
-    // Part 19: delete anonymous review archive rows past their 180 days (batched, idempotent; independent of the flag).
-    sweepReviewArchive(this.store, this.clock.now());
-    const due = guestPurgeDue(this.store, this.clock.now(), this.graceMs);
-    const rows = this.store.all<{ principal_id: string }>(
-      `SELECT r.principal_id FROM web_guest_retention r
-      JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id
-      WHERE (p.kind='guest' OR p.kind='invite' AND r.state='purging')
-      AND ${due.sql} ORDER BY r.expires_at,r.principal_id LIMIT ?`,
-      ...due.args,
-      limit,
-    );
     this.lastError = null;
+    const names = this.schemaNames();
+    // A broken ledger must never stop a purge: the worst case is that nothing is backed off.
+    const ledger = await this.memory.load().catch(emptyLedger);
+    let dirty = false;
+    const groups = new Map<
+      string,
+      { report: Omit<RetentionReport, 'failed' | 'stuck' | 'backedOff'>; count: number }
+    >();
+    const stuck = new Set<string>();
+    const note = (error: unknown, principalId: string | null) => {
+      const found = this.failure(error, principalId, names);
+      this.lastError ??= found.code;
+      const key = JSON.stringify([
+        found.code,
+        found.phase,
+        found.sub,
+        found.errorName,
+        found.messageShape,
+        found.at,
+        found.principalKind,
+        found.state,
+      ]);
+      const group = groups.get(key);
+      if (group) {
+        group.count++;
+        if (found.oldestAgeBucket)
+          group.report.oldestAgeBucket = olderBucket(group.report.oldestAgeBucket, found.oldestAgeBucket);
+      } else groups.set(key, { report: { event: 'web_retention_failed', step: 'sweep', ...found }, count: 1 });
+    };
+    // Part 19: delete anonymous review archive rows past their 180 days (batched, idempotent; independent of the flag).
+    // A failure here is reported on its own and never keeps the principals below from being purged.
+    try {
+      this.phase = 'archive';
+      this.sub = 'review_archive';
+      sweepReviewArchive(this.store, this.clock.now());
+    } catch (error) {
+      note(error, null);
+    }
+    const now = this.clock.now();
+    // Forget what is no longer pending (purged or gone), then choose who to try: the oldest due principals that are not in backoff.
+    for (const id of Object.keys(ledger.failures)) {
+      const state = this.store.get<{ state: string }>(
+        'SELECT state FROM web_guest_retention WHERE principal_id=?',
+        id,
+      )?.state;
+      if (state === undefined || state === 'purged') {
+        delete ledger.failures[id];
+        dirty = true;
+      }
+    }
+    const due = guestPurgeDue(this.store, now, this.graceMs);
+    const rows: { principal_id: string }[] = [];
+    let backedOff = 0;
+    for (let page = 0; page < SCAN_PAGES && rows.length < limit; page++) {
+      const found = this.store.all<{ principal_id: string }>(
+        `SELECT r.principal_id FROM web_guest_retention r
+        JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id
+        WHERE (p.kind='guest' OR p.kind='invite' AND r.state='purging')
+        AND ${due.sql} ORDER BY r.expires_at,r.principal_id LIMIT ? OFFSET ?`,
+        ...due.args,
+        SCAN_PAGE,
+        page * SCAN_PAGE,
+      );
+      for (const row of found) {
+        const previous = ledger.failures[row.principal_id];
+        if (previous && now < previous[1] + backoffDelay(previous[0])) backedOff++;
+        else if (rows.length < limit) rows.push(row);
+      }
+      if (found.length < SCAN_PAGE) break;
+    }
     let failed = 0;
-    for (const { principal_id } of rows)
+    for (const { principal_id } of rows) {
+      this.phase = 'markExpired';
+      this.sub = 'start';
       try {
         this.markExpired(principal_id);
         this.clearDatabase(principal_id);
         await this.eraseAudio(principal_id);
+        if (ledger.failures[principal_id]) delete ledger.failures[principal_id];
+        ledger.lastSuccessAt = this.clock.now();
+        dirty = true;
       } catch (error) {
         failed++;
-        this.lastError ??= safeCode(error);
+        stuck.add(principal_id);
+        const previous = ledger.failures[principal_id];
+        ledger.failures[principal_id] = [(previous?.[0] ?? 0) + 1, this.clock.now()];
+        dirty = true;
+        note(error, principal_id);
       }
-    if (failed > 0) this.report?.({ event: 'web_retention_failed', step: 'sweep', code: this.lastError!, failed });
+    }
+    if (dirty) await this.memory.save(ledger).catch(() => {});
+    // Most 4 reports per sweep, the most frequent cause first: a tail full of one repeated line helps nobody.
+    for (const group of [...groups.values()].sort((a, b) => b.count - a.count).slice(0, 4))
+      this.report?.({ ...group.report, failed: group.count, stuck: stuck.size, backedOff } as RetentionReport);
     return { processed: rows.length, failed };
+  }
+  /** Counts for the operator: how many principals are failing now, how long the oldest has been due, when a purge last completed. */
+  async health(): Promise<RetentionHealth> {
+    const ledger = await this.memory.load().catch(emptyLedger);
+    let failing = 0,
+      oldest: AgeBucket | undefined;
+    for (const id of Object.keys(ledger.failures)) {
+      const state = this.store.get<{ state: string }>(
+        'SELECT state FROM web_guest_retention WHERE principal_id=?',
+        id,
+      )?.state;
+      if (state === undefined || state === 'purged') continue;
+      failing++;
+      const bucket = this.describe(id).oldestAgeBucket;
+      if (bucket) oldest = olderBucket(oldest, bucket);
+    }
+    return { failing, oldestAgeBucket: oldest ?? null, lastSuccessAt: ledger.lastSuccessAt };
   }
   /** The player's own deletion request, step 1 (fence + release): the caller is WebPlayerAccounts.deleteAccount. */
   beginDeletion(principalId: string) {
+    this.phase = 'markExpired';
+    this.sub = 'start';
     this.markExpired(principalId, 'deleted');
   }
   /** Step 2 and 3 of the same audited path (T2 database clear, then F file erase). A failure leaves 'purging' for the alarm. */
   async finishDeletion(principalId: string) {
+    this.phase = 'clearDatabase';
+    this.sub = 'start';
     try {
       this.clearDatabase(principalId);
       await this.eraseAudio(principalId);
+      const ledger = await this.memory.load().catch(emptyLedger);
+      if (ledger.failures[principalId]) delete ledger.failures[principalId];
+      ledger.lastSuccessAt = this.clock.now();
+      await this.memory.save(ledger).catch(() => {});
     } catch (error) {
       // The caller must not turn a deletion into an error page, so it swallows this; the alarm resumes the purge.
-      this.report?.({ event: 'web_retention_failed', step: 'deletion', code: safeCode(error), failed: 1 });
+      const found = this.failure(error, principalId, this.schemaNames());
+      const ledger = await this.memory.load().catch(emptyLedger);
+      ledger.failures[principalId] = [(ledger.failures[principalId]?.[0] ?? 0) + 1, this.clock.now()];
+      await this.memory.save(ledger).catch(() => {});
+      this.report?.({ event: 'web_retention_failed', step: 'deletion', ...found, failed: 1, stuck: 1 });
       throw error;
     }
   }
@@ -159,10 +421,13 @@ export class WebCloudRetention {
    * caller revoked in this transaction.
    */
   markExpired(principalId: string, reason: 'expired' | 'deleted' = 'expired') {
+    this.phase = 'markExpired';
+    this.sub = 'scope';
     this.store.transaction(() => {
       const row = this.guest(principalId, reason === 'deleted'),
         now = this.clock.now();
       if (['purging', 'purged'].includes(row.state)) return;
+      this.sub = 'state';
       if (reason === 'deleted')
         ensure(['unstarted', 'active', 'protected'].includes(row.state), 'WEB_RETENTION_NOT_EXPIRED');
       else {
@@ -178,9 +443,11 @@ export class WebCloudRetention {
       // Part 19 (flag CHAT_REVIEW_ENABLED): the anonymous transcript copy is made HERE, in the transaction that starts the
       // purge and before anything is cleared, so a crash can neither lose the copy nor leave content without one. A purge
       // resumed later finds state 'purging' above and returns before this line: it never archives twice.
+      this.sub = 'review_archive';
       if (this.store.chatReview === true && chatReviewTablesExist(this.store))
         archivePlayerChats(this.store, principalId, row.world_id, now);
       // The table only allows a purging row that has a trial window; a never-started guest gets a one-ms one.
+      this.sub = 'retention_row';
       this.store.run(
         `UPDATE web_guest_retention SET state='purging',revision=revision+1,
         started_at=coalesce(started_at,?),expires_at=coalesce(expires_at,?) WHERE principal_id=?`,
@@ -189,7 +456,9 @@ export class WebCloudRetention {
         principalId,
       );
       // Part 17f: the address is free from here on, whatever happens to the heavier clear that follows.
+      this.sub = 'player_logins';
       releasePlayerLogin(this.store, principalId);
+      this.sub = 'operations';
       for (const operation of this.store.all<{ id: string; ip_window_id: string | null; metering_type: string }>(
         "SELECT * FROM web_operations WHERE principal_id=? AND world_id=? AND quota_state='reserved'",
         principalId,
@@ -232,6 +501,7 @@ export class WebCloudRetention {
           'WEB_QUOTA_STATE_INVALID',
         );
       }
+      this.sub = 'provider_attempts';
       const ledger = new WebProviderOffline(this.store, this.clock);
       for (const attempt of this.store.all<{
         operation_id: string;
@@ -271,6 +541,8 @@ export class WebCloudRetention {
     });
   }
   clearDatabase(principalId: string) {
+    this.phase = 'clearDatabase';
+    this.sub = 'scope';
     this.store.transaction(() => {
       const row = this.guest(principalId),
         world = row.world_id;
@@ -285,7 +557,9 @@ export class WebCloudRetention {
           !this.store.get('SELECT 1 FROM web_retention_purge_gate'),
         'WEB_RETENTION_SCOPE_UNSAFE',
       );
+      this.sub = 'audit_source';
       auditWebLifecycleWorld(this.store, world, 'source', 'provider');
+      this.sub = 'media_intent';
       for (const table of ['web_provider_outputs', 'web_provider_media_assets'])
         ensure(
           !this.store.get(
@@ -297,10 +571,29 @@ export class WebCloudRetention {
           ),
           'WEB_RETENTION_MEDIA_INTENT_REQUIRED',
         );
+      this.sub = 'purge_gate';
       this.store.run('INSERT INTO web_retention_purge_gate VALUES (?,?,?)', principalId, world, row.revision);
+      // Part 17g ROOT CAUSE. The deployed cloud triggers that guard web_provider_outputs, web_provider_candidates and
+      // web_provider_media_assets (workers/web-cloudflare/retention.sql, applied once to the empty authority) allow the purge
+      // delete only while the principal's kind is 'guest'. A player who redeemed an invite and then deleted the account is
+      // kind 'invite': its first reply with voice made the DELETE abort with WEB_PROVIDER_MEDIA_IMMUTABLE on every alarm,
+      // forever. The triggers cannot change without a migration, so this transaction (atomic, single-writer, rolled back as a
+      // whole on any error) relabels the principal for exactly the deletes below and restores it before anything else reads it.
+      // Every guard that mattered is still checked above: guest() proved no account and no live grant, the gate row is bound
+      // to this retention revision, and the state is 'purging'. A proper trigger fix belongs to a later migration.
+      const relabel =
+        this.store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind === 'invite';
+      if (relabel)
+        ensure(
+          this.store.run("UPDATE web_principals SET kind='guest' WHERE id=? AND kind='invite'", principalId).changes ===
+            1,
+          'WEB_RETENTION_SCOPE_UNSAFE',
+        );
       const operations = 'SELECT id FROM web_operations WHERE principal_id=? AND world_id=?';
-      for (const table of ['web_local_events', 'web_user_events'])
+      for (const table of ['web_local_events', 'web_user_events']) {
+        this.sub = table;
         this.store.run(`DELETE FROM ${table} WHERE principal_id=? AND world_id=?`, principalId, world);
+      }
       for (const table of [
         'web_publication_items',
         'web_publications',
@@ -317,13 +610,23 @@ export class WebCloudRetention {
         'web_private_audio_assets',
         'web_synthetic_voice_segments',
         'web_stage_attempts',
-      ])
+      ]) {
+        this.sub = table;
         this.store.run(`DELETE FROM ${table} WHERE operation_id IN (${operations})`, principalId, world);
+      }
+      if (relabel)
+        ensure(
+          this.store.run("UPDATE web_principals SET kind='invite' WHERE id=? AND kind='guest'", principalId).changes ===
+            1,
+          'WEB_RETENTION_SCOPE_UNSAFE',
+        );
+      this.sub = 'embed_holds';
       releaseUnsentEmbedHolds(this.store, world);
       // Co-creation ideas (schema 117) are the player's data and go with the player.
+      this.sub = 'cocreation';
       purgeCocreation(this.store, { principalId });
       // The email login (schema 118) and the nickname 名片 revisions it wrote are the player's data too.
-      purgePlayerLogins(this.store, { principalId, worldId: world });
+      purgePlayerLogins(this.store, { principalId, worldId: world }, (group) => void (this.sub = group));
       for (const table of [
         'memory_facts',
         'memory_embeddings',
@@ -348,11 +651,15 @@ export class WebCloudRetention {
         'job_evidence_snapshots',
         'dialogue_bubbles',
         'outbox',
-      ])
+      ]) {
+        this.sub = table;
         if (!LATE_TABLES.has(table) || embeddingTableExists(this.store, table))
           this.store.run(`DELETE FROM ${table} WHERE world_id=?`, world);
+      }
+      this.sub = 'jobs';
       this.store.run('UPDATE jobs SET published_message_id=NULL WHERE world_id=?', world);
       this.store.run('DELETE FROM jobs WHERE world_id=?', world);
+      this.sub = 'operations_scrub';
       for (const operation of this.store.all<{ id: string; payload_hash: string }>(
         'SELECT id,payload_hash FROM web_operations WHERE principal_id=? AND world_id=?',
         principalId,
@@ -363,6 +670,7 @@ export class WebCloudRetention {
           webReceiptDigest(this.store, 'receipt', `purged-payload\0${operation.payload_hash}`),
           operation.id,
         );
+      this.sub = 'external_attempts';
       for (const attempt of this.store.all<{
         operation_id: string;
         stage: string;
@@ -386,12 +694,20 @@ export class WebCloudRetention {
           attempt.phase,
           attempt.ordinal,
         );
+      this.sub = 'messages';
       this.store.run('DELETE FROM messages WHERE world_id=?', world);
+      this.sub = 'contacts';
       this.store.run('UPDATE contacts SET state_json=? WHERE world_id=?', JSON.stringify(emptySession()), world);
       this.store.run("UPDATE world_characters SET relationship='new' WHERE world_id=?", world);
+      // The two relabels above each wrote an 'access' event (trigger web_local_access_update): they are the player's rows too.
+      this.sub = 'web_local_events';
+      this.store.run('DELETE FROM web_local_events WHERE principal_id=? AND world_id=?', principalId, world);
+      this.sub = 'audit_cleared';
       this.store.run('DELETE FROM web_retention_purge_gate WHERE principal_id=?', principalId);
       auditWebLifecycleWorld(this.store, world, 'cleared', 'provider');
+      this.sub = 'foreign_key_check';
       ensure(!this.store.get('PRAGMA foreign_key_check'), 'WEB_RETENTION_CLEANUP_INCOMPLETE');
+      this.sub = 'retention_row';
       this.store.run(
         'UPDATE web_guest_retention SET db_cleared_at=?,revision=revision+1 WHERE principal_id=?',
         this.clock.now(),
@@ -400,6 +716,8 @@ export class WebCloudRetention {
     });
   }
   async eraseAudio(principalId: string) {
+    this.phase = 'eraseAudio';
+    this.sub = 'scope';
     const row = this.guest(principalId);
     ensure(['purging', 'purged'].includes(row.state) && row.db_cleared_at !== null, 'WEB_RETENTION_DB_NOT_CLEARED');
     for (const intent of this.store.all<ObjectIntent>(
@@ -408,6 +726,7 @@ export class WebCloudRetention {
       principalId,
       row.world_id,
     )) {
+      this.sub = 'audio_objects';
       const reference = JSON.parse(intent.reference_json) as MediaObjectReference;
       const authorize = async () => {
         const current = this.guest(principalId);
@@ -458,6 +777,7 @@ export class WebCloudRetention {
         intent.ordinal,
       );
     }
+    this.sub = 'retention_row';
     this.store.transaction(() => {
       this.guest(principalId);
       ensure(

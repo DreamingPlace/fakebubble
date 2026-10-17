@@ -191,8 +191,13 @@ export class WebHTTPFixture extends WebBusinessFixture {
     dailyCap: number | undefined,
     pub: { graceMs?: number; accountDelete?: boolean; legalPages?: boolean; turnstile?: boolean } = {},
   ) {
-    const retention = new WebCloudRetention(this.store, this.clock, pub.graceMs ?? 0, (report) =>
-      this.retentionReports.push(report),
+    const retention = new WebCloudRetention(
+      this.store,
+      this.clock,
+      pub.graceMs ?? 0,
+      (report) => this.retentionReports.push(report),
+      // Part 17g: tests here retry a failing purge on purpose, back to back; the backoff has its own test (web-retention-world-17g).
+      { load: async () => ({ failures: {}, lastSuccessAt: null }), save: async () => {} },
     );
     this.retention = retention;
     this.human = pub.turnstile

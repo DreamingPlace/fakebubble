@@ -11,6 +11,8 @@ import { reviewCodeFor } from '../../../apps/server/review/web-chat-review.ts';
 import { reviewState } from './review-state.ts';
 
 /** Test-only fault injection around actual R2 operations. Never a production entrypoint. */
+// Part 17g: these tests retry a failing purge on purpose, back to back; the backoff has its own test (web-retention-world-17g).
+const NO_BACKOFF = { load: async () => ({ failures: {}, lastSuccessAt: null }), save: async () => {} };
 export class WebRetentionFixture extends WebBusinessFixture {
   private cleaner: WebCloudRetention;
   private readonly rawBucket: PrivateBucket;
@@ -46,7 +48,7 @@ export class WebRetentionFixture extends WebBusinessFixture {
     });
     this.control = control;
     this.rawBucket = env.MEDIA;
-    this.cleaner = new WebCloudRetention(this.store, this.clock);
+    this.cleaner = new WebCloudRetention(this.store, this.clock, 0, undefined, NO_BACKOFF);
   }
   protected createRunner(audioMs = 250) {
     return super.createRunner(audioMs, async (provider) => {
@@ -90,7 +92,7 @@ export class WebRetentionFixture extends WebBusinessFixture {
         value = { expired: true };
       } else if (path === '/retention/grace') {
         // Part 17: the cleaner of a deployment with GUEST_GRACE_ENABLED (graceMs > 0) or without it (0).
-        this.cleaner = new WebCloudRetention(this.store, this.clock, input.graceMs ?? 0);
+        this.cleaner = new WebCloudRetention(this.store, this.clock, input.graceMs ?? 0, undefined, NO_BACKOFF);
         value = { graceMs: input.graceMs ?? 0 };
       } else if (path === '/retention/sweep')
         value = { ...(await this.cleaner.sweep()), error: this.cleaner.lastError };
@@ -306,7 +308,7 @@ export class WebRetentionFixture extends WebBusinessFixture {
         value = { begun: true };
       } else if (path === '/retention/restart') {
         // A restarted object: a new cleaner over the same storage.
-        this.cleaner = new WebCloudRetention(this.store, this.clock);
+        this.cleaner = new WebCloudRetention(this.store, this.clock, 0, undefined, NO_BACKOFF);
         value = { restarted: true };
       } else if (path === '/retention/review-state') value = reviewState(this.store);
       else if (path === '/retention/last-seen') {
