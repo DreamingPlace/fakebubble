@@ -167,14 +167,19 @@ test('per-voice resolution: only unpinned (s2.1-pro) bindings follow the site de
   assert.equal(isVoiceModelBinding('pin:drama-3'), false);
 });
 
-test('ledger: drama-3 is priced at the s2.1 upper bound (15 micros/byte), not the $10/M list price', () => {
+// Part 21i (named exception): the ledger now reserves 50 micros/byte for drama-3 (Fish bills it per character: USD 10/M until
+// 2026-11-12, USD 50/M after; a byte is never fewer than a character), no longer the s2.1 bound of 15. s2.1-pro is unchanged.
+test('ledger: drama-3 reserves 50 micros/byte, the post-discount list price per character; s2.1-pro stays 15', () => {
   const fish = PROVIDER_PRICES.filter((price) => price.provider === 'fish');
   const s21 = fish.find((price) => price.model === 's2.1-pro')!;
   const drama = fish.find((price) => price.model === 'drama-3')!;
-  assert.equal(drama.upper, s21.upper);
-  assert.equal(drama.upper, 15);
+  assert.equal(s21.upper, 15);
+  assert.equal(drama.upper, 50);
   assert.equal(drama.unit, 'byte');
   assert.equal(drama.phase, 'speech');
+  // Mixed ASCII (1 byte per character) and Chinese (3): never below 50 per character.
+  const text = '[soft and gentle, unhurried] 你好呀 ok';
+  assert.ok(Buffer.byteLength(text) * drama.upper >= [...text].length * 50);
 });
 
 test('draft: soundCue is optional ("none" = absent), whitelisted, and never part of the displayed text', () => {

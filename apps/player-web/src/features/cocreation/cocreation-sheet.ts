@@ -21,7 +21,7 @@ export interface CocreationApi {
     answers: CocreationAnswer[];
   }): Promise<{ submissionId: string; answered: number; duplicate: boolean }>;
   /** Has today's entry for this character been used? Best effort: without it the sheet simply does not say. */
-  cocreationToday?(characterId: string): Promise<{ used: boolean }>;
+  cocreationToday?(characterId: string): Promise<{ cardIds: string[] }>;
 }
 export type CocreationSheetOptions = {
   api: CocreationApi;
@@ -45,8 +45,10 @@ export const BATCH_SIZE = 5;
 export const cocreationCopy = {
   title: (name: string) => `共创 · 让${name}更像${name}`,
   sub: (name: string) => `写下你心中的${name}`,
-  /** Today's entry for this character is spent (one per player per character per UTC day). */
-  usedToday: '今天已提交',
+  /** One answer per player per character per card per UTC day: the card is spent until 00:00 UTC. */
+  cardUsed: '今天已回答，明天再来',
+  /** Every card of this character has been answered today. */
+  allUsed: '今天的问题都回答过了，明天再来',
   progress: (n: number) => (n === 0 ? '写几张都行，不用写完' : `已写 ${n} 张`),
   shuffle: '换一批',
   send: (name: string) => `交给${name}`,
@@ -65,7 +67,7 @@ export const cocreationCopy = {
   reply: (name: string) => `${name}会回：`,
   close: '关闭',
   errors: {
-    COCREATION_DAILY_LIMIT: '今天已经给 TA 共创过啦，明天再来吧',
+    COCREATION_DAILY_LIMIT: '有的问题今天已经回答过了，明天再来吧',
     COCREATION_IP_LIMIT: '今天的共创次数用完了，明天再来吧',
     COCREATION_TEXT_INVALID: '有一张的内容不太合适，检查一下长度再试试。',
     COCREATION_EMPTY: '先写一张再交出去吧。',
@@ -118,9 +120,14 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const dialogueDone = () => draft.dialogue.player.trim() !== '' && draft.dialogue.replies.some((r) => r.trim() !== '');
   const dialogueTouched = () =>
     draft.dialogue.player.trim() !== '' || draft.dialogue.replies.some((r) => r.trim() !== '');
-  const isWritten = (id: string) => (id === 'dialogue' ? dialogueDone() : (draft.text.get(id) ?? '').trim() !== '');
+  // Cards this player already answered today (UTC) for this character: shown disabled, never part of an answer.
+  const used = new Set<string>();
+  const isWritten = (id: string) =>
+    !used.has(id) && (id === 'dialogue' ? dialogueDone() : (draft.text.get(id) ?? '').trim() !== '');
   const unwrittenPool = () =>
-    COCREATION_CARDS.filter((card) => card.id !== 'free' && !isWritten(card.id)).map((card) => card.id);
+    COCREATION_CARDS.filter((card) => card.id !== 'free' && !used.has(card.id) && !isWritten(card.id)).map(
+      (card) => card.id,
+    );
   const writtenIds = () => draft.order.filter(isWritten);
   const writtenCount = () => writtenIds().length;
 
@@ -143,7 +150,8 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const deckIds = () => [
     ...writtenIds(),
     ...draft.batch.filter((id) => !isWritten(id)),
-    ...(isWritten('free') ? [] : ['free']),
+    ...(isWritten('free') || used.has('free') ? [] : ['free']),
+    ...COCREATION_CARDS.filter((card) => used.has(card.id)).map((card) => card.id),
   ];
 
   // ---- DOM ------------------------------------------------------------------------------------------------------
@@ -161,14 +169,14 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   });
   const dots = h('div', { class: 'cc-dots', attrs: { 'aria-hidden': 'true' } });
   const notice = h('p', { class: 'cc-notice', attrs: { role: 'status', 'aria-live': 'polite' }, hidden: true });
-  // Shown before the player starts typing when today's entry for this character is already used.
+  // Shown when every card of this character has been answered today.
   const usedBanner = h('p', {
     class: 'cc-used',
-    text: cocreationCopy.usedToday,
+    text: cocreationCopy.allUsed,
     attrs: { role: 'status', 'aria-live': 'polite' },
     hidden: true,
   });
-  let usedToday = false;
+  const allUsed = () => COCREATION_CARDS.every((card) => used.has(card.id));
   const sendButton = h('button', { class: 'cc-send', attrs: { type: 'button' }, text: cocreationCopy.send(name) });
   const thanks = h(
     'div',
@@ -204,6 +212,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     addReply?: HTMLElement;
     hint?: HTMLElement;
     skip: HTMLButtonElement;
+    cta: HTMLElement;
   };
   const refs = new Map<string, CardRefs>();
   let openId: string | null = null;
@@ -242,7 +251,14 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     ref.root.className = `cc-card${written ? ' is-written' : ''}${openId === id ? ' is-open' : ''}${
       id === 'dialogue' ? ' is-dialogue' : ''
     }`;
+    const spent = used.has(id);
+    if (spent) {
+      ref.root.className += ' is-used';
+      if (openId === id) openId = null;
+    }
     ref.editor.hidden = openId !== id;
+    ref.open.disabled = spent;
+    ref.cta.textContent = spent ? cocreationCopy.cardUsed : cocreationCopy.write;
     ref.open.setAttribute('aria-expanded', String(openId === id));
     ref.skip.textContent =
       written || (id === 'dialogue' && dialogueTouched()) ? cocreationCopy.clear : cocreationCopy.skip;
@@ -253,7 +269,8 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const refresh = () => {
     const n = writtenCount();
     progress.textContent = cocreationCopy.progress(n);
-    sendButton.disabled = busy || n === 0 || usedToday;
+    sendButton.disabled = busy || n === 0 || allUsed();
+    usedBanner.hidden = !allUsed();
     shuffleButton.disabled = busy;
     for (const id of refs.keys()) refreshRefs(id);
   };
@@ -261,12 +278,13 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const buildCard = (card: CocreationCard): CardRefs => {
     const prompt = cocreationPrompt(card, name);
     const badge = h('span', { class: 'cc-badge', text: cocreationCopy.written });
+    const cta = h('span', { class: 'cc-cta', text: cocreationCopy.write });
     const face = h(
       'button',
       { class: 'cc-face', attrs: { type: 'button', 'aria-expanded': 'false' } },
       h('span', { class: 'cc-prompt', text: prompt }),
       badge,
-      h('span', { class: 'cc-cta', text: cocreationCopy.write }),
+      cta,
     );
     const editor = h('div', { class: 'cc-editor', hidden: true });
     const areas: HTMLTextAreaElement[] = [];
@@ -374,6 +392,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
       areas,
       counters,
       skip,
+      cta,
       ...(secondReply ? { secondReply } : {}),
       ...(addReply ? { addReply } : {}),
       ...(hint ? { hint } : {}),
@@ -490,10 +509,8 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
       sendButton.textContent = cocreationCopy.send(name);
       const code = (error as { code?: string }).code ?? '';
       show(cocreationCopy.errors[code] ?? cocreationCopy.errors.unknown!);
-      if (code === 'COCREATION_DAILY_LIMIT') {
-        usedToday = true;
-        usedBanner.hidden = false;
-      }
+      // Refused whole: learn which cards are spent so they can be disabled; the rest of the draft stays.
+      if (code === 'COCREATION_DAILY_LIMIT') loadUsed();
       if (!closed) refresh();
       return;
     }
@@ -534,18 +551,28 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     Array.from(dots.children).forEach((dot, i) => (dot.className = i === index ? 'on' : ''));
   });
 
+  function loadUsed() {
+    void api.cocreationToday?.(characterId).then(
+      (today) => {
+        if (closed) return;
+        for (const id of today.cardIds) used.add(id);
+        // The unspent cards are drawn again, so a spent card never takes a place in the batch.
+        const kept = draft.batch.filter((id) => !used.has(id));
+        draft.batch = [
+          ...kept,
+          ...unwrittenPool()
+            .filter((id) => !kept.includes(id))
+            .slice(0, BATCH_SIZE - kept.length),
+        ];
+        renderDeck();
+      },
+      () => {},
+    );
+  }
+
   renderDeck();
   mountPoint.append(sheet);
   deck.focus?.();
-  void api.cocreationToday?.(characterId).then(
-    (today) => {
-      if (closed || !today.used) return;
-      usedToday = true;
-      usedBanner.hidden = false;
-      show(cocreationCopy.errors.COCREATION_DAILY_LIMIT!);
-      refresh();
-    },
-    () => {},
-  );
+  loadUsed();
   return { close, element: sheet, isOpen: () => !closed };
 }

@@ -3,7 +3,6 @@ import { test } from 'node:test';
 import { parseBootstrap } from '../../../packages/contracts/web-local-client.ts';
 import type { WebLocalMessage, WebLocalOperation } from '../../../packages/contracts/web-local.ts';
 import { LocalSession, type LocalScope } from '../../../apps/player-web/src/session/local-session.ts';
-import { LocalIdentityController } from '../../../apps/player-web/src/session/identity-controller.ts';
 import { LocalApi, LocalApiError, StaleLocalIdentityError } from '../../../apps/player-web/src/services/local-api.ts';
 import { LocalAudioController } from '../../../apps/player-web/src/media/audio-controller.ts';
 import { LocalSyncController, type EventStream } from '../../../apps/player-web/src/data/sync-controller.ts';
@@ -72,33 +71,48 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-test('018 register and recover cannot install after invalidate or competing transition', async () => {
+// Part 21i: moved here from the tests of the deleted LocalIdentityController (see the PR description). The security rules those
+// tests asserted live in LocalSession's identity tickets, which every identity flow (invite redemption included) uses.
+test('018 an identity transition cannot apply after invalidate, after the content was denied, or after a newer transition', () => {
   const session = new LocalSession();
   session.install(guest);
-  const gate = deferred<void>();
-  const api = { register: () => gate.promise, bootstrap: async () => account } as unknown as LocalApi;
-  const task = new LocalIdentityController(api, session).register('r', 'u', 'secret');
+  const afterInvalidate = session.beginIdentityTransition();
+  assert.equal(afterInvalidate(), true, 'live until something replaces it');
   session.invalidate();
-  gate.resolve();
-  await assert.rejects(task, StaleLocalIdentityError);
+  assert.equal(afterInvalidate(), false, 'a late response cannot reinstall an invalidated identity');
   assert.equal(session.currentView, null);
 
   session.install(guest);
-  const first = deferred<void>(),
-    second = deferred<void>();
-  let calls = 0;
-  const competing = {
-    register: () => (++calls === 1 ? first.promise : second.promise),
-    bootstrap: async () => account,
-  } as unknown as LocalApi;
-  const identity = new LocalIdentityController(competing, session);
-  const old = identity.register('r1', 'u', 'secret');
-  const current = identity.register('r2', 'u', 'secret');
-  second.resolve();
-  await current;
-  first.resolve();
-  await assert.rejects(old, StaleLocalIdentityError);
+  const afterDenial = session.beginIdentityTransition();
+  session.denyContent();
+  assert.equal(afterDenial(), false, 'a late response cannot revive an expired generation');
+  assert.equal(session.contentAvailable(), false);
+
+  session.install(guest);
+  const first = session.beginIdentityTransition(),
+    second = session.beginIdentityTransition();
+  assert.equal(first(), false, 'a competing, newer transition wins');
+  assert.equal(second(), true);
+  session.install(account);
+  assert.equal(second(), false, 'installing the result ends the transition');
   assert.equal(session.currentView, account);
+});
+
+test('018 an in-place identity change keeps its own request alive and rotates the generation when installed', () => {
+  const session = new LocalSession();
+  session.install(guest);
+  const oldScope = session.scope!,
+    oldSignal = session.signal;
+  const current = session.beginIdentityTransition();
+  assert.equal(oldSignal.aborted, false, 'beginning a transition never aborts the request that carries it');
+  assert.equal(current(), true);
+  session.install(account);
+  assert.equal(oldSignal.aborted, true, 'work of the old identity is aborted on receipt');
+  assert.equal(session.currentView?.bootstrap.access.kind, 'account');
+  assert.equal(session.scope?.principalId, oldScope.principalId, 'same principal and world');
+  assert.equal(session.scope?.worldId, oldScope.worldId);
+  assert.notEqual(session.scope?.generation, oldScope.generation);
+  assert.equal(session.isCurrent(oldScope), false, 'old UI work is no longer current');
 });
 
 test('018 stale bootstrap and challenge responses cannot overwrite in-memory CSRF', async () => {
@@ -128,39 +142,6 @@ test('018 stale bootstrap and challenge responses cannot overwrite in-memory CSR
   await assert.rejects(challenge, StaleLocalIdentityError);
   await api.send('synthetic-local', 'r', 'hello');
   assert.deepEqual(seen, ['initial']);
-});
-
-test('018 valid old-cookie recovery completes without aborting its own request', async () => {
-  const session = new LocalSession();
-  session.install(guest);
-  const oldSignal = session.signal;
-  let boots = 0;
-  const api = {
-    bootstrap: async () => {
-      if (++boots === 1) throw new LocalApiError(409, 'SESSION_ROTATED_RECOVERABLE');
-      return account;
-    },
-    receiptChallenge: async () => 'recovery-csrf',
-    recoverRegister: async () => ({ accountId: 'a', principalId: 'p' }),
-  } as unknown as LocalApi;
-  await new LocalIdentityController(api, session).recoverRegister('r', 'u', 'secret');
-  assert.equal(oldSignal.aborted, true);
-  assert.equal(session.currentView?.bootstrap.access.kind, 'account');
-});
-test('018 valid new-cookie receipt-status recovery retains same principal and world', async () => {
-  const session = new LocalSession();
-  session.install(guest);
-  let statuses = 0;
-  const api = {
-    bootstrap: async () => account,
-    receiptStatus: async () => {
-      statuses++;
-      return { accountId: 'a', principalId: 'p' };
-    },
-  } as unknown as LocalApi;
-  await new LocalIdentityController(api, session).recoverRegister('r', 'u', 'secret');
-  assert.equal(statuses, 1);
-  assert.equal(session.currentView, account);
 });
 
 const message = (id: string): WebLocalMessage => ({

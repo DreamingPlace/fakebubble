@@ -7,7 +7,6 @@ import {
   type AdminPermission,
 } from '../../src/services/account-admin-api.ts';
 import { CharacterAdminClient } from '../../src/services/character-admin-api.ts';
-import { permissionEditor } from '../../src/features/admin/permission-editor.ts';
 import { InviteLocalApiError } from '../../src/services/invite-local-api.ts';
 
 class ElementStub extends EventTarget {
@@ -343,42 +342,6 @@ test('account transport uses admin namespace, rotates CSRF after binding and nev
   assert.equal(requests[0]!.csrf, null);
   assert.equal(requests[1]!.csrf, 'a'.repeat(64));
   assert.equal(requests[2]!.csrf, 'b'.repeat(64));
-});
-
-test('permission editor contains exactly four categories; new grants are category codes and untouched legacy scopes never expand', (t) => {
-  setup(t);
-  const mount = new ElementStub(),
-    original = ['invites.revoke', 'characters.edit:deleted-role', 'characters.publish:jojo'] as AdminPermission[];
-  const editor = permissionEditor(mount as unknown as HTMLElement, original);
-  assert.equal(descendants(mount).filter((n) => n.type === 'checkbox').length, 4);
-  assert.deepEqual(editor.value(), [...original].sort());
-  const checkbox = (key: string) =>
-    descendants(mount).find((n) => n.attributes.get('data-permission-category') === key)!;
-  checkbox('category.characters').checked = false;
-  checkbox('category.characters').fire('change');
-  assert.deepEqual(editor.value(), ['characters.publish:jojo', 'invites.revoke']);
-  checkbox('category.characters').checked = true;
-  checkbox('category.characters').fire('change');
-  assert.deepEqual(editor.value(), ['category.characters', 'characters.publish:jojo', 'invites.revoke']);
-  editor.setDisabled(true);
-  assert.ok(
-    descendants(mount)
-      .filter((n) => n.type === 'checkbox')
-      .every((n) => n.disabled),
-  );
-  const fresh = new ElementStub(),
-    newEditor = permissionEditor(fresh as unknown as HTMLElement, []);
-  for (const node of descendants(fresh).filter((n) => n.type === 'checkbox')) {
-    node.checked = true;
-    node.fire('change');
-  }
-  assert.deepEqual(newEditor.value(), [
-    'category.characters',
-    'category.invites',
-    'category.materials',
-    'category.publication',
-  ]);
-  assert.ok(!descendants(mount).some((n) => /最多 128|全部人物|角色操作与范围/.test(n.textContent)));
 });
 
 test('owner explicitly confirms all-permission removal without logout and does not reissue after ambiguous response or refresh', async (t) => {

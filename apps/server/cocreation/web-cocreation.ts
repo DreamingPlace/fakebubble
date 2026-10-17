@@ -131,18 +131,12 @@ export class WebCocreation {
       }
       const now = this.clock.now();
       ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
-      // One submission per player per character per UTC day, counted from the existing rows.
+      // One answer per player per character per card per UTC day, counted from the existing rows. A submission that
+      // contains any card already answered today is refused whole: nothing is written.
       const dayStart = Math.floor(now / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs;
       const untilTomorrow = Math.max(1, dayStart + COCREATION_LIMITS.dayMs - now);
-      const today = this.store.get<{ n: number }>(
-        `SELECT count(*) n FROM web_cocreation_submissions
-        WHERE principal_id=? AND character_id=? AND created_at>=? AND created_at<?`,
-        principal.principalId,
-        characterId,
-        dayStart,
-        dayStart + COCREATION_LIMITS.dayMs,
-      )!.n;
-      if (today >= COCREATION_LIMITS.perCharacterPerDay)
+      const answeredToday = this.cardsAnsweredToday(principal.principalId, characterId, dayStart);
+      if (answers.some((answer) => answeredToday.has(answer.cardId)))
         throw new RetryAfterError('COCREATION_DAILY_LIMIT', untilTomorrow);
       // Anti-abuse: submissions per IP hash per UTC day (a submission row holds no address, so the counter is kept apart).
       if (
@@ -178,26 +172,32 @@ export class WebCocreation {
     });
   }
 
+  private cardsAnsweredToday(principalId: string, characterId: string, dayStart: number) {
+    return new Set(
+      this.store
+        .all<{ card_id: string }>(
+          `SELECT DISTINCT a.card_id FROM web_cocreation_answers a
+          JOIN web_cocreation_submissions s ON s.id=a.submission_id
+          WHERE s.principal_id=? AND s.character_id=? AND s.created_at>=? AND s.created_at<?`,
+          principalId,
+          characterId,
+          dayStart,
+          dayStart + COCREATION_LIMITS.dayMs,
+        )
+        .map((row) => row.card_id),
+    );
+  }
+
   /**
-   * Has this player already used today's entry for this character? Same session/CSRF/Origin checks as a write, so the
-   * sheet can say "今天已提交" before the player starts typing. Reads only this principal's own rows.
+   * Which cards has this player already answered today for this character? Same session/CSRF/Origin checks as a
+   * write, so the sheet can disable them before the player starts typing. Reads only this principal's own rows.
    */
   usedToday(token: string, csrf: string, origin: string, characterIdInput: unknown) {
     const principal = this.identity.authorizeWrite(token, csrf, origin);
     ensure(identifier(characterIdInput), 'INVALID_REQUEST');
     ensure(cocreationTablesExist(this.store), 'COCREATION_UNAVAILABLE');
-    const now = this.clock.now();
-    const dayStart = Math.floor(now / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs;
-    const used =
-      (this.store.get<{ n: number }>(
-        `SELECT count(*) n FROM web_cocreation_submissions
-        WHERE principal_id=? AND character_id=? AND created_at>=? AND created_at<?`,
-        principal.principalId,
-        characterIdInput,
-        dayStart,
-        dayStart + COCREATION_LIMITS.dayMs,
-      )?.n ?? 0) >= COCREATION_LIMITS.perCharacterPerDay;
-    return { used };
+    const dayStart = Math.floor(this.clock.now() / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs;
+    return { cardIds: [...this.cardsAnsweredToday(principal.principalId, characterIdInput, dayStart)].sort() };
   }
 
   // ---- administrators -------------------------------------------------------------------------------------------

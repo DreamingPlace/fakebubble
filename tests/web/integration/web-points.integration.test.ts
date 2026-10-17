@@ -11,6 +11,7 @@ import {
 import { BILLING_PAGE_SIZE, WebBilling, playerBilling } from '../../../apps/server/admission/web-billing.ts';
 import { routeWebBilling } from '../../../apps/server/admission/web-billing-routes.ts';
 import { parseBillingPage } from '../../../packages/contracts/player-billing.ts';
+import { DomainError } from '../../../packages/domain/errors.ts';
 import { purgePlayerLogins, playerLoginsRemain } from '../../../apps/server/identity/web-player-purge.ts';
 import { POINTS, replyPoints, repliesLeft, parsePlayerTextModels } from '../../../packages/contracts/player-models.ts';
 import type { PlayerModelId } from '../../../packages/contracts/player-models.ts';
@@ -675,12 +676,22 @@ test('消费记录: newest first; a backup reply names the model that wrote it a
   assert.equal(page.metered, true);
   assert.equal(page.balance, 100 - 12 - 25 - 12, 'r1 12, r2 25, r3 refunded, r4 pending 12');
   assert.equal(page.balance, f.sum(f.principalId), 'the shown balance is the sum of the events');
+  // Part 21i (named exception): the two trial replies made before signing up are listed too (免费试用, 0 points); the
+  // assertions below are about the points rows and are unchanged.
   assert.deepEqual(
-    page.items.map((i) => i.kind),
+    page.items.filter((i) => i.kind === 'trial').map((i) => [(i as any).model, (i as any).characterId]),
+    [
+      ['deepseek', characterId],
+      ['deepseek', characterId],
+    ],
+  );
+  const rows = page.items.filter((i) => i.kind !== 'trial');
+  assert.deepEqual(
+    rows.map((i) => i.kind),
     ['pending', 'failed', 'reply', 'reply', 'bonus'],
     'newest first',
   );
-  const [pending, failed, second, first, bonus] = page.items as [any, any, any, any, any];
+  const [pending, failed, second, first, bonus] = rows as [any, any, any, any, any];
   assert.deepEqual([pending.model, pending.points, pending.free], ['deepseek', 12, false]);
   assert.deepEqual([failed.refunded, failed.free], [22, false], 'the failed reply shows what was refunded');
   assert.deepEqual(
@@ -720,12 +731,16 @@ test("消费记录 is scoped to the session's own principal: player A never sees
   publish(f, a1.operationId, 'deepseek');
   const a = billing(f);
   const b = billing(f, other);
+  // Part 21i (named exception): each player's own two trial rows are listed too; the points rows are unchanged.
   assert.deepEqual(
-    a.items.map((i) => i.kind),
+    a.items.filter((i) => i.kind !== 'trial').map((i) => i.kind),
     ['reply', 'bonus'],
   );
-  assert.equal((a.items[0] as any).model, 'deepseek');
-  assert.equal((b.items[0] as any).model, 'xai');
+  assert.equal(a.items.filter((i) => i.kind === 'trial').length, 2);
+  assert.equal(b.items.filter((i) => i.kind === 'trial').length, 2, "B's own trial rows, never A's");
+  const firstReply = (page: typeof a) => page.items.find((i) => i.kind === 'reply') as any;
+  assert.equal(firstReply(a).model, 'deepseek');
+  assert.equal(firstReply(b).model, 'xai');
   assert.equal(a.balance, 100 - 12);
   assert.equal(b.balance, 100 - 27 + 0);
   assert.equal(a.month.byModel.length, 1);
@@ -747,8 +762,8 @@ test("消费记录 is scoped to the session's own principal: player A never sees
       playerToken: token,
       body,
     })!;
-  assert.equal((route('tok-a').body as any).items[0].model, 'deepseek');
-  assert.equal((route('tok-b').body as any).items[0].model, 'xai');
+  assert.equal(firstReply(route('tok-a').body as typeof a).model, 'deepseek');
+  assert.equal(firstReply(route('tok-b').body as typeof a).model, 'xai');
   assert.throws(() => route('tok-a', { principalId: other }), /INVALID_REQUEST/, 'no client-supplied scope');
   assert.throws(() => route('tok-a', { page: 0 }), /INVALID_REQUEST/);
   assert.throws(() => route('tok-a', { page: 1.5 }), /INVALID_REQUEST/);
@@ -763,17 +778,13 @@ function store_trial(f: ReturnType<typeof fixture>, principalId: string) {
   f.history(principalId, 'published', 'trial_extra', 202);
 }
 
-test('消费记录: a guest on the trial (or a deployment without the feature) gets 404; an invited player sees 不计点 rows', (t) => {
-  const guest = fixture(t, { bonus: false });
-  assert.throws(() => billing(guest), /NOT_FOUND/);
+// Part 21i (named exception): a guest on the trial now gets its own trial rows instead of 404 (see the tests after this one);
+// a deployment without the feature still answers 404, and the invited player's page is unchanged.
+test('消费记录: a deployment without the feature gets 404; an invited player sees 不计点 rows', (t) => {
   const off = fixture(t, { flag: false });
   assert.throws(() => billing(off), /NOT_FOUND/);
-  const service = new WebBilling(
-    guest.store,
-    { now: guest.clock },
-    { authorizeWrite: () => ({ principalId: guest.principalId }) },
-  );
-  assert.throws(() => service.history('t', 'c', 'o', {}), /NOT_FOUND/);
+  const guest = fixture(t, { bonus: false });
+  assert.equal(billing(guest).metered, false, 'a guest is no longer a 404');
 
   const f = fixture(t, { bonus: false });
   f.store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", f.principalId);
@@ -854,10 +865,17 @@ test("消费记录: grants and refills are listed; the month boundary follows th
     f.clock(),
   );
   const page = billing(f);
-  assert.deepEqual(page.items.map((i) => [i.kind, (i as any).points]).sort(), [
-    ['bonus', 100],
-    ['grant', 50],
-  ]);
+  // Part 21i (named exception): the fixture's two trial replies are listed too; the points rows are unchanged.
+  assert.deepEqual(
+    page.items
+      .filter((i) => i.kind !== 'trial')
+      .map((i) => [i.kind, (i as any).points])
+      .sort(),
+    [
+      ['bonus', 100],
+      ['grant', 50],
+    ],
+  );
   assert.doesNotMatch(JSON.stringify(page), /admin/, 'the acting administrator is never shown');
   // A reply made at 23:30 UTC on the last day of the month is already next month for a player at UTC+8.
   const g = fixture(t);
@@ -882,8 +900,101 @@ test('消费记录 after account deletion: the points data is gone and the page 
   assert.equal(f.store.get('SELECT 1 FROM web_points_balance'), undefined);
   assert.equal(f.store.get('SELECT 1 FROM web_points_events'), undefined);
   assert.equal(f.store.get('SELECT 1 FROM web_player_model'), undefined);
-  // No signup entitlement, no points account: the page answers 404 and never recreates a balance.
-  assert.throws(() => billing(f), /NOT_FOUND/);
+  // Part 21i (named exception): no signup entitlement and no points account any more, so the page is a guest's (no balance, no
+  // points rows) instead of a 404; reading it never recreates a balance.
+  const after = billing(f);
+  assert.deepEqual([after.metered, after.balance, after.quota], [false, null, null]);
+  assert.equal(after.items.filter((i) => i.kind === 'bonus' || i.kind === 'grant').length, 0);
   assert.equal(f.store.get('SELECT 1 FROM web_points_balance'), undefined, 'reading after deletion creates nothing');
   assert.equal(playerLoginsRemain(f.store, [f.principalId]), false);
+});
+
+// ---- Part 21i: free quota summary and the guest trial ---------------------------------------------------------------------
+
+test('Part 21i 消费记录 (signed up): the summary is total granted, used and left; trial replies are listed as 免费试用 with 0 points', (t) => {
+  const f = fixture(t, { trialSpent: 3 }); // 3 trial replies before signing up: 2 unused are worth 20 points
+  setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
+  const r1 = f.admit(f.principalId, 'r1'); // 22
+  publish(f, r1.operationId, 'deepseek', true, true); // backup: 10 comes back
+  f.advance(1000);
+  setPlayerModel(f.store, f.clock(), f.principalId, 'xai');
+  const r2 = f.admit(f.principalId, 'r2'); // 27
+  f.finish(r2.operationId, 'failed'); // all back
+  f.advance(1000);
+  f.store.run(
+    "INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,admin_id,price_version,created_at) VALUES (?,NULL,'grant',NULL,50,'admin-1',2,?)",
+    f.principalId,
+    f.clock(),
+  );
+  f.store.run('UPDATE web_points_balance SET balance=balance+50 WHERE principal_id=?', f.principalId);
+  f.advance(1000);
+  setPlayerModel(f.store, f.clock(), f.principalId, 'deepseek');
+  f.admit(f.principalId, 'r3'); // pending: 12
+  const page = billing(f);
+  assert.equal(page.trial, null);
+  const start = f.events(f.principalId).find((e) => e.source === 'bonus')!.delta;
+  assert.deepEqual(
+    page.quota,
+    { total: start + 50, used: 12 + 12 },
+    'bonus + grant; r1 net 12, r2 refunded, r3 pending 12',
+  );
+  assert.equal(page.balance, page.quota!.total - page.quota!.used, 'balance = total - used');
+  assert.equal(page.balance, f.sum(f.principalId));
+  const trial = page.items.filter((i) => i.kind === 'trial');
+  assert.equal(trial.length, 0, 'trialSpent 3 are counter replies with no operation rows in this fixture');
+  assert.equal(parseBillingPage(JSON.parse(JSON.stringify(page)))?.quota?.total, start + 50);
+});
+
+test('Part 21i 消费记录 (guest): only its own trial rows, no balance, used n of the trial; another principal never shows', (t) => {
+  const f = fixture(t, { bonus: false, trialSpent: 5 });
+  const other = f.guest('b', false);
+  f.history(other, 'published', 'trial_extra', 301);
+  f.history(other, 'published', 'trial_extra', 302);
+  f.history(other, 'published', 'trial_extra', 303);
+  const page = billing(f);
+  assert.deepEqual([page.metered, page.balance, page.quota], [false, null, null]);
+  assert.deepEqual(
+    page.trial,
+    { used: 2, limit: 5 },
+    "this guest's trial_extra replies only (the other 3 are counter replies)",
+  );
+  assert.deepEqual(
+    page.items.map((i) => [i.kind, (i as any).model, (i as any).characterId]),
+    [
+      ['trial', 'deepseek', characterId],
+      ['trial', 'deepseek', characterId],
+    ],
+  );
+  assert.deepEqual(page.month, { byModel: [], byCharacter: [] });
+  const theirs = billing(f, other);
+  assert.equal(theirs.items.length, 3);
+  assert.deepEqual(theirs.trial, { used: 3, limit: 5 });
+  assert.doesNotMatch(JSON.stringify(page), /principal|player-|world-|id-\d+|old-|operation/);
+  // A released (failed) trial reply is not a used one and is not listed.
+  f.finish(`old-103-${f.principalId}`, 'failed');
+  assert.deepEqual(billing(f).trial, { used: 1, limit: 5 });
+  assert.equal(billing(f).items.length, 1);
+  // The route takes the principal from the session only, with the same CSRF/Origin checks as any player read.
+  const service = new WebBilling(
+    f.store,
+    { now: f.clock },
+    {
+      authorizeWrite: (token, csrf) => {
+        if (csrf !== 'c') throw new DomainError('CSRF_INVALID');
+        return { principalId: token === 'tok-a' ? f.principalId : other };
+      },
+    },
+  );
+  const route = (token: string, csrf = 'c') =>
+    routeWebBilling(service, {
+      method: 'POST',
+      path: '/api/web/local/billing/history',
+      origin: 'https://fixture.invalid',
+      csrf,
+      playerToken: token,
+      body: {},
+    })!;
+  assert.equal((route('tok-a').body as any).trial.used, 1);
+  assert.equal((route('tok-b').body as any).trial.used, 3);
+  assert.throws(() => route('tok-a', 'bad'), /CSRF_INVALID/);
 });

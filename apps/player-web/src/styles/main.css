@@ -4474,3 +4474,50 @@ body.legal-page {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* Part 21i: spent co-creation cards, password toggle, signup mismatch line */
+.cc-card.is-used {
+  opacity: 0.62;
+  box-shadow: none;
+}
+.cc-card.is-used .cc-face {
+  cursor: default;
+}
+.cc-card.is-used .cc-cta {
+  background: #ece8dd;
+  color: #5b6b65;
+}
+.acct-pw {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.acct-pw .acct-input {
+  flex: 1;
+  min-width: 0;
+}
+.acct-reveal {
+  min-height: 48px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid #b9c4bf;
+  border-radius: 12px;
+  background: #fff;
+  color: #294b40;
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.acct-reveal:focus-visible {
+  outline: 3px solid #24584e;
+  outline-offset: 2px;
+}
+.acct-mismatch {
+  margin: 0;
+  font-size: 14px;
+  color: #9b2c2c;
+}
+.acct-goto-signup {
+  font-weight: 650;
+}

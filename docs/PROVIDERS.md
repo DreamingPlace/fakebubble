@@ -22,7 +22,7 @@ fail, it silently serves s2.1-pro.
 - The [models overview](https://docs.fish.audio/developer-guide/models-pricing/models-overview) does not list Drama 3 yet
   (it lists `s2.1-pro`, `s2.1-pro-free`, `s2-pro`, `s1`).
 - Fish's response does not echo the served model, so a silent fallback cannot be detected from the reply. That is why the
-  ledger prices Drama 3 at the s2.1 upper bound (below).
+  ledger prices Drama 3 at its post-discount list price per byte (below).
 
 ### Direction syntax
 
@@ -75,8 +75,17 @@ pinned back to s2.1-pro in the admin workbench, and why `pnpm voice:samples` exi
 ### Price
 
 [Launch post](https://fish.audio/blog/fish-audio-drama-3/): "$10 per million characters, 80% off the $50 list price" from
-2026-10-13 to 2026-11-12, charged per character. The ledger reserves per UTF-8 byte at 15 micros (the s2.1 upper bound),
-because the fallback can serve s2.1-pro and the reply does not say which model ran.
+2026-10-13 to 2026-11-12, charged per character: **USD 10 per million during the launch discount, USD 50 per million after
+it** (from 2026-11-13). Fish bills Drama 3 per character, and a UTF-8 byte count is never lower than the character count
+(an English `[bracket direction]` is one byte per character, Chinese is three), so a per-byte price never understates.
+
+- **Budget ledger (Part 21i): 50 micro-USD per UTF-8 byte** for `fish / drama-3 / speech` (`PROVIDER_PRICES`), the
+  post-discount list price. It was 15 (the s2.1 bound), which understated ASCII text 3.3x once the discount ends. It is a new
+  effective-dated price row: `renew-prices` appends a NEW VERSION that takes over from the moment it runs (see DEPLOYMENT.md);
+  the old 15 row is never edited, and reservations made before that moment keep their old row. s2.1-pro stays 15.
+  **Must be run on production before 2026-11-12.**
+- **Usage report (`pnpm usage:report`): list price by UTC day of the call**: drama-3 costs 10 micros/byte for days up to and
+  including 2026-11-12 and 50 from 2026-11-13 (`speechListMicrosPerByte(model, day)`); s2.1-pro 15.
 
 ## How the model is chosen per reply
 
@@ -122,7 +131,7 @@ tokens for xAI and Gemini (`REASONING_HEADROOM`), sent as the completion limit. 
   ([pricing](https://ai.google.dev/gemini-api/docs/pricing)). The ledger bound is 8 µ$/token (7.5 rounded up), so nothing breaks on 1 Jan 2027. No long-context tier is listed for this model.
 - Grok 4.7: $2 / $0.50 / $6 below 200k prompt tokens, **$4 / $1 / $12 at or above 200k** (all tokens of the request). A request body over 150 000 bytes is never sent (`MAX_REQUEST_BYTES.xai`; bytes ≥ tokens), so the dearer tier is impossible. Bound 6 µ$/token.
 - DeepSeek (peak rates = list, off-peak is half): flash $0.006 / $0.30 / $1.20, v4-pro $0.044 / $1.32 / $3.96 ([pricing](https://api-docs.deepseek.com/quick_start/pricing)). The existing ledger bounds (2 and 4 µ$/token) are far above these and unchanged.
-- Speech (Part 21c): the usage report costs a reply's voice at the LIST price of the model that made it: `s2.1-pro` 15 micros/byte, `drama-3` **10** micros/byte (`SPEECH_LIST_PRICES` in `model-list-prices.ts`; Fish bills Drama 3 per character, a byte count is never lower). The ledger still holds and charges 15 for `drama-3` (`PROVIDER_PRICES`), because a silent fallback to s2.1-pro cannot be seen in the reply.
+- Speech (Part 21c): the usage report costs a reply's voice at the LIST price of the model that made it: `s2.1-pro` 15 micros/byte, `drama-3` **10** micros/byte up to and including 2026-11-12 (UTC day of the call) and **50** from 2026-11-13 (`speechListMicrosPerByte` in `model-list-prices.ts`; Fish bills Drama 3 per character, a byte count is never lower). Since Part 21i the ledger holds and charges **50** for `drama-3` (`PROVIDER_PRICES`) from the day `renew-prices` installs it.
 - The ledger holds one integer µ$/token per (provider, model, phase) at the dearer of input/output. Usage rows (`web_provider_usage`) use the real per-rate list prices.
 - New rows are created by `renew-prices` (see DEPLOYMENT.md): it also creates the spending bound and capacity ticket of a provider that has none. `configureWebProvider` (first initialization) still seeds only DeepSeek and Fish, so a new deployment runs `renew-prices` once to make xAI/Gemini available.
 

@@ -4,7 +4,6 @@ import { parseBootstrap } from '../../../packages/contracts/web-local-client.ts'
 import type { WebLocalMessage, WebLocalOperation } from '../../../packages/contracts/web-local.ts';
 import { LocalSession, type LocalScope } from '../../../apps/player-web/src/session/local-session.ts';
 import { LocalApi, LocalApiError } from '../../../apps/player-web/src/services/local-api.ts';
-import { LocalIdentityController } from '../../../apps/player-web/src/session/identity-controller.ts';
 import { LocalAudioController } from '../../../apps/player-web/src/media/audio-controller.ts';
 import { LocalSyncController, type EventStream } from '../../../apps/player-web/src/data/sync-controller.ts';
 import { LocalSendController } from '../../../apps/player-web/src/data/send-controller.ts';
@@ -206,41 +205,6 @@ test('C R1: unknown-ID recovery is scoped and only checks by-request, including 
   assert.equal(lookups, 1);
   assert.equal(sends, 0);
   assert.equal((await store.get(now.scope!, saved.requestId))?.state, 'network_uncertain');
-});
-
-test('C R1: valid old-cookie receipt recovery survives its own identity transition', async () => {
-  const session = new LocalSession();
-  session.install(view);
-  const signal = session.signal,
-    before = session.scope!;
-  let boots = 0,
-    challenges = 0,
-    recoveries = 0;
-  const api = {
-    bootstrap: async () => {
-      if (++boots === 1) throw new LocalApiError(409, 'SESSION_ROTATED_RECOVERABLE');
-      return view;
-    },
-    receiptChallenge: async () => {
-      challenges++;
-      return 'c-challenge';
-    },
-    recoverRegister: async () => {
-      recoveries++;
-      return { principalId: before.principalId, accountId: 'c-account' };
-    },
-  } as unknown as LocalApi;
-  const result = await new LocalIdentityController(api, session).recoverRegister(
-    'c-receipt',
-    'c-name',
-    'not-a-real-password',
-  );
-  assert.equal(result, view);
-  assert.equal(challenges, 1);
-  assert.equal(recoveries, 1);
-  assert.equal(signal.aborted, true);
-  assert.equal(session.scope?.principalId, before.principalId);
-  assert.notEqual(session.scope?.generation, before.generation);
 });
 
 test('C R1: late rejection of an old play cannot pause a newer audio element', async (t) => {

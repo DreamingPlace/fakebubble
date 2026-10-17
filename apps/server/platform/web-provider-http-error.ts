@@ -45,6 +45,8 @@ export function webProviderHTTPError(error: unknown) {
               publicCode === 'GUEST_GRACE_ENDED' ||
               publicCode === 'ADMIN_UNAUTHORIZED' ||
               publicCode === 'PLAYER_LOGIN_INVALID' ||
+              publicCode === 'PLAYER_EMAIL_NOT_REGISTERED' ||
+              publicCode === 'PLAYER_PASSWORD_WRONG' ||
               publicCode === 'ADMIN_LOGIN_INVALID'
             ? 401
             : publicCode === 'CSRF_INVALID' ||

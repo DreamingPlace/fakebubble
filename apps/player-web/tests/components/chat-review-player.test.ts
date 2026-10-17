@@ -254,7 +254,9 @@ test('signup: the 18+ tick is there only with the legal pages, above the button,
   s.input('code').value = '123456';
   s.submit();
   await flush();
+  // Part 21i (named exception): signup asks for the password twice.
   s.input('password').value = 'pw-pw-pw-pw';
+  s.input('password-again').value = 'pw-pw-pw-pw';
   s.input('nickname').value = '阿泡';
   s.submit();
   await flush();
@@ -274,7 +276,9 @@ test('signup without the legal pages, and every other sheet: no tick, and the re
     s.input('code').value = '123456';
     s.submit();
     await flush();
+    // Part 21i (named exception): signup asks for the password twice.
     s.input('password').value = 'pw-pw-pw-pw';
+    s.input('password-again').value = 'pw-pw-pw-pw';
     s.input('nickname').value = '阿泡';
     s.submit();
     await flush();

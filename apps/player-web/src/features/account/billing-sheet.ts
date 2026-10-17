@@ -9,7 +9,9 @@ import { h } from '../cocreation/h.ts';
 export const billingCopy = {
   title: '消费记录',
   close: '关闭',
-  balance: (points: number) => `当前剩余 ${points} 点`,
+  quota: (total: number, used: number, balance: number) => `免费额度 ${total} 点 · 已用 ${used} · 剩余 ${balance}`,
+  trial: (used: number, limit: number) => `免费试用 已用 ${used}/${limit} 条`,
+  trialRow: '免费试用',
   unmetered: '你的聊天不计点',
   month: '本月消耗',
   byModel: '按模型',
@@ -67,6 +69,12 @@ export function billingRow(item: BillingItem, name: (characterId: string) => str
         points: item.free ? billingCopy.free : billingCopy.points(-item.points),
       };
     }
+    case 'trial':
+      return {
+        title: `${when} · ${who(item.characterId)}`,
+        sub: `${PLAYER_MODELS[item.model].label} · ${billingCopy.trialRow}`,
+        points: billingCopy.points(0),
+      };
     case 'pending':
       return {
         title: `${when} · ${who(item.characterId)}`,
@@ -161,7 +169,11 @@ export function openBillingSheet(options: BillingSheetOptions) {
     summary.replaceChildren(
       h('p', {
         class: 'bl-balance',
-        text: data.metered ? billingCopy.balance(data.balance ?? 0) : billingCopy.unmetered,
+        text: data.trial
+          ? billingCopy.trial(data.trial.used, data.trial.limit)
+          : data.metered && data.quota
+            ? billingCopy.quota(data.quota.total, data.quota.used, data.balance ?? 0)
+            : billingCopy.unmetered,
       }),
     );
     if (data.metered) {

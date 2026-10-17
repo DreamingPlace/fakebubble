@@ -302,14 +302,18 @@ test('submit is idempotent on requestId: the same content replays, other content
 
 // Part 21f (named exception): the limit changed from "5 per player and character in a rolling 24 hours" to "1 per player and
 // character per UTC day" (COCREATION_DAILY_LIMIT) plus an anti-abuse cap per IP hash per UTC day.
-test('one submission per player and character per UTC day; replays and other scopes do not count', (t) => {
+// Part 21i (named exception): the day limit is now per card, and usedToday answers { cardIds } instead of { used }; the
+// assertions below only change shape (same card, same refusals). The new rule has its own tests after this one.
+test('the same card twice per player and character per UTC day is refused; replays and other scopes do not count', (t) => {
   const f = fixture(t),
     ann = f.player('ann'),
     bob = f.player('bob');
   f.submit(ann, 'r0');
-  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'wei-guagua'), { used: true });
-  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'jojo'), { used: false });
-  assert.deepEqual(f.cocreation.usedToday(bob.token, bob.csrf, origin, 'wei-guagua'), { used: false });
+  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'wei-guagua'), {
+    cardIds: ['catchphrase'],
+  });
+  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'jojo'), { cardIds: [] });
+  assert.deepEqual(f.cocreation.usedToday(bob.token, bob.csrf, origin, 'wei-guagua'), { cardIds: [] });
   f.submit(ann, 'r0'); // an idempotent replay is not a second submission
   f.advance(60_000);
   let refusal: unknown;
@@ -327,10 +331,47 @@ test('one submission per player and character per UTC day; replays and other sco
   assert.equal(f.submit(bob, 'b1').duplicate, false, 'another player has their own entry');
   f.advance(wait);
   assert.equal(f.submit(ann, 'r1').duplicate, false, 'the next UTC day');
-  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'wei-guagua'), { used: true });
+  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'wei-guagua'), { cardIds: ['catchphrase'] });
   assert.throws(() => f.submit(ann, 'r2'), /COCREATION_DAILY_LIMIT/);
   assert.throws(() => f.cocreation.usedToday(ann.token, 'wrong', origin, 'wei-guagua'), /CSRF_INVALID/);
   assert.throws(() => f.cocreation.usedToday(ann.token, ann.csrf, origin, "a'b"), /INVALID_REQUEST/);
+});
+
+test('Part 21i: one answer per card per UTC day: other cards pass, a mixed submission is refused whole, the next day passes', (t) => {
+  const f = fixture(t),
+    ann = f.player('ann');
+  const count = (table: string) => f.store.get<{ n: number }>(`SELECT count(*) n FROM ${table}`)!.n;
+  const A = [{ cardId: 'catchphrase', text: '哎呀妈呀' }],
+    B = [{ cardId: 'quirk', text: '爱数台阶' }];
+  f.submit(ann, 'a1', A);
+  f.advance(3_600_000);
+  assert.equal(f.submit(ann, 'b1', B).duplicate, false, 'a different card the same day passes');
+  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'wei-guagua'), {
+    cardIds: ['catchphrase', 'quirk'],
+  });
+  assert.throws(() => f.submit(ann, 'a2', [{ cardId: 'catchphrase', text: '换一句' }]), /COCREATION_DAILY_LIMIT/);
+  // A mixed submission (one fresh card, one spent card) is refused whole and writes nothing.
+  const before = [count('web_cocreation_submissions'), count('web_cocreation_answers')];
+  assert.throws(
+    () =>
+      f.submit(ann, 'mix', [
+        { cardId: 'topics', text: '星星' },
+        { cardId: 'quirk', text: '又一条' },
+      ]),
+    /COCREATION_DAILY_LIMIT/,
+  );
+  assert.deepEqual([count('web_cocreation_submissions'), count('web_cocreation_answers')], before);
+  assert.deepEqual(
+    f.cocreation.usedToday(ann.token, ann.csrf, origin, 'wei-guagua').cardIds.includes('topics'),
+    false,
+    'the fresh card of the refused submission is still open',
+  );
+  assert.equal(f.submit(ann, 'topics-only', [{ cardId: 'topics', text: '星星' }]).duplicate, false);
+  // Another character has its own cards; the next UTC day opens every card again.
+  assert.equal(f.submit(ann, 'j1', A, 'jojo').duplicate, false);
+  f.advance(COCREATION_LIMITS.dayMs);
+  assert.deepEqual(f.cocreation.usedToday(ann.token, ann.csrf, origin, 'wei-guagua'), { cardIds: [] });
+  assert.equal(f.submit(ann, 'a3', A).duplicate, false, 'card A again after 00:00 UTC');
 });
 
 test('at most ten submissions per IP hash per UTC day, across principals; the count rolls back with a refused submission', (t) => {
@@ -427,8 +468,9 @@ test('the player route: exact body keys, 201 then 200 on replay, and the limit a
       body: { characterId: 'wei-guagua' },
       ...over,
     })!;
-  assert.deepEqual(today().body, { used: true });
-  assert.deepEqual(today({ body: { characterId: 'jojo' } }).body, { used: false });
+  // Part 21i (named exception): the answer is the list of spent card ids.
+  assert.deepEqual(today().body, { cardIds: ['quirk'] });
+  assert.deepEqual(today({ body: { characterId: 'jojo' } }).body, { cardIds: [] });
   assert.throws(() => today({ body: { characterId: 'jojo', x: 1 } }), /INVALID_REQUEST/);
   assert.throws(() => today({ playerToken: undefined }), /AUTH_REQUIRED/);
   assert.throws(() => today({ csrf: undefined }), /CSRF_INVALID/);

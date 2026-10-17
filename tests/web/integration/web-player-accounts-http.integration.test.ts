@@ -1,3 +1,5 @@
+// Part 21i (named exception): login answers PLAYER_EMAIL_NOT_REGISTERED / PLAYER_PASSWORD_WRONG instead of the generic
+// PLAYER_LOGIN_INVALID (owner decision); every status code and limit is unchanged.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -80,7 +82,7 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
   assert.equal(closed.error.code, 'PLAYER_SIGNUP_DISABLED');
   assert.equal(
     (await f.call(a('/login'), stranger, { email, password: PASSWORD }, 401)).error.code,
-    'PLAYER_LOGIN_INVALID',
+    'PLAYER_EMAIL_NOT_REGISTERED',
   );
 
   await f.fixture('/fixture/players', { signupEnabled: true });
@@ -176,11 +178,11 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
   assert.notEqual(guestOfSecond, principalFirst);
   assert.equal(
     (await f.call(a('/login'), second, { email, password: 'wrong password' }, 401)).error.code,
-    'PLAYER_LOGIN_INVALID',
+    'PLAYER_PASSWORD_WRONG',
   );
   assert.equal(
     (await f.call(a('/login'), second, { email: 'nobody@example.com', password: PASSWORD }, 401)).error.code,
-    'PLAYER_LOGIN_INVALID',
+    'PLAYER_EMAIL_NOT_REGISTERED',
   );
   await f.call(a('/login'), second, { email: ` ${email.toUpperCase()} `, password: PASSWORD });
   assert.match(f.seen.at(-1)!, /Max-Age=34560000$/);
@@ -238,7 +240,7 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
   assert.equal((await f.request(`${API}/bootstrap`, third)).status, 401, 'the other device was signed out');
   assert.equal(
     (await f.call(a('/login'), client(), { email, password: PASSWORD }, 401)).error.code,
-    'PLAYER_LOGIN_INVALID',
+    'PLAYER_PASSWORD_WRONG',
   );
   // An unknown address answers the same and sends nothing.
   await f.age();
@@ -330,7 +332,7 @@ test('redeeming needs a login while signup is open, a revoked grant blocks futur
   assert.equal(refused.error.code, 'PLAYER_ACCESS_REVOKED');
   assert.equal(
     (await f.call(a('/login'), client(), { email, password: 'wrong password' }, 401)).error.code,
-    'PLAYER_LOGIN_INVALID',
+    'PLAYER_PASSWORD_WRONG',
   );
 
   // Signup closed again: sending stops and redeeming is as it was (no login required).

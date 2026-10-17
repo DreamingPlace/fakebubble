@@ -20,6 +20,8 @@ None. 194 non-test `.ts` files were analysed; the only graph orphan is `workers/
 
 After the Part 3 correction one file remains: `apps/player-web/src/session/identity-controller.ts` (imported by the player-web component and integration tests, not by `main.ts`). The other 35 files this section previously listed (player-web data, features, services, session and media modules, and `packages/contracts/web-local{,-client,-invite}.ts`) are reachable from `main.ts` through `.js` specifiers. Nothing was deleted.
 
+**Update (Part 21i).** `apps/player-web/src/session/identity-controller.ts` (`LocalIdentityController`, only tests used it) and `apps/player-web/src/features/admin/permission-editor.ts` (replaced by `permissionMatrixEditor` in `permission-matrix.ts`; only two tests used it) were deleted. Their security/consistency assertions now run against `LocalSession` and `permissionMatrixEditor`; the tests that existed only for the deleted files are listed in docs/STATUS.md (Part 21i).
+
 ## (b) Exported symbols never imported by another file
 
 Heuristic: counts named imports/re-exports across all files including tests; ignores same-file use; a namespace import, `export *` or `import('…')` type reference counts as importing every export of that module. Many are exported types or helpers used inside their own module, so this list is **candidates for review, not a deletion list**.

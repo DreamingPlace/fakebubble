@@ -296,16 +296,19 @@ export class LiveBinding {
     ];
   }
 
-  /** 消费记录: only for a player with a points account or an invitation (the server answers 404 to anyone else). */
+  /**
+   * 消费记录: a player with a points account or an invitation, and (Part 21i) a guest on the trial, whose page lists its own
+   * trial replies and no balance.
+   */
   private billingMenu() {
-    // A guest on the trial may have a picker (Part 21g) but no points and no history: the server answers it 404.
     const info = this.modelChoice;
-    if (!info || !(info.metered || (this.account.signedIn && this.account.kind === 'invite'))) return [];
+    const guestTrial = this.view.access.kind === 'guest' && !this.hasLogin;
+    if (!guestTrial && !(info && (info.metered || (this.account.signedIn && this.account.kind === 'invite'))))
+      return [];
     const shell = this.shell;
     return [
       {
         label: '消费记录',
-        sub: '点数是怎么用的',
         onSelect: () =>
           openBillingSheet({
             api: this.api,
@@ -321,11 +324,10 @@ export class LiveBinding {
     if (this.hasLogin)
       return [
         ...this.billingMenu(),
-        { label: '我的昵称', sub: '角色怎么称呼你', onSelect: () => void this.openAccount('nickname') },
-        { label: '修改密码', sub: '需要当前密码', onSelect: () => void this.openAccount('password') },
+        { label: '我的昵称', onSelect: () => void this.openAccount('nickname') },
+        { label: '修改密码', onSelect: () => void this.openAccount('password') },
         {
           label: '退出其他设备',
-          sub: '其他浏览器和手机需要重新登录',
           onSelect: () =>
             void this.api.logoutOthers().then(
               () => say('已退出其他设备'),
@@ -334,7 +336,6 @@ export class LiveBinding {
         },
         {
           label: '退出登录',
-          sub: '这台设备回到首页',
           onSelect: () =>
             void this.api.logout().then(
               () => location.reload(),
@@ -345,28 +346,21 @@ export class LiveBinding {
           ? [
               {
                 label: accountCopy.deleteTitle,
-                sub: '永久删除聊天、记忆和账号',
                 onSelect: () => void this.openAccount('delete'),
               },
             ]
           : []),
       ];
     if (this.account.signedIn && this.account.canBind)
-      return [
-        ...this.billingMenu(),
-        { label: '绑定邮箱', sub: '换设备也能登录你的聊天', onSelect: () => void this.openAccount('bind') },
-      ];
+      return [...this.billingMenu(), { label: '绑定邮箱', onSelect: () => void this.openAccount('bind') }];
     // A guest's 登录 / 注册 are buttons of the top bar; what is left to put in its menu is clearing the device.
     if (this.view.access.kind === 'guest')
-      return this.deleteEnabled
-        ? [
-            {
-              label: accountCopy.clearTitle,
-              sub: '立即清除这台设备上的体验聊天',
-              onSelect: () => void this.openAccount('clear'),
-            },
-          ]
-        : [];
+      return [
+        ...this.billingMenu(),
+        ...(this.deleteEnabled
+          ? [{ label: accountCopy.clearTitle, onSelect: () => void this.openAccount('clear') }]
+          : []),
+      ];
     return this.billingMenu();
   }
 
@@ -423,13 +417,11 @@ export class LiveBinding {
       action('登录', 'head-account desktop-account', () => void this.openAccount('login'));
       action('注册', 'head-account desktop-account', () => void this.openAccount('signup'));
       action('登录/注册', 'head-account mobile-account', () => void this.openAccount('login'));
-      if (this.deleteEnabled) {
-        // Clearing this device's trial chats moved out of the chat's ⋯ menu: it lives in the top bar's menu.
-        const more = action('更多', 'head-account head-more', () => {});
-        more.setAttribute('aria-haspopup', 'menu');
-        more.setAttribute('aria-expanded', 'false');
-        this.headMenu = mountChatMenu(more, shell.head, () => this.accountMenu());
-      }
+      // 消费记录 and clearing this device's trial chats live in the top bar's menu.
+      const more = action('更多', 'head-account head-more', () => {});
+      more.setAttribute('aria-haspopup', 'menu');
+      more.setAttribute('aria-expanded', 'false');
+      this.headMenu = mountChatMenu(more, shell.head, () => this.accountMenu());
     }
     if (access.kind === 'invite' && !this.invitation.locked) {
       if (access.status === 'active' && this.accessKnown && !this.hasLogin) {

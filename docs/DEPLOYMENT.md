@@ -84,6 +84,8 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 ### 共创收件箱（Part 12）
 
+**每日限制（Part 21i）：** 每位玩家对每个角色的每张**卡片（问题）**每个 UTC 日只能回答一次（Part 21f 是每个角色每天一次）。同一天可以先答 A 卡、之后再答 B 卡；A 卡要到 00:00 UTC 之后才能再答。提交里只要有一张今天已答过的卡，整份提交以 `COCREATION_DAILY_LIMIT` 拒绝，什么都不写入。次数从 `web_cocreation_answers` 联结 `web_cocreation_submissions`（玩家、角色、卡片、日）数出；每个 IP 每日 10 次提交的上限不变。`POST /cocreation/today { characterId }` 现在返回 `{ cardIds }`（今天已答的卡片 id），共创页据此把这些卡显示为“今天已回答，明天再来”（不可点），全部答过时显示“今天的问题都回答过了，明天再来”。
+
 `117_cocreation.sql` 是独立的第 117 版迁移（Node：`user_version=117`，已有 provider 实例运行 `migrate-cocreation`；Cloudflare 内联与 R2：账本版本 117，已在 116 的权威启动时自动补上）。新增 `web_cocreation_submissions` 与 `web_cocreation_answers`（均为用户数据）。任何持有有效会话的玩家（访客、已注册、账号、受邀；访客会话本身已通过 Turnstile）通过 `POST /api/web/provider/cocreation/submit` 为官方角色留下想法（每答案 ≤300 字，自由卡 ≤1000，对话卡每句 ≤120；每次 ≤12 条；**Part 21f：每玩家每角色每个 UTC 日 1 次**，第二次返回 `COCREATION_DAILY_LIMIT`（429，带到次日零点的 retryAfter）；另有防滥用上限：每个 IP 哈希每 UTC 日 10 次，返回 `COCREATION_IP_LIMIT`，计数放在既有的每 IP 每日计数表 `web_local_guest_budget`（键 `cocreation:<ip 哈希>`，因为提交行不记录地址，无需迁移）；`POST /cocreation/today { characterId }` 告诉玩家今天的名额是否已用，页面据此在输入前显示“今天已提交”；按 requestId 幂等；不计入 DAILY_REPLY_LIMIT；不调用任何供应商、不预占预算）。管理员权限 `cocreation.read`（查看）与 `cocreation.manage`（处理）由主管理员在权限编辑器的“角色 · 共创收件箱”中授予，不包含在四个功能类别里。收件箱只显示稳定的匿名代号（`玩家#` + 4 位十六进制，来自 requestKey 派生密钥的 HMAC）和邀请批次名。内容只有在管理员“加入草稿”并经现有预览与发布流程后才会进入提示词。角色删除与玩家数据清理会一并删除这些行。
 
 ### 邮箱账号与多设备登录（Part 11f）
@@ -104,6 +106,8 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 **验证码：** 6 位数字，10 分钟有效，每个挑战最多 5 次错误尝试，**同一邮箱在所有挑战与用途上合计，滚动 24 小时内最多 10 次错误验证码**（超过后验证与任何用途的请求验证码都返回 `PLAYER_RATE_LIMITED` 并带 `retryAfterMs`，已注册与未注册邮箱的回应完全相同；计数键为邮箱的 HMAC），新的请求使同邮箱同用途的上一个挑战失效。限制在发送之前检查：同一邮箱两次发送至少间隔 60 秒、每小时最多 5 次；同一 IP 每小时最多 10 次；全局每日上限 `PLAYER_EMAIL_DAILY_CAP`。发送超时或出错不会自动重试，玩家可在冷却后点“重新发送”（计入上述限制）。请求验证码的回应对已注册与未注册邮箱完全相同：已注册邮箱收到“你已注册，可直接登录或重置密码”，不含验证码；忘记密码遇到未注册邮箱不发邮件。验证码、密码和完整邮箱不进入日志、指标、回执或错误；管理员的玩家/邀请记录只显示打码邮箱（首字符 + `***` + 域名）。
 
 **登录与会话：** 邮箱 + 密码（8–128 字节）；同一邮箱 15 分钟内失败 10 次、同一 IP 失败 30 次后需要等待；错误提示一律为“邮箱或密码不正确”。登录只新建会话，其他设备的会话不受影响，永远不合并两个 principal；对已被撤销邀请的受邀 principal，输对密码后给出明确的拒绝，管理员“撤销授权”照旧一次性结束全部会话并阻止今后的登录。忘记密码会结束该 principal 的其他全部会话；修改密码可选择同时退出其他设备。**保留期：** 已注册（有邮箱登录）的访客在试玩结束后**不会被保留清理删除**：聊天照常以“试玩已结束”拒绝（准入不变），但仍可登录、查看历史、修改昵称、兑换邀请码（兑换后按受邀玩家规则）。保留状态不新增：`web_guest_retention` 保持 `active` 且已过期，“有登录的访客”由服务端推导；只有显式声明 `read` 的读取路径（历史、事件、操作状态、已发布音频）放行，其余一律按 `live` 判断并返回 `TRIAL_EXPIRED`。没有邀请授权的登录若 **180 天**无活动（`web_player_logins.last_seen_at`，注册、登录时写入，`bootstrap` 每个 UTC 日最多刷新一次）则走原有的、带审计且失败即关闭的访客清理路径连同全部数据删除；没有登录的访客仍在试玩结束时清理。登录会话与注册当下的会话使用与受邀玩家相同的 400 天 Cookie，服务端以 400 天为上限。已失效/被撤销/被轮换的 Cookie 在 `bootstrap` 时由服务端清除，页面回到“登录 / 注册 / 以访客继续”的首页；仅当一次未确认的邀请兑换回执仍可取回时保留 Cookie。
+
+**登录错误与密码输入（Part 21i）：** 登录现在分开回答“这个邮箱还没有注册”（`PLAYER_EMAIL_NOT_REGISTERED`，附“去注册”）和“密码不正确”（`PLAYER_PASSWORD_WRONG`），限流“尝试次数太多，请稍后再试”，断网“网络异常，请重试”。这等于公开某个邮箱是否已注册，是主管理员接受的取舍；登录限流不变（每邮箱哈希 10 次／每 IP 30 次／15 分钟，先于任何查询计数）。注册页要输入两次密码（客户端比对，不一致时提交按钮禁用并显示“两次输入的密码不一致”，服务器仍按原规则校验密码）；所有玩家密码框（登录、注册、重置、修改密码、删除账号）都有“显示密码／隐藏密码”按钮（`aria-pressed`、`aria-controls`）。顶部账号菜单只显示条目名称，没有第二行小字。
 
 **旧受邀玩家（只有恢复码）：** 在顶部账号菜单（“我的账号”）里“绑定邮箱”（Part 21f：聊天页“⋯”里只剩切换回复模型与共创），验证后设置密码与昵称，绑定成功即撤销其恢复码；恢复码接口与测试保持不变，未绑定的玩家仍可从首页的小链接使用。
 
@@ -211,7 +215,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 - **开关：** 业务对象变量 `FISH_VOICE_MODEL`（`workers/web-cloudflare/deploy/business.json.example`），默认 `s2.1-pro`，即行为与之前完全一致；staging 设为 `drama-3`。只接受这两个值，其他值（包括 `drama`、`drama-3-preview`）在业务对象启动时直接拒绝（`INVALID_FISH_VOICE_MODEL`），因为 Fish 对无法识别的 `model` 头不报错而是悄悄改用 s2.1-pro。核实结果与链接见 `docs/PROVIDERS.md`：当前文档里的值是 `drama-3`，不是 `drama-3-preview`。
 - **逐角色：** 声音绑定里存的 `model`：`s2.1-pro`（含此前所有绑定）跟随站点默认；`pin:s2.1-pro` 固定回 s2.1-pro；`drama-3` 固定用 Drama 3。管理工作台“声音成品版本”里勾选“固定使用 s2.1-pro”即可把某个角色钉回去（克隆音色在 Drama 3 上不对时用）。这些值存进已有的自由文本 `model` 列，**没有新迁移**：`expected-migrations` 仍是 47 步（inline 与 R2 各 47），与 main 逐字节相同。
 - **欢迎／结束成品**始终以 s2.1-pro 渲染并保持原样，不随开关变化。
-- **价格：** `PROVIDER_PRICES` 新增 `fish / drama-3 / speech / byte`，上限 15 micros/字节（与 s2.1 相同；列表价 $10/百万字符，但悄悄回退到 s2.1-pro 时无法从返回得知）。**已部署的实例要先运行 `renew-prices` 才有 drama-3 的价格行**；没有价格行时 Drama 3 回复在预留阶段失败（`WEB_PROVIDER_PRICE_REQUIRED`），不会发出调用。新实例的 `migrate` 自动写入。
+- **价格：** `PROVIDER_PRICES` 新增 `fish / drama-3 / speech / byte`，上限 **50** micros/字节（Part 21i 起；Fish 按字符计费，折扣期 $10/百万字符到 2026-11-12，之后 $50/百万字符；UTF-8 字节数从不少于字符数，所以不会低估。此前是 15）。**已有 drama-3 价格行的实例必须在 2026-11-12 之前再运行一次 `renew-prices`**：当前生效行的单价与代码不同时，`renew-prices` 会追加一个新版本、从运行那一刻起生效（有效期不短于被取代的行），旧行（15）原样保留、从不修改，运行之前已预留的回复仍按旧行；新版本生效后再次运行报告 `not-due`。**已部署的实例要先运行 `renew-prices` 才有 drama-3 的价格行**；没有价格行时 Drama 3 回复在预留阶段失败（`WEB_PROVIDER_PRICE_REQUIRED`），不会发出调用。新实例的 `migrate` 自动写入。
 - **打开顺序（staging）：** 1）`renew-prices`；2）用 `pnpm voice:samples` 在 staging 上各生成一份 s2.1-pro 与 drama-3 的试听，确认 24 kHz WAV 可用、克隆音色听起来正确（文档未明确说明克隆音色与采样率）；3）把 `FISH_VOICE_MODEL` 改为 `drama-3` 并部署；4）个别角色听起来不对就在工作台钉回 s2.1-pro。回退：把变量改回 `s2.1-pro`。
 - **本地真实供应商模式（`scripts/web-provider.ts serve --live`）仍只用 s2.1-pro**：它的 Fish 客户端固定为 s2.1-pro，遇到解析为 `drama-3` 的绑定会以 `WEB_PROVIDER_WIRE_MISMATCH` 关闭失败，不会调用。Drama 3 只在 Cloudflare 业务对象上通过 `FISH_VOICE_MODEL` 打开。
 - **试听脚本：** `pnpm voice:samples <provider-root> <env-dir> <输出目录> --live [--model=s2.1-pro|drama-3]`。每个已批准角色音色 × 10 种 expression 各一条（固定文案，不读取任何玩家、对话或记忆数据，只读声音绑定与价格），写到 `<输出目录>/<角色>/<expression>.<model>.wav` 与 `manifest.<model>.json`。模型默认读 `.env.voice` 的 `FISH_VOICE_MODEL`。它花真钱：先预留共享预算再调用，UNKNOWN 不重发、占用不释放，已付费的片段重跑时直接复用；输出目录必须为空。
@@ -308,6 +312,8 @@ node scripts/web-cloudflare-operator.ts --action=inspect --receipt-file=/abs/pri
 
 供应商价格行（DeepSeek 草稿/审阅、Fish 语音，`web_provider_prices`）有有效期：初始化写入的第一行只有 30 天，过期后所有回复都会以 `WEB_PROVIDER_PRICE_REQUIRED` 失败。`--action=renew-prices` 为当前代码价格表的每一项**追加**一行 90 天的新价格（上限单价与代码一致）：新行从该项最新一行的 `valid_until` 开始（没有行或已过期则从现在开始），行与行首尾相接、从不重叠；已有的行从不修改或删除。行 ID 由（供应商、模型、阶段、起点）派生，重试只会得到“重复”，不会多出一行。最新一行离到期还超过 60 天时什么都不做，报告 `not-due`。管理员预演使用同一张价格表，一并续期；向量（bge-m3）按自己的固定价格记账，不在此表中，不受影响。
 
+**价格变更（Part 21i）：** 若某项当前生效行的单价与代码里的不同（例如 drama-3 由 15 改为 50），`renew-prices` 不等到 60 天窗口，而是追加一个**更高版本**的新行、从运行那一刻起生效，有效期不短于被取代的行；账本查询取当前生效的最高版本。旧行从不修改或删除，之前已预留的回复保留它们当时的价格行。除这一种“更高版本取代”之外，重叠的价格行仍被拒绝（`WEB_PROVIDER_PRICE_OVERLAP`）。
+
 认证与 `inspect`、`status` 完全相同：需要**临时**把业务 Worker 的 `OPERATOR_ENABLED` 设为 `true`，用完立即改回 `false`。**每次部署检查清单都运行一次**（未到期时是空操作，所以每次都跑也无妨）。结果只写入私有收据。`inspect` 的 `prices` 一节列出每个（供应商、模型、阶段）当前生效的价格行 ID 与 `valid_until`，以及最新的 `valid_until`（只有数字与 ID）。开启 `ALERTS_ENABLED` 时，任何在用价格 7 天内到期（或已过期）会给 owner 发一封告警（沿用每类 6 小时一封的限制），日报里显示最早的到期日。
 
 ```
@@ -349,5 +355,5 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 
 - **登录玩家一律付点数：** 开启点数的登录玩家不再走访客体验路径，任何模型每条都有 `web_operation_models` 与 spend 事件。没用完的体验回复折算进开场余额（每条 10 点）。
 - **价格：** `POINTS.version` = 2；xAI 25 点/条（DeepSeek 10、Gemini 20、语音 +2，仍在 `packages/contracts/player-models.ts` 一张表里）。旧事件保留 `price_version` = 1。
-- **消费记录：** 顶部账号菜单 → “消费记录”（登录玩家与受邀玩家；访客得到 404）。`POST /api/web/provider/billing/history { page?, tzOffsetMinutes? }`，只读本会话主体，先 `reconcilePoints`，最近 90 天、每页 50 条。只显示点数，不显示金额、供应商成本或任何 id。
+- **消费记录：** 顶部账号菜单 → “消费记录”（登录玩家、受邀玩家，以及 Part 21i 起的访客：访客的页面只有“免费试用 已用 n/5 条”和自己的试用回复，没有余额；功能开关关闭时仍是 404）。登录玩家顶部是“免费额度 {总数} 点 · 已用 {n} · 剩余 {余额}”（总数 = bonus / grant / daily_refill / reset 事件之和，含注册时折算的试用；已用 = 回复的净点数；余额 = 总数 − 已用），列表里注册前的试用回复显示为“免费试用”、0 点。`POST /api/web/provider/billing/history { page?, tzOffsetMinutes? }`，只读本会话主体，先 `reconcilePoints`，最近 90 天、每页 50 条。只显示点数，不显示金额、供应商成本或任何 id。
 - **Grok 延迟：** 见 `docs/PROVIDERS.md`“Grok latency”；选择器按模型显示速度提示（`PLAYER_MODELS[*].speed`）。

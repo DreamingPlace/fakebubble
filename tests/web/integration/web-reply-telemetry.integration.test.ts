@@ -5,6 +5,7 @@ import { draftArgs, modelFixture, reviewArgs, wire, type FetchCall } from '../fi
 import { WebProviderExecutor } from '../../../apps/server/generation/web-provider-executor.ts';
 import { webReplyLine } from '../../../apps/server/generation/web-reply-telemetry.ts';
 import { WEB_LIMITS } from '../../../config/web-v1.ts';
+import { DomainError } from '../../../packages/domain/errors.ts';
 import type { WebRuntimeStore as WebStore } from '../../../apps/server/platform/web-store-contract.ts';
 
 const DRAFT = 'submit_dialogue_draft';
@@ -137,4 +138,150 @@ test('failed and UNKNOWN replies are reported; an unfinished or cancelled one is
   }
   for (const status of ['queued', 'text_running', 'ready_to_publish', 'cancelled'])
     assert.equal(webReplyLine(reader(status), 'x'), null, status);
+});
+
+// ---- Part 21i: every path that finishes a reply reports it exactly once, from the object that runs the executor --------------------
+
+const replyLines = (lines: string[]) =>
+  lines.filter((line) => line.includes('"web_reply"')).map((line) => JSON.parse(line));
+
+/**
+ * Runs managed passes until the operation is final. `restart` makes every pass a NEW executor (the object was evicted and
+ * woke again: nothing in memory survives); `step` moves the clock between passes (waiting out a backoff).
+ */
+async function drive(
+  f: ReturnType<typeof modelFixture>,
+  options: { restart?: boolean; step?: number; until?: string[] } = {},
+) {
+  f.advance(WEB_LIMITS.coordinatorLeaseMs + 1);
+  const until = options.until ?? ['published', 'failed', 'unknown'];
+  const make = () =>
+    new WebProviderExecutor(f.store as unknown as WebStore, f.clock, f.runner, {
+      hold: () => {},
+      settled: async () => {},
+    });
+  let executor = make();
+  try {
+    const started = Date.now();
+    while (
+      !until.includes(f.get<{ status: string }>("SELECT status FROM web_operations WHERE id='operation'")!.status) &&
+      Date.now() - started < 10_000
+    ) {
+      executor.managedPass('telemetry');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      if (options.step) f.advance(options.step);
+      if (options.restart) {
+        await executor.close();
+        executor = make();
+      }
+    }
+    // One more look, as the next alarm would take.
+    executor.managedPass('telemetry');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  } finally {
+    await executor.close();
+  }
+}
+
+test('Part 21i voice reply: one line, with voice true', async (t) => {
+  const f = modelFixture(t, { chosen: null, fetch: answer() });
+  await f.runText();
+  const lines = replyLines(await captured(() => drive(f)));
+  assert.equal(lines.length, 1);
+  assert.deepEqual([lines[0].outcome, lines[0].voice, lines[0].backup], ['published', true, false]);
+});
+
+test('Part 21i the object restarts between every pass: still exactly one line, and none while the reply is unfinished', async (t) => {
+  const f = modelFixture(t, { chosen: 'xai', fetch: answer() });
+  const lines = replyLines(await captured(() => drive(f, { restart: true })));
+  assert.equal(f.status(), 'published');
+  assert.equal(lines.length, 1, JSON.stringify(lines));
+  assert.equal(lines[0].outcome, 'published');
+  assert.equal(lines[0].chosen, 'xai');
+});
+
+test('Part 21i recovery after a restart: a reply found ready to publish by a NEW executor is reported by it', async (t) => {
+  const f = modelFixture(t, { chosen: null, fetch: answer() });
+  await f.runText();
+  // The previous object claimed the publication (ready_to_publish) and was evicted before it committed.
+  for (
+    let claim = f.queue.claimAudio(f.lease, 'audio-worker');
+    claim;
+    claim = f.queue.claimAudio(f.lease, 'audio-worker')
+  )
+    await f.runner.runSpeech(claim, f.signal());
+  const { WebVerticalPublisher } = await import('../../../apps/server/conversation/web-vertical-publisher.ts');
+  const publisher = new WebVerticalPublisher(f.store as unknown as WebStore, f.clock);
+  publisher.claim(f.lease, 'operation', 'provider-publisher');
+  assert.equal(f.status(), 'ready_to_publish');
+  const lines = replyLines(await captured(() => drive(f)));
+  assert.equal(f.status(), 'published');
+  assert.equal(lines.length, 1, JSON.stringify(lines));
+  assert.equal(lines[0].outcome, 'published');
+});
+
+test('Part 21i voice to text fallback (Fish rate limited): one line, voice false', async (t) => {
+  const f = modelFixture(t, {
+    chosen: null,
+    fetch: answer(),
+    fish: async () => {
+      throw new DomainError('FISH_RATE_LIMITED');
+    },
+  });
+  await f.runText();
+  const lines = replyLines(await captured(() => drive(f, { step: 2_500 })));
+  assert.equal(f.status(), 'published');
+  assert.equal(lines.length, 1, JSON.stringify(lines));
+  assert.deepEqual([lines[0].outcome, lines[0].voice], ['published', false]);
+  // And the same when the object restarts between every pass.
+  const g = modelFixture(t, {
+    chosen: null,
+    fetch: answer(),
+    fish: async () => {
+      throw new DomainError('FISH_RATE_LIMITED');
+    },
+  });
+  await g.runText();
+  const again = replyLines(await captured(() => drive(g, { step: 2_500, restart: true })));
+  assert.equal(again.length, 1, JSON.stringify(again));
+  assert.deepEqual([again[0].outcome, again[0].voice], ['published', false]);
+});
+
+test('Part 21i backup model: one line naming the abandoned code, also across restarts', async (t) => {
+  const f = modelFixture(t, { chosen: 'xai', fetch: answer(true) });
+  const lines = replyLines(await captured(() => drive(f, { restart: true })));
+  assert.equal(lines.length, 1, JSON.stringify(lines));
+  assert.deepEqual([lines[0].backup, lines[0].abandoned], [true, ['XAI_RATE_LIMITED']]);
+});
+
+test('Part 21i a reply that expires is reported once as failed; an UNKNOWN one once as unknown, and its later expiry adds nothing', async (t) => {
+  const f = modelFixture(t, { chosen: null, fetch: answer() });
+  // The deadline passes before anything could finish it.
+  f.advance(WEB_LIMITS.coordinatorLeaseMs + 1);
+  f.store.run("UPDATE web_operations SET deadline_at=? WHERE id='operation'", f.clock.now() + 1);
+  f.advance(10);
+  const failed = replyLines(await captured(() => drive(f)));
+  assert.equal(f.status(), 'failed');
+  assert.equal(failed.length, 1, JSON.stringify(failed));
+  assert.deepEqual([failed[0].outcome, failed[0].pointsCharged], ['failed', 0]);
+
+  const g = modelFixture(t, { chosen: null, fetch: answer() });
+  const executor = new WebProviderExecutor(g.store as unknown as WebStore, g.clock, g.runner, {
+    hold: () => {},
+    settled: async () => {},
+  });
+  g.advance(WEB_LIMITS.coordinatorLeaseMs + 1);
+  const lines = await captured(async () => {
+    executor.managedPass('telemetry');
+    g.store.run("UPDATE web_operations SET status='unknown',stage_version=stage_version+1 WHERE id='operation'");
+    executor.managedPass('telemetry');
+    g.advance(1_000_000);
+    executor.managedPass('telemetry'); // expiry of the unknown reply
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    executor.managedPass('telemetry');
+  });
+  await executor.close();
+  const unknown = replyLines(lines);
+  assert.equal(unknown.length, 1, JSON.stringify(unknown));
+  assert.equal(unknown[0].outcome, 'unknown');
 });
