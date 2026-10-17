@@ -516,6 +516,8 @@ test('the balance on the page is the settled one: it is re-read when the player 
 const billingData = (over: Partial<BillingPage> = {}): BillingPage => ({
   metered: true,
   balance: 76,
+  quota: { total: 100, used: 24 },
+  trial: null,
   month: {
     byModel: [
       { model: 'xai', points: 25, replies: 1 },
@@ -553,7 +555,8 @@ test('消费记录: top account menu entry opens the page with balance, this mon
   entries[0]!.click();
   await flush();
   const sheet = f.doc.body.querySelector('.bl-sheet')!;
-  assert.equal(sheet.querySelector('.bl-balance')!.textContent, '当前剩余 76 点');
+  // Part 21i (named exception): the balance line became the free-quota summary card.
+  assert.equal(sheet.querySelector('.bl-balance')!.textContent, '免费额度 100 点 · 已用 24 · 剩余 76');
   const tables = sheet.querySelectorAll('.bl-table');
   assert.equal(tables.length, 2);
   assert.match(tables[0]!.textContent, /Grok 4\.7/);

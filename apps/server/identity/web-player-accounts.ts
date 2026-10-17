@@ -790,15 +790,15 @@ export class WebPlayerAccounts {
   async login(input: { email: unknown; password: unknown; origin: unknown; ipHash: string }) {
     this.origin(input.origin);
     ensure(/^[a-f0-9]{64}$/.test(input.ipHash), 'WEB_TRUSTED_IP_REQUIRED');
-    // Malformed input is the same generic failure a wrong password is.
+    // A malformed address is the generic failure; an unknown address and a wrong password are told apart (Part 21i: the owner
+    // accepts that this shows whether an email is registered). The per-email and per-IP counters are charged first, so
+    // probing addresses is bounded exactly as guessing passwords is.
     let email: string;
     try {
       email = normalizeEmail(input.email, 'PLAYER_LOGIN_INVALID');
-      validatePlayerPassword(input.password);
     } catch {
       throw new DomainError('PLAYER_LOGIN_INVALID');
     }
-    const password = input.password as string;
     const emailKey = this.key('email', email),
       ipKey = this.key('ip', input.ipHash);
     this.store.transaction(() => {
@@ -807,9 +807,16 @@ export class WebPlayerAccounts {
       this.reserve('login-ip', ipKey, PLAYER_LIMITS.loginPerIp, now);
     });
     const row = this.store.get<LoginRow>('SELECT * FROM web_player_logins WHERE email_norm=?', email);
-    // An unknown address pays the same scrypt cost: no timing oracle for who is registered.
-    const valid = await gate.run(() => playerPasswords.verify(password, row?.password_hash ?? null));
-    if (!valid || !row) throw new DomainError('PLAYER_LOGIN_INVALID');
+    if (!row) throw new DomainError('PLAYER_EMAIL_NOT_REGISTERED');
+    let password: string;
+    try {
+      validatePlayerPassword(input.password);
+      password = input.password as string;
+    } catch {
+      throw new DomainError('PLAYER_PASSWORD_WRONG');
+    }
+    const valid = await gate.run(() => playerPasswords.verify(password, row.password_hash));
+    if (!valid) throw new DomainError('PLAYER_PASSWORD_WRONG');
     return this.store.transaction(() => {
       const now = this.now();
       const current = this.loginOf(row.principal_id);

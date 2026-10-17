@@ -51,8 +51,8 @@ export const COCREATION_LIMITS = Object.freeze({
   dialogueReply: 120,
   dialogueReplies: 2,
   answersPerSubmission: 12,
-  /** One submission per player per character per UTC day (Part 21f). */
-  perCharacterPerDay: 1,
+  /** One answer per player per character per card per UTC day (Part 21i; Part 21f allowed one submission). */
+  perCardPerDay: 1,
   /** Anti-abuse: guests can start new sessions by clearing cookies, so each IP hash is capped per UTC day. */
   perIpPerDay: 10,
   dayMs: 86_400_000,

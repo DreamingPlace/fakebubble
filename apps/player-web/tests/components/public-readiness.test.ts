@@ -513,13 +513,15 @@ test('menu: 删除我的账号 / 清除本设备的体验数据 exist only when 
   const guestOff = chat(t, { signupEnabled: true, signedIn: false });
   await guestOff.attach();
   assert.deepEqual(titles(guestOff.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
-  assert.equal(guestOff.header.querySelectorAll('.head-more').length, 0, 'no 更多 button without account deletion');
+  // Part 21i (named exception): 更多 now always exists for a guest and holds 消费记录; deletion only adds 清除.
+  assert.equal(guestOff.header.querySelectorAll('.head-more').length, 1);
+  assert.deepEqual(titles(topMenu(guestOff, '更多')), ['消费记录']);
   const guest = chat(t, { signupEnabled: true, signedIn: false, features: { accountDelete: true } });
   await guest.attach();
   assert.deepEqual(titles(guest.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
   const guestItems = topMenu(guest, '更多');
-  assert.deepEqual(titles(guestItems), ['清除本设备的体验数据']);
-  guestItems[0]!.click();
+  assert.deepEqual(titles(guestItems), ['消费记录', '清除本设备的体验数据']);
+  guestItems[1]!.click();
   assert.equal(
     guest.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent,
     '清除本设备的体验数据',

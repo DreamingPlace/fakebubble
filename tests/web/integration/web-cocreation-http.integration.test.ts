@@ -130,12 +130,13 @@ test('co-creation over real HTTP: open to every session, idempotent, limited per
   );
   // Today's entry, before typing: used for the two characters written to, free for the rest.
   const today = (actor: Client, characterId: string) => f.call(`${API}/cocreation/today`, actor, { characterId });
-  assert.deepEqual(await today(invited, 'wei-guagua'), { used: true });
-  assert.deepEqual(await today(guest, 'wei-guagua'), { used: false });
+  // Part 21i (named exception): the answer is the list of spent card ids, not a boolean.
+  assert.deepEqual(await today(invited, 'wei-guagua'), { cardIds: ['catchphrase'] });
+  assert.deepEqual(await today(guest, 'wei-guagua'), { cardIds: [] });
   await f.call(`${API}/cocreation/today`, client(), { characterId: 'jojo' }, 401);
   // A guest session may submit too (Turnstile guards the guest session itself, as for chat).
   assert.equal((await submit(guest, body(randomUUID()))).duplicate, false);
-  assert.deepEqual(await today(guest, 'wei-guagua'), { used: true });
+  assert.deepEqual(await today(guest, 'wei-guagua'), { cardIds: ['catchphrase'] });
   assert.equal((await submit(guest, body(randomUUID()), 429)).error.code, 'COCREATION_DAILY_LIMIT');
 
   // Co-creation is not a reply: the player's reply allowance and every provider counter are untouched.

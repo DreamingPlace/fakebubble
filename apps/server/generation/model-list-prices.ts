@@ -28,17 +28,24 @@ export const TOKEN_LIST_PRICES: Readonly<Record<string, TokenListPrice>> = Objec
 /** Fish speech s2.1-pro: USD 15 per million UTF-8 bytes. */
 export const SPEECH_LIST_MICROS_PER_BYTE = 15;
 /**
- * Fish speech LIST price per UTF-8 byte (= micro-USD per byte at USD per million bytes) by the model the call was made
- * with. Drama 3 lists at USD 10 per million (Fish bills characters; a byte count is never lower, so this does not understate);
- * the budget ledger still holds 15 for it (PROVIDER_PRICES: a silent fallback to s2.1-pro cannot be seen in the reply).
+ * Fish bills Drama 3 per character: USD 10 per million during the launch discount, USD 50 per million after it (docs/PROVIDERS.md).
+ * The report costs a byte (never fewer than the characters, so this never understates) at the rate of the UTC day of the call:
+ * 10 up to and including 2026-11-12, 50 from 2026-11-13. The budget ledger holds 50 for every Drama 3 byte from the day
+ * `renew-prices` installs it (PROVIDER_PRICES).
  */
-export const SPEECH_LIST_PRICES: Readonly<Record<string, number>> = Object.freeze({
-  's2.1-pro': SPEECH_LIST_MICROS_PER_BYTE,
-  'drama-3': 10,
-});
-/** An unlisted speech model is costed at the s2.1-pro rate, the dearer one. */
-export const speechListMicrosPerByte = (model: string): number =>
-  SPEECH_LIST_PRICES[model] ?? SPEECH_LIST_MICROS_PER_BYTE;
+export const DRAMA3_DISCOUNT_LAST_DAY = '2026-11-12';
+export const DRAMA3_LIST_MICROS_PER_BYTE = { discount: 10, list: 50 } as const;
+/**
+ * Fish speech LIST price per UTF-8 byte (= micro-USD per byte at USD per million bytes) by the model the call was made
+ * with and the UTC day ("YYYY-MM-DD") of the call. An unlisted speech model is costed at the s2.1-pro rate, the dearer one
+ * of the two before the discount ends.
+ */
+export const speechListMicrosPerByte = (model: string, day: string): number =>
+  model === 'drama-3'
+    ? day <= DRAMA3_DISCOUNT_LAST_DAY
+      ? DRAMA3_LIST_MICROS_PER_BYTE.discount
+      : DRAMA3_LIST_MICROS_PER_BYTE.list
+    : SPEECH_LIST_MICROS_PER_BYTE;
 
 /**
  * Cost of one known call at list price, in whole micro-USD, rounded UP (never understated). `cachedInputTokens` is the part of

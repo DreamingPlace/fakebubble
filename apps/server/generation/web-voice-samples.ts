@@ -39,7 +39,7 @@ export async function renderVoiceSamples(
   const price = store.get<{ upper_micros_per_unit: number }>(
     `SELECT upper_micros_per_unit
     FROM web_provider_prices WHERE provider='fish' AND model=? AND phase='speech'
-    AND unit='byte' AND currency='USD' AND valid_from<=? AND valid_until>?`,
+    AND unit='byte' AND currency='USD' AND valid_from<=? AND valid_until>? ORDER BY version DESC LIMIT 1`,
     options.model,
     clock.now(),
     clock.now(),

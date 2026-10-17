@@ -260,15 +260,18 @@ export class WebProviderOffline {
         this.store.get('SELECT 1 FROM web_provider_spending WHERE provider=?', input.provider),
         'WEB_PROVIDER_BUDGET_REQUIRED',
       );
+      // A row may start inside an older row only as a NEWER version of the same price: it supersedes it from its own
+      // valid_from (the lookups take the highest version in force) and the older row is never edited. Any other overlap is refused.
       ensure(
         !this.store.get(
           `SELECT 1 FROM web_provider_prices WHERE provider=? AND model=? AND phase=?
-        AND valid_from<? AND valid_until>?`,
+        AND valid_from<? AND valid_until>? AND version>=?`,
           input.provider,
           input.model,
           input.phase,
           input.validUntil,
           input.validFrom,
+          input.version,
         ),
         'WEB_PROVIDER_PRICE_OVERLAP',
       );
@@ -394,7 +397,8 @@ export class WebProviderOffline {
       }
       const price = this.store.get<Price>(
         `SELECT id,upper_micros_per_unit,unit FROM web_provider_prices
-        WHERE provider=? AND model=? AND phase=? AND currency='USD' AND valid_from<=? AND valid_until>?`,
+        WHERE provider=? AND model=? AND phase=? AND currency='USD' AND valid_from<=? AND valid_until>?
+        ORDER BY version DESC LIMIT 1`,
         input.provider,
         input.model,
         input.phase,
@@ -1212,7 +1216,7 @@ export class WebProviderOffline {
     if (row.phase === 'speech') {
       if (result.usageUnits <= 0) return;
       bytes = result.usageUnits;
-      cost = bytes * speechListMicrosPerByte(row.model);
+      cost = bytes * speechListMicrosPerByte(row.model, new Date(this.now()).toISOString().slice(0, 10));
     } else {
       const usage = (result.receipt as { usage?: Record<string, unknown> } | null)?.usage;
       const n = (value: unknown) =>

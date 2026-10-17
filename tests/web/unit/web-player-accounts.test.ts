@@ -704,17 +704,22 @@ test('login: multi-device — logging in on B leaves A working; other sessions a
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_principals')?.n, 2);
 });
 
-test('login: generic failure for a wrong password, unknown email and malformed input; per-email and per-IP throttles', async (t) => {
+// Part 21i (named exception): a login now answers PLAYER_EMAIL_NOT_REGISTERED for an unknown address and PLAYER_PASSWORD_WRONG
+// for a wrong password (the owner accepts that this reveals whether an email is registered); a malformed address stays
+// PLAYER_LOGIN_INVALID, and every throttle below is unchanged.
+test('login: specific failures for an unknown email and a wrong password, generic for a malformed address; per-email and per-IP throttles', async (t) => {
   const f = fixture(t);
   await f.signUp('throttle@example.com');
   const attempt = (email: string, password: string, ip = IP) =>
     f.accounts.login({ email, password, origin, ipHash: ip });
-  const generic = code('PLAYER_LOGIN_INVALID');
+  const generic = code('PLAYER_PASSWORD_WRONG');
+  const unknown = code('PLAYER_EMAIL_NOT_REGISTERED');
   await assert.rejects(attempt('throttle@example.com', 'wrong password'), generic);
-  await assert.rejects(attempt('nobody@example.com', PASSWORD), generic);
-  await assert.rejects(attempt('not-an-email', PASSWORD), generic);
+  await assert.rejects(attempt('nobody@example.com', PASSWORD), unknown);
+  await assert.rejects(attempt('not-an-email', PASSWORD), code('PLAYER_LOGIN_INVALID'));
   await assert.rejects(attempt('throttle@example.com', 'short'), generic);
-  assert.equal(webProviderHTTPError(new DomainError('PLAYER_LOGIN_INVALID')).status, 401);
+  for (const name of ['PLAYER_LOGIN_INVALID', 'PLAYER_EMAIL_NOT_REGISTERED', 'PLAYER_PASSWORD_WRONG'])
+    assert.equal(webProviderHTTPError(new DomainError(name)).status, 401);
   // A success clears the email counter: ten wrong ones, a right one, then ten more wrong ones are all allowed to fail normally.
   for (let i = 0; i < 5; i++)
     await assert.rejects(attempt('throttle@example.com', `wrong password ${i}`, String(i).repeat(64)), generic);
@@ -735,7 +740,7 @@ test('login: generic failure for a wrong password, unknown email and malformed i
   await attempt('throttle@example.com', PASSWORD, 'e'.repeat(64));
   // Per IP: 30 failures in the window whatever the address, then wait.
   for (let i = 0; i < PLAYER_LIMITS.loginPerIp; i++)
-    await assert.rejects(attempt(`ghost${i}@example.com`, 'bad password!', 'f'.repeat(64)), generic);
+    await assert.rejects(attempt(`ghost${i}@example.com`, 'bad password!', 'f'.repeat(64)), unknown);
   await assert.rejects(attempt('throttle@example.com', PASSWORD, 'f'.repeat(64)), code('PLAYER_RATE_LIMITED'));
   await attempt('throttle@example.com', PASSWORD, 'c'.repeat(64));
   // Wrong origin is refused outright.
@@ -778,7 +783,7 @@ test('forgot password: the code sets a new password, every other session ends an
   // Old password dead, new password works, the challenge is spent.
   await assert.rejects(
     f.accounts.login({ email: 'reset@example.com', password: PASSWORD, origin, ipHash: IP }),
-    code('PLAYER_LOGIN_INVALID'),
+    code('PLAYER_PASSWORD_WRONG'),
   );
   await f.accounts.login({ email: 'reset@example.com', password: 'brand new pass', origin, ipHash: IP });
   await assert.rejects(
@@ -972,7 +977,7 @@ test('invited players: login is refused once the grant is revoked (after the rig
   );
   await assert.rejects(
     f.accounts.login({ email: 'legacy@example.com', password: 'wrong password', origin, ipHash: IP }),
-    code('PLAYER_LOGIN_INVALID'),
+    code('PLAYER_PASSWORD_WRONG'),
   );
   assert.equal(webProviderHTTPError(new DomainError('PLAYER_ACCESS_REVOKED')).status, 403);
   // Reset cannot reopen a revoked principal either.
@@ -1207,7 +1212,7 @@ test('purge: a purged player takes the login, challenges and 名片 with it; the
   assert.ok(f.store.get('SELECT 1 FROM player_profile_versions WHERE world_id=?', keep.world_id));
   await assert.rejects(
     f.accounts.login({ email: 'purge@example.com', password: PASSWORD, origin, ipHash: IP }),
-    code('PLAYER_LOGIN_INVALID'),
+    code('PLAYER_EMAIL_NOT_REGISTERED'),
   );
 });
 

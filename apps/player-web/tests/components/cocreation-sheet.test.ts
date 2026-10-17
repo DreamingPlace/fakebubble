@@ -366,9 +366,9 @@ test('a failed send keeps the draft, explains itself, and a retry of the same co
   fail = new ProviderApiError(429, 'COCREATION_DAILY_LIMIT');
   f.send().click();
   await flush();
-  assert.equal(f.root().querySelector('.cc-notice')!.textContent, '今天已经给 TA 共创过啦，明天再来吧');
-  assert.equal(f.root().querySelector('.cc-used')!.hidden, false, 'today is used: the sheet says so');
-  assert.equal(f.send().disabled, true, 'and does not offer another send today');
+  // Part 21i (named exception): the limit is per card, so a refusal names "some questions" and no longer disables the
+  // whole sheet; the spent cards are disabled from the usedToday lookup (tested above).
+  assert.equal(f.root().querySelector('.cc-notice')!.textContent, '有的问题今天已经回答过了，明天再来吧');
   assert.equal(f.card(id)!.querySelector('textarea')!.value, '改了一点', 'the draft is still there');
 });
 
@@ -505,26 +505,48 @@ test('in the live chat the ⋯ menu offers 共创 to every player: guest, invite
   }
 });
 
-test("the sheet says 今天已提交 before typing when today's entry for this character is used", async (t) => {
-  for (const used of [true, false]) {
-    const asked: string[] = [];
-    const f = setup(t, {
-      api: {
-        submitCocreation: async () => ({ submissionId: 's', answered: 1, duplicate: false }),
-        cocreationToday: async (characterId: string) => {
-          asked.push(characterId);
-          return { used };
-        },
+// Part 21i (named exception): the day limit is per card; this replaces the Part 21f test of the single "今天已提交" banner.
+test('the sheet disables the cards already answered today and keeps the rest open', async (t) => {
+  const asked: string[] = [];
+  const f = setup(t, {
+    api: {
+      submitCocreation: async () => ({ submissionId: 's', answered: 1, duplicate: false }),
+      cocreationToday: async (characterId: string) => {
+        asked.push(characterId);
+        return { cardIds: ['catchphrase', 'free'] };
       },
-    });
-    await flush();
-    assert.equal(asked.length, 1);
-    const banner = f.root().querySelector('.cc-used')!;
-    assert.equal(banner.hidden, !used);
-    assert.equal(banner.textContent, '今天已提交');
-    f.write(firstTextCards(f.ids())[0]!, '想写');
-    assert.equal(f.send().disabled, used, used ? 'cannot send a second entry today' : 'free to send');
+    },
+  });
+  await flush();
+  assert.equal(asked.length, 1);
+  const spent = ['catchphrase', 'free'].map((id) => f.card(id)!);
+  for (const card of spent) {
+    assert.equal(card.querySelector('.cc-face')!.disabled, true);
+    assert.equal(card.querySelector('.cc-cta')!.textContent, '今天已回答，明天再来');
+    assert.ok(card.classList.contains('is-used'));
   }
+  const open = firstTextCards(f.ids()).filter((id) => id !== 'catchphrase');
+  assert.ok(open.length >= 1, 'other cards are still on the deck');
+  assert.equal(f.card(open[0]!)!.querySelector('.cc-face')!.disabled, false);
+  assert.equal(f.card(open[0]!)!.querySelector('.cc-cta')!.textContent, '写下来');
+  assert.equal(f.root().querySelector('.cc-used')!.hidden, true, 'not every card is spent');
+  f.write(open[0]!, '想写');
+  assert.equal(f.send().disabled, false, 'free to send a fresh card');
+});
+
+test('when every card was answered today the sheet says so and cannot send', async (t) => {
+  const f = setup(t, {
+    api: {
+      submitCocreation: async () => ({ submissionId: 's', answered: 1, duplicate: false }),
+      cocreationToday: async () => ({ cardIds: COCREATION_CARDS.map((card) => card.id) }),
+    },
+  });
+  await flush();
+  const banner = f.root().querySelector('.cc-used')!;
+  assert.equal(banner.hidden, false);
+  assert.equal(banner.textContent, '今天的问题都回答过了，明天再来');
+  assert.equal(f.send().disabled, true);
+  assert.ok(f.ids().every((id) => f.card(id)!.querySelector('.cc-face')!.disabled));
   // A failing lookup changes nothing: the sheet works as before.
   const broken = setup(t, {
     api: {
@@ -536,18 +558,19 @@ test("the sheet says 今天已提交 before typing when today's entry for this c
   });
   await flush();
   assert.equal(broken.root().querySelector('.cc-used')!.hidden, true);
+  assert.equal(broken.card(firstTextCards(broken.ids())[0]!)!.querySelector('.cc-face')!.disabled, false);
 });
 
 test('ProviderApi.cocreationToday posts the character and parses the answer strictly', async () => {
   const seen: { url: string; body: string }[] = [];
   const api = new ProviderApi(async (url, init) => {
     seen.push({ url: String(url), body: String(init?.body) });
-    return Response.json(String(url).endsWith('today') ? { used: true } : {});
+    return Response.json(String(url).endsWith('today') ? { cardIds: ['quirk'] } : {});
   });
-  assert.deepEqual(await api.cocreationToday('jojo'), { used: true });
+  assert.deepEqual(await api.cocreationToday('jojo'), { cardIds: ['quirk'] });
   assert.equal(seen[0]!.url, '/api/web/provider/cocreation/today');
   assert.deepEqual(JSON.parse(seen[0]!.body), { characterId: 'jojo' });
-  const junk = new ProviderApi(async () => Response.json({ used: 'yes' }));
+  const junk = new ProviderApi(async () => Response.json({ cardIds: 'yes' }));
   await assert.rejects(junk.cocreationToday('jojo'), /PROTOCOL_INVALID/);
 });
 

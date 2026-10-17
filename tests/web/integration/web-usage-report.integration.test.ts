@@ -138,7 +138,9 @@ test('every known provider call lands in the aggregate table at LIST price; the 
   );
 });
 
-test('usage:report costs a drama-3 reply at its LIST price (10 micros/byte) while the budget ledger holds and charges the 15 upper bound', async (t) => {
+// Part 21i (named exception): the ledger holds and charges 50 for drama-3 (was 15); the report's list price is 10 up to and including
+// 2026-11-12 and 50 from 2026-11-13 (the fixture runs on a day before that).
+test('usage:report costs a drama-3 reply at its LIST price (10 micros/byte) while the budget ledger holds and charges the 50 upper bound', async (t) => {
   const f = modelFixture(t, {
     siteVoiceModel: 'drama-3',
     fetch: (_call, _n, request) =>
@@ -151,21 +153,28 @@ test('usage:report costs a drama-3 reply at its LIST price (10 micros/byte) whil
   const [speech] = rows as [UsageRow];
   assert.equal(speech.model, 'drama-3');
   assert.ok(speech.bytes > 0);
-  assert.equal(speechListMicrosPerByte('drama-3'), 10);
+  assert.equal(speechListMicrosPerByte('drama-3', '2026-11-12'), 10);
   assert.equal(speech.cost_micros, speech.bytes * 10, 'list price: USD 10 per million bytes');
   const charged = f.all<{ model: string; charged_micros: number }>(
     "SELECT model,charged_micros FROM web_provider_attempts WHERE phase='speech'",
   );
   assert.deepEqual(
     charged.map((row) => [row.model, row.charged_micros]),
-    [['drama-3', speech.bytes * 15]],
-    'the ledger keeps the s2.1 upper bound',
+    [['drama-3', speech.bytes * 50]],
+    'the ledger holds the post-discount list price per byte',
   );
   // The report (what usage:report prints) attributes the voice cost of the reply to its model, at the list cost.
   const all = f.all<UsageRow>('SELECT * FROM web_provider_usage').map((row) => ({ ...row }));
   const model = usageReport(all).models.find((m) => m.model === 'deepseek')!;
   assert.equal(model.replies, 1);
   assert.equal(model.speechMicros, speech.bytes * 10);
-  assert.equal(speechListMicrosPerByte('s2.1-pro'), SPEECH_LIST_MICROS_PER_BYTE);
-  assert.equal(speechListMicrosPerByte('s2-pro'), 15, 'an unlisted speech model is costed at the dearer rate');
+  assert.equal(speechListMicrosPerByte('drama-3', '2026-11-13'), 50, 'the discount ends after 2026-11-12 (UTC)');
+  assert.equal(speechListMicrosPerByte('drama-3', '2026-12-01'), 50);
+  assert.equal(speechListMicrosPerByte('s2.1-pro', '2026-11-13'), SPEECH_LIST_MICROS_PER_BYTE);
+  assert.equal(speechListMicrosPerByte('s2.1-pro', '2026-10-17'), SPEECH_LIST_MICROS_PER_BYTE);
+  assert.equal(
+    speechListMicrosPerByte('s2-pro', '2026-10-17'),
+    15,
+    'an unlisted speech model is costed at the dearer rate',
+  );
 });

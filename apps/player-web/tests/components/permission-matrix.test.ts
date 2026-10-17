@@ -163,6 +163,46 @@ test('a set the editor re-ticks to its loaded state is still returned unchanged;
   assert.ok(f.host.querySelectorAll('[data-permission]').every((n) => n.disabled));
 });
 
+// ---- Part 21i: assertions moved here from the tests of the deleted permission-editor.ts (see the PR description) --------------
+test('inbox permissions: 处理 includes 查看, and a grant that only has 处理 is returned as it was loaded; the group describes itself without identifying anyone', (t) => {
+  const f = mount(t);
+  assert.match(f.host.textContent, /共创收件箱/);
+  assert.match(f.host.textContent, /匿名代号和邀请批次/);
+  assert.doesNotMatch(f.host.textContent, /邮箱：|昵称：/);
+  f.toggle('cocreation.manage', true);
+  assert.ok(f.box('cocreation.read').checked, 'handling includes viewing');
+  assert.deepEqual(f.editor.value(), ['cocreation.manage', 'cocreation.read']);
+  f.toggle('cocreation.read', false);
+  assert.equal(f.box('cocreation.manage').checked, false, 'no handling without viewing');
+  assert.deepEqual(f.editor.value(), []);
+  const manageOnly = mount(t, ['cocreation.manage']);
+  assert.deepEqual(manageOnly.editor.value(), ['cocreation.manage'], 'an untouched grant is never widened or narrowed');
+  manageOnly.toggle('invites.read', true);
+  assert.ok(manageOnly.editor.value().includes('cocreation.manage'), 'touching another area keeps the grant');
+  manageOnly.editor.setDisabled(true);
+  assert.ok(manageOnly.host.querySelectorAll('[data-permission]').every((n) => n.disabled));
+});
+
+test('untouched role-scoped legacy grants never expand to every role, whatever is ticked beside them', (t) => {
+  const original: AdminPermission[] = ['invites.revoke', 'characters.edit:deleted-role', 'characters.publish:jojo'];
+  const f = mount(t, original);
+  assert.deepEqual(f.editor.value(), [...original].sort());
+  f.toggle('invites.revoke-code', false);
+  assert.deepEqual(f.editor.value(), [
+    'characters.edit:deleted-role',
+    'characters.publish:jojo',
+    'invites.revoke-access',
+  ]);
+  f.toggle('invites.issue', true);
+  const saved = f.editor.value();
+  assert.ok(saved.includes('characters.edit:deleted-role') && saved.includes('characters.publish:jojo'));
+  assert.ok(
+    !saved.some((p) => p.startsWith('characters.') && p.endsWith(':*')),
+    'ticking an invite item grants no wildcard character scope',
+  );
+  assert.ok(!f.host.textContent.match(/最多 128|全部人物|角色操作与范围/), 'no leftover wording of the removed editor');
+});
+
 // ---- 加入草稿 is shown only with characters.edit for that role -----------------------------------------------------
 const item = (id: string): InboxItem => ({
   id,

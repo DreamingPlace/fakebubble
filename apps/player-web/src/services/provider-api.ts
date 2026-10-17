@@ -275,13 +275,14 @@ export class ProviderApi implements WebProviderActions {
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
     return { submissionId: value.submissionId, answered: value.answered as number, duplicate: value.duplicate };
   }
-  /** Has today's entry for this character been used (one per player per character per UTC day)? */
-  async cocreationToday(characterId: string): Promise<{ used: boolean }> {
+  /** Which cards has this player already answered today for this character (one per card per UTC day)? */
+  async cocreationToday(characterId: string): Promise<{ cardIds: string[] }> {
     const value = record(
       await this.request('/cocreation/today', { method: 'POST', body: JSON.stringify({ characterId }) }),
     );
-    if (typeof value.used !== 'boolean') throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    return { used: value.used };
+    if (!Array.isArray(value.cardIds) || !value.cardIds.every((id) => typeof id === 'string'))
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return { cardIds: value.cardIds as string[] };
   }
   /** 消费记录: one page (50 rows, newest first, last 90 days) of this player's own spending. */
   async billing(page: number): Promise<BillingPage> {

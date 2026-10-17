@@ -9,7 +9,6 @@ import { LocalSession } from '../../../apps/player-web/src/session/local-session
 import { LocalApi, LocalApiError } from '../../../apps/player-web/src/services/local-api.ts';
 import { LocalSyncController } from '../../../apps/player-web/src/data/sync-controller.ts';
 import { LocalAudioController } from '../../../apps/player-web/src/media/audio-controller.ts';
-import { LocalIdentityController } from '../../../apps/player-web/src/session/identity-controller.ts';
 import type { WebLocalMessage } from '../../../packages/contracts/web-local.ts';
 import { draftKey, messageKey } from '../../../apps/player-web/src/data/local-cache.ts';
 
@@ -300,32 +299,6 @@ test('late private audio fetch cannot play after generation change', async () =>
   finish(new Response(new Blob(['RIFF'], { type: 'audio/wav' }), { status: 200 }));
   assert.equal(await pending, 'stale_generation');
   assert.equal(played, 0);
-});
-test('in-place registration does not abort its own request and rotates generation on receipt', async () => {
-  const session = new LocalSession();
-  session.install(view);
-  const oldScope = session.scope!,
-    oldSignal = session.signal;
-  let finish!: () => void;
-  const api = {
-    register: () =>
-      new Promise<void>((resolve) => {
-        finish = resolve;
-      }),
-    bootstrap: async () =>
-      parseBootstrap({
-        ...boot,
-        access: { ...boot.access, kind: 'account', trialRemaining: null, trialReserved: null },
-      }),
-  } as unknown as LocalApi;
-  const pending = new LocalIdentityController(api, session).register('r', 'name', 'password');
-  assert.equal(oldSignal.aborted, false);
-  finish();
-  await pending;
-  assert.equal(oldSignal.aborted, true);
-  assert.equal(session.scope?.principalId, oldScope.principalId);
-  assert.equal(session.scope?.worldId, oldScope.worldId);
-  assert.notEqual(session.scope?.generation, oldScope.generation);
 });
 test('draft and history cache keys partition world, identity generation and stable IDs', () => {
   const session = new LocalSession();

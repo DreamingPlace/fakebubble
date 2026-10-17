@@ -29,8 +29,13 @@ export class WebProviderExecutor {
   private readonly tasks = new Set<Promise<void>>();
   private readonly publishing = new Set<string>();
   private readonly falling = new Set<string>();
-  /** Operations this executor has worked on and not yet reported as finished (telemetry only; a restart forgets them). */
+  /**
+   * Telemetry only. Operations in flight that have not yet been reported as finished, and the ones already reported (so an
+   * UNKNOWN reply that later expires is not reported a second time). A restart forgets both, and starts again from what is
+   * in flight when the new executor first looks (see `reportFinished`).
+   */
   private readonly unreported = new Set<string>();
+  private readonly reported = new Set<string>();
   private managed = false;
   /** Indexing scans every scope, so an idle pass is not repeated for INDEX_IDLE_MS unless a publication committed. */
   private indexDirty = true;
@@ -141,6 +146,7 @@ export class WebProviderExecutor {
       this.error(error);
       if (error instanceof DomainError && error.code === 'WEB_COORDINATOR_STALE') this.stop();
     } finally {
+      this.reportFinished();
       if (this.tasks.size === 0) this.stop();
     }
   }
@@ -191,9 +197,40 @@ export class WebProviderExecutor {
     this.lastError = error instanceof DomainError ? error.code : 'INTERNAL_ERROR';
   }
 
-  /** One telemetry line per reply that reached published / failed / unknown while this executor was working on it. */
+  /**
+   * One telemetry line per reply that reaches published / failed / unknown, WHICHEVER path got it there: a scheduled stage, a
+   * publication, the voice-to-text fallback, a backup model, a recovery pass after the object restarted, an expiry, a
+   * cancellation. It does not depend on which task finished: every operation still in flight is tracked on each look, and
+   * logged exactly once when it is found in a final state (a replay of the same state logs nothing). Cancelled is not a reply.
+   */
   private reportFinished() {
-    for (const id of [...this.unreported]) if (logWebReply(this.store, id)) this.unreported.delete(id);
+    try {
+      for (const row of this.store.all<{ id: string }>(
+        "SELECT id FROM web_operations WHERE status NOT IN ('published','cancelled','failed','unknown') LIMIT 500",
+      ))
+        if (!this.reported.has(row.id)) this.unreported.add(row.id);
+    } catch {
+      /* telemetry never affects a reply */
+    }
+    for (const id of [...this.unreported]) {
+      let status: string | undefined;
+      try {
+        status = this.store.get<{ status: string }>('SELECT status FROM web_operations WHERE id=?', id)?.status;
+      } catch {
+        continue;
+      }
+      if (status === undefined)
+        this.unreported.delete(id); // purged before it finished
+      else if (!['published', 'cancelled', 'failed', 'unknown'].includes(status)) continue;
+      else {
+        this.unreported.delete(id);
+        if (status !== 'cancelled' && !this.reported.has(id)) {
+          logWebReply(this.store, id);
+          if (this.reported.size >= 5000) this.reported.clear();
+          this.reported.add(id);
+        }
+      }
+    }
   }
 
   private schedule(claim: WebStageClaim) {
@@ -337,6 +374,8 @@ export class WebProviderExecutor {
     ensure(this.coordinator, 'WEB_COORDINATOR_STALE');
     this.renew();
     const lease = this.coordinator;
+    // Everything in flight is known before this pass recovers, resumes or expires anything, so whatever it finishes is reported.
+    this.reportFinished();
     for (const row of this.store.all<{ id: string; status: string }>(
       `SELECT id,status FROM web_operations
       WHERE status IN ('text_running','audio_running','ready_to_publish')
@@ -379,8 +418,8 @@ export class WebProviderExecutor {
         }
       }
     }
-    for (const row of this.store.all<{ id: string }>(
-      `SELECT id FROM web_operations WHERE
+    for (const row of this.store.all<{ id: string; status: string }>(
+      `SELECT id,status FROM web_operations WHERE
       status NOT IN ('published','cancelled','failed') AND
       (deadline_at<=? OR status='queued' AND text_queued_at+?<=? OR
         status IN ('text_ready','audio_pending') AND audio_wait_started_at IS NOT NULL AND
@@ -394,7 +433,8 @@ export class WebProviderExecutor {
       try {
         const fence = this.ledger.fence(row.id);
         this.ledger.terminate(lease, fence, fence.principalId, 'failed', 'expired');
-        this.unreported.add(row.id);
+        // An UNKNOWN reply was reported when it became unknown; its expiry is the same reply, not a second one.
+        if (row.status !== 'unknown') this.unreported.add(row.id);
       } catch (error) {
         this.error(error);
       }

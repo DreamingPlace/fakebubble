@@ -20,9 +20,10 @@ export const PROVIDER_PRICES = [
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.draft, phase: 'draft', unit: 'token', upper: 2 },
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.review, phase: 'review', unit: 'token', upper: 4 },
   { provider: 'fish', model: 's2.1-pro', phase: 'speech', unit: 'byte', upper: 15 },
-  // Drama 3 lists at $10/M characters, but an unrecognised model header silently serves s2.1-pro, so the ledger reserves
-  // the s2.1 upper bound.
-  { provider: 'fish', model: 'drama-3', phase: 'speech', unit: 'byte', upper: 15 },
+  // Drama 3 is billed per CHARACTER: $10/M during the launch discount (until 2026-11-12), $50/M after it. The ledger reserves
+  // per UTF-8 byte (never fewer than the characters, so never an understatement) at the list price of $50/M, from the day
+  // renew-prices installs it: an ASCII direction is one byte per character, and the date is the owner's, not the code's.
+  { provider: 'fish', model: 'drama-3', phase: 'speech', unit: 'byte', upper: 50 },
   { provider: 'xai', model: PLAYER_MODELS.xai.model, phase: 'draft', unit: 'token', upper: 6 },
   { provider: 'gemini', model: PLAYER_MODELS.gemini.model, phase: 'draft', unit: 'token', upper: 8 },
   { provider: 'gemini', model: PLAYER_MODELS.gemini.model, phase: 'review', unit: 'token', upper: 8 },
@@ -61,12 +62,25 @@ export function renewProviderPrices(store: WebRuntimeStore, now: number): PriceR
         price.phase,
       );
       const base = { provider: price.provider, model: price.model, phase: price.phase };
-      if (latest && latest.valid_until - now > PRICE_RENEWAL_DUE_MS)
+      // The row in force today. When its price is not the one the code now holds, a new version takes over FROM NOW (it runs
+      // at least as long as the latest row, so the old one never comes back); the old row stays exactly as it was.
+      const inForce = store.get<{ upper_micros_per_unit: number }>(
+        `SELECT upper_micros_per_unit FROM web_provider_prices
+        WHERE provider=? AND model=? AND phase=? AND valid_from<=? AND valid_until>? ORDER BY version DESC LIMIT 1`,
+        price.provider,
+        price.model,
+        price.phase,
+        now,
+        now,
+      );
+      const supersede = !!latest && !!inForce && inForce.upper_micros_per_unit !== price.upper;
+      if (!supersede && latest && latest.valid_until - now > PRICE_RENEWAL_DUE_MS)
         return { ...base, result: 'not-due', validFrom: null, validUntil: latest.valid_until };
-      const validFrom = latest && latest.valid_until > now ? latest.valid_until : now,
+      const validFrom = supersede ? now : latest && latest.valid_until > now ? latest.valid_until : now,
+        validUntil = supersede ? Math.max(now + PRICE_RENEWAL_MS, latest!.valid_until) : validFrom + PRICE_RENEWAL_MS,
         id = `${price.provider}-${price.model}-${price.phase}-${validFrom}`;
       if (store.get('SELECT 1 FROM web_provider_prices WHERE id=?', id))
-        return { ...base, result: 'duplicate', validFrom, validUntil: validFrom + PRICE_RENEWAL_MS };
+        return { ...base, result: 'duplicate', validFrom, validUntil };
       const max = store.get<{ v: number | null }>(
         'SELECT MAX(version) v FROM web_provider_prices WHERE provider=? AND model=? AND phase=?',
         price.provider,
@@ -81,10 +95,10 @@ export function renewProviderPrices(store: WebRuntimeStore, now: number): PriceR
         unit: price.unit,
         upperMicrosPerUnit: price.upper,
         validFrom,
-        validUntil: validFrom + PRICE_RENEWAL_MS,
+        validUntil,
         version: (max?.v ?? 0) + 1,
       });
-      return { ...base, result: 'renewed', validFrom, validUntil: validFrom + PRICE_RENEWAL_MS };
+      return { ...base, result: 'renewed', validFrom, validUntil };
     });
   });
 }

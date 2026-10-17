@@ -2,7 +2,8 @@ import { h } from './h.ts';
 
 export type ChatMenuItem = {
   label: string;
-  sub: string;
+  /** Secondary line; the top-bar account menu has none (Part 21i). */
+  sub?: string;
   disabled?: boolean;
   onSelect(): void;
 };
@@ -40,7 +41,7 @@ export function mountChatMenu(button: HTMLElement, host: HTMLElement, items: () 
         'button',
         { class: 'chat-menu-item', attrs: { type: 'button', role: 'menuitem' } },
         h('span', { class: 'chat-menu-title', text: item.label }),
-        h('span', { class: 'chat-menu-sub', text: item.sub }),
+        item.sub ? h('span', { class: 'chat-menu-sub', text: item.sub }) : null,
       );
       if (item.disabled) {
         entry.disabled = true;

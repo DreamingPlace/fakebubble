@@ -1534,3 +1534,103 @@ test('a reply admitted just before the old row ends and one just after both pric
   // Without a renewal the price has simply ended: the same failure as before this Part.
   assert.throws(() => reserveAt(end, false), /WEB_PROVIDER_PRICE_REQUIRED/);
 });
+
+// ---- Part 21i: the Drama 3 ledger price (50 micros per byte from the day renew-prices installs it) ----------------------------
+
+test('Part 21i: renew-prices installs drama-3 at 50 micros/byte as a NEW version from now; the 15 row is never edited; s2.1-pro stays 15', (t) => {
+  const f = fixture(t);
+  for (const provider of INITIAL_PROVIDERS) f.ledger.configureBudget(provider, 3_000_000);
+  // A deployment whose drama-3 row (15) still runs 80 days: renewal is not due, but the price changed.
+  f.ledger.configurePrice({
+    id: 'fish-drama-3-speech-old',
+    provider: 'fish',
+    model: 'drama-3',
+    phase: 'speech',
+    currency: 'USD',
+    unit: 'byte',
+    upperMicrosPerUnit: 15,
+    validFrom: now,
+    validUntil: now + 80 * DAY,
+    version: 1,
+  });
+  const old = priceRows(f).find((r) => r.id === 'fish-drama-3-speech-old')!;
+  const deploy = now + 10_000;
+  const result = renewProviderPrices(f.store as never, deploy);
+  const drama = result.find((r) => r.model === 'drama-3')!;
+  assert.deepEqual([drama.result, drama.validFrom], ['renewed', deploy]);
+  assert.equal(drama.validUntil, deploy + 90 * DAY, 'it runs at least as long as the row it supersedes');
+  assert.deepEqual(
+    priceRows(f).find((r) => r.id === 'fish-drama-3-speech-old'),
+    old,
+    'the past row is byte for byte what it was',
+  );
+  const rows = f.store.all<{ id: string; upper_micros_per_unit: number; version: number }>(
+    "SELECT * FROM web_provider_prices WHERE model='drama-3' ORDER BY version",
+  );
+  assert.deepEqual(
+    rows.map((r) => [r.version, r.upper_micros_per_unit]),
+    [
+      [1, 15],
+      [2, 50],
+    ],
+  );
+  // A retry changes nothing.
+  assert.equal(renewProviderPrices(f.store as never, deploy).find((r) => r.model === 'drama-3')!.result, 'not-due');
+  assert.equal(f.store.all("SELECT 1 FROM web_provider_prices WHERE model='drama-3'").length, 2);
+
+  // Reservations: before the deploy the old row prices it, from the deploy the new one; mixed ASCII/Chinese text is never understated.
+  const text = '[soft and gentle, unhurried, tender] 你好呀，今天过得怎么样？ok';
+  const bytes = Buffer.byteLength(text),
+    characters = [...text].length;
+  assert.ok(bytes > characters, 'the sample is mixed ASCII and Chinese');
+  const reserve = (time: number, model: string, ordinal: number) => {
+    new WebProviderOffline(f.store, { now: () => time }).reserve({
+      ...f.input('speech', ordinal),
+      provider: 'fish',
+      model,
+      maxUnits: bytes,
+    });
+    return f.store.get<{ price_id: string; held_micros: number }>(
+      'SELECT price_id,held_micros FROM web_provider_attempts WHERE phase=? AND ordinal=?',
+      'speech',
+      ordinal,
+    )!;
+  };
+  assert.equal(
+    reserve(deploy - 1, 'drama-3', 0).held_micros,
+    bytes * 15,
+    'before the deploy the old row still prices it',
+  );
+  const after = reserve(deploy, 'drama-3', 1);
+  assert.equal(after.held_micros, bytes * 50);
+  assert.ok(after.held_micros >= 50 * characters, 'at least 50 per character');
+  assert.match(after.price_id, new RegExp(`^fish-drama-3-speech-${deploy}$`));
+  assert.equal(reserve(deploy, 's2.1-pro', 2).held_micros, bytes * 15, 's2.1-pro is unchanged');
+});
+
+test('Part 21i: a fresh deployment prices drama-3 at 50 from the first row; an overlapping row that is not a newer version is still refused', (t) => {
+  const f = fixture(t);
+  seedInitialPrices(f);
+  const drama = priceRows(f).filter((r) => r.id.startsWith('fish-drama-3-speech'));
+  assert.equal(drama.length, 1);
+  assert.equal(PROVIDER_PRICES.find((p) => p.model === 'drama-3')!.upper, 50);
+  assert.equal(
+    f.store.get<{ u: number }>("SELECT upper_micros_per_unit u FROM web_provider_prices WHERE model='drama-3'")!.u,
+    50,
+  );
+  const again = (version: number, from: number) => () =>
+    f.ledger.configurePrice({
+      id: `x-${version}-${from}`,
+      provider: 'fish',
+      model: 'drama-3',
+      phase: 'speech',
+      currency: 'USD',
+      unit: 'byte',
+      upperMicrosPerUnit: 60,
+      validFrom: from,
+      validUntil: from + DAY,
+      version,
+    });
+  assert.throws(again(1, now + DAY), /PRICE_OVERLAP|UNIQUE|SQLITE|constraint/i, 'same version inside an existing row');
+  again(2, now + DAY)();
+});

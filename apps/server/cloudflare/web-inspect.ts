@@ -144,7 +144,7 @@ export function inspectWebAuthority(
               inForce:
                 reader
                   .all<{ id: string; valid_until: number }>(
-                    'SELECT id,valid_until FROM web_provider_prices WHERE provider=? AND model=? AND phase=? AND valid_from<=? AND valid_until>?',
+                    'SELECT id,valid_until FROM web_provider_prices WHERE provider=? AND model=? AND phase=? AND valid_from<=? AND valid_until>? ORDER BY version DESC',
                     row.provider,
                     row.model,
                     row.phase,

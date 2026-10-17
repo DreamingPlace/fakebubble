@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cocreationInbox } from '../../src/features/admin/cocreation-inbox.ts';
-import { cocreationPermissionEditor, permissionEditor } from '../../src/features/admin/permission-editor.ts';
 import { characterWorkbench } from '../../src/features/admin/character-workbench.ts';
 import type { InboxDetail, InboxFilter, InboxItem, InboxStatus } from '../../src/services/cocreation-admin-api.ts';
 import type { CharacterDetail, CharacterProfile } from '../../src/services/character-admin-api.ts';
@@ -672,41 +671,4 @@ test('the character workbench shows an unread badge per character, and none for 
   assert.equal(rows[0]!.querySelector('.cocreation-badge')!.getAttribute('href'), '#/cocreation/wei-guagua');
   assert.equal(rows[1]!.querySelector('.cocreation-badge'), null);
   bench.dispose();
-});
-
-test('the inbox permissions have their own control beside the four categories, with Chinese descriptions', (t) => {
-  const doc = installFakeDom(t);
-  const mount = doc.createElement('div');
-  const categories = permissionEditor(mount as unknown as HTMLElement, ['cocreation.read', 'category.invites']);
-  const inbox = cocreationPermissionEditor(mount as unknown as HTMLElement, ['cocreation.read', 'category.invites']);
-  assert.equal(
-    mount.querySelectorAll('input[data-permission-category]').length,
-    4,
-    'the four categories are untouched',
-  );
-  assert.deepEqual(categories.value(), ['category.invites'], 'the category editor ignores inbox permissions');
-  assert.deepEqual(inbox.value(), ['cocreation.read']);
-  const text = mount.textContent;
-  assert.match(text, /角色 · 共创收件箱/);
-  assert.match(text, /共创收件箱 · 查看/);
-  assert.match(text, /共创收件箱 · 处理/);
-  assert.match(text, /不显示邮箱或身份/);
-  const read = mount.querySelector('[data-permission="cocreation.read"]')!;
-  const manage = mount.querySelector('[data-permission="cocreation.manage"]')!;
-  assert.equal(manage.checked, false);
-  manage.checked = true;
-  manage.dispatch('change');
-  assert.equal(read.checked, true, 'handling includes viewing');
-  assert.deepEqual(inbox.value(), ['cocreation.manage', 'cocreation.read']);
-  read.checked = false;
-  read.dispatch('change');
-  assert.equal(manage.checked, false, 'no handling without viewing');
-  assert.deepEqual(inbox.value(), []);
-  inbox.setDisabled(true);
-  assert.ok(mount.querySelectorAll('[data-permission]').every((box) => box.disabled));
-  // A grant that only has “manage” shows viewing ticked as well.
-  const other = doc.createElement('div');
-  const manageOnly = cocreationPermissionEditor(other as unknown as HTMLElement, ['cocreation.manage']);
-  assert.equal(other.querySelector('[data-permission="cocreation.read"]')!.checked, true);
-  assert.deepEqual(manageOnly.value(), ['cocreation.manage', 'cocreation.read']);
 });

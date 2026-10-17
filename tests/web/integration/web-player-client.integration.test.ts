@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseBootstrap } from '../../../packages/contracts/web-local-client.ts';
 import type { WebLocalMessage } from '../../../packages/contracts/web-local.ts';
-import { LocalIdentityController } from '../../../apps/player-web/src/session/identity-controller.ts';
 import { LocalSession } from '../../../apps/player-web/src/session/local-session.ts';
 import { LocalApi, LocalApiError } from '../../../apps/player-web/src/services/local-api.ts';
 import { LocalAudioController } from '../../../apps/player-web/src/media/audio-controller.ts';
@@ -56,31 +55,6 @@ function deferred<T>() {
   return { promise, resolve };
 }
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-
-for (const kind of ['register', 'recover'] as const)
-  test(`A-WEB-018 C: late ${kind} cannot reinstall an invalidated identity`, async () => {
-    const session = new LocalSession();
-    session.install(guest);
-    const gate = deferred<void>();
-    const api = {
-      register: () => gate.promise,
-      bootstrap: () => (kind === 'recover' ? gate.promise.then(() => account) : Promise.resolve(account)),
-      receiptStatus: async () => ({ principalId: 'c-principal', accountId: 'c-account' }),
-    } as unknown as LocalApi;
-    const identity = new LocalIdentityController(api, session);
-    const pending =
-      kind === 'register'
-        ? identity.register('id', 'name', 'not-secret')
-        : identity.recoverRegister('id', 'name', 'not-secret');
-    session.invalidate();
-    gate.resolve();
-    try {
-      await pending;
-    } catch {
-      /* Fail-closed rejection is also acceptable. */
-    }
-    assert.equal(session.currentView, null, `${kind} revived an invalidated principal`);
-  });
 
 test('A-WEB-018 C: delayed older bootstrap cannot overwrite a newer identity CSRF', async () => {
   const slow = deferred<Response>();

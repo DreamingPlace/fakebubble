@@ -10,6 +10,7 @@ import {
 import {
   accountCopy,
   accountError,
+  loginError,
   openAccountSheet,
   type AccountApi,
   type AccountSheetMode,
@@ -131,11 +132,14 @@ test('注册: email → code → password + nickname, one step at a time, with t
     args: [{ challengeId: 'challenge-1', code: '123456' }],
   });
   // Password and nickname are checked before they are sent.
+  // Part 21i (named exception): signup asks for the password twice; the repeat is filled in here and the rest is unchanged.
   s.input('password').value = 'short';
+  s.input('password-again').value = 'short';
   s.input('nickname').value = '阿泡';
   s.submit();
   assert.equal(s.status(), accountCopy.errors.PLAYER_PASSWORD_INVALID);
   s.input('password').value = 'correct horse battery';
+  s.input('password-again').value = 'correct horse battery';
   s.input('nickname').value = '换\n行';
   s.submit();
   assert.equal(s.status(), accountCopy.errors.PLAYER_NICKNAME_INVALID);
@@ -253,7 +257,8 @@ test('登录: generic failure line, wait line, and the guest-chats notice only w
   mode = 'limited';
   plain.submit();
   await flush();
-  assert.match(plain.status(), /12 分钟/);
+  // Part 21i (named exception): the login sheet has its own wait line instead of the general "请 N 分钟后再试".
+  assert.equal(plain.status(), '尝试次数太多，请稍后再试');
   mode = 'ok';
   const typed = plain.input('password');
   plain.submit();
@@ -894,10 +899,12 @@ const signedIn: AccountInfo = {
   canBind: false,
 };
 
+// Part 21i (named exception, three tests below): a guest's top bar now always carries 更多, which holds 消费记录 (the guest's trial
+// replies); the expected labels gain '更多' and nothing else changes.
 test("top bar: a guest finds 登录 and 注册 next to 邀请码, not only inside a chat card's ⋯ menu", async (t) => {
   const f = chat(t, { kind: 'guest', account: { signupEnabled: true, signedIn: false }, remaining: 3 });
   await f.attach();
-  assert.deepEqual(labelsOf(topBar(f)), ['登录', '注册', '邀请码']);
+  assert.deepEqual(labelsOf(topBar(f)), ['登录', '注册', '更多', '邀请码']);
   assert.equal(f.header.querySelectorAll('.head-actions').length, 1);
   assert.equal(f.header.querySelector('.head-hint'), null, 'replies left: no extra line');
   assert.equal(f.header.querySelector('.head-note')!.textContent, '体验剩余 3 次');
@@ -914,7 +921,7 @@ test('top bar: while signup is off 注册 still opens and says 注册暂未开�
   for (const account of [undefined, { signupEnabled: false, signedIn: false } as AccountInfo]) {
     const f = chat(t, { kind: 'guest', ...(account ? { account } : {}) });
     await f.attach();
-    assert.deepEqual(labelsOf(topBar(f)), ['登录', '注册', '邀请码']);
+    assert.deepEqual(labelsOf(topBar(f)), ['登录', '注册', '更多', '邀请码']);
     topBar(f)[1]!.click();
     const sheet = f.doc.body.querySelector('.acct-sheet')!;
     assert.equal(sheet.querySelector('.acct-closed')!.textContent, '注册暂未开放');
@@ -930,7 +937,7 @@ test('top bar: the trial used up shows ONE short line saying what to do next, an
   assert.equal(used.header.querySelector('.head-note')!.textContent, '体验剩余 0 次');
   assert.equal(used.header.querySelectorAll('.head-hint').length, 1);
   assert.equal(used.header.querySelector('.head-hint')!.textContent, '注册保存聊天，或输入邀请码继续');
-  assert.deepEqual(labelsOf(topBar(used)), ['登录', '注册', '邀请码']);
+  assert.deepEqual(labelsOf(topBar(used)), ['登录', '注册', '更多', '邀请码']);
   // Same line while signup is off: the buttons say 暂未开放 themselves.
   const closed = chat(t, { kind: 'guest', remaining: 0 });
   await closed.attach();
@@ -1010,4 +1017,194 @@ test('mobile top bar: one account entry opens the existing login sheet with a si
   const sheet = f.doc.body.querySelector('.acct-sheet')!;
   assert.equal(sheet.querySelector('.acct-title')!.textContent, '登录');
   assert.ok(sheet.textContent.includes('没有账号？注册'));
+});
+
+// ---- Part 21i: login errors, signup confirmation, password toggles, no small print in the account menu ---------------------
+
+test('Part 21i login: each failure has its own line, an unregistered email offers the signup link, and a retry works', async (t) => {
+  let failure: unknown = new ProviderApiError(401, 'PLAYER_EMAIL_NOT_REGISTERED');
+  const f = fakeApi({
+    login: () => {
+      if (failure) throw failure;
+      return undefined;
+    },
+  });
+  const s = open(t, 'login', { api: f.api });
+  s.input('email').value = 'a@example.com';
+  s.input('password').value = 'whatever pass';
+  const cases: [unknown, string][] = [
+    [new ProviderApiError(401, 'PLAYER_EMAIL_NOT_REGISTERED'), '这个邮箱还没有注册'],
+    [new ProviderApiError(401, 'PLAYER_PASSWORD_WRONG'), '密码不正确'],
+    [new ProviderApiError(429, 'PLAYER_RATE_LIMITED', 60_000), '尝试次数太多，请稍后再试'],
+    [new ProviderApiError(0, 'NETWORK'), '网络异常，请重试'],
+    [new TypeError('fetch failed'), '网络异常，请重试'],
+  ];
+  for (const [error, line] of cases) {
+    failure = error;
+    s.submit();
+    await flush();
+    assert.equal(s.status(), line + (line === '这个邮箱还没有注册' ? ` ${accountCopy.goSignup}` : ''));
+    assert.equal(loginError(error), line);
+    assert.equal(s.root.querySelectorAll('.acct-goto-signup').length, line === '这个邮箱还没有注册' ? 1 : 0);
+  }
+  // The signup link hands over to the signup sheet (and closes this one) like 没有账号？注册.
+  failure = new ProviderApiError(401, 'PLAYER_EMAIL_NOT_REGISTERED');
+  s.submit();
+  await flush();
+  s.root.querySelector('.acct-goto-signup')!.click();
+  assert.deepEqual(s.log.switched, ['signup']);
+  // Signup off: the line stays, no link to a closed door.
+  const closed = open(t, 'login', { api: f.api, signupEnabled: false });
+  closed.input('email').value = 'a@example.com';
+  closed.input('password').value = 'whatever pass';
+  closed.submit();
+  await flush();
+  assert.equal(closed.status(), '这个邮箱还没有注册');
+  assert.equal(closed.root.querySelectorAll('.acct-goto-signup').length, 0);
+  // Success still works after failures.
+  failure = null;
+  s.c.advance(0);
+});
+
+test('Part 21i signup: two password fields; submit is disabled and 两次输入的密码不一致 shows until they match', async (t) => {
+  const s = open(t, 'signup');
+  s.input('email').value = 'p@example.com';
+  s.submit();
+  await flush();
+  s.input('code').value = '123456';
+  s.submit();
+  await flush();
+  const labels = s.root.querySelectorAll('.acct-label').map((l) => l.textContent);
+  assert.deepEqual(labels.slice(0, 2), ['设置密码', '再次输入密码']);
+  const first = s.input('password'),
+    again = s.input('password-again');
+  const submit = s.root.querySelector('button[type="submit"]')!;
+  const message = s.root.querySelector('.acct-mismatch')!;
+  assert.equal(message.hidden, true, 'nothing typed in the second field yet: no scolding');
+  first.type_('correct horse');
+  again.type_('correct hors');
+  assert.equal(message.hidden, false);
+  assert.equal(message.textContent, '两次输入的密码不一致');
+  assert.equal(submit.disabled, true);
+  s.input('nickname').value = '阿泡';
+  s.submit();
+  await flush();
+  assert.equal(
+    s.f.names().includes('finishAccount'),
+    false,
+    'a mismatch never reaches the server, even if the form is submitted',
+  );
+  again.type_('correct horse');
+  assert.equal(message.hidden, true);
+  assert.equal(submit.disabled, false);
+  // Editing the first field breaks the match again.
+  first.type_('correct horse!');
+  assert.equal(submit.disabled, true);
+  assert.equal(message.hidden, false);
+  first.type_('correct horse');
+  s.submit();
+  await flush();
+  assert.deepEqual(s.f.calls.at(-1), {
+    name: 'finishAccount',
+    args: [{ purpose: 'signup', challengeId: 'challenge-1', password: 'correct horse', nickname: '阿泡' }],
+  });
+  // The server's password rules still apply to what matched on the client (too short = the usual line).
+  const short = open(t, 'signup');
+  short.input('email').value = 'p@example.com';
+  short.submit();
+  await flush();
+  short.input('code').value = '123456';
+  short.submit();
+  await flush();
+  short.input('password').type_('short');
+  short.input('password-again').type_('short');
+  short.input('nickname').value = '阿泡';
+  short.submit();
+  assert.equal(short.status(), accountCopy.errors.PLAYER_PASSWORD_INVALID);
+  // Reset, bind and every other sheet keep a single password field.
+  const reset = open(t, 'reset');
+  reset.input('email').value = 'p@example.com';
+  reset.submit();
+  await flush();
+  reset.input('code').value = '123456';
+  reset.submit();
+  await flush();
+  assert.equal(reset.root.querySelector('input[name="password-again"]'), null);
+});
+
+test('Part 21i: every player password field has a 显示/隐藏 toggle with aria-pressed and aria-controls', async (t) => {
+  const check = (root: FakeElement, expected: string[]) => {
+    const inputs = root.querySelectorAll('input[type="password"]');
+    assert.deepEqual(
+      inputs.map((i) => i.getAttribute('name')),
+      expected,
+    );
+    const toggles = root.querySelectorAll('.acct-reveal');
+    assert.equal(toggles.length, expected.length);
+    toggles.forEach((toggle, index) => {
+      const field = inputs[index]!;
+      assert.equal(toggle.getAttribute('aria-controls'), field.id);
+      assert.notEqual(field.id, '');
+      assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+      assert.equal(toggle.textContent, '显示密码');
+      assert.equal(toggle.getAttribute('type'), 'button', 'never submits the form');
+      toggle.click();
+      assert.equal(field.type, 'text');
+      assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+      assert.equal(toggle.textContent, '隐藏密码');
+      toggle.click();
+      assert.equal(field.type, 'password');
+      assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+    });
+    assert.equal(
+      new Set(
+        root
+          .querySelectorAll('.acct-input')
+          .map((i) => i.id)
+          .filter(Boolean),
+      ).size,
+      expected.length,
+    );
+  };
+  check(open(t, 'login').root, ['password']);
+  check(open(t, 'password').root, ['current', 'next']);
+  for (const mode of ['signup', 'reset', 'bind'] as const) {
+    const s = open(t, mode);
+    s.input('email').value = 'p@example.com';
+    s.submit();
+    await flush();
+    s.input('code').value = '123456';
+    s.submit();
+    await flush();
+    check(s.root, mode === 'signup' ? ['password', 'password-again'] : ['password']);
+  }
+});
+
+test('Part 21i: the top-bar account dropdown has item labels only, no secondary line', async (t) => {
+  const account: AccountInfo = {
+    signupEnabled: true,
+    signedIn: true,
+    kind: 'guest',
+    hasLogin: true,
+    emailMasked: 'p***@example.com',
+    nickname: '阿泡',
+    canBind: false,
+  };
+  const login = chat(t, { kind: 'guest', account });
+  await login.attach();
+  topBar(login)[0]!.click();
+  const items = login.header.querySelectorAll('.chat-menu-item');
+  assert.deepEqual(titles(items), ['我的昵称', '修改密码', '退出其他设备', '退出登录']);
+  assert.equal(login.header.querySelectorAll('.chat-menu-sub').length, 0);
+  for (const item of items) assert.equal(item.textContent, item.querySelector('.chat-menu-title')!.textContent);
+  // The guest's 更多 menu too; the chat's own ⋯ menu keeps its 共创 line.
+  const guest = chat(t, {
+    kind: 'guest',
+    account: { signupEnabled: true, signedIn: false, features: { accountDelete: true } },
+  });
+  await guest.attach();
+  topBar(guest)[2]!.click();
+  assert.deepEqual(titles(guest.header.querySelectorAll('.chat-menu-item')), ['消费记录', '清除本设备的体验数据']);
+  assert.equal(guest.header.querySelectorAll('.chat-menu-sub').length, 0);
+  assert.equal(guest.menu()[0]!.querySelectorAll('.chat-menu-sub').length, 1);
 });

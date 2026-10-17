@@ -70,6 +70,10 @@ export const accountCopy = {
   resendIn: (seconds: number) => `${seconds} 秒后可重新发送`,
   password: '密码',
   passwordNew: '设置密码',
+  passwordAgain: '再次输入密码',
+  passwordMismatch: '两次输入的密码不一致',
+  showPassword: '显示密码',
+  hidePassword: '隐藏密码',
   passwordHint: '8 到 128 个字符',
   nickname: '昵称',
   nicknameHint: '1 到 20 个字，不能换行',
@@ -83,6 +87,7 @@ export const accountCopy = {
   loginNoMergeSub: '登录后会切换到这个邮箱对应的聊天，现在这个访客身份的聊天会留在这台设备的访客里，不会带过去。',
   forgot: '忘记密码',
   toSignup: '没有账号？注册',
+  goSignup: '去注册',
   current: '当前密码',
   next: '新密码',
   logoutOthers: '同时退出其他设备',
@@ -104,6 +109,8 @@ export const accountCopy = {
     PLAYER_NICKNAME_INVALID: '昵称需要 1 到 20 个字，不能有换行或特殊控制字符。',
     PLAYER_CODE_INVALID: '验证码不对或已过期。验证码输错 5 次会作废，可以重新发送。',
     PLAYER_LOGIN_INVALID: '邮箱或密码不正确',
+    PLAYER_EMAIL_NOT_REGISTERED: '这个邮箱还没有注册',
+    PLAYER_PASSWORD_WRONG: '密码不正确',
     PLAYER_ACCESS_REVOKED: '这个账号的邀请已被收回，不能登录。',
     PLAYER_LOGIN_EXISTS: '这个身份已经绑定过邮箱了。',
     PLAYER_LOGIN_REQUIRED: '请先登录。',
@@ -124,6 +131,13 @@ export const accountCopy = {
     AUTH_REQUIRED: '登录状态已失效，请刷新页面。',
     NETWORK: '网络不太稳定，稍后再试试。',
   } as Record<string, string>,
+  /** Login only (Part 21i): the owner accepts that a distinct line reveals whether an email is registered. */
+  loginErrors: {
+    PLAYER_EMAIL_NOT_REGISTERED: '这个邮箱还没有注册',
+    PLAYER_PASSWORD_WRONG: '密码不正确',
+    RATE_LIMITED: '尝试次数太多，请稍后再试',
+    NETWORK: '网络异常，请重试',
+  } as Record<string, string>,
   wait: (ms: number) => {
     const minutes = Math.max(1, Math.ceil(ms / 60_000));
     return minutes <= 1 ? '操作太频繁了，请 1 分钟后再试。' : `操作太频繁了，请 ${minutes} 分钟后再试。`;
@@ -138,6 +152,15 @@ export function accountError(error: unknown) {
       ? accountCopy.errors[error.code]!
       : accountCopy.wait(error.retryAfterMs ?? 60_000);
   return accountCopy.errors[error.code] ?? accountCopy.errors.NETWORK!;
+}
+
+/** The login sheet's line for a failure: the four specific cases, else the general line. */
+export function loginError(error: unknown) {
+  if (!(error instanceof ProviderApiError)) return accountCopy.loginErrors.NETWORK!;
+  if (error.status === 429 || error.code === 'RATE_LIMITED' || error.code === 'PLAYER_RATE_LIMITED')
+    return accountCopy.loginErrors.RATE_LIMITED!;
+  if (error.status === 0 || error.code === 'NETWORK') return accountCopy.loginErrors.NETWORK!;
+  return accountCopy.loginErrors[error.code] ?? accountError(error);
 }
 
 const passwordOk = (value: string) => {
@@ -257,10 +280,50 @@ export function openAccountSheet(options: AccountSheetOptions) {
     );
   const input = (name: string, type: string, extra: Record<string, string> = {}) =>
     h('input', { class: 'acct-input', attrs: { name, type, ...extra } });
+  /**
+   * A password field with a 显示/隐藏 toggle (Part 21i; the admin page's pattern: aria-pressed and aria-controls). Returns the
+   * input and the labelled field; the input is also what the forms read and clear.
+   */
+  let passwordFields = 0;
+  const passwordField = (
+    label: string,
+    name: string,
+    extra: Record<string, string>,
+    hint?: string,
+  ): { input: HTMLInputElement; field: HTMLElement } => {
+    const control = input(name, 'password', { ...extra, id: `acct-pw-${++passwordFields}` });
+    const toggle = h('button', {
+      class: 'acct-reveal',
+      text: accountCopy.showPassword,
+      attrs: { type: 'button', 'aria-pressed': 'false', 'aria-controls': control.id },
+    });
+    toggle.addEventListener('click', () => {
+      const shown = control.type === 'password';
+      control.type = shown ? 'text' : 'password';
+      toggle.setAttribute('aria-pressed', String(shown));
+      toggle.textContent = shown ? accountCopy.hidePassword : accountCopy.showPassword;
+    });
+    return {
+      input: control,
+      field: h(
+        'div',
+        { class: 'acct-field' },
+        h('label', { class: 'acct-label', text: label, attrs: { for: control.id } }),
+        h('span', { class: 'acct-pw' }, control, toggle),
+        hint ? h('span', { class: 'acct-hint', text: hint }) : null,
+      ),
+    };
+  };
   const button = (text: string, className = 'acct-primary', type = 'button') =>
     h('button', { class: className, text, attrs: { type } });
   /** Disables the controls while a call is in flight and shows the fixed failure line when it throws. */
-  const run = async (submit: HTMLButtonElement, working: string, idle: string, work: () => Promise<void>) => {
+  const run = async (
+    submit: HTMLButtonElement,
+    working: string,
+    idle: string,
+    work: () => Promise<void>,
+    report: (error: unknown) => void = (error) => say(accountError(error)),
+  ) => {
     if (busy || closed) return;
     busy = true;
     submit.disabled = true;
@@ -269,7 +332,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
     try {
       await work();
     } catch (error) {
-      say(accountError(error));
+      report(error);
     } finally {
       busy = false;
       submit.disabled = false;
@@ -431,7 +494,27 @@ export function openAccountSheet(options: AccountSheetOptions) {
     };
 
     const stepDetails = () => {
-      const password = input('password', 'password', { autocomplete: 'new-password', maxlength: '128' });
+      const newPassword = passwordField(
+        purpose === 'reset' ? accountCopy.next : accountCopy.passwordNew,
+        'password',
+        { autocomplete: 'new-password', maxlength: '128' },
+        accountCopy.passwordHint,
+      );
+      const password = newPassword.input;
+      // Signup asks twice (Part 21i); the match is checked here, the server still validates the password rules.
+      const again =
+        purpose === 'signup'
+          ? passwordField(accountCopy.passwordAgain, 'password-again', {
+              autocomplete: 'new-password',
+              maxlength: '128',
+            })
+          : null;
+      const mismatch = h('p', {
+        class: 'acct-mismatch',
+        text: accountCopy.passwordMismatch,
+        attrs: { role: 'alert' },
+        hidden: true,
+      });
       const nickname = input('nickname', 'text', { autocomplete: 'nickname', maxlength: '40' });
       const label = { signup: accountCopy.finishSignup, bind: accountCopy.finishBind, reset: accountCopy.finishReset }[
         purpose
@@ -440,12 +523,26 @@ export function openAccountSheet(options: AccountSheetOptions) {
       const form = h(
         'form',
         { class: 'acct-form' },
-        field(purpose === 'reset' ? accountCopy.next : accountCopy.passwordNew, password, accountCopy.passwordHint),
+        newPassword.field,
+        again?.field,
+        again ? mismatch : null,
         purpose === 'reset' ? null : field(accountCopy.nickname, nickname, accountCopy.nicknameHint),
         submit,
       );
+      const checkMatch = () => {
+        if (!again) return;
+        const differs = password.value !== again.input.value;
+        mismatch.hidden = !(differs && again.input.value !== '');
+        submit.disabled = busy || differs;
+      };
+      password.addEventListener('input', checkMatch);
+      again?.input.addEventListener('input', checkMatch);
       form.addEventListener('submit', (event) => {
         event.preventDefault();
+        if (again && password.value !== again.input.value) {
+          mismatch.hidden = false;
+          return;
+        }
         if (!passwordOk(password.value)) {
           say(accountCopy.errors.PLAYER_PASSWORD_INVALID!);
           return;
@@ -470,6 +567,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
                 })
               )?.bonus ?? 0;
           password.value = '';
+          if (again) again.input.value = '';
           finish(
             purpose === 'signup' && bonus > 0
               ? accountCopy.doneSignupBonus(bonus)
@@ -485,7 +583,11 @@ export function openAccountSheet(options: AccountSheetOptions) {
   // ---- 登录 -----------------------------------------------------------------------------------------------------
   const loginForm = () => {
     const email = input('email', 'email', { autocomplete: 'username', inputmode: 'email', maxlength: '254' });
-    const password = input('password', 'password', { autocomplete: 'current-password', maxlength: '128' });
+    const loginPassword = passwordField(accountCopy.password, 'password', {
+      autocomplete: 'current-password',
+      maxlength: '128',
+    });
+    const password = loginPassword.input;
     const label = options.hasGuestChats ? accountCopy.loginSwitch : accountCopy.loginSubmit;
     const submit = button(label, 'acct-primary', 'submit');
     const forgot = button(accountCopy.forgot, 'acct-link');
@@ -514,7 +616,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
       { class: 'acct-form' },
       notice,
       field(accountCopy.email, email),
-      field(accountCopy.password, password),
+      loginPassword.field,
       submit,
       h('div', { class: 'acct-links' }, forgot, options.signupEnabled === false ? null : toSignup),
     );
@@ -524,11 +626,29 @@ export function openAccountSheet(options: AccountSheetOptions) {
         say(accountCopy.errors.PLAYER_LOGIN_INVALID!);
         return;
       }
-      void run(submit, accountCopy.working, label, async () => {
-        await api.login({ email: email.value.trim(), password: password.value });
-        password.value = '';
-        finish(accountCopy.loginTitle + '成功');
-      });
+      void run(
+        submit,
+        accountCopy.working,
+        label,
+        async () => {
+          await api.login({ email: email.value.trim(), password: password.value });
+          password.value = '';
+          finish(accountCopy.loginTitle + '成功');
+        },
+        (error) => {
+          const message = loginError(error);
+          // An unregistered address is offered the way to sign up, without leaving a second sheet open.
+          if (
+            error instanceof ProviderApiError &&
+            error.code === 'PLAYER_EMAIL_NOT_REGISTERED' &&
+            options.signupEnabled !== false
+          ) {
+            const signup = button(accountCopy.goSignup, 'acct-link acct-goto-signup');
+            signup.addEventListener('click', () => toSignup.click());
+            status.replaceChildren(message, ' ', signup);
+          } else say(message);
+        },
+      );
     });
     body.replaceChildren(form);
   };
@@ -559,15 +679,25 @@ export function openAccountSheet(options: AccountSheetOptions) {
     body.replaceChildren(form);
   };
   const passwordForm = () => {
-    const current = input('current', 'password', { autocomplete: 'current-password', maxlength: '128' });
-    const next = input('next', 'password', { autocomplete: 'new-password', maxlength: '128' });
+    const currentPassword = passwordField(accountCopy.current, 'current', {
+      autocomplete: 'current-password',
+      maxlength: '128',
+    });
+    const nextPassword = passwordField(
+      accountCopy.next,
+      'next',
+      { autocomplete: 'new-password', maxlength: '128' },
+      accountCopy.passwordHint,
+    );
+    const current = currentPassword.input,
+      next = nextPassword.input;
     const others = input('logoutOthers', 'checkbox');
     const submit = button(accountCopy.save, 'acct-primary', 'submit');
     const form = h(
       'form',
       { class: 'acct-form' },
-      field(accountCopy.current, current),
-      field(accountCopy.next, next, accountCopy.passwordHint),
+      currentPassword.field,
+      nextPassword.field,
       h('label', { class: 'acct-check' }, others, h('span', { text: accountCopy.logoutOthers })),
       submit,
     );
@@ -590,7 +720,11 @@ export function openAccountSheet(options: AccountSheetOptions) {
   // ---- 删除我的账号 / 清除本设备的体验数据 ---------------------------------------------------------------------------
   const eraseForm = () => {
     const withPassword = mode === 'delete';
-    const password = input('password', 'password', { autocomplete: 'current-password', maxlength: '128' });
+    const erasePassword = passwordField(accountCopy.password, 'password', {
+      autocomplete: 'current-password',
+      maxlength: '128',
+    });
+    const password = erasePassword.input;
     const word = withPassword ? accountCopy.deleteWord : accountCopy.clearWord;
     const confirm = input('confirm', 'text', { autocomplete: 'off', maxlength: '8' });
     const label = withPassword ? accountCopy.deleteSubmit : accountCopy.clearSubmit;
@@ -604,7 +738,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
           (withPassword ? accountCopy.deleteIntro : accountCopy.clearIntro) +
           (options.reviewRetention ? accountCopy.reviewRetention : ''),
       }),
-      withPassword ? field(accountCopy.password, password) : null,
+      withPassword ? erasePassword.field : null,
       withPassword ? field(accountCopy.deleteConfirm, confirm) : null,
       submit,
     );

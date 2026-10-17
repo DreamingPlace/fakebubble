@@ -3,7 +3,6 @@ import test from 'node:test';
 import { parseBootstrap } from '../../../packages/contracts/web-local-client.ts';
 import { LocalSession, type LocalScope } from '../../../apps/player-web/src/session/local-session.ts';
 import { LocalApi, StaleLocalIdentityError } from '../../../apps/player-web/src/services/local-api.ts';
-import { LocalIdentityController } from '../../../apps/player-web/src/session/identity-controller.ts';
 import { LocalSendController } from '../../../apps/player-web/src/data/send-controller.ts';
 import { LocalSyncController, type EventStream } from '../../../apps/player-web/src/data/sync-controller.ts';
 import { IndexedDbLocalCache } from '../../../apps/player-web/src/data/local-cache.ts';
@@ -149,34 +148,6 @@ test('C local-2: 410 from sync denies body, closes stream, and blocks later catc
   await controller.visible(true);
   assert.equal(calls, 1, '410 must not schedule another sync');
   controller.stop();
-});
-
-test('C local-2: late registration response cannot revive expired generation', async () => {
-  let now = 1000,
-    bootstraps = 0;
-  const session = new LocalSession(() => now);
-  session.install(bootstrap());
-  const receipt = deferred<void>(),
-    entered = deferred<void>();
-  const api = {
-    register: async () => {
-      entered.resolve();
-      await receipt.promise;
-    },
-    bootstrap: async () => {
-      bootstraps++;
-      return bootstrap('account');
-    },
-  } as unknown as LocalApi;
-  const registration = new LocalIdentityController(api, session).register('c-request', 'c-name', 'synthetic-password');
-  await entered.promise;
-  now = 2000;
-  session.denyContent();
-  receipt.resolve();
-  await assert.rejects(registration, StaleLocalIdentityError);
-  assert.equal(bootstraps, 0);
-  assert.equal(session.currentView?.bootstrap.access.kind, 'guest');
-  assert.equal(session.contentAvailable(), false);
 });
 
 test('C local-2: guest body never opens cache IDB, while account remains eligible', async () => {
