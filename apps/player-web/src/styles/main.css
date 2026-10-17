@@ -2788,6 +2788,27 @@ body:has(.admin-shell) {
 .admin-narrow-notice {
   display: none;
 }
+.admin-access-notice {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  max-width: 420px;
+  padding: 16px 18px;
+  border: 1px solid var(--ad-border);
+  border-radius: 8px;
+  background: var(--ad-surface);
+}
+.admin-access-notice p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+/* Until Access has been passed nothing else on the page can work, so nothing else is offered. */
+.account-admin-page[data-access] .admin-content > :not(.admin-access-notice),
+.account-admin-page[data-access] .admin-account,
+.account-admin-page[data-access] .admin-sidebar {
+  display: none !important;
+}
 @media (max-width: 1023px) {
   .admin-shell > :not(.admin-narrow-notice) {
     display: none !important;

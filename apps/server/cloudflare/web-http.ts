@@ -130,7 +130,13 @@ export class WebProviderHTTP {
     );
     ensure(!request.headers.has('origin') || request.headers.get('origin') === app.config.origin, 'ORIGIN_INVALID');
     const site = request.headers.get('sec-fetch-site');
-    ensure(site === null || site === 'same-origin' || site === 'none', 'ORIGIN_INVALID');
+    // Only the return from Cloudflare Access to /admin/enter may arrive cross-site, and only as a top-level GET navigation.
+    const accessReturn =
+      path === `${API}/admin/enter` && method === 'GET' && request.headers.get('sec-fetch-mode') === 'navigate';
+    ensure(
+      site === null || site === 'same-origin' || site === 'none' || (site === 'cross-site' && accessReturn),
+      'ORIGIN_INVALID',
+    );
     const fields = [...request.headers];
     ensure(
       fields.length <= 40 &&
@@ -161,6 +167,11 @@ export class WebProviderHTTP {
         (allowedQuery === null || url.searchParams.getAll(allowedQuery).length <= 1),
       'INVALID_REQUEST',
     );
+    if (path === `${API}/admin/enter`) {
+      ensure(method === 'GET', 'INVALID_REQUEST');
+      // A fixed target: no parameter can choose where this goes, and nothing is read or written.
+      return new Response(null, { status: 303, headers: { location: '/?mode=provider-admin' } });
+    }
     const welcome = path.match(new RegExp(`^${API}/public-audio/([A-Za-z0-9_-]{1,128})$`));
     if (method === 'GET' && welcome) {
       this.limits.rate(`web:welcome:${ipHash}`, LIMITS.welcomePerIpPerMinute);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { startAccountAdminPage } from '../../src/features/admin/account-admin-page.ts';
+import { adminAccountError, startAccountAdminPage } from '../../src/features/admin/account-admin-page.ts';
 import {
   AccountAdminApi,
   type AccountAdminSession,
@@ -160,6 +160,59 @@ test('administrator opens on email login; one-time option remains separate, no p
   assert.ok(!/Google|Apple|注册/.test(f.root.innerHTML));
   f.root.querySelector('[data-page="token"]').fire();
   assert.equal(f.root.querySelector('[data-panel="token"]').hidden, false);
+});
+
+test('an opaque Access redirect on restore shows the Access notice, not the generic error, and the button navigates to /enter', async (t) => {
+  const f = setup(t);
+  f.port.restore = async () => {
+    throw new InviteLocalApiError(0, 'ACCESS_REQUIRED');
+  };
+  const assigned: string[] = [];
+  (window as unknown as { location: { assign(url: string): void } }).location = { assign: (url) => assigned.push(url) };
+  f.mount();
+  await flush();
+  assert.equal(f.root.querySelector('#admin-access').hidden, false);
+  assert.match(f.root.innerHTML, /需要先通过 Cloudflare Access 验证身份。/);
+  assert.match(f.root.innerHTML, /前往验证/);
+  assert.ok(!f.root.querySelector('.invite-admin-status').textContent.includes('操作结果未确认'));
+  f.root.querySelector('#admin-access-enter').fire();
+  assert.deepEqual(assigned, ['/api/web/provider/admin/enter']);
+});
+
+test('the two new admin error codes have their own messages, and a plain 401 hides the Access notice', () => {
+  assert.equal(
+    adminAccountError(new InviteLocalApiError(0, 'ACCESS_REQUIRED')),
+    '需要先通过 Cloudflare Access 验证身份。',
+  );
+  assert.equal(
+    adminAccountError(new InviteLocalApiError(403, 'ORIGIN_INVALID')),
+    '请从管理页面操作，不要直接打开接口地址。',
+  );
+});
+
+test('the admin transport refuses redirects; an opaqueredirect or a network TypeError is ACCESS_REQUIRED', async () => {
+  const seen: (RequestInit | undefined)[] = [];
+  const of = (reply: () => Promise<Response>) =>
+    new AccountAdminApi((async (_input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(init);
+      return reply();
+    }) as typeof fetch);
+  const opaque = { type: 'opaqueredirect', ok: false, status: 0, json: async () => ({}) } as unknown as Response;
+  for (const reply of [async () => opaque, async () => Promise.reject(new TypeError('Failed to fetch'))])
+    await assert.rejects(
+      () => of(reply).restore(),
+      (error: unknown) => error instanceof InviteLocalApiError && error.code === 'ACCESS_REQUIRED',
+    );
+  assert.ok(seen.length === 2 && seen.every((init) => init?.redirect === 'manual'));
+  // A shared-transport client (characters) fails the same way, and other errors stay untouched.
+  await assert.rejects(
+    () => of(async () => opaque).characters.list(),
+    (error: unknown) => error instanceof InviteLocalApiError && error.code === 'ACCESS_REQUIRED',
+  );
+  await assert.rejects(
+    () => of(async () => Promise.reject(new Error('boom'))).restore(),
+    (error: unknown) => error instanceof Error && error.message === 'boom',
+  );
 });
 
 test('category editor preserves existing narrow grants and sends a compare-and-swap precondition', async (t) => {

@@ -50,7 +50,7 @@ export class WebInviteAdmin {
   /** Never expose this as a public unauthenticated route. */
   issueLoginGrant() {
     const token = this.newSecret();
-    const expiresAt = this.now() + 10 * 60_000;
+    const expiresAt = this.now() + 60 * 60_000;
     ensure(Number.isSafeInteger(expiresAt), 'INVALID_TIME');
     this.store.run('INSERT INTO admin_login_grants VALUES (?,?,NULL)', hash(token), expiresAt);
     return { token, expiresAt };

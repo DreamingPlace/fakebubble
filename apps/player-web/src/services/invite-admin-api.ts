@@ -20,17 +20,27 @@ export class InviteAdminApi {
     this.base = base;
   }
   protected async request(path: string, body?: Record<string, unknown>) {
-    const response = await this.fetcher(`${this.base}${path}`, {
-      method: body ? 'POST' : 'GET',
-      credentials: 'same-origin',
-      cache: 'no-store',
-      ...(body
-        ? {
-            headers: { 'Content-Type': 'application/json', ...(this.csrf ? { 'X-CSRF-Token': this.csrf } : {}) },
-            body: JSON.stringify(body),
-          }
-        : {}),
-    });
+    let response: Response;
+    try {
+      response = await this.fetcher(`${this.base}${path}`, {
+        method: body ? 'POST' : 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        // Cloudflare Access answers a browser without its cookie with a cross-origin redirect to its login page.
+        redirect: 'manual',
+        ...(body
+          ? {
+              headers: { 'Content-Type': 'application/json', ...(this.csrf ? { 'X-CSRF-Token': this.csrf } : {}) },
+              body: JSON.stringify(body),
+            }
+          : {}),
+      });
+    } catch (error) {
+      // A followed Access redirect fails as a CORS TypeError; either way the browser must pass Access first.
+      if (error instanceof TypeError) throw new InviteLocalApiError(0, 'ACCESS_REQUIRED');
+      throw error;
+    }
+    if (response.type === 'opaqueredirect') throw new InviteLocalApiError(0, 'ACCESS_REQUIRED');
     let value: unknown;
     try {
       value = await response.json();

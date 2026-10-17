@@ -92,6 +92,8 @@ export function adminAccountError(error: unknown) {
         ADMIN_EMAIL_UNAVAILABLE_FOR_BINDING: '无法绑定此邮箱，请使用其他邮箱或联系主管理员。',
         ADMIN_EMAIL_ALREADY_BOUND: '此账号已绑定邮箱，请刷新查看。',
         RATE_LIMITED: '操作太频繁，请稍后再试。',
+        ACCESS_REQUIRED: '需要先通过 Cloudflare Access 验证身份。',
+        ORIGIN_INVALID: '请从管理页面操作，不要直接打开接口地址。',
       } as Record<string, string>
     )[code] ?? '操作结果未确认。请刷新核对当前状态，不要重复提交发码请求。'
   );
@@ -122,6 +124,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       <button type="button" class="admin-nav-collapse" id="admin-nav-collapse" aria-pressed="false" title="收起或展开导航"><span aria-hidden="true">«</span><span class="admin-nav-collapse-text">收起导航</span></button>
     </nav>
     <div class="admin-content" tabindex="-1">
+    <section class="admin-access-notice" id="admin-access" role="alert" hidden><p>需要先通过 Cloudflare Access 验证身份。</p>
+      <button type="button" id="admin-access-enter">前往验证</button></section>
     <section class="invite-admin-result" id="admin-secret" hidden><span id="admin-secret-label"></span><strong class="invite-admin-code" id="admin-secret-value"></strong>
       <button id="admin-secret-close" type="button">已记录，清除显示</button></section>
     <section data-panel="login" hidden>
@@ -131,7 +135,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       <div class="admin-links"><button type="button" data-page="token">使用一次性登录凭据</button><button type="button" data-page="reset">忘记密码</button></div>
     </section>
     <section data-panel="token" hidden><form id="admin-token-login"><label for="admin-token">一次性登录凭据</label>
-      <input id="admin-token" type="password" autocomplete="off" maxlength="43" required><p>由主管理员签发，有效期 10 分钟，验证后即可进入管理。</p>
+      <input id="admin-token" type="password" autocomplete="off" maxlength="43" required><p>由主管理员签发，有效期 1 小时，验证后即可进入管理。</p>
       <button type="submit">验证并进入</button></form><button class="admin-back" type="button" data-page="login">返回邮箱登录</button></section>
     <section data-panel="reset" hidden><form id="admin-reset-start"><label for="admin-reset-email">管理员邮箱</label>
       <input id="admin-reset-email" type="email" autocomplete="username" maxlength="254" required><button type="submit">申请密码重置</button></form>
@@ -176,6 +180,16 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const q = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   const value = (id: string) => q<HTMLInputElement>(`#${id}`).value;
   const status = q<HTMLElement>('.invite-admin-status');
+  const accessNotice = q<HTMLElement>('#admin-access');
+  // The browser has no Cloudflare Access cookie yet: the notice carries its own text, so the status line stays empty.
+  q<HTMLButtonElement>('#admin-access-enter').addEventListener('click', () =>
+    window.location.assign('/api/web/provider/admin/enter'),
+  );
+  const report = (error: unknown) => {
+    const needsAccess = error instanceof InviteLocalApiError && error.code === 'ACCESS_REQUIRED';
+    accessNotice.hidden = !needsAccess;
+    status.textContent = needsAccess ? '' : adminAccountError(error);
+  };
   let session: AccountAdminSession | null = null,
     page: AdminPage | 'login' | 'token' | 'reset' = 'login',
     routeId: string | null = null,
@@ -319,9 +333,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     newPermissions?.setDisabled(busy || memberUnknown);
     q<HTMLElement>('main').setAttribute('data-surface', session ? page : 'login');
     // 系统 → 模型与价格 is the one page that is usable on a phone: its route lifts the desktop-only notice (and the login in front of it).
-    if (window.location?.hash?.startsWith('#/models') === true)
+    // The Access notice is usable on a phone as well: it is the only thing shown until Access has been passed.
+    if (window.location?.hash?.startsWith('#/models') === true || !accessNotice.hidden)
       q<HTMLElement>('main').setAttribute('data-mobile-ok', '');
     else q<HTMLElement>('main').removeAttribute('data-mobile-ok');
+    if (accessNotice.hidden) q<HTMLElement>('main').removeAttribute('data-access');
+    else q<HTMLElement>('main').setAttribute('data-access', '');
     workbench?.update(busy);
     previewBench?.update(busy);
     q<HTMLElement>('main').setAttribute('data-nav', navCollapsed ? 'collapsed' : 'expanded');
@@ -427,7 +444,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         clearSecrets();
         clearManagement();
       }
-      status.textContent = adminAccountError(error);
+      report(error);
       if (error instanceof InviteLocalApiError && error.code === 'ADMIN_PERMISSION_REQUIRED') {
         try {
           adoptSession(await port.restore());
@@ -883,7 +900,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         memberId: null,
         permissions,
       });
-      showSecret('管理员一次性登录凭据 · 10 分钟内使用', result.token);
+      showSecret('管理员一次性登录凭据 · 1 小时内使用', result.token);
       await loadMembers();
     } catch (error) {
       memberUnknown = true;
@@ -942,11 +959,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         clearSecrets();
         clearManagement();
       }
-      if (!disposed)
-        status.textContent =
-          error instanceof InviteLocalApiError && error.status === 401
-            ? '请使用管理员邮箱登录，或选择一次性凭据。'
-            : adminAccountError(error);
+      if (!disposed) {
+        if (error instanceof InviteLocalApiError && error.status === 401) {
+          accessNotice.hidden = true;
+          status.textContent = '请使用管理员邮箱登录，或选择一次性凭据。';
+        } else report(error);
+      }
     })
     .finally(() => {
       busy = false;
