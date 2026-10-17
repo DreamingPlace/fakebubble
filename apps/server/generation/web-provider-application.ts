@@ -1,4 +1,5 @@
 import { cheapestReplyPoints, hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
+import { ensureRegisteredBonus, signupBonusEmailKey, type BonusEmailKey } from '../admission/web-registered.ts';
 import { DEFAULT_PLAYER_MODEL, isPlayerModelId } from '../../../packages/contracts/player-models.ts';
 import { billedModelAt } from '../admission/web-model-settings.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
@@ -39,7 +40,7 @@ import {
   type PlayerMailer,
 } from '../identity/web-player-accounts.ts';
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
-import { bonusRemaining, extraTrialRemaining, freeTier, hasSignupBonus } from '../admission/web-free-tier.ts';
+import { bonusRemaining, extraTrialRemaining, freeTier, isRegistered } from '../admission/web-free-tier.ts';
 
 /** A cookie that names nothing recoverable: the transport expires it so the next visit starts from the signed-out page. */
 export class SessionClearedError extends DomainError {
@@ -147,6 +148,8 @@ export class WebProviderApplication {
   readonly config: WebProviderApplicationConfig;
   readonly identity: WebIdentity;
   readonly admission: WebAdmission;
+  /** Part 17h: lets a registered player without a bonus row be granted it once, on its first touch. */
+  private readonly bonusKey: BonusEmailKey;
   readonly publisher: WebVerticalPublisher;
   readonly inviteAdmin: WebAccountAdmin;
   readonly characterDeletion: WebCharacterDeletion;
@@ -197,7 +200,8 @@ export class WebProviderApplication {
       clock,
       ...(players.graceMs ? { guestGraceMs: players.graceMs } : {}),
     });
-    this.admission = new WebAdmission(store, clock, () => globalThis.crypto.randomUUID());
+    this.bonusKey = signupBonusEmailKey(Buffer.from(config.requestKey, 'base64url'));
+    this.admission = new WebAdmission(store, clock, () => globalThis.crypto.randomUUID(), this.bonusKey);
     this.publisher = new WebVerticalPublisher(store, clock);
     const chatReviewOn = store.chatReview === true && chatReviewTablesExist(store);
     this.inviteAdmin = new WebAccountAdmin(store, clock, config.origin, {
@@ -414,6 +418,8 @@ export class WebProviderApplication {
   access(principal: Principal, ipHash: string): WebProviderAccess & { inaccessible: boolean } {
     const now = this.clock.now();
     const tier = freeTier(this.store);
+    // Part 17h: a registered player (email login) that never got the signup bonus gets it here, once, on its first touch.
+    this.store.transaction(() => ensureRegisteredBonus(this.store, this.bonusKey, now, principal.principalId));
     const row = this.store.get<{
       kind: string;
       trial_used: number;
@@ -426,6 +432,23 @@ export class WebProviderApplication {
       playerId: principal.player_id,
       worldId: principal.world_id,
       revision: row.revision,
+    };
+    // Part 21b (flag PLAYER_MODEL_CHOICE_ENABLED): a registered player pays in points, so what it can still send follows the
+    // balance (after settling what finished). Part 21f: the guest trial is never spent by it (its unused replies were
+    // converted into the opening balance), so only the balance counts. Part 17h: registered = the signup bonus or an email
+    // login, as a guest or as an invited player whose grant lapsed; such a player is never "trial ended" or "invite gone".
+    const pointsAccess = (trialExpiresAt: number | null, inaccessible: boolean) => {
+      const state = modelChoiceState(this.store, now, principal.principalId, false)!;
+      return {
+        kind: 'guest' as const,
+        ...base,
+        lockedCharacterId: null,
+        remainingReplies: state.repliesLeft,
+        reservedReplies: row.trial_reserved,
+        trialExpiresAt,
+        canSend: state.balance >= cheapestReplyPoints(this.store, principal.principalId, now),
+        inaccessible,
+      };
     };
     if (row.kind === 'invite') {
       const grant = this.store.get<{ id: string; expires_at: number | null; revoked_at: number | null }>(
@@ -442,6 +465,12 @@ export class WebProviderApplication {
           : grant.expires_at !== null && now >= grant.expires_at
             ? ('expired' as const)
             : ('active' as const);
+      if (
+        status !== 'active' &&
+        hasPoints(this.store, principal.principalId, now) &&
+        isRegistered(this.store, principal.principalId, now)
+      )
+        return pointsAccess(null, false);
       return {
         kind: 'invite',
         ...base,
@@ -473,6 +502,7 @@ export class WebProviderApplication {
     // A guest with an email login keeps reading after the trial ended (requireWebContent 'read'); it still cannot send.
     const retained =
       expired && retention.state === 'active' && playerLoginRetainsGuest(this.store, principal.principalId);
+    const registered = isRegistered(this.store, principal.principalId, now);
     const counterRemaining = Math.max(
       0,
       Math.min(
@@ -487,23 +517,8 @@ export class WebProviderApplication {
     const extraLeft = tier.on && !expired ? extraTrialRemaining(this.store, principal.principalId, ipHash) : 0;
     const remaining = counterRemaining + extraLeft;
     const trialCanSend = !expired && remaining > 0 && (locked === null || !webCharacterDeleted(this.store, locked));
-    // Part 21b (flag PLAYER_MODEL_CHOICE_ENABLED): a player holding the signup bonus pays in points, so what it can still
-    // send follows the balance (after settling what finished). Part 21f: the guest trial is never spent by it (its unused
-    // replies were converted into the opening balance), so only the balance counts.
-    if (hasPoints(this.store, principal.principalId)) {
-      const state = modelChoiceState(this.store, now, principal.principalId, false)!;
-      const affordable = state.balance >= cheapestReplyPoints(this.store, principal.principalId);
-      return {
-        kind: 'guest',
-        ...base,
-        lockedCharacterId: null,
-        remainingReplies: state.repliesLeft,
-        reservedReplies: row.trial_reserved,
-        trialExpiresAt: retention.expires_at ?? null,
-        canSend: affordable,
-        inaccessible: expired && !retained,
-      };
-    }
+    if (hasPoints(this.store, principal.principalId, now))
+      return pointsAccess(retention.expires_at ?? null, expired && !retained && !registered);
     const bonusLeft = bonusRemaining(this.store, principal.principalId);
     if (bonusLeft > 0)
       return {
@@ -514,17 +529,17 @@ export class WebProviderApplication {
         reservedReplies: row.trial_reserved,
         trialExpiresAt: retention.expires_at ?? null,
         canSend: true,
-        inaccessible: expired && !retained,
+        inaccessible: expired && !retained && !registered,
       };
     return {
       kind: 'guest',
       ...base,
       lockedCharacterId: locked,
-      remainingReplies: hasSignupBonus(this.store, principal.principalId) && expired ? 0 : remaining,
+      remainingReplies: registered && expired ? 0 : remaining,
       reservedReplies: row.trial_reserved,
       trialExpiresAt: retention.expires_at ?? null,
       canSend: trialCanSend,
-      inaccessible: expired && !retained,
+      inaccessible: expired && !retained && !registered,
     };
   }
 

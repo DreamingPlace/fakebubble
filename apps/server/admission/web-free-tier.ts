@@ -71,12 +71,72 @@ export function hasSignupBonus(store: Flagged, principalId: string) {
     !!store.get('SELECT 1 FROM web_signup_bonus WHERE principal_id=?', principalId)
   );
 }
+/** An email login (web_player_logins, schema 118) is bound to this principal. */
+const hasLoginRow = (store: Reader, principalId: string) =>
+  tableExists(store, 'web_player_logins') &&
+  !!store.get('SELECT 1 FROM web_player_logins WHERE principal_id=?', principalId);
+/** The invite grant of an invited principal is active (not revoked, not expired). `now` unknown: only a revocation counts. */
+export function inviteGrantActive(store: Reader, principalId: string, now?: number) {
+  return (
+    tableExists(store, 'web_invite_grants') &&
+    !!store.get(
+      `SELECT 1 FROM web_invite_grants g JOIN web_principals p ON p.id=g.principal_id
+      WHERE g.principal_id=? AND g.player_id=p.player_id AND g.world_id=p.world_id AND p.kind='invite'
+        AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at>?)`,
+      principalId,
+      now ?? 0,
+    )
+  );
+}
+/**
+ * Part 17h. A REGISTERED player: the free tier is on and the principal either holds the signup bonus (a row, as before) or
+ * has an email login and is a guest (signed up before 17b or while SIGNUP_BONUS_ENABLED was off) or an invited player whose
+ * grant has lapsed (revoked or expired). A registered player is never answered TRIAL_EXPIRED / WEB_INVITE_ACCESS_REQUIRED;
+ * it is metered in points (or by the old bonus replies) and its content does not expire with the trial window. An invited
+ * player whose grant is still active is NOT registered by a login alone: it stays unmetered, as before.
+ */
+export function isRegistered(store: Flagged, principalId: string, now?: number) {
+  if (store.publicFreeTier !== true || !signupBonusTablesExist(store)) return false;
+  if (store.get('SELECT 1 FROM web_signup_bonus WHERE principal_id=?', principalId)) return true;
+  if (!hasLoginRow(store, principalId)) return false;
+  const kind = store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind;
+  return kind === 'guest' || (kind === 'invite' && !inviteGrantActive(store, principalId, now));
+}
+/** The principal HAS an invite grant and none of its grants is active any more (revoked or expired). */
+export function inviteGrantLapsed(store: Reader, principalId: string, now?: number) {
+  return (
+    tableExists(store, 'web_invite_grants') &&
+    !!store.get('SELECT 1 FROM web_invite_grants WHERE principal_id=?', principalId) &&
+    !inviteGrantActive(store, principalId, now)
+  );
+}
+/** The guest's trial window is over (or its content is being removed): it can no longer chat as a trial guest. */
+export function guestTrialOver(store: Reader, principalId: string, now: number) {
+  const row = store.get<{ state: string; expires_at: number | null }>(
+    'SELECT state,expires_at FROM web_guest_retention WHERE principal_id=?',
+    principalId,
+  );
+  return (
+    !!row &&
+    (row.state === 'purging' ||
+      row.state === 'purged' ||
+      (row.state === 'active' && row.expires_at !== null && row.expires_at <= now))
+  );
+}
+/** An invited principal whose grant is no longer active and who is registered: it chats as a registered player. */
+export function isLapsedRegisteredInvite(store: Flagged, principalId: string, now?: number) {
+  return (
+    store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind === 'invite' &&
+    !inviteGrantActive(store, principalId, now) &&
+    isRegistered(store, principalId, now)
+  );
+}
 /**
  * Long-term memory (recall, and the embeddings that serve it) is for account and invite principals and for guests who hold
  * the signup bonus. A plain trial guest keeps short-term context only. Writing is unconditional; only reading is gated.
  */
 export const recallsMemory = (store: Flagged, kind: string, principalId: string) =>
-  kind !== 'guest' || hasSignupBonus(store, principalId);
+  kind !== 'guest' || isRegistered(store, principalId);
 const live = "o.quota_state IN ('reserved','used')";
 /** Bonus replies reserved or used (an operation that failed or was cancelled is 'released' and not counted). */
 export function bonusSpent(store: Reader, principalId: string) {

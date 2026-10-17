@@ -71,7 +71,7 @@ export class WebHTTPFixture extends WebBusinessFixture {
   private readonly appConfig: ConstructorParameters<typeof WebProviderApplication>[2];
   private readonly adminMailer: ConstructorParameters<typeof WebProviderApplication>[3];
   private readonly waitUntil: (task: Promise<void>) => void;
-  private readonly durableStorage: Parameters<typeof durableAlertState>[0];
+  protected readonly durableStorage: Parameters<typeof durableAlertState>[0];
   private alerts: WebAlerts | undefined;
   private alertMails: { subject: string; text: string }[] = [];
   private alertSkew = 0;
@@ -413,7 +413,7 @@ export class WebHTTPFixture extends WebBusinessFixture {
         )!.world_id;
         const left = this.store
           .all<{ name: string }>(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '%sqlite%' AND name<>'_cf_METADATA'",
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '%sqlite%' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\'",
           )
           .filter(({ name }) => {
             if (!this.store.all<{ name: string }>(`PRAGMA table_info("${name}")`).some((c) => c.name === 'world_id'))

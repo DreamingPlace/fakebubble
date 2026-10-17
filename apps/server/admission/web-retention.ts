@@ -2,7 +2,7 @@ import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
-import { hasSignupBonus } from './web-free-tier.ts';
+import { isRegistered } from './web-free-tier.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 
 export type WebRetentionRow = {
@@ -25,8 +25,8 @@ export function webCloudContentExpired(store: Store, now: number, principalId: s
     worldId,
   );
   ensure(row, 'WEB_RETENTION_SCOPE_INVALID');
-  // A guest holding the signup bonus is a kept account: its content does not expire with the trial window.
-  if (row.kind === 'guest' && row.state === 'active' && hasSignupBonus(store as WebStore, principalId)) return false;
+  // A registered guest (signup bonus or an email login) is a kept account: its content does not expire with the trial window.
+  if (row.kind === 'guest' && row.state === 'active' && isRegistered(store as WebStore, principalId, now)) return false;
   return (
     row.kind === 'guest' &&
     (['purging', 'purged'].includes(row.state) ||
@@ -94,13 +94,13 @@ export function requireWebContent(
     (row.state === 'unstarted' || (row.state === 'active' && row.expires_at !== null && now < row.expires_at))
   )
     return row;
-  // Part 17b: a guest that holds the signup bonus (flag SIGNUP_BONUS_ENABLED) keeps working content after the trial window
+  // Part 17b (17h: or has an email login): a guest that is registered (flag SIGNUP_BONUS_ENABLED) keeps working content after the trial window
   // ended - the bonus has no time window. ADMISSION still decides whether a reply may start (trial first, then the
   // bonus, else TRIAL_EXHAUSTED); this gate only stops treating such an account as an expired trial.
   if (
     principal.kind === 'guest' &&
     (row.state === 'unstarted' || row.state === 'active') &&
-    hasSignupBonus(store as WebStore, principalId)
+    isRegistered(store as WebStore, principalId, now)
   )
     return row;
   if (
@@ -126,7 +126,9 @@ export function requireWebContent(
       worldId,
       now,
     );
-    ensure(grant, 'WEB_INVITE_ACCESS_REQUIRED');
+    // Part 17h: an invited player whose grant has lapsed but who is registered (signup bonus or email login) chats as a
+    // registered player; only an invited player with nothing else to fall back on is told the invite is gone.
+    ensure(grant || isRegistered(store as WebStore, principalId, now), 'WEB_INVITE_ACCESS_REQUIRED');
     return row;
   }
   ensure(false, 'TRIAL_EXPIRED');

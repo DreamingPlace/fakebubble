@@ -12,7 +12,10 @@ import {
   extraTrialRemaining,
   extraTrialSpent,
   freeTier,
+  guestTrialOver,
   hasSignupBonus,
+  isLapsedRegisteredInvite,
+  isRegistered,
 } from './web-free-tier.ts';
 import { DEFAULT_PLAYER_MODEL, type PlayerModelId } from '../../../packages/contracts/player-models.ts';
 import {
@@ -24,6 +27,7 @@ import {
   quote,
   recordUnmetered,
 } from './web-points.ts';
+import { ensureRegisteredBonus, type BonusEmailKey } from './web-registered.ts';
 import { requirePublishedWebCharacter } from '../characters/web-character-catalog.ts';
 
 interface PrincipalRow {
@@ -58,10 +62,13 @@ export class WebAdmission {
   private readonly clock: Clock;
   private readonly nextId: () => string;
   private readonly ipKeyFingerprint: string | null;
-  constructor(store: WebStore, clock: Clock, nextId: () => string) {
+  /** Part 17h: the keyed digest of a bonus address; without it a registered player that holds no bonus row cannot be granted one. */
+  private readonly bonusKey: BonusEmailKey | undefined;
+  constructor(store: WebStore, clock: Clock, nextId: () => string, bonusKey?: BonusEmailKey) {
     this.store = store;
     this.clock = clock;
     this.nextId = nextId;
+    this.bonusKey = bonusKey;
     this.ipKeyFingerprint = webDataLifecycleEnabled(store) ? store.webIpKeyFingerprint() : null;
   }
 
@@ -98,6 +105,8 @@ export class WebAdmission {
     return this.store.transaction(() => {
       const principal = this.store.get<PrincipalRow>('SELECT * FROM web_principals WHERE id=?', input.principalId);
       ensure(principal, 'WEB_PRINCIPAL_NOT_FOUND');
+      // Part 17h: a registered player (email login) without a bonus row gets it, once, before anything is decided.
+      ensureRegisteredBonus(this.store, this.bonusKey, this.clock.now(), principal.id);
       const webSchema = this.store.get<{ user_version: number }>('PRAGMA user_version')!.user_version;
       const lifecycle = webDataLifecycleEnabled(this.store);
       // The lifecycle gate precedes idempotent replay: expired content stays private.
@@ -143,7 +152,10 @@ export class WebAdmission {
         ),
         'WEB_CHARACTER_UNAVAILABLE',
       );
-      if (principal.kind === 'invite') this.dailyLimit(principal.id);
+      // Part 17h: an invited player whose grant lapsed but who is registered chats as a registered player (points, no daily limit).
+      const lapsed =
+        principal.kind === 'invite' && isLapsedRegisteredInvite(this.store, principal.id, this.clock.now());
+      if (principal.kind === 'invite' && !lapsed) this.dailyLimit(principal.id);
       const tier = freeTier(this.store);
       const trialWindowMs = tier.trialWindowMs;
       // Part 17b: the signup bonus is one more entitlement, decided HERE, before any reservation or provider call.
@@ -151,9 +163,20 @@ export class WebAdmission {
       // bonus accounting is not consulted for it. Part 21f: it ALWAYS pays points, whatever the model: the guest trial path is
       // never used (its unused trial replies were converted into the opening balance). Everyone else, and every deployment
       // with the flag off, takes the path above unchanged.
-      const pointsMode = trial && tier.on && hasPoints(this.store, principal.id);
+      const pointsMode = (trial || lapsed) && tier.on && hasPoints(this.store, principal.id, this.clock.now());
       let free: 'trial' | 'extra' | 'bonus' | 'points' =
-        trial && tier.on && !pointsMode ? this.pickFreeEntitlement(principal, input, retention) : 'trial';
+        (trial || lapsed) && tier.on && !pointsMode ? this.pickFreeEntitlement(principal, input, retention) : 'trial';
+      // Part 17h: a registered player whose trial window is over has nothing left on the trial path; it is never told the trial
+      // expired - it is told its free replies are used up (the page offers what to do next). Only the bonus replies can pay.
+      if (
+        (trial || lapsed) &&
+        tier.on &&
+        !pointsMode &&
+        free === 'trial' &&
+        isRegistered(this.store, principal.id, this.clock.now()) &&
+        (lapsed || (retention !== null && guestTrialOver(this.store, principal.id, this.clock.now())))
+      )
+        throw new DomainError('TRIAL_EXHAUSTED');
       let chosen: PlayerModelId = DEFAULT_PLAYER_MODEL;
       if (pointsMode) {
         chosen = effectiveModel(this.store, this.clock.now(), principal.id);
@@ -401,7 +424,7 @@ export class WebAdmission {
         );
       } else if (points) {
         chargeAdmission(this.store, now, principal.id, operationId, chosen);
-      } else if (isInvited(this.store, principal.id)) {
+      } else if (isInvited(this.store, principal.id, now)) {
         // Invited players may pick a model; nothing is charged and the rolling daily limit above is unchanged.
         recordUnmetered(this.store, now, operationId, effectiveModel(this.store, now, principal.id));
       } else if (extra) {

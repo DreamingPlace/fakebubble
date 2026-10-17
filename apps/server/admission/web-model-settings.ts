@@ -21,7 +21,7 @@ import {
 } from '../../../packages/contracts/player-models.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { hasSignupBonus } from './web-free-tier.ts';
+import { isLapsedRegisteredInvite, isRegistered } from './web-free-tier.ts';
 
 /**
  * Owner-controlled reply models and prices (Part 21g, migration 124).
@@ -176,10 +176,12 @@ export const replyPointsNow = (store: Reader, model: PlayerModelId, voice = true
  *  - guest: a trial guest; registered: a guest that signed up and holds the signup bonus (points); invited: kind invite or account.
  * Null for a principal that is none of these.
  */
-export function playerTier(store: Reader & ModelFlags, principalId: string): ModelTier | null {
+export function playerTier(store: Reader & ModelFlags, principalId: string, now?: number): ModelTier | null {
   const kind = store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind;
-  if (kind === 'invite' || kind === 'account') return 'invited';
-  if (kind === 'guest') return hasSignupBonus(store, principalId) ? 'registered' : 'guest';
+  // Part 17h: an invited player whose grant lapsed but who is registered (bonus or email login) is a registered player.
+  if (kind === 'invite') return isLapsedRegisteredInvite(store, principalId, now) ? 'registered' : 'invited';
+  if (kind === 'account') return 'invited';
+  if (kind === 'guest') return isRegistered(store, principalId, now) ? 'registered' : 'guest';
   return null;
 }
 

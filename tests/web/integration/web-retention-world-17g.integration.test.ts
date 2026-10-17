@@ -348,3 +348,71 @@ test('a failing purge reports where it broke and never what is in it; it backs o
   assert.equal(healed.failing, 0);
   assert.ok(healed.lastSuccessAt !== null);
 });
+
+// Part 17h. A SQLite-backed Durable Object that has used the key-value API also holds workerd's reserved _cf_KV table.
+// Reading it is denied, so before the fix the world audit failed every purge, reporting
+// {phase:'clearDatabase', sub:'audit_source', errorName:'Error', messageShape:'not <tok>: SQLITE_AUTH'} (reproduced here).
+test('17h: with the key-value API in use (alerts key + retention ledger) the purge succeeds, the audit is clean and lastSuccessAt is set', async (t) => {
+  const { f, stateOf, seed, make } = await world(t);
+  const player = await make('10.9.0.1');
+  await f.reply(player.actor, '普通访客');
+  await seed(player.principalId, 'K7M2');
+  await f.fixture('/fixture/world/age', { principalId: player.principalId, ms: 30 * DAY });
+  await f.fixture('/fixture/world/kv', { key: 'alerts:probe', value: 1 });
+  assert.deepEqual(await f.fixture('/fixture/world/sweep'), { processed: 1, failed: 0, error: null });
+  assert.deepEqual(await f.fixture('/fixture/world/reports'), []);
+  const after = await stateOf(player.principalId);
+  assert.equal(after.retention.state, 'purged');
+  assert.equal(after.foreignKeyViolations, 0);
+  assert.deepEqual(await f.fixture('/fixture/audit-world', { principalId: player.principalId }), {
+    clean: true,
+    loginsRemain: false,
+  });
+  const health = await f.fixture<Health>('/fixture/world/health');
+  assert.equal(health.failing, 0);
+  assert.ok(health.lastSuccessAt !== null, 'a success is recorded in the ledger');
+});
+
+test('17h: workerd refuses an application table named _cf_*, so the audit skips that prefix only; any other unknown table still fails closed', async (t) => {
+  const { f, stateOf, seed, make } = await world(t);
+  for (const name of ['_cf_x', '_CF_x', '_cf_KV'])
+    assert.equal((await f.fixture<{ created: boolean }>('/fixture/world/create-table', { name })).created, false, name);
+  const player = await make('10.9.0.2');
+  await f.reply(player.actor, '普通访客');
+  await seed(player.principalId, 'K7M2');
+  await f.fixture('/fixture/world/age', { principalId: player.principalId, ms: 30 * DAY });
+  await f.fixture('/fixture/world/kv', { key: 'alerts:probe', value: 1 });
+  assert.equal(
+    (
+      await f.fixture<{ created: boolean }>('/fixture/world/create-table', {
+        name: 'web_unknown_17h',
+        principalId: player.principalId,
+      })
+    ).created,
+    true,
+  );
+  const sweep = await f.fixture<Sweep>('/fixture/world/sweep');
+  assert.deepEqual([sweep.processed, sweep.failed], [1, 1], 'an unknown table holding the world fails closed');
+  assert.notEqual((await stateOf(player.principalId)).retention.state, 'purged');
+  const [report] = await f.fixture<{ sub: string; messageShape: string }[]>('/fixture/world/reports');
+  assert.match(String(report?.messageShape), /UNEXPECTED_WORLD_DATA|UNRECOGNIZED|SCOPE_UNSAFE/);
+});
+
+// Part 17h, real HTTP. An account that signed up before Part 17b: a login and no bonus row. Past its 7-day window it was
+// answered TRIAL_EXPIRED (HTTP 410) while the page still showed points; now the first touch grants the bonus once.
+test('17h: a signed-in account with no bonus row, past its trial window, chats and is charged in points (bonus granted once)', async (t) => {
+  const { f, stateOf, make } = await world(t);
+  const player = await make('10.9.1.1');
+  await f.signUp(player.actor, 'old.account@example.com');
+  await f.fixture('/fixture/world/unbonus', { principalId: player.principalId });
+  await f.fixture('/fixture/world/age', { principalId: player.principalId, ms: 10 * DAY });
+  assert.equal((await stateOf(player.principalId)).rows.web_signup_bonus, undefined);
+  await f.reply(player.actor, '很久以前注册的账号');
+  await f.reply(player.actor, '第二句');
+  const after = await stateOf(player.principalId);
+  assert.equal(after.rows.web_signup_bonus, 1, 'granted once, on the first touch');
+  assert.ok(after.rows.web_points_events! >= 3, 'the opening balance and both replies are points events');
+  const account = await f.call(`${API}/account`, player.actor);
+  assert.equal(account.hasLogin, true);
+  assert.equal(account.modelChoice.metered, true);
+});
