@@ -112,6 +112,26 @@ test('one grant is consumed once; unused grant and session expire at exact deadl
   assert.throws(() => f.admin.authorize(first.cookie, first.csrf, origin), code('ADMIN_UNAUTHORIZED'));
 });
 
+test('an admin login grant lasts 60 minutes: usable until the last millisecond, dead at the deadline, still single-use', (t) => {
+  const f = fixture(t, newCode.Admin, 70);
+  const start = f.now(),
+    hour = 60 * 60_000;
+  const early = f.admin.issueLoginGrant();
+  assert.equal(early.expiresAt, start + hour);
+  f.setNow(start + 10 * 60_000);
+  assert.ok(f.admin.login(early.token, origin), 'ten minutes in the grant is still good');
+  const late = f.admin.issueLoginGrant();
+  assert.equal(late.expiresAt, start + 70 * 60_000);
+  f.setNow(late.expiresAt - 1);
+  assert.ok(f.admin.login(late.token, origin), 'one millisecond before 60 minutes it still works');
+  assert.throws(() => f.admin.login(late.token, origin), code('ADMIN_INVALID_GRANT'), 'and only once');
+  f.setNow(start);
+  const unused = f.admin.issueLoginGrant();
+  f.setNow(unused.expiresAt - 1);
+  f.setNow(unused.expiresAt);
+  assert.throws(() => f.admin.login(unused.token, origin), code('ADMIN_INVALID_GRANT'));
+});
+
 test('logout revokes only its session, and separate in-memory Web instances reject each other', (t) => {
   const a = fixture(t, newCode.Admin, 1),
     b = fixture(t, newCode.Admin, 50);

@@ -19,7 +19,13 @@ function setup(t: test.TestContext) {
     [],
     ['enable_request_signal'],
   );
-  const request = (path: string, actor: Client, body?: unknown, headers: Record<string, string> = {}) =>
+  const request = (
+    path: string,
+    actor: Client,
+    body?: unknown,
+    headers: Record<string, string> = {},
+    init: { redirect?: 'manual' } = {},
+  ) =>
     runtime.request(origin + path, {
       headers: {
         ...(actor.cookie ? { cookie: actor.cookie } : {}),
@@ -28,6 +34,7 @@ function setup(t: test.TestContext) {
         'x-fixture-host': headers.host ?? 'fixture.invalid',
       },
       ...(body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) }),
+      ...init,
     });
   const call = async (
     path: string,
@@ -619,6 +626,39 @@ test('cloud HTTP SSE streams scoped events, limits duplicates, releases disconne
   } finally {
     await reader.cancel();
   }
+});
+
+test('admin enter: the Access return is a fixed 303 for a cross-site navigate GET, and nothing else is loosened', async (t) => {
+  const f = setup(t);
+  await f.fixture('/fixture/assets');
+  const guest = client(),
+    enter = `${API}/admin/enter`,
+    navigate = { 'sec-fetch-site': 'cross-site', 'x-fixture-fetch-mode': 'navigate' };
+  for (const headers of [navigate, { 'sec-fetch-site': 'none', 'x-fixture-fetch-mode': 'navigate' }, {}]) {
+    const response = await f.request(enter, guest, undefined, headers, { redirect: 'manual' });
+    assert.equal(response.status, 303);
+    assert.equal(response.headers.get('location'), '/?mode=provider-admin');
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('set-cookie'), null);
+    assert.equal(await response.text(), '');
+  }
+  const status = async (path: string, headers: Record<string, string>, post = false) =>
+    (await f.request(path, guest, post ? {} : undefined, headers, { redirect: 'manual' })).status;
+  // Refused: any other method, cross-site without navigation, any query string, a foreign Origin or Host.
+  assert.equal(await status(enter, navigate, true), 403, 'a cross-site POST is refused');
+  assert.equal(await status(enter, {}, true), 400, 'a same-origin POST is not a route');
+  assert.equal(await status(enter, { 'sec-fetch-site': 'cross-site', 'x-fixture-fetch-mode': 'cors' }), 403);
+  assert.equal(await status(enter, { 'sec-fetch-site': 'cross-site' }), 403);
+  assert.equal(await status(enter, { 'sec-fetch-site': 'same-site', 'x-fixture-fetch-mode': 'navigate' }), 403);
+  assert.equal(await status(`${enter}?next=https://evil.invalid`, navigate), 400);
+  assert.equal(await status(`${enter}?`, navigate), 303, 'an empty query carries no parameter');
+  assert.equal(await status(enter, { ...navigate, origin: 'https://evil.invalid' }), 403);
+  assert.equal(await status(enter, { ...navigate, host: 'evil.invalid' }), 403);
+  // Every other admin route keeps the cross-site refusal, even for a navigation.
+  assert.equal(await status(`${API}/admin/session`, navigate), 403);
+  assert.equal(await status(`${API}/admin/login`, navigate, true), 403);
+  assert.equal(await status(`${API}/admin/enterx`, navigate), 403);
+  assert.equal(await status(`${API}/bootstrap`, navigate), 403);
 });
 
 test('cloud HTTP rejects forged origin/cookie/CSRF/body, cancels before first Alarm and cannot spoof guest IP quota', async (t) => {

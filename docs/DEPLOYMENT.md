@@ -174,7 +174,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **Turnstile 小组件设置（Cloudflare 控制台）：** Turnstile → Add widget → Hostname 填你的站点域名（只填这一个）→ Widget Mode 选 **Managed**（页面使用 `interaction-only` 外观：绝大多数人看不到任何东西，需要点击时才弹出小框）→ 创建后复制 Site Key 填 `TURNSTILE_SITE_KEY`，复制 Secret Key 用 `wrangler secret put TURNSTILE_SECRET` 配给业务 Worker。业务对象调用 `siteverify`，令牌只能用一次（摘要先占位再验证），令牌的主机名与动作（`guest` / `code` / `login`）必须匹配，`siteverify` 不可达时请求被拒（503 `TURNSTILE_UNAVAILABLE`），**失败即关闭**。令牌通过请求头 `X-Turnstile-Token` 携带，所以接口体不变；页面在第一次被拒（`TURNSTILE_REQUIRED`）时自动取令牌并重试同一请求，正常情况下无需额外点击，失败时显示“人机验证没通过，请再试一次”。CSP 只在 `TURNSTILE_ENABLED=true` 时变化：`script-src`、`connect-src` 增加 `https://challenges.cloudflare.com`，新增 `frame-src https://challenges.cloudflare.com`，其余不变。Node 本地服务器不启用 Turnstile。
 
-**玩家站点公开、只用 Access 保护管理接口：** 公开玩家站点前，在 Cloudflare Zero Trust 里把 Access 应用的路径从整站收窄到只保护 `/api/web/provider/admin/*`（页面 `/?mode=provider-admin` 本身只是静态壳，没有数据；它调用的接口全在该前缀下，且管理员仍有自己的邮箱 + 密码登录和 CSRF）。收窄之前先在预发布域名验证：未登录 Access 访问 `/api/web/provider/admin/session` 被拦，访问 `/`、`/api/web/provider/bootstrap` 不被拦。
+**玩家站点公开、只用 Access 保护管理接口：** 公开玩家站点前，在 Cloudflare Zero Trust 里把 Access 应用的路径从整站收窄到只保护 `/api/web/provider/admin/*`（页面 `/?mode=provider-admin` 本身只是静态壳，没有数据；它调用的接口全在该前缀下，且管理员仍有自己的邮箱 + 密码登录和 CSRF）。未带 Access cookie 的浏览器打开管理页时，接口会被 Access 重定向；页面会提示“需要先通过 Cloudflare Access 验证身份”，点“前往验证”会顶层导航到 `GET /api/web/provider/admin/enter`（在同一 Access 路径下，无正文、无状态变更、不接受任何查询参数，固定 303 到 `/?mode=provider-admin`；只有这一条路由接受来自 Access 回跳的 `sec-fetch-site: cross-site`，且仅限 GET 与 `sec-fetch-mode: navigate`）。管理员一次性登录凭据有效期 1 小时，单次有效。收窄之前先在预发布域名验证：未登录 Access 访问 `/api/web/provider/admin/session` 被拦，访问 `/`、`/api/web/provider/bootstrap` 不被拦。
 
 **上线当天清单：**
 1. 部署新版本，所有 Part 17 开关保持 `false`；确认 `inspect` 的迁移账本 `matches:true`、`pnpm check` 通过。

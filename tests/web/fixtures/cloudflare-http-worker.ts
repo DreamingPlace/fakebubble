@@ -570,6 +570,10 @@ export class WebHTTPFixture extends WebBusinessFixture {
     const headers = new Headers(request.headers);
     headers.set('host', headers.get('x-fixture-host') ?? 'fixture.invalid');
     headers.delete('x-fixture-host');
+    // The fetch client of the test runtime always sends sec-fetch-mode: cors; a test may stand in for a browser navigation.
+    const mode = headers.get('x-fixture-fetch-mode');
+    if (mode) headers.set('sec-fetch-mode', mode);
+    headers.delete('x-fixture-fetch-mode');
     // Part 17b: a test may pick the peer address (per-IP limits); otherwise every request comes from 192.0.2.1.
     const peer = headers.get('x-fixture-peer') ?? '192.0.2.1';
     headers.delete('x-fixture-peer');
