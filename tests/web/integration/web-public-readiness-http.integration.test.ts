@@ -1,3 +1,5 @@
+// Part 21i (named exception): login answers PLAYER_EMAIL_NOT_REGISTERED / PLAYER_PASSWORD_WRONG instead of the generic
+// PLAYER_LOGIN_INVALID (owner decision); every status code and limit is unchanged.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -272,7 +274,7 @@ test('B: a fresh signed-up player deletes the account and the audit stays clean'
   assert.equal((await f.request(`${API}/bootstrap`, second)).status, 401);
   assert.equal(
     (await f.call(a('/login'), client(), { email, password: PASSWORD }, 401)).error.code,
-    'PLAYER_LOGIN_INVALID',
+    'PLAYER_EMAIL_NOT_REGISTERED',
   );
   const again = client();
   await f.call(`${API}/bootstrap`, again);
@@ -320,7 +322,7 @@ test('B: an invited player deletes the account: the grant is revoked and the dat
   assert.deepEqual(await f.fixture('/fixture/audit-world', { principalId }), { clean: true, loginsRemain: false });
   assert.equal(
     (await f.call(a('/login'), client(), { email: 'invitee@example.com', password: PASSWORD }, 401)).error.code,
-    'PLAYER_LOGIN_INVALID',
+    'PLAYER_EMAIL_NOT_REGISTERED',
   );
 });
 
@@ -383,7 +385,7 @@ test('D: Turnstile guards a new guest, request-code and login; each token works 
   assert.equal((await f.call(a('/login'), client(), login, 403)).error.code, 'TURNSTILE_REQUIRED');
   assert.equal(
     (await f.call(a('/login'), client(), login, 401, withToken('good-login-2'))).error.code,
-    'PLAYER_LOGIN_INVALID',
+    'PLAYER_EMAIL_NOT_REGISTERED',
   );
   assert.equal(
     (await f.call(a('/login'), client(), login, 403, withToken('good-login-2'))).error.code,
@@ -418,7 +420,7 @@ test('D: with the flag off nobody is asked for a token', async (t) => {
   await f.call(a('/request-code'), guest, { purpose: 'signup', email: 'plain@example.com' });
   assert.equal(
     (await f.call(a('/login'), client(), { email: 'plain@example.com', password: PASSWORD }, 401)).error.code,
-    'PLAYER_LOGIN_INVALID',
+    'PLAYER_EMAIL_NOT_REGISTERED',
   );
   assert.deepEqual((await f.fixture<{ calls: unknown[] }>('/fixture/turnstile-calls')).calls, []);
 });
