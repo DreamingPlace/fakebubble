@@ -30,6 +30,17 @@ export const PLAYER_INACTIVE_MS = 180 * 24 * 60 * 60_000;
 export function playerLoginRetainsGuest(store: Pick<BusinessStore, 'get'>, principalId: string) {
   return playerLoginsExist(store) && !!store.get('SELECT 1 FROM web_player_logins WHERE principal_id=?', principalId);
 }
+/**
+ * Part 17i. A signup bonus row is a registered player too (isRegistered), with or without a login: the TRIAL window ending
+ * never starts its purge. Not flag-dependent: a row that exists is data to keep. (Inactivity and the player's own deletion
+ * are different paths and unchanged.)
+ */
+export function bonusKeepsGuest(store: Pick<BusinessStore, 'get'>, principalId: string) {
+  return (
+    tableExists(store, 'web_signup_bonus') &&
+    !!store.get('SELECT 1 FROM web_signup_bonus WHERE principal_id=?', principalId)
+  );
+}
 /** last_seen_at of the principal's login, or null when it has none (or the schema predates 118). */
 export function playerLastSeenAt(store: Pick<BusinessStore, 'get'>, principalId: string) {
   if (!playerLoginsExist(store)) return null;
@@ -43,11 +54,15 @@ export function playerLastSeenAt(store: Pick<BusinessStore, 'get'>, principalId:
  * 118 tables it is the old predicate unchanged.
  */
 export function guestPurgeDue(store: Pick<BusinessStore, 'get'>, now: number, graceMs = 0) {
+  // Part 17i: a registered player's trial window ending is not a purge: no bonus row either.
+  const kept = tableExists(store, 'web_signup_bonus')
+    ? ' AND NOT EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=r.principal_id)'
+    : '';
   if (!playerLoginsExist(store))
-    return { sql: "(r.state='purging' OR r.state='active' AND r.expires_at<=?)", args: [now - graceMs] };
+    return { sql: `(r.state='purging' OR r.state='active' AND r.expires_at<=?${kept})`, args: [now - graceMs] };
   return {
     sql: `(r.state='purging'
-      OR r.state='active' AND r.expires_at<=?
+      OR r.state='active' AND r.expires_at<=?${kept}
         AND NOT EXISTS (SELECT 1 FROM web_player_logins l WHERE l.principal_id=r.principal_id)
       OR r.state IN ('unstarted','active')
         AND EXISTS (SELECT 1 FROM web_player_logins l WHERE l.principal_id=r.principal_id AND l.last_seen_at<=?))`,

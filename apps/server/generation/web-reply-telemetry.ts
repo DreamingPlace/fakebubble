@@ -23,13 +23,28 @@ export interface WebReplyLine {
    * before the backup-cheaper / no-voice adjustments, which are settled lazily at the player's next points check.
    */
   pointsCharged: number;
+  /**
+   * Only on a reply that did not publish (failed / unknown): the operation's stored failure code - a fixed upper-case code,
+   * never content - or null when the executor ended it without one (e.g. the deadline), and how long the operation had
+   * lived when it was reported, as a coarse bucket.
+   */
+  failureCode?: string | null;
+  ageAtFailureMs?: AgeAtFailure | null;
 }
+export type AgeAtFailure = '<1s' | '1-10s' | '10-60s' | '1-5m' | '>5m';
+export const ageAtFailure = (ageMs: number): AgeAtFailure =>
+  ageMs < 1_000 ? '<1s' : ageMs < 10_000 ? '1-10s' : ageMs < 60_000 ? '10-60s' : ageMs < 300_000 ? '1-5m' : '>5m';
+/** A failure code is a fixed identifier; anything else is dropped rather than logged. */
+const FIXED_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 
 const has = (store: Reader, table: string) =>
   !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", table);
 
-export function webReplyLine(store: Reader, operationId: string): WebReplyLine | null {
-  const op = store.get<{ status: string }>('SELECT status FROM web_operations WHERE id=?', operationId);
+export function webReplyLine(store: Reader, operationId: string, now?: number): WebReplyLine | null {
+  const op = store.get<{ status: string; failure_code?: string | null; created_at?: number }>(
+    'SELECT status,failure_code,created_at FROM web_operations WHERE id=?',
+    operationId,
+  );
   if (!op || !['published', 'failed', 'unknown'].includes(op.status)) return null;
   const outcome = op.status as WebReplyLine['outcome'];
   const model = has(store, 'web_operation_models')
@@ -67,7 +82,7 @@ export function webReplyLine(store: Reader, operationId: string): WebReplyLine |
     );
   const ref = (provider: string | null | undefined, name: string | null | undefined): ModelRef =>
     provider && name ? { provider, model: name } : null;
-  return {
+  const line: WebReplyLine = {
     event: 'web_reply',
     outcome,
     chosen: model?.chosen ?? null,
@@ -80,12 +95,18 @@ export function webReplyLine(store: Reader, operationId: string): WebReplyLine |
     voice: voiced,
     pointsCharged: outcome === 'published' ? (model?.points_charged ?? 0) : 0,
   };
+  if (outcome !== 'published') {
+    line.failureCode = op.failure_code && FIXED_CODE.test(op.failure_code) ? op.failure_code : null;
+    line.ageAtFailureMs =
+      now !== undefined && typeof op.created_at === 'number' ? ageAtFailure(Math.max(0, now - op.created_at)) : null;
+  }
+  return line;
 }
 
 /** Never throws: telemetry must not affect a reply. */
-export function logWebReply(store: Reader, operationId: string): boolean {
+export function logWebReply(store: Reader, operationId: string, now?: number): boolean {
   try {
-    const line = webReplyLine(store, operationId);
+    const line = webReplyLine(store, operationId, now);
     if (!line) return false;
     console.log(JSON.stringify(line));
     return true;

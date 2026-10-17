@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -23,6 +24,22 @@ function assetBytes(root: string, path: string) {
   const stat = lstatSync(current);
   ensure(stat.isFile() && stat.size <= 2_000_000, 'WEB_PACKAGE_ASSET_INVALID');
   return readFileSync(current);
+}
+
+/** The commit the package is built from: WEB_BUILD_COMMIT, else the checkout's HEAD; 'unbuilt' when neither is a full sha. */
+function buildCommit() {
+  let commit = process.env.WEB_BUILD_COMMIT ?? '';
+  if (!commit) {
+    try {
+      commit = execFileSync('git', ['rev-parse', 'HEAD'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      commit = '';
+    }
+  }
+  return /^[0-9a-f]{40}$/.test(commit) ? commit : 'unbuilt';
 }
 
 /** Fresh offline package only: AST-reachable production modules + exact player build manifest.
@@ -89,6 +106,11 @@ export function stageWebCloudflarePackage(output: string, assets: string) {
   for (const [path, module] of definitions) {
     ensure(typeof module.contents === 'string', 'WEB_PACKAGE_SOURCE_INVALID');
     let content = module.contents;
+    if (sourceName(path) === 'config/web-build.ts') {
+      const stamped = content.replace(/(WEB_BUILD_COMMIT\s*=\s*)(["'])unbuilt\2/, `$1"${buildCommit()}"`);
+      ensure(stamped !== content, 'WEB_PACKAGE_SOURCE_INVALID');
+      content = stamped;
+    }
     if (module.type === 'ESModule') {
       const parsed = ts.createSourceFile(path, content, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS);
       const edits: { start: number; end: number; value: string }[] = [];

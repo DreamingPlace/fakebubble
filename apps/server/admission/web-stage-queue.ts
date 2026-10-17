@@ -10,7 +10,7 @@ import {
   readInputSnapshot,
   requireCurrentInputSnapshot,
 } from '../generation/web-input-snapshot.ts';
-import { requireWebContent, webDataLifecycleEnabled } from './web-retention.ts';
+import { requireWebContent, webContentLiveSql, webDataLifecycleEnabled } from './web-retention.ts';
 import { freezeWebV7Request } from '../generation/web-v7-request.ts';
 import { readWebV7Request } from '../generation/web-v7-request.ts';
 import { applyTextReview, DROP_INVALID_METADATA, parseTextDraft } from '../generation/accepted-text-protocol.ts';
@@ -64,28 +64,19 @@ interface OperationRow {
   audio_wait_started_at?: number | null;
 }
 
+/**
+ * Which operations a claim may take: the owner's content is live (webContentLiveSql, the one rule shared with
+ * requireWebContent). Part 17i: a registered player - a signup bonus or an email login, also an invited player whose grant
+ * lapsed - is claimed like any other live principal; before, only the guest-with-bonus and active-grant shapes were.
+ */
 export function claimRetention(schema: number, now: number, signupBonus = false) {
   if (schema !== 110 && schema !== 111 && schema !== 112 && schema < 113) return { sql: '', args: [] as number[] };
+  const live = webContentLiveSql(schema, signupBonus, now);
   return {
     sql: `AND EXISTS (SELECT 1 FROM web_guest_retention r
       JOIN web_principals p ON p.id=r.principal_id WHERE r.principal_id=o.principal_id
-      AND r.world_id=o.world_id AND ((p.kind='account' AND r.state='protected') OR
-      (p.kind='guest' AND r.state='active' AND r.expires_at>?)
-      ${
-        // Part 17b: a guest holding the signup bonus keeps working content after the trial window (flag SIGNUP_BONUS_ENABLED).
-        signupBonus && schema >= 121
-          ? "OR (p.kind='guest' AND r.state IN ('unstarted','active') AND EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=p.id))"
-          : ''
-      }
-      ${
-        schema >= 111
-          ? `OR (p.kind='invite' AND r.state='protected' AND EXISTS
-        (SELECT 1 FROM web_invite_grants g WHERE g.principal_id=p.id
-          AND g.player_id=p.player_id AND g.world_id=p.world_id AND g.revoked_at IS NULL
-          AND (g.expires_at IS NULL OR g.expires_at>?)))`
-          : ''
-      }))`,
-    args: schema >= 111 ? [now, now] : [now],
+      AND r.world_id=o.world_id AND ${live.sql})`,
+    args: live.args,
   };
 }
 
