@@ -311,7 +311,8 @@ test('inspect reports, per provider/model/phase, the price row in force now and 
       provider: 'deepseek',
       model: 'm',
       phase: 'draft',
-      inForce: { id: 'p-1', validUntil: 2000 },
+      // Part 17i (named exception to this exact-shape assertion): inForce also names the row's version and upper_micros_per_unit.
+      inForce: { id: 'p-1', validUntil: 2000, version: 1, upperMicrosPerUnit: 2 },
       latestValidUntil: 3000,
     },
   ]);
