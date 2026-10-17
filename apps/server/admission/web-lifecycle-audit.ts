@@ -1,4 +1,5 @@
 import { ensure } from '../../../packages/domain/errors.ts';
+import { isWorkerdReservedTable } from '../platform/workerd-reserved-tables.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { cocreationRemains } from '../cocreation/web-cocreation-purge.ts';
 import { playerLoginsRemain } from '../identity/web-player-purge.ts';
@@ -111,9 +112,10 @@ export function auditWebLifecycleWorld(
     WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`);
   for (const { name } of tables) {
     ensure(/^[A-Za-z_][A-Za-z0-9_]*$/.test(name), 'WEB_RETENTION_UNRECOGNIZED_TABLE');
-    // workerd creates this protected Alarm metadata table; even table_info is denied.
-    // Exclude only that exact platform table, never arbitrary unknown application tables.
-    if (provider && name === '_cf_METADATA') continue;
+    // workerd's own tables (_cf_METADATA for alarms, _cf_KV for ctx.storage.put/get) deny even table_info, and workerd
+    // refuses an application table with that prefix, so skipping them never hides application data. Every other
+    // unknown table still fails closed below.
+    if (provider && isWorkerdReservedTable(name)) continue;
     const columns = store.all<{ name: string }>(`PRAGMA table_info("${name}")`);
     if (
       provider &&

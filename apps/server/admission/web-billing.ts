@@ -89,10 +89,10 @@ export function playerBilling(
   ensure(Number.isSafeInteger(page) && (page as number) >= 1 && (page as number) <= MAX_PAGE, 'INVALID_REQUEST');
   const tz = query.tzOffsetMinutes === undefined ? 0 : query.tzOffsetMinutes;
   ensure(Number.isSafeInteger(tz) && Math.abs(tz as number) <= 14 * 60, 'INVALID_REQUEST');
-  const metered = hasPoints(store, principalId);
+  const metered = hasPoints(store, principalId, now);
   const guest = !metered && offeredModels(store) !== null && principalKind(store, principalId) === 'guest';
   // A deployment without the feature has no spending history: the page does not exist.
-  ensure(metered || guest || isInvited(store, principalId), 'NOT_FOUND');
+  ensure(metered || guest || isInvited(store, principalId, now), 'NOT_FOUND');
   return store.transaction(() => {
     let balance: number | null = null;
     if (metered) {

@@ -6,9 +6,10 @@ import { playerPasswords, validatePlayerPassword } from '../admin/web-admin-pass
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import { guestInGrace } from './web-player-purge.ts';
-import { freeTier, signupBonusTablesExist } from '../admission/web-free-tier.ts';
+import { freeTier, isRegistered, signupBonusTablesExist } from '../admission/web-free-tier.ts';
+import { ensureRegisteredBonus, signupBonusEmailKey, type BonusEmailKey } from '../admission/web-registered.ts';
 import { modelChoiceState, setPlayerModel } from '../admission/web-points.ts';
-import { bonusCanonicalEmail, maskEmail, normalizeEmail } from './email-address.ts';
+import { maskEmail, normalizeEmail } from './email-address.ts';
 import type { WebIdentity } from './web-identity.ts';
 
 export type EmailPurpose = 'signup' | 'reset' | 'bind';
@@ -153,7 +154,7 @@ export class WebPlayerAccounts {
   private readonly options: WebPlayerAccountsOptions;
   private readonly codeKey: Buffer;
   private readonly throttleKey: Buffer;
-  private readonly bonusKey: Buffer;
+  private readonly bonusKey: BonusEmailKey;
 
   constructor(store: WebStore, identity: WebIdentity, options: WebPlayerAccountsOptions) {
     ensure(
@@ -174,7 +175,7 @@ export class WebPlayerAccounts {
     this.options = options;
     this.codeKey = createHmac('sha256', options.requestKey).update('web-player-email-code-v1').digest();
     this.throttleKey = createHmac('sha256', options.requestKey).update('web-player-throttle-v1').digest();
-    this.bonusKey = createHmac('sha256', options.requestKey).update('web-signup-bonus-email-v1').digest();
+    this.bonusKey = signupBonusEmailKey(options.requestKey);
   }
 
   /** LEGAL_PAGES_ENABLED: the signup request must carry adult:true. */
@@ -238,7 +239,11 @@ export class WebPlayerAccounts {
   private ensureLoginUsable(principalId: string, now: number) {
     const principal = this.store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId);
     ensure(principal, 'PLAYER_LOGIN_INVALID');
-    ensure(principal.kind === 'guest' || this.activeGrant(principalId, now), 'PLAYER_ACCESS_REVOKED');
+    // Part 17h: an invited player whose grant lapsed but who is registered (an email login) signs in as a registered player.
+    ensure(
+      principal.kind === 'guest' || this.activeGrant(principalId, now) || isRegistered(this.store, principalId, now),
+      'PLAYER_ACCESS_REVOKED',
+    );
   }
 
   /** Counters are reserved before the work they guard, so parallel requests cannot all slip under a limit. */
@@ -371,6 +376,8 @@ export class WebPlayerAccounts {
   }
   /** { modelChoice } for a points holder while PLAYER_MODEL_CHOICE_ENABLED is on; nothing otherwise (guests see no picker). */
   private modelChoiceInfo(principalId: string) {
+    // Part 17h: a registered player without a bonus row is granted it, once, the first time its page asks.
+    this.store.transaction(() => ensureRegisteredBonus(this.store, this.bonusKey, this.now(), principalId));
     const state = modelChoiceState(this.store, this.now(), principalId);
     return state ? { modelChoice: state } : {};
   }
@@ -516,7 +523,7 @@ export class WebPlayerAccounts {
   }
   /** The keyed digest of a normalized address: the only thing kept of a bonus grant after the account is deleted. */
   private bonusEmailKey(emailNorm: string) {
-    return createHmac('sha256', this.bonusKey).update(bonusCanonicalEmail(emailNorm)).digest('hex');
+    return this.bonusKey(emailNorm);
   }
   private ensureEligible(purpose: 'signup' | 'bind', scope: Scope, now: number) {
     ensure(!this.loginOf(scope.principalId), 'PLAYER_LOGIN_EXISTS');

@@ -1,4 +1,5 @@
 import { ensure } from '../../../packages/domain/errors.ts';
+import { isWorkerdReservedTable } from '../platform/workerd-reserved-tables.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { cocreationRemains } from '../cocreation/web-cocreation-purge.ts';
 export const operationContent = [
@@ -102,7 +103,7 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
   for (const { name } of store.all<{ name: string }>(
     "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
   )) {
-    if (name === '_cf_METADATA') continue;
+    if (isWorkerdReservedTable(name)) continue;
     ensure(/^[A-Za-z_][A-Za-z0-9_]*$/.test(name), 'CHARACTER_DELETION_SCOPE_UNSAFE');
     if (allowed.has(name)) continue;
     const columns = new Set(store.all<{ name: string }>(`PRAGMA table_info("${name}")`).map((c) => c.name));

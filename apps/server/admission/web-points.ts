@@ -7,7 +7,15 @@ import {
 } from '../../../packages/contracts/player-models.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { bonusSpent, extraTrialSpent, freeTier, hasSignupBonus } from './web-free-tier.ts';
+import {
+  bonusSpent,
+  extraTrialSpent,
+  freeTier,
+  guestTrialOver,
+  hasSignupBonus,
+  inviteGrantLapsed,
+  isRegistered,
+} from './web-free-tier.ts';
 import {
   currentPrices,
   firstTierModel,
@@ -58,20 +66,27 @@ export const modelChoiceTablesExist = (store: Pick<BusinessStore, 'get'>) =>
 export function offeredModels(store: Pick<BusinessStore, 'get' | 'all'> & Flagged): readonly PlayerModelId[] | null {
   return modelChoiceTablesExist(store) ? offeredGlobally(store) : null;
 }
-/** True for a principal with a points account: feature on and the signup bonus held. */
-export const hasPoints = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string) =>
-  offeredModels(store) !== null && hasSignupBonus(store, principalId);
+/**
+ * True for a principal with a points account: feature on and registered (Part 17h: the signup bonus held, or an email login
+ * as a guest or as an invited player whose grant lapsed - see isRegistered). `now` is only needed to see an expired grant.
+ */
+export const hasPoints = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string, now?: number) =>
+  offeredModels(store) !== null && isRegistered(store, principalId, now);
 /** An invited principal (an invite or an account): may choose a model, is never charged points. */
-export const isInvited = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string) =>
-  offeredModels(store) !== null && playerTier(store, principalId) === 'invited';
+export const isInvited = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string, now?: number) =>
+  offeredModels(store) !== null && playerTier(store, principalId, now) === 'invited';
 /**
  * May this principal pick a model? Registered and invited players whenever their tier is offered anything; a guest only when
  * the owner allows its tier more than one model (a guest reply costs one trial reply whatever the model).
  */
-export function canChooseModel(store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string) {
+export function canChooseModel(store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string, now?: number) {
   if (offeredModels(store) === null) return false;
-  const tier = playerTier(store, principalId);
+  const tier = playerTier(store, principalId, now);
   if (!tier) return false;
+  // A trial guest whose trial is over has nothing to choose a model for: the page shows the trial-ended state instead.
+  if (tier === 'guest' && now !== undefined && guestTrialOver(store, principalId, now)) return false;
+  // An invited player whose grant is gone (and who has nothing to fall back on: that one is 'registered') gets no picker.
+  if (tier === 'invited' && inviteGrantLapsed(store, principalId, now)) return false;
   const count = tierModels(store, tier).length;
   return tier === 'guest' ? count > 1 : count > 0;
 }
@@ -88,8 +103,12 @@ export function policyKind(
 }
 
 /** The cheapest reply (voice included) the principal's tier offers: below it the old "free replies used up" answer applies. */
-export function cheapestReplyPoints(store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string) {
-  const tier = playerTier(store, principalId);
+export function cheapestReplyPoints(
+  store: Pick<BusinessStore, 'get' | 'all'> & Flagged,
+  principalId: string,
+  now?: number,
+) {
+  const tier = playerTier(store, principalId, now);
   const prices = currentPrices(store);
   const models = tier ? tierModels(store, tier) : [];
   const cheapest = Math.min(...(models.length ? models : [DEFAULT_PLAYER_MODEL]).map((id) => prices.perReply[id]));
@@ -102,7 +121,7 @@ export function cheapestReplyPoints(store: Pick<BusinessStore, 'get' | 'all'> & 
  */
 export function effectiveModel(store: Writer & Flagged, now: number, principalId: string): PlayerModelId {
   if (!offeredModels(store)) return DEFAULT_PLAYER_MODEL;
-  const tier = playerTier(store, principalId);
+  const tier = playerTier(store, principalId, now);
   const allowed = tier ? tierModels(store, tier) : [];
   const first = firstTierModel(store, tier);
   const row = store.get<{ model: string }>('SELECT model FROM web_player_model WHERE principal_id=?', principalId);
@@ -121,8 +140,8 @@ export function effectiveModel(store: Writer & Flagged, now: number, principalId
 
 export function setPlayerModel(store: Writer & Flagged, now: number, principalId: string, model: unknown) {
   const offered = offeredModels(store);
-  ensure(offered && canChooseModel(store, principalId), 'NOT_FOUND');
-  const tier = playerTier(store, principalId)!;
+  ensure(offered && canChooseModel(store, principalId, now), 'NOT_FOUND');
+  const tier = playerTier(store, principalId, now)!;
   ensure(isPlayerModelId(model) && tierModels(store, tier).includes(model), 'MODEL_NOT_AVAILABLE');
   store.run(
     `INSERT INTO web_player_model(principal_id,model,notice,updated_at) VALUES (?,?,NULL,?)
@@ -139,7 +158,7 @@ export function setPlayerModel(store: Writer & Flagged, now: number, principalId
  * bonus reply in the opening balance. Counter replies (trial_used + trial_reserved) and the extra trial replies (derived
  * accounting, web_free_operations) are both subtracted from the trial allowance; floored at 0.
  */
-function unusedTrial(store: Pick<BusinessStore, 'get'> & Flagged, principalId: string) {
+export function unusedTrial(store: Pick<BusinessStore, 'get'> & Flagged, principalId: string) {
   const row = store.get<{ used: number; reserved: number }>(
     'SELECT trial_used used,trial_reserved reserved FROM web_principals WHERE id=?',
     principalId,
@@ -155,6 +174,13 @@ export function ensureBalance(store: Writer & Flagged, now: number, principalId:
     principalId,
   );
   if (row) return row.balance;
+  // Part 17h: only a METERED principal gets a balance: one that holds the signup bonus or has a points policy. Touching any
+  // other principal (a plain trial guest, an unmetered invited player, one whose bonus is not decided yet) creates nothing.
+  if (
+    !hasSignupBonus(store, principalId) &&
+    !store.get('SELECT 1 FROM web_points_policy WHERE principal_id=?', principalId)
+  )
+    return 0;
   const start = Math.max(
     0,
     POINTS.signupBalance -
@@ -284,7 +310,7 @@ export function quote(store: Writer & Flagged, now: number, principalId: string,
   if (balance >= price) return { ok: true, points: price };
   return {
     ok: false,
-    code: balance >= cheapestReplyPoints(store, principalId) ? 'POINTS_INSUFFICIENT' : 'TRIAL_EXHAUSTED',
+    code: balance >= cheapestReplyPoints(store, principalId, now) ? 'POINTS_INSUFFICIENT' : 'TRIAL_EXHAUSTED',
   };
 }
 
@@ -355,9 +381,9 @@ export function modelChoiceState(
   consumeNotice = true,
 ): ModelChoiceState | null {
   const offered = offeredModels(store);
-  if (!offered || !canChooseModel(store, principalId)) return null;
-  const metered = hasSignupBonus(store, principalId);
-  const allowed = tierModels(store, playerTier(store, principalId)!);
+  if (!offered || !canChooseModel(store, principalId, now)) return null;
+  const metered = isRegistered(store, principalId, now);
+  const allowed = tierModels(store, playerTier(store, principalId, now)!);
   const prices = currentPrices(store);
   return store.transaction(() => {
     let balance = 0;

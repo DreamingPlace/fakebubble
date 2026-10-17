@@ -29,6 +29,8 @@ export const errorText: Record<string, string> = {
   TRIAL_CHARACTER_LOCKED: '体验期间只能和第一个聊天的人物继续聊哦',
   TRIAL_EXHAUSTED: '体验次数已用完（同一网络累计），输入邀请码可以继续聊',
   TRIAL_EXPIRED: '体验时间已结束，输入邀请码可以继续聊',
+  // Part 17h: an invited player whose invite is gone is told so - not that a trial ended.
+  WEB_INVITE_ACCESS_REQUIRED: '邀请已失效，请重新输入邀请码或注册账号',
   QUEUE_FULL: '现在聊天的人有点多，稍后再试试',
   WEB_DAILY_LIMIT_REACHED: '今天聊得够多啦，明天再来找我吧～',
   RATE_LIMITED: '操作太频繁了，稍后再试试',
@@ -980,7 +982,9 @@ export class LiveBinding {
             ? access.remainingReplies === 0
               ? 'TRIAL_EXHAUSTED'
               : 'TRIAL_EXPIRED'
-            : 'ACCESS_UNAVAILABLE',
+            : access.kind === 'invite' && access.status !== 'active'
+              ? 'WEB_INVITE_ACCESS_REQUIRED'
+              : 'ACCESS_UNAVAILABLE',
         );
       if (access.kind === 'guest' && access.lockedCharacterId !== null && access.lockedCharacterId !== characterId)
         throw new ProviderApiError(403, 'TRIAL_CHARACTER_LOCKED');

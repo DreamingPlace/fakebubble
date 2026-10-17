@@ -1,7 +1,11 @@
 import { fixtureOptions } from './cloudflare-business-worker.ts';
 import { WebHTTPFixture } from './cloudflare-http-worker.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
-import { WebCloudRetention, type RetentionReport } from '../../../apps/server/cloudflare/web-retention.ts';
+import {
+  WebCloudRetention,
+  durableRetentionMemory,
+  type RetentionReport,
+} from '../../../apps/server/cloudflare/web-retention.ts';
 
 // Part 17g: the production switches that touch the purge are ALL on - SIGNUP_BONUS_ENABLED, CHAT_REVIEW_ENABLED and
 // PLAYER_MODEL_CHOICE_ENABLED - on top of the real-HTTP fixture, so one world holds a row in every feature table.
@@ -31,6 +35,8 @@ export class WebRetentionWorldFixture extends WebHTTPFixture {
       { now: () => this.clock.now() + this.skew },
       DAY,
       (report) => this.reports.push(report),
+      // As in production: the failure ledger lives in the Object's key-value storage, which creates workerd's _cf_KV.
+      durableRetentionMemory(this.durableStorage as unknown as Parameters<typeof durableRetentionMemory>[0]),
     ));
   }
   private scopeOf(principalId: string) {
@@ -52,6 +58,33 @@ export class WebRetentionWorldFixture extends WebHTTPFixture {
     if (path === '/fixture/world/sweep') {
       const result = await this.sweeper().sweep(16);
       return Response.json({ ...result, error: this.sweeper().lastError });
+    }
+    if (path === '/fixture/world/kv') {
+      // Part 17h: one key through the Durable Object KV API, which makes workerd create its reserved _cf_KV table.
+      await this.durableStorage.put(String(input.key), input.value ?? 1);
+      return Response.json({ put: true });
+    }
+    if (path === '/fixture/world/unbonus') {
+      // Part 17h: the shape of an account that signed up before Part 17b (or while the bonus was off): a login, no bonus row.
+      const { principalId } = input as { principalId: string };
+      for (const table of ['web_points_events', 'web_points_balance', 'web_points_policy', 'web_signup_bonus'])
+        this.store.run(`DELETE FROM ${table} WHERE principal_id=?`, principalId);
+      this.store.run('DELETE FROM web_bonus_emails');
+      return Response.json({ removed: true });
+    }
+    if (path === '/fixture/world/create-table') {
+      // Part 17h: does workerd refuse an application table in its reserved _cf_ namespace? Answers with the error text.
+      try {
+        this.store.run(`CREATE TABLE ${String(input.name)}(id INTEGER PRIMARY KEY,world_id TEXT)`);
+        if (typeof input.principalId === 'string')
+          this.store.run(
+            `INSERT INTO ${String(input.name)}(world_id) SELECT world_id FROM web_principals WHERE id=?`,
+            input.principalId,
+          );
+        return Response.json({ created: true });
+      } catch (error) {
+        return Response.json({ created: false, message: error instanceof Error ? error.message : String(error) });
+      }
     }
     if (path === '/fixture/world/reports') return Response.json(this.reports);
     if (path === '/fixture/world/skew') {
