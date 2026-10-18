@@ -1,5 +1,6 @@
 import { purgeDiagnostics } from '../identity/web-player-purge.ts';
 import { currentPrices } from '../admission/web-model-settings.ts';
+import { WEB_BUILD_COMMIT } from '../../../config/web-build.ts';
 
 /** Read-only operator view of the business authority: SELECT statements only, never content or secrets. */
 export interface WebInspectReader {
@@ -48,7 +49,7 @@ export interface WebInspectPrice {
   model: string;
   phase: string;
   /** The row in force now, or null when none is (an expired price fails closed with WEB_PROVIDER_PRICE_REQUIRED). */
-  inForce: { id: string; validUntil: number } | null;
+  inForce: { id: string; validUntil: number; version: number; upperMicrosPerUnit: number } | null;
   latestValidUntil: number;
 }
 /** Part 17g, counts and a time only: principals whose purge is failing now, how long the oldest has been due, when a purge last completed. */
@@ -112,6 +113,8 @@ export function inspectWebAuthority(
       )[0]
     : undefined;
   return {
+    // The code answering, as a build-time constant (config/web-build.ts): never a runtime lookup.
+    build: { commit: WEB_BUILD_COMMIT },
     schemaVersion: applied.length ? applied[applied.length - 1]!.version : null,
     migrations: {
       applied,
@@ -143,15 +146,20 @@ export function inspectWebAuthority(
               phase: row.phase,
               inForce:
                 reader
-                  .all<{ id: string; valid_until: number }>(
-                    'SELECT id,valid_until FROM web_provider_prices WHERE provider=? AND model=? AND phase=? AND valid_from<=? AND valid_until>? ORDER BY version DESC',
+                  .all<{ id: string; valid_until: number; version: number; upper_micros_per_unit: number }>(
+                    'SELECT id,valid_until,version,upper_micros_per_unit FROM web_provider_prices WHERE provider=? AND model=? AND phase=? AND valid_from<=? AND valid_until>? ORDER BY version DESC',
                     row.provider,
                     row.model,
                     row.phase,
                     now,
                     now,
                   )
-                  .map((p) => ({ id: p.id, validUntil: p.valid_until }))[0] ?? null,
+                  .map((p) => ({
+                    id: p.id,
+                    validUntil: p.valid_until,
+                    version: p.version,
+                    upperMicrosPerUnit: p.upper_micros_per_unit,
+                  }))[0] ?? null,
               latestValidUntil: row.latest,
             }),
           )

@@ -55,8 +55,122 @@ export function webReceiptDigest(store: WebStore, kind: 'receipt' | 'usage', jso
   return store.webReceiptDigest(kind, json);
 }
 
+/** What decides whether a principal's private work may run: the principal, its retention row and the clock. */
+export type WebContentVerdict = 'live' | 'TRIAL_EXPIRED' | 'WEB_INVITE_ACCESS_REQUIRED';
+const GRANT_SCHEMAS_FROM = 111;
+
 /**
- * One server-side predicate for lifecycle private content. Legacy schemas keep their old contract.
+ * Part 17i. THE rule for "is this principal's content live", in one place (JS here, SQL in webContentLiveSql below; a test
+ * asserts they agree for every principal shape). Everything that decides whether work may run or must be failed asks it:
+ * admission, the stage queue's claims, the publishers, the executors, the ledger and the cleaners.
+ *
+ *   account       state 'protected'
+ *   guest         state 'unstarted', or 'active' inside its window
+ *   guest         state 'unstarted' / 'active' and REGISTERED (isRegistered: signup bonus row, or an email login): the
+ *                 window is over but the player is a kept account (17b / 17h)
+ *   invite        state 'protected' and an ACTIVE grant, or REGISTERED (a lapsed grant with a login or a bonus row)
+ *   anything else (purging, purged, an unregistered lapsed invite, a plain guest past its window): not live.
+ *
+ * access 'read' (history, events, an operation's status, published audio) additionally lets a guest WITH an email login
+ * read after the trial; it is not part of the SQL rule (nothing is claimed or run on it).
+ */
+export function webContentVerdict(
+  store: Store,
+  now: number,
+  principalId: string,
+  principal: { kind: string; player_id: string },
+  row: Pick<WebRetentionRow, 'state' | 'expires_at'>,
+  worldId: string,
+  access: 'live' | 'read' = 'live',
+): WebContentVerdict {
+  if (principal.kind === 'account' && row.state === 'protected') return 'live';
+  if (
+    principal.kind === 'guest' &&
+    (row.state === 'unstarted' || (row.state === 'active' && row.expires_at !== null && now < row.expires_at))
+  )
+    return 'live';
+  // Part 17b (17h: or has an email login): a registered guest keeps working content after the trial window ended - the
+  // bonus has no time window. ADMISSION still decides whether a reply may start; this gate only stops treating such an
+  // account as an expired trial.
+  if (
+    principal.kind === 'guest' &&
+    (row.state === 'unstarted' || row.state === 'active') &&
+    isRegistered(store as WebStore, principalId, now)
+  )
+    return 'live';
+  if (
+    access === 'read' &&
+    principal.kind === 'guest' &&
+    row.state === 'active' &&
+    playerLoginRetainsGuest(store, principalId)
+  )
+    return 'live';
+  if (
+    principal.kind === 'invite' &&
+    row.state === 'protected' &&
+    (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= GRANT_SCHEMAS_FROM
+  ) {
+    const grant = store.get<{ id: string }>(
+      `SELECT id FROM web_invite_grants
+      WHERE principal_id=? AND player_id=? AND world_id=? AND revoked_at IS NULL
+        AND (expires_at IS NULL OR expires_at>?)`,
+      principalId,
+      principal.player_id,
+      worldId,
+      now,
+    );
+    // Part 17h: an invited player whose grant has lapsed but who is registered chats as a registered player; only one
+    // with nothing else to fall back on is told the invite is gone.
+    return grant || isRegistered(store as WebStore, principalId, now) ? 'live' : 'WEB_INVITE_ACCESS_REQUIRED';
+  }
+  return 'TRIAL_EXPIRED';
+}
+
+/**
+ * The SQL twin of isRegistered (web-free-tier.ts) over a web_principals row `alias`: a signup bonus row, or an email login
+ * on a guest or on an invited player whose grants are all revoked / expired at `now`. Same table-presence rules as the JS
+ * (bonus tables = schema 121, which also means logins and grants exist) and the same flag. One `?` (now).
+ */
+export function webRegisteredSql(schema: number, freeTier: boolean, now: number, alias = 'p') {
+  if (!freeTier || schema < 121) return { sql: '0', args: [] as number[] };
+  return {
+    sql: `(EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=${alias}.id)
+      OR EXISTS (SELECT 1 FROM web_player_logins lg WHERE lg.principal_id=${alias}.id)
+        AND (${alias}.kind='guest' OR ${alias}.kind='invite' AND NOT EXISTS (SELECT 1 FROM web_invite_grants ag
+          WHERE ag.principal_id=${alias}.id AND ag.player_id=${alias}.player_id AND ag.world_id=${alias}.world_id
+            AND ag.revoked_at IS NULL AND (ag.expires_at IS NULL OR ag.expires_at>?))))`,
+    args: [now],
+  };
+}
+
+/**
+ * The SQL twin of webContentVerdict(..., 'live') === 'live' over web_principals `p` joined to web_guest_retention `r`.
+ * Used by every query that selects work by its owner (the stage queue's claims). Same schema rules as the JS: the invite
+ * branch exists from schema 111, the registered branches from 121 with the free tier on.
+ */
+export function webContentLiveSql(schema: number, freeTier: boolean, now: number) {
+  const registered = webRegisteredSql(schema, freeTier, now);
+  const parts = ["(p.kind='account' AND r.state='protected')"];
+  const args: number[] = [];
+  parts.push("(p.kind='guest' AND (r.state='unstarted' OR r.state='active' AND r.expires_at>?))");
+  args.push(now);
+  if (registered.sql !== '0') {
+    parts.push(`(p.kind='guest' AND r.state IN ('unstarted','active') AND ${registered.sql})`);
+    args.push(...registered.args);
+  }
+  if (schema >= GRANT_SCHEMAS_FROM) {
+    parts.push(`(p.kind='invite' AND r.state='protected' AND (EXISTS
+      (SELECT 1 FROM web_invite_grants g WHERE g.principal_id=p.id
+        AND g.player_id=p.player_id AND g.world_id=p.world_id AND g.revoked_at IS NULL
+        AND (g.expires_at IS NULL OR g.expires_at>?))${registered.sql === '0' ? '' : ` OR ${registered.sql}`}))`);
+    args.push(now, ...registered.args);
+  }
+  return { sql: `(${parts.join(' OR ')})`, args };
+}
+
+/**
+ * One server-side predicate for lifecycle private content. Legacy schemas keep their old contract. The rule itself is
+ * webContentVerdict above.
  *
  * access 'live' (the default; admission, queues, publishers, provider calls, signup, redemption of the same kind of
  * work): a guest's content is available only inside the trial. access 'read' (history, events, an operation's status,
@@ -88,50 +202,9 @@ export function requireWebContent(
     worldId,
   );
   ensure(row && principal, 'WEB_RETENTION_SCOPE_INVALID');
-  if (principal.kind === 'account' && row.state === 'protected') return row;
-  if (
-    principal.kind === 'guest' &&
-    (row.state === 'unstarted' || (row.state === 'active' && row.expires_at !== null && now < row.expires_at))
-  )
-    return row;
-  // Part 17b (17h: or has an email login): a guest that is registered (flag SIGNUP_BONUS_ENABLED) keeps working content after the trial window
-  // ended - the bonus has no time window. ADMISSION still decides whether a reply may start (trial first, then the
-  // bonus, else TRIAL_EXHAUSTED); this gate only stops treating such an account as an expired trial.
-  if (
-    principal.kind === 'guest' &&
-    (row.state === 'unstarted' || row.state === 'active') &&
-    isRegistered(store as WebStore, principalId, now)
-  )
-    return row;
-  if (
-    access === 'read' &&
-    principal.kind === 'guest' &&
-    row.state === 'active' &&
-    playerLoginRetainsGuest(store, principalId)
-  )
-    return row;
-  if (
-    principal.kind === 'invite' &&
-    row.state === 'protected' &&
-    [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124].includes(
-      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
-    )
-  ) {
-    const grant = store.get<{ id: string }>(
-      `SELECT id FROM web_invite_grants
-      WHERE principal_id=? AND player_id=? AND world_id=? AND revoked_at IS NULL
-        AND (expires_at IS NULL OR expires_at>?)`,
-      principalId,
-      principal.player_id,
-      worldId,
-      now,
-    );
-    // Part 17h: an invited player whose grant has lapsed but who is registered (signup bonus or email login) chats as a
-    // registered player; only an invited player with nothing else to fall back on is told the invite is gone.
-    ensure(grant || isRegistered(store as WebStore, principalId, now), 'WEB_INVITE_ACCESS_REQUIRED');
-    return row;
-  }
-  ensure(false, 'TRIAL_EXPIRED');
+  const verdict = webContentVerdict(store, now, principalId, principal, row, worldId, access);
+  ensure(verdict === 'live', verdict as Exclude<WebContentVerdict, 'live'>);
+  return row;
 }
 
 /** Caller owns the operation-state CAS and the same short business transaction. */

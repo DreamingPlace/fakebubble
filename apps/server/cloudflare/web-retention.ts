@@ -6,6 +6,7 @@ import { auditWebLifecycleWorld } from '../admission/web-lifecycle-audit.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
 import {
+  bonusKeepsGuest,
   guestPurgeDue,
   PLAYER_INACTIVE_MS,
   playerLastSeenAt,
@@ -435,7 +436,10 @@ export class WebCloudRetention {
         const lastSeen = playerLastSeenAt(this.store, principalId);
         ensure(
           lastSeen === null
-            ? row.state === 'active' && row.expires_at !== null && row.expires_at + this.graceMs <= now
+            ? row.state === 'active' &&
+                row.expires_at !== null &&
+                row.expires_at + this.graceMs <= now &&
+                !bonusKeepsGuest(this.store, principalId)
             : (row.state === 'active' || row.state === 'unstarted') && lastSeen + PLAYER_INACTIVE_MS <= now,
           'WEB_RETENTION_NOT_EXPIRED',
         );

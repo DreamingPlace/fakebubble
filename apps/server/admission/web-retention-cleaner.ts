@@ -11,6 +11,7 @@ import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../b
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
 import { archivePlayerChats, chatReviewTablesExist, sweepReviewArchive } from '../review/web-chat-review.ts';
 import {
+  bonusKeepsGuest,
   guestPurgeDue,
   PLAYER_INACTIVE_MS,
   playerLastSeenAt,
@@ -114,7 +115,10 @@ export class WebRetentionCleaner {
       ensure(
         principal.kind === 'guest' &&
           (lastSeen === null
-            ? row.state === 'active' && row.expires_at !== null && now >= row.expires_at
+            ? row.state === 'active' &&
+              row.expires_at !== null &&
+              now >= row.expires_at &&
+              !bonusKeepsGuest(this.store, principalId)
             : (row.state === 'active' || row.state === 'unstarted') && lastSeen + PLAYER_INACTIVE_MS <= now),
         'WEB_RETENTION_NOT_EXPIRED',
       );

@@ -7,13 +7,13 @@ import { audioStartedExpr } from '../admission/web-stage-metrics.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import type { WebCoordinatorLease, WebStageClaim } from '../admission/web-stage-queue.ts';
 import { readInputSnapshot, requireCurrentInputSnapshot } from '../generation/web-input-snapshot.ts';
-import { signupBonusTablesExist } from '../admission/web-free-tier.ts';
 import { checkWebV7SceneAtDispatch } from '../generation/web-v7-request.ts';
 import {
   requireWebContent,
   settleWebLifetimeReservation,
   webReceiptDigest,
   webDataLifecycleEnabled,
+  webRegisteredSql,
 } from '../admission/web-retention.ts';
 
 type Stage = 'text' | 'audio';
@@ -367,25 +367,24 @@ export class WebDispatchLedger {
         schema === 112 ||
         (schema >= 113 && (!!this.store.providerAudio || webOperationDeleted(this.store, key.operationId)));
       const synthetic = [109, 110, 112].includes(schema);
+      // Part 17i: a REGISTERED player (webRegisteredSql: signup bonus, or an email login) is a kept account; its expired trial
+      // window is not a purge. The rule is the one requireWebContent and the stage queue use.
+      const registered = webRegisteredSql(schema, this.store.publicFreeTier === true, now);
       const purging =
         webOperationDeleted(this.store, key.operationId) ||
         (lifecycle &&
           !!this.store.get(
             `SELECT 1 FROM web_external_attempts a
         JOIN web_guest_retention r ON r.principal_id=a.principal_id AND r.world_id=a.world_id
+        JOIN web_principals p ON p.id=a.principal_id
         WHERE a.operation_id=? AND a.stage=? AND a.phase=? AND a.ordinal=?
-          AND (r.state IN ('purging','purged') OR r.state='active' AND r.expires_at<=?
-            ${
-              // Part 17b: a guest holding the signup bonus is a kept account; its expired trial window is not a purge.
-              this.store.publicFreeTier === true && signupBonusTablesExist(this.store)
-                ? 'AND NOT EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=a.principal_id)'
-                : ''
-            })`,
+          AND (r.state IN ('purging','purged') OR r.state='active' AND r.expires_at<=? AND NOT ${registered.sql})`,
             key.operationId,
             key.stage,
             key.phase,
             key.ordinal,
             now,
+            ...registered.args,
           ));
       const receiptJson = JSON.stringify(result.receipt),
         usageJson = JSON.stringify(result.usage);

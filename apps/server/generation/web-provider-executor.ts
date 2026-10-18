@@ -225,7 +225,7 @@ export class WebProviderExecutor {
       else {
         this.unreported.delete(id);
         if (status !== 'cancelled' && !this.reported.has(id)) {
-          logWebReply(this.store, id);
+          logWebReply(this.store, id, this.clock.now());
           if (this.reported.size >= 5000) this.reported.clear();
           this.reported.add(id);
         }
