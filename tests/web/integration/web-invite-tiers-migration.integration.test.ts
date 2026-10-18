@@ -152,24 +152,43 @@ test('125 backfill: entitlements only for invited principals with a login and an
   const grants = store.all('SELECT * FROM web_invite_grants ORDER BY id');
   migrateWebProviderInviteTiers(store);
   assert.deepEqual(store.all('SELECT * FROM web_principals ORDER BY id'), before, 'principal kinds are untouched');
-  assert.deepEqual(store.all('SELECT * FROM web_guest_retention ORDER BY principal_id'), retention, 'retention untouched');
+  assert.deepEqual(
+    store.all('SELECT * FROM web_guest_retention ORDER BY principal_id'),
+    retention,
+    'retention untouched',
+  );
   assert.deepEqual(store.all('SELECT * FROM web_invite_grants ORDER BY id'), grants, 'grants untouched');
 
-  const ent = store.all<{ principal_id: string; kind: string; expires_at: number | null; source: string; batch_id: string }>(
-    'SELECT principal_id,kind,expires_at,source,batch_id FROM web_entitlements ORDER BY principal_id',
-  );
+  const ent = store.all<{
+    principal_id: string;
+    kind: string;
+    expires_at: number | null;
+    source: string;
+    batch_id: string;
+  }>('SELECT principal_id,kind,expires_at,source,batch_id FROM web_entitlements ORDER BY principal_id');
   const byPrincipal = new Map(ent.map((e) => [e.principal_id, e]));
   assert.equal(ent.length, 2);
   assert.deepEqual(
-    [byPrincipal.get(shapes['invited, login, active grant (no expiry)'])!.kind, byPrincipal.get(shapes['invited, login, active grant (no expiry)'])!.expires_at],
+    [
+      byPrincipal.get(shapes['invited, login, active grant (no expiry)'])!.kind,
+      byPrincipal.get(shapes['invited, login, active grant (no expiry)'])!.expires_at,
+    ],
     ['unlimited', null],
   );
   assert.deepEqual(
-    [byPrincipal.get(shapes['invited, login, active grant (expires later)'])!.kind, byPrincipal.get(shapes['invited, login, active grant (expires later)'])!.expires_at],
+    [
+      byPrincipal.get(shapes['invited, login, active grant (expires later)'])!.kind,
+      byPrincipal.get(shapes['invited, login, active grant (expires later)'])!.expires_at,
+    ],
     ['unlimited', NOW + 30 * DAY],
   );
   assert.ok(ent.every((e) => e.source === 'invite' && e.batch_id === 'legacy:spring'));
-  for (const name of ['invited, login, lapsed grant (expired)', 'invited, login, revoked grant', 'invited, NO login, active grant', 'invited, NO login, lapsed grant'] as const)
+  for (const name of [
+    'invited, login, lapsed grant (expired)',
+    'invited, login, revoked grant',
+    'invited, NO login, active grant',
+    'invited, NO login, lapsed grant',
+  ] as const)
     assert.equal(byPrincipal.has(shapes[name]), false, name);
 
   // The legacy codes are carried by one 'unlimited' batch per distinct batch name.
@@ -182,12 +201,20 @@ test('125 backfill: entitlements only for invited principals with a login and an
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_invite_codes WHERE batch_id IS NULL')!.n, 0);
 
   // 玩家编号: every REGISTERED player (a bonus row or a login), unique, 8 Crockford characters; nobody else.
-  const numbers = store.all<{ principal_id: string; number: string }>('SELECT principal_id,number FROM web_player_numbers');
+  const numbers = store.all<{ principal_id: string; number: string }>(
+    'SELECT principal_id,number FROM web_player_numbers',
+  );
   assert.equal(numbers.length, 6, 'the four invited players with a login, plus the bonus guest and the login guest');
   assert.ok(numbers.every((n) => PLAYER_NUMBER_PATTERN.test(n.number)));
   assert.equal(new Set(numbers.map((n) => n.number)).size, numbers.length);
-  assert.equal(numbers.some((n) => n.principal_id === shapes['plain guest']), false);
-  assert.equal(numbers.some((n) => n.principal_id === shapes['invited, NO login, active grant']), false);
+  assert.equal(
+    numbers.some((n) => n.principal_id === shapes['plain guest']),
+    false,
+  );
+  assert.equal(
+    numbers.some((n) => n.principal_id === shapes['invited, NO login, active grant']),
+    false,
+  );
 
   // The effective tier after the migration: the entitled pair is unlimited, the lapsed ones are registered, the rest unchanged.
   const tier = (id: string) => effectiveTier(store, id, NOW)!.kind;

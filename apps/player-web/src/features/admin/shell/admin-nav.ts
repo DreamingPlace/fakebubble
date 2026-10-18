@@ -36,7 +36,7 @@ export const NAV_TREE: readonly NavGroup[] = [
     id: 'players',
     label: '玩家',
     items: [
-      { page: 'invites', label: '邀请码', icon: 'ticket' },
+      { page: 'invites', label: '邀请与额度', icon: 'ticket' },
       { page: 'grants', label: '玩家授权', icon: 'key' },
     ],
   },

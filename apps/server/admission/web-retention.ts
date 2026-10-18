@@ -163,9 +163,7 @@ export function webTierSql(schema: number, freeTier: boolean, now: number, alias
     parts.push(`WHEN ${alias}.kind='invite' AND ${grantActive} THEN 'legacy_invite'`);
     args.push(now);
   }
-  parts.push(
-    `WHEN NOT ${registered.sql} THEN CASE WHEN ${alias}.kind='guest' THEN 'guest' ELSE 'legacy_invite' END`,
-  );
+  parts.push(`WHEN NOT ${registered.sql} THEN CASE WHEN ${alias}.kind='guest' THEN 'guest' ELSE 'legacy_invite' END`);
   args.push(...registered.args);
   if (entitled) {
     parts.push(`WHEN ${unlimited.sql} THEN 'unlimited'`, `WHEN ${refill.sql} THEN 'daily_refill'`);

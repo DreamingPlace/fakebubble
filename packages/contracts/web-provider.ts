@@ -1,5 +1,5 @@
 import type { WebAudioStatus, WebErrorCode, WebOperationStatus, WebTheme } from './web-v1.ts';
-import type { PlayerModelId } from './player-models.ts';
+import type { PlayerModelId, PlayerPlan } from './player-models.ts';
 
 /** Separate provider-web protocol. Synthetic local-1/2/3 wire objects are not assignable. */
 export const WEB_PROVIDER_CONTRACT = 'web-v1-provider-2' as const;
@@ -155,7 +155,11 @@ export interface WebProviderSync {
 /** One principal-level SSE stream; each private event carries conversation and character scope. */
 export interface WebProviderActions {
   /** Reuse LocalApi bootstrap/byRequest/operation/SSE cursor pattern after redeem or uncertain send. */
-  redeemInvite(input: { requestId: string; code: string }): Promise<{ grantId: string; duplicate: boolean }>;
+  /** Part 22a: a signed-in player's code answers with the ENTITLEMENT it added; a code redeemed the old way with the grant. */
+  redeemInvite(input: {
+    requestId: string;
+    code: string;
+  }): Promise<{ grantId: string; duplicate: boolean } | { entitlement: PlayerPlan | undefined; duplicate: boolean }>;
   bootstrap(): Promise<WebProviderBootstrap>;
   byRequest(requestId: string): Promise<WebProviderOperation>;
   operation(operationId: string): Promise<WebProviderOperation>;

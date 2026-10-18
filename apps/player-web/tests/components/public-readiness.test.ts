@@ -490,24 +490,37 @@ const login: AccountInfo = {
 // Part 21f (named exception): the account entries left the chat's ⋯ menu (it is 共创 and the model picker only). 删除我的账号
 // is now an entry of the top account menu (the nickname button) and 清除本设备的体验数据 of the guest's 更多 button; the
 // assertions about WHEN they exist are unchanged.
+// Part 22a (named exception): the top account menu and 更多 are replaced by 我的信息 (opened by the nickname / 我的信息 button).
+// The same assertions about WHEN 删除我的账号 / 清除本设备的体验数据 exist are made against that page's buttons.
 const topMenu = (f: ReturnType<typeof chat>, label?: string) => {
   const button = f.header
     .querySelectorAll('.head-actions button')
-    .find((node) => (label ? node.textContent === label : node.getAttribute('aria-haspopup') === 'menu'))!;
+    .find((node) => (label ? node.textContent === label : true))!;
   button.click();
-  return f.header.querySelectorAll('.chat-menu-item');
+  return f.doc.body
+    .querySelector('.mi-sheet')!
+    .querySelectorAll('button')
+    .filter((b) => b.textContent !== '×');
 };
+const labelsOfButtons = (items: FakeElement[]) => items.map((item) => item.textContent);
 test('menu: 删除我的账号 / 清除本设备的体验数据 exist only when the server says account deletion is on', async (t) => {
   const off = chat(t, login);
   await off.attach();
   assert.deepEqual(titles(off.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
-  assert.deepEqual(titles(topMenu(off)), ['我的昵称', '修改密码', '退出其他设备', '退出登录']);
+  assert.deepEqual(labelsOfButtons(topMenu(off)), ['修改', '输入邀请码', '修改密码', '退出其他设备', '退出登录']);
   const on = chat(t, { ...login, features: { accountDelete: true } });
   await on.attach();
   assert.deepEqual(titles(on.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
   const items = topMenu(on);
-  assert.deepEqual(titles(items), ['我的昵称', '修改密码', '退出其他设备', '退出登录', '删除我的账号']);
-  items[4]!.click();
+  assert.deepEqual(labelsOfButtons(items), [
+    '修改',
+    '输入邀请码',
+    '修改密码',
+    '退出其他设备',
+    '退出登录',
+    '删除我的账号',
+  ]);
+  items[5]!.click();
   assert.equal(on.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '删除我的账号');
 
   const guestOff = chat(t, { signupEnabled: true, signedIn: false });
@@ -515,13 +528,13 @@ test('menu: 删除我的账号 / 清除本设备的体验数据 exist only when 
   assert.deepEqual(titles(guestOff.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
   // Part 21i (named exception): 更多 now always exists for a guest and holds 消费记录; deletion only adds 清除.
   assert.equal(guestOff.header.querySelectorAll('.head-more').length, 1);
-  assert.deepEqual(titles(topMenu(guestOff, '更多')), ['消费记录']);
+  assert.deepEqual(labelsOfButtons(topMenu(guestOff, '我的信息')), ['消费记录', '输入邀请码', '注册', '登录']);
   const guest = chat(t, { signupEnabled: true, signedIn: false, features: { accountDelete: true } });
   await guest.attach();
   assert.deepEqual(titles(guest.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
-  const guestItems = topMenu(guest, '更多');
-  assert.deepEqual(titles(guestItems), ['消费记录', '清除本设备的体验数据']);
-  guestItems[1]!.click();
+  const guestItems = topMenu(guest, '我的信息');
+  assert.deepEqual(labelsOfButtons(guestItems), ['消费记录', '输入邀请码', '注册', '登录', '清除本设备的体验数据']);
+  guestItems[4]!.click();
   assert.equal(
     guest.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent,
     '清除本设备的体验数据',
@@ -534,7 +547,7 @@ test('after 删除 the tab ends on the signed-out first page with the final conf
   app.setAttribute('id', 'app');
   f.doc.body.append(app);
   await f.attach();
-  topMenu(f)[4]!.click();
+  topMenu(f)[5]!.click();
   const sheetRoot = f.doc.body.querySelector('.acct-sheet')!;
   sheetRoot.querySelector('input[name="password"]')!.value = 'pw-pw-pw-pw';
   sheetRoot.querySelector('input[name="confirm"]')!.value = '删除';

@@ -1,5 +1,6 @@
 import {
   parseModelChoice,
+  parsePlan,
   type ModelChoiceInfo,
   type PlayerModelId,
 } from '../../../../packages/contracts/player-models.ts';
@@ -67,6 +68,8 @@ export type AccountInfo =
       grace?: { endsAt: number };
       /** PLAYER_MODEL_CHOICE_ENABLED and a points account: the model picker state. Absent for everyone else. */
       modelChoice?: ModelChoiceInfo;
+      /** Part 22a: the 玩家编号 of a registered player (8 characters, Crockford base32). */
+      playerNumber?: string;
     };
 /** The bot check: resolves one fresh Turnstile token for an action, or throws. Installed only on the real page. */
 export type HumanCheck = (siteKey: string, action: 'guest' | 'code' | 'login') => Promise<string>;
@@ -185,9 +188,11 @@ export class ProviderApi implements WebProviderActions {
     return view;
   }
   async redeemInvite(input: { requestId: string; code: string }) {
-    const { duplicate, ...value } = record(
-      await this.request('/invites/redeem', { method: 'POST', body: JSON.stringify(input) }),
-    );
+    const raw = record(await this.request('/invites/redeem', { method: 'POST', body: JSON.stringify(input) }));
+    // Part 22a: a signed-in player's code adds an ENTITLEMENT - no new session, no receipt, no recovery code.
+    if (raw.entitlement && typeof raw.entitlement === 'object' && typeof raw.duplicate === 'boolean')
+      return { entitlement: parsePlan(raw.entitlement), duplicate: raw.duplicate };
+    const { duplicate, ...value } = raw;
     try {
       if (typeof duplicate !== 'boolean') throw Error('invalid');
       const receipt = parseWebInviteReceipt(value);
@@ -399,6 +404,9 @@ export class ProviderApi implements WebProviderActions {
       ...(features ? { features } : {}),
       ...(typeof value.reviewNoticeClosed === 'boolean' ? { reviewNoticeClosed: value.reviewNoticeClosed } : {}),
       ...(parseModelChoice(value.modelChoice) ? { modelChoice: parseModelChoice(value.modelChoice)! } : {}),
+      ...(typeof value.playerNumber === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(value.playerNumber)
+        ? { playerNumber: value.playerNumber }
+        : {}),
       ...(value.grace &&
       typeof value.grace === 'object' &&
       Number.isSafeInteger((value.grace as { endsAt?: unknown }).endsAt)

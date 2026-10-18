@@ -16,7 +16,13 @@ import { ensurePlayerNumber } from '../admission/web-player-number.ts';
  * shown once at creation. Every admin action is audit-logged (web_admin_audit: actor member, action, batch or code id - never a
  * player id, email or nickname).
  */
-type InviteScope = { sessionId: string; principalId: string; playerId: string; worldId: string; kind: 'guest' | 'invite' };
+type InviteScope = {
+  sessionId: string;
+  principalId: string;
+  playerId: string;
+  worldId: string;
+  kind: 'guest' | 'invite';
+};
 export type InviteAuthorizer = (token: string, csrf: string, origin: string) => InviteScope;
 
 export const BATCH_LIMITS = Object.freeze({
@@ -129,7 +135,11 @@ export class WebInviteTiers {
   private requireAdmin(sessionId: string, now: number, permission: InviteAdminPermission) {
     ensure(
       typeof sessionId === 'string' &&
-        this.store.get(`SELECT 1 FROM admin_sessions WHERE id=? AND revoked_at IS NULL AND expires_at>?`, sessionId, now),
+        this.store.get(
+          `SELECT 1 FROM admin_sessions WHERE id=? AND revoked_at IS NULL AND expires_at>?`,
+          sessionId,
+          now,
+        ),
       'ADMIN_UNAUTHORIZED',
     );
     requireWebAdminMembership(this.store, sessionId, permission);
@@ -221,10 +231,11 @@ export class WebInviteTiers {
       );
       if (prior) {
         ensure(prior.code_digest === codeDigest, 'IDEMPOTENCY_CONFLICT');
-        const held = this.store.get<{ kind: 'unlimited' | 'daily_refill'; expires_at: number | null; batch_id: string | null }>(
-          'SELECT kind,expires_at,batch_id FROM web_entitlements WHERE id=?',
-          prior.entitlement_id,
-        );
+        const held = this.store.get<{
+          kind: 'unlimited' | 'daily_refill';
+          expires_at: number | null;
+          batch_id: string | null;
+        }>('SELECT kind,expires_at,batch_id FROM web_entitlements WHERE id=?', prior.entitlement_id);
         ensure(held, 'WEB_INVITE_SCOPE_INVALID');
         return { entitlement: this.view(held.kind, held.batch_id, held.expires_at), duplicate: true as const };
       }
@@ -295,7 +306,11 @@ export class WebInviteTiers {
     });
   }
 
-  private view(kind: 'unlimited' | 'daily_refill', batchId: string | null, expiresAt: number | null): RedeemedEntitlement {
+  private view(
+    kind: 'unlimited' | 'daily_refill',
+    batchId: string | null,
+    expiresAt: number | null,
+  ): RedeemedEntitlement {
     const batch = batchId
       ? this.store.get<{ daily_amount: number | null; total_cap: number | null }>(
           'SELECT daily_amount,total_cap FROM web_invite_batches WHERE id=?',
@@ -351,7 +366,10 @@ export class WebInviteTiers {
         input.requestId,
       );
       if (prior) {
-        ensure(prior.created_by === input.adminSessionId && prior.request_digest === requestDigest, 'IDEMPOTENCY_CONFLICT');
+        ensure(
+          prior.created_by === input.adminSessionId && prior.request_digest === requestDigest,
+          'IDEMPOTENCY_CONFLICT',
+        );
         return { batchId: prior.id, codes: null as string[] | null, duplicate: true as const };
       }
       ensure(input.redeemBy === null || input.redeemBy > now, 'WEB_INVITE_TERMS_REQUIRED');
@@ -450,7 +468,10 @@ export class WebInviteTiers {
   batchDetail(adminSessionId: string, batchId: string): { codes: BatchCodeView[] } {
     const now = this.now();
     this.requireAdmin(adminSessionId, now, 'invites.manage');
-    ensure(typeof batchId === 'string' && this.store.get('SELECT 1 FROM web_invite_batches WHERE id=?', batchId), 'NOT_FOUND');
+    ensure(
+      typeof batchId === 'string' && this.store.get('SELECT 1 FROM web_invite_batches WHERE id=?', batchId),
+      'NOT_FOUND',
+    );
     const rows = this.store.all<{
       id: string;
       status: string;
@@ -526,7 +547,10 @@ export class WebInviteTiers {
         'SELECT tier,daily_amount,total_cap FROM web_invite_batches WHERE id=?',
         input.batchId,
       );
-      ensure(batch && batch.tier === 'daily_refill' && batch.daily_amount !== null && batch.total_cap !== null, 'NOT_FOUND');
+      ensure(
+        batch && batch.tier === 'daily_refill' && batch.daily_amount !== null && batch.total_cap !== null,
+        'NOT_FOUND',
+      );
       ensure(batch.daily_amount !== input.dailyAmount || batch.total_cap !== input.cap, 'WEB_INVITE_TERMS_REQUIRED');
       const holders = this.store.get<{ n: number }>(
         `SELECT count(*) n FROM web_entitlements WHERE batch_id=? AND revoked_at IS NULL AND starts_at<=?
@@ -535,7 +559,12 @@ export class WebInviteTiers {
         now,
         now,
       )!.n;
-      this.store.run('UPDATE web_invite_batches SET daily_amount=?,total_cap=? WHERE id=?', input.dailyAmount, input.cap, input.batchId);
+      this.store.run(
+        'UPDATE web_invite_batches SET daily_amount=?,total_cap=? WHERE id=?',
+        input.dailyAmount,
+        input.cap,
+        input.batchId,
+      );
       this.store.run(
         `INSERT INTO web_invite_batch_changes(batch_id,admin_id,request_id,old_amount,new_amount,old_cap,new_cap,holders,created_at)
         VALUES (?,?,?,?,?,?,?,?,?)`,
@@ -589,7 +618,10 @@ export class WebInviteTiers {
     return this.store.transaction(() => {
       const now = this.now();
       this.requireAdmin(adminSessionId, now, 'invites.manage');
-      ensure(typeof batchId === 'string' && this.store.get('SELECT 1 FROM web_invite_batches WHERE id=?', batchId), 'NOT_FOUND');
+      ensure(
+        typeof batchId === 'string' && this.store.get('SELECT 1 FROM web_invite_batches WHERE id=?', batchId),
+        'NOT_FOUND',
+      );
       const revoked = this.store.run(
         "UPDATE web_invite_codes SET status='revoked',revoked_at=? WHERE batch_id=? AND status='active' AND redeemed_count=0",
         now,
@@ -620,7 +652,8 @@ export class WebInviteTiers {
       ensure(row || grant, 'WEB_INVITE_UNAVAILABLE');
       if ((row ? row.revoked_at !== null : true) && (grant ? grant.revoked_at !== null : true))
         return { inviteId, duplicate: true as const };
-      if (row) this.store.run('UPDATE web_entitlements SET revoked_at=? WHERE id=? AND revoked_at IS NULL', now, row.id);
+      if (row)
+        this.store.run('UPDATE web_entitlements SET revoked_at=? WHERE id=? AND revoked_at IS NULL', now, row.id);
       if (grant) {
         this.store.run('UPDATE web_invite_grants SET revoked_at=? WHERE id=? AND revoked_at IS NULL', now, grant.id);
         // A legacy invited player WITHOUT an email login has nothing to fall back on: its sessions and recovery credential end

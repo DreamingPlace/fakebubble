@@ -100,14 +100,18 @@ test('Cloudflare runner: 121 is the same SQL on both authorities, second to last
   const { inline, r2 } = expectedWebMigrations();
   // Named exception (Part 21g, migration 124): the ledger now has 49 steps and 124 is the newest, so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-  assert.equal(inline.length, 49);
-  assert.equal(r2.length, 49);
-  assert.equal(inline.at(-4)!.version, 121);
-  assert.equal(r2.at(-4)!.version, 121);
-  assert.equal(inline.at(-4)!.sha256, sha(sql121()), 'the ledger hash is the sha256 of the SQL file as written');
-  assert.equal(inline.at(-4)!.sha256, r2.at(-4)!.sha256);
+  // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(inline.length, 50);
+  assert.equal(r2.length, 50);
+  assert.equal(inline.at(-5)!.version, 121);
+  assert.equal(r2.at(-5)!.version, 121);
+  assert.equal(inline.at(-5)!.sha256, sha(sql121()), 'the ledger hash is the sha256 of the SQL file as written');
+  assert.equal(inline.at(-5)!.sha256, r2.at(-5)!.sha256);
   assert.equal(
-    inline.at(-4)!.sha256,
+    // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+    // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+    inline.at(-5)!.sha256,
     'f0fa334dbb0ac155d5421792e612438b722b9882fc8ff11a145e34e705fef8d9',
     'pinned: a change to the file is a new migration',
   );
@@ -122,8 +126,10 @@ test('Cloudflare runner: an existing authority at 120 gains 121 untouched (inlin
     assert.equal(result.before.length, 45, mode);
     assert.equal(result.before.at(-1)?.startsWith('120:'), true, mode);
     assert.deepEqual(result.after.slice(0, 45), result.before, `${mode}: applied steps are untouched`);
-    assert.equal(result.after.length, 49, mode);
-    assert.equal(result.after.at(-4), `121:${sha(sql121())}`, mode);
-    assert.deepEqual(result.version, { user_version: 124 }, mode);
+    // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+    // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+    assert.equal(result.after.length, 50, mode);
+    assert.equal(result.after.at(-5), `121:${sha(sql121())}`, mode);
+    assert.deepEqual(result.version, { user_version: 125 }, mode);
   }
 });

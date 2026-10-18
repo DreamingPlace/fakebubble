@@ -166,7 +166,10 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
     emailMasked: 'p***@example.com',
     nickname: '阿泡',
     canBind: false,
+    // Named exception (Part 22a): a signed-up player now also gets its 玩家编号 (8 Crockford characters) in this answer.
+    playerNumber: info.playerNumber,
   });
+  assert.match(info.playerNumber, /^[0-9A-HJKMNP-TV-Z]{8}$/);
   assert.equal(
     (await f.call(a('/request-code'), first, { purpose: 'signup', email: 'again@example.com' }, 409)).error.code,
     'PLAYER_LOGIN_EXISTS',

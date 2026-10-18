@@ -13,6 +13,7 @@ import { guideCopy, mountChatGuide } from '../cocreation/chat-guide.ts';
 import { openBillingSheet } from '../account/billing-sheet.ts';
 import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
 import { accountCopy, openAccountSheet, type AccountSheetMode } from '../account/account-sheet.ts';
+import { balanceLine, infoCopy, openMyInfo, tierView } from '../account/my-info.ts';
 import { mountReviewBanners } from './review-banner.ts';
 import { backupNote, modelCopy, modelFooterNote, modelMenuItem, openModelPicker } from './model-picker.ts';
 import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
@@ -122,7 +123,6 @@ export class LiveBinding {
       /* keep the defaults */
     }
   }
-  private headMenu: { close(): void } | null = null;
   private get hasLogin() {
     return this.account.signedIn && this.account.hasLogin;
   }
@@ -300,70 +300,107 @@ export class LiveBinding {
 
   /**
    * 消费记录: a player with a points account or an invitation, and (Part 21i) a guest on the trial, whose page lists its own
-   * trial replies and no balance.
+   * trial replies and no balance. Undefined when this player has none.
    */
-  private billingMenu() {
+  private billingAction(): (() => void) | undefined {
     const info = this.modelChoice;
     const guestTrial = this.view.access.kind === 'guest' && !this.hasLogin;
     if (!guestTrial && !(info && (info.metered || (this.account.signedIn && this.account.kind === 'invite'))))
-      return [];
+      return undefined;
     const shell = this.shell;
-    return [
-      {
-        label: '消费记录',
-        onSelect: () =>
-          openBillingSheet({
-            api: this.api,
-            name: (id) => (shell ? shell.name(id as WebProviderCharacterId) : ''),
-          }),
-      },
-    ];
+    return () =>
+      openBillingSheet({
+        api: this.api,
+        name: (id) => (shell ? shell.name(id as WebProviderCharacterId) : ''),
+      });
   }
 
-  /** The entries of the top account menu: they follow what this player has (a login, a bindable invite, nothing). */
-  private accountMenu() {
-    const say = (message: string) => this.shell?.say(message);
-    if (this.hasLogin)
-      return [
-        ...this.billingMenu(),
-        { label: '我的昵称', onSelect: () => void this.openAccount('nickname') },
-        { label: '修改密码', onSelect: () => void this.openAccount('password') },
-        {
-          label: '退出其他设备',
-          onSelect: () =>
-            void this.api.logoutOthers().then(
-              () => say('已退出其他设备'),
-              () => say('没能退出其他设备，稍后再试试'),
-            ),
-        },
-        {
-          label: '退出登录',
-          onSelect: () =>
-            void this.api.logout().then(
-              () => location.reload(),
-              () => say('没能退出登录，稍后再试试'),
-            ),
-        },
-        ...(this.deleteEnabled
-          ? [
-              {
-                label: accountCopy.deleteTitle,
-                onSelect: () => void this.openAccount('delete'),
+  /** The top bar's line under the nickname: the same words as 我的信息 (balance and replies, or 不限量). */
+  private headNote(): string {
+    const access = this.view.access;
+    const info = this.modelChoice;
+    if (access.kind === 'invite')
+      return !this.accessKnown
+        ? '访问权限暂无法确认'
+        : access.status === 'active'
+          ? info?.plan?.kind === 'daily_refill'
+            ? balanceLine(info)
+            : info?.plan
+              ? infoCopy.unlimited
+              : '邀请已解锁'
+          : '邀请已失效';
+    if (this.invitation.locked) return '邀请兑换待核对';
+    if (!this.accessKnown) return '额度暂无法确认';
+    if (!(access.remainingReplies === 0 || access.canSend)) return '体验已结束';
+    if (this.hasLogin && info?.plan?.kind === 'unlimited') return infoCopy.unlimited;
+    if (this.hasLogin && this.bonusOffer)
+      return access.remainingReplies === 0
+        ? '免费消息已用完'
+        : info?.metered
+          ? modelFooterNote(info)
+          : `免费消息剩余 ${access.remainingReplies} 条`;
+    return `体验剩余 ${access.remainingReplies} 次`;
+  }
+
+  /** 我的信息: one page for everything the account dropdown, 邀请码 and the recovery-code button used to hold. */
+  private info: { close(): void } | null = null;
+  private openInfo() {
+    if (this.info) return;
+    const account = this.account.signedIn ? this.account : null;
+    const mode = this.hasLogin ? 'player' : this.view.access.kind === 'guest' ? 'guest' : 'invited';
+    const shell = this.shell;
+    const may = this.view.access.kind === 'guest' || this.hasLogin;
+    const billing = this.billingAction();
+    this.info = openMyInfo({
+      mode,
+      nickname: account?.nickname ?? null,
+      playerNumber: account?.playerNumber ?? null,
+      emailMasked: account?.emailMasked ?? null,
+      tier: account && mode !== 'guest' ? tierView({ kind: account.kind, modelChoice: this.modelChoice }) : null,
+      trialLine: mode === 'guest' ? this.headNote() : null,
+      signupOpen: this.signupOpen,
+      deleteEnabled: this.deleteEnabled,
+      canBind: !!account?.canBind,
+      codeLabel: this.invitation.locked ? '核对邀请' : infoCopy.enterCode,
+      saveNickname: async (value) => {
+        await this.api.setNickname(value);
+        await this.loadAccount();
+        this.renderAccess();
+      },
+      say: (message) => shell?.say(message),
+      onClose: () => {
+        this.info = null;
+      },
+      actions: {
+        password: () => void this.openAccount('password'),
+        logoutOthers: () => this.api.logoutOthers().then(() => undefined),
+        logout: () => this.api.logout().then(() => location.reload()),
+        deleteAccount: () => void this.openAccount('delete'),
+        clearDevice: () => void this.openAccount('clear'),
+        signup: () => void this.openAccount('signup'),
+        login: () => void this.openAccount('login'),
+        bind: () => void this.openAccount('bind'),
+        ...(billing ? { billing } : {}),
+        // The invite box is a modal step of its own: 我的信息 closes behind it (reopen it to see the new figures).
+        ...(may
+          ? {
+              enterCode: () => {
+                this.info?.close();
+                this.inviteDialog();
               },
-            ]
-          : []),
-      ];
-    if (this.account.signedIn && this.account.canBind)
-      return [...this.billingMenu(), { label: '绑定邮箱', onSelect: () => void this.openAccount('bind') }];
-    // A guest's 登录 / 注册 are buttons of the top bar; what is left to put in its menu is clearing the device.
-    if (this.view.access.kind === 'guest')
-      return [
-        ...this.billingMenu(),
-        ...(this.deleteEnabled
-          ? [{ label: accountCopy.clearTitle, onSelect: () => void this.openAccount('clear') }]
-          : []),
-      ];
-    return this.billingMenu();
+            }
+          : {}),
+        ...(mode === 'invited'
+          ? { recovery: () => openRecoveryManage(this.api, (message) => shell?.say(message)) }
+          : {}),
+      },
+    });
+  }
+  /** After the account or access changed: an open 我的信息 shows the new figures. */
+  private refreshInfo() {
+    if (!this.info) return;
+    this.info.close();
+    this.openInfo();
   }
 
   private renderAccess() {
@@ -380,10 +417,8 @@ export class LiveBinding {
     shell.head.querySelector('.recovery-entry')?.remove();
     shell.head.querySelector('.head-actions')?.remove();
     shell.head.querySelector('.head-hint')?.remove();
-    this.headMenu?.close();
-    this.headMenu = null;
-    // Account entries live in the top bar next to 邀请码: a guest gets 登录 / 注册, a signed-in player gets a nickname
-    // button that opens the same account menu as the ⋯ menu. The invite button keeps its class and place.
+    // Account entries live in the top bar: a guest gets 登录 / 注册 and 我的信息, a signed-in player a nickname button that
+    // opens 我的信息 directly. 邀请码 is inside 我的信息; only a redemption that still needs checking keeps a top-bar button.
     const actions = document.createElement('span');
     actions.className = 'head-actions';
     const action = (text: string, className: string, onClick: () => void) => {
@@ -396,65 +431,26 @@ export class LiveBinding {
       return button;
     };
     if (this.hasLogin) {
-      const nick = action(
-        this.account.signedIn && this.account.nickname ? this.account.nickname : '我的账号',
+      action(
+        this.account.signedIn && this.account.nickname ? this.account.nickname : infoCopy.title,
         'head-account',
-        () => {},
+        () => this.openInfo(),
       );
-      nick.setAttribute('aria-haspopup', 'menu');
-      nick.setAttribute('aria-expanded', 'false');
-      this.headMenu = mountChatMenu(nick, shell.head, () => this.accountMenu());
-    } else if (
-      access.kind === 'invite' &&
-      access.status === 'active' &&
-      this.accessKnown &&
-      (this.modelChoice || (this.account.signedIn && this.account.canBind))
-    ) {
-      // An invited player has no login but may have a spending history or an email to bind: the same top account menu.
-      const mine = action('我的账号', 'head-account', () => {});
-      mine.setAttribute('aria-haspopup', 'menu');
-      mine.setAttribute('aria-expanded', 'false');
-      this.headMenu = mountChatMenu(mine, shell.head, () => this.accountMenu());
+    } else if (access.kind === 'invite' && access.status === 'active' && this.accessKnown) {
+      // A legacy invited player without a login: the same page (绑定邮箱 and 恢复码 are in it).
+      action(infoCopy.title, 'head-account', () => this.openInfo());
     } else if (access.kind === 'guest' && !this.invitation.locked) {
       action('登录', 'head-account desktop-account', () => void this.openAccount('login'));
       action('注册', 'head-account desktop-account', () => void this.openAccount('signup'));
       action('登录/注册', 'head-account mobile-account', () => void this.openAccount('login'));
-      // 消费记录 and clearing this device's trial chats live in the top bar's menu.
-      const more = action('更多', 'head-account head-more', () => {});
-      more.setAttribute('aria-haspopup', 'menu');
-      more.setAttribute('aria-expanded', 'false');
-      this.headMenu = mountChatMenu(more, shell.head, () => this.accountMenu());
+      action(infoCopy.title, 'head-account head-more', () => this.openInfo());
     }
+    note.textContent = this.headNote();
     if (access.kind === 'invite' && !this.invitation.locked) {
-      if (access.status === 'active' && this.accessKnown && !this.hasLogin) {
-        const manage = document.createElement('button');
-        manage.type = 'button';
-        manage.className = 'invite-entry recovery-entry';
-        manage.textContent = recoveryCopy.manage;
-        manage.addEventListener('click', () => openRecoveryManage(this.api, (message) => this.shell?.say(message)));
-        shell.head.append(manage);
-      }
-      note.textContent = !this.accessKnown
-        ? '访问权限暂无法确认'
-        : access.status === 'active'
-          ? '邀请已解锁'
-          : '邀请已失效';
       if (actions.children.length) shell.head.append(actions);
+      this.refreshInfo();
       return;
     }
-    note.textContent = this.invitation.locked
-      ? '邀请兑换待核对'
-      : !this.accessKnown
-        ? '额度暂无法确认'
-        : access.remainingReplies === 0 || access.canSend
-          ? this.hasLogin && this.bonusOffer
-            ? access.remainingReplies === 0
-              ? '免费消息已用完'
-              : this.account.signedIn && this.account.modelChoice?.metered
-                ? modelFooterNote(this.account.modelChoice)
-                : `免费消息剩余 ${access.remainingReplies} 条`
-            : `体验剩余 ${access.remainingReplies} 次`
-          : '体验已结束';
     // A guest past its trial but inside the 7-day grace period: signing up saves the chats and brings them back.
     if (this.grace && this.accessKnown && !this.invitation.locked) {
       const hint = document.createElement('span');
@@ -474,14 +470,16 @@ export class LiveBinding {
           : '注册保存聊天，或输入邀请码继续';
       shell.head.append(hint);
     }
-    const entry = document.createElement('button');
-    entry.type = 'button';
-    entry.className = 'invite-entry';
-    entry.textContent = this.invitation.locked ? '核对邀请' : '邀请码';
-    entry.addEventListener('click', () => this.inviteDialog());
-    // 邀请码 stays a direct child of the bar, right after the account entries.
-    if (actions.children.length) shell.head.append(actions);
-    shell.head.append(entry);
+    if (this.invitation.locked) {
+      const entry = document.createElement('button');
+      entry.type = 'button';
+      entry.className = 'invite-entry';
+      entry.textContent = '核对邀请';
+      entry.addEventListener('click', () => this.inviteDialog());
+      if (actions.children.length) shell.head.append(actions);
+      shell.head.append(entry);
+    } else if (actions.children.length) shell.head.append(actions);
+    this.refreshInfo();
   }
 
   updateComposer(characterId: WebProviderCharacterId) {
@@ -559,13 +557,9 @@ export class LiveBinding {
 
   private inviteDialog() {
     if (this.dialog) return;
-    // While accounts are open a redemption belongs to a login: a guest without one signs up first, then comes back here.
-    if (this.signupOpen && !this.hasLogin) {
-      this.openAccount('signup', () => {
-        void this.refreshLoginThenInvite();
-      });
-      return;
-    }
+    // While accounts are open a redemption belongs to a login (Part 22a: an invite is an entitlement of a signed-up player). A
+    // guest may open this dialog, but a code it enters is not sent anywhere: it is told to sign up, and the code is not consumed.
+    const guestMustSignUp = () => this.signupOpen && !this.hasLogin;
     const dialog = document.createElement('dialog');
     this.dialog = dialog;
     dialog.className = 'invite-dialog';
@@ -573,6 +567,8 @@ export class LiveBinding {
     dialog.innerHTML = `<form method="dialog"><label id="invite-label" for="invite-code">输入邀请码</label>
       <input id="invite-code" name="code" autocomplete="one-time-code" maxlength="64" required aria-describedby="invite-state">
       <p id="invite-state" class="invite-state" role="status" aria-live="polite"></p>
+      <div class="invite-signup" hidden><span class="invite-signup-text">${infoCopy.signupFirst}</span>
+      <button type="button" class="invite-signup-button">${infoCopy.signup}</button></div>
       <div class="invite-actions"><button type="button" class="invite-cancel">取消</button>
       <button type="button" class="invite-recover" hidden>核对原请求</button>
       <button type="submit">解锁</button></div>
@@ -611,6 +607,7 @@ export class LiveBinding {
       recover.disabled = phase !== 'uncertain';
       recover.textContent = phase === 'recovering' ? '正在核对…' : '核对原请求';
       cancel.textContent = this.invitation.locked ? '关闭' : '取消';
+      if (errorCode === 'PLAYER_LOGIN_REQUIRED' && signupNote) signupNote.hidden = false;
       status.textContent =
         phase === 'entry'
           ? errorCode === 'INVALID_CODE'
@@ -645,8 +642,21 @@ export class LiveBinding {
         finish(ok);
       });
     });
+    const signupNote = dialog.querySelector<HTMLElement>('.invite-signup');
+    dialog.querySelector('.invite-signup-button')?.addEventListener('click', () => {
+      close();
+      this.openAccount('signup', () => {
+        void this.refreshLoginThenInvite();
+      });
+    });
     dialog.querySelector('form')!.addEventListener('submit', (event) => {
       event.preventDefault();
+      if (guestMustSignUp()) {
+        // Nothing is sent: the code stays unused and the field keeps what was typed.
+        if (signupNote) signupNote.hidden = false;
+        status.textContent = '';
+        return;
+      }
       void this.redeem(input.value.trim()).then(finish);
     });
     document.body.append(dialog);
@@ -688,7 +698,7 @@ export class LiveBinding {
     try {
       showRecoveryCode(await this.api.regenerateRecoveryCode());
     } catch {
-      this.shell?.say(`${recoveryCopy.regenerateFailed}。可点右上角“${recoveryCopy.manage}”重新生成`);
+      this.shell?.say(`${recoveryCopy.regenerateFailed}。可在“${infoCopy.title}”里重新生成`);
     }
   }
 

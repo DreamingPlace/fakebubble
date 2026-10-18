@@ -107,7 +107,13 @@ export class WebInviteActions {
     return this.tiers?.enabled() === true;
   }
   /** Part 22a: redeem as a signed-in player. A guest is refused (PLAYER_LOGIN_REQUIRED) and the code is not consumed. */
-  redeemTier(token: string, csrf: string, origin: string, trustedIpHash: string, body: { code: string; requestId: string }) {
+  redeemTier(
+    token: string,
+    csrf: string,
+    origin: string,
+    trustedIpHash: string,
+    body: { code: string; requestId: string },
+  ) {
     ensure(this.tiers, 'NOT_FOUND');
     this.charge(trustedIpHash);
     return this.tiers.redeem({ token, csrf, origin, ...body });

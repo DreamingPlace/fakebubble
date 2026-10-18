@@ -97,13 +97,20 @@ export function routeWebInvite(
     };
   }
   const batchBase = '/api/web/local/admin/invites/';
-  if (req.path.startsWith(batchBase + 'batch-') || req.path === batchBase + 'entitlement-revoke' || req.path === batchBase + 'tier-code-revoke') {
+  if (
+    req.path.startsWith(batchBase + 'batch-') ||
+    req.path === batchBase + 'entitlement-revoke' ||
+    req.path === batchBase + 'tier-code-revoke'
+  ) {
     ensure(actions.tiers, 'NOT_FOUND');
     const auth = admin(req),
       action = req.path.slice(batchBase.length);
     if (action === 'batch-create') {
       const body = object(req.body, ['requestId', 'name', 'count', 'tier', 'durationDays', 'redeemBy']);
-      const tier = object(body.tier, (body.tier as { kind?: string } | null)?.kind === 'daily_refill' ? ['kind', 'dailyAmount', 'cap'] : ['kind']);
+      const tier = object(
+        body.tier,
+        (body.tier as { kind?: string } | null)?.kind === 'daily_refill' ? ['kind', 'dailyAmount', 'cap'] : ['kind'],
+      );
       const result = actions.createBatch(auth.cookie, auth.csrf, auth.origin, {
         requestId: string(body.requestId),
         name: string(body.name),

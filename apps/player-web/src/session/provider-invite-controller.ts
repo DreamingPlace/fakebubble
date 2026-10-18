@@ -103,12 +103,17 @@ export class ProviderInviteController {
     }
     this.intent = { code, requestId: this.requestId(), source: scope(view) };
     this.set('submitting');
-    let receipt: WebInviteStatus;
+    let receipt: Awaited<ReturnType<ProviderInviteController['api']['redeemInvite']>>;
     try {
       receipt = await this.api.redeemInvite({ code, requestId: this.intent.requestId });
     } catch (error) {
-      // Only this explicit transactional rejection permits editing a new intent.
-      if (error instanceof ProviderApiError && error.status === 409 && error.code === 'WEB_INVITE_UNAVAILABLE') {
+      // Only an explicit transactional rejection permits editing a new intent. A guest's code is refused before it is looked
+      // at (PLAYER_LOGIN_REQUIRED): nothing was consumed, so the player may sign up and enter it again.
+      if (
+        error instanceof ProviderApiError &&
+        error.status === 409 &&
+        (error.code === 'WEB_INVITE_UNAVAILABLE' || error.code === 'PLAYER_LOGIN_REQUIRED')
+      ) {
         this.intent = null;
         this.set('entry', error.code);
         return false;
@@ -116,6 +121,15 @@ export class ProviderInviteController {
       return this.failed(error);
     }
     try {
+      // Part 22a: an entitlement changes nothing about who the player is - same principal, same session. Take the new access.
+      if ('entitlement' in receipt) {
+        const view = await this.api.bootstrap();
+        this.check(view);
+        this.install(view);
+        this.intent = null;
+        this.set('accepted');
+        return true;
+      }
       return this.accept(await this.api.bootstrap(), receipt);
     } catch (error) {
       return this.failed(error);

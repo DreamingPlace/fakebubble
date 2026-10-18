@@ -29,7 +29,8 @@ test('the nav tree is exactly the agreed groups and pages; 退出登录 and 我�
     NAV_TREE.map((g) => [g.label, g.items.map((i) => i.label)]),
     [
       ['角色', ['角色资料', '预演测试', '共创收件箱']],
-      ['玩家', ['邀请码', '玩家授权']],
+      // Named exception (Part 22a): the invite page is now 邀请与额度 (same place, same permissions to see it). Nothing else changed.
+      ['玩家', ['邀请与额度', '玩家授权']],
       ['运营', ['运营数据']],
       // Named exception (Part 21g): 系统 → 模型与价格 is the new first page of the system group. No other assertion changed.
       ['系统', ['模型与价格', '管理员与权限']],
@@ -43,14 +44,16 @@ test('the owner sees everything; everyone else sees only what a permission opens
     '角色资料',
     '预演测试',
     '共创收件箱',
-    '邀请码',
+    // Named exception (Part 22a): 邀请码 is now called 邀请与额度.
+    '邀请与额度',
     '玩家授权',
     '运营数据',
     '管理员与权限',
   ]);
   assert.deepEqual(labels(access([])), []);
-  assert.deepEqual(labels(access(['invites.issue'])), ['邀请码']);
-  assert.deepEqual(labels(access(['invites.read'])), ['邀请码', '玩家授权']);
+  // Named exception (Part 22a): the label is now 邀请与额度; who sees the page is unchanged.
+  assert.deepEqual(labels(access(['invites.issue'])), ['邀请与额度']);
+  assert.deepEqual(labels(access(['invites.read'])), ['邀请与额度', '玩家授权']);
   assert.deepEqual(labels(access(['cocreation.read'])), ['共创收件箱']);
   assert.deepEqual(labels(access(['cocreation.read'], { inbox: false })), []);
   assert.deepEqual(labels(access(['characters.read:*', 'characters.edit:*'])), ['角色资料']);

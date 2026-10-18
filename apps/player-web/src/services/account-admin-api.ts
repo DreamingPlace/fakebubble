@@ -63,6 +63,38 @@ export type StageLatencyDay = {
     queryTimeouts: number;
   };
 };
+/** 邀请与额度 (Part 22a): one batch as the list shows it - counts only, no player. */
+export type InviteBatch = {
+  id: string;
+  name: string;
+  tier: 'unlimited' | 'daily_refill';
+  dailyAmount: number | null;
+  cap: number | null;
+  durationDays: number | null;
+  redeemBy: number | null;
+  createdAt: number;
+  codes: number;
+  redeemed: number;
+  revoked: number;
+  holders: number;
+};
+export type InviteBatchCode = {
+  id: string;
+  serial: number;
+  state: 'unused' | 'redeemed' | 'revoked' | 'ended' | 'expired';
+  redeemedAt: number | null;
+  expiresAt: number | null;
+  /** The holder's 玩家编号 - never an id or an email. */
+  playerNumber: string | null;
+};
+export type NewInviteBatch = {
+  requestId: string;
+  name: string;
+  count: number;
+  tier: { kind: 'unlimited' } | { kind: 'daily_refill'; dailyAmount: number; cap: number };
+  durationDays: number | null;
+  redeemBy: number | null;
+};
 const invalid = () => new Error('WEB_INVITE_ADMIN_PROTOCOL_INVALID');
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid();
@@ -287,6 +319,75 @@ export class AccountAdminApi extends InviteAdminApi {
     )
       throw invalid();
     return row as { revision: number; priceVersion: number; changes: number; duplicate: boolean };
+  }
+  /** The batches, newest first (needs the owner role or invites.manage). */
+  async inviteBatches(): Promise<InviteBatch[]> {
+    const row = object(await this.request('/invites/batch-list', {}));
+    if (!Array.isArray(row.batches)) throw invalid();
+    return row.batches.map((value): InviteBatch => {
+      const b = object(value);
+      if (!['unlimited', 'daily_refill'].includes(String(b.tier))) throw invalid();
+      const optional = (v: unknown) => (v === null ? null : time(v));
+      return {
+        id: string(b.id),
+        name: string(b.name),
+        tier: b.tier as InviteBatch['tier'],
+        dailyAmount: optional(b.dailyAmount),
+        cap: optional(b.cap),
+        durationDays: optional(b.durationDays),
+        redeemBy: optional(b.redeemBy),
+        createdAt: time(b.createdAt),
+        codes: time(b.codes),
+        redeemed: time(b.redeemed),
+        revoked: time(b.revoked),
+        holders: time(b.holders),
+      };
+    });
+  }
+  async inviteBatchDetail(batchId: string): Promise<InviteBatchCode[]> {
+    const row = object(await this.request('/invites/batch-detail', { batchId }));
+    if (!Array.isArray(row.codes)) throw invalid();
+    return row.codes.map((value): InviteBatchCode => {
+      const c = object(value);
+      if (!['unused', 'redeemed', 'revoked', 'ended', 'expired'].includes(String(c.state))) throw invalid();
+      const optional = (v: unknown) => (v === null ? null : time(v));
+      return {
+        id: string(c.id),
+        serial: time(c.serial),
+        state: c.state as InviteBatchCode['state'],
+        redeemedAt: optional(c.redeemedAt),
+        expiresAt: optional(c.expiresAt),
+        playerNumber: c.playerNumber === null ? null : string(c.playerNumber),
+      };
+    });
+  }
+  /** The codes come back ONCE (a replay of the same requestId answers `codes: null`). */
+  async createInviteBatch(input: NewInviteBatch) {
+    const row = object(await this.request('/invites/batch-create', input as unknown as Record<string, unknown>));
+    if (typeof row.duplicate !== 'boolean' || !(row.codes === null || Array.isArray(row.codes))) throw invalid();
+    return {
+      batchId: string(row.batchId),
+      duplicate: row.duplicate,
+      codes: row.codes === null ? null : (row.codes as unknown[]).map(string),
+    };
+  }
+  /** Owner only. */
+  async editInviteBatch(input: { requestId: string; batchId: string; dailyAmount: number; cap: number }) {
+    const row = object(await this.request('/invites/batch-edit', input));
+    if (typeof row.duplicate !== 'boolean') throw invalid();
+    return { batchId: string(row.batchId), duplicate: row.duplicate, holders: Number(row.holders ?? 0) };
+  }
+  async revokeInviteBatch(batchId: string) {
+    const row = object(await this.request('/invites/batch-revoke', { batchId }));
+    return { revoked: time(row.revoked) };
+  }
+  /** One UNREDEEMED code. */
+  async revokeTierCode(id: string) {
+    await this.request('/invites/tier-code-revoke', { id });
+  }
+  /** End a redeemed code's entitlement now. */
+  async revokeEntitlement(id: string) {
+    await this.request('/invites/entitlement-revoke', { id });
   }
   async revokeInvite(kind: 'code' | 'grant', id: string) {
     await this.request(`/invites/revoke-${kind}`, { id });

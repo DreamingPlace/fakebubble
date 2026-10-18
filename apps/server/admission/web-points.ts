@@ -247,13 +247,24 @@ export function ensureBalance(store: Writer & Flagged, now: number, principalId:
  * An administrator's gift of points (events source 'grant', carrying the admin id). Clamped like every grant: a daily_refill
  * player is never pushed above its cap. Returns the points actually added.
  */
-export function grantPoints(store: Writer & Flagged, now: number, principalId: string, adminId: string, points: number) {
+export function grantPoints(
+  store: Writer & Flagged,
+  now: number,
+  principalId: string,
+  adminId: string,
+  points: number,
+) {
   ensure(Number.isSafeInteger(points) && points > 0, 'INVALID_REQUEST');
   return store.transaction(() => {
     const balance = ensureBalance(store, now, principalId);
     const added = Math.min(points, grantRoom(store, principalId, now, balance));
     if (added <= 0) return 0;
-    store.run('UPDATE web_points_balance SET balance=balance+?,updated_at=? WHERE principal_id=?', added, now, principalId);
+    store.run(
+      'UPDATE web_points_balance SET balance=balance+?,updated_at=? WHERE principal_id=?',
+      added,
+      now,
+      principalId,
+    );
     store.run(
       `INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,admin_id,price_version,created_at)
       VALUES (?,NULL,'grant',NULL,?,?,?,?)`,

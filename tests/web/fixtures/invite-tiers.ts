@@ -83,7 +83,10 @@ export function tiersFixture(t: TestContext) {
   });
 
   /** A principal with a world and a live session. `signedUp` = an email login + the signup bonus (a registered player). */
-  const player = (name: string, o: { signedUp?: boolean; login?: boolean; bonus?: boolean; opening?: number | false } = {}) => {
+  const player = (
+    name: string,
+    o: { signedUp?: boolean; login?: boolean; bonus?: boolean; opening?: number | false } = {},
+  ) => {
     const playerId = `player-${name}`,
       worldId = `world-${name}`,
       principalId = `principal-${name}`,

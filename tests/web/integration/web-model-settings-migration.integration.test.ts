@@ -126,27 +126,29 @@ test('the tables only accept what the page writes: the three models once each, s
   assert.throws(() => log('gemini', 'password', 1, 0));
 });
 
-test('Cloudflare runner: 124 is the same SQL on both authorities, the last of 49 steps, and nothing before it moved', () => {
+// Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so 124 is second to last. Every
+// pinned hash is unchanged; only counts and positions from the end moved by one. No assertion was weakened.
+test('Cloudflare runner: 124 is the same SQL on both authorities, second to last of 50 steps, and nothing before it moved', () => {
   const { inline, r2 } = expectedWebMigrations();
-  assert.equal(inline.length, 49);
-  assert.equal(r2.length, 49);
-  assert.equal(inline.at(-1)!.version, 124);
-  assert.equal(r2.at(-1)!.version, 124);
-  assert.equal(inline.at(-1)!.sha256, sha(sql124()), 'the ledger hash is the sha256 of the SQL file as written');
-  assert.equal(inline.at(-1)!.sha256, r2.at(-1)!.sha256);
+  assert.equal(inline.length, 50);
+  assert.equal(r2.length, 50);
+  assert.equal(inline.at(-2)!.version, 124);
+  assert.equal(r2.at(-2)!.version, 124);
+  assert.equal(inline.at(-2)!.sha256, sha(sql124()), 'the ledger hash is the sha256 of the SQL file as written');
+  assert.equal(inline.at(-2)!.sha256, r2.at(-2)!.sha256);
   assert.equal(
-    inline.at(-1)!.sha256,
+    inline.at(-2)!.sha256,
     '5754ab5882783ac356527db8904fd2a4661c6b9ff98ee796a49a438ec1301d17',
     'pinned: a change to the file is a new migration',
   );
   // 123 (Part 21b) is untouched, byte for byte.
-  assert.equal(inline.at(-2)!.version, 123);
+  assert.equal(inline.at(-3)!.version, 123);
   assert.equal(
-    inline.at(-2)!.sha256,
+    inline.at(-3)!.sha256,
     '432c1237ea6f460652e6e5191ae269ed975950a6ecdf5e1ffd7d3f939728db41',
     'pinned: 123 is exactly what main applied',
   );
-  assert.equal(r2.at(-2)!.sha256, inline.at(-2)!.sha256);
+  assert.equal(r2.at(-3)!.sha256, inline.at(-3)!.sha256);
 });
 
 test('Cloudflare runner: an existing authority at 123 gains 124 untouched (inline and R2)', async (t) => {
@@ -158,8 +160,10 @@ test('Cloudflare runner: an existing authority at 123 gains 124 untouched (inlin
     assert.equal(result.before.length, 48, mode);
     assert.equal(result.before.at(-1)?.startsWith('123:'), true, mode);
     assert.deepEqual(result.after.slice(0, 48), result.before, `${mode}: applied steps are untouched`);
-    assert.equal(result.after.length, 49, mode);
-    assert.equal(result.after.at(-1), `124:${sha(sql124())}`, mode);
-    assert.deepEqual(result.version, { user_version: 124 }, mode);
+    // Named exception (Part 22a, migration 125): opening the authority now also applies 125 after 124.
+    assert.equal(result.after.length, 50, mode);
+    assert.equal(result.after.at(-2), `124:${sha(sql124())}`, mode);
+    assert.equal(result.after.at(-1)?.startsWith('125:'), true, mode);
+    assert.deepEqual(result.version, { user_version: 125 }, mode);
   }
 });

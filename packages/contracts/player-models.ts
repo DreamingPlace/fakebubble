@@ -120,11 +120,13 @@ export interface PlayerPlan {
   /** UTC milliseconds, or null for no expiry. */
   expiresAt: number | null;
 }
-function parsePlan(value: unknown): PlayerPlan | undefined {
+export function parsePlan(value: unknown): PlayerPlan | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const raw = value as Record<string, unknown>;
-  const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0 && (n as number) <= 100_000_000;
-  const expiresAt = raw.expiresAt === null ? null : Number.isSafeInteger(raw.expiresAt) ? (raw.expiresAt as number) : undefined;
+  const count = (n: unknown): n is number =>
+    Number.isSafeInteger(n) && (n as number) >= 0 && (n as number) <= 100_000_000;
+  const expiresAt =
+    raw.expiresAt === null ? null : Number.isSafeInteger(raw.expiresAt) ? (raw.expiresAt as number) : undefined;
   if (expiresAt === undefined) return undefined;
   if (raw.kind === 'unlimited') return { kind: 'unlimited', expiresAt };
   if (raw.kind === 'daily_refill' && count(raw.dailyAmount) && count(raw.cap))

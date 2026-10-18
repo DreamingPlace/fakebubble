@@ -426,6 +426,22 @@ test('preflight preserves the first-character lock instead of attempting another
   assert.match(f.messages.at(-1)!, /第一个聊天/);
 });
 
+/** Part 22a: the top bar's 我的信息 button, then its 输入邀请码 row (or 核对邀请 while a redemption is unconfirmed). */
+const everything = (node: NodeStub): NodeStub[] => [node, ...node.children.flatMap(everything)];
+function openInviteBox(f: Awaited<ReturnType<typeof fixture>>) {
+  const entry = f.head.querySelector('.invite-entry');
+  if (entry) {
+    entry.dispatch('click');
+    return;
+  }
+  everything(f.head.querySelector('.head-actions')!)
+    .find((b) => b.textContent === '我的信息')!
+    .dispatch('click');
+  everything(f.document.body.querySelector('.mi-sheet')!)
+    .find((b) => b.textContent === '输入邀请码' || b.textContent === '核对邀请')!
+    .dispatch('click');
+}
+
 test('provider invitation freezes one request across double click and an uncertain response', async (t) => {
   const f = await fixture(t);
   const requests: string[] = [];
@@ -462,8 +478,9 @@ test('mounted invite dialog locks double submit, preserves intent across Escape/
       finish = yes;
     });
   };
+  // Part 22a (named exception): 邀请码 is a row of 我的信息 now, not a top-bar button; opening the box goes through it.
   const open = () => {
-    f.head.querySelector('.invite-entry')!.dispatch('click');
+    openInviteBox(f);
     return f.document.body.children[0]!;
   };
   const first = open(),
@@ -513,7 +530,7 @@ test('mounted unknown invite exposes original-request recovery, including after 
     requests++;
     throw Error('lost');
   };
-  f.head.querySelector('.invite-entry')!.dispatch('click');
+  openInviteBox(f);
   let dialog = f.document.body.children[0]!;
   dialog.querySelector('input')!.value = 'A'.repeat(43);
   dialog.querySelector('form')!.dispatch('submit');
@@ -522,7 +539,7 @@ test('mounted unknown invite exposes original-request recovery, including after 
   assert.equal(dialog.querySelector('.invite-recover')!.hidden, false);
   assert.match(dialog.querySelector('.invite-state')!.textContent, /不要刷新/);
   dialog.querySelector('.invite-cancel')!.dispatch('click');
-  f.head.querySelector('.invite-entry')!.dispatch('click');
+  openInviteBox(f);
   dialog = f.document.body.children[0]!;
   assert.equal(dialog.querySelector('input')!.readOnly, true);
   dialog.querySelector('form')!.dispatch('submit');

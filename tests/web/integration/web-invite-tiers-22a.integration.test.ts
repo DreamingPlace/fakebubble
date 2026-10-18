@@ -48,7 +48,10 @@ test('22a a guest who enters a code is refused and the code is NOT consumed; sig
   const f = tiersFixture(t);
   const batch = f.create(f.owner);
   const guest = f.player('guest');
-  assert.equal(code(() => f.redeem(guest, batch.codes![0]!)), 'PLAYER_LOGIN_REQUIRED');
+  assert.equal(
+    code(() => f.redeem(guest, batch.codes![0]!)),
+    'PLAYER_LOGIN_REQUIRED',
+  );
   assert.equal(
     f.store.get<{ n: number }>('SELECT count(*) n FROM web_invite_codes WHERE redeemed_count=1')!.n,
     0,
@@ -82,12 +85,24 @@ test('22a a redemption adds an entitlement and never changes principal kind or r
   };
   f.redeem(who, batch.codes![0]!, 'replay');
   assert.deepEqual(f.store.get('SELECT * FROM web_principals WHERE id=?', who.principalId), before.principal);
-  assert.deepEqual(f.store.get('SELECT * FROM web_guest_retention WHERE principal_id=?', who.principalId), before.retention);
+  assert.deepEqual(
+    f.store.get('SELECT * FROM web_guest_retention WHERE principal_id=?', who.principalId),
+    before.retention,
+  );
   assert.deepEqual(f.store.all('SELECT * FROM web_sessions WHERE principal_id=?', who.principalId), before.sessions);
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_invite_grants')!.n, 0, 'no legacy grant is made');
-  assert.equal(f.store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', who.principalId)!.kind, 'guest');
+  assert.equal(
+    f.store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', who.principalId)!.kind,
+    'guest',
+  );
   // Replaying the same requestId is the same answer; another code needs another request.
-  const again = f.tiers.redeem({ token: who.token, csrf: 'c', origin: 'https://fixture.invalid', code: batch.codes![0]!, requestId: 'replay' });
+  const again = f.tiers.redeem({
+    token: who.token,
+    csrf: 'c',
+    origin: 'https://fixture.invalid',
+    code: batch.codes![0]!,
+    requestId: 'replay',
+  });
   assert.equal(again.duplicate, true);
 });
 
@@ -113,7 +128,10 @@ test('22a unlimited: never charged, tier invited, the per-day reply cap still st
     f.events(who.principalId).some(([source]) => source === 'spend'),
     false,
   );
-  assert.equal(code(() => f.admit(who.principalId, 'm-3')), 'WEB_DAILY_LIMIT_REACHED');
+  assert.equal(
+    code(() => f.admit(who.principalId, 'm-3')),
+    'WEB_DAILY_LIMIT_REACHED',
+  );
   assert.equal(quote(f.store, f.clock(), who.principalId, 'xai').ok, true);
 });
 
@@ -155,7 +173,8 @@ test('22a refill boundaries: 23:59:59.999 UTC is still the old day, 00:00:00.000
   assert.equal(f.events(who.principalId).filter(([s]) => s === 'daily_refill').length, 3);
   // No visit, no points: nothing touches the balance in the meantime.
   assert.equal(
-    f.store.get<{ n: number }>('SELECT count(*) n FROM web_entitlement_refills WHERE principal_id=?', who.principalId)!.n,
+    f.store.get<{ n: number }>('SELECT count(*) n FROM web_entitlement_refills WHERE principal_id=?', who.principalId)!
+      .n,
     3,
   );
 });
@@ -240,7 +259,10 @@ test('22a an expired entitlement of a player with NO balance left is told its fr
   const { f, who } = refillPlayer(t, { durationDays: 1 });
   f.store.run('UPDATE web_points_balance SET balance=0 WHERE principal_id=?', who.principalId);
   f.setNow(f.clock() + 2 * DAY);
-  assert.equal(code(() => f.admit(who.principalId, 'broke')), 'TRIAL_EXHAUSTED');
+  assert.equal(
+    code(() => f.admit(who.principalId, 'broke')),
+    'TRIAL_EXHAUSTED',
+  );
 });
 
 test('22a JS and SQL agree on the tier of every shape, and on content liveness (extends 17i)', (t) => {
@@ -290,7 +312,12 @@ test('22a JS and SQL agree on the tier of every shape, and on content liveness (
       make: () => {
         const p = f.player('s8', { signedUp: true });
         f.redeem(p, unlimited.codes![3]!);
-        f.store.run('UPDATE web_entitlements SET starts_at=?,expires_at=? WHERE principal_id=?', f.clock() - 5, f.clock(), p.principalId);
+        f.store.run(
+          'UPDATE web_entitlements SET starts_at=?,expires_at=? WHERE principal_id=?',
+          f.clock() - 5,
+          f.clock(),
+          p.principalId,
+        );
         return p;
       },
     },
@@ -345,17 +372,20 @@ test('22a JS and SQL agree on the tier of every shape, and on content liveness (
     assert.equal(claim, live, `${shape.name}: claim ${claim}, live ${live}`);
     seen.set(shape.name, js.kind);
   }
-  assert.deepEqual([...seen.entries()], [
-    ['plain guest', 'guest'],
-    ['guest+bonus', 'registered'],
-    ['guest+login', 'registered'],
-    ['registered+unlimited', 'unlimited'],
-    ['registered+refill', 'daily_refill'],
-    ['registered+both (unlimited wins)', 'unlimited'],
-    ['registered+revoked', 'registered'],
-    ['registered+expired', 'registered'],
-    ['legacy invite active', 'legacy_invite'],
-  ]);
+  assert.deepEqual(
+    [...seen.entries()],
+    [
+      ['plain guest', 'guest'],
+      ['guest+bonus', 'registered'],
+      ['guest+login', 'registered'],
+      ['registered+unlimited', 'unlimited'],
+      ['registered+refill', 'daily_refill'],
+      ['registered+both (unlimited wins)', 'unlimited'],
+      ['registered+revoked', 'registered'],
+      ['registered+expired', 'registered'],
+      ['legacy invite active', 'legacy_invite'],
+    ],
+  );
 });
 
 test('22a the operator inspect counts players by effective tier - numbers only', (t) => {
@@ -375,7 +405,14 @@ test('22a the operator inspect counts players by effective tier - numbers only',
     null,
     { freeTier: true },
   ) as unknown as { tiers: Record<string, number> };
-  assert.deepEqual(report.tiers, { guest: 1, registered: 1, unlimited: 0, daily_refill: 1, legacy_invite: 0, account: 0 });
+  assert.deepEqual(report.tiers, {
+    guest: 1,
+    registered: 1,
+    unlimited: 0,
+    daily_refill: 1,
+    legacy_invite: 0,
+    account: 0,
+  });
   assert.equal(JSON.stringify(report.tiers).includes('principal'), false);
 });
 
@@ -399,7 +436,11 @@ test('22a batches: codes are shown once and stored as digests, creation is idemp
   assert.equal(new Set(first.codes).size, 3);
   for (const c of first.codes!) {
     assert.match(c, /^[A-Za-z0-9_-]{43}$/);
-    assert.equal(f.store.get('SELECT 1 FROM web_invite_codes WHERE code_digest=?', c), undefined, 'the raw code is not stored');
+    assert.equal(
+      f.store.get('SELECT 1 FROM web_invite_codes WHERE code_digest=?', c),
+      undefined,
+      'the raw code is not stored',
+    );
   }
   const replay = f.tiers.createBatch(input);
   assert.deepEqual([replay.duplicate, replay.codes, replay.batchId], [true, null, first.batchId]);
@@ -407,7 +448,8 @@ test('22a batches: codes are shown once and stored as digests, creation is idemp
   assert.throws(() => f.tiers.createBatch({ ...input, count: 4 }), /IDEMPOTENCY_CONFLICT/);
   assert.throws(() => f.tiers.createBatch({ ...input, requestId: 'req-2', count: 0 }), /WEB_INVITE_TERMS_REQUIRED/);
   assert.throws(
-    () => f.tiers.createBatch({ ...input, requestId: 'req-3', tier: { kind: 'daily_refill', dailyAmount: 60, cap: 50 } }),
+    () =>
+      f.tiers.createBatch({ ...input, requestId: 'req-3', tier: { kind: 'daily_refill', dailyAmount: 60, cap: 50 } }),
     /WEB_INVITE_TERMS_REQUIRED/,
     'the cap cannot be below the daily amount',
   );
@@ -437,7 +479,8 @@ test('22a batches: codes are shown once and stored as digests, creation is idemp
   );
   // No player email, id or nickname anywhere an administrator can read; the holder is only a 玩家编号.
   const json = JSON.stringify([list, detail, f.tiers.batchDetail(sid, first.batchId)]);
-  for (const secret of ['example.com', 'principal-', 'player-', 'world-', 'token-']) assert.equal(json.includes(secret), false, secret);
+  for (const secret of ['example.com', 'principal-', 'player-', 'world-', 'token-'])
+    assert.equal(json.includes(secret), false, secret);
   const redeemed = f.tiers.batchDetail(sid, first.batchId).codes.find((c) => c.state === 'redeemed')!;
   assert.match(redeemed.playerNumber!, /^[0-9A-HJKMNP-TV-Z]{8}$/);
   assert.equal(redeemed.expiresAt, T0 + 30 * DAY);
@@ -448,7 +491,14 @@ test('22a permissions: create, list and revoke need the owner or invites.manage;
   const nobody = f.sessionIdOf(f.member(['invites.read'], 'reader'));
   const manager = f.sessionIdOf(f.member(['invites.manage'], 'manager'));
   const owner = f.sessionIdOf(f.owner);
-  const base = { requestId: 'p-1', name: 'b', count: 1, tier: { kind: 'daily_refill' as const, dailyAmount: 50, cap: 1000 }, durationDays: null, redeemBy: null };
+  const base = {
+    requestId: 'p-1',
+    name: 'b',
+    count: 1,
+    tier: { kind: 'daily_refill' as const, dailyAmount: 50, cap: 1000 },
+    durationDays: null,
+    redeemBy: null,
+  };
   assert.throws(() => f.tiers.createBatch({ ...base, adminSessionId: nobody }), /ADMIN_PERMISSION_REQUIRED/);
   assert.throws(() => f.tiers.listBatches(nobody), /ADMIN_PERMISSION_REQUIRED/);
   const made = f.tiers.createBatch({ ...base, adminSessionId: manager });
@@ -467,13 +517,21 @@ test('22a permissions: create, list and revoke need the owner or invites.manage;
     /WEB_INVITE_TERMS_REQUIRED/,
     'changing nothing is refused',
   );
-  assert.throws(() => f.tiers.editBatch({ ...edit, requestId: 'e-3', dailyAmount: 900, cap: 800, adminSessionId: owner }), /WEB_INVITE_TERMS_REQUIRED/);
+  assert.throws(
+    () => f.tiers.editBatch({ ...edit, requestId: 'e-3', dailyAmount: 900, cap: 800, adminSessionId: owner }),
+    /WEB_INVITE_TERMS_REQUIRED/,
+  );
   f.tiers.revokeBatch(manager, made.batchId);
-  const audit = f.store.all<{ action: string; target_id: string }>('SELECT action,target_id FROM web_admin_audit ORDER BY seq');
+  const audit = f.store.all<{ action: string; target_id: string }>(
+    'SELECT action,target_id FROM web_admin_audit ORDER BY seq',
+  );
   const actions = audit.map((a) => a.action.split(':')[0]);
   for (const wanted of ['invite-batch-created', 'invite-batch-edited', 'invite-batch-revoked'])
     assert.ok(actions.includes(wanted), wanted);
-  assert.equal(audit.some((a) => /principal|player|example/.test(a.action + a.target_id)), false);
+  assert.equal(
+    audit.some((a) => /principal|player|example/.test(a.action + a.target_id)),
+    false,
+  );
   const change = f.store.get<{ old_amount: number; new_amount: number; old_cap: number; new_cap: number }>(
     'SELECT old_amount,new_amount,old_cap,new_cap FROM web_invite_batch_changes',
   )!;
@@ -486,7 +544,13 @@ test('22a editing N and cap applies to every holder from their NEXT refill; lowe
   const second = f.player('bob', { signedUp: true });
   f.redeem(second, batch.codes![1]!);
   assert.equal(f.balance(who.principalId), 150);
-  const edit = f.tiers.editBatch({ adminSessionId: owner, requestId: 'e', batchId: batch.batchId, dailyAmount: 30, cap: 160 });
+  const edit = f.tiers.editBatch({
+    adminSessionId: owner,
+    requestId: 'e',
+    batchId: batch.batchId,
+    dailyAmount: 30,
+    cap: 160,
+  });
   assert.equal(edit.holders, 2, 'the confirm dialog names how many players hold the batch');
   assert.equal(f.balance(who.principalId), 150, 'nothing changes at once');
   f.setNow(f.clock() + DAY);
@@ -509,19 +573,33 @@ test('22a revoking: an unredeemed code, a whole batch (unredeemed codes only), a
   const who = f.player('ann', { signedUp: true });
   f.redeem(who, batch.codes![0]!);
   let detail = f.tiers.batchDetail(sid, batch.batchId);
-  assert.throws(() => f.tiers.revokeCode(sid, detail.codes.find((c) => c.state === 'redeemed')!.id), /WEB_INVITE_ALREADY_REDEEMED/);
+  assert.throws(
+    () => f.tiers.revokeCode(sid, detail.codes.find((c) => c.state === 'redeemed')!.id),
+    /WEB_INVITE_ALREADY_REDEEMED/,
+  );
   f.tiers.revokeCode(sid, detail.codes.find((c) => c.state === 'unused')!.id);
   assert.equal(f.tiers.revokeBatch(sid, batch.batchId).revoked, 2, 'the two codes still unused');
   detail = f.tiers.batchDetail(sid, batch.batchId);
   assert.deepEqual(detail.codes.map((c) => c.state).sort(), ['redeemed', 'revoked', 'revoked', 'revoked']);
-  assert.equal(code(() => f.redeem(f.player('bob', { signedUp: true }), batch.codes![1]!)), 'WEB_INVITE_UNAVAILABLE');
-  assert.equal(effectiveTier(f.store, who.principalId, f.clock())!.kind, 'daily_refill', 'a revoked batch leaves its holders alone');
+  assert.equal(
+    code(() => f.redeem(f.player('bob', { signedUp: true }), batch.codes![1]!)),
+    'WEB_INVITE_UNAVAILABLE',
+  );
+  assert.equal(
+    effectiveTier(f.store, who.principalId, f.clock())!.kind,
+    'daily_refill',
+    'a revoked batch leaves its holders alone',
+  );
   // Ending a redeemed code's entitlement: the player is a registered player at once.
   f.tiers.revokeEntitlement(sid, detail.codes.find((c) => c.state === 'redeemed')!.id);
   assert.equal(effectiveTier(f.store, who.principalId, f.clock())!.kind, 'registered');
   assert.equal(f.tiers.batchDetail(sid, batch.batchId).codes.filter((c) => c.state === 'ended').length, 1);
   assert.equal(f.tiers.listBatches(sid).batches[0]!.holders, 0);
-  assert.equal(f.tiers.revokeEntitlement(sid, detail.codes.find((c) => c.state === 'ended' || c.state === 'redeemed')!.id).duplicate, true);
+  assert.equal(
+    f.tiers.revokeEntitlement(sid, detail.codes.find((c) => c.state === 'ended' || c.state === 'redeemed')!.id)
+      .duplicate,
+    true,
+  );
 });
 
 test('22a a legacy unredeemed code (no batch of its own) grants unlimited, and every code can only be used once', (t) => {
@@ -529,9 +607,7 @@ test('22a a legacy unredeemed code (no batch of its own) grants unlimited, and e
   // A code issued before this Part: batch_id is set by migration 125 to the legacy batch of its name.
   f.store.run("INSERT INTO admin_sessions VALUES ('legacy-admin','h',?,?,NULL)", T0, T0 + DAY);
   const legacy = f.tiers['digest']('code-v1', 'L'.repeat(43));
-  f.store.run(
-    `INSERT INTO web_invite_batches(id,name,tier,created_at) VALUES ('legacy:old','old','unlimited',1)`,
-  );
+  f.store.run(`INSERT INTO web_invite_batches(id,name,tier,created_at) VALUES ('legacy:old','old','unlimited',1)`);
   f.store.run(
     `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,capacity,redeemed_count,status,batch,created_by,created_at,batch_id)
     VALUES ('c-old',?,?,?,1,0,'active','old','legacy-admin',1,'legacy:old')`,
@@ -542,6 +618,9 @@ test('22a a legacy unredeemed code (no batch of its own) grants unlimited, and e
   const who = f.player('ann', { signedUp: true });
   const done = f.redeem(who, 'L'.repeat(43));
   assert.equal(done.entitlement.kind, 'unlimited');
-  assert.equal(code(() => f.redeem(f.player('bob', { signedUp: true }), 'L'.repeat(43))), 'WEB_INVITE_UNAVAILABLE');
+  assert.equal(
+    code(() => f.redeem(f.player('bob', { signedUp: true }), 'L'.repeat(43))),
+    'WEB_INVITE_UNAVAILABLE',
+  );
   assert.equal(effectiveTier(f.store, who.principalId, f.clock())!.kind, 'unlimited');
 });

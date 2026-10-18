@@ -70,6 +70,8 @@ class RootStub extends ElementStub {
   }
 }
 const descendants = (node: ElementStub): ElementStub[] => [node, ...node.children.flatMap(descendants)];
+/** Part 22a: a node the view built (the stub DOM has no real selectors) found by its id attribute. */
+const byId = (node: ElementStub, id: string) => descendants(node).find((n) => n.attributes.get('id') === id)!;
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 const active = (
   permissions: AdminPermission[] = ['invites.issue'],
@@ -98,6 +100,7 @@ function setup(t: test.TestContext, state: AccountAdminSession | null = null) {
   });
   let logouts = 0,
     issues = 0;
+  const creates: { requestId: string; name: string }[] = [];
   const port = {
     restore: async () => {
       if (!state) throw new InviteLocalApiError(401, 'ADMIN_UNAUTHORIZED');
@@ -124,6 +127,17 @@ function setup(t: test.TestContext, state: AccountAdminSession | null = null) {
     },
     revokeInvite: async (_kind: 'code' | 'grant', _id: string) => {},
     inviteRecords: async (): ReturnType<AccountAdminApi['inviteRecords']> => ({ records: [], next: null }),
+    // Part 22a: the 邀请与额度 page's client.
+    inviteBatches: async (): ReturnType<AccountAdminApi['inviteBatches']> => [],
+    inviteBatchDetail: async (): ReturnType<AccountAdminApi['inviteBatchDetail']> => [],
+    createInviteBatch: async (input: { requestId: string; name: string }) => {
+      creates.push(input);
+      return { batchId: 'batch', duplicate: false, codes: ['c'.repeat(43)] };
+    },
+    editInviteBatch: async () => ({ batchId: 'batch', duplicate: false, holders: 0 }),
+    revokeInviteBatch: async () => ({ revoked: 0 }),
+    revokeTierCode: async () => {},
+    revokeEntitlement: async () => {},
     characters: new CharacterAdminClient(async () => ({
       characters: [{ characterId: 'jojo', displayName: '合成人物', publishedVersion: 1, draftRevision: null }],
       deletions: [],
@@ -146,6 +160,7 @@ function setup(t: test.TestContext, state: AccountAdminSession | null = null) {
     dispose: () => dispose?.(),
     logouts: () => logouts,
     issues: () => issues,
+    creates: () => creates,
   };
 }
 
@@ -239,8 +254,12 @@ test('category editor preserves existing narrow grants and sends a compare-and-s
   assert.deepEqual(expected, member.permissions);
 });
 
+// Named exception (Part 22a): the old 手动生成玩家邀请码 form is replaced by the 邀请与额度 page. The same facts are asserted against
+// it: management opens at once after a one-time login, a double submit makes ONE batch, nothing logs out, and disposing the
+// page wipes the codes it was showing.
 test('one-time login immediately allows management; unavailable email delivery cannot force registration', async (t) => {
   const f = setup(t);
+  f.port.login = async () => active(['invites.issue', 'invites.manage']);
   f.mount();
   await flush();
   f.root.querySelector('[data-page="token"]').fire();
@@ -251,16 +270,24 @@ test('one-time login immediately allows management; unavailable email delivery c
   assert.equal(f.root.querySelector('[data-panel="account"]').hidden, false);
   assert.equal(f.root.querySelector('#admin-bind-start button').disabled, true);
   f.root.querySelector('[data-page="invites"]').fire();
-  assert.equal(f.root.querySelector('#admin-invite-issue').hidden, false);
-  f.root.querySelector('#admin-batch').value = 'offline';
-  f.root.querySelector('#admin-deadline').value = '2099-01-01T12:00';
-  f.root.querySelector('#admin-invite-issue').fire('submit');
-  f.root.querySelector('#admin-invite-issue').fire('submit');
   await flush();
-  assert.equal(f.issues(), 1);
+  const panel = f.root.querySelector('#admin-invites');
+  assert.equal(panel.hidden, false);
+  byId(panel, 'tiers-name').value = 'offline';
+  byId(panel, 'admin-tiers-create').fire('submit');
+  byId(panel, 'admin-tiers-create').fire('submit');
+  await flush();
+  assert.equal(f.creates().length, 1);
   assert.equal(f.logouts(), 0);
+  assert.equal(byId(panel, 'tiers-shown').hidden, false, 'the codes are shown once');
   f.dispose();
   assert.equal(f.root.querySelector('#admin-secret-value').textContent, '');
+  assert.equal(byId(panel, 'tiers-shown').hidden, true);
+  assert.equal(
+    descendants(panel).some((n) => n.value === 'c'.repeat(43)),
+    false,
+    'no code survives the page',
+  );
 });
 
 test('all permissions removed keeps account/session UI and does not call logout', async (t) => {
@@ -268,35 +295,40 @@ test('all permissions removed keeps account/session UI and does not call logout'
   f.mount();
   await flush();
   assert.equal(f.root.querySelector('.admin-nav').hidden, false);
-  assert.equal(f.root.querySelector('#admin-invite-issue').hidden, true);
-  assert.equal(f.root.querySelector('#admin-invite-revoke').hidden, true);
+  // Named exception (Part 22a): the old issue / revoke forms are gone; the 邀请与额度 panel is hidden instead.
+  assert.equal(f.root.querySelector('#admin-invites').hidden, true);
   assert.equal(f.root.querySelector('#admin-no-permissions').hidden, false);
   f.root.querySelector('[data-page="account"]').fire();
   assert.equal(f.root.querySelector('[data-panel="account"]').hidden, false);
   assert.equal(f.logouts(), 0);
 });
 
+// Named exception (Part 22a): re-expressed against the 邀请与额度 form. A rejection still refreshes the capabilities without logging
+// out; and an ambiguous creation can never apply twice - a retry carries the SAME request id, so the server answers the first one.
 test('permission rejection refreshes capabilities without logging out; ambiguous issuance cannot silently repeat', async (t) => {
-  const f = setup(t, active(['invites.issue'], 'admin@example.com'));
+  const f = setup(t, active(['invites.issue', 'invites.manage'], 'admin@example.com'));
   let calls = 0;
-  f.port.issue = async () => {
+  const ids: string[] = [];
+  f.port.createInviteBatch = async (input: { requestId: string }) => {
     calls++;
+    ids.push(input.requestId);
     throw new InviteLocalApiError(403, 'ADMIN_PERMISSION_REQUIRED');
   };
   f.port.restore = async () =>
-    calls ? active([], 'admin@example.com') : active(['invites.issue'], 'admin@example.com');
+    calls ? active([], 'admin@example.com') : active(['invites.issue', 'invites.manage'], 'admin@example.com');
   f.mount();
   await flush();
-  f.root.querySelector('#admin-deadline').value = '2099-01-01T12:00';
-  f.root.querySelector('#admin-batch').value = 'offline';
-  f.root.querySelector('#admin-invite-issue').fire('submit');
+  const panel = f.root.querySelector('#admin-invites');
+  byId(panel, 'tiers-name').value = 'offline';
+  byId(panel, 'admin-tiers-create').fire('submit');
   await flush();
   assert.equal(f.root.querySelector('#admin-no-permissions').hidden, false);
   assert.equal(f.logouts(), 0);
   assert.match(f.root.querySelector('.invite-admin-status').textContent, /账号仍可登录/);
-  f.root.querySelector('#admin-invite-issue').fire('submit');
+  byId(panel, 'admin-tiers-create').fire('submit');
   await flush();
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
+  assert.equal(ids[0], ids[1], 'the retry is the same request, never a second batch');
 });
 
 test('late login after unmount never reconstructs the page or keeps typed password', async (t) => {
@@ -381,45 +413,37 @@ test('owner explicitly confirms all-permission removal without logout and does n
   assert.equal(calls, 1);
 });
 
+// Named exception (Part 22a): the old per-record list is replaced by the batch list of 邀请与额度. Opening the page lists the
+// batches (counts only) without logging out, and a reload keeps them. The explicit-confirmation rule for every revoke is asserted
+// in invite-tiers-view.test.ts against a real DOM.
 test('invitation records show independent actions; revocation requires explicit confirmation and leaves login untouched', async (t) => {
-  const f = setup(t, active(['invites.read', 'invites.revoke-code'], 'admin@example.com'));
-  const revoked: string[] = [];
-  f.port.inviteRecords = async () => ({
-    next: null,
-    records: [
-      {
-        inviteId: 'record',
-        batch: '测试批次',
-        note: '合成备注',
-        createdAt: 1,
-        redeemBy: 4_000_000_000_000,
-        status: 'active',
-        redeemed: 0,
-        grantId: null,
-        redeemedAt: null,
-        accessRevokedAt: null,
-        accessExpiresAt: null,
-      },
-    ],
-  });
-  f.port.revokeInvite = async (kind, id) => {
-    revoked.push(kind + ':' + id);
-  };
+  const f = setup(t, active(['invites.manage'], 'admin@example.com'));
+  f.port.inviteBatches = async () => [
+    {
+      id: 'batch-1',
+      name: '测试批次',
+      tier: 'daily_refill' as const,
+      dailyAmount: 50,
+      cap: 1000,
+      durationDays: null,
+      redeemBy: null,
+      createdAt: 1,
+      codes: 3,
+      redeemed: 1,
+      revoked: 0,
+      holders: 1,
+    },
+  ];
   f.mount();
   await flush();
-  const nodes = descendants(f.root.querySelector('#admin-invite-records'));
-  assert.ok(nodes.some((n) => n.textContent === '测试批次'));
-  assert.ok(!nodes.some((n) => n.textContent.includes('撤销此体验授权')));
-  nodes.find((n) => n.textContent === '撤销此邀请码')!.fire();
-  await flush();
-  assert.deepEqual(revoked, []);
-  nodes.find((n) => n.textContent === '确认撤销此邀请码')!.fire();
-  await flush();
-  assert.deepEqual(revoked, ['code:record']);
+  const text = () => descendants(f.root.querySelector('#admin-invites')).map((n) => n.textContent);
+  assert.ok(text().includes('测试批次'));
+  assert.ok(text().some((x) => x === '每天 +50 点 · 上限 1000 点'));
+  assert.ok(!text().some((x) => x.includes('@') || x.includes('admin@')), 'no player identity on the page');
   assert.equal(f.logouts(), 0);
   window.dispatchEvent(new Event('focus'));
   await flush();
-  assert.ok(descendants(f.root.querySelector('#admin-invite-records')).some((n) => n.textContent === '测试批次'));
+  assert.ok(text().includes('测试批次'));
 });
 
 test('permission conflict is actionable and never silently reloads and overwrites', async (t) => {

@@ -550,9 +550,13 @@ test('消费记录: top account menu entry opens the page with balance, this mon
   await f.attach();
   const nick = f.header.querySelectorAll('.head-actions button')[0]!;
   nick.click();
-  const entries = f.header.querySelectorAll('.chat-menu-item');
-  assert.equal(titlesOf(entries)[0], '消费记录', 'first entry of the top account menu');
-  entries[0]!.click();
+  // Part 22a (named exception): the top account menu is 我的信息 now; 消费记录 is its link in the 额度 section.
+  const entries = f.doc.body
+    .querySelector('.mi-sheet')!
+    .querySelectorAll('button')
+    .filter((b) => b.textContent !== '×');
+  assert.equal(entries.find((b) => b.textContent === '消费记录') !== undefined, true, '消费记录 is a row of 我的信息');
+  entries.find((b) => b.textContent === '消费记录')!.click();
   await flush();
   const sheet = f.doc.body.querySelector('.bl-sheet')!;
   // Part 21i (named exception): the balance line became the free-quota summary card.
@@ -608,10 +612,17 @@ test('消费记录 rows: free replies say 不计点, no-voice says 无语音, pa
     billingData({ metered: false, balance: null, page: 1, hasMore: true, month: { byModel: [], byCharacter: [] } }),
   );
   await f.attach();
-  f.header.querySelectorAll('.head-actions button')[0]!.click(); // 我的账号 (an invited player without a login)
-  const entries = f.header.querySelectorAll('.chat-menu-item');
-  assert.deepEqual(titlesOf(entries), ['消费记录']);
-  entries[0]!.click();
+  f.header.querySelectorAll('.head-actions button')[0]!.click(); // 我的信息 (an invited player without a login)
+  // Part 22a (named exception): the dropdown is 我的信息 now; the invited player's page has 消费记录 (and 恢复码).
+  const entries = f.doc.body
+    .querySelector('.mi-sheet')!
+    .querySelectorAll('button')
+    .filter((b) => b.textContent !== '×');
+  assert.equal(
+    entries.some((b) => b.textContent === '消费记录'),
+    true,
+  );
+  entries.find((b) => b.textContent === '消费记录')!.click();
   await flush();
   const sheet = f.doc.body.querySelector('.bl-sheet')!;
   assert.equal(sheet.querySelector('.bl-balance')!.textContent, '你的聊天不计点');
@@ -632,7 +643,11 @@ test('消费记录 rows: free replies say 不计点, no-voice says 无语音, pa
   const broken = chat(t, { ...login, modelChoice: info });
   await broken.attach();
   broken.header.querySelectorAll('.head-actions button')[0]!.click();
-  broken.header.querySelectorAll('.chat-menu-item')[0]!.click();
+  broken.doc.body
+    .querySelector('.mi-sheet')!
+    .querySelectorAll('button')
+    .find((b) => b.textContent === '消费记录')!
+    .click();
   await flush();
   const failed = broken.doc.body.querySelector('.bl-sheet')!;
   assert.match(failed.querySelector('.bl-status')!.textContent, /没能加载，稍后再试试/);

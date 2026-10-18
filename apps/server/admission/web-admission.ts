@@ -137,7 +137,9 @@ export class WebAdmission {
       const trial = principal.kind === 'guest';
       ensure(
         trial ||
-          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125].includes(webSchema) &&
+          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125].includes(
+            webSchema,
+          ) &&
             ((principal.kind === 'account' &&
               this.store.get(`SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1`, principal.id)) ||
               (principal.kind === 'invite' &&
