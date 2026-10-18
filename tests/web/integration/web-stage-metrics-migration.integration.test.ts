@@ -22,7 +22,7 @@ const MAIN_113 = {
 };
 // Extended for migration 120: the ledger now runs 100..122 (23 steps; Extended for migration 122).
 const ledgerVersions = Array.from({ length: 24 }, (_, i) => i + 1).concat(
-  Array.from({ length: 25 }, (_, i) => 100 + i),
+  Array.from({ length: 26 }, (_, i) => 100 + i),
 );
 
 function nodeAt113() {

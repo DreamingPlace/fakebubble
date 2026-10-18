@@ -215,6 +215,15 @@ export function effectiveTier(store: Reader & ModelFlags, principalId: string, n
 }
 
 /**
+ * Registered or better: a signed-up player, with or without an entitlement (kind registered / unlimited / daily_refill). Read from
+ * `effectiveTier`, so retention (webContentVerdict), points and the picker cannot disagree about who is a kept account.
+ */
+export function isRegisteredTier(store: Reader & ModelFlags, principalId: string, now?: number) {
+  const kind = effectiveTier(store, principalId, now)?.kind;
+  return kind === 'registered' || kind === 'unlimited' || kind === 'daily_refill';
+}
+
+/**
  * The tier of a principal for model choice. Part 22a: derived from `effectiveTier` and nowhere else.
  * Null for a principal that is none of these.
  */

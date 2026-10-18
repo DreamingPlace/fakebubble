@@ -179,7 +179,7 @@ test('Cloudflare runner: 119 is the same SQL on both authorities, 47 steps, and 
   assert.equal(last(inline).sha256, last(r2).sha256, 'only the R2 schema-113 step differs between the lists');
   assert.deepEqual(
     inline.map((m) => m.version),
-    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 25 }, (_, i) => 100 + i)],
+    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 26 }, (_, i) => 100 + i)],
   );
   assert.deepEqual(
     inline.slice(0, 43).map((m) => m.version),

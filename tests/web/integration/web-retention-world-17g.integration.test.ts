@@ -252,7 +252,8 @@ test('one world with every kind of principal and every feature table: sweep() an
       .map((r) => [r.step, r.code, r.phase, r.sub, r.principalKind]),
     [
       ['deletion', 'WEB_RETENTION_SCOPE_UNSAFE', 'clearDatabase', 'scope', 'guest'],
-      ['deletion', 'WEB_RETENTION_SCOPE_UNSAFE', 'clearDatabase', 'scope', 'invite'],
+      // Named exception (Part 22a): redeeming a code no longer changes the principal kind, so D (signed up, then redeemed) is a 'guest'.
+      ['deletion', 'WEB_RETENTION_SCOPE_UNSAFE', 'clearDatabase', 'scope', 'guest'],
     ],
   );
   for (const { principalId } of [A, B, C, D, E]) {

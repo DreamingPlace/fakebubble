@@ -130,9 +130,15 @@ test('22a over real HTTP: a guest’s code is refused unconsumed; a signed-up pl
   const info = await f.call(a(''), player);
   assert.deepEqual(info.modelChoice.plan, { kind: 'daily_refill', dailyAmount: 50, cap: 1000, expiresAt: null });
   assert.equal(info.modelChoice.balance, before + 50, 'the redemption was the first visit of the day: +50, once');
-  assert.equal((await f.call(a(''), player)).modelChoice.balance, before + 50, 'a second visit the same day pays nothing');
+  assert.equal(
+    (await f.call(a(''), player)).modelChoice.balance,
+    before + 50,
+    'a second visit the same day pays nothing',
+  );
   const billing = await f.call(`${API}/billing/history`, player, { page: 1 });
-  assert.ok(billing.items.some((item: { kind: string; points: number }) => item.kind === 'daily_refill' && item.points === 50));
+  assert.ok(
+    billing.items.some((item: { kind: string; points: number }) => item.kind === 'daily_refill' && item.points === 50),
+  );
   // Redeeming the same code again (a new request) is refused; the replay of the first request answers the same.
   assert.equal(
     (await f.call(`${API}/invites/redeem`, player, { requestId: randomUUID(), code: first }, 409)).error.code,
@@ -146,7 +152,8 @@ test('22a over real HTTP: a guest’s code is refused unconsumed; a signed-up pl
   const used = detail.codes.find((c: { state: string }) => c.state === 'redeemed');
   assert.equal(used.playerNumber, info.playerNumber);
   const text = JSON.stringify([batches, detail]);
-  for (const secret of ['tier.one', 'example.com', principal, '阿泡']) assert.equal(text.includes(secret), false, secret);
+  for (const secret of ['tier.one', 'example.com', principal, '阿泡'])
+    assert.equal(text.includes(secret), false, secret);
 
   // The owner lowers N and the cap; it applies from the next refill, and nothing is taken away.
   const edit = await f.call(`${API}/admin/invites/batch-edit`, owner, {
@@ -169,7 +176,10 @@ test('22a over real HTTP: a guest’s code is refused unconsumed; a signed-up pl
   const other = client();
   await f.call(`${API}/bootstrap`, other);
   await f.signUp(other, 'tier.two@example.com');
-  assert.equal((await f.call(`${API}/invites/redeem`, other, { requestId: randomUUID(), code: second }, 201)).entitlement.kind, 'daily_refill');
+  assert.equal(
+    (await f.call(`${API}/invites/redeem`, other, { requestId: randomUUID(), code: second }, 201)).entitlement.kind,
+    'daily_refill',
+  );
   assert.equal((await f.call(`${API}/admin/invites/batch-revoke`, owner, { batchId: made.batchId })).revoked, 0);
   assert.equal((await f.call(a(''), other)).modelChoice.plan.kind, 'daily_refill');
 });

@@ -3,7 +3,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
 import { entitlementActiveSql } from './web-entitlements.ts';
-import { isRegistered } from './web-free-tier.ts';
+import { isRegisteredTier } from './web-model-settings.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 
 export type WebRetentionRow = {
@@ -27,7 +27,8 @@ export function webCloudContentExpired(store: Store, now: number, principalId: s
   );
   ensure(row, 'WEB_RETENTION_SCOPE_INVALID');
   // A registered guest (signup bonus or an email login) is a kept account: its content does not expire with the trial window.
-  if (row.kind === 'guest' && row.state === 'active' && isRegistered(store as WebStore, principalId, now)) return false;
+  if (row.kind === 'guest' && row.state === 'active' && isRegisteredTier(store as WebStore, principalId, now))
+    return false;
   return (
     row.kind === 'guest' &&
     (['purging', 'purged'].includes(row.state) ||
@@ -96,7 +97,7 @@ export function webContentVerdict(
   if (
     principal.kind === 'guest' &&
     (row.state === 'unstarted' || row.state === 'active') &&
-    isRegistered(store as WebStore, principalId, now)
+    isRegisteredTier(store as WebStore, principalId, now)
   )
     return 'live';
   if (
@@ -122,7 +123,7 @@ export function webContentVerdict(
     );
     // Part 17h: an invited player whose grant has lapsed but who is registered chats as a registered player; only one
     // with nothing else to fall back on is told the invite is gone.
-    return grant || isRegistered(store as WebStore, principalId, now) ? 'live' : 'WEB_INVITE_ACCESS_REQUIRED';
+    return grant || isRegisteredTier(store as WebStore, principalId, now) ? 'live' : 'WEB_INVITE_ACCESS_REQUIRED';
   }
   return 'TRIAL_EXPIRED';
 }

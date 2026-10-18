@@ -21,6 +21,7 @@ import {
   currentPrices,
   effectiveTier,
   firstTierModel,
+  isRegisteredTier,
   modelSettingsTablesExist,
   offeredGlobally,
   playerTier,
@@ -73,7 +74,7 @@ export function offeredModels(store: Pick<BusinessStore, 'get' | 'all'> & Flagge
  * as a guest or as an invited player whose grant lapsed - see isRegistered). `now` is only needed to see an expired grant.
  */
 export const hasPoints = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string, now?: number) =>
-  offeredModels(store) !== null && isRegistered(store, principalId, now);
+  offeredModels(store) !== null && isRegisteredTier(store, principalId, now);
 /** An invited principal (an invite or an account): may choose a model, is never charged points. */
 export const isInvited = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string, now?: number) =>
   offeredModels(store) !== null && playerTier(store, principalId, now) === 'invited';
