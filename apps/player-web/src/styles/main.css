@@ -4716,3 +4716,16 @@ body.legal-page {
 .tiers-danger {
   color: #8a2f27;
 }
+.account-admin-page .tiers-kind label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  white-space: nowrap;
+}
+.account-admin-page .tiers-kind input[type="radio"] {
+  width: auto;
+  flex: none;
+  margin: 0;
+}
