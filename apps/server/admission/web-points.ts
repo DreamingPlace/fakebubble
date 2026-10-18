@@ -16,8 +16,10 @@ import {
   inviteGrantLapsed,
   isRegistered,
 } from './web-free-tier.ts';
+import { activeEntitlement, utcDay } from './web-entitlements.ts';
 import {
   currentPrices,
+  effectiveTier,
   firstTierModel,
   modelSettingsTablesExist,
   offeredGlobally,
@@ -85,8 +87,10 @@ export function canChooseModel(store: Pick<BusinessStore, 'get' | 'all'> & Flagg
   if (!tier) return false;
   // A trial guest whose trial is over has nothing to choose a model for: the page shows the trial-ended state instead.
   if (tier === 'guest' && now !== undefined && guestTrialOver(store, principalId, now)) return false;
-  // An invited player whose grant is gone (and who has nothing to fall back on: that one is 'registered') gets no picker.
-  if (tier === 'invited' && inviteGrantLapsed(store, principalId, now)) return false;
+  // An invited player whose grant is gone (and who has nothing to fall back on: that one is 'registered') gets no picker. A
+  // player who holds an entitlement is not that case: its tier comes from the entitlement, not from a grant.
+  if (tier === 'invited' && !activeEntitlement(store, principalId, now) && inviteGrantLapsed(store, principalId, now))
+    return false;
   const count = tierModels(store, tier).length;
   return tier === 'guest' ? count > 1 : count > 0;
 }
@@ -100,6 +104,27 @@ export function policyKind(
     principalId,
   );
   return row?.kind ?? 'one_off';
+}
+
+/**
+ * Never charged: an 'unlimited' points policy (the schema 123 field) or an unlimited effective tier (Part 22a: an unlimited
+ * entitlement, a legacy invite, an account). Both read here so quote and charge cannot disagree.
+ */
+export function isUnmetered(store: Reader & Flagged, principalId: string, now?: number) {
+  return policyKind(store, principalId) === 'unlimited' || effectiveTier(store, principalId, now)?.unlimited === true;
+}
+
+/**
+ * How many points may still be ADDED to this balance (Part 22a): a player on a daily_refill entitlement never goes above the
+ * entitlement's cap through a grant - the bonus, a refill or an administrator's gift add only up to it, and at or above it add
+ * nothing. Points already held are never taken away, and refunds (the return of points that were spent) are not grants.
+ * Everyone else: no cap.
+ */
+export function grantRoom(store: Reader & Flagged, principalId: string, now: number, balance: number) {
+  const entitlement = activeEntitlement(store, principalId, now);
+  if (!entitlement || entitlement.kind !== 'daily_refill' || entitlement.totalCap === null)
+    return Number.POSITIVE_INFINITY;
+  return Math.max(0, entitlement.totalCap - balance);
 }
 
 /** The cheapest reply (voice included) the principal's tier offers: below it the old "free replies used up" answer applies. */
@@ -181,11 +206,15 @@ export function ensureBalance(store: Writer & Flagged, now: number, principalId:
     !store.get('SELECT 1 FROM web_points_policy WHERE principal_id=?', principalId)
   )
     return 0;
-  const start = Math.max(
-    0,
-    POINTS.signupBalance -
-      POINTS.perBonusReply * bonusSpent(store, principalId) +
-      POINTS.perBonusReply * unusedTrial(store, principalId),
+  // Part 22a: the opening balance is a grant like any other - on a daily_refill entitlement it stops at the cap.
+  const start = Math.min(
+    Math.max(
+      0,
+      POINTS.signupBalance -
+        POINTS.perBonusReply * bonusSpent(store, principalId) +
+        POINTS.perBonusReply * unusedTrial(store, principalId),
+    ),
+    grantRoom(store, principalId, now, 0),
   );
   // The policy (what the principal is entitled to) and the balance (what is left) are created together, apart.
   store.run(
@@ -212,6 +241,82 @@ export function ensureBalance(store: Writer & Flagged, now: number, principalId:
       now,
     );
   return start;
+}
+
+/**
+ * An administrator's gift of points (events source 'grant', carrying the admin id). Clamped like every grant: a daily_refill
+ * player is never pushed above its cap. Returns the points actually added.
+ */
+export function grantPoints(store: Writer & Flagged, now: number, principalId: string, adminId: string, points: number) {
+  ensure(Number.isSafeInteger(points) && points > 0, 'INVALID_REQUEST');
+  return store.transaction(() => {
+    const balance = ensureBalance(store, now, principalId);
+    const added = Math.min(points, grantRoom(store, principalId, now, balance));
+    if (added <= 0) return 0;
+    store.run('UPDATE web_points_balance SET balance=balance+?,updated_at=? WHERE principal_id=?', added, now, principalId);
+    store.run(
+      `INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,admin_id,price_version,created_at)
+      VALUES (?,NULL,'grant',NULL,?,?,?,?)`,
+      principalId,
+      added,
+      adminId,
+      currentPrices(store).version,
+      now,
+    );
+    return added;
+  });
+}
+
+/**
+ * The daily refill (Part 22a). On a player's FIRST visit of each UTC day, a daily_refill entitlement ADDS its daily amount N
+ * (not a top-up to N) as ONE 'daily_refill' points event, never taking the balance above the entitlement's cap. A day without
+ * a visit pays nothing and a missed day is never paid later; the (player, day) row of web_entitlement_refills is the once-a-day
+ * guard. Returns the points added. Called by every "visit": the page bootstrap / account read, the billing read, a message, and
+ * a redemption.
+ */
+export function applyDailyRefill(store: Writer & Flagged, now: number, principalId: string) {
+  const eff = effectiveTier(store, principalId, now);
+  const entitlement = eff?.entitlement;
+  if (
+    !eff ||
+    eff.kind !== 'daily_refill' ||
+    !entitlement ||
+    entitlement.dailyAmount === null ||
+    entitlement.totalCap === null ||
+    !hasPoints(store, principalId, now)
+  )
+    return 0;
+  const day = utcDay(now);
+  if (store.get('SELECT 1 FROM web_entitlement_refills WHERE principal_id=? AND day=?', principalId, day)) return 0;
+  return store.transaction(() => {
+    const balance = ensureBalance(store, now, principalId);
+    const added = Math.max(0, Math.min(entitlement.dailyAmount!, entitlement.totalCap! - balance));
+    store.run(
+      'INSERT INTO web_entitlement_refills(principal_id,day,entitlement_id,delta,created_at) VALUES (?,?,?,?,?)',
+      principalId,
+      day,
+      entitlement.id,
+      added,
+      now,
+    );
+    if (added > 0) {
+      store.run(
+        'UPDATE web_points_balance SET balance=balance+?,updated_at=? WHERE principal_id=?',
+        added,
+        now,
+        principalId,
+      );
+      store.run(
+        `INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,price_version,created_at)
+        VALUES (?,NULL,'daily_refill',NULL,?,?,?)`,
+        principalId,
+        added,
+        currentPrices(store).version,
+        now,
+      );
+    }
+    return added;
+  });
 }
 
 function refund(
@@ -304,8 +409,9 @@ export type PointsDecision =
  */
 export function quote(store: Writer & Flagged, now: number, principalId: string, model: PlayerModelId): PointsDecision {
   reconcilePoints(store, now, principalId);
+  applyDailyRefill(store, now, principalId);
   const balance = ensureBalance(store, now, principalId);
-  if (policyKind(store, principalId) === 'unlimited') return { ok: true, points: 0 };
+  if (isUnmetered(store, principalId, now)) return { ok: true, points: 0 };
   const price = replyPointsNow(store, model);
   if (balance >= price) return { ok: true, points: price };
   return {
@@ -325,7 +431,7 @@ export function chargeAdmission(
   // An 'unlimited' policy is never charged (and has no spend event); the operation row still freezes the model.
   // The price is read from the owner's table (Part 21g) and its version is stamped on the event and the operation.
   const prices = currentPrices(store);
-  const price = policyKind(store, principalId) === 'unlimited' ? 0 : prices.perReply[model] + prices.voice;
+  const price = isUnmetered(store, principalId, now) ? 0 : prices.perReply[model] + prices.voice;
   if (price > 0) {
     ensure(
       store.run(
@@ -389,8 +495,19 @@ export function modelChoiceState(
     let balance = 0;
     if (metered) {
       reconcilePoints(store, now, principalId);
+      applyDailyRefill(store, now, principalId);
       balance = ensureBalance(store, now, principalId);
     }
+    const eff = effectiveTier(store, principalId, now);
+    const plan = eff?.entitlement
+      ? {
+          kind: eff.entitlement.kind,
+          ...(eff.entitlement.kind === 'daily_refill'
+            ? { dailyAmount: eff.entitlement.dailyAmount!, cap: eff.entitlement.totalCap! }
+            : {}),
+          expiresAt: eff.entitlement.expiresAt,
+        }
+      : undefined;
     const selected = effectiveModel(store, now, principalId);
     const notice = store.get<{ notice: string | null }>(
       'SELECT notice FROM web_player_model WHERE principal_id=?',
@@ -408,6 +525,7 @@ export function modelChoiceState(
       balance,
       repliesLeft: metered ? Math.max(0, Math.floor(balance / (prices.perReply[selected] + prices.voice))) : 0,
       version: prices.version,
+      ...(plan ? { plan } : {}),
       ...(notice === 'model_withdrawn' ? { notice } : {}),
     };
   });

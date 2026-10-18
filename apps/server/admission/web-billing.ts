@@ -7,7 +7,7 @@ import {
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { freeTier } from './web-free-tier.ts';
-import { ensureBalance, hasPoints, isInvited, offeredModels, reconcilePoints } from './web-points.ts';
+import { applyDailyRefill, ensureBalance, hasPoints, isInvited, offeredModels, reconcilePoints } from './web-points.ts';
 
 /**
  * 消费记录: the player's own spending history (Part 21f). Reads web_points_events + web_operation_models + web_operations
@@ -97,6 +97,8 @@ export function playerBilling(
     let balance: number | null = null;
     if (metered) {
       reconcilePoints(store, now, principalId);
+      // Part 22a: opening 消费记录 is a visit - a daily_refill player is paid today's refill before the figures are read.
+      applyDailyRefill(store as never, now, principalId);
       balance = ensureBalance(store, now, principalId);
     }
     const since = now - BILLING_WINDOW_MS;

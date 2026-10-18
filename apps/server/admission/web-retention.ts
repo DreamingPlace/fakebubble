@@ -2,6 +2,7 @@ import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
+import { entitlementActiveSql } from './web-entitlements.ts';
 import { isRegistered } from './web-free-tier.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 
@@ -141,6 +142,36 @@ export function webRegisteredSql(schema: number, freeTier: boolean, now: number,
             AND ag.revoked_at IS NULL AND (ag.expires_at IS NULL OR ag.expires_at>?))))`,
     args: [now],
   };
+}
+
+/**
+ * Part 22a. The SQL twin of `effectiveTier(...).kind` (web-model-settings.ts) over a web_principals row `alias`: the tier of every
+ * principal as one string - guest | registered | unlimited | daily_refill | legacy_invite | account. Built from webRegisteredSql
+ * above and entitlementActiveSql, so there is still ONE definition of "registered" and one of "holds an entitlement"; the
+ * operator inspect counts players with it and a test asserts it agrees with the JS for every shape. `?` count: see args.
+ */
+export function webTierSql(schema: number, freeTier: boolean, now: number, alias = 'p') {
+  const registered = webRegisteredSql(schema, freeTier, now, alias);
+  const grantActive = `EXISTS (SELECT 1 FROM web_invite_grants tg WHERE tg.principal_id=${alias}.id AND tg.player_id=${alias}.player_id
+    AND tg.world_id=${alias}.world_id AND tg.revoked_at IS NULL AND (tg.expires_at IS NULL OR tg.expires_at>?))`;
+  const unlimited = entitlementActiveSql(now, alias, 'unlimited');
+  const refill = entitlementActiveSql(now, alias, 'daily_refill');
+  const entitled = schema >= 125;
+  const parts = [`WHEN ${alias}.kind='account' THEN 'account'`];
+  const args: number[] = [];
+  if (schema >= GRANT_SCHEMAS_FROM) {
+    parts.push(`WHEN ${alias}.kind='invite' AND ${grantActive} THEN 'legacy_invite'`);
+    args.push(now);
+  }
+  parts.push(
+    `WHEN NOT ${registered.sql} THEN CASE WHEN ${alias}.kind='guest' THEN 'guest' ELSE 'legacy_invite' END`,
+  );
+  args.push(...registered.args);
+  if (entitled) {
+    parts.push(`WHEN ${unlimited.sql} THEN 'unlimited'`, `WHEN ${refill.sql} THEN 'daily_refill'`);
+    args.push(...unlimited.args, ...refill.args);
+  }
+  return { sql: `CASE ${parts.join(' ')} ELSE 'registered' END`, args };
 }
 
 /**

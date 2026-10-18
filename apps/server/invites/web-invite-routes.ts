@@ -96,6 +96,72 @@ export function routeWebInvite(
         : actions.revokeGrant(auth.cookie, auth.csrf, auth.origin, id),
     };
   }
+  const batchBase = '/api/web/local/admin/invites/';
+  if (req.path.startsWith(batchBase + 'batch-') || req.path === batchBase + 'entitlement-revoke' || req.path === batchBase + 'tier-code-revoke') {
+    ensure(actions.tiers, 'NOT_FOUND');
+    const auth = admin(req),
+      action = req.path.slice(batchBase.length);
+    if (action === 'batch-create') {
+      const body = object(req.body, ['requestId', 'name', 'count', 'tier', 'durationDays', 'redeemBy']);
+      const tier = object(body.tier, (body.tier as { kind?: string } | null)?.kind === 'daily_refill' ? ['kind', 'dailyAmount', 'cap'] : ['kind']);
+      const result = actions.createBatch(auth.cookie, auth.csrf, auth.origin, {
+        requestId: string(body.requestId),
+        name: string(body.name),
+        count: body.count as number,
+        tier: tier as never,
+        durationDays: body.durationDays as number | null,
+        redeemBy: body.redeemBy as number | null,
+      });
+      return { status: result.duplicate ? 200 : 201, body: result };
+    }
+    if (action === 'batch-list') {
+      object(req.body, []);
+      return { status: 200, body: actions.listBatches(auth.cookie, auth.csrf, auth.origin) };
+    }
+    if (action === 'batch-detail')
+      return {
+        status: 200,
+        body: actions.batchDetail(auth.cookie, auth.csrf, auth.origin, string(object(req.body, ['batchId']).batchId)),
+      };
+    if (action === 'batch-edit') {
+      const body = object(req.body, ['requestId', 'batchId', 'dailyAmount', 'cap']);
+      return {
+        status: 200,
+        body: actions.editBatch(auth.cookie, auth.csrf, auth.origin, {
+          requestId: string(body.requestId),
+          batchId: string(body.batchId),
+          dailyAmount: body.dailyAmount as number,
+          cap: body.cap as number,
+        }),
+      };
+    }
+    if (action === 'batch-revoke')
+      return {
+        status: 200,
+        body: actions.revokeBatch(auth.cookie, auth.csrf, auth.origin, string(object(req.body, ['batchId']).batchId)),
+      };
+    if (action === 'tier-code-revoke')
+      return {
+        status: 200,
+        body: actions.revokeTierCode(auth.cookie, auth.csrf, auth.origin, string(object(req.body, ['id']).id)),
+      };
+    if (action === 'entitlement-revoke')
+      return {
+        status: 200,
+        body: actions.revokeEntitlement(auth.cookie, auth.csrf, auth.origin, string(object(req.body, ['id']).id)),
+      };
+    ensure(false, 'NOT_FOUND');
+  }
+  if (req.path === '/api/web/local/invites/redeem' && actions.tiersEnabled()) {
+    const auth = player(req),
+      body = object(req.body, ['code', 'requestId']);
+    ensure(typeof req.trustedIpHash === 'string', 'WEB_TRUSTED_IP_REQUIRED');
+    const result = actions.redeemTier(auth.token, auth.csrf, auth.origin, req.trustedIpHash, {
+      code: string(body.code),
+      requestId: string(body.requestId),
+    });
+    return { status: result.duplicate ? 200 : 201, body: result };
+  }
   if (req.path === '/api/web/local/invites/redeem') {
     const auth = player(req),
       body = object(req.body, ['code', 'requestId']);

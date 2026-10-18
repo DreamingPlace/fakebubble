@@ -21,7 +21,8 @@ import {
 } from '../../../packages/contracts/player-models.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { isLapsedRegisteredInvite, isRegistered } from './web-free-tier.ts';
+import { activeEntitlement, type Entitlement } from './web-entitlements.ts';
+import { inviteGrantActive, isRegistered } from './web-free-tier.ts';
 
 /**
  * Owner-controlled reply models and prices (Part 21g, migration 124).
@@ -172,17 +173,53 @@ export const replyPointsNow = (store: Reader, model: PlayerModelId, voice = true
 };
 
 /**
- * THE tier resolution. Part 22 splits `invited` into unlimited / daily-refill here and nowhere else.
- *  - guest: a trial guest; registered: a guest that signed up and holds the signup bonus (points); invited: kind invite or account.
+ * What a principal is, for every predicate that depends on it (Part 22a: ONE place; model choice, quote / charge, billing, the
+ * picker, memory recall and the retention verdict all read it, directly or through playerTier).
+ *
+ *  tier  guest      a trial guest
+ *        registered a signed-up player (signup bonus, or an email login): points, no entitlement
+ *        invited    an active entitlement, a legacy invite principal with an active grant, or an account
+ *  kind  guest | registered | unlimited | daily_refill | legacy_invite | account
+ *
+ * An entitlement never changes the principal kind. Expired or revoked, it simply stops counting: the player is a registered
+ * player with whatever balance remains. `unlimited` says the player is never charged points.
+ */
+export type TierKind = 'guest' | 'registered' | 'unlimited' | 'daily_refill' | 'legacy_invite' | 'account';
+export interface EffectiveTier {
+  tier: ModelTier;
+  kind: TierKind;
+  entitlement: Entitlement | null;
+  unlimited: boolean;
+}
+export function effectiveTier(store: Reader & ModelFlags, principalId: string, now?: number): EffectiveTier | null {
+  const kind = store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind;
+  if (kind === 'account') return { tier: 'invited', kind: 'account', entitlement: null, unlimited: true };
+  if (kind !== 'guest' && kind !== 'invite') return null;
+  // A legacy invite principal (kind 'invite') whose grant is still active: the old unmetered path, untouched. A backfilled
+  // 'unlimited' entitlement of such a player (migration 125) says the same thing.
+  if (kind === 'invite' && inviteGrantActive(store, principalId, now))
+    return {
+      tier: 'invited',
+      kind: 'legacy_invite',
+      entitlement: activeEntitlement(store, principalId, now),
+      unlimited: true,
+    };
+  // Part 17h: a guest, or an invited player whose grant lapsed, is registered when it holds the bonus or has an email login.
+  if (!isRegistered(store, principalId, now))
+    return kind === 'guest'
+      ? { tier: 'guest', kind: 'guest', entitlement: null, unlimited: false }
+      : { tier: 'invited', kind: 'legacy_invite', entitlement: null, unlimited: true };
+  const entitlement = activeEntitlement(store, principalId, now);
+  if (!entitlement) return { tier: 'registered', kind: 'registered', entitlement: null, unlimited: false };
+  return { tier: 'invited', kind: entitlement.kind, entitlement, unlimited: entitlement.kind === 'unlimited' };
+}
+
+/**
+ * The tier of a principal for model choice. Part 22a: derived from `effectiveTier` and nowhere else.
  * Null for a principal that is none of these.
  */
 export function playerTier(store: Reader & ModelFlags, principalId: string, now?: number): ModelTier | null {
-  const kind = store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind;
-  // Part 17h: an invited player whose grant lapsed but who is registered (bonus or email login) is a registered player.
-  if (kind === 'invite') return isLapsedRegisteredInvite(store, principalId, now) ? 'registered' : 'invited';
-  if (kind === 'account') return 'invited';
-  if (kind === 'guest') return isRegistered(store, principalId, now) ? 'registered' : 'guest';
-  return null;
+  return effectiveTier(store, principalId, now)?.tier ?? null;
 }
 
 /** The models offered at all right now (ceiling ∩ globally enabled), in catalogue order; null while the feature is off. */

@@ -62,6 +62,7 @@ const WEB_SIGNUP_BONUS_SCHEMA = 121;
 const WEB_CHAT_REVIEW_SCHEMA = 122;
 const WEB_MODEL_CHOICE_SCHEMA = 123;
 const WEB_MODEL_SETTINGS_SCHEMA = 124;
+const WEB_INVITE_TIERS_SCHEMA = 125;
 const webDbName = 'web.sqlite';
 const webMarkerName = '.web-instance.json';
 type WebMarker = {
@@ -226,6 +227,7 @@ function webIdentity(
             WEB_CHAT_REVIEW_SCHEMA,
             WEB_MODEL_CHOICE_SCHEMA,
             WEB_MODEL_SETTINGS_SCHEMA,
+            WEB_INVITE_TIERS_SCHEMA,
           ]
         : []),
     ].includes(version),
@@ -285,7 +287,7 @@ function preflightWeb(path: string, options: WebStoreOptions) {
         version >= WEB_SCHEMA &&
           version <=
             (options.providerRuntime
-              ? WEB_MODEL_SETTINGS_SCHEMA
+              ? WEB_INVITE_TIERS_SCHEMA
               : options.inviteTest
                 ? WEB_INVITE_IDENTITY_SCHEMA
                 : WEB_DATA_SCHEMA),
@@ -426,6 +428,7 @@ export class Store {
                         WEB_CHAT_REVIEW_SCHEMA,
                         WEB_MODEL_CHOICE_SCHEMA,
                         WEB_MODEL_SETTINGS_SCHEMA,
+                        WEB_INVITE_TIERS_SCHEMA,
                       ]
                     : []),
                 ].includes(version)

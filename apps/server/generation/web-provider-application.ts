@@ -27,6 +27,7 @@ import { WebAdmission } from '../admission/web-admission.ts';
 import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts';
 import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts';
 import { WebInvites } from '../invites/web-invites.ts';
+import { WebInviteTiers } from '../invites/web-invite-tiers.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { WebCocreation } from '../cocreation/web-cocreation.ts';
 import { WebBilling } from '../admission/web-billing.ts';
@@ -224,6 +225,13 @@ export class WebProviderApplication {
       authorize: this.identity.authorizeInviteAction.bind(this.identity),
       identity: this.identity,
     });
+    const inviteTiers = new WebInviteTiers(store, {
+      clock,
+      codeKey: createHmac('sha256', Buffer.from(config.requestKey, 'base64url'))
+        .update('web-local-invite-code-v1')
+        .digest(),
+      authorize: this.identity.authorizeInviteAction.bind(this.identity),
+    });
     this.playerAccounts = store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'")
       ? new WebPlayerAccounts(store, this.identity, {
           origin: config.origin,
@@ -245,6 +253,7 @@ export class WebProviderApplication {
       : null;
     const accounts = this.playerAccounts;
     this.inviteActions = new WebInviteActions(store, clock, config.origin, invites, this.identity, {
+      tiers: inviteTiers,
       // While accounts can be opened, a redemption belongs to a signed-in login; with signup closed nobody could
       // ever satisfy that, so redemption stays as it was.
       requireLogin: accounts?.signupEnabled
