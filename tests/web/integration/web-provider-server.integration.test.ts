@@ -7,6 +7,7 @@ import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { localRuntime, initProviderInstance } from '../../../apps/server/platform/web-local-config.ts';
 import { syntheticSelection } from '../fixtures/provider-selection.ts';
+import { downgradeToLegacy } from '../fixtures/legacy-schema.ts';
 import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
 import { WebProviderRunner } from '../../../apps/server/generation/web-provider-runner.ts';
 import { WebProviderServer } from '../../../apps/server/generation/web-provider-server.ts';
@@ -35,6 +36,8 @@ test('provider-local 113 over HTTPS: catalog, guest lock, three turns + footer, 
   initProviderInstance(root);
   migrateProvider(root, syntheticSelection());
   let { config, store } = openProviderStore(root);
+  // NAMED EXCEPTION: legacy redemption (the invite upgrade below) exists only below schema 125 (see fixtures/legacy-schema.ts).
+  downgradeToLegacy(store as unknown as Parameters<typeof downgradeToLegacy>[0]);
   t.after(() => {
     try {
       store.close();

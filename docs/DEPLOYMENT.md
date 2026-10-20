@@ -264,7 +264,11 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 邀请码不再把玩家变成另一种“邀请玩家”。从这一版起，**邀请是挂在普通注册账号上的“额度（entitlement）”**：兑换只新增一条额度记录，**从不修改 `web_principals.kind` 和 `web_guest_retention.state`**，也不换会话、不发恢复码。有效档位 = 有效的额度，否则就是注册玩家（`effectiveTier`，`admission/web-model-settings.ts` 里唯一的一处；`playerTier`、报价/扣费、消费记录、选择器、记忆召回、内容存活判定都从它读）。
 
-**何时生效：** 只在 `SIGNUP_BONUS_ENABLED=true` **且** `PLAYER_MODEL_CHOICE_ENABLED=true`、数据库有迁移 125 时，邀请码才走“额度”这条路（注册玩家才存在、才按点数计量）。任何一个关着时，兑换仍是旧行为（旧的邀请主体），旧测试与旧部署不受影响。
+**何时生效：** 数据库有迁移 125 就**永远**走“额度”这条路，与 `SIGNUP_BONUS_ENABLED`、`PLAYER_MODEL_CHOICE_ENABLED` 无关；旧兑换（授权 + `kind='invite'` + retention `protected`）只存在于 schema < 125 的库里，125 上调用它会得到 `WEB_INVITE_LEGACY_UNAVAILABLE`。两个开关只影响“点数”：
+- `daily_refill` 需要点数。`PLAYER_MODEL_CHOICE_ENABLED` 关着时，建每天补充的批次被拒绝（`WEB_INVITE_POINTS_REQUIRED`，“需要先开启模型选择/积分”）；兑换每天补充的码被拒绝（`WEB_INVITE_UNUSABLE`，“这个邀请码暂时不能使用”），**码不会被消耗**，开关打开后可正常兑换。`unlimited` 批次不受影响。
+- 额度持有人的活性和档位**不依赖**免费档开关（`SIGNUP_BONUS_ENABLED`）；点数关着时，持有人不扣点（仍受每日回复上限）。
+- 页面从不按 principal kind 判定档位：服务端把 `effectiveTier` 的结果（`tier: {kind, unlimited, plan?}`）随账号信息发给每个已登录玩家，顶栏与 我的信息 只读它。仍读 `kind='invite'` 做业务判定的地方只有“没有邮箱登录的旧邀请玩家”这一条旧路径（见 STATUS.md 的清单）。
+- **一个撤销**：`endHolderAccess`（`invites/web-holder-access.ts`）在一个事务里结束持有人的一切：额度 + 同一邀请码的旧授权 + 该授权的会话/凭据/回执。管理页“结束额度”和旧的“撤销授权”入口调用的是同一个函数；玩家再次登录后是注册玩家，带着剩余点数。管理导航里不再有 玩家授权；旧的无登录邀请玩家显示在 邀请与额度（按玩家编号，没有则“旧邀请”，只有数量）。
 
 **迁移 125（`125_invite_tiers.sql`）：** 共 **50 步**（`expected-migrations` 的最后一步，`version 125`，两个 authority 完全相同）；本地 `scripts/web-provider.ts migrate-invite-tiers <root>`（新实例的 `migrate` 一路到 125）。sha256：
 

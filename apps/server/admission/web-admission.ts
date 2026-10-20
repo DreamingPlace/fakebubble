@@ -166,9 +166,9 @@ export class WebAdmission {
       const holderPoints = holder && hasPoints(this.store, principal.id, this.clock.now());
       // Points switched off: nothing to charge a holder with; it chats unmetered under the daily cap (like any invited player).
       const holderFree = holder && !holderPoints;
-      if (principal.kind === 'invite' && !lapsed) this.dailyLimit(principal.id);
-      // An unlimited entitlement is never charged, so the per-day reply cap stays as its invisible abuse guard.
-      else if (holderFree || eff?.kind === 'unlimited') this.dailyLimit(principal.id);
+      // An unmetered tier (the old invite-only holder, an unlimited entitlement, or a holder while points are off) is never
+      // charged, so the per-day reply cap stays as its invisible abuse guard. Decided from the EFFECTIVE tier, not the kind.
+      if (holderFree || eff?.kind === 'legacy_invite' || eff?.kind === 'unlimited') this.dailyLimit(principal.id);
       const tier = freeTier(this.store);
       const trialWindowMs = tier.trialWindowMs;
       // Part 17b: the signup bonus is one more entitlement, decided HERE, before any reservation or provider call.

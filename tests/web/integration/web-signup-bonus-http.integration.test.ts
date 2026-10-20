@@ -251,6 +251,8 @@ test('at most 3 signups per IP per UTC day: the 4th is refused with a retry-late
 
 test('invite holders are unaffected: no bonus counts against them, their entitlement and limits are as before', async (t) => {
   const f = setup(t);
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.fixture('/fixture/players', { signupEnabled: true });
   const owner = client(),

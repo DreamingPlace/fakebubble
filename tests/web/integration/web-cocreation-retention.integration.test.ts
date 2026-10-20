@@ -10,6 +10,8 @@ test('player-data retention removes a purged player’s co-creation ideas and le
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-retention-worker.ts', { STATE: 'WebRetentionFixture' }, [
     'MEDIA',
   ]);
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.call('/legacy-schema', {});
   await f.call('/assets');
   const guest = await f.call<Guest>('/bootstrap', {}),
     invited = await f.call<Guest>('/bootstrap', {});

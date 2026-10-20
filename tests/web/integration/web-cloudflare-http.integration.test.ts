@@ -545,6 +545,8 @@ test('cloud HTTP: catalog/welcome, three automatic rounds/footer, scoped private
 
 test('cloud HTTP invites use actual admin login, in-place upgrade, recovery rotation and revocation', async (t) => {
   const f = setup(t);
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   const admin = client(),
     guest = client(),
@@ -699,6 +701,8 @@ test('native materials: private upload, two-clip approval, new role and voice pr
     owner = client(),
     player = client(),
     denied = client();
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.boot(player);
   // Complete three offline replies so both old generated audio and the old fixed footer are exercised.
@@ -819,6 +823,8 @@ test('scoped role deletion over actual HTTP keeps another role, identities and u
     member = client(),
     invited = client(),
     guest = client();
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   const ownerGrant = await f.fixture<any>('/fixture/grant');
   await f.call(`${API}/admin/login`, owner, { token: ownerGrant.token });
@@ -937,6 +943,8 @@ test('bootstrap clears only dead cookies and never an active, recoverable-rotate
   const f = setup(t),
     owner = client(),
     guest = client();
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.boot(guest);
   const active = await f.request(`${API}/bootstrap`, guest);

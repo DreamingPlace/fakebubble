@@ -100,6 +100,8 @@ test('a signed-up guest can redeem an invite after the trial ended, and the norm
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-retention-worker.ts', { STATE: 'WebRetentionFixture' }, [
     'MEDIA',
   ]);
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.call('/legacy-schema', {});
   await f.call('/assets');
   const ipHash = 'a'.repeat(64);
   const guest = await f.call<Guest>('/bootstrap', {});

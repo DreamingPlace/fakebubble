@@ -13,6 +13,8 @@ const write = (guest: Guest) => ({ token: guest.issuedToken, csrf: guest.csrf, o
 
 test('workerd guest/invite identity: sealed rotation, restart recovery, scope and revocation', async (t) => {
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-business-worker.ts', { STATE: 'WebBusinessFixture' });
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.call('/legacy-schema', {});
   const guest = await f.call<Guest>('/bootstrap', {}),
     other = await f.call<Guest>('/bootstrap', {});
   const scope = await f.call<Scope>('/authenticate', { token: guest.issuedToken });

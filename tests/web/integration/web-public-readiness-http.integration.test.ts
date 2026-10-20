@@ -290,6 +290,8 @@ test('B: a fresh signed-up player deletes the account and the audit stays clean'
 
 test('B: an invited player deletes the account: the grant is revoked and the data goes', async (t) => {
   const f = setup(t);
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.fixture('/fixture/players', { signupEnabled: true, accountDelete: true });
   const owner = client(),

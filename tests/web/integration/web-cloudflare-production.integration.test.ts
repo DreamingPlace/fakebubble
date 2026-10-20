@@ -290,7 +290,7 @@ test('production topology: private immutable setup, six fixed clips, separate bu
 });
 
 test('private invite lookup returns only the selected grant ID after restart; revocation still needs admin authority', async (t) => {
-  const f = await fixture(t),
+  const f = await fixture(t, true),
     api = '/api/web/provider';
   await f.install();
   const grant = (await (await f.call({ action: 'grant' })).json()) as { token: string };
@@ -332,18 +332,19 @@ test('private invite lookup returns only the selected grant ID after restart; re
   const response = await f.call({ action: 'edge', path: api + '/bootstrap' });
   const guestCookie = response.headers.get('set-cookie')!.split(';')[0]!,
     boot = parseWebProviderBootstrap(await response.json());
-  const redeemed = await f.call(
-    {
-      action: 'edge',
-      path: api + '/invites/redeem',
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125, and this is the production topology (no fixture hook can
+  // lower the schema). The grant a pre-125 redemption leaves is OLD DATA on a 125 database: it is seeded (retention-worker
+  // /__test/legacy-invited) and everything after it - the private lookup, the admin revoke, the dead sessions - is the real path.
+  const seeded = (await (
+    await f.call({
+      action: 'business-http',
+      path: '/__test/legacy-invited',
       method: 'POST',
-      headers: { ...headers, cookie: guestCookie, 'x-csrf-token': boot.csrf },
-      body: { requestId: randomUUID(), code: invite.code },
-    },
-    201,
-  );
-  const invitedCookie = redeemed.headers.get('set-cookie')!.split(';')[0]!,
-    receipt = (await redeemed.json()) as { grantId: string };
+      body: { principalId: boot.access.principalId, inviteId: invite.inviteId },
+    })
+  ).json()) as { grantId: string };
+  const invitedCookie = guestCookie,
+    receipt = seeded;
   await f.restart();
   assert.deepEqual(await (await f.call({ action: 'invite-grants', body: invite.inviteId })).json(), [
     { grantId: receipt.grantId },
