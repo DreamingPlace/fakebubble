@@ -36,6 +36,7 @@ export const errorText: Record<string, string> = {
   WEB_DAILY_LIMIT_REACHED: '今天聊得够多啦，明天再来找我吧～',
   RATE_LIMITED: '操作太频繁了，稍后再试试',
   WEB_INVITE_UNAVAILABLE: '邀请码无效或已被使用',
+  WEB_INVITE_UNUSABLE: '这个邀请码暂时不能使用',
   INVALID_TEXT: '这条消息发不出去，换个说法试试',
   REPLY_NOT_DELIVERED: '这条回复未完成，未自动重发。剩余次数以页面显示为准。',
   REPLY_UNKNOWN: '这条回复的结果尚未确认，请勿重复发送；系统不会自动重发。',
@@ -239,6 +240,10 @@ export class LiveBinding {
     }
   }
   private guides = new Map<WebProviderCharacterId, ReturnType<typeof mountChatGuide>>();
+  /** The server's effective tier of a signed-in player (the page never derives one from the principal kind). */
+  private get tier() {
+    return this.account.signedIn ? this.account.tier : undefined;
+  }
   /** The model picker state of a player who can choose one (a points account or an invited player), else undefined. */
   private get modelChoice() {
     return this.account.signedIn ? this.account.modelChoice : undefined;
@@ -305,8 +310,7 @@ export class LiveBinding {
   private billingAction(): (() => void) | undefined {
     const info = this.modelChoice;
     const guestTrial = this.view.access.kind === 'guest' && !this.hasLogin;
-    if (!guestTrial && !(info && (info.metered || (this.account.signedIn && this.account.kind === 'invite'))))
-      return undefined;
+    if (!guestTrial && !(info && (info.metered || this.tier?.unlimited === true))) return undefined;
     const shell = this.shell;
     return () =>
       openBillingSheet({
@@ -319,20 +323,18 @@ export class LiveBinding {
   private headNote(): string {
     const access = this.view.access;
     const info = this.modelChoice;
-    if (access.kind === 'invite')
-      return !this.accessKnown
-        ? '访问权限暂无法确认'
-        : access.status === 'active'
-          ? info?.plan?.kind === 'daily_refill'
-            ? balanceLine(info)
-            : info?.plan
-              ? infoCopy.unlimited
-              : '邀请已解锁'
-          : '邀请已失效';
+    // The line comes from the server's effective tier (the same words as 我的信息); the principal kind decides nothing here.
+    const held = this.tier ? tierView({ tier: this.tier, modelChoice: info }) : null;
+    if (access.kind === 'invite') {
+      // The legacy invite-only access state (its status), not a tier.
+      if (!this.accessKnown) return '访问权限暂无法确认';
+      if (access.status !== 'active') return '邀请已失效';
+      return held?.quota ?? '邀请已解锁';
+    }
     if (this.invitation.locked) return '邀请兑换待核对';
     if (!this.accessKnown) return '额度暂无法确认';
     if (!(access.remainingReplies === 0 || access.canSend)) return '体验已结束';
-    if (this.hasLogin && info?.plan?.kind === 'unlimited') return infoCopy.unlimited;
+    if (this.hasLogin && held?.unlimited) return infoCopy.unlimited;
     if (this.hasLogin && this.bonusOffer)
       return access.remainingReplies === 0
         ? '免费消息已用完'
@@ -356,7 +358,7 @@ export class LiveBinding {
       nickname: account?.nickname ?? null,
       playerNumber: account?.playerNumber ?? null,
       emailMasked: account?.emailMasked ?? null,
-      tier: account && mode !== 'guest' ? tierView({ kind: account.kind, modelChoice: this.modelChoice }) : null,
+      tier: account && mode !== 'guest' ? tierView({ tier: this.tier, modelChoice: this.modelChoice }) : null,
       trialLine: mode === 'guest' ? this.headNote() : null,
       signupOpen: this.signupOpen,
       deleteEnabled: this.deleteEnabled,
@@ -560,6 +562,8 @@ export class LiveBinding {
     // While accounts are open a redemption belongs to a login (Part 22a: an invite is an entitlement of a signed-up player). A
     // guest may open this dialog, but a code it enters is not sent anywhere: it is told to sign up, and the code is not consumed.
     const guestMustSignUp = () => this.signupOpen && !this.hasLogin;
+    // Once the guest has been told to sign up, 解锁 goes away: there is nothing it could do.
+    let guestRefused = false;
     const dialog = document.createElement('dialog');
     this.dialog = dialog;
     dialog.className = 'invite-dialog';
@@ -600,7 +604,7 @@ export class LiveBinding {
         input.value = '';
         input.placeholder = '本次邀请码已保留，请勿重复兑换';
       } else input.placeholder = '';
-      submit.hidden = phase === 'uncertain' || phase === 'recovering' || phase === 'blocked';
+      submit.hidden = phase === 'uncertain' || phase === 'recovering' || phase === 'blocked' || guestRefused;
       submit.disabled = phase !== 'entry';
       submit.textContent = phase === 'submitting' ? '正在解锁…' : '解锁';
       recover.hidden = phase !== 'uncertain' && phase !== 'recovering';
@@ -614,7 +618,9 @@ export class LiveBinding {
             ? '请填写完整的 43 位邀请码。'
             : errorCode === 'WEB_INVITE_UNAVAILABLE'
               ? '邀请码无效或已被使用，请核对后再输入。'
-              : ''
+              : errorCode === 'WEB_INVITE_UNUSABLE'
+                ? '这个邀请码暂时不能使用'
+                : ''
           : phase === 'submitting'
             ? '正在兑换，请勿重复提交。'
             : phase === 'recovering'
@@ -654,6 +660,8 @@ export class LiveBinding {
       if (guestMustSignUp()) {
         // Nothing is sent: the code stays unused and the field keeps what was typed.
         if (signupNote) signupNote.hidden = false;
+        guestRefused = true;
+        submit.hidden = true;
         status.textContent = '';
         return;
       }

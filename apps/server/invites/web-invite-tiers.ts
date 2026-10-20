@@ -7,6 +7,7 @@ import { requireWebAdminMembership } from '../admin/web-admin-schema.ts';
 import { activeEntitlement, entitlementTablesExist } from '../admission/web-entitlements.ts';
 import { applyDailyRefill, offeredModels } from '../admission/web-points.ts';
 import type { ModelFlags } from '../admission/web-model-settings.ts';
+import { endHolderAccess } from './web-holder-access.ts';
 import { ensurePlayerNumber } from '../admission/web-player-number.ts';
 
 /**
@@ -108,17 +109,18 @@ export class WebInviteTiers {
   }
 
   /**
-   * Entitlement redemption is on when signed-up players exist (SIGNUP_BONUS_ENABLED) and are metered in points
-   * (PLAYER_MODEL_CHOICE_ENABLED) on a database with migration 125. Otherwise a code still makes the old invite principal.
+   * On a database with migration 125 a code ALWAYS becomes an entitlement (the old invite principal exists only below 125),
+   * whatever SIGNUP_BONUS_ENABLED / PLAYER_MODEL_CHOICE_ENABLED say. Only daily_refill needs points: see `pointsOn`.
    */
   enabled() {
-    const flags = this.store as unknown as ModelFlags & Store;
     return (
-      flags.publicFreeTier === true &&
       entitlementTablesExist(this.store) &&
-      !!this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'") &&
-      offeredModels(flags) !== null
+      !!this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'")
     );
+  }
+  /** Points exist (PLAYER_MODEL_CHOICE_ENABLED, with its tables). A daily_refill batch can be made or redeemed only then. */
+  pointsOn() {
+    return offeredModels(this.store as unknown as ModelFlags & Store) !== null;
   }
 
   private now() {
@@ -266,6 +268,8 @@ export class WebInviteTiers {
         : undefined;
       // A code from before this Part has no batch of its own: it grants unlimited access for its old duration.
       const kind = batch?.tier ?? 'unlimited';
+      // A refill needs points: with them off the code stays UNUSED (refused before anything is written).
+      ensure(kind !== 'daily_refill' || this.pointsOn(), 'WEB_INVITE_UNUSABLE');
       const durationMs = batch?.duration_days != null ? batch.duration_days * DAY_MS : invite.access_duration_ms;
       const expiresAt = durationMs === null ? null : now + durationMs;
       ensure(expiresAt === null || Number.isSafeInteger(expiresAt), 'INVALID_TIME');
@@ -373,6 +377,8 @@ export class WebInviteTiers {
         return { batchId: prior.id, codes: null as string[] | null, duplicate: true as const };
       }
       ensure(input.redeemBy === null || input.redeemBy > now, 'WEB_INVITE_TERMS_REQUIRED');
+      // 需要先开启模型选择/积分: a refill batch means nothing while points are off.
+      ensure(input.tier.kind !== 'daily_refill' || this.pointsOn(), 'WEB_INVITE_POINTS_REQUIRED');
       const batchId = this.nextId();
       this.store.run(
         `INSERT INTO web_invite_batches(id,name,tier,daily_amount,total_cap,duration_days,request_id,request_digest,created_by,created_at)
@@ -641,34 +647,9 @@ export class WebInviteTiers {
       const now = this.now();
       this.requireAdmin(adminSessionId, now, 'invites.manage');
       const id = typeof inviteId === 'string' ? inviteId : '';
-      const row = this.store.get<{ id: string; revoked_at: number | null }>(
-        'SELECT id,revoked_at FROM web_entitlements WHERE invite_id=?',
-        id,
-      );
-      const grant = this.store.get<{ id: string; principal_id: string; revoked_at: number | null }>(
-        'SELECT id,principal_id,revoked_at FROM web_invite_grants WHERE invite_id=?',
-        id,
-      );
-      ensure(row || grant, 'WEB_INVITE_UNAVAILABLE');
-      if ((row ? row.revoked_at !== null : true) && (grant ? grant.revoked_at !== null : true))
-        return { inviteId, duplicate: true as const };
-      if (row)
-        this.store.run('UPDATE web_entitlements SET revoked_at=? WHERE id=? AND revoked_at IS NULL', now, row.id);
-      if (grant) {
-        this.store.run('UPDATE web_invite_grants SET revoked_at=? WHERE id=? AND revoked_at IS NULL', now, grant.id);
-        // A legacy invited player WITHOUT an email login has nothing to fall back on: its sessions and recovery credential end
-        // with the grant, as the old revoke did. One with a login keeps signing in, as a registered player.
-        if (!row) {
-          this.store.run(
-            'UPDATE web_sessions SET revoked_at=? WHERE principal_id=? AND revoked_at IS NULL',
-            now,
-            grant.principal_id,
-          );
-          for (const table of ['web_invite_credentials', 'web_invite_identity_receipts'])
-            if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", table))
-              this.store.run(`UPDATE ${table} SET revoked_at=? WHERE grant_id=? AND revoked_at IS NULL`, now, grant.id);
-        }
-      }
+      const ended = endHolderAccess(this.store, now, id);
+      ensure(ended.found, 'WEB_INVITE_UNAVAILABLE');
+      if (!ended.changed) return { inviteId, duplicate: true as const };
       this.audit(adminSessionId, 'invite-entitlement-revoked', id, now);
       return { inviteId, duplicate: false as const };
     });

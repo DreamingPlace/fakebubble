@@ -405,6 +405,9 @@ const invitedAccount: AccountInfo = {
   nickname: null,
   canBind: false,
   modelChoice: { ...info, metered: false, balance: 0, repliesLeft: 0 },
+  // Named exception (Part 22a): the page reads the server's effective tier, never the principal kind, so this legacy invited
+  // player now says what it is (the server sends it to every signed-in player).
+  tier: { kind: 'legacy_invite', unlimited: true },
 };
 
 test('chat ⋯ menu: 切换回复模型 and 共创 only, in that order; a guest has 共创 only; no account entries in either', async (t) => {

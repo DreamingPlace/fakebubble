@@ -3800,6 +3800,69 @@ body:has(.admin-shell) {
   }
 }
 
+/* 玩家 → 邀请与额度 (Part 22a). */
+.tiers-form {
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+  margin-bottom: 20px;
+}
+.tiers-field {
+  display: grid;
+  gap: 4px;
+}
+.tiers-kind {
+  display: flex;
+  gap: 20px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.tiers-refill {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.tiers-refill[hidden] {
+  display: none;
+}
+.tiers-codes {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+.tiers-shown-actions,
+.tiers-actions,
+.tiers-list-head,
+.tiers-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+}
+.tiers-list-head {
+  justify-content: space-between;
+}
+.tiers-detail {
+  margin-top: 20px;
+}
+.tiers-danger {
+  color: #8a2f27;
+}
+.account-admin-page .tiers-kind label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  white-space: nowrap;
+}
+.account-admin-page .tiers-kind input[type="radio"] {
+  width: auto;
+  flex: none;
+  margin: 0;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;
@@ -4665,67 +4728,4 @@ body.legal-page {
   color: #fff;
   font: inherit;
   cursor: pointer;
-}
-
-/* 玩家 → 邀请与额度 (Part 22a). */
-.tiers-form {
-  display: grid;
-  gap: 12px;
-  max-width: 560px;
-  margin-bottom: 20px;
-}
-.tiers-field {
-  display: grid;
-  gap: 4px;
-}
-.tiers-kind {
-  display: flex;
-  gap: 20px;
-  border: 0;
-  padding: 0;
-  margin: 0;
-}
-.tiers-refill {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.tiers-refill[hidden] {
-  display: none;
-}
-.tiers-codes {
-  width: 100%;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-}
-.tiers-shown-actions,
-.tiers-actions,
-.tiers-list-head,
-.tiers-edit {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 8px;
-}
-.tiers-list-head {
-  justify-content: space-between;
-}
-.tiers-detail {
-  margin-top: 20px;
-}
-.tiers-danger {
-  color: #8a2f27;
-}
-.account-admin-page .tiers-kind label {
-  display: inline-flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-  width: auto;
-  white-space: nowrap;
-}
-.account-admin-page .tiers-kind input[type="radio"] {
-  width: auto;
-  flex: none;
-  margin: 0;
 }

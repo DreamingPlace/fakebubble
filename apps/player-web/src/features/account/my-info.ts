@@ -7,6 +7,7 @@
  * does; this file only lays it out, so it can be driven by a test without a page.
  */
 import type { ModelChoiceInfo, PlayerPlan } from '../../../../../packages/contracts/player-models.ts';
+import type { AccountTier } from '../../services/provider-api.ts';
 import { h } from '../cocreation/h.ts';
 import { accountCopy, accountError, nicknameOk } from './account-sheet.ts';
 
@@ -69,32 +70,28 @@ export interface TierView {
   unlimited: boolean;
 }
 export function tierView(args: {
-  /** principal kind of the session: 'guest' (also a signed-up player) or 'invite' (legacy invited player). */
-  kind: string;
+  /** The server's EFFECTIVE tier. The principal kind plays no part here. */
+  tier: AccountTier | undefined;
   modelChoice: ModelChoiceInfo | undefined;
 }): TierView {
-  const { kind, modelChoice } = args;
-  const plan: PlayerPlan | undefined = modelChoice?.plan;
-  if (plan?.kind === 'daily_refill')
+  const { tier, modelChoice } = args;
+  const plan = tier?.plan ?? modelChoice?.plan;
+  const balance = modelChoice?.metered ? balanceLine(modelChoice) : null;
+  if (tier?.kind === 'daily_refill' || (!tier && plan?.kind === 'daily_refill'))
     return {
-      label: infoCopy.invitedRefill(plan.dailyAmount ?? 0),
-      expires: plan.expiresAt === null ? null : utcDate(plan.expiresAt),
-      quota: modelChoice ? balanceLine(modelChoice) : null,
+      label: infoCopy.invitedRefill(plan?.dailyAmount ?? 0),
+      expires: plan?.expiresAt == null ? null : utcDate(plan.expiresAt),
+      quota: balance,
       unlimited: false,
     };
-  if (plan?.kind === 'unlimited' || kind === 'invite')
+  if (tier?.unlimited || (!tier && plan?.kind === 'unlimited'))
     return {
       label: infoCopy.invitedUnlimited,
       expires: plan?.expiresAt == null ? null : utcDate(plan.expiresAt),
       quota: infoCopy.unlimited,
       unlimited: true,
     };
-  return {
-    label: infoCopy.registered,
-    expires: null,
-    quota: modelChoice?.metered ? balanceLine(modelChoice) : null,
-    unlimited: false,
-  };
+  return { label: infoCopy.registered, expires: null, quota: balance, unlimited: false };
 }
 
 export interface MyInfoOptions {

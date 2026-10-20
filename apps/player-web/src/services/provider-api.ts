@@ -2,6 +2,7 @@ import {
   parseModelChoice,
   parsePlan,
   type ModelChoiceInfo,
+  type PlayerPlan,
   type PlayerModelId,
 } from '../../../../packages/contracts/player-models.ts';
 import {
@@ -51,6 +52,11 @@ export type AccountFeatures = {
   /** Administrators may read chats under an anonymous code while testing: the one-time banner applies. */
   chatReview?: true;
 };
+export type AccountTier = {
+  kind: 'guest' | 'registered' | 'unlimited' | 'daily_refill' | 'legacy_invite' | 'account';
+  unlimited: boolean;
+  plan?: PlayerPlan;
+};
 export type AccountInfo =
   | { signupEnabled: boolean; signedIn: false; features?: AccountFeatures }
   | {
@@ -70,6 +76,8 @@ export type AccountInfo =
       modelChoice?: ModelChoiceInfo;
       /** Part 22a: the 玩家编号 of a registered player (8 characters, Crockford base32). */
       playerNumber?: string;
+      /** Part 22a: the EFFECTIVE tier from the server (effectiveTier). The page never derives a tier from `kind`. */
+      tier?: AccountTier;
     };
 /** The bot check: resolves one fresh Turnstile token for an action, or throws. Installed only on the real page. */
 export type HumanCheck = (siteKey: string, action: 'guest' | 'code' | 'login') => Promise<string>;
@@ -82,6 +90,14 @@ const humanAction = (path: string) =>
         ? 'login'
         : null;
 
+const TIER_KINDS = ['guest', 'registered', 'unlimited', 'daily_refill', 'legacy_invite', 'account'] as const;
+function parseTier(value: unknown): AccountTier | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  if (!(TIER_KINDS as readonly unknown[]).includes(raw.kind) || typeof raw.unlimited !== 'boolean') return undefined;
+  const plan = raw.plan === undefined ? undefined : parsePlan(raw.plan);
+  return { kind: raw.kind as AccountTier['kind'], unlimited: raw.unlimited, ...(plan ? { plan } : {}) };
+}
 function parseFeatures(value: unknown): AccountFeatures | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const raw = value as Record<string, unknown>;
@@ -404,6 +420,7 @@ export class ProviderApi implements WebProviderActions {
       ...(features ? { features } : {}),
       ...(typeof value.reviewNoticeClosed === 'boolean' ? { reviewNoticeClosed: value.reviewNoticeClosed } : {}),
       ...(parseModelChoice(value.modelChoice) ? { modelChoice: parseModelChoice(value.modelChoice)! } : {}),
+      ...(parseTier(value.tier) ? { tier: parseTier(value.tier)! } : {}),
       ...(typeof value.playerNumber === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(value.playerNumber)
         ? { playerNumber: value.playerNumber }
         : {}),

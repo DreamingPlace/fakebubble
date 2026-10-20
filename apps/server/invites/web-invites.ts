@@ -5,6 +5,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import { requireWebRuntime } from '../platform/web-store-contract.ts';
 import type { WebIdentity } from '../identity/web-identity.ts';
+import { endHolderAccess } from './web-holder-access.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
 import { requireWebAdminMembership } from '../admin/web-admin-schema.ts';
 
@@ -176,6 +177,16 @@ export class WebInvites {
         input.adminSessionId,
         now,
       );
+      // Part 22a: from schema 125 every code belongs to a batch (the one 邀请与额度 lists), also one issued the old way.
+      if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_invite_batches'")) {
+        this.store.run(
+          `INSERT OR IGNORE INTO web_invite_batches(id,name,tier,created_at) VALUES (?,?,'unlimited',?)`,
+          `legacy:${input.batch}`,
+          input.batch,
+          now,
+        );
+        this.store.run('UPDATE web_invite_codes SET batch_id=? WHERE id=?', `legacy:${input.batch}`, inviteId);
+      }
       return { inviteId, code, duplicate: false as const };
     });
   }
@@ -211,29 +222,9 @@ export class WebInvites {
       const grant = this.store.get<GrantRow>('SELECT * FROM web_invite_grants WHERE id=?', grantId);
       ensure(grant, 'WEB_INVITE_GRANT_UNAVAILABLE');
       if (grant.revoked_at !== null) return { grantId, duplicate: true as const };
-      ensure(
-        this.store.run(`UPDATE web_invite_grants SET revoked_at=? WHERE id=? AND revoked_at IS NULL`, now, grantId)
-          .changes === 1,
-        'WEB_INVITE_GRANT_UNAVAILABLE',
-      );
-      // Same transaction: the player's every session and recovery credential end with the grant.
-      this.store.run(
-        'UPDATE web_sessions SET revoked_at=? WHERE principal_id=? AND revoked_at IS NULL',
-        now,
-        grant.principal_id,
-      );
-      if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_invite_credentials'"))
-        this.store.run(
-          'UPDATE web_invite_credentials SET revoked_at=? WHERE grant_id=? AND revoked_at IS NULL',
-          now,
-          grantId,
-        );
-      if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_invite_identity_receipts'"))
-        this.store.run(
-          'UPDATE web_invite_identity_receipts SET revoked_at=? WHERE grant_id=? AND revoked_at IS NULL',
-          now,
-          grantId,
-        );
+      // The shared revoke (also what 邀请与额度's 结束额度 calls): the grant, the entitlement of the same code, the player's
+      // sessions and its recovery credential / receipts - all in this transaction.
+      ensure(endHolderAccess(this.store, now, grant.invite_id).changed, 'WEB_INVITE_GRANT_UNAVAILABLE');
       return { grantId, duplicate: false as const };
     });
   }
@@ -246,6 +237,12 @@ export class WebInvites {
     return this.store.transaction(() => {
       const actor = this.authorize(input.token, input.csrf, input.origin),
         now = this.now();
+      // Part 22a: the old redemption (a grant, kind 'invite', retention 'protected') exists only below schema 125. From 125 on a
+      // code is ALWAYS an entitlement (WebInviteTiers.redeem); nothing may reach this path on such a database.
+      ensure(
+        !this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_entitlements'"),
+        'WEB_INVITE_LEGACY_UNAVAILABLE',
+      );
       ensure(actor.kind === 'guest' || actor.kind === 'invite', 'WEB_GUEST_REQUIRED');
       const session = this.store.get<{
         principal_id: string;

@@ -218,7 +218,8 @@ test('125 backfill: entitlements only for invited principals with a login and an
 
   // The effective tier after the migration: the entitled pair is unlimited, the lapsed ones are registered, the rest unchanged.
   const tier = (id: string) => effectiveTier(store, id, NOW)!.kind;
-  assert.equal(tier(shapes['invited, login, active grant (no expiry)']), 'legacy_invite');
+  // Part 22a follow-up: the backfilled entitlement decides (not the grant): unlimited, until it ends.
+  assert.equal(tier(shapes['invited, login, active grant (no expiry)']), 'unlimited');
   assert.equal(tier(shapes['invited, login, lapsed grant (expired)']), 'registered');
   assert.equal(tier(shapes['invited, NO login, lapsed grant']), 'legacy_invite');
   assert.equal(tier(shapes['registered guest (bonus)']), 'registered');

@@ -1,3 +1,4 @@
+import { effectiveTier } from '../admission/web-model-settings.ts';
 import { cheapestReplyPoints, hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
 import { ensureRegisteredBonus, signupBonusEmailKey, type BonusEmailKey } from '../admission/web-registered.ts';
 import { DEFAULT_PLAYER_MODEL, isPlayerModelId } from '../../../packages/contracts/player-models.ts';
@@ -528,6 +529,20 @@ export class WebProviderApplication {
     const trialCanSend = !expired && remaining > 0 && (locked === null || !webCharacterDeleted(this.store, locked));
     if (hasPoints(this.store, principal.principalId, now))
       return pointsAccess(retention.expires_at ?? null, expired && !retained && !registered);
+    // Part 22a: a holder of an entitlement with points switched off chats unmetered (admission: holderFree); it is never shown
+    // as a trial that ended or ran out.
+    const heldKind = effectiveTier(this.store, principal.principalId, now)?.kind;
+    if (heldKind === 'unlimited' || heldKind === 'daily_refill')
+      return {
+        kind: 'guest' as const,
+        ...base,
+        lockedCharacterId: null,
+        remainingReplies: 0,
+        reservedReplies: row.trial_reserved,
+        trialExpiresAt: retention.expires_at ?? null,
+        canSend: true,
+        inaccessible: false,
+      };
     const bonusLeft = bonusRemaining(this.store, principal.principalId);
     if (bonusLeft > 0)
       return {

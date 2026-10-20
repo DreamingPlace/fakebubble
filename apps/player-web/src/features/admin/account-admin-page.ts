@@ -3,7 +3,6 @@ import { characterWorkbench, characterAdminError } from './character-workbench.t
 import { previewWorkbench } from './preview/preview-workbench.ts';
 import type { PreviewAdminClient } from '../../services/preview-admin-api.ts';
 import { permissionMatrixEditor } from './permission-matrix.ts';
-import { grantsView } from './grants-view.ts';
 import { opsView } from './ops-view.ts';
 import { modelsView } from './models-view.ts';
 import { confirmDialog } from './ui/confirm-dialog.ts';
@@ -84,6 +83,7 @@ export function adminAccountError(error: unknown) {
       {
         MODEL_TIER_EMPTY: '每一类玩家至少要保留一个已开启的模型，本次未保存。',
         MODEL_SETTINGS_CONFLICT: '设置已被另一位管理员修改。请点“刷新”核对最新内容后再保存；本次未覆盖。',
+        WEB_INVITE_POINTS_REQUIRED: '需要先开启模型选择/积分，才能建每天补充的批次。',
         MODEL_SETTINGS_UNAVAILABLE: '这个站点的数据库还没有升级到模型与价格（迁移 124）。',
         IDEMPOTENCY_CONFLICT: '这次提交与之前的同一请求内容不一致，请刷新后重试。',
         INVALID_REQUEST: '填写的内容不符合要求（每条点数 1–200，语音加点 0–20，均为整数）。',
@@ -168,7 +168,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       <button class="admin-back" id="admin-members-refresh" type="button">刷新权限列表</button><div id="admin-members-list"></div>
     </section>
     <section data-panel="preview" hidden><div id="admin-preview" class="admin-fill"></div></section>
-    <section data-panel="grants" hidden><div id="admin-grants"></div></section>
     <section data-panel="ops" hidden><div id="admin-ops"></div></section>
     <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
     <section data-panel="models" hidden><div id="admin-models"></div></section>
@@ -409,7 +408,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       };
     if (page === 'members') return loadMembers;
     if (page === 'invites' && can('invites.manage') && port.inviteBatches) return () => tiers.load();
-    if (page === 'grants' && can('invites.read')) return () => grants.load();
     if (page === 'ops' && session.member.role === 'owner' && port.stageLatency) return () => ops.load();
     if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
     if (page === 'models' && port.modelSettings) return () => models.load();
@@ -574,13 +572,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       })
     : null;
   const toasts = toastHost(q('main'));
-  const grants = grantsView(q('#admin-grants'), {
-    port,
-    can,
-    run,
-    disposed: () => disposed,
-    toast: (text) => toasts.show(text, 'ok'),
-  });
   const ops = opsView(q('#admin-ops'), {
     load: (days) => (port.stageLatency ? port.stageLatency(days) : Promise.resolve([])),
     run,
@@ -630,7 +621,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     previewBench?.clear();
     previewSplit.detail.replaceChildren();
     picker.clear();
-    grants.clear();
     ops.clear();
     reviews.clear();
     models.clear();

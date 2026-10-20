@@ -134,14 +134,23 @@ export function webContentVerdict(
  * (bonus tables = schema 121, which also means logins and grants exist) and the same flag. One `?` (now).
  */
 export function webRegisteredSql(schema: number, freeTier: boolean, now: number, alias = 'p') {
-  if (!freeTier || schema < 121) return { sql: '0', args: [] as number[] };
-  return {
-    sql: `(EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=${alias}.id)
+  const base =
+    !freeTier || schema < 121
+      ? null
+      : {
+          sql: `(EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=${alias}.id)
       OR EXISTS (SELECT 1 FROM web_player_logins lg WHERE lg.principal_id=${alias}.id)
         AND (${alias}.kind='guest' OR ${alias}.kind='invite' AND NOT EXISTS (SELECT 1 FROM web_invite_grants ag
           WHERE ag.principal_id=${alias}.id AND ag.player_id=${alias}.player_id AND ag.world_id=${alias}.world_id
             AND ag.revoked_at IS NULL AND (ag.expires_at IS NULL OR ag.expires_at>?))))`,
-    args: [now],
+          args: [now],
+        };
+  // Part 22a: an ACTIVE entitlement keeps its holder a kept account whatever the free-tier switch says (schema 125).
+  const held = schema >= 125 ? entitlementActiveSql(now, alias) : null;
+  if (!base && !held) return { sql: '0', args: [] as number[] };
+  return {
+    sql: `(${[base?.sql, held?.sql].filter(Boolean).join(' OR ')})`,
+    args: [...(base?.args ?? []), ...(held?.args ?? [])],
   };
 }
 
@@ -160,16 +169,16 @@ export function webTierSql(schema: number, freeTier: boolean, now: number, alias
   const entitled = schema >= 125;
   const parts = [`WHEN ${alias}.kind='account' THEN 'account'`];
   const args: number[] = [];
+  if (entitled) {
+    parts.push(`WHEN ${unlimited.sql} THEN 'unlimited'`, `WHEN ${refill.sql} THEN 'daily_refill'`);
+    args.push(...unlimited.args, ...refill.args);
+  }
   if (schema >= GRANT_SCHEMAS_FROM) {
     parts.push(`WHEN ${alias}.kind='invite' AND ${grantActive} THEN 'legacy_invite'`);
     args.push(now);
   }
   parts.push(`WHEN NOT ${registered.sql} THEN CASE WHEN ${alias}.kind='guest' THEN 'guest' ELSE 'legacy_invite' END`);
   args.push(...registered.args);
-  if (entitled) {
-    parts.push(`WHEN ${unlimited.sql} THEN 'unlimited'`, `WHEN ${refill.sql} THEN 'daily_refill'`);
-    args.push(...unlimited.args, ...refill.args);
-  }
   return { sql: `CASE ${parts.join(' ')} ELSE 'registered' END`, args };
 }
 

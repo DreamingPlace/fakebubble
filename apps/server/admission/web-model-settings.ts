@@ -195,23 +195,20 @@ export function effectiveTier(store: Reader & ModelFlags, principalId: string, n
   const kind = store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind;
   if (kind === 'account') return { tier: 'invited', kind: 'account', entitlement: null, unlimited: true };
   if (kind !== 'guest' && kind !== 'invite') return null;
-  // A legacy invite principal (kind 'invite') whose grant is still active: the old unmetered path, untouched. A backfilled
-  // 'unlimited' entitlement of such a player (migration 125) says the same thing.
+  // An active entitlement decides, whatever the principal kind and whatever the free-tier switch says (a backfilled legacy
+  // invited player with a login holds one too, so its grant is not consulted).
+  const entitlement = activeEntitlement(store, principalId, now);
+  if (entitlement)
+    return { tier: 'invited', kind: entitlement.kind, entitlement, unlimited: entitlement.kind === 'unlimited' };
+  // The legacy invite-only path (no entitlement row): an invite principal whose grant is still active is unmetered.
   if (kind === 'invite' && inviteGrantActive(store, principalId, now))
-    return {
-      tier: 'invited',
-      kind: 'legacy_invite',
-      entitlement: activeEntitlement(store, principalId, now),
-      unlimited: true,
-    };
+    return { tier: 'invited', kind: 'legacy_invite', entitlement: null, unlimited: true };
   // Part 17h: a guest, or an invited player whose grant lapsed, is registered when it holds the bonus or has an email login.
   if (!isRegistered(store, principalId, now))
     return kind === 'guest'
       ? { tier: 'guest', kind: 'guest', entitlement: null, unlimited: false }
       : { tier: 'invited', kind: 'legacy_invite', entitlement: null, unlimited: true };
-  const entitlement = activeEntitlement(store, principalId, now);
-  if (!entitlement) return { tier: 'registered', kind: 'registered', entitlement: null, unlimited: false };
-  return { tier: 'invited', kind: entitlement.kind, entitlement, unlimited: entitlement.kind === 'unlimited' };
+  return { tier: 'registered', kind: 'registered', entitlement: null, unlimited: false };
 }
 
 /**

@@ -22,7 +22,7 @@ const choice = (over: Partial<ModelChoiceInfo> = {}): ModelChoiceInfo => ({
 });
 
 test('22a tier label, end date and quota line for each tier - one format for every metered tier', () => {
-  assert.deepEqual(tierView({ kind: 'guest', modelChoice: choice() }), {
+  assert.deepEqual(tierView({ tier: { kind: 'registered', unlimited: false }, modelChoice: choice() }), {
     label: '注册玩家',
     expires: null,
     quota: '剩余 150 点 · 约可聊 12 条',
@@ -30,26 +30,44 @@ test('22a tier label, end date and quota line for each tier - one format for eve
   });
   assert.deepEqual(
     tierView({
-      kind: 'guest',
-      modelChoice: choice({
+      tier: {
+        kind: 'daily_refill',
+        unlimited: false,
         plan: { kind: 'daily_refill', dailyAmount: 50, cap: 1000, expiresAt: Date.UTC(2026, 11, 31, 23) },
-      }),
+      },
+      modelChoice: choice(),
     }),
     { label: '邀请 · 每天 +50 点', expires: '2026-12-31', quota: '剩余 150 点 · 约可聊 12 条', unlimited: false },
   );
-  assert.deepEqual(tierView({ kind: 'guest', modelChoice: choice({ plan: { kind: 'unlimited', expiresAt: null } }) }), {
-    label: '邀请 · 不限量',
-    expires: null,
-    quota: '不限量',
-    unlimited: true,
-  });
+  assert.deepEqual(
+    tierView({
+      tier: { kind: 'unlimited', unlimited: true, plan: { kind: 'unlimited', expiresAt: null } },
+      modelChoice: choice(),
+    }),
+    {
+      label: '邀请 · 不限量',
+      expires: null,
+      quota: '不限量',
+      unlimited: true,
+    },
+  );
   // A legacy invited player (no entitlement row) is unlimited too.
-  assert.equal(tierView({ kind: 'invite', modelChoice: undefined }).label, '邀请 · 不限量');
-  assert.equal(balanceLine(choice()), tierView({ kind: 'guest', modelChoice: choice() }).quota);
+  assert.equal(
+    tierView({ tier: { kind: 'legacy_invite', unlimited: true }, modelChoice: undefined }).label,
+    '邀请 · 不限量',
+  );
+  assert.equal(
+    balanceLine(choice()),
+    tierView({ tier: { kind: 'registered', unlimited: false }, modelChoice: choice() }).quota,
+  );
   // The cap is never shown: no "每天最多", no cap number anywhere in what the page can say.
   const refill = tierView({
-    kind: 'guest',
-    modelChoice: choice({ plan: { kind: 'daily_refill', dailyAmount: 50, cap: 1000, expiresAt: null } }),
+    tier: {
+      kind: 'daily_refill',
+      unlimited: false,
+      plan: { kind: 'daily_refill', dailyAmount: 50, cap: 1000, expiresAt: null },
+    },
+    modelChoice: choice(),
   });
   assert.doesNotMatch(JSON.stringify(refill), /每天最多|上限|1000/);
   assert.equal(utcDate(Date.UTC(2026, 0, 2, 23, 59)), '2026-01-02');
@@ -63,7 +81,7 @@ function open(t: test.TestContext, over: Partial<MyInfoOptions> = {}) {
     nickname: '阿泡',
     playerNumber: 'ABCD2345',
     emailMasked: 'p***@example.com',
-    tier: tierView({ kind: 'guest', modelChoice: choice() }),
+    tier: tierView({ tier: { kind: 'registered', unlimited: false }, modelChoice: choice() }),
     trialLine: null,
     signupOpen: true,
     deleteEnabled: true,
@@ -144,7 +162,10 @@ test('22a rows do what they say, and the page has no helper line', async (t) => 
 
 test('22a an unlimited player sees 不限量 and the tier label; a daily-refill player sees N and the date, never the cap', (t) => {
   const unlimited = open(t, {
-    tier: tierView({ kind: 'guest', modelChoice: choice({ plan: { kind: 'unlimited', expiresAt: null } }) }),
+    tier: tierView({
+      tier: { kind: 'unlimited', unlimited: true, plan: { kind: 'unlimited', expiresAt: null } },
+      modelChoice: choice(),
+    }),
   });
   assert.ok(unlimited.text().includes('邀请 · 不限量'));
   assert.ok(unlimited.text().includes('不限量'));
@@ -152,10 +173,12 @@ test('22a an unlimited player sees 不限量 and the tier label; a daily-refill 
   unlimited.handle.close();
   const refill = open(t, {
     tier: tierView({
-      kind: 'guest',
-      modelChoice: choice({
+      tier: {
+        kind: 'daily_refill',
+        unlimited: false,
         plan: { kind: 'daily_refill', dailyAmount: 50, cap: 1000, expiresAt: Date.UTC(2026, 11, 31, 12) },
-      }),
+      },
+      modelChoice: choice(),
     }),
   });
   assert.ok(refill.text().includes('邀请 · 每天 +50 点'));
@@ -192,7 +215,7 @@ test('22a a legacy invited player without a login: 绑定邮箱 and 恢复码, n
     emailMasked: null,
     nickname: null,
     canBind: true,
-    tier: tierView({ kind: 'invite', modelChoice: undefined }),
+    tier: tierView({ tier: { kind: 'legacy_invite', unlimited: true }, modelChoice: undefined }),
     actions: {
       password: () => {},
       logoutOthers: async () => {},
@@ -221,4 +244,28 @@ test('22a closing removes the page and calls onClose once', (t) => {
   f.handle.close();
   assert.equal(closed, 1);
   assert.equal(f.doc.body.querySelector('.mi-sheet'), null);
+});
+
+test("22a the page decides a tier from the server's effective tier ONLY, never from the principal kind", () => {
+  // A legacy invite player whose grant expired: the server says registered -> 注册玩家 + the balance line.
+  assert.deepEqual(tierView({ tier: { kind: 'registered', unlimited: false }, modelChoice: choice() }), {
+    label: '注册玩家',
+    expires: null,
+    quota: '剩余 150 点 · 约可聊 12 条',
+    unlimited: false,
+  });
+  // The same player with a backfilled entitlement: 邀请 · 不限量 ...
+  const held = tierView({
+    tier: { kind: 'unlimited', unlimited: true, plan: { kind: 'unlimited', expiresAt: null } },
+    modelChoice: choice(),
+  });
+  assert.deepEqual([held.label, held.quota, held.unlimited], ['邀请 · 不限量', '不限量', true]);
+  // ... until the entitlement is revoked: registered again, with the balance that remains.
+  const after = tierView({
+    tier: { kind: 'registered', unlimited: false },
+    modelChoice: choice({ balance: 90, repliesLeft: 7 }),
+  });
+  assert.deepEqual([after.label, after.quota], ['注册玩家', '剩余 90 点 · 约可聊 7 条']);
+  // No tier from the server: a registered player, never an invited one.
+  assert.equal(tierView({ tier: undefined, modelChoice: choice() }).label, '注册玩家');
 });

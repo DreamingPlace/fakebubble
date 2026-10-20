@@ -380,7 +380,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
                     ),
                   ),
                   cell('兑换时间', code.redeemedAt === null ? '' : dayTime(code.redeemedAt)),
-                  cell('玩家编号', code.playerNumber ?? ''),
+                  cell('玩家编号', code.playerNumber ?? (code.redeemedAt === null ? '' : '旧邀请')),
                   cell('额度到期', code.expiresAt === null ? '' : utcDay(code.expiresAt)),
                   cell(
                     '操作',

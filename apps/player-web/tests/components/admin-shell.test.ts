@@ -30,7 +30,8 @@ test('the nav tree is exactly the agreed groups and pages; 退出登录 and 我�
     [
       ['角色', ['角色资料', '预演测试', '共创收件箱']],
       // Named exception (Part 22a): the invite page is now 邀请与额度 (same place, same permissions to see it). Nothing else changed.
-      ['玩家', ['邀请与额度', '玩家授权']],
+      // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
+      ['玩家', ['邀请与额度']],
       ['运营', ['运营数据']],
       // Named exception (Part 21g): 系统 → 模型与价格 is the new first page of the system group. No other assertion changed.
       ['系统', ['模型与价格', '管理员与权限']],
@@ -46,14 +47,15 @@ test('the owner sees everything; everyone else sees only what a permission opens
     '共创收件箱',
     // Named exception (Part 22a): 邀请码 is now called 邀请与额度.
     '邀请与额度',
-    '玩家授权',
+    // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
     '运营数据',
     '管理员与权限',
   ]);
   assert.deepEqual(labels(access([])), []);
   // Named exception (Part 22a): the label is now 邀请与额度; who sees the page is unchanged.
   assert.deepEqual(labels(access(['invites.issue'])), ['邀请与额度']);
-  assert.deepEqual(labels(access(['invites.read'])), ['邀请与额度', '玩家授权']);
+  // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
+  assert.deepEqual(labels(access(['invites.read'])), ['邀请与额度']);
   assert.deepEqual(labels(access(['cocreation.read'])), ['共创收件箱']);
   assert.deepEqual(labels(access(['cocreation.read'], { inbox: false })), []);
   assert.deepEqual(labels(access(['characters.read:*', 'characters.edit:*'])), ['角色资料']);
@@ -85,7 +87,6 @@ test('hash routes round-trip; unknown pages and malformed ids are not routes', (
     '#/preview/wei-guagua',
     '#/cocreation',
     '#/invites',
-    '#/grants',
     '#/ops',
     '#/members',
     '#/account',
@@ -175,7 +176,6 @@ class Root extends Stub {
       'characters',
       'preview',
       'cocreation',
-      'grants',
       'ops',
       'members',
     ];
@@ -278,8 +278,9 @@ const surface = (f: ReturnType<typeof setup>) => f.root.querySelector('main').at
 test('page: nav items an administrator may not use are hidden, not disabled', async (t) => {
   const f = setup(t, session(['invites.read', 'invites.issue']));
   await flush();
-  const shown = ['invites', 'grants'];
-  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'grants', 'ops', 'members']) {
+  // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
+  const shown = ['invites'];
+  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'ops', 'members']) {
     assert.equal(hiddenOf(f, page), !shown.includes(page), page);
     assert.equal(f.root.querySelector(`[data-page="${page}"]`).disabled, false, `${page} is never merely disabled`);
   }
@@ -290,7 +291,7 @@ test('page: nav items an administrator may not use are hidden, not disabled', as
 test('page: the owner sees every item', async (t) => {
   const f = setup(t, session([], 'owner'));
   await flush();
-  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'grants', 'ops', 'members'])
+  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'ops', 'members'])
     assert.equal(hiddenOf(f, page), false, page);
 });
 

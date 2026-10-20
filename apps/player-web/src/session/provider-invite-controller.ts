@@ -112,7 +112,7 @@ export class ProviderInviteController {
       if (
         error instanceof ProviderApiError &&
         error.status === 409 &&
-        (error.code === 'WEB_INVITE_UNAVAILABLE' || error.code === 'PLAYER_LOGIN_REQUIRED')
+        ['WEB_INVITE_UNAVAILABLE', 'WEB_INVITE_UNUSABLE', 'PLAYER_LOGIN_REQUIRED'].includes(error.code)
       ) {
         this.intent = null;
         this.set('entry', error.code);
