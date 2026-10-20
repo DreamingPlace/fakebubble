@@ -58,6 +58,8 @@ test('co-creation over real HTTP: open to every session, idempotent, limited per
     nobody = client(),
     guest = client(),
     invited = client();
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.call(`${API}/admin/login`, owner, { token: (await f.fixture<{ token: string }>('/fixture/grant')).token });
   const issue = (label: string, permissions: string[]) =>

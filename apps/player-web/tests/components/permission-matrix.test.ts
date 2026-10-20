@@ -41,11 +41,12 @@ test('permissions are grouped by area with every item present', (t) => {
     // Named exception (Part 21g): the new 模型与价格 group (models.manage) is last; counts below are one higher. Nothing weakened.
     ['角色资料', '预演与发布', '声音成品', '玩家邀请', '共创收件箱', '模型与价格'],
   );
-  assert.equal(f.host.querySelectorAll('[data-permission]').length, 16);
+  // Named exception (Part 22a): the new invites.manage item (邀请与额度) is in the 玩家邀请 group; counts are one higher.
+  assert.equal(f.host.querySelectorAll('[data-permission]').length, 17);
   const without = mount(t, [], false);
   assert.equal(
     without.host.querySelectorAll('[data-permission]').length,
-    14,
+    15,
     'no inbox group on a page without an inbox',
   );
 });
@@ -113,17 +114,19 @@ test('presets: 共创写手 has no publish; 运营 is invites plus inbox; 全部
   assert.ok(!f.ticked().includes('characters.publish'));
   assert.match(f.note(), /共创写手/);
   f.preset('operations');
+  // Named exception (Part 22a): 运营 also holds invites.manage (邀请与额度).
   assert.deepEqual(f.ticked(), [
     'cocreation.manage',
     'cocreation.read',
     'invites.issue',
+    'invites.manage',
     'invites.read',
     'invites.revoke-access',
     'invites.revoke-code',
   ]);
   f.preset('all');
-  // Named exception (Part 21g): 全部 now also ticks models.manage (16 items).
-  assert.equal(f.ticked().length, 16);
+  // Named exception (Part 21g): 全部 now also ticks models.manage (16 items). Part 22a: and invites.manage (17).
+  assert.equal(f.ticked().length, 17);
   f.toggle('characters.read', false);
   assert.deepEqual(
     f.ticked().filter((x) => x.startsWith('characters')),

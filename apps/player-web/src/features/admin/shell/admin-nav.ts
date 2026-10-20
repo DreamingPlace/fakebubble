@@ -12,7 +12,6 @@ export type AdminPage =
   | 'preview'
   | 'cocreation'
   | 'invites'
-  | 'grants'
   | 'ops'
   | 'conversations'
   | 'models'
@@ -35,10 +34,7 @@ export const NAV_TREE: readonly NavGroup[] = [
   {
     id: 'players',
     label: '玩家',
-    items: [
-      { page: 'invites', label: '邀请码', icon: 'ticket' },
-      { page: 'grants', label: '玩家授权', icon: 'key' },
-    ],
+    items: [{ page: 'invites', label: '邀请与额度', icon: 'ticket' }],
   },
   { id: 'ops', label: '运营', items: [{ page: 'ops', label: '运营数据', icon: 'chart' }] },
   {
@@ -99,8 +95,6 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
       return access.inbox && (owner || hasCocreationPermission(permissions, 'cocreation.read'));
     case 'invites':
       return owner || hasAnyInvitePermission(permissions);
-    case 'grants':
-      return owner || hasInvitePermission(permissions, 'invites.read');
     case 'ops':
       return access.metrics && owner;
     case 'conversations':

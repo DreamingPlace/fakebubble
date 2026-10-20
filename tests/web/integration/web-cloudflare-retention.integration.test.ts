@@ -49,6 +49,8 @@ const cleared = (state: State) => {
 test('cloud retention erases guest SQL/R2 content, preserves bills/IP quota, fixed clips and protected invite history', async (t) => {
   const f = setup(t),
     fixed = await f.call<string[]>('/assets');
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.call('/legacy-schema', {});
   const guest = await f.call<Guest>('/bootstrap', {}),
     invited = await f.call<Guest>('/bootstrap', {});
   for (const actor of [guest, invited]) {

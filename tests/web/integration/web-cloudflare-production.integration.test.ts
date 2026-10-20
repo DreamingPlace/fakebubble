@@ -290,7 +290,7 @@ test('production topology: private immutable setup, six fixed clips, separate bu
 });
 
 test('private invite lookup returns only the selected grant ID after restart; revocation still needs admin authority', async (t) => {
-  const f = await fixture(t),
+  const f = await fixture(t, true),
     api = '/api/web/provider';
   await f.install();
   const grant = (await (await f.call({ action: 'grant' })).json()) as { token: string };
@@ -332,18 +332,19 @@ test('private invite lookup returns only the selected grant ID after restart; re
   const response = await f.call({ action: 'edge', path: api + '/bootstrap' });
   const guestCookie = response.headers.get('set-cookie')!.split(';')[0]!,
     boot = parseWebProviderBootstrap(await response.json());
-  const redeemed = await f.call(
-    {
-      action: 'edge',
-      path: api + '/invites/redeem',
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125, and this is the production topology (no fixture hook can
+  // lower the schema). The grant a pre-125 redemption leaves is OLD DATA on a 125 database: it is seeded (retention-worker
+  // /__test/legacy-invited) and everything after it - the private lookup, the admin revoke, the dead sessions - is the real path.
+  const seeded = (await (
+    await f.call({
+      action: 'business-http',
+      path: '/__test/legacy-invited',
       method: 'POST',
-      headers: { ...headers, cookie: guestCookie, 'x-csrf-token': boot.csrf },
-      body: { requestId: randomUUID(), code: invite.code },
-    },
-    201,
-  );
-  const invitedCookie = redeemed.headers.get('set-cookie')!.split(';')[0]!,
-    receipt = (await redeemed.json()) as { grantId: string };
+      body: { principalId: boot.access.principalId, inviteId: invite.inviteId },
+    })
+  ).json()) as { grantId: string };
+  const invitedCookie = guestCookie,
+    receipt = seeded;
   await f.restart();
   assert.deepEqual(await (await f.call({ action: 'invite-grants', body: invite.inviteId })).json(), [
     { grantId: receipt.grantId },
@@ -530,9 +531,13 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
   // Schema 123 and 48 steps since migration 123 (model choice) was added. Extended for migration 123 (Part 21b named exception).
   // Named exception (Part 21g, migration 124): the ledger now has 49 steps and 124 is the newest, so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-  assert.equal(bare.schemaVersion, 124);
+  // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(bare.schemaVersion, 125);
   assert.equal(bare.migrations.matches, true);
-  assert.equal(bare.migrations.applied.length, 49);
+  // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(bare.migrations.applied.length, 50);
   assert.deepEqual(bare.budget, { available: false, error: 'WEB_CLOUD_BUDGET_NOT_INITIALIZED' });
   assert.equal(bare.ownerAdminExists, false);
   await f.install();
@@ -580,11 +585,15 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
   assert.deepEqual(await (await f.call({ action: 'budget-summary' })).json(), budgets);
   assert.deepEqual(again, report);
   // Facts.
-  assert.equal(report.schemaVersion, 124); // Extended for migration 123.
+  // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(report.schemaVersion, 125); // Extended for migration 123.
   assert.equal(report.migrations.matches, true);
   assert.equal(report.migrations.expected.active, 'r2');
   assert.deepEqual(report.migrations.applied, report.migrations.expected.r2);
-  assert.equal(report.migrations.expected.inline.length, 49);
+  // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(report.migrations.expected.inline.length, 50);
   assert.deepEqual(report.instance, {
     instanceId: f.business.bindings.INSTANCE_ID,
     recoveryEpoch: f.business.bindings.RECOVERY_EPOCH,
@@ -666,7 +675,9 @@ test('offline expected-migrations output equals the steps the deployed business 
   // And the deployed object's applied ledger is exactly the offline R2 list.
   assert.deepEqual(live.migrations.applied, offline.r2);
   assert.equal(live.migrations.matches, true);
-  assert.equal(offline.r2.length, 49); // Extended for migration 123.
+  // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+  // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
+  assert.equal(offline.r2.length, 50); // Extended for migration 123.
   const extra = spawnSync(process.execPath, ['scripts/web-cloudflare-operator.ts', 'expected-migrations', '--x=1'], {
     encoding: 'utf8',
   });

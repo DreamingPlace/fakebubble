@@ -4,6 +4,11 @@ export const ADMIN_INVITE_PERMISSIONS = [
   'invites.issue',
   'invites.revoke-code',
   'invites.revoke-access',
+  /**
+   * 邀请与额度 (Part 22a): create batches of codes, list them and revoke codes, batches and entitlements. Editing a batch's daily
+   * amount and cap is the owner's alone and is NOT a permission.
+   */
+  'invites.manage',
 ] as const;
 export type InviteAdminPermission = (typeof ADMIN_INVITE_PERMISSIONS)[number];
 /** 角色 · 共创收件箱: read the players' ideas, or also change status, star, note and mark answers adopted. */
@@ -153,6 +158,7 @@ export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, rea
   'invites.issue': ['invites.read'],
   'invites.revoke-code': ['invites.read'],
   'invites.revoke-access': ['invites.read'],
+  'invites.manage': [],
   'cocreation.read': [],
   'cocreation.manage': ['cocreation.read'],
   'conversations.read': [],
@@ -214,6 +220,7 @@ export const ADMIN_PERMISSION_PRESETS: readonly AdminPermissionPreset[] = [
       'invites.issue',
       'invites.revoke-code',
       'invites.revoke-access',
+      'invites.manage',
       'cocreation.read',
       'cocreation.manage',
     ],

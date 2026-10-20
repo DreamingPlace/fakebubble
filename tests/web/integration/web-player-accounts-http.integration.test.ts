@@ -166,7 +166,12 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
     emailMasked: 'p***@example.com',
     nickname: '阿泡',
     canBind: false,
+    // Named exception (Part 22a): a signed-up player now also gets its 玩家编号 (8 Crockford characters) in this answer.
+    playerNumber: info.playerNumber,
+    // Named exception (Part 22a follow-up): the answer carries the EFFECTIVE tier; the page decides nothing from the principal kind.
+    tier: { kind: 'guest', unlimited: false },
   });
+  assert.match(info.playerNumber, /^[0-9A-HJKMNP-TV-Z]{8}$/);
   assert.equal(
     (await f.call(a('/request-code'), first, { purpose: 'signup', email: 'again@example.com' }, 409)).error.code,
     'PLAYER_LOGIN_EXISTS',
@@ -221,6 +226,8 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
     emailMasked: null,
     nickname: null,
     canBind: false,
+    // Named exception (Part 22a follow-up): the answer carries the EFFECTIVE tier.
+    tier: { kind: 'guest', unlimited: false },
   });
   // An account route for a dead cookie answers like a signed-out visitor instead of failing.
   assert.deepEqual(await f.call(a(''), { cookie: '__Host-fixture=' + 'z'.repeat(43), csrf: '' }), {
@@ -277,6 +284,8 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
 
 test('redeeming needs a login while signup is open, a revoked grant blocks future logins, and the admin sees a masked address only', async (t) => {
   const f = setup(t);
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.fixture('/fixture/players', { signupEnabled: true });
   const owner = client(),

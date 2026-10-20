@@ -23,10 +23,12 @@ import {
   chargeAdmission,
   effectiveModel,
   hasPoints,
+  offeredModels,
   isInvited,
   quote,
   recordUnmetered,
 } from './web-points.ts';
+import { effectiveTier } from './web-model-settings.ts';
 import { ensureRegisteredBonus, type BonusEmailKey } from './web-registered.ts';
 import { requirePublishedWebCharacter } from '../characters/web-character-catalog.ts';
 
@@ -136,11 +138,13 @@ export class WebAdmission {
       const trial = principal.kind === 'guest';
       ensure(
         trial ||
-          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124].includes(webSchema) &&
+          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125].includes(
+            webSchema,
+          ) &&
             ((principal.kind === 'account' &&
               this.store.get(`SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1`, principal.id)) ||
               (principal.kind === 'invite' &&
-                [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124].includes(webSchema) &&
+                [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125].includes(webSchema) &&
                 retention !== null))),
         'WEB_ADMISSION_ENTITLEMENT_REQUIRED',
       );
@@ -155,7 +159,16 @@ export class WebAdmission {
       // Part 17h: an invited player whose grant lapsed but who is registered chats as a registered player (points, no daily limit).
       const lapsed =
         principal.kind === 'invite' && isLapsedRegisteredInvite(this.store, principal.id, this.clock.now());
-      if (principal.kind === 'invite' && !lapsed) this.dailyLimit(principal.id);
+      const eff = effectiveTier(this.store, principal.id, this.clock.now());
+      // Part 22a: a HOLDER is a signed-in player with an active entitlement (the principal stays a guest). Its tier and liveness
+      // never depend on the free-tier switch. unlimited is never charged; daily_refill is charged in points while points exist.
+      const holder = principal.kind === 'guest' && (eff?.kind === 'unlimited' || eff?.kind === 'daily_refill');
+      const holderPoints = holder && hasPoints(this.store, principal.id, this.clock.now());
+      // Points switched off: nothing to charge a holder with; it chats unmetered under the daily cap (like any invited player).
+      const holderFree = holder && !holderPoints;
+      // An unmetered tier (the old invite-only holder, an unlimited entitlement, or a holder while points are off) is never
+      // charged, so the per-day reply cap stays as its invisible abuse guard. Decided from the EFFECTIVE tier, not the kind.
+      if (holderFree || eff?.kind === 'legacy_invite' || eff?.kind === 'unlimited') this.dailyLimit(principal.id);
       const tier = freeTier(this.store);
       const trialWindowMs = tier.trialWindowMs;
       // Part 17b: the signup bonus is one more entitlement, decided HERE, before any reservation or provider call.
@@ -163,15 +176,19 @@ export class WebAdmission {
       // bonus accounting is not consulted for it. Part 21f: it ALWAYS pays points, whatever the model: the guest trial path is
       // never used (its unused trial replies were converted into the opening balance). Everyone else, and every deployment
       // with the flag off, takes the path above unchanged.
-      const pointsMode = (trial || lapsed) && tier.on && hasPoints(this.store, principal.id, this.clock.now());
+      const pointsMode =
+        holderPoints || ((trial || lapsed) && tier.on && hasPoints(this.store, principal.id, this.clock.now()));
       let free: 'trial' | 'extra' | 'bonus' | 'points' =
-        (trial || lapsed) && tier.on && !pointsMode ? this.pickFreeEntitlement(principal, input, retention) : 'trial';
+        (trial || lapsed) && tier.on && !pointsMode && !holderFree
+          ? this.pickFreeEntitlement(principal, input, retention)
+          : 'trial';
       // Part 17h: a registered player whose trial window is over has nothing left on the trial path; it is never told the trial
       // expired - it is told its free replies are used up (the page offers what to do next). Only the bonus replies can pay.
       if (
         (trial || lapsed) &&
         tier.on &&
         !pointsMode &&
+        !holderFree &&
         free === 'trial' &&
         isRegistered(this.store, principal.id, this.clock.now()) &&
         (lapsed || (retention !== null && guestTrialOver(this.store, principal.id, this.clock.now())))
@@ -190,13 +207,13 @@ export class WebAdmission {
       // Part 21g: a trial guest may be allowed another model than DeepSeek (or several). The model is frozen into the operation like
       // any other; the reply still costs exactly one trial reply, whatever the model. A DeepSeek-only guest keeps no row at all.
       let guestModel: PlayerModelId | null = null;
-      if (trial && !pointsMode && !bonus) {
+      if (trial && !pointsMode && !bonus && !holderFree) {
         const effective = effectiveModel(this.store, this.clock.now(), principal.id);
         if (effective !== DEFAULT_PLAYER_MODEL || canChooseModel(this.store, principal.id)) guestModel = effective;
       }
       // Both outside-the-counters entitlements are 'entitled' operations with a web_free_operations row: no IP window, no trial counter.
       // A points reply is entitled too, with a points event (and web_operation_models row) instead.
-      const counted = trial && !bonus && !extra && !points;
+      const counted = trial && !bonus && !extra && !points && !holderFree;
       if (counted) {
         ensure(
           principal.trial_character_id === null || principal.trial_character_id === input.characterId,
@@ -388,7 +405,7 @@ export class WebAdmission {
         now,
         now + WEB_LIMITS.operationDeadlineMs,
       ];
-      if (webSchema >= 102 && webSchema <= 124) {
+      if (webSchema >= 102 && webSchema <= 125) {
         const sequence = this.store.get<{ last_seq: number }>(`UPDATE web_admission_counter
           SET last_seq=last_seq+1 WHERE singleton=1 RETURNING last_seq`)?.last_seq;
         ensure(sequence !== undefined, 'WEB_ADMISSION_ORDER_MISSING');
@@ -424,9 +441,10 @@ export class WebAdmission {
         );
       } else if (points) {
         chargeAdmission(this.store, now, principal.id, operationId, chosen);
-      } else if (isInvited(this.store, principal.id, now)) {
+      } else if (holderFree || isInvited(this.store, principal.id, now)) {
         // Invited players may pick a model; nothing is charged and the rolling daily limit above is unchanged.
-        recordUnmetered(this.store, now, operationId, effectiveModel(this.store, now, principal.id));
+        if (offeredModels(this.store) !== null)
+          recordUnmetered(this.store, now, operationId, effectiveModel(this.store, now, principal.id));
       } else if (extra) {
         this.store.run(
           "INSERT INTO web_free_operations(operation_id,principal_id,tier,ip_hash) VALUES (?,?,'trial_extra',?)",
@@ -525,7 +543,7 @@ export class WebAdmission {
     return this.store.transaction(() => {
       ensure(
         ![
-          104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124,
+          104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
         ].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1),
         'WEB_DISPATCH_FENCE_REQUIRED',
       );

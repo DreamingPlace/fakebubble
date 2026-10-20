@@ -4,6 +4,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import type { WebIdentity } from '../identity/web-identity.ts';
 import type { WebInvites } from './web-invites.ts';
+import type { BatchTierInput, WebInviteTiers } from './web-invite-tiers.ts';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 function equalHex(left: string, right: string) {
@@ -18,15 +19,18 @@ export class WebInviteActions {
   private readonly invites: WebInvites;
   private readonly identity: WebIdentity;
   private readonly requireLogin: ((token: string) => void) | undefined;
+  /** Part 22a: entitlement redemption and the 邀请与额度 admin actions (absent in stores without migration 125). */
+  readonly tiers: WebInviteTiers | null;
   constructor(
     store: Store,
     clock: Clock,
     origin: string,
     invites: WebInvites,
     identity: WebIdentity,
-    options: { requireLogin?: ((token: string) => void) | undefined } = {},
+    options: { requireLogin?: ((token: string) => void) | undefined; tiers?: WebInviteTiers } = {},
   ) {
     this.requireLogin = options.requireLogin;
+    this.tiers = options.tiers ?? null;
     this.store = store;
     this.clock = clock;
     this.origin = origin;
@@ -97,6 +101,67 @@ export class WebInviteActions {
     this.charge(trustedIpHash);
     this.requireLogin?.(token);
     return this.invites.redeem({ token, csrf, origin, ...body });
+  }
+  /** True when a code grants an entitlement to a signed-in player (the old invite principal otherwise). */
+  tiersEnabled() {
+    return this.tiers?.enabled() === true;
+  }
+  /** Part 22a: redeem as a signed-in player. A guest is refused (PLAYER_LOGIN_REQUIRED) and the code is not consumed. */
+  redeemTier(
+    token: string,
+    csrf: string,
+    origin: string,
+    trustedIpHash: string,
+    body: { code: string; requestId: string },
+  ) {
+    ensure(this.tiers, 'NOT_FOUND');
+    this.charge(trustedIpHash);
+    return this.tiers.redeem({ token, csrf, origin, ...body });
+  }
+  createBatch(
+    adminCookie: string,
+    csrf: string,
+    origin: string,
+    body: {
+      requestId: string;
+      name: string;
+      count: number;
+      tier: BatchTierInput;
+      durationDays: number | null;
+      redeemBy: number | null;
+    },
+  ) {
+    ensure(this.tiers, 'NOT_FOUND');
+    return this.tiers.createBatch({ ...body, adminSessionId: this.admin(adminCookie, csrf, origin) });
+  }
+  listBatches(adminCookie: string, csrf: string, origin: string) {
+    ensure(this.tiers, 'NOT_FOUND');
+    return this.tiers.listBatches(this.admin(adminCookie, csrf, origin));
+  }
+  batchDetail(adminCookie: string, csrf: string, origin: string, batchId: string) {
+    ensure(this.tiers, 'NOT_FOUND');
+    return this.tiers.batchDetail(this.admin(adminCookie, csrf, origin), batchId);
+  }
+  editBatch(
+    adminCookie: string,
+    csrf: string,
+    origin: string,
+    body: { requestId: string; batchId: string; dailyAmount: number; cap: number },
+  ) {
+    ensure(this.tiers, 'NOT_FOUND');
+    return this.tiers.editBatch({ ...body, adminSessionId: this.admin(adminCookie, csrf, origin) });
+  }
+  revokeTierCode(adminCookie: string, csrf: string, origin: string, inviteId: string) {
+    ensure(this.tiers, 'NOT_FOUND');
+    return this.tiers.revokeCode(this.admin(adminCookie, csrf, origin), inviteId);
+  }
+  revokeBatch(adminCookie: string, csrf: string, origin: string, batchId: string) {
+    ensure(this.tiers, 'NOT_FOUND');
+    return this.tiers.revokeBatch(this.admin(adminCookie, csrf, origin), batchId);
+  }
+  revokeEntitlement(adminCookie: string, csrf: string, origin: string, inviteId: string) {
+    ensure(this.tiers, 'NOT_FOUND');
+    return this.tiers.revokeEntitlement(this.admin(adminCookie, csrf, origin), inviteId);
   }
   redemptionChallenge(oldToken: string, origin: string) {
     ensure(origin === this.origin, 'ORIGIN_INVALID');

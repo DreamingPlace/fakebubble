@@ -88,9 +88,11 @@ test('presets: 共创写手 cannot publish, 运营 is invites plus the inbox, �
   const ops = preset('operations');
   assert.equal(ops.label, '运营');
   assert.deepEqual([...ops.items].sort(), [
+    // Named exception (Part 22a): 运营 also holds invites.manage (邀请与额度).
     'cocreation.manage',
     'cocreation.read',
     'invites.issue',
+    'invites.manage',
     'invites.read',
     'invites.revoke-access',
     'invites.revoke-code',

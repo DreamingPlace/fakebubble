@@ -2,7 +2,8 @@ import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
-import { isRegistered } from './web-free-tier.ts';
+import { entitlementActiveSql } from './web-entitlements.ts';
+import { isRegisteredTier } from './web-model-settings.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 
 export type WebRetentionRow = {
@@ -26,7 +27,8 @@ export function webCloudContentExpired(store: Store, now: number, principalId: s
   );
   ensure(row, 'WEB_RETENTION_SCOPE_INVALID');
   // A registered guest (signup bonus or an email login) is a kept account: its content does not expire with the trial window.
-  if (row.kind === 'guest' && row.state === 'active' && isRegistered(store as WebStore, principalId, now)) return false;
+  if (row.kind === 'guest' && row.state === 'active' && isRegisteredTier(store as WebStore, principalId, now))
+    return false;
   return (
     row.kind === 'guest' &&
     (['purging', 'purged'].includes(row.state) ||
@@ -95,7 +97,7 @@ export function webContentVerdict(
   if (
     principal.kind === 'guest' &&
     (row.state === 'unstarted' || row.state === 'active') &&
-    isRegistered(store as WebStore, principalId, now)
+    isRegisteredTier(store as WebStore, principalId, now)
   )
     return 'live';
   if (
@@ -121,7 +123,7 @@ export function webContentVerdict(
     );
     // Part 17h: an invited player whose grant has lapsed but who is registered chats as a registered player; only one
     // with nothing else to fall back on is told the invite is gone.
-    return grant || isRegistered(store as WebStore, principalId, now) ? 'live' : 'WEB_INVITE_ACCESS_REQUIRED';
+    return grant || isRegisteredTier(store as WebStore, principalId, now) ? 'live' : 'WEB_INVITE_ACCESS_REQUIRED';
   }
   return 'TRIAL_EXPIRED';
 }
@@ -132,15 +134,52 @@ export function webContentVerdict(
  * (bonus tables = schema 121, which also means logins and grants exist) and the same flag. One `?` (now).
  */
 export function webRegisteredSql(schema: number, freeTier: boolean, now: number, alias = 'p') {
-  if (!freeTier || schema < 121) return { sql: '0', args: [] as number[] };
-  return {
-    sql: `(EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=${alias}.id)
+  const base =
+    !freeTier || schema < 121
+      ? null
+      : {
+          sql: `(EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=${alias}.id)
       OR EXISTS (SELECT 1 FROM web_player_logins lg WHERE lg.principal_id=${alias}.id)
         AND (${alias}.kind='guest' OR ${alias}.kind='invite' AND NOT EXISTS (SELECT 1 FROM web_invite_grants ag
           WHERE ag.principal_id=${alias}.id AND ag.player_id=${alias}.player_id AND ag.world_id=${alias}.world_id
             AND ag.revoked_at IS NULL AND (ag.expires_at IS NULL OR ag.expires_at>?))))`,
-    args: [now],
+          args: [now],
+        };
+  // Part 22a: an ACTIVE entitlement keeps its holder a kept account whatever the free-tier switch says (schema 125).
+  const held = schema >= 125 ? entitlementActiveSql(now, alias) : null;
+  if (!base && !held) return { sql: '0', args: [] as number[] };
+  return {
+    sql: `(${[base?.sql, held?.sql].filter(Boolean).join(' OR ')})`,
+    args: [...(base?.args ?? []), ...(held?.args ?? [])],
   };
+}
+
+/**
+ * Part 22a. The SQL twin of `effectiveTier(...).kind` (web-model-settings.ts) over a web_principals row `alias`: the tier of every
+ * principal as one string - guest | registered | unlimited | daily_refill | legacy_invite | account. Built from webRegisteredSql
+ * above and entitlementActiveSql, so there is still ONE definition of "registered" and one of "holds an entitlement"; the
+ * operator inspect counts players with it and a test asserts it agrees with the JS for every shape. `?` count: see args.
+ */
+export function webTierSql(schema: number, freeTier: boolean, now: number, alias = 'p') {
+  const registered = webRegisteredSql(schema, freeTier, now, alias);
+  const grantActive = `EXISTS (SELECT 1 FROM web_invite_grants tg WHERE tg.principal_id=${alias}.id AND tg.player_id=${alias}.player_id
+    AND tg.world_id=${alias}.world_id AND tg.revoked_at IS NULL AND (tg.expires_at IS NULL OR tg.expires_at>?))`;
+  const unlimited = entitlementActiveSql(now, alias, 'unlimited');
+  const refill = entitlementActiveSql(now, alias, 'daily_refill');
+  const entitled = schema >= 125;
+  const parts = [`WHEN ${alias}.kind='account' THEN 'account'`];
+  const args: number[] = [];
+  if (entitled) {
+    parts.push(`WHEN ${unlimited.sql} THEN 'unlimited'`, `WHEN ${refill.sql} THEN 'daily_refill'`);
+    args.push(...unlimited.args, ...refill.args);
+  }
+  if (schema >= GRANT_SCHEMAS_FROM) {
+    parts.push(`WHEN ${alias}.kind='invite' AND ${grantActive} THEN 'legacy_invite'`);
+    args.push(now);
+  }
+  parts.push(`WHEN NOT ${registered.sql} THEN CASE WHEN ${alias}.kind='guest' THEN 'guest' ELSE 'legacy_invite' END`);
+  args.push(...registered.args);
+  return { sql: `CASE ${parts.join(' ')} ELSE 'registered' END`, args };
 }
 
 /**

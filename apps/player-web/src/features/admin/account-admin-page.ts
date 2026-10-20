@@ -3,7 +3,6 @@ import { characterWorkbench, characterAdminError } from './character-workbench.t
 import { previewWorkbench } from './preview/preview-workbench.ts';
 import type { PreviewAdminClient } from '../../services/preview-admin-api.ts';
 import { permissionMatrixEditor } from './permission-matrix.ts';
-import { grantsView } from './grants-view.ts';
 import { opsView } from './ops-view.ts';
 import { modelsView } from './models-view.ts';
 import { confirmDialog } from './ui/confirm-dialog.ts';
@@ -24,7 +23,7 @@ import { cocreationInbox } from './cocreation-inbox.ts';
 import { conversationsView } from './conversations-view.ts';
 import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
 import type { CocreationAdminClient } from '../../services/cocreation-admin-api.ts';
-import { inviteRecords } from './invite-records.ts';
+import { inviteTiersView } from './invite-tiers-view.ts';
 import {
   ADMIN_PERMISSION_LIMIT,
   hasCharacterPermission,
@@ -59,6 +58,14 @@ type Port = Pick<
   previews?: PreviewAdminClient;
   /** 运营数据 (owner only). Optional: a page without it has no such page in the nav. */
   stageLatency?: AccountAdminApi['stageLatency'];
+  /** 邀请与额度 (the owner, or an administrator holding invites.manage). Optional: a page without them shows nothing on that page. */
+  inviteBatches?: AccountAdminApi['inviteBatches'];
+  inviteBatchDetail?: AccountAdminApi['inviteBatchDetail'];
+  createInviteBatch?: AccountAdminApi['createInviteBatch'];
+  editInviteBatch?: AccountAdminApi['editInviteBatch'];
+  revokeInviteBatch?: AccountAdminApi['revokeInviteBatch'];
+  revokeTierCode?: AccountAdminApi['revokeTierCode'];
+  revokeEntitlement?: AccountAdminApi['revokeEntitlement'];
   /** 系统 → 模型与价格 (any administrator may read; saving needs the owner role or models.manage). Optional: a page without it has no such page. */
   modelSettings?: AccountAdminApi['modelSettings'];
   saveModelSettings?: AccountAdminApi['saveModelSettings'];
@@ -76,6 +83,7 @@ export function adminAccountError(error: unknown) {
       {
         MODEL_TIER_EMPTY: '每一类玩家至少要保留一个已开启的模型，本次未保存。',
         MODEL_SETTINGS_CONFLICT: '设置已被另一位管理员修改。请点“刷新”核对最新内容后再保存；本次未覆盖。',
+        WEB_INVITE_POINTS_REQUIRED: '需要先开启模型选择/积分，才能建每天补充的批次。',
         MODEL_SETTINGS_UNAVAILABLE: '这个站点的数据库还没有升级到模型与价格（迁移 124）。',
         IDEMPOTENCY_CONFLICT: '这次提交与之前的同一请求内容不一致，请刷新后重试。',
         INVALID_REQUEST: '填写的内容不符合要求（每条点数 1–200，语音加点 0–20，均为整数）。',
@@ -150,16 +158,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         <label for="admin-bind-password">设置密码（8–18 个字符）</label><div class="admin-password-field"><input id="admin-bind-password" type="password" autocomplete="new-password" pattern=".{8,18}" maxlength="36" required><button id="admin-bind-password-toggle" type="button" class="admin-secondary" aria-controls="admin-bind-password" aria-pressed="false">显示密码</button></div>
         <button type="submit">完成邮箱绑定</button></form>
       <button id="admin-account-continue" class="admin-back" type="button" data-page="home">进入管理</button></section>
-    <section data-panel="invites" hidden><h2>玩家邀请码</h2><p id="admin-no-permissions" hidden>当前没有管理功能权限。账号和登录保留，你仍可管理自己的邮箱登录方式。</p>
-      <form id="admin-invite-issue"><label for="admin-batch">批次标识</label><input id="admin-batch" maxlength="128" required>
-        <label for="admin-note">备注（可选）</label><input id="admin-note" maxlength="500">
-        <label for="admin-deadline">兑换截止时间（本机时区）</label><input id="admin-deadline" type="datetime-local" required>
-        <p>这是兑换截止时间，不是受邀后的体验期限。</p><button type="submit">手动生成玩家邀请码</button></form>
-      <div id="admin-invite-records"></div>
-      <details id="admin-invite-manual"><summary>按记录 ID 撤销</summary><p>没有查看记录的权限时，可由主管理员提供记录 ID。请核对撤销范围。</p><form id="admin-invite-revoke"><label for="admin-revoke-id">需要撤销的记录 ID</label><input id="admin-revoke-id" required maxlength="128">
-        <label for="admin-revoke-kind">撤销范围</label><select id="admin-revoke-kind"><option value="code">邀请码（不影响已兑换的体验授权）</option><option value="grant">已兑换的体验授权</option></select>
-        <label><input id="admin-revoke-confirm" type="checkbox" required>我已核对记录和范围；此操作不会删除账号或聊天。</label><button type="submit">确认撤销该记录</button></form></details>
-    </section>
+    <section data-panel="invites" hidden><p id="admin-no-permissions" hidden>当前账号没有“邀请与额度”权限，请联系主管理员开通。</p><div id="admin-invites"></div></section>
     <section data-panel="characters" hidden><div id="admin-characters"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
     <section data-panel="members" hidden><h2>管理员权限</h2><p>调整功能权限不退出对方账号，也不影响玩家会话或存档。</p>
@@ -169,7 +168,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       <button class="admin-back" id="admin-members-refresh" type="button">刷新权限列表</button><div id="admin-members-list"></div>
     </section>
     <section data-panel="preview" hidden><div id="admin-preview" class="admin-fill"></div></section>
-    <section data-panel="grants" hidden><div id="admin-grants"></div></section>
     <section data-panel="ops" hidden><div id="admin-ops"></div></section>
     <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
     <section data-panel="models" hidden><div id="admin-models"></div></section>
@@ -197,7 +195,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     disposed = false;
   let bindId: string | null = null,
     resetId: string | null = null,
-    issueUnknown = false,
     memberUnknown = false;
   const cleanups: Array<() => void> = [];
   const can = (permission: InviteAdminPermission) =>
@@ -269,6 +266,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     button.setAttribute('aria-pressed', 'false');
   };
   const clearSecrets = () => {
+    tiers.clearSecrets();
     // Explicit IDs also clear secrets while their input is temporarily visible as text.
     for (const id of [...passwordIds, 'admin-token', 'admin-bind-code', 'admin-reset-code'])
       q<HTMLInputElement>(`#${id}`).value = '';
@@ -309,26 +307,14 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       : session?.emailDeliveryAvailable
         ? '你已可以管理。绑定邮箱仅用于以后方便登录，也可以稍后再做。'
         : '你已可以管理。邮件服务尚未就绪，暂不能绑定邮箱。';
-    q<HTMLElement>('#admin-invite-issue').hidden = !can('invites.issue');
-    const revokeCode = can('invites.revoke-code'),
-      revokeAccess = can('invites.revoke-access');
-    q<HTMLElement>('#admin-invite-revoke').hidden = !revokeCode && !revokeAccess;
-    q<HTMLElement>('#admin-invite-manual').hidden = !revokeCode && !revokeAccess;
-    q<HTMLElement>('#admin-invite-records').hidden = !can('invites.read');
-    if (!can('invites.read')) records.clear();
-    q<HTMLOptionElement>('#admin-revoke-kind option[value=code]').hidden = !revokeCode;
-    q<HTMLOptionElement>('#admin-revoke-kind option[value=grant]').hidden = !revokeAccess;
-    const kind = q<HTMLSelectElement>('#admin-revoke-kind');
-    if (kind.value === 'grant' && !revokeAccess) kind.value = 'code';
-    if (kind.value !== 'grant' && !revokeCode) kind.value = 'grant';
-    q<HTMLElement>('#admin-no-permissions').hidden =
-      can('invites.read') || can('invites.issue') || revokeCode || revokeAccess;
+    // 邀请与额度 needs the owner role or invites.manage (the server checks again); anyone else sees why the page is empty.
+    q<HTMLElement>('#admin-no-permissions').hidden = can('invites.manage');
+    q<HTMLElement>('#admin-invites').hidden = !can('invites.manage');
     for (const control of root.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>(
       'button,input,select,textarea',
     ))
       control.disabled = busy || control.dataset.locked === 'true';
     q<HTMLButtonElement>('#admin-bind-start button').disabled = busy || !session?.emailDeliveryAvailable;
-    q<HTMLButtonElement>('#admin-invite-issue button').disabled = busy || issueUnknown;
     q<HTMLButtonElement>('#admin-member-issue button').disabled = busy || memberUnknown || !newPermissions;
     newPermissions?.setDisabled(busy || memberUnknown);
     q<HTMLElement>('main').setAttribute('data-surface', session ? page : 'login');
@@ -421,8 +407,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         return inbox!.load();
       };
     if (page === 'members') return loadMembers;
-    if (page === 'invites' && can('invites.read')) return () => records.load();
-    if (page === 'grants' && can('invites.read')) return () => grants.load();
+    if (page === 'invites' && can('invites.manage') && port.inviteBatches) return () => tiers.load();
     if (page === 'ops' && session.member.role === 'owner' && port.stageLatency) return () => ops.load();
     if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
     if (page === 'models' && port.modelSettings) return () => models.load();
@@ -586,18 +571,19 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         onChanged: () => void refreshCounts(),
       })
     : null;
-  const records = inviteRecords(q('#admin-invite-records'), port, can, run, () => disposed);
   const toasts = toastHost(q('main'));
-  const grants = grantsView(q('#admin-grants'), {
-    port,
-    can,
-    run,
-    disposed: () => disposed,
-    toast: (text) => toasts.show(text, 'ok'),
-  });
   const ops = opsView(q('#admin-ops'), {
     load: (days) => (port.stageLatency ? port.stageLatency(days) : Promise.resolve([])),
     run,
+    disposed: () => disposed,
+  });
+  const tiers = inviteTiersView(q('#admin-invites'), {
+    port,
+    isOwner: () => session?.member.role === 'owner',
+    run,
+    confirm: (options) => confirmDialog(q('main'), options),
+    toast: (text) => toasts.show(text, 'ok'),
+    newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
   });
   const models = modelsView(q('#admin-models'), {
@@ -629,13 +615,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     newPermissions = null;
   };
   const clearManagement = () => {
-    records.clear();
+    tiers.clear();
     clearMemberControls();
     workbench?.clear();
     previewBench?.clear();
     previewSplit.detail.replaceChildren();
     picker.clear();
-    grants.clear();
     ops.clear();
     reviews.clear();
     models.clear();
@@ -648,7 +633,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       clearManagement();
       bindId = null;
       resetId = null;
-      issueUnknown = false;
       memberUnknown = false;
       reissueUnknown.clear();
       page = 'account';
@@ -852,38 +836,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     session = null;
     navigate('login');
     status.textContent = '密码已重置，请用新密码登录。';
-  });
-  submit('#admin-invite-issue', async () => {
-    if (issueUnknown || !can('invites.issue')) return;
-    const redeemBy = new Date(value('admin-deadline')).getTime();
-    if (!Number.isSafeInteger(redeemBy) || redeemBy <= Date.now()) {
-      status.textContent = '请填写未来的兑换截止时间。';
-      return;
-    }
-    try {
-      const result = await port.issue({
-        requestId: crypto.randomUUID(),
-        redeemBy,
-        batch: value('admin-batch').trim(),
-        note: value('admin-note').trim() || null,
-      });
-      showSecret('玩家邀请码（不是管理员登录凭据）', result.code);
-    } catch (error) {
-      issueUnknown = true;
-      throw error;
-    }
-  });
-  submit('#admin-invite-revoke', async () => {
-    const kind = value('admin-revoke-kind') === 'code' ? 'code' : 'grant';
-    if (
-      !can(kind === 'code' ? 'invites.revoke-code' : 'invites.revoke-access') ||
-      !q<HTMLInputElement>('#admin-revoke-confirm').checked
-    )
-      return;
-    await port.revokeInvite(kind, value('admin-revoke-id').trim());
-    q<HTMLInputElement>('#admin-revoke-confirm').checked = false;
-    if (can('invites.read')) await records.load();
-    if (!disposed) status.textContent = '指定记录已撤销。';
   });
   submit('#admin-member-issue', async () => {
     if (memberUnknown || session?.member.role !== 'owner') return;

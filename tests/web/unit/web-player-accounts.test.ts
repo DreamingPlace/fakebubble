@@ -243,6 +243,8 @@ test('signup: email code → password + nickname binds a login to the CURRENT gu
     emailMasked: 'p***@example.com',
     nickname: '阿泡',
     canBind: false,
+    // Named exception (Part 22a follow-up): the answer carries the EFFECTIVE tier (the page never reads the principal kind).
+    tier: { kind: 'guest', unlimited: false },
   });
   assert.deepEqual(f.accounts.info(undefined), { signupEnabled: true, signedIn: false });
   assert.deepEqual(f.accounts.info('x'.repeat(43)), { signupEnabled: true, signedIn: false });

@@ -248,7 +248,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 **`PLAYER_TEXT_MODELS` 现在是“上限”：** 一个模型要对玩家出现，必须同时 ① 在 `PLAYER_TEXT_MODELS` 里，② 它的 API 密钥存在，③ 这张表里总开关打开，④ 该类玩家被勾选。①② 任何一条不满足，不管表里怎么设置都不会出现，管理页该行显示 **未配置**。DeepSeek 是内部备用与固定审核模型，永远在上限之内，即使对所有玩家隐藏也照旧担任备用和审核。`PLAYER_MODEL_CHOICE_ENABLED` 仍是总开关。
 - **密钥探测：** 密钥只在 generation Worker。它新增了一个只返回布尔值的 RPC `modelKeys()`（`{ xai, gemini }`，不会返回密钥），业务对象每分钟最多问一次（失败 5 秒后重试），**失败时按“没有密钥”处理（宁可暂时不提供 xAI/Gemini）**。部署顺序：**先 generation，后 business**；反过来也安全，只是 business 先上线的那段时间 xAI/Gemini 会暂时显示“未配置”。本地（Node）运行不探测密钥，上限只看 `PLAYER_TEXT_MODELS`。
 
-**三类玩家（`playerTier`，只在一个函数里判定，Part 22 在这里拆“受邀”）：** 游客 = 试用游客；注册玩家 = 注册并持有点数的玩家；受邀玩家 = 受邀（invite）或 account 玩家。游客只有在所在类别可选超过一个模型时才看到选择器（聊天“⋯”菜单出现“切换回复模型”，首次引导文字也会提到；只有一个模型时仍只有“共创”）；游客的一条试用回复无论用哪个模型都只消耗一条试用回复，不扣点数。
+**三类玩家（`playerTier`，只在一个函数里判定；Part 22a 起由 `effectiveTier` 在那里拆出不限量/每天补充）：** 游客 = 试用游客；注册玩家 = 注册并持有点数的玩家；受邀玩家 = 受邀（invite）或 account 玩家。游客只有在所在类别可选超过一个模型时才看到选择器（聊天“⋯”菜单出现“切换回复模型”，首次引导文字也会提到；只有一个模型时仍只有“共创”）；游客的一条试用回复无论用哪个模型都只消耗一条试用回复，不扣点数。
 
 **规则：** 每一类至少保留一个“已开启且被勾选”的模型，否则保存被拒绝（`MODEL_TIER_EMPTY`，页面会说是哪一类）。关掉一个模型（总开关或某一类）后，受影响的玩家**下一条消息**起改用本类第一个可用模型，并收到一次性的“模型已下线”提示（`model_withdrawn`）。**已经受理的消息保留当时的模型与价格**（即使之后被关掉，只要环境上限仍允许它；上限之外则改回 DeepSeek，与以前一致）。
 
@@ -259,6 +259,46 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 **手机：** 这是后台唯一能在手机上用的页面（`#/models`；其他页面仍提示“请在电脑浏览器打开”）。
 
 **回退：** 在页面里把值改回去即可；迁移不需要回滚（无需部署）。想让所有人立刻回到“只有 DeepSeek”：关掉 `PLAYER_MODEL_CHOICE_ENABLED`，或把 xAI/Gemini 总开关关掉。
+
+### 邀请即额度（Part 22a，迁移 125）
+
+邀请码不再把玩家变成另一种“邀请玩家”。从这一版起，**邀请是挂在普通注册账号上的“额度（entitlement）”**：兑换只新增一条额度记录，**从不修改 `web_principals.kind` 和 `web_guest_retention.state`**，也不换会话、不发恢复码。有效档位 = 有效的额度，否则就是注册玩家（`effectiveTier`，`admission/web-model-settings.ts` 里唯一的一处；`playerTier`、报价/扣费、消费记录、选择器、记忆召回、内容存活判定都从它读）。
+
+**何时生效：** 数据库有迁移 125 就**永远**走“额度”这条路，与 `SIGNUP_BONUS_ENABLED`、`PLAYER_MODEL_CHOICE_ENABLED` 无关；旧兑换（授权 + `kind='invite'` + retention `protected`）只存在于 schema < 125 的库里，125 上调用它会得到 `WEB_INVITE_LEGACY_UNAVAILABLE`。两个开关只影响“点数”：
+- `daily_refill` 需要点数。`PLAYER_MODEL_CHOICE_ENABLED` 关着时，建每天补充的批次被拒绝（`WEB_INVITE_POINTS_REQUIRED`，“需要先开启模型选择/积分”）；兑换每天补充的码被拒绝（`WEB_INVITE_UNUSABLE`，“这个邀请码暂时不能使用”），**码不会被消耗**，开关打开后可正常兑换。`unlimited` 批次不受影响。
+- 额度持有人的活性和档位**不依赖**免费档开关（`SIGNUP_BONUS_ENABLED`）；点数关着时，持有人不扣点（仍受每日回复上限）。
+- 页面从不按 principal kind 判定档位：服务端把 `effectiveTier` 的结果（`tier: {kind, unlimited, plan?}`）随账号信息发给每个已登录玩家，顶栏与 我的信息 只读它。仍读 `kind='invite'` 做业务判定的地方只有“没有邮箱登录的旧邀请玩家”这一条旧路径（见 STATUS.md 的清单）。
+- **一个撤销**：`endHolderAccess`（`invites/web-holder-access.ts`）在一个事务里结束持有人的一切：额度 + 同一邀请码的旧授权 + 该授权的会话/凭据/回执。管理页“结束额度”和旧的“撤销授权”入口调用的是同一个函数；玩家再次登录后是注册玩家，带着剩余点数。管理导航里不再有 玩家授权；旧的无登录邀请玩家显示在 邀请与额度（按玩家编号，没有则“旧邀请”，只有数量）。
+
+**迁移 125（`125_invite_tiers.sql`）：** 共 **50 步**（`expected-migrations` 的最后一步，`version 125`，两个 authority 完全相同）；本地 `scripts/web-provider.ts migrate-invite-tiers <root>`（新实例的 `migrate` 一路到 125）。sha256：
+
+```
+9e7d9ca7a596747e399a6e69640785015fbd57339ef886dd17945386d7e85a1d   apps/server/web-migrations/125_invite_tiers.sql
+```
+
+（124 仍是 `5754ab58…1301d17`，123 仍是 `432c1237…28db41`；1–124 一个字节没动。）新增六张表，只有业务对象写入：`web_invite_batches`（批次：名称、档位 `unlimited`/`daily_refill`、每天 N、总上限 C、额度天数；`request_id` 保证创建幂等）、`web_entitlements`（玩家持有的额度：来源 invite/admin、档位、起止时间、撤销时间；`invite_id` 唯一）、`web_entitlement_redemptions`（兑换的幂等记录）、`web_entitlement_refills`（每个玩家每个 UTC 日一行，每日补充的“一天一次”闸门）、`web_invite_batch_changes`（所有者修改 N/上限的只增不改记录，含当时持有人数）、`web_player_numbers`（玩家编号）。并在 `web_invite_codes` 上 `ALTER TABLE … ADD COLUMN batch_id`（可空，带外键；旧步骤文件一个字节未改）。
+
+**Codex 注意（第 125 步）：**
+1. 版本白名单与 123/124 相同的所有位置都已加上 125：`web-identity.ts`（三处）、`web-admission.ts`、`web-stage-queue.ts`、`web-vertical-publisher.ts`、`web-v7-request.ts`、`platform/store.ts`（`WEB_INVITE_TIERS_SCHEMA`）、`cloudflare/web-store.ts`（版本列表 26 项）、`workers/web-cloudflare/migrations.ts`、`scripts/web-provider.ts`、`web-provider-migration.ts`（`migrateWebProviderInviteTiers`）。
+2. **回填在迁移里一次性完成**，用的是数据库时钟（`strftime('now')`）判断“授权是否仍有效”：邮箱登录 + 有效授权的邀请主体（`kind='invite'`）得到一条 `unlimited` 额度（到期时间 = 授权的到期时间）；授权已过期/已撤销的**不产生额度**（它们早已是注册玩家，见 17h/17i）；没有登录的邀请主体**不变**，继续走旧路径直到授权结束。**不改任何主体的 kind，不改任何 retention 状态，不改任何授权行。**
+3. 玩家编号也在迁移里回填（每个已注册玩家一个，8 位 Crockford base32，随机、唯一、非顺序；极小概率的碰撞由第二条语句补上，仍缺的由应用在下次读取账号时分配）。
+4. 旧邀请码按批次名各归入一个 `legacy:<名称>` 批次（档位 `unlimited`），尚未兑换的旧码以后兑换得到“不限量”额度（时长沿用旧码的 `access_duration_ms`）。
+5. 部署顺序同 124：先 `SIGNUP_BONUS_ENABLED`/`PLAYER_MODEL_CHOICE_ENABLED` 保持原状部署，`inspect` 确认 `migrations.matches: true`，再让玩家兑换新批次。没有新的密钥、绑定或 wrangler 配置。
+6. 回退：迁移是纯增量，不需要回滚。需要时把任一开关关掉即回到旧兑换行为；已发出的额度保留，玩家仍是注册玩家。
+
+**规则（`admission/web-points.ts`、`web-entitlements.ts`）：**
+- **不限量（unlimited）**：永不扣点；选模型按“受邀”；每日回复上限（`DAILY_REPLY_LIMIT`）仍作为看不见的防滥用保险，触发时提示原有的“今天聊得够多啦，明天再来找我吧～”。
+- **每天补充（daily_refill，每天 +N，总上限 C）**：玩家**每个 UTC 日第一次访问**（打开页面/读取账号/打开消费记录/发消息/兑换）时**增加 N 点**（不是补到 N），写一条 `daily_refill` 事件；当天没访问就没有，漏掉的日子不补。余额不会超过 C：会超过时只加到 C，已达到或超过 C 时不加；注册赠送、管理员赠送（`grantPoints`）同样只加到 C。**已有的点数永不被拿走**（把 C 调低只是暂时不再补充）。按注册玩家的价格扣费；选模型按“受邀”。
+- **额度到期/被撤销**：玩家就是普通注册玩家，剩下多少点就是多少点；绝不会 `TRIAL_EXPIRED` 或 `WEB_INVITE_ACCESS_REQUIRED`。
+- **访客输入邀请码**：被拒绝（`PLAYER_LOGIN_REQUIRED`），**邀请码不会被消耗**；页面显示“注册后即可使用邀请码”和注册按钮。
+
+**管理页 玩家 → 邀请与额度（取代原“邀请码”页）：** 新建批次（名称、数量 1–500、档位：不限量 / 每天补充 N（默认 50）与上限（默认 1000）、可选额度天数、可选兑换截止日期 UTC）；邀请码**只显示一次**并可下载只含邀请码的 CSV，同一请求 ID 重放得到同一批次但不再给出邀请码；批次列表（档位、N/上限、创建、邀请码、已兑换、已撤销、持有中）；每批的邀请码按序号显示状态、兑换时间、到期日和持有人的**玩家编号**（不显示邮箱、昵称、任何 ID）；撤销未兑换的码、整批（只作废未兑换的码，已兑换的玩家不受影响）、已兑换码的额度（玩家立即变回注册玩家）。**创建、查看、撤销需要主管理员或新权限 `invites.manage`；修改批次的每天补充和上限只有主管理员能做**，保存前弹出确认，写明改动和当前持有这批的人数，并写入审计日志（`web_admin_audit`）与 `web_invite_batch_changes`；改动从每位持有人的下一次每日补充起生效。旧权限 `invites.issue`/`revoke-*` 仍存在（旧的 玩家授权 页继续使用）。
+
+**玩家 我的信息：** 顶栏昵称按钮直接打开（不再是下拉菜单），邀请码入口移到里面：资料（昵称可改、玩家编号带复制、邮箱）、额度（档位、到期日、同一格式的余量 “剩余 N 点 · 约可聊 n 条” 或 “不限量”、消费记录、输入邀请码；**不显示任何上限文字**）、安全（修改密码、退出其他设备）、退出登录，其后另起一块的删除我的账号。访客看到体验状态、注册/登录和“注册后即可使用邀请码”。没有邮箱登录的旧邀请玩家在里面看到绑定邮箱和恢复码。
+
+**`inspect`：** 新增 `tiers`：按有效档位统计人数（`guest`/`registered`/`unlimited`/`daily_refill`/`legacy_invite`/`account`），只有数字，没有 ID。
+
+**删除我的账号：** 玩家的额度、兑换记录、每日补充记录和玩家编号随玩家一起清除；邀请码行（只是摘要）保留，已用过的码不会复活。
 
 ## 私有运维工具
 

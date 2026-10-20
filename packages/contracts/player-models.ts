@@ -109,7 +109,29 @@ export interface ModelChoiceInfo {
   balance: number;
   repliesLeft: number;
   version: number;
+  /** Part 22a: the invite entitlement the player holds, if any (an unlimited one is never charged; a refill adds N a day up to the cap). */
+  plan?: PlayerPlan;
   notice?: 'model_withdrawn';
+}
+export interface PlayerPlan {
+  kind: 'unlimited' | 'daily_refill';
+  dailyAmount?: number;
+  cap?: number;
+  /** UTC milliseconds, or null for no expiry. */
+  expiresAt: number | null;
+}
+export function parsePlan(value: unknown): PlayerPlan | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const count = (n: unknown): n is number =>
+    Number.isSafeInteger(n) && (n as number) >= 0 && (n as number) <= 100_000_000;
+  const expiresAt =
+    raw.expiresAt === null ? null : Number.isSafeInteger(raw.expiresAt) ? (raw.expiresAt as number) : undefined;
+  if (expiresAt === undefined) return undefined;
+  if (raw.kind === 'unlimited') return { kind: 'unlimited', expiresAt };
+  if (raw.kind === 'daily_refill' && count(raw.dailyAmount) && count(raw.cap))
+    return { kind: 'daily_refill', dailyAmount: raw.dailyAmount, cap: raw.cap, expiresAt };
+  return undefined;
 }
 /** Strict parse of the server's state: anything unexpected yields undefined and the page simply shows no picker. */
 export function parseModelChoice(value: unknown): ModelChoiceInfo | undefined {
@@ -133,6 +155,7 @@ export function parseModelChoice(value: unknown): ModelChoiceInfo | undefined {
     balance: raw.balance,
     repliesLeft: raw.repliesLeft,
     version: typeof raw.version === 'number' ? raw.version : POINTS_VERSION,
+    ...(parsePlan(raw.plan) ? { plan: parsePlan(raw.plan)! } : {}),
     ...(raw.notice === 'model_withdrawn' ? { notice: 'model_withdrawn' as const } : {}),
   };
 }

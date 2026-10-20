@@ -167,7 +167,7 @@ const passwordOk = (value: string) => {
   const bytes = new TextEncoder().encode(value).length;
   return bytes >= 8 && bytes <= 128;
 };
-const nicknameOk = (value: string) => {
+export const nicknameOk = (value: string) => {
   const trimmed = value.trim();
   const length = [...trimmed].length;
   return length >= 1 && length <= 20 && !/[\p{Cc}\u2028\u2029\u202a-\u202e\u2066-\u2069]/u.test(trimmed);

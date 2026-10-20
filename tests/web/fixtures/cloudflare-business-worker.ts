@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomUUID } from 'node:crypto';
+import { legacySchema, resumeLegacySchema } from './legacy-schema.ts';
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
 import { WebDurableStore } from '../../../apps/server/cloudflare/web-store.ts';
 import { webMigrations, webR2Migrations } from '../../../workers/web-cloudflare/migrations.ts';
@@ -104,6 +105,8 @@ export class WebBusinessFixture {
       ...(fixtureOptions.chatReview ? { chatReview: true } : {}),
       ...(fixtureOptions.playerModelChoice ? { playerModelChoice: fixtureOptions.playerModelChoice } : {}),
     });
+    // A restarted object of a database that legacySchema() made pre-125 reads as 124 again (a fresh database is untouched).
+    resumeLegacySchema(this.store);
     if (!this.store.get('SELECT 1 FROM character_templates'))
       this.store.transaction(() => {
         const selected = syntheticSelection();
@@ -185,7 +188,8 @@ export class WebBusinessFixture {
       const body = request.method === 'POST' ? ((await request.json()) as Record<string, any>) : {};
       const path = new URL(request.url).pathname;
       let value: unknown;
-      if (path === '/bootstrap') {
+      if (path === '/legacy-schema') value = legacySchema(this.store);
+      else if (path === '/bootstrap') {
         value = this.store.transaction(() => {
           const result = this.identity.bootstrap(body.token);
           const principal = this.store.get<{ world_id: string }>(

@@ -1,5 +1,6 @@
 import { purgeDiagnostics } from '../identity/web-player-purge.ts';
 import { currentPrices } from '../admission/web-model-settings.ts';
+import { webTierSql } from '../admission/web-retention.ts';
 import { WEB_BUILD_COMMIT } from '../../../config/web-build.ts';
 
 /** Read-only operator view of the business authority: SELECT statements only, never content or secrets. */
@@ -88,6 +89,8 @@ export function inspectWebAuthority(
   players: WebInspectPlayers = {},
   now: number = Date.now(),
   retentionHealth: WebInspectRetentionHealth | null = null,
+  /** Part 22a: whether the free tier is on (the same flag the business object uses), for the tier counts. */
+  tierContext: { freeTier: boolean } | null = null,
 ) {
   const has = (name: string) =>
     reader.all<{ n: number }>('SELECT 1 AS n FROM sqlite_master WHERE name=?', name).length > 0;
@@ -112,6 +115,25 @@ export function inspectWebAuthority(
         'SELECT instance_id,recovery_epoch FROM web_instance WHERE singleton=1',
       )[0]
     : undefined;
+  // Part 22a: players by effective tier - COUNTS ONLY, from the one SQL definition of the tier (webTierSql).
+  const tiers = (() => {
+    if (!tierContext || !has('web_principals') || !has('web_entitlements')) return null;
+    const sql = webTierSql(125, tierContext.freeTier, now);
+    const counts: Record<string, number> = {
+      guest: 0,
+      registered: 0,
+      unlimited: 0,
+      daily_refill: 0,
+      legacy_invite: 0,
+      account: 0,
+    };
+    for (const row of reader.all<{ tier: string; n: number }>(
+      `SELECT ${sql.sql} AS tier,count(*) AS n FROM web_principals p GROUP BY 1`,
+      ...sql.args,
+    ))
+      counts[row.tier] = row.n;
+    return counts;
+  })();
   return {
     // The code answering, as a build-time constant (config/web-build.ts): never a runtime lookup.
     build: { commit: WEB_BUILD_COMMIT },
@@ -166,6 +188,7 @@ export function inspectWebAuthority(
       : [],
     // Part 17f, numbers only: unfinished purges, the age of the oldest, and logins that outlived their purge (must be 0).
     retention: { ...purgeDiagnostics(reader, now), health: retentionHealth },
+    ...(tiers ? { tiers } : {}),
     ownerAdminExists: has('web_admin_members')
       ? reader.all("SELECT 1 FROM web_admin_members WHERE role='owner' LIMIT 1").length > 0
       : false,

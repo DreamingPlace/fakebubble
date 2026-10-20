@@ -27,8 +27,8 @@ const a = (path: string) => `${API}/account${path}`;
 function setup(t: test.TestContext) {
   const runtime = localRuntime(
     t,
-    'tests/web/fixtures/cloudflare-retention-world-worker.ts',
-    { STATE: 'WebRetentionWorldFixture' },
+    'tests/web/fixtures/cloudflare-cross-path-worker.ts',
+    { STATE: 'WebCrossPathFixture' },
     ['MEDIA'],
     [],
     ['enable_request_signal'],
@@ -142,15 +142,10 @@ async function world(t: test.TestContext) {
   const stateOf = (principalId: string) => f.fixture<World>('/fixture/world/state', { principalId });
   const seed = (principalId: string, code: string) => f.fixture('/fixture/world/seed', { principalId, code });
   const block = (principalId: string, on: boolean) => f.fixture('/fixture/purge-block', { principalId, on });
-  const invited = async (actor: Client) => {
-    const invite = await f.call(
-      `${API}/admin/invites/issue`,
-      owner,
-      { requestId: randomUUID(), redeemBy: null, accessDurationMs: null, batch: '17g', note: null },
-      201,
-    );
-    await f.call(`${API}/invites/redeem`, actor, { requestId: randomUUID(), code: invite.code }, 201);
-  };
+  // NAMED EXCEPTION: an old invited player (kind 'invite', a grant, and the unlimited entitlement migration 125 backfills for
+  // one with a login) is OLD DATA on a 125 database; the legacy redemption that used to create it no longer runs there.
+  const invited = async (actor: Client) =>
+    f.fixture('/fixture/cross/legacy', { principalId: await f.boot(actor), login: true });
   const make = async (peer: string) => {
     const actor = client(peer);
     return { actor, principalId: await f.boot(actor) };

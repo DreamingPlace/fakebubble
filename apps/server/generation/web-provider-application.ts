@@ -1,3 +1,4 @@
+import { effectiveTier } from '../admission/web-model-settings.ts';
 import { cheapestReplyPoints, hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
 import { ensureRegisteredBonus, signupBonusEmailKey, type BonusEmailKey } from '../admission/web-registered.ts';
 import { DEFAULT_PLAYER_MODEL, isPlayerModelId } from '../../../packages/contracts/player-models.ts';
@@ -27,6 +28,7 @@ import { WebAdmission } from '../admission/web-admission.ts';
 import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts';
 import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts';
 import { WebInvites } from '../invites/web-invites.ts';
+import { WebInviteTiers } from '../invites/web-invite-tiers.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { WebCocreation } from '../cocreation/web-cocreation.ts';
 import { WebBilling } from '../admission/web-billing.ts';
@@ -224,6 +226,13 @@ export class WebProviderApplication {
       authorize: this.identity.authorizeInviteAction.bind(this.identity),
       identity: this.identity,
     });
+    const inviteTiers = new WebInviteTiers(store, {
+      clock,
+      codeKey: createHmac('sha256', Buffer.from(config.requestKey, 'base64url'))
+        .update('web-local-invite-code-v1')
+        .digest(),
+      authorize: this.identity.authorizeInviteAction.bind(this.identity),
+    });
     this.playerAccounts = store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'")
       ? new WebPlayerAccounts(store, this.identity, {
           origin: config.origin,
@@ -245,6 +254,7 @@ export class WebProviderApplication {
       : null;
     const accounts = this.playerAccounts;
     this.inviteActions = new WebInviteActions(store, clock, config.origin, invites, this.identity, {
+      tiers: inviteTiers,
       // While accounts can be opened, a redemption belongs to a signed-in login; with signup closed nobody could
       // ever satisfy that, so redemption stays as it was.
       requireLogin: accounts?.signupEnabled
@@ -519,6 +529,20 @@ export class WebProviderApplication {
     const trialCanSend = !expired && remaining > 0 && (locked === null || !webCharacterDeleted(this.store, locked));
     if (hasPoints(this.store, principal.principalId, now))
       return pointsAccess(retention.expires_at ?? null, expired && !retained && !registered);
+    // Part 22a: a holder of an entitlement with points switched off chats unmetered (admission: holderFree); it is never shown
+    // as a trial that ended or ran out.
+    const heldKind = effectiveTier(this.store, principal.principalId, now)?.kind;
+    if (heldKind === 'unlimited' || heldKind === 'daily_refill')
+      return {
+        kind: 'guest' as const,
+        ...base,
+        lockedCharacterId: null,
+        remainingReplies: 0,
+        reservedReplies: row.trial_reserved,
+        trialExpiresAt: retention.expires_at ?? null,
+        canSend: true,
+        inaccessible: false,
+      };
     const bonusLeft = bonusRemaining(this.store, principal.principalId);
     if (bonusLeft > 0)
       return {

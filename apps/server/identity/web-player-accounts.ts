@@ -7,6 +7,8 @@ import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract
 import { requireWebContent } from '../admission/web-retention.ts';
 import { guestInGrace } from './web-player-purge.ts';
 import { freeTier, isRegistered, signupBonusTablesExist } from '../admission/web-free-tier.ts';
+import { effectiveTier } from '../admission/web-model-settings.ts';
+import { ensurePlayerNumber } from '../admission/web-player-number.ts';
 import { ensureRegisteredBonus, signupBonusEmailKey, type BonusEmailKey } from '../admission/web-registered.ts';
 import { modelChoiceState, setPlayerModel } from '../admission/web-points.ts';
 import { maskEmail, normalizeEmail } from './email-address.ts';
@@ -369,10 +371,42 @@ export class WebPlayerAccounts {
       nickname,
       ...(f?.chatReview ? { reviewNoticeClosed: this.reviewNoticeClosed(session.principalId) } : {}),
       ...this.modelChoiceInfo(session.principalId),
+      ...this.tierInfo(session.principalId),
+      ...this.playerNumberInfo(session.principalId, !!login),
       ...this.graceInfo(session.principalId),
       // A legacy invited player without a login may bind one.
       canBind: !login && session.kind === 'invite' && this.activeGrant(session.principalId, this.now()),
     };
+  }
+  /**
+   * Part 22a: the EFFECTIVE tier, from effectiveTier and nowhere else. The page labels a player and shows its quota from this
+   * and never from the principal kind. kind: guest | registered | unlimited | daily_refill | legacy_invite | account.
+   */
+  private tierInfo(principalId: string) {
+    const eff = effectiveTier(this.store, principalId, this.now());
+    if (!eff) return {};
+    const e = eff.entitlement;
+    return {
+      tier: {
+        kind: eff.kind,
+        unlimited: eff.unlimited,
+        ...(e
+          ? {
+              plan: {
+                kind: e.kind,
+                ...(e.kind === 'daily_refill' ? { dailyAmount: e.dailyAmount, cap: e.totalCap } : {}),
+                expiresAt: e.expiresAt,
+              },
+            }
+          : {}),
+      },
+    };
+  }
+  /** Part 22a: { playerNumber } for a registered player (assigned here when a pre-125 player somehow lacks one). */
+  private playerNumberInfo(principalId: string, hasLogin: boolean) {
+    if (!hasLogin && !isRegistered(this.store, principalId, this.now())) return {};
+    const playerNumber = this.store.transaction(() => ensurePlayerNumber(this.store, this.now(), principalId));
+    return playerNumber ? { playerNumber } : {};
   }
   /** { modelChoice } for a points holder while PLAYER_MODEL_CHOICE_ENABLED is on; nothing otherwise (guests see no picker). */
   private modelChoiceInfo(principalId: string) {
@@ -770,6 +804,8 @@ export class WebPlayerAccounts {
       );
       if (bonusGranted)
         this.store.run('INSERT INTO web_signup_bonus(principal_id,granted_at) VALUES (?,?)', scope.principalId, now);
+      // Part 22a: every registered player has a 玩家编号 from the moment of signup.
+      ensurePlayerNumber(this.store, now, scope.principalId);
       this.writeNickname(scope.worldId, nickname, now);
       this.identity.extendToLoginLifetime(scope.sessionId);
       if (input.purpose === 'bind' && this.store.get("SELECT 1 FROM sqlite_master WHERE name='web_invite_credentials'"))

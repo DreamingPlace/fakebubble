@@ -1,4 +1,5 @@
 import { WebCharacterPreviews } from '../../../apps/server/characters/web-character-preview.ts';
+import { legacySchema } from './legacy-schema.ts';
 import { WebCharacterPreviewRunner } from '../../../apps/server/characters/web-character-preview-runner.ts';
 import { WebCloudTextGenerator } from '../../../apps/server/cloudflare/web-generators.ts';
 import type { WebGenerationBinding } from '../../../packages/contracts/web-generation-rpc.ts';
@@ -246,6 +247,7 @@ export class WebHTTPFixture extends WebBusinessFixture {
   }
   async fetch(request: Request) {
     const path = new URL(request.url).pathname;
+    if (path === '/fixture/schema-124') return Response.json(legacySchema(this.store));
     if (path === '/fixture/preview/lost-settle') {
       this.store.run('UPDATE cf_preview_fault SET lost_settle=1');
       return Response.json({ configured: true });

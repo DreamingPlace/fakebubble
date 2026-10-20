@@ -15,6 +15,8 @@ for (const loss of ['cookie-and-body', 'body-only', 'no-request'] as const) {
       [],
       ['enable_request_signal'],
     );
+    // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+    await runtime.call('/fixture/schema-124');
     const origin = 'https://fixture.invalid',
       base = '/api/web/provider';
     const grant = await runtime.call<{ token: string }>('/fixture/grant');

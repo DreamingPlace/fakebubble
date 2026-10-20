@@ -71,6 +71,8 @@ async function admin(f: ReturnType<typeof setup>) {
 
 test('cloud: invited cookie is long-lived on redeem and re-issued on every bootstrap, even past the old 24h deadline', async (t) => {
   const f = setup(t);
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   const { issue } = await admin(f);
   const player = client();
@@ -114,6 +116,8 @@ test('cloud: guest sessions older than 24h still expire and clear the cookie', a
 
 test('cloud: redeem → one-time code → cookie cleared → recover to the same principal and history → old code dead → regenerate', async (t) => {
   const f = setup(t);
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   const { issue } = await admin(f);
   const player = client();
@@ -186,6 +190,8 @@ test('cloud: redeem → one-time code → cookie cleared → recover to the same
 
 test('cloud: revoking the grant ends every session at once and disables the recovery code; failed attempts stay limited', async (t) => {
   const f = setup(t);
+  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
+  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   const { owner, issue } = await admin(f);
   const player = client();

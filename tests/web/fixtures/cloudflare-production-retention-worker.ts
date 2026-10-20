@@ -62,6 +62,29 @@ export class WebBusinessObject extends ProductionObject {
         });
       }
     }
+    if (path === '/__test/legacy-invited') {
+      // OLD DATA on a 125 database: the grant a pre-125 redemption left (kind 'invite', protected, no entitlement). The legacy
+      // redemption itself no longer runs on 125, so the production-topology test seeds its result. Never ships.
+      const { principalId, inviteId } = (await request.json()) as { principalId: string; inviteId: string };
+      const p = sql.exec('SELECT player_id,world_id FROM web_principals WHERE id=?', principalId).toArray()[0]!;
+      const grantId = `legacy-grant-${principalId}`;
+      sql.exec("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", principalId);
+      sql.exec(
+        "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id=?",
+        principalId,
+      );
+      sql.exec('UPDATE web_invite_codes SET redeemed_count=1 WHERE id=?', inviteId);
+      sql.exec(
+        'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at,expires_at) VALUES (?,?,?,?,?,?,NULL)',
+        grantId,
+        inviteId,
+        principalId,
+        p.player_id as string,
+        p.world_id as string,
+        Date.now(),
+      );
+      return Response.json({ grantId });
+    }
     if (path === '/__test/expire') {
       sql.exec(
         "UPDATE web_guest_retention SET started_at=?,expires_at=? WHERE state='active'",

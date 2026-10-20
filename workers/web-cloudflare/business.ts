@@ -380,6 +380,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       },
       this.clock.now(),
       await this.retention.health(),
+      { freeTier: this.store.publicFreeTier === true },
     );
   }
   private async budget() {

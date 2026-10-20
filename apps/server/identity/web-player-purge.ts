@@ -104,6 +104,15 @@ export function purgePlayerLogins(
     store.run('DELETE FROM web_points_policy WHERE principal_id=?', scope.principalId);
     store.run('DELETE FROM web_player_model WHERE principal_id=?', scope.principalId);
   }
+  // Part 22a: the player's invite entitlements, their redemption records, the daily-refill days and the 玩家编号 go with the
+  // player. The invite CODE row stays (a digest, no player: a deleted player's code is not reusable).
+  mark('entitlements');
+  if (tableExists(store, 'web_entitlements')) {
+    store.run('DELETE FROM web_entitlement_refills WHERE principal_id=?', scope.principalId);
+    store.run('DELETE FROM web_entitlement_redemptions WHERE principal_id=?', scope.principalId);
+    store.run('DELETE FROM web_entitlements WHERE principal_id=?', scope.principalId);
+    store.run('DELETE FROM web_player_numbers WHERE principal_id=?', scope.principalId);
+  }
   // Part 19: the player's live review code and banner mark go with the player (the archive copy carries no identity).
   mark('review_codes');
   purgeReviewRows(store, scope.principalId);
@@ -172,6 +181,13 @@ export function playerLoginsRemain(store: Pick<BusinessStore, 'get'>, principalI
   if (
     tableExists(store, 'web_points_balance') &&
     ['web_points_events', 'web_points_balance', 'web_points_policy', 'web_player_model'].some((table) =>
+      store.get(`SELECT 1 FROM ${table} WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds),
+    )
+  )
+    return true;
+  if (
+    tableExists(store, 'web_entitlements') &&
+    ['web_entitlement_refills', 'web_entitlement_redemptions', 'web_entitlements', 'web_player_numbers'].some((table) =>
       store.get(`SELECT 1 FROM ${table} WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds),
     )
   )

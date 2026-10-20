@@ -47,6 +47,11 @@ export const PERMISSION_GROUPS: readonly Group[] = [
       { item: 'invites.issue', name: '生成邀请码', help: '邀请码仅在生成时显示一次。' },
       { item: 'invites.revoke-code', name: '撤销邀请码', help: '该码不再能兑换，已兑换的授权不受影响。' },
       { item: 'invites.revoke-access', name: '撤销体验授权', help: '对应玩家不能继续体验；账号和聊天保留。' },
+      {
+        item: 'invites.manage',
+        name: '邀请与额度',
+        help: '新建批次（邀请码只显示一次）、查看批次、撤销邀请码／整批／已兑换的额度。修改每天补充和上限只有主管理员能做。',
+      },
     ],
   },
   {
