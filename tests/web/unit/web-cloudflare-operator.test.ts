@@ -83,10 +83,6 @@ test('operator durably records before RPC, keeps secret grants only in 0600 rece
     importFixed: async () => null,
     status: async () => null,
     summary: async () => null,
-    inviteGrants: async (id: string) => {
-      assert.equal(id, 'test-invite');
-      return [{ grantId: 'test-grant' }];
-    },
     adminGrant: async () => {
       calls++;
       return { token: 'SYNTHETIC_PRIVATE_GRANT' };
@@ -148,18 +144,8 @@ test('operator durably records before RPC, keeps secret grants only in 0600 rece
   assert.equal(calls, 2);
   assert.equal(disposed, 2);
   assert.equal(JSON.parse(readFileSync(unknown, 'utf8').trim().split('\n').at(-1)!).state, 'unknown');
-  const lookup = join(dir, 'lookup.jsonl');
-  await runWebOperator(
-    prepareWebOperation(
-      webOperatorArguments(['--action=invite-grants', '--name=test-invite', `--receipt-file=${lookup}`]),
-    ),
-    async () => ({ env: { OPERATOR: operator }, dispose: async () => {} }),
-    '/offline/config.json',
-  );
-  assert.deepEqual(JSON.parse(readFileSync(lookup, 'utf8').trim().split('\n').at(-1)!).detail, [
-    { grantId: 'test-grant' },
-  ]);
-  assert.equal(statSync(lookup).mode & 0o777, 0o600);
+  // Named exception (Part 22x): the invite-grants lookup action was removed with the legacy invite system. Its 0600 receipt
+  // assertion is still carried by the admin-recovery-grant receipt below.
   const recovery = join(dir, 'recovery.jsonl');
   await runWebOperator(
     prepareWebOperation(

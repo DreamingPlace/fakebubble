@@ -185,8 +185,8 @@ test('inspect reports the deployed ledger next to the expected steps and matches
   assert.equal(
     // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
     // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-    // Extended for migration 124 (Part 21g named exception): 124 is a real step now, so the extra step is 125. Part 22a: 125 is a real step now, so the extra step is 126.
-    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (126,'" + 'a'.repeat(64) + "')")),
+    // Extended for migration 124 (Part 21g named exception): 124 is a real step now, so the extra step is 125. Part 22a: 125 is a real step now; Part 22x: 126 is a real step now, so the extra step is 127.
+    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (127,'" + 'a'.repeat(64) + "')")),
     false,
   );
   assert.equal(

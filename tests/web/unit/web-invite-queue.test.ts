@@ -48,8 +48,11 @@ test('112 queue invite predicate preserves 110 account/guest rules and excludes 
       .map((row) => row.id);
   };
   assert.deepEqual(selected(110), ['account', 'guest-live']);
-  assert.deepEqual(selected(111), ['account', 'guest-live', 'invite-live']);
+  // Named exception (Part 22x): no business decision reads kind 'invite' any more, so a legacy invite principal is never
+  // claimed through its grant (live, expired, revoked or wrong-scope alike): it is treated like an expired guest. The 110
+  // account/guest rules are unchanged at every schema.
+  assert.deepEqual(selected(111), ['account', 'guest-live']);
   assert.deepEqual(selected(112), selected(111));
   assert.deepEqual(claimRetention(110, now).args, [now]);
-  assert.deepEqual(claimRetention(112, now).args, [now, now]);
+  assert.deepEqual(claimRetention(112, now).args, [now]); // the grant clock argument went with the grant predicate
 });
