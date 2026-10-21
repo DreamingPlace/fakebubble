@@ -1,5 +1,6 @@
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { WebInviteActions } from './web-invite-actions.ts';
+import type { WebInviteAdmin } from './web-invite-admin.ts';
 
 export type WebInviteRequest = {
   method: string;
@@ -49,8 +50,25 @@ function player(req: WebInviteRequest) {
 }
 
 /** Entitlement route core; the transport supplies trusted IP, cookies and CSRF headers. */
-export function routeWebInvite(actions: WebInviteActions, req: WebInviteRequest): WebInviteResult {
+export function routeWebInvite(
+  actions: WebInviteActions,
+  req: WebInviteRequest,
+  adminAccess?: WebInviteAdmin,
+): WebInviteResult {
   ensure(req.method === 'POST' && !req.path.includes('?') && !req.path.includes('#'), 'NOT_FOUND');
+  if (adminAccess && req.path === '/api/web/local/admin/login') {
+    ensure(typeof req.origin === 'string' && typeof req.body === 'object' && req.body !== null, 'INVALID_REQUEST');
+    const body = object(req.body, ['token']);
+    const login = adminAccess.login(string(body.token), req.origin);
+    return { status: 200, issuedAdminCookie: login.cookie, body: { csrf: login.csrf, expiresAt: login.expiresAt } };
+  }
+  if (adminAccess && req.path === '/api/web/local/admin/logout') {
+    const auth = admin(req);
+    object(req.body, []);
+    adminAccess.authorize(auth.cookie, auth.csrf, auth.origin);
+    adminAccess.logout(auth.cookie);
+    return { status: 200, body: { loggedOut: true } };
+  }
   const batchBase = '/api/web/local/admin/invites/';
   if (
     req.path.startsWith(batchBase + 'batch-') ||

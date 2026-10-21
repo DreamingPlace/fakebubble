@@ -244,7 +244,7 @@ export class WebProviderHTTP {
         (await routeWebAccountAdmin(app.inviteAdmin, input, app.characterAdmin, app.cocreation, app.chatReview)) ??
         routeWebCocreation(app.cocreation, input) ??
         routeWebBilling(app.billing, input) ??
-        routeWebInvite(app.inviteActions, input);
+        routeWebInvite(app.inviteActions, input, app.inviteAdmin);
       if (/\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(review-start|run-start|delete-start)$/.test(localPath))
         await this.execution.wake();
       const response = Response.json(result.body, { status: result.status });

@@ -25,8 +25,6 @@ const answer =
   };
 
 export type Shape =
-  | 'lapsed-invite-login'
-  | 'lapsed-invite-bonus'
   | 'login-only-old'
   | 'guest-bonus-past-window'
   | 'plain-guest-past-window';
@@ -50,31 +48,7 @@ export function applyShape(store: ReturnType<typeof modelFixture>['store'], shap
       now - 30 * DAY,
       now - 23 * DAY,
     );
-  const lapsedInvite = () => {
-    store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id='principal'");
-    store.run(
-      "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id='principal'",
-    );
-    store.db.exec('PRAGMA foreign_keys=OFF');
-    store.run(
-      'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at,expires_at,revoked_at) VALUES (?,?,?,?,?,?,?,?)',
-      'grant',
-      'invite',
-      'principal',
-      'player',
-      'world',
-      now - 40 * DAY,
-      now - DAY,
-      null,
-    );
-  };
   switch (shape) {
-    case 'lapsed-invite-login':
-      dropBonus();
-      login();
-      return lapsedInvite();
-    case 'lapsed-invite-bonus':
-      return lapsedInvite();
     case 'login-only-old':
       dropBonus();
       login();
@@ -128,7 +102,10 @@ async function drive(f: ReturnType<typeof modelFixture>, options: { step?: numbe
 const replyLines = (lines: string[]) =>
   lines.filter((line) => line.includes('"web_reply"')).map((line) => JSON.parse(line));
 
-const REGISTERED: Shape[] = ['lapsed-invite-login', 'lapsed-invite-bonus', 'login-only-old', 'guest-bonus-past-window'];
+// Named exception (Part 22x): the 'lapsed-invite-login' and 'lapsed-invite-bonus' shapes (a kind-'invite' principal whose grant
+// lapsed) are deleted with the legacy invite principals; migration 126 made them guests with a login / a bonus past their
+// window, which are exactly the two shapes below, so the same claims and replies stay asserted for them.
+const REGISTERED: Shape[] = ['login-only-old', 'guest-bonus-past-window'];
 const MODELS = ['deepseek', 'xai', 'gemini'] as const;
 
 for (const shape of REGISTERED)

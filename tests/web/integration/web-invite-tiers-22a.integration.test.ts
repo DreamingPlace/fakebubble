@@ -321,28 +321,8 @@ test('22a JS and SQL agree on the tier of every shape, and on content liveness (
         return p;
       },
     },
-    {
-      name: 'legacy invite active',
-      make: () => {
-        const p = f.player('s9');
-        f.store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", p.principalId);
-        f.store.run(
-          "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL WHERE principal_id=?",
-          p.principalId,
-        );
-        f.store.db.exec('PRAGMA foreign_keys=OFF');
-        f.store.run(
-          'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at) VALUES (?,?,?,?,?,?)',
-          'g-s9',
-          'i-s9',
-          p.principalId,
-          p.playerId,
-          p.worldId,
-          1,
-        );
-        return p;
-      },
-    },
+    // Named exception (Part 22x): the 'legacy invite active' shape is gone with the kind; migration 126 makes it a guest (see
+    // web-legacy-invites-126.integration.test.ts, which asserts the JS/SQL agreement for it).
   ];
   const clock = { now: f.clock };
   const schema = f.store.get<{ user_version: number }>('PRAGMA user_version')!.user_version;
@@ -383,7 +363,6 @@ test('22a JS and SQL agree on the tier of every shape, and on content liveness (
       ['registered+both (unlimited wins)', 'unlimited'],
       ['registered+revoked', 'registered'],
       ['registered+expired', 'registered'],
-      ['legacy invite active', 'legacy_invite'],
     ],
   );
 });
@@ -410,7 +389,6 @@ test('22a the operator inspect counts players by effective tier - numbers only',
     registered: 1,
     unlimited: 0,
     daily_refill: 1,
-    legacy_invite: 0,
     account: 0,
   });
   assert.equal(JSON.stringify(report.tiers).includes('principal'), false);

@@ -489,7 +489,7 @@ export class WebProviderServer {
           )) ??
           routeWebCocreation(this.application.cocreation, input) ??
           routeWebBilling(this.application.billing, input) ??
-          routeWebInvite(this.inviteActions, input);
+          routeWebInvite(this.inviteActions, input, this.inviteAdmin);
         if (result.issuedToken) this.setCookie(res, result.issuedToken, true);
         else if (result.clearPlayerCookie)
           res.setHeader('Set-Cookie', `${this.config.cookieName}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`);

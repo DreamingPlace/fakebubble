@@ -323,6 +323,42 @@ export class WebHTTPFixture extends WebBusinessFixture {
       this.enablePlayers(body.signupEnabled, body.dailyCap, body);
       return Response.json({ configured: true });
     }
+    if (path === '/fixture/entitle') {
+      // Part 22x: a signed-up player (email login) holding an unlimited entitlement - what a redeemed code gives a registered
+      // player. Replaces redeeming a legacy invite in tests that only need a long-lived, kept, unlimited player.
+      const { principalId, kind, expiresAt } = (await request.json()) as {
+        principalId: string;
+        kind?: 'unlimited';
+        expiresAt?: number | null;
+      };
+      const now = this.clock.now();
+      this.store.transaction(() => {
+        this.store.run(
+          'INSERT OR IGNORE INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at,last_seen_at) VALUES (?,?,?,?,?,?)',
+          principalId,
+          `${principalId}@example.com`,
+          'x',
+          now,
+          now,
+          now,
+        );
+        this.store.run(
+          "INSERT INTO web_entitlements(id,principal_id,source,kind,starts_at,expires_at,created_at) VALUES (?,?,'admin',?,?,?,?)",
+          `fixture:${principalId}`,
+          principalId,
+          kind ?? 'unlimited',
+          now - 1,
+          expiresAt ?? null,
+          now,
+        );
+      });
+      return Response.json({ entitlementId: `fixture:${principalId}` });
+    }
+    if (path === '/fixture/revoke-entitlement') {
+      const { principalId } = (await request.json()) as { principalId: string };
+      this.store.run('UPDATE web_entitlements SET revoked_at=? WHERE principal_id=?', this.clock.now(), principalId);
+      return Response.json({ revoked: true });
+    }
     if (path === '/fixture/turnstile-calls')
       return Response.json({ calls: this.humanCalls, serverErrors: this.serverErrors });
     if (path === '/fixture/turnstile-mode') {
