@@ -7,7 +7,6 @@ import { localTime } from '../../../packages/domain/schedule.ts';
 import { validBirthDate } from '../characters/characters.ts';
 import { protocolFingerprint } from './accepted-text-protocol.ts';
 import type { TextDraft } from './accepted-text-protocol.ts';
-import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
 import { bubbleLimits, inspectBubbles } from '../../../packages/domain/bubbles.ts';
 import { dialogueParts } from '../../../packages/domain/directions.ts';
 
@@ -82,10 +81,6 @@ export const textPromptHash = (blocks: Record<string, string> = PROMPTS_V7) =>
         promptBlocks(blocks),
       ]),
     )
-    .digest('hex');
-export const textPolicyHash = (models: { draft: string; review: string } = DEFAULT_TEXT_MODELS) =>
-  createHash('sha256')
-    .update(JSON.stringify([textPromptHash(), models.draft, models.review]))
     .digest('hex');
 
 export function promptMessages(request: TextGenerationRequest) {

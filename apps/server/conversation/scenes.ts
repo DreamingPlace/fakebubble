@@ -1,17 +1,11 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type {
   CharacterScope,
   DialogueCandidate,
   MessageDTO,
   RelationshipPreset,
 } from '../../../packages/contracts/index.ts';
-import type {
-  EndSceneReceipt,
-  SceneDescription,
-  SceneEvent,
-  ScenePage,
-  SceneState,
-} from '../../../packages/contracts/scenes.ts';
+import type { SceneDescription, SceneState } from '../../../packages/contracts/scenes.ts';
 import {
   REMOTE_SCENE,
   SCENE_TTL,
@@ -21,16 +15,10 @@ import {
   validateSceneEvidence,
 } from '../../../packages/domain/scenes.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
-import { identifier, keys, record } from '../characters/template-validation.ts';
 import type { UserStore as Store } from '../platform/store-boundary.ts';
 
 const where = 'world_id=? AND conversation_id=? AND character_id=?';
 const params = (scope: CharacterScope) => [scope.worldId, scope.conversationId, scope.characterId] as const;
-const publicScope = (scope: CharacterScope) => ({
-  worldId: scope.worldId,
-  conversationId: scope.conversationId,
-  characterId: scope.characterId,
-});
 interface StateRow {
   revision: number;
   scene_json: string;
@@ -83,72 +71,6 @@ export function sceneState(store: Store, scope: CharacterScope, now: number): Sc
         needsConfirmation: row.expires_at !== null && now >= row.expires_at,
       }
     : { ...REMOTE_SCENE, revision: 0, updatedAt: null, expiresAt: null, needsConfirmation: false, lastChange: null };
-}
-export function freezeSceneContext(
-  store: Store,
-  scope: CharacterScope,
-  jobId: string,
-  messages: MessageDTO[],
-  now: number,
-): SceneState | undefined {
-  if (!isPrivate(store, scope)) return undefined;
-  authorize(store, scope);
-  const old = store.get<{ context_json: string }>(
-    scope,
-    `SELECT context_json FROM scene_job_contexts WHERE ${where} AND job_id=?`,
-    ...params(scope),
-    jobId,
-  );
-  if (old) return JSON.parse(old.context_json);
-  const playerIds = messages
-    .filter((item) => item.authorKind === 'player' && item.authorId === scope.playerId)
-    .map((item) => item.id);
-  const seq = playerIds.length
-    ? (store.get<{ seq: number | null }>(
-        scope,
-        `SELECT max(seq) seq FROM messages WHERE world_id=? AND conversation_id=?
-    AND author_kind='player' AND author_id=? AND id IN (${playerIds.map(() => '?').join(',')})`,
-        scope.worldId,
-        scope.conversationId,
-        scope.playerId,
-        ...playerIds,
-      )!.seq ?? 0)
-    : 0;
-  const state = sceneState(store, scope, now);
-  store.run(
-    scope,
-    'INSERT INTO scene_job_contexts VALUES (?,?,?,?,?,?)',
-    ...params(scope),
-    jobId,
-    JSON.stringify(state),
-    seq,
-  );
-  return state;
-}
-/** Read only the private scene and exact messages already supplied to review, never re-run recall. */
-export function frozenSceneInputs(store: Store, scope: CharacterScope, jobId: string) {
-  if (!isPrivate(store, scope)) return { sceneContext: undefined, messages: [] as MessageDTO[] };
-  const row = store.get<{ context_json: string; messages_json: string | null }>(
-    scope,
-    `SELECT s.context_json,r.messages_json
-    FROM scene_job_contexts s LEFT JOIN relationship_job_contexts r ON r.world_id=s.world_id
-      AND r.conversation_id=s.conversation_id AND r.character_id=s.character_id AND r.job_id=s.job_id
-    WHERE s.world_id=? AND s.conversation_id=? AND s.character_id=? AND s.job_id=?`,
-    ...params(scope),
-    jobId,
-  );
-  if (!row) {
-    ensure(
-      !store.get(scope, `SELECT 1 FROM relationship_job_contexts WHERE ${where} AND job_id=?`, ...params(scope), jobId),
-      'SCENE_CONTEXT_MISSING',
-    );
-    return undefined;
-  }
-  ensure(row.messages_json !== null, 'SCENE_CONTEXT_MISSING');
-  return {
-    sceneContext: JSON.parse(row.context_json) as SceneState,
-    messages: JSON.parse(row.messages_json) as MessageDTO[],
-  };
 }
 /** Rechecked before paid speech and every bubble; newly arrived input may withdraw an ongoing scene. */
 export function projectedSceneStyle(
@@ -297,99 +219,4 @@ export function touchScene(store: Store, scope: CharacterScope, jobId: string, n
     // Idle expiry is renewed only by a completed reply, not message spam or a future appointment.
     store.run(scope, `UPDATE scene_states SET expires_at=? WHERE ${where}`, now + SCENE_TTL.together, ...params(scope));
   }
-}
-export function readScene(store: Store, scope: CharacterScope, now: number): ScenePage {
-  authorize(store, scope);
-  const rows = store.all<{
-    id: string;
-    revision: number;
-    scene_json: string;
-    recorded_at: number;
-    source: SceneEvent['source'];
-    evidence_json: string;
-    response_json: string | null;
-  }>(
-    scope,
-    `SELECT id,revision,scene_json,recorded_at,source,evidence_json,response_json
-    FROM scene_events WHERE ${where} ORDER BY revision DESC LIMIT 20`,
-    ...params(scope),
-  );
-  return {
-    scope: publicScope(scope),
-    state: sceneState(store, scope, now),
-    recentEvents: rows.map((row) => ({
-      id: row.id,
-      revision: row.revision,
-      scene: JSON.parse(row.scene_json),
-      at: row.recorded_at,
-      source: row.source,
-      evidence: JSON.parse(row.evidence_json),
-      response: row.response_json ? JSON.parse(row.response_json) : null,
-    })),
-  };
-}
-export function endScene(store: Store, scope: CharacterScope, now: number, input: unknown): EndSceneReceipt {
-  record(input);
-  keys(input, ['requestId', 'expectedRevision']);
-  identifier(input.requestId);
-  ensure(Number.isSafeInteger(input.expectedRevision) && Number(input.expectedRevision) >= 0, 'INVALID_SCENE');
-  const requestHash = createHash('sha256')
-    .update(JSON.stringify([scope.conversationId, scope.characterId, input.expectedRevision]))
-    .digest('hex');
-  return store.transaction(scope, () => {
-    authorize(store, scope);
-    const existing = store.get<{ conversation_id: string; character_id: string; request_hash: string }>(
-      scope,
-      'SELECT conversation_id,character_id,request_hash FROM scene_end_requests WHERE world_id=? AND request_id=?',
-      scope.worldId,
-      input.requestId as string,
-    );
-    if (existing) {
-      ensure(
-        existing.conversation_id === scope.conversationId &&
-          existing.character_id === scope.characterId &&
-          existing.request_hash === requestHash,
-        'IDEMPOTENCY_CONFLICT',
-      );
-      const previous = store.get<{ revision: number; recorded_at: number }>(
-        scope,
-        `SELECT revision,recorded_at FROM scene_end_requests WHERE ${where} AND request_id=?`,
-        ...params(scope),
-        input.requestId as string,
-      )!;
-      return { scope: publicScope(scope), revision: previous.revision, at: previous.recorded_at, duplicate: true };
-    }
-    ensure(sceneRevision(store, scope) === input.expectedRevision, 'SCENE_REVISION_CONFLICT');
-    const revision = save(store, scope, { ...REMOTE_SCENE }, now);
-    store.run(
-      scope,
-      `UPDATE scene_states SET control_input_seq=COALESCE((SELECT max(seq) FROM messages WHERE world_id=? AND conversation_id=? AND author_kind='player' AND author_id=?),0) WHERE ${where}`,
-      scope.worldId,
-      scope.conversationId,
-      scope.playerId,
-      ...params(scope),
-    );
-    store.run(
-      scope,
-      'INSERT INTO scene_end_requests VALUES (?,?,?,?,?,?,?)',
-      ...params(scope),
-      input.requestId as string,
-      requestHash,
-      revision,
-      now,
-    );
-    store.run(
-      scope,
-      'INSERT INTO scene_events VALUES (?,?,?,?,?,?,?,?,?,?,NULL)',
-      randomUUID(),
-      ...params(scope),
-      revision,
-      JSON.stringify(REMOTE_SCENE),
-      now,
-      'player_control',
-      '[]',
-      null,
-    );
-    return { scope: publicScope(scope), revision, at: now, duplicate: false };
-  });
 }

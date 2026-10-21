@@ -4,7 +4,6 @@ import type {
   DialogueCandidate,
   MessageDTO,
   RandomSource,
-  ShortTermTurn,
   TopicMemory,
 } from '../../../packages/contracts/index.ts';
 import { DIALOGUE, RECALL, topicKey } from '../../../packages/domain/dialogue.ts';
@@ -408,35 +407,6 @@ export function recallPlayerFacts(store: Store, scope: CharacterScope): { factKe
       ...params(scope),
     )
     .map((row) => ({ factKey: row.fact_key, statement: row.statement }));
-}
-
-/** Every published dialogue has exact short-term memory, even a greeting with no semantic topic yet. */
-export function recentTurns(store: Store, scope: CharacterScope, now: number): ShortTermTurn[] {
-  const turns = store.all<{ id: string; at: number }>(
-    scope,
-    `SELECT j.id,min(m.created_at) AS at FROM jobs j
-    JOIN dialogue_bubbles b ON b.job_id=j.id AND b.world_id=j.world_id AND b.conversation_id=j.conversation_id
-    JOIN messages m ON m.id=b.message_id AND m.world_id=b.world_id AND m.conversation_id=b.conversation_id
-    WHERE j.world_id=? AND j.conversation_id=? AND j.character_id=? AND m.created_at>?
-    GROUP BY j.id ORDER BY max(m.seq) DESC LIMIT 8`,
-    ...params(scope),
-    now - DIALOGUE.shortMemoryMs,
-  );
-  return turns.reverse().map((turn) => ({
-    ...turn,
-    messages: store.all<{ id: string; text: string; expression: ShortTermTurn['messages'][number]['expression'] }>(
-      scope,
-      `SELECT m.id,m.body AS text,b.expression FROM dialogue_bubbles b JOIN messages m ON m.id=b.message_id
-        WHERE b.world_id=? AND b.conversation_id=? AND b.job_id=? AND m.world_id=? AND m.conversation_id=? AND m.author_id=?
-        ORDER BY b.ordinal`,
-      scope.worldId,
-      scope.conversationId,
-      turn.id,
-      scope.worldId,
-      scope.conversationId,
-      scope.characterId,
-    ),
-  }));
 }
 
 /** Called in the first eligible proactive claim transaction, never by a timer or generation retry. */

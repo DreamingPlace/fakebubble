@@ -35,13 +35,3 @@ export function userStore(store: BusinessStore): UserStore {
     transaction: <T>(_context: UserContext, work: () => T) => store.transaction(work),
   };
 }
-
-/** Thin wrapper: same connection, same transactions. */
-export function globalStore(store: BusinessStore): GlobalStore {
-  return {
-    run: (sql, ...params) => store.run(sql, ...params),
-    get: <T>(sql: string, ...params: SQLInputValue[]) => store.get<T>(sql, ...params),
-    all: <T>(sql: string, ...params: SQLInputValue[]) => store.all<T>(sql, ...params),
-    transaction: <T>(work: () => T) => store.transaction(work),
-  };
-}

@@ -1,8 +1,6 @@
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { purgeReviewRows, reviewRowsRemain } from '../review/web-chat-review.ts';
 
-export { GUEST_GRACE_MS } from '../../../config/web-public.ts';
-
 const tableExists = (store: Pick<BusinessStore, 'get'>, name: string) =>
   !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", name);
 /** Tables created by 118_player_logins.sql: an older database has nothing to purge there. */

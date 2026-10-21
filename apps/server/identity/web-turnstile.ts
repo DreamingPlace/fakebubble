@@ -14,7 +14,6 @@ import { DomainError } from '../../../packages/domain/errors.ts';
  * - The secret never leaves this module's verifier; nothing here is logged; the token itself is never stored, only its digest.
  */
 export type HumanAction = 'guest' | 'code' | 'login';
-export const HUMAN_ACTIONS: readonly HumanAction[] = ['guest', 'code', 'login'];
 
 export interface TurnstileVerdict {
   success: boolean;

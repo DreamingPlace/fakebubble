@@ -29,7 +29,11 @@ import { acceptedAuditEnvelope, draftEnvelope } from '../tests/text-fixtures.ts'
 const shots = process.argv[2] ? resolve(process.argv[2]) : null;
 if (shots) mkdirSync(shots, { recursive: true });
 
-function loadPlaywright(): typeof import('playwright') {
+type Cookie = { name: string; value: string; httpOnly: boolean; secure: boolean; expires: number };
+
+// Playwright is not a repository dependency, so it has no types here.
+// biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+function loadPlaywright(): any {
   const candidates = [
     process.env.PLAYWRIGHT_MODULE,
     'playwright',
@@ -48,7 +52,7 @@ function loadPlaywright(): typeof import('playwright') {
 
 const PASSWORD = 'correct horse battery';
 const EMAIL = 'browser.player@example.com';
-const { parent, port } = localRuntime();
+const { parent } = localRuntime();
 mkdirSync(parent, { recursive: true, mode: 0o700 });
 const root = join(parent, `provider-browser-${randomUUID().slice(0, 12)}`);
 initProviderInstance(root);
@@ -124,7 +128,7 @@ try {
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 420, height: 860 } });
   const page = await context.newPage();
   const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(String(error)));
+  page.on('pageerror', (error: unknown) => errors.push(String(error)));
   const shot = async (name: string) => {
     await page.waitForTimeout(800); // let the sheet's fade-in finish
     if (shots) await page.screenshot({ path: join(shots, `${name}.png`) });
@@ -138,7 +142,7 @@ try {
   const cookieName = config.cookieName;
   const cookies = await context.cookies();
   assert.ok(
-    cookies.some((cookie) => cookie.name === cookieName && cookie.httpOnly && cookie.secure),
+    cookies.some((cookie: Cookie) => cookie.name === cookieName && cookie.httpOnly && cookie.secure),
     'the guest session is an httpOnly secure cookie set by the server',
   );
 
@@ -152,7 +156,9 @@ try {
   for (const label of ['登录', '注册', '以访客继续'])
     await page.getByRole('button', { name: label, exact: true }).waitFor();
   assert.equal(
-    (await context.cookies()).some((cookie) => cookie.name === cookieName && cookie.value === 'dead-cookie-value'),
+    (await context.cookies()).some(
+      (cookie: Cookie) => cookie.name === cookieName && cookie.value === 'dead-cookie-value',
+    ),
     false,
     'the dead cookie was cleared by the server',
   );
@@ -179,7 +185,7 @@ try {
   // The sheet closes itself and the page reloads as the signed-up player.
   await page.getByRole('button', { name: /阿泡/ }).first().waitFor({ timeout: 20_000 });
   await page.waitForLoadState('networkidle');
-  const signedUp = (await context.cookies()).find((cookie) => cookie.name === cookieName);
+  const signedUp = (await context.cookies()).find((cookie: Cookie) => cookie.name === cookieName);
   assert.ok(signedUp && signedUp.httpOnly && signedUp.secure, 'signup left a session cookie');
   assert.ok(signedUp.expires > Date.now() / 1000 + 300 * 86_400, 'a signed-up session cookie is long-lived (400 days)');
 
@@ -196,7 +202,7 @@ try {
   await page.getByRole('button', { name: '登录/注册' }).first().waitFor({ timeout: 15_000 });
   assert.equal(await page.getByRole('button', { name: /阿泡/ }).count(), 0, 'the nickname button is gone');
   assert.notEqual(
-    (await context.cookies()).find((cookie) => cookie.name === cookieName)?.value,
+    (await context.cookies()).find((cookie: Cookie) => cookie.name === cookieName)?.value,
     signedUp.value,
     'logout replaced the signed-in session cookie',
   );
@@ -216,7 +222,7 @@ try {
   await second.getByRole('button', { name: '登录', exact: true }).last().click();
   await second.waitForLoadState('networkidle');
   await second.getByRole('button', { name: /阿泡/ }).first().waitFor({ timeout: 15_000 });
-  const logged = (await other.cookies()).find((cookie) => cookie.name === cookieName);
+  const logged = (await other.cookies()).find((cookie: Cookie) => cookie.name === cookieName);
   assert.ok(logged && logged.httpOnly && logged.secure, 'login set a session cookie');
   assert.deepEqual(errors, [], 'no uncaught page errors');
   process.stdout.write('browser check: PASS\n');

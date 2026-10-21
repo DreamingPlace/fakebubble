@@ -184,8 +184,33 @@ export function loadAllowList(): Allow[] {
   return raw.entries;
 }
 
+/**
+ * Allow-list entries that no longer do anything: the file or the named export is gone, or it now has a caller. A stale entry would
+ * hide a future dead export under the same name, so it is a failure of its own.
+ */
+export function staleAllowEntries(allow: Allow[]): string[] {
+  const dead = findDeadExports([]);
+  const stale: string[] = [];
+  for (const entry of allow) {
+    const inFile = dead.filter((d) => d.file === entry.file);
+    if (entry.names === '*') {
+      if (!inFile.length) stale.push(`${entry.file}: '*' matches no uncalled export`);
+      continue;
+    }
+    for (const name of entry.names) if (!inFile.some((d) => d.name === name)) stale.push(`${entry.file}: ${name}`);
+  }
+  return stale;
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const dead = findDeadExports(loadAllowList());
+  const allow = loadAllowList();
+  const dead = findDeadExports(allow);
+  const stale = staleAllowEntries(allow);
+  if (stale.length) {
+    process.stderr.write(`${stale.length} stale allow-list entr${stale.length === 1 ? 'y' : 'ies'}:\n`);
+    for (const entry of stale) process.stderr.write(`  ${entry}\n`);
+    process.exitCode = 1;
+  }
   if (process.argv.includes('--json')) process.stdout.write(`${JSON.stringify(dead, null, 2)}\n`);
   else if (dead.length) {
     process.stderr.write(`${dead.length} exported value(s) have no caller outside tests:\n`);
@@ -194,5 +219,5 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       'Delete the symbol (and its private helpers), stop exporting it, or add it to config/dead-exports-allowlist.json with a reason.\n',
     );
   } else process.stdout.write('dead-export check: clean\n');
-  process.exitCode = dead.length ? 1 : 0;
+  if (dead.length) process.exitCode = 1;
 }

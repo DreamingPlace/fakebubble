@@ -15,7 +15,7 @@ Every SQLite table created by the two migration trees (`apps/server/migrations/0
 Each table name was searched (whole word) in all non-test source under `apps/`, `workers/`, `scripts/` and `packages/` outside the `.sql` folders, and again in `tests/`. Every hit was then read:
 
 - Common words were checked by their SQL, not by the word. `media`, `jobs`, `messages` also match JavaScript properties (`media` appears as a property in the player app); only `messages` and `jobs` are real web tables. `media` appears in SQL only as a string in a "must be empty" probe in `admission/web-retention-cleaner.ts`, so it is legacy-unused. Web audio lives in `web_private_audio_assets` and `web_provider_media_assets`.
-- A reference does not count when it sits in a function nothing calls. `cloudQueueNextDue` (`cloudflare/queue-alarm.ts`), `runningAudioCount` (`audio/audio-validation.ts`), `freezeContextEvidence`, `selectProactiveTopic` and `VoiceCatalog` have no callers.
+- A reference does not count when it sits in a function nothing calls. Part 22x deleted the functions that were the only readers of many legacy tables (`cloudQueueNextDue`, `runningAudioCount`, `freezeContextEvidence`, `VoiceCatalog`, the cloud guard/recovery modules, `budget/beta-costs.ts`); `selectProactiveTopic` still has no caller and is allow-listed.
 - Web stores cannot be beta stores (`WEB_BETA_MODE_CONFLICT`); the Node store stops at migration 24 unless `beta` is set, so migrations 025–033 are never applied to a web instance.
 - A "must be empty" probe or a purge-list entry alone does not make a table used; a table the cleaner deletes from and that another web path writes is used.
 
@@ -31,12 +31,12 @@ Result: 71 user, 27 global, 76 legacy-unused (174 tables including four transien
 | `conversations` | migrations/001_core.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | admission/web-admission.ts, conversation/web-vertical-publisher.ts, memory/, conversation/, generation/web-v7-request.ts, purge in admission/web-retention-cleaner.ts |
 | `participants` | migrations/001_core.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | admission/web-admission.ts, conversation/web-vertical-publisher.ts, memory/, conversation/, generation/web-v7-request.ts, purge in admission/web-retention-cleaner.ts |
 | `contacts` | migrations/001_core.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | admission/web-admission.ts, conversation/web-vertical-publisher.ts, memory/, conversation/, generation/web-v7-request.ts, purge in admission/web-retention-cleaner.ts |
-| `batches` | migrations/001_core.sql | legacy-unused | — | only in `cloudQueueNextDue` (cloudflare/queue-alarm.ts), which has no caller |
+| `batches` | migrations/001_core.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
 | `draws` | migrations/001_core.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` (test fixtures only) |
 | `messages` | migrations/001_core.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | admission/web-admission.ts, conversation/web-vertical-publisher.ts, memory/, conversation/, generation/web-v7-request.ts, purge in admission/web-retention-cleaner.ts |
 | `proactive_intents` | migrations/001_core.sql | legacy-unused | — | only an "must be empty" probe in admission/web-retention-cleaner.ts; never written; web audio lives in `web_private_audio_assets` / `web_provider_media_assets` |
 | `jobs` | migrations/001_core.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | admission/web-admission.ts, conversation/web-vertical-publisher.ts, memory/, conversation/, generation/web-v7-request.ts, purge in admission/web-retention-cleaner.ts |
-| `reply_items` | migrations/001_core.sql | legacy-unused | — | `cloudQueueNextDue` (no caller) and emptiness probes in admission/web-lifecycle-audit.ts and characters/web-character-deletion-audit.ts; never written |
+| `reply_items` | migrations/001_core.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) and a cleaner/lifecycle emptiness probe only |
 | `media` | migrations/001_core.sql | legacy-unused | — | only an "must be empty" probe in admission/web-retention-cleaner.ts; never written; web audio lives in `web_private_audio_assets` / `web_provider_media_assets` |
 | `outbox` | migrations/001_core.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | admission/web-admission.ts, conversation/web-vertical-publisher.ts, memory/, conversation/, generation/web-v7-request.ts, purge in admission/web-retention-cleaner.ts |
 | `dialogue_bubbles` | migrations/002_dialogue_memory.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | admission/web-admission.ts, conversation/web-vertical-publisher.ts, memory/, conversation/, generation/web-v7-request.ts, purge in admission/web-retention-cleaner.ts |
@@ -60,11 +60,11 @@ Result: 71 user, 27 global, 76 legacy-unused (174 tables including four transien
 | `memory_mentions` | migrations/002_dialogue_memory.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
 | `proactive_topics` | migrations/003_proactive_topics.sql | legacy-unused | — | only in `selectProactiveTopic` (memory/memory.ts, no caller) |
 | `api_players` | migrations/004_player_api.sql | user | `id` (the player id, joined by `web_principals.player_id`) | identity/web-identity.ts (insert), admission/web-admission.ts |
-| `api_devices` | migrations/004_player_api.sql | legacy-unused | — | only the cloudflare guard/recovery modules (cloudflare/guard-access-state.ts, store.ts, schema.ts), which no web worker enters; `beta` stores cannot be web stores (`WEB_BETA_MODE_CONFLICT`) |
-| `pairing_invites` | migrations/004_player_api.sql | legacy-unused | — | only the cloudflare guard/recovery modules (cloudflare/guard-access-state.ts, store.ts, schema.ts), which no web worker enters; `beta` stores cannot be web stores (`WEB_BETA_MODE_CONFLICT`) |
+| `api_devices` | migrations/004_player_api.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
+| `pairing_invites` | migrations/004_player_api.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
 | `world_setup_receipts` | migrations/004_player_api.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `text_attempts` | migrations/004_player_api.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
-| `text_retry_state` | migrations/004_player_api.sql | legacy-unused | — | only in `cloudQueueNextDue` (cloudflare/queue-alarm.ts), which has no caller |
+| `text_retry_state` | migrations/004_player_api.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
 | `character_template_versions` | migrations/005_admin.sql | global | — | character versions: characters/web-character-publication.ts (insert) |
 | `admin_sessions` | migrations/005_admin.sql | global | — | admin accounts/sessions: admin/web-account-admin.ts, admin/web-admin-schema.ts |
 | `admin_login_grants` | migrations/005_admin.sql | global | — | admin accounts/sessions: admin/web-account-admin.ts, admin/web-admin-schema.ts |
@@ -75,27 +75,27 @@ Result: 71 user, 27 global, 76 legacy-unused (174 tables including four transien
 | `memory_catalog` | migrations/006_memory_corrections.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
 | `memory_corrections` | migrations/006_memory_corrections.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
 | `memory_context_versions` | migrations/006_memory_corrections.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
-| `group_conversations` | migrations/007_groups.sql | legacy-unused | — | only in `freezeContextEvidence` (memory/context-evidence.ts, no caller) and, for the first two, a cleaner emptiness probe |
+| `group_conversations` | migrations/007_groups.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) and a cleaner/lifecycle emptiness probe only |
 | `group_creation_receipts` | migrations/007_groups.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `group_message_routes` | migrations/007_groups.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `group_job_reads` | migrations/007_groups.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
-| `group_message_knowledge` | migrations/007_groups.sql | legacy-unused | — | only in `freezeContextEvidence` (memory/context-evidence.ts, no caller) and, for the first two, a cleaner emptiness probe |
+| `group_message_knowledge` | migrations/007_groups.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) and a cleaner/lifecycle emptiness probe only |
 | `job_evidence_snapshots` | migrations/008_memory_sources.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
 | `memory_episode_sources` | migrations/008_memory_sources.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
-| `moment_threads` | migrations/010_moments.sql | legacy-unused | — | only in `freezeContextEvidence` (memory/context-evidence.ts, no caller) and, for the first two, a cleaner emptiness probe |
+| `moment_threads` | migrations/010_moments.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) and a cleaner/lifecycle emptiness probe only |
 | `moment_requests` | migrations/010_moments.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `autonomy_days` | migrations/011_autonomy.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
-| `voice_profiles` | migrations/012_voice_delivery.sql | legacy-unused | — | only in `VoiceCatalog` (characters/voices.ts, never instantiated) |
-| `speech_tasks` | migrations/012_voice_delivery.sql | legacy-unused | — | only in `cloudQueueNextDue` (cloudflare/queue-alarm.ts), which has no caller / `runningAudioCount` (audio/audio-validation.ts, no caller); retention-cleaner emptiness probe only |
+| `voice_profiles` | migrations/012_voice_delivery.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
+| `speech_tasks` | migrations/012_voice_delivery.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) and a cleaner/lifecycle emptiness probe only |
 | `speech_retry_receipts` | migrations/012_voice_delivery.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
-| `admin_voice_previews` | migrations/013_admin_voice_previews.sql | legacy-unused | — | only in `cloudQueueNextDue` (cloudflare/queue-alarm.ts), which has no caller / `runningAudioCount` (audio/audio-validation.ts, no caller); retention-cleaner emptiness probe only |
+| `admin_voice_previews` | migrations/013_admin_voice_previews.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) and a cleaner/lifecycle emptiness probe only |
 | `external_sources` | migrations/014_external_sources.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `external_source_versions` | migrations/014_external_sources.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `source_fetch_attempts` | migrations/014_external_sources.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `source_posts` | migrations/014_external_sources.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `source_post_versions` | migrations/014_external_sources.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `source_summaries` | migrations/014_external_sources.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
-| `dialogue_deliveries` | migrations/015_paced_delivery.sql | legacy-unused | — | only in `cloudQueueNextDue` (cloudflare/queue-alarm.ts), which has no caller |
+| `dialogue_deliveries` | migrations/015_paced_delivery.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
 | `response_fallbacks` | migrations/016_chat_interactions.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `message_feedback` | migrations/016_chat_interactions.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `playtest_resets` | migrations/017_playtest_reset.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
@@ -128,13 +128,13 @@ Result: 71 user, 27 global, 76 legacy-unused (174 tables including four transien
 | `moment_audience_groups` | migrations/024_moment_audience_groups.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `moment_audience_group_members` | migrations/024_moment_audience_groups.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `moment_audience_group_receipts` | migrations/024_moment_audience_groups.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
-| `beta_instance` | migrations/025_beta_accounts.sql | legacy-unused | — | written only when `beta` is set (platform/store.ts), which is rejected for web stores; read only by cloudflare/recovery-point.ts |
-| `beta_accounts` | migrations/025_beta_accounts.sql | legacy-unused | — | only the cloudflare guard/recovery modules (cloudflare/guard-access-state.ts, store.ts, schema.ts), which no web worker enters; `beta` stores cannot be web stores (`WEB_BETA_MODE_CONFLICT`) |
-| `beta_invites` | migrations/025_beta_accounts.sql | legacy-unused | — | only the cloudflare guard/recovery modules (cloudflare/guard-access-state.ts, store.ts, schema.ts), which no web worker enters; `beta` stores cannot be web stores (`WEB_BETA_MODE_CONFLICT`) |
+| `beta_instance` | migrations/025_beta_accounts.sql | legacy-unused | — | written only when `beta` is set (platform/store.ts), which is rejected for web stores; its only reader was deleted in Part 22x |
+| `beta_accounts` | migrations/025_beta_accounts.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
+| `beta_invites` | migrations/025_beta_accounts.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
 | `beta_account_receipts` | migrations/025_beta_accounts.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `beta_generation_provenance` | migrations/026_beta_feedback.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
-| `beta_feedback` | migrations/026_beta_feedback.sql | legacy-unused | — | only the cloudflare guard/recovery modules (cloudflare/guard-access-state.ts, store.ts, schema.ts), which no web worker enters; `beta` stores cannot be web stores (`WEB_BETA_MODE_CONFLICT`) |
-| `beta_feedback_screenshots` | migrations/026_beta_feedback.sql | legacy-unused | — | only the cloudflare guard/recovery modules (cloudflare/guard-access-state.ts, store.ts, schema.ts), which no web worker enters; `beta` stores cannot be web stores (`WEB_BETA_MODE_CONFLICT`) |
+| `beta_feedback` | migrations/026_beta_feedback.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
+| `beta_feedback_screenshots` | migrations/026_beta_feedback.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
 | `beta_evaluations` | migrations/027_beta_evaluations.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `beta_evaluation_revisions` | migrations/027_beta_evaluations.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `beta_feedback_issues` | migrations/028_feedback_workflow.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
@@ -145,12 +145,12 @@ Result: 71 user, 27 global, 76 legacy-unused (174 tables including four transien
 | `beta_character_catalog` | migrations/029_character_requests.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `beta_character_requests` | migrations/029_character_requests.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `beta_character_request_receipts` | migrations/029_character_requests.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
-| `beta_cost_prices` | migrations/030_beta_costs.sql | legacy-unused | — | only budget/beta-costs.ts, reachable only through cloudflare/guard-cost-facts.ts (no web worker enters it) |
-| `beta_cost_budgets` | migrations/030_beta_costs.sql | legacy-unused | — | only budget/beta-costs.ts, reachable only through cloudflare/guard-cost-facts.ts (no web worker enters it) |
-| `beta_cost_calls` | migrations/030_beta_costs.sql | legacy-unused | — | only budget/beta-costs.ts, reachable only through cloudflare/guard-cost-facts.ts (no web worker enters it) |
-| `beta_cost_events` | migrations/030_beta_costs.sql | legacy-unused | — | only budget/beta-costs.ts, reachable only through cloudflare/guard-cost-facts.ts (no web worker enters it) |
-| `beta_cost_admin_receipts` | migrations/030_beta_costs.sql | legacy-unused | — | only budget/beta-costs.ts, reachable only through cloudflare/guard-cost-facts.ts (no web worker enters it) |
-| `beta_reviewed_replies` | migrations/032_beta_reviewed_replies.sql | legacy-unused | — | only in `cloudQueueNextDue` (cloudflare/queue-alarm.ts), which has no caller |
+| `beta_cost_prices` | migrations/030_beta_costs.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
+| `beta_cost_budgets` | migrations/030_beta_costs.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
+| `beta_cost_calls` | migrations/030_beta_costs.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
+| `beta_cost_events` | migrations/030_beta_costs.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
+| `beta_cost_admin_receipts` | migrations/030_beta_costs.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
+| `beta_reviewed_replies` | migrations/032_beta_reviewed_replies.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
 | `beta_cost_history` | migrations/033_beta_cost_history.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `beta_cost_history_receipts` | migrations/033_beta_cost_history.sql | legacy-unused | — | no reference in `apps/`, `workers/`, `scripts/`, `packages/` |
 | `web_instance` | web-migrations/100_web_instance.sql | global | — | instance singleton: platform/store.ts, budget/web-provider-*budget*.ts |

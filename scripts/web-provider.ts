@@ -30,7 +30,6 @@ import {
   type SelectedCharacterId,
 } from '../apps/server/generation/web-provider-materials.ts';
 import { configureWebProvider } from '../apps/server/generation/web-provider-configuration.ts';
-export { PROVIDER_PRICES, PROVIDER_LIMIT_MICROS } from '../apps/server/generation/web-provider-configuration.ts';
 import { DomainError, ensure } from '../packages/domain/errors.ts';
 import { textConfiguration } from '../apps/server/platform/config.ts';
 import { DeepSeekTextGenerator } from '../apps/server/generation/deepseek.ts';

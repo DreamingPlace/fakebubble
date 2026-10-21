@@ -19,10 +19,6 @@ export const TEXT_ENDPOINTS: Readonly<Record<TextProviderId, string>> = Object.f
   xai: 'https://api.x.ai/v1/chat/completions',
   gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
 });
-export const TEXT_ORIGINS: Readonly<Record<Exclude<TextProviderId, 'deepseek'>, string>> = Object.freeze({
-  xai: 'https://api.x.ai',
-  gemini: 'https://generativelanguage.googleapis.com',
-});
 
 /**
  * Reasoning tokens bill as OUTPUT, and neither xAI nor Gemini documents a hard cap on them that we could verify. The hold

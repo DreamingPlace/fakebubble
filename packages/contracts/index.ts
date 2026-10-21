@@ -4,7 +4,6 @@ import type { VoiceBinding } from './media.ts';
 import type { Association, PlayerIntroductionContext } from './profile.ts';
 import type { ProviderDeclaration, ProviderMeter } from './provider-calls.ts';
 export type { AutonomyPolicy } from './autonomy.ts';
-export const CONTRACT_VERSION = 1 as const;
 export type RelationshipPreset = 'new' | 'friend' | 'close_friend' | 'lover';
 export interface CharacterSelection {
   characterId: string;

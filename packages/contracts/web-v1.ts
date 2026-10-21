@@ -1,6 +1,6 @@
 /** WEB-V1 draft wire contract. S0 review is required before a server route uses it. */
 export type WebId = string;
-export type WebAccessKind = 'guest' | 'account' | 'invite';
+export type WebAccessKind = 'guest' | 'account';
 export type WebOperationStatus =
   | 'queued'
   | 'text_running'
@@ -172,24 +172,6 @@ export interface WebLoginInput {
 export interface WebInviteRedeemInput {
   requestId: WebId;
   code: string;
-}
-export interface WebRecoverInput {
-  requestId: WebId;
-  recoveryCode: string;
-}
-export interface WebPendingTrialClaim {
-  claimId: WebId;
-  characterId: WebId;
-  sourceConversationId: WebId;
-  /** Existing account's live conversation, not the read-only source. */
-  targetConversationId: WebId;
-  expiresAt: number;
-}
-export interface WebIdentityReceipt {
-  access: WebAccess;
-  duplicate: boolean;
-  /** Only when login meets an existing same-character archive conflict. Not authorization by itself. */
-  pendingTrialClaim: WebPendingTrialClaim | null;
 }
 
 export interface WebHistoryPage {

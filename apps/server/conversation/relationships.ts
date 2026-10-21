@@ -7,10 +7,7 @@ import type {
 } from '../../../packages/contracts/index.ts';
 import type {
   RelationshipContext,
-  RelationshipCorrectionReceipt,
   RelationshipEventCandidate,
-  RelationshipJournalItem,
-  RelationshipJournalPage,
   RelationshipProof,
 } from '../../../packages/contracts/relationships.ts';
 import { associationBaseline } from '../../../packages/domain/association.ts';
@@ -27,15 +24,7 @@ import type { UserStore as Store } from '../platform/store-boundary.ts';
 
 const where = 'world_id=? AND conversation_id=? AND character_id=?';
 const params = (scope: CharacterScope) => [scope.worldId, scope.conversationId, scope.characterId] as const;
-const publicScope = (scope: CharacterScope) => ({
-  worldId: scope.worldId,
-  conversationId: scope.conversationId,
-  characterId: scope.characterId,
-});
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-function identifier(value: unknown): asserts value is string {
-  ensure(typeof value === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(value), 'INVALID_REQUEST');
-}
 interface State {
   revision: number;
   trust_delta: number;
@@ -194,18 +183,6 @@ export function relationshipContext(
       };
     }),
   };
-}
-/** Freeze the same authorized messages supplied to review. Never resolve model-provided IDs globally. */
-export function freezeRelationshipMessages(store: Store, scope: CharacterScope, jobId: string, messages: MessageDTO[]) {
-  if (!isPrivate(store, scope)) return messages;
-  store.run(
-    scope,
-    `INSERT OR IGNORE INTO relationship_job_contexts VALUES (?,?,?,?,?)`,
-    ...params(scope),
-    jobId,
-    JSON.stringify(messages),
-  );
-  return frozenMessages(store, scope, jobId);
 }
 function frozenMessages(store: Store, scope: CharacterScope, jobId: string): MessageDTO[] {
   const context = store.get<{ messages_json: string }>(
@@ -377,138 +354,4 @@ export function recordRelationshipEvents(
     );
   }
   if (changed) rebuild(store, scope);
-}
-function item(event: EventRow): RelationshipJournalItem {
-  const candidate = proposal(event);
-  return {
-    id: event.id,
-    kind: candidate.kind,
-    summary: candidate.summary,
-    basis: candidate.basis,
-    at: event.recorded_at,
-    anchor: candidate.anchor,
-    evidence: candidate.evidence,
-    response: { messageId: event.response_id, quote: candidate.responseQuote },
-    counted: !!(event.trust_delta || event.familiarity_delta),
-    correction: event.reason === null ? null : { reason: event.reason, at: event.corrected_at! },
-  };
-}
-export function listRelationshipEvents(
-  store: Store,
-  scope: CharacterScope,
-  before: string | null,
-): RelationshipJournalPage {
-  authorizePrivate(store, scope);
-  let seq = Number.MAX_SAFE_INTEGER;
-  if (before !== null) {
-    identifier(before);
-    const cursor = store.get<{ seq: number }>(
-      scope,
-      `SELECT seq FROM relationship_events WHERE ${where} AND id=?`,
-      ...params(scope),
-      before,
-    );
-    ensure(cursor, 'INVALID_CURSOR');
-    seq = cursor.seq;
-  }
-  const page = store.all<EventRow>(
-    scope,
-    `${eventQuery} AND e.seq<? ORDER BY e.seq DESC LIMIT 26`,
-    ...params(scope),
-    seq,
-  );
-  const items = page.slice(0, 25).map(item);
-  return { scope: publicScope(scope), items, before: items.at(-1)?.id ?? before, hasMore: page.length > 25 };
-}
-/** Append a player's disputed-event record. It retracts contribution, not the conversation or original evidence. */
-export function correctRelationshipEvent(
-  store: Store,
-  scope: CharacterScope,
-  id: string,
-  input: unknown,
-  now: number,
-): RelationshipCorrectionReceipt {
-  identifier(id);
-  ensure(
-    input !== null &&
-      typeof input === 'object' &&
-      !Array.isArray(input) &&
-      Object.keys(input).sort().join(',') === 'expectedRevision,reason,requestId',
-    'INVALID_REQUEST',
-  );
-  const value = input as { requestId: unknown; expectedRevision: unknown; reason: unknown };
-  identifier(value.requestId);
-  ensure(
-    value.expectedRevision === 0 &&
-      typeof value.reason === 'string' &&
-      value.reason.trim().length > 0 &&
-      [...value.reason].length <= 400 &&
-      !/[\u0000-\u001f]/u.test(value.reason),
-    'INVALID_REQUEST',
-  );
-  const reason = value.reason.trim(),
-    requestId = value.requestId;
-  const digest = hash(JSON.stringify([scope.conversationId, scope.characterId, id, reason]));
-  return store.transaction(scope, () => {
-    authorizePrivate(store, scope);
-    const previous = store.get<{
-      event_id: string;
-      conversation_id: string;
-      character_id: string;
-      request_hash: string;
-    }>(
-      scope,
-      'SELECT event_id,conversation_id,character_id,request_hash FROM relationship_corrections WHERE world_id=? AND request_id=?',
-      scope.worldId,
-      requestId,
-    );
-    if (previous) {
-      ensure(
-        previous.conversation_id === scope.conversationId &&
-          previous.character_id === scope.characterId &&
-          previous.event_id === id &&
-          previous.request_hash === digest,
-        'IDEMPOTENCY_CONFLICT',
-      );
-      const receipt = store.get<{ reason: string; recorded_at: number }>(
-        scope,
-        `SELECT reason,recorded_at FROM relationship_corrections WHERE ${where} AND event_id=?`,
-        ...params(scope),
-        id,
-      )!;
-      return {
-        scope: publicScope(scope),
-        eventId: id,
-        revision: 1,
-        reason: receipt.reason,
-        at: receipt.recorded_at,
-        duplicate: true,
-      };
-    }
-    const event = store.get<EventRow>(scope, `${eventQuery} AND e.id=?`, ...params(scope), id);
-    ensure(event, 'NOT_FOUND');
-    ensure(event.reason === null, 'RELATIONSHIP_REVISION_CONFLICT');
-    store.run(
-      scope,
-      'INSERT INTO relationship_corrections VALUES (?,?,?,?,?,?,?,?)',
-      ...params(scope),
-      id,
-      requestId,
-      digest,
-      reason,
-      now,
-    );
-    rebuild(store, scope);
-    return { scope: publicScope(scope), eventId: id, revision: 1, reason, at: now, duplicate: false };
-  });
-}
-export function resetRelationshipState(store: Store, worldId: string, characterId: string) {
-  // Daily budgets deliberately survive the test reset; they contain no dialogue or relationship evidence.
-  store.run(
-    { worldId },
-    `INSERT INTO relationship_states VALUES (?,?,1,0,0,0,'[]') ON CONFLICT(world_id,character_id)
-    DO UPDATE SET revision=revision+1,trust_delta=0,familiarity_delta=0,positive_days=0,kinds_json='[]'`,
-    worldId,
-    characterId,
-  );
 }

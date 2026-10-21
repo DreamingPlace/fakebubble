@@ -1,7 +1,4 @@
 import type { BusinessStore } from '../platform/store-contract.ts';
-
-/** Tables created by 117_cocreation.sql: an older database has nothing to purge there. */
-export const COCREATION_TABLES = ['web_cocreation_answers', 'web_cocreation_submissions'] as const;
 export const cocreationTablesExist = (store: Pick<BusinessStore, 'get'>) =>
   !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_cocreation_submissions'");
 
