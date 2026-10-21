@@ -149,9 +149,7 @@ export class WebLocalExecutor {
       ? 'SCENE_INVALIDATED'
       : code.startsWith('WEB_INPUT_')
         ? 'INPUT_INVALIDATED'
-        : code === 'WEB_PUBLICATION_ENTITLEMENT_CHANGED' ||
-            code === 'WEB_OPERATION_AUTH_REVOKED' ||
-            code === 'WEB_INVITE_ACCESS_REQUIRED'
+        : code === 'WEB_PUBLICATION_ENTITLEMENT_CHANGED' || code === 'WEB_OPERATION_AUTH_REVOKED'
           ? 'AUTH_REVOKED'
           : null;
     if (!reason || !this.coordinator) throw error;
@@ -177,34 +175,15 @@ export class WebLocalExecutor {
     const operation = this.store.get<{
       metering_type: string;
       principal_id: string;
-      player_id: string;
       world_id: string;
-      kind: string;
     }>(
-      `SELECT o.metering_type,o.principal_id,p.player_id,o.world_id,p.kind
-        FROM web_operations o JOIN web_principals p ON p.id=o.principal_id AND p.world_id=o.world_id
-        WHERE o.id=?`,
+      `SELECT metering_type,principal_id,world_id FROM web_operations WHERE id=?`,
       operationId,
     );
     if (!operation) throw new DomainError('WEB_OPERATION_NOT_FOUND');
     requireWebContent(this.store, this.clock, operation.principal_id, operation.world_id);
     if (operation.metering_type === 'entitled') {
       if (
-        operation.kind === 'invite' &&
-        this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 112
-      ) {
-        if (
-          !this.store.get(
-            `SELECT 1 FROM web_invite_grants WHERE principal_id=? AND player_id=?
-          AND world_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)`,
-            operation.principal_id,
-            operation.player_id,
-            operation.world_id,
-            this.clock.now(),
-          )
-        )
-          throw new DomainError('WEB_OPERATION_AUTH_REVOKED');
-      } else if (
         !this.store.get(
           `SELECT 1 FROM web_accounts
         WHERE principal_id=? AND active=1`,

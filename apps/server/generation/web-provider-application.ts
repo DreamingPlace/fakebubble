@@ -27,7 +27,6 @@ import { WebIdentity } from '../identity/web-identity.ts';
 import { WebAdmission } from '../admission/web-admission.ts';
 import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts';
 import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts';
-import { WebInvites } from '../invites/web-invites.ts';
 import { WebInviteTiers } from '../invites/web-invite-tiers.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { WebCocreation } from '../cocreation/web-cocreation.ts';
@@ -218,14 +217,6 @@ export class WebProviderApplication {
     this.characterAdmin = new WebCharacterAdmin(store, clock, this.inviteAdmin);
     this.characterAdmin.enableMaterials(new WebCharacterMaterials(store, clock));
     this.characterAdmin.enableDeletion(this.characterDeletion);
-    const invites = new WebInvites(store, {
-      clock,
-      codeKey: createHmac('sha256', Buffer.from(config.requestKey, 'base64url'))
-        .update('web-local-invite-code-v1')
-        .digest(),
-      authorize: this.identity.authorizeInviteAction.bind(this.identity),
-      identity: this.identity,
-    });
     const inviteTiers = new WebInviteTiers(store, {
       clock,
       codeKey: createHmac('sha256', Buffer.from(config.requestKey, 'base64url'))
@@ -252,16 +243,7 @@ export class WebProviderApplication {
           },
         })
       : null;
-    const accounts = this.playerAccounts;
-    this.inviteActions = new WebInviteActions(store, clock, config.origin, invites, this.identity, {
-      tiers: inviteTiers,
-      // While accounts can be opened, a redemption belongs to a signed-in login; with signup closed nobody could
-      // ever satisfy that, so redemption stays as it was.
-      requireLogin: accounts?.signupEnabled
-        ? (token) =>
-            ensure(this.identity.hasLogin(this.identity.authenticate(token).principalId), 'PLAYER_LOGIN_REQUIRED')
-        : undefined,
-    });
+    this.inviteActions = new WebInviteActions(store, clock, config.origin, inviteTiers);
     this.cocreation = new WebCocreation(
       store,
       clock,
@@ -277,7 +259,7 @@ export class WebProviderApplication {
 
   bootstrap(token: string | undefined, ipHash: string) {
     let issued: string | null = null;
-    let invited = false;
+    let durable = false;
     const body = this.store.transaction((): WebProviderBootstrap => {
       if (!token) {
         const start = Math.floor(this.clock.now() / 86_400_000) * 86_400_000;
@@ -310,8 +292,7 @@ export class WebProviderApplication {
           // With the grace flag on, a dead guest cookie is a signed-out visit (the transport clears it and the page
           // offers 登录 / 注册 / 以访客继续); with it off the old "访客会话已过期" answer is unchanged.
           throw this.graceMs > 0 ? new GuestGraceEndedError() : new DomainError('GUEST_SESSION_EXPIRED');
-        // A revoked / rotated / unknown cookie leaves the page signed out: the transport clears it. A cookie whose
-        // uncertain invite redemption can still be recovered keeps its place until that is settled.
+        // A revoked / unknown cookie leaves the page signed out: the transport clears it.
         if (
           token &&
           error instanceof DomainError &&
@@ -322,7 +303,7 @@ export class WebProviderApplication {
         throw error;
       }
       issued = boot.issuedToken;
-      invited = this.identity.isDurableSession(token ?? boot.issuedToken!);
+      durable = this.identity.isDurableSession(token ?? boot.issuedToken!);
       const principal = this.identity.authenticate(token ?? boot.issuedToken!);
       // Activity for the 180-day inactivity purge (at most one write per UTC day).
       this.playerAccounts?.touch(principal.principalId);
@@ -377,7 +358,7 @@ export class WebProviderApplication {
         syncCursor: this.cursor(principal.principalId, high),
       };
     });
-    return { body, issuedToken: issued, invited };
+    return { body, issuedToken: issued, durable };
   }
 
   cursor(principalId: string, seq: number, conversationId?: string) {
@@ -460,40 +441,6 @@ export class WebProviderApplication {
         inaccessible,
       };
     };
-    if (row.kind === 'invite') {
-      const grant = this.store.get<{ id: string; expires_at: number | null; revoked_at: number | null }>(
-        `SELECT id,expires_at,revoked_at FROM web_invite_grants WHERE principal_id=?
-          AND player_id=? AND world_id=?`,
-        principal.principalId,
-        principal.player_id,
-        principal.world_id,
-      );
-      ensure(grant, 'WEB_INVITE_ACCESS_REQUIRED');
-      const status =
-        grant.revoked_at !== null
-          ? ('revoked' as const)
-          : grant.expires_at !== null && now >= grant.expires_at
-            ? ('expired' as const)
-            : ('active' as const);
-      if (
-        status !== 'active' &&
-        hasPoints(this.store, principal.principalId, now) &&
-        isRegistered(this.store, principal.principalId, now)
-      )
-        return pointsAccess(null, false);
-      return {
-        kind: 'invite',
-        ...base,
-        grantId: grant.id,
-        status,
-        lockedCharacterId: null,
-        remainingReplies: null,
-        reservedReplies: null,
-        trialExpiresAt: null,
-        canSend: status === 'active',
-        inaccessible: status !== 'active',
-      };
-    }
     ensure(row.kind === 'guest', 'WEB_PROVIDER_ACCESS_UNSUPPORTED');
     const retention = this.store.get<WebRetentionRow>(
       `SELECT * FROM web_guest_retention
@@ -512,7 +459,7 @@ export class WebProviderApplication {
     // A guest with an email login keeps reading after the trial ended (requireWebContent 'read'); it still cannot send.
     const retained =
       expired && retention.state === 'active' && playerLoginRetainsGuest(this.store, principal.principalId);
-    const registered = isRegistered(this.store, principal.principalId, now);
+    const registered = isRegistered(this.store, principal.principalId);
     const counterRemaining = Math.max(
       0,
       Math.min(

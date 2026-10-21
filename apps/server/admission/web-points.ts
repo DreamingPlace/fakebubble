@@ -13,7 +13,6 @@ import {
   freeTier,
   guestTrialOver,
   hasSignupBonus,
-  inviteGrantLapsed,
   isRegistered,
 } from './web-free-tier.ts';
 import { activeEntitlement, utcDay } from './web-entitlements.ts';
@@ -75,7 +74,7 @@ export function offeredModels(store: Pick<BusinessStore, 'get' | 'all'> & Flagge
  */
 export const hasPoints = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string, now?: number) =>
   offeredModels(store) !== null && isRegisteredTier(store, principalId, now);
-/** An invited principal (an invite or an account): may choose a model, is never charged points. */
+/** An entitled player or an account: may choose a model. */
 export const isInvited = (store: Pick<BusinessStore, 'get' | 'all'> & Flagged, principalId: string, now?: number) =>
   offeredModels(store) !== null && playerTier(store, principalId, now) === 'invited';
 /**
@@ -88,10 +87,6 @@ export function canChooseModel(store: Pick<BusinessStore, 'get' | 'all'> & Flagg
   if (!tier) return false;
   // A trial guest whose trial is over has nothing to choose a model for: the page shows the trial-ended state instead.
   if (tier === 'guest' && now !== undefined && guestTrialOver(store, principalId, now)) return false;
-  // An invited player whose grant is gone (and who has nothing to fall back on: that one is 'registered') gets no picker. A
-  // player who holds an entitlement is not that case: its tier comes from the entitlement, not from a grant.
-  if (tier === 'invited' && !activeEntitlement(store, principalId, now) && inviteGrantLapsed(store, principalId, now))
-    return false;
   const count = tierModels(store, tier).length;
   return tier === 'guest' ? count > 1 : count > 0;
 }
@@ -500,7 +495,7 @@ export function modelChoiceState(
 ): ModelChoiceState | null {
   const offered = offeredModels(store);
   if (!offered || !canChooseModel(store, principalId, now)) return null;
-  const metered = isRegistered(store, principalId, now);
+  const metered = isRegistered(store, principalId);
   const allowed = tierModels(store, playerTier(store, principalId, now)!);
   const prices = currentPrices(store);
   return store.transaction(() => {

@@ -20,7 +20,7 @@ test('private web operator pins only new workers/account, requires explicit argu
     'budget-summary',
     'business-object-id',
     'budget-object-id',
-    'invite-grants',
+    'admin-recovery-grant',
   ] as const) {
     const config = webOperatorConfig(action, 'a'.repeat(32));
     assert.equal(config.account_id, 'a'.repeat(32));
@@ -42,15 +42,11 @@ test('private web operator pins only new workers/account, requires explicit argu
     /WEB_OPERATOR_NAME_REQUIRED/,
   );
   assert.throws(
-    () => webOperatorArguments(['--action=invite-grants', `--receipt-file=${receipt}`]),
-    /WEB_OPERATOR_NAME_REQUIRED/,
-  );
-  assert.throws(
     () => webOperatorArguments(['--action=admin-recovery-grant', `--receipt-file=${receipt}`]),
     /WEB_OPERATOR_NAME_REQUIRED/,
   );
   assert.throws(
-    () => webOperatorArguments(['--action=invite-grants', `--receipt-file=${receipt}`, '--name=bad/id']),
+    () => webOperatorArguments(['--action=admin-recovery-grant', `--receipt-file=${receipt}`, '--name=bad/id']),
     /WEB_OPERATOR_NAME_REQUIRED/,
   );
   const bytes = Buffer.from('offline fixture bytes'),

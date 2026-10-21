@@ -6,7 +6,7 @@ import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
 import { effectiveTier } from '../../../apps/server/admission/web-model-settings.ts';
 import { PLAYER_NUMBER_PATTERN } from '../../../apps/server/admission/web-player-number.ts';
 import { Store, type WebStore } from '../../../apps/server/platform/store.ts';
-import { migrateWebProviderInviteTiers } from '../../../apps/server/generation/web-provider-migration.ts';
+import { migrateWebProviderInviteTiers, migrateWebProviderLegacyInvites } from '../../../apps/server/generation/web-provider-migration.ts';
 import { registerSqlTextLoader } from '../../../scripts/web-sql-text.ts';
 import { enableModelChoice } from '../fixtures/model-choice.ts';
 import { schema124 } from '../fixtures/model-settings.ts';
@@ -121,17 +121,18 @@ test('125 is its own step after 124, creates the tables once and is not repeatab
   assert.throws(() => migrateWebProviderInviteTiers(fresh), /WEB_PROVIDER_INVITE_TIERS_MIGRATION_REQUIRED/);
 });
 
-test('125 is the same SQL on both authorities, the last of 50 steps, and 100-124 are unchanged', () => {
+test('125 is the same SQL on both authorities, followed by 126, and 100-124 are unchanged', () => {
   const { inline, r2 } = expectedWebMigrations();
-  assert.equal(inline.length, 50);
-  assert.equal(r2.length, 50);
-  assert.equal(inline.at(-1)!.version, 125);
-  assert.equal(inline.at(-1)!.sha256, sha(sql125()));
-  assert.deepEqual(r2.at(-1), inline.at(-1));
-  // Never edit steps 1-124: the previous newest step is byte-identical to main's.
-  assert.equal(inline.at(-2)!.version, 124);
-  assert.equal(inline.at(-2)!.sha256, '5754ab5882783ac356527db8904fd2a4661c6b9ff98ee796a49a438ec1301d17');
-  assert.equal(inline.at(-3)!.sha256.startsWith('432c1237'), true);
+  assert.equal(inline.length, 51);
+  assert.equal(r2.length, 51);
+  assert.equal(inline.at(-1)!.version, 126);
+  assert.equal(inline.at(-2)!.version, 125);
+  assert.equal(inline.at(-2)!.sha256, sha(sql125()));
+  assert.deepEqual(r2.at(-2), inline.at(-2));
+  // Never edit steps 1-125: the earlier steps are byte-identical to main's.
+  assert.equal(inline.at(-3)!.version, 124);
+  assert.equal(inline.at(-3)!.sha256, '5754ab5882783ac356527db8904fd2a4661c6b9ff98ee796a49a438ec1301d17');
+  assert.equal(inline.at(-4)!.sha256.startsWith('432c1237'), true);
 });
 
 test('125 backfill: entitlements only for invited principals with a login and an ACTIVE grant; kind and retention never change', (t) => {
@@ -217,11 +218,14 @@ test('125 backfill: entitlements only for invited principals with a login and an
   );
 
   // The effective tier after the migration: the entitled pair is unlimited, the lapsed ones are registered, the rest unchanged.
+  // Named exception (Part 22x, migration 126): the effective tier is derived without the legacy kind, so the tiers are read
+  // after 126 normalizes the invite principals; 125's own assertions above (kind and retention unchanged) ran before it.
+  migrateWebProviderLegacyInvites(store);
   const tier = (id: string) => effectiveTier(store, id, NOW)!.kind;
   // Part 22a follow-up: the backfilled entitlement decides (not the grant): unlimited, until it ends.
   assert.equal(tier(shapes['invited, login, active grant (no expiry)']), 'unlimited');
   assert.equal(tier(shapes['invited, login, lapsed grant (expired)']), 'registered');
-  assert.equal(tier(shapes['invited, NO login, lapsed grant']), 'legacy_invite');
+  assert.equal(tier(shapes['invited, NO login, lapsed grant']), 'guest');
   assert.equal(tier(shapes['registered guest (bonus)']), 'registered');
   assert.equal(tier(shapes['plain guest']), 'guest');
 

@@ -1,5 +1,4 @@
 import type { WebProviderBootstrap } from '../../../../packages/contracts/web-provider.ts';
-import type { WebInviteStatus } from '../../../../packages/contracts/web-local-invite.ts';
 import { ProviderApi, ProviderApiError } from '../services/provider-api.ts';
 
 type Phase = 'entry' | 'submitting' | 'uncertain' | 'recovering' | 'accepted' | 'blocked';
@@ -22,15 +21,15 @@ const matches = (a: Scope, b: Scope) =>
   a.playerId === b.playerId &&
   a.worldId === b.worldId;
 
-/** One in-memory intent survives dialog dismissal; recovery never repeats redemption. */
+/**
+ * One in-memory intent survives dialog dismissal. A redemption is idempotent on its requestId (an entitlement is added once;
+ * the same request answers `duplicate`), so an uncertain one is settled by asking again with the SAME request, never a new one.
+ */
 export class ProviderInviteController {
   private phase: Phase = 'entry';
   private errorCode: string | null = null;
   private intent: { code: string; requestId: string; source: Scope } | null = null;
-  private readonly api: Pick<
-    ProviderApi,
-    'bootstrap' | 'redeemInvite' | 'inviteReceiptStatus' | 'inviteReceiptChallenge' | 'recoverInviteReceipt'
-  >;
+  private readonly api: Pick<ProviderApi, 'bootstrap' | 'redeemInvite'>;
   private readonly current: () => WebProviderBootstrap;
   private readonly install: (view: WebProviderBootstrap) => void;
   private readonly changed: () => void;
@@ -67,15 +66,10 @@ export class ProviderInviteController {
     )
       throw new ProviderApiError(0, 'IDENTITY_CHANGED');
   }
-  private accept(view: WebProviderBootstrap, receipt: WebInviteStatus) {
+  /** An entitlement changes nothing about who the player is - same principal, same session. Take the new access. */
+  private async accept() {
+    const view = await this.api.bootstrap();
     this.check(view);
-    if (
-      view.access.kind !== 'invite' ||
-      view.access.status !== 'active' ||
-      view.access.grantId !== receipt.grantId ||
-      view.access.principalId !== receipt.principalId
-    )
-      throw new ProviderApiError(0, 'INVITE_SCOPE_MISMATCH');
     this.install(view);
     this.intent = null;
     this.set('accepted');
@@ -83,9 +77,9 @@ export class ProviderInviteController {
   }
   private failed(error: unknown) {
     const code = error instanceof ProviderApiError ? error.code : 'NETWORK';
-    // Even an unavailable/expired receipt does not prove that the original request failed.
+    // A lost answer does not prove that the request failed.
     this.set(
-      ['IDENTITY_CHANGED', 'INVITE_SCOPE_MISMATCH', 'CATALOG_CHANGED'].includes(code) ? 'blocked' : 'uncertain',
+      ['IDENTITY_CHANGED', 'CATALOG_CHANGED'].includes(code) ? 'blocked' : 'uncertain',
       code,
     );
     return false;
@@ -93,19 +87,18 @@ export class ProviderInviteController {
   async redeem(code: string) {
     if (this.phase !== 'entry') return false;
     const view = this.current();
-    if (view.access.kind !== 'guest') {
-      this.set('blocked', 'IDENTITY_CHANGED');
-      return false;
-    }
     if (!/^[A-Za-z0-9_-]{43}$/.test(code)) {
       this.set('entry', 'INVALID_CODE');
       return false;
     }
     this.intent = { code, requestId: this.requestId(), source: scope(view) };
     this.set('submitting');
-    let receipt: Awaited<ReturnType<ProviderInviteController['api']['redeemInvite']>>;
+    return this.send();
+  }
+  private async send() {
+    const intent = this.intent!;
     try {
-      receipt = await this.api.redeemInvite({ code, requestId: this.intent.requestId });
+      await this.api.redeemInvite({ code: intent.code, requestId: intent.requestId });
     } catch (error) {
       // Only an explicit transactional rejection permits editing a new intent. A guest's code is refused before it is looked
       // at (PLAYER_LOGIN_REQUIRED): nothing was consumed, so the player may sign up and enter it again.
@@ -121,45 +114,20 @@ export class ProviderInviteController {
       return this.failed(error);
     }
     try {
-      // Part 22a: an entitlement changes nothing about who the player is - same principal, same session. Take the new access.
-      if ('entitlement' in receipt) {
-        const view = await this.api.bootstrap();
-        this.check(view);
-        this.install(view);
-        this.intent = null;
-        this.set('accepted');
-        return true;
-      }
-      return this.accept(await this.api.bootstrap(), receipt);
+      return await this.accept();
     } catch (error) {
       return this.failed(error);
     }
   }
+  /** Settles an uncertain redemption: the same request again, which the server answers without a second redemption. */
   async recover() {
     if (this.phase !== 'uncertain' || !this.intent) return false;
-    const { code, requestId } = this.intent;
     this.set('recovering');
     try {
       this.check(this.current());
-      let view: WebProviderBootstrap;
-      try {
-        view = await this.api.bootstrap();
-      } catch (error) {
-        if (
-          !(error instanceof ProviderApiError) ||
-          !['SESSION_ROTATED_RECOVERABLE', 'SESSION_EXPIRED'].includes(error.code)
-        )
-          throw error;
-        // Invite rotation currently reports SESSION_EXPIRED; the challenge proves a live sealed receipt.
-        const csrf = await this.api.inviteReceiptChallenge();
-        this.check(this.current());
-        const receipt = await this.api.recoverInviteReceipt({ code, requestId }, csrf);
-        return this.accept(await this.api.bootstrap(), receipt);
-      }
-      this.check(view);
-      return this.accept(view, await this.api.inviteReceiptStatus(requestId));
     } catch (error) {
       return this.failed(error);
     }
+    return this.send();
   }
 }

@@ -2,7 +2,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { PlayerMailer } from '../identity/web-player-accounts.ts';
 import type { AdminEmailBinding } from './web-admin-mail.ts';
 
-const purposeName = { signup: '注册', bind: '绑定邮箱', reset: '重置密码' } as const;
+const purposeName = { signup: '注册', reset: '重置密码' } as const;
 
 /** Plain Chinese text only: a code (or the "already registered" notice), no links, no HTML, no tracking. */
 export function playerMailText(message: {

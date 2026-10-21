@@ -29,7 +29,6 @@ const login: AccountInfo = {
   hasLogin: true,
   emailMasked: 'p***@example.com',
   nickname: '阿泡',
-  canBind: false,
   features: { signupBonus: 10 },
 };
 
@@ -201,7 +200,7 @@ test('the picker shows a speed hint per model from one constant', (t) => {
 
 // ---- the chat page: three small hooks -----------------------------------------------------------------------------------
 
-function chat(t: test.TestContext, account: AccountInfo, options: { invited?: boolean } = {}) {
+function chat(t: test.TestContext, account: AccountInfo) {
   const doc = installFakeDom(t);
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   Object.defineProperty(globalThis, 'window', { configurable: true, value: new EventTarget() });
@@ -213,21 +212,6 @@ function chat(t: test.TestContext, account: AccountInfo, options: { invited?: bo
   boot.fixture = false;
   for (const character of boot.characters) character.availability = { state: 'available', personaVersion: 1 };
   Object.assign(boot.access, { canSend: true, remainingReplies: 5 });
-  if (options.invited)
-    boot.access = {
-      kind: 'invite',
-      principalId: 'p',
-      playerId: 'pl',
-      worldId: 'w',
-      revision: 1,
-      grantId: 'g',
-      status: 'active',
-      lockedCharacterId: null,
-      remainingReplies: null,
-      reservedReplies: null,
-      trialExpiresAt: null,
-      canSend: true,
-    };
   boot.conversations = [
     { conversationId: 'conversation-1', characterId: 'wei-guagua', lastMessageId: 'm1', unreadCount: 0 },
   ];
@@ -396,18 +380,16 @@ test('an invited player picks a model without prices or balance: nothing is char
 
 const titlesOf = (items: FakeElement[]) => items.map((item) => item.querySelector('.chat-menu-title')!.textContent);
 const guestAccount: AccountInfo = { signupEnabled: true, signedIn: false };
+// An unlimited entitlement (Part 22a): the page reads the server's effective tier, never the principal kind.
 const invitedAccount: AccountInfo = {
   signupEnabled: true,
   signedIn: true,
-  kind: 'invite',
-  hasLogin: false,
-  emailMasked: null,
-  nickname: null,
-  canBind: false,
+  kind: 'guest',
+  hasLogin: true,
+  emailMasked: 'p***@example.com',
+  nickname: '阿泡',
   modelChoice: { ...info, metered: false, balance: 0, repliesLeft: 0 },
-  // Named exception (Part 22a): the page reads the server's effective tier, never the principal kind, so this legacy invited
-  // player now says what it is (the server sends it to every signed-in player).
-  tier: { kind: 'legacy_invite', unlimited: true },
+  tier: { kind: 'unlimited', unlimited: true },
 };
 
 test('chat ⋯ menu: 切换回复模型 and 共创 only, in that order; a guest has 共创 only; no account entries in either', async (t) => {
@@ -610,13 +592,13 @@ test('消费记录 rows: free replies say 不计点, no-voice says 无语音, pa
     billingRow({ kind: 'failed', at: 1_000_000, characterId: 'x', refunded: 0, free: true }, name).sub,
     '回复失败',
   );
-  const f = chat(t, { ...invitedAccount }, { invited: true });
+  const f = chat(t, { ...invitedAccount });
   f.setBilling(
     billingData({ metered: false, balance: null, page: 1, hasMore: true, month: { byModel: [], byCharacter: [] } }),
   );
   await f.attach();
-  f.header.querySelectorAll('.head-actions button')[0]!.click(); // 我的信息 (an invited player without a login)
-  // Part 22a (named exception): the dropdown is 我的信息 now; the invited player's page has 消费记录 (and 恢复码).
+  f.header.querySelectorAll('.head-actions button')[0]!.click(); // 我的信息 (a player on an unlimited entitlement)
+  // Part 22a (named exception): the dropdown is 我的信息 now; an entitled player's page has 消费记录.
   const entries = f.doc.body
     .querySelector('.mi-sheet')!
     .querySelectorAll('button')
@@ -697,7 +679,6 @@ const trialGuest = (modelChoice?: ModelChoiceInfo): AccountInfo => ({
   hasLogin: false,
   emailMasked: null,
   nickname: null,
-  canBind: false,
   ...(modelChoice ? { modelChoice } : {}),
 });
 const guestTwoModels: ModelChoiceInfo = {

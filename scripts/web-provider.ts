@@ -20,6 +20,7 @@ import {
   migrateWebProviderModelChoice,
   migrateWebProviderModelSettings,
   migrateWebProviderInviteTiers,
+  migrateWebProviderLegacyInvites,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -82,7 +83,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→125 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→126 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -123,8 +124,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderModelChoice(store);
     migrateWebProviderModelSettings(store);
     migrateWebProviderInviteTiers(store);
+    migrateWebProviderLegacyInvites(store);
     return {
-      schema: 125,
+      schema: 126,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -271,6 +273,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-model-choice',
       'migrate-model-settings',
       'migrate-invite-tiers',
+      'migrate-legacy-invites',
       'render-assets',
       'admin-grant',
       'serve',
@@ -430,6 +433,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderInviteTiers(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 125, inviteTiers: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-legacy-invites') {
+    // An existing provider-* instance at schema 125: its old invite principals become guests (data only).
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderLegacyInvites(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 126, legacyInvitesRetired: true }) + '\n');
     } finally {
       store.close();
     }

@@ -6,18 +6,13 @@ import { turnstileCheck } from '../services/turnstile-widget.js';
 
 const root = document.getElementById('app');
 if (!root) throw new Error('APP_ROOT_MISSING');
-const mode = new URLSearchParams(location.search).get('mode');
-if (mode === 'local-2' || mode === 'local-3') {
-  void import('./local-mode.js')
-    .then((module) => (mode === 'local-3' ? module.startLocal3Mode(root) : module.startLocalMode(root)))
-    .catch(() => {
-      root.textContent = '本机合成业务入口未能加载，请查看构建状态。';
-    });
-} else if (mode === 'local-3-admin' || mode === 'provider-admin') {
+const params = new URLSearchParams(location.search);
+const mode = params.get('mode');
+if (mode === 'provider-admin') {
   void import('./admin-mode.js')
-    .then((module) => module.startAdminMode(root, mode === 'provider-admin'))
+    .then((module) => module.startAdminMode(root))
     .catch(() => {
-      root.textContent = '本机合成管理入口未能加载，请查看构建状态。';
+      root.textContent = '管理入口未能加载，请查看构建状态。';
     });
 } else if (mode === 'provider') {
   // One API object for the whole page: its CSRF token follows bootstrap, login and the signed-out first page.
@@ -29,4 +24,8 @@ if (mode === 'local-2' || mode === 'local-3') {
     .catch((error) => {
       renderProviderStartError(root, error, undefined, api);
     });
-} else startPrototype(root);
+} else {
+  // The bare URL (and any other mode) opens the player: there is no other entry point.
+  params.set('mode', 'provider');
+  location.replace(`${location.pathname}?${params.toString()}`);
+}

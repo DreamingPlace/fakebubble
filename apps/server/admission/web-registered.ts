@@ -2,13 +2,13 @@ import { createHmac } from 'node:crypto';
 import { POINTS } from '../../../packages/contracts/player-models.ts';
 import { bonusCanonicalEmail } from '../identity/email-address.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { freeTier, guestTrialOver, inviteGrantActive, signupBonusTablesExist } from './web-free-tier.ts';
+import { freeTier, guestTrialOver, signupBonusTablesExist } from './web-free-tier.ts';
 import { currentPrices } from './web-model-settings.ts';
 import { modelChoiceTablesExist, offeredModels, unusedTrial } from './web-points.ts';
 
 /**
  * Part 17h: the signup bonus for a REGISTERED player that never got it (see isRegistered in web-free-tier.ts): a guest with an
- * email login signed up before Part 17b or while SIGNUP_BONUS_ENABLED was off, or an invited player whose grant lapsed.
+ * email login signed up before Part 17b or while SIGNUP_BONUS_ENABLED was off.
  *
  * It is granted ONCE, on the first touch (the player's first message, page load or account read), by the same rule a signup
  * uses: once per canonical e-mail address (web_bonus_emails, which outlives the account). The principal then holds an
@@ -46,7 +46,7 @@ export function ensureRegisteredBonus(
   );
   if (!login) return false;
   const kind = store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind;
-  if (kind !== 'guest' && !(kind === 'invite' && !inviteGrantActive(store, principalId, now))) return false;
+  if (kind !== 'guest') return false;
   const points = modelChoiceTablesExist(store);
   if (points && store.get('SELECT 1 FROM web_points_balance WHERE principal_id=?', principalId)) return false;
   return store.transaction(() => {

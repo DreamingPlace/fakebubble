@@ -14,7 +14,6 @@ import {
   freeTier,
   guestTrialOver,
   hasSignupBonus,
-  isLapsedRegisteredInvite,
   isRegistered,
 } from './web-free-tier.ts';
 import { DEFAULT_PLAYER_MODEL, type PlayerModelId } from '../../../packages/contracts/player-models.ts';
@@ -36,7 +35,7 @@ interface PrincipalRow {
   id: string;
   player_id: string;
   world_id: string;
-  kind: 'guest' | 'account' | 'invite';
+  kind: 'guest' | 'account';
   trial_character_id: string | null;
   trial_used: number;
   trial_reserved: number;
@@ -138,14 +137,11 @@ export class WebAdmission {
       const trial = principal.kind === 'guest';
       ensure(
         trial ||
-          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125].includes(
+          ([108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126].includes(
             webSchema,
           ) &&
-            ((principal.kind === 'account' &&
-              this.store.get(`SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1`, principal.id)) ||
-              (principal.kind === 'invite' &&
-                [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125].includes(webSchema) &&
-                retention !== null))),
+            principal.kind === 'account' &&
+            this.store.get(`SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1`, principal.id)),
         'WEB_ADMISSION_ENTITLEMENT_REQUIRED',
       );
       ensure(
@@ -156,9 +152,6 @@ export class WebAdmission {
         ),
         'WEB_CHARACTER_UNAVAILABLE',
       );
-      // Part 17h: an invited player whose grant lapsed but who is registered chats as a registered player (points, no daily limit).
-      const lapsed =
-        principal.kind === 'invite' && isLapsedRegisteredInvite(this.store, principal.id, this.clock.now());
       const eff = effectiveTier(this.store, principal.id, this.clock.now());
       // Part 22a: a HOLDER is a signed-in player with an active entitlement (the principal stays a guest). Its tier and liveness
       // never depend on the free-tier switch. unlimited is never charged; daily_refill is charged in points while points exist.
@@ -166,9 +159,9 @@ export class WebAdmission {
       const holderPoints = holder && hasPoints(this.store, principal.id, this.clock.now());
       // Points switched off: nothing to charge a holder with; it chats unmetered under the daily cap (like any invited player).
       const holderFree = holder && !holderPoints;
-      // An unmetered tier (the old invite-only holder, an unlimited entitlement, or a holder while points are off) is never
+      // An unmetered tier (an unlimited entitlement, or a holder while points are off) is never
       // charged, so the per-day reply cap stays as its invisible abuse guard. Decided from the EFFECTIVE tier, not the kind.
-      if (holderFree || eff?.kind === 'legacy_invite' || eff?.kind === 'unlimited') this.dailyLimit(principal.id);
+      if (holderFree || eff?.kind === 'unlimited') this.dailyLimit(principal.id);
       const tier = freeTier(this.store);
       const trialWindowMs = tier.trialWindowMs;
       // Part 17b: the signup bonus is one more entitlement, decided HERE, before any reservation or provider call.
@@ -177,21 +170,22 @@ export class WebAdmission {
       // never used (its unused trial replies were converted into the opening balance). Everyone else, and every deployment
       // with the flag off, takes the path above unchanged.
       const pointsMode =
-        holderPoints || ((trial || lapsed) && tier.on && hasPoints(this.store, principal.id, this.clock.now()));
+        holderPoints || (trial && tier.on && hasPoints(this.store, principal.id, this.clock.now()));
       let free: 'trial' | 'extra' | 'bonus' | 'points' =
-        (trial || lapsed) && tier.on && !pointsMode && !holderFree
+        trial && tier.on && !pointsMode && !holderFree
           ? this.pickFreeEntitlement(principal, input, retention)
           : 'trial';
       // Part 17h: a registered player whose trial window is over has nothing left on the trial path; it is never told the trial
       // expired - it is told its free replies are used up (the page offers what to do next). Only the bonus replies can pay.
       if (
-        (trial || lapsed) &&
+        trial &&
         tier.on &&
         !pointsMode &&
         !holderFree &&
         free === 'trial' &&
-        isRegistered(this.store, principal.id, this.clock.now()) &&
-        (lapsed || (retention !== null && guestTrialOver(this.store, principal.id, this.clock.now())))
+        isRegistered(this.store, principal.id) &&
+        retention !== null &&
+        guestTrialOver(this.store, principal.id, this.clock.now())
       )
         throw new DomainError('TRIAL_EXHAUSTED');
       let chosen: PlayerModelId = DEFAULT_PLAYER_MODEL;
@@ -405,7 +399,7 @@ export class WebAdmission {
         now,
         now + WEB_LIMITS.operationDeadlineMs,
       ];
-      if (webSchema >= 102 && webSchema <= 125) {
+      if (webSchema >= 102 && webSchema <= 126) {
         const sequence = this.store.get<{ last_seq: number }>(`UPDATE web_admission_counter
           SET last_seq=last_seq+1 WHERE singleton=1 RETURNING last_seq`)?.last_seq;
         ensure(sequence !== undefined, 'WEB_ADMISSION_ORDER_MISSING');
@@ -543,7 +537,7 @@ export class WebAdmission {
     return this.store.transaction(() => {
       ensure(
         ![
-          104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
+          104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126,
         ].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1),
         'WEB_DISPATCH_FENCE_REQUIRED',
       );

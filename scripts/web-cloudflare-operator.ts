@@ -22,7 +22,6 @@ const actions = [
   'budget-summary',
   'admin-grant',
   'admin-recovery-grant',
-  'invite-grants',
 ] as const;
 type Action = (typeof actions)[number];
 export const DEFAULT_BUSINESS_SERVICE = 'fakebubble-business';
@@ -49,7 +48,6 @@ interface Operator {
   renewPrices?(): Promise<unknown>;
   summary(): Promise<unknown>;
   adminGrant(): Promise<unknown>;
-  inviteGrants(inviteId: string): Promise<unknown>;
   adminRecoveryGrant(memberId: string): Promise<unknown>;
 }
 interface Proxy {
@@ -92,7 +90,7 @@ export function webOperatorArguments(argv: string[]): WebOperatorArguments {
   ensure(actions.includes(action), 'WEB_OPERATOR_ACTION_REQUIRED');
   const allowed = ['action', 'receipt-file', 'business-service', 'budget-service'];
   if (['initialize', 'asset', 'budget-initialize'].includes(action)) allowed.push('input-file');
-  if (action.endsWith('-object-id') || action === 'invite-grants' || action === 'admin-recovery-grant')
+  if (action.endsWith('-object-id') || action === 'admin-recovery-grant')
     allowed.push('name');
   ensure(
     [...values.keys()].every((key) => allowed.includes(key)),
@@ -267,9 +265,6 @@ export async function runWebOperator(prepared: Prepared, getProxy: GetProxy, con
         break;
       case 'admin-recovery-grant':
         result = await operator.adminRecoveryGrant(args.name!);
-        break;
-      case 'invite-grants':
-        result = await operator.inviteGrants(args.name!);
         break;
     }
     record('completed', result ?? null);

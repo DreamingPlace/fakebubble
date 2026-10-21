@@ -84,25 +84,3 @@ test('character transport freezes the caller request identity and rejects malfor
   }));
   await assert.rejects(malformed.list(), /PROTOCOL_INVALID/);
 });
-
-test('account invitation list refuses coercion and sends an explicit cursor over the authenticated namespace', async () => {
-  const record = {
-    inviteId: 'invite',
-    batch: 'offline',
-    note: null,
-    createdAt: 1,
-    redeemBy: null,
-    status: 'active',
-    redeemed: '0',
-    grantId: null,
-    redeemedAt: null,
-    accessRevokedAt: null,
-    accessExpiresAt: null,
-  };
-  const api = new AccountAdminApi(async (path, init) => {
-    assert.equal(path, '/api/web/provider/admin/invites/list');
-    assert.deepEqual(JSON.parse(String(init!.body)), { beforeId: 'before' });
-    return Response.json({ records: [record], next: null });
-  });
-  await assert.rejects(api.inviteRecords('before'), /PROTOCOL_INVALID/);
-});

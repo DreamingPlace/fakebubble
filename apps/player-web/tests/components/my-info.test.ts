@@ -51,11 +51,6 @@ test('22a tier label, end date and quota line for each tier - one format for eve
       unlimited: true,
     },
   );
-  // A legacy invited player (no entitlement row) is unlimited too.
-  assert.equal(
-    tierView({ tier: { kind: 'legacy_invite', unlimited: true }, modelChoice: undefined }).label,
-    '邀请 · 不限量',
-  );
   assert.equal(
     balanceLine(choice()),
     tierView({ tier: { kind: 'registered', unlimited: false }, modelChoice: choice() }).quota,
@@ -85,7 +80,6 @@ function open(t: test.TestContext, over: Partial<MyInfoOptions> = {}) {
     trialLine: null,
     signupOpen: true,
     deleteEnabled: true,
-    canBind: false,
     saveNickname: async (value) => void log.push(`nickname:${value}`),
     copy: async (text) => void log.push(`copy:${text}`),
     actions: {
@@ -98,7 +92,6 @@ function open(t: test.TestContext, over: Partial<MyInfoOptions> = {}) {
       enterCode: () => void log.push('code'),
       signup: () => void log.push('signup'),
       login: () => void log.push('login'),
-      bind: () => void log.push('bind'),
     },
     ...over,
   });
@@ -206,35 +199,6 @@ test('22a a guest sees the trial, 注册 / 登录 and 注册后即可使用邀�
   f.press('登录');
   f.press('清除本设备的体验数据');
   assert.deepEqual(f.log, ['signup', 'login', 'clear']);
-});
-
-test('22a a legacy invited player without a login: 绑定邮箱 and 恢复码, no 玩家编号', (t) => {
-  const f = open(t, {
-    mode: 'invited',
-    playerNumber: null,
-    emailMasked: null,
-    nickname: null,
-    canBind: true,
-    tier: tierView({ tier: { kind: 'legacy_invite', unlimited: true }, modelChoice: undefined }),
-    actions: {
-      password: () => {},
-      logoutOthers: async () => {},
-      logout: async () => {},
-      deleteAccount: () => {},
-      clearDevice: () => {},
-      signup: () => {},
-      login: () => {},
-      bind: () => {},
-      recovery: () => {},
-    },
-  });
-  assert.deepEqual(
-    f.buttons().map((b) => b.textContent),
-    ['绑定邮箱', '恢复码'],
-  );
-  assert.ok(f.text().includes('邀请 · 不限量'));
-  assert.doesNotMatch(f.text(), /玩家编号/);
-  assert.equal(infoCopy.title, '我的信息');
 });
 
 test('22a closing removes the page and calls onClose once', (t) => {

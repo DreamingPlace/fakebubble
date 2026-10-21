@@ -14,7 +14,7 @@ import { modelChoiceState, setPlayerModel } from '../admission/web-points.ts';
 import { maskEmail, normalizeEmail } from './email-address.ts';
 import type { WebIdentity } from './web-identity.ts';
 
-export type EmailPurpose = 'signup' | 'reset' | 'bind';
+export type EmailPurpose = 'signup' | 'reset';
 /** What a mailer is asked to send. `code` mails carry the six digits; `registered` mails carry no code at all. */
 export interface PlayerMailer {
   send(message: {
@@ -43,7 +43,7 @@ export interface WebPlayerAccountsOptions {
   clock: Clock;
   /** Null: no mail can be sent. */
   mailer: PlayerMailer | null;
-  /** PLAYER_SIGNUP_ENABLED. When false, signup / reset / bind refuse; login still works. */
+  /** PLAYER_SIGNUP_ENABLED. When false, signup / reset refuse; login still works. */
   signupEnabled: boolean;
   /** PLAYER_EMAIL_DAILY_CAP (emails per UTC day). */
   dailyCap: number;
@@ -228,24 +228,11 @@ export class WebPlayerAccounts {
   private loginOf(principalId: string) {
     return this.store.get<LoginRow>('SELECT * FROM web_player_logins WHERE principal_id=?', principalId);
   }
-  private activeGrant(principalId: string, now: number) {
-    return !!this.store.get(
-      `SELECT 1 FROM web_invite_grants g JOIN web_principals p ON p.id=g.principal_id
-      WHERE g.principal_id=? AND g.player_id=p.player_id AND g.world_id=p.world_id AND p.kind='invite'
-        AND g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at>?)`,
-      principalId,
-      now,
-    );
-  }
-  /** A login may open a session only while its principal is usable: an invited player's grant must still be active. */
-  private ensureLoginUsable(principalId: string, now: number) {
+  /** A login may open a session only while its principal is a guest (the principal every login is bound to). */
+  private ensureLoginUsable(principalId: string) {
     const principal = this.store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId);
     ensure(principal, 'PLAYER_LOGIN_INVALID');
-    // Part 17h: an invited player whose grant lapsed but who is registered (an email login) signs in as a registered player.
-    ensure(
-      principal.kind === 'guest' || this.activeGrant(principalId, now) || isRegistered(this.store, principalId, now),
-      'PLAYER_ACCESS_REVOKED',
-    );
+    ensure(principal.kind === 'guest', 'PLAYER_ACCESS_REVOKED');
   }
 
   /** Counters are reserved before the work they guard, so parallel requests cannot all slip under a limit. */
@@ -374,13 +361,11 @@ export class WebPlayerAccounts {
       ...this.tierInfo(session.principalId),
       ...this.playerNumberInfo(session.principalId, !!login),
       ...this.graceInfo(session.principalId),
-      // A legacy invited player without a login may bind one.
-      canBind: !login && session.kind === 'invite' && this.activeGrant(session.principalId, this.now()),
     };
   }
   /**
    * Part 22a: the EFFECTIVE tier, from effectiveTier and nowhere else. The page labels a player and shows its quota from this
-   * and never from the principal kind. kind: guest | registered | unlimited | daily_refill | legacy_invite | account.
+   * and never from the principal kind. kind: guest | registered | unlimited | daily_refill | account.
    */
   private tierInfo(principalId: string) {
     const eff = effectiveTier(this.store, principalId, this.now());
@@ -404,7 +389,7 @@ export class WebPlayerAccounts {
   }
   /** Part 22a: { playerNumber } for a registered player (assigned here when a pre-125 player somehow lacks one). */
   private playerNumberInfo(principalId: string, hasLogin: boolean) {
-    if (!hasLogin && !isRegistered(this.store, principalId, this.now())) return {};
+    if (!hasLogin && !isRegistered(this.store, principalId)) return {};
     const playerNumber = this.store.transaction(() => ensurePlayerNumber(this.store, this.now(), principalId));
     return playerNumber ? { playerNumber } : {};
   }
@@ -471,8 +456,8 @@ export class WebPlayerAccounts {
   }
 
   /**
-   * Starts a signup / reset / bind challenge. The response has the same shape and the same limits whether or not the
-   * address is registered: a registered address gets a "已注册" mail (signup/bind), an unknown reset address gets nothing.
+   * Starts a signup / reset challenge. The response has the same shape and the same limits whether or not the
+   * address is registered: a registered address gets a "已注册" mail (signup), an unknown reset address gets nothing.
    */
   requestCode(input: {
     purpose: unknown;
@@ -483,22 +468,22 @@ export class WebPlayerAccounts {
   }) {
     this.origin(input.origin);
     ensure(/^[a-f0-9]{64}$/.test(input.ipHash), 'WEB_TRUSTED_IP_REQUIRED');
-    ensure(input.purpose === 'signup' || input.purpose === 'reset' || input.purpose === 'bind', 'INVALID_REQUEST');
+    ensure(input.purpose === 'signup' || input.purpose === 'reset', 'INVALID_REQUEST');
     const purpose = input.purpose as EmailPurpose;
     this.requireSignupOpen();
     const email = normalizeEmail(input.email, 'PLAYER_EMAIL_INVALID');
     // Part 17b: an IP that already completed its signups today is told so before a code is sent (flag SIGNUP_BONUS_ENABLED).
     if (purpose === 'signup') this.requireSignupIpBudget(input.ipHash, this.now());
     let scope: Scope | null = null;
-    if (purpose !== 'reset') {
+    if (purpose === 'signup') {
       ensure(input.session, 'AUTH_REQUIRED');
       scope = this.identity.authorizeSessionWrite(input.session.token, input.session.csrf, input.session.origin);
-      this.ensureEligible(purpose, scope, this.now());
+      this.ensureEligible(scope, this.now());
     }
     const created = this.store.transaction(() => {
       const now = this.now();
       this.sweep(now);
-      if (scope && purpose !== 'reset') this.ensureEligible(purpose, scope, now);
+      if (scope) this.ensureEligible(scope, now);
       // Before anything is charged or looked up, and before registration is consulted: the same refusal for every
       // address and every purpose.
       this.requireCodeBudget(email, now);
@@ -510,7 +495,7 @@ export class WebPlayerAccounts {
         purpose,
       );
       const registered = !!this.store.get('SELECT 1 FROM web_player_logins WHERE email_norm=?', email);
-      // signup/bind to a registered address -> "already registered" mail; reset of an unknown address -> no mail.
+      // signup to a registered address -> "already registered" mail; reset of an unknown address -> no mail.
       const kind: 'code' | 'registered' | null =
         purpose === 'reset' ? (registered ? 'code' : null) : registered ? 'registered' : 'code';
       const id = this.id(),
@@ -559,15 +544,13 @@ export class WebPlayerAccounts {
   private bonusEmailKey(emailNorm: string) {
     return this.bonusKey(emailNorm);
   }
-  private ensureEligible(purpose: 'signup' | 'bind', scope: Scope, now: number) {
+  private ensureEligible(scope: Scope, now: number) {
     ensure(!this.loginOf(scope.principalId), 'PLAYER_LOGIN_EXISTS');
-    if (purpose === 'signup') {
-      ensure(scope.kind === 'guest', 'PLAYER_SIGNUP_UNAVAILABLE');
-      // Only a live trial can become a kept account: an ended one is already (being) purged. With the grace flag on, a
-      // guest whose trial ended is still signable for GUEST_GRACE_MS (its data has not been purged yet).
-      if (!guestInGrace(this.store, scope.principalId, now, this.options.graceMs ?? 0))
-        requireWebContent(this.store, this.options.clock, scope.principalId, scope.worldId);
-    } else ensure(scope.kind === 'invite' && this.activeGrant(scope.principalId, now), 'PLAYER_BIND_UNAVAILABLE');
+    ensure(scope.kind === 'guest', 'PLAYER_SIGNUP_UNAVAILABLE');
+    // Only a live trial can become a kept account: an ended one is already (being) purged. With the grace flag on, a
+    // guest whose trial ended is still signable for GUEST_GRACE_MS (its data has not been purged yet).
+    if (!guestInGrace(this.store, scope.principalId, now, this.options.graceMs ?? 0))
+      requireWebContent(this.store, this.options.clock, scope.principalId, scope.worldId);
   }
   /** Old challenges and idle counters go; the send ledger keeps a full day. */
   private sweep(now: number) {
@@ -735,16 +718,15 @@ export class WebPlayerAccounts {
   }
 
   /**
-   * Step 3 of 注册 / 绑定邮箱: password + nickname after the code was right. Binds the login to the CURRENT principal
-   * (its chats stay) and writes the nickname into the 名片. Other sessions are untouched; a bind also revokes the
-   * principal's recovery credential, so the old "revoke every other session" path can no longer be used on them.
+   * Step 3 of 注册: password + nickname after the code was right. Binds the login to the CURRENT principal (its chats stay)
+   * and writes the nickname into the 名片. Other sessions are untouched.
    */
   async complete(input: {
     challengeId: unknown;
     password: unknown;
     nickname: unknown;
     session: PlayerSessionInput;
-    purpose: 'signup' | 'bind';
+    purpose: 'signup';
     /** The trusted-peer hash; needed (and checked) for a signup while the free tier is on. */
     ipHash?: string;
     /** The "我已年满 18 周岁" tick of the signup sheet; required for a signup while LEGAL_PAGES_ENABLED is on. Never stored. */
@@ -767,7 +749,7 @@ export class WebPlayerAccounts {
       ensure(scope.sessionId === first.sessionId, 'SESSION_EXPIRED');
       const challenge = this.verifiedChallenge(challengeId, [input.purpose], now);
       ensure(challenge.principal_id === scope.principalId, 'PLAYER_CODE_INVALID');
-      this.ensureEligible(input.purpose, scope, now);
+      this.ensureEligible(scope, now);
       ensure(
         !this.store.get('SELECT 1 FROM web_player_logins WHERE email_norm=?', challenge.email_norm),
         'PLAYER_EMAIL_UNAVAILABLE',
@@ -808,13 +790,6 @@ export class WebPlayerAccounts {
       ensurePlayerNumber(this.store, now, scope.principalId);
       this.writeNickname(scope.worldId, nickname, now);
       this.identity.extendToLoginLifetime(scope.sessionId);
-      if (input.purpose === 'bind' && this.store.get("SELECT 1 FROM sqlite_master WHERE name='web_invite_credentials'"))
-        this.store.run(
-          `UPDATE web_invite_credentials SET revoked_at=? WHERE revoked_at IS NULL AND grant_id IN
-          (SELECT id FROM web_invite_grants WHERE principal_id=?)`,
-          now,
-          scope.principalId,
-        );
       this.store.run(
         'UPDATE web_email_challenges SET consumed_at=? WHERE email_norm=? AND consumed_at IS NULL',
         now,
@@ -864,7 +839,7 @@ export class WebPlayerAccounts {
       const now = this.now();
       const current = this.loginOf(row.principal_id);
       ensure(current && current.password_hash === row.password_hash, 'PLAYER_LOGIN_INVALID');
-      this.ensureLoginUsable(row.principal_id, now);
+      this.ensureLoginUsable(row.principal_id);
       this.release('login-email', emailKey, true);
       this.release('login-ip', ipKey, false);
       this.store.run('UPDATE web_player_logins SET last_seen_at=? WHERE principal_id=?', now, row.principal_id);
@@ -890,7 +865,7 @@ export class WebPlayerAccounts {
         challenge.email_norm,
       );
       ensure(login, 'PLAYER_CODE_INVALID');
-      this.ensureLoginUsable(login.principal_id, now);
+      this.ensureLoginUsable(login.principal_id);
       this.store.run(
         'UPDATE web_player_logins SET password_hash=?,password_changed_at=? WHERE principal_id=?',
         hash,
@@ -966,9 +941,8 @@ export class WebPlayerAccounts {
   /**
    * 删除我的账号 (a player with a login: password + typing 删除) and 清除本设备的体验数据 (a guest without one: a button,
    * confirm '清除'). Both run the SAME audited purge path the retention cleaner uses (AccountPurger): chats, memories, audio,
-   * co-creation, 名片, the login, its challenges and every session go; an invited player's grant is revoked in the same
-   * transaction. Rate-limited like a password check. The audit row (web_admin_audit) holds an action name, a keyed
-   * pseudonym of the player and a time: no content, no address, no id. An invited player needs a login to do this.
+   * co-creation, 名片, the login, its challenges and every session go. Rate-limited like a password check. The audit row
+   * (web_admin_audit) holds an action name, a keyed pseudonym of the player and a time: no content, no address, no id.
    */
   async deleteAccount(input: { password: unknown; confirm: unknown; session: PlayerSessionInput; ipHash: string }) {
     const purger = this.options.purger;
@@ -978,7 +952,7 @@ export class WebPlayerAccounts {
     const confirm = input.confirm,
       password = input.password;
     const scope = this.identity.authorizeSessionWrite(input.session.token, input.session.csrf, input.session.origin);
-    ensure(scope.kind === 'guest' || scope.kind === 'invite', 'ACCOUNT_DELETE_UNAVAILABLE');
+    ensure(scope.kind === 'guest', 'ACCOUNT_DELETE_UNAVAILABLE');
     const login = this.loginOf(scope.principalId);
     ensure(login || scope.kind === 'guest', 'PLAYER_LOGIN_REQUIRED');
     ensure(confirm === (login ? '删除' : '清除'), 'ACCOUNT_DELETE_CONFIRM_INVALID');
@@ -1004,23 +978,6 @@ export class WebPlayerAccounts {
         !!current === !!login && (!current || current.password_hash === login!.password_hash),
         'PLAYER_LOGIN_INVALID',
       );
-      if (scope.kind === 'invite') {
-        this.store.run(
-          'UPDATE web_invite_grants SET revoked_at=? WHERE principal_id=? AND revoked_at IS NULL',
-          now,
-          scope.principalId,
-        );
-        for (const [table, where] of [
-          ['web_invite_credentials', 'grant_id IN (SELECT id FROM web_invite_grants WHERE principal_id=?)'],
-          ['web_invite_identity_receipts', 'grant_id IN (SELECT id FROM web_invite_grants WHERE principal_id=?)'],
-        ] as const)
-          if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", table))
-            this.store.run(
-              `UPDATE ${table} SET revoked_at=? WHERE revoked_at IS NULL AND ${where}`,
-              now,
-              scope.principalId,
-            );
-      }
       this.identity.revokeSessions(scope.principalId);
       if (this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_admin_audit'"))
         this.store.run(

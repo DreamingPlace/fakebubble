@@ -20,7 +20,6 @@ const guest: AccountInfo = {
   hasLogin: false,
   emailMasked: null,
   nickname: null,
-  canBind: false,
 };
 
 // ---- GET /account and the close call ---------------------------------------------------------------------------------
@@ -287,6 +286,6 @@ test('signup without the legal pages, and every other sheet: no tick, and the re
       { purpose: 'signup', challengeId: 'c', password: 'pw-pw-pw-pw', nickname: '阿泡' },
     ]);
   }
-  for (const mode of ['login', 'reset', 'bind', 'nickname', 'password'] as const)
+  for (const mode of ['login', 'reset', 'nickname', 'password'] as const)
     assert.equal(sheet(t, mode, { legal: true }).root.querySelector('input[name="adult"]'), null, mode);
 });

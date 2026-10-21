@@ -86,7 +86,7 @@ test('schema103 is explicit and keeps admission tickets, quota windows and queue
   const queue = new WebStageQueue(store, clock, randomUUID),
     coordinator = queue.acquireCoordinator('coordinator');
   assert.equal(queue.claimText(coordinator, 'worker')?.operationId, result.operationId);
-  assert.throws(() => identity.bootstrap(token), /SESSION_ROTATED_RECOVERABLE/);
+  assert.throws(() => identity.bootstrap(token), /SESSION_EXPIRED/);
 });
 
 test('identity migration is explicit, reopens without changing epoch and rolls back on schema conflict', (t) => {
@@ -123,7 +123,7 @@ test('identity migration is explicit, reopens without changing epoch and rolls b
   );
 });
 
-test('new registration upgrades in place, revokes old ordinary auth and recovers one committed receipt both ways', async (t) => {
+test('new registration upgrades in place and revokes the old ordinary auth; no receipt is kept', async (t) => {
   const { store, identity } = fixture(t);
   const guest = identity.bootstrap(),
     oldToken = guest.issuedToken!;
@@ -142,27 +142,17 @@ test('new registration upgrades in place, revokes old ordinary auth and recovers
   assert.equal(identity.authenticate(registered.issuedToken).player_id, before.player_id);
   assert.equal(identity.authenticate(registered.issuedToken).kind, 'account');
   assert.throws(() => identity.authenticate(oldToken), /SESSION_EXPIRED/);
-  assert.throws(() => identity.bootstrap(oldToken), /SESSION_ROTATED_RECOVERABLE/);
-  const recoveryCsrf = identity.receiptChallenge(oldToken).csrf;
-  for (let i = 0; i < 3; i++) {
-    const replay = await identity.recoverReceipt(oldToken, recoveryCsrf, origin, input);
-    assert.equal(replay.issuedToken, registered.issuedToken);
-    assert.deepEqual(replay.receipt, registered.receipt);
-  }
-  await assert.rejects(identity.recoverReceipt(oldToken, recoveryCsrf, origin, input), /RECEIPT_UNAVAILABLE/);
   assert.throws(() => identity.bootstrap(oldToken), /SESSION_EXPIRED/);
-  assert.deepEqual(
-    identity.receiptStatus(registered.issuedToken, registered.csrf, origin, input.requestId),
-    registered.receipt,
-  );
   assert.equal(
     store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', guest.principalId)?.kind,
     'account',
   );
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_accounts')?.n, 1);
-  assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_identity_receipts')?.n, 1);
-  const raw = store.get<{ public_receipt: string }>('SELECT public_receipt FROM web_identity_receipts')!;
-  assert.ok(!raw.public_receipt.includes(input.password) && !raw.public_receipt.includes(registered.issuedToken));
+  assert.equal(
+    store.get<{ n: number }>('SELECT count(*) n FROM web_identity_receipts')?.n,
+    0,
+    'the retired receipt table is never written',
+  );
 });
 
 test('invite write authorization binds the active guest session, CSRF and Origin', (t) => {
@@ -182,190 +172,44 @@ test('invite write authorization binds the active guest session, CSRF and Origin
   );
   assert.throws(() => identity.authorizeInviteAction(token, 'wrong', origin), /CSRF_INVALID/);
   assert.throws(() => identity.authorizeInviteAction(token, guest.csrf, 'https://evil.test'), /ORIGIN_INVALID/);
-  store.run("UPDATE web_principals SET kind='invite' WHERE id=?", guest.principalId);
-  assert.equal(identity.authorizeInviteAction(token, guest.csrf, origin).kind, 'invite');
+  store.run("UPDATE web_principals SET kind='account' WHERE id=?", guest.principalId);
+  assert.throws(() => identity.authorizeInviteAction(token, guest.csrf, origin), /WEB_GUEST_REQUIRED/);
+  store.run("UPDATE web_principals SET kind='guest' WHERE id=?", guest.principalId);
   store.run('UPDATE web_sessions SET revoked_at=? WHERE id=?', 1_700_000_000_000, actor.sessionId);
   assert.throws(() => identity.authorizeInviteAction(token, guest.csrf, origin), /SESSION_EXPIRED/);
 });
 
-test('wrong secret, tampered AEAD, changed security revision, logout and epoch cannot reissue identity', async (t) => {
-  const { store, identity, keys } = fixture(t);
-  const guest = identity.bootstrap(),
-    oldToken = guest.issuedToken!;
-  const registered = await identity.register(oldToken, guest.csrf, origin, input);
-  const challenge = identity.receiptChallenge(oldToken).csrf;
-  await assert.rejects(
-    identity.recoverReceipt(oldToken, challenge, origin, { ...input, password: 'different-password' }),
-    /RECEIPT_UNAVAILABLE/,
-  );
-  assert.equal(
-    store.get<{ successful_retrievals: number }>('SELECT successful_retrievals FROM web_identity_receipts')
-      ?.successful_retrievals,
-    0,
-  );
-  const wrongKey = new WebIdentity(store, {
-    origin,
-    cookieName: '__Host-build_session',
-    clock: { now: () => 1_700_000_000_000 },
-    keys: { ...keys, sealKey: Buffer.alloc(32, 3) },
-  });
-  await assert.rejects(wrongKey.recoverReceipt(oldToken, challenge, origin, input), /RECEIPT_UNAVAILABLE/);
-  store.run('UPDATE web_accounts SET security_revision=security_revision+1');
-  await assert.rejects(identity.recoverReceipt(oldToken, challenge, origin, input), /RECEIPT_UNAVAILABLE/);
-  assert.throws(() => identity.authenticate(registered.issuedToken), /SESSION_EXPIRED/);
-});
-
-test('bad recovery proof is separately throttled without consuming successful retrievals', async (t) => {
-  const { store, identity, advance } = fixture(t);
-  const guest = identity.bootstrap(),
-    token = guest.issuedToken!;
-  await identity.register(token, guest.csrf, origin, input);
-  const csrf = identity.receiptChallenge(token).csrf;
-  for (let i = 0; i < 5; i++) {
-    await assert.rejects(
-      identity.recoverReceipt(token, csrf, origin, { ...input, password: 'different-password' }),
-      /RECEIPT_UNAVAILABLE/,
-    );
-  }
-  await assert.rejects(identity.recoverReceipt(token, csrf, origin, input), /WEB_IDENTITY_RATE_LIMITED/);
-  assert.equal(
-    store.get<{ successful_retrievals: number }>('SELECT successful_retrievals FROM web_identity_receipts')
-      ?.successful_retrievals,
-    0,
-  );
-  advance(30_000);
-  assert.equal(
-    (await identity.recoverReceipt(token, csrf, origin, input)).receipt.accountId,
-    store.get<{ id: string }>('SELECT id FROM web_accounts')?.id,
-  );
-});
-
-test('concurrent wrong receipt proofs reserve five DB slots across connections before KDF', async (t) => {
-  const { store, identity, root, instanceId, clock, keys, advance } = fixture(t);
-  const guest = identity.bootstrap(),
-    token = guest.issuedToken!;
-  const account = await identity.register(token, guest.csrf, origin, input);
-  const csrf = identity.receiptChallenge(token).csrf;
-  const secondStore = new WebStore(root, { create: false, instanceId });
-  t.after(() => secondStore.close());
-  const other = new WebIdentity(secondStore, { origin, cookieName: '__Host-build_session', clock, keys });
-  const outcomes = await Promise.allSettled(
-    Array.from({ length: 10 }, (_, i) =>
-      (i % 2 ? other : identity).recoverReceipt(token, csrf, origin, { ...input, password: 'wrong-synthetic-secret' }),
-    ),
-  );
-  assert.equal(
-    outcomes.filter((item) => item.status === 'rejected' && /RECEIPT_UNAVAILABLE/.test(String(item.reason))).length,
-    5,
-  );
-  assert.equal(
-    outcomes.filter((item) => item.status === 'rejected' && /WEB_IDENTITY_RATE_LIMITED/.test(String(item.reason)))
-      .length,
-    5,
-  );
-  assert.deepEqual(
-    {
-      ...store.get<{ failed_attempts: number; successful_retrievals: number }>(
-        'SELECT failed_attempts,successful_retrievals FROM web_identity_receipts',
-      ),
-    },
-    { failed_attempts: 5, successful_retrievals: 0 },
-  );
-  advance(30_000);
-  assert.equal((await other.recoverReceipt(token, csrf, origin, input)).issuedToken, account.issuedToken);
-  assert.deepEqual(
-    {
-      ...store.get<{ failed_attempts: number; successful_retrievals: number }>(
-        'SELECT failed_attempts,successful_retrievals FROM web_identity_receipts',
-      ),
-    },
-    { failed_attempts: 0, successful_retrievals: 1 },
-  );
-});
-
-test('logout during valid receipt KDF cannot reissue token and releases its reserved validation slot', async (t) => {
-  const { store, identity } = fixture(t);
-  const guest = identity.bootstrap(),
-    token = guest.issuedToken!;
-  const account = await identity.register(token, guest.csrf, origin, input);
-  const csrf = identity.receiptChallenge(token).csrf;
-  const pending = identity.recoverReceipt(token, csrf, origin, input);
-  const rejected = assert.rejects(pending, /RECEIPT_UNAVAILABLE/);
-  identity.logout(account.issuedToken, account.csrf, origin);
-  await rejected;
-  assert.deepEqual(
-    {
-      ...store.get<{ failed_attempts: number; successful_retrievals: number }>(
-        'SELECT failed_attempts,successful_retrievals FROM web_identity_receipts',
-      ),
-    },
-    { failed_attempts: 0, successful_retrievals: 0 },
-  );
-});
-
-test('a slow valid proof releases only its original window, not a new window failure', async (t) => {
-  const { store, identity, advance } = fixture(t);
-  const guest = identity.bootstrap(),
-    token = guest.issuedToken!;
-  await identity.register(token, guest.csrf, origin, input);
-  const csrf = identity.receiptChallenge(token).csrf;
-  const valid = identity.recoverReceipt(token, csrf, origin, input);
-  advance(30_000);
-  const invalid = assert.rejects(
-    identity.recoverReceipt(token, csrf, origin, { ...input, password: 'wrong-synthetic-secret' }),
-    /RECEIPT_UNAVAILABLE/,
-  );
-  await valid;
-  await invalid;
-  assert.deepEqual(
-    {
-      ...store.get<{ failed_attempts: number; successful_retrievals: number }>(
-        'SELECT failed_attempts,successful_retrievals FROM web_identity_receipts',
-      ),
-    },
-    { failed_attempts: 1, successful_retrievals: 1 },
-  );
-});
-
-test('web recovery epoch change invalidates active sessions and old receipt recovery', async (t) => {
+test('web recovery epoch change invalidates active sessions', async (t) => {
   const { store, identity } = fixture(t);
   const guest = identity.bootstrap(),
     token = guest.issuedToken!;
   const registered = await identity.register(token, guest.csrf, origin, input);
-  const csrf = identity.receiptChallenge(token).csrf;
   store.run('UPDATE web_instance SET recovery_epoch=?', randomUUID());
   assert.throws(() => identity.authenticate(registered.issuedToken), /SESSION_EXPIRED/);
-  assert.throws(() => identity.receiptChallenge(token), /RECEIPT_UNAVAILABLE/);
-  await assert.rejects(identity.recoverReceipt(token, csrf, origin, input), /RECEIPT_UNAVAILABLE/);
+  assert.throws(() => identity.bootstrap(registered.issuedToken), /SESSION_EXPIRED/);
 });
 
-test('restart with same instance and keys preserves committed account session and receipt scope', async (t) => {
-  const { store, identity, root, instanceId, clock, keys } = fixture(t);
+test('restart with same instance and keys preserves the committed account session', async (t) => {
+  const { store, root, instanceId, clock, keys, identity } = fixture(t);
   const guest = identity.bootstrap(),
     account = await identity.register(guest.issuedToken!, guest.csrf, origin, input);
   const reopened = new WebStore(root, { create: false, instanceId });
   t.after(() => reopened.close());
   const another = new WebIdentity(reopened, { origin, cookieName: '__Host-build_session', clock, keys });
   assert.equal(another.authenticate(account.issuedToken).principalId, guest.principalId);
-  assert.deepEqual(another.receiptStatus(account.issuedToken, account.csrf, origin, input.requestId), account.receipt);
   assert.equal(store.get<{ user_version: number }>('PRAGMA user_version')?.user_version, 103);
 });
 
-test('logout and receipt deadline block replay; no guest idle expiry before 24h', async (t) => {
+test('logout ends the account session; no guest idle expiry before 24h', async (t) => {
   const { identity, advance } = fixture(t);
   const guest = identity.bootstrap(),
     oldToken = guest.issuedToken!;
   advance(31 * 60_000);
   assert.equal(identity.authenticate(oldToken).principalId, guest.principalId);
   const registered = await identity.register(oldToken, guest.csrf, origin, input);
-  const challenge = identity.receiptChallenge(oldToken).csrf;
   identity.logout(registered.issuedToken, registered.csrf, origin);
-  await assert.rejects(identity.recoverReceipt(oldToken, challenge, origin, input), /RECEIPT_UNAVAILABLE/);
   assert.throws(() => identity.authenticate(registered.issuedToken), /SESSION_EXPIRED/);
-  assert.throws(
-    () => identity.receiptStatus(registered.issuedToken, registered.csrf, origin, input.requestId),
-    /SESSION_EXPIRED/,
-  );
+  assert.throws(() => identity.logout(registered.issuedToken, registered.csrf, origin), /SESSION_EXPIRED/);
 });
 
 test('guest absolute and account idle expiry are distinct, while explicit bootstrap renews account idle', async (t) => {
@@ -397,13 +241,13 @@ test('identity transaction failure rolls back account, principal upgrade and rev
     clock,
     keys,
     random: (size) => {
-      if (++calls === 6) throw new Error('synthetic seal nonce failure');
+      if (++calls === 5) throw new Error('synthetic session secret failure');
       return Buffer.alloc(size, calls);
     },
   });
   const guest = identity.bootstrap(),
     token = guest.issuedToken!;
-  await assert.rejects(identity.register(token, guest.csrf, origin, input), /synthetic seal nonce failure/);
+  await assert.rejects(identity.register(token, guest.csrf, origin, input), /synthetic session secret failure/);
   assert.equal(
     store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', guest.principalId)?.kind,
     'guest',
@@ -411,21 +255,6 @@ test('identity transaction failure rolls back account, principal upgrade and rev
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_accounts')?.n, 0);
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_identity_receipts')?.n, 0);
   assert.equal(identity.authenticate(token).principalId, guest.principalId);
-});
-
-test('receipt boundary expires at 300 seconds; another account cannot read its receipt', async (t) => {
-  const { identity, advance } = fixture(t);
-  const first = identity.bootstrap(),
-    second = identity.bootstrap();
-  const account = await identity.register(first.issuedToken!, first.csrf, origin, input);
-  assert.throws(
-    () => identity.receiptStatus(second.issuedToken!, second.csrf, origin, input.requestId),
-    /RECEIPT_UNAVAILABLE/,
-  );
-  const challenge = identity.receiptChallenge(first.issuedToken!).csrf;
-  advance(300_000);
-  await assert.rejects(identity.recoverReceipt(first.issuedToken!, challenge, origin, input), /RECEIPT_UNAVAILABLE/);
-  assert.deepEqual(identity.receiptStatus(account.issuedToken, account.csrf, origin, input.requestId), account.receipt);
 });
 
 test('native Argon2 scheduler admits two active plus eight waiting registrations, not an unbounded queue', async (t) => {

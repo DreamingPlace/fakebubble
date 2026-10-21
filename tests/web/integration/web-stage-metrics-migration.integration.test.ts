@@ -22,7 +22,7 @@ const MAIN_113 = {
 };
 // Extended for migration 120: the ledger now runs 100..122 (23 steps; Extended for migration 122).
 const ledgerVersions = Array.from({ length: 24 }, (_, i) => i + 1).concat(
-  Array.from({ length: 26 }, (_, i) => 100 + i),
+  Array.from({ length: 27 }, (_, i) => 100 + i),
 );
 
 function nodeAt113() {
@@ -144,8 +144,8 @@ test('Cloudflare runner: the 113 step is byte-for-byte what main applied; 114 is
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
   // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-  assert.equal(inline.hashes.at(-12)?.startsWith('114:'), true);
-  assert.equal(r2.hashes.at(-12)?.startsWith('114:'), true);
+  assert.equal(inline.hashes.at(-13)?.startsWith('114:'), true);
+  assert.equal(r2.hashes.at(-13)?.startsWith('114:'), true);
   assert.deepEqual(inline.ledger, ledgerVersions);
   assert.deepEqual(r2.ledger, ledgerVersions);
 });
@@ -157,7 +157,7 @@ test('Cloudflare runner: both authorities create 114 after 113; Worker vars are 
   // user_version is 120 now that the memory-metrics step exists (Extended for migration 120).
   // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-  assert.deepEqual(inline.version, { user_version: 125 });
+  assert.deepEqual(inline.version, { user_version: 126 });
   assert.equal(inline.mediaIdNotNull, 0);
   assert.deepEqual(inline.concurrency, {
     maxTextRunning: 20,
@@ -170,7 +170,7 @@ test('Cloudflare runner: both authorities create 114 after 113; Worker vars are 
   assert.equal(r2.metrics, true);
   // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-  assert.deepEqual(r2.version, { user_version: 125 });
+  assert.deepEqual(r2.version, { user_version: 126 });
   assert.equal(r2.mediaIdNotNull, 0);
   assert.deepEqual(r2.itemTriggers, ['web_publication_items_no_delete', 'web_publication_items_no_update']);
   assert.deepEqual(r2.ledger, ledgerVersions);
@@ -210,20 +210,23 @@ test('Cloudflare runner: an existing authority at 113 upgrades to 114 through th
     // Extended for migration 120: opening the authority also applies 116 to 120 after 114 and 115.
     // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
     // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-    assert.equal(result.after.length, 50, mode);
-    assert.equal(result.after.at(-12)?.startsWith('114:'), true, mode);
-    assert.equal(result.after.at(-11)?.startsWith('115:'), true, mode);
-    assert.equal(result.after.at(-10)?.startsWith('116:'), true, mode);
-    assert.equal(result.after.at(-9)?.startsWith('117:'), true, mode);
-    assert.equal(result.after.at(-8)?.startsWith('118:'), true, mode);
-    assert.equal(result.after.at(-7)?.startsWith('119:'), true, mode);
-    assert.equal(result.after.at(-6)?.startsWith('120:'), true, mode);
-    assert.equal(result.after.at(-5)?.startsWith('121:'), true, mode);
-    assert.equal(result.after.at(-4)?.startsWith('122:'), true, mode);
-    assert.equal(result.after.at(-3)?.startsWith('123:'), true, mode);
-    assert.equal(result.after.at(-2)?.startsWith('124:'), true, mode); // Extended for migration 124: the newest step is last.
-    assert.equal(result.after.at(-1)?.startsWith('125:'), true, mode); // Extended for migration 125: the newest step is last.
-    assert.deepEqual(result.version, { user_version: 125 }, mode);
+  // Named exception (Part 22x, migration 126): the ledger has 51 steps and 126 is the newest, so step counts, positions counted
+  // from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+    assert.equal(result.after.length, 51, mode);
+    assert.equal(result.after.at(-13)?.startsWith('114:'), true, mode);
+    assert.equal(result.after.at(-12)?.startsWith('115:'), true, mode);
+    assert.equal(result.after.at(-11)?.startsWith('116:'), true, mode);
+    assert.equal(result.after.at(-10)?.startsWith('117:'), true, mode);
+    assert.equal(result.after.at(-9)?.startsWith('118:'), true, mode);
+    assert.equal(result.after.at(-8)?.startsWith('119:'), true, mode);
+    assert.equal(result.after.at(-7)?.startsWith('120:'), true, mode);
+    assert.equal(result.after.at(-6)?.startsWith('121:'), true, mode);
+    assert.equal(result.after.at(-5)?.startsWith('122:'), true, mode);
+    assert.equal(result.after.at(-4)?.startsWith('123:'), true, mode);
+    assert.equal(result.after.at(-3)?.startsWith('124:'), true, mode); // Extended for migration 124: the newest step is last.
+    assert.equal(result.after.at(-2)?.startsWith('125:'), true, mode); // Extended for migration 125: the newest step is last.
+    assert.equal(result.after.at(-1)?.startsWith('126:'), true, mode); // Extended for migration 126: the newest step is last.
+    assert.deepEqual(result.version, { user_version: 126 }, mode);
     assert.equal(result.metrics && result.discardedColumn, true, mode);
   }
   await f.restart();

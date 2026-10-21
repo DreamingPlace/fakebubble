@@ -253,7 +253,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     scope.characterId,
   )?.relationship;
   ensure(relationship, 'WEB_CHARACTER_UNAVAILABLE');
-  const access = store.get<{ kind: 'guest' | 'account' | 'invite'; active: number | null }>(
+  const access = store.get<{ kind: 'guest' | 'account'; active: number | null }>(
     `SELECT p.kind,a.active FROM web_principals p LEFT JOIN web_accounts a ON a.principal_id=p.id
       WHERE p.id=? AND p.player_id=? AND p.world_id=?`,
     operation.principal_id,
@@ -262,13 +262,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   );
   ensure(
     access &&
-      (access.kind === 'guest' ||
-        (access.kind === 'account' && access.active === 1) ||
-        (access.kind === 'invite' &&
-          [111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125].includes(
-            store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
-          ) &&
-          requireWebContent(store, { now: () => now }, operation.principal_id, scope.worldId))),
+      (access.kind === 'guest' || (access.kind === 'account' && access.active === 1)),
     'WEB_V7_MEMORY_ENTITLEMENT_REQUIRED',
   );
   const recalls = recallsMemory(store, access.kind, operation.principal_id);

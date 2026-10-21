@@ -5,12 +5,6 @@ import {
   type PlayerPlan,
   type PlayerModelId,
 } from '../../../../packages/contracts/player-models.ts';
-import {
-  parseWebInviteCredential,
-  parseWebInviteReceipt,
-  parseWebInviteRecovery,
-  parseWebInviteStatus,
-} from '../../../../packages/contracts/web-local-invite.ts';
 import type { CocreationAnswer } from '../../../../packages/contracts/cocreation-cards.ts';
 import { parseBillingPage, type BillingPage } from '../../../../packages/contracts/player-billing.ts';
 import {
@@ -53,7 +47,7 @@ export type AccountFeatures = {
   chatReview?: true;
 };
 export type AccountTier = {
-  kind: 'guest' | 'registered' | 'unlimited' | 'daily_refill' | 'legacy_invite' | 'account';
+  kind: 'guest' | 'registered' | 'unlimited' | 'daily_refill' | 'account';
   unlimited: boolean;
   plan?: PlayerPlan;
 };
@@ -66,7 +60,6 @@ export type AccountInfo =
       hasLogin: boolean;
       emailMasked: string | null;
       nickname: string | null;
-      canBind: boolean;
       features?: AccountFeatures;
       /** The player closed the one-time review banner (only present while chatReview is on). */
       reviewNoticeClosed?: boolean;
@@ -90,7 +83,7 @@ const humanAction = (path: string) =>
         ? 'login'
         : null;
 
-const TIER_KINDS = ['guest', 'registered', 'unlimited', 'daily_refill', 'legacy_invite', 'account'] as const;
+const TIER_KINDS = ['guest', 'registered', 'unlimited', 'daily_refill', 'account'] as const;
 function parseTier(value: unknown): AccountTier | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const raw = value as Record<string, unknown>;
@@ -115,7 +108,7 @@ function parseFeatures(value: unknown): AccountFeatures | undefined {
   };
   return Object.keys(features).length ? features : undefined;
 }
-export type EmailPurpose = 'signup' | 'reset' | 'bind';
+export type EmailPurpose = 'signup' | 'reset';
 export type CodeChallenge = { challengeId: string; expiresAt: number; resendAfterMs: number };
 
 const record = (value: unknown): Record<string, unknown> => {
@@ -203,84 +196,14 @@ export class ProviderApi implements WebProviderActions {
     this.csrf = view.csrf;
     return view;
   }
+  /** A signed-in player's code adds an ENTITLEMENT: no new session, no receipt. Idempotent on requestId. */
   async redeemInvite(input: { requestId: string; code: string }) {
     const raw = record(await this.request('/invites/redeem', { method: 'POST', body: JSON.stringify(input) }));
-    // Part 22a: a signed-in player's code adds an ENTITLEMENT - no new session, no receipt, no recovery code.
-    if (raw.entitlement && typeof raw.entitlement === 'object' && typeof raw.duplicate === 'boolean')
-      return { entitlement: parsePlan(raw.entitlement), duplicate: raw.duplicate };
-    const { duplicate, ...value } = raw;
-    try {
-      if (typeof duplicate !== 'boolean') throw Error('invalid');
-      const receipt = parseWebInviteReceipt(value);
-      this.csrf = receipt.csrf;
-      return { ...receipt, duplicate };
-    } catch {
+    if (!raw.entitlement || typeof raw.entitlement !== 'object' || typeof raw.duplicate !== 'boolean')
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    }
+    return { entitlement: parsePlan(raw.entitlement), duplicate: raw.duplicate };
   }
-  async inviteReceiptStatus(requestId: string) {
-    const value = await this.request('/identity/invite-receipt-status', {
-      method: 'POST',
-      body: JSON.stringify({ requestId }),
-    });
-    try {
-      return parseWebInviteStatus(value);
-    } catch {
-      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    }
-  }
-  async inviteReceiptChallenge() {
-    const value = record(await this.request('/identity/invite-receipt-challenge', { method: 'POST', body: '{}' }));
-    if (
-      Object.keys(value).join(',') !== 'csrf' ||
-      typeof value.csrf !== 'string' ||
-      !/^[A-Za-z0-9_-]{43}$/.test(value.csrf)
-    )
-      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    return value.csrf;
-  }
-  async recoverInviteReceipt(input: { requestId: string; code: string }, receiptCsrf: string) {
-    const value = await this.request(
-      '/identity/invite-receipt-recover',
-      { method: 'POST', body: JSON.stringify(input) },
-      receiptCsrf,
-    );
-    try {
-      const receipt = parseWebInviteReceipt(value);
-      this.csrf = receipt.csrf;
-      return receipt;
-    } catch {
-      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    }
-  }
-  /** Replaces the recovery code of the signed-in invited player; the returned code is shown once. */
-  async regenerateRecoveryCode() {
-    try {
-      return parseWebInviteCredential(
-        await this.request('/invites/credential-regenerate', { method: 'POST', body: '{}' }),
-      ).secret;
-    } catch (error) {
-      if (error instanceof ProviderApiError) throw error;
-      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    }
-  }
-  /** Restores the invited principal behind a recovery code and returns the rotated code. */
-  async recoverWithRecoveryCode(input: { secret: string; requestId: string }) {
-    try {
-      const result = parseWebInviteRecovery(
-        await this.request('/invites/recover', {
-          method: 'POST',
-          body: JSON.stringify({ secret: input.secret, requestId: input.requestId }),
-        }),
-      );
-      this.csrf = result.csrf;
-      return result.recoverySecret;
-    } catch (error) {
-      if (error instanceof ProviderApiError) throw error;
-      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    }
-  }
-  /** An invited player's ideas for one official character; idempotent on requestId, so an uncertain send is retried as is. */
+  /** A player's ideas for one official character; idempotent on requestId, so an uncertain send is retried as is. */
   async submitCocreation(input: { characterId: string; requestId: string; answers: CocreationAnswer[] }) {
     const value = record(
       await this.request('/cocreation/submit', {
@@ -314,7 +237,7 @@ export class ProviderApi implements WebProviderActions {
     if (!parsed) throw new ProviderApiError(0, 'PROTOCOL_INVALID');
     return parsed;
   }
-  /** Signup / reset / bind step 1: ask for the emailed code. The answer is the same for registered and unknown addresses. */
+  /** Signup / reset step 1: ask for the emailed code. The answer is the same for registered and unknown addresses. */
   async requestEmailCode(input: { purpose: EmailPurpose; email: string }): Promise<CodeChallenge> {
     const value = record(await this.request('/account/request-code', { method: 'POST', body: JSON.stringify(input) }));
     if (
@@ -328,9 +251,9 @@ export class ProviderApi implements WebProviderActions {
   async verifyEmailCode(input: { challengeId: string; code: string }) {
     await this.request('/account/verify-code', { method: 'POST', body: JSON.stringify(input) });
   }
-  /** Step 3 for a guest (注册) or a legacy invited player (绑定邮箱): password + nickname after a verified code. */
+  /** Step 3 for a guest (注册): password + nickname after a verified code. */
   async finishAccount(input: {
-    purpose: 'signup' | 'bind';
+    purpose: 'signup';
     challengeId: string;
     password: string;
     nickname: string;
@@ -407,7 +330,7 @@ export class ProviderApi implements WebProviderActions {
     const features = parseFeatures(value.features);
     if (!value.signedIn)
       return { signupEnabled: value.signupEnabled, signedIn: false, ...(features ? { features } : {}) };
-    if (typeof value.hasLogin !== 'boolean' || typeof value.canBind !== 'boolean' || typeof value.kind !== 'string')
+    if (typeof value.hasLogin !== 'boolean' || typeof value.kind !== 'string')
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
     return {
       signupEnabled: value.signupEnabled,
@@ -416,7 +339,6 @@ export class ProviderApi implements WebProviderActions {
       hasLogin: value.hasLogin,
       emailMasked: typeof value.emailMasked === 'string' ? value.emailMasked : null,
       nickname: typeof value.nickname === 'string' ? value.nickname : null,
-      canBind: value.canBind,
       ...(features ? { features } : {}),
       ...(typeof value.reviewNoticeClosed === 'boolean' ? { reviewNoticeClosed: value.reviewNoticeClosed } : {}),
       ...(parseModelChoice(value.modelChoice) ? { modelChoice: parseModelChoice(value.modelChoice)! } : {}),

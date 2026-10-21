@@ -150,10 +150,7 @@ async function fixture(t: test.TestContext, wait?: (ms: number) => Promise<void>
   const handlers = {
     bootstrap: async () => view(),
     redeem: async (_input: { code: string; requestId: string }) => ({
-      grantId: 'g',
-      principalId: view().access.principalId,
-      expiresAt: null,
-      csrf: 'c',
+      entitlement: undefined,
       duplicate: false,
     }),
     submit: async () => ({ operation: operation(), duplicate: false }),
@@ -498,27 +495,10 @@ test('mounted invite dialog locks double submit, preserves intent across Escape/
   const second = open();
   assert.notEqual(second, first);
   assert.equal(second.querySelector('input')!.readOnly, true);
-  f.handlers.bootstrap = async () => {
-    const next = view();
-    return {
-      ...next,
-      access: {
-        ...next.access,
-        kind: 'invite',
-        grantId: 'g',
-        status: 'active',
-        canSend: true,
-        lockedCharacterId: null,
-        remainingReplies: null,
-        reservedReplies: null,
-        trialExpiresAt: null,
-      },
-    };
-  };
-  finish({ grantId: 'g', principalId: view().access.principalId, expiresAt: null, csrf: 'c', duplicate: false });
+  finish({ entitlement: undefined, duplicate: false });
   await flush();
   assert.equal(f.document.body.children.length, 0);
-  assert.match(f.note.textContent, /已解锁/);
+  assert.match(f.messages.at(-1)!, /已解锁/);
   assert.equal(f.editor.value, '保留我的草稿');
   assert.equal(requests, 1);
 });

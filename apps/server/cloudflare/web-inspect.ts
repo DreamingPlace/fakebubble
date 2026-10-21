@@ -124,7 +124,6 @@ export function inspectWebAuthority(
       registered: 0,
       unlimited: 0,
       daily_refill: 0,
-      legacy_invite: 0,
       account: 0,
     };
     for (const row of reader.all<{ tier: string; n: number }>(

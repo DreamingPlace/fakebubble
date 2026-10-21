@@ -1,4 +1,4 @@
-/** E visual shell. Without a live binding it is a pure local fixture and sends nothing. */
+/** The visual shell: a carousel of the characters the server's catalog lists, every chat driven by the live binding. */
 import { orbitStyle, ringOffset } from './orbit.js';
 import { appendLegalLinks, footerNote } from './legal-links.ts';
 import { followChatViewport, swipeStep } from './mobile-layout.js';
@@ -6,50 +6,6 @@ import type { LiveBinding } from './provider-binding.js';
 import { providerPeople, escapeCardText, type Person } from './provider-catalog-view.js';
 
 type Phase = 'browse' | 'hover' | 'expanding' | 'chat' | 'collapsing';
-
-const knownPeople: Person[] = [
-  {
-    id: 'preview-guagua',
-    name: '瓜瓜',
-    mark: '瓜',
-    color: '#D7C8B9',
-    ink: '#614C3C',
-    transcript: '我才放学回来，让你等久了',
-    characterId: 'wei-guagua',
-  },
-  {
-    id: 'preview-jojo',
-    name: 'JOJO',
-    mark: 'J',
-    color: '#C7D1D3',
-    ink: '#405C61',
-    transcript: 'Thanks Kobe，你终于来了',
-    characterId: 'jojo',
-  },
-  {
-    id: 'preview-chen-jimi',
-    name: '陈吉米',
-    mark: '吉',
-    color: '#C8C6D7',
-    ink: '#535271',
-    transcript: '打瓦请按1，王者请按2，其他事请挂断',
-    characterId: 'chen-jimi',
-  },
-];
-const reserveColors = ['#C8D4CB', '#D6CED4', '#C9D3DC', '#D9D0C5', '#CFD7D2', '#D4CDDB'];
-const reserve = (index: number): Person => ({
-  id: `preview-reserve-${String(index).padStart(2, '0')}`,
-  name: `未开放位置${index}`,
-  mark: '',
-  color: reserveColors[(index - 1) % reserveColors.length]!,
-  ink: '#596962',
-});
-// Twelve unconfigured positions make the fifteen-slot geometry testable without inventing people.
-const people: Person[] = [
-  ...Array.from({ length: 6 }, (_, i) => reserve(i + 1)),
-  ...knownPeople,
-  ...Array.from({ length: 6 }, (_, i) => reserve(i + 7)),
-];
 
 const icon = (name: 'sound' | 'back' | 'send' | 'play' | 'more') => {
   const paths = {
@@ -68,7 +24,7 @@ function blend(a: string, b: string, t: number): string {
   return `#${[1, 3, 5].map((i) => h(n(a, i) + (n(b, i) - n(a, i)) * t)).join('')}`;
 }
 
-function createCard(person: Person, live = false) {
+function createCard(person: Person) {
   const name = escapeCardText(person.name),
     mark = escapeCardText(person.mark);
   const configured = person.transcript !== undefined;
@@ -81,7 +37,7 @@ function createCard(person: Person, live = false) {
       <div class="chat-head">
         <button class="back-button icon-button" type="button" aria-label="返回人物浏览">${icon('back')}</button>
         <strong role="status" aria-live="polite">${name}</strong>
-        ${configured && live ? `<button class="chat-more icon-button" type="button" aria-label="更多" aria-haspopup="menu" aria-expanded="false">${icon('more')}</button>` : ''}
+        ${configured ? `<button class="chat-more icon-button" type="button" aria-label="更多" aria-haspopup="menu" aria-expanded="false">${icon('more')}</button>` : ''}
       </div>
       <div class="chat-body" role="log" aria-label="${name}的消息">
         ${configured ? `<p class="friend-notice">${name}已添加了你，来打个招呼吧</p>` : ''}
@@ -116,12 +72,11 @@ function createCard(person: Person, live = false) {
   return card;
 }
 
-export function startPrototype(root: HTMLElement, live?: LiveBinding) {
-  const roster = live ? providerPeople(live.catalog()) : people;
-  return startShell(root, roster, live);
+export function startPrototype(root: HTMLElement, live: LiveBinding) {
+  return startShell(root, providerPeople(live.catalog()), live);
 }
 
-function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
+function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   root.innerHTML = `
     <div class="page-shell">
       <header class="site-head"><div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>FAKE 泡泡</span></div><span class="head-note">遇见一个新朋友</span></header>
@@ -130,17 +85,17 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
         <div class="carousel" aria-label="人物聊天卡片，可滑动切换" tabindex="0"><div class="card-deck"></div></div>
         <nav class="avatar-nav" aria-label="选择人物"></nav>
       </main>
-      <footer class="preview-note">${live ? footerNote(live.freeTierEnabled, live.signedUpPlayer) : '本地交互原型 · 合成数据 · 暂无真实语音或生成回复'}</footer>
+      <footer class="preview-note">${footerNote(live.freeTierEnabled, live.signedUpPlayer)}</footer>
       <div class="toast" role="status" aria-live="polite"></div>
     </div>`;
   const page = root.querySelector<HTMLElement>('.page-shell')!;
-  appendLegalLinks(root.querySelector('.preview-note'), live?.legalEnabled);
+  appendLegalLinks(root.querySelector('.preview-note'), live.legalEnabled);
   followChatViewport(page);
   const carousel = root.querySelector<HTMLElement>('.carousel')!;
   const deck = root.querySelector<HTMLElement>('.card-deck')!;
   const nav = root.querySelector<HTMLElement>('.avatar-nav')!;
   const toast = root.querySelector<HTMLElement>('.toast')!;
-  const cards = people.map((person) => createCard(person, live !== undefined));
+  const cards = people.map((person) => createCard(person));
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   for (const card of cards) deck.append(card);
   let active = 7;
@@ -249,7 +204,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
   const switchTo = (index: number) => {
     const next = ((index % people.length) + people.length) % people.length;
     if (next === active) return;
-    live?.stopVoice();
+    live.stopVoice();
     if (phase === 'chat' && !people[next]!.transcript) {
       closeChat();
     }
@@ -259,7 +214,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     restoreEditor(active);
     render();
     const selected = people[active]!.characterId;
-    if (live && selected) void live.open(selected, cards[active]!);
+    if (selected) void live.open(selected, cards[active]!);
     if (phase === 'chat') cards[active]!.querySelector('textarea')!.focus({ preventScroll: true });
   };
   const spatial = (card: HTMLElement, before: DOMRect) => {
@@ -302,7 +257,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
       }
     };
     const opened = people[active]!.characterId;
-    if (live && opened) void live.open(opened, card);
+    if (opened) void live.open(opened, card);
     if (reduced.matches) settle();
     else settleTimer = window.setTimeout(settle, 220);
     if (focus) card.querySelector('textarea')!.focus({ preventScroll: true });
@@ -311,7 +266,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     if (phase !== 'chat' && phase !== 'expanding') return;
     clearTimeout(settleTimer);
     settleTimer = 0;
-    live?.stopVoice();
+    live.stopVoice();
     const card = cards[active]!;
     saveEditor(active);
     const wasFocused = document.activeElement === card.querySelector('textarea');
@@ -384,7 +339,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     card.querySelector<HTMLButtonElement>('.back-button')!.addEventListener('click', closeChat);
     card.querySelector<HTMLButtonElement>('.play-button')?.addEventListener('click', () => {
       const characterId = people[index]!.characterId;
-      if (live && characterId) live.playWelcome(characterId);
+      if (characterId) live.playWelcome(characterId);
       else say('这段语音暂时无法播放');
     });
     transcriptButton?.addEventListener('click', () => {
@@ -401,7 +356,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
     reply.addEventListener('input', () => {
       send.disabled = !reply.value.trim();
       const characterId = people[index]!.characterId;
-      if (live && characterId) live.updateComposer(characterId);
+      if (characterId) live.updateComposer(characterId);
       saveEditor(index);
     });
     reply.addEventListener('keydown', (event) => {
@@ -416,32 +371,16 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
         value = draft.trim();
       if (!value) return;
       const characterId = people[index]!.characterId;
-      if (live && characterId) {
-        void live.send(characterId, value, card, () => {
-          // Clear only the acknowledged draft, never newer typing during the request.
-          if (reply.value === draft) {
-            reply.value = '';
-            saveEditor(index);
-          }
-          live.updateComposer(characterId);
-        });
-        reply.focus({ preventScroll: true });
-        return;
-      }
-      const row = document.createElement('div');
-      row.className = 'message-row outgoing';
-      const bubble = document.createElement('p');
-      bubble.className = 'text-bubble';
-      bubble.textContent = value;
-      row.append(bubble);
-      card.querySelector('.sent-messages')!.append(row);
-      reply.value = '';
-      send.disabled = true;
-      const body = card.querySelector<HTMLElement>('.chat-body')!;
-      body.scrollTop = body.scrollHeight;
-      saveEditor(index);
+      if (!characterId) return;
+      void live.send(characterId, value, card, () => {
+        // Clear only the acknowledged draft, never newer typing during the request.
+        if (reply.value === draft) {
+          reply.value = '';
+          saveEditor(index);
+        }
+        live.updateComposer(characterId);
+      });
       reply.focus({ preventScroll: true });
-      say('已加入本地预览；没有请求真实回复');
     });
   });
 
@@ -520,7 +459,7 @@ function startShell(root: HTMLElement, people: Person[], live?: LiveBinding) {
   reduced.addEventListener('change', () => updateBackground());
   window.addEventListener('resize', render);
   render();
-  live?.attach({
+  live.attach({
     say,
     head: root.querySelector<HTMLElement>('.site-head')!,
     card: (characterId) => cards[people.findIndex((person) => person.characterId === characterId)]!,

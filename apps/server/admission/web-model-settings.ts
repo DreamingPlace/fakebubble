@@ -22,7 +22,7 @@ import {
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { activeEntitlement, type Entitlement } from './web-entitlements.ts';
-import { inviteGrantActive, isRegistered } from './web-free-tier.ts';
+import { isRegistered } from './web-free-tier.ts';
 
 /**
  * Owner-controlled reply models and prices (Part 21g, migration 124).
@@ -178,13 +178,13 @@ export const replyPointsNow = (store: Reader, model: PlayerModelId, voice = true
  *
  *  tier  guest      a trial guest
  *        registered a signed-up player (signup bonus, or an email login): points, no entitlement
- *        invited    an active entitlement, a legacy invite principal with an active grant, or an account
- *  kind  guest | registered | unlimited | daily_refill | legacy_invite | account
+ *        invited    an active entitlement, or an account
+ *  kind  guest | registered | unlimited | daily_refill | account
  *
  * An entitlement never changes the principal kind. Expired or revoked, it simply stops counting: the player is a registered
  * player with whatever balance remains. `unlimited` says the player is never charged points.
  */
-export type TierKind = 'guest' | 'registered' | 'unlimited' | 'daily_refill' | 'legacy_invite' | 'account';
+export type TierKind = 'guest' | 'registered' | 'unlimited' | 'daily_refill' | 'account';
 export interface EffectiveTier {
   tier: ModelTier;
   kind: TierKind;
@@ -194,20 +194,13 @@ export interface EffectiveTier {
 export function effectiveTier(store: Reader & ModelFlags, principalId: string, now?: number): EffectiveTier | null {
   const kind = store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind;
   if (kind === 'account') return { tier: 'invited', kind: 'account', entitlement: null, unlimited: true };
-  if (kind !== 'guest' && kind !== 'invite') return null;
-  // An active entitlement decides, whatever the principal kind and whatever the free-tier switch says (a backfilled legacy
-  // invited player with a login holds one too, so its grant is not consulted).
+  if (kind !== 'guest') return null;
+  // An active entitlement decides, whatever the free-tier switch says.
   const entitlement = activeEntitlement(store, principalId, now);
   if (entitlement)
     return { tier: 'invited', kind: entitlement.kind, entitlement, unlimited: entitlement.kind === 'unlimited' };
-  // The legacy invite-only path (no entitlement row): an invite principal whose grant is still active is unmetered.
-  if (kind === 'invite' && inviteGrantActive(store, principalId, now))
-    return { tier: 'invited', kind: 'legacy_invite', entitlement: null, unlimited: true };
-  // Part 17h: a guest, or an invited player whose grant lapsed, is registered when it holds the bonus or has an email login.
-  if (!isRegistered(store, principalId, now))
-    return kind === 'guest'
-      ? { tier: 'guest', kind: 'guest', entitlement: null, unlimited: false }
-      : { tier: 'invited', kind: 'legacy_invite', entitlement: null, unlimited: true };
+  // Part 17h: a guest is registered when it holds the bonus or has an email login.
+  if (!isRegistered(store, principalId)) return { tier: 'guest', kind: 'guest', entitlement: null, unlimited: false };
   return { tier: 'registered', kind: 'registered', entitlement: null, unlimited: false };
 }
 

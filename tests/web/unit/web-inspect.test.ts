@@ -127,18 +127,20 @@ test('inspect reports the deployed ledger next to the expected steps and matches
   // Extended for migration 123 (Part 21b named exception): schema 123, 48 steps.
   // Named exception (Part 21g, migration 124): the ledger now has 49 steps and 124 is the newest, so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-  // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+  // Named exception (Part 22x, migration 126): the ledger has 51 steps and 126 is the newest, so step counts and expected versions moved by one again. No assertion was weakened.
+  // (Part 22a, migration 125): the ledger had 50 steps; positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-  assert.equal(report.schemaVersion, 125);
-  assert.equal(report.migrations.applied.length, 50);
+  assert.equal(report.schemaVersion, 126);
+  assert.equal(report.migrations.applied.length, 51);
   assert.deepEqual(
     report.migrations.applied,
     webR2Migrations.map((m) => ({ version: m.version, sha256: sha(m.sql) })),
   );
   assert.deepEqual(report.migrations.expected.r2, report.migrations.applied);
-  // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
+  // Named exception (Part 22x, migration 126): the ledger has 51 steps and 126 is the newest, so step counts and expected versions moved by one again. No assertion was weakened.
+  // (Part 22a, migration 125): the ledger had 50 steps; positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-  assert.equal(report.migrations.expected.inline.length, 50);
+  assert.equal(report.migrations.expected.inline.length, 51);
   assert.deepEqual(
     report.migrations.expected.inline.map((m, i) => m.sha256 === report.migrations.expected.r2[i]!.sha256),
     report.migrations.expected.inline.map((m) => m.version !== 113),

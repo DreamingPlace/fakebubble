@@ -3,7 +3,7 @@ import type { TestContext } from 'node:test';
 import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
 import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
 import { WebInviteTiers } from '../../../apps/server/invites/web-invite-tiers.ts';
-import { migrateWebProviderInviteTiers } from '../../../apps/server/generation/web-provider-migration.ts';
+import { migrateWebProviderInviteTiers, migrateWebProviderLegacyInvites } from '../../../apps/server/generation/web-provider-migration.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
 import { enableModelChoice } from './model-choice.ts';
 import { schema124 } from './model-settings.ts';
@@ -14,10 +14,16 @@ export const DAY = 86_400_000;
 export const characterId = 'fixture-character';
 const ip = (digit: string) => digit.repeat(64);
 
-/** The real schema through migration 125 on an in-memory Node database. */
+/** The real schema through migration 125 on an in-memory Node database (the schema a legacy invite principal still has). */
 export function schema125() {
   const store = schema124();
   migrateWebProviderInviteTiers(store);
+  return store;
+}
+/** The real schema through migration 126: the legacy invite principals are guests. */
+export function schema126() {
+  const store = schema125();
+  migrateWebProviderLegacyInvites(store);
   return store;
 }
 
@@ -27,7 +33,7 @@ export function schema125() {
  * redeemed through the real WebInviteTiers.redeem.
  */
 export function tiersFixture(t: TestContext) {
-  const store = schema125();
+  const store = schema126();
   t.after(() => store.close());
   Object.assign(store, { webIpKeyFingerprint: () => 'f'.repeat(64) });
   enableModelChoice(store);
@@ -66,7 +72,7 @@ export function tiersFixture(t: TestContext) {
     authorize: (token) => {
       const principalId = sessions.get(token);
       if (!principalId) throw new Error('SESSION_EXPIRED');
-      const row = store.get<{ kind: 'guest' | 'invite'; player_id: string; world_id: string }>(
+      const row = store.get<{ kind: 'guest'; player_id: string; world_id: string }>(
         'SELECT kind,player_id,world_id FROM web_principals WHERE id=?',
         principalId,
       )!;

@@ -55,7 +55,7 @@ export type RetentionReport = {
   errorName?: string;
   messageShape?: string;
   at?: string;
-  principalKind?: 'guest' | 'invite' | 'account';
+  principalKind?: 'guest' | 'account';
   state?: string;
   /** Distinct principals that failed in this whole sweep, and how many were left alone because they are in backoff. */
   stuck?: number;
@@ -156,27 +156,17 @@ export class WebCloudRetention {
     this.store = store;
     this.clock = clock;
   }
-  /**
-   * The row of a principal this class may purge: a guest (no administrator account, no invite grant), or - only for an
-   * account deletion the player asked for (state 'purging'/'purged') - an invited player whose every grant was revoked
-   * in the same transaction that started the deletion (WebPlayerAccounts.deleteAccount).
-   */
-  private guest(principalId: string, deletion = false) {
+  /** The row of a principal this class may purge: a guest (no administrator account). */
+  private guest(principalId: string) {
     const row = this.store.get<Retention>('SELECT * FROM web_guest_retention WHERE principal_id=?', principalId);
-    const principalOk = (kind: 'guest' | 'invite') =>
-      !!row &&
-      !!this.store.get(
-        `SELECT 1 FROM web_principals p WHERE p.id=? AND p.world_id=? AND p.kind=?
-      AND NOT EXISTS (SELECT 1 FROM web_accounts a WHERE a.principal_id=p.id)
-      AND NOT EXISTS (SELECT 1 FROM web_invite_grants g WHERE g.principal_id=p.id${kind === 'invite' ? ' AND g.revoked_at IS NULL' : ''})`,
-        principalId,
-        row.world_id,
-        kind,
-      );
     ensure(
       row &&
-        (principalOk('guest') ||
-          ((deletion || row.state === 'purging' || row.state === 'purged') && principalOk('invite'))),
+        this.store.get(
+          `SELECT 1 FROM web_principals p WHERE p.id=? AND p.world_id=? AND p.kind='guest'
+      AND NOT EXISTS (SELECT 1 FROM web_accounts a WHERE a.principal_id=p.id)`,
+          principalId,
+          row.world_id,
+        ),
       'WEB_RETENTION_SCOPE_UNSAFE',
     );
     return row;
@@ -190,7 +180,7 @@ export class WebCloudRetention {
         ELSE r.expires_at+${this.graceMs} END) due
       FROM web_guest_retention r JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id
       ${logins ? 'LEFT JOIN web_player_logins l ON l.principal_id=r.principal_id' : ''}
-      WHERE (p.kind='guest' OR p.kind='invite' AND r.state='purging') AND (r.state IN ('active','purging')${logins ? " OR r.state='unstarted' AND l.principal_id IS NOT NULL" : ''})`,
+      WHERE p.kind='guest' AND (r.state IN ('active','purging')${logins ? " OR r.state='unstarted' AND l.principal_id IS NOT NULL" : ''})`,
       this.clock.now() + 30_000,
       ...(logins ? [PLAYER_INACTIVE_MS] : []),
     );
@@ -200,7 +190,7 @@ export class WebCloudRetention {
   }
   /** What is known about a failing principal, as labels only: kind, retention state and how long it has been due. */
   private describe(principalId: string): {
-    principalKind?: 'guest' | 'invite' | 'account';
+    principalKind?: 'guest' | 'account';
     state?: string;
     oldestAgeBucket?: AgeBucket;
   } {
@@ -230,12 +220,7 @@ export class WebCloudRetention {
               ? null
               : row.expires_at + this.graceMs;
       return {
-        principalKind:
-          row.kind === 'invite'
-            ? ('invite' as const)
-            : row.kind === 'account'
-              ? ('account' as const)
-              : ('guest' as const),
+        principalKind: row.kind === 'account' ? ('account' as const) : ('guest' as const),
         ...(row.state
           ? {
               state:
@@ -333,7 +318,7 @@ export class WebCloudRetention {
       const found = this.store.all<{ principal_id: string }>(
         `SELECT r.principal_id FROM web_guest_retention r
         JOIN web_principals p ON p.id=r.principal_id AND p.world_id=r.world_id
-        WHERE (p.kind='guest' OR p.kind='invite' AND r.state='purging')
+        WHERE p.kind='guest'
         AND ${due.sql} ORDER BY r.expires_at,r.principal_id LIMIT ? OFFSET ?`,
         ...due.args,
         SCAN_PAGE,
@@ -418,14 +403,13 @@ export class WebCloudRetention {
   }
   /**
    * T1. reason 'deleted' is the player's own request (删除我的账号 / 清除本设备的体验数据): it replaces the time condition
-   * and nothing else, so the same fencing, release and audit steps run. It also covers an invited player whose grants the
-   * caller revoked in this transaction.
+   * and nothing else, so the same fencing, release and audit steps run.
    */
   markExpired(principalId: string, reason: 'expired' | 'deleted' = 'expired') {
     this.phase = 'markExpired';
     this.sub = 'scope';
     this.store.transaction(() => {
-      const row = this.guest(principalId, reason === 'deleted'),
+      const row = this.guest(principalId),
         now = this.clock.now();
       if (['purging', 'purged'].includes(row.state)) return;
       this.sub = 'state';
@@ -477,7 +461,7 @@ export class WebCloudRetention {
           ).changes === 1,
           'WEB_RETENTION_STALE',
         );
-        // An entitled operation of a guest has no trial slot to give back: an invited player's (on request) or one admitted
+        // An entitled operation of a guest has no trial slot to give back: a deletion on request, or one admitted
         // on a free allowance outside the counters (its row in web_free_operations: the signup bonus or trial replies 4-5); the budget hold is settled below like any other.
         if (
           operation.metering_type === 'entitled' &&
@@ -577,22 +561,6 @@ export class WebCloudRetention {
         );
       this.sub = 'purge_gate';
       this.store.run('INSERT INTO web_retention_purge_gate VALUES (?,?,?)', principalId, world, row.revision);
-      // Part 17g ROOT CAUSE. The deployed cloud triggers that guard web_provider_outputs, web_provider_candidates and
-      // web_provider_media_assets (workers/web-cloudflare/retention.sql, applied once to the empty authority) allow the purge
-      // delete only while the principal's kind is 'guest'. A player who redeemed an invite and then deleted the account is
-      // kind 'invite': its first reply with voice made the DELETE abort with WEB_PROVIDER_MEDIA_IMMUTABLE on every alarm,
-      // forever. The triggers cannot change without a migration, so this transaction (atomic, single-writer, rolled back as a
-      // whole on any error) relabels the principal for exactly the deletes below and restores it before anything else reads it.
-      // Every guard that mattered is still checked above: guest() proved no account and no live grant, the gate row is bound
-      // to this retention revision, and the state is 'purging'. A proper trigger fix belongs to a later migration.
-      const relabel =
-        this.store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principalId)?.kind === 'invite';
-      if (relabel)
-        ensure(
-          this.store.run("UPDATE web_principals SET kind='guest' WHERE id=? AND kind='invite'", principalId).changes ===
-            1,
-          'WEB_RETENTION_SCOPE_UNSAFE',
-        );
       const operations = 'SELECT id FROM web_operations WHERE principal_id=? AND world_id=?';
       for (const table of ['web_local_events', 'web_user_events']) {
         this.sub = table;
@@ -618,12 +586,6 @@ export class WebCloudRetention {
         this.sub = table;
         this.store.run(`DELETE FROM ${table} WHERE operation_id IN (${operations})`, principalId, world);
       }
-      if (relabel)
-        ensure(
-          this.store.run("UPDATE web_principals SET kind='invite' WHERE id=? AND kind='guest'", principalId).changes ===
-            1,
-          'WEB_RETENTION_SCOPE_UNSAFE',
-        );
       this.sub = 'embed_holds';
       releaseUnsentEmbedHolds(this.store, world);
       // Co-creation ideas (schema 117) are the player's data and go with the player.
@@ -703,7 +665,7 @@ export class WebCloudRetention {
       this.sub = 'contacts';
       this.store.run('UPDATE contacts SET state_json=? WHERE world_id=?', JSON.stringify(emptySession()), world);
       this.store.run("UPDATE world_characters SET relationship='new' WHERE world_id=?", world);
-      // The two relabels above each wrote an 'access' event (trigger web_local_access_update): they are the player's rows too.
+      // The principal's 'access' events (trigger web_local_access_update) are the player's rows too.
       this.sub = 'web_local_events';
       this.store.run('DELETE FROM web_local_events WHERE principal_id=? AND world_id=?', principalId, world);
       this.sub = 'audit_cleared';
