@@ -1,6 +1,10 @@
 import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
 import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
-import { migrateWebProviderModelSettings } from '../../../apps/server/generation/web-provider-migration.ts';
+import {
+  migrateWebProviderInviteTiers,
+  migrateWebProviderLegacyInvites,
+  migrateWebProviderModelSettings,
+} from '../../../apps/server/generation/web-provider-migration.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
 import type { PlayerModelId } from '../../../packages/contracts/player-models.ts';
 import type { ModelSaveInput, ModelSetting } from '../../../packages/contracts/model-settings.ts';
@@ -20,6 +24,33 @@ export function schema124() {
   return store;
 }
 
+/** A signed-up player holding an unlimited entitlement: the "invited" tier since Part 22a. */
+export function grantUnlimited(
+  store: ReturnType<typeof schema124>,
+  principalId: string,
+  id: string,
+  now: number,
+  login = true,
+) {
+  if (login && !store.get('SELECT 1 FROM web_player_logins WHERE principal_id=?', principalId))
+    store.run(
+      'INSERT INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at,last_seen_at) VALUES (?,?,?,?,?,?)',
+      principalId,
+      `${id}@example.com`,
+      'x',
+      now,
+      now,
+      now,
+    );
+  store.run(
+    "INSERT INTO web_entitlements(id,principal_id,source,invite_id,batch_id,kind,starts_at,expires_at,created_at) VALUES (?,?,'admin',NULL,NULL,'unlimited',?,NULL,?)",
+    id,
+    principalId,
+    now - 1,
+    now - 1,
+  );
+}
+
 export type SettingsPatch = Partial<Record<PlayerModelId, Partial<Omit<ModelSetting, 'model'>>>>;
 
 /**
@@ -31,6 +62,8 @@ export function modelSettingsFixture(
   options: { models?: readonly PlayerModelId[]; keys?: { gemini?: boolean; xai?: boolean } } = {},
 ) {
   const store = schema124();
+  migrateWebProviderInviteTiers(store);
+  migrateWebProviderLegacyInvites(store);
   t.after(() => store.close());
   Object.assign(store, { webIpKeyFingerprint: () => 'f'.repeat(64) });
   enableModelChoice(store, options.models);
@@ -67,23 +100,9 @@ export function modelSettingsFixture(
     admission.registerGuest({ principalId, playerId, worldId });
     if (tier === 'registered')
       store.run('INSERT INTO web_signup_bonus(principal_id,granted_at) VALUES (?,?)', principalId, now);
-    if (tier === 'invited') {
-      store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", principalId);
-      store.run(
-        "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id=?",
-        principalId,
-      );
-      store.db.exec('PRAGMA foreign_keys=OFF'); // the grant's invite code row is not what these tests are about
-      store.run(
-        'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at) VALUES (?,?,?,?,?,?)',
-        `grant-${name}`,
-        `invite-${name}`,
-        principalId,
-        playerId,
-        worldId,
-        1,
-      );
-    }
+    // Named exception (Part 22x): the invited tier is an unlimited entitlement held by a signed-up player (the legacy invite
+    // principal kind no longer exists); the fixture store is the schema through migration 126.
+    if (tier === 'invited') grantUnlimited(store, principalId, `entitlement-${name}`, now);
     return principalId;
   };
   const admit = (principalId: string, requestId: string, hashDigit = 'a') =>

@@ -19,7 +19,7 @@ function fixture(t: test.TestContext, dailyReplyLimit: number) {
   const f = tiersFixture(t);
   Object.assign(f.store, { dailyReplyLimit });
   const batch = f.create(f.owner, { count: 8, tier: { kind: 'unlimited' } });
-  const codes = [...batch.codes];
+  const codes = [...(batch.codes ?? [])];
   const player = (name: string, kind: 'invite' | 'guest' = 'invite') => {
     if (kind === 'guest') return f.player(name).principalId;
     const who = f.player(name, { signedUp: true });
@@ -88,12 +88,13 @@ test('the limit is per principal; the guest trial keeps its own cap of 3 and ign
   f.finish('a1');
   assert.throws(() => f.admit(a, 'a2'), /WEB_DAILY_LIMIT_REACHED/);
   assert.equal(f.admit(b, 'b1').duplicate, false);
-  // Named exception (Part 22x): each trial reply is finished first (the real schema allows one pending operation per player).
+  // Named exception (Part 22x): the fixture runs the real schema, so the free tier is switched off for the plain trial path and
+  // each trial reply is finished first (one pending operation per player).
+  Object.assign(f.store, { publicFreeTier: false });
   for (const n of [1, 2, 3]) {
     f.admit(guest, `g${n}`);
     f.finish(`g${n}`);
   }
-  console.log(JSON.stringify(f.store.all('select id,kind,trial_used,trial_reserved from web_principals')), JSON.stringify(f.store.all('select status,quota_state from web_operations')));
   assert.throws(() => f.admit(guest, 'g4'), /TRIAL_EXHAUSTED/);
 });
 

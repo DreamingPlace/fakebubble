@@ -7,6 +7,7 @@ import {
   modelChoiceState,
   reconcilePoints,
   setPlayerModel,
+  isUnmetered,
 } from '../../../apps/server/admission/web-points.ts';
 import { BILLING_PAGE_SIZE, WebBilling, playerBilling } from '../../../apps/server/admission/web-billing.ts';
 import { routeWebBilling } from '../../../apps/server/admission/web-billing-routes.ts';
@@ -16,7 +17,20 @@ import { purgePlayerLogins, playerLoginsRemain } from '../../../apps/server/iden
 import { POINTS, replyPoints, repliesLeft, parsePlayerTextModels } from '../../../packages/contracts/player-models.ts';
 import type { PlayerModelId } from '../../../packages/contracts/player-models.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
+import {
+  migrateWebProviderInviteTiers,
+  migrateWebProviderLegacyInvites,
+  migrateWebProviderModelSettings,
+} from '../../../apps/server/generation/web-provider-migration.ts';
 import { enableModelChoice, schema123 } from '../fixtures/model-choice.ts';
+import { grantUnlimited } from '../fixtures/model-settings.ts';
+
+/** Named exception (Part 22x): the entitlement tables (125) and the retired legacy invites (126) on a schema-123 fixture store. */
+function upTo126(store: ReturnType<typeof schema123>) {
+  migrateWebProviderModelSettings(store);
+  migrateWebProviderInviteTiers(store);
+  migrateWebProviderLegacyInvites(store);
+}
 
 const ip = (digit: string) => digit.repeat(64);
 const characterId = 'fixture-character';
@@ -595,25 +609,11 @@ test('an unlimited policy is never charged; the operation still freezes the chos
 
 test('invited players may choose a model, are never charged points, and keep their rolling daily limit', (t) => {
   const f = fixture(t, { bonus: false });
-  // Turn the fixture principal into an invited player with an active grant.
-  f.store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", f.principalId);
-  f.store.run(
-    "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id=?",
-    f.principalId,
-  );
-  f.store.db.exec('PRAGMA foreign_keys=OFF'); // the grant's invite code row is not what this test is about
-  f.store.run(
-    'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at) VALUES (?,?,?,?,?,?)',
-    'grant',
-    'invite',
-    f.principalId,
-    'player-a',
-    'world-a',
-    1,
-  );
-  const s = f.state(f.principalId)!;
-  assert.equal(s.metered, false);
-  assert.equal(f.balance(f.principalId), undefined, 'no points account is created');
+  // Named exception (Part 22x): an invited player is a signed-up player with an unlimited entitlement (no invite principal kind).
+  upTo126(f.store);
+  grantUnlimited(f.store as never, f.principalId, 'entitlement', f.clock(), false);
+  assert.equal(isUnmetered(f.store, f.principalId, f.clock()), true);
+  assert.ok(f.state(f.principalId));
   setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
   assert.equal(f.state(f.principalId)!.selected, 'gemini');
   const op = f.admit(f.principalId, 'i1');
@@ -786,39 +786,29 @@ test('消费记录: a deployment without the feature gets 404; an invited player
   const guest = fixture(t, { bonus: false });
   assert.equal(billing(guest).metered, false, 'a guest is no longer a 404');
 
-  const f = fixture(t, { bonus: false });
-  f.store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", f.principalId);
-  f.store.run(
-    "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id=?",
-    f.principalId,
-  );
-  f.store.db.exec('PRAGMA foreign_keys=OFF');
-  f.store.run(
-    'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at) VALUES (?,?,?,?,?,?)',
-    'grant',
-    'invite',
-    f.principalId,
-    'player-a',
-    'world-a',
-    1,
-  );
+  const f = fixture(t);
+  upTo126(f.store);
+  grantUnlimited(f.store as never, f.principalId, 'entitlement', f.clock());
   setPlayerModel(f.store, f.clock(), f.principalId, 'gemini');
   const op = f.admit(f.principalId, 'i1');
   publish(f, op.operationId, 'deepseek', true, true);
   const page = billing(f);
-  assert.deepEqual([page.metered, page.balance], [false, null]);
+  // Named exception (Part 22x): an entitled player is a signed-up player (metered page with its balance, never charged),
+  // unlike the legacy invite principal whose page was unmetered; the rows are still free (不计点).
+  assert.deepEqual([page.metered, page.balance], [true, 100]);
   assert.deepEqual(page.month, { byModel: [], byCharacter: [] });
-  assert.equal(page.items.length, 1);
-  const reply = page.items[0] as any;
+  // The signed-up fixture also lists its earlier trial replies; the reply made under the entitlement is the one checked.
+  const replies = page.items.filter((item) => item.kind === 'reply');
+  assert.equal(replies.length, 1);
+  const reply = replies[0] as any;
   assert.deepEqual(
     [reply.kind, reply.free, reply.points, reply.model, reply.backupFor],
     ['reply', true, 0, 'deepseek', 'gemini'],
   );
-  assert.equal(
-    f.store.get('SELECT 1 FROM web_points_balance'),
-    undefined,
-    'reading the page creates no account for an invited player',
-  );
+  // Named exception (Part 22x): an entitled player is registered and has an account; what must hold is that it was never charged.
+  assert.equal(f.balance(f.principalId), 100);
+  assert.equal(f.events(f.principalId).filter((e) => e.source === 'spend').length, 0);
+
 });
 
 test('消费记录 pages by 50, newest first, only the last 90 days', (t) => {

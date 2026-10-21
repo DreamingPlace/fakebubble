@@ -47,8 +47,22 @@ function fixture(t: test.TestContext) {
   store.db.exec(
     'CREATE TABLE web_local_guest_budget(ip_hash TEXT NOT NULL, window_start INTEGER NOT NULL, created INTEGER NOT NULL CHECK(created>=0 AND created<=32), PRIMARY KEY(ip_hash,window_start)) STRICT',
   );
+  // Named exception (Part 22x): the inbox reads a player's batch from its ENTITLEMENT (web_entitlements, migration 125), so the
+  // fixture loads that table too; legacy grants no longer exist as a vehicle.
   for (const file of ['111_invite_core.sql', '117_cocreation.sql'])
     store.db.exec(readFileSync(new URL(`../../../apps/server/web-migrations/${file}`, import.meta.url), 'utf8'));
+  // Only the real DDL of the batch and entitlement tables of 125 (its backfill needs tables this inbox fixture never builds).
+  const ddl125 = readFileSync(
+    new URL('../../../apps/server/web-migrations/125_invite_tiers.sql', import.meta.url),
+    'utf8',
+  );
+  for (const statement of ddl125.split(/;\n/))
+    if (
+      /CREATE TABLE web_(invite_batches|entitlements) \(|ALTER TABLE web_invite_codes ADD COLUMN batch_id/.test(
+        statement,
+      )
+    )
+      store.db.exec(statement);
   let now = T0,
     ids = 0;
   const clock = { now: () => now };
@@ -57,13 +71,14 @@ function fixture(t: test.TestContext) {
   const characters = new WebCharacterAdmin(store, clock, accounts);
 
   // A tiny identity: tokens map to principals; only `invite` kinds with a live grant count as invited.
-  const principals = new Map<string, { principalId: string; kind: 'guest' | 'invite'; invited: boolean }>();
+  const principals = new Map<string, { principalId: string; kind: 'guest'; invited: boolean }>();
   const player = (name: string, kind: 'guest' | 'invite' = 'invite', batch = 'batch-spring') => {
     const principalId = `principal-${name}`;
     store.run('INSERT INTO api_players VALUES (?,?)', `player-${name}`, now);
     store.run('INSERT INTO worlds VALUES (?,?,?,?)', `world-${name}`, `player-${name}`, 'UTC', '{}');
-    store.run('INSERT INTO web_principals VALUES (?,?,?,?)', principalId, `player-${name}`, `world-${name}`, kind);
-    principals.set(`token-${name}`, { principalId, kind, invited: kind === 'invite' });
+    // Named exception (Part 22x): an "invite" player is a guest principal holding an entitlement (no kind 'invite' any more).
+    store.run('INSERT INTO web_principals VALUES (?,?,?,?)', principalId, `player-${name}`, `world-${name}`, 'guest');
+    principals.set(`token-${name}`, { principalId, kind: 'guest' as const, invited: kind === 'invite' });
     if (kind === 'invite') {
       const adminSession = store.get<{ id: string }>('SELECT id FROM admin_sessions LIMIT 1')!.id;
       store.run(
@@ -78,12 +93,12 @@ function fixture(t: test.TestContext) {
         now,
       );
       store.run(
-        `INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at) VALUES (?,?,?,?,?,?)`,
-        `grant-${name}`,
-        `code-${name}`,
+        `INSERT INTO web_entitlements(id,principal_id,source,invite_id,kind,starts_at,created_at)
+        VALUES (?,?,'invite',?,'unlimited',?,?)`,
+        `entitlement-${name}`,
         principalId,
-        `player-${name}`,
-        `world-${name}`,
+        `code-${name}`,
+        now,
         now,
       );
     }

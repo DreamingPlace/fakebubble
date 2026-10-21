@@ -9,7 +9,7 @@ import { webReplyLine } from '../../../apps/server/generation/web-reply-telemetr
 import { DomainError } from '../../../packages/domain/errors.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
 import { enableModelChoice, modelFixture } from '../fixtures/model-choice.ts';
-import { schema124 } from '../fixtures/model-settings.ts';
+import { schema126 } from '../fixtures/invite-tiers.ts';
 
 const T0 = 1_800_000_000_000;
 const DAY = 86_400_000;
@@ -17,12 +17,13 @@ const characterId = 'fixture-character';
 
 type Shape = {
   name: string;
-  kind?: 'guest' | 'invite' | 'account';
+  kind?: 'guest' | 'account';
   window?: 'in' | 'out';
   state?: 'purging' | 'purged';
   bonus?: boolean;
   login?: boolean;
-  grant?: 'active' | 'lapsed';
+  /** An entitlement (Part 22a) held by the player: live, or ended a day ago. */
+  entitlement?: 'active' | 'lapsed';
   /** Registered by the 17h definition (flag on). */
   registered: boolean;
 };
@@ -33,11 +34,13 @@ const SHAPES: Shape[] = [
   { name: 'guest+bonus in window', kind: 'guest', window: 'in', bonus: true, registered: true },
   { name: 'guest+bonus out of window', kind: 'guest', window: 'out', bonus: true, registered: true },
   { name: 'guest+login without bonus out of window', kind: 'guest', window: 'out', login: true, registered: true },
-  { name: 'invite active', kind: 'invite', grant: 'active', registered: false },
-  { name: 'invite active with login', kind: 'invite', grant: 'active', login: true, registered: false },
-  { name: 'invite lapsed with login', kind: 'invite', grant: 'lapsed', login: true, registered: true },
-  { name: 'invite lapsed with bonus', kind: 'invite', grant: 'lapsed', bonus: true, registered: true },
-  { name: 'invite lapsed with neither', kind: 'invite', grant: 'lapsed', registered: false },
+  // Named exception (Part 22x): the legacy invite principals (kind 'invite') no longer exist; migration 126 made them guests, so
+  // the shapes they stood for are an entitled player (live while the entitlement lasts) and a guest with a login or bonus.
+  { name: 'entitled with login out of window', kind: 'guest', window: 'out', login: true, entitlement: 'active', registered: true },
+  { name: 'entitled with bonus out of window', kind: 'guest', window: 'out', bonus: true, entitlement: 'active', registered: true },
+  { name: 'entitlement lapsed with login out of window', kind: 'guest', window: 'out', login: true, entitlement: 'lapsed', registered: true },
+  { name: 'entitlement lapsed with bonus out of window', kind: 'guest', window: 'out', bonus: true, entitlement: 'lapsed', registered: true },
+  { name: 'entitlement lapsed with neither out of window', kind: 'guest', window: 'out', entitlement: 'lapsed', registered: false },
   { name: 'account', kind: 'account', registered: false },
   { name: 'guest purging', kind: 'guest', state: 'purging', registered: false },
   { name: 'guest+bonus purging', kind: 'guest', state: 'purging', bonus: true, registered: true },
@@ -45,7 +48,7 @@ const SHAPES: Shape[] = [
 ];
 
 function world(t: TestContext) {
-  const store = schema124();
+  const store = schema126();
   t.after(() => store.close());
   Object.assign(store, { webIpKeyFingerprint: () => 'f'.repeat(64) });
   enableModelChoice(store);
@@ -90,27 +93,22 @@ function world(t: TestContext) {
         T0 - 23 * DAY,
         principalId,
       );
-    if (shape.kind === 'invite' || shape.kind === 'account') {
+    if (shape.kind === 'account') {
       store.run('UPDATE web_principals SET kind=?,revision=revision+1 WHERE id=?', shape.kind, principalId);
       store.run(
         "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id=?",
         principalId,
       );
     }
-    if (shape.kind === 'invite') {
-      store.db.exec('PRAGMA foreign_keys=OFF');
+    if (shape.entitlement)
       store.run(
-        'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at,expires_at,revoked_at) VALUES (?,?,?,?,?,?,?,?)',
-        `grant-${name}`,
-        `invite-${name}`,
+        "INSERT INTO web_entitlements(id,principal_id,source,invite_id,batch_id,kind,starts_at,expires_at,created_at) VALUES (?,?,'admin',NULL,NULL,'unlimited',?,?,?)",
+        `entitlement-${name}`,
         principalId,
-        playerId,
-        worldId,
-        1,
-        shape.grant === 'lapsed' ? T0 - DAY : null,
-        null,
+        T0 - 10 * DAY,
+        shape.entitlement === 'lapsed' ? T0 - DAY : null,
+        T0 - 10 * DAY,
       );
-    }
     return { principalId, worldId };
   };
   return { store, build };
@@ -128,7 +126,7 @@ const code = (fn: () => unknown) => {
 
 /** The claim's own SQL, applied to a one-row stand-in for web_operations `o`. */
 const claimable = (
-  store: ReturnType<typeof schema124>,
+  store: ReturnType<typeof schema126>,
   schema: number,
   flag: boolean,
   principalId: string,
@@ -161,7 +159,7 @@ for (const flag of [true, false])
         shape.state === undefined &&
         (shape.kind === 'account' ||
           (shape.kind === 'guest' && (shape.window === 'in' || (flag && shape.registered))) ||
-          (shape.kind === 'invite' && (shape.grant === 'active' || (flag && shape.registered))));
+          shape.entitlement === 'active');
       assert.equal(js === 'live', expected, `${shape.name} (flag ${flag}): ${js}`);
     }
     // The exact refusals are part of the rule too.
@@ -176,7 +174,7 @@ test('17i data safety: no cleaner selection and no markExpired guard touches a r
     w.store
       .all<{ principal_id: string }>(
         `SELECT r.principal_id FROM web_guest_retention r JOIN web_principals p ON p.id=r.principal_id
-        WHERE (p.kind='guest' OR p.kind='invite' AND r.state='purging') AND ${due.sql}`,
+        WHERE p.kind='guest' AND ${due.sql}`,
         ...due.args,
       )
       .map((r) => r.principal_id),
@@ -186,7 +184,7 @@ test('17i data safety: no cleaner selection and no markExpired guard touches a r
     w.store
       .all<{ principal_id: string }>(
         `SELECT r.principal_id FROM web_guest_retention r JOIN web_principals p ON p.id=r.principal_id
-        WHERE (p.kind='guest' OR p.kind='invite' AND r.state='purging') AND ${due.sql}`,
+        WHERE p.kind='guest' AND ${due.sql}`,
         ...due.args,
       )
       .map((r) => r.principal_id),
@@ -198,13 +196,13 @@ test('17i data safety: no cleaner selection and no markExpired guard touches a r
       shape.state === 'purging' || (shape.kind === 'guest' && shape.window === 'out' && !shape.registered);
     assert.equal(selected.has(principalId), mustBeDue, shape.name);
   }
-  // The lapsed-invite-with-login shape: never selected, whatever the window columns say.
-  const lapsed = built.find((b) => b.shape.name === 'invite lapsed with login')!;
+  // The lapsed-entitlement-with-login shape: never selected, whatever the window columns say.
+  const lapsed = built.find((b) => b.shape.name === 'entitlement lapsed with login out of window')!;
   assert.equal(selected.has(lapsed.principalId), false);
-  assert.equal(
+  assert.notEqual(
     w.store.get<{ state: string }>('SELECT state FROM web_guest_retention WHERE principal_id=?', lapsed.principalId)!
       .state,
-    'protected',
+    'purging',
   );
 });
 

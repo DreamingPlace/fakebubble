@@ -112,8 +112,11 @@ test('only a new role-scoped synthetic invite root can explicitly advance 110→
     );
     return actor;
   };
+  // Named exception (Part 22x): no business decision reads kind 'invite' any more. The valid entitled player is a second active
+  // account; the 'revoked' and 'expired' principals stay kind 'invite' and keep their grants (the expired one even a LIVE
+  // grant) to show the grant no longer admits anyone: a legacy invite principal has no access (refused as an expired guest, TRIAL_EXPIRED).
   const account = upgrade(0, 'account'),
-    valid = upgrade(2, 'invite');
+    valid = upgrade(2, 'account');
   const revoked = upgrade(3, 'invite'),
     expired = upgrade(4, 'invite');
   reopened.run(
@@ -122,6 +125,16 @@ test('only a new role-scoped synthetic invite root can explicitly advance 110→
     'account-synthetic',
     account.principalId,
     'synthetic',
+    Buffer.alloc(16),
+    Buffer.alloc(32),
+    clock.now(),
+  );
+  reopened.run(
+    `INSERT INTO web_accounts(id,principal_id,username_norm,password_salt,password_tag,created_at)
+    VALUES (?,?,?,?,?,?)`,
+    'account-valid',
+    valid.principalId,
+    'valid',
     Buffer.alloc(16),
     Buffer.alloc(32),
     clock.now(),
@@ -153,7 +166,7 @@ test('only a new role-scoped synthetic invite root can explicitly advance 110→
       actor.playerId,
       actor.worldId,
       clock.now() - 100,
-      index === 2 ? clock.now() : null,
+      null,
       index === 1 ? clock.now() - 1 : null,
     );
   }
@@ -173,8 +186,8 @@ test('only a new role-scoped synthetic invite root can explicitly advance 110→
     inviteNext.operationId,
     'idempotent invite replay does not enqueue twice',
   );
-  assert.throws(() => admit(revoked.principalId, 'revoked-next'), /WEB_INVITE_ACCESS_REQUIRED/);
-  assert.throws(() => admit(expired.principalId, 'expired-next'), /WEB_INVITE_ACCESS_REQUIRED/);
+  assert.throws(() => admit(revoked.principalId, 'revoked-next'), /TRIAL_EXPIRED/);
+  assert.throws(() => admit(expired.principalId, 'expired-next'), /TRIAL_EXPIRED/);
   assert.throws(() => admission.finalize(inviteNext.operationId, 'cancelled'), /WEB_DISPATCH_FENCE_REQUIRED/);
   const operations = reopened.all<{
     id: string;
