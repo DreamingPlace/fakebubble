@@ -78,10 +78,7 @@ export class ProviderInviteController {
   private failed(error: unknown) {
     const code = error instanceof ProviderApiError ? error.code : 'NETWORK';
     // A lost answer does not prove that the request failed.
-    this.set(
-      ['IDENTITY_CHANGED', 'CATALOG_CHANGED'].includes(code) ? 'blocked' : 'uncertain',
-      code,
-    );
+    this.set(['IDENTITY_CHANGED', 'CATALOG_CHANGED'].includes(code) ? 'blocked' : 'uncertain', code);
     return false;
   }
   async redeem(code: string) {

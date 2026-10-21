@@ -142,8 +142,8 @@ async function world(t: test.TestContext) {
   const stateOf = (principalId: string) => f.fixture<World>('/fixture/world/state', { principalId });
   const seed = (principalId: string, code: string) => f.fixture('/fixture/world/seed', { principalId, code });
   const block = (principalId: string, on: boolean) => f.fixture('/fixture/purge-block', { principalId, on });
-  // NAMED EXCEPTION: an old invited player (kind 'invite', a grant, and the unlimited entitlement migration 125 backfills for
-  // one with a login) is OLD DATA on a 125 database; the legacy redemption that used to create it no longer runs there.
+  // NAMED EXCEPTION: an old invited player (a guest since migration 126, holding the unlimited entitlement migration 125 backfilled
+  // for one with a login) is OLD DATA; the legacy redemption that used to create it no longer runs there.
   const invited = async (actor: Client) =>
     f.fixture('/fixture/cross/legacy', { principalId: await f.boot(actor), login: true });
   const make = async (peer: string) => {
@@ -247,7 +247,9 @@ test('one world with every kind of principal and every feature table: sweep() an
       .map((r) => [r.step, r.code, r.phase, r.sub, r.principalKind]),
     [
       ['deletion', 'WEB_RETENTION_SCOPE_UNSAFE', 'clearDatabase', 'scope', 'guest'],
-      ['deletion', 'WEB_RETENTION_SCOPE_UNSAFE', 'clearDatabase', 'scope', 'invite'],
+      // Named exception (Part 22x): D is an old invited player, now a guest holding an entitlement (migration 126), so its
+      // blocked deletion reports principalKind 'guest'; the kind 'invite' no longer exists.
+      ['deletion', 'WEB_RETENTION_SCOPE_UNSAFE', 'clearDatabase', 'scope', 'guest'],
     ],
   );
   for (const { principalId } of [A, B, C, D, E]) {

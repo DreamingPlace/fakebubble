@@ -371,7 +371,10 @@ test('administrator email identity and granular permissions persist; removal nev
     { memberId: grant.memberId, permissions: [], expectedPermissions: ['invites.manage'] },
     409,
   );
-  await f.call(`${API}/admin/members/permissions`, owner, { memberId: grant.memberId, permissions: ['invites.manage'] });
+  await f.call(`${API}/admin/members/permissions`, owner, {
+    memberId: grant.memberId,
+    permissions: ['invites.manage'],
+  });
   const records = await f.call(`${API}/admin/invites/batch-list`, member, {});
   assert.equal(records.batches.length, 1);
   assert.ok(!JSON.stringify(records).includes('digest'));

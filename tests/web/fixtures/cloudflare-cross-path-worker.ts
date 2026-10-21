@@ -56,6 +56,16 @@ export class WebCrossPathFixture extends WebRetentionWorldFixture {
       });
       return Response.json({ inviteId: `invite-${principalId}` });
     }
+    if (path === '/fixture/cross/trial-over') {
+      // A guest whose trial window ended (nothing legacy about it).
+      store.run(
+        "UPDATE web_guest_retention SET state='active',started_at=?,expires_at=?,revision=revision+1 WHERE principal_id=?",
+        now - 30 * 86_400_000,
+        now - 23 * 86_400_000,
+        input.principalId,
+      );
+      return Response.json({ over: true });
+    }
     if (path === '/fixture/cross/rewind-refill') {
       // A UTC midnight passed since the last refill: the (player, day) rows move one day back.
       store.run("UPDATE web_entitlement_refills SET day=date(day,'-1 day') WHERE principal_id=?", input.principalId);

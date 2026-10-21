@@ -635,7 +635,13 @@ test('signup flag off: signup and reset refuse, nothing is sent, and login still
   for (const accounts of [closed, f.accounts])
     assert.throws(
       () =>
-        accounts.requestCode({ purpose: 'bind', email: 'x@example.com', ipHash: IP, origin, session: f.guest().session }),
+        accounts.requestCode({
+          purpose: 'bind',
+          email: 'x@example.com',
+          ipHash: IP,
+          origin,
+          session: f.guest().session,
+        }),
       code('INVALID_REQUEST'),
     );
   await assert.rejects(
@@ -904,7 +910,9 @@ test('login and reset refuse a principal that is not a guest, after the right pa
   );
   // Back to a guest, everything works as before.
   f.store.run("UPDATE web_principals SET kind='guest' WHERE id=?", principalId);
-  f.identity.authenticate((await f.accounts.login({ email: 'legacy@example.com', password: PASSWORD, origin, ipHash: IP })).issuedToken);
+  f.identity.authenticate(
+    (await f.accounts.login({ email: 'legacy@example.com', password: PASSWORD, origin, ipHash: IP })).issuedToken,
+  );
 });
 
 test('dead cookies: unknown, malformed and revoked ones are clearable; a live one is not', async (t) => {

@@ -437,7 +437,10 @@ export class WebProviderApplication {
         remainingReplies: state.repliesLeft,
         reservedReplies: row.trial_reserved,
         trialExpiresAt,
-        canSend: state.balance >= cheapestReplyPoints(this.store, principal.principalId, now),
+        // An unlimited holder is never charged (admission: holderFree), so a zero balance never stops it.
+        canSend:
+          effectiveTier(this.store, principal.principalId, now)?.unlimited === true ||
+          state.balance >= cheapestReplyPoints(this.store, principal.principalId, now),
         inaccessible,
       };
     };

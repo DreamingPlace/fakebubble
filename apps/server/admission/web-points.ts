@@ -495,7 +495,8 @@ export function modelChoiceState(
 ): ModelChoiceState | null {
   const offered = offeredModels(store);
   if (!offered || !canChooseModel(store, principalId, now)) return null;
-  const metered = isRegistered(store, principalId);
+  // A daily_refill holder is charged in points (admission: holderPoints) whatever the free-tier switch says, so it is metered too.
+  const metered = isRegistered(store, principalId) || effectiveTier(store, principalId, now)?.kind === 'daily_refill';
   const allowed = tierModels(store, playerTier(store, principalId, now)!);
   const prices = currentPrices(store);
   return store.transaction(() => {

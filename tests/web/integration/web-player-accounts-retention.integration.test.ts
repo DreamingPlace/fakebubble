@@ -6,12 +6,10 @@ type Guest = { principalId: string; csrf: string; issuedToken: string };
 type State = { logins: number; challenges: number; cards: number };
 const origin = 'https://fixture.invalid';
 
-test('player-data retention removes a purged player’s login, challenges and nickname 名片 and leaves a protected invite’s untouched', async (t) => {
+test('player-data retention removes a purged player’s login, challenges and nickname 名片 and leaves an entitled player’s untouched', async (t) => {
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-retention-worker.ts', { STATE: 'WebRetentionFixture' }, [
     'MEDIA',
   ]);
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.call('/legacy-schema', {});
   await f.call('/assets');
   const guest = await f.call<Guest>('/bootstrap', {}),
     invited = await f.call<Guest>('/bootstrap', {});
@@ -25,20 +23,12 @@ test('player-data retention removes a purged player’s login, challenges and ni
         input: { requestId: 'retention-round', characterId: 'wei-guagua', text: '登录保留期清理' },
       })),
     });
-  const admin = await f.call<{ cookie: string; csrf: string }>('/admin');
-  const issued = await f.call<{ code: string }>('/issue', {
-    ...admin,
-    origin,
-    input: { requestId: 'retain-invite', redeemBy: null, accessDurationMs: null, batch: 'offline', note: null },
-  });
-  await f.call('/redeem', {
-    token: invited.issuedToken,
-    csrf: invited.csrf,
-    origin,
-    ipHash: 'a'.repeat(64),
-    input: { code: issued.code, requestId: 'retain-redeem' },
-  });
-  for (const actor of [guest, invited]) await f.call('/retention/seed-logins', actor);
+  // Named exception (Part 22x): the legacy invite redemption is gone; the kept player holds an unlimited entitlement instead.
+  await f.call('/retention/entitle', { principalId: invited.principalId });
+  // Named exception (Part 22x): an entitled player is kept like any registered player (180 idle days), not 'protected' for ever,
+  // so it is seeded as recently seen; the guest keeps the default 181 idle days.
+  await f.call('/retention/seed-logins', guest);
+  await f.call('/retention/seed-logins', { ...invited, lastSeenAgoMs: 0 });
   assert.deepEqual(await f.call<State>('/retention/login-state', guest), { logins: 1, challenges: 2, cards: 1 });
 
   await f.call('/retention/expire', guest);
@@ -49,6 +39,6 @@ test('player-data retention removes a purged player’s login, challenges and ni
   assert.deepEqual(
     await f.call<State>('/retention/login-state', invited),
     { logins: 1, challenges: 2, cards: 1 },
-    'the protected invite keeps its login, challenges and nickname',
+    'the entitled player keeps its login, challenges and nickname',
   );
 });

@@ -21,10 +21,7 @@ const NOW = 1_800_000_000_000;
 const DAY = 86_400_000;
 const characterId = 'fixture-character';
 const sql126 = () =>
-  readFileSync(
-    new URL('../../../apps/server/web-migrations/126_legacy_invites_retired.sql', import.meta.url),
-    'utf8',
-  );
+  readFileSync(new URL('../../../apps/server/web-migrations/126_legacy_invites_retired.sql', import.meta.url), 'utf8');
 
 /** The shapes production holds at schema 125: a legacy 'invite' principal is protected and carries a grant. */
 function legacyDatabase(t: test.TestContext) {
@@ -131,8 +128,7 @@ test('126 a legacy invite principal WITH an email login is a registered player; 
   // No principal is of kind 'invite' any more, and the old tables are exactly as they were.
   assert.equal(store.get<{ n: number }>("SELECT count(*) n FROM web_principals WHERE kind='invite'")!.n, 0);
   assert.deepEqual(store.all('SELECT * FROM web_invite_grants ORDER BY id'), grants);
-  const kind = (id: string) =>
-    store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', id)!.kind;
+  const kind = (id: string) => store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', id)!.kind;
   for (const who of [withLogin, without, purging, guest, registered]) assert.equal(kind(who.principalId), 'guest');
   const state = (id: string) =>
     store.get<{ state: string; started_at: number | null; expires_at: number | null }>(
@@ -183,8 +179,11 @@ test('126 a legacy invite principal WITH an email login is a registered player; 
     [guest, 'guest'],
   ] as const)
     assert.equal(
-      store.get<{ tier: string }>(`SELECT ${tier.sql} AS tier FROM web_principals p WHERE p.id=?`, ...tier.args, who.principalId)!
-        .tier,
+      store.get<{ tier: string }>(
+        `SELECT ${tier.sql} AS tier FROM web_principals p WHERE p.id=?`,
+        ...tier.args,
+        who.principalId,
+      )!.tier,
       expected,
     );
 });
@@ -212,6 +211,10 @@ test('126 no business decision reads principal kind invite', () => {
   ];
   for (const file of files) {
     const source = readFileSync(new URL(`../../../${file}`, import.meta.url), 'utf8');
-    assert.doesNotMatch(source, /kind\s*(===|!==|=)\s*'invite'|kind='invite'|kind\s*=\s*'invite'|'guest' \| 'invite'/, file);
+    assert.doesNotMatch(
+      source,
+      /kind\s*(===|!==|=)\s*'invite'|kind='invite'|kind\s*=\s*'invite'|'guest' \| 'invite'/,
+      file,
+    );
   }
 });

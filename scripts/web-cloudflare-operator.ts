@@ -90,8 +90,7 @@ export function webOperatorArguments(argv: string[]): WebOperatorArguments {
   ensure(actions.includes(action), 'WEB_OPERATOR_ACTION_REQUIRED');
   const allowed = ['action', 'receipt-file', 'business-service', 'budget-service'];
   if (['initialize', 'asset', 'budget-initialize'].includes(action)) allowed.push('input-file');
-  if (action.endsWith('-object-id') || action === 'admin-recovery-grant')
-    allowed.push('name');
+  if (action.endsWith('-object-id') || action === 'admin-recovery-grant') allowed.push('name');
   ensure(
     [...values.keys()].every((key) => allowed.includes(key)),
     'WEB_OPERATOR_ARGUMENT_INVALID',

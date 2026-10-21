@@ -410,7 +410,11 @@ try {
   ]);
   const retired = new Client();
   retired.cookie = oldCookie;
-  assert.equal((await retired.call('GET', '/api/web/local/bootstrap')).status, 401, 'the rotated cookie is simply dead');
+  assert.equal(
+    (await retired.call('GET', '/api/web/local/bootstrap')).status,
+    401,
+    'the rotated cookie is simply dead',
+  );
   // The sealed-receipt routes are retired: nothing can bring the old cookie back.
   assert.equal(
     (await alice.call('POST', '/api/web/local/identity/receipt-status', { requestId: 'register-1' })).status,

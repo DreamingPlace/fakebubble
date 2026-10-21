@@ -46,29 +46,36 @@ const cleared = (state: State) => {
   assert.ok(state.objects.every((row) => row.erased && row.size === 0 && row.type === 'application/x-web-erased'));
 };
 
-test('cloud retention erases guest SQL/R2 content, preserves bills/IP quota, fixed clips and protected invite history', async (t) => {
+test('cloud retention erases guest SQL/R2 content, preserves bills/IP quota, fixed clips and a registered entitled player’s history', async (t) => {
   const f = setup(t),
     fixed = await f.call<string[]>('/assets');
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.call('/legacy-schema', {});
   const guest = await f.call<Guest>('/bootstrap', {}),
     invited = await f.call<Guest>('/bootstrap', {});
   for (const actor of [guest, invited]) {
     const op = await admit(f, actor);
     await f.call('/run', op);
   }
+  // Named exception (Part 22x): the protected player is a signed-up one holding an entitlement (the legacy invite is gone).
   const admin = await f.call<{ cookie: string; csrf: string }>('/admin');
-  const issued = await f.call<{ code: string }>('/issue', {
+  const batch = await f.call<{ codes: string[] }>('/batch', {
     ...admin,
     origin,
-    input: { requestId: 'retain-invite', redeemBy: null, accessDurationMs: null, batch: 'offline', note: null },
+    input: {
+      requestId: 'retain-batch',
+      name: 'offline',
+      count: 1,
+      tier: { kind: 'unlimited' },
+      durationDays: null,
+      redeemBy: null,
+    },
   });
+  await f.call('/login', { token: invited.issuedToken });
   await f.call('/redeem', {
     token: invited.issuedToken,
     csrf: invited.csrf,
     origin,
     ipHash: 'a'.repeat(64),
-    input: { code: issued.code, requestId: 'retain-redeem' },
+    input: { code: batch.codes[0], requestId: 'retain-redeem' },
   });
   // A stated player fact is user content: the guest's is purged with the rest, the protected invite's stays.
   for (const actor of [guest, invited]) await f.call('/retention/seed-fact', actor);
@@ -102,7 +109,14 @@ test('cloud retention erases guest SQL/R2 content, preserves bills/IP quota, fix
   assert.equal(replay.conflict, 'WEB_PROVIDER_RECEIPT_CONFLICT');
   assert.deepEqual((await f.call<State>('/retention/state', guest)).attempts, before.attempts);
   assert.deepEqual(await f.call('/counts'), counts);
-  assert.deepEqual(await f.call('/retention/state', invited), { ...protectedState, due: null });
+  // Named exception (Part 22x): a registered player is kept by the login rule, not "protected" with no due date, so the whole
+  // state must be unchanged; the only difference is the next due date, which is now the registered player's own later date.
+  const keptState = await f.call<State>('/retention/state', invited);
+  assert.deepEqual({ ...keptState, due: 0 }, { ...protectedState, due: 0 });
+  assert.ok(
+    keptState.due !== null && keptState.due > (protectedState.due ?? 0),
+    'a later due date than the purged guest',
+  );
   for (const index of [0, 2, 4]) await f.call('/welcome', { mediaId: fixed[index] });
   await f.restart();
   assert.deepEqual(await f.call('/retention/sweep'), { processed: 0, failed: 0, error: null });

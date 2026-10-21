@@ -169,8 +169,7 @@ export class WebAdmission {
       // bonus accounting is not consulted for it. Part 21f: it ALWAYS pays points, whatever the model: the guest trial path is
       // never used (its unused trial replies were converted into the opening balance). Everyone else, and every deployment
       // with the flag off, takes the path above unchanged.
-      const pointsMode =
-        holderPoints || (trial && tier.on && hasPoints(this.store, principal.id, this.clock.now()));
+      const pointsMode = holderPoints || (trial && tier.on && hasPoints(this.store, principal.id, this.clock.now()));
       let free: 'trial' | 'extra' | 'bonus' | 'points' =
         trial && tier.on && !pointsMode && !holderFree
           ? this.pickFreeEntitlement(principal, input, retention)
@@ -537,7 +536,8 @@ export class WebAdmission {
     return this.store.transaction(() => {
       ensure(
         ![
-          104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126,
+          104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
+          126,
         ].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1),
         'WEB_DISPATCH_FENCE_REQUIRED',
       );

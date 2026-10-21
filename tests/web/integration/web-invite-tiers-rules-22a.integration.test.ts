@@ -151,8 +151,10 @@ test('22a one revoke ends the entitlement and nothing else: the player stays sig
   assert.equal(effectiveTier(f.store, who.principalId, f.clock())!.kind, 'unlimited');
   assert.deepEqual(f.tiers.revokeEntitlement(sid, inviteId), { inviteId, duplicate: false });
   assert.notEqual(
-    f.store.get<{ revoked_at: number | null }>('SELECT revoked_at FROM web_entitlements WHERE principal_id=?', who.principalId)!
-      .revoked_at,
+    f.store.get<{ revoked_at: number | null }>(
+      'SELECT revoked_at FROM web_entitlements WHERE principal_id=?',
+      who.principalId,
+    )!.revoked_at,
     null,
   );
   assert.equal(
@@ -174,5 +176,8 @@ test('22a one revoke ends the entitlement and nothing else: the player stays sig
   assert.deepEqual(f.tiers.revokeEntitlement(sid, inviteId), { inviteId, duplicate: true });
   f.finish(f.admit(who.principalId, 'after').operationId, 'published');
   assert.ok(f.balance(who.principalId)! < 77, 'now charged like any registered player');
-  assert.equal(code(() => f.tiers.revokeEntitlement(sid, 'no-such-code')), 'WEB_INVITE_UNAVAILABLE');
+  assert.equal(
+    code(() => f.tiers.revokeEntitlement(sid, 'no-such-code')),
+    'WEB_INVITE_UNAVAILABLE',
+  );
 });

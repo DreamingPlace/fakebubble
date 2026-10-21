@@ -374,7 +374,16 @@ export class WebLocalServer {
         conversations,
         activeOperations,
         syncCursor: this.cursor(principal.principalId, high),
-        unsupported: ['invite', 'login', 'account-recovery', 'trial-archive', 'read', 'listened', 'admin', 'text-delivery'],
+        unsupported: [
+          'invite',
+          'login',
+          'account-recovery',
+          'trial-archive',
+          'read',
+          'listened',
+          'admin',
+          'text-delivery',
+        ],
       };
     });
     if (issued) this.setCookie(res, issued);

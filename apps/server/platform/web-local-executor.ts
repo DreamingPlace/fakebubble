@@ -176,10 +176,7 @@ export class WebLocalExecutor {
       metering_type: string;
       principal_id: string;
       world_id: string;
-    }>(
-      `SELECT metering_type,principal_id,world_id FROM web_operations WHERE id=?`,
-      operationId,
-    );
+    }>(`SELECT metering_type,principal_id,world_id FROM web_operations WHERE id=?`, operationId);
     if (!operation) throw new DomainError('WEB_OPERATION_NOT_FOUND');
     requireWebContent(this.store, this.clock, operation.principal_id, operation.world_id);
     if (operation.metering_type === 'entitled') {

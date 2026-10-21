@@ -24,10 +24,7 @@ const answer =
     return Response.json(call.tool === DRAFT ? draftEnvelope(request) : acceptedAuditEnvelope(request));
   };
 
-export type Shape =
-  | 'login-only-old'
-  | 'guest-bonus-past-window'
-  | 'plain-guest-past-window';
+export type Shape = 'login-only-old' | 'guest-bonus-past-window' | 'plain-guest-past-window';
 
 /** Rewrites the fixture's principal (a guest with a bonus inside its window) into the production shape under test. */
 export function applyShape(store: ReturnType<typeof modelFixture>['store'], shape: Shape, now: number) {

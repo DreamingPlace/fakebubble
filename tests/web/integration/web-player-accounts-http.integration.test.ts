@@ -66,7 +66,7 @@ function setup(t: test.TestContext) {
 }
 const a = (path: string) => `${API}/account${path}`;
 
-test('accounts over real HTTP: signup, login on a second device, reset, dead cookies, redeem gate and revoked grants', async (t) => {
+test('accounts over real HTTP: signup, login on a second device, reset, dead cookies, redeem gate', async (t) => {
   const f = setup(t);
   await f.fixture('/fixture/assets');
   const first = client(),
@@ -165,7 +165,6 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
     hasLogin: true,
     emailMasked: 'p***@example.com',
     nickname: '阿泡',
-    canBind: false,
     // Named exception (Part 22a): a signed-up player now also gets its 玩家编号 (8 Crockford characters) in this answer.
     playerNumber: info.playerNumber,
     // Named exception (Part 22a follow-up): the answer carries the EFFECTIVE tier; the page decides nothing from the principal kind.
@@ -225,7 +224,6 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
     hasLogin: false,
     emailMasked: null,
     nickname: null,
-    canBind: false,
     // Named exception (Part 22a follow-up): the answer carries the EFFECTIVE tier.
     tier: { kind: 'guest', unlimited: false },
   });
@@ -282,10 +280,12 @@ test('accounts over real HTTP: signup, login on a second device, reset, dead coo
   assert.equal((await f.call(a(''), stranger)).signedIn, false);
 });
 
-test('redeeming needs a login while signup is open, a revoked grant blocks future logins, and the admin sees a masked address only', async (t) => {
+// Named exception (Part 22x): this test covered the legacy invite (a kind-'invite' grant, recovery code, 玩家授权 records and a
+// revoked grant ending every session). That system is gone; what still applies - redeeming needs a login, the same principal
+// keeps its chats, a second device logs in to it, the login survives an ended entitlement, signup closed stops sending - is
+// asserted for the entitlement code flow.
+test('redeeming needs a login, an ended entitlement leaves the login working, and closed signup stops sending', async (t) => {
   const f = setup(t);
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.fixture('/fixture/players', { signupEnabled: true });
   const owner = client(),
@@ -295,12 +295,19 @@ test('redeeming needs a login while signup is open, a revoked grant blocks futur
   const issue = async () =>
     (
       await f.call(
-        `${API}/admin/invites/issue`,
+        `${API}/admin/invites/batch-create`,
         owner,
-        { requestId: randomUUID(), redeemBy: null, accessDurationMs: null, batch: '春季内测', note: null },
+        {
+          requestId: randomUUID(),
+          name: '春季内测',
+          count: 1,
+          tier: { kind: 'unlimited' },
+          durationDays: null,
+          redeemBy: null,
+        },
         201,
       )
-    ).code as string;
+    ).codes[0] as string;
   await f.call(`${API}/bootstrap`, player);
   const code = await issue();
   // A guest without a login is sent to 注册 first; nothing is redeemed.
@@ -315,44 +322,34 @@ test('redeeming needs a login while signup is open, a revoked grant blocks futur
   await f.call(a('/signup'), player, { challengeId: challenge.challengeId, password: PASSWORD, nickname: '受邀者' });
   const principal = (await f.call(`${API}/bootstrap`, player)).access.principalId as string;
   const redeemed = await f.call(`${API}/invites/redeem`, player, { requestId: randomUUID(), code }, 201);
-  assert.equal(redeemed.principalId, principal, 'same principal: the chats stay');
+  assert.equal(redeemed.entitlement.kind, 'unlimited');
   const booted = await f.call(`${API}/bootstrap`, player);
-  assert.equal(booted.access.kind, 'invite');
-  assert.match(f.seen.at(-1)!, /Max-Age=34560000$/);
-  // No recovery code for a player with a login.
-  assert.equal(
-    (await f.call(`${API}/invites/credential-regenerate`, player, {}, 409)).error.code,
-    'PLAYER_LOGIN_EXISTS',
-  );
-  assert.equal((await f.call(a(''), player)).hasLogin, true);
-  // The administrator sees the login masked and nothing else of it.
-  const records = await f.call(`${API}/admin/invites/list`, owner, { beforeId: null });
-  const record = records.records.find((r: any) => r.grantId === redeemed.grantId);
-  assert.equal(record.loginEmailMasked, 'i***@example.com');
-  assert.ok(!JSON.stringify(records).includes('invitee@example.com'));
-  assert.ok(!JSON.stringify(records).includes(PASSWORD));
+  assert.equal(booted.access.principalId, principal, 'same principal: the chats stay');
+  assert.equal(booted.access.kind, 'guest', 'redemption never changes the principal kind');
+  const info = await f.call(a(''), player);
+  assert.equal(info.hasLogin, true);
+  assert.equal(info.tier.kind, 'unlimited');
 
-  // 退出其他设备 then login elsewhere; an administrator revoking the grant ends every session and blocks the login.
+  // A second device logs in to the same principal.
   await f.call(a('/login'), other, { email, password: PASSWORD });
   assert.equal((await f.call(`${API}/bootstrap`, other)).access.principalId, principal);
-  await f.call(`${API}/admin/invites/revoke-grant`, owner, { id: redeemed.grantId });
-  for (const dead of [player, other]) assert.equal((await f.request(`${API}/bootstrap`, dead)).status, 401);
-  const refused = await f.call(a('/login'), client(), { email, password: PASSWORD }, 403);
-  assert.equal(refused.error.code, 'PLAYER_ACCESS_REVOKED');
+  // The entitlement ends: nobody is signed out, the login and the wrong-password answer are as before, the entitlement tier is gone.
+  await f.fixture('/fixture/revoke-entitlement', { principalId: principal });
+  for (const live of [player, other]) assert.equal((await f.request(`${API}/bootstrap`, live)).status, 200);
+  // (This fixture runs with the free tier off, so a login alone is a guest again - never unlimited.)
+  assert.equal((await f.call(a(''), player)).tier.kind, 'guest');
+  await f.call(a('/login'), client(), { email, password: PASSWORD });
   assert.equal(
     (await f.call(a('/login'), client(), { email, password: 'wrong password' }, 401)).error.code,
     'PLAYER_PASSWORD_WRONG',
   );
 
-  // Signup closed again: sending stops and redeeming is as it was (no login required).
+  // Signup closed again: sending stops.
   await f.fixture('/fixture/players', { signupEnabled: false });
   assert.equal(
     (await f.call(a('/request-code'), client(), { purpose: 'reset', email }, 403)).error.code,
     'PLAYER_SIGNUP_DISABLED',
   );
-  const plain = client();
-  await f.call(`${API}/bootstrap`, plain);
-  await f.call(`${API}/invites/redeem`, plain, { requestId: randomUUID(), code: await issue() }, 201);
 });
 
 test('the daily cap stops sending over HTTP with a 429 and the same envelope', async (t) => {

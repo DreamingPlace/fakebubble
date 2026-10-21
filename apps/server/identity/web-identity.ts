@@ -211,9 +211,7 @@ export class WebIdentity {
     );
   }
   private withinLifetime(row: SessionRow, now: number) {
-    return (
-      now < row.absolute_expires_at || this.inGrace(row, now)
-    );
+    return now < row.absolute_expires_at || this.inGrace(row, now);
   }
   private activeSession(token: string, now: number) {
     const row = this.sessionFor(token);
@@ -437,10 +435,7 @@ export class WebIdentity {
     const session = this.activeSession(token, this.now());
     this.writeAuth(session, csrf, origin);
     const principal = this.authenticate(token);
-    ensure(
-      session.account_id === null && principal.kind === 'guest',
-      'WEB_GUEST_REQUIRED',
-    );
+    ensure(session.account_id === null && principal.kind === 'guest', 'WEB_GUEST_REQUIRED');
     return {
       sessionId: session.id,
       principalId: principal.principalId,

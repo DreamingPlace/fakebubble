@@ -58,7 +58,9 @@ test('provider api keeps CSRF in memory, maps errors and recovers an uncertain s
   assert.equal((await api.byRequest('r1')).operationId, 'op');
   assert.equal(calls[2]!.url, '/api/web/provider/operations/by-request/r1');
 
-  replies.push(Response.json({ entitlement: { kind: 'unlimited', expiresAt: null }, duplicate: false }, { status: 201 }));
+  replies.push(
+    Response.json({ entitlement: { kind: 'unlimited', expiresAt: null }, duplicate: false }, { status: 201 }),
+  );
   assert.deepEqual(await api.redeemInvite({ requestId: 'r2', code: 'CODE' }), {
     entitlement: { kind: 'unlimited', expiresAt: null },
     duplicate: false,

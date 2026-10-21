@@ -3,7 +3,10 @@ import type { TestContext } from 'node:test';
 import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
 import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
 import { WebInviteTiers } from '../../../apps/server/invites/web-invite-tiers.ts';
-import { migrateWebProviderInviteTiers, migrateWebProviderLegacyInvites } from '../../../apps/server/generation/web-provider-migration.ts';
+import {
+  migrateWebProviderInviteTiers,
+  migrateWebProviderLegacyInvites,
+} from '../../../apps/server/generation/web-provider-migration.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
 import { enableModelChoice } from './model-choice.ts';
 import { schema124 } from './model-settings.ts';

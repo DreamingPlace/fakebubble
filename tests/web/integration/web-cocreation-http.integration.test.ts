@@ -58,8 +58,6 @@ test('co-creation over real HTTP: open to every session, idempotent, limited per
     nobody = client(),
     guest = client(),
     invited = client();
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.call(`${API}/admin/login`, owner, { token: (await f.fixture<{ token: string }>('/fixture/grant')).token });
   const issue = (label: string, permissions: string[]) =>
@@ -68,14 +66,11 @@ test('co-creation over real HTTP: open to every session, idempotent, limited per
   await f.call(`${API}/admin/login`, nobody, { token: (await issue('nobody', ['category.characters'])).token });
 
   await f.call(`${API}/bootstrap`, guest);
-  await f.call(`${API}/bootstrap`, invited);
-  const code = await f.call(
-    `${API}/admin/invites/issue`,
-    owner,
-    { requestId: randomUUID(), redeemBy: null, accessDurationMs: null, batch: '春季内测', note: null },
-    201,
-  );
-  await f.call(`${API}/invites/redeem`, invited, { requestId: randomUUID(), code: code.code }, 201);
+  // Named exception (Part 22x): the invited player is a signed-up one holding a redeemed code (legacy redemption is gone).
+  await f.fixture('/fixture/entitle', {
+    principalId: (await f.call(`${API}/bootstrap`, invited)).access.principalId,
+    batch: '春季内测',
+  });
   const principal = (await f.call(`${API}/bootstrap`, invited)).access.principalId as string;
 
   const submit = (actor: Client, body: unknown, status = 201, headers: Record<string, string> = {}) =>

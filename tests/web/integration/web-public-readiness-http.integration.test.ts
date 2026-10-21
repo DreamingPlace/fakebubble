@@ -87,6 +87,7 @@ type State = {
   cards: number;
   liveSessions: number;
   grants: { revoked: number }[];
+  entitlements: number;
   audit: { actor_id: string | null; action: string; target_id: string }[];
 };
 
@@ -288,39 +289,26 @@ test('B: a fresh signed-up player deletes the account and the audit stays clean'
     assert.ok(!dump.includes(leak), `the audit and state must not contain ${leak}`);
 });
 
-test('B: an invited player deletes the account: the grant is revoked and the data goes', async (t) => {
+test('B: an entitled player deletes the account: the entitlement and the data go', async (t) => {
   const f = setup(t);
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.fixture('/fixture/players', { signupEnabled: true, accountDelete: true });
-  const owner = client(),
-    player = client();
-  await f.call(`${API}/admin/login`, owner, { token: (await f.fixture<{ token: string }>('/fixture/grant')).token });
-  const code = (
-    await f.call(
-      `${API}/admin/invites/issue`,
-      owner,
-      { requestId: randomUUID(), redeemBy: null, accessDurationMs: null, batch: '删除测试', note: null },
-      201,
-    )
-  ).code as string;
+  const player = client();
   const principalId = (await f.call(`${API}/bootstrap`, player)).access.principalId as string;
-  // Invited players without a login cannot delete: the password is the proof.
   await signUp(f, player, 'invitee@example.com', '受邀者');
-  await f.call(`${API}/invites/redeem`, player, { requestId: randomUUID(), code }, 201);
-  assert.equal((await f.call(`${API}/bootstrap`, player)).access.kind, 'invite');
+  // Named exception (Part 22x): the code is held as an entitlement (legacy redemption is gone); deletion removes it with the
+  // rest of the player's data instead of revoking a grant.
+  await f.fixture('/fixture/entitle', { principalId });
   await send(f, player, '受邀聊天').catch(() => {});
   const before = await f.fixture<State>('/fixture/player-state', { principalId });
-  assert.equal(before.grants.length, 1);
-  assert.equal(before.grants[0]!.revoked, 0);
+  assert.equal(before.entitlements, 1);
 
   const deleted = await f.call(a('/delete'), player, { password: PASSWORD, confirm: '删除' });
   assert.deepEqual(deleted, { deleted: true, complete: true });
   const after = await f.fixture<State>('/fixture/player-state', { principalId });
   assert.equal(after.retention.state, 'purged');
   assert.deepEqual([after.messages, after.logins, after.cards, after.liveSessions], [0, 0, 0, 0]);
-  assert.equal(after.grants[0]!.revoked, 1, 'the grant is revoked as part of the deletion');
+  assert.equal(after.entitlements, 0, 'the entitlement goes as part of the deletion');
   assert.deepEqual(await f.fixture('/fixture/audit-world', { principalId }), { clean: true, loginsRemain: false });
   assert.equal(
     (await f.call(a('/login'), client(), { email: 'invitee@example.com', password: PASSWORD }, 401)).error.code,

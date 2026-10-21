@@ -59,10 +59,7 @@ export function findDeadExports(allow: Allow[] = []): DeadExport[] {
   };
   const sources = new Map<string, ts.SourceFile>();
   for (const file of files)
-    sources.set(
-      file,
-      ts.createSourceFile(file, readFileSync(join(root, file), 'utf8'), ts.ScriptTarget.Latest, true),
-    );
+    sources.set(file, ts.createSourceFile(file, readFileSync(join(root, file), 'utf8'), ts.ScriptTarget.Latest, true));
 
   for (const file of files) {
     if (isTest(file)) continue;
@@ -70,8 +67,7 @@ export function findDeadExports(allow: Allow[] = []): DeadExport[] {
     for (const node of sources.get(file)!.statements) {
       if (ts.isVariableStatement(node)) {
         if (exported(node))
-          for (const d of node.declarationList.declarations)
-            for (const bound of boundNames(d.name)) names.add(bound);
+          for (const d of node.declarationList.declarations) for (const bound of boundNames(d.name)) names.add(bound);
       } else if (ts.isExportDeclaration(node)) {
         const clause = node.exportClause;
         if (!node.isTypeOnly && clause && ts.isNamedExports(clause))
@@ -109,7 +105,9 @@ export function findDeadExports(allow: Allow[] = []): DeadExport[] {
         const clause = node.exportClause;
         if (target && !node.isTypeOnly) {
           if (!clause || ts.isNamespaceExport(clause)) mark(target, '*', fromTest);
-          else for (const el of clause.elements) if (!el.isTypeOnly) mark(target, (el.propertyName ?? el.name).text, fromTest);
+          else
+            for (const el of clause.elements)
+              if (!el.isTypeOnly) mark(target, (el.propertyName ?? el.name).text, fromTest);
         }
       } else if (
         ts.isCallExpression(node) &&
@@ -129,7 +127,8 @@ export function findDeadExports(allow: Allow[] = []): DeadExport[] {
           const parent = node.parent;
           const target = namespaces.get(node.text)!;
           if (ts.isNamespaceImport(parent)) return;
-          if (ts.isPropertyAccessExpression(parent) && parent.expression === node) mark(target, parent.name.text, fromTest);
+          if (ts.isPropertyAccessExpression(parent) && parent.expression === node)
+            mark(target, parent.name.text, fromTest);
           else mark(target, '*', fromTest);
         }
         ts.forEachChild(node, walk);
@@ -145,7 +144,11 @@ export function findDeadExports(allow: Allow[] = []): DeadExport[] {
       if (ts.isIdentifier(node) && node.text === name) {
         const parent = node.parent;
         const declaration =
-          ((ts.isFunctionDeclaration(parent) || ts.isClassDeclaration(parent) || ts.isEnumDeclaration(parent) || ts.isVariableDeclaration(parent)) && parent.name === node) ||
+          ((ts.isFunctionDeclaration(parent) ||
+            ts.isClassDeclaration(parent) ||
+            ts.isEnumDeclaration(parent) ||
+            ts.isVariableDeclaration(parent)) &&
+            parent.name === node) ||
           ts.isExportSpecifier(parent) ||
           ts.isImportSpecifier(parent) ||
           (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
@@ -172,9 +175,12 @@ export function findDeadExports(allow: Allow[] = []): DeadExport[] {
 }
 
 export function loadAllowList(): Allow[] {
-  const raw = JSON.parse(readFileSync(join(root, 'config/dead-exports-allowlist.json'), 'utf8')) as { entries: Allow[] };
+  const raw = JSON.parse(readFileSync(join(root, 'config/dead-exports-allowlist.json'), 'utf8')) as {
+    entries: Allow[];
+  };
   for (const entry of raw.entries)
-    if (typeof entry.reason !== 'string' || entry.reason.length < 10) throw new Error(`allow-list entry ${entry.file} needs a reason`);
+    if (typeof entry.reason !== 'string' || entry.reason.length < 10)
+      throw new Error(`allow-list entry ${entry.file} needs a reason`);
   return raw.entries;
 }
 

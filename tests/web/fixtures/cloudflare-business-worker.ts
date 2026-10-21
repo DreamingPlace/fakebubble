@@ -222,6 +222,10 @@ export class WebBusinessFixture {
         value = { principalId: principal.principalId };
       } else if (path === '/redeem')
         value = this.actions.redeemTier(body.token, body.csrf, body.origin, body.ipHash, body.input);
+      else if (path === '/code-ids')
+        value = this.store
+          .all<{ id: string }>('SELECT id FROM web_invite_codes WHERE batch_id=? ORDER BY id', body.batchId)
+          .map((r) => r.id);
       else if (path === '/revoke')
         value = this.actions.revokeEntitlement(body.cookie, body.csrf, body.origin, body.inviteId);
       else if (path === '/content') {

@@ -6,7 +6,7 @@ import { ProviderApi } from '../../../apps/player-web/src/services/provider-api.
 import { ProviderInviteController } from '../../../apps/player-web/src/session/provider-invite-controller.ts';
 
 for (const loss of ['cookie-and-body', 'body-only', 'no-request'] as const) {
-  test(`provider client recovers ${loss} with persistent HTTP/SQLite/R2, no second redeem`, async (t) => {
+  test(`provider client recovers ${loss} with persistent HTTP/SQLite/R2, one entitlement`, async (t) => {
     const runtime = localRuntime(
       t,
       'tests/web/fixtures/cloudflare-http-worker.ts',
@@ -15,8 +15,6 @@ for (const loss of ['cookie-and-body', 'body-only', 'no-request'] as const) {
       [],
       ['enable_request_signal'],
     );
-    // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-    await runtime.call('/fixture/schema-124');
     const origin = 'https://fixture.invalid',
       base = '/api/web/provider';
     const grant = await runtime.call<{ token: string }>('/fixture/grant');
@@ -28,7 +26,7 @@ for (const loss of ['cookie-and-body', 'body-only', 'no-request'] as const) {
     assert.equal(login.status, 200);
     const adminCookie = login.headers.get('set-cookie')!.split(';')[0]!,
       admin = (await login.json()) as { csrf: string };
-    const issued = await runtime.request(origin + base + '/admin/invites/issue', {
+    const issued = await runtime.request(origin + base + '/admin/invites/batch-create', {
       method: 'POST',
       headers: {
         'x-fixture-host': 'fixture.invalid',
@@ -39,14 +37,15 @@ for (const loss of ['cookie-and-body', 'body-only', 'no-request'] as const) {
       },
       body: JSON.stringify({
         requestId: randomUUID(),
+        name: 'offline-receipt',
+        count: 1,
+        tier: { kind: 'unlimited' },
+        durationDays: null,
         redeemBy: null,
-        accessDurationMs: null,
-        batch: 'offline-receipt',
-        note: null,
       }),
     });
     assert.equal(issued.status, 201);
-    const { code } = (await issued.json()) as { code: string };
+    const code = ((await issued.json()) as { codes: string[] }).codes[0]!;
     let cookie = '',
       lose = true;
     const calls: { path: string; requestId?: string }[] = [];
@@ -77,6 +76,8 @@ for (const loss of ['cookie-and-body', 'body-only', 'no-request'] as const) {
       return new Response(bytes, { status: response.status, headers: Object.fromEntries(response.headers) });
     });
     let view = await api.bootstrap();
+    // A player redeems a code only when signed up: give this principal its email login directly.
+    await runtime.call('/fixture/login', { principalId: view.access.principalId });
     const original = structuredClone(view),
       stats = await runtime.call<any>('/fixture/stats');
     let installed = 0;
@@ -96,22 +97,29 @@ for (const loss of ['cookie-and-body', 'body-only', 'no-request'] as const) {
     await runtime.restart();
     const recovery = controller.recover();
     assert.equal(await controller.recover(), false);
-    assert.equal(await recovery, loss !== 'no-request', JSON.stringify({ state: controller.state, calls }));
+    // Named exception (Part 22x): every loss is settled by the same request (the old no-request case had nothing to recover).
+    assert.equal(await recovery, true, JSON.stringify({ state: controller.state, calls }));
     assert.equal(await controller.redeem(code), false);
-    assert.equal(installed, loss === 'no-request' ? 0 : 1);
+    assert.equal(installed, 1);
     assert.equal(view.access.principalId, original.access.principalId);
     assert.equal(view.access.worldId, original.access.worldId);
-    if (loss !== 'no-request') {
-      assert.equal(view.access.kind, 'invite');
+    {
+      // Named exception (Part 22x): redeeming adds an entitlement; the principal stays what it was (a guest) and its session is
+      // the same one, so there is no receipt and no recovery route: the lost answer is settled by asking again, same requestId.
+      assert.equal(view.access.kind, 'guest');
       assert.equal(view.access.canSend, true);
       await runtime.restart();
       assert.deepEqual((await api.bootstrap()).access, view.access);
     }
     const redemption = calls.filter((c) => c.path.endsWith('/invites/redeem'));
-    assert.equal(redemption.length, 1);
-    const recoveryCalls = calls.filter((c) => c.path.endsWith('/invite-receipt-recover'));
-    assert.equal(recoveryCalls.length, loss === 'cookie-and-body' ? 1 : 0);
+    assert.equal(redemption.length, 2, 'the lost attempt and its recovery');
+    assert.equal(redemption[0]!.requestId, redemption[1]!.requestId, 'the recovery repeats the same request');
+    assert.equal(calls.filter((c) => c.path.includes('receipt')).length, 0, 'no receipt route is used');
     for (const call of calls.filter((c) => c.requestId)) assert.equal(call.requestId, redemption[0]!.requestId);
+    const info = (await (
+      await runtime.request(origin + base + '/account', { headers: { 'x-fixture-host': 'fixture.invalid', cookie } })
+    ).json()) as { tier: { kind: string } };
+    assert.equal(info.tier.kind, 'unlimited', 'redeemed exactly once, whatever the loss');
     const after = await runtime.call<any>('/fixture/stats');
     assert.deepEqual(
       after,

@@ -140,7 +140,10 @@ export interface WebProviderSync {
 /** One principal-level SSE stream; each private event carries conversation and character scope. */
 export interface WebProviderActions {
   /** A signed-in player's code answers with the ENTITLEMENT it added. */
-  redeemInvite(input: { requestId: string; code: string }): Promise<{ entitlement: PlayerPlan | undefined; duplicate: boolean }>;
+  redeemInvite(input: {
+    requestId: string;
+    code: string;
+  }): Promise<{ entitlement: PlayerPlan | undefined; duplicate: boolean }>;
   bootstrap(): Promise<WebProviderBootstrap>;
   byRequest(requestId: string): Promise<WebProviderOperation>;
   operation(operationId: string): Promise<WebProviderOperation>;

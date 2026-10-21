@@ -6,7 +6,10 @@ import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
 import { effectiveTier } from '../../../apps/server/admission/web-model-settings.ts';
 import { PLAYER_NUMBER_PATTERN } from '../../../apps/server/admission/web-player-number.ts';
 import { Store, type WebStore } from '../../../apps/server/platform/store.ts';
-import { migrateWebProviderInviteTiers, migrateWebProviderLegacyInvites } from '../../../apps/server/generation/web-provider-migration.ts';
+import {
+  migrateWebProviderInviteTiers,
+  migrateWebProviderLegacyInvites,
+} from '../../../apps/server/generation/web-provider-migration.ts';
 import { registerSqlTextLoader } from '../../../scripts/web-sql-text.ts';
 import { enableModelChoice } from '../fixtures/model-choice.ts';
 import { schema124 } from '../fixtures/model-settings.ts';

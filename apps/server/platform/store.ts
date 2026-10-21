@@ -432,7 +432,7 @@ export class Store {
                         WEB_MODEL_SETTINGS_SCHEMA,
                         WEB_INVITE_TIERS_SCHEMA,
                         WEB_LEGACY_INVITES_SCHEMA,
-            WEB_LEGACY_INVITES_SCHEMA,
+                        WEB_LEGACY_INVITES_SCHEMA,
                       ]
                     : []),
                 ].includes(version)

@@ -261,8 +261,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     scope.worldId,
   );
   ensure(
-    access &&
-      (access.kind === 'guest' || (access.kind === 'account' && access.active === 1)),
+    access && (access.kind === 'guest' || (access.kind === 'account' && access.active === 1)),
     'WEB_V7_MEMORY_ENTITLEMENT_REQUIRED',
   );
   const recalls = recallsMemory(store, access.kind, operation.principal_id);

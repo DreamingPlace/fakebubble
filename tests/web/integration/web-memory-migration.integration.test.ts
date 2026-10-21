@@ -164,8 +164,8 @@ test('Cloudflare runner: an existing authority at 114 upgrades to 115 through th
     // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
     // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
     // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-  // Named exception (Part 22x, migration 126): the ledger has 51 steps and 126 is the newest, so step counts, positions counted
-  // from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+    // Named exception (Part 22x, migration 126): the ledger has 51 steps and 126 is the newest, so step counts, positions counted
+    // from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
     assert.equal(result.after.length, 51, mode);
     assert.equal(result.after.at(-12)?.startsWith('115:'), true, mode);
     assert.equal(result.after.at(-11)?.startsWith('116:'), true, mode);

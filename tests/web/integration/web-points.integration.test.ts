@@ -808,7 +808,6 @@ test('消费记录: a deployment without the feature gets 404; an invited player
   // Named exception (Part 22x): an entitled player is registered and has an account; what must hold is that it was never charged.
   assert.equal(f.balance(f.principalId), 100);
   assert.equal(f.events(f.principalId).filter((e) => e.source === 'spend').length, 0);
-
 });
 
 test('消费记录 pages by 50, newest first, only the last 90 days', (t) => {

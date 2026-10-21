@@ -7,7 +7,6 @@ interface Environment {
     status(): Promise<unknown>;
     inspect(): Promise<unknown>;
     adminGrant(): Promise<unknown>;
-    inviteGrants(id: string): Promise<unknown>;
     objectId(name: string): Promise<string>;
     fetch(request: Request): Promise<Response>;
   };
@@ -42,8 +41,6 @@ export default {
           return Response.json(await env.OPERATOR.inspect());
         case 'grant':
           return Response.json(await env.OPERATOR.adminGrant());
-        case 'invite-grants':
-          return Response.json(await env.OPERATOR.inviteGrants(value.body));
         case 'object-id':
           return Response.json(await env.OPERATOR.objectId('business'));
         case 'budget-initialize':

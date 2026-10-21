@@ -323,13 +323,30 @@ export class WebHTTPFixture extends WebBusinessFixture {
       this.enablePlayers(body.signupEnabled, body.dailyCap, body);
       return Response.json({ configured: true });
     }
+    if (path === '/fixture/login') {
+      // Part 22x: an email login on a principal (a signed-up player) without going through the mail flow, so a test can redeem
+      // a tier code over real HTTP.
+      const { principalId } = (await request.json()) as { principalId: string };
+      const now = this.clock.now();
+      this.store.run(
+        'INSERT OR IGNORE INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at,last_seen_at) VALUES (?,?,?,?,?,?)',
+        principalId,
+        `${principalId}@example.com`,
+        'x',
+        now,
+        now,
+        now,
+      );
+      return Response.json({ login: true });
+    }
     if (path === '/fixture/entitle') {
       // Part 22x: a signed-up player (email login) holding an unlimited entitlement - what a redeemed code gives a registered
       // player. Replaces redeeming a legacy invite in tests that only need a long-lived, kept, unlimited player.
-      const { principalId, kind, expiresAt } = (await request.json()) as {
+      const { principalId, kind, expiresAt, batch } = (await request.json()) as {
         principalId: string;
         kind?: 'unlimited';
         expiresAt?: number | null;
+        batch?: string;
       };
       const now = this.clock.now();
       this.store.transaction(() => {
@@ -342,15 +359,49 @@ export class WebHTTPFixture extends WebBusinessFixture {
           now,
           now,
         );
-        this.store.run(
-          "INSERT INTO web_entitlements(id,principal_id,source,kind,starts_at,expires_at,created_at) VALUES (?,?,'admin',?,?,?,?)",
-          `fixture:${principalId}`,
-          principalId,
-          kind ?? 'unlimited',
-          now - 1,
-          expiresAt ?? null,
-          now,
-        );
+        if (batch === undefined)
+          this.store.run(
+            "INSERT INTO web_entitlements(id,principal_id,source,kind,starts_at,expires_at,created_at) VALUES (?,?,'admin',?,?,?,?)",
+            `fixture:${principalId}`,
+            principalId,
+            kind ?? 'unlimited',
+            now - 1,
+            expiresAt ?? null,
+            now,
+          );
+        else {
+          // A redeemed code of a named batch: what an administrator sees as the only provenance of the player.
+          this.store.run(
+            'INSERT OR IGNORE INTO admin_sessions VALUES (?,?,?,?,NULL)',
+            'fixture-admin',
+            'h',
+            now,
+            now + 86_400_000,
+          );
+          this.store.run(
+            "INSERT OR IGNORE INTO web_invite_batches(id,name,tier,created_at) VALUES ('fixture:batch',?,'unlimited',1)",
+            batch,
+          );
+          this.store.run(
+            `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,capacity,redeemed_count,status,batch,created_by,created_at,batch_id)
+            VALUES (?,?,?,?,1,1,'active',?,'fixture-admin',1,'fixture:batch')`,
+            `fixture-code:${principalId}`,
+            `digest-${principalId}`,
+            `issue-${principalId}`,
+            'd',
+            batch,
+          );
+          this.store.run(
+            `INSERT INTO web_entitlements(id,principal_id,source,invite_id,batch_id,kind,starts_at,expires_at,created_at)
+            VALUES (?,?,'invite',?,'fixture:batch','unlimited',?,?,?)`,
+            `fixture:${principalId}`,
+            principalId,
+            `fixture-code:${principalId}`,
+            now - 1,
+            expiresAt ?? null,
+            now,
+          );
+        }
       });
       return Response.json({ entitlementId: `fixture:${principalId}` });
     }
@@ -550,6 +601,7 @@ export class WebHTTPFixture extends WebBusinessFixture {
           'SELECT revoked_at IS NOT NULL AS revoked FROM web_invite_grants WHERE principal_id=?',
           principalId,
         ),
+        entitlements: n('SELECT count(*) n FROM web_entitlements WHERE principal_id=?', principalId),
         audit: this.store.all('SELECT actor_id,action,target_id FROM web_admin_audit ORDER BY seq'),
       });
     }

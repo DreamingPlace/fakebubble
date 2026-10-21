@@ -54,7 +54,8 @@ test('22x a redemption is charged to its own trusted-IP budget: 20 attempts a mi
   );
   // Another address has its own budget.
   assert.equal(
-    actions.redeemTier(who.token, 'csrf', origin, 'e'.repeat(64), { requestId: 'use', code: batch.codes![0]! }).duplicate,
+    actions.redeemTier(who.token, 'csrf', origin, 'e'.repeat(64), { requestId: 'use', code: batch.codes![0]! })
+      .duplicate,
     true,
   );
 });
@@ -93,7 +94,8 @@ test('22x the route core separates administrator and player credentials and take
     code('NOT_FOUND'),
   );
   assert.throws(
-    () => routeWebInvite(actions, { ...redeem, path: '/api/web/local/invites/redeem', body: { ...redeem.body, extra: 1 } }),
+    () =>
+      routeWebInvite(actions, { ...redeem, path: '/api/web/local/invites/redeem', body: { ...redeem.body, extra: 1 } }),
     code('INVALID_REQUEST'),
   );
   // A player's token is not an administrator's cookie.
