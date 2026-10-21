@@ -19,6 +19,7 @@
     "web:preview": "node scripts/preview-web.ts",
     "web:cloudflare:package": "node scripts/web-cloudflare-package.ts",
     "check:web:local-http": "node scripts/test-web-local-http.ts",
+    "check:web:browser": "node scripts/check-web-browser.ts",
     "check:web:restart": "node scripts/test-web-data-lifecycle-restart.ts",
     "format": "biome format --write .",
     "format:check": "biome format .",

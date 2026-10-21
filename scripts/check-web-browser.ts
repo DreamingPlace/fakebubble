@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { localRuntime, initProviderInstance } from '../apps/server/platform/web-local-config.ts';
@@ -50,7 +50,7 @@ const PASSWORD = 'correct horse battery';
 const EMAIL = 'browser.player@example.com';
 const { parent, port } = localRuntime();
 mkdirSync(parent, { recursive: true, mode: 0o700 });
-const root = join(parent, `browser-check-${randomUUID().slice(0, 12)}`);
+const root = join(parent, `provider-browser-${randomUUID().slice(0, 12)}`);
 initProviderInstance(root);
 migrateProvider(root, syntheticSelection());
 const { config, store } = openProviderStore(root);
@@ -126,6 +126,7 @@ try {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(String(error)));
   const shot = async (name: string) => {
+    await page.waitForTimeout(800); // let the sheet's fade-in finish
     if (shots) await page.screenshot({ path: join(shots, `${name}.png`) });
   };
 
@@ -133,7 +134,7 @@ try {
   const first = await page.goto(`${origin}/`);
   assert.equal(new URL(page.url()).searchParams.get('mode'), 'provider', 'the bare URL redirects to ?mode=provider');
   assert.ok(first && first.status() === 200);
-  await page.waitForSelector('button, main', { timeout: 15_000 });
+  await page.locator('button:visible').first().waitFor({ timeout: 15_000 });
   const cookieName = config.cookieName;
   const cookies = await context.cookies();
   assert.ok(
@@ -148,7 +149,8 @@ try {
   ]);
   await page.goto(`${origin}/?mode=provider`);
   await page.getByText('你还没有登录').waitFor({ timeout: 15_000 });
-  for (const label of ['登录', '注册', '以访客继续']) await page.getByRole('button', { name: label, exact: true }).waitFor();
+  for (const label of ['登录', '注册', '以访客继续'])
+    await page.getByRole('button', { name: label, exact: true }).waitFor();
   assert.equal(
     (await context.cookies()).some((cookie) => cookie.name === cookieName && cookie.value === 'dead-cookie-value'),
     false,
@@ -174,7 +176,8 @@ try {
   await shot('signup-password');
   await page.getByRole('button', { name: '完成注册' }).click();
   await page.getByText(/注册成功/).waitFor({ timeout: 15_000 });
-  await page.getByRole('button', { name: '完成' }).click();
+  // The sheet closes itself and the page reloads as the signed-up player.
+  await page.getByRole('button', { name: /阿泡/ }).first().waitFor({ timeout: 20_000 });
   await page.waitForLoadState('networkidle');
   const signedUp = (await context.cookies()).find((cookie) => cookie.name === cookieName);
   assert.ok(signedUp && signedUp.httpOnly && signedUp.secure, 'signup left a session cookie');
@@ -189,11 +192,13 @@ try {
   assert.equal(await page.getByText(/恢复码/).count(), 0, 'no recovery-code UI anywhere');
   assert.equal(await page.getByText(/绑定邮箱/).count(), 0);
   await page.getByRole('button', { name: '退出登录' }).click();
-  await page.getByText('你还没有登录').waitFor({ timeout: 15_000 });
-  assert.equal(
-    (await context.cookies()).some((cookie) => cookie.name === cookieName),
-    false,
-    'logout cleared the cookie',
+  // Logging out ends the session: the page reloads as a fresh visitor and the signed-up cookie is gone.
+  await page.getByRole('button', { name: '登录/注册' }).first().waitFor({ timeout: 15_000 });
+  assert.equal(await page.getByRole('button', { name: /阿泡/ }).count(), 0, 'the nickname button is gone');
+  assert.notEqual(
+    (await context.cookies()).find((cookie) => cookie.name === cookieName)?.value,
+    signedUp.value,
+    'logout replaced the signed-in session cookie',
   );
 
   // 登录 from a second browser context (another device): cookies start empty.
@@ -206,7 +211,8 @@ try {
   await second.getByRole('button', { name: '登录', exact: true }).click();
   await second.getByLabel('邮箱').fill(EMAIL);
   await second.locator('input[type=password]').first().fill(PASSWORD);
-  await second.screenshot({ path: shots ? join(shots, 'login.png') : undefined as never }).catch(() => {});
+  await second.waitForTimeout(800);
+  if (shots) await second.screenshot({ path: join(shots, 'login.png') });
   await second.getByRole('button', { name: '登录', exact: true }).last().click();
   await second.waitForLoadState('networkidle');
   await second.getByRole('button', { name: /阿泡/ }).first().waitFor({ timeout: 15_000 });
@@ -230,4 +236,3 @@ if (failure) {
   console.error(failure);
   process.exitCode = 1;
 }
-void readFileSync;
