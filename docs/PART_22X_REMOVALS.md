@@ -1,0 +1,275 @@
+# Part 22x removals
+
+`git diff --shortstat ddcaf8d`: 238 files changed, 3038 insertions(+), 20691 deletions(-)
+
+## Deleted source files (no caller outside the removed code)
+- `apps/player-web/src/app/local-mode.ts`
+- `apps/player-web/src/data/local-cache.ts`
+- `apps/player-web/src/data/pending-operations.ts`
+- `apps/player-web/src/data/send-controller.ts`
+- `apps/player-web/src/data/sync-controller.ts`
+- `apps/player-web/src/features/admin/invite-admin-page.ts`
+- `apps/player-web/src/features/invite/invite-form.ts`
+- `apps/player-web/src/features/local/local-page.ts`
+- `apps/player-web/src/features/local/local-state.ts`
+- `apps/player-web/src/features/prototype/recovery-code.ts`
+- `apps/player-web/src/media/audio-controller.ts`
+- `apps/player-web/src/services/local-api.ts`
+- `apps/player-web/src/session/access-controller.ts`
+- `apps/player-web/src/session/invite-controller.ts`
+- `apps/player-web/src/session/invite-form-adapter.ts`
+- `apps/player-web/src/session/local-session.ts`
+- `apps/server/budget/beta-costs.ts`
+- `apps/server/cloudflare/guard-access-state.ts`
+- `apps/server/cloudflare/guard-cost-facts.ts`
+- `apps/server/cloudflare/guard-recovery.ts`
+- `apps/server/cloudflare/recovery-guard.ts`
+- `apps/server/cloudflare/recovery-point.ts`
+- `apps/server/cloudflare/schema.ts`
+- `apps/server/invites/web-holder-access.ts`
+- `apps/server/invites/web-invites.ts`
+- `packages/contracts/web-local-client.ts`
+- `packages/contracts/web-local-invite.ts`
+- `packages/contracts/web-local.ts`
+
+## Removed routes (all answer 404 now; asserted in `tests/web/integration/web-player-shapes-22x.integration.test.ts`)
+`/invites/credential`, `/invites/credential-regenerate`, `/invites/recover`, `/identity/invite-receipt-challenge|recover|status`, `/identity/receipt-challenge|recover|status`, `/admin/invites/issue|revoke-code|revoke-grant|list`, the 绑定邮箱 routes (`/account/bind-request-code|bind-verify-code|bind`). Callers: none (the only users were the removed client code and the removed local harness client).
+
+## Session receipts: call graph
+`/identity/receipt-*` were called only by the browser-local client (`local-session.ts`, `local-api.ts`) and the local test harness `register`. The email-login, logout, bootstrap and signed-out flows never called them; bootstrap/`isDeadCookie` read only an always-empty receipts table. Removed.
+
+## Deleted test files (existed only for removed features)
+- `apps/player-web/tests/components/invite-admin-page.test.ts`
+- `apps/player-web/tests/components/invite-expired-message.test.ts`
+- `apps/player-web/tests/components/invite-form.test.ts`
+- `apps/player-web/tests/components/local-page.test.ts`
+- `apps/player-web/tests/components/local-state.test.ts`
+- `apps/player-web/tests/components/provider-invite-controller.test.ts`
+- `tests/web/e2e/web-invite-form-c.html`
+- `tests/web/e2e/web-invite-full-c.e2e.test.ts`
+- `tests/web/e2e/web-local-client-idb-c.html`
+- `tests/web/e2e/web-local-wire-c.html`
+- `tests/web/e2e/web-local-wire-r1-c.html`
+- `tests/web/integration/web-access-refresh-c.integration.test.ts`
+- `tests/web/integration/web-identity-kdf-worker.mjs`
+- `tests/web/integration/web-invite-client-c.integration.test.ts`
+- `tests/web/integration/web-invite-core-c.integration.test.ts`
+- `tests/web/integration/web-local-client-lifecycle-c.integration.test.ts`
+- `tests/web/integration/web-local3-transition-c.integration.test.ts`
+- `tests/web/integration/web-player-client-r1.integration.test.ts`
+- `tests/web/integration/web-player-client.integration.test.ts`
+- `tests/web/unit/web-invite-client-paths.test.ts`
+- `tests/web/unit/web-invite-controller.test.ts`
+- `tests/web/unit/web-invite-entry-admin-client.test.ts`
+- `tests/web/unit/web-invite-form-adapter.test.ts`
+- `tests/web/unit/web-invite-identity.test.ts`
+- `tests/web/unit/web-invite-local-api.test.ts`
+- `tests/web/unit/web-invite-local-http.test.ts`
+- `tests/web/unit/web-invite-stay-signed-in.test.ts`
+- `tests/web/unit/web-invites.test.ts`
+- `tests/web/unit/web-local-client-lifecycle.test.ts`
+- `tests/web/unit/web-local-client-r1.test.ts`
+- `tests/web/unit/web-local-client-r2.test.ts`
+- `tests/web/unit/web-local-client.test.ts`
+- `tests/web/unit/web-local-invite-contract.test.ts`
+
+## Tests removed from files that remain (title, file)
+- apps/player-web/tests/components/account-sheet.test.ts :: chat: a legacy invited player without a login sees 绑定邮箱 and keeps the recovery-code entry; with a login that entry is gone
+- apps/player-web/tests/components/account-sheet.test.ts :: the signed-out first page offers 登录 / 注册 / 以访客继续 and a small 我有恢复码 link — not an error, not a dead end
+- apps/player-web/tests/components/account-sheet.test.ts :: top bar: an invited player with a login gets the nickname button too; one without a login keeps 恢复码 and gets one 我的账号 entry (绑定邮箱)
+- apps/player-web/tests/components/account-sheet.test.ts :: 绑定邮箱 explains that the recovery code stops working and finishes as a bind
+- apps/player-web/tests/components/admin-mode.test.ts :: public provider admin can render on HTTPS; synthetic admin remains loopback-only
+- apps/player-web/tests/components/admin-mode.test.ts :: rendering the public admin does not authorize issuing an invite or substitute a local API
+- apps/player-web/tests/components/character-admin-api.test.ts :: account invitation list refuses coercion and sends an explicit cursor over the authenticated namespace
+- apps/player-web/tests/components/cocreation-sheet.test.ts :: in the live chat the ⋯ menu offers 共创 to every player: guest, invited and a revoked invite alike
+- apps/player-web/tests/components/my-info.test.ts :: 22a a legacy invited player without a login: 绑定邮箱 and 恢复码, no 玩家编号
+- apps/player-web/tests/components/provider-api.test.ts :: receipt endpoints use exact payloads and purpose-specific CSRF without accepting malformed success
+- apps/player-web/tests/components/provider-recovery.test.ts :: entering a recovery code restores the player, shows the NEW code once, and reuses the request id on retry
+- apps/player-web/tests/components/provider-recovery.test.ts :: no error page carries the recovery entry any more; a dead session is the signed-out first page
+- apps/player-web/tests/components/provider-recovery.test.ts :: regenerating shows the replacement once and reports a failure without exposing any code
+- apps/player-web/tests/components/provider-recovery.test.ts :: the recovery code is shown once with the agreed copy, can be copied, and is never stored
+- tests/web/integration/web-cloudflare-business.integration.test.ts :: workerd guest/invite identity: sealed rotation, restart recovery, scope and revocation
+- tests/web/integration/web-cloudflare-http.integration.test.ts :: bootstrap clears only dead cookies and never an active, recoverable-rotated or invited one
+- tests/web/integration/web-cloudflare-http.integration.test.ts :: cloud HTTP invites use actual admin login, in-place upgrade, recovery rotation and revocation
+- tests/web/integration/web-cloudflare-production.integration.test.ts :: private invite lookup returns only the selected grant ID after restart; revocation still needs admin authority
+- tests/web/integration/web-cloudflare-retention.integration.test.ts :: cloud retention erases guest SQL/R2 content, preserves bills/IP quota, fixed clips and protected invite history
+- tests/web/integration/web-cloudflare-stay-signed-in.integration.test.ts :: cloud: invited cookie is long-lived on redeem and re-issued on every bootstrap, even past the old 24h deadline
+- tests/web/integration/web-cloudflare-stay-signed-in.integration.test.ts :: cloud: redeem → one-time code → cookie cleared → recover to the same principal and history → old code dead → regenerate
+- tests/web/integration/web-cloudflare-stay-signed-in.integration.test.ts :: cloud: revoking the grant ends every session at once and disables the recovery code; failed attempts stay limited
+- tests/web/integration/web-cocreation-retention.integration.test.ts :: player-data retention removes a purged player’s co-creation ideas and leaves a protected invite’s untouched
+- tests/web/integration/web-identity.integration.test.ts :: C-ID KDF callback failure releases reservation without consuming a valid recovery
+- tests/web/integration/web-identity.integration.test.ts :: C-ID a slow valid proof releases only its original failed-attempt window
+- tests/web/integration/web-identity.integration.test.ts :: C-ID an orphaned reserved proof has a finite original window and does not lock recovery forever
+- tests/web/integration/web-identity.integration.test.ts :: C-ID concurrent failed recovery proofs cannot exceed configured failure-window attempt budget
+- tests/web/integration/web-identity.integration.test.ts :: C-ID concurrent old-cookie recovery has exactly three successes across two connections and restart
+- tests/web/integration/web-identity.integration.test.ts :: C-ID epoch, key/AAD, security revision and logout fail closed for old recovery
+- tests/web/integration/web-identity.integration.test.ts :: C-ID excess concurrent proofs are rejected before native Argon2 starts
+- tests/web/integration/web-identity.integration.test.ts :: C-ID logout during receipt KDF cannot reissue identity or leave a failed-proof slot
+- tests/web/integration/web-identity.integration.test.ts :: C-ID registration is in place, old ordinary bearer revokes at commit, and both lost-response paths recover
+- tests/web/integration/web-invite-tiers-migration.integration.test.ts :: 125 is the same SQL on both authorities, the last of 50 steps, and 100-124 are unchanged
+- tests/web/integration/web-invite-tiers-rules-22a.integration.test.ts :: 22a an old invite-only player (no login) is ended by the same function, with its sessions
+- tests/web/integration/web-invite-tiers-rules-22a.integration.test.ts :: 22a one revoke, whichever page starts it: ${entry} ends the entitlement AND the grant; the player is registered with its balance
+- tests/web/integration/web-invite-tiers-rules-22a.integration.test.ts :: 22a the legacy redemption cannot be reached on schema 125
+- tests/web/integration/web-player-accounts-http.integration.test.ts :: accounts over real HTTP: signup, login on a second device, reset, dead cookies, redeem gate and revoked grants
+- tests/web/integration/web-player-accounts-http.integration.test.ts :: redeeming needs a login while signup is open, a revoked grant blocks future logins, and the admin sees a masked address only
+- tests/web/integration/web-player-accounts-keep.integration.test.ts :: a signed-up guest can redeem an invite after the trial ended, and the normal invited rules apply from then on
+- tests/web/integration/web-player-accounts-retention.integration.test.ts :: player-data retention removes a purged player’s login, challenges and nickname 名片 and leaves a protected invite’s untouched
+- tests/web/integration/web-provider-invite-client.integration.test.ts :: provider client recovers ${loss} with persistent HTTP/SQLite/R2, no second redeem
+- tests/web/integration/web-provider-offline-c.integration.test.ts :: C S3-003: revoked invite rejects private audio lookup and fresh provider reservation
+- tests/web/integration/web-public-readiness-http.integration.test.ts :: B: an invited player deletes the account: the grant is revoked and the data goes
+- tests/web/integration/web-registered-17h.integration.test.ts :: 2c: an invited player whose grant was revoked or expired (no login, no bonus) gets WEB_INVITE_ACCESS_REQUIRED - not the trial text - no balance, no picker
+- tests/web/integration/web-registered-17h.integration.test.ts :: 2d: an invited player whose grant lapsed but who has an email login chats as registered (points), not WEB_INVITE_ACCESS_REQUIRED; with the production shape (bonus + login + old invite) too
+- tests/web/unit/web-identity.test.ts :: a slow valid proof releases only its original window, not a new window failure
+- tests/web/unit/web-identity.test.ts :: bad recovery proof is separately throttled without consuming successful retrievals
+- tests/web/unit/web-identity.test.ts :: concurrent wrong receipt proofs reserve five DB slots across connections before KDF
+- tests/web/unit/web-identity.test.ts :: logout and receipt deadline block replay; no guest idle expiry before 24h
+- tests/web/unit/web-identity.test.ts :: logout during valid receipt KDF cannot reissue token and releases its reserved validation slot
+- tests/web/unit/web-identity.test.ts :: new registration upgrades in place, revokes old ordinary auth and recovers one committed receipt both ways
+- tests/web/unit/web-identity.test.ts :: receipt boundary expires at 300 seconds; another account cannot read its receipt
+- tests/web/unit/web-identity.test.ts :: restart with same instance and keys preserves committed account session and receipt scope
+- tests/web/unit/web-identity.test.ts :: web recovery epoch change invalidates active sessions and old receipt recovery
+- tests/web/unit/web-identity.test.ts :: wrong secret, tampered AEAD, changed security revision, logout and epoch cannot reissue identity
+- tests/web/unit/web-invite-executor.test.ts :: 112 invite revoked after speech sent cannot attach or publish; sent cost stays unknown
+- tests/web/unit/web-invite-executor.test.ts :: 112 invited principal completes synthetic text, speech and atomic publication
+- tests/web/unit/web-player-accounts.test.ts :: a guest with a login keeps its session past 24 h like an invited player; a plain guest does not
+- tests/web/unit/web-player-accounts.test.ts :: a signed-up guest after the trial: reads, logs in, edits the nickname and redeems an invite; a plain guest cannot
+- tests/web/unit/web-player-accounts.test.ts :: dead cookies: unknown, malformed and revoked ones are clearable, but a live redemption receipt keeps its cookie
+- tests/web/unit/web-player-accounts.test.ts :: invited players: login is refused once the grant is revoked (after the right password), and a bind revokes the recovery code
+- tests/web/unit/web-player-accounts.test.ts :: redeeming requires a signed-in login while signup is open; a guest signs up first and keeps its principal
+- tests/web/unit/web-player-accounts.test.ts :: signup flag off: signup, reset and bind refuse, nothing is sent, and login still works
+- tests/web/unit/web-provider-offline.test.ts :: 113 memory-only reservation reuses current same-scope invite grant predicate
+
+## Titles inside the deleted test files
+- apps/player-web/tests/components/invite-admin-page.test.ts :: admin login and manual issue show only the server code once
+- apps/player-web/tests/components/invite-admin-page.test.ts :: restored admin session never requires token; duplicate issue cannot reveal a code
+- apps/player-web/tests/components/invite-admin-page.test.ts :: unknown issue never silently sends a second request
+- apps/player-web/tests/components/invite-admin-page.test.ts :: unmount clears the token and ignores a late login
+- apps/player-web/tests/components/invite-expired-message.test.ts :: WEB_INVITE_ACCESS_REQUIRED has its own message, different from the trial text
+- apps/player-web/tests/components/invite-form.test.ts :: IME composition does not submit an invite code
+- apps/player-web/tests/components/invite-form.test.ts :: cancel clears code and ignores a late accepted response
+- apps/player-web/tests/components/invite-form.test.ts :: lost session is terminal and never shows accepted or issues a new ID
+- apps/player-web/tests/components/invite-form.test.ts :: uncertain redemption only recovers the original code and request ID
+- apps/player-web/tests/components/invite-form.test.ts :: unmount clears the code and late recovery cannot restore the form
+- apps/player-web/tests/components/local-page.test.ts :: a recovered accepted first send keeps its conversation and does not erase a newer draft
+- apps/player-web/tests/components/local-page.test.ts :: bootstrap blocks a new send while durable old intent is being queried
+- apps/player-web/tests/components/local-page.test.ts :: local-3 guest requires trusted invite install before chat and preserves invite bootstrap on refresh
+- apps/player-web/tests/components/local-page.test.ts :: old activation failure cannot poison a reconnected invite scope or unmounted page
+- apps/player-web/tests/components/local-page.test.ts :: old sync and visibility 401 cannot invalidate the reconnected session
+- apps/player-web/tests/components/local-page.test.ts :: trusted redemption recovery failure shows parent error, keeps invite and blocks send until reconnect
+- apps/player-web/tests/components/local-page.test.ts :: trusted redemption sync-start failure stops partial sync and blocks send until reconnect
+- apps/player-web/tests/components/local-state.test.ts :: late work cannot cross an identity or generation boundary
+- apps/player-web/tests/components/local-state.test.ts :: only published character synthetic audio gets a play control
+- apps/player-web/tests/components/local-state.test.ts :: operation labels distinguish waiting, published, unknown and failed
+- apps/player-web/tests/components/provider-invite-controller.test.ts :: body loss with installed cookie recovers by status, never redeem or receipt challenge
+- apps/player-web/tests/components/provider-invite-controller.test.ts :: invalid code stays editable, transactional unavailable permits a new intent
+- apps/player-web/tests/components/provider-invite-controller.test.ts :: invite fails closed on ${field} mismatch without installing a different identity
+- apps/player-web/tests/components/provider-invite-controller.test.ts :: lost whole response recovers fixed code and request, recovery itself is single flight
+- apps/player-web/tests/components/provider-invite-controller.test.ts :: successful in-place invite installs only its receipt; accepted cannot redeem again
+- apps/player-web/tests/components/provider-invite-controller.test.ts :: unavailable receipt and post-accept bootstrap errors never authorize a fresh redemption
+- tests/web/e2e/web-invite-full-c.e2e.test.ts :: C fixed 112: independent synthetic HTTPS invite, isolation, cleanup and restart
+- tests/web/e2e/web-invite-full-c.e2e.test.ts :: C isolated schema 110 guest/account remains usable without invite migration
+- tests/web/integration/web-access-refresh-c.integration.test.ts :: C access: first acceptance installs absolute expiry without invalidating an active sync stream
+- tests/web/integration/web-access-refresh-c.integration.test.ts :: C access: out-of-order, old-scope, and sliding-expiry replies cannot overwrite access
+- tests/web/integration/web-access-refresh-c.integration.test.ts :: C access: same principal and revision may reflect shared-IP remaining without a generation change
+- tests/web/integration/web-invite-client-c.integration.test.ts :: C invite client: every identity/receipt scope mismatch rejects without installing local-3
+- tests/web/integration/web-invite-client-c.integration.test.ts :: C invite client: expired guest cannot start a new redeem; only original server receipt restores access
+- tests/web/integration/web-invite-client-c.integration.test.ts :: C invite client: late old-generation bootstrap cannot overwrite newly installed identity
+- tests/web/integration/web-invite-client-c.integration.test.ts :: C invite client: missing or conflicting receipt never locally unlocks expired guest
+- tests/web/integration/web-invite-client-c.integration.test.ts :: C invite client: rotated-cookie recovery uses challenge and same receipt, never another redeem
+- tests/web/integration/web-invite-client-c.integration.test.ts :: C invite client: trusted in-place install is delayed until bootstrap and rotates generation
+- tests/web/integration/web-invite-core-c.integration.test.ts :: one code upgrades only its principal in place; same-IP second world stays separate
+- tests/web/integration/web-invite-core-c.integration.test.ts :: receipt insert failure rolls back code use, identity rotation and retention upgrade together
+- tests/web/integration/web-invite-core-c.integration.test.ts :: rotated old cookie recovers only its sealed receipt with bounded requests and time
+- tests/web/integration/web-invite-core-c.integration.test.ts :: separate recovery credential rotates secret and session; consumed code cannot log in
+- tests/web/integration/web-local-client-lifecycle-c.integration.test.ts :: C local-2: 410 from sync denies body, closes stream, and blocks later catch-up
+- tests/web/integration/web-local-client-lifecycle-c.integration.test.ts :: C local-2: expiry while a fake durable put is pending prevents POST but not a late fake write
+- tests/web/integration/web-local-client-lifecycle-c.integration.test.ts :: C local-2: guest body never opens cache IDB, while account remains eligible
+- tests/web/integration/web-local3-transition-c.integration.test.ts :: C local-3 accepted invite exposes activation failure and retains a recovery action
+- tests/web/integration/web-player-client-r1.integration.test.ts :: A-WEB-021 R1 C: retry suspended in durable get must not rebind to a later UI generation
+- tests/web/integration/web-player-client-r1.integration.test.ts :: C R1 positive: a newly explicit same-ID retry in the current generation still works
+- tests/web/integration/web-player-client-r1.integration.test.ts :: C R1: a retry rotated while durable put is pending cannot dispatch
+- tests/web/integration/web-player-client-r1.integration.test.ts :: C R1: failed cursor persistence blocks the queued next SSE event until catch-up
+- tests/web/integration/web-player-client-r1.integration.test.ts :: C R1: late rejection of an old play cannot pause a newer audio element
+- tests/web/integration/web-player-client-r1.integration.test.ts :: C R1: unknown-ID recovery is scoped and only checks by-request, including 404
+- tests/web/integration/web-player-client-r1.integration.test.ts :: C R2: by-request 404 persisted across a generation change cannot report current uncertainty
+- tests/web/integration/web-player-client-r1.integration.test.ts :: C R2: recovery finishing an uncertain lookup after rotation returns only stale
+- tests/web/integration/web-player-client.integration.test.ts :: A-WEB-018 C: delayed older bootstrap cannot overwrite a newer identity CSRF
+- tests/web/integration/web-player-client.integration.test.ts :: A-WEB-019 C: late first play fulfillment must not pause or revoke second playback
+- tests/web/integration/web-player-client.integration.test.ts :: A-WEB-020 C: failed SSE apply cannot commit a queued successor while catch-up is blocked
+- tests/web/integration/web-player-client.integration.test.ts :: A-WEB-021 C: lost-receipt intent remains discoverable by current authenticated scope after reload
+- tests/web/unit/web-invite-client-paths.test.ts :: installed invite sends with new trusted CSRF and recovers original request without currentView
+- tests/web/unit/web-invite-client-paths.test.ts :: invite access refresh and SSE use invited view; stale response cannot change next identity
+- tests/web/unit/web-invite-controller.test.ts :: expired local guest may recover only an already accepted server receipt, not initiate redeem
+- tests/web/unit/web-invite-controller.test.ts :: explicit ${code} recovery uses challenge and recover, never replays redeem
+- tests/web/unit/web-invite-controller.test.ts :: mismatched bootstrap is rejected without replacing the guest session
+- tests/web/unit/web-invite-controller.test.ts :: redeem installs only after a matching trusted local-3 bootstrap, preserving world
+- tests/web/unit/web-invite-controller.test.ts :: redeem rejects changed instance, recovery epoch and player even when receipt IDs match
+- tests/web/unit/web-invite-entry-admin-client.test.ts :: admin client keeps CSRF in memory and sends issue terms with explicit cutoff
+- tests/web/unit/web-invite-entry-admin-client.test.ts :: one bootstrap request selects local-2 guest and local-3 invite without protocol probing
+- tests/web/unit/web-invite-form-adapter.test.ts :: E form adapter exposes only known definitive denial as terminal or safe generic rejection
+- tests/web/unit/web-invite-form-adapter.test.ts :: E form adapter preserves uncertain outcome and never retries redemption
+- tests/web/unit/web-invite-form-adapter.test.ts :: E form adapter returns accepted only after controller completes trusted install
+- tests/web/unit/web-invite-identity.test.ts :: administrator action uses real cookie hash and CSRF; redeem charges a separate trusted-IP budget
+- tests/web/unit/web-invite-identity.test.ts :: identity receipt failure rolls back code use, grant, protected retention and old-session revocation
+- tests/web/unit/web-invite-identity.test.ts :: logout revokes sealed invite receipt recovery rather than leaving its old cookie usable
+- tests/web/unit/web-invite-identity.test.ts :: real identity authorizer rotates old session and seals the new bearer in the redemption transaction
+- tests/web/unit/web-invite-identity.test.ts :: revoked grant disables both old-cookie recovery and new-cookie status
+- tests/web/unit/web-invite-identity.test.ts :: same-Web-instance local administrator grant logs in once, issues a code and revokes its session
+- tests/web/unit/web-invite-identity.test.ts :: separate recovery credential rotates secret and session without using the consumed invite code
+- tests/web/unit/web-invite-identity.test.ts :: unconsumed local admin grant and independent session expire at their own deadlines
+- tests/web/unit/web-invite-identity.test.ts :: unserved local-3 route core separates administrator and player cookies without URL secrets
+- tests/web/unit/web-invite-identity.test.ts :: wrong recovery proofs consume a bounded trusted-IP window before looking up credentials
+- tests/web/unit/web-invite-local-api.test.ts :: invite bootstrap and access require explicit local-3 data, not legacy local-2
+- tests/web/unit/web-invite-local-api.test.ts :: invite transport preserves explicit rejection codes and never treats failed/non-JSON HTTP as success
+- tests/web/unit/web-invite-local-api.test.ts :: opt-in invite client sends proofs only in no-store same-origin POST bodies
+- tests/web/unit/web-invite-local-http.test.ts :: 112 isolated HTTPS invite exchange, private publication and revoked access
+- tests/web/unit/web-invite-stay-signed-in.test.ts :: an already-expired invited session revives while its grant is active, and not after revocation
+- tests/web/unit/web-invite-stay-signed-in.test.ts :: an invited session older than 24h still authenticates and bootstraps; a guest session expires
+- tests/web/unit/web-invite-stay-signed-in.test.ts :: recovery epoch and session revocation still end an invited session
+- tests/web/unit/web-invite-stay-signed-in.test.ts :: redeem → code shown once → cookie lost → recover → same principal and history → old code dead → new code works
+- tests/web/unit/web-invite-stay-signed-in.test.ts :: regenerate replaces the previous code at once, keeps sessions, and needs CSRF, origin and an active invited session
+- tests/web/unit/web-invite-stay-signed-in.test.ts :: revoking an unredeemed code leaves redeemed players untouched
+- tests/web/unit/web-invite-stay-signed-in.test.ts :: revoking the grant ends every session of the principal and disables its recovery code, atomically
+- tests/web/unit/web-invite-stay-signed-in.test.ts :: wrong recovery codes stay throttled per trusted IP after the new flows, with the same neutral error
+- tests/web/unit/web-invites.test.ts :: granular invite actions, metadata-only paginated list and scope checks use current durable membership
+- tests/web/unit/web-invites.test.ts :: manual one-use issuance requires explicit terms and live administrator, stores only digest
+- tests/web/unit/web-invites.test.ts :: one code upgrades original guest exactly once; replay, scope, expiry and revocations stay distinct
+- tests/web/unit/web-invites.test.ts :: schema111 private-content predicate requires an active matching grant, not protected retention alone
+- tests/web/unit/web-invites.test.ts :: two scheduled contenders for a single-use code yield one grant and one unchanged guest
+- tests/web/unit/web-invites.test.ts :: unredeemed code revocation is idempotent and does not issue a grant
+- tests/web/unit/web-invites.test.ts :: wrong code, expired code, expired trial, stale scope and failed grant write leave no half upgrade
+- tests/web/unit/web-local-client-lifecycle.test.ts :: access tickets reject stale, regressed and cross-identity responses without reviving expired guest
+- tests/web/unit/web-local-client-lifecycle.test.ts :: local-2 410 revokes current content and purges only the guest pending partition
+- tests/web/unit/web-local-client-lifecycle.test.ts :: local-2 guest body is not persisted or read offline; account cache is not purged
+- tests/web/unit/web-local-client-lifecycle.test.ts :: local-2 parser requires explicit retention while local-1 remains separate
+- tests/web/unit/web-local-client-lifecycle.test.ts :: trusted same-identity access refresh starts fixed expiry without interrupting sync or identity
+- tests/web/unit/web-local-client-r1.test.ts :: 018 an identity transition cannot apply after invalidate, after the content was denied, or after a newer transition
+- tests/web/unit/web-local-client-r1.test.ts :: 018 an in-place identity change keeps its own request alive and rotates the generation when installed
+- tests/web/unit/web-local-client-r1.test.ts :: 018 stale bootstrap and challenge responses cannot overwrite in-memory CSRF
+- tests/web/unit/web-local-client-r1.test.ts :: 019 stale play resolve or reject only releases its own audio
+- tests/web/unit/web-local-client-r1.test.ts :: 020 failed e1 or cursor cannot let queued e2 commit before replay
+- tests/web/unit/web-local-client-r1.test.ts :: 021 reload of stored-before-send intent keeps 404 unresolved and never auto-sends
+- tests/web/unit/web-local-client-r1.test.ts :: 021 trusted reload discovers old pending IDs and queries without another POST
+- tests/web/unit/web-local-client-r2.test.ts :: 021 R2: explicit new-generation retry may reuse old durable ID and payload
+- tests/web/unit/web-local-client-r2.test.ts :: 021 R2: lookup 404 storage write held across switch returns stale
+- tests/web/unit/web-local-client-r2.test.ts :: 021 R2: recoverPending list held across switch returns stale without lookup
+- tests/web/unit/web-local-client-r2.test.ts :: 021 R2: recoverPending lookup response held across switch cannot publish to new UI
+- tests/web/unit/web-local-client-r2.test.ts :: 021 R2: retrySame durable put held across switch never POSTs
+- tests/web/unit/web-local-client-r2.test.ts :: 021 R2: retrySame read held across generation switch never POSTs or writes
+- tests/web/unit/web-local-client.test.ts :: character switch stops a late audio fetch before playback
+- tests/web/unit/web-local-client.test.ts :: commit before send, simultaneous click one intent; later explicit action new ID
+- tests/web/unit/web-local-client.test.ts :: draft and history cache keys partition world, identity generation and stable IDs
+- tests/web/unit/web-local-client.test.ts :: failed pending commit prevents network dispatch
+- tests/web/unit/web-local-client.test.ts :: late private audio fetch cannot play after generation change
+- tests/web/unit/web-local-client.test.ts :: local protocol refuses unknown version/mode/error instead of draft casting
+- tests/web/unit/web-local-client.test.ts :: lost 202 and 404 remain network-uncertain, never resend
+- tests/web/unit/web-local-client.test.ts :: old generation sync response cannot advance visible cursor
+- tests/web/unit/web-local-client.test.ts :: same principal/world identity rotation fences late response
+- tests/web/unit/web-local-client.test.ts :: same-revision conflicting sync payload refetches and does not commit conflicted cursor
+- tests/web/unit/web-local-client.test.ts :: server 500 after possible admission checks original requestId instead of declaring rejection
+- tests/web/unit/web-local-client.test.ts :: sync applies before cursor, replays duplicate and detects revision conflict
+- tests/web/unit/web-local-invite-contract.test.ts :: local-3 invite access is a separate candidate and cannot silently enter the local-2 parser
+- tests/web/unit/web-local-invite-contract.test.ts :: local-3 parser and existing session install preserve scope but deny revoked invite content
+- tests/web/unit/web-local-invite-contract.test.ts :: local-3 session denies at the absolute expiry and cannot revive on clock rollback
+- tests/web/unit/web-local-invite-contract.test.ts :: receipt/status and one-time recovery-secret shapes reject unintended extra secrets
+- tests/web/unit/web-local-invite-contract.test.ts :: revoked invite cannot read or write cached private body with a stale active scope
