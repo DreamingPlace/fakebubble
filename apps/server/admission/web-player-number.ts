@@ -47,11 +47,3 @@ export function ensurePlayerNumber(
   }
   throw new Error('WEB_PLAYER_NUMBER_UNAVAILABLE');
 }
-
-export function playerNumberOf(store: Pick<BusinessStore, 'get'>, principalId: string): string | null {
-  if (!tableExists(store)) return null;
-  return (
-    store.get<{ number: string }>('SELECT number FROM web_player_numbers WHERE principal_id=?', principalId)?.number ??
-    null
-  );
-}

@@ -20,7 +20,7 @@ test('private web operator pins only new workers/account, requires explicit argu
     'budget-summary',
     'business-object-id',
     'budget-object-id',
-    'invite-grants',
+    'admin-recovery-grant',
   ] as const) {
     const config = webOperatorConfig(action, 'a'.repeat(32));
     assert.equal(config.account_id, 'a'.repeat(32));
@@ -42,15 +42,11 @@ test('private web operator pins only new workers/account, requires explicit argu
     /WEB_OPERATOR_NAME_REQUIRED/,
   );
   assert.throws(
-    () => webOperatorArguments(['--action=invite-grants', `--receipt-file=${receipt}`]),
-    /WEB_OPERATOR_NAME_REQUIRED/,
-  );
-  assert.throws(
     () => webOperatorArguments(['--action=admin-recovery-grant', `--receipt-file=${receipt}`]),
     /WEB_OPERATOR_NAME_REQUIRED/,
   );
   assert.throws(
-    () => webOperatorArguments(['--action=invite-grants', `--receipt-file=${receipt}`, '--name=bad/id']),
+    () => webOperatorArguments(['--action=admin-recovery-grant', `--receipt-file=${receipt}`, '--name=bad/id']),
     /WEB_OPERATOR_NAME_REQUIRED/,
   );
   const bytes = Buffer.from('offline fixture bytes'),
@@ -87,10 +83,6 @@ test('operator durably records before RPC, keeps secret grants only in 0600 rece
     importFixed: async () => null,
     status: async () => null,
     summary: async () => null,
-    inviteGrants: async (id: string) => {
-      assert.equal(id, 'test-invite');
-      return [{ grantId: 'test-grant' }];
-    },
     adminGrant: async () => {
       calls++;
       return { token: 'SYNTHETIC_PRIVATE_GRANT' };
@@ -152,18 +144,8 @@ test('operator durably records before RPC, keeps secret grants only in 0600 rece
   assert.equal(calls, 2);
   assert.equal(disposed, 2);
   assert.equal(JSON.parse(readFileSync(unknown, 'utf8').trim().split('\n').at(-1)!).state, 'unknown');
-  const lookup = join(dir, 'lookup.jsonl');
-  await runWebOperator(
-    prepareWebOperation(
-      webOperatorArguments(['--action=invite-grants', '--name=test-invite', `--receipt-file=${lookup}`]),
-    ),
-    async () => ({ env: { OPERATOR: operator }, dispose: async () => {} }),
-    '/offline/config.json',
-  );
-  assert.deepEqual(JSON.parse(readFileSync(lookup, 'utf8').trim().split('\n').at(-1)!).detail, [
-    { grantId: 'test-grant' },
-  ]);
-  assert.equal(statSync(lookup).mode & 0o777, 0o600);
+  // Named exception (Part 22x): the invite-grants lookup action was removed with the legacy invite system. Its 0600 receipt
+  // assertion is still carried by the admin-recovery-grant receipt below.
   const recovery = join(dir, 'recovery.jsonl');
   await runWebOperator(
     prepareWebOperation(

@@ -14,8 +14,6 @@ export type InviteAdminPermission = (typeof ADMIN_INVITE_PERMISSIONS)[number];
 /** 角色 · 共创收件箱: read the players' ideas, or also change status, star, note and mark answers adopted. */
 export const ADMIN_COCREATION_PERMISSIONS = ['cocreation.read', 'cocreation.manage'] as const;
 export type CocreationAdminPermission = (typeof ADMIN_COCREATION_PERMISSIONS)[number];
-export const isCocreationPermission = (value: string): value is CocreationAdminPermission =>
-  (ADMIN_COCREATION_PERMISSIONS as readonly string[]).includes(value);
 /**
  * 运营 · 测试对话 (Part 19, needs CHAT_REVIEW_ENABLED): read whole chat transcripts under an anonymous code. Held by the owner
  * only unless it is granted explicitly: it is in no preset except 全部, which lists every item.
@@ -118,17 +116,6 @@ export function hasModelsPermission(grants: readonly string[]) {
 
 export function canCreateCharacter(grants: readonly string[]) {
   return grants.includes('category.characters') || grants.includes('characters.create');
-}
-/** Used only to present/revoke old grants; this never grants a category implicitly. */
-export function permissionCategory(permission: AdminPermission): AdminPermissionCategory {
-  if ((ADMIN_PERMISSION_CATEGORIES as readonly string[]).includes(permission))
-    return permission as AdminPermissionCategory;
-  if (permission.startsWith('invites.')) return 'category.invites';
-  if (permission.startsWith('characters.preview:') || permission.startsWith('characters.publish:'))
-    return 'category.publication';
-  if (permission.startsWith('characters.materials:') || permission.startsWith('characters.approve-materials:'))
-    return 'category.materials';
-  return 'category.characters';
 }
 
 /**

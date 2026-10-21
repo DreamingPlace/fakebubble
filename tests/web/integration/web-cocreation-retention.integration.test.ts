@@ -6,12 +6,10 @@ type Guest = { principalId: string; csrf: string; issuedToken: string };
 type Inbox = { submissions: string[]; answers: number };
 const origin = 'https://fixture.invalid';
 
-test('player-data retention removes a purged player’s co-creation ideas and leaves a protected invite’s untouched', async (t) => {
+test('player-data retention removes a purged player’s co-creation ideas and leaves a registered entitled player’s untouched', async (t) => {
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-retention-worker.ts', { STATE: 'WebRetentionFixture' }, [
     'MEDIA',
   ]);
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.call('/legacy-schema', {});
   await f.call('/assets');
   const guest = await f.call<Guest>('/bootstrap', {}),
     invited = await f.call<Guest>('/bootstrap', {});
@@ -25,18 +23,27 @@ test('player-data retention removes a purged player’s co-creation ideas and le
         input: { requestId: 'retention-round', characterId: 'wei-guagua', text: '共创保留期清理' },
       })),
     });
+  // Named exception (Part 22x): the protected player is a signed-up one holding an entitlement (the legacy invite is gone).
   const admin = await f.call<{ cookie: string; csrf: string }>('/admin');
-  const issued = await f.call<{ code: string }>('/issue', {
+  const batch = await f.call<{ codes: string[] }>('/batch', {
     ...admin,
     origin,
-    input: { requestId: 'retain-invite', redeemBy: null, accessDurationMs: null, batch: 'offline', note: null },
+    input: {
+      requestId: 'retain-batch',
+      name: 'offline',
+      count: 1,
+      tier: { kind: 'unlimited' },
+      durationDays: null,
+      redeemBy: null,
+    },
   });
+  await f.call('/login', { token: invited.issuedToken });
   await f.call('/redeem', {
     token: invited.issuedToken,
     csrf: invited.csrf,
     origin,
     ipHash: 'a'.repeat(64),
-    input: { code: issued.code, requestId: 'retain-redeem' },
+    input: { code: batch.codes[0], requestId: 'retain-redeem' },
   });
   for (const actor of [guest, invited]) await f.call('/retention/seed-cocreation', actor);
   assert.equal((await f.call<Inbox>('/retention/cocreation-state', guest)).submissions.length, 2);
@@ -48,6 +55,6 @@ test('player-data retention removes a purged player’s co-creation ideas and le
   assert.equal(
     (await f.call<Inbox>('/retention/cocreation-state', invited)).submissions.length,
     2,
-    'the protected invite keeps its ideas',
+    'the registered player keeps its ideas',
   );
 });

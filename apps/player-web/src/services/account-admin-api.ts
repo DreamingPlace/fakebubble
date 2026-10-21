@@ -267,31 +267,6 @@ export class AccountAdminApi extends InviteAdminApi {
   async revokeCredential(grantId: string) {
     if (object(await this.request('/members/revoke-credential', { grantId })).revoked !== true) throw invalid();
   }
-  async inviteRecords(beforeId: string | null = null) {
-    const r = object(await this.request('/invites/list', { beforeId }));
-    if (!Array.isArray(r.records)) throw invalid();
-    return {
-      next: r.next === null ? null : string(r.next),
-      records: r.records.map((v) => {
-        const c = object(v);
-        if (!['active', 'revoked'].includes(String(c.status)) || ![0, 1].includes(c.redeemed as number))
-          throw invalid();
-        return {
-          inviteId: string(c.inviteId),
-          batch: string(c.batch),
-          note: c.note === null ? null : string(c.note),
-          createdAt: time(c.createdAt),
-          redeemBy: c.redeemBy === null ? null : time(c.redeemBy),
-          status: string(c.status),
-          redeemed: Number(c.redeemed),
-          grantId: c.grantId === null ? null : string(c.grantId),
-          redeemedAt: c.redeemedAt === null ? null : time(c.redeemedAt),
-          accessRevokedAt: c.accessRevokedAt === null ? null : time(c.accessRevokedAt),
-          accessExpiresAt: c.accessExpiresAt === null ? null : time(c.accessExpiresAt),
-        };
-      }),
-    };
-  }
   /** Owner-only; the server rejects everyone else. Days are newest first. */
   async stageLatency(days = 14): Promise<StageLatencyDay[]> {
     const row = object(await this.request('/metrics/stage-latency', { days }));
@@ -388,8 +363,5 @@ export class AccountAdminApi extends InviteAdminApi {
   /** End a redeemed code's entitlement now. */
   async revokeEntitlement(id: string) {
     await this.request('/invites/entitlement-revoke', { id });
-  }
-  async revokeInvite(kind: 'code' | 'grant', id: string) {
-    await this.request(`/invites/revoke-${kind}`, { id });
   }
 }

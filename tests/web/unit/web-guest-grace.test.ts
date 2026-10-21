@@ -5,7 +5,9 @@ import { Store, type WebStore } from '../../../apps/server/platform/store.ts';
 import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
 import { WebPlayerAccounts, type PlayerMailer } from '../../../apps/server/identity/web-player-accounts.ts';
 import { requireWebContent } from '../../../apps/server/admission/web-retention.ts';
-import { guestInGrace, guestPurgeDue, GUEST_GRACE_MS } from '../../../apps/server/identity/web-player-purge.ts';
+// Named exception (Part 22x): GUEST_GRACE_MS is imported from its definition; the unused re-export in web-player-purge.ts is gone.
+import { guestInGrace, guestPurgeDue } from '../../../apps/server/identity/web-player-purge.ts';
+import { GUEST_GRACE_MS } from '../../../config/web-public.ts';
 import { webPublicFromEnv } from '../../../config/web-public.ts';
 import { DomainError } from '../../../packages/domain/errors.ts';
 

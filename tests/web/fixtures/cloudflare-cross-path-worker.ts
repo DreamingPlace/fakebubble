@@ -1,7 +1,7 @@
 import { WebRetentionWorldFixture } from './cloudflare-retention-world-worker.ts';
 
 // Part 22a: the all-switches real-HTTP fixture plus routes (/fixture/cross/*) that put OLD data next to NEW data: an old invited
-// player (with and without a login) in exactly the shape migration 125 leaves, and the switches / refill day / expiry that a
+// player (with and without a login) in exactly the shape migration 126 leaves, and the switches / refill day / expiry that a
 // real clock would move. They never ship.
 const MODELS = ['deepseek', 'gemini', 'xai'] as const;
 
@@ -21,40 +21,24 @@ export class WebCrossPathFixture extends WebRetentionWorldFixture {
       return Response.json({ on: input.on === true });
     }
     if (path === '/fixture/cross/legacy') {
-      // The shape of an old invited player: kind 'invite', retention protected, a redeemed code and its grant; with a login also
-      // the unlimited entitlement migration 125 backfills for it.
+      // Named exception (Part 22x): the shape migration 126 leaves an old invited player in. Kind 'invite' no longer exists: with a
+      // login the player is a guest holding the unlimited entitlement migration 125 backfilled for it (its old code row stays, as
+      // the entitlement references it); without a login it is a guest whose window is over (no access).
       const { principalId, login } = input as { principalId: string; login: boolean };
-      const p = store.get<{ player_id: string; world_id: string }>(
-        'SELECT player_id,world_id FROM web_principals WHERE id=?',
-        principalId,
-      )!;
       store.transaction(() => {
-        store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", principalId);
-        store.run(
-          "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id=?",
-          principalId,
-        );
-        store.run("INSERT OR IGNORE INTO admin_sessions VALUES ('legacy-admin','h',?,?,NULL)", now, now + 86_400_000);
-        store.run(
-          "INSERT OR IGNORE INTO web_invite_batches(id,name,tier,created_at) VALUES ('legacy:old','old','unlimited',1)",
-        );
-        store.run(
-          `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,capacity,redeemed_count,status,batch,created_by,created_at,batch_id)
-          VALUES (?,?,?,?,1,1,'active','old','legacy-admin',1,'legacy:old')`,
-          `invite-${principalId}`,
-          `digest-${principalId}`,
-          `issue-${principalId}`,
-          'd',
-        );
-        store.run(
-          'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at,expires_at) VALUES (?,?,?,?,?,1,NULL)',
-          `grant-${principalId}`,
-          `invite-${principalId}`,
-          principalId,
-          p.player_id,
-          p.world_id,
-        );
-        if (login)
+        if (login) {
+          store.run("INSERT OR IGNORE INTO admin_sessions VALUES ('legacy-admin','h',?,?,NULL)", now, now + 86_400_000);
+          store.run(
+            "INSERT OR IGNORE INTO web_invite_batches(id,name,tier,created_at) VALUES ('legacy:old','old','unlimited',1)",
+          );
+          store.run(
+            `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,capacity,redeemed_count,status,batch,created_by,created_at,batch_id)
+            VALUES (?,?,?,?,1,1,'active','old','legacy-admin',1,'legacy:old')`,
+            `invite-${principalId}`,
+            `digest-${principalId}`,
+            `issue-${principalId}`,
+            'd',
+          );
           store.run(
             `INSERT INTO web_entitlements(id,principal_id,source,invite_id,batch_id,kind,starts_at,expires_at,created_at)
             VALUES (?,?,'invite',?,'legacy:old','unlimited',1,NULL,1)`,
@@ -62,8 +46,25 @@ export class WebCrossPathFixture extends WebRetentionWorldFixture {
             principalId,
             `invite-${principalId}`,
           );
+        } else
+          store.run(
+            "UPDATE web_guest_retention SET state='active',started_at=?,expires_at=?,revision=revision+1 WHERE principal_id=?",
+            now - 30 * 86_400_000,
+            now - 23 * 86_400_000,
+            principalId,
+          );
       });
-      return Response.json({ grantId: `grant-${principalId}`, inviteId: `invite-${principalId}` });
+      return Response.json({ inviteId: `invite-${principalId}` });
+    }
+    if (path === '/fixture/cross/trial-over') {
+      // A guest whose trial window ended (nothing legacy about it).
+      store.run(
+        "UPDATE web_guest_retention SET state='active',started_at=?,expires_at=?,revision=revision+1 WHERE principal_id=?",
+        now - 30 * 86_400_000,
+        now - 23 * 86_400_000,
+        input.principalId,
+      );
+      return Response.json({ over: true });
     }
     if (path === '/fixture/cross/rewind-refill') {
       // A UTC midnight passed since the last refill: the (player, day) rows move one day back.
@@ -73,11 +74,6 @@ export class WebCrossPathFixture extends WebRetentionWorldFixture {
     if (path === '/fixture/cross/expire') {
       store.run(
         'UPDATE web_entitlements SET starts_at=1,expires_at=? WHERE principal_id=?',
-        now - 1000,
-        input.principalId,
-      );
-      store.run(
-        'UPDATE web_invite_grants SET redeemed_at=1,expires_at=? WHERE principal_id=?',
         now - 1000,
         input.principalId,
       );
@@ -100,7 +96,6 @@ export class WebCrossPathFixture extends WebRetentionWorldFixture {
         balance:
           store.get<{ balance: number }>('SELECT balance FROM web_points_balance WHERE principal_id=?', id)?.balance ??
           null,
-        grants: store.get<{ n: number }>('SELECT count(*) n FROM web_invite_grants WHERE principal_id=?', id)!.n,
         liveSessions: store.get<{ n: number }>(
           'SELECT count(*) n FROM web_sessions WHERE principal_id=? AND revoked_at IS NULL',
           id,

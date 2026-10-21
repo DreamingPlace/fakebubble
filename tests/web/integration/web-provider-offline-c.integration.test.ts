@@ -451,24 +451,11 @@ test('C S3-003: expired audio lease reclaims known bytes without resend; UNKNOWN
   assert.equal(calls, 2);
 });
 
-test('C S3-003: revoked invite rejects private audio lookup and fresh provider reservation', (t) => {
+// Named exception (Part 22x): this was the revoked legacy invite grant (WEB_INVITE_ACCESS_REQUIRED). That grant no longer exists; the
+// same fence now is the player's access ending (the trial window over, no login): private audio lookup and a fresh provider
+// reservation are refused with TRIAL_EXPIRED, and no provider attempt is written.
+test('C S3-003: a player whose access ended rejects private audio lookup and fresh provider reservation', (t) => {
   const f = audioFixture(t);
-  f.store.run('INSERT INTO admin_sessions VALUES (?,?,?,?,NULL)', 'c-admin', 'c-admin-hash', now, now + 300_000);
-  f.store.run(
-    `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,
-    redeem_by,access_duration_ms,status,batch,created_by,created_at)
-    VALUES ('c-code','c-code-hash','c-issue','c-issue-hash',?,300000,'active','c-batch','c-admin',?)`,
-    now + 300_000,
-    now,
-  );
-  f.store.run(
-    `INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at,expires_at)
-    VALUES ('c-grant','c-code','c-principal','c-player','c-world',?,?)`,
-    now - 1,
-    now + 300_000,
-  );
-  f.store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id='c-principal'");
-  f.store.run("UPDATE web_guest_retention SET state='protected' WHERE principal_id='c-principal'");
   const publisher = new WebVerticalPublisher(f.store as WebStore, f.clock);
   const mediaScope = {
     principalId: f.scope.principalId,
@@ -478,9 +465,13 @@ test('C S3-003: revoked invite rejects private audio lookup and fresh provider r
     characterId: f.scope.characterId,
   };
   assert.throws(() => publisher.readPublishedAudio(mediaScope, 'absent-media'), /WEB_PUBLISHED_AUDIO_NOT_FOUND/);
-  f.store.run("UPDATE web_invite_grants SET revoked_at=? WHERE id='c-grant'", now);
-  assert.throws(() => publisher.readPublishedAudio(mediaScope, 'absent-media'), /WEB_INVITE_ACCESS_REQUIRED/);
-  assert.throws(() => f.ledger.reserve(f.input('speech', 0)), /WEB_INVITE_ACCESS_REQUIRED/);
+  f.store.run(
+    "UPDATE web_guest_retention SET state='active',started_at=?,expires_at=? WHERE principal_id='c-principal'",
+    now - 30 * 86_400_000,
+    now - 23 * 86_400_000,
+  );
+  assert.throws(() => publisher.readPublishedAudio(mediaScope, 'absent-media'), /TRIAL_EXPIRED/);
+  assert.throws(() => f.ledger.reserve(f.input('speech', 0)), /TRIAL_EXPIRED/);
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_provider_attempts')?.n, 0);
 });
 

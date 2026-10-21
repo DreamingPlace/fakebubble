@@ -207,7 +207,8 @@ test('chat review over real HTTP: transcripts under an anonymous code, no identi
     await f.call(`${API}/sync`, one),
     await f.call(`${API}/admin/session`, owner),
     await f.call(`${API}/admin/members/list`, owner, {}),
-    await f.call(`${API}/admin/invites/list`, owner, { beforeId: null }),
+    // Named exception (Part 22x): the legacy invite list is gone; its replacement is the entitlement batch list.
+    await f.call(`${API}/admin/invites/batch-list`, owner, {}),
     await f.call(`${API}/admin/characters/list`, owner, {}),
   ];
   const conversation = (await f.call(`${API}/bootstrap`, one)).conversations.find(

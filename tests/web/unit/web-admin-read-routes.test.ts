@@ -3,11 +3,11 @@ import test from 'node:test';
 import { isReadOnlyAdminPost } from '../../../apps/server/cloudflare/web-admin-read.ts';
 import { WEB_HTTP_LIMITS } from '../../../config/web-v1.ts';
 
+// Named exception (Part 22x): /admin/invites/list was removed with the legacy invite system, so it leaves the allowlist.
 test('read-only admin POSTs are an explicit allowlist', () => {
   for (const path of [
     '/admin/characters/list',
     '/admin/eval-sets/list',
-    '/admin/invites/list',
     '/admin/members/list',
     '/admin/metrics/stage-latency',
     '/admin/cocreation/counts',

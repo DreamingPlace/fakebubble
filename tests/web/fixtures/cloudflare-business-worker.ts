@@ -7,7 +7,7 @@ import { PrivateMediaObjects, type PrivateBucket } from '../../../apps/server/cl
 import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
 import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
 import { WebInviteAdmin } from '../../../apps/server/invites/web-invite-admin.ts';
-import { WebInvites } from '../../../apps/server/invites/web-invites.ts';
+import { WebInviteTiers } from '../../../apps/server/invites/web-invite-tiers.ts';
 import { WebInviteActions } from '../../../apps/server/invites/web-invite-actions.ts';
 import { requireWebContent } from '../../../apps/server/admission/web-retention.ts';
 import { configureWebProvider } from '../../../apps/server/generation/web-provider-configuration.ts';
@@ -137,13 +137,12 @@ export class WebBusinessFixture {
       keys: { keyId: 'fixture', sealKey: Buffer.alloc(32, 3), requestKey },
     });
     this.admin = new WebInviteAdmin(this.store, clock, origin);
-    const invites = new WebInvites(this.store, {
+    const tiers = new WebInviteTiers(this.store, {
       clock,
       codeKey: createHmac('sha256', requestKey).update('web-local-invite-code-v1').digest(),
       authorize: this.identity.authorizeInviteAction.bind(this.identity),
-      identity: this.identity,
     });
-    this.actions = new WebInviteActions(this.store, clock, origin, invites, this.identity);
+    this.actions = new WebInviteActions(this.store, clock, origin, tiers);
     this.admission = new WebAdmission(this.store, clock, randomUUID);
   }
   protected createRunner(audioMs = 250, beforeResult?: (provider: string, signal: AbortSignal) => Promise<void>) {
@@ -206,16 +205,29 @@ export class WebBusinessFixture {
         });
       } else if (path === '/authenticate') value = this.identity.authenticate(body.token);
       else if (path === '/admin') value = this.admin.login(this.admin.issueLoginGrant().token, origin);
-      else if (path === '/issue') value = this.actions.issue(body.cookie, body.csrf, body.origin, body.input);
-      else if (path === '/redeem')
-        value = this.actions.redeem(body.token, body.csrf, body.origin, body.ipHash, body.input);
-      else if (path === '/challenge') value = this.actions.redemptionChallenge(body.token, body.origin);
-      else if (path === '/recover-redemption')
-        value = this.actions.recoverRedemption(body.token, body.csrf, body.origin, body.input);
-      else if (path === '/credential')
-        value = this.actions.createRecoveryCredential(body.token, body.csrf, body.origin);
-      else if (path === '/recover-invite') value = this.actions.recoverInvite(body.origin, body.ipHash, body.input);
-      else if (path === '/revoke') value = this.actions.revokeGrant(body.cookie, body.csrf, body.origin, body.grantId);
+      else if (path === '/batch') value = this.actions.createBatch(body.cookie, body.csrf, body.origin, body.input);
+      else if (path === '/login') {
+        // Test seam: an email login on the principal behind a token, so it may redeem an entitlement code.
+        const principal = this.identity.authenticate(body.token);
+        this.store.run(
+          `INSERT INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at,last_seen_at)
+          VALUES (?,?,?,?,?,?)`,
+          principal.principalId,
+          `${principal.principalId}@fixture.invalid`,
+          'x',
+          clock.now(),
+          clock.now(),
+          clock.now(),
+        );
+        value = { principalId: principal.principalId };
+      } else if (path === '/redeem')
+        value = this.actions.redeemTier(body.token, body.csrf, body.origin, body.ipHash, body.input);
+      else if (path === '/code-ids')
+        value = this.store
+          .all<{ id: string }>('SELECT id FROM web_invite_codes WHERE batch_id=? ORDER BY id', body.batchId)
+          .map((r) => r.id);
+      else if (path === '/revoke')
+        value = this.actions.revokeEntitlement(body.cookie, body.csrf, body.origin, body.inviteId);
       else if (path === '/content') {
         const principal = this.identity.authenticate(body.token);
         value = requireWebContent(this.store, clock, principal.principalId, body.worldId ?? principal.world_id);

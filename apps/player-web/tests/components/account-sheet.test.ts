@@ -18,7 +18,6 @@ import {
 } from '../../src/features/account/account-sheet.ts';
 import { renderSignedOut, signedOutCopy, type SignedOutApi } from '../../src/features/account/signed-out-page.ts';
 import { providerStartFailure, renderProviderStartError } from '../../src/features/prototype/provider-start-error.ts';
-import { recoveryCopy } from '../../src/features/prototype/recovery-code.ts';
 import { syntheticProviderBootstrap, parseWebProviderBootstrap } from '../../../../packages/contracts/web-provider.ts';
 import { FakeElement, flush, installFakeDom } from './fake-dom.ts';
 
@@ -225,7 +224,7 @@ test('重新发送 waits out the 60 s cooldown, then asks again (a new request, 
 });
 
 test('while signup is closed the sheets say 注册暂未开放 and call nothing', (t) => {
-  for (const mode of ['signup', 'bind', 'reset'] as const) {
+  for (const mode of ['signup', 'reset'] as const) {
     const s = open(t, mode, { signupEnabled: false });
     assert.equal(s.root.querySelector('.acct-closed')!.textContent, accountCopy.closed, mode);
     assert.equal(accountCopy.closed, '注册暂未开放');
@@ -312,24 +311,6 @@ test('忘记密码 ends in a reset, not a signup, and says other devices were si
   assert.deepEqual(s.log.done, ['reset']);
 });
 
-test('绑定邮箱 explains that the recovery code stops working and finishes as a bind', async (t) => {
-  const s = open(t, 'bind');
-  assert.match(s.text(), /恢复码会失效/);
-  s.input('email').value = 'legacy@example.com';
-  s.submit();
-  await flush();
-  assert.deepEqual(s.f.calls[0]!.args, [{ purpose: 'bind', email: 'legacy@example.com' }]);
-  s.input('code').value = '111111';
-  s.submit();
-  await flush();
-  s.input('password').value = 'a brand new one';
-  s.input('nickname').value = '老玩家';
-  s.submit();
-  await flush();
-  assert.equal((s.f.calls.at(-1)!.args[0] as { purpose: string }).purpose, 'bind');
-  assert.equal(s.root.querySelector('.acct-done')!.textContent, accountCopy.doneBind);
-});
-
 test('我的昵称 shows the current name and saves a trimmed one; 修改密码 needs both passwords and offers 退出其他设备', async (t) => {
   const nick = open(t, 'nickname', { nickname: '旧名' });
   assert.equal(nick.input('nickname').value, '旧名');
@@ -407,7 +388,7 @@ test('no sheet stores anything: no localStorage, sessionStorage or cookie access
       else Reflect.deleteProperty(globalThis, name);
     });
   }
-  for (const mode of ['signup', 'login', 'reset', 'bind', 'nickname', 'password'] as const) {
+  for (const mode of ['signup', 'login', 'reset', 'nickname', 'password'] as const) {
     const s = open(t, mode);
     s.input(
       mode === 'nickname' ? 'nickname' : mode === 'password' ? 'current' : mode === 'login' ? 'email' : 'email',
@@ -430,8 +411,6 @@ function signedOutApi(over: Partial<SignedOutApi> = {}, info: AccountInfo = { si
       calls.push({ name: 'bootstrap', args: [] });
       return undefined;
     },
-    recoverWithRecoveryCode: async () => 'N'.repeat(43),
-    regenerateRecoveryCode: async () => 'N'.repeat(43),
     ...over,
   } as unknown as SignedOutApi;
   return { api, calls, names: () => calls.map((c) => c.name) };
@@ -453,7 +432,7 @@ function signedOut(t: test.TestContext, over: Partial<SignedOutApi> = {}, info?:
   return { doc, root, f, page, button, reloads: () => reloads };
 }
 
-test('the signed-out first page offers 登录 / 注册 / 以访客继续 and a small 我有恢复码 link — not an error, not a dead end', async (t) => {
+test('the signed-out first page offers 登录 / 注册 / 以访客继续 — not an error, not a dead end', async (t) => {
   const s = signedOut(t);
   await s.page.ready;
   assert.equal(s.root.querySelector('h1')!.textContent, signedOutCopy.title);
@@ -461,15 +440,10 @@ test('the signed-out first page offers 登录 / 注册 / 以访客继续 and a s
     s.root.querySelectorAll('.signed-out-actions button').map((b) => b.textContent),
     ['登录', '注册', '以访客继续'],
   );
-  const have = s.root.querySelector('.signed-out-more button')!;
-  assert.equal(have.textContent, recoveryCopy.have);
-  assert.ok(have.classList.contains('signed-out-recovery'));
+  assert.equal(s.root.querySelector('.signed-out-more'), null, 'the recovery-code link is gone');
   assert.doesNotMatch(s.root.textContent, /访问会话需要恢复|没有将受邀身份/);
   // Nothing was created or revoked just by showing the page.
   assert.deepEqual(s.f.names(), ['account']);
-  // 我有恢复码 is wired to the existing recovery entry (its own behaviour is covered in provider-recovery.test.ts; that
-  // component builds its dialog from HTML, which this in-memory DOM refuses by design).
-  assert.equal(have.listeners.get('click')?.length, 1);
 });
 
 test('登录 on the first page opens the login sheet and reloads after success; 忘记密码 reaches the reset sheet', async (t) => {
@@ -554,7 +528,6 @@ test('ProviderApi account calls use the exact routes, bodies and CSRF header, an
   const replies: Record<string, unknown> = {
     '/api/web/provider/account/request-code': { challengeId: 'c1', expiresAt: 5, resendAfterMs: 60000 },
     '/api/web/provider/account/signup': { nickname: '阿泡', emailMasked: 'p***@example.com' },
-    '/api/web/provider/account/bind': { nickname: '阿泡', emailMasked: 'p***@example.com' },
     '/api/web/provider/account/login': { csrf: 'L'.repeat(43) },
     '/api/web/provider/account/reset': { csrf: 'R'.repeat(43) },
     '/api/web/provider/account': {
@@ -564,7 +537,6 @@ test('ProviderApi account calls use the exact routes, bodies and CSRF header, an
       hasLogin: true,
       emailMasked: 'p***@example.com',
       nickname: '阿泡',
-      canBind: false,
     },
   };
   const api = new ProviderApi(async (url, init) => {
@@ -584,7 +556,6 @@ test('ProviderApi account calls use the exact routes, bodies and CSRF header, an
       emailMasked: 'p***@example.com',
     },
   );
-  await api.finishAccount({ purpose: 'bind', challengeId: 'c1', password: 'pw-pw-pw-pw', nickname: '阿泡' });
   await api.login({ email: 'p@example.com', password: 'pw-pw-pw-pw' });
   await api.resetPassword({ challengeId: 'c1', password: 'pw-pw-pw-pw' });
   await api.changePassword({ current: 'a', next: 'b', logoutOthers: true });
@@ -599,7 +570,6 @@ test('ProviderApi account calls use the exact routes, bodies and CSRF header, an
       ['POST', '/account/request-code'],
       ['POST', '/account/verify-code'],
       ['POST', '/account/signup'],
-      ['POST', '/account/bind'],
       ['POST', '/account/login'],
       ['POST', '/account/reset'],
       ['POST', '/account/password'],
@@ -610,14 +580,14 @@ test('ProviderApi account calls use the exact routes, bodies and CSRF header, an
       ['GET', '/account'],
     ],
   );
-  assert.deepEqual(JSON.parse(String(requests[6]!.init.body)), { current: 'a', next: 'b', logoutOthers: true });
+  assert.deepEqual(JSON.parse(String(requests[5]!.init.body)), { current: 'a', next: 'b', logoutOthers: true });
   assert.ok(
     requests
-      .slice(0, 11)
+      .slice(0, 10)
       .every((r) => (r.init.headers as Record<string, string>)['Content-Type'] === 'application/json'),
   );
   // After login the CSRF header is the new session's.
-  assert.equal((requests[6]!.init.headers as Record<string, string>)['X-CSRF-Token'], 'R'.repeat(43));
+  assert.equal((requests[5]!.init.headers as Record<string, string>)['X-CSRF-Token'], 'R'.repeat(43));
   assert.equal(info.signedIn && info.hasLogin && info.nickname, '阿泡');
   const signedOutReply = new ProviderApi(async () => Response.json({ signupEnabled: false, signedIn: false }));
   assert.deepEqual(await signedOutReply.account(), { signupEnabled: false, signedIn: false });
@@ -637,7 +607,7 @@ test('ProviderApi account calls use the exact routes, bodies and CSRF header, an
 function chat(
   t: test.TestContext,
   options: {
-    kind: 'guest' | 'invite';
+    kind: 'guest';
     account?: AccountInfo | 'throws' | 'missing';
     chats?: boolean;
     /** Part 13b: replies the guest has left (default: whatever the fixture says). */
@@ -670,21 +640,6 @@ function chat(
     boot.access.remainingReplies = options.remaining;
     boot.access.canSend = options.remaining > 0;
   }
-  if (options.kind === 'invite')
-    boot.access = {
-      kind: 'invite',
-      principalId: 'p',
-      playerId: 'pl',
-      worldId: 'w',
-      revision: 1,
-      grantId: 'g',
-      status: 'active',
-      lockedCharacterId: null,
-      remainingReplies: null,
-      reservedReplies: null,
-      trialExpiresAt: null,
-      canSend: true,
-    };
   if (options.chats)
     boot.conversations = boot.characters.map((c) => ({
       conversationId: `c-${c.characterId}`,
@@ -699,11 +654,7 @@ function chat(
     history: async () => ({ messages: [] }),
     redeemInvite: async () => {
       calls.push('redeemInvite');
-      return { grantId: 'g', principalId: 'p', expiresAt: null, csrf: 'c', duplicate: false };
-    },
-    regenerateRecoveryCode: async () => {
-      calls.push('regenerateRecoveryCode');
-      return 'N'.repeat(43);
+      return { entitlement: undefined, duplicate: false };
     },
     logout: async () => void calls.push('logout'),
     logoutOthers: async () => void calls.push('logoutOthers'),
@@ -784,7 +735,6 @@ test('top account menu for a signed-in login: 我的昵称 / 修改密码 / 退�
     hasLogin: true,
     emailMasked: 'p***@example.com',
     nickname: '阿泡',
-    canBind: false,
     playerNumber: 'ABCD2345',
   };
   const f = chat(t, { kind: 'guest', account });
@@ -815,49 +765,6 @@ test('top account menu for a signed-in login: 我的昵称 / 修改密码 / 退�
   await flush();
   assert.ok(f.calls.includes('logout'));
   assert.deepEqual(f.reloads, ['reload']);
-});
-
-// Part 22a (named exception): 绑定邮箱 and 恢复码 are rows of 我的信息 now (one top-bar button opens it); the recovery-code button left the bar.
-test('chat: a legacy invited player without a login sees 绑定邮箱 and keeps the recovery-code entry; with a login that entry is gone', async (t) => {
-  const bindable: AccountInfo = {
-    signupEnabled: true,
-    signedIn: true,
-    kind: 'invite',
-    hasLogin: false,
-    emailMasked: null,
-    nickname: null,
-    canBind: true,
-  };
-  const f = chat(t, { kind: 'invite', account: bindable });
-  await f.attach();
-  assert.deepEqual(titles(f.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
-  const mine = f.header.querySelectorAll('.head-actions button');
-  assert.deepEqual(labelsOf(mine), ['我的信息']);
-  mine[0]!.click();
-  assert.deepEqual(
-    infoButtons(f).map((b) => b.textContent),
-    ['×', '绑定邮箱', '恢复码'],
-  );
-  press(f, '绑定邮箱');
-  assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '绑定邮箱');
-  assert.equal(f.header.querySelectorAll('.recovery-entry').length, 0, '恢复码 is no top-bar button any more');
-  const bound = chat(t, {
-    kind: 'invite',
-    account: { ...bindable, hasLogin: true, canBind: false, emailMasked: 'p***@example.com', nickname: '老玩家' },
-  });
-  await bound.attach();
-  assert.equal(
-    bound.header.querySelectorAll('.recovery-entry').length,
-    0,
-    'no recovery code for a player with a login',
-  );
-  topBar(bound)[0]!.click();
-  assert.equal(
-    infoButtons(bound).some((b) => b.textContent === '恢复码'),
-    false,
-    'and none in 我的信息',
-  );
-  assert.deepEqual(titles(bound.menu()), ['共创 · 让瓜瓜更像瓜瓜'], 'the chat menu has no account entries');
 });
 
 // Part 22a (named exception): 邀请码 is no top-bar button; 输入邀请码 is a row of 我的信息. A guest sees it there next to 注册 / 登录
@@ -925,7 +832,6 @@ const signedIn: AccountInfo = {
   hasLogin: true,
   emailMasked: 'p***@example.com',
   nickname: '阿泡',
-  canBind: false,
 };
 
 // Part 21i (named exception, three tests below): a guest's top bar now always carries 更多, which holds 消费记录 (the guest's trial
@@ -977,13 +883,10 @@ test('top bar: the trial used up shows ONE short line saying what to do next, an
   const login = chat(t, { kind: 'guest', account: signedIn, remaining: 0 });
   await login.attach();
   assert.equal(login.header.querySelector('.head-hint')!.textContent, '输入邀请码继续');
-  // Replies left, or an invited player: no line.
+  // Replies left: no line.
   const left = chat(t, { kind: 'guest', remaining: 1 });
   await left.attach();
   assert.equal(left.header.querySelector('.head-hint'), null);
-  const invited = chat(t, { kind: 'invite' });
-  await invited.attach();
-  assert.equal(invited.header.querySelector('.head-hint'), null);
 });
 
 // Part 22a (named exception): the nickname button opens 我的信息 directly (no dropdown); the four actions are rows of that page.
@@ -1019,26 +922,6 @@ test('top bar: a signed-in player sees their nickname, which opens the account m
   const bare = chat(t, { kind: 'guest', account: { ...signedIn, nickname: null }, remaining: 2 });
   await bare.attach();
   assert.equal(topBar(bare)[0]!.textContent, '我的信息');
-});
-
-// Part 22a (named exception): the legacy invited player's single top-bar entry is 我的信息; 恢复码 is a row inside it, not a button in the bar.
-test('top bar: an invited player with a login gets the nickname button too; one without a login keeps 恢复码 and gets one 我的账号 entry (绑定邮箱)', async (t) => {
-  const bound = chat(t, {
-    kind: 'invite',
-    account: { ...signedIn, kind: 'invite', nickname: '老玩家' },
-  });
-  await bound.attach();
-  assert.deepEqual(labelsOf(topBar(bound)), ['老玩家']);
-  assert.equal(bound.header.querySelectorAll('.recovery-entry').length, 0);
-  const legacy = chat(t, {
-    kind: 'invite',
-    account: { ...signedIn, kind: 'invite', hasLogin: false, canBind: true, nickname: null, emailMasked: null },
-  });
-  await legacy.attach();
-  assert.deepEqual(labelsOf(legacy.header.querySelectorAll('.head-actions button')), ['我的信息']);
-  assert.equal(legacy.header.querySelectorAll('.recovery-entry').length, 0);
-  legacy.header.querySelectorAll('.head-actions button')[0]!.click();
-  assert.ok(infoButtons(legacy).some((b) => b.textContent === '恢复码'));
 });
 
 test('mobile top bar: one account entry opens the existing login sheet with a signup choice', async (t) => {
@@ -1202,7 +1085,7 @@ test('Part 21i: every player password field has a 显示/隐藏 toggle with aria
   };
   check(open(t, 'login').root, ['password']);
   check(open(t, 'password').root, ['current', 'next']);
-  for (const mode of ['signup', 'reset', 'bind'] as const) {
+  for (const mode of ['signup', 'reset'] as const) {
     const s = open(t, mode);
     s.input('email').value = 'p@example.com';
     s.submit();
@@ -1224,7 +1107,6 @@ test('Part 21i: the top-bar account dropdown has item labels only, no secondary 
     hasLogin: true,
     emailMasked: 'p***@example.com',
     nickname: '阿泡',
-    canBind: false,
     playerNumber: 'ABCD2345',
   };
   const login = chat(t, { kind: 'guest', account });

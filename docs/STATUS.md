@@ -235,6 +235,15 @@ The owner decides from the admin page, with no deploy, which reply models exist,
 - No migration (49 steps, 124 = `5754ab58…1301d17`); prompt/policy hashes unchanged.
 
 
+## Part 22x (one way to sign in; earlier-version features removed; dead server code removed)
+
+- **Sign-in.** Email + password only. Removed: recovery codes (issue, regenerate, 我有恢复码, 你的恢复码), the legacy invite system (kind-'invite' redemption, invite-only sessions, `web_invite_credentials` and the identity receipts), the session-receipt routes (`/identity/receipt-*`: nothing in login, logout, bootstrap or signed-out used them), and the 绑定邮箱 flow for recovery-code holders. Legacy invite principals: with an email login they are registered players (17h/17i rules, 22a entitlements); without one they have no access and are cleaned up as expired guests.
+- **Migration 126** (`126_legacy_invites_retired.sql`, data only, sha256 `68526f0cfc26957124a4a2f7ea9bcc600cc11c6ba0fcb3702b866aba67efec4e`): starts the retention window for kind-'invite' principals and sets their kind to 'guest'. The Cloudflare ledger now has 51 steps. Migrations 1-125 and every old table are untouched; no prompt or policy hash changed.
+- **Entry points.** The bare URL redirects to `?mode=provider`; the static demo and the browser-side local modes (`local-2`, `local-3`, `local-3-admin`) and their client-only code are gone. The server-side local harness the tests need stays.
+- **Dead server code.** `pnpm check:dead-exports` (also a unit test) fails when a non-test export has no caller outside tests; the allow-list in `config/dead-exports-allowlist.json` carries a reason per entry. `docs/DEAD_CODE_INVENTORY.md` describes the current tree.
+- **Fixed on the way** (found by the new seven-shape end-to-end test, `web-player-shapes-22x`): with the signup bonus off and model choice on, an unlimited holder was told it could not send, and a daily_refill holder was shown as unmetered with a zero balance although admission charged it in points.
+- **Tests.** `web-player-shapes-22x` drives the real app and reply pipeline over HTTP for seven player shapes (trial guest, guest past trial, registered, old invite with login, old invite-only, daily_refill, unlimited) under all four SIGNUP_BONUS_ENABLED x PLAYER_MODEL_CHOICE_ENABLED combinations, and asserts every removed route is 404. `pnpm check:web:browser` drives the signed-out page, signup, login and logout in real Chromium.
+
 ## Part 22a (invites are entitlements; 我的信息; 邀请与额度)
 
 Details and the step-125 notes for Codex: docs/DEPLOYMENT.md "邀请即额度". No prompt or tool-schema change: `POLICY_HASH` / `PROMPT_HASH` unchanged.

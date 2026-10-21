@@ -516,29 +516,17 @@ test('publication derives complete speech ordinals and exact spoken text from ac
   );
 });
 
-test('113 memory-only reservation reuses current same-scope invite grant predicate', (t) => {
+// Named exception (Part 22x): the legacy invite grant predicate is gone; the same assertion (the reservation re-reads the CURRENT
+// same-scope access rule, so access ending between two reservations refuses the second and releases nothing) now runs on the
+// remaining rule, the guest's retention expiry.
+test('113 memory-only reservation reuses current same-scope access predicate', (t) => {
   const f = fixture(t);
-  f.store.run("UPDATE web_principals SET kind='invite' WHERE id='principal'");
-  f.store.run("UPDATE web_guest_retention SET state='protected' WHERE principal_id='principal'");
-  f.store.run('INSERT INTO admin_sessions VALUES (?,?,?,?,NULL)', 'admin', 'admin-hash', now, now + 1000);
-  f.store.run(
-    `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,
-    redeem_by,access_duration_ms,status,batch,created_by,created_at)
-    VALUES ('code','code-hash','issue','issue-hash',?,1000,'active','synthetic','admin',?)`,
-    now + 1000,
-    now,
-  );
-  f.store.run(
-    `INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at,expires_at)
-    VALUES ('grant','code','principal','player','world',?,?)`,
-    now - 1,
-    now + 1000,
-  );
+  f.store.run("UPDATE web_guest_retention SET state='active',expires_at=? WHERE principal_id='principal'", now + 1000);
   f.price('fake-deepseek', 'draft');
   f.price('fake-deepseek', 'review');
   f.ledger.reserve(f.input('draft'));
-  f.store.run("UPDATE web_invite_grants SET revoked_at=? WHERE id='grant'", now);
-  assert.throws(() => f.ledger.reserve(f.input('review')), /WEB_INVITE_ACCESS_REQUIRED/);
+  f.store.run("UPDATE web_guest_retention SET expires_at=? WHERE principal_id='principal'", now);
+  assert.throws(() => f.ledger.reserve(f.input('review')), /TRIAL_EXPIRED/);
   assert.equal(
     f.store.get<{ held_micros: number }>("SELECT held_micros FROM web_provider_spending WHERE provider='fake-deepseek'")
       ?.held_micros,
@@ -982,22 +970,8 @@ test('113 fake protocol runner completes scoped text, Fish WAV, publication and 
       ),
     /WEB_PUBLISHED_AUDIO_NOT_FOUND/,
   );
-  f.store.run('INSERT INTO admin_sessions VALUES (?,?,?,?,NULL)', 'admin', 'admin-hash', now, now + 1000);
-  f.store.run(
-    `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,
-    redeem_by,access_duration_ms,status,batch,created_by,created_at)
-    VALUES ('code','code-hash','issue','issue-hash',?,1000,'active','synthetic','admin',?)`,
-    now + 1000,
-    now,
-  );
-  f.store.run(
-    `INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at,expires_at)
-    VALUES ('grant','code','principal','player','world',?,?)`,
-    now - 1,
-    now + 1000,
-  );
-  f.store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id='principal'");
-  f.store.run("UPDATE web_guest_retention SET state='protected' WHERE principal_id='principal'");
+  // Named exception (Part 22x): the invite upgrade and grant revocation that closed this test are gone with the legacy invite
+  // system. The current-access rule is exercised on the remaining one: a live guest reads its audio, an expired one does not.
   assert.equal(
     publisher.readPublishedAudio(
       {
@@ -1011,7 +985,7 @@ test('113 fake protocol runner completes scoped text, Fish WAV, publication and 
     ).length,
     syntheticTone().length,
   );
-  f.store.run("UPDATE web_invite_grants SET revoked_at=? WHERE id='grant'", now);
+  f.store.run("UPDATE web_guest_retention SET expires_at=? WHERE principal_id='principal'", now);
   assert.throws(
     () =>
       publisher.readPublishedAudio(
@@ -1024,7 +998,7 @@ test('113 fake protocol runner completes scoped text, Fish WAV, publication and 
         },
         mediaId,
       ),
-    /WEB_INVITE_ACCESS_REQUIRED/,
+    /TRIAL_EXPIRED/,
   );
 });
 

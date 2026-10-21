@@ -25,6 +25,7 @@ import m122 from '../../apps/server/web-migrations/122_chat_review.sql';
 import m123 from '../../apps/server/web-migrations/123_model_choice.sql';
 import m124 from '../../apps/server/web-migrations/124_model_settings.sql';
 import m125 from '../../apps/server/web-migrations/125_invite_tiers.sql';
+import m126 from '../../apps/server/web-migrations/126_legacy_invites_retired.sql';
 import retention from './retention.sql';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -74,6 +75,7 @@ export const webMigrations = [
     m123,
     m124,
     m125,
+    m126,
   ].map((sql, i) => ({
     version: 100 + i,
     sql:

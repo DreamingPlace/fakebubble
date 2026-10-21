@@ -15,7 +15,6 @@ type State = {
   spends: number;
   refills: number;
   balance: number | null;
-  grants: number;
   liveSessions: number;
 };
 let peers = 0;
@@ -23,9 +22,9 @@ const client = (): Client => ({ cookie: '', csrf: '', peer: `10.22.0.${++peers}`
 const a = (path: string) => `${API}/account${path}`;
 
 /**
- * Part 22a follow-up, item 5. ONE real-HTTP workerd database holding OLD and NEW data together: an old invited player with a
- * login (migration 125 backfilled an unlimited entitlement for it), an old invited player without a login (the legacy path,
- * untouched), a new daily_refill holder, and a plain registered player. Revoke, expiry, the model-choice switch both ways,
+ * Part 22a follow-up, item 5 (Part 22x: the old data is the shape migration 126 leaves). ONE real-HTTP workerd database holding
+ * OLD and NEW data together: an old invited player with a login (migration 125 backfilled an unlimited entitlement for it), an
+ * old invited player without a login (126: an expired guest, no access), a new daily_refill holder, and a plain registered player. Revoke, expiry, the model-choice switch both ways,
  * redemption and a refill across a UTC midnight run against all of them, and tier, charge and display are asserted for each.
  */
 function setup(t: test.TestContext) {
@@ -115,26 +114,26 @@ test('22a cross-path: old and new invite data side by side over real HTTP - tier
     f.call(`${API}/invites/redeem`, actor, { requestId: randomUUID(), code }, status);
   const info = (actor: Client) => f.call(a(''), actor);
 
-  // A: an OLD invited player WITH a login (kind 'invite', protected, backfilled unlimited entitlement).
+  // A: an OLD invited player WITH a login (a guest holding the backfilled unlimited entitlement).
   const A = client();
   const aId = await boot(A);
   await f.signUp(A, 'old.login@example.com');
-  const aLegacy = await f.fixture<{ grantId: string; inviteId: string }>('/fixture/cross/legacy', {
+  const aLegacy = await f.fixture<{ inviteId: string }>('/fixture/cross/legacy', {
     principalId: aId,
     login: true,
   });
-  // A2: the same shape, ended later through the OLD 玩家授权 route.
+  // A2: the same shape, ended later too.
   const A2 = client();
   const a2Id = await boot(A2);
   await f.signUp(A2, 'old.login2@example.com');
-  const a2Legacy = await f.fixture<{ grantId: string; inviteId: string }>('/fixture/cross/legacy', {
+  const a2Legacy = await f.fixture<{ inviteId: string }>('/fixture/cross/legacy', {
     principalId: a2Id,
     login: true,
   });
-  // B: an OLD invited player WITHOUT a login: only the legacy grant.
+  // B: an OLD invited player WITHOUT a login: after migration 126 an expired guest.
   const B = client();
   const bId = await boot(B);
-  const bLegacy = await f.fixture<{ grantId: string; inviteId: string }>('/fixture/cross/legacy', {
+  await f.fixture<{ inviteId: string }>('/fixture/cross/legacy', {
     principalId: bId,
     login: false,
   });
@@ -152,20 +151,20 @@ test('22a cross-path: old and new invite data side by side over real HTTP - tier
 
   // ---- 1. Start: tier and display of each. ----
   assert.deepEqual([(await info(A)).tier.kind, (await info(A)).tier.unlimited], ['unlimited', true]);
-  assert.deepEqual([(await state(aId)).kind, (await state(aId)).retention], ['invite', 'protected']);
+  assert.equal((await state(aId)).kind, 'guest', 'an old invite player is a guest after migration 126');
   assert.equal((await info(C)).tier.kind, 'daily_refill');
   assert.deepEqual((await info(C)).tier.plan, { kind: 'daily_refill', dailyAmount: 50, cap: 120, expiresAt: null });
   assert.equal((await info(D)).tier.kind, 'registered');
   assert.equal((await info(D)).tier.plan, undefined);
   const bBoot = await f.call(`${API}/bootstrap`, B);
-  assert.equal(bBoot.access.kind, 'invite', 'the invite-only legacy player stays on the legacy path');
+  assert.deepEqual([bBoot.access.kind, bBoot.access.canSend], ['guest', false], 'the invite-only player has no access');
 
   // ---- 2. Charge: unlimited players are never charged; metered ones pay. ----
   const d0 = (await state(dId)).balance!,
     c0 = (await state(cId)).balance!;
-  for (const actor of [A, B, C, D]) assert.equal(await f.reply(actor), 'published');
+  for (const actor of [A, C, D]) assert.equal(await f.reply(actor), 'published');
   assert.equal((await state(aId)).spends, 0, 'old login holder: unlimited, no spend');
-  assert.equal((await state(bId)).spends, 0, 'old invite-only holder: legacy path, no spend');
+  assert.equal((await state(bId)).spends, 0, 'old invite-only holder: no access, no spend');
   assert.equal((await state(cId)).spends, 1, 'new refill holder pays points');
   assert.equal((await state(dId)).spends, 1, 'registered pays points');
   assert.ok((await state(dId)).balance! < d0 && (await state(cId)).balance! < c0);
@@ -221,15 +220,16 @@ test('22a cross-path: old and new invite data side by side over real HTTP - tier
   assert.equal((await state(cId)).refills, cBefore.refills + 1);
   assert.equal((await info(C)).modelChoice.balance, next, 'once a day');
 
-  // ---- 6. Revoke: the entitlement page ends A; the OLD 玩家授权 route ends A2 and B. Same outcome. ----
+  // ---- 6. Revoke: the entitlement page ends A and A2. ----
   await f.call(`${API}/admin/invites/entitlement-revoke`, owner, { id: aLegacy.inviteId });
-  await f.call(`${API}/admin/invites/revoke-grant`, owner, { id: a2Legacy.grantId });
-  await f.call(`${API}/admin/invites/revoke-grant`, owner, { id: bLegacy.grantId });
+  await f.call(`${API}/admin/invites/entitlement-revoke`, owner, { id: a2Legacy.inviteId });
   for (const [actor, id, email] of [
     [A, aId, 'old.login@example.com'],
     [A2, a2Id, 'old.login2@example.com'],
   ] as const) {
-    assert.equal((await info(actor)).signedIn, false, "the legacy grant's sessions end with it, as before");
+    // Named exception (Part 22x): a revoked entitlement no longer ends the player's sessions (only the legacy grant did); the
+    // player stays signed in and is registered at once. A fresh login on the same account changes nothing.
+    assert.equal((await info(actor)).signedIn, true);
     actor.cookie = '';
     await f.call(a('/login'), actor, { email, password: PASSWORD });
     const after = await info(actor);
@@ -240,7 +240,6 @@ test('22a cross-path: old and new invite data side by side over real HTTP - tier
     assert.equal(await f.reply(actor), 'published');
     assert.equal((await state(id)).spends, spends + 1, 'charged now');
   }
-  assert.equal((await state(bId)).liveSessions, 0, "the old invite-only holder's sessions end with its grant");
 
   // ---- 7. Expiry: the new holder lapses into a registered player with its remaining balance. ----
   const cRemaining = (await state(cId)).balance;

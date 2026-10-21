@@ -1,0 +1,84 @@
+{
+  "entries": [
+    {
+      "file": "workers/web-cloudflare/edge.ts",
+      "names": "*",
+      "reason": "Worker entrypoint: the default export and flags are bound by name in the Cloudflare deployment (wrangler config), not imported."
+    },
+    {
+      "file": "workers/web-cloudflare/business.ts",
+      "names": "*",
+      "reason": "Worker entrypoint: the Durable Object class, the operator RPC service and the default export are bound by name in the Cloudflare deployment."
+    },
+    {
+      "file": "workers/web-cloudflare/budget.ts",
+      "names": "*",
+      "reason": "Worker entrypoint: the budget Durable Object and its RPC services are bound by name in the Cloudflare deployment."
+    },
+    {
+      "file": "workers/web-cloudflare/generation.ts",
+      "names": "*",
+      "reason": "Worker entrypoint: the generation service and default export are bound by name (service binding) in the Cloudflare deployment."
+    },
+    {
+      "file": "apps/server/memory/memory-review.ts",
+      "names": ["correctMemory", "listCorrections", "listMemoryTopics", "readMemoryDetail"],
+      "reason": "Memory review: the player-facing memory controls are the next product step; the live memory system and its tests use these."
+    },
+    {
+      "file": "apps/server/memory/memory.ts",
+      "names": ["selectProactiveTopic"],
+      "reason": "Proactive-message code is out of scope for Part 22x and is wired in a later Part."
+    },
+    {
+      "file": "apps/player-web/src/features/cocreation/chat-guide.ts",
+      "names": ["resetChatGuide"],
+      "reason": "Test seam: resets module state between component tests (model-picker.test.ts)."
+    },
+    {
+      "file": "apps/player-web/src/features/cocreation/cocreation-sheet.ts",
+      "names": ["resetCocreationDrafts"],
+      "reason": "Test seam: resets module state between component tests (cocreation-sheet.test.ts)."
+    },
+    {
+      "file": "apps/server/admission/web-player-number.ts",
+      "names": ["PLAYER_NUMBER_PATTERN"],
+      "reason": "Test seam: the public format of a 玩家编号, asserted by the migration tests."
+    },
+    {
+      "file": "apps/server/admission/web-points.ts",
+      "names": ["grantPoints"],
+      "reason": "Test seam: gives a test player a balance (web-invite-tiers-22a)."
+    },
+    {
+      "file": "apps/server/cloudflare/web-alerts.ts",
+      "names": ["memoryAlertState"],
+      "reason": "Test seam: the in-memory alert state used by web-alerts.test.ts."
+    },
+    {
+      "file": "apps/server/generation/embedding-provider.ts",
+      "names": ["OfflineEmbeddings", "fixtureVector"],
+      "reason": "Test seam: the offline embedding provider every embedding test and the embed fixture worker run on."
+    },
+    {
+      "file": "apps/server/generation/text-wire.ts",
+      "names": ["isPreSend"],
+      "reason": "Test seam: wire classification asserted by web-text-wire.test.ts."
+    },
+    {
+      "file": "apps/server/generation/web-provider-materials.ts",
+      "names": ["verifyVoiceMaterialEvidence"],
+      "reason": "Test seam: evidence check asserted by web-provider-materials.test.ts."
+    },
+    {
+      "file": "apps/server/platform/web-data-policy-preflight.ts",
+      "names": ["preflightWebDataPolicy"],
+      "reason": "Test seam: standalone entry of the 109→110 preflight whose in-transaction twin the store runs; both are asserted by the data-policy tests."
+    },
+    {
+      "file": "packages/contracts/web-provider.ts",
+      "names": ["syntheticProviderBootstrap"],
+      "reason": "Test seam: the synthetic bootstrap every player-web component test builds on."
+    }
+  ]
+}

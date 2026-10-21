@@ -90,39 +90,6 @@ export function finalizeFishWav(bytes: Uint8Array): { audio: Buffer; finalized: 
   return { audio, finalized };
 }
 
-/** Strip container metadata and preserve the selected PCM exactly; never modifies the original. */
-export function slicePCM(bytes: Uint8Array, startMs: number, endMs: number, maximumSourceMs = 600_000): Buffer {
-  const info = inspectPCM(bytes, maximumSourceMs);
-  ensure(
-    Number.isFinite(startMs) && Number.isFinite(endMs) && startMs >= 0 && endMs > startMs && endMs <= info.durationMs,
-    'INVALID_AUDIO_RANGE',
-  );
-  const start = Math.round((startMs * info.sampleRate) / 1000);
-  const end = Math.round((endMs * info.sampleRate) / 1000);
-  const length = (end - start) * info.channels * 2;
-  ensure(length > 0, 'INVALID_AUDIO_RANGE');
-  const result = Buffer.alloc(44 + length);
-  result.write('RIFF', 0);
-  result.writeUInt32LE(36 + length, 4);
-  result.write('WAVEfmt ', 8);
-  result.writeUInt32LE(16, 16);
-  result.writeUInt16LE(1, 20);
-  result.writeUInt16LE(info.channels, 22);
-  result.writeUInt32LE(info.sampleRate, 24);
-  result.writeUInt32LE(info.sampleRate * info.channels * 2, 28);
-  result.writeUInt16LE(info.channels * 2, 32);
-  result.writeUInt16LE(16, 34);
-  result.write('data', 36);
-  result.writeUInt32LE(length, 40);
-  Buffer.from(bytes).copy(
-    result,
-    44,
-    info.dataOffset + start * info.channels * 2,
-    info.dataOffset + end * info.channels * 2,
-  );
-  return result;
-}
-
 export function pcmLevels(bytes: Uint8Array) {
   const info = inspectPCM(bytes);
   const data = Buffer.from(bytes);

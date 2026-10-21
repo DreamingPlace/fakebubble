@@ -328,7 +328,8 @@ export class WebCocreation {
     // The invite batch name is the only provenance an administrator sees besides the pseudonym.
     const batch =
       this.store.get<{ batch: string }>(
-        `SELECT c.batch FROM web_invite_grants g JOIN web_invite_codes c ON c.id=g.invite_id WHERE g.principal_id=?`,
+        `SELECT c.batch FROM web_entitlements e JOIN web_invite_codes c ON c.id=e.invite_id WHERE e.principal_id=?
+        ORDER BY e.starts_at DESC LIMIT 1`,
         row.principal_id,
       )?.batch ?? null;
     return {

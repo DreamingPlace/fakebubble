@@ -175,10 +175,6 @@ test('C-S3-002 existing schema103 account session and receipt remain scoped afte
     },
     { ...session },
   );
-  assert.deepEqual(
-    afterIdentity.receiptStatus(registered.issuedToken, registered.csrf, origin, input.requestId),
-    registered.receipt,
-  );
   assert.throws(() => afterIdentity.authenticate(token), /SESSION_EXPIRED/);
 });
 

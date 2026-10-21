@@ -1,9 +1,6 @@
 import type { RecoveryPoint } from '../../../packages/contracts/player-api.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 
-export const RECOVERY_HEADER = 'x-bubble-recovery';
-export const recoveryToken = (point: RecoveryPoint | null | undefined) => point?.epoch ?? 'original';
-
 export function parseRecoveryPoint(value: unknown): RecoveryPoint {
   ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_RECOVERY_POINT');
   const p = value as RecoveryPoint;
@@ -16,9 +13,4 @@ export function parseRecoveryPoint(value: unknown): RecoveryPoint {
     'INVALID_RECOVERY_POINT',
   );
   return Object.freeze(p);
-}
-
-export function requireRecoveryPoint(point: RecoveryPoint | null, header: unknown) {
-  // Original instances remain compatible with legacy clients; restored instances fail closed.
-  ensure((header === undefined && point === null) || header === recoveryToken(point), 'RECOVERY_CONFIRMATION_REQUIRED');
 }

@@ -271,11 +271,6 @@ export async function routeWebAccountAdmin(
       body: await admin.finishReset(req.origin, peer(), value.challengeId, value.code, value.password),
     };
   }
-  if (path === `${base}/invites/list`) {
-    auth();
-    const value = body(['beforeId']);
-    return { status: 200, body: admin.inviteRecords(req.adminCookie, req.csrf, req.origin, value.beforeId) };
-  }
   if (path === `${base}/metrics/stage-latency`) {
     auth();
     const value = body(['days']);

@@ -58,8 +58,7 @@ export function webReceiptDigest(store: WebStore, kind: 'receipt' | 'usage', jso
 }
 
 /** What decides whether a principal's private work may run: the principal, its retention row and the clock. */
-export type WebContentVerdict = 'live' | 'TRIAL_EXPIRED' | 'WEB_INVITE_ACCESS_REQUIRED';
-const GRANT_SCHEMAS_FROM = 111;
+export type WebContentVerdict = 'live' | 'TRIAL_EXPIRED';
 
 /**
  * Part 17i. THE rule for "is this principal's content live", in one place (JS here, SQL in webContentLiveSql below; a test
@@ -70,8 +69,7 @@ const GRANT_SCHEMAS_FROM = 111;
  *   guest         state 'unstarted', or 'active' inside its window
  *   guest         state 'unstarted' / 'active' and REGISTERED (isRegistered: signup bonus row, or an email login): the
  *                 window is over but the player is a kept account (17b / 17h)
- *   invite        state 'protected' and an ACTIVE grant, or REGISTERED (a lapsed grant with a login or a bonus row)
- *   anything else (purging, purged, an unregistered lapsed invite, a plain guest past its window): not live.
+ *   anything else (purging, purged, a plain guest past its window): not live.
  *
  * access 'read' (history, events, an operation's status, published audio) additionally lets a guest WITH an email login
  * read after the trial; it is not part of the SQL rule (nothing is claimed or run on it).
@@ -107,31 +105,13 @@ export function webContentVerdict(
     playerLoginRetainsGuest(store, principalId)
   )
     return 'live';
-  if (
-    principal.kind === 'invite' &&
-    row.state === 'protected' &&
-    (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= GRANT_SCHEMAS_FROM
-  ) {
-    const grant = store.get<{ id: string }>(
-      `SELECT id FROM web_invite_grants
-      WHERE principal_id=? AND player_id=? AND world_id=? AND revoked_at IS NULL
-        AND (expires_at IS NULL OR expires_at>?)`,
-      principalId,
-      principal.player_id,
-      worldId,
-      now,
-    );
-    // Part 17h: an invited player whose grant has lapsed but who is registered chats as a registered player; only one
-    // with nothing else to fall back on is told the invite is gone.
-    return grant || isRegisteredTier(store as WebStore, principalId, now) ? 'live' : 'WEB_INVITE_ACCESS_REQUIRED';
-  }
   return 'TRIAL_EXPIRED';
 }
 
 /**
  * The SQL twin of isRegistered (web-free-tier.ts) over a web_principals row `alias`: a signup bonus row, or an email login
- * on a guest or on an invited player whose grants are all revoked / expired at `now`. Same table-presence rules as the JS
- * (bonus tables = schema 121, which also means logins and grants exist) and the same flag. One `?` (now).
+ * on a guest. Same table-presence rules as the JS (bonus tables = schema 121, which also means logins exist) and the same
+ * flag. `now` is only for the entitlement half.
  */
 export function webRegisteredSql(schema: number, freeTier: boolean, now: number, alias = 'p') {
   const base =
@@ -140,10 +120,8 @@ export function webRegisteredSql(schema: number, freeTier: boolean, now: number,
       : {
           sql: `(EXISTS (SELECT 1 FROM web_signup_bonus sb WHERE sb.principal_id=${alias}.id)
       OR EXISTS (SELECT 1 FROM web_player_logins lg WHERE lg.principal_id=${alias}.id)
-        AND (${alias}.kind='guest' OR ${alias}.kind='invite' AND NOT EXISTS (SELECT 1 FROM web_invite_grants ag
-          WHERE ag.principal_id=${alias}.id AND ag.player_id=${alias}.player_id AND ag.world_id=${alias}.world_id
-            AND ag.revoked_at IS NULL AND (ag.expires_at IS NULL OR ag.expires_at>?))))`,
-          args: [now],
+        AND ${alias}.kind='guest')`,
+          args: [] as number[],
         };
   // Part 22a: an ACTIVE entitlement keeps its holder a kept account whatever the free-tier switch says (schema 125).
   const held = schema >= 125 ? entitlementActiveSql(now, alias) : null;
@@ -156,14 +134,12 @@ export function webRegisteredSql(schema: number, freeTier: boolean, now: number,
 
 /**
  * Part 22a. The SQL twin of `effectiveTier(...).kind` (web-model-settings.ts) over a web_principals row `alias`: the tier of every
- * principal as one string - guest | registered | unlimited | daily_refill | legacy_invite | account. Built from webRegisteredSql
+ * principal as one string - guest | registered | unlimited | daily_refill | account. Built from webRegisteredSql
  * above and entitlementActiveSql, so there is still ONE definition of "registered" and one of "holds an entitlement"; the
  * operator inspect counts players with it and a test asserts it agrees with the JS for every shape. `?` count: see args.
  */
 export function webTierSql(schema: number, freeTier: boolean, now: number, alias = 'p') {
   const registered = webRegisteredSql(schema, freeTier, now, alias);
-  const grantActive = `EXISTS (SELECT 1 FROM web_invite_grants tg WHERE tg.principal_id=${alias}.id AND tg.player_id=${alias}.player_id
-    AND tg.world_id=${alias}.world_id AND tg.revoked_at IS NULL AND (tg.expires_at IS NULL OR tg.expires_at>?))`;
   const unlimited = entitlementActiveSql(now, alias, 'unlimited');
   const refill = entitlementActiveSql(now, alias, 'daily_refill');
   const entitled = schema >= 125;
@@ -173,19 +149,15 @@ export function webTierSql(schema: number, freeTier: boolean, now: number, alias
     parts.push(`WHEN ${unlimited.sql} THEN 'unlimited'`, `WHEN ${refill.sql} THEN 'daily_refill'`);
     args.push(...unlimited.args, ...refill.args);
   }
-  if (schema >= GRANT_SCHEMAS_FROM) {
-    parts.push(`WHEN ${alias}.kind='invite' AND ${grantActive} THEN 'legacy_invite'`);
-    args.push(now);
-  }
-  parts.push(`WHEN NOT ${registered.sql} THEN CASE WHEN ${alias}.kind='guest' THEN 'guest' ELSE 'legacy_invite' END`);
+  parts.push(`WHEN NOT ${registered.sql} THEN 'guest'`);
   args.push(...registered.args);
   return { sql: `CASE ${parts.join(' ')} ELSE 'registered' END`, args };
 }
 
 /**
  * The SQL twin of webContentVerdict(..., 'live') === 'live' over web_principals `p` joined to web_guest_retention `r`.
- * Used by every query that selects work by its owner (the stage queue's claims). Same schema rules as the JS: the invite
- * branch exists from schema 111, the registered branches from 121 with the free tier on.
+ * Used by every query that selects work by its owner (the stage queue's claims). Same schema rules as the JS: the
+ * registered branches exist from 121 with the free tier on.
  */
 export function webContentLiveSql(schema: number, freeTier: boolean, now: number) {
   const registered = webRegisteredSql(schema, freeTier, now);
@@ -196,13 +168,6 @@ export function webContentLiveSql(schema: number, freeTier: boolean, now: number
   if (registered.sql !== '0') {
     parts.push(`(p.kind='guest' AND r.state IN ('unstarted','active') AND ${registered.sql})`);
     args.push(...registered.args);
-  }
-  if (schema >= GRANT_SCHEMAS_FROM) {
-    parts.push(`(p.kind='invite' AND r.state='protected' AND (EXISTS
-      (SELECT 1 FROM web_invite_grants g WHERE g.principal_id=p.id
-        AND g.player_id=p.player_id AND g.world_id=p.world_id AND g.revoked_at IS NULL
-        AND (g.expires_at IS NULL OR g.expires_at>?))${registered.sql === '0' ? '' : ` OR ${registered.sql}`}))`);
-    args.push(now, ...registered.args);
   }
   return { sql: `(${parts.join(' OR ')})`, args };
 }

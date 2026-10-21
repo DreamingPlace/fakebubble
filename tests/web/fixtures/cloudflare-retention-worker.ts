@@ -224,6 +224,18 @@ export class WebRetentionFixture extends WebBusinessFixture {
             .map((row) => row.id),
           answers: this.store.get<{ n: number }>('SELECT count(*) n FROM web_cocreation_answers')!.n,
         };
+      } else if (path === '/retention/entitle') {
+        // Part 22x: an unlimited entitlement on a principal (what a redeemed code gives a signed-up player). Replaces redeeming a
+        // legacy invite in tests that need a long-lived, kept player.
+        const now = this.clock.now();
+        this.store.run(
+          "INSERT INTO web_entitlements(id,principal_id,source,kind,starts_at,expires_at,created_at) VALUES (?,?,'admin','unlimited',?,NULL,?)",
+          `fixture:${input.principalId}`,
+          input.principalId,
+          now - 1,
+          now,
+        );
+        value = { entitled: true };
       } else if (path === '/retention/seed-logins') {
         // An email login (schema 118) of this principal, a signup challenge, a reset challenge for its address and the
         // nickname 名片 revision the signup wrote.

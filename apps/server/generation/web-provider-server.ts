@@ -213,11 +213,11 @@ export class WebProviderServer {
     return found[0]?.slice(name.length + 1);
   }
 
-  private setCookie(res: ServerResponse, token: string, invited = false) {
+  private setCookie(res: ServerResponse, token: string, durable = false) {
     res.setHeader(
       'Set-Cookie',
       `${this.config.cookieName}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax${
-        invited ? `; Max-Age=${WEB_IDENTITY_LIMITS.inviteCookieMaxAgeSeconds}` : ''
+        durable ? `; Max-Age=${WEB_IDENTITY_LIMITS.inviteCookieMaxAgeSeconds}` : ''
       }`,
     );
   }
@@ -294,7 +294,7 @@ export class WebProviderServer {
       const result = this.application.bootstrap(this.cookie(req), this.ipHash(req));
       const token = this.cookie(req);
       if (result.issuedToken) this.setCookie(res, result.issuedToken);
-      else if (result.invited && token) this.setCookie(res, token, true);
+      else if (result.durable && token) this.setCookie(res, token, true);
       this.json(res, 200, result.body);
     } catch (error) {
       if (
@@ -427,8 +427,7 @@ export class WebProviderServer {
           path.startsWith(`${API}/admin/`) ||
           path.startsWith(`${API}/cocreation/`) ||
           path.startsWith(`${API}/billing/`) ||
-          path.startsWith(`${API}/account/`) ||
-          path.startsWith(`${API}/identity/invite-`))
+          path.startsWith(`${API}/account/`))
       ) {
         const localPath = `/api/web/local${path.slice(API.length)}`;
         const materialUpload = path.match(
@@ -504,19 +503,7 @@ export class WebProviderServer {
             'Set-Cookie',
             `${this.config.cookieName}_admin=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`,
           );
-        let body = result.body;
-        if (localPath === '/api/web/local/invites/redeem' && result.issuedToken) {
-          const principal = this.identity.authenticate(result.issuedToken);
-          const grant = this.store.get<{ id: string }>(
-            `SELECT id FROM web_invite_grants
-            WHERE principal_id=? AND player_id=? AND world_id=?`,
-            principal.principalId,
-            principal.player_id,
-            principal.world_id,
-          );
-          body = { ...(result.body as Record<string, unknown>), grantId: grant?.id ?? null, duplicate: false };
-        }
-        this.json(res, result.status, body);
+        this.json(res, result.status, result.body);
         return;
       }
       if (req.method === 'GET' && path === `${API}/account`) {

@@ -59,17 +59,11 @@ test('provider api keeps CSRF in memory, maps errors and recovers an uncertain s
   assert.equal(calls[2]!.url, '/api/web/provider/operations/by-request/r1');
 
   replies.push(
-    Response.json(
-      { grantId: 'grant', principalId: 'p', expiresAt: null, duplicate: false, csrf: 'csrf-2' },
-      { status: 201 },
-    ),
+    Response.json({ entitlement: { kind: 'unlimited', expiresAt: null }, duplicate: false }, { status: 201 }),
   );
   assert.deepEqual(await api.redeemInvite({ requestId: 'r2', code: 'CODE' }), {
-    grantId: 'grant',
-    principalId: 'p',
-    expiresAt: null,
+    entitlement: { kind: 'unlimited', expiresAt: null },
     duplicate: false,
-    csrf: 'csrf-2',
   });
   replies.push(Response.json({ error: { code: 'NOT_FOUND' } }, { status: 404 }));
   await assert.rejects(api.operation('missing'));
@@ -81,37 +75,13 @@ test('provider api keeps CSRF in memory, maps errors and recovers an uncertain s
   );
 });
 
-test('receipt endpoints use exact payloads and purpose-specific CSRF without accepting malformed success', async () => {
-  const replies: Response[] = [],
-    calls: { url: string; init: RequestInit }[] = [];
-  const api = new ProviderApi(async (url, init) => {
-    calls.push({ url: String(url), init: init! });
-    return replies.shift()!;
-  });
-  replies.push(Response.json({ ...syntheticProviderBootstrap(), csrf: 'active-1' }));
-  await api.bootstrap();
-  replies.push(Response.json({ csrf: 'C'.repeat(43) }));
-  const challenge = await api.inviteReceiptChallenge();
-  replies.push(Response.json({ grantId: 'g', principalId: 'p', expiresAt: null, csrf: 'active-2' }));
-  await api.recoverInviteReceipt({ code: 'A'.repeat(43), requestId: 'same' }, challenge);
-  replies.push(Response.json({ grantId: 'g', principalId: 'p', expiresAt: null }));
-  await api.inviteReceiptStatus('same');
-  assert.deepEqual(
-    calls.slice(1).map((c) => c.url),
-    [
-      '/api/web/provider/identity/invite-receipt-challenge',
-      '/api/web/provider/identity/invite-receipt-recover',
-      '/api/web/provider/identity/invite-receipt-status',
-    ],
-  );
-  assert.deepEqual(
-    calls.slice(1).map((c) => (c.init.headers as Record<string, string>)['X-CSRF-Token']),
-    ['active-1', 'C'.repeat(43), 'active-2'],
-  );
-  assert.deepEqual(JSON.parse(String(calls[3]!.init.body)), { requestId: 'same' });
+test('a redemption answer must be exactly an entitlement and a duplicate flag; anything else is a protocol failure', async () => {
+  const replies: Response[] = [];
+  const api = new ProviderApi(async () => replies.shift()!);
   for (const value of [
-    { grantId: 'g', duplicate: false },
-    { grantId: 'g', principalId: 'p', expiresAt: null, csrf: 'c', duplicate: false, extra: true },
+    { grantId: 'g', principalId: 'p', expiresAt: null, csrf: 'c', duplicate: false },
+    { entitlement: { kind: 'unlimited', expiresAt: null } },
+    { duplicate: false },
   ]) {
     replies.push(Response.json(value));
     await assert.rejects(

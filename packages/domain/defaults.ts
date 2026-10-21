@@ -1,18 +1,4 @@
-import type { CharacterTemplate, ScheduleSlot, Weekday, WeeklySchedule } from '../contracts/index.ts';
-
-export const MINUTE = 60_000;
-export const RULES = Object.freeze({
-  redrawAfterMs: 45 * MINUTE,
-  idleMs: 10 * MINUTE,
-  graceMs: 10 * MINUTE,
-  catchUpDelayMs: 15 * MINUTE,
-  jobLeaseMs: 5 * MINUTE,
-  proactiveTtlMs: 30 * MINUTE,
-  perCharacterDaily: 3,
-  perWorldDaily: 6,
-  maxReplyItems: 32,
-  maxPlayerMessageCharacters: 500,
-});
+import type { ScheduleSlot, Weekday, WeeklySchedule } from '../contracts/index.ts';
 
 export function defaultSchedule(timeZone = 'Asia/Singapore'): WeeklySchedule {
   const bounds = [0, 420, 720, 840, 1080, 1380, 1440];
@@ -28,16 +14,4 @@ export function defaultSchedule(timeZone = 'Asia/Singapore'): WeeklySchedule {
     }));
   }
   return { timeZone, days };
-}
-
-// Test fixtures only. Never import these into a real player's world implicitly.
-export function testCharacters(): CharacterTemplate[] {
-  return ['甲', '乙', '丙'].map((name, index) => ({
-    id: `fixture-${index + 1}`,
-    name: `测试角色${name}`,
-    version: 1,
-    fictional: true,
-    persona: '仅供规则测试的虚构角色，不代表真实人物。',
-    schedule: defaultSchedule(),
-  }));
 }

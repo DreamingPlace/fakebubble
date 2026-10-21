@@ -251,27 +251,16 @@ test('at most 3 signups per IP per UTC day: the 4th is refused with a retry-late
 
 test('invite holders are unaffected: no bonus counts against them, their entitlement and limits are as before', async (t) => {
   const f = setup(t);
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.fixture('/fixture/players', { signupEnabled: true });
-  const owner = client(),
-    player = client();
-  await f.call(`${API}/admin/login`, owner, { token: (await f.fixture<{ token: string }>('/fixture/grant')).token });
-  const code = (
-    await f.call(
-      `${API}/admin/invites/issue`,
-      owner,
-      { requestId: randomUUID(), redeemBy: null, accessDurationMs: null, batch: '免费消息', note: null },
-      201,
-    )
-  ).code as string;
+  const player = client();
   const principalId = (await f.boot(player)).access.principalId as string;
   await f.signUp(player, 'invited.bonus@example.com');
-  await f.call(`${API}/invites/redeem`, player, { requestId: randomUUID(), code }, 201);
+  // Named exception (Part 22x): the holder is a signed-up player with an unlimited entitlement (legacy redemption is gone).
+  await f.fixture('/fixture/entitle', { principalId });
   const access = (await f.boot(player)).access;
-  assert.equal(access.kind, 'invite');
-  assert.deepEqual([access.remainingReplies, access.canSend], [null, true]);
+  // The holder chats unmetered (access 22a: canSend, no trial count shown), where the legacy invited access said null.
+  assert.deepEqual([access.remainingReplies, access.canSend], [0, true]);
   await f.reply(player, 'jojo');
   const state = await f.fixture<Bonus>('/fixture/bonus-state', { principalId });
   assert.deepEqual(

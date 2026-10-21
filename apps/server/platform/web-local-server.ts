@@ -13,10 +13,6 @@ import { WebLocalExecutor } from './web-local-executor.ts';
 import { localTls, type WebLocalConfig } from './web-local-config.ts';
 import { serveLocalStatic } from './web-local-static.ts';
 import { requireWebContent, webDataLifecycleEnabled, type WebRetentionRow } from '../admission/web-retention.ts';
-import { WebInviteAdmin } from '../invites/web-invite-admin.ts';
-import { WebInvites } from '../invites/web-invites.ts';
-import { WebInviteActions } from '../invites/web-invite-actions.ts';
-import { routeWebInvite } from '../invites/web-invite-routes.ts';
 
 const privateHeaders = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
 type Principal = ReturnType<WebIdentity['authenticate']>;
@@ -31,15 +27,12 @@ export class WebLocalServer {
   private readonly admission: WebAdmission;
   private readonly publisher: WebVerticalPublisher;
   private readonly clock: Clock;
-  private readonly inviteAdmin: WebInviteAdmin | null;
-  private readonly inviteActions: WebInviteActions | null;
   private readonly streams = new Map<string, number>();
   private readonly activeStreams = new Set<ServerResponse>();
 
   constructor(store: WebStore, config: WebLocalConfig, clock: Clock) {
     const schema = store.get<{ user_version: number }>('PRAGMA user_version')?.user_version;
-    ensure([109, 110, 112].includes(schema ?? -1), 'WEB_LOCAL_MIGRATION_REQUIRED');
-    if (schema === 112) store.requireInviteTest();
+    ensure([109, 110].includes(schema ?? -1), 'WEB_LOCAL_MIGRATION_REQUIRED');
     ensure(
       store.instanceId === config.instanceId &&
         store.get<{ recovery_epoch: string }>('SELECT recovery_epoch FROM web_instance WHERE singleton=1')
@@ -69,19 +62,6 @@ export class WebLocalServer {
     this.admission = new WebAdmission(store, clock, cryptoRandomId);
     this.publisher = new WebVerticalPublisher(store, clock);
     this.executor = new WebLocalExecutor(store, clock);
-    this.inviteAdmin = schema === 112 ? new WebInviteAdmin(store, clock, config.origin) : null;
-    const invites =
-      schema === 112
-        ? new WebInvites(store, {
-            clock,
-            codeKey: createHmac('sha256', Buffer.from(config.requestKey, 'base64url'))
-              .update('web-local-invite-code-v1')
-              .digest(),
-            authorize: this.identity.authorizeInviteAction.bind(this.identity),
-            identity: this.identity,
-          })
-        : null;
-    this.inviteActions = invites ? new WebInviteActions(store, clock, config.origin, invites, this.identity) : null;
     this.server = createServer({ ...localTls(store.root), maxHeaderSize: 8192 }, (req, res) => {
       void this.handle(req, res);
     });
@@ -255,40 +235,6 @@ export class WebLocalServer {
       trial_character_id: string | null;
       revision: number;
     }>('SELECT * FROM web_principals WHERE id=? AND world_id=?', principal.principalId, principal.world_id)!;
-    if (row.kind === 'invite') {
-      ensure(this.inviteActions, 'WEB_INVITE_ACCESS_REQUIRED');
-      const grant = this.store.get<{ id: string; expires_at: number | null; revoked_at: number | null }>(
-        `SELECT id,expires_at,revoked_at FROM web_invite_grants WHERE principal_id=?
-          AND player_id=? AND world_id=?`,
-        principal.principalId,
-        principal.player_id,
-        principal.world_id,
-      );
-      ensure(grant, 'WEB_INVITE_ACCESS_REQUIRED');
-      const status =
-        grant.revoked_at !== null
-          ? 'revoked'
-          : grant.expires_at !== null && now >= grant.expires_at
-            ? 'expired'
-            : 'active';
-      return {
-        kind: 'invite',
-        principalId: principal.principalId,
-        playerId: principal.player_id,
-        worldId: principal.world_id,
-        revision: row.revision,
-        grantId: grant.id,
-        status,
-        expiresAt: grant.expires_at,
-        canSend: status === 'active',
-        canChooseText: false,
-        trialCharacterId: row.trial_character_id,
-        trialRemaining: null,
-        trialReserved: null,
-        retentionState: 'protected',
-        trialExpiresAt: null,
-      };
-    }
     const lifecycle = webDataLifecycleEnabled(this.store);
     const retention = lifecycle
       ? this.store.get<WebRetentionRow>(
@@ -375,7 +321,7 @@ export class WebLocalServer {
       issued = boot.issuedToken;
       const principal = this.identity.authenticate(token ?? boot.issuedToken!);
       const access = this.access(principal, ipHash);
-      if (access.retentionState !== 'expired' && access.status !== 'revoked' && access.status !== 'expired')
+      if (access.retentionState !== 'expired')
         for (const character of this.store.all<{ id: string }>('SELECT id FROM character_templates'))
           this.store.run(
             `INSERT OR IGNORE INTO world_characters(world_id,character_id,relationship)
@@ -395,8 +341,7 @@ export class WebLocalServer {
             audition: { state: 'unavailable', reason: 'not_approved' },
           };
         });
-      const inaccessible =
-        access.retentionState === 'expired' || access.status === 'revoked' || access.status === 'expired';
+      const inaccessible = access.retentionState === 'expired';
       const conversations = inaccessible
         ? []
         : this.store
@@ -418,12 +363,7 @@ export class WebLocalServer {
             )
             .map((row) => this.operation(principal, row.id));
       return {
-        contractVersion:
-          access.kind === 'invite'
-            ? 'web-v1-local-3'
-            : webDataLifecycleEnabled(this.store)
-              ? 'web-v1-local-2'
-              : 'web-v1-local-1',
+        contractVersion: webDataLifecycleEnabled(this.store) ? 'web-v1-local-2' : 'web-v1-local-1',
         mode: 'synthetic-local',
         region: 'local-test',
         instanceId: this.config.instanceId,
@@ -434,17 +374,16 @@ export class WebLocalServer {
         conversations,
         activeOperations,
         syncCursor: this.cursor(principal.principalId, high),
-        unsupported: this.inviteActions
-          ? [
-              ...(access.kind === 'account' ? ['invite'] : []),
-              'login',
-              'account-recovery',
-              'trial-archive',
-              'read',
-              'listened',
-              'text-delivery',
-            ]
-          : ['invite', 'login', 'account-recovery', 'trial-archive', 'read', 'listened', 'admin', 'text-delivery'],
+        unsupported: [
+          'invite',
+          'login',
+          'account-recovery',
+          'trial-archive',
+          'read',
+          'listened',
+          'admin',
+          'text-delivery',
+        ],
       };
     });
     if (issued) this.setCookie(res, issued);
@@ -638,72 +577,8 @@ export class WebLocalServer {
         return;
       }
       if (serveLocalStatic(req, res, fileURLToPath(new URL('../../player-web/dist', import.meta.url)))) return;
-      if (this.inviteAdmin && req.method === 'GET' && path === '/api/web/local/admin/session') {
-        this.json(res, 200, this.inviteAdmin.session(this.cookie(req, `${this.config.cookieName}_admin`)));
-        return;
-      }
-      if (
-        this.inviteActions &&
-        req.method === 'POST' &&
-        (/^\/api\/web\/local\/invites\//.test(path) ||
-          /^\/api\/web\/local\/admin\//.test(path) ||
-          /^\/api\/web\/local\/identity\/invite-/.test(path))
-      ) {
-        const result = routeWebInvite(
-          this.inviteActions,
-          {
-            method: req.method,
-            path,
-            origin: typeof req.headers.origin === 'string' ? req.headers.origin : undefined,
-            csrf: typeof req.headers['x-csrf-token'] === 'string' ? req.headers['x-csrf-token'] : undefined,
-            playerToken: this.cookie(req),
-            adminCookie: this.cookie(req, `${this.config.cookieName}_admin`),
-            trustedIpHash: this.ipHash(req),
-            body: await this.body(req),
-          },
-          this.inviteAdmin ?? undefined,
-        );
-        if (result.issuedToken) this.setCookie(res, result.issuedToken);
-        if (result.issuedAdminCookie)
-          res.setHeader(
-            'Set-Cookie',
-            `${this.config.cookieName}_admin=${result.issuedAdminCookie}; Path=/; Secure; HttpOnly; SameSite=Lax`,
-          );
-        if (path === '/api/web/local/admin/logout')
-          res.setHeader(
-            'Set-Cookie',
-            `${this.config.cookieName}_admin=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`,
-          );
-        this.json(res, result.status, result.body);
-        return;
-      }
       if (req.method === 'GET' && path === '/api/web/local/bootstrap') {
         this.bootstrap(req, res);
-        return;
-      }
-      if (req.method === 'GET' && path === '/api/web/local/identity/receipt-challenge') {
-        const token = this.cookie(req);
-        ensure(token, 'AUTH_REQUIRED');
-        this.json(res, 200, this.identity.receiptChallenge(token));
-        return;
-      }
-      if (req.method === 'POST' && path === '/api/web/local/identity/receipt-recover') {
-        const token = this.cookie(req),
-          csrf = req.headers['x-csrf-token'],
-          origin = req.headers.origin;
-        ensure(token && typeof csrf === 'string' && typeof origin === 'string', 'CSRF_INVALID');
-        const body = await this.body(req);
-        ensure(
-          typeof body.requestId === 'string' && typeof body.username === 'string' && typeof body.password === 'string',
-          'INVALID_REQUEST',
-        );
-        const recovered = await this.identity.recoverReceipt(token, csrf, origin, {
-          requestId: body.requestId,
-          username: body.username,
-          password: body.password,
-        });
-        this.setCookie(res, recovered.issuedToken);
-        this.json(res, 200, { ...recovered.receipt, csrf: recovered.csrf });
         return;
       }
       if (req.method === 'POST' && path === '/api/web/local/register') {
@@ -720,13 +595,6 @@ export class WebLocalServer {
         });
         this.setCookie(res, registered.issuedToken);
         this.json(res, 200, { ...registered.receipt, csrf: registered.csrf });
-        return;
-      }
-      if (req.method === 'POST' && path === '/api/web/local/identity/receipt-status') {
-        const { token, csrf, origin } = this.authorizeWrite(req),
-          body = await this.body(req);
-        ensure(typeof body.requestId === 'string', 'INVALID_REQUEST');
-        this.json(res, 200, this.identity.receiptStatus(token, csrf, origin, body.requestId));
         return;
       }
       if (req.method === 'POST' && path === '/api/web/local/logout') {
@@ -877,9 +745,7 @@ export class WebLocalServer {
             WEB_GUEST_RATE_LIMITED: 'RATE_LIMITED',
             WEB_STREAM_LIMITED: 'RATE_LIMITED',
             WEB_INVITE_RATE_LIMITED: 'RATE_LIMITED',
-            WEB_INVITE_ACCESS_REQUIRED: 'WEB_INVITE_ACCESS_REQUIRED',
             WEB_INVITE_UNAVAILABLE: 'WEB_INVITE_UNAVAILABLE',
-            WEB_INVITE_RECOVERY_UNAVAILABLE: 'WEB_INVITE_RECOVERY_UNAVAILABLE',
             WEB_GUEST_REQUIRED: 'WEB_GUEST_REQUIRED',
             ADMIN_UNAUTHORIZED: 'ADMIN_UNAUTHORIZED',
             ADMIN_INVALID_GRANT: 'ADMIN_INVALID_GRANT',
@@ -889,7 +755,7 @@ export class WebLocalServer {
           } as Record<string, string>
         )[code] ?? (code.startsWith('WEB_') ? 'INTERNAL_ERROR' : code);
       const status =
-        publicCode === 'TRIAL_EXPIRED' || publicCode === 'WEB_INVITE_ACCESS_REQUIRED'
+        publicCode === 'TRIAL_EXPIRED'
           ? 410
           : publicCode === 'NOT_FOUND'
             ? 404

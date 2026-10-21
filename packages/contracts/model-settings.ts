@@ -11,12 +11,10 @@ import { PLAYER_MODEL_IDS, isPlayerModelId, type PlayerModelId } from './player-
  * so Part 22 can split `invited` into unlimited / daily-refill in one place.
  *  - guest:      a trial guest (no signup bonus)
  *  - registered: a signed-up player with points (a guest holding the signup bonus)
- *  - invited:    principal.kind 'invite' or an account
+ *  - invited:    an active entitlement, or an account
  */
 export const MODEL_TIERS = ['guest', 'registered', 'invited'] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
-export const isModelTier = (value: unknown): value is ModelTier =>
-  typeof value === 'string' && (MODEL_TIERS as readonly string[]).includes(value);
 
 export const MODEL_LIMITS = Object.freeze({
   pointsMin: 1,

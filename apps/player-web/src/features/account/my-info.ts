@@ -1,6 +1,6 @@
 /**
  * 我的信息 (Part 22a): the one page behind the top bar's nickname button. It replaces the account dropdown and holds what the
- * dropdown, the 邀请码 button and the recovery-code button used to: 资料, 额度, 安全, 退出登录 and (separated) 删除我的账号.
+ * dropdown and the 邀请码 button used to: 资料, 额度, 安全, 退出登录 and (separated) 删除我的账号.
  * Rows are plain: a label, a value, at most one button. No helper lines under them (Part 21i).
  *
  * Nothing here is persisted and nothing is parsed as HTML (the `h` builder uses textContent). The caller supplies what each row
@@ -28,7 +28,6 @@ export const infoCopy = {
   copyFailed: '请长按编号复制',
   email: '邮箱',
   noEmail: '未绑定',
-  bind: '绑定邮箱',
   tier: '当前身份',
   registered: '注册玩家',
   invitedUnlimited: '邀请 · 不限量',
@@ -42,7 +41,6 @@ export const infoCopy = {
   logoutOthers: '退出其他设备',
   logoutOthersDone: '已退出其他设备',
   logoutOthersFailed: '没能退出其他设备，稍后再试试',
-  recovery: '恢复码',
   logout: '退出登录',
   logoutFailed: '没能退出登录，稍后再试试',
   signupFirst: '注册后即可使用邀请码',
@@ -95,8 +93,8 @@ export function tierView(args: {
 }
 
 export interface MyInfoOptions {
-  /** 'player' has an email login; 'guest' a trial; 'invited' a legacy invited player WITHOUT a login. */
-  mode: 'player' | 'guest' | 'invited';
+  /** 'player' has an email login; 'guest' a trial. */
+  mode: 'player' | 'guest';
   nickname: string | null;
   playerNumber: string | null;
   emailMasked: string | null;
@@ -108,7 +106,6 @@ export interface MyInfoOptions {
   codeLabel?: string;
   /** Account deletion is available (players) / clearing this device (guests). */
   deleteEnabled: boolean;
-  canBind: boolean;
   saveNickname(value: string): Promise<void>;
   actions: {
     password(): void;
@@ -120,8 +117,6 @@ export interface MyInfoOptions {
     enterCode?: () => void;
     signup(): void;
     login(): void;
-    bind(): void;
-    recovery?: () => void;
   };
   /** Copy text to the clipboard; a rejection is shown as the long-press fallback. Defaults to navigator.clipboard. */
   copy?: (text: string) => Promise<void>;
@@ -267,13 +262,6 @@ export function openMyInfo(options: MyInfoOptions) {
         row(infoCopy.email, options.emailMasked ?? infoCopy.noEmail),
       ),
     );
-  } else if (options.mode === 'invited') {
-    add(
-      section(
-        infoCopy.profile,
-        row(infoCopy.email, infoCopy.noEmail, options.canBind ? button(infoCopy.bind, 'mi-small', a.bind) : null),
-      ),
-    );
   }
   if (options.mode === 'guest') {
     add(
@@ -309,28 +297,22 @@ export function openMyInfo(options: MyInfoOptions) {
         a.billing ? link(infoCopy.billing, a.billing) : null,
         a.enterCode ? link(options.codeLabel ?? infoCopy.enterCode, a.enterCode) : null,
       ),
-      options.mode === 'player'
-        ? section(
-            infoCopy.security,
-            link(infoCopy.password, a.password),
-            link(infoCopy.logoutOthers, () => void logoutOthers()),
-          )
-        : a.recovery
-          ? section(infoCopy.security, link(infoCopy.recovery, a.recovery))
-          : null,
+      section(
+        infoCopy.security,
+        link(infoCopy.password, a.password),
+        link(infoCopy.logoutOthers, () => void logoutOthers()),
+      ),
     );
-    if (options.mode === 'player') {
-      add(
-        h(
-          'div',
-          { class: 'mi-foot' },
-          button(infoCopy.logout, 'acct-link mi-logout', () => void logout()),
-        ),
-        options.deleteEnabled
-          ? h('div', { class: 'mi-danger' }, button(accountCopy.deleteTitle, 'acct-danger', a.deleteAccount))
-          : null,
-      );
-    }
+    add(
+      h(
+        'div',
+        { class: 'mi-foot' },
+        button(infoCopy.logout, 'acct-link mi-logout', () => void logout()),
+      ),
+      options.deleteEnabled
+        ? h('div', { class: 'mi-danger' }, button(accountCopy.deleteTitle, 'acct-danger', a.deleteAccount))
+        : null,
+    );
   }
   async function logoutOthers() {
     try {

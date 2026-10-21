@@ -1,5 +1,5 @@
 /**
- * Account sheets: 注册 / 绑定邮箱 / 忘记密码 (email → code → password), 登录, 我的昵称 and 修改密码.
+ * Account sheets: 注册 / 忘记密码 (email → code → password), 登录, 我的昵称 and 修改密码.
  * Nothing here is persisted: passwords and codes live in input elements only, never in storage, a URL or a log.
  * Errors show fixed Chinese lines chosen from the server's code; a raw message never reaches the page.
  */
@@ -29,8 +29,6 @@ export const accountCopy = {
   close: '关闭',
   signupTitle: '注册',
   signupIntro: '用邮箱注册后，换手机或浏览器也能用邮箱和密码找回你的聊天。',
-  bindTitle: '绑定邮箱',
-  bindIntro: '绑定邮箱后，用邮箱和密码就能在其他设备登录你的聊天；绑定成功后，恢复码会失效。',
   resetTitle: '忘记密码',
   resetIntro: '我们会给这个邮箱发一个 6 位验证码。验证后设置新密码，其他设备会退出登录。',
   loginTitle: '登录',
@@ -78,7 +76,6 @@ export const accountCopy = {
   nickname: '昵称',
   nicknameHint: '1 到 20 个字，不能换行',
   finishSignup: '完成注册',
-  finishBind: '完成绑定',
   finishReset: '重置密码',
   working: '请稍候…',
   loginSubmit: '登录',
@@ -98,7 +95,6 @@ export const accountCopy = {
   signupForBonus: (n: number) => `注册即送 ${n} 条免费消息，可以和任何角色聊`,
   doneSignupBonus: (n: number) => `注册成功，已送你 ${n} 条免费消息`,
   signupBonusIntro: (n: number) => `注册即送 ${n} 条免费消息，可以和任何角色聊。`,
-  doneBind: '邮箱已绑定',
   doneReset: '密码已重置，其他设备已退出登录',
   doneNickname: '昵称已更新',
   donePassword: '密码已修改',
@@ -116,7 +112,6 @@ export const accountCopy = {
     PLAYER_LOGIN_REQUIRED: '请先登录。',
     PLAYER_EMAIL_UNAVAILABLE: '这个邮箱暂时不能使用，换一个试试。',
     PLAYER_SIGNUP_UNAVAILABLE: '当前身份不能注册。',
-    PLAYER_BIND_UNAVAILABLE: '当前身份不需要绑定邮箱。',
     PLAYER_EMAIL_DAILY_CAP: '今天的验证码发送名额已经用完，请明天再试。',
     PLAYER_SIGNUP_IP_LIMIT: '这个网络今天的注册次数已用完，请明天再试',
     AGE_CONFIRMATION_REQUIRED: '请先确认你已年满 18 周岁。',
@@ -185,11 +180,11 @@ const realTimers: Timers = {
   clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
 };
 
-export type AccountSheetMode = 'signup' | 'bind' | 'reset' | 'login' | 'nickname' | 'password' | 'delete' | 'clear';
+export type AccountSheetMode = 'signup' | 'reset' | 'login' | 'nickname' | 'password' | 'delete' | 'clear';
 export type AccountSheetOptions = {
   api: AccountApi;
   mode: AccountSheetMode;
-  /** Signup / bind / reset need the server flag; with it off the sheet says 注册暂未开放 and offers nothing else. */
+  /** Signup / reset need the server flag; with it off the sheet says 注册暂未开放 and offers nothing else. */
   signupEnabled?: boolean;
   /** The nickname shown in the nickname sheet. */
   nickname?: string | null;
@@ -219,10 +214,9 @@ export function openAccountSheet(options: AccountSheetOptions) {
   const { api, mode } = options;
   const timers = options.timers ?? realTimers;
   const mount = options.mount ?? document.body;
-  const flow = mode === 'signup' || mode === 'bind' || mode === 'reset';
+  const flow = mode === 'signup' || mode === 'reset';
   const titles: Record<AccountSheetMode, string> = {
     signup: accountCopy.signupTitle,
-    bind: accountCopy.bindTitle,
     reset: accountCopy.resetTitle,
     login: accountCopy.loginTitle,
     nickname: accountCopy.nicknameTitle,
@@ -365,16 +359,14 @@ export function openAccountSheet(options: AccountSheetOptions) {
     }
   };
 
-  // ---- email → code → password (signup / bind / reset) ---------------------------------------------------------
+  // ---- email → code → password (signup / reset) ---------------------------------------------------------
   const emailFlow = () => {
     const purpose = mode as EmailPurpose;
     if (options.signupEnabled === false) {
       body.replaceChildren(h('p', { class: 'acct-closed', text: accountCopy.closed }));
       return;
     }
-    const intro = { signup: accountCopy.signupIntro, bind: accountCopy.bindIntro, reset: accountCopy.resetIntro }[
-      purpose
-    ];
+    const intro = { signup: accountCopy.signupIntro, reset: accountCopy.resetIntro }[purpose];
     const email = input('email', 'email', { autocomplete: 'email', inputmode: 'email', maxlength: '254' });
     // LEGAL_PAGES_ENABLED: signing up needs the "我已年满 18 周岁" tick; it is sent once with the signup request, never stored.
     const adult = input('adult', 'checkbox', { required: '' });
@@ -516,9 +508,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
         hidden: true,
       });
       const nickname = input('nickname', 'text', { autocomplete: 'nickname', maxlength: '40' });
-      const label = { signup: accountCopy.finishSignup, bind: accountCopy.finishBind, reset: accountCopy.finishReset }[
-        purpose
-      ];
+      const label = { signup: accountCopy.finishSignup, reset: accountCopy.finishReset }[purpose];
       const submit = button(label, 'acct-primary', 'submit');
       const form = h(
         'form',
@@ -571,7 +561,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
           finish(
             purpose === 'signup' && bonus > 0
               ? accountCopy.doneSignupBonus(bonus)
-              : { signup: accountCopy.doneSignup, bind: accountCopy.doneBind, reset: accountCopy.doneReset }[purpose],
+              : { signup: accountCopy.doneSignup, reset: accountCopy.doneReset }[purpose],
           );
         });
       });

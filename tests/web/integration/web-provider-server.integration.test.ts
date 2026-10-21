@@ -7,7 +7,6 @@ import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { localRuntime, initProviderInstance } from '../../../apps/server/platform/web-local-config.ts';
 import { syntheticSelection } from '../fixtures/provider-selection.ts';
-import { downgradeToLegacy } from '../fixtures/legacy-schema.ts';
 import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
 import { WebProviderRunner } from '../../../apps/server/generation/web-provider-runner.ts';
 import { WebProviderServer } from '../../../apps/server/generation/web-provider-server.ts';
@@ -36,8 +35,6 @@ test('provider-local 113 over HTTPS: catalog, guest lock, three turns + footer, 
   initProviderInstance(root);
   migrateProvider(root, syntheticSelection());
   let { config, store } = openProviderStore(root);
-  // NAMED EXCEPTION: legacy redemption (the invite upgrade below) exists only below schema 125 (see fixtures/legacy-schema.ts).
-  downgradeToLegacy(store as unknown as Parameters<typeof downgradeToLegacy>[0]);
   t.after(() => {
     try {
       store.close();
@@ -304,7 +301,8 @@ test('provider-local 113 over HTTPS: catalog, guest lock, three turns + footer, 
     `${config.cookieName}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`,
   ]);
 
-  // Invite: admin issues a code; a fresh guest redeems and may talk to any character.
+  // Named exception (Part 22x): the legacy invite (a kind-'invite' grant that upgraded the session) is gone. A code now adds an
+  // entitlement to a SIGNED-UP player and nothing else changes: same principal, same session, still a guest by kind.
   const legacyGrant = new WebInviteAdmin(store, clock, config.origin).issueLoginGrant();
   const admin: Client = { cookie: '', csrf: '' };
   assert.equal(
@@ -314,18 +312,35 @@ test('provider-local 113 over HTTPS: catalog, guest lock, three turns + footer, 
   );
   const grant = new WebAccountAdmin(store, clock, config.origin).issueLoginGrant();
   assert.equal((await call('POST', `${API}/admin/login`, admin, { token: grant.token })).status, 200);
-  const issued = await call('POST', `${API}/admin/invites/issue`, admin, {
+  const issued = await call('POST', `${API}/admin/invites/batch-create`, admin, {
     requestId: randomUUID(),
+    name: 'provider-it',
+    count: 1,
+    tier: { kind: 'unlimited' },
+    durationDays: null,
     redeemBy: null,
-    accessDurationMs: null,
-    batch: 'provider-it',
-    note: null,
   });
   assert.equal(issued.status, 201);
-  const code = issued.data.code ?? issued.data.codes?.[0]?.code;
+  const code = issued.data.codes?.[0];
   assert.equal(typeof code, 'string');
+  const signedUp = (principalId: string) =>
+    store.run(
+      'INSERT INTO web_player_logins(principal_id,email_norm,password_hash,created_at,password_changed_at,last_seen_at) VALUES (?,?,?,?,?,?)',
+      principalId,
+      `${principalId}@example.com`,
+      'x',
+      clock.now(),
+      clock.now(),
+      clock.now(),
+    );
   const invitee: Client = { cookie: '', csrf: '' };
-  await call('GET', `${API}/bootstrap`, invitee);
+  const inviteeId = parseWebProviderBootstrap((await call('GET', `${API}/bootstrap`, invitee)).data).access.principalId;
+  assert.equal(
+    (await call('POST', `${API}/invites/redeem`, invitee, { requestId: randomUUID(), code })).data.error.code,
+    'PLAYER_LOGIN_REQUIRED',
+    'a guest without a login is sent to sign up first',
+  );
+  signedUp(inviteeId);
   const invalid = await call('POST', `${API}/invites/redeem`, invitee, {
     requestId: randomUUID(),
     code: 'A'.repeat(43),
@@ -334,19 +349,16 @@ test('provider-local 113 over HTTPS: catalog, guest lock, three turns + footer, 
   assert.equal(invalid.data.error.code, 'WEB_INVITE_UNAVAILABLE');
   const redeemed = await call('POST', `${API}/invites/redeem`, invitee, { requestId: randomUUID(), code });
   assert.equal(redeemed.status, 201);
-  assert.equal(typeof redeemed.data.grantId, 'string');
+  assert.equal(redeemed.data.entitlement.kind, 'unlimited');
   const upgraded = parseWebProviderBootstrap((await call('GET', `${API}/bootstrap`, invitee)).data);
-  assert.equal(upgraded.access.kind, 'invite');
+  assert.equal(upgraded.access.kind, 'guest');
+  assert.equal(upgraded.access.principalId, inviteeId, 'same principal');
   assert.equal(upgraded.access.canSend, true);
   const otherGuest: Client = { cookie: '', csrf: '' };
-  await call('GET', `${API}/bootstrap`, otherGuest);
+  signedUp(parseWebProviderBootstrap((await call('GET', `${API}/bootstrap`, otherGuest)).data).access.principalId);
   const used = await call('POST', `${API}/invites/redeem`, otherGuest, { requestId: randomUUID(), code });
   assert.equal(used.status, 409);
   assert.equal(used.data.error.code, 'WEB_INVITE_UNAVAILABLE');
-  assert.equal(
-    parseWebProviderBootstrap((await call('GET', `${API}/bootstrap`, otherGuest)).data).access.kind,
-    'guest',
-  );
   for (const characterId of ['jojo', 'chen-jimi']) {
     const reply = await send(invitee, characterId, '受邀用户你好');
     assert.equal(reply.status, 202);

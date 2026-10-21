@@ -9,9 +9,7 @@ import type {
   TextGenerator,
 } from '../../../packages/contracts/index.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
-import { dialogueCandidate } from '../../../packages/domain/dialogue.ts';
 import { bubbleLimits, BubbleValidationError, inspectBubbles } from '../../../packages/domain/bubbles.ts';
-import { groupEvidenceSource } from '../memory/context-evidence.ts';
 import { TextGenerationFailure } from './text-generation-error.ts';
 import {
   applyTextReview,
@@ -19,7 +17,6 @@ import {
   draftTool,
   parseTextDraft,
   reviewTool,
-  validateDialogueEvidence,
 } from './accepted-text-protocol.ts';
 import type { TextDraft } from './accepted-text-protocol.ts';
 import { promptMessages, reviewPromptMessages } from './accepted-text-prompt.ts';
@@ -77,83 +74,6 @@ async function readBody(response: Response): Promise<unknown> {
   } catch {
     throw new DomainError('INVALID_TEXT_RESPONSE');
   }
-}
-
-export function parseDeepSeekResponse(
-  value: unknown,
-  request: TextGenerationRequest,
-  model: string,
-  elapsedMs: number,
-): TextGenerationResult {
-  object(value);
-  ensure(Array.isArray(value.choices) && value.choices.length === 1, 'INVALID_TEXT_RESPONSE');
-  const choice: unknown = value.choices[0];
-  object(choice);
-  ensure(choice.finish_reason === 'stop', 'TEXT_INCOMPLETE_RESPONSE');
-  object(choice.message);
-  const message = choice.message;
-  ensure(
-    message.role === 'assistant' && typeof message.content === 'string' && message.content.trim(),
-    'INVALID_TEXT_RESPONSE',
-  );
-  ensure(
-    !message.refusal &&
-      (message.tool_calls == null || (Array.isArray(message.tool_calls) && message.tool_calls.length === 0)),
-    'TEXT_CONTENT_REJECTED',
-  );
-  let reply: unknown;
-  try {
-    reply = JSON.parse(message.content);
-  } catch {
-    throw new DomainError('INVALID_REPLY_JSON');
-  }
-  // Map the observed "gentle" tag to the application's "soft" expression, not another voice.
-  // Normalize only this known enum alias; arbitrary/missing fields still fail validation.
-  if (reply && typeof reply === 'object' && 'bubbles' in reply && Array.isArray(reply.bubbles)) {
-    for (const bubble of reply.bubbles) {
-      if (bubble && typeof bubble === 'object' && bubble.expression === 'gentle') bubble.expression = 'soft';
-    }
-  }
-  // Preserve, rather than discard, an observed provider mix-up between local message IDs
-  // and already-authorized group evidence. Arbitrary IDs are never resolved by a global lookup.
-  const clarificationIds = new Set(
-    (request.clarifications ?? []).flatMap((item) => item.messages.map((message) => message.id)),
-  );
-  const localIds = new Set([...request.messages.map((message) => message.id), ...clarificationIds]);
-  const aliases = new Map(
-    request.evidence.flatMap((evidence) => {
-      const source = groupEvidenceSource(evidence);
-      return source
-        ? [
-            [evidence.id, evidence.id],
-            [source.sourceMessageId, evidence.id],
-          ]
-        : [];
-    }) as [string, string][],
-  );
-  if (reply && typeof reply === 'object' && 'topics' in reply && Array.isArray(reply.topics)) {
-    for (const topic of reply.topics) {
-      if (
-        !topic ||
-        typeof topic !== 'object' ||
-        !Array.isArray(topic.evidenceMessageIds) ||
-        (topic.sourceEvidenceIds !== undefined && !Array.isArray(topic.sourceEvidenceIds))
-      )
-        continue;
-      const moved = topic.evidenceMessageIds.filter(
-        (id: unknown) => typeof id === 'string' && !localIds.has(id) && aliases.has(id),
-      ) as string[];
-      if (moved.length) {
-        topic.evidenceMessageIds = topic.evidenceMessageIds.filter((id: unknown) => !moved.includes(String(id)));
-        topic.sourceEvidenceIds = [
-          ...new Set([...(topic.sourceEvidenceIds ?? []), ...moved.map((id) => aliases.get(id)!)]),
-        ];
-      }
-    }
-  }
-  const candidate = dialogueCandidate(reply, request.requiredMessageIds, request.mustClose, request.deliveryMode);
-  validateDialogueEvidence(candidate, request);
-  return { ...responseMetadata(value, model, elapsedMs), reply: candidate };
 }
 
 function reportedModel(value: unknown): { reportedModel?: string } {

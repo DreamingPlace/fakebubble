@@ -7,7 +7,6 @@ import { requireWebAdminMembership } from '../admin/web-admin-schema.ts';
 import { activeEntitlement, entitlementTablesExist } from '../admission/web-entitlements.ts';
 import { applyDailyRefill, offeredModels } from '../admission/web-points.ts';
 import type { ModelFlags } from '../admission/web-model-settings.ts';
-import { endHolderAccess } from './web-holder-access.ts';
 import { ensurePlayerNumber } from '../admission/web-player-number.ts';
 
 /**
@@ -22,7 +21,7 @@ type InviteScope = {
   principalId: string;
   playerId: string;
   worldId: string;
-  kind: 'guest' | 'invite';
+  kind: 'guest';
 };
 export type InviteAuthorizer = (token: string, csrf: string, origin: string) => InviteScope;
 
@@ -184,7 +183,7 @@ export class WebInviteTiers {
     return this.store.transaction(() => {
       const actor = this.authorize(input.token, input.csrf, input.origin),
         now = this.now();
-      ensure(actor.kind === 'guest' || actor.kind === 'invite', 'WEB_GUEST_REQUIRED');
+      ensure(actor.kind === 'guest', 'WEB_GUEST_REQUIRED');
       const session = this.store.get<{
         principal_id: string;
         account_id: string | null;
@@ -224,7 +223,7 @@ export class WebInviteTiers {
         actor.principalId,
         actor.worldId,
       );
-      ensure(retention && ['unstarted', 'active', 'protected'].includes(retention.state), 'TRIAL_EXPIRED');
+      ensure(retention && ['unstarted', 'active'].includes(retention.state), 'TRIAL_EXPIRED');
 
       const prior = this.store.get<{ code_digest: string; entitlement_id: string }>(
         'SELECT code_digest,entitlement_id FROM web_entitlement_redemptions WHERE principal_id=? AND request_id=?',
@@ -487,12 +486,9 @@ export class WebInviteTiers {
       revoked_at: number | null;
       number: string | null;
     }>(
-      `SELECT c.id,c.status,c.redeemed_count,coalesce(e.starts_at,g.redeemed_at) redeemed_at,
-        CASE WHEN e.id IS NOT NULL THEN e.expires_at ELSE g.expires_at END expires_at,
-        CASE WHEN e.id IS NOT NULL THEN e.revoked_at ELSE g.revoked_at END revoked_at,n.number
+      `SELECT c.id,c.status,c.redeemed_count,e.starts_at redeemed_at,e.expires_at,e.revoked_at,n.number
       FROM web_invite_codes c LEFT JOIN web_entitlements e ON e.invite_id=c.id
-        LEFT JOIN web_invite_grants g ON g.invite_id=c.id
-        LEFT JOIN web_player_numbers n ON n.principal_id=coalesce(e.principal_id,g.principal_id)
+        LEFT JOIN web_player_numbers n ON n.principal_id=e.principal_id
       WHERE c.batch_id=? ORDER BY c.created_at,c.id`,
       batchId,
     );
@@ -639,17 +635,21 @@ export class WebInviteTiers {
   }
 
   /**
-   * End a redeemed code's entitlement NOW: the player falls back to a normal registered player with the balance it has. A
-   * code redeemed before this Part also ends its legacy grant (without signing the player out).
+   * End a redeemed code's entitlement NOW: the player falls back to a normal registered player with the balance it has and
+   * stays signed in. Repeating it is a no-op (duplicate).
    */
   revokeEntitlement(adminSessionId: string, inviteId: string) {
     return this.store.transaction(() => {
       const now = this.now();
       this.requireAdmin(adminSessionId, now, 'invites.manage');
       const id = typeof inviteId === 'string' ? inviteId : '';
-      const ended = endHolderAccess(this.store, now, id);
-      ensure(ended.found, 'WEB_INVITE_UNAVAILABLE');
-      if (!ended.changed) return { inviteId, duplicate: true as const };
+      const held = this.store.get<{ id: string; revoked_at: number | null }>(
+        'SELECT id,revoked_at FROM web_entitlements WHERE invite_id=?',
+        id,
+      );
+      ensure(held, 'WEB_INVITE_UNAVAILABLE');
+      if (held.revoked_at !== null) return { inviteId, duplicate: true as const };
+      this.store.run('UPDATE web_entitlements SET revoked_at=? WHERE id=? AND revoked_at IS NULL', now, held.id);
       this.audit(adminSessionId, 'invite-entitlement-revoked', id, now);
       return { inviteId, duplicate: false as const };
     });

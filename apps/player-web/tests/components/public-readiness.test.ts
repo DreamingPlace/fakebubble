@@ -26,7 +26,6 @@ test('GET /account: the Part 17 features and the grace line are parsed, and abse
     hasLogin: false,
     emailMasked: null,
     nickname: null,
-    canBind: false,
   };
   const plain = await new ProviderApi(async () => Response.json(signedIn)).account();
   assert.deepEqual(plain, { ...signedIn });
@@ -484,7 +483,6 @@ const login: AccountInfo = {
   hasLogin: true,
   emailMasked: 'p***@example.com',
   nickname: '阿泡',
-  canBind: false,
 };
 
 // Part 21f (named exception): the account entries left the chat's ⋯ menu (it is 共创 and the model picker only). 删除我的账号
@@ -568,7 +566,6 @@ test('grace: a guest past its trial sees the agreed line and keeps 注册; a sig
     hasLogin: false,
     emailMasked: null,
     nickname: null,
-    canBind: false,
     features: { grace: true },
     grace: { endsAt: Date.now() + 4 * 86_400_000 },
   };

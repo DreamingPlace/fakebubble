@@ -1,7 +1,6 @@
 import { InviteLocalApiError } from './invite-local-api.ts';
 
 type AdminSession = { csrf: string; expiresAt: number };
-type IssuedInvite = { inviteId: string; code: string | null; duplicate: boolean };
 const safeTime = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 function session(value: unknown): AdminSession {
   const row = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -10,7 +9,7 @@ function session(value: unknown): AdminSession {
   return { csrf: row.csrf, expiresAt: row.expiresAt };
 }
 
-/** Same-origin synthetic administrator transport; grant and CSRF remain memory-only. */
+/** Same-origin administrator transport (the base of AccountAdminApi); grant and CSRF remain memory-only. */
 export class InviteAdminApi {
   private readonly fetcher: typeof fetch;
   protected csrf: string | null = null;
@@ -68,24 +67,6 @@ export class InviteAdminApi {
     const active = session(await this.request('/session'));
     this.csrf = active.csrf;
     return active;
-  }
-  async issue(input: {
-    requestId: string;
-    redeemBy: number | null;
-    batch: string;
-    note: string | null;
-  }): Promise<IssuedInvite> {
-    if (!this.csrf) throw new Error('WEB_INVITE_ADMIN_SESSION_REQUIRED');
-    const value = await this.request('/invites/issue', { ...input, accessDurationMs: null });
-    const row = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-    if (
-      typeof row.inviteId !== 'string' ||
-      typeof row.duplicate !== 'boolean' ||
-      !(row.code === null || (typeof row.code === 'string' && /^[A-Za-z0-9_-]{43}$/.test(row.code))) ||
-      row.duplicate !== (row.code === null)
-    )
-      throw new Error('WEB_INVITE_ADMIN_PROTOCOL_INVALID');
-    return { inviteId: row.inviteId, code: row.code, duplicate: row.duplicate };
   }
   async logout() {
     if (!this.csrf) throw new Error('WEB_INVITE_ADMIN_SESSION_REQUIRED');

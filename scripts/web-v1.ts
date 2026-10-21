@@ -1,9 +1,6 @@
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
 import { WebStore } from '../apps/server/platform/store.ts';
 import { WebLocalServer } from '../apps/server/platform/web-local-server.ts';
-import { WebInviteAdmin } from '../apps/server/invites/web-invite-admin.ts';
 import { initLocalInstance, readLocalConfig } from '../apps/server/platform/web-local-config.ts';
 import { defaultSchedule } from '../packages/domain/defaults.ts';
 import { ensure } from '../packages/domain/errors.ts';
@@ -14,10 +11,7 @@ ensure(
     action === 'migrate' ||
     action === 'serve' ||
     action === 'migrate-data-lifecycle' ||
-    action === 'serve-data-lifecycle' ||
-    action === 'migrate-invites' ||
-    action === 'serve-invites' ||
-    action === 'admin-grant') &&
+    action === 'serve-data-lifecycle') &&
     typeof root === 'string',
   'WEB_LOCAL_USAGE',
 );
@@ -34,15 +28,13 @@ if (action === 'init') {
   );
 } else {
   const config = readLocalConfig(root);
-  const inviteTest = action === 'migrate-invites' || action === 'serve-invites' || action === 'admin-grant';
-  const dataLifecycleTest = inviteTest || action === 'migrate-data-lifecycle' || action === 'serve-data-lifecycle';
+  const dataLifecycleTest = action === 'migrate-data-lifecycle' || action === 'serve-data-lifecycle';
   const store = new WebStore(root, {
     create: false,
     instanceId: config.instanceId,
     concurrency: config.concurrency,
     dailyReplyLimit: config.dailyReplyLimit,
     ...(dataLifecycleTest ? { dataLifecycleTest: true as const } : {}),
-    ...(inviteTest ? { inviteTest: true as const } : {}),
   });
   if (action === 'migrate') {
     try {
@@ -80,24 +72,6 @@ if (action === 'init') {
     } finally {
       store.close();
     }
-  } else if (action === 'migrate-invites') {
-    try {
-      store.migrateInviteCore();
-      store.migrateInviteIdentity();
-      process.stdout.write(JSON.stringify({ action, root, schema: 112, mode: 'synthetic-local' }) + '\n');
-    } finally {
-      store.close();
-    }
-  } else if (action === 'admin-grant') {
-    try {
-      store.requireInviteTest();
-      const grant = new WebInviteAdmin(store, { now: () => Date.now() }, config.origin).issueLoginGrant();
-      const file = join(root, `admin-login-grant-${randomUUID()}.json`);
-      writeFileSync(file, JSON.stringify(grant), { flag: 'wx', mode: 0o600, flush: true });
-      process.stdout.write(JSON.stringify({ action, file, expiresAt: grant.expiresAt }) + '\n');
-    } finally {
-      store.close();
-    }
   } else {
     if (action === 'serve-data-lifecycle') {
       try {
@@ -105,14 +79,6 @@ if (action === 'init') {
           store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 110,
           'WEB_DATA_TEST_SCHEMA_REQUIRED',
         );
-      } catch (error) {
-        store.close();
-        throw error;
-      }
-    }
-    if (action === 'serve-invites') {
-      try {
-        store.requireInviteTest();
       } catch (error) {
         store.close();
         throw error;

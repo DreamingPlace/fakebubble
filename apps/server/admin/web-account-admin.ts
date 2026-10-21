@@ -438,54 +438,6 @@ export class WebAccountAdmin extends WebInviteAdmin {
       return result;
     });
   }
-  inviteRecords(cookie: unknown, csrf: unknown, origin: unknown, beforeId: unknown) {
-    const actor = this.authorize(cookie, csrf, origin),
-      member = this.current(cookie);
-    ensure(
-      actor.role === 'owner' || hasInvitePermission(JSON.parse(member.permissions_json), 'invites.read'),
-      'ADMIN_PERMISSION_REQUIRED',
-    );
-    ensure(beforeId === null || identifier(beforeId), 'INVALID_REQUEST');
-    const before =
-      beforeId === null
-        ? null
-        : this.db.get<{ created_at: number }>('SELECT created_at FROM web_invite_codes WHERE id=?', beforeId);
-    ensure(beforeId === null || before, 'INVALID_CURSOR');
-    // The player's login (schema 118) shows an administrator only a masked address, never the full one.
-    const hasLogins = !!this.db.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'");
-    const rows = this.db.all<{
-      inviteId: string;
-      batch: string;
-      note: string | null;
-      createdAt: number;
-      redeemBy: number | null;
-      status: string;
-      redeemed: number;
-      grantId: string | null;
-      redeemedAt: number | null;
-      accessRevokedAt: number | null;
-      accessExpiresAt: number | null;
-      loginEmail: string | null;
-    }>(
-      `
-      SELECT c.id inviteId,c.batch,c.note,c.created_at createdAt,c.redeem_by redeemBy,c.status,c.redeemed_count redeemed,
-        g.id grantId,g.redeemed_at redeemedAt,g.revoked_at accessRevokedAt,g.expires_at accessExpiresAt,
-        ${hasLogins ? 'l.email_norm' : 'NULL'} loginEmail FROM web_invite_codes c LEFT JOIN web_invite_grants g ON g.invite_id=c.id
-        ${hasLogins ? 'LEFT JOIN web_player_logins l ON l.principal_id=g.principal_id' : ''}
-      WHERE (? IS NULL OR c.created_at<? OR c.created_at=? AND c.id<?) ORDER BY c.created_at DESC,c.id DESC LIMIT 51`,
-      beforeId,
-      before?.created_at ?? null,
-      before?.created_at ?? null,
-      beforeId,
-    );
-    return {
-      records: rows.slice(0, 50).map(({ loginEmail, ...row }) => ({
-        ...row,
-        ...(hasLogins ? { loginEmailMasked: loginEmail === null ? null : maskEmail(loginEmail) } : {}),
-      })),
-      next: rows.length > 50 ? rows[49]!.inviteId : null,
-    };
-  }
   private newSession(memberId: string) {
     this.member(memberId);
     const bytes = this.bytes(32);

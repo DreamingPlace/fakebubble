@@ -68,8 +68,8 @@ export class WebProviderHTTP {
     ensure(found.length <= 1, 'INVALID_REQUEST');
     return found[0]?.slice(name.length + 1);
   }
-  private setCookie(response: Response, token: string, admin = false, clear = false, invited = false) {
-    const maxAge = clear ? '; Max-Age=0' : invited ? `; Max-Age=${WEB_IDENTITY_LIMITS.inviteCookieMaxAgeSeconds}` : '';
+  private setCookie(response: Response, token: string, admin = false, clear = false, durable = false) {
+    const maxAge = clear ? '; Max-Age=0' : durable ? `; Max-Age=${WEB_IDENTITY_LIMITS.inviteCookieMaxAgeSeconds}` : '';
     response.headers.append(
       'set-cookie',
       `${this.app.config.cookieName}${admin ? '_admin' : ''}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax${maxAge}`,
@@ -189,8 +189,7 @@ export class WebProviderHTTP {
         path.startsWith(`${API}/admin/`) ||
         path.startsWith(`${API}/cocreation/`) ||
         path.startsWith(`${API}/billing/`) ||
-        path.startsWith(`${API}/account/`) ||
-        path.startsWith(`${API}/identity/invite-`))
+        path.startsWith(`${API}/account/`))
     ) {
       const localPath = `/api/web/local${path.slice(API.length)}`;
       if (localPath === '/api/web/local/account/request-code') await this.human(request, 'code', trustedPeer);
@@ -248,19 +247,7 @@ export class WebProviderHTTP {
         routeWebInvite(app.inviteActions, input, app.inviteAdmin);
       if (/\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(review-start|run-start|delete-start)$/.test(localPath))
         await this.execution.wake();
-      let body = result.body;
-      if (localPath === '/api/web/local/invites/redeem' && result.issuedToken) {
-        const actor = app.identity.authenticate(result.issuedToken);
-        const grant = app.store.get<{ id: string }>(
-          `SELECT id FROM web_invite_grants
-          WHERE principal_id=? AND player_id=? AND world_id=?`,
-          actor.principalId,
-          actor.player_id,
-          actor.world_id,
-        );
-        body = { ...(body as Record<string, unknown>), grantId: grant?.id ?? null, duplicate: false };
-      }
-      const response = Response.json(body, { status: result.status });
+      const response = Response.json(result.body, { status: result.status });
       if (result.issuedToken) this.setCookie(response, result.issuedToken, false, false, true);
       else if (result.clearPlayerCookie) this.setCookie(response, '', false, true);
       if (result.issuedAdminCookie) this.setCookie(response, result.issuedAdminCookie, true);
@@ -277,7 +264,7 @@ export class WebProviderHTTP {
           response = Response.json(result.body);
         const current = this.cookie(request);
         if (result.issuedToken) this.setCookie(response, result.issuedToken);
-        else if (result.invited && current) this.setCookie(response, current, false, false, true);
+        else if (result.durable && current) this.setCookie(response, current, false, false, true);
         return response;
       } catch (error) {
         if (

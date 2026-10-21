@@ -35,33 +35,18 @@ export type WebProviderSlot =
   | { kind: 'character'; characterId: WebProviderCharacterId }
   | { kind: 'preview'; slotId: string; label: string };
 
-export type WebProviderAccess =
-  | {
-      kind: 'guest';
-      principalId: string;
-      playerId: string;
-      worldId: string;
-      revision: number;
-      lockedCharacterId: WebProviderCharacterId | null;
-      remainingReplies: number;
-      reservedReplies: number;
-      trialExpiresAt: number | null;
-      canSend: boolean;
-    }
-  | {
-      kind: 'invite';
-      principalId: string;
-      playerId: string;
-      worldId: string;
-      revision: number;
-      grantId: string;
-      status: 'active' | 'revoked' | 'expired';
-      lockedCharacterId: null;
-      remainingReplies: null;
-      reservedReplies: null;
-      trialExpiresAt: null;
-      canSend: boolean;
-    };
+export type WebProviderAccess = {
+  kind: 'guest';
+  principalId: string;
+  playerId: string;
+  worldId: string;
+  revision: number;
+  lockedCharacterId: WebProviderCharacterId | null;
+  remainingReplies: number;
+  reservedReplies: number;
+  trialExpiresAt: number | null;
+  canSend: boolean;
+};
 export interface WebProviderConversation {
   conversationId: string;
   characterId: WebProviderCharacterId;
@@ -154,12 +139,11 @@ export interface WebProviderSync {
 }
 /** One principal-level SSE stream; each private event carries conversation and character scope. */
 export interface WebProviderActions {
-  /** Reuse LocalApi bootstrap/byRequest/operation/SSE cursor pattern after redeem or uncertain send. */
-  /** Part 22a: a signed-in player's code answers with the ENTITLEMENT it added; a code redeemed the old way with the grant. */
+  /** A signed-in player's code answers with the ENTITLEMENT it added. */
   redeemInvite(input: {
     requestId: string;
     code: string;
-  }): Promise<{ grantId: string; duplicate: boolean } | { entitlement: PlayerPlan | undefined; duplicate: boolean }>;
+  }): Promise<{ entitlement: PlayerPlan | undefined; duplicate: boolean }>;
   bootstrap(): Promise<WebProviderBootstrap>;
   byRequest(requestId: string): Promise<WebProviderOperation>;
   operation(operationId: string): Promise<WebProviderOperation>;
@@ -281,7 +265,7 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
     invalid();
   const access = record(root.access);
   if (
-    !['guest', 'invite'].includes(String(access.kind)) ||
+    access.kind !== 'guest' ||
     !id(access.principalId) ||
     !id(access.playerId) ||
     !id(access.worldId) ||
@@ -289,54 +273,26 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
     typeof access.canSend !== 'boolean'
   )
     invalid();
-  if (access.kind === 'guest') {
-    exact(access, [
-      'kind',
-      'principalId',
-      'playerId',
-      'worldId',
-      'revision',
-      'lockedCharacterId',
-      'remainingReplies',
-      'reservedReplies',
-      'trialExpiresAt',
-      'canSend',
-    ]);
-    if (
-      !(access.lockedCharacterId === null || characterId(access.lockedCharacterId)) ||
-      !millis(access.remainingReplies) ||
-      !millis(access.reservedReplies) ||
-      !(access.trialExpiresAt === null || millis(access.trialExpiresAt)) ||
-      (root.fixture && access.canSend)
-    )
-      invalid();
-  } else {
-    exact(access, [
-      'kind',
-      'principalId',
-      'playerId',
-      'worldId',
-      'revision',
-      'grantId',
-      'status',
-      'lockedCharacterId',
-      'remainingReplies',
-      'reservedReplies',
-      'trialExpiresAt',
-      'canSend',
-    ]);
-    if (
-      !id(access.grantId) ||
-      !['active', 'revoked', 'expired'].includes(String(access.status)) ||
-      access.lockedCharacterId !== null ||
-      access.remainingReplies !== null ||
-      access.reservedReplies !== null ||
-      access.trialExpiresAt !== null ||
-      (access.status !== 'active' && access.canSend) ||
-      (root.fixture && access.canSend)
-    )
-      invalid();
-  }
+  exact(access, [
+    'kind',
+    'principalId',
+    'playerId',
+    'worldId',
+    'revision',
+    'lockedCharacterId',
+    'remainingReplies',
+    'reservedReplies',
+    'trialExpiresAt',
+    'canSend',
+  ]);
+  if (
+    !(access.lockedCharacterId === null || characterId(access.lockedCharacterId)) ||
+    !millis(access.remainingReplies) ||
+    !millis(access.reservedReplies) ||
+    !(access.trialExpiresAt === null || millis(access.trialExpiresAt)) ||
+    (root.fixture && access.canSend)
+  )
+    invalid();
   if (
     !Array.isArray(root.characters) ||
     root.characters.length > 15 ||

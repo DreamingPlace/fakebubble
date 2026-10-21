@@ -66,20 +66,14 @@ function fixture(t: TestContext) {
   const boot = identity.bootstrap(),
     scope = identity.authenticate(boot.issuedToken!);
   store.run("INSERT INTO world_characters VALUES (?,'synthetic','new')", scope.world_id);
-  store.run("UPDATE web_principals SET kind='invite' WHERE id=?", boot.principalId);
+  // Named exception (Part 22x): the vehicle was a legacy kind-'invite' principal with a grant. That kind decides nothing now, so the
+  // entitled player is the remaining entitled kind, an active account on this schema-112 local instance; revoking it is the
+  // same revocation the executor checks (web_accounts.active) before it attaches or publishes anything.
+  store.run("UPDATE web_principals SET kind='account' WHERE id=?", boot.principalId);
   store.run("UPDATE web_guest_retention SET state='protected',expires_at=NULL WHERE principal_id=?", boot.principalId);
-  store.run('INSERT INTO admin_sessions VALUES (?,?,?,?,NULL)', 'admin', 'hash', now, now + 10_000);
   store.run(
-    `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,
-    capacity,redeemed_count,redeem_by,access_duration_ms,status,batch,note,created_by,created_at)
-    VALUES ('code','digest','issue','issue-digest',1,1,NULL,NULL,'active','synthetic',NULL,'admin',?)`,
-    now,
-  );
-  store.run(
-    `INSERT INTO web_invite_grants VALUES ('grant','code',?,?,?,?,NULL,NULL)`,
+    `INSERT INTO web_accounts(id,principal_id,username_norm,password_salt,password_tag,created_at) VALUES ('account',?,'synthetic',x'00',x'00',?)`,
     boot.principalId,
-    scope.player_id,
-    scope.world_id,
     now,
   );
   const admitted = new WebAdmission(store, clock, randomUUID).admit({
@@ -94,14 +88,14 @@ function fixture(t: TestContext) {
     clock,
     admitted,
     principalId: boot.principalId,
-    revoke: () => store.run('UPDATE web_invite_grants SET revoked_at=? WHERE id=?', now, 'grant'),
+    revoke: () => store.run('UPDATE web_accounts SET active=0 WHERE id=?', 'account'),
     advance: (ms: number) => {
       now += ms;
     },
   };
 }
 
-test('112 invited principal completes synthetic text, speech and atomic publication', async (t) => {
+test('112 entitled principal completes synthetic text, speech and atomic publication', async (t) => {
   const f = fixture(t),
     executor = new WebLocalExecutor(f.store, f.clock);
   t.after(() => executor.stop());
@@ -124,7 +118,7 @@ test('112 invited principal completes synthetic text, speech and atomic publicat
   assert.ok(f.store.get('SELECT 1 FROM web_publications WHERE operation_id=?', f.admitted.operationId));
 });
 
-test('112 invite revoked after speech sent cannot attach or publish; sent cost stays unknown', async (t) => {
+test('112 entitled account revoked after speech sent cannot attach or publish; sent cost stays unknown', async (t) => {
   const f = fixture(t);
   const executor = new WebLocalExecutor(f.store, f.clock, {
     audioDelayMs: 25,

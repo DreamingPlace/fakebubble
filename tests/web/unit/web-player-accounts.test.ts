@@ -14,8 +14,6 @@ import { maskEmail, normalizeEmail } from '../../../apps/server/identity/email-a
 import { playerMailText } from '../../../apps/server/cloudflare/web-player-mail.ts';
 import { requireWebContent } from '../../../apps/server/admission/web-retention.ts';
 import { purgePlayerLogins, playerLoginsRemain } from '../../../apps/server/identity/web-player-purge.ts';
-import { WebInvites } from '../../../apps/server/invites/web-invites.ts';
-import { WebInviteActions } from '../../../apps/server/invites/web-invite-actions.ts';
 import { webProviderHTTPError } from '../../../apps/server/platform/web-provider-http-error.ts';
 import { playerIntroduction } from '../../../apps/server/conversation/player-profile.ts';
 import { userStore } from '../../../apps/server/platform/store-boundary.ts';
@@ -88,15 +86,6 @@ function fixture(
     });
   const accounts = accountsWith(options.signupEnabled ?? true);
   const adminCookie = 'D'.repeat(43);
-  const invites = new WebInvites(store, {
-    clock,
-    codeKey: Buffer.alloc(32, 3),
-    authorize: identity.authorizeInviteAction.bind(identity),
-    identity,
-    nextId: () => `invite-${++counter}`,
-  });
-  const actions = (requireLogin?: (token: string) => void) =>
-    new WebInviteActions(store, clock, origin, invites, identity, { requireLogin });
   store.run(
     'INSERT INTO admin_sessions VALUES (?,?,?,?,NULL)',
     'admin',
@@ -147,8 +136,6 @@ function fixture(
     identity,
     accounts,
     accountsWith,
-    invites,
-    actions,
     clock,
     sent,
     guest,
@@ -163,15 +150,6 @@ function fixture(
     set: (value: number) => {
       now = value;
     },
-    issueInvite: () =>
-      invites.issue({
-        adminSessionId: 'admin',
-        requestId: `issue-${++counter}`,
-        redeemBy: null,
-        accessDurationMs: null,
-        batch: 'synthetic',
-        note: null,
-      }),
   };
 }
 const code = (name: string) => (error: unknown) => error instanceof DomainError && error.code === name;
@@ -242,7 +220,6 @@ test('signup: email code → password + nickname binds a login to the CURRENT gu
     hasLogin: true,
     emailMasked: 'p***@example.com',
     nickname: '阿泡',
-    canBind: false,
     // Named exception (Part 22a follow-up): the answer carries the EFFECTIVE tier (the page never reads the principal kind).
     tier: { kind: 'guest', unlimited: false },
   });
@@ -408,7 +385,7 @@ test('a challenge belongs to the session that asked for it and to its purpose', 
       password: PASSWORD,
       nickname: 'x',
       session: a.session,
-      purpose: 'bind',
+      purpose: 'bind' as never, // the retired 绑定邮箱 purpose is no purpose at all
     }),
     code('PLAYER_CODE_INVALID'),
   );
@@ -637,12 +614,12 @@ test('a send that errors is recorded unknown and never retried; the resend count
   assert.equal(f.store.get<{ sends: number }>('SELECT sends FROM web_player_email_daily')?.sends, 2);
 });
 
-test('signup flag off: signup, reset and bind refuse, nothing is sent, and login still works', async (t) => {
+test('signup flag off: signup and reset refuse, nothing is sent, and login still works', async (t) => {
   const f = fixture(t);
   const actor = await f.signUp('stay@example.com');
   const closed = f.accountsWith(false);
   f.sent.length = 0;
-  for (const purpose of ['signup', 'reset', 'bind'] as const)
+  for (const purpose of ['signup', 'reset'] as const)
     assert.throws(
       () =>
         closed.requestCode({
@@ -653,6 +630,19 @@ test('signup flag off: signup, reset and bind refuse, nothing is sent, and login
           session: purpose === 'reset' ? undefined : f.guest().session,
         }),
       code('PLAYER_SIGNUP_DISABLED'),
+    );
+  // 绑定邮箱 is gone: its purpose is not a request at all, open or closed.
+  for (const accounts of [closed, f.accounts])
+    assert.throws(
+      () =>
+        accounts.requestCode({
+          purpose: 'bind',
+          email: 'x@example.com',
+          ipHash: IP,
+          origin,
+          session: f.guest().session,
+        }),
+      code('INVALID_REQUEST'),
     );
   await assert.rejects(
     closed.complete({ challengeId: 'c', password: PASSWORD, nickname: 'x', session: actor.session, purpose: 'signup' }),
@@ -894,85 +884,12 @@ test('change password needs the current one; logout-others and logout end exactl
   );
 });
 
-test('invited players: login is refused once the grant is revoked (after the right password), and a bind revokes the recovery code', async (t) => {
+test('login and reset refuse a principal that is not a guest, after the right password', async (t) => {
   const f = fixture(t);
-  // A legacy invited player: redeemed, has a recovery code, no login.
-  const player = f.guest();
-  const issued = f.issueInvite();
-  const redeemed = f.invites.redeem({
-    token: player.token,
-    csrf: player.csrf,
-    origin,
-    code: issued.code!,
-    requestId: 'redeem-1',
-  });
-  if (redeemed.duplicate) throw new Error('unexpected duplicate');
-  const token = redeemed.identity!.issuedToken,
-    csrf = redeemed.identity!.csrf;
-  const session = { token, csrf, origin };
-  const credential = f.identity.regenerateInviteCredential(token, csrf, origin);
-  assert.deepEqual((({ canBind, hasLogin, kind }) => ({ canBind, hasLogin, kind }))(f.accounts.info(token) as never), {
-    canBind: true,
-    hasLogin: false,
-    kind: 'invite',
-  });
-  // Signup is not for invited players; bind is.
-  assert.throws(
-    () => f.accounts.requestCode({ purpose: 'signup', email: 'legacy@example.com', ipHash: IP, origin, session }),
-    code('PLAYER_SIGNUP_UNAVAILABLE'),
-  );
-  const guestSession = f.guest().session;
-  assert.throws(
-    () =>
-      f.accounts.requestCode({
-        purpose: 'bind',
-        email: 'legacy@example.com',
-        ipHash: IP,
-        origin,
-        session: guestSession,
-      }),
-    code('PLAYER_BIND_UNAVAILABLE'),
-  );
-  const challenge = f.accounts.requestCode({
-    purpose: 'bind',
-    email: 'legacy@example.com',
-    ipHash: IP,
-    origin,
-    session,
-  });
-  await f.flush();
-  f.accounts.verifyCode({ challengeId: challenge.challengeId, code: f.latestCode().code!, origin, session });
-  const sessionsBefore = f.store.get<{ n: number }>('SELECT count(*) n FROM web_sessions WHERE revoked_at IS NULL')?.n;
-  await f.accounts.complete({
-    challengeId: challenge.challengeId,
-    password: PASSWORD,
-    nickname: '老玩家',
-    session,
-    purpose: 'bind',
-  });
-  // The recovery credential is revoked: using it anywhere fails, and no other session was revoked by the bind.
-  assert.throws(
-    () => f.identity.recoverInviteCredential({ origin, requestId: 'recover-1', secret: credential.secret, ipHash: IP }),
-    code('WEB_INVITE_RECOVERY_UNAVAILABLE'),
-  );
-  assert.equal(
-    f.store.get<{ n: number }>('SELECT count(*) n FROM web_sessions WHERE revoked_at IS NULL')?.n,
-    sessionsBefore,
-  );
-  f.identity.authenticate(token);
-  // A player with a login keeps no recovery code: creating or regenerating one is refused.
-  assert.throws(() => f.identity.regenerateInviteCredential(token, csrf, origin), code('PLAYER_LOGIN_EXISTS'));
-  assert.throws(() => f.identity.createInviteCredential(token, csrf, origin), code('PLAYER_LOGIN_EXISTS'));
-  assert.deepEqual((f.accounts.info(token) as { canBind: boolean }).canBind, false);
-  // The invited session is durable (400-day cookie) as before.
-  assert.equal(f.identity.isDurableSession(token), true);
-  // Login works while the grant is live …
-  const login = await f.accounts.login({ email: 'legacy@example.com', password: PASSWORD, origin, ipHash: IP });
-  f.identity.authenticate(login.issuedToken);
-  // … and an administrator revoking the grant ends every session and blocks future logins, after the password is right.
-  const grant = f.store.get<{ id: string }>('SELECT id FROM web_invite_grants')!;
-  f.invites.revokeGrant('admin', grant.id);
-  assert.throws(() => f.identity.authenticate(login.issuedToken), code('SESSION_EXPIRED'));
+  const actor = await f.signUp('legacy@example.com');
+  const principalId = f.principalOf(actor.token).principalId;
+  // A login is bound to a guest. If its principal were anything else (here an account), no session is opened.
+  f.store.run("UPDATE web_principals SET kind='account' WHERE id=?", principalId);
   await assert.rejects(
     f.accounts.login({ email: 'legacy@example.com', password: PASSWORD, origin, ipHash: IP }),
     code('PLAYER_ACCESS_REVOKED'),
@@ -982,7 +899,7 @@ test('invited players: login is refused once the grant is revoked (after the rig
     code('PLAYER_PASSWORD_WRONG'),
   );
   assert.equal(webProviderHTTPError(new DomainError('PLAYER_ACCESS_REVOKED')).status, 403);
-  // Reset cannot reopen a revoked principal either.
+  // Reset cannot reopen it either.
   f.advance(PLAYER_LIMITS.resendMs);
   const reset = f.accounts.requestCode({ purpose: 'reset', email: 'legacy@example.com', ipHash: IP, origin });
   await f.flush();
@@ -991,87 +908,26 @@ test('invited players: login is refused once the grant is revoked (after the rig
     f.accounts.reset({ challengeId: reset.challengeId, password: 'brand new pass', origin, ipHash: IP }),
     code('PLAYER_ACCESS_REVOKED'),
   );
-});
-
-test('redeeming requires a signed-in login while signup is open; a guest signs up first and keeps its principal', async (t) => {
-  const f = fixture(t);
-  const gate = (token: string) => {
-    if (!f.identity.hasLogin(f.identity.authenticate(token).principalId))
-      throw new DomainError('PLAYER_LOGIN_REQUIRED');
-  };
-  const actions = f.actions(gate);
-  const guest = f.guest();
-  const issued = f.issueInvite();
-  assert.throws(
-    () => actions.redeem(guest.token, guest.csrf, origin, IP, { code: issued.code!, requestId: 'redeem-a' }),
-    code('PLAYER_LOGIN_REQUIRED'),
-  );
-  assert.equal(f.store.get('SELECT 1 FROM web_invite_grants'), undefined, 'a refused redemption changed nothing');
-  assert.equal(
-    f.store.get<{ redeemed_count: number }>('SELECT redeemed_count FROM web_invite_codes')?.redeemed_count,
-    0,
-  );
-  // Sign up with the SAME guest, then redeem: same principal, no recovery code to keep.
-  const challenge = f.accounts.requestCode({
-    purpose: 'signup',
-    email: 'gate@example.com',
-    ipHash: IP,
-    origin,
-    session: guest.session,
-  });
-  await f.flush();
-  f.accounts.verifyCode({
-    challengeId: challenge.challengeId,
-    code: f.latestCode().code!,
-    origin,
-    session: guest.session,
-  });
-  await f.accounts.complete({
-    challengeId: challenge.challengeId,
-    password: PASSWORD,
-    nickname: '玩家',
-    session: guest.session,
-    purpose: 'signup',
-  });
-  const principal = f.principalOf(guest.token).principalId;
-  const result = actions.redeem(guest.token, guest.csrf, origin, IP, { code: issued.code!, requestId: 'redeem-b' });
-  assert.equal(result.principalId, principal);
-  if (result.duplicate) throw new Error('unexpected duplicate');
-  assert.equal(f.identity.hasLogin(principal), true);
-  assert.throws(
-    () => f.identity.regenerateInviteCredential(result.identity!.issuedToken, result.identity!.csrf, origin),
-    code('PLAYER_LOGIN_EXISTS'),
-  );
-  // With no gate (signup closed) redemption is exactly what it was.
-  const plain = f.guest();
-  const second = f.issueInvite();
-  assert.equal(
-    f.actions().redeem(plain.token, plain.csrf, origin, IP, { code: second.code!, requestId: 'redeem-c' }).duplicate,
-    false,
+  // Back to a guest, everything works as before.
+  f.store.run("UPDATE web_principals SET kind='guest' WHERE id=?", principalId);
+  f.identity.authenticate(
+    (await f.accounts.login({ email: 'legacy@example.com', password: PASSWORD, origin, ipHash: IP })).issuedToken,
   );
 });
 
-test('dead cookies: unknown, malformed and revoked ones are clearable, but a live redemption receipt keeps its cookie', async (t) => {
+test('dead cookies: unknown, malformed and revoked ones are clearable; a live one is not', async (t) => {
   const f = fixture(t);
   const guest = f.guest();
   assert.equal(f.identity.isDeadCookie(guest.token), false);
   assert.equal(f.identity.isDeadCookie('U'.repeat(43)), true);
   assert.equal(f.identity.isDeadCookie('not a token'), true);
-  // An uncertain invite redemption: the old cookie is revoked but its sealed receipt is recoverable.
-  const issued = f.issueInvite();
-  f.invites.redeem({ token: guest.token, csrf: guest.csrf, origin, code: issued.code!, requestId: 'redeem-d' });
-  assert.throws(() => f.principalOf(guest.token), code('SESSION_EXPIRED'));
-  assert.equal(f.identity.isDeadCookie(guest.token), false, 'the receipt can still be fetched');
-  // Once that receipt is gone (expired), it is dead like any other.
-  f.advance(10 * 60_000);
-  assert.equal(f.identity.isDeadCookie(guest.token), true);
   // A revoked ordinary session is dead.
   const other = f.guest();
   f.identity.logout(other.token, other.csrf, origin);
   assert.equal(f.identity.isDeadCookie(other.token), true);
 });
 
-test('a guest with a login keeps its session past 24 h like an invited player; a plain guest does not', async (t) => {
+test('a guest with a login keeps its session past 24 h; a plain guest does not', async (t) => {
   const f = fixture(t);
   const signed = await f.signUp('long@example.com');
   const plain = f.guest();
@@ -1297,43 +1153,33 @@ const outcome = (run: () => unknown) => {
 test('wrong codes: ten per email per rolling 24 h over ALL challenges and purposes, then every purpose refuses', async (t) => {
   const f = fixture(t);
   const email = 'target@example.com';
-  // A legacy invited player has a live bind challenge for the address from before the budget is spent.
-  const invited = f.guest();
-  const redeemed = f.invites.redeem({
-    token: invited.token,
-    csrf: invited.csrf,
-    origin,
-    code: f.issueInvite().code!,
-    requestId: 'redeem-limit',
-  });
-  if (redeemed.duplicate) throw new Error('unexpected duplicate');
-  const bindSession = { token: redeemed.identity!.issuedToken, csrf: redeemed.identity!.csrf, origin };
-  const bind = f.accounts.requestCode({ purpose: 'bind', email, ipHash: IP, origin, session: bindSession });
-  await f.flush();
-  const bindCode = f.latestCode().code!;
-  // Two more challenges (reset, then signup) for the same address; five wrong codes each = ten.
-  f.advance(61_000);
+  // Three challenges for the same address: reset (five wrong), signup (four wrong), a second reset (one wrong) = ten.
   const reset = f.accounts.requestCode({ purpose: 'reset', email, ipHash: IP, origin });
   f.advance(61_000);
   const guest = f.guest();
   const signup = f.accounts.requestCode({ purpose: 'signup', email, ipHash: IP, origin, session: guest.session });
   await f.flush();
+  const signupCode = f.latestCode().code!;
   const guess = (challengeId: string, session?: typeof guest.session) =>
     outcome(() => f.accounts.verifyCode({ challengeId, code: '000000', origin, session }));
   for (let i = 0; i < PLAYER_LIMITS.codeAttempts; i++) assert.equal(guess(reset.challengeId), 'PLAYER_CODE_INVALID');
-  for (let i = 0; i < PLAYER_LIMITS.codeAttempts; i++)
+  for (let i = 0; i < PLAYER_LIMITS.codeAttempts - 1; i++)
     assert.equal(guess(signup.challengeId, guest.session), 'PLAYER_CODE_INVALID');
-  // The tenth wrong code was an ordinary wrong code; from now on the address is refused everywhere, even the RIGHT code.
-  const verifyBind = () =>
-    f.accounts.verifyCode({ challengeId: bind.challengeId, code: bindCode, origin, session: bindSession });
+  f.advance(61_000);
+  const again = f.accounts.requestCode({ purpose: 'reset', email, ipHash: IP, origin });
+  assert.equal(guess(again.challengeId), 'PLAYER_CODE_INVALID');
+  // The tenth wrong code was an ordinary wrong code; from now on the address is refused everywhere, even the RIGHT code of
+  // a challenge that still had an attempt left.
+  const verifyRight = () =>
+    f.accounts.verifyCode({ challengeId: signup.challengeId, code: signupCode, origin, session: guest.session });
   assert.throws(
-    verifyBind,
+    verifyRight,
     (error: unknown) =>
       error instanceof RetryAfterError && error.code === 'PLAYER_RATE_LIMITED' && error.retryAfterMs > 0,
   );
   f.advance(61_000);
-  for (const purpose of ['reset', 'signup', 'bind'] as const) {
-    const session = purpose === 'reset' ? undefined : purpose === 'signup' ? f.guest().session : bindSession;
+  for (const purpose of ['reset', 'signup'] as const) {
+    const session = purpose === 'reset' ? undefined : f.guest().session;
     assert.match(
       outcome(() => f.accounts.requestCode({ purpose, email, ipHash: OTHER_IP, origin, session })),
       /^PLAYER_RATE_LIMITED@\d+$/,
@@ -1473,7 +1319,7 @@ test('last_seen_at: set at signup and login, refreshed by bootstrap at most once
   f.accounts.touch(f.principalOf(f.guest().token).principalId);
 });
 
-test('a signed-up guest after the trial: reads, logs in, edits the nickname and redeems an invite; a plain guest cannot', async (t) => {
+test('a signed-up guest after the trial: reads, logs in and edits the nickname; a plain guest cannot', async (t) => {
   const f = fixture(t);
   const player = await f.signUp('kept@example.com');
   const principal = f.principalOf(player.token);
@@ -1516,29 +1362,9 @@ test('a signed-up guest after the trial: reads, logs in, edits the nickname and 
       }),
     code('TRIAL_EXPIRED'),
   );
-  // Redemption: the signed-up guest may, the plain expired guest may not; afterwards the invited rules apply.
-  const invite = f.issueInvite();
-  assert.throws(
-    () =>
-      f.invites.redeem({ token: plain.token, csrf: plain.csrf, origin, code: invite.code!, requestId: 'late-plain' }),
-    code('TRIAL_EXPIRED'),
-  );
-  const redeemed = f.invites.redeem({
-    token: player.token,
-    csrf: player.csrf,
-    origin,
-    code: invite.code!,
-    requestId: 'late-kept',
-  });
-  assert.equal(redeemed.duplicate, false);
+  // The principal and its retention row are untouched by any of it.
   assert.equal(
     f.store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principal.principalId)?.kind,
-    'invite',
+    'guest',
   );
-  assert.equal(
-    f.store.get<{ state: string }>('SELECT state FROM web_guest_retention WHERE principal_id=?', principal.principalId)
-      ?.state,
-    'protected',
-  );
-  assert.equal(requireWebContent(f.store, f.clock, principal.principalId, principal.world_id)?.state, 'protected');
 });

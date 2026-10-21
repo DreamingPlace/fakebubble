@@ -13,9 +13,7 @@ pnpm web:player:build
 pnpm web:local serve "$ROOT"
 ```
 
-服务为 `https://127.0.0.1:18491/`，使用实例内生成的本地证书。验证证书后访问 `?mode=local-2`。它仅含合成人物与离线行为，不代表真实 AI 或声音质量。
-
-邀请码离线场景另建以 `local-invite-` 开头的实例，依次执行 `init`、`migrate`、`migrate-data-lifecycle`、`migrate-invites`，再用 `serve-invites` 启动、以 `?mode=local-3` 访问。测试管理员凭据通过同一实例的 `admin-grant` 命令写入 0600 私有文件，不会直接打印凭据。
+服务为 `https://127.0.0.1:18491/`，使用实例内生成的本地证书。它是**服务端测试装置**（合成人物、离线行为，供 `pnpm check:web:local-http`、`pnpm check:web:restart` 与集成测试使用），**没有浏览器入口**：玩家页面只有 `?mode=provider`（裸网址会跳转到它）和管理页 `?mode=provider-admin`，不再有 `?mode=local-2`、`local-3`、`local-3-admin` 或静态演示原型。本地想看真实页面请用 `scripts/web-provider.ts serve`。
 
 ## Cloudflare 源码包
 
@@ -98,18 +96,18 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 | --- | --- | --- |
 | `PLAYER_EMAIL` | `send_email` 绑定 | Cloudflare Email Service（Email Sending）发信绑定，只发纯中文文本，无链接、无 HTML、无追踪。 |
 | `PLAYER_EMAIL_FROM` | 变量 | 发件地址，必须属于已完成发信域名验证的域。 |
-| `PLAYER_SIGNUP_ENABLED` | 变量，默认 `false` | 开启注册、绑定邮箱与忘记密码。为 `false` 时这三个入口显示“注册暂未开放”，**登录照常可用**，邀请码兑换也照旧（不要求登录）。为 `true` 时必须同时配置 `PLAYER_EMAIL` 与 `PLAYER_EMAIL_FROM`，否则业务对象拒绝启动；并且兑换邀请码要求先登录。 |
+| `PLAYER_SIGNUP_ENABLED` | 变量，默认 `false` | 开启注册与忘记密码。为 `false` 时这两个入口显示“注册暂未开放”，**登录照常可用**。为 `true` 时必须同时配置 `PLAYER_EMAIL` 与 `PLAYER_EMAIL_FROM`，否则业务对象拒绝启动。兑换邀请码一律要求先登录（访客输入邀请码被拒绝且码不被消耗）。 |
 | `PLAYER_EMAIL_DAILY_CAP` | 变量，默认 `200` | 所有玩家合计每个 UTC 日最多发送的邮件数（1–100000）。 |
 
 **上线前：** (1) 在 Cloudflare Email Service 里为发件域名完成 **Sending Domain onboarding**（添加域名并按提示写入 SPF / DKIM / DMARC 的 DNS 记录，等待状态变为已验证）；(2) Email Service 的发信需要 **Workers Paid** 套餐；(3) 先保持 `PLAYER_SIGNUP_ENABLED=false` 部署，确认迁移账本 `matches:true` 后再改为 `true` 重新部署；(4) 用自己的邮箱走一遍注册、登录、忘记密码。
 
-**验证码：** 6 位数字，10 分钟有效，每个挑战最多 5 次错误尝试，**同一邮箱在所有挑战与用途上合计，滚动 24 小时内最多 10 次错误验证码**（超过后验证与任何用途的请求验证码都返回 `PLAYER_RATE_LIMITED` 并带 `retryAfterMs`，已注册与未注册邮箱的回应完全相同；计数键为邮箱的 HMAC），新的请求使同邮箱同用途的上一个挑战失效。限制在发送之前检查：同一邮箱两次发送至少间隔 60 秒、每小时最多 5 次；同一 IP 每小时最多 10 次；全局每日上限 `PLAYER_EMAIL_DAILY_CAP`。发送超时或出错不会自动重试，玩家可在冷却后点“重新发送”（计入上述限制）。请求验证码的回应对已注册与未注册邮箱完全相同：已注册邮箱收到“你已注册，可直接登录或重置密码”，不含验证码；忘记密码遇到未注册邮箱不发邮件。验证码、密码和完整邮箱不进入日志、指标、回执或错误；管理员的玩家/邀请记录只显示打码邮箱（首字符 + `***` + 域名）。
+**验证码：** 6 位数字，10 分钟有效，每个挑战最多 5 次错误尝试，**同一邮箱在所有挑战与用途上合计，滚动 24 小时内最多 10 次错误验证码**（超过后验证与任何用途的请求验证码都返回 `PLAYER_RATE_LIMITED` 并带 `retryAfterMs`，已注册与未注册邮箱的回应完全相同；计数键为邮箱的 HMAC），新的请求使同邮箱同用途的上一个挑战失效。限制在发送之前检查：同一邮箱两次发送至少间隔 60 秒、每小时最多 5 次；同一 IP 每小时最多 10 次；全局每日上限 `PLAYER_EMAIL_DAILY_CAP`。发送超时或出错不会自动重试，玩家可在冷却后点“重新发送”（计入上述限制）。请求验证码的回应对已注册与未注册邮箱完全相同：已注册邮箱收到“你已注册，可直接登录或重置密码”，不含验证码；忘记密码遇到未注册邮箱不发邮件。验证码、密码和完整邮箱不进入日志、指标、回执或错误；管理员视图只显示打码邮箱或玩家编号（首字符 + `***` + 域名）。
 
-**登录与会话：** 邮箱 + 密码（8–128 字节）；同一邮箱 15 分钟内失败 10 次、同一 IP 失败 30 次后需要等待；错误提示一律为“邮箱或密码不正确”。登录只新建会话，其他设备的会话不受影响，永远不合并两个 principal；对已被撤销邀请的受邀 principal，输对密码后给出明确的拒绝，管理员“撤销授权”照旧一次性结束全部会话并阻止今后的登录。忘记密码会结束该 principal 的其他全部会话；修改密码可选择同时退出其他设备。**保留期：** 已注册（有邮箱登录）的访客在试玩结束后**不会被保留清理删除**：聊天照常以“试玩已结束”拒绝（准入不变），但仍可登录、查看历史、修改昵称、兑换邀请码（兑换后按受邀玩家规则）。保留状态不新增：`web_guest_retention` 保持 `active` 且已过期，“有登录的访客”由服务端推导；只有显式声明 `read` 的读取路径（历史、事件、操作状态、已发布音频）放行，其余一律按 `live` 判断并返回 `TRIAL_EXPIRED`。没有邀请授权的登录若 **180 天**无活动（`web_player_logins.last_seen_at`，注册、登录时写入，`bootstrap` 每个 UTC 日最多刷新一次）则走原有的、带审计且失败即关闭的访客清理路径连同全部数据删除；没有登录的访客仍在试玩结束时清理。登录会话与注册当下的会话使用与受邀玩家相同的 400 天 Cookie，服务端以 400 天为上限。已失效/被撤销/被轮换的 Cookie 在 `bootstrap` 时由服务端清除，页面回到“登录 / 注册 / 以访客继续”的首页；仅当一次未确认的邀请兑换回执仍可取回时保留 Cookie。
+**登录与会话：** 邮箱 + 密码（8–128 字节）；同一邮箱 15 分钟内失败 10 次、同一 IP 失败 30 次后需要等待；错误提示一律为“邮箱或密码不正确”。登录只新建会话，其他设备的会话不受影响，永远不合并两个 principal；忘记密码会结束该 principal 的其他全部会话；修改密码可选择同时退出其他设备。**保留期：** 已注册（有邮箱登录）的访客在试玩结束后**不会被保留清理删除**：聊天照常以“试玩已结束”拒绝（准入不变），但仍可登录、查看历史、修改昵称、兑换邀请码（得到的是额度，见下）。保留状态不新增：`web_guest_retention` 保持 `active` 且已过期，“有登录的访客”由服务端推导；只有显式声明 `read` 的读取路径（历史、事件、操作状态、已发布音频）放行，其余一律按 `live` 判断并返回 `TRIAL_EXPIRED`。登录若 **180 天**无活动（`web_player_logins.last_seen_at`，注册、登录时写入，`bootstrap` 每个 UTC 日最多刷新一次）则走原有的、带审计且失败即关闭的访客清理路径连同全部数据删除；没有登录的访客仍在试玩结束时清理。登录会话与注册当下的会话使用 400 天 Cookie，服务端以 400 天为上限。已失效/被撤销的 Cookie 在 `bootstrap` 时由服务端清除，页面回到“登录 / 注册 / 以访客继续”的首页。
 
 **登录错误与密码输入（Part 21i）：** 登录现在分开回答“这个邮箱还没有注册”（`PLAYER_EMAIL_NOT_REGISTERED`，附“去注册”）和“密码不正确”（`PLAYER_PASSWORD_WRONG`），限流“尝试次数太多，请稍后再试”，断网“网络异常，请重试”。这等于公开某个邮箱是否已注册，是主管理员接受的取舍；登录限流不变（每邮箱哈希 10 次／每 IP 30 次／15 分钟，先于任何查询计数）。注册页要输入两次密码（客户端比对，不一致时提交按钮禁用并显示“两次输入的密码不一致”，服务器仍按原规则校验密码）；所有玩家密码框（登录、注册、重置、修改密码、删除账号）都有“显示密码／隐藏密码”按钮（`aria-pressed`、`aria-controls`）。顶部账号菜单只显示条目名称，没有第二行小字。
 
-**旧受邀玩家（只有恢复码）：** 在顶部账号菜单（“我的账号”）里“绑定邮箱”（Part 21f：聊天页“⋯”里只剩切换回复模型与共创），验证后设置密码与昵称，绑定成功即撤销其恢复码；恢复码接口与测试保持不变，未绑定的玩家仍可从首页的小链接使用。
+**唯一的登录方式是邮箱 + 密码**（Part 22x）：恢复码、“我有恢复码”入口、旧邀请体系的绑定邮箱流程都已移除。
 
 **数据清理：** 登录行与验证码挑战是玩家数据，随玩家清理一并删除（Node 与 Cloudflare 保留期清理器、生命周期审计在清理后仍有残留时失败关闭）；昵称写入的“名片”修订同样随之删除。
 
@@ -264,11 +262,11 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 邀请码不再把玩家变成另一种“邀请玩家”。从这一版起，**邀请是挂在普通注册账号上的“额度（entitlement）”**：兑换只新增一条额度记录，**从不修改 `web_principals.kind` 和 `web_guest_retention.state`**，也不换会话、不发恢复码。有效档位 = 有效的额度，否则就是注册玩家（`effectiveTier`，`admission/web-model-settings.ts` 里唯一的一处；`playerTier`、报价/扣费、消费记录、选择器、记忆召回、内容存活判定都从它读）。
 
-**何时生效：** 数据库有迁移 125 就**永远**走“额度”这条路，与 `SIGNUP_BONUS_ENABLED`、`PLAYER_MODEL_CHOICE_ENABLED` 无关；旧兑换（授权 + `kind='invite'` + retention `protected`）只存在于 schema < 125 的库里，125 上调用它会得到 `WEB_INVITE_LEGACY_UNAVAILABLE`。两个开关只影响“点数”：
+**何时生效：** 数据库有迁移 125 就**永远**走“额度”这条路，与 `SIGNUP_BONUS_ENABLED`、`PLAYER_MODEL_CHOICE_ENABLED` 无关；旧兑换（授权 + `kind='invite'` + retention `protected`）已在 Part 22x 删除。两个开关只影响“点数”：
 - `daily_refill` 需要点数。`PLAYER_MODEL_CHOICE_ENABLED` 关着时，建每天补充的批次被拒绝（`WEB_INVITE_POINTS_REQUIRED`，“需要先开启模型选择/积分”）；兑换每天补充的码被拒绝（`WEB_INVITE_UNUSABLE`，“这个邀请码暂时不能使用”），**码不会被消耗**，开关打开后可正常兑换。`unlimited` 批次不受影响。
 - 额度持有人的活性和档位**不依赖**免费档开关（`SIGNUP_BONUS_ENABLED`）；点数关着时，持有人不扣点（仍受每日回复上限）。
-- 页面从不按 principal kind 判定档位：服务端把 `effectiveTier` 的结果（`tier: {kind, unlimited, plan?}`）随账号信息发给每个已登录玩家，顶栏与 我的信息 只读它。仍读 `kind='invite'` 做业务判定的地方只有“没有邮箱登录的旧邀请玩家”这一条旧路径（见 STATUS.md 的清单）。
-- **一个撤销**：`endHolderAccess`（`invites/web-holder-access.ts`）在一个事务里结束持有人的一切：额度 + 同一邀请码的旧授权 + 该授权的会话/凭据/回执。管理页“结束额度”和旧的“撤销授权”入口调用的是同一个函数；玩家再次登录后是注册玩家，带着剩余点数。管理导航里不再有 玩家授权；旧的无登录邀请玩家显示在 邀请与额度（按玩家编号，没有则“旧邀请”，只有数量）。
+- 页面从不按 principal kind 判定档位：服务端把 `effectiveTier` 的结果（`tier: {kind, unlimited, plan?}`）随账号信息发给每个已登录玩家，顶栏与 我的信息 只读它。Part 22x 起没有任何业务判定读 `kind='invite'`（迁移 126 把旧邀请主体变成访客，见下）。
+- **一个撤销**：管理页“结束额度”（`revokeEntitlement`）在一个事务里结束持有人的额度；玩家保持登录，之后是注册玩家，带着剩余点数。
 
 **迁移 125（`125_invite_tiers.sql`）：** 共 **50 步**（`expected-migrations` 的最后一步，`version 125`，两个 authority 完全相同）；本地 `scripts/web-provider.ts migrate-invite-tiers <root>`（新实例的 `migrate` 一路到 125）。sha256：
 
@@ -294,9 +292,9 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **管理页 玩家 → 邀请与额度（取代原“邀请码”页）：** 新建批次（名称、数量 1–500、档位：不限量 / 每天补充 N（默认 50）与上限（默认 1000）、可选额度天数、可选兑换截止日期 UTC）；邀请码**只显示一次**并可下载只含邀请码的 CSV，同一请求 ID 重放得到同一批次但不再给出邀请码；批次列表（档位、N/上限、创建、邀请码、已兑换、已撤销、持有中）；每批的邀请码按序号显示状态、兑换时间、到期日和持有人的**玩家编号**（不显示邮箱、昵称、任何 ID）；撤销未兑换的码、整批（只作废未兑换的码，已兑换的玩家不受影响）、已兑换码的额度（玩家立即变回注册玩家）。**创建、查看、撤销需要主管理员或新权限 `invites.manage`；修改批次的每天补充和上限只有主管理员能做**，保存前弹出确认，写明改动和当前持有这批的人数，并写入审计日志（`web_admin_audit`）与 `web_invite_batch_changes`；改动从每位持有人的下一次每日补充起生效。旧权限 `invites.issue`/`revoke-*` 仍存在（旧的 玩家授权 页继续使用）。
 
-**玩家 我的信息：** 顶栏昵称按钮直接打开（不再是下拉菜单），邀请码入口移到里面：资料（昵称可改、玩家编号带复制、邮箱）、额度（档位、到期日、同一格式的余量 “剩余 N 点 · 约可聊 n 条” 或 “不限量”、消费记录、输入邀请码；**不显示任何上限文字**）、安全（修改密码、退出其他设备）、退出登录，其后另起一块的删除我的账号。访客看到体验状态、注册/登录和“注册后即可使用邀请码”。没有邮箱登录的旧邀请玩家在里面看到绑定邮箱和恢复码。
+**玩家 我的信息：** 顶栏昵称按钮直接打开（不再是下拉菜单），邀请码入口移到里面：资料（昵称可改、玩家编号带复制、邮箱）、额度（档位、到期日、同一格式的余量 “剩余 N 点 · 约可聊 n 条” 或 “不限量”、消费记录、输入邀请码；**不显示任何上限文字**）、安全（修改密码、退出其他设备）、退出登录，其后另起一块的删除我的账号。访客看到体验状态、注册/登录和“注册后即可使用邀请码”。
 
-**`inspect`：** 新增 `tiers`：按有效档位统计人数（`guest`/`registered`/`unlimited`/`daily_refill`/`legacy_invite`/`account`），只有数字，没有 ID。
+**`inspect`：** 新增 `tiers`：按有效档位统计人数（`guest`/`registered`/`unlimited`/`daily_refill`/`account`），只有数字，没有 ID。
 
 **删除我的账号：** 玩家的额度、兑换记录、每日补充记录和玩家编号随玩家一起清除；邀请码行（只是摘要）保留，已用过的码不会复活。
 
@@ -377,15 +375,25 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 - `FAKEBUBBLE_BUDGET_AUTHORITY`：指向 0600 绝对路径配置，结构见 `config/budget-authority.json.example`。同一供应商账户下的所有本地实例必须使用同一个 `budgetPath` 和完整 `historyRoots`。只有确实不存在历史调用的新环境才可填空历史列表。路径不能按实例临时变化。
 - 供应商 `.env` / `.env.voice` / `.env.embed` 不随源码分发。禁止把生产运营预算作为任意测试许可；禁止自动重发 UNKNOWN 调用。
 
+### 退役旧邀请体系（Part 22x，迁移 126）
+
+删除：恢复码（签发、重新生成、输入、“你的恢复码”弹窗）、旧邀请兑换（`kind='invite'` 的会话与授权）、`web_invite_credentials` 与各类回执、路由 `/invites/credential`、`/invites/credential-regenerate`、`/invites/recover`、`/identity/invite-receipt-challenge|recover|status`、`/identity/receipt-challenge|recover|status`、`/admin/invites/issue|revoke-code|revoke-grant`、`/admin/invites/list`（旧邀请记录）、运营命令 `invite-grants`、玩家的“绑定邮箱”流程；浏览器端 `?mode=local-2|local-3|local-3-admin` 与静态演示原型。**旧表一个都没有删**，只是不再有人读写它们。
+
+**迁移 126（`126_legacy_invites_retired.sql`）** 只改数据，不改表结构：每个 `kind='invite'` 的主体变成 `guest`；其中 retention 状态为 `protected` 的改为 `active` 并给一个已结束的试用窗口。有邮箱登录的 = 已注册玩家（17h/17i 规则、22a 额度照旧）；没有登录的 = 试用已结束的访客，没有访问权，由保留期清理器按原有的、带审计且失败即关闭的路径清理。`purging`/`purged` 的主体只改 kind。共 **51 步**（`expected-migrations`，inline 与 R2 各 51，最后一步 `version 126`，两边同一份 SQL）。sha256：
+
+```
+68526f0cfc26957124a4a2f7ea9bcc600cc11c6ba0fcb3702b866aba67efec4e   apps/server/web-migrations/126_legacy_invites_retired.sql
+```
+
+（125 仍是 `9e7d9ca7…7e85a1d`，1–125 一个字节没动。）本地：`scripts/web-provider.ts migrate-legacy-invites <root>`（新实例的 `migrate` 一路到 126）；Cloudflare：账本版本 126，已在 125 的权威启动时自动补上。版本白名单加上 126 的位置同 125（`web-identity.ts`、`web-admission.ts`、`web-stage-queue.ts`、`platform/store.ts`（`WEB_LEGACY_INVITES_SCHEMA`）、`cloudflare/web-store.ts`（版本列表 27 项）、`workers/web-cloudflare/migrations.ts`、`scripts/web-provider.ts`、`web-provider-migration.ts`）。部署：先确认 `inspect` 的 `migrations.matches: true`；旧邀请玩家里没有邮箱登录的会失去访问并被清理（主管理员已确认只有其自己的测试账号），有登录的照常以注册玩家登录。回退：迁移是单向数据变更，不提供回滚。
+
 不要把 `runtime/`、Secrets、材料目录、邮件、收据、真实数据库或构建产物提交到 GitHub。
 
 
-### 受邀玩家保持登录与恢复码（Part 11d）
+### 登录会话 Cookie
 
-- 持有未撤销邀请授权的玩家，其会话不受 24 小时绝对期限和空闲期限约束（访客仍是 24 小时，管理员与账号会话不变）；恢复纪元、`revoked_at` 等其他检查照旧。无需迁移：判断在 `activeSession` 中按主体的有效授权做出，因此已经“过期”的受邀会话在授权仍有效时会自行恢复。
-- 每次成功 bootstrap（以及兑换、恢复）都会重新下发会话 cookie，`Max-Age=34560000`（400 天，浏览器上限）；`__Host-`、`Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/` 不变。
-- 管理员在邀请记录里撤销授权（`revoke-grant`）时，同一事务内结束该主体的全部会话并停用其恢复码；撤销未兑换的邀请码仍只阻止今后兑换。
-- 玩家兑换成功后页面一次性显示恢复码（`POST /invites/credential-regenerate`，需要 CSRF、Origin 与有效受邀会话；旧码立即失效）。凭恢复码调用 `POST /invites/recover`（沿用每个 IP 哈希每分钟 20 次的失败限额）可在新浏览器里恢复同一主体、同样的聊天与记忆，并轮换出一个新码；每个码只能用一次，错误或已用过的码返回同一个中性错误。恢复码只存摘要，页面不写入 localStorage 或 cookie，也不记录日志。
+- 有邮箱登录的玩家（以及注册当下的会话）使用 `Max-Age=34560000`（400 天，浏览器上限）的会话 Cookie，每次成功 bootstrap 重新下发；访客仍是 24 小时（开启免费档后为试用期 + 宽限期）。`__Host-`、`Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/` 不变。
+- 旧的“受邀会话不过期”“恢复码接口（`/invites/credential`、`/invites/credential-regenerate`、`/invites/recover`）”“邀请回执接口（`/identity/invite-receipt-*`）”与会话回执接口（`/identity/receipt-*`）已在 Part 22x 删除。
 
 ### 提示词变更（Part 11e）
 

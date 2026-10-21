@@ -408,23 +408,18 @@ try {
     oldStream.ended,
     new Promise((_, reject) => setTimeout(() => reject(new Error('revoked SSE did not close')), 3000)),
   ]);
-  assert.equal(
-    (await alice.call('POST', '/api/web/local/identity/receipt-status', { requestId: 'register-1' })).status,
-    200,
-  );
   const retired = new Client();
   retired.cookie = oldCookie;
-  assert.equal((await retired.call('GET', '/api/web/local/bootstrap')).status, 409);
-  const challenge = await retired.call('GET', '/api/web/local/identity/receipt-challenge');
-  assert.equal(challenge.status, 200);
-  retired.csrf = challenge.data.csrf;
-  const recovered = await retired.call('POST', '/api/web/local/identity/receipt-recover', {
-    requestId: 'register-1',
-    username,
-    password,
-  });
-  assert.equal(recovered.status, 200);
-  assert.equal(retired.cookie, alice.cookie);
+  assert.equal(
+    (await retired.call('GET', '/api/web/local/bootstrap')).status,
+    401,
+    'the rotated cookie is simply dead',
+  );
+  // The sealed-receipt routes are retired: nothing can bring the old cookie back.
+  assert.equal(
+    (await alice.call('POST', '/api/web/local/identity/receipt-status', { requestId: 'register-1' })).status,
+    404,
+  );
   assert.equal((await alice.call('GET', '/api/web/local/bootstrap')).data.access.kind, 'account');
   const accountIdleBefore = new WebStore(root, { create: false, instanceId: localConfig.instanceId });
   const idleBefore = accountIdleBefore.get<{ last_active_at: number }>(

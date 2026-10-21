@@ -14,7 +14,6 @@ const guest: AccountInfo = {
   hasLogin: false,
   emailMasked: null,
   nickname: null,
-  canBind: false,
   features: { signupBonus: 10 },
 };
 const accounts: [string, AccountInfo, { freeTier: boolean; signedUp: boolean }, string][] = [

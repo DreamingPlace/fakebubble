@@ -1,5 +1,4 @@
 import type { Clock } from '../../../packages/contracts/index.ts';
-import type { BusinessStore } from '../platform/store-contract.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 
 export interface AlarmStorage {
@@ -69,26 +68,4 @@ export class CloudQueueAlarm {
       this.#running = false;
     }
   }
-}
-
-/** Chat/voice deadlines only; optional autonomous posting needs its separately enabled scheduler wake. */
-export function cloudQueueNextDue(store: BusinessStore, now: number): number | null {
-  const queries = [
-    `SELECT min(b.guaranteed_at) due FROM batches b JOIN worlds w ON w.id=b.world_id JOIN beta_accounts a ON a.player_id=w.owner_id
-      WHERE b.status='waiting' AND a.status='active'`,
-    `SELECT min(max(b.response_ready_at,i.not_before,coalesce(r.retry_at,0))) due FROM batches b
-      JOIN reply_items i ON i.batch_id=b.id JOIN worlds w ON w.id=b.world_id JOIN beta_accounts a ON a.player_id=w.owner_id
-      LEFT JOIN text_retry_state r ON r.world_id=b.world_id AND r.conversation_id=b.conversation_id AND r.character_id=b.character_id
-      WHERE b.status='eligible' AND i.covered_by IS NULL AND i.job_id IS NULL AND i.awaiting_player=0 AND a.status='active'
-        AND (r.world_id IS NULL OR r.retry_at IS NOT NULL)`,
-    "SELECT min(next_due_at) due FROM dialogue_deliveries WHERE state='queued'",
-    "SELECT min(lease_until) due FROM jobs WHERE status='leased'",
-    "SELECT min(lease_until) due FROM speech_tasks WHERE state='generating'",
-    "SELECT 0 due FROM speech_tasks WHERE state='queued' AND retry=1 LIMIT 1",
-    'SELECT min(coalesce(preparation_until,0)) due FROM beta_reviewed_replies',
-  ];
-  const times = queries
-    .map((sql) => store.get<{ due: number | null }>(sql)?.due)
-    .filter((value): value is number => value != null);
-  return times.length ? Math.max(now, Math.min(...times)) : null;
 }

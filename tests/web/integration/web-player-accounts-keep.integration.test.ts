@@ -11,7 +11,7 @@ const DAY = 24 * 60 * 60_000;
 /**
  * Fix-up 11f: a guest who signed up keeps the account after the trial. Against the real Cloudflare retention object:
  * trial end with a login keeps everything readable and refuses new replies, trial end without a login purges as before,
- * 180 idle days purge through the audited path, and an invite can still be redeemed after the trial.
+ * 180 idle days purge through the audited path, and an entitlement still applies after the trial.
  */
 test('a signed-up guest keeps its data after the trial, is purged after 180 idle days, and a guest without a login purges as before', async (t) => {
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-retention-worker.ts', { STATE: 'WebRetentionFixture' }, [
@@ -96,12 +96,10 @@ test('a guest who signed up but never chatted is purged after 180 idle days and 
   assert.deepEqual(await f.call<State>('/retention/login-state', idle), { logins: 0, challenges: 0, cards: 0 });
 });
 
-test('a signed-up guest can redeem an invite after the trial ended, and the normal invited rules apply from then on', async (t) => {
+test('a signed-up guest holding an entitlement after the trial ended is live again, and is then kept like any registered player', async (t) => {
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-retention-worker.ts', { STATE: 'WebRetentionFixture' }, [
     'MEDIA',
   ]);
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.call('/legacy-schema', {});
   await f.call('/assets');
   const ipHash = 'a'.repeat(64);
   const guest = await f.call<Guest>('/bootstrap', {});
@@ -118,27 +116,20 @@ test('a signed-up guest can redeem an invite after the trial ended, and the norm
   await f.call('/retention/expire', guest);
   assert.deepEqual(await f.call('/content', { token: guest.issuedToken }, 409), { error: 'TRIAL_EXPIRED' });
 
-  const admin = await f.call<{ cookie: string; csrf: string }>('/admin');
-  const issued = await f.call<{ code: string }>('/issue', {
-    ...admin,
-    origin,
-    input: { requestId: 'after-trial-invite', redeemBy: null, accessDurationMs: null, batch: 'keep', note: null },
-  });
-  const redeemed = await f.call<{ identity?: { issuedToken: string } }>('/redeem', {
-    token: guest.issuedToken,
-    csrf: guest.csrf,
-    origin,
-    ipHash,
-    input: { code: issued.code, requestId: 'after-trial-redeem' },
-  });
+  // Named exception (Part 22x): the legacy invite redemption (kind 'invite', retention 'protected') is gone; a redeemed code now
+  // adds an unlimited entitlement to the signed-up guest, which keeps the same principal and its history.
+  await f.call('/retention/entitle', { principalId: guest.principalId });
   const state = await f.call<Kept>('/retention/state', guest);
-  assert.equal(state.retention.state, 'protected', 'redemption moves the player to the invited (protected) rules');
-  assert.ok(state.messages > 0, 'the history survived the redemption');
+  assert.ok(state.messages > 0, 'the history survived');
   await f.call('/retention/read', guest);
-  // Invited now: the live gate opens too (the redemption's new session), and the guest cleaner never touches it
-  // however idle the login is.
-  await f.call('/content', { token: redeemed.identity!.issuedToken });
-  await f.call('/retention/last-seen', { ...guest, lastSeenAgoMs: 400 * DAY });
+  // Entitled now: the live gate opens again (same session), and it is then kept like any registered player.
+  await f.call('/content', { token: guest.issuedToken });
+  // Named exception (Part 22x): the 'protected for ever' rule belonged to the legacy invite kind. An entitled player is a registered
+  // player: kept for 179 idle days, purged through the audited path after 181 like any other.
+  await f.call('/retention/last-seen', { ...guest, lastSeenAgoMs: 179 * DAY });
   assert.deepEqual(await f.call('/retention/sweep'), { processed: 0, failed: 0, error: null });
-  assert.equal((await f.call<Kept>('/retention/state', guest)).retention.state, 'protected');
+  assert.notEqual((await f.call<Kept>('/retention/state', guest)).retention.state, 'purged');
+  await f.call('/retention/last-seen', { ...guest, lastSeenAgoMs: 181 * DAY });
+  assert.deepEqual(await f.call('/retention/sweep'), { processed: 1, failed: 0, error: null });
+  assert.equal((await f.call<Kept>('/retention/state', guest)).retention.state, 'purged');
 });

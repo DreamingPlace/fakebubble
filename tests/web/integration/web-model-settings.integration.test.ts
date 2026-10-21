@@ -3,6 +3,7 @@ import test from 'node:test';
 import { routeWebAccountAdmin } from '../../../apps/server/admin/web-account-admin-routes.ts';
 import {
   canChooseModel,
+  isUnmetered,
   effectiveModel,
   modelChoiceState,
   offeredModels,
@@ -81,7 +82,9 @@ test('migration 124 writes exactly today’s behaviour: all three on, guests Dee
     ],
   );
   const invitedState = modelChoiceState(f.store, f.clock(), invited)!;
-  assert.equal(invitedState.metered, false);
+  // Named exception (Part 22x): the invited tier is an unlimited entitlement on a signed-up player (the legacy invite kind is
+  // gone). Such a player is never charged; the page still shows its (registered) balance, so "unmetered" replaces "metered:false".
+  assert.equal(isUnmetered(f.store, invited, f.clock()), true);
   assert.deepEqual(
     invitedState.models.map((m) => m.id),
     ['deepseek', 'gemini', 'xai'],

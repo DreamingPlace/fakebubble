@@ -98,8 +98,7 @@ function setup(t: test.TestContext, state: AccountAdminSession | null = null) {
       },
     },
   });
-  let logouts = 0,
-    issues = 0;
+  let logouts = 0;
   const creates: { requestId: string; name: string }[] = [];
   const port = {
     restore: async () => {
@@ -121,12 +120,6 @@ function setup(t: test.TestContext, state: AccountAdminSession | null = null) {
     setPermissions: async (_id: string, permissions: AdminPermission[], _expected?: AdminPermission[]) =>
       active(permissions).member,
     revokeCredential: async () => {},
-    issue: async () => {
-      issues++;
-      return { inviteId: 'invite', code: 'c'.repeat(43), duplicate: false };
-    },
-    revokeInvite: async (_kind: 'code' | 'grant', _id: string) => {},
-    inviteRecords: async (): ReturnType<AccountAdminApi['inviteRecords']> => ({ records: [], next: null }),
     // Part 22a: the 邀请与额度 page's client.
     inviteBatches: async (): ReturnType<AccountAdminApi['inviteBatches']> => [],
     inviteBatchDetail: async (): ReturnType<AccountAdminApi['inviteBatchDetail']> => [],
@@ -159,7 +152,6 @@ function setup(t: test.TestContext, state: AccountAdminSession | null = null) {
     },
     dispose: () => dispose?.(),
     logouts: () => logouts,
-    issues: () => issues,
     creates: () => creates,
   };
 }

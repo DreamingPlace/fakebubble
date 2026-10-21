@@ -11,63 +11,52 @@ type Admin = { cookie: string; csrf: string };
 type Scope = { principalId: string; world_id: string; player_id: string; kind: string };
 const write = (guest: Guest) => ({ token: guest.issuedToken, csrf: guest.csrf, origin, ipHash });
 
-test('workerd guest/invite identity: sealed rotation, restart recovery, scope and revocation', async (t) => {
+// Named exception (Part 22x): this test covered the legacy invite identity (sealed rotation on redeem, redemption recovery,
+// recovery code, revoke ending the session). Those are gone; the assertions that still apply (CSRF and Origin on the redeeming
+// request, scope, idempotent replay across a restart, revocation) are carried over onto the entitlement redemption.
+test('workerd entitlement redemption: CSRF/Origin, scope, replay across restart and revocation', async (t) => {
   const f = localRuntime(t, 'tests/web/fixtures/cloudflare-business-worker.ts', { STATE: 'WebBusinessFixture' });
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.call('/legacy-schema', {});
   const guest = await f.call<Guest>('/bootstrap', {}),
     other = await f.call<Guest>('/bootstrap', {});
   const scope = await f.call<Scope>('/authenticate', { token: guest.issuedToken });
   const admin = await f.call<Admin>('/admin');
-  const input = { requestId: 'issue-1', redeemBy: null, accessDurationMs: null, batch: 'offline', note: null };
-  const issued = await f.call<{ inviteId: string; code: string }>('/issue', { ...admin, origin, input });
-  const redemption = { ...write(guest), input: { code: issued.code, requestId: 'redeem-1' } };
+  const batch = await f.call<{ batchId: string; codes: string[] }>('/batch', {
+    ...admin,
+    origin,
+    input: {
+      requestId: 'batch-1',
+      name: 'offline',
+      count: 1,
+      tier: { kind: 'unlimited' },
+      durationDays: null,
+      redeemBy: null,
+    },
+  });
+  const redemption = { ...write(guest), input: { code: batch.codes[0], requestId: 'redeem-1' } };
+  // A guest with no email login is refused before the code is looked at; nothing is consumed.
+  assert.deepEqual(await f.call('/redeem', redemption, 409), { error: 'PLAYER_LOGIN_REQUIRED' });
+  await f.call('/login', { token: guest.issuedToken });
   assert.deepEqual(await f.call('/redeem', { ...redemption, csrf: 'x'.repeat(43) }, 409), { error: 'CSRF_INVALID' });
   assert.deepEqual(await f.call('/redeem', { ...redemption, origin: 'https://other.invalid' }, 409), {
     error: 'ORIGIN_INVALID',
   });
-  const redeemed = await f.call<{
-    grantId: string;
-    worldId: string;
-    principalId: string;
-    identity: { issuedToken: string; csrf: string; receipt: unknown };
-  }>('/redeem', redemption);
-  assert.equal(redeemed.principalId, guest.principalId);
-  assert.equal(redeemed.worldId, scope.world_id);
-  assert.notEqual(redeemed.identity.issuedToken, guest.issuedToken);
-  assert.deepEqual(await f.call('/authenticate', { token: guest.issuedToken }, 409), { error: 'SESSION_EXPIRED' });
+  const redeemed = await f.call<{ entitlement: { kind: string }; duplicate: boolean }>('/redeem', redemption);
+  assert.deepEqual([redeemed.entitlement.kind, redeemed.duplicate], ['unlimited', false]);
+  // Same session: no rotation, the same principal and world.
+  assert.deepEqual(await f.call('/authenticate', { token: guest.issuedToken }), scope);
   assert.deepEqual(await f.call('/redeem', { ...write(other), input: redemption.input }, 409), {
-    error: 'WEB_INVITE_UNAVAILABLE',
+    error: 'PLAYER_LOGIN_REQUIRED',
   });
   assert.deepEqual(await f.call('/content', { token: other.issuedToken, worldId: scope.world_id }, 409), {
     error: 'WEB_RETENTION_SCOPE_INVALID',
   });
   await f.restart();
-  const challenge = await f.call<{ csrf: string }>('/challenge', { token: guest.issuedToken, origin });
-  const recovered = await f.call<{ issuedToken: string; csrf: string; receipt: unknown }>('/recover-redemption', {
-    ...redemption,
-    csrf: challenge.csrf,
-  });
-  assert.deepEqual(recovered, redeemed.identity);
-  assert.deepEqual(await f.call('/authenticate', { token: recovered.issuedToken }), { ...scope, kind: 'invite' });
-  const credential = await f.call<{ secret: string }>('/credential', {
-    ...write(guest),
-    token: recovered.issuedToken,
-    csrf: recovered.csrf,
-  });
-  const recovery = { origin, ipHash, input: { secret: credential.secret, requestId: 'recover-1' } };
-  const restored = await f.call<{ issuedToken: string; principalId: string }>('/recover-invite', recovery);
-  assert.equal(restored.principalId, guest.principalId);
-  await f.restart();
-  assert.deepEqual(await f.call('/recover-invite', recovery), { ...restored, duplicate: true });
-  const duplicate = await f.call<{ code: null; duplicate: boolean }>('/issue', { ...admin, origin, input });
-  assert.equal(duplicate.code, null);
-  assert.equal(duplicate.duplicate, true);
-  await f.call('/revoke', { ...admin, origin, grantId: redeemed.grantId });
-  // Revoking the grant also ends the player's sessions, so the session itself is rejected first.
-  assert.deepEqual(await f.call('/content', { token: restored.issuedToken }, 409), {
-    error: 'SESSION_EXPIRED',
-  });
+  const replay = await f.call<{ entitlement: unknown; duplicate: boolean }>('/redeem', redemption);
+  assert.equal(replay.duplicate, true);
+  assert.deepEqual(replay.entitlement, redeemed.entitlement);
+  const [inviteId] = await f.call<string[]>('/code-ids', { batchId: batch.batchId });
+  await f.call('/revoke', { ...admin, origin, inviteId });
+  assert.deepEqual(await f.call('/authenticate', { token: guest.issuedToken }), scope);
 });
 
 test('workerd admission is durable and immutable; unavailable password KDF never falls back', async (t) => {

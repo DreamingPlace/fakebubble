@@ -5,7 +5,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 
 export const RECOVERY_FILE = 'recovery.json';
 export const RESTORE_INCOMPLETE = '.restore-incomplete';
-export { RECOVERY_HEADER, recoveryToken, parseRecoveryPoint, requireRecoveryPoint } from './recovery-protocol.ts';
+export { parseRecoveryPoint } from './recovery-protocol.ts';
 import { parseRecoveryPoint } from './recovery-protocol.ts';
 
 /** Immutable for a Store lifetime. Restoring a running instance in place is unsupported. */

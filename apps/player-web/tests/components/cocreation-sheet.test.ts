@@ -424,7 +424,7 @@ test('the menu opens under the button, lists its items from the current access a
   assert.equal(menu.isOpen(), false);
 });
 
-function binding(t: test.TestContext, access: 'guest' | 'invite' | 'revoked') {
+function binding(t: test.TestContext) {
   const doc = installFakeDom(t);
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   Object.defineProperty(globalThis, 'window', { configurable: true, value: new EventTarget() });
@@ -437,21 +437,6 @@ function binding(t: test.TestContext, access: 'guest' | 'invite' | 'revoked') {
   const boot = syntheticProviderBootstrap();
   boot.fixture = false;
   for (const character of boot.characters) character.availability = { state: 'available', personaVersion: 1 };
-  if (access !== 'guest')
-    boot.access = {
-      kind: 'invite',
-      principalId: 'p',
-      playerId: 'pl',
-      worldId: 'w',
-      revision: 1,
-      grantId: 'g',
-      status: access === 'invite' ? 'active' : 'revoked',
-      lockedCharacterId: null,
-      remainingReplies: null,
-      reservedReplies: null,
-      trialExpiresAt: null,
-      canSend: access === 'invite',
-    };
   const view = parseWebProviderBootstrap(boot);
   const submitted: unknown[] = [];
   const api = {
@@ -479,9 +464,9 @@ function binding(t: test.TestContext, access: 'guest' | 'invite' | 'revoked') {
 }
 
 // Part 21f (named exception): 共创 is open to everyone; the old test asserted it disabled for a guest ("受邀后可参与").
-test('in the live chat the ⋯ menu offers 共创 to every player: guest, invited and a revoked invite alike', async (t) => {
-  for (const access of ['guest', 'invite', 'revoked'] as const) {
-    const f = binding(t, access);
+test('in the live chat the ⋯ menu offers 共创 to every player', async (t) => {
+  for (const access of ['guest'] as const) {
+    const f = binding(t);
     const live = await LiveBinding.connect(f.api);
     live.attach({
       head: f.header as unknown as HTMLElement,

@@ -296,13 +296,13 @@ test('administrator email identity and granular permissions persist; removal nev
     requestId: randomUUID(),
     label: 'Offline collaborator',
     memberId: null,
-    permissions: ['invites.issue'],
+    permissions: ['invites.manage'],
   };
   const grant = await f.call(`${API}/admin/members/issue`, owner, input);
   const login = await f.call(`${API}/admin/login`, member, { token: grant.token });
   assert.equal(login.member.email, null);
   // Part 13a exception (共生项): the stored set is normalized, so issuing brings the read permission it needs.
-  assert.deepEqual(login.member.permissions, ['invites.issue', 'invites.read']);
+  assert.deepEqual(login.member.permissions, ['invites.manage']);
   await f.call(`${API}/admin/members/list`, member, {}, 403);
   await f.call(
     `${API}/admin/email/register`,
@@ -310,19 +310,17 @@ test('administrator email identity and granular permissions persist; removal nev
     { email: 'public@example.com', password: 'Offline password 123' },
     404,
   );
-  const invitation = await f.call(
-    `${API}/admin/invites/issue`,
-    member,
-    {
-      requestId: randomUUID(),
-      redeemBy: null,
-      accessDurationMs: null,
-      batch: 'before-email',
-      note: null,
-    },
-    201,
-  );
-  await f.call(`${API}/admin/invites/revoke-code`, member, { id: invitation.inviteId }, 403);
+  // Named exception (Part 22x): the legacy issue / revoke-code / list routes are gone; the same permission checks are probed
+  // through the entitlement batch routes, which need 'invites.manage'.
+  const batchBody = (name: string) => ({
+    requestId: randomUUID(),
+    name,
+    count: 1,
+    tier: { kind: 'unlimited' },
+    durationDays: null,
+    redeemBy: null,
+  });
+  const created = await f.call(`${API}/admin/invites/batch-create`, member, batchBody('before-email'), 201);
   const bind = await f.call(`${API}/admin/email/bind/start`, member, { email: 'COLLAB@example.com' });
   const mails = await f.fixture<any[]>('/fixture/admin-mail');
   assert.equal(mails.length, 1);
@@ -344,18 +342,7 @@ test('administrator email identity and granular permissions persist; removal nev
   for (const actor of [member, second]) {
     const current = await f.call(`${API}/admin/session`, actor);
     assert.deepEqual(current.member.permissions, []);
-    await f.call(
-      `${API}/admin/invites/issue`,
-      actor,
-      {
-        requestId: randomUUID(),
-        redeemBy: null,
-        accessDurationMs: null,
-        batch: 'forbidden',
-        note: null,
-      },
-      403,
-    );
+    await f.call(`${API}/admin/invites/batch-create`, actor, batchBody('forbidden'), 403);
   }
   assert.deepEqual([member.cookie, second.cookie], allCookies);
   await f.restart();
@@ -369,37 +356,35 @@ test('administrator email identity and granular permissions persist; removal nev
   assert.deepEqual(after.spending, before.spending);
   await f.call(`${API}/admin/members/permissions`, owner, {
     memberId: grant.memberId,
-    permissions: ['invites.revoke'],
+    permissions: ['invites.manage'],
   });
-  await f.call(`${API}/admin/invites/revoke-code`, member, { id: invitation.inviteId });
-  await f.call(`${API}/admin/invites/list`, member, { beforeId: null }, 403);
+  await f.call(`${API}/admin/invites/batch-revoke`, member, { batchId: created.batchId });
   await f.call(`${API}/admin/members/permissions`, owner, {
     memberId: grant.memberId,
     permissions: ['invites.read'],
-    expectedPermissions: ['invites.revoke'],
+    expectedPermissions: ['invites.manage'],
   });
+  await f.call(`${API}/admin/invites/batch-list`, member, {}, 403);
   await f.call(
     `${API}/admin/members/permissions`,
     owner,
-    { memberId: grant.memberId, permissions: [], expectedPermissions: ['invites.revoke'] },
+    { memberId: grant.memberId, permissions: [], expectedPermissions: ['invites.manage'] },
     409,
   );
-  const records = await f.call(`${API}/admin/invites/list`, member, { beforeId: null });
-  assert.equal(records.records.length, 1);
-  assert.equal(records.records[0].status, 'revoked');
-  assert.equal(records.next, null);
-  assert.ok(!JSON.stringify(records).includes(invitation.code));
+  await f.call(`${API}/admin/members/permissions`, owner, {
+    memberId: grant.memberId,
+    permissions: ['invites.manage'],
+  });
+  const records = await f.call(`${API}/admin/invites/batch-list`, member, {});
+  assert.equal(records.batches.length, 1);
   assert.ok(!JSON.stringify(records).includes('digest'));
   await f.restart();
-  assert.equal(
-    (await f.call(`${API}/admin/invites/list`, member, { beforeId: null })).records[0].inviteId,
-    invitation.inviteId,
-  );
-  await f.call(`${API}/admin/invites/revoke-code`, member, { id: invitation.inviteId }, 403);
+  assert.equal((await f.call(`${API}/admin/invites/batch-list`, member, {})).batches[0].id, created.batchId);
+  await f.call(`${API}/admin/invites/batch-revoke`, member, { batchId: created.batchId });
   await f.call(
     `${API}/admin/members/permissions`,
     member,
-    { memberId: grant.memberId, permissions: ['invites.issue'] },
+    { memberId: grant.memberId, permissions: ['invites.manage'] },
     403,
   );
   await f.call(`${API}/admin/members/permissions`, owner, { memberId: ownerLogin.member.id, permissions: [] }, 403);
@@ -543,52 +528,6 @@ test('cloud HTTP: catalog/welcome, three automatic rounds/footer, scoped private
   await f.call(audioPath, guest, undefined, 401);
 });
 
-test('cloud HTTP invites use actual admin login, in-place upgrade, recovery rotation and revocation', async (t) => {
-  const f = setup(t);
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.fixture('/fixture/schema-124');
-  await f.fixture('/fixture/assets');
-  const admin = client(),
-    guest = client(),
-    other = client();
-  const grant = await f.fixture<{ token: string }>('/fixture/grant');
-  await f.call(`${API}/admin/login`, admin, { token: grant.token });
-  await f.call(`${API}/admin/login`, client(), { token: grant.token }, 403);
-  await f.call(`${API}/admin/session`, admin);
-  const issued = await f.call(
-    `${API}/admin/invites/issue`,
-    admin,
-    { requestId: randomUUID(), redeemBy: null, accessDurationMs: null, batch: 'offline-http', note: null },
-    201,
-  );
-  const original = await f.boot(guest);
-  await f.boot(other);
-  assert.equal(
-    (await f.call(`${API}/invites/redeem`, guest, { requestId: randomUUID(), code: 'A'.repeat(43) }, 409)).error.code,
-    'WEB_INVITE_UNAVAILABLE',
-  );
-  const redeemed = await f.call(`${API}/invites/redeem`, guest, { requestId: randomUUID(), code: issued.code }, 201);
-  const upgraded = await f.boot(guest);
-  assert.equal(upgraded.access.kind, 'invite');
-  assert.equal(upgraded.access.worldId, original.access.worldId);
-  assert.equal(upgraded.access.principalId, original.access.principalId);
-  await f.call(`${API}/invites/redeem`, other, { requestId: randomUUID(), code: issued.code }, 409);
-  for (const character of ['jojo', 'chen-jimi']) {
-    const sent = await f.send(guest, character);
-    assert.equal((await f.settle(guest, sent.operation.operationId)).status, 'published');
-  }
-  const credential = await f.call(`${API}/invites/credential`, guest, {}, 201);
-  const recovered = client();
-  await f.call(`${API}/invites/recover`, recovered, { requestId: randomUUID(), secret: credential.secret });
-  assert.equal((await f.boot(recovered)).access.worldId, original.access.worldId);
-  await f.call(`${API}/sync`, guest, undefined, 401);
-  await f.call(`${API}/admin/invites/revoke-grant`, admin, { id: redeemed.grantId });
-  // Revoking the grant ends every session of the player at once (it used to leave a 410 "access revoked" read).
-  await f.call(`${API}/sync`, recovered, undefined, 401);
-  await f.call(`${API}/admin/logout`, admin, {});
-  await f.call(`${API}/admin/session`, admin, undefined, 401);
-});
-
 test('cloud HTTP SSE streams scoped events, limits duplicates, releases disconnected slots and closes after revocation', async (t) => {
   const f = setup(t);
   await f.fixture('/fixture/assets');
@@ -701,8 +640,6 @@ test('native materials: private upload, two-clip approval, new role and voice pr
     owner = client(),
     player = client(),
     denied = client();
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.boot(player);
   // Complete three offline replies so both old generated audio and the old fixed footer are exercised.
@@ -803,15 +740,9 @@ test('native materials: private upload, two-clip approval, new role and voice pr
     await f.call(path, denied, undefined, 401);
   }
   // Explicit offline invitation allows a new player to use the newly published role without resetting IP quota.
-  const invite = await f.call(
-    `${API}/admin/invites/issue`,
-    owner,
-    { requestId: randomUUID(), redeemBy: null, accessDurationMs: null, batch: 'offline-material', note: null },
-    201,
-  );
   const fresh = client();
-  await f.boot(fresh);
-  await f.call(`${API}/invites/redeem`, fresh, { requestId: randomUUID(), code: invite.code }, 201);
+  // Named exception (Part 22x): the new player is a signed-up one (the legacy invite redemption is gone).
+  await f.fixture('/fixture/entitle', { principalId: (await f.boot(fresh)).access.principalId });
   await f.boot(fresh);
   const sent = await f.send(fresh, 'new-material-role');
   assert.equal((await f.settle(fresh, sent.operation.operationId)).status, 'published');
@@ -823,8 +754,6 @@ test('scoped role deletion over actual HTTP keeps another role, identities and u
     member = client(),
     invited = client(),
     guest = client();
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   const ownerGrant = await f.fixture<any>('/fixture/grant');
   await f.call(`${API}/admin/login`, owner, { token: ownerGrant.token });
@@ -835,15 +764,9 @@ test('scoped role deletion over actual HTTP keeps another role, identities and u
     permissions: ['characters.read:wei-guagua', 'characters.delete:jojo'],
   });
   await f.call(`${API}/admin/login`, member, { token: memberGrant.token });
-  await f.boot(invited);
   await f.boot(guest);
-  const invite = await f.call(
-    `${API}/admin/invites/issue`,
-    owner,
-    { requestId: randomUUID(), redeemBy: null, accessDurationMs: null, batch: 'deletion-isolation', note: null },
-    201,
-  );
-  await f.call(`${API}/invites/redeem`, invited, { requestId: randomUUID(), code: invite.code }, 201);
+  // Named exception (Part 22x): the invited player is a signed-up one with an entitlement (legacy redemption is gone).
+  await f.fixture('/fixture/entitle', { principalId: (await f.boot(invited)).access.principalId });
   await f.boot(invited);
   const ops = [];
   for (const [actor, id] of [
@@ -939,12 +862,9 @@ test('scoped role deletion over actual HTTP keeps another role, identities and u
 
 // Part 11f changed this deliberately: a dead (unknown / revoked) cookie is now cleared so the page starts signed out;
 // active, invited and still-recoverable rotated cookies are still never cleared.
-test('bootstrap clears only dead cookies and never an active, recoverable-rotated or invited one', async (t) => {
+test('bootstrap clears only dead cookies and never an active one', async (t) => {
   const f = setup(t),
-    owner = client(),
     guest = client();
-  // NAMED EXCEPTION: legacy redemption exists only below schema 125 (see fixtures/legacy-schema.ts).
-  await f.fixture('/fixture/schema-124');
   await f.fixture('/fixture/assets');
   await f.boot(guest);
   const active = await f.request(`${API}/bootstrap`, guest);
@@ -956,36 +876,13 @@ test('bootstrap clears only dead cookies and never an active, recoverable-rotate
     unknown.headers.get('set-cookie')!,
     /^__Host-fixture=; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=0$/,
   );
-  const grant = await f.fixture<any>('/fixture/grant');
-  await f.call(`${API}/admin/login`, owner, { token: grant.token });
-  const issued = await f.call(
-    `${API}/admin/invites/issue`,
-    owner,
-    {
-      requestId: randomUUID(),
-      batch: 'expiry-boundary',
-      note: 'synthetic',
-      redeemBy: Date.now() + 600000,
-      accessDurationMs: null,
-    },
-    201,
-  );
-  const old = { ...guest };
-  const redeemed = await f.call(`${API}/invites/redeem`, guest, { requestId: randomUUID(), code: issued.code }, 201);
-  const invited = await f.boot(guest);
-  const rotated = await f.request(`${API}/bootstrap`, old);
-  assert.notEqual(rotated.status, 200);
-  assert.equal(rotated.headers.get('set-cookie'), null);
-  await f.fixture('/fixture/session-expire', { principalId: invited.access.principalId });
+  // Named exception (Part 22x): the legacy invited session (long-lived cookie, revoked grant) no longer exists. What remains of
+  // the test: an expired guest session is dead and the failed bootstrap clears its cookie, while an active one is untouched.
+  const view = await f.boot(guest);
+  await f.fixture('/fixture/session-expire', { principalId: view.access.principalId });
   await f.restart();
-  // An invited session past its old 24h deadline stays alive (and renews its long-lived cookie) while the grant is active.
-  const revived = await f.request(`${API}/bootstrap`, guest);
-  assert.equal(revived.status, 200);
-  assert.match(revived.headers.get('set-cookie')!, /; Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=34560000$/);
-  // Only an administrator ends it; once it is ended the cookie is dead and the failed bootstrap clears it (11f).
-  await f.call(`${API}/admin/invites/revoke-grant`, owner, { id: redeemed.grantId });
   const expired = await f.request(`${API}/bootstrap`, guest);
   assert.equal(expired.status, 401);
-  assert.equal(((await expired.json()) as any).error.code, 'SESSION_EXPIRED');
+  assert.equal(((await expired.json()) as any).error.code, 'GUEST_SESSION_EXPIRED');
   assert.match(expired.headers.get('set-cookie')!, /Max-Age=0$/);
 });

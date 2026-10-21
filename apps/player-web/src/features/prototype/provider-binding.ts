@@ -7,7 +7,6 @@ import type {
 import { ProviderApi, ProviderApiError, type AccountInfo } from '../../services/provider-api.ts';
 import { replyPauseMs } from './reply-presentation.ts';
 import { ProviderInviteController } from '../../session/provider-invite-controller.ts';
-import { openRecoveryEntry, openRecoveryManage, recoveryCopy, showRecoveryCode } from './recovery-code.ts';
 import { mountChatMenu } from '../cocreation/chat-menu.ts';
 import { guideCopy, mountChatGuide } from '../cocreation/chat-guide.ts';
 import { openBillingSheet } from '../account/billing-sheet.ts';
@@ -30,8 +29,6 @@ export const errorText: Record<string, string> = {
   TRIAL_CHARACTER_LOCKED: '体验期间只能和第一个聊天的人物继续聊哦',
   TRIAL_EXHAUSTED: '体验次数已用完（同一网络累计），输入邀请码可以继续聊',
   TRIAL_EXPIRED: '体验时间已结束，输入邀请码可以继续聊',
-  // Part 17h: an invited player whose invite is gone is told so - not that a trial ended.
-  WEB_INVITE_ACCESS_REQUIRED: '邀请已失效，请重新输入邀请码或注册账号',
   QUEUE_FULL: '现在聊天的人有点多，稍后再试试',
   WEB_DAILY_LIMIT_REACHED: '今天聊得够多啦，明天再来找我吧～',
   RATE_LIMITED: '操作太频繁了，稍后再试试',
@@ -277,7 +274,7 @@ export class LiveBinding {
           else location.reload();
         } else if (after) after();
         // A login or reset replaces the session cookie, a signup or bind changes who the page belongs to: start clean.
-        else if (done === 'login' || done === 'reset' || done === 'signup' || done === 'bind') location.reload();
+        else if (done === 'login' || done === 'reset' || done === 'signup') location.reload();
         else void this.loadAccount();
       },
       onSwitch: (to) => this.openAccount(to),
@@ -325,12 +322,6 @@ export class LiveBinding {
     const info = this.modelChoice;
     // The line comes from the server's effective tier (the same words as 我的信息); the principal kind decides nothing here.
     const held = this.tier ? tierView({ tier: this.tier, modelChoice: info }) : null;
-    if (access.kind === 'invite') {
-      // The legacy invite-only access state (its status), not a tier.
-      if (!this.accessKnown) return '访问权限暂无法确认';
-      if (access.status !== 'active') return '邀请已失效';
-      return held?.quota ?? '邀请已解锁';
-    }
     if (this.invitation.locked) return '邀请兑换待核对';
     if (!this.accessKnown) return '额度暂无法确认';
     if (!(access.remainingReplies === 0 || access.canSend)) return '体验已结束';
@@ -344,14 +335,13 @@ export class LiveBinding {
     return `体验剩余 ${access.remainingReplies} 次`;
   }
 
-  /** 我的信息: one page for everything the account dropdown, 邀请码 and the recovery-code button used to hold. */
+  /** 我的信息: one page for everything the account dropdown and the 邀请码 button used to hold. */
   private info: { close(): void } | null = null;
   private openInfo() {
     if (this.info) return;
     const account = this.account.signedIn ? this.account : null;
-    const mode = this.hasLogin ? 'player' : this.view.access.kind === 'guest' ? 'guest' : 'invited';
+    const mode = this.hasLogin ? 'player' : 'guest';
     const shell = this.shell;
-    const may = this.view.access.kind === 'guest' || this.hasLogin;
     const billing = this.billingAction();
     this.info = openMyInfo({
       mode,
@@ -362,7 +352,6 @@ export class LiveBinding {
       trialLine: mode === 'guest' ? this.headNote() : null,
       signupOpen: this.signupOpen,
       deleteEnabled: this.deleteEnabled,
-      canBind: !!account?.canBind,
       codeLabel: this.invitation.locked ? '核对邀请' : infoCopy.enterCode,
       saveNickname: async (value) => {
         await this.api.setNickname(value);
@@ -381,20 +370,12 @@ export class LiveBinding {
         clearDevice: () => void this.openAccount('clear'),
         signup: () => void this.openAccount('signup'),
         login: () => void this.openAccount('login'),
-        bind: () => void this.openAccount('bind'),
         ...(billing ? { billing } : {}),
         // The invite box is a modal step of its own: 我的信息 closes behind it (reopen it to see the new figures).
-        ...(may
-          ? {
-              enterCode: () => {
-                this.info?.close();
-                this.inviteDialog();
-              },
-            }
-          : {}),
-        ...(mode === 'invited'
-          ? { recovery: () => openRecoveryManage(this.api, (message) => shell?.say(message)) }
-          : {}),
+        enterCode: () => {
+          this.info?.close();
+          this.inviteDialog();
+        },
       },
     });
   }
@@ -416,7 +397,6 @@ export class LiveBinding {
       return;
     }
     shell.head.querySelector('.invite-entry')?.remove();
-    shell.head.querySelector('.recovery-entry')?.remove();
     shell.head.querySelector('.head-actions')?.remove();
     shell.head.querySelector('.head-hint')?.remove();
     // Account entries live in the top bar: a guest gets 登录 / 注册 and 我的信息, a signed-in player a nickname button that
@@ -438,21 +418,13 @@ export class LiveBinding {
         'head-account',
         () => this.openInfo(),
       );
-    } else if (access.kind === 'invite' && access.status === 'active' && this.accessKnown) {
-      // A legacy invited player without a login: the same page (绑定邮箱 and 恢复码 are in it).
-      action(infoCopy.title, 'head-account', () => this.openInfo());
-    } else if (access.kind === 'guest' && !this.invitation.locked) {
+    } else if (!this.invitation.locked) {
       action('登录', 'head-account desktop-account', () => void this.openAccount('login'));
       action('注册', 'head-account desktop-account', () => void this.openAccount('signup'));
       action('登录/注册', 'head-account mobile-account', () => void this.openAccount('login'));
       action(infoCopy.title, 'head-account head-more', () => this.openInfo());
     }
     note.textContent = this.headNote();
-    if (access.kind === 'invite' && !this.invitation.locked) {
-      if (actions.children.length) shell.head.append(actions);
-      this.refreshInfo();
-      return;
-    }
     // A guest past its trial but inside the 7-day grace period: signing up saves the chats and brings them back.
     if (this.grace && this.accessKnown && !this.invitation.locked) {
       const hint = document.createElement('span');
@@ -575,8 +547,7 @@ export class LiveBinding {
       <button type="button" class="invite-signup-button">${infoCopy.signup}</button></div>
       <div class="invite-actions"><button type="button" class="invite-cancel">取消</button>
       <button type="button" class="invite-recover" hidden>核对原请求</button>
-      <button type="submit">解锁</button></div>
-      ${this.hasLogin ? '' : `<button type="button" class="invite-have-code">${recoveryCopy.have}</button>`}</form>`;
+      <button type="submit">解锁</button></div></form>`;
     const input = dialog.querySelector<HTMLInputElement>('input')!;
     const submit = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     const recover = dialog.querySelector<HTMLButtonElement>('.invite-recover')!;
@@ -630,11 +601,6 @@ export class LiveBinding {
                 : '结果尚未确认。请核对原请求，不要刷新页面或再次兑换；关闭后可从“核对邀请”继续。';
     };
     cancel.addEventListener('click', close);
-    dialog.querySelector('.invite-have-code')?.addEventListener('click', () => {
-      if (this.invitation.locked) return;
-      close();
-      openRecoveryEntry(this.api, () => location.reload());
-    });
     dialog.addEventListener('cancel', (event) => {
       event.preventDefault();
       close();
@@ -694,20 +660,9 @@ export class LiveBinding {
     return ok;
   }
 
-  /** A player with a login has no recovery code to keep; one without (accounts closed) still gets theirs, once. */
   private async afterRedeem() {
     await this.loadAccount();
     this.renderAccess();
-    if (!this.hasLogin) await this.issueRecoveryCode();
-  }
-
-  /** Right after redemption: create the player's recovery code and show it once. Never persisted or logged. */
-  private async issueRecoveryCode() {
-    try {
-      showRecoveryCode(await this.api.regenerateRecoveryCode());
-    } catch {
-      this.shell?.say(`${recoveryCopy.regenerateFailed}。可在“${infoCopy.title}”里重新生成`);
-    }
   }
 
   private fail(error: unknown) {
@@ -1000,9 +955,7 @@ export class LiveBinding {
             ? access.remainingReplies === 0
               ? 'TRIAL_EXHAUSTED'
               : 'TRIAL_EXPIRED'
-            : access.kind === 'invite' && access.status !== 'active'
-              ? 'WEB_INVITE_ACCESS_REQUIRED'
-              : 'ACCESS_UNAVAILABLE',
+            : 'ACCESS_UNAVAILABLE',
         );
       if (access.kind === 'guest' && access.lockedCharacterId !== null && access.lockedCharacterId !== characterId)
         throw new ProviderApiError(403, 'TRIAL_CHARACTER_LOCKED');

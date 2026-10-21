@@ -99,9 +99,6 @@ function setup(t: test.TestContext, state: AccountAdminSession, withInbox = true
     issueMember: async () => ({ memberId: 'n', grantId: 'g', token: 'b'.repeat(43), duplicate: false }),
     setPermissions: async (_id: string, permissions: AdminPermission[]) => ({ ...state.member, permissions }),
     revokeCredential: async () => {},
-    issue: async () => ({ inviteId: 'i', code: 'c'.repeat(43), duplicate: false }),
-    revokeInvite: async () => {},
-    inviteRecords: async () => ({ records: [], next: null }),
     characters: new CharacterAdminClient(async () => ({
       characters: [
         { characterId: 'wei-guagua', displayName: '瓜瓜', publishedVersion: 1, draftRevision: null },

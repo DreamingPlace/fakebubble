@@ -1,12 +1,10 @@
 /**
- * The normal first page for someone whose cookie is gone, revoked or rotated: 登录 / 注册 / 以访客继续, plus a small
- * 我有恢复码 link for players who have not bound an email. The server already cleared the dead cookie; nothing of the
- * dead session is shown or attached to a new guest, and a guest is created only by the same bootstrap a cookieless
- * first visit uses.
+ * The normal first page for someone whose cookie is gone or revoked: 登录 / 注册 / 以访客继续. The server already
+ * cleared the dead cookie; nothing of the dead session is shown or attached to a new guest, and a guest is created only by
+ * the same bootstrap a cookieless first visit uses.
  */
 import { ProviderApiError, type AccountInfo, type ProviderApi } from '../../services/provider-api.ts';
 import { h } from '../cocreation/h.ts';
-import { openRecoveryEntry, recoveryCopy } from '../prototype/recovery-code.ts';
 import { accountCopy, openAccountSheet, type AccountApi, type AccountSheetMode, type Timers } from './account-sheet.ts';
 
 export const signedOutCopy = {
@@ -25,8 +23,7 @@ export const signedOutCopy = {
   privacy: '隐私政策',
 } as const;
 
-export type SignedOutApi = AccountApi &
-  Pick<ProviderApi, 'account' | 'bootstrap' | 'recoverWithRecoveryCode' | 'regenerateRecoveryCode'>;
+export type SignedOutApi = AccountApi & Pick<ProviderApi, 'account' | 'bootstrap'>;
 
 export function renderSignedOut(
   root: HTMLElement,
@@ -65,11 +62,6 @@ export function renderSignedOut(
   let legal = false;
   let bonus = 0;
   const legalLinks = h('p', { class: 'legal-links signed-out-legal', hidden: true });
-  const have = h('button', {
-    class: 'recovery-have signed-out-recovery',
-    text: recoveryCopy.have,
-    attrs: { type: 'button' },
-  });
   const panel = h(
     'main',
     { class: 'provider-start-error signed-out-page' },
@@ -81,7 +73,6 @@ export function renderSignedOut(
     h('p', { text: signedOutCopy.detail }),
     h('div', { class: 'signed-out-actions' }, loginButton, signupButton, guestButton),
     notice,
-    h('div', { class: 'signed-out-more' }, have),
     legalLinks,
   );
   root.replaceChildren(panel);
@@ -169,6 +160,5 @@ export function renderSignedOut(
       reload();
     });
   });
-  have.addEventListener('click', () => openRecoveryEntry(api, reload));
   return { panel, ready: known };
 }

@@ -1,5 +1,4 @@
-import type { ScheduleSlot, Weekday, WeeklySchedule } from '../contracts/index.ts';
-import { MINUTE, RULES } from './defaults.ts';
+import type { Weekday, WeeklySchedule } from '../contracts/index.ts';
 import { DomainError, ensure } from './errors.ts';
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -87,33 +86,6 @@ export function validateSchedule(schedule: WeeklySchedule): void {
   ensure(catchUpFound, 'NO_CATCH_UP_WINDOW');
 }
 
-export function slotAt(schedule: WeeklySchedule, at: number): ScheduleSlot {
-  const { day, minute } = localTime(at, schedule.timeZone);
-  const result = schedule.days[day].find((slot) => minute >= slot.startMinute && minute < slot.endMinute);
-  ensure(result, 'INVALID_SCHEDULE');
-  return result;
-}
-
-export function catchUpAt(schedule: WeeklySchedule, now: number): number {
-  if (slotAt(schedule, now).catchUp) return now + RULES.catchUpDelayMs;
-  // Walk real UTC minutes so skipped/repeated local hours across DST are handled naturally.
-  const start = Math.floor(now / MINUTE) * MINUTE + MINUTE;
-  for (let at = start; at <= now + 8 * 24 * 60 * MINUTE; at += MINUTE) {
-    if (slotAt(schedule, at).catchUp) return at;
-  }
-  ensure(false, 'NO_CATCH_UP_WINDOW');
-}
-
-export function firstProbabilityDrop(schedule: WeeklySchedule, after: number, through: number): number | null {
-  let previous = slotAt(schedule, after).probability;
-  for (let at = Math.floor(after / MINUTE) * MINUTE + MINUTE; at <= through; at += MINUTE) {
-    const probability = slotAt(schedule, at).probability;
-    if (probability < previous) return at;
-    previous = probability;
-  }
-  return null;
-}
-
 export interface SessionState {
   epoch: number;
   lastActivityAt: number | null;
@@ -128,24 +100,3 @@ export const emptySession = (): SessionState => ({
   graceUntil: null,
   schedule: null,
 });
-
-export function closeSession(state: SessionState): SessionState {
-  return { ...emptySession(), epoch: state.epoch + 1 };
-}
-
-export function advanceSession(input: SessionState, now: number): SessionState {
-  const state = structuredClone(input);
-  if (state.lastActivityAt === null) return state;
-  const idleUntil = state.lastActivityAt + RULES.idleMs;
-  if (state.graceUntil === null && state.schedule) {
-    const drop = firstProbabilityDrop(
-      state.schedule,
-      state.checkedAt ?? state.lastActivityAt,
-      Math.min(now, idleUntil - 1),
-    );
-    if (drop !== null) state.graceUntil = drop + RULES.graceMs;
-  }
-  if (now >= Math.min(idleUntil, state.graceUntil ?? Infinity)) return closeSession(state);
-  state.checkedAt = Math.max(now, state.checkedAt ?? now);
-  return state;
-}

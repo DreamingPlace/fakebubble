@@ -329,17 +329,6 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     this.operator(proof);
     return this.application().inviteAdmin.issueRecoveryGrant(memberId);
   }
-  inviteGrants(proof: string, inviteId: string) {
-    this.operator(proof);
-    this.setup.ready();
-    ensure(typeof inviteId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(inviteId), 'WEB_INVITE_UNAVAILABLE');
-    ensure(this.store.get('SELECT 1 FROM web_invite_codes WHERE id=?', inviteId), 'WEB_INVITE_UNAVAILABLE');
-    // IDs only; revocation still requires the existing administrator/CSRF route.
-    return this.store.all<{ grantId: string }>(
-      'SELECT id AS grantId FROM web_invite_grants WHERE invite_id=? ORDER BY id',
-      inviteId,
-    );
-  }
   renewPrices(proof: string) {
     this.operator(proof);
     return this.setup.renewPrices();
@@ -536,7 +525,6 @@ interface OperatorEnvironment {
       importFixed(proof: string, kind: 'welcome' | 'footer', characterId: string, bytes: Uint8Array): Promise<string>;
       adminGrant(proof: string): Promise<unknown>;
       adminRecoveryGrant(proof: string, memberId: string): Promise<unknown>;
-      inviteGrants(proof: string, inviteId: string): Promise<unknown>;
       status(proof: string): Promise<unknown>;
       inspect(proof: string): Promise<unknown>;
       renewPrices(proof: string): Promise<unknown>;
@@ -563,7 +551,6 @@ export class WebOperatorService extends WorkerEntrypoint<OperatorEnvironment> {
       importFixed: (k: 'welcome' | 'footer', c: string, b: Uint8Array) => stub.importFixed(proof, k, c, b),
       adminGrant: () => stub.adminGrant(proof),
       adminRecoveryGrant: (m: string) => stub.adminRecoveryGrant(proof, m),
-      inviteGrants: (i: string) => stub.inviteGrants(proof, i),
       status: () => stub.status(proof),
       inspect: () => stub.inspect(proof),
       renewPrices: () => stub.renewPrices(proof),
@@ -580,9 +567,6 @@ export class WebOperatorService extends WorkerEntrypoint<OperatorEnvironment> {
   }
   async adminRecoveryGrant(memberId: string) {
     return this.authority().adminRecoveryGrant(memberId);
-  }
-  async inviteGrants(inviteId: string) {
-    return this.authority().inviteGrants(inviteId);
   }
   async status() {
     return this.authority().status();

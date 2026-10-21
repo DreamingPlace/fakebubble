@@ -5,7 +5,7 @@ import { hasPoints, modelChoiceState } from '../../../apps/server/admission/web-
 import { DomainError } from '../../../packages/domain/errors.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
 import { enableModelChoice } from '../fixtures/model-choice.ts';
-import { schema124 } from '../fixtures/model-settings.ts';
+import { schema126 } from '../fixtures/invite-tiers.ts';
 import { ensureRegisteredBonus, signupBonusEmailKey } from '../../../apps/server/admission/web-registered.ts';
 
 const ip = 'a'.repeat(64);
@@ -16,10 +16,11 @@ const DAY = 86_400_000;
 /**
  * Part 17h. Real schema-123 store, free tier + model choice on, lifecycle on (in-memory = provider runtime). Players are
  * built in the state production holds them in: a guest past its 7-day window, with or without a signup bonus row, a
- * login, a balance row, or an invite grant.
+ * login, a balance row, or an entitlement. Named exception (Part 22x): the store is the schema through 126, where the legacy
+ * invite principals are guests; the invited tier is an entitlement.
  */
 function world(t: TestContext, options: { key?: boolean } = {}) {
-  const store = schema124();
+  const store = schema126();
   t.after(() => store.close());
   Object.assign(store, { webIpKeyFingerprint: () => 'f'.repeat(64) });
   enableModelChoice(store);
@@ -67,26 +68,16 @@ function world(t: TestContext, options: { key?: boolean } = {}) {
       );
     return principalId;
   };
-  /** The principal is an invited player; the grant is active, revoked or expired. */
-  const invite = (principalId: string, grant: 'active' | 'revoked' | 'expired') => {
-    store.run("UPDATE web_principals SET kind='invite',revision=revision+1 WHERE id=?", principalId);
+  /** The principal holds an unlimited entitlement (the invited tier since Part 22a): live, or ended a day ago. */
+  const entitle = (principalId: string, entitlement: 'active' | 'lapsed') =>
     store.run(
-      "UPDATE web_guest_retention SET state='protected',started_at=NULL,expires_at=NULL,revision=revision+1 WHERE principal_id=?",
+      "INSERT INTO web_entitlements(id,principal_id,source,invite_id,batch_id,kind,starts_at,expires_at,created_at) VALUES (?,?,'admin',NULL,NULL,'unlimited',?,?,?)",
+      `entitlement-${principalId}`,
       principalId,
+      now - 10 * DAY,
+      entitlement === 'lapsed' ? now - DAY : null,
+      now - 10 * DAY,
     );
-    store.db.exec('PRAGMA foreign_keys=OFF');
-    store.run(
-      'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at,expires_at,revoked_at) VALUES (?,?,?,?,?,?,?,?)',
-      `grant-${principalId}`,
-      `invite-${principalId}`,
-      principalId,
-      principalId.replace('principal', 'player'),
-      principalId.replace('principal', 'world'),
-      1,
-      grant === 'expired' ? now - DAY : null,
-      grant === 'revoked' ? now - DAY : null,
-    );
-  };
   const admit = (principalId: string, requestId: string) =>
     admission.admit({ principalId, requestId, characterId, text: '你好', ipHash: ip });
   const code = (fn: () => unknown) => {
@@ -119,7 +110,7 @@ function world(t: TestContext, options: { key?: boolean } = {}) {
     bonusRows,
     admission,
     player,
-    invite,
+    entitle,
     admit,
     code,
     balanceRows,
@@ -173,26 +164,28 @@ test('2b: a signed-up guest (signup bonus) whose window ended long ago is admitt
 });
 
 // ---- 2c ------------------------------------------------------------------------------------------------------------------
-test('2c: an invited player whose grant was revoked or expired (no login, no bonus) gets WEB_INVITE_ACCESS_REQUIRED - not the trial text - no balance, no picker', (t) => {
+// Named exception (Part 22x): 2c was the legacy invite principal whose grant lapsed (WEB_INVITE_ACCESS_REQUIRED). Migration 126
+// made those principals guests, so a lapsed one WITHOUT a login is an expired guest: TRIAL_EXPIRED, no balance, no picker.
+test('2c: a former invite player with no login and no bonus is an expired guest - TRIAL_EXPIRED, no balance, no picker; an active entitlement is unchanged', (t) => {
   const w = world(t);
-  for (const [name, grant] of [
-    ['r', 'revoked'],
-    ['e', 'expired'],
-  ] as const) {
-    const p = w.player(name);
-    w.invite(p, grant);
+  for (const name of ['r', 'e']) {
+    const p = w.player(name, { trialEnded: true });
     assert.equal(
       w.code(() => w.admit(p, 'r1')),
-      'WEB_INVITE_ACCESS_REQUIRED',
-      grant,
+      'TRIAL_EXPIRED',
+      name,
     );
-    assert.equal(modelChoiceState(w.store, w.now(), p), null, `${grant}: no picker`);
+    assert.equal(modelChoiceState(w.store, w.now(), p), null, `${name}: no picker`);
   }
   assert.equal(w.balanceRows().length, 0);
-  // An invited player whose grant is active is unchanged: a picker, nothing charged.
-  const ok = w.player('ok');
-  w.invite(ok, 'active');
+  // A player whose entitlement is active is unchanged: a picker, nothing charged.
+  const ok = w.player('ok', { login: 'ok@example.com', bonus: true, trialEnded: true });
+  w.entitle(ok, 'active');
   assert.equal(reply(w, ok, 'r1').points_charged, 0);
+  // Its entitlement lapsed: a registered player, charged in points.
+  const lapsed = w.player('lap', { login: 'lap@example.com', bonus: true, trialEnded: true });
+  w.entitle(lapsed, 'lapsed');
+  assert.equal(reply(w, lapsed, 'r1').points_charged, 12);
 });
 
 // ---- 2d ------------------------------------------------------------------------------------------------------------------
@@ -248,22 +241,21 @@ test('2d: a refused principal whose window is still open keeps the value of its 
   assert.deepEqual(w.bonusRows(), []);
 });
 
-test('2d: an invited player whose grant lapsed but who has an email login chats as registered (points), not WEB_INVITE_ACCESS_REQUIRED; with the production shape (bonus + login + old invite) too', (t) => {
+// Named exception (Part 22x): the legacy invite principal with an email login is a registered player (migration 126 made it a
+// guest); an entitlement, while it lasts, makes the player unmetered, exactly as before.
+test('2d: a former invite player who has an email login chats as registered (points); with the production shape (bonus + login) too', (t) => {
   const w = world(t);
   const login = w.player('l', { login: 'lapsed@example.com', trialEnded: true, trialUsed: 1 });
-  w.invite(login, 'expired');
   assert.equal(reply(w, login, 'r1').points_charged, 12);
   assert.deepEqual(w.bonusRows(), [login]);
-  // Production: signed up (bonus 140), redeemed an invite, the invite expired. The page showed 140 points and the picker, and
-  // sending was answered 410.
+  // Production: signed up (bonus 140), redeemed an invite, the invite expired. The page showed 140 points and the picker.
   const shape = w.player('p', { bonus: true, login: 'prod@example.com', trialUsed: 1 });
-  w.invite(shape, 'revoked');
   assert.equal(modelChoiceState(w.store, w.now(), shape)!.balance, 140);
   assert.equal(reply(w, shape, 'r1').points_charged, 12);
   assert.equal(w.balance(shape), 128);
-  // Its grant still active: the invited player is unmetered, exactly as before, even with a login.
+  // Its entitlement still active: the player is unmetered, even with a login.
   const active = w.player('act', { login: 'active@example.com', bonus: true });
-  w.invite(active, 'active');
+  w.entitle(active, 'active');
   assert.equal(reply(w, active, 'r1').points_charged, 0);
 });
 

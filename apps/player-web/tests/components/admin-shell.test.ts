@@ -238,9 +238,6 @@ function setup(t: test.TestContext, state: AccountAdminSession, hash = '') {
     issueMember: async () => ({ memberId: 'x', grantId: 'g', token: 'b'.repeat(43), duplicate: false }),
     setPermissions: async () => state.member,
     revokeCredential: async () => {},
-    issue: async () => ({ inviteId: 'i', code: 'c'.repeat(43), duplicate: false }),
-    revokeInvite: async () => {},
-    inviteRecords: async () => ({ records: [], next: null }),
     characters: new CharacterAdminClient(async (path) => {
       listed.push(path);
       return {

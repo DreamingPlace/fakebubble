@@ -61,11 +61,11 @@ export async function routeWebPlayerAccounts(
       }),
     };
   }
-  if (action === 'signup' || action === 'bind') {
+  if (action === 'signup') {
     // With the legal pages on, the signup request also carries adult:true ("我已年满 18 周岁"); without them the body is as before.
     const body = object(
       req.body,
-      action === 'signup' && accounts.legalPagesOn
+      accounts.legalPagesOn
         ? ['challengeId', 'password', 'nickname', ...(req.body && Object.hasOwn(req.body, 'adult') ? ['adult'] : [])]
         : ['challengeId', 'password', 'nickname'],
     );
@@ -74,7 +74,7 @@ export async function routeWebPlayerAccounts(
       password: body.password,
       nickname: body.nickname,
       session: session(req),
-      purpose: action,
+      purpose: 'signup',
       ipHash,
       adult: body.adult,
     });

@@ -3,133 +3,40 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
-import { WebStore } from '../../../apps/server/platform/store.ts';
-import { WebIdentity } from '../../../apps/server/identity/web-identity.ts';
-import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
 import { initLocalInstance, localRuntime, readLocalConfig } from '../../../apps/server/platform/web-local-config.ts';
 import { parseWebDailyReplyLimit, webDailyReplyLimitFromEnv } from '../../../config/web-concurrency.ts';
 import { RetryAfterError } from '../../../packages/domain/errors.ts';
-import { defaultSchedule } from '../../../packages/domain/defaults.ts';
+import { tiersFixture } from '../fixtures/invite-tiers.ts';
 
 const DAY = 24 * 60 * 60_000;
 
-/** A schema-112 synthetic instance with one account-like invited principal and a configurable daily limit. */
+/**
+ * Named exception (Part 22x): the fixture's vehicle was a legacy kind-'invite' principal on a schema-112 local instance. That
+ * kind no longer decides anything, so the player is now an unlimited-entitlement holder (a signed-up guest redeeming a real
+ * code through WebInviteTiers) on the real schema 126; the daily limit is still the one WebAdmission applies to an unmetered tier.
+ */
 function fixture(t: test.TestContext, dailyReplyLimit: number) {
-  const { parent } = localRuntime();
-  mkdirSync(parent, { recursive: true });
-  const root = join(parent, `local-invite-daily-${randomUUID().slice(0, 12)}`);
-  initLocalInstance(root);
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const config = readLocalConfig(root);
-  let now = 1_700_000_000_000;
-  const clock = { now: () => now };
-  const base = new WebStore(root, { create: false, instanceId: config.instanceId, dataLifecycleTest: true });
-  base.migrateStages();
-  base.migrateAdmissionOrder();
-  base.migrateIdentity(config.recoveryEpoch);
-  base.migrateDispatchLedger();
-  base.migrateSyntheticVoiceQueue();
-  base.migrateInputSnapshot();
-  base.migrateSyntheticPrivateAudio();
-  base.migrateVerticalCandidate();
-  base.migrateLocalTransport();
-  base.migrateDataLifecycle(clock);
-  base.close();
-  const store = new WebStore(root, {
-    create: false,
-    instanceId: config.instanceId,
-    dataLifecycleTest: true,
-    inviteTest: true,
-    dailyReplyLimit,
-  });
-  t.after(() => store.close());
-  store.migrateInviteCore();
-  store.migrateInviteIdentity();
-  store.run(
-    'INSERT INTO character_templates VALUES (?,?,?)',
-    'synthetic-invite',
-    1,
-    JSON.stringify({
-      id: 'synthetic-invite',
-      name: '合成',
-      version: 1,
-      fictional: true,
-      persona: 'isolated daily limit test only',
-      schedule: defaultSchedule(),
-    }),
-  );
-  const identity = new WebIdentity(store, {
-    origin: config.origin,
-    cookieName: config.cookieName,
-    clock,
-    keys: {
-      keyId: 'synthetic-daily',
-      sealKey: Buffer.from(config.sealKey, 'base64url'),
-      requestKey: Buffer.from(config.requestKey, 'base64url'),
-    },
-  });
-  const admission = new WebAdmission(store, clock, randomUUID);
-  store.run('INSERT INTO admin_sessions VALUES (?,?,?,?,NULL)', 'admin-synthetic', 'hash', now, now + 400 * DAY);
+  const f = tiersFixture(t);
+  Object.assign(f.store, { dailyReplyLimit });
+  const batch = f.create(f.owner, { count: 8, tier: { kind: 'unlimited' } });
+  const codes = [...(batch.codes ?? [])];
   const player = (name: string, kind: 'invite' | 'guest' = 'invite') => {
-    const boot = identity.bootstrap();
-    const scope = identity.authenticate(boot.issuedToken!);
-    store.run("INSERT INTO world_characters VALUES (?,'synthetic-invite','new')", scope.world_id);
-    if (kind === 'invite') {
-      store.run("UPDATE web_principals SET kind='invite' WHERE id=?", boot.principalId);
-      store.run(
-        "UPDATE web_guest_retention SET state='protected',expires_at=NULL WHERE principal_id=?",
-        boot.principalId,
-      );
-      store.run(
-        `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,
-        capacity,redeemed_count,redeem_by,access_duration_ms,status,batch,note,created_by,created_at)
-        VALUES (?,?,?,?,1,1,NULL,NULL,'active','synthetic',NULL,'admin-synthetic',?)`,
-        `code-${name}`,
-        `digest-${name}`,
-        `issue-${name}`,
-        `issue-digest-${name}`,
-        now,
-      );
-      store.run(
-        'INSERT INTO web_invite_grants VALUES (?,?,?,?,?,?,NULL,NULL)',
-        `grant-${name}`,
-        `code-${name}`,
-        boot.principalId,
-        scope.player_id,
-        scope.world_id,
-        now,
-      );
-    }
-    return boot.principalId;
+    if (kind === 'guest') return f.player(name).principalId;
+    const who = f.player(name, { signedUp: true });
+    f.redeem(who, codes.shift()!);
+    return who.principalId;
   };
-  const admit = (principalId: string, requestId: string) =>
-    admission.admit({
-      principalId,
-      requestId,
-      characterId: 'synthetic-invite',
-      text: `synthetic ${requestId}`,
-      ipHash: 'a'.repeat(64),
-    });
+  const admit = (principalId: string, requestId: string) => f.admit(principalId, requestId);
   // Finishing an operation frees the per-player pending slot; quota_state stays as the admission left it.
   const finish = (requestId: string, status: 'published' | 'failed' = 'published', quota?: 'released') =>
-    store.run(
+    f.store.run(
       `UPDATE web_operations SET status=?,stage_version=stage_version+1${quota ? ",quota_state='released'" : ''}
       WHERE request_id=?`,
       status,
       requestId,
     );
-  const count = () => store.get<{ n: number }>('SELECT count(*) n FROM web_operations')!.n;
-  return {
-    store,
-    admit,
-    finish,
-    player,
-    count,
-    advance: (ms: number) => {
-      now += ms;
-    },
-    now: () => now,
-  };
+  const count = () => f.store.get<{ n: number }>('SELECT count(*) n FROM web_operations')!.n;
+  return { store: f.store, admit, finish, player, count, advance: f.advance, now: f.clock };
 }
 
 test('the limit+1th player reply in 24h is refused at admission, before any reservation, then allowed once the window passes', (t) => {
@@ -181,7 +88,13 @@ test('the limit is per principal; the guest trial keeps its own cap of 3 and ign
   f.finish('a1');
   assert.throws(() => f.admit(a, 'a2'), /WEB_DAILY_LIMIT_REACHED/);
   assert.equal(f.admit(b, 'b1').duplicate, false);
-  for (const n of [1, 2, 3]) f.admit(guest, `g${n}`);
+  // Named exception (Part 22x): the fixture runs the real schema, so the free tier is switched off for the plain trial path and
+  // each trial reply is finished first (one pending operation per player).
+  Object.assign(f.store, { publicFreeTier: false });
+  for (const n of [1, 2, 3]) {
+    f.admit(guest, `g${n}`);
+    f.finish(`g${n}`);
+  }
   assert.throws(() => f.admit(guest, 'g4'), /TRIAL_EXHAUSTED/);
 });
 
@@ -195,7 +108,7 @@ test('operations whose reservation was released do not count; proactive messages
   for (const n of [1, 2, 3, 4])
     f.store.run(
       `INSERT INTO messages(id,world_id,conversation_id,author_kind,author_id,body,created_at,delivery,proactive,quota_day)
-      VALUES (?,?,?,'character','synthetic-invite','hi',0,'text',1,'2023-11-14')`,
+      VALUES (?,?,?,'character','fixture-character','hi',0,'text',1,'2023-11-14')`,
       `proactive-${n}`,
       conversation.world_id,
       conversation.id,

@@ -49,9 +49,6 @@ type Port = Pick<
   | 'issueMember'
   | 'setPermissions'
   | 'revokeCredential'
-  | 'issue'
-  | 'revokeInvite'
-  | 'inviteRecords'
   | 'characters'
 > & {
   /** 预演测试 workbench (runs, eval sets, batched status). Without it the page keeps the single-preview panel. */

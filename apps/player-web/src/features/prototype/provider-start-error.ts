@@ -35,8 +35,7 @@ export function renderProviderStartError(
   root: HTMLElement,
   error: unknown,
   reload = () => location.reload(),
-  api: Pick<ProviderApi, 'regenerateRecoveryCode' | 'recoverWithRecoveryCode'> &
-    Partial<SignedOutApi> = new ProviderApi(),
+  api: Partial<SignedOutApi> = new ProviderApi(),
 ) {
   if (isSignedOutError(error)) {
     // The trial and its grace period are over (GUEST_GRACE_ENABLED): the first page says the earlier chats expired.
