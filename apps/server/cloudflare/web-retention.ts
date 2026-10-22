@@ -70,7 +70,21 @@ const safeCode = (error: unknown) =>
  * time of the last attempt (the backoff), and when a purge last completed (the health line). It lives in the Durable
  * Object's key-value storage, not in SQL: web_guest_retention has no column for it and this Part adds no migration.
  */
-export type RetentionLedger = { failures: Record<string, [number, number]>; lastSuccessAt: number | null };
+export type RetentionLedger = {
+  failures: Record<string, [number, number, RetentionFailureDetail?]>;
+  lastSuccessAt: number | null;
+};
+/**
+ * Part 22a2. Where the LAST failure of one principal broke, as the same fixed labels a report carries (never an id): kept per
+ * principal so the operator's inspect can say what is failing without a live tail.
+ */
+export type RetentionFailureDetail = {
+  code: string;
+  phase: RetentionPhase;
+  sub: string;
+  errorName: string;
+  messageShape: string;
+};
 export type RetentionMemory = { load(): Promise<RetentionLedger>; save(ledger: RetentionLedger): Promise<void> };
 const emptyLedger = (): RetentionLedger => ({ failures: {}, lastSuccessAt: null });
 export function inMemoryRetention(): RetentionMemory {
@@ -94,8 +108,10 @@ export function durableRetentionMemory(storage: {
           Number.isSafeInteger(entry[0]) &&
           Number.isSafeInteger(entry[1]) &&
           Object.keys(failures).length < LEDGER_MAX
-        )
-          failures[id] = [entry[0], entry[1]];
+        ) {
+          const detail = failureDetail(entry[2]);
+          failures[id] = detail ? [entry[0], entry[1], detail] : [entry[0], entry[1]];
+        }
       return {
         failures,
         lastSuccessAt: Number.isSafeInteger(value?.lastSuccessAt) ? (value!.lastSuccessAt as number) : null,
@@ -104,8 +120,35 @@ export function durableRetentionMemory(storage: {
     save: (ledger) => storage.put(LEDGER_KEY, ledger),
   };
 }
-/** What the operator sees (counts and a time only). */
-export type RetentionHealth = { failing: number; oldestAgeBucket: AgeBucket | null; lastSuccessAt: number | null };
+const failureDetail = (value: unknown): RetentionFailureDetail | undefined => {
+  const v = value as Partial<Record<keyof RetentionFailureDetail, unknown>> | null | undefined;
+  return v &&
+    typeof v.code === 'string' &&
+    typeof v.phase === 'string' &&
+    typeof v.sub === 'string' &&
+    typeof v.errorName === 'string' &&
+    typeof v.messageShape === 'string'
+    ? ({
+        code: v.code.slice(0, 64),
+        phase: v.phase as RetentionPhase,
+        sub: v.sub.slice(0, 64),
+        errorName: v.errorName.slice(0, 40),
+        messageShape: v.messageShape.slice(0, 160),
+      } satisfies RetentionFailureDetail)
+    : undefined;
+};
+/**
+ * What the operator sees: counts, a time and, per failing principal, where its last failure broke (labels, an error class
+ * name, a message with its values taken out, and how many times in a row) - never an id.
+ */
+export type RetentionHealth = {
+  failing: number;
+  oldestAgeBucket: AgeBucket | null;
+  lastSuccessAt: number | null;
+  failures: (RetentionFailureDetail & { count: number })[];
+};
+/** At most this many failing principals are listed on the operator's inspect, the most frequent first. */
+const HEALTH_LIST_LIMIT = 20;
 /** Candidates looked at per sweep when some of them are in backoff (so a stuck few cannot hide the rest). */
 const SCAN_PAGE = 64;
 const SCAN_PAGES = 8;
@@ -258,6 +301,17 @@ export class WebCloudRetention {
       ...info,
     };
   }
+  /** The fixed labels of a failure that happened just now (this.phase / this.sub are where it broke). */
+  private detail(error: unknown, names: ReadonlySet<string>): RetentionFailureDetail {
+    const found = this.failure(error, null, names);
+    return {
+      code: found.code,
+      phase: found.phase,
+      sub: found.sub,
+      errorName: found.errorName,
+      messageShape: found.messageShape,
+    };
+  }
   async sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit > 0 && limit <= 16, 'WEB_RETENTION_SWEEP_INVALID');
     this.lastError = null;
@@ -346,7 +400,7 @@ export class WebCloudRetention {
         failed++;
         stuck.add(principal_id);
         const previous = ledger.failures[principal_id];
-        ledger.failures[principal_id] = [(previous?.[0] ?? 0) + 1, this.clock.now()];
+        ledger.failures[principal_id] = [(previous?.[0] ?? 0) + 1, this.clock.now(), this.detail(error, names)];
         dirty = true;
         note(error, principal_id);
       }
@@ -362,6 +416,7 @@ export class WebCloudRetention {
     const ledger = await this.memory.load().catch(emptyLedger);
     let failing = 0,
       oldest: AgeBucket | undefined;
+    const failures: RetentionHealth['failures'] = [];
     for (const id of Object.keys(ledger.failures)) {
       const state = this.store.get<{ state: string }>(
         'SELECT state FROM web_guest_retention WHERE principal_id=?',
@@ -371,8 +426,17 @@ export class WebCloudRetention {
       failing++;
       const bucket = this.describe(id).oldestAgeBucket;
       if (bucket) oldest = olderBucket(oldest, bucket);
+      const entry = ledger.failures[id]!;
+      // (An entry written before Part 22a2 has no detail until its next failure.)
+      if (entry[2]) failures.push({ ...entry[2], count: entry[0] });
     }
-    return { failing, oldestAgeBucket: oldest ?? null, lastSuccessAt: ledger.lastSuccessAt };
+    failures.sort((a, b) => b.count - a.count);
+    return {
+      failing,
+      oldestAgeBucket: oldest ?? null,
+      lastSuccessAt: ledger.lastSuccessAt,
+      failures: failures.slice(0, HEALTH_LIST_LIMIT),
+    };
   }
   /** The player's own deletion request, step 1 (fence + release): the caller is WebPlayerAccounts.deleteAccount. */
   beginDeletion(principalId: string) {
@@ -395,7 +459,17 @@ export class WebCloudRetention {
       // The caller must not turn a deletion into an error page, so it swallows this; the alarm resumes the purge.
       const found = this.failure(error, principalId, this.schemaNames());
       const ledger = await this.memory.load().catch(emptyLedger);
-      ledger.failures[principalId] = [(ledger.failures[principalId]?.[0] ?? 0) + 1, this.clock.now()];
+      ledger.failures[principalId] = [
+        (ledger.failures[principalId]?.[0] ?? 0) + 1,
+        this.clock.now(),
+        {
+          code: found.code,
+          phase: found.phase,
+          sub: found.sub,
+          errorName: found.errorName,
+          messageShape: found.messageShape,
+        },
+      ];
       await this.memory.save(ledger).catch(() => {});
       this.report?.({ event: 'web_retention_failed', step: 'deletion', ...found, failed: 1, stuck: 1 });
       throw error;
@@ -592,7 +666,11 @@ export class WebCloudRetention {
       this.sub = 'cocreation';
       purgeCocreation(this.store, { principalId });
       // The email login (schema 118) and the nickname 名片 revisions it wrote are the player's data too.
-      purgePlayerLogins(this.store, { principalId, worldId: world }, (group) => void (this.sub = group));
+      purgePlayerLogins(
+        this.store,
+        { principalId, worldId: world, now: this.clock.now() },
+        (group) => void (this.sub = group),
+      );
       for (const table of [
         'memory_facts',
         'memory_embeddings',
