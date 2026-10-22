@@ -13,7 +13,11 @@ import { WebDurableStore } from '../../apps/server/cloudflare/web-store.ts';
 import { PrivateMediaObjects, type PrivateBucket } from '../../apps/server/cloudflare/media-objects.ts';
 import type { DurableSQLStorage } from '../../apps/server/cloudflare/store.ts';
 import type { AlarmStorage } from '../../apps/server/cloudflare/queue-alarm.ts';
-import { WebCloudBudgetClient, type WebBudgetStatusRPC } from '../../apps/server/cloudflare/web-budget-client.ts';
+import {
+  WebCloudBudgetClient,
+  type WebBudgetStatusRPC,
+  type WebBudgetTopUpRPC,
+} from '../../apps/server/cloudflare/web-budget-client.ts';
 import {
   WebCloudTextGenerator,
   webCloudEmbeddings,
@@ -27,6 +31,7 @@ import {
 } from '../../apps/server/generation/web-provider-application.ts';
 import { WebCloudExecutor } from '../../apps/server/cloudflare/web-executor.ts';
 import { WebCloudRetention, durableRetentionMemory } from '../../apps/server/cloudflare/web-retention.ts';
+import type { WebSystemOps } from '../../apps/server/admin/web-system-admin.ts';
 import { WebProviderHTTP } from '../../apps/server/cloudflare/web-http.ts';
 import { trustedWebRequest } from '../../apps/server/cloudflare/web-edge-request.ts';
 import { expectedWebMigrations, webR2Migrations } from './migrations.ts';
@@ -118,7 +123,7 @@ export interface WebBusinessEnvironment {
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET?: string;
   MEDIA: PrivateBucket;
-  BUDGET: WebBudgetStatusRPC;
+  BUDGET: WebBudgetStatusRPC & WebBudgetTopUpRPC;
   GENERATION: WebGenerationBinding;
 }
 
@@ -317,9 +322,37 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           legalPages: this.publicConfig.legalPages,
           turnstileSiteKey: this.publicConfig.turnstile?.siteKey ?? null,
         },
+        this.systemOps(),
       );
     }
     return this.app;
+  }
+  /**
+   * Part 22b: what the console's system pages may use. Reads from this object's own environment and bindings; the two actions
+   * are the SAME ones the operator runs (renew-prices) and the budget Worker's owner top-up. Booleans and names only: never a
+   * key, an address or a secret.
+   */
+  private systemOps(): WebSystemOps {
+    const env = this.env;
+    return {
+      flags: () => ({
+        signupBonus: this.store.publicFreeTier === true,
+        playerModelChoice: env.PLAYER_MODEL_CHOICE_ENABLED === 'true',
+        playerTextModels:
+          env.PLAYER_MODEL_CHOICE_ENABLED === 'true' ? [...parsePlayerTextModels(env.PLAYER_TEXT_MODELS)] : null,
+        fishVoiceModel: siteVoiceModelFromEnv(env.FISH_VOICE_MODEL),
+        chatReview: this.publicConfig.chatReview,
+        turnstile: this.human !== null,
+        alerts: this.alerts !== null,
+        alertMailBindingPresent: env.ADMIN_EMAIL !== undefined && env.ADMIN_EMAIL !== null,
+        alertRecipientSet: typeof env.ALERT_EMAIL_TO === 'string' && env.ALERT_EMAIL_TO.includes('@'),
+      }),
+      migrations: () => ({ active: 'r2', ...expectedWebMigrations() }),
+      budget: () => env.BUDGET.summary(),
+      retention: () => this.retention.health(),
+      renewPrices: () => this.setup.renewPrices(),
+      topUp: (requestId, provider, micros) => env.BUDGET.topUp(requestId, provider, micros),
+    };
   }
   adminGrant(proof: string) {
     this.operator(proof);

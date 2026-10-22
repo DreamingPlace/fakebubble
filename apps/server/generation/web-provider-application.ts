@@ -27,6 +27,8 @@ import { WebIdentity } from '../identity/web-identity.ts';
 import { WebAdmission } from '../admission/web-admission.ts';
 import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts';
 import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts';
+import { WebSystemAdmin, type WebSystemOps } from '../admin/web-system-admin.ts';
+import { WebSecurityCounters, installWebAdminActions } from '../admin/web-admin-actions.ts';
 import { WebInviteTiers } from '../invites/web-invite-tiers.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { WebCocreation } from '../cocreation/web-cocreation.ts';
@@ -153,6 +155,10 @@ export class WebProviderApplication {
   private readonly bonusKey: BonusEmailKey;
   readonly publisher: WebVerticalPublisher;
   readonly inviteAdmin: WebAccountAdmin;
+  /** Part 22b: 概览, 系统状态, 积分发放 (the administrator's system pages). */
+  readonly system: WebSystemAdmin;
+  /** Part 22b: Turnstile failure counts for 系统状态 → 安全. */
+  readonly security: WebSecurityCounters;
   readonly characterDeletion: WebCharacterDeletion;
   readonly characterAdmin: WebCharacterAdmin;
   readonly inviteActions: WebInviteActions;
@@ -171,6 +177,8 @@ export class WebProviderApplication {
     config: WebProviderApplicationConfig,
     mailer?: AdminMailer,
     players: WebPlayerAccountsConfig = {},
+    /** What only the Worker knows (environment, budget Worker, retention ledger, price renewal). Absent in a harness. */
+    ops?: WebSystemOps,
   ) {
     store.requireProviderRuntime();
     ensure(
@@ -210,6 +218,15 @@ export class WebProviderApplication {
       ...(chatReviewOn ? { features: { chatReview: true } } : {}),
     });
     this.chatReview = chatReviewOn ? new WebChatReviewAdmin(store, clock, this.inviteAdmin) : null;
+    installWebAdminActions(store);
+    this.security = new WebSecurityCounters(store, clock);
+    this.system = new WebSystemAdmin(store, clock, this.inviteAdmin, {
+      ops,
+      security: this.security,
+      emailKey: createHmac('sha256', Buffer.from(config.requestKey, 'base64url'))
+        .update('web-admin-points-lookup-v1')
+        .digest(),
+    });
     installWebCharacterCatalog(store);
     installWebCharacterMaterials(store);
     installWebCharacterDeletion(store);

@@ -41,11 +41,6 @@
       "reason": "Test seam: resets module state between component tests (cocreation-sheet.test.ts)."
     },
     {
-      "file": "apps/server/admission/web-player-number.ts",
-      "names": ["PLAYER_NUMBER_PATTERN"],
-      "reason": "Test seam: the public format of a 玩家编号, asserted by the migration tests."
-    },
-    {
       "file": "apps/server/admission/web-points.ts",
       "names": ["grantPoints"],
       "reason": "Test seam: gives a test player a balance (web-invite-tiers-22a)."

@@ -86,7 +86,17 @@ export class WebProviderHTTP {
   }
   /** Turnstile (when enabled): the token travels in a header so no body schema changes; it is checked before any work. */
   private async human(request: Request, action: HumanAction, peer: string) {
-    await this.options.human?.require(request.headers.get(TURNSTILE_HEADER), action, peer);
+    try {
+      await this.options.human?.require(request.headers.get(TURNSTILE_HEADER), action, peer);
+    } catch (error) {
+      // Part 22b: the refusal is counted (a day and an outcome, nothing else) for 系统状态 → 安全, then answered as before.
+      if (error instanceof DomainError) {
+        if (error.code === 'TURNSTILE_REQUIRED' || error.code === 'TURNSTILE_FAILED')
+          this.app.security.record('failed');
+        else if (error.code === 'TURNSTILE_UNAVAILABLE') this.app.security.record('unavailable');
+      }
+      throw error;
+    }
   }
   private async body(request: Request, maximum = 8192) {
     ensure(request.headers.get('content-type') === 'application/json', 'INVALID_REQUEST');
@@ -241,7 +251,14 @@ export class WebProviderHTTP {
       };
       const result =
         (await routeWebPlayerAccounts(path.startsWith(`${API}/account/`) ? app.playerAccounts : null, input)) ??
-        (await routeWebAccountAdmin(app.inviteAdmin, input, app.characterAdmin, app.cocreation, app.chatReview)) ??
+        (await routeWebAccountAdmin(
+          app.inviteAdmin,
+          input,
+          app.characterAdmin,
+          app.cocreation,
+          app.chatReview,
+          app.system,
+        )) ??
         routeWebCocreation(app.cocreation, input) ??
         routeWebBilling(app.billing, input) ??
         routeWebInvite(app.inviteActions, input, app.inviteAdmin);
