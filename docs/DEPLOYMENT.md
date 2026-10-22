@@ -390,6 +390,24 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 不要把 `runtime/`、Secrets、材料目录、邮件、收据、真实数据库或构建产物提交到 GitHub。
 
 
+### 管理后台：概览、系统状态、积分发放（Part 22b，无迁移）
+
+**没有新迁移**：`expected-migrations` 仍是 51 步（126 = `68526f0cfc26957124a4a2f7ea9bcc600cc11c6ba0fcb3702b866aba67efec4e`），提示词与策略哈希不变。新表 `web_admin_actions`、`web_turnstile_counts` 与管理员表一样由 TypeScript 在打开时 `CREATE TABLE IF NOT EXISTS` 建立（见 DATA_BOUNDARY.md），预算 Worker 另有一张加法表 `cf_web_budget_topups`（同样启动时建立，不改变已哈希的账本模式，所以已部署的预算对象照常通过身份校验）。
+
+**部署顺序（必须）：先部署预算 Worker，再部署业务 Worker。** 业务 Worker 的 `预算充值` 调用预算 Worker 新增的 `WebBudgetService.topUp(requestId, provider, micros)`；业务先上线时，旧预算 Worker 没有这个方法，按钮会以“预算服务暂时没有回应”失败（只是按钮，聊天不受影响）。`topUp` 只在 `WebBudgetService`（只有业务 Worker 的 `BUDGET` 绑定指向它）和 `WebBudgetObject` 上；运维入口 `WebBudgetOperatorService`、边缘和生成 Worker 都没有，不可从 HTTP 到达。
+
+**新权限：** `system.read`（查看系统状态）、`points.grant`（积分发放）。只有主管理员能分配（成员权限接口本来就是主管理员专用），不在任何预设里，只在“全部”里。续期价格、预算充值、重置全部额度**不是权限**：服务器要求主管理员角色（`ADMIN_OWNER_REQUIRED`），持有全部权限的管理员也不行。概览对任何能登录的管理员开放。
+
+**路由**（都是 `POST /api/web/provider/admin/...`，会话 + CSRF + Origin，先查权限再读请求体）：`overview/read`、`system/status`、`system/renew-prices`、`system/budget-topup`、`points/preview`、`points/grant`、`points/reset-preview`、`points/reset`。`overview/read`、`system/status`、`points/preview`、`points/reset-preview` 走只读预算。`/admin/metrics/stage-latency` 仍然存在（主管理员），后台页面不再调用它：同样的数字在 `system/status` 的 `metrics` 里。
+
+**预算充值的细节。** 额度 = 初始授权 + 全部充值；只对“限额”（`BUDGET_POLICY=test-cumulative`）的供应商可用，`production-unlimited` 返回 `WEB_BUDGET_TOPUP_UNLIMITED`（页面显示“不限额”且没有按钮）。每次 $1–$50 整数美元，按 `requestId` 幂等（同一个 id 不同金额是 `IDEMPOTENCY_CONFLICT`）。占用中的预留、已结算的调用和 UNKNOWN 都不受影响：UNKNOWN 的预留依然不释放、不重试。充值后业务对象还会把**本地**每实例上限（`web_provider_spending.limit_micros`，是同一个 $3 上限的副本，schema 上限就是 $3）对同一类供应商置为 NULL（云端 R2 库允许；Node 内联库列是 NOT NULL，保持原样）：真正的钱仍由预算 Worker 在每次调用前预留，本地副本只是不再先一步拒绝。
+
+**续期价格** 与运维的 `renew-prices` 是同一个函数（`WebCloudSetup.renewPrices` → `renewProviderPrices`）：行 ID 由（供应商、模型、阶段、起点）派生，所以先点按钮再跑命令、或反过来，结果是同样的行，第二次全部 `not-due`，不会重复。命令行保留不变；按钮是补充。
+
+**积分发放 / 重置全部额度** 只在 `PLAYER_MODEL_CHOICE_ENABLED=true`（点数存在）时可用，否则返回 `POINTS_NOT_ENABLED`，什么都不写。受益人按**有效档位**（`effectiveTier`）：`registered`（关闭 `SIGNUP_BONUS_ENABLED` 时只登录过的玩家是访客，会被跳过）和 `daily_refill`；访客、`unlimited`、`account` 跳过并计数；正在清理（`purging`/`purged`）的玩家不动。`daily_refill` 玩家受 22a 上限约束，已到上限的只计数。`grant` / `reset` 事件带管理员 id，玩家在“消费记录”里看到“管理员发放”（`reset` 显示“余额调整”）。邮箱查找：要输入完整邮箱（规范化后精确匹配，没有搜索、前缀、列表），只返回玩家编号、档位和余额；每次查找（找到与否）在 `web_admin_audit` 写 `points-lookup`，目标是带密钥的摘要（`email:` + 32 位十六进制），不存邮箱；每个网络位置每分钟 6 次。
+
+**系统状态** 读：版本与迁移（`cf_web_migrations` 与代码期望比对）、开关（只有布尔值和模型名，永远没有密钥或邮件地址）、价格（每个供应商/模型/阶段当前生效的版本与“覆盖到”的日期，60 天内高亮）、预算（预算 Worker 的 `summary()`，一次 RPC）、UNKNOWN（按类的数量与最早一条的年龄）、清理（健康行 + `purging`）、安全（Turnstile 未通过 / 不可达的次数，业务对象里 `web_turnstile_counts`，只有日期、结果和计数）。概览的“新 UNKNOWN”指最近 24 小时内出现的 UNKNOWN。每条清理失败的 phase/sub/errorName/messageShape 属于 22a2（尚未合并），这里没有。
+
 ### 登录会话 Cookie
 
 - 有邮箱登录的玩家（以及注册当下的会话）使用 `Max-Age=34560000`（400 天，浏览器上限）的会话 Cookie，每次成功 bootstrap 重新下发；访客仍是 24 小时（开启免费档后为试用期 + 宽限期）。`__Host-`、`Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/` 不变。
