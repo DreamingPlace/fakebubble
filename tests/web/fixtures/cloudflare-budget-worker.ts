@@ -10,6 +10,7 @@ type Namespace = {
     settle(...args: unknown[]): Promise<void>;
     read(...args: unknown[]): Promise<unknown>;
     summary(): Promise<unknown>;
+    topUp(requestId: string, provider: string, micros: number): Promise<unknown>;
   };
 };
 type Environment = { STATE: Namespace; DISABLED: Namespace };
@@ -63,6 +64,7 @@ export default {
       else if (path === '/settle') value = await stub.settle(body.id, body.fingerprint, body.micros, body.receipt);
       else if (path === '/read') value = await stub.read(body.id, body.fingerprint);
       else if (path === '/summary') value = await stub.summary();
+      else if (path === '/topup') value = await stub.topUp(body.requestId, body.provider, body.micros);
       else return new Response('Not found', { status: 404 });
       return Response.json(value ?? null);
     } catch (error) {

@@ -19,7 +19,8 @@ const access = (permissions: string[], over: Partial<NavAccess> = {}): NavAccess
   owner: false,
   permissions,
   inbox: true,
-  metrics: true,
+  // Named exception (Part 22b): `metrics` is gone (运营数据 left the nav). `system` stands for a page given the 概览 / 系统状态 / 积分发放 clients; the old assertions run without it.
+  system: false,
   ...over,
 });
 const labels = (a: NavAccess) => visibleNav(a).flatMap((g) => g.items.map((i) => i.label));
@@ -28,13 +29,18 @@ test('the nav tree is exactly the agreed groups and pages; 退出登录 and 我�
   assert.deepEqual(
     NAV_TREE.map((g) => [g.label, g.items.map((i) => i.label)]),
     [
+      // Named exception (Part 22b): 概览 stands alone at the top (a group without a title).
+      ['', ['概览']],
       ['角色', ['角色资料', '预演测试', '共创收件箱']],
       // Named exception (Part 22a): the invite page is now 邀请与额度 (same place, same permissions to see it). Nothing else changed.
       // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
-      ['玩家', ['邀请与额度']],
-      ['运营', ['运营数据']],
+      // Named exception (Part 22b): 积分发放 and the 玩家统计 placeholder join 玩家.
+      ['玩家', ['邀请与额度', '积分发放', '玩家统计']],
+      // Named exception (Part 22b): 运营数据 left the nav (its numbers moved into 系统状态 → 技术指标); 消耗表 is a placeholder until Part 22c.
+      ['运营', ['消耗表']],
       // Named exception (Part 21g): 系统 → 模型与价格 is the new first page of the system group. No other assertion changed.
-      ['系统', ['模型与价格', '管理员与权限']],
+      // Named exception (Part 22b): 系统状态 sits between 模型与价格 and 管理员与权限.
+      ['系统', ['模型与价格', '系统状态', '管理员与权限']],
     ],
   );
   assert.ok(!navMarkup().includes('退出登录') && !navMarkup().includes('我的账号'));
@@ -48,7 +54,7 @@ test('the owner sees everything; everyone else sees only what a permission opens
     // Named exception (Part 22a): 邀请码 is now called 邀请与额度.
     '邀请与额度',
     // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
-    '运营数据',
+    // Named exception (Part 22b): 运营数据 is gone from the nav (this access has no 概览 / 系统 clients, so none of the new pages show).
     '管理员与权限',
   ]);
   assert.deepEqual(labels(access([])), []);
@@ -67,14 +73,26 @@ test('the owner sees everything; everyone else sees only what a permission opens
     'preview alone cannot list roles',
   );
   assert.deepEqual(labels(access(['category.publication'])), ['角色资料', '预演测试']);
-  assert.deepEqual(labels(access([], { owner: true, metrics: false })).includes('运营数据'), false);
-  assert.equal(canSeePage('ops', access(['category.invites'])), false, 'operations data is owner only');
+  // Named exception (Part 22b): the 运营数据 page no longer exists; its replacement (系统状态) needs the owner or system.read and a page with the client.
+  assert.equal(
+    labels(access([], { owner: true })).includes('系统状态'),
+    false,
+    'a page without the client has no such page',
+  );
+  assert.equal(
+    canSeePage('system', access(['category.invites'], { system: true })),
+    false,
+    'system status needs system.read',
+  );
   assert.equal(canSeePage('members', access(['category.invites'])), false);
   assert.equal(canSeePage('account', access([])), true);
 });
 
 test('the first allowed page follows the nav order, else the account page', () => {
   assert.equal(firstAllowedPage(access([], { owner: true })), 'characters');
+  // Named exception (Part 22b): with the 概览 client every administrator lands on 概览 first.
+  assert.equal(firstAllowedPage(access([], { owner: true, system: true })), 'overview');
+  assert.equal(firstAllowedPage(access(['invites.issue'], { system: true })), 'overview');
   assert.equal(firstAllowedPage(access(['cocreation.read', 'invites.read'])), 'cocreation');
   assert.equal(firstAllowedPage(access(['invites.issue'])), 'invites');
   assert.equal(firstAllowedPage(access([])), 'account');
@@ -87,7 +105,12 @@ test('hash routes round-trip; unknown pages and malformed ids are not routes', (
     '#/preview/wei-guagua',
     '#/cocreation',
     '#/invites',
-    '#/ops',
+    // Named exception (Part 22b): #/ops is no longer a page; the new pages round-trip instead.
+    '#/overview',
+    '#/points',
+    '#/stats',
+    '#/costs',
+    '#/system',
     '#/members',
     '#/account',
   ])
@@ -176,7 +199,11 @@ class Root extends Stub {
       'characters',
       'preview',
       'cocreation',
-      'ops',
+      'overview',
+      'points',
+      'stats',
+      'costs',
+      'system',
       'members',
     ];
     if (selector === '[data-panel]')
@@ -248,7 +275,6 @@ function setup(t: test.TestContext, state: AccountAdminSession, hash = '') {
         deletions: [],
       };
     }),
-    stageLatency: async () => [],
     cocreation: {
       counts: async () => ({}),
       list: async () => ({ items: [], next: null }),
@@ -277,7 +303,8 @@ test('page: nav items an administrator may not use are hidden, not disabled', as
   await flush();
   // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
   const shown = ['invites'];
-  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'ops', 'members']) {
+  // Named exception (Part 22b): 'ops' (运营数据) is gone; the pages that replaced it are hidden for this administrator too.
+  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'points', 'system', 'members']) {
     assert.equal(hiddenOf(f, page), !shown.includes(page), page);
     assert.equal(f.root.querySelector(`[data-page="${page}"]`).disabled, false, `${page} is never merely disabled`);
   }
@@ -288,7 +315,8 @@ test('page: nav items an administrator may not use are hidden, not disabled', as
 test('page: the owner sees every item', async (t) => {
   const f = setup(t, session([], 'owner'));
   await flush();
-  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'ops', 'members'])
+  // Named exception (Part 22b): 'ops' is gone. This page has no 概览 / 系统 clients, so those pages are absent; the owner sees the rest.
+  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'members'])
     assert.equal(hiddenOf(f, page), false, page);
 });
 
