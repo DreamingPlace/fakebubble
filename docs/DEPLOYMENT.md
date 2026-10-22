@@ -331,7 +331,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **退避：** 清除失败的主体不会在每次闹钟（30 秒）都被重试，而是按连续失败次数等待 1 分钟、5 分钟、30 分钟，之后每 6 小时一次；成功即清零。闹钟本身照常运行，其他主体、队列与告警不受影响。退避状态（主体 id 与计数，仅存于对象内部）放在 Durable Object 的键值存储 `retention:ledger`，**没有新增迁移或列**（`web_guest_retention` 没有可用的列）。
 
-**健康行：** `status` 的 `retentionHealth` 与 `inspect` 的 `retention.health` 只含计数与时间：`failing`（当前处于失败状态、尚未清除完的主体数）、`oldestAgeBucket`（其中最老的到期档，没有则为 `null`）、`lastSuccessAt`（最近一次清除完成的时间，毫秒时间戳，没有则为 `null`）。`failing` 长期大于 0 就需要按上表排查。
+**健康行（Part 22a2 起带失败清单）：** `status` 的 `retentionHealth` 与 `inspect` 的 `retention.health` 还有 `failures`：对每个正在失败的主体（最多 20 个，次数多的在前）给出上一次失败的 `code`、`phase`、`sub`、`errorName`、`messageShape` 和连续失败次数 `count`——**没有任何 id**，所以下一次排查不需要实时 tail。它们来自退避账本（`retention:ledger`，每个主体多存一个固定标签的小对象）；这一版之前留下的账本条目在该主体下一次失败之前没有细节。其余部分只含计数与时间：`failing`（当前处于失败状态、尚未清除完的主体数）、`oldestAgeBucket`（其中最老的到期档，没有则为 `null`）、`lastSuccessAt`（最近一次清除完成的时间，毫秒时间戳，没有则为 `null`）。`failing` 长期大于 0 就需要按上表排查。
 
 ### `inspect`（只读检查）
 
@@ -389,6 +389,20 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 
 不要把 `runtime/`、Secrets、材料目录、邮件、收据、真实数据库或构建产物提交到 GitHub。
 
+
+### 邀请码可再次查看（Part 22a2，迁移 127）
+
+**迁移 127（`127_invite_codes_viewable.sql`，sha256 `3cc1d4c03ebbdf90f02ce751341a7aa175804c35799dfe34b29034dd1ae54ecf`）：** 共 **52 步**（`expected-migrations`，inline 与 R2 各 52，最后一步 `version 127`，两边同一份 SQL；1–126 一个字节没动，126 仍是 `68526f0c…efec4e`）。只加两列，不改任何已有行：`web_invite_codes.code_sealed BLOB`（可空）和 `web_invite_batches.created_by_member TEXT`（可空）。本地：`scripts/web-provider.ts migrate-invite-codes <root>`（新实例的 `migrate` 一路到 127）；Cloudflare：账本版本 127，已在 126 的权威启动时自动补上。版本白名单加上 127 的位置同 126。**部署：** 先确认 `inspect` 的 `migrations.matches: true`；回退：两列可空且旧代码不读它们，把代码退回即可，不需要回滚迁移。
+
+- **存储。** 兑换仍只读 `code_digest`（HMAC），没有变。从 127 起**新建**的码同时加密保存：`code_sealed = nonce(12) ‖ AES-256-GCM 密文 ‖ tag(16)`，密钥由业务 Worker 的 `SEAL_KEY` 经 HKDF-SHA256 派生（info 为 `invite-code-v1`），附加认证数据是该码所在行的 id（密文不能被搬到另一行）。`SEAL_KEY` 换了，旧的密文打不开，该码显示为“旧邀请码无法再次查看”，兑换不受影响。**127 之前建的码只有摘要，永远无法再次查看**（不回填）；这些行 `code_sealed` 为 NULL。`created_by_member` 记录建批次的**管理员本人**（登录会话 8 小时就失效，所以不能用会话判断“谁建的”）。
+- **谁能看什么**（服务端判定，浏览器从不拿到它无权看的明文）：主管理员——所有码的明文；有 `invites.manage` 的管理员——**自己建的**批次明文，其他管理员建的批次里码显示为 `********`，但批次名、档位、N/上限、数量、已兑换、状态都可见；其余人看不到这个页面（`ADMIN_PERMISSION_REQUIRED`）。127 之前的码对所有人（包括主管理员）都显示“旧邀请码无法再次查看”。
+- **批次详情**（`/admin/invites/batch-detail`）列出每个码：序号（按生成顺序）、邀请码、状态（未使用 / 已兑换 / 已撤销）、兑换时间（UTC）、玩家编号、额度到期；每个可见的码有自己的“复制”。**导出表格**（新路由 `/admin/invites/batch-export`）返回同样的列、同一套遮罩规则的 CSV，开头带 UTF-8 BOM（Excel 直接显示中文）。以 `=`、`+`、`-`、`@` 开头的单元格（邀请码是 base64url，六十四分之一以 `-` 开头）前面加一个制表符，Excel 当作文本；兑换框会去掉首尾空白，粘贴回去仍可用。
+- **审计**（`web_admin_audit`：管理员、动作、批次 id；绝不含邀请码、玩家 id、邮箱）：`invite-batch-exported:<行数>`——每次导出都记（即使全是 `********`）；`invite-codes-viewed:<行数>`——某次批次详情里真的发出了明文码时记（只含遮罩/旧码的查看不产生明文，不记）。`/admin/invites/batch-detail` 因此不再属于“只读 POST”白名单（走写入限速）。
+- **创建结果**仍然当场显示邀请码并提供“复制”和“下载 CSV”，但不再是唯一的机会。
+
+### 旧邀请主体清除失败（Part 22a2）
+
+**现象：** 22x 部署后 `purging=2, failing=2`。**根因（已用失败测试复现）：** 迁移 126 把旧 `kind='invite'` 主体变成已过期的访客，但没有动 `web_invite_grants` 及其子表；清除末尾的 `cleared` 审计（`admission/web-lifecycle-audit.ts`）拒绝仍有**未撤销授权**的世界，报 `WEB_RETENTION_UNEXPECTED_WORLD_DATA`（`phase=clearDatabase`、`sub=audit_cleared`）。**修复：** `identity/web-player-purge.ts` 的 `purgeLegacyInvites` 在清除同一事务里、按外键顺序删除该主体的 `web_invite_redemptions`、两种回执和 `web_invite_credentials`，并**撤销**授权（授权行作为已允许的外壳保留：只有 id 和时间）；它由 `purgePlayerLogins` 调用，所以 Cloudflare 的 `clearDatabase`、Node 清除器和玩家自己的删除请求共用同一个实现，`playerLoginsRemain` 也会在还剩任何一行时让审计失败。已卡住的两个主体在部署后的下一次闹钟（退避内最多 6 小时）自行完成，无需手工操作。
 
 ### 登录会话 Cookie
 

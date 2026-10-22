@@ -268,3 +268,22 @@ export function migrateWebProviderLegacyInvites(store: Store) {
     store.db.exec('PRAGMA user_version = 126');
   });
 }
+
+/** Node-only 126→127: invite codes can be viewed again - sealed code and creating member columns (127_invite_codes_viewable.sql). */
+export function migrateWebProviderInviteCodes(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 126 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_invite_batches'"),
+      'WEB_PROVIDER_INVITE_CODES_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/127_invite_codes_viewable.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 127');
+  });
+}

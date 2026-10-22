@@ -1,4 +1,4 @@
-import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes, randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { InviteAdminPermission } from '../../../packages/contracts/web-admin-permissions.ts';
@@ -8,13 +8,17 @@ import { activeEntitlement, entitlementTablesExist } from '../admission/web-enti
 import { applyDailyRefill, offeredModels } from '../admission/web-points.ts';
 import type { ModelFlags } from '../admission/web-model-settings.ts';
 import { ensurePlayerNumber } from '../admission/web-player-number.ts';
+import { inviteCodesCsv, MASKED_CODE } from './web-invite-export.ts';
 
 /**
  * Invite tiers (Part 22a): batches of codes that each grant an ENTITLEMENT, redeemed by a signed-in player, and the owner's
  * pages that create, list, edit and revoke them. Redeeming adds a row to web_entitlements; it never touches
- * web_principals.kind or web_guest_retention. Codes are stored only as digests (the same HMAC as the legacy codes) and are
- * shown once at creation. Every admin action is audit-logged (web_admin_audit: actor member, action, batch or code id - never a
- * player id, email or nickname).
+ * web_principals.kind or web_guest_retention. Redemption reads only the code's digest (an HMAC). Since migration 127 (Part 22a2)
+ * a new code is also stored SEALED (AES-256-GCM under a key derived from SEAL_KEY), so it can be shown again: to the owner (every
+ * code) and to the administrator who created the batch (that batch's codes); any other administrator who may open the page gets
+ * ******** and the batch's counts. A code made before 127 has only its digest and is never shown again. The server decides who
+ * sees what; the browser never receives a plain code it may not show. Every admin action is audit-logged (web_admin_audit: actor
+ * member, action, batch or code id and a row count - never a player id, email, nickname or a code).
  */
 type InviteScope = {
   sessionId: string;
@@ -69,7 +73,15 @@ export type BatchCodeView = {
   redeemedAt: number | null;
   expiresAt: number | null;
   playerNumber: string | null;
+  /** The plain code ('plain'), the mask ('masked': this viewer may not see it) or null ('legacy': only a digest exists). */
+  code: string | null;
+  codeView: 'plain' | 'masked' | 'legacy';
 };
+/** HKDF info for the key that seals invite codes. */
+export const INVITE_CODE_SEAL_LABEL = 'invite-code-v1';
+/** The sealing key: HKDF-SHA256 over the business worker's SEAL_KEY, info 'invite-code-v1'. */
+export const inviteCodeSealKey = (sealKey: Buffer) =>
+  Buffer.from(hkdfSync('sha256', sealKey, Buffer.alloc(0), INVITE_CODE_SEAL_LABEL, 32));
 export type RedeemedEntitlement = {
   kind: 'unlimited' | 'daily_refill';
   dailyAmount: number | null;
@@ -84,6 +96,8 @@ export class WebInviteTiers {
   private readonly store: Store;
   private readonly clock: Clock;
   private readonly codeKey: Buffer;
+  /** The derived AES key; null = new codes are stored as digests only (no SEAL_KEY given). */
+  private readonly sealKey: Buffer | null;
   private readonly authorize: InviteAuthorizer;
   private readonly nextId: () => string;
   private readonly random: (size: number) => Buffer;
@@ -93,12 +107,16 @@ export class WebInviteTiers {
     options: {
       clock: Clock;
       codeKey: Buffer;
+      /** The business worker's SEAL_KEY (raw 32 bytes); the sealing key is derived from it. */
+      sealKey?: Buffer;
       authorize: InviteAuthorizer;
       nextId?: () => string;
       random?: (size: number) => Buffer;
     },
   ) {
     ensure(options.codeKey.length === 32, 'WEB_INVITE_KEY_REQUIRED');
+    ensure(options.sealKey === undefined || options.sealKey.length === 32, 'WEB_INVITE_KEY_REQUIRED');
+    this.sealKey = options.sealKey ? inviteCodeSealKey(options.sealKey) : null;
     this.store = store;
     this.clock = options.clock;
     this.codeKey = options.codeKey;
@@ -129,6 +147,48 @@ export class WebInviteTiers {
   }
   private digest(label: string, value: string) {
     return createHmac('sha256', this.codeKey).update(label).update('\0').update(value).digest('hex');
+  }
+  /** Migration 127's columns exist (an older database keeps the digest-only behaviour). */
+  private sealedColumns() {
+    return (
+      this.store.all<{ name: string }>('PRAGMA table_info(web_invite_codes)').some((c) => c.name === 'code_sealed') &&
+      this.store
+        .all<{ name: string }>('PRAGMA table_info(web_invite_batches)')
+        .some((c) => c.name === 'created_by_member')
+    );
+  }
+  /** nonce(12) || ciphertext || tag(16); the row's id is authenticated so a sealed code cannot be moved to another row. */
+  private seal(inviteId: string, code: string) {
+    const nonce = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', this.sealKey!, nonce);
+    cipher.setAAD(Buffer.from(`${INVITE_CODE_SEAL_LABEL}\0${inviteId}`));
+    const body = Buffer.concat([cipher.update(code, 'utf8'), cipher.final()]);
+    return Buffer.concat([nonce, body, cipher.getAuthTag()]);
+  }
+  /** The plain code, or null when it cannot be opened (a different key, or the row was altered). */
+  private unseal(inviteId: string, sealed: Uint8Array): string | null {
+    if (!this.sealKey || sealed.length < 12 + 16) return null;
+    try {
+      const raw = Buffer.from(sealed);
+      const decipher = createDecipheriv('aes-256-gcm', this.sealKey, raw.subarray(0, 12));
+      decipher.setAAD(Buffer.from(`${INVITE_CODE_SEAL_LABEL}\0${inviteId}`));
+      decipher.setAuthTag(raw.subarray(raw.length - 16));
+      const code = Buffer.concat([decipher.update(raw.subarray(12, raw.length - 16)), decipher.final()]).toString(
+        'utf8',
+      );
+      return /^[A-Za-z0-9_-]{43}$/.test(code) ? code : null;
+    } catch {
+      return null;
+    }
+  }
+  /** The administrator member behind a login session, and the role: who may see a batch's plain codes follows the person. */
+  private memberOf(sessionId: string) {
+    if (!this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_admin_session_members'"))
+      return undefined;
+    return this.store.get<{ member_id: string; role: string }>(
+      `SELECT s.member_id,m.role FROM web_admin_session_members s JOIN web_admin_members m ON m.id=s.member_id WHERE s.session_id=?`,
+      sessionId,
+    );
   }
   private requestId(value: unknown) {
     ensure(typeof value === 'string' && /^[A-Za-z0-9_.-]{1,100}$/.test(value), 'INVALID_REQUEST_ID');
@@ -379,9 +439,11 @@ export class WebInviteTiers {
       // 需要先开启模型选择/积分: a refill batch means nothing while points are off.
       ensure(input.tier.kind !== 'daily_refill' || this.pointsOn(), 'WEB_INVITE_POINTS_REQUIRED');
       const batchId = this.nextId();
+      const columns = this.sealedColumns();
+      const creator = columns ? (this.memberOf(input.adminSessionId)?.member_id ?? null) : null;
       this.store.run(
-        `INSERT INTO web_invite_batches(id,name,tier,daily_amount,total_cap,duration_days,request_id,request_digest,created_by,created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO web_invite_batches(id,name,tier,daily_amount,total_cap,duration_days,request_id,request_digest,created_by,created_at${columns ? ',created_by_member' : ''})
+        VALUES (?,?,?,?,?,?,?,?,?,?${columns ? ',?' : ''})`,
         batchId,
         input.name.trim(),
         input.tier.kind,
@@ -392,6 +454,7 @@ export class WebInviteTiers {
         requestDigest,
         input.adminSessionId,
         now,
+        ...(columns ? [creator] : []),
       );
       const codes: string[] = [];
       for (let i = 0; i < input.count; i++) {
@@ -399,11 +462,13 @@ export class WebInviteTiers {
         ensure(Buffer.isBuffer(bytes) && bytes.length === 32, 'WEB_RANDOM_INVALID');
         const code = bytes.toString('base64url');
         codes.push(code);
+        const inviteId = this.nextId();
+        const sealed = columns && this.sealKey ? this.seal(inviteId, code) : null;
         this.store.run(
           `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,capacity,redeemed_count,redeem_by,
-          access_duration_ms,status,batch,note,created_by,created_at,batch_id)
-          VALUES (?,?,?,?,1,0,?,?,'active',?,NULL,?,?,?)`,
-          this.nextId(),
+          access_duration_ms,status,batch,note,created_by,created_at,batch_id${columns ? ',code_sealed' : ''})
+          VALUES (?,?,?,?,1,0,?,?,'active',?,NULL,?,?,?${columns ? ',?' : ''})`,
+          inviteId,
           this.digest('code-v1', code),
           `${batchId}.${i}`,
           requestDigest,
@@ -413,6 +478,7 @@ export class WebInviteTiers {
           input.adminSessionId,
           now,
           batchId,
+          ...(columns ? [sealed] : []),
         );
       }
       this.audit(input.adminSessionId, 'invite-batch-created', batchId, now);
@@ -469,14 +535,52 @@ export class WebInviteTiers {
     };
   }
 
-  /** One batch's codes by serial number: state, when redeemed, when it ends, and the holder's 玩家编号 - never an id or an email. */
-  batchDetail(adminSessionId: string, batchId: string): { codes: BatchCodeView[] } {
+  /**
+   * One batch's codes by serial number: state, when redeemed, when it ends, the holder's 玩家编号 (never an id or an email) and the
+   * code itself under the viewing rule - the owner sees every plain code, the administrator who CREATED the batch sees its plain
+   * codes, any other administrator with invites.manage gets ******** ('masked'), and a code made before migration 127 is 'legacy'
+   * (only a digest exists). 序号 follows the order the codes were made (rowid), not their random ids. The masking is done here: a caller who may not see a code never receives it. Handing out plain codes
+   * is audit-logged (administrator, batch, number of rows; never the codes).
+   */
+  batchDetail(adminSessionId: string, batchId: string): { codes: BatchCodeView[]; canViewCodes: boolean } {
     const now = this.now();
     this.requireAdmin(adminSessionId, now, 'invites.manage');
-    ensure(
-      typeof batchId === 'string' && this.store.get('SELECT 1 FROM web_invite_batches WHERE id=?', batchId),
-      'NOT_FOUND',
-    );
+    const { codes, canViewCodes } = this.codeRows(adminSessionId, batchId, now);
+    if (codes.some((row) => row.codeView === 'plain'))
+      this.audit(adminSessionId, `invite-codes-viewed:${codes.length}`, batchId, now);
+    return { codes, canViewCodes };
+  }
+
+  /**
+   * 导出表格: the same rows under the same masking rule as batchDetail, as a CSV with a UTF-8 BOM. Always audit-logged
+   * (administrator, batch, number of rows) - also when every code is masked; the codes themselves are never logged.
+   */
+  exportBatch(adminSessionId: string, batchId: string): { csv: string; rows: number } {
+    const now = this.now();
+    this.requireAdmin(adminSessionId, now, 'invites.manage');
+    const { codes } = this.codeRows(adminSessionId, batchId, now);
+    this.audit(adminSessionId, `invite-batch-exported:${codes.length}`, batchId, now);
+    return { csv: inviteCodesCsv(codes), rows: codes.length };
+  }
+
+  private codeRows(adminSessionId: string, batchId: string, now: number) {
+    const batch =
+      typeof batchId === 'string'
+        ? this.store.get<{ created_by: string | null }>('SELECT created_by FROM web_invite_batches WHERE id=?', batchId)
+        : undefined;
+    ensure(batch, 'NOT_FOUND');
+    const columns = this.sealedColumns();
+    // Who made the batch is a PERSON (a login session ends after 8 hours): created_by_member, else the member behind the
+    // session that created it. The viewer is the person behind this session.
+    const viewer = this.memberOf(adminSessionId);
+    const creator = columns
+      ? (this.store.get<{ created_by_member: string | null }>(
+          'SELECT created_by_member FROM web_invite_batches WHERE id=?',
+          batchId,
+        )?.created_by_member ?? (batch.created_by ? (this.memberOf(batch.created_by)?.member_id ?? null) : null))
+      : null;
+    const canViewCodes =
+      viewer !== undefined && (viewer.role === 'owner' || (creator !== null && viewer.member_id === creator));
     const rows = this.store.all<{
       id: string;
       status: string;
@@ -485,35 +589,47 @@ export class WebInviteTiers {
       expires_at: number | null;
       revoked_at: number | null;
       number: string | null;
+      sealed: Uint8Array | null;
     }>(
-      `SELECT c.id,c.status,c.redeemed_count,e.starts_at redeemed_at,e.expires_at,e.revoked_at,n.number
+      `SELECT c.id,c.status,c.redeemed_count,e.starts_at redeemed_at,e.expires_at,e.revoked_at,n.number,
+        ${columns ? 'c.code_sealed' : 'NULL'} sealed
       FROM web_invite_codes c LEFT JOIN web_entitlements e ON e.invite_id=c.id
         LEFT JOIN web_player_numbers n ON n.principal_id=e.principal_id
-      WHERE c.batch_id=? ORDER BY c.created_at,c.id`,
+      WHERE c.batch_id=? ORDER BY c.created_at,c.rowid`,
       batchId,
     );
-    return {
-      codes: rows.map((row, i): BatchCodeView => {
-        const state: BatchCodeView['state'] =
-          row.redeemed_count === 1
-            ? row.revoked_at !== null
-              ? 'ended'
-              : row.expires_at !== null && row.expires_at <= now
-                ? 'expired'
-                : 'redeemed'
-            : row.status === 'revoked'
-              ? 'revoked'
-              : 'unused';
-        return {
-          id: row.id,
-          serial: i + 1,
-          state,
-          redeemedAt: row.redeemed_at,
-          expiresAt: row.expires_at,
-          playerNumber: row.number,
-        };
-      }),
-    };
+    const codes = rows.map((row, i): BatchCodeView => {
+      const state: BatchCodeView['state'] =
+        row.redeemed_count === 1
+          ? row.revoked_at !== null
+            ? 'ended'
+            : row.expires_at !== null && row.expires_at <= now
+              ? 'expired'
+              : 'redeemed'
+          : row.status === 'revoked'
+            ? 'revoked'
+            : 'unused';
+      // A code with nothing sealed (made before 127) is 'legacy' for everyone, the owner included.
+      const plain = row.sealed && canViewCodes ? this.unseal(row.id, row.sealed) : null;
+      const codeView: BatchCodeView['codeView'] = !row.sealed
+        ? 'legacy'
+        : !canViewCodes
+          ? 'masked'
+          : plain === null
+            ? 'legacy'
+            : 'plain';
+      return {
+        id: row.id,
+        serial: i + 1,
+        state,
+        redeemedAt: row.redeemed_at,
+        expiresAt: row.expires_at,
+        playerNumber: row.number,
+        code: codeView === 'plain' ? plain : codeView === 'masked' ? MASKED_CODE : null,
+        codeView,
+      };
+    });
+    return { codes, canViewCodes };
   }
 
   /**

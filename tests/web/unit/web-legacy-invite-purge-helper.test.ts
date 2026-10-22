@@ -118,7 +118,9 @@ test('purgeLegacyInvites deletes children before parents, revokes the grant, lea
     assert.equal(count(table, 'b'), 1, `${table} of the other principal`);
   }
   assert.deepEqual(
-    store.all('SELECT id,revoked_at FROM web_invite_grants ORDER BY id').map((row) => ({ ...row })),
+    store
+      .all<{ id: string; revoked_at: number | null }>('SELECT id,revoked_at FROM web_invite_grants ORDER BY id')
+      .map((row) => ({ ...row })),
     [
       { id: 'grant-a', revoked_at: NOW },
       { id: 'grant-b', revoked_at: null },

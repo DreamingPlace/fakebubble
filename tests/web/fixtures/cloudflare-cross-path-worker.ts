@@ -178,6 +178,18 @@ export class WebCrossPathFixture extends WebRetentionWorldFixture {
         ),
       });
     }
+    if (path === '/fixture/cross/old-batch') {
+      // Part 22a2: turn a batch into one made BEFORE migration 127: a digest and nothing sealed, and no creating member.
+      store.run('UPDATE web_invite_codes SET code_sealed=NULL WHERE batch_id=?', input.batchId);
+      store.run('UPDATE web_invite_batches SET created_by_member=NULL WHERE id=?', input.batchId);
+      return Response.json({ old: true });
+    }
+    if (path === '/fixture/cross/invite-audit') {
+      // The administrators' audit entries for invite codes (action, target, actor): what the log holds, never a code.
+      return Response.json(
+        store.all("SELECT actor_id,action,target_id FROM web_admin_audit WHERE action LIKE 'invite-%' ORDER BY seq"),
+      );
+    }
     if (path === '/fixture/cross/review-switch') {
       Object.assign(store, { chatReview: input.on === true });
       return Response.json({ on: input.on === true });

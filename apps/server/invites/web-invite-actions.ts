@@ -96,6 +96,10 @@ export class WebInviteActions {
   batchDetail(adminCookie: string, csrf: string, origin: string, batchId: string) {
     return this.tiers.batchDetail(this.admin(adminCookie, csrf, origin), batchId);
   }
+  /** 导出表格: a CSV (UTF-8 BOM) of the batch under the same masking rule as batchDetail. Audit-logged. */
+  exportBatch(adminCookie: string, csrf: string, origin: string, batchId: string) {
+    return this.tiers.exportBatch(this.admin(adminCookie, csrf, origin), batchId);
+  }
   editBatch(
     adminCookie: string,
     csrf: string,

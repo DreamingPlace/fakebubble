@@ -102,6 +102,11 @@ export function routeWebInvite(
         status: 200,
         body: actions.batchDetail(auth.cookie, auth.csrf, auth.origin, string(object(req.body, ['batchId']).batchId)),
       };
+    if (action === 'batch-export')
+      return {
+        status: 200,
+        body: actions.exportBatch(auth.cookie, auth.csrf, auth.origin, string(object(req.body, ['batchId']).batchId)),
+      };
     if (action === 'batch-edit') {
       const body = object(req.body, ['requestId', 'batchId', 'dailyAmount', 'cap']);
       return {
