@@ -4296,6 +4296,9 @@ body.legal-page {
   gap: 10px;
   justify-content: space-between;
 }
+.invite-signup[hidden] {
+  display: none;
+}
 .invite-signup-text {
   font-size: 16px;
 }

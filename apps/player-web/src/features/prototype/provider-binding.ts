@@ -12,6 +12,7 @@ import { guideCopy, mountChatGuide } from '../cocreation/chat-guide.ts';
 import { openBillingSheet } from '../account/billing-sheet.ts';
 import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
 import { accountCopy, openAccountSheet, type AccountSheetMode } from '../account/account-sheet.ts';
+import { inviteDialogHtml } from '../account/invite-dialog-html.ts';
 import { balanceLine, infoCopy, openMyInfo, tierView } from '../account/my-info.ts';
 import { mountReviewBanners } from './review-banner.ts';
 import { backupNote, modelCopy, modelFooterNote, modelMenuItem, openModelPicker } from './model-picker.ts';
@@ -534,20 +535,13 @@ export class LiveBinding {
     // While accounts are open a redemption belongs to a login (Part 22a: an invite is an entitlement of a signed-up player). A
     // guest may open this dialog, but a code it enters is not sent anywhere: it is told to sign up, and the code is not consumed.
     const guestMustSignUp = () => this.signupOpen && !this.hasLogin;
-    // Once the guest has been told to sign up, 解锁 goes away: there is nothing it could do.
+    // Once the guest has been told to sign up, 兑换 goes away: there is nothing it could do.
     let guestRefused = false;
     const dialog = document.createElement('dialog');
     this.dialog = dialog;
     dialog.className = 'invite-dialog';
     dialog.setAttribute('aria-labelledby', 'invite-label');
-    dialog.innerHTML = `<form method="dialog"><label id="invite-label" for="invite-code">输入邀请码</label>
-      <input id="invite-code" name="code" autocomplete="one-time-code" maxlength="64" required aria-describedby="invite-state">
-      <p id="invite-state" class="invite-state" role="status" aria-live="polite"></p>
-      <div class="invite-signup" hidden><span class="invite-signup-text">${infoCopy.signupFirst}</span>
-      <button type="button" class="invite-signup-button">${infoCopy.signup}</button></div>
-      <div class="invite-actions"><button type="button" class="invite-cancel">取消</button>
-      <button type="button" class="invite-recover" hidden>核对原请求</button>
-      <button type="submit">解锁</button></div></form>`;
+    dialog.innerHTML = inviteDialogHtml(!this.hasLogin);
     const input = dialog.querySelector<HTMLInputElement>('input')!;
     const submit = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     const recover = dialog.querySelector<HTMLButtonElement>('.invite-recover')!;
@@ -577,7 +571,7 @@ export class LiveBinding {
       } else input.placeholder = '';
       submit.hidden = phase === 'uncertain' || phase === 'recovering' || phase === 'blocked' || guestRefused;
       submit.disabled = phase !== 'entry';
-      submit.textContent = phase === 'submitting' ? '正在解锁…' : '解锁';
+      submit.textContent = phase === 'submitting' ? '正在兑换…' : '兑换';
       recover.hidden = phase !== 'uncertain' && phase !== 'recovering';
       recover.disabled = phase !== 'uncertain';
       recover.textContent = phase === 'recovering' ? '正在核对…' : '核对原请求';
