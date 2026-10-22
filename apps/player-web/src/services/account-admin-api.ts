@@ -86,6 +86,12 @@ export type InviteBatchCode = {
   expiresAt: number | null;
   /** The holder's 玩家编号 - never an id or an email. */
   playerNumber: string | null;
+  /**
+   * Part 22a2. The server decides: 'plain' = `code` is the code, 'masked' = this administrator may not see it (`code` is
+   * ********), 'legacy' = made before codes were kept, only a digest exists (`code` is null). Absent = legacy.
+   */
+  code?: string | null;
+  codeView?: 'plain' | 'masked' | 'legacy';
 };
 export type NewInviteBatch = {
   requestId: string;
@@ -326,6 +332,9 @@ export class AccountAdminApi extends InviteAdminApi {
       const c = object(value);
       if (!['unused', 'redeemed', 'revoked', 'ended', 'expired'].includes(String(c.state))) throw invalid();
       const optional = (v: unknown) => (v === null ? null : time(v));
+      if (c.codeView !== undefined && !['plain', 'masked', 'legacy'].includes(String(c.codeView))) throw invalid();
+      const codeView = c.codeView;
+      const codeText = c.code === null || c.code === undefined ? null : string(c.code);
       return {
         id: string(c.id),
         serial: time(c.serial),
@@ -333,8 +342,14 @@ export class AccountAdminApi extends InviteAdminApi {
         redeemedAt: optional(c.redeemedAt),
         expiresAt: optional(c.expiresAt),
         playerNumber: c.playerNumber === null ? null : string(c.playerNumber),
+        ...(c.codeView === undefined ? {} : { codeView: codeView as 'plain' | 'masked' | 'legacy', code: codeText }),
       };
     });
+  }
+  /** 导出表格: the batch as a CSV (UTF-8 BOM) under the same masking rule as the detail; the export is audit-logged. */
+  async exportInviteBatch(batchId: string): Promise<{ csv: string; rows: number }> {
+    const row = object(await this.request('/invites/batch-export', { batchId }));
+    return { csv: string(row.csv), rows: time(row.rows) };
   }
   /** The codes come back ONCE (a replay of the same requestId answers `codes: null`). */
   async createInviteBatch(input: NewInviteBatch) {

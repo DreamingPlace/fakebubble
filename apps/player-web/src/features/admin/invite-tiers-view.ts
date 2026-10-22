@@ -15,18 +15,25 @@ export const TIER_FORM = Object.freeze({
 const two = (n: number) => String(n).padStart(2, '0');
 /** UTC calendar date, 'YYYY-MM-DD' - the same day for every administrator. */
 export const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
-const dayTime = (at: number) => `${utcDay(at)} ${two(new Date(at).getUTCHours())}:${two(new Date(at).getUTCMinutes())}`;
+/** UTC date and time, 'YYYY-MM-DD HH:MM:SS' - the same text the exported table carries. */
+export const utcDateTime = (at: number) => {
+  const d = new Date(at);
+  return `${utcDay(at)} ${two(d.getUTCHours())}:${two(d.getUTCMinutes())}:${two(d.getUTCSeconds())}`;
+};
 
 export const tierText = (batch: Pick<InviteBatch, 'tier' | 'dailyAmount' | 'cap'>) =>
   batch.tier === 'unlimited' ? '不限量' : `每天 +${batch.dailyAmount} 点 · 上限 ${batch.cap} 点`;
 
+/** 状态: 未使用 / 已兑换 / 已撤销 (an ended entitlement is a revoked code; an expired one was redeemed; the date column says when). */
 const STATE_LABEL: Record<InviteBatchCode['state'], string> = {
-  unused: '未兑换',
+  unused: '未使用',
   redeemed: '已兑换',
   revoked: '已撤销',
-  ended: '额度已结束',
-  expired: '已到期',
+  ended: '已撤销',
+  expired: '已兑换',
 };
+export const MASKED_CODE = '********';
+export const LEGACY_CODE_TEXT = '旧邀请码无法再次查看';
 
 /** The CSV a batch's codes are downloaded as: a `code` column and nothing else (no batch name, no player, no date). */
 export const codesCsv = (codes: readonly string[]) => `code\r\n${codes.join('\r\n')}\r\n`;
@@ -46,6 +53,8 @@ export interface InviteTiersDeps {
   port: {
     inviteBatches?: () => Promise<InviteBatch[]>;
     inviteBatchDetail?: (batchId: string) => Promise<InviteBatchCode[]>;
+    /** 导出表格: the server builds the CSV (BOM included) under the same masking rule as the detail. */
+    exportInviteBatch?: (batchId: string) => Promise<{ csv: string; rows: number }>;
     createInviteBatch?: (
       input: NewInviteBatch,
     ) => Promise<{ batchId: string; duplicate: boolean; codes: string[] | null }>;
@@ -68,6 +77,8 @@ export interface InviteTiersDeps {
   disposed: () => boolean;
   /** Hands a file to the browser; replaced in tests. */
   download?: (filename: string, text: string) => void;
+  /** Copies text to the clipboard; replaced in tests. A rejection is reported to the administrator. */
+  copy?: (text: string) => Promise<void>;
 }
 
 /** The browser's own "save as": a Blob link clicked once. Nothing is uploaded and the object URL is revoked at once. */
@@ -97,6 +108,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   let createPending: { id: string; signature: string } | null = null;
   let editPending: { id: string; signature: string } | null = null;
   const download = deps.download ?? browserDownload;
+  const copy = deps.copy ?? ((text: string) => navigator.clipboard.writeText(text));
 
   // ---- the form ---------------------------------------------------------------------------------------------------------
   const field = (id: string, label: string, input: HTMLElement) =>
@@ -149,11 +161,12 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     create,
   );
 
-  const shownTitle = h('strong', { text: '邀请码（只显示这一次，请立即保存）' });
+  const shownTitle = h('strong', { text: '邀请码（现在显示；之后可在批次的“查看”里再次查看）' });
   const shownList = h('textarea', {
     class: 'tiers-codes',
     attrs: { readonly: 'readonly', rows: '8', 'aria-label': '邀请码' },
   });
+  const shownCopy = h('button', { text: '复制', attrs: { type: 'button', id: 'tiers-copy' } });
   const shownDownload = h('button', { text: '下载 CSV', attrs: { type: 'button', id: 'tiers-download' } });
   const shownClose = h('button', {
     class: 'admin-secondary',
@@ -165,7 +178,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     { class: 'tiers-shown invite-admin-result', attrs: { id: 'tiers-shown' }, hidden: true },
     shownTitle,
     shownList,
-    h('div', { class: 'tiers-shown-actions' }, shownDownload, shownClose),
+    h('div', { class: 'tiers-shown-actions' }, shownCopy, shownDownload, shownClose),
   );
   let shownCodes: string[] = [];
   let shownName = '';
@@ -175,6 +188,9 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     shown.hidden = true;
   };
   shownClose.addEventListener('click', clearShown);
+  shownCopy.addEventListener('click', () => {
+    if (shownCodes.length) void copyText(shownCodes.join('\n'));
+  });
   shownDownload.addEventListener('click', () => {
     if (shownCodes.length) download(`${shownName || 'invites'}.csv`, codesCsv(shownCodes));
   });
@@ -212,6 +228,15 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     detail,
   );
 
+  /** Copy to the clipboard and say so; a refusal (no permission, no secure context) is told, never silent. */
+  async function copyText(text: string) {
+    try {
+      await copy(text);
+      deps.toast('已复制');
+    } catch {
+      deps.toast('复制没有成功，请手动选取文字');
+    }
+  }
   const cell = (label: string, ...children: (Node | string)[]) =>
     h('td', { attrs: { 'data-label': label } }, ...children);
   const button = (text: string, onClick: () => void, className = 'admin-secondary') => {
@@ -335,6 +360,35 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     open = { batch, codes };
     paintDetail();
   }
+  /** The 邀请码 cell: the code with its own 复制 (plain), the mask, or the notice for a code that was never kept. */
+  function codeCell(code: InviteBatchCode) {
+    if (code.codeView === 'plain' && typeof code.code === 'string') {
+      const plain = code.code;
+      return cell(
+        '邀请码',
+        h(
+          'div',
+          { class: 'tiers-code-cell' },
+          h('code', { class: 'tiers-code-text', text: plain }),
+          button('复制', () => void copyText(plain), 'admin-secondary tiers-copy'),
+        ),
+      );
+    }
+    return cell(
+      '邀请码',
+      h('span', {
+        class: 'tiers-code-hidden',
+        text: code.codeView === 'masked' ? MASKED_CODE : LEGACY_CODE_TEXT,
+      }),
+    );
+  }
+  async function exportTable(batch: InviteBatch) {
+    if (!port.exportInviteBatch) throw new Error('ADMIN_INVITES_UNAVAILABLE');
+    const { csv } = await port.exportInviteBatch(batch.id);
+    if (deps.disposed()) return;
+    download(`${batch.name}-邀请码.csv`, csv);
+    deps.toast('已导出');
+  }
   function paintDetail() {
     if (!open) {
       detail.hidden = true;
@@ -342,8 +396,17 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     }
     const { batch, codes } = open;
     detail.hidden = false;
+    const masked = codes.some((code) => code.codeView === 'masked');
     detail.replaceChildren(
       h('h3', { text: `${batch.name} · ${tierText(batch)}` }),
+      ...(masked
+        ? [
+            h('p', {
+              class: 'admin-hint tiers-masked-note',
+              text: '这批邀请码由其他管理员创建，邀请码已隐藏；批次信息和兑换情况仍然可见。',
+            }),
+          ]
+        : []),
       h(
         'div',
         { class: 'admin-table-region' },
@@ -359,7 +422,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
               h(
                 'tr',
                 {},
-                ...['序号', '状态', '兑换时间', '玩家编号', '额度到期', '操作'].map((label) =>
+                ...['序号', '邀请码', '状态', '兑换时间 (UTC)', '玩家编号', '额度到期', '操作'].map((label) =>
                   h('th', { text: label, attrs: { scope: 'col' } }),
                 ),
               ),
@@ -372,16 +435,21 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
                   'tr',
                   { attrs: { 'data-code': code.id, 'data-state': code.state } },
                   h('th', { text: `#${code.serial}`, attrs: { scope: 'row' } }),
+                  codeCell(code),
                   cell(
                     '状态',
                     statusBadge(
                       STATE_LABEL[code.state],
-                      code.state === 'redeemed' ? 'ok' : code.state === 'unused' ? 'neutral' : 'warn',
+                      code.state === 'redeemed' || code.state === 'expired'
+                        ? 'ok'
+                        : code.state === 'unused'
+                          ? 'neutral'
+                          : 'warn',
                     ),
                   ),
-                  cell('兑换时间', code.redeemedAt === null ? '' : dayTime(code.redeemedAt)),
+                  cell('兑换时间 (UTC)', code.redeemedAt === null ? '' : utcDateTime(code.redeemedAt)),
                   cell('玩家编号', code.playerNumber ?? (code.redeemedAt === null ? '' : '旧邀请')),
-                  cell('额度到期', code.expiresAt === null ? '' : utcDay(code.expiresAt)),
+                  cell('额度到期', code.expiresAt === null ? '' : utcDateTime(code.expiresAt)),
                   cell(
                     '操作',
                     code.state === 'unused'
@@ -396,10 +464,15 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
           ),
         ),
       ),
-      button('收起', () => {
-        open = null;
-        paintDetail();
-      }),
+      h(
+        'div',
+        { class: 'tiers-detail-actions' },
+        button('导出表格', () => void deps.run(() => exportTable(batch)), 'admin-secondary tiers-export'),
+        button('收起', () => {
+          open = null;
+          paintDetail();
+        }),
+      ),
     );
   }
 

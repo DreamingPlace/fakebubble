@@ -324,7 +324,7 @@ export class WebRetentionCleaner {
       // Co-creation ideas (schema 117) are the player's data and go with the player.
       purgeCocreation(this.store, { principalId });
       // The email login (schema 118) and the nickname 名片 revisions it wrote are the player's data too.
-      purgePlayerLogins(this.store, { principalId, worldId: world });
+      purgePlayerLogins(this.store, { principalId, worldId: world, now });
       for (const table of [
         'memory_facts',
         'memory_embeddings',

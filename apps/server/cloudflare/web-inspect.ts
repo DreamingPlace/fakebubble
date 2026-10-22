@@ -58,6 +58,15 @@ export interface WebInspectRetentionHealth {
   failing: number;
   oldestAgeBucket: '<1d' | '1-7d' | '7-30d' | '>30d' | null;
   lastSuccessAt: number | null;
+  /** Part 22a2: per failing principal where its last purge failure broke - fixed labels and a count, never an id. */
+  failures?: {
+    code: string;
+    phase: string;
+    sub: string;
+    errorName: string;
+    messageShape: string;
+    count: number;
+  }[];
 }
 const ID_LIMIT = 200;
 const flag = (value: unknown) => (value === undefined ? null : value === 'true' || value === 'false' ? value : 'other');
