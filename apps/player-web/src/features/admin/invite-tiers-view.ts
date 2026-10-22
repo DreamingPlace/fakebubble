@@ -366,9 +366,12 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       const plain = code.code;
       return cell(
         '邀请码',
-        h('code', { class: 'tiers-code-text', text: plain }),
-        ' ',
-        button('复制', () => void copyText(plain), 'admin-secondary tiers-copy'),
+        h(
+          'div',
+          { class: 'tiers-code-cell' },
+          h('code', { class: 'tiers-code-text', text: plain }),
+          button('复制', () => void copyText(plain), 'admin-secondary tiers-copy'),
+        ),
       );
     }
     return cell(

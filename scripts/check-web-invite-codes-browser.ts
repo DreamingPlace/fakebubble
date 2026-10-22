@@ -142,7 +142,7 @@ try {
     return body;
   };
   const adminLogin = async (token: string): Promise<Actor> => {
-    const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 900 } });
+    const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 1500 } });
     const response = await context.request.post(`${API}/admin/login`, {
       data: { token },
       headers: { origin: config.origin },
@@ -172,7 +172,7 @@ try {
         requestId: randomUUID(),
         name,
         count: 3,
-        tier: { kind: 'daily_refill', dailyAmount: 50, cap: 1000 },
+        tier: { kind: 'unlimited' },
         durationDays: 30,
         redeemBy: null,
       },
@@ -197,17 +197,25 @@ try {
   await player.locator('.invite-dialog').waitFor();
   const guestSignup = await player.locator('.invite-dialog .invite-signup').count();
   assert.equal(guestSignup, 1, 'a guest’s dialog carries the sign-up block');
-  assert.equal(await player.locator('.invite-dialog .invite-signup').isVisible(), false, 'hidden until the guest submits a code');
+  assert.equal(
+    await player.locator('.invite-dialog .invite-signup').isVisible(),
+    false,
+    'hidden until the guest submits a code',
+  );
   await player.locator('.invite-dialog input').fill('A'.repeat(43));
   await player.getByRole('button', { name: '兑换', exact: true }).click();
   await player.locator('.invite-dialog .invite-signup').waitFor({ state: 'visible' });
   await player.getByText('注册后即可使用邀请码').waitFor();
   await shot(player, 'redeem-dialog-guest');
-  await player.getByRole('button', { name: '取消' }).or(player.getByRole('button', { name: '关闭' })).first().click();
+  await player
+    .getByRole('button', { name: '取消' })
+    .or(player.getByRole('button', { name: '关闭' }))
+    .first()
+    .click();
 
   // Sign up, then open the dialog again.
   await player.getByRole('button', { name: '登录/注册' }).first().click();
-  await player.getByRole('button', { name: '注册', exact: true }).click();
+  await player.getByRole('button', { name: '没有账号？注册' }).click();
   await player.getByLabel('邮箱').fill(EMAIL);
   await player.getByRole('button', { name: '发送验证码' }).click();
   for (let i = 0; i < 100 && mails.length === 0; i++) await new Promise((r) => setTimeout(r, 50));
@@ -224,10 +232,17 @@ try {
   await player.getByRole('button', { name: /阿泡/ }).first().click();
   await player.getByRole('button', { name: '输入邀请码' }).click();
   await player.locator('.invite-dialog').waitFor();
-  assert.equal(await player.locator('.invite-dialog .invite-signup').count(), 0, 'no sign-up block for a signed-in player');
+  assert.equal(
+    await player.locator('.invite-dialog .invite-signup').count(),
+    0,
+    'no sign-up block for a signed-in player',
+  );
   assert.equal(await player.locator('.invite-dialog').getByText('注册后即可使用邀请码').count(), 0);
   assert.equal(await player.locator('.invite-dialog').getByRole('button', { name: '注册' }).count(), 0);
-  assert.equal(await player.locator('.invite-dialog').getByRole('button', { name: '兑换', exact: true }).isVisible(), true);
+  assert.equal(
+    await player.locator('.invite-dialog').getByRole('button', { name: '兑换', exact: true }).isVisible(),
+    true,
+  );
   await shot(player, 'redeem-dialog-signed-in');
   // And it redeems.
   await player.locator('.invite-dialog input').fill(aBatch.codes[0]!);
@@ -243,6 +258,7 @@ try {
     await row.waitFor({ timeout: 20_000 });
     await row.getByRole('button', { name: '查看' }).click();
     await page.locator('.tiers-codes-table tbody tr').first().waitFor({ timeout: 15_000 });
+    await page.locator('.tiers-detail h3').scrollIntoViewIfNeeded();
     return page;
   };
   const ownerPage = await open(owner, '管理员A批次');
@@ -259,10 +275,11 @@ try {
   for (const code of aBatch.codes) assert.ok(csv.toString('utf8').includes(code));
 
   const bPage = await open(adminB, '管理员A批次');
-  assert.equal(await bPage.getByText('********').count() >= 3, true);
+  assert.equal((await bPage.getByText('********').count()) >= 3, true);
   assert.equal(await bPage.getByRole('button', { name: '复制' }).count(), 0, 'no 复制 for a masked code');
   const bText = await bPage.locator('body').innerText();
-  for (const code of [...aBatch.codes, ...ownerBatch.codes]) assert.equal(bText.includes(code), false, 'no plain code in the page');
+  for (const code of [...aBatch.codes, ...ownerBatch.codes])
+    assert.equal(bText.includes(code), false, 'no plain code in the page');
   await bPage.getByText('其他管理员创建').waitFor();
   await shot(bPage, 'batch-detail-admin-b-masked');
   const [bDownload] = await Promise.all([
@@ -270,7 +287,8 @@ try {
     bPage.getByRole('button', { name: '导出表格' }).click(),
   ]);
   const bCsv = readFileSync(await bDownload.path()).toString('utf8');
-  for (const code of aBatch.codes) assert.equal(bCsv.includes(code), false, 'the second administrator’s CSV is masked too');
+  for (const code of aBatch.codes)
+    assert.equal(bCsv.includes(code), false, 'the second administrator’s CSV is masked too');
   assert.ok(bCsv.includes('********'));
 
   const aPage = await open(adminA, '管理员A批次');
