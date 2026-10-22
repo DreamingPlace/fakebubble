@@ -3,7 +3,9 @@ import { characterWorkbench, characterAdminError } from './character-workbench.t
 import { previewWorkbench } from './preview/preview-workbench.ts';
 import type { PreviewAdminClient } from '../../services/preview-admin-api.ts';
 import { permissionMatrixEditor } from './permission-matrix.ts';
-import { opsView } from './ops-view.ts';
+import { overviewView } from './overview-view.ts';
+import { pointsView } from './points-view.ts';
+import { systemView } from './system-view.ts';
 import { modelsView } from './models-view.ts';
 import { confirmDialog } from './ui/confirm-dialog.ts';
 import { rolePicker } from './shell/role-picker.ts';
@@ -53,8 +55,15 @@ type Port = Pick<
 > & {
   /** 预演测试 workbench (runs, eval sets, batched status). Without it the page keeps the single-preview panel. */
   previews?: PreviewAdminClient;
-  /** 运营数据 (owner only). Optional: a page without it has no such page in the nav. */
-  stageLatency?: AccountAdminApi['stageLatency'];
+  /** 概览, 系统状态 and 积分发放 (Part 22b). Optional: a page without `overview` has none of them in the nav. */
+  overview?: AccountAdminApi['overview'];
+  systemStatus?: AccountAdminApi['systemStatus'];
+  renewPrices?: AccountAdminApi['renewPrices'];
+  budgetTopUp?: AccountAdminApi['budgetTopUp'];
+  pointsPreview?: AccountAdminApi['pointsPreview'];
+  pointsGrant?: AccountAdminApi['pointsGrant'];
+  resetPreview?: AccountAdminApi['resetPreview'];
+  resetPoints?: AccountAdminApi['resetPoints'];
   /** 邀请与额度 (the owner, or an administrator holding invites.manage). Optional: a page without them shows nothing on that page. */
   inviteBatches?: AccountAdminApi['inviteBatches'];
   inviteBatchDetail?: AccountAdminApi['inviteBatchDetail'];
@@ -82,6 +91,12 @@ export function adminAccountError(error: unknown) {
         MODEL_SETTINGS_CONFLICT: '设置已被另一位管理员修改。请点“刷新”核对最新内容后再保存；本次未覆盖。',
         WEB_INVITE_POINTS_REQUIRED: '需要先开启模型选择/积分，才能建每天补充的批次。',
         MODEL_SETTINGS_UNAVAILABLE: '这个站点的数据库还没有升级到模型与价格（迁移 124）。',
+        PLAYER_NOT_FOUND: '没有找到这位玩家。请核对完整的邮箱或 8 位玩家编号。',
+        POINTS_NOT_ENABLED: '积分功能还没有打开（PLAYER_MODEL_CHOICE_ENABLED），现在不能发放或重置。',
+        BUDGET_UNLIMITED: '这个供应商的预算不限额，不需要充值。',
+        BUDGET_UNAVAILABLE:
+          '预算服务暂时没有回应，充值结果未确认。请刷新核对剩余额度后再试（同一次点击不会重复充值）。',
+        SYSTEM_UNAVAILABLE: '这个环境没有提供这项系统功能。',
         IDEMPOTENCY_CONFLICT: '这次提交与之前的同一请求内容不一致，请刷新后重试。',
         INVALID_REQUEST: '填写的内容不符合要求（每条点数 1–200，语音加点 0–20，均为整数）。',
         ADMIN_PERMISSIONS_CONFLICT: '权限已被另一页面修改。请刷新权限列表，核对后再保存；本次未覆盖新权限。',
@@ -165,7 +180,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       <button class="admin-back" id="admin-members-refresh" type="button">刷新权限列表</button><div id="admin-members-list"></div>
     </section>
     <section data-panel="preview" hidden><div id="admin-preview" class="admin-fill"></div></section>
-    <section data-panel="ops" hidden><div id="admin-ops"></div></section>
+    <section data-panel="overview" hidden><div id="admin-overview"></div></section>
+    <section data-panel="points" hidden><div id="admin-points"></div></section>
+    <section data-panel="system" hidden><div id="admin-system"></div></section>
+    <section data-panel="stats" hidden><h2>玩家统计</h2><p class="admin-empty">下个版本提供</p></section>
+    <section data-panel="costs" hidden><h2>消耗表</h2><p class="admin-empty">下个版本提供</p></section>
     <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
     <section data-panel="models" hidden><div id="admin-models"></div></section>
     </div>
@@ -200,8 +219,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     owner: session?.member.role === 'owner',
     permissions: session?.member.permissions ?? [],
     inbox: !!port.cocreation,
-    metrics: !!port.stageLatency,
     models: !!port.modelSettings,
+    system: !!port.overview && !!port.systemStatus,
     conversations: !!port.conversations && session?.features?.chatReview === true,
   });
   const canEditCharacter = (characterId: string) =>
@@ -405,7 +424,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       };
     if (page === 'members') return loadMembers;
     if (page === 'invites' && can('invites.manage') && port.inviteBatches) return () => tiers.load();
-    if (page === 'ops' && session.member.role === 'owner' && port.stageLatency) return () => ops.load();
+    if (page === 'overview' && canSeePage('overview', access())) return () => overview.load();
+    if (page === 'points' && canSeePage('points', access())) return () => points.load();
+    if (page === 'system' && canSeePage('system', access())) return () => system.load();
     if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
     if (page === 'models' && port.modelSettings) return () => models.load();
     return null;
@@ -569,9 +590,43 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       })
     : null;
   const toasts = toastHost(q('main'));
-  const ops = opsView(q('#admin-ops'), {
-    load: (days) => (port.stageLatency ? port.stageLatency(days) : Promise.resolve([])),
+  const unavailable = () => Promise.reject(new Error('ADMIN_SYSTEM_UNAVAILABLE'));
+  const overview = overviewView(q('#admin-overview'), {
+    load: () => (port.overview ? port.overview() : unavailable()),
+    links: () =>
+      navTree()
+        .flatMap((group) => group.items)
+        .filter((item) => item.page !== 'overview' && canSeePage(item.page, access()))
+        .map((item) => ({ page: item.page, label: item.label })),
+    go: (target) => {
+      if (busy || disposed || !navigate(target)) return;
+      const load = loader();
+      if (load) void run(load);
+    },
     run,
+    disposed: () => disposed,
+  });
+  const system = systemView(q('#admin-system'), {
+    load: () => (port.systemStatus ? port.systemStatus() : unavailable()),
+    renewPrices: (requestId) => (port.renewPrices ? port.renewPrices(requestId) : unavailable()),
+    topUp: (input) => (port.budgetTopUp ? port.budgetTopUp(input) : unavailable()),
+    isOwner: () => session?.member.role === 'owner',
+    run,
+    confirm: (options) => confirmDialog(q('main'), options),
+    toast: (text) => toasts.show(text, 'ok'),
+    newRequestId: () => globalThis.crypto.randomUUID(),
+    disposed: () => disposed,
+  });
+  const points = pointsView(q('#admin-points'), {
+    preview: (to, amount) => (port.pointsPreview ? port.pointsPreview(to, amount) : unavailable()),
+    grant: (input) => (port.pointsGrant ? port.pointsGrant(input) : unavailable()),
+    resetPreview: () => (port.resetPreview ? port.resetPreview() : unavailable()),
+    reset: (requestId) => (port.resetPoints ? port.resetPoints(requestId) : unavailable()),
+    isOwner: () => session?.member.role === 'owner',
+    run,
+    confirm: (options) => confirmDialog(q('main'), options),
+    toast: (text) => toasts.show(text, 'ok'),
+    newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
   });
   const tiers = inviteTiersView(q('#admin-invites'), {
@@ -618,7 +673,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     previewBench?.clear();
     previewSplit.detail.replaceChildren();
     picker.clear();
-    ops.clear();
+    overview.clear();
+    system.clear();
+    points.clear();
     reviews.clear();
     models.clear();
     inbox?.clear();

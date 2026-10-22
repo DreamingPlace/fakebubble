@@ -3286,6 +3286,96 @@ body:has(.admin-shell) {
   gap: 8px;
   margin: 12px 0 20px;
 }
+/* Part 22b: 概览, 系统状态, 积分发放. */
+.overview-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+.overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+}
+.overview-card strong {
+  font-size: 24px;
+}
+.overview-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.overview-warnings {
+  margin: 8px 0 16px;
+}
+.overview-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+.system-section {
+  margin: 0 0 24px;
+}
+.system-section h3 {
+  margin: 0 0 8px;
+}
+.system-result:empty {
+  display: none;
+}
+.system-result {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+}
+.admin-table tr[data-expiring] td {
+  background: #fbf3dc;
+}
+.system-topup {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.system-topup input {
+  width: 72px;
+}
+.points-form {
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+}
+.points-form fieldset {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+}
+.account-admin-page .points-kind {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  white-space: nowrap;
+}
+.account-admin-page .points-kind input[type="radio"] {
+  width: auto;
+  flex: none;
+  margin: 0;
+}
+.overview-links a {
+  color: var(--ad-primary);
+}
 .models-problem {
   margin: 8px 0 0;
   color: var(--ad-danger) !important;

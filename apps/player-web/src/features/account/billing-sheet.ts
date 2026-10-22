@@ -33,7 +33,7 @@ export const billingCopy = {
   pending: '回复中…',
   bonus: '注册赠送',
   bonusSub: '含没用完的体验回复',
-  grant: '管理员赠送',
+  grant: '管理员发放',
   daily_refill: '每日补充',
   reset: '余额调整',
   voice: (on: boolean) => (on ? '语音' : '无语音'),

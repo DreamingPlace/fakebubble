@@ -7,11 +7,15 @@ const ms = (p: { samples: number; p50Ms: number | null; p95Ms: number | null }) 
   p.samples === 0 ? '—' : `${p.p50Ms}/${p.p95Ms} ms（${p.samples}）`;
 const percent = (value: number | null) => (value === null ? '—' : `${Math.round(value * 100)}%`);
 
-/** 运营数据 (owner only): the stage-latency, review-rewrite, cache and embedding counters the server already reports per UTC day. */
+/**
+ * The stage-latency, review-rewrite, cache and embedding counters the server reports per UTC day. Since Part 22b it is the
+ * 技术指标 section of 系统状态 (no longer a page of its own); `title` names it there and `show` takes rows already fetched.
+ */
 export function opsView(
   root: HTMLElement,
   deps: {
     load: (days: number) => Promise<StageLatencyDay[]>;
+    title?: string;
     run: (work: () => Promise<void>) => Promise<void>;
     disposed: () => boolean;
   },
@@ -65,7 +69,7 @@ export function opsView(
     caption: '运营数据',
   });
   const bar = toolbar({
-    title: '运营数据',
+    title: deps.title ?? '运营数据',
     filters: [
       {
         kind: 'select',
@@ -96,5 +100,5 @@ export function opsView(
     const rows = await deps.load(days);
     if (!deps.disposed()) table.setRows(rows);
   }
-  return { load, clear: () => table.setRows([]) };
+  return { load, show: (rows: StageLatencyDay[]) => table.setRows(rows), clear: () => table.setRows([]) };
 }

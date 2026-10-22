@@ -9,6 +9,22 @@ import {
   type ModelAdminView,
   type ModelSaveInput,
 } from '../../../../packages/contracts/model-settings.ts';
+import type {
+  BudgetTopUpResult,
+  OverviewView,
+  PointsGrantResult,
+  PointsPreview,
+  PointsResetResult,
+  PointsTarget,
+  RenewPricesResult,
+  SystemBudgetRow,
+  SystemFlags,
+  SystemPriceRow,
+  SystemRetention,
+  SystemSecurity,
+  SystemUnknownKind,
+  SystemWarnings,
+} from '../../../../packages/contracts/web-system.ts';
 import {
   ADMIN_PERMISSION_LIMIT,
   isAdminPermission,
@@ -62,6 +78,19 @@ export type StageLatencyDay = {
     queryFallbacks: number;
     queryTimeouts: number;
   };
+};
+/** 系统状态 (Part 22b): one read; counts, times and prices only. */
+export type SystemStatusView = {
+  now: number;
+  version: { commit: string; migrationSteps: number; schemaVersion: number | null; matches: boolean | null };
+  flags: SystemFlags | null;
+  prices: SystemPriceRow[];
+  budget: { available: true; rows: SystemBudgetRow[] } | { available: false; error: string };
+  unknown: SystemUnknownKind[];
+  retention: SystemRetention;
+  metrics: StageLatencyDay[];
+  security: SystemSecurity;
+  warnings: SystemWarnings;
 };
 /** 邀请与额度 (Part 22a): one batch as the list shows it - counts only, no player. */
 export type InviteBatch = {
@@ -294,6 +323,63 @@ export class AccountAdminApi extends InviteAdminApi {
     )
       throw invalid();
     return row as { revision: number; priceVersion: number; changes: number; duplicate: boolean };
+  }
+  /** 概览: any administrator. */
+  async overview(): Promise<OverviewView> {
+    const row = object(await this.request('/overview/read', {}));
+    object(row.today);
+    object(row.warnings);
+    if (typeof row.day !== 'string') throw invalid();
+    return row as unknown as OverviewView;
+  }
+  /** 系统状态: the owner or system.read. */
+  async systemStatus(): Promise<SystemStatusView> {
+    const row = object(await this.request('/system/status', {}));
+    if (!Array.isArray(row.prices) || !Array.isArray(row.metrics) || !Array.isArray(row.unknown)) throw invalid();
+    object(row.version);
+    object(row.security);
+    object(row.warnings);
+    return row as unknown as SystemStatusView;
+  }
+  /** Owner only. The same renewal the operator command runs. */
+  async renewPrices(requestId: string): Promise<RenewPricesResult> {
+    const row = object(await this.request('/system/renew-prices', { requestId }));
+    if (!Array.isArray(row.rows) || typeof row.duplicate !== 'boolean') throw invalid();
+    return row as unknown as RenewPricesResult;
+  }
+  /** Owner only: dollars 1–50 for a capped provider. */
+  async budgetTopUp(input: { requestId: string; provider: 'deepseek' | 'fish'; dollars: number }) {
+    const row = object(await this.request('/system/budget-topup', input));
+    if (!Number.isSafeInteger(row.allowanceMicros) || typeof row.duplicate !== 'boolean') throw invalid();
+    return row as unknown as BudgetTopUpResult;
+  }
+  /** What a grant would do, and the one lookup (an email answers 玩家编号, tier and balance only). */
+  async pointsPreview(target: PointsTarget, amount: number): Promise<PointsPreview> {
+    const row = object(await this.request('/points/preview', { target, amount }));
+    if (!Number.isSafeInteger(row.granted)) throw invalid();
+    return row as unknown as PointsPreview;
+  }
+  async pointsGrant(input: {
+    requestId: string;
+    target: PointsTarget;
+    amount: number;
+    note: string;
+  }): Promise<PointsGrantResult> {
+    const row = object(await this.request('/points/grant', input));
+    if (!Number.isSafeInteger(row.granted) || typeof row.duplicate !== 'boolean') throw invalid();
+    return row as unknown as PointsGrantResult;
+  }
+  /** Owner only. */
+  async resetPreview(): Promise<PointsResetResult> {
+    const row = object(await this.request('/points/reset-preview', {}));
+    if (!Number.isSafeInteger(row.affected)) throw invalid();
+    return row as unknown as PointsResetResult;
+  }
+  /** Owner only. */
+  async resetPoints(requestId: string): Promise<PointsResetResult> {
+    const row = object(await this.request('/points/reset', { requestId }));
+    if (!Number.isSafeInteger(row.affected) || typeof row.duplicate !== 'boolean') throw invalid();
+    return row as unknown as PointsResetResult;
   }
   /** The batches, newest first (needs the owner role or invites.manage). */
   async inviteBatches(): Promise<InviteBatch[]> {

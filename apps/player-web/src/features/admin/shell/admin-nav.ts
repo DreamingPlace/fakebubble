@@ -3,18 +3,23 @@ import {
   hasAnyInvitePermission,
   hasCocreationPermission,
   hasConversationsPermission,
-  hasInvitePermission,
+  hasPointsPermission,
+  hasSystemPermission,
 } from '../../../../../../packages/contracts/web-admin-permissions.ts';
 
 /** Pages behind the sidebar plus 我的账号, which lives in the account menu rather than the first-level nav. */
 export type AdminPage =
+  | 'overview'
   | 'characters'
   | 'preview'
   | 'cocreation'
   | 'invites'
-  | 'ops'
+  | 'points'
+  | 'stats'
   | 'conversations'
+  | 'costs'
   | 'models'
+  | 'system'
   | 'members'
   | 'account';
 export type NavItem = { page: Exclude<AdminPage, 'account'>; label: string; icon: string };
@@ -22,6 +27,8 @@ export type NavGroup = { id: string; label: string; items: readonly NavItem[] };
 
 /** First-level navigation. The order is also the order of "the first page this administrator may use". */
 export const NAV_TREE: readonly NavGroup[] = [
+  // 概览 stands alone at the top: its group has no title of its own.
+  { id: 'overview', label: '', items: [{ page: 'overview', label: '概览', icon: 'home' }] },
   {
     id: 'roles',
     label: '角色',
@@ -34,14 +41,19 @@ export const NAV_TREE: readonly NavGroup[] = [
   {
     id: 'players',
     label: '玩家',
-    items: [{ page: 'invites', label: '邀请与额度', icon: 'ticket' }],
+    items: [
+      { page: 'invites', label: '邀请与额度', icon: 'ticket' },
+      { page: 'points', label: '积分发放', icon: 'coin' },
+      { page: 'stats', label: '玩家统计', icon: 'chart' },
+    ],
   },
-  { id: 'ops', label: '运营', items: [{ page: 'ops', label: '运营数据', icon: 'chart' }] },
+  { id: 'ops', label: '运营', items: [{ page: 'costs', label: '消耗表', icon: 'table' }] },
   {
     id: 'system',
     label: '系统',
     items: [
       { page: 'models', label: '模型与价格', icon: 'sliders' },
+      { page: 'system', label: '系统状态', icon: 'pulse' },
       { page: 'members', label: '管理员与权限', icon: 'shield' },
     ],
   },
@@ -52,29 +64,37 @@ export const NAV_TREE: readonly NavGroup[] = [
  * NAV_TREE - the groups and pages every deployment has - and are appended to their group by `navTree()`. `canSeePage` hides
  * them unless the session says the switch is on and the administrator holds the permission.
  */
-export const OPTIONAL_NAV: ReadonlyArray<NavItem & { group: string }> = [
-  { group: 'ops', page: 'conversations', label: '测试对话', icon: 'chat' },
+export const OPTIONAL_NAV: ReadonlyArray<NavItem & { group: string; first?: boolean }> = [
+  { group: 'ops', page: 'conversations', label: '测试对话', icon: 'chat', first: true },
 ];
-/** NAV_TREE plus the switch-gated pages, in their groups. */
+/** NAV_TREE plus the switch-gated pages, in their groups (an item marked `first` goes before the group's own pages). */
 export const navTree = (): NavGroup[] =>
-  NAV_TREE.map((group) => ({
-    ...group,
-    items: [
-      ...group.items,
-      ...OPTIONAL_NAV.filter((item) => item.group === group.id).map(({ group: _group, ...item }) => item),
-    ],
-  }));
+  NAV_TREE.map((group) => {
+    const extra = OPTIONAL_NAV.filter((item) => item.group === group.id).map(({ group: _group, first, ...item }) => ({
+      item,
+      first: first === true,
+    }));
+    return {
+      ...group,
+      items: [
+        ...extra.filter((entry) => entry.first).map((entry) => entry.item),
+        ...group.items,
+        ...extra.filter((entry) => !entry.first).map((entry) => entry.item),
+      ],
+    };
+  });
 
-/** What decides visibility. `inbox` and `metrics` say whether this page was given a client for them at all. */
+/** What decides visibility. `inbox` says whether this page was given a client for it at all. */
 export type NavAccess = {
   owner: boolean;
   permissions: readonly string[];
   inbox: boolean;
-  metrics: boolean;
   /** CHAT_REVIEW_ENABLED and this page has the client for 测试对话. Absent = off. */
   conversations?: boolean;
   /** This page was given a client for 模型与价格. Any administrator may read it (saving is decided by the server and `canManage`). */
   models?: boolean;
+  /** This page was given the clients for 概览 / 系统状态 / 积分发放 (Part 22b). Absent = those pages do not exist here. */
+  system?: boolean;
 };
 export const PAGES: readonly AdminPage[] = [...navTree().flatMap((g) => g.items.map((i) => i.page)), 'account'];
 export const isAdminPage = (value: string): value is AdminPage => (PAGES as readonly string[]).includes(value);
@@ -85,6 +105,8 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
   switch (page) {
     case 'account':
       return true;
+    case 'overview':
+      return access.system === true;
     case 'characters':
       return owner || hasAnyCharacterPermission(permissions, 'read');
     case 'preview':
@@ -95,8 +117,14 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
       return access.inbox && (owner || hasCocreationPermission(permissions, 'cocreation.read'));
     case 'invites':
       return owner || hasAnyInvitePermission(permissions);
-    case 'ops':
-      return access.metrics && owner;
+    case 'points':
+      return access.system === true && (owner || hasPointsPermission(permissions));
+    // 玩家统计 and 消耗表 are placeholders until Part 22c; only the owner is shown them.
+    case 'stats':
+    case 'costs':
+      return access.system === true && owner;
+    case 'system':
+      return access.system === true && (owner || hasSystemPermission(permissions));
     case 'conversations':
       return access.conversations === true && (owner || hasConversationsPermission(permissions));
     case 'models':
@@ -122,6 +150,10 @@ const ICON_PATHS: Record<string, string> = {
   chart: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
   shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
   chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  home: '<path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/>',
+  coin: '<circle cx="12" cy="12" r="9"/><path d="M9 10h6M9 14h6M12 7v10"/>',
+  table: '<rect x="4" y="5" width="16" height="14" rx="1"/><path d="M4 10h16M10 5v14"/>',
+  pulse: '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
   sliders:
     '<path d="M5 4v16M12 4v16M19 4v16"/><circle cx="5" cy="9" r="2"/><circle cx="12" cy="15" r="2"/><circle cx="19" cy="8" r="2"/>',
 };
@@ -132,7 +164,7 @@ export const navMarkup = () =>
   navTree()
     .map(
       (group) =>
-        `<div class="admin-nav-group" data-group="${group.id}"><p class="admin-nav-title">${group.label}</p>${group.items
+        `<div class="admin-nav-group" data-group="${group.id}">${group.label ? `<p class="admin-nav-title">${group.label}</p>` : ''}${group.items
           .map(
             (item) =>
               `<a class="admin-nav-item" href="#/${item.page}" data-page="${item.page}" title="${item.label}">${icon(item.icon)}<span>${item.label}</span></a>`,
