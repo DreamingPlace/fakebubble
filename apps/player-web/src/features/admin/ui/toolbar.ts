@@ -2,7 +2,14 @@ import { h } from '../../cocreation/h.ts';
 
 export type ToolbarFilter =
   | { kind: 'search'; id: string; label: string; placeholder?: string }
-  | { kind: 'select'; id: string; label: string; options: ReadonlyArray<readonly [value: string, label: string]> };
+  | {
+      kind: 'select';
+      id: string;
+      label: string;
+      options: ReadonlyArray<readonly [value: string, label: string]>;
+      /** The option the select opens on (default: the first). */
+      value?: string;
+    };
 /**
  * Sticky toolbar: a title, filters (search box, selects) and action buttons. `onChange` receives every filter's
  * current value keyed by id, after any change.
@@ -27,6 +34,7 @@ export function toolbar(options: {
     } else {
       input = h('select');
       for (const [value, text] of filter.options) input.append(h('option', { text, attrs: { value } }));
+      if (filter.value !== undefined) input.value = filter.value;
     }
     input.addEventListener('input', () => options.onChange?.(values()));
     input.addEventListener('change', () => options.onChange?.(values()));

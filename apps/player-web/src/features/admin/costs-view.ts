@@ -78,6 +78,8 @@ export function costsView(
         id: 'range',
         label: '范围',
         options: STATS_RANGES.map((days) => [String(days), `最近 ${days} 天`] as const),
+        // The range this view starts with.
+        value: String(range),
       },
     ],
     actions: [
@@ -89,8 +91,6 @@ export function costsView(
       void deps.run(() => load());
     },
   });
-  // The range select opens on 30 days, the range this view starts with.
-  (bar.root.querySelector('select') as HTMLSelectElement).value = String(range);
   root.replaceChildren(
     bar.root,
     rate,
