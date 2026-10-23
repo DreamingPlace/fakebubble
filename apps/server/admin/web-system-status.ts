@@ -209,7 +209,7 @@ export async function readOverview(
   store: BusinessStore,
   now: number,
   sources: WebSystemSources | undefined,
-): Promise<OverviewView> {
+): Promise<Omit<OverviewView, 'stats'>> {
   const day = new Date(now).toISOString().slice(0, 10);
   const start = Date.parse(`${day}T00:00:00Z`);
   const count = (status: string) =>

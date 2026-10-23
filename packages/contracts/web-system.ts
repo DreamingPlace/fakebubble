@@ -1,3 +1,5 @@
+import type { OverviewStats } from './web-stats.ts';
+
 /**
  * The administrator console's system pages (Part 22b): 概览, 系统状态, 积分发放. Counts, times and prices only: no player id,
  * email, nickname, IP hash or message content appears in any of these shapes.
@@ -134,9 +136,11 @@ export type PriceRenewalRow = {
 };
 export type RenewPricesResult = { rows: PriceRenewalRow[]; duplicate: boolean };
 
-/** 概览: today (UTC), the status warnings in one line, nothing else. */
+/** 概览: today (UTC), the status warnings in one line and - for the owner and stats.read - yesterday and this month's spend (Part 22c). */
 export type OverviewView = {
   day: string;
   today: { replies: number; voiceReplies: number; failedReplies: number; spendMicros: number | null };
   warnings: SystemWarnings;
+  /** Absent or null for an administrator without stats.read (and on a database older than migration 128). */
+  stats?: OverviewStats | null;
 };

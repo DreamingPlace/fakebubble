@@ -1,5 +1,9 @@
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
-import { hasPointsPermission, hasSystemPermission } from '../../../packages/contracts/web-admin-permissions.ts';
+import {
+  hasPointsPermission,
+  hasStatsPermission,
+  hasSystemPermission,
+} from '../../../packages/contracts/web-admin-permissions.ts';
 import { BUDGET_TOPUP_LIMITS } from '../../../packages/contracts/web-system.ts';
 import type {
   BudgetTopUpResult,
@@ -11,6 +15,7 @@ import type {
   RenewPricesResult,
 } from '../../../packages/contracts/web-system.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
+import type { CostsView, PlayerStatsView } from '../../../packages/contracts/web-stats.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { ModelFlags } from '../admission/web-model-settings.ts';
 import { bucketProviders } from '../budget/web-provider-budget-contract.ts';
@@ -29,6 +34,14 @@ import {
   selectPlayers,
 } from './web-points-admin.ts';
 import { readOverview, readSystemStatus, type WebSystemSources } from './web-system-status.ts';
+import {
+  costsCsv,
+  parseRange,
+  playerStatsCsv,
+  readCosts,
+  readOverviewStats,
+  readPlayerStats,
+} from './web-stats-admin.ts';
 
 type Auth = { cookie: unknown; csrf: unknown; origin: unknown };
 type Store = BusinessStore & ModelFlags;
@@ -81,7 +94,7 @@ export class WebSystemAdmin {
     this.security = options.security;
     this.emailKey = options.emailKey;
   }
-  private actor(auth: Auth, need: 'any' | 'system' | 'points' | 'owner') {
+  private actor(auth: Auth, need: 'any' | 'system' | 'points' | 'stats' | 'owner') {
     const actor = this.admin.authorize(auth.cookie, auth.csrf, auth.origin);
     if (need === 'any') return actor;
     if (need === 'owner') {
@@ -90,7 +103,12 @@ export class WebSystemAdmin {
     }
     const granted = this.admin.session(auth.cookie).member.permissions;
     ensure(
-      actor.role === 'owner' || (need === 'system' ? hasSystemPermission(granted) : hasPointsPermission(granted)),
+      actor.role === 'owner' ||
+        (need === 'system'
+          ? hasSystemPermission(granted)
+          : need === 'stats'
+            ? hasStatsPermission(granted)
+            : hasPointsPermission(granted)),
       'ADMIN_PERMISSION_REQUIRED',
     );
     return actor;
@@ -106,9 +124,39 @@ export class WebSystemAdmin {
   }
 
   /** 概览: any administrator who can log in. */
-  overview(auth: Auth): Promise<OverviewView> {
-    this.actor(auth, 'any');
-    return readOverview(this.store, this.clock.now(), this.ops);
+  async overview(auth: Auth): Promise<OverviewView> {
+    const actor = this.actor(auth, 'any');
+    const view = await readOverview(this.store, this.clock.now(), this.ops);
+    // Part 22c: yesterday's numbers and this month's spend are 玩家统计 / 消耗表 data: only for the owner and stats.read.
+    const stats =
+      actor.role === 'owner' || hasStatsPermission(this.admin.session(auth.cookie).member.permissions)
+        ? readOverviewStats(this.store, this.clock.now())
+        : null;
+    return { ...view, stats };
+  }
+
+  /** 玩家统计: the owner or stats.read. The range is read AFTER the permission, like every administrator body. */
+  playerStats(auth: Auth, input: unknown): PlayerStatsView {
+    this.actor(auth, 'stats');
+    return readPlayerStats(this.store, this.clock.now(), parseRange(exactly(input, ['range']).range));
+  }
+  /** 导出表格 of the same table: a CSV with a UTF-8 BOM; the administrator, the range and the row count are audited. */
+  exportPlayerStats(auth: Auth, input: unknown) {
+    const actor = this.actor(auth, 'stats');
+    const view = readPlayerStats(this.store, this.clock.now(), parseRange(exactly(input, ['range']).range));
+    this.audit(actor.memberId, 'stats-export:players', `${view.range}d/${view.days.length}`);
+    return { csv: playerStatsCsv(view), rows: view.days.length };
+  }
+  /** 消耗表: the owner or stats.read. */
+  costs(auth: Auth, input: unknown): CostsView {
+    this.actor(auth, 'stats');
+    return readCosts(this.store, this.clock.now(), parseRange(exactly(input, ['range']).range));
+  }
+  exportCosts(auth: Auth, input: unknown) {
+    const actor = this.actor(auth, 'stats');
+    const view = readCosts(this.store, this.clock.now(), parseRange(exactly(input, ['range']).range));
+    this.audit(actor.memberId, 'stats-export:costs', `${view.range}d/${view.rows.length}`);
+    return { csv: costsCsv(view), rows: view.rows.length };
   }
 
   /** 系统状态: the owner or system.read. Read-only. */

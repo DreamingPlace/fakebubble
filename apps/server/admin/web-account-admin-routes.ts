@@ -55,11 +55,12 @@ export async function routeWebAccountAdmin(
       return { status: 200, body: chatReview.export(actor, body(['characterId', 'code', 'archived']) as never) };
     ensure(false, 'NOT_FOUND');
   }
-  // Part 22b: 概览, 系统状态 and 积分发放. The body goes to the handler unread: each checks its permission before it looks at the body.
+  // Part 22b: 概览, 系统状态 and 积分发放 (Part 22c adds 玩家统计 and 消耗表 under stats/). The body goes to the handler unread: each checks its permission before it looks at the body.
   if (
     path.startsWith(`${base}/overview/`) ||
     path.startsWith(`${base}/system/`) ||
-    path.startsWith(`${base}/points/`)
+    path.startsWith(`${base}/points/`) ||
+    path.startsWith(`${base}/stats/`)
   ) {
     auth();
     ensure(system, 'NOT_FOUND');
@@ -80,6 +81,11 @@ export async function routeWebAccountAdmin(
     if (action === 'points/grant') return { status: 200, body: system.pointsGrant(actor, req.body, req.trustedIpHash) };
     if (action === 'points/reset-preview') return { status: 200, body: system.resetPreview(actor, req.body) };
     if (action === 'points/reset') return { status: 200, body: system.resetPoints(actor, req.body) };
+    // Part 22c: 玩家统计 and 消耗表, each with its 导出表格. The permission is checked before the body is read.
+    if (action === 'stats/players') return { status: 200, body: system.playerStats(actor, req.body) };
+    if (action === 'stats/players-export') return { status: 200, body: system.exportPlayerStats(actor, req.body) };
+    if (action === 'stats/costs') return { status: 200, body: system.costs(actor, req.body) };
+    if (action === 'stats/costs-export') return { status: 200, body: system.exportCosts(actor, req.body) };
     ensure(false, 'NOT_FOUND');
   }
   if (path.startsWith(`${base}/cocreation/`)) {
