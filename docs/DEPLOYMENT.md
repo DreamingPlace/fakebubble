@@ -424,6 +424,25 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 
 **现象：** 22x 部署后 `purging=2, failing=2`。**根因（已用失败测试复现）：** 迁移 126 把旧 `kind='invite'` 主体变成已过期的访客，但没有动 `web_invite_grants` 及其子表；清除末尾的 `cleared` 审计（`admission/web-lifecycle-audit.ts`）拒绝仍有**未撤销授权**的世界，报 `WEB_RETENTION_UNEXPECTED_WORLD_DATA`（`phase=clearDatabase`、`sub=audit_cleared`）。**修复：** `identity/web-player-purge.ts` 的 `purgeLegacyInvites` 在清除同一事务里、按外键顺序删除该主体的 `web_invite_redemptions`、两种回执和 `web_invite_credentials`，并**撤销**授权（授权行作为已允许的外壳保留：只有 id 和时间）；它由 `purgePlayerLogins` 调用，所以 Cloudflare 的 `clearDatabase`、Node 清除器和玩家自己的删除请求共用同一个实现，`playerLoginsRemain` 也会在还剩任何一行时让审计失败。已卡住的两个主体在部署后的下一次闹钟（退避内最多 6 小时）自行完成，无需手工操作。
 
+### 玩家统计与消耗表（Part 22c，迁移 128）
+
+**迁移 128（`128_stats.sql`，sha256 `44271b05dc49d7f26d59a1f5537249707d8d66863bd4080d7146ea3b8f25364f`）：** 共 **53 步**（`expected-migrations`，inline 与 R2 各 53，最后一步 `version 128`，两边同一份 SQL；1–127 一个字节没动，127 仍是 `3cc1d4c0…54ecf`）。新增两张表、三个触发器和一列：`web_stats_daily`（UTC 日、指标、角色、所选模型、数值，只有计数，没有玩家 id、操作 id、内容）、`web_daily_active`（当天谁活跃，只存不可逆标记，见下）、`web_operations` 上的 **一个** `AFTER UPDATE OF status` 触发器（回复）、`web_points_events` 上的 `AFTER INSERT` 触发器（点数）、`web_player_logins` 上的 `AFTER INSERT` 触发器（新注册），以及 `web_provider_usage.ledger_charged_micros`（`ALTER ADD COLUMN`，默认 0）。本地：`scripts/web-provider.ts migrate-stats <root>`（新实例的 `migrate` 一路到 128）；Cloudflare：账本版本 128，已在 127 的权威启动时自动补上。版本白名单加上 128 的位置同 127（见 docs/STATUS.md）。**不回填**：128 之前的操作、点数、注册一概不计；页头写“统计自 YYYY-MM-DD 起（UTC）”（迁移那天），之前的日子没有数据。**部署：** 先确认 `inspect` 的 `migrations.matches: true`；回退：新表和触发器不被旧代码读到，把代码退回即可，不需要回滚迁移（触发器仍会写计数，无害）。
+
+**为什么用触发器、为什么不在报表时读表。** `web_operations`、`web_operation_models`、`web_points_events`、`web_provider_attempts` 的行会被清除（删除账号、不活跃清理、试用到期清理）。所以没有任何统计在看报表时从这些表现算：每个计数都在事件发生时、同一个事务里写进 `web_stats_daily`（和已有的 `web_provider_usage` 同一个做法）。清除一个玩家不会改变任何一天的数字。
+
+**写在哪里**（测试逐处证明，见 docs/STATUS.md）：
+- **回复（published / failed / unknown，语音回复）：** `web_operations` 上的一个触发器，`status` 从非终态变成 published / failed / unknown 时触发一次；终态 = published、failed、cancelled、unknown（UNKNOWN 永不重试，之后的过期不会再计一次；cancelled 不计）。日期 = 玩家发消息那天（`created_at` 的 UTC 日），模型 = `web_operation_models.chosen`（没有这一行，即模型选择关闭，记为空），角色 = 该操作的角色；语音回复 = 已发布且至少一条气泡带音频（文字回退不算）。状态写入点很多（发布器、调度账本、准入、阶段队列、过期/取消/恢复、清除、角色删除），所以用触发器而不是业务代码；重放和对终态行的第二次更新不计数。
+- **点数：** `web_points_events` 的 `AFTER INSERT`（追加写）：spent、refunded（带所选模型）、granted、reset、daily_refill、bonus，数值 = 当天动的点数。
+- **新注册：** `web_player_logins` 的 `AFTER INSERT`。**新访客：** `WebProviderApplication.bootstrap`，只在**新发**访客身份时（回头的 cookie 不计）。
+- **活跃 / 聊天人数：** 同一个 bootstrap 事务里 `playerAccounts.touch()` 之后写一条 `visit` 标记（“当天打开过网站”），`WebAdmission.admit` 成功后写一条 `chat` 标记（“当天发过消息”）；kind = 有邮箱登录为 registered，否则 guest（同一天注册的，记为 registered，不会算两次）。
+- **清除开始（T1，每个主体一次）：** `WebCloudRetention.markExpired`，在把状态改成 `purging` 的同一个事务里：`purge_deleted`（玩家自己删除账号 / 清除本设备数据）、`purge_inactive`（有登录、180 天没来）、`purge_expired`（试用到期的访客）。旧的本机清除器 `WebRetentionCleaner` 只能在合成库 110 / 112 上运行，那里没有这些表，所以没有改动。
+- **D1 / D7（只统计注册玩家，访客不进队列）：** 业务对象已有的闹钟（`WebCloudRetention.sweep`，每个 UTC 日最多做一次）在 D+2 天为 D 日队列写 `d1_cohort`、`d1_retained`，D+8 天写 `d7_*`，写一次后冻结。队列人数 = 当天的 `signups` 计数（所以清除前删除账号的人仍算在队列里）；留存 = 用这一天注册的、仍然存在的登录重新算出 D+1（D+7）那天的 `visit` 标记是否存在；已删除的人算队列、不算留存。D7 = 恰好第 7 天有访问。
+- **账本扣款：** `recordUsage` 同一处把该次调用的 `charged_micros` 加进 `web_provider_usage.ledger_charged_micros`；迁移前的日子页面显示“—”。
+
+**活跃标记。** `marker = HMAC-SHA256(key, day ‖ 0x00 ‖ principalId)`，`key` 由 `SEAL_KEY` 经 HKDF-SHA256 派生（info 为 `stats-active-v1`）。业务对象能为它已知的主体重新算出标记（D1 / D7 收口），没有人能从标记反推出主体。保存 35 天，由闹钟删除；永不显示、导出或写日志。每个已结束的日子的人数在删除标记之前写进 `web_stats_daily`（`active_*`、`chat_*`），所以 90 天的表不依赖 35 天的标记；今天的人数直接数标记。闹钟在还有标记或队列要处理时每个 UTC 日零点后醒一次。
+
+**页面**（桌面管理后台，主管理员或 `stats.read`；`stats.read` 只有主管理员能给，不在任何预设里，只在“全部”里，同 `system.read` / `points.grant`）：玩家 → **玩家统计**（最近 7 / 30 / 90 天；按天表 + 合计行，新的在前；按角色 = 角色**名字**；按模型；页头“统计自 … 起（UTC）”；导出表格）、运营 → **消耗表**（`web_provider_usage` 每天 × 供应商 × 模型 × 阶段：调用、输入/缓存/输出令牌、字节、列表价、账本扣款、回复；每天的“每条成功回复成本”和消耗积分；本 UTC 月合计的美元与人民币，汇率只有一个常量 `USD_CNY = 6.7`（`config/web-stats.ts`），页面写“按 1 美元 ≈ 6.7 元估算”；本月含 Fish Drama 3 计价变化日（2026-11-12）时多一行备注）。**概览**多一行昨天的新注册 / 活跃 / 回复和本月花费（人民币），只给主管理员和 `stats.read`，其他管理员收到 `null`。路由（`POST /api/web/provider/admin/stats/...`，会话 + CSRF + Origin，**先查权限再读请求体**）：`stats/players`、`stats/players-export`、`stats/costs`、`stats/costs-export`；没有 `stats.read` 一律 403。导出是带 UTF-8 BOM 的 CSV（复用 22a2 的 `csvDocument`，含 `= + - @` 前加制表符的规则），每次导出记审计 `stats-export:players|costs`（管理员、范围、行数）。占位页“下个版本提供”已移除，客户端没有调用任何已删除的路由。
+
 ### 登录会话 Cookie
 
 - 有邮箱登录的玩家（以及注册当下的会话）使用 `Max-Age=34560000`（400 天，浏览器上限）的会话 Cookie，每次成功 bootstrap 重新下发；访客仍是 24 小时（开启免费档后为试用期 + 宽限期）。`__Host-`、`Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/` 不变。
