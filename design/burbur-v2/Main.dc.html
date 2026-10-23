@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Burbur 首页与聊天原型</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit}
+@keyframes fbSheen { from { background-position: 160% 0 } to { background-position: -60% 0 } }
+@keyframes fbEnter { from { opacity: 0; transform: translateY(14px) } to { opacity: 1; transform: none } }
+@keyframes fbPop { 0% { opacity: 0; transform: translateY(10px) scale(0.9) } 70% { opacity: 1; transform: translateY(-1px) scale(1.02) } 100% { opacity: 1; transform: none } }
+@keyframes fbBars { 0%, 100% { transform: scaleY(0.45) } 50% { transform: scaleY(1) } }
+.fb-sheen { animation: fbSheen 900ms cubic-bezier(0.2, 0.82, 0.24, 1) 120ms both }
+.fb-enter { animation: fbEnter 360ms cubic-bezier(0.2, 0.82, 0.24, 1) 300ms both }
+.fb-pop { animation: fbPop 300ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+.fb-bar { animation: fbBars 700ms ease-in-out infinite; transform-origin: center }
+@media (prefers-reduced-motion: reduce) {
+  .fb-sheen, .fb-enter, .fb-pop, .fb-bar { animation-duration: 1ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important }
+}
+</style>
+</helmet>
+<div onPointerDown="{{swDown}}" onPointerUp="{{swUp}}" style="width: 390px; height: 844px; position: relative; overflow: hidden; touch-action: pan-y; background: {{t.paper}}; color: {{t.ink}}; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif">
+
+  <sc-for list="{{auras}}" as="a" hint-placeholder-count="4">
+    <div aria-hidden="true" style="position: absolute; inset: 0; background: {{a.bg}}; opacity: {{a.op}}; transition: opacity 480ms cubic-bezier(0.2, 0.82, 0.24, 1)"></div>
+  </sc-for>
+
+  <header style="position: absolute; left: 0; right: 0; top: 47px; height: 56px; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; opacity: {{chromeOp}}; transform: {{chromeUp}}; transition: opacity 240ms ease, transform 360ms cubic-bezier(0.2, 0.82, 0.24, 1); pointer-events: {{chromePe}}">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <dc-import name="Hand" text="burbur" size="40" color="{{t.ink}}" weight="2" hint-size="108px,40px"></dc-import>
+    </div>
+    <span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.04em; color: {{t.sub}}">{{tagline}}</span>
+  <svg width="132" height="59" viewBox="0 0 132 59" preserveAspectRatio="none" style="position: absolute; left: 267px; top: 1px; width: 132px; height: 59px; overflow: visible; fill: none; stroke: #8a8378; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M36 8 C27.7 8 19.3 8 11 8 C11 14.9 8.8 26.4 11.5 32.8 C13.6 37.6 19.5 41.3 23 45 C39.3 62 59.8 59 82.3 59 C98.6 59 127 62.3 131.8 40.5 C141 -1.8 94.4 4.2 67.8 2 C55.7 1 41.1 -2.6 29 0.3 C17.8 2.9 11.3 13.6 0 16 C1.6 17.3 3.5 18.8 5 20" vector-effect="non-scaling-stroke"></path></svg></header>
+
+  <sc-for list="{{slots}}" as="s" hint-placeholder-count="5">
+    <div style="position: absolute; left: {{s.left}}px; top: {{s.top}}px; width: {{s.w}}px; height: {{s.h}}px; box-sizing: border-box; padding: {{s.pad}}px; border-radius: {{s.rad}}px; border: 1px solid {{s.sleeveBorder}}; background: {{s.sleeveBg}}; box-shadow: {{s.shadow}}; transform: {{s.transform}}; opacity: {{s.opacity}}; z-index: {{s.z}}; transition: left 520ms cubic-bezier(0.2, 0.82, 0.24, 1), top 520ms cubic-bezier(0.2, 0.82, 0.24, 1), width 520ms cubic-bezier(0.2, 0.82, 0.24, 1), height 520ms cubic-bezier(0.2, 0.82, 0.24, 1), padding 520ms cubic-bezier(0.2, 0.82, 0.24, 1), border-radius 520ms cubic-bezier(0.2, 0.82, 0.24, 1), transform 440ms cubic-bezier(0.2, 0.82, 0.24, 1), opacity 260ms ease">
+      <div style="position: relative; width: 100%; height: 100%; border-radius: {{s.innerRad}}px; overflow: hidden; background: {{s.cardBg}}; transition: border-radius 520ms cubic-bezier(0.2, 0.82, 0.24, 1)">
+
+        <div style="position: absolute; inset: 0; display: flex; flex-direction: column; padding: 16px 16px 14px; box-sizing: border-box; opacity: {{s.faceOp}}; transition: opacity 180ms ease">
+          <div style="display: flex; justify-content: space-between; font-family: ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.06em; color: {{s.faceSub}}">
+            <span>burbur</span><span>No.{{s.no}}</span>
+          </div>
+          <sc-if value="{{s.isChar}}" hint-placeholder-val="{{ true }}">
+            <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px">
+              <div style="font-size: {{s.nameSize}}px; font-weight: 900; letter-spacing: -0.05em; line-height: 0.95; color: {{t.ink}}">{{s.name}}</div>
+              <dc-import name="Hand" text="{{s.latin}}" size="44" color="{{s.handColor}}" weight="1.9" hint-size="180px,44px"></dc-import>
+            </div>
+            <div style="align-self: flex-start; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 999px; background: {{t.pill}}; font-size: 12px; font-weight: 500; margin-bottom: 10px">
+              <i style="width: 7px; height: 7px; border-radius: 50%; background: {{s.accent}}"></i>{{s.status}} · <span style="font-family: ui-monospace, Menlo, monospace">UTC+8 03:12</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; height: 52px; padding: 0 14px 0 8px; border-radius: 999px; background: {{t.voice}}; box-shadow: inset 0 0 0 1px {{t.voiceBorder}}">
+              <span aria-hidden="true" style="width: 36px; height: 36px; flex-shrink: 0; border-radius: 50%; background: {{s.accent}}; color: {{t.playFg}}; display: flex; align-items: center; justify-content: center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+              </span>
+              <span style="flex-grow: 1; min-width: 0; font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.line}}</span>
+              <span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: {{t.sub}}">{{s.dur}}</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{s.isReserve}}" hint-placeholder-val="{{ false }}">
+            <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px">
+              <dc-import name="Hand" text="?" size="120" color="{{t.sub}}" weight="1.6" hint-size="50px,120px"></dc-import>
+              <span style="font-size: 14px; font-weight: 700; color: {{t.ink}}">新朋友还未到来</span>
+            </div>
+            <div style="align-self: center; transform: rotate(-3deg); background: {{t.sticker}}; color: {{t.stickerFg}}; border-radius: 4px; padding: 6px 12px; font-size: 12px; font-weight: 700; box-shadow: 0 4px 12px rgba(40, 24, 60, 0.14)">盲抽小卡 · 敬请期待</div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{s.sheen}}" hint-placeholder-val="{{ false }}">
+          <div class="fb-sheen" aria-hidden="true" style="position: absolute; inset: 0; pointer-events: none; mix-blend-mode: {{t.sheenBlend}}; background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.7) 44%, rgba(255, 200, 244, 0.6) 50%, rgba(180, 236, 255, 0.6) 56%, transparent 70%); background-size: 250% 100%"></div>
+        </sc-if>
+
+        <sc-if value="{{s.chatOn}}" hint-placeholder-val="{{ false }}">
+          <div class="fb-enter" style="position: absolute; inset: 0; display: flex; flex-direction: column; background: {{chatBg}}">
+            <div style="height: 76px; flex-shrink: 0; display: grid; grid-template-columns: 56px 1fr 56px; align-items: center; background: {{t.head}}; box-shadow: inset 0 -1px 0 {{t.headLine}}; position: relative">
+              <button type="button" aria-label="返回" onClick="{{close}}" style="width: 44px; height: 44px; margin-left: 6px; border: none; border-radius: 50%; background: none; color: {{t.ink}}; display: flex; align-items: center; justify-content: center; cursor: pointer">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+              </button>
+              <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; position: relative">
+                <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 50%; padding: 2px; box-sizing: border-box; background: {{cur.ring}}">
+                  <span style="width: 100%; height: 100%; border-radius: 50%; border: 1.5px solid {{t.paper}}; box-sizing: border-box; background: {{cur.dot}}; color: #141414; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900">{{cur.mark}}</span>
+                </span>
+                <strong style="font-size: 16px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1">{{cur.name}}</strong>
+                <sc-if value="{{recording}}" hint-placeholder-val="{{ false }}">
+                  <span role="status" style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: {{t.sub}}">
+                    <span style="display: flex; gap: 2px; align-items: center; height: 10px" aria-hidden="true"><i class="fb-bar" style="width: 2px; height: 10px; border-radius: 1px; background: {{cur.accent}}"></i><i class="fb-bar" style="width: 2px; height: 10px; border-radius: 1px; background: {{cur.accent}}; animation-delay: 120ms"></i><i class="fb-bar" style="width: 2px; height: 10px; border-radius: 1px; background: {{cur.accent}}; animation-delay: 240ms"></i></span>
+                    正在录语音…
+                  </span>
+                </sc-if>
+                <sc-if value="{{idle}}" hint-placeholder-val="{{ true }}">
+                  <span style="display: flex; align-items: center; gap: 5px; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: {{t.sub}}"><i style="width: 6px; height: 6px; border-radius: 50%; background: {{cur.accent}}"></i>{{cur.status}} · UTC+8 03:14</span>
+                </sc-if>
+              <div style="font-size: 16px; line-height: 1; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; position: absolute; left: 166px; top: 3px">delete&nbsp;</div></div>
+              <button type="button" aria-label="更多" style="width: 44px; height: 44px; justify-self: end; margin-right: 6px; border: none; border-radius: 50%; background: none; color: {{t.ink}}; display: flex; align-items: center; justify-content: center">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="18.5" cy="12" r="1.6"></circle></svg>
+              </button>
+            <svg width="38" height="34" viewBox="0 0 38 34" preserveAspectRatio="none" style="position: absolute; left: 179px; top: 4px; width: 38px; height: 34px; overflow: visible; fill: none; stroke: #8a8378; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M16 0 C11.9 0.3 5.1 0.2 2 3.3 C-2.5 7.7 1.3 23.4 3 29 C7.9 29.9 25.7 34.5 29 33.8 C45.7 30.3 34.4 10.7 26 5 C22 2.3 16.4 2.2 12 0" vector-effect="non-scaling-stroke"></path></svg></div>
+
+            <div role="log" aria-label="消息" style="flex-grow: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; padding: 14px 16px 10px; overflow: hidden">
+              <div style="align-self: center; transform: rotate(-1.5deg); background: {{t.sticker}}; color: {{t.stickerFg}}; border-radius: 4px; padding: 6px 12px; font-size: 12px; box-shadow: 0 4px 12px rgba(40, 24, 60, 0.12)">{{cur.name}}已添加了你，来打个招呼吧</div>
+              <sc-for list="{{msgs}}" as="m" hint-placeholder-count="1">
+                <sc-if value="{{m.mine}}" hint-placeholder-val="{{ false }}">
+                  <div class="fb-pop" style="align-self: flex-end; max-width: 76%; background: {{t.out}}; color: {{t.outFg}}; border-radius: 22px 6px 22px 22px; padding: 11px 16px; font-size: 16px; line-height: 1.45">{{m.text}}</div>
+                </sc-if>
+                <sc-if value="{{m.hers}}" hint-placeholder-val="{{ true }}">
+                  <div class="fb-pop" style="align-self: flex-start; width: 286px; background: {{t.inBubble}}; box-shadow: inset 0 0 0 1px {{t.inBorder}}; border-radius: 6px 22px 22px 22px; padding: 8px 8px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px">
+                    <div style="display: flex; align-items: center; gap: 10px">
+                      <button type="button" aria-label="播放语音" style="width: 38px; height: 38px; flex-shrink: 0; border: none; border-radius: 50%; background: {{cur.accent}}; color: {{t.playFg}}; display: flex; align-items: center; justify-content: center">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
+                      </button>
+                      <span style="display: flex; align-items: center; gap: 2px; height: 20px; flex-grow: 1; overflow: hidden" aria-hidden="true">
+                        <sc-for list="{{bars}}" as="b" hint-placeholder-count="26"><i style="width: 3px; flex-shrink: 0; border-radius: 2px; height: {{b.h}}px; background: {{cur.accent}}; opacity: 0.55"></i></sc-for>
+                      </span>
+                      <span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: {{t.sub}}; padding-right: 6px">{{m.dur}}</span>
+                    </div>
+                    <p style="margin: 0; padding: 0 8px; font-size: 16px; line-height: 1.55">{{m.text}}</p>
+                  </div>
+                </sc-if>
+              </sc-for>
+            </div>
+
+            <div style="flex-shrink: 0; display: flex; gap: 8px; padding: 0 14px 8px; flex-wrap: wrap">
+              <sc-for list="{{chips}}" as="c" hint-placeholder-count="3">
+                <button type="button" onClick="{{c.send}}" style="height: 36px; padding: 0 14px; border: none; border-radius: 999px; background: {{t.pill}}; box-shadow: inset 0 0 0 1px {{t.headLine}}; color: {{t.ink}}; font: inherit; font-size: 14px; cursor: pointer">{{c.text}}</button>
+              </sc-for>
+            </div>
+            <div style="flex-shrink: 0; padding: 0 12px 12px">
+              <div style="display: flex; align-items: center; gap: 6px; padding: 5px; border-radius: 28px; background: {{t.composer}}; box-shadow: inset 0 0 0 1px {{t.composerBorder}}">
+                <label for="reply" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">回复{{cur.name}}</label>
+                <textarea id="reply" rows="1" enterkeyhint="send" placeholder="说点什么…" style="flex-grow: 1; min-height: 44px; box-sizing: border-box; resize: none; padding: 11px 14px; border: none; background: none; color: {{t.ink}}; font: inherit; font-size: 16px; line-height: 1.4; outline: none"></textarea>
+                <button type="button" aria-label="发送消息" style="width: 44px; height: 44px; flex-shrink: 0; border: none; border-radius: 50%; background: {{t.send}}; color: {{t.sendFg}}; display: flex; align-items: center; justify-content: center">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+      <sc-if value="{{s.canOpen}}" hint-placeholder-val="{{ false }}">
+        <button type="button" aria-label="和{{s.name}}聊天" onClick="{{open}}" style="position: absolute; inset: 0; border: none; border-radius: 30px; background: none; cursor: pointer"></button>
+      </sc-if>
+      <sc-if value="{{s.isSide}}" hint-placeholder-val="{{ false }}">
+        <button type="button" aria-label="切换到{{s.label}}" onClick="{{s.pick}}" style="position: absolute; inset: 0; border: none; border-radius: 30px; background: none; cursor: pointer"></button>
+      </sc-if>
+    </div>
+  </sc-for>
+
+  <div style="position: absolute; left: 0; right: 0; top: 548px; display: flex; flex-direction: column; align-items: center; gap: 6px; opacity: {{chromeOp}}; transform: {{chromeDown}}; transition: opacity 240ms ease, transform 360ms cubic-bezier(0.2, 0.82, 0.24, 1); pointer-events: {{chromePe}}">
+    <sc-if value="{{curIsChar}}" hint-placeholder-val="{{ true }}">
+      <button type="button" onClick="{{open}}" style="width: 300px; height: 52px; border: none; border-radius: 999px; background: {{t.cta}}; color: {{t.ctaFg}}; display: flex; align-items: center; justify-content: center; gap: 8px; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer">和{{cur.name}}聊天 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"></path></svg></button>
+    </sc-if>
+    <sc-if value="{{curIsReserve}}" hint-placeholder-val="{{ false }}">
+      <button type="button" disabled="" style="width: 300px; height: 52px; border: none; border-radius: 999px; background: {{t.pill}}; box-shadow: inset 0 0 0 1px {{t.headLine}}; color: {{t.sub}}; font: inherit; font-size: 16px; font-weight: 700">新朋友还未到来</button>
+    </sc-if>
+    <span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: {{t.sub}}">免费 5 次 · 不用注册</span>
+  </div>
+
+  <nav aria-label="选择人物" style="position: absolute; left: 0; right: 0; top: 640px; height: 110px; opacity: {{chromeOp}}; transform: {{chromeDown}}; transition: opacity 240ms ease, transform 360ms cubic-bezier(0.2, 0.82, 0.24, 1); pointer-events: {{chromePe}}">
+    <sc-for list="{{ring}}" as="r" hint-placeholder-count="9">
+      <button type="button" onClick="{{r.pick}}" aria-label="{{r.label}}" aria-pressed="{{r.on}}" style="position: absolute; left: {{r.x}}px; top: {{r.y}}px; width: 48px; height: 48px; padding: 0; border: none; border-radius: 50%; background: {{r.fill}}; box-shadow: {{r.ringShadow}}; color: #141414; display: flex; align-items: center; justify-content: center; font: inherit; font-size: 17px; font-weight: 900; transform: scale({{r.scale}}); opacity: {{r.op}}; z-index: {{r.z}}; cursor: pointer; transition: left 440ms cubic-bezier(0.2, 0.82, 0.24, 1), top 440ms cubic-bezier(0.2, 0.82, 0.24, 1), transform 440ms cubic-bezier(0.2, 0.82, 0.24, 1), opacity 300ms ease">{{r.mark}}</button>
+    </sc-for>
+    <span style="position: absolute; left: 0; right: 0; top: 66px; text-align: center; font-size: 12px; font-weight: 700">{{cur.label}}</span>
+  </nav>
+
+  <div style="position: absolute; left: 0; right: 0; top: 744px; text-align: center; font-size: 11px; color: {{t.sub}}; opacity: {{chromeOp}}; transition: opacity 240ms ease">回复由AI生成 · 用户协议 · 隐私政策</div>
+
+  <div style="position: absolute; left: 0; right: 0; top: 0; height: 47px; z-index: 500; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">status bar · system</div>
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 80px; z-index: 500; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">Safari address bar · system</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"night":{"editor":"boolean","default":false},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { active: 6, phase: 'browse', msgs: [], recording: false };
+    this.timers = [];
+  }
+  componentWillUnmount() {
+    this.timers.forEach(function (id) { clearTimeout(id); });
+  }
+  later(fn, ms) {
+    this.timers.push(setTimeout(fn, ms));
+  }
+  renderVals() {
+    var self = this;
+    var night = !!this.props.night;
+    var N = 15, active = this.state.active, chat = this.state.phase === 'chat';
+    var T = night ? {
+      ink: '#F5F3F7', sub: '#B8B3C4', paper: '#0C0B10', sleeveBorder: 'rgba(255, 255, 255, 0.2)', sleeveBg: 'rgba(255, 255, 255, 0.06)',
+      shadow: '0 24px 60px rgba(0, 0, 0, 0.5)', pill: 'rgba(255, 255, 255, 0.12)', voice: 'rgba(255, 255, 255, 0.1)', voiceBorder: 'rgba(255, 255, 255, 0.14)',
+      cta: '#F5F3F7', ctaFg: '#0C0B10', head: 'rgba(12, 11, 16, 0.6)', headLine: 'rgba(255, 255, 255, 0.1)', inBubble: 'rgba(255, 255, 255, 0.08)', inBorder: 'rgba(255, 255, 255, 0.12)',
+      out: '#F5F3F7', outFg: '#0C0B10', composer: 'rgba(255, 255, 255, 0.08)', composerBorder: 'rgba(255, 255, 255, 0.14)', send: '#F5F3F7', sendFg: '#0C0B10',
+      sticker: '#F5F3F7', stickerFg: '#3F3F3F', resA: '#17141E', resB: '#1E1A28', playFg: '#0C0B10', sheenBlend: 'screen'
+    } : {
+      ink: '#141414', sub: '#4A4A4A', paper: '#FAF8F6', sleeveBorder: 'rgba(255, 255, 255, 0.85)', sleeveBg: 'rgba(255, 255, 255, 0.3)',
+      shadow: '0 24px 60px rgba(40, 24, 60, 0.18)', pill: 'rgba(255, 255, 255, 0.72)', voice: '#FFFFFF', voiceBorder: 'rgba(20, 20, 20, 0.04)',
+      cta: '#141414', ctaFg: '#FFFFFF', head: 'rgba(255, 255, 255, 0.72)', headLine: 'rgba(20, 20, 20, 0.1)', inBubble: 'rgba(255, 255, 255, 0.9)', inBorder: '#FFFFFF',
+      out: '#141414', outFg: '#FFFFFF', composer: 'rgba(255, 255, 255, 0.9)', composerBorder: '#FFFFFF', send: '#141414', sendFg: '#FFFFFF',
+      sticker: '#FFFFFF', stickerFg: '#3F3F3F', resA: '#F3EEF8', resB: '#FFFFFF', playFg: '#FFFFFF', sheenBlend: 'soft-light'
+    };
+    var C = {
+      6: { name: '瓜瓜', mark: '瓜', latin: 'guagua', no: '001', status: '还没睡', size: 96, line: '我才放学回来，让你等久了', dur: '0:06',
+        reply: '今天累不累？先喝口水，再慢慢跟我说。',
+        day: ['#FFD3B8', '#FFEBC9', '#FFB295', '#E8561E'], night: ['#FF6A3D', '#FFB547', '#C2366B', '#FF8A5C'] },
+      7: { name: 'JOJO', mark: 'J', latin: 'jojo', no: '002', status: '打游戏中', size: 78, line: 'Thanks Kobe，你终于来了', dur: '0:04',
+        reply: '收到！等我打完这把，马上听你说。',
+        day: ['#C6E4FF', '#D5F6EE', '#97C8F5', '#2F7BEA'], night: ['#2F6BFF', '#23D5C4', '#6A3DFF', '#5AA2FF'] },
+      8: { name: '陈吉米', mark: '吉', latin: 'chen jimi', no: '003', status: '在线', size: 74, line: '打瓦请按1，王者请按2，其他事请挂断', dur: '0:07',
+        reply: '嗯，我在。说吧，我听着。',
+        day: ['#DCD2FF', '#FFD8EE', '#BBA4FF', '#7C4DEB'], night: ['#8B5CFF', '#FF4FB8', '#4B2BC9', '#B18CFF'] }
+    };
+    var NEU = night ? ['#3A3450', '#2A2638', '#4A4060', '#F5F3F7'] : ['#E9E2F2', '#F2EEE9', '#DCD6E6', '#141414'];
+    var pal = function (i) { var c = C[i]; return c ? (night ? c.night : c.day) : NEU; };
+    var alpha = function (hex, a) { return night ? hex + a : hex; };
+    var aura = function (p) {
+      return 'radial-gradient(60% 40% at 12% 20%, ' + alpha(p[0], '73') + ' 0%, transparent 70%), radial-gradient(55% 38% at 92% 48%, ' + alpha(p[1], '4D') + ' 0%, transparent 70%), radial-gradient(75% 45% at 40% 98%, ' + alpha(p[2], '80') + ' 0%, transparent 70%), ' + T.paper;
+    };
+    var off = function (i) { var f = ((i - active) % N + N) % N; return f > Math.floor(N / 2) ? f - N : f; };
+    var pick = function (i) { return function () { if (self.state.phase === 'browse') self.setState({ active: i }); }; };
+
+    var slots = [];
+    for (var i = 0; i < N; i++) {
+      (function (i) {
+        var o = off(i), d = Math.abs(o), sg = o < 0 ? -1 : 1, c = C[i], p = pal(i);
+        if (d > 3) d = 3;
+        var isActive = o === 0, open = isActive && chat;
+        var tf = d === 0 ? 'none'
+          : d === 1 ? 'translateX(' + (sg * 182) + 'px) translateY(36px) rotate(' + (sg * 9) + 'deg) scale(0.8)'
+          : d === 2 ? 'translateX(' + (sg * 300) + 'px) translateY(76px) rotate(' + (sg * 16) + 'deg) scale(0.66)'
+          : 'translateX(' + (sg * 390) + 'px) translateY(110px) rotate(' + (sg * 22) + 'deg) scale(0.55)';
+        var cardBg = c
+          ? (night ? 'linear-gradient(165deg, ' + p[2] + ' 0%, #1C1724 52%, #110F16 100%)' : 'linear-gradient(165deg, ' + p[2] + ' 0%, ' + p[0] + ' 45%, #FFFFFF 100%)')
+          : 'repeating-linear-gradient(135deg, ' + T.resA + ' 0 12px, ' + T.resB + ' 12px 24px)';
+        slots.push({
+          left: open ? 0 : 61, top: open ? 47 : 112, w: open ? 390 : 268, h: open ? 717 : 420,
+          pad: open ? 0 : 7, rad: open ? 0 : 30, innerRad: open ? 0 : 23,
+          sleeveBorder: open ? 'transparent' : T.sleeveBorder, sleeveBg: T.sleeveBg,
+          shadow: open ? 'none' : (night && isActive && c ? '0 0 60px ' + p[0] + '55, ' + T.shadow : T.shadow),
+          transform: tf, opacity: chat && !isActive ? 0 : (d === 0 ? 1 : d === 1 ? 0.92 : d === 2 ? 0.6 : 0),
+          z: 100 - d, cardBg: cardBg, faceOp: open ? 0 : 1, faceSub: night ? '#D9D5E2' : '#3F3F3F',
+          isChar: !!c, isReserve: !c, name: c ? c.name : '', label: c ? c.name : '未开放位置',
+          latin: c ? c.latin : '', nameSize: c ? c.size : 0, status: c ? c.status : '', line: c ? c.line : '', dur: c ? c.dur : '',
+          no: c ? c.no : String(i + 1).padStart(3, '0'), accent: p[3], handColor: night ? p[3] : T.ink,
+          sheen: isActive && !chat, chatOn: open, canOpen: isActive && !chat && !!c, isSide: !isActive && !chat && d <= 2,
+          pick: pick(i)
+        });
+      })(i);
+    }
+
+    var AS = [1, 0.86, 0.73, 0.6, 0.51, 0.44, 0.39, 0.35], AO = [1, 0.88, 0.68, 0.44, 0.24, 0.11, 0.04, 0];
+    var ring = [];
+    for (var j = 0; j < N; j++) {
+      (function (j) {
+        var o = off(j), d = Math.abs(o), a = o * 2 * Math.PI / N, c = C[j], p = pal(j);
+        ring.push({
+          x: Math.round(195 + Math.sin(a) * 150 - 24), y: Math.round(18 - (1 - Math.cos(a)) * 10),
+          scale: AS[d], op: AO[d], z: 100 - d, on: o === 0,
+          fill: c ? 'linear-gradient(140deg, ' + p[2] + ', ' + p[1] + ')' : (night ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.55)'),
+          ringShadow: o === 0 ? '0 0 0 2px ' + T.paper + ', 0 0 0 4px ' + T.ink : (c ? '0 3px 8px rgba(40, 24, 60, 0.14)' : 'inset 0 0 0 1.5px ' + (night ? 'rgba(255,255,255,0.25)' : 'rgba(20,20,20,0.18)')),
+          mark: c ? c.mark : '', label: c ? c.name : '未开放位置 ' + (j + 1), pick: pick(j)
+        });
+      })(j);
+    }
+
+    var cc = C[active], cp = pal(active);
+    var cur = {
+      name: cc ? cc.name : '', label: cc ? cc.name : '新朋友还未到来', mark: cc ? cc.mark : '', status: cc ? cc.status : '', accent: cp[3],
+      dot: 'linear-gradient(140deg, ' + cp[2] + ', ' + cp[1] + ')',
+      ring: 'conic-gradient(from 200deg, ' + cp[3] + ', ' + cp[2] + ', ' + cp[1] + ', ' + cp[3] + ')'
+    };
+    var auras = [];
+    for (var k = 0; k < N; k++) {
+      if (C[k]) auras.push({ bg: aura(pal(k)), op: k === active ? 1 : 0 });
+    }
+    auras.push({ bg: aura(NEU), op: C[active] ? 0 : 1 });
+
+    var send = function (text) {
+      return function () {
+        if (self.state.recording) return;
+        var reply = cc ? cc.reply : '';
+        self.setState({ msgs: self.state.msgs.concat([{ mine: true, hers: false, text: text }]) });
+        self.later(function () { self.setState({ recording: true }); }, 500);
+        self.later(function () {
+          self.setState({ recording: false, msgs: self.state.msgs.concat([{ mine: false, hers: true, text: reply, dur: '0:05' }]) });
+        }, 2100);
+      };
+    };
+    var chatBg = night
+      ? 'radial-gradient(70% 30% at 8% 12%, ' + cp[0] + '59 0%, transparent 70%), radial-gradient(80% 35% at 30% 100%, ' + cp[2] + '66 0%, transparent 70%), #0C0B10'
+      : 'radial-gradient(70% 35% at 10% 15%, ' + cp[0] + ' 0%, transparent 70%), radial-gradient(60% 35% at 95% 55%, ' + cp[1] + ' 0%, transparent 70%), radial-gradient(80% 40% at 30% 100%, ' + cp[2] + ' 0%, transparent 70%), #FAF8F6';
+
+    var swDown = function (e) { self._sx = e.clientX; };
+    var swUp = function (e) {
+      if (self._sx == null || self.state.phase !== 'browse') return;
+      var dx = e.clientX - self._sx; self._sx = null;
+      if (Math.abs(dx) < 40) return;
+      self.setState({ active: ((self.state.active + (dx < 0 ? 1 : -1)) % N + N) % N });
+    };
+    return {
+      t: T, slots: slots, ring: ring, auras: auras, cur: cur, chatBg: chatBg,
+      swDown: swDown, swUp: swUp,
+      tagline: '捡到一窝小四四',
+      curIsChar: !!cc, curIsReserve: !cc,
+      chromeOp: chat ? 0 : 1, chromePe: chat ? 'none' : 'auto',
+      chromeUp: chat ? 'translateY(-12px)' : 'none', chromeDown: chat ? 'translateY(24px)' : 'none',
+      recording: this.state.recording, idle: !this.state.recording,
+      msgs: this.state.msgs,
+      bars: [6,10,16,8,14,18,10,6,12,16,8,12,6,10,14,8,16,10,6,12,16,8,12,10,6,8].map(function (h) { return { h: h }; }),
+      chips: ['今天好累', '想你了', '在干嘛'].map(function (x) { return { text: x, send: send(x) }; }),
+      open: function () {
+        if (!cc) return;
+        self.timers.forEach(function (id) { clearTimeout(id); });
+        self.timers = [];
+        self.setState({ phase: 'chat', recording: false, msgs: [{ mine: false, hers: true, text: cc.line, dur: cc.dur }] });
+      },
+      close: function () {
+        self.timers.forEach(function (id) { clearTimeout(id); });
+        self.timers = [];
+        self.setState({ phase: 'browse', recording: false, msgs: [] });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

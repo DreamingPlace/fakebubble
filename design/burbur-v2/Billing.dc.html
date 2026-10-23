@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>消费记录</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; box-sizing: border-box; background: radial-gradient(70% 30% at 10% 10%, #DCD2FF 0%, transparent 70%), radial-gradient(60% 30% at 95% 40%, #FFD8EE 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-direction: column; overflow: hidden; font-variant-numeric: tabular-nums">
+  <div style="height: 47px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">status bar · system</div>
+
+  <div style="height: 60px; flex-shrink: 0; display: grid; grid-template-columns: 56px 1fr 56px; align-items: center">
+    <a href="MyInfo.dc.html" aria-label="返回我的信息" style="width: 44px; height: 44px; margin-left: 6px; border-radius: 50%; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
+    <h1 style="margin: 0; text-align: center; font-size: 17px; font-weight: 900">消费记录</h1>
+    <span></span>
+  </div>
+
+  <div style="flex-grow: 1; min-height: 0; overflow: hidden; padding: 0 16px 12px; display: flex; flex-direction: column; gap: 12px">
+    <div style="align-self: center; height: 32px; padding: 0 14px; border-radius: 999px; background: #141414; color: #FFFFFF; display: flex; align-items: center; font-family: 'DM Mono', monospace; font-size: 13px">剩余 470 点 · 约可聊 47 条</div>
+
+    <section aria-labelledby="month-title" style="background: rgba(255, 255, 255, 0.9); border-radius: 24px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <h2 id="month-title" style="margin: 0; font-size: 15px; font-weight: 900">本月消耗</h2>
+        <div role="group" aria-label="分组" style="display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: #F3F0EC">
+          <button type="button" onClick="{{byModel}}" aria-pressed="{{mOn}}" style="height: 30px; padding: 0 12px; border: none; border-radius: 999px; background: {{mBg}}; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer">按模型</button>
+          <button type="button" onClick="{{byChar}}" aria-pressed="{{cOn}}" style="height: 30px; padding: 0 12px; border: none; border-radius: 999px; background: {{cBg}}; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer">按角色</button>
+        </div>
+      </div>
+      <sc-for list="{{month}}" as="r" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 10px; font-size: 14px">
+          <i style="width: 10px; height: 10px; border-radius: 50%; background: {{r.col}}"></i>
+          <span style="flex-grow: 1">{{r.name}}</span>
+          <span style="font-family: 'DM Mono', monospace; font-size: 13px">{{r.n}} 条</span>
+          <span style="width: 64px; text-align: right; font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500">{{r.p}} 点</span>
+        </div>
+      </sc-for>
+    </section>
+
+    <section aria-label="记录" style="background: rgba(255, 255, 255, 0.9); border-radius: 24px; padding: 4px 16px; display: flex; flex-direction: column">
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="7">
+        <div style="min-height: 56px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #F0ECE7">
+          <span aria-hidden="true" style="width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; background: {{r.dot}}; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900">{{r.mark}}</span>
+          <span style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+            <span style="font-size: 14px; font-weight: 700">{{r.title}}</span>
+            <span style="font-size: 12px; color: #3F3F3F; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{r.sub}}</span>
+          </span>
+          <span style="font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 500; color: {{r.fg}}">{{r.pts}}</span>
+        </div>
+      </sc-for>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0 4px">
+        <button type="button" disabled style="height: 36px; padding: 0 12px; border: none; background: none; font: inherit; font-size: 13px; color: #8A847C">上一页</button>
+        <span style="font-family: 'DM Mono', monospace; font-size: 12px">第 1 页 · 只显示最近 90 天</span>
+        <button type="button" style="height: 36px; padding: 0 12px; border: none; background: none; font: inherit; font-size: 13px; font-weight: 700">下一页</button>
+      </div>
+    </section>
+  </div>
+
+  <div style="height: 80px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">Safari address bar · system</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { by: 'model' };
+  }
+  renderVals() {
+    var self = this;
+    var model = this.state.by === 'model';
+    var G = 'linear-gradient(140deg, #FFB295, #FFEBC9)', J = 'linear-gradient(140deg, #97C8F5, #D5F6EE)', M = 'linear-gradient(140deg, #BBA4FF, #FFD8EE)', A = '#141414';
+    return {
+      mOn: model, cOn: !model, mBg: model ? '#FFFFFF' : 'transparent', cBg: model ? 'transparent' : '#FFFFFF',
+      byModel: function () { self.setState({ by: 'model' }); },
+      byChar: function () { self.setState({ by: 'char' }); },
+      month: model
+        ? [{ name: 'DeepSeek', n: 41, p: 451, col: '#2F7BEA' }, { name: 'Gemini', n: 6, p: 126, col: '#E8561E' }, { name: 'Grok', n: 2, p: 52, col: '#7C4DEB' }]
+        : [{ name: '瓜瓜', n: 22, p: 290, col: '#E8561E' }, { name: 'JOJO', n: 18, p: 236, col: '#2F7BEA' }, { name: '陈吉米', n: 9, p: 103, col: '#7C4DEB' }],
+      rows: [
+        { mark: 'J', dot: J, title: 'JOJO · DeepSeek · 语音', sub: '今天 15:42', pts: '−11 点', fg: '#141414' },
+        { mark: '瓜', dot: G, title: '瓜瓜 · DeepSeek · 语音', sub: '今天 15:30（Gemini 繁忙，已改用）', pts: '−11 点', fg: '#141414' },
+        { mark: '+', dot: '#E3F3E8', title: '余额调整', sub: '今天 08:00 · 管理员', pts: '+350 点', fg: '#1E5E36' },
+        { mark: '+', dot: '#E3F3E8', title: '每日补充', sub: '今天 00:12', pts: '+50 点', fg: '#1E5E36' },
+        { mark: '吉', dot: M, title: '陈吉米 · Grok · 无语音', sub: '昨天 23:10 · 回复失败，已退还 25 点', pts: '0 点', fg: '#4A4A4A' },
+        { mark: '+', dot: '#E3F3E8', title: '管理员发放', sub: '昨天 12:00', pts: '+100 点', fg: '#1E5E36' },
+        { mark: '+', dot: '#E3F3E8', title: '注册赠送', sub: '10月20日 · 含没用完的体验回复', pts: '+100 点', fg: '#1E5E36' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

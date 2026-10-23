@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>系统状态</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="min-height: 1240px; background: radial-gradient(40% 22% at 22% 0%, #E6F5EF 0%, transparent 70%), radial-gradient(30% 20% at 80% 0%, #E2EEFF 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1 1 248px; max-width: 260px"><dc-import name="AdminNav" current="系统状态" hint-size="248px,1100px"></dc-import></div>
+
+  <main style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 28px 36px 40px">
+    <div style="max-width: 1120px; display: flex; flex-direction: column; gap: 18px">
+
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #4A4A4A">{{env}}</span>
+          <h1 style="margin: 0; font-size: 36px; font-weight: 900; letter-spacing: -0.04em; line-height: 1">系统状态</h1>
+        </div>
+        <span style="height: 36px; padding: 0 16px; border-radius: 999px; background: {{overall.bg}}; color: {{overall.fg}}; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700"><i style="width: 8px; height: 8px; border-radius: 50%; background: currentColor"></i>{{overall.label}}</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+        <section aria-labelledby="ver-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+          <h2 id="ver-title" style="margin: 0; font-size: 15px; font-weight: 900">运行版本</h2>
+          <dl style="margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 13px">
+            <dt style="color: #3F3F3F">构建提交</dt><dd style="margin: 0; font-family: 'DM Mono', monospace">6155488</dd>
+            <dt style="color: #3F3F3F">迁移</dt><dd style="margin: 0; display: flex; gap: 6px; align-items: center">52 步 <span style="height: 20px; padding: 0 8px; border-radius: 999px; background: #E3F3E8; color: #1E5E36; display: flex; align-items: center; font-size: 11px; font-weight: 700">一致</span></dd>
+            <dt style="color: #3F3F3F">数据库版本</dt><dd style="margin: 0; font-family: 'DM Mono', monospace">127</dd>
+          </dl>
+        </section>
+        <section aria-labelledby="unk-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+          <h2 id="unk-title" style="margin: 0; font-size: 15px; font-weight: 900">UNKNOWN 调用</h2>
+          <dl style="margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 13px">
+            <dt style="color: #3F3F3F">模型</dt><dd style="margin: 0">3 · 最早 9 天前</dd>
+            <dt style="color: #3F3F3F">外部</dt><dd style="margin: 0">3 · 最早 9 天前</dd>
+            <dt style="color: #3F3F3F">向量</dt><dd style="margin: 0">0</dd>
+          </dl>
+          <span style="font-size: 12px; color: #3F3F3F">24h 无新增</span>
+        </section>
+        <section aria-labelledby="sec-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+          <h2 id="sec-title" style="margin: 0; font-size: 15px; font-weight: 900">安全 · Turnstile</h2>
+          <dl style="margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 13px">
+            <dt style="color: #3F3F3F">今天未通过</dt><dd style="margin: 0">2</dd>
+            <dt style="color: #3F3F3F">7 天未通过</dt><dd style="margin: 0">11</dd>
+            <dt style="color: #3F3F3F">无法验证</dt><dd style="margin: 0">0 / 1</dd>
+          </dl>
+        </section>
+      </div>
+
+      <section aria-labelledby="price-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px">
+          <h2 id="price-title" style="margin: 0; font-size: 15px; font-weight: 900">价格（账本预留用的上限价）</h2>
+          <div style="display: flex; align-items: center; gap: 10px">
+            <sc-if value="{{renewed}}" hint-placeholder-val="{{ false }}"><span role="status" style="font-size: 13px; color: #1E5E36; font-weight: 700">已续期 {{renewCount}} 行 · 其余未到期</span></sc-if>
+            <button type="button" onClick="{{renew}}" style="height: 36px; padding: 0 16px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">续期价格</button>
+          </div>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+          <thead><tr style="text-align: left; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A"><th scope="col" style="padding: 7px 8px; font-weight: 500">供应商 / 模型 / 阶段</th><th scope="col" style="padding: 7px 8px; font-weight: 500">µ$ / 单位</th><th scope="col" style="padding: 7px 8px; font-weight: 500">版本</th><th scope="col" style="padding: 7px 8px; font-weight: 500">有效到（UTC）</th><th scope="col" style="padding: 7px 8px; font-weight: 500">状态</th></tr></thead>
+          <tbody>
+            <sc-for list="{{prices}}" as="p" hint-placeholder-count="7">
+              <tr style="border-top: 1px solid #F0ECE7; background: {{p.rowBg}}"><th scope="row" style="padding: 9px 8px; text-align: left; font-weight: 500">{{p.name}}</th><td style="padding: 9px 8px">{{p.unit}}</td><td style="padding: 9px 8px">{{p.ver}}</td><td style="padding: 9px 8px; font-family: 'DM Mono', monospace">{{p.until}}</td><td style="padding: 9px 8px"><span style="height: 22px; padding: 0 9px; border-radius: 999px; background: {{p.stBg}}; color: {{p.stFg}}; display: inline-flex; align-items: center; font-size: 12px; font-weight: 700">{{p.st}}</span></td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+        <section aria-labelledby="budget-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+          <h2 id="budget-title" style="margin: 0; font-size: 15px; font-weight: 900">预算</h2>
+          <sc-for list="{{budget}}" as="b" hint-placeholder-count="2">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #F0ECE7">
+              <span style="font-weight: 700; min-width: 76px">{{b.name}}</span>
+              <span style="flex-grow: 1; font-size: 13px">{{b.text}}</span>
+              <sc-if value="{{b.capped}}" hint-placeholder-val="{{ false }}">
+                <button type="button" style="height: 32px; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">预算充值</button>
+              </sc-if>
+              <sc-if value="{{b.unlimited}}" hint-placeholder-val="{{ true }}">
+                <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center; font-size: 12px; font-weight: 700">不限额</span>
+              </sc-if>
+            </div>
+          </sc-for>
+          <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #3F3F3F"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7l8 6 8-6"></path><rect x="3" y="5" width="18" height="14" rx="2"></rect></svg>&gt; $30 / 天</span>
+        </section>
+
+        <section aria-labelledby="ret-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+          <h2 id="ret-title" style="margin: 0; font-size: 15px; font-weight: 900">清理（数据保留）</h2>
+          <dl style="margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 13px">
+            <dt style="color: #3F3F3F">上次成功</dt><dd style="margin: 0; font-family: 'DM Mono', monospace">2026-10-23 07:31 UTC</dd>
+            <dt style="color: #3F3F3F">清理中</dt><dd style="margin: 0">{{ret.purging}}</dd>
+            <dt style="color: #3F3F3F">失败</dt><dd style="margin: 0">{{ret.failing}}</dd>
+          </dl>
+          <sc-if value="{{ret.hasFailures}}" hint-placeholder-val="{{ false }}">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px">
+              <thead><tr style="text-align: left; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A"><th scope="col" style="padding: 6px; font-weight: 500">阶段</th><th scope="col" style="padding: 6px; font-weight: 500">子步骤</th><th scope="col" style="padding: 6px; font-weight: 500">错误</th><th scope="col" style="padding: 6px; font-weight: 500">次数</th></tr></thead>
+              <tbody>
+                <tr style="border-top: 1px solid #F0ECE7"><td style="padding: 6px; font-family: 'DM Mono', monospace">clearDatabase</td><td style="padding: 6px; font-family: 'DM Mono', monospace">audit_cleared</td><td style="padding: 6px; font-family: 'DM Mono', monospace">DomainError</td><td style="padding: 6px">14</td></tr>
+                <tr style="border-top: 1px solid #F0ECE7"><td style="padding: 6px; font-family: 'DM Mono', monospace">clearDatabase</td><td style="padding: 6px; font-family: 'DM Mono', monospace">audit_cleared</td><td style="padding: 6px; font-family: 'DM Mono', monospace">DomainError</td><td style="padding: 6px">14</td></tr>
+              </tbody>
+            </table>
+          </sc-if>
+          <sc-if value="{{ret.ok}}" hint-placeholder-val="{{ true }}"><span style="font-size: 12px; color: #1E5E36; font-weight: 700">没有失败</span></sc-if>
+        </section>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+        <section aria-labelledby="flags-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px">
+          <h2 id="flags-title" style="margin: 0; font-size: 15px; font-weight: 900">开关</h2>
+          <sc-for list="{{flags}}" as="f" hint-placeholder-count="8">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid #F0ECE7; font-size: 13px">
+              <span style="flex-grow: 1; font-family: 'DM Mono', monospace; font-size: 12px">{{f.k}}</span>
+              <span style="height: 22px; padding: 0 9px; border-radius: 999px; background: {{f.bg}}; color: {{f.fg}}; display: flex; align-items: center; font-size: 12px; font-weight: 700">{{f.v}}</span>
+            </div>
+          </sc-for>
+        </section>
+        <section aria-labelledby="tech-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px">
+          <h2 id="tech-title" style="margin: 0; font-size: 15px; font-weight: 900">技术指标 · 今天 p50 / p95</h2>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+            <thead><tr style="text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A"><th scope="col" style="text-align: left; padding: 6px; font-weight: 500">阶段</th><th scope="col" style="padding: 6px; font-weight: 500">排队</th><th scope="col" style="padding: 6px; font-weight: 500">执行</th><th scope="col" style="padding: 6px; font-weight: 500">样本</th></tr></thead>
+            <tbody>
+              <tr style="text-align: right; border-top: 1px solid #F0ECE7"><th scope="row" style="text-align: left; padding: 7px 6px; font-weight: 500">文字草稿</th><td style="padding: 7px 6px">0.2s / 0.9s</td><td style="padding: 7px 6px">2.1s / 5.0s</td><td style="padding: 7px 6px">412</td></tr>
+              <tr style="text-align: right; border-top: 1px solid #F0ECE7"><th scope="row" style="text-align: left; padding: 7px 6px; font-weight: 500">审核</th><td style="padding: 7px 6px">0.1s / 0.4s</td><td style="padding: 7px 6px">1.4s / 3.8s</td><td style="padding: 7px 6px">412</td></tr>
+              <tr style="text-align: right; border-top: 1px solid #F0ECE7"><th scope="row" style="text-align: left; padding: 7px 6px; font-weight: 500">语音</th><td style="padding: 7px 6px">0.4s / 3.2s</td><td style="padding: 7px 6px">2.6s / 7.9s</td><td style="padding: 7px 6px">298</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"environment":{"editor":"enum","options":["正式","测试环境"],"default":"正式"},"retentionFailing":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { renewed: false };
+  }
+  renderVals() {
+    var self = this;
+    var prod = (this.props.environment ?? '正式') === '正式';
+    var fail = !!this.props.retentionFailing;
+    var renewed = this.state.renewed;
+    var P = [
+      ['deepseek / deepseek-flash / draft', '2 µ$ / token', 'v3', '2027-02-12', false],
+      ['deepseek / deepseek-v4-pro / review', '4 µ$ / token', 'v3', '2027-02-12', false],
+      ['fish / drama-3 / speech', '50 µ$ / 字节', 'v2', '2027-01-15', false],
+      ['fish / s2.1-pro / speech', '15 µ$ / 字节', 'v4', '2027-02-12', false],
+      ['gemini / gemini-3.8-flash / draft', '8 µ$ / token', 'v1', renewed ? '2027-03-14' : '2026-12-20', !renewed],
+      ['gemini / gemini-3.8-flash / review', '8 µ$ / token', 'v1', '2027-01-14', false],
+      ['xai / grok-4.7 / draft', '10 µ$ / token', 'v1', '2027-01-14', false]
+    ];
+    var prices = P.map(function (p) {
+      return { name: p[0], unit: p[1], ver: p[2], until: p[3], rowBg: p[4] ? '#FFF8E8' : 'transparent', st: p[4] ? '58 天后到期' : '有效', stBg: p[4] ? '#FFF1D6' : '#E3F3E8', stFg: p[4] ? '#6A4000' : '#1E5E36' };
+    });
+    var ok = !fail;
+    return {
+      env: prod ? '正式环境' : '测试环境',
+      overall: ok ? { label: '全部正常', bg: '#E3F3E8', fg: '#1E5E36' } : { label: '清理有 2 个失败', bg: '#FFE4DC', fg: '#8A2A0A' },
+      prices: prices, renewed: renewed, renewCount: 1,
+      renew: function () { self.setState({ renewed: true }); },
+      budget: prod
+        ? [{ name: 'DeepSeek', text: '本月已花 $22.90 · 进行中 $0.04', capped: false, unlimited: true }, { name: 'Fish', text: '本月已花 $72.30 · 进行中 $0.02', capped: false, unlimited: true }]
+        : [{ name: 'DeepSeek', text: '剩余 $1.04 / $2.00 · 进行中 $0', capped: true, unlimited: false }, { name: 'Fish', text: '剩余 $1.96 / $2.00 · 进行中 $0', capped: true, unlimited: false }],
+      ret: { purging: fail ? 2 : 0, failing: fail ? 2 : 0, hasFailures: fail, ok: ok },
+      flags: [
+        { k: 'SIGNUP_BONUS_ENABLED', v: '开', bg: '#E3F3E8', fg: '#1E5E36' },
+        { k: 'PLAYER_MODEL_CHOICE_ENABLED', v: '开', bg: '#E3F3E8', fg: '#1E5E36' },
+        { k: 'PLAYER_TEXT_MODELS', v: 'deepseek · gemini · xai', bg: '#F3F0EC', fg: '#141414' },
+        { k: 'FISH_VOICE_MODEL', v: 'drama-3', bg: '#F3F0EC', fg: '#141414' },
+        { k: 'CHAT_REVIEW_ENABLED', v: '开', bg: '#E3F3E8', fg: '#1E5E36' },
+        { k: 'Turnstile', v: '开', bg: '#E3F3E8', fg: '#1E5E36' },
+        { k: '告警邮件', v: prod ? '开 · 已绑定' : '关', bg: prod ? '#E3F3E8' : '#F3F0EC', fg: prod ? '#1E5E36' : '#141414' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

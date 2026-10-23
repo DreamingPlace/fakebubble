@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bubble Hand lettering</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<span style="display: inline-block; line-height: 0; color: {{color}}">
+  <svg role="img" aria-label="{{text}}" viewBox="{{vb}}" width="{{wpx}}" height="{{hpx}}" fill="none" stroke="currentColor" stroke-width="{{weight}}" stroke-linecap="round" stroke-linejoin="round"><path d="{{d}}"></path></svg>
+</span>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"text":{"editor":"text","default":"burbur · guagua jojo chen jimi"},"size":{"editor":"int","default":96,"min":12,"max":400},"color":{"editor":"color","default":"#141414"},"weight":{"editor":"float","default":1.7,"min":0.8,"max":3,"step":0.1},"logo":{"editor":"boolean","default":false},"$preview":{"width":900,"height":110}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var G = {
+      a: [13, 'M10.5,-5 a5,5 0 1,0 -10,0 a5,5 0 1,0 10,0 M10.5,-10 v8.2 q0,1.8 1.8,1.8'],
+      b: [12, 'M0.5,-18 v18 M0.5,-5 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0'],
+      c: [11, 'M9.04,-8.54 a5,5 0 1,0 0,7.08'],
+      d: [13, 'M10.5,-5 a5,5 0 1,0 -10,0 a5,5 0 1,0 10,0 M10.5,-18 v16.2 q0,1.8 1.8,1.8'],
+      e: [12, 'M0.5,-5 h10 a5,5 0 1,0 -1.46,3.54'],
+      f: [9, 'M8.5,-16.5 q-1.5,-1.8 -3.6,-1.2 q-1.9,0.6 -1.9,3 v14.7 M0.5,-10 h6.5'],
+      g: [13, 'M10.5,-5 a5,5 0 1,0 -10,0 a5,5 0 1,0 10,0 M10.5,-10 v11 q0,5 -5,5 q-3,0 -4.5,-2'],
+      h: [12, 'M0.5,-18 v18 M0.5,-5.5 a5,4.5 0 0,1 10,0 v5.5'],
+      i: [3.5, 'M1.2,-10 v10 M1.2,-15.6 a1.2,1.2 0 1,0 0.01,0'],
+      j: [6, 'M4.5,-10 v12 q0,4.5 -4,4.5 M4.5,-15.6 a1.2,1.2 0 1,0 0.01,0'],
+      k: [10.5, 'M0.5,-18 v18 M9.5,-10 l-9,6.2 M3.6,-6.1 l6,6.1'],
+      l: [5, 'M1,-18 v16.2 q0,1.8 1.8,1.8'],
+      m: [18, 'M0.5,-10 v10 M0.5,-5.5 a4,4.5 0 0,1 8,0 v5.5 M8.5,-5.5 a4,4.5 0 0,1 8,0 v5.5'],
+      n: [12, 'M0.5,-10 v10 M0.5,-5.5 a5,4.5 0 0,1 10,0 v5.5'],
+      o: [12, 'M10.5,-5 a5,5 0 1,0 -10,0 a5,5 0 1,0 10,0'],
+      p: [12, 'M0.5,-10 v17 M0.5,-5 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0'],
+      q: [13, 'M10.5,-5 a5,5 0 1,0 -10,0 a5,5 0 1,0 10,0 M10.5,-10 v15 q0,2 2,2'],
+      r: [8.5, 'M0.5,-10 v10 M0.5,-5.5 q1.5,-4.5 7,-4.2'],
+      s: [10, 'M8.5,-8.8 q-1.2,-1.6 -3.8,-1.4 q-3.6,0.3 -3.4,2.6 q0.2,1.9 3.6,2.5 q3.8,0.6 3.6,2.8 q-0.2,2.4 -3.8,2.4 q-2.7,0 -4,-1.6'],
+      t: [9, 'M3,-15 v13 q0,2 2.4,2 q1.4,0 2.4,-0.8 M0.5,-10 h7'],
+      u: [13, 'M0.5,-10 v5 a5,5 0 0,0 10,0 M10.5,-10 v8.2 q0,1.8 1.8,1.8'],
+      v: [11, 'M0.5,-10 l5,10 l5,-10'],
+      w: [15, 'M0.5,-10 l3.5,10 l3.5,-8 l3.5,8 l3.5,-10'],
+      x: [10.5, 'M0.5,-10 l9,10 M9.5,-10 l-9,10'],
+      y: [13, 'M0.5,-10 v5 a5,5 0 0,0 10,0 M10.5,-10 v11 q0,5 -5,5 q-3,0 -4.5,-2'],
+      z: [10.5, 'M0.5,-10 h9 l-9,10 h9'],
+      '?': [10, 'M1,-14 q0,-4 4,-4 q4,0 4,3.6 q0,2.4 -3.2,3.6 q-0.8,0.4 -0.8,1.8 v1.6 M5,-1.6 a1.1,1.1 0 1,0 0.01,0'],
+      '!': [4, 'M1.5,-17 v11 M1.5,-1.6 a1.1,1.1 0 1,0 0.01,0'],
+      '·': [6, 'M3,-5 a0.9,0.9 0 1,0 0.01,0'],
+      '~': [10, 'M0.5,-4.5 q2,-3 4.5,-1 q2.5,2 4.5,-1'],
+      ' ': [6, '']
+    };
+    var bounce = [0, -0.35, 0.25, -0.15, 0.3, -0.3, 0.1, -0.2];
+    var text = String(this.props.text ?? 'burbur · guagua jojo chen jimi').toLowerCase();
+    var size = Number(this.props.size ?? 96);
+    var logo = !!this.props.logo;
+    var x = 0, parts = [], k = 0;
+    for (var n = 0; n < text.length; n++) {
+      var g = G[text[n]];
+      if (!g) continue;
+      var dy = text[n] === ' ' ? 0 : bounce[k++ % bounce.length];
+      var ox = x;
+      var d = g[1].replace(/M(-?[\d.]+),(-?[\d.]+)/g, function (m, px, py) {
+        return 'M' + (Number(px) + ox).toFixed(2) + ',' + (Number(py) + dy).toFixed(2);
+      });
+      parts.push(d);
+      x += g[0] + 1.2;
+    }
+    if (logo) {
+      var ex = x + 0.6;
+      parts.push('M' + (ex + 1.6).toFixed(2) + ',-10.5 a1.5,1.5 0 1,0 0.01,0');
+      parts.push('M' + (ex + 5.2).toFixed(2) + ',-15.2 c0,-1.4 -1.9,-1.4 -1.9,0 c0,1.1 1.9,2 1.9,2.6 c0,-0.6 1.9,-1.5 1.9,-2.6 c0,-1.4 -1.9,-1.4 -1.9,0');
+      x += 8.2;
+    }
+    var w = Math.max(x - 1.2, 1);
+    var top = -20, h = 28.5;
+    return {
+      text: text,
+      d: parts.join(' '),
+      vb: '-1.5 ' + top + ' ' + (w + 3).toFixed(2) + ' ' + h,
+      hpx: size,
+      wpx: Math.round(size * (w + 3) / h),
+      color: this.props.color ?? '#141414',
+      weight: this.props.weight ?? 1.7
+    };
+  }
+}
+</script>
+</body>
+</html>

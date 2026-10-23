@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>角色工作台</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}a:hover{color:#000000}
+@keyframes wbIn { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+@keyframes wbDots { 0%, 80%, 100% { opacity: 0.25 } 40% { opacity: 1 } }
+.wb-in { animation: wbIn 380ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+.wb-dot { animation: wbDots 1s ease-in-out infinite }
+@media (prefers-reduced-motion: reduce) { .wb-in, .wb-dot { animation-duration: 1ms !important } }
+</style>
+</helmet>
+<div style="min-height: 1320px; background: {{aura}}; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1 1 248px; max-width: 260px"><dc-import name="AdminNav" current="角色工作台" hint-size="248px,1100px"></dc-import></div>
+
+  <main style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 28px 32px 40px">
+    <div style="max-width: 1160px; display: flex; flex-direction: column; gap: 18px">
+
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #4A4A4A">示例</span>
+          <h1 style="margin: 0; font-size: 36px; font-weight: 900; letter-spacing: -0.04em; line-height: 1">角色工作台</h1>
+        </div>
+        <a href="Cast.dc.html" style="height: 40px; padding: 0 6px 0 16px; border-radius: 999px; background: #FFFFFF; display: flex; align-items: center; gap: 12px; text-decoration: none; color: #141414; font-size: 13px">
+          <span>阵容 v12 已发布 · 草稿 v13 有 <b>{{changes}} 处改动</b></span>
+          <span style="height: 30px; padding: 0 14px; border-radius: 999px; background: #141414; color: #FFFFFF; display: flex; align-items: center; font-weight: 700">查看改动并发布</span>
+        </a>
+      </div>
+
+      <div role="tablist" aria-label="角色" style="display: flex; flex-wrap: wrap; gap: 8px">
+        <sc-for list="{{chars}}" as="c" hint-placeholder-count="3">
+          <button type="button" role="tab" onClick="{{c.pick}}" aria-selected="{{c.on}}" style="height: 48px; padding: 0 18px 0 6px; border: none; border-radius: 999px; background: {{c.bg}}; color: {{c.fg}}; font: inherit; display: flex; align-items: center; gap: 10px; cursor: pointer">
+            <span aria-hidden="true" style="width: 36px; height: 36px; border-radius: 50%; padding: 2px; box-sizing: border-box; background: {{c.ring}}"><span style="width: 100%; height: 100%; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; background: {{c.dot}}; color: #141414; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900">{{c.mark}}</span></span>
+            <span style="font-size: 15px; font-weight: 900">{{c.name}}</span>
+            <sc-if value="{{c.dirty}}" hint-placeholder-val="{{ false }}"><span style="height: 20px; padding: 0 8px; border-radius: 999px; background: {{c.dirtyBg}}; color: {{c.dirtyFg}}; display: flex; align-items: center; font-size: 11px; font-weight: 700">草稿</span></sc-if>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start">
+
+        <nav aria-label="{{cur.name}} 的资料分区" style="flex: 1 1 200px; max-width: 220px; background: rgba(255, 255, 255, 0.8); border-radius: 24px; padding: 10px; display: flex; flex-direction: column; gap: 2px">
+          <sc-for list="{{sections}}" as="s" hint-placeholder-count="9">
+            <button type="button" onClick="{{s.pick}}" aria-current="{{s.aria}}" style="height: 40px; padding: 0 12px; border: none; border-radius: 999px; background: {{s.bg}}; color: {{s.fg}}; font: inherit; font-size: 14px; font-weight: {{s.weight}}; display: flex; align-items: center; gap: 8px; cursor: pointer; text-align: left">
+              <sc-if value="{{s.hidden}}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-label="不公开"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg></sc-if>
+              <span style="flex-grow: 1">{{s.label}}</span>
+              <sc-if value="{{s.edited}}" hint-placeholder-val="{{ false }}"><i aria-label="有改动" style="width: 7px; height: 7px; border-radius: 50%; background: {{s.dotCol}}"></i></sc-if>
+              <sc-if value="{{s.hasCc}}" hint-placeholder-val="{{ false }}"><span aria-label="{{s.cc}} 条共创" style="min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: #E8561E; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 11px">{{s.cc}}</span></sc-if>
+            </button>
+          </sc-for>
+        </nav>
+
+        <section aria-labelledby="sec-title" style="flex: 999 1 400px; min-width: 0; background: #FFFFFF; border-radius: 24px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px">
+            <h2 id="sec-title" style="margin: 0; font-size: 20px; font-weight: 900">{{cur.name}} · {{sec.label}}</h2>
+            <span style="height: 26px; padding: 0 10px; border-radius: 999px; background: {{sec.visBg}}; color: {{sec.visFg}}; display: flex; align-items: center; font-size: 12px; font-weight: 700">{{sec.vis}}</span>
+          </div>
+
+          <sc-for list="{{sec.fields}}" as="f" hint-placeholder-count="3">
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <span style="font-size: 13px; font-weight: 700">{{f.label}}</span>
+              <sc-if value="{{f.isChips}}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                  <sc-for list="{{f.items}}" as="it" hint-placeholder-count="3">
+                    <span style="min-height: 32px; padding: 6px 12px; box-sizing: border-box; border-radius: 999px; background: {{it.bg}}; box-shadow: inset 0 0 0 1px {{it.line}}; display: flex; align-items: center; gap: 6px; font-size: 14px">{{it.t}}<sc-if value="{{it.isNew}}" hint-placeholder-val="{{ false }}"><span style="font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 700">新 · 来自共创</span></sc-if></span>
+                  </sc-for>
+                  <button type="button" style="height: 32px; padding: 0 12px; border: 1px dashed #BDB5AC; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; cursor: pointer">+ 添加</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{f.isText}}" hint-placeholder-val="{{ true }}">
+                <textarea aria-label="{{f.label}}" rows="{{f.rows}}" style="box-sizing: border-box; width: 100%; padding: 12px 14px; border: 1px solid #E4DED7; border-radius: 18px; font: inherit; font-size: 14px; line-height: 1.6; resize: vertical">{{f.value}}</textarea>
+              </sc-if>
+            </div>
+          </sc-for>
+
+          <sc-if value="{{sec.isVoice}}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 20px; background: #F7F4F0">
+              <span style="font-size: 13px; font-weight: 700">试听一句</span>
+              <div style="display: flex; gap: 8px">
+                <label style="flex-grow: 1; display: flex"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">试听文字</span><input type="text" value="你又熬夜了吧……算了，早点睡。" style="flex-grow: 1; height: 40px; box-sizing: border-box; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px"></label>
+                <button type="button" onClick="{{testVoice}}" style="height: 40px; padding: 0 16px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{voiceBtn}}</button>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{sec.hasCc}}" hint-placeholder-val="{{ false }}">
+            <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 6px; border-top: 1px solid #F0ECE7">
+              <div style="display: flex; justify-content: space-between; align-items: center">
+                <span style="font-size: 14px; font-weight: 900">共创 · 这个分区的 {{sec.ccCount}} 条</span>
+                <a href="Inbox.dc.html" style="font-size: 13px; font-weight: 700">在收件箱里看全部 →</a>
+              </div>
+              <sc-for list="{{cc}}" as="x" hint-placeholder-count="3">
+                <div style="display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 18px; background: {{x.bg}}">
+                  <div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+                    <span style="font-size: 12px; color: #3F3F3F">问题：{{x.q}}</span>
+                    <span style="font-size: 14px; line-height: 1.5">{{x.a}}</span>
+                    <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">{{x.meta}}</span>
+                  </div>
+                  <button type="button" onClick="{{x.adopt}}" aria-pressed="{{x.on}}" style="width: 88px; height: 32px; flex-shrink: 0; border: 1px solid #E4DED7; border-radius: 999px; background: {{x.btnBg}}; color: {{x.btnFg}}; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">{{x.btn}}</button>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px">
+            <button type="button" style="height: 40px; padding: 0 16px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">放弃本区改动</button>
+            <button type="button" style="height: 40px; padding: 0 18px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">保存到草稿</button>
+          </div>
+        </section>
+
+        <aside aria-labelledby="pv-title" style="flex: 1 1 320px; max-width: 360px; background: #FFFFFF; border-radius: 24px; padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; justify-content: space-between; align-items: center">
+            <h2 id="pv-title" style="margin: 0; font-size: 17px; font-weight: 900">预演</h2>
+            <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center; font-size: 12px; font-weight: 700">初识 · 用草稿 v13</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 20px; background: {{pvBg}}">
+            <span style="align-self: flex-end; max-width: 80%; background: #141414; color: #FFFFFF; border-radius: 18px 6px 18px 18px; padding: 9px 14px; font-size: 14px; line-height: 1.45">{{pv.ask}}</span>
+            <sc-if value="{{pv.running}}" hint-placeholder-val="{{ false }}">
+              <span aria-label="正在生成" style="align-self: flex-start; height: 36px; padding: 0 14px; border-radius: 6px 18px 18px 18px; background: #FFFFFF; display: flex; align-items: center; gap: 4px"><i class="wb-dot" style="width: 6px; height: 6px; border-radius: 50%; background: #141414"></i><i class="wb-dot" style="animation-delay: 150ms; width: 6px; height: 6px; border-radius: 50%; background: #141414"></i><i class="wb-dot" style="animation-delay: 300ms; width: 6px; height: 6px; border-radius: 50%; background: #141414"></i></span>
+            </sc-if>
+            <sc-if value="{{pv.done}}" hint-placeholder-val="{{ true }}">
+              <div class="wb-in" style="align-self: flex-start; width: 100%; box-sizing: border-box; background: #FFFFFF; border-radius: 6px 18px 18px 18px; padding: 8px 8px 10px; display: flex; flex-direction: column; gap: 6px">
+                <span style="display: flex; align-items: center; gap: 8px">
+                  <button type="button" aria-label="播放语音" style="width: 34px; height: 34px; border: none; border-radius: 50%; background: {{cur.accent}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg></button>
+                  <span style="font-family: 'DM Mono', monospace; font-size: 11px">0:07 · drama-3</span>
+                </span>
+                <span style="padding: 0 6px; font-size: 14px; line-height: 1.55">{{pv.reply}}</span>
+              </div>
+            </sc-if>
+          </div>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">试着说<input type="text" value="{{pv.ask}}" style="height: 40px; box-sizing: border-box; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 400"></label>
+          <button type="button" onClick="{{runPreview}}" style="height: 40px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">{{pvBtn}}</button>
+          <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid #F0ECE7">
+            <span style="font-size: 13px; font-weight: 900">这条回复用到的资料</span>
+            <sc-for list="{{used}}" as="u" hint-placeholder-count="4">
+              <span style="display: flex; justify-content: space-between; gap: 8px; font-size: 13px"><span>{{u.k}}</span><span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #3F3F3F">{{u.v}}</span></span>
+            </sc-for>
+            <span style="display: flex; justify-content: space-between; gap: 8px; font-size: 13px"><span>审核</span><span style="font-weight: 700; color: #1E5E36">通过 · 未改写</span></span>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { c: 1, s: 'speech', adopted: {}, pv: 'done', voice: false };
+  }
+  renderVals() {
+    var self = this;
+    var C = [
+      { name: '瓜瓜', mark: '瓜', accent: '#E8561E', a: ['#FFD3B8', '#FFEBC9', '#FFB295'], other: ['JOJO', '陈吉米'], dirty: false },
+      { name: 'JOJO', mark: 'J', accent: '#2F7BEA', a: ['#C6E4FF', '#D5F6EE', '#97C8F5'], other: ['瓜瓜', '陈吉米'], dirty: true },
+      { name: '陈吉米', mark: '吉', accent: '#7C4DEB', a: ['#DCD2FF', '#FFD8EE', '#BBA4FF'], other: ['瓜瓜', 'JOJO'], dirty: false }
+    ];
+    var cur = C[this.state.c];
+    var S = [
+      ['identity', '身份与自我', false], ['personality', '性格与行为', false], ['speech', '说话方式', false], ['past', '经历', false],
+      ['direction', '演绎说明', false], ['voice', '声音', false], ['avatar', '头像', false], ['schedule', '作息', false], ['secret', '不公开设定', true]
+    ];
+    var ccBy = this.state.c === 1 ? { speech: 4, personality: 1 } : this.state.c === 0 ? { personality: 2 } : { past: 1 };
+    var edited = this.state.c === 1 ? { speech: true, direction: true } : {};
+    var sections = S.map(function (s) {
+      var on = s[0] === self.state.s;
+      return {
+        label: s[1], hidden: s[2], aria: on ? 'true' : 'false', bg: on ? '#141414' : 'transparent', fg: on ? '#FFFFFF' : '#141414', weight: on ? 700 : 500,
+        edited: !!edited[s[0]], dotCol: on ? '#FFFFFF' : cur.accent, hasCc: !!ccBy[s[0]], cc: ccBy[s[0]] || 0,
+        pick: function () { self.setState({ s: s[0] }); }
+      };
+    });
+    var n = cur.name;
+    var adopted = this.state.adopted;
+    var newLine = adopted[0] ? [{ t: '“这把是我 carry 的，你承认吧。”', bg: '#FFF1D6', line: '#F3D9A4', isNew: true }] : [];
+    var F = {
+      identity: { help: '名字、别人怎么叫他、他怎么看自己。玩家可见。', vis: '玩家可见', fields: [
+        { label: '名字与称呼', isText: true, rows: 2, value: '[示例] ' + n + '。熟人叫他……；他不喜欢被叫……' },
+        { label: '自我认知', isText: true, rows: 3, value: '[示例] 他觉得自己……' }] },
+      personality: { help: '平时什么样、担心或开心时会做什么。', vis: '玩家可见', fields: [
+        { label: '性格要点', isText: true, rows: 4, value: '[示例] ……' }] },
+      speech: { help: '口头禅、常说的话和语气。共创里“他会怎么说”的投稿会落在这里。', vis: '玩家可见', fields: [
+        { label: '口头禅', isChips: true, items: [{ t: '“这把不算”', bg: '#FFFFFF', line: '#E4DED7' }, { t: '“你先睡，我再打一把”', bg: '#FFFFFF', line: '#E4DED7' }].concat(newLine) },
+        { label: '语气要点', isText: true, rows: 3, value: '[示例] 句子短，爱用反问；关心人的时候会故意说得很随便。' }] },
+      past: { help: '他自己的经历。和别人共同经历的事放在「关系与故事」。', vis: '玩家可见', fields: [{ label: '经历', isText: true, rows: 6, value: '[示例] ……' }] },
+      direction: { help: '给语音用的演绎说明：整体的说话感觉。具体每句的情绪由模型在句中标出（23b）。', vis: '只给模型', fields: [{ label: '演绎说明', isText: true, rows: 5, value: '[示例] 声音放松、带一点鼻音；开心时语速快，认真时会停顿一下再说。' }] },
+      voice: { help: '已有的 Fish 音色；可以固定用 s2.1-pro。', vis: '只给模型', isVoice: true, fields: [{ label: '音色', isText: true, rows: 1, value: 'referenceId ••••••3f2a · 克隆音色' }] },
+      avatar: { help: '玩家在首页小卡、聊天顶部看到的头像。', vis: '玩家可见', fields: [{ label: '当前头像', isText: true, rows: 1, value: '[还没有图片] 上传 PNG / JPG，正方形，至少 512 px' }] },
+      schedule: { help: '每周作息（UTC+8，角色生活的时区），决定“在线 / 在睡觉”。', vis: '只给模型', fields: [{ label: '每周作息', isText: true, rows: 3, value: '[示例] 工作日 10:00–02:00 在线；周末更晚。' }] },
+      secret: { help: '不公开：只给模型，共创永远不会问到这里，也不会出现在给玩家的问题里。', vis: '不公开', fields: [{ label: '不公开设定', isText: true, rows: 5, value: '[示例] ……' }] }
+    };
+    var sec = F[this.state.s];
+    var ccList = this.state.c === 1 && this.state.s === 'speech' ? [
+      { q: '如果 JOJO 赢了一局游戏，他第一句话会说什么？', a: '“这把是我 carry 的，你承认吧。”说完又补一句“你也还行”。', meta: '玩家 7Q3KM2F8 · 10-23 05:12 UTC' },
+      { q: 'JOJO 输了不想承认的时候怎么说？', a: '“网卡了。”然后马上开下一把。', meta: '玩家 K81MW0D4 · 10-22 21:30 UTC' },
+      { q: 'JOJO 催你睡觉会怎么说？', a: '“你再不睡我就开麦唱歌了。”', meta: '玩家 P2XAH9C6 · 10-22 15:02 UTC' }
+    ] : [];
+    var cc = ccList.map(function (x, i) {
+      var on = !!adopted[i];
+      return Object.assign({}, x, { on: on, bg: on ? '#FFF8E8' : '#F7F4F0', btn: on ? '已采用' : '采用到草稿', btnBg: on ? '#141414' : '#FFFFFF', btnFg: on ? '#FFFFFF' : '#141414', adopt: function () { var a = Object.assign({}, self.state.adopted); a[i] = !a[i]; self.setState({ adopted: a }); } });
+    });
+    var ccCount = ccBy[this.state.s] || 0;
+    var chars = C.map(function (c, i) {
+      var on = i === self.state.c;
+      return { name: c.name, mark: c.mark, on: on, bg: on ? '#141414' : 'rgba(255, 255, 255, 0.85)', fg: on ? '#FFFFFF' : '#141414',
+        ring: 'conic-gradient(from 200deg, ' + c.accent + ', ' + c.a[2] + ', ' + c.a[1] + ', ' + c.accent + ')', dot: 'linear-gradient(140deg, ' + c.a[2] + ', ' + c.a[1] + ')',
+        dirty: c.dirty, dirtyBg: on ? '#FFFFFF' : '#FFF1D6', dirtyFg: on ? '#141414' : '#6A4000',
+        pick: function () { self.setState({ c: i, s: 'speech', adopted: {} }); } };
+    });
+    var asks = ['你认识陈吉米吗？', '你和瓜瓜熟吗？', '瓜瓜最近怎么样？'];
+    var replies = [
+      '[示例] 认识啊，天天被他拉着打游戏。你也认识他？那你别信他说我菜。',
+      '[示例] 熟啊，最近老在练新歌。你要是见到别提倒车入库，会炸。',
+      '[示例] 嘴上说不在乎，其实每次都最早到排练室。'
+    ];
+    var running = this.state.pv === 'running';
+    return {
+      aura: 'radial-gradient(40% 22% at 30% 0%, ' + cur.a[0] + ' 0%, transparent 70%), radial-gradient(30% 20% at 85% 5%, ' + cur.a[1] + ' 0%, transparent 70%), #FAF8F6',
+      changes: 4, chars: chars, cur: cur, sections: sections,
+      sec: { label: S.filter(function (s) { return s[0] === self.state.s; })[0][1], help: sec.help, vis: sec.vis, fields: sec.fields, isVoice: !!sec.isVoice, hasCc: cc.length > 0, ccCount: ccCount,
+        visBg: sec.vis === '不公开' ? '#141414' : sec.vis === '玩家可见' ? '#E3F3E8' : '#F3F0EC', visFg: sec.vis === '不公开' ? '#FFFFFF' : sec.vis === '玩家可见' ? '#1E5E36' : '#141414' },
+      cc: cc,
+      testVoice: function () { self.setState({ voice: true }); }, voiceBtn: this.state.voice ? '▶ 播放结果' : '生成试听',
+      pv: { ask: asks[this.state.c], reply: replies[this.state.c], done: !running, running: running },
+      pvBg: 'linear-gradient(160deg, ' + cur.a[0] + ', #FFFFFF)',
+      pvBtn: running ? '正在生成…' : '发送预演',
+      runPreview: function () { self.setState({ pv: 'running' }); setTimeout(function () { self.setState({ pv: 'done' }); }, 1200); },
+      used: [
+        { k: n + ' 的全部资料', v: '9 个分区' },
+        { k: cur.other[0] + ' · ' + cur.other[1] + ' 简介', v: '各 1 段' },
+        { k: '关系', v: n + '–' + cur.other[0] + ' · ' + n + '–' + cur.other[1] },
+        { k: '故事', v: '亲历 2 · 听说 1 · 不知道的不给' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

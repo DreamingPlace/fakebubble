@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>登录 / 注册</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; box-sizing: border-box; background: radial-gradient(60% 28% at 12% 10%, #FFD3B8 0%, transparent 70%), radial-gradient(55% 28% at 92% 22%, #C6E4FF 0%, transparent 70%), radial-gradient(70% 30% at 40% 100%, #DCD2FF 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 47px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">status bar · system</div>
+
+  <div style="flex-grow: 1; min-height: 0; padding: 28px 20px 16px; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+      <dc-import name="Hand" text="burbur" size="64" color="#141414" weight="2" logo="{{ true }}" hint-size="206px,64px"></dc-import>
+      <span aria-hidden="true" style="height: 18px"></span>
+    </div>
+
+    <div role="tablist" aria-label="登录或注册" style="display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.8); border: 1px solid #FFFFFF">
+      <button type="button" role="tab" onClick="{{toLogin}}" aria-selected="{{isLogin}}" style="flex: 1 1 0; height: 40px; border: none; border-radius: 999px; background: {{loginBg}}; color: {{loginFg}}; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer">登录</button>
+      <button type="button" role="tab" onClick="{{toSignup}}" aria-selected="{{isSignup}}" style="flex: 1 1 0; height: 40px; border: none; border-radius: 999px; background: {{signupBg}}; color: {{signupFg}}; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer">注册</button>
+    </div>
+
+    <div style="background: rgba(255, 255, 255, 0.9); border-radius: 28px; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px">
+      <sc-if value="{{isLogin}}" hint-placeholder-val="{{ true }}">
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">邮箱<input type="email" value="lin@icloud.com" autocomplete="email" style="height: 48px; box-sizing: border-box; padding: 0 16px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 16px; font-weight: 400"></label>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <label for="pw" style="font-size: 13px; font-weight: 700">密码</label>
+          <div style="display: flex; align-items: center; height: 48px; box-sizing: border-box; padding: 0 4px 0 16px; border: 1px solid {{pwLine}}; border-radius: 999px">
+            <input id="pw" type="{{pwType}}" value="burbur2026" autocomplete="current-password" style="flex-grow: 1; min-width: 0; border: none; background: none; font: inherit; font-size: 16px; outline: none">
+            <button type="button" onClick="{{togglePw}}" aria-label="{{pwAria}}" style="width: 40px; height: 40px; border: none; border-radius: 50%; background: none; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+          </div>
+        </div>
+        <sc-if value="{{hasError}}" hint-placeholder-val="{{ false }}">
+          <span role="alert" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 18px; background: #FFE4DC; color: #8A2A0A; font-size: 14px; font-weight: 700">{{error}}</span>
+        </sc-if>
+        <button type="button" style="height: 50px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer">登录</button>
+        <a href="#" style="align-self: center; min-height: 40px; display: flex; align-items: center; font-size: 13px">忘记密码</a>
+      </sc-if>
+
+      <sc-if value="{{isCode}}" hint-placeholder-val="{{ false }}">
+        <span style="font-family: 'DM Mono', monospace; font-size: 11px">第 1 步 / 共 2 步</span>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">邮箱<input type="email" value="lin@icloud.com" style="height: 48px; box-sizing: border-box; padding: 0 16px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 16px; font-weight: 400"></label>
+        <div style="display: flex; gap: 8px; align-items: flex-end">
+          <label style="flex-grow: 1; display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">验证码<input type="text" inputmode="numeric" placeholder="6 位数字" style="height: 48px; box-sizing: border-box; padding: 0 16px; border: 1px solid #E4DED7; border-radius: 999px; font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 400; letter-spacing: 0.2em"></label>
+          <button type="button" style="height: 48px; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700">重新发送 · 52s</button>
+        </div>
+        <div aria-label="人机验证" style="height: 64px; border-radius: 18px; background: #F3F0EC; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">Turnstile · 自动验证</div>
+        <button type="button" onClick="{{toPassword}}" style="height: 50px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer">下一步</button>
+      </sc-if>
+
+      <sc-if value="{{isPassword}}" hint-placeholder-val="{{ false }}">
+        <span style="font-family: 'DM Mono', monospace; font-size: 11px">第 2 步 / 共 2 步 · lin@icloud.com</span>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">他们怎么叫你<input type="text" value="小林" style="height: 48px; box-sizing: border-box; padding: 0 16px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 16px; font-weight: 400"></label>
+        <sc-for list="{{pwFields}}" as="f" hint-placeholder-count="2">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <label for="{{f.id}}" style="font-size: 13px; font-weight: 700">{{f.label}}</label>
+            <div style="display: flex; align-items: center; height: 48px; box-sizing: border-box; padding: 0 4px 0 16px; border: 1px solid #E4DED7; border-radius: 999px">
+              <input id="{{f.id}}" type="password" value="burbur2026" autocomplete="new-password" style="flex-grow: 1; min-width: 0; border: none; background: none; font: inherit; font-size: 16px; outline: none">
+              <button type="button" aria-label="显示密码" style="width: 40px; height: 40px; border: none; border-radius: 50%; background: none; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+            </div>
+          </div>
+        </sc-for>
+        <label style="display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5"><input type="checkbox" style="width: 20px; height: 20px; margin: 0"><span>我已年满 18 岁，并同意 <a href="#">用户协议</a> 和 <a href="#">隐私说明</a></span></label>
+        <button type="button" style="height: 50px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 16px; font-weight: 700; cursor: pointer">完成注册 · 送 100 点</button>
+      </sc-if>
+    </div>
+    <a href="Main.dc.html" style="align-self: center; min-height: 44px; display: flex; align-items: center; font-size: 14px">先以访客身份看看</a>
+  </div>
+
+  <div style="height: 80px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">Safari address bar · system</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"loginError":{"editor":"enum","options":["无","邮箱未注册","密码不对","尝试太多次"],"default":"密码不对"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: 'login', show: false };
+  }
+  renderVals() {
+    var self = this;
+    var mode = this.state.mode;
+    var err = this.props.loginError ?? '密码不对';
+    var E = { '邮箱未注册': '这个邮箱还没有注册，去注册吧', '密码不对': '密码不对，再试一次', '尝试太多次': '试错太多次了，请稍后再试' };
+    var isLogin = mode === 'login', isSignup = !isLogin;
+    return {
+      isLogin: isLogin, isSignup: isSignup, isCode: mode === 'code', isPassword: mode === 'password',
+      loginBg: isLogin ? '#141414' : 'transparent', loginFg: isLogin ? '#FFFFFF' : '#141414',
+      signupBg: isSignup ? '#141414' : 'transparent', signupFg: isSignup ? '#FFFFFF' : '#141414',
+      toLogin: function () { self.setState({ mode: 'login' }); },
+      toSignup: function () { self.setState({ mode: 'code' }); },
+      toPassword: function () { self.setState({ mode: 'password' }); },
+      hasError: err !== '无', error: E[err] || '', pwLine: err === '密码不对' ? '#C2410C' : '#E4DED7',
+      pwType: this.state.show ? 'text' : 'password', pwAria: this.state.show ? '隐藏密码' : '显示密码',
+      togglePw: function () { self.setState({ show: !self.state.show }); },
+      pwFields: [{ id: 'pw1', label: '设置密码（至少 8 位）' }, { id: 'pw2', label: '再输一次密码' }]
+    };
+  }
+}
+</script>
+</body>
+</html>

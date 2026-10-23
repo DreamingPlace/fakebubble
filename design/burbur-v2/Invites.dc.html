@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>邀请与额度</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="min-height: 1320px; background: radial-gradient(40% 22% at 20% 0%, #FFE3D3 0%, transparent 70%), radial-gradient(30% 20% at 75% 0%, #E2EEFF 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1 1 248px; max-width: 260px"><dc-import name="AdminNav" current="邀请与额度" hint-size="248px,1100px"></dc-import></div>
+
+  <main style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 28px 36px 40px">
+    <div style="max-width: 1120px; display: flex; flex-direction: column; gap: 20px">
+
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #4A4A4A">UTC · 示例</span>
+          <h1 style="margin: 0; font-size: 36px; font-weight: 900; letter-spacing: -0.04em; line-height: 1">邀请与额度</h1>
+        </div>
+        <button type="button" onClick="{{toggleCreate}}" aria-expanded="{{createOpen}}" style="height: 40px; padding: 0 18px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; cursor: pointer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>新建批次
+        </button>
+      </div>
+
+      <sc-if value="{{createOpen}}" hint-placeholder-val="{{ false }}">
+        <section aria-labelledby="new-title" style="background: #FFFFFF; border-radius: 24px; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px">
+          <h2 id="new-title" style="margin: 0; font-size: 17px; font-weight: 900">新建批次</h2>
+          <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 16px">
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; grid-column: span 2">批次名称<input type="text" value="朋友第二批" style="height: 40px; box-sizing: border-box; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 400"></label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">数量（1–500）<input type="number" value="10" style="height: 40px; box-sizing: border-box; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 400"></label>
+            <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">额度类型
+              <div role="group" aria-label="额度类型" style="display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: #F3F0EC; height: 40px; box-sizing: border-box">
+                <button type="button" aria-pressed="false" style="flex: 1 1 0; border: none; border-radius: 999px; background: transparent; font: inherit; font-size: 13px; cursor: pointer">不限量</button>
+                <button type="button" aria-pressed="true" style="flex: 1 1 0; border: none; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">每天补充</button>
+              </div>
+            </div>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">每天补充（点）<input type="number" value="50" style="height: 40px; box-sizing: border-box; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 400"></label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">总上限（点）<input type="number" value="1000" style="height: 40px; box-sizing: border-box; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 400"></label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">额度有效天数<input type="text" placeholder="不填为长期" style="height: 40px; box-sizing: border-box; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 400"></label>
+            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700">兑换截止（UTC）<input type="text" placeholder="可选 · YYYY-MM-DD" style="height: 40px; box-sizing: border-box; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 400"></label>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px">
+            <button type="button" onClick="{{toggleCreate}}" style="height: 40px; padding: 0 18px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">取消</button>
+            <button type="button" onClick="{{create}}" style="height: 40px; padding: 0 18px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">生成 10 个邀请码</button>
+          </div>
+        </section>
+      </sc-if>
+
+      <section aria-labelledby="batches-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px 10px; display: flex; flex-direction: column; gap: 8px">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px">
+          <h2 id="batches-title" style="margin: 0; font-size: 17px; font-weight: 900">批次</h2>
+          <span style="font-size: 13px; color: #3F3F3F">持有中 16 人 · 不限量 4 · 每天补充 12</span>
+        </div>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; min-width: 860px; table-layout: fixed; border-collapse: collapse; font-size: 14px">
+            <colgroup><col style="width: 22%"><col style="width: 19%"><col style="width: 10%"><col style="width: 12%"><col style="width: 13%"><col style="width: 9%"><col style="width: 15%"></colgroup>
+            <thead><tr style="text-align: left; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">
+              <th scope="col" style="padding: 8px 10px; font-weight: 500">批次</th><th scope="col" style="padding: 8px 10px; font-weight: 500">额度</th><th scope="col" style="padding: 8px 10px; font-weight: 500">有效期</th><th scope="col" style="padding: 8px 10px; font-weight: 500">建批人</th><th scope="col" style="padding: 8px 10px; font-weight: 500">兑换</th><th scope="col" style="padding: 8px 10px; font-weight: 500">状态</th><th scope="col" style="padding: 8px 10px; font-weight: 500; text-align: right">操作</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{batches}}" as="b" hint-placeholder-count="4">
+                <tr style="border-top: 1px solid #F0ECE7; background: {{b.rowBg}}">
+                  <th scope="row" style="padding: 12px 10px; text-align: left; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis"><span>{{b.name}}</span><span style="display: block; font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 400; color: #4A4A4A">{{b.created}}</span></th>
+                  <td style="padding: 12px 10px; white-space: nowrap">{{b.tier}}</td>
+                  <td style="padding: 12px 10px; white-space: nowrap">{{b.term}}</td>
+                  <td style="padding: 12px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{b.by}}</td>
+                  <td style="padding: 12px 10px">
+                    <span style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 700">{{b.used}}</span><span style="flex-grow: 1; height: 6px; border-radius: 999px; background: #EFEBE6; overflow: hidden"><span style="display: block; width: {{b.pct}}; height: 100%; background: #141414"></span></span></span>
+                  </td>
+                  <td style="padding: 12px 10px"><span style="height: 24px; padding: 0 10px; border-radius: 999px; background: {{b.stBg}}; color: {{b.stFg}}; display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; white-space: nowrap">{{b.status}}</span></td>
+                  <td style="padding: 12px 10px">
+                    <span style="display: flex; justify-content: flex-end; gap: 6px">
+                      <button type="button" onClick="{{b.open}}" aria-pressed="{{b.on}}" style="width: 72px; height: 32px; border: 1px solid #E4DED7; border-radius: 999px; background: {{b.btnBg}}; color: {{b.btnFg}}; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{b.btn}}</button>
+                      <button type="button" aria-label="更多操作：{{b.name}}" style="width: 32px; height: 32px; border: 1px solid #E4DED7; border-radius: 50%; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="18.5" cy="12" r="1.6"></circle></svg></button>
+                    </span>
+                  </td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section aria-labelledby="detail-title" style="background: #FFFFFF; border-radius: 24px; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+        <sc-if value="{{justCreated}}" hint-placeholder-val="{{ false }}">
+          <div role="status" style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 999px; background: #E3F3E8; color: #1E5E36; font-size: 14px; font-weight: 700">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>
+            已生成 {{d.count}} 个邀请码。每个都能单独复制，以后也能回到这里再看。
+          </div>
+        </sc-if>
+        <div style="display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <h2 id="detail-title" style="margin: 0; font-size: 22px; font-weight: 900; letter-spacing: -0.02em">{{d.name}}</h2>
+            <span style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px">
+              <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center">{{d.tier}}</span>
+              <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center">{{d.term}}</span>
+              <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center">建批人 {{d.by}}</span>
+              <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center; font-family: 'DM Mono', monospace">{{d.created}}</span>
+            </span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px">
+            <sc-if value="{{d.canCopy}}" hint-placeholder-val="{{ true }}">
+              <button type="button" onClick="{{copyAll}}" style="height: 36px; padding: 0 16px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{copyAllLabel}}</button>
+            </sc-if>
+            <button type="button" style="height: 36px; padding: 0 16px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">导出表格</button>
+            <button type="button" style="height: 36px; padding: 0 16px; border: 1px solid #F1C9BC; border-radius: 999px; background: #FFFFFF; color: #A3330F; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">撤销整批</button>
+          </div>
+        </div>
+        <sc-if value="{{d.maskNote}}" hint-placeholder-val="{{ false }}">
+          <span style="align-self: flex-start; height: 26px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>其他管理员的批次</span>
+        </sc-if>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; min-width: 820px; table-layout: fixed; border-collapse: collapse; font-size: 14px">
+            <colgroup><col style="width: 7%"><col style="width: 25%"><col style="width: 11%"><col style="width: 17%"><col style="width: 12%"><col style="width: 14%"><col style="width: 14%"></colgroup>
+            <thead><tr style="text-align: left; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">
+              <th scope="col" style="padding: 8px 10px; font-weight: 500">序号</th><th scope="col" style="padding: 8px 10px; font-weight: 500">邀请码</th><th scope="col" style="padding: 8px 10px; font-weight: 500">状态</th><th scope="col" style="padding: 8px 10px; font-weight: 500">兑换时间</th><th scope="col" style="padding: 8px 10px; font-weight: 500">玩家编号</th><th scope="col" style="padding: 8px 10px; font-weight: 500">额度到期</th><th scope="col" style="padding: 8px 10px; font-weight: 500; text-align: right">操作</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{codes}}" as="c" hint-placeholder-count="8">
+                <tr style="border-top: 1px solid #F0ECE7">
+                  <th scope="row" style="padding: 10px; text-align: left; font-family: 'DM Mono', monospace; font-weight: 500">#{{c.n}}</th>
+                  <td style="padding: 10px">
+                    <span style="display: flex; align-items: center; gap: 8px; min-width: 0">
+                      <span style="font-family: 'DM Mono', monospace; font-size: {{c.codeSize}}; color: {{c.codeFg}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.code}}</span>
+                      <sc-if value="{{c.copyable}}" hint-placeholder-val="{{ true }}">
+                        <button type="button" onClick="{{c.copy}}" aria-label="复制邀请码 #{{c.n}}" style="width: 64px; height: 32px; flex-shrink: 0; border: 1px solid #E4DED7; border-radius: 999px; background: {{c.copyBg}}; color: {{c.copyFg}}; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">{{c.copyLabel}}</button>
+                      </sc-if>
+                    </span>
+                  </td>
+                  <td style="padding: 10px"><span style="height: 24px; padding: 0 10px; border-radius: 999px; background: {{c.stBg}}; color: {{c.stFg}}; display: inline-flex; align-items: center; font-size: 12px; font-weight: 700">{{c.status}}</span></td>
+                  <td style="padding: 10px; font-family: 'DM Mono', monospace; font-size: 12px">{{c.at}}</td>
+                  <td style="padding: 10px; font-family: 'DM Mono', monospace; font-size: 12px">{{c.player}}</td>
+                  <td style="padding: 10px; font-family: 'DM Mono', monospace; font-size: 12px">{{c.until}}</td>
+                  <td style="padding: 10px; text-align: right">
+                    <sc-if value="{{c.hasAction}}" hint-placeholder-val="{{ true }}">
+                      <button type="button" style="width: 84px; height: 32px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">{{c.action}}</button>
+                    </sc-if>
+                  </td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"viewer":{"editor":"enum","options":["主管理员","另一位管理员"],"default":"主管理员"},"justCreated":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: 0, copied: {}, all: false, createOpen: false, created: false };
+  }
+  renderVals() {
+    var self = this;
+    var owner = (this.props.viewer ?? '主管理员') === '主管理员';
+    var justCreated = !!this.props.justCreated || this.state.created;
+    var B = [
+      { name: '朋友第一批', created: '2026-10-23 06:10', tier: '每天 +50 · 上限 1000', term: '长期', by: '主管理员', byOwner: true, total: 20, used: 12, status: '进行中', kind: 'sealed' },
+      { name: '共创作者', created: '2026-10-22 18:02', tier: '不限量', term: '90 天', by: '小林', byOwner: false, total: 5, used: 3, status: '进行中', kind: 'sealed' },
+      { name: '测试旧码', created: '2026-10-20 09:31', tier: '不限量', term: '30 天', by: '主管理员', byOwner: true, total: 3, used: 1, status: '进行中', kind: 'legacy' },
+      { name: '十月试用', created: '2026-10-15 12:00', tier: '每天 +30 · 上限 500', term: '30 天', by: '主管理员', byOwner: true, total: 10, used: 4, status: '已撤销', kind: 'legacy' }
+    ];
+    if (justCreated) B.unshift({ name: '朋友第二批', created: '2026-10-23 07:41', tier: '每天 +50 · 上限 1000', term: '长期', by: '主管理员', byOwner: true, total: 10, used: 0, status: '进行中', kind: 'sealed' });
+    var sel = justCreated && this.state.sel === 0 ? 0 : Math.min(this.state.sel, B.length - 1);
+    var batches = B.map(function (b, i) {
+      var on = i === sel;
+      var st = b.status === '已撤销' ? ['#F3F0EC', '#4A4A4A'] : ['#E3F3E8', '#1E5E36'];
+      return {
+        name: b.name, created: b.created, tier: b.tier, term: b.term, by: b.by,
+        used: b.used + ' / ' + b.total, pct: Math.round(b.used / b.total * 100) + '%',
+        status: b.status, stBg: st[0], stFg: st[1],
+        on: on, btn: on ? '查看中' : '查看', btnBg: on ? '#141414' : '#FFFFFF', btnFg: on ? '#FFFFFF' : '#141414',
+        rowBg: on ? '#FAF8F6' : 'transparent',
+        open: function () { self.setState({ sel: i, copied: {}, all: false }); }
+      };
+    });
+    var b = B[sel];
+    var canSee = b.kind === 'sealed' && (owner || !b.byOwner && false || (!owner && !b.byOwner && false));
+    canSee = b.kind === 'sealed' && (owner || b.by === '小林' && false);
+    var masked = b.kind === 'sealed' && !owner && b.byOwner;
+    if (!owner && b.by === '小林') canSee = false;
+    if (owner && b.kind === 'sealed') canSee = true;
+    var POOL = ['kq7R2mZxWp9a', 'Hn4tVb8LcQe1', 'p0XwJ3dYfK6s', 'Zr5aGm1NqT8u', 'bE9cUh2KvL0x', 'wT6yRj4PsD3m', 'M2fQx7NaHk5c', 'gV8pLz0BrW4e', 'Yd3kTq9ScF1n', 'c7HwPa5XmJ2r'];
+    var n = Math.min(b.total, 8);
+    var copied = this.state.copied;
+    var codes = [];
+    for (var i = 0; i < n; i++) {
+      (function (i) {
+        var redeemed = i < Math.min(b.used, n) && !justCreated || (sel > 0 && i < b.used);
+        if (justCreated && sel === 0) redeemed = false;
+        var revoked = b.status === '已撤销' && !redeemed;
+        var status = redeemed ? '已兑换' : revoked ? '已撤销' : '未使用';
+        var st = redeemed ? ['#E3EEFF', '#1C4FA0'] : revoked ? ['#F3F0EC', '#4A4A4A'] : ['#F3F0EC', '#141414'];
+        var code = b.kind === 'legacy' ? '旧邀请码无法再次查看' : canSee ? POOL[i] : '********';
+        var isCopied = !!copied[i] || self.state.all;
+        codes.push({
+          n: i + 1, code: code,
+          codeFg: b.kind === 'legacy' ? '#5A5A5A' : '#141414', codeSize: b.kind === 'legacy' ? '12px' : '14px',
+          copyable: canSee && b.kind === 'sealed' && !revoked,
+          copyLabel: isCopied ? '已复制' : '复制', copyBg: isCopied ? '#141414' : '#FFFFFF', copyFg: isCopied ? '#FFFFFF' : '#141414',
+          copy: function () { var c = Object.assign({}, self.state.copied); c[i] = true; self.setState({ copied: c }); },
+          status: status, stBg: st[0], stFg: st[1],
+          at: redeemed ? '2026-10-2' + (2 + (i % 2)) + ' 0' + (i + 1) + ':1' + i : '—',
+          player: redeemed ? ['FT7S1112', 'K81MW0D4', '7Q3KM2F8', 'P2XAH9C6', 'R5NBT3E7', 'W0CJ8QK2', 'H6ZDV1M9', 'L4GTP8S3'][i] : '—',
+          until: redeemed ? (b.term === '长期' ? '长期' : '2026-11-2' + i) : '—',
+          hasAction: !revoked && b.status !== '已撤销', action: redeemed ? '结束额度' : '撤销该码'
+        });
+      })(i);
+    }
+    return {
+      batches: batches, codes: codes, justCreated: justCreated && sel === 0,
+      d: { name: b.name, tier: b.tier, term: b.term, by: b.by, created: b.created + ' UTC', count: b.total, canCopy: canSee && b.kind === 'sealed', maskNote: !canSee && b.kind === 'sealed' },
+      copyAll: function () { self.setState({ all: true }); },
+      copyAllLabel: this.state.all ? '已复制全部未使用' : '复制全部未使用',
+      createOpen: this.state.createOpen,
+      toggleCreate: function () { self.setState({ createOpen: !self.state.createOpen }); },
+      create: function () { self.setState({ createOpen: false, created: true, sel: 0, copied: {}, all: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>消耗表</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}a:hover{color:#000000}
+@keyframes usGrow { from { transform: scaleY(0) } to { transform: scaleY(1) } }
+@keyframes usIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+@keyframes usDraw { from { stroke-dashoffset: 1600 } to { stroke-dashoffset: 0 } }
+.us-grow { transform-origin: bottom; animation: usGrow 560ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+.us-in { animation: usIn 320ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+.us-draw { stroke-dasharray: 1600; animation: usDraw 900ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+@media (prefers-reduced-motion: reduce) { .us-grow, .us-in, .us-draw { animation-duration: 1ms !important; animation-delay: 0ms !important } }
+</style>
+</helmet>
+<div style="min-height: 1240px; background: radial-gradient(40% 22% at 22% 0%, #FFE8D6 0%, transparent 70%), radial-gradient(30% 20% at 80% 0%, #E6F5EF 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1 1 248px; max-width: 260px"><dc-import name="AdminNav" current="消耗表" hint-size="248px,1100px"></dc-import></div>
+
+  <main style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 28px 36px 40px">
+    <div style="max-width: 1120px; display: flex; flex-direction: column; gap: 20px">
+
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 36px; font-weight: 900; letter-spacing: -0.04em; line-height: 1">消耗表</h1>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <div role="group" aria-label="月份" style="display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.85); border: 1px solid #FFFFFF">
+            <sc-for list="{{months}}" as="m" hint-placeholder-count="2">
+              <button type="button" onClick="{{m.pick}}" aria-pressed="{{m.on}}" style="height: 34px; padding: 0 14px; border: none; border-radius: 999px; background: {{m.bg}}; color: {{m.fg}}; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: background 200ms ease">{{m.label}}</button>
+            </sc-for>
+          </div>
+          <button type="button" style="height: 40px; padding: 0 16px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">导出表格</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+        <div class="us-in" style="background: #141414; color: #FFFFFF; border-radius: 24px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 13px; font-weight: 700">本月花费</span>
+          <span style="font-size: 32px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1">{{m.usd}}</span>
+          <span title="按 $1 ≈ ¥6.7" style="font-size: 13px; color: #E2DEEA">≈ {{m.rmb}}</span>
+        </div>
+        <div class="us-in" style="animation-delay: 40ms; background: #FFFFFF; border-radius: 24px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 13px; font-weight: 700">每条回复</span>
+          <span style="font-size: 32px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1">{{m.per}}</span>
+          <span style="font-size: 13px; color: #3F3F3F">{{m.replies}} 条</span>
+        </div>
+        <div class="us-in" style="animation-delay: 80ms; background: #FFFFFF; border-radius: 24px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 13px; font-weight: 700">账本扣的</span>
+          <span style="font-size: 32px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1">{{m.ledger}}</span>
+        </div>
+        <div class="us-in" style="animation-delay: 120ms; background: #FFFFFF; border-radius: 24px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+          <span style="font-size: 13px; font-weight: 700">用掉的点数</span>
+          <span style="font-size: 32px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1">{{m.points}}</span>
+        </div>
+      </div>
+
+      <section aria-labelledby="daily-title" style="background: #FFFFFF; border-radius: 24px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px">
+          <h2 id="daily-title" style="margin: 0; font-size: 17px; font-weight: 900">每天花费</h2>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px">
+            <div role="group" aria-label="拆分方式" style="display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: #F3F0EC">
+              <sc-for list="{{splits}}" as="s" hint-placeholder-count="2">
+                <button type="button" onClick="{{s.pick}}" aria-pressed="{{s.on}}" style="height: 32px; padding: 0 14px; border: none; border-radius: 999px; background: {{s.bg}}; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: background 200ms ease">{{s.label}}</button>
+              </sc-for>
+            </div>
+            <div role="group" aria-label="图表类型" style="display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: #F3F0EC">
+              <sc-for list="{{kinds}}" as="k" hint-placeholder-count="2">
+                <button type="button" onClick="{{k.pick}}" aria-pressed="{{k.on}}" aria-label="{{k.label}}" style="width: 40px; height: 32px; border: none; border-radius: 999px; background: {{k.bg}}; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 200ms ease">
+                  <sc-if value="{{k.isBar}}" hint-placeholder-val="{{ true }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 20V11M12 20V5M18 20v-7"></path></svg></sc-if>
+                  <sc-if value="{{k.isLine}}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-6 4 3 7-8"></path></svg></sc-if>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        <div role="group" aria-label="显示哪些" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <sc-for list="{{legend}}" as="l" hint-placeholder-count="6">
+            <button type="button" onClick="{{l.toggle}}" aria-pressed="{{l.on}}" style="height: 34px; padding: 0 12px 0 8px; border: 1.5px solid {{l.border}}; border-radius: 999px; background: {{l.bg}}; color: #141414; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: background 200ms ease, border-color 200ms ease, opacity 200ms ease; opacity: {{l.op}}">
+              <span style="width: 18px; height: 18px; border-radius: 50%; background: {{l.dotBg}}; box-shadow: inset 0 0 0 2px {{l.col}}; display: flex; align-items: center; justify-content: center; transition: background 200ms ease">
+                <sc-if value="{{l.on}}" hint-placeholder-val="{{ true }}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg></sc-if>
+              </span>
+              {{l.name}} <b>{{l.v}}</b>
+            </button>
+          </sc-for>
+          <sc-if value="{{alertShown}}" hint-placeholder-val="{{ true }}"><span style="display: flex; align-items: center; gap: 6px; margin-left: 4px; font-size: 13px"><i style="width: 14px; border-top: 2px dashed #C2410C"></i>$30</span></sc-if>
+        </div>
+
+        <div style="position: relative; height: 230px; padding-left: 44px">
+          <sc-for list="{{grid}}" as="gl" hint-placeholder-count="5">
+            <div style="position: absolute; left: 44px; right: 0; bottom: {{gl.y}}px; border-top: 1px solid #F0ECE7; transition: bottom 400ms cubic-bezier(0.2, 0.82, 0.24, 1)"></div>
+            <span style="position: absolute; left: 0; bottom: {{gl.ly}}px; width: 36px; text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A; transition: bottom 400ms cubic-bezier(0.2, 0.82, 0.24, 1)">{{gl.label}}</span>
+          </sc-for>
+          <sc-if value="{{alertShown}}" hint-placeholder-val="{{ true }}">
+            <div style="position: absolute; left: 44px; right: 0; bottom: {{alertY}}px; border-top: 2px dashed #C2410C; transition: bottom 400ms cubic-bezier(0.2, 0.82, 0.24, 1)"></div>
+          </sc-if>
+
+          <sc-if value="{{barOn}}" hint-placeholder-val="{{ true }}">
+            <div style="position: absolute; left: 44px; right: 0; top: 0; bottom: 0; display: flex; align-items: flex-end; gap: 3px">
+              <sc-for list="{{bars}}" as="b" hint-placeholder-count="30">
+                <div aria-label="{{b.aria}}" style="position: relative; flex: 1 1 0; height: 100%; display: flex; flex-direction: column-reverse">
+                  <sc-if value="{{b.mark}}" hint-placeholder-val="{{ false }}">
+                    <span style="position: absolute; left: 50%; top: 0; bottom: 0; border-left: 1.5px solid #141414"></span>
+                    <span style="position: absolute; left: 50%; top: -2px; transform: translateX(-50%); height: 22px; padding: 0 8px; border-radius: 999px; background: #141414; color: #FFFFFF; display: flex; align-items: center; font-family: 'DM Mono', monospace; font-size: 11px; white-space: nowrap">Drama 3 ×5</span>
+                  </sc-if>
+                  <div class="us-grow" style="animation-delay: {{b.delay}}; display: flex; flex-direction: column-reverse; gap: 1px">
+                    <sc-for list="{{b.segs}}" as="s" hint-placeholder-count="2"><div style="height: {{s.h}}px; background: {{s.col}}; transition: height 400ms cubic-bezier(0.2, 0.82, 0.24, 1)"></div></sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{lineOn}}" hint-placeholder-val="{{ false }}">
+            <svg viewBox="0 0 640 230" preserveAspectRatio="none" role="img" aria-label="每天花费折线" style="position: absolute; left: 44px; right: 0; top: 0; width: calc(100% - 44px); height: 230px; overflow: visible">
+              <sc-if value="{{markOn}}" hint-placeholder-val="{{ false }}"><line x1="{{markX}}" x2="{{markX}}" y1="0" y2="230" stroke="#141414" stroke-width="1.5" vector-effect="non-scaling-stroke"></line></sc-if>
+              <sc-for list="{{lines}}" as="l" hint-placeholder-count="3"><polyline class="us-draw" points="{{l.pts}}" fill="none" stroke="{{l.col}}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline></sc-for>
+            </svg>
+            <sc-if value="{{markOn}}" hint-placeholder-val="{{ false }}"><span style="position: absolute; left: calc(44px + (100% - 44px) * {{markFrac}}); top: -2px; transform: translateX(-50%); height: 22px; padding: 0 8px; border-radius: 999px; background: #141414; color: #FFFFFF; display: flex; align-items: center; font-family: 'DM Mono', monospace; font-size: 11px; white-space: nowrap">Drama 3 ×5</span></sc-if>
+          </sc-if>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding-left: 44px; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">
+          <sc-for list="{{xlabels}}" as="x" hint-placeholder-count="6"><span>{{x}}</span></sc-for>
+        </div>
+      </section>
+
+      <section aria-labelledby="model-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+        <h2 id="model-title" style="margin: 0; font-size: 17px; font-weight: 900">按模型</h2>
+        <div style="overflow-x: auto">
+          <table style="width: 100%; min-width: 1000px; border-collapse: collapse; font-size: 13px">
+            <thead><tr style="text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">
+              <th scope="col" style="text-align: left; padding: 8px; font-weight: 500">供应商 / 模型 / 阶段</th><th scope="col" style="padding: 8px; font-weight: 500">调用</th><th scope="col" style="padding: 8px; font-weight: 500">输入</th><th scope="col" style="padding: 8px; font-weight: 500">缓存</th><th scope="col" style="padding: 8px; font-weight: 500">输出</th><th scope="col" style="padding: 8px; font-weight: 500">语音字节</th><th scope="col" style="padding: 8px; font-weight: 500">列表价</th><th scope="col" style="padding: 8px; font-weight: 500">账本扣</th><th scope="col" style="padding: 8px; font-weight: 500">回复</th>
+            </tr></thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="r" hint-placeholder-count="5">
+                <tr style="text-align: right; border-top: 1px solid #F0ECE7"><th scope="row" style="text-align: left; padding: 10px 8px; font-weight: 500"><span style="font-weight: 700">{{r.p}}</span> / {{r.model}} / {{r.phase}}</th><td style="padding: 10px 8px">{{r.calls}}</td><td style="padding: 10px 8px">{{r.inp}}</td><td style="padding: 10px 8px">{{r.cache}}</td><td style="padding: 10px 8px">{{r.out}}</td><td style="padding: 10px 8px">{{r.bytes}}</td><td style="padding: 10px 8px; font-weight: 700">{{r.cost}}</td><td style="padding: 10px 8px">{{r.ledger}}</td><td style="padding: 10px 8px">{{r.rep}}</td></tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { month: '2026-11', split: 'user', off: {}, kind: 'bar' };
+  }
+  renderVals() {
+    var self = this;
+    var nov = this.state.month === '2026-11';
+    var days = nov ? 30 : 31;
+    var H = 230;
+    var U = [
+      { id: 'guest', name: '访客', col: '#BDB5AC', w: 0.12 },
+      { id: 'reg', name: '注册', col: '#9DB8F5', w: 0.30 },
+      { id: 'refill', name: '每天补充', col: '#2F7BEA', w: 0.28 },
+      { id: 'unl', name: '不限量', col: '#7C4DEB', w: 0.14 },
+      { id: 'admin', name: '管理员', col: '#E8561E', w: 0.10 },
+      { id: 'test', name: '测试组', col: '#141414', w: 0.06 }
+    ];
+    var C = [{ id: 'voice', name: '语音', col: '#141414', w: 0.75 }, { id: 'text', name: '文字', col: '#BDB5AC', w: 0.25 }];
+    var parts = this.state.split === 'user' ? U : C;
+    var off = this.state.off, kind = this.state.kind;
+    var vis = parts.filter(function (p) { return !off[p.id]; });
+    var daily = [];
+    for (var i = 0; i < days; i++) {
+      var base = nov ? 3 + i * 0.12 : 1.4 + i * 0.12;
+      if (nov && i >= 11) base = base * 2.7;
+      daily.push(Math.min(base, 38) + (i % 3) * 0.3 + (i % 5 === 0 ? 0.6 : 0));
+    }
+    var totals = parts.map(function (p) { return daily.reduce(function (a, d) { return a + d * p.w; }, 0); });
+    // Auto scale: the top follows the tallest visible value (stacked total for bars, single series for lines).
+    var peak = 0;
+    daily.forEach(function (d) {
+      var v = kind === 'bar' ? vis.reduce(function (a, p) { return a + d * p.w; }, 0) : Math.max.apply(null, vis.map(function (p) { return d * p.w; }).concat([0]));
+      if (v > peak) peak = v;
+    });
+    var nice = function (v) {
+      if (v <= 0) return 1;
+      var e = Math.pow(10, Math.floor(Math.log(v) / Math.LN10)), f = v / e;
+      return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+    };
+    var top = nice(peak * 1.12);
+    var px = function (v) { return Math.round(v / top * H); };
+    var fmt = function (v) { return '$' + (v < 1 ? v.toFixed(2) : v < 10 ? v.toFixed(1).replace(/\.0$/, '') : Math.round(v)); };
+    var grid = [0, 0.25, 0.5, 0.75, 1].map(function (f) { return { y: px(top * f), ly: px(top * f) - 6, label: fmt(top * f) }; });
+    var bars = daily.map(function (d, i) {
+      return { mark: nov && i === 11, delay: (i * 12) + 'ms', aria: (nov ? '11-' : '10-') + (i + 1) + ' ' + fmt(d), segs: vis.map(function (p) { return { h: Math.max(1, px(d * p.w)), col: p.col }; }) };
+    });
+    var lines = vis.map(function (p) {
+      return { col: p.col, pts: daily.map(function (d, i) { return (i / (days - 1) * 640).toFixed(1) + ',' + (H - d * p.w / top * H).toFixed(1); }).join(' ') };
+    });
+    var M = nov
+      ? { usd: '$612', rmb: '¥4,100', per: '$0.061', replies: '10,020', ledger: '$780', points: '88,400' }
+      : { usd: '$96.40', rmb: '¥646', per: '$0.018', replies: '5,340', ledger: '$141', points: '41,280' };
+    var rows = [
+      { p: 'deepseek', model: 'deepseek-flash', phase: 'draft', calls: '5,120', inp: '21.4M', cache: '14.9M', out: '1.9M', bytes: '—', cost: '$6.80', ledger: '$11.30', rep: '4,510' },
+      { p: 'deepseek', model: 'deepseek-v4-pro', phase: 'review', calls: '5,890', inp: '30.2M', cache: '19.6M', out: '2.4M', bytes: '—', cost: '$14.60', ledger: '$23.90', rep: '5,340' },
+      { p: 'gemini', model: 'gemini-3.8-flash', phase: 'draft', calls: '540', inp: '2.3M', cache: '0.9M', out: '0.2M', bytes: '—', cost: '$1.20', ledger: '$2.10', rep: '512' },
+      { p: 'xai', model: 'grok-4.7', phase: 'draft', calls: '370', inp: '1.6M', cache: '0.5M', out: '0.1M', bytes: '—', cost: '$1.50', ledger: '$2.40', rep: '352' },
+      { p: 'fish', model: 'drama-3', phase: 'speech', calls: '3,880', inp: '—', cache: '—', out: '—', bytes: '7.2M', cost: '$72.30', ledger: '$101.50', rep: '3,860' }
+    ];
+    var split = this.state.split;
+    var mo = nov ? '11-' : '10-';
+    return {
+      m: M, rows: rows, bars: bars, lines: lines, grid: grid,
+      barOn: kind === 'bar', lineOn: kind === 'line',
+      alertShown: top >= 30, alertY: px(30),
+      markOn: nov, markX: (11 / (days - 1) * 640).toFixed(1), markFrac: (11 / (days - 1)).toFixed(3),
+      xlabels: [1, 6, 11, 16, 21, 26, days].map(function (d) { return mo + (d < 10 ? '0' : '') + d; }),
+      legend: parts.map(function (p, k) {
+        var on = !off[p.id];
+        return { name: p.name, col: p.col, v: '$' + Math.round(totals[k]), on: on, op: on ? 1 : 0.55, bg: on ? '#FFFFFF' : '#F7F4F0', border: on ? p.col : '#E4DED7', dotBg: on ? p.col : '#FFFFFF',
+          toggle: function () { var o = Object.assign({}, self.state.off); o[p.id] = !o[p.id]; self.setState({ off: o }); } };
+      }),
+      kinds: [['bar', '柱状'], ['line', '折线']].map(function (k) { var on = kind === k[0]; return { label: k[1], on: on, isBar: k[0] === 'bar', isLine: k[0] === 'line', bg: on ? '#FFFFFF' : 'transparent', pick: function () { self.setState({ kind: k[0] }); } }; }),
+      splits: [['user', '按用户'], ['kind', '文字 / 语音']].map(function (s) { var on = split === s[0]; return { label: s[1], on: on, bg: on ? '#FFFFFF' : 'transparent', pick: function () { self.setState({ split: s[0], off: {} }); } }; }),
+      months: ['2026-11', '2026-10'].map(function (k) { var on = self.state.month === k; return { label: k, on: on, bg: on ? '#141414' : 'transparent', fg: on ? '#FFFFFF' : '#141414', pick: function () { self.setState({ month: k }); } }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

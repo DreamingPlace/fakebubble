@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>玩家统计</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="min-height: 1320px; background: radial-gradient(40% 22% at 20% 0%, #E2EEFF 0%, transparent 70%), radial-gradient(30% 20% at 80% 0%, #EDE6FF 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1 1 248px; max-width: 260px"><dc-import name="AdminNav" current="玩家统计" hint-size="248px,1100px"></dc-import></div>
+
+  <main style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 28px 36px 40px">
+    <div style="max-width: 1120px; display: flex; flex-direction: column; gap: 20px">
+
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #4A4A4A; position: relative">UTC · 示例数据</span>
+          <h1 style="margin: 0; font-size: 36px; font-weight: 900; letter-spacing: -0.04em; line-height: 1">玩家统计</h1>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <div role="group" aria-label="时间范围" style="display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.85); border: 1px solid #FFFFFF">
+            <sc-for list="{{ranges}}" as="r" hint-placeholder-count="3">
+              <button type="button" onClick="{{r.pick}}" aria-pressed="{{r.on}}" style="height: 34px; padding: 0 14px; border: none; border-radius: 999px; background: {{r.bg}}; color: {{r.fg}}; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer">{{r.label}}</button>
+            </sc-for>
+          </div>
+          <button type="button" style="height: 40px; padding: 0 16px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">导出表格</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px">
+        <sc-for list="{{kpis}}" as="k" hint-placeholder-count="5">
+          <div style="background: #FFFFFF; border-radius: 24px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 13px; font-weight: 700">{{k.label}}</span>
+            <span style="font-size: 32px; font-weight: 900; letter-spacing: -0.03em; line-height: 1.1">{{k.v}}</span>
+            <span style="font-size: 12px; color: #3F3F3F">{{k.sub}}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <section aria-labelledby="active-title" style="background: #FFFFFF; border-radius: 24px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px">
+          <h2 id="active-title" style="margin: 0; font-size: 17px; font-weight: 900">每天活跃（打开过网站）</h2>
+          <span style="display: flex; gap: 14px; font-size: 13px">
+            <span style="display: flex; align-items: center; gap: 6px"><i style="width: 10px; height: 10px; border-radius: 50%; background: #141414"></i>注册玩家</span>
+            <span style="display: flex; align-items: center; gap: 6px"><i style="width: 10px; height: 10px; border-radius: 50%; background: #BDB5AC"></i>访客</span>
+          </span>
+        </div>
+        <div style="position: relative; height: 180px; padding-left: 36px">
+          <sc-for list="{{grid}}" as="gl" hint-placeholder-count="4">
+            <div style="position: absolute; left: 36px; right: 0; bottom: {{gl.y}}px; border-top: 1px solid #F0ECE7"></div>
+            <span style="position: absolute; left: 0; bottom: {{gl.ly}}px; width: 28px; text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">{{gl.label}}</span>
+          </sc-for>
+          <div style="position: absolute; left: 36px; right: 0; top: 0; bottom: 0; display: flex; align-items: flex-end; gap: {{gap}}">
+            <sc-for list="{{bars}}" as="b" hint-placeholder-count="30">
+              <div aria-label="{{b.aria}}" style="flex: 1 1 0; display: flex; flex-direction: column-reverse; gap: 1px">
+                <div style="height: {{b.r}}px; background: #141414"></div>
+                <div style="height: {{b.g}}px; background: #BDB5AC; border-radius: 3px 3px 0 0"></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="tbl-title" style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px">
+          <h2 id="tbl-title" style="margin: 0; font-size: 17px; font-weight: 900">明细</h2>
+          <div role="tablist" aria-label="明细视图" style="display: flex; gap: 4px; padding: 3px; border-radius: 999px; background: #F3F0EC">
+            <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+              <button type="button" role="tab" onClick="{{t.pick}}" aria-selected="{{t.on}}" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; background: {{t.bg}}; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer">{{t.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <sc-if value="{{dailyOn}}" hint-placeholder-val="{{ true }}">
+          <div style="overflow-x: auto; max-height: 520px; overflow-y: auto">
+            <table style="width: 100%; min-width: 1040px; border-collapse: collapse; font-size: 13px">
+              <thead style="position: sticky; top: 0; background: #FFFFFF"><tr style="text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">
+                <th scope="col" style="text-align: left; padding: 8px; font-weight: 500">日期 UTC</th><th scope="col" style="padding: 8px; font-weight: 500">新注册</th><th scope="col" style="padding: 8px; font-weight: 500">新访客</th><th scope="col" style="padding: 8px; font-weight: 500">活跃 注册/访客</th><th scope="col" style="padding: 8px; font-weight: 500">聊天人数 注册/访客</th><th scope="col" style="padding: 8px; font-weight: 500">回复 成功/失败/未知</th><th scope="col" style="padding: 8px; font-weight: 500">语音</th><th scope="col" style="padding: 8px; font-weight: 500">删除账号</th><th scope="col" style="padding: 8px; font-weight: 500">不活跃清理</th><th scope="col" style="padding: 8px; font-weight: 500">试用到期清理</th><th scope="col" style="padding: 8px; font-weight: 500">次日留存</th><th scope="col" style="padding: 8px; font-weight: 500">7 日留存</th>
+              </tr></thead>
+              <tbody>
+                <tr style="text-align: right; border-top: 1px solid #F0ECE7; background: #FAF8F6; font-weight: 700"><th scope="row" style="text-align: left; padding: 8px">合计</th><td style="padding: 8px">{{tot.su}}</td><td style="padding: 8px">{{tot.ng}}</td><td style="padding: 8px">—</td><td style="padding: 8px">—</td><td style="padding: 8px">{{tot.rep}}</td><td style="padding: 8px">{{tot.v}}</td><td style="padding: 8px">{{tot.del}}</td><td style="padding: 8px">0</td><td style="padding: 8px">{{tot.tp}}</td><td style="padding: 8px">{{tot.d1}}</td><td style="padding: 8px">{{tot.d7}}</td></tr>
+                <sc-for list="{{rows}}" as="r" hint-placeholder-count="14">
+                  <tr style="text-align: right; border-top: 1px solid #F0ECE7"><th scope="row" style="text-align: left; padding: 8px; font-weight: 500; font-family: 'DM Mono', monospace">{{r.day}}</th><td style="padding: 8px">{{r.su}}</td><td style="padding: 8px">{{r.ng}}</td><td style="padding: 8px">{{r.act}}</td><td style="padding: 8px">{{r.chat}}</td><td style="padding: 8px">{{r.rep}}</td><td style="padding: 8px">{{r.v}}</td><td style="padding: 8px">{{r.del}}</td><td style="padding: 8px">0</td><td style="padding: 8px">{{r.tp}}</td><td style="padding: 8px">{{r.d1}}</td><td style="padding: 8px">{{r.d7}}</td></tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{charOn}}" hint-placeholder-val="{{ false }}">
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+            <sc-for list="{{chars}}" as="c" hint-placeholder-count="3">
+              <div style="border-radius: 20px; background: #F7F4F0; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px">
+                <span style="display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 900"><i style="width: 10px; height: 10px; border-radius: 50%; background: {{c.col}}"></i>{{c.name}}</span>
+                <span style="font-size: 30px; font-weight: 900; letter-spacing: -0.03em">{{c.rep}} <span style="font-size: 14px; font-weight: 500">条回复</span></span>
+                <span style="font-size: 13px">语音 {{c.voice}} · 失败 {{c.fail}} · 聊天人数 {{c.people}}</span>
+                <span style="height: 8px; border-radius: 999px; background: #EFEBE6; overflow: hidden"><span style="display: block; width: {{c.share}}; height: 100%; background: {{c.col}}"></span></span>
+                <span style="font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">占全部回复 {{c.share}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{modelOn}}" hint-placeholder-val="{{ false }}">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px">
+            <thead><tr style="text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A"><th scope="col" style="text-align: left; padding: 8px; font-weight: 500">玩家选的模型</th><th scope="col" style="padding: 8px; font-weight: 500">成功</th><th scope="col" style="padding: 8px; font-weight: 500">失败</th><th scope="col" style="padding: 8px; font-weight: 500">改用备用</th><th scope="col" style="padding: 8px; font-weight: 500">占比</th></tr></thead>
+            <tbody>
+              <sc-for list="{{models}}" as="m" hint-placeholder-count="3">
+                <tr style="text-align: right; border-top: 1px solid #F0ECE7"><th scope="row" style="text-align: left; padding: 10px 8px; font-weight: 700">{{m.name}}</th><td style="padding: 10px 8px">{{m.ok}}</td><td style="padding: 10px 8px">{{m.fail}}</td><td style="padding: 10px 8px">{{m.backup}}</td><td style="padding: 10px 8px">{{m.share}}</td></tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </sc-if>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { range: 30, tab: 'daily' };
+  }
+  renderVals() {
+    var self = this;
+    var n = this.state.range;
+    var pad = function (x) { return x < 10 ? '0' + x : '' + x; };
+    var base = Date.UTC(2026, 9, 22);
+    var data = [];
+    for (var i = n - 1; i >= 0; i--) {
+      var k = n - 1 - i;
+      var reg = 6 + Math.round(k * 0.35) + (k % 3);
+      var gst = 9 + (k * 7 % 11);
+      var d = new Date(base - i * 86400000);
+      data.push({ day: d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()), reg: reg, gst: gst, su: 1 + (k % 4), ng: 7 + (k * 5 % 9), ok: 140 + k * 9, f: k % 3, u: 0, v: 100 + k * 6, del: k % 9 === 4 ? 1 : 0, tp: 2 + (k % 5), i: i });
+    }
+    var max = 50, H = 180;
+    var px = function (v) { return Math.round(v / max * H); };
+    var bars = data.map(function (r) { return { r: px(r.reg), g: px(r.gst), aria: r.day + ' 注册 ' + r.reg + ' 访客 ' + r.gst }; });
+    var rows = data.slice().reverse().map(function (r) {
+      return {
+        day: r.day, su: r.su, ng: r.ng, act: r.reg + ' / ' + r.gst, chat: Math.round(r.reg * 0.8) + ' / ' + Math.round(r.gst * 0.6),
+        rep: r.ok + ' / ' + r.f + ' / ' + r.u, v: r.v, del: r.del, tp: r.tp,
+        d1: r.i < 2 ? '—' : '2 / 3 · 67%', d7: r.i < 8 ? '—' : '1 / 3 · 33%'
+      };
+    });
+    var sum = function (f) { return data.reduce(function (a, r) { return a + f(r); }, 0); };
+    var last = data[data.length - 2];
+    var range = this.state.range, tab = this.state.tab;
+    return {
+      bars: bars, rows: rows, gap: n > 40 ? '1px' : '3px',
+      grid: [0, 25, 50].map(function (v) { return { y: px(v), ly: px(v) - 6, label: String(v) }; }),
+      tot: { su: sum(function (r) { return r.su; }), ng: sum(function (r) { return r.ng; }), rep: sum(function (r) { return r.ok; }) + ' / ' + sum(function (r) { return r.f; }) + ' / 0', v: sum(function (r) { return r.v; }), del: sum(function (r) { return r.del; }), tp: sum(function (r) { return r.tp; }), d1: '58%', d7: '31%' },
+      kpis: [
+        { label: '昨天活跃', v: last.reg + last.gst, sub: '注册 ' + last.reg + ' · 访客 ' + last.gst },
+        { label: '新注册', v: sum(function (r) { return r.su; }), sub: '最近 ' + n + ' 天' },
+        { label: '昨天聊天人数', v: Math.round(last.reg * 0.8) + Math.round(last.gst * 0.6), sub: '发过至少一条消息' },
+        { label: '次日留存', v: '58%', sub: '注册玩家 · 已结算的批次' },
+        { label: '7 日留存', v: '31%', sub: '注册玩家 · 已结算的批次' }
+      ],
+      ranges: [7, 30, 90].map(function (r) { return { label: '最近 ' + r + ' 天', on: range === r, bg: range === r ? '#141414' : 'transparent', fg: range === r ? '#FFFFFF' : '#141414', pick: function () { self.setState({ range: r }); } }; }),
+      tabs: [['daily', '每天'], ['char', '按角色'], ['model', '按模型']].map(function (t) { return { label: t[1], on: tab === t[0], bg: tab === t[0] ? '#FFFFFF' : 'transparent', pick: function () { self.setState({ tab: t[0] }); } }; }),
+      dailyOn: tab === 'daily', charOn: tab === 'char', modelOn: tab === 'model',
+      chars: [
+        { name: '瓜瓜', col: '#E8561E', rep: 2140, voice: 1630, fail: 9, people: 41, share: '37%' },
+        { name: 'JOJO', col: '#2F7BEA', rep: 1960, voice: 1410, fail: 7, people: 38, share: '34%' },
+        { name: '陈吉米', col: '#7C4DEB', rep: 1650, voice: 1180, fail: 6, people: 30, share: '29%' }
+      ],
+      models: [
+        { name: 'DeepSeek', ok: 4870, fail: 15, backup: 0, share: '85%' },
+        { name: 'Gemini', ok: 520, fail: 4, backup: 11, share: '9%' },
+        { name: 'Grok', ok: 360, fail: 3, backup: 6, share: '6%' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

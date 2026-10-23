@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>我的信息</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}
+@keyframes miFill { from { width: 0 } }
+@keyframes miPop { from { opacity: 0; transform: translateY(16px) scale(0.96) } to { opacity: 1; transform: none } }
+@keyframes miFade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes miRise { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: none } }
+.mi-fill { animation: miFill 900ms cubic-bezier(0.2, 0.82, 0.24, 1) 200ms both }
+.mi-pop { animation: miPop 320ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+.mi-fade { animation: miFade 240ms ease both }
+.mi-rise { animation: miRise 420ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+@media (prefers-reduced-motion: reduce) { .mi-fill, .mi-pop, .mi-fade, .mi-rise { animation-duration: 1ms !important; animation-delay: 0ms !important } }
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; box-sizing: border-box; background: radial-gradient(70% 30% at 10% 12%, #C6E4FF 0%, transparent 70%), radial-gradient(60% 30% at 95% 40%, #D5F6EE 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-direction: column; overflow: hidden; font-variant-numeric: tabular-nums">
+  <div style="height: 47px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">status bar · system</div>
+
+  <div style="height: 60px; flex-shrink: 0; display: grid; grid-template-columns: 56px 1fr 56px; align-items: center">
+    <a href="Chat.dc.html" aria-label="返回聊天" style="width: 44px; height: 44px; margin-left: 6px; border-radius: 50%; display: flex; align-items: center; justify-content: center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg></a>
+    <h1 style="margin: 0; text-align: center; font-size: 17px; font-weight: 900">我的信息</h1>
+    <span></span>
+  </div>
+
+  <div style="flex-grow: 1; min-height: 0; overflow: hidden; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+
+    <section class="mi-rise" aria-label="额度" style="background: rgba(255, 255, 255, 0.9); border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <span style="height: 26px; padding: 0 12px; border-radius: 999px; background: #141414; color: #FFFFFF; display: flex; align-items: center; font-size: 12px; font-weight: 700">{{t.label}}</span>
+        <span style="display: flex; gap: 6px">
+          <sc-for list="{{t.chips}}" as="c" hint-placeholder-count="2">
+            <span aria-label="{{c.aria}}" style="height: 26px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center; gap: 4px; font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500">
+              <sc-if value="{{c.refill}}" hint-placeholder-val="{{ false }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7"></path><path d="M20 4v5h-5"></path></svg></sc-if>
+              <sc-if value="{{c.forever}}" hint-placeholder-val="{{ false }}"><span style="font-size: 17px; line-height: 1">∞</span></sc-if>
+              {{c.t}}
+            </span>
+          </sc-for>
+        </span>
+      </div>
+      <span style="display: flex; align-items: baseline; gap: 6px"><span style="font-size: 44px; font-weight: 900; letter-spacing: -0.04em; line-height: 1">{{t.big}}</span><span style="font-size: 16px; font-weight: 700">{{t.unit}}</span><sc-if value="{{t.hasDaily}}" hint-placeholder-val="{{ false }}"><span style="font-size: 14px; color: #3F3F3F">/ 每天 +50</span></sc-if></span>
+      <sc-if value="{{t.hasBar}}" hint-placeholder-val="{{ true }}">
+        <div role="meter" aria-label="额度" aria-valuenow="{{t.pctNum}}" aria-valuemin="0" aria-valuemax="100" style="height: 10px; border-radius: 999px; background: #EFEBE6; overflow: hidden">
+          <div class="mi-fill" style="width: {{t.pct}}; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #97C8F5, #2F7BEA)"></div>
+        </div>
+      </sc-if>
+      <div style="display: flex; gap: 8px">
+        <sc-for list="{{t.buttons}}" as="b" hint-placeholder-count="2">
+          <button type="button" onClick="{{b.go}}" style="flex: 1 1 0; height: 44px; border: {{b.border}}; border-radius: 999px; background: {{b.bg}}; color: {{b.fg}}; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">{{b.label}}</button>
+        </sc-for>
+      </div>
+    </section>
+
+    <sc-if value="{{signedIn}}" hint-placeholder-val="{{ true }}">
+      <section class="mi-rise" aria-label="资料" style="animation-delay: 60ms; background: rgba(255, 255, 255, 0.85); border-radius: 24px; padding: 4px 16px">
+        <div style="min-height: 52px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #F0ECE7">
+          <span style="width: 72px; font-size: 13px; color: #3F3F3F">昵称</span><span style="flex-grow: 1; font-size: 15px; font-weight: 700">小林</span>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px">修改</button>
+        </div>
+        <div style="min-height: 52px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #F0ECE7">
+          <span style="width: 72px; font-size: 13px; color: #3F3F3F">玩家编号</span><span style="flex-grow: 1; font-family: 'DM Mono', monospace; font-size: 15px">FT7S1112</span>
+          <button type="button" onClick="{{copyNo}}" style="height: 32px; padding: 0 12px; border: 1px solid #E4DED7; border-radius: 999px; background: {{copyBg}}; color: {{copyFg}}; font: inherit; font-size: 13px; transition: background 200ms ease, color 200ms ease">{{copyLabel}}</button>
+        </div>
+        <div style="min-height: 52px; display: flex; align-items: center; gap: 10px">
+          <span style="width: 72px; font-size: 13px; color: #3F3F3F">邮箱</span><span style="flex-grow: 1; font-size: 14px">l••••@icloud.com</span>
+        </div>
+      </section>
+      <section class="mi-rise" aria-label="安全" style="animation-delay: 120ms; background: rgba(255, 255, 255, 0.85); border-radius: 24px; padding: 4px 16px">
+        <button type="button" style="width: 100%; min-height: 50px; border: none; border-bottom: 1px solid #F0ECE7; background: none; font: inherit; font-size: 15px; text-align: left; display: flex; align-items: center; justify-content: space-between">修改密码<span aria-hidden="true">›</span></button>
+        <button type="button" style="width: 100%; min-height: 50px; border: none; border-bottom: 1px solid #F0ECE7; background: none; font: inherit; font-size: 15px; text-align: left; display: flex; align-items: center; justify-content: space-between">退出其他设备<span aria-hidden="true">›</span></button>
+        <button type="button" style="width: 100%; min-height: 50px; border: none; background: none; font: inherit; font-size: 15px; text-align: left">退出登录</button>
+      </section>
+      <a href="#" style="align-self: center; min-height: 44px; display: flex; align-items: center; font-size: 13px; color: #4A4A4A">删除我的账号</a>
+    </sc-if>
+
+    <sc-if value="{{guest}}" hint-placeholder-val="{{ false }}">
+      <a href="#" style="align-self: center; min-height: 44px; display: flex; align-items: center; font-size: 13px; color: #4A4A4A">清除本设备的体验数据</a>
+    </sc-if>
+  </div>
+
+  <div style="height: 80px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">Safari address bar · system</div>
+
+  <sc-if value="{{dialog}}" hint-placeholder-val="{{ false }}">
+    <div class="mi-fade" style="position: absolute; inset: 0; background: rgba(12, 11, 16, 0.42); display: flex; align-items: center; justify-content: center; padding: 24px">
+      <div class="mi-pop" role="dialog" aria-modal="true" aria-labelledby="inv-title" style="width: 100%; background: #FFFFFF; border-radius: 28px; padding: 22px 20px 18px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 24px 60px rgba(12, 11, 16, 0.3)">
+        <h2 id="inv-title" style="margin: 0; font-size: 18px; font-weight: 900">输入邀请码</h2>
+        <sc-if value="{{guest}}" hint-placeholder-val="{{ false }}">
+          <span style="font-size: 14px; line-height: 1.5">注册后即可使用邀请码</span>
+        </sc-if>
+        <label style="display: flex; flex-direction: column; gap: 6px"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">邀请码</span><input type="text" placeholder="粘贴邀请码" style="height: 48px; box-sizing: border-box; padding: 0 16px; border: 1.5px solid #141414; border-radius: 999px; font-family: 'DM Mono', monospace; font-size: 16px"></label>
+        <div style="display: flex; gap: 8px">
+          <button type="button" onClick="{{closeDialog}}" style="flex: 1 1 0; height: 46px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 15px; cursor: pointer">取消</button>
+          <sc-if value="{{guest}}" hint-placeholder-val="{{ false }}"><a href="Login.dc.html" style="flex: 1 1 0; height: 46px; border-radius: 999px; background: #141414; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; text-decoration: none">注册</a></sc-if>
+          <sc-if value="{{signedIn}}" hint-placeholder-val="{{ true }}"><button type="button" style="flex: 1 1 0; height: 46px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer">兑换</button></sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tier":{"editor":"enum","options":["注册玩家","每天补充 · 长期","每天补充 · 有期限","不限量","访客"],"default":"每天补充 · 长期"},"inviteDialog":{"editor":"boolean","default":false},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { dialog: null, copied: false };
+  }
+  renderVals() {
+    var self = this;
+    var tier = this.props.tier ?? '每天补充 · 长期';
+    var guest = tier === '访客';
+    var open = function () { self.setState({ dialog: true }); };
+    var forever = { t: '', forever: true, refill: false, aria: '长期有效' };
+    var until = function (d) { return { t: d, forever: false, refill: false, aria: '到期 ' + d }; };
+    var T = {
+      '注册玩家': { label: '注册玩家', big: '64', unit: '点', hasBar: false, pct: '0%', chips: [], hasDaily: false },
+      '每天补充 · 长期': { label: '邀请', big: '470', unit: '点', hasBar: true, pct: '47%', chips: [forever], hasDaily: true },
+      '每天补充 · 有期限': { label: '邀请', big: '470', unit: '点', hasBar: true, pct: '47%', chips: [until('2027-01-20')], hasDaily: true },
+      '不限量': { label: '邀请', big: '不限量', unit: '', hasBar: false, pct: '0%', chips: [until('2027-01-20')], hasDaily: false },
+      '访客': { label: '体验中', big: '3', unit: '次', hasBar: true, pct: '60%', chips: [until('10-30')], hasDaily: false }
+    }[tier];
+    T.pctNum = parseInt(T.pct, 10);
+    T.buttons = guest
+      ? [{ label: '登录', bg: '#FFFFFF', fg: '#141414', border: '1px solid #E4DED7', go: function () {} }, { label: '注册', bg: '#141414', fg: '#FFFFFF', border: 'none', go: function () {} }]
+      : [{ label: '消费记录', bg: '#FFFFFF', fg: '#141414', border: '1px solid #E4DED7', go: function () {} }, { label: '输入邀请码', bg: '#141414', fg: '#FFFFFF', border: 'none', go: open }];
+    var dialog = this.state.dialog === null ? !!this.props.inviteDialog : this.state.dialog;
+    return {
+      t: T, guest: guest, signedIn: !guest, dialog: dialog,
+      closeDialog: function () { self.setState({ dialog: false }); },
+      copyNo: function () { self.setState({ copied: true }); },
+      copyLabel: this.state.copied ? '已复制' : '复制', copyBg: this.state.copied ? '#141414' : '#FFFFFF', copyFg: this.state.copied ? '#FFFFFF' : '#141414'
+    };
+  }
+}
+</script>
+</body>
+</html>

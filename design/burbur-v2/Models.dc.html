@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>给瓜瓜换个脑子</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}
+@keyframes mpUp { from { transform: translateY(100%) } to { transform: none } }
+@keyframes mpFade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes mpIn { from { opacity: 0; transform: translateY(10px) scale(0.98) } to { opacity: 1; transform: none } }
+.mp-sheet { animation: mpUp 420ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+.mp-dim { animation: mpFade 300ms ease both }
+.mp-in { animation: mpIn 280ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+@keyframes mpBrain { 0% { transform: scale(0.4) rotate(-20deg) } 60% { transform: scale(1.15) rotate(8deg) } 80% { transform: scale(0.95) rotate(-4deg) } 100% { transform: none } }
+@keyframes mpWiggle { 0%, 100% { transform: rotate(0) } 25% { transform: rotate(-8deg) } 75% { transform: rotate(8deg) } }
+.mp-brain { transform-origin: 50% 70%; animation: mpBrain 700ms cubic-bezier(0.2, 0.82, 0.24, 1) 300ms both }
+.mp-brain:hover { animation: mpWiggle 500ms ease-in-out }
+@media (prefers-reduced-motion: reduce) { .mp-sheet, .mp-dim, .mp-in { animation-duration: 1ms !important } }
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; box-sizing: border-box; background: radial-gradient(70% 35% at 10% 15%, #FFD3B8 0%, transparent 70%), radial-gradient(80% 40% at 30% 100%, #FFB295 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 47px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">status bar · system</div>
+  <div aria-hidden="true" style="flex-grow: 1; padding: 20px 16px; display: flex; flex-direction: column; justify-content: flex-start; gap: 12px; filter: blur(1px)">
+    <div style="align-self: center; font-size: 15px; font-weight: 900">瓜瓜</div>
+    <div style="align-self: flex-end; width: 50%; height: 40px; border-radius: 22px 6px 22px 22px; background: #141414"></div>
+    <div style="align-self: flex-start; width: 72%; height: 92px; border-radius: 6px 22px 22px 22px; background: rgba(255, 255, 255, 0.9)"></div>
+  </div>
+  <div style="height: 80px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">Safari address bar · system</div>
+
+  <div class="mp-dim" style="position: absolute; left: 0; right: 0; top: 47px; bottom: 80px; background: rgba(12, 11, 16, 0.38)"></div>
+
+  <div class="mp-sheet" role="dialog" aria-modal="true" aria-labelledby="mp-title" style="position: absolute; left: 0; right: 0; bottom: 80px; background: #FAF8F6; border-radius: 28px 28px 0 0; padding: 10px 16px 18px; display: flex; flex-direction: column; gap: 12px">
+    <span aria-hidden="true" style="align-self: center; width: 40px; height: 5px; border-radius: 999px; background: #D8D1C8"></span>
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <h2 id="mp-title" style="margin: 0; display: flex; align-items: center; gap: 6px; font-size: 20px; font-weight: 900">给瓜瓜换个
+        <svg class="mp-brain" role="img" aria-label="脑子" width="34" height="34" viewBox="0 0 32 32">
+          <path d="{{brain.left}}" fill="#FBB3D1"></path>
+          <path d="{{brain.right}}" fill="#F79CC3"></path>
+          <path d="{{brain.folds}}" fill="none" stroke="#D95A93" stroke-width="1.5" stroke-linecap="round"></path>
+          <path d="M16 6.8V26.4" fill="none" stroke="#D95A93" stroke-width="1.4" stroke-linecap="round"></path>
+          <ellipse cx="9.6" cy="9.4" rx="2" ry="1.2" fill="#FFFFFF" opacity="0.85" transform="rotate(-30 9.6 9.4)"></ellipse>
+        </svg>
+      </h2>
+      <button type="button" aria-label="关闭" style="width: 44px; height: 44px; border: none; border-radius: 50%; background: none; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+    </div>
+    <sc-if value="{{metered}}" hint-placeholder-val="{{ true }}">
+      <span style="align-self: flex-start; height: 28px; padding: 0 12px; border-radius: 999px; background: #FFFFFF; display: flex; align-items: center; font-family: 'DM Mono', monospace; font-size: 12px">剩余 470 点 · 约可聊 47 条</span>
+    </sc-if>
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <sc-for list="{{models}}" as="m" hint-placeholder-count="3">
+        <button type="button" onClick="{{m.pick}}" aria-pressed="{{m.on}}" style="min-height: 68px; padding: 12px 14px; border: none; border-radius: 22px; background: #FFFFFF; box-shadow: {{m.ring}}; transform: {{m.lift}}; transition: transform 220ms cubic-bezier(0.2, 0.82, 0.24, 1), box-shadow 220ms ease; font: inherit; text-align: left; display: flex; align-items: center; gap: 12px; cursor: pointer">
+          <span aria-hidden="true" style="width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; background: {{m.dot}}; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500">{{m.mark}}</span>
+          <span style="flex-grow: 1; display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 900">{{m.label}}<sc-if value="{{m.current}}" hint-placeholder-val="{{ false }}"><span style="height: 20px; padding: 0 8px; border-radius: 999px; background: #141414; color: #FFFFFF; display: flex; align-items: center; font-size: 11px; font-weight: 700">当前</span></sc-if></span>
+          <sc-if value="{{metered}}" hint-placeholder-val="{{ true }}"><span style="display: flex; flex-direction: column; align-items: flex-end; font-family: 'DM Mono', monospace; font-size: 12px"><span style="font-size: 14px; font-weight: 500">{{m.pts}} 点/条</span><span>语音 +1</span></span></sc-if>
+        </button>
+      </sc-for>
+    </div>
+    <sc-if value="{{confirming}}" hint-placeholder-val="{{ false }}">
+      <div class="mp-in" style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 22px; background: #FFFFFF">
+        <span style="font-size: 14px; line-height: 1.55">{{confirmText}}</span>
+        <div style="display: flex; gap: 8px">
+          <button type="button" onClick="{{cancel}}" style="flex: 1 1 0; height: 44px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 15px; cursor: pointer">取消</button>
+          <button type="button" onClick="{{confirm}}" style="flex: 1 1 0; height: 44px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer">换</button>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{switched}}" hint-placeholder-val="{{ false }}"><span class="mp-in" role="status" style="align-self: center; font-size: 13px; font-weight: 700">已换成 {{curLabel}}</span></sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"player":{"editor":"enum","options":["按点数","邀请 · 不限量"],"default":"按点数"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { cur: 'deepseek', pick: null, switched: false };
+  }
+  renderVals() {
+    var self = this;
+    var metered = (this.props.player ?? '按点数') === '按点数';
+    var M = [
+      { id: 'deepseek', label: 'DeepSeek', mark: 'DS', pts: 10, dot: 'linear-gradient(140deg, #C6E4FF, #D5F6EE)' },
+      { id: 'gemini', label: 'Gemini', mark: 'GE', pts: 20, dot: 'linear-gradient(140deg, #FFD3B8, #FFEBC9)' },
+      { id: 'xai', label: 'Grok', mark: 'GK', pts: 25, dot: 'linear-gradient(140deg, #DCD2FF, #FFD8EE)' }
+    ];
+    var pick = this.state.pick;
+    var models = M.map(function (m) {
+      var current = m.id === self.state.cur, chosen = m.id === pick;
+      return Object.assign({}, m, { current: current, on: current || chosen,
+        ring: chosen ? 'inset 0 0 0 2px #E8561E, 0 10px 24px rgba(40, 24, 60, 0.12)' : current ? 'inset 0 0 0 2px #141414' : 'inset 0 0 0 1px #EEE8E1',
+        lift: chosen ? 'translateY(-2px) scale(1.01)' : 'none',
+        pick: function () { if (m.id !== self.state.cur) self.setState({ pick: m.id, switched: false }); } });
+    });
+    var p = M.filter(function (m) { return m.id === pick; })[0];
+    var cur = M.filter(function (m) { return m.id === self.state.cur; })[0];
+    // Brain drawn from one half-outline, mirrored: lobes as small arcs, so it reads like the emoji.
+    var half = [[16, 6.8], [12.6, 5.2], [9.4, 6], [6.6, 8.4], [5.4, 11.8], [3.6, 14.6], [4, 18.4], [5.6, 21.6], [8.4, 24.4], [12, 25.6], [16, 26.4]];
+    var path = function (pts, mirror) {
+      var p = pts.map(function (q) { return [mirror ? 32 - q[0] : q[0], q[1]]; });
+      var d = 'M' + p[0][0] + ',' + p[0][1];
+      for (var i = 1; i < p.length; i++) d += ' A2.6,2.6 0 0,' + (mirror ? 1 : 0) + ' ' + p[i][0] + ',' + p[i][1];
+      return d + ' Z';
+    };
+    var brain = {
+      left: path(half, false), right: path(half, true),
+      folds: 'M9.6,12.4 c1.6,-0.6 3.2,0.4 3.4,2 M6.8,17.6 c1.8,-0.8 3.8,0 4.4,1.8 M10.4,22.4 c0.6,-1.4 2.2,-2 3.6,-1.4 M22.4,12.4 c-1.6,-0.6 -3.2,0.4 -3.4,2 M25.2,17.6 c-1.8,-0.8 -3.8,0 -4.4,1.8 M21.6,22.4 c-0.6,-1.4 -2.2,-2 -3.6,-1.4'
+    };
+    return {
+      brain: brain,
+      metered: metered, models: models, confirming: !!p, switched: this.state.switched, curLabel: cur.label,
+      confirmText: p ? (metered ? '之后用 ' + p.label + ' · ' + p.pts + ' 点/条（语音 +1）。记忆不变。' : '之后用 ' + p.label + '。记忆不变。') : '',
+      cancel: function () { self.setState({ pick: null }); },
+      confirm: function () { self.setState({ cur: self.state.pick, pick: null, switched: true }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

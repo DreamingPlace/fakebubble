@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Burbur 动效</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 1280px; height: 1060px; box-sizing: border-box; background: #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; padding: 56px 64px; display: flex; flex-direction: column; gap: 26px">
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 40px">
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; letter-spacing: 0.08em">MOTION · 切换动效</span>
+      <h1 style="margin: 0; font-size: 52px; font-weight: 900; letter-spacing: -0.04em; line-height: 1">每一次切换，都像翻一张卡</h1>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; max-width: 430px">
+      <span><b>One curve everywhere:</b> <span style="font-family: ui-monospace, Menlo, monospace">cubic-bezier(.2,.82,.24,1)</span>, which is already in your code.</span>
+      <span><b>Three speeds:</b> 180 ms fades · 300–440 ms moves · 520 ms card-to-chat.</span>
+      <span><b>Reduced motion:</b> every move becomes a 120 ms fade; nothing loops.</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="10">
+      <div style="background: #FFFFFF; border-radius: 24px; padding: 16px 20px; display: grid; grid-template-columns: 34px 1fr; gap: 4px 12px; align-items: start">
+        <span style="grid-row: span 3; width: 34px; height: 34px; border-radius: 50%; background: {{r.dot}}; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 12px; font-weight: 500">{{r.n}}</span>
+        <span style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline"><span style="font-size: 16px; font-weight: 900">{{r.title}}</span><span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #4A4A4A; white-space: nowrap">{{r.time}}</span></span>
+        <span style="font-size: 13px; line-height: 1.55">{{r.what}}</span>
+        <span style="font-size: 12px; color: #4A4A4A; line-height: 1.5">{{r.note}}</span>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1060}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var live = '#FFD3B8', spec = '#E9E2F2';
+    return { rows: [
+      { n: '1', dot: live, title: '换人 · swipe between cards', time: '440 ms', what: 'Cards slide round the orbit: the next one straightens from 9° and grows from 80%. The avatar ellipse turns with it, and the page aura cross-fades to her colours.', note: 'Already in the prototype. Live drag keeps blending the colour like today.' },
+      { n: '2', dot: live, title: '小卡反光 · sheen on arrival', time: '900 ms, once', what: 'When a card lands in the centre, one holographic glint sweeps across it, like tilting a real photocard under a lamp.', note: 'Plays once per arrival, never loops. Skipped with reduced motion.' },
+      { n: '3', dot: live, title: '打开聊天 · card becomes the chat', time: '520 ms', what: 'The card leaves its sleeve and grows to fill the screen; its face fades out, the chat fades up 300 ms later. The top bar lifts away, the ring and button drop away.', note: 'Back reverses it. On the real site this is your existing expanding phase, just restyled.' },
+      { n: '4', dot: live, title: '她在录语音 · recording', time: 'loop while waiting', what: 'The centred status under her name turns into three small bars and 正在录语音… while the reply is generated, then returns to her status.', note: 'Only state the server reports; never fake a delay.' },
+      { n: '5', dot: live, title: '气泡弹出 · bubble pop', time: '300 ms', what: 'New bubbles rise 10 px and settle with a tiny overshoot. Hers appear only after the recording state ends.', note: 'Respects your display-only pauses between a reply’s bubbles.' },
+      { n: '6', dot: spec, title: '盲抽卡 · empty slots', time: '—', what: 'Unopened slots show the back of a blind-box card with a striped pattern and a handwritten "?". Tapping one does nothing but turn to it.', note: 'Later: a flip animation when a new character is released.' },
+      { n: '7', dot: spec, title: '面板 · sheets', time: '360 ms', what: 'Account, model picker and co-creation sheets slide up from the bottom with a 1° settle, like a card pulled out of a deck.', note: 'Spec only; not in the prototype yet.' },
+      { n: '8', dot: spec, title: '菜单 · menus', time: '160 ms', what: 'The ⋯ and nickname menus scale from 97% at their corner. Same as today.', note: 'Layering rule unchanged: menus always above every card.' },
+      { n: '9', dot: spec, title: '日夜 · day ↔ night', time: '600 ms', what: 'Follows the phone’s light/dark setting. When it changes while open, the page cross-fades instead of snapping.', note: 'Try the night tweak on the home prototype.' },
+      { n: '10', dot: spec, title: '分享成小卡 · share', time: '520 ms', what: 'The voice bubble lifts, gains a sleeve and serial number, and turns into the shareable photocard.', note: 'Comes with the share feature (Part 23).' }
+    ] };
+  }
+}
+</script>
+</body>
+</html>

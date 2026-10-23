@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Burbur 聊天</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; position: relative; box-sizing: border-box; background: {{c.aura}}; color: {{t.ink}}; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 47px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">status bar · system</div>
+
+  <div style="height: 76px; flex-shrink: 0; display: grid; grid-template-columns: 56px 1fr 56px; align-items: center; background: {{t.head}}; box-shadow: inset 0 -1px 0 {{t.headLine}}">
+    <a href="Main.dc.html" aria-label="返回" style="width: 44px; height: 44px; margin-left: 6px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: {{t.ink}}">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0">
+      <span aria-hidden="true" style="width: 28px; height: 28px; border-radius: 50%; padding: 2px; box-sizing: border-box; background: {{c.ring}}">
+        <span style="width: 100%; height: 100%; border-radius: 50%; border: 1.5px solid {{t.paper}}; box-sizing: border-box; background: {{c.dot}}; color: #141414; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900">{{c.mark}}</span>
+      </span>
+      <strong style="font-size: 16px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.1">{{c.nick}}</strong>
+      <span style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: {{t.sub}}"><i style="width: 6px; height: 6px; border-radius: 50%; background: {{c.accent}}"></i>{{c.state}}</span>
+    </div>
+    <button type="button" aria-label="更多" style="width: 44px; height: 44px; justify-self: end; margin-right: 6px; border: none; border-radius: 50%; background: none; color: {{t.ink}}; display: flex; align-items: center; justify-content: center">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="18.5" cy="12" r="1.6"></circle></svg>
+    </button>
+  </div>
+
+  <div role="log" aria-label="消息" style="flex-grow: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; padding: 14px 16px 10px; overflow: hidden">
+    <div style="align-self: center; height: 24px; padding: 0 10px; border-radius: 999px; background: {{t.pill}}; display: flex; align-items: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: {{t.sub}}">03:13</div>
+    <div style="align-self: flex-end; max-width: 76%; background: {{t.out}}; color: {{t.outFg}}; border-radius: 22px 6px 22px 22px; padding: 11px 16px; font-size: 16px; line-height: 1.45">我驾照考过了！！</div>
+
+    <div style="align-self: flex-start; width: 292px; background: {{t.inBubble}}; box-shadow: inset 0 0 0 1px {{t.inBorder}}; border-radius: 6px 22px 22px 22px; padding: 8px 8px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <button type="button" aria-label="暂停语音" style="width: 40px; height: 40px; flex-shrink: 0; border: none; border-radius: 50%; background: {{c.accent}}; color: {{t.playFg}}; display: flex; align-items: center; justify-content: center">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
+        </button>
+        <span style="display: flex; align-items: center; gap: 2px; height: 22px; flex-grow: 1; overflow: hidden" aria-hidden="true">
+          <sc-for list="{{bars}}" as="b" hint-placeholder-count="30"><i style="width: 3px; flex-shrink: 0; border-radius: 2px; height: {{b.h}}px; background: {{b.col}}"></i></sc-for>
+        </span>
+        <span style="font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: {{t.sub}}; padding-right: 6px">0:04/0:08</span>
+      </div>
+      <p style="margin: 0; padding: 0 8px; font-size: 16px; line-height: 1.55">等等，倒车入库这次也过了？我就说你可以的。好啦，快去睡觉，明天还要上班呢。</p>
+    </div>
+
+    <div style="align-self: flex-start; display: flex; align-items: center; gap: 10px; margin-left: 6px">
+      <div style="position: relative; transform: rotate(-2.5deg); background: {{t.sticker}}; color: #141414; border-radius: 4px; padding: 14px 6px 8px 14px; box-shadow: 0 6px 16px rgba(40, 24, 60, 0.14); display: flex; align-items: center; gap: 2px">
+        <i aria-hidden="true" style="position: absolute; left: 50%; top: -8px; width: 54px; height: 16px; transform: translateX(-50%) rotate(3deg); background: {{c.tape}}; opacity: 0.85"></i>
+        <div style="display: flex; flex-direction: column; gap: 2px">
+          <span style="font-family: ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; color: #4A4A4A">{{c.name}}记得 · 09.28</span>
+          <span style="font-size: 14px; font-weight: 700">倒车入库又挂了</span>
+        </div>
+        <button type="button" aria-label="让{{c.name}}忘掉这件事" style="width: 36px; height: 36px; border: none; background: none; color: #5A5A5A; display: flex; align-items: center; justify-content: center">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+        </button>
+      </div>
+      <a href="Shared.dc.html" style="height: 36px; padding: 0 14px; border-radius: 999px; background: {{t.pill}}; box-shadow: inset 0 0 0 1px {{t.headLine}}; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: {{t.ink}}; text-decoration: none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg>
+        分享成小卡
+      </a>
+    </div>
+
+    <div style="align-self: flex-end; max-width: 76%; background: {{t.out}}; color: {{t.outFg}}; border-radius: 22px 6px 22px 22px; padding: 11px 16px; font-size: 16px; line-height: 1.45">你居然还记得</div>
+  </div>
+
+  <div style="flex-shrink: 0; padding: 4px 12px 12px">
+    <div style="display: flex; justify-content: flex-end; padding: 0 6px 6px">
+      <span style="height: 26px; padding: 0 10px; border-radius: 999px; background: {{t.pill}}; display: flex; align-items: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px">免费 2/5 · 注册 +10</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 6px; padding: 5px; border-radius: 28px; background: {{t.composer}}; box-shadow: inset 0 0 0 1px {{t.composerBorder}}">
+      <label for="reply" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">回复{{c.name}}</label>
+      <textarea id="reply" rows="1" enterkeyhint="send" placeholder="说点什么…" style="flex-grow: 1; min-height: 44px; box-sizing: border-box; resize: none; padding: 11px 14px; border: none; background: none; color: {{t.ink}}; font: inherit; font-size: 16px; line-height: 1.4; outline: none"></textarea>
+      <button type="button" aria-label="发送消息" style="width: 44px; height: 44px; flex-shrink: 0; border: none; border-radius: 50%; background: {{t.send}}; color: {{t.sendFg}}; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <div style="height: 80px; flex-shrink: 0; background: #2B2A2E; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: #B5B0AA">Safari address bar · system</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"character":{"editor":"enum","options":["瓜瓜","JOJO","陈吉米"],"default":"瓜瓜"},"night":{"editor":"boolean","default":false},"header":{"editor":"enum","options":["status","nickname"],"default":"status"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var night = !!this.props.night;
+    var P = {
+      '瓜瓜': { name: '瓜瓜', mark: '瓜', nick: '瓜瓜同学', status: '还没睡', day: ['#FFD3B8', '#FFEBC9', '#FFB295', '#E8561E'], night: ['#FF6A3D', '#FFB547', '#C2366B', '#FF8A5C'] },
+      'JOJO': { name: 'JOJO', mark: 'J', nick: 'JOJO（打游戏版）', status: '打游戏中', day: ['#C6E4FF', '#D5F6EE', '#97C8F5', '#2F7BEA'], night: ['#2F6BFF', '#23D5C4', '#6A3DFF', '#5AA2FF'] },
+      '陈吉米': { name: '陈吉米', mark: '吉', nick: '吉米哥', status: '在线', day: ['#DCD2FF', '#FFD8EE', '#BBA4FF', '#7C4DEB'], night: ['#8B5CFF', '#FF4FB8', '#4B2BC9', '#B18CFF'] }
+    };
+    var q = P[this.props.character ?? '瓜瓜'] || P['瓜瓜'];
+    var p = night ? q.night : q.day;
+    var t = night ? {
+      ink: '#F5F3F7', sub: '#B8B3C4', paper: '#0C0B10', pill: 'rgba(255, 255, 255, 0.1)', head: 'rgba(12, 11, 16, 0.6)', headLine: 'rgba(255, 255, 255, 0.1)',
+      inBubble: 'rgba(255, 255, 255, 0.08)', inBorder: 'rgba(255, 255, 255, 0.12)', out: '#F5F3F7', outFg: '#0C0B10',
+      composer: 'rgba(255, 255, 255, 0.08)', composerBorder: 'rgba(255, 255, 255, 0.14)', send: '#F5F3F7', sendFg: '#0C0B10', sticker: '#F5F3F7', playFg: '#0C0B10'
+    } : {
+      ink: '#141414', sub: '#4A4A4A', paper: '#FAF8F6', pill: 'rgba(255, 255, 255, 0.72)', head: 'rgba(255, 255, 255, 0.72)', headLine: 'rgba(20, 20, 20, 0.1)',
+      inBubble: 'rgba(255, 255, 255, 0.9)', inBorder: '#FFFFFF', out: '#141414', outFg: '#FFFFFF',
+      composer: 'rgba(255, 255, 255, 0.9)', composerBorder: '#FFFFFF', send: '#141414', sendFg: '#FFFFFF', sticker: '#FFFFFF', playFg: '#FFFFFF'
+    };
+    var a = function (hex, x) { return night ? hex + x : hex; };
+    var useNick = (this.props.header ?? 'status') === 'nickname';
+    var c = {
+      name: q.name, mark: q.mark, accent: p[3], tape: p[2],
+      nick: useNick ? q.nick : q.name,
+      state: useNick ? q.name + ' · ' + q.status : q.status + ' · UTC+8 03:14',
+      dot: 'linear-gradient(140deg, ' + p[2] + ', ' + p[1] + ')',
+      ring: 'conic-gradient(from 200deg, ' + p[3] + ', ' + p[2] + ', ' + p[1] + ', ' + p[3] + ')',
+      aura: 'radial-gradient(70% 35% at 10% 15%, ' + a(p[0], '59') + ' 0%, transparent 70%), radial-gradient(60% 35% at 95% 55%, ' + a(p[1], '33') + ' 0%, transparent 70%), radial-gradient(80% 40% at 30% 100%, ' + a(p[2], '66') + ' 0%, transparent 70%), ' + t.paper
+    };
+    var H = [6,10,16,8,14,20,10,6,12,18,8,12,6,10,14,8,16,10,6,12,18,8,14,10,6,12,8,14,10,6];
+    return {
+      c: c, t: t,
+      bars: H.map(function (h, i) { return { h: h, col: i < 14 ? p[3] : (night ? 'rgba(255, 255, 255, 0.2)' : 'rgba(20, 20, 20, 0.18)') }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>共创收件箱</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}a:hover{color:#000000}
+@keyframes ibIn { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+.ib-in { animation: ibIn 340ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+@media (prefers-reduced-motion: reduce) { .ib-in { animation-duration: 1ms !important } }
+</style>
+</helmet>
+<div style="min-height: 1320px; background: radial-gradient(40% 22% at 25% 0%, #FFE3D3 0%, transparent 70%), radial-gradient(30% 20% at 80% 0%, #C6E4FF 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1 1 248px; max-width: 260px"><dc-import name="AdminNav" current="共创收件箱" hint-size="248px,1100px"></dc-import></div>
+
+  <main style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 28px 32px 40px">
+    <div style="max-width: 1160px; display: flex; flex-direction: column; gap: 18px">
+
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #4A4A4A">示例</span>
+          <h1 style="margin: 0; font-size: 36px; font-weight: 900; letter-spacing: -0.04em; line-height: 1">共创收件箱</h1>
+        </div>
+        <div role="group" aria-label="状态" style="display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.85); border: 1px solid #FFFFFF">
+          <button type="button" aria-pressed="true" style="height: 34px; padding: 0 14px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 600">待处理 9</button>
+          <button type="button" aria-pressed="false" style="height: 34px; padding: 0 14px; border: none; border-radius: 999px; background: transparent; font: inherit; font-size: 13px; font-weight: 600">已采用 23</button>
+          <button type="button" aria-pressed="false" style="height: 34px; padding: 0 14px; border: none; border-radius: 999px; background: transparent; font: inherit; font-size: 13px; font-weight: 600">不用 11</button>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start">
+
+        <nav aria-label="位置" style="flex: 1 1 220px; max-width: 240px; background: rgba(255, 255, 255, 0.85); border-radius: 24px; padding: 12px 10px; display: flex; flex-direction: column; gap: 12px">
+          <sc-for list="{{tree}}" as="g" hint-placeholder-count="5">
+            <div style="display: flex; flex-direction: column; gap: 2px">
+              <span style="display: flex; align-items: center; gap: 6px; padding: 0 10px 4px; font-size: 12px; font-weight: 900"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{g.col}}"></i>{{g.label}}</span>
+              <sc-for list="{{g.items}}" as="i" hint-placeholder-count="2">
+                <button type="button" onClick="{{i.pick}}" aria-current="{{i.aria}}" style="height: 36px; padding: 0 10px; border: none; border-radius: 999px; background: {{i.bg}}; color: {{i.fg}}; font: inherit; font-size: 13px; font-weight: {{i.weight}}; display: flex; align-items: center; justify-content: space-between; cursor: pointer">
+                  <span>{{i.label}}</span>
+                  <span style="min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: {{i.badgeBg}}; color: {{i.badgeFg}}; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 11px">{{i.n}}</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-for>
+        </nav>
+
+        <section aria-labelledby="slot-title" style="flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+          <div style="background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px">
+              <h2 id="slot-title" style="margin: 0; font-size: 20px; font-weight: 900">{{slot.title}}</h2>
+              <a href="{{slot.href}}" style="height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #E4DED7; display: flex; align-items: center; font-size: 13px; font-weight: 700; text-decoration: none">{{slot.open}}</a>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 18px; background: #F7F4F0">
+              <span style="font-size: 12px; font-weight: 700">现在的内容（v12 已发布）</span>
+              <span style="font-size: 14px; line-height: 1.6">{{slot.current}}</span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center">
+              <span style="font-size: 12px; color: #3F3F3F">最近给玩家的问法：</span>
+              <sc-for list="{{slot.asked}}" as="q" hint-placeholder-count="3"><span style="min-height: 26px; padding: 4px 10px; box-sizing: border-box; border-radius: 999px; background: #F3F0EC; font-size: 12px; display: flex; align-items: center">{{q}}</span></sc-for>
+            </div>
+          </div>
+
+          <sc-for list="{{items}}" as="x" hint-placeholder-count="3">
+            <article class="ib-in" style="background: {{x.bg}}; transition: background 260ms ease; border-radius: 24px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px">
+              <span style="font-size: 12px; color: #3F3F3F">玩家看到的问题：<b style="color: #141414">{{x.q}}</b></span>
+              <sc-if value="{{x.isDialogue}}" hint-placeholder-val="{{ false }}">
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <span style="align-self: flex-end; max-width: 80%; background: #141414; color: #FFFFFF; border-radius: 18px 6px 18px 18px; padding: 8px 12px; font-size: 14px">{{x.you}}</span>
+                  <span style="align-self: flex-start; max-width: 80%; background: #F3F0EC; border-radius: 6px 18px 18px 18px; padding: 8px 12px; font-size: 14px">{{x.a}}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{x.isText}}" hint-placeholder-val="{{ true }}"><span style="font-size: 15px; line-height: 1.6">{{x.a}}</span></sc-if>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+                <span style="flex-grow: 1; font-family: 'DM Mono', monospace; font-size: 11px; color: #4A4A4A">{{x.meta}}</span>
+                <button type="button" onClick="{{x.star}}" aria-pressed="{{x.starred}}" aria-label="标星" style="width: 32px; height: 32px; border: 1px solid #E4DED7; border-radius: 50%; background: #FFFFFF; color: {{x.starCol}}; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="{{x.starFill}}" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9Z"></path></svg></button>
+                <button type="button" onClick="{{x.skip}}" style="width: 72px; height: 32px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">不用</button>
+                <button type="button" onClick="{{x.adopt}}" aria-pressed="{{x.adopted}}" style="width: 96px; height: 32px; border: none; border-radius: 999px; background: {{x.adBg}}; color: #FFFFFF; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">{{x.adLabel}}</button>
+              </div>
+            </article>
+          </sc-for>
+          <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}"><div style="background: #FFFFFF; border-radius: 24px; padding: 28px; text-align: center; font-size: 14px">这个位置的投稿都处理完了</div></sc-if>
+        </section>
+
+        <aside aria-labelledby="today-title" style="flex: 1 1 260px; max-width: 300px; background: #FFFFFF; border-radius: 24px; padding: 18px; display: flex; flex-direction: column; gap: 10px">
+          <h2 id="today-title" style="margin: 0; font-size: 15px; font-weight: 900">今天出题的位置</h2>
+          <sc-for list="{{today}}" as="t" hint-placeholder-count="6">
+            <div style="display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid #F0ECE7">
+              <span style="display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700"><span>{{t.slot}}</span><span style="font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 400">{{t.why}}</span></span>
+              <span style="font-size: 12px; color: #3F3F3F">“{{t.q}}”</span>
+              <span style="height: 5px; border-radius: 999px; background: #EFEBE6; overflow: hidden"><span style="display: block; width: {{t.fill}}; height: 100%; background: #141414"></span></span>
+            </div>
+          </sc-for>
+          <button type="button" style="height: 36px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">换一批今天的问法</button>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { slot: 'j-speech', done: {}, starred: {} };
+  }
+  renderVals() {
+    var self = this;
+    var SL = {
+      'j-speech': { title: 'JOJO · 说话方式', href: 'Workbench.dc.html', open: '在工作台打开这个分区', current: '[示例] 口头禅：“这把不算”“你先睡，我再打一把”。句子短，爱用反问。', asked: ['JOJO 赢了第一句话说什么？', 'JOJO 催你睡觉会怎么说？', 'JOJO 输了不认账时怎么说？'], items: [
+        { q: '如果 JOJO 赢了一局游戏，他第一句话会说什么？', a: '“这把是我 carry 的，你承认吧。”说完又补一句“你也还行”。', meta: '玩家 7Q3KM2F8 · 2026-10-23 05:12 UTC' },
+        { q: 'JOJO 催你睡觉会怎么说？', you: '我再玩十分钟', a: '“十分钟？你上次说十分钟玩到三点。睡。”', meta: '玩家 P2XAH9C6 · 2026-10-22 15:02 UTC · 对话卡', dialogue: true },
+        { q: 'JOJO 输了不想承认的时候怎么说？', a: '“网卡了。”然后马上开下一把。', meta: '玩家 K81MW0D4 · 2026-10-22 21:30 UTC' }] },
+      'jm-rel': { title: 'JOJO – 陈吉米 · 关系', href: 'Cast.dc.html', open: '在关系与故事打开', current: '[示例] 游戏搭子，输了互相甩锅。', asked: ['JOJO 和陈吉米会因为什么拌嘴？', '他们俩谁更会哄人？'], items: [
+        { q: 'JOJO 和陈吉米会因为什么小事拌嘴？', a: '谁该请奶茶。每次打赌输了的人都说“下次一定”。', meta: '玩家 W0CJ8QK2 · 2026-10-23 01:20 UTC' },
+        { q: '他们俩谁更会哄人？', a: '陈吉米。JOJO 只会说“那你要不要打一把”。', meta: '玩家 R5NBT3E7 · 2026-10-22 19:44 UTC' }] },
+      'new-story': { title: '新故事 · 瓜瓜 + 陈吉米', href: 'Cast.dc.html', open: '在关系与故事打开', current: '这对目前只有 1 个故事。', asked: ['写一个瓜瓜和陈吉米之间的小瞬间'], items: [
+        { q: '写一个瓜瓜和陈吉米之间的小瞬间', a: '排练室最后两个人都不想关灯，结果站在门口猜拳猜了十分钟。', meta: '玩家 K81MW0D4 · 2026-10-23 03:40 UTC' }] },
+      'locate': { title: '待定位', href: 'Workbench.dc.html', open: '选一个分区', current: '玩家在聊天里点了“这句不像他”，或写了不针对某个问题的意见。选一个位置就会移过去。', asked: [], items: [
+        { q: '（聊天里标记）JOJO：“好的呢亲，我会继续努力的～”', a: '这句太像客服了，JOJO 不会这么说话。', meta: '玩家 H6ZDV1M9 · 2026-10-23 06:58 UTC · 来自消息' }] },
+      'g-person': { title: '瓜瓜 · 性格与行为', href: 'Workbench.dc.html', open: '在工作台打开这个分区', current: '[示例] ……', asked: ['瓜瓜担心你的时候表面上是什么样？'], items: [
+        { q: '瓜瓜担心你的时候，表面上会是什么样子？', a: '装作很凶地问你吃饭没，问完就开始碎碎念。', meta: '玩家 P2XAH9C6 · 2026-10-22 22:05 UTC' }] }
+    };
+    var counts = { 'j-speech': 3, 'jm-rel': 2, 'new-story': 1, 'locate': 1, 'g-person': 1 };
+    var mk = function (id, label) {
+      var on = id === self.state.slot;
+      var left = SL[id].items.filter(function (_, i) { return !self.state.done[id + i]; }).length;
+      return { label: label, n: left, aria: on ? 'true' : 'false', bg: on ? '#141414' : 'transparent', fg: on ? '#FFFFFF' : '#141414', weight: on ? 700 : 500, badgeBg: on ? '#FFFFFF' : (left ? '#E8561E' : '#EFEBE6'), badgeFg: on ? '#141414' : (left ? '#FFFFFF' : '#5A5A5A'), pick: function () { self.setState({ slot: id }); } };
+    };
+    var s = SL[this.state.slot];
+    var id = this.state.slot;
+    var items = s.items.map(function (x, i) {
+      var key = id + i, ad = self.state.done[key] === 'adopt', st = !!self.state.starred[key];
+      return {
+        q: x.q, a: x.a, you: x.you || '', meta: x.meta, isDialogue: !!x.dialogue, isText: !x.dialogue,
+        bg: ad ? '#FFF8E8' : '#FFFFFF', adopted: ad, adLabel: ad ? '已放进草稿' : '采用到草稿', adBg: ad ? '#1E5E36' : '#141414',
+        starred: st, starCol: st ? '#B8860B' : '#141414', starFill: st ? 'currentColor' : 'none',
+        adopt: function () { var d = Object.assign({}, self.state.done); d[key] = d[key] === 'adopt' ? undefined : 'adopt'; self.setState({ done: d }); },
+        skip: function () { var d = Object.assign({}, self.state.done); d[key] = 'skip'; self.setState({ done: d }); },
+        star: function () { var t = Object.assign({}, self.state.starred); t[key] = !t[key]; self.setState({ starred: t }); }
+      };
+    }).filter(function (_, i) { return self.state.done[id + i] !== 'skip'; });
+    return {
+      slot: s, items: items, empty: items.length === 0,
+      tree: [
+        { label: '瓜瓜', col: '#E8561E', items: [mk('g-person', '性格与行为')] },
+        { label: 'JOJO', col: '#2F7BEA', items: [mk('j-speech', '说话方式')] },
+        { label: '关系', col: '#7C4DEB', items: [mk('jm-rel', 'JOJO – 陈吉米')] },
+        { label: '新故事', col: '#141414', items: [mk('new-story', '瓜瓜 + 陈吉米')] },
+        { label: '其他', col: '#BDB5AC', items: [mk('locate', '待定位')] }
+      ],
+      today: [
+        { slot: '瓜瓜 – 陈吉米 · 故事', why: '只有 1 个', q: '写一个他们俩之间的小瞬间', fill: '20%' },
+        { slot: '陈吉米 · 说话方式', why: '空', q: '陈吉米生气时说话会变成什么样？', fill: '5%' },
+        { slot: 'JOJO · 经历', why: '21 天没人答', q: '你觉得 JOJO 小时候是什么样？', fill: '40%' },
+        { slot: '瓜瓜 · 身份与自我', why: '内容少', q: '瓜瓜最不喜欢被怎么叫？', fill: '30%' },
+        { slot: 'JOJO – 陈吉米 · 关系', why: '', q: '他们俩谁更会哄人？', fill: '60%' },
+        { slot: '瓜瓜 · 说话方式', why: '', q: '瓜瓜夸人的时候会怎么说？', fill: '70%' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

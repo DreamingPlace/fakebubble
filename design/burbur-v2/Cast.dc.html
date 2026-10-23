@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>关系与故事</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#141414}a:hover{color:#000000}
+@keyframes csIn { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+@keyframes csPop { 0% { transform: scale(0.6) } 60% { transform: scale(1.25) } 100% { transform: scale(1) } }
+.cs-in { animation: csIn 320ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+.cs-pop { animation: csPop 320ms cubic-bezier(0.2, 0.82, 0.24, 1) both }
+@media (prefers-reduced-motion: reduce) { .cs-in, .cs-pop { animation-duration: 1ms !important } }
+</style>
+</helmet>
+<div style="min-height: 1320px; background: radial-gradient(30% 20% at 15% 0%, #FFD3B8 0%, transparent 70%), radial-gradient(30% 20% at 50% 0%, #C6E4FF 0%, transparent 70%), radial-gradient(30% 20% at 85% 0%, #DCD2FF 0%, transparent 70%), #FAF8F6; color: #141414; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 1 1 248px; max-width: 260px"><dc-import name="AdminNav" current="关系与故事" hint-size="248px,1100px"></dc-import></div>
+
+  <main style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 28px 32px 40px">
+    <div style="max-width: 1160px; display: flex; flex-direction: column; gap: 16px">
+
+      <div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px">
+        <h1 style="margin: 0; font-size: 36px; font-weight: 900; letter-spacing: -0.04em; line-height: 1">关系与故事</h1>
+        <span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #4A4A4A">15 人 · 示例</span>
+      </div>
+
+      <section aria-labelledby="pub-title" style="background: #FFFFFF; border-radius: 999px; padding: 8px 8px 8px 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+        <h2 id="pub-title" style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 900">发布阵容 <span style="font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500">v12 → v13</span></h2>
+        <span style="flex-grow: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px">
+          <sc-for list="{{changes}}" as="c" hint-placeholder-count="4">
+            <span style="height: 30px; padding: 0 10px; border-radius: 999px; background: #F7F4F0; display: flex; align-items: center; gap: 6px; font-size: 12px"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{c.col}}"></i>{{c.t}} <b style="font-family: 'DM Mono', monospace; font-weight: 500">{{c.k}}</b></span>
+          </sc-for>
+        </span>
+        <span style="height: 30px; padding: 0 12px; border-radius: 999px; background: #E3F3E8; color: #1E5E36; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5 9-10"></path></svg>预演通过</span>
+        <button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">回到 v12</button>
+        <button type="button" onClick="{{publish}}" style="height: 40px; padding: 0 18px; border: none; border-radius: 999px; background: {{pubBg}}; color: #FFFFFF; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 300ms ease">{{pubLabel}}</button>
+      </section>
+
+      <div role="tablist" aria-label="选角色" style="display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.85)">
+        <sc-for list="{{people}}" as="p" hint-placeholder-count="15">
+          <button type="button" role="tab" onClick="{{p.pick}}" aria-selected="{{p.on}}" aria-label="{{p.name}}" style="width: 40px; height: 40px; padding: 0; border: none; border-radius: 50%; background: {{p.ringBg}}; box-shadow: {{p.ring}}; transform: {{p.lift}}; transition: transform 220ms cubic-bezier(0.2, 0.82, 0.24, 1), box-shadow 220ms ease; cursor: pointer; display: flex; align-items: center; justify-content: center">
+            <span style="width: 34px; height: 34px; border-radius: 50%; background: {{p.dot}}; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900">{{p.mark}}</span>
+          </button>
+        </sc-for>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch">
+        <section aria-labelledby="mx-title" style="flex: 0 1 auto; background: #FFFFFF; border-radius: 24px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px">
+            <h2 id="mx-title" style="margin: 0; font-size: 15px; font-weight: 900">关系网</h2>
+            <span aria-label="颜色越深越亲近，0 到 5 星" style="display: flex; align-items: center; gap: 6px; font-size: 12px">
+              <span>陌生</span>
+              <span style="width: 120px; height: 10px; border-radius: 999px; background: linear-gradient(90deg, #F7F4F0, #FBD7E6, #F398BE, #E15492, #C92370)"></span>
+              <span style="color: #C92370">★5</span>
+              <span style="margin-left: 6px; font-family: 'DM Mono', monospace">行 → 列</span>
+            </span>
+          </div>
+          <div role="grid" aria-label="15×15 关系网" onMouseLeave="{{unhover}}" style="display: grid; grid-template-columns: 26px repeat(15, 26px); gap: 2px">
+            <span></span>
+            <sc-for list="{{colHeads}}" as="h" hint-placeholder-count="15">
+              <span aria-hidden="true" style="width: 26px; height: 26px; border-radius: 50%; background: {{h.dot}}; box-shadow: {{h.ring}}; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; transition: box-shadow 160ms ease">{{h.mark}}</span>
+            </sc-for>
+            <sc-for list="{{rows}}" as="r" hint-placeholder-count="15">
+              <span aria-hidden="true" style="width: 26px; height: 26px; border-radius: 50%; background: {{r.dot}}; box-shadow: {{r.ring}}; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; transition: box-shadow 160ms ease">{{r.mark}}</span>
+              <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="15">
+                <button type="button" onClick="{{c.pick}}" onMouseEnter="{{c.hover}}" aria-label="{{c.aria}}" aria-pressed="{{c.on}}" style="width: 26px; height: 26px; padding: 0; border: none; border-radius: 6px; background: {{c.bg}}; box-shadow: {{c.edge}}; opacity: {{c.op}}; cursor: {{c.cursor}}; transition: background 200ms ease, box-shadow 140ms ease, opacity 140ms ease"></button>
+              </sc-for>
+            </sc-for>
+          </div>
+        </section>
+
+        <sc-if value="{{groupMode}}" hint-placeholder-val="{{ false }}">
+        <section class="cs-in" aria-labelledby="grp-ed-title" style="flex: 1 1 300px; min-width: 0; background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <i style="width: 14px; height: 14px; border-radius: 4px; background: {{grp.col}}"></i>
+            <h2 id="grp-ed-title" style="margin: 0; font-size: 17px; font-weight: 900">{{grp.name}}</h2>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+            <sc-for list="{{grp.members}}" as="m" hint-placeholder-count="4">
+              <span style="height: 32px; padding: 0 10px 0 3px; border-radius: 999px; background: #F7F4F0; display: flex; align-items: center; gap: 6px; font-size: 13px"><span aria-hidden="true" style="width: 26px; height: 26px; border-radius: 50%; background: {{m.dot}}; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900">{{m.mark}}</span>{{m.name}}</span>
+            </sc-for>
+            <button type="button" aria-label="加成员" style="width: 32px; height: 32px; border: 1px dashed #BDB5AC; border-radius: 50%; background: #FFFFFF; font: inherit; font-size: 16px; cursor: pointer">+</button>
+          </div>
+          <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700">组合背景<textarea rows="3" style="box-sizing: border-box; width: 100%; padding: 10px 12px; border: 1px solid #E4DED7; border-radius: 16px; font: inherit; font-size: 14px; font-weight: 400; line-height: 1.55; resize: vertical">[示例] 同一年出道，宿舍在同一层……</textarea></label>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="display: flex; justify-content: space-between; align-items: center">
+              <span style="font-size: 13px; font-weight: 900">组合故事</span>
+              <button type="button" style="height: 30px; padding: 0 12px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">+ 组合故事</button>
+            </div>
+            <sc-for list="{{grp.stories}}" as="s" hint-placeholder-count="2">
+              <span class="cs-in" style="min-height: 40px; padding: 0 12px; border-radius: 14px; background: #F7F4F0; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700">{{s.t}}<span style="font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 400">全员亲历</span></span>
+            </sc-for>
+            <sc-if value="{{grp.empty}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #5A5A5A">还没有</span></sc-if>
+          </div>
+        </section>
+        </sc-if>
+
+        <sc-if value="{{pairMode}}" hint-placeholder-val="{{ true }}">
+        <section class="cs-in" aria-labelledby="pair-title" style="flex: 1 1 300px; min-width: 0; background: #FFFFFF; border-radius: 24px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; align-items: center; gap: 8px">
+            <span aria-hidden="true" style="width: 36px; height: 36px; border-radius: 50%; border: 2px solid #FFFFFF; background: {{pair.a.dot}}; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900">{{pair.a.mark}}</span>
+            <span aria-hidden="true" style="width: 36px; height: 36px; margin-left: -12px; border-radius: 50%; border: 2px solid #FFFFFF; background: {{pair.b.dot}}; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900">{{pair.b.mark}}</span>
+            <h2 id="pair-title" style="margin: 0; font-size: 17px; font-weight: 900">{{pair.a.name}} · {{pair.b.name}}</h2>
+          </div>
+
+          <sc-for list="{{dirs}}" as="d" hint-placeholder-count="2">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+              <span style="width: 128px; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700">
+                <span aria-hidden="true" style="width: 24px; height: 24px; border-radius: 50%; background: {{d.from.dot}}; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 900">{{d.from.mark}}</span>
+                <svg width="16" height="10" viewBox="0 0 16 10" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4" fill="none" stroke="#141414" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                <span aria-hidden="true" style="width: 24px; height: 24px; border-radius: 50%; background: {{d.to.dot}}; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 900">{{d.to.mark}}</span>
+              </span>
+              <div role="radiogroup" aria-label="{{d.label}}" style="display: flex; gap: 2px">
+                <sc-for list="{{d.stars}}" as="s" hint-placeholder-count="5">
+                  <span style="position: relative; width: 32px; height: 32px">
+                    <svg class="{{s.anim}}" width="32" height="32" viewBox="0 0 24 24" aria-hidden="true" style="display: block">
+                      <defs><linearGradient id="{{s.gid}}" x1="0" x2="1" y1="0" y2="0"><stop offset="{{s.fill}}" stop-color="#F2B01E"></stop><stop offset="{{s.fill}}" stop-color="#E9E4DE"></stop></linearGradient></defs>
+                      <path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9Z" fill="url(#{{s.gid}})" stroke="{{s.stroke}}" stroke-width="1" stroke-linejoin="round"></path>
+                    </svg>
+                    <button type="button" role="radio" aria-checked="{{s.halfOn}}" aria-label="{{s.halfLabel}}" onClick="{{s.pickHalf}}" style="position: absolute; left: 0; top: 0; width: 16px; height: 32px; padding: 0; border: none; background: transparent; cursor: pointer"></button>
+                    <button type="button" role="radio" aria-checked="{{s.fullOn}}" aria-label="{{s.fullLabel}}" onClick="{{s.pickFull}}" style="position: absolute; right: 0; top: 0; width: 16px; height: 32px; padding: 0; border: none; background: transparent; cursor: pointer"></button>
+                  </span>
+                </sc-for>
+              </div>
+              <span style="min-width: 40px; font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 500">{{d.val}}</span>
+              <button type="button" onClick="{{d.clear}}" aria-label="{{d.label}}：设为陌生" style="height: 28px; padding: 0 10px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 12px; cursor: pointer">陌生</button>
+            </div>
+          </sc-for>
+
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+            <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700">{{pair.a.name}} → {{pair.b.name}}<input type="text" value="[叫法]" style="height: 38px; box-sizing: border-box; padding: 0 12px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 400"></label>
+            <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700">{{pair.b.name}} → {{pair.a.name}}<input type="text" value="[叫法]" style="height: 38px; box-sizing: border-box; padding: 0 12px; border: 1px solid #E4DED7; border-radius: 999px; font: inherit; font-size: 14px; font-weight: 400"></label>
+          </div>
+          <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700">相处<textarea rows="3" style="box-sizing: border-box; width: 100%; padding: 10px 12px; border: 1px solid #E4DED7; border-radius: 16px; font: inherit; font-size: 14px; font-weight: 400; line-height: 1.55; resize: vertical">[示例] 游戏搭子，输了互相甩锅。</textarea></label>
+          <span style="display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px">
+            <sc-if value="{{pair.hasGroup}}" hint-placeholder-val="{{ false }}"><span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center; gap: 6px"><i style="width: 8px; height: 8px; border-radius: 3px; background: {{pair.groupCol}}"></i>{{pair.groupName}}</span></sc-if>
+            <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; display: flex; align-items: center">故事 {{pair.stories}}</span>
+            <sc-if value="{{pair.hasCc}}" hint-placeholder-val="{{ false }}"><a href="Inbox.dc.html" style="height: 24px; padding: 0 10px; border-radius: 999px; background: #E8561E; color: #FFFFFF; display: flex; align-items: center; font-weight: 700; text-decoration: none">共创 {{pair.cc}}</a></sc-if>
+          </span>
+        </section>
+        </sc-if>
+      </div>
+
+      <section aria-labelledby="grp-title" style="background: #FFFFFF; border-radius: 24px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <h2 id="grp-title" style="margin: 0; font-size: 15px; font-weight: 900">组合</h2>
+          <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #E4DED7; border-radius: 999px; background: #FFFFFF; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">+ 组合</button>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+          <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+            <button type="button" onClick="{{g.pick}}" aria-pressed="{{g.on}}" style="border: none; border-radius: 20px; background: {{g.bg}}; box-shadow: {{g.edge}}; padding: 12px 14px; font: inherit; text-align: left; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: box-shadow 200ms ease, transform 200ms ease; transform: {{g.lift}}">
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 900"><i style="width: 10px; height: 10px; border-radius: 3px; background: {{g.col}}"></i>{{g.name}}</span>
+              <span style="display: flex">
+                <sc-for list="{{g.members}}" as="m" hint-placeholder-count="4"><span aria-label="{{m.name}}" style="width: 26px; height: 26px; margin-right: -6px; border-radius: 50%; border: 2px solid #FFFFFF; background: {{m.dot}}; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900">{{m.mark}}</span></sc-for>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+      </section>
+
+      <section aria-labelledby="story-title" style="background: #FFFFFF; border-radius: 24px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px">
+          <h2 id="story-title" style="margin: 0; font-size: 15px; font-weight: 900">{{selName}} 知道的故事</h2>
+          <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px">
+            <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #141414; color: #FFFFFF; display: flex; align-items: center; font-size: 12px; font-weight: 700">亲历</span>
+            <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #E2EEFF; color: #1C4FA0; display: flex; align-items: center; font-size: 12px; font-weight: 700">听说</span>
+            <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #F3F0EC; color: #5A5A5A; display: flex; align-items: center; font-size: 12px; font-weight: 700">不知道</span>
+            <button type="button" style="height: 32px; padding: 0 12px; border: none; border-radius: 999px; background: #141414; color: #FFFFFF; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">+ 故事</button>
+          </span>
+        </div>
+        <sc-for list="{{stories}}" as="s" hint-placeholder-count="5">
+          <div class="cs-in" style="min-height: 48px; display: flex; align-items: center; gap: 12px; border-top: 1px solid #F0ECE7">
+            <span style="flex-grow: 1; min-width: 0; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{s.title}}</span>
+            <span style="display: flex">
+              <sc-for list="{{s.who}}" as="w" hint-placeholder-count="3"><span aria-label="{{w.name}}" style="width: 24px; height: 24px; margin-right: -6px; border-radius: 50%; border: 2px solid #FFFFFF; background: {{w.dot}}; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 900">{{w.mark}}</span></sc-for>
+            </span>
+            <button type="button" onClick="{{s.cycle}}" aria-label="{{selName}} 对这个故事：{{s.k}}，点击切换" style="width: 72px; height: 28px; margin-left: 8px; border: {{s.border}}; border-radius: 999px; background: {{s.bg}}; color: {{s.fg}}; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: background 200ms ease, color 200ms ease">{{s.k}}</button>
+          </div>
+        </sc-for>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1320}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: 1, pair: [1, 2], hover: null, stars: {}, bump: 0, know: {}, published: false, mode: 'pair', grp: 0 };
+  }
+  renderVals() {
+    var self = this;
+    var HUES = ['#FFB295', '#97C8F5', '#BBA4FF', '#F5C26B', '#9ED9B8', '#F59EC0', '#8FD3E8', '#C9B6F2', '#FFCF9E', '#A7D49B', '#F2A6A6', '#9DB8F5', '#E6C17A', '#B5E0D0', '#D8A9E8'];
+    var P = [];
+    for (var i = 0; i < 15; i++) P.push({ name: i === 0 ? '瓜瓜' : i === 1 ? 'JOJO' : i === 2 ? '陈吉米' : '[角色 ' + (i + 1) + ']', mark: i === 0 ? '瓜' : i === 1 ? 'J' : i === 2 ? '吉' : String(i + 1), dot: 'linear-gradient(140deg, ' + HUES[i] + ', #FFFFFF)' });
+    var GROUPS = [
+      { name: '[组合 A]', col: '#D9C9FF', tint: '#EFE7FF', m: [0, 1, 2, 3, 4] },
+      { name: '[组合 B]', col: '#BFE3FF', tint: '#E6F3FF', m: [5, 6, 7, 8] },
+      { name: '[组合 C]', col: '#FFD9BF', tint: '#FFF0E4', m: [9, 10, 11] }
+    ];
+    var groupOf = function (x) { for (var g = 0; g < GROUPS.length; g++) if (GROUPS[g].m.indexOf(x) >= 0) return g; return -1; };
+    // One direction: key 'a>b' is how close a feels to b; b>a can differ.
+    var key = function (a, b) { return a + '>' + b; };
+    var SEED = { '1>2': 4.5, '2>1': 3.5, '0>1': 4, '1>0': 4, '0>2': 3, '2>0': 1.5, '4>7': 1, '7>4': 3, '0>12': 0.5, '6>13': 2.5, '13>6': 4, '5>6': 4, '6>5': 4, '9>10': 3.5 };
+    var starsOf = function (a, b) {
+      var k = key(a, b);
+      if (self.state.stars[k] !== undefined) return self.state.stars[k];
+      if (SEED[k] !== undefined) return SEED[k];
+      return groupOf(a) >= 0 && groupOf(a) === groupOf(b) ? 2 : 0;
+    };
+    var HEAT = ['#F7F4F0', '#FDEBF2', '#FBD7E6', '#F9C2D9', '#F6ADCB', '#F398BE', '#EF82B0', '#E96BA1', '#E15492', '#D63C82', '#C92370'];
+    var sel = this.state.sel, hv = this.state.hover || [-1, -1], pr = this.state.pair;
+    var hotR = function (x) { return x === sel || x === hv[0] || x === pr[0]; };
+    var hotC = function (y) { return y === sel || y === hv[1] || y === pr[1]; };
+    var anyHot = true;
+    var head = function (x, hot) { return { mark: P[x].mark, dot: P[x].dot, ring: hot ? '0 0 0 2px #141414' : 'none' }; };
+    var rows = P.map(function (p, a) {
+      var r = head(a, hotR(a)); r.cells = [];
+      for (var b = 0; b < 15; b++) {
+        (function (b) {
+          var v = a === b ? -1 : starsOf(a, b);
+          var line = (hotR(a) || hotC(b)) && a !== b;
+          var on = (pr[0] === a && pr[1] === b) || (pr[0] === b && pr[1] === a);
+          r.cells.push({
+            on: on, bg: a === b ? '#E9E4DE' : HEAT[Math.round(v * 2)], cursor: a === b ? 'default' : 'pointer',
+            op: a === b || line || on ? 1 : 0.45,
+            edge: on ? '0 0 0 2px #141414' : line ? 'inset 0 0 0 1px rgba(20, 20, 20, 0.25)' : 'none',
+            aria: P[a].name + ' → ' + P[b].name + (a === b ? '' : '：' + (v === 0 ? '陌生' : v + ' 星')),
+            pick: function () { if (a !== b) self.setState({ pair: [a, b], sel: a, mode: 'pair' }); },
+            hover: function () { self.setState({ hover: [a, b] }); }
+          });
+        })(b);
+      }
+      return r;
+    });
+    var A = pr[0], B = pr[1];
+    var dir = function (from, to, tag) {
+      var val = starsOf(from, to);
+      var setVal = function (n) { var s = Object.assign({}, self.state.stars); s[key(from, to)] = n; self.setState({ stars: s, bump: self.state.bump + 1 }); };
+      return {
+        from: P[from], to: P[to], label: P[from].name + ' 对 ' + P[to].name, val: val === 0 ? '陌生' : val.toFixed(1),
+        clear: function () { setVal(0); },
+        stars: [1, 2, 3, 4, 5].map(function (n) {
+          var f = val >= n ? 1 : val >= n - 0.5 ? 0.5 : 0;
+          return {
+            gid: tag + n, fill: (f * 100) + '%', stroke: f > 0 ? '#D99A0E' : '#CFC7BE',
+            anim: f > 0 && Math.ceil(val) === n ? 'cs-pop' : '',
+            halfOn: val === n - 0.5, fullOn: val === n, halfLabel: (n - 0.5) + ' 星', fullLabel: n + ' 星',
+            pickHalf: function () { setVal(n - 0.5); }, pickFull: function () { setVal(n); }
+          };
+        })
+      };
+    };
+    var dirs = [dir(A, B, 'ab'), dir(B, A, 'ba')];
+    var gk = groupOf(A) >= 0 && groupOf(A) === groupOf(B) ? groupOf(A) : -1;
+    var K = { l: ['亲历', '#141414', '#FFFFFF'], h: ['听说', '#E2EEFF', '#1C4FA0'], n: ['不知道', '#F3F0EC', '#5A5A5A'] };
+    var ST = [
+      { t: '[示例] 练习室停电那晚', who: [0, 1] },
+      { t: '[示例] 排练室关灯之争', who: [0, 2] },
+      { t: '[示例] 第一次一起上台', who: [0, 1, 2, 3, 4] },
+      { t: '[示例] “这把不算”', who: [1, 2] },
+      { t: '[示例] 组合 B 的综艺翻车', who: [5, 6, 7, 8], grp: 1 },
+      { t: '[示例] 组合 A 出道夜', who: [0, 1, 2, 3, 4], grp: 0 },
+      { t: '[示例] 偷偷准备的生日歌', who: [1, 2, 4] }
+    ];
+    var know = this.state.know;
+    var stories = ST.map(function (s, si) {
+      var def = s.who.indexOf(sel) >= 0 ? 'l' : s.who.some(function (w) { return starsOf(w, sel) >= 3; }) ? 'h' : 'n';
+      var kk = know[sel + ':' + si] || def;
+      var over = !!know[sel + ':' + si];
+      return {
+        title: s.t, who: s.who.map(function (w) { return P[w]; }), k: K[kk][0], bg: K[kk][1], fg: K[kk][2], border: over ? '2px solid #E8561E' : 'none',
+        cycle: function () { var n = Object.assign({}, self.state.know); n[sel + ':' + si] = kk === 'l' ? 'h' : kk === 'h' ? 'n' : 'l'; self.setState({ know: n }); }
+      };
+    });
+    var groupMode = this.state.mode === 'group';
+    var groups = GROUPS.map(function (g, gi) {
+      var on = groupMode ? gi === self.state.grp : g.m.indexOf(sel) >= 0;
+      return { name: g.name, col: g.col, members: g.m.map(function (x) { return P[x]; }), on: on, bg: on ? g.tint : '#F7F4F0', edge: on ? '0 0 0 2px ' + g.col : 'none', lift: on ? 'translateY(-2px)' : 'none', pick: function () { self.setState({ mode: 'group', grp: gi }); } };
+    });
+    var G = GROUPS[this.state.grp];
+    var gStories = ST.filter(function (s) { return s.grp === self.state.grp; }).map(function (s) { return { t: s.t }; });
+    var grp = { name: G.name, col: G.col, members: G.m.map(function (x) { return P[x]; }), stories: gStories, empty: gStories.length === 0 };
+    return {
+      people: P.map(function (p, x) { var on = x === sel; return { name: p.name, mark: p.mark, dot: p.dot, on: on, ringBg: on ? '#141414' : 'transparent', ring: on ? '0 6px 14px rgba(20, 20, 20, 0.2)' : 'none', lift: on ? 'translateY(-3px) scale(1.08)' : 'none', pick: function () { self.setState({ sel: x, pair: [x, x === 1 ? 2 : 1] }); } }; }),
+      colHeads: P.map(function (p, y) { return head(y, hotC(y)); }),
+      rows: rows, selName: P[sel].name, stories: stories, groups: groups, dirs: dirs, grp: grp,
+      groupMode: groupMode, pairMode: !groupMode,
+      unhover: function () { self.setState({ hover: null }); },
+      pair: { a: P[A], b: P[B], hasGroup: gk >= 0, groupName: gk >= 0 ? GROUPS[gk].name : '', groupCol: gk >= 0 ? GROUPS[gk].col : '#FFFFFF', stories: ST.filter(function (s) { return s.who.indexOf(A) >= 0 && s.who.indexOf(B) >= 0; }).length, hasCc: key(A, B) === '1-2', cc: 2 },
+      changes: [
+        { t: 'JOJO · 说话方式', k: '+1', col: '#2F7BEA' },
+        { t: 'JOJO → 陈吉米', k: '★4.5', col: '#7C4DEB' },
+        { t: '[组合 B]', k: '新', col: '#8FD3E8' },
+        { t: '排练室关灯之争', k: '新', col: '#E8561E' }
+      ],
+      publish: function () { self.setState({ published: true }); },
+      pubLabel: this.state.published ? '已发布 v13' : '发布 v13',
+      pubBg: this.state.published ? '#1E5E36' : '#141414'
+    };
+  }
+}
+</script>
+</body>
+</html>
