@@ -1197,7 +1197,7 @@ export class WebProviderOffline {
           },
           { outcome: result.outcome, receipt: result.receipt, usage: { units: result.usageUnits } },
         );
-      this.recordUsage(row, result);
+      this.recordUsage(row, result, charge);
       return { duplicate: false as const, chargedMicros: charge };
     });
   }
@@ -1206,7 +1206,7 @@ export class WebProviderOffline {
    * operation, no content. A call that cost nothing (rejected before it ran) records nothing. The cost is the LIST price,
    * not the upper bound this ledger holds. Never changes a reservation or a settlement.
    */
-  private recordUsage(row: Attempt, result: { receipt: unknown; usageUnits: number }) {
+  private recordUsage(row: Attempt, result: { receipt: unknown; usageUnits: number }, chargedMicros: number) {
     if (!this.modelChoiceSchema()) return;
     let input = 0,
       cached = 0,
@@ -1229,11 +1229,13 @@ export class WebProviderOffline {
       output = outputTokens;
       cost = listPriceMicros(row.provider, row.model, { inputTokens, cachedInputTokens: cached, outputTokens });
     }
+    // Part 22c (schema 128): what the budget ledger charged for the call, next to its list cost.
+    const ledger = (this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 128;
     this.store.run(
-      `INSERT INTO web_provider_usage(day,provider,model,phase,calls,input_tokens,cached_input_tokens,output_tokens,bytes,cost_micros)
-      VALUES (?,?,?,?,1,?,?,?,?,?) ON CONFLICT(day,provider,model,phase) DO UPDATE SET calls=calls+1,
+      `INSERT INTO web_provider_usage(day,provider,model,phase,calls,input_tokens,cached_input_tokens,output_tokens,bytes,cost_micros${ledger ? ',ledger_charged_micros' : ''})
+      VALUES (?,?,?,?,1,?,?,?,?,?${ledger ? ',?' : ''}) ON CONFLICT(day,provider,model,phase) DO UPDATE SET calls=calls+1,
       input_tokens=input_tokens+excluded.input_tokens,cached_input_tokens=cached_input_tokens+excluded.cached_input_tokens,
-      output_tokens=output_tokens+excluded.output_tokens,bytes=bytes+excluded.bytes,cost_micros=cost_micros+excluded.cost_micros`,
+      output_tokens=output_tokens+excluded.output_tokens,bytes=bytes+excluded.bytes,cost_micros=cost_micros+excluded.cost_micros${ledger ? ',ledger_charged_micros=ledger_charged_micros+excluded.ledger_charged_micros' : ''}`,
       new Date(this.now()).toISOString().slice(0, 10),
       row.provider,
       row.model,
@@ -1243,6 +1245,7 @@ export class WebProviderOffline {
       output,
       bytes,
       cost,
+      ...(ledger ? [chargedMicros] : []),
     );
   }
   /**

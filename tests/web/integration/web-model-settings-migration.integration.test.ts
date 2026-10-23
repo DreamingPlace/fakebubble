@@ -133,26 +133,31 @@ test('Cloudflare runner: 124 is the same SQL on both authorities, second to last
   // Named exception (Part 22x, migration 126): the ledger has 51 steps and 126 is the newest, so step counts, positions counted
   // from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-  assert.equal(inline.length, 52);
-  assert.equal(r2.length, 52);
-  assert.equal(inline.at(-4)!.version, 124);
-  assert.equal(r2.at(-4)!.version, 124);
-  assert.equal(inline.at(-4)!.sha256, sha(sql124()), 'the ledger hash is the sha256 of the SQL file as written');
-  assert.equal(inline.at(-4)!.sha256, r2.at(-4)!.sha256);
+  // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.length, 53);
+  assert.equal(r2.length, 53);
+  assert.equal(inline.at(-5)!.version, 124);
+  assert.equal(r2.at(-5)!.version, 124);
+  assert.equal(inline.at(-5)!.sha256, sha(sql124()), 'the ledger hash is the sha256 of the SQL file as written');
+  assert.equal(inline.at(-5)!.sha256, r2.at(-5)!.sha256);
   assert.equal(
-    inline.at(-4)!.sha256,
+    // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+    inline.at(-5)!.sha256,
     '5754ab5882783ac356527db8904fd2a4661c6b9ff98ee796a49a438ec1301d17',
     'pinned: a change to the file is a new migration',
   );
   // 123 (Part 21b) is untouched, byte for byte.
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-  assert.equal(inline.at(-5)!.version, 123);
+  // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.at(-6)!.version, 123);
   assert.equal(
-    inline.at(-5)!.sha256,
+    // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+    inline.at(-6)!.sha256,
     '432c1237ea6f460652e6e5191ae269ed975950a6ecdf5e1ffd7d3f939728db41',
     'pinned: 123 is exactly what main applied',
   );
-  assert.equal(r2.at(-5)!.sha256, inline.at(-5)!.sha256);
+  // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(r2.at(-6)!.sha256, inline.at(-6)!.sha256);
 });
 
 test('Cloudflare runner: an existing authority at 123 gains 124 untouched (inline and R2)', async (t) => {
@@ -166,11 +171,13 @@ test('Cloudflare runner: an existing authority at 123 gains 124 untouched (inlin
     assert.deepEqual(result.after.slice(0, 48), result.before, `${mode}: applied steps are untouched`);
     // Named exception (Part 22a, migration 125): opening the authority now also applies 125 after 124.
     // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-    assert.equal(result.after.length, 52, mode);
-    assert.equal(result.after.at(-4), `124:${sha(sql124())}`, mode);
-    assert.equal(result.after.at(-3)?.startsWith('125:'), true, mode);
-    assert.equal(result.after.at(-2)?.startsWith('126:'), true, mode); // Extended for migration 126: the newest step is last.
-    assert.equal(result.after.at(-1)?.startsWith('127:'), true, mode); // Extended for migration 127: the newest step is last.
-    assert.deepEqual(result.version, { user_version: 127 }, mode);
+    // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+    assert.equal(result.after.length, 53, mode);
+    assert.equal(result.after.at(-5), `124:${sha(sql124())}`, mode);
+    assert.equal(result.after.at(-4)?.startsWith('125:'), true, mode);
+    assert.equal(result.after.at(-3)?.startsWith('126:'), true, mode); // Extended for migration 126: the newest step is last.
+    assert.equal(result.after.at(-2)?.startsWith('127:'), true, mode); // Extended for migration 127: the newest step is last.
+    assert.equal(result.after.at(-1)?.startsWith('128:'), true, mode); // Extended for migration 128: the newest step is last.
+    assert.deepEqual(result.version, { user_version: 128 }, mode);
   }
 });

@@ -48,5 +48,10 @@ export function inviteCodesCsv(rows: readonly BatchCodeView[]) {
       row.redeemedAt === null ? '' : row.expiresAt === null ? '无期限' : utcDateTime(row.expiresAt),
     ]),
   ];
-  return `﻿${lines.map((line) => line.map(csvCell).join(',')).join('\r\n')}\r\n`;
+  return csvDocument(lines);
+}
+
+/** Lines of cells as one CSV document: a UTF-8 BOM first (Excel reads the Chinese correctly), CRLF line ends, every cell guarded by csvCell. */
+export function csvDocument(lines: readonly (readonly string[])[]) {
+  return `\uFEFF${lines.map((line) => line.map(csvCell).join(',')).join('\r\n')}\r\n`;
 }

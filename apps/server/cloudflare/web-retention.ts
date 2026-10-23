@@ -15,6 +15,7 @@ import {
   releasePlayerLogin,
 } from '../identity/web-player-purge.ts';
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
+import { recordStat, type WebStats } from '../stats/web-stats.ts';
 import { signupBonusTablesExist } from '../admission/web-free-tier.ts';
 import {
   archivePlayerChats,
@@ -177,15 +178,19 @@ export class WebCloudRetention {
   private sub = 'start';
   /** Part 17g: durable per-principal failure bookkeeping (backoff + health); in memory when none is given. */
   private readonly memory: RetentionMemory;
+  private readonly stats: WebStats | undefined;
   constructor(
     store: WebRuntimeStore,
     clock: Clock,
     graceMs = 0,
     report?: (report: RetentionReport) => void,
     memory: RetentionMemory = inMemoryRetention(),
+    /** Part 22c: closes the D1 / D7 cohorts and prunes the active markers once per UTC day, on the same alarm. */
+    stats?: WebStats,
   ) {
     this.report = report;
     this.memory = memory;
+    this.stats = stats;
     ensure(
       Number.isSafeInteger(graceMs) && graceMs >= 0 && graceMs <= 30 * 24 * 60 * 60_000,
       'WEB_RETENTION_GRACE_INVALID',
@@ -229,7 +234,10 @@ export class WebCloudRetention {
     );
     // Part 19: the anonymous review archive's rows expire on their own clock.
     const archive = nextReviewArchiveExpiry(this.store);
-    return row?.due == null ? archive : archive === null ? row.due : Math.min(row.due, archive);
+    const due = row?.due == null ? archive : archive === null ? row.due : Math.min(row.due, archive);
+    // Part 22c: the statistics wake the alarm at the next UTC midnight while a cohort or a marker is waiting.
+    const stats = this.stats?.nextDue(this.clock.now()) ?? null;
+    return due === null ? stats : stats === null ? due : Math.min(due, stats);
   }
   /** What is known about a failing principal, as labels only: kind, retention state and how long it has been due. */
   private describe(principalId: string): {
@@ -315,6 +323,12 @@ export class WebCloudRetention {
   async sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit > 0 && limit <= 16, 'WEB_RETENTION_SWEEP_INVALID');
     this.lastError = null;
+    // Part 22c: the daily statistics work (cohort close, marker pruning) never blocks or fails a purge.
+    try {
+      this.stats?.maintain(this.clock.now());
+    } catch (error) {
+      this.lastError ??= safeCode(error);
+    }
     const names = this.schemaNames();
     // A broken ledger must never stop a purge: the worst case is that nothing is backed off.
     const ledger = await this.memory.load().catch(emptyLedger);
@@ -508,6 +522,18 @@ export class WebCloudRetention {
       this.sub = 'review_archive';
       if (this.store.chatReview === true && chatReviewTablesExist(this.store))
         archivePlayerChats(this.store, principalId, row.world_id, now);
+      // Part 22c: the purge STARTS here (T1), once per principal - the 'purging' / 'purged' return above and this transaction see
+      // to that. Counted by why it started: the player's own deletion, 180 days without a visit (a login), or an ended trial.
+      this.sub = 'stats';
+      recordStat(
+        this.store,
+        reason === 'deleted'
+          ? 'purge_deleted'
+          : playerLastSeenAt(this.store, principalId) !== null
+            ? 'purge_inactive'
+            : 'purge_expired',
+        now,
+      );
       // The table only allows a purging row that has a trial window; a never-started guest gets a one-ms one.
       this.sub = 'retention_row';
       this.store.run(

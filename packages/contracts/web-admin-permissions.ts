@@ -38,6 +38,12 @@ export type SystemAdminPermission = (typeof ADMIN_SYSTEM_PERMISSIONS)[number];
  */
 export const ADMIN_POINTS_PERMISSIONS = ['points.grant'] as const;
 export type PointsAdminPermission = (typeof ADMIN_POINTS_PERMISSIONS)[number];
+/**
+ * 玩家 · 玩家统计 and 运营 · 消耗表 (Part 22c): read the daily player counts and the consumption table, and export them. The owner
+ * always can. Only the owner can give this permission (it is in no preset except 全部).
+ */
+export const ADMIN_STATS_PERMISSIONS = ['stats.read'] as const;
+export type StatsAdminPermission = (typeof ADMIN_STATS_PERMISSIONS)[number];
 // Read legacy scoped grants without silently migrating them. New UI grants only four categories.
 export const ADMIN_PERMISSION_LIMIT = 128;
 export const ADMIN_CHARACTER_ACTIONS = [
@@ -66,6 +72,7 @@ export type AdminPermission =
   | ModelAdminPermission
   | SystemAdminPermission
   | PointsAdminPermission
+  | StatsAdminPermission
   | 'invites.revoke'
   | 'characters.create'
   | `characters.${CharacterAdminAction}:${string}`;
@@ -80,6 +87,7 @@ export function isAdminPermission(value: unknown): value is AdminPermission {
     (ADMIN_MODEL_PERMISSIONS as readonly string[]).includes(value) ||
     (ADMIN_SYSTEM_PERMISSIONS as readonly string[]).includes(value) ||
     (ADMIN_POINTS_PERMISSIONS as readonly string[]).includes(value) ||
+    (ADMIN_STATS_PERMISSIONS as readonly string[]).includes(value) ||
     value === 'invites.revoke' ||
     value === 'characters.create' ||
     /^characters\.(read|edit|discard|preview|publish|materials|approve-materials|delete):(?:\*|[A-Za-z0-9_-]{1,128})$/.test(
@@ -140,6 +148,11 @@ export function hasPointsPermission(grants: readonly string[]) {
   return grants.includes('points.grant');
 }
 
+/** Reading 玩家统计 and 消耗表 and exporting them (the owner role is checked by the caller). */
+export function hasStatsPermission(grants: readonly string[]) {
+  return grants.includes('stats.read');
+}
+
 export function canCreateCharacter(grants: readonly string[]) {
   return grants.includes('category.characters') || grants.includes('characters.create');
 }
@@ -157,7 +170,8 @@ export type AdminPermissionItem =
   | ConversationAdminPermission
   | ModelAdminPermission
   | SystemAdminPermission
-  | PointsAdminPermission;
+  | PointsAdminPermission
+  | StatsAdminPermission;
 /** Direct requirements only; the closure is computed. */
 export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, readonly AdminPermissionItem[]>> = {
   'characters.read': [],
@@ -180,6 +194,7 @@ export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, rea
   'models.manage': [],
   'system.read': [],
   'points.grant': [],
+  'stats.read': [],
 };
 export const ADMIN_PERMISSION_ITEMS = Object.keys(ADMIN_PERMISSION_REQUIRES) as AdminPermissionItem[];
 const closure = (item: AdminPermissionItem, next: (value: AdminPermissionItem) => readonly AdminPermissionItem[]) => {

@@ -289,6 +289,16 @@ The player's chosen model only DRAFTS. REVIEW (safety, memory topics and `factOp
 
 Points are player fairness; the budget ledger is money safety; they are independent (a refund never releases a reservation). A charge happens at admission; an operation that ends with no reply (failed, cancelled, UNKNOWN) is refunded in full, and one answered by the backup model costs the cheaper of the two models, when the balance is next touched (`reconcilePoints`, once per fact by a unique index). xAI and Gemini spend books against the existing text bucket (`deepseek`) of the shared budget authority (no new grant ceremony); the local ledger tracks each provider separately.
 
+## Statistics (Part 22c, migration 128)
+
+The pages 玩家统计 and 消耗表 are read from two tables written only by the business object, when the event happens. Nothing is computed at report time from a table the purge deletes from (`web_operations`, `web_operation_models`, `web_points_events`, `web_provider_attempts`, `web_player_logins`), so purging a player never changes a past number.
+
+| Table | Class | Kept after deletion? |
+|---|---|---|
+| `web_stats_daily` (UTC day, metric, character id, chosen model, value) | global | Yes, and that is its purpose: counts only - no principal id, no operation id, no content. Metrics: `reply_published/failed/unknown/voice` (trigger on `web_operations.status`), `points_*` (trigger on `web_points_events`), `signups` (trigger on `web_player_logins`), `new_guests`, `purge_deleted/inactive/expired`, `active_*`/`chat_*` (a finished day's distinct players), `d1_*`/`d7_*` (a closed cohort), `stats_started`. |
+| `web_daily_active` (UTC day, marker, kind, scope) | global | Yes, for 35 days, then the retention alarm deletes the rows. `marker` is an HMAC-SHA256 under a key derived with HKDF from SEAL_KEY (label `stats-active-v1`) over the day and the principal id: the business object can recompute it for a principal it knows (the D1 / D7 close); nobody can read a principal back from it. Never shown, exported or logged. |
+| `web_provider_usage.ledger_charged_micros` | global | Yes (a column of the aggregate above this Part's table): what the budget ledger charged for the calls of that row; 0 for a row written before 128 (the page shows —). |
+
 ## Owner-controlled models and prices (Part 21g, migration 124)
 
 The admin page 系统 → 模型与价格 is settings only: it holds no player data. The five tables below are global configuration written only by the business object (an owner or `models.manage` administrator, behind session + CSRF + origin). They carry no principal id, player id, world id, email, nickname or message content, and no column could (`web_model_changes` stores the acting administrator's member id, shown in the page only as the administrator's label).

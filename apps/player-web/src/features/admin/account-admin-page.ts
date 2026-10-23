@@ -6,6 +6,8 @@ import { permissionMatrixEditor } from './permission-matrix.ts';
 import { overviewView } from './overview-view.ts';
 import { pointsView } from './points-view.ts';
 import { systemView } from './system-view.ts';
+import { statsView } from './stats-view.ts';
+import { costsView } from './costs-view.ts';
 import { modelsView } from './models-view.ts';
 import { confirmDialog } from './ui/confirm-dialog.ts';
 import { rolePicker } from './shell/role-picker.ts';
@@ -25,7 +27,7 @@ import { cocreationInbox } from './cocreation-inbox.ts';
 import { conversationsView } from './conversations-view.ts';
 import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
 import type { CocreationAdminClient } from '../../services/cocreation-admin-api.ts';
-import { inviteTiersView } from './invite-tiers-view.ts';
+import { browserDownload, inviteTiersView } from './invite-tiers-view.ts';
 import {
   ADMIN_PERMISSION_LIMIT,
   hasCharacterPermission,
@@ -64,6 +66,11 @@ type Port = Pick<
   pointsGrant?: AccountAdminApi['pointsGrant'];
   resetPreview?: AccountAdminApi['resetPreview'];
   resetPoints?: AccountAdminApi['resetPoints'];
+  /** 玩家统计 and 消耗表 (Part 22c): the owner or stats.read. Optional: a page without them has neither in the nav. */
+  playerStats?: AccountAdminApi['playerStats'];
+  exportPlayerStats?: AccountAdminApi['exportPlayerStats'];
+  costs?: AccountAdminApi['costs'];
+  exportCosts?: AccountAdminApi['exportCosts'];
   /** 邀请与额度 (the owner, or an administrator holding invites.manage). Optional: a page without them shows nothing on that page. */
   inviteBatches?: AccountAdminApi['inviteBatches'];
   inviteBatchDetail?: AccountAdminApi['inviteBatchDetail'];
@@ -98,6 +105,7 @@ export function adminAccountError(error: unknown) {
         BUDGET_UNAVAILABLE:
           '预算服务暂时没有回应，充值结果未确认。请刷新核对剩余额度后再试（同一次点击不会重复充值）。',
         SYSTEM_UNAVAILABLE: '这个环境没有提供这项系统功能。',
+        STATS_UNAVAILABLE: '这个站点的数据库还没有升级到统计功能（迁移 128）。',
         IDEMPOTENCY_CONFLICT: '这次提交与之前的同一请求内容不一致，请刷新后重试。',
         INVALID_REQUEST: '填写的内容不符合要求（每条点数 1–200，语音加点 0–20，均为整数）。',
         ADMIN_PERMISSIONS_CONFLICT: '权限已被另一页面修改。请刷新权限列表，核对后再保存；本次未覆盖新权限。',
@@ -184,8 +192,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="overview" hidden><div id="admin-overview"></div></section>
     <section data-panel="points" hidden><div id="admin-points"></div></section>
     <section data-panel="system" hidden><div id="admin-system"></div></section>
-    <section data-panel="stats" hidden><h2>玩家统计</h2><p class="admin-empty">下个版本提供</p></section>
-    <section data-panel="costs" hidden><h2>消耗表</h2><p class="admin-empty">下个版本提供</p></section>
+    <section data-panel="stats" hidden><div id="admin-stats"></div></section>
+    <section data-panel="costs" hidden><div id="admin-costs"></div></section>
     <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
     <section data-panel="models" hidden><div id="admin-models"></div></section>
     </div>
@@ -428,6 +436,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (page === 'overview' && canSeePage('overview', access())) return () => overview.load();
     if (page === 'points' && canSeePage('points', access())) return () => points.load();
     if (page === 'system' && canSeePage('system', access())) return () => system.load();
+    if (page === 'stats' && canSeePage('stats', access())) return () => stats.load();
+    if (page === 'costs' && canSeePage('costs', access())) return () => costs.load();
     if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
     if (page === 'models' && port.modelSettings) return () => models.load();
     return null;
@@ -618,6 +628,20 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
   });
+  const stats = statsView(q('#admin-stats'), {
+    load: (range) => (port.playerStats ? port.playerStats(range) : unavailable()),
+    exportCsv: (range) => (port.exportPlayerStats ? port.exportPlayerStats(range) : unavailable()),
+    download: browserDownload,
+    run,
+    disposed: () => disposed,
+  });
+  const costs = costsView(q('#admin-costs'), {
+    load: (range) => (port.costs ? port.costs(range) : unavailable()),
+    exportCsv: (range) => (port.exportCosts ? port.exportCosts(range) : unavailable()),
+    download: browserDownload,
+    run,
+    disposed: () => disposed,
+  });
   const points = pointsView(q('#admin-points'), {
     preview: (to, amount) => (port.pointsPreview ? port.pointsPreview(to, amount) : unavailable()),
     grant: (input) => (port.pointsGrant ? port.pointsGrant(input) : unavailable()),
@@ -676,6 +700,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     picker.clear();
     overview.clear();
     system.clear();
+    stats.clear();
+    costs.clear();
     points.clear();
     reviews.clear();
     models.clear();

@@ -36,6 +36,7 @@ import { WebBilling } from '../admission/web-billing.ts';
 import { chatReviewTablesExist } from '../review/web-chat-review.ts';
 import { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 import { playerLoginRetainsGuest } from '../identity/web-player-purge.ts';
+import { WebStats, recordStat } from '../stats/web-stats.ts';
 import {
   PLAYER_LIMITS,
   WebPlayerAccounts,
@@ -171,6 +172,8 @@ export class WebProviderApplication {
   readonly graceMs: number;
   /** Null on a database older than schema 118. */
   readonly playerAccounts: WebPlayerAccounts | null;
+  /** Part 22c: the statistics counters' write side (daily active markers, cohort close). */
+  readonly stats: WebStats;
   constructor(
     store: WebRuntimeStore,
     clock: Clock,
@@ -210,7 +213,9 @@ export class WebProviderApplication {
       ...(players.graceMs ? { guestGraceMs: players.graceMs } : {}),
     });
     this.bonusKey = signupBonusEmailKey(Buffer.from(config.requestKey, 'base64url'));
-    this.admission = new WebAdmission(store, clock, () => globalThis.crypto.randomUUID(), this.bonusKey);
+    this.stats = new WebStats(store, Buffer.from(config.sealKey, 'base64url'));
+    this.stats.start(clock.now());
+    this.admission = new WebAdmission(store, clock, () => globalThis.crypto.randomUUID(), this.bonusKey, this.stats);
     this.publisher = new WebVerticalPublisher(store, clock);
     const chatReviewOn = store.chatReview === true && chatReviewTablesExist(store);
     this.inviteAdmin = new WebAccountAdmin(store, clock, config.origin, {
@@ -322,10 +327,14 @@ export class WebProviderApplication {
         throw error;
       }
       issued = boot.issuedToken;
+      // Part 22c: a NEW guest principal was issued (a returning cookie issues nothing).
+      if (issued) recordStat(this.store, 'new_guests', this.clock.now());
       durable = this.identity.isDurableSession(token ?? boot.issuedToken!);
       const principal = this.identity.authenticate(token ?? boot.issuedToken!);
       // Activity for the 180-day inactivity purge (at most one write per UTC day).
       this.playerAccounts?.touch(principal.principalId);
+      // Part 22c: opened the site this UTC day (once per day and principal; the marker names nobody).
+      this.stats.markActive(principal.principalId, 'visit', this.clock.now());
       const { inaccessible, ...access } = this.access(principal, ipHash);
       const characters = this.characters(),
         ids = new Set(characters.map((entry) => entry.characterId));

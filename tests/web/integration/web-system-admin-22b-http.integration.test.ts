@@ -240,7 +240,8 @@ for (const combo of COMBOS) {
 
     // ---- 概览 and 系统状态 first: the page is usable whatever the switches say ----
     const overview = await f.call(`${ADMIN}/overview/read`, owner, {});
-    assert.deepEqual(Object.keys(overview).sort(), ['day', 'today', 'warnings']);
+    // Named exception (Part 22c): the owner's 概览 also carries `stats` (yesterday and this month's spend; null for an administrator without stats.read). No assertion was weakened.
+    assert.deepEqual(Object.keys(overview).sort(), ['day', 'stats', 'today', 'warnings']);
     assert.deepEqual(Object.keys(overview.today).sort(), ['failedReplies', 'replies', 'spendMicros', 'voiceReplies']);
     const status = await f.call(`${ADMIN}/system/status`, owner, {});
     assert.equal(status.version.matches, true, 'the ledger is the expected one');

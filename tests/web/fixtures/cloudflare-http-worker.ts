@@ -43,7 +43,8 @@ export class PreviewBudgetFixture extends WebBudgetObject {
     );
   }
 }
-import { WebBusinessFixture } from './cloudflare-business-worker.ts';
+import { WebBusinessFixture, fixtureClock } from './cloudflare-business-worker.ts';
+import { WebStats } from '../../../apps/server/stats/web-stats.ts';
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
 import type { AlarmStorage } from '../../../apps/server/cloudflare/queue-alarm.ts';
 import type { PrivateBucket } from '../../../apps/server/cloudflare/media-objects.ts';
@@ -102,7 +103,7 @@ export class WebHTTPFixture extends WebBusinessFixture {
           },
         },
       },
-      { now: () => Date.now() },
+      { now: () => Date.now() + fixtureClock.skewMs },
     );
     afterRead = () => {
       if (this.revokeOnRead) {
@@ -200,6 +201,8 @@ export class WebHTTPFixture extends WebBusinessFixture {
       (report) => this.retentionReports.push(report),
       // Part 17g: tests here retry a failing purge on purpose, back to back; the backoff has its own test (web-retention-world-17g).
       { load: async () => ({ failures: {}, lastSuccessAt: null }), save: async () => {} },
+      // Part 22c: the alarm of the production object also closes the D1 / D7 cohorts and prunes the markers.
+      new WebStats(this.store, Buffer.from(this.appConfig.sealKey, 'base64url')),
     );
     this.retention = retention;
     this.human = pub.turnstile

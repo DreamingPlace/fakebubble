@@ -448,12 +448,14 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
   // Named exception (Part 22x, migration 126): the ledger now has 51 steps and 126 is the newest (22a: 50 steps, 125), so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
-  assert.equal(bare.schemaVersion, 127);
+  // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
+  assert.equal(bare.schemaVersion, 128);
   assert.equal(bare.migrations.matches, true);
   // Named exception (Part 22x, migration 126): the ledger now has 51 steps and 126 is the newest (22a: 50 steps, 125), so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
-  assert.equal(bare.migrations.applied.length, 52);
+  // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
+  assert.equal(bare.migrations.applied.length, 53);
   assert.deepEqual(bare.budget, { available: false, error: 'WEB_CLOUD_BUDGET_NOT_INITIALIZED' });
   assert.equal(bare.ownerAdminExists, false);
   await f.install();
@@ -504,14 +506,16 @@ test('operator inspect: read-only workerd snapshot, expected-vs-applied ledger, 
   // Named exception (Part 22x, migration 126): the ledger now has 51 steps and 126 is the newest (22a: 50 steps, 125), so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
-  assert.equal(report.schemaVersion, 127); // Extended for migration 123.
+  // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
+  assert.equal(report.schemaVersion, 128); // Extended for migration 123.
   assert.equal(report.migrations.matches, true);
   assert.equal(report.migrations.expected.active, 'r2');
   assert.deepEqual(report.migrations.applied, report.migrations.expected.r2);
   // Named exception (Part 22x, migration 126): the ledger now has 51 steps and 126 is the newest (22a: 50 steps, 125), so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
-  assert.equal(report.migrations.expected.inline.length, 52);
+  // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
+  assert.equal(report.migrations.expected.inline.length, 53);
   assert.deepEqual(report.instance, {
     instanceId: f.business.bindings.INSTANCE_ID,
     recoveryEpoch: f.business.bindings.RECOVERY_EPOCH,
@@ -596,7 +600,8 @@ test('offline expected-migrations output equals the steps the deployed business 
   // Named exception (Part 22x, migration 126): the ledger now has 51 steps and 126 is the newest (22a: 50 steps, 125), so step counts, positions
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
-  assert.equal(offline.r2.length, 52); // Extended for migration 123.
+  // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
+  assert.equal(offline.r2.length, 53); // Extended for migration 123.
   const extra = spawnSync(process.execPath, ['scripts/web-cloudflare-operator.ts', 'expected-migrations', '--x=1'], {
     encoding: 'utf8',
   });

@@ -31,6 +31,7 @@ import {
 } from '../../apps/server/generation/web-provider-application.ts';
 import { WebCloudExecutor } from '../../apps/server/cloudflare/web-executor.ts';
 import { WebCloudRetention, durableRetentionMemory } from '../../apps/server/cloudflare/web-retention.ts';
+import { WebStats } from '../../apps/server/stats/web-stats.ts';
 import type { WebSystemOps } from '../../apps/server/admin/web-system-admin.ts';
 import { WebProviderHTTP } from '../../apps/server/cloudflare/web-http.ts';
 import { trustedWebRequest } from '../../apps/server/cloudflare/web-edge-request.ts';
@@ -241,6 +242,8 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         );
       },
       durableRetentionMemory(this.context.storage as unknown as Parameters<typeof durableRetentionMemory>[0]),
+      // Part 22c: the same alarm closes the D1 / D7 cohorts and prunes the active markers once per UTC day.
+      new WebStats(this.store, Buffer.from(env.SEAL_KEY, 'base64url')),
     );
     const alertConfig = this.publicConfig.alerts;
     if (alertConfig) {
