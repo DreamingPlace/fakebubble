@@ -287,3 +287,27 @@ export function migrateWebProviderInviteCodes(store: Store) {
     store.db.exec('PRAGMA user_version = 127');
   });
 }
+
+/** Node-only 127→128: statistics and consumption - the daily counters, the active markers and their triggers (128_stats.sql). */
+export function migrateWebProviderStats(store: Store, now = Date.now()) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 127 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_provider_usage'"),
+      'WEB_PROVIDER_STATS_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/128_stats.sql', import.meta.url), 'utf8'));
+    // The day the counters started (the page says 统计自 ...): the day this step ran, never earlier, nothing is backfilled.
+    store.run(
+      "INSERT INTO web_stats_daily(day,metric,character_id,model,value) VALUES (?,'stats_started','','',1)",
+      new Date(now).toISOString().slice(0, 10),
+    );
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 128');
+  });
+}

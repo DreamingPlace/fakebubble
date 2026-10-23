@@ -22,6 +22,7 @@ import {
   migrateWebProviderInviteTiers,
   migrateWebProviderLegacyInvites,
   migrateWebProviderInviteCodes,
+  migrateWebProviderStats,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -83,7 +84,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→127 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→128 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -126,8 +127,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderInviteTiers(store);
     migrateWebProviderLegacyInvites(store);
     migrateWebProviderInviteCodes(store);
+    migrateWebProviderStats(store, now);
     return {
-      schema: 127,
+      schema: 128,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -276,6 +278,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-invite-tiers',
       'migrate-legacy-invites',
       'migrate-invite-codes',
+      'migrate-stats',
       'render-assets',
       'admin-grant',
       'serve',
@@ -453,6 +456,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderInviteCodes(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 127, inviteCodesViewable: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-stats') {
+    // An existing provider-* instance at schema 127 gains the daily counters, the active markers and their triggers.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderStats(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 128, stats: true }) + '\n');
     } finally {
       store.close();
     }

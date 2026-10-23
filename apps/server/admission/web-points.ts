@@ -439,7 +439,7 @@ export function chargeAdmission(
   // The price is read from the owner's table (Part 21g) and its version is stamped on the event and the operation.
   const prices = currentPrices(store);
   const price = isUnmetered(store, principalId, now) ? 0 : prices.perReply[model] + prices.voice;
-  if (price > 0) {
+  if (price > 0)
     ensure(
       store.run(
         'UPDATE web_points_balance SET balance=balance-?,updated_at=? WHERE principal_id=? AND balance>=?',
@@ -450,16 +450,7 @@ export function chargeAdmission(
       ).changes === 1,
       'TRIAL_EXHAUSTED',
     );
-    store.run(
-      `INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,price_version,created_at)
-      VALUES (?,?,'spend','reply',?,?,?)`,
-      principalId,
-      operationId,
-      -price,
-      prices.version,
-      now,
-    );
-  }
+  // The model row goes in BEFORE the spend event: the statistics trigger of migration 128 reads the chosen model from it.
   store.run(
     `INSERT INTO web_operation_models(operation_id,chosen,voice,points_charged,price_version,created_at)
     VALUES (?,?,1,?,?,?)`,
@@ -469,6 +460,16 @@ export function chargeAdmission(
     prices.version,
     now,
   );
+  if (price > 0)
+    store.run(
+      `INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,price_version,created_at)
+      VALUES (?,?,'spend','reply',?,?,?)`,
+      principalId,
+      operationId,
+      -price,
+      prices.version,
+      now,
+    );
   return price;
 }
 

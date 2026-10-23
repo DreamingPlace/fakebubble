@@ -29,6 +29,7 @@ import {
 } from './web-points.ts';
 import { effectiveTier } from './web-model-settings.ts';
 import { ensureRegisteredBonus, type BonusEmailKey } from './web-registered.ts';
+import type { WebStats } from '../stats/web-stats.ts';
 import { requirePublishedWebCharacter } from '../characters/web-character-catalog.ts';
 
 interface PrincipalRow {
@@ -65,11 +66,14 @@ export class WebAdmission {
   private readonly ipKeyFingerprint: string | null;
   /** Part 17h: the keyed digest of a bonus address; without it a registered player that holds no bonus row cannot be granted one. */
   private readonly bonusKey: BonusEmailKey | undefined;
-  constructor(store: WebStore, clock: Clock, nextId: () => string, bonusKey?: BonusEmailKey) {
+  /** Part 22c: marks the principal active ('chat') on the day it sends a message. Absent in a harness without statistics. */
+  private readonly stats: WebStats | undefined;
+  constructor(store: WebStore, clock: Clock, nextId: () => string, bonusKey?: BonusEmailKey, stats?: WebStats) {
     this.store = store;
     this.clock = clock;
     this.nextId = nextId;
     this.bonusKey = bonusKey;
+    this.stats = stats;
     this.ipKeyFingerprint = webDataLifecycleEnabled(store) ? store.webIpKeyFingerprint() : null;
   }
 
@@ -138,7 +142,7 @@ export class WebAdmission {
       ensure(
         trial ||
           ([
-            108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+            108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128,
           ].includes(webSchema) &&
             principal.kind === 'account' &&
             this.store.get(`SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1`, principal.id)),
@@ -398,7 +402,7 @@ export class WebAdmission {
         now,
         now + WEB_LIMITS.operationDeadlineMs,
       ];
-      if (webSchema >= 102 && webSchema <= 127) {
+      if (webSchema >= 102 && webSchema <= 128) {
         const sequence = this.store.get<{ last_seq: number }>(`UPDATE web_admission_counter
           SET last_seq=last_seq+1 WHERE singleton=1 RETURNING last_seq`)?.last_seq;
         ensure(sequence !== undefined, 'WEB_ADMISSION_ORDER_MISSING');
@@ -452,6 +456,8 @@ export class WebAdmission {
         );
       }
       if (guestModel) recordUnmetered(this.store, now, operationId, guestModel);
+      // Part 22c: a message was sent (the reply may still fail): the principal counts as a chatter of this UTC day.
+      this.stats?.markActive(principal.id, 'chat', now);
       return {
         operationId,
         conversationId: conversation.id,
@@ -537,7 +543,7 @@ export class WebAdmission {
       ensure(
         ![
           104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
-          126, 127,
+          126, 127, 128,
         ].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1),
         'WEB_DISPATCH_FENCE_REQUIRED',
       );
