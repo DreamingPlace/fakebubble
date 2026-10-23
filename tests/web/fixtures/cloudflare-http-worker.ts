@@ -3,12 +3,12 @@ import { legacySchema } from './legacy-schema.ts';
 import { WebCharacterPreviewRunner } from '../../../apps/server/characters/web-character-preview-runner.ts';
 import { WebCloudTextGenerator } from '../../../apps/server/cloudflare/web-generators.ts';
 import type { WebGenerationBinding } from '../../../packages/contracts/web-generation-rpc.ts';
-import type { WebBudgetStatusRPC } from '../../../apps/server/cloudflare/web-budget-client.ts';
+import type { WebBudgetStatusRPC, WebBudgetTopUpRPC } from '../../../apps/server/cloudflare/web-budget-client.ts';
 import { WebBudgetObject } from '../../../workers/web-cloudflare/budget.ts';
 
 type PreviewBudgetNamespace = {
   idFromName(name: string): { toString(): string };
-  get(id: unknown): WebBudgetStatusRPC;
+  get(id: unknown): WebBudgetStatusRPC & WebBudgetTopUpRPC;
 };
 const ALERT_FIXTURE_BASE_MS = Date.parse('2026-01-05T02:00:00Z');
 
@@ -53,6 +53,7 @@ import { WebProviderApplication } from '../../../apps/server/generation/web-prov
 import { WebProviderHTTP } from '../../../apps/server/cloudflare/web-http.ts';
 import { auditWebLifecycleWorld } from '../../../apps/server/admission/web-lifecycle-audit.ts';
 import { playerLoginsRemain, purgeDiagnostics } from '../../../apps/server/identity/web-player-purge.ts';
+import type { WebSystemOps } from '../../../apps/server/admin/web-system-admin.ts';
 import { WebAlerts, durableAlertState } from '../../../apps/server/cloudflare/web-alerts.ts';
 import { WebCloudRetention } from '../../../apps/server/cloudflare/web-retention.ts';
 import { TurnstileGate, type TurnstileVerifier } from '../../../apps/server/identity/web-turnstile.ts';
@@ -159,7 +160,7 @@ export class WebHTTPFixture extends WebBusinessFixture {
     this.http = this.transport();
   }
   /** Part 17 test switches (set through /fixture/players). The Turnstile verifier is fake: no network, ever. */
-  private human: TurnstileGate | undefined;
+  protected human: TurnstileGate | undefined;
   private humanCalls: { token: string; remoteIp: string | null }[] = [];
   private humanMode: 'normal' | 'down' = 'normal';
   private serverErrors = 0;
@@ -210,33 +211,44 @@ export class WebHTTPFixture extends WebBusinessFixture {
           clock: this.clock,
         })
       : undefined;
-    this.app = new WebProviderApplication(this.store, this.clock, this.appConfig, this.adminMailer, {
-      signupEnabled,
-      dailyCap,
-      graceMs: pub.graceMs ?? 0,
-      accountDelete: pub.accountDelete === true,
-      legalPages: pub.legalPages === true,
-      turnstileSiteKey: this.human ? this.human.siteKey : null,
-      purger: {
-        begin: (principalId) => retention.beginDeletion(principalId),
-        finish: (principalId) => retention.finishDeletion(principalId),
-      },
-      mailer: {
-        send: async (message) => {
-          if (this.failPlayerMail) throw new Error('fixture mail failure');
-          this.store.run('INSERT INTO cf_fixture_player_mail VALUES (?,?)', message.id, JSON.stringify(message));
+    this.app = new WebProviderApplication(
+      this.store,
+      this.clock,
+      this.appConfig,
+      this.adminMailer,
+      {
+        signupEnabled,
+        dailyCap,
+        graceMs: pub.graceMs ?? 0,
+        accountDelete: pub.accountDelete === true,
+        legalPages: pub.legalPages === true,
+        turnstileSiteKey: this.human ? this.human.siteKey : null,
+        purger: {
+          begin: (principalId) => retention.beginDeletion(principalId),
+          finish: (principalId) => retention.finishDeletion(principalId),
         },
-        waitUntil: this.waitUntil,
+        mailer: {
+          send: async (message) => {
+            if (this.failPlayerMail) throw new Error('fixture mail failure');
+            this.store.run('INSERT INTO cf_fixture_player_mail VALUES (?,?)', message.id, JSON.stringify(message));
+          },
+          waitUntil: this.waitUntil,
+        },
       },
-    });
+      this.systemOps(),
+    );
     this.http = this.transport();
   }
   private failPlayerMail = false;
+  /** Part 22b: what the console's system pages may use. None here; the system fixture supplies the real budget Worker and the rest. */
+  protected systemOps(): WebSystemOps | undefined {
+    return undefined;
+  }
   private revoke(principal: string) {
     this.store.run('UPDATE web_sessions SET revoked_at=? WHERE principal_id=?', this.clock.now(), principal);
   }
   /** Part 17f: what the production Durable Object's alarm does for retention - sweep first, then the queues. */
-  private retention: WebCloudRetention | undefined;
+  protected retention: WebCloudRetention | undefined;
   private retentionReports: unknown[] = [];
   async alarm() {
     await this.retention?.sweep();

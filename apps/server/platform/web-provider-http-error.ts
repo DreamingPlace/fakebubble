@@ -39,7 +39,7 @@ export function webProviderHTTPError(error: unknown) {
       ? 503
       : publicCode === 'TRIAL_EXPIRED'
         ? 410
-        : publicCode === 'NOT_FOUND'
+        : publicCode === 'NOT_FOUND' || publicCode === 'PLAYER_NOT_FOUND'
           ? 404
           : publicCode === 'AUTH_REQUIRED' ||
               publicCode === 'SESSION_EXPIRED' ||

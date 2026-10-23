@@ -284,6 +284,10 @@ export class WebAccountAdmin extends WebInviteAdmin {
    */
   stageLatency(cookie: unknown, csrf: unknown, origin: unknown, days: unknown) {
     this.owner(cookie, csrf, origin);
+    return this.stageLatencyRows(days);
+  }
+  /** The same counters without the owner check: the caller (系统状态 → 技术指标, Part 22b) has done its own. */
+  stageLatencyRows(days: unknown) {
     ensure(Number.isSafeInteger(days) && (days as number) >= 1 && (days as number) <= 31, 'INVALID_REQUEST');
     if (!metricsEnabled(this.db)) return { days: [] as StageLatencyDay[] };
     // review_changed exists from schema 115; a 114 database reports no review samples.

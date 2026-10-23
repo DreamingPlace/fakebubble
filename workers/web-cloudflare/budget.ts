@@ -7,14 +7,18 @@ import type {
   CloudBudgetAuthorization,
   Provider,
 } from '../../apps/server/budget/web-provider-budget-contract.ts';
-import type { WebBudgetRPC, WebBudgetStatusRPC } from '../../apps/server/cloudflare/web-budget-client.ts';
+import type {
+  WebBudgetRPC,
+  WebBudgetStatusRPC,
+  WebBudgetTopUpRPC,
+} from '../../apps/server/cloudflare/web-budget-client.ts';
 
 export interface BudgetEnvironment {
   ACCOUNT_ID: string;
   BUDGET_NAMESPACE_ID: string;
   BUDGET_OBJECT_ID: string;
   OPERATOR_ENABLED?: string;
-  BUDGET: { idFromString(id: string): unknown; get(id: unknown): WebBudgetStatusRPC };
+  BUDGET: { idFromString(id: string): unknown; get(id: unknown): WebBudgetStatusRPC & WebBudgetTopUpRPC };
 }
 const target = (env: BudgetEnvironment): CloudBudgetTarget => ({
   accountId: env.ACCOUNT_ID,
@@ -47,12 +51,15 @@ export class WebBudgetObject extends DurableObject<BudgetEnvironment> {
   settle(id: string, fingerprint: string, micros: number, receipt: unknown) {
     this.ledger.settle(id, fingerprint, micros, receipt);
   }
+  topUp(requestId: string, provider: Provider, micros: number) {
+    return this.ledger.topUp(requestId, provider, micros);
+  }
   fetch() {
     return new Response(null, { status: 404 });
   }
 }
 
-export class WebBudgetService extends WorkerEntrypoint<BudgetEnvironment> implements WebBudgetRPC {
+export class WebBudgetService extends WorkerEntrypoint<BudgetEnvironment> implements WebBudgetRPC, WebBudgetTopUpRPC {
   private authority() {
     return this.env.BUDGET.get(this.env.BUDGET.idFromString(this.env.BUDGET_OBJECT_ID));
   }
@@ -67,6 +74,14 @@ export class WebBudgetService extends WorkerEntrypoint<BudgetEnvironment> implem
   }
   async settle(id: string, fingerprint: string, micros: number, receipt: unknown) {
     await this.authority().settle(id, fingerprint, micros, receipt);
+  }
+  /**
+   * Part 22b: the owner console's 预算充值. This entrypoint is bound ONLY by the business Worker (the operator Worker binds
+   * WebBudgetOperatorService, the edge and generation Workers bind nothing here), and the business object only calls it from
+   * the owner-checked console route. Deploy the budget Worker before the business Worker (docs/DEPLOYMENT.md).
+   */
+  async topUp(requestId: string, provider: Provider, micros: number) {
+    return this.authority().topUp(requestId, provider, micros);
   }
   fetch() {
     return new Response(null, { status: 404 });

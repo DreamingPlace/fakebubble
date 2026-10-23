@@ -17,6 +17,10 @@ export interface WebBudgetRPC {
 export interface WebBudgetStatusRPC extends WebBudgetRPC {
   summary(): Promise<ReturnType<WebCloudBudget['summary']>>;
 }
+/** Part 22b: the owner console's 预算充值. Only the business Worker's binding reaches it; see WebBudgetService. */
+export interface WebBudgetTopUpRPC {
+  topUp(requestId: string, provider: Provider, micros: number): Promise<ReturnType<WebCloudBudget['topUp']>>;
+}
 /** Private service binding only. No caller-supplied authority/URL or default USD3 namespace. */
 export class WebCloudBudgetClient implements WebAttemptBudget {
   private readonly rpc: WebBudgetRPC;

@@ -486,6 +486,7 @@ export class WebProviderServer {
             this.application.characterAdmin,
             this.application.cocreation,
             this.application.chatReview,
+            this.application.system,
           )) ??
           routeWebCocreation(this.application.cocreation, input) ??
           routeWebBilling(this.application.billing, input) ??

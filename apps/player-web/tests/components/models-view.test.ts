@@ -248,7 +248,6 @@ test('navigation: 系统 → 模型与价格 is visible to every administrator w
     owner: false,
     permissions: [],
     inbox: true,
-    metrics: true,
     models: true,
     ...over,
   });
@@ -258,6 +257,7 @@ test('navigation: 系统 → 模型与价格 is visible to every administrator w
     visibleNav(access({ owner: true }))
       .find((g) => g.id === 'system')!
       .items.map((i) => i.label),
+    // Named exception (Part 22b): 系统状态 joins the system group (shown only when the page has its client; this access has none).
     ['模型与价格', '管理员与权限'],
   );
   assert.equal(firstAllowedPage(access()), 'models');

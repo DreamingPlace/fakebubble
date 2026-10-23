@@ -26,6 +26,18 @@ export type ConversationAdminPermission = (typeof ADMIN_CONVERSATION_PERMISSIONS
  */
 export const ADMIN_MODEL_PERMISSIONS = ['models.manage'] as const;
 export type ModelAdminPermission = (typeof ADMIN_MODEL_PERMISSIONS)[number];
+/**
+ * 系统 · 系统状态 (Part 22b): read the read-only status page (versions, switches, prices, budget, UNKNOWN, retention, metrics,
+ * security counters). The owner always can. The owner-only buttons on that page (续期价格, 预算充值) are NOT a permission.
+ */
+export const ADMIN_SYSTEM_PERMISSIONS = ['system.read'] as const;
+export type SystemAdminPermission = (typeof ADMIN_SYSTEM_PERMISSIONS)[number];
+/**
+ * 玩家 · 积分发放 (Part 22b): give points to all registered players, one tier, one 玩家编号 or one exact email. Only the owner
+ * can give this permission (it is in no preset except 全部). 重置全部额度 is the owner's alone and is NOT a permission.
+ */
+export const ADMIN_POINTS_PERMISSIONS = ['points.grant'] as const;
+export type PointsAdminPermission = (typeof ADMIN_POINTS_PERMISSIONS)[number];
 // Read legacy scoped grants without silently migrating them. New UI grants only four categories.
 export const ADMIN_PERMISSION_LIMIT = 128;
 export const ADMIN_CHARACTER_ACTIONS = [
@@ -52,6 +64,8 @@ export type AdminPermission =
   | CocreationAdminPermission
   | ConversationAdminPermission
   | ModelAdminPermission
+  | SystemAdminPermission
+  | PointsAdminPermission
   | 'invites.revoke'
   | 'characters.create'
   | `characters.${CharacterAdminAction}:${string}`;
@@ -64,6 +78,8 @@ export function isAdminPermission(value: unknown): value is AdminPermission {
     (ADMIN_COCREATION_PERMISSIONS as readonly string[]).includes(value) ||
     (ADMIN_CONVERSATION_PERMISSIONS as readonly string[]).includes(value) ||
     (ADMIN_MODEL_PERMISSIONS as readonly string[]).includes(value) ||
+    (ADMIN_SYSTEM_PERMISSIONS as readonly string[]).includes(value) ||
+    (ADMIN_POINTS_PERMISSIONS as readonly string[]).includes(value) ||
     value === 'invites.revoke' ||
     value === 'characters.create' ||
     /^characters\.(read|edit|discard|preview|publish|materials|approve-materials|delete):(?:\*|[A-Za-z0-9_-]{1,128})$/.test(
@@ -114,6 +130,16 @@ export function hasModelsPermission(grants: readonly string[]) {
   return grants.includes('models.manage');
 }
 
+/** Reading 系统状态 (the owner role is checked by the caller). */
+export function hasSystemPermission(grants: readonly string[]) {
+  return grants.includes('system.read');
+}
+
+/** Giving points (the owner role is checked by the caller). */
+export function hasPointsPermission(grants: readonly string[]) {
+  return grants.includes('points.grant');
+}
+
 export function canCreateCharacter(grants: readonly string[]) {
   return grants.includes('category.characters') || grants.includes('characters.create');
 }
@@ -129,7 +155,9 @@ export type AdminPermissionItem =
   | InviteAdminPermission
   | CocreationAdminPermission
   | ConversationAdminPermission
-  | ModelAdminPermission;
+  | ModelAdminPermission
+  | SystemAdminPermission
+  | PointsAdminPermission;
 /** Direct requirements only; the closure is computed. */
 export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, readonly AdminPermissionItem[]>> = {
   'characters.read': [],
@@ -150,6 +178,8 @@ export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, rea
   'cocreation.manage': ['cocreation.read'],
   'conversations.read': [],
   'models.manage': [],
+  'system.read': [],
+  'points.grant': [],
 };
 export const ADMIN_PERMISSION_ITEMS = Object.keys(ADMIN_PERMISSION_REQUIRES) as AdminPermissionItem[];
 const closure = (item: AdminPermissionItem, next: (value: AdminPermissionItem) => readonly AdminPermissionItem[]) => {

@@ -17,6 +17,15 @@ CREATE TABLE cf_web_budget_calls(id TEXT PRIMARY KEY,provider TEXT NOT NULL REFE
   charged_micros INTEGER,receipt_hash TEXT,created_at INTEGER NOT NULL,settled_at INTEGER,
   CHECK((charged_micros IS NULL AND receipt_hash IS NULL AND settled_at IS NULL) OR
     (charged_micros>=0 AND charged_micros<=held_micros AND receipt_hash IS NOT NULL AND settled_at IS NOT NULL))) STRICT;`;
+/**
+ * Part 22b: allowance added by the owner after initialization (console 预算充值). A separate, additive table created on first
+ * start: the grant rows and the hashed schema above are untouched (their CHECK still caps the INITIAL grant at USD 3), so a
+ * deployed authority keeps its identity. The allowance of a capped provider is its grant plus the sum of these rows.
+ */
+const topupSchema = `CREATE TABLE IF NOT EXISTS cf_web_budget_topups(request_id TEXT PRIMARY KEY,provider TEXT NOT NULL,
+  micros INTEGER NOT NULL CHECK(micros>0),created_at INTEGER NOT NULL) STRICT`;
+const BUDGET_TOPUP_MIN_MICROS = 1_000_000;
+const BUDGET_TOPUP_MAX_MICROS = 50_000_000;
 export type CloudBudgetEntry = {
   provider: Provider;
   fingerprint: string;
@@ -55,6 +64,7 @@ export class WebCloudBudget {
         meta?.schema_hash === budgetHash(schema) && meta.target_json === JSON.stringify(this.target),
         'WEB_CLOUD_BUDGET_IDENTITY_MISMATCH',
       );
+      this.sql(topupSchema);
     });
   }
   private sql(query: string, ...bindings: (string | number)[]) {
@@ -111,6 +121,8 @@ export class WebCloudBudget {
       const authorization = JSON.parse(grant.manifest_json) as CloudBudgetAuthorization;
       validateCloudBudgetAuthorization(authorization);
       ensure(grant.micros === (authorization.version === 1 ? authorization.micros : null), 'WEB_CLOUD_BUDGET_CORRUPT');
+      // The allowance is the initial grant plus every top-up; a production-unlimited authority has none (and takes none).
+      const allowance = grant.micros === null ? null : grant.micros + this.toppedUp(provider);
       const used = this.row<{ spent: number; held: number }>(
         `SELECT COALESCE(SUM(charged_micros),0) spent,
         COALESCE(SUM(CASE WHEN charged_micros IS NULL THEN held_micros ELSE 0 END),0) held
@@ -120,17 +132,70 @@ export class WebCloudBudget {
       ensure(
         [used.spent, used.held].every((n) => Number.isSafeInteger(n) && n >= 0) &&
           Number.isSafeInteger(used.spent + used.held) &&
-          (grant.micros === null || used.spent + used.held <= grant.micros),
+          (allowance === null || used.spent + used.held <= allowance),
         'WEB_CLOUD_BUDGET_CORRUPT',
       );
       return {
         provider,
-        allowanceMicros: grant.micros,
+        allowanceMicros: allowance,
         spentMicros: used.spent,
         heldMicros: used.held,
-        remainingMicros: grant.micros === null ? null : grant.micros - used.spent - used.held,
+        remainingMicros: allowance === null ? null : allowance - used.spent - used.held,
         policy: authorization.version === 1 ? ('test-cumulative' as const) : ('production-unlimited' as const),
         grantHash: budgetHash(authorization),
+      };
+    });
+  }
+  private toppedUp(provider: string) {
+    return this.row<{ total: number }>(
+      'SELECT COALESCE(SUM(micros),0) total FROM cf_web_budget_topups WHERE provider=?',
+      provider,
+    )!.total;
+  }
+  /**
+   * Part 22b, owner console only (reached through the business Worker's service binding; there is no operator or HTTP path):
+   * add USD 1-50 to the allowance of a CAPPED provider. Idempotent per request id - the same id with the same provider and
+   * amount answers the stored result and adds nothing; the same id with anything else is a conflict. A production-unlimited
+   * authority has no allowance to add to and refuses. Nothing here touches a reservation or a settled call.
+   */
+  topUp(requestId: string, provider: Provider, micros: number) {
+    ensure(
+      typeof requestId === 'string' &&
+        /^[A-Za-z0-9_-]{8,128}$/.test(requestId) &&
+        ['deepseek', 'fish'].includes(provider) &&
+        Number.isSafeInteger(micros) &&
+        micros >= BUDGET_TOPUP_MIN_MICROS &&
+        micros <= BUDGET_TOPUP_MAX_MICROS &&
+        micros % 1_000_000 === 0,
+      'WEB_BUDGET_TOPUP_INVALID',
+    );
+    return this.storage.transactionSync(() => {
+      const grant = this.row<{ micros: number | null }>(
+        'SELECT micros FROM cf_web_budget_grants WHERE provider=?',
+        provider,
+      );
+      ensure(grant, 'WEB_CLOUD_BUDGET_NOT_INITIALIZED');
+      ensure(grant.micros !== null, 'WEB_BUDGET_TOPUP_UNLIMITED');
+      const prior = this.row<{ provider: string; micros: number }>(
+        'SELECT provider,micros FROM cf_web_budget_topups WHERE request_id=?',
+        requestId,
+      );
+      if (prior) ensure(prior.provider === provider && prior.micros === micros, 'WEB_BUDGET_TOPUP_CONFLICT');
+      else
+        this.sql(
+          'INSERT INTO cf_web_budget_topups(request_id,provider,micros,created_at) VALUES (?,?,?,?)',
+          requestId,
+          provider,
+          micros,
+          this.now(),
+        );
+      const row = this.summary().find((entry) => entry.provider === provider)!;
+      return {
+        provider,
+        addedMicros: micros,
+        allowanceMicros: row.allowanceMicros!,
+        remainingMicros: row.remainingMicros!,
+        duplicate: !!prior,
       };
     });
   }

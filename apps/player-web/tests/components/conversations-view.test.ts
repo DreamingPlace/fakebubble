@@ -257,7 +257,6 @@ const access = (permissions: string[], extra: Partial<NavAccess> = {}): NavAcces
   owner: false,
   permissions,
   inbox: true,
-  metrics: true,
   ...extra,
 });
 
@@ -265,9 +264,10 @@ test('the sidebar item 运营 → 测试对话: hidden without the switch, for t
   const ops = navTree().find((g) => g.id === 'ops')!;
   assert.deepEqual(
     ops.items.map((i) => [i.page, i.label]),
+    // Named exception (Part 22b): 运营数据 left the nav (its numbers are 系统状态 → 技术指标); 测试对话 comes first, then the 消耗表 placeholder.
     [
-      ['ops', '运营数据'],
       ['conversations', '测试对话'],
+      ['costs', '消耗表'],
     ],
   );
   // The switch (CHAT_REVIEW_ENABLED) is the first condition.

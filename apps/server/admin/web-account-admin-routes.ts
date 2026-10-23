@@ -4,6 +4,7 @@ import type { WebInviteRequest, WebInviteResult } from '../invites/web-invite-ro
 import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
 import type { WebCocreation } from '../cocreation/web-cocreation.ts';
 import type { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
+import type { WebSystemAdmin } from './web-system-admin.ts';
 
 export async function routeWebAccountAdmin(
   admin: WebAccountAdmin,
@@ -11,6 +12,7 @@ export async function routeWebAccountAdmin(
   characters?: WebCharacterAdmin,
   cocreation?: WebCocreation,
   chatReview?: WebChatReviewAdmin | null,
+  system?: WebSystemAdmin | null,
 ): Promise<WebInviteResult | null> {
   const base = '/api/web/local/admin',
     path = req.path;
@@ -51,6 +53,33 @@ export async function routeWebAccountAdmin(
       };
     if (action === 'export')
       return { status: 200, body: chatReview.export(actor, body(['characterId', 'code', 'archived']) as never) };
+    ensure(false, 'NOT_FOUND');
+  }
+  // Part 22b: 概览, 系统状态 and 积分发放. The body goes to the handler unread: each checks its permission before it looks at the body.
+  if (
+    path.startsWith(`${base}/overview/`) ||
+    path.startsWith(`${base}/system/`) ||
+    path.startsWith(`${base}/points/`)
+  ) {
+    auth();
+    ensure(system, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(base.length + 1);
+    if (action === 'overview/read') {
+      body([]);
+      return { status: 200, body: await system.overview(actor) };
+    }
+    if (action === 'system/status') {
+      body([]);
+      return { status: 200, body: await system.status(actor) };
+    }
+    if (action === 'system/renew-prices') return { status: 200, body: system.renewPrices(actor, req.body) };
+    if (action === 'system/budget-topup') return { status: 200, body: await system.budgetTopUp(actor, req.body) };
+    if (action === 'points/preview')
+      return { status: 200, body: system.pointsPreview(actor, req.body, req.trustedIpHash) };
+    if (action === 'points/grant') return { status: 200, body: system.pointsGrant(actor, req.body, req.trustedIpHash) };
+    if (action === 'points/reset-preview') return { status: 200, body: system.resetPreview(actor, req.body) };
+    if (action === 'points/reset') return { status: 200, body: system.resetPoints(actor, req.body) };
     ensure(false, 'NOT_FOUND');
   }
   if (path.startsWith(`${base}/cocreation/`)) {
