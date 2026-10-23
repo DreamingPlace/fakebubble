@@ -1,6 +1,7 @@
 import type { OverviewView } from '../../../../../packages/contracts/web-system.ts';
 import { h } from '../cocreation/h.ts';
 import { dollars } from './system-format.ts';
+import { rmb } from './costs-view.ts';
 import { statusBadge } from './ui/status-badge.ts';
 
 /** The one-line summary of the 系统状态 warnings; null when there is nothing to say. */
@@ -28,12 +29,15 @@ export function overviewView(
   },
 ) {
   const cards = h('div', { class: 'overview-cards' });
+  // Part 22c: yesterday and this month, only for the owner and stats.read (the server sends null to everyone else).
+  const yesterday = h('div', { class: 'overview-cards' });
   const warnings = h('p', { class: 'overview-warnings', attrs: { role: 'status' } });
   const links = h('ul', { class: 'overview-links' });
   const reload = h('button', { class: 'admin-secondary', text: '刷新', attrs: { type: 'button' } });
   root.replaceChildren(
     h('h2', { text: '概览' }),
     cards,
+    yesterday,
     warnings,
     h('h3', { text: '进入' }),
     links,
@@ -69,6 +73,16 @@ export function overviewView(
       card('失败回复', String(view.today.failedReplies)),
       card('今日花费（列表价）', view.today.spendMicros === null ? '—' : dollars(view.today.spendMicros)),
     );
+    yesterday.replaceChildren(
+      ...(view.stats
+        ? [
+            card(`昨日新注册（UTC ${view.stats.yesterday.day}）`, String(view.stats.yesterday.signups)),
+            card('昨日活跃', String(view.stats.yesterday.active)),
+            card('昨日回复', String(view.stats.yesterday.replies)),
+            card('本月花费（列表价，约）', rmb(view.stats.monthListCostRmbFen)),
+          ]
+        : []),
+    );
     const line = warningLine(view.warnings);
     warnings.replaceChildren(
       line ? statusBadge('需要留意', 'warn') : statusBadge('正常', 'ok'),
@@ -82,6 +96,7 @@ export function overviewView(
     load,
     clear() {
       cards.replaceChildren();
+      yesterday.replaceChildren();
       warnings.replaceChildren();
       links.replaceChildren();
     },

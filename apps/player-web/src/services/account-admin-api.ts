@@ -25,6 +25,7 @@ import type {
   SystemUnknownKind,
   SystemWarnings,
 } from '../../../../packages/contracts/web-system.ts';
+import type { CostsView, PlayerStatsView, StatsRange } from '../../../../packages/contracts/web-stats.ts';
 import {
   ADMIN_PERMISSION_LIMIT,
   isAdminPermission,
@@ -335,6 +336,7 @@ export class AccountAdminApi extends InviteAdminApi {
     const row = object(await this.request('/overview/read', {}));
     object(row.today);
     object(row.warnings);
+    if (row.stats !== null && row.stats !== undefined) object(row.stats);
     if (typeof row.day !== 'string') throw invalid();
     return row as unknown as OverviewView;
   }
@@ -386,6 +388,29 @@ export class AccountAdminApi extends InviteAdminApi {
     const row = object(await this.request('/points/reset', { requestId }));
     if (!Number.isSafeInteger(row.affected) || typeof row.duplicate !== 'boolean') throw invalid();
     return row as unknown as PointsResetResult;
+  }
+  /** 玩家统计 (Part 22c): the owner or stats.read. */
+  async playerStats(range: StatsRange): Promise<PlayerStatsView> {
+    const row = object(await this.request('/stats/players', { range }));
+    if (!Array.isArray(row.days) || !Array.isArray(row.byCharacter) || !Array.isArray(row.byModel)) throw invalid();
+    object(row.totals);
+    return row as unknown as PlayerStatsView;
+  }
+  /** 导出表格 of the daily table: a CSV (UTF-8 BOM) built by the server, audited there. */
+  async exportPlayerStats(range: StatsRange): Promise<{ csv: string; rows: number }> {
+    const row = object(await this.request('/stats/players-export', { range }));
+    return { csv: string(row.csv), rows: time(row.rows) };
+  }
+  /** 消耗表 (Part 22c): the owner or stats.read. */
+  async costs(range: StatsRange): Promise<CostsView> {
+    const row = object(await this.request('/stats/costs', { range }));
+    if (!Array.isArray(row.rows) || !Array.isArray(row.daily) || typeof row.usdCny !== 'number') throw invalid();
+    object(row.month);
+    return row as unknown as CostsView;
+  }
+  async exportCosts(range: StatsRange): Promise<{ csv: string; rows: number }> {
+    const row = object(await this.request('/stats/costs-export', { range }));
+    return { csv: string(row.csv), rows: time(row.rows) };
   }
   /** The batches, newest first (needs the owner role or invites.manage). */
   async inviteBatches(): Promise<InviteBatch[]> {

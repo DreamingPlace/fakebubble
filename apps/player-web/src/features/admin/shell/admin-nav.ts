@@ -4,6 +4,7 @@ import {
   hasCocreationPermission,
   hasConversationsPermission,
   hasPointsPermission,
+  hasStatsPermission,
   hasSystemPermission,
 } from '../../../../../../packages/contracts/web-admin-permissions.ts';
 
@@ -93,7 +94,7 @@ export type NavAccess = {
   conversations?: boolean;
   /** This page was given a client for 模型与价格. Any administrator may read it (saving is decided by the server and `canManage`). */
   models?: boolean;
-  /** This page was given the clients for 概览 / 系统状态 / 积分发放 (Part 22b). Absent = those pages do not exist here. */
+  /** This page was given the clients for 概览 / 系统状态 / 积分发放 (Part 22b) and 玩家统计 / 消耗表 (Part 22c). Absent = those pages do not exist here. */
   system?: boolean;
 };
 export const PAGES: readonly AdminPage[] = [...navTree().flatMap((g) => g.items.map((i) => i.page)), 'account'];
@@ -119,10 +120,10 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
       return owner || hasAnyInvitePermission(permissions);
     case 'points':
       return access.system === true && (owner || hasPointsPermission(permissions));
-    // 玩家统计 and 消耗表 are placeholders until Part 22c; only the owner is shown them.
+    // 玩家统计 and 消耗表 (Part 22c): the owner, or an administrator holding stats.read.
     case 'stats':
     case 'costs':
-      return access.system === true && owner;
+      return access.system === true && (owner || hasStatsPermission(permissions));
     case 'system':
       return access.system === true && (owner || hasSystemPermission(permissions));
     case 'conversations':
