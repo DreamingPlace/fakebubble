@@ -68,16 +68,62 @@ export function guestPurgeDue(store: Pick<BusinessStore, 'get'>, now: number, gr
 }
 
 /**
+ * Part 22a2. The retired invite system (Part 22x) left its rows behind: migration 126 turned the old kind-'invite' principals
+ * into expired guests but never touched web_invite_grants and its dependants, so a grant was still unrevoked and the 'cleared'
+ * audit refused the world (WEB_RETENTION_UNEXPECTED_WORLD_DATA) for ever. Everything a principal holds there goes in the same
+ * transaction as the rest of its purge, children before parents (the foreign keys): redemptions, identity receipts, credential
+ * receipts and credentials are deleted (they hold a code digest, a secret digest and sealed secrets); the grant itself is
+ * REVOKED and stays as the shell the audit allows (ids and times: the record that a code was redeemed, so the code is not
+ * reusable). The sessions the receipts point at are shells too and stay. The invite CODE row (a digest, no player) stays.
+ */
+export function purgeLegacyInvites(
+  store: Pick<BusinessStore, 'get' | 'run'>,
+  scope: { principalId: string; now: number },
+) {
+  if (!tableExists(store, 'web_invite_grants')) return;
+  const grants = 'SELECT id FROM web_invite_grants WHERE principal_id=?';
+  for (const table of ['web_invite_credential_receipts', 'web_invite_identity_receipts', 'web_invite_credentials'])
+    if (tableExists(store, table)) store.run(`DELETE FROM ${table} WHERE grant_id IN (${grants})`, scope.principalId);
+  if (tableExists(store, 'web_invite_redemptions'))
+    store.run('DELETE FROM web_invite_redemptions WHERE principal_id=?', scope.principalId);
+  store.run(
+    'UPDATE web_invite_grants SET revoked_at=? WHERE principal_id=? AND revoked_at IS NULL',
+    scope.now,
+    scope.principalId,
+  );
+}
+/** True while the principal still holds a legacy invite row other than a revoked grant: the audits fail closed on it. */
+function legacyInvitesRemain(store: Pick<BusinessStore, 'get'>, principalIds: string[]) {
+  if (!tableExists(store, 'web_invite_grants')) return false;
+  const marks = principalIds.map(() => '?').join(',');
+  const grants = `SELECT id FROM web_invite_grants WHERE principal_id IN (${marks})`;
+  return (
+    !!store.get(
+      `SELECT 1 FROM web_invite_grants WHERE principal_id IN (${marks}) AND revoked_at IS NULL LIMIT 1`,
+      ...principalIds,
+    ) ||
+    !!store.get(`SELECT 1 FROM web_invite_redemptions WHERE principal_id IN (${marks}) LIMIT 1`, ...principalIds) ||
+    ['web_invite_credential_receipts', 'web_invite_identity_receipts', 'web_invite_credentials'].some(
+      (table) =>
+        tableExists(store, table) &&
+        !!store.get(`SELECT 1 FROM ${table} WHERE grant_id IN (${grants}) LIMIT 1`, ...principalIds),
+    )
+  );
+}
+
+/**
  * A player's email login, their email challenges and their 名片 revisions are the player's own data: they go with the
  * player. Challenges are matched by principal and by the address of the login being removed (a reset challenge has
  * no principal). Throttle rows hold only HMAC keys and carry no principal, so they age out on their own.
  */
 export function purgePlayerLogins(
   store: Pick<BusinessStore, 'get' | 'run' | 'all'>,
-  scope: { principalId: string; worldId: string },
+  scope: { principalId: string; worldId: string; now?: number },
   /** Part 17g: told the fixed name of each statement group just before it runs (retention diagnostics). */
   mark: (group: string) => void = () => {},
 ) {
+  mark('legacy_invites');
+  purgeLegacyInvites(store, { principalId: scope.principalId, now: scope.now ?? Date.now() });
   mark('player_profiles');
   if (tableExists(store, 'player_profile_versions')) {
     if (tableExists(store, 'player_profile_requests'))
@@ -174,7 +220,7 @@ export function purgeDiagnostics(store: { all<T>(sql: string, ...params: (string
 export function playerLoginsRemain(store: Pick<BusinessStore, 'get'>, principalIds: string[]) {
   if (principalIds.length === 0) return false;
   const marks = principalIds.map(() => '?').join(',');
-  if (reviewRowsRemain(store, principalIds)) return true;
+  if (reviewRowsRemain(store, principalIds) || legacyInvitesRemain(store, principalIds)) return true;
   if (
     tableExists(store, 'web_points_balance') &&
     ['web_points_events', 'web_points_balance', 'web_points_policy', 'web_player_model'].some((table) =>

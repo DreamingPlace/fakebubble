@@ -91,6 +91,16 @@ const status = (over: Partial<SystemStatusView> = {}): SystemStatusView => ({
     lastSuccessAt: NOW - 3_600_000,
     purging: 2,
     oldestPurgingMinutes: 5,
+    failures: [
+      {
+        code: 'WEB_RETENTION_FAILED',
+        phase: 'clearDatabase',
+        sub: 'audit_source',
+        errorName: 'Error',
+        messageShape: 'not <tok>: <tok>',
+        count: 3,
+      },
+    ],
   },
   metrics: [
     {
@@ -549,4 +559,33 @@ test('the new navigation: who sees 概览, 积分发放, 系统状态 and the 22
     [],
     '运营数据 is not in the nav',
   );
+});
+
+test('系统状态 清理: each failing principal shows phase / sub / errorName / messageShape and the count, without any id', async (t) => {
+  const f = mountSystem(t, status());
+  await f.api.load();
+  const cells = f.node.querySelectorAll('td').map((td) => td.textContent);
+  const start = cells.indexOf('clearDatabase');
+  assert.deepEqual(cells.slice(start, start + 5), [
+    'clearDatabase',
+    'audit_source',
+    'Error',
+    'not <tok>: <tok>',
+    '3 次',
+  ]);
+  const none = mountSystem(
+    t,
+    status({
+      retention: {
+        failing: 0,
+        oldestAgeBucket: null,
+        lastSuccessAt: null,
+        purging: 0,
+        oldestPurgingMinutes: null,
+        failures: [],
+      },
+    }),
+  );
+  await none.api.load();
+  assert.ok(!none.node.textContent.includes('messageShape'), 'no failure table when nothing is failing');
 });

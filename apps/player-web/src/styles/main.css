@@ -3516,6 +3516,29 @@ body:has(.admin-shell) {
 .tiers-detail {
   margin-top: 20px;
 }
+/* A code is 43 characters: it wraps onto two lines beside its 复制 button, so the 操作 column is never pushed off the table. */
+.tiers-code-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tiers-code-text {
+  min-width: 0;
+  max-width: 26ch;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tiers-code-hidden {
+  letter-spacing: 1px;
+}
+.tiers-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
 .tiers-danger {
   color: #8a2f27;
 }
@@ -4385,6 +4408,9 @@ body.legal-page {
   align-items: center;
   gap: 10px;
   justify-content: space-between;
+}
+.invite-signup[hidden] {
+  display: none;
 }
 .invite-signup-text {
   font-size: 16px;

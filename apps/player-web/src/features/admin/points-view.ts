@@ -260,7 +260,7 @@ export function pointsView(
       h('h3', { text: '重置全部额度' }),
       h('p', {
         class: 'admin-hint',
-        text: '仅主管理员。注册玩家补到 100 点；每日补充的玩家补到 7 天的每日额度（不超过上限）；不限量的不动；访客不在内；只补不扣。',
+        text: '仅主管理员。注册玩家补到 100 点；每日补充的玩家加 7 天的每日额度（不超过上限）；不限量的不动；访客不在内；只补不扣。',
       }),
       resetButton,
       resetOutcome,

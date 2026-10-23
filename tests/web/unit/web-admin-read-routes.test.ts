@@ -59,3 +59,21 @@ test('the read budget is higher than the write budget', () => {
   assert.ok(WEB_HTTP_LIMITS.adminReadsPerIpPerMinute > WEB_HTTP_LIMITS.writesPerIpPerMinute);
   assert.ok(WEB_HTTP_LIMITS.adminReadsPerIpPerMinute < WEB_HTTP_LIMITS.requestsPerIpPerMinute);
 });
+
+// Part 22b: the read-only allowlist for the new routes. points/preview is NOT read-only: with an email target it writes a points-lookup
+// audit row (the same reason 22a2 took invites/batch-detail off the list), so it keeps the write limit.
+test('22b: 概览, 系统状态 and the reset preview are read-only; points/preview, grant, reset, renew and top-up are writes; batch-detail stays a write', () => {
+  for (const path of ['/admin/overview/read', '/admin/system/status', '/admin/points/reset-preview'])
+    assert.equal(isReadOnlyAdminPost(path), true, path);
+  for (const path of [
+    '/admin/points/preview',
+    '/admin/points/grant',
+    '/admin/points/reset',
+    '/admin/system/renew-prices',
+    '/admin/system/budget-topup',
+    '/admin/invites/batch-detail',
+    '/admin/system/status/extra',
+    '/admin/points/preview/x',
+  ])
+    assert.equal(isReadOnlyAdminPost(path), false, path);
+});

@@ -239,6 +239,8 @@ export class WebProviderApplication {
       codeKey: createHmac('sha256', Buffer.from(config.requestKey, 'base64url'))
         .update('web-local-invite-code-v1')
         .digest(),
+      // Part 22a2: new codes are sealed under a key derived from SEAL_KEY (HKDF, 'invite-code-v1') so they can be shown again.
+      sealKey: Buffer.from(config.sealKey, 'base64url'),
       authorize: this.identity.authorizeInviteAction.bind(this.identity),
     });
     this.playerAccounts = store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'")

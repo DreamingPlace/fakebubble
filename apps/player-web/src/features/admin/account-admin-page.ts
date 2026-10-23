@@ -67,6 +67,7 @@ type Port = Pick<
   /** 邀请与额度 (the owner, or an administrator holding invites.manage). Optional: a page without them shows nothing on that page. */
   inviteBatches?: AccountAdminApi['inviteBatches'];
   inviteBatchDetail?: AccountAdminApi['inviteBatchDetail'];
+  exportInviteBatch?: AccountAdminApi['exportInviteBatch'];
   createInviteBatch?: AccountAdminApi['createInviteBatch'];
   editInviteBatch?: AccountAdminApi['editInviteBatch'];
   revokeInviteBatch?: AccountAdminApi['revokeInviteBatch'];

@@ -84,7 +84,17 @@ export type SystemRetention = {
   lastSuccessAt: number | null;
   purging: number;
   oldestPurgingMinutes: number | null;
+  /** Per failing principal (no id), the most frequent first: where its last failure broke and how many times in a row. */
+  failures: SystemRetentionFailure[];
 } | null;
+export type SystemRetentionFailure = {
+  code: string;
+  phase: string;
+  sub: string;
+  errorName: string;
+  messageShape: string;
+  count: number;
+};
 export type SystemWarnings = { priceExpiring: number; retentionFailing: number; unknownNew: number };
 export type SystemFlags = {
   signupBonus: boolean;

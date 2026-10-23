@@ -316,7 +316,7 @@ export class WebSystemAdmin {
     throw new DomainError('INTERNAL_ERROR');
   }
 
-  /** 重置全部额度 (owner only): registered → 100, daily_refill → 7 × N under the cap; never lowers; one 'reset' event per player. */
+  /** 重置全部额度 (owner only): registered → 100 if below; daily_refill → +7 × N on top of the balance, never above the cap; never lowers; one 'reset' event per player. */
   resetPoints(auth: Auth, input: unknown): PointsResetResult {
     const actor = this.actor(auth, 'owner');
     const body = exactly(input, ['requestId']);

@@ -21,6 +21,7 @@ import {
   migrateWebProviderModelSettings,
   migrateWebProviderInviteTiers,
   migrateWebProviderLegacyInvites,
+  migrateWebProviderInviteCodes,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -82,7 +83,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→126 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→127 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -124,8 +125,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderModelSettings(store);
     migrateWebProviderInviteTiers(store);
     migrateWebProviderLegacyInvites(store);
+    migrateWebProviderInviteCodes(store);
     return {
-      schema: 126,
+      schema: 127,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -273,6 +275,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-model-settings',
       'migrate-invite-tiers',
       'migrate-legacy-invites',
+      'migrate-invite-codes',
       'render-assets',
       'admin-grant',
       'serve',
@@ -441,6 +444,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderLegacyInvites(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 126, legacyInvitesRetired: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-invite-codes') {
+    // An existing provider-* instance at schema 126 gains the sealed invite code and creating-member columns.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderInviteCodes(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 127, inviteCodesViewable: true }) + '\n');
     } finally {
       store.close();
     }

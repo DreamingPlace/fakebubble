@@ -4,6 +4,7 @@ import { WebAdmission } from '../../../apps/server/admission/web-admission.ts';
 import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
 import { WebInviteTiers } from '../../../apps/server/invites/web-invite-tiers.ts';
 import {
+  migrateWebProviderInviteCodes,
   migrateWebProviderInviteTiers,
   migrateWebProviderLegacyInvites,
 } from '../../../apps/server/generation/web-provider-migration.ts';
@@ -30,13 +31,20 @@ export function schema126() {
   return store;
 }
 
+/** The real schema through migration 127: codes can be sealed and a batch remembers the member who made it. */
+export function schema127() {
+  const store = schema126();
+  migrateWebProviderInviteCodes(store);
+  return store;
+}
+
 /**
  * Part 22a fixture: a schema-125 store with the free tier and model choice on, an admission, an owner and administrators, the
  * tiers object, and players who are signed up (a login, the signup bonus) or guests, each with a live session so a code can be
  * redeemed through the real WebInviteTiers.redeem.
  */
-export function tiersFixture(t: TestContext) {
-  const store = schema126();
+export function tiersFixture(t: TestContext, options: { sealKey?: Buffer } = {}) {
+  const store = schema127();
   t.after(() => store.close());
   Object.assign(store, { webIpKeyFingerprint: () => 'f'.repeat(64) });
   enableModelChoice(store);
@@ -72,6 +80,7 @@ export function tiersFixture(t: TestContext) {
   const tiers = new WebInviteTiers(store, {
     clock,
     codeKey: Buffer.alloc(32, 9),
+    ...(options.sealKey ? { sealKey: options.sealKey } : {}),
     authorize: (token) => {
       const principalId = sessions.get(token);
       if (!principalId) throw new Error('SESSION_EXPIRED');

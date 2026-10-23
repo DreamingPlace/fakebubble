@@ -56,6 +56,144 @@ export class WebCrossPathFixture extends WebRetentionWorldFixture {
       });
       return Response.json({ inviteId: `invite-${principalId}` });
     }
+    if (path === '/fixture/cross/legacy-126') {
+      // Part 22a2: a principal in EXACTLY the shape migration 126 leaves: a guest whose window is over, still holding the old
+      // invite rows - an UNREVOKED grant, a credential, an identity receipt, a credential receipt, a redemption and the sessions
+      // those receipts point at. (126 never touched these tables.)
+      const { principalId } = input as { principalId: string };
+      const p = store.get<{ player_id: string; world_id: string }>(
+        'SELECT player_id,world_id FROM web_principals WHERE id=?',
+        principalId,
+      )!;
+      const live = store.get<{ recovery_epoch: string; security_revision: number }>(
+        'SELECT recovery_epoch,security_revision FROM web_sessions WHERE principal_id=? LIMIT 1',
+        principalId,
+      )!;
+      const blob = (n: number) => new Uint8Array(n).fill(7);
+      store.transaction(() => {
+        store.run("INSERT OR IGNORE INTO admin_sessions VALUES ('legacy-admin','h',?,?,NULL)", now, now + 86_400_000);
+        for (const name of ['old', 'new', 'rotated'])
+          store.run(
+            'INSERT INTO web_sessions(id,token_digest,principal_id,recovery_epoch,security_revision,csrf_seed,created_at,last_active_at,absolute_expires_at,revoked_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            `legacy-${name}-${principalId}`,
+            `legacy-digest-${name}-${principalId}`,
+            principalId,
+            live.recovery_epoch,
+            live.security_revision,
+            blob(32),
+            now - 30 * 86_400_000,
+            now - 30 * 86_400_000,
+            now + 86_400_000,
+            name === 'old' ? now - 29 * 86_400_000 : null,
+          );
+        store.run(
+          `INSERT INTO web_invite_codes(id,code_digest,issue_request_id,issue_digest,capacity,redeemed_count,status,batch,created_by,created_at)
+          VALUES (?,?,?,?,1,1,'active','old','legacy-admin',1)`,
+          `lc-${principalId}`,
+          `lc-digest-${principalId}`,
+          `lc-issue-${principalId}`,
+          'd',
+        );
+        store.run(
+          'INSERT INTO web_invite_grants(id,invite_id,principal_id,player_id,world_id,redeemed_at) VALUES (?,?,?,?,?,?)',
+          `lg-${principalId}`,
+          `lc-${principalId}`,
+          principalId,
+          p.player_id,
+          p.world_id,
+          now - 30 * 86_400_000,
+        );
+        store.run(
+          'INSERT INTO web_invite_credentials(grant_id,secret_digest,created_at) VALUES (?,?,?)',
+          `lg-${principalId}`,
+          `secret-${principalId}`,
+          now - 30 * 86_400_000,
+        );
+        store.run(
+          `INSERT INTO web_invite_identity_receipts(id,old_session_id,new_session_id,grant_id,request_id,code_digest,public_receipt,key_id,nonce,ciphertext,auth_tag,created_at,expires_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `lir-${principalId}`,
+          `legacy-old-${principalId}`,
+          `legacy-new-${principalId}`,
+          `lg-${principalId}`,
+          'req-1',
+          `lc-digest-${principalId}`,
+          'pub',
+          'k',
+          blob(12),
+          blob(32),
+          blob(16),
+          now - 30 * 86_400_000,
+          now - 29 * 86_400_000,
+        );
+        store.run(
+          `INSERT INTO web_invite_credential_receipts(id,grant_id,request_id,old_secret_digest,new_secret_digest,new_session_id,key_id,nonce,ciphertext,auth_tag,created_at,expires_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          `lcr-${principalId}`,
+          `lg-${principalId}`,
+          'req-2',
+          `secret-${principalId}`,
+          `secret2-${principalId}`,
+          `legacy-rotated-${principalId}`,
+          'k',
+          blob(12),
+          blob(32),
+          blob(16),
+          now - 20 * 86_400_000,
+          now - 19 * 86_400_000,
+        );
+        store.run(
+          'INSERT INTO web_invite_redemptions(principal_id,request_id,code_digest,grant_id,redeemed_at) VALUES (?,?,?,?,?)',
+          principalId,
+          'req-1',
+          `lc-digest-${principalId}`,
+          `lg-${principalId}`,
+          now - 30 * 86_400_000,
+        );
+        store.run(
+          "UPDATE web_guest_retention SET state='active',started_at=?,expires_at=?,revision=revision+1 WHERE principal_id=?",
+          now - 30 * 86_400_000,
+          now - 23 * 86_400_000,
+          principalId,
+        );
+      });
+      return Response.json({ shaped: true });
+    }
+    if (path === '/fixture/cross/legacy-rows') {
+      // What the old invite tables still hold for this principal (counts only, by table) and whether any grant is unrevoked.
+      const id = input.principalId as string;
+      const count = (sql: string) => store.get<{ n: number }>(sql, id)!.n;
+      return Response.json({
+        grants: count('SELECT count(*) n FROM web_invite_grants WHERE principal_id=?'),
+        unrevokedGrants: count('SELECT count(*) n FROM web_invite_grants WHERE principal_id=? AND revoked_at IS NULL'),
+        redemptions: count('SELECT count(*) n FROM web_invite_redemptions WHERE principal_id=?'),
+        credentials: count(
+          'SELECT count(*) n FROM web_invite_credentials c JOIN web_invite_grants g ON g.id=c.grant_id WHERE g.principal_id=?',
+        ),
+        identityReceipts: count(
+          'SELECT count(*) n FROM web_invite_identity_receipts c JOIN web_invite_grants g ON g.id=c.grant_id WHERE g.principal_id=?',
+        ),
+        credentialReceipts: count(
+          'SELECT count(*) n FROM web_invite_credential_receipts c JOIN web_invite_grants g ON g.id=c.grant_id WHERE g.principal_id=?',
+        ),
+      });
+    }
+    if (path === '/fixture/cross/old-batch') {
+      // Part 22a2: turn a batch into one made BEFORE migration 127: a digest and nothing sealed, and no creating member.
+      store.run('UPDATE web_invite_codes SET code_sealed=NULL WHERE batch_id=?', input.batchId);
+      store.run('UPDATE web_invite_batches SET created_by_member=NULL WHERE id=?', input.batchId);
+      return Response.json({ old: true });
+    }
+    if (path === '/fixture/cross/invite-audit') {
+      // The administrators' audit entries for invite codes (action, target, actor): what the log holds, never a code.
+      return Response.json(
+        store.all("SELECT actor_id,action,target_id FROM web_admin_audit WHERE action LIKE 'invite-%' ORDER BY seq"),
+      );
+    }
+    if (path === '/fixture/cross/review-switch') {
+      Object.assign(store, { chatReview: input.on === true });
+      return Response.json({ on: input.on === true });
+    }
     if (path === '/fixture/cross/trial-over') {
       // A guest whose trial window ended (nothing legacy about it).
       store.run(

@@ -6,6 +6,11 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { localRuntime } from '../../cloudflare/runtime.ts';
 import { ADMIN_PERMISSION_ITEMS } from '../../../packages/contracts/web-admin-permissions.ts';
 
+const LATEST_MIGRATION = Math.max(
+  ...readdirSync('apps/server/web-migrations')
+    .map((name) => Number(name.slice(0, 3)))
+    .filter(Number.isInteger),
+);
 const API = '/api/web/provider',
   origin = 'https://fixture.invalid';
 const PASSWORD = 'correct horse battery';
@@ -239,7 +244,8 @@ for (const combo of COMBOS) {
     assert.deepEqual(Object.keys(overview.today).sort(), ['failedReplies', 'replies', 'spendMicros', 'voiceReplies']);
     const status = await f.call(`${ADMIN}/system/status`, owner, {});
     assert.equal(status.version.matches, true, 'the ledger is the expected one');
-    assert.equal(status.version.schemaVersion, 126);
+    // Named exception (22b follow-up): the schema version is the code's latest migration, not a literal (22a2 added 127).
+    assert.equal(status.version.schemaVersion, LATEST_MIGRATION);
     assert.equal(status.flags.signupBonus, combo.bonus);
     assert.equal(status.flags.playerModelChoice, combo.choice);
     assert.deepEqual(
@@ -386,7 +392,9 @@ for (const combo of COMBOS) {
       await check('reset preview writes nothing');
       const resetId = randomUUID();
       const reset = await f.call(`${ADMIN}/points/reset`, owner, { requestId: resetId });
-      // registered → 100 (only when it holds points), refill → min(7 × 50, cap 120); never lowers; unlimited and guests untouched.
+      // registered → 100 (only when it holds points); refill → +min(7 × 50, cap 120 − balance); never lowers; unlimited and guests untouched.
+      // Named exception (22b follow-up, the owner changed the product rule): daily_refill adds on top of the balance, so the player
+      // already at its cap is counted 已达上限 (atCap), not 已不低于目标 (alreadyFull).
       if (eligible('registered')) {
         const added = 100 - model.registered!;
         model.registered = 100;
@@ -397,7 +405,11 @@ for (const combo of COMBOS) {
       const affected = eligible('registered') ? 2 : 1;
       assert.equal(reset.affected, affected);
       assert.equal(reset.totalPoints, eligible('registered') ? 170 : 110);
-      assert.equal(reset.skipped.alreadyFull, 1, 'the player already at its cap is not touched');
+      assert.deepEqual(
+        [reset.skipped.atCap, reset.skipped.alreadyFull],
+        [1, 0],
+        'the player already at its cap is not touched',
+      );
       assert.deepEqual([reset.skipped.guests, reset.skipped.unlimited], [combo.bonus ? 1 : 2, 1]);
       assert.ok(reset.worstCaseMicros === null || Number.isSafeInteger(reset.worstCaseMicros));
       assert.equal(resetDry.totalPoints, reset.totalPoints, 'the preview named what the reset then did');
@@ -759,4 +771,151 @@ test('22b 概览 and 系统状态 numbers come from real data: today’s replies
   assert.equal(after.warnings.unknownNew, 1);
   assert.equal((await overview()).warnings.unknownNew, 1);
   assert.doesNotMatch(after.__text, /daily@example|principal|operation-/i);
+});
+
+// Named exception family (22b follow-up): the owner changed the 重置全部额度 rule for daily_refill holders - +7 days of N ON TOP of the
+// balance, never above the cap. This test states the four agreed examples explicitly (N = 50, cap 1000) over real HTTP.
+test('22b 重置全部额度 for daily_refill: +7 × N on top of the balance up to the cap (the four agreed examples), idempotent, then the next UTC day refills only up to the cap', async (t) => {
+  const f = setup(t);
+  await f.fixture('/fixture/assets');
+  await f.fixture('/fixture/players', { signupEnabled: true });
+  await f.fixture('/fixture/cross/choice', { on: true });
+  await f.fixture('/fixture/cross/signup-switch', { on: true });
+  const owner = client();
+  await f.call(`${ADMIN}/login`, owner, { token: (await f.fixture<{ token: string }>('/fixture/grant')).token });
+  const batch = await f.call(
+    `${ADMIN}/invites/batch-create`,
+    owner,
+    {
+      requestId: randomUUID(),
+      name: 'refill-1000',
+      count: 4,
+      tier: { kind: 'daily_refill', dailyAmount: 50, cap: 1000 },
+      durationDays: null,
+      redeemBy: null,
+    },
+    201,
+  );
+  const examples = [
+    { start: 120, added: 350, end: 470 },
+    { start: 780, added: 220, end: 1000 },
+    { start: 990, added: 10, end: 1000 },
+    { start: 1000, added: 0, end: 1000 },
+  ];
+  const players: { actor: Client; id: string }[] = [];
+  for (const [i] of examples.entries()) {
+    const actor = client();
+    const id = (await f.call(`${API}/bootstrap`, actor)).access.principalId as string;
+    await f.signUp(actor, `refill${i}@example.com`);
+    await f.call(`${API}/invites/redeem`, actor, { requestId: randomUUID(), code: batch.codes[i] }, 201);
+    await f.call(a(''), actor);
+    await f.fixture('/fixture/system/set-balance', { principalId: id, balance: examples[i]!.start });
+    players.push({ actor, id });
+  }
+  const balances = async () =>
+    Promise.all(
+      players.map(
+        async (p) => (await f.fixture<{ balance: number }>('/fixture/system/balance', { principalId: p.id })).balance,
+      ),
+    );
+  const resets = async () =>
+    Promise.all(
+      players.map(async (p) =>
+        (await f.fixture<{ source: string; delta: number }[]>('/fixture/system/events', { principalId: p.id }))
+          .filter((e) => e.source === 'reset')
+          .map((e) => e.delta),
+      ),
+    );
+  const dry = await f.call(`${ADMIN}/points/reset-preview`, owner, {});
+  assert.deepEqual(
+    await balances(),
+    examples.map((e) => e.start),
+    'the preview writes nothing',
+  );
+  const requestId = randomUUID();
+  const done = await f.call(`${ADMIN}/points/reset`, owner, { requestId });
+  assert.deepEqual(
+    await balances(),
+    examples.map((e) => e.end),
+  );
+  assert.deepEqual(
+    await resets(),
+    examples.map((e) => (e.added > 0 ? [e.added] : [])),
+    'one reset event each; none for the player already at its cap',
+  );
+  assert.deepEqual(
+    [done.affected, done.totalPoints, done.skipped.atCap],
+    [3, 580, 1],
+    'at the cap is counted 已达上限',
+  );
+  assert.equal(dry.totalPoints, done.totalPoints);
+  // The same request id again adds nothing.
+  const again = await f.call(`${ADMIN}/points/reset`, owner, { requestId });
+  assert.equal(again.duplicate, true);
+  assert.deepEqual(
+    await balances(),
+    examples.map((e) => e.end),
+  );
+  assert.deepEqual(
+    await resets(),
+    examples.map((e) => (e.added > 0 ? [e.added] : [])),
+  );
+  // A NEW request id is a new reset: the player still below the cap (470) gets another 7 days (+350); the others are at the cap.
+  const second = await f.call(`${ADMIN}/points/reset`, owner, { requestId: randomUUID() });
+  assert.deepEqual([second.affected, second.totalPoints, second.skipped.atCap], [1, 350, 3]);
+  assert.deepEqual(await balances(), [820, 1000, 1000, 1000]);
+
+  // The next UTC day: a visit pays +N refill, but only up to the cap (one player is at 820, the rest at 1000).
+  for (const p of players) await f.fixture('/fixture/cross/rewind-refill', { principalId: p.id });
+  for (const p of players) await f.call(a(''), p.actor);
+  assert.deepEqual(await balances(), [870, 1000, 1000, 1000], 'only the player below the cap gets +50');
+});
+
+// Part 22b follow-up (22a2 is merged): 系统状态 → 清理 lists, per failing principal, where its purge broke and how many times - from the same
+// source as operator inspect (WebCloudRetention.health) - and no id.
+test('22b 系统状态 清理: phase / sub / errorName / messageShape and the count per failing principal, no ids; a purged principal is not listed', async (t) => {
+  const f = setup(t);
+  await f.fixture('/fixture/assets');
+  await f.fixture('/fixture/players', { signupEnabled: true });
+  const owner = client();
+  await f.call(`${ADMIN}/login`, owner, { token: (await f.fixture<{ token: string }>('/fixture/grant')).token });
+  const ids: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const actor = client();
+    ids.push((await f.call(`${API}/bootstrap`, actor)).access.principalId as string);
+  }
+  const detail = (phase: string, sub: string, errorName: string, messageShape: string) => ({
+    code: 'WEB_RETENTION_FAILED',
+    phase,
+    sub,
+    errorName,
+    messageShape,
+  });
+  const fail = (principalId: string, count: number, d: ReturnType<typeof detail>) =>
+    f.fixture('/fixture/system/retention-fail', { principalId, count, detail: d });
+  assert.deepEqual((await f.call(`${ADMIN}/system/status`, owner, {})).retention.failures, [], 'nothing failing');
+  await fail(ids[0]!, 2, detail('clearDatabase', 'audit_source', 'Error', 'not <tok>: <tok>'));
+  await fail(ids[1]!, 5, detail('eraseAudio', 'media_delete', 'DomainError', 'R2 <n> failed'));
+  const status = await f.call(`${ADMIN}/system/status`, owner, {});
+  assert.equal(status.retention.failing, 2);
+  assert.deepEqual(status.retention.failures, [
+    {
+      code: 'WEB_RETENTION_FAILED',
+      phase: 'eraseAudio',
+      sub: 'media_delete',
+      errorName: 'DomainError',
+      messageShape: 'R2 <n> failed',
+      count: 5,
+    },
+    {
+      code: 'WEB_RETENTION_FAILED',
+      phase: 'clearDatabase',
+      sub: 'audit_source',
+      errorName: 'Error',
+      messageShape: 'not <tok>: <tok>',
+      count: 2,
+    },
+  ]);
+  for (const id of ids) assert.ok(!status.__text.includes(id), 'no principal id on the page');
+  assert.equal((await f.call(`${ADMIN}/overview/read`, owner, {})).warnings.retentionFailing, 2);
 });

@@ -331,7 +331,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 
 **退避：** 清除失败的主体不会在每次闹钟（30 秒）都被重试，而是按连续失败次数等待 1 分钟、5 分钟、30 分钟，之后每 6 小时一次；成功即清零。闹钟本身照常运行，其他主体、队列与告警不受影响。退避状态（主体 id 与计数，仅存于对象内部）放在 Durable Object 的键值存储 `retention:ledger`，**没有新增迁移或列**（`web_guest_retention` 没有可用的列）。
 
-**健康行：** `status` 的 `retentionHealth` 与 `inspect` 的 `retention.health` 只含计数与时间：`failing`（当前处于失败状态、尚未清除完的主体数）、`oldestAgeBucket`（其中最老的到期档，没有则为 `null`）、`lastSuccessAt`（最近一次清除完成的时间，毫秒时间戳，没有则为 `null`）。`failing` 长期大于 0 就需要按上表排查。
+**健康行（Part 22a2 起带失败清单）：** `status` 的 `retentionHealth` 与 `inspect` 的 `retention.health` 还有 `failures`：对每个正在失败的主体（最多 20 个，次数多的在前）给出上一次失败的 `code`、`phase`、`sub`、`errorName`、`messageShape` 和连续失败次数 `count`——**没有任何 id**，所以下一次排查不需要实时 tail。它们来自退避账本（`retention:ledger`，每个主体多存一个固定标签的小对象）；这一版之前留下的账本条目在该主体下一次失败之前没有细节。其余部分只含计数与时间：`failing`（当前处于失败状态、尚未清除完的主体数）、`oldestAgeBucket`（其中最老的到期档，没有则为 `null`）、`lastSuccessAt`（最近一次清除完成的时间，毫秒时间戳，没有则为 `null`）。`failing` 长期大于 0 就需要按上表排查。
 
 ### `inspect`（只读检查）
 
@@ -398,15 +398,31 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 
 **新权限：** `system.read`（查看系统状态）、`points.grant`（积分发放）。只有主管理员能分配（成员权限接口本来就是主管理员专用），不在任何预设里，只在“全部”里。续期价格、预算充值、重置全部额度**不是权限**：服务器要求主管理员角色（`ADMIN_OWNER_REQUIRED`），持有全部权限的管理员也不行。概览对任何能登录的管理员开放。
 
-**路由**（都是 `POST /api/web/provider/admin/...`，会话 + CSRF + Origin，先查权限再读请求体）：`overview/read`、`system/status`、`system/renew-prices`、`system/budget-topup`、`points/preview`、`points/grant`、`points/reset-preview`、`points/reset`。`overview/read`、`system/status`、`points/preview`、`points/reset-preview` 走只读预算。`/admin/metrics/stage-latency` 仍然存在（主管理员），后台页面不再调用它：同样的数字在 `system/status` 的 `metrics` 里。
+**路由**（都是 `POST /api/web/provider/admin/...`，会话 + CSRF + Origin，先查权限再读请求体）：`overview/read`、`system/status`、`system/renew-prices`、`system/budget-topup`、`points/preview`、`points/grant`、`points/reset-preview`、`points/reset`。`overview/read`、`system/status`、`points/reset-preview` 走只读预算；`points/preview` 不在只读名单里（它写一条 `points-lookup` 审计行，和 22a2 去掉 `invites/batch-detail` 的理由相同），走写入预算。`/admin/metrics/stage-latency` 仍然存在（主管理员），后台页面不再调用它：同样的数字在 `system/status` 的 `metrics` 里。
 
 **预算充值的细节。** 额度 = 初始授权 + 全部充值；只对“限额”（`BUDGET_POLICY=test-cumulative`）的供应商可用，`production-unlimited` 返回 `WEB_BUDGET_TOPUP_UNLIMITED`（页面显示“不限额”且没有按钮）。每次 $1–$50 整数美元，按 `requestId` 幂等（同一个 id 不同金额是 `IDEMPOTENCY_CONFLICT`）。占用中的预留、已结算的调用和 UNKNOWN 都不受影响：UNKNOWN 的预留依然不释放、不重试。充值后业务对象还会把**本地**每实例上限（`web_provider_spending.limit_micros`，是同一个 $3 上限的副本，schema 上限就是 $3）对同一类供应商置为 NULL（云端 R2 库允许；Node 内联库列是 NOT NULL，保持原样）：真正的钱仍由预算 Worker 在每次调用前预留，本地副本只是不再先一步拒绝。
 
 **续期价格** 与运维的 `renew-prices` 是同一个函数（`WebCloudSetup.renewPrices` → `renewProviderPrices`）：行 ID 由（供应商、模型、阶段、起点）派生，所以先点按钮再跑命令、或反过来，结果是同样的行，第二次全部 `not-due`，不会重复。命令行保留不变；按钮是补充。
 
+**重置全部额度（主管理员的产品规则）：** 注册玩家低于 100 补到 100；`daily_refill` 持有者在当前余额**之上**加 7 天的每日额度，但不超过上限：`added = min(7 × N, 上限 − 余额)`（余额低于上限时），否则不写事件、计入“已达上限”。例（N=50，上限 1000）：120→470（+350）；780→1000（+220）；990→1000（+10）；1000→1000（无事件）。不限量的不动，访客不在内，从不降低任何人；每人最多一条 `reset` 事件，按 `requestId` 幂等。
+
 **积分发放 / 重置全部额度** 只在 `PLAYER_MODEL_CHOICE_ENABLED=true`（点数存在）时可用，否则返回 `POINTS_NOT_ENABLED`，什么都不写。受益人按**有效档位**（`effectiveTier`）：`registered`（关闭 `SIGNUP_BONUS_ENABLED` 时只登录过的玩家是访客，会被跳过）和 `daily_refill`；访客、`unlimited`、`account` 跳过并计数；正在清理（`purging`/`purged`）的玩家不动。`daily_refill` 玩家受 22a 上限约束，已到上限的只计数。`grant` / `reset` 事件带管理员 id，玩家在“消费记录”里看到“管理员发放”（`reset` 显示“余额调整”）。邮箱查找：要输入完整邮箱（规范化后精确匹配，没有搜索、前缀、列表），只返回玩家编号、档位和余额；每次查找（找到与否）在 `web_admin_audit` 写 `points-lookup`，目标是带密钥的摘要（`email:` + 32 位十六进制），不存邮箱；每个网络位置每分钟 6 次。
 
-**系统状态** 读：版本与迁移（`cf_web_migrations` 与代码期望比对）、开关（只有布尔值和模型名，永远没有密钥或邮件地址）、价格（每个供应商/模型/阶段当前生效的版本与“覆盖到”的日期，60 天内高亮）、预算（预算 Worker 的 `summary()`，一次 RPC）、UNKNOWN（按类的数量与最早一条的年龄）、清理（健康行 + `purging`）、安全（Turnstile 未通过 / 不可达的次数，业务对象里 `web_turnstile_counts`，只有日期、结果和计数）。概览的“新 UNKNOWN”指最近 24 小时内出现的 UNKNOWN。每条清理失败的 phase/sub/errorName/messageShape 属于 22a2（尚未合并），这里没有。
+**系统状态** 读：版本与迁移（`cf_web_migrations` 与代码期望比对）、开关（只有布尔值和模型名，永远没有密钥或邮件地址）、价格（每个供应商/模型/阶段当前生效的版本与“覆盖到”的日期，60 天内高亮）、预算（预算 Worker 的 `summary()`，一次 RPC）、UNKNOWN（按类的数量与最早一条的年龄）、清理（健康行 + `purging`）、安全（Turnstile 未通过 / 不可达的次数，业务对象里 `web_turnstile_counts`，只有日期、结果和计数）。概览的“新 UNKNOWN”指最近 24 小时内出现的 UNKNOWN。清理一节对每个正在失败的主体（最多 20 个，次数多的在前）显示 phase / sub / errorName / messageShape 与连续失败次数，不含任何 id，来源与 `inspect` 的 `retention.health.failures`（Part 22a2）相同。
+
+### 邀请码可再次查看（Part 22a2，迁移 127）
+
+**迁移 127（`127_invite_codes_viewable.sql`，sha256 `3cc1d4c03ebbdf90f02ce751341a7aa175804c35799dfe34b29034dd1ae54ecf`）：** 共 **52 步**（`expected-migrations`，inline 与 R2 各 52，最后一步 `version 127`，两边同一份 SQL；1–126 一个字节没动，126 仍是 `68526f0c…efec4e`）。只加两列，不改任何已有行：`web_invite_codes.code_sealed BLOB`（可空）和 `web_invite_batches.created_by_member TEXT`（可空）。本地：`scripts/web-provider.ts migrate-invite-codes <root>`（新实例的 `migrate` 一路到 127）；Cloudflare：账本版本 127，已在 126 的权威启动时自动补上。版本白名单加上 127 的位置同 126。**部署：** 先确认 `inspect` 的 `migrations.matches: true`；回退：两列可空且旧代码不读它们，把代码退回即可，不需要回滚迁移。
+
+- **存储。** 兑换仍只读 `code_digest`（HMAC），没有变。从 127 起**新建**的码同时加密保存：`code_sealed = nonce(12) ‖ AES-256-GCM 密文 ‖ tag(16)`，密钥由业务 Worker 的 `SEAL_KEY` 经 HKDF-SHA256 派生（info 为 `invite-code-v1`），附加认证数据是该码所在行的 id（密文不能被搬到另一行）。`SEAL_KEY` 换了，旧的密文打不开，该码显示为“旧邀请码无法再次查看”，兑换不受影响。**127 之前建的码只有摘要，永远无法再次查看**（不回填）；这些行 `code_sealed` 为 NULL。`created_by_member` 记录建批次的**管理员本人**（登录会话 8 小时就失效，所以不能用会话判断“谁建的”）。
+- **谁能看什么**（服务端判定，浏览器从不拿到它无权看的明文）：主管理员——所有码的明文；有 `invites.manage` 的管理员——**自己建的**批次明文，其他管理员建的批次里码显示为 `********`，但批次名、档位、N/上限、数量、已兑换、状态都可见；其余人看不到这个页面（`ADMIN_PERMISSION_REQUIRED`）。127 之前的码对所有人（包括主管理员）都显示“旧邀请码无法再次查看”。
+- **批次详情**（`/admin/invites/batch-detail`）列出每个码：序号（按生成顺序）、邀请码、状态（未使用 / 已兑换 / 已撤销）、兑换时间（UTC）、玩家编号、额度到期；每个可见的码有自己的“复制”。**导出表格**（新路由 `/admin/invites/batch-export`）返回同样的列、同一套遮罩规则的 CSV，开头带 UTF-8 BOM（Excel 直接显示中文）。以 `=`、`+`、`-`、`@` 开头的单元格（邀请码是 base64url，六十四分之一以 `-` 开头）前面加一个制表符，Excel 当作文本；兑换框会去掉首尾空白，粘贴回去仍可用。
+- **审计**（`web_admin_audit`：管理员、动作、批次 id；绝不含邀请码、玩家 id、邮箱）：`invite-batch-exported:<行数>`——每次导出都记（即使全是 `********`）；`invite-codes-viewed:<行数>`——某次批次详情里真的发出了明文码时记（只含遮罩/旧码的查看不产生明文，不记）。`/admin/invites/batch-detail` 因此不再属于“只读 POST”白名单（走写入限速）。
+- **创建结果**仍然当场显示邀请码并提供“复制”和“下载 CSV”，但不再是唯一的机会。
+
+### 旧邀请主体清除失败（Part 22a2）
+
+**现象：** 22x 部署后 `purging=2, failing=2`。**根因（已用失败测试复现）：** 迁移 126 把旧 `kind='invite'` 主体变成已过期的访客，但没有动 `web_invite_grants` 及其子表；清除末尾的 `cleared` 审计（`admission/web-lifecycle-audit.ts`）拒绝仍有**未撤销授权**的世界，报 `WEB_RETENTION_UNEXPECTED_WORLD_DATA`（`phase=clearDatabase`、`sub=audit_cleared`）。**修复：** `identity/web-player-purge.ts` 的 `purgeLegacyInvites` 在清除同一事务里、按外键顺序删除该主体的 `web_invite_redemptions`、两种回执和 `web_invite_credentials`，并**撤销**授权（授权行作为已允许的外壳保留：只有 id 和时间）；它由 `purgePlayerLogins` 调用，所以 Cloudflare 的 `clearDatabase`、Node 清除器和玩家自己的删除请求共用同一个实现，`playerLoginsRemain` 也会在还剩任何一行时让审计失败。已卡住的两个主体在部署后的下一次闹钟（退避内最多 6 小时）自行完成，无需手工操作。
 
 ### 登录会话 Cookie
 

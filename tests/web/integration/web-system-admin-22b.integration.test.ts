@@ -232,7 +232,9 @@ test('a purging or purged player is never given points', (t) => {
   assert.deepEqual(f.events(p.principalId), [['bonus', 100]]);
 });
 
-test('reset: registered to 100, daily_refill to 7 × N under the cap, never lowers, one reset event each; worst-case cost from the 30-day usage', (t) => {
+// Named exception (22b follow-up): the owner changed the product rule - daily_refill holders get +7 days of N ON TOP of the balance,
+// never above the cap (it used to be "topped up to 7 × N"). The expectations below follow the new rule.
+test('reset: registered to 100, daily_refill +7 × N up to the cap, never lowers, one reset event each; worst-case cost from the 30-day usage', (t) => {
   const f = system(t);
   const low = f.player('low', { signedUp: true }),
     high = f.player('high', { signedUp: true }),
@@ -248,37 +250,38 @@ test('reset: registered to 100, daily_refill to 7 × N under the cap, never lowe
     f.store.run('UPDATE web_points_balance SET balance=? WHERE principal_id=?', balance, who.principalId);
   set(low, 30);
   set(high, 400);
-  set(refillLow, 20); // 7 × 50 = 350 < cap 1000
-  set(refillCapped, 20); // 7 × 50 = 350 > cap 200 → 200
-  set(bigCap, 100); // 7 × 10 = 70 < 100: never lowered
+  set(refillLow, 20); // +350 (7 × 50), room to 1000
+  set(refillCapped, 20); // +180: 7 × 50 = 350 would pass the cap 200
+  set(bigCap, 100); // +70 (7 × 10), room to 5000
   const sources = (who: { principalId: string }) => f.events(who.principalId).filter((e) => e[0] === 'reset');
   const dry = f.admin.resetPreview(f.owner, {});
   assert.equal(f.balance(low.principalId), 30, 'a preview writes nothing');
   assert.equal(dry.worstCaseMicros, null, 'no usage yet: 暂无数据');
   const result = f.admin.resetPoints(f.owner, { requestId: 'reset-request-1' });
   assert.deepEqual(
-    [result.affected, result.totalPoints, result.skipped.alreadyFull, result.skipped.guests, result.skipped.unlimited],
-    [3, 70 + 330 + 180, 2, 0, 0],
+    [
+      result.affected,
+      result.totalPoints,
+      result.skipped.alreadyFull,
+      result.skipped.atCap,
+      result.skipped.guests,
+      result.skipped.unlimited,
+    ],
+    [4, 70 + 350 + 180 + 70, 1, 0, 0, 0],
   );
   assert.deepEqual(
     [low, high, refillLow, refillCapped, bigCap].map((p) => f.balance(p.principalId)),
-    [100, 400, 350, 200, 100],
+    [100, 400, 370, 200, 170],
   );
   assert.deepEqual(
-    [low, refillLow, refillCapped].map((p) => sources(p)),
-    [[['reset', 70]], [['reset', 330]], [['reset', 180]]],
+    [low, refillLow, refillCapped, bigCap].map((p) => sources(p)),
+    [[['reset', 70]], [['reset', 350]], [['reset', 180]], [['reset', 70]]],
   );
-  assert.deepEqual(
-    [high, bigCap].map((p) => sources(p)),
-    [[], []],
-    'nobody is lowered or touched',
-  );
+  assert.deepEqual(sources(high), [], 'nobody is lowered or touched');
   assert.equal(f.admin.resetPoints(f.owner, { requestId: 'reset-request-1' }).duplicate, true);
-  assert.equal(
-    f.admin.resetPoints(f.owner, { requestId: 'reset-request-2' }).affected,
-    0,
-    'a second reset finds everyone at their level',
-  );
+  // A new request id is a new reset: the refill holders still below their cap get another 7 days; the one at its cap is counted.
+  const second = f.admin.resetPoints(f.owner, { requestId: 'reset-request-2' });
+  assert.deepEqual([second.affected, second.totalPoints, second.skipped.atCap], [2, 350 + 70, 1]);
 
   // The estimate: points × the highest 30-day average micro-USD per point across the offered models.
   const day = new Date(T0 - DAY).toISOString().slice(0, 10);
@@ -298,9 +301,47 @@ test('reset: registered to 100, daily_refill to 7 × N under the cap, never lowe
   usage('fish', 's2.1-pro', 'speech', 200, 10);
   set(low, 0);
   const priced = f.admin.resetPreview(f.owner, {});
-  assert.equal(priced.totalPoints, 100);
+  assert.equal(priced.totalPoints, 100 + 280 + 70, 'low back to 100, refillLow 720 → 1000 (cap), bigCap +70');
   assert.ok(priced.worstCaseMicros !== null && priced.worstCaseMicros > 0, 'priced from the usage aggregates');
   assert.equal(priced.worstCaseMicros % priced.totalPoints, 0, 'points × an integer micro-USD per point');
+});
+
+// Named exception family (22b follow-up): the four agreed examples of the new 重置全部额度 rule for daily_refill (N = 50, cap 1000).
+test('reset daily_refill: 120 → 470, 780 → 1000, 990 → 1000, 1000 → no event (已达上限); the same request id adds nothing', (t) => {
+  const f = system(t);
+  const examples = [
+    { start: 120, added: 350, end: 470 },
+    { start: 780, added: 220, end: 1000 },
+    { start: 990, added: 10, end: 1000 },
+    { start: 1000, added: 0, end: 1000 },
+  ];
+  const codes = f.create(f.owner, {
+    count: 4,
+    tier: { kind: 'daily_refill', dailyAmount: 50, cap: 1000 },
+  }).codes!;
+  const who = examples.map((e, i) => {
+    const p = f.player(`example-${i}`, { signedUp: true });
+    f.redeem(p, codes[i]!);
+    f.store.run('UPDATE web_points_balance SET balance=? WHERE principal_id=?', e.start, p.principalId);
+    return p;
+  });
+  const result = f.admin.resetPoints(f.owner, { requestId: 'reset-examples-1' });
+  examples.forEach((e, i) => {
+    assert.equal(f.balance(who[i]!.principalId), e.end, `${e.start} → ${e.end}`);
+    assert.deepEqual(
+      f.events(who[i]!.principalId).filter((event) => event[0] === 'reset'),
+      e.added > 0 ? [['reset', e.added]] : [],
+      `${e.start}: ${e.added > 0 ? `+${e.added}` : 'no event'}`,
+    );
+  });
+  assert.deepEqual([result.affected, result.totalPoints, result.skipped.atCap], [3, 580, 1]);
+  const again = f.admin.resetPoints(f.owner, { requestId: 'reset-examples-1' });
+  assert.equal(again.duplicate, true);
+  assert.deepEqual(
+    who.map((p) => f.balance(p.principalId)),
+    examples.map((e) => e.end),
+    'the same request id adds nothing',
+  );
 });
 
 test('points off: every points action is refused and nothing is written', (t) => {

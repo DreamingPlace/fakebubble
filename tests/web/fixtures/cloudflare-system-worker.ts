@@ -5,6 +5,7 @@ import { expectedWebMigrations } from '../../../workers/web-cloudflare/migration
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
 import type { AlarmStorage } from '../../../apps/server/cloudflare/queue-alarm.ts';
 import type { PrivateBucket } from '../../../apps/server/cloudflare/media-objects.ts';
+import { WebCloudRetention, inMemoryRetention } from '../../../apps/server/cloudflare/web-retention.ts';
 import { WebCrossPathFixture } from './cloudflare-cross-path-worker.ts';
 
 type Namespace = {
@@ -16,6 +17,9 @@ type Namespace = {
 // (PreviewBudgetFixture is a WebBudgetObject holding two capped USD 3 grants) and the same price renewal the operator runs.
 // /fixture/system/* routes set the facts only a real clock or deployment would: spend, UNKNOWN calls, an expiring price. They never ship.
 export class WebSystemFixture extends WebCrossPathFixture {
+  // A real WebCloudRetention over an in-memory ledger: /fixture/system/retention-fail writes failures into it like a failing sweep.
+  private readonly ledger = inMemoryRetention();
+  private readonly healthSource = new WebCloudRetention(this.store, this.clock, 0, undefined, this.ledger);
   private readonly budget: (WebBudgetStatusRPC & WebBudgetTopUpRPC) | undefined;
   constructor(
     ctx: { storage: DurableSQLStorage & AlarmStorage; waitUntil(task: Promise<void>): void },
@@ -41,7 +45,7 @@ export class WebSystemFixture extends WebCrossPathFixture {
       // This fixture authority applies the R2 list (a media bucket is bound).
       migrations: () => ({ active: 'r2', ...expectedWebMigrations() }),
       budget: () => budget.summary(),
-      retention: async () => (this.retention ? await this.retention.health() : null),
+      retention: () => this.healthSource.health(),
       renewPrices: () => renewProviderPrices(this.store, this.clock.now()),
       topUp: (requestId, provider, micros) => budget.topUp(requestId, provider, micros),
     };
@@ -62,6 +66,12 @@ export class WebSystemFixture extends WebCrossPathFixture {
     if (path === '/fixture/system/operator-renew') {
       // What `renew-prices` runs in the operator Worker: WebCloudSetup.renewPrices() is renewProviderPrices(store, now) behind a ready() check.
       return Response.json(renewProviderPrices(store, this.clock.now()));
+    }
+    if (path === '/fixture/system/retention-fail') {
+      const ledger = await this.ledger.load();
+      ledger.failures[input.principalId as string] = [input.count, this.clock.now(), input.detail];
+      await this.ledger.save(ledger);
+      return Response.json({ saved: true });
     }
     if (path === '/fixture/system/budget') return Response.json(await this.budget!.summary());
     if (path === '/fixture/system/local-limits')

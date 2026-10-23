@@ -89,12 +89,13 @@ test('Cloudflare runner: 120 is the same SQL on both authorities, third to last 
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
   // Named exception (Part 22x, migration 126): the ledger has 51 steps and 126 is the newest, so step counts, positions counted
   // from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-  assert.equal(inline.length, 51);
-  assert.equal(r2.length, 51);
-  assert.equal(inline.at(-7)!.version, 120);
-  assert.equal(r2.at(-7)!.version, 120);
-  assert.equal(inline.at(-7)!.sha256, sha(sql120()), 'the ledger hash is the sha256 of the SQL file as written');
-  assert.equal(inline.at(-7)!.sha256, r2.at(-7)!.sha256);
+  // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.length, 52);
+  assert.equal(r2.length, 52);
+  assert.equal(inline.at(-8)!.version, 120);
+  assert.equal(r2.at(-8)!.version, 120);
+  assert.equal(inline.at(-8)!.sha256, sha(sql120()), 'the ledger hash is the sha256 of the SQL file as written');
+  assert.equal(inline.at(-8)!.sha256, r2.at(-8)!.sha256);
 });
 
 test('Cloudflare runner: an existing authority at 119 gains 120 untouched (inline and R2)', async (t) => {
@@ -108,14 +109,17 @@ test('Cloudflare runner: an existing authority at 119 gains 120 untouched (inlin
     assert.deepEqual(result.after.slice(0, 44), result.before, `${mode}: applied steps are untouched`);
     // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
     // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
-    assert.equal(result.after.length, 51, mode);
-    assert.equal(result.after.at(-7), `120:${sha(sql120())}`, mode);
-    assert.equal(result.after.at(-6)?.startsWith('121:'), true, mode);
-    assert.equal(result.after.at(-5)?.startsWith('122:'), true, mode);
-    assert.equal(result.after.at(-4)?.startsWith('123:'), true, mode);
-    assert.equal(result.after.at(-3)?.startsWith('124:'), true, mode); // Extended for migration 124: the newest step is last.
-    assert.equal(result.after.at(-2)?.startsWith('125:'), true, mode); // Extended for migration 125: the newest step is last.
-    assert.equal(result.after.at(-1)?.startsWith('126:'), true, mode); // Extended for migration 126: the newest step is last.
-    assert.deepEqual(result.version, { user_version: 126 }, mode);
+    // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+    assert.equal(result.after.length, 52, mode);
+    assert.equal(result.after.at(-8), `120:${sha(sql120())}`, mode);
+    assert.equal(result.after.at(-7)?.startsWith('121:'), true, mode);
+    assert.equal(result.after.at(-6)?.startsWith('122:'), true, mode);
+    assert.equal(result.after.at(-5)?.startsWith('123:'), true, mode);
+    assert.equal(result.after.at(-4)?.startsWith('124:'), true, mode); // Extended for migration 124: the newest step is last.
+    assert.equal(result.after.at(-3)?.startsWith('125:'), true, mode); // Extended for migration 125: the newest step is last.
+    assert.equal(result.after.at(-2)?.startsWith('126:'), true, mode); // Extended for migration 126: the newest step is last.
+    assert.equal(result.after.at(-1)?.startsWith('127:'), true, mode); // Extended for migration 127: the newest step is last.
+    // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+    assert.deepEqual(result.version, { user_version: 127 }, mode);
   }
 });

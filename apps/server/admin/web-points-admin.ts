@@ -234,39 +234,49 @@ export function grantToPlayers(store: Store, now: number, adminId: string, selec
   };
 }
 
-/** The level 重置全部额度 brings a player up to, or null when it never touches them. */
-function resetLevel(store: Store, now: number, row: Classified, balance: number): number | null {
-  if (row.tier === 'registered') return POINTS.signupBalance;
+/**
+ * What 重置全部额度 adds to one player, or null when it never touches them (unlimited, accounts). A registered player is brought
+ * back to 100 when below it. A daily_refill holder gets seven days of its batch's daily amount ON TOP of its balance, never
+ * above the cap: min(7 × N, cap − balance) while below the cap, else nothing (that is "已达上限"). Nobody is ever lowered.
+ */
+function resetAmount(
+  store: Store,
+  now: number,
+  row: Classified,
+  balance: number,
+): { add: number; capped: boolean } | null {
+  if (row.tier === 'registered') return { add: Math.max(0, POINTS.signupBalance - balance), capped: false };
   if (row.tier !== 'daily_refill') return null;
   const entitlement = activeEntitlement(store, row.id, now);
   if (!entitlement || entitlement.dailyAmount === null || entitlement.totalCap === null) return null;
-  // Seven days of the batch's daily amount, never above its cap and never below what the player already holds (never lowers).
-  return Math.max(balance, Math.min(entitlement.dailyAmount * 7, entitlement.totalCap));
+  if (balance >= entitlement.totalCap) return { add: 0, capped: true };
+  return { add: Math.min(entitlement.dailyAmount * 7, entitlement.totalCap - balance), capped: false };
 }
 
-/** 重置全部额度: raises registered players to 100 and daily_refill holders to 7 × N (under the cap). Writes; the caller owns the transaction. */
+/** 重置全部额度: registered players back to 100 if below; daily_refill holders +7 days of N up to the cap. Writes; the caller owns the transaction. */
 export function resetAll(store: Store, now: number, adminId: string) {
   const everyone = selectPlayers(store, now, { kind: 'all' }, () => {}, Buffer.alloc(0));
   let affected = 0,
     totalPoints = 0,
-    alreadyFull = 0;
+    alreadyFull = 0,
+    atCap = 0;
   for (const receiver of everyone.receivers) {
     if (!hasPoints(store, receiver.id, now)) continue;
     const balance = openAccount(store, now, receiver.id);
-    const level = resetLevel(store, now, receiver, balance);
-    const added = level === null ? 0 : level - balance;
-    if (added <= 0) {
-      alreadyFull += 1;
+    const plan = resetAmount(store, now, receiver, balance);
+    if (!plan || plan.add <= 0) {
+      if (plan?.capped) atCap += 1;
+      else alreadyFull += 1;
       continue;
     }
-    addPoints(store, now, receiver.id, adminId, 'reset', added);
+    addPoints(store, now, receiver.id, adminId, 'reset', plan.add);
     affected += 1;
-    totalPoints += added;
+    totalPoints += plan.add;
   }
   return {
     affected,
     totalPoints,
-    skipped: { ...everyone.skipped, atCap: 0, alreadyFull },
+    skipped: { ...everyone.skipped, atCap, alreadyFull },
   } satisfies Omit<PointsResetResult, 'worstCaseMicros' | 'duplicate'>;
 }
 

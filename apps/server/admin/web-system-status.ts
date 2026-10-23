@@ -9,6 +9,7 @@ import type {
   SystemFlags,
   SystemPriceRow,
   SystemRetention,
+  SystemRetentionFailure,
   SystemSecurity,
   SystemUnknownKind,
   SystemWarnings,
@@ -28,6 +29,7 @@ export interface WebSystemSources {
     failing: number;
     oldestAgeBucket: '<1d' | '1-7d' | '7-30d' | '>30d' | null;
     lastSuccessAt: number | null;
+    failures?: SystemRetentionFailure[];
   } | null>;
 }
 
@@ -121,7 +123,19 @@ async function retentionOf(
   const health = await sources?.retention().catch(() => null);
   if (!health) return null;
   const purge = purgeDiagnostics(store, now);
-  return { ...health, purging: purge.purging, oldestPurgingMinutes: purge.oldestPurgingMinutes };
+  return {
+    ...health,
+    failures: (health.failures ?? []).map(({ code, phase, sub, errorName, messageShape, count }) => ({
+      code,
+      phase,
+      sub,
+      errorName,
+      messageShape,
+      count,
+    })),
+    purging: purge.purging,
+    oldestPurgingMinutes: purge.oldestPurgingMinutes,
+  };
 }
 
 export async function systemWarnings(
