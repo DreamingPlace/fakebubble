@@ -7,8 +7,10 @@ import {
   migrateWebProviderInviteCodes,
   migrateWebProviderInviteTiers,
   migrateWebProviderLegacyInvites,
+  migrateWebProviderStats,
 } from '../../../apps/server/generation/web-provider-migration.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
+import { WebStats } from '../../../apps/server/stats/web-stats.ts';
 import { enableModelChoice } from './model-choice.ts';
 import { schema124 } from './model-settings.ts';
 
@@ -16,6 +18,8 @@ export const origin = 'https://fixture.invalid';
 export const T0 = 1_800_000_000_000;
 export const DAY = 86_400_000;
 export const characterId = 'fixture-character';
+/** Part 22c: the SEAL_KEY of a fixture with statistics (markers are HMACs under a key derived from it). */
+export const STATS_SEAL_KEY = Buffer.alloc(32, 6);
 const ip = (digit: string) => digit.repeat(64);
 
 /** The real schema through migration 125 on an in-memory Node database (the schema a legacy invite principal still has). */
@@ -43,8 +47,10 @@ export function schema127() {
  * tiers object, and players who are signed up (a login, the signup bonus) or guests, each with a live session so a code can be
  * redeemed through the real WebInviteTiers.redeem.
  */
-export function tiersFixture(t: TestContext, options: { sealKey?: Buffer } = {}) {
+export function tiersFixture(t: TestContext, options: { sealKey?: Buffer; stats?: boolean } = {}) {
   const store = schema127();
+  // Part 22c: with `stats` the store is taken on to 128 before anything exists, so every event is counted from the start.
+  if (options.stats) migrateWebProviderStats(store, T0);
   t.after(() => store.close());
   Object.assign(store, { webIpKeyFingerprint: () => 'f'.repeat(64) });
   enableModelChoice(store);
@@ -53,7 +59,8 @@ export function tiersFixture(t: TestContext, options: { sealKey?: Buffer } = {})
     ids = 0,
     rnd = 0;
   const clock = { now: () => now };
-  const admission = new WebAdmission(store as WebStore, clock, () => `id-${++seq}`);
+  const stats = options.stats ? new WebStats(store, STATS_SEAL_KEY) : undefined;
+  const admission = new WebAdmission(store as WebStore, clock, () => `id-${++seq}`, undefined, stats);
   store.run('INSERT INTO character_templates(id,version,config_json) VALUES (?,?,?)', characterId, 1, '{}');
   const accounts = new WebAccountAdmin(store, clock, origin);
   const owner = accounts.login(accounts.issueLoginGrant().token, origin);
@@ -201,6 +208,7 @@ export function tiersFixture(t: TestContext, options: { sealKey?: Buffer } = {})
       .map((e) => [e.source, e.delta] as const);
   return {
     store,
+    stats,
     admission,
     accounts,
     tiers,

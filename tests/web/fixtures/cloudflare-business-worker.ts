@@ -45,6 +45,8 @@ export const fixtureOptions: {
   /** Part 17g: PLAYER_MODEL_CHOICE_ENABLED with these models; absent = off. */
   playerModelChoice?: readonly ('deepseek' | 'gemini' | 'xai')[];
 } = { publicFreeTier: false, chatReview: false };
+/** Part 22c: a real-HTTP test moves the UTC clock of the whole object forward by whole days (/fixture/stats/clock). */
+export const fixtureClock = { skewMs: 0 };
 // Part 19: likewise for CHAT_REVIEW_ENABLED (pseudonymous transcript review and the anonymous archive).
 
 export class WebBusinessFixture {
