@@ -154,6 +154,8 @@ export function auditWebLifecycleWorld(
     ),
     'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
   );
+  // Part 22c: xAI and Gemini attempts (Part 21b: a reply written by the chosen model, or the last model of an exhausted chain) are
+  // provider attempts too; without them in this list a player with such a reply could never be purged.
   if (provider)
     ensure(
       !store.get(
@@ -161,7 +163,7 @@ export function auditWebLifecycleWorld(
     WHERE o.world_id=? AND (a.provider_request_id<>a.operation_id||':'||a.phase||':'||a.ordinal OR NOT EXISTS (
       SELECT 1 FROM web_provider_attempts p WHERE p.operation_id=a.operation_id AND p.phase=a.phase AND p.ordinal=a.ordinal
         AND p.principal_id=a.principal_id AND p.world_id=a.world_id AND p.conversation_id=a.conversation_id
-        AND p.input_message_id=a.input_message_id AND p.provider=a.provider AND p.provider IN ('deepseek','fish'))) LIMIT 1`,
+        AND p.input_message_id=a.input_message_id AND p.provider=a.provider AND p.provider IN ('deepseek','fish','xai','gemini'))) LIMIT 1`,
         worldId,
       ),
       'WEB_RETENTION_EXTERNAL_INTENT_UNSAFE',
