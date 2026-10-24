@@ -4,7 +4,9 @@ import {
   balanceLine,
   infoCopy,
   openMyInfo,
+  quotaView,
   tierView,
+  trialQuotaView,
   utcDate,
   type MyInfoOptions,
 } from '../../src/features/account/my-info.ts';
@@ -76,7 +78,7 @@ function open(t: test.TestContext, over: Partial<MyInfoOptions> = {}) {
     nickname: '阿泡',
     playerNumber: 'ABCD2345',
     emailMasked: 'p***@example.com',
-    tier: tierView({ tier: { kind: 'registered', unlimited: false }, modelChoice: choice() }),
+    quota: quotaView({ tier: { kind: 'registered', unlimited: false }, modelChoice: choice() }),
     trialLine: null,
     signupOpen: true,
     deleteEnabled: true,
@@ -117,8 +119,10 @@ test('22a a registered player’s page: 资料, 额度, 安全, 退出登录 and
   assert.ok(f.text().includes('ABCD2345'));
   assert.ok(f.text().includes('p***@example.com'));
   assert.ok(f.text().includes('注册玩家'));
-  assert.ok(f.text().includes('剩余 150 点 · 约可聊 12 条'));
-  assert.doesNotMatch(f.text(), /每天最多|上限/);
+  // Part 25a (named exception): the 额度 block shows the number, not the "剩余 … · 约可聊 N 条" line (that stays in the top bar and the
+  // model sheet), and never the cap.
+  assert.equal(f.sheet.querySelector('.mi-big')!.textContent, '150');
+  assert.doesNotMatch(f.text(), /约可聊|每天最多|上限/);
   // The danger zone is a block of its own, after 退出登录.
   const order = f.sheet.querySelectorAll('.mi-foot, .mi-danger');
   assert.equal(order.length >= 0, true);
@@ -153,19 +157,21 @@ test('22a rows do what they say, and the page has no helper line', async (t) => 
   assert.equal(paragraphs.length, 0, '21i: no small print under the rows');
 });
 
-test('22a an unlimited player sees 不限量 and the tier label; a daily-refill player sees N and the date, never the cap', (t) => {
+// Part 25a (named exception): the tier is a pill ("邀请"), the end date a chip, the refill "/ 每天 +N" after the number and the balance a
+// bar; the old "邀请 · 每天 +N 点" line and "剩余 … · 约可聊 …" line are gone from this page.
+test('22a an unlimited player sees 不限量 and an invitation pill; a daily-refill player sees N and the date, never the cap', (t) => {
   const unlimited = open(t, {
-    tier: tierView({
+    quota: quotaView({
       tier: { kind: 'unlimited', unlimited: true, plan: { kind: 'unlimited', expiresAt: null } },
       modelChoice: choice(),
     }),
   });
-  assert.ok(unlimited.text().includes('邀请 · 不限量'));
+  assert.equal(unlimited.sheet.querySelector('.mi-pill')!.textContent, '邀请');
   assert.ok(unlimited.text().includes('不限量'));
-  assert.doesNotMatch(unlimited.text(), /剩余/);
+  assert.doesNotMatch(unlimited.text(), /剩余|约可聊/);
   unlimited.handle.close();
   const refill = open(t, {
-    tier: tierView({
+    quota: quotaView({
       tier: {
         kind: 'daily_refill',
         unlimited: false,
@@ -174,10 +180,10 @@ test('22a an unlimited player sees 不限量 and the tier label; a daily-refill 
       modelChoice: choice(),
     }),
   });
-  assert.ok(refill.text().includes('邀请 · 每天 +50 点'));
+  assert.equal(refill.sheet.querySelector('.mi-pill')!.textContent, '邀请');
   assert.ok(refill.text().includes('2026-12-31'));
-  assert.ok(refill.text().includes('剩余 150 点 · 约可聊 12 条'));
-  assert.doesNotMatch(refill.text(), /1000|每天最多|上限/);
+  assert.ok(refill.text().includes('/ 每天 +50'));
+  assert.doesNotMatch(refill.text(), /1000|每天最多|上限|约可聊|剩余/);
 });
 
 test('22a a guest sees the trial, 注册 / 登录 and 注册后即可使用邀请码; a guest has no password, no email and no logout', (t) => {
@@ -186,7 +192,7 @@ test('22a a guest sees the trial, 注册 / 登录 and 注册后即可使用邀�
     nickname: null,
     playerNumber: null,
     emailMasked: null,
-    tier: null,
+    quota: trialQuotaView({ remaining: 3, offered: 5, endsAt: null }),
     trialLine: '体验剩余 3 次',
   });
   assert.ok(f.text().includes('体验剩余 3 次'));
@@ -232,4 +238,151 @@ test("22a the page decides a tier from the server's effective tier ONLY, never f
   assert.deepEqual([after.label, after.quota], ['注册玩家', '剩余 90 点 · 约可聊 7 条']);
   // No tier from the server: a registered player, never an invited one.
   assert.equal(tierView({ tier: undefined, modelChoice: choice() }).label, '注册玩家');
+});
+
+// ---- Part 25a: the 额度 block in every state ----------------------------------------------------------------------------
+
+const refillPlan = (expiresAt: number | null) => ({
+  kind: 'daily_refill' as const,
+  unlimited: false,
+  plan: { kind: 'daily_refill' as const, dailyAmount: 50, cap: 1000, expiresAt },
+});
+/** What the page's quota block shows, read back as plain data. */
+const block = (f: ReturnType<typeof open>) => ({
+  pill: f.sheet.querySelector('.mi-pill')?.textContent ?? null,
+  chip: f.sheet.querySelector('.mi-chip')?.textContent ?? null,
+  chipLabel: f.sheet.querySelector('.mi-chip')?.getAttribute('aria-label') ?? null,
+  big: f.sheet.querySelector('.mi-big')?.textContent ?? null,
+  unit: f.sheet.querySelector('.mi-unit')?.textContent ?? null,
+  daily: f.sheet.querySelector('.mi-daily')?.textContent ?? null,
+  fill: f.sheet.querySelector('.mi-fill')?.style.getPropertyValue('--fill') ?? null,
+  meter: f.sheet.querySelector('.mi-meter') !== null,
+});
+
+test('25a a registered player: 注册玩家, the points, no chip, no bar, no daily text', (t) => {
+  const f = open(t, {
+    quota: quotaView({ tier: { kind: 'registered', unlimited: false }, modelChoice: choice({ balance: 64 }) }),
+  });
+  assert.deepEqual(block(f), {
+    pill: '注册玩家',
+    chip: null,
+    chipLabel: null,
+    big: '64',
+    unit: '点',
+    daily: null,
+    fill: null,
+    meter: false,
+  });
+  assert.doesNotMatch(f.text(), /约可聊|上限|每天/);
+});
+
+test('25a a daily refill that never ends: 邀请, ∞, the balance over the cap as a bar, and "/ 每天 +N" after the number', (t) => {
+  const f = open(t, { quota: quotaView({ tier: refillPlan(null), modelChoice: choice({ balance: 470 }) }) });
+  assert.deepEqual(block(f), {
+    pill: '邀请',
+    chip: '∞',
+    chipLabel: '长期有效',
+    big: '470',
+    unit: '点',
+    daily: '/ 每天 +50',
+    fill: '47%',
+    meter: true,
+  });
+  assert.equal(f.sheet.querySelector('.mi-meter')!.getAttribute('aria-valuenow'), '47');
+  // The cap is the bar; it is printed nowhere (no "上限", no 1000), and 约可聊 stays off this page.
+  assert.doesNotMatch(f.text(), /约可聊|上限|1000/);
+});
+
+test('25a a daily refill with an end date shows that UTC date instead of ∞', (t) => {
+  const f = open(t, {
+    quota: quotaView({ tier: refillPlan(Date.UTC(2027, 0, 20, 23, 30)), modelChoice: choice({ balance: 470 }) }),
+  });
+  const shown = block(f);
+  assert.equal(shown.chip, '2027-01-20');
+  assert.equal(shown.chipLabel, '到期 2027-01-20');
+  assert.ok(!f.text().includes('∞'));
+  assert.equal(shown.daily, '/ 每天 +50');
+});
+
+test('25a the bar is clamped to 0-100 and "/ 每天 +N" belongs to a daily refill only', (t) => {
+  const over = open(t, { quota: quotaView({ tier: refillPlan(null), modelChoice: choice({ balance: 5000 }) }) });
+  assert.equal(block(over).fill, '100%');
+  over.handle.close();
+  const empty = open(t, { quota: quotaView({ tier: refillPlan(null), modelChoice: choice({ balance: 0 }) }) });
+  assert.equal(block(empty).fill, '0%');
+  empty.handle.close();
+  const unlimited = open(t, {
+    quota: quotaView({
+      tier: { kind: 'unlimited', unlimited: true, plan: { kind: 'unlimited', expiresAt: null } },
+      modelChoice: choice({ metered: false, balance: 0, repliesLeft: 0 }),
+    }),
+  });
+  assert.equal(block(unlimited).daily, null);
+  const registered = open(t, {
+    quota: quotaView({ tier: { kind: 'registered', unlimited: false }, modelChoice: choice() }),
+  });
+  assert.equal(block(registered).daily, null);
+});
+
+test('25a unlimited: 不限量 with the expiry chip (∞ or the date), no unit and no bar', (t) => {
+  const never = open(t, {
+    quota: quotaView({
+      tier: { kind: 'unlimited', unlimited: true, plan: { kind: 'unlimited', expiresAt: null } },
+      modelChoice: choice({ metered: false, balance: 0, repliesLeft: 0 }),
+    }),
+  });
+  assert.deepEqual(block(never), {
+    pill: '邀请',
+    chip: '∞',
+    chipLabel: '长期有效',
+    big: '不限量',
+    unit: null,
+    daily: null,
+    fill: null,
+    meter: false,
+  });
+  never.handle.close();
+  const dated = open(t, {
+    quota: quotaView({
+      tier: { kind: 'unlimited', unlimited: true, plan: { kind: 'unlimited', expiresAt: Date.UTC(2027, 0, 20, 12) } },
+      modelChoice: choice({ metered: false, balance: 0, repliesLeft: 0 }),
+    }),
+  });
+  assert.equal(block(dated).chip, '2027-01-20');
+  assert.doesNotMatch(dated.text(), /约可聊|剩余/);
+});
+
+test('25a a guest: 体验中, the replies left as a number and a bar; 登录 and 注册 are the main buttons', (t) => {
+  const f = open(t, {
+    mode: 'guest',
+    nickname: null,
+    playerNumber: null,
+    emailMasked: null,
+    quota: trialQuotaView({ remaining: 3, offered: 5, endsAt: Date.UTC(2026, 9, 30, 8) }),
+    trialLine: '体验剩余 3 次',
+  });
+  assert.deepEqual(block(f), {
+    pill: '体验中',
+    chip: '10-30',
+    chipLabel: '到期 10-30',
+    big: '3',
+    unit: '次',
+    daily: null,
+    fill: '60%',
+    meter: true,
+  });
+  assert.doesNotMatch(f.text(), /约可聊|上限/);
+  // 登录 and 注册 sit last in the block, which is what the stylesheet lifts to the first row.
+  const last = f.sheet.querySelectorAll('.mi-pillbtn').map((b) => b.textContent);
+  assert.deepEqual(last.slice(-2), ['注册', '登录']);
+});
+
+test('25a a quota that cannot be read shows only the buttons', (t) => {
+  const f = open(t, { quota: null });
+  assert.equal(f.sheet.querySelector('.mi-pill'), null);
+  assert.equal(f.sheet.querySelector('.mi-big'), null);
+  assert.deepEqual(
+    f.sheet.querySelectorAll('.mi-pillbtn').map((b) => b.textContent),
+    ['消费记录', '输入邀请码'],
+  );
 });

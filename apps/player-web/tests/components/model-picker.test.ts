@@ -1,3 +1,6 @@
+// Part 25a (named exceptions, all in the model sheet): a row says "{n} 点/条" (no 约), the confirm sentence is "之后用 {model} · {n} 点/条
+// （语音 +N）。记忆不变。" (unmetered: "之后用 {model}。记忆不变。"), the buttons are 取消 / 换 and success says "已换成 {model}". The chat ⋯ menu's
+// "切换回复模型 · 约 N 点/条" is unchanged.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LiveBinding } from '../../src/features/prototype/provider-binding.ts';
@@ -72,25 +75,28 @@ test('setModel is one POST with the CSRF token and returns the new state', async
 
 test('the words: name, one line of character, 约 N 点/条, 语音 +2, the confirm sentence and the balance line', (t) => {
   const doc = installFakeDom(t);
-  openModelPicker({ info, api: { setModel: async () => info }, onChanged: () => {}, mount: doc.body as never });
+  openModelPicker({
+    characterName: '瓜瓜',
+    info,
+    api: { setModel: async () => info },
+    onChanged: () => {},
+    mount: doc.body as never,
+  });
   const cards = doc.body.querySelectorAll('.mp-card');
   assert.equal(cards.length, 3);
   const text = (card: FakeElement) => card.textContent;
   assert.match(text(cards[0]!), /DeepSeek/);
   assert.match(text(cards[0]!), /当前/);
   assert.match(text(cards[1]!), /Gemini 3\.8 Flash/);
-  assert.match(text(cards[1]!), /约 20 点\/条/);
+  assert.match(text(cards[1]!), /20 点\/条/);
   assert.match(text(cards[2]!), /Grok 4\.7/);
-  assert.match(text(cards[2]!), /约 25 点\/条/);
+  assert.match(text(cards[2]!), /25 点\/条/);
   assert.match(text(cards[2]!), /语音 \+2/);
   for (const model of Object.values(PLAYER_MODELS))
     assert.ok(model.blurb.length > 0 && [...model.blurb].length <= 16, 'one short line');
   assert.equal(doc.body.querySelector('.mp-balance')!.textContent, '剩余 100 点 · 约可聊 8 条');
   assert.equal(modelFooterNote(info), '剩余 100 点 · 约可聊 8 条');
-  assert.equal(
-    modelCopy.confirm('Grok 4.7', 25, 2),
-    '之后的消息用 Grok 4.7，约 25 点/条（语音 +2）。记忆和聊天记录不变。',
-  );
+  assert.equal(modelCopy.confirm('Grok 4.7', 25, 2), '之后用 Grok 4.7 · 25 点/条（语音 +2）。记忆不变。');
 });
 
 test('switching asks first: cancel changes nothing; confirm switches once, reports the new state and closes', async (t) => {
@@ -99,6 +105,7 @@ test('switching asks first: cancel changes nothing; confirm switches once, repor
   const changed: ModelChoiceInfo[] = [];
   const said: string[] = [];
   const picker = openModelPicker({
+    characterName: '瓜瓜',
     info,
     api: {
       setModel: async (id) => {
@@ -112,10 +119,7 @@ test('switching asks first: cancel changes nothing; confirm switches once, repor
   });
   const grok = () => doc.body.querySelector('[data-model="xai"]')!;
   grok().click();
-  assert.equal(
-    doc.body.querySelector('.mp-confirm')!.textContent,
-    '之后的消息用 Grok 4.7，约 25 点/条（语音 +2）。记忆和聊天记录不变。',
-  );
+  assert.equal(doc.body.querySelector('.mp-confirm')!.textContent, '之后用 Grok 4.7 · 25 点/条（语音 +2）。记忆不变。');
   assert.deepEqual(calls, [], 'nothing is sent before the confirmation');
   doc.body
     .querySelectorAll('button')
@@ -129,12 +133,12 @@ test('switching asks first: cancel changes nothing; confirm switches once, repor
   grok().click();
   doc.body
     .querySelectorAll('button')
-    .find((b) => b.textContent === '确认切换')!
+    .find((b) => b.textContent === '换')!
     .click();
   await flush();
   assert.deepEqual(calls, ['xai']);
   assert.equal(changed[0]!.selected, 'xai');
-  assert.deepEqual(said, ['已切换为 Grok 4.7']);
+  assert.deepEqual(said, ['已换成 Grok 4.7']);
   assert.equal(doc.body.querySelector('.mp-sheet'), null, 'closed');
   picker.close();
 });
@@ -143,6 +147,7 @@ test('a failed switch keeps the sheet open, says so, and can be retried', async 
   const doc = installFakeDom(t);
   let fail = true;
   openModelPicker({
+    characterName: '瓜瓜',
     info,
     api: {
       setModel: async (id) => {
@@ -154,7 +159,7 @@ test('a failed switch keeps the sheet open, says so, and can be retried', async 
     mount: doc.body as never,
   });
   doc.body.querySelector('[data-model="gemini"]')!.click();
-  const sure = () => doc.body.querySelectorAll('button').find((b) => b.textContent === '确认切换')!;
+  const sure = () => doc.body.querySelectorAll('button').find((b) => b.textContent === '换')!;
   sure().click();
   await flush();
   assert.equal(doc.body.querySelector('.acct-status')!.textContent, '没能切换，稍后再试试');
@@ -189,7 +194,13 @@ test('the backup note is plain text and names the models; an invited player is t
 
 test('the picker shows a speed hint per model from one constant', (t) => {
   const doc = installFakeDom(t);
-  openModelPicker({ info, api: { setModel: async () => info }, onChanged: () => {}, mount: doc.body as never });
+  openModelPicker({
+    characterName: '瓜瓜',
+    info,
+    api: { setModel: async () => info },
+    onChanged: () => {},
+    mount: doc.body as never,
+  });
   const speeds = doc.body.querySelectorAll('.mp-card').map((card) => card.querySelector('.mp-speed')!.textContent);
   assert.deepEqual(speeds, ['较快', '较快', '较慢，约20秒']);
   assert.deepEqual(
@@ -368,11 +379,17 @@ test('page hook 3: a reply written by the backup model says so, once; an ordinar
 test('an invited player picks a model without prices or balance: nothing is charged', (t) => {
   const doc = installFakeDom(t);
   const free: ModelChoiceInfo = { ...info, metered: false, balance: 0, repliesLeft: 0 };
-  openModelPicker({ info: free, api: { setModel: async () => free }, onChanged: () => {}, mount: doc.body as never });
+  openModelPicker({
+    characterName: '瓜瓜',
+    info: free,
+    api: { setModel: async () => free },
+    onChanged: () => {},
+    mount: doc.body as never,
+  });
   assert.equal(doc.body.querySelectorAll('.mp-prices').length, 0);
   assert.equal(doc.body.querySelector('.mp-balance')!.textContent, '');
   doc.body.querySelector('[data-model="xai"]')!.click();
-  assert.equal(doc.body.querySelector('.mp-confirm')!.textContent, '之后的消息用 Grok 4.7。记忆和聊天记录不变。');
+  assert.equal(doc.body.querySelector('.mp-confirm')!.textContent, '之后用 Grok 4.7。记忆不变。');
   assert.equal(modelCopy.menuSub(free), 'DeepSeek');
 });
 

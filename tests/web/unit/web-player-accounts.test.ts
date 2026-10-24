@@ -11,7 +11,7 @@ import {
 } from '../../../apps/server/identity/web-player-accounts.ts';
 import { routeWebPlayerAccounts } from '../../../apps/server/identity/web-player-routes.ts';
 import { maskEmail, normalizeEmail } from '../../../apps/server/identity/email-address.ts';
-import { playerMailText } from '../../../apps/server/cloudflare/web-player-mail.ts';
+import { cloudPlayerMailer, playerMailText } from '../../../apps/server/cloudflare/web-player-mail.ts';
 import { requireWebContent } from '../../../apps/server/admission/web-retention.ts';
 import { purgePlayerLogins, playerLoginsRemain } from '../../../apps/server/identity/web-player-purge.ts';
 import { webProviderHTTPError } from '../../../apps/server/platform/web-provider-http-error.ts';
@@ -1367,4 +1367,22 @@ test('a signed-up guest after the trial: reads, logs in and edits the nickname; 
     f.store.get<{ kind: string }>('SELECT kind FROM web_principals WHERE id=?', principal.principalId)?.kind,
     'guest',
   );
+});
+
+// Part 25a: the product is called Burbur in the player's emails (subject and text); no old name is left in them.
+test('player emails name the product Burbur in the subject and the text', async () => {
+  const sent: { subject: string; text: string }[] = [];
+  const mailer = cloudPlayerMailer(
+    { send: async (message: { subject: string; text: string }) => (sent.push(message), { messageId: 'm' }) } as never,
+    'no-reply@example.com',
+    () => {},
+  );
+  await mailer.send({ to: 'p@example.com', purpose: 'signup', kind: 'code', code: '123456' } as never);
+  await mailer.send({ to: 'p@example.com', purpose: 'reset', kind: 'code', code: '123456' } as never);
+  await mailer.send({ to: 'p@example.com', purpose: 'signup', kind: 'registered', code: null } as never);
+  assert.deepEqual(
+    sent.map((message) => message.subject),
+    ['Burbur · 注册验证码', 'Burbur · 重置密码验证码', 'Burbur · 你已注册'],
+  );
+  for (const message of sent) assert.doesNotMatch(message.subject + message.text, /FAKE|泡泡/);
 });

@@ -13,7 +13,7 @@ import { openBillingSheet } from '../account/billing-sheet.ts';
 import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
 import { accountCopy, openAccountSheet, type AccountSheetMode } from '../account/account-sheet.ts';
 import { inviteDialogHtml } from '../account/invite-dialog-html.ts';
-import { balanceLine, infoCopy, openMyInfo, tierView } from '../account/my-info.ts';
+import { balanceLine, infoCopy, openMyInfo, quotaView, tierView, trialQuotaView } from '../account/my-info.ts';
 import { mountReviewBanners } from './review-banner.ts';
 import { backupNote, modelCopy, modelFooterNote, modelMenuItem, openModelPicker } from './model-picker.ts';
 import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
@@ -214,7 +214,7 @@ export class LiveBinding {
         mountChatGuide(more, head, () => (this.modelChoice ? guideCopy.withPicker : guideCopy.guest)),
       );
       mountChatMenu(more, head, () => {
-        const model = this.modelMenu();
+        const model = this.modelMenu(name, card.style.getPropertyValue('--accent'));
         return [
           ...model,
           {
@@ -230,6 +230,9 @@ export class LiveBinding {
                 mark: shell.mark(character.characterId),
                 color: card.style.getPropertyValue('--avatar-bg'),
                 ink: card.style.getPropertyValue('--avatar-ink'),
+                aura: ['--aura-1', '--aura-2', '--aura-3', '--accent'].map((name) =>
+                  card.style.getPropertyValue(name),
+                ) as unknown as [string, string, string, string],
                 say: (message) => shell.say(message),
               }),
           },
@@ -283,13 +286,15 @@ export class LiveBinding {
   }
 
   /** Part 21b: the model picker entry of the chat's ⋯ menu, only for a player who can choose a model (PLAYER_MODEL_CHOICE_ENABLED). */
-  private modelMenu() {
+  private modelMenu(characterName: string, accent: string) {
     const info = this.account.signedIn ? this.account.modelChoice : undefined;
     if (!info) return [];
     return [
       modelMenuItem(info, () =>
         openModelPicker({
           info,
+          characterName,
+          accent,
           api: this.api,
           say: (message) => this.shell?.say(message),
           onChanged: (next) => {
@@ -349,7 +354,17 @@ export class LiveBinding {
       nickname: account?.nickname ?? null,
       playerNumber: account?.playerNumber ?? null,
       emailMasked: account?.emailMasked ?? null,
-      tier: account && mode !== 'guest' ? tierView({ tier: this.tier, modelChoice: this.modelChoice }) : null,
+      quota:
+        mode === 'guest'
+          ? trialQuotaView({
+              remaining: this.view.access.remainingReplies,
+              // The page is not told how many replies the trial started with: it is 5 while the free tier is on, 3 otherwise.
+              offered: this.freeTierEnabled ? 5 : 3,
+              endsAt: this.view.access.trialExpiresAt,
+            })
+          : account
+            ? quotaView({ tier: this.tier, modelChoice: this.modelChoice })
+            : null,
       trialLine: mode === 'guest' ? this.headNote() : null,
       signupOpen: this.signupOpen,
       deleteEnabled: this.deleteEnabled,

@@ -4,6 +4,7 @@
  * the same bootstrap a cookieless first visit uses.
  */
 import { ProviderApiError, type AccountInfo, type ProviderApi } from '../../services/provider-api.ts';
+import { handElement } from '../brand/wordmark.ts';
 import { h } from '../cocreation/h.ts';
 import { accountCopy, openAccountSheet, type AccountApi, type AccountSheetMode, type Timers } from './account-sheet.ts';
 
@@ -65,12 +66,19 @@ export function renderSignedOut(
   const panel = h(
     'main',
     { class: 'provider-start-error signed-out-page' },
-    h('h1', { text: signedOutCopy.title }),
+    // Part 25a: the wordmark with the logo trail, and an empty line under it (no tagline).
+    h(
+      'div',
+      { class: 'so-brand' },
+      handElement('burbur', { size: 64, weight: 2, logo: true, label: 'Burbur', className: 'hand so-hand' }),
+      h('span', { class: 'so-blank', attrs: { 'aria-hidden': 'true' } }),
+    ),
+    h('h1', { class: 'sr-only', text: signedOutCopy.title }),
     options.erased ? h('p', { class: 'signed-out-erased', text: options.erased, attrs: { role: 'status' } }) : null,
     options.expired
       ? h('p', { class: 'signed-out-expired', text: signedOutCopy.expired, attrs: { role: 'status' } })
       : null,
-    h('p', { text: signedOutCopy.detail }),
+    h('p', { class: 'sr-only', text: signedOutCopy.detail }),
     h('div', { class: 'signed-out-actions' }, loginButton, signupButton, guestButton),
     notice,
     legalLinks,

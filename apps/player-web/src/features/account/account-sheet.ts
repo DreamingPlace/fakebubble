@@ -9,6 +9,7 @@ import {
   type EmailPurpose,
   type ProviderApi,
 } from '../../services/provider-api.ts';
+import { handElement } from '../brand/wordmark.ts';
 import { h } from '../cocreation/h.ts';
 
 export type AccountApi = Pick<
@@ -239,6 +240,15 @@ export function openAccountSheet(options: AccountSheetOptions) {
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'acct-title' },
     },
     h('header', { class: 'acct-head' }, title, closeButton),
+    // Part 25a: login and signup carry the wordmark (with the logo trail) and an empty line under it, as the board's page does.
+    flow || mode === 'login'
+      ? h(
+          'div',
+          { class: 'acct-brand' },
+          handElement('burbur', { size: 48, weight: 2, logo: true, label: 'Burbur', className: 'hand acct-hand' }),
+          h('span', { class: 'so-blank', attrs: { 'aria-hidden': 'true' } }),
+        )
+      : null,
     body,
     status,
   );
@@ -616,6 +626,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
         say(accountCopy.errors.PLAYER_LOGIN_INVALID!);
         return;
       }
+      loginPassword.field.classList.remove('has-error');
       void run(
         submit,
         accountCopy.working,
@@ -627,6 +638,9 @@ export function openAccountSheet(options: AccountSheetOptions) {
         },
         (error) => {
           const message = loginError(error);
+          // Part 25a: a wrong password outlines the password field (the board's red line); the message stays as it was.
+          if (error instanceof ProviderApiError && error.code === 'PLAYER_PASSWORD_WRONG')
+            loginPassword.field.classList.add('has-error');
           // An unregistered address is offered the way to sign up, without leaving a second sheet open.
           if (
             error instanceof ProviderApiError &&
