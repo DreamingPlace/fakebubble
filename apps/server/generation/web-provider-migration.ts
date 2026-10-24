@@ -330,3 +330,27 @@ export function migrateWebProviderCast(store: Store) {
     store.db.exec('PRAGMA user_version = 129');
   });
 }
+
+/** Node-only 129→130: statistics extras - chat users per character, hourly counts, user types, spend by user type (130_stats_extras.sql). */
+export function migrateWebProviderStatsExtras(store: Store, now = Date.now()) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 129 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_stats_daily'"),
+      'WEB_PROVIDER_STATS_EXTRAS_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/130_stats_extras.sql', import.meta.url), 'utf8'));
+    // The day the per-type spend counters started (the spend table shows — before it); nothing is backfilled.
+    store.run(
+      "INSERT INTO web_stats_daily(day,metric,character_id,model,value) VALUES (?,'extras_started','','',1)",
+      new Date(now).toISOString().slice(0, 10),
+    );
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 130');
+  });
+}

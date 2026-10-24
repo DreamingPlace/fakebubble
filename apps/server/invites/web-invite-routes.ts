@@ -78,7 +78,12 @@ export function routeWebInvite(
     const auth = admin(req),
       action = req.path.slice(batchBase.length);
     if (action === 'batch-create') {
-      const body = object(req.body, ['requestId', 'name', 'count', 'tier', 'durationDays', 'redeemBy']);
+      // Part 22d: `test` (测试组) is optional; the 22a body without it stays valid.
+      const keys = ['requestId', 'name', 'count', 'tier', 'durationDays', 'redeemBy'];
+      const body = object(
+        req.body,
+        (req.body as { test?: unknown } | null)?.test === undefined ? keys : [...keys, 'test'],
+      );
       const tier = object(
         body.tier,
         (body.tier as { kind?: string } | null)?.kind === 'daily_refill' ? ['kind', 'dailyAmount', 'cap'] : ['kind'],
@@ -90,6 +95,7 @@ export function routeWebInvite(
         tier: tier as never,
         durationDays: body.durationDays as number | null,
         redeemBy: body.redeemBy as number | null,
+        ...(body.test === undefined ? {} : { test: body.test as boolean }),
       });
       return { status: result.duplicate ? 200 : 201, body: result };
     }

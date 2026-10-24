@@ -87,6 +87,9 @@ export async function routeWebAccountAdmin(
     if (action === 'stats/players') return { status: 200, body: system.playerStats(actor, req.body) };
     if (action === 'stats/players-export') return { status: 200, body: system.exportPlayerStats(actor, req.body) };
     if (action === 'stats/costs') return { status: 200, body: system.costs(actor, req.body) };
+    // Part 22d: the data of 总览's chart and of the 消耗表 by user type (no page yet).
+    if (action === 'stats/chart') return { status: 200, body: system.chart(actor, req.body) };
+    if (action === 'stats/spend-by-type') return { status: 200, body: system.spendByType(actor, req.body) };
     if (action === 'stats/costs-export') return { status: 200, body: system.exportCosts(actor, req.body) };
     ensure(false, 'NOT_FOUND');
   }

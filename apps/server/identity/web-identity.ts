@@ -139,7 +139,7 @@ export class WebIdentity {
     ensure(
       [
         103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124,
-        125, 126, 127, 128, 129,
+        125, 126, 127, 128, 129, 130,
       ].includes(store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1),
       'WEB_IDENTITY_MIGRATION_REQUIRED',
     );

@@ -95,14 +95,16 @@ function fixture(t: TestContext, options: { characters?: boolean } = {}) {
 
 test('129 is the 54th and last step; steps 1–128 hash exactly as on main; the Node and Cloudflare ledgers agree', () => {
   const { inline, r2 } = expectedWebMigrations();
-  assert.equal(inline.length, 54);
-  assert.equal(r2.length, 54);
-  assert.equal(inline.at(-1)!.version, 129);
-  assert.equal(r2.at(-1)!.version, 129);
-  assert.equal(inline.at(-1)!.sha256, sha(sql129()), 'the ledger hash is the sha256 of the SQL file as written');
-  assert.equal(inline.at(-1)!.sha256, r2.at(-1)!.sha256, '129 is the same SQL on both authorities');
+  // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.length, 55);
+  assert.equal(r2.length, 55);
+  assert.equal(inline.at(-2)!.version, 129);
+  assert.equal(r2.at(-2)!.version, 129);
+  assert.equal(inline.at(-2)!.sha256, sha(sql129()), 'the ledger hash is the sha256 of the SQL file as written');
+  assert.equal(inline.at(-2)!.sha256, r2.at(-2)!.sha256, '129 is the same SQL on both authorities');
   // Part 24a (named, pinned): changing the file is a new migration. Recorded when 129 was written.
-  assert.equal(inline.at(-1)!.sha256, '061602aea27da734c9c279dfea8de748520f3d45b0afcfeba1ea6333ce992148');
+  // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.at(-2)!.sha256, '061602aea27da734c9c279dfea8de748520f3d45b0afcfeba1ea6333ce992148');
   // main's 53 steps (3f57e04), both lists, as one digest: nothing in 1-128 moved
   assert.equal(
     sha(JSON.stringify(inline.slice(0, 53))),

@@ -86,6 +86,7 @@ export class WebInviteActions {
       tier: BatchTierInput;
       durationDays: number | null;
       redeemBy: number | null;
+      test?: boolean;
     },
   ) {
     return this.tiers.createBatch({ ...body, adminSessionId: this.admin(adminCookie, csrf, origin) });
