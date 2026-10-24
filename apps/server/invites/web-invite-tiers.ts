@@ -62,8 +62,8 @@ export type BatchView = {
   cap: number | null;
   durationDays: number | null;
   redeemBy: number | null;
-  /** Part 22d: the batch is the test group. */
-  test: boolean;
+  /** Part 22d: present (true) only on a test batch (测试组); absent otherwise. */
+  test?: true;
   createdAt: number;
   codes: number;
   redeemed: number;
@@ -540,7 +540,7 @@ export class WebInviteTiers {
         cap: row.total_cap,
         durationDays: row.duration_days,
         redeemBy: row.redeem_by,
-        test: row.test === 1,
+        ...(row.test === 1 ? { test: true as const } : {}),
         createdAt: row.created_at,
         codes: row.codes,
         redeemed: row.redeemed,

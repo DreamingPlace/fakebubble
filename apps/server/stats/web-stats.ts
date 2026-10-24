@@ -134,7 +134,12 @@ export class WebStats {
    * Part 22d: the user type of an operation, frozen at admission with the operation row (the spend split reads it later, when the
    * provider call is charged). `flags` is the store that answers the tier question (model-choice flags live on it).
    */
-  freezeUserType(flags: Pick<BusinessStore, 'get' | 'all'> & ModelFlags, operationId: string, principalId: string, now: number) {
+  freezeUserType(
+    flags: Pick<BusinessStore, 'get' | 'all'> & ModelFlags,
+    operationId: string,
+    principalId: string,
+    now: number,
+  ) {
     if (!statsExtrasExist(this.store)) return;
     this.store.run(
       'INSERT INTO web_operation_user_types(operation_id,user_type,created_at) VALUES (?,?,?) ON CONFLICT DO NOTHING',

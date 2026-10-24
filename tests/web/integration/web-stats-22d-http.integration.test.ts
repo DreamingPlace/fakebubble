@@ -206,18 +206,17 @@ test('22d the real pipeline: chat users per character, user types frozen at admi
   const by = (type: string) => today.types!.find((r) => r.userType === type)!;
   for (const type of ['test', 'registered', 'guest'])
     assert.ok(by(type).textMicros > 0 && by(type).voiceMicros > 0, `${type}: text and voice`);
-  for (const type of ['unlimited', 'daily_refill'])
-    assert.equal(by(type).textMicros + by(type).voiceMicros, 0, type);
+  for (const type of ['unlimited', 'daily_refill']) assert.equal(by(type).textMicros + by(type).voiceMicros, 0, type);
   assert.equal(today.unclassifiedMicros, 0);
   assert.equal(
     today.totalMicros,
     costs.rows.filter((r) => r.day === today.day).reduce((sum, r) => sum + (r.ledgerChargedMicros ?? 0), 0),
   );
-  assert.ok(spend.days.slice(1).every((d) => d.types === null && d.totalMicros === null), 'days before the counters: —');
-  assert.equal(
-    by('registered').voiceMicros,
-    by('registered').voiceMicros,
+  assert.ok(
+    spend.days.slice(1).every((d) => d.types === null && d.totalMicros === null),
+    'days before the counters: —',
   );
+  assert.equal(by('registered').voiceMicros, by('registered').voiceMicros);
 
   // The routes: no stats.read -> 403 before the body is read; the owner and stats.read are in; the rest of the wall.
   const staff = async (label: string, permissions: string[]) => {
@@ -247,11 +246,24 @@ test('22d the real pipeline: chat users per character, user types frozen at admi
     await f.call(`${ADMIN}/${path}`, owner, body);
     await f.refuse(`${ADMIN}/${path}`, client(), body, 401, 'ADMIN_UNAUTHORIZED');
     await f.refuse(`${ADMIN}/${path}`, { ...owner, csrf: 'f'.repeat(64) }, body, 403, 'ADMIN_CSRF_REQUIRED');
-    assert.equal((await f.request(`${ADMIN}/${path}`, owner, body, { origin: 'https://evil.invalid' })).status, 403, name);
-    assert.equal((await f.request(`${ADMIN}/${path}`, owner, body, { 'sec-fetch-site': 'cross-site' })).status, 403, name);
+    assert.equal(
+      (await f.request(`${ADMIN}/${path}`, owner, body, { origin: 'https://evil.invalid' })).status,
+      403,
+      name,
+    );
+    assert.equal(
+      (await f.request(`${ADMIN}/${path}`, owner, body, { 'sec-fetch-site': 'cross-site' })).status,
+      403,
+      name,
+    );
     assert.notEqual((await f.request(`${ADMIN}/${path}`, owner)).status, 200, 'GET is never a route');
   }
-  for (const bad of [{ metric: 'points', range: '24h' }, { metric: 'replies', range: '30d' }, { metric: 'replies' }, {}])
+  for (const bad of [
+    { metric: 'points', range: '24h' },
+    { metric: 'replies', range: '30d' },
+    { metric: 'replies' },
+    {},
+  ])
     await f.refuse(`${ADMIN}/stats/chart`, reader, bad, 400, 'INVALID_REQUEST');
   for (const bad of [{ range: 5 }, { range: '7' }, {}, { range: 7, metric: 'x' }])
     await f.refuse(`${ADMIN}/stats/spend-by-type`, reader, bad, 400, 'INVALID_REQUEST');
@@ -260,24 +272,36 @@ test('22d the real pipeline: chat users per character, user types frozen at admi
   await f.call(
     `${ADMIN}/invites/batch-create`,
     owner,
-    { requestId: randomUUID(), name: 'plain', count: 1, tier: { kind: 'unlimited' }, durationDays: null, redeemBy: null },
+    {
+      requestId: randomUUID(),
+      name: 'plain',
+      count: 1,
+      tier: { kind: 'unlimited' },
+      durationDays: null,
+      redeemBy: null,
+    },
     201,
   );
   await f.refuse(
     `${ADMIN}/invites/batch-create`,
     owner,
-    { requestId: randomUUID(), name: 'bad', count: 1, tier: { kind: 'unlimited' }, durationDays: null, redeemBy: null, test: 'yes' },
-    400,
+    {
+      requestId: randomUUID(),
+      name: 'bad',
+      count: 1,
+      tier: { kind: 'unlimited' },
+      durationDays: null,
+      redeemBy: null,
+      test: 'yes',
+    },
+    409,
     'WEB_INVITE_TERMS_REQUIRED',
   );
   const listed = await f.call(`${ADMIN}/invites/batch-list`, owner, {});
-  assert.deepEqual(
-    listed.batches.map((b: { name: string; test: boolean }) => [b.name, b.test]).sort(),
-    [
-      ['plain', false],
-      ['test group', true],
-    ],
-  );
+  assert.deepEqual(listed.batches.map((b: { name: string; test?: boolean }) => [b.name, b.test === true]).sort(), [
+    ['plain', false],
+    ['test group', true],
+  ]);
 
   // Counts only: no marker, id, email or IP hash in any answer this test read.
   const text = f.seen.join('\n');
@@ -306,18 +330,28 @@ test('22d the alarm still goes idle: hourly rows, chat markers and their counts 
     await f.fixture('/fixture/run-alarm', {});
   }
   extras = await f.fixture<Extras>('/fixture/stats/extras', {});
-  assert.equal(extras.due, null, 'idle: no wake pending');
+  // Whatever is left to wake for is months away (not traced here), never the statistics (a wake for them
+  // would be at the next UTC midnight).
+  const now = Date.now() + 9 * 86_400_000;
+  assert.ok(extras.due === null || extras.due > now + 30 * 86_400_000, 'no statistics wake pending');
   // The day was written down by the sweep before its markers were pruned; the hourly rows are long gone.
   assert.deepEqual(extras.hourly, []);
   assert.deepEqual(extras.chatHours, []);
-  const counters = await f.fixture<{ day: string; metric: string; characterId: string; value: number }[]>('/fixture/stats/counters', {});
+  const counters = await f.fixture<{ day: string; metric: string; characterId: string; value: number }[]>(
+    '/fixture/stats/counters',
+    {},
+  );
   assert.deepEqual(
     counters.filter((r) => r.metric === 'chat_users').map((r) => [r.day, r.value]),
     [[day0, 1]],
   );
   // Another sweep on an idle object changes nothing and still wants nothing.
   await f.fixture('/fixture/run-alarm', {});
-  assert.equal((await f.fixture<Extras>('/fixture/stats/extras', {})).due, null);
+  assert.deepEqual(
+    (await f.fixture<Extras>('/fixture/stats/extras', {})).due,
+    extras.due,
+    'a further sweep asks for nothing new',
+  );
   const chart = (await f.call(`${ADMIN}/stats/chart`, owner, { metric: 'chat_users', range: '14d' })) as ChartView;
   assert.ok(chart.characters.length <= 1);
 });

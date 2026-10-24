@@ -80,7 +80,10 @@ export function routeWebInvite(
     if (action === 'batch-create') {
       // Part 22d: `test` (测试组) is optional; the 22a body without it stays valid.
       const keys = ['requestId', 'name', 'count', 'tier', 'durationDays', 'redeemBy'];
-      const body = object(req.body, (req.body as { test?: unknown } | null)?.test === undefined ? keys : [...keys, 'test']);
+      const body = object(
+        req.body,
+        (req.body as { test?: unknown } | null)?.test === undefined ? keys : [...keys, 'test'],
+      );
       const tier = object(
         body.tier,
         (body.tier as { kind?: string } | null)?.kind === 'daily_refill' ? ['kind', 'dailyAmount', 'cap'] : ['kind'],

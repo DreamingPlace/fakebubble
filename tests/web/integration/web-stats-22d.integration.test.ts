@@ -27,10 +27,8 @@ const DRAFT = 'submit_dialogue_draft';
 const utc = (at: number) => new Date(at).toISOString().slice(0, 10);
 const sql130 = () =>
   readFileSync(new URL('../../../apps/server/web-migrations/130_stats_extras.sql', import.meta.url), 'utf8');
-const answer =
-  () =>
-  (call: FetchCall, _n: number, request: Parameters<typeof draftEnvelope>[0]) =>
-    Response.json(call.tool === DRAFT ? draftEnvelope(request) : acceptedAuditEnvelope(request));
+const answer = () => (call: FetchCall, _n: number, request: Parameters<typeof draftEnvelope>[0]) =>
+  Response.json(call.tool === DRAFT ? draftEnvelope(request) : acceptedAuditEnvelope(request));
 /** modelFixture is a schema-123 store; the steps after it are what a deployment applied one by one, 128, 129 and 130 last. */
 const up130 = (store: Parameters<typeof migrateWebProviderStats>[0], now = NOW) => {
   migrateWebProviderModelSettings(store);
@@ -70,7 +68,9 @@ test('130 is its own step: same SQL on both authorities, 55 steps, 1-129 unchang
   assert.equal(f.store.get('PRAGMA foreign_key_check'), undefined);
   assert.deepEqual(
     f.store
-      .all<{ day: string; metric: string }>("SELECT day,metric FROM web_stats_daily WHERE metric LIKE '%started' ORDER BY metric")
+      .all<{ day: string; metric: string }>(
+        "SELECT day,metric FROM web_stats_daily WHERE metric LIKE '%started' ORDER BY metric",
+      )
       .map((r) => [r.day, r.metric]),
     [
       [utc(T0), 'extras_started'],
@@ -91,12 +91,20 @@ test('chat users per character: a player chatting with two characters counts onc
     [a, Y, 'a2'],
     [a, X, 'a3'], // the same player again: still one
     [b, X, 'b1'],
-  ] as const) f.finish(f.admit(who.principalId, id, 'a', character).operationId, 'published');
+  ] as const)
+    f.finish(f.admit(who.principalId, id, 'a', character).operationId, 'published');
   f.finish(f.admit(g.principalId, 'g1', 'b', Y).operationId, 'published');
 
   const key = Buffer.from(hkdfSync('sha256', STATS_SEAL_KEY, Buffer.alloc(0), 'stats-active-v1', 32));
   const chatMarker = (period: string, character: string, principalId: string) =>
-    createHmac('sha256', key).update('chat\0').update(period).update('\0').update(character).update('\0').update(principalId).digest('hex');
+    createHmac('sha256', key)
+      .update('chat\0')
+      .update(period)
+      .update('\0')
+      .update(character)
+      .update('\0')
+      .update(principalId)
+      .digest('hex');
   const day = utc(T0);
   assert.deepEqual(
     f.store
@@ -115,10 +123,7 @@ test('chat users per character: a player chatting with two characters counts onc
   // Today is read from the markers: X 2 (a, b), Y 2 (a, guest g); the total counts a once: 3 players.
   const today = readChart(f.store, T0, 'chat_users', '7d');
   assert.equal(last(today.total), 3);
-  assert.deepEqual(
-    today.characters.map((c) => last(c.values)).sort(),
-    [2, 2],
-  );
+  assert.deepEqual(today.characters.map((c) => last(c.values)).sort(), [2, 2]);
   assert.equal(today.bucket, 'day');
   assert.equal(today.buckets.length, 7);
   assert.equal(last(today.buckets), day);
@@ -132,7 +137,11 @@ test('chat users per character: a player chatting with two characters counts onc
   f.finish(f.admit(a.principalId, 'a4', 'a', Y).operationId, 'published');
   f.stats!.maintain(f.clock());
   assert.deepEqual(
-    f.store.all<{ day: string; character_id: string; value: number }>("SELECT day,character_id,value FROM web_stats_daily WHERE metric='chat_users' ORDER BY character_id").map((r) => `${r.day}|${r.character_id}|${r.value}`),
+    f.store
+      .all<{ day: string; character_id: string; value: number }>(
+        "SELECT day,character_id,value FROM web_stats_daily WHERE metric='chat_users' ORDER BY character_id",
+      )
+      .map((r) => `${r.day}|${r.character_id}|${r.value}`),
     [`${day}|${X}|2`, `${day}|${Y}|2`],
   );
   const closed = readChart(f.store, f.clock(), 'chat_users', '7d');
@@ -146,7 +155,10 @@ test('chat users per character: a player chatting with two characters counts onc
   assert.equal(f.store.all('SELECT 1 FROM web_chat_active').length, 1, 'a marker of day X is kept through X + 35');
   const later = readChart(f.store, T0 + 36 * DAY, 'chat_users', '14d');
   assert.equal(later.buckets.includes(day), false, 'the chart window moved on');
-  assert.equal(f.store.get<{ n: number }>("SELECT sum(value) n FROM web_stats_daily WHERE metric='chat_users' AND day=?", day)!.n, 4);
+  assert.equal(
+    f.store.get<{ n: number }>("SELECT sum(value) n FROM web_stats_daily WHERE metric='chat_users' AND day=?", day)!.n,
+    4,
+  );
 });
 
 test('hourly rows: replies by the admission hour, chat users in total and per character; 48 hours, pruned on the sweep; the sum of a day is its daily row', (t) => {
@@ -159,7 +171,8 @@ test('hourly rows: replies by the admission hour, chat users in total and per ch
     [a, X, 'a1'],
     [a, Y, 'a2'],
     [b, X, 'b1'],
-  ] as const) f.finish(f.admit(who.principalId, id, 'a', character).operationId, 'published');
+  ] as const)
+    f.finish(f.admit(who.principalId, id, 'a', character).operationId, 'published');
   f.advance(2 * HOUR);
   f.finish(f.admit(a.principalId, 'a3', 'a', X).operationId, 'failed');
   f.finish(f.admit(b.principalId, 'b2', 'a', X).operationId, 'published');
@@ -174,17 +187,14 @@ test('hourly rows: replies by the admission hour, chat users in total and per ch
     h10 = new Date(T0 + 2 * HOUR).toISOString().slice(0, 13);
   assert.deepEqual(hours('reply_published'), [`${h8}|${X}|2`, `${h8}|${Y}|1`, `${h10}|${X}|1`]);
   assert.deepEqual(hours('reply_failed'), [`${h10}|${X}|1`]);
-  assert.deepEqual(hours('chat_users'), [
-    `${h8}||2`,
-    `${h8}|${X}|2`,
-    `${h8}|${Y}|1`,
-    `${h10}||2`,
-    `${h10}|${X}|2`,
-  ]);
+  assert.deepEqual(hours('chat_users'), [`${h8}||2`, `${h8}|${X}|2`, `${h8}|${Y}|1`, `${h10}||2`, `${h10}|${X}|2`]);
   // A replay of a final row adds nothing (the same once-only condition as the daily counters).
   f.store.run("UPDATE web_operations SET status='published',stage_version=stage_version+1 WHERE status='published'");
   assert.equal(hours('reply_published').length, 3);
-  assert.deepEqual(hours('reply_published').map((l) => l.split('|')[2]), ['2', '1', '1']);
+  assert.deepEqual(
+    hours('reply_published').map((l) => l.split('|')[2]),
+    ['2', '1', '1'],
+  );
   // The 24 hours of the day add up to the day's daily row, per character.
   assert.deepEqual(
     f.store
@@ -213,7 +223,11 @@ test('hourly rows: replies by the admission hour, chat users in total and per ch
   assert.equal(hours('reply_published').length, 3);
   f.stats!.maintain(T0 + 50 * HOUR); // the 08:00 rows are 50 hours old, the 10:00 ones 48
   assert.deepEqual(hours('reply_published'), [`${h10}|${X}|1`]);
-  assert.equal(f.store.all('SELECT 1 FROM web_chat_active_hourly').length, 4, 'its markers go with the rows (a, b: X and the total)');
+  assert.equal(
+    f.store.all('SELECT 1 FROM web_chat_active_hourly').length,
+    4,
+    'its markers go with the rows (a, b: X and the total)',
+  );
   f.stats!.maintain(T0 + 51 * HOUR);
   assert.deepEqual(hours('reply_published'), []);
   assert.deepEqual(hours('chat_users'), []);
@@ -244,8 +258,10 @@ test('the alarm can go idle: chat markers and hourly rows never ask for a wake, 
 test('user type: first match wins (test, unlimited, daily refill, registered, guest), frozen at admission', (t) => {
   const f = tiersFixture(t, { stats: true, extras: true });
   const typeOf = (operationId: string) =>
-    f.store.get<{ user_type: string }>('SELECT user_type FROM web_operation_user_types WHERE operation_id=?', operationId)
-      ?.user_type;
+    f.store.get<{ user_type: string }>(
+      'SELECT user_type FROM web_operation_user_types WHERE operation_id=?',
+      operationId,
+    )?.user_type;
   const guest = f.player('guest');
   assert.equal(typeOf(f.admit(guest.principalId, 'g1').operationId), 'guest');
   const reg = f.player('reg', { signedUp: true });
@@ -286,7 +302,10 @@ test('user type: first match wins (test, unlimited, daily refill, registered, gu
   // 管理员 is not a type: the schema cannot hold one.
   assert.throws(
     () =>
-      f.store.run("INSERT INTO web_operation_user_types(operation_id,user_type,created_at) VALUES (?,'admin',0)", first),
+      f.store.run(
+        "INSERT INTO web_operation_user_types(operation_id,user_type,created_at) VALUES (?,'admin',0)",
+        first,
+      ),
     /CHECK|UNIQUE|constraint/i,
   );
 });
@@ -296,13 +315,17 @@ test('the test flag is set at creation only: default off, existing batches are n
   const old = f.create(f.owner, { name: 'before 130' }); // created on schema 128
   migrateWebProviderCast(f.store);
   migrateWebProviderStatsExtras(f.store, T0);
-  const flag = (id: string) => f.store.get<{ test: number }>('SELECT test FROM web_invite_batches WHERE id=?', id)!.test;
+  const flag = (id: string) =>
+    f.store.get<{ test: number }>('SELECT test FROM web_invite_batches WHERE id=?', id)!.test;
   assert.equal(flag(old.batchId), 0, 'a batch that exists before 130 is not a test batch');
   const normal = f.create(f.owner, { name: 'normal' });
   const marked = f.create(f.owner, { name: 'marked', test: true });
   assert.deepEqual([flag(normal.batchId), flag(marked.batchId)], [0, 1]);
   assert.deepEqual(
-    f.tiers.listBatches(f.sessionIdOf(f.owner)).batches.map((b) => [b.name, b.test]).sort(),
+    f.tiers
+      .listBatches(f.sessionIdOf(f.owner))
+      .batches.map((b) => [b.name, b.test === true])
+      .sort(),
     [
       ['before 130', false],
       ['marked', true],
@@ -311,7 +334,8 @@ test('the test flag is set at creation only: default off, existing batches are n
   );
   for (const to of [0, 1])
     assert.throws(
-      () => f.store.run('UPDATE web_invite_batches SET test=? WHERE id=?', to, to === 0 ? marked.batchId : normal.batchId),
+      () =>
+        f.store.run('UPDATE web_invite_batches SET test=? WHERE id=?', to, to === 0 ? marked.batchId : normal.batchId),
       /WEB_INVITE_BATCH_TEST_IMMUTABLE/,
     );
   assert.equal(flag(marked.batchId), 1);
@@ -320,28 +344,37 @@ test('the test flag is set at creation only: default off, existing batches are n
   f.create(f.owner, { ...again, test: true });
   assert.equal(f.create(f.owner, { ...again, test: true }).duplicate, true);
   assert.throws(() => f.create(f.owner, { ...again }), /IDEMPOTENCY_CONFLICT/);
-  assert.throws(() => f.create(f.owner, { ...again, requestId: 'request-bad', test: 'yes' as never }), /WEB_INVITE_TERMS_REQUIRED/);
+  assert.throws(
+    () => f.create(f.owner, { ...again, requestId: 'request-bad', test: 'yes' as never }),
+    /WEB_INVITE_TERMS_REQUIRED/,
+  );
 });
 
 const spendFixture = async (t: test.TestContext) => {
   const f = modelFixture(t, { chosen: 'deepseek', fetch: answer() });
   up130(f.store);
   // What admission wrote for this operation (the fixture inserts the operation itself).
-  f.store.run("INSERT INTO web_operation_user_types(operation_id,user_type,created_at) VALUES ('operation','registered',?)", NOW);
+  f.store.run(
+    "INSERT INTO web_operation_user_types(operation_id,user_type,created_at) VALUES ('operation','registered',?)",
+    NOW,
+  );
   await f.runText();
   await f.finishReply('operation');
   return f;
 };
 
-test('spend by user type: the ledger amount of every call lands in its user type and text / voice, and adds up to 22c\'s ledger column', async (t) => {
+test("spend by user type: the ledger amount of every call lands in its user type and text / voice, and adds up to 22c's ledger column", async (t) => {
   const f = await spendFixture(t);
   const spend = f.all<{ day: string; user_type: string; kind: string; calls: number; charged_micros: number }>(
     'SELECT day,user_type,kind,calls,charged_micros FROM web_stats_spend ORDER BY kind',
   );
-  assert.deepEqual(spend.map((r) => [r.day, r.user_type, r.kind]), [
-    [utc(NOW), 'registered', 'text'],
-    [utc(NOW), 'registered', 'voice'],
-  ]);
+  assert.deepEqual(
+    spend.map((r) => [r.day, r.user_type, r.kind]),
+    [
+      [utc(NOW), 'registered', 'text'],
+      [utc(NOW), 'registered', 'voice'],
+    ],
+  );
   const usage = (phases: string) =>
     f.get<{ n: number; c: number }>(
       `SELECT sum(ledger_charged_micros) n,sum(calls) c FROM web_provider_usage WHERE phase IN (${phases})`,
@@ -367,12 +400,18 @@ test('spend by user type: the ledger amount of every call lands in its user type
     ['test', 'unlimited', 'daily_refill', 'registered', 'guest'],
     'priority order',
   );
-  assert.deepEqual(today.types!.find((r) => r.userType === 'registered'), {
-    userType: 'registered',
-    textMicros: spend[0]!.charged_micros,
-    voiceMicros: spend[1]!.charged_micros,
-  });
-  assert.equal(today.types!.filter((r) => r.userType !== 'registered').every((r) => r.textMicros + r.voiceMicros === 0), true);
+  assert.deepEqual(
+    today.types!.find((r) => r.userType === 'registered'),
+    {
+      userType: 'registered',
+      textMicros: spend[0]!.charged_micros,
+      voiceMicros: spend[1]!.charged_micros,
+    },
+  );
+  assert.equal(
+    today.types!.filter((r) => r.userType !== 'registered').every((r) => r.textMicros + r.voiceMicros === 0),
+    true,
+  );
   assert.equal(today.totalMicros, spend[0]!.charged_micros + spend[1]!.charged_micros);
   // Days before the counters started show —, as in 22c; the totals only add the known days.
   assert.equal(view.days[1]!.types, null);
@@ -397,7 +436,10 @@ test('spend by user type: a call of an operation with no frozen type (admitted b
   const day = readSpend(f.store, NOW, 7).days[0]!;
   assert.ok(day.unclassifiedMicros! > 0);
   assert.equal(day.totalMicros, day.unclassifiedMicros);
-  assert.equal(day.types!.every((r) => r.textMicros + r.voiceMicros === 0), true);
+  assert.equal(
+    day.types!.every((r) => r.textMicros + r.voiceMicros === 0),
+    true,
+  );
 });
 
 test('permission gating: chart and spend-by-type need stats.read (the owner always), checked before the body; no id leaves', (t) => {
@@ -454,15 +496,24 @@ test('privacy: no column of a new table holds an id, an email or a hash of one; 
   const p = f.player('p', { signedUp: true });
   f.finish(f.admit(p.principalId, 'p1').operationId, 'published');
   const dump = JSON.stringify(
-    ['web_chat_active', 'web_chat_active_hourly', 'web_stats_hourly', 'web_stats_spend', 'web_operation_user_types'].map((table) =>
-      f.store.all(`SELECT * FROM ${table}`),
-    ),
+    [
+      'web_chat_active',
+      'web_chat_active_hourly',
+      'web_stats_hourly',
+      'web_stats_spend',
+      'web_operation_user_types',
+    ].map((table) => f.store.all(`SELECT * FROM ${table}`)),
   );
   for (const secret of [p.principalId, p.playerId, p.worldId, 'p@example.com', 'a'.repeat(64)])
     assert.equal(dump.includes(secret), false, secret);
-  for (const file of ['apps/server/stats/web-stats.ts', 'apps/server/stats/web-user-type.ts', 'apps/server/admin/web-stats-admin.ts'])
+  for (const file of [
+    'apps/server/stats/web-stats.ts',
+    'apps/server/stats/web-user-type.ts',
+    'apps/server/admin/web-stats-admin.ts',
+  ])
     assert.doesNotMatch(readFileSync(file, 'utf8'), /console\.|logger|report\(/, `${file} writes no log line`);
   // The only reads of the marker tables count them.
   const admin = readFileSync('apps/server/admin/web-stats-admin.ts', 'utf8');
-  for (const [, query] of admin.matchAll(/'(SELECT [^']*FROM web_chat_active[^']*)'/g)) assert.match(query!, /count\(\*\)/, query);
+  for (const [, query] of admin.matchAll(/'(SELECT [^']*FROM web_chat_active[^']*)'/g))
+    assert.match(query!, /count\(\*\)/, query);
 });

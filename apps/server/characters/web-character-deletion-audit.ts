@@ -88,6 +88,8 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
     // counters and timings keyed by operation, no content
     'web_operation_metrics',
     'web_attempt_rejections',
+    // Part 22d: the frozen user type of an operation: an operation id and an enum, no content
+    'web_operation_user_types',
   ]);
   if (!cleared)
     for (const name of [
