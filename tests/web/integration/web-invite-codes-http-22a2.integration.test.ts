@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { localRuntime } from '../../cloudflare/runtime.ts';
+import { csvCell, inviteCodesCsv } from '../../../apps/server/invites/web-invite-export.ts';
+import type { BatchCodeView } from '../../../apps/server/invites/web-invite-tiers.ts';
 
 const API = '/api/web/provider',
   origin = 'https://fixture.invalid';
@@ -171,7 +173,9 @@ test('22a2 old and new together over real HTTP: owner / creating administrator /
         assert.deepEqual([row.codeView, row.code], [want.view, want.code], `${viewer} sees the ${key} batch #${i + 1}`);
         // The CSV: the same cell, the same rule.
         assert.equal(table[i]![0], String(i + 1));
-        assert.equal(table[i]![1], want.text, `${viewer}'s CSV of the ${key} batch #${i + 1}`);
+        // Named fix of a flaky test (Part 26a fix): codes are random base64url, so one in 64 starts with '-' and the exporter writes
+        // it formula-safe (a leading TAB, then quoted). The expectation applies the exporter's own rule (csvCell), not the raw code.
+        assert.equal(table[i]![1], csvCell(want.text), `${viewer}'s CSV of the ${key} batch #${i + 1}`);
         // Redeemed vs unused.
         assert.equal(row.state, i === 0 ? 'redeemed' : 'unused');
         assert.equal(table[i]![2], i === 0 ? '已兑换' : '未使用');
@@ -262,4 +266,23 @@ test('22a2 old and new together over real HTTP: owner / creating administrator /
       .toString('hex'),
     'efbbbf',
   );
+});
+
+test('22a2 (named fix of a flaky test) a code that starts with "-" is exported formula-safe, every time', () => {
+  const row = (code: string, serial: number) =>
+    ({
+      serial,
+      code,
+      codeView: 'plain',
+      state: 'unused',
+      redeemedAt: null,
+      expiresAt: null,
+      playerNumber: null,
+    }) as unknown as BatchCodeView;
+  const csv = inviteCodesCsv([row('-abcDEF_123', 1), row('=cmd', 2), row('plainCode', 3)]);
+  const table = csvRows(csv);
+  assert.equal(table[0]![1], '"\t-abcDEF_123"');
+  assert.equal(table[0]![1], csvCell('-abcDEF_123'));
+  assert.equal(table[1]![1], '"\t=cmd"');
+  assert.equal(table[2]![1], 'plainCode', 'an ordinary code is written as it is');
 });

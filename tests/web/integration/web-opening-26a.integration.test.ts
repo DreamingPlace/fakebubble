@@ -122,19 +122,115 @@ test('a template frozen at version 2 says the version 2 welcome', (t) => {
   assert.deepEqual(readWebV7Request(store as unknown as WebStore, 'operation').request.opening, { text: WELCOME_B });
 });
 
-test('a history that was cut (an earlier message exists) leaves the opening out', (t) => {
+test('rows that are not eligible history (an unpublished earlier input, a note) do not remove the opening', (t) => {
   const store = schema128();
   t.after(() => store.close());
   seedFreezeScenario(store);
   publish(store, 'character', { 1: WELCOME_A });
-  // Something older than everything the request selected: the start of the conversation is not in the history.
+  // Older than everything the request selects, but never published: not part of the eligible history.
   store.run(
     "INSERT INTO messages(seq,id,world_id,conversation_id,author_kind,author_id,body,created_at,delivery,proactive) VALUES (0,'older','world','conversation','character','character','更早的一句',?,'text',0)",
     FREEZE_NOW - 1,
   );
   const out = captureFreeze(store);
-  assert.equal(String(out.request.request_json).includes('opening'), false);
-  assert.equal('opening' in userJson(out.prompts.voice.draft), false);
+  assert.deepEqual(JSON.parse(out.request.request_json as string).opening, { text: WELCOME_A });
+  assert.deepEqual(userJson(out.prompts.voice.draft).opening, [
+    { authorKind: 'character', delivery: 'voice', text: WELCOME_A },
+  ]);
+});
+
+/** The first send ('operation', never published) failed; `turns` published turns follow, then the current input 'last'. */
+function afterFailedFirstSend(store: ReturnType<typeof schema128>, turns: number, extraItems = 0) {
+  store.db.exec('PRAGMA foreign_keys=OFF');
+  store.run(
+    "UPDATE web_operations SET status='failed',quota_state='released',stage_version=stage_version+1 WHERE id='operation'",
+  );
+  let at = FREEZE_NOW,
+    items = 0;
+  const message = (id: string, kind: 'player' | 'character') =>
+    store.run(
+      "INSERT INTO messages(id,world_id,conversation_id,author_kind,author_id,body,created_at,delivery,proactive) VALUES (?,'world','conversation',?,?,?,?,'text',0)",
+      id,
+      kind,
+      kind === 'player' ? 'player' : 'character',
+      `说话${id}`,
+      ++at,
+    );
+  for (let n = 1; n <= turns; n++) {
+    message(`in${n}`, 'player');
+    store.run(
+      `INSERT INTO web_publications(operation_id,principal_id,player_id,world_id,conversation_id,character_id,input_message_id,job_id,
+      request_digest,candidate_digest,published_at,receipt_json) VALUES (?,'principal','player','world','conversation','character',?,?,'d','c',?,'{}')`,
+      `op${n}`,
+      `in${n}`,
+      `job${n}`,
+      at,
+    );
+    for (let k = 0; k < 1 + (n === 1 ? extraItems : 0); k++) {
+      message(`re${n}-${k}`, 'character');
+      store.run(
+        "INSERT INTO web_publication_items(operation_id,ordinal,message_id,media_id,origin) VALUES (?,?,?,'m','narrative')",
+        `op${n}`,
+        k,
+        `re${n}-${k}`,
+      );
+      items++;
+    }
+  }
+  message('last', 'player');
+  store.run(
+    `INSERT INTO web_operations(id,principal_id,request_id,payload_hash,world_id,conversation_id,character_id,input_message_id,
+    ip_window_id,status,quota_state,created_at,deadline_at,metering_type)
+    VALUES ('second','principal','request2','payload','world','conversation','character','last',NULL,'queued','reserved',?,?,'entitled')`,
+    FREEZE_NOW,
+    FREEZE_NOW + 100_000,
+  );
+  return items;
+}
+const freezeSecond = (store: ReturnType<typeof schema128>) => {
+  const frozen = store as unknown as WebStore;
+  freezeInputSnapshot(frozen, 'second', FREEZE_NOW);
+  freezeWebV7Request(frozen, 'second', FREEZE_NOW);
+  return readWebV7Request(frozen, 'second').request;
+};
+
+test('a failed first send, then a successful second send: the opening is included', (t) => {
+  const store = schema128();
+  t.after(() => store.close());
+  seedFreezeScenario(store);
+  publish(store, 'character', { 1: WELCOME_A });
+  afterFailedFirstSend(store, 0);
+  const request = freezeSecond(store);
+  assert.deepEqual(request.opening, { text: WELCOME_A });
+  assert.deepEqual(
+    request.messages.map((m) => m.id),
+    ['last'],
+  );
+});
+
+test('the opening is kept while every eligible message fits the 24-message window and dropped the moment one is cut', (t) => {
+  // 11 turns of (input, reply) + 1 extra reply + the current input = 24: nothing cut.
+  const fits = schema128();
+  t.after(() => fits.close());
+  seedFreezeScenario(fits);
+  publish(fits, 'character', { 1: WELCOME_A });
+  afterFailedFirstSend(fits, 11, 1);
+  const kept = freezeSecond(fits);
+  assert.equal(kept.messages.length, 24);
+  assert.deepEqual(kept.opening, { text: WELCOME_A });
+  // One more eligible message: the oldest falls out of the window.
+  for (const turns of [12, 26]) {
+    const cut = schema128();
+    t.after(() => cut.close());
+    seedFreezeScenario(cut);
+    publish(cut, 'character', { 1: WELCOME_A });
+    afterFailedFirstSend(cut, turns, 1);
+    const request = freezeSecond(cut);
+    assert.equal(request.messages.length, 24);
+    assert.equal('opening' in request, false, `${turns} published turns`);
+    assert.equal(JSON.stringify(request).includes('opening'), false);
+    assert.equal('opening' in userJson(promptMessages(request)), false);
+  }
 });
 
 test('a group, a moment and a moment post never carry an opening', () => {

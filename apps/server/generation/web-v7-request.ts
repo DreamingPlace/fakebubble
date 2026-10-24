@@ -25,6 +25,8 @@ import { castRequestContext } from '../cast/cast-store.ts';
 import { castPromptHash } from './cast-prompt.ts';
 import { frozenOpening } from './opening-line.ts';
 
+/** Messages (published prior turns + the current input) a request carries; the opening is added only when none was cut. */
+const HISTORY_WINDOW = 24;
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 interface MessageRow {
   id: string;
@@ -225,7 +227,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       .every((row) => priorJobs.has(row.job_id)),
     'WEB_V7_SCENE_SOURCE_UNTRUSTED',
   );
-  const ids = orderedIds.slice(-24),
+  const ids = orderedIds.slice(-HISTORY_WINDOW),
     source = store.all<MessageRow>(
       `SELECT * FROM messages
     WHERE world_id=? AND conversation_id=? AND id IN (${ids.map(() => '?').join(',')})`,
@@ -307,16 +309,10 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
         .reverse()
         .map((row) => ({ job_id: row.job_id, at: row.at }))
     : [];
-  // Part 26a: when nothing earlier in the conversation was cut off, the welcome line of the frozen revision is the character's first line.
-  const first = selected[0]!;
-  const opening = store.get(
-    'SELECT 1 FROM messages WHERE world_id=? AND conversation_id=? AND seq<? LIMIT 1',
-    scope.worldId,
-    scope.conversationId,
-    first.seq,
-  )
-    ? undefined
-    : frozenOpening(store, scope.characterId, input.template_version);
+  // Part 26a: the welcome line of the frozen revision is the character's first line when nothing was cut from the eligible history:
+  // every published prior turn and the current input fit the window. Unpublished or failed inputs are not eligible history.
+  const opening =
+    orderedIds.length <= HISTORY_WINDOW ? frozenOpening(store, scope.characterId, input.template_version) : undefined;
   const introduction = playerIntroduction(userStore(store), scope);
   const facts = recalls ? recallPlayerFacts(userStore(store), scope) : [];
   const request: TextGenerationRequest = {
