@@ -12,3 +12,6 @@ Boards are in `design/burbur-v2/` on branch `design/burbur-v2`.
 | signed-out.png, login-error.png, signup-step1.png, signup-step2.png | Login.dc.html |
 | billing.png | Billing.dc.html |
 | cocreate.png | Cocreate.dc.html |
+
+## Fix round
+billing-320/375/390/430.png, billing-scrolled.png (title row stays clear), re-taken home.png and desktop.png, switching-desktop.webm and switching-mobile.webm (character switching and swiping).
