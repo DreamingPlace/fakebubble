@@ -1,7 +1,14 @@
 import { ensure } from '../../../packages/domain/errors.ts';
 import { USD_CNY } from '../../../config/web-stats.ts';
 import {
+  CHART_METRICS,
+  CHART_RANGES,
   STATS_RANGES,
+  STATS_USER_TYPES,
+  type ChartMetric,
+  type ChartRange,
+  type ChartSeries,
+  type ChartView,
   type CohortRetention,
   type CostDay,
   type CostRow,
@@ -11,13 +18,16 @@ import {
   type PlayerStatsTotals,
   type PlayerStatsView,
   type ReplyBreakdown,
+  type SpendByType,
+  type SpendDay,
+  type SpendView,
   type StatsCounts,
   type StatsRange,
 } from '../../../packages/contracts/web-stats.ts';
 import { DRAMA3_DISCOUNT_LAST_DAY } from '../generation/model-list-prices.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { csvDocument } from '../invites/web-invite-export.ts';
-import { statsTablesExist, statsUtcDay } from '../stats/web-stats.ts';
+import { statsExtrasExist, statsTablesExist, statsUtcDay, statsUtcHour } from '../stats/web-stats.ts';
 
 /**
  * 玩家统计 and 消耗表 (Part 22c): reads of the counters the triggers and the write sites keep (web_stats_daily, web_daily_active
@@ -33,6 +43,13 @@ const has = (store: Store, name: string) =>
 export function parseRange(value: unknown): StatsRange {
   ensure(STATS_RANGES.includes(value as StatsRange), 'INVALID_REQUEST');
   return value as StatsRange;
+}
+export function parseChart(input: Record<string, unknown>): { metric: ChartMetric; range: ChartRange } {
+  ensure(
+    CHART_METRICS.includes(input.metric as ChartMetric) && CHART_RANGES.includes(input.range as ChartRange),
+    'INVALID_REQUEST',
+  );
+  return { metric: input.metric as ChartMetric, range: input.range as ChartRange };
 }
 /** STATS_UNAVAILABLE on a database that has not been migrated to 128. */
 const requireStats = (store: Store) => ensure(statsTablesExist(store), 'STATS_UNAVAILABLE');
@@ -276,6 +293,154 @@ export function readCosts(store: Store, now: number, range: StatsRange): CostsVi
       spansDramaPriceChange: DRAMA3_DISCOUNT_LAST_DAY.startsWith(month),
     },
   };
+}
+
+/** The first UTC day the Part 22d counters (per-character chat users, hourly rows, spend by user type) ran. */
+const extrasSince = (store: Store) =>
+  store.get<{ day: string | null }>("SELECT min(day) day FROM web_stats_daily WHERE metric='extras_started'")?.day ??
+  null;
+const requireExtras = (store: Store) => ensure(statsTablesExist(store) && statsExtrasExist(store), 'STATS_UNAVAILABLE');
+
+/**
+ * 总览 chart data (Part 22d): replies or chat users, per character and in total. 24h = the last 24 UTC hours (hourly rows, kept 48
+ * hours); 7d / 14d = the last days (the daily counters, today read live). Nothing here reads a table the purge deletes from, and no
+ * id, marker or content leaves: the characters are named by their display name.
+ */
+export function readChart(store: Store, now: number, metric: ChartMetric, range: ChartRange): ChartView {
+  requireExtras(store);
+  const hourly = range === '24h',
+    today = statsUtcDay(now),
+    since = extrasSince(store);
+  const buckets: string[] = [];
+  if (hourly) for (let i = 23; i >= 0; i--) buckets.push(statsUtcHour(now - i * 3_600_000));
+  else for (let i = (range === '7d' ? 7 : 14) - 1; i >= 0; i--) buckets.push(addDays(today, -i));
+  const first = buckets[0]!,
+    last = buckets[buckets.length - 1]!;
+  const perCharacter = new Map<string, Map<string, number>>(),
+    totals = new Map<string, number>();
+  const put = (map: Map<string, Map<string, number>>, id: string, bucket: string, value: number) => {
+    const row = map.get(id) ?? new Map<string, number>();
+    map.set(id, row);
+    row.set(bucket, value);
+  };
+  if (hourly) {
+    for (const row of store.all<{ hour: string; character_id: string; value: number }>(
+      'SELECT hour,character_id,value FROM web_stats_hourly WHERE metric=? AND hour>=? AND hour<=?',
+      metric === 'replies' ? 'reply_published' : 'chat_users',
+      first,
+      last,
+    ))
+      if (row.character_id === '') totals.set(row.hour, row.value);
+      else {
+        put(perCharacter, row.character_id, row.hour, row.value);
+        if (metric === 'replies') totals.set(row.hour, (totals.get(row.hour) ?? 0) + row.value);
+      }
+  } else if (metric === 'replies') {
+    for (const row of store.all<{ day: string; character_id: string; value: number }>(
+      "SELECT day,character_id,sum(value) value FROM web_stats_daily WHERE metric='reply_published' AND day>=? AND day<=? GROUP BY day,character_id",
+      first,
+      last,
+    )) {
+      put(perCharacter, row.character_id, row.day, row.value);
+      totals.set(row.day, (totals.get(row.day) ?? 0) + row.value);
+    }
+  } else {
+    const written = new Set<string>();
+    for (const row of store.all<{ day: string; character_id: string; value: number }>(
+      "SELECT day,character_id,value FROM web_stats_daily WHERE metric='chat_users' AND day>=? AND day<=?",
+      first,
+      last,
+    )) {
+      put(perCharacter, row.character_id, row.day, row.value);
+      written.add(`${row.day}\0${row.character_id}`);
+    }
+    // A day the alarm has not written down yet (today, or yesterday before its first sweep) is counted from the markers.
+    for (const row of store.all<{ day: string; character_id: string; n: number }>(
+      'SELECT day,character_id,count(*) n FROM web_chat_active WHERE day>=? AND day<=? GROUP BY day,character_id',
+      first,
+      last,
+    ))
+      if (!written.has(`${row.day}\0${row.character_id}`)) put(perCharacter, row.character_id, row.day, row.n);
+    const snapshot = new Map<string, number>();
+    for (const row of store.all<{ day: string; value: number }>(
+      "SELECT day,sum(value) value FROM web_stats_daily WHERE metric IN ('chat_registered','chat_guest') AND day>=? AND day<=? GROUP BY day",
+      first,
+      last,
+    ))
+      snapshot.set(row.day, row.value);
+    for (const row of store.all<{ day: string; n: number }>(
+      "SELECT day,count(*) n FROM web_daily_active WHERE scope='chat' AND day>=? AND day<=? GROUP BY day",
+      first,
+      last,
+    ))
+      if (!snapshot.has(row.day)) snapshot.set(row.day, row.n);
+    for (const [day, value] of snapshot) totals.set(day, value);
+  }
+  const known = (bucket: string) => since !== null && bucket.slice(0, 10) >= since;
+  const column = (values: Map<string, number>) =>
+    buckets.map((bucket) => (known(bucket) ? (values.get(bucket) ?? 0) : null));
+  const names = characterNames(store, [...perCharacter.keys()]);
+  const characters: (ChartSeries & { sum: number })[] = [...perCharacter].map(([id, values]) => {
+    const series = column(values);
+    return { name: names.get(id)!, values: series, sum: series.reduce<number>((a, b) => a + (b ?? 0), 0) };
+  });
+  characters.sort((a, b) => b.sum - a.sum || a.name.localeCompare(b.name, 'zh-CN'));
+  return {
+    metric,
+    range,
+    bucket: hourly ? 'hour' : 'day',
+    since,
+    buckets,
+    total: column(totals),
+    characters: characters.map(({ name, values }) => ({ name, values })),
+  };
+}
+
+/**
+ * 消耗表 by user type (Part 22d): per UTC day, what the budget ledger charged for the provider calls of replies, split by the user
+ * type frozen at admission and by text (draft, review) or voice (speech), in USD micros. A day before the per-type counters ran has
+ * `types: null` (shown —). The sum of a day equals that day's ledger amount in web_provider_usage.
+ */
+export function readSpend(store: Store, now: number, range: StatsRange): SpendView {
+  requireExtras(store);
+  const today = statsUtcDay(now),
+    since = extrasSince(store),
+    from = addDays(today, -(range - 1));
+  const cell = new Map<string, number>();
+  for (const row of store.all<{ day: string; user_type: string; kind: string; charged_micros: number }>(
+    'SELECT day,user_type,kind,charged_micros FROM web_stats_spend WHERE day>=? AND day<=?',
+    from,
+    today,
+  ))
+    cell.set(`${row.day}\0${row.user_type}\0${row.kind}`, row.charged_micros);
+  const of = (day: string, userType: string, kind: 'text' | 'voice') => cell.get(`${day}\0${userType}\0${kind}`) ?? 0;
+  const days: SpendDay[] = [];
+  const totals: SpendByType[] = STATS_USER_TYPES.map((userType) => ({ userType, textMicros: 0, voiceMicros: 0 }));
+  let anyKnown = false;
+  for (let day = today; day >= from; day = addDays(day, -1)) {
+    if (since === null || day < since) {
+      days.push({ day, types: null, unclassifiedMicros: null, totalMicros: null });
+      continue;
+    }
+    anyKnown = true;
+    const types = STATS_USER_TYPES.map((userType) => ({
+      userType,
+      textMicros: of(day, userType, 'text'),
+      voiceMicros: of(day, userType, 'voice'),
+    }));
+    types.forEach((entry, i) => {
+      totals[i]!.textMicros += entry.textMicros;
+      totals[i]!.voiceMicros += entry.voiceMicros;
+    });
+    const unclassified = of(day, 'unknown', 'text') + of(day, 'unknown', 'voice');
+    days.push({
+      day,
+      types,
+      unclassifiedMicros: unclassified,
+      totalMicros: types.reduce((sum, t) => sum + t.textMicros + t.voiceMicros, unclassified),
+    });
+  }
+  return { since, range, usdCny: USD_CNY, days, totals: anyKnown ? totals : null };
 }
 
 /** 概览's extra numbers (administrators with stats.read): yesterday (UTC) and this month's list-price spend in RMB. */

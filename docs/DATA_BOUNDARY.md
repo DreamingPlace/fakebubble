@@ -299,6 +299,19 @@ The pages 玩家统计 and 消耗表 are read from two tables written only by th
 | `web_daily_active` (UTC day, marker, kind, scope) | global | Yes, for 35 days, then the retention alarm deletes the rows. `marker` is an HMAC-SHA256 under a key derived with HKDF from SEAL_KEY (label `stats-active-v1`) over the day and the principal id: the business object can recompute it for a principal it knows (the D1 / D7 close); nobody can read a principal back from it. Never shown, exported or logged. |
 | `web_provider_usage.ledger_charged_micros` | global | Yes (a column of the aggregate above this Part's table): what the budget ledger charged for the calls of that row; 0 for a row written before 128 (the page shows —). |
 
+## Statistics extras (Part 22d, migration 130)
+
+All of it is written only by the business object, when the event happens, and holds counts, enums and HMACs only.
+
+| Table | Class | Kept after deletion? |
+|---|---|---|
+| `web_chat_active` (UTC day, character id, marker) | global | Yes for 35 days, then the retention alarm deletes the rows (a finished day's per-character counts are written into `web_stats_daily` first, metric `chat_users`). `marker` is an HMAC-SHA256 under the same HKDF key as `web_daily_active` over `"chat"`, the day, the character and the principal id. Never shown, exported or logged. |
+| `web_chat_active_hourly` (UTC hour, character id or '' for the total, marker) | global | Yes for 48 hours, deleted on the retention sweep with the hourly rows. Same HMAC, hour instead of day. |
+| `web_stats_hourly` (UTC hour, metric, character id, value) | global | 48 hours. Counts only: `reply_published/failed/unknown` (trigger, by admission hour) and `chat_users`. |
+| `web_operation_user_types` (operation id, user type, created at) | global operation shell | Yes, like `web_operation_models`: an operation id and one of `test / unlimited / daily_refill / registered / guest`, no principal. The lifecycle audit lists it among the shells. |
+| `web_stats_spend` (UTC day, user type, text or voice, calls, charged micros) | global | Yes: what the budget ledger charged, split by who the reply was for. Counts and money only. |
+| `web_invite_batches.test` | global configuration | Yes: a flag on a batch, set at creation and never changed. |
+
 ## Owner-controlled models and prices (Part 21g, migration 124)
 
 The admin page 系统 → 模型与价格 is settings only: it holds no player data. The five tables below are global configuration written only by the business object (an owner or `models.manage` administrator, behind session + CSRF + origin). They carry no principal id, player id, world id, email, nickname or message content, and no column could (`web_model_changes` stores the acting administrator's member id, shown in the page only as the administrator's label).

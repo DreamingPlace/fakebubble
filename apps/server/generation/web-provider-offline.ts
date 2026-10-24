@@ -1247,6 +1247,17 @@ export class WebProviderOffline {
       cost,
       ...(ledger ? [chargedMicros] : []),
     );
+    // Part 22d (schema 130): the same ledger amount, split by the user type frozen at admission and by text / voice.
+    if ((this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 130)
+      this.store.run(
+        `INSERT INTO web_stats_spend(day,user_type,kind,calls,charged_micros)
+        VALUES (?,coalesce((SELECT user_type FROM web_operation_user_types WHERE operation_id=?),'unknown'),?,1,?)
+        ON CONFLICT(day,user_type,kind) DO UPDATE SET calls=calls+1,charged_micros=charged_micros+excluded.charged_micros`,
+        new Date(this.now()).toISOString().slice(0, 10),
+        row.operation_id,
+        row.phase === 'speech' ? 'voice' : 'text',
+        chargedMicros,
+      );
   }
   /**
    * Part 21b B: what really wrote and reviewed the accepted reply, for the stats and the chat-review view, plus the reply

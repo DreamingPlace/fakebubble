@@ -51,6 +51,8 @@ export type BatchInput = {
   tier: BatchTierInput;
   durationDays: number | null;
   redeemBy: number | null;
+  /** Part 22d: a test batch (测试组). Set here, at creation, and never changed. Absent = not a test batch. */
+  test?: boolean;
 };
 export type BatchView = {
   id: string;
@@ -60,6 +62,8 @@ export type BatchView = {
   cap: number | null;
   durationDays: number | null;
   redeemBy: number | null;
+  /** Part 22d: the batch is the test group. */
+  test: boolean;
   createdAt: number;
   codes: number;
   redeemed: number;
@@ -156,6 +160,10 @@ export class WebInviteTiers {
         .all<{ name: string }>('PRAGMA table_info(web_invite_batches)')
         .some((c) => c.name === 'created_by_member')
     );
+  }
+  /** Migration 130's column exists (an older database has no test batches). */
+  private testColumn() {
+    return this.store.all<{ name: string }>('PRAGMA table_info(web_invite_batches)').some((c) => c.name === 'test');
   }
   /** nonce(12) || ciphertext || tag(16); the row's id is authenticated so a sealed code cannot be moved to another row. */
   private seal(inviteId: string, code: string) {
@@ -401,6 +409,7 @@ export class WebInviteTiers {
         isInt(input.count, 1, BATCH_LIMITS.maxCodes) &&
         (input.durationDays === null || isInt(input.durationDays, 1, BATCH_LIMITS.durationMaxDays)) &&
         (input.redeemBy === null || (Number.isSafeInteger(input.redeemBy) && input.redeemBy >= 0)) &&
+        (input.test === undefined || typeof input.test === 'boolean') &&
         (input.tier.kind === 'unlimited' ||
           (input.tier.kind === 'daily_refill' &&
             isInt(input.tier.dailyAmount, BATCH_LIMITS.amountMin, BATCH_LIMITS.amountMax) &&
@@ -419,6 +428,8 @@ export class WebInviteTiers {
         refill?.cap ?? null,
         input.durationDays,
         input.redeemBy,
+        // A batch that is not a test batch digests exactly as before 22d, so an old request replays unchanged.
+        ...(input.test === true ? ['test'] : []),
       ]),
     );
     return this.store.transaction(() => {
@@ -439,11 +450,12 @@ export class WebInviteTiers {
       // 需要先开启模型选择/积分: a refill batch means nothing while points are off.
       ensure(input.tier.kind !== 'daily_refill' || this.pointsOn(), 'WEB_INVITE_POINTS_REQUIRED');
       const batchId = this.nextId();
+      ensure(input.test !== true || this.testColumn(), 'WEB_INVITE_TERMS_REQUIRED');
       const columns = this.sealedColumns();
       const creator = columns ? (this.memberOf(input.adminSessionId)?.member_id ?? null) : null;
       this.store.run(
-        `INSERT INTO web_invite_batches(id,name,tier,daily_amount,total_cap,duration_days,request_id,request_digest,created_by,created_at${columns ? ',created_by_member' : ''})
-        VALUES (?,?,?,?,?,?,?,?,?,?${columns ? ',?' : ''})`,
+        `INSERT INTO web_invite_batches(id,name,tier,daily_amount,total_cap,duration_days,request_id,request_digest,created_by,created_at${columns ? ',created_by_member' : ''}${this.testColumn() ? ',test' : ''})
+        VALUES (?,?,?,?,?,?,?,?,?,?${columns ? ',?' : ''}${this.testColumn() ? ',?' : ''})`,
         batchId,
         input.name.trim(),
         input.tier.kind,
@@ -455,6 +467,7 @@ export class WebInviteTiers {
         input.adminSessionId,
         now,
         ...(columns ? [creator] : []),
+        ...(this.testColumn() ? [input.test === true ? 1 : 0] : []),
       );
       const codes: string[] = [];
       for (let i = 0; i < input.count; i++) {
@@ -503,8 +516,9 @@ export class WebInviteTiers {
       redeemed: number;
       revoked: number;
       holders: number;
+      test: number;
     }>(
-      `SELECT b.id,b.name,b.tier,b.daily_amount,b.total_cap,b.duration_days,b.created_at,
+      `SELECT b.id,b.name,b.tier,b.daily_amount,b.total_cap,b.duration_days,b.created_at,${this.testColumn() ? 'b.test' : '0'} test,
         (SELECT max(c.redeem_by) FROM web_invite_codes c WHERE c.batch_id=b.id) redeem_by,
         (SELECT count(*) FROM web_invite_codes c WHERE c.batch_id=b.id) codes,
         (SELECT count(*) FROM web_invite_codes c WHERE c.batch_id=b.id AND c.redeemed_count=1) redeemed,
@@ -526,6 +540,7 @@ export class WebInviteTiers {
         cap: row.total_cap,
         durationDays: row.duration_days,
         redeemBy: row.redeem_by,
+        test: row.test === 1,
         createdAt: row.created_at,
         codes: row.codes,
         redeemed: row.redeemed,

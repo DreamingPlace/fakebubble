@@ -15,7 +15,7 @@ import type {
   RenewPricesResult,
 } from '../../../packages/contracts/web-system.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
-import type { CostsView, PlayerStatsView } from '../../../packages/contracts/web-stats.ts';
+import type { ChartView, CostsView, PlayerStatsView, SpendView } from '../../../packages/contracts/web-stats.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { ModelFlags } from '../admission/web-model-settings.ts';
 import { bucketProviders } from '../budget/web-provider-budget-contract.ts';
@@ -36,11 +36,14 @@ import {
 import { readOverview, readSystemStatus, type WebSystemSources } from './web-system-status.ts';
 import {
   costsCsv,
+  parseChart,
   parseRange,
   playerStatsCsv,
+  readChart,
   readCosts,
   readOverviewStats,
   readPlayerStats,
+  readSpend,
 } from './web-stats-admin.ts';
 
 type Auth = { cookie: unknown; csrf: unknown; origin: unknown };
@@ -151,6 +154,17 @@ export class WebSystemAdmin {
   costs(auth: Auth, input: unknown): CostsView {
     this.actor(auth, 'stats');
     return readCosts(this.store, this.clock.now(), parseRange(exactly(input, ['range']).range));
+  }
+  /** 总览 chart (Part 22d): replies or chat users, 24h hourly or 7d / 14d daily, per character and in total. Counts only. */
+  chart(auth: Auth, input: unknown): ChartView {
+    this.actor(auth, 'stats');
+    const { metric, range } = parseChart(exactly(input, ['metric', 'range']));
+    return readChart(this.store, this.clock.now(), metric, range);
+  }
+  /** 消耗表 by user type (Part 22d): per day, user type and text / voice, in USD micros with the rate the page uses. */
+  spendByType(auth: Auth, input: unknown): SpendView {
+    this.actor(auth, 'stats');
+    return readSpend(this.store, this.clock.now(), parseRange(exactly(input, ['range']).range));
   }
   exportCosts(auth: Auth, input: unknown) {
     const actor = this.actor(auth, 'stats');
