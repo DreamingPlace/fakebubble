@@ -542,8 +542,12 @@ export class LiveBinding {
     if (!card) return;
     this.renderGuestNote(characterId, card);
     const access = this.view.access;
+    // Part 26a: while the one-character rule applies, its prompt answers a tap on send; the old trial lock must not disable the button first.
     const locked =
-      access.kind === 'guest' && access.lockedCharacterId !== null && access.lockedCharacterId !== characterId;
+      !access.lockedCharacterIds &&
+      access.kind === 'guest' &&
+      access.lockedCharacterId !== null &&
+      access.lockedCharacterId !== characterId;
     const button = card.querySelector<HTMLButtonElement>('.send-button');
     const available =
       this.view.characters.find((character) => character.characterId === characterId)?.availability.state ===

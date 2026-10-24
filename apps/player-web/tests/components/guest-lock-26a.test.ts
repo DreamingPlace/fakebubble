@@ -207,3 +207,12 @@ test('once the guest has sent to its character the opening question is gone', as
   assert.equal(shown(f.note('jojo')), false);
   assert.equal(shown(f.note('wei-guagua')), false, 'another character: silent until the guest taps send');
 });
+
+test('the old trial lock does not disable send while the one-character rule applies: the tap shows the prompt', async (t) => {
+  const f = chat(t, ['jojo']);
+  const live = await f.attach();
+  const view = (live as unknown as { view: WebProviderBootstrap }).view;
+  if (view.access.kind === 'guest') view.access.lockedCharacterId = 'jojo';
+  f.box('wei-guagua').type_('你好');
+  assert.equal(f.send('wei-guagua').disabled, false);
+});
