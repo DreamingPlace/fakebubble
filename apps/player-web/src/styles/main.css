@@ -5536,12 +5536,23 @@ html:has(.signed-out-page) {
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.9);
 }
+@media (max-width: 360px) {
+  .bl-sheet {
+    padding-inline: 12px;
+  }
+  .bl-list {
+    padding-inline: 12px;
+  }
+  .bl-title {
+    font-size: 13px;
+  }
+}
 /* A history row is a fixed three-column grid: icon | text (left, fills, wraps) | points (right, fixed, never wraps). */
 .bl-row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 84px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 12px;
+  column-gap: 10px;
   min-height: 56px;
   padding: 8px 0;
   border-bottom: 1px solid #f0ece7;
@@ -5603,7 +5614,8 @@ html:has(.signed-out-page) {
 .bl-points {
   text-align: right;
   white-space: nowrap;
-  font-family: var(--bb-mono);
+  /* "−12 点": the number and 点 stay together; the space is drawn thin (no padded mono). */
+  word-spacing: -0.22em;
   font-size: 14px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -5805,6 +5817,23 @@ html:has(.signed-out-page) {
 .cc-sheet .cc-thanks-title {
   color: var(--bb-ink);
   font-weight: 900;
+}
+
+/* ---- a swipe must never select text: the deck, the cards and the avatar row are not selectable; the chat itself and inputs are ---- */
+.carousel,
+.card-deck,
+.card-slot,
+.avatar-nav {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.card-slot .chat-body,
+.card-slot .chat-body *,
+.card-slot textarea {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* ---- home: a hand of solid cards, with some life ---- */

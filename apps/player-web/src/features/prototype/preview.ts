@@ -511,6 +511,8 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     const dy = event.clientY - dragStart.y;
     if (Math.abs(dx) < 7 || Math.abs(dx) <= Math.abs(dy) * 1.15) return;
     dragged = true;
+    // A swipe never leaves a text selection behind.
+    window.getSelection()?.removeAllRanges();
     carousel.classList.add('is-dragging');
     if (event.pointerType === 'mouse') carousel.setPointerCapture(event.pointerId);
     deck.style.setProperty('--drag-x', `${Math.max(-110, Math.min(110, dx * 0.45))}px`);

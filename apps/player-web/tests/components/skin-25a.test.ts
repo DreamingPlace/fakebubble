@@ -416,7 +416,7 @@ test('消费记录: one set of .bl-* rules; both tables share one fixed grid; a 
   assert.match(bare, /\.bl-table th:nth-child\(2\),\s*\.bl-table td:nth-child\(2\) \{\s*width: 52px/);
   assert.match(bare, /\.bl-table th:nth-child\(3\),\s*\.bl-table td:nth-child\(3\) \{\s*width: 64px/);
   assert.match(bare, /\.bl-table \{[^}]*font-variant-numeric: tabular-nums/);
-  assert.match(bare, /\.bl-row \{[^}]*grid-template-columns: 32px minmax\(0, 1fr\) 84px/);
+  assert.match(bare, /\.bl-row \{[^}]*grid-template-columns: 32px minmax\(0, 1fr\) auto/);
   assert.match(bare, /\.bl-main \{[^}]*text-align: left/);
   assert.match(bare, /\.bl-title \{[^}]*text-align: left/);
   assert.match(bare, /\.bl-points \{[^}]*text-align: right;[^}]*white-space: nowrap/);
@@ -434,4 +434,28 @@ test('home: far slots are hidden, the back cards are solid and fanned, the front
   assert.match(bare, /\.page-shell \.card-slot\.is-active:not\(\.is-chat\) \{\s*animation: bb-breathe/);
   assert.match(bare, /\.card-slot:not\(\.is-active\) :is\(\.face-latin, \.face-voice/);
   assert.match(bare, /\.face-reserve \.face-empty-text \{\s*display: none/);
+});
+
+// ---- Part 25a fix 2 ----------------------------------------------------------------------------------------------------------
+
+test('a swipe cannot select text: deck, cards and avatar row are user-select: none; chat messages and inputs stay selectable', () => {
+  const rule = /\.carousel,\s*\.card-deck,\s*\.card-slot,\s*\.avatar-nav \{([^}]*)\}/.exec(bare)![1]!;
+  for (const line of [
+    '-webkit-user-select: none',
+    'user-select: none',
+    '-webkit-touch-callout: none',
+    '-webkit-tap-highlight-color: transparent',
+  ])
+    assert.ok(rule.includes(line), line);
+  assert.match(
+    bare,
+    /\.card-slot \.chat-body,\s*\.card-slot \.chat-body \*,\s*\.card-slot textarea \{[^}]*user-select: text/,
+  );
+  const source = readFileSync(new URL('../../src/features/prototype/preview.ts', import.meta.url), 'utf8');
+  assert.match(source, /dragged = true;\s*\/\/[^\n]*\n\s*window\.getSelection\(\)\?\.removeAllRanges\(\)/);
+});
+
+test('消费记录 points: sized to their content, right-aligned, never wrapping, with a thin space instead of padded mono', () => {
+  assert.match(bare, /\.bl-points \{[^}]*white-space: nowrap;[^}]*word-spacing: -0\.22em/);
+  assert.doesNotMatch(/\.bl-points \{([^}]*)\}/.exec(bare)![1]!, /monospace|--bb-mono/);
 });
