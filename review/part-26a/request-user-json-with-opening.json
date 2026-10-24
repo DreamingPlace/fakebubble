@@ -1,0 +1,121 @@
+{
+  "responseConstraints": {
+    "playerInputKinds": [
+      "text"
+    ],
+    "expressionEnum": [
+      "neutral",
+      "upbeat",
+      "soft",
+      "hesitant",
+      "serious",
+      "playful",
+      "mock_annoyed",
+      "excited",
+      "sad",
+      "surprised"
+    ],
+    "deliveryMode": "voice",
+    "interactionKind": "reply",
+    "bubbleLimits": {
+      "casual": {
+        "maxBubbles": 3,
+        "maxCharacters": 120,
+        "maxTotalCharacters": 180,
+        "allowLineBreaks": false
+      },
+      "conflict_apology": {
+        "maxBubbles": 6,
+        "maxCharacters": 160,
+        "maxTotalCharacters": 700,
+        "allowLineBreaks": false
+      }
+    },
+    "contextCoverage": {
+      "messages": "bounded_excerpt",
+      "groupEvidence": "observed_excerpt_only"
+    }
+  },
+  "character": {
+    "id": "jojo",
+    "name": "快照角色",
+    "persona": "只用于离线测试。",
+    "authorCanon": null
+  },
+  "age": 14,
+  "relationship": "friend",
+  "relationshipContext": {
+    "policyVersion": 1,
+    "revision": 0,
+    "trust": 35,
+    "familiarity": 40,
+    "positiveDays": 0,
+    "eventKinds": [],
+    "openness": "settling",
+    "auditEnabled": true,
+    "recentEvents": []
+  },
+  "playerIntroduction": null,
+  "playerFacts": [],
+  "conversation": null,
+  "memories": [],
+  "memoryCorrections": [],
+  "sceneContext": {
+    "kind": "remote",
+    "setting": null,
+    "plan": null,
+    "proximity": "ordinary",
+    "speaking": "normal",
+    "revision": 0,
+    "updatedAt": null,
+    "expiresAt": null,
+    "needsConfirmation": false,
+    "lastChange": null
+  },
+  "evidence": [],
+  "shortTermTurns": [],
+  "clarifications": [],
+  "proactiveTopic": null,
+  "requiredMessageIds": [
+    "input"
+  ],
+  "mustClose": false,
+  "opening": [
+    {
+      "authorKind": "character",
+      "delivery": "voice",
+      "text": "Thanks Kobe，你终于来了"
+    }
+  ],
+  "messages": [
+    {
+      "id": "input",
+      "authorKind": "player",
+      "text": "今天想聊什么？",
+      "spokenText": "今天想聊什么？",
+      "directionHints": [],
+      "createdAt": 1800000000000,
+      "sentTime": {
+        "localTime": "2027-01-15 16:00",
+        "calendarDaysAgo": 0,
+        "elapsed": "不足1分钟"
+      }
+    }
+  ],
+  "characterTimeZone": "Asia/Singapore",
+  "characterLocalTime": "2027-01-15 16:00",
+  "localWeekday": "周五",
+  "responseTiming": {
+    "oldestCoveredInput": {
+      "localTime": "2027-01-15 16:00",
+      "calendarDaysAgo": 0,
+      "elapsed": "不足1分钟"
+    },
+    "newestCoveredInput": {
+      "localTime": "2027-01-15 16:00",
+      "calendarDaysAgo": 0,
+      "elapsed": "不足1分钟"
+    },
+    "priorServiceFailure": null
+  }
+}
