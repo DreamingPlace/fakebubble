@@ -214,8 +214,6 @@ export interface CastCard {
 export interface CastViewStory {
   title: string;
   level: '亲历' | '听说';
-  /** True when an override (not the default rule) decided the level. */
-  fromOverride: boolean;
   period: CastPeriod;
   participants: string[];
   narrationBoundary: string;
@@ -245,7 +243,7 @@ export interface CastView {
     name: string;
     members: string[];
     background: string;
-    stories: (Omit<CastViewStory, 'level' | 'fromOverride' | 'participants'> & { level: '亲历' })[];
+    stories: (Omit<CastViewStory, 'level' | 'participants'> & { level: '亲历' })[];
   }[];
   stories: CastViewStory[];
   memes: { key: string; parties: string[]; meaning: string; trigger: string; prohibited: string }[];

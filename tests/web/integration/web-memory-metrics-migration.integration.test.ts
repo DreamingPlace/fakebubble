@@ -123,6 +123,7 @@ test('Cloudflare runner: an existing authority at 119 gains 120 untouched (inlin
     assert.equal(result.after.at(-5)?.startsWith('125:'), true, mode); // Extended for migration 125: the newest step is last.
     assert.equal(result.after.at(-4)?.startsWith('126:'), true, mode); // Extended for migration 126: the newest step is last.
     assert.equal(result.after.at(-3)?.startsWith('127:'), true, mode); // Extended for migration 127: the newest step is last.
+    assert.equal(result.after.at(-2)?.startsWith('128:'), true, mode); // Extended for migration 128: the newest step is last.
     assert.equal(result.after.at(-1)?.startsWith('129:'), true, mode); // Extended for migration 129: the newest step is last.
     // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
     // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.

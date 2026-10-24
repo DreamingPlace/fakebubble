@@ -273,15 +273,16 @@ test('the compiled view: own sections in full, cards for the others, outgoing re
     view.memes.map((m) => m.key),
     ['落汤鸡'],
   );
-  // stories: lived or heard only, tagged; the override is marked
+  // stories: lived or heard only, tagged. Which level came from an override is NOT in the view (it is in castKnowledge, for the console)
   assert.deepEqual(
-    view.stories.map((s) => [s.title, s.level, s.fromOverride]),
+    view.stories.map((s) => [s.title, s.level]),
     [
-      ['雨夜的告白', '亲历', false],
-      ['校庆演出', '亲历', true],
-      ['天台的约定', '亲历', false],
+      ['雨夜的告白', '亲历'],
+      ['校庆演出', '亲历'],
+      ['天台的约定', '亲历'],
     ],
   );
+  assert.equal(JSON.stringify(view).includes('fromOverride'), false);
   assert.equal(view.stories[0]!.narrationBoundary, '只能点到为止，不能复述原话。');
 });
 
@@ -290,9 +291,10 @@ test('a story he only heard of is its summary alone; one he does not know is not
   const view = compileCastView(doc, 'c05');
   const heard = view.stories.find((s) => s.title === '雨夜的告白')!;
   assert.equal(heard.level, '听说');
-  assert.equal(heard.fromOverride, false);
+  assert.equal('fromOverride' in heard, false);
   assert.equal(heard.summary, '小满在雨夜向阿杰说出了心里话。');
   assert.equal('details' in heard, false);
+  assert.ok(!CAST_CONTEXT_PROMPT.includes('fromOverride') && !CAST_REVIEW_PROMPT.includes('fromOverride'));
   assert.ok(!JSON.stringify(view).includes('公交站台'), 'the details of a heard story never reach him');
   assert.ok(
     !JSON.stringify(compileCastView(doc, 'c07')).includes('旧照片'),
@@ -436,9 +438,9 @@ test('prompt files: the cast prompts are pinned, separate from PROMPTS_V7, and g
   );
   assert.deepEqual(Object.keys(PROMPTS_CAST), ['castContext', 'castReview']);
   // Part 24a: pinned on purpose. Changing either file changes castPromptHash(), which every request that carries `cast` records.
-  assert.equal(sha(CAST_CONTEXT_PROMPT), '469c2ab4337ce20c71b96ecc3d27cea6988d79b108b4d1f08034659c9a694f78');
-  assert.equal(sha(CAST_REVIEW_PROMPT), 'b2550c319c3759499f093f96309ef38d386449bb5a378476bccdf937c60e51e2');
-  assert.equal(castPromptHash(), '2c48c7e99bf67daa6d834eb12e542d0fadc5a90509e42a00d8145d21428b1ad7');
+  assert.equal(sha(CAST_CONTEXT_PROMPT), '8389e2006b9330e713fb5757dd57bbc6af4246a1123dbd185e18345f570fc6e6');
+  assert.equal(sha(CAST_REVIEW_PROMPT), 'f16fc9a093e1554de20d4f0fdca0ed771b5ae7ca764896e462b48139c12b9100');
+  assert.equal(castPromptHash(), '1462d09ed4627be98191b4ad6c423fe234934a54a248ffc1b3c009a59067de35');
   for (const marker of ['亲历', '听说', '不知道', 'narrationBoundary', 'hiddenSettings'])
     assert.ok(CAST_CONTEXT_PROMPT.includes(marker), marker);
   for (const marker of ['hiddenSettings', '不知道', 'narrationBoundary'])

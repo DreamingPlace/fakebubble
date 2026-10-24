@@ -247,6 +247,7 @@ test('Cloudflare runner: a fresh install and an existing authority at 118 both r
     // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
     assert.equal(result.after.at(-4)?.startsWith('126:'), true, mode); // Extended for migration 126: the newest step is last.
     assert.equal(result.after.at(-3)?.startsWith('127:'), true, mode); // Extended for migration 127: the newest step is last.
+    assert.equal(result.after.at(-2)?.startsWith('128:'), true, mode); // Extended for migration 128: the newest step is last.
     assert.equal(result.after.at(-1)?.startsWith('129:'), true, mode); // Extended for migration 129: the newest step is last.
     assert.deepEqual(result.version, { user_version: 129 }, mode);
     assert.deepEqual(result.workbench, TABLES, mode);

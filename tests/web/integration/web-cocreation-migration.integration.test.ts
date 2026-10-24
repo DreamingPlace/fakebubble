@@ -244,6 +244,7 @@ test('Cloudflare runner: an existing authority at 116 upgrades to 117 through th
     assert.equal(result.after.at(-5)?.startsWith('125:'), true, mode); // Extended for migration 125: the newest step is last.
     assert.equal(result.after.at(-4)?.startsWith('126:'), true, mode); // Extended for migration 126: the newest step is last.
     assert.equal(result.after.at(-3)?.startsWith('127:'), true, mode); // Extended for migration 127: the newest step is last.
+    assert.equal(result.after.at(-2)?.startsWith('128:'), true, mode); // Extended for migration 128: the newest step is last.
     assert.equal(result.after.at(-1)?.startsWith('129:'), true, mode); // Extended for migration 129: the newest step is last.
     assert.deepEqual(result.version, { user_version: 129 }, mode);
     assert.deepEqual(result.cocreation, { submissions: true, answers: true }, mode);

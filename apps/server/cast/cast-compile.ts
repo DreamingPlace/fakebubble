@@ -151,7 +151,6 @@ function build(doc: CastDoc, characterId: string): Parts {
     stories.push({
       title: story.title,
       level: CAST_KNOWLEDGE_LABEL[known.level] as '亲历' | '听说',
-      fromOverride: known.fromOverride,
       period: story.period,
       participants: story.participants.map(nameOf),
       narrationBoundary: story.boundary,
