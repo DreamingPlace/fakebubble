@@ -4,6 +4,7 @@ import { appendLegalLinks, footerNote } from './legal-links.ts';
 import { followChatViewport, swipeStep } from './mobile-layout.js';
 import type { LiveBinding } from './provider-binding.js';
 import { providerPeople, escapeCardText, type Person } from './provider-catalog-view.js';
+import { handSvg, wordmarkSvg } from '../brand/wordmark.js';
 
 type Phase = 'browse' | 'hover' | 'expanding' | 'chat' | 'collapsing';
 
@@ -18,10 +19,29 @@ const icon = (name: 'sound' | 'back' | 'send' | 'play' | 'more') => {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
 };
 
-function blend(a: string, b: string, t: number): string {
-  const n = (s: string, i: number) => Number.parseInt(s.slice(i, i + 2), 16);
-  const h = (v: number) => Math.round(v).toString(16).padStart(2, '0');
-  return `#${[1, 3, 5].map((i) => h(n(a, i) + (n(b, i) - n(a, i)) * t)).join('')}`;
+/** The page's paper; the character's aura is painted over it by `.aura-stack`, never mixed into it (Part 25a). */
+const PAPER = '#FAF8F6';
+
+/** Part 25a: the front of the 小卡 — shown while the card is a card, faded out when it becomes the chat. Decoration only. */
+function cardFace(person: Person, configured: boolean) {
+  if (!configured)
+    return `<div class="card-face face-reserve" aria-hidden="true">
+      <div class="face-top"><span>burbur</span><span>No.${person.card.no}</span></div>
+      <div class="face-main face-empty">${handSvg('?', { size: 120, weight: 1.6, label: null, className: 'hand face-question' })}<span class="face-empty-text">新朋友还未到来</span></div>
+    </div>`;
+  const line = person.transcript
+    ? `<div class="face-voice"><span class="face-play"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span><span class="face-line">${escapeCardText(person.transcript)}</span></div>`
+    : '';
+  return `<div class="card-face" aria-hidden="true">
+      <div class="face-top"><span>burbur</span><span>No.${person.card.no}</span></div>
+      <div class="face-main"><span class="face-name">${escapeCardText(person.name)}</span>${
+        person.card.latin
+          ? handSvg(person.card.latin, { size: 44, weight: 1.9, label: null, className: 'hand face-latin' })
+          : ''
+      }</div>
+      ${line}
+      <i class="face-sheen"></i>
+    </div>`;
 }
 
 function createCard(person: Person) {
@@ -64,7 +84,14 @@ function createCard(person: Person) {
         <textarea id="reply-${person.id}" rows="1" enterkeyhint="send" placeholder="回复…" aria-label="回复${name}"></textarea>
         <button class="send-button icon-button" type="button" aria-label="发送消息" disabled>${icon('send')}</button>
       </div>
+      ${cardFace(person, configured)}
     </div>`;
+  const [aura1, aura2, aura3, accent] = person.card.aura;
+  card.style.setProperty('--aura-1', aura1);
+  card.style.setProperty('--aura-2', aura2);
+  card.style.setProperty('--aura-3', aura3);
+  card.style.setProperty('--accent', accent);
+  card.style.setProperty('--name-size', String(person.card.nameSize));
   card.style.setProperty('--avatar-bg', person.color);
   card.style.setProperty('--avatar-ink', person.ink);
   card.style.setProperty('--card-color', person.color);
@@ -79,7 +106,8 @@ export function startPrototype(root: HTMLElement, live: LiveBinding) {
 function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   root.innerHTML = `
     <div class="page-shell">
-      <header class="site-head"><div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>FAKE 泡泡</span></div><span class="head-note">遇见一个新朋友</span></header>
+      <div class="aura-stack" aria-hidden="true"></div>
+      <header class="site-head"><div class="brand">${wordmarkSvg({ size: 34, weight: 2, className: 'hand brand-hand' })}</div><span class="head-note">捡到一窝小四四</span></header>
       <main class="main-area">
         <h1 class="sr-only">选择人物开始聊天</h1>
         <div class="carousel" aria-label="人物聊天卡片，可滑动切换" tabindex="0"><div class="card-deck"></div></div>
@@ -116,17 +144,38 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 2800);
   };
+  // Part 25a: one aura layer per character (and one for the empty slots). The page cross-fades between them; a drag blends the
+  // two neighbours by how far the finger moved, like the solid colour did before.
+  const auraStack = root.querySelector<HTMLElement>('.aura-stack')!;
+  const auraKey = (person: Person) => (person.characterId ? person.id : 'neutral');
+  const layers = new Map<string, HTMLElement>();
+  for (const person of people) {
+    if (layers.has(auraKey(person))) continue;
+    const layer = document.createElement('div');
+    layer.className = 'aura';
+    const [aura1, aura2, aura3] = person.card.aura;
+    layer.style.setProperty('--aura-1', aura1);
+    layer.style.setProperty('--aura-2', aura2);
+    layer.style.setProperty('--aura-3', aura3);
+    auraStack.append(layer);
+    layers.set(auraKey(person), layer);
+  }
+  page.style.setProperty('--page-bg', PAPER);
+  document.documentElement.style.backgroundColor = PAPER;
+  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', PAPER);
   const updateBackground = (position = active) => {
     const n = people.length;
     const wrapped = ((position % n) + n) % n;
     const lower = Math.floor(wrapped);
     const next = (lower + 1) % n;
-    const color = reduced.matches
-      ? people[active]!.color
-      : blend(people[lower]!.color, people[next]!.color, wrapped - lower);
-    page.style.setProperty('--page-bg', color);
-    document.documentElement.style.backgroundColor = color;
-    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', color);
+    const weight = new Map<string, number>();
+    const add = (person: Person, by: number) => weight.set(auraKey(person), (weight.get(auraKey(person)) ?? 0) + by);
+    if (reduced.matches) add(people[active]!, 1);
+    else {
+      add(people[lower]!, 1 - (wrapped - lower));
+      add(people[next]!, wrapped - lower);
+    }
+    for (const [key, layer] of layers) layer.style.opacity = String(weight.get(key) ?? 0);
   };
   const saveEditor = (index: number) => {
     const textarea = cards[index]!.querySelector('textarea')!;
@@ -153,10 +202,35 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     const mobile = window.innerWidth <= 600;
     nav.inert = chatting;
     nav.setAttribute('aria-hidden', String(chatting));
+    // Part 25a: a card in front of another is solid and nothing shows through it. Only the three nearest cards on each side are
+    // drawn, at most two of them empty "new friend" slots, and the words "新朋友还未到来" appear once, on the nearest empty slot.
+    const isEmpty = (index: number) => !people[index]!.characterId;
+    const hiddenSlots = new Set<number>();
+    let nearEmpty = isEmpty(active) ? active : -1;
+    let nearEmptyDepth = 99;
+    for (const direction of [1, -1]) {
+      let empties = 0;
+      for (let depth = 1; depth <= Math.floor(people.length / 2); depth++) {
+        const index = (((active + direction * depth) % people.length) + people.length) % people.length;
+        if (depth > 3) hiddenSlots.add(index);
+        else if (isEmpty(index)) {
+          empties++;
+          if (empties > 2) hiddenSlots.add(index);
+          else if (!isEmpty(active) && depth < nearEmptyDepth) {
+            nearEmpty = index;
+            nearEmptyDepth = depth;
+          }
+        }
+      }
+    }
     cards.forEach((card, index) => {
       const offset = ringOffset(index, active, people.length);
       const orbit = orbitStyle(offset, people.length);
       const previous = previousOffsets.get(card);
+      card.dataset.side = offset === 0 ? 'c' : offset < 0 ? 'l' : 'r';
+      card.style.setProperty('--fan', String(Math.sign(offset) * Math.min(Math.abs(offset), 3) * 3.5));
+      card.classList.toggle('is-hidden-slot', hiddenSlots.has(index));
+      card.classList.toggle('is-near-empty', index === nearEmpty);
       if (previous !== undefined && Math.abs(previous - offset) > 7) {
         card.classList.add('orbit-wrap');
         requestAnimationFrame(() => card.classList.remove('orbit-wrap'));
@@ -175,7 +249,9 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
       );
       const hidden = chatting;
       const inaccessible =
-        ((hidden || window.innerWidth <= 600) && index !== active) || (!hidden && Math.abs(offset) > 2);
+        ((hidden || window.innerWidth <= 600) && index !== active) ||
+        (!hidden && Math.abs(offset) > 2) ||
+        hiddenSlots.has(index);
       card.inert = inaccessible;
       card.setAttribute('aria-hidden', inaccessible ? 'true' : 'false');
       const reply = card.querySelector<HTMLTextAreaElement>('textarea')!;
@@ -287,6 +363,10 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     button.innerHTML = `<span class="avatar avatar-choice-mark" aria-hidden="true">${escapeCardText(person.mark) || '<span class="reserve-dot"></span>'}</span>`;
     button.style.setProperty('--avatar-bg', person.color);
     button.style.setProperty('--avatar-ink', person.ink);
+    const [aura1, aura2, aura3] = person.card.aura;
+    button.style.setProperty('--aura-1', aura1);
+    button.style.setProperty('--aura-2', aura2);
+    button.style.setProperty('--aura-3', aura3);
     button.addEventListener('click', () => switchTo(index));
     nav.append(button);
   });
@@ -431,6 +511,8 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     const dy = event.clientY - dragStart.y;
     if (Math.abs(dx) < 7 || Math.abs(dx) <= Math.abs(dy) * 1.15) return;
     dragged = true;
+    // A swipe never leaves a text selection behind.
+    window.getSelection()?.removeAllRanges();
     carousel.classList.add('is-dragging');
     if (event.pointerType === 'mouse') carousel.setPointerCapture(event.pointerId);
     deck.style.setProperty('--drag-x', `${Math.max(-110, Math.min(110, dx * 0.45))}px`);

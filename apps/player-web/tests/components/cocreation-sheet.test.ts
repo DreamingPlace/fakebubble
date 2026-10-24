@@ -1,3 +1,5 @@
+// Part 25a (named exception): the sheet's header is "让{name}更像{name}" (the chat ⋯ menu entry keeps "共创 · …") and the progress is
+// "written / cards on offer" ("n / 6": a batch of five plus the free card) instead of "已写 n 张" / "写几张都行，不用写完".
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { LiveBinding } from '../../src/features/prototype/provider-binding.ts';
@@ -102,7 +104,7 @@ test('the card list is the whole spec: prompts name the character and no routing
 test('the sheet opens with one shuffled batch of cards plus the free card, and a gentle progress hint', (t) => {
   const f = setup(t);
   assert.equal(f.root().getAttribute('role'), 'dialog');
-  assert.equal(f.root().querySelector('.cc-title')!.textContent, '共创 · 让瓜瓜更像瓜瓜');
+  assert.equal(f.root().querySelector('.cc-title')!.textContent, '让瓜瓜更像瓜瓜');
   const ids = f.ids();
   assert.equal(ids.length, BATCH_SIZE + 1);
   assert.equal(ids.at(-1), 'free', '“随便写点什么” is always the last card');
@@ -112,7 +114,7 @@ test('the sheet opens with one shuffled batch of cards plus the free card, and a
     COCREATION_CARDS.filter((c) => firstTextCards(ids).includes(c.id)).map((c) => c.id),
     'shuffled, not in list order',
   );
-  assert.equal(f.progress(), '写几张都行，不用写完');
+  assert.equal(f.progress(), '0 / 6');
   assert.equal(f.send().disabled, true, 'nothing written yet');
   assert.equal(f.send().textContent, '交给瓜瓜');
   assert.equal(f.root().querySelector('.cc-shuffle')!.textContent, '换一批');
@@ -137,7 +139,7 @@ test('tapping a card opens an inline editor with a character counter; writing ma
   assert.equal(card.querySelector('.cc-count')!.textContent, '4/300');
   assert.ok(card.classList.contains('is-written'), '已写 state');
   assert.equal(card.querySelector('.cc-badge')!.textContent, '已写');
-  assert.equal(f.progress(), '已写 1 张');
+  assert.equal(f.progress(), '1 / 6');
   assert.equal(f.send().disabled, false);
   card.querySelector('.cc-done')!.click();
   assert.equal(editor.hidden, true, 'closing the editor keeps the text');
@@ -155,7 +157,7 @@ test('line breaks and control characters become spaces, as chat input would refu
   assert.equal(f.card(id)!.querySelector('textarea')!.value, '第一行 第二行 尾');
   f.write(id, '   ');
   assert.ok(!f.card(id)!.classList.contains('is-written'));
-  assert.equal(f.progress(), '写几张都行，不用写完');
+  assert.equal(f.progress(), '0 / 6');
   const enter = f.card(id)!.querySelector('textarea')!.dispatch('keydown', { key: 'Enter' });
   assert.equal(enter.defaultPrevented, true, 'Enter finishes the card instead of adding a line break');
   assert.equal(f.card(id)!.querySelector('.cc-editor')!.hidden, true);
@@ -166,11 +168,11 @@ test('skipping is always fine, and clearing a written card takes it back out', (
   const [a, b] = firstTextCards(f.ids()) as [string, string];
   f.write(a, '写了');
   f.write(b, '也写了');
-  assert.equal(f.progress(), '已写 2 张');
+  assert.equal(f.progress(), '2 / 6');
   const skip = f.card(b)!.querySelector('.cc-skip')!;
   assert.equal(skip.textContent, '清除这张');
   skip.click();
-  assert.equal(f.progress(), '已写 1 张');
+  assert.equal(f.progress(), '1 / 6');
   assert.equal(f.card(b)!.querySelector('textarea')!.value, '');
   assert.ok(!f.card(b)!.classList.contains('is-written'));
   assert.equal(f.card(b)!.querySelector('.cc-skip')!.textContent, '跳过');
@@ -208,7 +210,7 @@ test('after a successful hand-over the draft is spent and a new sheet starts emp
   await new Promise((resolve) => setTimeout(resolve, 5));
   const again = f.open();
   const root = again.element as unknown as FakeElement;
-  assert.equal(root.querySelector('.cc-progress')!.textContent, '写几张都行，不用写完');
+  assert.equal(root.querySelector('.cc-progress')!.textContent, '0 / 6');
   assert.ok(root.querySelectorAll('textarea').every((area) => area.value === ''));
 });
 
@@ -222,7 +224,7 @@ test('drafts survive closing the sheet while the page is open, live in memory on
   assert.equal(f.calls.length, 0, 'closing submits nothing');
   const again = f.open();
   const root = again.element as unknown as FakeElement;
-  assert.equal(root.querySelector('.cc-progress')!.textContent, '已写 2 张');
+  assert.equal(root.querySelector('.cc-progress')!.textContent, '2 / 6');
   assert.equal(root.querySelector(`[data-card="${id}"] textarea`)!.value, '先放在这里');
   assert.equal(root.querySelector('[data-card="free"] textarea')!.value, '还有一点');
   assert.deepEqual(
@@ -261,7 +263,7 @@ test('换一批 draws a fresh set of cards, keeps what is written, and cycles th
   const third = f.ids();
   const seen = new Set([...first, ...second, ...third]);
   for (const card of COCREATION_CARDS) assert.ok(seen.has(card.id), `${card.id} shows up within a few batches`);
-  assert.equal(f.progress(), '已写 1 张');
+  assert.equal(f.progress(), '1 / 7', 'one written card plus a fresh batch of five and the free card');
 });
 
 test('“对话卡” is two real chat bubbles; both sides are needed, up to two reply bubbles', async (t) => {
@@ -282,11 +284,11 @@ test('“对话卡” is two real chat bubbles; both sides are needed, up to two
   assert.equal(secondRow.hidden, true, 'one reply bubble to start with');
 
   you.type_('你今天好厉害');
-  assert.equal(f.progress(), '写几张都行，不用写完', 'one side is not a card yet');
+  assert.equal(f.progress(), '0 / 6', 'one side is not a card yet');
   assert.equal(card.querySelector('.cc-hint')!.hidden, false);
   assert.equal(f.send().disabled, true);
   reply.type_('才没有');
-  assert.equal(f.progress(), '已写 1 张');
+  assert.equal(f.progress(), '1 / 6');
   assert.equal(card.querySelector('.cc-hint')!.hidden, true);
 
   const add = card.querySelectorAll('.cc-link').find((b) => b.textContent === cocreationCopy.addReply)!;

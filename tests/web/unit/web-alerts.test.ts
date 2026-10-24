@@ -80,7 +80,8 @@ function fixture(overrides: Partial<WebAlertConfig> = {}, budget: AlertBudgetRow
 const quiet = (alert: { subject: string; text: string }) => {
   // No player content: no address, no long hex id/token, no token-like string, no chat text.
   assert.doesNotMatch(alert.text + alert.subject, /@|[a-f0-9]{16,}|[A-Za-z0-9_-]{32,}/);
-  assert.match(alert.subject, /^FAKE 泡泡 /);
+  // Part 25a (named exception): the product is Burbur; the owner's alert and digest subjects start with its name.
+  assert.match(alert.subject, /^Burbur /);
 };
 
 test('nothing fires below the thresholds, and the hour gate runs the pass once per hour', async () => {

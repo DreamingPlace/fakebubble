@@ -305,6 +305,10 @@ export class FakeDocument {
   createElement(tag: string) {
     return new FakeElement(tag);
   }
+  /** Part 25a: components may build SVG (the wordmark) through the DOM; the fake treats it as any other element. */
+  createElementNS(_namespace: string, tag: string) {
+    return new FakeElement(tag);
+  }
   createTextNode(text: string) {
     return new FakeText(text);
   }

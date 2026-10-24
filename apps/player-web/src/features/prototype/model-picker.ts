@@ -12,7 +12,9 @@ import {
 import { h } from '../cocreation/h.ts';
 
 export const modelCopy = {
-  menuTitle: '写回复的模型',
+  /** Part 25a: the sheet's title, with the pink brain after it ("给瓜瓜换个🧠"). */
+  title: (name: string) => `给${name}换个`,
+  brain: '脑子',
   /** The entry of the chat's ⋯ menu. */
   menuLabel: '切换回复模型',
   menuSub: (info: ModelChoiceInfo) =>
@@ -20,14 +22,16 @@ export const modelCopy = {
       ? `${PLAYER_MODELS[info.selected].label} · ${modelCopy.perMessage(pointsOf(info, info.selected))}`
       : PLAYER_MODELS[info.selected].label,
   perMessage: (points: number) => `约 ${points} 点/条`,
+  /** Part 25a: a row of the sheet: the price without the "约". */
+  price: (points: number) => `${points} 点/条`,
   voice: (points: number) => `语音 +${points}`,
   current: '当前',
   balance: (points: number, messages: number) => `剩余 ${points} 点 · 约可聊 ${messages} 条`,
   confirm: (label: string, points: number, voicePoints: number) =>
-    `之后的消息用 ${label}，约 ${points} 点/条（语音 +${voicePoints}）。记忆和聊天记录不变。`,
+    `之后用 ${label} · ${points} 点/条（语音 +${voicePoints}）。记忆不变。`,
   /** Invited players are not charged: no prices. */
-  confirmFree: (label: string) => `之后的消息用 ${label}。记忆和聊天记录不变。`,
-  confirmButton: '确认切换',
+  confirmFree: (label: string) => `之后用 ${label}。记忆不变。`,
+  confirmButton: '换',
   cancelButton: '取消',
   close: '关闭',
   /** "{chosen} 繁忙，由 {actual} 回复 · 按 {billed} 计费"; an invited player is not billed, so no billing clause. */
@@ -37,9 +41,12 @@ export const modelCopy = {
       metered ? ` · 按 ${PLAYER_MODELS[billed ?? billedModel(chosen, actual)].label} 计费` : ''
     }`,
   withdrawn: '之前选的模型暂时不提供了，已改用 DeepSeek',
-  switched: (label: string) => `已切换为 ${label}`,
+  switched: (label: string) => `已换成 ${label}`,
   failed: '没能切换，稍后再试试',
 };
+
+/** A round chip behind each model's row: its initials on a soft gradient (the design's Models board). */
+const MODEL_MARKS: Record<PlayerModelId, string> = { deepseek: 'DS', gemini: 'GE', xai: 'GK' };
 
 const pointsOf = (info: ModelChoiceInfo, id: PlayerModelId) =>
   info.models.find((entry) => entry.id === id)?.points ?? 0;
@@ -65,6 +72,10 @@ export function backupNote(
 
 export interface ModelPickerOptions {
   info: ModelChoiceInfo;
+  /** The character whose replies the model writes: the sheet is titled "给{name}换个". */
+  characterName: string;
+  /** The character's accent colour: the picked row is outlined in it. */
+  accent?: string;
   api: { setModel(model: PlayerModelId): Promise<ModelChoiceInfo> };
   /** Called with the new state after a successful switch. */
   onChanged(info: ModelChoiceInfo): void;
@@ -77,7 +88,13 @@ export function openModelPicker(options: ModelPickerOptions) {
   let info = options.info;
   const mountPoint = options.mount ?? document.body;
   const opener = document.activeElement as HTMLElement | null;
-  const title = h('strong', { class: 'acct-title', text: modelCopy.menuTitle, attrs: { id: 'mp-title' } });
+  const title = h(
+    'strong',
+    { class: 'acct-title mp-title', attrs: { id: 'mp-title' } },
+    h('span', { text: modelCopy.title(options.characterName) }),
+    // The pink brain is drawn by the stylesheet (a data-URI background): no markup to parse, and it works under the strict CSP.
+    h('span', { class: 'mp-brain', attrs: { role: 'img', 'aria-label': modelCopy.brain } }),
+  );
   const closeButton = h('button', {
     class: 'acct-close icon-button',
     attrs: { type: 'button', 'aria-label': modelCopy.close },
@@ -86,14 +103,27 @@ export function openModelPicker(options: ModelPickerOptions) {
   const balance = h('p', { class: 'mp-balance', attrs: { role: 'status', 'aria-live': 'polite' } });
   const body = h('div', { class: 'acct-body mp-body' });
   const status = h('p', { class: 'acct-status', attrs: { role: 'status', 'aria-live': 'polite' } });
+  /** The confirm box under the rows (the rows stay, the picked one lifts). Empty while nothing is picked. */
+  const confirmBox = h('div', { class: 'mp-confirm-box' });
+  // The sheet is a panel that slides up over a dim that fades in; tapping the dim closes it (Part 25a).
   const sheet = h(
     'div',
     { class: 'acct-sheet mp-sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'mp-title' } },
-    h('header', { class: 'acct-head' }, title, closeButton),
-    h('div', { class: 'acct-body' }, balance),
-    body,
-    status,
+    h(
+      'div',
+      { class: 'mp-panel' },
+      h('span', { class: 'mp-grip', attrs: { 'aria-hidden': 'true' } }),
+      h('header', { class: 'acct-head' }, title, closeButton),
+      h('div', { class: 'acct-body' }, balance),
+      body,
+      confirmBox,
+      status,
+    ),
   );
+  sheet.addEventListener('click', (event) => {
+    if (event.target === sheet) close();
+  });
+  if (options.accent) sheet.style.setProperty('--accent', options.accent);
   let closed = false;
   let busy = false;
   const close = () => {
@@ -107,33 +137,39 @@ export function openModelPicker(options: ModelPickerOptions) {
     if ((event as KeyboardEvent).key === 'Escape') close();
   }
 
-  const list = () => {
+  const list = (picked?: PlayerModelId) => {
     balance.textContent = info.metered ? modelFooterNote(info) : '';
     balance.hidden = !info.metered;
     status.textContent = '';
+    confirmBox.replaceChildren();
     body.replaceChildren(
       ...info.models.map((entry) => {
         const model = PLAYER_MODELS[entry.id];
         const selected = entry.id === info.selected;
+        const lifted = entry.id === picked;
         const card = h(
           'button',
           {
-            class: `mp-card${selected ? ' is-current' : ''}`,
-            attrs: { type: 'button', 'aria-pressed': String(selected), 'data-model': entry.id },
+            class: `mp-card${selected ? ' is-current' : ''}${lifted ? ' is-picked' : ''}`,
+            attrs: { type: 'button', 'aria-pressed': String(selected || lifted), 'data-model': entry.id },
           },
+          h('span', { class: 'mp-chip', text: MODEL_MARKS[entry.id], attrs: { 'aria-hidden': 'true' } }),
           h(
             'span',
-            { class: 'mp-name' },
-            model.label,
-            selected ? h('i', { class: 'mp-tag', text: modelCopy.current }) : null,
+            { class: 'mp-text' },
+            h(
+              'span',
+              { class: 'mp-name' },
+              model.label,
+              selected ? h('i', { class: 'mp-tag', text: modelCopy.current }) : null,
+            ),
+            h('span', { class: 'mp-speed', text: model.speed }),
           ),
-          h('span', { class: 'mp-blurb', text: model.blurb }),
-          h('span', { class: 'mp-speed', text: model.speed }),
           info.metered
             ? h(
                 'span',
                 { class: 'mp-prices' },
-                h('b', { text: modelCopy.perMessage(entry.points) }),
+                h('b', { text: modelCopy.price(entry.points) }),
                 h('b', { text: modelCopy.voice(entry.voicePoints) }),
               )
             : null,
@@ -148,9 +184,14 @@ export function openModelPicker(options: ModelPickerOptions) {
 
   const confirm = (id: PlayerModelId) => {
     const entry = info.models.find((item) => item.id === id)!;
-    const sure = h('button', { class: 'acct-primary', attrs: { type: 'button' }, text: modelCopy.confirmButton });
-    const back = h('button', { class: 'acct-link', attrs: { type: 'button' }, text: modelCopy.cancelButton });
-    back.addEventListener('click', list);
+    list(id);
+    const sure = h('button', {
+      class: 'acct-primary mp-sure',
+      attrs: { type: 'button' },
+      text: modelCopy.confirmButton,
+    });
+    const back = h('button', { class: 'acct-link mp-back', attrs: { type: 'button' }, text: modelCopy.cancelButton });
+    back.addEventListener('click', () => list());
     sure.addEventListener('click', async () => {
       if (busy) return;
       busy = true;
@@ -167,7 +208,7 @@ export function openModelPicker(options: ModelPickerOptions) {
         busy = false;
       }
     });
-    body.replaceChildren(
+    confirmBox.replaceChildren(
       h('p', {
         class: 'acct-intro mp-confirm',
         text: info.metered

@@ -49,6 +49,8 @@ class NodeStub {
   scrollHeight = 0;
   clientHeight = 0;
   dataset: Record<string, string> = {};
+  // Part 25a: the 额度 block's bar and the 小卡 colours are set through the CSSOM.
+  style = { setProperty() {}, getPropertyValue: () => '' };
   parent: NodeStub | null = null;
   children: NodeStub[] = [];
   nodes = new Map<string, NodeStub>();

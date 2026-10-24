@@ -32,6 +32,8 @@ export type CocreationSheetOptions = {
   mark?: string;
   color?: string;
   ink?: string;
+  /** Part 25a: the character's aura (three cloud colours) and accent; the sheet is painted in them. */
+  aura?: readonly [string, string, string, string];
   say?: (message: string) => void;
   /** Where the sheet is mounted; defaults to document.body. */
   mount?: HTMLElement;
@@ -43,13 +45,17 @@ export type CocreationSheetOptions = {
 
 export const BATCH_SIZE = 5;
 export const cocreationCopy = {
+  /** The chat ⋯ menu's entry. */
   title: (name: string) => `共创 · 让${name}更像${name}`,
+  /** Part 25a: the sheet's own header. */
+  heading: (name: string) => `让${name}更像${name}`,
   sub: (name: string) => `写下你心中的${name}`,
   /** One answer per player per character per card per UTC day: the card is spent until 00:00 UTC. */
   cardUsed: '今天已回答，明天再来',
   /** Every card of this character has been answered today. */
   allUsed: '今天的问题都回答过了，明天再来',
-  progress: (n: number) => (n === 0 ? '写几张都行，不用写完' : `已写 ${n} 张`),
+  /** Part 25a: "written / cards on offer". */
+  progress: (n: number, total: number) => `${n} / ${total}`,
   shuffle: '换一批',
   send: (name: string) => `交给${name}`,
   sending: '正在交出去…',
@@ -155,7 +161,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   ];
 
   // ---- DOM ------------------------------------------------------------------------------------------------------
-  const title = h('strong', { class: 'cc-title', text: cocreationCopy.title(name), attrs: { id: 'cc-title' } });
+  const title = h('strong', { class: 'cc-title', text: cocreationCopy.heading(name), attrs: { id: 'cc-title' } });
   const progress = h('span', { class: 'cc-progress', attrs: { role: 'status', 'aria-live': 'polite' } });
   const closeButton = h('button', {
     class: 'cc-close icon-button',
@@ -195,11 +201,22 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     h('footer', { class: 'cc-foot' }, notice, sendButton),
     thanks,
   );
-  if (options.color)
-    sheet.setAttribute(
-      'style',
-      `--cc-color:${options.color};--cc-ink:${options.ink ?? '#29423b'};--avatar-bg:${options.color};--avatar-ink:${options.ink ?? '#29423b'}`,
-    );
+  // The character's colours travel as custom properties set through the CSSOM (an inline style attribute is refused by the CSP).
+  const paint = (name: string, value: string | undefined) => {
+    if (value) sheet.style.setProperty(name, value);
+  };
+  if (options.color) {
+    paint('--cc-color', options.color);
+    paint('--cc-ink', options.ink ?? '#29423b');
+    paint('--avatar-bg', options.color);
+    paint('--avatar-ink', options.ink ?? '#29423b');
+  }
+  if (options.aura) {
+    paint('--aura-1', options.aura[0]);
+    paint('--aura-2', options.aura[1]);
+    paint('--aura-3', options.aura[2]);
+    paint('--accent', options.aura[3]);
+  }
 
   type CardRefs = {
     card: CocreationCard;
@@ -268,7 +285,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   };
   const refresh = () => {
     const n = writtenCount();
-    progress.textContent = cocreationCopy.progress(n);
+    progress.textContent = cocreationCopy.progress(n, deckIds().filter((id) => !used.has(id)).length);
     sendButton.disabled = busy || n === 0 || allUsed();
     usedBanner.hidden = !allUsed();
     shuffleButton.disabled = busy;

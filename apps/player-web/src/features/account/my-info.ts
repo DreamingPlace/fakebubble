@@ -28,12 +28,18 @@ export const infoCopy = {
   copyFailed: '请长按编号复制',
   email: '邮箱',
   noEmail: '未绑定',
-  tier: '当前身份',
   registered: '注册玩家',
   invitedUnlimited: '邀请 · 不限量',
   invitedRefill: (n: number) => `邀请 · 每天 +${n} 点`,
   trial: '体验中',
-  expires: '到期',
+  /** Part 25a: the 额度 block's tier pill for an invitation (the refill amount and the end date have their own places). */
+  invited: '邀请',
+  points: '点',
+  times: '次',
+  perDay: (n: number) => `/ 每天 +${n}`,
+  forever: '∞',
+  foreverLabel: '长期有效',
+  expiresLabel: (date: string) => `到期 ${date}`,
   billing: '消费记录',
   enterCode: '输入邀请码',
   unlimited: '不限量',
@@ -92,14 +98,87 @@ export function tierView(args: {
   return { label: infoCopy.registered, expires: null, quota: balance, unlimited: false };
 }
 
+/**
+ * Part 25a: what the one 额度 block shows. Pure. The page decides nothing from the principal kind; `tier` is the server's effective
+ * tier. Never carries the cap (the bar is the cap) and never the "约可聊" line (that stays in the top bar and the model sheet).
+ */
+export interface QuotaView {
+  /** 注册玩家 / 邀请 / 体验中 */
+  pill: string;
+  /** The chip on the right: '∞' when it never ends, the UTC date when it does, nothing for a plain registered player. */
+  expiry: { forever: true } | { date: string } | null;
+  /** The big number, or 不限量; null when the page has no figure for this player. */
+  big: string | null;
+  /** 点 / 次, empty for 不限量. */
+  unit: string;
+  /** "/ 每天 +N": a daily-refill entitlement only. */
+  daily: number | null;
+  /** How full the bar is (0-100): balance ÷ cap for a daily refill, remaining ÷ offered for a trial. No bar when null. */
+  fill: number | null;
+  unlimited: boolean;
+}
+const percent = (part: number, whole: number) => Math.max(0, Math.min(100, Math.round((part / whole) * 100)));
+export function quotaView(args: {
+  tier: AccountTier | undefined;
+  modelChoice: ModelChoiceInfo | undefined;
+}): QuotaView {
+  const { tier, modelChoice } = args;
+  const plan = tier?.plan ?? modelChoice?.plan;
+  const balance = modelChoice?.metered ? modelChoice.balance : null;
+  const expiry = (): QuotaView['expiry'] =>
+    plan?.expiresAt == null ? { forever: true } : { date: utcDate(plan.expiresAt) };
+  if (tier?.kind === 'daily_refill' || (!tier && plan?.kind === 'daily_refill'))
+    return {
+      pill: infoCopy.invited,
+      expiry: expiry(),
+      big: balance === null ? null : String(balance),
+      unit: infoCopy.points,
+      daily: plan?.dailyAmount ?? 0,
+      fill: balance !== null && plan?.cap ? percent(balance, plan.cap) : null,
+      unlimited: false,
+    };
+  if (tier?.unlimited || (!tier && plan?.kind === 'unlimited'))
+    return {
+      pill: infoCopy.invited,
+      expiry: expiry(),
+      big: infoCopy.unlimited,
+      unit: '',
+      daily: null,
+      fill: null,
+      unlimited: true,
+    };
+  return {
+    pill: infoCopy.registered,
+    expiry: null,
+    big: balance === null ? null : String(balance),
+    unit: infoCopy.points,
+    daily: null,
+    fill: null,
+    unlimited: false,
+  };
+}
+/** A guest's trial: the replies it has left, and how far the bar is filled. `offered` is what the trial started with. */
+export function trialQuotaView(args: { remaining: number; offered: number; endsAt: number | null }): QuotaView {
+  return {
+    pill: infoCopy.trial,
+    expiry: args.endsAt === null ? null : { date: utcDate(args.endsAt).slice(5) },
+    big: String(args.remaining),
+    unit: infoCopy.times,
+    daily: null,
+    fill: percent(args.remaining, Math.max(args.offered, args.remaining, 1)),
+    unlimited: false,
+  };
+}
+
 export interface MyInfoOptions {
   /** 'player' has an email login; 'guest' a trial. */
   mode: 'player' | 'guest';
   nickname: string | null;
   playerNumber: string | null;
   emailMasked: string | null;
-  tier: TierView | null;
-  /** The guest's trial status (the top bar's line), shown as its 额度. */
+  /** The 额度 block (Part 25a): a signed-up player's tier, or a guest's trial. Null shows the buttons only. */
+  quota: QuotaView | null;
+  /** The guest's trial status (the top bar's line). Read by screen readers next to the trial number. */
   trialLine: string | null;
   signupOpen: boolean;
   /** The label of the invite-code row: 输入邀请码, or 核对邀请 while a redemption still needs checking. */
@@ -263,39 +342,85 @@ export function openMyInfo(options: MyInfoOptions) {
       ),
     );
   }
+  /** Part 25a: the one 额度 block - tier pill and expiry chip, the big number, the bar, the buttons. */
+  const quotaCard = (quota: QuotaView | null, extra: { guest: boolean }, ...buttons: (HTMLElement | null)[]) => {
+    const chip =
+      quota?.expiry == null
+        ? null
+        : 'forever' in quota.expiry
+          ? h(
+              'span',
+              { class: 'mi-chip', attrs: { 'aria-label': infoCopy.foreverLabel } },
+              h('i', { text: infoCopy.forever }),
+            )
+          : h('span', {
+              class: 'mi-chip',
+              text: quota.expiry.date,
+              attrs: { 'aria-label': infoCopy.expiresLabel(quota.expiry.date) },
+            });
+    const fill = h('span', { class: 'mi-fill' });
+    fill.style.setProperty('--fill', `${quota?.fill ?? 0}%`);
+    const meter =
+      quota?.fill == null
+        ? null
+        : h(
+            'div',
+            {
+              class: 'mi-meter',
+              attrs: {
+                role: 'meter',
+                'aria-label': infoCopy.quota,
+                'aria-valuemin': '0',
+                'aria-valuemax': '100',
+                'aria-valuenow': String(quota.fill),
+              },
+            },
+            fill,
+          );
+    return h(
+      'section',
+      { class: `mi-section mi-quota-card${extra.guest ? ' is-guest' : ''}` },
+      h('h3', { class: 'mi-heading', text: infoCopy.quota }),
+      quota ? h('div', { class: 'mi-q-head' }, h('span', { class: 'mi-pill', text: quota.pill }), chip) : null,
+      quota?.big == null
+        ? null
+        : h(
+            'div',
+            { class: 'mi-q-number' },
+            h('span', { class: 'mi-big', text: quota.big }),
+            quota.unit ? h('span', { class: 'mi-unit', text: quota.unit }) : null,
+            quota.daily === null ? null : h('span', { class: 'mi-daily', text: infoCopy.perDay(quota.daily) }),
+          ),
+      extra.guest && options.trialLine ? h('span', { class: 'sr-only', text: options.trialLine }) : null,
+      meter,
+      h('div', { class: 'mi-q-buttons' }, ...buttons),
+    );
+  };
+  /** A pill button of the 额度 block. `main` is the black one. */
+  const pillButton = (text: string, onClick: () => void, main: boolean) =>
+    button(text, `mi-pillbtn${main ? ' is-main' : ''}`, onClick);
+
   if (options.mode === 'guest') {
     add(
-      section(
-        infoCopy.quota,
-        row(infoCopy.tier, infoCopy.trial),
-        options.trialLine ? row('', options.trialLine, null, 'mi-trial') : null,
-        a.billing ? link(infoCopy.billing, a.billing) : null,
-        a.enterCode ? link(options.codeLabel ?? infoCopy.enterCode, a.enterCode) : null,
+      quotaCard(
+        options.quota,
+        { guest: true },
+        a.billing ? pillButton(infoCopy.billing, a.billing, false) : null,
+        a.enterCode ? pillButton(options.codeLabel ?? infoCopy.enterCode, a.enterCode, false) : null,
+        pillButton(infoCopy.signup, a.signup, true),
+        pillButton(infoCopy.login, a.login, false),
       ),
-      h(
-        'section',
-        { class: 'mi-section mi-guest' },
-        h(
-          'div',
-          { class: 'mi-buttons' },
-          button(infoCopy.signup, 'acct-primary', a.signup),
-          button(infoCopy.login, 'acct-link mi-login', a.login),
-        ),
-        h('p', { class: 'mi-signup-first', text: infoCopy.signupFirst }),
-      ),
+      h('p', { class: 'mi-signup-first', text: infoCopy.signupFirst }),
     );
     if (options.deleteEnabled)
       add(h('div', { class: 'mi-danger' }, button(infoCopy.clear, 'acct-danger', a.clearDevice)));
   } else {
-    const tier = options.tier;
     add(
-      section(
-        infoCopy.quota,
-        tier ? row(infoCopy.tier, tier.label) : null,
-        tier?.expires ? row(infoCopy.expires, tier.expires, null, 'mi-expires') : null,
-        tier?.quota ? row('', tier.quota, null, 'mi-quota') : null,
-        a.billing ? link(infoCopy.billing, a.billing) : null,
-        a.enterCode ? link(options.codeLabel ?? infoCopy.enterCode, a.enterCode) : null,
+      quotaCard(
+        options.quota,
+        { guest: false },
+        a.billing ? pillButton(infoCopy.billing, a.billing, false) : null,
+        a.enterCode ? pillButton(options.codeLabel ?? infoCopy.enterCode, a.enterCode, true) : null,
       ),
       section(
         infoCopy.security,

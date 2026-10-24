@@ -11,8 +11,8 @@ export function playerMailText(message: {
   code: string | null;
 }) {
   if (message.kind === 'registered')
-    return '你已注册，可直接登录或重置密码。\n\n如果你想登录，请回到 FAKE 泡泡的登录页输入这个邮箱和你的密码；忘记密码时，可以在登录页选择“忘记密码”。\n若非本人操作，请忽略此邮件，不会有任何变化。';
-  return `你的${purposeName[message.purpose]}验证码是：${message.code}\n\n请在 10 分钟内回到 FAKE 泡泡的页面输入。请勿转发此邮件或验证码，也不要告诉任何人。\n若非本人操作，请忽略此邮件。`;
+    return '你已注册，可直接登录或重置密码。\n\n如果你想登录，请回到 Burbur 的登录页输入这个邮箱和你的密码；忘记密码时，可以在登录页选择“忘记密码”。\n若非本人操作，请忽略此邮件，不会有任何变化。';
+  return `你的${purposeName[message.purpose]}验证码是：${message.code}\n\n请在 10 分钟内回到 Burbur 的页面输入。请勿转发此邮件或验证码，也不要告诉任何人。\n若非本人操作，请忽略此邮件。`;
 }
 
 /** Cloudflare's structured Email Sending binding. A timeout or error is reported to the caller and never retried here. */
@@ -32,9 +32,7 @@ export function cloudPlayerMailer(
             from,
             to: message.to,
             subject:
-              message.kind === 'registered'
-                ? 'FAKE 泡泡 · 你已注册'
-                : `FAKE 泡泡 · ${purposeName[message.purpose]}验证码`,
+              message.kind === 'registered' ? 'Burbur · 你已注册' : `Burbur · ${purposeName[message.purpose]}验证码`,
             text: playerMailText(message),
           }),
           new Promise<never>((_, reject) => {

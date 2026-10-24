@@ -200,7 +200,7 @@ export class WebAlerts {
         if (!alert) return;
         if (await this.claim(`sent:${type}`, now, ALERT_COOLDOWN_MS)) {
           await alert.commit?.();
-          if (await this.deliver(`FAKE 泡泡 告警 · ${label[type]}`, alert.text)) sent.push(type);
+          if (await this.deliver(`Burbur 告警 · ${label[type]}`, alert.text)) sent.push(type);
         }
       } catch {
         this.d.report?.(`alert_evaluate_failed:${type}`);
@@ -313,8 +313,8 @@ export class WebAlerts {
           const errors = await this.errorsLastHour(now);
           const expiry = this.earliestPriceExpiry();
           const purging = this.has('web_guest_retention') ? purgeDiagnostics(this.d.store, now).purging : 0;
-          const text = `FAKE 泡泡 日报（最近 24 小时）\n回复：${replies} 条\n新注册：${signups} 人\n供应商花费：约 ${money(this.spendSince(since))}\n失败回复：${failures} 条\n结果未知的调用（累计）：${unknown} 条\n最近一小时服务端错误：${errors} 次${expiry === null ? '' : `\n最早的价格到期：UTC ${isoDay(expiry)}`}${purging > 0 ? `\n未完成的数据清理：${purging} 个` : ''}`;
-          if (await this.deliver('FAKE 泡泡 日报', text)) sent.push('digest');
+          const text = `Burbur 日报（最近 24 小时）\n回复：${replies} 条\n新注册：${signups} 人\n供应商花费：约 ${money(this.spendSince(since))}\n失败回复：${failures} 条\n结果未知的调用（累计）：${unknown} 条\n最近一小时服务端错误：${errors} 次${expiry === null ? '' : `\n最早的价格到期：UTC ${isoDay(expiry)}`}${purging > 0 ? `\n未完成的数据清理：${purging} 个` : ''}`;
+          if (await this.deliver('Burbur 日报', text)) sent.push('digest');
         }
       } catch {
         this.d.report?.('alert_digest_failed');
