@@ -202,10 +202,35 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     const mobile = window.innerWidth <= 600;
     nav.inert = chatting;
     nav.setAttribute('aria-hidden', String(chatting));
+    // Part 25a: a card in front of another is solid and nothing shows through it. Only the three nearest cards on each side are
+    // drawn, at most two of them empty "new friend" slots, and the words "新朋友还未到来" appear once, on the nearest empty slot.
+    const isEmpty = (index: number) => !people[index]!.characterId;
+    const hiddenSlots = new Set<number>();
+    let nearEmpty = isEmpty(active) ? active : -1;
+    let nearEmptyDepth = 99;
+    for (const direction of [1, -1]) {
+      let empties = 0;
+      for (let depth = 1; depth <= Math.floor(people.length / 2); depth++) {
+        const index = (((active + direction * depth) % people.length) + people.length) % people.length;
+        if (depth > 3) hiddenSlots.add(index);
+        else if (isEmpty(index)) {
+          empties++;
+          if (empties > 2) hiddenSlots.add(index);
+          else if (!isEmpty(active) && depth < nearEmptyDepth) {
+            nearEmpty = index;
+            nearEmptyDepth = depth;
+          }
+        }
+      }
+    }
     cards.forEach((card, index) => {
       const offset = ringOffset(index, active, people.length);
       const orbit = orbitStyle(offset, people.length);
       const previous = previousOffsets.get(card);
+      card.dataset.side = offset === 0 ? 'c' : offset < 0 ? 'l' : 'r';
+      card.style.setProperty('--fan', String(Math.sign(offset) * Math.min(Math.abs(offset), 3) * 3.5));
+      card.classList.toggle('is-hidden-slot', hiddenSlots.has(index));
+      card.classList.toggle('is-near-empty', index === nearEmpty);
       if (previous !== undefined && Math.abs(previous - offset) > 7) {
         card.classList.add('orbit-wrap');
         requestAnimationFrame(() => card.classList.remove('orbit-wrap'));
@@ -224,7 +249,9 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
       );
       const hidden = chatting;
       const inaccessible =
-        ((hidden || window.innerWidth <= 600) && index !== active) || (!hidden && Math.abs(offset) > 2);
+        ((hidden || window.innerWidth <= 600) && index !== active) ||
+        (!hidden && Math.abs(offset) > 2) ||
+        hiddenSlots.has(index);
       card.inert = inaccessible;
       card.setAttribute('aria-hidden', inaccessible ? 'true' : 'false');
       const reply = card.querySelector<HTMLTextAreaElement>('textarea')!;

@@ -385,7 +385,9 @@ test('every animation of the skin is switched off by prefers-reduced-motion', ()
 
 test('the design’s one curve is used for every move, and the 小卡 sheen plays once per arrival, never in a loop', () => {
   assert.match(skin, /--bb-ease: cubic-bezier\(0\.2, 0\.82, 0\.24, 1\)/);
-  assert.doesNotMatch(bare, /animation:[^;}]*infinite/);
+  // Part 25a fix (named exception): two slow loops are wanted - the front card breathing and the avatar bubbles drifting - and no other.
+  const loops = [...bare.matchAll(/animation:\s*(bb-[a-z]+)[^;}]*infinite/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(loops)].sort(), ['bb-breathe', 'bb-drift']);
   assert.match(skin, /\.card-slot\.is-active:not\(\.is-chat\) \.face-sheen \{\s*animation: bb-sheen 900ms/);
 });
 
@@ -402,4 +404,34 @@ test('animations that end must not leave a stacking context over the ⋯ menu (f
     skin,
     /\.card-slot\.is-chat :is\(\.chat-head, \.chat-body, \.composer\) \{\s*animation: bb-fade 320ms ease 120ms backwards/,
   );
+});
+
+// ---- 消费记录 layout (Part 25a fix) --------------------------------------------------------------------------------------
+
+test('消费记录: one set of .bl-* rules; both tables share one fixed grid; a history row is icon | text | points', () => {
+  const count = (selector: string) => css.split('\n').filter((line) => line === `${selector} {`).length;
+  for (const selector of ['.bl-row', '.bl-table', '.bl-tables', '.bl-balance', '.bl-points', '.bl-list', '.bl-body'])
+    assert.equal(count(selector), 1, `${selector} is defined once`);
+  assert.match(bare, /\.bl-table \{[^}]*table-layout: fixed/);
+  assert.match(bare, /\.bl-table th:nth-child\(2\),\s*\.bl-table td:nth-child\(2\) \{\s*width: 52px/);
+  assert.match(bare, /\.bl-table th:nth-child\(3\),\s*\.bl-table td:nth-child\(3\) \{\s*width: 64px/);
+  assert.match(bare, /\.bl-table \{[^}]*font-variant-numeric: tabular-nums/);
+  assert.match(bare, /\.bl-row \{[^}]*grid-template-columns: 32px minmax\(0, 1fr\) 84px/);
+  assert.match(bare, /\.bl-main \{[^}]*text-align: left/);
+  assert.match(bare, /\.bl-title \{[^}]*text-align: left/);
+  assert.match(bare, /\.bl-points \{[^}]*text-align: right;[^}]*white-space: nowrap/);
+});
+
+test('消费记录: the title row is outside the scrolling body, so the black pill cannot cover it', () => {
+  assert.match(bare, /\.bl-sheet \{\s*overflow: hidden/);
+  assert.match(bare, /\.bl-body \{[^}]*flex: 1;[^}]*min-height: 0;[^}]*overflow-y: auto/);
+});
+
+test('home: far slots are hidden, the back cards are solid and fanned, the front card breathes', () => {
+  assert.match(bare, /\.page-shell \.card-slot \{\s*opacity: 1;/);
+  assert.match(bare, /rotate\(calc\(var\(--fan, 0\) \* 1deg\)\)/);
+  assert.match(bare, /\.card-slot\.is-hidden-slot \{[^}]*visibility: hidden/);
+  assert.match(bare, /\.page-shell \.card-slot\.is-active:not\(\.is-chat\) \{\s*animation: bb-breathe/);
+  assert.match(bare, /\.card-slot:not\(\.is-active\) :is\(\.face-latin, \.face-voice/);
+  assert.match(bare, /\.face-reserve \.face-empty-text \{\s*display: none/);
 });

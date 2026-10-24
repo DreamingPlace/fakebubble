@@ -4111,117 +4111,7 @@ body.legal-page {
   text-align: center;
 }
 
-/* Part 21f: 消费记录 */
-.bl-body {
-  display: grid;
-  gap: 14px;
-  align-content: start;
-  overflow-y: auto;
-}
-.bl-balance {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 650;
-  color: #294b40;
-}
-.bl-heading {
-  margin: 12px 0 6px;
-  font-size: 14px;
-  font-weight: 600;
-  opacity: 0.75;
-}
-.bl-tables {
-  display: grid;
-  gap: 12px;
-}
-.bl-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-.bl-table th,
-.bl-table td {
-  padding: 5px 4px;
-  text-align: right;
-  border-bottom: 1px solid #e3e6e2;
-}
-.bl-table th:first-child,
-.bl-table td:first-child {
-  text-align: left;
-}
-.bl-table th {
-  font-weight: 500;
-  opacity: 0.65;
-}
-.bl-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-}
-.bl-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  padding: 10px 2px;
-  border-bottom: 1px solid #e3e6e2;
-}
-.bl-main {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.bl-title {
-  font-size: 14px;
-}
-.bl-sub {
-  font-size: 13px;
-  opacity: 0.7;
-  overflow-wrap: anywhere;
-}
-.bl-points {
-  flex: none;
-  font-size: 14px;
-  font-weight: 600;
-}
-.bl-row.is-bonus .bl-points,
-.bl-row.is-grant .bl-points,
-.bl-row.is-daily_refill .bl-points {
-  color: #2f7a4f;
-}
-.bl-empty,
-.bl-window {
-  padding: 12px 2px;
-  font-size: 13px;
-  opacity: 0.65;
-  text-align: center;
-}
-.bl-pager {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-.bl-pager button:disabled {
-  opacity: 0.4;
-}
-.bl-page {
-  font-size: 13px;
-  opacity: 0.7;
-}
-@media (min-width: 601px) {
-  .bl-sheet {
-    align-items: stretch;
-  }
-  .bl-sheet .acct-head,
-  .bl-sheet .acct-body {
-    width: min(520px, 100%);
-  }
-  .bl-tables {
-    grid-template-columns: 1fr 1fr;
-  }
-}
+/* Part 21f: 消费记录 — its rules live in one place now: the Part 25a block below. */
 
 /* Part 21i: spent co-creation cards, password toggle, signup mismatch line */
 .cc-card.is-used {
@@ -4565,8 +4455,8 @@ body.legal-page {
 .page-shell .card-slot:not(.is-chat) {
   padding: 7px;
   border-radius: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid #fff;
+  background: #fbf9f8;
   box-shadow: 0 24px 60px rgba(40, 24, 60, 0.18);
 }
 .page-shell .card-slot:not(.is-chat) .card-shell {
@@ -4854,6 +4744,7 @@ body.legal-page {
     radial-gradient(60% 30% at 95% 40%, #d5f6ee 0%, transparent 70%), var(--bb-paper);
 }
 .bl-sheet {
+  overflow: hidden;
   background:
     radial-gradient(70% 30% at 10% 10%, #dcd2ff 0%, transparent 70%),
     radial-gradient(60% 30% at 95% 40%, #ffd8ee 0%, transparent 70%), var(--bb-paper);
@@ -5557,48 +5448,100 @@ html:has(.signed-out-page) {
   font-weight: 700;
 }
 
-/* ---- 消费记录 ---- */
+/* ---- 消费记录: the one set of .bl-* rules ---- */
+.bl-sheet .acct-head {
+  flex: none;
+}
+/* The title row is not part of the scrolling body, so nothing (the black pill included) can ever slide over it. */
+.bl-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  overflow-y: auto;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+}
+.bl-summary {
+  display: grid;
+  gap: 12px;
+}
 .bl-balance {
-  align-self: center;
   display: flex;
   align-items: center;
   width: fit-content;
-  height: 32px;
+  max-width: 100%;
+  min-height: 32px;
   margin: 0 auto;
-  padding: 0 14px;
+  padding: 6px 14px;
   border-radius: 999px;
   background: var(--bb-ink);
   color: #fff;
   font-family: var(--bb-mono);
   font-size: 13px;
   font-weight: 400;
-}
-.bl-summary {
-  display: grid;
-  gap: 12px;
+  text-align: center;
 }
 .bl-heading {
   margin: 0;
   font-size: 15px;
   font-weight: 900;
-  opacity: 1;
 }
 .bl-tables {
+  display: grid;
+  gap: 14px;
   padding: 14px 16px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.9);
-  font-variant-numeric: tabular-nums;
   animation: bb-rise 420ms var(--bb-ease) both;
 }
-.bl-list {
-  padding: 4px 16px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.9);
+/* Both tables share one fixed grid: the name takes the rest, 条数 and 点数 have fixed widths, numbers are right-aligned. */
+.bl-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
 }
+.bl-table th,
+.bl-table td {
+  padding: 5px 4px;
+  border-bottom: 1px solid #f0ece7;
+  text-align: right;
+  white-space: nowrap;
+}
+.bl-table th:first-child,
+.bl-table td:first-child {
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.bl-table th:nth-child(2),
+.bl-table td:nth-child(2) {
+  width: 52px;
+}
+.bl-table th:nth-child(3),
+.bl-table td:nth-child(3) {
+  width: 64px;
+}
+.bl-table th {
+  font-weight: 500;
+  color: var(--bb-sub);
+}
+.bl-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 16px;
+  display: grid;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+}
+/* A history row is a fixed three-column grid: icon | text (left, fills, wraps) | points (right, fixed, never wraps). */
 .bl-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 84px;
   align-items: center;
-  gap: 12px;
+  column-gap: 12px;
   min-height: 56px;
   padding: 8px 0;
   border-bottom: 1px solid #f0ece7;
@@ -5606,10 +5549,8 @@ html:has(.signed-out-page) {
 }
 .bl-row::before {
   content: "";
-  order: -1;
   width: 32px;
   height: 32px;
-  flex: none;
   border-radius: 50%;
   background: linear-gradient(140deg, #e9e2f2, #fff);
   box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.06);
@@ -5642,27 +5583,67 @@ html:has(.signed-out-page) {
   animation-delay: 200ms;
 }
 .bl-main {
-  flex: 1;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
 }
 .bl-title {
+  font-size: 14px;
   font-weight: 700;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 .bl-sub {
   font-size: 12px;
-  opacity: 1;
   color: #3f3f3f;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 .bl-points {
+  text-align: right;
+  white-space: nowrap;
   font-family: var(--bb-mono);
+  font-size: 14px;
   font-weight: 500;
+  font-variant-numeric: tabular-nums;
 }
 .bl-row.is-bonus .bl-points,
 .bl-row.is-grant .bl-points,
 .bl-row.is-daily_refill .bl-points {
   color: #1e5e36;
 }
+.bl-empty,
+.bl-window {
+  padding: 12px 2px;
+  font-size: 13px;
+  color: var(--bb-sub);
+  text-align: center;
+}
+.bl-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.bl-pager button:disabled {
+  opacity: 0.4;
+}
 .bl-page {
   font-family: var(--bb-mono);
+  font-size: 13px;
+}
+@media (min-width: 601px) {
+  .bl-sheet {
+    align-items: stretch;
+  }
+  .bl-sheet .acct-head,
+  .bl-sheet .acct-body {
+    width: min(520px, 100%);
+  }
+  .bl-tables {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 /* ---- 共创: the deck of tilted photocards ---- */
@@ -5826,15 +5807,127 @@ html:has(.signed-out-page) {
   font-weight: 900;
 }
 
+/* ---- home: a hand of solid cards, with some life ---- */
+@keyframes bb-breathe {
+  50% {
+    translate: 0 -5px;
+  }
+}
+@keyframes bb-drift {
+  50% {
+    translate: 0 -3px;
+  }
+}
+/* Solid, fanned, and springy. The orbit's own numbers (offset, height, scale) stay; the fade is replaced by hiding the far slots. */
+.page-shell .card-slot {
+  opacity: 1;
+  transform: translate(-50%, -50%) translateX(calc(var(--orbit-x) + var(--drag-x))) translateY(var(--orbit-y))
+    rotate(calc(var(--fan, 0) * 1deg)) scale(var(--orbit-scale));
+}
+.page-shell .carousel:not(.is-dragging) .card-slot:not(.orbit-wrap) {
+  transition:
+    transform 560ms cubic-bezier(0.34, 1.35, 0.5, 1),
+    opacity 220ms ease,
+    translate 220ms var(--bb-ease);
+}
+.page-shell .card-slot.is-hidden-slot {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 220ms ease,
+    visibility 0s 220ms;
+}
+.page-shell .card-slot.is-active:not(.is-chat) {
+  animation: bb-breathe 5s ease-in-out infinite;
+}
+@media (hover: hover) and (min-width: 601px) {
+  .page-shell .card-slot:not(.is-active):not(.is-hidden-slot):hover {
+    translate: 0 -12px;
+  }
+}
+/* Behind the front card only the colour, the small name and the number show, on the edge that sticks out. */
+.card-slot:not(.is-active) .face-name {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.card-slot:not(.is-active) :is(.face-latin, .face-voice, .face-sheen, .face-top span:first-child) {
+  display: none;
+}
+.card-slot[data-side="r"]:not(.is-active) .face-top {
+  justify-content: flex-end;
+}
+.card-slot[data-side="r"]:not(.is-active) .face-main {
+  align-items: flex-end;
+}
+.card-slot:not(.is-active) .face-main {
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+.card-slot:not(.is-active) .face-empty {
+  justify-content: center;
+  padding-top: 0;
+}
+.card-slot.is-active .face-name {
+  animation: bb-pop 420ms var(--bb-ease) both;
+}
+.face-reserve .face-question {
+  opacity: 0.35;
+}
+.face-reserve .face-empty-text {
+  display: none;
+}
+.card-slot.is-near-empty .face-empty-text,
+.card-slot.is-active .face-reserve .face-empty-text {
+  display: block;
+}
+.face-reserve .face-top {
+  visibility: hidden;
+}
+.card-slot.is-active .face-reserve .face-top {
+  visibility: visible;
+}
+.page-shell .avatar-choice-mark {
+  animation: bb-drift 6s ease-in-out infinite;
+}
+.page-shell .avatar-choice:nth-child(2n) .avatar-choice-mark {
+  animation-delay: -2s;
+}
+.page-shell .avatar-choice:nth-child(3n) .avatar-choice-mark {
+  animation-delay: -4s;
+}
+@media (max-width: 600px) {
+  .page-shell .site-head .head-note {
+    text-align: right;
+    justify-self: end;
+    padding: 0;
+  }
+  .page-shell .head-actions {
+    grid-column: 2 / 4;
+    justify-self: end;
+    justify-content: flex-end;
+    margin: 0;
+  }
+  .page-shell .head-account {
+    min-width: 0;
+    padding-right: 0;
+    text-align: right;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .aura,
   .card-face,
+  .page-shell .carousel:not(.is-dragging) .card-slot:not(.orbit-wrap),
   .mi-pillbtn,
   .mp-card,
   .cc-sheet .cc-cta {
     transition: none;
   }
   .card-slot.is-active:not(.is-chat) .face-sheen,
+  .page-shell .card-slot.is-active:not(.is-chat),
+  .card-slot.is-active .face-name,
+  .page-shell .avatar-choice-mark,
   .page-shell .message-row,
   .card-slot.is-chat :is(.chat-head, .chat-body, .composer),
   .acct-sheet,
