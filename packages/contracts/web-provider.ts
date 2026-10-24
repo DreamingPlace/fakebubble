@@ -42,6 +42,8 @@ export type WebProviderAccess = {
   worldId: string;
   revision: number;
   lockedCharacterId: WebProviderCharacterId | null;
+  /** Part 26a: present only for an unregistered guest while GUEST_ONE_CHARACTER_ENABLED is on: the characters it may chat with ([] = none chosen yet). */
+  lockedCharacterIds?: WebProviderCharacterId[];
   remainingReplies: number;
   reservedReplies: number;
   trialExpiresAt: number | null;
@@ -273,7 +275,10 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
     typeof access.canSend !== 'boolean'
   )
     invalid();
+  // Part 26a: present only for an unregistered guest under GUEST_ONE_CHARACTER_ENABLED; absent everywhere else.
+  const hasLocks = Object.hasOwn(access, 'lockedCharacterIds');
   exact(access, [
+    ...(hasLocks ? ['lockedCharacterIds'] : []),
     'kind',
     'principalId',
     'playerId',
@@ -287,6 +292,13 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
   ]);
   if (
     !(access.lockedCharacterId === null || characterId(access.lockedCharacterId)) ||
+    (hasLocks &&
+      !(
+        Array.isArray(access.lockedCharacterIds) &&
+        access.lockedCharacterIds.length <= 15 &&
+        new Set(access.lockedCharacterIds).size === access.lockedCharacterIds.length &&
+        access.lockedCharacterIds.every(characterId)
+      )) ||
     !millis(access.remainingReplies) ||
     !millis(access.reservedReplies) ||
     !(access.trialExpiresAt === null || millis(access.trialExpiresAt)) ||

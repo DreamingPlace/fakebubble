@@ -30,6 +30,7 @@ import {
 import { effectiveTier } from './web-model-settings.ts';
 import { ensureRegisteredBonus, type BonusEmailKey } from './web-registered.ts';
 import type { WebStats } from '../stats/web-stats.ts';
+import { lockedCharacterIds } from './web-guest-lock.ts';
 import { requirePublishedWebCharacter } from '../characters/web-character-catalog.ts';
 
 interface PrincipalRow {
@@ -164,6 +165,11 @@ export class WebAdmission {
       const holderPoints = holder && hasPoints(this.store, principal.id, this.clock.now());
       // Points switched off: nothing to charge a holder with; it chats unmetered under the daily cap (like any invited player).
       const holderFree = holder && !holderPoints;
+      // Part 26a: an unregistered guest that already chats with a character may not start another. Decided HERE, before any
+      // reservation, trial counter, conversation or provider call, so the refusal costs nothing.
+      const guestMay = lockedCharacterIds(this.store, principal.id, this.clock.now());
+      if (guestMay && guestMay.length > 0 && !guestMay.includes(input.characterId))
+        throw new DomainError('GUEST_CHARACTER_LOCKED');
       // An unmetered tier (an unlimited entitlement, or a holder while points are off) is never
       // charged, so the per-day reply cap stays as its invisible abuse guard. Decided from the EFFECTIVE tier, not the kind.
       if (holderFree || eff?.kind === 'unlimited') this.dailyLimit(principal.id);

@@ -624,6 +624,8 @@ export class WebStore extends Store {
   readonly chatReview?: boolean;
   /** CAST_CONTEXT_ENABLED (Part 24a): freeze the compiled cast view into new input snapshots. */
   readonly castContext?: boolean;
+  /** GUEST_ONE_CHARACTER_ENABLED (Part 26a): an unregistered guest chats with one character. */
+  readonly guestOneCharacter?: boolean;
   /** PLAYER_MODEL_CHOICE_ENABLED: the models a player may pick (PLAYER_TEXT_MODELS). Absent = the feature is off. */
   readonly playerModelChoice?: readonly PlayerModelId[];
   /** A persisted invite runtime must have passed the role/root/config preflight on open. */
@@ -659,6 +661,7 @@ export class WebStore extends Store {
       publicFreeTier?: boolean;
       chatReview?: boolean;
       castContext?: boolean;
+      guestOneCharacter?: boolean;
       playerModelChoice?: readonly PlayerModelId[];
     },
   ) {
@@ -669,6 +672,7 @@ export class WebStore extends Store {
     if (options.publicFreeTier === true) this.publicFreeTier = true;
     if (options.chatReview === true) this.chatReview = true;
     if (options.castContext === true) this.castContext = true;
+    if (options.guestOneCharacter === true) this.guestOneCharacter = true;
     this.instanceId = options.instanceId;
     this.root = root;
     this.dataLifecycleTest = options.dataLifecycleTest === true;

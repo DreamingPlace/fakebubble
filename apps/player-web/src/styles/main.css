@@ -4317,6 +4317,44 @@ body.legal-page {
   cursor: pointer;
 }
 
+/* Part 26a: the one-character rule's line above the composer: light, centered, small, fades in; the only control is the word 注册. */
+.guest-note {
+  flex: none;
+  margin: 0;
+  padding: 6px 16px 8px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--bb-sub, #6a7772);
+  background: transparent;
+  animation: guest-note-in 360ms ease backwards;
+}
+.guest-note[hidden],
+.card-slot:not(.is-chat) .guest-note {
+  display: none;
+}
+.guest-note-link {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+  .guest-note {
+    animation: none;
+  }
+}
+@keyframes guest-note-in {
+  from {
+    opacity: 0;
+  }
+}
+
 /* Part 25a: the Burbur skin of the player site (design/burbur-v2). Player selectors only. Everything here repaints what exists:
    the 小卡 cards and the aura page, the chat bubbles, 我的信息, the model sheet, login, 消费记录, 共创 and the motion between
    them. One curve everywhere (cubic-bezier(.2,.82,.24,1)); every animation below is switched off by prefers-reduced-motion. */

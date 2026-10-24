@@ -36,6 +36,7 @@
     "SIGNUP_BONUS_ENABLED": "false",
     "CHAT_REVIEW_ENABLED": "false",
     "CAST_CONTEXT_ENABLED": "false",
+    "GUEST_ONE_CHARACTER_ENABLED": "false",
     "PLAYER_MODEL_CHOICE_ENABLED": "false",
     "PLAYER_TEXT_MODELS": "deepseek,gemini,xai",
     "ALERTS_ENABLED": "false",

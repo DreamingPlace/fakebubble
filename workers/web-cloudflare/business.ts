@@ -109,6 +109,7 @@ export interface WebBusinessEnvironment {
   CHAT_REVIEW_ENABLED?: string;
   /** Part 24a: freeze each character's compiled cast view into new input snapshots and carry it in the request. Off unless 'true'. */
   CAST_CONTEXT_ENABLED?: string;
+  GUEST_ONE_CHARACTER_ENABLED?: string;
   /** Part 21b: players choose the model that writes their replies (and pay in points). Off unless 'true'; PLAYER_TEXT_MODELS lists the models offered. */
   PLAYER_MODEL_CHOICE_ENABLED?: string;
   PLAYER_TEXT_MODELS?: string;
@@ -210,6 +211,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       publicFreeTier: this.publicConfig.signupBonus,
       chatReview: this.publicConfig.chatReview,
       castContext: env.CAST_CONTEXT_ENABLED === 'true',
+      guestOneCharacter: env.GUEST_ONE_CHARACTER_ENABLED === 'true',
       ...(env.PLAYER_MODEL_CHOICE_ENABLED === 'true'
         ? { playerModelChoice: parsePlayerTextModels(env.PLAYER_TEXT_MODELS) }
         : {}),

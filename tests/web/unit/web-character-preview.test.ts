@@ -20,6 +20,7 @@ import {
 } from '../../../apps/server/characters/web-character-preview-runner.ts';
 import { WebProviderBudget } from '../../../apps/server/budget/web-provider-budget.ts';
 import { DeepSeekTextGenerator } from '../../../apps/server/generation/deepseek.ts';
+import { promptMessages } from '../../../apps/server/generation/accepted-text-prompt.ts';
 import { acceptedAuditEnvelope, draftEnvelope } from '../../text-fixtures.ts';
 
 function fixture(t: test.TestContext) {
@@ -452,4 +453,19 @@ test('admin preview list and status return the stored input text and send time, 
   const status = f.chars.previewStatus(f.auth, 'wei-guagua', started.previewId) as typeof started;
   assert.equal(status.input, '今天好吗');
   assert.equal(readWebPreview(f.store, started.previewId).request_json.includes('今天好吗'), true);
+});
+
+test('Part 26a: a preview is the start of a chat, so it says the DRAFT welcome line as its opening, through the same prompt code', (t) => {
+  const f = fixture(t),
+    job = f.start();
+  const row = f.store.get<{ request_json: string }>(
+    'SELECT request_json FROM admin_previews WHERE id=?',
+    job.previewId,
+  )!;
+  const request = JSON.parse(row.request_json);
+  assert.deepEqual(request.opening, { text: f.profile.presentation.welcome.text });
+  const messages = promptMessages(request);
+  assert.deepEqual(JSON.parse(messages[1]!.content).opening, [
+    { authorKind: 'character', delivery: 'voice', text: f.profile.presentation.welcome.text },
+  ]);
 });
