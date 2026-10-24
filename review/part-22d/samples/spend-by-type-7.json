@@ -1,0 +1,128 @@
+{
+  "since": "2027-01-14",
+  "range": 7,
+  "usdCny": 6.7,
+  "days": [
+    {
+      "day": "2027-01-15",
+      "types": [
+        {
+          "userType": "test",
+          "textMicros": 2100,
+          "voiceMicros": 19600
+        },
+        {
+          "userType": "unlimited",
+          "textMicros": 6300,
+          "voiceMicros": 39200
+        },
+        {
+          "userType": "daily_refill",
+          "textMicros": 10500,
+          "voiceMicros": 9800
+        },
+        {
+          "userType": "registered",
+          "textMicros": 4200,
+          "voiceMicros": 29400
+        },
+        {
+          "userType": "guest",
+          "textMicros": 8400,
+          "voiceMicros": 49000
+        }
+      ],
+      "unclassifiedMicros": 0,
+      "totalMicros": 178500
+    },
+    {
+      "day": "2027-01-14",
+      "types": [
+        {
+          "userType": "test",
+          "textMicros": 2100,
+          "voiceMicros": 19600
+        },
+        {
+          "userType": "unlimited",
+          "textMicros": 6300,
+          "voiceMicros": 39200
+        },
+        {
+          "userType": "daily_refill",
+          "textMicros": 10500,
+          "voiceMicros": 9800
+        },
+        {
+          "userType": "registered",
+          "textMicros": 4200,
+          "voiceMicros": 29400
+        },
+        {
+          "userType": "guest",
+          "textMicros": 8400,
+          "voiceMicros": 49000
+        }
+      ],
+      "unclassifiedMicros": 0,
+      "totalMicros": 178500
+    },
+    {
+      "day": "2027-01-13",
+      "types": null,
+      "unclassifiedMicros": null,
+      "totalMicros": null
+    },
+    {
+      "day": "2027-01-12",
+      "types": null,
+      "unclassifiedMicros": null,
+      "totalMicros": null
+    },
+    {
+      "day": "2027-01-11",
+      "types": null,
+      "unclassifiedMicros": null,
+      "totalMicros": null
+    },
+    {
+      "day": "2027-01-10",
+      "types": null,
+      "unclassifiedMicros": null,
+      "totalMicros": null
+    },
+    {
+      "day": "2027-01-09",
+      "types": null,
+      "unclassifiedMicros": null,
+      "totalMicros": null
+    }
+  ],
+  "totals": [
+    {
+      "userType": "test",
+      "textMicros": 4200,
+      "voiceMicros": 39200
+    },
+    {
+      "userType": "unlimited",
+      "textMicros": 12600,
+      "voiceMicros": 78400
+    },
+    {
+      "userType": "daily_refill",
+      "textMicros": 21000,
+      "voiceMicros": 19600
+    },
+    {
+      "userType": "registered",
+      "textMicros": 8400,
+      "voiceMicros": 58800
+    },
+    {
+      "userType": "guest",
+      "textMicros": 16800,
+      "voiceMicros": 98000
+    }
+  ]
+}
