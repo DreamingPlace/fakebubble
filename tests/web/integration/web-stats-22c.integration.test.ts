@@ -120,11 +120,12 @@ test('128 is its own step: same SQL on both authorities, 53 steps, 1-127 unchang
 
   // The ledger of steps.
   const { inline, r2 } = expectedWebMigrations();
-  assert.equal(inline.length, 53);
-  assert.equal(r2.length, 53);
-  assert.equal(inline.at(-1)!.version, 128);
-  assert.equal(inline.at(-1)!.sha256, createHash('sha256').update(sql128()).digest('hex'));
-  assert.deepEqual(r2.at(-1), inline.at(-1));
+  // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.length, 54);
+  assert.equal(r2.length, 54);
+  assert.equal(inline.at(-2)!.version, 128);
+  assert.equal(inline.at(-2)!.sha256, createHash('sha256').update(sql128()).digest('hex'));
+  assert.deepEqual(r2.at(-2), inline.at(-2));
   // 1-127 are byte for byte what Part 22a2 deployed.
   assert.equal(
     inline.find((m) => m.version === 127)!.sha256,

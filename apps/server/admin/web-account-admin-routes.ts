@@ -5,6 +5,7 @@ import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
 import type { WebCocreation } from '../cocreation/web-cocreation.ts';
 import type { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 import type { WebSystemAdmin } from './web-system-admin.ts';
+import type { WebCastAdmin } from './web-cast-admin.ts';
 
 export async function routeWebAccountAdmin(
   admin: WebAccountAdmin,
@@ -13,6 +14,7 @@ export async function routeWebAccountAdmin(
   cocreation?: WebCocreation,
   chatReview?: WebChatReviewAdmin | null,
   system?: WebSystemAdmin | null,
+  cast?: WebCastAdmin | null,
 ): Promise<WebInviteResult | null> {
   const base = '/api/web/local/admin',
     path = req.path;
@@ -86,6 +88,22 @@ export async function routeWebAccountAdmin(
     if (action === 'stats/players-export') return { status: 200, body: system.exportPlayerStats(actor, req.body) };
     if (action === 'stats/costs') return { status: 200, body: system.costs(actor, req.body) };
     if (action === 'stats/costs-export') return { status: 200, body: system.exportCosts(actor, req.body) };
+    ensure(false, 'NOT_FOUND');
+  }
+  // Part 24a: the cast (no console yet). Every call checks its permission before it looks at the body.
+  if (path.startsWith(`${base}/cast/`)) {
+    auth();
+    ensure(cast, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/cast/`.length);
+    if (action === 'draft') return { status: 200, body: cast.draft(actor, req.body) };
+    if (action === 'versions') return { status: 200, body: cast.versions(actor, req.body) };
+    if (action === 'validate') return { status: 200, body: cast.validate(actor, req.body) };
+    if (action === 'compile-preview') return { status: 200, body: cast.compilePreview(actor, req.body) };
+    if (action === 'save') return { status: 200, body: cast.save(actor, req.body) };
+    if (action === 'publish') return { status: 200, body: cast.publish(actor, req.body) };
+    if (action === 'rollback') return { status: 200, body: cast.rollback(actor, req.body) };
+    if (action === 'import-legacy') return { status: 200, body: cast.importLegacy(actor, req.body) };
     ensure(false, 'NOT_FOUND');
   }
   if (path.startsWith(`${base}/cocreation/`)) {

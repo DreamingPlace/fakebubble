@@ -193,6 +193,8 @@ export interface TextGenerationRequest {
   deliveryMode?: 'text' | 'voice';
   requiredMessageIds: string[];
   character: CharacterTemplate;
+  // Part 24a (CAST_CONTEXT_ENABLED): the shared-world view compiled for this character. Absent - never null - while the switch is off.
+  cast?: import('./web-cast.ts').CastRequestContext;
   conversation?: ({ kind: 'group' } | { kind: 'moment'; postMessageId: string } | { kind: 'moment_post' }) & {
     name: string;
     members: { id: string; name: string }[];

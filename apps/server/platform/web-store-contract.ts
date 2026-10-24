@@ -14,6 +14,8 @@ export interface WebRuntimeStore extends BusinessStore {
   /** SIGNUP_BONUS_ENABLED: the 5-reply trial and the signup bonus (see admission/web-free-tier.ts); absent = off. */
   readonly publicFreeTier?: boolean;
   readonly chatReview?: boolean;
+  /** CAST_CONTEXT_ENABLED (Part 24a): freeze the compiled cast view into new input snapshots. Absent = off. */
+  readonly castContext?: boolean;
   /** PLAYER_MODEL_CHOICE_ENABLED: the models a player may pick (PLAYER_TEXT_MODELS). Absent = the feature is off. */
   readonly playerModelChoice?: readonly PlayerModelId[];
   readonly providerAudio?: PrivateMediaObjects;

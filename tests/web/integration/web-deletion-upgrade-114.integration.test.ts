@@ -285,7 +285,8 @@ test('production database at 113 with the deletion schema installed upgrades thr
   // counted from the end of the ledger and expected user_versions in this test moved by one again. No assertion was weakened.
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
   // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
-  assert.equal(upgraded.version, 128);
+  // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(upgraded.version, 129);
   assert.ok(upgraded.schema.some((row) => row.name === 'web_operation_metrics'));
   assert.deepEqual(
     upgraded.triggers,

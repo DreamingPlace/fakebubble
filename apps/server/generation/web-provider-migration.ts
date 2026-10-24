@@ -311,3 +311,22 @@ export function migrateWebProviderStats(store: Store, now = Date.now()) {
     store.db.exec('PRAGMA user_version = 128');
   });
 }
+
+/** Node-only 128→129: the cast - the draft, the append-only publications and the snapshot's three cast columns (129_cast.sql). */
+export function migrateWebProviderCast(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 128 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_stats_daily'"),
+      'WEB_PROVIDER_CAST_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/129_cast.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 129');
+  });
+}

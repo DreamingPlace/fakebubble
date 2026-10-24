@@ -11,6 +11,8 @@ import { bubbleLimits, inspectBubbles } from '../../../packages/domain/bubbles.t
 import { dialogueParts } from '../../../packages/domain/directions.ts';
 
 import { PROMPTS_V7 } from './prompts.generated.ts';
+import { CAST_CONTEXT_PROMPT, CAST_REVIEW_PROMPT, castPromptHash } from './cast-prompt.ts';
+import { CAST_LIMITS } from '../../../packages/contracts/web-cast.ts';
 
 const TEXT_CONTENT_RULES = PROMPTS_V7.textContentRules.replace('{{EXPRESSIONS}}', EXPRESSIONS.join('/'));
 const { chatPresentationTask: CHAT_PRESENTATION_TASK, timeContextTask: TIME_CONTEXT_TASK } = PROMPTS_V7;
@@ -219,6 +221,22 @@ export function promptMessages(request: TextGenerationRequest) {
       ),
     'INVALID_CLARIFICATION_CONTEXT',
   );
+  // Part 24a: a request that carries `cast` was frozen with the cast prompt files of this build; anything else is not read.
+  const cast = request.cast;
+  if (cast !== undefined)
+    ensure(
+      typeof cast === 'object' &&
+        cast !== null &&
+        Number.isSafeInteger(cast.version) &&
+        cast.version > 0 &&
+        typeof cast.digest === 'string' &&
+        /^[a-f0-9]{64}$/.test(cast.digest) &&
+        cast.promptHash === castPromptHash() &&
+        typeof cast.view === 'object' &&
+        cast.view !== null &&
+        JSON.stringify(cast.view).length <= CAST_LIMITS.viewMax,
+      'INVALID_CAST_CONTEXT',
+    );
   const local = localTime(request.now, request.character.schedule.timeZone);
   const describeTime = (at: number) => promptTimestamp(at, request.now, request.character.schedule.timeZone);
   const coveredTimes = request.messages
@@ -251,6 +269,9 @@ export function promptMessages(request: TextGenerationRequest) {
       persona: request.character.persona,
       authorCanon: request.character.authorCanon ?? null,
     },
+    // Right after `character`, so the per-character prefix of the prompt stays stable (DeepSeek's prefix cache). Absent, not null,
+    // while the switch is off: those prompts are byte-identical to what they were before Part 24a.
+    ...(cast ? { cast: { view: cast.view } } : {}),
     age,
     relationship: conversation ? null : request.relationship,
     relationshipContext: request.relationshipContext ?? null,
@@ -307,7 +328,8 @@ export function promptMessages(request: TextGenerationRequest) {
           ? MOMENT_POST_TASK
           : request.deliveryMode === 'voice'
             ? SPEECH_DRAFT_TASK
-            : ''),
+            : '') +
+        (cast ? CAST_CONTEXT_PROMPT : ''),
     },
     { role: 'user' as const, content },
   ];
@@ -321,7 +343,8 @@ export function reviewPromptMessages(request: TextGenerationRequest, draft: Text
       ? MOMENT_POST_TASK
       : request.deliveryMode === 'voice'
         ? SPEECH_REVIEW_TASK
-        : '');
+        : '') +
+    (request.cast ? CAST_REVIEW_PROMPT : '');
   messages[1]!.content = JSON.stringify({
     ...JSON.parse(messages[1]!.content),
     draftPresentationCheck: inspectBubbles(draft.bubbles, bubbleLimits(request.deliveryMode)[draft.mode]),

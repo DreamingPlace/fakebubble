@@ -157,6 +157,7 @@ DeepSeek 自动缓存相同的请求前缀。用户消息 JSON 现在把同一�
 | --- | --- | --- |
 | `GUEST_GRACE_ENABLED` | `false` | 注册永远开放，并给没有登录的访客 **7 天宽限期**：试玩结束后数据再保留 7 天（清理时间由 `expires_at` 改为 `expires_at + 7 天`，只对没有登录的访客），期间不能聊天、不能读历史，但会话仍可用于注册；注册即成为保留账号（沿用 Part 11f 的 180 天不活跃规则），历史回来。宽限期结束后数据清除，旧 Cookie 返回 `GUEST_GRACE_ENDED`（401，清 Cookie），页面落到“登录 / 注册 / 以访客继续”，提示“之前的体验聊天已过期”，选 注册 会走正常首访流程创建新访客并以空历史注册。准入不变：没有邀请就没有新回复。 |
 | `SIGNUP_BONUS_ENABLED` | `false` | 免费额度（Part 17b，见下）：访客试聊每人、每个网络（终身）5 条，注册并验证邮箱再送 10 条，同一 IP 每个 UTC 日最多完成 3 次注册。关闭时（默认）一切照旧：3 条、没有赠送、没有注册上限。 |
+| `CAST_CONTEXT_ENABLED` | `false` | 世界设定（Part 24a，迁移 129）：打开后，每次回复在第一次文字领取时把该角色的 cast 视图（取自最新发布版）冻结进输入快照并写入请求（`request.cast`，紧跟 `character`）。关闭时请求、摘要、提示词字节与之前完全相同。后台接口（草稿、发布、回滚、导入旧设定）不受此开关限制。 |
 | `CHAT_REVIEW_ENABLED` | `false` | 测试对话（Part 19，见下）：站长可以用匿名编号阅读聊天全文；玩家被删除聊天时，文字以匿名编号再保留 180 天；聊天页出现一次性提示；删除账号／清除体验数据的确认单多一句 180 天说明。关闭时（默认）一切照旧：没有页面、没有存档、删除立即清空，审核相关路由和没有一样（404）。 |
 | `ACCOUNT_DELETE_ENABLED` | `false` | 顶部账号菜单里出现“删除我的账号”（有登录：密码 + 输入“删除”）；访客的顶部栏出现“更多”，里面是“清除本设备的体验数据”（无需密码）。走原有、带审计、失败即关闭的清理路径，立即清除聊天、记忆、语音、共创、名片、登录、验证码挑战与全部会话；受邀玩家的授权在同一事务里撤销。 |
 | `LEGAL_PAGES_ENABLED` | `false` | **业务 Worker 与边缘 Worker 都要设**。开启后注册页显示“注册即表示你同意《用户协议》和《隐私政策》”，页脚和首页出现两个链接；边缘 Worker 才会提供 `/privacy.html`、`/terms.html`（关闭时 404）。两页已在 Part 19 定稿（没有 【待确认】，没有“草稿”提示）；开启后注册弹窗还会多一个必选的“我已年满 18 周岁”勾选（见下）。 |
@@ -458,3 +459,5 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 - **价格：** `POINTS.version` = 2；xAI 25 点/条（DeepSeek 10、Gemini 20、语音 +2，仍在 `packages/contracts/player-models.ts` 一张表里）。旧事件保留 `price_version` = 1。
 - **消费记录：** 顶部账号菜单 → “消费记录”（登录玩家、受邀玩家，以及 Part 21i 起的访客：访客的页面只有“免费试用 已用 n/5 条”和自己的试用回复，没有余额；功能开关关闭时仍是 404）。登录玩家顶部是“免费额度 {总数} 点 · 已用 {n} · 剩余 {余额}”（总数 = bonus / grant / daily_refill / reset 事件之和，含注册时折算的试用；已用 = 回复的净点数；余额 = 总数 − 已用），列表里注册前的试用回复显示为“免费试用”、0 点。`POST /api/web/provider/billing/history { page?, tzOffsetMinutes? }`，只读本会话主体，先 `reconcilePoints`，最近 90 天、每页 50 条。只显示点数，不显示金额、供应商成本或任何 id。
 - **Grok 延迟：** 见 `docs/PROVIDERS.md`“Grok latency”；选择器按模型显示速度提示（`PLAYER_MODELS[*].speed`）。
+
+**迁移 129（`129_cast.sql`，sha256 `061602aea27da734c9c279dfea8de748520f3d45b0afcfeba1ea6333ce992148`，54 步）：** 新增 `web_cast_draft`、`web_cast_publications`，并给 `web_input_snapshots` 加 `cast_version`/`cast_json`/`cast_digest`。Node 实例用 `migrate-cast`；Cloudflare 由迁移账本自动执行。不含玩家数据，发布与回滚不读写任何玩家表。

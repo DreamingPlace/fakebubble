@@ -28,6 +28,8 @@ import { WebAdmission } from '../admission/web-admission.ts';
 import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts';
 import { WebAccountAdmin, type AdminMailer } from '../admin/web-account-admin.ts';
 import { WebSystemAdmin, type WebSystemOps } from '../admin/web-system-admin.ts';
+import { WebCastAdmin } from '../admin/web-cast-admin.ts';
+import { castTablesExist } from '../cast/cast-store.ts';
 import { WebSecurityCounters, installWebAdminActions } from '../admin/web-admin-actions.ts';
 import { WebInviteTiers } from '../invites/web-invite-tiers.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
@@ -158,6 +160,8 @@ export class WebProviderApplication {
   readonly inviteAdmin: WebAccountAdmin;
   /** Part 22b: 概览, 系统状态, 积分发放 (the administrator's system pages). */
   readonly system: WebSystemAdmin;
+  /** Part 24a: the cast's draft, publications and compiled views. Null on a database older than schema 129. */
+  readonly cast: WebCastAdmin | null;
   /** Part 22b: Turnstile failure counts for 系统状态 → 安全. */
   readonly security: WebSecurityCounters;
   readonly characterDeletion: WebCharacterDeletion;
@@ -232,6 +236,7 @@ export class WebProviderApplication {
         .update('web-admin-points-lookup-v1')
         .digest(),
     });
+    this.cast = castTablesExist(store) ? new WebCastAdmin(store, clock, this.inviteAdmin) : null;
     installWebCharacterCatalog(store);
     installWebCharacterMaterials(store);
     installWebCharacterDeletion(store);

@@ -111,9 +111,10 @@ test('126 is its own step after 125, data only, and not repeatable', (t) => {
   const { inline, r2 } = expectedWebMigrations();
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
   // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-  assert.equal(inline.at(-3)!.version, 126);
-  assert.equal(inline.at(-3)!.sha256, createHash('sha256').update(sql126()).digest('hex'));
-  assert.deepEqual(r2.at(-3), inline.at(-3));
+  // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.at(-4)!.version, 126);
+  assert.equal(inline.at(-4)!.sha256, createHash('sha256').update(sql126()).digest('hex'));
+  assert.deepEqual(r2.at(-4), inline.at(-4));
 });
 
 test('126 a legacy invite principal WITH an email login is a registered player; one WITHOUT has no access and is purged like an expired guest', (t) => {

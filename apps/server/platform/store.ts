@@ -66,6 +66,7 @@ const WEB_INVITE_TIERS_SCHEMA = 125;
 const WEB_LEGACY_INVITES_SCHEMA = 126;
 const WEB_INVITE_CODES_SCHEMA = 127;
 const WEB_STATS_SCHEMA = 128;
+const WEB_CAST_SCHEMA = 129;
 const webDbName = 'web.sqlite';
 const webMarkerName = '.web-instance.json';
 type WebMarker = {
@@ -234,6 +235,7 @@ function webIdentity(
             WEB_LEGACY_INVITES_SCHEMA,
             WEB_INVITE_CODES_SCHEMA,
             WEB_STATS_SCHEMA,
+            WEB_CAST_SCHEMA,
           ]
         : []),
     ].includes(version),
@@ -293,7 +295,7 @@ function preflightWeb(path: string, options: WebStoreOptions) {
         version >= WEB_SCHEMA &&
           version <=
             (options.providerRuntime
-              ? WEB_STATS_SCHEMA
+              ? WEB_CAST_SCHEMA
               : options.inviteTest
                 ? WEB_INVITE_IDENTITY_SCHEMA
                 : WEB_DATA_SCHEMA),
@@ -438,6 +440,7 @@ export class Store {
                         WEB_LEGACY_INVITES_SCHEMA,
                         WEB_INVITE_CODES_SCHEMA,
                         WEB_STATS_SCHEMA,
+                        WEB_CAST_SCHEMA,
                       ]
                     : []),
                 ].includes(version)
@@ -619,6 +622,8 @@ export class WebStore extends Store {
   readonly publicFreeTier?: boolean;
   /** CHAT_REVIEW_ENABLED: archive a transcript (anonymously, 180 days) whenever a player's chats are removed. */
   readonly chatReview?: boolean;
+  /** CAST_CONTEXT_ENABLED (Part 24a): freeze the compiled cast view into new input snapshots. */
+  readonly castContext?: boolean;
   /** PLAYER_MODEL_CHOICE_ENABLED: the models a player may pick (PLAYER_TEXT_MODELS). Absent = the feature is off. */
   readonly playerModelChoice?: readonly PlayerModelId[];
   /** A persisted invite runtime must have passed the role/root/config preflight on open. */
@@ -653,6 +658,7 @@ export class WebStore extends Store {
       dailyReplyLimit?: number;
       publicFreeTier?: boolean;
       chatReview?: boolean;
+      castContext?: boolean;
       playerModelChoice?: readonly PlayerModelId[];
     },
   ) {
@@ -662,6 +668,7 @@ export class WebStore extends Store {
     if (options.dailyReplyLimit !== undefined) this.dailyReplyLimit = parseWebDailyReplyLimit(options.dailyReplyLimit);
     if (options.publicFreeTier === true) this.publicFreeTier = true;
     if (options.chatReview === true) this.chatReview = true;
+    if (options.castContext === true) this.castContext = true;
     this.instanceId = options.instanceId;
     this.root = root;
     this.dataLifecycleTest = options.dataLifecycleTest === true;

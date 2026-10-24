@@ -21,6 +21,8 @@ import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract
 import { readInputSnapshot } from './web-input-snapshot.ts';
 import { recallsMemory } from '../admission/web-free-tier.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
+import { castRequestContext } from '../cast/cast-store.ts';
+import { castPromptHash } from './cast-prompt.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 interface MessageRow {
@@ -247,6 +249,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       template.schedule !== undefined,
     'WEB_V7_TEMPLATE_INVALID',
   );
+  const cast = castRequestContext(input);
   const relationship = store.get<{ relationship: TextGenerationRequest['relationship'] }>(
     'SELECT relationship FROM world_characters WHERE world_id=? AND character_id=?',
     scope.worldId,
@@ -317,6 +320,9 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     deliveryMode: 'voice',
     requiredMessageIds: [input.input_message_id],
     character: template,
+    // Part 24a: only a snapshot that froze a cast view carries `cast`. The key is absent (not null) otherwise, so the serialized
+    // request and its digest are what they were before.
+    ...(cast ? { cast } : {}),
     messages: selected.map((row) => dto(row!)),
     mustClose: false,
     evidence: [],
@@ -384,6 +390,8 @@ export function readWebV7Request(
     'WEB_V7_REQUEST_INVALID',
   );
   const request = JSON.parse(row.request_json) as TextGenerationRequest;
+  // Part 24a: a frozen cast view is read with the cast prompt files it was frozen with.
+  ensure(request.cast === undefined || request.cast.promptHash === castPromptHash(), 'WEB_V7_REQUEST_INVALID');
   ensure(
     request.jobId === operationId &&
       request.scope.worldId === row.world_id &&

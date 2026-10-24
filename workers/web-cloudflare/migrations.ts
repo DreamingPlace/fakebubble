@@ -28,6 +28,7 @@ import m125 from '../../apps/server/web-migrations/125_invite_tiers.sql';
 import m126 from '../../apps/server/web-migrations/126_legacy_invites_retired.sql';
 import m127 from '../../apps/server/web-migrations/127_invite_codes_viewable.sql';
 import m128 from '../../apps/server/web-migrations/128_stats.sql';
+import m129 from '../../apps/server/web-migrations/129_cast.sql';
 import retention from './retention.sql';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -80,6 +81,7 @@ export const webMigrations = [
     m126,
     m127,
     m128,
+    m129,
   ].map((sql, i) => ({
     version: 100 + i,
     sql:
