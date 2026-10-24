@@ -16,6 +16,8 @@ export interface WebRuntimeStore extends BusinessStore {
   readonly chatReview?: boolean;
   /** CAST_CONTEXT_ENABLED (Part 24a): freeze the compiled cast view into new input snapshots. Absent = off. */
   readonly castContext?: boolean;
+  /** GUEST_ONE_CHARACTER_ENABLED (Part 26a): an unregistered guest chats with one character. Absent = off. */
+  readonly guestOneCharacter?: boolean;
   /** PLAYER_MODEL_CHOICE_ENABLED: the models a player may pick (PLAYER_TEXT_MODELS). Absent = the feature is off. */
   readonly playerModelChoice?: readonly PlayerModelId[];
   readonly providerAudio?: PrivateMediaObjects;

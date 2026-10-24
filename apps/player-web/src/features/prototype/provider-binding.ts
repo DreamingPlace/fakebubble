@@ -26,7 +26,15 @@ type Shell = {
   name(id: WebProviderCharacterId): string;
 };
 
+/** Part 26a: the two lines of the one-character rule (GUEST_ONE_CHARACTER_ENABLED); 注册 in the second one opens the signup sheet. */
+export const guestLockCopy = {
+  first: '新客人，就决定是这位小四四了吗？',
+  lockedLink: '注册',
+  lockedAfter: '就能解锁全部小四四～',
+};
+
 export const errorText: Record<string, string> = {
+  GUEST_CHARACTER_LOCKED: '注册就能解锁全部小四四～',
   TRIAL_CHARACTER_LOCKED: '体验期间只能和第一个聊天的人物继续聊哦',
   TRIAL_EXHAUSTED: '体验次数已用完（同一网络累计），输入邀请码可以继续聊',
   TRIAL_EXPIRED: '体验时间已结束，输入邀请码可以继续聊',
@@ -472,9 +480,67 @@ export class LiveBinding {
     this.refreshInfo();
   }
 
+  /**
+   * Part 26a. The characters an unregistered guest may chat with, or undefined when the rule does not apply (the server only
+   * sends the list to such a guest while GUEST_ONE_CHARACTER_ENABLED is on). [] = none chosen yet.
+   */
+  private get guestMay() {
+    return this.view.access.lockedCharacterIds;
+  }
+  private guestLocked(characterId: WebProviderCharacterId) {
+    const may = this.guestMay;
+    return !!may && may.length > 0 && !may.includes(characterId);
+  }
+  /** Characters whose chat has been tapped on send while locked: they keep showing the prompt until the rule stops applying. */
+  private readonly lockPrompted = new Set<WebProviderCharacterId>();
+  private lockPrompt(characterId: WebProviderCharacterId, card: HTMLElement) {
+    this.lockPrompted.add(characterId);
+    this.renderGuestNote(characterId, card);
+  }
+  /** One light centered line above the composer; it fades in (CSS) when it appears and holds no buttons but the 注册 word. */
+  private renderGuestNote(characterId: WebProviderCharacterId, card: HTMLElement) {
+    const may = this.guestMay;
+    const mode =
+      !may || may.includes(characterId)
+        ? null
+        : may.length === 0
+          ? this.busy
+            ? null
+            : ('first' as const)
+          : this.lockPrompted.has(characterId)
+            ? ('locked' as const)
+            : null;
+    if (!may || may.includes(characterId)) this.lockPrompted.delete(characterId);
+    let note = card.querySelector<HTMLElement>('.guest-note');
+    if (!note && mode === null) return;
+    if (!note) {
+      note = document.createElement('p');
+      note.className = 'guest-note';
+      note.setAttribute('role', 'status');
+      const composer = card.querySelector<HTMLElement>('.composer');
+      if (composer) composer.before(note);
+      else card.append(note);
+    }
+    // Rebuilt only when the line changes, so the fade-in does not restart and a tap on 注册 is not lost to a re-render.
+    if ((note.dataset.mode ?? '') === (mode ?? '')) return;
+    note.dataset.mode = mode ?? '';
+    note.hidden = mode === null;
+    note.replaceChildren();
+    if (mode === 'first') note.textContent = guestLockCopy.first;
+    if (mode === 'locked') {
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'guest-note-link';
+      link.textContent = guestLockCopy.lockedLink;
+      link.addEventListener('click', () => void this.openAccount('signup'));
+      note.append(link, guestLockCopy.lockedAfter);
+    }
+  }
+
   updateComposer(characterId: WebProviderCharacterId) {
     const card = this.shell?.card(characterId);
     if (!card) return;
+    this.renderGuestNote(characterId, card);
     const access = this.view.access;
     const locked =
       access.kind === 'guest' && access.lockedCharacterId !== null && access.lockedCharacterId !== characterId;
@@ -925,6 +991,11 @@ export class LiveBinding {
   }
 
   async send(characterId: WebProviderCharacterId, text: string, card: HTMLElement, onAccepted?: () => void) {
+    // Part 26a: nothing is sent and the draft stays; the page says why, and 注册 opens the signup sheet.
+    if (this.guestLocked(characterId)) {
+      this.lockPrompt(characterId, card);
+      return;
+    }
     if (this.invitation.locked) {
       this.shell?.say('请先核对邀请兑换结果，未发送消息');
       return;
@@ -968,6 +1039,8 @@ export class LiveBinding {
         );
       if (access.kind === 'guest' && access.lockedCharacterId !== null && access.lockedCharacterId !== characterId)
         throw new ProviderApiError(403, 'TRIAL_CHARACTER_LOCKED');
+      // The page was stale: the refresh above brought the guest's list, which no longer includes this character.
+      if (this.guestLocked(characterId)) throw new ProviderApiError(403, 'GUEST_CHARACTER_LOCKED');
       list.append(echo);
       this.speaking(characterId, card, true);
       card.querySelector<HTMLElement>('.chat-body')!.scrollTop =
@@ -1030,7 +1103,10 @@ export class LiveBinding {
         // Never retain the old "3" after the server has rejected quota/access.
         await this.refreshAccess().catch(() => {});
       }
-      this.fail(error);
+      // A stale page: the server answered that this guest's character is another one. Same prompt, never a toast.
+      if (error instanceof ProviderApiError && error.code === 'GUEST_CHARACTER_LOCKED')
+        this.lockPrompt(characterId, card);
+      else this.fail(error);
     } finally {
       this.speaking(characterId, card, false);
       this.sendingCharacter = null;

@@ -22,6 +22,9 @@ const {
   momentPostTask: MOMENT_POST_TASK,
 } = PROMPTS_V7;
 
+/** Longest welcome line carried into a request, in code points. */
+const OPENING_MAX = 500;
+
 // The app accepts text only from players; the draft and review prompts both state this (responseConstraints.playerInputKinds).
 const PLAYER_INPUT_KINDS = ['text'] as const;
 const PLAYER_CHANNEL_RULES = PROMPTS_V7.playerChannelRules;
@@ -164,6 +167,17 @@ export function promptMessages(request: TextGenerationRequest) {
         'INVALID_TEXT_SCOPE',
       );
   }
+  // Part 26a: the opening line belongs to a normal private chat only; a group, a moment or a moment post never carries it.
+  if (request.opening !== undefined)
+    ensure(
+      !conversation &&
+        typeof request.opening === 'object' &&
+        request.opening !== null &&
+        typeof request.opening.text === 'string' &&
+        request.opening.text.trim().length > 0 &&
+        [...request.opening.text].length <= OPENING_MAX,
+      'INVALID_TEXT_REQUEST',
+    );
   const authors = new Set(conversation?.members.map((member) => member.id) ?? [request.character.id]);
   for (const message of request.messages) {
     ensure(
@@ -299,6 +313,10 @@ export function promptMessages(request: TextGenerationRequest) {
     proactiveTopic: request.proactiveTopic ?? null,
     requiredMessageIds: request.requiredMessageIds,
     mustClose: request.mustClose,
+    // Right before `messages`; key absent (not null) when there is no opening, so those prompts are byte-identical to before Part 26a.
+    ...(request.opening
+      ? { opening: [{ authorKind: 'character', delivery: 'voice', text: request.opening.text }] }
+      : {}),
     messages: request.messages.map(({ id, authorKind, authorId, text, createdAt, mentionedCharacterIds, replyTo }) => ({
       id,
       authorKind,

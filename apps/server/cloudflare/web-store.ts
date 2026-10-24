@@ -25,6 +25,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
   readonly publicFreeTier: boolean;
   readonly chatReview: boolean;
   readonly castContext: boolean;
+  readonly guestOneCharacter: boolean;
   readonly playerModelChoice?: readonly PlayerModelId[];
   /** Which optional provider keys exist (Part 21g), set by the business object from the generation Worker; absent = not checked. */
   playerModelKeys?: Readonly<Partial<Record<'gemini' | 'xai', boolean>>>;
@@ -50,6 +51,8 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
       chatReview?: boolean;
       /** CAST_CONTEXT_ENABLED (Part 24a). */
       castContext?: boolean;
+      /** GUEST_ONE_CHARACTER_ENABLED (Part 26a). */
+      guestOneCharacter?: boolean;
       /** PLAYER_MODEL_CHOICE_ENABLED with the models PLAYER_TEXT_MODELS offers; absent = off. */
       playerModelChoice?: readonly PlayerModelId[];
     },
@@ -69,6 +72,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
     this.publicFreeTier = identity.publicFreeTier === true;
     this.chatReview = identity.chatReview === true;
     this.castContext = identity.castContext === true;
+    this.guestOneCharacter = identity.guestOneCharacter === true;
     if (identity.playerModelChoice) this.playerModelChoice = Object.freeze([...identity.playerModelChoice]);
     this.instanceId = identity.instanceId;
     this.recoveryEpoch = identity.recoveryEpoch;

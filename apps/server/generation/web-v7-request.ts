@@ -23,6 +23,7 @@ import { recallsMemory } from '../admission/web-free-tier.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import { castRequestContext } from '../cast/cast-store.ts';
 import { castPromptHash } from './cast-prompt.ts';
+import { frozenOpening } from './opening-line.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 interface MessageRow {
@@ -306,6 +307,16 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
         .reverse()
         .map((row) => ({ job_id: row.job_id, at: row.at }))
     : [];
+  // Part 26a: when nothing earlier in the conversation was cut off, the welcome line of the frozen revision is the character's first line.
+  const first = selected[0]!;
+  const opening = store.get(
+    'SELECT 1 FROM messages WHERE world_id=? AND conversation_id=? AND seq<? LIMIT 1',
+    scope.worldId,
+    scope.conversationId,
+    first.seq,
+  )
+    ? undefined
+    : frozenOpening(store, scope.characterId, input.template_version);
   const introduction = playerIntroduction(userStore(store), scope);
   const facts = recalls ? recallPlayerFacts(userStore(store), scope) : [];
   const request: TextGenerationRequest = {
@@ -323,6 +334,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     // Part 24a: only a snapshot that froze a cast view carries `cast`. The key is absent (not null) otherwise, so the serialized
     // request and its digest are what they were before.
     ...(cast ? { cast } : {}),
+    ...(opening ? { opening } : {}),
     messages: selected.map((row) => dto(row!)),
     mustClose: false,
     evidence: [],

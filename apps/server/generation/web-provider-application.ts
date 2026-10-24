@@ -47,6 +47,7 @@ import {
 } from '../identity/web-player-accounts.ts';
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
 import { bonusRemaining, extraTrialRemaining, freeTier, isRegistered } from '../admission/web-free-tier.ts';
+import { lockedCharacterIds } from '../admission/web-guest-lock.ts';
 
 /** A cookie that names nothing recoverable: the transport expires it so the next visit starts from the signed-out page. */
 export class SessionClearedError extends DomainError {
@@ -440,6 +441,12 @@ export class WebProviderApplication {
   }
 
   access(principal: Principal, ipHash: string): WebProviderAccess & { inaccessible: boolean } {
+    const access = this.accessCore(principal, ipHash);
+    const may = lockedCharacterIds(this.store, principal.principalId, this.clock.now());
+    return may ? { ...access, lockedCharacterIds: may.filter(characterId) } : access;
+  }
+
+  private accessCore(principal: Principal, ipHash: string): WebProviderAccess & { inaccessible: boolean } {
     const now = this.clock.now();
     const tier = freeTier(this.store);
     // Part 17h: a registered player (email login) that never got the signup bonus gets it here, once, on its first touch.

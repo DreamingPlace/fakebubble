@@ -187,3 +187,21 @@ test('provider parser accepts a scoped approved ready catalog entry and rejects 
     /WEB_PROVIDER_PROTOCOL_INVALID/,
   );
 });
+
+test('Part 26a: access may carry lockedCharacterIds (a list of known, distinct characters) and is otherwise exact', () => {
+  const boot = () => {
+    const value = syntheticProviderBootstrap();
+    return value as typeof value & { access: { lockedCharacterIds?: unknown } };
+  };
+  assert.doesNotThrow(() => parseWebProviderBootstrap(boot()));
+  for (const ok of [[], ['jojo'], ['wei-guagua', 'jojo']]) {
+    const value = boot();
+    value.access.lockedCharacterIds = ok;
+    assert.deepEqual(parseWebProviderBootstrap(value).access.lockedCharacterIds, ok);
+  }
+  for (const bad of [null, 'jojo', ['jojo', 'jojo'], [1], {}, ['not an id!']]) {
+    const value = boot();
+    value.access.lockedCharacterIds = bad;
+    assert.throws(() => parseWebProviderBootstrap(value));
+  }
+});
