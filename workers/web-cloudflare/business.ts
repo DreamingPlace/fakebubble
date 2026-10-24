@@ -107,6 +107,8 @@ export interface WebBusinessEnvironment {
   /** Part 17b: 5-reply guest trial, 10-reply signup bonus, 3 signups per IP per UTC day. Off unless 'true'. */
   SIGNUP_BONUS_ENABLED?: string;
   CHAT_REVIEW_ENABLED?: string;
+  /** Part 24a: freeze each character's compiled cast view into new input snapshots and carry it in the request. Off unless 'true'. */
+  CAST_CONTEXT_ENABLED?: string;
   /** Part 21b: players choose the model that writes their replies (and pay in points). Off unless 'true'; PLAYER_TEXT_MODELS lists the models offered. */
   PLAYER_MODEL_CHOICE_ENABLED?: string;
   PLAYER_TEXT_MODELS?: string;
@@ -207,6 +209,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       dailyReplyLimit: webDailyReplyLimitFromEnv(env as unknown as Record<string, unknown>),
       publicFreeTier: this.publicConfig.signupBonus,
       chatReview: this.publicConfig.chatReview,
+      castContext: env.CAST_CONTEXT_ENABLED === 'true',
       ...(env.PLAYER_MODEL_CHOICE_ENABLED === 'true'
         ? { playerModelChoice: parsePlayerTextModels(env.PLAYER_TEXT_MODELS) }
         : {}),

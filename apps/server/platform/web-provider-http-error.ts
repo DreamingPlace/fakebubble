@@ -1,4 +1,4 @@
-import { DomainError, RetryAfterError } from '../../../packages/domain/errors.ts';
+import { DetailedError, DomainError, RetryAfterError } from '../../../packages/domain/errors.ts';
 
 /** Co-creation submit failures that are the player's input (400) rather than state (409). */
 const cocreationInvalid = new Set([
@@ -80,6 +80,7 @@ export function webProviderHTTPError(error: unknown) {
                   publicCode === 'AGE_CONFIRMATION_REQUIRED' ||
                   publicCode === 'MODEL_NOT_AVAILABLE' ||
                   publicCode === 'ACCOUNT_DELETE_CONFIRM_INVALID' ||
+                  publicCode === 'CAST_INVALID' ||
                   cocreationInvalid.has(publicCode)
                 ? 400
                 : publicCode === 'QUEUE_FULL' ||
@@ -95,5 +96,15 @@ export function webProviderHTTPError(error: unknown) {
                     ? 500
                     : 409;
   const retryAfterMs = error instanceof RetryAfterError ? error.retryAfterMs : null;
-  return { status, body: { error: { code: publicCode, requestId: null, retryAfterMs } } };
+  return {
+    status,
+    body: {
+      error: {
+        code: publicCode,
+        requestId: null,
+        retryAfterMs,
+        ...(error instanceof DetailedError ? { detail: error.detail } : {}),
+      },
+    },
+  };
 }

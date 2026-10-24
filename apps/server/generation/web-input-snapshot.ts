@@ -2,6 +2,7 @@ import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
+import { castFreeze } from '../cast/cast-store.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 interface Source {
@@ -25,6 +26,10 @@ export interface WebInputSnapshot extends Source {
   template_digest: string;
   frozen_at: number;
   snapshot_digest: string;
+  /** Part 24a (schema 129): the compiled cast view of this character, or NULL x3 when the switch was off / nothing was published. */
+  cast_version?: number | null;
+  cast_json?: string | null;
+  cast_digest?: string | null;
 }
 export type SnapshotScope = Pick<
   Source,
@@ -55,6 +60,10 @@ export function freezeInputSnapshot(store: WebStore, operationId: string, now: n
     operationId,
   );
   ensure(row && row.input_body.length > 0, 'WEB_INPUT_SNAPSHOT_SOURCE_INVALID');
+  // Part 24a: with CAST_CONTEXT_ENABLED on and a publication, the character's compiled view is frozen right here, next to
+  // template_json. Otherwise the three columns stay NULL and the digest below is exactly what it was before 129.
+  const schema = store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
+  const cast = schema >= 129 ? castFreeze(store, row.character_id) : null;
   const inputDigest = digest(JSON.stringify([row.input_message_id, row.input_seq, row.input_body]));
   const templateDigest = digest(row.template_json);
   const snapshotDigest = digest(
@@ -75,10 +84,11 @@ export function freezeInputSnapshot(store: WebStore, operationId: string, now: n
       templateDigest,
       row.access_revision,
       now,
+      ...(cast ? [cast.version, cast.digest] : []),
     ]),
   );
   store.run(
-    `INSERT INTO web_input_snapshots VALUES (?,'input-snapshot-only',1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO web_input_snapshots${schema >= 129 ? '(operation_id,capability,format_version,principal_id,player_id,world_id,conversation_id,character_id,input_message_id,input_seq,input_body,input_digest,template_version,template_json,template_digest,access_revision,frozen_at,snapshot_digest,cast_version,cast_json,cast_digest)' : ''} VALUES (?,'input-snapshot-only',1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?${schema >= 129 ? ',?,?,?' : ''})`,
     row.operation_id,
     row.principal_id,
     row.player_id,
@@ -95,6 +105,7 @@ export function freezeInputSnapshot(store: WebStore, operationId: string, now: n
     row.access_revision,
     now,
     snapshotDigest,
+    ...(schema >= 129 ? [cast?.version ?? null, cast?.json ?? null, cast?.digest ?? null] : []),
   );
   return inputDigest;
 }

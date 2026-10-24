@@ -12,6 +12,7 @@
       "!node_modules",
       "!work",
       "!apps/server/generation/prompts.generated.ts",
+      "!apps/server/generation/cast-prompts.generated.ts",
       "!tests/web/fixtures/prompt-snapshots"
     ]
   },

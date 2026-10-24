@@ -23,6 +23,7 @@ import {
   migrateWebProviderLegacyInvites,
   migrateWebProviderInviteCodes,
   migrateWebProviderStats,
+  migrateWebProviderCast,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -84,7 +85,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→128 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→129 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -128,8 +129,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderLegacyInvites(store);
     migrateWebProviderInviteCodes(store);
     migrateWebProviderStats(store, now);
+    migrateWebProviderCast(store);
     return {
-      schema: 128,
+      schema: 129,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -279,6 +281,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-legacy-invites',
       'migrate-invite-codes',
       'migrate-stats',
+      'migrate-cast',
       'render-assets',
       'admin-grant',
       'serve',
@@ -465,6 +468,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderStats(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 128, stats: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-cast') {
+    // An existing provider-* instance at schema 128 gains the cast draft, the publications and the snapshot's cast columns.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderCast(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 129, cast: true }) + '\n');
     } finally {
       store.close();
     }

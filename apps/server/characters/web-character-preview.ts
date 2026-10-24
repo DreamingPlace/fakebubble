@@ -10,6 +10,7 @@ import { textPolicyHash } from '../generation/text-generation-policy.ts';
 import { instantAtLocalMinute } from '../../../packages/domain/schedule.ts';
 import { characterProfileHash, type WebCharacterProfile } from './web-character-catalog.ts';
 import { installWebCharacterPreviews } from './web-character-preview-schema.ts';
+import { castContextEnabled, castForPreview, castTablesExist, latestPublication } from '../cast/cast-store.ts';
 
 export const previewDigest = (value: string) => createHash('sha256').update(value).digest('hex');
 export const previewPolicy = textPolicyHash();
@@ -117,6 +118,9 @@ export const PREVIEW_INPUT_MAX = 4000;
 export const PREVIEW_RUN_MAX = 50;
 export const PREVIEW_NOTE_MAX = 300;
 const RELATIONSHIPS = ['new', 'friend', 'close_friend', 'lover'];
+/** Part 24a: where a preview takes the character's cast view from: none, the latest publication, or the draft (to test before the switch is on). */
+export const PREVIEW_CAST_SOURCES = ['none', 'published', 'draft'] as const;
+export type PreviewCastSource = (typeof PREVIEW_CAST_SOURCES)[number];
 /** "HH:MM" -> minutes after midnight; the only accepted spelling of a simulated time. */
 export function parseSimulatedTime(value: unknown): number | null {
   if (value === null || value === undefined) return null;
@@ -145,7 +149,13 @@ interface QueuedInput {
   relationship: string;
   message: string;
   simulatedMinute: number | null;
+  castSource: PreviewCastSource | null;
   deadlineAt: (now: number) => number;
+}
+function castSourceField(value: unknown): PreviewCastSource | null {
+  if (value === undefined) return null;
+  ensure((PREVIEW_CAST_SOURCES as readonly unknown[]).includes(value), 'INVALID_CAST_SOURCE');
+  return value as PreviewCastSource;
 }
 function startFields(input: Record<string, unknown>) {
   identifier(input.requestId);
@@ -163,6 +173,8 @@ function startFields(input: Record<string, unknown>) {
     profileHash: input.profileHash as string,
     relationship: input.relationship as string,
     simulatedMinute: parseSimulatedTime(input.simulatedTime),
+    // null = not asked: none while CAST_CONTEXT_ENABLED is off, the published cast while it is on (see resolveCast).
+    castSource: castSourceField(input.castSource),
   };
 }
 
@@ -180,7 +192,15 @@ export class WebCharacterPreviews {
   start(actor: PreviewActor, characterId: string, input: unknown) {
     identifier(characterId);
     record(input);
-    keys(input, ['requestId', 'draftRevision', 'profileHash', 'relationship', 'message', 'simulatedTime']);
+    keys(input, [
+      'requestId',
+      'draftRevision',
+      'profileHash',
+      'relationship',
+      'message',
+      'simulatedTime',
+      'castSource',
+    ]);
     nonempty(input.message, PREVIEW_INPUT_MAX);
     const fields = startFields(input);
     const digest = contentHash([actor.memberId, characterId, input]);
@@ -228,6 +248,7 @@ export class WebCharacterPreviews {
       'simulatedTime',
       'inputs',
       'evalSetId',
+      'castSource',
     ]);
     const fields = startFields(input);
     ensure(input.label === undefined || input.label === null || typeof input.label === 'string', 'INVALID_RUN_LABEL');
@@ -351,6 +372,19 @@ export class WebCharacterPreviews {
     ensure(characterProfileHash(profile) === profileHash, 'DRAFT_CONFLICT');
     return { profile, baseVersion: draft.base_version };
   }
+  /**
+   * The cast view of a preview: the SAME compile as production (castForPreview -> compileCastView), only read from the published
+   * cast, the draft or nowhere. Not asked: none while the switch is off; the published cast while it is on - and then a character
+   * that is not in the published cast (or no publication at all) simply gets none, exactly like a live reply. Asked explicitly,
+   * the source must exist. A preview never writes a snapshot or anything of a player's.
+   */
+  private resolveCast(characterId: string, asked: PreviewCastSource | null) {
+    if (asked !== null) return castForPreview(this.store, characterId, asked);
+    if (!castContextEnabled(this.store) || !castTablesExist(this.store)) return undefined;
+    const latest = latestPublication(this.store);
+    if (!latest?.doc.characters.some((c) => c.characterId === characterId)) return undefined;
+    return castForPreview(this.store, characterId, 'published');
+  }
   /** Inside the caller's transaction. Returns the new preview id. */
   private enqueue(actor: PreviewActor, characterId: string, now: number, digest: string, q: QueuedInput) {
     const { profile, baseVersion } = this.draftProfile(characterId, q.draftRevision, q.profileHash);
@@ -361,11 +395,13 @@ export class WebCharacterPreviews {
     const scope = { worldId: 'admin-preview-' + id, conversationId: id, characterId };
     const zone = profile.template.schedule.timeZone;
     const at = previewInstant(scope, now, zone, q.simulatedMinute);
+    const cast = this.resolveCast(characterId, q.castSource);
     const request: TextGenerationRequest = {
       jobId: id,
       scope,
       now: at,
       character: profile.template,
+      ...(cast ? { cast } : {}),
       relationship: q.relationship as RelationshipPreset,
       requiredMessageIds: [messageId],
       mustClose: false,

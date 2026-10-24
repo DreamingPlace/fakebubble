@@ -8,7 +8,7 @@ import type { PrivateMediaObjects } from './media-objects.ts';
 import { parseWebConcurrency, parseWebDailyReplyLimit, type WebConcurrency } from '../../../config/web-concurrency.ts';
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-const versions = [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 29 }, (_, i) => 100 + i)];
+const versions = [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 30 }, (_, i) => 100 + i)];
 
 /** A separate schema113 authority. No beta namespace, filesystem, implicit seed or paid default. */
 export class WebDurableStore implements BusinessStore, WebRuntimeStore {
@@ -24,6 +24,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
   readonly dailyReplyLimit: number;
   readonly publicFreeTier: boolean;
   readonly chatReview: boolean;
+  readonly castContext: boolean;
   readonly playerModelChoice?: readonly PlayerModelId[];
   /** Which optional provider keys exist (Part 21g), set by the business object from the generation Worker; absent = not checked. */
   playerModelKeys?: Readonly<Partial<Record<'gemini' | 'xai', boolean>>>;
@@ -47,6 +48,8 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
       publicFreeTier?: boolean;
       /** CHAT_REVIEW_ENABLED. */
       chatReview?: boolean;
+      /** CAST_CONTEXT_ENABLED (Part 24a). */
+      castContext?: boolean;
       /** PLAYER_MODEL_CHOICE_ENABLED with the models PLAYER_TEXT_MODELS offers; absent = off. */
       playerModelChoice?: readonly PlayerModelId[];
     },
@@ -65,6 +68,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
     this.dailyReplyLimit = parseWebDailyReplyLimit(identity.dailyReplyLimit);
     this.publicFreeTier = identity.publicFreeTier === true;
     this.chatReview = identity.chatReview === true;
+    this.castContext = identity.castContext === true;
     if (identity.playerModelChoice) this.playerModelChoice = Object.freeze([...identity.playerModelChoice]);
     this.instanceId = identity.instanceId;
     this.recoveryEpoch = identity.recoveryEpoch;
@@ -95,7 +99,7 @@ export class WebDurableStore implements BusinessStore, WebRuntimeStore {
       }
       let applied = this.all<{ version: number; sha256: string }>('SELECT * FROM cf_web_migrations ORDER BY version');
       // Every applied step must be hash-identical to the code's step of that version; steps the ledger lacks are
-      // the newer ones and run in order (an authority at 127 gains 128). A ledger ahead of the code is a mismatch.
+      // the newer ones and run in order (an authority at 128 gains 129). A ledger ahead of the code is a mismatch.
       ensure(
         applied.length <= migrations.length &&
           applied.every((m, i) => m.version === migrations[i]!.version && m.sha256 === digest(migrations[i]!.sql)),
