@@ -201,7 +201,7 @@ test('Part 26a: access may carry lockedCharacterIds (a list of known, distinct c
   }
   for (const bad of [null, 'jojo', ['jojo', 'jojo'], [1], {}, ['not an id!']]) {
     const value = boot();
-    value.access.lockedCharacterIds = bad;
+    value.access.lockedCharacterIds = bad as never;
     assert.throws(() => parseWebProviderBootstrap(value));
   }
 });

@@ -159,9 +159,9 @@ test('a group, a moment and a moment post never carry an opening', () => {
     messages: [],
     conversation: { kind: 'moment_post' as const, name: '动态', members: [member] },
   };
-  assert.doesNotThrow(() => promptMessages({ ...post, opening: undefined }));
+  const { opening: _opening, ...plain } = post;
+  assert.doesNotThrow(() => promptMessages(plain));
   assert.throws(() => promptMessages(post), /INVALID_TEXT_REQUEST/);
-  assert.doesNotThrow(() => promptMessages({ ...post, opening: undefined }));
   // An empty or oversized line is not a welcome either.
   assert.throws(() => promptMessages({ ...base, opening: { text: '  ' } }), /INVALID_TEXT_REQUEST/);
   assert.throws(() => promptMessages({ ...base, opening: { text: '好'.repeat(501) } }), /INVALID_TEXT_REQUEST/);
