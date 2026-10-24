@@ -1,32 +1,32 @@
 {
   "knowledge": [
     {
-      "storyId": "e_95693e5dc1d14d76a6ef",
+      "storyId": "e_d62825d9be61447da574",
       "level": "lived",
       "fromOverride": false
     },
     {
-      "storyId": "e_06cca1d2c4f34ff6a8d9",
+      "storyId": "e_34db9d7bff5b447b8ae2",
       "level": "lived",
       "fromOverride": true
     },
     {
-      "storyId": "e_33984d4040b74bd69f2d",
+      "storyId": "e_8d2e56b680eb4d08a24e",
       "level": "unknown",
       "fromOverride": false
     },
     {
-      "storyId": "e_e7cb433b078147feabe4",
+      "storyId": "e_194f3218b0684fdca3f7",
       "level": "unknown",
       "fromOverride": false
     },
     {
-      "storyId": "e_9574a70fe9504ae49146",
+      "storyId": "e_dbf61327e9884f6c9d28",
       "level": "unknown",
       "fromOverride": false
     },
     {
-      "storyId": "e_3b495962023e4b39a90b",
+      "storyId": "e_21ebd7101e93434dadae",
       "level": "lived",
       "fromOverride": false
     }
@@ -360,7 +360,6 @@
       {
         "title": "雨夜的告白",
         "level": "亲历",
-        "fromOverride": false,
         "period": {
           "start": "2026-04-12",
           "end": ""
@@ -376,7 +375,6 @@
       {
         "title": "校庆演出",
         "level": "亲历",
-        "fromOverride": true,
         "period": {
           "start": "2025-12-20",
           "end": ""
@@ -393,7 +391,6 @@
       {
         "title": "天台的约定",
         "level": "亲历",
-        "fromOverride": false,
         "period": {
           "start": "2025-06",
           "end": ""

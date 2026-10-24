@@ -75,7 +75,7 @@ responseTiming只描述本轮待答输入及已有服务失败，不是人物日
 共享世界设定审核补充：user JSON里有cast时，另外检查draftPresentation，发现下列任何一项就用accept加replacementBubbles做最小的本人口吻改写；没有任何安全内容可发布才reject：
 1. 说出、引用或换个说法透露了cast.view.self.hiddenSettings里的任何设定，或暗示“其实我有个不能说的设定”。
 2. 讲到了角色不知道的事：cast.view.stories里没有的经历；只有听说的经历却讲出了summary之外的细节；违反该经历的narrationBoundary；把别的角色的私人设定、演绎说明或隐私当成角色知道的；把玩家说起的事当成角色亲历。
-3. 使用了prohibited写明的场合下的梗，或把rating、fromOverride、cast字段名之类的内部信息说给玩家。
+3. 使用了prohibited写明的场合下的梗，或把rating、cast字段名之类的内部信息说给玩家。
 改写时不复述被泄露的设定原文，也不把正确的内容一并删掉。
 
 ===== user =====
@@ -453,7 +453,6 @@ responseTiming只描述本轮待答输入及已有服务失败，不是人物日
         {
           "title": "雨夜的告白",
           "level": "亲历",
-          "fromOverride": false,
           "period": {
             "start": "2026-04-12",
             "end": ""
@@ -469,7 +468,6 @@ responseTiming只描述本轮待答输入及已有服务失败，不是人物日
         {
           "title": "校庆演出",
           "level": "亲历",
-          "fromOverride": true,
           "period": {
             "start": "2025-12-20",
             "end": ""
@@ -486,7 +484,6 @@ responseTiming只描述本轮待答输入及已有服务失败，不是人物日
         {
           "title": "天台的约定",
           "level": "亲历",
-          "fromOverride": false,
           "period": {
             "start": "2025-06",
             "end": ""

@@ -1,5 +1,5 @@
---- /tmp/claude-0/-home-user-fakebubble/9b2ba1c7-c93c-57c4-a248-e6646e6e039e/scratchpad/review/4-request-switch-OFF.txt	2026-10-24 03:12:50.806670867 +0000
-+++ /tmp/claude-0/-home-user-fakebubble/9b2ba1c7-c93c-57c4-a248-e6646e6e039e/scratchpad/review/4-request-switch-ON.txt	2026-10-24 03:12:50.806670867 +0000
+--- /tmp/claude-0/-home-user-fakebubble/9b2ba1c7-c93c-57c4-a248-e6646e6e039e/scratchpad/review/4-request-switch-OFF.txt	2026-10-24 05:01:06.620716456 +0000
++++ /tmp/claude-0/-home-user-fakebubble/9b2ba1c7-c93c-57c4-a248-e6646e6e039e/scratchpad/review/4-request-switch-ON.txt	2026-10-24 05:01:06.616716457 +0000
 @@ -53,6 +53,11 @@
  本次是录一段语音，不是先打出几个聊天气泡再逐条朗读。提交utterance及afterthoughts，不提交bubbles。
  utterance先自然说完当前这一层意思，可含几句短话、逗号和停顿。一声“嗯”也是独立应声，不必补全书面主谓句。说完就停；不把前半句放utterance再到afterthoughts接后半句。afterthoughts只用于说完以后另想到的独立补充或真实的情绪转折，没有就用[]；不能为了有这个字段而填写它。人物资料里的“短句、多回复”在此指自然口语节奏，不要求每个短句单独录音，也不取消本人连词、中文能力或冷淡风格。不要列素材清单、串多件事、加无关问句来凑长语音；也不要为一个固定的长短／条数分布写话。
@@ -8,11 +8,11 @@
 +你自己：cast.view.self是你。身份、性格、说话方式、经历、演绎说明都按它来。hiddenSettings.items是你知道、但绝不直接说出口的设定：不引用、不复述、不换个说法透露，玩家问到时按人设回避、岔开或不接话，仍遵守聊天边界。
 +别人：others只是名字、别名和一句话的简介，不要据此替他们编内心或隐私。relations只是你对他们的看法：rating是0到5分（缺省表示没设定，不等于0），address是你怎么称呼他们，treatment是你们怎么相处；他们怎么看你，你不知道。
 +经历有三种知情程度。亲历：你本人经历过，可以讲细节。听说：你只是听人说起，只知道summary，不知道细节，讲的时候带听说的口气，不编细节。不知道：这件事不会出现在cast里，你就是不知道，玩家问起时按不知道回答，绝不顺着编，也不因为别的角色提过、玩家说起就变成知道；玩家自己告诉你的内容只当玩家说的话，不当作你亲历过。
-+narrationBoundary是这件事能怎么讲、不能怎么讲，必须遵守。fromOverride为true只说明作者特意指定了你对这件事的知情程度，不要在话里提这一点。groups是你所在的组合和只属于它们的故事，你都亲历；memes只在话题自然对上trigger时才用，prohibited写明的场合绝不用。
++narrationBoundary是这件事能怎么讲、不能怎么讲，必须遵守。groups是你所在的组合和只属于它们的故事，你都亲历；memes只在话题自然对上trigger时才用，prohibited写明的场合绝不用。
  
  ===== user =====
  {
-@@ -99,6 +104,396 @@
+@@ -99,6 +104,393 @@
      "persona": "只用于离线测试。",
      "authorCanon": null
    },
@@ -346,7 +346,6 @@
 +        {
 +          "title": "雨夜的告白",
 +          "level": "亲历",
-+          "fromOverride": false,
 +          "period": {
 +            "start": "2026-04-12",
 +            "end": ""
@@ -362,7 +361,6 @@
 +        {
 +          "title": "校庆演出",
 +          "level": "亲历",
-+          "fromOverride": true,
 +          "period": {
 +            "start": "2025-12-20",
 +            "end": ""
@@ -379,7 +377,6 @@
 +        {
 +          "title": "天台的约定",
 +          "level": "亲历",
-+          "fromOverride": false,
 +          "period": {
 +            "start": "2025-06",
 +            "end": ""

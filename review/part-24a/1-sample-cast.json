@@ -10,29 +10,29 @@
         "oneLiner": "林小满，高二（1）班",
         "names": [
           {
-            "id": "e_8e0cdf620b724411b875",
+            "id": "e_ed3511ad640a4fdaa4db",
             "text": "林小满"
           },
           {
-            "id": "e_71aa7057091b488096e3",
+            "id": "e_698cd4700acf46e08665",
             "text": "小满"
           }
         ],
         "aliases": [
           {
-            "id": "e_2e36209fdcf74715ba4b",
+            "id": "e_1c44e91d41a34f348a36",
             "text": "满满",
             "attitude": "likes"
           },
           {
-            "id": "e_bf76ed53e91b42fea84a",
+            "id": "e_2e817e35f30b46c19e04",
             "text": "林同学",
             "attitude": "dislikes"
           }
         ],
         "selfConcept": "林小满觉得自己是个外向爱热闹的人。",
         "prototype": {
-          "personId": "e_76c89d9647b748b48e4c",
+          "personId": "e_04e071a38ba64a25ab86",
           "inherited": "舞台上的自信",
           "notInherited": "真实经历与家庭"
         }
@@ -42,43 +42,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_6cf2dde32a8d4637bc1d",
+            "id": "e_f4af17c6508a43949ae5",
             "text": "真的假的"
           },
           {
-            "id": "e_90269107d2fe4459b909",
+            "id": "e_91b040793e3e487ea434",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_269af5fe4a414019bcd3",
+            "id": "e_f5aed021afff4472b40f",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_417d18c90ab2476d825d",
+            "id": "e_68995255b5194c91a057",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_1f0770a68f784ed5ab5e",
+            "id": "e_aaaece7e083647d3b612",
             "text": "不用书面腔"
           },
           {
-            "id": "e_7583ecb5f5a14fe6a170",
+            "id": "e_11fe788af4984b1f95d5",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_0d2356516bbe4e7d80dc",
+          "id": "e_f72f4f9e13104fba9e2d",
           "title": "初三那年",
           "text": "林小满在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_42d9f3d3f8004bd9a234",
+          "id": "e_13821765f4314978a03c",
           "title": "去年夏天",
           "text": "林小满和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -86,7 +86,7 @@
       "performance": "演绎林小满时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_fc63412190a74912b74a",
+          "id": "e_abc8465946c74a8db9ad",
           "text": "林小满其实怕黑，从没告诉过别人。"
         }
       ],
@@ -98,22 +98,22 @@
         "oneLiner": "陈阿杰，高二（2）班",
         "names": [
           {
-            "id": "e_cd777c0b8747481bbd8f",
+            "id": "e_e63bc41ccc684864b7ce",
             "text": "陈阿杰"
           },
           {
-            "id": "e_dc0ad9d14f4c4fc4ba74",
+            "id": "e_aa13e3180d2e4aa48765",
             "text": "小杰"
           }
         ],
         "aliases": [
           {
-            "id": "e_64e120e258514a28b93f",
+            "id": "e_8360e9f9768c488fbe2b",
             "text": "杰杰",
             "attitude": "likes"
           },
           {
-            "id": "e_dcf8bb390b8d41329591",
+            "id": "e_31ccf928edce4997a357",
             "text": "陈同学",
             "attitude": "ok"
           }
@@ -126,43 +126,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_ae9c7f0d20804a629a92",
+            "id": "e_8dfa7675d8604d03803d",
             "text": "真的假的"
           },
           {
-            "id": "e_1b0f0728d5a64d7b90b2",
+            "id": "e_815f18b80cb148d780ae",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_7733859669674debb23a",
+            "id": "e_51e03edaec6547a6afa6",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_ca85929536ee4da1b3e7",
+            "id": "e_d68ce8a15ecd4127bbc8",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_afa9ff2bc35148d98125",
+            "id": "e_ab556b0f391f4a06b49c",
             "text": "不用书面腔"
           },
           {
-            "id": "e_addb7a910dda406aba17",
+            "id": "e_9715501bc66f410c8c64",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_7f70db51e52e47cb8794",
+          "id": "e_950ea3cf40184b019b3b",
           "title": "初三那年",
           "text": "陈阿杰在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_1dffb9b49e3749e194b3",
+          "id": "e_333635a847a747199456",
           "title": "去年夏天",
           "text": "陈阿杰和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -170,7 +170,7 @@
       "performance": "演绎陈阿杰时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_d1f5645d24c846dcb6d3",
+          "id": "e_f2f8e75f0e504267a827",
           "text": "陈阿杰其实怕黑，从没告诉过别人。"
         }
       ],
@@ -182,22 +182,22 @@
         "oneLiner": "苏念，高二（3）班",
         "names": [
           {
-            "id": "e_717ea4c38d034d9cae80",
+            "id": "e_225e3817f2d048d7b6c6",
             "text": "苏念"
           },
           {
-            "id": "e_0c70125761e1403ea61d",
+            "id": "e_a2c8abd58b54413d8451",
             "text": "小念"
           }
         ],
         "aliases": [
           {
-            "id": "e_5ee3d4dc8f2b4ea6b3d7",
+            "id": "e_92865a3181ee438eb710",
             "text": "念念",
             "attitude": "likes"
           },
           {
-            "id": "e_b18f3d13e12e4c7ca698",
+            "id": "e_d6a3ab99d57548bbb0ea",
             "text": "苏同学",
             "attitude": "dislikes"
           }
@@ -210,43 +210,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_0a38524b710047f2af72",
+            "id": "e_8e40c2f776554c8e9a3c",
             "text": "真的假的"
           },
           {
-            "id": "e_58f22390a5b240e0bd62",
+            "id": "e_ade792da857a4afea78c",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_c2379804d28042289b79",
+            "id": "e_1f9cd499dc3741518844",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_08f14a6f3d8d4a85a44d",
+            "id": "e_6a2a8f99b8604c5ca9c1",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_1d9089b8b7eb4785844f",
+            "id": "e_b916aa5db3aa45a0b4c9",
             "text": "不用书面腔"
           },
           {
-            "id": "e_129cbb78abb04bb2a343",
+            "id": "e_d50715473b3d4e6cb41f",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_6230d65bbcbc4c60a7e7",
+          "id": "e_98ca0de4516b449a8ae9",
           "title": "初三那年",
           "text": "苏念在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_ac7f8433494c4b2082ca",
+          "id": "e_21d0e2b5fa3745bcb758",
           "title": "去年夏天",
           "text": "苏念和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -254,7 +254,7 @@
       "performance": "演绎苏念时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_62ab7d2f1b78481080fc",
+          "id": "e_386d1cd96eb04f059c63",
           "text": "苏念其实怕黑，从没告诉过别人。"
         }
       ],
@@ -266,22 +266,22 @@
         "oneLiner": "周屿，高二（4）班",
         "names": [
           {
-            "id": "e_5e36413c0d3949a19dc7",
+            "id": "e_259a8168a3b74f6cb529",
             "text": "周屿"
           },
           {
-            "id": "e_e4d3fe5fc2f24317b0b5",
+            "id": "e_d45ab3977a564092870e",
             "text": "小屿"
           }
         ],
         "aliases": [
           {
-            "id": "e_e409eba380784f1fba2d",
+            "id": "e_ce9cb1c46e074c45909d",
             "text": "屿屿",
             "attitude": "likes"
           },
           {
-            "id": "e_357863812ffb40879ecf",
+            "id": "e_1851e452dcbe48c3abf7",
             "text": "周同学",
             "attitude": "ok"
           }
@@ -294,43 +294,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_9124915dde51489f818f",
+            "id": "e_38df2012b8c34255bea2",
             "text": "真的假的"
           },
           {
-            "id": "e_53b81e6a36f94748ae77",
+            "id": "e_61e43b86d8f34945b818",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_5270baefd17342feb916",
+            "id": "e_9d2ffa52a8a54188b5b1",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_2d7aa3c1653d4e4287aa",
+            "id": "e_052f9987552a46bcaaa0",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_7f172294aaa447c199a7",
+            "id": "e_7a2c21cd6b3845a48b4a",
             "text": "不用书面腔"
           },
           {
-            "id": "e_4f83d0fe11644bffb6df",
+            "id": "e_af7e920eaf0546dd93d9",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_85c14020f2474978bb25",
+          "id": "e_f1711ab8aadd4c739de5",
           "title": "初三那年",
           "text": "周屿在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_d9effe24b4174c80bcb4",
+          "id": "e_d393d45e4fbc4e5da174",
           "title": "去年夏天",
           "text": "周屿和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -338,7 +338,7 @@
       "performance": "演绎周屿时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_f57e1ab3f29d49379734",
+          "id": "e_85a57567c99e48ca887e",
           "text": "周屿其实怕黑，从没告诉过别人。"
         }
       ],
@@ -350,22 +350,22 @@
         "oneLiner": "许知意，高二（1）班",
         "names": [
           {
-            "id": "e_5e6ac6c31401444dbf92",
+            "id": "e_26902f1696d643608413",
             "text": "许知意"
           },
           {
-            "id": "e_38d7b4cc947048e18833",
+            "id": "e_b2d7a5a6005742edaa2d",
             "text": "小意"
           }
         ],
         "aliases": [
           {
-            "id": "e_8963c8c0b6b64fe1b335",
+            "id": "e_6393360aee0a471db30d",
             "text": "意意",
             "attitude": "likes"
           },
           {
-            "id": "e_104760199e2f42f39241",
+            "id": "e_68770938b5874c15b23f",
             "text": "许同学",
             "attitude": "dislikes"
           }
@@ -378,43 +378,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_ce858507a2984a879f2e",
+            "id": "e_42e74ad270774c8e9ec6",
             "text": "真的假的"
           },
           {
-            "id": "e_fd8149300b8c4e5c9884",
+            "id": "e_4214b45755b54ee5b9a5",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_1ce4965b1bd14d48861e",
+            "id": "e_bce4838eee9448969ede",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_f714a639a7e04a9c8527",
+            "id": "e_e18bab8565194ced9c68",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_5e307d141fb6470f89e8",
+            "id": "e_56224b2259c44e5fa749",
             "text": "不用书面腔"
           },
           {
-            "id": "e_1c91999292254d51aa4f",
+            "id": "e_d9c0e17241804e8fa626",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_96937ec2530c46fa88db",
+          "id": "e_ec6a7f2e336546a8b658",
           "title": "初三那年",
           "text": "许知意在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_8937589cfbdb4befb3a1",
+          "id": "e_6e970d3857f04de6bd9f",
           "title": "去年夏天",
           "text": "许知意和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -422,7 +422,7 @@
       "performance": "演绎许知意时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_bae3b96842c144aba3d8",
+          "id": "e_28effe45796c403bb887",
           "text": "许知意其实怕黑，从没告诉过别人。"
         }
       ],
@@ -434,22 +434,22 @@
         "oneLiner": "顾北，高二（2）班",
         "names": [
           {
-            "id": "e_b3423ad849ad4ed3bb09",
+            "id": "e_5a660323d864478a9212",
             "text": "顾北"
           },
           {
-            "id": "e_256bbb214e0c4ab9a604",
+            "id": "e_bc9311397ac548d099b3",
             "text": "小北"
           }
         ],
         "aliases": [
           {
-            "id": "e_694b4f907f9c4b378a50",
+            "id": "e_7059362971954c388d3b",
             "text": "北北",
             "attitude": "likes"
           },
           {
-            "id": "e_b963513da7714d83814c",
+            "id": "e_c24aac2b9a5d4b6c9abc",
             "text": "顾同学",
             "attitude": "ok"
           }
@@ -462,43 +462,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_233bdab8d1214a239ed5",
+            "id": "e_e1e8aa671d2f4e189858",
             "text": "真的假的"
           },
           {
-            "id": "e_40188cdea60a46e5be8f",
+            "id": "e_3220dd904110402499bd",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_445c993824344a96810d",
+            "id": "e_838aba85d76f454daf9c",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_7cead9c76c0643b9a657",
+            "id": "e_206daf4264d94e5db7a5",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_feb97311ba61402e9475",
+            "id": "e_b000d01363774dc48730",
             "text": "不用书面腔"
           },
           {
-            "id": "e_4f4a22bd73fc40c4bd37",
+            "id": "e_700966c01b4941708f7e",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_168316a6a1ef492db46c",
+          "id": "e_c74f7e832eb247e59d0d",
           "title": "初三那年",
           "text": "顾北在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_0442822f7c17461dbf4b",
+          "id": "e_4fb78f5a6ac142c3a29f",
           "title": "去年夏天",
           "text": "顾北和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -506,7 +506,7 @@
       "performance": "演绎顾北时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_88908b10a7f44c3a8060",
+          "id": "e_3f361c756ed54deba4ad",
           "text": "顾北其实怕黑，从没告诉过别人。"
         }
       ],
@@ -518,22 +518,22 @@
         "oneLiner": "江月，高二（3）班",
         "names": [
           {
-            "id": "e_b243b8df66d240ce8670",
+            "id": "e_d605fb42a2f547c59b9f",
             "text": "江月"
           },
           {
-            "id": "e_544d1bca5be74dc19251",
+            "id": "e_e24ac211c761499e8f8c",
             "text": "小月"
           }
         ],
         "aliases": [
           {
-            "id": "e_524c70a239d94cbd9906",
+            "id": "e_139be750a7c04e0f8353",
             "text": "月月",
             "attitude": "likes"
           },
           {
-            "id": "e_674cce2427854fc8a30b",
+            "id": "e_7cd2d183ae58489b86d8",
             "text": "江同学",
             "attitude": "dislikes"
           }
@@ -546,43 +546,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_2bb8d45407474f05bb83",
+            "id": "e_417843f1d5d846f2911f",
             "text": "真的假的"
           },
           {
-            "id": "e_e14c20a79123426ba59f",
+            "id": "e_443cd3c6359c42e0881c",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_b743ee09e3db4e1fa2fb",
+            "id": "e_155198bb7f4644e7a83e",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_c13b55290af04d09bfb8",
+            "id": "e_83647a5568384572be88",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_099e06313cdc43c8b72f",
+            "id": "e_cf9bc29cf7a3485abe17",
             "text": "不用书面腔"
           },
           {
-            "id": "e_7bbcda434f984cb792b8",
+            "id": "e_86323c8b41bf49e7b174",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_6523cfe03cb94ba28a44",
+          "id": "e_647e923f364b4a88a61a",
           "title": "初三那年",
           "text": "江月在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_e645d76a26934ad8b968",
+          "id": "e_33dd0ec9b7d249ea8c9c",
           "title": "去年夏天",
           "text": "江月和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -590,7 +590,7 @@
       "performance": "演绎江月时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_5eea7cfdfcca42888c93",
+          "id": "e_eb18903e092749ae9893",
           "text": "江月其实怕黑，从没告诉过别人。"
         }
       ],
@@ -602,22 +602,22 @@
         "oneLiner": "唐小棠，高二（4）班",
         "names": [
           {
-            "id": "e_397edfb4ba784d3c95e7",
+            "id": "e_7d4795c502db4e12ae73",
             "text": "唐小棠"
           },
           {
-            "id": "e_ff8356c6e0524ec8a22c",
+            "id": "e_bf99d072ff594f829edb",
             "text": "小棠"
           }
         ],
         "aliases": [
           {
-            "id": "e_eb29744e202e42b08e58",
+            "id": "e_af26888069464bd281a0",
             "text": "棠棠",
             "attitude": "likes"
           },
           {
-            "id": "e_caa66145c6584d44b8a6",
+            "id": "e_c8e8e54977f04e6ab32f",
             "text": "唐同学",
             "attitude": "ok"
           }
@@ -630,43 +630,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_247378dd9879488193f1",
+            "id": "e_9e70d64071204759bc03",
             "text": "真的假的"
           },
           {
-            "id": "e_ba200461f7cf4a278d05",
+            "id": "e_90be617f3e1c4ec09148",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_a7bb58dd0cc34e0b951b",
+            "id": "e_1c70ce4d56434f90ae0f",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_ef86d127437b4312a3d4",
+            "id": "e_8a5f84260fba479aa44c",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_33271dd818974ba3a2af",
+            "id": "e_9ee223f6049c41aaaf91",
             "text": "不用书面腔"
           },
           {
-            "id": "e_d2563ee7005d4e72869e",
+            "id": "e_6ff76f845c704bd293fa",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_4fc3cc6e75dc42c7bb94",
+          "id": "e_66736adba04440d4b569",
           "title": "初三那年",
           "text": "唐小棠在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_a05b4bc4d62c43168c5d",
+          "id": "e_2511e57a1a87402d8f89",
           "title": "去年夏天",
           "text": "唐小棠和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -674,7 +674,7 @@
       "performance": "演绎唐小棠时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_1a62e73101da4c1c95bf",
+          "id": "e_979c07a1634f46dfb1ea",
           "text": "唐小棠其实怕黑，从没告诉过别人。"
         }
       ],
@@ -686,22 +686,22 @@
         "oneLiner": "沈烬，高二（1）班",
         "names": [
           {
-            "id": "e_0f72b92b51d44a2098ae",
+            "id": "e_9a9dd7a49d664fae8305",
             "text": "沈烬"
           },
           {
-            "id": "e_6eeaf5349f5d40549b6b",
+            "id": "e_ddeee4f0c0aa463185f3",
             "text": "小烬"
           }
         ],
         "aliases": [
           {
-            "id": "e_c5ecee7287914a63bac3",
+            "id": "e_d14ee361cc3b4009916b",
             "text": "烬烬",
             "attitude": "likes"
           },
           {
-            "id": "e_be3ce55d1f1b4887b05a",
+            "id": "e_784b3e5185b84f3f8a8a",
             "text": "沈同学",
             "attitude": "dislikes"
           }
@@ -714,43 +714,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_f27eeeb067704e72ab8d",
+            "id": "e_0f45cefb8be047f09739",
             "text": "真的假的"
           },
           {
-            "id": "e_86d29a67617843fa87bf",
+            "id": "e_9fdb8e1dea72409bada8",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_fb3ddf6e518a431e8685",
+            "id": "e_844cb457da594c7597b6",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_49a30bbb308a46f0bcf3",
+            "id": "e_32e2a555ed2f496ba9ef",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_26a96d8e071549e797a3",
+            "id": "e_ca62f88ac23d465dbcf9",
             "text": "不用书面腔"
           },
           {
-            "id": "e_4016f9602f70472b9aeb",
+            "id": "e_d793e4d895164450b9dc",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_75efa39026324524a1d7",
+          "id": "e_40775df46f484937bfc5",
           "title": "初三那年",
           "text": "沈烬在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_b119ee6fea654e45bbe1",
+          "id": "e_8ac5960b4fa449b7bfdd",
           "title": "去年夏天",
           "text": "沈烬和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -758,7 +758,7 @@
       "performance": "演绎沈烬时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_85d54d44a4494f9db4c7",
+          "id": "e_01429e5c29094912a53b",
           "text": "沈烬其实怕黑，从没告诉过别人。"
         }
       ],
@@ -770,22 +770,22 @@
         "oneLiner": "叶初晴，高二（2）班",
         "names": [
           {
-            "id": "e_9f53b91ecb804ffa959e",
+            "id": "e_3a0aaf32ad594ece81e5",
             "text": "叶初晴"
           },
           {
-            "id": "e_2373d5d505f041e993e5",
+            "id": "e_0fa5c37f32b24a5a8899",
             "text": "小晴"
           }
         ],
         "aliases": [
           {
-            "id": "e_2ea04059d8d043418526",
+            "id": "e_73796ab2aa8840dba24b",
             "text": "晴晴",
             "attitude": "likes"
           },
           {
-            "id": "e_06539c4c20fc494593c1",
+            "id": "e_fe7f34a2a4e346578fa4",
             "text": "叶同学",
             "attitude": "ok"
           }
@@ -798,43 +798,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_22930cb5b6e24cf4929d",
+            "id": "e_db020e5d2bfa4e05bfd2",
             "text": "真的假的"
           },
           {
-            "id": "e_cad7c7b9f0ac423aa4a4",
+            "id": "e_dd0a88a8bc3a46ebbad3",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_a67882032c79490fbc99",
+            "id": "e_705b4c6f4fb04b19b3f0",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_fa60707463db47058831",
+            "id": "e_477d60a325e84052acae",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_73aeb8293cdb4ddfb8f3",
+            "id": "e_b62260908c874e3280af",
             "text": "不用书面腔"
           },
           {
-            "id": "e_1cd5721e334e45b2bfa9",
+            "id": "e_56818f1d78cd4ee0b62b",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_a87e54a62d5a4174bb2b",
+          "id": "e_4a0af4a64c064fb6ad9e",
           "title": "初三那年",
           "text": "叶初晴在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_98b6bff6ea354a97bf3a",
+          "id": "e_4ca921bd41b5469ea3c1",
           "title": "去年夏天",
           "text": "叶初晴和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -842,7 +842,7 @@
       "performance": "演绎叶初晴时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_37c16054ba4b43fc8291",
+          "id": "e_e5b6f75d8d914d819953",
           "text": "叶初晴其实怕黑，从没告诉过别人。"
         }
       ],
@@ -854,22 +854,22 @@
         "oneLiner": "秦川，高二（3）班",
         "names": [
           {
-            "id": "e_fdaeb30683b5483dba37",
+            "id": "e_ce8461e3c6d04ddeb210",
             "text": "秦川"
           },
           {
-            "id": "e_d049c00720ce40708d25",
+            "id": "e_49e53f44d72b4ee08957",
             "text": "小川"
           }
         ],
         "aliases": [
           {
-            "id": "e_c76b6fe518b64d4096c7",
+            "id": "e_22a220de601a469daa3a",
             "text": "川川",
             "attitude": "likes"
           },
           {
-            "id": "e_a6fbec5f5fe743749ab0",
+            "id": "e_a84aa11bebc645998fca",
             "text": "秦同学",
             "attitude": "dislikes"
           }
@@ -882,43 +882,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_a46abe8e22c34d438443",
+            "id": "e_5d142635f3a7467b9833",
             "text": "真的假的"
           },
           {
-            "id": "e_f440024dacb049af8ca9",
+            "id": "e_359faf88ed8045d3a2b2",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_bc9984a80da341a9802e",
+            "id": "e_8f3fadfb05f34048b128",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_3cd0ffd6fb3041278e29",
+            "id": "e_b70b395d71b64532b777",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_b14e482853dd4f32bb08",
+            "id": "e_d215f1fbd65b460e9266",
             "text": "不用书面腔"
           },
           {
-            "id": "e_af971084afec4a479721",
+            "id": "e_26f07adcfe92484f94ed",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_765eb7a33df44c4b8fdf",
+          "id": "e_736d6236ea234e1dadbf",
           "title": "初三那年",
           "text": "秦川在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_1c77ca40b1514b9e8b40",
+          "id": "e_74fbd404e4874d5ab2bc",
           "title": "去年夏天",
           "text": "秦川和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -926,7 +926,7 @@
       "performance": "演绎秦川时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_7d302f4d131e4bc1ba48",
+          "id": "e_e90678558de94a0884e2",
           "text": "秦川其实怕黑，从没告诉过别人。"
         }
       ],
@@ -938,22 +938,22 @@
         "oneLiner": "白露，高二（4）班",
         "names": [
           {
-            "id": "e_7d52fc3684be4b2ba6ea",
+            "id": "e_d04718e81f1d4d1e8e33",
             "text": "白露"
           },
           {
-            "id": "e_8a8ac2c0a87948c9a359",
+            "id": "e_a742451be25749f2b29a",
             "text": "小露"
           }
         ],
         "aliases": [
           {
-            "id": "e_54d912648bc44c4595bd",
+            "id": "e_e3fadc19b0e94a5b9cee",
             "text": "露露",
             "attitude": "likes"
           },
           {
-            "id": "e_7cfcd7bd99ff457a977c",
+            "id": "e_6b840341e90d450288d2",
             "text": "白同学",
             "attitude": "ok"
           }
@@ -966,43 +966,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_c76e80101a624c8bb889",
+            "id": "e_acde4bda8de2468ab42c",
             "text": "真的假的"
           },
           {
-            "id": "e_06fee3fef13e4755a89e",
+            "id": "e_9b049362c3e84d06a128",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_bc352f3dc43443548da2",
+            "id": "e_f5e275b673b348b6ae93",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_1ed0880f295b4de8ae0b",
+            "id": "e_447bc59acf934fb199f3",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_f4af8a71723b4b8ca19b",
+            "id": "e_c7c5488b0c984bfdae6f",
             "text": "不用书面腔"
           },
           {
-            "id": "e_361f4e900d3841d2b7e7",
+            "id": "e_1f76043ac41e4b8f8597",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_81e720fe4bad4d8eaf6d",
+          "id": "e_c0d3f3c167dc4af99a84",
           "title": "初三那年",
           "text": "白露在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_bcf074efaa454f06a3a9",
+          "id": "e_cc859e31304441389ec1",
           "title": "去年夏天",
           "text": "白露和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -1010,7 +1010,7 @@
       "performance": "演绎白露时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_012933b9a35d4fe899aa",
+          "id": "e_708d0c9815a14527abaa",
           "text": "白露其实怕黑，从没告诉过别人。"
         }
       ],
@@ -1022,22 +1022,22 @@
         "oneLiner": "温言，高二（1）班",
         "names": [
           {
-            "id": "e_f43fcba358844fa48696",
+            "id": "e_3fb5010f5c93430697de",
             "text": "温言"
           },
           {
-            "id": "e_71880977229549308af0",
+            "id": "e_baa277f422e64b4b850a",
             "text": "小言"
           }
         ],
         "aliases": [
           {
-            "id": "e_21a4cabda7cb42979a36",
+            "id": "e_fa777610b5494294bb35",
             "text": "言言",
             "attitude": "likes"
           },
           {
-            "id": "e_e8e90f79dad14ba38bd6",
+            "id": "e_c8020588da8e4e3fb5bb",
             "text": "温同学",
             "attitude": "dislikes"
           }
@@ -1050,43 +1050,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_01678ac970ea4033ba0a",
+            "id": "e_11962fa4620349a5b057",
             "text": "真的假的"
           },
           {
-            "id": "e_351944c3042846258b9e",
+            "id": "e_46296679d16e4e3dbdf4",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_d0589036f77246ebb559",
+            "id": "e_eac74d14aeb141aea5d7",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_8ad6245eb2b347159471",
+            "id": "e_4f19b95208f14e9ebefe",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_405984bbb9ed44cf983c",
+            "id": "e_a0102b0e1bfe4c43bf5b",
             "text": "不用书面腔"
           },
           {
-            "id": "e_bb8a885d7afe4fafbee3",
+            "id": "e_ac3e248ded1a446ebe34",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_e8a1e71191fc4c6a9aeb",
+          "id": "e_d399641c546b4aa292f4",
           "title": "初三那年",
           "text": "温言在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_dac5f417c7444c53a0da",
+          "id": "e_d0e2b72c6b5e45f9b39a",
           "title": "去年夏天",
           "text": "温言和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -1094,7 +1094,7 @@
       "performance": "演绎温言时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_5f670e0ebe7e45a989a7",
+          "id": "e_728d6ce317324b269fac",
           "text": "温言其实怕黑，从没告诉过别人。"
         }
       ],
@@ -1106,22 +1106,22 @@
         "oneLiner": "陆远，高二（2）班",
         "names": [
           {
-            "id": "e_21b89d507a1340fd96f8",
+            "id": "e_0072af06379e413ba26b",
             "text": "陆远"
           },
           {
-            "id": "e_7b9cc01901c545dcb479",
+            "id": "e_4cc56ca8406e40ea8f5a",
             "text": "小远"
           }
         ],
         "aliases": [
           {
-            "id": "e_423c3ad1b1db4578902e",
+            "id": "e_65e10638dcc94f2a8b9f",
             "text": "远远",
             "attitude": "likes"
           },
           {
-            "id": "e_9eca11f1c41540f0b880",
+            "id": "e_6bb31c56cb69445facfa",
             "text": "陆同学",
             "attitude": "ok"
           }
@@ -1134,43 +1134,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_a18e2b3f4c864c37be59",
+            "id": "e_12147142e5ad4e4b99f5",
             "text": "真的假的"
           },
           {
-            "id": "e_726f385685c2434a91f7",
+            "id": "e_756ab68b3c43411e90a6",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_0167f832f3e048608dd7",
+            "id": "e_40df79d82526482988ba",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_5e64e81a204a4b10b797",
+            "id": "e_8f2fd3bdf21e4ec08c67",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_24d23dbb7b774f8d936f",
+            "id": "e_5fe5002f27be46debabb",
             "text": "不用书面腔"
           },
           {
-            "id": "e_34385c0e42a94cfdb275",
+            "id": "e_8c46687c459e4b7992ff",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_77ec1efac14a4fd692b5",
+          "id": "e_c730dca1e77a49128cfc",
           "title": "初三那年",
           "text": "陆远在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_d95c99fe7e884693aa91",
+          "id": "e_310ae4269fe64eeda3ae",
           "title": "去年夏天",
           "text": "陆远和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -1178,7 +1178,7 @@
       "performance": "演绎陆远时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_17d44e3d0d02420bbaac",
+          "id": "e_849c86a703e8447080c6",
           "text": "陆远其实怕黑，从没告诉过别人。"
         }
       ],
@@ -1190,22 +1190,22 @@
         "oneLiner": "宋青，高二（3）班",
         "names": [
           {
-            "id": "e_7035e4a6013d44c2aa11",
+            "id": "e_844750152ae34ed5a67f",
             "text": "宋青"
           },
           {
-            "id": "e_986928c3303b447cab4d",
+            "id": "e_561891d44dd847b8a103",
             "text": "小青"
           }
         ],
         "aliases": [
           {
-            "id": "e_786e127afc7949c69b78",
+            "id": "e_d5520d96643840f5afc2",
             "text": "青青",
             "attitude": "likes"
           },
           {
-            "id": "e_6adee0f835fe4eeeaa55",
+            "id": "e_7dac19e5e342478f9361",
             "text": "宋同学",
             "attitude": "dislikes"
           }
@@ -1218,43 +1218,43 @@
       "speech": {
         "catchphrases": [
           {
-            "id": "e_ad3fca44c4c54c0391fc",
+            "id": "e_3b3850143092401c934e",
             "text": "真的假的"
           },
           {
-            "id": "e_48b6d81d1fde49169684",
+            "id": "e_f033599f5af5453386a4",
             "text": "行吧行吧"
           }
         ],
         "samples": [
           {
-            "id": "e_2f1b51ee353946bbb550",
+            "id": "e_09156fda5e594cbe8c42",
             "text": "你先说，我听着呢。"
           },
           {
-            "id": "e_d2a4b94ca55a49539105",
+            "id": "e_48c4743792aa41e29af0",
             "text": "这事儿我可记着了啊。"
           }
         ],
         "avoid": [
           {
-            "id": "e_844049437a854aed9264",
+            "id": "e_a40af163a9554961b522",
             "text": "不用书面腔"
           },
           {
-            "id": "e_23d7c2249ab64113bbe6",
+            "id": "e_ea5e8074584c4e66b980",
             "text": "不说“亲”"
           }
         ]
       },
       "experiences": [
         {
-          "id": "e_1d1f81904c794e38939b",
+          "id": "e_3cd596b02d92428fac74",
           "title": "初三那年",
           "text": "宋青在初三转学来到这座城市，第一次交到朋友是在天台。"
         },
         {
-          "id": "e_da75515b10c44ea2b121",
+          "id": "e_056aec9a8b8c426fa5e4",
           "title": "去年夏天",
           "text": "宋青和朋友一起去海边，忘了带伞被淋成落汤鸡。"
         }
@@ -1262,7 +1262,7 @@
       "performance": "演绎宋青时语气随意，不要过度撒娇。",
       "hidden": [
         {
-          "id": "e_b36033d8f84849d5811b",
+          "id": "e_c699fab2080a49d2a78e",
           "text": "宋青其实怕黑，从没告诉过别人。"
         }
       ],
@@ -1271,66 +1271,66 @@
   ],
   "people": [
     {
-      "id": "e_f6baff159d82404992a9",
+      "id": "e_29ef38f826b2420196c3",
       "kind": "person",
       "names": [
         {
-          "id": "e_a23e3824ff12479eb627",
+          "id": "e_060713d87f184dad9205",
           "text": "林妈妈"
         }
       ],
       "oneLiner": "小满的妈妈，开早餐店"
     },
     {
-      "id": "e_ba4e3827826a41eea890",
+      "id": "e_13a7bb64ed0940e9aba3",
       "kind": "person",
       "names": [
         {
-          "id": "e_e67a70fa9a0e4c44a142",
+          "id": "e_78727ffc46d0409891ba",
           "text": "老周"
         }
       ],
       "oneLiner": "班主任，教语文"
     },
     {
-      "id": "e_76c89d9647b748b48e4c",
+      "id": "e_04e071a38ba64a25ab86",
       "kind": "prototype",
       "names": [
         {
-          "id": "e_1c950045f5f346e8bd15",
+          "id": "e_8b0a253d831b450a87ff",
           "text": "舞台上的她"
         }
       ],
       "oneLiner": "小满喜欢的歌手"
     },
     {
-      "id": "e_7d0a3ce68f2c4c69abe6",
+      "id": "e_6a9e747f18374435b7c4",
       "kind": "person",
       "names": [
         {
-          "id": "e_69e6be73b84d40cbb300",
+          "id": "e_ed7e6511a7d3474886fe",
           "text": "大黄"
         }
       ],
       "oneLiner": "老街上的流浪狗"
     },
     {
-      "id": "e_2c20bfd930e642b8870c",
+      "id": "e_73f94087ee2040738496",
       "kind": "person",
       "names": [
         {
-          "id": "e_9b673c592bcb48428ad1",
+          "id": "e_6aff3a3dd1a746f6bd5b",
           "text": "书店老板"
         }
       ],
       "oneLiner": "开旧书店的中年人"
     },
     {
-      "id": "e_3ece717862744f2a84bd",
+      "id": "e_1aa646cdbb5046f68f8b",
       "kind": "person",
       "names": [
         {
-          "id": "e_705376c9a3f64abc814f",
+          "id": "e_ab12216daac34d42a4df",
           "text": "教练"
         }
       ],
@@ -1416,37 +1416,37 @@
   },
   "directions": [
     {
-      "id": "e_953413dd32684ecea6d2",
+      "id": "e_272a1b4fa0694d85a489",
       "from": "c01",
       "to": "c02",
       "address": "阿杰",
       "treatment": "嘴上互怼，其实最信任他"
     },
     {
-      "id": "e_f8f013d34f314a4ea3b0",
+      "id": "e_f03649e6b47e47039028",
       "from": "c02",
       "to": "c01",
       "address": "小满",
       "treatment": "嘴硬，会替她出头"
     },
     {
-      "id": "e_0cb5539e059248ba9325",
+      "id": "e_cb88b4abe58749a38c15",
       "from": "c05",
       "to": "c01",
       "address": "林同学",
       "treatment": "客气，保持距离"
     },
     {
-      "id": "e_7232de76310540c09d5b",
+      "id": "e_f67a79bdb4214a2696fa",
       "from": "c01",
-      "to": "e_f6baff159d82404992a9",
+      "to": "e_29ef38f826b2420196c3",
       "address": "妈",
       "treatment": "撒娇，报喜不报忧"
     }
   ],
   "groups": [
     {
-      "id": "e_e7b8e9f7dc8f494eb813",
+      "id": "e_41cd18afdc0147c4b485",
       "name": "文学社",
       "members": [
         "c01",
@@ -1457,7 +1457,7 @@
       "background": "周四放学后在旧书店二楼聚会。",
       "stories": [
         {
-          "id": "e_4481d764e8004148b107",
+          "id": "e_0277ae34e15b4aeca32e",
           "title": "社刊创刊",
           "summary": "四个人熬夜印出了第一期社刊。",
           "details": "封面是苏念画的，错了两个字。",
@@ -1470,7 +1470,7 @@
       ]
     },
     {
-      "id": "e_1405e28ec6c44185b09f",
+      "id": "e_8177f167d46c4dbca6ee",
       "name": "篮球队",
       "members": [
         "c05",
@@ -1483,7 +1483,7 @@
       "stories": []
     },
     {
-      "id": "e_48ce00e5fccb4339aad0",
+      "id": "e_47a50f72bfa84360bd6e",
       "name": "宿舍",
       "members": [
         "c10",
@@ -1493,7 +1493,7 @@
       "background": "三人同一间寝室。",
       "stories": [
         {
-          "id": "e_19b1881ba56344c3aa24",
+          "id": "e_0c43f5e337d14c7194d7",
           "title": "停电夜",
           "summary": "整栋楼停电，三个人在走廊打牌。",
           "details": "",
@@ -1508,7 +1508,7 @@
   ],
   "stories": [
     {
-      "id": "e_95693e5dc1d14d76a6ef",
+      "id": "e_d62825d9be61447da574",
       "title": "雨夜的告白",
       "summary": "小满在雨夜向阿杰说出了心里话。",
       "details": "在公交站台，伞只有一把，两个人都没提回家。",
@@ -1524,7 +1524,7 @@
       "overrides": []
     },
     {
-      "id": "e_06cca1d2c4f34ff6a8d9",
+      "id": "e_34db9d7bff5b447b8ae2",
       "title": "校庆演出",
       "summary": "校庆晚会上苏念、周屿和陆远合唱。",
       "details": "中途话筒坏了，全场跟着一起唱完。",
@@ -1540,14 +1540,14 @@
       "boundary": "",
       "overrides": [
         {
-          "id": "e_4d1019f36e054ed6ab82",
+          "id": "e_d9cea20c27cc4c64a87f",
           "characterId": "c01",
           "level": "lived"
         }
       ]
     },
     {
-      "id": "e_33984d4040b74bd69f2d",
+      "id": "e_8d2e56b680eb4d08a24e",
       "title": "旧照片",
       "summary": "书店老板翻出一张十年前的合影。",
       "details": "照片里有三个人，其中一个后来搬走了。",
@@ -1557,19 +1557,19 @@
       },
       "participants": [
         "c07",
-        "e_2c20bfd930e642b8870c"
+        "e_73f94087ee2040738496"
       ],
       "boundary": "不要猜照片里是谁。",
       "overrides": [
         {
-          "id": "e_e9f36088e59545c2ac1b",
+          "id": "e_920171e4dc724b73b15e",
           "characterId": "c07",
           "level": "unknown"
         }
       ]
     },
     {
-      "id": "e_e7cb433b078147feabe4",
+      "id": "e_194f3218b0684fdca3f7",
       "title": "决赛前夜",
       "summary": "篮球队决赛前一晚全队没睡。",
       "details": "教练给每人发了一张纸条。",
@@ -1581,13 +1581,13 @@
         "c05",
         "c06",
         "c08",
-        "e_3ece717862744f2a84bd"
+        "e_1aa646cdbb5046f68f8b"
       ],
       "boundary": "",
       "overrides": []
     },
     {
-      "id": "e_9574a70fe9504ae49146",
+      "id": "e_dbf61327e9884f6c9d28",
       "title": "大黄走丢",
       "summary": "大黄走丢了三天，全街的人都在找。",
       "details": "",
@@ -1596,14 +1596,14 @@
         "end": ""
       },
       "participants": [
-        "e_7d0a3ce68f2c4c69abe6",
+        "e_6a9e747f18374435b7c4",
         "c15"
       ],
       "boundary": "",
       "overrides": []
     },
     {
-      "id": "e_3b495962023e4b39a90b",
+      "id": "e_21ebd7101e93434dadae",
       "title": "天台的约定",
       "summary": "几个人在天台约好毕业后再来。",
       "details": "",
@@ -1618,7 +1618,7 @@
       "boundary": "",
       "overrides": [
         {
-          "id": "e_aabbfb60cd1e4175b5cf",
+          "id": "e_436a258c61cd4f9d9ecb",
           "characterId": "c10",
           "level": "heard"
         }
@@ -1627,7 +1627,7 @@
   ],
   "memes": [
     {
-      "id": "e_73d7307e726f467d9915",
+      "id": "e_c0f399f15c8842a5a119",
       "key": "落汤鸡",
       "parties": [
         "c01",
@@ -1638,7 +1638,7 @@
       "prohibited": "对方情绪低落时不要用。"
     },
     {
-      "id": "e_6463e9d6b78b4fa0813e",
+      "id": "e_e3f0a043350e4a0bb7e2",
       "key": "行吧行吧",
       "parties": [
         "c05"
