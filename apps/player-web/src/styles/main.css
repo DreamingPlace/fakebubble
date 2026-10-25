@@ -5603,804 +5603,6 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   margin-top: 20px;
 }
 
-/* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
-.page-shell .mobile-account {
-  display: none;
-}
-@media (min-width: 601px) {
-  .page-shell .carousel {
-    height: min(840px, calc(100dvh - 220px));
-  }
-  .page-shell .card-slot {
-    height: min(794px, calc(100dvh - 240px));
-    min-height: 380px;
-  }
-  .page-shell .card-slot.is-chat {
-    width: min(376px, calc(100vw - 108px));
-    height: min(794px, calc(100dvh - 22px));
-  }
-}
-@media (max-width: 600px) {
-  /* Track the visible viewport (including Safari's keyboard pan), not the layout viewport. */
-  .page-shell,
-  .page-shell[data-phase] {
-    position: fixed;
-    width: var(--chat-width, 100vw);
-    height: var(--chat-height, 100dvh);
-    min-height: 0;
-    left: calc(var(--chat-left, 50vw) - var(--chat-width, 100vw) / 2);
-    top: calc(var(--chat-top, 50dvh) - var(--chat-height, 100dvh) / 2);
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    background: var(--page-bg);
-  }
-  .page-shell[data-phase] .site-head {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    grid-template-rows: 44px auto;
-    column-gap: 4px;
-    row-gap: 0;
-    flex-wrap: nowrap;
-    height: auto;
-    min-height: 68px;
-    padding: 0 16px 6px;
-    visibility: visible;
-    align-items: center;
-  }
-  .page-shell .brand {
-    grid-column: 1;
-    grid-row: 1 / 3;
-    gap: 6px;
-    font-size: 15px;
-    white-space: nowrap;
-  }
-  .page-shell .brand-mark {
-    width: 24px;
-    height: 24px;
-    flex: none;
-  }
-  .page-shell .head-actions {
-    grid-column: 2;
-    grid-row: 1;
-    margin: 0;
-    gap: 0;
-    min-width: 0;
-  }
-  .page-shell .desktop-account {
-    display: none;
-  }
-  .page-shell .mobile-account {
-    display: block;
-  }
-  .page-shell .head-account,
-  .page-shell .site-head > .invite-entry {
-    min-height: 44px;
-    min-width: 44px;
-    padding: 4px 8px;
-    font-size: 13px;
-    white-space: nowrap;
-  }
-  .page-shell .head-account {
-    max-width: 96px;
-  }
-  .page-shell .site-head > .invite-entry {
-    grid-column: 3;
-    grid-row: 1;
-    margin: 0;
-  }
-  .page-shell .site-head .head-note {
-    display: block;
-    grid-column: 2 / 4;
-    grid-row: 2;
-    margin: 0;
-    font-size: 12px;
-    letter-spacing: 0;
-    line-height: 18px;
-    text-align: center;
-    overflow-wrap: anywhere;
-  }
-  .page-shell .site-head .head-hint {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    margin: 4px -16px 0;
-    padding: 4px 16px;
-    text-align: center;
-    line-height: 18px;
-    background: rgba(255, 255, 255, 0.22);
-  }
-  .page-shell .main-area {
-    min-height: 0;
-    flex: 1;
-  }
-  .page-shell .carousel {
-    flex: 1;
-    min-height: 0;
-    height: auto;
-  }
-  .page-shell[data-phase] .card-slot,
-  .page-shell[data-phase] .card-slot.is-chat {
-    position: absolute;
-    width: calc(100% - 32px);
-    height: 100%;
-    min-height: 0;
-    left: 50%;
-    top: 50%;
-  }
-  .page-shell[data-phase] .card-slot.is-chat .card-shell {
-    border-radius: 18px;
-    box-shadow: 0 8px 24px rgba(44, 51, 47, 0.16);
-  }
-  .page-shell .chat-head {
-    height: 44px;
-    gap: 8px;
-    padding: 0 8px;
-  }
-  .page-shell .chat-head strong {
-    font-size: 15px;
-    line-height: 20px;
-  }
-  .page-shell .chat-head .back-button {
-    margin-left: 0;
-  }
-  .page-shell .chat-body {
-    min-height: 0;
-    overflow-y: auto;
-    padding: 16px 12px;
-  }
-  .page-shell .card-slot.is-chat .chat-body {
-    padding-top: 12px;
-  }
-  .page-shell .friend-notice {
-    white-space: normal;
-    overflow-wrap: anywhere;
-    margin-bottom: 16px;
-  }
-  .page-shell[data-phase] .composer {
-    min-height: 60px;
-    padding: 8px;
-  }
-  .page-shell .play-button,
-  .page-shell .transcript-toggle {
-    min-height: 44px;
-    min-width: 44px;
-  }
-  .page-shell[data-phase] .avatar-nav {
-    display: block;
-    position: relative;
-    width: 100%;
-    height: 68px;
-    flex: none;
-    margin-top: 8px;
-    padding: 0;
-    left: auto;
-    bottom: auto;
-    transform: none;
-    background: transparent;
-    box-shadow: none;
-  }
-  .page-shell[data-phase="chat"] .avatar-nav,
-  .page-shell[data-phase="expanding"] .avatar-nav,
-  .page-shell[data-phase="collapsing"] .avatar-nav {
-    display: none;
-  }
-  .page-shell[data-phase] .avatar-choice {
-    width: 48px;
-    height: 48px;
-    min-width: 48px;
-    transform: translate(-50%, 0) translateX(var(--avatar-x)) translateY(calc(var(--avatar-y) * 0.3));
-  }
-  .page-shell[data-phase] .avatar-choice-mark {
-    /* 54 px → 45.9 px: circles shrink 15%; hit targets remain 48 px. */
-    width: 45.9px;
-    height: 45.9px;
-    border-radius: 50%;
-    font-size: 18px;
-  }
-  .page-shell[data-phase="chat"] .preview-note,
-  .page-shell[data-phase="expanding"] .preview-note {
-    display: none;
-  }
-  .page-shell[data-phase="browse"] .preview-note,
-  .page-shell[data-phase="hover"] .preview-note {
-    display: block;
-    visibility: visible;
-    padding: 0 16px 4px;
-    margin: 0;
-    font-size: 10px;
-    line-height: 14px;
-  }
-}
-
-/* Part 17: consent line, erase sheets, grace hint, Turnstile box and the legal pages. */
-.acct-legal {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #3b4a45;
-}
-.acct-legal a,
-.legal-link,
-.signed-out-legal a {
-  color: #294b40;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.acct-expired,
-.signed-out-expired,
-.signed-out-erased {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #ece8dd;
-  font-size: 14px;
-  line-height: 1.6;
-}
-.acct-warning {
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: #f4e4e1;
-  color: #5c2420;
-}
-.acct-danger {
-  background: #8a2f27;
-}
-.signed-out-legal {
-  margin: 12px 0 0;
-  font-size: 12px;
-  text-align: center;
-}
-/* Part 17f: the check is centred on both axes (desktop and phone), not parked at the bottom. The wrapper covers the
-   viewport only to centre its child and lets every tap through except on the widget itself. */
-.human-check {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
-  box-sizing: border-box;
-  pointer-events: none;
-  z-index: 400;
-}
-.human-check > * {
-  pointer-events: auto;
-}
-.legal-doc {
-  box-sizing: border-box;
-  max-width: 720px;
-  margin: 0 auto;
-  padding: max(24px, env(safe-area-inset-top)) 20px max(40px, env(safe-area-inset-bottom));
-  background: #f6f4ef;
-  color: #24302f;
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.85;
-}
-.legal-doc h1 {
-  font-size: 24px;
-  margin: 0 0 4px;
-}
-.legal-doc h2 {
-  font-size: 17px;
-  margin: 28px 0 6px;
-}
-.legal-doc p,
-.legal-doc li {
-  margin: 6px 0;
-  overflow-wrap: anywhere;
-}
-.legal-doc ul {
-  padding-left: 20px;
-}
-.legal-doc .legal-meta {
-  font-size: 13px;
-  color: #5a6762;
-}
-.legal-doc .legal-todo {
-  background: #fff1c2;
-  border-radius: 4px;
-  padding: 0 3px;
-}
-.legal-doc .legal-draft {
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #fff1c2;
-  font-size: 13px;
-}
-.legal-doc nav {
-  margin-top: 32px;
-  font-size: 13px;
-}
-.legal-doc nav a {
-  color: #294b40;
-}
-body.legal-page {
-  margin: 0;
-  background: #f6f4ef;
-}
-.acct-bonus {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #e3efe6;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-/* Part 19: the one-time chat-review banner (CHAT_REVIEW_ENABLED) and the 18+ tick of the signup sheet. */
-.review-banner {
-  display: none;
-  flex: none;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 8px 8px 18px;
-  background: #f2efe4;
-  border-bottom: 1px solid #e1ddd0;
-  color: #5a4c3f;
-  font-size: 12px;
-  line-height: 1.6;
-}
-.card-slot.is-chat .review-banner {
-  display: flex;
-}
-.review-banner-text {
-  flex: 1;
-  margin: 0;
-}
-.review-banner-text a {
-  color: #294b40;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-.review-banner-close {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
-  font-size: 20px;
-  line-height: 1;
-}
-.review-banner-close:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-.acct-adult {
-  margin: 2px 0;
-}
-
-/* Part 19: 测试对话 (the owner's anonymous transcript review). */
-.review-pager {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 8px 0;
-  font-size: 13px;
-  color: var(--ad-muted);
-}
-.review-state {
-  align-self: center;
-  font-size: 12px;
-  color: var(--ad-muted);
-}
-.review-lines {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 6px;
-}
-.review-line {
-  display: grid;
-  grid-template-columns: 9.5em 6.5em 1fr auto;
-  gap: 10px;
-  align-items: baseline;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--ad-surface, #fff);
-  border: 1px solid var(--ad-border);
-  line-height: 1.6;
-}
-.review-line.is-player {
-  background: var(--ad-bg);
-}
-.review-line.is-failed {
-  border-color: #c98f86;
-  color: #8a3b30;
-}
-.review-time,
-.review-speaker {
-  font-size: 12px;
-  color: var(--ad-muted);
-  white-space: nowrap;
-}
-.review-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.review-changed {
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  border: 1px solid var(--ad-border);
-  color: var(--ad-muted);
-  white-space: nowrap;
-}
-
-/* Part 21b: model picker (reuses the account sheet frame), the points line, and the backup-model note. */
-.mp-balance {
-  margin: 0 0 12px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #294b40;
-}
-.mp-body {
-  display: grid;
-  gap: 10px;
-}
-.mp-card {
-  display: grid;
-  gap: 6px;
-  min-height: 44px;
-  padding: 14px 16px;
-  border: 1px solid #b9c4bf;
-  border-radius: 14px;
-  background: #fff;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-.mp-card.is-current {
-  border-color: #294b40;
-  box-shadow: inset 0 0 0 1px #294b40;
-}
-.mp-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
-}
-.mp-tag {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: #294b40;
-  color: #fff;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 400;
-}
-.mp-blurb {
-  font-size: 14px;
-  line-height: 1.5;
-  opacity: 0.8;
-}
-.mp-prices {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.mp-prices b {
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: #ece8dd;
-  font-size: 13px;
-  font-weight: 500;
-}
-.mp-confirm {
-  padding: 4px 0;
-  font-size: 16px;
-}
-.text-with-note {
-  display: grid;
-  min-width: 0;
-}
-.backup-note {
-  display: block;
-  margin: 4px 0 0 4px;
-  font-size: 12px;
-  opacity: 0.6;
-}
-@media (min-width: 601px) {
-  .mp-sheet {
-    align-items: stretch;
-  }
-  .mp-sheet .acct-head,
-  .mp-sheet .acct-body,
-  .mp-sheet .acct-status {
-    width: min(480px, 100%);
-  }
-}
-
-/* Part 21f: first-time guide bubble under the chat's ⋯ button, speed hint in the picker, today's co-creation entry. */
-.chat-guide {
-  position: absolute;
-  right: 10px;
-  top: calc(100% - 4px);
-  z-index: 29;
-  max-width: min(260px, calc(100% - 20px));
-  min-height: 44px;
-  padding: 10px 14px;
-  border: 0;
-  border-radius: 14px;
-  background: #294b40;
-  color: #fff;
-  font: inherit;
-  font-size: 14px;
-  line-height: 1.45;
-  text-align: left;
-  box-shadow: 0 10px 28px rgba(32, 48, 42, 0.28);
-  animation: chat-menu-in 200ms cubic-bezier(0.2, 0.82, 0.24, 1);
-}
-.chat-guide::before {
-  content: "";
-  position: absolute;
-  right: 18px;
-  top: -6px;
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  background: inherit;
-  transform: rotate(45deg);
-}
-.mp-speed {
-  font-size: 13px;
-  color: #5b6b65;
-}
-.cc-used {
-  margin: 0 16px 8px;
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: #ece8dd;
-  font-size: 14px;
-  font-weight: 600;
-  text-align: center;
-}
-
-/* Part 21f: 消费记录 — its rules live in one place now: the Part 25a block below. */
-
-/* Part 21i: spent co-creation cards, password toggle, signup mismatch line */
-.cc-card.is-used {
-  opacity: 0.62;
-  box-shadow: none;
-}
-.cc-card.is-used .cc-face {
-  cursor: default;
-}
-.cc-card.is-used .cc-cta {
-  background: #ece8dd;
-  color: #5b6b65;
-}
-.acct-pw {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-.acct-pw .acct-input {
-  flex: 1;
-  min-width: 0;
-}
-.acct-reveal {
-  min-height: 48px;
-  min-width: 44px;
-  padding: 0 12px;
-  border: 1px solid #b9c4bf;
-  border-radius: 12px;
-  background: #fff;
-  color: #294b40;
-  font: inherit;
-  font-size: 14px;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.acct-reveal:focus-visible {
-  outline: 3px solid #24584e;
-  outline-offset: 2px;
-}
-.acct-mismatch {
-  margin: 0;
-  font-size: 14px;
-  color: #9b2c2c;
-}
-.acct-goto-signup {
-  font-weight: 650;
-}
-
-/* 我的信息 (Part 22a): the page behind the top bar's nickname button. Plain rows - a label, a value, at most one button. It works
-   at 390 px: one column, 48 px touch rows, long values wrap. */
-.mi-body {
-  display: grid;
-  gap: 18px;
-  align-content: start;
-  padding-top: 8px;
-}
-.mi-section {
-  display: grid;
-  gap: 2px;
-}
-.mi-heading {
-  margin: 0 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: #5c6a64;
-}
-.mi-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(36, 48, 47, 0.1);
-}
-.mi-key {
-  flex: none;
-  min-width: 4.5em;
-  color: #5c6a64;
-  font-size: 14px;
-}
-.mi-key:empty {
-  display: none;
-}
-.mi-val {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: 16px;
-}
-.mi-number {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  letter-spacing: 0.12em;
-}
-.mi-quota {
-  font-weight: 650;
-  color: #294b40;
-}
-.mi-small {
-  flex: none;
-  min-height: 36px;
-  min-width: 56px;
-  padding: 4px 12px;
-  border: 1px solid rgba(41, 75, 64, 0.35);
-  border-radius: 999px;
-  background: transparent;
-  color: #294b40;
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-.mi-small.acct-primary {
-  background: #294b40;
-  color: #fff;
-}
-.mi-input {
-  flex: 1;
-  min-width: 0;
-}
-.mi-link {
-  position: relative;
-  padding: 0;
-}
-.mi-action {
-  flex: 1;
-  min-height: 48px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 16px;
-  text-align: left;
-  cursor: pointer;
-}
-.mi-chev {
-  color: #8a958f;
-  font-size: 20px;
-}
-.mi-buttons {
-  display: flex;
-  gap: 10px;
-}
-.mi-buttons .acct-primary {
-  flex: 1;
-}
-.mi-buttons .mi-login {
-  flex: 1;
-  border: 1px solid rgba(41, 75, 64, 0.35);
-  border-radius: 12px;
-  text-decoration: none;
-}
-.mi-signup-first {
-  margin: 12px 0 0;
-  font-size: 16px;
-  color: #24302f;
-}
-.mi-foot {
-  display: grid;
-  margin-top: 6px;
-}
-.mi-logout {
-  min-height: 48px;
-  border: 1px solid rgba(41, 75, 64, 0.35);
-  border-radius: 12px;
-  text-decoration: none;
-}
-/* 删除我的账号 / 清除本设备的体验数据: kept apart from the everyday buttons above. */
-.mi-danger {
-  display: grid;
-  margin-top: 28px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(138, 47, 39, 0.25);
-}
-.mi-danger .acct-danger {
-  min-height: 48px;
-  border: 0;
-  border-radius: 12px;
-  color: #fff;
-  font: inherit;
-  cursor: pointer;
-}
-.invite-signup {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: space-between;
-}
-.invite-signup[hidden] {
-  display: none;
-}
-.invite-signup-text {
-  font-size: 16px;
-}
-.invite-signup-button {
-  min-height: 44px;
-  padding: 6px 18px;
-  border: 0;
-  border-radius: 12px;
-  background: #294b40;
-  color: #fff;
-  font: inherit;
-  cursor: pointer;
-}
-
-/* Part 26a: the one-character rule's line above the composer: light, centered, small, fades in; the only control is the word 注册. */
-.guest-note {
-  flex: none;
-  margin: 0;
-  padding: 6px 16px 8px;
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--bb-sub, #6a7772);
-  background: transparent;
-  animation: guest-note-in 360ms ease backwards;
-}
-.guest-note[hidden],
-.card-slot:not(.is-chat) .guest-note {
-  display: none;
-}
-.guest-note-link {
-  appearance: none;
-  border: 0;
-  background: none;
-  padding: 0 2px;
-  font: inherit;
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-@media (prefers-reduced-motion: reduce) {
-  .guest-note {
-    animation: none;
-  }
-}
-@keyframes guest-note-in {
-  from {
-    opacity: 0;
-  }
-}
-
 /* ======================================================================================================================
    Part 24b-2: 角色工作台 (list | editor | 预演), 关系与故事, 共创收件箱, and the permission tooltips.
    Same rules as 24b-1: motion is multiplied by --ad-motion (0 under prefers-reduced-motion), data colours travel as custom
@@ -7738,6 +6940,804 @@ body.legal-page {
 }
 .account-admin-page.admin-shell .admin-pick-row .cocreation-badge:hover {
   transform: translateY(-1px);
+}
+
+/* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
+.page-shell .mobile-account {
+  display: none;
+}
+@media (min-width: 601px) {
+  .page-shell .carousel {
+    height: min(840px, calc(100dvh - 220px));
+  }
+  .page-shell .card-slot {
+    height: min(794px, calc(100dvh - 240px));
+    min-height: 380px;
+  }
+  .page-shell .card-slot.is-chat {
+    width: min(376px, calc(100vw - 108px));
+    height: min(794px, calc(100dvh - 22px));
+  }
+}
+@media (max-width: 600px) {
+  /* Track the visible viewport (including Safari's keyboard pan), not the layout viewport. */
+  .page-shell,
+  .page-shell[data-phase] {
+    position: fixed;
+    width: var(--chat-width, 100vw);
+    height: var(--chat-height, 100dvh);
+    min-height: 0;
+    left: calc(var(--chat-left, 50vw) - var(--chat-width, 100vw) / 2);
+    top: calc(var(--chat-top, 50dvh) - var(--chat-height, 100dvh) / 2);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: var(--page-bg);
+  }
+  .page-shell[data-phase] .site-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: 44px auto;
+    column-gap: 4px;
+    row-gap: 0;
+    flex-wrap: nowrap;
+    height: auto;
+    min-height: 68px;
+    padding: 0 16px 6px;
+    visibility: visible;
+    align-items: center;
+  }
+  .page-shell .brand {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    gap: 6px;
+    font-size: 15px;
+    white-space: nowrap;
+  }
+  .page-shell .brand-mark {
+    width: 24px;
+    height: 24px;
+    flex: none;
+  }
+  .page-shell .head-actions {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    gap: 0;
+    min-width: 0;
+  }
+  .page-shell .desktop-account {
+    display: none;
+  }
+  .page-shell .mobile-account {
+    display: block;
+  }
+  .page-shell .head-account,
+  .page-shell .site-head > .invite-entry {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 4px 8px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .page-shell .head-account {
+    max-width: 96px;
+  }
+  .page-shell .site-head > .invite-entry {
+    grid-column: 3;
+    grid-row: 1;
+    margin: 0;
+  }
+  .page-shell .site-head .head-note {
+    display: block;
+    grid-column: 2 / 4;
+    grid-row: 2;
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0;
+    line-height: 18px;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+  .page-shell .site-head .head-hint {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    margin: 4px -16px 0;
+    padding: 4px 16px;
+    text-align: center;
+    line-height: 18px;
+    background: rgba(255, 255, 255, 0.22);
+  }
+  .page-shell .main-area {
+    min-height: 0;
+    flex: 1;
+  }
+  .page-shell .carousel {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+  }
+  .page-shell[data-phase] .card-slot,
+  .page-shell[data-phase] .card-slot.is-chat {
+    position: absolute;
+    width: calc(100% - 32px);
+    height: 100%;
+    min-height: 0;
+    left: 50%;
+    top: 50%;
+  }
+  .page-shell[data-phase] .card-slot.is-chat .card-shell {
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(44, 51, 47, 0.16);
+  }
+  .page-shell .chat-head {
+    height: 44px;
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .page-shell .chat-head strong {
+    font-size: 15px;
+    line-height: 20px;
+  }
+  .page-shell .chat-head .back-button {
+    margin-left: 0;
+  }
+  .page-shell .chat-body {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 12px;
+  }
+  .page-shell .card-slot.is-chat .chat-body {
+    padding-top: 12px;
+  }
+  .page-shell .friend-notice {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    margin-bottom: 16px;
+  }
+  .page-shell[data-phase] .composer {
+    min-height: 60px;
+    padding: 8px;
+  }
+  .page-shell .play-button,
+  .page-shell .transcript-toggle {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .page-shell[data-phase] .avatar-nav {
+    display: block;
+    position: relative;
+    width: 100%;
+    height: 68px;
+    flex: none;
+    margin-top: 8px;
+    padding: 0;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    background: transparent;
+    box-shadow: none;
+  }
+  .page-shell[data-phase="chat"] .avatar-nav,
+  .page-shell[data-phase="expanding"] .avatar-nav,
+  .page-shell[data-phase="collapsing"] .avatar-nav {
+    display: none;
+  }
+  .page-shell[data-phase] .avatar-choice {
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    transform: translate(-50%, 0) translateX(var(--avatar-x)) translateY(calc(var(--avatar-y) * 0.3));
+  }
+  .page-shell[data-phase] .avatar-choice-mark {
+    /* 54 px → 45.9 px: circles shrink 15%; hit targets remain 48 px. */
+    width: 45.9px;
+    height: 45.9px;
+    border-radius: 50%;
+    font-size: 18px;
+  }
+  .page-shell[data-phase="chat"] .preview-note,
+  .page-shell[data-phase="expanding"] .preview-note {
+    display: none;
+  }
+  .page-shell[data-phase="browse"] .preview-note,
+  .page-shell[data-phase="hover"] .preview-note {
+    display: block;
+    visibility: visible;
+    padding: 0 16px 4px;
+    margin: 0;
+    font-size: 10px;
+    line-height: 14px;
+  }
+}
+
+/* Part 17: consent line, erase sheets, grace hint, Turnstile box and the legal pages. */
+.acct-legal {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #3b4a45;
+}
+.acct-legal a,
+.legal-link,
+.signed-out-legal a {
+  color: #294b40;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.acct-expired,
+.signed-out-expired,
+.signed-out-erased {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ece8dd;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.acct-warning {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f4e4e1;
+  color: #5c2420;
+}
+.acct-danger {
+  background: #8a2f27;
+}
+.signed-out-legal {
+  margin: 12px 0 0;
+  font-size: 12px;
+  text-align: center;
+}
+/* Part 17f: the check is centred on both axes (desktop and phone), not parked at the bottom. The wrapper covers the
+   viewport only to centre its child and lets every tap through except on the widget itself. */
+.human-check {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 400;
+}
+.human-check > * {
+  pointer-events: auto;
+}
+.legal-doc {
+  box-sizing: border-box;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(40px, env(safe-area-inset-bottom));
+  background: #f6f4ef;
+  color: #24302f;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.85;
+}
+.legal-doc h1 {
+  font-size: 24px;
+  margin: 0 0 4px;
+}
+.legal-doc h2 {
+  font-size: 17px;
+  margin: 28px 0 6px;
+}
+.legal-doc p,
+.legal-doc li {
+  margin: 6px 0;
+  overflow-wrap: anywhere;
+}
+.legal-doc ul {
+  padding-left: 20px;
+}
+.legal-doc .legal-meta {
+  font-size: 13px;
+  color: #5a6762;
+}
+.legal-doc .legal-todo {
+  background: #fff1c2;
+  border-radius: 4px;
+  padding: 0 3px;
+}
+.legal-doc .legal-draft {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff1c2;
+  font-size: 13px;
+}
+.legal-doc nav {
+  margin-top: 32px;
+  font-size: 13px;
+}
+.legal-doc nav a {
+  color: #294b40;
+}
+body.legal-page {
+  margin: 0;
+  background: #f6f4ef;
+}
+.acct-bonus {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #e3efe6;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Part 19: the one-time chat-review banner (CHAT_REVIEW_ENABLED) and the 18+ tick of the signup sheet. */
+.review-banner {
+  display: none;
+  flex: none;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 8px 8px 18px;
+  background: #f2efe4;
+  border-bottom: 1px solid #e1ddd0;
+  color: #5a4c3f;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.card-slot.is-chat .review-banner {
+  display: flex;
+}
+.review-banner-text {
+  flex: 1;
+  margin: 0;
+}
+.review-banner-text a {
+  color: #294b40;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.review-banner-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+}
+.review-banner-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.acct-adult {
+  margin: 2px 0;
+}
+
+/* Part 19: 测试对话 (the owner's anonymous transcript review). */
+.review-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  color: var(--ad-muted);
+}
+.review-state {
+  align-self: center;
+  font-size: 12px;
+  color: var(--ad-muted);
+}
+.review-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.review-line {
+  display: grid;
+  grid-template-columns: 9.5em 6.5em 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--ad-surface, #fff);
+  border: 1px solid var(--ad-border);
+  line-height: 1.6;
+}
+.review-line.is-player {
+  background: var(--ad-bg);
+}
+.review-line.is-failed {
+  border-color: #c98f86;
+  color: #8a3b30;
+}
+.review-time,
+.review-speaker {
+  font-size: 12px;
+  color: var(--ad-muted);
+  white-space: nowrap;
+}
+.review-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.review-changed {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+  white-space: nowrap;
+}
+
+/* Part 21b: model picker (reuses the account sheet frame), the points line, and the backup-model note. */
+.mp-balance {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #294b40;
+}
+.mp-body {
+  display: grid;
+  gap: 10px;
+}
+.mp-card {
+  display: grid;
+  gap: 6px;
+  min-height: 44px;
+  padding: 14px 16px;
+  border: 1px solid #b9c4bf;
+  border-radius: 14px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.mp-card.is-current {
+  border-color: #294b40;
+  box-shadow: inset 0 0 0 1px #294b40;
+}
+.mp-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.mp-tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #294b40;
+  color: #fff;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+}
+.mp-blurb {
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+.mp-prices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mp-prices b {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #ece8dd;
+  font-size: 13px;
+  font-weight: 500;
+}
+.mp-confirm {
+  padding: 4px 0;
+  font-size: 16px;
+}
+.text-with-note {
+  display: grid;
+  min-width: 0;
+}
+.backup-note {
+  display: block;
+  margin: 4px 0 0 4px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+@media (min-width: 601px) {
+  .mp-sheet {
+    align-items: stretch;
+  }
+  .mp-sheet .acct-head,
+  .mp-sheet .acct-body,
+  .mp-sheet .acct-status {
+    width: min(480px, 100%);
+  }
+}
+
+/* Part 21f: first-time guide bubble under the chat's ⋯ button, speed hint in the picker, today's co-creation entry. */
+.chat-guide {
+  position: absolute;
+  right: 10px;
+  top: calc(100% - 4px);
+  z-index: 29;
+  max-width: min(260px, calc(100% - 20px));
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: #294b40;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: left;
+  box-shadow: 0 10px 28px rgba(32, 48, 42, 0.28);
+  animation: chat-menu-in 200ms cubic-bezier(0.2, 0.82, 0.24, 1);
+}
+.chat-guide::before {
+  content: "";
+  position: absolute;
+  right: 18px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: inherit;
+  transform: rotate(45deg);
+}
+.mp-speed {
+  font-size: 13px;
+  color: #5b6b65;
+}
+.cc-used {
+  margin: 0 16px 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #ece8dd;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Part 21f: 消费记录 — its rules live in one place now: the Part 25a block below. */
+
+/* Part 21i: spent co-creation cards, password toggle, signup mismatch line */
+.cc-card.is-used {
+  opacity: 0.62;
+  box-shadow: none;
+}
+.cc-card.is-used .cc-face {
+  cursor: default;
+}
+.cc-card.is-used .cc-cta {
+  background: #ece8dd;
+  color: #5b6b65;
+}
+.acct-pw {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.acct-pw .acct-input {
+  flex: 1;
+  min-width: 0;
+}
+.acct-reveal {
+  min-height: 48px;
+  min-width: 44px;
+  padding: 0 12px;
+  border: 1px solid #b9c4bf;
+  border-radius: 12px;
+  background: #fff;
+  color: #294b40;
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.acct-reveal:focus-visible {
+  outline: 3px solid #24584e;
+  outline-offset: 2px;
+}
+.acct-mismatch {
+  margin: 0;
+  font-size: 14px;
+  color: #9b2c2c;
+}
+.acct-goto-signup {
+  font-weight: 650;
+}
+
+/* 我的信息 (Part 22a): the page behind the top bar's nickname button. Plain rows - a label, a value, at most one button. It works
+   at 390 px: one column, 48 px touch rows, long values wrap. */
+.mi-body {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  padding-top: 8px;
+}
+.mi-section {
+  display: grid;
+  gap: 2px;
+}
+.mi-heading {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #5c6a64;
+}
+.mi-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(36, 48, 47, 0.1);
+}
+.mi-key {
+  flex: none;
+  min-width: 4.5em;
+  color: #5c6a64;
+  font-size: 14px;
+}
+.mi-key:empty {
+  display: none;
+}
+.mi-val {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+}
+.mi-number {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.12em;
+}
+.mi-quota {
+  font-weight: 650;
+  color: #294b40;
+}
+.mi-small {
+  flex: none;
+  min-height: 36px;
+  min-width: 56px;
+  padding: 4px 12px;
+  border: 1px solid rgba(41, 75, 64, 0.35);
+  border-radius: 999px;
+  background: transparent;
+  color: #294b40;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.mi-small.acct-primary {
+  background: #294b40;
+  color: #fff;
+}
+.mi-input {
+  flex: 1;
+  min-width: 0;
+}
+.mi-link {
+  position: relative;
+  padding: 0;
+}
+.mi-action {
+  flex: 1;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+.mi-chev {
+  color: #8a958f;
+  font-size: 20px;
+}
+.mi-buttons {
+  display: flex;
+  gap: 10px;
+}
+.mi-buttons .acct-primary {
+  flex: 1;
+}
+.mi-buttons .mi-login {
+  flex: 1;
+  border: 1px solid rgba(41, 75, 64, 0.35);
+  border-radius: 12px;
+  text-decoration: none;
+}
+.mi-signup-first {
+  margin: 12px 0 0;
+  font-size: 16px;
+  color: #24302f;
+}
+.mi-foot {
+  display: grid;
+  margin-top: 6px;
+}
+.mi-logout {
+  min-height: 48px;
+  border: 1px solid rgba(41, 75, 64, 0.35);
+  border-radius: 12px;
+  text-decoration: none;
+}
+/* 删除我的账号 / 清除本设备的体验数据: kept apart from the everyday buttons above. */
+.mi-danger {
+  display: grid;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(138, 47, 39, 0.25);
+}
+.mi-danger .acct-danger {
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.invite-signup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.invite-signup[hidden] {
+  display: none;
+}
+.invite-signup-text {
+  font-size: 16px;
+}
+.invite-signup-button {
+  min-height: 44px;
+  padding: 6px 18px;
+  border: 0;
+  border-radius: 12px;
+  background: #294b40;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Part 26a: the one-character rule's line above the composer: light, centered, small, fades in; the only control is the word 注册. */
+.guest-note {
+  flex: none;
+  margin: 0;
+  padding: 6px 16px 8px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--bb-sub, #6a7772);
+  background: transparent;
+  animation: guest-note-in 360ms ease backwards;
+}
+.guest-note[hidden],
+.card-slot:not(.is-chat) .guest-note {
+  display: none;
+}
+.guest-note-link {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+  .guest-note {
+    animation: none;
+  }
+}
+@keyframes guest-note-in {
+  from {
+    opacity: 0;
+  }
 }
 
 /* Part 25a: the Burbur skin of the player site (design/burbur-v2). Player selectors only. Everything here repaints what exists:
