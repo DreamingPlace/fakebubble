@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { providerPeople, escapeCardText } from '../../src/features/prototype/provider-catalog-view.ts';
 import { syntheticProviderBootstrap } from '../../../../packages/contracts/web-provider.ts';
-import { derivePalette } from '../../../../packages/domain/character-colour.ts';
+import { derivePalette } from '../../src/features/brand/character-colour.ts';
 
 test('dynamic orbit retains fifteen slots and approved initial palettes without hardcoded person selection', () => {
   const view = syntheticProviderBootstrap();

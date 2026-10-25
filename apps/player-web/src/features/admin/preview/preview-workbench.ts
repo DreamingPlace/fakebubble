@@ -1,10 +1,12 @@
 import { h } from '../../cocreation/h.ts';
 import type { AdminMember } from '../../../services/account-admin-api.ts';
 import type { CharacterAdminClient, CharacterDetail } from '../../../services/character-admin-api.ts';
+import { segmented } from '../ui/segmented.ts';
 import type {
   Bubble,
   EvalSet,
   PreviewAdminClient,
+  PreviewCastSource,
   PreviewDetail,
   PreviewRow,
   RunDetail,
@@ -47,6 +49,8 @@ export type PreviewWorkbenchHost = {
   toast: (text: string, tone?: 'ok' | 'info' | 'warn' | 'danger') => void;
   /** Where modal dialogs attach (the page's main element). */
   modalParent: () => HTMLElement;
+  /** A 预演 changed state (finished, failed, was submitted): the editor beside this panel re-reads the proofs it offers. */
+  changed?: () => void;
   /** Injected in tests: timer, visibility, download and request ids. */
   poll?: Partial<Pick<PollerHost, 'setTimer' | 'clearTimer' | 'hidden' | 'onVisible'>>;
   download?: (name: string, text: string, type: string) => void;
@@ -155,7 +159,10 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
           if (p.runId) touched.add(p.runId);
         }
       }
-      if (changed) await refresh([...touched]);
+      if (changed) {
+        await refresh([...touched]);
+        host.changed?.();
+      }
       return { active: result.active, changed };
     },
     hidden: host.poll?.hidden ?? defaultHidden,
@@ -178,6 +185,21 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   const simTime = h('input', { attrs: { type: 'time', value: '05:50', 'aria-label': '模拟的当地时间' } });
   simTime.value = '05:50';
   const simZone = h('span', { class: 'admin-hint pw-zone' });
+  // 关系与故事 for this 预演 (Part 24a castSource): the cast draft is how the owner tests it before CAST_CONTEXT_ENABLED is on.
+  // Always sent, so what is tested is what is shown on the chip, not whatever the server defaults to.
+  let castSource: PreviewCastSource = 'none';
+  const castSwitch = segmented<PreviewCastSource>(
+    '关系与故事',
+    [
+      { id: 'none', label: '不用' },
+      { id: 'published', label: '已发布' },
+      { id: 'draft', label: '草稿' },
+    ],
+    castSource,
+    (next) => {
+      castSource = next;
+    },
+  );
   const setPicker = h('select', { attrs: { 'aria-label': '评测集' } });
   const runSet = h('button', { text: '运行评测集', attrs: { type: 'button' } });
   const editSets = h('button', { class: 'admin-secondary', text: '编辑评测集', attrs: { type: 'button' } });
@@ -242,6 +264,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     field('关系', relation),
     field('模拟时间', simMode, simTime),
     simZone,
+    h('div', { class: 'admin-filter' }, h('span', { text: '关系与故事' }), castSwitch.root),
     h('span', { class: 'admin-bar-spacer' }),
     field('评测集', setPicker),
     runSet,
@@ -287,6 +310,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     const time = simulated();
     const body = {
       ...draftBody(),
+      castSource,
       ...(label.value.trim() ? { label: label.value.trim() } : {}),
       ...(time ? { simulatedTime: time } : {}),
     };
@@ -321,7 +345,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     if (sendSingle.disabled || !d || !id) return;
     const characterId = id,
       time = simulated();
-    const body = { ...draftBody(), message: single.value, ...(time ? { simulatedTime: time } : {}) };
+    const body = { ...draftBody(), castSource, message: single.value, ...(time ? { simulatedTime: time } : {}) };
     const sig = JSON.stringify([characterId, body]);
     if (pendingSingle?.sig !== sig) pendingSingle = { sig, body: { requestId: nextId(), ...body } };
     const request = pendingSingle.body;

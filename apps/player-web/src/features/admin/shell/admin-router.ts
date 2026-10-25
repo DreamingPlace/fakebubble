@@ -1,8 +1,8 @@
 import { isAdminPage, type AdminPage } from './admin-nav.ts';
 
-/** `#/characters/jojo` → { page: 'characters', id: 'jojo' }. Only characters, preview and cocreation (the inbox filtered to one character) carry an id. */
+/** `#/characters/jojo` → { page: 'characters', id: 'jojo' }. Only characters and cocreation (the inbox filtered to one character) carry an id. */
 export type AdminRoute = { page: AdminPage; id: string | null };
-const WITH_ID: readonly AdminPage[] = ['characters', 'preview', 'cocreation'];
+const WITH_ID: readonly AdminPage[] = ['characters', 'cocreation'];
 
 /**
  * Old deep links keep working: a page that earlier consoles knew by another name (or that moved, Part 24b-1) resolves to its
@@ -13,6 +13,8 @@ export const LEGACY_ROUTES: Readonly<Record<string, AdminPage>> = {
   ops: 'system',
   metrics: 'system',
   home: 'overview',
+  // Part 24b-2: 预演测试 is part of 角色工作台; #/preview/jojo opens jojo there.
+  preview: 'characters',
 };
 
 export function parseRoute(hash: string): AdminRoute | null {

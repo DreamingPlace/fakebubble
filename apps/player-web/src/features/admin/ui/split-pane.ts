@@ -22,7 +22,8 @@ export function splitPane(parent: HTMLElement, options: SplitPaneOptions = {}) {
   });
   const root = h('div', { class: 'admin-split' }, list, divider, detail);
   const apply = () => {
-    root.setAttribute('style', `--split-list-width:${width}px`);
+    // CSSOM, not a style attribute: the page's CSP (style-src 'self') refuses inline style.
+    root.style.setProperty('--split-list-width', `${width}px`);
     divider.setAttribute('aria-valuenow', String(width));
     divider.setAttribute('aria-valuemin', String(min));
     divider.setAttribute('aria-valuemax', String(max));

@@ -8,7 +8,10 @@ export type PickerRole = {
   draftRevision: number | null;
 };
 /** The list pane of a list | detail page: one button per role, the open one marked, with an empty state. */
-export function rolePicker(host: HTMLElement, options: { emptyText: string; onPick: (characterId: string) => void }) {
+export function rolePicker(
+  host: HTMLElement,
+  options: { emptyText: string; onPick: (characterId: string) => void; badges?: () => Record<string, number> },
+) {
   let selected: string | null = null;
   let roles: readonly PickerRole[] = [];
   const paint = () => {
@@ -26,7 +29,13 @@ export function rolePicker(host: HTMLElement, options: { emptyText: string; onPi
           },
         },
         h('strong', { text: role.displayName }),
-        h('span', { class: 'admin-pick-meta', text: role.characterId }),
+        (options.badges?.()[role.characterId] ?? 0) > 0
+          ? h('span', {
+              class: 'admin-pick-cc',
+              text: String(options.badges!()[role.characterId]),
+              attrs: { title: '新的共创' },
+            })
+          : null,
         statusBadge(
           role.publishedVersion === null ? '未发布' : `正式 v${role.publishedVersion}`,
           role.publishedVersion === null ? 'warn' : 'ok',

@@ -9,6 +9,7 @@ import { systemView } from './system-view.ts';
 import { statsView } from './stats-view.ts';
 import { costsView } from './costs-view.ts';
 import { modelsView } from './models-view.ts';
+import { dateTimeText } from './system-format.ts';
 import { confirmDialog } from './ui/confirm-dialog.ts';
 import { rolePicker } from './shell/role-picker.ts';
 import { wordmarkSvg } from '../brand/wordmark.ts';
@@ -23,8 +24,10 @@ import {
   type NavAccess,
 } from './shell/admin-nav.ts';
 import { addressBar, sameRoute, type AdminRoute } from './shell/admin-router.ts';
-import { splitPane } from './ui/split-pane.ts';
 import { toastHost } from './ui/toast.ts';
+import { splitPane } from './ui/split-pane.ts';
+import { castView } from './cast/cast-view.ts';
+import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
 import { conversationsView } from './conversations-view.ts';
 import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
@@ -32,6 +35,8 @@ import type { CocreationAdminClient } from '../../services/cocreation-admin-api.
 import { browserDownload, inviteTiersView } from './invite-tiers-view.ts';
 import {
   ADMIN_PERMISSION_LIMIT,
+  canCreateCharacter,
+  hasCastPermission,
   hasCharacterPermission,
   hasInvitePermission,
   hasCocreationPermission,
@@ -57,8 +62,10 @@ type Port = Pick<
   | 'revokeCredential'
   | 'characters'
 > & {
-  /** 预演测试 workbench (runs, eval sets, batched status). Without it the page keeps the single-preview panel. */
+  /** 预演 beside the editor of 角色工作台 (runs, eval sets, batched status). Without it the page keeps the single-preview panel. */
   previews?: PreviewAdminClient;
+  /** 关系与故事. Optional: a page without it has no such page in the nav. */
+  cast?: CastAdminClient;
   /** 概览, 系统状态 and 积分发放 (Part 22b). Optional: a page without `overview` has none of them in the nav. */
   overview?: AccountAdminApi['overview'];
   systemStatus?: AccountAdminApi['systemStatus'];
@@ -113,6 +120,11 @@ export function adminAccountError(error: unknown) {
         STATS_UNAVAILABLE: '这个站点的数据库还没有升级到统计功能（迁移 128）。',
         IDEMPOTENCY_CONFLICT: '这次提交与之前的同一请求内容不一致，请重新打开本页后重试。',
         INVALID_REQUEST: '填写的内容不符合要求（每条点数 1–200，语音加点 0–20，均为整数）。',
+        CAST_REVISION_CONFLICT: '草稿已被另一位管理员修改，本次没有保存。你写的内容还在页面上。',
+        CAST_INVALID: '有些内容不符合要求，请看页面上的提示。',
+        CAST_PUBLISH_BLOCKED: '还有问题挡着发布，请先解决页面上列出的问题。',
+        CAST_DRAFT_NOT_EMPTY: '草稿不是空的，不能再从旧资料导入。',
+        CAST_UNAVAILABLE: '这个站点的数据库还没有升级到关系与故事（迁移 129）。',
         ADMIN_PERMISSIONS_CONFLICT: '权限已被另一页面修改。请重新打开本页核对后再保存；本次未覆盖新权限。',
         ADMIN_LOGIN_INVALID: '邮箱或密码不正确。',
         ADMIN_INVALID_GRANT: '凭据已使用、已过期或已撤销，请联系主管理员。',
@@ -185,7 +197,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         <button type="submit">完成邮箱绑定</button></form>
       <button id="admin-account-continue" class="admin-back" type="button" data-page="home">进入管理</button></section>
     <section data-panel="invites" hidden><p id="admin-no-permissions" hidden>当前账号没有“邀请与额度”权限，请联系主管理员开通。</p><div id="admin-invites"></div></section>
-    <section data-panel="characters" hidden><div id="admin-characters"></div></section>
+    <section data-panel="characters" hidden><div id="admin-characters-host"></div></section>
+    <section data-panel="cast" hidden><div id="admin-cast"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
     <section data-panel="members" hidden><h2>管理员与权限</h2>
       <div class="members-layout"><div class="members-side"><form id="admin-member-issue"><label for="admin-member-label">管理员备注</label><input id="admin-member-label" maxlength="80" required>
@@ -193,7 +206,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         <button type="submit">签发管理员一次性凭据</button></form></div>
       <div id="admin-members-list" class="members-list"></div></div>
     </section>
-    <section data-panel="preview" hidden><div id="admin-preview" class="admin-fill"></div></section>
     <section data-panel="overview" hidden><div id="admin-overview"></div></section>
     <section data-panel="points" hidden><div id="admin-points"></div></section>
     <section data-panel="system" hidden><div id="admin-system"></div></section>
@@ -249,10 +261,13 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     owner: session?.member.role === 'owner',
     permissions: session?.member.permissions ?? [],
     inbox: !!port.cocreation,
+    cast: !!port.cast,
     models: !!port.modelSettings,
     system: !!port.overview && !!port.systemStatus,
     conversations: !!port.conversations && session?.features?.chatReview === true,
   });
+  const canCreateRole = () =>
+    session?.member.role === 'owner' || (!!session && canCreateCharacter(session.member.permissions));
   const canEditCharacter = (characterId: string) =>
     session?.member.role === 'owner' ||
     (!!session && hasCharacterPermission(session.member.permissions, 'edit', characterId));
@@ -367,14 +382,13 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     else q<HTMLElement>('main').setAttribute('data-access', '');
     workbench?.update(busy);
     previewBench?.update(busy);
+    newRole.hidden = !session || !canCreateRole();
     for (const nav of root.querySelectorAll<HTMLElement>('.admin-nav [data-page]')) {
       if (nav.dataset.page === page) nav.setAttribute('aria-current', 'page');
       else nav.removeAttribute('aria-current');
     }
-    // 角色工作台 stays lit while its 预演测试 page (listed under it) is open.
-    q<HTMLElement>('.admin-nav [data-page="characters"]').setAttribute('data-trail', String(page === 'preview'));
   };
-  const WITH_ID: readonly string[] = ['characters', 'preview', 'cocreation'];
+  const WITH_ID: readonly string[] = ['characters', 'cocreation'];
   const closeMenu = () => {
     q<HTMLElement>('#admin-account-menu').hidden = true;
     q<HTMLElement>('#admin-account-toggle').setAttribute('aria-expanded', 'false');
@@ -407,7 +421,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     routeId = targetId;
     status.textContent = '';
     closeMenu();
-    if (target === 'preview') picker.select(routeId);
+    if (target === 'characters') picker.select(routeId);
     render();
     q<HTMLElement>('.admin-content').focus();
     const route = here();
@@ -426,20 +440,14 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         quiet++;
         try {
           await workbench!.load();
-          if (routeId) await workbench!.open(routeId);
+          picker.select(routeId);
+          if (routeId) await openRole(routeId);
+          else showPreview(null);
         } finally {
           quiet--;
         }
       };
-    if (page === 'preview')
-      return async () => {
-        const result = await port.characters.list();
-        if (disposed) return;
-        picker.show(result.characters.filter((c) => canPreview(c.characterId)));
-        picker.select(routeId);
-        if (routeId) await previewBench!.open(routeId);
-        else previewSplit.detail.replaceChildren(previewHint());
-      };
+    if (page === 'cast' && port.cast && canSeePage('cast', access())) return () => castPage.load();
     if (page === 'cocreation' && inbox && canCocreation('cocreation.read'))
       return () => {
         // #/cocreation/<id> is the inbox filtered to that character (the badge on its card); plain #/cocreation keeps the filter.
@@ -553,15 +561,68 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     },
     disposed: () => disposed,
   };
-  // 角色资料 no longer carries the paid preview; it has its own page (the second workbench, preview only).
-  workbench = characterWorkbench(q('#admin-characters'), {
+  // 角色工作台: the role list (left, its width draggable), the editor (centre) and the paid 预演 (right) are one page; the shell
+  // opens a role in both.
+  const bench = splitPane(q('#admin-characters-host'), { initial: 188, min: 150, max: 320, label: '调整角色列表宽度' });
+  const newRole = document.createElement('button');
+  newRole.type = 'button';
+  newRole.id = 'wb-new';
+  newRole.textContent = '新建角色';
+  newRole.hidden = true;
+  const rolesHost = document.createElement('div');
+  rolesHost.id = 'wb-roles';
+  bench.list.className += ' wb-list';
+  bench.list.setAttribute('aria-label', '角色');
+  bench.list.append(rolesHost, newRole);
+  const editorHost = document.createElement('div');
+  editorHost.id = 'admin-characters';
+  editorHost.className = 'wb-editor';
+  const previewHost = document.createElement('aside');
+  previewHost.id = 'wb-preview';
+  previewHost.className = 'wb-preview';
+  previewHost.setAttribute('aria-label', '预演');
+  previewHost.hidden = true;
+  const split = document.createElement('div');
+  split.className = 'wb';
+  split.append(editorHost, previewHost);
+  bench.detail.append(split);
+  const picker = rolePicker(rolesHost, {
+    emptyText: '当前没有可查看的角色。',
+    badges: () => unread,
+    onPick: (characterId) => {
+      if (disposed || !navigate('characters', characterId)) return;
+      // Still the picked role when its turn comes (a later pick, or leaving the page, replaces this one).
+      runLatest(async () => {
+        if (page === 'characters' && routeId === characterId) await openRole(characterId);
+      });
+    },
+  });
+  const openRole = async (characterId: string) => {
+    quiet++;
+    try {
+      await workbench!.open(characterId);
+    } finally {
+      quiet--;
+    }
+    if (disposed || routeId !== characterId) return;
+    picker.select(characterId);
+    await showPreview(characterId);
+  };
+  /** The 预演 column shows for a role this administrator may preview; for anyone else it is not there. */
+  const showPreview = async (characterId: string | null) => {
+    const column = previewHost;
+    column.hidden = !characterId || !previewBench || !canPreview(characterId);
+    if (column.hidden) {
+      previewBench?.clear();
+      return;
+    }
+    await previewBench!.open(characterId!);
+  };
+  workbench = characterWorkbench(editorHost, {
     ...workbenchHost,
     badges: () => unread,
-    openInbox: (characterId) => {
-      if (busy || disposed || !navigate('cocreation', characterId)) return;
-      const load = loader();
-      if (load) void run(load);
-    },
+    directory: 'none',
+    onDirectory: (roles) => picker.show(roles),
     preview: 'none',
     onView: (id) => {
       if (quiet || page !== 'characters') return;
@@ -569,25 +630,16 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       address.push({ page: 'characters', id });
     },
   });
-  const previewSplit = splitPane(q('#admin-preview'), { label: '调整角色列表宽度' });
-  const previewHint = () => {
-    const note = document.createElement('p');
-    note.className = 'admin-empty';
-    note.textContent = '从左侧选择要预演的角色。预演只发送该角色的已存草稿和你输入的合成内容。';
-    return note;
-  };
-  const picker = rolePicker(previewSplit.list, {
-    emptyText: '没有可预演的角色。预演需要“查看角色”和“预演测试”权限。',
-    onPick: (characterId) => {
-      if (disposed || !navigate('preview', characterId)) return;
-      // Still the picked role when its turn comes (a later pick, or leaving the page, replaces this one).
-      runLatest(async () => {
-        if (page === 'preview' && routeId === characterId) await previewBench!.open(characterId);
-      });
-    },
+  listen(newRole, 'click', () => {
+    if (busy || disposed || !workbench!.canLeave()) return;
+    previewBench?.clear();
+    previewHost.hidden = true;
+    picker.select(null);
+    routeId = null;
+    workbench!.openNew();
   });
   previewBench = port.previews
-    ? previewWorkbench(previewSplit.detail, {
+    ? previewWorkbench(previewHost, {
         api: port.previews,
         characters: port.characters,
         member: () => session?.member ?? null,
@@ -598,8 +650,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         disposed: () => disposed,
         toast: (text, tone) => toasts.show(text, tone ?? 'info'),
         modalParent: () => q('main'),
+        changed: () => void workbench?.syncPreviews().catch(() => {}),
       })
-    : characterWorkbench(previewSplit.detail, { ...workbenchHost, preview: 'only' });
+    : null;
   inbox = port.cocreation
     ? cocreationInbox(q('#admin-cocreation'), {
         api: port.cocreation,
@@ -614,6 +667,18 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         onChanged: () => void refreshCounts(),
       })
     : null;
+  const castPage = castView(q('#admin-cast'), {
+    api: port.cast ?? null,
+    can: (permission) =>
+      session?.member.role === 'owner' || (!!session && hasCastPermission(session.member.permissions, permission)),
+    run,
+    status: (text) => {
+      if (!disposed) status.textContent = text;
+    },
+    confirm: (options) => confirmDialog(q('main'), options),
+    toast: (text, tone) => toasts.show(text, tone ?? 'info'),
+    disposed: () => disposed,
+  });
   const toasts = toastHost(q('main'));
   toastSink = (text, tone) => void toasts.show(text, tone);
   const unavailable = () => Promise.reject(new Error('ADMIN_SYSTEM_UNAVAILABLE'));
@@ -709,7 +774,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     clearMemberControls();
     workbench?.clear();
     previewBench?.clear();
-    previewSplit.detail.replaceChildren();
+    castPage?.clear();
     picker.clear();
     overview.clear();
     system.clear();
@@ -785,24 +850,28 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
           });
         });
         item.append(save);
-        const confirm = document.createElement('details');
-        confirm.className = 'admin-confirm';
-        const summary = document.createElement('summary');
-        summary.textContent = `收回 ${member.label} 的全部功能权限`;
-        const note = document.createElement('p');
-        note.textContent = '只收回管理功能。此账号仍可登录，所有会话、邮箱和玩家聊天保持不变。';
         const remove = document.createElement('button');
         remove.type = 'button';
-        remove.textContent = '确认收回全部功能权限';
+        remove.className = 'admin-danger';
+        remove.textContent = '收回全部功能权限';
         remove.addEventListener('click', () => {
-          void run(async () => {
-            await port.setPermissions(member.id, [], member.permissions);
-            await loadMembers();
-            if (!disposed) status.textContent = '已收回全部管理功能权限，账号及登录会话保留。';
+          if (busy) return;
+          // Asked before the request starts: while one runs, every control (the dialog's too) is locked.
+          void confirmDialog(q('main'), {
+            title: `收回 ${member.label} 的全部功能权限`,
+            message: '只收回管理功能。此账号仍可登录，所有会话、邮箱和玩家聊天保持不变。',
+            confirmLabel: '确认收回',
+            danger: true,
+          }).then((sure) => {
+            if (!sure || disposed) return;
+            return run(async () => {
+              await port.setPermissions(member.id, [], member.permissions);
+              await loadMembers();
+              if (!disposed) status.textContent = '已收回全部管理功能权限，账号及登录会话保留。';
+            });
           });
         });
-        confirm.append(summary, note, remove);
-        item.append(confirm);
+        item.append(remove);
         const reissue = document.createElement('button');
         reissue.type = 'button';
         reissue.className = 'admin-secondary';
@@ -842,7 +911,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         const revoke = document.createElement('button');
         revoke.type = 'button';
         revoke.className = 'admin-secondary';
-        revoke.textContent = `撤销未用登录凭据 · ${new Date(grant.expiresAt).toLocaleString()} 到期`;
+        revoke.textContent = `撤销未用登录凭据 · ${dateTimeText(grant.expiresAt)} 到期`;
         revoke.addEventListener('click', () => {
           void run(async () => {
             await port.revokeCredential(grant.id);
@@ -1052,6 +1121,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     session = null;
     workbench?.dispose();
     previewBench?.dispose();
+    castPage.dispose();
     toasts.dispose();
     inbox?.dispose();
     for (const cleanup of cleanups) cleanup();

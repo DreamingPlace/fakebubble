@@ -3,6 +3,7 @@
  * it to the character's draft with the existing draft save. Nothing here publishes anything, calls a provider or
  * reviews text; every player string is rendered with textContent only.
  */
+import { dateTimeText } from './system-format.ts';
 import {
   COCREATION_FIELD_LABELS,
   COCREATION_LIMITS,
@@ -49,7 +50,7 @@ type Deps = {
 };
 
 const STATUS_LABEL: Record<InboxStatus, string> = { new: '新', processed: '已处理', archived: '已归档' };
-const when = (ms: number) => new Date(ms).toLocaleString('zh-CN', { hour12: false });
+const when = (ms: number) => dateTimeText(ms);
 const preview = (text: string) => ([...text].length > 48 ? `${[...text].slice(0, 48).join('')}…` : text);
 const isField = (node: unknown) => {
   const tag = (node as { tagName?: string } | null)?.tagName;
@@ -74,22 +75,19 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   let adoptError = '';
   let gone = false;
   let activated = false;
+  let loadingMore = false;
 
   const nameOf = (id: string) => names[id] ?? id;
 
   // ---- static frame ---------------------------------------------------------------------------------------------
-  const characterSelect = h('select', { attrs: { id: 'cc-filter-character', 'aria-label': '角色' } });
-  const statusSelect = h('select', { attrs: { id: 'cc-filter-status', 'aria-label': '状态' } });
-  for (const [value, label] of [
-    ['', '全部状态'],
-    ['new', '新'],
-    ['processed', '已处理'],
-    ['archived', '已归档'],
-  ] as const) {
-    const option = h('option', { text: label, attrs: { value } });
-    statusSelect.append(option);
-  }
-  const starred = h('input', { attrs: { type: 'checkbox', id: 'cc-filter-starred' } });
+  // Filters are chips, not dropdowns: one pressed chip per group (角色, 状态), a 只看星标 toggle, and the search field.
+  const characterChips = h('div', { class: 'cc-chip-row', attrs: { role: 'group', 'aria-label': '角色' } });
+  const statusChips = h('div', { class: 'cc-chip-row', attrs: { role: 'group', 'aria-label': '状态' } });
+  const starChip = h('button', {
+    class: 'cc-filter-chip cc-star-filter',
+    text: '★ 只看星标',
+    attrs: { type: 'button', 'aria-pressed': 'false' },
+  });
   const query = h('input', {
     attrs: {
       type: 'search',
@@ -99,37 +97,49 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       'aria-label': '搜索',
     },
   });
-  const selectAll = h('button', { text: '全选本页', attrs: { type: 'button' }, class: 'cc-select-all' });
-  const archiveSelected = h('button', { text: '归档所选', attrs: { type: 'button' }, class: 'cc-archive-selected' });
-  const bulk = h('div', { class: 'cc-bulk' }, selectAll, archiveSelected);
+  const archiveSelected = h('button', {
+    text: '归档所选',
+    attrs: { type: 'button' },
+    class: 'cc-archive-selected',
+    hidden: true,
+  });
   const list = h('ul', { class: 'cc-list', attrs: { 'aria-label': '共创列表' } });
-  const more = h('button', { text: '更多', attrs: { type: 'button' }, class: 'cc-more', hidden: true });
   const empty = h('p', { class: 'cc-empty', text: '还没有玩家的想法。' });
   const pane = h('section', { class: 'cc-detail', attrs: { 'aria-live': 'polite' } });
-  root.replaceChildren(
-    h('h2', { text: '共创收件箱' }),
-    h(
-      'div',
-      { class: 'cc-toolbar' },
-      h('label', { text: '角色' }, characterSelect),
-      h('label', { text: '状态' }, statusSelect),
-      h('label', { class: 'cc-star-filter' }, starred, '只看星标'),
-      h('label', { text: '搜索' }, query),
-    ),
-    bulk,
+  const listColumn = h(
+    'div',
+    { class: 'cc-list-column' },
+    h('div', { class: 'cc-toolbar' }, characterChips, h('div', { class: 'cc-chip-row' }, statusChips, starChip), query),
+    archiveSelected,
     empty,
     list,
-    more,
-    pane,
   );
+  root.replaceChildren(h('h2', { text: '共创收件箱' }), h('div', { class: 'cc-layout' }, listColumn, pane));
 
   // ---- list -----------------------------------------------------------------------------------------------------
+  const chip = (label: string, on: boolean, pick: () => void, count?: number) => {
+    const node = h('button', {
+      class: 'cc-filter-chip',
+      text: count ? `${label} ${count}` : label,
+      attrs: { type: 'button', 'aria-pressed': String(on) },
+    });
+    node.addEventListener('click', pick);
+    return node;
+  };
   const renderFilters = () => {
-    characterSelect.replaceChildren(
-      h('option', { text: '全部角色', attrs: { value: '' } }),
-      ...Object.entries(names).map(([id, name]) => h('option', { text: name, attrs: { value: id } })),
+    characterChips.replaceChildren(
+      chip('全部角色', filter.characterId === null, () => pickFilter({ characterId: null })),
+      ...Object.entries(names).map(([id, name]) =>
+        chip(name, filter.characterId === id, () => pickFilter({ characterId: id })),
+      ),
     );
-    characterSelect.value = filter.characterId ?? '';
+    statusChips.replaceChildren(
+      chip('全部', filter.status === null, () => pickFilter({ status: null })),
+      ...(['new', 'processed', 'archived'] as const).map((status) =>
+        chip(STATUS_LABEL[status], filter.status === status, () => pickFilter({ status })),
+      ),
+    );
+    starChip.setAttribute('aria-pressed', String(filter.starred));
   };
   const renderList = () => {
     empty.hidden = items.length > 0;
@@ -137,10 +147,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       filter.query || filter.status || filter.starred || filter.characterId
         ? '没有符合条件的想法。'
         : '还没有玩家的想法。';
-    more.hidden = next === null;
-    bulk.hidden = !deps.canManage() || items.length === 0;
-    archiveSelected.disabled = selected.size === 0;
-    archiveSelected.textContent = selected.size ? `归档所选（${selected.size}）` : '归档所选';
+    archiveSelected.hidden = !deps.canManage() || selected.size === 0;
+    archiveSelected.textContent = `归档所选（${selected.size}）`;
     list.replaceChildren(
       ...items.map((item, index) => {
         const check = h('input', {
@@ -571,18 +579,11 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     adopting = null;
     void deps.run(() => load());
   };
-  characterSelect.addEventListener('change', () => {
-    filter = { ...filter, characterId: characterSelect.value || null };
+  const pickFilter = (change: Partial<InboxFilter>) => {
+    filter = { ...filter, ...change };
     reload();
-  });
-  statusSelect.addEventListener('change', () => {
-    filter = { ...filter, status: (statusSelect.value || null) as InboxStatus | null };
-    reload();
-  });
-  starred.addEventListener('change', () => {
-    filter = { ...filter, starred: starred.checked };
-    reload();
-  });
+  };
+  starChip.addEventListener('click', () => pickFilter({ starred: !filter.starred }));
   const search = () => {
     filter = { ...filter, query: query.value };
     reload();
@@ -594,12 +595,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     }
   });
   query.addEventListener('change', search);
-  more.addEventListener('click', () => {
-    if (next) void deps.run(() => load(next));
-  });
-  selectAll.addEventListener('click', () => {
-    for (const item of items) selected.add(item.id);
-    renderList();
+  // There is no 更多 button: the next page is read when the list is scrolled to its end.
+  list.addEventListener('scroll', () => {
+    const box = list as unknown as { scrollTop: number; clientHeight: number; scrollHeight: number };
+    if (next && !loadingMore && box.scrollTop + box.clientHeight >= box.scrollHeight - 120) {
+      loadingMore = true;
+      void deps.run(() => load(next)).finally(() => (loadingMore = false));
+    }
   });
   archiveSelected.addEventListener('click', () => {
     if (selected.size) void setStatus([...selected], 'archived');

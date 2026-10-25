@@ -1,4 +1,5 @@
 import { CharacterAdminClient } from './character-admin-api.ts';
+import { CastAdminClient } from './cast-admin-api.ts';
 import { CocreationAdminClient } from './cocreation-admin-api.ts';
 import { ConversationsAdminClient } from './conversations-admin-api.ts';
 import { PreviewAdminClient } from './preview-admin-api.ts';
@@ -188,6 +189,7 @@ export class AccountAdminApi extends InviteAdminApi {
     (path, body) => this.request('/characters/' + path, body),
     (path, body) => this.request('/eval-sets/' + path, body),
   );
+  readonly cast = new CastAdminClient((path, body) => this.request('/cast/' + path, body));
   readonly cocreation = new CocreationAdminClient((path, body) => this.request('/cocreation/' + path, body));
   readonly conversations = new ConversationsAdminClient((path, body) => this.request('/conversations/' + path, body));
   constructor(fetcher?: typeof fetch) {

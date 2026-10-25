@@ -67,6 +67,15 @@ export const PERMISSION_GROUPS: readonly Group[] = [
     ],
   },
   {
+    id: 'cast',
+    title: '关系与故事',
+    items: [
+      { item: 'cast.read', name: '查看', help: '打开关系网、故事和角色设定的草稿与已发布版本。' },
+      { item: 'cast.edit', name: '修改草稿', help: '保存阵容草稿、从旧资料导入。不会改变玩家看到的任何内容。' },
+      { item: 'cast.publish', name: '发布与回滚', help: '把草稿发布为新版本，或把旧版本重新发布。' },
+    ],
+  },
+  {
     id: 'models',
     title: '模型与价格',
     items: [
@@ -174,9 +183,20 @@ export function permissionMatrixEditor(
       input.type = 'checkbox';
       input.setAttribute('data-permission', item);
       boxes.set(item, input);
+      // The grid shows the short name only; what it means appears on hover or keyboard focus (and is read out with it).
+      const tip = h('span', {
+        class: 'permission-tip',
+        text: help,
+        attrs: { role: 'tooltip', id: `perm-tip-${item}` },
+      });
+      input.setAttribute('aria-describedby', tip.id);
       section.append(
-        h('label', { class: 'permission-item' }, input, h('span', { text: name })),
-        h('p', { class: 'permission-help', text: help }),
+        h(
+          'div',
+          { class: 'permission-row' },
+          h('label', { class: 'permission-item' }, input, h('span', { text: name })),
+          tip,
+        ),
       );
       input.addEventListener('change', () => {
         touched = true;
@@ -200,8 +220,7 @@ export function permissionMatrixEditor(
     const section = h(
       'div',
       { class: 'permission-group', attrs: { 'data-area': 'legacy' } },
-      h('h4', { text: '按具体角色授予的旧授权' }),
-      h('p', { class: 'permission-help', text: '保存时原样保留；取消勾选即收回。' }),
+      h('h4', { text: '按具体角色授予的旧授权', attrs: { title: '保存时原样保留；取消勾选即收回。' } }),
     );
     for (const permission of base.legacy) {
       const input = h('input');

@@ -137,7 +137,9 @@ test('split pane: both panes exist, the divider is a labelled separator, arrow k
   const pane = splitPane(host as unknown as HTMLElement, { initial: 300, min: 250, max: 340 });
   assert.equal(el(pane.divider).getAttribute('role'), 'separator');
   assert.equal(el(pane.divider).getAttribute('aria-valuenow'), '300');
-  assert.match(el(pane.root).getAttribute('style')!, /--split-list-width:300px/);
+  // Part 24b-2 exception (named, narrow): the width is set through the CSSOM, not a style attribute, because the page's CSP
+  // (style-src 'self') refuses inline style attributes; what is asserted (the custom property's value) is unchanged.
+  assert.equal(el(pane.root).style.getPropertyValue('--split-list-width'), '300px');
   el(pane.divider).dispatch('keydown', { key: 'ArrowRight' });
   assert.equal(pane.width(), 316);
   for (let i = 0; i < 10; i++) el(pane.divider).dispatch('keydown', { key: 'ArrowRight' });

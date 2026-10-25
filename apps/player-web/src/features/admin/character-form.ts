@@ -1,4 +1,5 @@
 import type { CharacterProfile } from '../../services/character-admin-api.ts';
+import { derivePalette, parseColour } from '../brand/character-colour.ts';
 import type { JsonValue, Weekday, WeeklySchedule } from '../../../../../packages/contracts/index.ts';
 export class AdminFormError extends Error {}
 export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) => {
@@ -66,6 +67,8 @@ export function editedCharacter(
     publicDescription: string;
     welcomeText: string;
     welcomeVersion: string;
+    /** '' = no main colour (the player page keeps its built-in palette); otherwise '#RRGGBB'. */
+    color?: string;
     canon: string;
     voice: null | { profileId: string; version: number; speed: number };
   },
@@ -101,8 +104,98 @@ export function editedCharacter(
     displayName: values.displayName,
     publicDescription: values.publicDescription,
     welcome: { text: values.welcomeText, version: values.welcomeVersion.trim() },
+    // The key is absent, not empty, when there is no colour: a profile without one hashes exactly as it always did.
+    ...(values.color ? { color: values.color } : {}),
   };
   return next;
+}
+
+const stable = (value: unknown): string =>
+  Array.isArray(value)
+    ? `[${value.map(stable).join(',')}]`
+    : value && typeof value === 'object'
+      ? `{${Object.entries(value)
+          .sort(([a], [b]) => (a < b ? -1 : 1))
+          .map(([key, child]) => `${JSON.stringify(key)}:${stable(child)}`)
+          .join(',')}}`
+      : JSON.stringify(value);
+/**
+ * True when the draft differs from the published profile in the main colour and nothing else (the version number it will be
+ * published under aside). Such a draft is published without a 预演; the server makes the same comparison and has the last word.
+ */
+export function isColourOnlyChange(published: CharacterProfile | null, draft: CharacterProfile): boolean {
+  if (!published || published.presentation.color === draft.presentation.color) return false;
+  const bare = (profile: CharacterProfile) => {
+    const { color: _color, ...presentation } = profile.presentation;
+    return stable({ template: { ...profile.template, version: 0 }, presentation });
+  };
+  return bare(published) === bare(draft);
+}
+
+/**
+ * 主色: one text field that takes #RRGGBB or r, g, b, a colour-picker swatch that writes into it, and a live chip showing the card
+ * tint, its ink and the three aura clouds that the player page will derive. Empty means "no colour". Anything else that does not
+ * parse is flagged on the field and refused when the form is read.
+ */
+export function colourField(parent: HTMLElement, initial: string | undefined, onChange: () => void) {
+  const row = el('div');
+  row.className = 'colour-field';
+  const label = el('label'),
+    input = el('input'),
+    picker = el('input'),
+    chip = el('span');
+  label.append(el('span', '主色'), input);
+  input.type = 'text';
+  input.maxLength = 40;
+  input.placeholder = '#RRGGBB 或 r, g, b';
+  input.value = initial ?? '';
+  input.autocomplete = 'off';
+  picker.type = 'color';
+  picker.setAttribute('aria-label', '取色');
+  chip.className = 'colour-chip';
+  chip.setAttribute('role', 'img');
+  const paint = () => {
+    const parsed = input.value.trim() === '' ? '' : parseColour(input.value);
+    input.setAttribute('aria-invalid', String(parsed === null));
+    chip.dataset.state = parsed === null ? 'invalid' : parsed === '' ? 'empty' : 'ok';
+    chip.setAttribute('aria-label', parsed ? `主色 ${parsed}` : parsed === null ? '颜色格式不对' : '未设置');
+    chip.replaceChildren();
+    if (!parsed) return;
+    picker.value = parsed.toLowerCase();
+    const palette = derivePalette(parsed);
+    chip.style.setProperty('--chip-tint', palette.color);
+    chip.style.setProperty('--chip-ink', palette.ink);
+    chip.append(el('b', '字'));
+    palette.aura.forEach((colour, index) => {
+      const dot = el('i');
+      dot.style.setProperty('--dot', colour);
+      dot.dataset.n = String(index);
+      chip.append(dot);
+    });
+  };
+  input.addEventListener('input', () => {
+    paint();
+    onChange();
+  });
+  picker.addEventListener('input', () => {
+    input.value = picker.value.toUpperCase();
+    paint();
+    onChange();
+  });
+  row.append(label, picker, chip);
+  parent.append(row);
+  paint();
+  return {
+    input,
+    picker,
+    /** '' for none, '#RRGGBB' for a valid one; a typed value that does not parse is refused. */
+    read: () => {
+      if (input.value.trim() === '') return '';
+      const parsed = parseColour(input.value);
+      if (!parsed) throw new AdminFormError('主色请填 #RRGGBB（如 #E8561E）或 r, g, b（0–255）。');
+      return parsed;
+    },
+  };
 }
 
 export function characterForm(
@@ -133,6 +226,7 @@ export function characterForm(
   const displayName = field(identity, '网页展示名', base.presentation.displayName, { required: true, max: 100 });
   const birthDate = field(identity, '设定生日（可选）', base.template.birthDate ?? '', { type: 'date' });
   const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { area: true, max: 500 });
+  const colour = colourField(identity, base.presentation.color, () => onChange());
   const persona = field(form, '基础人设', base.template.persona, { area: true, required: true, max: 20000 });
   const welcome = el('fieldset');
   welcome.append(el('legend', '欢迎内容'));
@@ -192,6 +286,7 @@ export function characterForm(
       publicDescription: publicDescription.value,
       welcomeText: welcomeText.value,
       welcomeVersion: welcomeVersion.value,
+      color: colour.read(),
       canon: canon.value,
       voice: voiceOn.checked
         ? { profileId: profileId.value.trim(), version: Number(voiceVersion.value), speed: Number(speed.value) }

@@ -1,5 +1,5 @@
 import type { WebProviderBootstrap } from '../../../../../packages/contracts/web-provider.ts';
-import { derivePalette } from '../../../../../packages/domain/character-colour.ts';
+import { derivePalette } from '../brand/character-colour.ts';
 
 export type Person = {
   id: string;
