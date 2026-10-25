@@ -5,6 +5,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { contentHash } from './admin-content-hash.ts';
 import { identifier, keys, nonempty, record } from './template-validation.ts';
+import { openingFrom } from '../generation/opening-line.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
 import { textPolicyHash } from '../generation/text-generation-policy.ts';
 import { instantAtLocalMinute } from '../../../packages/domain/schedule.ts';
@@ -407,6 +408,10 @@ export class WebCharacterPreviews {
       mustClose: false,
       evidence: [],
       deliveryMode: profile.template.voice ? 'voice' : 'text',
+      // Part 26a: a preview is the start of a chat; it says the draft's welcome line, as a live chat says its published one.
+      ...(openingFrom(profile.presentation.welcome.text)
+        ? { opening: openingFrom(profile.presentation.welcome.text)! }
+        : {}),
       messages: [
         {
           id: messageId,

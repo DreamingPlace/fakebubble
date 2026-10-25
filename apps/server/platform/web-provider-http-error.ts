@@ -56,6 +56,7 @@ export function webProviderHTTPError(error: unknown) {
                 publicCode === 'TRIAL_EXHAUSTED' ||
                 publicCode === 'POINTS_INSUFFICIENT' ||
                 publicCode === 'TRIAL_CHARACTER_LOCKED' ||
+                publicCode === 'GUEST_CHARACTER_LOCKED' ||
                 publicCode === 'ADMIN_INVALID_GRANT' ||
                 publicCode === 'ADMIN_CSRF_REQUIRED' ||
                 publicCode === 'ADMIN_PERMISSION_REQUIRED' ||

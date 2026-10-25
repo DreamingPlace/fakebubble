@@ -199,6 +199,9 @@ export interface TextGenerationRequest {
     name: string;
     members: { id: string; name: string }[];
   };
+  // Part 26a: the character's welcome line, from the published revision the template was frozen from, said as the character's
+  // first line when the history reaches the start of a normal chat. Absent - never null - otherwise.
+  opening?: { text: string };
   messages: MessageDTO[];
   mustClose: boolean;
   // Untrusted source/memory records, never interpolated as developer instructions.
