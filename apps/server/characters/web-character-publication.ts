@@ -28,6 +28,12 @@ const dto = (row: Publication) => ({
   publishedAt: row.created_at,
 });
 
+/** The profile as the colour-only gate compares it: everything but the colour and the version number it is published under. */
+const withoutColour = (value: WebCharacterProfile) => {
+  const { color: _color, ...presentation } = value.presentation;
+  return { template: { ...value.template, version: 0 }, presentation };
+};
+
 /** Pure business transaction: no generation, material import, player-content mutation or implicit retry. */
 export function publishWebCharacter(
   store: BusinessStore,
@@ -39,13 +45,16 @@ export function publishWebCharacter(
   record(input);
   keys(input, ['requestId', 'draftRevision', 'profileHash', 'previewId', 'acknowledgeReview', 'materialId']);
   identifier(input.requestId);
-  identifier(input.previewId);
+  // No previewId = a colour-only publication (checked below against the live version); every other change names its 预演.
+  const colourOnlyAsked = input.previewId === undefined;
+  if (!colourOnlyAsked) identifier(input.previewId);
+  ensure(!colourOnlyAsked || input.materialId === undefined, 'VALID_PREVIEW_REQUIRED');
   ensure(input.acknowledgeReview === true, 'REVIEW_ACKNOWLEDGEMENT_REQUIRED');
   ensure(Number.isSafeInteger(input.draftRevision) && Number(input.draftRevision) > 0, 'INVALID_DRAFT_REVISION');
   ensure(typeof input.profileHash === 'string' && /^[a-f0-9]{64}$/.test(input.profileHash), 'INVALID_PROFILE_HASH');
   ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
   const requestId = input.requestId,
-    previewId = input.previewId;
+    previewId = input.previewId as string;
   const requestHash = contentHash([actor.memberId, id, input]);
   return store.transaction(() => {
     ensure(!webCharacterDeleted(store, id), 'CHARACTER_DELETED');
@@ -76,94 +85,108 @@ export function publishWebCharacter(
     ensure(template.id === id && template.version === (draft.base_version ?? 0) + 1, 'INVALID_DRAFT_VERSION');
     ensure((live?.version ?? null) === draft.base_version, 'LIVE_VERSION_CONFLICT');
 
-    // Reuse only a completed real v7 review of these exact template bytes, not a UI/static preview.
-    // Publication itself cannot enqueue or regenerate proof.
-    const review = store.get<{
-      content_hash: string;
-      prompt_hash: string;
-      request_json: string;
-      result_json: string;
-      template_json: string;
-      finished_at: number;
-      error_code: string | null;
-    }>(
-      `SELECT p.content_hash,p.prompt_hash,p.request_json,p.result_json,p.finished_at,p.error_code,r.template_json
-      FROM admin_previews p JOIN character_draft_revisions r ON r.character_id=p.character_id AND r.revision=p.draft_revision
-      WHERE p.id=? AND p.character_id=? AND p.status='succeeded' AND p.evidence_kind='deepseek'`,
-      previewId,
-      id,
-    );
-    ensure(
-      review?.result_json &&
-        review.finished_at !== null &&
-        review.finished_at <= now &&
-        review.error_code === null &&
-        review.prompt_hash === textPolicyHash() &&
-        review.content_hash === contentHash(template) &&
-        contentHash(JSON.parse(review.template_json)) === contentHash(template),
-      'VALID_PREVIEW_REQUIRED',
-    );
-    if (store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_preview_jobs'")) {
-      const proof = store.get<{ revision: number; profile_hash: string }>(
-        'SELECT revision,profile_hash FROM web_character_preview_jobs WHERE preview_id=? AND character_id=?',
+    const colourOnly = colourOnlyAsked;
+    if (colourOnly)
+      ensure(
+        live &&
+          profile.presentation.color !== live.presentation.color &&
+          contentHash(withoutColour(profile)) === contentHash(withoutColour(live)),
+        'VALID_PREVIEW_REQUIRED',
+      );
+    const review = colourOnly ? null : verifiedReview(draft);
+    function verifiedReview(draft: { revision: number; content_hash: string }) {
+      // Reuse only a completed real v7 review of these exact template bytes, not a UI/static preview.
+      // Publication itself cannot enqueue or regenerate proof.
+      const review = store.get<{
+        content_hash: string;
+        prompt_hash: string;
+        request_json: string;
+        result_json: string;
+        template_json: string;
+        finished_at: number;
+        error_code: string | null;
+      }>(
+        `SELECT p.content_hash,p.prompt_hash,p.request_json,p.result_json,p.finished_at,p.error_code,r.template_json
+        FROM admin_previews p JOIN character_draft_revisions r ON r.character_id=p.character_id AND r.revision=p.draft_revision
+        WHERE p.id=? AND p.character_id=? AND p.status='succeeded' AND p.evidence_kind='deepseek'`,
         previewId,
         id,
       );
       ensure(
-        proof &&
-          proof.revision === draft.revision &&
-          proof.profile_hash === draft.content_hash &&
-          store.get<{ n: number }>(
-            `SELECT count(*) n FROM web_character_preview_attempts WHERE preview_id=?
-          AND state='known' AND outcome='succeeded' AND shared_settled=1`,
-            previewId,
-          )!.n === 2,
+        review?.result_json &&
+          review.finished_at !== null &&
+          review.finished_at <= now &&
+          review.error_code === null &&
+          review.prompt_hash === textPolicyHash() &&
+          review.content_hash === contentHash(template) &&
+          contentHash(JSON.parse(review.template_json)) === contentHash(template),
         'VALID_PREVIEW_REQUIRED',
       );
-    }
-    const request = JSON.parse(review.request_json) as TextGenerationRequest;
-    const result = JSON.parse(review.result_json) as TextGenerationResult;
-    ensure(
-      request.jobId === input.previewId &&
-        request.scope.characterId === id &&
-        request.scope.worldId === 'admin-preview-' + input.previewId &&
-        request.scope.conversationId === input.previewId &&
-        contentHash(request.character) === contentHash(template) &&
-        result.provider === 'deepseek' &&
-        result.reply,
-      'VALID_PREVIEW_REQUIRED',
-    );
-    ensure(
-      result.stages?.length === 2 &&
-        ['draft', 'review'].every(
-          (stage) =>
-            result.stages!.filter(
-              (item) =>
-                item.stage === stage &&
-                item.status === 'succeeded' &&
-                item.usage &&
-                [item.usage.inputTokens, item.usage.outputTokens, item.usage.totalTokens].every(
-                  (n) => Number.isSafeInteger(n) && n >= 0,
-                ) &&
-                item.usage.totalTokens === item.usage.inputTokens + item.usage.outputTokens,
-            ).length === 1,
-        ),
-      'VALID_PREVIEW_REQUIRED',
-    );
-    try {
-      dialogueCandidate(
-        dialogueWire(result.reply),
-        request.requiredMessageIds,
-        request.mustClose,
-        request.deliveryMode,
+      if (store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_preview_jobs'")) {
+        const proof = store.get<{ revision: number; profile_hash: string }>(
+          'SELECT revision,profile_hash FROM web_character_preview_jobs WHERE preview_id=? AND character_id=?',
+          previewId,
+          id,
+        );
+        ensure(
+          proof &&
+            proof.revision === draft.revision &&
+            proof.profile_hash === draft.content_hash &&
+            store.get<{ n: number }>(
+              `SELECT count(*) n FROM web_character_preview_attempts WHERE preview_id=?
+            AND state='known' AND outcome='succeeded' AND shared_settled=1`,
+              previewId,
+            )!.n === 2,
+          'VALID_PREVIEW_REQUIRED',
+        );
+      }
+      const request = JSON.parse(review.request_json) as TextGenerationRequest;
+      const result = JSON.parse(review.result_json) as TextGenerationResult;
+      ensure(
+        request.jobId === previewId &&
+          request.scope.characterId === id &&
+          request.scope.worldId === 'admin-preview-' + previewId &&
+          request.scope.conversationId === previewId &&
+          contentHash(request.character) === contentHash(template) &&
+          result.provider === 'deepseek' &&
+          result.reply,
+        'VALID_PREVIEW_REQUIRED',
       );
-    } catch {
-      ensure(false, 'VALID_PREVIEW_REQUIRED');
+      ensure(
+        result.stages?.length === 2 &&
+          ['draft', 'review'].every(
+            (stage) =>
+              result.stages!.filter(
+                (item) =>
+                  item.stage === stage &&
+                  item.status === 'succeeded' &&
+                  item.usage &&
+                  [item.usage.inputTokens, item.usage.outputTokens, item.usage.totalTokens].every(
+                    (n) => Number.isSafeInteger(n) && n >= 0,
+                  ) &&
+                  item.usage.totalTokens === item.usage.inputTokens + item.usage.outputTokens,
+              ).length === 1,
+          ),
+        'VALID_PREVIEW_REQUIRED',
+      );
+      try {
+        dialogueCandidate(
+          dialogueWire(result.reply),
+          request.requiredMessageIds,
+          request.mustClose,
+          request.deliveryMode,
+        );
+      } catch {
+        ensure(false, 'VALID_PREVIEW_REQUIRED');
+      }
+
+      return review;
     }
 
     if (input.materialId !== undefined && input.materialId !== null) identifier(input.materialId);
+    // A colour-only publication changes neither voice nor welcome, so the live approval stays exactly as it is.
     const material =
-      input.materialId === undefined || input.materialId === null
+      colourOnly || input.materialId === undefined || input.materialId === null
         ? null
         : approvedCharacterMaterial(store, id, input.materialId as string, draft.revision, draft.content_hash);
     if (material)
@@ -173,7 +196,7 @@ export function publishWebCharacter(
           template.voice.version === material.voice_revision,
         'CHARACTER_MATERIALS_REQUIRED',
       );
-    else {
+    else if (!colourOnly) {
       // Unchanged voice and welcome can reuse existing approval; changes require an exact bundle.
       const binding = store.get<{ voice_version: string; profile_id: string; voice_revision: number }>(
         `SELECT * FROM web_provider_voice_bindings WHERE character_id=? AND source='user_selected' AND approved=1`,
@@ -234,29 +257,40 @@ export function publishWebCharacter(
     );
     if (live) store.run('UPDATE web_character_catalog SET version=? WHERE character_id=?', template.version, id);
     else store.run('INSERT INTO web_character_catalog VALUES (?,?,?)', id, template.version, position);
-    store.run(
-      'INSERT INTO web_character_publications VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-      requestId,
-      requestHash,
-      id,
-      template.version,
-      draft.revision,
-      draft.content_hash,
-      previewId,
-      contentHash(review),
-      actor.memberId,
-      actor.sessionId,
-      now,
-    );
+    // A publication row records the 预演 it stood on; a colour-only one has none, so it leaves only the version and the audit row.
+    if (review)
+      store.run(
+        'INSERT INTO web_character_publications VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        requestId,
+        requestHash,
+        id,
+        template.version,
+        draft.revision,
+        draft.content_hash,
+        previewId,
+        contentHash(review),
+        actor.memberId,
+        actor.sessionId,
+        now,
+      );
     if (material) promoteCharacterMaterial(store, material, template.version);
     store.run('DELETE FROM web_character_drafts WHERE character_id=?', id);
     store.run(
       'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',
       actor.memberId,
-      `character-published:${template.version}`,
+      `character-published:${template.version}${colourOnly ? ':colour-only' : ''}`,
       id,
       now,
     );
+    if (colourOnly)
+      return {
+        characterId: id,
+        version: template.version,
+        draftRevision: draft.revision,
+        profileHash: draft.content_hash,
+        previewId: null,
+        publishedAt: now,
+      };
     return dto(store.get<Publication>('SELECT * FROM web_character_publications WHERE request_id=?', requestId)!);
   });
 }

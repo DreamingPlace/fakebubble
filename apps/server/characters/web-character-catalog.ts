@@ -8,6 +8,8 @@ export interface WebCharacterPresentation {
   displayName: string;
   publicDescription: string;
   welcome: { text: string; version: string };
+  /** The character's main chat colour, '#RRGGBB' in capitals. Absent = the player page keeps its built-in palette. */
+  color?: string;
 }
 export interface WebCharacterProfile {
   template: CharacterTemplate;
