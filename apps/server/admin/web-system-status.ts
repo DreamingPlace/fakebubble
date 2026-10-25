@@ -21,6 +21,8 @@ type Digest = { version: number; sha256: string };
 /** What only the Worker knows (its environment, its bindings, the budget Worker, its retention ledger). Absent in a harness. */
 export interface WebSystemSources {
   flags(): SystemFlags;
+  /** ALERT_DAILY_SPEND_MICROS while the owner alerts are on (消耗表 draws it as a line); null/absent = none. */
+  alertDailySpendMicros?(): number | null;
   /** The ledger this object runs and the one it expects: { active, inline, r2 }. */
   migrations(): { active: 'inline' | 'r2'; inline: Digest[]; r2: Digest[] };
   /** The budget Worker's summary (one RPC read). Throws when it cannot be reached. */

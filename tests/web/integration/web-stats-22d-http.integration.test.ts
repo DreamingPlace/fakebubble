@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { localRuntime } from '../../cloudflare/runtime.ts';
 import type { ChartView, CostsView, SpendView } from '../../../packages/contracts/web-stats.ts';
+import { ARCHIVE_TTL_MS } from '../../../apps/server/review/web-chat-review.ts';
 
 const API = '/api/web/provider',
   ADMIN = `${API}/admin`,
@@ -18,6 +19,10 @@ type Extras = {
   userTypes: { userType: string; n: number }[];
   spend: { day: string; userType: string; kind: string; calls: number; chargedMicros: number }[];
   due: number | null;
+  now: number;
+  archive: number;
+  archiveDue: number | null;
+  archiveArchivedAt: number | null;
 };
 let peers = 0;
 const client = (): Client => ({
@@ -218,6 +223,25 @@ test('22d the real pipeline: chat users per character, user types frozen at admi
   );
   assert.equal(by('registered').voiceMicros, by('registered').voiceMicros);
 
+  // Part 24b-1 read-only additions: the alert threshold the owner alerts use, and real price changes only.
+  assert.equal(spend.alertMicros, 5_000_000, 'the production ALERT_DAILY_SPEND_MICROS while alerts are on');
+  assert.deepEqual(spend.priceChanges, [], 'no price changed yet: nothing to mark');
+  await f.fixture('/fixture/stats/price-version', {
+    provider: 'deepseek',
+    model: 'deepseek-flash',
+    phase: 'draft',
+    same: true,
+  });
+  assert.deepEqual(
+    ((await f.call(`${ADMIN}/stats/spend-by-type`, owner, { range: 7 })) as SpendView).priceChanges,
+    [],
+    'a renewal at the same number is not a change',
+  );
+  await f.fixture('/fixture/stats/price-version', { provider: 'deepseek', model: 'deepseek-flash', phase: 'draft' });
+  assert.deepEqual(((await f.call(`${ADMIN}/stats/spend-by-type`, owner, { range: 7 })) as SpendView).priceChanges, [
+    { day: today.day, provider: 'deepseek', model: 'deepseek-flash', phase: 'draft' },
+  ]);
+
   // The routes: no stats.read -> 403 before the body is read; the owner and stats.read are in; the rest of the wall.
   const staff = async (label: string, permissions: string[]) => {
     const issued = await f.call(`${ADMIN}/members/issue`, owner, {
@@ -330,10 +354,23 @@ test('22d the alarm still goes idle: hourly rows, chat markers and their counts 
     await f.fixture('/fixture/run-alarm', {});
   }
   extras = await f.fixture<Extras>('/fixture/stats/extras', {});
-  // Whatever is left to wake for is months away (not traced here), never the statistics (a wake for them
-  // would be at the next UTC midnight).
-  const now = Date.now() + 9 * 86_400_000;
-  assert.ok(extras.due === null || extras.due > now + 30 * 86_400_000, 'no statistics wake pending');
+  // Part 24b-1 (named precision, not a weakening): the one wake that is left is traced to its source. It is the anonymous
+  // chat-review archive (web_review_archive), which expires on its own clock: archived_at + ARCHIVE_TTL_MS (180 days). It is not
+  // the statistics (their wake would be the next UTC midnight) and not a guest purge (the guest was purged above).
+  assert.ok(
+    extras.archive > 0 && extras.archiveArchivedAt !== null,
+    'the purged guest left its anonymous review archive',
+  );
+  assert.equal(extras.due, extras.archiveDue, 'the pending wake IS the review archive expiry');
+  assert.equal(
+    extras.archiveDue,
+    extras.archiveArchivedAt + ARCHIVE_TTL_MS,
+    'and it falls exactly 180 days after archiving',
+  );
+  assert.ok(
+    extras.archiveDue! - extras.now > 179 * 86_400_000,
+    'about 180 days from the (moved) test clock, never a midnight',
+  );
   // The day was written down by the sweep before its markers were pruned; the hourly rows are long gone.
   assert.deepEqual(extras.hourly, []);
   assert.deepEqual(extras.chatHours, []);

@@ -164,7 +164,12 @@ export class WebSystemAdmin {
   /** 消耗表 by user type (Part 22d): per day, user type and text / voice, in USD micros with the rate the page uses. */
   spendByType(auth: Auth, input: unknown): SpendView {
     this.actor(auth, 'stats');
-    return readSpend(this.store, this.clock.now(), parseRange(exactly(input, ['range']).range));
+    return readSpend(
+      this.store,
+      this.clock.now(),
+      parseRange(exactly(input, ['range']).range),
+      this.ops?.alertDailySpendMicros?.() ?? null,
+    );
   }
   exportCosts(auth: Auth, input: unknown) {
     const actor = this.actor(auth, 'stats');

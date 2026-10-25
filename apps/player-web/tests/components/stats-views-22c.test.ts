@@ -102,7 +102,12 @@ test('玩家统计: since line, newest first, a totals row, 次日留存 as "x /
 test('玩家统计: 按角色 shows the display name, 按模型 names a reply with no model choice, the range reloads, 导出表格 saves the CSV', async (t) => {
   const f = mountStats(t);
   await f.api.load();
-  assert.deepEqual(rows(f.root, '玩家统计（按角色）'), [['瓜瓜', '7', '1', '0', '6']]);
+  // Named exception (Part 24b-1): 按角色 is a card per character on the new board (still the display name and the same counts),
+  // with the 聊天人数 of 22d beside them (— while the chart data is not given).
+  const card = (f.root as unknown as FakeElement).querySelector('[data-character="瓜瓜"]')!;
+  assert.match(card.textContent, /7\s*条回复/);
+  assert.match(card.textContent, /语音 6 · 失败 1 · 未知 0/);
+  assert.match(card.textContent, /聊天人数 —/);
   assert.deepEqual(rows(f.root, '玩家统计（按模型）'), [
     ['xai', '5', '0', '0', '4'],
     ['未选择模型', '2', '1', '0', '2'],
@@ -115,9 +120,13 @@ test('玩家统计: 按角色 shows the display name, 按模型 names a reply wi
   tabs[1]!.click();
   assert.equal(tabs[1]!.getAttribute('aria-selected'), 'true');
   assert.equal(tabs[0]!.getAttribute('aria-selected'), 'false');
-  const select = (f.root as unknown as FakeElement).querySelector('select')!;
-  select.value = '30';
-  select.dispatch('change');
+  // Named exception (Part 24b-1): the range is a pill switch (最近 7 / 30 / 90 天), not a select.
+  const range = (f.root as unknown as FakeElement).querySelectorAll('[aria-label="时间范围"] button');
+  assert.deepEqual(
+    range.map((b) => b.textContent),
+    ['最近 7 天', '最近 30 天', '最近 90 天'],
+  );
+  range[1]!.click();
   await flush();
   assert.deepEqual(f.loads, [7, 30]);
   const buttons = (f.root as unknown as FakeElement).querySelectorAll('button');
@@ -199,15 +208,19 @@ function mountCosts(t: test.TestContext, view: CostsView) {
   return { root, api, saved };
 }
 
-test('消耗表: the one rate is on the page, the month is in USD and RMB, the ledger column reads — before 22c, the price note only when the month spans the change', async (t) => {
+test('消耗表: the month is in USD with the RMB figure (the rate is its tooltip), the ledger column reads — before 22c, and no hardcoded price note', async (t) => {
   const f = mountCosts(t, costs(true));
   await f.api.load();
   const page = text(f.root);
-  assert.match(page, /按 1 美元 ≈ 6\.7 元估算/);
-  assert.match(page, /本月（UTC 2026-11）/);
-  assert.match(page, /\$2\.0000（约 ¥13\.40）/);
-  assert.match(page, /\$3\.6000/);
-  assert.match(page, /Fish Drama 3 的列表价在 2026-11-12 之后改变/);
+  // Named exception (Part 24b-1): no exchange rate in the header and no Fish Drama 3 note any more; the rate is the tooltip of the ¥ figure.
+  assert.doesNotMatch(page, /按 1 美元 ≈ 6\.7 元估算/);
+  assert.doesNotMatch(page, /Fish Drama 3/);
+  assert.match(page, /UTC 2026-11/);
+  assert.match(page, /\$2\.00/);
+  assert.match(page, /≈ ¥13\.40/);
+  assert.match(page, /\$3\.60/);
+  const yuan = (f.root as unknown as FakeElement).querySelectorAll('[title]').find((el) => /¥13\.40/.test(el.textContent))!;
+  assert.equal(yuan.getAttribute('title'), '按 $1 ≈ ¥6.7');
   const detail = rows(f.root, '消耗表（按供应商、模型、阶段）');
   assert.deepEqual(detail[0]!.slice(0, 4), ['2026-11-20', 'fish', 'drama-3', '语音']);
   assert.deepEqual(detail[0]!.slice(-3), ['$0.0500', '$0.0900', '0']);
@@ -216,11 +229,11 @@ test('消耗表: the one rate is on the page, the month is in USD and RMB, the l
   const quiet = mountCosts(t, costs(false));
   await quiet.api.load();
   assert.doesNotMatch(text(quiet.root), /Fish Drama 3/);
-  assert.equal(
-    (f.root as unknown as FakeElement).querySelector('select')!.value,
-    '30',
-    'the range select opens on the range the view loads',
-  );
+  // Named exception (Part 24b-1): the range is a pill switch; it opens on 30 days, as the select did.
+  const pressed = (f.root as unknown as FakeElement)
+    .querySelectorAll('[aria-label="时间范围"] button')
+    .find((b) => b.getAttribute('aria-pressed') === 'true')!;
+  assert.equal(pressed.textContent, '30天', 'the range opens on the range the view loads');
 });
 
 test('概览: yesterday and this month in RMB for stats.read, nothing for anyone else', async (t) => {

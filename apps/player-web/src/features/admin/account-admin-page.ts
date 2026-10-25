@@ -11,9 +11,11 @@ import { costsView } from './costs-view.ts';
 import { modelsView } from './models-view.ts';
 import { confirmDialog } from './ui/confirm-dialog.ts';
 import { rolePicker } from './shell/role-picker.ts';
+import { wordmarkSvg } from '../brand/wordmark.ts';
 import {
   canSeePage,
   firstAllowedPage,
+  groupPages,
   isAdminPage,
   navMarkup,
   navTree,
@@ -71,6 +73,9 @@ type Port = Pick<
   exportPlayerStats?: AccountAdminApi['exportPlayerStats'];
   costs?: AccountAdminApi['costs'];
   exportCosts?: AccountAdminApi['exportCosts'];
+  /** 总览's chart, 消耗表 by user type and 玩家统计's chat users (Part 22d / 24b-1): the owner or stats.read. Optional like the rest. */
+  chart?: AccountAdminApi['chart'];
+  spendByType?: AccountAdminApi['spendByType'];
   /** 邀请与额度 (the owner, or an administrator holding invites.manage). Optional: a page without them shows nothing on that page. */
   inviteBatches?: AccountAdminApi['inviteBatches'];
   inviteBatchDetail?: AccountAdminApi['inviteBatchDetail'];
@@ -137,7 +142,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   root.innerHTML = `<main class="invite-admin-page account-admin-page admin-shell" data-surface="login">
     <div class="admin-narrow-notice" role="note">管理后台请在电脑浏览器打开</div>
     <header class="admin-topbar">
-      <div class="admin-brand"><h1 tabindex="-1">FAKE 泡泡管理</h1><span class="admin-env" id="admin-env"></span></div>
+      <div class="admin-brand"><h1 tabindex="-1">FAKE 泡泡管理</h1></div>
       <div class="admin-account" hidden>
         <button type="button" id="admin-account-toggle" class="admin-account-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="admin-account-menu"></button>
         <div class="admin-menu" id="admin-account-menu" hidden>
@@ -149,6 +154,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     </header>
     <div class="admin-frame">
     <nav class="admin-sidebar admin-nav" aria-label="管理页面" hidden>
+      <div class="admin-side-brand">${wordmarkSvg({ size: 30, weight: 2, logo: true, className: 'hand admin-hand' })}<span class="admin-tag">ADMIN</span><span class="admin-env" id="admin-env"></span></div>
       <div class="admin-nav-groups">${navMarkup()}</div>
       <button type="button" class="admin-nav-collapse" id="admin-nav-collapse" aria-pressed="false" title="收起或展开导航"><span aria-hidden="true">«</span><span class="admin-nav-collapse-text">收起导航</span></button>
     </nav>
@@ -313,7 +319,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     const visible = access();
     for (const group of navTree()) {
       let any = false;
-      for (const item of group.items) {
+      for (const item of groupPages(group)) {
         const show = !!session && canSeePage(item.page, visible);
         q<HTMLElement>(`[data-page="${item.page}"]`).hidden = !show;
         any ||= show;
@@ -358,6 +364,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       if (nav.dataset.page === page) nav.setAttribute('aria-current', 'page');
       else nav.removeAttribute('aria-current');
     }
+    // 角色工作台 stays lit while its 预演测试 page (listed under it) is open.
+    q<HTMLElement>('.admin-nav [data-page="characters"]').setAttribute('data-trail', String(page === 'preview'));
   };
   const WITH_ID: readonly string[] = ['characters', 'preview', 'cocreation'];
   const closeMenu = () => {
@@ -616,6 +624,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     },
     run,
     disposed: () => disposed,
+    chart: port.chart
+      ? { load: (metric, range) => port.chart!(metric, range), available: () => canSeePage('stats', access()) }
+      : undefined,
   });
   const system = systemView(q('#admin-system'), {
     load: () => (port.systemStatus ? port.systemStatus() : unavailable()),
@@ -630,6 +641,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   });
   const stats = statsView(q('#admin-stats'), {
     load: (range) => (port.playerStats ? port.playerStats(range) : unavailable()),
+    chatUsers: port.chart ? () => port.chart!('chat_users', '14d') : undefined,
     exportCsv: (range) => (port.exportPlayerStats ? port.exportPlayerStats(range) : unavailable()),
     download: browserDownload,
     run,
@@ -637,6 +649,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   });
   const costs = costsView(q('#admin-costs'), {
     load: (range) => (port.costs ? port.costs(range) : unavailable()),
+    spend: port.spendByType ? (range) => port.spendByType!(range) : undefined,
     exportCsv: (range) => (port.exportCosts ? port.exportCosts(range) : unavailable()),
     download: browserDownload,
     run,
@@ -864,7 +877,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   // Back/Forward and edited addresses: follow the hash, but never past unsaved edits or a request in flight.
   const stopHash = address.listen(() => {
     const wanted = address.read();
-    if (!session || disposed || !wanted || sameRoute(wanted, here())) return;
+    if (!session || disposed || !wanted) return;
+    // An old link to a page that moved: the address is rewritten to its place today.
+    if (sameRoute(wanted, here())) {
+      address.replace(wanted);
+      return;
+    }
     const before = here();
     if (busy || !navigate(wanted.page, wanted.id, { replaceUrl: true })) {
       if (busy) status.textContent = '请等待当前操作完成后再切换。';

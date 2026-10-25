@@ -355,6 +355,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         alertMailBindingPresent: env.ADMIN_EMAIL !== undefined && env.ADMIN_EMAIL !== null,
         alertRecipientSet: typeof env.ALERT_EMAIL_TO === 'string' && env.ALERT_EMAIL_TO.includes('@'),
       }),
+      alertDailySpendMicros: () => this.publicConfig.alerts?.dailySpendMicros ?? null,
       migrations: () => ({ active: 'r2', ...expectedWebMigrations() }),
       budget: () => env.BUDGET.summary(),
       retention: () => this.retention.health(),

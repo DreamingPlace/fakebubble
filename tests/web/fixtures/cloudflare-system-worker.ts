@@ -42,6 +42,8 @@ export class WebSystemFixture extends WebCrossPathFixture {
         alertMailBindingPresent: false,
         alertRecipientSet: false,
       }),
+      // Part 24b-1: the owner alerts are on at the production default, so 消耗表 has a line to draw.
+      alertDailySpendMicros: () => 5_000_000,
       // This fixture authority applies the R2 list (a media bucket is bound).
       migrations: () => ({ active: 'r2', ...expectedWebMigrations() }),
       budget: () => budget.summary(),

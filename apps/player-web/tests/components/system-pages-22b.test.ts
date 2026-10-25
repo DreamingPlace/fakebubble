@@ -6,6 +6,7 @@ import { systemView } from '../../src/features/admin/system-view.ts';
 import {
   canSeePage,
   firstAllowedPage,
+  groupPages,
   navTree,
   visibleNav,
   type NavAccess,
@@ -519,25 +520,27 @@ const access = (permissions: string[], over: Partial<NavAccess> = {}): NavAccess
   conversations: true,
   ...over,
 });
-const labels = (a: NavAccess) => visibleNav(a).flatMap((g) => g.items.map((i) => i.label));
+// Named exception (Part 24b-1): 预演测试 is listed UNDER 角色工作台, so the flat list walks the nested pages too.
+const labels = (a: NavAccess) => visibleNav(a).flatMap((g) => groupPages(g).map((i) => i.label));
 
-test('the new navigation: who sees 概览, 积分发放, 系统状态 and the 22c placeholders; 概览 first; 测试对话 before 消耗表', () => {
+test('the new navigation: who sees 总览, 积分发放, 系统状态 and the 22c placeholders; 总览 first; 玩家统计, 消耗表, 测试对话 in 运营', () => {
+  // Named exceptions (Part 24b-1): 概览 is called 总览, 角色资料 is 角色工作台, 玩家统计 moved to 运营 and 测试对话 now follows 消耗表.
   assert.deepEqual(labels(access([], { owner: true })), [
-    '概览',
-    '角色资料',
+    '总览',
+    '角色工作台',
     '预演测试',
     '共创收件箱',
     '邀请与额度',
     '积分发放',
     '玩家统计',
-    '测试对话',
     '消耗表',
+    '测试对话',
     '系统状态',
     '管理员与权限',
   ]);
-  assert.deepEqual(labels(access([])), ['概览'], '概览 is for everyone who can log in');
-  assert.deepEqual(labels(access(['points.grant'])), ['概览', '积分发放']);
-  assert.deepEqual(labels(access(['system.read'])), ['概览', '系统状态']);
+  assert.deepEqual(labels(access([])), ['总览'], '总览 is for everyone who can log in');
+  assert.deepEqual(labels(access(['points.grant'])), ['总览', '积分发放']);
+  assert.deepEqual(labels(access(['system.read'])), ['总览', '系统状态']);
   assert.equal(canSeePage('stats', access(['points.grant', 'system.read'])), false, 'placeholders are the owner’s');
   assert.equal(canSeePage('costs', access(['points.grant', 'system.read'])), false);
   assert.equal(canSeePage('points', access(['system.read'])), false);

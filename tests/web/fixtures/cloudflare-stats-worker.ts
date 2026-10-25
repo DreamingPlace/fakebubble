@@ -3,6 +3,7 @@ import { WebProviderRunner } from '../../../apps/server/generation/web-provider-
 import { readWebV7Request } from '../../../apps/server/generation/web-v7-request.ts';
 import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { acceptedAuditEnvelope, draftEnvelope } from '../../text-fixtures.ts';
+import { nextReviewArchiveExpiry } from '../../../apps/server/review/web-chat-review.ts';
 import { fixtureClock } from './cloudflare-business-worker.ts';
 import { WebSystemFixture } from './cloudflare-system-worker.ts';
 
@@ -123,7 +124,38 @@ export class WebStatsFixture extends WebSystemFixture {
           'SELECT day,user_type userType,kind,calls,charged_micros chargedMicros FROM web_stats_spend ORDER BY day,user_type,kind',
         ),
         due: this.retention?.nextDue() ?? null,
+        // Part 24b-1: where the wake comes from. The anonymous chat-review archive expires on its own clock (archived_at + 180 days).
+        now: this.clock.now(),
+        archive: store.get<{ n: number }>('SELECT count(*) n FROM web_review_archive')?.n ?? 0,
+        archiveDue: nextReviewArchiveExpiry(store),
+        archiveArchivedAt:
+          store.get<{ at: number | null }>('SELECT min(archived_at) at FROM web_review_archive')?.at ?? null,
       });
+    // Part 24b-1: a new version of one price row (a different number from today), or - with `same` - a renewal at the same number.
+    if (path === '/fixture/stats/price-version') {
+      const last = store.get<Record<string, any>>(
+        'SELECT * FROM web_provider_prices WHERE provider=? AND model=? AND phase=? ORDER BY version DESC LIMIT 1',
+        input.provider,
+        input.model,
+        input.phase,
+      )!;
+      const from = this.clock.now();
+      store.run(
+        `INSERT INTO web_provider_prices(id,provider,model,phase,currency,unit,upper_micros_per_unit,valid_from,valid_until,version)
+        VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        `${last.id}-v${last.version + 1}`,
+        last.provider,
+        last.model,
+        last.phase,
+        last.currency,
+        last.unit,
+        input.same === true ? last.upper_micros_per_unit : last.upper_micros_per_unit + 1,
+        from,
+        from + 90 * DAY,
+        last.version + 1,
+      );
+      return Response.json({ version: last.version + 1 });
+    }
     if (path === '/fixture/stats/reopen') {
       // A reply still in flight when its player is purged: the row of a finished one, put back to queued and reserved.
       store.run("UPDATE web_operations SET status='queued',quota_state='reserved' WHERE id=?", input.operationId);

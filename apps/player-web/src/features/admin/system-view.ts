@@ -8,6 +8,7 @@ import { BUDGET_TOPUP_LIMITS } from '../../../../../packages/contracts/web-syste
 import type { StageLatencyDay, SystemStatusView } from '../../services/account-admin-api.ts';
 import { h } from '../cocreation/h.ts';
 import { opsView } from './ops-view.ts';
+import { warningLine } from './overview-view.ts';
 import { PROVIDER_LABELS, ageText, dateText, dateTimeText, dollars } from './system-format.ts';
 import { keyValuePanel } from './ui/key-value-panel.ts';
 import { statusBadge } from './ui/status-badge.ts';
@@ -64,16 +65,17 @@ export function systemView(
     run: (work) => deps.run(work),
     disposed: deps.disposed,
   });
+  // The overall verdict sits in the header: green, or the same one-line summary 总览 shows.
+  const overall = h('p', { class: 'ov-status sys-overall', attrs: { role: 'status' } });
   root.replaceChildren(
-    h('h2', { text: '系统状态' }),
-    h('p', {
-      class: 'admin-hint',
-      text: '只读，只含数量、时间和价格；不含玩家、邮箱、昵称或聊天内容。',
-    }),
+    h('div', { class: 'page-head' }, h('div', {}, h('h2', { text: '系统状态' })), overall),
     sections,
     result,
     h('div', { class: 'models-actions' }, reload),
   );
+  /** Sections laid out in a row: `top` is the three-up row with the version card, `pair` two side by side, `wide` one full row. */
+  const row = (kind: 'top' | 'pair' | 'wide', ...children: (Node | null)[]) =>
+    h('div', { class: `sys-row sys-${kind}` }, ...children);
 
   const section = (title: string, ...children: (Node | null)[]) =>
     h('section', { class: 'system-section' }, h('h3', { text: title }), ...children);
@@ -126,7 +128,6 @@ export function systemView(
     );
     return section(
       '价格',
-      h('p', { class: 'admin-hint', text: '高亮的行在 60 天内到期（或已过期），续期价格会为它们追加新的价格行。' }),
       table(
         ['供应商 / 模型 / 阶段', '微美元 / 单位', '版本', '到期（UTC）', '状态'],
         v.prices.map((row) => [
@@ -238,89 +239,93 @@ export function systemView(
 
   function paint(v: SystemStatusView) {
     const flags = v.flags;
+    const note = warningLine(v.warnings);
+    overall.setAttribute('data-tone', note ? 'warn' : 'ok');
+    overall.replaceChildren(statusBadge(note ? '需要留意' : '全部正常', note ? 'warn' : 'ok'), ' ', note ?? '');
+    // The owner accepts every deploy on this card: the build, the migration steps and whether they match, the database version.
+    const version = section(
+      '运行版本',
+      keyValuePanel([
+        ['构建提交', v.version.commit === 'unbuilt' ? '未标记（本地构建）' : v.version.commit],
+        [
+          '迁移',
+          h(
+            'span',
+            {},
+            `${v.version.migrationSteps} 步 `,
+            v.version.matches === null
+              ? statusBadge('无法核对', 'neutral')
+              : v.version.matches
+                ? statusBadge('matches: true', 'ok')
+                : statusBadge('matches: false', 'danger'),
+          ),
+        ],
+        ['数据库版本', v.version.schemaVersion === null ? null : String(v.version.schemaVersion)],
+      ]),
+    );
+    version.classList.add('sys-version');
+    const unknown = section(
+      'UNKNOWN',
+      table(
+        ['类别', '数量', '最早的已过'],
+        v.unknown.map((kind) => [KIND_LABELS[kind.kind], String(kind.count), ageText(kind.oldestAgeMs)]),
+        'UNKNOWN 调用',
+      ),
+    );
+    const security = section(
+      '安全',
+      keyValuePanel([
+        ['Turnstile', onOff(v.security.turnstile)],
+        ['今天未通过（UTC）', String(v.security.failuresToday)],
+        ['最近 7 天未通过', String(v.security.failuresLast7Days)],
+        ['今天无法验证（Turnstile 服务不可达）', String(v.security.unavailableToday)],
+        ['最近 7 天无法验证', String(v.security.unavailableLast7Days)],
+      ]),
+    );
+    const cleanup = section(
+      '清理',
+      v.retention
+        ? keyValuePanel([
+            [
+              '清理失败',
+              v.retention.failing > 0 ? statusBadge(`${v.retention.failing} 位`, 'danger') : statusBadge('0', 'ok'),
+            ],
+            ['最早一条已过', v.retention.oldestAgeBucket ? BUCKETS[v.retention.oldestAgeBucket] : '—'],
+            ['上次成功', dateTimeText(v.retention.lastSuccessAt)],
+            ['正在清理', String(v.retention.purging)],
+          ])
+        : h('p', { class: 'admin-hint', text: '这个环境没有提供清理状态。' }),
+      v.retention && v.retention.failures.length > 0
+        ? table(
+            ['阶段 phase', '语句组 sub', '错误类 errorName', '信息形状 messageShape', '连续失败'],
+            v.retention.failures.map((f) => [f.phase, f.sub, f.errorName, f.messageShape, `${f.count} 次`]),
+            '清理失败明细（不含任何 id）',
+          )
+        : null,
+    );
+    const switches = section(
+      '开关',
+      flags
+        ? keyValuePanel([
+            ['SIGNUP_BONUS_ENABLED', onOff(flags.signupBonus)],
+            ['PLAYER_MODEL_CHOICE_ENABLED', onOff(flags.playerModelChoice)],
+            ['PLAYER_TEXT_MODELS', flags.playerTextModels ? flags.playerTextModels.join('、') : '未启用'],
+            ['FISH_VOICE_MODEL', flags.fishVoiceModel],
+            ['CHAT_REVIEW_ENABLED', onOff(flags.chatReview)],
+            ['Turnstile', onOff(flags.turnstile)],
+            ['告警', onOff(flags.alerts)],
+            ['告警邮件绑定', yesNo(flags.alertMailBindingPresent)],
+            ['告警收件人', yesNo(flags.alertRecipientSet)],
+          ])
+        : h('p', { class: 'admin-hint', text: '这个环境没有提供开关信息。' }),
+    );
+    switches.classList.add('sys-switches');
     sections.replaceChildren(
-      section(
-        '运行版本',
-        keyValuePanel([
-          ['构建提交', v.version.commit === 'unbuilt' ? '未标记（本地构建）' : v.version.commit],
-          [
-            '迁移',
-            h(
-              'span',
-              {},
-              `${v.version.migrationSteps} 步 `,
-              v.version.matches === null
-                ? statusBadge('无法核对', 'neutral')
-                : v.version.matches
-                  ? statusBadge('matches: true', 'ok')
-                  : statusBadge('matches: false', 'danger'),
-            ),
-          ],
-          ['数据库版本', v.version.schemaVersion === null ? null : String(v.version.schemaVersion)],
-        ]),
-      ),
-      section(
-        '开关',
-        flags
-          ? keyValuePanel([
-              ['SIGNUP_BONUS_ENABLED', onOff(flags.signupBonus)],
-              ['PLAYER_MODEL_CHOICE_ENABLED', onOff(flags.playerModelChoice)],
-              ['PLAYER_TEXT_MODELS', flags.playerTextModels ? flags.playerTextModels.join('、') : '未启用'],
-              ['FISH_VOICE_MODEL', flags.fishVoiceModel],
-              ['CHAT_REVIEW_ENABLED', onOff(flags.chatReview)],
-              ['Turnstile', onOff(flags.turnstile)],
-              ['告警', onOff(flags.alerts)],
-              ['告警邮件绑定', yesNo(flags.alertMailBindingPresent)],
-              ['告警收件人', yesNo(flags.alertRecipientSet)],
-            ])
-          : h('p', { class: 'admin-hint', text: '这个环境没有提供开关信息。' }),
-      ),
-      priceSection(v),
-      budgetSection(v),
-      section(
-        'UNKNOWN',
-        table(
-          ['类别', '数量', '最早的已过'],
-          v.unknown.map((kind) => [KIND_LABELS[kind.kind], String(kind.count), ageText(kind.oldestAgeMs)]),
-          'UNKNOWN 调用',
-        ),
-        h('p', {
-          class: 'admin-hint',
-          text: 'UNKNOWN 的调用不会重试，它的预算占用也不会释放；这里只显示数量和最早一条已经过了多久。',
-        }),
-      ),
-      section(
-        '清理',
-        v.retention
-          ? keyValuePanel([
-              [
-                '清理失败',
-                v.retention.failing > 0 ? statusBadge(`${v.retention.failing} 位`, 'danger') : statusBadge('0', 'ok'),
-              ],
-              ['最早一条已过', v.retention.oldestAgeBucket ? BUCKETS[v.retention.oldestAgeBucket] : '—'],
-              ['上次成功', dateTimeText(v.retention.lastSuccessAt)],
-              ['正在清理', String(v.retention.purging)],
-            ])
-          : h('p', { class: 'admin-hint', text: '这个环境没有提供清理状态。' }),
-        v.retention && v.retention.failures.length > 0
-          ? table(
-              ['阶段 phase', '语句组 sub', '错误类 errorName', '信息形状 messageShape', '连续失败'],
-              v.retention.failures.map((f) => [f.phase, f.sub, f.errorName, f.messageShape, `${f.count} 次`]),
-              '清理失败明细（不含任何 id）',
-            )
-          : null,
-      ),
-      section(
-        '安全',
-        keyValuePanel([
-          ['Turnstile', onOff(v.security.turnstile)],
-          ['今天未通过（UTC）', String(v.security.failuresToday)],
-          ['最近 7 天未通过', String(v.security.failuresLast7Days)],
-          ['今天无法验证（Turnstile 服务不可达）', String(v.security.unavailableToday)],
-          ['最近 7 天无法验证', String(v.security.unavailableLast7Days)],
-        ]),
-      ),
-      section('技术指标', metricsHost),
+      row('top', version, unknown, security),
+      row('wide', priceSection(v)),
+      row('pair', budgetSection(v), cleanup),
+      row('wide', switches),
+      row('wide', section('技术指标', metricsHost)),
     );
     metrics.show(v.metrics.slice(0, 14) as StageLatencyDay[]);
   }

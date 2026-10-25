@@ -264,10 +264,12 @@ test('the sidebar item 运营 → 测试对话: hidden without the switch, for t
   const ops = navTree().find((g) => g.id === 'ops')!;
   assert.deepEqual(
     ops.items.map((i) => [i.page, i.label]),
-    // Named exception (Part 22b): 运营数据 left the nav (its numbers are 系统状态 → 技术指标); 测试对话 comes first, then the 消耗表 placeholder.
+    // Named exception (Part 22b): 运营数据 left the nav (its numbers are 系统状态 → 技术指标).
+    // Named exception (Part 24b-1): 运营 = 玩家统计, 消耗表, 测试对话 - 测试对话 moved from first to last (and 玩家统计 joined 运营).
     [
-      ['conversations', '测试对话'],
+      ['stats', '玩家统计'],
       ['costs', '消耗表'],
+      ['conversations', '测试对话'],
     ],
   );
   // The switch (CHAT_REVIEW_ENABLED) is the first condition.
