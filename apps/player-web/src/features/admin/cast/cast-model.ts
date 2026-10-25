@@ -123,8 +123,6 @@ export const blankGroup = (members: string[] = []): CastGroup => ({
   stories: [],
 });
 
-export const groupsOf = (doc: CastDoc, characterId: string) =>
-  doc.groups.filter((g) => g.members.includes(characterId));
 export const sharedGroups = (doc: CastDoc, a: string, b: string) =>
   doc.groups.filter((g) => g.members.includes(a) && g.members.includes(b));
 export const storiesOfPair = (doc: CastDoc, a: string, b: string) =>
