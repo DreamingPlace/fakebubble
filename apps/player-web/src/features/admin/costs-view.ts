@@ -176,9 +176,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
     },
     'm',
   );
-  const refresh = h('button', { class: 'admin-secondary', text: '刷新', attrs: { type: 'button' } });
   const exportButton = h('button', { class: 'admin-secondary', text: '导出表格', attrs: { type: 'button' } });
-  refresh.addEventListener('click', () => void deps.run(() => load()));
   exportButton.addEventListener('click', () => void deps.run(() => exportTable()));
   const splitSwitch = segmented(
     '拆分方式',
@@ -222,7 +220,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
     chart.root,
     empty,
   );
-  const dated = h('details', { class: 'cost-dated' }, h('summary', { text: '按天明细' }), daily.root, detail.root);
+  const dated = h('section', { class: 'cost-dated' }, h('h3', { text: '按天明细' }), daily.root, detail.root);
   const since = h('span', { class: 'page-kicker' });
 
   root.replaceChildren(
@@ -230,7 +228,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
       'div',
       { class: 'page-head' },
       h('div', {}, since, h('h2', { text: '消耗表' })),
-      h('div', { class: 'ov-chart-tools' }, rangeSwitch.root, exportButton, refresh),
+      h('div', { class: 'ov-chart-tools' }, rangeSwitch.root, exportButton),
     ),
     month,
     chartCard,

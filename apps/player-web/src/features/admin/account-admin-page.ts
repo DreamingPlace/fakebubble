@@ -101,19 +101,19 @@ export function adminAccountError(error: unknown) {
     (
       {
         MODEL_TIER_EMPTY: '每一类玩家至少要保留一个已开启的模型，本次未保存。',
-        MODEL_SETTINGS_CONFLICT: '设置已被另一位管理员修改。请点“刷新”核对最新内容后再保存；本次未覆盖。',
+        MODEL_SETTINGS_CONFLICT: '设置已被另一位管理员修改。请重新打开本页核对最新内容后再保存；本次未覆盖。',
         WEB_INVITE_POINTS_REQUIRED: '需要先开启模型选择/积分，才能建每天补充的批次。',
         MODEL_SETTINGS_UNAVAILABLE: '这个站点的数据库还没有升级到模型与价格（迁移 124）。',
         PLAYER_NOT_FOUND: '没有找到这位玩家。请核对完整的邮箱或 8 位玩家编号。',
         POINTS_NOT_ENABLED: '积分功能还没有打开（PLAYER_MODEL_CHOICE_ENABLED），现在不能发放或重置。',
         BUDGET_UNLIMITED: '这个供应商的预算不限额，不需要充值。',
         BUDGET_UNAVAILABLE:
-          '预算服务暂时没有回应，充值结果未确认。请刷新核对剩余额度后再试（同一次点击不会重复充值）。',
+          '预算服务暂时没有回应，充值结果未确认。请重新打开本页核对剩余额度后再试（同一次点击不会重复充值）。',
         SYSTEM_UNAVAILABLE: '这个环境没有提供这项系统功能。',
         STATS_UNAVAILABLE: '这个站点的数据库还没有升级到统计功能（迁移 128）。',
-        IDEMPOTENCY_CONFLICT: '这次提交与之前的同一请求内容不一致，请刷新后重试。',
+        IDEMPOTENCY_CONFLICT: '这次提交与之前的同一请求内容不一致，请重新打开本页后重试。',
         INVALID_REQUEST: '填写的内容不符合要求（每条点数 1–200，语音加点 0–20，均为整数）。',
-        ADMIN_PERMISSIONS_CONFLICT: '权限已被另一页面修改。请刷新权限列表，核对后再保存；本次未覆盖新权限。',
+        ADMIN_PERMISSIONS_CONFLICT: '权限已被另一页面修改。请重新打开本页核对后再保存；本次未覆盖新权限。',
         ADMIN_LOGIN_INVALID: '邮箱或密码不正确。',
         ADMIN_INVALID_GRANT: '凭据已使用、已过期或已撤销，请联系主管理员。',
         ADMIN_UNAUTHORIZED: '登录已过期，请重新登录。',
@@ -124,12 +124,12 @@ export function adminAccountError(error: unknown) {
         ADMIN_CODE_INVALID: '验证码无效或已过期，请核对最新一封邮件；连续错误后需重新申请。',
         ADMIN_EMAIL_UNAVAILABLE: '邮件服务尚未就绪。你仍可使用一次性凭据登录和管理。',
         ADMIN_EMAIL_UNAVAILABLE_FOR_BINDING: '无法绑定此邮箱，请使用其他邮箱或联系主管理员。',
-        ADMIN_EMAIL_ALREADY_BOUND: '此账号已绑定邮箱，请刷新查看。',
+        ADMIN_EMAIL_ALREADY_BOUND: '此账号已绑定邮箱，请重新打开本页查看。',
         RATE_LIMITED: '操作太频繁，请稍后再试。',
         ACCESS_REQUIRED: '需要先通过 Cloudflare Access 验证身份。',
         ORIGIN_INVALID: '请从管理页面操作，不要直接打开接口地址。',
       } as Record<string, string>
-    )[code] ?? '操作结果未确认。请刷新核对当前状态，不要重复提交发码请求。'
+    )[code] ?? '操作结果未确认。请重新打开本页核对当前状态，不要重复提交发码请求。'
   );
 }
 
@@ -156,7 +156,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <nav class="admin-sidebar admin-nav" aria-label="管理页面" hidden>
       <div class="admin-side-brand">${wordmarkSvg({ size: 30, weight: 2, logo: true, className: 'hand admin-hand' })}<span class="admin-tag">ADMIN</span><span class="admin-env" id="admin-env"></span></div>
       <div class="admin-nav-groups">${navMarkup()}</div>
-      <button type="button" class="admin-nav-collapse" id="admin-nav-collapse" aria-pressed="false" title="收起或展开导航"><span aria-hidden="true">«</span><span class="admin-nav-collapse-text">收起导航</span></button>
     </nav>
     <div class="admin-content" tabindex="-1">
     <section class="admin-access-notice" id="admin-access" role="alert" hidden><p>需要先通过 Cloudflare Access 验证身份。</p>
@@ -188,11 +187,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="invites" hidden><p id="admin-no-permissions" hidden>当前账号没有“邀请与额度”权限，请联系主管理员开通。</p><div id="admin-invites"></div></section>
     <section data-panel="characters" hidden><div id="admin-characters"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
-    <section data-panel="members" hidden><h2>管理员权限</h2><p>调整功能权限不退出对方账号，也不影响玩家会话或存档。</p>
-      <details class="admin-new-member"><summary>添加管理员 · 签发一次性登录凭据</summary><form id="admin-member-issue"><label for="admin-member-label">管理员备注（便于识别，不是职位）</label><input id="admin-member-label" maxlength="80" required>
-        <p>按功能区勾选需要的权限（也可先套用快速设置），再签发一次性登录凭据。使用凭据后立即获得所选权限；邮箱绑定可稍后完成。</p><div id="admin-new-permissions"></div>
-        <button type="submit">签发管理员一次性凭据</button></form></details>
-      <button class="admin-back" id="admin-members-refresh" type="button">刷新权限列表</button><div id="admin-members-list"></div>
+    <section data-panel="members" hidden><h2>管理员与权限</h2>
+      <div class="members-layout"><div class="members-side"><form id="admin-member-issue"><label for="admin-member-label">管理员备注</label><input id="admin-member-label" maxlength="80" required>
+        <div id="admin-new-permissions"></div>
+        <button type="submit">签发管理员一次性凭据</button></form></div>
+      <div id="admin-members-list" class="members-list"></div></div>
     </section>
     <section data-panel="preview" hidden><div id="admin-preview" class="admin-fill"></div></section>
     <section data-panel="overview" hidden><div id="admin-overview"></div></section>
@@ -204,11 +203,23 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="models" hidden><div id="admin-models"></div></section>
     </div>
     </div>
-    <p class="invite-admin-status admin-statusbar" role="status" aria-live="polite">正在检查登录状态…</p>
+    <p class="invite-admin-status admin-statusbar sr-only" role="status" aria-live="polite"></p>
   </main>`;
   const q = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   const value = (id: string) => q<HTMLInputElement>(`#${id}`).value;
-  const status = q<HTMLElement>('.invite-admin-status');
+  const statusLine = q<HTMLElement>('.invite-admin-status');
+  // Feedback appears where it happened, one message at a time (the toast), and stays readable by a screen reader in the live
+  // region; there is no status bar. Messages that only say "fine" are not shown at all.
+  let toastSink: ((text: string, tone: 'info' | 'danger') => void) | null = null;
+  const status = {
+    get textContent() {
+      return statusLine.textContent ?? '';
+    },
+    set textContent(text: string) {
+      statusLine.textContent = text;
+      if (text) toastSink?.(text, 'info');
+    },
+  };
   const accessNotice = q<HTMLElement>('#admin-access');
   // The browser has no Cloudflare Access cookie yet: the notice carries its own text, so the status line stays empty.
   q<HTMLButtonElement>('#admin-access-enter').addEventListener('click', () =>
@@ -217,7 +228,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const report = (error: unknown) => {
     const needsAccess = error instanceof InviteLocalApiError && error.code === 'ACCESS_REQUIRED';
     accessNotice.hidden = !needsAccess;
-    status.textContent = needsAccess ? '' : adminAccountError(error);
+    statusLine.textContent = needsAccess ? '' : adminAccountError(error);
+    if (!needsAccess) toastSink?.(statusLine.textContent, 'danger');
   };
   let session: AccountAdminSession | null = null,
     page: AdminPage | 'login' | 'token' | 'reset' = 'login',
@@ -228,6 +240,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     resetId: string | null = null,
     memberUnknown = false;
   const cleanups: Array<() => void> = [];
+  // The administrator whose permission grid is open (a click on a name); the first one until another is picked.
+  let chosenMember: string | null = null;
+  let membersResult: Awaited<ReturnType<Port['members']>> | null = null;
   const can = (permission: InviteAdminPermission) =>
     session?.member.role === 'owner' || (!!session && hasInvitePermission(session.member.permissions, permission));
   const access = (): NavAccess => ({
@@ -277,12 +292,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   let newPermissions: ReturnType<typeof permissionControls> | null = null;
   // Opening a page loads its list and then the role in the address; the workbench's own "view changed" reports are muted meanwhile.
   let quiet = 0;
-  let navCollapsed = false;
-  try {
-    navCollapsed = localStorage.getItem('fakebubble.admin.nav') === 'collapsed';
-  } catch {
-    /* A per-viewer convenience only; the page works without it. */
-  }
   const canPreview = (characterId: string) =>
     session?.member.role === 'owner' ||
     (!!session &&
@@ -358,8 +367,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     else q<HTMLElement>('main').setAttribute('data-access', '');
     workbench?.update(busy);
     previewBench?.update(busy);
-    q<HTMLElement>('main').setAttribute('data-nav', navCollapsed ? 'collapsed' : 'expanded');
-    q<HTMLElement>('#admin-nav-collapse').setAttribute('aria-pressed', String(navCollapsed));
     for (const nav of root.querySelectorAll<HTMLElement>('.admin-nav [data-page]')) {
       if (nav.dataset.page === page) nav.setAttribute('aria-current', 'page');
       else nav.removeAttribute('aria-current');
@@ -525,7 +532,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     page = landing.page;
     routeId = landing.id;
     address.replace(landing);
-    status.textContent = '已登录。';
     const load = loader();
     if (load) await load();
   };
@@ -609,19 +615,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       })
     : null;
   const toasts = toastHost(q('main'));
+  toastSink = (text, tone) => void toasts.show(text, tone);
   const unavailable = () => Promise.reject(new Error('ADMIN_SYSTEM_UNAVAILABLE'));
   const overview = overviewView(q('#admin-overview'), {
     load: () => (port.overview ? port.overview() : unavailable()),
-    links: () =>
-      navTree()
-        .flatMap((group) => group.items)
-        .filter((item) => item.page !== 'overview' && canSeePage(item.page, access()))
-        .map((item) => ({ page: item.page, label: item.label })),
-    go: (target) => {
-      if (busy || disposed || !navigate(target)) return;
-      const load = loader();
-      if (load) void run(load);
-    },
     run,
     disposed: () => disposed,
     chart: port.chart
@@ -658,6 +655,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const points = pointsView(q('#admin-points'), {
     preview: (to, amount) => (port.pointsPreview ? port.pointsPreview(to, amount) : unavailable()),
     grant: (input) => (port.pointsGrant ? port.pointsGrant(input) : unavailable()),
+    errorText: adminAccountError,
     resetPreview: () => (port.resetPreview ? port.resetPreview() : unavailable()),
     reset: (requestId) => (port.resetPoints ? port.resetPoints(requestId) : unavailable()),
     isOwner: () => session?.member.role === 'owner',
@@ -701,6 +699,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   });
   const clearMemberControls = () => {
     q('#admin-members-list').replaceChildren();
+    membersResult = null;
+    chosenMember = null;
     q('#admin-new-permissions').replaceChildren();
     newPermissions = null;
   };
@@ -734,23 +734,33 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     }
     session = current;
   };
-  const loadMembers = async () => {
-    const result = await port.members();
-    if (disposed) return;
-    const selected = newPermissions?.value() ?? [];
-    q('#admin-new-permissions').replaceChildren();
-    newPermissions = permissionControls(q('#admin-new-permissions'), selected);
+  const paintMembers = () => {
+    const result = membersResult;
+    if (!result) return;
     const list = q<HTMLElement>('#admin-members-list');
     list.replaceChildren();
+    const chosen =
+      result.members.find((m) => m.id === chosenMember)?.id ??
+      (result.members.find((m) => m.role !== 'owner') ?? result.members[0])?.id ??
+      null;
     for (const member of result.members) {
-      const item = document.createElement('details');
+      const item = document.createElement('div');
       item.className = 'admin-member';
-      const heading = document.createElement('summary');
-      heading.textContent = `${member.label} · ${member.role === 'owner' ? '主管理员' : `已分配 ${member.permissions.length} 项授权`}`;
+      const heading = document.createElement('button');
+      heading.type = 'button';
+      heading.className = 'admin-member-head';
+      heading.setAttribute('aria-expanded', String(member.id === chosen));
+      heading.textContent = `${member.label} · ${member.role === 'owner' ? '主管理员' : `已分配 ${member.permissions.length} 项授权`}${member.email ? ` · ${member.email}` : ''}`;
+      heading.addEventListener('click', () => {
+        if (chosenMember === member.id) return;
+        chosenMember = member.id;
+        paintMembers();
+      });
       item.append(heading);
-      const detail = document.createElement('p');
-      detail.textContent = member.email ?? '尚未绑定邮箱';
-      item.append(detail);
+      if (member.id !== chosen) {
+        list.append(item);
+        continue;
+      }
       if (member.role === 'owner') {
         const owner = document.createElement('p');
         owner.textContent = '主管理员保留所有功能权限，不能在此撤权。';
@@ -805,12 +815,19 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
           void run(async () => {
             reissueUnknown.add(member.id);
             reissue.dataset.locked = 'true';
-            const result = await port.issueMember({
-              requestId: crypto.randomUUID(),
-              label: member.label,
-              memberId: member.id,
-              permissions: member.permissions,
-            });
+            let result: Awaited<ReturnType<typeof port.issueMember>>;
+            try {
+              result = await port.issueMember({
+                requestId: crypto.randomUUID(),
+                label: member.label,
+                memberId: member.id,
+                permissions: member.permissions,
+              });
+            } catch (error) {
+              // An unconfirmed issue is shown at once (the button stays locked) instead of waiting for a reload.
+              paintMembers();
+              throw error;
+            }
             reissueUnknown.delete(member.id);
             showSecret('管理员一次性登录凭据 · 权限保持原样', result.token);
             await loadMembers();
@@ -837,6 +854,15 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       list.append(item);
     }
   };
+  const loadMembers = async () => {
+    const result = await port.members();
+    if (disposed) return;
+    const selected = newPermissions?.value() ?? [];
+    q('#admin-new-permissions').replaceChildren();
+    newPermissions = permissionControls(q('#admin-new-permissions'), selected);
+    membersResult = result;
+    paintMembers();
+  };
   for (const button of root.querySelectorAll<HTMLElement>('[data-page]'))
     listen(button, 'click', (event) => {
       const click = event as MouseEvent;
@@ -851,15 +877,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       if (load) void run(load);
     });
   listen(q('#admin-account-toggle'), 'click', toggleMenu);
-  listen(q('#admin-nav-collapse'), 'click', () => {
-    navCollapsed = !navCollapsed;
-    try {
-      localStorage.setItem('fakebubble.admin.nav', navCollapsed ? 'collapsed' : 'expanded');
-    } catch {
-      /* Not remembered; still collapsed for this visit. */
-    }
-    render();
-  });
   const onWindowClick = (event: Event) => {
     const menu = q<HTMLElement>('#admin-account-menu');
     if (menu.hidden || q<HTMLElement>('.admin-account').contains?.(event.target as Node)) return;
@@ -958,9 +975,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       throw error;
     }
   });
-  listen(q('#admin-members-refresh'), 'click', () => {
-    void run(loadMembers);
-  });
   listen(q('#admin-secret-close'), 'click', clearSecrets);
   listen(q('#admin-logout'), 'click', () => {
     void run(async () => {
@@ -996,6 +1010,17 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       }
     });
   };
+  // 总览 and 系统状态 reload by themselves every 60 s while the tab is visible and nothing else is running.
+  const tick = setInterval(() => {
+    if (!session || busy || disposed || (page !== 'overview' && page !== 'system')) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    // Never under the administrator's hands: not while a field has focus (the repaint would take it away).
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName ?? '')) return;
+    // A quiet reload: the controls are not disabled for it, and a failure is simply tried again a minute later.
+    void loader()?.().catch(() => {});
+  }, 60_000);
+  (tick as { unref?: () => void }).unref?.();
+  cleanups.push(() => clearInterval(tick));
   window.addEventListener('focus', refresh);
   cleanups.push(() => window.removeEventListener('focus', refresh));
   q<HTMLElement>('#admin-env').textContent = environmentLabel(window.location?.hostname);

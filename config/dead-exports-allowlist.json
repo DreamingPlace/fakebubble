@@ -74,6 +74,11 @@
       "file": "packages/contracts/web-provider.ts",
       "names": ["syntheticProviderBootstrap"],
       "reason": "Test seam: the synthetic bootstrap every player-web component test builds on."
+    },
+    {
+      "file": "apps/player-web/src/features/admin/invite-tiers-view.ts",
+      "names": ["codesCsv"],
+      "reason": "Part 24b-1 fix: the page no longer builds a CSV of the codes shown at creation (the server's 导出表格 does); the pinned 'CSV holds codes only' test still covers the helper."
     }
   ]
 }

@@ -226,9 +226,7 @@ try {
     'from the start day: 18 days and the totals',
   );
   await shot(stats, 'player-stats-30-days', true);
-  await stats.getByRole('tab', { name: '按角色' }).click();
   await shot(stats, 'player-stats-by-character');
-  await stats.getByRole('tab', { name: '按模型' }).click();
   await shot(stats, 'player-stats-by-model');
   const body = await stats.locator('body').innerText();
   for (const id of CHARACTERS) assert.equal(body.includes(id), false, `no character id on the page: ${id}`);

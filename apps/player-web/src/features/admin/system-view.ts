@@ -53,7 +53,6 @@ export function systemView(
   };
   const sections = h('div', { class: 'system-sections' });
   const result = h('div', { class: 'system-result', attrs: { role: 'status' } });
-  const reload = h('button', { class: 'admin-secondary sys-reload', text: '刷新', attrs: { type: 'button' } });
   const metricsHost = h('div', { class: 'system-metrics' });
   const metrics = opsView(metricsHost, {
     title: '技术指标',
@@ -71,7 +70,6 @@ export function systemView(
     h('div', { class: 'page-head' }, h('div', {}, h('h2', { text: '系统状态' })), overall),
     sections,
     result,
-    h('div', { class: 'models-actions' }, reload),
   );
   /** Sections laid out in a row: `top` is the three-up row with the version card, `pair` two side by side, `wide` one full row. */
   const row = (kind: 'top' | 'pair' | 'wide', ...children: (Node | null)[]) =>
@@ -345,7 +343,6 @@ export function systemView(
     view = next;
     paint(next);
   }
-  reload.addEventListener('click', () => void deps.run(refresh));
   return {
     load: refresh,
     clear() {

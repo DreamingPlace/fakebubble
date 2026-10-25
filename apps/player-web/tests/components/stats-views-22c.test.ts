@@ -112,14 +112,17 @@ test('玩家统计: 按角色 shows the display name, 按模型 names a reply wi
     ['xai', '5', '0', '0', '4'],
     ['未选择模型', '2', '1', '0', '2'],
   ]);
-  const tabs = (f.root as unknown as FakeElement).querySelectorAll('[role="tab"]');
+  // Named exception (Part 24b-1 fix): no tabs - 按天 on top, 按角色 and 按模型 side by side under it, all on the page at once.
+  assert.equal((f.root as unknown as FakeElement).querySelectorAll('[role="tab"]').length, 0);
   assert.deepEqual(
-    tabs.map((tab) => tab.textContent),
+    (f.root as unknown as FakeElement).querySelectorAll('.stat-detail h3').map((h) => h.textContent),
     ['按天', '按角色', '按模型'],
   );
-  tabs[1]!.click();
-  assert.equal(tabs[1]!.getAttribute('aria-selected'), 'true');
-  assert.equal(tabs[0]!.getAttribute('aria-selected'), 'false');
+  assert.equal(
+    (f.root as unknown as FakeElement).querySelector('.stat-pair')!.querySelectorAll('.stat-detail').length,
+    2,
+  );
+  assert.ok(!(f.root as unknown as FakeElement).querySelectorAll('button').some((b) => b.textContent === '刷新'));
   // Named exception (Part 24b-1): the range is a pill switch (最近 7 / 30 / 90 天), not a select.
   const range = (f.root as unknown as FakeElement).querySelectorAll('[aria-label="时间范围"] button');
   assert.deepEqual(
@@ -250,8 +253,6 @@ test('概览: yesterday and this month in RMB for stats.read, nothing for anyone
           warnings: { priceExpiring: 0, retentionFailing: 0, unknownNew: 0 },
           stats,
         }) as never,
-      links: () => [],
-      go: () => {},
       run: async (work) => {
         await work();
       },

@@ -303,7 +303,7 @@ test('系统状态: an unreachable budget Worker and a missing source are said p
   assert.ok(text.includes('没有提供清理状态'));
 });
 
-function mountPoints(t: test.TestContext, o: { owner?: boolean; granted?: number } = {}) {
+function mountPoints(t: test.TestContext, o: { owner?: boolean; granted?: number; live?: boolean } = {}) {
   const doc = installFakeDom(t);
   const root = doc.createElement('div') as unknown as HTMLElement;
   const node = root as unknown as FakeElement;
@@ -361,6 +361,8 @@ function mountPoints(t: test.TestContext, o: { owner?: boolean; granted?: number
     toast: () => {},
     newRequestId: () => `request-${++ids}`,
     disposed: () => false,
+    // Part 24b-1 fix: the live count waits for a pause in typing; tests that do not look at it keep it out of the way.
+    debounceMs: o.live ? 0 : 3_600_000,
   });
   const set = (id: string, value: string) => {
     const el = node.querySelector(id) as FakeElement;
@@ -396,12 +398,13 @@ test('积分发放: the dialog shows the number of players and the total points,
 });
 
 test('积分发放 by email: sent in full, never shown back; the answer is 玩家编号, tier and balance only', async (t) => {
-  const f = mountPoints(t);
+  const f = mountPoints(t, { live: true });
   await f.api.load();
   f.pick('email');
   f.set('#points-email', 'player@example.com');
   f.set('#points-amount', '15');
-  (f.node.querySelector('#points-lookup') as FakeElement).click();
+  // Named exception (Part 24b-1 fix): 核对 is gone; the same answer appears by itself while the inputs change (debounced, here 0 ms).
+  await f.tick();
   await f.tick();
   const shown = f.node.textContent;
   assert.ok(shown.includes('玩家编号 A1B2C3D4 · 注册玩家 · 余额 40 点'));
@@ -476,21 +479,15 @@ test('重置全部额度: owner only; the dialog shows accounts, total points an
   assert.deepEqual(f.calls, [['reset-preview'], ['reset', 'request-1']]);
 });
 
-test('概览: today in UTC, the warnings in one line, and a link to every section', async (t) => {
+test('概览: today in UTC and the warnings in one line (no row of section links: the navigation has them)', async (t) => {
   const doc = installFakeDom(t);
   const root = doc.createElement('div') as unknown as HTMLElement;
-  const went: string[] = [];
   const api = overviewView(root, {
     load: async () => ({
       day: '2026-10-22',
       today: { replies: 12, voiceReplies: 9, failedReplies: 1, spendMicros: 2_500_000 },
       warnings: { priceExpiring: 2, retentionFailing: 0, unknownNew: 1 },
     }),
-    links: () => [
-      { page: 'characters', label: '角色资料' },
-      { page: 'points', label: '积分发放' },
-    ],
-    go: (page) => went.push(page),
     run: async (work) => {
       await work();
     },
@@ -501,13 +498,8 @@ test('概览: today in UTC, the warnings in one line, and a link to every sectio
   for (const wanted of ['12', '9', '$2.50', '2026-10-22', '2 项价格即将到期', '近 24 小时新增 1 个 UNKNOWN 调用'])
     assert.ok(text.includes(wanted), wanted);
   assert.ok(!text.includes('清理失败'), 'only the warnings that apply');
-  const links = (root as unknown as FakeElement).querySelectorAll('.overview-links a');
-  assert.deepEqual(
-    links.map((a) => a.textContent),
-    ['角色资料', '积分发放'],
-  );
-  links[1]!.dispatch('click');
-  assert.deepEqual(went, ['points']);
+  // Named exception (Part 24b-1 fix): the row of links under the chart repeated the navigation and is gone.
+  assert.equal((root as unknown as FakeElement).querySelectorAll('.overview-links a').length, 0);
   assert.equal(warningLine({ priceExpiring: 0, retentionFailing: 0, unknownNew: 0 }), null);
   assert.equal(warningLine({ priceExpiring: 0, retentionFailing: 3, unknownNew: 0 }), '3 位玩家的清理失败');
 });

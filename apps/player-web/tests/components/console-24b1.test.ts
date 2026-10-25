@@ -248,8 +248,6 @@ function mountOverview(t: test.TestContext, o: { chart?: boolean; available?: bo
       warnings: { priceExpiring: 0, retentionFailing: 0, unknownNew: 0 },
       stats: null,
     }),
-    links: () => [],
-    go: () => {},
     run: async (work) => {
       await work();
     },
@@ -460,8 +458,9 @@ test('24b-1 邀请与额度: right after creating, every code opens with its own
   const f = mountInvites(t);
   await f.view.load();
   await f.create('朋友第二批', false);
-  // The new batch's detail is open at once, with the notice.
-  assert.match(text(one(f.root, '.tiers-fresh')), /已生成 3 个邀请码。每个都能单独复制/);
+  // The new batch is selected at once (no notice, no separate box).
+  assert.equal(all(f.root, '.tiers-fresh').length, 0);
+  assert.equal(one(f.root, 'tr[data-batch="b2"]').getAttribute('aria-selected'), 'true');
   const rows = all(f.root, '.tiers-codes-table tbody tr');
   assert.equal(rows.length, 3);
   const buttons = rows.map((r) => r.querySelector('.tiers-copy')!);
@@ -796,4 +795,117 @@ test('24b-1 系统状态: the build, the migration steps with matches, and the d
   await warn.api.load();
   assert.match(text(one(warn.root, '.sys-overall')), /需要留意.*2 项价格即将到期/);
   assert.match(text(one(f.root, '.sys-overall')), /全部正常/);
+});
+
+// ---- the console fix: nothing hidden behind a button, no 刷新, no status line ------------------------------------------------
+
+test('24b-1 fix: the pages have no 刷新 button and no explanatory lines under their titles', async (t) => {
+  const over = mountOverview(t);
+  await over.api.load();
+  const costs = mountCosts(t, spend());
+  await costs.api.load();
+  const system = mountSystem(t, status());
+  await system.api.load();
+  for (const root of [over.root, costs.root, system.root])
+    assert.ok(!all(root, 'button').some((b) => b.textContent === '刷新'), 'no 刷新');
+  // 技术指标: the range is segmented buttons, there is no dropdown and no paragraph.
+  assert.deepEqual(
+    all(system.root, '.system-metrics [aria-label="范围"] button').map((b) => b.textContent),
+    ['7天', '14天', '31天'],
+  );
+  assert.equal(all(system.root, '.system-metrics select').length, 0);
+  assert.equal(all(system.root, '.system-metrics .admin-hint').length, 0);
+  // 总览: no row of links under the chart; 消耗表: 按天明细 is shown, not folded.
+  assert.equal(all(over.root, '.overview-links').length, 0);
+  assert.equal(all(costs.root, 'details').length, 0);
+  assert.equal(one(costs.root, '.cost-dated').hidden, false);
+  assert.ok(all(costs.root, '.cost-dated table').length >= 2);
+});
+
+test('24b-1 fix: the sources of the page are the pages themselves - no status bar, no collapse control in the shell', () => {
+  const page = readFileSync(new URL('../../src/features/admin/account-admin-page.ts', import.meta.url), 'utf8');
+  for (const gone of ['刷新权限列表', '收起导航', 'admin-nav-collapse', '正在检查登录状态'])
+    assert.ok(!page.includes(gone), gone);
+  assert.match(
+    page,
+    /invite-admin-status admin-statusbar sr-only/,
+    'the line only survives as a live region for screen readers',
+  );
+});
+
+test('24b-1 fix: 邀请与额度 shows the form and the list side by side; a click on a row selects the batch', async (t) => {
+  const f = mountInvites(t);
+  await f.view.load();
+  assert.equal(all(f.root, '.tiers-layout .tiers-side #admin-tiers-create').length, 1, 'the form is always there');
+  assert.equal(all(f.root, '.tiers-layout .tiers-main .tiers-table').length, 1);
+  const labels = all(f.root, 'button').map((b) => b.textContent);
+  for (const gone of ['新建批次', '取消', '查看', '收起', '刷新']) assert.ok(!labels.includes(gone), gone);
+  assert.ok(labels.includes('撤销整批'), 'a real action stays on the row');
+  assert.equal(one(f.root, '.tiers-detail').hidden, true);
+  one(f.root, 'tr[data-batch="b1"]').click();
+  await flush();
+  assert.equal(one(f.root, '.tiers-detail').hidden, false);
+  assert.equal(one(f.root, 'tr[data-batch="b1"]').getAttribute('aria-selected'), 'true');
+  // A click on a button inside the row does not select it (撤销整批 asks first).
+});
+
+test('24b-1 fix: 积分发放 counts the players by itself while the inputs change; one 发放 button', async (t) => {
+  const { pointsView } = await import('../../src/features/admin/points-view.ts');
+  const doc = installFakeDom(t);
+  const root = doc.createElement('div') as unknown as HTMLElement;
+  const asked: [string, number][] = [];
+  const api = pointsView(root, {
+    preview: async (target, amount) => {
+      asked.push([target.kind, amount]);
+      return {
+        amount,
+        players: 9,
+        granted: 7,
+        totalPoints: 7 * amount,
+        skipped: { guests: 2, unlimited: 0, atCap: 0 },
+        duplicate: false,
+      };
+    },
+    grant: async () => {
+      throw new Error('not here');
+    },
+    resetPreview: async () => {
+      throw new Error('not here');
+    },
+    reset: async () => {
+      throw new Error('not here');
+    },
+    isOwner: () => true,
+    run: async (work) => {
+      await work();
+    },
+    confirm: async () => true,
+    toast: () => {},
+    newRequestId: () => 'r',
+    disposed: () => false,
+    debounceMs: 0,
+  });
+  await api.load();
+  const labels = all(root, 'button').map((b) => b.textContent);
+  assert.ok(!labels.includes('核对'));
+  assert.equal(labels.filter((l) => l === '发放').length, 1);
+  assert.ok(labels.includes('重置全部额度'), 'the owner has the reset in its own panel');
+  const amount = one(root, '#points-amount') as FakeElement;
+  amount.value = '20';
+  amount.dispatch('input');
+  await flush();
+  await flush();
+  assert.deepEqual(asked, [['all', 20]]);
+  assert.match(text(one(root, '.points-live')), /将发给 7 位玩家，共 140 点/);
+  amount.value = '30';
+  amount.dispatch('input');
+  await flush();
+  await flush();
+  assert.match(text(one(root, '.points-live')), /共 210 点/);
+  // Invalid input asks nothing and shows nothing.
+  amount.value = '0';
+  amount.dispatch('input');
+  await flush();
+  assert.equal(asked.length, 2);
+  assert.equal(text(one(root, '.points-live')), '');
 });

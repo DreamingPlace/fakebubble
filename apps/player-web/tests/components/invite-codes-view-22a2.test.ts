@@ -70,10 +70,8 @@ function mount(t: test.TestContext, rows: InviteBatchCode[], o: { copyFails?: bo
   const tick = () => new Promise((r) => setTimeout(r, 0));
   const open = async () => {
     await view.load();
-    node
-      .querySelectorAll('button')
-      .find((b) => b.textContent === '查看')!
-      .click();
+    // Named exception (Part 24b-1 fix): 查看 is gone; a click on the batch's row selects it and shows its codes.
+    node.querySelector('tr[data-batch]')!.click();
     await tick();
   };
   return { node, copied, toasts, downloads, exports, open, tick };
@@ -103,7 +101,9 @@ test('a plain code is shown with its own 复制 button that copies exactly that 
   copyButtons[1]!.click();
   await f.tick();
   assert.deepEqual(f.copied, [other]);
-  assert.deepEqual(f.toasts, ['已复制']);
+  // Named exception (Part 24b-1 fix): no toast where the button shows its own state (复制 -> 已复制).
+  assert.deepEqual(f.toasts, []);
+  assert.equal(copyButtons[1]!.textContent, '已复制');
 });
 
 test('a masked code shows ******** and has no 复制 button; the page says why; the code is not in the page at all', async (t) => {
@@ -187,19 +187,33 @@ test('a refused clipboard is told, not silent', async (t) => {
   assert.match(f.toasts.at(-1)!, /复制没有成功/);
 });
 
-test('the create result keeps the codes on screen with 复制 and 下载 CSV, and says they can be viewed again', async (t) => {
+// Named exception (Part 24b-1 fix): the separate text box with 复制 / 下载 CSV / 已保存，清除显示 is gone. The new batch is selected
+// at once and its codes table carries one 复制全部未使用 and one 导出表格, with a 复制 on every code.
+test('the create result selects the new batch: every code has its own 复制, one 复制全部未使用 copies them in order', async (t) => {
   const doc = installFakeDom(t);
   const root = doc.createElement('div') as unknown as HTMLElement;
   const node = root as unknown as FakeElement;
   const copied: string[] = [];
+  const made = [0, 1].map((i) => `${i}`.repeat(43));
+  let created = false;
   const view = inviteTiersView(root, {
     port: {
-      inviteBatches: async () => [],
-      createInviteBatch: async (input) => ({
-        batchId: 'b9',
-        duplicate: false,
-        codes: Array.from({ length: input.count }, (_, i) => `${i}`.repeat(43)),
-      }),
+      inviteBatches: async () => (created ? [{ ...batch, id: 'b9', codes: 2 }] : []),
+      inviteBatchDetail: async () =>
+        made.map((code, i) => ({
+          id: `c${i}`,
+          serial: i + 1,
+          state: 'unused' as const,
+          redeemedAt: null,
+          expiresAt: null,
+          playerNumber: null,
+          codeView: 'plain' as const,
+          code,
+        })),
+      createInviteBatch: async (input) => {
+        created = true;
+        return { batchId: 'b9', duplicate: false, codes: made.slice(0, input.count) };
+      },
     },
     isOwner: () => true,
     run: async (work) => work(),
@@ -215,9 +229,12 @@ test('the create result keeps the codes on screen with 复制 and 下载 CSV, an
   (node.querySelector('#tiers-count') as FakeElement).value = '2';
   (node.querySelector('#admin-tiers-create') as FakeElement).dispatch('submit');
   await new Promise((r) => setTimeout(r, 0));
-  assert.equal((node.querySelector('#tiers-shown') as FakeElement).hidden, false);
-  assert.match(node.querySelector('#tiers-shown')!.textContent, /之后可在批次的“查看”里再次查看/);
-  (node.querySelector('#tiers-copy') as FakeElement).click();
+  assert.equal(node.querySelector('#tiers-shown'), null, 'no separate box of codes');
+  assert.equal(node.querySelectorAll('.tiers-codes-table tbody tr .tiers-copy').length, 2);
+  node
+    .querySelectorAll('button')
+    .find((b) => b.textContent === '复制全部未使用')!
+    .click();
   await new Promise((r) => setTimeout(r, 0));
-  assert.deepEqual(copied, [`${'0'.repeat(43)}\n${'1'.repeat(43)}`]);
+  assert.deepEqual(copied, [made.join('\n')]);
 });

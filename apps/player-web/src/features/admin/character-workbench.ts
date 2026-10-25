@@ -145,7 +145,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   const act = (work: () => Promise<void>) => {
     void host.run(async () => {
       if (gone()) return;
-      host.status('处理中…');
+
       await work();
     });
   };
@@ -241,7 +241,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         const next = await host.api.deleteStatus(job.characterId);
         if (gone()) return;
         show(next);
-        host.status('删除进度已更新。');
       },
       true,
     );
@@ -255,10 +254,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     id = null;
     detail = null;
     dirty = false;
-    root.append(
-      el('h2', '角色资料'),
-      el('p', '保存草稿 → 查看改动 → 文字预演／批准成品 → 确认发布。正式角色与玩家聊天不会因保存草稿改变。'),
-    );
+    root.append(el('h2', '角色资料'));
     const tools = el('div');
     tools.className = 'admin-toolbar';
     root.append(tools);
@@ -268,7 +264,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       () => !canCreate(),
       () => openNew(),
     );
-    button(tools, '刷新角色目录', () => false, list, true);
     if (!result.characters.length) root.append(el('p', '当前没有可查看的人物。请由主管理员勾选所需功能类别。'));
     const roles = el('div');
     roles.className = 'character-directory';
@@ -314,7 +309,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       jobs.append(el('p', '最近100条可查看任务。已删除 ID 不能复用；账号、其他人物、额度历史和账务保留。'));
       for (const job of result.deletions) deletionRow(jobs, job);
     }
-    host.status('目录已更新。');
     sync();
     host.onView?.(null);
   }
@@ -326,7 +320,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     id = target;
     detail = next;
     renderDetail();
-    host.status('资料已读取；保存草稿与正式发布是分开的操作。');
+
     host.onView?.(target);
   }
   function openNew() {
@@ -747,7 +741,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         pump(cid);
         paint();
         schedulePoll();
-        host.status('预演状态已更新。');
       },
       true,
     );
@@ -894,7 +887,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         output.append(el('p', '还没有管理工作台创建的素材版本。原已批准音色与欢迎词完全不变时，发布可沿用原成品。'));
       for (const material of items) materialRow(output, snapshot, material);
       sync();
-      host.status('成品版本已读取；只有明确选择文件并点击上传才会传输。');
     }
     reference.addEventListener('input', sync);
   }
@@ -945,7 +937,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
             audio.preload = 'none';
             audio.src = url;
             mount.replaceChildren(audio);
-            host.status('成品已加载，请手动播放试听。');
           },
           true,
         );
@@ -1069,7 +1060,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           option.value = item.materialId;
           material.append(option);
         }
-        host.status('只列出与当前修订/hash匹配的已批准成品。');
       },
       true,
     );

@@ -396,16 +396,17 @@ test('page: 退出登录 and 我的账号 live in the account menu, which opens 
   assert.equal(surface(f), 'account');
 });
 
-test('page: the sidebar collapses to icons and back', async (t) => {
+// Named exception (Part 24b-1 fix): 收起导航 is gone (the console is for a PC screen); the sidebar is always open.
+test('page: the sidebar has no collapse control', async (t) => {
   const f = setup(t, session(['invites.read']));
   await flush();
-  const main = f.root.querySelector('main');
-  assert.equal(main.attributes.get('data-nav'), 'expanded');
-  f.root.querySelector('#admin-nav-collapse').fire();
-  assert.equal(main.attributes.get('data-nav'), 'collapsed');
-  assert.equal(f.root.querySelector('#admin-nav-collapse').attributes.get('aria-pressed'), 'true');
-  f.root.querySelector('#admin-nav-collapse').fire();
-  assert.equal(main.attributes.get('data-nav'), 'expanded');
+  assert.equal(f.root.querySelector('main').attributes.get('data-nav'), undefined);
+  assert.equal(f.root.querySelector('#admin-nav-collapse').dataset.page, undefined);
+  assert.ok(
+    !readFileSync(new URL('../../src/features/admin/account-admin-page.ts', import.meta.url), 'utf8').includes(
+      '收起导航',
+    ),
+  );
 });
 
 test('page: the preview page lists only roles the administrator may preview and opens one into its own pane', async (t) => {

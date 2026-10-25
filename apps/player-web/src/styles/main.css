@@ -5237,6 +5237,372 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   margin: 8px 0 0;
 }
 
+/* ---- the console fix: two columns, nothing folded ---- */
+.account-admin-page.admin-shell .admin-account {
+  bottom: 20px;
+}
+.account-admin-page.admin-shell .admin-sidebar {
+  padding-bottom: 88px;
+}
+.admin-content > section[data-panel] {
+  max-width: 1480px;
+}
+.admin-content > section[data-panel="members"],
+.admin-content > section[data-panel="invites"],
+.admin-content > section[data-panel="account"] {
+  max-width: 1480px;
+}
+.admin-content > section[data-panel="account"] {
+  max-width: 960px;
+}
+.tiers-layout,
+.members-layout,
+.points-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.points-grid {
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+}
+.tiers-side,
+.members-side,
+.points-main,
+.points-grid > .system-section {
+  min-width: 0;
+}
+.account-admin-page.admin-shell .tiers-form {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.tiers-form .tiers-field:first-child {
+  grid-column: auto;
+}
+.tiers-refill {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .tiers-form-actions button {
+  width: 100%;
+}
+.tiers-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0;
+}
+.account-admin-page.admin-shell .tiers-main .admin-table-region {
+  margin: 0;
+  padding: 0 14px 12px;
+  border: 0;
+  border-radius: 0 0 24px 24px;
+  background: #fff;
+}
+.account-admin-page.admin-shell .tiers-table {
+  min-width: 0;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .tiers-table th,
+.account-admin-page.admin-shell .tiers-table td {
+  padding: 9px 8px;
+}
+.tiers-col-name {
+  width: 17%;
+}
+.tiers-col-tier {
+  width: 17%;
+}
+.tiers-col-created {
+  width: 12%;
+}
+.tiers-col-num {
+  width: 8%;
+}
+.tiers-col-actions {
+  width: 190px;
+}
+.account-admin-page.admin-shell .tiers-table tbody tr[data-batch] {
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .tiers-table tbody tr.is-selected {
+  background: #faf8f6;
+  box-shadow: inset 3px 0 0 #141414;
+}
+.account-admin-page.admin-shell .tiers-actions {
+  gap: 6px;
+}
+.account-admin-page.admin-shell .tiers-actions button {
+  width: 84px;
+}
+.account-admin-page.admin-shell .tiers-detail {
+  margin-top: 16px;
+}
+.account-admin-page.admin-shell .tiers-detail-head {
+  align-items: center;
+}
+.account-admin-page.admin-shell .tiers-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+.account-admin-page.admin-shell .tiers-codes-table {
+  min-width: 0;
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .tiers-codes-table th,
+.account-admin-page.admin-shell .tiers-codes-table td {
+  padding: 8px 6px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tiers-dcol-serial {
+  width: 40px;
+}
+.tiers-dcol-code {
+  width: 36%;
+}
+.tiers-dcol-state {
+  width: 64px;
+}
+.tiers-dcol-at {
+  width: 13%;
+}
+.tiers-dcol-player {
+  width: 10%;
+}
+.tiers-dcol-until {
+  width: 13%;
+}
+.tiers-dcol-action {
+  width: 100px;
+}
+.account-admin-page.admin-shell .tiers-code-cell {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .tiers-code-text {
+  flex: 1 1 140px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+}
+.account-admin-page.admin-shell .tiers-copy {
+  width: 64px;
+}
+.account-admin-page.admin-shell .tiers-codes-table td button:not(.tiers-copy) {
+  width: 88px;
+}
+/* 管理员与权限 */
+.account-admin-page.admin-shell .members-side form {
+  display: grid;
+  gap: 12px;
+  max-width: none;
+  margin: 0;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: #fff;
+}
+.members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .admin-member {
+  display: block;
+  margin: 0;
+  padding: 6px;
+  border: 0;
+  border-radius: 24px;
+  background: #fff;
+}
+.account-admin-page.admin-shell .admin-member > :not(.admin-member-head) {
+  margin-left: 14px;
+  margin-right: 14px;
+}
+.account-admin-page.admin-shell .admin-member-head {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 44px;
+  background: transparent;
+  color: #141414;
+  font-size: 14px;
+  text-align: left;
+}
+.account-admin-page.admin-shell .admin-member-head:hover {
+  background: #faf8f6;
+}
+.account-admin-page.admin-shell .admin-member-head[aria-expanded="true"] {
+  background: #f3f0ec;
+}
+.account-admin-page.admin-shell .admin-member > button:not(.admin-member-head) {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+/* 积分发放 */
+.account-admin-page.admin-shell .points-form {
+  max-width: none;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: #fff;
+}
+.account-admin-page.admin-shell .points-grid > .system-section {
+  margin: 0;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: #fff;
+}
+.points-live {
+  min-height: 1.4em;
+  white-space: pre-line;
+  font-size: 14px;
+  font-weight: 700;
+  transition: opacity calc(200ms * var(--ad-motion));
+}
+.points-live:empty {
+  display: none;
+}
+/* 玩家统计: 按角色 and 按模型 side by side */
+.stat-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.stat-pair > .stat-detail {
+  margin: 0;
+}
+.stat-pair .stat-characters {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+.account-admin-page.admin-shell .stat-detail > h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 900;
+}
+.account-admin-page.admin-shell .cost-dated > h3 {
+  margin: 0 0 12px;
+  font-size: 17px;
+  font-weight: 900;
+}
+.ops-bar {
+  margin: 0 0 10px;
+}
+.account-admin-page.admin-shell .models-banner {
+  margin: 0 0 10px;
+  font-weight: 700;
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .models-banner:empty {
+  display: none;
+}
+
+/* ---- fit at 1280: the columns are sized in pixels where the content is short ---- */
+.account-admin-page.admin-shell .admin-content {
+  padding: 28px 24px 40px;
+}
+.tiers-layout,
+.members-layout {
+  grid-template-columns: 290px minmax(0, 1fr);
+}
+.account-admin-page.admin-shell .tiers-main .admin-table-region {
+  padding: 0 12px 10px;
+}
+.tiers-col-name {
+  width: 17%;
+}
+.tiers-col-tier {
+  width: 16%;
+}
+.tiers-col-created {
+  width: 88px;
+}
+.tiers-col-num {
+  width: 48px;
+}
+.tiers-col-actions {
+  width: 176px;
+}
+.account-admin-page.admin-shell .tiers-table th,
+.account-admin-page.admin-shell .tiers-table td {
+  padding: 9px 6px;
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .tiers-table td:nth-child(3) {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .tiers-detail {
+  padding: 18px 16px;
+}
+.tiers-dcol-serial {
+  width: 36px;
+}
+.tiers-dcol-code {
+  width: auto;
+}
+.tiers-dcol-state {
+  width: 64px;
+}
+.tiers-dcol-at,
+.tiers-dcol-until {
+  width: 70px;
+}
+.tiers-dcol-player {
+  width: 76px;
+}
+.tiers-dcol-action {
+  width: 88px;
+}
+.account-admin-page.admin-shell .tiers-code-cell {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.account-admin-page.admin-shell .tiers-code-text {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .tiers-codes-table .admin-badge {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .tiers-codes-table td button:not(.tiers-copy) {
+  width: 76px;
+}
+.account-admin-page.admin-shell .tiers-actions button {
+  width: 80px;
+}
+
+.members-layout {
+  grid-template-columns: 440px minmax(0, 1fr);
+}
+.account-admin-page.admin-shell .points-form fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 22px;
+  border-radius: 20px;
+  border-color: #e4ded7;
+}
+.account-admin-page.admin-shell .points-form fieldset legend {
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .points-form input[type="number"],
+.account-admin-page.admin-shell .points-form input:not([type]),
+.account-admin-page.admin-shell .points-form select {
+  border-radius: 999px;
+}
+
+.account-admin-page.admin-shell .models-actions + h3,
+.account-admin-page.admin-shell .models-recent {
+  margin-top: 20px;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

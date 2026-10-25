@@ -271,10 +271,9 @@ test('one-time login immediately allows management; unavailable email delivery c
   await flush();
   assert.equal(f.creates().length, 1);
   assert.equal(f.logouts(), 0);
-  assert.equal(byId(panel, 'tiers-shown').hidden, false, 'the codes are shown once');
+  // Named exception (Part 24b-1 fix): the separate once-only box of codes (#tiers-shown) is gone; the codes live in the batch's table.
   f.dispose();
   assert.equal(f.root.querySelector('#admin-secret-value').textContent, '');
-  assert.equal(byId(panel, 'tiers-shown').hidden, true);
   assert.equal(
     descendants(panel).some((n) => n.value === 'c'.repeat(43)),
     false,
@@ -394,8 +393,7 @@ test('owner explicitly confirms all-permission removal without logout and does n
   nodes = descendants(f.root.querySelector('#admin-members-list'));
   nodes.find((n) => n.textContent === '为此管理员签发新登录凭据')!.fire();
   await flush();
-  f.root.querySelector('#admin-members-refresh').fire();
-  await flush();
+  // Named exception (Part 24b-1 fix): 刷新权限列表 is gone; the list reloads by itself after every action (the reissue above did).
   const frozen = descendants(f.root.querySelector('#admin-members-list')).find((n) =>
     n.textContent.startsWith('上次签发结果未确认'),
   )!;

@@ -1,7 +1,7 @@
 import type { StageLatencyDay } from '../../services/account-admin-api.ts';
 import { h } from '../cocreation/h.ts';
 import { dataTable } from './ui/data-table.ts';
-import { toolbar } from './ui/toolbar.ts';
+import { segmented } from './ui/segmented.ts';
 
 const ms = (p: { samples: number; p50Ms: number | null; p95Ms: number | null }) =>
   p.samples === 0 ? '—' : `${p.p50Ms}/${p.p95Ms} ms（${p.samples}）`;
@@ -68,34 +68,21 @@ export function opsView(
     emptyText: '还没有运营数据。玩家产生回复后，每日统计会显示在这里。',
     caption: '运营数据',
   });
-  const bar = toolbar({
-    title: deps.title ?? '运营数据',
-    filters: [
-      {
-        kind: 'select',
-        id: 'days',
-        label: '范围',
-        options: [
-          ['14', '最近 14 天'],
-          ['7', '最近 7 天'],
-          ['31', '最近 31 天'],
-        ],
-      },
+  // The range is three buttons; picking one asks again (the server call is the same one 系统状态 makes).
+  const range = segmented(
+    '范围',
+    [
+      { id: '7', label: '7天' },
+      { id: '14', label: '14天' },
+      { id: '31', label: '31天' },
     ],
-    actions: [{ label: '刷新', secondary: true, run: () => void deps.run(() => load()) }],
-    onChange: (values) => {
-      days = Number(values.days) || 14;
+    String(days),
+    (id) => {
+      days = Number(id) || 14;
       void deps.run(() => load());
     },
-  });
-  root.replaceChildren(
-    bar.root,
-    h('p', {
-      class: 'admin-hint',
-      text: '只含数量与耗时，不含玩家内容或身份。p50/p95 按最近排名计算，括号内是样本数。“话题/事实丢弃”是回复正常送出、但话题或事实格式不合法而未存入记忆的次数。',
-    }),
-    table.root,
   );
+  root.replaceChildren(h('div', { class: 'ops-bar' }, range.root), table.root);
   async function load() {
     const rows = await deps.load(days);
     if (!deps.disposed()) table.setRows(rows);

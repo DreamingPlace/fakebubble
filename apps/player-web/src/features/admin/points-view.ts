@@ -55,6 +55,10 @@ export function pointsView(
     toast: (text: string) => void;
     newRequestId: () => string;
     disposed: () => boolean;
+    /** How long typing must pause before the live count asks the server (default 350 ms). */
+    debounceMs?: number;
+    /** The words for a refused or failed count (default: —). */
+    errorText?: (error: unknown) => string;
   },
 ) {
   const pending = new Map<string, string>();
@@ -95,7 +99,7 @@ export function pointsView(
       inputmode: 'email',
       maxlength: '254',
       autocomplete: 'off',
-      placeholder: '完整邮箱地址（不能搜索，也没有列表）',
+      placeholder: '完整邮箱地址',
       'aria-label': '玩家邮箱',
     },
   });
@@ -115,13 +119,8 @@ export function pointsView(
       id: 'points-note',
       maxlength: String(POINTS_GRANT_LIMITS.noteMax),
       autocomplete: 'off',
-      'aria-label': '备注（可选，最多 100 字）',
+      'aria-label': '备注',
     },
-  });
-  const lookup = h('button', {
-    class: 'admin-secondary',
-    text: '核对',
-    attrs: { type: 'button', id: 'points-lookup' },
   });
   const send = h('button', { text: '发放', attrs: { type: 'button', id: 'points-send' } });
   const problem = h('p', { class: 'admin-hint models-problem', attrs: { role: 'alert' }, hidden: true });
@@ -138,6 +137,19 @@ export function pointsView(
     }
     const value = email.value.trim();
     return value.includes('@') ? { kind, email: value } : '请填写完整的邮箱地址。';
+  };
+  /** The first thing wrong with the inputs, or null; touches nothing on the page. */
+  const validate = (): string | null => {
+    const to = target();
+    const points = Number(amount.value);
+    const note_ = note.value.trim();
+    return typeof to === 'string'
+      ? to
+      : !Number.isSafeInteger(points) || points < POINTS_GRANT_LIMITS.min || points > POINTS_GRANT_LIMITS.max
+        ? `点数需要是 ${POINTS_GRANT_LIMITS.min}–${POINTS_GRANT_LIMITS.max} 的整数。`
+        : length(note_) > POINTS_GRANT_LIMITS.noteMax
+          ? `备注最多 ${POINTS_GRANT_LIMITS.noteMax} 个字。`
+          : null;
   };
   const parsed = () => {
     const to = target();
@@ -164,24 +176,45 @@ export function pointsView(
   for (const k of kinds) k.input.addEventListener('change', refreshFields);
   refreshFields();
 
-  const showPreview = (preview: PointsPreview) =>
-    outcome.replaceChildren(
-      h('strong', { text: '核对结果' }),
-      ...(preview.player ? [h('p', { text: lookupLine(preview.player) })] : []),
-      h('p', {
-        text: `将发给 ${preview.granted} 位玩家，共 ${preview.totalPoints} 点。${skippedText(preview.skipped)}。`,
-      }),
-    );
-  lookup.addEventListener(
-    'click',
-    () =>
-      void deps.run(async () => {
-        const input = parsed();
-        if (!input) return;
+  const live = h('div', { class: 'points-live', attrs: { role: 'status' } });
+  const liveText = (preview: PointsPreview) =>
+    [
+      preview.player ? lookupLine(preview.player) : null,
+      `将发给 ${preview.granted} 位玩家，共 ${preview.totalPoints} 点。${skippedText(preview.skipped)}。`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  const showPreview = (preview: PointsPreview) => {
+    live.textContent = liveText(preview);
+  };
+  // The number of players who would receive points follows the inputs (debounced); this is the same server question 发放 asks.
+  let liveTimer: ReturnType<typeof setTimeout> | null = null;
+  let liveSeq = 0;
+  const refreshLive = () => {
+    if (liveTimer !== null) clearTimeout(liveTimer);
+    const seq = ++liveSeq;
+    if (validate() !== null) {
+      live.textContent = '';
+      return;
+    }
+    liveTimer = setTimeout(async () => {
+      liveTimer = null;
+      const input = parsed();
+      if (!input) return;
+      try {
         const preview = await deps.preview(input.to, input.points);
-        if (!deps.disposed()) showPreview(preview);
-      }),
-  );
+        if (seq === liveSeq && !deps.disposed()) showPreview(preview);
+      } catch (error) {
+        if (seq === liveSeq && !deps.disposed()) live.textContent = deps.errorText?.(error) ?? '—';
+      }
+    }, deps.debounceMs ?? 350);
+    (liveTimer as { unref?: () => void }).unref?.();
+  };
+  for (const input of [number, email, amount, note, tier]) {
+    input.addEventListener('input', refreshLive);
+    input.addEventListener('change', refreshLive);
+  }
+  for (const k of kinds) k.input.addEventListener('change', refreshLive);
   send.addEventListener(
     'click',
     () =>
@@ -220,6 +253,7 @@ export function pointsView(
           h('p', { text: `已发给 ${done.granted} 位玩家，共 ${done.totalPoints} 点。${skippedText(done.skipped)}。` }),
         );
         email.value = '';
+        live.textContent = '';
         deps.toast('已发放');
       }),
   );
@@ -256,36 +290,33 @@ export function pointsView(
     resetBox.hidden = !deps.isOwner();
     // Not merely hidden: for anyone but the owner the button does not exist on the page at all.
     if (!deps.isOwner()) return resetBox.replaceChildren();
-    resetBox.replaceChildren(
-      h('h3', { text: '重置全部额度' }),
-      h('p', {
-        class: 'admin-hint',
-        text: '仅主管理员。注册玩家补到 100 点；每日补充的玩家加 7 天的每日额度（不超过上限）；不限量的不动；访客不在内；只补不扣。',
-      }),
-      resetButton,
-      resetOutcome,
-    );
+    resetBox.replaceChildren(h('h3', { text: '重置全部额度' }), resetButton, resetOutcome);
   };
 
   root.replaceChildren(
     h('h2', { text: '积分发放' }),
-    h('p', {
-      class: 'admin-hint',
-      text: '给玩家发点数。玩家在“消费记录”里看到“管理员发放”。每日补充的玩家不会超过自己的上限；不限量的和访客会被跳过。',
-    }),
     h(
-      'form',
-      { class: 'points-form', attrs: { id: 'points-form', autocomplete: 'off' } },
-      h('fieldset', {}, h('legend', { text: '发给谁' }), ...kinds.map((k) => k.node), tier, number, email),
-      h('label', { text: '点数（1–10000）', attrs: { for: 'points-amount' } }),
-      amount,
-      h('label', { text: '备注（可选，最多 100 字）', attrs: { for: 'points-note' } }),
-      note,
-      problem,
-      h('div', { class: 'models-actions' }, lookup, send),
+      'div',
+      { class: 'points-grid' },
+      h(
+        'div',
+        { class: 'points-main' },
+        h(
+          'form',
+          { class: 'points-form', attrs: { id: 'points-form', autocomplete: 'off' } },
+          h('fieldset', {}, h('legend', { text: '发给谁' }), ...kinds.map((k) => k.node), tier, number, email),
+          h('label', { text: '点数（1–10000）', attrs: { for: 'points-amount' } }),
+          amount,
+          h('label', { text: '备注', attrs: { for: 'points-note' } }),
+          note,
+          live,
+          problem,
+          h('div', { class: 'models-actions' }, send),
+        ),
+        outcome,
+      ),
+      resetBox,
     ),
-    outcome,
-    resetBox,
   );
   paintReset();
   return {
@@ -297,6 +328,9 @@ export function pointsView(
       number.value = '';
       amount.value = '';
       note.value = '';
+      if (liveTimer !== null) clearTimeout(liveTimer);
+      liveSeq++;
+      live.textContent = '';
       outcome.replaceChildren();
       resetOutcome.replaceChildren();
       problem.hidden = true;

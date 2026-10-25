@@ -128,9 +128,7 @@ export function statsView(
     },
     'm',
   );
-  const refresh = h('button', { class: 'admin-secondary', text: '刷新', attrs: { type: 'button' } });
   const exportButton = h('button', { class: 'admin-secondary', text: '导出表格', attrs: { type: 'button' } });
-  refresh.addEventListener('click', () => void deps.run(() => load()));
   exportButton.addEventListener('click', () => void deps.run(() => exportTable()));
   const since = h('span', { class: 'page-kicker', attrs: { role: 'status' } });
   const kpis = h('div', { class: 'stat-kpis' });
@@ -151,44 +149,21 @@ export function statsView(
     ),
     active.root,
   );
-  const tabSwitch = segmented(
-    '明细视图',
-    TABS.map(({ id, label }) => ({ id, label })),
-    tab,
-    (id) => show(id),
-  );
-  // The tablist semantics the page has always had: every option is also a tab.
-  for (const [id, button] of tabSwitch.buttons) {
-    button.setAttribute('role', 'tab');
-    button.setAttribute('aria-selected', String(id === tab));
-  }
-  const panels: Record<Tab, HTMLElement> = { days: days.root, characters: characterBox, models: models.root };
-  const detailCard = h(
-    'section',
-    { class: 'stat-detail', attrs: { 'aria-label': '明细' } },
-    h('div', { class: 'cost-chart-bar' }, h('h3', { text: '明细' }), tabSwitch.root),
-    days.root,
-    characterBox,
-    models.root,
-  );
-  function show(next: Tab) {
-    tab = next;
-    tabSwitch.set(next);
-    for (const [id, button] of tabSwitch.buttons) button.setAttribute('aria-selected', String(id === tab));
-    for (const id of Object.keys(panels) as Tab[]) panels[id].hidden = id !== tab;
-  }
+  // No tabs: 按天 on top, 按角色 and 按模型 side by side under it.
+  const card = (title: string, ...children: HTMLElement[]) =>
+    h('section', { class: 'stat-detail', attrs: { 'aria-label': title } }, h('h3', { text: title }), ...children);
   root.replaceChildren(
     h(
       'div',
       { class: 'page-head' },
       h('div', {}, since, h('h2', { text: '玩家统计' })),
-      h('div', { class: 'ov-chart-tools' }, rangeSwitch.root, exportButton, refresh),
+      h('div', { class: 'ov-chart-tools' }, rangeSwitch.root, exportButton),
     ),
     kpis,
     activeCard,
-    detailCard,
+    card('按天', days.root),
+    h('div', { class: 'stat-pair' }, card('按角色', characterBox), card('按模型', models.root)),
   );
-  show('days');
 
   const kpi = (label: string, value: string, sub: string) =>
     h(

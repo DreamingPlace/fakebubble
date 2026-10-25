@@ -128,17 +128,11 @@ test('22a the form defaults to 每天补充 50 / 上限 1000 and creates with on
       redeemBy: null,
     },
   ]);
-  assert.equal(f.q('#tiers-shown').hidden, false);
-  assert.equal(f.q('.tiers-codes').value.split('\n').length, 2);
-  f.q('#tiers-download').click();
-  assert.equal(f.downloads.length, 1);
-  assert.equal(f.downloads[0]!.filename, '夏季.csv');
-  assert.match(f.downloads[0]!.text, /^code\r\n/);
-  // Codes only: a header and one code per line, nothing else.
-  assert.equal(f.downloads[0]!.text.trim().split(/\r\n/).length, 3);
-  f.q('#tiers-shown-close').click();
-  assert.equal(f.q('#tiers-shown').hidden, true);
-  assert.equal(f.q('.tiers-codes').value, '');
+  // Named exception (Part 24b-1 fix): the codes are no longer shown once in a text box (复制 / 下载 CSV / 清除显示 are gone):
+  // the new batch is selected and its codes table shows them, each with its own 复制, plus 复制全部未使用 and 导出表格.
+  assert.equal(f.q('#tiers-shown'), null);
+  assert.equal(f.node.querySelectorAll('.tiers-codes-table tbody tr').length, 3, 'its codes table is open');
+  assert.ok(f.find('导出表格'));
   // The new batch is in the list.
   assert.ok(f.node.querySelectorAll('tbody tr').some((tr) => tr.textContent.includes('夏季')));
 });
@@ -252,7 +246,8 @@ test('22a declining the owner’s confirmation changes nothing; a no-op or inval
 test('22a codes by serial with the holder’s 玩家编号; every revoke asks first and does exactly what it says', async (t) => {
   const f = mount(t);
   await f.view.load();
-  f.find('查看').click();
+  // Named exception (Part 24b-1 fix): 查看 is gone; a click on the batch's row shows its codes.
+  f.node.querySelector('tr[data-batch]')!.click();
   await f.tick();
   const rows = f.node.querySelectorAll('.tiers-codes-table tbody tr');
   assert.equal(rows.length, 3);

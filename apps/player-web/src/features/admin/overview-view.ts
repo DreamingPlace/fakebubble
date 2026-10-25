@@ -80,8 +80,6 @@ export function overviewView(
   root: HTMLElement,
   deps: {
     load: () => Promise<OverviewView>;
-    links: () => ReadonlyArray<{ page: string; label: string }>;
-    go: (page: string) => void;
     run: (work: () => Promise<void>) => Promise<void>;
     disposed: () => boolean;
     /** Present for the owner and stats.read: the 22d chart endpoint. Without it the page has no chart card. */
@@ -92,8 +90,6 @@ export function overviewView(
   // Part 22c: yesterday and this month, only for the owner and stats.read (the server sends null to everyone else).
   const yesterday = h('div', { class: 'overview-cards ov-yesterday' });
   const warnings = h('p', { class: 'overview-warnings ov-status', attrs: { role: 'status' } });
-  const links = h('ul', { class: 'overview-links' });
-  const reload = h('button', { class: 'admin-secondary ov-reload', text: '刷新', attrs: { type: 'button' } });
   const day = h('span', { class: 'page-kicker' });
 
   // ---- the chart card ---------------------------------------------------------------------------------------------------
@@ -159,8 +155,6 @@ export function overviewView(
     cards,
     yesterday,
     chartCard,
-    links,
-    h('div', { class: 'models-actions' }, reload),
   );
 
   const card = (label: string, value: string, sub?: string, tone: 'plain' | 'dark' = 'plain') =>
@@ -171,21 +165,6 @@ export function overviewView(
       h('strong', { text: value }),
       sub ? h('span', { class: 'overview-sub', text: sub }) : null,
     );
-  const paintLinks = () => {
-    links.replaceChildren(
-      ...deps.links().map(({ page, label }) => {
-        const anchor = h('a', { text: label, attrs: { href: `#/${page}` } });
-        anchor.addEventListener('click', (event) => {
-          const click = event as MouseEvent;
-          if (click.metaKey || click.ctrlKey || click.shiftKey || click.button === 1) return;
-          event.preventDefault();
-          deps.go(page);
-        });
-        return h('li', {}, anchor);
-      }),
-    );
-  };
-
   const unit = () => METRICS.find((m) => m.id === metric)!.unit;
   const colorOf = (index: number) => CHARACTER_COLORS[index % CHARACTER_COLORS.length]!;
   function entries() {
@@ -348,10 +327,8 @@ export function overviewView(
     const note = warningLine(view.warnings);
     warnings.setAttribute('data-tone', note ? 'warn' : 'ok');
     warnings.replaceChildren(statusBadge(note ? '需要留意' : '正常', note ? 'warn' : 'ok'), ' ', note ?? '');
-    paintLinks();
     await loadChart();
   }
-  reload.addEventListener('click', () => void deps.run(load));
   return {
     load,
     /** The chart's current choices, for tests. */
@@ -362,7 +339,6 @@ export function overviewView(
       cards.replaceChildren();
       yesterday.replaceChildren();
       warnings.replaceChildren();
-      links.replaceChildren();
       data = null;
       legend.replaceChildren();
       tableBox.replaceChildren();
