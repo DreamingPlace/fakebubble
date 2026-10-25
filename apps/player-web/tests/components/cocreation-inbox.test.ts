@@ -621,8 +621,7 @@ test('filters go to the server (character, status, star, text) and the next page
   assert.equal(f.q('.cc-more'), null, 'no 更多 button');
   assert.equal(f.all('select').length, 0, 'no dropdowns');
   const list = f.q('.cc-list')!;
-  list.clientHeight = 500;
-  list.scrollHeight = 500;
+  Object.assign(list, { clientHeight: 500, scrollHeight: 500 });
   list.dispatch('scroll');
   await flush();
   assert.deepEqual(rowIds(f), ['p1', 'p2']);
