@@ -533,6 +533,8 @@ test('submitting: the paid-call confirmation gates every button; a run carries l
       draftRevision: 3,
       profileHash: 'a'.repeat(64),
       relationship: 'friend',
+      // Named exception (Part 24b-2): the 关系与故事 switch is always sent; its default chip is 不用.
+      castSource: 'none',
       label: '改前',
       simulatedTime: '05:50',
       inputs: [
@@ -872,4 +874,33 @@ test('eval-set editor: saves a new version with the expected version, respects w
   write = false;
   lines.dispatch('input');
   assert.equal(byText(root, 'button', '保存（生成新版本）').disabled, true);
+});
+
+test('预演 reads the cast named by the 关系与故事 switch: 不用 / 已发布 / 草稿 reach the run and the single request', async (t) => {
+  const f = setup(t);
+  await f.bench.open('jojo');
+  await flush();
+  const switchLabels = f.root.querySelectorAll('[data-seg]').map((b) => [b.getAttribute('data-seg'), b.textContent]);
+  assert.deepEqual(switchLabels, [
+    ['none', '不用'],
+    ['published', '已发布'],
+    ['draft', '草稿'],
+  ]);
+  const ack = label(f.root, '确认发起真实付费预演');
+  for (const source of ['none', 'published', 'draft'] as const) {
+    (f.root.querySelector(`[data-seg="${source}"]`) as FakeElement).click();
+    assert.equal((f.root.querySelector(`[data-seg="${source}"]`) as FakeElement).getAttribute('aria-pressed'), 'true');
+    ack.checked = true;
+    ack.dispatch('change');
+    label(f.root, '批量输入').type_(`来自${source}`);
+    byText(f.root, 'button', '批量运行').click();
+    await flush();
+    assert.equal((f.api as unknown as { lastRun: { castSource: string } }).lastRun.castSource, source);
+    ack.checked = true;
+    ack.dispatch('change');
+    label(f.root, '单条预演输入').type_('你好');
+    byText(f.root, 'button', '单条预演').click();
+    await flush();
+    assert.equal((f.api as unknown as { lastSingle: { castSource: string } }).lastSingle.castSource, source);
+  }
 });

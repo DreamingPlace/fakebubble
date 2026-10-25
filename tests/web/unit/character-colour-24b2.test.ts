@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { contrastRatio, derivePalette, parseColour } from '../../../apps/player-web/src/features/brand/character-colour.ts';
+import {
+  contrastRatio,
+  derivePalette,
+  parseColour,
+} from '../../../apps/player-web/src/features/brand/character-colour.ts';
 
 test('a colour is typed as #RRGGBB or as r, g, b and normalised to capitals; anything else is refused', () => {
   for (const [typed, hex] of [

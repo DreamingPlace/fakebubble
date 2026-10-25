@@ -22,6 +22,7 @@ class ElementStub extends EventTarget {
   children: ElementStub[] = [];
   attributes = new Map<string, string>();
   focus() {}
+  remove() {}
   setAttribute(key: string, value: string) {
     this.attributes.set(key, value);
   }
@@ -89,14 +90,15 @@ function setup(t: test.TestContext, state: AccountAdminSession | null = null) {
   Object.defineProperty(globalThis, 'window', { configurable: true, value: new EventTarget() });
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
-    value: {
+    // Part 24b-2: an EventTarget, because the confirm dialog of 收回全部功能权限 listens for Escape on the document.
+    value: Object.assign(new EventTarget(), {
       createElement: () => new ElementStub(),
       createTextNode: (value: string) => {
         const node = new ElementStub();
         node.textContent = value;
         return node;
       },
-    },
+    }),
   });
   let logouts = 0;
   const creates: { requestId: string; name: string }[] = [];
@@ -386,7 +388,14 @@ test('owner explicitly confirms all-permission removal without logout and does n
   f.root.querySelector('[data-page="members"]').fire();
   await flush();
   let nodes = descendants(f.root.querySelector('#admin-members-list'));
-  nodes.find((n) => n.textContent === '确认收回全部功能权限')!.fire();
+  // Named exception (Part 24b-2): 收回全部功能权限 is a plain button now, not a fold; it asks in a confirm dialog (确认收回).
+  nodes.find((n) => n.textContent === '收回全部功能权限')!.fire();
+  await flush();
+  assert.equal(saved, undefined, 'nothing is revoked before the confirmation');
+  descendants(f.root.querySelector('main'))
+    .find((n) => n.textContent === '确认收回')!
+    .fire();
+  await flush();
   await flush();
   assert.deepEqual(saved, []);
   assert.equal(f.logouts(), 0);

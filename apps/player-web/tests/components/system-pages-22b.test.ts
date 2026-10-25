@@ -520,7 +520,7 @@ test('the new navigation: who sees 总览, 积分发放, 系统状态 and the 22
   assert.deepEqual(labels(access([], { owner: true })), [
     '总览',
     '角色工作台',
-    '预演测试',
+    // Named exception (Part 24b-2): 预演测试 is not a nav item any more (this access has no cast client, so no 关系与故事 either).
     '共创收件箱',
     '邀请与额度',
     '积分发放',

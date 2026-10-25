@@ -156,7 +156,7 @@ function setup(t: test.TestContext) {
       await flush();
     },
     pick: (characterId: string) => {
-      const row = descendants(root.querySelector('#admin-preview')).find(
+      const row = descendants(root.querySelector('#admin-characters')).find(
         (n) => n.attributes.get('data-character') === characterId,
       );
       assert.ok(row, `${characterId} is in the picker`);
@@ -165,10 +165,12 @@ function setup(t: test.TestContext) {
   };
 }
 
+// Part 24b-2 exception (named, narrow): 预演 lives inside 角色工作台 now, so the same "latest pick wins" rules are checked on the role list of
+// that page (#admin-characters).
 test('预演测试: a character picked while another one is still loading is not dropped; the latest pick ends up open', async (t) => {
   const f = setup(t);
   await f.mount();
-  f.root.querySelector('[data-page="preview"]').fire();
+  f.root.querySelector('[data-page="characters"]').fire();
   await flush();
   await flush();
   f.pick('wei-guagua');
@@ -193,7 +195,7 @@ test('预演测试: a character picked while another one is still loading is not
 test('预演测试: of several clicks during one load only the latest is opened, never a stale pick', async (t) => {
   const f = setup(t);
   await f.mount();
-  f.root.querySelector('[data-page="preview"]').fire();
+  f.root.querySelector('[data-page="characters"]').fire();
   await flush();
   await flush();
   f.pick('wei-guagua');

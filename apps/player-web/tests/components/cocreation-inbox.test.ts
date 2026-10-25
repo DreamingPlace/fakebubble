@@ -517,7 +517,8 @@ test('keyboard: j and k move through the list and open each submission; e archiv
 test('someone who may only read cannot change anything: manage controls are off and shortcuts do nothing', async (t) => {
   const f = setup(t, { manage: false });
   await f.inbox.load();
-  assert.equal(f.q('.cc-bulk')!.hidden, true);
+  // Named exception (Part 24b-2): the bulk bar is just the 归档所选 button, shown only while rows are ticked and the viewer may manage.
+  assert.equal(f.q('.cc-archive-selected')!.hidden, true);
   assert.ok(f.all('.cc-row input').every((box) => box.hidden));
   assert.equal(f.q('.cc-star')!.disabled, true);
   assert.equal(f.q('.cc-set-archived')!.disabled, true);
@@ -534,10 +535,12 @@ test('someone who may only read cannot change anything: manage controls are off 
   assert.equal(f.inbox.snapshot().active, 1, 'moving around is still fine');
 });
 
-test('bulk archive: select rows or the whole page, archive them in one request; a status filter drops them from view', async (t) => {
+// Named exception (Part 24b-2): no 全选本页 button and no status dropdown any more: rows are ticked one by one, 归档所选 appears only while
+// something is ticked, and the status filter is a chip.
+test('bulk archive: select rows, archive them in one request; a status filter drops them from view', async (t) => {
   const f = setup(t);
   await f.inbox.load();
-  assert.equal(f.q('.cc-archive-selected')!.disabled, true);
+  assert.equal(f.q('.cc-archive-selected')!.hidden, true);
   f.all('.cc-row input')[0]!.checked = true;
   f.all('.cc-row input')[0]!.dispatch('change');
   f.all('.cc-row input')[2]!.checked = true;
@@ -551,16 +554,14 @@ test('bulk archive: select rows or the whole page, archive them in one request; 
   );
   assert.match(f.all('.cc-row')[0]!.textContent, /已归档/);
   assert.match(f.all('.cc-row')[1]!.textContent, /新/);
-  assert.equal(f.q('.cc-archive-selected')!.textContent, '归档所选');
-  f.q('.cc-select-all')!.click();
-  assert.equal(f.q('.cc-archive-selected')!.textContent, '归档所选（3）');
+  assert.equal(f.q('.cc-archive-selected')!.hidden, true, 'nothing is ticked after the archive');
 
   // With the “新” filter on, archived rows leave the list and the next one opens.
   const g = setup(t);
   await g.inbox.load();
-  const status = g.q('#cc-filter-status')!;
-  status.value = 'new';
-  status.dispatch('change');
+  g.all('.cc-filter-chip')
+    .find((chip) => chip.textContent === '新')!
+    .click();
   await flush();
   assert.equal(g.filters.at(-1)!.filter.status, 'new');
   g.all('.cc-row input')[0]!.checked = true;
@@ -611,30 +612,37 @@ test('status buttons change one submission; the star toggles', async (t) => {
   assert.deepEqual(callsOf(f, 'star').at(-1)!.args, ['s1', false]);
 });
 
-test('filters go to the server (character, status, star, text) and 更多 pages by cursor', async (t) => {
+// Named exception (Part 24b-2): the filters are chips (角色, 状态, 只看星标) plus the search field, and the next page is read when the
+// list is scrolled to its end: there are no dropdowns and no 更多 button.
+test('filters go to the server (character, status, star, text) and the next page is read by cursor when the list is scrolled to its end', async (t) => {
   const f = setup(t, { pages: [[item('p1')], [item('p2')]] });
   await f.inbox.load();
   assert.deepEqual(f.filters[0]!.filter, { characterId: null, status: null, starred: false, query: '' });
-  assert.equal(f.q('.cc-more')!.hidden, false);
-  f.q('.cc-more')!.click();
+  assert.equal(f.q('.cc-more'), null, 'no 更多 button');
+  assert.equal(f.all('select').length, 0, 'no dropdowns');
+  const list = f.q('.cc-list')!;
+  list.clientHeight = 500;
+  list.scrollHeight = 500;
+  list.dispatch('scroll');
   await flush();
   assert.deepEqual(rowIds(f), ['p1', 'p2']);
   assert.deepEqual(f.filters.at(-1)!.before, { createdAt: 1, id: 'cursor' });
-  assert.equal(f.q('.cc-more')!.hidden, true);
 
   const g = setup(t);
   await g.inbox.load();
-  g.q('#cc-filter-character')!.value = 'wei-guagua';
-  g.q('#cc-filter-character')!.dispatch('change');
+  const chip = (label: string) => g.all('.cc-filter-chip').find((c) => c.textContent === label)!;
+  chip('瓜瓜').click();
   await flush();
-  g.q('#cc-filter-starred')!.checked = true;
-  g.q('#cc-filter-starred')!.dispatch('change');
+  assert.equal(chip('瓜瓜').getAttribute('aria-pressed'), 'true');
+  chip('★ 只看星标').click();
   await flush();
   g.q('#cc-filter-query')!.type_('哎呀');
   g.q('#cc-filter-query')!.dispatch('change');
   await flush();
   assert.deepEqual(g.filters.at(-1)!.filter, { characterId: 'wei-guagua', status: null, starred: true, query: '哎呀' });
   assert.equal(g.filters.at(-1)!.before, null, 'a new filter starts from the top');
+  chip('全部').click();
+  await flush();
 });
 
 test('the character workbench shows an unread badge per character, and none for zero', async (t) => {

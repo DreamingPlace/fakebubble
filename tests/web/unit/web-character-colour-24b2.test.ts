@@ -141,3 +141,47 @@ test('every other change still requires its 预演, with or without a colour', (
   refuse(only, { materialId: 'm1' });
   assert.equal(f.service.detail(f.auth, 'wei-guagua').published!.version, 1);
 });
+
+test('the admin routes let castSource through on both 预演 starts and let a colour-only publish omit previewId', async () => {
+  const { routeWebAccountAdmin } = await import('../../../apps/server/admin/web-account-admin-routes.ts');
+  const seen: Record<string, unknown> = {};
+  const characters = {
+    startPreview: (_a: unknown, _id: string, body: unknown) => (seen.single = body),
+    startRun: (_a: unknown, _id: string, body: unknown) => (seen.run = body),
+    publish: (_a: unknown, _id: string, body: unknown) => (seen.publish = body),
+  };
+  const admin = { authorize: () => ({}) };
+  const call = (path: string, body: Record<string, unknown>) =>
+    routeWebAccountAdmin(
+      admin as never,
+      {
+        method: 'POST',
+        path: `/api/web/local/admin/characters/jojo/${path}`,
+        body,
+        adminCookie: 'c',
+        csrf: 'x',
+        origin: 'o',
+      } as never,
+      characters as never,
+    );
+  const draft = { requestId: 'r', draftRevision: 1, profileHash: 'a'.repeat(64), relationship: 'new' };
+  for (const castSource of ['none', 'published', 'draft']) {
+    await call('review-start', { ...draft, message: 'hi', castSource });
+    assert.equal((seen.single as { castSource: string }).castSource, castSource);
+    await call('run-start', { ...draft, inputs: [], castSource });
+    assert.equal((seen.run as { castSource: string }).castSource, castSource);
+  }
+  await call('publish', { requestId: 'r', draftRevision: 1, profileHash: 'a'.repeat(64), acknowledgeReview: true });
+  assert.equal('previewId' in (seen.publish as object), false);
+  await assert.rejects(
+    () =>
+      call('publish', {
+        requestId: 'r',
+        draftRevision: 1,
+        profileHash: 'a'.repeat(64),
+        acknowledgeReview: true,
+        extra: 1,
+      }),
+    /INVALID_REQUEST/,
+  );
+});

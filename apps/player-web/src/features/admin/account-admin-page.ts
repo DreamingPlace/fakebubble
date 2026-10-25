@@ -197,7 +197,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         <button type="submit">完成邮箱绑定</button></form>
       <button id="admin-account-continue" class="admin-back" type="button" data-page="home">进入管理</button></section>
     <section data-panel="invites" hidden><p id="admin-no-permissions" hidden>当前账号没有“邀请与额度”权限，请联系主管理员开通。</p><div id="admin-invites"></div></section>
-    <section data-panel="characters" hidden><div id="admin-characters-host"></div></section>
+    <section data-panel="characters" hidden><div id="admin-characters"></div></section>
     <section data-panel="cast" hidden><div id="admin-cast"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
     <section data-panel="members" hidden><h2>管理员与权限</h2>
@@ -563,7 +563,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   };
   // 角色工作台: the role list (left, its width draggable), the editor (centre) and the paid 预演 (right) are one page; the shell
   // opens a role in both.
-  const bench = splitPane(q('#admin-characters-host'), { initial: 188, min: 150, max: 320, label: '调整角色列表宽度' });
+  const bench = splitPane(q('#admin-characters'), { initial: 188, min: 150, max: 320, label: '调整角色列表宽度' });
   const newRole = document.createElement('button');
   newRole.type = 'button';
   newRole.id = 'wb-new';
@@ -575,7 +575,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   bench.list.setAttribute('aria-label', '角色');
   bench.list.append(rolesHost, newRole);
   const editorHost = document.createElement('div');
-  editorHost.id = 'admin-characters';
+  editorHost.id = 'wb-editor';
   editorHost.className = 'wb-editor';
   const previewHost = document.createElement('aside');
   previewHost.id = 'wb-preview';
@@ -589,6 +589,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const picker = rolePicker(rolesHost, {
     emptyText: '当前没有可查看的角色。',
     badges: () => unread,
+    openInbox: (characterId) => {
+      if (busy || disposed || !navigate('cocreation', characterId)) return;
+      const load = loader();
+      if (load) void run(load);
+    },
     onPick: (characterId) => {
       if (disposed || !navigate('characters', characterId)) return;
       // Still the picked role when its turn comes (a later pick, or leaving the page, replaces this one).

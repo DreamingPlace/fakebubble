@@ -151,24 +151,24 @@ export function colourField(parent: HTMLElement, initial: string | undefined, on
   input.value = initial ?? '';
   input.autocomplete = 'off';
   picker.type = 'color';
-  picker.setAttribute('aria-label', '取色');
+  picker.title = '取色';
   chip.className = 'colour-chip';
-  chip.setAttribute('role', 'img');
+  chip.setAttribute?.('role', 'img');
   const paint = () => {
     const parsed = input.value.trim() === '' ? '' : parseColour(input.value);
-    input.setAttribute('aria-invalid', String(parsed === null));
+    input.setAttribute?.('aria-invalid', String(parsed === null));
     chip.dataset.state = parsed === null ? 'invalid' : parsed === '' ? 'empty' : 'ok';
-    chip.setAttribute('aria-label', parsed ? `主色 ${parsed}` : parsed === null ? '颜色格式不对' : '未设置');
+    chip.setAttribute?.('aria-label', parsed ? `主色 ${parsed}` : parsed === null ? '颜色格式不对' : '未设置');
     chip.replaceChildren();
     if (!parsed) return;
     picker.value = parsed.toLowerCase();
     const palette = derivePalette(parsed);
-    chip.style.setProperty('--chip-tint', palette.color);
-    chip.style.setProperty('--chip-ink', palette.ink);
+    chip.style?.setProperty('--chip-tint', palette.color);
+    chip.style?.setProperty('--chip-ink', palette.ink);
     chip.append(el('b', '字'));
     palette.aura.forEach((colour, index) => {
       const dot = el('i');
-      dot.style.setProperty('--dot', colour);
+      dot.style?.setProperty('--dot', colour);
       dot.dataset.n = String(index);
       chip.append(dot);
     });

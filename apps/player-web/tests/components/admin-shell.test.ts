@@ -33,8 +33,9 @@ test('the nav tree is exactly the agreed groups and pages; 退出登录 and 我�
     [
       // Named exception (Part 24b-1): 总览 (was 概览) stands alone at the top (a group without a title).
       ['', ['总览']],
-      // Named exception (Part 24b-1): 角色资料 is now called 角色工作台 (same page); 预演测试 stays, listed right under it.
-      ['角色', ['角色工作台', '预演测试', '共创收件箱']],
+      // Named exception (Part 24b-1): 角色资料 is now called 角色工作台 (same page).
+      // Named exception (Part 24b-2): 预演测试 is no longer a page (预演 is inside 角色工作台); 关系与故事 follows 角色工作台.
+      ['角色', ['角色工作台', '关系与故事', '共创收件箱']],
       // Named exception (Part 22a): the invite page is now 邀请与额度 (same place, same permissions to see it). Nothing else changed.
       // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
       // Named exception (Part 24b-1): 玩家统计 moved from 玩家 to 运营.
@@ -53,7 +54,7 @@ test('the owner sees everything; everyone else sees only what a permission opens
   assert.deepEqual(labels(access([], { owner: true })), [
     // Named exception (Part 24b-1): 角色资料 is now 角色工作台.
     '角色工作台',
-    '预演测试',
+    // Named exception (Part 24b-2): no 预演测试 page any more; this access has no cast client, so no 关系与故事 either.
     '共创收件箱',
     // Named exception (Part 22a): 邀请码 is now called 邀请与额度.
     '邀请与额度',
@@ -70,9 +71,10 @@ test('the owner sees everything; everyone else sees only what a permission opens
   assert.deepEqual(labels(access(['cocreation.read'], { inbox: false })), []);
   assert.deepEqual(labels(access(['characters.read:*', 'characters.edit:*'])), ['角色工作台']);
   assert.deepEqual(labels(access(['characters.edit:*'])), [], 'a role action without read lists nothing');
-  assert.deepEqual(labels(access(['characters.read:*', 'characters.preview:*'])), ['角色工作台', '预演测试']);
+  // Named exception (Part 24b-2): preview is a part of 角色工作台 now, not a nav item.
+  assert.deepEqual(labels(access(['characters.read:*', 'characters.preview:*'])), ['角色工作台']);
   assert.deepEqual(labels(access(['characters.preview:*'])), [] as string[], 'preview alone cannot list roles');
-  assert.deepEqual(labels(access(['category.publication'])), ['角色工作台', '预演测试']);
+  assert.deepEqual(labels(access(['category.publication'])), ['角色工作台']);
   // Named exception (Part 22b): the 运营数据 page no longer exists; its replacement (系统状态) needs the owner or system.read and a page with the client.
   assert.equal(
     labels(access([], { owner: true })).includes('系统状态'),
@@ -102,7 +104,6 @@ test('hash routes round-trip; unknown pages and malformed ids are not routes', (
   for (const hash of [
     '#/characters',
     '#/characters/jojo',
-    '#/preview/wei-guagua',
     '#/cocreation',
     '#/invites',
     // Named exception (Part 22b): #/ops is no longer a page; the new pages round-trip instead.
@@ -116,6 +117,9 @@ test('hash routes round-trip; unknown pages and malformed ids are not routes', (
   ])
     assert.equal(formatRoute(parseRoute(hash)!), hash);
   assert.deepEqual(parseRoute('#/characters/jojo'), { page: 'characters', id: 'jojo' });
+  // Named exception (Part 24b-2): the old 预演测试 address redirects into 角色工作台, with its role.
+  assert.deepEqual(parseRoute('#/preview/wei-guagua'), { page: 'characters', id: 'wei-guagua' });
+  assert.equal(formatRoute(parseRoute('#/preview/wei-guagua')!), '#/characters/wei-guagua');
   assert.deepEqual(parseRoute('#/invites/abc'), { page: 'invites', id: null }, 'only roles carry an id');
   for (const bad of ['', '#', '#/', '#/nowhere', '#/characters/a b', '#/characters/../x', 'characters'])
     assert.equal(parseRoute(bad), null, bad);
@@ -304,7 +308,8 @@ test('page: nav items an administrator may not use are hidden, not disabled', as
   // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
   const shown = ['invites'];
   // Named exception (Part 22b): 'ops' (运营数据) is gone; the pages that replaced it are hidden for this administrator too.
-  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'points', 'system', 'members']) {
+  // Named exception (Part 24b-2): 'preview' is no longer a nav item.
+  for (const page of ['characters', 'cocreation', 'invites', 'points', 'system', 'members']) {
     assert.equal(hiddenOf(f, page), !shown.includes(page), page);
     assert.equal(f.root.querySelector(`[data-page="${page}"]`).disabled, false, `${page} is never merely disabled`);
   }
@@ -316,8 +321,7 @@ test('page: the owner sees every item', async (t) => {
   const f = setup(t, session([], 'owner'));
   await flush();
   // Named exception (Part 22b): 'ops' is gone. This page has no 概览 / 系统 clients, so those pages are absent; the owner sees the rest.
-  for (const page of ['characters', 'preview', 'cocreation', 'invites', 'members'])
-    assert.equal(hiddenOf(f, page), false, page);
+  for (const page of ['characters', 'cocreation', 'invites', 'members']) assert.equal(hiddenOf(f, page), false, page);
 });
 
 test('page: after login the first page the administrator may use opens, not always 邀请码', async (t) => {
@@ -409,20 +413,21 @@ test('page: the sidebar has no collapse control', async (t) => {
   );
 });
 
-test('page: the preview page lists only roles the administrator may preview and opens one into its own pane', async (t) => {
+// Named exception (Part 24b-2): the 预演测试 page is gone; the same list-and-open behaviour is checked on 角色工作台, whose list shows the
+// roles the administrator may read (the 预演 beside the editor is only shown for a role they may also preview).
+test('page: 角色工作台 lists the roles the administrator may read and opens one beside its editor', async (t) => {
   const f = setup(t, session(['characters.read:jojo', 'characters.preview:jojo', 'characters.read:other']));
   await flush();
-  f.root.querySelector('[data-page="preview"]').fire();
+  f.root.querySelector('[data-page="characters"]').fire();
   await flush();
-  assert.equal(surface(f), 'preview');
-  const picks = descendants(f.root.querySelector('#admin-preview')).filter((n) => n.attributes.get('data-character'));
-  assert.deepEqual(
-    picks.map((n) => n.attributes.get('data-character')),
-    ['jojo'],
+  assert.equal(surface(f), 'characters');
+  const picks = descendants(f.root.querySelector('#admin-characters')).filter((n) =>
+    n.attributes.get('data-character'),
   );
-  picks[0]!.fire();
+  assert.ok(picks.map((n) => n.attributes.get('data-character')).includes('jojo'));
+  picks.find((n) => n.attributes.get('data-character') === 'jojo')!.fire();
   await flush();
-  assert.equal(f.win.location.hash, '#/preview/jojo');
+  assert.equal(f.win.location.hash, '#/characters/jojo');
 });
 
 test('page: a failed restore shows the login page and never a nav', async (t) => {

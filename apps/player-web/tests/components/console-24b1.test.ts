@@ -66,7 +66,7 @@ test('24b-1 nav: the groups and pages are exactly the board (as amended by 24b-2
     ],
   );
   // 测试对话 joins 运营 behind its switch, after 消耗表.
-  const everything = labelsOf(access([], { owner: true }));
+  const everything = labelsOf(access([], { owner: true, cast: true }));
   assert.deepEqual(everything.slice(everything.indexOf('玩家统计'), everything.indexOf('玩家统计') + 3), [
     '玩家统计',
     '消耗表',
@@ -119,7 +119,14 @@ test('24b-1 nav: the first page an administrator may use follows the nav order',
 
 test('24b-1 nav: old links still work and are followed to their place today', () => {
   // Every old name resolves to a page that exists, and the address is the new place.
-  assert.deepEqual(LEGACY_ROUTES, { grants: 'invites', ops: 'system', metrics: 'system', home: 'overview' });
+  // Named exception (Part 24b-2): #/preview/<id> (预演测试) follows into 角色工作台.
+  assert.deepEqual(LEGACY_ROUTES, {
+    grants: 'invites',
+    ops: 'system',
+    metrics: 'system',
+    home: 'overview',
+    preview: 'characters',
+  });
   assert.deepEqual(parseRoute('#/grants'), { page: 'invites', id: null });
   assert.deepEqual(parseRoute('#/ops'), { page: 'system', id: null });
   assert.deepEqual(parseRoute('#/metrics'), { page: 'system', id: null });
