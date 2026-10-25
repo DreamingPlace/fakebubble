@@ -133,8 +133,9 @@ test('inspect reports the deployed ledger next to the expected steps and matches
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
   // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
   // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-  assert.equal(report.schemaVersion, 129);
-  assert.equal(report.migrations.applied.length, 54);
+  // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(report.schemaVersion, 130);
+  assert.equal(report.migrations.applied.length, 55);
   assert.deepEqual(
     report.migrations.applied,
     webR2Migrations.map((m) => ({ version: m.version, sha256: sha(m.sql) })),
@@ -146,7 +147,8 @@ test('inspect reports the deployed ledger next to the expected steps and matches
   // Named exception (Part 22a2, migration 127): the ledger has 52 steps and 127 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
   // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
   // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-  assert.equal(report.migrations.expected.inline.length, 54);
+  // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(report.migrations.expected.inline.length, 55);
   assert.deepEqual(
     report.migrations.expected.inline.map((m, i) => m.sha256 === report.migrations.expected.r2[i]!.sha256),
     report.migrations.expected.inline.map((m) => m.version !== 113),
@@ -195,7 +197,8 @@ test('inspect reports the deployed ledger next to the expected steps and matches
     // Named exception (Part 22a2, migration 127): 127 is a real step now, so the extra step is 128. No assertion was weakened.
     // Named exception (Part 22c, migration 128): 128 is a real step now, so the extra step is 129. No assertion was weakened.
     // Named exception (Part 24a, migration 129): 129 is a real step now, so the extra step is 130. No assertion was weakened.
-    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (130,'" + 'a'.repeat(64) + "')")),
+    // Named exception (Part 22d, migration 130): 130 is a real step now, so the extra step is 131. No assertion was weakened.
+    hit((db) => db.exec("INSERT INTO cf_web_migrations VALUES (131,'" + 'a'.repeat(64) + "')")),
     false,
   );
   assert.equal(

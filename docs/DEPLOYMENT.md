@@ -445,6 +445,24 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 
 **页面**（桌面管理后台，主管理员或 `stats.read`；`stats.read` 只有主管理员能给，不在任何预设里，只在“全部”里，同 `system.read` / `points.grant`）：玩家 → **玩家统计**（最近 7 / 30 / 90 天；按天表 + 合计行，新的在前；按角色 = 角色**名字**；按模型；页头“统计自 … 起（UTC）”；导出表格）、运营 → **消耗表**（`web_provider_usage` 每天 × 供应商 × 模型 × 阶段：调用、输入/缓存/输出令牌、字节、列表价、账本扣款、回复；每天的“每条成功回复成本”和消耗积分；本 UTC 月合计的美元与人民币，汇率只有一个常量 `USD_CNY = 6.7`（`config/web-stats.ts`），页面写“按 1 美元 ≈ 6.7 元估算”；本月含 Fish Drama 3 计价变化日（2026-11-12）时多一行备注）。**概览**多一行昨天的新注册 / 活跃 / 回复和本月花费（人民币），只给主管理员和 `stats.read`，其他管理员收到 `null`。路由（`POST /api/web/provider/admin/stats/...`，会话 + CSRF + Origin，**先查权限再读请求体**）：`stats/players`、`stats/players-export`、`stats/costs`、`stats/costs-export`；没有 `stats.read` 一律 403。导出是带 UTF-8 BOM 的 CSV（复用 22a2 的 `csvDocument`，含 `= + - @` 前加制表符的规则），每次导出记审计 `stats-export:players|costs`（管理员、范围、行数）。占位页“下个版本提供”已移除，客户端没有调用任何已删除的路由。
 
+### 统计补充：聊天人数、24 小时、按用户类型的花费（Part 22d，迁移 130）
+
+**迁移 130（`130_stats_extras.sql`，sha256 `8ec416d7f741b65203a30dc215e902b37810e76283c1c84d7a0f8a66508b5621`）：** 共 **55 步**（`expected-migrations`，inline 与 R2 各 55，最后一步 `version 130`，两边同一份 SQL；1–129 一个字节没动，129 仍是 `061602ae…2148`）。基于 22c 的 `web_stats_daily` / `web_daily_active`。新增：`web_invite_batches.test`（测试组标记，只在创建时设置，更新触发器拒绝改动；已有的批次都不是测试批次）、`web_chat_active`（某天谁给哪个角色发过消息，只存 HMAC 标记）、`web_stats_hourly` + `web_chat_active_hourly`（每个 UTC 小时的回复与聊天人数，只留 48 小时）、`web_operation_user_types`（每条回复在受理时冻结的用户类型）、`web_stats_spend`（每天 × 用户类型 × 文字/语音，账本实际扣款的微美元），以及 `web_operations` 上的第二个触发器 `web_stats_reply_final_hourly`（与每日触发器同一个“只计一次”条件）。本地：`scripts/web-provider.ts migrate-stats-extras <root>`（`migrate` 已含）。
+
+**聊天人数（聊天人数）。** 每次受理一条消息时，业务对象写一个标记：`marker = HMAC-SHA256(key, "chat" ‖ 0 ‖ 日 ‖ 0 ‖ 角色 ‖ 0 ‖ 玩家id)`，`key` 与 22c 同一个（`SEAL_KEY` 经 HKDF，info `stats-active-v1`）。同一玩家同一天对同一角色只算一次；对两个角色聊天，每个角色各算一次，合计里算一次（合计 = 22c 的 `chat_registered + chat_guest`，即不重复的人数）。**一天结束后**，保留期闹钟在清除标记**之前**把每个角色的人数写进 `web_stats_daily`（指标 `chat_users`，带 `character_id`），标记同样保留 35 天；当天与尚未写下的那一天由标记现数。
+
+**24 小时（每小时）。** `web_stats_hourly` 按 UTC 小时记：`reply_published|failed|unknown`（按受理时刻所在小时，与每日计数同一规则同一触发条件，所以一天 24 个小时之和等于当天的每日行）与 `chat_users`（每个角色一行，`character_id` 为空的一行是合计）。每次保留期闹钟 `sweep` 时删除超过 48 小时的小时行与小时标记。**这些不会让闹钟醒来**（`nextDue` 不变，仍只在有未关闭的注册队列时才要求次日零点醒来），闹钟仍能空闲（测试：`web-stats-22d` 与 `web-stats-22d-http`）。
+
+**用户类型（受理时冻结）。** 按先中先得：1 测试组（兑换过测试批次的邀请码；兑换过就算，之后即使撤销或到期仍在测试组）· 2 管理员（**没有**，见下）· 3 不限量（不限量权益、旧邀请账号、或积分策略 `unlimited`）· 4 每天补充 · 5 注册 · 6 访客。`WebAdmission.admit` 在写操作行的同一事务里写 `web_operation_user_types`；以后换了档位，旧的回复不会被挪走。
+
+**管理员为什么没有。** 管理员是控制台成员（`web_admin_members`，邮箱 + 密码），玩家是网站主体（`web_principals`，玩家登录 `web_player_logins`）；表结构里没有任何一列把两者连起来。唯一能碰上的是同一个邮箱地址，但那是两次各自的验证，系统并不保存这种关联，也不能保证同一个人，所以不据此推断。需要时应先增加明确的“管理员的玩家账号”关联（新迁移），再加这一类型。
+
+**按用户类型的花费。** `recordUsage` 在写 22c 的 `ledger_charged_micros` 的同一位置，把同一笔账本扣款按该操作冻结的用户类型和文字（草稿、审稿）/语音（speech）记进 `web_stats_spend`；受理时间早于 130、没有冻结类型的操作记为“未归类”（`unclassifiedMicros`），不猜。每天各类型之和等于 22c 消耗表当天的账本扣款。130 之前的日子显示“—”（`types: null`），起算日是 130 开始运行的那一天（`extras_started`），当天混有旧数据。
+
+**读取接口（无页面，页面在 24b-1）。** `POST /api/web/provider/admin/stats/chart`（`{ metric: "replies" | "chat_users", range: "24h" | "7d" | "14d" }`：24h 按小时，7d/14d 按天；总计与按角色（角色**名字**）；回复 = 成功发布的回复）与 `stats/spend-by-type`（`{ range: 7 | 30 | 90 }`：每天 × 类型 × 文字/语音，微美元，附 `usdCny`）。会话 + CSRF + Origin，**先查权限再读请求体**，`stats.read`（主管理员总是可以）；没有权限一律 403。`admin/invites/batch-create` 多一个可选字段 `test`（布尔，缺省 false），`batch-list` 每批多 `test`。
+
+**隐私。** 没有 id、邮箱、昵称、IP 哈希、消息内容进入任何新表、日志或响应；标记是 HMAC 且会被清除；`web_operation_user_types` 与 `web_operation_models` 一样只有操作 id 和枚举，清除玩家时留下的操作壳不含主体信息（生命周期审计把它与 `web_operation_models` 并列）。
+
 ### 登录会话 Cookie
 
 - 有邮箱登录的玩家（以及注册当下的会话）使用 `Max-Age=34560000`（400 天，浏览器上限）的会话 Cookie，每次成功 bootstrap 重新下发；访客仍是 24 小时（开启免费档后为试用期 + 宽限期）。`__Host-`、`Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/` 不变。

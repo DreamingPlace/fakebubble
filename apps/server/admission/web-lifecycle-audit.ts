@@ -86,6 +86,8 @@ export function auditWebLifecycleWorld(
     // no principal id and no content (the points events themselves are removed with the player, below).
     'web_operation_models',
     'web_provider_backups',
+    // Part 22d: the frozen user type of an operation (an enum next to the operation id, like the model row).
+    'web_operation_user_types',
   ]);
   const operationContent = new Set([
     'web_provider_outputs',

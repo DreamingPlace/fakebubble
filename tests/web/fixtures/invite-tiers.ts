@@ -8,6 +8,8 @@ import {
   migrateWebProviderInviteTiers,
   migrateWebProviderLegacyInvites,
   migrateWebProviderStats,
+  migrateWebProviderCast,
+  migrateWebProviderStatsExtras,
 } from '../../../apps/server/generation/web-provider-migration.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
 import { WebStats } from '../../../apps/server/stats/web-stats.ts';
@@ -47,10 +49,15 @@ export function schema127() {
  * tiers object, and players who are signed up (a login, the signup bonus) or guests, each with a live session so a code can be
  * redeemed through the real WebInviteTiers.redeem.
  */
-export function tiersFixture(t: TestContext, options: { sealKey?: Buffer; stats?: boolean } = {}) {
+export function tiersFixture(t: TestContext, options: { sealKey?: Buffer; stats?: boolean; extras?: boolean } = {}) {
   const store = schema127();
   // Part 22c: with `stats` the store is taken on to 128 before anything exists, so every event is counted from the start.
   if (options.stats) migrateWebProviderStats(store, T0);
+  // Part 22d: `extras` takes it on to 130 (the cast step 129 first): chat users per character, hourly counts, user types, spend by type.
+  if (options.stats && options.extras) {
+    migrateWebProviderCast(store);
+    migrateWebProviderStatsExtras(store, T0);
+  }
   t.after(() => store.close());
   Object.assign(store, { webIpKeyFingerprint: () => 'f'.repeat(64) });
   enableModelChoice(store);
@@ -84,6 +91,7 @@ export function tiersFixture(t: TestContext, options: { sealKey?: Buffer; stats?
   store.run("UPDATE web_instance SET recovery_epoch='fixture-epoch' WHERE singleton=1");
   const epoch = 'fixture-epoch';
   const sessions = new Map<string, string>();
+  const extraCharacters: string[] = [];
   const tiers = new WebInviteTiers(store, {
     clock,
     codeKey: Buffer.alloc(32, 9),
@@ -120,6 +128,7 @@ export function tiersFixture(t: TestContext, options: { sealKey?: Buffer; stats?
       store.run('INSERT INTO api_players VALUES (?,?)', playerId, now);
       store.run('INSERT INTO worlds VALUES (?,?,?,?)', worldId, playerId, 'Asia/Singapore', '{}');
       store.run("INSERT INTO world_characters VALUES (?,?,'new')", worldId, characterId);
+      for (const id of extraCharacters) store.run("INSERT INTO world_characters VALUES (?,?,'new')", worldId, id);
     });
     admission.registerGuest({ principalId, playerId, worldId });
     if (o.signedUp || o.login)
@@ -188,8 +197,15 @@ export function tiersFixture(t: TestContext, options: { sealKey?: Buffer; stats?
       redeemBy: null,
       ...over,
     });
-  const admit = (principalId: string, requestId: string, hashDigit = 'a') =>
-    admission.admit({ principalId, requestId, characterId, text: '你好', ipHash: ip(hashDigit) });
+  const admit = (principalId: string, requestId: string, hashDigit = 'a', character = characterId) =>
+    admission.admit({ principalId, requestId, characterId: character, text: '你好', ipHash: ip(hashDigit) });
+  /** Part 22d: one more character every player's world has. */
+  const addCharacter = (id: string) => {
+    extraCharacters.push(id);
+    store.run('INSERT INTO character_templates(id,version,config_json) VALUES (?,?,?)', id, 1, '{}');
+    for (const row of store.all<{ id: string }>('SELECT id FROM worlds'))
+      store.run("INSERT INTO world_characters VALUES (?,?,'new')", row.id, id);
+  };
   const finish = (operationId: string, status: string) =>
     store.run(
       'UPDATE web_operations SET status=?,quota_state=?,stage_version=stage_version+1 WHERE id=?',
@@ -219,6 +235,7 @@ export function tiersFixture(t: TestContext, options: { sealKey?: Buffer; stats?
     redeem,
     create,
     admit,
+    addCharacter,
     finish,
     balance,
     events,

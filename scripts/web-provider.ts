@@ -24,6 +24,7 @@ import {
   migrateWebProviderInviteCodes,
   migrateWebProviderStats,
   migrateWebProviderCast,
+  migrateWebProviderStatsExtras,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -85,7 +86,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→129 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→130 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -130,8 +131,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderInviteCodes(store);
     migrateWebProviderStats(store, now);
     migrateWebProviderCast(store);
+    migrateWebProviderStatsExtras(store, now);
     return {
-      schema: 129,
+      schema: 130,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -282,6 +284,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-invite-codes',
       'migrate-stats',
       'migrate-cast',
+      'migrate-stats-extras',
       'render-assets',
       'admin-grant',
       'serve',
@@ -477,6 +480,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderCast(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 129, cast: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-stats-extras') {
+    // An existing provider-* instance at schema 129 gains chat users per character, hourly counts and the spend split by user type.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderStatsExtras(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 130, statsExtras: true }) + '\n');
     } finally {
       store.close();
     }

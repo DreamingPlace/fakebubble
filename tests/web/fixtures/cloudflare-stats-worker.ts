@@ -104,6 +104,26 @@ export class WebStatsFixture extends WebSystemFixture {
         ),
         attempts: store.all('SELECT phase,provider,state,outcome FROM web_provider_attempts ORDER BY rowid'),
       });
+    // Part 22d: the extras tables as they are now, and what the retention alarm would wake for (null = idle).
+    if (path === '/fixture/stats/extras')
+      return Response.json({
+        hourly: store.all(
+          'SELECT hour,metric,character_id characterId,value FROM web_stats_hourly ORDER BY hour,metric,character_id',
+        ),
+        chatDays: store.all(
+          'SELECT day,character_id characterId,count(*) n FROM web_chat_active GROUP BY day,character_id ORDER BY day,character_id',
+        ),
+        chatHours: store.all(
+          'SELECT hour,character_id characterId,count(*) n FROM web_chat_active_hourly GROUP BY hour,character_id ORDER BY hour,character_id',
+        ),
+        userTypes: store.all(
+          'SELECT user_type userType,count(*) n FROM web_operation_user_types GROUP BY user_type ORDER BY user_type',
+        ),
+        spend: store.all(
+          'SELECT day,user_type userType,kind,calls,charged_micros chargedMicros FROM web_stats_spend ORDER BY day,user_type,kind',
+        ),
+        due: this.retention?.nextDue() ?? null,
+      });
     if (path === '/fixture/stats/reopen') {
       // A reply still in flight when its player is purged: the row of a finished one, put back to queued and reserved.
       store.run("UPDATE web_operations SET status='queued',quota_state='reserved' WHERE id=?", input.operationId);

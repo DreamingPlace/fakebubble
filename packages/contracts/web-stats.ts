@@ -92,3 +92,54 @@ export type OverviewStats = {
   yesterday: { day: string; signups: number; active: number; replies: number };
   monthListCostRmbFen: number;
 };
+
+/**
+ * Part 22d. Who a reply was for, in priority order (first match wins at admission, then frozen): 测试组 test · 不限量 unlimited ·
+ * 每天补充 daily_refill · 注册 registered · 访客 guest. There is no 管理员: nothing links an administrator to a player.
+ */
+export const STATS_USER_TYPES = ['test', 'unlimited', 'daily_refill', 'registered', 'guest'] as const;
+export type StatsUserType = (typeof STATS_USER_TYPES)[number];
+
+/** 总览 chart: what is counted and over what window. 24h is hourly (the last 24 UTC hours); 7d and 14d are daily. */
+export const CHART_METRICS = ['replies', 'chat_users'] as const;
+export type ChartMetric = (typeof CHART_METRICS)[number];
+export const CHART_RANGES = ['24h', '7d', '14d'] as const;
+export type ChartRange = (typeof CHART_RANGES)[number];
+/**
+ * 总览 chart data, oldest first. `buckets` are UTC hours ('YYYY-MM-DDTHH') for 24h and UTC days ('YYYY-MM-DD') for 7d / 14d; every
+ * series has one value per bucket, null where the counters were not running yet (shown —). `total` for replies is the sum of the
+ * characters; for chat_users it is the number of DISTINCT players (a player who chatted with two characters is in both of their
+ * series and once in the total). `replies` counts published replies, by the bucket of their admission. Character NAMES, never ids.
+ */
+export type ChartSeries = { name: string; values: (number | null)[] };
+export type ChartView = {
+  metric: ChartMetric;
+  range: ChartRange;
+  bucket: 'hour' | 'day';
+  /** The first UTC day the per-character counters ran; null while unknown. */
+  since: string | null;
+  buckets: string[];
+  total: (number | null)[];
+  characters: ChartSeries[];
+};
+
+/** Provider spend of one user type on one day, in USD micros: what the budget ledger charged, text (draft, review) and voice. */
+export type SpendByType = { userType: StatsUserType; textMicros: number; voiceMicros: number };
+/**
+ * 消耗表 by user type, newest day first. `types` is null for a day before the per-type counters ran (shown —). `unclassifiedMicros`
+ * = calls of replies admitted before the counters (no frozen type). The rate is the same estimate the 消耗表 page uses.
+ */
+export type SpendDay = {
+  day: string;
+  types: SpendByType[] | null;
+  unclassifiedMicros: number | null;
+  totalMicros: number | null;
+};
+export type SpendView = {
+  since: string | null;
+  range: StatsRange;
+  usdCny: number;
+  days: SpendDay[];
+  /** The range's sum over the days that are known, by type; null when no day is. */
+  totals: SpendByType[] | null;
+};
