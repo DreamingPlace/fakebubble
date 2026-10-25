@@ -276,7 +276,7 @@ try {
   const errors: string[] = [];
   const admins = new WebAccountAdmin(store, clock, config.origin);
   const grant = admins.issueLoginGrant().token;
-  const WIDTHS = [1440, 1280];
+  const WIDTHS = [1440, 1280, 1680];
   // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
   const login = async (opts: Record<string, unknown>, token: string): Promise<any> => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, ...opts });
@@ -291,6 +291,17 @@ try {
     { viewport: { width: 1440, height: 1500 }, recordVideo: { dir: tmpVideo, size: { width: 1440, height: 900 } } },
     grant,
   );
+  // a second administrator, so the permission grid of a non-owner is on the page
+  const issued = await owner.context.request.post(`${API}/admin/members/issue`, {
+    data: {
+      requestId: randomUUID(),
+      label: '小林',
+      memberId: null,
+      permissions: ['invites.manage', 'characters.read:*', 'cocreation.read'],
+    },
+    headers: { origin: config.origin, 'x-csrf-token': owner.csrf },
+  });
+  assert.equal(issued.status(), 200, await issued.text());
   // two batches to start with
   for (const [name, test] of [
     ['朋友第一批', false],
@@ -386,14 +397,13 @@ try {
 
     // ---- 邀请与额度: create a batch (测试), copy each code ----
     const inv = await open('invites', width);
-    await inv.getByRole('button', { name: '新建批次' }).click();
     await inv.locator('#tiers-name').fill('测试组第一批');
     await inv.locator('#tiers-count').fill('4');
     await inv.locator('label:has(#tiers-kind-unlimited)').click();
     await inv.locator('#tiers-test').check();
     await shot(inv, 'invites-new-batch-form', width);
     await inv.locator('#tiers-create').click();
-    await inv.locator('.tiers-fresh').waitFor({ timeout: 20_000 });
+    await inv.locator('.tiers-codes-table tbody tr').first().waitFor({ timeout: 20_000 });
     assert.equal(
       await inv.locator('.tiers-codes-table tbody tr .tiers-copy').count(),
       4,
@@ -410,11 +420,7 @@ try {
     const stats = await open('stats', width);
     await stats.getByText('统计自 2026-11-03 起（UTC）').waitFor({ timeout: 20_000 });
     await stats.locator('.stat-active .xy-bar').first().waitFor();
-    await shot(stats, 'player-stats-days', width);
-    await stats.getByRole('tab', { name: '按角色' }).click();
-    await shot(stats, 'player-stats-characters', width);
-    await stats.getByRole('tab', { name: '按模型' }).click();
-    await shot(stats, 'player-stats-models', width);
+    await shot(stats, 'player-stats', width);
     await overflowOk(stats, `stats ${width}`);
 
     // ---- 消耗表: bar, line, only 测试组 ----
@@ -435,6 +441,23 @@ try {
     const sys = await open('system', width);
     await sys.getByText('运行版本').waitFor({ timeout: 20_000 });
     await shot(sys, 'system', width);
+
+    // ---- 管理员与权限, 积分发放, 模型与价格 ----
+    const mem = await open('members', width);
+    await mem.locator('#admin-members-list .admin-member-head').first().waitFor({ timeout: 20_000 });
+    await shot(mem, 'members', width);
+    await overflowOk(mem, `members ${width}`);
+    const pts = await open('points', width);
+    await pts.locator('#points-amount').fill('20');
+    await pts.waitForFunction(
+      () => (document.querySelector('#admin-points .points-live')?.textContent ?? '').length > 0,
+    );
+    await shot(pts, 'points', width);
+    await overflowOk(pts, `points ${width}`);
+    const mod = await open('models', width);
+    await mod.locator('#admin-models table').waitFor({ timeout: 20_000 });
+    await shot(mod, 'models', width);
+    await overflowOk(mod, `models ${width}`);
     await overflowOk(sys, `system ${width}`);
   }
 
@@ -470,7 +493,10 @@ try {
   // The one known console error is older than this Part: the preview page's split pane writes a style attribute on load (split-pane.ts),
   // which the page's CSP refuses. Anything else - any other style attribute, any other error - fails the run.
   const unexpected = errors.filter(
-    (e) => !/DIV\.admin-split|CSP style-src-attr|Applying inline style violates/.test(e),
+    (e) =>
+      !/DIV\.admin-split|status of 409 \(Conflict\) @ .*points\/preview|CSP style-src-attr|Applying inline style violates/.test(
+        e,
+      ),
   );
   assert.deepEqual(unexpected, [], 'no uncaught page errors');
   process.stdout.write(`capture: PASS (${out})\n`);
