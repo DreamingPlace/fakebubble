@@ -53,7 +53,7 @@ export function systemView(
   };
   const sections = h('div', { class: 'system-sections' });
   const result = h('div', { class: 'system-result', attrs: { role: 'status' } });
-  const reload = h('button', { class: 'admin-secondary', text: '刷新', attrs: { type: 'button' } });
+  const reload = h('button', { class: 'admin-secondary sys-reload', text: '刷新', attrs: { type: 'button' } });
   const metricsHost = h('div', { class: 'system-metrics' });
   const metrics = opsView(metricsHost, {
     title: '技术指标',
@@ -303,28 +303,37 @@ export function systemView(
           )
         : null,
     );
+    const flag = (name: string, value: string | Node) =>
+      h(
+        'div',
+        { class: 'sys-flag' },
+        h('span', { class: 'sys-flag-name', text: name }),
+        h('span', { class: 'sys-flag-value' }, value),
+      );
     const switches = section(
       '开关',
       flags
-        ? keyValuePanel([
-            ['SIGNUP_BONUS_ENABLED', onOff(flags.signupBonus)],
-            ['PLAYER_MODEL_CHOICE_ENABLED', onOff(flags.playerModelChoice)],
-            ['PLAYER_TEXT_MODELS', flags.playerTextModels ? flags.playerTextModels.join('、') : '未启用'],
-            ['FISH_VOICE_MODEL', flags.fishVoiceModel],
-            ['CHAT_REVIEW_ENABLED', onOff(flags.chatReview)],
-            ['Turnstile', onOff(flags.turnstile)],
-            ['告警', onOff(flags.alerts)],
-            ['告警邮件绑定', yesNo(flags.alertMailBindingPresent)],
-            ['告警收件人', yesNo(flags.alertRecipientSet)],
-          ])
+        ? h(
+            'div',
+            { class: 'sys-flags' },
+            flag('SIGNUP_BONUS_ENABLED', onOff(flags.signupBonus)),
+            flag('PLAYER_MODEL_CHOICE_ENABLED', onOff(flags.playerModelChoice)),
+            flag('PLAYER_TEXT_MODELS', flags.playerTextModels ? flags.playerTextModels.join('、') : '未启用'),
+            flag('FISH_VOICE_MODEL', flags.fishVoiceModel),
+            flag('CHAT_REVIEW_ENABLED', onOff(flags.chatReview)),
+            flag('Turnstile', onOff(flags.turnstile)),
+            flag('告警', onOff(flags.alerts)),
+            flag('告警邮件绑定', yesNo(flags.alertMailBindingPresent)),
+            flag('告警收件人', yesNo(flags.alertRecipientSet)),
+          )
         : h('p', { class: 'admin-hint', text: '这个环境没有提供开关信息。' }),
     );
     switches.classList.add('sys-switches');
     sections.replaceChildren(
       row('top', version, unknown, security),
       row('wide', priceSection(v)),
-      row('pair', budgetSection(v), cleanup),
-      row('wide', switches),
+      row('wide', budgetSection(v)),
+      row('pair', cleanup, switches),
       row('wide', section('技术指标', metricsHost)),
     );
     metrics.show(v.metrics.slice(0, 14) as StageLatencyDay[]);

@@ -23,7 +23,7 @@ export type XyState = {
   buckets: readonly string[];
   ticks: ReadonlyArray<{ index: number; label: string }>;
   /** The y-axis label of a gridline, and the text of a value in a hover. */
-  axisLabel: (value: number) => string;
+  axisLabel: (value: number, ticks: readonly number[]) => string;
   valueLabel: (value: number) => string;
   /** A reference line (in the same unit as the values); drawn only when it lies inside the current scale. */
   alert?: number | null;
@@ -140,13 +140,13 @@ export function xyChart() {
       slot.line.classList.toggle('is-off', tick === undefined);
       if (tick === undefined) return;
       slot.line.style.setProperty('--y', percent((tick / top) * 100));
-      slot.label.textContent = state.axisLabel(tick);
+      slot.label.textContent = state.axisLabel(tick, ticks);
     });
     const alertShown = state.alert != null && state.alert > 0 && state.alert <= top;
     alertLine.classList.toggle('is-off', !alertShown);
     if (alertShown) {
       alertLine.style.setProperty('--y', percent((state.alert! / top) * 100));
-      alertLine.querySelector('.xy-alert-label')!.textContent = state.axisLabel(state.alert!);
+      alertLine.querySelector('.xy-alert-label')!.textContent = state.axisLabel(state.alert!, ticks);
     }
     const count = state.buckets.length;
     if (state.mode === 'bar') {

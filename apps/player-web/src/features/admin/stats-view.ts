@@ -59,8 +59,6 @@ export function statsView(
     download: (filename: string, text: string) => void;
     run: (work: () => Promise<void>) => Promise<void>;
     disposed: () => boolean;
-    /** The current time (UTC day arithmetic only); replaced in tests. */
-    now?: () => number;
   },
 ) {
   let range: StatsRange = 7,
@@ -231,8 +229,9 @@ export function statsView(
     models.setRows(view.byModel);
 
     // ---- five figures: yesterday is the newest complete UTC day ----
-    const today = new Date((deps.now ?? Date.now)()).toISOString().slice(0, 10);
-    const yesterday = view.days.find((day) => day.day === addDays(today, -1)) ?? null;
+    // The newest row is the server's today; yesterday is the row right before it, when the counters ran that day.
+    const today = view.days[0]?.day ?? '';
+    const yesterday = today && view.days[1]?.day === addDays(today, -1) ? view.days[1]! : null;
     kpis.replaceChildren(
       kpi(
         '昨天活跃',

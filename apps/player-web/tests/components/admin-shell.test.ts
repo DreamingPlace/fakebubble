@@ -71,11 +71,7 @@ test('the owner sees everything; everyone else sees only what a permission opens
   assert.deepEqual(labels(access(['characters.read:*', 'characters.edit:*'])), ['角色工作台']);
   assert.deepEqual(labels(access(['characters.edit:*'])), [], 'a role action without read lists nothing');
   assert.deepEqual(labels(access(['characters.read:*', 'characters.preview:*'])), ['角色工作台', '预演测试']);
-  assert.deepEqual(
-    labels(access(['characters.preview:*'])),
-    [] as string[],
-    'preview alone cannot list roles',
-  );
+  assert.deepEqual(labels(access(['characters.preview:*'])), [] as string[], 'preview alone cannot list roles');
   assert.deepEqual(labels(access(['category.publication'])), ['角色工作台', '预演测试']);
   // Named exception (Part 22b): the 运营数据 page no longer exists; its replacement (系统状态) needs the owner or system.read and a page with the client.
   assert.equal(

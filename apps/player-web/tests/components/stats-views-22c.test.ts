@@ -219,7 +219,9 @@ test('消耗表: the month is in USD with the RMB figure (the rate is its toolti
   assert.match(page, /\$2\.00/);
   assert.match(page, /≈ ¥13\.40/);
   assert.match(page, /\$3\.60/);
-  const yuan = (f.root as unknown as FakeElement).querySelectorAll('[title]').find((el) => /¥13\.40/.test(el.textContent))!;
+  const yuan = (f.root as unknown as FakeElement)
+    .querySelectorAll('[title]')
+    .find((el) => /¥13\.40/.test(el.textContent))!;
   assert.equal(yuan.getAttribute('title'), '按 $1 ≈ ¥6.7');
   const detail = rows(f.root, '消耗表（按供应商、模型、阶段）');
   assert.deepEqual(detail[0]!.slice(0, 4), ['2026-11-20', 'fish', 'drama-3', '语音']);

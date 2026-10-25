@@ -3590,7 +3590,7 @@ body:has(.admin-shell) {
   --ad-warn: #6a4000;
   --ad-warn-soft: #fff1d6;
   --ad-ease: cubic-bezier(0.2, 0.82, 0.24, 1);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   background:
     radial-gradient(40% 26% at 18% 0%, #ffe3d3 0%, transparent 70%),
     radial-gradient(35% 24% at 70% 0%, #e9e2ff 0%, transparent 70%), #faf8f6;
@@ -3599,10 +3599,6 @@ body:has(.admin-shell) {
 }
 .account-admin-page.admin-shell[data-nav="collapsed"] {
   --ad-nav-width: 68px;
-}
-.account-admin-page.admin-shell[data-surface="login"],
-.account-admin-page.admin-shell[data-mobile-ok] {
-  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 .account-admin-page.admin-shell [hidden] {
   display: none !important;
@@ -3870,7 +3866,9 @@ body:has(.admin-shell) {
   gap: 8px;
 }
 .account-admin-page.admin-shell .page-head button.admin-secondary,
-.account-admin-page.admin-shell .ov-chart-tools button.admin-secondary {
+.account-admin-page.admin-shell .ov-chart-tools button.admin-secondary,
+.account-admin-page.admin-shell .ov-reload,
+.account-admin-page.admin-shell .sys-reload {
   height: 40px;
   padding: 0 16px;
   border: 1px solid #e4ded7;
@@ -4922,13 +4920,13 @@ body:has(.admin-shell) {
 }
 .account-admin-page.admin-shell .tiers-codes-table {
   table-layout: fixed;
-  min-width: 1000px;
+  min-width: 880px;
 }
 .tiers-dcol-serial {
-  width: 6%;
+  width: 5%;
 }
 .tiers-dcol-code {
-  width: 42%;
+  width: 44%;
 }
 .tiers-dcol-state {
   width: 8%;
@@ -4937,10 +4935,10 @@ body:has(.admin-shell) {
   width: 12%;
 }
 .tiers-dcol-player {
-  width: 10%;
+  width: 9%;
 }
 .tiers-dcol-until {
-  width: 12%;
+  width: 11%;
 }
 .tiers-dcol-action {
   width: 116px;
@@ -4955,7 +4953,7 @@ body:has(.admin-shell) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 11px;
 }
 .account-admin-page.admin-shell .tiers-copy {
   flex: none;
@@ -4972,7 +4970,8 @@ body:has(.admin-shell) {
     background calc(200ms * var(--ad-motion)),
     color calc(200ms * var(--ad-motion));
 }
-.account-admin-page.admin-shell .tiers-copy[aria-pressed="true"] {
+.account-admin-page.admin-shell .tiers-copy.admin-secondary[aria-pressed="true"],
+.account-admin-page.admin-shell .tiers-copy.admin-secondary[aria-pressed="true"]:hover {
   background: #141414;
   color: #fff;
 }
@@ -5087,6 +5086,155 @@ body:has(.admin-shell) {
     right: 0;
     left: auto;
   }
+}
+
+/* ---- second pass: buttons, toasts, system rows ---- */
+.account-admin-page.admin-shell
+button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-toggle, .admin-menu-item)) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #141414;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  transition:
+    background calc(200ms * var(--ad-motion)),
+    color calc(200ms * var(--ad-motion)),
+    transform calc(160ms * var(--ad-motion)),
+    box-shadow calc(200ms * var(--ad-motion));
+}
+.account-admin-page.admin-shell
+  button:not(.seg-button):not(.cost-chip):not(.admin-nav-collapse):not(.admin-account-toggle):not(
+    .admin-menu-item
+  ):active {
+  transform: scale(0.97);
+}
+.account-admin-page.admin-shell button.admin-secondary,
+.account-admin-page.admin-shell .admin-back {
+  border-color: #e4ded7;
+  background: #fff;
+  color: #141414;
+}
+.account-admin-page.admin-shell button.admin-secondary:hover {
+  background: #faf8f6;
+}
+.account-admin-page.admin-shell button:disabled {
+  opacity: 0.5;
+}
+.account-admin-page.admin-shell .admin-toast {
+  border-radius: 999px;
+  background: #141414;
+  color: #fff;
+  animation: adPop calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .admin-toast[data-tone="danger"] {
+  background: #a3330f;
+}
+.account-admin-page.admin-shell select {
+  min-height: 36px;
+  border: 1px solid #e4ded7;
+  border-radius: 999px;
+  background: #fff;
+  padding: 0 14px;
+}
+.account-admin-page.admin-shell .cost-dated {
+  gap: 0;
+}
+.account-admin-page.admin-shell .ov-yesterday {
+  grid-template-columns: 1.35fr 1fr 1fr 1fr;
+}
+.account-admin-page.admin-shell .stat-detail thead th {
+  white-space: normal;
+  vertical-align: bottom;
+  line-height: 1.3;
+}
+.account-admin-page.admin-shell .stat-detail .admin-table th,
+.account-admin-page.admin-shell .stat-detail .admin-table td {
+  padding: 9px 8px;
+}
+.tiers-col-created {
+  width: 11%;
+}
+.tiers-table td:nth-child(3) {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .tiers-shown button {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .tiers-shown .admin-secondary {
+  border: 1px solid #e4ded7;
+}
+.sys-flags {
+  display: flex;
+  flex-direction: column;
+}
+.sys-flag {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--ad-line);
+  font-size: 13px;
+}
+.sys-flag:first-child {
+  border-top: 0;
+}
+.sys-flag-name {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+}
+.sys-flag-value {
+  text-align: right;
+}
+.account-admin-page.admin-shell .system-topup {
+  gap: 6px;
+}
+.account-admin-page.admin-shell .system-topup input {
+  width: 64px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #e4ded7;
+  border-radius: 999px;
+}
+.account-admin-page.admin-shell .system-topup button,
+.account-admin-page.admin-shell #system-renew {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #system-renew {
+  margin-top: 12px;
+}
+.account-admin-page.admin-shell .system-metrics .admin-bar {
+  position: static;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell .system-metrics .admin-bar-title {
+  display: none;
+}
+.account-admin-page.admin-shell .system-metrics .admin-hint {
+  margin: 0 0 10px;
+  color: #4a4a4a;
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .system-result:not(:empty) {
+  border: 0;
+  border-radius: 20px;
+  background: #fff;
+}
+.account-admin-page.admin-shell .models-actions {
+  margin: 8px 0 0;
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */

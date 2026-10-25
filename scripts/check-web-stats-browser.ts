@@ -216,7 +216,7 @@ try {
     '7 days and the totals row',
   );
   await shot(stats, 'player-stats-7-days');
-  await stats.locator('#admin-stats select').selectOption('30');
+  await stats.locator('#admin-stats [aria-label="时间范围"] button', { hasText: '最近 30 天' }).click();
   await stats.waitForFunction(
     () => (document.querySelectorAll('#admin-stats table tbody tr') as NodeListOf<Element>).length > 10,
   );
@@ -242,8 +242,10 @@ try {
 
   // ---- 消耗表: the month spans 2026-11-12 ----
   const costs = await open(owner, 'costs');
-  await costs.getByText('按 1 美元 ≈ 6.7 元估算').waitFor({ timeout: 20_000 });
-  await costs.getByText('Fish Drama 3 的列表价').waitFor();
+  // Part 24b-1: the rate is the tooltip of the ¥ figure (not in the header) and there is no hardcoded price note.
+  await costs.getByText('本月花费').waitFor({ timeout: 20_000 });
+  assert.equal(await costs.locator('#admin-costs [title="按 $1 ≈ ¥6.7"]').count(), 1);
+  assert.equal(await costs.getByText('Fish Drama 3').count(), 0);
   await shot(costs, 'costs-month-spanning-2026-11-12', true);
   const [costsCsv] = await Promise.all([
     costs.waitForEvent('download'),

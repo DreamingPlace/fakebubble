@@ -29,11 +29,18 @@ export function axisTicks(top: number): number[] {
   return Array.from({ length: spans + 1 }, (_, i) => (top / spans) * i);
 }
 
-/** Dollar axis labels: cents under $1, one decimal under $10, whole dollars above. */
-export const dollarLabel = (value: number): string =>
-  `$${value < 1 ? value.toFixed(2) : value < 10 ? value.toFixed(1).replace(/\.0$/, '') : Math.round(value)}`;
+/**
+ * Dollar axis labels. With the gridline values at hand every label gets the same number of decimals (none when every gridline is a whole
+ * dollar: $0 $5 $10; otherwise cents: $0.00 $0.50 $1.00); alone, a value gets cents under $1 and whole dollars above.
+ */
+export const dollarLabel = (value: number, ticks?: readonly number[]): string => {
+  if (!ticks)
+    return `$${value < 1 ? value.toFixed(2) : value < 10 ? value.toFixed(1).replace(/\.0$/, '') : Math.round(value)}`;
+  const decimals = ticks.every((t) => Math.abs(t - Math.round(t)) < 1e-9) ? 0 : 2;
+  return `$${value.toFixed(decimals)}`;
+};
 /** Count axis labels: whole numbers, or a decimal for the rare ceiling below 5. */
-export const countLabel = (value: number): string =>
+export const countLabel = (value: number, _ticks?: readonly number[]): string =>
   Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
 
 /** A line drawn in a viewBox of `width` × `height`: an SVG path, with a gap (a new "M") wherever a value is missing. */
