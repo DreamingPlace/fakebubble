@@ -110,7 +110,6 @@ export function conversationsView(
         ],
       },
     ],
-    actions: [{ label: '刷新', secondary: true, run: () => void deps.run(() => load()) }],
     onChange: (values) => {
       characterId = values.character || null;
       scope = values.scope === 'live' || values.scope === 'archived' ? values.scope : null;

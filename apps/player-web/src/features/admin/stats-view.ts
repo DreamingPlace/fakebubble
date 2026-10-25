@@ -1,37 +1,60 @@
 import {
   STATS_RANGES,
+  type ChartView,
   type CohortRetention,
   type PlayerStatsView,
   type StatsRange,
 } from '../../../../../packages/contracts/web-stats.ts';
 import { h } from '../cocreation/h.ts';
+import { CHARACTER_COLORS } from './overview-view.ts';
+import { countLabel } from './ui/chart-math.ts';
 import { dataTable } from './ui/data-table.ts';
-import { toolbar } from './ui/toolbar.ts';
+import { segmented } from './ui/segmented.ts';
+import { xyChart } from './ui/xy-chart.ts';
 
 const pair = (a: number, b: number) => `${a} / ${b}`;
 const retention = (c: CohortRetention | null) =>
   c === null
     ? '—'
     : `${c.retained} / ${c.cohort}${c.cohort > 0 ? `（${Math.round((c.retained / c.cohort) * 100)}%）` : ''}`;
+const percentOf = (c: CohortRetention | null) =>
+  c === null || c.cohort === 0 ? '—' : `${Math.round((c.retained / c.cohort) * 100)}%`;
 /** '' = a reply admitted while model choice was off. */
 const modelLabel = (model: string) => (model === '' ? '未选择模型' : model);
+const addDays = (day: string, days: number) =>
+  new Date(Date.parse(`${day}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 type Tab = 'days' | 'characters' | 'models';
-const TABS: ReadonlyArray<readonly [Tab, string]> = [
-  ['days', '按天'],
-  ['characters', '按角色'],
-  ['models', '按模型'],
+const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
+  { id: 'days', label: '按天' },
+  { id: 'characters', label: '按角色' },
+  { id: 'models', label: '按模型' },
 ];
 
 /**
- * 玩家 → 玩家统计. Plain tables of counts per UTC day (newest first, with a totals row), per character (display NAME) and per
- * chosen model, for the last 7 / 30 / 90 days, and 导出表格 of the daily table. Nothing here names a player: the server only ever
- * sends counts. The page keeps the existing table and toolbar components; its look is left to the console redesign.
+ * The people who chatted with each character on the newest COMPLETE UTC day (the day before `today`), by display name, from the
+ * 22d chart data. A name the chart does not know reads null.
+ */
+export function chatPeopleByName(chart: ChartView | null, today: string): Map<string, number | null> {
+  const found = new Map<string, number | null>();
+  if (!chart || chart.bucket !== 'day') return found;
+  const index = chart.buckets.indexOf(addDays(today, -1));
+  if (index < 0) return found;
+  for (const series of chart.characters) found.set(series.name, series.values[index] ?? null);
+  return found;
+}
+
+/**
+ * 运营 → 玩家统计. Counts per UTC day (newest first, with a totals row), per character (display NAME, with the people who chatted
+ * with it) and per chosen model, for the last 7 / 30 / 90 days, five figures on top, a bar chart of the people who opened the site
+ * each day, and 导出表格 of the daily table. Nothing here names a player: the server only ever sends counts.
  */
 export function statsView(
   root: HTMLElement,
   deps: {
     load: (range: StatsRange) => Promise<PlayerStatsView>;
+    /** 22d: chat users per character (14 days of daily buckets). Absent or failing = the 聊天人数 of a character reads —. */
+    chatUsers?: (() => Promise<ChartView>) | undefined;
     exportCsv: (range: StatsRange) => Promise<{ csv: string; rows: number }>;
     download: (filename: string, text: string) => void;
     run: (work: () => Promise<void>) => Promise<void>;
@@ -74,18 +97,14 @@ export function statsView(
     emptyText: '还没有统计数据。玩家访问或聊天之后，每日数字会显示在这里。',
     caption: '玩家统计（按天）',
   });
-  const characters = dataTable<PlayerStatsView['byCharacter'][number]>({
-    columns: [
-      { key: 'name', label: '角色' },
-      { key: 'published', label: '回复（成功）', align: 'end' },
-      { key: 'failed', label: '回复（失败）', align: 'end' },
-      { key: 'unknown', label: '回复（未知）', align: 'end' },
-      { key: 'voice', label: '语音回复', align: 'end' },
-    ],
-    rowKey: (row) => row.name,
-    emptyText: '这段时间还没有回复。',
-    caption: '玩家统计（按角色）',
-  });
+  const characters = h('div', { class: 'stat-characters' });
+  const charactersEmpty = h('p', { class: 'admin-empty', text: '这段时间还没有回复。', hidden: true });
+  const characterBox = h(
+    'div',
+    { class: 'stat-characters-box', attrs: { 'aria-label': '玩家统计（按角色）' } },
+    characters,
+    charactersEmpty,
+  );
   const models = dataTable<PlayerStatsView['byModel'][number]>({
     columns: [
       { key: 'model', label: '模型', render: (row) => modelLabel(row.model) },
@@ -98,59 +117,68 @@ export function statsView(
     emptyText: '这段时间还没有回复。',
     caption: '玩家统计（按模型）',
   });
-  const bar = toolbar({
-    title: '玩家统计',
-    filters: [
-      {
-        kind: 'select',
-        id: 'range',
-        label: '范围',
-        options: STATS_RANGES.map((days) => [String(days), `最近 ${days} 天`] as const),
-      },
-    ],
-    actions: [
-      { label: '刷新', secondary: true, run: () => void deps.run(() => load()) },
-      { label: '导出表格', secondary: true, run: () => void deps.run(() => exportTable()) },
-    ],
-    onChange: (values) => {
-      range = Number(values.range) as StatsRange;
+
+  const rangeSwitch = segmented(
+    '时间范围',
+    STATS_RANGES.map((n) => ({ id: String(n), label: `最近 ${n} 天` })),
+    String(range),
+    (id) => {
+      range = Number(id) as StatsRange;
       void deps.run(() => load());
     },
-  });
-  const since = h('p', { class: 'admin-hint', attrs: { role: 'status' } });
-  const buttons = new Map<Tab, HTMLButtonElement>();
-  const tabs = h('div', { class: 'admin-bar', attrs: { role: 'tablist', 'aria-label': '统计视图' } });
-  for (const [id, label] of TABS) {
-    const button = h('button', {
-      class: 'admin-secondary',
-      text: label,
-      attrs: { type: 'button', role: 'tab', 'aria-selected': 'false' },
-    });
-    button.addEventListener('click', () => show(id));
-    buttons.set(id, button);
-    tabs.append(button);
-  }
-  const panels: Record<Tab, HTMLElement> = { days: days.root, characters: characters.root, models: models.root };
-  function show(next: Tab) {
-    tab = next;
-    for (const [id, button] of buttons) button.setAttribute('aria-selected', String(id === tab));
-    for (const id of Object.keys(panels) as Tab[]) panels[id].hidden = id !== tab;
-  }
-  root.replaceChildren(
-    bar.root,
-    since,
-    h('p', {
-      class: 'admin-hint',
-      text: '只含数量，不含玩家、邮箱、昵称或聊天内容。日期按 UTC；回复按玩家发送消息的那一天统计；活跃 = 当天打开过网站，聊天人数 = 当天发过消息；留存只统计注册玩家，次日留存在第 3 天、7 日留存在第 9 天才显示（之前为“—”）。',
-    }),
-    tabs,
-    days.root,
-    characters.root,
-    models.root,
+    'm',
   );
-  show('days');
+  const exportButton = h('button', { class: 'admin-secondary', text: '导出表格', attrs: { type: 'button' } });
+  exportButton.addEventListener('click', () => void deps.run(() => exportTable()));
+  const since = h('span', { class: 'page-kicker', attrs: { role: 'status' } });
+  const kpis = h('div', { class: 'stat-kpis' });
+  const active = xyChart();
+  const activeCard = h(
+    'section',
+    { class: 'stat-active', attrs: { 'aria-label': '每天活跃' } },
+    h(
+      'div',
+      { class: 'cost-chart-bar' },
+      h('h3', { text: '每天活跃' }),
+      h(
+        'span',
+        { class: 'ov-legend' },
+        h('span', { class: 'ov-chip' }, h('i', { class: 'ov-dot is-registered' }), '注册玩家'),
+        h('span', { class: 'ov-chip' }, h('i', { class: 'ov-dot is-guest' }), '访客'),
+      ),
+    ),
+    active.root,
+  );
+  // No tabs: 按天 on top, 按角色 and 按模型 side by side under it.
+  const card = (title: string, ...children: HTMLElement[]) =>
+    h('section', { class: 'stat-detail', attrs: { 'aria-label': title } }, h('h3', { text: title }), ...children);
+  root.replaceChildren(
+    h(
+      'div',
+      { class: 'page-head' },
+      h('div', {}, since, h('h2', { text: '玩家统计' })),
+      h('div', { class: 'ov-chart-tools' }, rangeSwitch.root, exportButton),
+    ),
+    kpis,
+    activeCard,
+    card('按天', days.root),
+    h('div', { class: 'stat-pair' }, card('按角色', characterBox), card('按模型', models.root)),
+  );
+
+  const kpi = (label: string, value: string, sub: string) =>
+    h(
+      'div',
+      { class: 'overview-card' },
+      h('span', { class: 'overview-label', text: label }),
+      h('strong', { text: value }),
+      h('span', { class: 'overview-sub', text: sub }),
+    );
+
   async function load() {
-    const view = await deps.load(range);
+    const [view, chat] = await Promise.all([
+      deps.load(range),
+      deps.chatUsers ? deps.chatUsers().catch(() => null) : Promise.resolve(null),
+    ]);
     if (deps.disposed()) return;
     since.textContent = view.since === null ? '统计尚未开始。' : `统计自 ${view.since} 起（UTC）`;
     const row = (key: string, label: string, r: PlayerStatsView['totals']): Row => ({
@@ -173,8 +201,111 @@ export function statsView(
         ? [...view.days.map((day) => row(day.day, day.day, day)), row('total', '合计', view.totals)]
         : [],
     );
-    characters.setRows(view.byCharacter);
     models.setRows(view.byModel);
+
+    // ---- five figures: yesterday is the newest complete UTC day ----
+    // The newest row is the server's today; yesterday is the row right before it, when the counters ran that day.
+    const today = view.days[0]?.day ?? '';
+    const yesterday = today && view.days[1]?.day === addDays(today, -1) ? view.days[1]! : null;
+    kpis.replaceChildren(
+      kpi(
+        '昨天活跃',
+        yesterday ? String(yesterday.activeRegistered + yesterday.activeGuests) : '—',
+        yesterday ? `注册 ${yesterday.activeRegistered} · 访客 ${yesterday.activeGuests}` : '注册 — · 访客 —',
+      ),
+      kpi('新注册', view.days.length ? String(view.totals.signups) : '—', `最近 ${range} 天`),
+      kpi(
+        '昨天聊天人数',
+        yesterday ? String(yesterday.chatRegistered + yesterday.chatGuests) : '—',
+        yesterday ? `注册 ${yesterday.chatRegistered} · 访客 ${yesterday.chatGuests}` : '注册 — · 访客 —',
+      ),
+      kpi(
+        '次日留存',
+        percentOf(view.totals.d1),
+        view.totals.d1 ? `${view.totals.d1.retained} / ${view.totals.d1.cohort}` : '注册玩家',
+      ),
+      kpi(
+        '7 日留存',
+        percentOf(view.totals.d7),
+        view.totals.d7 ? `${view.totals.d7.retained} / ${view.totals.d7.cohort}` : '注册玩家',
+      ),
+    );
+
+    // ---- 每天活跃: registered players and guests who opened the site, oldest day first ----
+    const chronological = [...view.days].reverse();
+    activeCard.hidden = chronological.length === 0;
+    const step = Math.max(1, Math.ceil(chronological.length / 7));
+    active.update({
+      mode: 'bar',
+      series: [
+        {
+          id: 'registered',
+          name: '注册玩家',
+          color: '#141414',
+          values: chronological.map((d) => d.activeRegistered),
+          on: true,
+        },
+        { id: 'guests', name: '访客', color: '#BDB5AC', values: chronological.map((d) => d.activeGuests), on: true },
+      ],
+      buckets: chronological.map((d) => d.day),
+      ticks: chronological
+        .map((d, index) => ({ index, label: d.day.slice(5) }))
+        .filter((tick) => tick.index % step === 0 || tick.index === chronological.length - 1),
+      axisLabel: countLabel,
+      valueLabel: countLabel,
+      ariaLabel: '每天活跃',
+    });
+
+    // ---- 按角色: a card each, with the people who chatted with it ----
+    const people = chatPeopleByName(chat, today);
+    const replies = view.byCharacter.reduce((sum, c) => sum + c.published, 0);
+    charactersEmpty.hidden = view.byCharacter.length > 0;
+    characters.replaceChildren(
+      ...view.byCharacter.map((c, i) => {
+        const share = replies > 0 ? Math.round((c.published / replies) * 100) : 0;
+        const talked = people.get(c.name);
+        const cardNode = h(
+          'article',
+          { class: 'stat-character', attrs: { 'data-character': c.name } },
+          h('span', { class: 'stat-character-name' }, h('i', { class: 'ov-dot' }), c.name),
+          h('span', { class: 'stat-character-count' }, h('b', { text: String(c.published) }), ' 条回复'),
+          h(
+            'span',
+            { class: 'stat-character-sub' },
+            `语音 ${c.voice} · 失败 ${c.failed} · 未知 ${c.unknown} · `,
+            h('span', {
+              text: `聊天人数 ${talked === undefined || talked === null ? '—' : talked}`,
+              attrs: { title: '昨天（UTC）' },
+            }),
+          ),
+          h(
+            'span',
+            {
+              class: 'stat-share',
+              attrs: {
+                role: 'meter',
+                'aria-valuemin': '0',
+                'aria-valuemax': '100',
+                'aria-valuenow': String(share),
+                'aria-label': `占全部回复 ${share}%`,
+              },
+            },
+            h('span', { class: 'stat-share-fill' }),
+          ),
+          h('span', { class: 'stat-share-text', text: `占全部回复 ${share}%` }),
+        );
+        (cardNode.querySelector('.ov-dot') as HTMLElement).style.setProperty(
+          '--c',
+          CHARACTER_COLORS[i % CHARACTER_COLORS.length]!,
+        );
+        (cardNode.querySelector('.stat-share-fill') as HTMLElement).style.setProperty('--w', `${share}%`);
+        (cardNode.querySelector('.stat-share-fill') as HTMLElement).style.setProperty(
+          '--c',
+          CHARACTER_COLORS[i % CHARACTER_COLORS.length]!,
+        );
+        return cardNode;
+      }),
+    );
   }
   async function exportTable() {
     const { csv } = await deps.exportCsv(range);
@@ -185,8 +316,9 @@ export function statsView(
     clear() {
       since.textContent = '';
       days.setRows([]);
-      characters.setRows([]);
       models.setRows([]);
+      characters.replaceChildren();
+      kpis.replaceChildren();
     },
   };
 }

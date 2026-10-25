@@ -20,6 +20,7 @@ import {
   type ReplyBreakdown,
   type SpendByType,
   type SpendDay,
+  type SpendPriceChange,
   type SpendView,
   type StatsCounts,
   type StatsRange,
@@ -401,7 +402,7 @@ export function readChart(store: Store, now: number, metric: ChartMetric, range:
  * type frozen at admission and by text (draft, review) or voice (speech), in USD micros. A day before the per-type counters ran has
  * `types: null` (shown —). The sum of a day equals that day's ledger amount in web_provider_usage.
  */
-export function readSpend(store: Store, now: number, range: StatsRange): SpendView {
+export function readSpend(store: Store, now: number, range: StatsRange, alertMicros: number | null = null): SpendView {
   requireExtras(store);
   const today = statsUtcDay(now),
     since = extrasSince(store),
@@ -440,7 +441,33 @@ export function readSpend(store: Store, now: number, range: StatsRange): SpendVi
       totalMicros: types.reduce((sum, t) => sum + t.textMicros + t.voiceMicros, unclassified),
     });
   }
-  return { since, range, usdCny: USD_CNY, days, totals: anyKnown ? totals : null };
+  return {
+    since,
+    range,
+    usdCny: USD_CNY,
+    days,
+    totals: anyKnown ? totals : null,
+    alertMicros,
+    priceChanges: readPriceChanges(store, from, today),
+  };
+}
+
+/**
+ * Part 24b-1: the price rows are immutable and versioned, so a change is the row whose number differs from its predecessor's.
+ * Returns the UTC days (inside from..to) such a row takes effect; a database without prices has none.
+ */
+function readPriceChanges(store: Store, from: string, to: string): SpendPriceChange[] {
+  if (!has(store, 'web_provider_prices')) return [];
+  return store
+    .all<{ provider: string; model: string; phase: SpendPriceChange['phase']; valid_from: number }>(
+      `SELECT p.provider,p.model,p.phase,p.valid_from FROM web_provider_prices p
+      JOIN web_provider_prices q ON q.provider=p.provider AND q.model=p.model AND q.phase=p.phase AND q.version=p.version-1
+      WHERE p.upper_micros_per_unit<>q.upper_micros_per_unit AND p.valid_from>=? AND p.valid_from<?
+      ORDER BY p.valid_from,p.provider,p.model,p.phase`,
+      Date.parse(`${from}T00:00:00Z`),
+      Date.parse(`${to}T00:00:00Z`) + DAY_MS,
+    )
+    .map((row) => ({ day: statsUtcDay(row.valid_from), provider: row.provider, model: row.model, phase: row.phase }));
 }
 
 /** 概览's extra numbers (administrators with stats.read): yesterday (UTC) and this month's list-price spend in RMB. */

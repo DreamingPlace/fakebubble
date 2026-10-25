@@ -4,10 +4,23 @@ import { isAdminPage, type AdminPage } from './admin-nav.ts';
 export type AdminRoute = { page: AdminPage; id: string | null };
 const WITH_ID: readonly AdminPage[] = ['characters', 'preview', 'cocreation'];
 
+/**
+ * Old deep links keep working: a page that earlier consoles knew by another name (or that moved, Part 24b-1) resolves to its
+ * place today. `#/grants` (玩家授权) became 邀请与额度; `#/ops` and `#/metrics` (运营数据) became 系统状态 → 技术指标; `#/home` is 总览. The address bar is rewritten to the new place when the route is followed.
+ */
+export const LEGACY_ROUTES: Readonly<Record<string, AdminPage>> = {
+  grants: 'invites',
+  ops: 'system',
+  metrics: 'system',
+  home: 'overview',
+};
+
 export function parseRoute(hash: string): AdminRoute | null {
   const match = /^#\/([a-z]+)(?:\/([A-Za-z0-9_-]{1,128}))?\/?$/.exec(hash);
-  if (!match || !isAdminPage(match[1]!)) return null;
-  const page = match[1] as AdminPage;
+  if (!match) return null;
+  const legacy = LEGACY_ROUTES[match[1]!];
+  if (!legacy && !isAdminPage(match[1]!)) return null;
+  const page = (legacy ?? match[1]) as AdminPage;
   return { page, id: match[2] && WITH_ID.includes(page) ? match[2] : null };
 }
 export const formatRoute = (route: AdminRoute) => `#/${route.page}${route.id ? `/${route.id}` : ''}`;

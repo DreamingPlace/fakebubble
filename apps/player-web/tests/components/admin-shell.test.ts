@@ -5,6 +5,7 @@ import { startAccountAdminPage, environmentLabel } from '../../src/features/admi
 import {
   canSeePage,
   firstAllowedPage,
+  groupPages,
   navMarkup,
   NAV_TREE,
   visibleNav,
@@ -23,21 +24,23 @@ const access = (permissions: string[], over: Partial<NavAccess> = {}): NavAccess
   system: false,
   ...over,
 });
-const labels = (a: NavAccess) => visibleNav(a).flatMap((g) => g.items.map((i) => i.label));
+// Named exception (Part 24b-1): 预演测试 is listed UNDER 角色工作台, so the flat list of labels walks the nested pages too.
+const labels = (a: NavAccess) => visibleNav(a).flatMap((g) => groupPages(g).map((i) => i.label));
 
 test('the nav tree is exactly the agreed groups and pages; 退出登录 and 我的账号 are not in it', () => {
   assert.deepEqual(
-    NAV_TREE.map((g) => [g.label, g.items.map((i) => i.label)]),
+    NAV_TREE.map((g) => [g.label, groupPages(g).map((i) => i.label)]),
     [
-      // Named exception (Part 22b): 概览 stands alone at the top (a group without a title).
-      ['', ['概览']],
-      ['角色', ['角色资料', '预演测试', '共创收件箱']],
+      // Named exception (Part 24b-1): 总览 (was 概览) stands alone at the top (a group without a title).
+      ['', ['总览']],
+      // Named exception (Part 24b-1): 角色资料 is now called 角色工作台 (same page); 预演测试 stays, listed right under it.
+      ['角色', ['角色工作台', '预演测试', '共创收件箱']],
       // Named exception (Part 22a): the invite page is now 邀请与额度 (same place, same permissions to see it). Nothing else changed.
       // Named exception (Part 22a): 玩家授权 left the nav; its functions live on 邀请与额度 now.
-      // Named exception (Part 22b): 积分发放 and the 玩家统计 placeholder join 玩家.
-      ['玩家', ['邀请与额度', '积分发放', '玩家统计']],
-      // Named exception (Part 22b): 运营数据 left the nav (its numbers moved into 系统状态 → 技术指标); 消耗表 is a placeholder until Part 22c.
-      ['运营', ['消耗表']],
+      // Named exception (Part 24b-1): 玩家统计 moved from 玩家 to 运营.
+      ['玩家', ['邀请与额度', '积分发放']],
+      // Named exception (Part 24b-1): 运营 = 玩家统计, 消耗表 (and, behind its switch, 测试对话 - see OPTIONAL_NAV).
+      ['运营', ['玩家统计', '消耗表']],
       // Named exception (Part 21g): 系统 → 模型与价格 is the new first page of the system group. No other assertion changed.
       // Named exception (Part 22b): 系统状态 sits between 模型与价格 and 管理员与权限.
       ['系统', ['模型与价格', '系统状态', '管理员与权限']],
@@ -48,7 +51,8 @@ test('the nav tree is exactly the agreed groups and pages; 退出登录 and 我�
 
 test('the owner sees everything; everyone else sees only what a permission opens, and a page without a client is absent', () => {
   assert.deepEqual(labels(access([], { owner: true })), [
-    '角色资料',
+    // Named exception (Part 24b-1): 角色资料 is now 角色工作台.
+    '角色工作台',
     '预演测试',
     '共创收件箱',
     // Named exception (Part 22a): 邀请码 is now called 邀请与额度.
@@ -64,15 +68,11 @@ test('the owner sees everything; everyone else sees only what a permission opens
   assert.deepEqual(labels(access(['invites.read'])), ['邀请与额度']);
   assert.deepEqual(labels(access(['cocreation.read'])), ['共创收件箱']);
   assert.deepEqual(labels(access(['cocreation.read'], { inbox: false })), []);
-  assert.deepEqual(labels(access(['characters.read:*', 'characters.edit:*'])), ['角色资料']);
+  assert.deepEqual(labels(access(['characters.read:*', 'characters.edit:*'])), ['角色工作台']);
   assert.deepEqual(labels(access(['characters.edit:*'])), [], 'a role action without read lists nothing');
-  assert.deepEqual(labels(access(['characters.read:*', 'characters.preview:*'])), ['角色资料', '预演测试']);
-  assert.deepEqual(
-    labels(access(['characters.preview:*'])),
-    ['角色资料'].slice(1) as string[],
-    'preview alone cannot list roles',
-  );
-  assert.deepEqual(labels(access(['category.publication'])), ['角色资料', '预演测试']);
+  assert.deepEqual(labels(access(['characters.read:*', 'characters.preview:*'])), ['角色工作台', '预演测试']);
+  assert.deepEqual(labels(access(['characters.preview:*'])), [] as string[], 'preview alone cannot list roles');
+  assert.deepEqual(labels(access(['category.publication'])), ['角色工作台', '预演测试']);
   // Named exception (Part 22b): the 运营数据 page no longer exists; its replacement (系统状态) needs the owner or system.read and a page with the client.
   assert.equal(
     labels(access([], { owner: true })).includes('系统状态'),
@@ -396,16 +396,17 @@ test('page: 退出登录 and 我的账号 live in the account menu, which opens 
   assert.equal(surface(f), 'account');
 });
 
-test('page: the sidebar collapses to icons and back', async (t) => {
+// Named exception (Part 24b-1 fix): 收起导航 is gone (the console is for a PC screen); the sidebar is always open.
+test('page: the sidebar has no collapse control', async (t) => {
   const f = setup(t, session(['invites.read']));
   await flush();
-  const main = f.root.querySelector('main');
-  assert.equal(main.attributes.get('data-nav'), 'expanded');
-  f.root.querySelector('#admin-nav-collapse').fire();
-  assert.equal(main.attributes.get('data-nav'), 'collapsed');
-  assert.equal(f.root.querySelector('#admin-nav-collapse').attributes.get('aria-pressed'), 'true');
-  f.root.querySelector('#admin-nav-collapse').fire();
-  assert.equal(main.attributes.get('data-nav'), 'expanded');
+  assert.equal(f.root.querySelector('main').attributes.get('data-nav'), undefined);
+  assert.equal(f.root.querySelector('#admin-nav-collapse').dataset.page, undefined);
+  assert.ok(
+    !readFileSync(new URL('../../src/features/admin/account-admin-page.ts', import.meta.url), 'utf8').includes(
+      '收起导航',
+    ),
+  );
 });
 
 test('page: the preview page lists only roles the administrator may preview and opens one into its own pane', async (t) => {

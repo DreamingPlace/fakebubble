@@ -99,7 +99,6 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       'aria-label': '搜索',
     },
   });
-  const refresh = h('button', { text: '刷新', attrs: { type: 'button', class: 'cc-refresh' } });
   const selectAll = h('button', { text: '全选本页', attrs: { type: 'button' }, class: 'cc-select-all' });
   const archiveSelected = h('button', { text: '归档所选', attrs: { type: 'button' }, class: 'cc-archive-selected' });
   const bulk = h('div', { class: 'cc-bulk' }, selectAll, archiveSelected);
@@ -109,9 +108,6 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   const pane = h('section', { class: 'cc-detail', attrs: { 'aria-live': 'polite' } });
   root.replaceChildren(
     h('h2', { text: '共创收件箱' }),
-    h('p', {
-      text: '玩家为官方角色写下的想法。这里只读、摘取和改写：自动不会进入角色，“加入草稿”也只写草稿，仍须预览并发布。快捷键：j / k 切换，e 归档，s 星标。',
-    }),
     h(
       'div',
       { class: 'cc-toolbar' },
@@ -119,7 +115,6 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       h('label', { text: '状态' }, statusSelect),
       h('label', { class: 'cc-star-filter' }, starred, '只看星标'),
       h('label', { text: '搜索' }, query),
-      refresh,
     ),
     bulk,
     empty,
@@ -599,7 +594,6 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     }
   });
   query.addEventListener('change', search);
-  refresh.addEventListener('click', reload);
   more.addEventListener('click', () => {
     if (next) void deps.run(() => load(next));
   });

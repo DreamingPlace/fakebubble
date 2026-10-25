@@ -23,19 +23,30 @@ export type AdminPage =
   | 'system'
   | 'members'
   | 'account';
-export type NavItem = { page: Exclude<AdminPage, 'account'>; label: string; icon: string };
+export type NavItem = {
+  page: Exclude<AdminPage, 'account'>;
+  label: string;
+  icon: string;
+  /** Pages that belong under this one (indented beneath it in the sidebar). 预演测试 sits under 角色工作台. */
+  subs?: readonly NavItem[];
+};
 export type NavGroup = { id: string; label: string; items: readonly NavItem[] };
 
-/** First-level navigation. The order is also the order of "the first page this administrator may use". */
+/** First-level navigation (Part 24b-1). The order is also the order of "the first page this administrator may use". */
 export const NAV_TREE: readonly NavGroup[] = [
-  // 概览 stands alone at the top: its group has no title of its own.
-  { id: 'overview', label: '', items: [{ page: 'overview', label: '概览', icon: 'home' }] },
+  // 总览 stands alone at the top: its group has no title of its own.
+  { id: 'overview', label: '', items: [{ page: 'overview', label: '总览', icon: 'home' }] },
   {
     id: 'roles',
     label: '角色',
     items: [
-      { page: 'characters', label: '角色资料', icon: 'user' },
-      { page: 'preview', label: '预演测试', icon: 'play' },
+      // 角色工作台 is today's 角色资料 page; the 预演测试 page stays reachable right under it, unchanged.
+      {
+        page: 'characters',
+        label: '角色工作台',
+        icon: 'user',
+        subs: [{ page: 'preview', label: '预演测试', icon: 'play' }],
+      },
       { page: 'cocreation', label: '共创收件箱', icon: 'inbox' },
     ],
   },
@@ -45,10 +56,16 @@ export const NAV_TREE: readonly NavGroup[] = [
     items: [
       { page: 'invites', label: '邀请与额度', icon: 'ticket' },
       { page: 'points', label: '积分发放', icon: 'coin' },
-      { page: 'stats', label: '玩家统计', icon: 'chart' },
     ],
   },
-  { id: 'ops', label: '运营', items: [{ page: 'costs', label: '消耗表', icon: 'table' }] },
+  {
+    id: 'ops',
+    label: '运营',
+    items: [
+      { page: 'stats', label: '玩家统计', icon: 'chart' },
+      { page: 'costs', label: '消耗表', icon: 'table' },
+    ],
+  },
   {
     id: 'system',
     label: '系统',
@@ -66,7 +83,7 @@ export const NAV_TREE: readonly NavGroup[] = [
  * them unless the session says the switch is on and the administrator holds the permission.
  */
 export const OPTIONAL_NAV: ReadonlyArray<NavItem & { group: string; first?: boolean }> = [
-  { group: 'ops', page: 'conversations', label: '测试对话', icon: 'chat', first: true },
+  { group: 'ops', page: 'conversations', label: '测试对话', icon: 'chat' },
 ];
 /** NAV_TREE plus the switch-gated pages, in their groups (an item marked `first` goes before the group's own pages). */
 export const navTree = (): NavGroup[] =>
@@ -84,6 +101,8 @@ export const navTree = (): NavGroup[] =>
       ],
     };
   });
+/** Every item of a group with the pages nested under them, in sidebar order. */
+export const groupPages = (group: NavGroup): NavItem[] => group.items.flatMap((item) => [item, ...(item.subs ?? [])]);
 
 /** What decides visibility. `inbox` says whether this page was given a client for it at all. */
 export type NavAccess = {
@@ -97,7 +116,7 @@ export type NavAccess = {
   /** This page was given the clients for 概览 / 系统状态 / 积分发放 (Part 22b) and 玩家统计 / 消耗表 (Part 22c). Absent = those pages do not exist here. */
   system?: boolean;
 };
-export const PAGES: readonly AdminPage[] = [...navTree().flatMap((g) => g.items.map((i) => i.page)), 'account'];
+export const PAGES: readonly AdminPage[] = [...navTree().flatMap((g) => groupPages(g).map((i) => i.page)), 'account'];
 export const isAdminPage = (value: string): value is AdminPage => (PAGES as readonly string[]).includes(value);
 
 /** Hidden, never disabled. The server still checks every request; this only decides what is worth showing. */
@@ -136,7 +155,12 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
 }
 export const visibleNav = (access: NavAccess): NavGroup[] =>
   navTree()
-    .map((group) => ({ ...group, items: group.items.filter((item) => canSeePage(item.page, access)) }))
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .filter((item) => canSeePage(item.page, access))
+        .map((item) => (item.subs ? { ...item, subs: item.subs.filter((sub) => canSeePage(sub.page, access)) } : item)),
+    }))
     .filter((group) => group.items.length > 0);
 /** Where to land: the first sidebar page the administrator may use, else their account. */
 export const firstAllowedPage = (access: NavAccess): AdminPage => visibleNav(access)[0]?.items[0]?.page ?? 'account';
@@ -160,16 +184,15 @@ const ICON_PATHS: Record<string, string> = {
 };
 const icon = (name: string) =>
   `<svg class="admin-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] ?? ''}</svg>`;
+const link = (item: NavItem, sub = false) =>
+  `<a class="admin-nav-item${sub ? ' admin-nav-sub' : ''}" href="#/${item.page}" data-page="${item.page}" title="${item.label}">${icon(item.icon)}<span>${item.label}</span></a>`;
 /** Static markup for every item; `render()` of the page then hides what the administrator may not use. */
 export const navMarkup = () =>
   navTree()
     .map(
       (group) =>
         `<div class="admin-nav-group" data-group="${group.id}">${group.label ? `<p class="admin-nav-title">${group.label}</p>` : ''}${group.items
-          .map(
-            (item) =>
-              `<a class="admin-nav-item" href="#/${item.page}" data-page="${item.page}" title="${item.label}">${icon(item.icon)}<span>${item.label}</span></a>`,
-          )
+          .map((item) => link(item) + (item.subs ?? []).map((sub) => link(sub, true)).join(''))
           .join('')}</div>`,
     )
     .join('');

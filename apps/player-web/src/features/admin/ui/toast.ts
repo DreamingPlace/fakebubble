@@ -10,6 +10,10 @@ export function toastHost(parent: HTMLElement, options: { ttlMs?: number } = {})
   return {
     region,
     show(text: string, tone: BadgeTone = 'info') {
+      // One at a time: a new message replaces the one on screen.
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+      region.replaceChildren();
       const toast = h('div', { class: 'admin-toast', text, attrs: { 'data-tone': tone } });
       region.append(toast);
       const timer = setTimeout(() => {

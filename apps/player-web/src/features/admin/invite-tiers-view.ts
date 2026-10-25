@@ -102,7 +102,9 @@ export function browserDownload(filename: string, text: string) {
 export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   const { port } = deps;
   let batches: InviteBatch[] = [];
-  let open: { batch: InviteBatch; codes: InviteBatchCode[] } | null = null;
+  /** `fresh`: the batch was created a moment ago - the detail says so, and the codes returned at creation back up each 复制. */
+  let open: { batch: InviteBatch; codes: InviteBatchCode[]; fresh: string[] | null } | null = null;
+  const copied = new Set<string>();
   let editing: string | null = null;
   // A creation or an edit whose outcome was never seen is retried under the same request id, so it never applies twice.
   let createPending: { id: string; signature: string } | null = null;
@@ -133,6 +135,13 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   const cap = num('tiers-cap', 1, TIER_FORM.capMax, String(TIER_FORM.defaultCap));
   const duration = num('tiers-duration', 1, TIER_FORM.durationMax);
   const redeemBy = h('input', { attrs: { id: 'tiers-redeem-by', type: 'date' } });
+  // Part 22d: a test batch (测试组) is marked here, at creation, and never changed afterwards.
+  const testBox = h('input', { attrs: { type: 'checkbox', id: 'tiers-test' } });
+  const testField = h(
+    'div',
+    { class: 'tiers-field tiers-test' },
+    h('label', { attrs: { for: 'tiers-test', title: '兑换这批码的玩家算测试组；创建后不能再改' } }, testBox, ' 测试'),
+  );
   const problem = h('p', { class: 'admin-hint tiers-problem', attrs: { role: 'alert' }, hidden: true });
   const create = h('button', { text: '生成邀请码', attrs: { type: 'submit', id: 'tiers-create' } });
   const refillFields = h(
@@ -144,56 +153,26 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   const form = h(
     'form',
     { class: 'tiers-form', attrs: { id: 'admin-tiers-create', novalidate: 'novalidate' } },
-    h('h3', { text: '新建批次' }),
     field('tiers-name', '批次名称', name),
     field('tiers-count', '邀请码数量（1–500）', count),
     h(
-      'fieldset',
-      { class: 'tiers-kind' },
-      h('legend', { text: '额度类型' }),
-      h('label', {}, kindUnlimited, ' 不限量'),
-      h('label', {}, kindRefill, ' 每天补充'),
+      'div',
+      { class: 'tiers-field tiers-kind-field' },
+      h('span', { class: 'tiers-label', text: '额度类型', attrs: { id: 'tiers-kind-label' } }),
+      h(
+        'div',
+        { class: 'tiers-kind', attrs: { role: 'radiogroup', 'aria-labelledby': 'tiers-kind-label' } },
+        h('label', {}, kindUnlimited, h('span', { text: '不限量' })),
+        h('label', {}, kindRefill, h('span', { text: '每天补充' })),
+      ),
     ),
     refillFields,
     field('tiers-duration', '额度有效天数（可选，不填为长期）', duration),
     field('tiers-redeem-by', '兑换截止日期（UTC，可选）', redeemBy),
+    testField,
     problem,
-    create,
+    h('div', { class: 'tiers-form-actions' }, create),
   );
-
-  const shownTitle = h('strong', { text: '邀请码（现在显示；之后可在批次的“查看”里再次查看）' });
-  const shownList = h('textarea', {
-    class: 'tiers-codes',
-    attrs: { readonly: 'readonly', rows: '8', 'aria-label': '邀请码' },
-  });
-  const shownCopy = h('button', { text: '复制', attrs: { type: 'button', id: 'tiers-copy' } });
-  const shownDownload = h('button', { text: '下载 CSV', attrs: { type: 'button', id: 'tiers-download' } });
-  const shownClose = h('button', {
-    class: 'admin-secondary',
-    text: '已保存，清除显示',
-    attrs: { type: 'button', id: 'tiers-shown-close' },
-  });
-  const shown = h(
-    'section',
-    { class: 'tiers-shown invite-admin-result', attrs: { id: 'tiers-shown' }, hidden: true },
-    shownTitle,
-    shownList,
-    h('div', { class: 'tiers-shown-actions' }, shownCopy, shownDownload, shownClose),
-  );
-  let shownCodes: string[] = [];
-  let shownName = '';
-  const clearShown = () => {
-    shownCodes = [];
-    shownList.value = '';
-    shown.hidden = true;
-  };
-  shownClose.addEventListener('click', clearShown);
-  shownCopy.addEventListener('click', () => {
-    if (shownCodes.length) void copyText(shownCodes.join('\n'));
-  });
-  shownDownload.addEventListener('click', () => {
-    if (shownCodes.length) download(`${shownName || 'invites'}.csv`, codesCsv(shownCodes));
-  });
 
   // ---- the list ---------------------------------------------------------------------------------------------------------
   const body = h('tbody');
@@ -201,6 +180,13 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     'table',
     { class: 'admin-table tiers-table', attrs: { 'aria-label': '邀请批次' } },
     h('caption', { text: '邀请批次' }),
+    h(
+      'colgroup',
+      {},
+      ...['name', 'tier', 'created', 'num', 'num', 'num', 'num', 'actions'].map((c) =>
+        h('col', { class: `tiers-col-${c}` }),
+      ),
+    ),
     h(
       'thead',
       {},
@@ -216,25 +202,34 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   );
   const empty = h('p', { class: 'admin-hint', text: '还没有邀请批次。', hidden: true });
   const detail = h('section', { class: 'tiers-detail', hidden: true });
-  const reload = h('button', { class: 'admin-secondary', text: '刷新', attrs: { type: 'button' } });
-
+  const summary = h('span', { class: 'tiers-summary' });
+  // Two columns, nothing folded: the creation form on the left; on the right the batches, and under them the codes of the
+  // batch that is selected (a click on its row; a new batch is selected as soon as it exists).
   root.replaceChildren(
-    h('h2', { text: '邀请与额度' }),
-    form,
-    shown,
-    h('div', { class: 'tiers-list-head' }, h('h3', { text: '批次' }), reload),
-    empty,
-    h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table)),
-    detail,
+    h('div', { class: 'page-head' }, h('h2', { text: '邀请与额度' })),
+    h(
+      'div',
+      { class: 'tiers-layout' },
+      h('div', { class: 'tiers-side' }, form),
+      h(
+        'div',
+        { class: 'tiers-main' },
+        h('div', { class: 'tiers-list-head' }, h('h3', { text: '批次' }), summary),
+        empty,
+        h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table)),
+        detail,
+      ),
+    ),
   );
 
   /** Copy to the clipboard and say so; a refusal (no permission, no secure context) is told, never silent. */
-  async function copyText(text: string) {
+  async function copyText(text: string): Promise<boolean> {
     try {
       await copy(text);
-      deps.toast('已复制');
+      return true;
     } catch {
       deps.toast('复制没有成功，请手动选取文字');
+      return false;
     }
   }
   const cell = (label: string, ...children: (Node | string)[]) =>
@@ -245,6 +240,33 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     return node;
   };
 
+  /** Clicking a batch row (not one of its buttons) selects it: its codes show under the list. Enter and Space do the same. */
+  const insideControl = (target: unknown, row: unknown) => {
+    for (
+      let node = target as { tagName?: string; parentNode?: unknown; parent?: unknown } | null;
+      node && node !== row;
+    ) {
+      if (node.tagName === 'BUTTON' || node.tagName === 'INPUT') return true;
+      node = (node.parentNode ?? node.parent) as typeof node;
+    }
+    return false;
+  };
+  function selectable(row: HTMLElement, batch: InviteBatch) {
+    const pick = () => {
+      if (open?.batch.id !== batch.id) void deps.run(() => show(batch));
+    };
+    row.addEventListener('click', (event) => {
+      if (!insideControl(event.target, row)) pick();
+    });
+    row.addEventListener('keydown', (event) => {
+      const key = (event as KeyboardEvent).key;
+      if ((key === 'Enter' || key === ' ') && !insideControl(event.target, row)) {
+        event.preventDefault();
+        pick();
+      }
+    });
+    return row;
+  }
   function paintList() {
     body.replaceChildren(
       ...batches
@@ -252,7 +274,6 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
           const actions = h(
             'div',
             { class: 'tiers-actions' },
-            button('查看', () => void deps.run(() => show(batch))),
             batch.tier === 'daily_refill' && deps.isOwner()
               ? button('修改额度', () => {
                   editing = batch.id;
@@ -262,17 +283,32 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
             button('撤销整批', () => void deps.run(() => revokeBatch(batch)), 'admin-secondary tiers-danger'),
           );
           const rows: HTMLElement[] = [
-            h(
-              'tr',
-              { attrs: { 'data-batch': batch.id } },
-              h('th', { text: batch.name, attrs: { scope: 'row' } }),
-              cell('类型', tierText(batch), batch.durationDays ? ` · ${batch.durationDays} 天` : ''),
-              cell('创建', utcDay(batch.createdAt)),
-              cell('邀请码', String(batch.codes)),
-              cell('已兑换', String(batch.redeemed)),
-              cell('已撤销', String(batch.revoked)),
-              cell('持有中', String(batch.holders)),
-              cell('操作', actions),
+            selectable(
+              h(
+                'tr',
+                {
+                  class: open?.batch.id === batch.id ? 'is-selected' : '',
+                  attrs: {
+                    'data-batch': batch.id,
+                    tabindex: '0',
+                    'aria-selected': String(open?.batch.id === batch.id),
+                  },
+                },
+                h(
+                  'th',
+                  { attrs: { scope: 'row' } },
+                  h('span', { class: 'tiers-name', text: batch.name }),
+                  batch.test ? h('span', { class: 'tiers-test-badge', text: '测试' }) : null,
+                ),
+                cell('类型', tierText(batch), batch.durationDays ? ` · ${batch.durationDays} 天` : ''),
+                cell('创建', utcDay(batch.createdAt)),
+                cell('邀请码', String(batch.codes)),
+                cell('已兑换', String(batch.redeemed)),
+                cell('已撤销', String(batch.revoked)),
+                cell('持有中', String(batch.holders)),
+                cell('操作', actions),
+              ),
+              batch,
             ),
           ];
           if (editing === batch.id) rows.push(editorRow(batch));
@@ -282,6 +318,11 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     );
     empty.hidden = batches.length > 0;
     table.hidden = batches.length === 0;
+    const held = (tier: InviteBatch['tier']) =>
+      batches.filter((b) => b.tier === tier).reduce((n, b) => n + b.holders, 0);
+    summary.textContent = batches.length
+      ? `持有中 ${held('unlimited') + held('daily_refill')} 人 · 不限量 ${held('unlimited')} · 每天补充 ${held('daily_refill')}`
+      : '';
   }
 
   function editorRow(batch: InviteBatch) {
@@ -354,24 +395,39 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     );
   }
 
-  async function show(batch: InviteBatch) {
+  async function show(batch: InviteBatch, fresh: string[] | null = null) {
     const codes = await port.inviteBatchDetail!(batch.id);
     if (deps.disposed()) return;
-    open = { batch, codes };
+    if (open?.batch.id !== batch.id) copied.clear();
+    open = { batch, codes, fresh: fresh ?? (open?.batch.id === batch.id ? open.fresh : null) };
     paintDetail();
+    paintList();
   }
+  /** The code to copy for this row: what the server sent in the clear, else - for a batch made a moment ago - what creation returned. */
+  const plainOf = (code: InviteBatchCode): string | null => {
+    if (code.codeView === 'plain' && typeof code.code === 'string') return code.code;
+    if (code.codeView === undefined && open?.fresh) return open.fresh[code.serial - 1] ?? null;
+    return null;
+  };
   /** The 邀请码 cell: the code with its own 复制 (plain), the mask, or the notice for a code that was never kept. */
   function codeCell(code: InviteBatchCode) {
-    if (code.codeView === 'plain' && typeof code.code === 'string') {
-      const plain = code.code;
+    const plain = plainOf(code);
+    if (plain !== null) {
+      const done = copied.has(code.id);
+      const copyButton = button(done ? '已复制' : '复制', () => {}, 'admin-secondary tiers-copy');
+      copyButton.setAttribute('aria-label', `复制邀请码 #${code.serial}`);
+      copyButton.setAttribute('aria-pressed', String(done));
+      copyButton.addEventListener('click', () => {
+        void copyText(plain).then((ok) => {
+          if (!ok) return;
+          copied.add(code.id);
+          copyButton.textContent = '已复制';
+          copyButton.setAttribute('aria-pressed', 'true');
+        });
+      });
       return cell(
         '邀请码',
-        h(
-          'div',
-          { class: 'tiers-code-cell' },
-          h('code', { class: 'tiers-code-text', text: plain }),
-          button('复制', () => void copyText(plain), 'admin-secondary tiers-copy'),
-        ),
+        h('div', { class: 'tiers-code-cell' }, h('code', { class: 'tiers-code-text', text: plain }), copyButton),
       );
     }
     return cell(
@@ -397,8 +453,34 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     const { batch, codes } = open;
     detail.hidden = false;
     const masked = codes.some((code) => code.codeView === 'masked');
+    const unusedPlain = codes
+      .filter((code) => code.state === 'unused')
+      .map(plainOf)
+      .filter((c): c is string => c !== null);
+    const copyAll = button(
+      '复制全部未使用',
+      () => void copyText(unusedPlain.join('\n')).then((ok) => ok && (copyAll.textContent = '已复制全部未使用')),
+      'admin-secondary tiers-copy-all',
+    );
     detail.replaceChildren(
-      h('h3', { text: `${batch.name} · ${tierText(batch)}` }),
+      h(
+        'div',
+        { class: 'tiers-detail-head' },
+        h('h3', { text: `${batch.name} · ${tierText(batch)}` }),
+        h(
+          'span',
+          { class: 'tiers-chips' },
+          batch.durationDays ? h('span', { text: `${batch.durationDays} 天` }) : h('span', { text: '长期' }),
+          h('span', { class: 'tiers-chip-date', text: utcDay(batch.createdAt) }),
+          batch.test ? h('span', { class: 'tiers-test-badge', text: '测试' }) : null,
+        ),
+        h(
+          'div',
+          { class: 'tiers-detail-actions' },
+          unusedPlain.length ? copyAll : null,
+          button('导出表格', () => void deps.run(() => exportTable(batch)), 'admin-secondary tiers-export'),
+        ),
+      ),
       ...(masked
         ? [
             h('p', {
@@ -416,6 +498,13 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
           h(
             'table',
             { class: 'admin-table tiers-codes-table', attrs: { 'aria-label': '邀请码' } },
+            h(
+              'colgroup',
+              {},
+              ...['serial', 'code', 'state', 'at', 'player', 'until', 'action'].map((c) =>
+                h('col', { class: `tiers-dcol-${c}` }),
+              ),
+            ),
             h(
               'thead',
               {},
@@ -463,15 +552,6 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
             ),
           ),
         ),
-      ),
-      h(
-        'div',
-        { class: 'tiers-detail-actions' },
-        button('导出表格', () => void deps.run(() => exportTable(batch)), 'admin-secondary tiers-export'),
-        button('收起', () => {
-          open = null;
-          paintDetail();
-        }),
       ),
     );
   }
@@ -563,7 +643,15 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       by = Date.parse(`${redeemBy.value}T23:59:59.999Z`);
       if (!Number.isSafeInteger(by) || by <= Date.now()) return '兑换截止日期需要是今天之后。';
     }
-    return { requestId: '', name: label, count: n, tier, durationDays: days, redeemBy: by };
+    return {
+      requestId: '',
+      name: label,
+      count: n,
+      tier,
+      durationDays: days,
+      redeemBy: by,
+      ...(testBox.checked ? { test: true } : {}),
+    };
   }
 
   form.addEventListener('submit', (event) => {
@@ -579,12 +667,6 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       const result = await port.createInviteBatch!({ ...input, requestId: createPending.id });
       createPending = null;
       if (deps.disposed()) return;
-      if (result.codes) {
-        shownCodes = result.codes;
-        shownName = input.name;
-        shownList.value = result.codes.join('\n');
-        shown.hidden = false;
-      }
       name.value = '';
       duration.value = '';
       redeemBy.value = '';
@@ -592,24 +674,28 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       cap.value = String(TIER_FORM.defaultCap);
       count.value = '10';
       kindRefill.checked = true;
+      testBox.checked = false;
       syncKind();
-      deps.toast(result.codes ? '已生成，邀请码只显示这一次' : '这个批次已经生成过了');
+      if (!result.codes) deps.toast('这个批次已经生成过了');
       await load();
+      // Right away: the new batch's codes, each with its own 复制.
+      const made = batches.find((entry) => entry.id === result.batchId);
+      if (made && port.inviteBatchDetail) await show(made, result.codes);
     });
   });
-  reload.addEventListener('click', () => void deps.run(load));
 
   return {
     load,
     /** The codes shown once are wiped (logout, a new session, leaving the page). */
-    clearSecrets: clearShown,
+    clearSecrets: () => {
+      if (open) open.fresh = null;
+    },
     clear() {
       batches = [];
       open = null;
       editing = null;
       createPending = null;
       editPending = null;
-      clearShown();
       body.replaceChildren();
       detail.replaceChildren();
       detail.hidden = true;

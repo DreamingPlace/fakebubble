@@ -135,6 +135,11 @@ export type SpendDay = {
   unclassifiedMicros: number | null;
   totalMicros: number | null;
 };
+/**
+ * A real price change (Part 24b-1): a new version of a provider / model / phase price row whose number differs from the version
+ * before it, on the UTC day it takes effect. A renewal at the same number is not a change. Names only, never an id.
+ */
+export type SpendPriceChange = { day: string; provider: string; model: string; phase: 'draft' | 'review' | 'speech' };
 export type SpendView = {
   since: string | null;
   range: StatsRange;
@@ -142,4 +147,8 @@ export type SpendView = {
   days: SpendDay[];
   /** The range's sum over the days that are known, by type; null when no day is. */
   totals: SpendByType[] | null;
+  /** Part 24b-1: ALERT_DAILY_SPEND_MICROS while the owner alerts are on (the line 消耗表 draws); null = no alert is configured. */
+  alertMicros: number | null;
+  /** Part 24b-1: the real price changes inside the range, oldest first; empty = nothing to mark. */
+  priceChanges: SpendPriceChange[];
 };

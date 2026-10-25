@@ -25,7 +25,15 @@ import type {
   SystemUnknownKind,
   SystemWarnings,
 } from '../../../../packages/contracts/web-system.ts';
-import type { CostsView, PlayerStatsView, StatsRange } from '../../../../packages/contracts/web-stats.ts';
+import type {
+  ChartMetric,
+  ChartRange,
+  ChartView,
+  CostsView,
+  PlayerStatsView,
+  SpendView,
+  StatsRange,
+} from '../../../../packages/contracts/web-stats.ts';
 import {
   ADMIN_PERMISSION_LIMIT,
   isAdminPermission,
@@ -107,6 +115,8 @@ export type InviteBatch = {
   redeemed: number;
   revoked: number;
   holders: number;
+  /** Part 22d: true only on a test batch (测试组). */
+  test?: true;
 };
 export type InviteBatchCode = {
   id: string;
@@ -130,6 +140,8 @@ export type NewInviteBatch = {
   tier: { kind: 'unlimited' } | { kind: 'daily_refill'; dailyAmount: number; cap: number };
   durationDays: number | null;
   redeemBy: number | null;
+  /** Part 22d: a test batch (测试组); set here at creation and never changed. Omitted = not a test batch. */
+  test?: boolean;
 };
 const invalid = () => new Error('WEB_INVITE_ADMIN_PROTOCOL_INVALID');
 function object(value: unknown): Record<string, unknown> {
@@ -408,6 +420,18 @@ export class AccountAdminApi extends InviteAdminApi {
     object(row.month);
     return row as unknown as CostsView;
   }
+  /** 总览 chart (Part 22d): replies or chat users, per character and in total. */
+  async chart(metric: ChartMetric, range: ChartRange): Promise<ChartView> {
+    const row = object(await this.request('/stats/chart', { metric, range }));
+    if (!Array.isArray(row.buckets) || !Array.isArray(row.total) || !Array.isArray(row.characters)) throw invalid();
+    return row as unknown as ChartView;
+  }
+  /** 消耗表 by user type (Part 22d) with the alert line and the real price changes (Part 24b-1). */
+  async spendByType(range: StatsRange): Promise<SpendView> {
+    const row = object(await this.request('/stats/spend-by-type', { range }));
+    if (!Array.isArray(row.days) || !Array.isArray(row.priceChanges) || typeof row.usdCny !== 'number') throw invalid();
+    return row as unknown as SpendView;
+  }
   async exportCosts(range: StatsRange): Promise<{ csv: string; rows: number }> {
     const row = object(await this.request('/stats/costs-export', { range }));
     return { csv: string(row.csv), rows: time(row.rows) };
@@ -433,6 +457,7 @@ export class AccountAdminApi extends InviteAdminApi {
         redeemed: time(b.redeemed),
         revoked: time(b.revoked),
         holders: time(b.holders),
+        ...(b.test === true ? { test: true as const } : {}),
       };
     });
   }

@@ -127,34 +127,23 @@ export function modelsView(
     },
   });
   const saveButton = h('button', { text: '保存', attrs: { type: 'button', id: 'models-save' } });
-  const reloadButton = h('button', { class: 'admin-secondary', text: '刷新', attrs: { type: 'button' } });
   const readonly = h('p', {
     class: 'admin-hint',
-    text: '你可以查看，但不能修改。需要“模型与价格”管理权限，请联系主管理员。',
+    text: '只读：需要“模型与价格”管理权限',
     hidden: true,
   });
   const recent = h('ul', { class: 'models-recent' });
-  const recentEmpty = h('p', { class: 'admin-hint', text: '还没有修改记录。', hidden: true });
+  const recentHead = h('h3', { text: '最近修改', hidden: true });
 
   root.replaceChildren(
     h('h2', { text: '模型与价格' }),
-    h('p', {
-      class: 'admin-hint',
-      text: '决定玩家能选哪些回复模型、谁能选、每条消息多少点。保存后下一条消息就按新设置处理，不需要重新部署；已发出的消息保留当时的模型和价格。',
-    }),
     banner,
     readonly,
     h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table)),
-    h(
-      'div',
-      { class: 'models-voice' },
-      h('label', { text: '语音加点（回复带语音时，每条额外加的点数，0–20）', attrs: { for: 'models-voice' } }),
-      voiceInput,
-    ),
+    h('div', { class: 'models-voice' }, h('label', { text: '语音加点', attrs: { for: 'models-voice' } }), voiceInput),
     problem,
-    h('div', { class: 'models-actions' }, saveButton, reloadButton),
-    h('h3', { text: '最近修改' }),
-    recentEmpty,
+    h('div', { class: 'models-actions' }, saveButton),
+    recentHead,
     recent,
   );
 
@@ -193,9 +182,9 @@ export function modelsView(
   }
   function paint() {
     if (!view || !draft) return;
-    banner.textContent = view.featureOn
-      ? `当前价格版本 v${view.priceVersion}。“未配置”表示服务器环境没有列出该模型（PLAYER_TEXT_MODELS）或缺少它的 API 密钥，不管这里怎么设置，玩家都看不到它。`
-      : '玩家选模型功能目前没有打开（PLAYER_MODEL_CHOICE_ENABLED），所以这里的设置暂时不会影响玩家；可以先设置好。';
+    // Only a warning that changes what the administrator should do: while the switch is off the table has no effect on players.
+    banner.textContent = view.featureOn ? '' : '玩家选模型未开启（PLAYER_MODEL_CHOICE_ENABLED）';
+    banner.hidden = view.featureOn;
     body.replaceChildren();
     for (const entry of draft.models) {
       const info = view.models.find((m) => m.model === entry.model)!;
@@ -250,7 +239,7 @@ export function modelsView(
     }
     voiceInput.value = String(draft.voicePoints);
     recent.replaceChildren(...view.recent.map((change) => h('li', { text: changeLine(change, labels()) })));
-    recentEmpty.hidden = view.recent.length > 0;
+    recentHead.hidden = view.recent.length === 0;
     refreshControls();
   }
   voiceInput.addEventListener('input', () => {
@@ -267,7 +256,6 @@ export function modelsView(
     pending = null;
     paint();
   }
-  reloadButton.addEventListener('click', () => void deps.run(load));
   saveButton.addEventListener(
     'click',
     () =>
