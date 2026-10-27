@@ -7,6 +7,7 @@ import { conicGradient, countLabel } from './ui/chart-math.ts';
 import { segmented } from './ui/segmented.ts';
 import { statusBadge } from './ui/status-badge.ts';
 import { xyChart, type XySeries } from './ui/xy-chart.ts';
+import { pageHead } from './ui/page-head.ts';
 
 /** The one-line summary of the 系统状态 warnings; null when there is nothing to say. */
 export function warningLine(warnings: OverviewView['warnings']) {
@@ -29,7 +30,7 @@ export const CHARACTER_COLORS = [
   '#0E7490',
   '#9D174D',
 ];
-export const TOTAL_COLOR = '#141414';
+export const TOTAL_COLOR = '#2B2833';
 
 const METRICS = [
   { id: 'replies', label: '回复', unit: '条' },
@@ -150,12 +151,7 @@ export function overviewView(
     body,
   );
 
-  root.replaceChildren(
-    h('div', { class: 'page-head' }, h('div', {}, day, h('h2', { text: '总览' })), warnings),
-    cards,
-    yesterday,
-    chartCard,
-  );
+  root.replaceChildren(pageHead('总览', day, warnings), cards, yesterday, chartCard);
 
   const card = (label: string, value: string, sub?: string, tone: 'plain' | 'dark' = 'plain') =>
     h(

@@ -11,6 +11,7 @@ import { countLabel } from './ui/chart-math.ts';
 import { dataTable } from './ui/data-table.ts';
 import { segmented } from './ui/segmented.ts';
 import { xyChart } from './ui/xy-chart.ts';
+import { pageHead } from './ui/page-head.ts';
 
 const pair = (a: number, b: number) => `${a} / ${b}`;
 const retention = (c: CohortRetention | null) =>
@@ -153,12 +154,7 @@ export function statsView(
   const card = (title: string, ...children: HTMLElement[]) =>
     h('section', { class: 'stat-detail', attrs: { 'aria-label': title } }, h('h3', { text: title }), ...children);
   root.replaceChildren(
-    h(
-      'div',
-      { class: 'page-head' },
-      h('div', {}, since, h('h2', { text: '玩家统计' })),
-      h('div', { class: 'ov-chart-tools' }, rangeSwitch.root, exportButton),
-    ),
+    pageHead('玩家统计', since, rangeSwitch.root, exportButton),
     kpis,
     activeCard,
     card('按天', days.root),
@@ -241,7 +237,7 @@ export function statsView(
         {
           id: 'registered',
           name: '注册玩家',
-          color: '#141414',
+          color: '#2B2833',
           values: chronological.map((d) => d.activeRegistered),
           on: true,
         },

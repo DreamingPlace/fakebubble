@@ -185,3 +185,70 @@ export const ISSUE_LABEL: Record<string, string> = {
   CAST_GROUP_TOO_SMALL: '组合不足两人',
   CAST_DUPLICATE_NAME: '有角色重名',
 };
+
+const FIELD_LABEL: Record<string, string> = {
+  identity: '身份',
+  names: '名字',
+  aliases: '别名',
+  oneLiner: '一句话',
+  selfConcept: '自我认知',
+  profile: '简介',
+  personality: '性格',
+  speech: '说话方式',
+  catchphrases: '口头禅',
+  samples: '说话样例',
+  avoid: '不会这样说',
+  experiences: '经历',
+  performance: '演绎说明',
+  hidden: '不公开设定',
+  members: '成员',
+  participants: '参与者',
+  overrides: '手动设置',
+  period: '时间段',
+  title: '标题',
+  summary: '概要',
+  details: '细节',
+  boundary: '叙述边界',
+  background: '背景',
+  name: '名称',
+  from: '谁',
+  to: '对谁',
+  address: '称呼',
+  treatment: '相处',
+};
+/**
+ * An issue's path ("characters[c01].identity.names", "stories[2].participants[1]") as people read it: ids and indexes become the
+ * character's name, the story's title or the group's name. `who` is the character it is about (null: nothing in particular), so
+ * the page can group a long list by character.
+ */
+export function humanIssue(doc: CastDoc, path: string): { who: string | null; where: string } {
+  const pick = <T>(list: T[], key: string, idOf: (item: T) => string): T | undefined =>
+    list.find((item) => idOf(item) === key) ?? (/^\d+$/.test(key) ? list[Number(key)] : undefined);
+  let who: string | null = null;
+  const parts: string[] = [];
+  for (const [, head, key = '', rest = ''] of path.matchAll(/([A-Za-z]+)(?:\[([^\]]*)\])?((?:\.[A-Za-z]+)*)/g)) {
+    if (head === 'characters' || head === 'people') {
+      const character = pick(doc.characters, key, (c) => c.characterId);
+      const person = pick(doc.people, key, (p) => p.id);
+      const label = nameOf(doc, character?.characterId ?? person?.id ?? key);
+      if (head === 'characters') who ??= label;
+      else parts.push(label);
+    } else if (head === 'groups') {
+      const group = pick(doc.groups, key, (g) => g.id);
+      parts.push(group ? `组合「${group.name}」` : '组合');
+    } else if (head === 'stories') {
+      const story = pick(doc.stories, key, (g) => g.id);
+      parts.push(story ? `故事「${story.title}」` : '故事');
+    } else if (head === 'ratings' || head === 'directions') {
+      const name = nameOf(doc, key);
+      if (key) who ??= name;
+      parts.push(head === 'ratings' ? '星级' : '称呼与相处');
+    } else if (head) {
+      const label = FIELD_LABEL[head];
+      if (label) parts.push(label);
+      else if (key) parts.push(nameOf(doc, key));
+    }
+    for (const field of rest.split('.').filter(Boolean)) if (FIELD_LABEL[field]) parts.push(FIELD_LABEL[field]!);
+  }
+  return { who, where: parts.join(' · ') };
+}

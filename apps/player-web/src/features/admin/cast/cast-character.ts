@@ -73,6 +73,8 @@ function textList(
  * and hidden settings. Opened from the grid's row header. Nothing here is folded or tabbed.
  */
 export function characterPanel(host: HTMLElement, ctx: CastCtx, selected: () => string | null) {
+  // Part 24b-3: one section at a time, picked from a rail; which one stays while the panel is painted again for the same character.
+  let shown = { character: '', section: 0 };
   const paint = () => {
     const doc = ctx.doc();
     host.replaceChildren();
@@ -87,9 +89,15 @@ export function characterPanel(host: HTMLElement, ctx: CastCtx, selected: () => 
     const repaintNames = () => ctx.paint('grid', 'stories', 'side', 'groups');
     host.append(h('div', { class: 'cs-card-head' }, h('h2', { text: nameOf(doc, character.characterId) })));
     const id = character.identity;
+    const parts: HTMLElement[] = [];
     const section = (title: string, ...nodes: Node[]) =>
-      h('section', { class: 'cs-section' }, h('h3', { text: title }), ...nodes);
-    host.append(
+      h('section', { class: 'cs-section', attrs: { 'data-title': title } }, h('h3', { text: title }), ...nodes);
+    const body = {
+      append: (...nodes: HTMLElement[]) => {
+        parts.push(...nodes);
+      },
+    };
+    body.append(
       section(
         '身份',
         bound(
@@ -157,7 +165,7 @@ export function characterPanel(host: HTMLElement, ctx: CastCtx, selected: () => 
       }
     };
     paintAliases();
-    host.append(
+    body.append(
       section(
         '别名',
         aliases,
@@ -240,7 +248,7 @@ export function characterPanel(host: HTMLElement, ctx: CastCtx, selected: () => 
       }
     };
     paintExperiences();
-    host.append(
+    body.append(
       section('经历', experiences),
       section(
         '演绎说明',
@@ -255,7 +263,31 @@ export function characterPanel(host: HTMLElement, ctx: CastCtx, selected: () => 
       section('不公开设定', textList(ctx, '他知道、但绝不直接说出口的设定', character.hidden, L.hidden, L.hiddenText)),
     );
     if (character.unmapped)
-      host.append(section('旧资料里没能放进去的', h('pre', { class: 'cs-unmapped', text: character.unmapped })));
+      body.append(section('旧资料里没能放进去的', h('pre', { class: 'cs-unmapped', text: character.unmapped })));
+    // ---- the rail ----
+    const rail = h('nav', {
+      class: 'wb-rail cs-rail',
+      attrs: { 'aria-label': `${nameOf(doc, character.characterId)} 的分区` },
+    });
+    const items = parts.map((part, index) => {
+      const item = h('button', {
+        class: 'wb-rail-item',
+        text: part.getAttribute('data-title') ?? '',
+        attrs: { type: 'button', 'aria-current': 'false' },
+      });
+      item.addEventListener('click', () => show(index));
+      rail.append(item);
+      return item;
+    });
+    const show = (index: number) => {
+      shown = { character: character.characterId, section: index };
+      parts.forEach((part, i) => {
+        part.hidden = i !== index;
+        items[i]!.setAttribute('aria-current', String(i === index));
+      });
+    };
+    host.append(h('div', { class: 'cs-character-split' }, rail, h('div', { class: 'cs-character-body' }, ...parts)));
+    show(shown.character === character.characterId && shown.section < parts.length ? shown.section : 0);
   };
   return { paint };
 }

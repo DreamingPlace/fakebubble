@@ -151,6 +151,8 @@ export function colourField(parent: HTMLElement, initial: string | undefined, on
   input.value = initial ?? '';
   input.autocomplete = 'off';
   picker.type = 'color';
+  // The swatch starts on a soft tint, not the browser's black: the text field decides whether there is a colour at all.
+  picker.value = '#ddd8f0';
   picker.title = '取色';
   chip.className = 'colour-chip';
   chip.setAttribute?.('role', 'img');
@@ -198,12 +200,34 @@ export function colourField(parent: HTMLElement, initial: string | undefined, on
   };
 }
 
+export type FormPane = { id: string; label: string; node: HTMLElement };
+
+/** The editor sections whose content differs between a published profile and a draft: what 草稿有 N 处改动 counts. */
+export function changedSections(published: CharacterProfile | null, draft: CharacterProfile): string[] {
+  const part = (profile: CharacterProfile | null, id: string) => {
+    if (!profile) return null;
+    const { template: t, presentation: p } = profile;
+    return stable(
+      {
+        identity: [t.id, t.name, t.birthDate ?? null, p.displayName, p.publicDescription, p.color ?? null],
+        welcome: p.welcome,
+        persona: t.persona,
+        canon: t.authorCanon ?? null,
+        voice: t.voice ?? null,
+      }[id] ?? null,
+    );
+  };
+  return ['identity', 'welcome', 'persona', 'canon', 'voice'].filter((id) => part(published, id) !== part(draft, id));
+}
+
 export function characterForm(
   parent: HTMLElement,
   base: CharacterProfile,
   isNew: boolean,
   onChange: () => void,
   onError: (e: unknown) => void,
+  /** A required or malformed field sits in this section (null: unknown); the console shows it before the browser complains. */
+  onInvalid?: (pane: string | null) => void,
 ) {
   const form = el('form');
   form.className = 'character-profile-form';
@@ -227,7 +251,10 @@ export function characterForm(
   const birthDate = field(identity, '设定生日（可选）', base.template.birthDate ?? '', { type: 'date' });
   const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { area: true, max: 500 });
   const colour = colourField(identity, base.presentation.color, () => onChange());
-  const persona = field(form, '基础人设', base.template.persona, { area: true, required: true, max: 20000 });
+  const personaSet = el('fieldset');
+  personaSet.append(el('legend', '性格'));
+  form.append(personaSet);
+  const persona = field(personaSet, '基础人设', base.template.persona, { area: true, required: true, max: 20000 });
   const welcome = el('fieldset');
   welcome.append(el('legend', '欢迎内容'));
   form.append(welcome);
@@ -275,7 +302,26 @@ export function characterForm(
   speed.step = 'any';
   form.addEventListener('input', onChange);
   form.addEventListener('change', onChange);
+  /** The editor's sections (Part 24b-3), in the order of the console's rail. Each is a node of this one form. */
+  const panes: FormPane[] = [
+    { id: 'identity', label: '身份与展示', node: identity },
+    { id: 'welcome', label: '欢迎内容', node: welcome },
+    { id: 'persona', label: '性格', node: personaSet },
+    { id: 'canon', label: '作者设定与样例', node: canonSection },
+    { id: 'voice', label: '声音', node: voiceSection },
+  ];
+  const controlsOf = (node: HTMLElement) => [
+    ...(node.querySelectorAll?.<HTMLInputElement | HTMLTextAreaElement>('input,textarea') ?? []),
+  ];
+  const valuesOf = (node: HTMLElement) =>
+    controlsOf(node).map((control) =>
+      control.type === 'checkbox' ? String((control as HTMLInputElement).checked) : control.value,
+    );
+  const initial = new Map(panes.map((pane) => [pane.id, valuesOf(pane.node).join('\u0000')]));
   const read = () => {
+    // A control in a section that is not showing cannot take the browser's bubble: show that section first.
+    const bad = panes.find((pane) => controlsOf(pane.node).some((c) => c.willValidate && c.validity?.valid === false));
+    if (bad) onInvalid?.(bad.id);
     if (!form.reportValidity()) throw new AdminFormError('请先补齐或修正标记的资料字段。');
     return editedCharacter(base, {
       id: id.value,
@@ -296,6 +342,9 @@ export function characterForm(
   return {
     form,
     read,
+    panes,
+    /** The sections whose fields differ from what was loaded (a field typed back to its old value no longer counts). */
+    changed: () => panes.filter((pane) => valuesOf(pane.node).join('\u0000') !== initial.get(pane.id)).map((p) => p.id),
     setDisabled: (disabled: boolean) => {
       for (const input of form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement>(
         'input,textarea,button',

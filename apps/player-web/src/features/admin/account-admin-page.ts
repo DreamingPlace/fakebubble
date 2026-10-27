@@ -25,7 +25,7 @@ import {
 } from './shell/admin-nav.ts';
 import { addressBar, sameRoute, type AdminRoute } from './shell/admin-router.ts';
 import { toastHost } from './ui/toast.ts';
-import { splitPane } from './ui/split-pane.ts';
+import { CHARACTER_COLORS } from './overview-view.ts';
 import { castView } from './cast/cast-view.ts';
 import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
@@ -189,7 +189,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         <label for="admin-reset-password">新密码（8–18 个字符）</label><div class="admin-password-field"><input id="admin-reset-password" type="password" autocomplete="new-password" pattern=".{8,18}" maxlength="36" required><button id="admin-reset-password-toggle" type="button" class="admin-secondary" aria-controls="admin-reset-password" aria-pressed="false">显示密码</button></div>
         <p>重置密码会退出此账号的其他登录，但不会改变管理权限。</p><button type="submit">重置密码</button></form>
       <button class="admin-back" type="button" data-page="login">返回邮箱登录</button></section>
-    <section data-panel="account" hidden><h2>我的账号</h2><p id="admin-account-info"></p>
+    <section data-panel="account" hidden><div class="page-head"><h2>我的账号</h2><div class="page-head-actions"></div></div><p id="admin-account-info"></p>
       <form id="admin-bind-start"><label for="admin-bind-email">用于以后登录的邮箱</label><input id="admin-bind-email" type="email" autocomplete="username" maxlength="254" required>
         <button type="submit">验证邮箱</button></form>
       <form id="admin-bind-finish" hidden><label for="admin-bind-code">邮件验证码（6 位数字）</label><input id="admin-bind-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required>
@@ -197,10 +197,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         <button type="submit">完成邮箱绑定</button></form>
       <button id="admin-account-continue" class="admin-back" type="button" data-page="home">进入管理</button></section>
     <section data-panel="invites" hidden><p id="admin-no-permissions" hidden>当前账号没有“邀请与额度”权限，请联系主管理员开通。</p><div id="admin-invites"></div></section>
-    <section data-panel="characters" hidden><div id="admin-characters"></div></section>
+    <section data-panel="characters" hidden><div class="page-head"><h2>角色工作台</h2><div class="page-head-actions" id="wb-head"></div></div><div id="admin-characters"></div></section>
     <section data-panel="cast" hidden><div id="admin-cast"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
-    <section data-panel="members" hidden><h2>管理员与权限</h2>
+    <section data-panel="members" hidden><div class="page-head"><h2>管理员与权限</h2><div class="page-head-actions"></div></div>
       <div class="members-layout"><div class="members-side"><form id="admin-member-issue"><label for="admin-member-label">管理员备注</label><input id="admin-member-label" maxlength="80" required>
         <div id="admin-new-permissions"></div>
         <button type="submit">签发管理员一次性凭据</button></form></div>
@@ -561,19 +561,22 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     },
     disposed: () => disposed,
   };
-  // 角色工作台: the role list (left, its width draggable), the editor (centre) and the paid 预演 (right) are one page; the shell
-  // opens a role in both.
-  const bench = splitPane(q('#admin-characters'), { initial: 188, min: 150, max: 320, label: '调整角色列表宽度' });
+  // 角色工作台: a row of role pills, then the editor (one section at a time) and the paid 预演 beside it (under it on a narrow window);
+  // the shell opens a role in both.
+  const stage = q('#admin-characters');
   const newRole = document.createElement('button');
   newRole.type = 'button';
   newRole.id = 'wb-new';
-  newRole.textContent = '新建角色';
+  newRole.textContent = '+ 新建角色';
   newRole.hidden = true;
   const rolesHost = document.createElement('div');
   rolesHost.id = 'wb-roles';
-  bench.list.className += ' wb-list';
-  bench.list.setAttribute('aria-label', '角色');
-  bench.list.append(rolesHost, newRole);
+  rolesHost.className = 'wb-roles';
+  const roster = document.createElement('div');
+  roster.className = 'wb-roster';
+  roster.setAttribute('role', 'group');
+  roster.setAttribute('aria-label', '角色');
+  roster.append(rolesHost, newRole);
   const editorHost = document.createElement('div');
   editorHost.id = 'wb-editor';
   editorHost.className = 'wb-editor';
@@ -585,9 +588,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const split = document.createElement('div');
   split.className = 'wb';
   split.append(editorHost, previewHost);
-  bench.detail.append(split);
+  stage.append(roster, split);
   const picker = rolePicker(rolesHost, {
     emptyText: '当前没有可查看的角色。',
+    compact: { colour: (_id, index) => CHARACTER_COLORS[index % CHARACTER_COLORS.length]! },
     badges: () => unread,
     openInbox: (characterId) => {
       if (busy || disposed || !navigate('cocreation', characterId)) return;
@@ -627,6 +631,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     ...workbenchHost,
     badges: () => unread,
     directory: 'none',
+    headerHost: q('#wb-head'),
     onDirectory: (roles) => picker.show(roles),
     preview: 'none',
     onView: (id) => {
@@ -841,6 +846,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         const editor = permissionControls(controls, member.permissions);
         const save = document.createElement('button');
         save.type = 'button';
+        save.className = 'admin-primary';
         save.textContent = `保存 ${member.label} 的权限`;
         save.addEventListener('click', () => {
           void run(async () => {
