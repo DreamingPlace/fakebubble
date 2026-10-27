@@ -235,8 +235,9 @@ export async function routeWebAccountAdmin(
             'requestId',
             'draftRevision',
             'profileHash',
-            'previewId',
             'acknowledgeReview',
+            // A colour-only change names no 预演 (the business object decides whether the draft really is one).
+            ...(req.body && Object.hasOwn(req.body, 'previewId') ? ['previewId'] : []),
             ...(req.body && Object.hasOwn(req.body, 'materialId') ? ['materialId'] : []),
           ]),
         ),
@@ -254,6 +255,7 @@ export async function routeWebAccountAdmin(
             'relationship',
             'message',
             ...(req.body && Object.hasOwn(req.body, 'simulatedTime') ? ['simulatedTime'] : []),
+            ...(req.body && Object.hasOwn(req.body, 'castSource') ? ['castSource'] : []),
           ]),
         ),
       };
@@ -270,6 +272,7 @@ export async function routeWebAccountAdmin(
             'relationship',
             ...(req.body && Object.hasOwn(req.body, 'label') ? ['label'] : []),
             ...(req.body && Object.hasOwn(req.body, 'simulatedTime') ? ['simulatedTime'] : []),
+            ...(req.body && Object.hasOwn(req.body, 'castSource') ? ['castSource'] : []),
             ...(req.body && Object.hasOwn(req.body, 'evalSetId') ? ['evalSetId'] : ['inputs']),
           ]),
         ),

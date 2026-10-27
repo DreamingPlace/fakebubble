@@ -1,4 +1,5 @@
 import type { WebProviderBootstrap } from '../../../../../packages/contracts/web-provider.ts';
+import { derivePalette } from '../brand/character-colour.ts';
 
 export type Person = {
   id: string;
@@ -75,7 +76,10 @@ export function providerPeople(view: Pick<WebProviderBootstrap, 'characters' | '
     const character = byId.get(slot.characterId);
     if (!character) throw Error('WEB_PROVIDER_PROTOCOL_INVALID');
     const known = Object.hasOwn(palettes, character.characterId) ? palettes[character.characterId]! : null;
-    const palette = known ?? { color: '#CFD7D2', ink: '#344A43', mark: [...character.displayName][0] ?? '' };
+    const base = known ?? { color: '#CFD7D2', ink: '#344A43', mark: [...character.displayName][0] ?? '' };
+    // A published main colour wins; without one the built-in palette (or the neutral one) stays exactly as it was.
+    const derived = character.mainColor ? derivePalette(character.mainColor) : null;
+    const palette = derived ? { ...base, color: derived.color, ink: derived.ink } : base;
     const latin = known
       ? known.latin
       : /^[A-Za-z][A-Za-z ]{0,23}$/.test(character.displayName)
@@ -91,7 +95,7 @@ export function providerPeople(view: Pick<WebProviderBootstrap, 'characters' | '
       card: {
         no: known ? known.no : String(nextNo++).padStart(3, '0'),
         latin,
-        aura: known ? known.aura : NEUTRAL_AURA,
+        aura: derived ? derived.aura : known ? known.aura : NEUTRAL_AURA,
         nameSize: nameSize(character.displayName),
       },
       ...(character.availability.state === 'available' ? { transcript: character.welcome.text ?? '' } : {}),

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { providerPeople, escapeCardText } from '../../src/features/prototype/provider-catalog-view.ts';
 import { syntheticProviderBootstrap } from '../../../../packages/contracts/web-provider.ts';
+import { derivePalette } from '../../src/features/brand/character-colour.ts';
 
 test('dynamic orbit retains fifteen slots and approved initial palettes without hardcoded person selection', () => {
   const view = syntheticProviderBootstrap();
@@ -33,4 +34,20 @@ test('empty catalog and full orbit have no seed ghosts or duplicated slots', () 
   assert.equal(providerPeople(view).length, 15);
   assert.equal(new Set(providerPeople(view).map((p) => p.id)).size, 15);
   assert.ok(providerPeople(view).every((p) => p.transcript === undefined));
+});
+
+test('a published main colour drives the card tint, ink and aura; a character without one keeps the built-in palette', () => {
+  const view = syntheticProviderBootstrap();
+  for (const character of view.characters) character.availability = { state: 'available', personaVersion: 1 };
+  const before = providerPeople(view).find((p) => p.characterId === 'jojo')!;
+  assert.equal(view.characters.find((c) => c.characterId === 'jojo')!.mainColor, null);
+  assert.deepEqual(before.card.aura, ['#C6E4FF', '#D5F6EE', '#97C8F5', '#2F7BEA']);
+  view.characters.find((c) => c.characterId === 'jojo')!.mainColor = '#7C4DEB';
+  const after = providerPeople(view).find((p) => p.characterId === 'jojo')!;
+  assert.equal(after.card.aura[3], '#7C4DEB');
+  assert.notEqual(after.color, before.color);
+  assert.deepEqual(after.card.aura, derivePalette('#7C4DEB').aura);
+  // The other two are untouched.
+  const guagua = providerPeople(view).find((p) => p.characterId === 'wei-guagua')!;
+  assert.equal(guagua.color, '#D7C8B9');
 });

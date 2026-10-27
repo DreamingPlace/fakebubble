@@ -24,6 +24,8 @@ export interface WebProviderCharacter {
   publicDescription: string;
   portraitUrl: string | null;
   theme: WebTheme | null;
+  /** The character's published main colour ('#RRGGBB'), or null: the player page then keeps its built-in palette. */
+  mainColor: string | null;
   availability:
     | { state: 'available'; personaVersion: number }
     | { state: 'unavailable'; reason: WebProviderUnavailableReason };
@@ -319,7 +321,16 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
   const seen = new Set<string>();
   for (const raw of characters) {
     const c = record(raw);
-    exact(c, ['characterId', 'displayName', 'publicDescription', 'portraitUrl', 'theme', 'availability', 'welcome']);
+    exact(c, [
+      'characterId',
+      'displayName',
+      'publicDescription',
+      'portraitUrl',
+      'theme',
+      'mainColor',
+      'availability',
+      'welcome',
+    ]);
     if (
       !characterId(c.characterId) ||
       seen.has(c.characterId) ||
@@ -335,6 +346,7 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
     )
       invalid();
     parseTheme(c.theme);
+    if (!(c.mainColor === null || (typeof c.mainColor === 'string' && /^#[0-9A-F]{6}$/.test(c.mainColor)))) invalid();
     seen.add(c.characterId as string);
     const availability = record(c.availability),
       welcome = record(c.welcome);
@@ -442,6 +454,7 @@ export function syntheticProviderBootstrap(): WebProviderBootstrap {
       publicDescription: '合成契约占位，尚无可展示人物资料。',
       portraitUrl: null,
       theme: null,
+      mainColor: null,
       availability: { state: 'unavailable', reason: 'material_missing' },
       welcome: { text: null, version: null, audio: { state: 'unavailable', reason: 'audio_missing' } },
     })),

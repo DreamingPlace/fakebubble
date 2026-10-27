@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { characterForm, editedCharacter, emptyCharacter } from '../../src/features/admin/character-form.ts';
+import { dateTimeText } from '../../src/features/admin/system-format.ts';
 import { characterAdminError, characterWorkbench } from '../../src/features/admin/character-workbench.ts';
 import {
   CharacterAdminClient,
@@ -697,7 +698,8 @@ test('every result card shows its input text, send time, status and bubbles, new
   const text = f.root.textContent;
   assert.ok(text.includes('较新的输入') && text.includes('较旧的输入'));
   assert.ok(text.indexOf('较新的输入') < text.indexOf('较旧的输入'), 'newest first');
-  assert.ok(text.includes(new Date(at + 5000).toLocaleString('zh-CN', { hour12: false })));
+  // Part 24b-2 exception (named, narrow): the console writes every time as YYYY-MM-DD HH:mm UTC, not in the browser's locale.
+  assert.ok(text.includes(dateTimeText(at + 5000)));
   assert.ok(text.includes('已通过') && text.includes('失败：PROVIDER_REJECTED'));
   assert.ok(text.includes('气泡甲') && text.includes('气泡乙'));
   const full = all(f.root).find((n) => n.tagName === 'details' && n.textContent.startsWith('完整预演与审核数据'));

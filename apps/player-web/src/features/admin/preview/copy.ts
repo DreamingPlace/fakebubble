@@ -1,3 +1,4 @@
+import { dateTimeText } from '../system-format.ts';
 import type { PreviewRow, Settlement } from '../../../services/preview-admin-api.ts';
 import type { BadgeTone } from '../ui/status-badge.ts';
 
@@ -77,4 +78,5 @@ export function zoneLabel(timeZone: string, at = Date.now()): string {
     return timeZone;
   }
 }
-export const when = (ms: number) => new Date(ms).toLocaleString('zh-CN', { hour12: false });
+/** The console's one time format: YYYY-MM-DD HH:mm UTC, whatever the browser's locale. */
+export const when = (ms: number) => dateTimeText(ms);

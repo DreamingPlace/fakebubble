@@ -2,6 +2,7 @@ import {
   hasAnyCharacterPermission,
   hasAnyInvitePermission,
   hasCocreationPermission,
+  hasCastPermission,
   hasConversationsPermission,
   hasPointsPermission,
   hasStatsPermission,
@@ -12,7 +13,7 @@ import {
 export type AdminPage =
   | 'overview'
   | 'characters'
-  | 'preview'
+  | 'cast'
   | 'cocreation'
   | 'invites'
   | 'points'
@@ -27,7 +28,7 @@ export type NavItem = {
   page: Exclude<AdminPage, 'account'>;
   label: string;
   icon: string;
-  /** Pages that belong under this one (indented beneath it in the sidebar). 预演测试 sits under 角色工作台. */
+  /** Pages that belong under this one (indented beneath it in the sidebar). */
   subs?: readonly NavItem[];
 };
 export type NavGroup = { id: string; label: string; items: readonly NavItem[] };
@@ -40,13 +41,9 @@ export const NAV_TREE: readonly NavGroup[] = [
     id: 'roles',
     label: '角色',
     items: [
-      // 角色工作台 is today's 角色资料 page; the 预演测试 page stays reachable right under it, unchanged.
-      {
-        page: 'characters',
-        label: '角色工作台',
-        icon: 'user',
-        subs: [{ page: 'preview', label: '预演测试', icon: 'play' }],
-      },
+      // 预演 lives inside 角色工作台 (Part 24b-2); the old 预演测试 address still arrives there.
+      { page: 'characters', label: '角色工作台', icon: 'user' },
+      { page: 'cast', label: '关系与故事', icon: 'web' },
       { page: 'cocreation', label: '共创收件箱', icon: 'inbox' },
     ],
   },
@@ -111,6 +108,8 @@ export type NavAccess = {
   inbox: boolean;
   /** CHAT_REVIEW_ENABLED and this page has the client for 测试对话. Absent = off. */
   conversations?: boolean;
+  /** This page was given the cast client (关系与故事). Absent = the page does not exist here. */
+  cast?: boolean;
   /** This page was given a client for 模型与价格. Any administrator may read it (saving is decided by the server and `canManage`). */
   models?: boolean;
   /** This page was given the clients for 概览 / 系统状态 / 积分发放 (Part 22b) and 玩家统计 / 消耗表 (Part 22c). Absent = those pages do not exist here. */
@@ -129,10 +128,8 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
       return access.system === true;
     case 'characters':
       return owner || hasAnyCharacterPermission(permissions, 'read');
-    case 'preview':
-      return (
-        owner || (hasAnyCharacterPermission(permissions, 'read') && hasAnyCharacterPermission(permissions, 'preview'))
-      );
+    case 'cast':
+      return access.cast === true && (owner || hasCastPermission(permissions, 'cast.read'));
     case 'cocreation':
       return access.inbox && (owner || hasCocreationPermission(permissions, 'cocreation.read'));
     case 'invites':
@@ -168,7 +165,7 @@ export const firstAllowedPage = (access: NavAccess): AdminPage => visibleNav(acc
 // Icons: simple 24px strokes drawn for this console in the style of Tabler Icons (MIT, https://tabler.io/icons).
 const ICON_PATHS: Record<string, string> = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
-  play: '<circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4z"/>',
+  web: '<circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 7h7M7.4 9.3l3.5 6.6M16.6 9.3l-3.5 6.6"/>',
   inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 3h6l1-3h5"/>',
   ticket: '<path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/><path d="M14 7v12"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',

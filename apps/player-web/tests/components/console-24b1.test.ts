@@ -52,29 +52,30 @@ const access = (permissions: string[], over: Partial<NavAccess> = {}): NavAccess
 });
 const labelsOf = (a: NavAccess) => visibleNav(a).flatMap((g) => groupPages(g).map((i) => i.label));
 
-test('24b-1 nav: the groups and pages are exactly the board; 关系与故事 is not there yet', () => {
+// Part 24b-2 exception (named, narrow): 关系与故事 now exists after 角色工作台, and 预演测试 is no longer a page of its own (预演 lives
+// inside 角色工作台; #/preview/<id> redirects there). The assertions about those two items are changed; nothing else here is.
+test('24b-1 nav: the groups and pages are exactly the board (as amended by 24b-2: 关系与故事 added, 预演测试 folded into 角色工作台)', () => {
   assert.deepEqual(
     NAV_TREE.map((g) => [g.label, groupPages(g).map((i) => `${i.page}:${i.label}`)]),
     [
       ['', ['overview:总览']],
-      ['角色', ['characters:角色工作台', 'preview:预演测试', 'cocreation:共创收件箱']],
+      ['角色', ['characters:角色工作台', 'cast:关系与故事', 'cocreation:共创收件箱']],
       ['玩家', ['invites:邀请与额度', 'points:积分发放']],
       ['运营', ['stats:玩家统计', 'costs:消耗表']],
       ['系统', ['models:模型与价格', 'system:系统状态', 'members:管理员与权限']],
     ],
   );
   // 测试对话 joins 运营 behind its switch, after 消耗表.
-  const everything = labelsOf(access([], { owner: true }));
+  const everything = labelsOf(access([], { owner: true, cast: true }));
   assert.deepEqual(everything.slice(everything.indexOf('玩家统计'), everything.indexOf('玩家统计') + 3), [
     '玩家统计',
     '消耗表',
     '测试对话',
   ]);
-  assert.ok(!everything.includes('关系与故事'));
-  assert.ok(!navMarkup().includes('data-page="relations"'));
-  // 预演测试 is listed under 角色工作台 as a sub-item: it is in the markup, indented.
-  assert.match(navMarkup(), /data-page="preview"[^>]*>/);
-  assert.match(navMarkup(), /class="admin-nav-item admin-nav-sub" href="#\/preview"/);
+  assert.ok(everything.includes('关系与故事'));
+  assert.ok(!everything.includes('预演测试'));
+  assert.ok(!navMarkup().includes('data-page="preview"'));
+  assert.match(navMarkup(), /data-page="cast"[^>]*>/);
 });
 
 test('24b-1 nav: every page keeps its own permission rule, whatever group it moved to', () => {
@@ -89,10 +90,8 @@ test('24b-1 nav: every page keeps its own permission rule, whatever group it mov
   assert.equal(canSeePage('conversations', access(['conversations.read'], { conversations: false })), false);
   assert.equal(canSeePage('conversations', access(['conversations.read'])), true);
   assert.equal(canSeePage('conversations', access(['stats.read'])), false);
-  // 角色工作台 needs read; its 预演测试 needs read AND preview; 共创收件箱 needs the inbox and cocreation.read.
+  // 角色工作台 needs read; 共创收件箱 needs the inbox and cocreation.read.
   assert.equal(canSeePage('characters', access(['characters.read:*'])), true);
-  assert.equal(canSeePage('preview', access(['characters.read:*'])), false);
-  assert.equal(canSeePage('preview', access(['characters.read:*', 'characters.preview:*'])), true);
   assert.equal(canSeePage('cocreation', access(['cocreation.read'], { inbox: false })), false);
   // 邀请与额度, 积分发放, 系统状态, 管理员与权限.
   assert.equal(canSeePage('invites', access(['invites.read'])), true);
@@ -120,21 +119,20 @@ test('24b-1 nav: the first page an administrator may use follows the nav order',
 
 test('24b-1 nav: old links still work and are followed to their place today', () => {
   // Every old name resolves to a page that exists, and the address is the new place.
-  assert.deepEqual(LEGACY_ROUTES, { grants: 'invites', ops: 'system', metrics: 'system', home: 'overview' });
+  // Named exception (Part 24b-2): #/preview/<id> (预演测试) follows into 角色工作台.
+  assert.deepEqual(LEGACY_ROUTES, {
+    grants: 'invites',
+    ops: 'system',
+    metrics: 'system',
+    home: 'overview',
+    preview: 'characters',
+  });
   assert.deepEqual(parseRoute('#/grants'), { page: 'invites', id: null });
   assert.deepEqual(parseRoute('#/ops'), { page: 'system', id: null });
   assert.deepEqual(parseRoute('#/metrics'), { page: 'system', id: null });
   assert.equal(formatRoute(parseRoute('#/grants')!), '#/invites');
   // The links of the pages that kept their names (and moved group) are untouched.
-  for (const hash of [
-    '#/stats',
-    '#/costs',
-    '#/conversations',
-    '#/characters/jojo',
-    '#/preview/jojo',
-    '#/overview',
-    '#/system',
-  ])
+  for (const hash of ['#/stats', '#/costs', '#/conversations', '#/characters/jojo', '#/overview', '#/system'])
     assert.equal(formatRoute(parseRoute(hash)!), hash);
   assert.equal(parseRoute('#/relations'), null, 'a page that does not exist yet is not a route');
 });

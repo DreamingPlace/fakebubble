@@ -1,7 +1,13 @@
 import type { CharacterTemplate } from '../../../../packages/contracts/index.ts';
 export type CharacterProfile = {
   template: CharacterTemplate;
-  presentation: { displayName: string; publicDescription: string; welcome: { text: string; version: string } };
+  presentation: {
+    displayName: string;
+    publicDescription: string;
+    welcome: { text: string; version: string };
+    /** The main chat colour, '#RRGGBB'; absent = the player page's built-in palette. */
+    color?: string;
+  };
 };
 export type CharacterDraft = {
   characterId: string;
@@ -100,6 +106,7 @@ function profile(v: unknown): CharacterProfile {
       displayName: string(d.displayName),
       publicDescription: string(d.publicDescription),
       welcome: { text: string(w.text), version: string(w.version) },
+      ...(d.color === undefined ? {} : { color: string(d.color) }),
     },
   };
 }
@@ -258,7 +265,8 @@ export class CharacterAdminClient {
       requestId: string;
       draftRevision: number;
       profileHash: string;
-      previewId: string;
+      /** Absent only for a colour-only change (the server decides; every other change needs its 预演). */
+      previewId?: string;
       acknowledgeReview: boolean;
       materialId?: string;
     },

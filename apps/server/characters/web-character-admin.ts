@@ -49,7 +49,7 @@ function profile(value: unknown): WebCharacterProfile {
   const template = validatedTemplate(value.template),
     display = value.presentation;
   record(display);
-  keys(display, ['displayName', 'publicDescription', 'welcome']);
+  keys(display, ['displayName', 'publicDescription', 'welcome', 'color']);
   nonempty(display.displayName, 100);
   ensure(
     typeof display.publicDescription === 'string' && display.publicDescription.length <= 500,
@@ -59,12 +59,17 @@ function profile(value: unknown): WebCharacterProfile {
   keys(display.welcome, ['text', 'version']);
   nonempty(display.welcome.text, 500);
   identifier(display.welcome.version);
+  ensure(
+    display.color === undefined || (typeof display.color === 'string' && /^#[0-9A-F]{6}$/.test(display.color)),
+    'INVALID_ADMIN_REQUEST',
+  );
   return {
     template,
     presentation: {
       displayName: display.displayName,
       publicDescription: display.publicDescription,
       welcome: { text: display.welcome.text, version: display.welcome.version },
+      ...(display.color === undefined ? {} : { color: display.color }),
     },
   };
 }

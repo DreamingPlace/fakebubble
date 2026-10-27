@@ -52,6 +52,7 @@ export class InviteAdminApi {
       throw new InviteLocalApiError(
         response.status,
         typeof error === 'string' ? error : 'WEB_INVITE_ADMIN_REQUEST_FAILED',
+        value && typeof value === 'object' ? (value as { error?: { detail?: unknown } }).error?.detail : undefined,
       );
     }
     return value;

@@ -94,6 +94,8 @@ export type EvalSet = {
   updatedBy: string;
   updatedAt: number;
 };
+/** Which cast a 预演 reads (Part 24a): none, the published one, or the draft. Absent = the server's default. */
+export type PreviewCastSource = 'none' | 'published' | 'draft';
 export type RunInput = {
   requestId: string;
   draftRevision: number;
@@ -101,6 +103,7 @@ export type RunInput = {
   relationship: string;
   label?: string;
   simulatedTime?: string;
+  castSource?: PreviewCastSource;
 } & ({ inputs: EvalItem[] } | { evalSetId: string });
 
 const invalid = () => new Error('ADMIN_PREVIEW_PROTOCOL_INVALID');
@@ -302,6 +305,7 @@ export class PreviewAdminClient {
       relationship: string;
       message: string;
       simulatedTime?: string;
+      castSource?: PreviewCastSource;
     },
   ) {
     return previewRow(await this.call(id, 'review-start', input));

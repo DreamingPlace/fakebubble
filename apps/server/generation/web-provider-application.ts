@@ -580,6 +580,7 @@ export class WebProviderApplication {
         publicDescription: entry.presentation.publicDescription,
         portraitUrl: null,
         theme: null,
+        mainColor: entry.presentation.color ?? null,
         availability: approved
           ? { state: 'available' as const, personaVersion: entry.version }
           : { state: 'unavailable' as const, reason: 'voice_unverified' as const },

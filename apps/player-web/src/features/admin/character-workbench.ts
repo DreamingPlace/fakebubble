@@ -12,9 +12,19 @@ import {
   hasCharacterPermission,
   type CharacterAdminAction,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
+import { dateTimeText } from './system-format.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { formatRoute } from './shell/admin-router.ts';
-import { AdminFormError, characterForm, check, disclosure, el, emptyCharacter, field } from './character-form.ts';
+import {
+  AdminFormError,
+  characterForm,
+  check,
+  disclosure,
+  el,
+  emptyCharacter,
+  field,
+  isColourOnlyChange,
+} from './character-form.ts';
 
 type Host = {
   api: CharacterAdminClient;
@@ -33,6 +43,14 @@ type Host = {
    * admin shell shows it on its own page. `only`: this instance is that page and renders nothing but the preview.
    */
   preview?: 'inline' | 'none' | 'only';
+  /**
+   * `inline` (default): the role directory is this component's first view. `none` (the console, Part 24b-2): the shell draws the
+   * role list beside the editor and opens a role with `open()`; the editor then shows what it can without a button
+   * (folds open, comparisons and material lists loaded on open) and has no 返回 / 重新读取 buttons.
+   */
+  directory?: 'inline' | 'none';
+  /** The roles this administrator may see, whenever `load()` read them (directory `none`). */
+  onDirectory?: (roles: Awaited<ReturnType<CharacterAdminClient['list']>>['characters']) => void;
   /** Tells the shell which view is showing (the role id, or null for the directory) so it can keep the URL in step. */
   onView?: (id: string | null) => void;
 };
@@ -50,7 +68,7 @@ type QueueItem = {
 export const PREVIEW_MAX_IN_FLIGHT = 3;
 export const PREVIEW_BATCH_MAX = 20;
 const PREVIEW_INPUT_MAX = 4000;
-const when = (ms: number) => new Date(ms).toLocaleString('zh-CN', { hour12: false });
+const when = (ms: number) => dateTimeText(ms);
 type Control = {
   node: HTMLButtonElement | HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
   locked: () => boolean;
@@ -123,6 +141,13 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     return !!m && (m.role === 'owner' || canCreateCharacter(m.permissions));
   };
   const gone = () => disposed || host.disposed();
+  const embedded = host.directory === 'none';
+  /** A fold, open from the start in the console: nothing that can be shown waits behind a click. */
+  const fold = (parent: HTMLElement, title: string) => {
+    const section = disclosure(parent, title);
+    if (embedded) section.open = true;
+    return section;
+  };
   const revokeAudio = () => {
     for (const url of urls) URL.revokeObjectURL(url);
     urls.clear();
@@ -254,6 +279,22 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     id = null;
     detail = null;
     dirty = false;
+    if (embedded) {
+      host.onDirectory?.(result.characters);
+      const note = el('p', '从左边选一个角色。');
+      note.className = 'admin-empty';
+      root.append(note);
+      if (result.deletions.length) {
+        const jobs = el('section');
+        jobs.className = 'character-deletions';
+        jobs.append(el('h3', '角色删除记录'));
+        root.append(jobs);
+        for (const job of result.deletions) deletionRow(jobs, job);
+      }
+      sync();
+      host.onView?.(null);
+      return;
+    }
     root.append(el('h2', '角色资料'));
     const tools = el('div');
     tools.className = 'admin-toolbar';
@@ -342,7 +383,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     const tools = el('div');
     tools.className = 'admin-toolbar';
     root.append(tools);
-    if (host.preview !== 'only') button(tools, '返回人物目录', () => dirty, list, true);
+    if (host.preview !== 'only' && !embedded) button(tools, '返回人物目录', () => dirty, list, true);
     root.append(
       el('h2', snapshot ? profile.presentation.displayName : '新建角色草稿'),
       el(
@@ -409,13 +450,14 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       true,
     );
     if (snapshot) {
-      button(
-        actions,
-        '重新读取资料',
-        () => dirty,
-        () => open(target),
-        true,
-      );
+      if (!embedded)
+        button(
+          actions,
+          '重新读取资料',
+          () => dirty,
+          () => open(target),
+          true,
+        );
       const flow = el('section');
       flow.className = 'character-flow';
       root.append(flow);
@@ -426,7 +468,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       publication(flow, snapshot);
       deletion(flow, snapshot);
       if (snapshot.draft) {
-        const section = disclosure(flow, '放弃服务器草稿');
+        const section = fold(flow, '放弃服务器草稿');
         section.className = 'admin-confirm';
         section.append(el('p', '只移除当前未发布草稿；正式版本和历史不变。与“放弃本页修改”不同。'));
         button(
@@ -457,43 +499,40 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     sync();
   }
   function profileDiff(parent: HTMLElement, snapshot: CharacterDetail) {
-    const section = disclosure(parent, '查看资料改动（不调用供应商）'),
+    const section = fold(parent, '查看资料改动（不调用供应商）'),
       output = el('div');
     section.append(output);
-    button(
-      section,
-      '比较已存草稿与正式资料',
-      () => dirty || !can('read'),
-      async () => {
-        const token = view,
-          result = await host.api.profilePreview(snapshot.characterId, snapshot.draft!.revision);
-        if (gone() || token !== view) return;
-        output.replaceChildren();
-        const groups: [string, unknown, unknown][] = [
-          ['人设', result.published?.template.persona, result.draft.profile.template.persona],
-          ['网页展示', result.published?.presentation, result.draft.profile.presentation],
-          ['完整模板', result.published?.template, result.draft.profile.template],
-        ];
-        for (const [name, before, after] of groups) {
-          if (JSON.stringify(before) === JSON.stringify(after)) continue;
-          const group = disclosure(output, name),
-            columns = el('div');
-          columns.className = 'profile-diff';
-          for (const [label, value] of [
-            ['正式', before],
-            ['草稿', after],
-          ] as const) {
-            const side = el('section');
-            side.append(el('h4', label), el('pre', value === undefined ? '尚无正式版本' : stringify(value)));
-            columns.append(side);
-          }
-          group.append(columns);
+    const compare = async () => {
+      const token = view,
+        result = await host.api.profilePreview(snapshot.characterId, snapshot.draft!.revision);
+      if (gone() || token !== view) return;
+      output.replaceChildren();
+      const groups: [string, unknown, unknown][] = [
+        ['人设', result.published?.template.persona, result.draft.profile.template.persona],
+        ['网页展示', result.published?.presentation, result.draft.profile.presentation],
+        ['完整模板', result.published?.template, result.draft.profile.template],
+      ];
+      for (const [name, before, after] of groups) {
+        if (JSON.stringify(before) === JSON.stringify(after)) continue;
+        const group = fold(output, name),
+          columns = el('div');
+        columns.className = 'profile-diff';
+        for (const [label, value] of [
+          ['正式', before],
+          ['草稿', after],
+        ] as const) {
+          const side = el('section');
+          side.append(el('h4', label), el('pre', value === undefined ? '尚无正式版本' : stringify(value)));
+          columns.append(side);
         }
-        if (!output.childElementCount) output.append(el('p', '没有资料差异。'));
-        host.status('静态资料比较完成；这不是付费预演或发布审核证明。');
-      },
-      true,
-    );
+        group.append(columns);
+      }
+      if (!output.childElementCount) output.append(el('p', '没有资料差异。'));
+      if (!embedded) host.status('静态资料比较完成；这不是付费预演或发布审核证明。');
+    };
+    // In the console the comparison is simply there when the draft opens; elsewhere it is one explicit click.
+    if (embedded) void compare().catch((error) => host.status(characterAdminError(error) ?? '资料比较没有完成。'));
+    else button(section, '比较已存草稿与正式资料', () => dirty || !can('read'), compare, true);
   }
   const isOpenJob = (job: PreviewJob) => job.status === 'queued' || job.status === 'generating';
   const jobsOf = (characterId: string) => [...live.values()].filter((j) => j.characterId === characterId);
@@ -833,7 +872,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     schedulePoll();
   }
   function materials(parent: HTMLElement, snapshot: CharacterDetail) {
-    const section = disclosure(parent, '声音成品版本'),
+    const section = fold(parent, '声音成品版本'),
       saved = snapshot.draft!,
       target = snapshot.characterId,
       key = `material:${target}`,
@@ -874,7 +913,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         host.status(`素材版本 ${materialId} 已准备，请明确选择欢迎和结束成品。`);
       },
     );
-    button(section, '读取已有成品版本', () => dirty || !can('read'), load, true);
+    if (!embedded) button(section, '读取已有成品版本', () => dirty || !can('read'), load, true);
     section.append(output);
     async function load() {
       const token = view,
@@ -889,11 +928,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       sync();
     }
     reference.addEventListener('input', sync);
+    if (embedded) void load().catch((error) => host.status(characterAdminError(error) ?? '成品版本没有读取成功。'));
   }
   function materialRow(parent: HTMLElement, snapshot: CharacterDetail, material: Material) {
     const target = snapshot.characterId,
       current = sameDraft(material, snapshot),
-      section = disclosure(
+      section = fold(
         parent,
         `${material.materialId} · ${material.approved ? '已批准' : '待批准'}${current ? ' · 当前草稿' : ' · 旧修订'}`,
       );
@@ -1006,7 +1046,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     }
   }
   function publication(parent: HTMLElement, snapshot: CharacterDetail) {
-    const section = disclosure(parent, '发布角色版本'),
+    const section = fold(parent, '发布角色版本'),
       target = snapshot.characterId,
       key = `publish:${target}`,
       saved = snapshot.draft;
@@ -1021,9 +1061,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       section.append(el('p', '当前没有未发布草稿。'));
       return;
     }
+    // A draft that differs from the published profile in the main colour only needs no 预演 (the server checks the same thing).
+    const colourOnly = !!saved && isColourOnlyChange(snapshot.published?.profile ?? null, saved.profile);
     const label = el('label'),
       preview = el('select');
     label.append(el('span', '已查看且匹配当前草稿的预演'), preview);
+    label.hidden = colourOnly;
     section.append(label);
     const noProof = el('p', '尚无匹配当前草稿的成功预演，不能发布。');
     const fillPreviews = () => {
@@ -1035,35 +1078,41 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         preview.append(option);
       }
       if (keep && previews().some((p) => p.previewId === keep)) preview.value = keep;
-      noProof.textContent = !previews().length && !pending.has(key) ? '尚无匹配当前草稿的成功预演，不能发布。' : '';
+      noProof.textContent = colourOnly
+        ? '只改了主色，不需要预演，可以直接发布。'
+        : !previews().length && !pending.has(key)
+          ? '尚无匹配当前草稿的成功预演，不能发布。'
+          : '';
     };
     fillPreviews();
     previewsChanged = fillPreviews;
     const materialLabel = el('label'),
       material = el('select');
     materialLabel.append(el('span', '发布使用的成品版本'), material);
+    materialLabel.hidden = colourOnly;
     section.append(materialLabel);
     const reuse = el('option', '沿用原成品（仅声音与欢迎词完全不变）');
     reuse.value = '';
     material.append(reuse);
-    button(
+    const loadApproved = async () => {
+      const token = view,
+        items = await host.api.materials(target);
+      if (gone() || token !== view) return;
+      material.replaceChildren(reuse);
+      for (const item of items.filter((m) => m.approved && sameDraft(m, snapshot))) {
+        const option = el('option', item.materialId);
+        option.value = item.materialId;
+        material.append(option);
+      }
+    };
+    if (embedded) {
+      if (!colourOnly)
+        void loadApproved().catch((error) => host.status(characterAdminError(error) ?? '成品版本没有读取成功。'));
+    } else button(section, '读取当前草稿的已批准成品', () => dirty || !can('read'), loadApproved, true);
+    const ack = check(
       section,
-      '读取当前草稿的已批准成品',
-      () => dirty || !can('read'),
-      async () => {
-        const token = view,
-          items = await host.api.materials(target);
-        if (gone() || token !== view) return;
-        material.replaceChildren(reuse);
-        for (const item of items.filter((m) => m.approved && sameDraft(m, snapshot))) {
-          const option = el('option', item.materialId);
-          option.value = item.materialId;
-          material.append(option);
-        }
-      },
-      true,
+      colourOnly ? '我已核对主色，确认将本版本发布给玩家' : '我已查看资料差异和该预演结果，确认将本版本发布给玩家',
     );
-    const ack = check(section, '我已查看资料差异和该预演结果，确认将本版本发布给玩家');
     for (const input of [preview, material, ack]) guarded(input, () => dirty || pending.has(key) || !can('publish'));
     section.append(noProof);
     button(
@@ -1072,7 +1121,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       () =>
         dirty ||
         !can('publish') ||
-        (!pending.has(key) && (!saved || !ack.checked || !previews().some((p) => p.previewId === preview.value))),
+        (!pending.has(key) &&
+          (!saved || !ack.checked || !(colourOnly || previews().some((p) => p.previewId === preview.value)))),
       async () => {
         const result = await exact(
           key,
@@ -1080,9 +1130,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
             requestId: crypto.randomUUID(),
             draftRevision: saved?.revision ?? 0,
             profileHash: saved?.contentHash ?? '',
-            previewId: preview.value,
+            ...(colourOnly ? {} : { previewId: preview.value }),
             acknowledgeReview: true,
-            ...(material.value ? { materialId: material.value } : {}),
+            ...(material.value && !colourOnly ? { materialId: material.value } : {}),
           },
           (input) => host.api.publish(target, input),
         );
@@ -1095,7 +1145,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   }
   function deletion(parent: HTMLElement, snapshot: CharacterDetail) {
     if (!snapshot.published) return;
-    const section = disclosure(parent, '删除角色及所有旧聊天');
+    const section = fold(parent, '删除角色及所有旧聊天');
     section.className = 'admin-confirm';
     const target = snapshot.characterId,
       key = `delete:${target}`,
@@ -1164,6 +1214,19 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         true,
       );
   }
+  /** A 预演 finished in the panel beside the editor: the proofs the publish step offers are re-read, the form is left alone. */
+  async function syncPreviews() {
+    if (!id || !detail?.draft || dirty) return;
+    const token = view,
+      target = id,
+      next = await host.api.detail(target);
+    if (gone() || token !== view) return;
+    if (next.draft?.revision !== detail.draft.revision || next.draft.contentHash !== detail.draft.contentHash) return;
+    for (const job of next.previews) mergeLive(job);
+    detail = next;
+    previewsChanged?.();
+    sync();
+  }
   const beforeUnload = (event: BeforeUnloadEvent) => {
     if (dirty) {
       event.preventDefault();
@@ -1174,6 +1237,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   return {
     load: list,
     open,
+    openNew,
+    syncPreviews,
     canLeave: () => !dirty,
     update: (working: boolean) => {
       busy = working;
