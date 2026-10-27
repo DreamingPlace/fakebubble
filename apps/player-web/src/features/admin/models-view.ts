@@ -11,6 +11,7 @@ import {
 import type { PlayerModelId } from '../../../../../packages/contracts/player-models.ts';
 import { h } from '../cocreation/h.ts';
 import { statusBadge } from './ui/status-badge.ts';
+import { pageHead } from './ui/page-head.ts';
 
 const FIELD_LABELS: Record<SettingField, string> = {
   enabled: '总开关',
@@ -126,7 +127,11 @@ export function modelsView(
       step: '1',
     },
   });
-  const saveButton = h('button', { text: '保存', attrs: { type: 'button', id: 'models-save' } });
+  const saveButton = h('button', {
+    class: 'admin-primary',
+    text: '保存',
+    attrs: { type: 'button', id: 'models-save' },
+  });
   const readonly = h('p', {
     class: 'admin-hint',
     text: '只读：需要“模型与价格”管理权限',
@@ -136,13 +141,12 @@ export function modelsView(
   const recentHead = h('h3', { text: '最近修改', hidden: true });
 
   root.replaceChildren(
-    h('h2', { text: '模型与价格' }),
+    pageHead('模型与价格', saveButton),
     banner,
     readonly,
     h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table)),
     h('div', { class: 'models-voice' }, h('label', { text: '语音加点', attrs: { for: 'models-voice' } }), voiceInput),
     problem,
-    h('div', { class: 'models-actions' }, saveButton),
     recentHead,
     recent,
   );

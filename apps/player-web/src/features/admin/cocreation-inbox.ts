@@ -33,6 +33,7 @@ import type {
 import type { CharacterAdminClient } from '../../services/character-admin-api.ts';
 import { characterAdminError } from './character-workbench.ts';
 import { h } from '../cocreation/h.ts';
+import { pageHead } from './ui/page-head.ts';
 
 type Deps = {
   api: Pick<CocreationAdminClient, 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'>;
@@ -114,7 +115,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     empty,
     list,
   );
-  root.replaceChildren(h('h2', { text: '共创收件箱' }), h('div', { class: 'cc-layout' }, listColumn, pane));
+  root.replaceChildren(pageHead('共创收件箱'), h('div', { class: 'cc-layout' }, listColumn, pane));
 
   // ---- list -----------------------------------------------------------------------------------------------------
   const chip = (label: string, on: boolean, pick: () => void, count?: number) => {
@@ -161,28 +162,33 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           else selected.delete(item.id);
           renderList();
         });
+        // One fixed grid per row (Part 24b-3): who | the text, left-aligned and cut after two lines | when | state.
         const open = h(
           'button',
           { class: 'cc-row-open', attrs: { type: 'button', 'aria-current': String(index === active) } },
           h(
             'span',
-            { class: 'cc-row-head' },
+            { class: 'cc-who' },
             h('strong', { text: nameOf(item.characterId) }),
             h('span', { class: 'cc-pseudonym', text: item.pseudonym }),
-            h('time', { text: when(item.createdAt) }),
-            h('span', { text: `${item.answerCount} 条` }),
           ),
-          h('span', { class: 'cc-first', text: preview(item.firstLine) }),
           h(
             'span',
-            { class: 'cc-chips' },
-            h('span', { class: `cc-chip cc-chip-${item.status}`, text: STATUS_LABEL[item.status] }),
-            item.starred ? h('span', { class: 'cc-chip cc-chip-star', text: '★' }) : null,
-            item.hasNote ? h('span', { class: 'cc-chip', text: '有备注' }) : null,
-            item.adoptedCount > 0
-              ? h('span', { class: 'cc-chip', text: `已采用 ${item.adoptedCount}/${item.answerCount}` })
-              : null,
+            { class: 'cc-text' },
+            h('span', { class: 'cc-first', text: preview(item.firstLine) }),
+            h(
+              'span',
+              { class: 'cc-chips' },
+              h('span', { class: 'cc-count', text: `${item.answerCount} 条` }),
+              item.starred ? h('span', { class: 'cc-chip cc-chip-star', text: '★' }) : null,
+              item.hasNote ? h('span', { class: 'cc-chip', text: '有备注' }) : null,
+              item.adoptedCount > 0
+                ? h('span', { class: 'cc-chip', text: `已采用 ${item.adoptedCount}/${item.answerCount}` })
+                : null,
+            ),
           ),
+          h('time', { class: 'cc-when', text: when(item.createdAt) }),
+          h('span', { class: `cc-chip cc-state cc-chip-${item.status}`, text: STATUS_LABEL[item.status] }),
         );
         open.addEventListener('click', () => select(index));
         const row = h(

@@ -12,6 +12,7 @@ import { warningLine } from './overview-view.ts';
 import { PROVIDER_LABELS, ageText, dateText, dateTimeText, dollars } from './system-format.ts';
 import { keyValuePanel } from './ui/key-value-panel.ts';
 import { statusBadge } from './ui/status-badge.ts';
+import { pageHead } from './ui/page-head.ts';
 
 const onOff = (value: boolean) => statusBadge(value ? '开' : '关', value ? 'ok' : 'neutral');
 const yesNo = (value: boolean) => statusBadge(value ? '有' : '无', value ? 'ok' : 'neutral');
@@ -66,11 +67,7 @@ export function systemView(
   });
   // The overall verdict sits in the header: green, or the same one-line summary 总览 shows.
   const overall = h('p', { class: 'ov-status sys-overall', attrs: { role: 'status' } });
-  root.replaceChildren(
-    h('div', { class: 'page-head' }, h('div', {}, h('h2', { text: '系统状态' })), overall),
-    sections,
-    result,
-  );
+  root.replaceChildren(pageHead('系统状态', overall), sections, result);
   /** Sections laid out in a row: `top` is the three-up row with the version card, `pair` two side by side, `wide` one full row. */
   const row = (kind: 'top' | 'pair' | 'wide', ...children: (Node | null)[]) =>
     h('div', { class: `sys-row sys-${kind}` }, ...children);

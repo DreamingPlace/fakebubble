@@ -3,6 +3,7 @@ import type { AdminMember } from '../../services/account-admin-api.ts';
 import type {
   CharacterAdminClient,
   CharacterDetail,
+  CharacterProfile,
   DeletionStatus,
   Material,
   PreviewJob,
@@ -17,6 +18,7 @@ import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { formatRoute } from './shell/admin-router.ts';
 import {
   AdminFormError,
+  changedSections,
   characterForm,
   check,
   disclosure,
@@ -53,7 +55,12 @@ type Host = {
   onDirectory?: (roles: Awaited<ReturnType<CharacterAdminClient['list']>>['characters']) => void;
   /** Tells the shell which view is showing (the role id, or null for the directory) so it can keep the URL in step. */
   onView?: (id: string | null) => void;
+  /** The console's title row (right side): the draft status chip and 预演后发布. Only with directory `none`. */
+  headerHost?: HTMLElement;
+  /** Where the section rail goes (under the role list). Without it the rail sits in front of the editor card. */
+  railHost?: HTMLElement;
 };
+type Section = { id: string; label: string; nodes: HTMLElement[]; danger?: boolean };
 /** One client-side submission. The body (including requestId) is fixed when it is created. */
 type QueueItem = {
   n: number;
@@ -124,6 +131,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     controls: Control[] = [],
     view = 0;
   let protectedRows: Array<{ characterId: string; node: HTMLElement }> = [];
+  // The console shows one section of the editor at a time; the one showing is kept across a save of the same role.
+  let lastSection: { id: string; section: string } = { id: '', section: '' };
+  let paintDirty: (() => void) | null = null;
   const urls = new Set<string>();
   const pending = new Map<string, { input: unknown; uncertain: boolean; send: () => Promise<unknown> }>();
   const items: QueueItem[] = [];
@@ -163,9 +173,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     }
   };
   const setDirty = () => {
+    const was = dirty;
     dirty = true;
-    host.status('有未保存修改。请先保存草稿，或放弃本页修改后切换／预览。');
+    // In the console the save bar and the rail's dots say it; the message is for the first change only.
+    if (!embedded || !was) host.status('有未保存修改。请先保存草稿，或放弃本页修改后切换／预览。');
     sync();
+    paintDirty?.();
   };
   const act = (work: () => Promise<void>) => {
     void host.run(async () => {
@@ -209,6 +222,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     editor = null;
     paintResults = null;
     previewsChanged = null;
+    paintDirty = null;
+    host.headerHost?.replaceChildren();
+    host.railHost?.replaceChildren();
     root.replaceChildren();
   };
   async function exact<I, T>(key: string, input: I, send: (input: I) => Promise<T>): Promise<T> {
@@ -380,10 +396,38 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       ? structuredClone(snapshot.draft?.profile ?? snapshot.published!.profile)
       : emptyCharacter();
     if (snapshot && !snapshot.draft) profile.template.version = snapshot.published!.version + 1;
+    const canEdit = () => (snapshot ? can('edit', target) : canCreate());
+    const submit = () => {
+      if (busy || !canEdit()) return;
+      let next;
+      try {
+        next = editor!.read();
+      } catch (error) {
+        host.status(characterAdminError(error) ?? '请核对资料字段。');
+        return;
+      }
+      const role = next.template.id;
+      act(async () => {
+        if (!can('edit', role)) throw new AdminFormError('没有角色资料管理权限，请联系主管理员。');
+        const saved = await host.api.save(role, snapshot?.draft?.revision ?? null, next);
+        if (gone()) return;
+        dirty = false;
+        await open(saved.characterId);
+        host.status(`草稿修订 ${saved.revision} 已保存；尚未发布。`);
+      });
+    };
+    const discardLocal = () => {
+      renderDetail();
+      host.status('已放弃本页修改；服务器草稿和正式版本不变。');
+    };
+    if (embedded) {
+      renderConsole(snapshot, target, profile, canEdit, submit, discardLocal);
+      return;
+    }
     const tools = el('div');
     tools.className = 'admin-toolbar';
     root.append(tools);
-    if (host.preview !== 'only' && !embedded) button(tools, '返回人物目录', () => dirty, list, true);
+    if (host.preview !== 'only') button(tools, '返回人物目录', () => dirty, list, true);
     root.append(
       el('h2', snapshot ? profile.presentation.displayName : '新建角色草稿'),
       el(
@@ -417,47 +461,20 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     const save = el('button', '保存草稿');
     save.type = 'submit';
     actions.append(save);
-    const canEdit = () => (snapshot ? can('edit', target) : canCreate());
     controls.push({ node: save, locked: () => !canEdit() });
     editor.form.addEventListener('submit', (event) => {
       event.preventDefault();
-      if (busy || !canEdit()) return;
-      let next;
-      try {
-        next = editor!.read();
-      } catch (error) {
-        host.status(characterAdminError(error) ?? '请核对资料字段。');
-        return;
-      }
-      const role = next.template.id;
-      act(async () => {
-        if (!can('edit', role)) throw new AdminFormError('没有角色资料管理权限，请联系主管理员。');
-        const saved = await host.api.save(role, snapshot?.draft?.revision ?? null, next);
-        if (gone()) return;
-        dirty = false;
-        await open(saved.characterId);
-        host.status(`草稿修订 ${saved.revision} 已保存；尚未发布。`);
-      });
+      submit();
     });
-    button(
-      actions,
-      '放弃本页未保存修改',
-      () => !dirty,
-      () => {
-        renderDetail();
-        host.status('已放弃本页修改；服务器草稿和正式版本不变。');
-      },
-      true,
-    );
+    button(actions, '放弃本页未保存修改', () => !dirty, discardLocal, true);
     if (snapshot) {
-      if (!embedded)
-        button(
-          actions,
-          '重新读取资料',
-          () => dirty,
-          () => open(target),
-          true,
-        );
+      button(
+        actions,
+        '重新读取资料',
+        () => dirty,
+        () => open(target),
+        true,
+      );
       const flow = el('section');
       flow.className = 'character-flow';
       root.append(flow);
@@ -467,23 +484,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       }
       publication(flow, snapshot);
       deletion(flow, snapshot);
-      if (snapshot.draft) {
-        const section = fold(flow, '放弃服务器草稿');
-        section.className = 'admin-confirm';
-        section.append(el('p', '只移除当前未发布草稿；正式版本和历史不变。与“放弃本页修改”不同。'));
-        button(
-          section,
-          '确认放弃此修订草稿',
-          () => dirty || !can('discard'),
-          async () => {
-            await host.api.discard(target, snapshot.draft!.revision);
-            if (gone()) return;
-            dirty = false;
-            await list();
-            host.status('服务器草稿已放弃，正式版本不变。');
-          },
-        );
-      }
+      if (snapshot.draft) discardFold(flow, snapshot);
     }
     const sections: IndexedSection[] = [];
     for (const node of root.children as unknown as HTMLElement[]) {
@@ -496,6 +497,188 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
             sections.push({ label: part.children[0]?.textContent ?? '', node: part });
     }
     sectionIndex(index, sections);
+    sync();
+  }
+  /** 只移除当前未发布草稿: its own fold, in the publish section of the console and after the deletion fold elsewhere. */
+  function discardFold(parent: HTMLElement, snapshot: CharacterDetail) {
+    const target = snapshot.characterId;
+    const section = fold(parent, '放弃服务器草稿');
+    section.className = 'admin-confirm';
+    section.append(el('p', '只移除当前未发布草稿；正式版本和历史不变。与“放弃本页修改”不同。'));
+    button(
+      section,
+      '确认放弃此修订草稿',
+      () => dirty || !can('discard'),
+      async () => {
+        await host.api.discard(target, snapshot.draft!.revision);
+        if (gone()) return;
+        dirty = false;
+        await list();
+        host.status('服务器草稿已放弃，正式版本不变。');
+      },
+    );
+  }
+  /**
+   * The console's editor (Part 24b-3): one card with ONE section of the role at a time, a rail of sections under the role list, the
+   * draft status and 预演后发布 in the title row, and a save bar at the foot of the card. Every section stays in the page (only
+   * `hidden` changes), so what was typed in one survives a visit to another; a dot on the rail marks the sections with changes.
+   */
+  function renderConsole(
+    snapshot: CharacterDetail | null,
+    target: string,
+    profile: CharacterProfile,
+    canEdit: () => boolean,
+    submit: () => void,
+    discardLocal: () => void,
+  ) {
+    const card = el('section'),
+      head = el('header'),
+      title = el('h2'),
+      meta = el('p'),
+      body = el('div'),
+      bar = el('footer'),
+      state = el('span'),
+      barActions = el('div');
+    card.className = 'wb-card';
+    head.className = 'wb-card-head';
+    meta.className = 'wb-card-meta';
+    meta.textContent = snapshot
+      ? `${target} · ${snapshot.published ? `正式 v${snapshot.published.version}` : '未发布'} · 编辑版本 v${profile.template.version}${snapshot.draft ? ` · 草稿修订 ${snapshot.draft.revision}` : ' · 尚无已保存草稿'}`
+      : '从空白资料建立 AI 虚构人物，不复制其他角色的资料或声音。保存后仍不会出现在玩家目录。';
+    head.append(title, meta);
+    body.className = 'wb-card-body';
+    bar.className = 'wb-savebar';
+    state.className = 'wb-savestate';
+    barActions.className = 'wb-savebar-actions';
+    bar.append(state, barActions);
+    card.append(head, body, bar);
+    if (snapshot && !can('edit')) {
+      const note = el('p', '当前只有被授予的操作可用；资料编辑只读。');
+      note.className = 'wb-readonly';
+      body.append(note);
+    }
+    if (snapshot) for (const job of snapshot.previews) mergeLive(job);
+    const showing: { show: (section: string) => void } = { show: () => {} };
+    editor = characterForm(
+      body,
+      profile,
+      !snapshot,
+      setDirty,
+      (e) => host.status(characterAdminError(e) ?? '请核对资料字段。'),
+      (pane) => {
+        if (pane) showing.show(pane);
+      },
+    );
+    const form = editor.form;
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      submit();
+    });
+    button(barActions, '放弃本页未保存修改', () => !dirty, discardLocal, true);
+    const save = el('button', '保存草稿');
+    save.type = 'button';
+    save.className = 'admin-secondary';
+    barActions.append(save);
+    controls.push({ node: save, locked: () => !canEdit() });
+    save.addEventListener('click', () => submit());
+
+    // ---- the sections: the form's five, then what only a saved role has ----
+    const sections: Section[] = editor.panes.map((pane) => ({ id: pane.id, label: pane.label, nodes: [pane.node] }));
+    for (const pane of editor.panes)
+      if (pane.node.tagName.toLowerCase() === 'details') (pane.node as HTMLDetailsElement).open = true;
+    if (snapshot) {
+      const flow = el('section');
+      flow.className = 'character-flow';
+      body.append(flow);
+      // What a builder appended to the flow, so it can be shown and hidden as one section.
+      const made = (build: () => void) => {
+        const before = new Set(Array.from(flow.children));
+        build();
+        return (Array.from(flow.children) as unknown as HTMLElement[]).filter((node) => !before.has(node));
+      };
+      if (snapshot.draft) {
+        const changes = made(() => profileDiff(flow, snapshot));
+        sections.find((section) => section.id === 'voice')!.nodes.push(...made(() => materials(flow, snapshot)));
+        sections.push({ id: 'diff', label: '资料改动', nodes: changes });
+      }
+      const publish = made(() => publication(flow, snapshot));
+      if (snapshot.draft) publish.push(...made(() => discardFold(flow, snapshot)));
+      sections.push({ id: 'publish', label: '发布', nodes: publish });
+      const removal = made(() => deletion(flow, snapshot));
+      if (removal.length) sections.push({ id: 'delete', label: '删除角色', nodes: removal, danger: true });
+    }
+    for (const section of sections)
+      if (section.nodes.length === 1) section.nodes[0]!.className = `${section.nodes[0]!.className} wb-sole`.trim();
+
+    // ---- the rail ----
+    const rail = el('nav'),
+      railItems = new Map<string, HTMLElement>(),
+      railDots = new Map<string, HTMLElement>();
+    rail.className = 'wb-rail';
+    rail.setAttribute('aria-label', '角色分区');
+    for (const section of sections) {
+      const item = el('button'),
+        dot = el('i');
+      item.type = 'button';
+      item.className = `wb-rail-item${section.danger ? ' is-danger' : ''}`;
+      item.append(el('span', section.label), dot);
+      dot.className = 'wb-dot';
+      dot.hidden = true;
+      dot.setAttribute('aria-hidden', 'true');
+      item.addEventListener('click', () => showing.show(section.id));
+      rail.append(item);
+      railItems.set(section.id, item);
+      railDots.set(section.id, dot);
+    }
+    (host.railHost ?? root).append(rail);
+
+    // ---- the title row: draft status and 预演后发布 ----
+    const name = profile.presentation.displayName || target || '新角色';
+    const chip = el('span'),
+      publishLink = el('button', '预演后发布');
+    chip.className = 'wb-chip';
+    publishLink.type = 'button';
+    publishLink.className = 'admin-primary';
+    publishLink.addEventListener('click', () => showing.show('publish'));
+    host.headerHost?.append(chip, publishLink);
+    let current = '';
+    const paint = () => {
+      const changed = new Set(editor?.changed() ?? []);
+      for (const [section, dot] of railDots) dot.hidden = !changed.has(section);
+      const unsaved = Math.max(changed.size, dirty ? 1 : 0);
+      state.textContent = dirty ? `未保存 ${unsaved} 处` : snapshot?.draft ? '草稿已保存' : '没有未保存的修改';
+      state.dataset.state = dirty ? 'dirty' : 'saved';
+      const drafted = snapshot?.draft
+        ? changedSections(snapshot.published?.profile ?? null, snapshot.draft.profile).length
+        : 0;
+      chip.hidden = !dirty && !snapshot?.draft;
+      chip.dataset.tone = dirty || drafted ? 'warn' : 'quiet';
+      chip.textContent = dirty
+        ? `${name} 有 ${unsaved} 处未保存`
+        : drafted
+          ? `${name} 草稿有 ${drafted} 处改动`
+          : `${name} 草稿与正式版一致`;
+      publishLink.hidden = !snapshot?.draft || !can('publish') || current === 'publish';
+    };
+    paintDirty = paint;
+    showing.show = (sectionId: string) => {
+      if (!sections.some((section) => section.id === sectionId)) return;
+      current = sectionId;
+      lastSection = { id: target, section: sectionId };
+      for (const section of sections) {
+        const on = section.id === sectionId;
+        for (const node of section.nodes) node.hidden = !on;
+        railItems.get(section.id)!.setAttribute('aria-current', String(on));
+        if (on) title.textContent = section.label;
+      }
+      paint();
+    };
+    showing.show(
+      lastSection.id === target && sections.some((section) => section.id === lastSection.section)
+        ? lastSection.section
+        : sections[0]!.id,
+    );
+    root.append(card);
     sync();
   }
   function profileDiff(parent: HTMLElement, snapshot: CharacterDetail) {

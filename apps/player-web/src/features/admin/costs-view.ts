@@ -14,6 +14,7 @@ import { dollarLabel } from './ui/chart-math.ts';
 import { dataTable } from './ui/data-table.ts';
 import { segmented } from './ui/segmented.ts';
 import { xyChart, type XyMarker, type XySeries } from './ui/xy-chart.ts';
+import { pageHead } from './ui/page-head.ts';
 
 /** Four decimals: a reply costs a fraction of a cent. */
 const usd = (micros: number | null) => (micros === null ? '—' : `$${(micros / 1_000_000).toFixed(4)}`);
@@ -27,12 +28,12 @@ export const USER_PARTS: ReadonlyArray<{ id: StatsUserType | 'unclassified'; nam
   { id: 'registered', name: '注册', color: '#9DB8F5' },
   { id: 'daily_refill', name: '每天补充', color: '#2F7BEA' },
   { id: 'unlimited', name: '不限量', color: '#7C4DEB' },
-  { id: 'test', name: '测试组', color: '#141414' },
+  { id: 'test', name: '测试组', color: '#2B2833' },
   { id: 'unclassified', name: '未归类', color: '#E8561E' },
 ];
 export const KIND_PARTS = [
   { id: 'text', name: '文字', color: '#BDB5AC' },
-  { id: 'voice', name: '语音', color: '#141414' },
+  { id: 'voice', name: '语音', color: '#2B2833' },
   { id: 'unclassified', name: '未归类', color: '#E8561E' },
 ] as const;
 const toUsd = (micros: number) => micros / 1_000_000;
@@ -224,12 +225,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
   const since = h('span', { class: 'page-kicker' });
 
   root.replaceChildren(
-    h(
-      'div',
-      { class: 'page-head' },
-      h('div', {}, since, h('h2', { text: '消耗表' })),
-      h('div', { class: 'ov-chart-tools' }, rangeSwitch.root, exportButton),
-    ),
+    pageHead('消耗表', since, rangeSwitch.root, exportButton),
     month,
     chartCard,
     h('section', { class: 'cost-models' }, h('h3', { text: '按模型' }), totals.root),

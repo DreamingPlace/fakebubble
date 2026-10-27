@@ -9,6 +9,7 @@ import type {
 import { POINTS_GRANT_LIMITS } from '../../../../../packages/contracts/web-system.ts';
 import { h, length } from '../cocreation/h.ts';
 import { dollars } from './system-format.ts';
+import { pageHead } from './ui/page-head.ts';
 
 const TIER_LABELS = {
   guest: '访客',
@@ -122,7 +123,7 @@ export function pointsView(
       'aria-label': '备注',
     },
   });
-  const send = h('button', { text: '发放', attrs: { type: 'button', id: 'points-send' } });
+  const send = h('button', { class: 'admin-primary', text: '发放', attrs: { type: 'button', id: 'points-send' } });
   const problem = h('p', { class: 'admin-hint models-problem', attrs: { role: 'alert' }, hidden: true });
   const outcome = h('div', { class: 'system-result', attrs: { role: 'status' } });
   const resetBox = h('section', { class: 'system-section' });
@@ -294,7 +295,7 @@ export function pointsView(
   };
 
   root.replaceChildren(
-    h('h2', { text: '积分发放' }),
+    pageHead('积分发放'),
     h(
       'div',
       { class: 'points-grid' },

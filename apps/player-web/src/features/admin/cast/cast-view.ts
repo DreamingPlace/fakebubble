@@ -15,6 +15,7 @@ import { characterPanel, seesPanel } from './cast-character.ts';
 import { ISSUE_LABEL, nameOf } from './cast-model.ts';
 import { groupCards, groupPanel, storiesPanel, type StoryState } from './cast-stories.ts';
 import { lock, type CastCtx, type Region } from './cast-ui.ts';
+import { pageHead } from '../ui/page-head.ts';
 
 export type CastViewHost = {
   api: CastAdminClient | null;
@@ -83,12 +84,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   const sidePair = h('div', { class: 'cs-side-pair' }),
     sideGroup = h('div', { class: 'cs-side-group' });
   frame.side.append(sidePair, sideGroup);
-  const title = h(
-    'div',
-    { class: 'page-head' },
-    h('div', {}, h('h2', { text: '关系与故事' })),
-    h('span', { class: 'cs-mono cs-count' }),
-  );
+  const title = pageHead('关系与故事', h('span', { class: 'cs-mono cs-count' }));
   const page = h(
     'div',
     { class: 'cs' },
@@ -202,7 +198,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       frame.bar.append(importLegacy);
     }
     if (canEdit() && state.dirty) {
-      const save = h('button', { class: 'cs-primary', text: '保存草稿', attrs: { type: 'button' } });
+      const save = h('button', { class: 'cs-quiet', text: '保存草稿', attrs: { type: 'button' } });
       save.addEventListener('click', () => void saveDraft(false));
       frame.bar.append(save);
     }
@@ -245,7 +241,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   function paintNotice() {
     frame.notice.replaceChildren();
     if (state.conflict) {
-      const keep = h('button', { class: 'cs-primary', text: '用我的内容覆盖', attrs: { type: 'button' } });
+      const keep = h('button', { class: 'cs-danger', text: '用我的内容覆盖', attrs: { type: 'button' } });
       keep.addEventListener('click', () => {
         // Their revision becomes the base, so the next save is a normal compare-and-swap against what is there now.
         state.revision = state.conflict!.revision;

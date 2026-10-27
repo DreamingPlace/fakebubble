@@ -1,6 +1,7 @@
 import type { InviteBatch, InviteBatchCode, NewInviteBatch } from '../../services/account-admin-api.ts';
 import { h } from '../cocreation/h.ts';
 import { statusBadge } from './ui/status-badge.ts';
+import { pageHead } from './ui/page-head.ts';
 
 /** Limits the server enforces (BATCH_LIMITS in invites/web-invite-tiers.ts); the form only mirrors them. */
 export const TIER_FORM = Object.freeze({
@@ -143,7 +144,11 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     h('label', { attrs: { for: 'tiers-test', title: '兑换这批码的玩家算测试组；创建后不能再改' } }, testBox, ' 测试'),
   );
   const problem = h('p', { class: 'admin-hint tiers-problem', attrs: { role: 'alert' }, hidden: true });
-  const create = h('button', { text: '生成邀请码', attrs: { type: 'submit', id: 'tiers-create' } });
+  const create = h('button', {
+    class: 'admin-primary',
+    text: '生成邀请码',
+    attrs: { type: 'submit', id: 'tiers-create' },
+  });
   const refillFields = h(
     'div',
     { class: 'tiers-refill' },
@@ -206,7 +211,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   // Two columns, nothing folded: the creation form on the left; on the right the batches, and under them the codes of the
   // batch that is selected (a click on its row; a new batch is selected as soon as it exists).
   root.replaceChildren(
-    h('div', { class: 'page-head' }, h('h2', { text: '邀请与额度' })),
+    pageHead('邀请与额度'),
     h(
       'div',
       { class: 'tiers-layout' },
