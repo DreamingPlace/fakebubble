@@ -57,8 +57,6 @@ type Host = {
   onView?: (id: string | null) => void;
   /** The console's title row (right side): the draft status chip and 预演后发布. Only with directory `none`. */
   headerHost?: HTMLElement;
-  /** Where the section rail goes (under the role list). Without it the rail sits in front of the editor card. */
-  railHost?: HTMLElement;
 };
 type Section = { id: string; label: string; nodes: HTMLElement[]; danger?: boolean };
 /** One client-side submission. The body (including requestId) is fixed when it is created. */
@@ -224,7 +222,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     previewsChanged = null;
     paintDirty = null;
     host.headerHost?.replaceChildren();
-    host.railHost?.replaceChildren();
     root.replaceChildren();
   };
   async function exact<I, T>(key: string, input: I, send: (input: I) => Promise<T>): Promise<T> {
@@ -616,6 +613,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       railDots = new Map<string, HTMLElement>();
     rail.className = 'wb-rail';
     rail.setAttribute('aria-label', '角色分区');
+    rail.setAttribute('role', 'group');
     for (const section of sections) {
       const item = el('button'),
         dot = el('i');
@@ -630,7 +628,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       railItems.set(section.id, item);
       railDots.set(section.id, dot);
     }
-    (host.railHost ?? root).append(rail);
+    card.replaceChildren(rail, head, body, bar);
 
     // ---- the title row: draft status and 预演后发布 ----
     const name = profile.presentation.displayName || target || '新角色';

@@ -193,15 +193,24 @@ try {
       const content = document.querySelector('.admin-content') as HTMLElement | null;
       return Math.max(content?.scrollHeight ?? 0, document.documentElement.scrollHeight);
     });
+  const SIZES = [
+    [1280, 800],
+    [1440, 900],
+    [1680, 1050],
+  ] as const;
+  /** A viewport shot and a full-page shot at 1280×800 and 1440×900 (the review material); the height is the one at 1440×900. */
   const shot = async (name: string) => {
-    await wait(900);
-    heights[name] = await pageHeight();
-    if (!shots) return;
-    await page.screenshot({ path: join(shots, `${name}.png`) });
-    const total = heights[name]!;
-    await page.setViewportSize({ width: 1440, height: Math.min(Math.max(total, 900), 6000) });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: join(shots, `${name}-full.png`) });
+    for (const [width, height] of SIZES.slice(0, 2)) {
+      await page.setViewportSize({ width, height });
+      await wait(width === 1440 ? 900 : 700);
+      const total = await pageHeight();
+      if (width === 1440) heights[name] = total;
+      if (!shots) continue;
+      await page.screenshot({ path: join(shots, `${name}-${width}.png`) });
+      await page.setViewportSize({ width, height: Math.min(Math.max(total, height), 6000) });
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: join(shots, `${name}-${width}-full.png`) });
+    }
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(300);
   };
@@ -211,11 +220,95 @@ try {
       true,
       `no sideways scroll: ${label}`,
     );
+  /**
+   * The hard rules, read off the page: nothing visible overflows its own box (a scroll area such as a table or a list may), no text
+   * is cut with an ellipsis, no chip, badge or button runs onto a second line, and a select is wide enough for the value it shows.
+   */
+  const overflowAudit = () =>
+    page.evaluate(() => {
+      const found: string[] = [];
+      const name = (n: Element) =>
+        `${n.tagName.toLowerCase()}${
+          (n as HTMLElement).className
+            ? `.${String((n as HTMLElement).className)
+                .split(' ')
+                .join('.')}`
+            : ''
+        } "${(n.textContent ?? '').trim().slice(0, 20)}"`;
+      const shown = (n: Element) => {
+        const box = n.getBoundingClientRect();
+        if (box.width < 2 || box.height < 2) return false;
+        for (let p: Element | null = n; p; p = p.parentElement) {
+          const style = getComputedStyle(p);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+        }
+        return true;
+      };
+      const lines = (n: Element) => {
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        return new Set(
+          [...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round((r.top + r.bottom) / 2 / 8)),
+        ).size;
+      };
+      const measure = document.createElement('canvas').getContext('2d')!;
+      for (const n of document.querySelectorAll('.admin-shell *')) {
+        if (
+          [
+            'INPUT',
+            'TEXTAREA',
+            'OPTION',
+            'svg',
+            'path',
+            'circle',
+            'rect',
+            'line',
+            'text',
+            'g',
+            'use',
+            'STYLE',
+            'SCRIPT',
+            'BR',
+          ].includes(n.tagName)
+        )
+          continue;
+        if (n.closest('svg') || n.closest('.sr-only') || !shown(n)) continue;
+        const style = getComputedStyle(n);
+        const own = [...n.childNodes].some((c) => c.nodeType === 3 && (c.textContent ?? '').trim());
+        const scrollArea = ['auto', 'scroll'].includes(style.overflowX);
+        if (n.tagName === 'SELECT') {
+          const select = n as HTMLSelectElement;
+          measure.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+          const width = measure.measureText(select.selectedOptions[0]?.textContent ?? '').width;
+          if (width > select.clientWidth - 40)
+            found.push(
+              `select too narrow for its value: ${name(n)} (${Math.round(width)} > ${select.clientWidth - 40})`,
+            );
+          continue;
+        }
+        if (!scrollArea && n.scrollWidth > n.clientWidth + 1)
+          found.push(`overflows its box: ${name(n)} (${n.scrollWidth} > ${n.clientWidth})`);
+        if (own && style.textOverflow === 'ellipsis') found.push(`ellipsis: ${name(n)}`);
+        if (
+          n.matches(
+            'button, .admin-badge, .cc-chip, .cs-chip-static, .cs-tag, .wb-chip, .cocreation-badge, .ov-status, .cost-chip, .seg-button, .admin-pick-cc, .cs-level, .cs-know, .cs-lived, .cs-chip, .page-kicker, .admin-tag',
+          ) &&
+          own &&
+          lines(n) > 1
+        )
+          found.push(`wraps inside itself: ${name(n)}`);
+      }
+      return found;
+    });
+  const overflow: Record<string, Record<string, string[]>> = {};
+  /** Runs the hard-rule audit on the page that is open, at all three sizes. */
   const noSidewaysAll = async (label: string) => {
-    for (const width of [1280, 1440, 1680]) {
-      await page.setViewportSize({ width, height: 900 });
-      await wait(300);
+    overflow[label] = {};
+    for (const [width, height] of SIZES) {
+      await page.setViewportSize({ width, height });
+      await wait(500);
       await noSideways(`${label} ${width}`);
+      overflow[label]![`${width}x${height}`] = await overflowAudit();
     }
     await page.setViewportSize({ width: 1440, height: 900 });
   };
@@ -335,8 +428,8 @@ try {
 
   // ---- 角色工作台: one section at a time, edits survive a visit elsewhere, a dot marks the changed section ----
   await go('characters/jojo', '.wb-editor form.character-profile-form');
-  const rail = page.locator('#wb-rail .wb-rail-item');
-  await page.waitForFunction(() => document.querySelectorAll('#wb-rail .wb-rail-item').length >= 8);
+  const rail = page.locator('.wb-card .wb-rail-item');
+  await page.waitForFunction(() => document.querySelectorAll('.wb-card .wb-rail-item').length >= 8);
   await wait(500);
   assert.deepEqual(await rail.allInnerTexts(), [
     '身份与展示',
@@ -361,7 +454,7 @@ try {
   assert.equal(await page.locator('.wb-card-head h2').innerText(), '性格');
   const persona = page.locator('.wb-card-body textarea').filter({ visible: true }).first();
   await persona.fill('改过的人设');
-  assert.equal(await page.locator('#wb-rail .wb-rail-item', { hasText: '性格' }).locator('.wb-dot').isVisible(), true);
+  assert.equal(await page.locator('.wb-card .wb-rail-item', { hasText: '性格' }).locator('.wb-dot').isVisible(), true);
   assert.equal(await page.locator('.wb-savestate').innerText(), '未保存 1 处');
   await rail.filter({ hasText: '身份与展示' }).click();
   await rail.filter({ hasText: '发布' }).click();
@@ -376,9 +469,69 @@ try {
   await page.getByRole('button', { name: '放弃本页未保存修改' }).click();
   assert.equal(await page.locator('.wb-dot:visible').count(), 0, 'the dots are gone once the edit is dropped');
 
+  // ---- every section of the workbench and of a character panel obeys the same hard rules, at every size ----
+  const sectionFindings: string[] = [];
+  const sweep = async (label: string, tabs: string, ready: () => Promise<void>) => {
+    for (const [width, height] of SIZES) {
+      await page.setViewportSize({ width, height });
+      await wait(400);
+      const count = await page.locator(tabs).count();
+      for (let i = 0; i < count; i++) {
+        await page.locator(tabs).nth(i).click();
+        await ready();
+        await page.waitForTimeout(350);
+        const name = await page.locator(tabs).nth(i).innerText();
+        for (const item of await overflowAudit()) sectionFindings.push(`${label} ${name} @${width}x${height}: ${item}`);
+      }
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+  };
+  await go('characters/jojo', '.wb-card .wb-rail-item');
+  await page.waitForFunction(() => document.querySelectorAll('.wb-card .wb-rail-item').length >= 8);
+  await wait(500);
+  if (process.env.DEBUG_WB) {
+    await page.locator('.wb-card .wb-rail-item', { hasText: '发布' }).click();
+    process.stderr.write(
+      JSON.stringify(
+        await page.evaluate(() =>
+          [...document.querySelectorAll('.wb-card-body details')]
+            .filter((n) => (n as HTMLElement).offsetParent)
+            .map((n) => {
+              const c = getComputedStyle(n);
+              return {
+                w: n.getBoundingClientRect().width,
+                display: c.display,
+                cols: c.gridTemplateColumns,
+                cls: n.className,
+              };
+            }),
+        ),
+      ) + '\n',
+    );
+  }
+  await sweep('角色工作台', '.wb-card .wb-rail-item', async () => {});
+  await go('cast', '.cs-cell[data-from]');
+  await wait(800);
+  await sweep('关系与故事', '.cs-character .wb-rail-item', async () => {});
+  if (sectionFindings.length) process.stderr.write(`${sectionFindings.join('\n')}\n`);
+  assert.deepEqual(sectionFindings, [], 'every section obeys the hard rules');
+
   // ---- 共创收件箱: one fixed grid per row, nothing stacked ----
   await go('cocreation', '.cc-row-open');
   await wait(900);
+  if (process.env.DEBUG_CC)
+    process.stderr.write(
+      JSON.stringify(
+        await page.evaluate(() =>
+          [...document.querySelectorAll('.cc-row-open')].slice(0, 2).map((n) =>
+            [...n.children].map((c) => {
+              const r = c.getBoundingClientRect();
+              return [c.className, Math.round(r.x), Math.round(r.width), c.scrollWidth];
+            }),
+          ),
+        ),
+      ) + '\n',
+    );
   const rows = await page.locator('.cc-row-open').evaluateAll((nodes: Element[]) =>
     nodes.map((n: Element) => {
       const text = (n.querySelector('.cc-first') as HTMLElement).getBoundingClientRect();
@@ -437,9 +590,9 @@ try {
     });
     const p2 = await film2.newPage();
     await p2.goto(`${origin}/?mode=provider-admin#/characters/jojo`);
-    await p2.locator('#wb-rail .wb-rail-item').first().waitFor({ timeout: 20_000 });
+    await p2.locator('.wb-card .wb-rail-item').first().waitFor({ timeout: 20_000 });
     await p2.waitForTimeout(900);
-    const items = p2.locator('#wb-rail .wb-rail-item');
+    const items = p2.locator('.wb-card .wb-rail-item');
     await items.filter({ hasText: '欢迎内容' }).click();
     await p2.waitForTimeout(700);
     await items.filter({ hasText: '性格' }).click();
@@ -459,6 +612,17 @@ try {
       renameSync(path2, join(shots, 'workbench-switch-sections.webm'));
     }
   }
+  const failures = Object.entries(overflow).flatMap(([label, sizes]) =>
+    Object.entries(sizes).flatMap(([size, list]) => list.map((item) => `${label} @${size}: ${item}`)),
+  );
+  process.stdout.write(
+    `overflow check per page: ${Object.entries(overflow)
+      .map(([label, sizes]) => `${label} ${Object.values(sizes).every((l) => !l.length) ? 'ok' : 'FAIL'}`)
+      .join(' · ')}\n`,
+  );
+  if (failures.length)
+    process.stderr.write(`${[...new Set(failures.map((f) => f.replace(/@\d+x\d+/, '@size')))].join('\n')}\n`);
+  assert.deepEqual(failures, [], 'the hard rules hold on every page at 1280×800, 1440×900 and 1680×1050');
   assert.deepEqual(errors, [], 'no uncaught page errors');
   process.stdout.write(`console 24b-3 page heights at 1440×900: ${JSON.stringify(heights)}\n`);
   process.stdout.write('console 24b-3 browser check: PASS\n');

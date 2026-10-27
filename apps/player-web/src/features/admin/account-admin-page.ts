@@ -25,7 +25,7 @@ import {
 } from './shell/admin-nav.ts';
 import { addressBar, sameRoute, type AdminRoute } from './shell/admin-router.ts';
 import { toastHost } from './ui/toast.ts';
-import { splitPane } from './ui/split-pane.ts';
+import { CHARACTER_COLORS } from './overview-view.ts';
 import { castView } from './cast/cast-view.ts';
 import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
@@ -561,21 +561,22 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     },
     disposed: () => disposed,
   };
-  // 角色工作台: the role list (left, its width draggable), the editor (centre) and the paid 预演 (right) are one page; the shell
-  // opens a role in both.
-  const bench = splitPane(q('#admin-characters'), { initial: 188, min: 150, max: 320, label: '调整角色列表宽度' });
+  // 角色工作台: a row of role pills, then the editor (one section at a time) and the paid 预演 beside it (under it on a narrow window);
+  // the shell opens a role in both.
+  const stage = q('#admin-characters');
   const newRole = document.createElement('button');
   newRole.type = 'button';
   newRole.id = 'wb-new';
-  newRole.textContent = '新建角色';
+  newRole.textContent = '+ 新建角色';
   newRole.hidden = true;
   const rolesHost = document.createElement('div');
   rolesHost.id = 'wb-roles';
-  bench.list.className += ' wb-list';
-  bench.list.setAttribute('aria-label', '角色');
-  const railHost = document.createElement('div');
-  railHost.id = 'wb-rail';
-  bench.list.append(rolesHost, newRole, railHost);
+  rolesHost.className = 'wb-roles';
+  const roster = document.createElement('div');
+  roster.className = 'wb-roster';
+  roster.setAttribute('role', 'group');
+  roster.setAttribute('aria-label', '角色');
+  roster.append(rolesHost, newRole);
   const editorHost = document.createElement('div');
   editorHost.id = 'wb-editor';
   editorHost.className = 'wb-editor';
@@ -587,9 +588,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const split = document.createElement('div');
   split.className = 'wb';
   split.append(editorHost, previewHost);
-  bench.detail.append(split);
+  stage.append(roster, split);
   const picker = rolePicker(rolesHost, {
     emptyText: '当前没有可查看的角色。',
+    compact: { colour: (_id, index) => CHARACTER_COLORS[index % CHARACTER_COLORS.length]! },
     badges: () => unread,
     openInbox: (characterId) => {
       if (busy || disposed || !navigate('cocreation', characterId)) return;
@@ -630,7 +632,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     badges: () => unread,
     directory: 'none',
     headerHost: q('#wb-head'),
-    railHost,
     onDirectory: (roles) => picker.show(roles),
     preview: 'none',
     onView: (id) => {

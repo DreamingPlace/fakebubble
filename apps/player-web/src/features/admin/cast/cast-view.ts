@@ -12,7 +12,7 @@ import type { ConfirmOptions } from '../ui/confirm-dialog.ts';
 import { dateTimeText } from '../system-format.ts';
 import { castGrid, pairPanel, type GridState } from './cast-grid.ts';
 import { characterPanel, seesPanel } from './cast-character.ts';
-import { ISSUE_LABEL, nameOf } from './cast-model.ts';
+import { ISSUE_LABEL, humanIssue, nameOf } from './cast-model.ts';
 import { groupCards, groupPanel, storiesPanel, type StoryState } from './cast-stories.ts';
 import { lock, type CastCtx, type Region } from './cast-ui.ts';
 import { pageHead } from '../ui/page-head.ts';
@@ -27,7 +27,31 @@ export type CastViewHost = {
   disposed: () => boolean;
 };
 
-const issueText = (issue: CastIssue) => `${ISSUE_LABEL[issue.code] ?? issue.code}（${issue.path}）`;
+/** The issue as a person reads it: what is wrong, and where (a name or a title, never an id). */
+const issueText = (doc: CastDoc, issue: CastIssue) => {
+  const { where } = humanIssue(doc, issue.path);
+  return `${ISSUE_LABEL[issue.code] ?? issue.code}${where ? `（${where}）` : ''}`;
+};
+/** The issues grouped by the character they are about (the rest under 其他), in a box that scrolls by itself. */
+function issueBox(doc: CastDoc, issues: readonly CastIssue[]) {
+  const groups = new Map<string, string[]>();
+  for (const issue of issues) {
+    const who = humanIssue(doc, issue.path).who ?? '其他';
+    groups.set(who, [...(groups.get(who) ?? []), issueText(doc, issue)]);
+  }
+  return h(
+    'div',
+    { class: 'cs-issues' },
+    ...[...groups].map(([who, lines]) =>
+      h(
+        'section',
+        { class: 'cs-issue-group' },
+        h('h4', { text: who }),
+        h('ul', {}, ...lines.map((text) => h('li', { text }))),
+      ),
+    ),
+  );
+}
 const isEmptyDraft = (doc: CastDoc) =>
   !doc.characters.length &&
   !doc.people.length &&
@@ -266,14 +290,17 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       frame.notice.append(box);
     }
     const issues = state.saveIssues.length ? state.saveIssues : state.publishIssues;
-    if (issues.length) {
+    if (issues.length && state.doc) {
       frame.notice.append(
         h(
           'div',
           { class: `cs-notice ${state.saveIssues.length ? 'is-bad' : 'is-warn'}`, attrs: { role: 'status' } },
-          h('b', { text: state.saveIssues.length ? '没能保存：' : '发布前要先解决：' }),
-          h('ul', {}, ...issues.slice(0, 6).map((issue) => h('li', { text: issueText(issue) }))),
-          issues.length > 6 ? h('span', { class: 'cs-mono', text: `还有 ${issues.length - 6} 条` }) : null,
+          h('b', {
+            text: state.saveIssues.length
+              ? `没能保存：${issues.length} 个问题`
+              : `发布前要先解决：${issues.length} 个问题`,
+          }),
+          issueBox(state.doc, issues),
         ),
       );
     }

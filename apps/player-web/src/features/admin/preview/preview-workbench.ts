@@ -232,7 +232,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   const simulated = () => (simMode.value === 'set' && /^\d\d:\d\d$/.test(simTime.value) ? simTime.value : undefined);
   const zone = () => detail?.draft?.profile.template.schedule.timeZone ?? '';
   const calls = (n: number) =>
-    `约 ${n} 条预演 = ${n * 2} 次付费调用（每条含草稿与审核两个阶段，逐次预留预算）；单次运行最多 ${RUN_MAX} 条。`;
+    `约 ${n} 条预演 = ${n * 2} 次付费调用（每条含草稿与审核两个阶段）；单次最多 ${RUN_MAX} 条。`;
   const lock = () => {
     const ready = !busy && !!detail?.draft && detail.previewAvailable && can('preview');
     const base = ready && ack.checked;
@@ -276,11 +276,15 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     h('div', { class: 'pw-compose-row' }, batch, h('div', { class: 'pw-compose-col' }, label, sendBatch)),
     h(
       'label',
-      { class: 'admin-check' },
+      {
+        class: 'admin-check pw-ack',
+        attrs: {
+          title:
+            '真实付费文字预演：已核对当前草稿、输入与模拟时间。费用逐次预留，每条含草稿与审核两个阶段，页面不会自动重发。',
+        },
+      },
       ack,
-      h('span', {
-        text: '我确认发起真实付费文字预演，并已核对当前草稿、输入与模拟时间。费用逐次预留，页面不会自动重发。',
-      }),
+      h('span', { text: '确认发起付费预演' }),
     ),
     estimate,
     unavailable,
@@ -436,9 +440,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     runsHost.replaceChildren();
     compareHost.replaceChildren();
     if (!runs.length) {
-      runsHost.append(
-        h('p', { class: 'admin-empty', text: '还没有运行。用上方“批量运行”或“运行评测集”开始一次评测。' }),
-      );
+      runsHost.append(h('p', { class: 'admin-empty', text: '还没有运行。' }));
       return;
     }
     runs.forEach((run, index) => {

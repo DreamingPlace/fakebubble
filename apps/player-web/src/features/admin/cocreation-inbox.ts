@@ -52,7 +52,6 @@ type Deps = {
 
 const STATUS_LABEL: Record<InboxStatus, string> = { new: '新', processed: '已处理', archived: '已归档' };
 const when = (ms: number) => dateTimeText(ms);
-const preview = (text: string) => ([...text].length > 48 ? `${[...text].slice(0, 48).join('')}…` : text);
 const isField = (node: unknown) => {
   const tag = (node as { tagName?: string } | null)?.tagName;
   return (
@@ -175,7 +174,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           h(
             'span',
             { class: 'cc-text' },
-            h('span', { class: 'cc-first', text: preview(item.firstLine) }),
+            h('span', { class: 'cc-first', text: item.firstLine }),
             h(
               'span',
               { class: 'cc-chips' },
