@@ -79,6 +79,11 @@
       "file": "apps/player-web/src/features/admin/invite-tiers-view.ts",
       "names": ["codesCsv"],
       "reason": "Part 24b-1 fix: the page no longer builds a CSV of the codes shown at creation (the server's 导出表格 does); the pinned 'CSV holds codes only' test still covers the helper."
+    },
+    {
+      "file": "apps/player-web/src/features/admin/ui/split-pane.ts",
+      "names": ["splitPane"],
+      "reason": "Part 24b-3: the 角色工作台 no longer has a draggable list column (the roles are one row of pills), so no page uses the list | detail pane today; it stays, with its own tests, as the console's pane component."
     }
   ]
 }
