@@ -7162,25 +7162,26 @@ body:has(.admin-shell) {
 }
 
 /* ---- cards: one padding, one radius, one hairline ---- */
-.account-admin-page.admin-shell :is(
-    .overview-card,
-    .cost-dated,
-    .stat-detail,
-    .sys-row > .system-section,
-    .tiers-form,
-    .tiers-detail,
-    .tiers-shown,
-    .members-side form,
-    .admin-member,
-    .points-form,
-    .points-grid > .system-section,
-    .cs-card,
-    .cc-list-column,
-    .cc-detail,
-    .wb-card,
-    .wb-preview,
-    .system-result:not(:empty)
-  ) {
+.account-admin-page.admin-shell
+:is(
+  .overview-card,
+  .cost-dated,
+  .stat-detail,
+  .sys-row > .system-section,
+  .tiers-form,
+  .tiers-detail,
+  .tiers-shown,
+  .members-side form,
+  .admin-member,
+  .points-form,
+  .points-grid > .system-section,
+  .cs-card,
+  .cc-list-column,
+  .cc-detail,
+  .wb-card,
+  .wb-preview,
+  .system-result:not(:empty)
+) {
   box-sizing: border-box;
   padding: var(--ad-card-pad);
   border: 1px solid var(--ad-hairline);
@@ -7190,7 +7191,8 @@ body:has(.admin-shell) {
 }
 
 /* ---- buttons: white with a border; ONE solid primary per screen (.admin-primary) ---- */
-.account-admin-page.admin-shell button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-toggle, .admin-menu-item)) {
+.account-admin-page.admin-shell
+button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-toggle, .admin-menu-item)) {
   height: 40px;
   min-height: 40px;
   padding: 0 18px;
@@ -7201,7 +7203,10 @@ body:has(.admin-shell) {
   font-size: 14px;
   font-weight: 700;
 }
-.account-admin-page.admin-shell button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-toggle, .admin-menu-item)):hover:not(:disabled) {
+.account-admin-page.admin-shell
+  button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-toggle, .admin-menu-item)):hover:not(
+    :disabled
+  ) {
   background: #faf9f7;
   border-color: #cfc9c0;
 }
@@ -7256,7 +7261,8 @@ body:has(.admin-shell) {
 }
 
 /* ---- fields: 40 high, 12 radius, one border ---- */
-.account-admin-page.admin-shell input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [type="range"]),
+.account-admin-page.admin-shell
+input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [type="range"]),
 .account-admin-page.admin-shell select {
   box-sizing: border-box;
   height: 40px;
@@ -7353,7 +7359,6 @@ body:has(.admin-shell) {
   background: var(--ad-tint);
   color: var(--ad-tint-ink);
 }
-
 
 /* ---- 角色工作台: a row of role pills, then the editor (one section at a time) and 预演 ---- */
 .account-admin-page.admin-shell .wb-roster,
@@ -7630,7 +7635,10 @@ body:has(.admin-shell) {
 }
 /* long text and notes take the whole row; short fields share it */
 .account-admin-page.admin-shell .wb-card fieldset > p,
-.account-admin-page.admin-shell .wb-card details > :is(p, div, section, pre, textarea, .admin-confirm, label.admin-check),
+.account-admin-page.admin-shell
+  .wb-card
+  details
+  > :is(p, div, section, pre, textarea, .admin-confirm, label.admin-check),
 .account-admin-page.admin-shell .wb-card .colour-field,
 .account-admin-page.admin-shell .wb-card label:has(textarea),
 .account-admin-page.admin-shell .wb-card label:has(select),
@@ -7845,7 +7853,6 @@ body:has(.admin-shell) {
   font-size: 13px;
   white-space: nowrap;
 }
-
 
 /* ---- 共创收件箱: a list that scrolls in its card (one fixed grid per row) and a detail that stays ---- */
 .account-admin-page.admin-shell #admin-cocreation {
@@ -8124,7 +8131,6 @@ body:has(.admin-shell) {
   white-space: nowrap;
 }
 
-
 /* ---- 关系与故事: sections in a row at the top of the character panel; cards of one row share top and bottom ---- */
 .account-admin-page.admin-shell .cs {
   gap: var(--ad-gap);
@@ -8279,12 +8285,12 @@ body:has(.admin-shell) {
   background: rgba(255, 255, 255, 0.7);
 }
 
-
 /* ---- hard rules for every console page: nothing is cut, nothing wraps inside itself, nothing leaves its box ---- */
 .account-admin-page.admin-shell * {
   text-overflow: clip;
 }
-.account-admin-page.admin-shell :is(
+.account-admin-page.admin-shell
+  :is(
     button,
     .admin-badge,
     .cc-chip,
@@ -8374,7 +8380,17 @@ body:has(.admin-shell) {
 .account-admin-page.admin-shell .cc-first {
   white-space: normal;
 }
-
+.account-admin-page.admin-shell .tiers-main > p,
+.account-admin-page.admin-shell .tiers-main > .admin-hint {
+  margin: 0;
+  padding: 0 var(--ad-card-pad) var(--ad-card-pad);
+}
+.account-admin-page.admin-shell .tiers-main .tiers-list-head {
+  padding: var(--ad-card-pad) var(--ad-card-pad) 8px;
+}
+.account-admin-page.admin-shell .admin-member > .admin-member-head {
+  margin: 0;
+}
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {

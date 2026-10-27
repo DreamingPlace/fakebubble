@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { humanIssue } from '../../src/features/admin/cast/cast-model.ts';
+import { rolePicker } from '../../src/features/admin/shell/role-picker.ts';
 import { changedSections, emptyCharacter } from '../../src/features/admin/character-form.ts';
 import { characterWorkbench } from '../../src/features/admin/character-workbench.ts';
 import { pageHead } from '../../src/features/admin/ui/page-head.ts';
@@ -75,7 +77,6 @@ function bench(t: test.TestContext, withDraft: boolean) {
     profilePreview: async () => ({ draft: detail.draft, published: detail.published?.profile ?? null }),
   };
   const root = doc.createElement('div') as unknown as FakeElement;
-  const rail = doc.createElement('div') as unknown as FakeElement;
   const header = doc.createElement('div') as unknown as FakeElement;
   const workbench = characterWorkbench(root as unknown as HTMLElement, {
     api: api as never,
@@ -84,10 +85,9 @@ function bench(t: test.TestContext, withDraft: boolean) {
     status: () => {},
     disposed: () => false,
     directory: 'none',
-    railHost: rail as unknown as HTMLElement,
     headerHost: header as unknown as HTMLElement,
   });
-  return { root, rail, header, workbench };
+  return { root, rail: root, header, workbench };
 }
 const railItems = (rail: FakeElement) => rail.querySelectorAll('.wb-rail-item');
 const labels = (rail: FakeElement) => railItems(rail).map((b) => b.textContent);
@@ -219,7 +219,7 @@ test('24b-3 no endless pages: the workbench, the inbox, the permission grid and 
   assert.match(block, /\.wb-preview \{[^}]*position: sticky;/);
   assert.match(block, /\.cc-list-column \.cc-list \{[^}]*overflow-y: auto;/);
   assert.match(block, /\.cc-detail \{[^}]*overflow-y: auto;/);
-  assert.match(block, /\.cc-row-open \{[^}]*grid-template-columns: 112px minmax\(0, 1fr\) 128px 64px;/);
+  assert.match(block, /\.cc-row-open \{[^}]*grid-template-columns: 112px minmax\(0, 1fr\) 152px 68px;/);
   assert.match(block, /\.cc-chip \{[^}]*white-space: nowrap;/);
   assert.match(block, /\.admin-member \.permission-matrix \{[^}]*overflow-y: auto;/);
   assert.match(block, /\.admin-table-wrap \{[^}]*max-height:[^}]*overflow: auto;/);
@@ -231,4 +231,55 @@ test('24b-3 motion follows prefers-reduced-motion: every new duration is multipl
   assert.ok(durations.length >= 4);
   for (const line of durations) assert.match(line, /var\(--ad-motion\)/, line);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*:root \{\s*--ad-motion: 0;/);
+});
+
+test('24b-3 the roles are one row of pills: colour dot, full name, one compact state, the co-creation badge', (t) => {
+  const doc = installFakeDom(t);
+  const host = doc.createElement('div') as unknown as FakeElement;
+  const picker = rolePicker(host as unknown as HTMLElement, {
+    emptyText: '无',
+    onPick: () => {},
+    badges: () => ({ jojo: 2 }),
+    compact: { colour: (_id, index) => ['#E8561E', '#2F7BEA'][index]! },
+  });
+  picker.show([
+    { characterId: 'jojo', displayName: 'JOJO', publishedVersion: 2, draftRevision: 1 },
+    { characterId: 'new-one', displayName: '新角色', publishedVersion: null, draftRevision: null },
+  ]);
+  const rows = host.querySelectorAll('.admin-pick-row');
+  assert.equal(rows.length, 2, 'every role is one pill');
+  assert.match(rows[0]!.textContent, /JOJO/);
+  assert.match(rows[0]!.textContent, /v2 · 草稿/);
+  assert.doesNotMatch(rows[0]!.textContent, /正式/, 'one compact state, not two badges');
+  assert.equal(rows[0]!.querySelector('.admin-pick-dot')!.style.getPropertyValue('--dot'), '#E8561E');
+  assert.equal(rows[0]!.querySelector('.cocreation-badge')!.textContent, '2 条新共创');
+  assert.match(rows[1]!.textContent, /未发布/);
+});
+
+test('24b-3 an issue of the cast is read with names, not ids, and grouped by character', () => {
+  const doc = {
+    characters: [{ characterId: 'c01', identity: { names: [{ id: '', text: '林小满' }] } }],
+    people: [{ id: 'p1', names: [{ id: '', text: '老师' }] }],
+    groups: [{ id: 'g1', name: '文学社' }],
+    stories: [{ id: 's1', title: '雨夜的告白' }],
+  } as never;
+  assert.deepEqual(humanIssue(doc, 'characters[c01]'), { who: '林小满', where: '' });
+  assert.deepEqual(humanIssue(doc, 'characters[0].identity.names'), { who: '林小满', where: '身份 · 名字' });
+  assert.deepEqual(humanIssue(doc, 'stories[0].participants[1]'), { who: null, where: '故事「雨夜的告白」 · 参与者' });
+  assert.deepEqual(humanIssue(doc, 'groups[g1].members'), { who: null, where: '组合「文学社」 · 成员' });
+  assert.ok(!/c01|characters\[/.test(humanIssue(doc, 'characters[c01].profile').where));
+});
+
+test('24b-3 hard rules in CSS: no ellipsis, chips never wrap, two columns with 预演 at 420 px that goes under below ~1360 px', () => {
+  assert.match(block, /\.admin-shell \* \{\s*text-overflow: clip;/);
+  assert.doesNotMatch(block, /text-overflow: ellipsis/);
+  assert.doesNotMatch(block, /line-clamp|-webkit-box/);
+  assert.match(block, /\.cc-chip,[\s\S]*?\) \{\s*white-space: nowrap;/);
+  assert.match(block, /grid-template-columns: minmax\(600px, 1fr\) 420px;/);
+  assert.match(
+    block,
+    /@container adc \(max-width: 1063px\) \{[^@]*\.wb:has\(\.wb-preview:not\(\[hidden\]\)\) \{\s*grid-template-columns: minmax\(0, 1fr\);/,
+  );
+  // The console has no @media query but the one that shows the narrow-window notice.
+  assert.doesNotMatch(block, /@media/);
 });
