@@ -1,0 +1,11 @@
+{
+  "name": "fake-paopao-apex",
+  "compatibility_date": "2026-10-13",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "none"
+  }
+}
