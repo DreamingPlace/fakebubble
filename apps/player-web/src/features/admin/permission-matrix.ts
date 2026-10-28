@@ -7,6 +7,7 @@ import {
   type AdminPermissionItem,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { h } from '../cocreation/h.ts';
+import { bindTip } from './ui/tooltip.ts';
 
 type ItemInfo = { item: AdminPermissionItem; name: string; help: string };
 type Group = { id: string; title: string; items: readonly ItemInfo[] };
@@ -169,6 +170,9 @@ export function permissionMatrixEditor(
     presets.append(button);
   }
   group.append(presets);
+  // The areas flow down three columns (same grid on the add form and on a member's grid); the fieldset itself stays a plain block.
+  const areas = h('div', { class: 'permission-areas' });
+  group.append(areas);
 
   for (const area of PERMISSION_GROUPS) {
     const items = area.items.filter((i) => shown(i.item));
@@ -190,14 +194,14 @@ export function permissionMatrixEditor(
         attrs: { role: 'tooltip', id: `perm-tip-${item}` },
       });
       input.setAttribute('aria-describedby', tip.id);
-      section.append(
-        h(
-          'div',
-          { class: 'permission-row' },
-          h('label', { class: 'permission-item' }, input, h('span', { text: name })),
-          tip,
-        ),
+      const row = h(
+        'div',
+        { class: 'permission-row' },
+        h('label', { class: 'permission-item' }, input, h('span', { text: name })),
+        tip,
       );
+      bindTip(row, tip, input);
+      section.append(row);
       input.addEventListener('change', () => {
         touched = true;
         if (input.checked) {
@@ -214,7 +218,7 @@ export function permissionMatrixEditor(
         paint();
       });
     }
-    group.append(section);
+    areas.append(section);
   }
   if (base.legacy.length) {
     const section = h(
@@ -230,7 +234,7 @@ export function permissionMatrixEditor(
       input.addEventListener('change', () => (touched = true));
       section.append(h('label', { class: 'permission-item' }, input, h('span', { text: permission })));
     }
-    group.append(section);
+    areas.append(section);
   }
   group.append(note);
   const paint = () => {

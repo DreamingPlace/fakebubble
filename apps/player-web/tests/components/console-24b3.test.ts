@@ -205,10 +205,11 @@ test('24b-3 the page frame: the sidebar is sticky and as tall as the window, the
   assert.match(block, /\.admin-sidebar \{[^}]*position: sticky;[^}]*top: 0;[^}]*height: 100dvh;[^}]*overflow-y: auto;/);
   assert.match(block, /html:has\(\.admin-shell\),\s*body:has\(\.admin-shell\) \{[^}]*overflow: visible;/);
   assert.match(block, /--ad-page-max/);
-  assert.match(consoleCss, /--ad-page-max: 1160px/);
-  // Fields and buttons: 40 on their own, 32 in a row.
+  // Named exception (Part 24b-4): the one content width is 1680 px (side padding only), not 1160; the token stays, its value moved.
+  assert.match(consoleCss, /--ad-page-max: 1680px/);
+  // Fields are 40. Named exception (Part 24b-4): buttons have exactly two heights now, 36 and compact 30 (a segment is compact), not 40 / 32.
   assert.match(block, /input:not\([^)]*\),\s*\.account-admin-page\.admin-shell select \{[^}]*height: 40px;/);
-  assert.match(block, /\.seg-button \{[^}]*height: 32px;/);
+  assert.match(block, /\.seg-button \{[^}]*height: 30px;/);
   // Cards share one hairline and one radius.
   assert.match(block, /border: 1px solid var\(--ad-hairline\);\s*border-radius: var\(--ad-card-radius\);/);
 });

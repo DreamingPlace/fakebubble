@@ -238,14 +238,8 @@ export function characterForm(
   const id = field(identity, '固定人物 ID', base.template.id, { required: true, max: 128 }) as HTMLInputElement;
   id.pattern = '[A-Za-z0-9_-]{1,128}';
   id.readOnly = !isNew;
-  identity.append(
-    el(
-      'p',
-      isNew
-        ? '使用英文、数字、短横线或下划线；保存后不能改 ID。删除后的 ID 也不能复用。'
-        : '固定身份不可修改；名称和展示名通过新版本更新。',
-    ),
-  );
+  // The fixed-id sentence of an existing role is gone (Part 24b-4): the field is read-only, which says it. A new role keeps the id rule.
+  if (isNew) identity.append(el('p', '使用英文、数字、短横线或下划线；保存后不能改 ID。删除后的 ID 也不能复用。'));
   const name = field(identity, '人设名称', base.template.name, { required: true, max: 100 });
   const displayName = field(identity, '网页展示名', base.presentation.displayName, { required: true, max: 100 });
   const birthDate = field(identity, '设定生日（可选）', base.template.birthDate ?? '', { type: 'date' });

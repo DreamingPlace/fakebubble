@@ -3597,7 +3597,7 @@ body:has(.admin-shell) {
   --ad-card-radius: 18px;
   --ad-card-pad: 20px;
   --ad-gap: 20px;
-  --ad-page-max: 1160px;
+  --ad-page-max: 1680px;
   --ad-nav-width: 232px;
   --ad-line: var(--ad-hairline);
   --ad-ease: cubic-bezier(0.2, 0.82, 0.24, 1);
@@ -5921,36 +5921,6 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
 .account-admin-page.admin-shell .permission-row {
   position: relative;
 }
-.account-admin-page.admin-shell .permission-tip {
-  position: absolute;
-  left: 24px;
-  top: calc(100% - 2px);
-  z-index: 20;
-  width: max-content;
-  max-width: min(360px, 80vw);
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: var(--ad-text);
-  color: #fff;
-  font-size: 12px;
-  line-height: 1.5;
-  font-weight: 400;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-4px);
-  pointer-events: none;
-  transition:
-    opacity calc(160ms * var(--ad-motion)) ease,
-    transform calc(160ms * var(--ad-motion)) var(--ad-ease),
-    visibility 0s linear calc(160ms * var(--ad-motion));
-}
-.account-admin-page.admin-shell .permission-row:hover .permission-tip,
-.account-admin-page.admin-shell .permission-row:focus-within .permission-tip {
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-  transition-delay: 0s;
-}
 .account-admin-page.admin-shell .admin-danger,
 .account-admin-page.admin-shell .admin-member > button.admin-danger {
   background: #fff;
@@ -7193,9 +7163,9 @@ body:has(.admin-shell) {
 /* ---- buttons: white with a border; ONE solid primary per screen (.admin-primary) ---- */
 .account-admin-page.admin-shell
 button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-toggle, .admin-menu-item)) {
-  height: 40px;
-  min-height: 40px;
-  padding: 0 18px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 16px;
   border: 1px solid var(--ad-border);
   border-radius: 999px;
   background: #fff;
@@ -7307,7 +7277,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   background: #f3f1ee;
 }
 .account-admin-page.admin-shell .seg-button {
-  height: 32px;
+  height: 30px;
   color: var(--ad-text);
 }
 .account-admin-page.admin-shell .page-head .seg {
@@ -7316,7 +7286,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .seg-m .seg-button,
 .account-admin-page.admin-shell .page-head .seg-button {
-  height: 32px;
+  height: 30px;
   font-size: 13px;
   font-weight: 700;
 }
@@ -7329,7 +7299,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   box-shadow: none;
 }
 .account-admin-page.admin-shell :is(.cs-chip, .cc-filter-chip, .cost-chip) {
-  height: 32px;
+  height: 30px;
   border: 1px solid var(--ad-border);
   background: #fff;
   color: var(--ad-text);
@@ -7344,7 +7314,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .cs button.cs-add,
 .account-admin-page.admin-shell .cs button.cs-danger,
 .account-admin-page.admin-shell .cs button.cs-mini {
-  height: 32px;
+  height: 30px;
   border: 1px solid var(--ad-border);
   background: #fff;
   box-shadow: none;
@@ -7449,7 +7419,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell #wb-new {
   flex: none;
-  height: 40px;
+  height: 36px;
   padding: 0 16px;
   border: 1px dashed #c9c2b8;
   background: transparent;
@@ -7510,8 +7480,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   flex: none;
   align-items: center;
   gap: 8px;
-  height: 32px;
-  min-height: 32px;
+  height: 30px;
+  min-height: 30px;
   padding: 0 14px;
   border: 0;
   border-radius: 999px;
@@ -7804,8 +7774,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   white-space: normal;
 }
 .account-admin-page.admin-shell .wb-preview .pw button {
-  height: 32px;
-  min-height: 32px;
+  height: 30px;
+  min-height: 30px;
   padding: 0 14px;
   font-size: 13px;
   white-space: nowrap;
@@ -8102,8 +8072,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-size: 13px;
 }
 .account-admin-page.admin-shell .permission-presets button {
-  height: 32px;
-  min-height: 32px;
+  height: 30px;
+  min-height: 30px;
   padding: 0 14px;
   font-size: 13px;
 }
@@ -8353,13 +8323,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .xy-x-label:last-child {
   transform: translateX(-100%);
 }
-/* the description bubble stays inside its row: it never widens the grid, and it never leaves a scrolling card */
-.account-admin-page.admin-shell .permission-tip {
-  right: 0;
-  left: 0;
-  width: auto;
-  max-width: none;
-}
 .account-admin-page.admin-shell .system-section .admin-kv {
   grid-template-columns: minmax(0, 1fr) max-content;
 }
@@ -8390,6 +8353,946 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .admin-member > .admin-member-head {
   margin: 0;
+}
+
+/* ======================================================================================================================
+   Part 24b-4: one layout system for every console page (owner's production check).
+   - The content uses the whole width beside the sidebar (side padding only, up to --ad-page-max = 1680 px); no page has a width of
+     its own. Two-column pages use fixed proportions so both columns fill the row, and the cards of a row share top and bottom lines.
+   - Buttons have exactly two heights: standard 36 (forms, page actions) and compact 30 (inside tables, lists, chips and segments);
+     buttons side by side in one group are the same size. Fields stay 40.
+   - Hover help is a light bubble (white card, hairline, soft shadow, #2B2833 text) to the lower right of the pointer; never black.
+   ====================================================================================================================== */
+.account-admin-page.admin-shell .admin-content > section[data-panel] {
+  width: 100%;
+  max-width: var(--ad-page-max);
+}
+.account-admin-page.admin-shell
+  button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-toggle, .admin-menu-item)) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* compact (30): in tables and lists, chips, segments, rail items and the small actions of the cast, the inbox and 预演 */
+.account-admin-page.admin-shell
+:is(
+  .seg-button,
+  .cs-chip,
+  .cc-filter-chip,
+  .cost-chip,
+  .wb-rail-item,
+  .permission-presets button,
+  .admin-table-wrap button,
+  .members-table button,
+  .tiers-main button,
+  .cc-detail-actions button,
+  .cc-answer-actions button,
+  .cc-bulk button,
+  .cc-adopt-actions button,
+  .cc-note-box button,
+  .wb-preview .pw button,
+  .cs-add,
+  .cs-mini,
+  .cs-clear,
+  .cs-danger,
+  .cs-quiet:not(.cs-bar *, .cs-start *, .cs-adder *)
+) {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-clear {
+  padding: 0;
+  width: 30px;
+}
+/* standard (36): the publish bar, the start card and the inline forms of the cast */
+.account-admin-page.admin-shell :is(.cs-bar, .cs-start, .cs-adder) button {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .cs button.cs-quiet,
+.account-admin-page.admin-shell .cs button.cs-add,
+.account-admin-page.admin-shell .cs button.cs-danger,
+.account-admin-page.admin-shell .cs button.cs-mini {
+  box-shadow: none;
+}
+.account-admin-page.admin-shell .admin-pick-row {
+  height: 40px;
+}
+.account-admin-page.admin-shell .wb-roles .admin-pick {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 8px 0 4px;
+}
+/* an action that carries a small icon: the icon is a mask drawn in the text colour, the label stays ordinary text */
+.account-admin-page.admin-shell
+:is(
+  .cc-set-processed,
+  .cc-set-archived,
+  .cc-set-new,
+  .cc-copy,
+  .cc-adopt-open,
+  .cc-process-selected,
+  .cc-archive-selected,
+  .cc-clear-selected,
+  .cc-save-note
+)::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: var(--ic) center / contain no-repeat;
+  mask: var(--ic) center / contain no-repeat;
+}
+.account-admin-page.admin-shell :is(.cc-set-processed, .cc-process-selected) {
+  --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7'/%3E%3C/svg%3E");
+}
+.account-admin-page.admin-shell :is(.cc-set-archived, .cc-archive-selected) {
+  --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='4' rx='1'/%3E%3Cpath d='M5 8v11h14V8M10 12h4'/%3E%3C/svg%3E");
+}
+.account-admin-page.admin-shell :is(.cc-set-new, .cc-clear-selected) {
+  --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 14 4 9l5-5'/%3E%3Cpath d='M4 9h10a6 6 0 0 1 0 12h-3'/%3E%3C/svg%3E");
+}
+.account-admin-page.admin-shell .cc-copy {
+  --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15V6a2 2 0 0 1 2-2h8'/%3E%3C/svg%3E");
+}
+.account-admin-page.admin-shell .cc-adopt-open {
+  --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E");
+}
+.account-admin-page.admin-shell .cc-save-note {
+  --ic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 4h11l3 3v13H5z'/%3E%3Cpath d='M8 4v6h7V4M8 20v-6h8v6'/%3E%3C/svg%3E");
+}
+
+/* standard 36 wherever an older rule gave a button its own height */
+.account-admin-page.admin-shell
+:is(
+  .page-head button,
+  button.tiers-new,
+  .tiers-form button,
+  button.cs-publish,
+  .sys-reload,
+  #system-renew,
+  .system-topup button
+) {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+/* ---- 我的账号: two columns of cards (what this account is | the form), like every other page ---- */
+.account-admin-page.admin-shell .admin-content > section[data-panel="account"]:not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--ad-gap);
+}
+.account-admin-page.admin-shell .admin-content > section[data-panel="account"] > .page-head {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell #admin-account-info,
+.account-admin-page.admin-shell #admin-bind-start,
+.account-admin-page.admin-shell #admin-bind-finish {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: var(--ad-card-pad);
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell #admin-bind-start input,
+.account-admin-page.admin-shell #admin-bind-finish input {
+  width: 100%;
+}
+.account-admin-page.admin-shell #admin-bind-finish[hidden],
+.account-admin-page.admin-shell #admin-account-info:empty {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-account-continue {
+  justify-self: start;
+}
+
+/* two-column pages: fixed proportions, both columns fill the row */
+.account-admin-page.admin-shell .tiers-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+.account-admin-page.admin-shell .page-head-actions > button {
+  align-self: center;
+  margin: 0;
+}
+
+/* ---- hover help: a light bubble to the lower right of the pointer ---- */
+.account-admin-page.admin-shell .has-tip {
+  position: relative;
+}
+.account-admin-page.admin-shell .ad-tip,
+.account-admin-page.admin-shell .permission-tip {
+  position: absolute;
+  left: var(--tip-x, 28px);
+  top: var(--tip-y, 100%);
+  right: auto;
+  z-index: 40;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(280px, 70vw);
+  padding: 8px 12px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 12px;
+  background: #fff;
+  color: #2b2833;
+  box-shadow: 0 8px 24px rgba(43, 40, 51, 0.12);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+  /* Not drawn until wanted: a hidden box that still took part in layout would stretch the columns it sits in. */
+  display: none;
+  pointer-events: none;
+}
+.account-admin-page.admin-shell .has-tip:hover > .ad-tip,
+.account-admin-page.admin-shell .has-tip:focus-within > .ad-tip {
+  display: block;
+  animation: adTipIn calc(140ms * var(--ad-motion)) ease both;
+}
+@keyframes adTipIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.account-admin-page.admin-shell .pw-ack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .pw-ack-i {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+
+/* ---- 管理员与权限: the add form on the left, the table and the selected person's grid on the right; both fill the row ---- */
+.account-admin-page.admin-shell .members-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: stretch;
+  gap: var(--ad-gap);
+}
+.account-admin-page.admin-shell .members-side {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .members-side form {
+  flex: 1;
+  max-height: none;
+  overflow: visible;
+}
+.account-admin-page.admin-shell .members-side form h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+}
+.account-admin-page.admin-shell .members-side form button[type="submit"] {
+  align-self: flex-start;
+}
+.account-admin-page.admin-shell .members-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-gap);
+  min-width: 0;
+}
+.account-admin-page.admin-shell .members-table-card {
+  overflow-x: auto;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell .members-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .members-table th,
+.account-admin-page.admin-shell .members-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ad-hairline);
+  text-align: left;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .members-table th {
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .members-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.account-admin-page.admin-shell .members-table tr[aria-selected="true"] td {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell .members-pick {
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ad-text);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .members-mail {
+  display: block;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .members-list .admin-member {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: var(--ad-card-pad);
+}
+.account-admin-page.admin-shell .members-list .admin-member > *,
+.account-admin-page.admin-shell .members-list .admin-member > button:not(.admin-member-head),
+.account-admin-page.admin-shell .members-list .admin-member > button:not(.admin-member-head) + button {
+  margin: 0;
+}
+.account-admin-page.admin-shell .members-list .admin-member > :is(.admin-member-head, div, p) {
+  flex: 1 1 100%;
+}
+.account-admin-page.admin-shell .admin-member-head {
+  min-height: 0;
+  padding: 0;
+  font-size: 16px;
+  font-weight: 900;
+}
+/* The same three columns on both sides: the areas flow down the columns, so the heights balance. */
+.account-admin-page.admin-shell .permission-matrix {
+  display: block;
+}
+.account-admin-page.admin-shell .permission-areas {
+  column-count: 3;
+  column-gap: 28px;
+}
+.account-admin-page.admin-shell .permission-areas > .permission-group {
+  break-inside: avoid;
+  margin-bottom: 8px;
+}
+.account-admin-page.admin-shell .permission-areas > .permission-group:first-child h4,
+.account-admin-page.admin-shell .permission-group h4 {
+  margin-top: 0;
+}
+.account-admin-page.admin-shell .permission-note {
+  margin: 8px 0 0;
+}
+.account-admin-page.admin-shell .permission-note:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .members-side .permission-matrix {
+  max-height: none;
+  overflow: visible;
+}
+.account-admin-page.admin-shell .members-list .admin-member .permission-matrix {
+  max-height: calc(100dvh - 140px);
+}
+.account-admin-page.admin-shell .permission-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .permission-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  overflow-wrap: anywhere;
+}
+@container adc (max-width: 1100px) {
+  .account-admin-page.admin-shell .permission-areas {
+    column-count: 2;
+  }
+}
+
+/* ---- 共创收件箱: list 3 / detail 2, one height, both scroll inside ---- */
+.account-admin-page.admin-shell .cc-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: stretch;
+  height: max(520px, calc(100dvh - 140px));
+}
+.account-admin-page.admin-shell .cc-list-column,
+.account-admin-page.admin-shell .cc-detail {
+  position: static;
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+}
+.account-admin-page.admin-shell .cc-list-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .cc-detail {
+  align-content: start;
+}
+.account-admin-page.admin-shell .cc-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .cc-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.account-admin-page.admin-shell .cc-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cc-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .cc-bulk-count {
+  margin-right: auto;
+  font-size: 13px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cc-row-open {
+  grid-template-columns: minmax(124px, 172px) minmax(0, 1fr) 96px 64px;
+}
+.account-admin-page.admin-shell .cc-when {
+  display: flex;
+  flex-direction: column;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .cc-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cc-pseudonym {
+  padding-left: 18px;
+}
+.account-admin-page.admin-shell .cc-detail-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .cc-detail-actions,
+.account-admin-page.admin-shell .cc-answer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .cc-adopt-actions {
+  display: flex;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .cc-note-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .cc-note-box label {
+  align-self: stretch;
+}
+.account-admin-page.admin-shell .cc-note-box textarea {
+  width: 100%;
+}
+.account-admin-page.admin-shell .cs-dot {
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--size, 12px);
+  height: var(--size, 12px);
+  border-radius: 50%;
+  background: var(--dot, #8c8697);
+  box-shadow: 0 0 0 2px #fff;
+}
+@container adc (max-width: 1100px) {
+  .account-admin-page.admin-shell .cc-row-open {
+    grid-template-columns: minmax(112px, 150px) minmax(0, 1fr) 64px;
+    grid-template-areas:
+      "who text state"
+      "who when when";
+  }
+}
+
+/* ---- 角色工作台: the editor takes the width, 预演 keeps 420 and stretches with it; the sections fit on one row ---- */
+@container adc (min-width: 1064px) {
+  .account-admin-page.admin-shell .wb:has(.wb-preview:not([hidden])) {
+    grid-template-columns: minmax(0, 1fr) 420px;
+    align-items: stretch;
+  }
+}
+.account-admin-page.admin-shell .wb-editor {
+  display: flex;
+  flex-direction: column;
+}
+.account-admin-page.admin-shell .wb-editor > .wb-card {
+  flex: 1;
+}
+.account-admin-page.admin-shell .wb-roles .admin-pick-row {
+  height: 40px;
+}
+/* fifteen roles must fit two rows: a published role with no draft shows no badge (only 草稿 / 未发布 are worth a mark) */
+.account-admin-page.admin-shell .wb-roles .admin-pick .admin-badge[data-tone="ok"] {
+  display: none;
+}
+.account-admin-page.admin-shell .wb-rail {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.account-admin-page.admin-shell .cs-rail {
+  flex-wrap: wrap;
+}
+.account-admin-page.admin-shell .wb-rail-item.is-danger {
+  margin-left: auto;
+}
+.account-admin-page.admin-shell .wb-card details::details-content,
+.account-admin-page.admin-shell .wb-card form.character-profile-form fieldset {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.account-admin-page.admin-shell .wb-card fieldset > :is(p, .colour-field, label:has(textarea)) {
+  grid-column: 1 / -1;
+}
+
+/* ---- 关系与故事 ---- */
+.account-admin-page.admin-shell .cs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+.account-admin-page.admin-shell .cs-bar .cs-spacer {
+  flex: 1;
+}
+.account-admin-page.admin-shell .cs-bar-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 900;
+}
+.account-admin-page.admin-shell .cs-start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 32px;
+}
+.account-admin-page.admin-shell .cs-start h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.account-admin-page.admin-shell .cs-start-actions,
+.account-admin-page.admin-shell .cs-adder-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .cs-adder {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .cs-adder h2 {
+  margin: 0;
+}
+.account-admin-page.admin-shell .cs-adder input {
+  width: 260px;
+}
+.account-admin-page.admin-shell .cs-main {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  align-items: stretch;
+  gap: var(--ad-gap);
+}
+.account-admin-page.admin-shell .cs-grid-card {
+  overflow-x: auto;
+}
+.account-admin-page.admin-shell .cs-grid {
+  display: grid;
+  grid-template-columns: fit-content(112px) repeat(var(--n, 15), minmax(0, 1fr));
+  gap: 2px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-corner {
+  display: block;
+}
+.account-admin-page.admin-shell .cs-head {
+  display: flex;
+  box-sizing: border-box;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  place-items: initial;
+  overflow: visible;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ad-text);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: none;
+}
+.account-admin-page.admin-shell .cs-head-col {
+  padding: 4px 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-head-col .cs-head-name {
+  flex: none;
+  line-height: 1.2;
+  text-align: center;
+  white-space: pre;
+}
+.account-admin-page.admin-shell .cs-head-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  height: 100%;
+  min-height: 30px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .cs-head.is-lit {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  box-shadow: none;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs-head-row.is-open {
+  box-shadow: inset 0 0 0 2px #e8561e;
+}
+.account-admin-page.admin-shell .cs-cell {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: auto;
+  height: 32px;
+  min-width: 0;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--ad-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.account-admin-page.admin-shell .cs-cell.is-lit {
+  box-shadow: inset 0 0 0 1px rgba(91, 79, 196, 0.45);
+}
+/* no growing cells: a scaled cell at the edge of the grid would leave the card */
+.account-admin-page.admin-shell .cs-cell:hover:not(.is-self),
+.account-admin-page.admin-shell .cs-cell:focus-visible,
+.account-admin-page.admin-shell .cs-cell[aria-pressed="true"] {
+  transform: none;
+}
+.account-admin-page.admin-shell .cs-cell[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px var(--ad-primary);
+}
+.account-admin-page.admin-shell .cs-side-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .cs-pair-title {
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs-pair-title h2 {
+  margin-left: 4px;
+}
+.account-admin-page.admin-shell .cs-dir {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 6px 10px;
+}
+.account-admin-page.admin-shell .cs-dir-label {
+  grid-column: 1 / -1;
+  width: auto;
+  gap: 6px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-dir > .cs-stars {
+  grid-column: 1;
+}
+.account-admin-page.admin-shell .cs-star {
+  width: 28px;
+  height: 28px;
+}
+.account-admin-page.admin-shell .cs-star-glyph {
+  width: 28px;
+  height: 28px;
+  font-size: 26px;
+  line-height: 28px;
+}
+.account-admin-page.admin-shell .cs-pair-texts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.account-admin-page.admin-shell .cs-pair-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .cs-field :is(input, textarea) {
+  width: 100%;
+  color: var(--ad-text);
+}
+.account-admin-page.admin-shell .cs-split {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--ad-gap);
+  align-items: stretch;
+}
+.account-admin-page.admin-shell .cs-pane-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding-right: var(--ad-gap);
+  border-right: 1px solid var(--ad-hairline);
+}
+.account-admin-page.admin-shell .cs-pane-list .cs-card-head {
+  margin-bottom: 0;
+}
+.account-admin-page.admin-shell .cs-pane-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-pane-editor .cs-card-head {
+  margin-bottom: 0;
+}
+.account-admin-page.admin-shell .cs-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.account-admin-page.admin-shell .cs-group-name {
+  font-weight: 700;
+  text-align: left;
+}
+.account-admin-page.admin-shell .cs-group-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  min-height: 48px;
+  padding: 8px 14px;
+  border-radius: 14px;
+  text-align: left;
+}
+.account-admin-page.admin-shell .cs-group-card[aria-pressed="true"],
+.account-admin-page.admin-shell .cs-person-row[aria-pressed="true"],
+.account-admin-page.admin-shell .cs-story-row[aria-current="true"] {
+  border-color: transparent;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .cs-stack {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  padding-right: 0;
+}
+.account-admin-page.admin-shell .cs-count-text {
+  margin-left: 6px;
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .cs-story-list,
+.account-admin-page.admin-shell .cs-people-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.account-admin-page.admin-shell .cs-story-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 4px 12px;
+  border-radius: 12px;
+}
+.account-admin-page.admin-shell .cs-story-title {
+  align-self: center;
+  text-decoration: none;
+  justify-content: flex-start;
+  height: auto;
+  min-height: 30px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  white-space: normal;
+}
+.account-admin-page.admin-shell .cs-person-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  border-radius: 12px;
+}
+.account-admin-page.admin-shell .cs-person-name {
+  flex: 1;
+  text-align: left;
+}
+.account-admin-page.admin-shell .cs-fields-3 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.account-admin-page.admin-shell .cs-fields-3 > .cs-period {
+  display: contents;
+}
+.account-admin-page.admin-shell .cs-fields-2,
+.account-admin-page.admin-shell .cs-gstory {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.account-admin-page.admin-shell .cs-gstory > :is(.cs-period) {
+  display: contents;
+}
+.account-admin-page.admin-shell .cs-gstory {
+  padding: 12px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 14px;
+}
+.account-admin-page.admin-shell .cs-gstory > button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.account-admin-page.admin-shell .cs-gstories {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .cs-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs-label {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .cs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.account-admin-page.admin-shell .cs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs-chip.is-person .cs-dot {
+  border-radius: 3px;
+}
+.account-admin-page.admin-shell .cs-know-matrix {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px 8px;
+  max-height: none;
+  overflow: visible;
+}
+.account-admin-page.admin-shell .cs-know-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.account-admin-page.admin-shell .cs-know {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-people {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  align-items: stretch;
+  gap: var(--ad-gap);
+}
+.account-admin-page.admin-shell .cs-roster {
+  margin-bottom: 12px;
+}
+.account-admin-page.admin-shell .cs-character,
+.account-admin-page.admin-shell .cs-sees {
+  height: 640px;
+}
+.account-admin-page.admin-shell .cs-character-split {
+  display: flex;
+  flex-direction: column;
+}
+@container adc (max-width: 1100px) {
+  .account-admin-page.admin-shell .cs-main,
+  .account-admin-page.admin-shell .cs-people {
+    grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+  }
+  .account-admin-page.admin-shell .cs-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  }
+  .account-admin-page.admin-shell .cs-fields-3 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */

@@ -8,7 +8,7 @@ import {
 import type { CastCompilePreviewResult } from '../../../services/cast-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
 import { KNOWLEDGE_LABEL, nameOf } from './cast-model.ts';
-import { bound, type CastCtx } from './cast-ui.ts';
+import { bound, dot, toggleChip, type CastCtx } from './cast-ui.ts';
 
 const L = CAST_LIMITS;
 const ATTITUDE_LABEL: Record<CastAliasAttitude, string> = { likes: '喜欢', ok: '无所谓', dislikes: '不喜欢' };
@@ -72,7 +72,13 @@ function textList(
  * One character: identity (names, aliases and how they feel about each), profile, personality, speech, experiences, 演绎说明
  * and hidden settings. Opened from the grid's row header. Nothing here is folded or tabbed.
  */
-export function characterPanel(host: HTMLElement, ctx: CastCtx, selected: () => string | null) {
+export function characterPanel(
+  host: HTMLElement,
+  ctx: CastCtx,
+  selected: () => string | null,
+  /** 从阵容移除: the page asks, then takes the character (and every mention of them) out of the working copy. */
+  removeFromCast: (characterId: string) => void,
+) {
   // Part 24b-3: one section at a time, picked from a rail; which one stays while the panel is painted again for the same character.
   let shown = { character: '', section: 0 };
   const paint = () => {
@@ -87,7 +93,25 @@ export function characterPanel(host: HTMLElement, ctx: CastCtx, selected: () => 
       return;
     }
     const repaintNames = () => ctx.paint('grid', 'stories', 'side', 'groups');
-    host.append(h('div', { class: 'cs-card-head' }, h('h2', { text: nameOf(doc, character.characterId) })));
+    const head = h('div', { class: 'cs-card-head' }, h('h2', { text: nameOf(doc, character.characterId) }));
+    if (ctx.canEdit()) {
+      const out = h('button', { class: 'cs-danger', text: '从阵容移除', attrs: { type: 'button' } });
+      out.addEventListener('click', () => removeFromCast(character.characterId));
+      head.append(out);
+    }
+    // Everyone of the cast, one click away: a roster of fifteen is picked here as well as from the grid's row headers.
+    const roster = h('div', { class: 'cs-chips cs-roster', attrs: { role: 'group', 'aria-label': '切换角色' } });
+    for (const c of doc.characters)
+      roster.append(
+        toggleChip(
+          nameOf(doc, c.characterId),
+          c.characterId === character.characterId,
+          true,
+          () => ctx.openCharacter(c.characterId),
+          dot(ctx.colour(c.characterId)),
+        ),
+      );
+    host.append(head, roster);
     const id = character.identity;
     const parts: HTMLElement[] = [];
     const section = (title: string, ...nodes: Node[]) =>
@@ -299,6 +323,8 @@ export function seesPanel(
   state: {
     loading: boolean;
     failed: boolean;
+    /** The character was added after the draft was last saved: there is nothing on the server to compile yet. */
+    unsaved: boolean;
     stale: boolean;
     names: (id: string) => string;
     storyTitle: (id: string) => string;
@@ -315,6 +341,10 @@ export function seesPanel(
   );
   if (!state.selected) {
     host.append(h('p', { class: 'cs-hint', text: '打开一个角色就能看到。' }));
+    return;
+  }
+  if (state.unsaved) {
+    host.append(h('p', { class: 'cs-hint', text: '保存草稿后，这里会显示他看到的内容。' }));
     return;
   }
   if (state.failed) {

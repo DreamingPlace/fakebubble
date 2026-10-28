@@ -36,6 +36,7 @@ import { diffBubbles } from './diff.ts';
 import { evalSetEditor } from './eval-set-editor.ts';
 import { downloadText, exportName, runToCsv, runToJson } from './export.ts';
 import { previewPoller, type PollerHost } from './poller.ts';
+import { bindTip } from '../ui/tooltip.ts';
 
 export const RUN_MAX = 50;
 const INPUT_MAX = 4000;
@@ -220,7 +221,18 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   });
   const sendBatch = h('button', { text: '批量运行', attrs: { type: 'button' } });
   const ack = h('input', { attrs: { type: 'checkbox', 'aria-label': '确认发起真实付费预演' } });
-  const estimate = h('p', { class: 'admin-hint pw-estimate' });
+  // The cost is a tooltip on the confirm line (Part 24b-4), not a sentence under 预演; the paid-call confirmation itself is unchanged.
+  const estimate = h('span', { class: 'admin-hint pw-estimate', attrs: { id: 'pw-estimate-tip' } });
+  const ackLine = h(
+    'label',
+    { class: 'admin-check pw-ack' },
+    ack,
+    h('span', { text: '确认发起付费预演' }),
+    h('span', { class: 'pw-ack-i', text: 'ⓘ', attrs: { 'aria-hidden': 'true' } }),
+    estimate,
+  );
+  ack.setAttribute('aria-describedby', 'pw-estimate-tip');
+  bindTip(ackLine, estimate, ack);
   const unavailable = h('p', { class: 'admin-empty', hidden: true });
 
   const lines = () =>
@@ -274,19 +286,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     bar.root,
     h('div', { class: 'pw-compose-row' }, single, sendSingle),
     h('div', { class: 'pw-compose-row' }, batch, h('div', { class: 'pw-compose-col' }, label, sendBatch)),
-    h(
-      'label',
-      {
-        class: 'admin-check pw-ack',
-        attrs: {
-          title:
-            '真实付费文字预演：已核对当前草稿、输入与模拟时间。费用逐次预留，每条含草稿与审核两个阶段，页面不会自动重发。',
-        },
-      },
-      ack,
-      h('span', { text: '确认发起付费预演' }),
-    ),
-    estimate,
+    ackLine,
     unavailable,
   );
   for (const input of [relation, simMode, simTime, setPicker, single, batch, label, ack]) {

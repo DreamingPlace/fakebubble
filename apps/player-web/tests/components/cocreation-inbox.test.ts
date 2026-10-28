@@ -679,3 +679,50 @@ test('the character workbench shows an unread badge per character, and none for 
   assert.equal(rows[1]!.querySelector('.cocreation-badge'), null);
   bench.dispose();
 });
+
+// Part 24b-4: the bulk bar names its actions, the rows start with the character's colour dot and full name, no button is icon-only.
+test('24b-4 several rows ticked show a bulk bar with labelled actions; 标为已处理 sends one request; 取消选择 clears', async (t) => {
+  const f = setup(t);
+  await f.inbox.load();
+  assert.equal(f.q('.cc-bulk')!.hidden, true);
+  for (const i of [0, 2]) {
+    f.all('.cc-row input')[i]!.checked = true;
+    f.all('.cc-row input')[i]!.dispatch('change');
+  }
+  assert.equal(f.q('.cc-bulk')!.hidden, false);
+  assert.equal(f.q('.cc-bulk-count')!.textContent, '已选 2 条');
+  assert.deepEqual(
+    f
+      .q('.cc-bulk')!
+      .querySelectorAll('button')
+      .map((b) => b.textContent),
+    ['标为已处理（2）', '归档所选（2）', '取消选择'],
+  );
+  f.q('.cc-process-selected')!.click();
+  await flush();
+  assert.deepEqual(callsOf(f, 'setStatus')[0]!.args, [['s1', 's3'], 'processed']);
+  f.all('.cc-row input')[1]!.checked = true;
+  f.all('.cc-row input')[1]!.dispatch('change');
+  f.q('.cc-clear-selected')!.click();
+  assert.equal(f.q('.cc-bulk')!.hidden, true);
+});
+
+test('24b-4 every row starts with the character colour dot and the full name; no button of the inbox is icon-only', async (t) => {
+  const f = setup(t);
+  await f.inbox.load();
+  for (const row of f.all('.cc-row-open')) {
+    const name = row.querySelectorAll('.cc-name')[0]!;
+    assert.equal(name.querySelectorAll('.cs-dot').length, 1);
+    assert.equal(name.textContent, NAME);
+  }
+  const labelled = f.all('button').filter((b) => b.textContent.trim() === '' && !b.hidden);
+  assert.deepEqual(labelled, []);
+  assert.equal(f.q('.cc-detail h3')!.querySelectorAll('.cs-dot').length, 1);
+  assert.deepEqual(
+    f
+      .q('.cc-detail-actions')!
+      .querySelectorAll('button')
+      .map((b) => b.textContent),
+    ['☆ 星标', '标为已处理', '归档'],
+  );
+});

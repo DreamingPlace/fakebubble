@@ -156,7 +156,14 @@ type Calls = {
 };
 function page(
   t: test.TestContext,
-  options: { permissions?: string[]; doc?: CastDoc; revision?: number; conflictOnce?: boolean } = {},
+  options: {
+    permissions?: string[];
+    doc?: CastDoc;
+    revision?: number;
+    conflictOnce?: boolean;
+    /** Part 24b-4: the character API behind + 角色 (and whether this administrator may create characters). */
+    characters?: { saves: { id: string; revision: number | null; name: string }[]; canCreate?: boolean };
+  } = {},
 ) {
   const document = installFakeDom(t);
   const root = document.createElement('div') as unknown as FakeElement;
@@ -235,6 +242,18 @@ function page(
     confirm: async () => true,
     toast: (text) => toasts.push(text),
     disposed: () => false,
+    ...(options.characters
+      ? {
+          characters: {
+            list: async () => ({ characters: [], deletions: [] }),
+            save: async (id: string, revision: number | null, profile: { template: { name: string } }) => {
+              options.characters!.saves.push({ id, revision, name: profile.template.name });
+              return { characterId: id, revision: 1 } as never;
+            },
+          },
+          canCreateCharacter: () => options.characters!.canCreate ?? true,
+        }
+      : {}),
   };
   const view = castView(root as unknown as HTMLElement, host);
   const buttons = (label: string) => root.querySelectorAll('button').filter((b) => b.textContent === label);
@@ -532,4 +551,119 @@ test('the draft client reads the shapes the server sends and refuses others', as
     issues,
   });
   void (null as unknown as CastDraftResult | CastCompilePreviewResult);
+});
+
+// ---- Part 24b-4 -----------------------------------------------------------------------------------------------------------
+const emptyDoc = () =>
+  ({
+    ...sampleCast(),
+    characters: [],
+    people: [],
+    groups: [],
+    stories: [],
+    memes: [],
+    ratings: {},
+    directions: [],
+  }) as CastDoc;
+
+test('24b-4 an empty draft opens on one clear start: 从旧资料导入 and + 角色, one of each', async (t) => {
+  const saves: { id: string; revision: number | null; name: string }[] = [];
+  const f = page(t, { doc: emptyDoc(), characters: { saves } });
+  await f.view.load();
+  const start = f.root.querySelectorAll('.cs-start')[0]!;
+  assert.equal(start.hidden, false);
+  assert.deepEqual(
+    start.querySelectorAll('button').map((b) => b.textContent),
+    ['从旧资料导入', '+ 角色'],
+  );
+  assert.equal(f.buttons('从旧资料导入').length, 1);
+  assert.equal(f.buttons('+ 角色').length, 1);
+  // the cards that need a character are hidden until there is one
+  assert.equal(f.root.querySelectorAll('.cs-grid-card')[0]!.hidden, true);
+});
+
+test('24b-4 + 角色 creates the character through the 角色工作台 route (a draft with a name) and adds it to the cast draft', async (t) => {
+  const saves: { id: string; revision: number | null; name: string }[] = [];
+  const f = page(t, { doc: emptyDoc(), characters: { saves } });
+  await f.view.load();
+  f.buttons('+ 角色')[0]!.click();
+  const adder = f.root.querySelectorAll('.cs-adder')[0]!;
+  assert.equal(adder.hidden, false);
+  adder.querySelectorAll('input')[0]!.type_('小雨');
+  f.buttons('创建')[0]!.click();
+  await flush();
+  assert.equal(saves.length, 1);
+  assert.match(saves[0]!.id, /^role-[0-9a-f]{8}$/);
+  assert.equal(saves[0]!.revision, null, 'a new draft character, like 新建角色');
+  assert.equal(saves[0]!.name, '小雨');
+  const doc = f.view.state.doc!;
+  assert.equal(doc.characters.length, 1);
+  assert.equal(doc.characters[0]!.characterId, saves[0]!.id);
+  assert.equal(doc.characters[0]!.identity.names[0]!.text, '小雨');
+  assert.equal(f.view.state.dirty, true, 'the cast draft still has to be saved');
+  assert.equal(f.root.querySelectorAll('.cs-start')[0]!.hidden, true);
+  assert.ok(f.toasts.some((x) => x.includes('还没有上线')));
+  // the saved draft does not know the character yet: nothing is asked of the server for what it sees
+  assert.match(f.root.querySelectorAll('.cs-sees')[0]!.textContent, /保存草稿后/);
+});
+
+test('24b-4 + 角色 is not drawn without the character API or without characters.create, nor once the cast has 15', async (t) => {
+  const bare = page(t, { doc: emptyDoc() });
+  await bare.view.load();
+  assert.equal(bare.buttons('+ 角色').length, 0);
+  const denied = page(t, { doc: emptyDoc(), characters: { saves: [], canCreate: false } });
+  await denied.view.load();
+  assert.equal(denied.buttons('+ 角色').length, 0);
+  assert.equal(denied.buttons('从旧资料导入').length, 1, 'import only needs cast.edit');
+  const full = page(t, { characters: { saves: [] } });
+  await full.view.load();
+  assert.equal(full.buttons('+ 角色').length, 0, 'fifteen is the most');
+  const some = page(t, {
+    doc: { ...sampleCast(), characters: sampleCast().characters.slice(0, 3) },
+    characters: { saves: [] },
+  });
+  await some.view.load();
+  assert.equal(some.buttons('+ 角色').length, 1, 'the grid has its own + 角色');
+});
+
+test('24b-4 a person is added, edited and removed on the page; removing takes the person out of every story', async (t) => {
+  const f = page(t, { characters: { saves: [] } });
+  await f.view.load();
+  const before = f.view.state.doc!.people.length;
+  f.buttons('+ 人物')[0]!.click();
+  f.root.querySelectorAll('.cs-adder input')[0]!.type_('新来的邻居');
+  f.buttons('创建')[0]!.click();
+  const doc = f.view.state.doc!;
+  assert.equal(doc.people.length, before + 1);
+  const fresh = doc.people.at(-1)!;
+  assert.match(fresh.id, /^new-[A-Za-z0-9]+$/, 'a token the server turns into an id');
+  assert.equal(fresh.names[0]!.text, '新来的邻居');
+  assert.equal(f.view.state.person, fresh.id);
+  // it can be a participant at once
+  doc.stories[0]!.participants.push(fresh.id);
+  const chips = f.root.querySelectorAll('.cs-people-card input');
+  chips[0]!.type_('邻居阿姨');
+  assert.equal(fresh.names[0]!.text, '邻居阿姨');
+});
+
+test('24b-4 the participant and member pickers show every character and person as a chip with a dot, many selected at once', async (t) => {
+  const f = page(t);
+  await f.view.load();
+  const doc = f.view.state.doc!;
+  f.root.querySelectorAll('.cs-story-title')[0]!.click();
+  const picker = f.root.querySelectorAll('.cs-stories .cs-picker')[0]!;
+  const chips = picker.querySelectorAll('.cs-chip');
+  assert.equal(chips.length, doc.characters.length + doc.people.length);
+  assert.ok(chips.every((c) => c.querySelectorAll('.cs-dot').length === 1));
+  const story = doc.stories[0]!;
+  const open = f.root
+    .querySelectorAll('.cs-stories .cs-picker')[0]!
+    .querySelectorAll('.cs-chip')
+    .filter((c) => c.getAttribute('aria-pressed') === 'false');
+  const names = open.slice(0, 3).map((c) => c.textContent);
+  for (const chip of open.slice(0, 3)) {
+    chip.click();
+  }
+  assert.equal(story.participants.length >= 3, true);
+  assert.ok(names.every((n) => n.length > 0));
 });

@@ -25,7 +25,7 @@ import {
 } from './shell/admin-nav.ts';
 import { addressBar, sameRoute, type AdminRoute } from './shell/admin-router.ts';
 import { toastHost } from './ui/toast.ts';
-import { CHARACTER_COLORS } from './overview-view.ts';
+import { ROSTER_COLOURS } from './ui/character-colour.ts';
 import { castView } from './cast/cast-view.ts';
 import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
@@ -201,10 +201,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="cast" hidden><div id="admin-cast"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
     <section data-panel="members" hidden><div class="page-head"><h2>管理员与权限</h2><div class="page-head-actions"></div></div>
-      <div class="members-layout"><div class="members-side"><form id="admin-member-issue"><label for="admin-member-label">管理员备注</label><input id="admin-member-label" maxlength="80" required>
+      <div class="members-layout"><div class="members-side"><form id="admin-member-issue"><h3>添加管理员</h3><label for="admin-member-label">管理员备注</label><input id="admin-member-label" maxlength="80" required>
         <div id="admin-new-permissions"></div>
         <button type="submit">签发管理员一次性凭据</button></form></div>
-      <div id="admin-members-list" class="members-list"></div></div>
+      <div class="members-main"><div id="admin-members-table" class="members-table-card"></div><div id="admin-members-list" class="members-list"></div></div></div>
     </section>
     <section data-panel="overview" hidden><div id="admin-overview"></div></section>
     <section data-panel="points" hidden><div id="admin-points"></div></section>
@@ -591,7 +591,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   stage.append(roster, split);
   const picker = rolePicker(rolesHost, {
     emptyText: '当前没有可查看的角色。',
-    compact: { colour: (_id, index) => CHARACTER_COLORS[index % CHARACTER_COLORS.length]! },
+    compact: { colour: (_id, index) => ROSTER_COLOURS[index % ROSTER_COLOURS.length]! },
     badges: () => unread,
     openInbox: (characterId) => {
       if (busy || disposed || !navigate('cocreation', characterId)) return;
@@ -679,6 +679,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     : null;
   const castPage = castView(q('#admin-cast'), {
     api: port.cast ?? null,
+    characters: port.characters,
+    canCreateCharacter: () => {
+      const member = session?.member;
+      return !!member && (member.role === 'owner' || canCreateCharacter(member.permissions));
+    },
     can: (permission) =>
       session?.member.role === 'owner' || (!!session && hasCastPermission(session.member.permissions, permission)),
     run,
@@ -774,6 +779,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   });
   const clearMemberControls = () => {
     q('#admin-members-list').replaceChildren();
+    q('#admin-members-table').replaceChildren();
     membersResult = null;
     chosenMember = null;
     q('#admin-new-permissions').replaceChildren();
@@ -818,24 +824,65 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       result.members.find((m) => m.id === chosenMember)?.id ??
       (result.members.find((m) => m.role !== 'owner') ?? result.members[0])?.id ??
       null;
+    // The table (Part 24b-4): name, role, how many permissions, last sign-in (UTC). A row picks whose grid is shown below it.
+    const tableHost = q<HTMLElement>('#admin-members-table');
+    const table = document.createElement('table');
+    table.className = 'members-table';
+    const head = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    for (const text of ['名称', '角色', '权限数', '最近登录'] as const) {
+      const cell = document.createElement('th');
+      cell.scope = 'col';
+      cell.textContent = text;
+      headRow.append(cell);
+    }
+    head.append(headRow);
+    const body = document.createElement('tbody');
     for (const member of result.members) {
-      const item = document.createElement('div');
-      item.className = 'admin-member';
-      const heading = document.createElement('button');
-      heading.type = 'button';
-      heading.className = 'admin-member-head';
-      heading.setAttribute('aria-expanded', String(member.id === chosen));
-      heading.textContent = `${member.label} · ${member.role === 'owner' ? '主管理员' : `已分配 ${member.permissions.length} 项授权`}${member.email ? ` · ${member.email}` : ''}`;
-      heading.addEventListener('click', () => {
+      const row = document.createElement('tr');
+      row.dataset.member = member.id;
+      if (member.id === chosen) row.setAttribute('aria-selected', 'true');
+      const pick = document.createElement('button');
+      pick.type = 'button';
+      pick.className = 'members-pick';
+      pick.setAttribute('aria-pressed', String(member.id === chosen));
+      pick.textContent = member.label;
+      pick.addEventListener('click', () => {
         if (chosenMember === member.id) return;
         chosenMember = member.id;
         paintMembers();
       });
-      item.append(heading);
-      if (member.id !== chosen) {
-        list.append(item);
-        continue;
+      const name = document.createElement('td');
+      name.append(pick);
+      if (member.email) {
+        const mail = document.createElement('span');
+        mail.className = 'members-mail';
+        mail.textContent = member.email;
+        name.append(mail);
       }
+      const cells = [
+        member.role === 'owner' ? '主管理员' : '管理员',
+        member.role === 'owner' ? '全部' : String(member.permissions.length),
+        dateTimeText(member.lastSignInAt ?? null),
+      ];
+      row.append(name);
+      for (const text of cells) {
+        const cell = document.createElement('td');
+        cell.textContent = text;
+        row.append(cell);
+      }
+      body.append(row);
+    }
+    table.append(head, body);
+    tableHost.replaceChildren(table);
+    for (const member of result.members) {
+      if (member.id !== chosen) continue;
+      const item = document.createElement('div');
+      item.className = 'admin-member';
+      const heading = document.createElement('h3');
+      heading.className = 'admin-member-head';
+      heading.textContent = `${member.label} · ${member.role === 'owner' ? '主管理员' : `已分配 ${member.permissions.length} 项授权`}${member.email ? ` · ${member.email}` : ''}`;
+      item.append(heading);
       if (member.role === 'owner') {
         const owner = document.createElement('p');
         owner.textContent = '主管理员保留所有功能权限，不能在此撤权。';
