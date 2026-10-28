@@ -154,7 +154,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   root.innerHTML = `<main class="invite-admin-page account-admin-page admin-shell" data-surface="login">
     <div class="admin-narrow-notice" role="note">管理后台请在电脑浏览器打开</div>
     <header class="admin-topbar">
-      <div class="admin-brand"><h1 tabindex="-1">FAKE 泡泡管理</h1></div>
+      <div class="admin-brand"><h1 tabindex="-1">Burbur 管理</h1></div>
       <div class="admin-account" hidden>
         <button type="button" id="admin-account-toggle" class="admin-account-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="admin-account-menu"></button>
         <div class="admin-menu" id="admin-account-menu" hidden>
@@ -693,6 +693,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     confirm: (options) => confirmDialog(q('main'), options),
     toast: (text, tone) => toasts.show(text, tone ?? 'info'),
     disposed: () => disposed,
+    download: browserDownload,
   });
   const toasts = toastHost(q('main'));
   toastSink = (text, tone) => void toasts.show(text, tone);

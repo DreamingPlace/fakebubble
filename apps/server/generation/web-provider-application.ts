@@ -245,6 +245,7 @@ export class WebProviderApplication {
     this.characterAdmin = new WebCharacterAdmin(store, clock, this.inviteAdmin);
     this.characterAdmin.enableMaterials(new WebCharacterMaterials(store, clock));
     this.characterAdmin.enableDeletion(this.characterDeletion);
+    this.cast?.enableCharacters(this.characterAdmin);
     const inviteTiers = new WebInviteTiers(store, {
       clock,
       codeKey: createHmac('sha256', Buffer.from(config.requestKey, 'base64url'))

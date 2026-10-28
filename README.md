@@ -4,7 +4,7 @@
 
 ## English
 
-fakebubble is the web source for FAKE Bubble: browsing characters, text and voice conversations, a guest trial, invite-based upgrades, and administrator email sign-in with character profile management. It runs on Cloudflare Workers and Durable Objects (edge, business, budget and generation Workers), with an offline local server and fixture-based tests for development. The native iOS app is discontinued and is not part of this repository; text generation uses a single protocol, accepted-v7 (the experimental v10 protocol has been removed).
+fakebubble is the web source for Burbur: browsing characters, text and voice conversations, a guest trial, invite-based upgrades, and administrator email sign-in with character profile management. It runs on Cloudflare Workers and Durable Objects (edge, business, budget and generation Workers), with an offline local server and fixture-based tests for development. The native iOS app is discontinued and is not part of this repository; text generation uses a single protocol, accepted-v7 (the experimental v10 protocol has been removed).
 
 <!-- screenshot: docs/screenshot.png -->
 
@@ -39,6 +39,7 @@ Tests use synthetic fixtures and never call real providers or send email. OpenSS
 - [Architecture](docs/ARCHITECTURE.md)
 - [Deployment and configuration](docs/DEPLOYMENT.md)
 - [Status and known limitations](docs/STATUS.md)
+- [Cast file format (bulk filling 关系与故事)](docs/CAST_FILE.md)
 - [Security](SECURITY.md)
 - [Contributing](CONTRIBUTING.md)
 
@@ -46,7 +47,7 @@ Tests use synthetic fixtures and never call real providers or send email. OpenSS
 
 ## 中文
 
-FAKE 泡泡的网页源码：人物浏览、文字与语音对话、游客体验、邀请升级，以及管理员邮箱登录和角色资料管理。
+Burbur 的网页源码：人物浏览、文字与语音对话、游客体验、邀请升级，以及管理员邮箱登录和角色资料管理。
 
 > **源码预览 · 真机验收未完成。** 公开源码不等于正式发布或生产部署。
 > 手机布局、键盘定位、手势与分条回复的修复仍需真实设备复验；桌面移动视口不算真机验收。
@@ -92,6 +93,7 @@ pnpm check:web:restart         # 持久化与重启恢复
 - [架构与边界](docs/ARCHITECTURE.md)
 - [本地运行与生产配置](docs/DEPLOYMENT.md)
 - [验收状态与已知限制](docs/STATUS.md)
+- [阵容文件格式（批量填写 关系与故事）](docs/CAST_FILE.md)
 - [安全与贡献约束](SECURITY.md)
 
 本仓库没有自动部署流程；配置模板默认关闭公网及真实调用。克隆仓库不会复制任何现有账号、人物资料或服务实例。

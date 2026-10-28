@@ -444,7 +444,7 @@ export class WebProviderServer {
             materialUpload[1]!,
           );
         const characterWrite =
-          /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save|cast\/save)$/.test(
+          /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save|cast\/(?:save|import-preview|import-file))$/.test(
             path,
           );
         // A run (up to 50 inputs of 4000 characters) and an eval set are larger than a profile save.
@@ -467,7 +467,7 @@ export class WebProviderServer {
             req,
             materialUpload
               ? 8_001_024
-              : /\/admin\/cast\/save$/.test(path)
+              : /\/admin\/cast\/(?:save|import-preview|import-file)$/.test(path)
                 ? CAST_BODY_LIMIT
                 : bulkWrite
                   ? 786_432

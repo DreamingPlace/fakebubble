@@ -29,6 +29,8 @@ test('both legal pages are static Chinese documents with no script, linked to ea
 // Named exception (Part 19): the test that stood here ("every fact the owner must confirm is marked 【待确认：…】, and the
 // unfinished-draft banner is there") described the DRAFT stage. The owner's facts are now in the pages, so it is replaced by
 // the checks below; every other legal-page test in this file is unchanged.
+// Named exception (Part 24b-5): the owner renamed the operator to Burbur everywhere, so the pinned operator name and the
+// "最近更新" date (the merge date of that rename) change below. Every other assertion in this test is unchanged.
 test('legal pages finalized in Part 19: no 待确认, no draft banner, and the owner facts are in', () => {
   const EMAIL = 'contact@4th-generation.fans';
   for (const name of ['privacy.html', 'terms.html']) {
@@ -48,8 +50,8 @@ test('legal pages finalized in Part 19: no 待确认, no draft banner, and the o
       `${name}: every address is a mailto link`,
     );
     const plain = text(html);
-    assert.ok(plain.includes('最近更新：2026 年 10 月 13 日。自本页公开发布之日起生效。'), `${name} effective date`);
-    assert.ok(plain.includes('FAKE 泡泡开源项目（个人维护，非公司主体）'), `${name} operator`);
+    assert.ok(plain.includes('最近更新：2026 年 10 月 28 日。自本页公开发布之日起生效。'), `${name} effective date`);
+    assert.ok(plain.includes('Burbur 开源项目（个人维护，非公司主体）'), `${name} operator`);
     assert.ok(
       plain.includes('本服务由个人维护的开源项目提供。与本服务有关的问题或争议，请先通过上面的邮箱联系我们协商解决。'),
       `${name} governing law`,

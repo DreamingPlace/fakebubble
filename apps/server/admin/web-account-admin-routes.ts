@@ -107,6 +107,10 @@ export async function routeWebAccountAdmin(
     if (action === 'publish') return { status: 200, body: cast.publish(actor, req.body) };
     if (action === 'rollback') return { status: 200, body: cast.rollback(actor, req.body) };
     if (action === 'import-legacy') return { status: 200, body: cast.importLegacy(actor, req.body) };
+    // Part 24b-5: the cast file. Export is a read; the preview saves nothing; the import is the one write.
+    if (action === 'export') return { status: 200, body: cast.exportFile(actor, req.body) };
+    if (action === 'import-preview') return { status: 200, body: cast.importPreview(actor, req.body) };
+    if (action === 'import-file') return { status: 200, body: cast.importFile(actor, req.body) };
     ensure(false, 'NOT_FOUND');
   }
   if (path.startsWith(`${base}/cocreation/`)) {

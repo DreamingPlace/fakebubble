@@ -396,8 +396,10 @@ try {
   const startButtons = await page
     .locator('.cs-start button')
     .evaluateAll((nodes: Element[]) => nodes.map((n) => [n.textContent, Math.round(n.getBoundingClientRect().height)]));
+  // Named exception (Part 24b-5): the start card also offers 导入文件 (a cast file); every button is still 36 high.
   assert.deepEqual(startButtons, [
     ['从旧资料导入', 36],
+    ['导入文件', 36],
     ['+ 角色', 36],
   ]);
   await page.getByRole('button', { name: '从旧资料导入', exact: true }).click();

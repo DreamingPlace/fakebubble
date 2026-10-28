@@ -1,12 +1,20 @@
-import { CAST_LIMITS, type CastDoc, type CastIssue } from '../../../../../../packages/contracts/web-cast.ts';
+import {
+  CAST_BODY_LIMIT,
+  CAST_LIMITS,
+  type CastDoc,
+  type CastFileProblem,
+  type CastIssue,
+} from '../../../../../../packages/contracts/web-cast.ts';
 import type { CastAdminPermission } from '../../../../../../packages/contracts/web-admin-permissions.ts';
 import {
   castIssues,
   type CastAdminClient,
   type CastCompilePreviewResult,
+  type CastImportPreview,
   type CastVersion,
 } from '../../../services/cast-admin-api.ts';
 import { InviteLocalApiError } from '../../../services/invite-local-api.ts';
+import { browserDownload } from '../invite-tiers-view.ts';
 import { h } from '../../cocreation/h.ts';
 import type { ConfirmOptions } from '../ui/confirm-dialog.ts';
 import { dateTimeText } from '../system-format.ts';
@@ -34,6 +42,8 @@ export type CastViewHost = {
    */
   characters?: Pick<CharacterAdminClient, 'list' | 'save'> | null;
   canCreateCharacter?: () => boolean;
+  /** Hands a file to the browser (导出文件); replaced in tests. */
+  download?: (filename: string, text: string, type?: string) => void;
 };
 
 /** The issue as a person reads it: what is wrong, and where (a name or a title, never an id). */
@@ -47,6 +57,26 @@ function issueBox(doc: CastDoc, issues: readonly CastIssue[]) {
   for (const issue of issues) {
     const who = humanIssue(doc, issue.path).who ?? '其他';
     groups.set(who, [...(groups.get(who) ?? []), issueText(doc, issue)]);
+  }
+  return h(
+    'div',
+    { class: 'cs-issues' },
+    ...[...groups].map(([who, lines]) =>
+      h(
+        'section',
+        { class: 'cs-issue-group' },
+        h('h4', { text: who }),
+        h('ul', {}, ...lines.map((text) => h('li', { text }))),
+      ),
+    ),
+  );
+}
+/** Problems the server already put in words (the cast file import), grouped by the character they are about. */
+function problemBox(problems: readonly CastFileProblem[]) {
+  const groups = new Map<string, string[]>();
+  for (const problem of problems) {
+    const who = problem.who ?? '其他';
+    groups.set(who, [...(groups.get(who) ?? []), problem.text]);
   }
   return h(
     'div',
@@ -103,6 +133,8 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     adding: null as 'character' | 'person' | null,
     /** Every character id the colours are dealt over (the roster of 角色工作台 when it can be read, else the cast). */
     roster: [] as string[],
+    /** A chosen cast file and what importing it would do; the server saved nothing yet. */
+    importing: null as { file: unknown; preview: CastImportPreview; requestId: string } | null,
   };
   let disposed = false;
   const gone = () => disposed || host.disposed();
@@ -115,6 +147,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     notice: h('div', { class: 'cs-notices' }),
     start: h('section', { class: 'cs-card cs-start' }),
     adder: h('section', { class: 'cs-card cs-adder', attrs: { 'aria-label': '新建' } }),
+    importer: h('section', { class: 'cs-card cs-adder cs-import', attrs: { 'aria-label': '导入文件' } }),
     grid: h('section', { class: 'cs-card cs-grid-card' }),
     side: h('section', { class: 'cs-card cs-side-card' }),
     groups: h('section', { class: 'cs-card cs-split cs-groups-card' }),
@@ -134,6 +167,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     frame.versions,
     frame.start,
     frame.adder,
+    frame.importer,
     h('div', { class: 'cs-main' }, frame.grid, frame.side),
     frame.groups,
     frame.stories,
@@ -141,8 +175,11 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     h('div', { class: 'cs-people' }, frame.character, frame.sees),
   );
   /** Everything below the publish bar that needs at least one character; the start card stands in until there is one. */
+  const picker = h('input', {
+    attrs: { type: 'file', accept: '.json,application/json', hidden: '', 'data-cast-file': '', tabindex: '-1' },
+  });
   const body = [frame.grid, frame.side, frame.groups, frame.stories, frame.people, frame.character, frame.sees];
-  root.append(page);
+  root.append(page, picker);
 
   const reveal = (node: HTMLElement) => {
     const quiet = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -221,6 +258,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     const none = state.doc.characters.length === 0;
     title.querySelector('.cs-count')!.textContent = `${state.doc.characters.length} 人`;
     frame.start.hidden = !none;
+    paintImporter();
     for (const node of body) node.hidden = none;
     // Nothing to draw in the cards while there are no characters; the start card is the page.
     for (const region of Object.keys(paint) as Region[])
@@ -261,6 +299,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       importLegacy.addEventListener('click', () => void importOld());
       actions.append(importLegacy);
     }
+    if (canEdit()) actions.append(fileButton());
     if (canCreate()) {
       const create = h('button', { class: 'cs-quiet', text: '+ 角色', attrs: { type: 'button' } });
       create.addEventListener('click', () => openAdder('character'));
@@ -402,6 +441,10 @@ export function castView(root: HTMLElement, host: CastViewHost) {
           }),
       h('span', { class: 'cs-spacer' }),
     );
+    const exportButton = h('button', { class: 'cs-quiet', text: '导出文件', attrs: { type: 'button' } });
+    exportButton.addEventListener('click', () => void exportNow());
+    frame.bar.append(exportButton);
+    if (canEdit()) frame.bar.append(fileButton());
     if (canEdit() && state.dirty) {
       const save = h('button', { class: 'cs-quiet', text: '保存草稿', attrs: { type: 'button' } });
       save.addEventListener('click', () => void saveDraft(false));
@@ -645,6 +688,146 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       if (!gone()) host.toast(`已回滚，发布为 v${result.version}`, 'ok');
     });
   }
+  // ---- cast file: export, and import with a summary first ----------------------------------------------------------------
+  function fileButton() {
+    const button = h('button', { class: 'cs-quiet', text: '导入文件', attrs: { type: 'button' } });
+    button.addEventListener('click', () => picker.click());
+    return button;
+  }
+  picker.addEventListener('change', () => {
+    const chosen = (picker as HTMLInputElement).files?.[0];
+    (picker as HTMLInputElement).value = '';
+    if (chosen) void chooseFile(chosen);
+  });
+  async function exportNow() {
+    if (!host.api || !host.can('cast.read')) return;
+    await host.run(async () => {
+      const { revision, file } = await host.api!.exportFile();
+      if (gone()) return;
+      (host.download ?? browserDownload)(
+        `burbur-cast-修订${revision}.json`,
+        `${JSON.stringify(file, null, 2)}\n`,
+        'application/json;charset=utf-8',
+      );
+      host.toast('已导出当前草稿（修订 ' + revision + '）。', 'ok');
+    });
+  }
+  async function chooseFile(file: File) {
+    if (!host.api || !canEdit()) return;
+    if (state.dirty) {
+      host.toast('先保存草稿，或放弃没保存的修改，再导入文件。', 'warn');
+      return;
+    }
+    if (file.size > CAST_BODY_LIMIT - 4096) {
+      host.toast('文件太大了：一份阵容文件不能超过 1,000,000 字节。', 'warn');
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      host.toast('这不是合法的 JSON 文件。', 'warn');
+      return;
+    }
+    await host.run(async () => {
+      const preview = await host.api!.importPreview(parsed);
+      if (gone()) return;
+      state.importing = { file: parsed, preview, requestId: globalThis.crypto.randomUUID() };
+      paintImporter();
+      ctx.reveal(frame.importer);
+    });
+  }
+  function paintImporter() {
+    frame.importer.replaceChildren();
+    frame.importer.hidden = !state.importing;
+    const pending = state.importing;
+    if (!pending) return;
+    const { preview } = pending;
+    const summary = preview.summary;
+    const names = (label: string, list: readonly string[]) =>
+      list.length ? h('li', { text: `${label} ${list.length}：${list.join('、')}` }) : null;
+    const lines = h('ul', { class: 'cs-import-summary' });
+    if (summary) {
+      if (summary.unchanged) lines.append(h('li', { text: '文件和现在的草稿完全一样，导入后不会有任何改动。' }));
+      for (const row of [
+        names('新增角色', summary.charactersAdded),
+        names('改动的角色', summary.charactersChanged),
+        names('从草稿里移除的角色', summary.charactersRemoved),
+      ])
+        if (row) lines.append(row);
+      lines.append(
+        h('li', {
+          text: `人物 ${summary.people} · 星级 ${summary.ratings} 条 · 称呼与相处 ${summary.directions} 条 · 组合 ${summary.groups} · 故事 ${summary.stories} · 梗 ${summary.memes}`,
+        }),
+      );
+      const fresh = preview.created.filter((c) => !c.matched).length;
+      if (fresh) lines.append(h('li', { text: `会同时建立 ${fresh} 个角色草稿（还没有上线，暂时不能聊天）。` }));
+    }
+    const confirm = h('button', { class: 'cs-primary', text: '确认导入', attrs: { type: 'button' } });
+    lock(confirm, !preview.importable || !canEdit(), !preview.importable ? '先解决上面的问题' : undefined);
+    confirm.addEventListener('click', () => void confirmImport());
+    const cancel = h('button', { class: 'cs-quiet', text: '取消', attrs: { type: 'button' } });
+    cancel.addEventListener('click', () => {
+      state.importing = null;
+      paintImporter();
+    });
+    frame.importer.append(
+      h('h2', { text: '导入文件' }),
+      h('p', {
+        class: 'cs-hint',
+        text: '确认后，这份文件会替换整份阵容草稿（现在草稿里有、文件里没有的角色会被移出阵容，角色本身不会被删除）。只改草稿：不会发布，也不会动玩家的任何数据。',
+      }),
+      lines,
+    );
+    if (preview.problems.length)
+      frame.importer.append(
+        h('b', { text: `${preview.problems.length} 个问题，必须先改文件：` }),
+        problemBox(preview.problems),
+      );
+    if (preview.publishBlockers.length)
+      frame.importer.append(
+        h('b', { text: `${preview.publishBlockers.length} 个问题不影响导入，但发布前要处理：` }),
+        problemBox(preview.publishBlockers),
+      );
+    if (preview.warnings.length)
+      frame.importer.append(h('b', { text: `${preview.warnings.length} 条提醒：` }), problemBox(preview.warnings));
+    frame.importer.append(h('div', { class: 'cs-adder-row' }, confirm, cancel));
+  }
+  async function confirmImport() {
+    const pending = state.importing;
+    if (!pending || !host.api || !canEdit() || !pending.preview.importable) return;
+    await host.run(async () => {
+      try {
+        const result = await host.api!.importFile(pending.preview.revision, pending.file, pending.requestId);
+        if (gone()) return;
+        state.importing = null;
+        paintImporter();
+        await load();
+        if (!gone())
+          host.toast(
+            result.unchanged
+              ? '文件和草稿一样，没有改动。'
+              : `已导入到草稿（修订 ${result.revision}）${result.created ? `，并建立了 ${result.created} 个角色草稿` : ''}。还没有发布。`,
+            'ok',
+          );
+      } catch (error) {
+        if (error instanceof InviteLocalApiError && error.code === 'CAST_REVISION_CONFLICT') {
+          state.importing = null;
+          paintImporter();
+          await load();
+          host.toast('草稿在你选文件之后被改过了，这次没有导入。请重新选择文件。', 'warn');
+          return;
+        }
+        if (error instanceof InviteLocalApiError && error.code === 'CAST_FILE_INVALID') {
+          state.importing = { ...pending, preview: await host.api!.importPreview(pending.file) };
+          paintImporter();
+          host.toast('文件有问题，没有导入。', 'warn');
+          return;
+        }
+        throw error;
+      }
+    });
+  }
   async function importOld() {
     if (!host.api || !canEdit()) return;
     const yes = await host.confirm({
@@ -667,6 +850,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       state.dirty = false;
       state.conflict = null;
       state.sees = null;
+      state.importing = null;
       for (const node of Object.values(frame)) node.replaceChildren();
     },
     /** Unsaved edits block leaving the page the same way an unsaved character does. */

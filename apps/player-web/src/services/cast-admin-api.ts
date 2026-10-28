@@ -1,5 +1,8 @@
 import type {
   CastDoc,
+  CastFileProblem,
+  CastFileSummary,
+  CastFileViewReport,
   CastIssue,
   CastKnowledge,
   CastRequestContext,
@@ -43,6 +46,18 @@ export type CastCompilePreviewResult = {
   knowledge: CastKnowledgeRow[];
   dropOrder: readonly string[];
 };
+/** What importing a cast file would do (nothing is saved); `created` lists the characters that would be made. */
+export type CastImportPreview = {
+  revision: number;
+  importable: boolean;
+  created: { name: string; matched: boolean }[];
+  problems: CastFileProblem[];
+  publishBlockers: CastFileProblem[];
+  warnings: CastFileProblem[];
+  summary: CastFileSummary | null;
+  views: CastFileViewReport[];
+};
+export type CastImportResult = { revision: number; counts: CastCounts; created: number; unchanged: boolean };
 export type CastRequest = (path: string, body: Record<string, unknown>) => Promise<unknown>;
 
 const invalid = () => new Error('ADMIN_CAST_PROTOCOL_INVALID');
@@ -58,6 +73,18 @@ const validation = (value: unknown): CastValidation => {
   const v = object(value);
   if (!Array.isArray(v.errors) || !Array.isArray(v.warnings)) throw invalid();
   return { errors: v.errors as CastIssue[], warnings: v.warnings as CastIssue[] };
+};
+const problems = (value: unknown): CastFileProblem[] => {
+  if (!Array.isArray(value)) throw invalid();
+  return value.map((raw) => {
+    const p = object(raw);
+    return {
+      code: String(p.code),
+      path: String(p.path),
+      who: typeof p.who === 'string' ? p.who : null,
+      text: String(p.text),
+    };
+  });
 };
 const counts = (value: unknown): CastCounts => {
   const c = object(value);
@@ -145,6 +172,38 @@ export class CastAdminClient {
   }
   async rollback(version: number, requestId = this.newId()): Promise<CastPublishResult> {
     return publishResult(await this.send('rollback', { requestId, version }));
+  }
+  /** The current draft as a cast file (the server builds it; the page only saves it). */
+  async exportFile(): Promise<{ revision: number; file: Record<string, unknown> }> {
+    const r = object(await this.send('export', {}));
+    return { revision: int(r.revision), file: object(r.file) };
+  }
+  async importPreview(file: unknown): Promise<CastImportPreview> {
+    const r = object(await this.send('import-preview', { file }));
+    if (!Array.isArray(r.created) || !Array.isArray(r.views)) throw invalid();
+    return {
+      revision: int(r.revision),
+      importable: r.importable === true,
+      created: r.created.map((raw) => {
+        const c = object(raw);
+        return { name: String(c.name), matched: c.matched === true };
+      }),
+      problems: problems(r.problems),
+      publishBlockers: problems(r.publishBlockers),
+      warnings: problems(r.warnings),
+      summary: r.summary === null ? null : (object(r.summary) as unknown as CastFileSummary),
+      views: r.views as CastFileViewReport[],
+    };
+  }
+  /** `requestId` is fixed by the caller so a lost answer can be retried as the same request. */
+  async importFile(expectedRevision: number, file: unknown, requestId = this.newId()): Promise<CastImportResult> {
+    const r = object(await this.send('import-file', { requestId, expectedRevision, file }));
+    return {
+      revision: int(r.revision),
+      counts: counts(r.counts),
+      created: int(r.created),
+      unchanged: r.unchanged === true,
+    };
   }
   async importLegacy(expectedRevision: number, requestId = this.newId()): Promise<CastSaveResult> {
     const r = object(await this.send('import-legacy', { requestId, expectedRevision, overwrite: false }));

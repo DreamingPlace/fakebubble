@@ -83,8 +83,8 @@ export interface InviteTiersDeps {
 }
 
 /** The browser's own "save as": a Blob link clicked once. Nothing is uploaded and the object URL is revoked at once. */
-export function browserDownload(filename: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+export function browserDownload(filename: string, text: string, type = 'text/csv;charset=utf-8') {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
