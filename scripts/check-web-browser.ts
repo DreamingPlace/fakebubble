@@ -399,6 +399,25 @@ try {
     await phone.close();
   }
 
+  {
+    // Reduced motion: the sheets do not slide and the top bar does not animate, whatever the page would otherwise do.
+    const calm = await browser.newContext({
+      ignoreHTTPSErrors: true,
+      viewport: { width: 390, height: 844 },
+      reducedMotion: 'reduce',
+    });
+    const view = await calm.newPage();
+    view.on('pageerror', (error: unknown) => errors.push(String(error)));
+    await view.goto(`${origin}/?mode=provider`);
+    await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
+    await view.getByRole('button', { name: '登录/注册' }).first().click();
+    assert.equal(
+      await view.locator('.acct-sheet').evaluate((el: Element) => getComputedStyle(el).animationName),
+      'none',
+      'no slide-up under reduced motion',
+    );
+    await calm.close();
+  }
   assert.deepEqual(errors, [], 'no uncaught page errors');
   process.stdout.write('browser check: PASS\n');
 } catch (error) {

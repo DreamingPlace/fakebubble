@@ -427,7 +427,7 @@ test('我的信息 in its four states keeps its content: 470 点 / 每天 +50 wi
 });
 
 test('我的信息 is painted in soft colours: a tinted points card and soft accent buttons, no black pills or black buttons', () => {
-  assert.match(rule('.mi-quota-card'), /background: linear-gradient\(160deg, #dcebff 0%, #e4f6ee 100%\)/);
+  assert.match(rule('.mi-quota-card'), /background: linear-gradient\(160deg, #cfe3ff 0%, #d4f3e6 100%\)/);
   for (const selector of ['.mi-pill', '.mi-pillbtn.is-main', '.mi-small.acct-primary', '.mi-theme-pill.is-on'])
     assert.doesNotMatch(rule(selector), /var\(--bb-ink\)|#141414|#000|background: #fff/, selector);
   assert.match(rule('.mi-pill'), /rgba\(47, 123, 234, 0\.14\)/);
