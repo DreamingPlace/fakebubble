@@ -128,8 +128,9 @@ try {
   await page.goto(`${origin}/?mode=provider-admin#/cast`);
   await page.locator('.cs-start, .cs-bar').first().waitFor({ timeout: 20_000 });
   await page.waitForTimeout(800);
-  assert.equal(await button('导入文件').count(), 1, 'the import button is in the page');
-  assert.equal(await button('导出文件').count(), 1, 'the export button is in the page');
+  // On an empty draft the start card offers it too, so the bar's own button is the one held to the size rule.
+  assert.ok((await button('导入文件').count()) >= 1, 'the import button is in the page');
+  assert.ok((await button('导出文件').count()) >= 1, 'the export button is in the page');
   const heights = await page.evaluate(() =>
     [...document.querySelectorAll('.cs-bar button')].map((b) =>
       Math.round((b as HTMLElement).getBoundingClientRect().height),
