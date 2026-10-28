@@ -8925,6 +8925,17 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   align-items: flex-start;
   gap: 10px;
 }
+/* ---- 关系与故事: 导入文件 (24b-5) ---- */
+.account-admin-page.admin-shell .cs-import[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .cs-import-summary {
+  margin: 0;
+  padding-left: 18px;
+}
+.account-admin-page.admin-shell .cs-import .cs-issues {
+  align-self: stretch;
+}
 .account-admin-page.admin-shell .cs-adder h2 {
   margin: 0;
 }
@@ -11752,16 +11763,4 @@ html:has(.signed-out-page) {
   .cc-sheet .cc-editor {
     animation: none;
   }
-}
-
-/* ---- 关系与故事: 导入文件 (24b-5) ---- */
-.account-admin-page.admin-shell .cs-import[hidden] {
-  display: none;
-}
-.account-admin-page.admin-shell .cs-import-summary {
-  margin: 0;
-  padding-left: 18px;
-}
-.account-admin-page.admin-shell .cs-import .cs-issues {
-  align-self: stretch;
 }
