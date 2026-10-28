@@ -227,32 +227,63 @@ export class WebCharacterAdmin {
           this.store.get<{ n: number }>('SELECT count(*) n FROM web_character_drafts')!.n < 100,
           'CHARACTER_DRAFT_LIMIT',
         );
-      const revision = this.store.get<{ n: number }>(
-          `SELECT coalesce(max(revision),0)+1 n
-        FROM web_character_revisions WHERE character_id=?`,
-          id,
-        )!.n,
-        now = this.clock.now();
+      const now = this.clock.now();
       ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
-      this.store.run(
-        'INSERT INTO web_character_revisions VALUES (?,?,?,?,?,?,?)',
-        id,
-        revision,
-        base,
-        JSON.stringify(next),
-        digest,
-        now,
-        actor.sessionId,
-      );
-      this.store.run(
-        `INSERT INTO web_character_drafts VALUES (?,?)
-        ON CONFLICT(character_id) DO UPDATE SET revision=excluded.revision`,
-        id,
-        revision,
-      );
-      this.audit(actor.memberId, `character-draft-saved:${revision}`, id, now);
+      this.writeRevision(actor, id, base, next, digest, now);
       return draftDTO(this.draft(id)!);
     });
+  }
+  /** The rows of one saved draft revision (and the audit line): shared by save() and the cast file import. */
+  private writeRevision(
+    actor: { memberId: string; sessionId: string },
+    id: string,
+    base: number | null,
+    next: WebCharacterProfile,
+    digest: string,
+    now: number,
+  ) {
+    const revision = this.store.get<{ n: number }>(
+      `SELECT coalesce(max(revision),0)+1 n
+        FROM web_character_revisions WHERE character_id=?`,
+      id,
+    )!.n;
+    this.store.run(
+      'INSERT INTO web_character_revisions VALUES (?,?,?,?,?,?,?)',
+      id,
+      revision,
+      base,
+      JSON.stringify(next),
+      digest,
+      now,
+      actor.sessionId,
+    );
+    this.store.run(
+      `INSERT INTO web_character_drafts VALUES (?,?)
+        ON CONFLICT(character_id) DO UPDATE SET revision=excluded.revision`,
+      id,
+      revision,
+    );
+    this.audit(actor.memberId, `character-draft-saved:${revision}`, id, now);
+    return revision;
+  }
+  /**
+   * Part 24b-5: the first draft of a brand-new character, for the cast file import, inside the CALLER's transaction (so a failed
+   * import leaves no orphan draft). Same checks and rows as save() for an id with no draft and no live version; who may create is
+   * the caller's to decide (cast.edit and characters.create) and nothing else of an existing character is read or written.
+   */
+  createDraftForCast(actor: { memberId: string; sessionId: string }, input: unknown, now: number) {
+    const next = profile(input);
+    const id = next.template.id;
+    identifier(id);
+    ensure(!webCharacterDeleted(this.store, id), 'CHARACTER_DELETED');
+    ensure(!this.draft(id) && !this.live(id), 'DRAFT_CONFLICT');
+    ensure(next.template.version === 1, 'INVALID_DRAFT_VERSION');
+    ensure(
+      this.store.get<{ n: number }>('SELECT count(*) n FROM web_character_drafts')!.n < 100,
+      'CHARACTER_DRAFT_LIMIT',
+    );
+    ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
+    this.writeRevision(actor, id, null, next, characterProfileHash(next), now);
   }
   discard(auth: Auth, id: string, revision: unknown) {
     const actor = this.require(auth, 'discard', id);

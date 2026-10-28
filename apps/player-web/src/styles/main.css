@@ -8413,7 +8413,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   width: 30px;
 }
 /* standard (36): the publish bar, the start card and the inline forms of the cast */
-.account-admin-page.admin-shell :is(.cs-bar, .cs-start, .cs-adder) button {
+.account-admin-page.admin-shell :is(.cs-bar, .cs-start, .cs-adder, .cs-import) button {
   height: 36px;
   min-height: 36px;
   padding: 0 16px;
@@ -11752,4 +11752,16 @@ html:has(.signed-out-page) {
   .cc-sheet .cc-editor {
     animation: none;
   }
+}
+
+/* ---- 关系与故事: 导入文件 (24b-5) ---- */
+.account-admin-page.admin-shell .cs-import[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .cs-import-summary {
+  margin: 0;
+  padding-left: 18px;
+}
+.account-admin-page.admin-shell .cs-import .cs-issues {
+  align-self: stretch;
 }

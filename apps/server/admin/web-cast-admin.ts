@@ -1,10 +1,17 @@
-import { hasCastPermission, type CastAdminPermission } from '../../../packages/contracts/web-admin-permissions.ts';
+import {
+  canCreateCharacter,
+  hasCastPermission,
+  type CastAdminPermission,
+} from '../../../packages/contracts/web-admin-permissions.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { buildLegacyCast } from '../cast/cast-import.ts';
+import { exportCastFile, type NewCharacter } from '../cast/cast-file.ts';
 import {
   castCounts,
   compilePreview,
+  importCastFile,
+  previewCastFile,
   listVersions,
   publishDraft,
   readDraft,
@@ -17,6 +24,7 @@ import {
 } from '../cast/cast-store.ts';
 import { publishedWebCharacters } from '../characters/web-character-catalog.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
+import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
 import type { WebAccountAdmin } from './web-account-admin.ts';
 import { once, requestHash } from './web-admin-actions.ts';
 
@@ -43,6 +51,11 @@ export class WebCastAdmin {
   private readonly store: BusinessStore;
   private readonly clock: Clock;
   private readonly admin: WebAccountAdmin;
+  private characters: WebCharacterAdmin | null = null;
+  /** The draft-character route of 角色工作台, for the cast file import. Without it a file with new characters is refused. */
+  enableCharacters(characters: WebCharacterAdmin) {
+    this.characters = characters;
+  }
   constructor(store: BusinessStore, clock: Clock, admin: WebAccountAdmin) {
     this.store = store;
     this.clock = clock;
@@ -55,6 +68,11 @@ export class WebCastAdmin {
       'ADMIN_PERMISSION_REQUIRED',
     );
     return actor;
+  }
+  /** Who may create a character: the owner, or a member holding characters.create. */
+  private mayCreate(auth: Auth) {
+    const session = this.admin.session(auth.cookie);
+    return session.member.role === 'owner' || canCreateCharacter(session.member.permissions);
   }
   private audit(actorId: string, action: string, detail: string) {
     this.store.run(
@@ -253,4 +271,98 @@ export class WebCastAdmin {
       },
     );
   }
+
+  /** The current draft as a cast file, to start from or to keep (cast.read). Existing characters by id; no workbench blocks. */
+  exportFile(auth: Auth, input: unknown) {
+    this.actor(auth, 'cast.read');
+    exactly(input, []);
+    const draft = readDraft(this.store);
+    return { revision: draft.revision, digest: draft.digest, file: exportCastFile(draft.doc) };
+  }
+
+  /** What importing a file would do, without saving anything (cast.edit, like the import itself). */
+  importPreview(auth: Auth, input: unknown) {
+    this.actor(auth, 'cast.edit');
+    const body = exactly(input, ['file']);
+    const preview = previewCastFile(this.store, body.file);
+    if (!this.mayCreate(auth) && preview.created.some((c) => !c.matched))
+      preview.problems.push({
+        code: 'CAST_FILE_NO_CREATE',
+        path: 'doc.characters',
+        who: null,
+        text: '没有新建角色的权限，文件里却有新角色',
+      });
+    return {
+      ...preview,
+      importable: preview.importable && !preview.problems.some((p) => p.code === 'CAST_FILE_NO_CREATE'),
+    };
+  }
+
+  /**
+   * Import a cast file into the DRAFT (cast.edit; characters.create too when the file has new characters). One transaction: the
+   * draft characters of the `new:` keys, the key rewrite and the compare-and-swap save of the draft commit or vanish together.
+   * Idempotent per request id. Never publishes. The audit row says what happened in counts and a digest, nothing of the content.
+   */
+  importFile(auth: Auth, input: unknown) {
+    const actor = this.actor(auth, 'cast.edit');
+    const body = exactly(input, ['requestId', 'expectedRevision', 'file']);
+    const now = this.clock.now();
+    return once(
+      this.store,
+      now,
+      {
+        requestId: body.requestId,
+        action: 'cast-import-file',
+        hash: requestHash({ action: 'cast-import-file', expectedRevision: body.expectedRevision, file: body.file }),
+        adminId: actor.memberId,
+      },
+      () => {
+        const saved = importCastFile(this.store, now, {
+          expectedRevision: body.expectedRevision,
+          file: body.file,
+          create: (character) => {
+            ensure(this.characters, 'CAST_FILE_NO_CREATE');
+            ensure(this.mayCreate(auth), 'ADMIN_PERMISSION_REQUIRED');
+            this.characters.createDraftForCast(
+              { memberId: actor.memberId, sessionId: actor.sessionId },
+              newCharacterProfile(character),
+              now,
+            );
+          },
+        });
+        this.audit(
+          actor.memberId,
+          saved.unchanged ? 'cast-file-import-unchanged' : 'cast-file-imported',
+          this.detail({
+            revision: saved.revision,
+            ...saved.counts,
+            created: saved.created,
+            digest: short(saved.digest),
+          }),
+        );
+        return saved;
+      },
+    );
+  }
+}
+
+/** The first draft of a character a cast file creates: the blank one of 新建角色 with the file's workbench seed. */
+function newCharacterProfile(character: NewCharacter) {
+  const days: Record<number, unknown[]> = {};
+  for (let day = 0; day < 7; day++) days[day] = [{ startMinute: 0, endMinute: 1440, probability: 1, catchUp: true }];
+  return {
+    template: {
+      id: character.id,
+      name: character.name,
+      version: 1,
+      fictional: true,
+      persona: character.workbench.persona,
+      schedule: { timeZone: 'Asia/Singapore', days },
+    },
+    presentation: {
+      displayName: character.workbench.displayName,
+      publicDescription: '',
+      welcome: { text: character.workbench.welcome, version: 'welcome-v1' },
+    },
+  };
 }

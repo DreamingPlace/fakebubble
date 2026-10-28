@@ -1,9 +1,10 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { CastDoc, CastRequestContext, CastValidation, CastView } from '../../../packages/contracts/web-cast.ts';
 import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { castPromptHash } from '../generation/cast-prompt.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
+import { prepareCastFile, type NewCharacter, type PreparedCastFile } from './cast-file.ts';
 import {
   compileCastView,
   compileCastViewDetailed,
@@ -370,4 +371,70 @@ export function castForPreview(
     promptHash: castPromptHash(),
     view: JSON.parse(json) as CastView,
   };
+}
+
+/** An id for a character created by a cast file: the form 新建角色 uses (`role-` and 8 hex), free in every place an id lives. */
+function newCharacterId(store: ReadStore, taken: Set<string>): string {
+  const lookup = characterLookup(store);
+  for (;;) {
+    const id = `role-${randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    if (!taken.has(id) && !lookup.exists(id) && !lookup.deleted(id)) {
+      taken.add(id);
+      return id;
+    }
+  }
+}
+const prepareFor = (store: ReadStore, draft: CastDraft, file: unknown): PreparedCastFile => {
+  const taken = new Set<string>();
+  return prepareCastFile(file, {
+    current: draft.doc,
+    known: castEntryIds(draft.doc),
+    lookup: characterLookup(store),
+    newId: () => newCharacterId(store, taken),
+  });
+};
+
+/** What importing this file would do to the current draft - nothing is saved, no character is created. */
+export function previewCastFile(store: ReadStore, file: unknown) {
+  const draft = readDraft(store);
+  const { doc: _doc, ...prepared } = prepareFor(store, draft, file);
+  return { revision: draft.revision, digest: draft.digest, ...prepared };
+}
+
+/**
+ * The cast file import (Part 24b-5), all in the caller's one transaction: the revision is compared first, the file is read against
+ * the draft, the draft characters of every `new:` key are created (by `create`, the 新建角色 route), and the draft is replaced.
+ * Any refusal after the first character was created rolls all of it back. A file that says what the draft already says writes
+ * nothing. It never publishes anything and never reads or writes a player table.
+ */
+export function importCastFile(
+  store: Store,
+  now: number,
+  input: { expectedRevision: unknown; file: unknown; create: (character: NewCharacter) => void },
+) {
+  ensure(Number.isSafeInteger(input.expectedRevision) && Number(input.expectedRevision) > 0, 'INVALID_REQUEST');
+  return store.transaction(() => {
+    const current = readDraft(store);
+    if (current.revision !== input.expectedRevision)
+      throw new DetailedError('CAST_REVISION_CONFLICT', { currentRevision: current.revision });
+    const prepared = prepareFor(store, current, input.file);
+    if (!prepared.importable || !prepared.doc || !prepared.summary)
+      throw new DetailedError('CAST_FILE_INVALID', { issues: prepared.problems });
+    const created = prepared.created.filter((c) => !c.matched);
+    for (const character of created) input.create(character);
+    const counts = castCounts(prepared.doc);
+    if (prepared.summary.unchanged)
+      return { revision: current.revision, digest: current.digest, counts, created: 0, unchanged: true };
+    // The characters now exist, so the real table is asked again - the same check a normal save makes.
+    const validation = validateCastDoc(prepared.doc, 'draft', characterLookup(store));
+    if (validation.errors.length) throw new DetailedError('CAST_INVALID', { issues: validation.errors });
+    const saved = writeDraft(store, now, current.revision, prepared.doc, validation);
+    return {
+      revision: saved.revision,
+      digest: saved.digest,
+      counts: saved.counts,
+      created: created.length,
+      unchanged: false,
+    };
+  });
 }
