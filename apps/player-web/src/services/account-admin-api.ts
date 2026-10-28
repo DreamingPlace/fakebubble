@@ -49,6 +49,8 @@ export type AdminMember = {
   email: string | null;
   permissions: AdminPermission[];
   createdAt: number;
+  /** When the newest session began, epoch ms; null = never signed in (or the server predates the field). */
+  lastSignInAt?: number | null;
 };
 export type AccountAdminSession = {
   csrf: string;
@@ -176,6 +178,9 @@ function member(value: unknown): AdminMember {
     role: role as AdminMember['role'],
     email: row.email as string | null,
     createdAt: time(row.createdAt),
+    ...(row.lastSignInAt === undefined
+      ? {}
+      : { lastSignInAt: row.lastSignInAt === null ? null : time(row.lastSignInAt) }),
     permissions: permissions as AdminPermission[],
   };
 }

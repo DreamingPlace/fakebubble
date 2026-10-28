@@ -5,6 +5,7 @@ import {
   heatIndex,
   nameOf,
   ratingOf,
+  ratingShort,
   ratingText,
   setDirection,
   setRating,
@@ -74,13 +75,22 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
       state.hover = null;
       light();
     });
-    grid.append(h('span'));
-    const cols = doc.characters.map((c, i) => {
+    grid.append(h('span', { class: 'cs-corner' }));
+    const cols = doc.characters.map((c) => {
       const name = nameOf(doc, c.characterId);
+      // The name runs top to bottom, one character per line, so the header is as tall as the name needs.
+      // A name of up to 5 characters is written out; a longer one gives its first 4 and a … (the whole name is on the row header,
+      // in the title of this one, and in the pair panel).
+      const chars = [...name];
+      const label = h('span', {
+        class: 'cs-head-name',
+        text: (chars.length > 5 ? [...chars.slice(0, 4), '…'] : chars).join('\n'),
+      });
       const node = h(
         'span',
         { class: 'cs-head cs-head-col', attrs: { 'aria-hidden': 'true', title: name } },
-        dot(i, name),
+        dot(ctx.colour(c.characterId), 12),
+        label,
       );
       grid.append(node);
       return node;
@@ -93,7 +103,8 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
           class: 'cs-head cs-head-row',
           attrs: { type: 'button', title: `${name} 的资料`, 'aria-label': `打开 ${name} 的资料` },
         },
-        dot(r, name),
+        dot(ctx.colour(row.characterId), 12),
+        h('span', { class: 'cs-head-name', text: name }),
       );
       head.addEventListener('click', () => ctx.openCharacter(row.characterId));
       grid.append(head);
@@ -115,6 +126,7 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
           },
         });
         cell.style.setProperty('--heat', value === null ? 'transparent' : HEAT[heatIndex(value)!]!);
+        if (value !== null) cell.textContent = ratingShort(value);
         cell.addEventListener('click', () => {
           state.pair = [row.characterId, col.characterId];
           state.sel = row.characterId;
@@ -143,11 +155,15 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
         grid.append(cell);
       });
     });
+    const addCharacter = ctx.addCharacter();
+    const addButton = addCharacter ? h('button', { class: 'cs-add', text: '+ 角色', attrs: { type: 'button' } }) : null;
+    addButton?.addEventListener('click', () => addCharacter!());
     host.replaceChildren(
       h(
         'div',
         { class: 'cs-card-head' },
         h('h2', { text: '关系网' }),
+        addButton,
         h(
           'span',
           { class: 'cs-legend', attrs: { 'aria-label': '颜色越深越亲近，0 到 5 星；虚线格是还没设置' } },
@@ -226,7 +242,6 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
       return;
     }
     const [a, b] = pair;
-    const index = (id: string) => doc.characters.findIndex((c) => c.characterId === id);
     const nameA = nameOf(doc, a),
       nameB = nameOf(doc, b);
     const again = () => {
@@ -237,8 +252,8 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
       h(
         'div',
         { class: 'cs-pair-title' },
-        dot(index(a), nameA, 36),
-        h('span', { class: 'cs-overlap' }, dot(index(b), nameB, 36)),
+        dot(ctx.colour(a), 14),
+        dot(ctx.colour(b), 14),
         h('h2', { text: `${nameA} · ${nameB}` }),
       ),
     );
@@ -252,9 +267,11 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
         h(
           'span',
           { class: 'cs-dir-label' },
-          dot(index(from), fromName, 24),
+          dot(ctx.colour(from), 12),
+          h('b', { class: 'cs-dir-name', text: fromName }),
           h('i', { class: 'cs-arrow', text: '→' }),
-          dot(index(to), toName, 24),
+          dot(ctx.colour(to), 12),
+          h('b', { class: 'cs-dir-name', text: toName }),
         ),
         stars(
           ctx,

@@ -544,3 +544,34 @@ test('normalization cannot push a saved set past the permission limit', (t) => {
   const edits = Array.from({ length: ADMIN_PERMISSION_LIMIT - 1 }, (_, i) => `characters.edit:role-${i}`);
   assert.throws(() => f.admin.setPermissions(...f.auth, session.member.id, edits), /INVALID_REQUEST/);
 });
+
+// Part 24b-4: the administrator table shows when each member last signed in (a read-only addition to members/list).
+test('members/list carries lastSignInAt: null before a first sign-in, the newest session start after it', (t) => {
+  const f = fixture(t);
+  const issued = f.admin.issueMember(...f.auth, {
+    requestId: crypto.randomUUID(),
+    label: '只读',
+    memberId: null,
+    permissions: ['cast.read'],
+  });
+  const find = (id: string) =>
+    (f.admin.list(...f.auth).members as { id: string; lastSignInAt: number | null }[]).find((m) => m.id === id)!;
+  assert.equal(find(issued.memberId).lastSignInAt, null, 'issued but never signed in');
+  assert.equal(
+    find(f.owner.member.id).lastSignInAt,
+    1_800_000_000_000,
+    'the owner signed in when the fixture logged in',
+  );
+  f.advance(60_000);
+  const session = f.admin.login(issued.token, origin);
+  assert.equal(find(session.member.id).lastSignInAt, 1_800_000_060_000);
+  f.advance(60_000);
+  const again = f.admin.issueMember(...f.auth, {
+    requestId: crypto.randomUUID(),
+    label: '只读',
+    memberId: session.member.id,
+    permissions: ['cast.read'],
+  });
+  f.admin.login(again.token, origin);
+  assert.equal(find(session.member.id).lastSignInAt, 1_800_000_120_000, 'the newest of the sessions');
+});

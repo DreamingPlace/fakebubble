@@ -1,6 +1,5 @@
 import { h } from '../../cocreation/h.ts';
 import type { CastDoc } from '../../../../../../packages/contracts/web-cast.ts';
-import { DOTS } from './cast-model.ts';
 
 /** What every region of the page shares: the working document, who may do what, and how to tell the others something changed. */
 export type CastCtx = {
@@ -15,8 +14,24 @@ export type CastCtx = {
   openCharacter: (characterId: string) => void;
   /** Reduced-motion aware smooth scrolling to a region. */
   reveal: (node: HTMLElement) => void;
+  /** The dot colour of a character (the same one 角色工作台 and 共创收件箱 use) or of a person (grey). */
+  colour: (id: string) => string;
+  /** Opens the + 角色 form, or null when this administrator cannot create characters (or the cast is full). */
+  addCharacter: () => (() => void) | null;
 };
-export type Region = 'bar' | 'versions' | 'notice' | 'grid' | 'side' | 'groups' | 'stories' | 'character' | 'sees';
+export type Region =
+  | 'bar'
+  | 'versions'
+  | 'notice'
+  | 'start'
+  | 'adder'
+  | 'grid'
+  | 'side'
+  | 'groups'
+  | 'stories'
+  | 'people'
+  | 'character'
+  | 'sees';
 
 /** A text input or textarea bound to a getter/setter; read-only (but visible) for someone who cannot edit. */
 export function bound(
@@ -42,10 +57,10 @@ export function bound(
   return { wrap, input };
 }
 
-/** The little round name tag used in the grid, panels and chips. */
-export function dot(index: number, name: string, size = 26) {
-  const node = h('span', { class: 'cs-dot', text: [...name][0] ?? '', attrs: { 'aria-hidden': 'true' } });
-  node.style.setProperty('--dot', DOTS[index % DOTS.length]!);
+/** The little round colour dot beside a name (never carries text of its own: the name is always written next to it). */
+export function dot(colour: string, size = 12) {
+  const node = h('i', { class: 'cs-dot', attrs: { 'aria-hidden': 'true' } });
+  node.style.setProperty('--dot', colour);
   node.style.setProperty('--size', `${size}px`);
   return node;
 }
@@ -61,6 +76,50 @@ export function toggleChip(label: string, on: boolean, enabled: boolean, onToggl
   }
   button.addEventListener('click', onToggle);
   return button;
+}
+
+/**
+ * The picker for story participants and group members (Part 24b-4): every character of the cast, and (with `people`) every person,
+ * as chips with a colour dot and the name, any number of them selected. `max` is the server's cap; once reached only the chosen
+ * ones stay clickable (to take them off).
+ */
+export function picker(
+  ctx: CastCtx,
+  label: string,
+  chosen: string[],
+  options: { people: boolean; max: number; after: () => void },
+) {
+  const doc = ctx.doc();
+  const edit = ctx.canEdit();
+  const make = (id: string, name: string) => {
+    const on = chosen.includes(id);
+    return toggleChip(
+      name,
+      on,
+      edit && (on || chosen.length < options.max),
+      () => {
+        if (on) chosen.splice(chosen.indexOf(id), 1);
+        else chosen.push(id);
+        ctx.edited();
+        options.after();
+      },
+      dot(ctx.colour(id)),
+    );
+  };
+  const box = h('div', { class: 'cs-chips', attrs: { role: 'group', 'aria-label': label } });
+  for (const c of doc.characters) box.append(make(c.characterId, c.identity.names[0]?.text ?? c.characterId));
+  if (options.people)
+    for (const p of doc.people) {
+      const chip = make(p.id, p.names[0]?.text ?? p.id);
+      chip.classList.add('is-person');
+      box.append(chip);
+    }
+  return h(
+    'div',
+    { class: 'cs-picker' },
+    h('span', { class: 'cs-label', text: `${label}（已选 ${chosen.length}）` }),
+    box,
+  );
 }
 
 /** Disabled-by-state buttons keep their lock through the page's own re-enabling (it honours data-locked). */

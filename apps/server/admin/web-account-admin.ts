@@ -513,7 +513,14 @@ export class WebAccountAdmin extends WebInviteAdmin {
   list(cookie: unknown, csrf: unknown, origin: unknown) {
     this.owner(cookie, csrf, origin);
     return {
-      members: this.db.all<MemberRow>('SELECT * FROM web_admin_members ORDER BY created_at,id').map(publicMember),
+      // lastSignInAt (Part 24b-4): when the member's newest session began (null = never signed in); a read-only addition for the
+      // administrator table. Sessions are pruned per member but the newest always stays.
+      members: this.db
+        .all<MemberRow & { last_sign_in: number | null }>(
+          `SELECT m.*,(SELECT max(s.created_at) FROM web_admin_session_members x JOIN admin_sessions s ON s.id=x.session_id
+            WHERE x.member_id=m.id) last_sign_in FROM web_admin_members m ORDER BY m.created_at,m.id`,
+        )
+        .map((row) => ({ ...publicMember(row), lastSignInAt: row.last_sign_in })),
       grants: this.db.all(`SELECT g.id,g.member_id AS memberId,l.expires_at AS expiresAt,
         l.consumed_session_id IS NOT NULL AS consumed,g.revoked_at AS revokedAt
         FROM web_admin_grant_members g JOIN admin_login_grants l ON l.token_hash=g.token_hash ORDER BY g.id`),

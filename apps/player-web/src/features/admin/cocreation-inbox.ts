@@ -34,6 +34,8 @@ import type { CharacterAdminClient } from '../../services/character-admin-api.ts
 import { characterAdminError } from './character-workbench.ts';
 import { h } from '../cocreation/h.ts';
 import { pageHead } from './ui/page-head.ts';
+import { dot } from './cast/cast-ui.ts';
+import { rosterColours } from './ui/character-colour.ts';
 
 type Deps = {
   api: Pick<CocreationAdminClient, 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'>;
@@ -78,6 +80,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   let loadingMore = false;
 
   const nameOf = (id: string) => names[id] ?? id;
+  /** The dot of a character: the same colour as in 角色工作台 and 关系与故事. */
+  const colourOf = () => rosterColours(Object.keys(names));
 
   // ---- static frame ---------------------------------------------------------------------------------------------
   // Filters are chips, not dropdowns: one pressed chip per group (角色, 状态), a 只看星标 toggle, and the search field.
@@ -97,12 +101,24 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       'aria-label': '搜索',
     },
   });
+  // The bulk bar (Part 24b-4): shown while rows are ticked, every action written out.
+  const bulkCount = h('span', { class: 'cc-bulk-count' });
+  const processSelected = h('button', { class: 'cc-process-selected', attrs: { type: 'button' } });
   const archiveSelected = h('button', {
     text: '归档所选',
     attrs: { type: 'button' },
     class: 'cc-archive-selected',
     hidden: true,
   });
+  const clearSelected = h('button', { class: 'cc-clear-selected', text: '取消选择', attrs: { type: 'button' } });
+  const bulk = h(
+    'div',
+    { class: 'cc-bulk', attrs: { role: 'group', 'aria-label': '批量处理' }, hidden: true },
+    bulkCount,
+    processSelected,
+    archiveSelected,
+    clearSelected,
+  );
   const list = h('ul', { class: 'cc-list', attrs: { 'aria-label': '共创列表' } });
   const empty = h('p', { class: 'cc-empty', text: '还没有玩家的想法。' });
   const pane = h('section', { class: 'cc-detail', attrs: { 'aria-live': 'polite' } });
@@ -110,19 +126,20 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     'div',
     { class: 'cc-list-column' },
     h('div', { class: 'cc-toolbar' }, characterChips, h('div', { class: 'cc-chip-row' }, statusChips, starChip), query),
-    archiveSelected,
+    bulk,
     empty,
     list,
   );
   root.replaceChildren(pageHead('共创收件箱'), h('div', { class: 'cc-layout' }, listColumn, pane));
 
   // ---- list -----------------------------------------------------------------------------------------------------
-  const chip = (label: string, on: boolean, pick: () => void, count?: number) => {
+  const chip = (label: string, on: boolean, pick: () => void, count?: number, lead?: Node) => {
     const node = h('button', {
       class: 'cc-filter-chip',
-      text: count ? `${label} ${count}` : label,
       attrs: { type: 'button', 'aria-pressed': String(on) },
     });
+    if (lead) node.append(lead);
+    node.append(count ? `${label} ${count}` : label);
     node.addEventListener('click', pick);
     return node;
   };
@@ -130,7 +147,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     characterChips.replaceChildren(
       chip('全部角色', filter.characterId === null, () => pickFilter({ characterId: null })),
       ...Object.entries(names).map(([id, name]) =>
-        chip(name, filter.characterId === id, () => pickFilter({ characterId: id })),
+        chip(
+          name,
+          filter.characterId === id,
+          () => pickFilter({ characterId: id }),
+          undefined,
+          dot(colourOf()(id), 10),
+        ),
       ),
     );
     statusChips.replaceChildren(
@@ -148,7 +171,11 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         ? '没有符合条件的想法。'
         : '还没有玩家的想法。';
     archiveSelected.hidden = !deps.canManage() || selected.size === 0;
+    bulk.hidden = archiveSelected.hidden;
     archiveSelected.textContent = `归档所选（${selected.size}）`;
+    processSelected.textContent = `标为已处理（${selected.size}）`;
+    bulkCount.textContent = `已选 ${selected.size} 条`;
+    const colour = colourOf();
     list.replaceChildren(
       ...items.map((item, index) => {
         const check = h('input', {
@@ -168,7 +195,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           h(
             'span',
             { class: 'cc-who' },
-            h('strong', { text: nameOf(item.characterId) }),
+            h(
+              'span',
+              { class: 'cc-name' },
+              dot(colour(item.characterId), 12),
+              h('strong', { text: nameOf(item.characterId) }),
+            ),
             h('span', { class: 'cc-pseudonym', text: item.pseudonym }),
           ),
           h(
@@ -186,7 +218,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                 : null,
             ),
           ),
-          h('time', { class: 'cc-when', text: when(item.createdAt) }),
+          h(
+            'time',
+            { class: 'cc-when' },
+            h('span', { text: when(item.createdAt).slice(0, 10) }),
+            h('span', { text: when(item.createdAt).slice(11) }),
+          ),
           h('span', { class: `cc-chip cc-state cc-chip-${item.status}`, text: STATUS_LABEL[item.status] }),
         );
         open.addEventListener('click', () => select(index));
@@ -536,7 +573,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       h(
         'header',
         { class: 'cc-detail-head' },
-        h('h3', { text: `${character} · ${current.pseudonym}` }),
+        h('h3', {}, dot(colourOf()(current.characterId), 12), `${character} · ${current.pseudonym}`),
         h('p', {
           text: `${when(current.createdAt)}${current.batch ? ` · 邀请批次：${current.batch}` : ''} · ${STATUS_LABEL[current.status]}${current.processedAt ? `（${when(current.processedAt)}）` : ''}`,
         }),
@@ -610,6 +647,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   });
   archiveSelected.addEventListener('click', () => {
     if (selected.size) void setStatus([...selected], 'archived');
+  });
+  processSelected.addEventListener('click', () => {
+    if (selected.size) void setStatus([...selected], 'processed');
+  });
+  clearSelected.addEventListener('click', () => {
+    selected.clear();
+    renderList();
   });
 
   const onKey = (event: Event) => {

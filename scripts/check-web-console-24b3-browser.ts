@@ -15,7 +15,8 @@ import { WebAccountAdmin } from '../apps/server/admin/web-account-admin.ts';
 import { WEB_PROVIDER_WELCOME } from '../config/web-v1.ts';
 import { migrateProvider, openProviderStore } from './web-provider.ts';
 import { syntheticSelection } from '../tests/web/fixtures/provider-selection.ts';
-import { sampleCastRaw } from '../tests/web/fixtures/cast-sample.ts';
+import { SAMPLE_NAMES, sampleCastRaw, sampleId } from '../tests/web/fixtures/cast-sample.ts';
+import { characterProfileHash } from '../apps/server/characters/web-character-catalog.ts';
 
 /**
  * Part 24b-3: the polished console (one page frame, calmer colours, fixed sidebar, no endless pages) in a REAL browser (Chromium), as the owner sees
@@ -74,6 +75,7 @@ for (const characterId of ['wei-guagua', 'jojo', 'chen-jimi'] as const) {
     wav: syntheticTone(),
   });
 }
+
 // Offline: no provider is ever reached. 预演 is switched on (so the panel is the real one) but a submitted one would simply fail.
 const offlineText = new DeepSeekTextGenerator({
   apiKey: 'offline-only',
@@ -87,6 +89,60 @@ const runner = new WebProviderRunner(store, clock, offlineText, async (request) 
 const previews = new WebCharacterPreviewRunner(store, clock, offlineText, { reserve() {}, settle() {} });
 const app = new WebProviderServer(store, config, clock, runner, undefined, previews, { signupEnabled: false });
 await app.listen();
+
+// ---- Part 24b-4: a cast of 15. Three are the instance's own characters, nine more are live (written straight into the catalog tables,
+// as a publication would), and the last three are made on 关系与故事 itself with + 角色 (角色工作台's 新建角色): saved drafts, not yet live in chat, but in the cast. ----
+const OWN = ['wei-guagua', 'jojo', 'chen-jimi'] as const;
+const TINTS = [
+  '#E8561E',
+  '#2F7DE1',
+  '#7C4DDB',
+  '#F2A33A',
+  '#3FA776',
+  '#E4568F',
+  '#2BA6C7',
+  '#8E6BD0',
+  '#D98B3A',
+  '#6CAB4B',
+  '#D96A6A',
+  '#4F74D9',
+];
+/** The cast fixture's c01…c15 become the 15 real ids: the 3 own characters, then c04…c15. */
+/** The ids of the three characters made through + 角色 on 关系与故事 (c13…c15 of the fixture), in the order they were made. */
+const created: string[] = [];
+const castId = (fixtureId: string) => {
+  const n = Number(fixtureId.slice(1));
+  return n <= 3 ? OWN[n - 1]! : n <= 12 ? fixtureId : created[n - 13]!;
+};
+const liveNew = Array.from({ length: 9 }, (_, i) => sampleId(i + 3));
+const template0 = JSON.parse(
+  store.get<{ config_json: string }>("SELECT config_json FROM character_templates WHERE id='jojo'")!.config_json,
+);
+liveNew.forEach((id, i) => {
+  const name = SAMPLE_NAMES[Number(id.slice(1)) - 1]!;
+  const template = { ...structuredClone(template0), id, name, version: 1, persona: `${name}是一个虚构的高中生。` };
+  delete template.voice;
+  const profile = {
+    template,
+    presentation: {
+      displayName: name,
+      publicDescription: '',
+      welcome: { text: `${name}：来啦？`, version: 'welcome-v1' },
+      color: TINTS[i]!,
+    },
+  };
+  const config = JSON.stringify(template);
+  store.run('INSERT INTO character_templates VALUES (?,?,?)', id, 1, config);
+  store.run('INSERT INTO character_template_versions VALUES (?,?,?,NULL)', id, 1, config);
+  store.run(
+    'INSERT INTO web_character_versions VALUES (?,?,?,?,NULL)',
+    id,
+    1,
+    JSON.stringify(profile),
+    characterProfileHash(profile),
+  );
+  store.run('INSERT INTO web_character_catalog VALUES (?,?,?)', id, 1, i + 3);
+});
 
 const { chromium } = loadPlaywright();
 const browser = await chromium.launch(
@@ -122,10 +178,6 @@ try {
   next.template.persona += ' 说话更慢一点。';
   next.presentation.welcome.text += '（新）';
   await post('characters/jojo/save', { expectedRevision: null, profile: next });
-
-  // ---- the cast draft: the 15-person fixture ----
-  const cast0 = await (await post('cast/draft', {})).json();
-  await post('cast/save', { requestId: randomUUID(), expectedRevision: cast0.revision, doc: sampleCastRaw() });
 
   // A player's first visit creates the principal the synthetic notes belong to.
   const player = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 420, height: 860 } });
@@ -199,13 +251,15 @@ try {
     [1680, 1050],
   ] as const;
   /** A viewport shot and a full-page shot at 1280×800 and 1440×900 (the review material); the height is the one at 1440×900. */
-  const shot = async (name: string) => {
+  /** `focus`: a selector scrolled into view before the viewport shot (Part 24b-4: the group and story editors are far down the page). */
+  const shot = async (name: string, focus?: string) => {
     for (const [width, height] of SIZES.slice(0, 2)) {
       await page.setViewportSize({ width, height });
       await wait(width === 1440 ? 900 : 700);
       const total = await pageHeight();
       if (width === 1440) heights[name] = total;
       if (!shots) continue;
+      if (focus) await page.locator(focus).first().scrollIntoViewIfNeeded();
       await page.screenshot({ path: join(shots, `${name}-${width}.png`) });
       await page.setViewportSize({ width, height: Math.min(Math.max(total, height), 6000) });
       await page.waitForTimeout(500);
@@ -244,12 +298,17 @@ try {
         }
         return true;
       };
+      // Lines of TEXT: the element's own text nodes only (Part 24b-4: a colour dot inside a chip is a box, not a line, and its centre
+      // can sit in the next 8 px bucket without the label having wrapped).
       const lines = (n: Element) => {
-        const range = document.createRange();
-        range.selectNodeContents(n);
-        return new Set(
-          [...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round((r.top + r.bottom) / 2 / 8)),
-        ).size;
+        const tops = new Set<number>();
+        for (const child of n.childNodes) {
+          if (child.nodeType !== 3 || !(child.textContent ?? '').trim()) continue;
+          const range = document.createRange();
+          range.selectNodeContents(child);
+          for (const r of range.getClientRects()) if (r.width > 0) tops.add(Math.round((r.top + r.bottom) / 2 / 8));
+        }
+        return tops.size;
       };
       const measure = document.createElement('canvas').getContext('2d')!;
       for (const n of document.querySelectorAll('.admin-shell *')) {
@@ -327,6 +386,68 @@ try {
   await wait(1200);
   await shot('overview');
   await noSidewaysAll('总览');
+  // ---- Part 24b-4: 关系与故事 from the empty start to a cast of 15 -------------------------------------------------------------
+  // The first screen of an empty draft is one clear start; 从旧资料导入 brings in every existing (live) character, + 角色 makes a new
+  // draft character through the same route as 角色工作台's 新建角色 and adds it to the cast. Then the cast (with three characters that
+  // are not live yet) is saved and PUBLISHED, which is what 24a's publish rule used to refuse.
+  await go('cast', '.cs-start');
+  await wait(900);
+  await shot('cast-empty');
+  const startButtons = await page
+    .locator('.cs-start button')
+    .evaluateAll((nodes: Element[]) => nodes.map((n) => [n.textContent, Math.round(n.getBoundingClientRect().height)]));
+  assert.deepEqual(startButtons, [
+    ['从旧资料导入', 36],
+    ['+ 角色', 36],
+  ]);
+  await page.getByRole('button', { name: '从旧资料导入', exact: true }).click();
+  await page.getByRole('button', { name: '导入', exact: true }).click();
+  await page.waitForFunction(() => document.querySelectorAll('.cs-head-row').length === 12, null, { timeout: 20_000 });
+  const NEW_NAMES = [SAMPLE_NAMES[12]!, SAMPLE_NAMES[13]!, SAMPLE_NAMES[14]!];
+  for (const [i, name] of NEW_NAMES.entries()) {
+    await page.locator('.cs-grid-card').getByRole('button', { name: '+ 角色', exact: true }).click();
+    await page.locator('.cs-adder input').fill(name);
+    await page.getByRole('button', { name: '创建', exact: true }).click();
+    await page.waitForFunction((n: number) => document.querySelectorAll('.cs-head-row').length === n, 13 + i, {
+      timeout: 20_000,
+    });
+  }
+  assert.equal(await page.locator('.cs-head-row').count(), 15);
+  assert.equal(
+    await page.locator('.cs-grid-card').getByRole('button', { name: '+ 角色', exact: true }).count(),
+    0,
+    'no + 角色 once the cast is full',
+  );
+  // The three new ones are saved drafts (角色工作台 lists them), not live characters.
+  const listed = (await (await post('characters/list', {})).json()).characters as {
+    characterId: string;
+    displayName: string;
+    publishedVersion: number | null;
+    draftRevision: number | null;
+  }[];
+  for (const name of NEW_NAMES) {
+    const row = listed.find((c) => c.displayName === name)!;
+    assert.ok(row, `${name} exists as a character`);
+    assert.equal(row.publishedVersion, null, `${name} is not live`);
+    assert.ok(row.draftRevision !== null, `${name} has a saved draft`);
+    created.push(row.characterId);
+  }
+  await wait(600);
+  await shot('cast-added');
+  await page.getByRole('button', { name: '保存草稿', exact: true }).click();
+  await page.waitForFunction(() => !document.body.innerText.includes('有没保存的修改'), null, { timeout: 20_000 });
+  await page.getByRole('button', { name: /^发布 v1$/ }).click();
+  await page.getByRole('button', { name: '发布', exact: true }).click();
+  await page.waitForSelector('.cs-version[data-version="1"]', { timeout: 20_000 });
+  const published = await (await post('cast/versions', {})).json();
+  assert.equal(published.latest, 1, 'the cast was published with three characters that are not live');
+  assert.equal(published.versions[0].counts.characters, 15);
+  // From here on the whole fixture (ratings, groups, stories, people) is the draft.
+  const draftNow = await (await post('cast/draft', {})).json();
+  const castDoc = JSON.parse(
+    JSON.stringify(sampleCastRaw()).replace(/"(c\d\d)"/g, (_, id: string) => `"${castId(id)}"`),
+  );
+  await post('cast/save', { requestId: randomUUID(), expectedRevision: draftNow.revision, doc: castDoc });
   // ---- helpers that read the page as the administrator sees it ----
   /** Visible text that is too faint, and fills that are pure black, anywhere in the console. */
   const paintAudit = () =>
@@ -387,6 +508,63 @@ try {
     assert.deepEqual(audit.black, [], `${name}: no black fills`);
     assert.deepEqual(audit.faint, [], `${name}: text contrast`);
   };
+  // ---- Part 24b-4: the layout system, read off the page ----
+  /**
+   * Named exceptions to "every button is 36 or 30 px": the cells and heads of the 关系网 and the star hit areas (sized by the data they
+   * show), and the buttons that ARE a whole row or card of a list (inbox row, story row, group card), which hold lines of text.
+   */
+  const BUTTON_EXEMPT = '.cs-cell, .cs-head, .cs-star-hit, .cc-row-open, .cs-story-title, .cs-group-card';
+  /** Buttons that sit side by side in one group, which must be one height. */
+  const BUTTON_GROUPS =
+    '.cs-bar, .cs-start-actions, .cs-adder-row, .cc-bulk, .cc-detail-actions, .cc-answer-actions, .permission-presets, .wb-savebar-actions, .members-list .admin-member, .cc-adopt-actions';
+  const layoutAudit = () =>
+    page.evaluate(
+      ([exempt, groups]: [string, string]) => {
+        const found: string[] = [];
+        const content = document.querySelector('.admin-content') as HTMLElement;
+        const box = content.getBoundingClientRect();
+        const pad = getComputedStyle(content);
+        const left = box.left + parseFloat(pad.paddingLeft);
+        const right = box.right - parseFloat(pad.paddingRight);
+        const section = [...content.querySelectorAll(':scope > section[data-panel]')].find(
+          (n) => !(n as HTMLElement).hidden && (n as HTMLElement).offsetParent,
+        ) as HTMLElement;
+        const visible = (n: Element) => {
+          const r = n.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && (n as HTMLElement).offsetParent !== null;
+        };
+        // 1. the content spans the width: the right edge of the widest card is within 15% of the content's right edge
+        let reach = left;
+        for (const n of section.querySelectorAll('*')) {
+          if (!visible(n)) continue;
+          const r = n.getBoundingClientRect();
+          const bg = getComputedStyle(n).backgroundColor;
+          if (r.width >= 200 && (bg === 'rgb(255, 255, 255)' || bg === 'rgb(251, 250, 248)'))
+            reach = Math.max(reach, r.right);
+        }
+        const unused = (right - reach) / (right - left);
+        if (unused > 0.15) found.push(`unused right area ${(unused * 100).toFixed(0)}%`);
+        // 2. every button is 36 or 30 high
+        for (const b of section.querySelectorAll('button')) {
+          if (!visible(b) || b.matches(exempt)) continue;
+          const h = Math.round(b.getBoundingClientRect().height);
+          if (h !== 36 && h !== 30)
+            found.push(`button ${h}px: ${b.className || 'button'} "${(b.textContent ?? '').trim().slice(0, 14)}"`);
+        }
+        // 3. buttons in one group are one height
+        for (const g of section.querySelectorAll(groups)) {
+          const heights = new Set(
+            [...g.querySelectorAll(':scope > button, :scope > * > button')]
+              .filter((b) => visible(b) && !b.matches('.cs-clear'))
+              .map((b) => Math.round(b.getBoundingClientRect().height)),
+          );
+          if (heights.size > 1) found.push(`group ${g.className} has buttons of ${[...heights].join('/')}px`);
+        }
+        return found;
+      },
+      [BUTTON_EXEMPT, BUTTON_GROUPS] as [string, string],
+    );
+  const layoutFindings: string[] = [];
   const heads: Record<string, number> = {};
   for (const [route, ready, name] of [
     ['characters/jojo', '.wb-editor form.character-profile-form', 'workbench'],
@@ -405,13 +583,222 @@ try {
     await wait(1200);
     await shot(name);
     await frame(name);
+    for (const [width, height] of SIZES.slice(0, 2)) {
+      await page.setViewportSize({ width, height });
+      await wait(500);
+      for (const item of await layoutAudit()) layoutFindings.push(`${name} @${width}: ${item}`);
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
     await noSidewaysAll(name);
   }
+  if (layoutFindings.length) process.stderr.write(`${layoutFindings.join('\n')}\n`);
+  assert.deepEqual(layoutFindings, [], 'the layout system holds on every page at 1280×800 and 1440×900');
   assert.equal(
     new Set(Object.values(heads)).size,
     1,
     `every title row starts on the same line: ${JSON.stringify(heads)}`,
   );
+
+  // ---- Part 24b-4: hover help is a light bubble to the lower right of the pointer, never on the item it explains ----
+  await go('members', '.members-list .permission-row');
+  await wait(600);
+  const tipRow = page.locator('.members-list .permission-row').nth(3);
+  const rowBox = (await tipRow.boundingBox())!;
+  await page.mouse.move(rowBox.x + 40, rowBox.y + rowBox.height / 2);
+  await wait(300);
+  const tip = await tipRow.locator('.permission-tip').evaluate((n: Element) => {
+    const style = getComputedStyle(n);
+    const r = n.getBoundingClientRect();
+    const rgb = style.backgroundColor.match(/\d+/g)!.map(Number);
+    return { bg: rgb, color: style.color, w: r.width, h: r.height, x: r.x, y: r.y, shown: style.display !== 'none' };
+  });
+  assert.equal(tip.shown, true, 'the help shows on hover');
+  assert.ok(Math.min(...tip.bg.slice(0, 3)) >= 245, `the help is on a light background: ${tip.bg}`);
+  assert.equal(tip.color, 'rgb(43, 40, 51)', 'its text is #2B2833');
+  assert.ok(tip.x > rowBox.x + 40, 'to the right of the pointer');
+  assert.ok(tip.y >= rowBox.y + rowBox.height - 1, 'below the hovered item: it does not cover it');
+  await shot('members-tooltip');
+  // the cost line of 预演 is a tooltip as well
+  await go('characters/jojo', '.pw-ack');
+  await wait(800);
+  await page.locator('.pw-ack').hover();
+  await wait(300);
+  const costTip = await page
+    .locator('.pw-estimate')
+    .evaluate((n: Element) => [getComputedStyle(n).display, getComputedStyle(n).backgroundColor, n.textContent]);
+  assert.notEqual(costTip[0], 'none');
+  assert.equal(costTip[1], 'rgb(255, 255, 255)');
+  assert.match(String(costTip[2]), /次付费调用/);
+  assert.equal(await page.getByText('固定身份不可修改').count(), 0, 'the leftover explanation line is gone');
+
+  // ---- 共创收件箱: dots with the full name, labelled actions, a bulk bar for several rows ----
+  await go('cocreation', '.cc-row-open');
+  await wait(900);
+  await shot('inbox-one-selected');
+  const iconOnly = await page
+    .locator('.cc-layout button')
+    .evaluateAll((nodes: Element[]) =>
+      nodes
+        .filter((n) => (n as HTMLElement).offsetParent !== null && !(n.textContent ?? '').trim())
+        .map((n) => n.className),
+    );
+  assert.deepEqual(iconOnly, [], 'no icon-only button in the inbox');
+  const detailActions = await page
+    .locator('.cc-detail-actions button')
+    .evaluateAll((nodes: Element[]) =>
+      nodes.map((n) => [(n.textContent ?? '').trim(), Math.round(n.getBoundingClientRect().height)]),
+    );
+  assert.deepEqual(
+    detailActions.map((a: (string | number)[]) => a[0]),
+    ['★ 已星标', '标为已处理', '归档'],
+  );
+  assert.ok(
+    detailActions.every((a: (string | number)[]) => a[1] === 30),
+    'the detail actions are compact',
+  );
+  const names = await page
+    .locator('.cc-row-open .cc-name')
+    .evaluateAll((nodes: Element[]) =>
+      nodes.map((n) => [n.querySelector('.cs-dot') !== null, (n.textContent ?? '').trim()]),
+    );
+  assert.ok(
+    names.every((n: (string | boolean)[]) => n[0] === true && String(n[1]).length >= 2),
+    'a colour dot and the full name',
+  );
+  await page.locator('.cc-row input[type="checkbox"]').nth(0).check();
+  await page.locator('.cc-row input[type="checkbox"]').nth(1).check();
+  await page.locator('.cc-row input[type="checkbox"]').nth(3).check();
+  await wait(400);
+  const bulk = await page
+    .locator('.cc-bulk button')
+    .evaluateAll((nodes: Element[]) =>
+      nodes.map((n) => [(n.textContent ?? '').trim(), Math.round(n.getBoundingClientRect().height)]),
+    );
+  assert.deepEqual(bulk, [
+    ['标为已处理（3）', 30],
+    ['归档所选（3）', 30],
+    ['取消选择', 30],
+  ]);
+  await shot('inbox-several-selected');
+  await page.getByRole('button', { name: '取消选择' }).click();
+  assert.equal(await page.locator('.cc-bulk').isVisible(), false, 'the bulk bar goes away with the selection');
+
+  // ---- 关系与故事: every editor, with cast.edit and with cast.read only ----
+  await go('cast', '.cs-cell[data-from]');
+  await wait(900);
+  assert.equal(await page.locator('.cs-version[data-version="1"]').count(), 1);
+  // a group with members picked
+  await page.locator('.cs-group-card').nth(1).click();
+  const memberChips = page.locator('.cs-groups-card .cs-picker .cs-chip');
+  const pressed = () =>
+    memberChips.evaluateAll((n: Element[]) => n.filter((c) => c.getAttribute('aria-pressed') === 'true').length);
+  const before = await pressed();
+  await memberChips.filter({ hasNotText: /^$/ }).nth(14).click();
+  assert.equal(await pressed(), before + (before < 15 ? 1 : 0));
+  await page.locator('.cs-groups-card .cs-picker').scrollIntoViewIfNeeded();
+  await shot('cast-group-members', '.cs-groups-card .cs-picker');
+  // a story with participants picked (characters and people)
+  await page.locator('.cs-story-title').nth(2).click();
+  const people = page.locator('.cs-stories .cs-picker .cs-chip.is-person');
+  assert.ok((await people.count()) >= 1, 'people are in the participant picker');
+  const storyBefore = await page.locator('.cs-stories .cs-picker .cs-chip[aria-pressed="true"]').count();
+  await people.first().click();
+  await page.locator('.cs-stories .cs-picker .cs-chip:not(.is-person)').nth(12).click();
+  const storyAfter = await page.locator('.cs-stories .cs-picker .cs-chip[aria-pressed="true"]').count();
+  assert.ok(storyAfter !== storyBefore, 'the picker changed the participants');
+  await page.locator('.cs-stories .cs-picker').scrollIntoViewIfNeeded();
+  await shot('cast-story-participants', '.cs-stories .cs-picker');
+  // a person is added and edited here
+  await page.getByRole('button', { name: '+ 人物', exact: true }).click();
+  await page.locator('.cs-adder input').fill('新来的邻居');
+  await page.getByRole('button', { name: '创建', exact: true }).click();
+  assert.ok((await page.locator('.cs-person-row').count()) >= 7);
+  await page.locator('.cs-people-card input[type="text"]').first().fill('新来的邻居阿姨');
+  assert.equal(
+    await page
+      .locator('.cs-person-row')
+      .last()
+      .innerText()
+      .then((t: string) => t.includes('新来的邻居')),
+    true,
+  );
+  // the grid at 15×15: names on both axes, the selected row and column lit
+  await page.locator('.cs-cell[data-from][data-to]').nth(20).click();
+  const grid = await page.evaluate(() => ({
+    rows: [...document.querySelectorAll('.cs-head-row .cs-head-name')].map((n) => (n.textContent ?? '').trim()),
+    cols: [...document.querySelectorAll('.cs-head-col .cs-head-name')].map((n) =>
+      (n.textContent ?? '').replace(/\n/g, ''),
+    ),
+    litRows: document.querySelectorAll('.cs-head-row.is-lit').length,
+    litCols: document.querySelectorAll('.cs-head-col.is-lit').length,
+    cells: [...document.querySelectorAll('.cs-cell[data-from]')].every(
+      (c) => c.getBoundingClientRect().width >= 22 && c.getBoundingClientRect().height >= 30,
+    ),
+  }));
+  assert.equal(grid.rows.length, 15);
+  assert.deepEqual(grid.rows, grid.cols, 'the same names on both axes');
+  assert.ok(
+    grid.rows.every((n: string) => n.length >= 2),
+    'whole names, not one character',
+  );
+  assert.deepEqual([grid.litRows, grid.litCols, grid.cells], [1, 1, true]);
+  // read-only and edit-only members
+  const asMember = async (permissions: string[]) => {
+    const issued = await (
+      await post('members/issue', {
+        requestId: randomUUID(),
+        label: `验证${permissions.length}`,
+        memberId: null,
+        permissions,
+      })
+    ).json();
+    const ctx2 = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 900 } });
+    const login = await ctx2.request.post(`${API}/admin/login`, {
+      data: { token: issued.token },
+      headers: { origin: config.origin },
+    });
+    assert.equal(login.status(), 200);
+    const p2 = await ctx2.newPage();
+    await p2.goto(`${origin}/?mode=provider-admin#/cast`);
+    await p2.locator('.cs-cell[data-from]').first().waitFor({ timeout: 20_000 });
+    await p2.waitForTimeout(700);
+    return { p2, ctx2 };
+  };
+  const reader = await asMember(['cast.read']);
+  const readerState = await reader.p2.evaluate(() => ({
+    editable: document.querySelectorAll('.cs input[type="text"]:not([readonly]), .cs textarea:not([readonly])').length,
+    adds: [...document.querySelectorAll('.cs button')].filter((b) =>
+      /^\+ |^删除|^从阵容移除|^保存草稿$|^发布 v|^回滚/.test((b.textContent ?? '').trim()),
+    ).length,
+    stars: [...document.querySelectorAll('.cs-star-hit')].every((b) => (b as HTMLButtonElement).disabled),
+    know: [...document.querySelectorAll('.cs-know')].every((b) => (b as HTMLButtonElement).disabled),
+    chips: [...document.querySelectorAll('.cs-picker .cs-chip')].every((b) => (b as HTMLButtonElement).disabled),
+  }));
+  assert.deepEqual(
+    readerState,
+    { editable: 0, adds: 0, stars: true, know: true, chips: true },
+    'cast.read alone cannot change anything',
+  );
+  await reader.ctx2.close();
+  const editor = await asMember(['cast.read', 'cast.edit']);
+  await editor.p2.locator('.cs-pair-texts input').first().fill('可以改');
+  assert.equal(
+    await editor.p2.getByRole('button', { name: '保存草稿', exact: true }).count(),
+    1,
+    'editing shows 保存草稿',
+  );
+  assert.equal(await editor.p2.getByRole('button', { name: /^发布 v/ }).count(), 0, 'cast.edit alone cannot publish');
+  assert.equal(
+    await editor.p2.getByRole('button', { name: '+ 角色', exact: true }).count(),
+    0,
+    'no + 角色 without characters.create',
+  );
+  assert.ok((await editor.p2.getByRole('button', { name: '+ 故事', exact: true }).count()) >= 1);
+  await editor.p2.locator('.cs-story-title').first().click();
+  await editor.p2.locator('.cs-stories input[type="text"]').first().fill('改过的标题');
+  await editor.p2.getByRole('button', { name: '保存草稿', exact: true }).click();
+  await editor.p2.waitForFunction(() => !document.body.innerText.includes('有没保存的修改'), null, { timeout: 20_000 });
+  await editor.ctx2.close();
 
   // ---- the sidebar stays while a long page scrolls ----
   await go('cast', '.cs-cell[data-from]');

@@ -325,6 +325,42 @@ test('save: compare-and-swap on the revision, idempotent per request id, validat
   assert.equal(loose.characters.length, 15);
 });
 
+// Part 24b-4: a character that only exists as a saved draft (角色工作台's 新建角色, no character_templates row yet) is in the cast.
+test('publish: a character with a saved draft but no live template (not yet live in chat) can be in the published cast', (t) => {
+  const f = fixture(t);
+  f.store.run(
+    'CREATE TABLE IF NOT EXISTS web_character_drafts(character_id TEXT PRIMARY KEY,revision INTEGER NOT NULL)',
+  );
+  const draft = f.cast.draft(f.ownerAuth, {});
+  const saved = f.cast.save(f.ownerAuth, {
+    requestId: f.request(),
+    expectedRevision: draft.revision,
+    doc: sampleCastRaw(),
+  });
+  f.store.run("DELETE FROM character_templates WHERE id='c15'");
+  refused(
+    () => f.cast.publish(f.ownerAuth, { requestId: f.request(), expectedRevision: saved.revision }),
+    'CAST_PUBLISH_BLOCKED',
+  );
+  f.store.run("INSERT INTO web_character_drafts VALUES ('c15',1)");
+  assert.deepEqual(f.cast.validate(f.ownerAuth, {}).validation.errors, []);
+  const v1 = f.cast.publish(f.ownerAuth, { requestId: f.request(), expectedRevision: saved.revision });
+  assert.equal(v1.counts.characters, 15);
+  // the others' views carry c15's card; c15 has a view too, but no chat can freeze it without a live template
+  const published = latestPublication(f.store)!.doc;
+  assert.ok(
+    compileCastView(published, 'c01').others.some(
+      (card) => card.name === published.characters[14]!.identity.names[0]!.text,
+    ),
+  );
+  // a draft that is discarded (and never went live) is missing again, so the next publish is blocked
+  f.store.run("DELETE FROM web_character_drafts WHERE character_id='c15'");
+  refused(
+    () => f.cast.publish(f.ownerAuth, { requestId: f.request(), expectedRevision: saved.revision }),
+    'CAST_PUBLISH_BLOCKED',
+  );
+});
+
 test('publish: the whole draft becomes the next version, only if every character exists; rollback republishes an old version as a new one', (t) => {
   const f = fixture(t);
   const draft = f.cast.draft(f.ownerAuth, {});

@@ -134,9 +134,17 @@ export function listVersions(store: ReadStore) {
     });
 }
 
-/** The character table as validation sees it. */
+/**
+ * The character table as validation sees it. A character exists when it has a live template OR a saved draft (角色工作台's 新建角色):
+ * a not-yet-live character may be in the cast (cards, stories, groups) and simply has no chat of its own, because castFreeze only
+ * runs for a character that chats, and a chat needs the live template. A draft that is later discarded (and never went live)
+ * makes the character missing again, which blocks the next publish.
+ */
 export const characterLookup = (store: ReadStore): CastCharacterLookup => ({
-  exists: (id) => !!store.get('SELECT 1 FROM character_templates WHERE id=?', id),
+  exists: (id) =>
+    !!store.get('SELECT 1 FROM character_templates WHERE id=?', id) ||
+    (!!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_character_drafts'") &&
+      !!store.get('SELECT 1 FROM web_character_drafts WHERE character_id=?', id)),
   deleted: (id) => webCharacterDeleted(store as BusinessStore, id),
 });
 
