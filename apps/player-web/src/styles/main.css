@@ -9171,6 +9171,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   border-radius: 12px;
 }
 .account-admin-page.admin-shell .cs-story-title {
+  align-self: center;
+  text-decoration: none;
   justify-content: flex-start;
   height: auto;
   min-height: 30px;
