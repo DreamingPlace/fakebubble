@@ -413,20 +413,22 @@ test('chat ⋯ menu: 切换回复模型 and 共创 only, in that order; a guest 
   const signedUp = chat(t, { ...login, modelChoice: info });
   await signedUp.attach();
   const items = signedUp.menu();
-  assert.deepEqual(titlesOf(items), ['切换回复模型', '共创 · 让瓜瓜更像瓜瓜']);
+  // Part 25b (named exception): the chat's ⋯ menu gains 外观 (the chat's background colour and the player's avatar frame; the owner asked
+  // for them in this menu), always last. The lists below that named 共创 (and 切换回复模型) now end with 外观; nothing else in the menu changed.
+  assert.deepEqual(titlesOf(items), ['切换回复模型', '共创 · 让瓜瓜更像瓜瓜', '外观']);
   assert.equal(items[0]!.querySelector('.chat-menu-sub')!.textContent, 'DeepSeek · 约 10 点/条');
   items[0]!.click();
   assert.ok(signedUp.doc.body.querySelector('.mp-sheet'), 'the picker opens');
   const guest = chat(t, guestAccount);
   await guest.attach();
-  assert.deepEqual(titlesOf(guest.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titlesOf(guest.menu()), ['共创 · 让瓜瓜更像瓜瓜', '外观']);
   const invited = chat(t, invitedAccount);
   await invited.attach();
-  assert.deepEqual(titlesOf(invited.menu()), ['切换回复模型', '共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titlesOf(invited.menu()), ['切换回复模型', '共创 · 让瓜瓜更像瓜瓜', '外观']);
   // Flag off (a login without a picker): 共创 only, the account entries are in the top menu.
   const noPicker = chat(t, login);
   await noPicker.attach();
-  assert.deepEqual(titlesOf(noPicker.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titlesOf(noPicker.menu()), ['共创 · 让瓜瓜更像瓜瓜', '外观']);
 });
 
 test('first-time guide: a bubble at ⋯ when a chat is first opened; tap or opening the menu dismisses it for good (localStorage)', async (t) => {
@@ -726,7 +728,7 @@ test('guest ⋯ menu: 切换回复模型 appears (before 共创) only when the s
     '点这里可以切换回复模型，或和角色一起共创',
   );
   const items = two.menu();
-  assert.deepEqual(titlesOf(items), ['切换回复模型', '共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titlesOf(items), ['切换回复模型', '共创 · 让瓜瓜更像瓜瓜', '外观']);
   assert.ok(!/点/.test(items[0]!.querySelector('.chat-menu-sub')!.textContent), 'no points are named for a guest');
   items[0]!.click();
   assert.ok(two.doc.body.querySelector('.mp-sheet'), 'the picker opens for a guest');
@@ -736,7 +738,7 @@ test('guest ⋯ menu: 切换回复模型 appears (before 共创) only when the s
   const one = chat(t, trialGuest());
   await one.openChat(await one.attach());
   assert.equal(one.cards.get('wei-guagua')!.querySelector('.chat-guide')!.textContent, '点这里可以和角色一起共创');
-  assert.deepEqual(titlesOf(one.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titlesOf(one.menu()), ['共创 · 让瓜瓜更像瓜瓜', '外观']);
   // A guest has no spending history: no 消费记录 anywhere.
   assert.ok(!titlesOf(two.header.querySelectorAll('.chat-menu-item')).includes('消费记录'));
 });

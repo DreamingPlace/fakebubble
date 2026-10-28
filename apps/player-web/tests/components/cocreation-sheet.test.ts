@@ -480,7 +480,8 @@ test('in the live chat the ⋯ menu offers 共创 to every player', async (t) =>
     const card = f.cards.get('wei-guagua')!;
     card.querySelector('.chat-more')!.click();
     const items = card.querySelectorAll('.chat-menu-item');
-    assert.equal(items.length, 1, `${access}: 共创 only (no picker without a points account, no account entries)`);
+    // Part 25b (named exception): the ⋯ menu also holds 外观 (last); 共创 is still its first and only co-creation entry.
+    assert.equal(items.length, 2, `${access}: 共创 and 外观 (no picker without a points account, no account entries)`);
     const item = items[0]!;
     assert.equal(item.querySelector('.chat-menu-title')!.textContent, '共创 · 让瓜瓜更像瓜瓜', access);
     assert.equal(item.disabled, false, access);

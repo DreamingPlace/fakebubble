@@ -9,6 +9,7 @@
 import type { ModelChoiceInfo, PlayerPlan } from '../../../../../packages/contracts/player-models.ts';
 import type { AccountTier } from '../../services/provider-api.ts';
 import { h } from '../cocreation/h.ts';
+import { playerPrefs, type PlayerPrefs, type ThemePref } from '../prefs/player-prefs.ts';
 import { accountCopy, accountError, nicknameOk } from './account-sheet.ts';
 
 export const infoCopy = {
@@ -54,6 +55,13 @@ export const infoCopy = {
   login: '登录',
   loginOrSignup: '登录 / 注册',
   clear: '清除本设备的体验数据',
+  /** Part 25b: night mode. The first choice follows the system's own setting. */
+  display: '显示模式',
+  themes: [
+    ['system', '跟随系统'],
+    ['light', '日间'],
+    ['dark', '夜间'],
+  ] as const satisfies readonly (readonly [ThemePref, string])[],
 };
 
 /** The UTC calendar date of a clock reading, 'YYYY-MM-DD'. */
@@ -203,6 +211,8 @@ export interface MyInfoOptions {
   mount?: HTMLElement;
   /** Called once when the page closes. */
   onClose?: () => void;
+  /** Where the 日间 / 夜间 choice is kept (Part 25b). Defaults to this device's store. */
+  prefs?: PlayerPrefs;
 }
 
 export function openMyInfo(options: MyInfoOptions) {
@@ -330,6 +340,38 @@ export function openMyInfo(options: MyInfoOptions) {
 
   const add = (...nodes: (Node | null)[]) => body.append(...nodes.filter((node): node is Node => node !== null));
 
+  /**
+   * Part 25b: 跟随系统 / 日间 / 夜间 - three soft pills, the chosen one filled. They are radio inputs, not buttons: the arrow keys and the
+   * screen reader's "1 of 3" come for free. A choice is applied at once and kept on this device.
+   */
+  const themeRow = () => {
+    const prefs = options.prefs ?? playerPrefs();
+    const pills = infoCopy.themes.map(([value, label]) => {
+      const input = h('input', {
+        class: 'sr-only',
+        attrs: { type: 'radio', name: 'mi-theme', value, 'data-theme-pref': value },
+      });
+      const pill = h('label', { class: 'mi-theme-pill' }, input, h('span', { text: label }));
+      input.addEventListener('change', () => {
+        prefs.setTheme(value);
+        mark();
+      });
+      return { value, input, pill };
+    });
+    const mark = () => {
+      for (const { value, input, pill } of pills) {
+        input.checked = value === prefs.theme;
+        pill.className = value === prefs.theme ? 'mi-theme-pill is-on' : 'mi-theme-pill';
+      }
+    };
+    mark();
+    return h(
+      'div',
+      { class: 'mi-theme', attrs: { role: 'radiogroup', 'aria-label': infoCopy.display } },
+      ...pills.map(({ pill }) => pill),
+    );
+  };
+
   // ---- build per mode ---------------------------------------------------------------------------------------------------
   const a = options.actions;
   if (options.mode === 'player') {
@@ -411,6 +453,7 @@ export function openMyInfo(options: MyInfoOptions) {
         pillButton(infoCopy.login, a.login, false),
       ),
       h('p', { class: 'mi-signup-first', text: infoCopy.signupFirst }),
+      themeRow(),
     );
     if (options.deleteEnabled)
       add(h('div', { class: 'mi-danger' }, button(infoCopy.clear, 'acct-danger', a.clearDevice)));
@@ -427,6 +470,7 @@ export function openMyInfo(options: MyInfoOptions) {
         link(infoCopy.password, a.password),
         link(infoCopy.logoutOthers, () => void logoutOthers()),
       ),
+      themeRow(),
     );
     add(
       h(

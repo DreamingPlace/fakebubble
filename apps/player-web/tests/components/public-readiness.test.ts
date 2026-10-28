@@ -501,14 +501,16 @@ const topMenu = (f: ReturnType<typeof chat>, label?: string) => {
     .filter((b) => b.textContent !== '×');
 };
 const labelsOfButtons = (items: FakeElement[]) => items.map((item) => item.textContent);
+// Part 25b (named exception): the chat's ⋯ menu gains 外观 (the chat's background colour and the player's avatar frame; the owner asked
+// for them in this menu), always last. The lists below that named 共创 (and 切换回复模型) now end with 外观; nothing else in the menu changed.
 test('menu: 删除我的账号 / 清除本设备的体验数据 exist only when the server says account deletion is on', async (t) => {
   const off = chat(t, login);
   await off.attach();
-  assert.deepEqual(titles(off.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titles(off.menu()), ['共创 · 让瓜瓜更像瓜瓜', '外观']);
   assert.deepEqual(labelsOfButtons(topMenu(off)), ['修改', '输入邀请码', '修改密码', '退出其他设备', '退出登录']);
   const on = chat(t, { ...login, features: { accountDelete: true } });
   await on.attach();
-  assert.deepEqual(titles(on.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titles(on.menu()), ['共创 · 让瓜瓜更像瓜瓜', '外观']);
   const items = topMenu(on);
   assert.deepEqual(labelsOfButtons(items), [
     '修改',
@@ -523,13 +525,13 @@ test('menu: 删除我的账号 / 清除本设备的体验数据 exist only when 
 
   const guestOff = chat(t, { signupEnabled: true, signedIn: false });
   await guestOff.attach();
-  assert.deepEqual(titles(guestOff.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titles(guestOff.menu()), ['共创 · 让瓜瓜更像瓜瓜', '外观']);
   // Part 21i (named exception): 更多 now always exists for a guest and holds 消费记录; deletion only adds 清除.
   assert.equal(guestOff.header.querySelectorAll('.head-more').length, 1);
   assert.deepEqual(labelsOfButtons(topMenu(guestOff, '我的信息')), ['消费记录', '输入邀请码', '注册', '登录']);
   const guest = chat(t, { signupEnabled: true, signedIn: false, features: { accountDelete: true } });
   await guest.attach();
-  assert.deepEqual(titles(guest.menu()), ['共创 · 让瓜瓜更像瓜瓜']);
+  assert.deepEqual(titles(guest.menu()), ['共创 · 让瓜瓜更像瓜瓜', '外观']);
   const guestItems = topMenu(guest, '我的信息');
   assert.deepEqual(labelsOfButtons(guestItems), ['消费记录', '输入邀请码', '注册', '登录', '清除本设备的体验数据']);
   guestItems[4]!.click();

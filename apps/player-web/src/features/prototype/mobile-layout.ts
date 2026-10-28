@@ -23,3 +23,11 @@ export function followChatViewport(page: HTMLElement) {
   window.addEventListener('resize', sync);
   sync();
 }
+
+/**
+ * The width of the front 小卡 (Part 25b): a phone stacks the cards like the desktop does - the front card with the neighbours
+ * peeking out on both sides - so the card is narrower than the screen by the width of the peek, on every size.
+ */
+export function stackCardWidth(viewportWidth: number) {
+  return viewportWidth <= 600 ? Math.min(300, viewportWidth - 96) : Math.min(376, viewportWidth - 108);
+}

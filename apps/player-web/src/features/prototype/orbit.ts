@@ -22,7 +22,9 @@ export function orbitStyle(offset: number, count: number) {
     opacity: cardOpacity[depth]!,
     z: 100 - depth,
     avatarX: Math.sin(angle),
-    avatarY: (1 - Math.cos(angle)) * 52,
+    // Part 25b: the avatars sit on an ellipse seen from the front (design/burbur-v2 Main board): the chosen one lowest and nearest,
+    // the others rising as they turn away, so the row reads as an oval and not a frown.
+    avatarY: (Math.cos(angle) - 1) * 28,
     avatarScale: avatarScale[depth]!,
     avatarOpacity: avatarOpacity[depth]!,
     wash: `${Math.min(70, depth * 12)}%`,
