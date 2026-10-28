@@ -11838,6 +11838,10 @@ html.theme-fade *::after {
 :root[data-theme="dark"] .face-reserve {
   background: repeating-linear-gradient(135deg, #17141e 0 12px, #1e1a28 12px 24px);
 }
+:root[data-theme="dark"] .icon-button:hover,
+:root[data-theme="dark"] .icon-button:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
 :root[data-theme="dark"] .page-shell .avatar-choice-mark {
   background: linear-gradient(140deg, var(--n-aura-3), var(--n-aura-2));
 }
@@ -11875,8 +11879,13 @@ html.theme-fade *::after {
   .page-shell[data-phase] .avatar-choice {
     transform: translate(-50%, 0) translateX(var(--avatar-x)) translateY(var(--avatar-y));
   }
+  /* Room for the chosen avatar's ring above the footer note, and for the far ones rising on the oval. */
   .page-shell[data-phase] .avatar-nav {
-    margin-top: 4px;
+    height: 86px;
+    margin-top: 0;
+  }
+  .page-shell[data-phase] .avatar-choice {
+    top: 20px;
   }
 }
 
@@ -12597,7 +12606,7 @@ html.theme-fade *::after {
 :root[data-theme="dark"] .mi-logout {
   color: #ff9db1;
 }
-:root[data-theme="dark"] .cc-sheet :is(.cc-shuffle, .cc-close) {
+:root[data-theme="dark"] .cc-sheet .cc-close {
   background: rgba(255, 255, 255, 0.12);
 }
 /* The 共创 cards are pastel in the character's colours in both themes: their words stay dark. */
@@ -12611,8 +12620,7 @@ html.theme-fade *::after {
   color: var(--bb-ink);
 }
 :root[data-theme="dark"] .cc-sheet .cc-bubble-out .cc-area,
-:root[data-theme="dark"] .cc-sheet .cc-send,
-:root[data-theme="dark"] .cc-sheet .cc-cta {
+:root[data-theme="dark"] .cc-sheet .cc-send {
   background: var(--s-out);
   color: var(--s-out-fg);
 }

@@ -224,6 +224,181 @@ try {
   await second.getByRole('button', { name: /阿泡/ }).first().waitFor({ timeout: 15_000 });
   const logged = (await other.cookies()).find((cookie: Cookie) => cookie.name === cookieName);
   assert.ok(logged && logged.httpOnly && logged.secure, 'login set a session cookie');
+
+  // ---- Part 25b: the player's pages in a phone-sized browser ------------------------------------------------------------------
+  // A fresh guest on a 390x844 phone: the stack of cards, the swipe, the welcome pill, the chat's own colour (kept across a reload),
+  // the guest's line in the middle, night mode (system and toggle) and the slide-up of the sheets.
+  const phoneContext = async (colorScheme: 'light' | 'dark', lockGuest = false) => {
+    const phone = await browser.newContext({
+      ignoreHTTPSErrors: true,
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      colorScheme,
+    });
+    const view = await phone.newPage();
+    view.on('pageerror', (error: unknown) => errors.push(String(error)));
+    if (lockGuest)
+      await view.route('**/bootstrap', async (route: any) => {
+        const response = await route.fetch();
+        const json = await response.json();
+        if (json.access?.kind === 'guest') json.access.lockedCharacterIds = [];
+        await route.fulfill({ response, json });
+      });
+    await view.goto(`${origin}/?mode=provider`);
+    await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
+    await view.waitForTimeout(1200);
+    return { phone, view };
+  };
+  const selectedName = (view: any) => view.locator('.avatar-choice.selected').getAttribute('aria-label');
+  {
+    const { phone, view } = await phoneContext('light');
+    // The stack: the front card is narrower than the screen and a neighbour peeks out on both sides.
+    const front = await view.locator('.card-slot.is-active').boundingBox();
+    assert.ok(front.width <= 300 && front.width >= 240, `the front card is ${front.width}px wide on a 390px phone`);
+    assert.ok(Math.abs(front.x + front.width / 2 - 195) < 3, 'the front card is in the middle');
+    for (const side of ['l', 'r']) {
+      const box = await view.locator(`.card-slot[data-side="${side}"]:not(.is-hidden-slot)`).first().boundingBox();
+      const shown =
+        side === 'l' ? front.x - Math.max(box.x, 0) : Math.min(box.x + box.width, 390) - (front.x + front.width);
+      assert.ok(shown >= 30, `the ${side} neighbour shows ${Math.round(shown)}px beside the front card`);
+      assert.equal(
+        await view
+          .locator(`.card-slot[data-side="${side}"]:not(.is-hidden-slot)`)
+          .first()
+          .evaluate((el: Element) => getComputedStyle(el).visibility),
+        'visible',
+      );
+    }
+    // The welcome is a pill with a waveform and a length - and none of the welcome words is on the card.
+    const face = view.locator('.card-slot.is-active .card-face');
+    assert.equal(await face.locator('.face-voice .face-wave').count(), 1);
+    assert.match(await face.locator('.face-dur').innerText(), /^\d:\d\d$/);
+    const faceText: string = await face.evaluate((el: HTMLElement) => el.textContent ?? '');
+    for (const entry of Object.values(WEB_PROVIDER_WELCOME) as { text: string }[])
+      assert.equal(faceText.includes(entry.text), false, 'no welcome transcript on the card');
+    // Swipe: a sideways drag turns to the next card; the card in front changes.
+    const before = await selectedName(view);
+    await view.mouse.move(195, 420);
+    await view.mouse.down();
+    for (let step = 1; step <= 8; step++) await view.mouse.move(195 - step * 20, 420, { steps: 2 });
+    await view.mouse.up();
+    await view.waitForTimeout(900);
+    assert.notEqual(await selectedName(view), before, 'a swipe turns to another card');
+    // Back to a character, then open its chat: the top bar fades and lifts (it is not removed), the chat fills the screen.
+    await view.locator('.avatar-choice[aria-label^="选择"]').first().click();
+    await view.waitForTimeout(900);
+    await view.mouse.click(195, 380);
+    await view.waitForSelector('.page-shell[data-phase="chat"]');
+    await view.waitForTimeout(700);
+    const bar = await view.locator('.site-head').evaluate((el: Element) => {
+      const style = getComputedStyle(el);
+      return {
+        display: style.display,
+        opacity: style.opacity,
+        visibility: style.visibility,
+        transform: style.transform,
+      };
+    });
+    assert.notEqual(bar.display, 'none', 'the top bar is animated away, not removed');
+    assert.equal(bar.opacity, '0');
+    assert.equal(bar.visibility, 'hidden');
+    const chat = await view.locator('.card-slot.is-chat').boundingBox();
+    assert.ok(chat.width >= 388 && chat.height >= 840, `the chat fills the phone (${chat.width}x${chat.height})`);
+    // The header is centred: the name sits in the middle of the card.
+    const name = await view.locator('.card-slot.is-chat .chat-head strong').boundingBox();
+    assert.ok(Math.abs(name.x + name.width / 2 - 195) < 4, 'the chat title is centred');
+    // 外观: a preset, then a custom colour - applied at once, and still there after a reload.
+    await view
+      .locator('.chat-guide')
+      .click({ timeout: 1000 })
+      .catch(() => {});
+    await view.locator('.card-slot.is-chat .chat-more').click();
+    await view.getByRole('menuitem', { name: '外观' }).click();
+    const sheetMotion = await view
+      .locator('.look-sheet .mp-panel')
+      .evaluate((el: Element) => getComputedStyle(el).animationName);
+    assert.equal(sheetMotion, 'bb-up', 'the 外观 sheet slides up');
+    const shellColour = () =>
+      view.locator('.card-slot.is-chat .card-shell').evaluate((el: Element) => getComputedStyle(el).backgroundColor);
+    await view.getByRole('radiogroup', { name: '背景' }).getByRole('radio', { name: '薄荷' }).click();
+    await view.waitForTimeout(500);
+    assert.equal(await shellColour(), 'rgb(221, 244, 234)', 'the preset is the chat background');
+    await view.locator('.look-color').evaluate((el: HTMLInputElement) => {
+      el.value = '#7fd6c2';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await view.waitForTimeout(500);
+    assert.equal(await shellColour(), 'rgb(127, 214, 194)', 'a custom colour is the chat background');
+    await view.getByRole('radiogroup', { name: '头像框' }).getByRole('radio', { name: '葡萄' }).click();
+    await view.locator('.look-sheet .acct-close').click();
+    await view.reload();
+    await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
+    await view.waitForTimeout(900);
+    await view.locator('.avatar-choice[aria-label^="选择"]').first().click();
+    await view.waitForTimeout(700);
+    await view.mouse.click(195, 380);
+    await view.waitForSelector('.page-shell[data-phase="chat"]');
+    await view.waitForTimeout(900);
+    assert.equal(await shellColour(), 'rgb(127, 214, 194)', 'the colour is remembered for that character');
+    assert.equal(
+      await view.evaluate(() =>
+        getComputedStyle(document.querySelector('.page-shell') as Element)
+          .getPropertyValue('--own-a')
+          .trim(),
+      ),
+      '#7C4DEB',
+      'the player’s own avatar frame is remembered',
+    );
+    if (shots) await view.screenshot({ path: join(shots, 'chat-custom-390.png') });
+    await phone.close();
+  }
+  {
+    // The guest's line: in the middle of the chat area, below the header and above the input.
+    const { phone, view } = await phoneContext('light', true);
+    await view.locator('.avatar-choice[aria-label^="选择"]').first().click();
+    await view.waitForTimeout(700);
+    await view.mouse.click(195, 380);
+    await view.waitForSelector('.page-shell[data-phase="chat"]');
+    await view.waitForTimeout(900);
+    const note = await view.locator('.card-slot.is-chat .guest-note').boundingBox();
+    const head = await view.locator('.card-slot.is-chat .chat-head').boundingBox();
+    const composer = await view.locator('.card-slot.is-chat .composer').boundingBox();
+    assert.equal(await view.locator('.card-slot.is-chat .guest-note').innerText(), '新客人，就决定是这位小四四了吗？');
+    assert.ok(note.y >= head.y + head.height - 1, 'the line is below the header');
+    assert.ok(note.y + note.height <= composer.y, 'the line is not on the input');
+    const middle = (head.y + head.height + composer.y) / 2;
+    assert.ok(Math.abs(note.y + note.height / 2 - middle) < 40, 'the line is in the middle of the chat area');
+    assert.ok(Math.abs(note.x + note.width / 2 - 195) < 4, 'and centred sideways');
+    if (shots) await view.screenshot({ path: join(shots, 'guest-prompt-390.png') });
+    await phone.close();
+  }
+  {
+    // Night mode follows the system, and the toggle in 我的信息 overrides it; the account sheets slide up.
+    const { phone, view } = await phoneContext('dark');
+    const theme = () => view.evaluate(() => document.documentElement.getAttribute('data-theme'));
+    const paper = () => view.evaluate(() => getComputedStyle(document.documentElement).backgroundColor);
+    assert.equal(await theme(), 'dark');
+    assert.equal(await paper(), 'rgb(12, 11, 16)');
+    await view.getByRole('button', { name: '我的信息' }).first().click();
+    const motion = await view.locator('.mi-sheet').evaluate((el: Element) => getComputedStyle(el).animationName);
+    assert.equal(motion, 'bb-sheet', '我的信息 slides up');
+    await view.waitForTimeout(900);
+    if (shots) await view.screenshot({ path: join(shots, 'my-info-night-390.png') });
+    await view.getByText('日间', { exact: true }).click();
+    await view.waitForTimeout(900);
+    assert.equal(await theme(), 'light', 'the toggle overrides the system');
+    assert.equal(await paper(), 'rgb(250, 248, 246)');
+    await view.reload();
+    await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
+    assert.equal(await theme(), 'light', 'and the pick is remembered');
+    await view.getByRole('button', { name: '登录/注册' }).first().click();
+    const sheetMotionLogin = await view
+      .locator('.acct-sheet')
+      .evaluate((el: Element) => getComputedStyle(el).animationName);
+    assert.equal(sheetMotionLogin, 'bb-sheet', 'the account sheets slide up');
+    await phone.close();
+  }
+
   assert.deepEqual(errors, [], 'no uncaught page errors');
   process.stdout.write('browser check: PASS\n');
 } catch (error) {
