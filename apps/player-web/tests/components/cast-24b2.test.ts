@@ -566,6 +566,8 @@ const emptyDoc = () =>
     directions: [],
   }) as CastDoc;
 
+// Named exception (Part 24b-5): the start card also offers 导入文件 (a cast file), between the two buttons pinned here before.
+// Every other assertion in this test is unchanged.
 test('24b-4 an empty draft opens on one clear start: 从旧资料导入 and + 角色, one of each', async (t) => {
   const saves: { id: string; revision: number | null; name: string }[] = [];
   const f = page(t, { doc: emptyDoc(), characters: { saves } });
@@ -574,7 +576,7 @@ test('24b-4 an empty draft opens on one clear start: 从旧资料导入 and + �
   assert.equal(start.hidden, false);
   assert.deepEqual(
     start.querySelectorAll('button').map((b) => b.textContent),
-    ['从旧资料导入', '+ 角色'],
+    ['从旧资料导入', '导入文件', '+ 角色'],
   );
   assert.equal(f.buttons('从旧资料导入').length, 1);
   assert.equal(f.buttons('+ 角色').length, 1);

@@ -256,3 +256,49 @@ export interface CastRequestContext {
   promptHash: string;
   view: CastView;
 }
+
+/**
+ * The cast file (Part 24b-5): the cast document plus a header, for bulk filling offline and for backups. A character that does not
+ * exist yet is keyed `new:<name>` (everywhere it is referred to); only such a character may carry a `workbench` block, which seeds
+ * the draft character created for it. apps/server/cast/cast-file.ts reads and validates it; scripts/cast-file.ts is the local check.
+ */
+export const CAST_FILE_FORMAT = 'burbur-cast';
+export const CAST_FILE_VERSION = 1;
+export const CAST_FILE_NEW_PREFIX = 'new:';
+/** Caps of the `workbench` block (角色工作台 keeps its own, larger ones; a file seeds only a short summary). */
+export const CAST_FILE_LIMITS = Object.freeze({ newKey: 40, displayName: 12, persona: 300, welcome: 200 });
+export interface CastWorkbenchSeed {
+  displayName: string;
+  /** A short summary that matches the cast entry. The full character lives in the cast. */
+  persona: string;
+  welcome: string;
+}
+/** One problem in a cast file, in words: `who` is the character it is about (null: nothing in particular). */
+export interface CastFileProblem {
+  code: string;
+  path: string;
+  who: string | null;
+  text: string;
+}
+export interface CastFileSummary {
+  charactersAdded: string[];
+  charactersChanged: string[];
+  charactersRemoved: string[];
+  people: number;
+  ratings: number;
+  directions: number;
+  groups: number;
+  stories: number;
+  memes: number;
+  /** The file leaves the draft exactly as it is. */
+  unchanged: boolean;
+}
+export interface CastFileViewReport {
+  name: string;
+  /** The view before the cap is applied, and after it (JSON.stringify length). */
+  size: number;
+  finalSize: number;
+  max: number;
+  /** Titles / keys of what the cap would leave out of this character's view. */
+  dropped: string[];
+}

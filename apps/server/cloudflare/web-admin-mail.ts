@@ -20,7 +20,7 @@ export function cloudAdminMailer(
           binding.send({
             from,
             to: message.to,
-            subject: message.purpose === 'bind' ? 'FAKE 泡泡 · 管理员邮箱验证' : 'FAKE 泡泡 · 管理员密码重置',
+            subject: message.purpose === 'bind' ? 'Burbur · 管理员邮箱验证' : 'Burbur · 管理员密码重置',
             text: `你的${message.purpose === 'bind' ? '邮箱验证' : '密码重置'}码是：${message.code}\n\n请在 10 分钟内返回管理员页面输入。请勿转发此邮件或验证码。\n若非本人操作，请忽略此邮件。此操作不会授予或恢复管理权限。`,
           }),
           new Promise<never>((_, reject) => {
