@@ -413,24 +413,25 @@ test('chat ⋯ menu: 切换回复模型 and 共创 only, in that order; a guest 
   const signedUp = chat(t, { ...login, modelChoice: info });
   await signedUp.attach();
   const items = signedUp.menu();
+  // Part 25b (named exception): the chat's ⋯ menu gains 外观 (the chat's background colour and the player's avatar frame; the owner asked
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titlesOf(items), ['切换回复模型', '一起共创角色']);
+  assert.deepEqual(titlesOf(items), ['切换回复模型', '一起共创角色', '外观']);
   assert.equal(items[0]!.querySelector('.chat-menu-sub')!.textContent, 'DeepSeek · 约 10 点/条');
   items[0]!.click();
   assert.ok(signedUp.doc.body.querySelector('.mp-sheet'), 'the picker opens');
   const guest = chat(t, guestAccount);
   await guest.attach();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titlesOf(guest.menu()), ['一起共创角色']);
+  assert.deepEqual(titlesOf(guest.menu()), ['一起共创角色', '外观']);
   const invited = chat(t, invitedAccount);
   await invited.attach();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titlesOf(invited.menu()), ['切换回复模型', '一起共创角色']);
+  assert.deepEqual(titlesOf(invited.menu()), ['切换回复模型', '一起共创角色', '外观']);
   // Flag off (a login without a picker): 共创 only, the account entries are in the top menu.
   const noPicker = chat(t, login);
   await noPicker.attach();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titlesOf(noPicker.menu()), ['一起共创角色']);
+  assert.deepEqual(titlesOf(noPicker.menu()), ['一起共创角色', '外观']);
 });
 
 test('first-time guide: a bubble at ⋯ when a chat is first opened; tap or opening the menu dismisses it for good (localStorage)', async (t) => {
@@ -734,7 +735,7 @@ test('guest ⋯ menu: 切换回复模型 appears (before 共创) only when the s
   );
   const items = two.menu();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titlesOf(items), ['切换回复模型', '一起共创角色']);
+  assert.deepEqual(titlesOf(items), ['切换回复模型', '一起共创角色', '外观']);
   assert.ok(!/点/.test(items[0]!.querySelector('.chat-menu-sub')!.textContent), 'no points are named for a guest');
   items[0]!.click();
   assert.ok(two.doc.body.querySelector('.mp-sheet'), 'the picker opens for a guest');
@@ -749,7 +750,7 @@ test('guest ⋯ menu: 切换回复模型 appears (before 共创) only when the s
     '给瓜瓜换个大脑？或者来说说你心中的瓜瓜～',
   );
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titlesOf(one.menu()), ['一起共创角色']);
+  assert.deepEqual(titlesOf(one.menu()), ['一起共创角色', '外观']);
   // A guest has no spending history: no 消费记录 anywhere.
   assert.ok(!titlesOf(two.header.querySelectorAll('.chat-menu-item')).includes('消费记录'));
 });

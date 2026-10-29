@@ -706,6 +706,8 @@ function chat(
     },
   };
 }
+// Part 25b (named exception): the chat's ⋯ menu gains 外观 (the chat's background colour and the player's avatar frame; the owner asked
+// for them in this menu), always last. The lists below that named 共创 (and 切换回复模型) now end with 外观; nothing else in the menu changed.
 const titles = (items: FakeElement[]) => items.map((item) => item.querySelector('.chat-menu-title')!.textContent);
 
 // Part 21f (named exception): the chat's ⋯ menu holds only 切换回复模型 (for a player who can choose one) and 共创. A guest's
@@ -714,7 +716,7 @@ test('chat ⋯ menu: a guest sees 共创 only; 登录 / 注册 are in the top ba
   const f = chat(t, { kind: 'guest' });
   await f.attach();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titles(f.menu()), ['一起共创角色']);
+  assert.deepEqual(titles(f.menu()), ['一起共创角色', '外观']);
   const [login, signup] = topBar(f);
   assert.deepEqual(labelsOf([login!, signup!]), ['登录', '注册']);
   login!.click();
@@ -741,7 +743,7 @@ test('top account menu for a signed-in login: 我的昵称 / 修改密码 / 退�
   const f = chat(t, { kind: 'guest', account });
   await f.attach();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titles(f.menu()), ['一起共创角色'], 'the chat menu: 共创 only');
+  assert.deepEqual(titles(f.menu()), ['一起共创角色', '外观'], 'the chat menu: 共创 and 外观 only');
   const nick = topBar(f)[0]!;
   nick.click();
   assert.equal(f.header.querySelectorAll('.chat-menu-item').length, 0, 'no dropdown: the page opens directly');
@@ -797,7 +799,7 @@ test('chat: with signup closed (or unknown), 邀请码 opens the invite box exac
     assert.throws(() => press(f, '输入邀请码'), /parse HTML/, String(account));
     assert.equal(f.doc.body.querySelector('.acct-sheet'), null, String(account));
     // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-    assert.deepEqual(titles(f.menu()), ['一起共创角色'], String(account));
+    assert.deepEqual(titles(f.menu()), ['一起共创角色', '外观'], String(account));
   }
 });
 
@@ -855,7 +857,7 @@ test("top bar: a guest finds 登录 and 注册 next to 邀请码, not only insid
   assert.equal(f.doc.body.querySelector('.acct-sheet')!.querySelector('.acct-title')!.textContent, '注册');
   // The ⋯ menu no longer repeats them.
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titles(f.menu()), ['一起共创角色']);
+  assert.deepEqual(titles(f.menu()), ['一起共创角色', '外观']);
 });
 
 test('top bar: while signup is off 注册 still opens and says 注册暂未开放; 登录 is never closed', async (t) => {
@@ -922,7 +924,7 @@ test('top bar: a signed-in player sees their nickname, which opens the account m
   assert.deepEqual(f.reloads, ['reload']);
   // The chat cards' ⋯ menu no longer carries them (Part 21f).
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titles(f.menu()), ['一起共创角色']);
+  assert.deepEqual(titles(f.menu()), ['一起共创角色', '外观']);
   // A login without a nickname yet is still reachable.
   const bare = chat(t, { kind: 'guest', account: { ...signedIn, nickname: null }, remaining: 2 });
   await bare.attach();

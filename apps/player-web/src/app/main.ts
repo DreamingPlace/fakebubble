@@ -3,6 +3,8 @@ import { startPrototype } from '../features/prototype/preview.js';
 import { renderProviderStartError } from '../features/prototype/provider-start-error.js';
 import { ProviderApi } from '../services/provider-api.js';
 import { turnstileCheck } from '../services/turnstile-widget.js';
+import { playerPrefs } from '../features/prefs/player-prefs.ts';
+import { startTheme } from '../features/prefs/theme.ts';
 
 const root = document.getElementById('app');
 if (!root) throw new Error('APP_ROOT_MISSING');
@@ -15,6 +17,8 @@ if (mode === 'provider-admin') {
       root.textContent = '管理入口未能加载，请查看构建状态。';
     });
 } else if (mode === 'provider') {
+  // Night mode (Part 25b) belongs to the player pages only: the administrator console never reads it.
+  startTheme(playerPrefs());
   // One API object for the whole page: its CSRF token follows bootstrap, login and the signed-out first page.
   const api = new ProviderApi();
   // Only used when the server answers TURNSTILE_REQUIRED (the flag is off by default): then a token is fetched silently.

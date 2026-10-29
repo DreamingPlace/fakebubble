@@ -18,6 +18,8 @@ import { balanceLine, infoCopy, openMyInfo, quotaView, tierView, trialQuotaView 
 import { mountReviewBanners } from './review-banner.ts';
 import { backupNote, modelCopy, modelFooterNote, modelMenuItem, openModelPicker } from './model-picker.ts';
 import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
+import { playerPrefs } from '../prefs/player-prefs.ts';
+import { lookCopy, openLookSheet } from './chat-look.ts';
 
 type Shell = {
   say(message: string): void;
@@ -172,13 +174,17 @@ export class LiveBinding {
   attach(shell: Shell) {
     this.shell = shell;
     for (const character of this.view.characters) {
-      const button = shell.card(character.characterId).querySelector<HTMLButtonElement>('.welcome-row .play-button');
-      button?.setAttribute(
-        'aria-label',
-        character.welcome.audio.state === 'available'
-          ? `播放${shell.name(character.characterId)}的语音`
-          : `播放${shell.name(character.characterId)}的语音，当前没有音频素材`,
-      );
+      const card = shell.card(character.characterId);
+      // The bubble in the chat and the pill on the card are the same welcome voice.
+      for (const selector of ['.welcome-row .play-button', '.face-voice'])
+        card
+          .querySelector<HTMLButtonElement>(selector)
+          ?.setAttribute(
+            'aria-label',
+            character.welcome.audio.state === 'available'
+              ? `播放${shell.name(character.characterId)}的语音`
+              : `播放${shell.name(character.characterId)}的语音，当前没有音频素材`,
+          );
     }
     this.renderAccess();
     this.mountChatMenus(shell);
@@ -232,6 +238,17 @@ export class LiveBinding {
             // Any principal with a valid session may submit; only a pending invitation check holds it back.
             disabled: this.invitation.locked,
             onSelect: () => this.openCocreation(character.characterId),
+          },
+          // Part 25b: 外观 is for everyone, guests included; the choices stay on this device.
+          {
+            label: lookCopy.title,
+            onSelect: () =>
+              openLookSheet({
+                characterId: character.characterId,
+                prefs: playerPrefs(),
+                card,
+                frameHost: document.body.querySelector<HTMLElement>('.page-shell') ?? document.body,
+              }),
           },
         ];
       });
@@ -302,6 +319,8 @@ export class LiveBinding {
       onDone: (done) => {
         // After an erasure the cookie is gone: the last page this tab shows is the signed-out first page.
         if (done === 'delete' || done === 'clear') {
+          // What the player chose about the look is on this device too: erasing the device's data erases it.
+          playerPrefs().clear();
           const root = document.body.querySelector<HTMLElement>('#app');
           if (root)
             renderSignedOut(root, {
@@ -791,6 +810,8 @@ export class LiveBinding {
     this.audioUrl = null;
     this.mark(this.nowPlaying, false);
     this.nowPlaying = null;
+    this.welcomeButton?.setAttribute('data-playing', 'false');
+    this.welcomeButton = null;
   }
 
   /** Stops the current clip and drops the whole voice queue (leaving the chat, new message, page hidden). */
@@ -857,7 +878,8 @@ export class LiveBinding {
     if (this.voiceReply === operationId && this.queueIdle && this.canContinue(entry)) void this.playEntry(entry);
   }
 
-  playWelcome(characterId: WebProviderCharacterId) {
+  /** The welcome of one character, from the pill on its card or the bubble in its chat; `button` shows that it is playing. */
+  playWelcome(characterId: WebProviderCharacterId, button?: HTMLElement) {
     if (this.catalogChanged) {
       this.fail(new ProviderApiError(409, 'CATALOG_CHANGED'));
       return;
@@ -866,8 +888,11 @@ export class LiveBinding {
     if (audio?.state === 'available') {
       this.stopVoice();
       this.start(audio.url);
+      this.welcomeButton = button ?? null;
+      this.welcomeButton?.setAttribute('data-playing', 'true');
     } else this.shell?.say('这段语音暂时无法播放');
   }
+  private welcomeButton: HTMLElement | null = null;
 
   private async playMessage(characterId: WebProviderCharacterId, message: WebProviderMessage) {
     if (!message.audio?.mediaId || this.catalogChanged) return;

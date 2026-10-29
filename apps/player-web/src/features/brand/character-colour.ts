@@ -116,3 +116,20 @@ export function derivePalette(hex: string): CharacterPalette {
     ],
   };
 }
+
+/**
+ * The same card at night (design/burbur-v2 Main board): the hue kept, the clouds saturated so they glow on a dark page, and the
+ * accent lifted. A neutral aura (an empty slot, a black accent) stays neutral. The three built-in characters carry the design's
+ * own night colours instead (provider-catalog-view); this is for every colour an administrator publishes.
+ */
+export function nightAura(aura: Aura): Aura {
+  const [h, s] = toHsl(rgbOf(aura[3]));
+  if (s < 0.1) return ['#3A3450', '#2A2638', '#4A4060', '#F5F3F7'];
+  const saturation = Math.max(0.55, Math.min(1, s));
+  return [
+    fromHsl(h, saturation, 0.58),
+    fromHsl(h + 22, saturation, 0.62),
+    fromHsl(h - 24, saturation * 0.7, 0.42),
+    fromHsl(h, saturation, 0.68),
+  ];
+}

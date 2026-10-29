@@ -11353,7 +11353,7 @@ html:has(.signed-out-page) {
   padding: 6px 14px;
   border-radius: 999px;
   background: var(--bb-ink);
-  color: #fff;
+  color: var(--s-out-fg);
   font-family: var(--bb-mono);
   font-size: 13px;
   font-weight: 400;
@@ -11445,6 +11445,8 @@ html:has(.signed-out-page) {
 }
 .bl-row.is-bonus::before,
 .bl-row.is-grant::before,
+.bl-row.is-cocreation_note::before,
+.bl-row.is-cocreation_adopted::before,
 .bl-row.is-daily_refill::before,
 .bl-row.is-reset::before {
   content: "+";
@@ -11499,6 +11501,8 @@ html:has(.signed-out-page) {
 }
 .bl-row.is-bonus .bl-points,
 .bl-row.is-grant .bl-points,
+.bl-row.is-cocreation_note .bl-points,
+.bl-row.is-cocreation_adopted .bl-points,
 .bl-row.is-daily_refill .bl-points {
   color: #1e5e36;
 }
@@ -11821,6 +11825,1286 @@ html:has(.signed-out-page) {
   }
 }
 
+/* ======================================================================================================================
+   Part 25b: player UI round 2 (design/burbur-v2 Main, Chat, MyInfo, Shared, Motion). Player selectors only; every rule here sits
+   after Part 25a and repaints it: theme tokens and night mode, the phone's stack of cards, the welcome pill, the chat's header,
+   avatars, background and guest line, 我的信息 in soft colours, the slide-up of the account sheets, the shared card page.
+   Night mode hangs on one attribute, html[data-theme="dark"], set by the page from the system setting or the player's pick.
+   ====================================================================================================================== */
+:root {
+  --s-card: rgba(255, 255, 255, 0.9);
+  --s-card-line: #fff;
+  --s-soft: rgba(255, 255, 255, 0.85);
+  --s-solid: #fff;
+  --s-line: #e4ded7;
+  --s-hair: #f0ece7;
+  --s-pill: rgba(255, 255, 255, 0.72);
+  --s-head: rgba(255, 255, 255, 0.72);
+  --s-head-line: rgba(20, 20, 20, 0.1);
+  --s-out: #141414;
+  --s-out-fg: #fff;
+  --s-input: #fff;
+  --s-dim: rgba(12, 11, 16, 0.42);
+}
+:root[data-theme="dark"],
+.card-slot.is-chat[data-tone="dark"] {
+  --bb-ink: #f5f3f7;
+  --bb-sub: #b8b3c4;
+  --bb-paper: #0c0b10;
+  --bb-line: rgba(255, 255, 255, 0.1);
+  --s-card: rgba(255, 255, 255, 0.08);
+  --s-card-line: rgba(255, 255, 255, 0.12);
+  --s-soft: rgba(255, 255, 255, 0.07);
+  --s-solid: #1c1824;
+  --s-line: rgba(255, 255, 255, 0.16);
+  --s-hair: rgba(255, 255, 255, 0.08);
+  --s-pill: rgba(255, 255, 255, 0.1);
+  --s-head: rgba(12, 11, 16, 0.6);
+  --s-head-line: rgba(255, 255, 255, 0.1);
+  --s-out: #f5f3f7;
+  --s-out-fg: #0c0b10;
+  --s-input: rgba(255, 255, 255, 0.08);
+  --s-dim: rgba(0, 0, 0, 0.6);
+}
+/* A custom chat colour that is light (or dark) keeps its bubbles readable whichever theme the page is in. */
+:root[data-theme] .card-slot.is-chat[data-tone="light"] {
+  --bb-ink: #141414;
+  --bb-sub: #4a4a4a;
+  --bb-paper: #faf8f6;
+  --s-card: rgba(255, 255, 255, 0.9);
+  --s-card-line: #fff;
+  --s-solid: #fff;
+  --s-head: rgba(255, 255, 255, 0.72);
+  --s-head-line: rgba(20, 20, 20, 0.1);
+  --s-out: #141414;
+  --s-out-fg: #fff;
+  --s-input: #fff;
+}
+.page-shell {
+  --page-bg: var(--bb-paper);
+}
+html.theme-fade,
+html.theme-fade *,
+html.theme-fade *::before,
+html.theme-fade *::after {
+  transition:
+    background-color 600ms ease,
+    color 600ms ease,
+    border-color 600ms ease,
+    box-shadow 600ms ease,
+    opacity 600ms ease !important;
+}
+
+/* ---- night: the aura of the page, the 小卡, the avatar row ---- */
+.aura-set {
+  position: absolute;
+  inset: 0;
+  transition: opacity 600ms ease;
+}
+.aura-night,
+:root[data-theme="dark"] .aura-day {
+  opacity: 0;
+}
+:root[data-theme="dark"] .aura-night {
+  opacity: 1;
+}
+.aura-night .aura {
+  background:
+    radial-gradient(60% 40% at 12% 20%, color-mix(in srgb, var(--aura-1) 45%, transparent) 0%, transparent 70%),
+    radial-gradient(55% 38% at 92% 48%, color-mix(in srgb, var(--aura-2) 30%, transparent) 0%, transparent 70%),
+    radial-gradient(75% 45% at 40% 98%, color-mix(in srgb, var(--aura-3) 50%, transparent) 0%, transparent 70%);
+}
+:root[data-theme="dark"] .page-shell .card-slot:not(.is-chat) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+:root[data-theme="dark"] .page-shell .card-slot:not(.is-chat) .card-shell {
+  background: var(--bb-paper);
+}
+:root[data-theme="dark"] .card-face {
+  background: linear-gradient(165deg, var(--n-aura-3) 0%, #1c1724 52%, #110f16 100%);
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .card-slot.is-active:not(.is-chat) {
+  box-shadow:
+    0 0 60px color-mix(in srgb, var(--n-aura-1) 33%, transparent),
+    0 24px 60px rgba(0, 0, 0, 0.5);
+}
+:root[data-theme="dark"] .face-top {
+  color: #d9d5e2;
+}
+:root[data-theme="dark"] .face-latin {
+  color: var(--n-accent);
+}
+:root[data-theme="dark"] .face-sheen {
+  mix-blend-mode: screen;
+}
+:root[data-theme="dark"] .face-reserve {
+  background: repeating-linear-gradient(135deg, #17141e 0 12px, #1e1a28 12px 24px);
+}
+:root[data-theme="dark"] .icon-button:not(.send-button):hover,
+:root[data-theme="dark"] .icon-button:not(.send-button):focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme="dark"] .page-shell .avatar-choice-mark {
+  background: linear-gradient(140deg, var(--n-aura-3), var(--n-aura-2));
+}
+:root[data-theme="dark"] .page-shell .avatar-choice-mark .reserve-dot {
+  color: rgba(255, 255, 255, 0.4);
+}
+:root[data-theme="dark"] .page-shell .avatar-choice.selected .avatar-choice-mark {
+  outline-color: var(--bb-ink);
+}
+:root[data-theme="dark"] .page-shell .head-account,
+:root[data-theme="dark"] .page-shell .brand {
+  color: var(--bb-ink);
+}
+.avatar-choice {
+  top: 22px;
+}
+
+/* ---- home on a phone: the same stack as the desktop - the front card, the neighbours peeking out on both sides ---- */
+@media (max-width: 600px) {
+  /* The card is as wide as the stack's own number (preview.ts sets --card-w): the same in every phase but the chat. */
+  .page-shell[data-phase] .card-slot:not(.is-chat) {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--card-w, 294px);
+    height: calc(100% - 22px);
+    min-height: 0;
+  }
+  /* The old phone layout hid everything but the front card; the neighbours are part of the stack now. */
+  .page-shell[data-phase="browse"] .card-slot:not(.is-active):not(.is-hidden-slot),
+  .page-shell[data-phase="hover"] .card-slot:not(.is-active):not(.is-hidden-slot) {
+    visibility: visible;
+    pointer-events: auto;
+  }
+  .page-shell[data-phase] .avatar-choice {
+    transform: translate(-50%, 0) translateX(var(--avatar-x)) translateY(var(--avatar-y));
+  }
+  /* Room for the chosen avatar's ring above the footer note, and for the far ones rising on the oval. */
+  .page-shell[data-phase] .avatar-nav {
+    height: 86px;
+    margin-top: 0;
+  }
+  .page-shell[data-phase] .avatar-choice {
+    top: 20px;
+  }
+}
+
+/* ---- the welcome on the card: a play pill, voice only ---- */
+.page-shell .face-voice {
+  appearance: none;
+  border: 0;
+  width: 100%;
+  font: inherit;
+  color: var(--bb-ink);
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  transition: transform 160ms var(--bb-ease);
+}
+.page-shell .face-voice:active {
+  transform: scale(0.98);
+}
+.face-voice:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.face-wave {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  color: rgba(20, 20, 20, 0.24);
+  transition: color 240ms ease;
+}
+.face-voice[data-playing="true"] .face-wave {
+  color: var(--accent);
+}
+.face-dur {
+  font-family: var(--bb-mono);
+  font-size: 11px;
+  color: var(--bb-sub);
+}
+.face-voice[data-playing="true"] .face-play {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.face-play {
+  transition: box-shadow 240ms ease;
+}
+:root[data-theme="dark"] .face-voice {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+:root[data-theme="dark"] .face-play {
+  background: var(--n-accent);
+  color: #0c0b10;
+}
+:root[data-theme="dark"] .face-wave {
+  color: rgba(255, 255, 255, 0.24);
+}
+:root[data-theme="dark"] .face-voice[data-playing="true"] .face-wave {
+  color: var(--n-accent);
+}
+/* the head's one-line next step (体验已结束 …) and the footer note read on the dark page too */
+:root[data-theme="dark"] .page-shell .site-head .head-hint,
+:root[data-theme="dark"] .page-shell .site-head .head-note,
+:root[data-theme="dark"] .page-shell .preview-note {
+  color: var(--bb-sub);
+}
+
+/* ---- chat: the header is centred (back | avatar over name | ⋯), as on the Chat board ---- */
+.page-shell .card-slot .chat-head {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  align-items: center;
+  height: calc(76px + env(safe-area-inset-top));
+  gap: 0;
+  padding: env(safe-area-inset-top) 0 0;
+  background: var(--s-head);
+  border-bottom: 0;
+  box-shadow: inset 0 -1px 0 var(--s-head-line);
+}
+.page-shell .card-slot .chat-head .back-button {
+  grid-column: 1;
+  margin: 0 0 0 6px;
+}
+.page-shell .card-slot .chat-head .chat-more,
+.page-shell .card-slot .chat-head .chat-head-gap {
+  grid-column: 3;
+  justify-self: end;
+  margin: 0 6px 0 0;
+}
+.chat-title {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.page-shell .chat-head strong {
+  position: static;
+  transform: none;
+  max-width: 100%;
+  font-size: 16px;
+  line-height: 1.1;
+  color: var(--bb-ink);
+}
+.page-shell .chat-head .icon-button {
+  color: var(--bb-ink);
+}
+
+/* ---- avatars: a ring, a thin gap of page colour, then the fill. A character's comes from its colour; the player's from their pick ---- */
+.page-shell .message-avatar,
+.page-shell .chat-mark {
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background:
+    linear-gradient(140deg, var(--frame-f1), var(--frame-f2)) padding-box,
+    conic-gradient(from 200deg, var(--frame-a), var(--frame-b), var(--frame-c), var(--frame-a)) border-box;
+  box-shadow: inset 0 0 0 1.5px var(--bb-paper);
+  color: #141414;
+  font-weight: 900;
+}
+.page-shell .chat-mark {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  font-size: 10px;
+}
+.page-shell .message-avatar {
+  width: 38px;
+  height: 38px;
+}
+:root[data-theme="dark"] .page-shell .message-avatar,
+:root[data-theme="dark"] .page-shell .chat-mark {
+  background:
+    linear-gradient(140deg, var(--n-aura-3), var(--n-aura-2)) padding-box,
+    conic-gradient(from 200deg, var(--n-accent), var(--n-aura-3), var(--n-aura-2), var(--n-accent)) border-box;
+}
+/* The player's own avatar sits beside their bubbles: drawn by the stylesheet, so a message row has nothing extra in it. */
+.page-shell .message-row.outgoing {
+  align-items: flex-end;
+  gap: 8px;
+}
+.page-shell .message-row.outgoing::after {
+  content: "我";
+  content: "我" / "";
+  order: 2;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background:
+    linear-gradient(140deg, var(--own-f1, #f2eee9), var(--own-f2, #e9e2f2)) padding-box,
+    conic-gradient(
+      from 200deg,
+      var(--own-a, #ffb295),
+      var(--own-b, #bba4ff),
+      var(--own-c, #97c8f5),
+      var(--own-a, #ffb295)
+    )
+    border-box;
+  box-shadow: inset 0 0 0 1.5px var(--bb-paper);
+  color: #141414;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+/* ---- chat: bubbles, header and composer take their colours from the tokens, so night and a dark custom colour both work ---- */
+.page-shell .text-bubble {
+  background: var(--s-out);
+  color: var(--s-out-fg);
+}
+.page-shell .message-row.incoming .incoming-text,
+.page-shell .voice-bubble,
+.page-shell .transcript {
+  background: var(--s-card);
+  box-shadow: inset 0 0 0 1px var(--s-card-line);
+  color: var(--bb-ink);
+}
+.page-shell .play-button,
+.page-shell .transcript-toggle {
+  color: var(--bb-ink);
+}
+.page-shell .play-button > svg:first-child {
+  color: #fff;
+}
+:root[data-theme="dark"] .page-shell .play-button > svg:first-child,
+.card-slot.is-chat[data-tone="dark"] .play-button > svg:first-child {
+  background: var(--n-accent, var(--accent));
+  color: #0c0b10;
+}
+:root[data-theme="dark"] .card-slot.is-chat[data-tone="light"] .play-button > svg:first-child {
+  background: var(--accent);
+  color: #fff;
+}
+.page-shell .friend-notice {
+  background: var(--s-solid);
+  color: var(--bb-sub);
+}
+.page-shell[data-phase] .composer {
+  background: var(--s-card);
+  box-shadow: inset 0 0 0 1px var(--s-card-line);
+}
+.page-shell .composer textarea {
+  color: var(--bb-ink);
+}
+.page-shell .composer textarea::placeholder {
+  color: var(--bb-sub);
+}
+.page-shell .send-button {
+  background: var(--s-out);
+  color: var(--s-out-fg);
+}
+.page-shell .send-button:disabled {
+  opacity: 0.4;
+}
+.page-shell .card-slot.is-chat .chat-body {
+  color: var(--bb-ink);
+}
+
+/* ---- the chat's own colour: the character's aura by default, or the player's colour (--chat-tint-*), remembered per character ---- */
+:root[data-theme="dark"] .page-shell .card-slot.is-chat .card-shell {
+  background:
+    radial-gradient(70% 30% at 8% 12%, color-mix(in srgb, var(--n-aura-1) 35%, transparent) 0%, transparent 70%),
+    radial-gradient(80% 35% at 30% 100%, color-mix(in srgb, var(--n-aura-3) 40%, transparent) 0%, transparent 70%),
+    var(--bb-paper);
+}
+.page-shell .card-slot.is-chat.has-chat-bg .card-shell {
+  background: radial-gradient(80% 40% at 15% 8%, rgba(255, 255, 255, 0.55) 0%, transparent 70%), var(--chat-tint-day);
+  transition: background-color 320ms ease;
+}
+:root[data-theme="dark"] .page-shell .card-slot.is-chat.has-chat-bg .card-shell {
+  background: radial-gradient(80% 40% at 15% 8%, rgba(255, 255, 255, 0.07) 0%, transparent 70%), var(--chat-tint-night);
+}
+
+/* ---- the guest's line: light and centred in the chat area, not above the input (Part 26a's words, Part 25b's place) ---- */
+.page-shell .card-slot.is-chat .card-shell > .guest-note:not([hidden]) {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  top: calc(76px + env(safe-area-inset-top));
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  display: grid;
+  place-content: center;
+  padding: 0 36px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--bb-sub);
+  pointer-events: none;
+}
+.page-shell .card-slot.is-chat .guest-note-link {
+  pointer-events: auto;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--bb-ink);
+  font-weight: 700;
+}
+
+.page-shell .card-slot.is-chat .chat-body {
+  transition: padding-top 240ms var(--bb-ease);
+}
+/* The one-time guide hangs under the header (about 70 px): the chat's first line waits below it. */
+.page-shell .card-slot.is-chat .chat-head.has-guide ~ .chat-body {
+  padding-top: 84px;
+}
+
+/* 获得点数 (Part 24c) in the 25b colours: a small bottom sheet sized to its content, a soft accent button; night follows the tokens. */
+.earn-sheet .mp-panel {
+  gap: 14px;
+}
+.earn-line {
+  color: var(--bb-ink);
+}
+.mi-small.mi-earn {
+  background: #a9cdfb;
+  color: #0f3c7c;
+  font-weight: 700;
+}
+.earn-sheet .earn-go {
+  background: #a9cdfb;
+  color: #0f3c7c;
+}
+:root[data-theme="dark"] .mi-small.mi-earn,
+:root[data-theme="dark"] .earn-sheet .earn-go {
+  background: #5aa2ff;
+  color: #07162e;
+}
+
+/* ---- ⋯ menu in night ---- */
+.chat-menu {
+  background: var(--s-solid);
+}
+.chat-menu-item {
+  color: var(--bb-ink);
+}
+.chat-menu-sub {
+  color: var(--bb-sub);
+}
+:root[data-theme="dark"] .chat-menu-item:hover:not(:disabled),
+:root[data-theme="dark"] .chat-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ---- 外观: the sheet that changes the chat's background and the frame of your avatar (it is the model sheet's frame) ---- */
+.look-section {
+  display: grid;
+  gap: 10px;
+}
+.look-label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bb-sub);
+}
+.look-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.look-swatch,
+.look-frame {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    transform 160ms var(--bb-ease),
+    box-shadow 200ms ease;
+}
+.look-swatch {
+  background: var(--swatch-day);
+  box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.12);
+}
+:root[data-theme="dark"] .look-swatch {
+  background: var(--swatch-night);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.look-default {
+  background: conic-gradient(from 200deg, #ffb295, #bba4ff, #97c8f5, #ffb295);
+}
+:root[data-theme="dark"] .look-default {
+  background: conic-gradient(from 200deg, #ff6a3d, #6a3dff, #23d5c4, #ff6a3d);
+}
+.look-custom {
+  background: conic-gradient(from 0deg, #ff7a7a, #ffd36e, #8fe3a3, #7ab8ff, #c59bff, #ff7a7a) padding-box;
+  overflow: hidden;
+}
+:root .look-custom:not(.is-on) {
+  background: conic-gradient(from 0deg, #ff7a7a, #ffd36e, #8fe3a3, #7ab8ff, #c59bff, #ff7a7a);
+}
+.look-custom.is-on {
+  background: var(--swatch-day);
+}
+:root[data-theme="dark"] .look-custom.is-on {
+  background: var(--swatch-night);
+}
+.look-color {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.look-swatch.is-on,
+.look-frame.is-on {
+  box-shadow:
+    0 0 0 2px var(--bb-paper),
+    0 0 0 4px var(--bb-ink);
+}
+.look-swatch:active,
+.look-frame:active {
+  transform: scale(0.94);
+}
+.look-swatch:focus-visible,
+.look-frame:focus-visible,
+.look-custom:focus-within {
+  outline: 3px solid var(--bb-ink);
+  outline-offset: 3px;
+}
+.look-frame {
+  background: transparent;
+}
+.look-frame-demo {
+  width: 40px;
+  height: 40px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background:
+    linear-gradient(140deg, var(--own-f1), var(--own-f2)) padding-box,
+    conic-gradient(from 200deg, var(--own-a), var(--own-b), var(--own-c), var(--own-a)) border-box;
+  box-shadow: inset 0 0 0 1.5px var(--bb-paper);
+  color: #141414;
+  font-size: 14px;
+  font-weight: 900;
+}
+.look-sheet .mp-panel {
+  gap: 18px;
+}
+
+/* ---- phone: opening a chat. The card grows to fill the screen; the top bar lifts away and the avatar row and the note drop
+   away with a fade, where they used to vanish at once; going back reverses it ---- */
+@media (max-width: 600px) {
+  .page-shell .site-head,
+  .page-shell .avatar-nav,
+  .page-shell .preview-note {
+    transition:
+      opacity 240ms ease,
+      transform 360ms var(--bb-ease),
+      visibility 0s;
+  }
+  .page-shell[data-phase="chat"] .site-head,
+  .page-shell[data-phase="expanding"] .site-head {
+    display: grid;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(-12px);
+    pointer-events: none;
+    transition:
+      opacity 240ms ease,
+      transform 360ms var(--bb-ease),
+      visibility 0s 360ms;
+  }
+  .page-shell[data-phase="chat"] .avatar-nav,
+  .page-shell[data-phase="expanding"] .avatar-nav,
+  .page-shell[data-phase="collapsing"] .avatar-nav {
+    display: block;
+    visibility: hidden;
+    opacity: 0;
+    transform: translateY(24px);
+    pointer-events: none;
+    transition:
+      opacity 240ms ease,
+      transform 360ms var(--bb-ease),
+      visibility 0s 360ms;
+  }
+  .page-shell[data-phase="chat"] .preview-note,
+  .page-shell[data-phase="expanding"] .preview-note {
+    display: block;
+    visibility: hidden;
+    opacity: 0;
+    transition:
+      opacity 240ms ease,
+      visibility 0s 240ms;
+  }
+  .page-shell[data-phase="chat"] .card-slot.is-chat,
+  .page-shell[data-phase="expanding"] .card-slot.is-chat {
+    position: fixed;
+    left: var(--chat-left, 50%);
+    top: var(--chat-top, 50%);
+    width: var(--chat-width, 100vw);
+    height: var(--chat-height, 100dvh);
+    min-height: 0;
+    max-width: none;
+    border-radius: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .page-shell[data-phase="chat"] .card-slot.is-chat .card-shell,
+  .page-shell[data-phase="expanding"] .card-slot.is-chat .card-shell {
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .page-shell[data-phase="chat"] .composer,
+  .page-shell[data-phase="expanding"] .composer {
+    padding-bottom: 5px;
+  }
+  html.chat-open,
+  html.chat-open body,
+  html.chat-open #app {
+    background: var(--bb-paper);
+  }
+  .page-shell[data-phase="chat"],
+  .page-shell[data-phase="expanding"] {
+    background: var(--bb-paper);
+  }
+}
+
+/* ---- sheets: the account sheets slide up like the model and 共创 sheets, with a small settle (Motion board, 360 ms) ---- */
+@keyframes bb-sheet {
+  from {
+    transform: translateY(100%) rotate(1deg);
+  }
+  70% {
+    transform: translateY(-1.5%) rotate(-0.3deg);
+  }
+  to {
+    transform: none;
+  }
+}
+.acct-sheet:not(.mp-sheet),
+.mi-sheet {
+  transform-origin: 50% 100%;
+  animation: bb-sheet 360ms var(--bb-ease) backwards;
+}
+
+/* ---- 我的信息 in soft colours: a tinted points card and soft accent buttons instead of black and white ---- */
+.mi-sheet {
+  color: var(--bb-ink);
+}
+.mi-quota-card {
+  background: linear-gradient(160deg, #cfe3ff 0%, #d4f3e6 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.85);
+}
+.mi-pill {
+  background: rgba(47, 123, 234, 0.14);
+  color: #1d5ec0;
+}
+.mi-chip {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--bb-ink);
+}
+.mi-daily {
+  color: #3d5a80;
+}
+.mi-meter {
+  background: rgba(47, 123, 234, 0.14);
+}
+.mi-pillbtn {
+  border-color: transparent;
+  background: rgba(47, 123, 234, 0.12);
+  color: #1d4f9a;
+}
+.mi-pillbtn.is-main {
+  background: #a9cdfb;
+  color: #0f3c7c;
+}
+.mi-small.acct-primary {
+  background: #a9cdfb;
+  color: #0f3c7c;
+  font-weight: 700;
+}
+.mi-small {
+  border-color: transparent;
+  background: rgba(47, 123, 234, 0.1);
+  color: #1d4f9a;
+}
+.mi-section,
+.mi-logout {
+  background: var(--s-soft);
+}
+.mi-row,
+.mi-link {
+  border-bottom-color: var(--s-hair);
+}
+.mi-key,
+.mi-signup-first,
+.mi-danger .acct-danger {
+  color: var(--bb-sub);
+}
+.mi-logout {
+  color: #a23b52;
+}
+.mi-theme {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--s-soft);
+}
+.mi-theme-pill {
+  min-height: 40px;
+  padding: 0 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bb-sub);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  transition:
+    background 240ms ease,
+    color 240ms ease,
+    transform 160ms var(--bb-ease);
+}
+.mi-theme-pill.is-on {
+  background: #a9cdfb;
+  color: #0f3c7c;
+  font-weight: 700;
+}
+.mi-theme-pill:active {
+  transform: scale(0.97);
+}
+.mi-theme-pill:has(input:focus-visible) {
+  outline: 3px solid var(--bb-ink);
+  outline-offset: 2px;
+}
+
+/* ---- night: sheets, forms, dialogs ---- */
+.acct-sheet,
+.mi-sheet,
+.bl-sheet,
+.mp-panel,
+.cc-sheet,
+.invite-dialog {
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .acct-sheet:not(.mp-sheet),
+:root[data-theme="dark"] .mi-sheet {
+  background:
+    radial-gradient(60% 28% at 12% 10%, rgba(255, 106, 61, 0.22) 0%, transparent 70%),
+    radial-gradient(55% 28% at 92% 22%, rgba(47, 107, 255, 0.22) 0%, transparent 70%),
+    radial-gradient(70% 30% at 40% 100%, rgba(139, 92, 255, 0.24) 0%, transparent 70%), var(--bb-paper);
+}
+:root[data-theme="dark"] .mi-sheet {
+  background:
+    radial-gradient(70% 30% at 10% 12%, rgba(47, 107, 255, 0.24) 0%, transparent 70%),
+    radial-gradient(60% 30% at 95% 40%, rgba(35, 213, 196, 0.16) 0%, transparent 70%), var(--bb-paper);
+}
+:root[data-theme="dark"] .bl-sheet {
+  background:
+    radial-gradient(70% 30% at 10% 10%, rgba(139, 92, 255, 0.24) 0%, transparent 70%),
+    radial-gradient(60% 30% at 95% 40%, rgba(255, 79, 184, 0.16) 0%, transparent 70%), var(--bb-paper);
+}
+:root[data-theme="dark"] .mp-panel {
+  background:
+    radial-gradient(
+      70% 35% at 10% 15%,
+      color-mix(in srgb, var(--n-aura-1, #2f6bff) 30%, transparent) 0%,
+      transparent 70%
+    ),
+    var(--bb-paper);
+}
+:root[data-theme="dark"] .cc-sheet {
+  background:
+    radial-gradient(70% 30% at 10% 10%, color-mix(in srgb, var(--accent, #8b5cff) 26%, transparent) 0%, transparent 70%),
+    radial-gradient(
+      80% 35% at 30% 100%,
+      color-mix(in srgb, var(--accent, #8b5cff) 18%, transparent) 0%,
+      transparent 70%
+    ),
+    var(--bb-paper);
+}
+:root[data-theme="dark"] .mp-sheet,
+:root[data-theme="dark"] .invite-dialog::backdrop {
+  background: var(--s-dim);
+}
+:root[data-theme="dark"] .mp-sheet {
+  background: var(--s-dim);
+}
+:root[data-theme="dark"] .mp-grip {
+  background: rgba(255, 255, 255, 0.24);
+}
+:root[data-theme="dark"] .acct-close {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--bb-ink);
+}
+/* The back chevron and the eye are dark line drawings (data URIs): turned light for night; the chevron has no disc. */
+:root[data-theme="dark"] .mi-sheet .acct-close,
+:root[data-theme="dark"] .bl-sheet .acct-close {
+  background-color: transparent;
+  filter: invert(1);
+}
+:root[data-theme="dark"] .acct-reveal {
+  filter: invert(1);
+}
+:root[data-theme="dark"] .acct-form,
+:root[data-theme="dark"] .mp-confirm-box:not(:empty) {
+  background: var(--s-card);
+}
+:root[data-theme="dark"] .acct-input,
+:root[data-theme="dark"] .acct-pw {
+  background: var(--s-input);
+  border-color: var(--s-line);
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .acct-pw .acct-input {
+  background: transparent;
+}
+:root[data-theme="dark"] .mi-small:not(.acct-primary),
+:root[data-theme="dark"] .mp-back {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: transparent;
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .acct-primary {
+  background: var(--s-out);
+  color: var(--s-out-fg);
+}
+:root[data-theme="dark"] .acct-link,
+:root[data-theme="dark"] .acct-intro,
+:root[data-theme="dark"] .acct-label,
+:root[data-theme="dark"] .acct-legal {
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .mp-card,
+:root[data-theme="dark"] .mp-balance {
+  background: var(--s-card);
+  box-shadow: inset 0 0 0 1px var(--s-card-line);
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .mp-card.is-current {
+  box-shadow: inset 0 0 0 2px var(--bb-ink);
+}
+:root[data-theme="dark"] .mp-card.is-picked {
+  box-shadow:
+    inset 0 0 0 2px var(--n-accent, var(--accent)),
+    0 10px 24px rgba(0, 0, 0, 0.4);
+}
+:root[data-theme="dark"] .mp-tag {
+  background: var(--bb-ink);
+  color: var(--bb-paper);
+}
+:root[data-theme="dark"] .mp-chip {
+  color: #141414;
+}
+:root[data-theme="dark"] .mi-quota-card {
+  background: linear-gradient(160deg, rgba(47, 107, 255, 0.28) 0%, rgba(35, 213, 196, 0.16) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+:root[data-theme="dark"] .mi-pill {
+  background: rgba(90, 162, 255, 0.22);
+  color: #a9ceff;
+}
+:root[data-theme="dark"] .mi-chip {
+  background: rgba(255, 255, 255, 0.12);
+}
+:root[data-theme="dark"] .mi-daily {
+  color: #b8c9e6;
+}
+:root[data-theme="dark"] .mi-meter {
+  background: rgba(255, 255, 255, 0.12);
+}
+:root[data-theme="dark"] .mi-fill {
+  background: linear-gradient(90deg, #5aa2ff, #23d5c4);
+}
+:root[data-theme="dark"] .mi-pillbtn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cfe2ff;
+}
+:root[data-theme="dark"] .mi-pillbtn.is-main,
+:root[data-theme="dark"] .mi-small.acct-primary,
+:root[data-theme="dark"] .mi-theme-pill.is-on {
+  background: #5aa2ff;
+  color: #07162e;
+}
+:root[data-theme="dark"] .mi-logout {
+  color: #ff9db1;
+}
+:root[data-theme="dark"] .cc-sheet .cc-close {
+  background: rgba(255, 255, 255, 0.12);
+}
+/* The 共创 cards are pastel in the character's colours in both themes: their words stay dark. */
+:root[data-theme="dark"] .cc-sheet .cc-card {
+  --bb-ink: #141414;
+  --bb-sub: #4a4a4a;
+  color: #141414;
+}
+:root[data-theme="dark"] .cc-sheet .cc-bubble-in .cc-area {
+  background: var(--s-card);
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .cc-sheet .cc-bubble-out .cc-area,
+:root[data-theme="dark"] .cc-sheet .cc-send {
+  background: var(--s-out);
+  color: var(--s-out-fg);
+}
+:root[data-theme="dark"] .bl-tables,
+:root[data-theme="dark"] .bl-list {
+  background: var(--s-card);
+}
+:root[data-theme="dark"] .bl-row::before {
+  background: linear-gradient(140deg, #3a3450, #2a2638);
+}
+:root[data-theme="dark"] .bl-row.is-bonus::before,
+:root[data-theme="dark"] .bl-row.is-grant::before,
+:root[data-theme="dark"] .bl-row.is-cocreation_note::before,
+:root[data-theme="dark"] .bl-row.is-cocreation_adopted::before,
+:root[data-theme="dark"] .bl-row.is-daily_refill::before,
+:root[data-theme="dark"] .bl-row.is-reset::before {
+  background: rgba(127, 227, 163, 0.18);
+  color: #7fe3a3;
+}
+:root[data-theme="dark"] .bl-sub {
+  color: var(--bb-sub);
+}
+:root[data-theme="dark"] .bl-row.is-bonus .bl-points,
+:root[data-theme="dark"] .bl-row.is-grant .bl-points,
+:root[data-theme="dark"] .bl-row.is-cocreation_note .bl-points,
+:root[data-theme="dark"] .bl-row.is-cocreation_adopted .bl-points,
+:root[data-theme="dark"] .bl-row.is-daily_refill .bl-points {
+  color: #7fe3a3;
+}
+:root[data-theme="dark"] .invite-dialog {
+  background: var(--s-solid);
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .invite-dialog input {
+  background: var(--s-input);
+  color: var(--bb-ink);
+  border-color: var(--bb-ink);
+}
+:root[data-theme="dark"] .invite-actions button:not([type="submit"]) {
+  background: transparent;
+  color: var(--bb-ink);
+  border-color: var(--s-line);
+}
+:root[data-theme="dark"] .invite-actions button[type="submit"],
+:root[data-theme="dark"] .invite-signup-button {
+  background: var(--s-out);
+  color: var(--s-out-fg);
+}
+:root[data-theme="dark"] html:has(.signed-out-page),
+:root[data-theme="dark"]:has(.signed-out-page) {
+  background:
+    radial-gradient(60% 28% at 12% 10%, rgba(255, 106, 61, 0.22) 0%, transparent 70%),
+    radial-gradient(55% 28% at 92% 22%, rgba(47, 107, 255, 0.22) 0%, transparent 70%),
+    radial-gradient(70% 30% at 40% 100%, rgba(139, 92, 255, 0.24) 0%, transparent 70%), var(--bb-paper) !important;
+}
+:root[data-theme="dark"] .signed-out-page,
+:root[data-theme="dark"] .signed-out-legal a {
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .signed-out-page .signed-out-actions::before {
+  background: var(--s-card);
+  box-shadow: inset 0 0 0 1px var(--s-card-line);
+}
+:root[data-theme="dark"] .signed-out-page .signed-out-actions > button:nth-child(1) {
+  background: var(--s-out);
+  color: var(--s-out-fg);
+}
+:root[data-theme="dark"] .signed-out-page .signed-out-actions > button:not(:nth-child(1)) {
+  color: var(--bb-ink);
+}
+
+/* ---- the shared voice 小卡: what a person lands on when a card is sent to them ---- */
+.shared-page {
+  min-height: 100dvh;
+  max-width: 460px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  color: var(--bb-ink);
+}
+.shared-page {
+  position: relative;
+  isolation: isolate;
+}
+/* The card's aura paints the whole window behind the page (the custom properties live on the page, not on <html>). */
+.shared-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 35% at 10% 15%, var(--aura-1) 0%, transparent 70%),
+    radial-gradient(60% 35% at 95% 50%, var(--aura-2) 0%, transparent 70%),
+    radial-gradient(80% 40% at 30% 100%, var(--aura-3) 0%, transparent 70%);
+}
+.shared-head {
+  height: 56px;
+  flex: none;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.shared-hand {
+  height: 34px;
+  color: var(--bb-ink);
+}
+.shared-what {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--bb-ink);
+}
+.shared-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 20px 12px;
+}
+.shared-sticker {
+  position: relative;
+  z-index: 2;
+  margin: 0 0 -12px;
+  padding: 8px 14px;
+  border-radius: 4px;
+  background: #fff;
+  color: #141414;
+  font-size: 14px;
+  font-weight: 700;
+  transform: rotate(-3deg);
+  box-shadow: 0 6px 16px rgba(40, 24, 60, 0.12);
+  animation: bb-pop 300ms var(--bb-ease) backwards;
+}
+.shared-sticker::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  width: 54px;
+  height: 16px;
+  background: var(--accent, #bba4ff);
+  opacity: 0.55;
+  transform: translateX(-50%) rotate(-4deg);
+}
+.shared-card {
+  width: min(286px, 100%);
+  aspect-ratio: 286 / 452;
+  max-height: 100%;
+  padding: 7px;
+  border-radius: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 24px 60px rgba(40, 24, 60, 0.2);
+  transform: rotate(2deg);
+  animation: bb-in 420ms var(--bb-ease) 80ms backwards;
+}
+.shared-face {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 18px 16px;
+  border-radius: 23px;
+  overflow: hidden;
+  background: linear-gradient(165deg, var(--aura-3) 0%, var(--aura-1) 45%, #fff 100%);
+  color: #141414;
+}
+.shared-face::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: soft-light;
+  background: linear-gradient(
+    115deg,
+    transparent 28%,
+    rgba(255, 255, 255, 0.6) 42%,
+    rgba(255, 210, 246, 0.5) 48%,
+    rgba(186, 236, 255, 0.5) 54%,
+    transparent 68%
+  );
+}
+.shared-top,
+.shared-foot {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--bb-mono);
+  letter-spacing: 0.06em;
+}
+.shared-top {
+  font-size: 11px;
+}
+.shared-foot {
+  padding-top: 10px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #4a4a4a;
+}
+.shared-who {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.shared-name {
+  font-size: 76px;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  white-space: nowrap;
+}
+.shared-latin {
+  height: 44px;
+  color: #141414;
+}
+.shared-quote {
+  position: relative;
+  margin: 0 0 14px;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.shared-play {
+  position: relative;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 54px;
+  padding: 0 14px 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(40, 24, 60, 0.1);
+  color: #141414;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 160ms var(--bb-ease);
+}
+.shared-play:disabled {
+  cursor: default;
+}
+.shared-play:not(:disabled):active {
+  transform: scale(0.98);
+}
+.shared-play-dot {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent, #7c4deb);
+  color: #fff;
+}
+.shared-play-dot svg {
+  width: 16px;
+  height: 16px;
+}
+.shared-wave {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  color: rgba(20, 20, 20, 0.22);
+}
+.shared-dur {
+  font-family: var(--bb-mono);
+  font-size: 11px;
+  color: #4a4a4a;
+}
+.shared-actions {
+  flex: none;
+  padding: 0 20px max(14px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.shared-cta {
+  width: 100%;
+  max-width: 300px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--s-out);
+  color: var(--s-out-fg);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 160ms var(--bb-ease);
+}
+.shared-cta::after {
+  content: "→";
+  margin-left: 8px;
+}
+.shared-cta:active {
+  transform: scale(0.98);
+}
+.shared-hint {
+  font-size: 13px;
+  color: var(--bb-sub);
+}
+:root[data-theme="dark"] .shared-page::before {
+  background:
+    radial-gradient(70% 35% at 10% 15%, color-mix(in srgb, var(--n-aura-1) 35%, transparent) 0%, transparent 70%),
+    radial-gradient(80% 40% at 30% 100%, color-mix(in srgb, var(--n-aura-3) 40%, transparent) 0%, transparent 70%);
+}
+:root[data-theme="dark"] .shared-face {
+  background: linear-gradient(165deg, var(--n-aura-3) 0%, #1c1724 52%, #110f16 100%);
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .shared-latin {
+  color: var(--n-accent);
+}
+:root[data-theme="dark"] .shared-foot,
+:root[data-theme="dark"] .shared-dur {
+  color: #d9d5e2;
+}
+:root[data-theme="dark"] .shared-card {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+:root[data-theme="dark"] .shared-play {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  color: var(--bb-ink);
+}
+:root[data-theme="dark"] .shared-play-dot {
+  background: var(--n-accent);
+  color: #0c0b10;
+}
+:root[data-theme="dark"] .shared-wave {
+  color: rgba(255, 255, 255, 0.24);
+}
+:root[data-theme="dark"] .shared-sticker {
+  background: #f5f3f7;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .aura,
   .card-face,
@@ -11837,6 +13121,7 @@ html:has(.signed-out-page) {
   .page-shell .message-row,
   .card-slot.is-chat :is(.chat-head, .chat-body, .composer),
   .acct-sheet,
+  .acct-sheet:not(.mp-sheet),
   .mi-sheet,
   .mi-section,
   .mi-fill,
@@ -11850,7 +13135,9 @@ html:has(.signed-out-page) {
   .bl-tables,
   .bl-row,
   .cc-sheet,
-  .cc-sheet .cc-editor {
+  .cc-sheet .cc-editor,
+  .shared-sticker,
+  .shared-card {
     animation: none;
   }
 }

@@ -1,10 +1,14 @@
 /** The visual shell: a carousel of the characters the server's catalog lists, every chat driven by the live binding. */
 import { orbitStyle, ringOffset } from './orbit.js';
 import { appendLegalLinks, footerNote } from './legal-links.ts';
-import { followChatViewport, swipeStep } from './mobile-layout.js';
+import { followChatViewport, stackCardWidth, swipeStep } from './mobile-layout.js';
 import type { LiveBinding } from './provider-binding.js';
 import { providerPeople, escapeCardText, type Person } from './provider-catalog-view.js';
-import { handSvg, wordmarkSvg } from '../brand/wordmark.js';
+import { wordmarkSvg } from '../brand/wordmark.js';
+import { characterFrame, playerFrame, setFrameProperties } from '../brand/avatar-frame.ts';
+import { playerPrefs } from '../prefs/player-prefs.ts';
+import { applyChatBackground } from './chat-look.ts';
+import { cardFace } from './card-face.ts';
 
 type Phase = 'browse' | 'hover' | 'expanding' | 'chat' | 'collapsing';
 
@@ -19,31 +23,6 @@ const icon = (name: 'sound' | 'back' | 'send' | 'play' | 'more') => {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name]}</svg>`;
 };
 
-/** The page's paper; the character's aura is painted over it by `.aura-stack`, never mixed into it (Part 25a). */
-const PAPER = '#FAF8F6';
-
-/** Part 25a: the front of the 小卡 — shown while the card is a card, faded out when it becomes the chat. Decoration only. */
-function cardFace(person: Person, configured: boolean) {
-  if (!configured)
-    return `<div class="card-face face-reserve" aria-hidden="true">
-      <div class="face-top"><span>burbur</span><span>No.${person.card.no}</span></div>
-      <div class="face-main face-empty">${handSvg('?', { size: 120, weight: 1.6, label: null, className: 'hand face-question' })}<span class="face-empty-text">新朋友还未到来</span></div>
-    </div>`;
-  const line = person.transcript
-    ? `<div class="face-voice"><span class="face-play"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span><span class="face-line">${escapeCardText(person.transcript)}</span></div>`
-    : '';
-  return `<div class="card-face" aria-hidden="true">
-      <div class="face-top"><span>burbur</span><span>No.${person.card.no}</span></div>
-      <div class="face-main"><span class="face-name">${escapeCardText(person.name)}</span>${
-        person.card.latin
-          ? handSvg(person.card.latin, { size: 44, weight: 1.9, label: null, className: 'hand face-latin' })
-          : ''
-      }</div>
-      ${line}
-      <i class="face-sheen"></i>
-    </div>`;
-}
-
 function createCard(person: Person) {
   const name = escapeCardText(person.name),
     mark = escapeCardText(person.mark);
@@ -56,8 +35,8 @@ function createCard(person: Person) {
     <div class="card-shell">
       <div class="chat-head">
         <button class="back-button icon-button" type="button" aria-label="返回人物浏览">${icon('back')}</button>
-        <strong role="status" aria-live="polite">${name}</strong>
-        ${configured ? `<button class="chat-more icon-button" type="button" aria-label="更多" aria-haspopup="menu" aria-expanded="false">${icon('more')}</button>` : ''}
+        <div class="chat-title"><span class="avatar chat-mark" aria-hidden="true">${mark}</span><strong role="status" aria-live="polite">${name}</strong></div>
+        ${configured ? `<button class="chat-more icon-button" type="button" aria-label="更多" aria-haspopup="menu" aria-expanded="false">${icon('more')}</button>` : '<span class="chat-head-gap" aria-hidden="true"></span>'}
       </div>
       <div class="chat-body" role="log" aria-label="${name}的消息">
         ${configured ? `<p class="friend-notice">${name}已添加了你，来打个招呼吧</p>` : ''}
@@ -91,6 +70,13 @@ function createCard(person: Person) {
   card.style.setProperty('--aura-2', aura2);
   card.style.setProperty('--aura-3', aura3);
   card.style.setProperty('--accent', accent);
+  // Part 25b: the same aura at night, and the avatar frame every avatar of this character wears (from its colour).
+  const [night1, night2, night3, nightAccent] = person.card.night;
+  card.style.setProperty('--n-aura-1', night1);
+  card.style.setProperty('--n-aura-2', night2);
+  card.style.setProperty('--n-aura-3', night3);
+  card.style.setProperty('--n-accent', nightAccent);
+  setFrameProperties(card, characterFrame(person.card.aura), 'frame');
   card.style.setProperty('--name-size', String(person.card.nameSize));
   card.style.setProperty('--avatar-bg', person.color);
   card.style.setProperty('--avatar-ink', person.ink);
@@ -126,6 +112,12 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   const cards = people.map((person) => createCard(person));
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   for (const card of cards) deck.append(card);
+  // Part 25b: what this player chose - a background for each chat, a frame for their own avatar - is applied from the start.
+  const prefs = playerPrefs();
+  setFrameProperties(page, playerFrame(prefs.frame), 'own');
+  people.forEach((person, index) => {
+    if (person.characterId) applyChatBackground(cards[index]!, prefs.chatBackground(person.characterId));
+  });
   let active = 7;
   let phase: Phase = 'browse';
   let dragStart: { x: number; y: number; pointerId: number } | undefined;
@@ -136,7 +128,7 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   let toastTimer = 0;
   const previousOffsets = new Map<HTMLElement, number>();
   const drafts = new Map<string, { value: string; start: number; end: number; scroll: number }>();
-  const cardWidth = () => (window.innerWidth <= 600 ? window.innerWidth - 32 : Math.min(376, window.innerWidth - 108));
+  const cardWidth = () => stackCardWidth(window.innerWidth);
 
   const say = (message: string) => {
     toast.textContent = message;
@@ -146,23 +138,28 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   };
   // Part 25a: one aura layer per character (and one for the empty slots). The page cross-fades between them; a drag blends the
   // two neighbours by how far the finger moved, like the solid colour did before.
+  // Part 25b: every character has a day layer and a night layer; the theme fades one stack out and the other in.
   const auraStack = root.querySelector<HTMLElement>('.aura-stack')!;
   const auraKey = (person: Person) => (person.characterId ? person.id : 'neutral');
-  const layers = new Map<string, HTMLElement>();
+  const layers = new Map<string, HTMLElement[]>();
+  const dayStack = document.createElement('div');
+  const nightStack = document.createElement('div');
+  dayStack.className = 'aura-set aura-day';
+  nightStack.className = 'aura-set aura-night';
+  auraStack.append(dayStack, nightStack);
   for (const person of people) {
     if (layers.has(auraKey(person))) continue;
-    const layer = document.createElement('div');
-    layer.className = 'aura';
-    const [aura1, aura2, aura3] = person.card.aura;
-    layer.style.setProperty('--aura-1', aura1);
-    layer.style.setProperty('--aura-2', aura2);
-    layer.style.setProperty('--aura-3', aura3);
-    auraStack.append(layer);
-    layers.set(auraKey(person), layer);
+    const pair = [person.card.aura, person.card.night].map((colours, i) => {
+      const layer = document.createElement('div');
+      layer.className = 'aura';
+      layer.style.setProperty('--aura-1', colours[0]);
+      layer.style.setProperty('--aura-2', colours[1]);
+      layer.style.setProperty('--aura-3', colours[2]);
+      (i === 0 ? dayStack : nightStack).append(layer);
+      return layer;
+    });
+    layers.set(auraKey(person), pair);
   }
-  page.style.setProperty('--page-bg', PAPER);
-  document.documentElement.style.backgroundColor = PAPER;
-  document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', PAPER);
   const updateBackground = (position = active) => {
     const n = people.length;
     const wrapped = ((position % n) + n) % n;
@@ -175,7 +172,7 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
       add(people[lower]!, 1 - (wrapped - lower));
       add(people[next]!, wrapped - lower);
     }
-    for (const [key, layer] of layers) layer.style.opacity = String(weight.get(key) ?? 0);
+    for (const [key, pair] of layers) for (const layer of pair) layer.style.opacity = String(weight.get(key) ?? 0);
   };
   const saveEditor = (index: number) => {
     const textarea = cards[index]!.querySelector('textarea')!;
@@ -200,6 +197,7 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     const chatting = phase === 'expanding' || phase === 'chat' || phase === 'collapsing';
     document.documentElement.classList.toggle('chat-open', chatting);
     const mobile = window.innerWidth <= 600;
+    page.style.setProperty('--card-w', `${cardWidth()}px`);
     nav.inert = chatting;
     nav.setAttribute('aria-hidden', String(chatting));
     // Part 25a: a card in front of another is solid and nothing shows through it. Only the three nearest cards on each side are
@@ -248,10 +246,8 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
         index === active && (phase === 'expanding' || phase === 'chat' || phase === 'collapsing'),
       );
       const hidden = chatting;
-      const inaccessible =
-        ((hidden || window.innerWidth <= 600) && index !== active) ||
-        (!hidden && Math.abs(offset) > 2) ||
-        hiddenSlots.has(index);
+      // Part 25b: a phone shows the same stack as the desktop, so its neighbours are reachable too (a tap turns to them).
+      const inaccessible = (hidden && index !== active) || (!hidden && Math.abs(offset) > 2) || hiddenSlots.has(index);
       card.inert = inaccessible;
       card.setAttribute('aria-hidden', inaccessible ? 'true' : 'false');
       const reply = card.querySelector<HTMLTextAreaElement>('textarea')!;
@@ -367,6 +363,10 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     button.style.setProperty('--aura-1', aura1);
     button.style.setProperty('--aura-2', aura2);
     button.style.setProperty('--aura-3', aura3);
+    const [night1, night2, night3] = person.card.night;
+    button.style.setProperty('--n-aura-1', night1);
+    button.style.setProperty('--n-aura-2', night2);
+    button.style.setProperty('--n-aura-3', night3);
     button.addEventListener('click', () => switchTo(index));
     nav.append(button);
   });
@@ -398,7 +398,8 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
         if (index !== active && (phase === 'browse' || phase === 'hover')) {
           event.stopPropagation();
           switchTo(index);
-          openChat(event.target instanceof Element && !!event.target.closest('textarea'));
+          // On a phone a tap on a neighbour only turns to it (the card is then in front); on a desktop it also opens the chat.
+          if (window.innerWidth > 600) openChat(event.target instanceof Element && !!event.target.closest('textarea'));
           return;
         }
         if (event.target instanceof Element && event.target.closest('button,textarea')) return;
@@ -417,11 +418,16 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
       if (phase === 'hover') phase = 'browse';
     });
     card.querySelector<HTMLButtonElement>('.back-button')!.addEventListener('click', closeChat);
-    card.querySelector<HTMLButtonElement>('.play-button')?.addEventListener('click', () => {
+    const playWelcome = (button: HTMLElement) => () => {
       const characterId = people[index]!.characterId;
-      if (characterId) live.playWelcome(characterId);
+      if (characterId) live.playWelcome(characterId, button);
       else say('这段语音暂时无法播放');
-    });
+    };
+    // The pill on the card and the bubble in the chat play the same welcome; neither opens or closes anything.
+    for (const selector of ['.play-button', '.face-voice']) {
+      const button = card.querySelector<HTMLButtonElement>(selector);
+      button?.addEventListener('click', playWelcome(button));
+    }
     transcriptButton?.addEventListener('click', () => {
       if (!transcript) return;
       const visible = transcript.hidden;

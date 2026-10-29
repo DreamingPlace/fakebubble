@@ -31,6 +31,11 @@
       "reason": "Proactive-message code is out of scope for Part 22x and is wired in a later Part."
     },
     {
+      "file": "apps/player-web/src/features/share/shared-card.ts",
+      "names": ["renderSharedCard"],
+      "reason": "The page a shared voice 小卡 opens on (Part 25b, Shared board). The share link and its data are the share feature's own Part; the page, its tests and its review screenshots exist now."
+    },
+    {
       "file": "apps/player-web/src/features/cocreation/chat-guide.ts",
       "names": ["resetChatGuide"],
       "reason": "Test seam: resets module state between component tests (model-picker.test.ts)."

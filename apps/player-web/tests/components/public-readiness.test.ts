@@ -501,16 +501,18 @@ const topMenu = (f: ReturnType<typeof chat>, label?: string) => {
     .filter((b) => b.textContent !== '×');
 };
 const labelsOfButtons = (items: FakeElement[]) => items.map((item) => item.textContent);
+// Part 25b (named exception): the chat's ⋯ menu gains 外观 (the chat's background colour and the player's avatar frame; the owner asked
+// for them in this menu), always last. The lists below that named 共创 (and 切换回复模型) now end with 外观; nothing else in the menu changed.
 test('menu: 删除我的账号 / 清除本设备的体验数据 exist only when the server says account deletion is on', async (t) => {
   const off = chat(t, login);
   await off.attach();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titles(off.menu()), ['一起共创角色']);
+  assert.deepEqual(titles(off.menu()), ['一起共创角色', '外观']);
   assert.deepEqual(labelsOfButtons(topMenu(off)), ['修改', '输入邀请码', '修改密码', '退出其他设备', '退出登录']);
   const on = chat(t, { ...login, features: { accountDelete: true } });
   await on.attach();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titles(on.menu()), ['一起共创角色']);
+  assert.deepEqual(titles(on.menu()), ['一起共创角色', '外观']);
   const items = topMenu(on);
   assert.deepEqual(labelsOfButtons(items), [
     '修改',
@@ -526,14 +528,14 @@ test('menu: 删除我的账号 / 清除本设备的体验数据 exist only when 
   const guestOff = chat(t, { signupEnabled: true, signedIn: false });
   await guestOff.attach();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titles(guestOff.menu()), ['一起共创角色']);
+  assert.deepEqual(titles(guestOff.menu()), ['一起共创角色', '外观']);
   // Part 21i (named exception): 更多 now always exists for a guest and holds 消费记录; deletion only adds 清除.
   assert.equal(guestOff.header.querySelectorAll('.head-more').length, 1);
   assert.deepEqual(labelsOfButtons(topMenu(guestOff, '我的信息')), ['消费记录', '输入邀请码', '注册', '登录']);
   const guest = chat(t, { signupEnabled: true, signedIn: false, features: { accountDelete: true } });
   await guest.attach();
   // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
-  assert.deepEqual(titles(guest.menu()), ['一起共创角色']);
+  assert.deepEqual(titles(guest.menu()), ['一起共创角色', '外观']);
   const guestItems = topMenu(guest, '我的信息');
   assert.deepEqual(labelsOfButtons(guestItems), ['消费记录', '输入邀请码', '注册', '登录', '清除本设备的体验数据']);
   guestItems[4]!.click();
