@@ -12155,6 +12155,14 @@ html.theme-fade *::after {
   font-weight: 700;
 }
 
+.page-shell .card-slot.is-chat .chat-body {
+  transition: padding-top 240ms var(--bb-ease);
+}
+/* The one-time guide hangs under the header (about 70 px): the chat's first line waits below it. */
+.page-shell .card-slot.is-chat .chat-head.has-guide ~ .chat-body {
+  padding-top: 84px;
+}
+
 /* ---- ⋯ menu in night ---- */
 .chat-menu {
   background: var(--s-solid);

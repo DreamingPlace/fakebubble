@@ -134,7 +134,11 @@ export function openModelPicker(options: ModelPickerOptions) {
     opener?.focus?.();
   };
   function onKey(event: Event) {
-    if ((event as KeyboardEvent).key === 'Escape') close();
+    if ((event as KeyboardEvent).key === 'Escape') {
+      // Escape closes the sheet, not the chat behind it (Part 25b).
+      event.stopPropagation?.();
+      close();
+    }
   }
 
   const list = (picked?: PlayerModelId) => {

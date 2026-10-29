@@ -18,6 +18,8 @@ import { derivePalette, nightAura } from '../../src/features/brand/character-col
 import { PREFS_KEY, PlayerPrefs, parsePrefs } from '../../src/features/prefs/player-prefs.ts';
 import { PAPER, resolveTheme, startTheme } from '../../src/features/prefs/theme.ts';
 import { applyChatBackground, openLookSheet } from '../../src/features/prototype/chat-look.ts';
+import { mountChatGuide, GUIDE_KEY } from '../../src/features/cocreation/chat-guide.ts';
+import { openModelPicker } from '../../src/features/prototype/model-picker.ts';
 import { orbitStyle, ringOffset } from '../../src/features/prototype/orbit.ts';
 import { cardFace } from '../../src/features/prototype/card-face.ts';
 import { providerPeople } from '../../src/features/prototype/provider-catalog-view.ts';
@@ -624,4 +626,56 @@ test('the account sheets and 我的信息 slide up like the model and 共创 she
   assert.match(reduced, /animation: none/);
   // The 外观 sheet uses the model sheet's frame, so it slides up too.
   assert.match(css, /\.mp-sheet \{[^}]*animation: bb-fade 300ms/);
+});
+
+// ---- 25b fix round ---------------------------------------------------------------------------------------------------------------
+
+test('Escape in the model sheet closes the sheet only: the keydown stops there and never reaches the chat behind it', (t) => {
+  const doc = installFakeDom(t);
+  const handle = openModelPicker({
+    info: {
+      models: [{ id: 'deepseek', points: 10, voicePoints: 2 }],
+      selected: 'deepseek',
+      metered: true,
+      balance: 100,
+      repliesLeft: 10,
+      version: 1,
+    },
+    characterName: '瓜瓜',
+    api: {
+      setModel: async () => {
+        throw new Error('not used');
+      },
+    },
+    onChanged() {},
+    mount: doc.body as never,
+  });
+  assert.ok(doc.body.querySelector('.mp-sheet'));
+  let stopped = false;
+  doc.fire('keydown', { key: 'Escape', stopPropagation: () => void (stopped = true) });
+  assert.equal(stopped, true, 'the chat’s own Escape handler is never reached');
+  assert.equal(doc.body.querySelector('.mp-sheet'), null);
+  void handle;
+});
+
+test('the one-time ⋯ guide hangs under the header while the chat’s first line waits below it, and gives the room back when dismissed', (t) => {
+  const doc = installFakeDom(t);
+  t.after(() => void 0);
+  const store = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) },
+  });
+  t.after(() => Reflect.deleteProperty(globalThis, 'localStorage'));
+  const head = doc.createElement('div');
+  const more = doc.createElement('button');
+  head.append(more);
+  const guide = mountChatGuide(more as never, head as never, () => '点这里可以和角色一起共创');
+  guide.show();
+  assert.ok(guide.isShown());
+  assert.ok(head.classList.contains('has-guide'));
+  guide.dismiss();
+  assert.equal(head.classList.contains('has-guide'), false);
+  assert.equal(store.get(GUIDE_KEY), '1');
+  assert.match(rule('.page-shell .card-slot.is-chat .chat-head.has-guide ~ .chat-body'), /padding-top: 84px/);
 });

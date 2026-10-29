@@ -42,6 +42,7 @@ export function mountChatGuide(button: HTMLElement, host: HTMLElement, text: () 
     shownThisLoad = true;
     bubble?.remove();
     bubble = null;
+    host.classList?.remove?.('has-guide');
     button.removeEventListener('click', dismiss);
   };
   return {
@@ -56,6 +57,8 @@ export function mountChatGuide(button: HTMLElement, host: HTMLElement, text: () 
       bubble.addEventListener('click', dismiss);
       button.addEventListener('click', dismiss);
       host.append(bubble);
+      // The chat's first line (X已添加了你) moves down while the bubble hangs under the header, so both can be read (Part 25b).
+      host.classList?.add?.('has-guide');
     },
     dismiss,
     isShown: () => bubble !== null,
