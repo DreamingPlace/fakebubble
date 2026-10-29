@@ -644,15 +644,23 @@ test('131 on a database that had co-creation data: nothing is lost, the old rows
     eventsBefore,
   );
   assert.deepEqual(
-    { ...before.store.get('SELECT kind,partner_id FROM web_cocreation_submissions') },
+    { ...before.store.get<Record<string, unknown>>('SELECT kind,partner_id FROM web_cocreation_submissions') },
     { kind: 'character', partner_id: null },
   );
   assert.deepEqual(
-    { ...before.store.get('SELECT adopt_paid,paid_points,note_hash FROM web_cocreation_answers') },
+    {
+      ...before.store.get<Record<string, unknown>>(
+        'SELECT adopt_paid,paid_points,note_hash FROM web_cocreation_answers',
+      ),
+    },
     { adopt_paid: 0, paid_points: 0, note_hash: null },
   );
   assert.deepEqual(
-    { ...before.store.get('SELECT note_points,daily_cap,adopt_points,revision FROM web_cocreation_points') },
+    {
+      ...before.store.get<Record<string, unknown>>(
+        'SELECT note_points,daily_cap,adopt_points,revision FROM web_cocreation_points',
+      ),
+    },
     { note_points: 5, daily_cap: 15, adopt_points: 20, revision: 1 },
   );
   assert.equal(before.store.get<{ user_version: number }>('PRAGMA user_version')!.user_version, 131);
