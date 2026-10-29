@@ -7,6 +7,9 @@
 import {
   COCREATION_CARDS,
   COCREATION_LIMITS,
+  COCREATION_NOTE_MAX,
+  COCREATION_PAIR_CARD,
+  COCREATION_PAIR_NOTE_MAX,
   cocreationPrompt,
   validateCocreationAnswers,
   type CocreationAnswer,
@@ -22,6 +25,18 @@ export interface CocreationApi {
   }): Promise<{ submissionId: string; answered: number; duplicate: boolean }>;
   /** Has today's entry for this character been used? Best effort: without it the sheet simply does not say. */
   cocreationToday?(characterId: string): Promise<{ cardIds: string[] }>;
+  /** Part 24c: a note to the production team (留言条). Without it the sheet has no such entry. */
+  submitMemo?(input: {
+    requestId: string;
+    text: string;
+  }): Promise<{ submissionId: string; duplicate: boolean; earned?: number }>;
+  /** Part 24c: the story between this character and another. Without it the sheet has no pair card. */
+  submitPair?(input: {
+    requestId: string;
+    characterId: string;
+    partnerId: string;
+    text: string;
+  }): Promise<{ submissionId: string; duplicate: boolean; earned?: number }>;
 }
 export type CocreationSheetOptions = {
   api: CocreationApi;
@@ -35,6 +50,8 @@ export type CocreationSheetOptions = {
   /** Part 25a: the character's aura (three cloud colours) and accent; the sheet is painted in them. */
   aura?: readonly [string, string, string, string];
   say?: (message: string) => void;
+  /** Part 24c: the other live characters, for the pair story card (id and display name). */
+  others?: readonly { characterId: string; name: string }[];
   /** Where the sheet is mounted; defaults to document.body. */
   mount?: HTMLElement;
   random?: () => number;
@@ -46,7 +63,7 @@ export type CocreationSheetOptions = {
 export const BATCH_SIZE = 5;
 export const cocreationCopy = {
   /** The chat ⋯ menu's entry. */
-  title: (name: string) => `共创 · 让${name}更像${name}`,
+  title: (_name: string) => '一起共创角色',
   /** Part 25a: the sheet's own header. */
   heading: (name: string) => `让${name}更像${name}`,
   sub: (name: string) => `写下你心中的${name}`,
@@ -61,6 +78,20 @@ export const cocreationCopy = {
   sending: '正在交出去…',
   thanks: (name: string) => `${name}收到了你的小纸条`,
   thanksSub: '谢谢你，这份心意已经交到了。',
+  /** Part 24c: shown under the thank-you when the notes earned points. */
+  earned: (points: number) => `共创奖励 +${points} 点`,
+  /** The pair story card: "{name} 和 [select] [🎲] 之间的故事". */
+  pairWith: (name: string) => `${name} 和`,
+  pairBetween: '之间的故事',
+  pairSelect: '选一个角色',
+  pairRoll: '随机换一个',
+  pairPlaceholder: (name: string, other: string) => `${name}和${other}之间发生过什么？`,
+  /** The 留言条 entry: a note to the production team, never rewarded. */
+  memoOpen: '给制作组的留言条',
+  memoPlaceholder: '想对制作组说点什么',
+  memoSend: '递给制作组',
+  memoSending: '正在递出去…',
+  memoThanks: '留言条递到了，谢谢',
   written: '已写',
   write: '写下来',
   done: '写好了',
@@ -78,6 +109,7 @@ export const cocreationCopy = {
     COCREATION_TEXT_INVALID: '有一张的内容不太合适，检查一下长度再试试。',
     COCREATION_EMPTY: '先写一张再交出去吧。',
     NOT_FOUND: '这个人物暂时不能共创。',
+    COCREATION_UNAVAILABLE: '暂时不能写这个，稍后再试试。',
     unknown: '没能交出去，稍后再试一次。写的内容还在这里。',
   } as Record<string, string>,
 };
@@ -90,10 +122,21 @@ type Draft = {
   queue: string[];
   batch: string[];
   pending: { requestId: string; fingerprint: string } | null;
+  /** Part 24c: the pair story card: the chosen other character ('' = none yet), its text and the request id of an uncertain send. */
+  pair: { partnerId: string; text: string; pending: { requestId: string; fingerprint: string } | null };
 };
 const drafts = new Map<string, Draft>();
+/** The 留言条 text and the request id of an uncertain send (one for the whole page, as a memo is about no character). */
+const memoDraft: { text: string; pending: { requestId: string; fingerprint: string } | null } = {
+  text: '',
+  pending: null,
+};
 /** Test hook and sign-out: drafts are memory only and can be dropped at any time. */
-export const resetCocreationDrafts = () => drafts.clear();
+export const resetCocreationDrafts = () => {
+  drafts.clear();
+  memoDraft.text = '';
+  memoDraft.pending = null;
+};
 
 const cardMax = (card: CocreationCard) => (card.id === 'free' ? COCREATION_LIMITS.free : COCREATION_LIMITS.text);
 /** Same rule as chat input: line breaks and other control characters become a space. */
@@ -120,8 +163,14 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     queue: [],
     batch: [],
     pending: null,
+    pair: { partnerId: '', text: '', pending: null },
   };
   drafts.set(characterId, draft);
+  const others = api.submitPair ? (options.others ?? []).filter((entry) => entry.characterId !== characterId) : [];
+  if (!others.some((entry) => entry.characterId === draft.pair.partnerId))
+    draft.pair.partnerId = others[0]?.characterId ?? '';
+  const otherName = () => others.find((entry) => entry.characterId === draft.pair.partnerId)?.name ?? '';
+  const pairReady = () => draft.pair.partnerId !== '' && draft.pair.text.trim() !== '';
 
   const dialogueDone = () => draft.dialogue.player.trim() !== '' && draft.dialogue.replies.some((r) => r.trim() !== '');
   const dialogueTouched = () =>
@@ -184,12 +233,14 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   });
   const allUsed = () => COCREATION_CARDS.every((card) => used.has(card.id));
   const sendButton = h('button', { class: 'cc-send', attrs: { type: 'button' }, text: cocreationCopy.send(name) });
+  const footer = h('footer', { class: 'cc-foot' }, notice, sendButton);
+  const thanksSub = h('p', { class: 'cc-thanks-sub', text: cocreationCopy.thanksSub });
   const thanks = h(
     'div',
     { class: 'cc-thanks', attrs: { role: 'status', 'aria-live': 'polite' }, hidden: true },
     h('div', { class: 'cc-note-art', attrs: { 'aria-hidden': 'true' } }, h('i'), h('i'), h('i')),
     h('strong', { class: 'cc-thanks-title', text: cocreationCopy.thanks(name) }),
-    h('p', { class: 'cc-thanks-sub', text: cocreationCopy.thanksSub }),
+    thanksSub,
   );
   const sheet = h(
     'div',
@@ -198,7 +249,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     usedBanner,
     deck,
     dots,
-    h('footer', { class: 'cc-foot' }, notice, sendButton),
+    footer,
     thanks,
   );
   // The character's colours travel as custom properties set through the CSSOM (an inline style attribute is refused by the CSP).
@@ -286,9 +337,10 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const refresh = () => {
     const n = writtenCount();
     progress.textContent = cocreationCopy.progress(n, deckIds().filter((id) => !used.has(id)).length);
-    sendButton.disabled = busy || n === 0 || allUsed();
+    sendButton.disabled = busy || ((n === 0 || allUsed()) && !pairReady());
     usedBanner.hidden = !allUsed();
     shuffleButton.disabled = busy;
+    memoRefresh();
     for (const id of refs.keys()) refreshRefs(id);
   };
 
@@ -464,6 +516,103 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     } else refs.get(id)?.open.focus?.();
   }
 
+  // ---- Part 24c: the pair story card (design/burbur-v2 Cocreate board): "{name} 和 [select] [🎲] 之间的故事" -------------------
+  const buildPairCard = () => {
+    const select = h('select', { class: 'cc-pair-select', attrs: { 'aria-label': cocreationCopy.pairSelect } });
+    for (const entry of others) {
+      const option = h('option', { text: entry.name, attrs: { value: entry.characterId } });
+      select.append(option);
+    }
+    select.value = draft.pair.partnerId;
+    const roll = h('button', {
+      class: 'cc-pair-roll',
+      text: '🎲',
+      attrs: { type: 'button', 'aria-label': cocreationCopy.pairRoll },
+    });
+    const { area, count } = textArea(
+      cocreationCopy.pairWith(name),
+      cocreationCopy.pairPlaceholder(name, otherName()),
+      draft.pair.text,
+      COCREATION_PAIR_NOTE_MAX,
+      (value) => {
+        draft.pair.text = value;
+        refresh();
+      },
+      3,
+    );
+    const setPartner = (id: string) => {
+      draft.pair.partnerId = id;
+      select.value = id;
+      area.setAttribute('placeholder', cocreationCopy.pairPlaceholder(name, otherName()));
+      refresh();
+    };
+    select.addEventListener('change', () => setPartner(select.value));
+    // Tap again to re-roll: any OTHER character than the one showing (when there is more than one to pick from).
+    roll.addEventListener('click', () => {
+      const pool = others.filter((entry) => entry.characterId !== draft.pair.partnerId);
+      const pick = (pool.length ? pool : others)[Math.floor(random() * (pool.length ? pool.length : others.length))];
+      if (pick) setPartner(pick.characterId);
+    });
+    area.addEventListener('keydown', (event) => {
+      if ((event as unknown as { key: string }).key === 'Enter') event.preventDefault();
+    });
+    const root = h(
+      'article',
+      { class: 'cc-card cc-pair', attrs: { role: 'listitem', 'data-card': COCREATION_PAIR_CARD } },
+      h(
+        'div',
+        { class: 'cc-face cc-pair-face' },
+        h(
+          'div',
+          { class: 'cc-pair-line' },
+          h('span', { text: cocreationCopy.pairWith(name) }),
+          select,
+          roll,
+          h('span', { text: cocreationCopy.pairBetween }),
+        ),
+      ),
+      h('div', { class: 'cc-editor' }, area, h('div', { class: 'cc-meta' }, count)),
+    );
+    return { root, area, count };
+  };
+  const pairCard = others.length > 0 ? buildPairCard() : null;
+
+  // ---- Part 24c: 给制作组的留言条 (a note to the production team; stored and typed as a memo, never rewarded) --------------------
+  const memoOpen = h('button', {
+    class: 'cc-memo-open',
+    text: cocreationCopy.memoOpen,
+    attrs: { type: 'button', 'aria-expanded': 'false' },
+  });
+  const memoArea = h('textarea', {
+    class: 'cc-area cc-memo-area',
+    attrs: {
+      rows: '3',
+      maxlength: String(COCREATION_NOTE_MAX),
+      placeholder: cocreationCopy.memoPlaceholder,
+      'aria-label': cocreationCopy.memoOpen,
+    },
+  });
+  memoArea.value = memoDraft.text;
+  const memoSend = h('button', { class: 'cc-memo-send', text: cocreationCopy.memoSend, attrs: { type: 'button' } });
+  const memoPanel = h('div', { class: 'cc-memo', hidden: true }, memoArea, memoSend);
+  const memoRefresh = () => {
+    memoSend.disabled = busy || memoDraft.text.trim() === '';
+  };
+  memoOpen.addEventListener('click', () => {
+    memoPanel.hidden = !memoPanel.hidden;
+    memoOpen.setAttribute('aria-expanded', String(!memoPanel.hidden));
+    if (!memoPanel.hidden) memoArea.focus?.();
+  });
+  memoArea.addEventListener('input', () => {
+    const next = clean(memoArea.value);
+    if (next !== memoArea.value) memoArea.value = next;
+    memoDraft.text = next;
+    memoRefresh();
+  });
+  const memoEntry = api.submitMemo ? h('div', { class: 'cc-memo-entry' }, memoOpen, memoPanel) : null;
+  if (memoEntry) footer.replaceChildren(memoEntry, notice, sendButton);
+  memoRefresh();
+
   const renderDeck = () => {
     refs.clear();
     const ids = deckIds();
@@ -472,7 +621,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
       refs.set(id, ref);
       return ref.root;
     });
-    deck.replaceChildren(...cards);
+    deck.replaceChildren(...cards, ...(pairCard ? [pairCard.root] : []));
     dots.replaceChildren(...ids.map((id) => h('i', { class: id === ids[0] ? 'on' : '', attrs: { 'data-dot': id } })));
     refresh();
   };
@@ -504,41 +653,126 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     notice.hidden = message === '';
   };
 
+  /** The cards in `sent` were handed over while the pair note was not: they are spent for today and leave the draft. */
+  const spendCards = (sent: CocreationAnswer[]) => {
+    for (const answer of sent) {
+      used.add(answer.cardId);
+      draft.text.delete(answer.cardId);
+      if (answer.cardId === 'dialogue') draft.dialogue = { player: '', replies: [''] };
+    }
+    draft.order = draft.order.filter((id) => !used.has(id));
+    draft.pending = null;
+    draft.batch = [];
+    drawBatch();
+    renderDeck();
+  };
+
   sendButton.addEventListener('click', async () => {
     if (busy || closed) return;
     const payload = answers();
-    const checked = validateCocreationAnswers(payload);
-    if (!checked.ok) {
-      show(cocreationCopy.errors[checked.code] ?? cocreationCopy.errors.unknown!);
-      return;
-    }
+    const sendCards = payload.length > 0 && !allUsed();
+    if (sendCards) {
+      const checked = validateCocreationAnswers(payload);
+      if (!checked.ok) {
+        show(cocreationCopy.errors[checked.code] ?? cocreationCopy.errors.unknown!);
+        return;
+      }
+    } else if (!pairReady()) return;
     busy = true;
     show('');
     sendButton.textContent = cocreationCopy.sending;
     refresh();
-    // The same content keeps the same request id, so retrying an uncertain send can never submit it twice.
-    const fingerprint = JSON.stringify(payload);
-    if (draft.pending?.fingerprint !== fingerprint) draft.pending = { requestId: newRequestId(), fingerprint };
-    try {
-      await api.submitCocreation({ characterId, requestId: draft.pending.requestId, answers: payload });
-    } catch (error) {
+    const fail = (error: unknown) => {
       busy = false;
       sendButton.textContent = cocreationCopy.send(name);
       const code = (error as { code?: string }).code ?? '';
       show(cocreationCopy.errors[code] ?? cocreationCopy.errors.unknown!);
-      // Refused whole: learn which cards are spent so they can be disabled; the rest of the draft stays.
-      if (code === 'COCREATION_DAILY_LIMIT') loadUsed();
-      if (!closed) refresh();
-      return;
+      return code;
+    };
+    let earned = 0;
+    if (sendCards) {
+      // The same content keeps the same request id, so retrying an uncertain send can never submit it twice.
+      const fingerprint = JSON.stringify(payload);
+      if (draft.pending?.fingerprint !== fingerprint) draft.pending = { requestId: newRequestId(), fingerprint };
+      try {
+        const handed = await api.submitCocreation({
+          characterId,
+          requestId: draft.pending.requestId,
+          answers: payload,
+        });
+        earned += (handed as { earned?: number }).earned ?? 0;
+      } catch (error) {
+        const code = fail(error);
+        // Refused whole: learn which cards are spent so they can be disabled; the rest of the draft stays.
+        if (code === 'COCREATION_DAILY_LIMIT') loadUsed();
+        if (!closed) refresh();
+        return;
+      }
+    }
+    if (pairReady() && api.submitPair) {
+      const text = draft.pair.text.trim();
+      const fingerprint = JSON.stringify([draft.pair.partnerId, text]);
+      if (draft.pair.pending?.fingerprint !== fingerprint)
+        draft.pair.pending = { requestId: newRequestId(), fingerprint };
+      try {
+        const handed = await api.submitPair({
+          requestId: draft.pair.pending.requestId,
+          characterId,
+          partnerId: draft.pair.partnerId,
+          text,
+        });
+        earned += handed.earned ?? 0;
+      } catch (error) {
+        fail(error);
+        // The cards went through: they are spent, and only the pair note is left to send.
+        if (sendCards && !closed) spendCards(payload);
+        if (!closed) refresh();
+        return;
+      }
     }
     // Handed over: the draft is spent. A new sheet starts fresh.
     drafts.delete(characterId);
     busy = false;
     if (closed) return;
+    if (earned > 0) thanksSub.textContent = `${cocreationCopy.thanksSub} ${cocreationCopy.earned(earned)}`;
     thanks.hidden = false;
     sheet.className = 'cc-sheet is-thanked';
     sendButton.disabled = true;
     timer = setTimeout(() => close(), options.thanksMs ?? 1800);
+  });
+
+  memoSend.addEventListener('click', async () => {
+    if (busy || closed || !api.submitMemo || memoDraft.text.trim() === '') return;
+    const text = memoDraft.text.trim();
+    busy = true;
+    memoSend.textContent = cocreationCopy.memoSending;
+    refresh();
+    memoRefresh();
+    const fingerprint = JSON.stringify(text);
+    if (memoDraft.pending?.fingerprint !== fingerprint) memoDraft.pending = { requestId: newRequestId(), fingerprint };
+    try {
+      await api.submitMemo({ requestId: memoDraft.pending.requestId, text });
+    } catch (error) {
+      busy = false;
+      memoSend.textContent = cocreationCopy.memoSend;
+      show(cocreationCopy.errors[(error as { code?: string }).code ?? ''] ?? cocreationCopy.errors.unknown!);
+      if (!closed) {
+        refresh();
+        memoRefresh();
+      }
+      return;
+    }
+    busy = false;
+    memoDraft.text = '';
+    memoDraft.pending = null;
+    if (closed) return;
+    memoArea.value = '';
+    memoSend.textContent = cocreationCopy.memoSend;
+    memoPanel.hidden = true;
+    memoOpen.setAttribute('aria-expanded', 'false');
+    show(cocreationCopy.memoThanks);
+    refresh();
+    memoRefresh();
   });
 
   function close() {

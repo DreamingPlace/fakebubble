@@ -7,8 +7,8 @@ import { h } from './h.ts';
  */
 export const GUIDE_KEY = 'fakebubble.chat-menu-guide.v1';
 export const guideCopy = {
-  withPicker: '点这里可以切换回复模型，或和角色一起共创',
-  guest: '点这里可以和角色一起共创',
+  /** Part 24c: one line for everyone, whether or not the player can choose a model. */
+  text: (name: string) => `给${name}换个大脑？或者来说说你心中的${name}～`,
 };
 
 let shownThisLoad = false;

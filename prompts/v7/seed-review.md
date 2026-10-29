@@ -1,0 +1,2 @@
+
+成长中角色审核补充：这个角色的设定很少。发现draftPresentation把character里没写明的事（家人、过去、经历、喜好等）当成确定的事实说出来，或与已写明的设定矛盾，就用accept加replacementBubbles做最小的本人口吻改写，改成模糊、轻描淡写或向玩家发问；没有任何安全内容可发布才reject。

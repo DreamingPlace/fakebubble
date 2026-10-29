@@ -483,7 +483,8 @@ test('in the live chat the ⋯ menu offers 共创 to every player', async (t) =>
     // Part 25b (named exception): the ⋯ menu also holds 外观 (last); 共创 is still its first and only co-creation entry.
     assert.equal(items.length, 2, `${access}: 共创 and 外观 (no picker without a points account, no account entries)`);
     const item = items[0]!;
-    assert.equal(item.querySelector('.chat-menu-title')!.textContent, '共创 · 让瓜瓜更像瓜瓜', access);
+    // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
+    assert.equal(item.querySelector('.chat-menu-title')!.textContent, '一起共创角色', access);
     assert.equal(item.disabled, false, access);
     assert.equal(item.querySelector('.chat-menu-sub')!.textContent, '写下你心中的瓜瓜');
     item.click();

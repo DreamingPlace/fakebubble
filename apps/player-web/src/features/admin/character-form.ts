@@ -71,6 +71,8 @@ export function editedCharacter(
     color?: string;
     canon: string;
     voice: null | { profileId: string; version: number; speed: number };
+    /** Part 24c: 成长中 (seed character). Absent = keep what the base says. */
+    seed?: boolean;
   },
 ): CharacterProfile {
   const next = structuredClone(base),
@@ -78,6 +80,9 @@ export function editedCharacter(
   t.id = values.id.trim();
   t.name = values.name;
   t.persona = values.persona;
+  // The key is absent, not false, for a finished character: a profile without it hashes exactly as it always did.
+  if (values.seed === true) t.seed = true;
+  else if (values.seed === false) delete t.seed;
   let settings: Record<string, JsonValue>;
   try {
     const parsed: unknown = JSON.parse(values.canon);
@@ -211,7 +216,7 @@ export function changedSections(published: CharacterProfile | null, draft: Chara
       {
         identity: [t.id, t.name, t.birthDate ?? null, p.displayName, p.publicDescription, p.color ?? null],
         welcome: p.welcome,
-        persona: t.persona,
+        persona: [t.persona, t.seed === true],
         canon: t.authorCanon ?? null,
         voice: t.voice ?? null,
       }[id] ?? null,
@@ -249,6 +254,8 @@ export function characterForm(
   personaSet.append(el('legend', '性格'));
   form.append(personaSet);
   const persona = field(personaSet, '基础人设', base.template.persona, { area: true, required: true, max: 20000 });
+  const seed = check(personaSet, '成长中角色（种子：只有几行人设，其余靠共创慢慢补全）');
+  seed.checked = base.template.seed === true;
   const welcome = el('fieldset');
   welcome.append(el('legend', '欢迎内容'));
   form.append(welcome);
@@ -328,6 +335,7 @@ export function characterForm(
       welcomeVersion: welcomeVersion.value,
       color: colour.read(),
       canon: canon.value,
+      seed: seed.checked,
       voice: voiceOn.checked
         ? { profileId: profileId.value.trim(), version: Number(voiceVersion.value), speed: Number(speed.value) }
         : null,

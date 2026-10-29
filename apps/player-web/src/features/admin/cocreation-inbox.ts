@@ -38,7 +38,12 @@ import { dot } from './cast/cast-ui.ts';
 import { rosterColours } from './ui/character-colour.ts';
 
 type Deps = {
-  api: Pick<CocreationAdminClient, 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'>;
+  api: Pick<CocreationAdminClient, 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
+    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory'>>;
+  /** Part 24c: the revision of the cast draft the administrator is looking at (cast.read); without it 加入关系与故事 is not shown. */
+  castRevision?: () => Promise<number>;
+  /** cast.edit (or the owner): without it 加入关系与故事 is disabled. Default: allowed. */
+  canEditCast?: () => boolean;
   characters: Pick<CharacterAdminClient, 'list' | 'detail' | 'save'>;
   /** cocreation.manage (or the owner): status, star, note and adopting. Reading needs only cocreation.read. */
   canManage: () => boolean;
@@ -195,12 +200,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           h(
             'span',
             { class: 'cc-who' },
-            h(
-              'span',
-              { class: 'cc-name' },
-              dot(colour(item.characterId), 12),
-              h('strong', { text: nameOf(item.characterId) }),
-            ),
+            h('span', { class: 'cc-name' }, dot(colour(item.characterId), 12), h('strong', { text: whoOf(item) })),
             h('span', { class: 'cc-pseudonym', text: item.pseudonym }),
           ),
           h(
@@ -210,6 +210,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
             h(
               'span',
               { class: 'cc-chips' },
+              item.kind === 'memo' ? h('span', { class: 'cc-chip cc-chip-memo', text: '留言条' }) : null,
+              item.kind === 'pair' ? h('span', { class: 'cc-chip cc-chip-pair', text: '关系与故事' }) : null,
               h('span', { class: 'cc-count', text: `${item.answerCount} 条` }),
               item.starred ? h('span', { class: 'cc-chip cc-chip-star', text: '★' }) : null,
               item.hasNote ? h('span', { class: 'cc-chip', text: '有备注' }) : null,
@@ -573,7 +575,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       h(
         'header',
         { class: 'cc-detail-head' },
-        h('h3', {}, dot(colourOf()(current.characterId), 12), `${character} · ${current.pseudonym}`),
+        h('h3', {}, dot(colourOf()(current.characterId), 12), `${whoOf(current)} · ${current.pseudonym}`),
         h('p', {
           text: `${when(current.createdAt)}${current.batch ? ` · 邀请批次：${current.batch}` : ''} · ${STATUS_LABEL[current.status]}${current.processedAt ? `（${when(current.processedAt)}）` : ''}`,
         }),
@@ -595,17 +597,43 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
               adoptError = '';
               renderDetail();
             });
+            // Part 24c: a pair note goes to the cast draft as a story; a memo is for the team and has no adoption at all.
+            const story = h('button', { text: '加入关系与故事', attrs: { type: 'button' }, class: 'cc-adopt-story' });
+            story.disabled = !manage || (deps.canEditCast ? !deps.canEditCast() : false);
+            story.addEventListener('click', () => void addStory(current, answer.ordinal));
+            const undo = h('button', { text: '取消采用', attrs: { type: 'button' }, class: 'cc-unadopt' });
+            undo.disabled = !manage;
+            undo.addEventListener('click', () => void unadopt(current, answer.ordinal));
             return h(
               'article',
               { class: 'cc-answer', attrs: { 'data-ordinal': String(answer.ordinal) } },
-              h('p', { class: 'cc-card-prompt', text: card ? cocreationPrompt(card, character) : answer.cardId }),
+              h('p', {
+                class: 'cc-card-prompt',
+                text:
+                  current.kind === 'memo'
+                    ? '给制作组的留言条'
+                    : current.kind === 'pair'
+                      ? `${nameOf(current.characterId)}和${nameOf(current.partnerId ?? '')}之间的故事`
+                      : card
+                        ? cocreationPrompt(card, character)
+                        : answer.cardId,
+              }),
               bubbles(answer, character),
               h(
                 'div',
                 { class: 'cc-answer-actions' },
                 copy,
-                deps.canEditCharacter && !deps.canEditCharacter(current.characterId) ? null : add,
+                current.kind === 'memo'
+                  ? null
+                  : current.kind === 'pair'
+                    ? deps.castRevision
+                      ? story
+                      : null
+                    : deps.canEditCharacter && !deps.canEditCharacter(current.characterId)
+                      ? null
+                      : add,
                 answer.adoptedAt !== null ? h('span', { class: 'cc-chip cc-chip-adopted', text: '已采用' }) : null,
+                answer.adoptedAt !== null && current.kind !== 'memo' ? undo : null,
               ),
               adopting?.ordinal === answer.ordinal ? adoptEditor(current, answer) : null,
             );
@@ -615,6 +643,46 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       h('div', { class: 'cc-note-box' }, h('label', { text: '管理员备注（玩家看不到）' }, note), saveNote),
     );
   };
+
+  /** Who a note is about: a character, both characters of a pair, or the production team. */
+  function whoOf(entry: { kind?: InboxItem['kind']; characterId: string; partnerId?: string | null }) {
+    if (entry.kind === 'memo') return '制作组';
+    if (entry.kind === 'pair') return `${nameOf(entry.characterId)} × ${nameOf(entry.partnerId ?? '')}`;
+    return nameOf(entry.characterId);
+  }
+  /** 加入关系与故事: reads the cast draft's revision, then adds the story to THAT revision (a draft that moved on is refused). */
+  async function addStory(current: InboxDetail, ordinal: number) {
+    if (!deps.castRevision || !deps.api.addToCastStory) return;
+    await deps.run(async () => {
+      const revision = await deps.castRevision!();
+      await deps.api.addToCastStory!(current.id, ordinal, revision);
+      stampAdopted(current, ordinal, Date.now());
+      deps.status('已加入世界设定草稿的「关系与故事」（未发布）。');
+    });
+  }
+  async function unadopt(current: InboxDetail, ordinal: number) {
+    if (!deps.api.unadopt) return;
+    await deps.run(async () => {
+      await deps.api.unadopt!(current.id, ordinal);
+      stampAdopted(current, ordinal, null);
+      deps.status('已取消采用标记（已发的点数不收回）。');
+    });
+  }
+  function stampAdopted(current: InboxDetail, ordinal: number, stamp: number | null) {
+    if (!detail || detail.id !== current.id) return;
+    detail = {
+      ...detail,
+      status: 'processed',
+      answers: detail.answers.map((entry) => (entry.ordinal === ordinal ? { ...entry, adoptedAt: stamp } : entry)),
+    };
+    patchItem(current.id, {
+      status: 'processed',
+      adoptedCount: detail.answers.filter((entry) => entry.adoptedAt !== null).length,
+    });
+    renderList();
+    renderDetail();
+    deps.onChanged?.();
+  }
 
   // ---- events ---------------------------------------------------------------------------------------------------
   const reload = () => {

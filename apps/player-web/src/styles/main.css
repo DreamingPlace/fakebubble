@@ -1831,6 +1831,96 @@ html.cc-open body {
   opacity: 0.45;
   box-shadow: none;
 }
+/* Part 24c: the pair story card ("{name} 和 [select] [🎲] 之间的故事") and the 留言条 entry. */
+.cc-pair-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+.cc-pair-face {
+  min-height: 0;
+  padding-bottom: 6px;
+}
+.cc-pair-select {
+  min-height: 36px;
+  max-width: 100%;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 14px;
+  background: #29423b;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+}
+.cc-pair-roll {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(44, 51, 47, 0.18);
+  font-size: 18px;
+  line-height: 1;
+}
+.cc-pair-roll:active {
+  transform: rotate(120deg) scale(1.1);
+}
+.cc-memo-entry {
+  display: grid;
+  gap: 8px;
+}
+.cc-memo-open {
+  justify-self: center;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--cc-ink);
+  font-size: 13.5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cc-memo {
+  display: grid;
+  gap: 8px;
+}
+.cc-memo[hidden] {
+  display: none;
+}
+.cc-memo-send {
+  min-height: 44px;
+  border: 1px solid #29423b;
+  border-radius: 999px;
+  background: #fff;
+  color: #29423b;
+  font-size: 15px;
+  font-weight: 650;
+}
+.cc-memo-send:disabled {
+  opacity: 0.45;
+}
+/* Part 24c: 获得点数 beside the points of 我的信息, and its sheet. */
+.mi-earn {
+  margin-left: auto;
+  align-self: center;
+}
+.earn-body {
+  display: grid;
+  gap: 16px;
+  justify-items: stretch;
+}
+.earn-line {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.earn-go:disabled {
+  opacity: 0.45;
+}
 .cc-thanks {
   position: absolute;
   inset: 0;

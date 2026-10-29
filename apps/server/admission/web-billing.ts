@@ -1,4 +1,4 @@
-import type { BillingItem, BillingPage } from '../../../packages/contracts/player-billing.ts';
+import type { BillingItem, BillingPage, PointsEventKind } from '../../../packages/contracts/player-billing.ts';
 import {
   DEFAULT_PLAYER_MODEL,
   isPlayerModelId,
@@ -56,7 +56,7 @@ const TRIAL_ROW = `(CASE WHEN p.kind='guest' AND (m.operation_id IS NULL OR
 /** "免费额度 total 点 · 已用 used · 剩余 balance": lifetime, so older than the 90-day list window too. balance == total - used. */
 function quotaSummary(store: Reader, principalId: string) {
   const row = store.get<{ total: number; used: number }>(
-    `SELECT coalesce(sum(CASE WHEN source IN ('bonus','grant','daily_refill','reset') THEN delta END),0) total,
+    `SELECT coalesce(sum(CASE WHEN source IN ('bonus','grant','daily_refill','reset','cocreation_note','cocreation_adopted') THEN delta END),0) total,
       coalesce(-sum(CASE WHEN source IN ('spend','refund') THEN delta END),0) used
     FROM web_points_events WHERE principal_id=?`,
     principalId,
@@ -132,8 +132,7 @@ export function playerBilling(
       ((page as number) - 1) * BILLING_PAGE_SIZE,
     );
     const items: BillingItem[] = rows.slice(0, BILLING_PAGE_SIZE).map((row): BillingItem => {
-      if (row.kind === 'event')
-        return { kind: row.source as 'bonus' | 'grant' | 'daily_refill' | 'reset', at: row.at, points: row.delta! };
+      if (row.kind === 'event') return { kind: row.source as PointsEventKind, at: row.at, points: row.delta! };
       const free = (row.points_charged ?? 0) === 0;
       const characterId = row.character_id!;
       if (row.trial === 1)

@@ -2,12 +2,18 @@ import { createHash, createHmac } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import {
   COCREATION_LIMITS,
+  COCREATION_MEMO_CARD,
+  COCREATION_MEMO_CHARACTER,
+  COCREATION_PAIR_NOTE_MAX,
+  COCREATION_PAIR_CARD,
   cocreationCard,
+  cocreationNoteOk,
   validateCocreationAnswers,
   type CocreationKind,
   type CocreationTargetField,
 } from '../../../packages/contracts/cocreation-cards.ts';
 import {
+  hasCastPermission,
   hasCocreationPermission,
   type CocreationAdminPermission,
 } from '../../../packages/contracts/web-admin-permissions.ts';
@@ -18,9 +24,19 @@ import type { WebIdentity } from '../identity/web-identity.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { takeIpDaily } from '../admission/web-ip-daily.ts';
 import { cocreationTablesExist } from './web-cocreation-purge.ts';
+import { awardCocreationPoints, cocreationReceiver } from '../admin/web-points-admin.ts';
+import { readDraft, saveDraft } from '../cast/cast-store.ts';
+import {
+  characterScope,
+  cocreationPointsTablesExist,
+  noteHash,
+  pairScope,
+  readCocreationPoints,
+} from './web-cocreation-points.ts';
 
 type Auth = { cookie: unknown; csrf: unknown; origin: unknown };
 export type CocreationStatus = 'new' | 'processed' | 'archived';
+export type CocreationSubmissionKind = 'character' | 'memo' | 'pair';
 const STATUSES: readonly string[] = ['new', 'processed', 'archived'];
 const identifier = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -38,6 +54,9 @@ type SubmissionRow = {
   starred: number;
   admin_note: string | null;
   processed_at: number | null;
+  /** Migration 131; rows of an older database are all 'character'. */
+  kind?: CocreationSubmissionKind;
+  partner_id?: string | null;
 };
 type AnswerRow = {
   ordinal: number;
@@ -46,6 +65,8 @@ type AnswerRow = {
   kind: CocreationKind;
   text_json: string;
   adopted_at: number | null;
+  adopt_paid?: number;
+  paid_points?: number;
 };
 const answerValue = (row: Pick<AnswerRow, 'kind' | 'text_json'>) =>
   JSON.parse(row.text_json) as string | { player: string; replies: string[] };
@@ -127,7 +148,7 @@ export class WebCocreation {
       );
       if (prior) {
         ensure(prior.request_hash === hash, 'IDEMPOTENCY_CONFLICT');
-        return { submissionId: prior.id, answered: answers.length, duplicate: true };
+        return { submissionId: prior.id, answered: answers.length, duplicate: true, ...this.earnedOf(prior.id) };
       }
       const now = this.clock.now();
       ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
@@ -168,7 +189,157 @@ export class WebCocreation {
           JSON.stringify(value),
         );
       });
-      return { submissionId, answered: answers.length, duplicate: false };
+      // Part 24c: points for the notes, in this same transaction (a refused or rolled-back submission pays nothing).
+      const notes = answers.map((answer) =>
+        'text' in answer ? answer.text : [answer.player, ...answer.replies].join('\n'),
+      );
+      const earned = this.payNotes(principal.principalId, submissionId, characterScope(characterId), notes, now);
+      return { submissionId, answered: answers.length, duplicate: false, ...(earned > 0 ? { earned } : {}) };
+    });
+  }
+
+  /** The points a stored submission earned, as the `earned` member of its reply (absent when nothing was paid). */
+  private earnedOf(submissionId: string) {
+    if (!cocreationPointsTablesExist(this.store)) return {};
+    const earned =
+      this.store.get<{ n: number }>(
+        'SELECT coalesce(sum(paid_points),0) n FROM web_cocreation_answers WHERE submission_id=?',
+        submissionId,
+      )?.n ?? 0;
+    return earned > 0 ? { earned } : {};
+  }
+
+  /**
+   * Part 24c: +notePoints per note, at most dailyCap PAID notes per player per UTC day, and only for a player on points (the population
+   * 积分发放 grants to: reuse of its tier rule, its daily_refill cap and its event writer). A note beyond the cap is still stored, just
+   * unpaid; an empty note or one the same player already wrote about the same character / pair earns nothing, silently. Records the
+   * digest and the payment on each answer. Returns the points paid. The caller owns the transaction.
+   */
+  private payNotes(principalId: string, submissionId: string, scope: string, notes: string[], now: number) {
+    if (!cocreationPointsTablesExist(this.store)) return 0;
+    const settings = readCocreationPoints(this.store),
+      dayStart = Math.floor(now / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs,
+      receiver = cocreationReceiver(this.store, now, principalId);
+    let paidToday =
+        this.store.get<{ n: number }>(
+          `SELECT count(*) n FROM web_cocreation_answers a JOIN web_cocreation_submissions s ON s.id=a.submission_id
+          WHERE s.principal_id=? AND a.paid_points>0 AND s.created_at>=? AND s.created_at<?`,
+          principalId,
+          dayStart,
+          dayStart + COCREATION_LIMITS.dayMs,
+        )?.n ?? 0,
+      earned = 0;
+    notes.forEach((text, ordinal) => {
+      const hash = noteHash(scope, text);
+      const duplicate = !!this.store.get(
+        `SELECT 1 FROM web_cocreation_answers a JOIN web_cocreation_submissions s ON s.id=a.submission_id
+        WHERE s.principal_id=? AND a.note_hash=? LIMIT 1`,
+        principalId,
+        hash,
+      );
+      let paid = 0;
+      if (receiver && !duplicate && text.trim() !== '' && settings.notePoints > 0 && paidToday < settings.dailyCap) {
+        paid = awardCocreationPoints(
+          this.store,
+          now,
+          principalId,
+          'cocreation_note',
+          settings.notePoints,
+          `${submissionId}:${ordinal}`,
+          null,
+        );
+        if (paid > 0) paidToday += 1;
+      }
+      this.store.run(
+        'UPDATE web_cocreation_answers SET note_hash=?,paid_points=? WHERE submission_id=? AND ordinal=?',
+        hash,
+        paid,
+        submissionId,
+        ordinal,
+      );
+      earned += paid;
+    });
+    return earned;
+  }
+
+  /**
+   * A 留言条 (to the production team, kind 'memo') or the story between two characters (kind 'pair'). Same session / CSRF / Origin,
+   * request-id idempotency and per-IP daily cap as the cards; one answer holding the text. A memo is stored under the placeholder
+   * character '_memo', is hashed for no duplicate check and NEVER earns points. A pair note earns like any note.
+   */
+  submitNote(
+    token: string,
+    csrf: string,
+    origin: string,
+    input: { kind: 'memo' | 'pair'; requestId: unknown; text: unknown; characterId?: unknown; partnerId?: unknown },
+    ipHash?: string,
+  ) {
+    this.identity.authorizeWrite(token, csrf, origin);
+    const memo = input.kind === 'memo';
+    ensure(requestIdOk(input.requestId), 'INVALID_REQUEST');
+    ensure(memo || (identifier(input.characterId) && identifier(input.partnerId)), 'INVALID_REQUEST');
+    ensure(memo || input.characterId !== input.partnerId, 'INVALID_REQUEST');
+    ensure(
+      cocreationNoteOk(input.text) && (memo || [...input.text].length <= COCREATION_PAIR_NOTE_MAX),
+      'COCREATION_TEXT_INVALID',
+    );
+    const requestId = input.requestId,
+      text = input.text,
+      characterId = memo ? COCREATION_MEMO_CHARACTER : (input.characterId as string),
+      partnerId = memo ? null : (input.partnerId as string),
+      hash = createHash('sha256')
+        .update(JSON.stringify([input.kind, characterId, partnerId, text]))
+        .digest('hex');
+    return this.store.transaction(() => {
+      ensure(cocreationTablesExist(this.store) && cocreationPointsTablesExist(this.store), 'COCREATION_UNAVAILABLE');
+      const principal = this.identity.authorizeWrite(token, csrf, origin);
+      if (!memo)
+        for (const id of [characterId, partnerId!])
+          ensure(
+            this.store.get('SELECT 1 FROM web_character_catalog WHERE character_id=?', id) &&
+              !webCharacterDeleted(this.store, id),
+            'NOT_FOUND',
+          );
+      const prior = this.store.get<{ id: string; request_hash: string }>(
+        'SELECT id,request_hash FROM web_cocreation_submissions WHERE principal_id=? AND request_id=?',
+        principal.principalId,
+        requestId,
+      );
+      if (prior) {
+        ensure(prior.request_hash === hash, 'IDEMPOTENCY_CONFLICT');
+        return { submissionId: prior.id, answered: 1, duplicate: true, ...this.earnedOf(prior.id) };
+      }
+      const now = this.clock.now();
+      ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
+      const dayStart = Math.floor(now / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs;
+      if (
+        ipHash !== undefined &&
+        !takeIpDaily(this.store, 'cocreation-note', ipHash, dayStart, COCREATION_LIMITS.notePerIpPerDay)
+      )
+        throw new RetryAfterError('COCREATION_IP_LIMIT', Math.max(1, dayStart + COCREATION_LIMITS.dayMs - now));
+      const submissionId = this.id();
+      this.store.run(
+        `INSERT INTO web_cocreation_submissions(id,character_id,principal_id,request_id,request_hash,created_at,kind,partner_id)
+        VALUES (?,?,?,?,?,?,?,?)`,
+        submissionId,
+        characterId,
+        principal.principalId,
+        requestId,
+        hash,
+        now,
+        input.kind,
+        partnerId,
+      );
+      this.store.run(
+        `INSERT INTO web_cocreation_answers(submission_id,ordinal,card_id,target_field,kind,text_json) VALUES (?,0,?,'free','text',?)`,
+        submissionId,
+        memo ? COCREATION_MEMO_CARD : COCREATION_PAIR_CARD,
+        JSON.stringify(text),
+      );
+      const earned = memo
+        ? 0
+        : this.payNotes(principal.principalId, submissionId, pairScope(characterId, partnerId!), [text], now);
+      return { submissionId, answered: 1, duplicate: false, ...(earned > 0 ? { earned } : {}) };
     });
   }
 
@@ -198,6 +369,17 @@ export class WebCocreation {
     ensure(cocreationTablesExist(this.store), 'COCREATION_UNAVAILABLE');
     const dayStart = Math.floor(this.clock.now() / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs;
     return { cardIds: [...this.cardsAnsweredToday(principal.principalId, characterIdInput, dayStart)].sort() };
+  }
+
+  /**
+   * The live numbers of points for notes, for the 获得点数 sheet of 我的信息. Same session / CSRF / Origin as a write; the numbers
+   * are the same for everyone and name nobody. Without migration 131 there are none.
+   */
+  rewards(token: string, csrf: string, origin: string) {
+    this.identity.authorizeWrite(token, csrf, origin);
+    ensure(cocreationTablesExist(this.store) && cocreationPointsTablesExist(this.store), 'COCREATION_UNAVAILABLE');
+    const { notePoints, dailyCap, adoptPoints } = readCocreationPoints(this.store);
+    return { notePoints, dailyCap, adoptPoints };
   }
 
   // ---- administrators -------------------------------------------------------------------------------------------
@@ -271,8 +453,14 @@ export class WebCocreation {
     const where: string[] = [],
       args: (string | number)[] = [];
     if (input.characterId !== null) {
-      where.push('s.character_id=?');
-      args.push(input.characterId as string);
+      // A pair note is about both of its characters.
+      if (this.hasKinds()) {
+        where.push('(s.character_id=? OR s.partner_id=?)');
+        args.push(input.characterId as string, input.characterId as string);
+      } else {
+        where.push('s.character_id=?');
+        args.push(input.characterId as string);
+      }
     }
     if (input.status !== null) {
       where.push('s.status=?');
@@ -302,6 +490,7 @@ export class WebCocreation {
       items: page.map((row) => ({
         id: row.id,
         characterId: row.character_id,
+        ...this.kindOf(row),
         createdAt: row.created_at,
         pseudonym: this.pseudonym(row.principal_id),
         answerCount: row.answers,
@@ -313,6 +502,13 @@ export class WebCocreation {
       })),
       next: rows.length > PAGE ? { createdAt: page.at(-1)!.created_at, id: page.at(-1)!.id } : null,
     };
+  }
+  private hasKinds() {
+    return cocreationPointsTablesExist(this.store);
+  }
+  /** `kind` and `partnerId` of a submission; a database before migration 131 only has character notes, and says nothing. */
+  private kindOf(row: Pick<SubmissionRow, 'kind' | 'partner_id'>) {
+    return row.kind === undefined ? {} : { kind: row.kind, partnerId: row.partner_id ?? null };
   }
   private firstAnswer(submissionId: string) {
     const first = this.store.get<AnswerRow>(
@@ -335,6 +531,7 @@ export class WebCocreation {
     return {
       id: row.id,
       characterId: row.character_id,
+      ...this.kindOf(row),
       createdAt: row.created_at,
       pseudonym: this.pseudonym(row.principal_id),
       batch,
@@ -424,29 +621,117 @@ export class WebCocreation {
     });
   }
 
-  /** Records that an administrator copied this answer into a draft; the first adoption also marks the submission processed. */
+  /**
+   * Records that an administrator copied this answer into a draft or the cast; the first adoption also marks the submission processed
+   * and (Part 24c) pays the author the adoption reward ONCE per note, in this same transaction: a second adoption, or an adoption after
+   * an undo, pays nothing. A memo is adopted without a reward. Used by the draft route and by 加入关系与故事.
+   */
   markAdopted(auth: Auth, id: unknown, ordinal: unknown) {
     const actor = this.actor(auth, 'cocreation.manage');
+    return this.store.transaction(() => this.adopt(actor.memberId, id, ordinal));
+  }
+  private adopt(actorId: string, id: unknown, ordinal: unknown) {
     ensure(Number.isSafeInteger(ordinal) && (ordinal as number) >= 0 && (ordinal as number) <= 11, 'INVALID_REQUEST');
-    return this.store.transaction(() => {
-      const row = this.row(id),
-        answer = this.store.get<AnswerRow>(
-          'SELECT * FROM web_cocreation_answers WHERE submission_id=? AND ordinal=?',
-          row.id,
-          ordinal as number,
-        );
-      ensure(answer, 'NOT_FOUND');
-      const now = this.clock.now();
+    const row = this.row(id),
+      answer = this.store.get<AnswerRow>(
+        'SELECT * FROM web_cocreation_answers WHERE submission_id=? AND ordinal=?',
+        row.id,
+        ordinal as number,
+      );
+    ensure(answer, 'NOT_FOUND');
+    const now = this.clock.now();
+    this.store.run(
+      'UPDATE web_cocreation_answers SET adopted_at=?,adopted_by=? WHERE submission_id=? AND ordinal=? AND adopted_at IS NULL',
+      now,
+      actorId,
+      row.id,
+      answer.ordinal,
+    );
+    if (row.status !== 'processed') this.setStatusRow(actorId, row, 'processed');
+    this.audit(actorId, `cocreation-adopted:${answer.ordinal}`, row.id);
+    if (answer.adopt_paid === 0 && row.kind !== undefined) {
+      // The marker is set whether or not points are paid (a guest never gets them later), so the reward is for the first adoption only.
       this.store.run(
-        'UPDATE web_cocreation_answers SET adopted_at=?,adopted_by=? WHERE submission_id=? AND ordinal=? AND adopted_at IS NULL',
-        now,
-        actor.memberId,
+        'UPDATE web_cocreation_answers SET adopt_paid=1 WHERE submission_id=? AND ordinal=?',
         row.id,
         answer.ordinal,
       );
-      if (row.status !== 'processed') this.setStatusRow(actor.memberId, row, 'processed');
-      this.audit(actor.memberId, `cocreation-adopted:${answer.ordinal}`, row.id);
-      return { id: row.id, ordinal: answer.ordinal, status: 'processed' as const };
+      if (row.kind !== 'memo')
+        awardCocreationPoints(
+          this.store,
+          now,
+          row.principal_id,
+          'cocreation_adopted',
+          readCocreationPoints(this.store).adoptPoints,
+          `${row.id}:${answer.ordinal}`,
+          actorId,
+        );
+    }
+    return { id: row.id, ordinal: answer.ordinal, status: 'processed' as const };
+  }
+
+  /** Takes the adoption mark off an answer. Nothing already paid is taken back, and the reward is not paid again by adopting anew. */
+  unadopt(auth: Auth, id: unknown, ordinal: unknown) {
+    const actor = this.actor(auth, 'cocreation.manage');
+    ensure(Number.isSafeInteger(ordinal) && (ordinal as number) >= 0 && (ordinal as number) <= 11, 'INVALID_REQUEST');
+    return this.store.transaction(() => {
+      const row = this.row(id);
+      const cleared = this.store.run(
+        'UPDATE web_cocreation_answers SET adopted_at=NULL,adopted_by=NULL WHERE submission_id=? AND ordinal=? AND adopted_at IS NOT NULL',
+        row.id,
+        ordinal as number,
+      );
+      ensure(cleared.changes === 1, 'NOT_FOUND');
+      this.audit(actor.memberId, `cocreation-unadopted:${ordinal as number}`, row.id);
+      return { id: row.id, ordinal: ordinal as number };
+    });
+  }
+
+  /**
+   * 加入关系与故事: a pair note becomes a story of the cast DRAFT - the two characters as participants, the note as the summary.
+   * Compare-and-swap on the cast draft revision the administrator looked at; a stale revision is refused and nothing (no story, no
+   * adoption, no points) is written. Never publishes. Needs cocreation.manage and cast.edit.
+   */
+  addToCastStory(auth: Auth, id: unknown, ordinal: unknown, expectedRevision: unknown) {
+    const actor = this.actor(auth, 'cocreation.manage');
+    ensure(
+      actor.role === 'owner' || hasCastPermission(this.admin.session(auth.cookie).member.permissions, 'cast.edit'),
+      'ADMIN_PERMISSION_REQUIRED',
+    );
+    ensure(Number.isSafeInteger(expectedRevision) && (expectedRevision as number) > 0, 'INVALID_REQUEST');
+    return this.store.transaction(() => {
+      const row = this.row(id);
+      ensure(row.kind === 'pair' && row.partner_id, 'INVALID_REQUEST');
+      const answer = this.store.get<AnswerRow>(
+        'SELECT * FROM web_cocreation_answers WHERE submission_id=? AND ordinal=?',
+        row.id,
+        ordinal as number,
+      );
+      ensure(answer, 'NOT_FOUND');
+      const draft = readDraft(this.store),
+        name = (characterId: string) =>
+          draft.doc.characters.find((entry) => entry.characterId === characterId)?.identity.names[0]?.text ??
+          characterId;
+      // The story is added to the draft the administrator saw; saveDraft refuses a draft that has moved on.
+      const next = {
+        ...draft.doc,
+        stories: [
+          ...draft.doc.stories,
+          {
+            title: [...`${name(row.character_id)}与${name(row.partner_id!)}`].slice(0, 30).join(''),
+            summary: answerValue(answer) as string,
+            details: '',
+            period: { start: '', end: '' },
+            participants: [row.character_id, row.partner_id!],
+            boundary: '',
+            overrides: [],
+          },
+        ],
+      };
+      const saved = saveDraft(this.store, this.clock.now(), expectedRevision, next);
+      const adopted = this.adopt(actor.memberId, row.id, answer.ordinal);
+      this.audit(actor.memberId, 'cocreation-cast-story', `${row.id}:${answer.ordinal};revision=${saved.revision}`);
+      return { ...adopted, castRevision: saved.revision };
     });
   }
 }

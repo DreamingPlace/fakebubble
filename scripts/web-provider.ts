@@ -25,6 +25,7 @@ import {
   migrateWebProviderStats,
   migrateWebProviderCast,
   migrateWebProviderStatsExtras,
+  migrateWebProviderCocreationPoints,
   migrateWebProviderOffline,
 } from '../apps/server/generation/web-provider-migration.ts';
 import {
@@ -86,7 +87,7 @@ export function openProviderStore(root: string) {
   };
 }
 
-/** 100→130 on a new provider-* root, importing only digest-verified user selections. */
+/** 100→131 on a new provider-* root, importing only digest-verified user selections. */
 export function migrateProvider(root: string, selected: ReturnType<typeof verifySelectedVoiceSetup>, now = Date.now()) {
   const { config, store } = openProviderStore(root);
   try {
@@ -132,8 +133,9 @@ export function migrateProvider(root: string, selected: ReturnType<typeof verify
     migrateWebProviderStats(store, now);
     migrateWebProviderCast(store);
     migrateWebProviderStatsExtras(store, now);
+    migrateWebProviderCocreationPoints(store);
     return {
-      schema: 130,
+      schema: 131,
       characters: selected.map((item) => ({
         characterId: item.characterId,
         personaVersion: item.personaVersion,
@@ -285,6 +287,7 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
       'migrate-stats',
       'migrate-cast',
       'migrate-stats-extras',
+      'migrate-cocreation-points',
       'render-assets',
       'admin-grant',
       'serve',
@@ -489,6 +492,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
     try {
       migrateWebProviderStatsExtras(store);
       process.stdout.write(JSON.stringify({ action, root, schema: 130, statsExtras: true }) + '\n');
+    } finally {
+      store.close();
+    }
+  } else if (action === 'migrate-cocreation-points') {
+    // An existing provider-* instance at schema 130 gains memo / pair-story notes and points for co-creation notes.
+    const { store } = openProviderStore(root);
+    try {
+      migrateWebProviderCocreationPoints(store);
+      process.stdout.write(JSON.stringify({ action, root, schema: 131, cocreationPoints: true }) + '\n');
     } finally {
       store.close();
     }

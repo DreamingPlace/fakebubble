@@ -12,6 +12,7 @@ import { dialogueParts } from '../../../packages/domain/directions.ts';
 
 import { PROMPTS_V7 } from './prompts.generated.ts';
 import { CAST_CONTEXT_PROMPT, CAST_REVIEW_PROMPT, castPromptHash } from './cast-prompt.ts';
+import { SEED_CHARACTER_PROMPT, SEED_REVIEW_PROMPT } from './seed-prompt.ts';
 import { CAST_LIMITS } from '../../../packages/contracts/web-cast.ts';
 
 const TEXT_CONTENT_RULES = PROMPTS_V7.textContentRules.replace('{{EXPRESSIONS}}', EXPRESSIONS.join('/'));
@@ -347,7 +348,9 @@ export function promptMessages(request: TextGenerationRequest) {
           : request.deliveryMode === 'voice'
             ? SPEECH_DRAFT_TASK
             : '') +
-        (cast ? CAST_CONTEXT_PROMPT : ''),
+        (cast ? CAST_CONTEXT_PROMPT : '') +
+        // Part 24c: a seed character ("成长中") is read with one more block; any other character's bytes are unchanged.
+        (request.character.seed === true ? SEED_CHARACTER_PROMPT : ''),
     },
     { role: 'user' as const, content },
   ];
@@ -362,7 +365,8 @@ export function reviewPromptMessages(request: TextGenerationRequest, draft: Text
       : request.deliveryMode === 'voice'
         ? SPEECH_REVIEW_TASK
         : '') +
-    (request.cast ? CAST_REVIEW_PROMPT : '');
+    (request.cast ? CAST_REVIEW_PROMPT : '') +
+    (request.character.seed === true ? SEED_REVIEW_PROMPT : '');
   messages[1]!.content = JSON.stringify({
     ...JSON.parse(messages[1]!.content),
     draftPresentationCheck: inspectBubbles(draft.bubbles, bubbleLimits(request.deliveryMode)[draft.mode]),

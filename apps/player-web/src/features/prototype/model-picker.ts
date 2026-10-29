@@ -12,8 +12,8 @@ import {
 import { h } from '../cocreation/h.ts';
 
 export const modelCopy = {
-  /** Part 25a: the sheet's title, with the pink brain after it ("给瓜瓜换个🧠"). */
-  title: (name: string) => `给${name}换个`,
+  /** Part 24c: the sheet's title when opened, with the pink brain after it. */
+  title: '当前大脑',
   brain: '脑子',
   /** The entry of the chat's ⋯ menu. */
   menuLabel: '切换回复模型',
@@ -72,7 +72,7 @@ export function backupNote(
 
 export interface ModelPickerOptions {
   info: ModelChoiceInfo;
-  /** The character whose replies the model writes: the sheet is titled "给{name}换个". */
+  /** The character whose replies the model writes: kept for callers; the sheet is titled 当前大脑. */
   characterName: string;
   /** The character's accent colour: the picked row is outlined in it. */
   accent?: string;
@@ -91,7 +91,7 @@ export function openModelPicker(options: ModelPickerOptions) {
   const title = h(
     'strong',
     { class: 'acct-title mp-title', attrs: { id: 'mp-title' } },
-    h('span', { text: modelCopy.title(options.characterName) }),
+    h('span', { text: modelCopy.title }),
     // The pink brain is drawn by the stylesheet (a data-URI background): no markup to parse, and it works under the strict CSP.
     h('span', { class: 'mp-brain', attrs: { role: 'img', 'aria-label': modelCopy.brain } }),
   );

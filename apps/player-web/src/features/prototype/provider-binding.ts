@@ -9,6 +9,7 @@ import { replyPauseMs } from './reply-presentation.ts';
 import { ProviderInviteController } from '../../session/provider-invite-controller.ts';
 import { mountChatMenu } from '../cocreation/chat-menu.ts';
 import { guideCopy, mountChatGuide } from '../cocreation/chat-guide.ts';
+import { openEarnSheet } from '../cocreation/earn-sheet.ts';
 import { openBillingSheet } from '../account/billing-sheet.ts';
 import { cocreationCopy, openCocreationSheet } from '../cocreation/cocreation-sheet.ts';
 import { accountCopy, openAccountSheet, type AccountSheetMode } from '../account/account-sheet.ts';
@@ -225,7 +226,7 @@ export class LiveBinding {
       // The first-time guide points at the button; it appears when this chat is opened (see open()).
       this.guides.set(
         character.characterId,
-        mountChatGuide(more, head, () => (this.modelChoice ? guideCopy.withPicker : guideCopy.guest)),
+        mountChatGuide(more, head, () => guideCopy.text(name)),
       );
       mountChatMenu(more, head, () => {
         const model = this.modelMenu(name, card.style.getPropertyValue('--accent'));
@@ -236,19 +237,7 @@ export class LiveBinding {
             sub: cocreationCopy.sub(name),
             // Any principal with a valid session may submit; only a pending invitation check holds it back.
             disabled: this.invitation.locked,
-            onSelect: () =>
-              openCocreationSheet({
-                api: this.api,
-                characterId: character.characterId,
-                name,
-                mark: shell.mark(character.characterId),
-                color: card.style.getPropertyValue('--avatar-bg'),
-                ink: card.style.getPropertyValue('--avatar-ink'),
-                aura: ['--aura-1', '--aura-2', '--aura-3', '--accent'].map((name) =>
-                  card.style.getPropertyValue(name),
-                ) as unknown as [string, string, string, string],
-                say: (message) => shell.say(message),
-              }),
+            onSelect: () => this.openCocreation(character.characterId),
           },
           // Part 25b: 外观 is for everyone, guests included; the choices stay on this device.
           {
@@ -266,6 +255,43 @@ export class LiveBinding {
     }
   }
   private guides = new Map<WebProviderCharacterId, ReturnType<typeof mountChatGuide>>();
+  /** The co-creation sheet of one character (from its ⋯ menu, or from 获得点数). The other live characters feed the pair story card. */
+  private openCocreation(characterId: WebProviderCharacterId) {
+    const shell = this.shell,
+      card = shell?.card(characterId);
+    if (!shell || !card) return;
+    openCocreationSheet({
+      api: this.api,
+      characterId,
+      name: shell.name(characterId),
+      mark: shell.mark(characterId),
+      color: card.style.getPropertyValue('--avatar-bg'),
+      ink: card.style.getPropertyValue('--avatar-ink'),
+      aura: ['--aura-1', '--aura-2', '--aura-3', '--accent'].map((name) =>
+        card.style.getPropertyValue(name),
+      ) as unknown as [string, string, string, string],
+      others: this.view.characters
+        .filter((entry) => entry.characterId !== characterId)
+        .map((entry) => ({ characterId: entry.characterId, name: shell.name(entry.characterId) })),
+      say: (message) => shell.say(message),
+    });
+  }
+  /** 获得点数: the character whose chat is open (else the first one) is where co-creation opens. */
+  private openEarn() {
+    const shell = this.shell;
+    if (!shell) return;
+    openEarnSheet({
+      api: this.api,
+      openCocreation: () => {
+        this.info?.close();
+        const active = this.view.characters.find((entry) =>
+          shell.card(entry.characterId)?.classList.contains('is-active'),
+        );
+        const target = active ?? this.view.characters[0];
+        if (target) this.openCocreation(target.characterId);
+      },
+    });
+  }
   /** The server's effective tier of a signed-in player (the page never derives one from the principal kind). */
   private get tier() {
     return this.account.signedIn ? this.account.tier : undefined;
@@ -414,6 +440,10 @@ export class LiveBinding {
         signup: () => void this.openAccount('signup'),
         login: () => void this.openAccount('login'),
         ...(billing ? { billing } : {}),
+        // Part 24c: only a player on points earns them (not a guest, not an unlimited player).
+        ...(account && this.modelChoice?.metered === true && !this.tier?.unlimited
+          ? { earn: () => this.openEarn() }
+          : {}),
         // The invite box is a modal step of its own: 我的信息 closes behind it (reopen it to see the new figures).
         enterCode: () => {
           this.info?.close();
