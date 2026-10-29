@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>系统状态 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes aIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.a-page{animation:aIn 280ms cubic-bezier(.2,.82,.24,1) both}
+.a-open{animation:aOpen 240ms cubic-bezier(.2,.82,.24,1) both}
+.a-row{transition:background 200ms}.a-row:hover{background:#F7F5F2}
+.a-col{transition:background 160ms}.a-col:hover{background:#F3F1EE}
+.a-tip{position:relative}
+.a-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.a-tip:hover::after{opacity:1;transform:none}
+.a-card{border-radius:18px;background:#FFFFFF;border:1px solid #ECE8E3;padding:18px 20px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.a-h2{margin:0;font-size:18px;font-weight:900}
+.a-kv{display:grid;grid-template-columns:1fr auto;gap:8px 12px;font-size:14px;align-items:center}
+.a-kv span:nth-child(odd){color:#6E6875;font-size:13px}
+.a-kv b{font-family:'DM Mono',monospace;font-weight:500;text-align:right}
+.a-b30{height:30px;padding:0 12px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.a-b36{height:36px;padding:0 16px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+@media (prefers-reduced-motion: reduce){.a-page,.a-open{animation-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 1500px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="系统状态" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="a-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">系统状态</h1>
+        <span style="height: 28px; padding: 0 12px; border-radius: 999px; background: #FDF3DC; color: #8A5A00; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700"><i style="width: 6px; height: 6px; border-radius: 50%; background: #8A5A00"></i>需要留意 · 4 项价格 6 天后到期</span>
+      </header>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: stretch">
+        <section class="a-card" style="background: #F2FAF5; border-color: #BFE0CB">
+          <div style="display: flex; justify-content: space-between; align-items: center"><h2 class="a-h2">运行版本</h2><span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #E7F3EC; color: #2F7A4F; font-size: 12px; font-weight: 700; display: flex; align-items: center">与预期一致</span></div>
+          <div class="a-kv"><span>构建提交</span><b class="a-tip" data-tip="00ac220 · Merge pull request #53 · 10-28 02:10 UTC">00ac220</b><span>迁移</span><b class="a-tip" data-tip="最后一步 130 · 8ec416d7…5621">55 步 · 到 130</b><span>数据库版本</span><b>130</b></div>
+        </section>
+        <section class="a-card">
+          <h2 class="a-h2">UNKNOWN 调用</h2>
+          <div style="font-size: 14px; display: flex; flex-direction: column">
+            <div style="display: grid; grid-template-columns: 1fr 60px 120px; height: 30px; align-items: center; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3"><span>类别</span><span style="text-align: right">数量</span><span style="text-align: right">最早的已过</span></div>
+            <div class="a-row" style="display: grid; grid-template-columns: 1fr 60px 120px; height: 36px; align-items: center"><span>供应商调用</span><b style="text-align: right; font-family: 'DM Mono', monospace; color: #8A5A00">1</b><span class="a-tip" data-tip="2026-10-27 22:41 UTC" style="text-align: right; font-family: 'DM Mono', monospace">1–7 天</span></div>
+            <div class="a-row" style="display: grid; grid-template-columns: 1fr 60px 120px; height: 36px; align-items: center; border-top: 1px solid #F3F0EC"><span>外部调用</span><span style="text-align: right; font-family: 'DM Mono', monospace">0</span><span style="text-align: right">—</span></div>
+            <div class="a-row" style="display: grid; grid-template-columns: 1fr 60px 120px; height: 36px; align-items: center; border-top: 1px solid #F3F0EC"><span>记忆向量化</span><span style="text-align: right; font-family: 'DM Mono', monospace">0</span><span style="text-align: right">—</span></div>
+          </div>
+        </section>
+        <section class="a-card">
+          <div style="display: flex; justify-content: space-between; align-items: center"><h2 class="a-h2">安全</h2><span style="height: 24px; padding: 0 10px; border-radius: 999px; background: #E7F3EC; color: #2F7A4F; font-size: 12px; font-weight: 700; display: flex; align-items: center">Turnstile 开</span></div>
+          <div class="a-kv"><span>今天未通过（UTC）</span><b>3</b><span>最近 7 天未通过</span><b>17</b><span>今天无法验证</span><b>0</b><span>最近 7 天无法验证</span><b>1</b></div>
+        </section>
+      </div>
+
+      <section class="a-card">
+        <div style="display: flex; justify-content: space-between; align-items: center"><h2 class="a-h2">价格</h2><button type="button" onClick="{{renewToggle}}" aria-expanded="{{renewAria}}" class="a-b36" style="border-color: #CFC8F2; color: #3F3596">续期价格</button></div>
+        <sc-if value="{{renew}}" hint-placeholder-val="{{ false }}">
+          <div class="a-open" style="border-radius: 12px; background: #F7F5FD; padding: 12px 14px; display: flex; align-items: center; gap: 12px; font-size: 14px"><span style="flex: 1">4 项价格续期 30 天，到 <b style="font-family: 'DM Mono', monospace">2026-12-03</b>；单价不变。</span><button type="button" class="a-b36" style="border-color: #5B4FC4; color: #3F3596">确认续期</button></div>
+        </sc-if>
+        <div style="border: 1px solid #ECE8E3; border-radius: 12px; font-size: 14px">
+          <div style="display: grid; grid-template-columns: 2fr 1fr 80px 140px 140px; gap: 12px; height: 36px; align-items: center; padding: 0 14px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3"><span>供应商 / 模型 / 阶段</span><span>微美元 / 单位</span><span>版本</span><span>到期 UTC</span><span>状态</span></div>
+          <sc-for list="{{prices}}" as="p" hint-placeholder-count="4">
+            <div class="a-row" style="display: grid; grid-template-columns: 2fr 1fr 80px 140px 140px; gap: 12px; height: 40px; align-items: center; padding: 0 14px; border-top: 1px solid #F3F0EC; background: #FFFBF1"><span style="font-family: 'DM Mono', monospace; font-size: 13px">{{p.n}}</span><span style="font-family: 'DM Mono', monospace; font-size: 13px">{{p.u}}</span><span style="font-family: 'DM Mono', monospace">v1</span><span class="a-tip" data-tip="2026-11-03 00:00 UTC" style="font-family: 'DM Mono', monospace">2026-11-03</span><b style="font-size: 13px; color: #8A5A00">6 天后到期</b></div>
+          </sc-for>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch">
+        <section class="a-card">
+          <div style="display: flex; justify-content: space-between; align-items: center"><h2 class="a-h2">预算</h2><button type="button" class="a-b30">预算充值</button></div>
+          <sc-for list="{{budgets}}" as="b" hint-placeholder-count="2">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <span style="display: flex; justify-content: space-between; font-size: 14px"><span>{{b.n}}</span><span style="font-family: 'DM Mono', monospace; font-size: 13px; color: #6E6875">剩余 <b style="color: #2B2833">{{b.left}}</b> / {{b.cap}}</span></span>
+              <span class="a-tip" data-tip="{{b.tip}}" style="height: 10px; border-radius: 999px; background: #F0ECE7; display: flex; overflow: hidden"><i style="width: {{b.used}}; background: #5B4FC4"></i><i style="width: {{b.held}}; background: #CFC8F2"></i></span>
+            </div>
+          </sc-for>
+          <div class="a-kv" style="border-top: 1px solid #F0ECE7; padding-top: 12px"><span>每日花费告警</span><b>$30</b><span>告警收件人</span><b>1 位 · 已绑定</b></div>
+        </section>
+        <section class="a-card">
+          <h2 class="a-h2">清理与开关</h2>
+          <div class="a-kv"><span>清理 · 上次成功</span><b>10-28 03:00</b><span>连续失败</span><b>0</b><span>正在清理</span><b>无</b></div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid #F0ECE7; padding-top: 12px">
+            <sc-for list="{{flags}}" as="f" hint-placeholder-count="5"><span class="a-tip" data-tip="{{f.k}}" style="height: 30px; padding: 0 12px; border-radius: 999px; background: {{f.bg}}; color: {{f.fg}}; font-size: 13px; display: flex; align-items: center; gap: 8px"><i style="width: 6px; height: 6px; border-radius: 50%; background: {{f.fg}}"></i>{{f.n}} · {{f.v}}</span></sc-for>
+          </div>
+        </section>
+      </div>
+
+      <section class="a-card">
+        <div style="display: flex; justify-content: space-between; align-items: center"><h2 class="a-h2">技术指标</h2><span style="display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE"><sc-for list="{{ranges}}" as="o" hint-placeholder-count="3"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.aria}}" style="height: 28px; padding: 0 14px; border: none; border-radius: 999px; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{o.sh}}; cursor: pointer; transition: background 200ms">{{o.l}}</button></sc-for></span></div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="font-size: 13px; color: #6E6875">失败的回复（每天）</span>
+            <div style="height: 140px; display: flex; gap: 4px; align-items: flex-end; border-bottom: 1px solid #ECE8E3">
+              <sc-for list="{{fails}}" as="b" hint-placeholder-count="14"><div class="a-col a-tip" data-tip="{{b.tip}}" style="flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; border-radius: 6px 6px 0 0"><i style="width: 60%; height: {{b.h}}; background: #B23A26; border-radius: 4px 4px 0 0; opacity: .8"></i></div></sc-for>
+            </div>
+          </div>
+          <div style="border: 1px solid #ECE8E3; border-radius: 12px; font-size: 13px; align-self: start">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 70px; height: 32px; align-items: center; padding: 0 12px; color: #6E6875; border-bottom: 1px solid #ECE8E3"><span>错误类</span><span>阶段</span><span style="text-align: right">次</span></div>
+            <div class="a-row" style="display: grid; grid-template-columns: 1fr 1fr 70px; height: 34px; align-items: center; padding: 0 12px; font-family: 'DM Mono', monospace"><span>ProviderTimeout</span><span>speech</span><span style="text-align: right">9</span></div>
+            <div class="a-row" style="display: grid; grid-template-columns: 1fr 1fr 70px; height: 34px; align-items: center; padding: 0 12px; font-family: 'DM Mono', monospace; border-top: 1px solid #F3F0EC"><span>ReviewRejected</span><span>review</span><span style="text-align: right">4</span></div>
+            <div class="a-row" style="display: grid; grid-template-columns: 1fr 1fr 70px; height: 34px; align-items: center; padding: 0 12px; font-family: 'DM Mono', monospace; border-top: 1px solid #F3F0EC"><span>RateLimited</span><span>draft</span><span style="text-align: right">1</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { renew: false, r: 1 }; }
+  renderVals() {
+    var self = this, S = this.state;
+    var f = [0, 1, 0, 2, 1, 0, 3, 1, 0, 2, 4, 1, 0, 1];
+    return {
+      renew: S.renew, renewAria: S.renew ? 'true' : 'false', renewToggle: function () { self.setState({ renew: !S.renew }); },
+      ranges: ['7天', '14天', '31天'].map(function (l, i) { var on = S.r === i; return { l: l, aria: on ? 'true' : 'false', bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#3F3596' : '#2B2833', sh: on ? '0 1px 3px rgba(43,40,51,.12)' : 'none', pick: function () { self.setState({ r: i }); } }; }),
+      prices: [{ n: 'deepseek / deepseek-flash / draft', u: '2 µ$ / 令牌' }, { n: 'deepseek / deepseek-v4-pro / review', u: '4 µ$ / 令牌' }, { n: 'fish / drama-3 / speech', u: '50 µ$ / 字节' }, { n: 'fish / s2.1-pro / speech', u: '15 µ$ / 字节' }],
+      budgets: [{ n: '文字', cap: '$100', left: '$71.20', used: '27%', held: '2%', tip: '已用 $27.10 · 占用中 $1.70 · 剩余 $71.20' }, { n: '语音', cap: '$150', left: '$118.90', used: '20%', held: '1%', tip: '已用 $29.60 · 占用中 $1.50 · 剩余 $118.90' }],
+      flags: [{ n: '游客只聊一位', v: '开', k: 'GUEST_ONE_CHARACTER_ENABLED', bg: '#E7F3EC', fg: '#2F7A4F' }, { n: '关系与故事进聊天', v: '关', k: 'CAST_CONTEXT_ENABLED', bg: '#F0ECE7', fg: '#6E6875' }, { n: '玩家选模型', v: '关', k: 'PLAYER_MODEL_CHOICE_ENABLED', bg: '#F0ECE7', fg: '#6E6875' }, { n: '运维通道', v: '关', k: 'OPERATOR_ENABLED', bg: '#F0ECE7', fg: '#6E6875' }],
+      fails: f.map(function (v, i) { return { h: (v / 5 * 100) + '%', tip: '10-' + (15 + i) + ' UTC · 失败 ' + v + ' 条' }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

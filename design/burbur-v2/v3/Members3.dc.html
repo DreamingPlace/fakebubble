@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>管理员与权限 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes aIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.a-page{animation:aIn 280ms cubic-bezier(.2,.82,.24,1) both}
+.a-open{animation:aOpen 240ms cubic-bezier(.2,.82,.24,1) both}
+.a-row{transition:background 200ms}.a-row:hover{background:#F7F5F2}
+.a-tip{position:relative}
+.a-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.a-tip:hover::after{opacity:1;transform:none}
+.a-in{height:36px;box-sizing:border-box;border-radius:10px;border:1px solid #E2DDD6;padding:0 12px;font:inherit;font-size:14px;color:#2B2833;background:#FFFFFF;min-width:0}
+.a-b30{height:30px;padding:0 12px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.a-b36{height:36px;padding:0 16px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+@media (prefers-reduced-motion: reduce){.a-page,.a-open{animation-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 1300px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="管理员与权限" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="a-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">管理员与权限</h1>
+        <span style="font-size: 13px; color: #6E6875">{{n}} 位管理员</span>
+      </header>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 16px 20px; display: grid; grid-template-columns: minmax(200px, 1fr) auto auto; gap: 12px; align-items: end">
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #6E6875">新管理员备注<input class="a-in" placeholder="例：共创写手 · 小雨"></label>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #6E6875">先给哪套权限<span style="display: flex; gap: 6px"><button type="button" class="a-b30" style="height: 36px; border-color: #CFC8F2; background: #EEEBFA; color: #3F3596; font-weight: 700">共创写手</button><button type="button" class="a-b30" style="height: 36px">运营</button><button type="button" class="a-b30" style="height: 36px">全部</button></span></div>
+        <button type="button" class="a-b36" style="border-color: #CFC8F2; color: #3F3596">添加并签发一次性凭据</button>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; font-size: 14px">
+        <div style="display: grid; grid-template-columns: 24px 32px 1.2fr 1fr 1fr 1.2fr; gap: 12px; height: 40px; align-items: center; padding: 0 20px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3"><span></span><span class="a-tip" data-tip="改动标记的颜色">色</span><span>名称</span><span>角色</span><span>权限</span><span>最近登录 UTC</span></div>
+        <sc-for list="{{people}}" as="p" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; border-top: {{p.line}}">
+            <button type="button" class="a-row" onClick="{{p.pick}}" aria-expanded="{{p.aria}}" style="height: 50px; border: none; background: {{p.bg}}; font: inherit; color: #2B2833; display: grid; grid-template-columns: 24px 32px 1.2fr 1fr 1fr 1.2fr; gap: 12px; align-items: center; padding: 0 20px; text-align: left; cursor: pointer">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6E6875" stroke-width="2.5" aria-hidden="true" style="transform: rotate({{p.rot}}); transition: transform 240ms cubic-bezier(.2,.82,.24,1)"><path d="m9 6 6 6-6 6"></path></svg>
+              <b style="width: 18px; height: 18px; border-radius: 5px; background: {{p.col}}; color: #FFFFFF; font-size: 11px; display: flex; align-items: center; justify-content: center">{{p.mark}}</b>
+              <span style="font-weight: {{p.weight}}">{{p.name}}</span><span>{{p.role}}</span><span class="a-tip" data-tip="{{p.permTip}}" style="font-family: 'DM Mono', monospace">{{p.perm}}</span><span style="font-family: 'DM Mono', monospace; font-size: 13px">{{p.last}}</span>
+            </button>
+            <sc-if value="{{p.isOpen}}" hint-placeholder-val="{{ true }}">
+              <div class="a-open" style="margin: 0 20px 18px; display: flex; flex-direction: column; gap: 14px">
+                <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border-radius: 12px; background: #F7F5FD; font-size: 13px">
+                  <span style="color: #6E6875">快速设置</span><span style="display: flex; gap: 6px"><button type="button" class="a-b30">共创写手</button><button type="button" class="a-b30">运营</button><button type="button" class="a-b30">全部</button></span>
+                  <i style="width: 1px; height: 18px; background: #E2DDD6"></i>
+                  <span style="color: #6E6875">标记颜色</span>
+                  <span style="display: flex; gap: 6px"><sc-for list="{{swatches}}" as="s" hint-placeholder-count="8"><button type="button" onClick="{{s.pick}}" aria-label="{{s.c}}" aria-pressed="{{s.aria}}" style="width: 22px; height: 22px; border-radius: 6px; border: none; background: {{s.c}}; box-shadow: {{s.ring}}; cursor: pointer; transition: box-shadow 200ms"></button></sc-for></span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 16px">
+                  <sc-for list="{{groups}}" as="g" hint-placeholder-count="7">
+                    <div style="display: flex; flex-direction: column; gap: 8px"><span style="font-size: 12px; color: #6E6875; font-weight: 700">{{g.t}}</span>
+                      <sc-for list="{{g.items}}" as="i" hint-placeholder-count="3"><label class="a-tip" data-tip="{{i.tip}}" style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; cursor: pointer"><input type="checkbox" checked="{{i.on}}" onChange="{{i.flip}}" style="width: 16px; height: 16px; margin: 1px 0 0; accent-color: #5B4FC4; flex: none"><span>{{i.l}}</span></label></sc-for>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; border-top: 1px solid #F0ECE7; padding-top: 14px">
+                  <button type="button" style="height: 36px; padding: 0 18px; border: none; border-radius: 999px; background: #5B4FC4; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">保存 {{cur}} 的权限</button>
+                  <button type="button" class="a-b36" style="font-weight: 400">签发新登录凭据</button>
+                  <span style="flex: 1"></span>
+                  <button type="button" class="a-b36" style="border-color: #E8B9B0; color: #B23A26; font-weight: 400">收回全部功能权限</button>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: 1, col: { 0: '#5B4FC4', 1: '#0E7490', 2: '#B45309' }, perm: { 1: { 'r0': 1, 'b0': 1, 'c0': 1, 'c1': 1 } } };
+  }
+  renderVals() {
+    var self = this, S = this.state;
+    var P = [{ name: '主管理员', mark: '主', role: '主管理员', last: '2026-10-28 09:30' }, { name: '小鱼', mark: '鱼', role: '管理员', last: '2026-10-28 14:02' }, { name: '阿北', mark: '北', role: '管理员', last: '2026-10-28 13:40' }];
+    var G = [
+      ['角色资料', 'r', [['查看角色'], ['新建角色'], ['修改并保存草稿'], ['放弃服务器草稿', '只移除未发布草稿，正式版本不变'], ['删除角色']]],
+      ['声音成品', 'v', [['上传与试听成品音频'], ['批准成品音频']]],
+      ['预演与发布', 'p', [['预演测试', '会花真钱'], ['发布']]],
+      ['玩家邀请', 'i', [['查看邀请记录'], ['生成邀请码'], ['撤销邀请码'], ['撤销体验授权'], ['邀请与额度']]],
+      ['共创收件箱', 'x', [['查看'], ['处理']]],
+      ['关系与故事', 'c', [['查看'], ['修改草稿'], ['发布与回滚']]],
+      ['模型与价格', 'm', [['修改模型与价格']]]
+    ];
+    var total = G.reduce(function (a, g) { return a + g[2].length; }, 0);
+    var mine = S.perm[S.open] || {};
+    var groups = G.map(function (g) {
+      return { t: g[0], items: g[2].map(function (it, k) {
+        var key = g[1] + k, on = S.open === 0 || !!mine[key];
+        return { l: it[0], tip: it[1] || g[0] + ' · ' + it[0], on: on, flip: function () { if (S.open === 0) return; var p = Object.assign({}, S.perm); var m = Object.assign({}, p[S.open] || {}); m[key] = !m[key]; p[S.open] = m; self.setState({ perm: p }); } };
+      }) };
+    });
+    var people = P.map(function (p, i) {
+      var on = S.open === i, cnt = i === 0 ? '全部' : String(Object.keys(S.perm[i] || {}).filter(function (k) { return S.perm[i][k]; }).length);
+      return Object.assign({}, p, { col: S.col[i], perm: cnt, permTip: i === 0 ? '主管理员总是全部 ' + total + ' 项' : cnt + ' / ' + total + ' 项', isOpen: on, aria: on ? 'true' : 'false', bg: on ? '#EEEBFA' : '#FFFFFF', rot: on ? '90deg' : '0deg', weight: on ? 700 : 400, line: i === 0 ? 'none' : '1px solid #F0ECE7', pick: function () { self.setState({ open: on ? -1 : i }); } });
+    });
+    var palette = ['#5B4FC4', '#0E7490', '#B45309', '#9D174D', '#4D7C0F', '#1D4ED8', '#C2410C', '#6D28D9'];
+    var used = {}; Object.keys(S.col).forEach(function (k) { if (Number(k) !== S.open) used[S.col[k]] = true; });
+    return {
+      n: P.length, people: people, groups: groups, cur: S.open >= 0 ? P[S.open].name : '',
+      swatches: palette.map(function (c) { var on = S.col[S.open] === c, taken = !!used[c]; return { c: c, aria: on ? 'true' : 'false', ring: on ? '0 0 0 2px #FFFFFF, 0 0 0 4px ' + c : taken ? 'inset 0 0 0 7px rgba(255,255,255,.7)' : 'none', pick: function () { if (taken) return; var m = Object.assign({}, S.col); m[S.open] = c; self.setState({ col: m }); } }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

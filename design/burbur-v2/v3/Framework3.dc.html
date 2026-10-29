@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>V3 骨架</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes fwOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.fw-open{animation:fwOpen 240ms cubic-bezier(.2,.8,.2,1) both}
+.fw-row{transition:background 200ms cubic-bezier(.2,.8,.2,1)}
+.fw-row:hover{background:#F7F5F2}
+.fw-tip{position:relative}
+.fw-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:5;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-family:'DM Mono',monospace;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.fw-tip:hover::after{opacity:1;transform:none}
+.fw-pt{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;border:2px solid #FFFFFF;box-sizing:border-box;padding:0;cursor:default}
+.fw-pt::before{content:'';position:absolute;left:4px;top:-220px;width:1px;height:440px;background:#CFC8F2;opacity:0;transition:opacity 160ms;pointer-events:none}
+.fw-pt:hover::before{opacity:1}
+.fw-pt:hover{transform:scale(1.35)}
+.fw-hold{position:relative;overflow:hidden}
+.fw-hold i{position:absolute;inset:0;width:0;background:#B23A26;transition:width 80ms linear}
+.fw-hold.on i{width:100%;transition:width 1500ms linear}
+@media (prefers-reduced-motion: reduce){.fw-open{animation-duration:1ms}.fw-hold.on i{transition-duration:1ms}}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1560px; box-sizing: border-box; padding: 48px 56px 56px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-direction: column; gap: 28px; font-variant-numeric: tabular-nums">
+
+  <header style="display: flex; align-items: baseline; justify-content: space-between">
+    <h1 style="margin: 0; font-size: 34px; font-weight: 900; letter-spacing: -0.03em">每一页只用三种布局</h1>
+    <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: #6E6875">PC · 全宽 · 时间都是 UTC</span>
+  </header>
+
+  <section style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px">
+    <div style="background: #FFFFFF; border: 1px solid #ECE8E3; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 10px"><b style="width: 28px; height: 28px; border-radius: 8px; background: #EEEBFA; color: #3F3596; display: flex; align-items: center; justify-content: center; font-size: 14px">A</b><span style="font-size: 17px; font-weight: 900">看数</span></div>
+      <div style="height: 200px; border-radius: 12px; background: #F6F4F1; padding: 12px; box-sizing: border-box; display: grid; grid-template-rows: 44px 1fr; gap: 10px">
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px"><i style="background: #FFFFFF; border-radius: 8px"></i><i style="background: #FFFFFF; border-radius: 8px"></i><i style="background: #FFFFFF; border-radius: 8px"></i><i style="background: #FFFFFF; border-radius: 8px"></i></div>
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px"><i style="background: #FFFFFF; border-radius: 8px; border-bottom: 3px solid #CFC8F2"></i><i style="background: #FFFFFF; border-radius: 8px"></i></div>
+      </div>
+      <span style="font-size: 13px; color: #6E6875">总览（含玩家统计）· 消耗表 · 系统状态</span>
+    </div>
+    <div style="background: #FFFFFF; border: 1px solid #ECE8E3; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 10px"><b style="width: 28px; height: 28px; border-radius: 8px; background: #EEEBFA; color: #3F3596; display: flex; align-items: center; justify-content: center; font-size: 14px">B</b><span style="font-size: 17px; font-weight: 900">选一行 → 下方展开</span></div>
+      <div style="height: 200px; border-radius: 12px; background: #F6F4F1; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px">
+        <i style="height: 24px; background: #FFFFFF; border-radius: 6px"></i>
+        <i style="height: 24px; background: #EEEBFA; border-radius: 6px"></i>
+        <i style="height: 62px; background: #FFFFFF; border-radius: 6px; border: 1px dashed #CFC8F2"></i>
+        <i style="height: 24px; background: #FFFFFF; border-radius: 6px"></i>
+        <i style="height: 24px; background: #FFFFFF; border-radius: 6px"></i>
+      </div>
+      <span style="font-size: 13px; color: #6E6875">邀请与额度 · 共创收件箱 · 管理员与权限 · 积分发放 · 模型与价格 · 我的账号</span>
+    </div>
+    <div style="background: #FFFFFF; border: 1px solid #ECE8E3; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; align-items: center; gap: 10px"><b style="width: 28px; height: 28px; border-radius: 8px; background: #EEEBFA; color: #3F3596; display: flex; align-items: center; justify-content: center; font-size: 14px">C</b><span style="font-size: 17px; font-weight: 900">工作台</span></div>
+      <div style="height: 200px; border-radius: 12px; background: #F6F4F1; padding: 12px; box-sizing: border-box; display: grid; grid-template-rows: 1fr 46px; gap: 8px">
+        <div style="display: grid; grid-template-columns: 14px 1fr; gap: 8px"><i style="background: #FFFFFF; border-radius: 6px"></i><i style="background: #FFFFFF; border-radius: 8px; border-top: 10px solid #EEEBFA"></i></div>
+        <i style="background: #FFFFFF; border-radius: 8px; border: 1px dashed #CFC8F2"></i>
+      </div>
+      <span style="font-size: 13px; color: #6E6875">角色工作台 · 关系与故事</span>
+    </div>
+  </section>
+
+  <section style="background: #FFFFFF; border: 1px solid #ECE8E3; border-radius: 18px; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+    <span style="font-size: 13px; color: #6E6875">每页同一个标题行：左边名字，右边一个状态 + 唯一的实心按钮</span>
+    <div style="height: 56px; display: flex; align-items: center; justify-content: space-between; border-top: 1px dashed #E2DDD6; border-bottom: 1px dashed #E2DDD6">
+      <span style="font-size: 30px; font-weight: 900; letter-spacing: -0.03em">关系与故事</span>
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6E6875"><span style="font-family: 'DM Mono', monospace">线上 v2</span><i style="width: 1px; height: 14px; background: #E2DDD6"></i><span style="color: #8A5A00">草稿 6 处没发布</span></span>
+        <button type="button" style="height: 36px; padding: 0 18px; border: none; border-radius: 999px; background: #5B4FC4; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700">发布 v3</button>
+      </div>
+    </div>
+  </section>
+
+  <section style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px">
+    <div style="background: #FFFFFF; border: 1px solid #ECE8E3; border-radius: 18px; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px">
+      <span style="font-size: 17px; font-weight: 900">改动用颜色说话</span>
+      <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px 16px; align-items: center; font-size: 13px">
+        <span style="color: #6E6875">已发布</span>
+        <span style="height: 40px; border-radius: 12px; border: 1px solid #E2DDD6; display: flex; align-items: center; padding: 0 12px; font-size: 14px">游戏搭子，输了互相甩锅。</span>
+        <span style="color: #8A5A00; font-weight: 700">还没保存</span>
+        <span style="height: 40px; border-radius: 12px; border: 1.5px solid #D9A441; background: #FDF6E6; display: flex; align-items: center; padding: 0 12px; font-size: 14px">游戏搭子，输了互相甩锅，赢了抢功。</span>
+        <span style="color: #6E6875">草稿（谁改的）</span>
+        <span style="height: 40px; border-radius: 12px; border: 1px solid #E2DDD6; display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 14px"><b class="fw-tip" data-tip="小鱼 · 10-28 14:02 UTC" style="width: 16px; height: 16px; border-radius: 4px; background: #0E7490; color: #FFFFFF; font-size: 10px; display: flex; align-items: center; justify-content: center; flex: none">鱼</b>一起熬夜打排位。</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 4px; border-top: 1px solid #F0ECE7">
+        <span style="font-size: 12px; color: #6E6875; padding-top: 8px">每位管理员一个固定颜色（方块）。角色永远是圆点。</span>
+        <div style="display: flex; gap: 14px; align-items: center; font-size: 13px">
+          <span style="display: flex; align-items: center; gap: 6px"><b style="width: 16px; height: 16px; border-radius: 4px; background: #5B4FC4; color: #FFFFFF; font-size: 10px; display: flex; align-items: center; justify-content: center">主</b>主管理员</span>
+          <span style="display: flex; align-items: center; gap: 6px"><b style="width: 16px; height: 16px; border-radius: 4px; background: #0E7490; color: #FFFFFF; font-size: 10px; display: flex; align-items: center; justify-content: center">鱼</b>小鱼</span>
+          <span style="display: flex; align-items: center; gap: 6px"><b style="width: 16px; height: 16px; border-radius: 4px; background: #B45309; color: #FFFFFF; font-size: 10px; display: flex; align-items: center; justify-content: center">北</b>阿北</span>
+          <i style="width: 1px; height: 16px; background: #E2DDD6"></i>
+          <span style="display: flex; align-items: center; gap: 6px"><i style="width: 10px; height: 10px; border-radius: 50%; background: #1D4ED8"></i>JOJO</span>
+          <span style="display: flex; align-items: center; gap: 6px"><i style="width: 10px; height: 10px; border-radius: 50%; background: #B45309"></i>瓜瓜</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #F0ECE7; padding-top: 12px">
+        <span style="font-size: 12px; color: #6E6875">名字里永远只有名字。状态在行尾同一列，只用三个记号：</span>
+        <div style="display: flex; gap: 22px; align-items: center; font-size: 13px">
+          <span style="display: flex; align-items: center; gap: 8px"><i style="width: 8px; height: 8px; border-radius: 50%; background: #D98A00"></i>有草稿</span>
+          <span style="display: flex; align-items: center; gap: 8px"><i style="width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #8C8697; box-sizing: border-box"></i>还没上线</span>
+          <span style="display: flex; align-items: center; gap: 8px"><b style="min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: #C2410C; color: #FFFFFF; font-family: 'DM Mono', monospace; font-size: 11px; display: flex; align-items: center; justify-content: center">2</b>共创待看</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #FFFFFF; border: 1px solid #ECE8E3; border-radius: 18px; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 17px; font-weight: 900">指到哪，数字就在哪</span><span style="font-size: 12px; color: #6E6875">移到点或格子上</span></div>
+      <div style="position: relative; height: 200px; margin: 6px 4px 0; border-bottom: 1px solid #ECE8E3">
+        <svg width="100%" height="200" viewBox="0 0 560 200" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0"><polyline points="0,150 93,120 187,132 280,84 373,96 467,52 560,64" fill="none" stroke="#5B4FC4" stroke-width="2.5" vector-effect="non-scaling-stroke"></polyline><polyline points="0,180 93,170 187,176 280,150 373,160 467,138 560,144" fill="none" stroke="#D98A00" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"></polyline></svg>
+        <sc-for list="{{pts}}" as="p" hint-placeholder-count="7">
+          <button type="button" class="fw-pt fw-tip" data-tip="{{p.tip}}" aria-label="{{p.tip}}" style="left: {{p.x}}; top: {{p.y}}; background: {{p.c}}"></button>
+        </sc-for>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875"><span>10-22</span><span>10-23</span><span>10-24</span><span>10-25</span><span>10-26</span><span>10-27</span><span>10-28</span></div>
+      <div style="border: 1px solid #ECE8E3; border-radius: 12px; overflow: visible; font-size: 13px">
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; padding: 0 12px; height: 34px; align-items: center; color: #6E6875; border-bottom: 1px solid #ECE8E3"><span>模型</span><span style="text-align: right">回复</span><span style="text-align: right">费用</span><span style="text-align: right">平均耗时</span></div>
+        <div class="fw-row" style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; padding: 0 12px; height: 38px; align-items: center"><span>DeepSeek</span><span class="fw-tip" data-tip="1,284 条 · 占 71%" style="text-align: right; font-family: 'DM Mono', monospace">1,284</span><span class="fw-tip" data-tip="$4.213 870 (4,213,870 µ$)" style="text-align: right; font-family: 'DM Mono', monospace">$4.21</span><span class="fw-tip" data-tip="中位 2.4 s · 最慢 9.8 s" style="text-align: right; font-family: 'DM Mono', monospace">2.6 s</span></div>
+        <div class="fw-row" style="display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr; padding: 0 12px; height: 38px; align-items: center; border-top: 1px solid #F3F0EC"><span>Fish Drama 3</span><span class="fw-tip" data-tip="522 条 · 占 29%" style="text-align: right; font-family: 'DM Mono', monospace">522</span><span class="fw-tip" data-tip="$11.402 116 (11,402,116 µ$)" style="text-align: right; font-family: 'DM Mono', monospace">$11.40</span><span class="fw-tip" data-tip="中位 3.1 s · 最慢 12.0 s" style="text-align: right; font-family: 'DM Mono', monospace">3.3 s</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; align-items: start">
+    <div style="background: #FFFFFF; border: 1px solid #ECE8E3; border-radius: 18px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 17px; font-weight: 900">B · 点一行，详情就在它下面</span><span style="font-size: 12px; color: #6E6875">再点一次收起 · 一次只开一行</span></div>
+      <div style="border: 1px solid #ECE8E3; border-radius: 12px; font-size: 14px">
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; border-top: {{r.line}}">
+            <button type="button" class="fw-row" onClick="{{r.pick}}" aria-expanded="{{r.open}}" style="height: 44px; border: none; background: {{r.bg}}; color: #2B2833; font: inherit; font-size: 14px; display: grid; grid-template-columns: 24px 1.4fr 1fr 1fr; align-items: center; padding: 0 12px; text-align: left; cursor: pointer; border-radius: {{r.radius}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6E6875" stroke-width="2.5" aria-hidden="true" style="transform: rotate({{r.rot}}); transition: transform 240ms cubic-bezier(.2,.8,.2,1)"><path d="m9 6 6 6-6 6"></path></svg><span style="font-weight: {{r.weight}}">{{r.name}}</span><span style="font-family: 'DM Mono', monospace; font-size: 13px">{{r.a}}</span><span style="font-family: 'DM Mono', monospace; font-size: 13px; text-align: right">{{r.b}}</span></button>
+            <sc-if value="{{r.isOpen}}" hint-placeholder-val="{{ false }}">
+              <div class="fw-open" style="margin: 0 12px 12px; border-radius: 10px; background: #F7F5FD; padding: 14px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+                <span style="height: 30px; border-radius: 8px; background: #FFFFFF"></span><span style="height: 30px; border-radius: 8px; background: #FFFFFF"></span><span style="height: 30px; border-radius: 8px; background: #FFFFFF"></span><span style="height: 30px; border-radius: 8px; background: #FFFFFF"></span>
+                <span style="height: 30px; border-radius: 8px; background: #FFFFFF"></span><span style="height: 30px; border-radius: 8px; background: #FFFFFF"></span><span style="height: 30px; border-radius: 8px; background: #FFFFFF"></span><span style="height: 30px; border-radius: 8px; background: #FFFFFF"></span>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="background: #FFFFFF; border: 1px solid #ECE8E3; border-radius: 18px; padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 17px; font-weight: 900">删除：三步，放在最底下</span><span style="font-size: 12px; color: #6E6875">没有弹窗</span></div>
+      <div style="display: flex; gap: 10px; align-items: center">
+        <button type="button" onClick="{{dangerToggle}}" aria-expanded="{{dangerOpen}}" style="height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid #E8B9B0; background: #FFFFFF; color: #B23A26; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">删除角色 JOJO</button>
+        <span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #6E6875">① 点开</span>
+      </div>
+      <sc-if value="{{showDanger}}" hint-placeholder-val="{{ true }}">
+        <div class="fw-open" style="border-radius: 12px; background: #FBEDEA; padding: 16px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: 13px">
+            <span style="background: #FFFFFF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column"><b style="font-size: 18px; font-family: 'DM Mono', monospace">214</b>位玩家的聊天</span>
+            <span style="background: #FFFFFF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column"><b style="font-size: 18px; font-family: 'DM Mono', monospace">1,862</b>条记忆</span>
+            <span style="background: #FFFFFF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column"><b style="font-size: 18px; font-family: 'DM Mono', monospace">530</b>段私有音频</span>
+          </div>
+          <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #B23A26">② 输入 JOJO
+            <input value="{{typed}}" onInput="{{onType}}" aria-label="输入角色名确认" style="height: 36px; border-radius: 10px; border: 1px solid #E8B9B0; padding: 0 12px; font: inherit; font-size: 14px; color: #2B2833; background: #FFFFFF">
+          </label>
+          <button type="button" class="{{holdClass}}" onMouseDown="{{holdStart}}" onMouseUp="{{holdStop}}" onMouseLeave="{{holdStop}}" disabled="{{holdDisabled}}" style="height: 40px; border-radius: 999px; border: 1px solid #B23A26; background: #FFFFFF; color: {{holdFg}}; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; opacity: {{holdOpacity}}"><i></i><span style="position: relative; mix-blend-mode: difference; color: #FFFFFF">{{holdLabel}}</span></button>
+        </div>
+      </sc-if>
+    </div>
+  </section>
+
+  <section style="background: #FFFFFF; border: 1px solid #ECE8E3; border-radius: 18px; padding: 20px 24px; display: grid; grid-template-columns: 180px repeat(5, minmax(0, 1fr)); gap: 14px; align-items: center; font-size: 13px">
+    <span style="font-size: 17px; font-weight: 900">动效</span>
+    <span style="display: flex; flex-direction: column; gap: 2px"><b>进入页面</b><span style="font-family: 'DM Mono', monospace; color: #6E6875">280ms · 上浮 8px</span></span>
+    <span style="display: flex; flex-direction: column; gap: 2px"><b>下方展开 / 收起</b><span style="font-family: 'DM Mono', monospace; color: #6E6875">240ms · 高度+淡入</span></span>
+    <span style="display: flex; flex-direction: column; gap: 2px"><b>选中滑动</b><span style="font-family: 'DM Mono', monospace; color: #6E6875">200ms · 底色滑过去</span></span>
+    <span style="display: flex; flex-direction: column; gap: 2px"><b>移除一行</b><span style="font-family: 'DM Mono', monospace; color: #6E6875">200ms · 淡出再收起</span></span>
+    <span style="display: flex; flex-direction: column; gap: 2px"><b>数字变化</b><span style="font-family: 'DM Mono', monospace; color: #6E6875">300ms · 滚动到新值</span></span>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: 1, danger: true, typed: '', holding: false, deleted: false };
+    this.timer = null;
+  }
+  componentWillUnmount() { if (this.timer) clearTimeout(this.timer); }
+  renderVals() {
+    var self = this;
+    var days = ['10-22', '10-23', '10-24', '10-25', '10-26', '10-27', '10-28'];
+    var a = [150, 120, 132, 84, 96, 52, 64], b = [180, 170, 176, 150, 160, 138, 144];
+    var av = [212, 260, 241, 318, 299, 371, 352], bv = [38, 54, 44, 86, 70, 102, 96];
+    var pts = [];
+    days.forEach(function (d, i) {
+      var x = (i / 6 * 100).toFixed(2) + '%';
+      pts.push({ x: x, y: a[i] + 'px', c: '#5B4FC4', tip: d + ' · 回复 ' + av[i] + ' 条' });
+      pts.push({ x: x, y: b[i] + 'px', c: '#D98A00', tip: d + ' · 新注册 ' + bv[i] + ' 人' });
+    });
+    var raw = [
+      { name: '十月朋友', a: '已兑换 18 / 30', b: '10-21' },
+      { name: '测试组 · 第二批', a: '已兑换 7 / 10', b: '10-24' },
+      { name: '共创者', a: '已兑换 3 / 5', b: '10-27' }
+    ];
+    var rows = raw.map(function (r, i) {
+      var on = self.state.open === i;
+      return Object.assign({}, r, {
+        isOpen: on, open: on ? 'true' : 'false', bg: on ? '#EEEBFA' : '#FFFFFF', weight: on ? 700 : 400, rot: on ? '90deg' : '0deg',
+        line: i === 0 ? 'none' : '1px solid #F0ECE7', radius: i === 0 ? '12px 12px 0 0' : '0',
+        pick: function () { self.setState({ open: on ? -1 : i }); }
+      });
+    });
+    var ok = this.state.typed.trim() === 'JOJO';
+    return {
+      pts: pts, rows: rows,
+      showDanger: this.state.danger, dangerOpen: this.state.danger ? 'true' : 'false',
+      dangerToggle: function () { self.setState({ danger: !self.state.danger, typed: '', deleted: false }); },
+      typed: this.state.typed,
+      onType: function (e) { self.setState({ typed: e.target.value }); },
+      holdDisabled: !ok, holdOpacity: ok ? 1 : 0.45, holdFg: '#B23A26',
+      holdClass: 'fw-hold' + (this.state.holding ? ' on' : ''),
+      holdLabel: this.state.deleted ? '已删除（示例）' : (ok ? '③ 按住 1.5 秒删除' : '③ 输入名字后才能按'),
+      holdStart: function () {
+        if (!ok) return;
+        self.setState({ holding: true });
+        self.timer = setTimeout(function () { self.setState({ holding: false, deleted: true }); }, 1500);
+      },
+      holdStop: function () { if (self.timer) clearTimeout(self.timer); if (self.state.holding) self.setState({ holding: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

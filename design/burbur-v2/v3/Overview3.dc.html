@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>总览 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes aIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aGrow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.a-page{animation:aIn 280ms cubic-bezier(.2,.82,.24,1) both}
+.a-swap{animation:aIn 220ms cubic-bezier(.2,.82,.24,1) both}
+.a-bar{transform-origin:bottom;animation:aGrow 300ms cubic-bezier(.2,.82,.24,1) both}
+.a-col{transition:background 160ms}.a-col:hover{background:#F3F1EE}
+.a-row{transition:background 200ms}.a-row:hover{background:#F7F5F2}
+.a-tip{position:relative}
+.a-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.a-tip:hover::after{opacity:1;transform:none}
+.a-pt{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;border:2px solid #FFFFFF;box-sizing:border-box;padding:0;transition:transform 160ms}
+.a-pt::before{content:'';position:absolute;left:4px;top:-400px;width:1px;height:800px;background:#CFC8F2;opacity:0;transition:opacity 160ms;pointer-events:none}
+.a-pt:hover{transform:scale(1.35)}.a-pt:hover::before{opacity:1}
+.a-tile{border-radius:18px;background:#FFFFFF;border:1px solid #ECE8E3;padding:16px 20px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.a-big{font-size:30px;font-weight:900;letter-spacing:-0.03em;font-family:'DM Mono',monospace;line-height:1.15}
+.a-b36{height:36px;padding:0 16px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}
+.a-h2{margin:0;font-size:18px;font-weight:900}
+@media (prefers-reduced-motion: reduce){.a-page,.a-swap,.a-bar{animation-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 1700px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="总览" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="a-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">总览</h1>
+        <span style="display: flex; align-items: center; gap: 12px; font-size: 13px; color: #6E6875">
+          <span class="a-tip" data-tip="统计自 2026-10-04 起" style="font-family: 'DM Mono', monospace">UTC 2026-10-28</span>
+          <a href="System3.dc.html" style="height: 28px; padding: 0 12px; border-radius: 999px; background: #FDF3DC; color: #8A5A00; display: flex; align-items: center; gap: 6px; font-weight: 700; text-decoration: none"><i style="width: 6px; height: 6px; border-radius: 50%; background: #8A5A00"></i>4 项价格 6 天后到期</a>
+          <span style="display: flex; padding: 3px; border-radius: 999px; background: #EFECE8"><sc-for list="{{ranges}}" as="o" hint-placeholder-count="4"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.aria}}" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{o.sh}}; cursor: pointer; transition: background 200ms">{{o.l}}</button></sc-for></span>
+          <button type="button" class="a-b36" style="color: #2B2833">导出表格</button>
+        </span>
+      </header>
+
+      <section style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+        <sc-for list="{{tiles}}" as="t" hint-placeholder-count="8">
+          <div class="a-tile"><span style="font-size: 13px; color: #6E6875">{{t.l}}</span><span class="a-big a-tip" data-tip="{{t.tip}}" style="width: max-content">{{t.v}}</span><span style="font-size: 12px; color: #6E6875; font-family: 'DM Mono', monospace; min-height: 16px">{{t.s}}</span></div>
+        </sc-for>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+          <span style="display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE"><sc-for list="{{metrics}}" as="o" hint-placeholder-count="3"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.aria}}" style="height: 28px; padding: 0 14px; border: none; border-radius: 999px; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{o.sh}}; cursor: pointer; transition: background 200ms">{{o.l}}</button></sc-for></span>
+          <span style="display: flex; align-items: center; gap: 14px">
+            <span style="display: flex; gap: 12px; font-size: 13px"><sc-for list="{{legend}}" as="g" hint-placeholder-count="2"><span style="display: flex; align-items: center; gap: 6px"><i style="width: 10px; height: 10px; border-radius: 3px; background: {{g.c}}"></i>{{g.n}} <b style="font-family: 'DM Mono', monospace">{{g.v}}</b></span></sc-for></span>
+            <span style="display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE"><sc-for list="{{kinds}}" as="o" hint-placeholder-count="3"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.aria}}" style="height: 28px; padding: 0 14px; border: none; border-radius: 999px; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{o.sh}}; cursor: pointer; transition: background 200ms">{{o.l}}</button></sc-for></span>
+          </span>
+        </div>
+
+        <sc-if value="{{isLine}}" hint-placeholder-val="{{ true }}">
+          <div class="a-swap" style="display: grid; grid-template-columns: 40px 1fr; gap: 8px">
+            <div style="height: 280px; display: flex; flex-direction: column; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875; text-align: right"><span>{{ymax}}</span><span>{{ymid}}</span><span>0</span></div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="position: relative; height: 280px; border-bottom: 1px solid #ECE8E3; background: linear-gradient(#F3F0EC 1px, transparent 1px) 0 0 / 100% 140px">
+                <svg width="100%" height="280" viewBox="0 0 1000 280" preserveAspectRatio="none" aria-hidden="true" style="position: absolute; inset: 0"><polyline points="{{lineA.poly}}" fill="none" stroke="{{lineA.c}}" stroke-width="2.5" vector-effect="non-scaling-stroke"></polyline><polyline points="{{lineB.poly}}" fill="none" stroke="{{lineB.c}}" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"></polyline></svg>
+                <sc-for list="{{pts}}" as="p" hint-placeholder-count="14"><button type="button" class="a-pt a-tip" data-tip="{{p.tip}}" aria-label="{{p.tip}}" style="left: {{p.x}}; top: {{p.y}}; background: {{p.c}}"></button></sc-for>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875"><sc-for list="{{xl}}" as="x" hint-placeholder-count="7"><span>{{x}}</span></sc-for></div>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{isBar}}" hint-placeholder-val="{{ false }}">
+          <div class="a-swap" style="display: grid; grid-template-columns: 40px 1fr; gap: 8px">
+            <div style="height: 280px; display: flex; flex-direction: column; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875; text-align: right"><span>{{ymax}}</span><span>{{ymid}}</span><span>0</span></div>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="height: 280px; display: flex; gap: 4px; align-items: flex-end; border-bottom: 1px solid #ECE8E3; background: linear-gradient(#F3F0EC 1px, transparent 1px) 0 0 / 100% 140px">
+                <sc-for list="{{bars}}" as="b" hint-placeholder-count="14"><div class="a-col a-tip" data-tip="{{b.tip}}" style="flex: 1; height: 100%; display: flex; flex-direction: column-reverse; align-items: center; border-radius: 6px 6px 0 0"><sc-for list="{{b.segs}}" as="g" hint-placeholder-count="2"><i class="a-bar" style="width: 60%; height: {{g.h}}; background: {{g.c}}"></i></sc-for></div></sc-for>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875"><sc-for list="{{xl}}" as="x" hint-placeholder-count="7"><span>{{x}}</span></sc-for></div>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{isPie}}" hint-placeholder-val="{{ false }}">
+          <div class="a-swap" style="display: grid; grid-template-columns: 300px 1fr; gap: 40px; align-items: center; padding: 10px 0">
+            <svg width="260" height="260" viewBox="0 0 42 42" role="img" aria-label="按角色的占比"><circle cx="21" cy="21" r="15.9" fill="none" stroke="#1D4ED8" stroke-width="6" stroke-dasharray="38 62" stroke-dashoffset="25"></circle><circle cx="21" cy="21" r="15.9" fill="none" stroke="#B45309" stroke-width="6" stroke-dasharray="27 73" stroke-dashoffset="87"></circle><circle cx="21" cy="21" r="15.9" fill="none" stroke="#BE185D" stroke-width="6" stroke-dasharray="21 79" stroke-dashoffset="60"></circle><circle cx="21" cy="21" r="15.9" fill="none" stroke="#C9C2B8" stroke-width="6" stroke-dasharray="14 86" stroke-dashoffset="39"></circle></svg>
+            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 14px"><span style="font-size: 13px; color: #6E6875">按角色</span><sc-for list="{{share}}" as="s" hint-placeholder-count="4"><span class="a-row a-tip" data-tip="{{s.tip}}" style="display: grid; grid-template-columns: 14px 120px 70px 1fr; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 8px"><i style="width: 10px; height: 10px; border-radius: 50%; background: {{s.c}}"></i><span>{{s.n}}</span><b style="font-family: 'DM Mono', monospace">{{s.p}}</b><span style="font-family: 'DM Mono', monospace; color: #6E6875">{{s.v}}</span></span></sc-for></div>
+          </div>
+        </sc-if>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+        <h2 class="a-h2">按天</h2>
+        <div style="border: 1px solid #ECE8E3; border-radius: 12px; font-size: 14px">
+          <div style="display: grid; grid-template-columns: 130px repeat(10, minmax(0, 1fr)); gap: 8px; height: 40px; align-items: center; padding: 0 14px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3; text-align: right"><span style="text-align: left">日期 UTC</span><span>新注册</span><span>新访客</span><span class="a-tip" data-tip="注册 / 访客">活跃</span><span class="a-tip" data-tip="注册 / 访客">聊天人数</span><span class="a-tip" data-tip="成功 / 失败 / 未知">回复</span><span>语音回复</span><span>删除账号</span><span class="a-tip" data-tip="不活跃清理 / 试用到期清理">清理</span><span>次日留存</span><span>7 日留存</span></div>
+          <sc-for list="{{days}}" as="r" hint-placeholder-count="8">
+            <div class="a-row" style="display: grid; grid-template-columns: 130px repeat(10, minmax(0, 1fr)); gap: 8px; height: 40px; align-items: center; padding: 0 14px; border-top: {{r.line}}; font-family: 'DM Mono', monospace; text-align: right; font-weight: {{r.weight}}">
+              <span style="text-align: left">{{r.d}}</span><span>{{r.reg}}</span><span>{{r.vis}}</span><span class="a-tip" data-tip="{{r.actTip}}">{{r.act}}</span><span class="a-tip" data-tip="{{r.chatTip}}">{{r.chat}}</span><span class="a-tip" data-tip="{{r.repTip}}">{{r.rep}}</span><span>{{r.voice}}</span><span>{{r.del}}</span><span class="a-tip" data-tip="{{r.cleanTip}}">{{r.clean}}</span><span class="a-tip" data-tip="{{r.r1Tip}}">{{r.r1}}</span><span>{{r.r7}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: stretch">
+        <sc-for list="{{splits}}" as="s" hint-placeholder-count="2">
+          <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 10px">
+            <h2 class="a-h2">{{s.title}}</h2>
+            <sc-for list="{{s.rows}}" as="r" hint-placeholder-count="4">
+              <div class="a-row a-tip" data-tip="{{r.tip}}" style="display: grid; grid-template-columns: 130px 1fr 70px; gap: 12px; align-items: center; height: 36px; padding: 0 8px; border-radius: 8px; font-size: 14px"><span style="display: flex; align-items: center; gap: 6px"><i style="width: 8px; height: 8px; border-radius: {{r.shape}}; background: {{r.c}}"></i>{{r.n}}</span><span style="height: 8px; border-radius: 999px; background: #F0ECE7; display: flex; overflow: hidden"><i style="width: {{r.w}}; background: {{r.c}}; border-radius: 999px"></i></span><span style="font-family: 'DM Mono', monospace; text-align: right">{{r.v}}</span></div>
+            </sc-for>
+          </section>
+        </sc-for>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1700}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { m: 0, r: 1, k: 0 }; }
+  renderVals() {
+    var self = this, S = this.state;
+    var seg = function (labels, key) { return labels.map(function (l, i) { var on = S[key] === i; return { l: l, aria: on ? 'true' : 'false', bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#3F3596' : '#2B2833', sh: on ? '0 1px 3px rgba(43,40,51,.12)' : 'none', pick: function () { var o = {}; o[key] = i; self.setState(o); } }; }); };
+    var N = S.r === 0 ? 24 : S.r === 1 ? 7 : S.r === 2 ? 30 : 90;
+    var labels = [], A = [], B = [];
+    for (var i = 0; i < N; i++) {
+      var t = i / Math.max(1, N - 1);
+      if (S.r === 0) labels.push((i < 10 ? '0' : '') + i + ':00'); else { var d = new Date(Date.UTC(2026, 9, 28 - (N - 1 - i))); labels.push(((d.getUTCMonth() + 1) < 10 ? '0' : '') + (d.getUTCMonth() + 1) + '-' + (d.getUTCDate() < 10 ? '0' : '') + d.getUTCDate()); }
+      var wave = Math.sin(i * 1.3) * 0.08;
+      if (S.m === 0) { A.push(Math.round((S.r === 0 ? 14 : 300) * (0.55 + 0.45 * t + wave))); B.push(Math.round((S.r === 0 ? 1 : 4) * (1 + Math.abs(wave) * 10))); }
+      else if (S.m === 1) { A.push(Math.round((S.r === 0 ? 3 : 28) * (0.6 + 0.4 * t + wave))); B.push(Math.round((S.r === 0 ? 2 : 19) * (0.6 + 0.4 * t - wave))); }
+      else { A.push(Math.round((S.r === 0 ? 4 : 31) * (0.6 + 0.4 * t + wave))); B.push(Math.round((S.r === 0 ? 3 : 27) * (0.6 + 0.4 * t - wave))); }
+    }
+    var names = S.m === 0 ? ['成功', '失败'] : ['注册玩家', '访客'];
+    var cols = S.m === 0 ? ['#5B4FC4', '#B23A26'] : ['#5B4FC4', '#C9C2B8'];
+    var unit = S.m === 0 ? '条' : '人';
+    var max = Math.max.apply(null, A.map(function (a, i) { return S.k === 1 ? a + B[i] : Math.max(a, B[i]); })) * 1.15;
+    var H = 280, pts = [], polyA = [], polyB = [];
+    A.forEach(function (a, i) {
+      var x = N === 1 ? 50 : i / (N - 1) * 100, ya = H - a / max * H, yb = H - B[i] / max * H;
+      polyA.push((x * 10).toFixed(1) + ',' + ya.toFixed(1)); polyB.push((x * 10).toFixed(1) + ',' + yb.toFixed(1));
+      if (N <= 30 || i % 3 === 0) {
+        pts.push({ x: x.toFixed(2) + '%', y: ya.toFixed(1) + 'px', c: cols[0], tip: labels[i] + ' UTC · ' + names[0] + ' ' + a + ' ' + unit });
+        pts.push({ x: x.toFixed(2) + '%', y: yb.toFixed(1) + 'px', c: cols[1], tip: labels[i] + ' UTC · ' + names[1] + ' ' + B[i] + ' ' + unit });
+      }
+    });
+    var sumA = A.reduce(function (p, q) { return p + q; }, 0), sumB = B.reduce(function (p, q) { return p + q; }, 0);
+    var step = Math.max(1, Math.ceil(N / 8));
+    var bars = A.map(function (a, i) { return { tip: labels[i] + ' UTC · ' + names[0] + ' ' + a + ' · ' + names[1] + ' ' + B[i], segs: [{ h: (a / max * 100).toFixed(1) + '%', c: cols[0] }, { h: (B[i] / max * 100).toFixed(1) + '%', c: cols[1] }] }; });
+    var d7 = ['10-28', '10-27', '10-26', '10-25', '10-24', '10-23', '10-22'];
+    var reg = [29, 31, 26, 27, 24, 22, 18], vis = [24, 27, 25, 30, 26, 19, 21];
+    var days = d7.map(function (x, k) { return { d: '2026-' + x, line: k === 0 ? 'none' : '1px solid #F3F0EC', weight: 400, reg: Math.round(reg[k] / 3), vis: Math.round(vis[k] / 2), act: reg[k] + vis[k], actTip: '注册 ' + reg[k] + ' / 访客 ' + vis[k], chat: Math.round((reg[k] + vis[k]) * .8), chatTip: '注册 ' + Math.round(reg[k] * .9) + ' / 访客 ' + Math.round(vis[k] * .7), rep: 360 - k * 11, repTip: '成功 ' + (358 - k * 11) + ' / 失败 2 / 未知 0', voice: 210 - k * 7, del: k % 3 === 0 ? 1 : 0, clean: k % 2, cleanTip: '不活跃 ' + (k % 2) + ' · 试用到期 0', r1: k < 1 ? '—' : (46 - k) + '%', r1Tip: k < 1 ? '还要等一天' : '前一天注册的人里回来的比例', r7: '—' }; });
+    days.push({ d: '合计', line: '1px solid #ECE8E3', weight: 700, reg: 59, vis: 87, act: 349, actTip: '注册 177 / 访客 172', chat: 280, chatTip: '注册 160 / 访客 120', rep: 2331, repTip: '成功 2,317 / 失败 14 / 未知 0', voice: 1407, del: 3, clean: 3, cleanTip: '不活跃 3 · 试用到期 0', r1: '43%', r1Tip: '加权平均', r7: '—' });
+    var mk = function (n, c, v, max2, shape) { return { n: n, c: c, v: v, w: Math.round(v / max2 * 100) + '%', shape: shape, tip: n + ' · ' + v + ' 条回复' }; };
+    return {
+      ranges: seg(['24H', '7天', '30天', '90天'], 'r'), metrics: seg(['回复', '聊天人数', '活跃'], 'm'), kinds: seg(['折线', '柱状', '饼图'], 'k'),
+      isLine: S.k === 0, isBar: S.k === 1, isPie: S.k === 2,
+      legend: [{ n: names[0], c: cols[0], v: sumA }, { n: names[1], c: cols[1], v: sumB }],
+      lineA: { poly: polyA.join(' '), c: cols[0] }, lineB: { poly: polyB.join(' '), c: cols[1] }, pts: pts, bars: bars,
+      ymax: Math.round(max), ymid: Math.round(max / 2), xl: labels.filter(function (_, i) { return i % step === 0; }),
+      share: [{ n: 'JOJO', c: '#1D4ED8', p: '38%', v: Math.round(sumA * .38), tip: 'JOJO · ' + Math.round(sumA * .38) + ' ' + unit }, { n: '瓜瓜', c: '#B45309', p: '27%', v: Math.round(sumA * .27), tip: '瓜瓜 · ' + Math.round(sumA * .27) + ' ' + unit }, { n: '陈吉米', c: '#BE185D', p: '21%', v: Math.round(sumA * .21), tip: '陈吉米 · ' + Math.round(sumA * .21) + ' ' + unit }, { n: '其他 12 位', c: '#C9C2B8', p: '14%', v: Math.round(sumA * .14), tip: '其他 12 位 · ' + Math.round(sumA * .14) + ' ' + unit }],
+      tiles: [
+        { l: '今日回复', v: '352', s: '语音 211 · 失败 3', tip: '成功 349 · 失败 3 · 未知 0' },
+        { l: '今日花费 · 列表价', v: '$2.91', s: '', tip: '$2.913 870' },
+        { l: '本月花费 · 约', v: '¥283', s: '$39.12', tip: '列表价 $39.118 004 · 汇率 7.24' },
+        { l: '昨日新注册', v: '14', s: '', tip: '2026-10-27 · 14 人' },
+        { l: '昨日活跃', v: '58', s: '注册 31 · 访客 27', tip: '2026-10-27 UTC' },
+        { l: '昨日聊天人数', v: '47', s: '注册 28 · 访客 19', tip: '2026-10-27 UTC' },
+        { l: '次日留存', v: '43%', s: '注册玩家', tip: '最近 7 天加权' },
+        { l: '7 日留存', v: '—', s: '注册玩家', tip: '要满 7 天才有' }
+      ],
+      days: days,
+      splits: [
+        { title: '按角色', rows: [mk('JOJO', '#1D4ED8', 886, 886, '50%'), mk('瓜瓜', '#B45309', 630, 886, '50%'), mk('陈吉米', '#BE185D', 489, 886, '50%'), mk('其他 12 位', '#C9C2B8', 326, 886, '50%')] },
+        { title: '按模型', rows: [mk('DeepSeek', '#5B4FC4', 2014, 2014, '2px'), mk('Gemini 3.8 Flash', '#0E7490', 241, 2014, '2px'), mk('Grok 4.7', '#B45309', 62, 2014, '2px'), mk('未选择模型', '#C9C2B8', 14, 2014, '2px')] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

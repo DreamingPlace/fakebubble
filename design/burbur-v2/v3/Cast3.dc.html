@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>关系与故事 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes aIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.a-page{animation:aIn 280ms cubic-bezier(.2,.82,.24,1) both}
+.a-open{animation:aOpen 240ms cubic-bezier(.2,.82,.24,1) both}
+.a-swap{animation:aIn 220ms cubic-bezier(.2,.82,.24,1) both}
+.a-cell{transition:box-shadow 160ms}
+.a-cell:hover{box-shadow:0 0 0 2px #5B4FC4 inset}
+.a-head{transition:background 200ms,color 200ms}
+.a-head:hover{background:#F3F1EE}
+.a-row{transition:background 200ms}.a-row:hover{background:#F7F5F2}
+.a-chip{transition:background 200ms,border-color 200ms,color 200ms}
+.a-tip{position:relative}
+.a-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.a-tip:hover::after{opacity:1;transform:none}
+.a-star{position:relative;width:28px;height:28px}
+.a-star button{position:absolute;top:0;width:14px;height:28px;border:none;background:transparent;padding:0;cursor:pointer}
+.a-in{height:36px;box-sizing:border-box;border-radius:10px;border:1px solid #E2DDD6;padding:0 10px;font:inherit;font-size:14px;color:#2B2833;background:#FFFFFF;min-width:0}
+.a-ta{box-sizing:border-box;border-radius:10px;border:1px solid #E2DDD6;padding:8px 10px;font:inherit;font-size:14px;line-height:1.6;color:#2B2833;resize:vertical;width:100%;background:#FFFFFF}
+.a-lb{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#6E6875}
+.a-b30{height:30px;padding:0 12px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.a-b36{height:36px;padding:0 16px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.a-pri{border-color:#CFC8F2;color:#3F3596}
+.a-dan{border-color:#E8B9B0;color:#B23A26}
+.a-pill{height:28px;padding:0 10px;border-radius:999px;border:1px solid #E2DDD6;box-sizing:border-box;display:flex;align-items:center;gap:6px;font-size:13px;color:#2B2833;background:#FFFFFF}
+.a-h2{margin:0;font-size:18px;font-weight:900}
+.a-h3{margin:0;font-size:14px;font-weight:900}
+@media (prefers-reduced-motion: reduce){.a-page,.a-open,.a-swap{animation-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 3200px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+  <svg width="0" height="0" aria-hidden="true" style="position: absolute"><defs><clipPath id="a-half"><rect x="0" y="0" width="12" height="24"></rect></clipPath></defs></svg>
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="关系与故事" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="a-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">关系与故事</h1>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6E6875"><span style="font-family: 'DM Mono', monospace">线上 v2</span><i style="width: 1px; height: 14px; background: #E2DDD6"></i><span style="font-family: 'DM Mono', monospace">草稿 #5</span><span style="height: 22px; padding: 0 8px; border-radius: 999px; background: #E7F3EC; color: #2F7A4F; font-size: 12px; font-weight: 700; display: flex; align-items: center">可以发布</span><sc-if value="{{hasUnsaved}}" hint-placeholder-val="{{ true }}"><i style="width: 1px; height: 14px; background: #E2DDD6"></i><b style="color: #8A5A00">{{unsavedText}}</b></sc-if></span>
+          <button type="button" onClick="{{save}}" class="a-b36" style="opacity: {{saveOpacity}}">保存草稿</button>
+          <button type="button" style="height: 36px; padding: 0 18px; border: none; border-radius: 999px; background: #5B4FC4; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer" class="a-tip" data-tip="这一页的全部内容一起发布成 v3">发布 v3</button>
+        </div>
+      </header>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 14px 20px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; align-items: center; gap: 16px">
+          <span class="a-tip" data-tip="关系、组合、故事、世界、名片一起，发布成一个版本" style="font-size: 13px; color: #6E6875; flex: none">整页版本</span>
+          <div style="flex: 1; display: flex; align-items: center; min-width: 0">
+            <sc-for list="{{versions}}" as="v" hint-placeholder-count="5">
+              <div style="display: flex; align-items: center; flex: {{v.flex}}">
+                <button type="button" class="a-tip" data-tip="{{v.tip}}" onClick="{{v.pick}}" aria-pressed="{{v.aria}}" style="height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid {{v.bd}}; background: {{v.bg}}; color: {{v.fg}}; font: inherit; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px; cursor: pointer; flex: none; transition: background 200ms"><i style="width: {{v.mk}}; height: {{v.mk}}; border-radius: {{v.mkr}}; background: {{v.mc}}"></i><span style="font-family: 'DM Mono', monospace">{{v.label}}</span></button>
+                <sc-if value="{{v.hasLine}}" hint-placeholder-val="{{ true }}"><i style="flex: 1; height: 1px; background: {{v.lineCol}}; min-width: 16px"></i></sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <span style="display: flex; gap: 8px; flex: none"><button type="button" class="a-b30">导出文件</button><button type="button" class="a-b30">导入文件</button></span>
+        </div>
+        <sc-if value="{{verOpen}}" hint-placeholder-val="{{ false }}">
+          <div class="a-open" style="border-radius: 12px; background: #F7F5FD; padding: 12px 14px; display: flex; align-items: center; gap: 14px; font-size: 13px">
+            <i style="width: 14px; height: 14px; border-radius: {{ver.r}}; background: {{ver.col}}"></i>
+            <b>{{ver.title}}</b>
+            <span style="color: #6E6875; flex: 1">{{ver.sub}}</span>
+            <button type="button" class="a-b30 a-pri" style="font-weight: 700">{{ver.act}}</button>
+            <sc-if value="{{ver.canDelete}}" hint-placeholder-val="{{ true }}"><button type="button" class="a-b30 a-dan">删除这次保存</button></sc-if>
+          </div>
+        </sc-if>
+      </section>
+
+      <div style="display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 20px; align-items: start">
+
+        <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 10px">
+          <div style="display: flex; justify-content: space-between; align-items: baseline"><h2 class="a-h2">关系</h2><span style="font-size: 12px; color: #6E6875">点名字看这个人 · 点格子看两个人 · 行 → 列</span></div>
+          <div style="display: grid; grid-template-columns: 76px repeat(15, 42px); gap: 3px; align-items: stretch">
+            <span></span>
+            <sc-for list="{{cols}}" as="h" hint-placeholder-count="15">
+              <button type="button" class="a-head" onClick="{{h.pick}}" style="height: 40px; border: none; border-radius: 8px; background: {{h.bg}}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font: inherit; font-size: 12px; font-weight: {{h.weight}}; color: {{h.fg}}; white-space: nowrap; padding: 0; cursor: pointer"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{h.col}}"></i>{{h.name}}</button>
+            </sc-for>
+            <sc-for list="{{grid}}" as="row" hint-placeholder-count="15">
+              <button type="button" class="a-head" onClick="{{row.pick}}" style="height: 34px; border: none; border-radius: 8px; background: {{row.bg}}; display: flex; align-items: center; gap: 6px; padding: 0 8px; font: inherit; font-size: 13px; font-weight: {{row.weight}}; color: {{row.fg}}; white-space: nowrap; cursor: pointer; text-align: left"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{row.col}}"></i>{{row.name}}</button>
+              <sc-for list="{{row.cells}}" as="x" hint-placeholder-count="15">
+                <button type="button" class="a-cell a-tip" data-tip="{{x.tip}}" aria-label="{{x.tip}}" onClick="{{x.pick}}" disabled="{{x.self}}" style="position: relative; height: 34px; border-radius: 6px; border: 1px solid {{x.bd}}; background: {{x.bg}}; color: {{x.fg}}; font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; padding: 0; cursor: {{x.cur}}; box-shadow: {{x.ring}}">{{x.v}}<sc-if value="{{x.hasMark}}" hint-placeholder-val="{{ false }}"><i style="position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 2px; background: {{x.mark}}"></i></sc-if><sc-if value="{{x.hasStory}}" hint-placeholder-val="{{ false }}"><i style="position: absolute; bottom: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: #2B2833"></i></sc-if></button>
+              </sc-for>
+            </sc-for>
+          </div>
+          <span style="display: flex; gap: 14px; font-size: 12px; color: #6E6875; padding-top: 4px"><span style="display: flex; align-items: center; gap: 6px"><i style="width: 5px; height: 5px; border-radius: 50%; background: #2B2833"></i>有故事</span><span style="display: flex; align-items: center; gap: 6px"><i style="width: 6px; height: 6px; border-radius: 2px; background: #0E7490"></i>草稿（谁改的）</span><span style="display: flex; align-items: center; gap: 6px"><i style="width: 10px; height: 10px; border-radius: 3px; border: 1.5px solid #D9A441; background: #FDF6E6"></i>未保存</span></span>
+        </section>
+
+        <sc-if value="{{isPair}}" hint-placeholder-val="{{ true }}">
+          <section class="a-swap" style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 16px">
+            <h2 class="a-h2" style="display: flex; align-items: center; gap: 8px"><i style="width: 10px; height: 10px; border-radius: 50%; background: {{pair.ac}}"></i>{{pair.a}}<span style="color: #6E6875; font-weight: 400">与</span><i style="width: 10px; height: 10px; border-radius: 50%; background: {{pair.bc}}"></i>{{pair.b}}</h2>
+            <sc-for list="{{dirs}}" as="d" hint-placeholder-count="2">
+              <div style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid #F0ECE7">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap">
+                  <span style="font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{d.fc}}"></i>{{d.from}}<span style="color: #6E6875; font-weight: 400">→</span><i style="width: 8px; height: 8px; border-radius: 50%; background: {{d.tc}}"></i>{{d.to}}</span>
+                  <span style="display: flex; align-items: center; gap: 2px">
+                    <sc-for list="{{d.stars}}" as="s" hint-placeholder-count="5">
+                      <span class="a-star">
+                        <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.85 5.95 6.55.85-4.8 4.55 1.25 6.5L12 17.3l-5.85 3.15 1.25-6.5-4.8-4.55 6.55-.85z" fill="#ECE8E3"></path><sc-if value="{{s.full}}" hint-placeholder-val="{{ false }}"><path d="M12 2.6l2.85 5.95 6.55.85-4.8 4.55 1.25 6.5L12 17.3l-5.85 3.15 1.25-6.5-4.8-4.55 6.55-.85z" fill="#E0A100"></path></sc-if><sc-if value="{{s.half}}" hint-placeholder-val="{{ false }}"><path d="M12 2.6l2.85 5.95 6.55.85-4.8 4.55 1.25 6.5L12 17.3l-5.85 3.15 1.25-6.5-4.8-4.55 6.55-.85z" fill="#E0A100" clip-path="url(#a-half)"></path></sc-if></svg>
+                        <button type="button" aria-label="{{s.lowLabel}}" onClick="{{s.setLow}}" style="left: 0"></button>
+                        <button type="button" aria-label="{{s.highLabel}}" onClick="{{s.setHigh}}" style="left: 14px"></button>
+                      </span>
+                    </sc-for>
+                    <b style="width: 50px; text-align: right; font-family: 'DM Mono', monospace; font-size: 14px; color: {{d.valCol}}">{{d.val}}</b>
+                    <button type="button" class="a-b30 a-tip" data-tip="陌生人" onClick="{{d.setZero}}" style="margin-left: 6px; height: 26px; padding: 0 10px">0</button>
+                    <button type="button" class="a-b30" onClick="{{d.clear}}" style="height: 26px; padding: 0 10px">未设置</button>
+                  </span>
+                </div>
+                <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px">
+                  <input class="a-in" value="{{d.addr}}" aria-label="称呼" placeholder="称呼">
+                  <input class="a-in" value="{{d.how}}" aria-label="相处" placeholder="相处">
+                </div>
+              </div>
+            </sc-for>
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="display: flex; align-items: center; justify-content: space-between"><span class="a-h3">他们一起的故事</span><button type="button" onClick="{{newStory}}" class="a-b30 a-pri" style="font-weight: 700">+ 写他们的故事</button></div>
+              <sc-for list="{{pairStories}}" as="p" hint-placeholder-count="2">
+                <button type="button" class="a-row" onClick="{{p.pick}}" aria-pressed="{{p.aria}}" style="height: 40px; border: none; border-radius: 10px; background: {{p.bg}}; color: #2B2833; font: inherit; font-size: 14px; font-weight: {{p.weight}}; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; padding: 0 10px; text-align: left; cursor: pointer"><span>{{p.t}}</span><span style="display: flex; gap: 2px"><sc-for list="{{p.dots}}" as="o" hint-placeholder-count="2"><i style="width: 10px; height: 10px; border-radius: 50%; background: {{o}}; border: 1.5px solid #FFFFFF"></i></sc-for></span></button>
+              </sc-for>
+              <sc-if value="{{noPairStory}}" hint-placeholder-val="{{ false }}"><span style="height: 40px; display: flex; align-items: center; font-size: 13px; color: #6E6875">还没有</span></sc-if>
+            </div>
+          </section>
+        </sc-if>
+
+        <sc-if value="{{isChar}}" hint-placeholder-val="{{ false }}">
+          <section class="a-swap" style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+            <div style="display: flex; justify-content: space-between; align-items: baseline"><h2 class="a-h2" style="display: flex; align-items: center; gap: 8px"><i style="width: 10px; height: 10px; border-radius: 50%; background: {{ch.col}}"></i>{{ch.name}} 看到的</h2><span class="a-tip" data-tip="按已保存的草稿算" style="font-family: 'DM Mono', monospace; font-size: 12px; color: #6E6875">2,759 / 24,000</span></div>
+            <div style="display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.7">
+              <b style="font-size: 13px">他自己</b><span>{{ch.one}}</span>
+              <b style="font-size: 13px; padding-top: 8px">他对别人</b>
+              <sc-for list="{{ch.toward}}" as="t" hint-placeholder-count="3"><span style="display: flex; gap: 8px"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{t.c}}; margin-top: 7px; flex: none"></i><span>{{t.x}}</span></span></sc-for>
+              <b style="font-size: 13px; padding-top: 8px">每个故事他知道多少</b>
+              <sc-for list="{{ch.known}}" as="k" hint-placeholder-count="3"><span style="display: flex; align-items: center; gap: 8px"><span style="flex: 1">{{k.t}}</span><b style="height: 22px; padding: 0 8px; border-radius: 999px; background: {{k.bg}}; color: {{k.fg}}; font-size: 12px; display: flex; align-items: center">{{k.l}}</b></span></sc-for>
+            </div>
+          </section>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{isChar}}" hint-placeholder-val="{{ false }}">
+        <section class="a-open" style="border-radius: 18px; background: #FFFFFF; border: 1.5px solid #CFC8F2; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px"><h2 class="a-h2" style="display: flex; align-items: center; gap: 8px"><i style="width: 10px; height: 10px; border-radius: 50%; background: {{ch.col}}"></i>{{ch.name}} 的名片<span style="font-size: 13px; font-weight: 400; color: #6E6875">别的角色只知道这些</span></h2><a href="Workbench4.dc.html" style="font-size: 13px; color: #3F3596; font-weight: 700; text-decoration: none">人设、说话、经历在角色工作台 →</a></div>
+          <div style="display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.8fr); gap: 20px; align-items: start">
+            <label class="a-lb">一句话<input class="a-in" value="{{ch.one}}"></label>
+            <div class="a-lb">名字 · 第一个是对外的<span style="display: flex; flex-wrap: wrap; gap: 6px"><sc-for list="{{ch.names}}" as="n" hint-placeholder-count="2"><span class="a-pill">{{n}}<span style="color: #6E6875">×</span></span></sc-for><span class="a-pill" style="border-style: dashed; color: #6E6875">+</span></span></div>
+            <div class="a-lb">别名 · 他对这个叫法的感觉<span style="display: flex; flex-wrap: wrap; gap: 6px"><sc-for list="{{ch.aliases}}" as="a" hint-placeholder-count="2"><span class="a-pill" style="border-color: {{a.bd}}; background: {{a.bg}}">{{a.t}}<b style="font-size: 11px; color: {{a.fg}}">{{a.l}}</b></span></sc-for><span class="a-pill" style="border-style: dashed; color: #6E6875">+</span></span></div>
+            <label class="a-lb">原型<select class="a-in"><option>不用原型</option><option>舞台上的她</option></select></label>
+          </div>
+        </section>
+      </sc-if>
+
+      <sc-if value="{{hasStory}}" hint-placeholder-val="{{ true }}">
+        <section class="a-open" style="border-radius: 18px; background: #FFFFFF; border: 1.5px solid #CFC8F2; padding: 18px 20px 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 24px">
+          <div style="display: flex; flex-direction: column; gap: 12px">
+            <div style="display: grid; grid-template-columns: minmax(0, 1fr) 120px 120px; gap: 10px">
+              <label class="a-lb">标题<input class="a-in" value="{{story.t}}" style="font-weight: 700"></label>
+              <label class="a-lb">开始<input class="a-in" value="{{story.from}}" placeholder="2024-05" style="font-family: 'DM Mono', monospace"></label>
+              <label class="a-lb">结束<input class="a-in" value="{{story.to}}" placeholder="可空" style="font-family: 'DM Mono', monospace"></label>
+            </div>
+            <label class="a-lb">摘要 · 听说的人只知道这一段<textarea class="a-ta" style="height: 60px">{{story.sum}}</textarea></label>
+            <label class="a-lb">细节 · 只给亲历的人<textarea class="a-ta" style="height: 84px">{{story.det}}</textarea></label>
+            <label class="a-lb">叙述边界<input class="a-in" value="{{story.bnd}}"></label>
+            <button type="button" class="a-b30 a-dan" style="align-self: flex-start">删除这个故事</button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 14px">
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <span style="font-size: 13px; color: #6E6875">参与者 · 点名字加人或去掉</span>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px">
+                <sc-for list="{{who}}" as="w" hint-placeholder-count="19">
+                  <button type="button" class="a-chip" onClick="{{w.pick}}" aria-pressed="{{w.aria}}" style="height: 30px; padding: 0 12px 0 8px; border-radius: 999px; border: 1px solid {{w.bd}}; background: {{w.bg}}; color: {{w.fg}}; font: inherit; font-size: 13px; font-weight: {{w.weight}}; display: flex; align-items: center; gap: 6px; cursor: pointer"><i style="width: 8px; height: 8px; border-radius: {{w.shape}}; background: {{w.col}}"></i>{{w.name}}</button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+              <span style="font-size: 13px; color: #6E6875">谁知道 · 自动算，点一下改，橙框是手动</span>
+              <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
+                <sc-for list="{{know}}" as="k" hint-placeholder-count="15">
+                  <button type="button" class="a-chip a-tip" data-tip="{{k.tip}}" onClick="{{k.pick}}" style="height: 44px; border-radius: 10px; border: {{k.bd}}; background: {{k.bg}}; color: #2B2833; font: inherit; font-size: 13px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; padding: 0 10px; cursor: pointer"><span style="display: flex; align-items: center; gap: 6px"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{k.col}}"></i>{{k.name}}</span><b style="font-size: 12px; color: {{k.fg}}">{{k.level}}</b></button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </section>
+      </sc-if>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px"><h2 class="a-h2" style="display: flex; align-items: center; gap: 8px">组合<span style="font-size: 14px; font-weight: 400; color: #6E6875; display: flex; align-items: center; gap: 6px">{{gTitle}}</span></h2><span style="display: flex; gap: 8px"><button type="button" onClick="{{toggleAll}}" class="a-b30">{{allLabel}}</button><button type="button" class="a-b30" style="border-color: #CFC8F2; color: #3F3596; font-weight: 700">{{newGroupLabel}}</button></span></div>
+        <sc-if value="{{noGroup}}" hint-placeholder-val="{{ false }}"><div class="a-open" style="height: 48px; border-radius: 12px; border: 1px dashed #E2DDD6; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #6E6875">还没有同时有他们的组合</div></sc-if>
+        <div style="border: 1px solid #ECE8E3; border-radius: 12px">
+          <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+            <div style="display: flex; flex-direction: column; border-top: {{g.line}}">
+              <button type="button" class="a-row" onClick="{{g.pick}}" onMouseEnter="{{g.enter}}" onMouseLeave="{{g.leave}}" aria-expanded="{{g.aria}}" style="height: 48px; border: none; background: {{g.bg}}; font: inherit; color: #2B2833; display: grid; grid-template-columns: 24px 140px 180px 1fr 90px; gap: 12px; align-items: center; padding: 0 14px; text-align: left; cursor: pointer; border-radius: {{g.radius}}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6E6875" stroke-width="2.5" aria-hidden="true" style="transform: rotate({{g.rot}}); transition: transform 240ms cubic-bezier(.2,.82,.24,1)"><path d="m9 6 6 6-6 6"></path></svg>
+                <b style="font-size: 14px">{{g.name}}</b>
+                <span style="display: flex; gap: 4px; align-items: center"><sc-for list="{{g.dots}}" as="o" hint-placeholder-count="4"><i class="a-tip" data-tip="{{o.n}}" style="width: 12px; height: 12px; border-radius: 50%; background: {{o.c}}"></i></sc-for></span>
+                <span style="font-size: 14px; color: #6E6875">{{g.bgText}}</span>
+                <span style="font-size: 13px; color: #6E6875; text-align: right">{{g.n}} 个故事</span>
+              </button>
+              <sc-if value="{{g.isOpen}}" hint-placeholder-val="{{ false }}">
+                <div class="a-open" style="margin: 0 14px 14px; border-radius: 12px; background: #F7F5FD; padding: 14px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 16px">
+                  <div style="display: flex; flex-direction: column; gap: 10px">
+                    <label class="a-lb">组合名<input class="a-in" value="{{g.name}}"></label>
+                    <div class="a-lb">成员 · 点名字加人或去掉<span style="display: flex; flex-wrap: wrap; gap: 6px"><sc-for list="{{g.picker}}" as="w" hint-placeholder-count="15"><span style="height: 28px; padding: 0 10px 0 8px; border-radius: 999px; border: 1px solid {{w.bd}}; background: {{w.bg}}; color: {{w.fg}}; font-size: 12px; font-weight: {{w.weight}}; display: flex; align-items: center; gap: 6px"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{w.col}}"></i>{{w.name}}</span></sc-for></span></div>
+                    <label class="a-lb">组合背景<input class="a-in" value="{{g.bgText}}"></label>
+                    <button type="button" class="a-b30 a-dan" style="align-self: flex-start">删除组合</button>
+                  </div>
+                  <div style="display: flex; flex-direction: column; gap: 8px">
+                    <span style="font-size: 13px; color: #6E6875">组合故事 · 成员全都亲历</span>
+                    <sc-for list="{{g.stories}}" as="s" hint-placeholder-count="2"><div style="border-radius: 10px; background: #FFFFFF; padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px; gap: 8px"><input class="a-in" value="{{s.t}}" style="font-weight: 700"><input class="a-in" value="{{s.p}}" style="font-family: 'DM Mono', monospace"><input class="a-in" placeholder="结束" style="font-family: 'DM Mono', monospace"><input class="a-in" value="{{s.sum}}" placeholder="摘要" style="grid-column: 1 / -1"></div></sc-for>
+                    <span style="height: 36px; border-radius: 10px; border: 1px dashed #C9C2B8; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #6E6875">+ 组合故事</span>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: baseline; gap: 10px"><h2 class="a-h2">世界</h2><span style="font-size: 13px; color: #6E6875">所有角色都知道</span></div>
+        <textarea class="a-ta" aria-label="世界背景" style="height: 84px">一座南方小城的高中，学生们在同一条老街上长大。</textarea>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center">
+          <span style="font-size: 13px; color: #6E6875; margin-right: 4px">世界里的其他人</span>
+          <sc-for list="{{people}}" as="p" hint-placeholder-count="5"><button type="button" class="a-chip a-tip" data-tip="{{p.tip}}" onClick="{{p.pick}}" aria-pressed="{{p.aria}}" style="height: 30px; padding: 0 12px 0 8px; border-radius: 999px; border: 1px solid {{p.bd}}; background: {{p.bg}}; color: {{p.fg}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer"><i style="width: 8px; height: 8px; border-radius: 2px; background: #8C8697"></i>{{p.n}}</button></sc-for>
+          <button type="button" onClick="{{addPerson}}" class="a-chip" style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px dashed #C9C2B8; background: transparent; color: #6E6875; font: inherit; font-size: 13px; cursor: pointer">+ 人</button>
+        </div>
+        <sc-if value="{{hasPerson}}" hint-placeholder-val="{{ false }}">
+          <div class="a-open" style="display: grid; grid-template-columns: 130px 130px 100px minmax(0, 1fr) auto; gap: 10px; align-items: end; padding: 12px 14px; border-radius: 12px; background: #F7F5FD">
+            <label class="a-lb">名字<input class="a-in" value="{{person.n}}"></label>
+            <label class="a-lb">另一个叫法<input class="a-in" value="{{person.a}}" placeholder="可空"></label>
+            <label class="a-lb">类型<select class="a-in"><option>人物</option><option>原型</option></select></label>
+            <label class="a-lb">一句话<input class="a-in" value="{{person.o}}"></label>
+            <button type="button" class="a-b30 a-dan" style="height: 36px">删除</button>
+          </div>
+        </sc-if>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":3200}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    var R = ['周屿', '许知意', '顾北', '江月', '唐小棠', '沈烬', '叶初晴', '秦川', '白露', '陈吉米', 'JOJO', '陆远', '宋青', '温言', '瓜瓜'];
+    var ratings = {};
+    R.forEach(function (a, i) {
+      ratings[a] = {};
+      [[1, 4], [2, 3], [3, 1.5]].forEach(function (d) { var j = (i + d[0]) % 15; ratings[a][R[j]] = d[1]; });
+    });
+    ratings['JOJO']['陈吉米'] = 4; ratings['陈吉米']['JOJO'] = 3.5; ratings['JOJO']['瓜瓜'] = 2.5; ratings['瓜瓜']['陈吉米'] = 4.5;
+    ratings['周屿']['JOJO'] = 3; ratings['宋青']['陆远'] = 4; ratings['陆远']['宋青'] = 5; ratings['温言']['宋青'] = 3; ratings['JOJO']['沈烬'] = 0;
+    this.state = { mode: 'pair', a: 'JOJO', b: '陈吉米', ch: 'JOJO', ratings: ratings, unsaved: {}, story: 's1', ver: -1, group: -1, hl: -1, allGroups: false, person: -1,
+      parts: { s1: ['JOJO', '陈吉米', '周屿', '教练'], s2: ['JOJO', '陈吉米'], s3: ['宋青', '陆远'], s4: ['瓜瓜', '陈吉米'] }, over: {}, extra: 0 };
+  }
+  groupList() {
+    return [
+      { n: '战队', m: ['JOJO', '陈吉米', '周屿', '顾北'], b: '学校电竞社，五排缺一', s: [{ t: '第一次线下赛', p: '2025-11', sum: '在网吧包了一整晚。' }, { t: '战队改名', p: '2026-02', sum: '投票投了三轮。' }] },
+      { n: '奶茶小分队', m: ['JOJO', '陈吉米', '瓜瓜'], b: '每周五放学一起去校门口那家', s: [{ t: '第一杯赌注', p: '2026-03', sum: '输的人请一个月。' }] },
+      { n: '文学社', m: ['宋青', '温言', '许知意', '白露'], b: '周四放学后在旧书店二楼聚会', s: [{ t: '社刊创刊', p: '2025-09', sum: '四个人熬夜印出了第一期社刊。' }] },
+      { n: '宿舍', m: ['江月', '唐小棠', '叶初晴'], b: '六楼最里面那间', s: [] }
+    ];
+  }
+  renderVals() {
+    var self = this, S = this.state;
+    var roster = [
+      ['周屿', '#E8561E'], ['许知意', '#2F7BEA'], ['顾北', '#7C4DEB'], ['江月', '#1E8E4E'], ['唐小棠', '#D98A00'],
+      ['沈烬', '#C2410C'], ['叶初晴', '#0E7490'], ['秦川', '#9D174D'], ['白露', '#4D7C0F'], ['陈吉米', '#BE185D'],
+      ['JOJO', '#1D4ED8'], ['陆远', '#A16207'], ['宋青', '#047857'], ['温言', '#6D28D9'], ['瓜瓜', '#B45309']
+    ];
+    var col = {}; roster.forEach(function (r) { col[r[0]] = r[1]; });
+    var names = roster.map(function (r) { return r[0]; });
+    var people = ['林妈妈', '老周', '书店老板', '教练', '舞台上的她'];
+    var heat = function (v) { return v === undefined || v === 0 ? '#FFFFFF' : v <= 1 ? '#F1EEFB' : v <= 2 ? '#E4DEF7' : v <= 3 ? '#D2C9F2' : v <= 4 ? '#BCAFEC' : '#A291E4'; };
+    var addr = { 'JOJO>陈吉米': ['吉米', '游戏搭子，输了互相甩锅'], '陈吉米>JOJO': ['乔', '嘴上嫌弃，开黑一定叫上他'], '宋青>陆远': ['阿远', '有点躲着他'], '陆远>宋青': ['小青', '什么都让着她'] };
+    var draftMark = { 'JOJO>陈吉米': '#0E7490', '陈吉米>JOJO': '#0E7490', '宋青>陆远': '#5B4FC4', '瓜瓜>陈吉米': '#B45309' };
+    var stories = [
+      { id: 's1', t: '高二那场决赛', from: '2025-06', to: '', sum: '战队最后一局翻盘拿了冠军。', det: '赛前 JOJO 的耳机坏了，用的是陈吉米的备用耳机，到现在没还。', bnd: '可以当玩笑提，不要说比分。' },
+      { id: 's2', t: '谁请奶茶', from: '2026-03', to: '', sum: '两个人打赌输了的请奶茶，谁都没请过。', det: '账记在 JOJO 手机备忘录里，已经欠到第 11 杯。', bnd: '随便说。' },
+      { id: 's3', t: '雨夜的告白', from: '2026-04-12', to: '', sum: '陆远在雨夜对宋青说了心里话。', det: '公交站只有一把伞，两个人都没提回家。', bnd: '只能点到为止，不能复述原话。' },
+      { id: 's4', t: '排练室关灯', from: '2026-05', to: '', sum: '排练完最后两个人谁都不想关灯。', det: '在门口猜拳猜了十分钟。', bnd: '随便说。' }
+    ];
+    if (S.extra) stories.push({ id: 'new', t: '新故事', from: '', to: '', sum: '', det: '', bnd: '' });
+    var parts = S.parts, R = S.ratings, gl = this.groupList();
+    var shareStory = function (x, y) { return stories.some(function (s) { var p = parts[s.id] || []; return p.indexOf(x) >= 0 && p.indexOf(y) >= 0; }); };
+    var nUnsaved = Object.keys(S.unsaved).length;
+    var lit = function (n) { return S.mode === 'char' ? n === S.ch : (n === S.a || n === S.b); };
+    var inHl = function (n) { return S.hl >= 0 && gl[S.hl].m.indexOf(n) >= 0; };
+    var pickChar = function (n) { return function () { self.setState({ mode: 'char', ch: n, story: '' }); }; };
+    var cols = names.map(function (n) { var on = lit(n); return { name: n, col: col[n], bg: on ? '#EEEBFA' : inHl(n) ? '#FDF3DC' : 'transparent', fg: on ? '#3F3596' : '#2B2833', weight: on ? 700 : 400, pick: pickChar(n) }; });
+    var grid = names.map(function (a) {
+      var onRow = S.mode === 'char' ? a === S.ch : a === S.a;
+      return {
+        name: a, col: col[a], bg: onRow ? '#EEEBFA' : inHl(a) ? '#FDF3DC' : 'transparent', fg: onRow ? '#3F3596' : '#2B2833', weight: onRow ? 700 : 400, pick: pickChar(a),
+        cells: names.map(function (b) {
+          var me = a === b, v = R[a][b], key = a + '>' + b, sel = S.mode === 'pair' && a === S.a && b === S.b, un = !!S.unsaved[key];
+          var bits = [a + ' → ' + b, v === undefined ? '未设置' : v === 0 ? '0 · 陌生人' : v + ' 星'];
+          if (addr[key]) bits.push('叫他“' + addr[key][0] + '”');
+          if (un) bits.push('未保存'); else if (draftMark[key]) bits.push('草稿');
+          return {
+            self: me, v: me || v === undefined ? '' : String(v), tip: me ? a : bits.join(' · '),
+            bg: me ? '#F0ECE7' : un ? '#FDF6E6' : heat(v), fg: v === 0 ? '#6E6875' : '#2B2833', bd: un ? '#D9A441' : sel ? '#5B4FC4' : me ? '#F0ECE7' : '#ECE8E3',
+            ring: sel ? '0 0 0 2px #5B4FC4' : 'none', cur: me ? 'default' : 'pointer',
+            hasMark: !un && !!draftMark[key], mark: draftMark[key] || 'transparent', hasStory: !me && shareStory(a, b),
+            pick: function () { if (me) return; var first = stories.filter(function (s) { var p = parts[s.id] || []; return p.indexOf(a) >= 0 && p.indexOf(b) >= 0; })[0]; self.setState({ mode: 'pair', a: a, b: b, story: first ? first.id : '' }); }
+          };
+        })
+      };
+    });
+    var mkDir = function (f, t) {
+      var v = R[f][t], key = f + '>' + t, un = !!S.unsaved[key];
+      var setv = function (nv) { var r = Object.assign({}, R); r[f] = Object.assign({}, R[f]); if (nv === null) delete r[f][t]; else r[f][t] = nv; var u = Object.assign({}, S.unsaved); u[key] = true; self.setState({ ratings: r, unsaved: u }); };
+      var stars = [1, 2, 3, 4, 5].map(function (n) {
+        var full = v !== undefined && v >= n, half = v !== undefined && !full && v >= n - 0.5;
+        return { full: full, half: half, lowLabel: (n - 0.5) + ' 星', highLabel: n + ' 星', setLow: function () { setv(n - 0.5); }, setHigh: function () { setv(n); } };
+      });
+      return { from: f, to: t, fc: col[f], tc: col[t], stars: stars, val: v === undefined ? '未设置' : String(v), valCol: un ? '#8A5A00' : v === undefined ? '#6E6875' : '#2B2833', addr: (addr[key] || ['', ''])[0], how: (addr[key] || ['', ''])[1], setZero: function () { setv(0); }, clear: function () { setv(null); } };
+    };
+    var pairStories = stories.filter(function (s) { var p = parts[s.id] || []; return p.indexOf(S.a) >= 0 && p.indexOf(S.b) >= 0; }).map(function (s) {
+      var on = s.id === S.story;
+      return { t: s.t, aria: on ? 'true' : 'false', bg: on ? '#EEEBFA' : '#FBFAF8', weight: on ? 700 : 400, dots: (parts[s.id] || []).map(function (n) { return col[n] || '#8C8697'; }), pick: function () { self.setState({ story: on ? '' : s.id }); } };
+    });
+    var cur = S.mode === 'pair' ? stories.filter(function (s) { return s.id === S.story; })[0] : null;
+    var curParts = cur ? (parts[cur.id] || []) : [];
+    var who = names.concat(people).map(function (n) {
+      var on = curParts.indexOf(n) >= 0, isP = people.indexOf(n) >= 0;
+      return { name: n, col: col[n] || '#8C8697', shape: isP ? '2px' : '50%', aria: on ? 'true' : 'false', bd: on ? '#CFC8F2' : '#E2DDD6', bg: on ? '#EEEBFA' : '#FFFFFF', fg: on ? '#3F3596' : '#2B2833', weight: on ? 700 : 400,
+        pick: function () { if (!cur) return; var p = Object.assign({}, parts); var list = (p[cur.id] || []).slice(); var i = list.indexOf(n); if (i >= 0) list.splice(i, 1); else list.push(n); p[cur.id] = list; var u = Object.assign({}, S.unsaved); u['story:' + cur.id] = true; self.setState({ parts: p, unsaved: u }); } };
+    });
+    var LV = { lived: ['亲历', '#3F3596', '#EEEBFA'], heard: ['听说', '#0E5A8A', '#E8F2FA'], unknown: ['不知道', '#6E6875', '#F6F4F1'] };
+    var autoLevel = function (n, ps) { return ps.indexOf(n) >= 0 ? 'lived' : ps.some(function (p) { return R[n] && R[n][p] !== undefined && R[n][p] >= 3; }) ? 'heard' : 'unknown'; };
+    var know = names.map(function (n) {
+      var auto = autoLevel(n, curParts), ok = cur ? cur.id + ':' + n : n, ov = S.over[ok], lv = ov || auto;
+      var why = auto === 'lived' ? '在场' : auto === 'heard' ? '对在场的人 ≥ 3 星' : '对在场的人都 < 3 星';
+      return { name: n, col: col[n], level: LV[lv][0], fg: LV[lv][1], bg: LV[lv][2], bd: ov ? '1.5px solid #D98A00' : '1px solid transparent', tip: ov ? '手动 · 自动是“' + LV[auto][0] + '”· 再点回到自动' : '自动：' + why,
+        pick: function () { var order = ['lived', 'heard', 'unknown']; var nx = order[(order.indexOf(lv) + 1) % 3]; var o = Object.assign({}, S.over); o[ok] = nx === auto ? undefined : nx; var u = Object.assign({}, S.unsaved); u['know:' + ok] = true; self.setState({ over: o, unsaved: u }); } };
+    });
+    var J = S.ch === 'JOJO', ph = '[待填写]';
+    var toward = names.filter(function (n) { return n !== S.ch && R[S.ch][n] !== undefined; }).slice(0, 4).map(function (n) { var k = S.ch + '>' + n; return { c: col[n], x: n + ' · ' + R[S.ch][n] + ' 星' + (addr[k] ? ' · 叫他“' + addr[k][0] + '”· ' + addr[k][1] : '') }; });
+    var known = stories.filter(function (s) { return s.id !== 'new'; }).map(function (s) { var lv = autoLevel(S.ch, parts[s.id] || []); return { t: s.t, l: LV[lv][0], fg: LV[lv][1], bg: LV[lv][2] }; });
+    var P = [{ n: '林妈妈', a: '', k: '人物', o: '小满的妈妈，开早餐店' }, { n: '老周', a: '周老师', k: '人物', o: '班主任，总在走廊巡逻' }, { n: '书店老板', a: '', k: '人物', o: '旧书店二楼借给文学社聚会' }, { n: '教练', a: '', k: '人物', o: '电竞社的外聘教练' }, { n: '舞台上的她', a: '', k: '原型', o: '某位角色的参照' }];
+    var ch = {
+      name: S.ch, col: col[S.ch], one: J ? '高二（2）班，游戏打得比作业好' : ph, names: J ? ['JOJO', '乔乔'] : [S.ch],
+      aliases: J ? [{ t: '小乔', l: '喜欢', bd: '#BFE0CB', bg: '#F1F8F3', fg: '#2F7A4F' }, { t: '乔老师', l: '不喜欢', bd: '#E8B9B0', bg: '#FCF3F1', fg: '#B23A26' }] : [],
+      profile: J ? '生日：5 月 17 日\n家住老城区，楼下是网吧。' : ph, persona: J ? '嘴硬心软，什么都记得。' : ph,
+      catch: J ? ['这把不算', '你先睡'] : [], avoid: J ? ['书面腔', '“亲”'] : [], samples: J ? '你先说，我听着呢。\n这事儿我可记着了啊。' : '',
+      past: J ? [{ t: '第一台电脑', x: '攒了一个暑假的零花钱。' }] : [], play: J ? '句子短；关心人时绕个弯。' : ph, hidden: J ? '其实很怕一个人待着。' : ph, unmapped: J ? 'appearance：常穿队服外套' : '',
+      toward: toward, known: known
+    };
+    var rawVer = [
+      { label: 'v1', tip: 'v1 · 10-24 09:30 UTC · 主管理员发布', col: '#5B4FC4', pub: true, title: 'v1 · 10-24 09:30 UTC', sub: '主管理员发布 · 15 个角色 · 0 个故事', act: '回滚到这一版' },
+      { label: 'v2', tip: 'v2 · 10-27 11:05 UTC · 主管理员发布 · 线上', col: '#5B4FC4', pub: true, title: 'v2 · 线上', sub: '主管理员发布 · 4 个故事 · 3 个组合', act: '和草稿对比' },
+      { label: '#3', tip: '主管理员保存 · 10-27 18:20 UTC · 改了 2 处', col: '#5B4FC4', title: '草稿 #3', sub: '主管理员 · 10-27 18:20 UTC · 改了 2 处', act: '恢复到这里' },
+      { label: '#4', tip: '小鱼保存 · 10-28 09:02 UTC · 改了 3 处', col: '#0E7490', title: '草稿 #4', sub: '小鱼 · 10-28 09:02 UTC · 改了 3 处', act: '恢复到这里' },
+      { label: '#5', tip: '阿北保存 · 10-28 14:02 UTC · 改了 1 处 · 现在的草稿', col: '#B45309', title: '草稿 #5 · 现在', sub: '阿北 · 10-28 14:02 UTC · 改了 1 处', act: '和 v2 对比' }
+    ];
+    var versions = rawVer.map(function (v, i) {
+      var on = S.ver === i, last = i === rawVer.length - 1;
+      return { label: v.label, tip: v.tip, aria: on ? 'true' : 'false', bd: on ? '#5B4FC4' : '#E2DDD6', bg: on ? '#EEEBFA' : '#FFFFFF', fg: on ? '#3F3596' : '#2B2833',
+        mk: v.pub ? '8px' : '9px', mkr: v.pub ? '50%' : '3px', mc: v.col, flex: last ? '0 0 auto' : '1 1 0', hasLine: !last, lineCol: i >= 1 ? '#D9A441' : '#CFC8F2',
+        pick: function () { self.setState({ ver: on ? -1 : i }); } };
+    });
+    var ver = rawVer[S.ver >= 0 ? S.ver : 0];
+    var focus = S.mode === 'pair' ? [S.a, S.b] : [S.ch];
+    var gIdx = gl.map(function (_, i) { return i; }).filter(function (i) { return S.allGroups || focus.every(function (n) { return gl[i].m.indexOf(n) >= 0; }); });
+    var groups = gIdx.map(function (i, k) {
+      var g = gl[i], on = S.group === i;
+      return { name: g.n, bgText: g.b, n: g.s.length, dots: g.m.map(function (m) { return { c: col[m], n: m }; }), isOpen: on, aria: on ? 'true' : 'false', bg: on ? '#EEEBFA' : '#FFFFFF', rot: on ? '90deg' : '0deg', line: k === 0 ? 'none' : '1px solid #F0ECE7', radius: k === 0 ? '12px 12px 0 0' : '0',
+        stories: g.s, picker: names.map(function (n) { var m = g.m.indexOf(n) >= 0; return { name: n, col: col[n], bd: m ? '#CFC8F2' : '#E2DDD6', bg: m ? '#EEEBFA' : '#FFFFFF', fg: m ? '#3F3596' : '#2B2833', weight: m ? 700 : 400 }; }),
+        pick: function () { self.setState({ group: on ? -1 : i }); }, enter: function () { self.setState({ hl: i }); }, leave: function () { self.setState({ hl: -1 }); } };
+    });
+    return {
+      cols: cols, grid: grid, versions: versions, verOpen: S.ver >= 0, ver: { col: ver.col, r: ver.pub ? '50%' : '4px', title: ver.title, sub: ver.sub, act: ver.act, canDelete: !ver.pub && S.ver !== rawVer.length - 1 },
+      isPair: S.mode === 'pair', isChar: S.mode === 'char', ch: ch,
+      pair: { a: S.a, b: S.b, ac: col[S.a], bc: col[S.b] }, dirs: [mkDir(S.a, S.b), mkDir(S.b, S.a)],
+      pairStories: pairStories, noPairStory: pairStories.length === 0,
+      newStory: function () { var p = Object.assign({}, parts); p['new'] = [S.a, S.b]; var u = Object.assign({}, S.unsaved); u['story:new'] = true; self.setState({ extra: 1, parts: p, story: 'new', unsaved: u }); },
+      hasStory: !!cur, story: cur || { t: '', from: '', to: '', sum: '', det: '', bnd: '' }, who: who, know: know,
+      groups: groups, noGroup: groups.length === 0,
+      gTitle: S.allGroups ? '全部 ' + gl.length + ' 个' : '有 ' + focus.join(' 和 ') + ' 的',
+      allLabel: S.allGroups ? '只看' + focus.join('、') + '在的' : '全部 ' + gl.length + ' 个',
+      toggleAll: function () { self.setState({ allGroups: !S.allGroups }); },
+      newGroupLabel: '+ 用' + focus.join('、') + '建组合',
+      people: P.map(function (p, i) { var on = S.person === i; return { n: p.n, tip: p.k + ' · ' + p.o, aria: on ? 'true' : 'false', bd: on ? '#CFC8F2' : '#E2DDD6', bg: on ? '#EEEBFA' : '#FFFFFF', fg: on ? '#3F3596' : '#2B2833', pick: function () { self.setState({ person: on ? -1 : i }); } }; }),
+      hasPerson: S.person >= 0, person: S.person >= 0 ? P[S.person] : { n: '', a: '', o: '' },
+      addPerson: function () { self.setState({ person: P.length - 1 }); },
+      hasUnsaved: nUnsaved > 0, unsavedText: nUnsaved + ' 处未保存', saveOpacity: nUnsaved > 0 ? 1 : 0.5,
+      save: function () { self.setState({ unsaved: {} }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

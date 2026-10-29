@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Admin nav V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+.nv-item{transition:background 200ms cubic-bezier(.2,.82,.24,1),color 200ms}
+.nv-item:hover{background:#EFECE8}
+</style>
+</helmet>
+<aside style="width: 232px; min-height: 1000px; box-sizing: border-box; padding: 24px 14px; border-right: 1px solid #ECE8E3; background: #FBFAF8; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-direction: column; gap: 2px">
+  <div style="display: flex; flex-direction: column; gap: 4px; padding: 0 10px 18px">
+    <span style="display: flex; align-items: center; justify-content: space-between"><span style="font-size: 22px; font-weight: 900; letter-spacing: -0.03em">burbur</span><span style="font-family: 'DM Mono', monospace; font-size: 10px; color: #3F3596; background: #EEEBFA; border-radius: 999px; padding: 2px 8px">ADMIN</span></span>
+    <span style="font-size: 11px; color: #6E6875">本机测试环境</span>
+  </div>
+  <sc-for list="{{groups}}" as="g" hint-placeholder-count="5">
+    <div style="display: flex; flex-direction: column; gap: 2px; padding-bottom: 10px">
+      <sc-if value="{{g.hasLabel}}" hint-placeholder-val="{{ true }}"><span style="font-size: 12px; color: #6E6875; padding: 8px 12px 4px">{{g.label}}</span></sc-if>
+      <sc-for list="{{g.items}}" as="i" hint-placeholder-count="3">
+        <a href="{{i.href}}" class="nv-item" aria-current="{{i.aria}}" style="height: 38px; border-radius: 12px; background: {{i.bg}}; color: {{i.fg}}; display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 14px; font-weight: {{i.weight}}; text-decoration: none"><i style="width: 6px; height: 6px; border-radius: 50%; background: {{i.dot}}"></i><span style="flex: 1">{{i.label}}</span></a>
+      </sc-for>
+    </div>
+  </sc-for>
+  <div style="margin-top: auto; height: 44px; border-radius: 14px; border: 1px solid #ECE8E3; background: #FFFFFF; display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 14px">
+    <i style="width: 18px; height: 18px; border-radius: 5px; background: #5B4FC4; color: #FFFFFF; font-style: normal; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center">主</i>
+    <span>主管理员</span>
+  </div>
+</aside>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"current":{"editor":"text","default":"角色工作台"},"$preview":{"width":232,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var cur = this.props.current ?? '角色工作台';
+    var mk = function (label, href) {
+      var on = label === cur;
+      return { label: label, href: href || '#', aria: on ? 'page' : 'false', bg: on ? '#EEEBFA' : 'transparent', fg: on ? '#3F3596' : '#2B2833', weight: on ? 700 : 400, dot: on ? '#5B4FC4' : 'transparent' };
+    };
+    return {
+      groups: [
+        { hasLabel: false, label: '', items: [mk('总览', 'Overview3.dc.html')] },
+        { hasLabel: true, label: '角色', items: [mk('角色工作台', 'Workbench4.dc.html'), mk('关系与故事', 'Cast3.dc.html'), mk('共创收件箱', 'Inbox3.dc.html')] },
+        { hasLabel: true, label: '玩家', items: [mk('邀请与额度', 'Invites3.dc.html'), mk('积分发放', 'Points3.dc.html')] },
+        { hasLabel: true, label: '运营', items: [mk('消耗表', 'Usage3.dc.html')] },
+        { hasLabel: true, label: '系统', items: [mk('模型与价格', 'Models3.dc.html'), mk('系统状态', 'System3.dc.html'), mk('管理员与权限', 'Members3.dc.html')] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

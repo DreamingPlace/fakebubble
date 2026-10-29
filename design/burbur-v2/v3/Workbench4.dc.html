@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>角色工作台 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes aIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aPop{from{opacity:0;transform:translateY(10px) scale(.985);clip-path:inset(0 0 40% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+@keyframes aOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.a-page{animation:aIn 280ms cubic-bezier(.2,.82,.24,1) both}
+.a-pop{animation:aPop 300ms cubic-bezier(.2,.82,.24,1) both}
+.a-open{animation:aOpen 240ms cubic-bezier(.2,.82,.24,1) both}
+.a-rwrap{position:sticky;top:24px;width:64px;height:660px;z-index:5}
+.a-railp{position:absolute;left:0;top:0;width:64px;box-sizing:border-box;border-radius:18px;background:#FFFFFF;border:1px solid #ECE8E3;padding:8px;display:flex;flex-direction:column;gap:2px;overflow:hidden;transition:width 260ms cubic-bezier(.2,.82,.24,1),box-shadow 260ms}
+.a-rwrap:hover .a-railp,.a-rwrap:focus-within .a-railp{width:212px;box-shadow:0 12px 32px rgba(43,40,51,.14)}
+.a-rn{opacity:0;transition:opacity 160ms;white-space:nowrap}
+.a-rwrap:hover .a-rn,.a-rwrap:focus-within .a-rn{opacity:1;transition-delay:80ms}
+.a-rail{transition:background 200ms,color 200ms}.a-rail:hover{background:#F3F1EE}
+.a-row{transition:background 200ms}.a-row:hover{background:#F7F5F2}
+.a-tip{position:relative}
+.a-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.a-tip:hover::after{opacity:1;transform:none}
+.a-hold{position:relative;overflow:hidden}
+.a-hold i{position:absolute;inset:0;width:0;background:#B23A26;transition:width 80ms linear}
+.a-hold.on i{width:100%;transition:width 1500ms linear}
+.a-in{height:40px;box-sizing:border-box;border-radius:12px;border:1px solid #E2DDD6;padding:0 12px;font:inherit;font-size:14px;color:#2B2833;background:#FFFFFF;min-width:0}
+.a-ta{box-sizing:border-box;border-radius:12px;border:1px solid #E2DDD6;padding:10px 12px;font:inherit;font-size:14px;line-height:1.6;color:#2B2833;resize:vertical;width:100%}
+.a-lb{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#6E6875}
+.a-b30{height:30px;padding:0 12px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.a-b36{height:36px;padding:0 16px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.a-pri{border-color:#CFC8F2;color:#3F3596}
+.a-dan{border-color:#E8B9B0;color:#B23A26}
+.a-sec{padding:24px 28px;display:flex;flex-direction:column;gap:16px}
+.a-h2{margin:0;font-size:18px;font-weight:900}
+@media (prefers-reduced-motion: reduce){.a-page,.a-pop,.a-open{animation-duration:1ms}.a-railp,.a-rn{transition-duration:1ms}.a-hold.on i{transition-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 1400px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="角色工作台" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="a-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">角色工作台</h1>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6E6875"><i style="width: 10px; height: 10px; border-radius: 50%; background: {{c.col}}"></i><b style="color: #2B2833">{{c.name}}</b><span style="font-family: 'DM Mono', monospace">{{c.meta}}</span><sc-if value="{{c.seed}}" hint-placeholder-val="{{ false }}"><span class="a-tip" data-tip="设定还少：不编细节，多问玩家" style="height: 22px; padding: 0 8px; border-radius: 999px; background: #E7F3EC; color: #2F7A4F; font-size: 12px; font-weight: 700; display: flex; align-items: center">成长中</span></sc-if><sc-if value="{{c.dirty}}" hint-placeholder-val="{{ true }}"><i style="width: 1px; height: 14px; background: #E2DDD6"></i><b style="color: #8A5A00">1 处未保存</b></sc-if></span>
+          <button type="button" onClick="{{goPublish}}" style="height: 36px; padding: 0 18px; border: none; border-radius: 999px; background: #5B4FC4; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">预演后发布</button>
+        </div>
+      </header>
+
+      <div style="display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 20px; align-items: start">
+
+        <div class="a-rwrap">
+          <nav aria-label="角色" class="a-railp">
+            <sc-for list="{{rail}}" as="r" hint-placeholder-count="15">
+              <button type="button" class="a-rail" onClick="{{r.pick}}" aria-current="{{r.aria}}" aria-label="{{r.name}}" style="height: 38px; border: none; border-radius: 12px; background: {{r.bg}}; color: {{r.fg}}; font: inherit; font-size: 14px; font-weight: {{r.weight}}; display: grid; grid-template-columns: 30px 1fr 24px; gap: 10px; align-items: center; padding: 0 4px; text-align: left; cursor: pointer; flex: none">
+                <span style="position: relative; width: 28px; height: 28px; border-radius: 50%; background: {{r.col}}; color: #FFFFFF; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: {{r.ring}}; outline: {{r.seedRing}}; outline-offset: 2px">{{r.ini}}<sc-if value="{{r.hasMark}}" hint-placeholder-val="{{ false }}"><i style="position: absolute; right: -2px; top: -2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #FFFFFF; box-sizing: border-box; background: {{r.markBg}}"></i></sc-if></span>
+                <span class="a-rn">{{r.name}}</span>
+                <span class="a-rn" style="display: flex; justify-content: flex-end"><sc-if value="{{r.isBadge}}" hint-placeholder-val="{{ false }}"><b style="min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 999px; background: #C2410C; color: #FFFFFF; font-family: 'DM Mono', monospace; font-size: 11px; display: flex; align-items: center; justify-content: center">{{r.badge}}</b></sc-if><sc-if value="{{r.isOff}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; color: #6E6875">未上线</span></sc-if><sc-if value="{{r.isSeed}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; color: #2F7A4F">成长中</span></sc-if></span>
+              </button>
+            </sc-for>
+            <button type="button" aria-label="新建角色" style="margin-top: 6px; height: 38px; border-radius: 12px; border: 1px dashed #C9C2B8; background: transparent; color: #6E6875; font: inherit; font-size: 14px; cursor: pointer; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center; padding: 0 4px; text-align: left; flex: none"><span style="text-align: center; font-size: 18px">+</span><span class="a-rn">新建角色</span></button>
+          </nav>
+        </div>
+
+        <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; display: flex; flex-direction: column; min-width: 0">
+          <div style="position: sticky; top: 0; z-index: 3; background: #FFFFFF; border-radius: 18px 18px 0 0; border-bottom: 1px solid #ECE8E3; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center">
+            <sc-for list="{{tabs}}" as="s" hint-placeholder-count="9">
+              <button type="button" onClick="{{s.pick}}" aria-pressed="{{s.aria}}" style="height: 32px; padding: 0 14px; border: none; border-radius: 999px; background: {{s.bg}}; color: {{s.fg}}; font: inherit; font-size: 14px; font-weight: {{s.weight}}; display: flex; align-items: center; gap: 6px; cursor: pointer; margin-left: {{s.ml}}; transition: background 200ms, color 200ms">{{s.label}}<sc-if value="{{s.dirty}}" hint-placeholder-val="{{ false }}"><i style="width: 6px; height: 6px; border-radius: 50%; background: #D98A00"></i></sc-if></button>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{is.id}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <div style="display: flex; align-items: center; justify-content: space-between"><h2 class="a-h2">身份与展示</h2><label class="a-tip" data-tip="开着时：角色不编具体细节，遇到没写的就问玩家" style="display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer">成长中<button type="button" onClick="{{toggleSeed}}" aria-pressed="{{seedAria}}" aria-label="成长中" style="width: 40px; height: 24px; border-radius: 999px; border: none; padding: 2px; box-sizing: border-box; background: {{seedBg}}; cursor: pointer; display: flex; transition: background 200ms"><i style="width: 20px; height: 20px; border-radius: 50%; background: #FFFFFF; box-shadow: 0 1px 3px rgba(43,40,51,.2); transform: translateX({{seedX}}); transition: transform 200ms cubic-bezier(.2,.82,.24,1)"></i></button></label></div>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 20px">
+                <label class="a-lb">固定人物 ID<input class="a-in" value="{{c.fixedId}}" readonly="readonly" style="font-family: 'DM Mono', monospace; background: #F6F4F1; color: #6E6875"></label>
+                <label class="a-lb">人设名称<input class="a-in" value="{{c.persona}}"></label>
+                <label class="a-lb">网页展示名<input class="a-in" value="{{c.name}}"></label>
+                <label class="a-lb">设定生日<input class="a-in" value="{{c.birth}}" placeholder="可空" style="font-family: 'DM Mono', monospace"></label>
+                <div class="a-lb" style="grid-column: span 2">主色<span style="display: flex; gap: 8px; align-items: center"><i style="width: 40px; height: 40px; border-radius: 12px; background: {{c.col}}; flex: none"></i><input class="a-in" value="{{c.col}}" aria-label="主色" style="flex: 1; font-family: 'DM Mono', monospace"><button type="button" class="a-b36" style="font-weight: 400">默认</button></span></div>
+                <label class="a-lb" style="grid-column: 1 / -1">公开简介<textarea class="a-ta" style="height: 90px">{{c.intro}}</textarea></label>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.welcome}}" hint-placeholder-val="{{ true }}">
+            <section class="a-sec a-pop">
+              <div style="display: flex; align-items: center; justify-content: space-between"><h2 class="a-h2">欢迎内容</h2><span style="display: flex; align-items: center; gap: 10px; font-size: 13px"><span style="color: #6E6875">新玩家进来时随机遇到一条</span><b style="height: 26px; padding: 0 10px; border-radius: 999px; background: {{w.sumBg}}; color: {{w.sumFg}}; display: flex; align-items: center; font-family: 'DM Mono', monospace">{{w.sumText}}</b></span></div>
+              <div style="display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: #F0ECE7">
+                <sc-for list="{{w.items}}" as="x" hint-placeholder-count="3"><i class="a-tip" data-tip="{{x.tip}}" style="width: {{x.p}}%; background: {{x.c}}; transition: width 300ms cubic-bezier(.2,.82,.24,1)"></i></sc-for>
+              </div>
+              <sc-for list="{{w.items}}" as="x" hint-placeholder-count="3">
+                <div class="a-open" style="display: grid; grid-template-columns: 28px minmax(0, 1fr) 120px 32px; gap: 12px; align-items: start">
+                  <span style="width: 28px; height: 28px; border-radius: 50%; background: {{x.c}}; color: #FFFFFF; font-family: 'DM Mono', monospace; font-size: 13px; display: flex; align-items: center; justify-content: center; margin-top: 6px">{{x.n}}</span>
+                  <textarea class="a-ta" aria-label="欢迎词" onInput="{{x.setT}}" style="height: 64px">{{x.t}}</textarea>
+                  <label style="display: flex; align-items: center; gap: 6px; height: 40px; font-size: 13px; color: #6E6875"><input value="{{x.p}}" onInput="{{x.setP}}" aria-label="出现概率" style="width: 72px; height: 40px; box-sizing: border-box; border-radius: 12px; border: {{x.bd}}; padding: 0 10px; font-family: 'DM Mono', monospace; font-size: 15px; text-align: right; color: #2B2833">%</label>
+                  <button type="button" onClick="{{x.remove}}" aria-label="删除这一条" disabled="{{x.noRemove}}" style="width: 32px; height: 32px; margin-top: 4px; border-radius: 50%; border: 1px solid #ECE8E3; background: #FFFFFF; color: #B23A26; cursor: pointer; opacity: {{x.rmOp}}">×</button>
+                </div>
+              </sc-for>
+              <div style="display: grid; grid-template-columns: 28px minmax(0, 1fr) 120px 32px; gap: 12px">
+                <span></span>
+                <button type="button" onClick="{{w.add}}" style="height: 40px; border-radius: 12px; border: 1px dashed #C9C2B8; background: transparent; color: #6E6875; font: inherit; font-size: 14px; cursor: pointer">+ 欢迎词</button>
+                <button type="button" onClick="{{w.even}}" class="a-b30 a-tip" data-tip="平均分配，合计 100%" style="height: 40px">平均</button>
+              </div>
+              <label class="a-lb" style="width: 280px">欢迎词版本标识<input class="a-in a-tip" data-tip="改了以后要重新批准欢迎成品" value="{{c.wver}}" style="font-family: 'DM Mono', monospace"></label>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.persona}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <div style="display: flex; align-items: center; gap: 10px"><h2 class="a-h2">性格</h2><b class="a-tip" data-tip="小鱼 · 10-28 14:02 UTC 保存的草稿" style="width: 16px; height: 16px; border-radius: 4px; background: #0E7490; color: #FFFFFF; font-size: 10px; display: flex; align-items: center; justify-content: center">鱼</b></div>
+              <label class="a-lb" style="color: #8A5A00; font-weight: 700">基础人设 · 未保存<textarea class="a-ta" style="height: 320px; border: 1.5px solid #D9A441; background: #FDF6E6; font-weight: 400">{{c.base}}</textarea></label>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.speech}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <h2 class="a-h2">说话方式</h2>
+              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px">
+                <div class="a-lb">口头禅<span style="display: flex; flex-wrap: wrap; gap: 6px"><sc-for list="{{c.catch}}" as="t" hint-placeholder-count="2"><span style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #E2DDD6; box-sizing: border-box; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #2B2833">{{t}}<span style="color: #6E6875">×</span></span></sc-for><span style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px dashed #C9C2B8; box-sizing: border-box; display: flex; align-items: center; font-size: 13px">+</span></span></div>
+                <div class="a-lb">不会这样说<span style="display: flex; flex-wrap: wrap; gap: 6px"><sc-for list="{{c.avoid}}" as="t" hint-placeholder-count="2"><span style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #E8B9B0; background: #FCF3F1; box-sizing: border-box; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #2B2833">{{t}}<span style="color: #6E6875">×</span></span></sc-for><span style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px dashed #C9C2B8; box-sizing: border-box; display: flex; align-items: center; font-size: 13px">+</span></span></div>
+              </div>
+              <div class="a-lb">对话样例
+                <sc-for list="{{c.dialog}}" as="d" hint-placeholder-count="2"><div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 32px; gap: 10px; align-items: center"><input class="a-in" value="{{d.p}}" aria-label="玩家说"><input class="a-in" value="{{d.r}}" aria-label="他回" style="border-color: #CFC8F2"><span style="color: #6E6875; text-align: center">×</span></div></sc-for>
+                <span style="height: 40px; border-radius: 12px; border: 1px dashed #C9C2B8; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #6E6875">+ 一组样例</span>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.past}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <h2 class="a-h2">经历</h2>
+              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+                <sc-for list="{{c.past}}" as="p" hint-placeholder-count="2"><div style="border-radius: 14px; border: 1px solid #E2DDD6; padding: 12px; display: flex; flex-direction: column; gap: 8px"><input class="a-in" value="{{p.t}}" style="font-weight: 700"><textarea class="a-ta" style="height: 76px">{{p.x}}</textarea></div></sc-for>
+                <div style="border-radius: 14px; border: 1px dashed #C9C2B8; min-height: 140px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #6E6875">+ 经历</div>
+              </div>
+              <span style="font-size: 13px; color: #6E6875">和别的角色一起经历的事写在 <a href="Cast3.dc.html" style="color: #3F3596; font-weight: 700">关系与故事</a></span>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.hidden}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <h2 class="a-h2">不公开设定</h2>
+              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px">
+                <label class="a-lb">他知道、但绝不直接说出口<textarea class="a-ta" style="height: 140px">{{c.hidden}}</textarea></label>
+                <label class="a-lb">演绎说明 · 只给他自己的模型看<textarea class="a-ta" style="height: 140px">{{c.play}}</textarea></label>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.raw}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <div style="display: flex; align-items: baseline; justify-content: space-between"><h2 class="a-h2">其余设定</h2><span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #6E6875">外貌、爱好、宠物… · JSON</span></div>
+              <textarea class="a-ta" aria-label="其余设定 JSON" style="height: 320px; font-family: 'DM Mono', monospace; font-size: 13px; background: #FBFAF8">{{c.canon}}</textarea>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.voice}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <h2 class="a-h2">声音</h2>
+              <div style="display: grid; grid-template-columns: 160px minmax(0, 1fr) 120px 120px; gap: 16px 20px; align-items: end">
+                <label style="height: 40px; display: flex; align-items: center; gap: 8px; font-size: 14px"><input type="checkbox" checked="checked" style="width: 18px; height: 18px; accent-color: #5B4FC4">绑定已有音色</label>
+                <label class="a-lb">音色档案 ID<input class="a-in" value="{{c.voice}}" style="font-family: 'DM Mono', monospace"></label>
+                <label class="a-lb">版本<input class="a-in" value="3" style="font-family: 'DM Mono', monospace"></label>
+                <label class="a-lb">语速<input class="a-in" value="1.05" style="font-family: 'DM Mono', monospace"></label>
+              </div>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: end">
+                <label class="a-lb">已有 Fish 音色 referenceId<input class="a-in" value="7f3c9e0a21d84b5c" style="font-family: 'DM Mono', monospace"></label>
+                <label class="a-tip" data-tip="这个克隆在 Drama 3 上听起来不对时勾选" style="height: 40px; display: flex; align-items: center; gap: 8px; font-size: 14px"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #5B4FC4">固定用 s2.1-pro</label>
+                <button type="button" class="a-b36 a-pri" style="height: 40px">准备新素材版本</button>
+              </div>
+              <div style="border: 1px solid #ECE8E3; border-radius: 12px; font-size: 14px">
+                <div style="display: grid; grid-template-columns: 100px 1fr 1fr 170px 80px; gap: 12px; height: 34px; align-items: center; padding: 0 12px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3"><span>素材版本</span><span>欢迎成品（每条欢迎词一条）</span><span>结束成品</span><span>状态</span><span></span></div>
+                <sc-for list="{{assets}}" as="m" hint-placeholder-count="2">
+                  <div class="a-row" style="display: grid; grid-template-columns: 100px 1fr 1fr 170px 80px; gap: 12px; height: 46px; align-items: center; padding: 0 12px; border-top: 1px solid #F3F0EC">
+                    <span style="font-family: 'DM Mono', monospace">{{m.v}}</span>
+                    <span style="display: flex; gap: 6px"><sc-for list="{{m.wel}}" as="k" hint-placeholder-count="3"><button type="button" class="a-tip" data-tip="试听欢迎词 {{k}}" aria-label="试听欢迎词 {{k}}" style="height: 28px; padding: 0 10px; border-radius: 999px; border: none; background: {{c.col}}; color: #FFFFFF; font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer">▶ {{k}}</button></sc-for></span>
+                    <span><button type="button" aria-label="试听结束成品" style="height: 28px; padding: 0 10px; border-radius: 999px; border: none; background: {{c.col}}; color: #FFFFFF; font-size: 11px; cursor: pointer">▶ 结束</button></span>
+                    <span style="font-size: 13px; font-weight: 700; color: {{m.stFg}}">{{m.st}}</span>
+                    <sc-if value="{{m.canApprove}}" hint-placeholder-val="{{ false }}"><button type="button" class="a-b30 a-pri" style="justify-self: end; font-weight: 700">批准</button></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.diff}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <div style="display: flex; align-items: center; justify-content: space-between"><h2 class="a-h2">资料改动</h2><span style="display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE"><b style="height: 26px; padding: 0 12px; border-radius: 999px; background: #FFFFFF; color: #3F3596; display: flex; align-items: center; font-size: 12px; box-shadow: 0 1px 3px rgba(43,40,51,.12)">人设</b><span style="height: 26px; padding: 0 12px; display: flex; align-items: center; font-size: 12px">网页展示</span><span style="height: 26px; padding: 0 12px; display: flex; align-items: center; font-size: 12px">完整模板</span></span></div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #ECE8E3; border-radius: 12px; overflow: hidden; font-size: 14px; line-height: 1.7">
+                <div style="padding: 8px 14px; background: #FBFAF8; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3">正式 v2</div>
+                <div style="padding: 8px 14px; background: #FBFAF8; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3; border-left: 1px solid #ECE8E3">草稿修订 1</div>
+                <div style="padding: 12px 14px">嘴硬心软，嘴上说着“随便”。<span style="background: #FBEDEA; color: #B23A26; text-decoration: line-through">输了游戏会生闷气。</span></div>
+                <div style="padding: 12px 14px; border-left: 1px solid #ECE8E3">嘴硬心软，嘴上说着“随便”。<span style="background: #E7F3EC; color: #2F7A4F">输了游戏不认账，但会第一个问你吃饭没。</span></div>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.publish}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <h2 class="a-h2">发布</h2>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 20px">
+                <label class="a-lb">匹配当前草稿的预演<select class="a-in"><option>10-28 06:12 · 催睡觉的语气 · 10 / 12 通过</option></select></label>
+                <label class="a-lb">成品版本<select class="a-in"><option>沿用原成品（声音与欢迎词没变）</option></select></label>
+              </div>
+              <div style="display: flex; align-items: center; gap: 14px">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; flex: 1"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #5B4FC4">我看过资料改动和预演结果</label>
+                <button type="button" class="a-b36 a-pri">发布 v3</button>
+              </div>
+              <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid #F0ECE7; display: flex; flex-direction: column; gap: 12px">
+                <div style="display: flex; gap: 12px; flex-wrap: wrap"><button type="button" onClick="{{discardToggle}}" class="a-b36 a-dan">放弃服务器草稿</button><button type="button" onClick="{{dangerToggle}}" class="a-b36 a-dan">删除角色 {{c.name}}</button></div>
+                <sc-if value="{{discardOpen}}" hint-placeholder-val="{{ false }}"><div class="a-open" style="border-radius: 12px; background: #FBEDEA; padding: 14px 16px; display: flex; align-items: center; gap: 14px; font-size: 14px"><span style="flex: 1">草稿修订 1 会被删掉，正式 v2 不变。</span><button type="button" class="a-b36" style="border-color: #B23A26; color: #B23A26">确认放弃</button></div></sc-if>
+                <sc-if value="{{dangerOpen}}" hint-placeholder-val="{{ false }}">
+                  <div class="a-open" style="border-radius: 12px; background: #FBEDEA; padding: 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 1.4fr; gap: 10px; align-items: end">
+                    <span style="background: #FFFFFF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; font-size: 13px"><b style="font-size: 18px; font-family: 'DM Mono', monospace">214</b>位玩家的聊天</span>
+                    <span style="background: #FFFFFF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; font-size: 13px"><b style="font-size: 18px; font-family: 'DM Mono', monospace">1,862</b>条记忆</span>
+                    <span style="background: #FFFFFF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; font-size: 13px"><b style="font-size: 18px; font-family: 'DM Mono', monospace">530</b>段私有音频</span>
+                    <div style="display: flex; flex-direction: column; gap: 8px">
+                      <input value="{{typed}}" onInput="{{onType}}" placeholder="输入 {{c.name}}" aria-label="输入角色名确认" style="height: 36px; border-radius: 10px; border: 1px solid #E8B9B0; padding: 0 12px; font: inherit; font-size: 14px; color: #2B2833; background: #FFFFFF">
+                      <button type="button" class="{{holdClass}}" onMouseDown="{{holdStart}}" onMouseUp="{{holdStop}}" onMouseLeave="{{holdStop}}" disabled="{{holdDisabled}}" style="height: 36px; border-radius: 999px; border: 1px solid #B23A26; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; opacity: {{holdOpacity}}"><i></i><span style="position: relative; mix-blend-mode: difference; color: #FFFFFF">{{holdLabel}}</span></button>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </section>
+          </sc-if>
+
+          <sc-if value="{{is.preview}}" hint-placeholder-val="{{ false }}">
+            <section class="a-sec a-pop">
+              <div style="display: flex; justify-content: space-between; align-items: baseline"><h2 class="a-h2">预演</h2><span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #6E6875">用已保存的草稿修订 1</span></div>
+              <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start">
+                <div style="display: flex; flex-direction: column; gap: 14px">
+                  <div style="display: grid; grid-template-columns: 72px 1fr; gap: 10px; align-items: center; font-size: 13px; color: #6E6875">
+                    <span>关系</span>
+                    <span style="display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE"><sc-for list="{{rels}}" as="o" hint-placeholder-count="4"><button type="button" onClick="{{o.pick}}" style="flex: 1; height: 28px; border: none; border-radius: 999px; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{o.sh}}; cursor: pointer; transition: background 200ms">{{o.l}}</button></sc-for></span>
+                    <span>时间</span>
+                    <span style="display: grid; grid-template-columns: 1fr 110px; gap: 6px"><select class="a-in" style="height: 34px; font-size: 13px"><option>真实时间</option><option>指定时间</option></select><input class="a-in a-tip" data-tip="北京时间，角色永远在 UTC+8" value="05:50" style="height: 34px; font-family: 'DM Mono', monospace; font-size: 13px"></span>
+                    <span>关系与故事</span>
+                    <span style="display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE; width: max-content"><span style="height: 28px; padding: 0 14px; display: flex; align-items: center; font-size: 13px; color: #2B2833">不用</span><span style="height: 28px; padding: 0 14px; display: flex; align-items: center; font-size: 13px; color: #2B2833">已发布</span><b style="height: 28px; padding: 0 14px; border-radius: 999px; background: #FFFFFF; color: #3F3596; display: flex; align-items: center; font-size: 13px; box-shadow: 0 1px 3px rgba(43,40,51,.12)">草稿</b></span>
+                    <span>评测集</span>
+                    <span style="display: grid; grid-template-columns: 1fr auto auto; gap: 6px"><select class="a-in" style="height: 34px; font-size: 13px"><option>基础 20 句</option></select><button type="button" class="a-b30">编辑</button><button type="button" class="a-b30 a-pri" style="font-weight: 700">运行</button></span>
+                  </div>
+                  <textarea class="a-ta" aria-label="批量输入" placeholder="批量：每行一条" style="height: 96px"></textarea>
+                  <div style="display: flex; gap: 8px"><input class="a-in" aria-label="运行备注" placeholder="运行备注（可空，≤60 字）" style="flex: 1; height: 36px; border-radius: 999px"><button type="button" class="a-b36 a-pri">批量运行</button></div>
+                  <label class="a-tip" data-tip="每条约 $0.006，花的是真钱" style="display: flex; align-items: center; gap: 8px; font-size: 14px; width: max-content"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #5B4FC4">确认发起付费预演</label>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 10px">
+                  <div style="border-radius: 14px; background: #F6F4F1; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-height: 230px">
+                    <span style="align-self: flex-end; max-width: 80%; border-radius: 16px; background: #2B2833; color: #FFFFFF; padding: 8px 12px; font-size: 14px">我再玩十分钟</span>
+                    <span style="align-self: flex-start; max-width: 85%; border-radius: 16px; background: #FFFFFF; padding: 8px 12px; font-size: 14px">十分钟？你上次说十分钟玩到三点。睡。</span>
+                    <span style="align-self: flex-start; font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875">已通过 · 1.7 s · $0.002</span>
+                  </div>
+                  <div style="display: flex; gap: 8px"><input class="a-in" aria-label="单条输入" placeholder="单条输入（不是玩家消息）" style="flex: 1; height: 36px; border-radius: 999px"><button type="button" class="a-b36 a-pri">单条预演</button></div>
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px"><span style="font-size: 15px; font-weight: 900">结果</span><sc-if value="{{canCompare}}" hint-placeholder-val="{{ false }}"><button type="button" class="a-b30 a-pri" style="font-weight: 700">对比所选 2 次</button></sc-if></div>
+              <div style="border: 1px solid #ECE8E3; border-radius: 12px; font-size: 14px">
+                <div style="display: grid; grid-template-columns: 28px 24px 160px 1fr 70px 180px 90px 90px; gap: 12px; height: 36px; align-items: center; padding: 0 14px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3"><span class="a-tip" data-tip="勾两次运行来对比">比</span><span></span><span>时间 UTC</span><span>运行</span><span style="text-align: right">条数</span><span>状态</span><span style="text-align: right">费用</span><span>草稿</span></div>
+                <sc-for list="{{runs}}" as="r" hint-placeholder-count="3">
+                  <div style="display: flex; flex-direction: column; border-top: {{r.line}}">
+                    <div class="a-row" style="display: grid; grid-template-columns: 28px 24px 160px 1fr 70px 180px 90px 90px; gap: 12px; height: 46px; align-items: center; padding: 0 14px; background: {{r.bg}}">
+                      <input type="checkbox" checked="{{r.cmp}}" onChange="{{r.toggleCmp}}" aria-label="选来对比" style="width: 16px; height: 16px; accent-color: #5B4FC4">
+                      <button type="button" onClick="{{r.pick}}" aria-label="展开" aria-expanded="{{r.aria}}" style="border: none; background: transparent; padding: 0; cursor: pointer; display: flex"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6E6875" stroke-width="2.5" aria-hidden="true" style="transform: rotate({{r.rot}}); transition: transform 240ms cubic-bezier(.2,.82,.24,1)"><path d="m9 6 6 6-6 6"></path></svg></button>
+                      <span onClick="{{r.pick}}" style="font-family: 'DM Mono', monospace; font-size: 13px; cursor: pointer">{{r.at}}</span>
+                      <span onClick="{{r.pick}}" style="font-weight: {{r.weight}}; cursor: pointer">{{r.note}}</span>
+                      <span style="text-align: right; font-family: 'DM Mono', monospace">{{r.n}}</span>
+                      <span class="a-tip" data-tip="{{r.tip}}" style="display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: #F0ECE7"><i style="width: {{r.ok}}; background: #2F7A4F"></i><i style="width: {{r.bad}}; background: #B23A26"></i></span>
+                      <span class="a-tip" data-tip="{{r.costTip}}" style="text-align: right; font-family: 'DM Mono', monospace">{{r.cost}}</span>
+                      <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: #6E6875">{{r.rev}}</span>
+                    </div>
+                    <sc-if value="{{r.isOpen}}" hint-placeholder-val="{{ true }}">
+                      <div class="a-open" style="margin: 0 14px 14px; border-radius: 12px; border: 1px solid #ECE8E3; font-size: 14px">
+                        <div style="display: grid; grid-template-columns: 36px 220px 1fr 80px 80px 70px 80px 70px; gap: 12px; height: 34px; align-items: center; padding: 0 14px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3; background: #FBFAF8; border-radius: 12px 12px 0 0"><span>#</span><span>输入</span><span>最终气泡</span><span>状态</span><span>审核改动</span><span>覆盖</span><span style="text-align: right">费用</span><span style="text-align: right">耗时</span></div>
+                        <sc-for list="{{items}}" as="x" hint-placeholder-count="4">
+                          <div class="a-row" style="display: grid; grid-template-columns: 36px 220px 1fr 80px 80px 70px 80px 70px; gap: 12px; padding: 12px 14px; align-items: start; border-top: 1px solid #F3F0EC; line-height: 1.6">
+                            <span style="font-family: 'DM Mono', monospace; color: #6E6875">{{x.i}}</span><span>{{x.input}}</span><span>{{x.out}}</span><span style="color: {{x.stCol}}; font-weight: 700; font-size: 13px">{{x.st}}</span><span style="font-size: 13px">{{x.changed}}</span><span class="a-tip" data-tip="{{x.covTip}}" style="font-size: 13px; font-family: 'DM Mono', monospace">{{x.cov}}</span><span class="a-tip" data-tip="{{x.costTip}}" style="text-align: right; font-family: 'DM Mono', monospace; font-size: 13px">{{x.cost}}</span><span class="a-tip" data-tip="{{x.msTip}}" style="text-align: right; font-family: 'DM Mono', monospace; font-size: 13px">{{x.ms}}</span>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+          </sc-if>
+
+          <div style="position: sticky; bottom: 0; border-top: 1px solid #ECE8E3; padding: 12px 28px; display: flex; align-items: center; gap: 10px; background: #FFFFFF; border-radius: 0 0 18px 18px">
+            <span style="font-size: 13px; color: #8A5A00; font-weight: 700; flex: 1">1 处未保存</span>
+            <button type="button" class="a-b36" style="font-weight: 400">放弃本页修改</button>
+            <button type="button" class="a-b36">保存草稿</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1400}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { who: 'JOJO', sec: 'welcome', seed: { '江月': true, '白露': true, '秦川': true }, run: 0, cmp: { 0: true }, rel: 0, danger: false, discard: false, typed: '', holding: false, deleted: false,
+      wel: [{ t: '来了？我刚打完一把，你今天怎么样。', p: '40' }, { t: '你终于上线了，我等你半天了。', p: '30' }, { t: '这么晚还不睡？……算了，陪你聊会儿。', p: '30' }] };
+    this.timer = null;
+  }
+  componentWillUnmount() { if (this.timer) clearTimeout(this.timer); }
+  renderVals() {
+    var self = this, S = this.state;
+    var roster = [
+      ['周屿', '#E8561E'], ['许知意', '#2F7BEA'], ['顾北', '#7C4DEB'], ['江月', '#1E8E4E'], ['唐小棠', '#D98A00'],
+      ['沈烬', '#C2410C'], ['叶初晴', '#0E7490'], ['秦川', '#9D174D'], ['白露', '#4D7C0F'], ['陈吉米', '#BE185D'],
+      ['JOJO', '#1D4ED8'], ['陆远', '#A16207'], ['宋青', '#047857'], ['温言', '#6D28D9'], ['瓜瓜', '#B45309']
+    ];
+    var status = { 'JOJO': { draft: true, badge: '2' }, '瓜瓜': { badge: '1' }, '陆远': { off: true }, '宋青': { off: true }, '温言': { off: true } };
+    var who = S.who, col = '#1D4ED8';
+    var rail = roster.map(function (r) {
+      var on = r[0] === who, st = status[r[0]] || {};
+      if (on) col = r[1];
+      return { name: r[0], ini: r[0].slice(0, 1), col: r[1], aria: on ? 'true' : 'false', bg: on ? '#EEEBFA' : 'transparent', fg: on ? '#3F3596' : '#2B2833', weight: on ? 700 : 400, ring: on ? '0 0 0 2px #FFFFFF, 0 0 0 4px ' + r[1] : 'none', seedRing: S.seed[r[0]] ? '2px dashed #2F7A4F' : '2px solid transparent',
+        hasMark: !!(st.draft || st.badge || st.off), markBg: st.badge ? '#C2410C' : st.draft ? '#D98A00' : '#FFFFFF',
+        isBadge: !!st.badge, badge: st.badge || '', isOff: !!st.off, isSeed: !!S.seed[r[0]] && !st.badge && !st.off,
+        pick: function () { self.setState({ who: r[0], danger: false, discard: false, typed: '', deleted: false }); } };
+    });
+    var st = status[who] || {}, J = who === 'JOJO', ph = '[待填写]';
+    var c = {
+      name: who, col: col, dirty: J, seed: !!S.seed[who], meta: st.off ? '未发布 · 草稿修订 1' : '正式 v2 · 草稿修订 1',
+      fixedId: J ? 'jojo' : 'role-' + (who.length * 7919).toString(16), persona: J ? '合成jojo' : who, birth: J ? '2012-05-17' : '', intro: J ? '高二（2）班，游戏打得比作业好。' : ph,
+      wver: J ? 'jojo-welcome-v3' : 'welcome-v1',
+      base: J ? '嘴硬心软，嘴上说着“随便”，其实什么都记得。输了游戏不认账，但会第一个问你吃饭没。\n说话短，爱用反问；关心人时绕个弯，不直说。' : ph,
+      canon: J ? '{\n  "appearance": "常穿队服外套",\n  "interests": ["打游戏", "奶茶"]\n}' : '{}',
+      catch: J ? ['这把不算', '你先睡'] : [], avoid: J ? ['书面腔', '“亲”'] : [],
+      dialog: J ? [{ p: '我再玩十分钟', r: '十分钟？你上次说十分钟玩到三点。睡。' }, { p: '你在干嘛', r: '打游戏啊，还能干嘛。你呢？' }] : [],
+      past: J ? [{ t: '第一台电脑', x: '攒了一个暑假的零花钱，配置到现在都记得。' }] : [],
+      hidden: J ? '其实很怕一个人待着。' : ph, play: J ? '句子短；关心人时绕个弯，不直说。' : ph,
+      voice: J ? 'jojo-2026-10' : ''
+    };
+    var T = [['id', '身份与展示'], ['welcome', '欢迎内容'], ['persona', '性格', true], ['speech', '说话方式'], ['past', '经历'], ['hidden', '不公开设定'], ['raw', '其余设定'], ['voice', '声音'], ['diff', '资料改动'], ['publish', '发布'], ['preview', '预演']];
+    var tabs = T.map(function (t) { var on = S.sec === t[0]; return { label: t[1], dirty: !!t[2] && J, aria: on ? 'true' : 'false', bg: on ? '#EEEBFA' : 'transparent', fg: on ? '#3F3596' : '#2B2833', weight: on ? 700 : 400, ml: t[0] === 'preview' ? 'auto' : '0', pick: function () { self.setState({ sec: t[0] }); } }; });
+    var is = {}; T.forEach(function (t) { is[t[0]] = S.sec === t[0]; });
+    var wcols = ['#5B4FC4', '#0E7490', '#B45309', '#9D174D', '#4D7C0F', '#6D28D9'];
+    var sum = S.wel.reduce(function (a, x) { var n = Number(x.p); return a + (isFinite(n) ? n : 0); }, 0);
+    var setWel = function (i, k, v) { var w = S.wel.map(function (x) { return Object.assign({}, x); }); w[i][k] = v; self.setState({ wel: w }); };
+    var w = {
+      items: S.wel.map(function (x, i) { var n = Number(x.p); return { n: i + 1, t: x.t, p: x.p, c: wcols[i % wcols.length], tip: '第 ' + (i + 1) + ' 条 · ' + x.p + '%', bd: sum === 100 ? '1px solid #E2DDD6' : '1.5px solid #D9A441', noRemove: S.wel.length <= 1, rmOp: S.wel.length <= 1 ? 0.35 : 1,
+        setT: function (e) { setWel(i, 't', e.target.value); }, setP: function (e) { setWel(i, 'p', e.target.value.replace(/[^0-9]/g, '')); },
+        remove: function () { if (S.wel.length <= 1) return; var arr = S.wel.slice(); arr.splice(i, 1); self.setState({ wel: arr }); } }; }),
+      sumText: '合计 ' + sum + '%', sumBg: sum === 100 ? '#E7F3EC' : '#FBEDEA', sumFg: sum === 100 ? '#2F7A4F' : '#B23A26',
+      add: function () { self.setState({ wel: S.wel.concat([{ t: '', p: '0' }]) }); },
+      even: function () { var n = S.wel.length, base = Math.floor(100 / n), rest = 100 - base * n; self.setState({ wel: S.wel.map(function (x, i) { return { t: x.t, p: String(base + (i < rest ? 1 : 0)) }; }) }); }
+    };
+    var rels = ['初识', '朋友', '亲近朋友', '恋人'].map(function (l, i) { var on = S.rel === i; return { l: l, bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#3F3596' : '#2B2833', sh: on ? '0 1px 3px rgba(43,40,51,.12)' : 'none', pick: function () { self.setState({ rel: i }); } }; });
+    var rawRuns = [
+      { at: '2026-10-28 06:12', note: '催睡觉的语气', n: '12', ok: 83, bad: 8, tip: '已通过 10 · 失败 1 · 排队中 1', cost: '$0.071', costTip: '$0.071 204', rev: '修订 1' },
+      { at: '2026-10-27 22:40', note: '输了不认账', n: '8', ok: 100, bad: 0, tip: '已通过 8', cost: '$0.046', costTip: '$0.046 880', rev: '旧修订' },
+      { at: '2026-10-26 15:03', note: '评测集 · 基础 20 句', n: '20', ok: 95, bad: 5, tip: '已通过 19 · 失败 1', cost: '$0.118', costTip: '$0.118 340', rev: '旧修订' }
+    ];
+    var runs = rawRuns.map(function (r, i) {
+      var on = S.run === i;
+      return Object.assign({}, r, { ok: r.ok + '%', bad: r.bad + '%', isOpen: on, aria: on ? 'true' : 'false', bg: on ? '#EEEBFA' : '#FFFFFF', rot: on ? '90deg' : '0deg', weight: on ? 700 : 400, line: i === 0 ? 'none' : '1px solid #F0ECE7',
+        cmp: !!S.cmp[i], toggleCmp: function () { var m = Object.assign({}, S.cmp); m[i] = !m[i]; self.setState({ cmp: m }); }, pick: function () { self.setState({ run: on ? -1 : i }); } });
+    });
+    var items = [
+      { i: '1', input: '我再玩十分钟', out: '十分钟？你上次说十分钟玩到三点。睡。', st: '已通过', stCol: '#2F7A4F', changed: '否', cov: '3 / 3', covTip: '性格 · 说话 · 时间 都用到了', cost: '$0.002', costTip: '草稿 $0.0012 · 审核 $0.0008', ms: '1.7 s', msTip: '草稿 1.1 s · 审核 0.6 s' },
+      { i: '2', input: '明天还要早起，但我睡不着', out: '那你把手机放远一点，我陪你说两句，说完就睡，不许再看了。', st: '已通过', stCol: '#2F7A4F', changed: '是', cov: '2 / 3', covTip: '时间 没用到', cost: '$0.002', costTip: '草稿 $0.0013 · 审核 $0.0009', ms: '2.2 s', msTip: '草稿 1.3 s · 审核 0.9 s' },
+      { i: '3', input: '晚安', out: '—', st: '失败', stCol: '#B23A26', changed: '—', cov: '—', covTip: '没有结果', cost: '$0.000', costTip: '没有扣费', ms: '—', msTip: '供应商超时' },
+      { i: '4', input: '你今天在干嘛', out: '—', st: '排队中', stCol: '#8A5A00', changed: '—', cov: '—', covTip: '还没跑', cost: '—', costTip: '还没跑', ms: '—', msTip: '还没跑' }
+    ];
+    var ok = S.typed.trim() === who;
+    return {
+      c: c, rail: rail, tabs: tabs, is: is, w: w, rels: rels, runs: runs, items: items,
+      seedAria: S.seed[who] ? 'true' : 'false', seedBg: S.seed[who] ? '#2F7A4F' : '#D9D4CD', seedX: S.seed[who] ? '16px' : '0',
+      toggleSeed: function () { var m = Object.assign({}, S.seed); m[who] = !m[who]; self.setState({ seed: m }); },
+      goPublish: function () { self.setState({ sec: 'publish' }); },
+      canCompare: Object.keys(S.cmp).filter(function (k) { return S.cmp[k]; }).length === 2,
+      assets: [{ v: 'v3', wel: ['1', '2', '3'], st: '已批准', stFg: '#2F7A4F', canApprove: false }, { v: 'v4', wel: ['1', '2', '3'], st: '待批准 · 当前草稿', stFg: '#8A5A00', canApprove: true }],
+      discardOpen: S.discard, discardToggle: function () { self.setState({ discard: !S.discard }); },
+      dangerOpen: S.danger, dangerToggle: function () { self.setState({ danger: !S.danger, typed: '', deleted: false }); },
+      typed: S.typed, onType: function (e) { self.setState({ typed: e.target.value }); },
+      holdDisabled: !ok, holdOpacity: ok ? 1 : 0.45, holdClass: 'a-hold' + (S.holding ? ' on' : ''),
+      holdLabel: S.deleted ? '已删除（示例）' : (ok ? '按住 1.5 秒删除' : '先输入名字'),
+      holdStart: function () { if (!ok) return; self.setState({ holding: true }); self.timer = setTimeout(function () { self.setState({ holding: false, deleted: true }); }, 1500); },
+      holdStop: function () { if (self.timer) clearTimeout(self.timer); if (self.state.holding) self.setState({ holding: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

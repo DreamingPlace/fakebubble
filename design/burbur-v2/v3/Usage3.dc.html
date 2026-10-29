@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>消耗表 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes aIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.a-page{animation:aIn 280ms cubic-bezier(.2,.82,.24,1) both}
+.a-open{animation:aOpen 240ms cubic-bezier(.2,.82,.24,1) both}
+.a-seg{transition:height 300ms cubic-bezier(.2,.82,.24,1)}
+.a-col{transition:background 160ms}.a-col:hover{background:#F3F1EE}
+.a-row{transition:background 200ms}.a-row:hover{background:#F7F5F2}
+.a-tip{position:relative}
+.a-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:pre;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;line-height:1.6;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms;text-align:left}
+.a-tip:hover::after{opacity:1;transform:none}
+.a-tile{border-radius:18px;background:#FFFFFF;border:1px solid #ECE8E3;padding:18px 20px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.a-big{font-size:32px;font-weight:900;letter-spacing:-0.03em;font-family:'DM Mono',monospace;line-height:1.1}
+.a-b36{height:36px;padding:0 16px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}
+.a-h2{margin:0;font-size:18px;font-weight:900}
+@media (prefers-reduced-motion: reduce){.a-page,.a-open{animation-duration:1ms}.a-seg{transition-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 1600px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="消耗表" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="a-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">消耗表</h1>
+        <span style="display: flex; align-items: center; gap: 12px">
+          <span style="font-family: 'DM Mono', monospace; font-size: 13px; color: #6E6875">UTC</span>
+          <span style="display: flex; padding: 3px; border-radius: 999px; background: #EFECE8"><sc-for list="{{ranges}}" as="o" hint-placeholder-count="3"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.aria}}" style="height: 30px; padding: 0 14px; border: none; border-radius: 999px; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{o.sh}}; cursor: pointer; transition: background 200ms">{{o.l}}</button></sc-for></span>
+          <button type="button" class="a-b36">导出表格</button>
+        </span>
+      </header>
+
+      <section style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+        <sc-for list="{{tiles}}" as="t" hint-placeholder-count="4">
+          <div class="a-tile"><span style="font-size: 13px; color: #6E6875">{{t.l}}</span><span class="a-big a-tip" data-tip="{{t.tip}}" style="width: max-content">{{t.v}}</span><span style="font-size: 12px; color: #6E6875; font-family: 'DM Mono', monospace">{{t.s}}</span></div>
+        </sc-for>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px"><h2 class="a-h2">每天花费</h2>
+          <span style="display: flex; gap: 10px">
+            <span style="display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE"><sc-for list="{{splitSeg}}" as="o" hint-placeholder-count="2"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.aria}}" style="height: 28px; padding: 0 14px; border: none; border-radius: 999px; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{o.sh}}; cursor: pointer; transition: background 200ms">{{o.l}}</button></sc-for></span>
+            <span style="display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE"><button type="button" aria-pressed="true" style="height: 28px; padding: 0 14px; border: none; border-radius: 999px; background: #FFFFFF; color: #3F3596; font: inherit; font-size: 13px; font-weight: 700; box-shadow: 0 1px 3px rgba(43,40,51,.12)">柱状</button><button type="button" aria-pressed="false" style="height: 28px; padding: 0 14px; border: none; border-radius: 999px; background: transparent; font: inherit; font-size: 13px; font-weight: 700">折线</button></span>
+          </span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <sc-for list="{{series}}" as="s" hint-placeholder-count="6"><button type="button" onClick="{{s.pick}}" aria-pressed="{{s.aria}}" style="height: 30px; padding: 0 12px 0 10px; border-radius: 999px; border: 1px solid {{s.bd}}; background: {{s.bg}}; color: {{s.fg}}; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: background 200ms, opacity 200ms; opacity: {{s.op}}"><i style="width: 10px; height: 10px; border-radius: 3px; background: {{s.c}}"></i>{{s.n}}<b style="font-family: 'DM Mono', monospace">{{s.v}}</b></button></sc-for>
+        </div>
+        <div style="display: grid; grid-template-columns: 44px 1fr; gap: 8px">
+          <div style="height: 240px; display: flex; flex-direction: column; justify-content: space-between; font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875; text-align: right"><span>$4</span><span>$2</span><span>$0</span></div>
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="height: 240px; display: flex; gap: 6px; align-items: flex-end; border-bottom: 1px solid #ECE8E3; background: linear-gradient(#F3F0EC 1px, transparent 1px) 0 0 / 100% 120px">
+              <sc-for list="{{bars}}" as="b" hint-placeholder-count="14">
+                <div class="a-col a-tip" data-tip="{{b.tip}}" style="flex: 1; height: 100%; display: flex; flex-direction: column-reverse; align-items: center; border-radius: 8px 8px 0 0">
+                  <sc-for list="{{b.segs}}" as="g" hint-placeholder-count="3"><i class="a-seg" style="width: 60%; height: {{g.h}}; background: {{g.c}}"></i></sc-for>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display: flex; gap: 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875"><sc-for list="{{bars}}" as="b" hint-placeholder-count="14"><span style="flex: 1; text-align: center">{{b.d}}</span></sc-for></div>
+          </div>
+        </div>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+        <h2 class="a-h2">按模型</h2>
+        <div style="border: 1px solid #ECE8E3; border-radius: 12px; font-size: 14px">
+          <div style="display: grid; grid-template-columns: 1.8fr repeat(6, minmax(0, 1fr)); gap: 10px; height: 38px; align-items: center; padding: 0 14px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3; text-align: right"><span style="text-align: left">供应商 / 模型 / 阶段</span><span>调用次数</span><span>输入令牌</span><span>输出令牌</span><span>缓存命中</span><span>语音字节</span><span>列表价合计</span></div>
+          <sc-for list="{{models}}" as="m" hint-placeholder-count="4">
+            <div class="a-row" style="display: grid; grid-template-columns: 1.8fr repeat(6, minmax(0, 1fr)); gap: 10px; height: 40px; align-items: center; padding: 0 14px; border-top: 1px solid #F3F0EC; font-family: 'DM Mono', monospace; text-align: right; font-size: 13px">
+              <span style="text-align: left">{{m.n}}</span><span>{{m.calls}}</span><span class="a-tip" data-tip="{{m.inTip}}">{{m.inp}}</span><span>{{m.out}}</span><span class="a-tip" data-tip="{{m.cacheTip}}">{{m.cache}}</span><span>{{m.bytes}}</span><b class="a-tip" data-tip="{{m.costTip}}">{{m.cost}}</b>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 12px">
+        <h2 class="a-h2">按天明细</h2>
+        <div style="border: 1px solid #ECE8E3; border-radius: 12px; font-size: 14px">
+          <div style="display: grid; grid-template-columns: 24px 140px repeat(5, minmax(0, 1fr)); gap: 10px; height: 38px; align-items: center; padding: 0 14px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3; text-align: right"><span></span><span style="text-align: left">日期 UTC</span><span>成功回复</span><span>列表价</span><span>账本扣</span><span>消耗积分</span><span class="a-tip" data-tip="列表价 ÷ 成功回复">每条成功回复成本</span></div>
+          <sc-for list="{{daily}}" as="r" hint-placeholder-count="5">
+            <div style="display: flex; flex-direction: column; border-top: {{r.line}}">
+              <button type="button" class="a-row" onClick="{{r.pick}}" aria-expanded="{{r.aria}}" style="border: none; background: {{r.bg}}; font: inherit; color: #2B2833; display: grid; grid-template-columns: 24px 140px repeat(5, minmax(0, 1fr)); gap: 10px; height: 42px; align-items: center; padding: 0 14px; text-align: right; font-family: 'DM Mono', monospace; font-size: 13px; cursor: pointer">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6E6875" stroke-width="2.5" aria-hidden="true" style="transform: rotate({{r.rot}}); transition: transform 240ms cubic-bezier(.2,.82,.24,1)"><path d="m9 6 6 6-6 6"></path></svg>
+                <span style="text-align: left; font-weight: {{r.weight}}">{{r.d}}</span><span>{{r.ok}}</span><span>{{r.list}}</span><span>{{r.ledger}}</span><span>{{r.pts}}</span><span>{{r.per}}</span>
+              </button>
+              <sc-if value="{{r.isOpen}}" hint-placeholder-val="{{ true }}">
+                <div class="a-open" style="margin: 0 14px 14px; border-radius: 12px; background: #F7F5FD; padding: 10px 14px; font-size: 13px">
+                  <div style="display: grid; grid-template-columns: 1.8fr repeat(5, minmax(0, 1fr)); gap: 10px; height: 30px; align-items: center; color: #6E6875; text-align: right"><span style="text-align: left">供应商 / 模型 / 阶段</span><span>调用</span><span>输入</span><span>输出</span><span>语音字节</span><span>列表价</span></div>
+                  <sc-for list="{{calls}}" as="c" hint-placeholder-count="4"><div style="display: grid; grid-template-columns: 1.8fr repeat(5, minmax(0, 1fr)); gap: 10px; height: 32px; align-items: center; font-family: 'DM Mono', monospace; text-align: right; border-top: 1px solid #E9E5F7"><span style="text-align: left">{{c.n}}</span><span>{{c.calls}}</span><span>{{c.inp}}</span><span>{{c.out}}</span><span>{{c.bytes}}</span><span class="a-tip" data-tip="{{c.costTip}}">{{c.cost}}</span></div></sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1600}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { r: 1, split: 0, off: {}, open: 0 }; }
+  renderVals() {
+    var self = this, S = this.state;
+    var seg = function (labels, key) { return labels.map(function (l, i) { var on = S[key] === i; return { l: l, aria: on ? 'true' : 'false', bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#3F3596' : '#2B2833', sh: on ? '0 1px 3px rgba(43,40,51,.12)' : 'none', pick: function () { var o = {}; o[key] = i; self.setState(o); } }; }); };
+    var byUser = [['访客', '#C9C2B8', 0.18], ['注册', '#8E84D9', 0.22], ['每天补充', '#5B4FC4', 0.34], ['不限量', '#3F3596', 0.14], ['测试组', '#0E7490', 0.08], ['未归类', '#B45309', 0.04]];
+    var byKind = [['文字', '#5B4FC4', 0.31], ['语音', '#0E7490', 0.69]];
+    var defs = S.split === 0 ? byUser : byKind;
+    var days = ['10-15', '10-16', '10-17', '10-18', '10-19', '10-20', '10-21', '10-22', '10-23', '10-24', '10-25', '10-26', '10-27', '10-28'];
+    var tot = [1.6, 1.9, 1.8, 2.2, 2.6, 2.4, 2.9, 2.7, 3.2, 3.0, 3.6, 3.4, 3.9, 2.9];
+    var series = defs.map(function (d) { var sum = tot.reduce(function (a, b) { return a + b; }, 0) * d[2]; var on = !S.off[d[0]]; return { n: d[0], c: d[1], v: '$' + sum.toFixed(2), aria: on ? 'true' : 'false', op: on ? 1 : 0.45, bd: on ? '#E2DDD6' : '#ECE8E3', bg: '#FFFFFF', fg: '#2B2833', pick: function () { var o = Object.assign({}, S.off); o[d[0]] = !o[d[0]]; self.setState({ off: o }); } }; });
+    var bars = days.map(function (d, i) {
+      var segs = defs.filter(function (x) { return !S.off[x[0]]; }).map(function (x) { return { h: (tot[i] * x[2] / 4 * 100).toFixed(1) + '%', c: x[1] }; });
+      var lines = defs.map(function (x) { return x[0] + '  $' + (tot[i] * x[2]).toFixed(3); }).join('\n');
+      return { d: d.slice(3), segs: segs, tip: '2026-' + d + ' UTC · 合计 $' + tot[i].toFixed(3) + '\n' + lines };
+    });
+    var calls = [
+      { n: 'deepseek / flash / draft', calls: '352', inp: '1.21M', out: '88K', bytes: '—', cost: '$0.42', costTip: '$0.421 960' },
+      { n: 'deepseek / v4-pro / review', calls: '352', inp: '0.94M', out: '41K', bytes: '—', cost: '$0.51', costTip: '$0.512 330' },
+      { n: 'fish / drama-3 / speech', calls: '211', inp: '—', out: '—', bytes: '38.2K', cost: '$1.91', costTip: '$1.910 000' },
+      { n: 'embeddings / memory', calls: '96', inp: '0.12M', out: '—', bytes: '—', cost: '$0.07', costTip: '$0.069 580' }
+    ];
+    var daily = days.slice().reverse().slice(0, 5).map(function (d, k) {
+      var i = 13 - k, on = S.open === k;
+      return { d: '2026-' + d, ok: 300 + i * 4, list: '$' + tot[i].toFixed(2), ledger: '$' + (tot[i] * 0.96).toFixed(2), pts: 2140 + i * 37, per: '$' + (tot[i] / (300 + i * 4)).toFixed(4), isOpen: on, aria: on ? 'true' : 'false', bg: on ? '#EEEBFA' : '#FFFFFF', rot: on ? '90deg' : '0deg', weight: on ? 700 : 400, line: k === 0 ? 'none' : '1px solid #F0ECE7', pick: function () { self.setState({ open: on ? -1 : k }); } };
+    });
+    return {
+      ranges: seg(['7天', '30天', '90天'], 'r'), splitSeg: seg(['按用户', '文字 / 语音'], 'split'), series: series, bars: bars, daily: daily, calls: calls,
+      tiles: [
+        { l: '本月花费', v: '$39.12', s: '≈ ¥283', tip: '列表价 $39.118 004' },
+        { l: '每条成功回复', v: '$0.0098', s: '3,987 条', tip: '$39.118 ÷ 3,987' },
+        { l: '账本扣的', v: '$37.55', s: '', tip: '$37.553 280 · 比列表价少 4%' },
+        { l: '用掉的点数', v: '41,210', s: '', tip: '注册 12,880 · 每天补充 24,330 · 不限量 4,000' }
+      ],
+      models: [
+        { n: 'deepseek / flash / draft', calls: '3,987', inp: '13.8M', inTip: '13,812,440 令牌', out: '1.02M', cache: '61%', cacheTip: '8,425,588 令牌命中缓存', bytes: '—', cost: '$4.81', costTip: '$4.812 001' },
+        { n: 'deepseek / v4-pro / review', calls: '3,987', inp: '10.6M', inTip: '10,604,018 令牌', out: '0.47M', cache: '58%', cacheTip: '6,150,330 令牌命中缓存', bytes: '—', cost: '$5.88', costTip: '$5.880 412' },
+        { n: 'fish / drama-3 / speech', calls: '2,402', inp: '—', inTip: '—', out: '—', cache: '—', cacheTip: '—', bytes: '436K', cost: '$21.80', costTip: '$21.802 600' },
+        { n: 'fish / s2.1-pro / speech', calls: '412', inp: '—', inTip: '—', out: '—', cache: '—', cacheTip: '—', bytes: '74K', cost: '$1.11', costTip: '$1.110 450' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

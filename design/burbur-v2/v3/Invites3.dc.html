@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>邀请与额度 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes ivIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes ivOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.iv-page{animation:ivIn 280ms cubic-bezier(.2,.8,.2,1) both}
+.iv-open{animation:ivOpen 240ms cubic-bezier(.2,.8,.2,1) both}
+.iv-row{transition:background 200ms}
+.iv-row:hover{background:#F7F5F2}
+.iv-tip{position:relative}
+.iv-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.iv-tip:hover::after{opacity:1;transform:none}
+.iv-copy{transition:background 200ms,color 200ms,border-color 200ms}
+@media (prefers-reduced-motion: reduce){.iv-page,.iv-open{animation-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 1240px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="邀请与额度" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="iv-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">邀请与额度</h1>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6E6875"><span>持有中 <b style="font-family: 'DM Mono', monospace; color: #2B2833">31</b> 人</span><i style="width: 1px; height: 14px; background: #E2DDD6"></i><span>未使用 <b style="font-family: 'DM Mono', monospace; color: #2B2833">28</b> 个</span></span>
+      </header>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 16px 20px; display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.6fr) minmax(176px, 1.3fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 1fr) auto auto; gap: 12px; align-items: end; box-sizing: border-box">
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #6E6875">批次名称<input value="十一月朋友" style="height: 36px; border-radius: 10px; border: 1px solid #E2DDD6; padding: 0 12px; font: inherit; font-size: 14px; color: #2B2833; min-width: 0"></label>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #6E6875">数量<input value="10" style="height: 36px; border-radius: 10px; border: 1px solid #E2DDD6; padding: 0 12px; font-family: 'DM Mono', monospace; font-size: 14px; color: #2B2833; min-width: 0"></label>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #6E6875">额度
+          <span role="group" aria-label="额度类型" style="height: 36px; box-sizing: border-box; display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE"><button type="button" onClick="{{setUnl}}" aria-pressed="{{unlAria}}" style="flex: 1; border: none; border-radius: 999px; background: {{unlBg}}; color: {{unlFg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{unlSh}}; cursor: pointer; transition: background 200ms">不限量</button><button type="button" onClick="{{setDaily}}" aria-pressed="{{dayAria}}" style="flex: 1; border: none; border-radius: 999px; background: {{dayBg}}; color: {{dayFg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{daySh}}; cursor: pointer; transition: background 200ms">每天补充</button></span>
+        </div>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #6E6875; opacity: {{dailyOp}}">每天 +点<input value="50" disabled="{{unl}}" style="height: 36px; border-radius: 10px; border: 1px solid #E2DDD6; padding: 0 12px; font-family: 'DM Mono', monospace; font-size: 14px; color: #2B2833; min-width: 0"></label>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #6E6875; opacity: {{dailyOp}}">上限 点<input value="1000" disabled="{{unl}}" style="height: 36px; border-radius: 10px; border: 1px solid #E2DDD6; padding: 0 12px; font-family: 'DM Mono', monospace; font-size: 14px; color: #2B2833; min-width: 0"></label>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #6E6875">有效天数<input placeholder="长期" style="height: 36px; border-radius: 10px; border: 1px solid #E2DDD6; padding: 0 12px; font-family: 'DM Mono', monospace; font-size: 14px; color: #2B2833; min-width: 0"></label>
+        <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #6E6875">兑换截止 UTC<input placeholder="不限" style="height: 36px; border-radius: 10px; border: 1px solid #E2DDD6; padding: 0 12px; font-family: 'DM Mono', monospace; font-size: 14px; color: #2B2833; min-width: 0"></label>
+        <label class="iv-tip" data-tip="兑换的人算测试组，创建后不能改" style="height: 36px; display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer"><input type="checkbox" style="width: 18px; height: 18px; accent-color: #5B4FC4">测试</label>
+        <button type="button" style="height: 36px; padding: 0 18px; border: none; border-radius: 999px; background: #5B4FC4; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap">生成邀请码</button>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; font-size: 14px">
+        <div style="display: grid; grid-template-columns: 24px minmax(160px, 1.4fr) 1.4fr 150px 70px 1.2fr 70px 70px; gap: 14px; height: 40px; align-items: center; padding: 0 20px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3"><span></span><span>批次</span><span>类型</span><span>创建 UTC</span><span style="text-align: right">码</span><span>兑换</span><span style="text-align: right">撤销</span><span style="text-align: right">持有中</span></div>
+        <sc-for list="{{batches}}" as="b" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; border-top: {{b.line}}">
+            <button type="button" class="iv-row" onClick="{{b.pick}}" aria-expanded="{{b.aria}}" style="height: 50px; border: none; background: {{b.bg}}; font: inherit; color: #2B2833; display: grid; grid-template-columns: 24px minmax(160px, 1.4fr) 1.4fr 150px 70px 1.2fr 70px 70px; gap: 14px; align-items: center; padding: 0 20px; text-align: left; cursor: pointer">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6E6875" stroke-width="2.5" aria-hidden="true" style="transform: rotate({{b.rot}}); transition: transform 240ms cubic-bezier(.2,.8,.2,1)"><path d="m9 6 6 6-6 6"></path></svg>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: {{b.weight}}">{{b.name}}<sc-if value="{{b.test}}" hint-placeholder-val="{{ false }}"><span style="height: 22px; padding: 0 8px; border-radius: 999px; background: #E8F2FA; color: #0E5A8A; font-size: 12px; font-weight: 700; display: flex; align-items: center">测试</span></sc-if><sc-if value="{{b.isNew}}" hint-placeholder-val="{{ false }}"><span style="height: 22px; padding: 0 8px; border-radius: 999px; background: #E7F3EC; color: #2F7A4F; font-size: 12px; font-weight: 700; display: flex; align-items: center">刚生成</span></sc-if></span>
+              <span style="font-size: 13px">{{b.tier}}</span>
+              <span style="font-family: 'DM Mono', monospace; font-size: 13px">{{b.at}}</span>
+              <span style="text-align: right; font-family: 'DM Mono', monospace">{{b.n}}</span>
+              <span class="iv-tip" data-tip="{{b.redTip}}" style="display: flex; align-items: center; gap: 10px"><span style="flex: 1; height: 8px; border-radius: 999px; background: #F0ECE7; overflow: hidden; display: flex"><i style="width: {{b.redPct}}; background: #5B4FC4"></i></span><span style="font-family: 'DM Mono', monospace; font-size: 13px; width: 44px; text-align: right">{{b.red}}</span></span>
+              <span style="text-align: right; font-family: 'DM Mono', monospace">{{b.rev}}</span>
+              <span style="text-align: right; font-family: 'DM Mono', monospace; font-weight: 700">{{b.hold}}</span>
+            </button>
+            <sc-if value="{{b.isOpen}}" hint-placeholder-val="{{ true }}">
+              <div class="iv-open" style="margin: 0 20px 18px; display: flex; flex-direction: column; gap: 12px">
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 12px; background: #F7F5FD">
+                  <button type="button" onClick="{{copyAll}}" class="iv-copy" style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #CFC8F2; background: {{allBg}}; color: #3F3596; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{allLabel}}</button>
+                  <button type="button" style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #E2DDD6; background: #FFFFFF; font: inherit; font-size: 13px; cursor: pointer">导出表格</button>
+                  <i style="width: 1px; height: 18px; background: #E2DDD6; margin: 0 6px"></i>
+                  <span style="font-size: 13px; color: #6E6875">每天 +</span><input value="50" aria-label="每天补充" style="width: 64px; height: 30px; border-radius: 8px; border: 1px solid #E2DDD6; padding: 0 8px; font-family: 'DM Mono', monospace; font-size: 13px"><span style="font-size: 13px; color: #6E6875">上限</span><input value="1000" aria-label="总上限" style="width: 72px; height: 30px; border-radius: 8px; border: 1px solid #E2DDD6; padding: 0 8px; font-family: 'DM Mono', monospace; font-size: 13px"><button type="button" class="iv-tip" data-tip="从每人下一次每日补充起生效" style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #E2DDD6; background: #FFFFFF; font: inherit; font-size: 13px; cursor: pointer">修改额度</button>
+                  <span style="flex: 1"></span>
+                  <button type="button" style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #E8B9B0; background: #FFFFFF; color: #B23A26; font: inherit; font-size: 13px; cursor: pointer">撤销整批</button>
+                </div>
+                <sc-if value="{{masked}}" hint-placeholder-val="{{ false }}"><span style="font-size: 13px; color: #6E6875">这批码由小鱼创建，码本身只有她看得到；兑换情况照常显示。</span></sc-if>
+                <div style="border: 1px solid #ECE8E3; border-radius: 12px; font-size: 14px">
+                  <div style="display: grid; grid-template-columns: 50px 240px 110px 190px 1fr 150px 70px; gap: 14px; height: 36px; align-items: center; padding: 0 14px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3; background: #FBFAF8; border-radius: 12px 12px 0 0"><span>#</span><span>邀请码</span><span>状态</span><span>兑换 UTC</span><span>玩家</span><span>额度到期</span><span></span></div>
+                  <sc-for list="{{codes}}" as="c" hint-placeholder-count="6">
+                    <div class="iv-row" style="display: grid; grid-template-columns: 50px 240px 110px 190px 1fr 150px 70px; gap: 14px; height: 42px; align-items: center; padding: 0 14px; border-top: 1px solid #F3F0EC">
+                      <span style="font-family: 'DM Mono', monospace; color: #6E6875">{{c.i}}</span>
+                      <span style="display: flex; align-items: center; gap: 8px"><span style="font-family: 'DM Mono', monospace; font-size: 14px; letter-spacing: 0.04em; color: {{c.codeFg}}">{{c.code}}</span><sc-if value="{{c.canCopy}}" hint-placeholder-val="{{ true }}"><button type="button" class="iv-copy" onClick="{{c.copy}}" style="height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid {{c.cpBd}}; background: {{c.cpBg}}; color: {{c.cpFg}}; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer">{{c.cpLabel}}</button></sc-if></span>
+                      <span style="font-size: 13px; font-weight: 700; color: {{c.stFg}}">{{c.st}}</span>
+                      <span class="iv-tip" data-tip="{{c.atTip}}" style="font-family: 'DM Mono', monospace; font-size: 13px">{{c.at}}</span>
+                      <span style="font-family: 'DM Mono', monospace; font-size: 13px">{{c.who}}</span>
+                      <span style="font-family: 'DM Mono', monospace; font-size: 13px">{{c.exp}}</span>
+                      <sc-if value="{{c.canRevoke}}" hint-placeholder-val="{{ false }}"><button type="button" style="justify-self: end; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid #E8B9B0; background: #FFFFFF; color: #B23A26; font: inherit; font-size: 12px; cursor: pointer">撤销</button></sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: 0, unl: false, copied: {}, all: false };
+  }
+  renderVals() {
+    var self = this, S = this.state;
+    var raw = [
+      { name: '十一月朋友', tier: '每天 +50 · 上限 1000', at: '2026-10-28 08:40', n: 10, red: 2, rev: 0, hold: 2, isNew: true },
+      { name: '测试组 · 第二批', tier: '不限量 · 30 天', at: '2026-10-24 12:02', n: 10, red: 7, rev: 1, hold: 6, test: true },
+      { name: '十月朋友', tier: '每天 +50 · 上限 1000', at: '2026-10-21 03:15', n: 30, red: 18, rev: 0, hold: 18 },
+      { name: '共创者', tier: '不限量', at: '2026-10-17 10:30', n: 5, red: 5, rev: 0, hold: 5, other: true }
+    ];
+    var batches = raw.map(function (b, i) {
+      var on = S.open === i, pct = Math.round(b.red / b.n * 100);
+      return { name: b.name, tier: b.tier, at: b.at, n: b.n, red: b.red + ' / ' + b.n, redPct: pct + '%', redTip: '已兑换 ' + b.red + ' 个 · ' + pct + '% · 未使用 ' + (b.n - b.red - b.rev), rev: b.rev, hold: b.hold, test: !!b.test, isNew: !!b.isNew,
+        isOpen: on, aria: on ? 'true' : 'false', bg: on ? '#EEEBFA' : '#FFFFFF', weight: on ? 700 : 400, rot: on ? '90deg' : '0deg', line: i === 0 ? 'none' : '1px solid #F0ECE7',
+        pick: function () { self.setState({ open: on ? -1 : i }); } };
+    });
+    var list = ['K7QM-2F8P', 'W0CJ-8QK2', 'R5NB-T3E7', 'H6ZD-V1M9', 'P2XA-H9C6', 'D4LT-6YR3', 'M8VE-Q2N5', 'T1GS-K7W4', 'B3HF-9JX6', 'Z5PU-4CD8'];
+    var masked = S.open >= 0 && !!raw[S.open].other;
+    var codes = list.map(function (code, i) {
+      var red = i < 2, cp = !!S.copied[i];
+      return { i: i + 1, code: masked ? '••••-••••' : code, codeFg: red || masked ? '#6E6875' : '#2B2833', canCopy: !red && !masked, cpLabel: cp ? '已复制' : '复制', cpBg: cp ? '#E7F3EC' : '#FFFFFF', cpBd: cp ? '#BFE0CB' : '#E2DDD6', cpFg: cp ? '#2F7A4F' : '#2B2833',
+        copy: function () { var c = Object.assign({}, S.copied); c[i] = true; self.setState({ copied: c }); },
+        st: red ? '已兑换' : '未使用', stFg: red ? '#3F3596' : '#2F7A4F', at: red ? (i === 0 ? '2026-10-28 09:12' : '2026-10-28 10:47') : '—', atTip: red ? (i === 0 ? '2026-10-28 09:12:41 UTC' : '2026-10-28 10:47:03 UTC') : '还没兑换',
+        who: red ? (i === 0 ? '玩家 7Q3K' : '玩家 P2XA') : '—', exp: red ? '长期' : '—', canRevoke: true };
+    });
+    var unl = S.unl;
+    return {
+      batches: batches, codes: codes, masked: masked, unl: unl, dailyOp: unl ? 0.4 : 1,
+      unlAria: unl ? 'true' : 'false', dayAria: unl ? 'false' : 'true',
+      unlBg: unl ? '#FFFFFF' : 'transparent', unlFg: unl ? '#3F3596' : '#2B2833', unlSh: unl ? '0 1px 3px rgba(43,40,51,.12)' : 'none',
+      dayBg: unl ? 'transparent' : '#FFFFFF', dayFg: unl ? '#2B2833' : '#3F3596', daySh: unl ? 'none' : '0 1px 3px rgba(43,40,51,.12)',
+      setUnl: function () { self.setState({ unl: true }); }, setDaily: function () { self.setState({ unl: false }); },
+      allLabel: S.all ? '已复制 8 个未使用' : '复制全部未使用（8）', allBg: S.all ? '#E7F3EC' : '#FFFFFF',
+      copyAll: function () { self.setState({ all: true }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

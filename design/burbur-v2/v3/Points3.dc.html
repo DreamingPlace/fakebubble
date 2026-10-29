@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>积分发放 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes aIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.a-page{animation:aIn 280ms cubic-bezier(.2,.82,.24,1) both}
+.a-open{animation:aOpen 240ms cubic-bezier(.2,.82,.24,1) both}
+.a-swap{animation:aIn 200ms cubic-bezier(.2,.82,.24,1) both}
+.a-tip{position:relative}
+.a-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.a-tip:hover::after{opacity:1;transform:none}
+.a-hold{position:relative;overflow:hidden}
+.a-hold i{position:absolute;inset:0;width:0;background:#B23A26;transition:width 80ms linear}
+.a-hold.on i{width:100%;transition:width 1500ms linear}
+.a-in{height:36px;box-sizing:border-box;border-radius:10px;border:1px solid #E2DDD6;padding:0 12px;font:inherit;font-size:14px;color:#2B2833;background:#FFFFFF;min-width:0}
+.a-lb{display:flex;flex-direction:column;gap:6px;font-size:13px;color:#6E6875}
+.a-b36{height:36px;padding:0 16px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.a-h2{margin:0;font-size:18px;font-weight:900}
+@media (prefers-reduced-motion: reduce){.a-page,.a-open,.a-swap{animation-duration:1ms}.a-hold.on i{transition-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 1000px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="积分发放" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="a-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">积分发放</h1>
+      </header>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+        <div style="display: grid; grid-template-columns: auto minmax(200px, 1fr) 140px minmax(160px, 1fr) auto; gap: 12px; align-items: end">
+          <div class="a-lb">发给谁
+            <span role="group" aria-label="发给谁" style="height: 36px; box-sizing: border-box; display: flex; padding: 3px; border-radius: 999px; background: #F3F1EE"><sc-for list="{{targets}}" as="o" hint-placeholder-count="4"><button type="button" onClick="{{o.pick}}" aria-pressed="{{o.aria}}" style="padding: 0 14px; border: none; border-radius: 999px; background: {{o.bg}}; color: {{o.fg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{o.sh}}; cursor: pointer; white-space: nowrap; transition: background 200ms">{{o.l}}</button></sc-for></span>
+          </div>
+          <div class="a-swap a-lb">{{field.l}}
+            <sc-if value="{{field.isAll}}" hint-placeholder-val="{{ true }}"><span style="height: 36px; display: flex; align-items: center; font-size: 14px; color: #2B2833">注册玩家 <b style="font-family: 'DM Mono', monospace; margin-left: 6px">214</b> 人</span></sc-if>
+            <sc-if value="{{field.isTier}}" hint-placeholder-val="{{ false }}"><select class="a-in"><option>每日补充 · 31 人</option><option>不限量 · 9 人</option><option>注册玩家 · 174 人</option></select></sc-if>
+            <sc-if value="{{field.isText}}" hint-placeholder-val="{{ false }}"><input class="a-in" placeholder="{{field.ph}}" style="font-family: 'DM Mono', monospace"></sc-if>
+          </div>
+          <label class="a-lb">点数<input class="a-in" value="50" placeholder="1–10000" style="font-family: 'DM Mono', monospace"></label>
+          <label class="a-lb">备注<input class="a-in" value="十月测试感谢"></label>
+          <button type="button" onClick="{{askGive}}" style="height: 36px; padding: 0 20px; border: none; border-radius: 999px; background: #5B4FC4; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer">发放</button>
+        </div>
+        <sc-if value="{{confirm}}" hint-placeholder-val="{{ false }}">
+          <div class="a-open" style="border-radius: 12px; background: #F7F5FD; padding: 12px 14px; display: flex; align-items: center; gap: 14px; font-size: 14px"><span style="flex: 1">给 <b>{{field.who}}</b> 各 <b style="font-family: 'DM Mono', monospace">+50</b> 点 · 备注“十月测试感谢”</span><button type="button" onClick="{{cancel}}" class="a-b36" style="font-weight: 400">取消</button><button type="button" onClick="{{give}}" class="a-b36" style="border-color: #5B4FC4; color: #3F3596">确认发放</button></div>
+        </sc-if>
+        <sc-if value="{{given}}" hint-placeholder-val="{{ false }}">
+          <div class="a-open" style="border-radius: 12px; background: #E7F3EC; color: #2F7A4F; padding: 12px 14px; display: flex; gap: 14px; font-size: 14px; font-weight: 700"><span>已发放 214 人</span><span class="a-tip" data-tip="达到上限的人只补到上限" style="font-weight: 400">跳过 0 人</span></div>
+        </sc-if>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px; display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)) auto; gap: 20px; align-items: end">
+        <div style="display: flex; flex-direction: column; gap: 4px; align-self: center"><h2 class="a-h2">共创积分</h2><span class="a-tip" data-tip="写给制作组的留言不算" style="font-size: 13px; color: #6E6875">玩家写共创留言得到的点数</span></div>
+        <label class="a-lb">每条留言<span style="display: flex; align-items: center; gap: 6px"><input value="{{p1}}" onInput="{{set1}}" class="a-in" style="width: 90px; font-family: 'DM Mono', monospace; border: {{b1}}; background: {{g1}}"><span style="font-size: 13px">点</span></span></label>
+        <label class="a-lb">每天最多算几条<span style="display: flex; align-items: center; gap: 6px"><input value="{{p2}}" onInput="{{set2}}" class="a-in" style="width: 90px; font-family: 'DM Mono', monospace; border: {{b2}}; background: {{g2}}"><span class="a-tip" data-tip="今天最多 {{max}} 点" style="font-size: 13px">条</span></span></label>
+        <label class="a-lb">被采用<span style="display: flex; align-items: center; gap: 6px"><input value="{{p3}}" onInput="{{set3}}" class="a-in" style="width: 90px; font-family: 'DM Mono', monospace; border: {{b3}}; background: {{g3}}"><span style="font-size: 13px">点 · 不限次数</span></span></label>
+        <button type="button" onClick="{{savePts}}" style="height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid {{saveBd}}; background: #FFFFFF; color: {{saveFg}}; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap">{{saveLabel}}</button>
+      </section>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+          <div style="display: flex; flex-direction: column; gap: 4px"><h2 class="a-h2">重置全部额度</h2><span style="font-size: 13px; color: #6E6875">每天补充的人：加 7 天的量，不超过上限。不限量的人不变。</span></div>
+          <button type="button" onClick="{{resetToggle}}" aria-expanded="{{resetAria}}" class="a-b36" style="border-color: #E8B9B0; color: #B23A26">重置全部额度</button>
+        </div>
+        <sc-if value="{{reset}}" hint-placeholder-val="{{ false }}">
+          <div class="a-open" style="border-radius: 12px; background: #FBEDEA; padding: 14px 16px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 260px; gap: 10px; align-items: center; font-size: 13px">
+            <span style="background: #FFFFFF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column"><b style="font-size: 18px; font-family: 'DM Mono', monospace">31</b>人会加点</span>
+            <span class="a-tip" data-tip="例：每天 50 · 上限 1000 · 120 → 470" style="background: #FFFFFF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column"><b style="font-size: 18px; font-family: 'DM Mono', monospace">+350</b>每人最多</span>
+            <span style="background: #FFFFFF; border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column"><b style="font-size: 18px; font-family: 'DM Mono', monospace">6</b>人已在上限</span>
+            <button type="button" class="{{holdClass}}" onMouseDown="{{holdStart}}" onMouseUp="{{holdStop}}" onMouseLeave="{{holdStop}}" style="height: 40px; border-radius: 999px; border: 1px solid #B23A26; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer"><i></i><span style="position: relative; mix-blend-mode: difference; color: #FFFFFF">{{holdLabel}}</span></button>
+          </div>
+        </sc-if>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { t: 0, confirm: false, given: false, reset: false, holding: false, done: false }; this.timer = null; }
+  componentWillUnmount() { if (this.timer) clearTimeout(this.timer); }
+  renderVals() {
+    var self = this, S = this.state;
+    var F = [
+      { l: '人数', isAll: true, who: '214 位注册玩家' },
+      { l: '档位', isTier: true, who: '每日补充档 31 人' },
+      { l: '玩家编号', isText: true, ph: '8 位玩家编号', who: '玩家 7Q3KM2F8' },
+      { l: '邮箱', isText: true, ph: '完整邮箱地址', who: '这个邮箱的玩家' }
+    ];
+    var base = this.ptsBase || (this.ptsBase = { p1: '5', p2: '15', p3: '20' });
+    var P = { p1: S.p1 == null ? base.p1 : S.p1, p2: S.p2 == null ? base.p2 : S.p2, p3: S.p3 == null ? base.p3 : S.p3 };
+    var ch = function (k) { return P[k] !== base[k]; };
+    var anyCh = ch('p1') || ch('p2') || ch('p3');
+    var pv = { p1: P.p1, p2: P.p2, p3: P.p3, max: (Number(P.p1) * Number(P.p2)) || 0,
+      set1: function (e) { self.setState({ p1: e.target.value }); }, set2: function (e) { self.setState({ p2: e.target.value }); }, set3: function (e) { self.setState({ p3: e.target.value }); },
+      b1: ch('p1') ? '1.5px solid #D9A441' : '1px solid #E2DDD6', g1: ch('p1') ? '#FDF6E6' : '#FFFFFF', b2: ch('p2') ? '1.5px solid #D9A441' : '1px solid #E2DDD6', g2: ch('p2') ? '#FDF6E6' : '#FFFFFF', b3: ch('p3') ? '1.5px solid #D9A441' : '1px solid #E2DDD6', g3: ch('p3') ? '#FDF6E6' : '#FFFFFF',
+      saveLabel: anyCh ? '保存' : '已保存', saveBd: anyCh ? '#5B4FC4' : '#E2DDD6', saveFg: anyCh ? '#3F3596' : '#6E6875',
+      savePts: function () { self.ptsBase = { p1: P.p1, p2: P.p2, p3: P.p3 }; self.setState({ p1: null, p2: null, p3: null }); } };
+    var field = Object.assign({ isAll: false, isTier: false, isText: false, ph: '' }, F[S.t]);
+    return Object.assign(pv, {
+      targets: ['全部注册玩家', '某一档', '一个玩家编号', '一个邮箱'].map(function (l, i) { var on = S.t === i; return { l: l, aria: on ? 'true' : 'false', bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#3F3596' : '#2B2833', sh: on ? '0 1px 3px rgba(43,40,51,.12)' : 'none', pick: function () { self.setState({ t: i, confirm: false, given: false }); } }; }),
+      field: field, confirm: S.confirm, given: S.given,
+      askGive: function () { self.setState({ confirm: true, given: false }); }, cancel: function () { self.setState({ confirm: false }); }, give: function () { self.setState({ confirm: false, given: true }); },
+      reset: S.reset, resetAria: S.reset ? 'true' : 'false', resetToggle: function () { self.setState({ reset: !S.reset, done: false }); },
+      holdClass: 'a-hold' + (S.holding ? ' on' : ''), holdLabel: S.done ? '已重置（示例）' : '按住 1.5 秒重置',
+      holdStart: function () { self.setState({ holding: true }); self.timer = setTimeout(function () { self.setState({ holding: false, done: true }); }, 1500); },
+      holdStop: function () { if (self.timer) clearTimeout(self.timer); if (self.state.holding) self.setState({ holding: false }); }
+    });
+  }
+}
+</script>
+</body>
+</html>

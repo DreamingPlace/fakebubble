@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>模型与价格 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes aIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.a-page{animation:aIn 280ms cubic-bezier(.2,.82,.24,1) both}
+.a-open{animation:aOpen 240ms cubic-bezier(.2,.82,.24,1) both}
+.a-row{transition:background 200ms}.a-row:hover{background:#F7F5F2}
+.a-sw{width:40px;height:24px;border-radius:999px;border:none;padding:2px;box-sizing:border-box;cursor:pointer;display:flex;transition:background 200ms}
+.a-sw i{width:20px;height:20px;border-radius:50%;background:#FFFFFF;box-shadow:0 1px 3px rgba(43,40,51,.2);transition:transform 200ms cubic-bezier(.2,.82,.24,1)}
+.a-tip{position:relative}
+.a-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.a-tip:hover::after{opacity:1;transform:none}
+.a-b36{height:36px;padding:0 16px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+@media (prefers-reduced-motion: reduce){.a-page,.a-open{animation-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 1000px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="模型与价格" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="a-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 20px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">模型与价格</h1>
+        <span style="display: flex; align-items: center; gap: 12px">
+          <span class="a-tip" data-tip="PLAYER_MODEL_CHOICE_ENABLED" style="height: 28px; padding: 0 12px; border-radius: 999px; background: #F0ECE7; color: #6E6875; font-size: 13px; display: flex; align-items: center">玩家选模型 · 关</span>
+          <sc-if value="{{dirty}}" hint-placeholder-val="{{ true }}"><b style="font-size: 13px; color: #8A5A00">{{nChanged}} 处未保存</b></sc-if>
+          <button type="button" onClick="{{askSave}}" disabled="{{clean}}" style="height: 36px; padding: 0 18px; border: none; border-radius: 999px; background: #5B4FC4; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; opacity: {{saveOp}}">保存</button>
+        </span>
+      </header>
+
+      <sc-if value="{{confirm}}" hint-placeholder-val="{{ false }}">
+        <section class="a-open" style="border-radius: 18px; background: #F7F5FD; border: 1px solid #CFC8F2; padding: 14px 20px; display: flex; align-items: center; gap: 16px; font-size: 14px">
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px"><sc-for list="{{changes}}" as="c" hint-placeholder-count="2"><span>{{c.n}} · {{c.f}}：<span style="font-family: 'DM Mono', monospace; color: #6E6875">{{c.a}}</span> → <b style="font-family: 'DM Mono', monospace">{{c.b}}</b></span></sc-for></div>
+          <button type="button" onClick="{{cancel}}" class="a-b36" style="font-weight: 400">取消</button>
+          <button type="button" onClick="{{save}}" class="a-b36" style="border-color: #5B4FC4; color: #3F3596">确认保存</button>
+        </section>
+      </sc-if>
+
+      <section style="border-radius: 18px; background: #FFFFFF; border: 1px solid #ECE8E3; font-size: 14px">
+        <div style="display: grid; grid-template-columns: 1.6fr repeat(4, 110px) 140px 110px 1fr; gap: 12px; height: 42px; align-items: center; padding: 0 20px; color: #6E6875; font-size: 13px; border-bottom: 1px solid #ECE8E3"><span>模型</span><span>总开关</span><span>游客</span><span>注册玩家</span><span>受邀玩家</span><span class="a-tip" data-tip="DeepSeek 是 1 倍的基准">每条点数</span><span>状态</span><span>最近修改</span></div>
+        <sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+          <div class="a-row" style="display: grid; grid-template-columns: 1.6fr repeat(4, 110px) 140px 110px 1fr; gap: 12px; height: 56px; align-items: center; padding: 0 20px; border-top: 1px solid #F3F0EC">
+            <b>{{r.n}}</b>
+            <sc-for list="{{r.sw}}" as="s" hint-placeholder-count="4"><span style="display: flex"><button type="button" class="a-sw" onClick="{{s.flip}}" aria-pressed="{{s.aria}}" aria-label="{{s.label}}" style="background: {{s.bg}}; box-shadow: {{s.ring}}"><i style="transform: translateX({{s.x}})"></i></button></span></sc-for>
+            <span style="display: flex; align-items: center; gap: 6px"><input value="{{r.pts}}" onInput="{{r.setPts}}" aria-label="每条点数" style="width: 72px; height: 36px; box-sizing: border-box; border-radius: 10px; border: {{r.ptsBd}}; background: {{r.ptsBg}}; padding: 0 10px; font-family: 'DM Mono', monospace; font-size: 14px; color: #2B2833"><span class="a-tip" data-tip="{{r.multTip}}" style="font-family: 'DM Mono', monospace; font-size: 12px; color: #6E6875">{{r.mult}}</span></span>
+            <span style="height: 24px; padding: 0 10px; border-radius: 999px; background: {{r.stBg}}; color: {{r.stFg}}; font-size: 12px; font-weight: 700; display: flex; align-items: center; width: max-content">{{r.st}}</span>
+            <span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #6E6875">{{r.at}}</span>
+          </div>
+        </sc-for>
+        <div style="display: grid; grid-template-columns: 1.6fr repeat(4, 110px) 140px 110px 1fr; gap: 12px; height: 56px; align-items: center; padding: 0 20px; border-top: 1px solid #ECE8E3; background: #FBFAF8; border-radius: 0 0 18px 18px">
+          <b>语音加点</b><span></span><span></span><span></span><span></span>
+          <span style="display: flex; align-items: center; gap: 6px"><input value="2" aria-label="语音加点" style="width: 72px; height: 36px; box-sizing: border-box; border-radius: 10px; border: 1px solid #E2DDD6; padding: 0 10px; font-family: 'DM Mono', monospace; font-size: 14px"><span style="font-size: 12px; color: #6E6875">每条</span></span>
+          <span></span><span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #6E6875">10-21 · 主管理员</span>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.base = [{ n: 'DeepSeek', sw: [true, true, true, true], pts: '10', st: '可用' }, { n: 'Gemini 3.8 Flash', sw: [true, false, true, true], pts: '20', st: '未配置' }, { n: 'Grok 4.7', sw: [true, false, true, true], pts: '25', st: '未配置' }];
+    this.state = { cur: JSON.parse(JSON.stringify(this.base)), confirm: false };
+  }
+  renderVals() {
+    var self = this, S = this.state, B = this.base;
+    var labels = ['总开关', '游客', '注册玩家', '受邀玩家'];
+    var changes = [];
+    var rows = S.cur.map(function (m, i) {
+      var sw = m.sw.map(function (on, j) {
+        var changed = on !== B[i].sw[j];
+        if (changed) changes.push({ n: m.n, f: labels[j], a: B[i].sw[j] ? '开' : '关', b: on ? '开' : '关' });
+        return { aria: on ? 'true' : 'false', label: m.n + ' ' + labels[j], bg: on ? '#5B4FC4' : '#D9D4CD', x: on ? '16px' : '0', ring: changed ? '0 0 0 2px #D9A441' : 'none',
+          flip: function () { var c = JSON.parse(JSON.stringify(S.cur)); c[i].sw[j] = !c[i].sw[j]; self.setState({ cur: c }); } };
+      });
+      var pc = m.pts !== B[i].pts;
+      if (pc) changes.push({ n: m.n, f: '每条点数', a: B[i].pts, b: m.pts });
+      var mult = (Number(m.pts) / 10);
+      return { n: m.n, sw: sw, pts: m.pts, ptsBd: pc ? '1.5px solid #D9A441' : '1px solid #E2DDD6', ptsBg: pc ? '#FDF6E6' : '#FFFFFF', mult: '×' + (isFinite(mult) ? mult : '—'), multTip: '每条回复扣 ' + m.pts + ' 点，相当于 ' + mult + ' 条 DeepSeek',
+        setPts: function (e) { var c = JSON.parse(JSON.stringify(S.cur)); c[i].pts = e.target.value; self.setState({ cur: c }); },
+        st: m.st, stBg: m.st === '可用' ? '#E7F3EC' : '#FDF3DC', stFg: m.st === '可用' ? '#2F7A4F' : '#8A5A00', at: i === 0 ? '10-21 · 主管理员' : '10-24 · 主管理员' };
+    });
+    return {
+      rows: rows, changes: changes, dirty: changes.length > 0, clean: changes.length === 0, nChanged: changes.length, saveOp: changes.length ? 1 : 0.45,
+      confirm: S.confirm && changes.length > 0,
+      askSave: function () { self.setState({ confirm: true }); }, cancel: function () { self.setState({ confirm: false }); },
+      save: function () { self.base = JSON.parse(JSON.stringify(S.cur)); self.setState({ confirm: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

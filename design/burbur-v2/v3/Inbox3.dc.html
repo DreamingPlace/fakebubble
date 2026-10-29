@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>共创收件箱 V3</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&amp;family=Noto+Sans+SC:wght@400;500;700;900&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B2833}a:hover{color:#5B4FC4}
+@keyframes aIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes aOpen{from{opacity:0;transform:translateY(-6px);clip-path:inset(0 0 100% 0)}to{opacity:1;transform:none;clip-path:inset(0 0 0 0)}}
+.a-page{animation:aIn 280ms cubic-bezier(.2,.82,.24,1) both}
+.a-open{animation:aOpen 240ms cubic-bezier(.2,.82,.24,1) both}
+.a-card{transition:border-color 200ms,box-shadow 200ms}
+.a-card:hover{border-color:#CFC8F2;box-shadow:0 6px 18px rgba(43,40,51,.06)}
+.a-fade{overflow:hidden;-webkit-mask-image:linear-gradient(180deg,#000 66%,transparent);mask-image:linear-gradient(180deg,#000 66%,transparent)}
+.a-tip{position:relative}
+.a-tip::after{content:attr(data-tip);position:absolute;left:calc(100% - 6px);top:calc(100% - 4px);z-index:6;white-space:nowrap;background:#FFFFFF;color:#2B2833;border:1px solid #ECE8E3;box-shadow:0 6px 18px rgba(43,40,51,.10);border-radius:10px;padding:6px 10px;font-size:12px;font-weight:400;font-family:-apple-system,'PingFang SC','Noto Sans SC',sans-serif;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity 160ms,transform 160ms}
+.a-tip:hover::after{opacity:1;transform:none}
+.a-b30{height:30px;padding:0 12px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.a-b36{height:36px;padding:0 16px;border-radius:999px;border:1px solid #E2DDD6;background:#FFFFFF;color:#2B2833;font:inherit;font-size:14px;cursor:pointer;white-space:nowrap}
+@media (prefers-reduced-motion: reduce){.a-page,.a-open{animation-duration:1ms}}
+</style>
+</helmet>
+<div style="min-height: 1300px; background: #F6F4F1; color: #2B2833; font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', sans-serif; display: flex; flex-wrap: wrap; font-variant-numeric: tabular-nums">
+
+  <div style="flex: 0 0 232px"><dc-import name="NavV3" current="共创收件箱" hint-size="232px,1000px"></dc-import></div>
+
+  <main class="a-page" style="flex: 999 1 640px; min-width: 0; box-sizing: border-box; padding: 24px 32px 48px">
+    <div style="max-width: 1680px; display: flex; flex-direction: column; gap: 16px">
+
+      <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 16px">
+        <h1 style="margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -0.03em">共创收件箱</h1>
+        <sc-if value="{{noSel}}" hint-placeholder-val="{{ true }}"><span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #6E6875">新 <b style="font-family: 'DM Mono', monospace; color: #2B2833">{{nNew}}</b><i style="width: 1px; height: 14px; background: #E2DDD6"></i>星标 <b style="font-family: 'DM Mono', monospace; color: #2B2833">{{nStar}}</b></span></sc-if>
+        <sc-if value="{{hasSel}}" hint-placeholder-val="{{ false }}"><span class="a-open" style="display: flex; align-items: center; gap: 8px; font-size: 13px"><b>已选 {{nSel}} 条</b><button type="button" onClick="{{bulkDone}}" class="a-b36">标为已处理（{{nSel}}）</button><button type="button" onClick="{{bulkArch}}" class="a-b36">归档所选（{{nSel}}）</button><button type="button" onClick="{{clearSel}}" class="a-b36" style="color: #6E6875">取消选择</button></span></sc-if>
+      </header>
+
+      <section style="display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; flex-wrap: wrap; gap: 6px">
+          <sc-for list="{{chars}}" as="c" hint-placeholder-count="16">
+            <button type="button" onClick="{{c.pick}}" aria-pressed="{{c.aria}}" style="height: 30px; padding: 0 12px 0 10px; border-radius: 999px; border: 1px solid {{c.bd}}; background: {{c.bg}}; color: {{c.fg}}; font: inherit; font-size: 13px; font-weight: {{c.weight}}; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: background 200ms, color 200ms"><sc-if value="{{c.hasDot}}" hint-placeholder-val="{{ true }}"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{c.col}}"></i></sc-if>{{c.name}}<sc-if value="{{c.hasN}}" hint-placeholder-val="{{ false }}"><span style="font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875">{{c.n}}</span></sc-if></button>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center">
+          <span role="group" aria-label="状态" style="display: flex; padding: 3px; border-radius: 999px; background: #EFECE8">
+            <sc-for list="{{states}}" as="s" hint-placeholder-count="4"><button type="button" onClick="{{s.pick}}" aria-pressed="{{s.aria}}" style="height: 28px; padding: 0 14px; border: none; border-radius: 999px; background: {{s.bg}}; color: {{s.fg}}; font: inherit; font-size: 13px; font-weight: 700; box-shadow: {{s.sh}}; cursor: pointer; transition: background 200ms">{{s.label}}</button></sc-for>
+          </span>
+          <button type="button" onClick="{{starOnly}}" aria-pressed="{{starAria}}" class="a-b30" style="height: 34px; background: {{starBg}}; color: {{starFg}}; border-color: {{starBd}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.85 5.95 6.55.85-4.8 4.55 1.25 6.5L12 17.3l-5.85 3.15 1.25-6.5-4.8-4.55 6.55-.85z"></path></svg>只看星标</button>
+          <input aria-label="搜索" placeholder="搜玩家写的内容或备注" style="flex: 1; max-width: 420px; height: 34px; box-sizing: border-box; border-radius: 999px; border: 1px solid #E2DDD6; background: #FFFFFF; padding: 0 14px; font: inherit; font-size: 14px">
+        </div>
+      </section>
+
+      <sc-for list="{{rows}}" as="row" hint-placeholder-count="3">
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+            <sc-for list="{{row.cards}}" as="x" hint-placeholder-count="3">
+              <div class="a-card" style="position: relative; height: 176px; box-sizing: border-box; border-radius: 16px; border: 1.5px solid {{x.bd}}; background: {{x.bg}}">
+                <button type="button" onClick="{{x.pick}}" aria-expanded="{{x.aria}}" style="position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: transparent; border-radius: 16px; padding: 14px 16px 12px 44px; font: inherit; color: #2B2833; text-align: left; display: grid; grid-template-rows: 22px 1fr 26px; gap: 8px; cursor: pointer; box-sizing: border-box">
+                  <span style="display: flex; align-items: center; gap: 8px; font-size: 13px"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{x.col}}"></i><b>{{x.who}}</b><span style="font-family: 'DM Mono', monospace; font-size: 12px; color: #6E6875">{{x.pid}}</span><span class="a-tip" data-tip="{{x.atFull}}" style="margin-left: auto; font-family: 'DM Mono', monospace; font-size: 11px; color: #6E6875">{{x.at}}</span></span>
+                  <span class="a-fade" style="font-size: 15px; line-height: 1.6">{{x.a}}</span>
+                  <span style="display: flex; align-items: center; gap: 8px"><span style="font-size: 12px; color: #6E6875; flex: 1">{{x.slot}} · {{x.n}} 条</span><sc-if value="{{x.starred}}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="#E0A100" role="img" aria-label="已星标"><path d="M12 2.6l2.85 5.95 6.55.85-4.8 4.55 1.25 6.5L12 17.3l-5.85 3.15 1.25-6.5-4.8-4.55 6.55-.85z"></path></svg></sc-if><span style="height: 22px; padding: 0 10px; border-radius: 999px; background: {{x.stBg}}; color: {{x.stFg}}; font-size: 12px; font-weight: 700; display: flex; align-items: center">{{x.st}}</span></span>
+                </button>
+                <input type="checkbox" checked="{{x.sel}}" onChange="{{x.toggle}}" aria-label="选中" style="position: absolute; left: 16px; top: 16px; width: 16px; height: 16px; margin: 0; accent-color: #5B4FC4; cursor: pointer">
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{row.hasOpen}}" hint-placeholder-val="{{ false }}">
+            <div class="a-open" style="border-radius: 16px; background: #FFFFFF; border: 1.5px solid #CFC8F2; padding: 18px 20px; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px">
+              <div style="display: flex; flex-direction: column; gap: 12px">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+                  <i style="width: 10px; height: 10px; border-radius: 50%; background: {{d.col}}"></i><b style="font-size: 16px">{{d.who}} · {{d.pid}}</b><span style="font-family: 'DM Mono', monospace; font-size: 13px; color: #6E6875">{{d.atFull}}</span>
+                  <span style="flex: 1"></span>
+                  <button type="button" onClick="{{star}}" class="a-b30" style="color: {{starTxt}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.85 5.95 6.55.85-4.8 4.55 1.25 6.5L12 17.3l-5.85 3.15 1.25-6.5-4.8-4.55 6.55-.85z"></path></svg>{{starLabel}}</button>
+                  <button type="button" onClick="{{done}}" class="a-b30">标为已处理</button>
+                  <button type="button" onClick="{{arch}}" class="a-b30">归档</button>
+                </div>
+                <span style="font-size: 13px; color: #3F3596; font-weight: 700">{{d.slot}}</span>
+                <div style="border-radius: 12px; background: #F6F4F1; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+                  <span style="font-size: 12px; color: #6E6875">{{d.q}}</span>
+                  <span style="font-size: 16px; line-height: 1.7">{{d.a}}</span>
+                  <span style="display: flex; gap: 8px"><button type="button" onClick="{{copy}}" class="a-b30">{{copyLabel}}</button><button type="button" onClick="{{addDraft}}" disabled="{{added}}" class="a-b30" style="border-color: #CFC8F2; color: #3F3596; font-weight: 700; opacity: {{addOp}}">{{addLabel}}</button></span>
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px">
+                <span style="display: flex; align-items: center; gap: 8px; font-size: 13px"><i style="width: 8px; height: 8px; border-radius: 50%; background: {{d.col}}"></i><b>{{d.sec}}</b><span style="height: 22px; padding: 0 8px; border-radius: 999px; background: #FDF3DC; color: #8A5A00; font-size: 12px; display: flex; align-items: center">草稿</span><span style="flex: 1"></span><span class="a-tip" data-tip="采用后玩家得到的积分，在积分发放里改" style="height: 22px; padding: 0 8px; border-radius: 999px; background: #E7F3EC; color: #2F7A4F; font-size: 12px; font-weight: 700; display: flex; align-items: center">采用 +20</span><span style="font-size: 12px; color: #6E6875">在{{d.page}}里发布</span></span>
+                <sc-if value="{{notAdded}}" hint-placeholder-val="{{ true }}">
+                  <div style="flex: 1; min-height: 150px; border-radius: 12px; border: 1px solid #ECE8E3; background: #FBFAF8; padding: 12px 14px; font-size: 14px; line-height: 1.7; white-space: pre-line">{{d.draft}}</div>
+                </sc-if>
+                <sc-if value="{{editing}}" hint-placeholder-val="{{ false }}">
+                  <div class="a-open" style="display: flex; flex-direction: column; gap: 8px">
+                    <sc-if value="{{d.isStory}}" hint-placeholder-val="{{ false }}">
+                      <div style="display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center">
+                        <input value="新故事 · 门口猜拳" aria-label="故事标题" style="height: 36px; box-sizing: border-box; border-radius: 10px; border: 1.5px solid #D9A441; background: #FDF6E6; padding: 0 12px; font: inherit; font-size: 14px; font-weight: 700">
+                        <span style="display: flex; gap: 4px"><span style="height: 28px; padding: 0 10px 0 8px; border-radius: 999px; background: #EEEBFA; color: #3F3596; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px"><i style="width: 8px; height: 8px; border-radius: 50%; background: #B45309"></i>瓜瓜</span><span style="height: 28px; padding: 0 10px 0 8px; border-radius: 999px; background: #EEEBFA; color: #3F3596; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px"><i style="width: 8px; height: 8px; border-radius: 50%; background: #BE185D"></i>陈吉米</span><span style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px dashed #C9C2B8; font-size: 12px; color: #6E6875; display: flex; align-items: center">+</span></span>
+                      </div>
+                    </sc-if>
+                    <textarea aria-label="草稿内容" style="min-height: 150px; resize: vertical; border-radius: 12px; border: 1.5px solid #D9A441; background: #FDF6E6; padding: 12px 14px; font: inherit; font-size: 14px; line-height: 1.7; color: #2B2833">{{d.merged}}</textarea>
+                    <span style="display: flex; gap: 8px; align-items: center"><b style="flex: 1; font-size: 13px; color: #8A5A00">未保存</b><button type="button" onClick="{{undoAdd}}" class="a-b36" style="font-weight: 400">撤回</button><button type="button" onClick="{{saveDraft}}" class="a-b36" style="border-color: #5B4FC4; color: #3F3596; font-weight: 700">保存草稿</button></span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{saved}}" hint-placeholder-val="{{ false }}">
+                  <div class="a-open" style="display: flex; flex-direction: column; gap: 8px">
+                    <div style="min-height: 150px; border-radius: 12px; border: 1px solid #ECE8E3; background: #FFFFFF; padding: 12px 14px; font-size: 14px; line-height: 1.7; white-space: pre-line; display: flex; gap: 10px"><b style="width: 16px; height: 16px; border-radius: 4px; background: #5B4FC4; color: #FFFFFF; font-size: 10px; display: flex; align-items: center; justify-content: center; flex: none; margin-top: 4px" class="a-tip" data-tip="主管理员 · 刚刚保存">主</b><span>{{d.merged}}</span></div>
+                    <span style="display: flex; align-items: center; gap: 10px; font-size: 13px"><b style="color: #2F7A4F; flex: 1">{{savedText}}</b><a href="{{d.href}}" style="height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid #CFC8F2; color: #3F3596; font-weight: 700; display: flex; align-items: center; text-decoration: none">去{{d.page}}发布 →</a></span>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+      <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}"><div style="height: 176px; border-radius: 16px; border: 1.5px dashed #E2DDD6; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #6E6875">这里没有了</div></sc-if>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: 0, draft: {}, who: '全部角色', st: 'all', starOnly: false, state: { 2: 'done', 6: 'archived' }, star: { 1: true, 3: true }, sel: {}, copied: false };
+  }
+  renderVals() {
+    var self = this, S = this.state;
+    var col = { 'JOJO': '#1D4ED8', '瓜瓜': '#B45309', '陈吉米': '#BE185D', '宋青': '#047857', '周屿': '#E8561E' };
+    var all = [
+      { who: 'JOJO', slot: '说话方式 · 口头禅', q: 'JOJO 赢了一局游戏，第一句话会说什么？', a: '“这把是我 carry 的，你承认吧。”说完又补一句“你也还行”。', pid: '玩家#58e1', at: '10-28 08:30', n: 1 },
+      { who: 'JOJO', slot: '说话方式 · 口头禅', q: 'JOJO 输了不想承认的时候怎么说？', a: '“网卡了。”然后马上开下一把。', pid: '玩家#7q3k', at: '10-28 07:30', n: 1 },
+      { who: 'JOJO', slot: '人设 · 性格底色', q: 'JOJO 催你睡觉会怎么说？', a: '我再玩十分钟 / “十分钟？你上次说十分钟玩到三点。睡。”', pid: '玩家#p2xa', at: '10-28 06:30', n: 2 },
+      { who: '瓜瓜', slot: '人设 · 性格底色', q: '瓜瓜担心你的时候，表面上会是什么样子？', a: '装作很凶地问你吃饭没，问完就开始碎碎念。', pid: '玩家#k81m', at: '10-28 05:30', n: 1 },
+      { who: '陈吉米', slot: '这句不像他', q: '（聊天里标记的一句）', a: '这句太像客服了，不像他会说的话。陈吉米会先给你点一杯奶茶，再陪你骂完那个人，最后才问你要不要打一把，顺序永远不会错，客服腔一出来就全不对了。', pid: '玩家#h6zd', at: '10-28 04:30', n: 1 },
+      { who: '宋青', slot: '经历', q: '你觉得宋青小时候是什么样？', a: '会把每天的天气画在日历上，下雨就画一把伞。', pid: '玩家#w0cj', at: '10-27 20:10', n: 1 },
+      { who: '周屿', slot: '说话方式', q: '周屿生气时说话会变成什么样？', a: '突然开始用全名叫你。', pid: '玩家#d4lt', at: '10-27 15:02', n: 1 },
+      { who: '瓜瓜', slot: '新故事 · 和陈吉米', q: '写一个瓜瓜和陈吉米之间的小瞬间', a: '排练室最后两个人都不想关灯，结果站在门口猜拳猜了十分钟，谁输了谁关灯，最后保安来了把灯关了。', pid: '玩家#k81m', at: '10-27 03:40', n: 1 }
+    ];
+    var SEC = [
+      { sec: 'JOJO · 说话方式 · 口头禅', draft: '这把不算\n你先睡', page: '角色工作台', href: 'Workbench4.dc.html' },
+      { sec: 'JOJO · 说话方式 · 口头禅', draft: '这把不算\n你先睡', page: '角色工作台', href: 'Workbench4.dc.html' },
+      { sec: 'JOJO · 性格', draft: '嘴硬心软，嘴上说着“随便”，其实什么都记得。', page: '角色工作台', href: 'Workbench4.dc.html' },
+      { sec: '瓜瓜 · 性格', draft: '[示例] 表面大大咧咧，其实很细心。', page: '角色工作台', href: 'Workbench4.dc.html' },
+      { sec: '陈吉米 · 不会这样说', draft: '书面腔\n“亲”', page: '角色工作台', href: 'Workbench4.dc.html' },
+      { sec: '宋青 · 经历', draft: '[待填写]', page: '角色工作台', href: 'Workbench4.dc.html' },
+      { sec: '周屿 · 说话方式', draft: '[待填写]', page: '角色工作台', href: 'Workbench4.dc.html' },
+      { sec: '瓜瓜 和 陈吉米 · 新故事', draft: '（这对现在有 1 个故事：排练室关灯）', page: '关系与故事', href: 'Cast3.dc.html', story: true }
+    ];
+    var stOf = function (i) { return S.state[i] || 'new'; };
+    var items = all.map(function (x, i) { return Object.assign({ i: i }, x); }).filter(function (x) {
+      return (S.who === '全部角色' || x.who === S.who) && (S.st === 'all' || stOf(x.i) === S.st) && (!S.starOnly || S.star[x.i]);
+    });
+    var STL = { new: ['新', '#EEEBFA', '#3F3596'], done: ['已处理', '#E7F3EC', '#2F7A4F'], archived: ['已归档', '#F0ECE7', '#6E6875'] };
+    var cards = items.map(function (x) {
+      var on = S.open === x.i, st = stOf(x.i), sel = !!S.sel[x.i];
+      return { who: x.who, col: col[x.who], slot: x.slot, a: x.a, pid: x.pid, at: x.at, atFull: '2026-' + x.at + ' UTC', n: x.n, starred: !!S.star[x.i], st: STL[st][0], stBg: STL[st][1], stFg: STL[st][2], sel: sel,
+        aria: on ? 'true' : 'false', bd: on ? '#5B4FC4' : sel ? '#CFC8F2' : '#ECE8E3', bg: sel ? '#FBFAFE' : '#FFFFFF', isOpen: on,
+        pick: function () { self.setState({ open: on ? -1 : x.i, copied: false }); },
+        toggle: function () { var m = Object.assign({}, S.sel); m[x.i] = !m[x.i]; self.setState({ sel: m }); } };
+    });
+    var rows = [];
+    for (var k = 0; k < cards.length; k += 3) { var part = cards.slice(k, k + 3); rows.push({ cards: part, hasOpen: part.some(function (c) { return c.isOpen; }) }); }
+    var cur = all[S.open] || all[0];
+    var counts = {}; all.forEach(function (x, i) { if (stOf(i) === 'new') counts[x.who] = (counts[x.who] || 0) + 1; });
+    var roster = ['周屿', '许知意', '顾北', '江月', '唐小棠', '沈烬', '叶初晴', '秦川', '白露', '陈吉米', 'JOJO', '陆远', '宋青', '温言', '瓜瓜'];
+    var rc = { '许知意': '#2F7BEA', '顾北': '#7C4DEB', '江月': '#1E8E4E', '唐小棠': '#D98A00', '沈烬': '#C2410C', '叶初晴': '#0E7490', '秦川': '#9D174D', '白露': '#4D7C0F', '陆远': '#A16207', '温言': '#6D28D9' };
+    var chars = ['全部角色'].concat(roster).map(function (n) {
+      var on = S.who === n;
+      return { name: n, col: col[n] || rc[n] || '#8C8697', hasDot: n !== '全部角色', hasN: !!counts[n], n: counts[n] || '', aria: on ? 'true' : 'false', bd: on ? '#CFC8F2' : '#E2DDD6', bg: on ? '#EEEBFA' : '#FFFFFF', fg: on ? '#3F3596' : '#2B2833', weight: on ? 700 : 400, pick: function () { self.setState({ who: n, open: -1 }); } };
+    });
+    var sts = [['all', '全部'], ['new', '新'], ['done', '已处理'], ['archived', '已归档']];
+    var states = sts.map(function (s) { var on = S.st === s[0]; return { label: s[1], aria: on ? 'true' : 'false', bg: on ? '#FFFFFF' : 'transparent', fg: on ? '#3F3596' : '#2B2833', sh: on ? '0 1px 3px rgba(43,40,51,.12)' : 'none', pick: function () { self.setState({ st: s[0], open: -1 }); } }; });
+    var setSt = function (v) { var d = Object.assign({}, S.state); d[S.open] = v; self.setState({ state: d }); };
+    var selKeys = Object.keys(S.sel).filter(function (k) { return S.sel[k]; });
+    var bulk = function (v) { return function () { var d = Object.assign({}, S.state); selKeys.forEach(function (k) { d[k] = v; }); self.setState({ state: d, sel: {} }); }; };
+    return {
+      chars: chars, states: states, rows: rows, empty: cards.length === 0,
+      nNew: all.filter(function (_, i) { return stOf(i) === 'new'; }).length, nStar: Object.keys(S.star).filter(function (k) { return S.star[k]; }).length,
+      hasSel: selKeys.length > 0, noSel: selKeys.length === 0, nSel: selKeys.length, bulkDone: bulk('done'), bulkArch: bulk('archived'), clearSel: function () { self.setState({ sel: {} }); },
+      starOnly: function () { self.setState({ starOnly: !S.starOnly, open: -1 }); }, starAria: S.starOnly ? 'true' : 'false', starBg: S.starOnly ? '#FDF3DC' : '#FFFFFF', starFg: S.starOnly ? '#8A5A00' : '#2B2833', starBd: S.starOnly ? '#E8C77A' : '#E2DDD6',
+      d: { who: cur.who, col: col[cur.who], slot: cur.slot, pid: cur.pid, atFull: '2026-' + cur.at + ' UTC', q: cur.q, a: cur.a, sec: (SEC[S.open] || SEC[0]).sec, page: (SEC[S.open] || SEC[0]).page, href: (SEC[S.open] || SEC[0]).href, draft: (SEC[S.open] || SEC[0]).draft, merged: (SEC[S.open] || SEC[0]).story ? cur.a : (SEC[S.open] || SEC[0]).draft + '\n' + cur.a, isStory: !!(SEC[S.open] || SEC[0]).story },
+      addLabel: (SEC[S.open] || SEC[0]).story ? '+ 加入关系与故事 →' : '+ 加入草稿 →',
+      savedText: ((SEC[S.open] || SEC[0]).story ? '已存成关系与故事的草稿故事' : '已存进角色草稿') + '，玩家 +20 积分，这条标为已处理',
+      added: !!S.draft[S.open], addOp: S.draft[S.open] ? 0.45 : 1, notAdded: !S.draft[S.open], editing: S.draft[S.open] === 'editing', saved: S.draft[S.open] === 'saved',
+      addDraft: function () { var m = Object.assign({}, S.draft); m[S.open] = 'editing'; self.setState({ draft: m }); },
+      undoAdd: function () { var m = Object.assign({}, S.draft); delete m[S.open]; self.setState({ draft: m }); },
+      saveDraft: function () { var m = Object.assign({}, S.draft); m[S.open] = 'saved'; var d = Object.assign({}, S.state); d[S.open] = 'done'; self.setState({ draft: m, state: d }); },
+      starLabel: S.star[S.open] ? '已星标' : '星标', starTxt: S.star[S.open] ? '#8A5A00' : '#2B2833',
+      star: function () { var t = Object.assign({}, S.star); t[S.open] = !t[S.open]; self.setState({ star: t }); },
+      done: function () { setSt('done'); }, arch: function () { setSt('archived'); },
+      copyLabel: S.copied ? '已复制' : '复制', copy: function () { self.setState({ copied: true }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
