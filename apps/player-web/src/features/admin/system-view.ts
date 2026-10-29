@@ -10,6 +10,8 @@ import { h } from '../cocreation/h.ts';
 import { opsView } from './ops-view.ts';
 import { warningLine } from './overview-view.ts';
 import { PROVIDER_LABELS, ageText, dateText, dateTimeText, dollars } from './system-format.ts';
+import { hoverValue } from './ui/hover-value.ts';
+import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { keyValuePanel } from './ui/key-value-panel.ts';
 import { statusBadge } from './ui/status-badge.ts';
 import { pageHead } from './ui/page-head.ts';
@@ -38,7 +40,8 @@ export function systemView(
     topUp: (input: { requestId: string; provider: 'deepseek' | 'fish'; dollars: number }) => Promise<BudgetTopUpResult>;
     isOwner: () => boolean;
     run: (work: () => Promise<void>) => Promise<void>;
-    confirm: (options: { title: string; message: string; confirmLabel: string }) => Promise<boolean>;
+    /** 续期 and 预算充值 confirm in place, inside the host they are given (no dialog). */
+    confirm: ConfirmInPlace;
     toast: (text: string) => void;
     newRequestId: () => string;
     disposed: () => boolean;
@@ -102,17 +105,21 @@ export function systemView(
     );
 
   const priceSection = (v: SystemStatusView) => {
-    const renew = h('button', { text: '续期价格', attrs: { type: 'button', id: 'system-renew' } });
+    const renew = h('button', { class: 'sys-renew', text: '续期价格', attrs: { type: 'button', id: 'system-renew' } });
+    const renewHost = h('div', { class: 'sys-confirm' });
     renew.addEventListener(
       'click',
       () =>
         void deps.run(async () => {
           const due = v.prices.filter((row) => row.expiring).length;
-          const ok = await deps.confirm({
-            title: '确认续期价格',
-            message: `将运行与运维命令 renew-prices 相同的续期：现有 ${due} 项价格在 60 天内到期或已过期，会各追加一条新的 90 天价格；其余保持不变。重复点击不会产生重复价格。`,
-            confirmLabel: '确认续期',
-          });
+          const ok = await deps.confirm(
+            {
+              title: '确认续期价格',
+              message: `将运行与运维命令 renew-prices 相同的续期：现有 ${due} 项价格在 60 天内到期或已过期，会各追加一条新的 90 天价格；其余保持不变。重复点击不会产生重复价格。`,
+              confirmLabel: '确认续期',
+            },
+            renewHost,
+          );
           if (!ok || deps.disposed()) return;
           const renewed = await deps.renewPrices(requestId('renew'));
           pending.delete('renew');
@@ -140,6 +147,7 @@ export function systemView(
         v.prices.map((row) => row.expiring),
       ),
       deps.isOwner() ? renew : null,
+      deps.isOwner() ? renewHost : null,
     );
   };
   const showRenewal = (renewal: RenewPricesResult) =>
@@ -164,25 +172,38 @@ export function systemView(
     const rows = v.budget.rows;
     return section(
       '预算',
-      table(
-        ['供应商', '策略', '已用', '占用中', '剩余', ''],
-        rows.map((row) => {
-          const action = h('span');
-          if (row.policy === 'unlimited') action.textContent = '不限额';
-          else if (deps.isOwner()) action.append(topUpControls(row));
-          return [
-            PROVIDER_LABELS[row.provider],
-            row.policy === 'unlimited' ? statusBadge('不限额', 'info') : statusBadge('限额', 'neutral'),
-            dollars(row.spentMicros),
-            dollars(row.heldMicros),
-            row.remainingMicros === null ? '不限额' : dollars(row.remainingMicros),
-            action,
-          ];
-        }),
-        '预算',
-      ),
+      ...rows.map((row) => {
+        const limited = row.policy !== 'unlimited' && row.remainingMicros !== null;
+        const cap = row.spentMicros + row.heldMicros + (row.remainingMicros ?? 0);
+        const share = (value: number) => `${cap > 0 ? Math.min(100, (value / cap) * 100).toFixed(1) : 0}%`;
+        const used = h('i', { class: 'is-used' });
+        const held = h('i', { class: 'is-held' });
+        const bar = h('span', { class: 'sys-bar' }, used, held);
+        if (limited) {
+          used.style?.setProperty('--w', share(row.spentMicros));
+          held.style?.setProperty('--w', share(row.heldMicros));
+          hoverValue(bar, `已用 ${dollars(row.spentMicros)} · 占用中 ${dollars(row.heldMicros)} · 剩余 ${dollars(row.remainingMicros!)}`);
+        }
+        return h(
+          'div',
+          { class: 'sys-budget' },
+          h(
+            'span',
+            { class: 'sys-budget-line' },
+            h('span', { text: PROVIDER_LABELS[row.provider] }),
+            limited
+              ? h('span', { class: 'sys-budget-left' }, '剩余 ', h('b', { text: dollars(row.remainingMicros!) }), ` / ${dollars(cap)}`)
+              : statusBadge('不限额', 'info'),
+          ),
+          limited ? bar : null,
+          limited ? h('span', { class: 'sys-budget-used', text: `已用 ${dollars(row.spentMicros)} · 占用中 ${dollars(row.heldMicros)}` }) : null,
+          limited && deps.isOwner() ? topUpControls(row) : null,
+        );
+      }),
+      topUpHost,
     );
   };
+  const topUpHost = h('div', { class: 'sys-confirm' });
   const topUpControls = (row: SystemBudgetRow) => {
     const amount = h('input', {
       attrs: {
@@ -210,11 +231,10 @@ export function systemView(
             deps.toast(`充值金额需要是 $${BUDGET_TOPUP_LIMITS.minDollars}–$${BUDGET_TOPUP_LIMITS.maxDollars} 的整数。`);
             return;
           }
-          const ok = await deps.confirm({
-            title: '确认预算充值',
-            message: topUpMessage(row, dollarsValue),
-            confirmLabel: '确认充值',
-          });
+          const ok = await deps.confirm(
+            { title: '确认预算充值', message: topUpMessage(row, dollarsValue), confirmLabel: '确认充值' },
+            topUpHost,
+          );
           if (!ok || deps.disposed()) return;
           const key = `topup:${row.provider}:${dollarsValue}`;
           const done = await deps.topUp({ requestId: requestId(key), provider: row.provider, dollars: dollarsValue });
@@ -251,8 +271,8 @@ export function systemView(
             v.version.matches === null
               ? statusBadge('无法核对', 'neutral')
               : v.version.matches
-                ? statusBadge('matches: true', 'ok')
-                : statusBadge('matches: false', 'danger'),
+                ? hoverValue(statusBadge('与预期一致', 'ok'), 'matches: true')
+                : hoverValue(statusBadge('与预期不一致', 'danger'), 'matches: false'),
           ),
         ],
         ['数据库版本', v.version.schemaVersion === null ? null : String(v.version.schemaVersion)],
@@ -277,58 +297,54 @@ export function systemView(
         ['最近 7 天无法验证', String(v.security.unavailableLast7Days)],
       ]),
     );
-    const cleanup = section(
-      '清理',
-      v.retention
-        ? keyValuePanel([
-            [
-              '清理失败',
-              v.retention.failing > 0 ? statusBadge(`${v.retention.failing} 位`, 'danger') : statusBadge('0', 'ok'),
-            ],
-            ['最早一条已过', v.retention.oldestAgeBucket ? BUCKETS[v.retention.oldestAgeBucket] : '—'],
-            ['上次成功', dateTimeText(v.retention.lastSuccessAt)],
-            ['正在清理', String(v.retention.purging)],
-          ])
-        : h('p', { class: 'admin-hint', text: '这个环境没有提供清理状态。' }),
+    const cleanup = v.retention
+      ? keyValuePanel([
+          ['清理 · 上次成功', dateTimeText(v.retention.lastSuccessAt)],
+          [
+            '清理失败',
+            v.retention.failing > 0 ? statusBadge(`${v.retention.failing} 位`, 'danger') : statusBadge('0', 'ok'),
+          ],
+          ['最早一条已过', v.retention.oldestAgeBucket ? BUCKETS[v.retention.oldestAgeBucket] : '—'],
+          ['正在清理', String(v.retention.purging)],
+        ])
+      : h('p', { class: 'admin-hint', text: '这个环境没有提供清理状态。' });
+    const failures =
       v.retention && v.retention.failures.length > 0
         ? table(
             ['阶段 phase', '语句组 sub', '错误类 errorName', '信息形状 messageShape', '连续失败'],
             v.retention.failures.map((f) => [f.phase, f.sub, f.errorName, f.messageShape, `${f.count} 次`]),
             '清理失败明细（不含任何 id）',
           )
-        : null,
-    );
-    const flag = (name: string, value: string | Node) =>
-      h(
-        'div',
-        { class: 'sys-flag' },
-        h('span', { class: 'sys-flag-name', text: name }),
-        h('span', { class: 'sys-flag-value' }, value),
-      );
-    const switches = section(
-      '开关',
-      flags
-        ? h(
-            'div',
-            { class: 'sys-flags' },
-            flag('SIGNUP_BONUS_ENABLED', onOff(flags.signupBonus)),
-            flag('PLAYER_MODEL_CHOICE_ENABLED', onOff(flags.playerModelChoice)),
-            flag('PLAYER_TEXT_MODELS', flags.playerTextModels ? flags.playerTextModels.join('、') : '未启用'),
-            flag('FISH_VOICE_MODEL', flags.fishVoiceModel),
-            flag('CHAT_REVIEW_ENABLED', onOff(flags.chatReview)),
-            flag('Turnstile', onOff(flags.turnstile)),
-            flag('告警', onOff(flags.alerts)),
-            flag('告警邮件绑定', yesNo(flags.alertMailBindingPresent)),
-            flag('告警收件人', yesNo(flags.alertRecipientSet)),
-          )
-        : h('p', { class: 'admin-hint', text: '这个环境没有提供开关信息。' }),
-    );
-    switches.classList.add('sys-switches');
+        : null;
+    /** A switch as a pill: its plain name and state, the environment variable on hover. */
+    const pill = (name: string, key: string, value: string, tone: 'on' | 'off' | 'plain') => {
+      const node = h('span', { class: `sys-pill is-${tone}` }, h('i'), `${name} · ${value}`);
+      return hoverValue(node, key);
+    };
+    const on = (value: boolean) => (value ? '开' : '关');
+    const have = (value: boolean) => (value ? '有' : '无');
+    const tone = (value: boolean) => (value ? 'on' : 'off') as 'on' | 'off';
+    const switches = flags
+      ? h(
+          'div',
+          { class: 'sys-flags' },
+          pill('注册赠点', 'SIGNUP_BONUS_ENABLED', on(flags.signupBonus), tone(flags.signupBonus)),
+          pill('玩家选模型', 'PLAYER_MODEL_CHOICE_ENABLED', on(flags.playerModelChoice), tone(flags.playerModelChoice)),
+          pill('可选文字模型', 'PLAYER_TEXT_MODELS', flags.playerTextModels ? flags.playerTextModels.join('、') : '未启用', 'plain'),
+          pill('语音模型', 'FISH_VOICE_MODEL', flags.fishVoiceModel, 'plain'),
+          pill('测试对话', 'CHAT_REVIEW_ENABLED', on(flags.chatReview), tone(flags.chatReview)),
+          pill('Turnstile', 'Turnstile', on(flags.turnstile), tone(flags.turnstile)),
+          pill('告警', 'ALERTS', on(flags.alerts), tone(flags.alerts)),
+          pill('告警邮件绑定', 'ALERT_MAIL_BINDING', have(flags.alertMailBindingPresent), tone(flags.alertMailBindingPresent)),
+          pill('告警收件人', 'ALERT_RECIPIENT', have(flags.alertRecipientSet), tone(flags.alertRecipientSet)),
+        )
+      : h('p', { class: 'admin-hint', text: '这个环境没有提供开关信息。' });
+    const cleanupCard = section('清理与开关', cleanup, failures, switches);
+    cleanupCard.classList.add('sys-switches');
     sections.replaceChildren(
       row('top', version, unknown, security),
       row('wide', priceSection(v)),
-      row('wide', budgetSection(v)),
-      row('pair', cleanup, switches),
+      row('pair', budgetSection(v), cleanupCard),
       row('wide', section('技术指标', metricsHost)),
     );
     metrics.show(v.metrics.slice(0, 14) as StageLatencyDay[]);

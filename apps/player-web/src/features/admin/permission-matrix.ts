@@ -8,6 +8,7 @@ import {
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { h } from '../cocreation/h.ts';
 import { bindTip } from './ui/tooltip.ts';
+import { markDirty } from './ui/unsaved.ts';
 
 type ItemInfo = { item: AdminPermissionItem; name: string; help: string };
 type Group = { id: string; title: string; items: readonly ItemInfo[] };
@@ -139,7 +140,7 @@ const sameSet = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => a.size === b.size &
 export function permissionMatrixEditor(
   root: HTMLElement,
   initial: readonly AdminPermission[],
-  options: { cocreation?: boolean; conversations?: boolean } = {},
+  options: { cocreation?: boolean; conversations?: boolean; onChange?: (dirty: number) => void } = {},
 ) {
   const base = decompose(initial);
   const state = new Set<AdminPermissionItem>(base.items);
@@ -231,14 +232,27 @@ export function permissionMatrixEditor(
       input.type = 'checkbox';
       input.checked = true;
       legacyBoxes.set(permission, input);
-      input.addEventListener('change', () => (touched = true));
+      input.addEventListener('change', () => {
+        touched = true;
+        options.onChange?.(dirtyCount());
+      });
       section.append(h('label', { class: 'permission-item' }, input, h('span', { text: permission })));
     }
     areas.append(section);
   }
   group.append(note);
+  const rows = new Map<AdminPermissionItem, HTMLElement>();
+  for (const [item, input] of boxes) rows.set(item, input.parentElement ?? input);
+  const dirtyCount = () =>
+    [...boxes.keys()].filter((item) => state.has(item) !== base.items.has(item)).length +
+    [...legacyBoxes.values()].filter((input) => !input.checked).length;
   const paint = () => {
-    for (const [item, input] of boxes) input.checked = state.has(item);
+    for (const [item, input] of boxes) {
+      input.checked = state.has(item);
+      // Part 24b-6: a changed permission is amber until it is saved.
+      markDirty(rows.get(item) ?? input, state.has(item) !== base.items.has(item));
+    }
+    options.onChange?.(dirtyCount());
   };
   paint();
 
@@ -252,6 +266,8 @@ export function permissionMatrixEditor(
       for (const [permission, input] of legacyBoxes) if (input.checked) result.add(permission);
       return [...result].sort();
     },
+    dirty: dirtyCount,
+    /** Ticks every item of an area-independent preset (the add bar and 快速设置 use the same list). */
     setDisabled: (disabled: boolean) => {
       for (const input of [...boxes.values(), ...legacyBoxes.values()]) input.disabled = disabled;
       for (const button of presets.children) (button as HTMLButtonElement).disabled = disabled;

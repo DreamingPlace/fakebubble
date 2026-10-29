@@ -8675,152 +8675,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-size: 13px;
 }
 
-/* ---- 管理员与权限: the add form on the left, the table and the selected person's grid on the right; both fill the row ---- */
-.account-admin-page.admin-shell .members-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  align-items: stretch;
-  gap: var(--ad-gap);
-}
-.account-admin-page.admin-shell .members-side {
-  position: static;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .members-side form {
-  flex: 1;
-  max-height: none;
-  overflow: visible;
-}
-.account-admin-page.admin-shell .members-side form h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 900;
-}
-.account-admin-page.admin-shell .members-side form button[type="submit"] {
-  align-self: flex-start;
-}
-.account-admin-page.admin-shell .members-main {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ad-gap);
-  min-width: 0;
-}
-.account-admin-page.admin-shell .members-table-card {
-  overflow-x: auto;
-  border: 1px solid var(--ad-hairline);
-  border-radius: var(--ad-card-radius);
-  background: #fff;
-}
-.account-admin-page.admin-shell .members-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .members-table th,
-.account-admin-page.admin-shell .members-table td {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--ad-hairline);
-  text-align: left;
-  white-space: nowrap;
-}
-.account-admin-page.admin-shell .members-table th {
-  color: var(--ad-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .members-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-.account-admin-page.admin-shell .members-table tr[aria-selected="true"] td {
-  background: var(--ad-tint);
-}
-.account-admin-page.admin-shell .members-pick {
-  height: 30px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ad-text);
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .members-mail {
-  display: block;
-  color: var(--ad-muted);
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .members-list .admin-member {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: var(--ad-card-pad);
-}
-.account-admin-page.admin-shell .members-list .admin-member > *,
-.account-admin-page.admin-shell .members-list .admin-member > button:not(.admin-member-head),
-.account-admin-page.admin-shell .members-list .admin-member > button:not(.admin-member-head) + button {
-  margin: 0;
-}
-.account-admin-page.admin-shell .members-list .admin-member > :is(.admin-member-head, div, p) {
-  flex: 1 1 100%;
-}
-.account-admin-page.admin-shell .admin-member-head {
-  min-height: 0;
-  padding: 0;
-  font-size: 16px;
-  font-weight: 900;
-}
-/* The same three columns on both sides: the areas flow down the columns, so the heights balance. */
-.account-admin-page.admin-shell .permission-matrix {
-  display: block;
-}
-.account-admin-page.admin-shell .permission-areas {
-  column-count: 3;
-  column-gap: 28px;
-}
-.account-admin-page.admin-shell .permission-areas > .permission-group {
-  break-inside: avoid;
-  margin-bottom: 8px;
-}
-.account-admin-page.admin-shell .permission-areas > .permission-group:first-child h4,
-.account-admin-page.admin-shell .permission-group h4 {
-  margin-top: 0;
-}
-.account-admin-page.admin-shell .permission-note {
-  margin: 8px 0 0;
-}
-.account-admin-page.admin-shell .permission-note:empty {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: 0;
-  overflow: hidden;
-}
-.account-admin-page.admin-shell .members-side .permission-matrix {
-  max-height: none;
-  overflow: visible;
-}
-.account-admin-page.admin-shell .members-list .admin-member .permission-matrix {
-  max-height: calc(100dvh - 140px);
-}
-.account-admin-page.admin-shell .permission-presets {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .permission-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  overflow-wrap: anywhere;
-}
-@container adc (max-width: 1100px) {
-  .account-admin-page.admin-shell .permission-areas {
-    column-count: 2;
-  }
-}
-
 /* ---- 共创收件箱: list 3 / detail 2, one height, both scroll inside ---- */
 .account-admin-page.admin-shell .cc-layout {
   display: grid;
@@ -9394,6 +9248,1724 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   .account-admin-page.admin-shell .cs-fields-3 {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
+}
+
+/* ======================================================================================================================
+   Part 24b-6: admin V3 (design/burbur-v2/v3). Same D1 palette; the layers above stay, this block repaints and adds.
+   Motion tokens (Framework3): page enter 280 ms rise 8 px, open-below 240 ms, selection slide 200 ms, removal 200 ms, number
+   change 300 ms, one easing (--ad-ease). All multiplied by --ad-motion, which prefers-reduced-motion sets to 0.
+   ====================================================================================================================== */
+.account-admin-page.admin-shell {
+  --ad-t-page: calc(280ms * var(--ad-motion));
+  --ad-t-open: calc(240ms * var(--ad-motion));
+  --ad-t-slide: calc(200ms * var(--ad-motion));
+  --ad-t-remove: calc(200ms * var(--ad-motion));
+  --ad-t-number: calc(300ms * var(--ad-motion));
+  --ad-amber: #d9a441;
+  --ad-amber-soft: #fdf6e6;
+  --ad-amber-ink: #8a5a00;
+  --ad-tint-line: #cfc8f2;
+  --ad-wash: #f7f5fd;
+  --ad-danger-line: #e8b9b0;
+}
+@keyframes adPageIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes adRemove {
+  to {
+    opacity: 0;
+    transform: scaleY(0.6);
+  }
+}
+.account-admin-page.admin-shell .admin-content > section[data-panel]:not([hidden], [data-panel="login"], [data-panel="token"], [data-panel="reset"]) {
+  animation: adPageIn var(--ad-t-page) var(--ad-ease) both;
+}
+
+/* ---- title row: name left; one status line + the only solid button right ---- */
+.account-admin-page.admin-shell .head-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ad-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .head-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--ad-border);
+}
+.account-admin-page.admin-shell .head-status .is-warn {
+  color: var(--ad-amber-ink);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .head-status .is-ok {
+  color: var(--ad-ok);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .head-status .is-mono {
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+
+/* ---- hover values: numeric cells and chart parts are targets of the light bubble ---- */
+.account-admin-page.admin-shell .has-tip:where(span, td, b, i, div, li, label)[tabindex]:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.account-admin-page.admin-shell .has-tip > .ad-tip {
+  z-index: 60;
+}
+
+/* ---- open-below table (Framework3 B) ---- */
+.account-admin-page.admin-shell .ot {
+  --cols: minmax(0, 1fr);
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .ot-head,
+.account-admin-page.admin-shell .ot-row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+  column-gap: 12px;
+  box-sizing: border-box;
+  padding: 0 20px;
+}
+.account-admin-page.admin-shell .ot-head {
+  height: 40px;
+  border-bottom: 1px solid var(--ad-hairline);
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .ot-row {
+  min-height: 48px;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .ot-item + .ot-item {
+  border-top: 1px solid #f0ece7;
+}
+.account-admin-page.admin-shell .ot-item:first-child > .ot-row {
+  border-radius: 0;
+}
+.account-admin-page.admin-shell .ot-row.is-pickable {
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .ot-row:hover {
+  background: #f7f5f2;
+}
+.account-admin-page.admin-shell .ot-item[data-open="true"] > .ot-row {
+  background: var(--ad-tint);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .ot-row:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: -2px;
+}
+.account-admin-page.admin-shell .ot-cell {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .ot-cell.is-end {
+  text-align: right;
+}
+.account-admin-page.admin-shell .ot-cell.is-mono {
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .ot-chev {
+  display: flex;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .ot-chevron {
+  transition: transform var(--ad-t-open) var(--ad-ease);
+}
+.account-admin-page.admin-shell .ot-item[data-open="true"] .ot-chevron {
+  transform: rotate(90deg);
+}
+.account-admin-page.admin-shell .ot-empty {
+  margin: 0;
+  padding: 28px 20px;
+  color: var(--ad-muted);
+  text-align: center;
+}
+/* The panel grows by height and fades in: grid rows 0fr → 1fr. */
+.account-admin-page.admin-shell .ot-panel,
+.account-admin-page.admin-shell .dz-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--ad-t-open) var(--ad-ease),
+    opacity var(--ad-t-open) var(--ad-ease);
+}
+.account-admin-page.admin-shell .ot-panel[data-state="open"],
+.account-admin-page.admin-shell .dz[data-open="true"] > .dz-panel {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.account-admin-page.admin-shell .ot-inner,
+.account-admin-page.admin-shell .dz-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .ot-panel[data-settled="true"] > .ot-inner,
+.account-admin-page.admin-shell .dz[data-open="true"] > .dz-panel > .dz-inner {
+  overflow: visible;
+}
+.account-admin-page.admin-shell .ot-detail {
+  margin: 4px 20px 18px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--ad-wash);
+}
+
+/* ---- danger zone (Framework3: 点开 → 数字 → 输入名字 → 按住) ---- */
+.account-admin-page.admin-shell .dz {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .dz > .dz-open,
+.account-admin-page.admin-shell button.dz-open {
+  border-color: var(--ad-danger-line);
+  background: #fff;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell button.dz-open:hover:not(:disabled) {
+  background: var(--ad-danger-soft);
+  border-color: var(--ad-danger-line);
+}
+.account-admin-page.admin-shell .dz-panel {
+  width: 100%;
+}
+.account-admin-page.admin-shell .dz-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--ad-danger-soft);
+}
+.account-admin-page.admin-shell .dz-impact {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .dz-card {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fff;
+}
+.account-admin-page.admin-shell .dz-card b {
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 18px;
+}
+.account-admin-page.admin-shell .dz-note,
+.account-admin-page.admin-shell .dz-wait {
+  margin: 0;
+  color: var(--ad-danger);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .dz-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ad-danger);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .dz-field input {
+  border-color: var(--ad-danger-line);
+}
+.account-admin-page.admin-shell button.dz-go {
+  position: relative;
+  overflow: hidden;
+  height: 40px;
+  border-color: var(--ad-danger);
+  background: #fff;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell button.dz-go:not(.is-hold):hover:not(:disabled) {
+  background: var(--ad-danger);
+  color: #fff;
+}
+.account-admin-page.admin-shell button.dz-go > i {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  background: var(--ad-danger);
+  transition: width 80ms linear;
+}
+.account-admin-page.admin-shell button.dz-go[data-hold="on"] > i {
+  width: 100%;
+  transition: width calc(1500ms * var(--ad-motion)) linear;
+}
+/* Reduced motion removes the sweep, not the hold: the fill is full at once but the button still needs the 1.5 s. */
+.account-admin-page.admin-shell button.dz-go > .dz-label {
+  position: relative;
+  mix-blend-mode: normal;
+}
+.account-admin-page.admin-shell button.dz-go[data-hold="on"] > .dz-label {
+  color: #fff;
+}
+
+/* ---- unsaved = amber ---- */
+.account-admin-page.admin-shell :is(input, select, textarea)[data-dirty="true"],
+.account-admin-page.admin-shell [data-dirty="true"] > :is(input, select, textarea),
+.account-admin-page.admin-shell .is-dirty {
+  border-color: var(--ad-amber) !important;
+  border-width: 1.5px;
+  background: var(--ad-amber-soft) !important;
+}
+.account-admin-page.admin-shell :is(button, label, span, div)[data-dirty="true"]:not(.seg-button) {
+  border-color: var(--ad-amber);
+  background: var(--ad-amber-soft);
+}
+.account-admin-page.admin-shell input[type="checkbox"][data-dirty="true"] {
+  outline: 2px solid var(--ad-amber);
+  outline-offset: 1px;
+}
+
+/* ---- NavV3: a dot and the name; the page you are on is the tint with a primary dot ---- */
+.account-admin-page.admin-shell .admin-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: 12px;
+}
+.account-admin-page.admin-shell .admin-nav-item[aria-current="page"]::before {
+  content: none;
+}
+.account-admin-page.admin-shell .admin-nav-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .admin-nav-item[aria-current="page"] .admin-nav-dot {
+  background: var(--ad-primary);
+}
+.account-admin-page.admin-shell .admin-nav-item:hover {
+  background: #efece8;
+}
+.account-admin-page.admin-shell .admin-nav-item[aria-current="page"]:hover {
+  background: var(--ad-tint);
+}
+
+/* ---- 管理员与权限 (Members3): add bar, people table, the grid opens below the row ---- */
+.account-admin-page.admin-shell .mb-add {
+  box-sizing: border-box;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px 20px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell .mb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mb-field input {
+  height: 36px;
+  min-height: 36px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .mb-presets {
+  display: flex;
+  gap: 6px;
+}
+.account-admin-page.admin-shell button.mb-preset[aria-pressed="true"] {
+  border-color: var(--ad-tint-line);
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .mb-add > button[type="submit"] {
+  border-color: var(--ad-tint-line);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .members-table-card {
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell .mb-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--mark, var(--ad-primary));
+  color: #fff;
+  font-size: 11px;
+}
+.account-admin-page.admin-shell .mb-name {
+  display: flex;
+  flex-direction: column;
+}
+.account-admin-page.admin-shell .members-mail {
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .members-list:empty {
+  display: none;
+}
+.account-admin-page.admin-shell .ot-panel .members-list {
+  margin: 0 20px 18px;
+}
+.account-admin-page.admin-shell .members-list .admin-member {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell .members-list .admin-member > .admin-member-head {
+  display: none;
+}
+.account-admin-page.admin-shell .members-list .admin-member > :is(.mb-grid, .dz, p) {
+  flex: 1 1 100%;
+}
+.account-admin-page.admin-shell .mb-grid {
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f0ece7;
+}
+.account-admin-page.admin-shell .members-list .admin-member > .dz {
+  margin-top: 10px;
+}
+.account-admin-page.admin-shell .members-list .permission-matrix {
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+}
+.account-admin-page.admin-shell .permission-matrix > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .permission-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ad-wash);
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .permission-presets > button {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .permission-areas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  column-count: auto;
+  gap: 16px;
+}
+.account-admin-page.admin-shell .permission-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+.account-admin-page.admin-shell .permission-group h4 {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .permission-item {
+  align-items: flex-start;
+  min-height: 0;
+  padding: 2px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition:
+    background var(--ad-t-slide) var(--ad-ease),
+    border-color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .permission-item > input {
+  margin: 3px 0 0;
+}
+.account-admin-page.admin-shell .permission-item[data-dirty="true"] {
+  border-color: var(--ad-amber);
+  background: var(--ad-amber-soft);
+}
+@media (max-width: 1400px) {
+  .account-admin-page.admin-shell .mb-add {
+    grid-template-columns: minmax(200px, 1fr) auto;
+  }
+}
+
+/* ---- charts (V3): every bucket is a hover / focus target with a vertical guide line, dots on the points, one bubble ---- */
+.account-admin-page.admin-shell .xy-hit {
+  position: relative;
+  outline: none;
+}
+.account-admin-page.admin-shell .xy[data-mode="line"] .xy-hit {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--px, 0%);
+  width: var(--w, 0%);
+  flex: none;
+}
+.account-admin-page.admin-shell .xy-hit:hover,
+.account-admin-page.admin-shell .xy-hit:focus-visible {
+  background: rgba(43, 40, 51, 0.04);
+}
+.account-admin-page.admin-shell .xy-hit:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--ad-primary);
+}
+.account-admin-page.admin-shell .xy-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--gx, 0%);
+  width: 1px;
+  background: var(--ad-tint-line);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity calc(160ms * var(--ad-motion));
+}
+.account-admin-page.admin-shell .xy-plot:hover > .xy-guide,
+.account-admin-page.admin-shell .xy-plot:focus-within > .xy-guide {
+  opacity: 1;
+}
+.account-admin-page.admin-shell .xy-dot {
+  position: absolute;
+  left: var(--dot, 50%);
+  bottom: var(--y, 0%);
+  width: 10px;
+  height: 10px;
+  margin: 0 0 -5px -5px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: var(--c);
+  pointer-events: none;
+  transition:
+    transform calc(160ms * var(--ad-motion)),
+    bottom calc(400ms * var(--ad-motion)) var(--ad-ease),
+    opacity calc(160ms * var(--ad-motion));
+}
+.account-admin-page.admin-shell .xy-dot.is-off {
+  opacity: 0;
+}
+.account-admin-page.admin-shell .xy-hit:hover .xy-dot,
+.account-admin-page.admin-shell .xy-hit:focus-visible .xy-dot {
+  transform: scale(1.4);
+}
+.account-admin-page.admin-shell .xy[data-dense="true"] .xy-dot {
+  opacity: 0;
+}
+.account-admin-page.admin-shell .xy[data-dense="true"] .xy-hit:hover .xy-dot,
+.account-admin-page.admin-shell .xy[data-dense="true"] .xy-hit:focus-visible .xy-dot {
+  opacity: 1;
+}
+.account-admin-page.admin-shell .xy-tip {
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+.account-admin-page.admin-shell .xy-plot:hover > .xy-tip,
+.account-admin-page.admin-shell .xy-plot:focus-within > .xy-tip {
+  display: flex;
+}
+.account-admin-page.admin-shell .xy-tip-head {
+  color: var(--ad-muted);
+}
+
+/* ---- pie (V3) ---- */
+.account-admin-page.admin-shell .pie {
+  position: relative;
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 40px;
+  align-items: center;
+  padding: 10px 0;
+}
+.account-admin-page.admin-shell .pie-svg {
+  width: 260px;
+  height: 260px;
+}
+.account-admin-page.admin-shell .pie-arc {
+  stroke-width: 6;
+  outline: none;
+  transition:
+    stroke-dasharray var(--ad-t-number) var(--ad-ease),
+    stroke-dashoffset var(--ad-t-number) var(--ad-ease),
+    stroke-width var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .pie-arc:hover,
+.account-admin-page.admin-shell .pie-arc:focus-visible {
+  stroke-width: 7;
+}
+.account-admin-page.admin-shell .pie-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .pie-title {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pie-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 70px 90px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .pie-row:hover,
+.account-admin-page.admin-shell .pie-row:focus-visible {
+  background: #f7f5f2;
+}
+.account-admin-page.admin-shell .pie-row > i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.account-admin-page.admin-shell .pie-row > b,
+.account-admin-page.admin-shell .pie-figure {
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+.account-admin-page.admin-shell .pie-figure {
+  color: var(--ad-muted);
+  text-align: right;
+}
+.account-admin-page.admin-shell .pie[data-active="true"] > .pie-tip {
+  display: block;
+}
+
+/* ---- 总览 (Overview3) ---- */
+.account-admin-page.admin-shell .ov-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.account-admin-page.admin-shell .ov-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 16px 20px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell .ov-tile-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .ov-big {
+  width: max-content;
+  max-width: 100%;
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.account-admin-page.admin-shell .ov-tile-sub {
+  min-height: 16px;
+  color: var(--ad-muted);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .ov-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn);
+  font-weight: 700;
+  text-decoration: none;
+}
+.account-admin-page.admin-shell .ov-warn > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ad-warn);
+}
+.account-admin-page.admin-shell .ovx-trend {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell .ovx-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .ovx-tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .ovx-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .ovx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .ovx-chip b {
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+.account-admin-page.admin-shell .ovx-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--c);
+}
+.account-admin-page.admin-shell .ovx-pane {
+  animation: adPageIn var(--ad-t-slide) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .ovx-empty {
+  margin: 0;
+  padding: 40px 0;
+  color: var(--ad-muted);
+  text-align: center;
+}
+.account-admin-page.admin-shell .ovx-trend .xy-plot {
+  height: 280px;
+}
+.account-admin-page.admin-shell .ov-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell .ov-card > h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+}
+.account-admin-page.admin-shell .ov-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+.account-admin-page.admin-shell .ov-days {
+  border-radius: 12px;
+}
+.account-admin-page.admin-shell .ov-days .ot-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #fff;
+  border-radius: 12px 12px 0 0;
+}
+.account-admin-page.admin-shell .ov-days .ot-row {
+  min-height: 40px;
+  padding: 0 14px;
+}
+.account-admin-page.admin-shell .ov-days .ot-head {
+  padding: 0 14px;
+}
+.account-admin-page.admin-shell .ov-days .ot-row.is-total {
+  border-top: 1px solid var(--ad-hairline);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .ov-split-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.account-admin-page.admin-shell .ov-split-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 70px;
+  gap: 12px;
+  align-items: center;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .ov-split-row:hover {
+  background: #f7f5f2;
+}
+.account-admin-page.admin-shell .ov-split-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .ov-rdot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r, 50%);
+  background: var(--c);
+}
+.account-admin-page.admin-shell .ov-bar {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f0ece7;
+}
+.account-admin-page.admin-shell .ov-bar > i {
+  width: var(--w, 0%);
+  border-radius: 999px;
+  background: var(--c);
+  transition: width var(--ad-t-number) var(--ad-ease);
+}
+.account-admin-page.admin-shell .ov-split-value {
+  font-family: "DM Mono", ui-monospace, monospace;
+  text-align: right;
+}
+
+/* ---- 消耗表 (Usage3) ---- */
+.account-admin-page.admin-shell .cs-tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.account-admin-page.admin-shell .cs-table .ot-row,
+.account-admin-page.admin-shell .cs-table .ot-head {
+  padding: 0 14px;
+}
+.account-admin-page.admin-shell .cs-table .ot-row {
+  min-height: 40px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-table {
+  border-radius: 12px;
+  --cols: minmax(0, 1.9fr) repeat(6, minmax(0, 1fr));
+}
+.account-admin-page.admin-shell .cs-calls {
+  margin: 2px 14px 14px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-call {
+  display: grid;
+  grid-template-columns: var(--grid, 1.8fr repeat(5, minmax(0, 1fr)));
+  gap: 10px;
+  align-items: center;
+  min-height: 32px;
+  border-top: 1px solid #e9e5f7;
+  font-family: "DM Mono", ui-monospace, monospace;
+  text-align: right;
+}
+.account-admin-page.admin-shell .cs-call.is-head {
+  min-height: 30px;
+  border-top: 0;
+  color: var(--ad-muted);
+  font-family: inherit;
+}
+.account-admin-page.admin-shell .cs-call > .is-name {
+  text-align: left;
+}
+
+/* ---- a confirmation that opens in place ---- */
+.account-admin-page.admin-shell .ic {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--ad-t-open) var(--ad-ease),
+    opacity var(--ad-t-open) var(--ad-ease);
+}
+.account-admin-page.admin-shell .ic[data-state="open"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.account-admin-page.admin-shell .ic-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .ic-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ad-wash);
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .ic-text {
+  flex: 1;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .ic-text p {
+  margin: 0;
+  white-space: pre-line;
+}
+.account-admin-page.admin-shell .ic-actions {
+  display: flex;
+  gap: 8px;
+}
+.account-admin-page.admin-shell button.ic-go {
+  border-color: var(--ad-primary);
+  color: var(--ad-tint-ink);
+}
+
+/* ---- 积分发放 (Points3) ---- */
+.account-admin-page.admin-shell .pt-give,
+.account-admin-page.admin-shell .pt-cc,
+.account-admin-page.admin-shell .points-main {
+  box-sizing: border-box;
+  width: 100%;
+}
+.account-admin-page.admin-shell form.pt-give,
+.account-admin-page.admin-shell section.pt-cc,
+.account-admin-page.admin-shell section.system-section:has(#points-reset),
+.account-admin-page.admin-shell .pt-reset {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell .pt-bar {
+  display: grid;
+  grid-template-columns: auto minmax(200px, 1fr) 140px minmax(160px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+.account-admin-page.admin-shell .pt-lb {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pt-lb input:not([type="radio"]),
+.account-admin-page.admin-shell .pt-lb select {
+  height: 36px;
+  min-height: 36px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .pt-with {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ad-text);
+}
+.account-admin-page.admin-shell .pt-with input {
+  flex: 1;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .pt-small {
+  flex: none !important;
+  width: 90px;
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+.account-admin-page.admin-shell .pt-seg {
+  display: flex;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #f3f1ee;
+}
+.account-admin-page.admin-shell .pt-seg .points-kind {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: var(--ad-text);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--ad-t-slide) var(--ad-ease),
+    color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .pt-seg .points-kind input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .pt-seg .points-kind:has(input:checked) {
+  background: #fff;
+  color: var(--ad-tint-ink);
+  box-shadow: 0 1px 3px rgba(43, 40, 51, 0.12);
+}
+.account-admin-page.admin-shell .pt-seg .points-kind:has(input:focus-visible) {
+  outline: 2px solid var(--ad-primary);
+}
+.account-admin-page.admin-shell .pt-give .points-live,
+.account-admin-page.admin-shell .pt-give .points-live:empty {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+  white-space: pre-line;
+}
+.account-admin-page.admin-shell .pt-give .points-live:empty {
+  display: none;
+}
+.account-admin-page.admin-shell .pt-give .system-result:empty,
+.account-admin-page.admin-shell .pt-reset .system-result:empty,
+.account-admin-page.admin-shell section.system-section:has(#points-reset) .system-result:empty {
+  display: none;
+}
+.account-admin-page.admin-shell .pt-give .system-result:not(:empty),
+.account-admin-page.admin-shell section.system-section:has(#points-reset) .system-result:not(:empty) {
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+  font-size: 14px;
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .pt-give .system-result p {
+  display: inline;
+  margin: 0 0 0 10px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .pt-cc {
+  flex-direction: row !important;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 20px !important;
+}
+.account-admin-page.admin-shell .pt-cc[hidden] {
+  display: none !important;
+}
+.account-admin-page.admin-shell .pt-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-self: center;
+  min-width: 160px;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pt-head h3 {
+  margin: 0;
+  color: var(--ad-text);
+  font-size: 18px;
+  font-weight: 900;
+}
+.account-admin-page.admin-shell .pt-cc > .pt-lb {
+  flex: 1 1 160px;
+}
+.account-admin-page.admin-shell .pt-cc > button {
+  margin-left: auto;
+}
+.account-admin-page.admin-shell .pt-cc > button[data-changed="true"] {
+  border-color: var(--ad-primary);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .pt-cc > p:empty,
+.account-admin-page.admin-shell .pt-cc > p[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .system-section:has(#points-reset) .pt-head {
+  align-self: flex-start;
+}
+
+/* ---- 模型与价格 (Models3): rows are grids, checkboxes are switches ---- */
+.account-admin-page.admin-shell .models-card {
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .models-table {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-collapse: collapse;
+}
+.account-admin-page.admin-shell .models-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .models-table :is(thead, tbody, tfoot) {
+  display: block;
+}
+.account-admin-page.admin-shell .models-table tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(4, 110px) 140px 110px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 0 20px;
+  min-height: 56px;
+  box-sizing: border-box;
+}
+.account-admin-page.admin-shell .models-table thead tr {
+  min-height: 42px;
+  border-bottom: 1px solid var(--ad-hairline);
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .models-table :is(th, td) {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: inherit;
+}
+.account-admin-page.admin-shell .models-table thead th {
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .models-table tbody tr {
+  border-top: 1px solid #f3f0ec;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .models-table tbody tr:first-child {
+  border-top: 0;
+}
+.account-admin-page.admin-shell .models-table tbody tr:hover {
+  background: #f7f5f2;
+}
+.account-admin-page.admin-shell .models-table tfoot tr {
+  border-top: 1px solid var(--ad-hairline);
+  background: #fbfaf8;
+  border-radius: 0 0 var(--ad-card-radius) var(--ad-card-radius);
+}
+.account-admin-page.admin-shell .models-table td:empty {
+  display: block;
+}
+.account-admin-page.admin-shell .models-table input[type="number"] {
+  width: 72px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  font-family: "DM Mono", ui-monospace, monospace;
+  border-radius: 10px;
+}
+.account-admin-page.admin-shell .models-unit,
+.account-admin-page.admin-shell .models-at {
+  margin-left: 6px;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .models-at {
+  margin: 0;
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+.account-admin-page.admin-shell .models-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #f0ece7;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .models-pill.is-on {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell .models-table input[type="checkbox"] {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 40px;
+  height: 24px;
+  margin: 0;
+  border-radius: 999px;
+  background: #d9d4cd;
+  cursor: pointer;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .models-table input[type="checkbox"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(43, 40, 51, 0.2);
+  transition: transform var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .models-table input[type="checkbox"]:checked {
+  background: var(--ad-primary);
+}
+.account-admin-page.admin-shell .models-table input[type="checkbox"]:checked::after {
+  transform: translateX(16px);
+}
+.account-admin-page.admin-shell .models-table input[type="checkbox"][data-dirty="true"] {
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--ad-amber);
+}
+.account-admin-page.admin-shell .models-table input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.account-admin-page.admin-shell .models-table input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 2px;
+}
+
+/* ---- 系统状态 (System3) ---- */
+.account-admin-page.admin-shell .sys-overall {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  margin: 0;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+  font-size: 13px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .sys-overall[data-tone="warn"] {
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .sys-overall .admin-badge {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+.account-admin-page.admin-shell .sys-top {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ad-gap);
+  align-items: stretch;
+}
+.account-admin-page.admin-shell .sys-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ad-gap);
+  align-items: stretch;
+}
+.account-admin-page.admin-shell .sys-version {
+  border-color: #bfe0cb;
+  background: #f2faf5;
+}
+.account-admin-page.admin-shell .sys-renew {
+  float: right;
+  border-color: var(--ad-tint-line);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .sys-budget {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .sys-budget-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .sys-budget-left,
+.account-admin-page.admin-shell .sys-budget-used {
+  color: var(--ad-muted);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .sys-budget-left b {
+  color: var(--ad-text);
+}
+.account-admin-page.admin-shell .sys-bar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f0ece7;
+}
+.account-admin-page.admin-shell .sys-bar > i {
+  width: var(--w, 0%);
+  transition: width var(--ad-t-number) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sys-bar > .is-used {
+  background: var(--ad-primary);
+}
+.account-admin-page.admin-shell .sys-bar > .is-held {
+  background: var(--ad-tint-line);
+}
+.account-admin-page.admin-shell .sys-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid #f0ece7;
+}
+.account-admin-page.admin-shell .sys-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #f0ece7;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .sys-pill > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.account-admin-page.admin-shell .sys-pill.is-on {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell .sys-pill.is-plain {
+  background: #f3f1ee;
+  color: var(--ad-text);
+}
+.account-admin-page.admin-shell .sys-confirm:empty {
+  display: none;
+}
+.account-admin-page.admin-shell .ops-grid .ot-row,
+.account-admin-page.admin-shell .ops-grid .ot-head {
+  gap: 8px;
+  font-size: 12px;
+}
+
+/* ---- 邀请与额度 (Invites3): one create bar, batches open their codes below ---- */
+.account-admin-page.admin-shell form.tiers-form {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.6fr) minmax(0, 0.6fr) minmax(176px, 1.3fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr)
+    minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px 20px;
+  position: static;
+  max-height: none;
+  overflow: visible;
+}
+.account-admin-page.admin-shell .tiers-form .tiers-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .tiers-form .tiers-refill {
+  display: contents;
+}
+.account-admin-page.admin-shell .tiers-form .tiers-field > label,
+.account-admin-page.admin-shell .tiers-form .tiers-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .tiers-form input:not([type="radio"], [type="checkbox"]) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  min-height: 36px;
+}
+.account-admin-page.admin-shell .tiers-form .tiers-kind {
+  display: flex;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 3px;
+  border-radius: 999px;
+  background: #f3f1ee;
+}
+.account-admin-page.admin-shell .tiers-form .tiers-kind label {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--ad-text);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--ad-t-slide) var(--ad-ease),
+    color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .tiers-form .tiers-kind input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .tiers-form .tiers-kind label:has(input:checked) {
+  background: #fff;
+  color: var(--ad-tint-ink);
+  box-shadow: 0 1px 3px rgba(43, 40, 51, 0.12);
+}
+.account-admin-page.admin-shell .tiers-form .tiers-kind label:has(input:focus-visible) {
+  outline: 2px solid var(--ad-primary);
+}
+.account-admin-page.admin-shell .tiers-form .tiers-test {
+  flex-direction: row;
+  align-items: center;
+  height: 36px;
+}
+.account-admin-page.admin-shell .tiers-form .tiers-test label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ad-text);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .tiers-form .tiers-problem {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.account-admin-page.admin-shell .tiers-form .tiers-form-actions {
+  display: flex;
+}
+.account-admin-page.admin-shell .tiers-list > .admin-table-region {
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell .tiers-table {
+  display: block;
+  width: 100%;
+  border: 0;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .tiers-table :is(thead, tbody) {
+  display: block;
+}
+.account-admin-page.admin-shell .tiers-table tr:not(.tiers-open-row) {
+  display: grid;
+  grid-template-columns: 24px minmax(160px, 1.4fr) 1.4fr 150px 70px 1.2fr 70px 70px;
+  gap: 14px;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 20px;
+}
+.account-admin-page.admin-shell .tiers-table thead tr {
+  height: 40px;
+  border-bottom: 1px solid var(--ad-hairline);
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .tiers-table :is(th, td) {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .tiers-table .is-end,
+.account-admin-page.admin-shell .tiers-table td:nth-child(5),
+.account-admin-page.admin-shell .tiers-table td:nth-child(7),
+.account-admin-page.admin-shell .tiers-table td:nth-child(8) {
+  text-align: right;
+}
+.account-admin-page.admin-shell .tiers-table tbody tr.tiers-row {
+  min-height: 50px;
+  border-top: 1px solid #f0ece7;
+  cursor: pointer;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .tiers-table tbody tr.tiers-row:first-child {
+  border-top: 0;
+}
+.account-admin-page.admin-shell .tiers-table tbody tr.tiers-row:hover {
+  background: #f7f5f2;
+}
+.account-admin-page.admin-shell .tiers-table tbody tr.tiers-row.is-selected {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell .tiers-table tbody tr.tiers-row.is-selected .tiers-name {
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .tiers-table tr.tiers-row .ot-chevron {
+  transition: transform var(--ad-t-open) var(--ad-ease);
+}
+.account-admin-page.admin-shell .tiers-table tr.tiers-row[aria-expanded="true"] .ot-chevron {
+  transform: rotate(90deg);
+}
+.account-admin-page.admin-shell .tiers-name {
+  font-weight: 400;
+}
+.account-admin-page.admin-shell th[scope="row"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .tiers-test-badge,
+.account-admin-page.admin-shell .tiers-new-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e8f2fa;
+  color: #0e5a8a;
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .tiers-new-badge {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell .iv-redeemed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .iv-bar {
+  display: flex;
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f0ece7;
+}
+.account-admin-page.admin-shell .iv-bar > i {
+  width: var(--w, 0%);
+  background: var(--ad-primary);
+  transition: width var(--ad-t-number) var(--ad-ease);
+}
+.account-admin-page.admin-shell .iv-fig {
+  width: 56px;
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 13px;
+  text-align: right;
+}
+.account-admin-page.admin-shell .tiers-table :is(td:nth-child(4), td:nth-child(5), td:nth-child(7), td:nth-child(8), td:nth-child(6)) {
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .tiers-table tr.tiers-open-row {
+  display: block;
+}
+.account-admin-page.admin-shell .tiers-table tr.tiers-open-row > td {
+  display: block;
+  padding: 0 20px 18px;
+}
+.account-admin-page.admin-shell .tiers-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.account-admin-page.admin-shell .tiers-detail[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .iv-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ad-wash);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .iv-tools button {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .iv-tools button.iv-chip:first-child,
+.account-admin-page.admin-shell .iv-tools .tiers-copy-all {
+  border-color: var(--ad-tint-line);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .iv-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .iv-edit input {
+  width: 72px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .tiers-codes-card {
+  border: 1px solid var(--ad-hairline);
+  border-radius: 12px;
+  background: #fff;
+}
+.account-admin-page.admin-shell .tiers-codes-table {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+.account-admin-page.admin-shell .tiers-codes-table :is(thead, tbody) {
+  display: block;
+}
+.account-admin-page.admin-shell .tiers-codes-table tr {
+  display: grid;
+  grid-template-columns: 50px 240px 110px 190px minmax(0, 1fr) 150px 90px;
+  gap: 14px;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 0 14px;
+  min-height: 42px;
+}
+.account-admin-page.admin-shell .tiers-codes-table thead tr {
+  min-height: 36px;
+  border-bottom: 1px solid var(--ad-hairline);
+  border-radius: 12px 12px 0 0;
+  background: #fbfaf8;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .tiers-codes-table tbody tr + tr {
+  border-top: 1px solid #f3f0ec;
+}
+.account-admin-page.admin-shell .tiers-codes-table :is(th, td) {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .tiers-codes-table tbody :is(th, td:nth-child(4), td:nth-child(5), td:nth-child(6)) {
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+.account-admin-page.admin-shell .tiers-code-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .tiers-code-text {
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+.account-admin-page.admin-shell button.tiers-copy,
+.account-admin-page.admin-shell button.iv-small {
+  height: 26px;
+  min-height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.account-admin-page.admin-shell button.tiers-copy[aria-pressed="true"] {
+  border-color: #bfe0cb;
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell button.iv-danger {
+  justify-self: end;
+  border-color: var(--ad-danger-line);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .tiers-confirm:empty {
+  display: none;
+}
+
+.account-admin-page.admin-shell .tiers-form > .tiers-form-actions {
+  grid-column: auto;
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+.account-admin-page.admin-shell .tiers-form button[type="submit"] {
+  width: auto;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .tiers-table :is(th, td),
+.account-admin-page.admin-shell .tiers-codes-table :is(th, td),
+.account-admin-page.admin-shell .models-table :is(th, td) {
+  box-shadow: none;
+}
+.account-admin-page.admin-shell .tiers-table tbody tr.tiers-row.is-selected {
+  border-left: 0;
+  box-shadow: none;
+}
+.account-admin-page.admin-shell .tiers-codes-table tr {
+  grid-template-columns: 44px minmax(380px, 2.4fr) 100px 150px minmax(0, 1fr) 140px 90px;
+}
+.account-admin-page.admin-shell .tiers-code-text {
+  white-space: nowrap;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.account-admin-page.admin-shell .tiers-form button[type="submit"] {
+  height: 36px;
+  min-height: 36px;
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */

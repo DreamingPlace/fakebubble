@@ -11,7 +11,10 @@ import {
 import type { PlayerModelId } from '../../../../../packages/contracts/player-models.ts';
 import { h } from '../cocreation/h.ts';
 import { statusBadge } from './ui/status-badge.ts';
-import { pageHead } from './ui/page-head.ts';
+import { hoverValue } from './ui/hover-value.ts';
+import type { ConfirmInPlace } from './ui/inline-confirm.ts';
+import { fillStatus, pageHead } from './ui/page-head.ts';
+import { markDirty, unsavedText } from './ui/unsaved.ts';
 
 const FIELD_LABELS: Record<SettingField, string> = {
   enabled: '总开关',
@@ -84,7 +87,8 @@ export function modelsView(
     load: () => Promise<ModelAdminView>;
     save: (input: ModelSaveInput) => Promise<unknown>;
     run: (work: () => Promise<void>) => Promise<void>;
-    confirm: (options: { title: string; message: string; confirmLabel: string }) => Promise<boolean>;
+    /** 保存 opens the list of changes in place (no dialog); 确认保存 is its confirm button. */
+    confirm: ConfirmInPlace;
     toast: (text: string) => void;
     newRequestId: () => string;
     disposed: () => boolean;
@@ -98,8 +102,11 @@ export function modelsView(
     Object.fromEntries((view?.models ?? []).map((m) => [m.model, m.label])) as Record<PlayerModelId, string>;
 
   const banner = h('p', { class: 'admin-hint models-banner', attrs: { role: 'status' } });
+  const headStatus = h('span', { class: 'head-status' });
+  const confirmHost = h('div', { class: 'models-confirm' });
   const problem = h('p', { class: 'admin-hint models-problem', attrs: { role: 'alert' }, hidden: true });
   const body = h('tbody');
+  const foot = h('tfoot');
   const table = h(
     'table',
     { class: 'admin-table models-table', attrs: { 'aria-label': '模型与价格' } },
@@ -110,12 +117,13 @@ export function modelsView(
       h(
         'tr',
         {},
-        ...['模型', '总开关', '游客', '注册玩家', '受邀玩家', '每条点数', '状态'].map((label) =>
+        ...['模型', '总开关', '游客', '注册玩家', '受邀玩家', '每条点数', '状态', '最近修改'].map((label) =>
           h('th', { text: label, attrs: { scope: 'col' } }),
         ),
       ),
     ),
     body,
+    foot,
   );
   const voiceInput = h('input', {
     attrs: {
@@ -137,18 +145,14 @@ export function modelsView(
     text: '只读：需要“模型与价格”管理权限',
     hidden: true,
   });
-  const recent = h('ul', { class: 'models-recent' });
-  const recentHead = h('h3', { text: '最近修改', hidden: true });
 
   root.replaceChildren(
-    pageHead('模型与价格', saveButton),
+    pageHead('模型与价格', headStatus, saveButton),
     banner,
+    confirmHost,
     readonly,
-    h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table)),
-    h('div', { class: 'models-voice' }, h('label', { text: '语音加点', attrs: { for: 'models-voice' } }), voiceInput),
     problem,
-    recentHead,
-    recent,
+    h('div', { class: 'models-card' }, table),
   );
 
   const signature = () => JSON.stringify(draft);
@@ -179,16 +183,40 @@ export function modelsView(
     saveButton.disabled = !manage || !dirty || !!message;
     readonly.hidden = !view || manage;
     voiceInput.disabled = !manage;
+    const n = changes().length;
+    const pill = h('span', { class: view?.featureOn ? 'models-pill is-on' : 'models-pill', text: `玩家选模型 · ${view?.featureOn ? '开' : '关'}` });
+    hoverValue(pill, 'PLAYER_MODEL_CHOICE_ENABLED');
+    fillStatus(headStatus, view ? pill : null, n > 0 ? h('span', { class: 'is-warn', text: unsavedText(n) }) : null);
+    // A changed value is amber until it is saved.
+    if (view && draft) {
+      for (const input of body.querySelectorAll<HTMLInputElement>('input[data-model]')) {
+        const model = input.dataset.model!;
+        const field = input.dataset.field!;
+        const now = draft.models.find((m) => m.model === model);
+        const before = view.models.find((m) => m.model === model);
+        if (!now || !before) continue;
+        const key = field as 'enabled' | 'guest' | 'registered' | 'invited' | 'points';
+        markDirty(input, now[key] !== before[key]);
+      }
+      markDirty(voiceInput, draft.voicePoints !== view.voicePoints);
+    }
   };
 
+  /** 最近修改 of a row: the UTC day and who; the whole line (before → after) is the hover. */
+  function lastChange(change: ModelChangeView | undefined): Node {
+    if (!change) return h('span', { class: 'models-at', text: '—' });
+    const node = h('span', { class: 'models-at', text: `${new Date(change.at).toISOString().slice(5, 10)} · ${change.admin}` });
+    return hoverValue(node, changeLine(change, labels()));
+  }
   function cell(label: string, ...children: Node[]) {
     return h('td', { attrs: { 'data-label': label } }, ...children);
   }
   function paint() {
     if (!view || !draft) return;
     // Only a warning that changes what the administrator should do: while the switch is off the table has no effect on players.
+    // The title row carries the state (玩家选模型 · 开 / 关); the sentence stays for screen readers.
     banner.textContent = view.featureOn ? '' : '玩家选模型未开启（PLAYER_MODEL_CHOICE_ENABLED）';
-    banner.hidden = view.featureOn;
+    banner.hidden = true;
     body.replaceChildren();
     for (const entry of draft.models) {
       const info = view.models.find((m) => m.model === entry.model)!;
@@ -238,12 +266,25 @@ export function modelsView(
           box('invited', '受邀玩家'),
           cell('每条点数', points),
           cell('状态', info.configured ? statusBadge('可用', 'ok') : statusBadge('未配置', 'warn')),
+          cell('最近修改', lastChange(view.recent.find((c) => c.model === entry.model))),
         ),
       );
     }
     voiceInput.value = String(draft.voicePoints);
-    recent.replaceChildren(...view.recent.map((change) => h('li', { text: changeLine(change, labels()) })));
-    recentHead.hidden = view.recent.length === 0;
+    foot.replaceChildren(
+      h(
+        'tr',
+        { class: 'models-voice' },
+        h('th', { text: '语音加点', attrs: { scope: 'row' } }),
+        cell('', ),
+        cell('', ),
+        cell('', ),
+        cell('', ),
+        cell('语音加点', voiceInput, h('span', { class: 'models-unit', text: '每条' })),
+        cell('', ),
+        cell('最近修改', lastChange(view.recent.find((c) => c.field === 'voice_points'))),
+      ),
+    );
     refreshControls();
   }
   voiceInput.addEventListener('input', () => {
@@ -267,11 +308,14 @@ export function modelsView(
         if (!view || !draft || !view.canManage) return;
         const lines = changes();
         if (!lines.length || invalid()) return;
-        const ok = await deps.confirm({
-          title: '确认保存模型与价格',
-          message: `将保存以下 ${lines.length} 项修改，下一条消息起生效：\n${lines.map((line) => `· ${line}`).join('\n')}`,
-          confirmLabel: '确认保存',
-        });
+        const ok = await deps.confirm(
+          {
+            title: '确认保存模型与价格',
+            message: `将保存以下 ${lines.length} 项修改，下一条消息起生效：\n${lines.map((line) => `· ${line}`).join('\n')}`,
+            confirmLabel: '确认保存',
+          },
+          confirmHost,
+        );
         if (!ok || deps.disposed()) return;
         const sig = signature();
         if (!pending || pending.signature !== sig) pending = { id: deps.newRequestId(), signature: sig };
@@ -293,7 +337,7 @@ export function modelsView(
       draft = null;
       pending = null;
       body.replaceChildren();
-      recent.replaceChildren();
+      foot.replaceChildren();
     },
   };
 }

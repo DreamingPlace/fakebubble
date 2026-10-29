@@ -13,6 +13,8 @@ export const LEGACY_ROUTES: Readonly<Record<string, AdminPage>> = {
   ops: 'system',
   metrics: 'system',
   home: 'overview',
+  // Part 24b-6: 玩家统计 is part of 总览; the old address arrives there.
+  stats: 'overview',
   // Part 24b-2: 预演测试 is part of 角色工作台; #/preview/jojo opens jojo there.
   preview: 'characters',
 };

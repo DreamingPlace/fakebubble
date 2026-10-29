@@ -14,7 +14,11 @@ import {
 import { POINTS_GRANT_LIMITS } from '../../../../../packages/contracts/web-system.ts';
 import { h, length } from '../cocreation/h.ts';
 import { dollars } from './system-format.ts';
+import { dangerZone } from './ui/danger-zone.ts';
+import { hoverValue } from './ui/hover-value.ts';
+import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { pageHead } from './ui/page-head.ts';
+import { markDirty } from './ui/unsaved.ts';
 
 const TIER_LABELS = {
   guest: '访客',
@@ -64,7 +68,10 @@ export function pointsView(
     };
     isOwner: () => boolean;
     run: (work: () => Promise<void>) => Promise<void>;
-    confirm: (options: { title: string; message: string; confirmLabel: string }) => Promise<boolean>;
+    /** The question opens in place, inside the host it is given (no dialog). */
+    confirm: ConfirmInPlace;
+    /** How long 重置全部额度 has to be held (default 1.5 s); tests shorten it. */
+    holdMs?: number;
     toast: (text: string) => void;
     newRequestId: () => string;
     disposed: () => boolean;
@@ -136,6 +143,7 @@ export function pointsView(
     },
   });
   const send = h('button', { class: 'admin-primary', text: '发放', attrs: { type: 'button', id: 'points-send' } });
+  const confirmHost = h('div', { class: 'points-confirm' });
   const problem = h('p', { class: 'admin-hint models-problem', attrs: { role: 'alert' }, hidden: true });
   const outcome = h('div', { class: 'system-result', attrs: { role: 'status' } });
   const resetBox = h('section', { class: 'system-section' });
@@ -180,8 +188,10 @@ export function pointsView(
     problem.textContent = message ?? '';
     return message ? null : { to: to as PointsTarget, points, note: note_ };
   };
+  const everyone = h('span', { class: 'pt-all', text: '全部注册玩家' });
   const refreshFields = () => {
     const kind = kinds.find((k) => k.input.checked)?.kind;
+    everyone.hidden = kind !== 'all';
     tier.hidden = kind !== 'tier';
     number.hidden = kind !== 'player';
     email.hidden = kind !== 'email';
@@ -241,11 +251,14 @@ export function pointsView(
           deps.toast('没有可以发放的玩家。');
           return;
         }
-        const ok = await deps.confirm({
-          title: '确认积分发放',
-          message: `${preview.player ? `${lookupLine(preview.player)}。` : ''}将发给 ${preview.granted} 位玩家，共 ${preview.totalPoints} 点（每人最多 ${input.points} 点）。${skippedText(preview.skipped)}。`,
-          confirmLabel: '确认发放',
-        });
+        const ok = await deps.confirm(
+          {
+            title: '确认积分发放',
+            message: `${preview.player ? `${lookupLine(preview.player)}。` : ''}将发给 ${preview.granted} 位玩家，共 ${preview.totalPoints} 点（每人最多 ${input.points} 点）。${skippedText(preview.skipped)}。`,
+            confirmLabel: '确认发放',
+          },
+          confirmHost,
+        );
         if (!ok || deps.disposed()) return;
         // The same request id for the same content until an answer is seen, so a retry can never give twice.
         const key = JSON.stringify([
@@ -271,25 +284,26 @@ export function pointsView(
       }),
   );
 
-  const resetButton = h('button', {
-    class: 'admin-danger',
-    text: '重置全部额度',
-    attrs: { type: 'button', id: 'points-reset' },
-  });
   const resetOutcome = h('div', { class: 'system-result', attrs: { role: 'status' } });
-  resetButton.addEventListener(
-    'click',
-    () =>
-      void deps.run(async () => {
-        const preview = await deps.resetPreview();
-        if (deps.disposed()) return;
-        const cost = preview.worstCaseMicros === null ? '暂无数据' : dollars(preview.worstCaseMicros);
-        const ok = await deps.confirm({
-          title: '确认重置全部额度',
-          message: `影响 ${preview.affected} 个账号，共补发 ${preview.totalPoints} 点；按最近 30 天最高的每点成本估算，最坏成本 ${cost}。${skippedText(preview.skipped)}。只补不扣：不会降低任何人的点数。`,
-          confirmLabel: '确认重置',
-        });
-        if (!ok || deps.disposed()) return;
+  const resetZone = dangerZone({
+    open: '重置全部额度',
+    openerId: 'points-reset',
+    impact: async () => {
+      const preview = await deps.resetPreview();
+      const cost = preview.worstCaseMicros === null ? '暂无数据' : dollars(preview.worstCaseMicros);
+      return [
+        { n: String(preview.affected), label: '个账号会补点' },
+        { n: String(preview.totalPoints), label: '点共补发' },
+        { n: cost, label: '最坏成本（最近 30 天最高每点成本）' },
+      ];
+    },
+    note: '只补不扣：不会降低任何人的点数。',
+    typeName: '重置',
+    typeLabel: '输入 重置',
+    confirm: '重置全部额度',
+    ...(deps.holdMs ? { holdMs: deps.holdMs } : {}),
+    run: async () => {
+      await deps.run(async () => {
         const done = await deps.reset(requestId('reset'));
         pending.delete('reset');
         resetOutcome.replaceChildren(
@@ -297,43 +311,63 @@ export function pointsView(
           h('p', { text: `${done.affected} 个账号补发了 ${done.totalPoints} 点。${skippedText(done.skipped)}。` }),
         );
         deps.toast('额度已重置');
-      }),
-  );
+        resetZone.close();
+      });
+    },
+  });
   const paintReset = () => {
     resetBox.hidden = !deps.isOwner();
     // Not merely hidden: for anyone but the owner the button does not exist on the page at all.
     if (!deps.isOwner()) return resetBox.replaceChildren();
-    resetBox.replaceChildren(h('h3', { text: '重置全部额度' }), resetButton, resetOutcome);
+    resetBox.replaceChildren(
+      h('div', { class: 'pt-head' }, h('h3', { text: '重置全部额度' }), h('span', { text: '每天补充的人：加 7 天的量，不超过上限。不限量的人不变。' })),
+      resetOutcome,
+      resetZone.root,
+    );
   };
 
-  // Part 24c: 共创点数 - unstyled and minimal; the console redesign places it. Three numbers and 保存.
-  const ccBox = h('div', { class: 'points-cocreation', attrs: { id: 'points-cocreation' }, hidden: true });
+  // Part 24c: 共创积分 (the three values). A changed value is amber until 保存; one 保存.
+  const ccBox = h('section', { class: 'points-cocreation pt-cc', attrs: { id: 'points-cocreation' }, hidden: true });
   let ccRevision = 0;
-  const ccInput = (key: keyof CocreationPointsSettings, label: string) => {
+  let ccBase: CocreationPointsSettings | null = null;
+  type CcField = { key: keyof CocreationPointsSettings; input: HTMLInputElement; suffix: HTMLElement; tip: () => string; node: HTMLElement };
+  const ccInput = (key: keyof CocreationPointsSettings, label: string, unit: string, tip: () => string): CcField => {
     const limits = COCREATION_POINTS_LIMITS[key];
     const input = h('input', {
-      class: 'admin-input',
-      attrs: {
-        type: 'number',
-        min: String(limits.min),
-        max: String(limits.max),
-        step: '1',
-        id: `points-cc-${key}`,
-        inputmode: 'numeric',
-      },
+      class: 'admin-input pt-small',
+      attrs: { type: 'number', min: String(limits.min), max: String(limits.max), step: '1', id: `points-cc-${key}`, inputmode: 'numeric', 'aria-label': `${label}（${limits.min}–${limits.max}）` },
     });
-    return { key, input, node: h('label', { text: `${label}（${limits.min}–${limits.max}）` }, input) };
+    const suffix = h('span', { text: unit });
+    hoverValue(suffix, '');
+    return { key, input, suffix, tip, node: h('label', { class: 'pt-lb' }, label, h('span', { class: 'pt-with' }, input, suffix)) };
   };
-  const ccFields = [
-    ccInput('notePoints', '每条共创 +点'),
-    ccInput('dailyCap', '每人每天最多几条有点数'),
-    ccInput('adoptPoints', '被采用 +点'),
+  const num = (el: HTMLInputElement) => Number(el.value);
+  const ccFields: CcField[] = [
+    ccInput('notePoints', '每条留言', '点', () => `每条共创留言 ${num(ccFields[0]!.input)} 点`),
+    ccInput('dailyCap', '每天最多算几条', '条', () => `今天最多 ${num(ccFields[0]!.input) * num(ccFields[1]!.input) || 0} 点`),
+    ccInput('adoptPoints', '被采用', '点 · 不限次数', () => `被采用一次 ${num(ccFields[2]!.input)} 点`),
   ];
   const ccProblem = h('p', { class: 'admin-error', attrs: { role: 'alert' }, hidden: true });
-  const ccSave = h('button', { text: '保存共创点数', attrs: { type: 'button', id: 'points-cc-save' } });
+  const ccSave = h('button', { text: '已保存', attrs: { type: 'button', id: 'points-cc-save' } });
+  const ccPaint = () => {
+    let changed = 0;
+    for (const field of ccFields) {
+      const dirty = ccBase !== null && String(ccBase[field.key]) !== field.input.value;
+      markDirty(field.input, dirty);
+      if (dirty) changed++;
+      setHover(field);
+    }
+    ccSave.textContent = changed ? '保存' : '已保存';
+    markDirty(ccSave, changed > 0);
+    ccSave.dataset.changed = String(changed > 0);
+  };
+  const setHover = (field: CcField) => hoverValue(field.suffix, field.tip());
+  for (const field of ccFields) field.input.addEventListener('input', ccPaint);
   const ccFill = (view: CocreationPointsSettings & { revision: number }) => {
     ccRevision = view.revision;
+    ccBase = { notePoints: view.notePoints, dailyCap: view.dailyCap, adoptPoints: view.adoptPoints };
     for (const field of ccFields) field.input.value = String(view[field.key]);
+    ccPaint();
   };
   ccSave.addEventListener(
     'click',
@@ -355,34 +389,40 @@ export function pointsView(
         deps.toast('共创点数已保存');
       }),
   );
-  ccBox.replaceChildren(h('h3', { text: '共创点数' }), ...ccFields.map((field) => field.node), ccProblem, ccSave);
+  ccBox.replaceChildren(
+    h('div', { class: 'pt-head' }, h('h3', { text: '共创积分' }), hoverValue(h('span', { text: '玩家写共创留言得到的点数' }), '写给制作组的留言不算')),
+    ...ccFields.map((field) => field.node),
+    ccProblem,
+    ccSave,
+  );
+
+  const kindSwitch = h('span', { class: 'pt-seg', attrs: { role: 'group', 'aria-label': '发给谁' } }, ...kinds.map((k) => k.node));
+  const field = h('div', { class: 'pt-lb pt-field' }, h('span', { text: '对象' }), h('span', { class: 'pt-with' }, everyone, tier, number, email));
+  const label = (text: string, control: HTMLElement) => h('label', { class: 'pt-lb' }, text, control);
 
   root.replaceChildren(
     pageHead('积分发放'),
     h(
-      'div',
-      { class: 'points-grid' },
+      'form',
+      { class: 'points-form pt-give', attrs: { id: 'points-form', autocomplete: 'off' } },
       h(
         'div',
-        { class: 'points-main' },
-        h(
-          'form',
-          { class: 'points-form', attrs: { id: 'points-form', autocomplete: 'off' } },
-          h('fieldset', {}, h('legend', { text: '发给谁' }), ...kinds.map((k) => k.node), tier, number, email),
-          h('label', { text: '点数（1–10000）', attrs: { for: 'points-amount' } }),
-          amount,
-          h('label', { text: '备注', attrs: { for: 'points-note' } }),
-          note,
-          live,
-          problem,
-          h('div', { class: 'models-actions' }, send),
-        ),
-        outcome,
+        { class: 'pt-bar' },
+        h('div', { class: 'pt-lb' }, h('span', { text: '发给谁' }), kindSwitch),
+        field,
+        label('点数', amount),
+        label('备注', note),
+        send,
       ),
-      resetBox,
-      ccBox,
+      live,
+      problem,
+      confirmHost,
+      outcome,
     ),
+    ccBox,
+    resetBox,
   );
+  amount.setAttribute('placeholder', '1–10000');
   paintReset();
   return {
     /** The page needs nothing from the server to open; only the owner's section depends on the role. */

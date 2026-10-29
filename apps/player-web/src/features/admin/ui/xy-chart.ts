@@ -1,4 +1,5 @@
 import { axisTicks, linePath, niceCeiling, peakOf } from './chart-math.ts';
+import { bindTip } from './tooltip.ts';
 
 /**
  * The console's one chart: stacked bars or lines over the same buckets, with an axis that scales itself. The DOM is built once and
@@ -29,6 +30,11 @@ export type XyState = {
   alert?: number | null;
   markers?: readonly XyMarker[];
   ariaLabel: string;
+  /**
+   * Part 24b-6: the lines of the hover bubble of one bucket (its label first, then every value at full precision). Default: the
+   * bucket label and each visible series with `valueLabel`.
+   */
+  tipLines?: (index: number) => readonly string[];
 };
 export type XyScale = { top: number; ticks: number[]; alertShown: boolean };
 
@@ -45,7 +51,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className: string, te
 };
 
 export function xyChart() {
-  const root = el('div', 'xy');
+  const root = el('div', 'xy ad-tip-bounds');
   const plot = el('div', 'xy-plot');
   const grid = Array.from({ length: GRID_SLOTS }, () => {
     const line = el('div', 'xy-grid is-off');
@@ -60,13 +66,17 @@ export function xyChart() {
   const layer = el('div', 'xy-layer');
   const markerHost = el('div', 'xy-markers');
   const hits = el('div', 'xy-hits');
-  plot.append(layer, markerHost, hits);
+  const guide = el('div', 'xy-guide');
+  const tip = el('span', 'ad-tip xy-tip');
+  plot.append(layer, markerHost, guide, hits, tip);
+  bindTip(plot, tip);
   const axis = el('div', 'xy-x');
   root.append(plot, axis);
 
   let built = '';
   let bars: HTMLElement[][] = [];
   let paths: SVGPathElement[] = [];
+  let dots: HTMLElement[][] = [];
   let last: XyState | null = null;
 
   const identity = (state: XyState) =>
@@ -113,11 +123,58 @@ export function xyChart() {
       }
       layer.replaceChildren(svg);
     }
+    dots = [];
     hits.replaceChildren(
       ...state.buckets.map((_, i) => {
+        // Every bucket is one hover (and keyboard) target: a column through the points of all its series.
         const hit = el('div', 'xy-hit');
         hit.style.setProperty('--i', String(i));
+        hit.setAttribute('tabindex', '0');
+        hit.setAttribute('role', 'img');
+        hit.addEventListener('pointerenter', () => activate(i));
+        hit.addEventListener('focus', () => {
+          activate(i);
+          const box = plot.getBoundingClientRect?.();
+          const at = hit.getBoundingClientRect?.();
+          if (box && at) {
+            tip.style.setProperty('--tip-x', `${Math.max(0, Math.round(at.left - box.left + at.width / 2 + 10))}px`);
+            tip.style.setProperty('--tip-y', '24px');
+          }
+        });
+        dots.push(
+          state.mode === 'line'
+            ? state.series.map((series) => {
+                const dot = el('i', 'xy-dot');
+                dot.style.setProperty('--c', series.color);
+                hit.append(dot);
+                return dot;
+              })
+            : [],
+        );
         return hit;
+      }),
+    );
+  }
+
+  /** The bubble and the guide line follow the bucket under the pointer (or focus). */
+  function activate(index: number) {
+    const state = last;
+    if (!state) return;
+    const count = state.buckets.length;
+    const at = state.mode === 'bar' ? (index + 0.5) / count : index / Math.max(1, count - 1);
+    guide.style.setProperty('--gx', percent(at * 100));
+    const lines =
+      state.tipLines?.(index) ??
+      [
+        state.buckets[index]!,
+        ...state.series
+          .filter((series) => series.on)
+          .map((series) => `${series.name} ${series.values[index] == null ? '—' : state.valueLabel(series.values[index]!)}`),
+      ];
+    tip.replaceChildren(
+      ...lines.map((line, k) => {
+        const row = el('span', k === 0 ? 'xy-tip-head' : 'xy-tip-row', line);
+        return row;
       }),
     );
   }
@@ -183,14 +240,34 @@ export function xyChart() {
         return label;
       }),
     );
-    // Hover text per bucket: its label and every visible series' value.
+    // Hover text per bucket: the bubble is built when a bucket is entered; the column also carries it as its accessible name.
     const columns = hits.querySelectorAll<HTMLElement>('.xy-hit');
     columns.forEach((hit, i) => {
-      const values = visible
-        .map((series) => `${series.name} ${series.values[i] == null ? '—' : state.valueLabel(series.values[i]!)}`)
-        .join(' · ');
-      hit.setAttribute('title', `${state.buckets[i]}${values ? ` · ${values}` : ''}`);
+      const lines =
+        state.tipLines?.(i) ??
+        [
+          state.buckets[i]!,
+          ...visible.map((series) => `${series.name} ${series.values[i] == null ? '—' : state.valueLabel(series.values[i]!)}`),
+        ];
+      hit.setAttribute('aria-label', lines.join(' · '));
+      if (state.mode === 'line') {
+        // A column through the point, kept inside the plot at both ends.
+        const at = (i / Math.max(1, count - 1)) * 100;
+        const half = 50 / Math.max(1, count - 1);
+        const left = Math.max(0, at - half);
+        hit.style.setProperty('--px', percent(left));
+        hit.style.setProperty('--w', percent(Math.min(100, at + half) - left));
+        hit.style.setProperty('--dot', percent(((at - left) / Math.max(0.001, Math.min(100, at + half) - left)) * 100));
+        state.series.forEach((series, k) => {
+          const value = series.on ? series.values[i] : null;
+          const dot = dots[i]?.[k];
+          if (!dot) return;
+          dot.classList.toggle('is-off', value == null);
+          if (value != null) dot.style.setProperty('--y', percent((Math.min(value, top) / top) * 100));
+        });
+      }
     });
+    root.dataset.dense = String(count > 31);
     root.setAttribute('role', 'img');
     root.setAttribute('aria-label', state.ariaLabel);
     root.dataset.mode = state.mode;
