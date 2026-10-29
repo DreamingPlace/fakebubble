@@ -175,6 +175,7 @@ test('Cloudflare runner: 119 is the same SQL on both authorities, 47 steps, and 
   // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so positions counted from the end of the ledger moved by one again. No assertion was weakened.
   // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so positions counted from the end of the ledger and the number of steps (100..131) moved by one again. No assertion was weakened.
   const last = (list: { version: number; sha256: string }[]) => list.at(-13)!;
   // Named exception (Part 22x, migration 126): the ledger has 51 steps and 126 is the newest, so step counts, positions counted
   // from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
@@ -194,7 +195,8 @@ test('Cloudflare runner: 119 is the same SQL on both authorities, 47 steps, and 
     // Named exception (Part 22c, migration 128): the ledger runs 100..128 (29 steps after the first 24). No assertion was weakened.
     // Named exception (Part 24a, migration 129): the ledger runs 100..129 (30 steps after the first 24). No assertion was weakened.
     // Named exception (Part 22d, migration 130): the ledger runs 100..130 (31 steps after the first 24). No assertion was weakened.
-    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 31 }, (_, i) => 100 + i)],
+    // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so positions counted from the end of the ledger and the number of steps (100..131) moved by one again. No assertion was weakened.
+    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 32 }, (_, i) => 100 + i)],
   );
   assert.deepEqual(
     inline.slice(0, 43).map((m) => m.version),
@@ -217,7 +219,8 @@ test('Cloudflare runner: a fresh install and an existing authority at 118 both r
   // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   assert.deepEqual(fresh.version, { user_version: 131 });
   // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so positions counted from the end of the ledger moved by one again. No assertion was weakened.
-  assert.equal(fresh.hashes.at(-12), `119:${sha(sql119())}`);
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so positions counted from the end of the ledger and the number of steps (100..131) moved by one again. No assertion was weakened.
+  assert.equal(fresh.hashes.at(-13), `119:${sha(sql119())}`);
   assert.deepEqual(fresh.workbench, TABLES);
   const freshR2 = await f.call<{ version: unknown; hashes: string[]; workbench: string[] }>('/r2?object=wb-fresh-r2');
   // Named exception (Part 22a, migration 125): the ledger now has 50 steps and 125 is the newest, so step counts, positions
@@ -228,7 +231,8 @@ test('Cloudflare runner: a fresh install and an existing authority at 118 both r
   // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   assert.deepEqual(freshR2.version, { user_version: 131 });
   // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so positions counted from the end of the ledger moved by one again. No assertion was weakened.
-  assert.equal(freshR2.hashes.at(-12), `119:${sha(sql119())}`);
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so positions counted from the end of the ledger and the number of steps (100..131) moved by one again. No assertion was weakened.
+  assert.equal(freshR2.hashes.at(-13), `119:${sha(sql119())}`);
   assert.deepEqual(freshR2.workbench, TABLES);
   for (const mode of ['inline', 'r2']) {
     const result = await f.call<{

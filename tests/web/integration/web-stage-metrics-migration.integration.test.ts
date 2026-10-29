@@ -26,7 +26,8 @@ const MAIN_113 = {
 const ledgerVersions = Array.from({ length: 24 }, (_, i) => i + 1).concat(
   // Named exception (Part 24a, migration 129): the ledger runs 100..129 (30 steps after the first 24). No assertion was weakened.
   // Named exception (Part 22d, migration 130): the ledger runs 100..130 (31 steps after the first 24). No assertion was weakened.
-  Array.from({ length: 31 }, (_, i) => 100 + i),
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so positions counted from the end of the ledger and the number of steps (100..131) moved by one again. No assertion was weakened.
+  Array.from({ length: 32 }, (_, i) => 100 + i),
 );
 
 function nodeAt113() {
@@ -152,9 +153,11 @@ test('Cloudflare runner: the 113 step is byte-for-byte what main applied; 114 is
   // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so positions counted from the end of the ledger moved by one again. No assertion was weakened.
-  assert.equal(inline.hashes.at(-17)?.startsWith('114:'), true);
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so positions counted from the end of the ledger and the number of steps (100..131) moved by one again. No assertion was weakened.
+  assert.equal(inline.hashes.at(-18)?.startsWith('114:'), true);
   // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so positions counted from the end of the ledger moved by one again. No assertion was weakened.
-  assert.equal(r2.hashes.at(-17)?.startsWith('114:'), true);
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so positions counted from the end of the ledger and the number of steps (100..131) moved by one again. No assertion was weakened.
+  assert.equal(r2.hashes.at(-18)?.startsWith('114:'), true);
   assert.deepEqual(inline.ledger, ledgerVersions);
   assert.deepEqual(r2.ledger, ledgerVersions);
 });
