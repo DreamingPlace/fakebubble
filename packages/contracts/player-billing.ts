@@ -5,6 +5,15 @@ import { isPlayerModelId, type PlayerModelId } from './player-models.ts';
  * `points` of a reply is the NET spent (after a cheaper-backup or no-voice refund), positive; 0 and `free` for a reply
  * that is not charged (an invited player). The page shows it as a minus.
  */
+export const POINTS_EVENT_KINDS = [
+  'bonus',
+  'grant',
+  'daily_refill',
+  'reset',
+  'cocreation_note',
+  'cocreation_adopted',
+] as const;
+export type PointsEventKind = (typeof POINTS_EVENT_KINDS)[number];
 export type BillingItem =
   | {
       kind: 'reply';
@@ -23,7 +32,8 @@ export type BillingItem =
   | { kind: 'failed'; at: number; characterId: string; refunded: number; free: boolean }
   /** A free guest-trial reply (also shown to a signed-up player for the replies made before signing up): 0 points. */
   | { kind: 'trial'; at: number; characterId: string; model: PlayerModelId }
-  | { kind: 'bonus' | 'grant' | 'daily_refill' | 'reset'; at: number; points: number };
+  /** Part 24c: cocreation_note / cocreation_adopted are shown as 共创奖励. */
+  | { kind: PointsEventKind; at: number; points: number };
 
 export interface BillingPage {
   /** False for an invited player: nothing is charged, there is no balance. */
@@ -125,9 +135,9 @@ export function parseBillingPage(value: unknown): BillingPage | undefined {
     } else if (raw.kind === 'trial') {
       if (!text(raw.characterId) || !isPlayerModelId(raw.model)) return undefined;
       items.push({ kind: 'trial', at, characterId: raw.characterId, model: raw.model });
-    } else if (raw.kind === 'bonus' || raw.kind === 'grant' || raw.kind === 'daily_refill' || raw.kind === 'reset') {
+    } else if ((POINTS_EVENT_KINDS as readonly unknown[]).includes(raw.kind)) {
       if (!Number.isSafeInteger(raw.points)) return undefined;
-      items.push({ kind: raw.kind, at, points: raw.points as number });
+      items.push({ kind: raw.kind as PointsEventKind, at, points: raw.points as number });
     } else return undefined;
   }
   return {

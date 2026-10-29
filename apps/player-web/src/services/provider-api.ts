@@ -5,7 +5,11 @@ import {
   type PlayerPlan,
   type PlayerModelId,
 } from '../../../../packages/contracts/player-models.ts';
-import type { CocreationAnswer } from '../../../../packages/contracts/cocreation-cards.ts';
+import {
+  cocreationPointsOk,
+  type CocreationAnswer,
+  type CocreationPointsSettings,
+} from '../../../../packages/contracts/cocreation-cards.ts';
 import { parseBillingPage, type BillingPage } from '../../../../packages/contracts/player-billing.ts';
 import {
   parseWebProviderBootstrap,
@@ -217,7 +221,51 @@ export class ProviderApi implements WebProviderActions {
       typeof value.duplicate !== 'boolean'
     )
       throw new ProviderApiError(0, 'PROTOCOL_INVALID');
-    return { submissionId: value.submissionId, answered: value.answered as number, duplicate: value.duplicate };
+    return {
+      submissionId: value.submissionId,
+      answered: value.answered as number,
+      duplicate: value.duplicate,
+      ...(Number.isSafeInteger(value.earned) ? { earned: value.earned as number } : {}),
+    };
+  }
+  /** Part 24c: 给制作组的留言条. Never rewarded. Idempotent on requestId. */
+  async submitMemo(input: { requestId: string; text: string }) {
+    return this.noteResult(
+      await this.request('/cocreation/memo', {
+        method: 'POST',
+        body: JSON.stringify({ requestId: input.requestId, text: input.text }),
+      }),
+    );
+  }
+  /** Part 24c: the story between two characters. Idempotent on requestId. */
+  async submitPair(input: { requestId: string; characterId: string; partnerId: string; text: string }) {
+    return this.noteResult(
+      await this.request('/cocreation/pair', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: input.requestId,
+          characterId: input.characterId,
+          partnerId: input.partnerId,
+          text: input.text,
+        }),
+      }),
+    );
+  }
+  private noteResult(raw: unknown) {
+    const value = record(raw);
+    if (typeof value.submissionId !== 'string' || typeof value.duplicate !== 'boolean')
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return {
+      submissionId: value.submissionId,
+      duplicate: value.duplicate,
+      ...(Number.isSafeInteger(value.earned) ? { earned: value.earned as number } : {}),
+    };
+  }
+  /** Part 24c: the live numbers of points for notes (the 获得点数 sheet). */
+  async cocreationRewards(): Promise<CocreationPointsSettings> {
+    const value = record(await this.request('/cocreation/rewards', { method: 'POST', body: JSON.stringify({}) }));
+    if (!cocreationPointsOk(value)) throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return { notePoints: value.notePoints, dailyCap: value.dailyCap, adoptPoints: value.adoptPoints };
   }
   /** Which cards has this player already answered today for this character (one per card per UTC day)? */
   async cocreationToday(characterId: string): Promise<{ cardIds: string[] }> {

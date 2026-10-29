@@ -841,3 +841,23 @@ test('105 known-failed receipt retains old external-only behavior', (t) => {
   );
   assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
 });
+
+test('Part 24c: the seed flag freezes with the template - publishing the character as finished never changes a frozen reply', (t) => {
+  const f = fixture(t),
+    principal = f.guest('a');
+  f.store.run('UPDATE character_templates SET config_json=\'{"name":"synthetic","seed":true}\' WHERE id=\'character\'');
+  f.admit(principal, 'first');
+  f.store.migrateInputSnapshot();
+  const claim = f.queue.claimText(f.queue.acquireCoordinator('coordinator'), 'worker')!;
+  const frozen = f.queue.inputSnapshot(scope(claim));
+  assert.equal((JSON.parse(frozen.template_json) as { seed?: boolean }).seed, true);
+  // The administrators publish the character as a finished one (a new template): the frozen snapshot is what it was.
+  f.store.run('UPDATE character_templates SET config_json=\'{"name":"synthetic"}\' WHERE id=\'character\'');
+  const again = f.queue.inputSnapshot(scope(claim));
+  assert.equal((JSON.parse(again.template_json) as { seed?: boolean }).seed, true);
+  assert.deepEqual({ ...again }, { ...frozen });
+  assert.throws(
+    () => f.store.run("UPDATE web_input_snapshots SET template_json='{}' WHERE operation_id=?", claim.operationId),
+    /WEB_INPUT_SNAPSHOT_IMMUTABLE/,
+  );
+});

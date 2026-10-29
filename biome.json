@@ -13,6 +13,7 @@
       "!work",
       "!apps/server/generation/prompts.generated.ts",
       "!apps/server/generation/cast-prompts.generated.ts",
+      "!apps/server/generation/seed-prompts.generated.ts",
       "!tests/web/fixtures/prompt-snapshots"
     ]
   },

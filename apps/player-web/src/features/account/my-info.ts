@@ -41,6 +41,8 @@ export const infoCopy = {
   foreverLabel: '长期有效',
   expiresLabel: (date: string) => `到期 ${date}`,
   billing: '消费记录',
+  /** Part 24c: beside the points; opens the sheet that says how co-creation earns more. */
+  earn: '获得点数',
   enterCode: '输入邀请码',
   unlimited: '不限量',
   password: '修改密码',
@@ -193,6 +195,8 @@ export interface MyInfoOptions {
     deleteAccount(): void;
     clearDevice(): void;
     billing?: () => void;
+    /** Part 24c: 获得点数 beside the points (a player on points only). */
+    earn?: () => void;
     enterCode?: () => void;
     signup(): void;
     login(): void;
@@ -390,6 +394,7 @@ export function openMyInfo(options: MyInfoOptions) {
             h('span', { class: 'mi-big', text: quota.big }),
             quota.unit ? h('span', { class: 'mi-unit', text: quota.unit }) : null,
             quota.daily === null ? null : h('span', { class: 'mi-daily', text: infoCopy.perDay(quota.daily) }),
+            options.actions.earn ? button(infoCopy.earn, 'mi-small mi-earn', options.actions.earn) : null,
           ),
       extra.guest && options.trialLine ? h('span', { class: 'sr-only', text: options.trialLine }) : null,
       meter,

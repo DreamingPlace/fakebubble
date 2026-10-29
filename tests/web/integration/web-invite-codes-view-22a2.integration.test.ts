@@ -70,10 +70,11 @@ test('127 is its own step, the same SQL on both authorities, adds two nullable c
   // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and expected versions moved by one again. No assertion was weakened.
   // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-  assert.equal(inline.length, 55);
-  assert.equal(inline.at(-4)!.version, 127);
-  assert.equal(inline.at(-4)!.sha256, createHash('sha256').update(sql127()).digest('hex'));
-  assert.deepEqual(r2.at(-4), inline.at(-4));
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.length, 56);
+  assert.equal(inline.at(-5)!.version, 127);
+  assert.equal(inline.at(-5)!.sha256, createHash('sha256').update(sql127()).digest('hex'));
+  assert.deepEqual(r2.at(-5), inline.at(-5));
   // 1-126 are byte for byte what they were (126 is the hash the 22x deployment recorded).
   assert.equal(
     inline.find((m) => m.version === 126)!.sha256,

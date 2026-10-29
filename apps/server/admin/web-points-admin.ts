@@ -294,3 +294,57 @@ export function highestMicrosPerPoint(store: Store, now: number): number | null 
     .map((model) => model.microsPerPoint!);
   return costs.length ? Math.max(...costs) : null;
 }
+
+/**
+ * Part 24c: may this player be paid points for a co-creation note? EXACTLY the population 积分发放 grants to: the points feature is on,
+ * the player's tier is registered or daily_refill (classify), and hasPoints agrees. Guests and unlimited players/accounts never.
+ */
+export function cocreationReceiver(
+  store: Pick<BusinessStore, 'get' | 'all' | 'run'>,
+  now: number,
+  principalId: string,
+) {
+  const s = store as Store;
+  try {
+    requirePoints(s);
+  } catch {
+    return false;
+  }
+  const found = classify(s, now, principalId)[0];
+  return !!found && (found.tier === 'registered' || found.tier === 'daily_refill') && hasPoints(s, found.id, now);
+}
+
+/**
+ * One co-creation reward (source cocreation_note / cocreation_adopted) with ONE event, clamped by 22a's cap for daily_refill players
+ * exactly like a grant (grantRoom). `ref` is the idempotency key: a second call with the same source and ref adds nothing. Returns
+ * the points actually added (0 for a player who may not receive, who is at the cap, or a replay). The caller owns the transaction.
+ */
+export function awardCocreationPoints(
+  store: Pick<BusinessStore, 'get' | 'all' | 'run'>,
+  now: number,
+  principalId: string,
+  source: 'cocreation_note' | 'cocreation_adopted',
+  points: number,
+  ref: string,
+  adminId: string | null,
+) {
+  if (points <= 0 || !cocreationReceiver(store, now, principalId)) return 0;
+  const s = store as Store;
+  if (s.get('SELECT 1 FROM web_points_events WHERE source=? AND ref=?', source, ref)) return 0;
+  const balance = openAccount(s, now, principalId);
+  const added = Math.min(points, grantRoom(s, principalId, now, balance));
+  if (added <= 0) return 0;
+  s.run(
+    `INSERT INTO web_points_events(principal_id,operation_id,source,reason,delta,admin_id,price_version,created_at,ref)
+    VALUES (?,NULL,?,NULL,?,?,?,?,?)`,
+    principalId,
+    source,
+    added,
+    adminId,
+    currentPrices(s).version,
+    now,
+    ref,
+  );
+  s.run('UPDATE web_points_balance SET balance=balance+?,updated_at=? WHERE principal_id=?', added, now, principalId);
+  return added;
+}

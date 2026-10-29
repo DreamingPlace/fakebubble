@@ -144,7 +144,7 @@ export class WebAdmission {
         trial ||
           ([
             108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128,
-            129, 130,
+            129, 130, 131,
           ].includes(webSchema) &&
             principal.kind === 'account' &&
             this.store.get(`SELECT 1 FROM web_accounts WHERE principal_id=? AND active=1`, principal.id)),
@@ -409,7 +409,7 @@ export class WebAdmission {
         now,
         now + WEB_LIMITS.operationDeadlineMs,
       ];
-      if (webSchema >= 102 && webSchema <= 130) {
+      if (webSchema >= 102 && webSchema <= 131) {
         const sequence = this.store.get<{ last_seq: number }>(`UPDATE web_admission_counter
           SET last_seq=last_seq+1 WHERE singleton=1 RETURNING last_seq`)?.last_seq;
         ensure(sequence !== undefined, 'WEB_ADMISSION_ORDER_MISSING');
@@ -553,7 +553,7 @@ export class WebAdmission {
       ensure(
         ![
           104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
-          126, 127, 128, 129, 130,
+          126, 127, 128, 129, 130, 131,
         ].includes(this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1),
         'WEB_DISPATCH_FENCE_REQUIRED',
       );

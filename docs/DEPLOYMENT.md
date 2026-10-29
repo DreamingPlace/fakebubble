@@ -463,6 +463,18 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 
 **隐私。** 没有 id、邮箱、昵称、IP 哈希、消息内容进入任何新表、日志或响应；标记是 HMAC 且会被清除；`web_operation_user_types` 与 `web_operation_models` 一样只有操作 id 和枚举，清除玩家时留下的操作壳不含主体信息（生命周期审计把它与 `web_operation_models` 并列）。
 
+### 共创奖励与成长中角色（Part 24c，迁移 131）
+
+**迁移 131（`131_cocreation_points.sql`，sha256 `a6f581dd6b9bf482d72c035dd6d693b5a4330aae195123aef16106e0e370990a`）：** 共 **56 步**（`expected-migrations`，inline 与 R2 各 56，最后一步 `version 131`，两边同一份 SQL；1–130 一个字节没动，130 仍是 `8ec416d7…5621`）。本地：`scripts/web-provider.ts migrate-cocreation-points <root>`（`migrate` 已含）。`web_cocreation_submissions` 加 `kind`（`character` / `memo` / `pair`，已有行都是 `character`）和 `partner_id`（只有 `pair` 有；触发器检查：memo 的角色是占位符 `_memo`，pair 的两个角色不同）。`web_cocreation_answers` 加 `note_hash`（规范化文字在角色或角色对范围内的 sha256，静默查重用）、`paid_points`、`adopt_paid`。新表 `web_cocreation_points`（一行：每条点数、每天最多几条、被采用点数、修订号）。`web_points_events` 因为要新增两个 `source`（`cocreation_note`、`cocreation_adopted`）和幂等键 `ref`（`<投稿id>:<序号>`，每个 source 内唯一）而重建（CHECK 不能 ALTER）：id、行、索引和两个触发器（只增不改、22c 统计）原样带过去，`sqlite_sequence` 不回退。
+
+**成长中角色。** `template.seed === true`（没勾选时这个键不存在，所以现有角色的资料哈希、预演和提示词一个字节都没变）随资料版本发布，在 角色工作台 → 性格 里勾选；冻结在输入快照的 `template_json` 里，所以进行中的回复不会因为之后改成“已完成角色”而变。只有勾选时才在草稿系统提示词末尾追加 `prompts/v7/seed-character.md`，审稿多一行 `prompts/v7/seed-review.md`；两个文件在 `PROMPTS_SEED` 里，不在 `PROMPTS_V7`，所以聊天提示词哈希不变，各自的 sha256 在 `web-seed-character` 里钉死。种子提示词：没写明的事（家人、过去、喜好……）不当事实编造，可以说得轻、说得模糊或问玩家怎么想，绝不违背已写明的设定，也不说“共创”。
+
+**共创奖励。** 一条“笔记”= 一个答案（卡片、关系与故事）。`+5`/条，每个玩家每个 UTC 日最多 15 条**有点数**（超过的照常收下，只是不加点），被采用时**第一次**`+20`，不限次数；给制作组的留言条永不加点。有点数的人群与 积分发放 完全相同：`classify` 的 registered / daily_refill 档（访客、不限量、账号一律跳过）+ `hasPoints`；每日补充的玩家同样按 22a 的上限截断（`grantRoom`），已到上限的笔记不加点。空白或与同一玩家此前对**同一角色（或同一角色对，顺序无关）**写过的文字重复的笔记不加点，且不出任何提示。奖励在提交或采用的同一个事务里由业务对象写入，`ref` 保证重放不重复；采用的事件带管理员 id。取消采用不收回已发的点数，再次采用也不再发。事件在 消费记录 里显示为“共创奖励”，并计入 22c 的 `points_cocreation_note` / `points_cocreation_adopted`。
+
+**三个数字。** 每条 `5`（0–100）、每天最多 `15`（0–100）、被采用 `20`（0–1000），在 玩家 → 积分发放 页（无样式的最小表单）由主管理员或 `points.grant` 修改；修订号比较并交换，审计记录只写这三个数字。玩家的“获得点数”小页读 `POST cocreation/rewards`，所以永远显示当前数字。
+
+**新接口。** 玩家：`POST /api/web/provider/cocreation/memo { requestId, text }`、`/cocreation/pair { requestId, characterId, partnerId, text }`（文字最多 200 字，等于关系与故事摘要的上限）、`/cocreation/rewards {}`；会话 + CSRF + Origin，按 IP 每天 30 次（与卡片分开计）。`submit` 的回复在有奖励时多一个 `earned`。管理员：`admin/cocreation/cast-story { id, ordinal, expectedRevision }`（`cocreation.manage` + `cast.edit`；在世界设定**草稿**里加一个故事，参与者是这一对角色，摘要是笔记；修订号过期则整个拒绝，什么都不写；不发布）、`admin/cocreation/unadopt`、`admin/points/cocreation`、`admin/points/cocreation-save`。
+
 ### 登录会话 Cookie
 
 - 有邮箱登录的玩家（以及注册当下的会话）使用 `Max-Age=34560000`（400 天，浏览器上限）的会话 Cookie，每次成功 bootstrap 重新下发；访客仍是 24 小时（开启免费档后为试用期 + 宽限期）。`__Host-`、`Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/` 不变。

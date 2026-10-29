@@ -36,6 +36,9 @@ export const billingCopy = {
   grant: '管理员发放',
   daily_refill: '每日补充',
   reset: '余额调整',
+  /** Part 24c: a reward for a co-creation note, and for one that was adopted. */
+  cocreation: '共创奖励',
+  cocreationAdopted: '被采用',
   voice: (on: boolean) => (on ? '语音' : '无语音'),
   backup: (chosen: string) => `（${chosen} 繁忙，已改用）`,
   unknownCharacter: '角色',
@@ -91,6 +94,13 @@ export function billingRow(item: BillingItem, name: (characterId: string) => str
       return {
         title: `${when} · ${billingCopy.bonus}`,
         sub: billingCopy.bonusSub,
+        points: billingCopy.points(item.points),
+      };
+    case 'cocreation_note':
+    case 'cocreation_adopted':
+      return {
+        title: `${when} · ${billingCopy.cocreation}`,
+        sub: item.kind === 'cocreation_adopted' ? billingCopy.cocreationAdopted : '',
         points: billingCopy.points(item.points),
       };
     default:
