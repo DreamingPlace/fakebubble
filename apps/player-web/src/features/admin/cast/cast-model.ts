@@ -198,3 +198,34 @@ export function removePerson(doc: CastDoc, id: string) {
   for (const character of doc.characters)
     if (character.identity.prototype?.personId === id) character.identity.prototype = null;
 }
+
+/**
+ * How many things differ between the saved draft and the working copy, counted the way the title row says it ("n 处未保存"): one
+ * for each rating cell, direction, story, group, person, character card and the world text that was added, removed or changed.
+ */
+export function changeCount(base: CastDoc, doc: CastDoc): number {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  let n = 0;
+  const ratingKeys = new Set<string>();
+  for (const [from, row] of Object.entries(base.ratings)) for (const to of Object.keys(row)) ratingKeys.add(`${from}\n${to}`);
+  for (const [from, row] of Object.entries(doc.ratings)) for (const to of Object.keys(row)) ratingKeys.add(`${from}\n${to}`);
+  for (const key of ratingKeys) {
+    const [from, to] = key.split('\n') as [string, string];
+    if (ratingOf(base, from, to) !== ratingOf(doc, from, to)) n++;
+  }
+  const byKey = <T>(list: readonly T[], key: (item: T, index: number) => string) => new Map(list.map((item, i) => [key(item, i), item]));
+  const compare = <T>(before: readonly T[], after: readonly T[], key: (item: T, index: number) => string) => {
+    const a = byKey(before, key);
+    const b = byKey(after, key);
+    for (const [k, item] of b) if (!a.has(k) || !same(a.get(k), item)) n++;
+    for (const k of a.keys()) if (!b.has(k)) n++;
+  };
+  compare(base.directions, doc.directions, (d) => `${d.from}\n${d.to}`);
+  compare(base.stories, doc.stories, (s, i) => s.id || `#${i}`);
+  compare(base.groups, doc.groups, (g, i) => g.id || `#${i}`);
+  compare(base.people, doc.people, (p) => p.id);
+  compare(base.characters, doc.characters, (c) => c.characterId);
+  compare(base.memes, doc.memes, (m, i) => (m as { id?: string }).id || `#${i}`);
+  if (base.world.background !== doc.world.background) n++;
+  return n;
+}

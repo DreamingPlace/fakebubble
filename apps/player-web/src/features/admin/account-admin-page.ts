@@ -678,6 +678,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
                 (!!session && hasCastPermission(session.member.permissions, 'cast.edit')),
             }
           : {}),
+        ...(port.cocreationPoints
+          ? { adoptPoints: () => port.cocreationPoints!().then((points) => points.adoptPoints) }
+          : {}),
         run,
         status: (text) => {
           if (!disposed) status.textContent = text;
@@ -699,7 +702,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     status: (text) => {
       if (!disposed) status.textContent = text;
     },
-    confirm: (options) => confirmDialog(q('main'), options),
+    confirm: (options, host) => inlineConfirm(host, options),
     toast: (text, tone) => toasts.show(text, tone ?? 'info'),
     disposed: () => disposed,
     download: browserDownload,

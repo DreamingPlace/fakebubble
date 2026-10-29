@@ -31,7 +31,9 @@ export type OpenTableOptions<T> = {
   /** A checkbox column (compare, bulk). Its changes are reported with the chosen keys. */
   tick?: { label: string; max?: number; onChange: (keys: string[]) => void };
   rowClass?: (row: T) => string;
-  /** The row that opens by itself after the rows are set (e.g. the only one). */
+  /** The pointer (or keyboard focus) enters a row / leaves it again: the group under the pointer lights its members elsewhere. */
+  hover?: (row: T | null) => void;
+  /** Reports the open row's key (or null when closed). */
   onToggle?: (key: string | null) => void;
 };
 
@@ -157,6 +159,12 @@ export function openTable<T>(options: OpenTableOptions<T>) {
       }
       const inner = h('div', { class: 'ot-inner' });
       const panel = h('div', { class: 'ot-panel', attrs: { 'data-state': 'closed' } }, inner);
+      if (options.hover) {
+        line.addEventListener('mouseenter', () => options.hover!(row));
+        line.addEventListener('mouseleave', () => options.hover!(null));
+        line.addEventListener('focus', () => options.hover!(row));
+        line.addEventListener('blur', () => options.hover!(null));
+      }
       if (hasDetail) {
         const go = (event: Event) => {
           const target = event.target as HTMLElement | null;

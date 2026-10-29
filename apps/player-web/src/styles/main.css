@@ -6018,396 +6018,75 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   border: 1px solid #e8c6bb;
   border-radius: 999px;
 } /* ---- 关系与故事 ---- */
-.account-admin-page.admin-shell .cs {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.account-admin-page.admin-shell .cs .page-head {
-  margin-bottom: 0;
-}
-.account-admin-page.admin-shell .cs-mono {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 12px;
-  color: var(--ad-muted);
-}
-.account-admin-page.admin-shell .cs-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 8px 8px 20px;
-  border-radius: 999px;
-  background: #fff;
-}
-.account-admin-page.admin-shell .cs-bar-title {
-  margin: 0 !important;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px !important;
-}
-.account-admin-page.admin-shell .cs-spacer {
-  flex: 1 1 0;
-}
-.account-admin-page.admin-shell .cs-chip-static {
-  display: inline-flex;
-  align-items: center;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #f7f4f0;
-  font-size: 12px;
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .cs-chip-static.is-ok {
-  background: var(--ad-ok-soft);
-  color: var(--ad-ok);
-}
-.account-admin-page.admin-shell .cs-chip-static.is-warn {
-  background: var(--ad-warn-soft);
-  color: var(--ad-warn);
-}
-.account-admin-page.admin-shell .cs-chip-static.is-bad {
-  background: #fde7e1;
-  color: var(--ad-danger);
-}
-.account-admin-page.admin-shell .cs button.cs-primary,
-.account-admin-page.admin-shell .cs button.cs-quiet,
-.account-admin-page.admin-shell .cs button.cs-add,
-.account-admin-page.admin-shell .cs button.cs-danger,
-.account-admin-page.admin-shell .cs button.cs-mini {
-  border: 0;
-  border-radius: 999px;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    background calc(240ms * var(--ad-motion)) ease,
-    transform calc(160ms * var(--ad-motion)) var(--ad-ease),
-    opacity calc(160ms * var(--ad-motion)) ease;
-}
-.account-admin-page.admin-shell .cs button.cs-primary {
-  height: 40px;
-  padding: 0 18px;
-  background: var(--ad-primary);
-  color: #fff;
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .cs button.cs-primary:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-.account-admin-page.admin-shell .cs button.cs-quiet {
-  height: 36px;
-  padding: 0 14px;
-  background: #f3f0ec;
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .cs button.cs-add {
-  height: 30px;
-  padding: 0 12px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px var(--ad-border);
-  color: var(--ad-text);
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .cs button.cs-danger {
-  height: 30px;
-  padding: 0 12px;
-  background: #fff;
-  color: var(--ad-danger);
-  box-shadow: inset 0 0 0 1px #e8c6bb;
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .cs button.cs-mini {
-  height: 28px;
-  padding: 0 10px;
-  background: #fff;
-  box-shadow: inset 0 0 0 1px var(--ad-border);
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .cs button.cs-mini[aria-pressed="true"] {
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-}
-.account-admin-page.admin-shell .cs button:active:not(:disabled) {
-  transform: scale(0.97);
-}
-.account-admin-page.admin-shell .cs-notices {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cs-notices:empty {
-  display: none;
-}
-.account-admin-page.admin-shell .cs-notice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border-radius: 20px;
-  font-size: 13px;
-  animation: adIn calc(280ms * var(--ad-motion)) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell .cs-notice.is-bad {
-  background: #fde7e1;
-  color: var(--ad-danger);
-}
-.account-admin-page.admin-shell .cs-notice.is-warn {
-  background: var(--ad-warn-soft);
-  color: var(--ad-warn);
-}
-.account-admin-page.admin-shell .cs-notice ul {
-  margin: 0;
-  padding-left: 18px;
-}
-.account-admin-page.admin-shell .cs-versions:empty {
-  display: none;
-}
-.account-admin-page.admin-shell .cs-version-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.account-admin-page.admin-shell .cs-version {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 6px 0 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .cs-card {
-  min-width: 0;
-  padding: 16px 18px;
-  border-radius: 24px;
-  background: #fff;
-}
-.account-admin-page.admin-shell .cs-card h2 {
-  margin: 0 !important;
-  font-size: 15px !important;
-}
-.account-admin-page.admin-shell .cs-card h3 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 900;
-}
-.account-admin-page.admin-shell .cs-card-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.account-admin-page.admin-shell .cs-hint {
-  margin: 0;
-  color: var(--ad-muted);
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .cs-main {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-.account-admin-page.admin-shell .cs-grid-card {
-  overflow-x: auto;
-}
-.account-admin-page.admin-shell .cs-grid {
-  display: grid;
-  grid-template-columns: 28px repeat(var(--n, 15), 28px);
-  gap: 2px;
-}
-.account-admin-page.admin-shell .cs-dot {
-  display: inline-grid;
-  place-items: center;
-  width: var(--size, 26px);
-  height: var(--size, 26px);
-  flex: none;
-  border-radius: 50%;
-  background: linear-gradient(140deg, var(--dot), #fff);
-  font-size: calc(var(--size, 26px) * 0.4);
-  font-weight: 900;
-  color: var(--ad-text);
-}
-.account-admin-page.admin-shell .cs-head {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  transition: box-shadow calc(160ms * var(--ad-motion)) ease;
-}
-.account-admin-page.admin-shell .cs-head .cs-dot {
-  --size: 24px;
-}
-.account-admin-page.admin-shell button.cs-head {
-  cursor: pointer;
-}
-.account-admin-page.admin-shell .cs-head.is-lit {
-  box-shadow: 0 0 0 2px var(--ad-primary);
-}
-.account-admin-page.admin-shell .cs-head-row.is-open {
-  box-shadow: 0 0 0 2px #e8561e;
-}
-.account-admin-page.admin-shell .cs-cell {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 7px;
-  background: var(--heat, #f7f4f0);
-  transition:
-    background calc(200ms * var(--ad-motion)) ease,
-    box-shadow calc(140ms * var(--ad-motion)) ease,
-    opacity calc(140ms * var(--ad-motion)) ease,
-    transform calc(140ms * var(--ad-motion)) var(--ad-ease);
-  cursor: pointer;
-}
-.account-admin-page.admin-shell .cs-cell.is-self {
-  background: #e9e4de;
-  cursor: default;
-} /* Never set is a dashed empty cell; 0 stars is a filled, lightest one. The two are never the same picture. */
-.account-admin-page.admin-shell .cs-cell.is-unset {
-  background: #fff;
-  box-shadow: inset 0 0 0 1px #d9d2c9;
-  background-image: repeating-linear-gradient(135deg, transparent 0 4px, #ece6df 4px 5px);
-}
-.account-admin-page.admin-shell .cs-cell.is-dim {
-  opacity: 0.5;
-}
-.account-admin-page.admin-shell .cs-cell.is-lit {
-  opacity: 1;
-  box-shadow: inset 0 0 0 1px rgba(20, 20, 20, 0.28);
-}
-.account-admin-page.admin-shell .cs-cell:hover:not(.is-self),
-.account-admin-page.admin-shell .cs-cell:focus-visible {
-  transform: scale(1.12);
-  outline: 0;
-}
-.account-admin-page.admin-shell .cs-cell[aria-pressed="true"] {
-  box-shadow: 0 0 0 2px var(--ad-primary);
-  opacity: 1;
-  transform: scale(1.08);
-}
-.account-admin-page.admin-shell .cs-legend {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .cs-legend-bar {
-  width: 100px;
-  height: 10px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #f7f4f0, #fbd7e6, #f398be, #e15492, #c92370);
-}
-.account-admin-page.admin-shell .cs-legend-unset {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  box-shadow: inset 0 0 0 1px #d9d2c9;
-  background-image: repeating-linear-gradient(135deg, transparent 0 3px, #ece6df 3px 4px);
-}
-.account-admin-page.admin-shell .cs-side-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  animation: adIn calc(320ms * var(--ad-motion)) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell .cs-side-pair,
-.account-admin-page.admin-shell .cs-side-group {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.account-admin-page.admin-shell .cs-pair-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cs-pair-title .cs-dot {
-  box-shadow: 0 0 0 2px #fff;
-}
-.account-admin-page.admin-shell .cs-overlap {
-  margin-left: -20px;
-}
-.account-admin-page.admin-shell .cs-dir {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-}
-.account-admin-page.admin-shell .cs-dir-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 112px;
-}
-.account-admin-page.admin-shell .cs-arrow {
-  font-style: normal;
-  font-weight: 900;
-}
-.account-admin-page.admin-shell .cs-stars {
-  display: flex;
-  gap: 2px;
-}
-.account-admin-page.admin-shell .cs-star {
-  position: relative;
-  width: 32px;
-  height: 32px;
-}
-.account-admin-page.admin-shell .cs-star-glyph {
-  display: block;
-  width: 32px;
-  height: 32px;
-  font-size: 30px;
-  line-height: 32px;
-  text-align: center;
-  background: linear-gradient(90deg, #f2b01e var(--fill, 0%), #e9e4de var(--fill, 0%));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  transition: transform calc(160ms * var(--ad-motion)) var(--ad-ease);
-}
-.account-admin-page.admin-shell .cs-star:hover .cs-star-glyph {
-  transform: scale(1.12);
-}
-.account-admin-page.admin-shell .cs-star.is-pop .cs-star-glyph {
-  animation: csPop calc(320ms * var(--ad-motion)) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell .cs-star-hit {
-  position: absolute;
-  top: 0;
-  width: 16px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-}
-.account-admin-page.admin-shell .cs-star-hit.is-half {
-  left: 0;
-}
-.account-admin-page.admin-shell .cs-star-hit.is-whole {
-  right: 0;
-}
-.account-admin-page.admin-shell .cs-star-hit:focus-visible {
-  outline: 2px solid var(--ad-primary);
-  border-radius: 6px;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ /* Never set is a dashed empty cell; 0 stars is a filled, lightest one. The two are never the same picture. */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 @keyframes csPop {
   0% {
     transform: scale(0.6);
@@ -6419,243 +6098,42 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
     transform: scale(1);
   }
 }
-.account-admin-page.admin-shell .cs-rating {
-  min-width: 52px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 16px;
-  font-weight: 500;
-} /* 未设置 is written out, in italics and a dashed pill: it must never read as a 0. */
-.account-admin-page.admin-shell .cs-rating.is-unset {
-  padding: 2px 8px;
-  border: 1px dashed #bdb5ac;
-  border-radius: 999px;
-  color: var(--ad-muted);
-  font-family: inherit;
-  font-size: 12px;
-  font-style: italic;
-}
-.account-admin-page.admin-shell .cs-pair-texts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.account-admin-page.admin-shell .cs-pair-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cs-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-tag {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: #f3f0ec;
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .cs-tag.is-warn {
-  background: var(--ad-warn-soft);
-  color: var(--ad-warn);
-}
-.account-admin-page.admin-shell .cs-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  font-size: 12px;
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .cs-field input,
-.account-admin-page.admin-shell .cs-field textarea,
-.account-admin-page.admin-shell .cs-field select,
-.account-admin-page.admin-shell .cs-list-row input,
-.account-admin-page.admin-shell .cs-list-row select {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--ad-border);
-  border-radius: 14px;
-  background: #fff;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.5;
-}
-.account-admin-page.admin-shell .cs-field textarea {
-  resize: vertical;
-}
-.account-admin-page.admin-shell .cs-field input[readonly],
-.account-admin-page.admin-shell .cs-field textarea[readonly] {
-  background: var(--ad-bg);
-}
-.account-admin-page.admin-shell .cs-label {
-  font-size: 12px;
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .cs-groups {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
-}
-.account-admin-page.admin-shell .cs-group-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 0;
-  border-radius: 20px;
-  background: #f7f4f0;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  transition:
-    background calc(220ms * var(--ad-motion)) ease,
-    box-shadow calc(220ms * var(--ad-motion)) ease,
-    transform calc(220ms * var(--ad-motion)) var(--ad-ease);
-}
-.account-admin-page.admin-shell .cs-group-card[aria-pressed="true"] {
-  background: var(--tint);
-  box-shadow: 0 0 0 2px var(--edge);
-  transform: translateY(-2px);
-}
-.account-admin-page.admin-shell .cs-group-name {
-  font-size: 14px;
-  font-weight: 900;
-}
-.account-admin-page.admin-shell .cs-stack {
-  display: flex;
-}
-.account-admin-page.admin-shell .cs-stack .cs-dot {
-  margin-right: -6px;
-  box-shadow: 0 0 0 2px #fff;
-}
-.account-admin-page.admin-shell .cs-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px 0 4px;
-  border: 0;
-  border-radius: 999px;
-  background: #f7f4f0;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition:
-    background calc(180ms * var(--ad-motion)) ease,
-    color calc(180ms * var(--ad-motion)) ease;
-}
-.account-admin-page.admin-shell .cs-chip[aria-pressed="true"] {
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-}
-.account-admin-page.admin-shell .cs-chip:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.account-admin-page.admin-shell .cs-gstories {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cs-gstory {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 18px;
-  background: #f7f4f0;
-  animation: adIn calc(260ms * var(--ad-motion)) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell .cs-gstory-head {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cs-gstory-head .cs-field {
-  flex: 1;
-}
-.account-admin-page.admin-shell .cs-lived {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-  font-size: 11px;
-  line-height: 24px;
-}
-.account-admin-page.admin-shell .cs-period {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cs-stories {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
-}
-.account-admin-page.admin-shell .cs-story-list {
-  display: flex;
-  flex-direction: column;
-}
-.account-admin-page.admin-shell .cs-story-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 48px;
-  border-top: 1px solid var(--ad-line);
-  animation: adIn calc(280ms * var(--ad-motion)) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell .cs-story-row[aria-current="true"] .cs-story-title {
-  font-weight: 900;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-.account-admin-page.admin-shell .cs-story-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.account-admin-page.admin-shell .cs-levels {
-  display: flex;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-level,
-.account-admin-page.admin-shell .cs-know {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 28px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 999px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .cs-level {
-  height: 24px;
-  padding: 0 10px;
-}
+ /* 未设置 is written out, in italics and a dashed pill: it must never read as a 0. */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 .account-admin-page.admin-shell .is-lived {
   background: var(--ad-tint);
   color: var(--ad-tint-ink);
@@ -6668,128 +6146,27 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   background: #f3f0ec;
   color: var(--ad-muted);
 }
-.account-admin-page.admin-shell .cs-know {
-  min-width: 72px;
-  cursor: pointer;
-  transition:
-    background calc(200ms * var(--ad-motion)) ease,
-    color calc(200ms * var(--ad-motion)) ease,
-    box-shadow calc(200ms * var(--ad-motion)) ease;
-} /* A setting somebody made by hand is outlined in orange; the computed default has no outline. */
-.account-admin-page.admin-shell .cs-know.is-override {
-  box-shadow: 0 0 0 2px #e8561e;
-}
-.account-admin-page.admin-shell .cs-know-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.account-admin-page.admin-shell .cs-clear {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: #f3f0ec;
-  font-size: 11px;
-  line-height: 22px;
-  cursor: pointer;
-}
-.account-admin-page.admin-shell .cs-story-edit,
-.account-admin-page.admin-shell .cs-list,
-.account-admin-page.admin-shell .cs-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cs-know-matrix {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-know-matrix .cs-know {
-  justify-content: flex-start;
-}
-.account-admin-page.admin-shell .cs-people {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-.account-admin-page.admin-shell .cs-character {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.account-admin-page.admin-shell .cs-section {
-  padding-top: 10px;
-  border-top: 1px solid var(--ad-line);
-}
-.account-admin-page.admin-shell .cs-list-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-list-row select {
-  width: 110px;
-  flex: none;
-}
-.account-admin-page.admin-shell .cs-exp {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
-  border-radius: 16px;
-  background: #f7f4f0;
-}
-.account-admin-page.admin-shell .cs-unmapped {
-  margin: 0;
-  max-height: 140px;
-  overflow: auto;
-  white-space: pre-wrap;
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .cs-sees {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 80vh;
-  overflow-y: auto;
-  position: sticky;
-  top: 16px;
-}
-.account-admin-page.admin-shell .cs-sees-block {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--ad-line);
-}
-.account-admin-page.admin-shell .cs-sees-block p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
-}
-.account-admin-page.admin-shell .cs-sees-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cs-know-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-know-line .cs-level.is-override {
-  box-shadow: 0 0 0 2px #e8561e;
-}
-@container adc (max-width: 1100px) {
-  .account-admin-page.admin-shell .cs-main,
-  .account-admin-page.admin-shell .cs-stories,
-  .account-admin-page.admin-shell .cs-people {
-    grid-template-columns: minmax(0, 1fr);
-  }
-} /* ---- 共创收件箱: filters are chips, the detail sits to the right of the list ---- */
+ /* A setting somebody made by hand is outlined in orange; the computed default has no outline. */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ /* ---- 共创收件箱: filters are chips, the detail sits to the right of the list ---- */
 .account-admin-page.admin-shell #admin-cocreation {
   display: flex;
   flex-direction: column;
@@ -6920,61 +6297,21 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
     grid-template-columns: minmax(0, 1fr);
   }
 } /* The console's generic button (padding, minimum size) must not reach the grid cells and the half-star hit areas. */
-.account-admin-page.admin-shell .cs button {
-  min-width: 0;
-  min-height: 0;
-  box-sizing: border-box;
-}
-.account-admin-page.admin-shell
-  .cs
-  :is(
-    .cs-star-hit,
-    .account-admin-page.admin-shell .cs-cell,
-    .account-admin-page.admin-shell .cs-head,
-    .account-admin-page.admin-shell .cs-clear
-  ) {
-  padding: 0;
-}
-.account-admin-page.admin-shell .cs .cs-star-hit {
-  width: 16px;
-  height: 32px;
-  background: transparent;
-  border: 0;
-}
-.account-admin-page.admin-shell .cs .cs-clear {
-  width: 22px;
-  height: 22px;
-  background: #f3f0ec;
-  color: var(--ad-text);
-  font-size: 11px;
-  line-height: 1;
-}
-.account-admin-page.admin-shell .cs .cs-clear:hover {
-  background: var(--ad-border);
-}
+
+
+
+
+
 .account-admin-page.admin-shell .cs-group-card,
 .account-admin-page.admin-shell .cs-story-title,
 .account-admin-page.admin-shell .cs-chip:not([aria-pressed="true"]),
 .account-admin-page.admin-shell .cc-filter-chip:not([aria-pressed="true"]) {
   color: var(--ad-text);
 }
-.account-admin-page.admin-shell .cs-story-title {
-  background: transparent;
-  padding: 0;
-  text-align: left;
-}
-.account-admin-page.admin-shell .cs-group-card {
-  border-radius: 20px;
-  padding: 12px 14px;
-}
-.account-admin-page.admin-shell .cs-head {
-  background: transparent;
-}
-.account-admin-page.admin-shell .cs-story-title {
-  display: block;
-  justify-content: flex-start;
-  text-align: left;
-}
+
+
+
+
 .account-admin-page.admin-shell .cc-row-open {
   background: transparent;
   color: var(--ad-text);
@@ -7400,25 +6737,9 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   color: var(--ad-tint-ink);
   font-weight: 700;
 }
-.account-admin-page.admin-shell .cs button.cs-quiet,
-.account-admin-page.admin-shell .cs button.cs-add,
-.account-admin-page.admin-shell .cs button.cs-danger,
-.account-admin-page.admin-shell .cs button.cs-mini {
-  height: 30px;
-  border: 1px solid var(--ad-border);
-  background: #fff;
-  box-shadow: none;
-  color: var(--ad-text);
-}
-.account-admin-page.admin-shell .cs button.cs-danger {
-  border-color: #e3b5ab;
-  color: var(--ad-danger);
-}
-.account-admin-page.admin-shell .cs button.cs-mini[aria-pressed="true"] {
-  border-color: transparent;
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-}
+
+
+
 
 /* ---- 角色工作台: a row of role pills, then the editor (one section at a time) and 预演 ---- */
 .account-admin-page.admin-shell .wb-roster,
@@ -7914,183 +7235,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   white-space: nowrap;
 }
 
-/* ---- 共创收件箱: a list that scrolls in its card (one fixed grid per row) and a detail that stays ---- */
-.account-admin-page.admin-shell #admin-cocreation {
-  gap: var(--ad-gap);
-}
-.account-admin-page.admin-shell .cc-layout {
-  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
-  gap: var(--ad-gap);
-}
-.account-admin-page.admin-shell .cc-list-column,
-.account-admin-page.admin-shell .cc-detail {
-  position: sticky;
-  top: 24px;
-  max-height: calc(100dvh - 48px);
-}
-.account-admin-page.admin-shell .cc-list-column {
-  min-height: 320px;
-  overflow: hidden;
-}
-.account-admin-page.admin-shell .cc-list-column .cc-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  margin: 0;
-  padding: 0 2px 0 0;
-  overflow-y: auto;
-  list-style: none;
-}
-.account-admin-page.admin-shell .cc-row {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 14px;
-  background: transparent;
-}
-.account-admin-page.admin-shell .cc-row:hover {
-  background: #faf9f7;
-}
-.account-admin-page.admin-shell .cc-row.is-active {
-  background: var(--ad-tint);
-  box-shadow: none;
-}
-.account-admin-page.admin-shell .cc-row input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-}
-.account-admin-page.admin-shell .cc-row-open {
-  display: grid;
-  grid-template-columns: 112px minmax(0, 1fr) 152px 68px;
-  grid-template-areas: "who text when state";
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  height: auto;
-  min-height: 48px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--ad-text);
-  font: inherit;
-  font-weight: 400;
-  text-align: left;
-  white-space: normal;
-}
-.account-admin-page.admin-shell .cc-row-open:hover:not(:disabled) {
-  background: transparent;
-}
-.account-admin-page.admin-shell .cc-who {
-  grid-area: who;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .cc-who strong,
-.account-admin-page.admin-shell .cc-pseudonym {
-  font-size: 14px;
-  white-space: nowrap;
-}
-.account-admin-page.admin-shell .cc-pseudonym {
-  color: var(--ad-muted);
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .cc-text {
-  grid-area: text;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  min-width: 0;
-  text-align: left;
-}
-.account-admin-page.admin-shell .cc-first {
-  color: var(--ad-text);
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: left;
-  overflow-wrap: anywhere;
-}
-.account-admin-page.admin-shell .cc-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 6px;
-}
-.account-admin-page.admin-shell .cc-count {
-  color: var(--ad-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.account-admin-page.admin-shell .cc-when {
-  grid-area: when;
-  color: var(--ad-muted);
-  font-size: 12px;
-  text-align: left;
-  white-space: nowrap;
-}
-.account-admin-page.admin-shell .cc-state {
-  grid-area: state;
-}
-.account-admin-page.admin-shell .cc-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: #f3f1ee;
-  color: var(--ad-text);
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-.account-admin-page.admin-shell .cc-chip.cc-state {
-  justify-self: end;
-  min-width: 52px;
-}
-.account-admin-page.admin-shell .cc-chip-new {
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .cc-chip-star {
-  background: var(--ad-warn-soft);
-  color: var(--ad-warn);
-}
-.account-admin-page.admin-shell .cc-chip-adopted,
-.account-admin-page.admin-shell .cc-chip-processed {
-  background: var(--ad-ok-soft);
-  color: var(--ad-ok);
-}
-.account-admin-page.admin-shell .cc-detail {
-  overflow-y: auto;
-}
-.account-admin-page.admin-shell .cc-answer {
-  border-radius: 14px;
-  background: #f6f4f1;
-}
-/* A narrower list moves the time under the text instead of squeezing the columns. */
-@container adc (max-width: 1100px) {
-  .account-admin-page.admin-shell .cc-layout {
-    grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
-  }
-  .account-admin-page.admin-shell .cc-row-open {
-    grid-template-columns: 100px minmax(0, 1fr) 68px;
-    grid-template-areas:
-      "who text state"
-      "who when when";
-    row-gap: 4px;
-  }
-}
-
 /* ---- 管理员与权限: the grid scrolls inside its card when it is taller than the window ---- */
 .account-admin-page.admin-shell .members-layout {
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
@@ -8192,112 +7336,26 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 
 /* ---- 关系与故事: sections in a row at the top of the character panel; cards of one row share top and bottom ---- */
-.account-admin-page.admin-shell .cs {
-  gap: var(--ad-gap);
-}
-.account-admin-page.admin-shell .cs-main,
-.account-admin-page.admin-shell .cs-people,
-.account-admin-page.admin-shell .cs-stories {
-  align-items: stretch;
-}
-.account-admin-page.admin-shell .cs-character,
-.account-admin-page.admin-shell .cs-sees {
-  position: static;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  height: 580px;
-  max-height: none;
-  overflow: hidden;
-}
-.account-admin-page.admin-shell .cs-character-split {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 0;
-}
-.account-admin-page.admin-shell .cs-character-split > .cs-rail {
-  position: static;
-  margin: 0;
-}
-.account-admin-page.admin-shell .cs-character-body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 0;
-  min-width: 0;
-  max-height: none;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-.account-admin-page.admin-shell .cs-character-body > .cs-section {
-  padding-top: 0;
-  border-top: 0;
-  animation: wbIn calc(260ms * var(--ad-motion)) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell .cs-character-body > .cs-section[hidden] {
-  display: none;
-}
-.account-admin-page.admin-shell .cs-sees {
-  overflow-y: auto;
-}
-.account-admin-page.admin-shell .cs-notice {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cs-issues {
-  display: grid;
-  gap: 8px;
-  max-height: 132px;
-  padding: 8px 12px;
-  overflow-y: auto;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.6);
-}
-.account-admin-page.admin-shell .cs-issue-group h4 {
-  margin: 0 0 2px;
-  font-size: 13px;
-  font-weight: 900;
-}
-.account-admin-page.admin-shell .cs-issue-group ul {
-  margin: 0;
-  padding-left: 18px;
-}
-.account-admin-page.admin-shell .cs-groups {
-  align-content: start;
-  grid-auto-rows: min-content;
-  max-height: 150px;
-  overflow-y: auto;
-}
-.account-admin-page.admin-shell .cs-story-list {
-  max-height: 252px;
-  overflow-y: auto;
-}
-.account-admin-page.admin-shell .cs-know-matrix {
-  max-height: 260px;
-  overflow-y: auto;
-}
-.account-admin-page.admin-shell .cs-bar {
-  border: 1px solid var(--ad-hairline);
-  padding: 10px 12px 10px 20px;
-}
-.account-admin-page.admin-shell .cs-group-card {
-  background: #f6f4f1;
-}
-.account-admin-page.admin-shell .cs-story-title {
-  overflow: visible;
-  text-overflow: clip;
-  white-space: normal;
-}
-@container adc (max-width: 1100px) {
-  .account-admin-page.admin-shell .cs-character,
-  .account-admin-page.admin-shell .cs-sees {
-    height: 520px;
-  }
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /* ---- the view roots share the page gap; long tables scroll inside their card under a sticky header ---- */
 .account-admin-page.admin-shell .admin-content > section[data-panel] > div[id^="admin-"]:not(#admin-characters) {
@@ -8401,9 +7459,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .cs-story-title {
   text-overflow: clip;
 }
-.account-admin-page.admin-shell .cs-stack {
-  padding-right: 6px;
-}
+
 .account-admin-page.admin-shell .sys-top {
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
 }
@@ -8419,11 +7475,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .sys-version .admin-kv {
   grid-template-columns: max-content minmax(0, 1fr);
 }
-.account-admin-page.admin-shell .cs-group-card {
-  flex: none;
-  height: auto;
-  min-height: 72px;
-}
+
 /* A button that is a whole row or a heading holds ordinary text: it wraps like text, its chips do not. */
 .account-admin-page.admin-shell .cc-row-open,
 .account-admin-page.admin-shell .cs-story-title,
@@ -8498,23 +7550,10 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   padding: 0 12px;
   font-size: 13px;
 }
-.account-admin-page.admin-shell .cs-clear {
-  padding: 0;
-  width: 30px;
-}
+
 /* standard (36): the publish bar, the start card and the inline forms of the cast */
-.account-admin-page.admin-shell :is(.cs-bar, .cs-start, .cs-adder, .cs-import) button {
-  height: 36px;
-  min-height: 36px;
-  padding: 0 16px;
-  font-size: 14px;
-}
-.account-admin-page.admin-shell .cs button.cs-quiet,
-.account-admin-page.admin-shell .cs button.cs-add,
-.account-admin-page.admin-shell .cs button.cs-danger,
-.account-admin-page.admin-shell .cs button.cs-mini {
-  box-shadow: none;
-}
+
+
 .account-admin-page.admin-shell .admin-pick-row {
   height: 40px;
 }
@@ -8675,122 +7714,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-size: 13px;
 }
 
-/* ---- 共创收件箱: list 3 / detail 2, one height, both scroll inside ---- */
-.account-admin-page.admin-shell .cc-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  align-items: stretch;
-  height: max(520px, calc(100dvh - 140px));
-}
-.account-admin-page.admin-shell .cc-list-column,
-.account-admin-page.admin-shell .cc-detail {
-  position: static;
-  min-height: 0;
-  max-height: none;
-  height: 100%;
-}
-.account-admin-page.admin-shell .cc-list-column {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.account-admin-page.admin-shell .cc-detail {
-  align-content: start;
-}
-.account-admin-page.admin-shell .cc-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cc-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 8px;
-}
-.account-admin-page.admin-shell .cc-filter-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cc-bulk {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 14px;
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-}
-.account-admin-page.admin-shell .cc-bulk-count {
-  margin-right: auto;
-  font-size: 13px;
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .cc-row-open {
-  grid-template-columns: minmax(124px, 172px) minmax(0, 1fr) 96px 64px;
-}
-.account-admin-page.admin-shell .cc-when {
-  display: flex;
-  flex-direction: column;
-  white-space: nowrap;
-}
-.account-admin-page.admin-shell .cc-name {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cc-pseudonym {
-  padding-left: 18px;
-}
-.account-admin-page.admin-shell .cc-detail-head h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cc-detail-actions,
-.account-admin-page.admin-shell .cc-answer-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cc-adopt-actions {
-  display: flex;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cc-note-box {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .cc-note-box label {
-  align-self: stretch;
-}
-.account-admin-page.admin-shell .cc-note-box textarea {
-  width: 100%;
-}
-.account-admin-page.admin-shell .cs-dot {
-  display: inline-block;
-  flex: none;
-  box-sizing: border-box;
-  width: var(--size, 12px);
-  height: var(--size, 12px);
-  border-radius: 50%;
-  background: var(--dot, #8c8697);
-  box-shadow: 0 0 0 2px #fff;
-}
-@container adc (max-width: 1100px) {
-  .account-admin-page.admin-shell .cc-row-open {
-    grid-template-columns: minmax(112px, 150px) minmax(0, 1fr) 64px;
-    grid-template-areas:
-      "who text state"
-      "who when when";
-  }
-}
-
 /* ---- 角色工作台: the editor takes the width, 预演 keeps 420 and stretches with it; the sections fit on one row ---- */
 @container adc (min-width: 1064px) {
   .account-admin-page.admin-shell .wb:has(.wb-preview:not([hidden])) {
@@ -8816,9 +7739,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   flex-wrap: nowrap;
   align-items: center;
 }
-.account-admin-page.admin-shell .cs-rail {
-  flex-wrap: wrap;
-}
+
 .account-admin-page.admin-shell .wb-rail-item.is-danger {
   margin-left: auto;
 }
@@ -8831,424 +7752,85 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 
 /* ---- 关系与故事 ---- */
-.account-admin-page.admin-shell .cs-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-}
-.account-admin-page.admin-shell .cs-bar .cs-spacer {
-  flex: 1;
-}
-.account-admin-page.admin-shell .cs-bar-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 900;
-}
-.account-admin-page.admin-shell .cs-start {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 32px;
-}
-.account-admin-page.admin-shell .cs-start h2 {
-  margin: 0;
-  font-size: 22px;
-}
-.account-admin-page.admin-shell .cs-start-actions,
-.account-admin-page.admin-shell .cs-adder-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-.account-admin-page.admin-shell .cs-adder {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-}
+
+
+
+
+
+
+
 /* ---- 关系与故事: 导入文件 (24b-5) ---- */
-.account-admin-page.admin-shell .cs-import[hidden] {
-  display: none;
-}
-.account-admin-page.admin-shell .cs-import-summary {
-  margin: 0;
-  padding-left: 18px;
-}
-.account-admin-page.admin-shell .cs-import .cs-issues {
-  align-self: stretch;
-}
-.account-admin-page.admin-shell .cs-adder h2 {
-  margin: 0;
-}
-.account-admin-page.admin-shell .cs-adder input {
-  width: 260px;
-}
-.account-admin-page.admin-shell .cs-main {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  align-items: stretch;
-  gap: var(--ad-gap);
-}
-.account-admin-page.admin-shell .cs-grid-card {
-  overflow-x: auto;
-}
-.account-admin-page.admin-shell .cs-grid {
-  display: grid;
-  grid-template-columns: fit-content(112px) repeat(var(--n, 15), minmax(0, 1fr));
-  gap: 2px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .cs-corner {
-  display: block;
-}
-.account-admin-page.admin-shell .cs-head {
-  display: flex;
-  box-sizing: border-box;
-  width: auto;
-  height: auto;
-  min-height: 0;
-  place-items: initial;
-  overflow: visible;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--ad-text);
-  font-size: 12px;
-  font-weight: 500;
-  box-shadow: none;
-}
-.account-admin-page.admin-shell .cs-head-col {
-  padding: 4px 0;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .cs-head-col .cs-head-name {
-  flex: none;
-  line-height: 1.2;
-  text-align: center;
-  white-space: pre;
-}
-.account-admin-page.admin-shell .cs-head-row {
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  height: 100%;
-  min-height: 30px;
-  text-align: left;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.account-admin-page.admin-shell .cs-head.is-lit {
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-  box-shadow: none;
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .cs-head-row.is-open {
-  box-shadow: inset 0 0 0 2px #e8561e;
-}
-.account-admin-page.admin-shell .cs-cell {
-  display: grid;
-  place-items: center;
-  box-sizing: border-box;
-  width: auto;
-  height: 32px;
-  min-width: 0;
-  padding: 0;
-  border-radius: 8px;
-  color: var(--ad-text);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-}
-.account-admin-page.admin-shell .cs-cell.is-lit {
-  box-shadow: inset 0 0 0 1px rgba(91, 79, 196, 0.45);
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /* no growing cells: a scaled cell at the edge of the grid would leave the card */
-.account-admin-page.admin-shell .cs-cell:hover:not(.is-self),
-.account-admin-page.admin-shell .cs-cell:focus-visible,
-.account-admin-page.admin-shell .cs-cell[aria-pressed="true"] {
-  transform: none;
-}
-.account-admin-page.admin-shell .cs-cell[aria-pressed="true"] {
-  box-shadow: 0 0 0 2px var(--ad-primary);
-}
-.account-admin-page.admin-shell .cs-side-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.account-admin-page.admin-shell .cs-pair-title {
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-pair-title h2 {
-  margin-left: 4px;
-}
-.account-admin-page.admin-shell .cs-dir {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  gap: 6px 10px;
-}
-.account-admin-page.admin-shell .cs-dir-label {
-  grid-column: 1 / -1;
-  width: auto;
-  gap: 6px;
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .cs-dir > .cs-stars {
-  grid-column: 1;
-}
-.account-admin-page.admin-shell .cs-star {
-  width: 28px;
-  height: 28px;
-}
-.account-admin-page.admin-shell .cs-star-glyph {
-  width: 28px;
-  height: 28px;
-  font-size: 26px;
-  line-height: 28px;
-}
-.account-admin-page.admin-shell .cs-pair-texts {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-}
-.account-admin-page.admin-shell .cs-pair-col {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .cs-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  color: var(--ad-muted);
-  font-size: 12px;
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
 .account-admin-page.admin-shell .cs-field :is(input, textarea) {
   width: 100%;
   color: var(--ad-text);
 }
-.account-admin-page.admin-shell .cs-split {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: var(--ad-gap);
-  align-items: stretch;
-}
-.account-admin-page.admin-shell .cs-pane-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding-right: var(--ad-gap);
-  border-right: 1px solid var(--ad-hairline);
-}
-.account-admin-page.admin-shell .cs-pane-list .cs-card-head {
-  margin-bottom: 0;
-}
-.account-admin-page.admin-shell .cs-pane-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .cs-pane-editor .cs-card-head {
-  margin-bottom: 0;
-}
-.account-admin-page.admin-shell .cs-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 360px;
-  overflow-y: auto;
-}
-.account-admin-page.admin-shell .cs-group-name {
-  font-weight: 700;
-  text-align: left;
-}
-.account-admin-page.admin-shell .cs-group-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  height: auto;
-  min-height: 48px;
-  padding: 8px 14px;
-  border-radius: 14px;
-  text-align: left;
-}
-.account-admin-page.admin-shell .cs-group-card[aria-pressed="true"],
-.account-admin-page.admin-shell .cs-person-row[aria-pressed="true"],
-.account-admin-page.admin-shell .cs-story-row[aria-current="true"] {
-  border-color: transparent;
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-}
-.account-admin-page.admin-shell .cs-stack {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px;
-  padding-right: 0;
-}
-.account-admin-page.admin-shell .cs-count-text {
-  margin-left: 6px;
-  color: var(--ad-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.account-admin-page.admin-shell .cs-story-list,
-.account-admin-page.admin-shell .cs-people-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 360px;
-  overflow-y: auto;
-}
-.account-admin-page.admin-shell .cs-story-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 8px 4px 12px;
-  border-radius: 12px;
-}
-.account-admin-page.admin-shell .cs-story-title {
-  align-self: center;
-  text-decoration: none;
-  justify-content: flex-start;
-  height: auto;
-  min-height: 30px;
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  white-space: normal;
-}
-.account-admin-page.admin-shell .cs-person-row {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  width: 100%;
-  height: 36px;
-  border-radius: 12px;
-}
-.account-admin-page.admin-shell .cs-person-name {
-  flex: 1;
-  text-align: left;
-}
-.account-admin-page.admin-shell .cs-fields-3 {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-}
-.account-admin-page.admin-shell .cs-fields-3 > .cs-period {
-  display: contents;
-}
-.account-admin-page.admin-shell .cs-fields-2,
-.account-admin-page.admin-shell .cs-gstory {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-}
-.account-admin-page.admin-shell .cs-gstory > :is(.cs-period) {
-  display: contents;
-}
-.account-admin-page.admin-shell .cs-gstory {
-  padding: 12px;
-  border: 1px solid var(--ad-hairline);
-  border-radius: 14px;
-}
-.account-admin-page.admin-shell .cs-gstory > button {
-  grid-column: 1 / -1;
-  justify-self: start;
-}
-.account-admin-page.admin-shell .cs-gstories {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.account-admin-page.admin-shell .cs-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-label {
-  color: var(--ad-muted);
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .cs-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-}
-.account-admin-page.admin-shell .cs-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-chip.is-person .cs-dot {
-  border-radius: 3px;
-}
-.account-admin-page.admin-shell .cs-know-matrix {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 6px 8px;
-  max-height: none;
-  overflow: visible;
-}
-.account-admin-page.admin-shell .cs-know-wrap {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.account-admin-page.admin-shell .cs-know {
-  height: 30px;
-  padding: 0 12px;
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .cs-people {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-  align-items: stretch;
-  gap: var(--ad-gap);
-}
-.account-admin-page.admin-shell .cs-roster {
-  margin-bottom: 12px;
-}
-.account-admin-page.admin-shell .cs-character,
-.account-admin-page.admin-shell .cs-sees {
-  height: 640px;
-}
-.account-admin-page.admin-shell .cs-character-split {
-  display: flex;
-  flex-direction: column;
-}
-@container adc (max-width: 1100px) {
-  .account-admin-page.admin-shell .cs-main,
-  .account-admin-page.admin-shell .cs-people {
-    grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
-  }
-  .account-admin-page.admin-shell .cs-split {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  }
-  .account-admin-page.admin-shell .cs-fields-3 {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /* ======================================================================================================================
    Part 24b-6: admin V3 (design/burbur-v2/v3). Same D1 palette; the layers above stay, this block repaints and adds.
@@ -10966,6 +9548,1332 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .tiers-form button[type="submit"] {
   height: 36px;
   min-height: 36px;
+}
+
+/* ---- 共创收件箱 (Inbox3): fixed cards, three to a row; the detail opens under its row ---- */
+.account-admin-page.admin-shell #admin-cocreation .cc-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  overflow: visible;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-list-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px 0 10px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-star-filter {
+  height: 34px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-star-filter[aria-pressed="true"] {
+  border-color: #e8c77a;
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell #admin-cocreation input[type="search"] {
+  flex: 1;
+  max-width: 420px;
+  height: 34px;
+  min-height: 34px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: none;
+  overflow: visible;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-row {
+  position: relative;
+  box-sizing: border-box;
+  height: 176px;
+  padding: 0;
+  border: 1.5px solid var(--ad-hairline);
+  border-radius: 16px;
+  background: #fff;
+  display: block;
+  overflow: hidden;
+  transition:
+    border-color var(--ad-t-slide) var(--ad-ease),
+    box-shadow var(--ad-t-slide) var(--ad-ease),
+    background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-row:hover {
+  border-color: var(--ad-tint-line);
+  box-shadow: 0 6px 18px rgba(43, 40, 51, 0.06);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-row.is-active {
+  border-color: var(--ad-primary);
+  background: #fff;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-row.is-selected {
+  border-color: var(--ad-tint-line);
+  background: #fbfafe;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-row .cc-check {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-row-open {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 22px minmax(0, 1fr) 26px;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 14px 16px 12px 44px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ad-text);
+  font-weight: 400;
+  text-align: left;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-row-open:hover {
+  background: transparent;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-pseudonym,
+.account-admin-page.admin-shell #admin-cocreation .cc-when {
+  color: var(--ad-muted);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-when {
+  margin-left: auto;
+  font-size: 11px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-text {
+  display: block;
+  min-height: 0;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, #000 66%, transparent);
+  mask-image: linear-gradient(180deg, #000 66%, transparent);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-first {
+  display: block;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-count {
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-spacer {
+  flex: 1;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #f0ece7;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-chip-new {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-chip-processed,
+.account-admin-page.admin-shell #admin-cocreation .cc-chip-adopted {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-chip-star {
+  padding: 0;
+  background: transparent;
+  color: #b07a00;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-chip-draft {
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-chip-points {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 176px;
+  margin: 0;
+  border: 1.5px dashed var(--ad-border);
+  border-radius: 16px;
+  color: var(--ad-muted);
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-empty[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail-row {
+  grid-column: 1 / -1;
+  list-style: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail {
+  display: block;
+  box-sizing: border-box;
+  padding: 18px 20px;
+  border: 1.5px solid var(--ad-tint-line);
+  border-radius: 16px;
+  background: #fff;
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail-head h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail-head p {
+  flex: 1;
+  margin: 0;
+  color: var(--ad-muted);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail-actions {
+  display: flex;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail-actions button,
+.account-admin-page.admin-shell #admin-cocreation .cc-answer-actions button,
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt-actions button {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 24px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-detail-grid.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-group > h4 {
+  margin: 0;
+  color: var(--ad-tint-ink);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ad-bg);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-card-prompt {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-answer-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-answer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-cocreation button.cc-adopt-open,
+.account-admin-page.admin-shell #admin-cocreation button.cc-adopt-story {
+  border-color: var(--ad-tint-line);
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target-where {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target-value {
+  box-sizing: border-box;
+  min-height: 150px;
+  padding: 12px 14px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 12px;
+  background: #fbfaf8;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target-text,
+.account-admin-page.admin-shell #admin-cocreation .cc-target-empty {
+  margin: 0;
+  white-space: pre-line;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target-empty {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target-pair {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-pair-situation {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt textarea,
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt .cc-example input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1.5px solid var(--ad-amber);
+  background: var(--ad-amber-soft);
+  font-size: 14px;
+  line-height: 1.7;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-example {
+  display: grid;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-example label,
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt > label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt-help {
+  margin: 0;
+  color: var(--ad-amber-ink);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-cocreation button.cc-adopt-save {
+  border-color: var(--ad-primary);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-saved {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ad-ok);
+  font-size: 13px;
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-saved b {
+  flex: 1;
+}
+.account-admin-page.admin-shell #admin-cocreation a.cc-go {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--ad-tint-line);
+  border-radius: 999px;
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+.account-admin-page.admin-shell .cc-bulk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cc-bulk[hidden],
+.account-admin-page.admin-shell .cc-counts[hidden] {
+  display: none;
+}
+
+.account-admin-page.admin-shell #admin-cocreation button::before,
+.account-admin-page.admin-shell #admin-cocreation button::after {
+  content: none;
+  display: none;
+}
+
+/* ---- 关系与故事 (Cast3) ---- */
+.account-admin-page.admin-shell .cs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-gap);
+}
+.account-admin-page.admin-shell .cs-defs {
+  position: absolute;
+}
+.account-admin-page.admin-shell .cs .cs-card,
+.account-admin-page.admin-shell .cs .cs-versions {
+  box-sizing: border-box;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell .cs .cs-card[hidden],
+.account-admin-page.admin-shell .cs .cs-side[hidden],
+.account-admin-page.admin-shell .cs [hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .cs .cs-card.cs-open {
+  border-width: 1.5px;
+  border-color: var(--ad-tint-line);
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .cs h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 900;
+}
+.account-admin-page.admin-shell .cs h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 900;
+}
+.account-admin-page.admin-shell .cs-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .cs-hint-line,
+.account-admin-page.admin-shell .cs-sub {
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .cs-sub {
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .cs-actions,
+.account-admin-page.admin-shell .cs-head-right,
+.account-admin-page.admin-shell .cs-versions-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .cs-head-right {
+  gap: 12px;
+}
+.account-admin-page.admin-shell .cs-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #f0ece7;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs-tag.is-ok {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell .cs-tag.is-bad {
+  background: var(--ad-danger-soft);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .cs button.cs-quiet,
+.account-admin-page.admin-shell .cs button.cs-add,
+.account-admin-page.admin-shell .cs button.cs-mini,
+.account-admin-page.admin-shell .cs button.cs-close {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .cs button.is-tint,
+.account-admin-page.admin-shell .cs button.cs-add.is-tint {
+  border-color: var(--ad-tint-line);
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs button.cs-dashed {
+  align-self: flex-start;
+  border-style: dashed;
+  border-color: #c9c2b8;
+  background: transparent;
+  color: var(--ad-muted);
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .cs button.cs-danger {
+  border-color: var(--ad-danger-line);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .cs button.cs-mini[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+}
+/* ---- 整页版本 ---- */
+.account-admin-page.admin-shell .cs-versions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 20px;
+}
+.account-admin-page.admin-shell .cs-versions-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.account-admin-page.admin-shell .cs-versions-label {
+  flex: none;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-version-line {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs button.cs-version,
+.account-admin-page.admin-shell .cs .cs-version.is-draft {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ad-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs button.cs-version[aria-pressed="true"] {
+  border-color: var(--ad-tint-line);
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .cs-version-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ad-primary);
+}
+.account-admin-page.admin-shell .cs .cs-version.is-draft .cs-version-mark {
+  border-radius: 2px;
+  background: var(--ad-warn);
+  transform: rotate(45deg);
+}
+.account-admin-page.admin-shell .cs .cs-version.is-draft.is-dirty {
+  border-color: var(--ad-amber);
+  background: var(--ad-amber-soft);
+}
+.account-admin-page.admin-shell .cs-version-rule {
+  flex: 1;
+  min-width: 16px;
+  height: 1px;
+  background: var(--ad-tint-line);
+}
+.account-admin-page.admin-shell .cs-version-open {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ad-wash);
+  font-size: 13px;
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .cs-version-sub {
+  flex: 1;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .cs-confirm:empty {
+  display: none;
+}
+/* ---- notices ---- */
+.account-admin-page.admin-shell .cs-notices:empty {
+  display: none;
+}
+.account-admin-page.admin-shell .cs-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--ad-warn-soft);
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .cs-notice.is-bad {
+  background: var(--ad-danger-soft);
+}
+.account-admin-page.admin-shell .cs-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-height: 240px;
+  overflow: auto;
+}
+.account-admin-page.admin-shell .cs-issue-group h4 {
+  margin: 0 0 2px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-issue-group ul {
+  margin: 0;
+  padding-left: 18px;
+}
+/* ---- grid and side panel ---- */
+.account-admin-page.admin-shell .cs-main {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--ad-gap);
+  align-items: start;
+}
+.account-admin-page.admin-shell .cs-main:has(> .cs-side[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.account-admin-page.admin-shell .cs-grid-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.account-admin-page.admin-shell .cs-grid {
+  display: grid;
+  grid-template-columns: minmax(76px, max-content) repeat(var(--n, 15), minmax(42px, max-content));
+  gap: 3px;
+  align-items: stretch;
+}
+.account-admin-page.admin-shell .cs-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ad-text);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  transition:
+    background var(--ad-t-slide) var(--ad-ease),
+    color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .cs-head:hover:not(:disabled) {
+  background: #f3f1ee;
+}
+.account-admin-page.admin-shell .cs-head-col {
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  height: 40px;
+  padding: 0 4px;
+}
+.account-admin-page.admin-shell .cs-head-row {
+  height: 34px;
+  font-size: 13px;
+  text-align: left;
+}
+.account-admin-page.admin-shell .cs-head[data-lit="true"] {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .cs-head[data-open="true"] {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs-dot {
+  flex: none;
+  width: var(--size, 8px);
+  height: var(--size, 8px);
+  border-radius: 50%;
+  background: var(--dot, #8c8697);
+}
+.account-admin-page.admin-shell .cs-cell {
+  position: relative;
+  box-sizing: border-box;
+  height: 34px;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 6px;
+  background: var(--heat, transparent);
+  color: var(--ad-text);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  transition:
+    box-shadow var(--ad-t-slide) var(--ad-ease),
+    opacity var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .cs-cell.is-unset {
+  border-style: dashed;
+  border-color: var(--ad-border);
+}
+.account-admin-page.admin-shell .cs-cell.is-self {
+  border: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell .cs-cell:hover:not(.is-self),
+.account-admin-page.admin-shell .cs-cell[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 2px var(--ad-primary);
+  background-color: var(--heat, #fff);
+}
+.account-admin-page.admin-shell .cs-cell[data-dim="true"] {
+  opacity: 0.55;
+}
+.account-admin-page.admin-shell .cs-cell[data-lit="true"][data-dim="false"] {
+  opacity: 1;
+}
+.account-admin-page.admin-shell .cs-cell[data-dirty="true"] {
+  border: 1.5px solid var(--ad-amber);
+}
+.account-admin-page.admin-shell .cs-story-dot {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ad-text);
+}
+.account-admin-page.admin-shell .cs-legend {
+  display: flex;
+  gap: 14px;
+  padding-top: 4px;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .cs-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs-legend-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ad-text);
+}
+.account-admin-page.admin-shell .cs-legend-amber {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--ad-amber);
+  border-radius: 3px;
+  background: var(--ad-amber-soft);
+}
+.account-admin-page.admin-shell .cs-legend-unset {
+  width: 10px;
+  height: 10px;
+  border: 1px dashed var(--ad-border);
+  border-radius: 3px;
+}
+.account-admin-page.admin-shell .cs-side {
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-side-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: adPageIn var(--ad-t-slide) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .cs-pair-title .cs-with {
+  color: var(--ad-muted);
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .cs-dir {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f0ece7;
+}
+.account-admin-page.admin-shell .cs-dir-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .cs-dir-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-arrow {
+  color: var(--ad-muted);
+  font-style: normal;
+}
+.account-admin-page.admin-shell .cs-dir-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.account-admin-page.admin-shell .cs-stars {
+  display: inline-flex;
+  gap: 2px;
+}
+.account-admin-page.admin-shell .cs-star {
+  position: relative;
+  width: 28px;
+  height: 28px;
+}
+.account-admin-page.admin-shell .cs-star svg {
+  display: block;
+}
+.account-admin-page.admin-shell .cs-star-hit {
+  position: absolute;
+  top: 0;
+  width: 14px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .cs-star-hit.is-half {
+  left: 0;
+}
+.account-admin-page.admin-shell .cs-star-hit.is-whole {
+  left: 14px;
+}
+.account-admin-page.admin-shell .cs-star-hit:hover {
+  background: rgba(224, 161, 0, 0.12);
+}
+.account-admin-page.admin-shell .cs-star-hit:focus-visible {
+  outline: 2px solid var(--ad-primary);
+}
+.account-admin-page.admin-shell .cs-rating {
+  width: 50px;
+  text-align: right;
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .cs-rating.is-unset {
+  color: var(--ad-muted);
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .cs-rating[data-dirty="true"] {
+  color: var(--ad-amber-ink);
+}
+.account-admin-page.admin-shell .cs-dir-rate .cs-mini {
+  margin-left: 4px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 10px;
+}
+.account-admin-page.admin-shell .cs-dir-texts {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px;
+}
+.account-admin-page.admin-shell .cs-dir-texts input {
+  height: 36px;
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .cs-pair-stories {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs-story-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 400;
+  text-align: left;
+}
+.account-admin-page.admin-shell .cs-story-row:hover:not(:disabled) {
+  background: #f7f5f2;
+}
+.account-admin-page.admin-shell .cs-story-row[aria-pressed="true"] {
+  background: var(--ad-tint);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs-stack {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* ---- sees ---- */
+.account-admin-page.admin-shell .cs-sees-meta {
+  display: flex;
+  gap: 8px;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .cs-sees-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.account-admin-page.admin-shell .cs-sees-block p {
+  margin: 0;
+}
+.account-admin-page.admin-shell .cs-sees {
+  max-height: 560px;
+  overflow: auto;
+}
+.account-admin-page.admin-shell .cs-hint {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-level {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #f0ece7;
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs-level.is-lived {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .cs-level.is-heard {
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn);
+}
+/* ---- name card ---- */
+.account-admin-page.admin-shell .cs-go {
+  color: var(--ad-tint-ink);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.account-admin-page.admin-shell .cs-namecard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.8fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 14px;
+}
+.account-admin-page.admin-shell .cs-lb,
+.account-admin-page.admin-shell .cs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-lb input,
+.account-admin-page.admin-shell .cs-lb select,
+.account-admin-page.admin-shell .cs-field input,
+.account-admin-page.admin-shell .cs-field select {
+  height: 36px;
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .cs-field textarea,
+.account-admin-page.admin-shell .cs-world-card textarea {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  padding: 8px 10px;
+  line-height: 1.6;
+}
+.account-admin-page.admin-shell .cs-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ad-text);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-pill.is-add {
+  border-style: dashed;
+  color: var(--ad-muted);
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .cs-pill input.cs-pill-input {
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-pill-x {
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ad-muted);
+  font-size: 14px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .cs-feel {
+  height: 20px;
+  min-height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #f0ece7;
+  color: var(--ad-muted);
+  font-size: 11px;
+}
+.account-admin-page.admin-shell .cs-feel.is-likes {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell .cs-feel.is-dislikes {
+  background: var(--ad-danger-soft);
+  color: var(--ad-danger);
+}
+/* ---- story below ---- */
+.account-admin-page.admin-shell .cs-story-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.account-admin-page.admin-shell .cs-story-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 24px;
+}
+.account-admin-page.admin-shell .cs-story-left,
+.account-admin-page.admin-shell .cs-story-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-fields-3 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 120px;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .cs-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .cs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs button.cs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px 0 8px;
+  font-size: 13px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .cs button.cs-chip[aria-pressed="true"] {
+  border-color: var(--ad-tint-line);
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs button.cs-chip.is-person .cs-dot {
+  border-radius: 2px;
+}
+.account-admin-page.admin-shell .cs-know-matrix {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs button.cs-know {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ad-text);
+  font-size: 13px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .cs-know-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs-know-level {
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .cs button.cs-know.is-lived {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell .cs button.cs-know.is-lived .cs-know-level {
+  color: var(--ad-tint-ink);
+}
+.account-admin-page.admin-shell .cs button.cs-know.is-heard {
+  background: var(--ad-warn-soft);
+}
+.account-admin-page.admin-shell .cs button.cs-know.is-heard .cs-know-level {
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .cs button.cs-know.is-unknown .cs-know-level {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .cs button.cs-know.is-override {
+  border: 1.5px solid #e07a1f;
+}
+/* ---- groups, world ---- */
+.account-admin-page.admin-shell .cs-groups-card,
+.account-admin-page.admin-shell .cs-world-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .cs-groups-table {
+  border-radius: 12px;
+}
+.account-admin-page.admin-shell .cs-groups-table .ot-row {
+  min-height: 48px;
+  padding: 0 14px;
+}
+.account-admin-page.admin-shell .cs-groups-table .ot-head {
+  display: none;
+}
+.account-admin-page.admin-shell .cs-g-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+  gap: 16px;
+  margin: 0 14px 14px;
+}
+.account-admin-page.admin-shell .cs-g-left,
+.account-admin-page.admin-shell .cs-g-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-gstory {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 90px;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff;
+}
+.account-admin-page.admin-shell .cs-gstory > :nth-child(n + 4) {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .cs-people-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs-people-row .cs-label {
+  margin-right: 4px;
+}
+.account-admin-page.admin-shell .cs-person-row {
+  display: grid;
+  grid-template-columns: 130px 130px 100px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--ad-wash);
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .cs-start {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .cs-start-actions {
+  display: flex;
+  gap: 8px;
+}
+@container adc (max-width: 1040px) {
+  .account-admin-page.admin-shell .cs-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .account-admin-page.admin-shell .cs-namecard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .account-admin-page.admin-shell .cs-story-body,
+  .account-admin-page.admin-shell .cs-g-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .account-admin-page.admin-shell .cs-person-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.account-admin-page.admin-shell .cs-dir-rate {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 4px;
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */

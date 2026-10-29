@@ -16,20 +16,27 @@ export type CastCtx = {
   reveal: (node: HTMLElement) => void;
   /** The dot colour of a character (the same one 角色工作台 and 共创收件箱 use) or of a person (grey). */
   colour: (id: string) => string;
-  /** Opens the + 角色 form, or null when this administrator cannot create characters (or the cast is full). */
-  addCharacter: () => (() => void) | null;
+  /** The people in the grid, in order: the workbench roster (the fixed grid), then any cast character it does not list. */
+  ids: () => string[];
+  /** A character's name wherever the document does not have its entry yet (the workbench's display name). */
+  nameOf: (id: string) => string;
+  /** The draft as it was last read or saved, for the amber "not saved yet" marks. */
+  base: () => CastDoc;
+  /** Opens a story (an index into doc.stories) in the full-width editor below. */
+  openStory: (index: number) => void;
+  /** Lights the rows and columns of the group under the pointer (no repaint). */
+  light: () => void;
 };
 export type Region =
   | 'bar'
   | 'versions'
   | 'notice'
   | 'start'
-  | 'adder'
   | 'grid'
   | 'side'
   | 'groups'
   | 'stories'
-  | 'people'
+  | 'world'
   | 'character'
   | 'sees';
 
@@ -107,7 +114,7 @@ export function picker(
     );
   };
   const box = h('div', { class: 'cs-chips', attrs: { role: 'group', 'aria-label': label } });
-  for (const c of doc.characters) box.append(make(c.characterId, c.identity.names[0]?.text ?? c.characterId));
+  for (const id of ctx.ids()) box.append(make(id, ctx.nameOf(id)));
   if (options.people)
     for (const p of doc.people) {
       const chip = make(p.id, p.names[0]?.text ?? p.id);
@@ -128,4 +135,12 @@ export function lock(button: HTMLButtonElement, locked: boolean, why?: string) {
   button.disabled = locked;
   if (locked && why) button.setAttribute('title', why);
   else button.removeAttribute('title');
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+/** An SVG node with its attributes (a document without namespaces - the stub DOMs of some tests - gets a plain element). */
+export function svgNode(tag: string, attrs: Record<string, string> = {}): SVGElement {
+  const node = (typeof document.createElementNS === 'function' ? document.createElementNS(SVG_NS, tag) : document.createElement(tag)) as unknown as SVGElement;
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  return node;
 }
