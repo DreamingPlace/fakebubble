@@ -157,6 +157,8 @@ test('co-creation over real HTTP: open to every session, idempotent, limited per
   const guestDetail = await f.call(`${API}/admin/cocreation/detail`, reader, { id: listing.items[0].id });
   assert.equal(guestDetail.batch, null);
   assert.ok(!/@|principal|player-|world-/.test(JSON.stringify([listing, guestDetail])), 'no email or id for a guest');
+  // Part 24c (named exception): the detail now also says what kind of note it is ('character' | 'memo' | 'pair') and, for a pair, the
+  // other character; nothing else about the player is added.
   assert.deepEqual(Object.keys(detail).sort(), [
     'adminNote',
     'answers',
@@ -164,6 +166,8 @@ test('co-creation over real HTTP: open to every session, idempotent, limited per
     'characterId',
     'createdAt',
     'id',
+    'kind',
+    'partnerId',
     'processedAt',
     'pseudonym',
     'starred',

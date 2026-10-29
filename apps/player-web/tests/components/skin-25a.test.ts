@@ -255,7 +255,8 @@ function picker(
 
 test('model sheet, metered: "给瓜瓜换个" with the brain, rows with "{n} 点/条" and "语音 +N", the current one marked 当前', (t) => {
   const f = picker(t, metered);
-  assert.equal(f.root.querySelector('.mp-title')!.textContent, '给瓜瓜换个');
+  // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
+  assert.equal(f.root.querySelector('.mp-title')!.textContent, '当前大脑');
   const brain = f.root.querySelector('.mp-brain')!;
   assert.equal(brain.getAttribute('role'), 'img');
   assert.equal(brain.getAttribute('aria-label'), '脑子');
@@ -278,7 +279,8 @@ test('model sheet, metered: "给瓜瓜换个" with the brain, rows with "{n} 点
   );
   for (const id of ['deepseek', 'gemini', 'xai'] as const)
     assert.match(f.row(id).textContent, new RegExp(PLAYER_MODELS[id].label));
-  assert.equal(modelCopy.title('JOJO'), '给JOJO换个');
+  // Named exception (Part 24c): the chat ⋯ menu's co-creation entry reads 一起共创角色 (was 共创 · 让{name}更像{name}), the first-time hint reads 给{name}换个大脑？或者来说说你心中的{name}～ for everyone, and the model sheet is titled 当前大脑. Only the words changed; no assertion was weakened.
+  assert.equal(modelCopy.title, '当前大脑');
 });
 
 test('model sheet, unmetered: no prices and no balance; the confirm sentence has no price', (t) => {

@@ -312,6 +312,17 @@ All of it is written only by the business object, when the event happens, and ho
 | `web_stats_spend` (UTC day, user type, text or voice, calls, charged micros) | global | Yes: what the budget ledger charged, split by who the reply was for. Counts and money only. |
 | `web_invite_batches.test` | global configuration | Yes: a flag on a batch, set at creation and never changed. |
 
+## Co-creation notes and points for notes (Part 24c, migration 131)
+
+Written only by the business object. Nothing here reaches a prompt or a provider.
+
+| Table / column | Class | Kept after deletion? |
+|---|---|---|
+| `web_cocreation_submissions.kind`, `.partner_id` | user | No: with the row. `kind` is `character` (the cards), `memo` (a 留言条 to the production team; `character_id` is the placeholder `_memo`) or `pair` (the story between `character_id` and `partner_id`). A pair note goes with EITHER of its two characters when one is deleted (`purgeCocreation`, `cocreationRemains`). |
+| `web_cocreation_answers.note_hash`, `.paid_points`, `.adopt_paid` | user | No: with the answer. `note_hash` is a sha256 of the normalized words under their character / pair scope (the silent duplicate rule; NULL for a memo), `paid_points` what the note earned, `adopt_paid` 1 once its first adoption was rewarded. |
+| `web_cocreation_points` (one row: note points, daily cap, adoption points, revision) | global configuration | Yes: three numbers and who last changed them, no player data. Every change is also a `web_admin_audit` row with the numbers only. |
+| `web_points_events.ref` and the sources `cocreation_note`, `cocreation_adopted` | user | As the table: removed with the player. `ref` is `<submission id>:<ordinal>`, the idempotency key (unique per source). The 22c counters (`web_stats_daily`, metric `points_cocreation_note` / `points_cocreation_adopted`) keep only the day's sum. |
+
 ## Owner-controlled models and prices (Part 21g, migration 124)
 
 The admin page 系统 → 模型与价格 is settings only: it holds no player data. The five tables below are global configuration written only by the business object (an owner or `models.manage` administrator, behind session + CSRF + origin). They carry no principal id, player id, world id, email, nickname or message content, and no column could (`web_model_changes` stores the acting administrator's member id, shown in the page only as the administrator's label).

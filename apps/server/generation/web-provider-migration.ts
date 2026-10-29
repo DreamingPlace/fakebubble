@@ -354,3 +354,22 @@ export function migrateWebProviderStatsExtras(store: Store, now = Date.now()) {
     store.db.exec('PRAGMA user_version = 130');
   });
 }
+
+/** Node-only 130→131: memo and pair-story notes, points for co-creation notes, their three settings (131_cocreation_points.sql). */
+export function migrateWebProviderCocreationPoints(store: Store) {
+  ensure(
+    store.get<{ file: string }>('PRAGMA database_list')?.file === '' ||
+      (store instanceof WebStore && store.providerRuntime),
+    'WEB_PROVIDER_OFFLINE_ONLY',
+  );
+  store.transaction(() => {
+    ensure(
+      store.get<{ user_version: number }>('PRAGMA user_version')?.user_version === 130 &&
+        store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_stats_hourly'"),
+      'WEB_PROVIDER_COCREATION_POINTS_MIGRATION_REQUIRED',
+    );
+    store.db.exec(readFileSync(new URL('../web-migrations/131_cocreation_points.sql', import.meta.url), 'utf8'));
+    ensure(!store.get('PRAGMA foreign_key_check'), 'WEB_PROVIDER_MIGRATION_FOREIGN_KEY_INVALID');
+    store.db.exec('PRAGMA user_version = 131');
+  });
+}

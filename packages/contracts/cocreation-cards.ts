@@ -55,6 +55,8 @@ export const COCREATION_LIMITS = Object.freeze({
   perCardPerDay: 1,
   /** Anti-abuse: guests can start new sessions by clearing cookies, so each IP hash is capped per UTC day. */
   perIpPerDay: 10,
+  /** Part 24c: memos and pair stories have their own per-IP daily count. */
+  notePerIpPerDay: 30,
   dayMs: 86_400_000,
   note: 1000,
 });
@@ -118,3 +120,42 @@ export function validateCocreationAnswers(value: unknown): CocreationValidation 
   }
   return { ok: true, answers };
 }
+
+// ---- Part 24c: notes to the production team, pair stories, and points for notes -------------------------------------------
+/** The character id a 留言条 is stored under (a memo is about no character) and the card ids of the two extra kinds of note. */
+export const COCREATION_MEMO_CHARACTER = '_memo';
+export const COCREATION_MEMO_CARD = 'memo';
+export const COCREATION_PAIR_CARD = 'pair-story';
+/** A memo is one free text of up to this many code points (the same rule as the free card). */
+export const COCREATION_NOTE_MAX = COCREATION_LIMITS.free;
+/** A pair story becomes the summary of a cast story, which holds 200 code points (CAST_LIMITS.storySummary; a test keeps them equal). */
+export const COCREATION_PAIR_NOTE_MAX = 200;
+
+/** The three editable numbers of points for notes: +note per note, at most dailyCap paid notes per UTC day, +adopt when adopted. */
+export type CocreationPointsSettings = { notePoints: number; dailyCap: number; adoptPoints: number };
+export const COCREATION_POINTS_DEFAULTS: CocreationPointsSettings = Object.freeze({
+  notePoints: 5,
+  dailyCap: 15,
+  adoptPoints: 20,
+});
+export const COCREATION_POINTS_LIMITS = Object.freeze({
+  notePoints: { min: 0, max: 100 },
+  dailyCap: { min: 0, max: 100 },
+  adoptPoints: { min: 0, max: 1000 },
+});
+export const cocreationPointsOk = (value: unknown): value is CocreationPointsSettings => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    Object.keys(v).sort().join(',') === 'adoptPoints,dailyCap,notePoints' &&
+    (['notePoints', 'dailyCap', 'adoptPoints'] as const).every(
+      (key) =>
+        Number.isSafeInteger(v[key]) &&
+        (v[key] as number) >= COCREATION_POINTS_LIMITS[key].min &&
+        (v[key] as number) <= COCREATION_POINTS_LIMITS[key].max,
+    )
+  );
+};
+
+/** Same rule as a chat message for a memo / pair story: non-blank, no control characters. */
+export const cocreationNoteOk = (value: unknown): value is string => cocreationTextOk(value, COCREATION_NOTE_MAX);

@@ -35,6 +35,8 @@ export interface CharacterTemplate {
   voice?: VoiceBinding;
   birthDate?: string;
   authorCanon?: { kind: 'author_canon'; settings: Record<string, JsonValue> };
+  // Part 24c: a seed ("成长中") character - only `true` is ever stored; absent means a finished character. Frozen with the template.
+  seed?: true;
 }
 // Trusted application context, resolved from credentials by the future HTTP layer.
 export interface PlayerContext {

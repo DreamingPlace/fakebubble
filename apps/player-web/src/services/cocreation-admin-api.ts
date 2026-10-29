@@ -4,9 +4,19 @@ import {
 } from '../../../../packages/contracts/cocreation-cards.ts';
 
 export type InboxStatus = 'new' | 'processed' | 'archived';
+/** Part 24c: a note about one character (the cards), to the production team (留言条) or about the story between two characters. */
+export type InboxKind = 'character' | 'memo' | 'pair';
+const kindOf = (v: unknown): InboxKind => {
+  if (v === undefined) return 'character';
+  if (v !== 'character' && v !== 'memo' && v !== 'pair') throw invalid();
+  return v;
+};
 export type InboxItem = {
   id: string;
   characterId: string;
+  /** Absent on a server before migration 131 (every note is a 'character' note then). */
+  kind?: InboxKind;
+  partnerId?: string | null;
   createdAt: number;
   pseudonym: string;
   answerCount: number;
@@ -26,6 +36,9 @@ export type InboxAnswer = {
 export type InboxDetail = {
   id: string;
   characterId: string;
+  /** Absent on a server before migration 131 (every note is a 'character' note then). */
+  kind?: InboxKind;
+  partnerId?: string | null;
   createdAt: number;
   pseudonym: string;
   batch: string | null;
@@ -73,6 +86,8 @@ const item = (v: unknown): InboxItem => {
   return {
     id: string(r.id),
     characterId: string(r.characterId),
+    kind: kindOf(r.kind),
+    partnerId: r.partnerId == null ? null : string(r.partnerId),
     createdAt: count(r.createdAt),
     pseudonym: string(r.pseudonym),
     answerCount: count(r.answerCount),
@@ -131,6 +146,8 @@ export class CocreationAdminClient {
     return {
       id: string(r.id),
       characterId: string(r.characterId),
+      kind: kindOf(r.kind),
+      partnerId: r.partnerId == null ? null : string(r.partnerId),
       createdAt: count(r.createdAt),
       pseudonym: string(r.pseudonym),
       batch: r.batch === null ? null : string(r.batch),
@@ -155,5 +172,14 @@ export class CocreationAdminClient {
   async adopt(id: string, ordinal: number) {
     const r = object(await this.request('adopt', { id, ordinal }));
     return { ordinal: count(r.ordinal), status: status(r.status) };
+  }
+  /** Takes the adoption mark off an answer. Points already paid stay paid. */
+  async unadopt(id: string, ordinal: number) {
+    count(object(await this.request('unadopt', { id, ordinal })).ordinal);
+  }
+  /** 加入关系与故事: a pair note becomes a story of the cast draft the administrator looked at (revision), never published. */
+  async addToCastStory(id: string, ordinal: number, expectedRevision: number) {
+    const r = object(await this.request('cast-story', { id, ordinal, expectedRevision }));
+    return { ordinal: count(r.ordinal), castRevision: count(r.castRevision) };
   }
 }

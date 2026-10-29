@@ -81,6 +81,9 @@ export async function routeWebAccountAdmin(
     if (action === 'points/preview')
       return { status: 200, body: system.pointsPreview(actor, req.body, req.trustedIpHash) };
     if (action === 'points/grant') return { status: 200, body: system.pointsGrant(actor, req.body, req.trustedIpHash) };
+    // Part 24c: the three numbers of points for co-creation notes (owner or points.grant).
+    if (action === 'points/cocreation') return { status: 200, body: system.cocreationPoints(actor, req.body) };
+    if (action === 'points/cocreation-save') return { status: 200, body: system.saveCocreationPoints(actor, req.body) };
     if (action === 'points/reset-preview') return { status: 200, body: system.resetPreview(actor, req.body) };
     if (action === 'points/reset') return { status: 200, body: system.resetPoints(actor, req.body) };
     // Part 22c: 玩家统计 and 消耗表, each with its 导出表格. The permission is checked before the body is read.
@@ -143,6 +146,15 @@ export async function routeWebAccountAdmin(
     if (action === 'adopt') {
       const value = body(['id', 'ordinal']);
       return { status: 200, body: cocreation.markAdopted(actor, value.id, value.ordinal) };
+    }
+    if (action === 'unadopt') {
+      const value = body(['id', 'ordinal']);
+      return { status: 200, body: cocreation.unadopt(actor, value.id, value.ordinal) };
+    }
+    // Part 24c: 加入关系与故事 - a pair note becomes a story of the cast draft (compare-and-swap on its revision; never publishes).
+    if (action === 'cast-story') {
+      const value = body(['id', 'ordinal', 'expectedRevision']);
+      return { status: 200, body: cocreation.addToCastStory(actor, value.id, value.ordinal, value.expectedRevision) };
     }
     ensure(false, 'NOT_FOUND');
   }

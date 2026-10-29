@@ -16,6 +16,11 @@ import type {
 } from '../../../packages/contracts/web-system.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import type { ChartView, CostsView, PlayerStatsView, SpendView } from '../../../packages/contracts/web-stats.ts';
+import {
+  cocreationPointsTablesExist,
+  readCocreationPoints,
+  saveCocreationPoints,
+} from '../cocreation/web-cocreation-points.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { ModelFlags } from '../admission/web-model-settings.ts';
 import { bucketProviders } from '../budget/web-provider-budget-contract.ts';
@@ -338,6 +343,20 @@ export class WebSystemAdmin {
       result = error.value as typeof result;
     }
     return { ...result, duplicate: false, ...(selection.player ? { player: selection.player.lookup } : {}) };
+  }
+
+  /** Part 24c: the three numbers of points for co-creation notes and the revision they are saved under (owner or points.grant). */
+  cocreationPoints(auth: Auth, input: unknown) {
+    this.actor(auth, 'points');
+    exactly(input, []);
+    ensure(cocreationPointsTablesExist(this.store), 'COCREATION_UNAVAILABLE');
+    return readCocreationPoints(this.store);
+  }
+  /** Saves them (compare-and-swap on the revision; validated ranges; the audit row has the numbers only). */
+  saveCocreationPoints(auth: Auth, input: unknown) {
+    const actor = this.actor(auth, 'points');
+    object(input);
+    return this.store.transaction(() => saveCocreationPoints(this.store, this.clock.now(), actor.memberId, input));
   }
 
   /** 积分发放 to the selected players (owner or points.grant). One 'grant' event per player that receives points. */

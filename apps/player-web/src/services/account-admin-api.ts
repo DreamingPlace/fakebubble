@@ -1,4 +1,5 @@
 import { CharacterAdminClient } from './character-admin-api.ts';
+import { cocreationPointsOk, type CocreationPointsSettings } from '../../../../packages/contracts/cocreation-cards.ts';
 import { CastAdminClient } from './cast-admin-api.ts';
 import { CocreationAdminClient } from './cocreation-admin-api.ts';
 import { ConversationsAdminClient } from './conversations-admin-api.ts';
@@ -188,6 +189,14 @@ function challenge(value: unknown) {
   const row = object(value);
   return { challengeId: string(row.challengeId), expiresAt: time(row.expiresAt) };
 }
+export type CocreationPointsView = CocreationPointsSettings & { revision: number };
+function parseCocreationPoints(value: unknown): CocreationPointsView {
+  const row = object(value);
+  const { revision, ...numbers } = row;
+  if (!Number.isSafeInteger(revision) || !cocreationPointsOk(numbers)) throw invalid();
+  return { ...numbers, revision: revision as number };
+}
+
 export class AccountAdminApi extends InviteAdminApi {
   readonly characters = new CharacterAdminClient((path, body) => this.request('/characters/' + path, body));
   readonly previews = new PreviewAdminClient(
@@ -395,6 +404,15 @@ export class AccountAdminApi extends InviteAdminApi {
     const row = object(await this.request('/points/grant', input));
     if (!Number.isSafeInteger(row.granted) || typeof row.duplicate !== 'boolean') throw invalid();
     return row as unknown as PointsGrantResult;
+  }
+  /** Part 24c: the three numbers of points for co-creation notes and their revision (owner or points.grant). */
+  async cocreationPoints(): Promise<CocreationPointsView> {
+    return parseCocreationPoints(await this.request('/points/cocreation', {}));
+  }
+  async saveCocreationPoints(
+    input: CocreationPointsSettings & { expectedRevision: number },
+  ): Promise<CocreationPointsView> {
+    return parseCocreationPoints(await this.request('/points/cocreation-save', input));
   }
   /** Owner only. */
   async resetPreview(): Promise<PointsResetResult> {

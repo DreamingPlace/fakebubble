@@ -10,6 +10,7 @@ import {
   migrateWebProviderStats,
   migrateWebProviderCast,
   migrateWebProviderStatsExtras,
+  migrateWebProviderCocreationPoints,
 } from '../../../apps/server/generation/web-provider-migration.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
 import { WebStats } from '../../../apps/server/stats/web-stats.ts';
@@ -49,7 +50,10 @@ export function schema127() {
  * tiers object, and players who are signed up (a login, the signup bonus) or guests, each with a live session so a code can be
  * redeemed through the real WebInviteTiers.redeem.
  */
-export function tiersFixture(t: TestContext, options: { sealKey?: Buffer; stats?: boolean; extras?: boolean } = {}) {
+export function tiersFixture(
+  t: TestContext,
+  options: { sealKey?: Buffer; stats?: boolean; extras?: boolean; cocreation?: boolean } = {},
+) {
   const store = schema127();
   // Part 22c: with `stats` the store is taken on to 128 before anything exists, so every event is counted from the start.
   if (options.stats) migrateWebProviderStats(store, T0);
@@ -57,6 +61,8 @@ export function tiersFixture(t: TestContext, options: { sealKey?: Buffer; stats?
   if (options.stats && options.extras) {
     migrateWebProviderCast(store);
     migrateWebProviderStatsExtras(store, T0);
+    // Part 24c: `cocreation` takes it on to 131 (memo and pair notes, points for notes).
+    if (options.cocreation) migrateWebProviderCocreationPoints(store);
   }
   t.after(() => store.close());
   Object.assign(store, { webIpKeyFingerprint: () => 'f'.repeat(64) });

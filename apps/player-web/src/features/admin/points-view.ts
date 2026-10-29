@@ -6,6 +6,11 @@ import type {
   PointsSkipped,
   PointsTarget,
 } from '../../../../../packages/contracts/web-system.ts';
+import {
+  COCREATION_POINTS_LIMITS,
+  cocreationPointsOk,
+  type CocreationPointsSettings,
+} from '../../../../../packages/contracts/cocreation-cards.ts';
 import { POINTS_GRANT_LIMITS } from '../../../../../packages/contracts/web-system.ts';
 import { h, length } from '../cocreation/h.ts';
 import { dollars } from './system-format.ts';
@@ -50,6 +55,13 @@ export function pointsView(
     }) => Promise<PointsGrantResult>;
     resetPreview: () => Promise<PointsResetResult>;
     reset: (requestId: string) => Promise<PointsResetResult>;
+    /** Part 24c: the three numbers of points for co-creation notes. Without them the form is not on the page. */
+    cocreation?: {
+      read: () => Promise<CocreationPointsSettings & { revision: number }>;
+      save: (
+        input: CocreationPointsSettings & { expectedRevision: number },
+      ) => Promise<CocreationPointsSettings & { revision: number }>;
+    };
     isOwner: () => boolean;
     run: (work: () => Promise<void>) => Promise<void>;
     confirm: (options: { title: string; message: string; confirmLabel: string }) => Promise<boolean>;
@@ -294,6 +306,57 @@ export function pointsView(
     resetBox.replaceChildren(h('h3', { text: '重置全部额度' }), resetButton, resetOutcome);
   };
 
+  // Part 24c: 共创点数 - unstyled and minimal; the console redesign places it. Three numbers and 保存.
+  const ccBox = h('div', { class: 'points-cocreation', attrs: { id: 'points-cocreation' }, hidden: true });
+  let ccRevision = 0;
+  const ccInput = (key: keyof CocreationPointsSettings, label: string) => {
+    const limits = COCREATION_POINTS_LIMITS[key];
+    const input = h('input', {
+      class: 'admin-input',
+      attrs: {
+        type: 'number',
+        min: String(limits.min),
+        max: String(limits.max),
+        step: '1',
+        id: `points-cc-${key}`,
+        inputmode: 'numeric',
+      },
+    });
+    return { key, input, node: h('label', { text: `${label}（${limits.min}–${limits.max}）` }, input) };
+  };
+  const ccFields = [
+    ccInput('notePoints', '每条共创 +点'),
+    ccInput('dailyCap', '每人每天最多几条有点数'),
+    ccInput('adoptPoints', '被采用 +点'),
+  ];
+  const ccProblem = h('p', { class: 'admin-error', attrs: { role: 'alert' }, hidden: true });
+  const ccSave = h('button', { text: '保存共创点数', attrs: { type: 'button', id: 'points-cc-save' } });
+  const ccFill = (view: CocreationPointsSettings & { revision: number }) => {
+    ccRevision = view.revision;
+    for (const field of ccFields) field.input.value = String(view[field.key]);
+  };
+  ccSave.addEventListener(
+    'click',
+    () =>
+      void deps.run(async () => {
+        if (!deps.cocreation) return;
+        const next = {
+          notePoints: Number(ccFields[0]!.input.value),
+          dailyCap: Number(ccFields[1]!.input.value),
+          adoptPoints: Number(ccFields[2]!.input.value),
+        };
+        if (!cocreationPointsOk(next)) {
+          ccProblem.textContent = '请填整数，并在括号里的范围内。';
+          ccProblem.hidden = false;
+          return;
+        }
+        ccProblem.hidden = true;
+        ccFill(await deps.cocreation.save({ ...next, expectedRevision: ccRevision }));
+        deps.toast('共创点数已保存');
+      }),
+  );
+  ccBox.replaceChildren(h('h3', { text: '共创点数' }), ...ccFields.map((field) => field.node), ccProblem, ccSave);
+
   root.replaceChildren(
     pageHead('积分发放'),
     h(
@@ -317,12 +380,23 @@ export function pointsView(
         outcome,
       ),
       resetBox,
+      ccBox,
     ),
   );
   paintReset();
   return {
     /** The page needs nothing from the server to open; only the owner's section depends on the role. */
-    load: async () => paintReset(),
+    load: async () => {
+      paintReset();
+      if (!deps.cocreation) return;
+      try {
+        ccFill(await deps.cocreation.read());
+        ccBox.hidden = false;
+      } catch {
+        /* Without migration 131 (or without the permission) the form is simply not there. */
+        ccBox.hidden = true;
+      }
+    },
     clear() {
       pending.clear();
       email.value = '';

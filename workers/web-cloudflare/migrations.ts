@@ -30,6 +30,7 @@ import m127 from '../../apps/server/web-migrations/127_invite_codes_viewable.sql
 import m128 from '../../apps/server/web-migrations/128_stats.sql';
 import m129 from '../../apps/server/web-migrations/129_cast.sql';
 import m130 from '../../apps/server/web-migrations/130_stats_extras.sql';
+import m131 from '../../apps/server/web-migrations/131_cocreation_points.sql';
 import retention from './retention.sql';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -84,6 +85,7 @@ export const webMigrations = [
     m128,
     m129,
     m130,
+    m131,
   ].map((sql, i) => ({
     version: 100 + i,
     sql:

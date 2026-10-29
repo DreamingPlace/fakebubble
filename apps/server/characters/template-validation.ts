@@ -50,8 +50,11 @@ export function validatedTemplate(value: unknown): CharacterTemplate {
     'voice',
     'birthDate',
     'authorCanon',
+    'seed',
   ]);
   identifier(value.id);
+  // Only `true` is stored: an absent key is a finished character, so existing templates (and their hashes) are unchanged.
+  ensure(value.seed === undefined || value.seed === true, 'INVALID_TEMPLATE');
   nonempty(value.name, 100);
   nonempty(value.persona, 20_000);
   ensure(

@@ -43,16 +43,17 @@ const last = <T>(values: T[]) => values[values.length - 1]!;
 const X = 'fixture-character',
   Y = 'fixture-character-2';
 
-test('130 is its own step: same SQL on both authorities, 55 steps, 1-129 unchanged, the Node step stamps the start day', (t) => {
+test('130 is its own step: same SQL on both authorities, 1-129 unchanged, the Node step stamps the start day', (t) => {
   const { inline, r2 } = expectedWebMigrations();
-  assert.equal(inline.length, 55);
-  assert.equal(r2.length, 55);
-  assert.equal(inline.at(-1)!.version, 130);
-  assert.equal(inline.at(-1)!.sha256, createHash('sha256').update(sql130()).digest('hex'));
-  assert.deepEqual(r2.at(-1), inline.at(-1), '130 is the same SQL on both authorities');
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so step counts and positions counted from the end of the ledger moved by one again. No assertion was weakened.
+  assert.equal(inline.length, 56);
+  assert.equal(r2.length, 56);
+  assert.equal(inline.at(-2)!.version, 130);
+  assert.equal(inline.at(-2)!.sha256, createHash('sha256').update(sql130()).digest('hex'));
+  assert.deepEqual(r2.at(-2), inline.at(-2), '130 is the same SQL on both authorities');
   assert.deepEqual(
     inline.map((m) => m.version),
-    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 31 }, (_, i) => 100 + i)].slice(0, 55),
+    [...Array.from({ length: 24 }, (_, i) => i + 1), ...Array.from({ length: 32 }, (_, i) => 100 + i)].slice(0, 56),
   );
   // 1-129 are byte for byte what Part 24a deployed (the pins of 126-129 are the ones the earlier Parts recorded).
   for (const [version, sha] of [

@@ -74,6 +74,8 @@ type Port = Pick<
   pointsPreview?: AccountAdminApi['pointsPreview'];
   pointsGrant?: AccountAdminApi['pointsGrant'];
   resetPreview?: AccountAdminApi['resetPreview'];
+  cocreationPoints?: AccountAdminApi['cocreationPoints'];
+  saveCocreationPoints?: AccountAdminApi['saveCocreationPoints'];
   resetPoints?: AccountAdminApi['resetPoints'];
   /** 玩家统计 and 消耗表 (Part 22c): the owner or stats.read. Optional: a page without them has neither in the nav. */
   playerStats?: AccountAdminApi['playerStats'];
@@ -96,7 +98,8 @@ type Port = Pick<
   modelSettings?: AccountAdminApi['modelSettings'];
   saveModelSettings?: AccountAdminApi['saveModelSettings'];
   /** 共创收件箱. Optional: a page without it simply has no inbox tab. */
-  cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'>;
+  cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
+    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory'>>;
   /** 测试对话 (CHAT_REVIEW_ENABLED; the page only appears when the session says the switch is on). */
   conversations?: Pick<ConversationsAdminClient, 'list' | 'detail' | 'export'>;
 };
@@ -669,6 +672,14 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         characters: port.characters,
         canManage: () => canCocreation('cocreation.manage'),
         canEditCharacter,
+        ...(port.cast
+          ? {
+              castRevision: () => port.cast!.draft().then((draft) => draft.revision),
+              canEditCast: () =>
+                session?.member.role === 'owner' ||
+                (!!session && hasCastPermission(session.member.permissions, 'cast.edit')),
+            }
+          : {}),
         run,
         status: (text) => {
           if (!disposed) status.textContent = text;
@@ -739,6 +750,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     errorText: adminAccountError,
     resetPreview: () => (port.resetPreview ? port.resetPreview() : unavailable()),
     reset: (requestId) => (port.resetPoints ? port.resetPoints(requestId) : unavailable()),
+    ...(port.cocreationPoints && port.saveCocreationPoints
+      ? { cocreation: { read: () => port.cocreationPoints!(), save: (input) => port.saveCocreationPoints!(input) } }
+      : {}),
     isOwner: () => session?.member.role === 'owner',
     run,
     confirm: (options) => confirmDialog(q('main'), options),

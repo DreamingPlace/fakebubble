@@ -130,19 +130,21 @@ test('125 is the same SQL on both authorities, followed by 126, and 100-124 are 
   // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-  assert.equal(inline.length, 55);
-  assert.equal(r2.length, 55);
-  assert.equal(inline.at(-5)!.version, 126);
-  assert.equal(inline.at(-6)!.version, 125);
-  assert.equal(inline.at(-6)!.sha256, sha(sql125()));
-  assert.deepEqual(r2.at(-6), inline.at(-6));
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.length, 56);
+  assert.equal(r2.length, 56);
+  assert.equal(inline.at(-6)!.version, 126);
+  assert.equal(inline.at(-7)!.version, 125);
+  assert.equal(inline.at(-7)!.sha256, sha(sql125()));
+  assert.deepEqual(r2.at(-7), inline.at(-7));
   // Never edit steps 1-125: the earlier steps are byte-identical to main's.
   // Named exception (Part 22c, migration 128): the ledger has 53 steps and 128 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   // Named exception (Part 24a, migration 129): the ledger has 54 steps and 129 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
   // Named exception (Part 22d, migration 130): the ledger has 55 steps and 130 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
-  assert.equal(inline.at(-7)!.version, 124);
-  assert.equal(inline.at(-7)!.sha256, '5754ab5882783ac356527db8904fd2a4661c6b9ff98ee796a49a438ec1301d17');
-  assert.equal(inline.at(-8)!.sha256.startsWith('432c1237'), true);
+  // Named exception (Part 24c, migration 131): the ledger has 56 steps and 131 is the newest, so step counts, positions counted from the end of the ledger and the expected user_version moved by one again. No assertion was weakened.
+  assert.equal(inline.at(-8)!.version, 124);
+  assert.equal(inline.at(-8)!.sha256, '5754ab5882783ac356527db8904fd2a4661c6b9ff98ee796a49a438ec1301d17');
+  assert.equal(inline.at(-9)!.sha256.startsWith('432c1237'), true);
 });
 
 test('125 backfill: entitlements only for invited principals with a login and an ACTIVE grant; kind and retention never change', (t) => {
