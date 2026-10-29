@@ -37,17 +37,26 @@ export function openEarnSheet(options: EarnSheetOptions) {
   const sheet = h(
     'div',
     {
-      class: 'acct-sheet earn-sheet',
+      // Part 25b: a small bottom sheet in the model sheet's frame (a dim, a panel that slides up), sized to its content.
+      class: 'acct-sheet mp-sheet earn-sheet',
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'earn-title' },
     },
     h(
-      'header',
-      { class: 'acct-head' },
-      h('strong', { class: 'acct-title', text: earnCopy.title, attrs: { id: 'earn-title' } }),
-      closeButton,
+      'div',
+      { class: 'mp-panel' },
+      h('span', { class: 'mp-grip', attrs: { 'aria-hidden': 'true' } }),
+      h(
+        'header',
+        { class: 'acct-head' },
+        h('strong', { class: 'acct-title', text: earnCopy.title, attrs: { id: 'earn-title' } }),
+        closeButton,
+      ),
+      h('div', { class: 'acct-body earn-body' }, line, go),
     ),
-    h('div', { class: 'acct-body earn-body' }, line, go),
   );
+  sheet.addEventListener('click', (event) => {
+    if (event.target === sheet) close();
+  });
   let closed = false;
   const close = () => {
     if (closed) return;
@@ -57,7 +66,10 @@ export function openEarnSheet(options: EarnSheetOptions) {
     opener?.focus?.();
   };
   function onKey(event: Event) {
-    if ((event as KeyboardEvent).key === 'Escape') close();
+    if ((event as KeyboardEvent).key === 'Escape') {
+      event.stopPropagation?.();
+      close();
+    }
   }
   closeButton.addEventListener('click', close);
   go.addEventListener('click', () => {

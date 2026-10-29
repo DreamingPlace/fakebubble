@@ -11445,6 +11445,8 @@ html:has(.signed-out-page) {
 }
 .bl-row.is-bonus::before,
 .bl-row.is-grant::before,
+.bl-row.is-cocreation_note::before,
+.bl-row.is-cocreation_adopted::before,
 .bl-row.is-daily_refill::before,
 .bl-row.is-reset::before {
   content: "+";
@@ -11499,6 +11501,8 @@ html:has(.signed-out-page) {
 }
 .bl-row.is-bonus .bl-points,
 .bl-row.is-grant .bl-points,
+.bl-row.is-cocreation_note .bl-points,
+.bl-row.is-cocreation_adopted .bl-points,
 .bl-row.is-daily_refill .bl-points {
   color: #1e5e36;
 }
@@ -12253,6 +12257,28 @@ html.theme-fade *::after {
   padding-top: 84px;
 }
 
+/* 获得点数 (Part 24c) in the 25b colours: a small bottom sheet sized to its content, a soft accent button; night follows the tokens. */
+.earn-sheet .mp-panel {
+  gap: 14px;
+}
+.earn-line {
+  color: var(--bb-ink);
+}
+.mi-small.mi-earn {
+  background: #a9cdfb;
+  color: #0f3c7c;
+  font-weight: 700;
+}
+.earn-sheet .earn-go {
+  background: #a9cdfb;
+  color: #0f3c7c;
+}
+:root[data-theme="dark"] .mi-small.mi-earn,
+:root[data-theme="dark"] .earn-sheet .earn-go {
+  background: #5aa2ff;
+  color: #07162e;
+}
+
 /* ---- ⋯ menu in night ---- */
 .chat-menu {
   background: var(--s-solid);
@@ -12742,6 +12768,8 @@ html.theme-fade *::after {
 }
 :root[data-theme="dark"] .bl-row.is-bonus::before,
 :root[data-theme="dark"] .bl-row.is-grant::before,
+:root[data-theme="dark"] .bl-row.is-cocreation_note::before,
+:root[data-theme="dark"] .bl-row.is-cocreation_adopted::before,
 :root[data-theme="dark"] .bl-row.is-daily_refill::before,
 :root[data-theme="dark"] .bl-row.is-reset::before {
   background: rgba(127, 227, 163, 0.18);
@@ -12752,6 +12780,8 @@ html.theme-fade *::after {
 }
 :root[data-theme="dark"] .bl-row.is-bonus .bl-points,
 :root[data-theme="dark"] .bl-row.is-grant .bl-points,
+:root[data-theme="dark"] .bl-row.is-cocreation_note .bl-points,
+:root[data-theme="dark"] .bl-row.is-cocreation_adopted .bl-points,
 :root[data-theme="dark"] .bl-row.is-daily_refill .bl-points {
   color: #7fe3a3;
 }

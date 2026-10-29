@@ -19,6 +19,7 @@ import { PREFS_KEY, PlayerPrefs, parsePrefs } from '../../src/features/prefs/pla
 import { PAPER, resolveTheme, startTheme } from '../../src/features/prefs/theme.ts';
 import { applyChatBackground, openLookSheet } from '../../src/features/prototype/chat-look.ts';
 import { mountChatGuide, GUIDE_KEY } from '../../src/features/cocreation/chat-guide.ts';
+import { openEarnSheet } from '../../src/features/cocreation/earn-sheet.ts';
 import { openModelPicker } from '../../src/features/prototype/model-picker.ts';
 import { orbitStyle, ringOffset } from '../../src/features/prototype/orbit.ts';
 import { cardFace } from '../../src/features/prototype/card-face.ts';
@@ -678,4 +679,41 @@ test('the one-time ⋯ guide hangs under the header while the chat’s first lin
   assert.equal(head.classList.contains('has-guide'), false);
   assert.equal(store.get(GUIDE_KEY), '1');
   assert.match(rule('.page-shell .card-slot.is-chat .chat-head.has-guide ~ .chat-body'), /padding-top: 84px/);
+});
+
+// ---- 25b + 24c ---------------------------------------------------------------------------------------------------------------
+
+test('共创奖励 rows read as income: the green + icon and the green amount of 每日补充 and 管理员发放, in day and night', () => {
+  for (const kind of ['cocreation_note', 'cocreation_adopted']) {
+    assert.ok(css.includes(`.bl-row.is-${kind}::before`), `${kind}: icon`);
+    assert.ok(css.includes(`.bl-row.is-${kind} .bl-points`), `${kind}: amount`);
+    assert.ok(css.includes(`:root[data-theme="dark"] .bl-row.is-${kind}::before`), `${kind}: night icon`);
+    assert.ok(css.includes(`:root[data-theme="dark"] .bl-row.is-${kind} .bl-points`), `${kind}: night amount`);
+  }
+});
+
+test('获得点数 is a small bottom sheet in the model sheet’s frame, sized to its content, in the soft colours; Escape closes only it', (t) => {
+  const doc = installFakeDom(t);
+  const sheet = openEarnSheet({
+    api: { cocreationRewards: async () => ({ notePoints: 5, dailyCap: 15, adoptPoints: 20 }) },
+    openCocreation() {},
+    mount: doc.body as never,
+  }).element as unknown as FakeElement;
+  assert.ok(sheet.classList.contains('mp-sheet') && sheet.classList.contains('earn-sheet'));
+  assert.ok(
+    sheet.querySelector('.mp-panel .earn-line') && sheet.querySelector('.mp-panel .earn-go'),
+    'the panel holds the one line and the button',
+  );
+  assert.match(rule('.mi-small.mi-earn'), /background: #a9cdfb/);
+  assert.match(
+    rule(':root[data-theme="dark"] .mi-small.mi-earn,\n:root[data-theme="dark"] .earn-sheet .earn-go'),
+    /background: #5aa2ff/,
+  );
+  // Not full screen: the model sheet's panel is as tall as its content, never a full-height form.
+  assert.match(css, /\.mp-panel \{[^}]*max-height: 100%/);
+  assert.doesNotMatch(rule('.earn-sheet .mp-panel'), /height/);
+  let stopped = false;
+  doc.fire('keydown', { key: 'Escape', stopPropagation: () => void (stopped = true) });
+  assert.equal(stopped, true);
+  assert.equal(doc.body.querySelector('.earn-sheet'), null);
 });
