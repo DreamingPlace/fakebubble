@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { billingFixture } from './billing-data.ts';
 import { origin, close, loadPlaywright, mails, config } from './fixture.ts';
 
 const out = process.argv[2]!;
@@ -230,6 +231,59 @@ if (only === 'misc') {
     await page.getByRole('button', { name: '输入邀请码' }).click();
     await page.waitForTimeout(700);
     await page.screenshot({ path: join(out, `invite-${scheme}-390.png`) });
+    await ctx.close();
+  }
+}
+
+if (only === 'billing' || only === 'guide') {
+  for (const scheme of SCHEMES) {
+    const [w, h] = [390, 844];
+    const { ctx, page } = await open(w, h, scheme);
+    if (only === 'guide') {
+      await page.mouse.click(w / 2, h * 0.45);
+      await page.waitForSelector('.chat-guide');
+      await page.waitForTimeout(900);
+      await page.screenshot({ path: join(out, `guide-${scheme}-${w}.png`) });
+      await ctx.close();
+      continue;
+    }
+    const email = `bill.${scheme}@example.com`;
+    await page.getByRole('button', { name: /登录\/注册|注册/ }).first().click();
+    await page.waitForTimeout(700);
+    await page.locator('.acct-sheet').getByRole('button', { name: /没有账号/ }).click();
+    await page.getByLabel('邮箱').fill(email);
+    await page.getByRole('button', { name: '发送验证码' }).click();
+    for (let i = 0; i < 100 && !mails.some((m: any) => m.to === email); i++) await new Promise((r) => setTimeout(r, 50));
+    await page.getByLabel('验证码（6 位数字）').fill([...mails].reverse().find((m: any) => m.to === email)!.code!);
+    await page.getByRole('button', { name: '验证', exact: true }).click();
+    const pw = page.locator('input[type=password]');
+    await pw.first().waitFor({ timeout: 15000 });
+    await pw.nth(0).fill(PASSWORD);
+    await pw.nth(1).fill(PASSWORD);
+    await page.getByLabel('昵称').fill('阿泡');
+    await page.getByRole('button', { name: '完成注册' }).click();
+    await page.getByRole('button', { name: /阿泡/ }).first().waitFor({ timeout: 20000 });
+    await page.waitForLoadState('networkidle');
+    await page.route('**/billing/history', (route: any) => route.fulfill({ json: billingFixture() }));
+    await page.route('**/account', async (route: any) => {
+      const res = await route.fetch();
+      const json = await res.json();
+      if (route.request().method() === 'GET' && json.signedIn) {
+        const plan = { kind: 'daily_refill', dailyAmount: 50, cap: 1000, expiresAt: null };
+        json.tier = { kind: 'daily_refill', unlimited: false, plan };
+        json.modelChoice = { models: [{ id: 'deepseek', points: 10, voicePoints: 2 }], selected: 'deepseek', metered: true, balance: 470, repliesLeft: 47, version: 1, plan };
+      }
+      await route.fulfill({ response: res, json });
+    });
+    await page.reload();
+    await page.locator('.card-slot.is-active').waitFor();
+    await page.waitForTimeout(900);
+    await page.getByRole('button', { name: /阿泡/ }).first().click();
+    await page.waitForTimeout(700);
+    await page.getByRole('button', { name: '消费记录' }).click();
+    await page.waitForSelector('.bl-row');
+    await page.waitForTimeout(1000);
+    await page.screenshot({ path: join(out, `billing-${scheme}-${w}.png`) });
     await ctx.close();
   }
 }

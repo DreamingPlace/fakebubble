@@ -16,7 +16,7 @@ have, the one response is rewritten in the browser (listed below); nothing else 
 | `myinfo-refill-*`, `myinfo-unlimited-*` | 470 点 / 每天 +50 with the bar, and 不限量 (the response of `/account` gets a tier and a model state) | MyInfo |
 | `shared-*` | the shared voice 小卡: 收到一张语音小卡, no nickname, 来聊几句嘛～ (the component, with sample data) | Shared |
 | `signup-*`, `login-*`, `signed-out-*`, `invite-*` | sheets and pages in both themes; the account sheets slide up | — |
-| `model-*`, `cocreate-*`, `after-cocreate-*`, `billing-*` | the model sheet, 共创 and 消费记录 in both themes (390 only; billing's tables are empty in the fixture) | — |
+| `model-*`, `cocreate-*`, `after-cocreate-*`, `billing-*` | the model sheet, 共创 and 消费记录 in both themes (390 only) | — |
 
 Recordings (webm, 390×844): `video/swipe-mobile.webm` (swiping through the stack, both ways, past an empty slot) and
 `video/enter-chat-mobile.webm` (opening a chat: the card grows to fill the screen while the top bar lifts and fades, then back).
@@ -33,3 +33,11 @@ Recordings (webm, 390×844): `video/swipe-mobile.webm` (swiping through the stac
 `pnpm web:player:build`, then from the repository root `node review/part-25b/tools/capture.ts <out> [guest|player|sheets|misc|video]`
 (Playwright from `PLAYWRIGHT_MODULE` or the usual global directories, as in `scripts/check-web-browser.ts`). The shared card:
 bundle `tools/shared-entry.ts` with esbuild to `tools/shared-bundle.js` (iife) and run `tools/shared-snap.ts <out>`.
+
+## Fix round 2 (PR #55 follow-up)
+- `billing-light-390.png`, `billing-dark-390.png` are re-taken with real billing data: `tools/billing-data.ts` builds a `BillingPage`
+  (a month by model and by character, replies with and without voice, a backup reply, a failed reply with its refund, a daily
+  refill, a grant, a trial reply and the signup bonus) and checks it with the contract's own `parseBillingPage`; `capture.ts billing`
+  answers `/billing/history` with it. They render (before, the fixture had nothing for that route and the page said 没能加载).
+- `guide-light-390.png`, `guide-dark-390.png`: the one-time ⋯ guide under the header, and "X已添加了你" waiting below it; both readable.
+- Escape in the model sheet closes only the sheet (test `player-ui-25b`).
