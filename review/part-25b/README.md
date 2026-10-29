@@ -41,3 +41,7 @@ bundle `tools/shared-entry.ts` with esbuild to `tools/shared-bundle.js` (iife) a
   answers `/billing/history` with it. They render (before, the fixture had nothing for that route and the page said 没能加载).
 - `guide-light-390.png`, `guide-dark-390.png`: the one-time ⋯ guide under the header, and "X已添加了你" waiting below it; both readable.
 - Escape in the model sheet closes only the sheet (test `player-ui-25b`).
+
+## Fix round 3 (after Part 24c merged)
+- `billing-*-390.png` re-taken with real billing data including 共创奖励 rows (`tools/billing-data.ts`), which now read as income (green + icon and amount, like 每日补充).
+- `myinfo-earn-*-390.png`: 我的信息 with 24c's 获得点数 button in the 25b colours; `earn-sheet-*-390.png`: the 获得点数 sheet, a small bottom sheet sized to its content (day and night).

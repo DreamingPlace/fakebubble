@@ -26,6 +26,8 @@ export function billingFixture(now = Date.now()): BillingPage {
       { kind: 'daily_refill', at: now - 9 * H, points: 50 },
       { kind: 'reply', at: now - 1 * D, characterId: 'wei-guagua', model: 'deepseek', backupFor: 'xai', voice: true, points: 12, free: false },
       { kind: 'reply', at: now - 1 * D - 2 * H, characterId: 'chen-jimi', model: 'xai', voice: true, points: 27, free: false },
+      { kind: 'cocreation_note', at: now - 2 * D, points: 5 },
+      { kind: 'cocreation_adopted', at: now - 2 * D - H, points: 20 },
       { kind: 'grant', at: now - 3 * D, points: 100 },
       { kind: 'reply', at: now - 4 * D, characterId: 'jojo', model: 'deepseek', voice: false, points: 10, free: false },
       { kind: 'trial', at: now - 8 * D, characterId: 'jojo', model: 'deepseek' },

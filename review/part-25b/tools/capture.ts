@@ -278,8 +278,15 @@ if (only === 'billing' || only === 'guide') {
     await page.reload();
     await page.locator('.card-slot.is-active').waitFor();
     await page.waitForTimeout(900);
+    await page.route('**/cocreation/rewards', (route: any) => route.fulfill({ json: { notePoints: 5, dailyCap: 15, adoptPoints: 20 } }));
     await page.getByRole('button', { name: /阿泡/ }).first().click();
-    await page.waitForTimeout(700);
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: join(out, `myinfo-earn-${scheme}-${w}.png`) });
+    await page.getByRole('button', { name: '获得点数' }).click();
+    await page.waitForTimeout(900);
+    await page.screenshot({ path: join(out, `earn-sheet-${scheme}-${w}.png`) });
+    await page.locator('.earn-sheet .acct-close').click();
+    await page.waitForTimeout(400);
     await page.getByRole('button', { name: '消费记录' }).click();
     await page.waitForSelector('.bl-row');
     await page.waitForTimeout(1000);
