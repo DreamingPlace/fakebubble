@@ -37,5 +37,8 @@ test('运营数据 shows the daily count of replies delivered with dropped topic
   assert.ok(headers.includes('话题/事实丢弃'), headers.join('|'));
   const cells = node.querySelectorAll('.ot-row .ot-cell').map((td) => td.textContent);
   // A numeric cell carries its hover value (Part 24b-6), so the visible text starts the cell's text.
-  assert.ok(cells.some((c) => c.startsWith('3/1')), cells.join('|'));
+  assert.ok(
+    cells.some((c) => c.startsWith('3/1')),
+    cells.join('|'),
+  );
 });

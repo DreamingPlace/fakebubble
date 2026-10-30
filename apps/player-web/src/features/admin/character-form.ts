@@ -218,7 +218,15 @@ export function changedSections(published: CharacterProfile | null, draft: Chara
     const { speechStyle, dialogueStyle, dialogueExamples, background, ...rest } = settings;
     return stable(
       {
-        identity: [t.id, t.name, t.birthDate ?? null, p.displayName, p.publicDescription, p.color ?? null, t.seed === true],
+        identity: [
+          t.id,
+          t.name,
+          t.birthDate ?? null,
+          p.displayName,
+          p.publicDescription,
+          p.color ?? null,
+          t.seed === true,
+        ],
         welcome: p.welcome,
         persona: t.persona,
         speech: [speechStyle ?? null, dialogueStyle ?? null, dialogueExamples ?? null],
@@ -281,7 +289,9 @@ export function characterForm(
   welcome.append(
     el('p', '修改欢迎词或版本标识后，需要匹配新草稿的欢迎／结束成品批准，保存不会替换玩家当前听到的音频。'),
   );
-  const parts = canonEditors((base.template.authorCanon?.settings ?? {}) as Record<string, JsonValue>, () => onChange());
+  const parts = canonEditors((base.template.authorCanon?.settings ?? {}) as Record<string, JsonValue>, () =>
+    onChange(),
+  );
   form.append(parts.speech, parts.past);
   const rawSet = el('fieldset');
   rawSet.append(el('legend', '其余设定'));
@@ -309,7 +319,10 @@ export function characterForm(
   // A changed field turns amber until the draft is saved (and the page re-renders from what was saved).
   for (const control of form.querySelectorAll?.<HTMLInputElement | HTMLTextAreaElement>('input,textarea') ?? [])
     if (control.getAttribute?.('data-was') === null || control.getAttribute?.('data-was') === undefined)
-      control.setAttribute?.('data-was', control.type === 'checkbox' ? String((control as HTMLInputElement).checked) : control.value);
+      control.setAttribute?.(
+        'data-was',
+        control.type === 'checkbox' ? String((control as HTMLInputElement).checked) : control.value,
+      );
   const flag = (event: Event) => {
     const control = event.target as HTMLInputElement | null;
     const was = control?.getAttribute?.('data-was');

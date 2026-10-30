@@ -100,7 +100,9 @@ test('消耗表: the month is in USD with the RMB figure (the rate is its toolti
   // Named exception (Part 24b-6, Usage3): the rate is the hover value of the ¥ tile (no title attribute); the tables are open-below
   // grids (.ot) whose numeric cells carry their exact value on hover (the bubble's text follows the visible text), 按模型 merges the days
   // and 按天明细 has one row per day (its calls open under it). The values asserted are the same ones.
-  const yuan = (f.root as unknown as FakeElement).querySelectorAll('.ov-tile').find((el) => /¥13\.40/.test(el.textContent))!;
+  const yuan = (f.root as unknown as FakeElement)
+    .querySelectorAll('.ov-tile')
+    .find((el) => /¥13\.40/.test(el.textContent))!;
   assert.match(yuan.textContent, /汇率 6\.7/);
   const grid = (caption: string) =>
     (f.root as unknown as FakeElement)
@@ -114,11 +116,17 @@ test('消耗表: the month is in USD with the RMB figure (the rate is its toolti
     ['fish / drama-3 / 语音', 'deepseek / deepseek-v4-flash / 草稿'],
   );
   assert.ok(models[0]![6]!.startsWith('$0.05') && models[0]![6]!.includes('账本扣 $0.090 000'));
-  assert.ok(models[1]![6]!.startsWith('$0.00') && !models[1]![6]!.includes('账本扣'), 'a day before 22c has no ledger amount');
+  assert.ok(
+    models[1]![6]!.startsWith('$0.00') && !models[1]![6]!.includes('账本扣'),
+    'a day before 22c has no ledger amount',
+  );
   const days = grid('消耗表（按天明细）');
   assert.equal(days.length, 1);
   assert.deepEqual(
-    days[0]!.map((c, i) => [0, 1, 2, 3, 4, 5].includes(i) && c.startsWith(['2026-11-20', '10', '$0.05', '$0.09', '120', '$0.0050'][i]!)),
+    days[0]!.map(
+      (c, i) =>
+        [0, 1, 2, 3, 4, 5].includes(i) && c.startsWith(['2026-11-20', '10', '$0.05', '$0.09', '120', '$0.0050'][i]!),
+    ),
     [true, true, true, true, true, true],
   );
   const quiet = mountCosts(t, costs(false));

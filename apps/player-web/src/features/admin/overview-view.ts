@@ -178,37 +178,104 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
   const num = (n: number) => String(n);
   const dayColumns: OpenColumn<DayRow>[] = [
     { key: 'day', label: '日期 UTC', width: '130px', mono: true, cell: (r) => r.label },
-    { key: 'signups', label: '新注册', align: 'end', mono: true, cell: (r) => num(r.counts.signups), tip: (r) => exactCount(r.counts.signups) },
-    { key: 'guests', label: '新访客', align: 'end', mono: true, cell: (r) => num(r.counts.newGuests), tip: (r) => exactCount(r.counts.newGuests) },
     {
-      key: 'active', label: '活跃', align: 'end', mono: true, headTip: '注册 / 访客',
+      key: 'signups',
+      label: '新注册',
+      align: 'end',
+      mono: true,
+      cell: (r) => num(r.counts.signups),
+      tip: (r) => exactCount(r.counts.signups),
+    },
+    {
+      key: 'guests',
+      label: '新访客',
+      align: 'end',
+      mono: true,
+      cell: (r) => num(r.counts.newGuests),
+      tip: (r) => exactCount(r.counts.newGuests),
+    },
+    {
+      key: 'active',
+      label: '活跃',
+      align: 'end',
+      mono: true,
+      headTip: '注册 / 访客',
       cell: (r) => num(r.counts.activeRegistered + r.counts.activeGuests),
-      tip: (r) => partsText([['注册', r.counts.activeRegistered], ['访客', r.counts.activeGuests]]),
+      tip: (r) =>
+        partsText([
+          ['注册', r.counts.activeRegistered],
+          ['访客', r.counts.activeGuests],
+        ]),
     },
     {
-      key: 'chat', label: '聊天人数', align: 'end', mono: true, headTip: '注册 / 访客',
+      key: 'chat',
+      label: '聊天人数',
+      align: 'end',
+      mono: true,
+      headTip: '注册 / 访客',
       cell: (r) => num(r.counts.chatRegistered + r.counts.chatGuests),
-      tip: (r) => partsText([['注册', r.counts.chatRegistered], ['访客', r.counts.chatGuests]]),
+      tip: (r) =>
+        partsText([
+          ['注册', r.counts.chatRegistered],
+          ['访客', r.counts.chatGuests],
+        ]),
     },
     {
-      key: 'replies', label: '回复', align: 'end', mono: true, headTip: '成功 / 失败 / 未知',
+      key: 'replies',
+      label: '回复',
+      align: 'end',
+      mono: true,
+      headTip: '成功 / 失败 / 未知',
       cell: (r) => num(r.counts.repliesPublished + r.counts.repliesFailed + r.counts.repliesUnknown),
-      tip: (r) => partsText([['成功', r.counts.repliesPublished], ['失败', r.counts.repliesFailed], ['未知', r.counts.repliesUnknown]]),
+      tip: (r) =>
+        partsText([
+          ['成功', r.counts.repliesPublished],
+          ['失败', r.counts.repliesFailed],
+          ['未知', r.counts.repliesUnknown],
+        ]),
     },
-    { key: 'voice', label: '语音回复', align: 'end', mono: true, cell: (r) => num(r.counts.voiceReplies), tip: (r) => exactCount(r.counts.voiceReplies) },
-    { key: 'deleted', label: '删除账号', align: 'end', mono: true, cell: (r) => num(r.counts.deletedAccounts), tip: (r) => exactCount(r.counts.deletedAccounts) },
     {
-      key: 'clean', label: '清理', align: 'end', mono: true, headTip: '不活跃清理 / 试用到期清理',
+      key: 'voice',
+      label: '语音回复',
+      align: 'end',
+      mono: true,
+      cell: (r) => num(r.counts.voiceReplies),
+      tip: (r) => exactCount(r.counts.voiceReplies),
+    },
+    {
+      key: 'deleted',
+      label: '删除账号',
+      align: 'end',
+      mono: true,
+      cell: (r) => num(r.counts.deletedAccounts),
+      tip: (r) => exactCount(r.counts.deletedAccounts),
+    },
+    {
+      key: 'clean',
+      label: '清理',
+      align: 'end',
+      mono: true,
+      headTip: '不活跃清理 / 试用到期清理',
       cell: (r) => num(r.counts.inactivePurged + r.counts.expiredPurged),
-      tip: (r) => partsText([['不活跃', r.counts.inactivePurged], ['试用到期', r.counts.expiredPurged]]),
+      tip: (r) =>
+        partsText([
+          ['不活跃', r.counts.inactivePurged],
+          ['试用到期', r.counts.expiredPurged],
+        ]),
     },
     {
-      key: 'd1', label: '次日留存', align: 'end', mono: true,
+      key: 'd1',
+      label: '次日留存',
+      align: 'end',
+      mono: true,
       cell: (r) => pct(r.counts.d1),
       tip: (r) => (r.counts.d1 ? `${r.counts.d1.retained} / ${r.counts.d1.cohort}` : '还要等一天'),
     },
     {
-      key: 'd7', label: '7 日留存', align: 'end', mono: true,
+      key: 'd7',
+      label: '7 日留存',
+      align: 'end',
+      mono: true,
       cell: (r) => pct(r.counts.d7),
       tip: (r) => (r.counts.d7 ? `${r.counts.d7.retained} / ${r.counts.d7.cohort}` : '要满 7 天才有'),
     },
@@ -221,7 +288,12 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     emptyText: '还没有统计数据。玩家访问或聊天之后，每日数字会显示在这里。',
     rowClass: (r) => (r.total ? 'is-total' : ''),
   });
-  const daysCard = h('section', { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按天' } }, h('h3', { text: '按天' }), days.root);
+  const daysCard = h(
+    'section',
+    { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按天' } },
+    h('h3', { text: '按天' }),
+    days.root,
+  );
 
   // ---- splits ----
   const characterHost = h('div', { class: 'ov-split-rows' });
@@ -230,7 +302,12 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
   const split = h(
     'div',
     { class: 'ov-pair' },
-    h('section', { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按角色' } }, h('h3', { text: '按角色' }), characterHost),
+    h(
+      'section',
+      { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按角色' } },
+      h('h3', { text: '按角色' }),
+      characterHost,
+    ),
     h('section', { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按模型' } }, modelTitle, modelHost),
   );
 
@@ -333,25 +410,63 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
   const colorOf = (index: number) => CHARACTER_COLORS[index % CHARACTER_COLORS.length]!;
   /** The characters by their most-replies order, the rest together as one grey entry. */
   function grouped<T extends { name: string }>(rows: readonly T[], value: (row: T) => number) {
-    const head = rows.slice(0, SHOWN_CHARACTERS).map((row, i) => ({ name: row.name, color: colorOf(i), value: value(row) }));
+    const head = rows
+      .slice(0, SHOWN_CHARACTERS)
+      .map((row, i) => ({ name: row.name, color: colorOf(i), value: value(row) }));
     const rest = rows.slice(SHOWN_CHARACTERS);
-    if (rest.length) head.push({ name: `其他 ${rest.length} 位`, color: OTHER_COLOUR, value: rest.reduce((a, r) => a + value(r), 0) });
+    if (rest.length)
+      head.push({ name: `其他 ${rest.length} 位`, color: OTHER_COLOUR, value: rest.reduce((a, r) => a + value(r), 0) });
     return head;
   }
 
-  function series(): { names: [string, string]; colors: [string, string]; a: (number | null)[]; b: (number | null)[]; buckets: string[]; hourly: boolean } | null {
+  function series(): {
+    names: [string, string];
+    colors: [string, string];
+    a: (number | null)[];
+    b: (number | null)[];
+    buckets: string[];
+    hourly: boolean;
+  } | null {
     if (span === '24h') {
       const view = metric === 'chat' ? hourly.chat : hourly.replies;
       if (!view) return null;
-      return { names: ['合计', '合计'], colors: [PRIMARY, PRIMARY], a: view.total, b: view.total.map(() => null), buckets: view.buckets, hourly: true };
+      return {
+        names: ['合计', '合计'],
+        colors: [PRIMARY, PRIMARY],
+        a: view.total,
+        b: view.total.map(() => null),
+        buckets: view.buckets,
+        hourly: true,
+      };
     }
     if (!stats) return null;
     const chrono = [...stats.days].reverse();
     if (metric === 'replies')
-      return { names: ['成功', '失败'], colors: [PRIMARY, DANGER], a: chrono.map((d) => d.repliesPublished), b: chrono.map((d) => d.repliesFailed), buckets: chrono.map((d) => d.day), hourly: false };
+      return {
+        names: ['成功', '失败'],
+        colors: [PRIMARY, DANGER],
+        a: chrono.map((d) => d.repliesPublished),
+        b: chrono.map((d) => d.repliesFailed),
+        buckets: chrono.map((d) => d.day),
+        hourly: false,
+      };
     if (metric === 'chat')
-      return { names: ['注册玩家', '访客'], colors: [PRIMARY, OTHER_COLOUR], a: chrono.map((d) => d.chatRegistered), b: chrono.map((d) => d.chatGuests), buckets: chrono.map((d) => d.day), hourly: false };
-    return { names: ['注册玩家', '访客'], colors: [PRIMARY, OTHER_COLOUR], a: chrono.map((d) => d.activeRegistered), b: chrono.map((d) => d.activeGuests), buckets: chrono.map((d) => d.day), hourly: false };
+      return {
+        names: ['注册玩家', '访客'],
+        colors: [PRIMARY, OTHER_COLOUR],
+        a: chrono.map((d) => d.chatRegistered),
+        b: chrono.map((d) => d.chatGuests),
+        buckets: chrono.map((d) => d.day),
+        hourly: false,
+      };
+    return {
+      names: ['注册玩家', '访客'],
+      colors: [PRIMARY, OTHER_COLOUR],
+      a: chrono.map((d) => d.activeRegistered),
+      b: chrono.map((d) => d.activeGuests),
+      buckets: chrono.map((d) => d.day),
+      hourly: false,
+    };
   }
 
   function paintTrend(replay = false) {
@@ -370,11 +485,23 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     const figureOf = (values: readonly (number | null)[]) => (metric === 'replies' ? sum(values) : latest(values));
     const chip = (name: string, color: string, values: readonly (number | null)[]) => {
       const figure = figureOf(values);
-      const node = h('span', { class: 'ovx-chip' }, h('i', { class: 'ovx-dot' }), `${name} `, h('b', { text: figure === null ? '—' : countLabel(figure) }));
+      const node = h(
+        'span',
+        { class: 'ovx-chip' },
+        h('i', { class: 'ovx-dot' }),
+        `${name} `,
+        h('b', { text: figure === null ? '—' : countLabel(figure) }),
+      );
       (node.querySelector?.('i') as HTMLElement | null)?.style.setProperty('--c', color);
-      return hoverValue(node, `${name} ${figure === null ? '—' : exactCount(figure)} ${unit}${metric === 'replies' ? '（这段时间的合计）' : '（最新一格）'}`);
+      return hoverValue(
+        node,
+        `${name} ${figure === null ? '—' : exactCount(figure)} ${unit}${metric === 'replies' ? '（这段时间的合计）' : '（最新一格）'}`,
+      );
     };
-    legend.replaceChildren(chip(data.names[0], data.colors[0], data.a), ...(single ? [] : [chip(data.names[1], data.colors[1], data.b)]));
+    legend.replaceChildren(
+      chip(data.names[0], data.colors[0], data.a),
+      ...(single ? [] : [chip(data.names[1], data.colors[1], data.b)]),
+    );
     if (kind === 'pie') {
       paintPie(data, unit);
       return;
@@ -389,7 +516,9 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
         mode: kind === 'bar' ? 'bar' : 'line',
         series: list,
         buckets: data.buckets.map((b) => bucketLabel(b, false)),
-        ticks: data.buckets.map((b, index) => ({ index, label: bucketLabel(b, true) })).filter((t) => t.index % step === 0),
+        ticks: data.buckets
+          .map((b, index) => ({ index, label: bucketLabel(b, true) }))
+          .filter((t) => t.index % step === 0),
         axisLabel: countLabel,
         valueLabel: countLabel,
         ariaLabel: `${METRICS.find((m) => m.id === metric)!.label}${kind === 'bar' ? '柱状' : '折线'}`,
@@ -412,7 +541,10 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       ];
     } else if (span === '24h') {
       const view = metric === 'chat' ? hourly.chat : hourly.replies;
-      entries = grouped(view?.characters ?? [], (c) => seriesFigure(metric === 'chat' ? 'chat_users' : 'replies', c.values) ?? 0);
+      entries = grouped(
+        view?.characters ?? [],
+        (c) => seriesFigure(metric === 'chat' ? 'chat_users' : 'replies', c.values) ?? 0,
+      );
     } else if (metric === 'replies') {
       entries = grouped(stats?.byCharacter ?? [], (c) => c.published);
     } else {
@@ -435,12 +567,21 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     }
     const rowFor = (name: string, color: string, value: number, top: number, round: string, tip: string) => {
       const bar = h('span', { class: 'ov-bar' }, h('i'));
-      (bar.querySelector?.('i') as HTMLElement | null)?.style.setProperty('--w', `${top > 0 ? Math.round((value / top) * 100) : 0}%`);
+      (bar.querySelector?.('i') as HTMLElement | null)?.style.setProperty(
+        '--w',
+        `${top > 0 ? Math.round((value / top) * 100) : 0}%`,
+      );
       (bar.querySelector?.('i') as HTMLElement | null)?.style.setProperty('--c', color);
       const dot = h('i', { class: 'ov-rdot' });
       dot.style.setProperty('--c', color);
       dot.style.setProperty('--r', round);
-      const row = h('div', { class: 'ov-split-row' }, h('span', { class: 'ov-split-name' }, dot, name), bar, h('span', { class: 'ov-split-value', text: exactCount(value) }));
+      const row = h(
+        'div',
+        { class: 'ov-split-row' },
+        h('span', { class: 'ov-split-name' }, dot, name),
+        bar,
+        h('span', { class: 'ov-split-value', text: exactCount(value) }),
+      );
       return hoverValue(row, tip);
     };
     const chars = view.byCharacter;
@@ -456,20 +597,45 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     const rest = chars.slice(SHOWN_CHARACTERS);
     const rows = shown.map(({ c, color }) => {
       const chat = chatFor(c.name);
-      return rowFor(c.name, color, c.published, charTop, '50%', `${c.name} · 成功 ${exactCount(c.published)} / 失败 ${exactCount(c.failed)} / 未知 ${exactCount(c.unknown)} · 语音 ${exactCount(c.voice)}${chat === null ? '' : ` · 昨日聊天 ${exactCount(chat)} 人`}`);
+      return rowFor(
+        c.name,
+        color,
+        c.published,
+        charTop,
+        '50%',
+        `${c.name} · 成功 ${exactCount(c.published)} / 失败 ${exactCount(c.failed)} / 未知 ${exactCount(c.unknown)} · 语音 ${exactCount(c.voice)}${chat === null ? '' : ` · 昨日聊天 ${exactCount(chat)} 人`}`,
+      );
     });
     if (rest.length) {
       const value = rest.reduce((a, c) => a + c.published, 0);
-      rows.push(rowFor(`其他 ${rest.length} 位`, OTHER_COLOUR, value, charTop, '50%', `其他 ${rest.length} 位 · ${exactCount(value)} 条回复`));
+      rows.push(
+        rowFor(
+          `其他 ${rest.length} 位`,
+          OTHER_COLOUR,
+          value,
+          charTop,
+          '50%',
+          `其他 ${rest.length} 位 · ${exactCount(value)} 条回复`,
+        ),
+      );
     }
-    characterHost.replaceChildren(...(rows.length ? rows : [h('p', { class: 'ot-empty', text: '这段时间还没有回复。' })]));
+    characterHost.replaceChildren(
+      ...(rows.length ? rows : [h('p', { class: 'ot-empty', text: '这段时间还没有回复。' })]),
+    );
     const models = view.byModel;
     const modelTop = Math.max(0, ...models.map((m) => m.published));
     const palette = [PRIMARY, '#0E7490', '#B45309', '#9D174D'];
     modelHost.replaceChildren(
       ...(models.length
         ? models.map((m, i) =>
-            rowFor(modelLabel(m.model), m.model === '' ? OTHER_COLOUR : palette[i % palette.length]!, m.published, modelTop, '2px', `${modelLabel(m.model)} · 成功 ${exactCount(m.published)} / 失败 ${exactCount(m.failed)} / 未知 ${exactCount(m.unknown)} · 语音 ${exactCount(m.voice)}`),
+            rowFor(
+              modelLabel(m.model),
+              m.model === '' ? OTHER_COLOUR : palette[i % palette.length]!,
+              m.published,
+              modelTop,
+              '2px',
+              `${modelLabel(m.model)} · 成功 ${exactCount(m.published)} / 失败 ${exactCount(m.failed)} / 未知 ${exactCount(m.unknown)} · 语音 ${exactCount(m.voice)}`,
+            ),
           )
         : [h('p', { class: 'ot-empty', text: '这段时间还没有回复。' })]),
     );
@@ -484,7 +650,9 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     const rows: DayRow[] = view.days.map((d) => ({ key: d.day, label: d.day, counts: d, total: false }));
     // 24H: today and yesterday; the other ranges: every day, then the totals.
     const shownRows = span === '24h' ? rows.slice(0, 2) : rows;
-    days.setRows(span === '24h' ? shownRows : [...shownRows, { key: 'total', label: '合计', counts: view.totals, total: true }]);
+    days.setRows(
+      span === '24h' ? shownRows : [...shownRows, { key: 'total', label: '合计', counts: view.totals, total: true }],
+    );
   }
   function paintAll(replay = false) {
     paintMetricTabs();

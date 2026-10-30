@@ -210,7 +210,9 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     return [...new Set([...state.roster, ...own])];
   };
   const nameFor = (id: string) =>
-    state.doc && state.doc.characters.some((c) => c.characterId === id) ? nameOf(state.doc, id) : (state.rosterNames.get(id) ?? id);
+    state.doc && state.doc.characters.some((c) => c.characterId === id)
+      ? nameOf(state.doc, id)
+      : (state.rosterNames.get(id) ?? id);
   const ctx: CastCtx = {
     doc: () => state.doc!,
     canEdit,
@@ -237,7 +239,8 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     },
     light: () => grid.light(),
   };
-  const colourOf = () => rosterColours(state.roster.length ? state.roster : (state.doc?.characters ?? []).map((c) => c.characterId));
+  const colourOf = () =>
+    rosterColours(state.roster.length ? state.roster : (state.doc?.characters ?? []).map((c) => c.characterId));
 
   // ---- the regions that share the grid's state ---------------------------------------------------------------------
   const view = state as typeof state & GridState & StoryState;
@@ -288,7 +291,9 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     frame.start.hidden = !none;
     paintImporter();
     for (const node of body) node.hidden = none;
-    for (const region of Object.keys(paint) as Region[]) if (!none || region === 'start' || region === 'bar' || region === 'versions' || region === 'notice') paint[region]();
+    for (const region of Object.keys(paint) as Region[])
+      if (!none || region === 'start' || region === 'bar' || region === 'versions' || region === 'notice')
+        paint[region]();
   };
 
   // ---- the first step: only when there is no character at all --------------------------------------------------------
@@ -297,7 +302,10 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     if (!state.doc || ids().length) return;
     frame.start.append(
       h('h2', { text: '还没有角色' }),
-      h('p', { class: 'cs-hint', text: canEdit() ? '先在角色工作台建一个角色，或者导入一份阵容文件。' : '阵容里还没有角色（你只有查看权限）。' }),
+      h('p', {
+        class: 'cs-hint',
+        text: canEdit() ? '先在角色工作台建一个角色，或者导入一份阵容文件。' : '阵容里还没有角色（你只有查看权限）。',
+      }),
     );
   }
 
@@ -314,8 +322,16 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       h('span', { class: 'is-mono', text: state.latest ? `线上 v${state.latest}` : '还没发布' }),
       h('span', { class: 'is-mono', text: `草稿 #${state.revision}` }),
       blocked
-        ? h('span', { class: 'cs-tag is-bad', text: `${state.publishIssues.length} 个问题挡着发布`, attrs: { role: 'status' } })
-        : h('span', { class: 'cs-tag is-ok', text: state.warnings ? `可以发布 · ${state.warnings} 条提醒` : '可以发布', attrs: { role: 'status' } }),
+        ? h('span', {
+            class: 'cs-tag is-bad',
+            text: `${state.publishIssues.length} 个问题挡着发布`,
+            attrs: { role: 'status' },
+          })
+        : h('span', {
+            class: 'cs-tag is-ok',
+            text: state.warnings ? `可以发布 · ${state.warnings} 条提醒` : '可以发布',
+            attrs: { role: 'status' },
+          }),
       state.dirty ? h('span', { class: 'is-warn', text: changes > 0 ? unsavedText(changes) : '有没保存的修改' }) : null,
     );
     head.append(status);
@@ -326,7 +342,11 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       head.append(save);
     }
     if (canPublish()) {
-      const publish = h('button', { class: 'admin-primary cs-primary cs-publish', text: `发布 v${next}`, attrs: { type: 'button' } });
+      const publish = h('button', {
+        class: 'admin-primary cs-primary cs-publish',
+        text: `发布 v${next}`,
+        attrs: { type: 'button' },
+      });
       lock(publish, state.dirty || blocked || !state.doc.characters.length, state.dirty ? '先保存草稿' : undefined);
       hoverValue(publish, '这一页的全部内容一起发布成 v' + next);
       publish.addEventListener('click', () => void publishNow(next));
@@ -337,17 +357,30 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   function paintVersions() {
     frame.versions.replaceChildren();
     if (!state.doc) return;
-    const label = hoverValue(h('span', { class: 'cs-versions-label', text: '整页版本' }), '关系、组合、故事、世界、名片一起，发布成一个版本');
+    const label = hoverValue(
+      h('span', { class: 'cs-versions-label', text: '整页版本' }),
+      '关系、组合、故事、世界、名片一起，发布成一个版本',
+    );
     const line = h('div', { class: 'cs-version-line' });
     const ordered = [...state.versions].sort((a, b) => a.version - b.version);
     ordered.forEach((v, index) => {
       const chip = h(
         'button',
-        { class: 'cs-version', attrs: { type: 'button', 'data-version': String(v.version), 'aria-pressed': String(state.openVersion === v.version) } },
+        {
+          class: 'cs-version',
+          attrs: {
+            type: 'button',
+            'data-version': String(v.version),
+            'aria-pressed': String(state.openVersion === v.version),
+          },
+        },
         h('i', { class: 'cs-version-mark' }),
         h('span', { class: 'cs-mono', text: `v${v.version}` }),
       );
-      hoverValue(chip, `${dateTimeText(v.publishedAt)} · 角色 ${v.counts.characters} · 组合 ${v.counts.groups} · 故事 ${v.counts.stories}${v.kind === 'rollback' ? ` · 回滚自 v${v.fromVersion}` : ''}`);
+      hoverValue(
+        chip,
+        `${dateTimeText(v.publishedAt)} · 角色 ${v.counts.characters} · 组合 ${v.counts.groups} · 故事 ${v.counts.stories}${v.kind === 'rollback' ? ` · 回滚自 v${v.fromVersion}` : ''}`,
+      );
       chip.addEventListener('click', () => {
         state.openVersion = state.openVersion === v.version ? null : v.version;
         paintVersions();
@@ -355,7 +388,17 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       line.append(chip, h('i', { class: 'cs-version-rule', attrs: { 'aria-hidden': 'true' } }));
       void index;
     });
-    line.append(h('span', { class: `cs-version is-draft${state.dirty ? ' is-dirty' : ''}`, attrs: { 'data-draft': String(state.revision) } }, h('i', { class: 'cs-version-mark' }), h('span', { class: 'cs-mono', text: `草稿 #${state.revision}` })));
+    line.append(
+      h(
+        'span',
+        {
+          class: `cs-version is-draft${state.dirty ? ' is-dirty' : ''}`,
+          attrs: { 'data-draft': String(state.revision) },
+        },
+        h('i', { class: 'cs-version-mark' }),
+        h('span', { class: 'cs-mono', text: `草稿 #${state.revision}` }),
+      ),
+    );
     const actions = h('span', { class: 'cs-versions-actions' });
     if (canEdit() && state.serverEmpty && !state.dirty) {
       const legacy = h('button', { class: 'cs-quiet', text: '从旧资料导入', attrs: { type: 'button' } });
@@ -374,13 +417,20 @@ export function castView(root: HTMLElement, host: CastViewHost) {
           'div',
           { class: 'cs-version-open' },
           h('b', { class: 'cs-mono', text: `v${open.version}` }),
-          h('span', { class: 'cs-version-sub', text: `${open.kind === 'rollback' ? `回滚自 v${open.fromVersion}` : '发布'} · ${dateTimeText(open.publishedAt)} · 角色 ${open.counts.characters} · 组合 ${open.counts.groups} · 故事 ${open.counts.stories}` }),
+          h('span', {
+            class: 'cs-version-sub',
+            text: `${open.kind === 'rollback' ? `回滚自 v${open.fromVersion}` : '发布'} · ${dateTimeText(open.publishedAt)} · 角色 ${open.counts.characters} · 组合 ${open.counts.groups} · 故事 ${open.counts.stories}`,
+          }),
           canPublish() && open.version !== state.latest ? rollbackButton(open.version) : null,
         ),
       );
   }
   function rollbackButton(version: number) {
-    const back = h('button', { class: 'cs-quiet is-tint', text: `回滚到 v${version}`, attrs: { type: 'button', 'aria-label': `回滚到 v${version}（作为新版本发布）` } });
+    const back = h('button', {
+      class: 'cs-quiet is-tint',
+      text: `回滚到 v${version}`,
+      attrs: { type: 'button', 'aria-label': `回滚到 v${version}（作为新版本发布）` },
+    });
     back.addEventListener('click', () => void rollbackTo(version));
     return back;
   }
@@ -402,7 +452,11 @@ export function castView(root: HTMLElement, host: CastViewHost) {
         state.conflict = null;
         paintAll();
       });
-      const box = h('div', { class: 'cs-notice is-bad', attrs: { role: 'alert' } }, h('span', { text: `草稿已被另一位管理员存成修订 ${state.conflict.revision}。你写的内容都还在下面。` }));
+      const box = h(
+        'div',
+        { class: 'cs-notice is-bad', attrs: { role: 'alert' } },
+        h('span', { text: `草稿已被另一位管理员存成修订 ${state.conflict.revision}。你写的内容都还在下面。` }),
+      );
       if (canEdit()) box.append(keep);
       box.append(take);
       frame.notice.append(box);
@@ -413,7 +467,11 @@ export function castView(root: HTMLElement, host: CastViewHost) {
         h(
           'div',
           { class: `cs-notice ${state.saveIssues.length ? 'is-bad' : 'is-warn'}`, attrs: { role: 'status' } },
-          h('b', { text: state.saveIssues.length ? `没能保存：${issues.length} 个问题` : `发布前要先解决：${issues.length} 个问题` }),
+          h('b', {
+            text: state.saveIssues.length
+              ? `没能保存：${issues.length} 个问题`
+              : `发布前要先解决：${issues.length} 个问题`,
+          }),
           issueBox(state.doc, issues),
         ),
       );
@@ -433,7 +491,14 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     return added;
   }
   function adopt(doc: CastDoc, revision: number) {
-    state.serverEmpty = !doc.characters.length && !doc.people.length && !doc.groups.length && !doc.stories.length && !doc.memes.length && !Object.keys(doc.ratings).length && !doc.directions.length;
+    state.serverEmpty =
+      !doc.characters.length &&
+      !doc.people.length &&
+      !doc.groups.length &&
+      !doc.stories.length &&
+      !doc.memes.length &&
+      !Object.keys(doc.ratings).length &&
+      !doc.directions.length;
     state.doc = structuredClone(doc);
     const added = ensureEntries(state.doc);
     // The new entries are part of the baseline, so they are not "unsaved changes"; they are saved with the next save.
@@ -566,7 +631,11 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   async function publishNow(version: number) {
     if (!host.api || !canPublish() || state.dirty) return;
     const yes = await host.confirm(
-      { title: `发布 v${version}`, message: '把整份草稿发布为新版本。CAST_CONTEXT_ENABLED 打开之前，玩家聊天不会用到它。', confirmLabel: '发布' },
+      {
+        title: `发布 v${version}`,
+        message: '把整份草稿发布为新版本。CAST_CONTEXT_ENABLED 打开之前，玩家聊天不会用到它。',
+        confirmLabel: '发布',
+      },
       frame.confirm,
     );
     if (!yes || gone()) return;
@@ -579,7 +648,11 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   async function rollbackTo(version: number) {
     if (!host.api || !canPublish()) return;
     const yes = await host.confirm(
-      { title: `回滚到 v${version}`, message: `把 v${version} 的内容作为新版本重新发布；旧版本都保留。`, confirmLabel: '回滚' },
+      {
+        title: `回滚到 v${version}`,
+        message: `把 v${version} 的内容作为新版本重新发布；旧版本都保留。`,
+        confirmLabel: '回滚',
+      },
       frame.confirm,
     );
     if (!yes || gone()) return;
@@ -732,7 +805,11 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   async function importOld() {
     if (!host.api || !canEdit()) return;
     const yes = await host.confirm(
-      { title: '从旧资料导入', message: '用已发布角色里的旧设定生成阵容草稿（草稿现在是空的）。不会改动任何角色。', confirmLabel: '导入' },
+      {
+        title: '从旧资料导入',
+        message: '用已发布角色里的旧设定生成阵容草稿（草稿现在是空的）。不会改动任何角色。',
+        confirmLabel: '导入',
+      },
       frame.confirm,
     );
     if (!yes || gone()) return;

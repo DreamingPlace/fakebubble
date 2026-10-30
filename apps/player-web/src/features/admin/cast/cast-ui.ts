@@ -140,7 +140,9 @@ export function lock(button: HTMLButtonElement, locked: boolean, why?: string) {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** An SVG node with its attributes (a document without namespaces - the stub DOMs of some tests - gets a plain element). */
 export function svgNode(tag: string, attrs: Record<string, string> = {}): SVGElement {
-  const node = (typeof document.createElementNS === 'function' ? document.createElementNS(SVG_NS, tag) : document.createElement(tag)) as unknown as SVGElement;
+  const node = (typeof document.createElementNS === 'function'
+    ? document.createElementNS(SVG_NS, tag)
+    : document.createElement(tag)) as unknown as SVGElement;
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
   return node;
 }

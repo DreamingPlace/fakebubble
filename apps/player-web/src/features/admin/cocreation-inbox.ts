@@ -162,7 +162,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   /** The notes still new, per character: the number after a character's name (of what is loaded). */
   const newPer = () => {
     const found = new Map<string, number>();
-    for (const item of items) if (item.status === 'new') found.set(item.characterId, (found.get(item.characterId) ?? 0) + 1);
+    for (const item of items)
+      if (item.status === 'new') found.set(item.characterId, (found.get(item.characterId) ?? 0) + 1);
     return found;
   };
   const renderFilters = () => {
@@ -170,7 +171,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     characterChips.replaceChildren(
       chip('全部角色', filter.characterId === null, () => pickFilter({ characterId: null })),
       ...Object.entries(names).map(([id, name]) =>
-        chip(name, filter.characterId === id, () => pickFilter({ characterId: id }), fresh.get(id), dot(colourOf()(id), 8)),
+        chip(
+          name,
+          filter.characterId === id,
+          () => pickFilter({ characterId: id }),
+          fresh.get(id),
+          dot(colourOf()(id), 8),
+        ),
       ),
     );
     statusChips.replaceChildren(
@@ -219,7 +226,14 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       // One fixed card: who | the text, fading out at the foot | how many, star, state. It never grows.
       const open = h(
         'button',
-        { class: 'cc-row-open', attrs: { type: 'button', 'aria-current': String(index === active), 'aria-expanded': String(index === active) } },
+        {
+          class: 'cc-row-open',
+          attrs: {
+            type: 'button',
+            'aria-current': String(index === active),
+            'aria-expanded': String(index === active),
+          },
+        },
         h(
           'span',
           { class: 'cc-who' },
@@ -234,9 +248,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           item.kind === 'memo' ? h('span', { class: 'cc-chip cc-chip-memo', text: '留言条' }) : null,
           item.kind === 'pair' ? h('span', { class: 'cc-chip cc-chip-pair', text: '关系与故事' }) : null,
           h('span', { class: 'cc-count', text: `${item.answerCount} 条` }),
-          item.adoptedCount > 0 ? h('span', { class: 'cc-chip', text: `已采用 ${item.adoptedCount}/${item.answerCount}` }) : null,
+          item.adoptedCount > 0
+            ? h('span', { class: 'cc-chip', text: `已采用 ${item.adoptedCount}/${item.answerCount}` })
+            : null,
           h('span', { class: 'cc-spacer' }),
-          item.starred ? h('span', { class: 'cc-chip cc-chip-star', text: '★', attrs: { role: 'img', 'aria-label': '已星标' } }) : null,
+          item.starred
+            ? h('span', { class: 'cc-chip cc-chip-star', text: '★', attrs: { role: 'img', 'aria-label': '已星标' } })
+            : null,
           h('span', { class: `cc-chip cc-state cc-chip-${item.status}`, text: STATUS_LABEL[item.status] }),
         ),
       );
@@ -557,7 +575,9 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     if (!found) {
       found = deps.characters
         .detail(characterId)
-        .then((target) => ((target.draft?.profile ?? target.published?.profile)?.template as unknown as Template) ?? null)
+        .then(
+          (target) => ((target.draft?.profile ?? target.published?.profile)?.template as unknown as Template) ?? null,
+        )
         .catch(() => null);
       drafts.set(characterId, found);
     }
@@ -567,7 +587,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   const fieldValue = (template: Template | null, field: AdoptField): Node => {
     if (!template) return h('p', { class: 'cc-target-empty', text: '读不到这个角色的草稿。' });
     const raw = field === 'persona' ? template.persona : template.authorCanon?.settings?.[field];
-    if (raw === undefined || raw === null || raw === '') return h('p', { class: 'cc-target-empty', text: '（还没有内容）' });
+    if (raw === undefined || raw === null || raw === '')
+      return h('p', { class: 'cc-target-empty', text: '（还没有内容）' });
     if (typeof raw === 'string') return h('p', { class: 'cc-target-text', text: raw });
     if (Array.isArray(raw) && raw.every((entry) => typeof entry === 'string'))
       return h('ul', { class: 'cc-target-list' }, ...(raw as string[]).map((line) => h('li', { text: line })));
@@ -601,8 +622,19 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     if (current.kind === 'pair') {
       const adopted = current.answers.some((answer) => answer.adoptedAt !== null);
       pane_.append(
-        h('div', { class: 'cc-target-head' }, dot(colourOf()(current.characterId), 8), h('b', { text: `${whoOf(current)} · 新故事` }), h('span', { class: 'cc-chip cc-chip-draft', text: '草稿' }), h('span', { class: 'cc-spacer' }), h('span', { class: 'cc-target-where', text: '在关系与故事里发布' })),
-        h('p', { class: 'cc-target-text', text: adopted ? '已存成关系与故事的草稿故事。' : '这条会作为新故事存进关系与故事的草稿，参与者是这两位。' }),
+        h(
+          'div',
+          { class: 'cc-target-head' },
+          dot(colourOf()(current.characterId), 8),
+          h('b', { text: `${whoOf(current)} · 新故事` }),
+          h('span', { class: 'cc-chip cc-chip-draft', text: '草稿' }),
+          h('span', { class: 'cc-spacer' }),
+          h('span', { class: 'cc-target-where', text: '在关系与故事里发布' }),
+        ),
+        h('p', {
+          class: 'cc-target-text',
+          text: adopted ? '已存成关系与故事的草稿故事。' : '这条会作为新故事存进关系与故事的草稿，参与者是这两位。',
+        }),
       );
       if (adopted) pane_.append(h('a', { class: 'cc-go', text: '去关系与故事发布 →', attrs: { href: '#/cast' } }));
       return pane_;
@@ -628,14 +660,35 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         hoverValue(points, '采用后玩家得到的积分，在积分发放里改');
       };
       if (adoptPoints !== undefined) show(adoptPoints);
-      else void deps.adoptPoints().then((n) => { adoptPoints = n; show(n); }).catch(() => {});
+      else
+        void deps
+          .adoptPoints()
+          .then((n) => {
+            adoptPoints = n;
+            show(n);
+          })
+          .catch(() => {});
     }
     pane_.append(
-      h('div', { class: 'cc-target-head' }, dot(colourOf()(current.characterId), 8), label, h('span', { class: 'cc-chip cc-chip-draft', text: '草稿' }), h('span', { class: 'cc-spacer' }), points, h('span', { class: 'cc-target-where', text: '在角色工作台里发布' })),
+      h(
+        'div',
+        { class: 'cc-target-head' },
+        dot(colourOf()(current.characterId), 8),
+        label,
+        h('span', { class: 'cc-chip cc-chip-draft', text: '草稿' }),
+        h('span', { class: 'cc-spacer' }),
+        points,
+        h('span', { class: 'cc-target-where', text: '在角色工作台里发布' }),
+      ),
       value,
     );
     if (adopting?.ordinal === picked.ordinal) {
-      pane_.append(adoptEditor(current, picked, (next) => { field = next; paintField(); }));
+      pane_.append(
+        adoptEditor(current, picked, (next) => {
+          field = next;
+          paintField();
+        }),
+      );
     }
     if (saved && saved.ordinal === picked.ordinal && picked.adoptedAt !== null)
       pane_.append(
@@ -643,7 +696,11 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           'div',
           { class: 'cc-saved' },
           h('b', { text: `已存进角色草稿（修订 ${saved.revision}），这条标为已处理` }),
-          h('a', { class: 'cc-go', text: '去角色工作台发布 →', attrs: { href: `#/characters/${current.characterId}` } }),
+          h('a', {
+            class: 'cc-go',
+            text: '去角色工作台发布 →',
+            attrs: { href: `#/characters/${current.characterId}` },
+          }),
         ),
       );
     paintField();
@@ -706,7 +763,11 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
               renderDetail();
             });
             // Part 24c: a pair note goes to the cast draft as a story; a memo is for the team and has no adoption at all.
-            const story = h('button', { text: '+ 加入关系与故事 →', attrs: { type: 'button' }, class: 'cc-adopt-story' });
+            const story = h('button', {
+              text: '+ 加入关系与故事 →',
+              attrs: { type: 'button' },
+              class: 'cc-adopt-story',
+            });
             story.disabled = !manage || (deps.canEditCast ? !deps.canEditCast() : false);
             story.addEventListener('click', () => void addStory(current, answer.ordinal));
             const undo = h('button', { text: '取消采用', attrs: { type: 'button' }, class: 'cc-unadopt' });

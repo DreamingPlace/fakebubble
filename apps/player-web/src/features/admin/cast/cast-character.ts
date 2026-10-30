@@ -31,13 +31,21 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
     const identity = character.identity;
     const edit = ctx.canEdit();
     const repaintNames = () => ctx.paint('grid', 'side', 'groups', 'stories');
-    const link = h('a', { class: 'cs-go', text: '人设、说话、经历在角色工作台 →', attrs: { href: `#/characters/${character.characterId}` } });
+    const link = h('a', {
+      class: 'cs-go',
+      text: '人设、说话、经历在角色工作台 →',
+      attrs: { href: `#/characters/${character.characterId}` },
+    });
     const oneLiner = h('input', { attrs: { type: 'text', maxlength: String(L.oneLiner), 'aria-label': '一句话' } });
     oneLiner.value = identity.oneLiner;
     if (!edit) oneLiner.setAttribute('readonly', '');
     oneLiner.addEventListener('input', () => {
       identity.oneLiner = oneLiner.value;
-      markDirty(oneLiner, oneLiner.value !== (ctx.base().characters.find((c) => c.characterId === character.characterId)?.identity.oneLiner ?? ''));
+      markDirty(
+        oneLiner,
+        oneLiner.value !==
+          (ctx.base().characters.find((c) => c.characterId === character.characterId)?.identity.oneLiner ?? ''),
+      );
       ctx.edited(true);
     });
     const pill = (input: HTMLInputElement, extra: Node | null, remove: (() => void) | null) => {
@@ -50,7 +58,15 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
       return node;
     };
     const textInput = (value: string, max: number, label: string, set: (v: string) => void, after?: () => void) => {
-      const input = h('input', { class: 'cs-pill-input', attrs: { type: 'text', maxlength: String(max), 'aria-label': label, size: String(Math.max(2, [...value].length + 1)) } });
+      const input = h('input', {
+        class: 'cs-pill-input',
+        attrs: {
+          type: 'text',
+          maxlength: String(max),
+          'aria-label': label,
+          size: String(Math.max(2, [...value].length + 1)),
+        },
+      });
       input.value = value;
       if (!edit) input.setAttribute('readonly', '');
       input.addEventListener('input', () => {
@@ -62,32 +78,79 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
       return input;
     };
     const addPill = (label: string, onAdd: () => void) => {
-      const button = h('button', { class: 'cs-pill is-add', text: '+', attrs: { type: 'button', 'aria-label': label } });
+      const button = h('button', {
+        class: 'cs-pill is-add',
+        text: '+',
+        attrs: { type: 'button', 'aria-label': label },
+      });
       button.addEventListener('click', onAdd);
       return button;
     };
     const names = h('div', { class: 'cs-lb' }, h('span', { text: '名字 · 第一个是对外的' }));
     const nameRow = h('span', { class: 'cs-pills' });
     identity.names.forEach((entry, index) => {
-      nameRow.append(pill(textInput(entry.text, L.name, `名字 ${index + 1}`, (v) => (entry.text = v), repaintNames), null, identity.names.length > 1 ? () => { identity.names.splice(index, 1); ctx.edited(); repaintNames(); ctx.paint('character'); } : null));
+      nameRow.append(
+        pill(
+          textInput(entry.text, L.name, `名字 ${index + 1}`, (v) => (entry.text = v), repaintNames),
+          null,
+          identity.names.length > 1
+            ? () => {
+                identity.names.splice(index, 1);
+                ctx.edited();
+                repaintNames();
+                ctx.paint('character');
+              }
+            : null,
+        ),
+      );
     });
     if (edit && identity.names.length < L.names)
-      nameRow.append(addPill('加一个名字', () => { identity.names.push({ id: '', text: '' }); ctx.edited(); ctx.paint('character'); }));
+      nameRow.append(
+        addPill('加一个名字', () => {
+          identity.names.push({ id: '', text: '' });
+          ctx.edited();
+          ctx.paint('character');
+        }),
+      );
     names.append(nameRow);
     const aliases = h('div', { class: 'cs-lb' }, h('span', { text: '别名 · 他对这个叫法的感觉' }));
     const aliasRow = h('span', { class: 'cs-pills' });
     identity.aliases.forEach((alias, index) => {
-      const feel = h('button', { class: `cs-feel is-${alias.attitude}`, text: ATTITUDE_LABEL[alias.attitude], attrs: { type: 'button', 'aria-label': `对「${alias.text}」的感觉：${ATTITUDE_LABEL[alias.attitude]}，点一下换` } });
+      const feel = h('button', {
+        class: `cs-feel is-${alias.attitude}`,
+        text: ATTITUDE_LABEL[alias.attitude],
+        attrs: {
+          type: 'button',
+          'aria-label': `对「${alias.text}」的感觉：${ATTITUDE_LABEL[alias.attitude]}，点一下换`,
+        },
+      });
       feel.disabled = !edit;
       feel.addEventListener('click', () => {
-        alias.attitude = CAST_ALIAS_ATTITUDES[(CAST_ALIAS_ATTITUDES.indexOf(alias.attitude) + 1) % CAST_ALIAS_ATTITUDES.length]!;
+        alias.attitude =
+          CAST_ALIAS_ATTITUDES[(CAST_ALIAS_ATTITUDES.indexOf(alias.attitude) + 1) % CAST_ALIAS_ATTITUDES.length]!;
         ctx.edited();
         ctx.paint('character');
       });
-      aliasRow.append(pill(textInput(alias.text, L.alias, `别名 ${index + 1}`, (v) => (alias.text = v)), feel, () => { identity.aliases.splice(index, 1); ctx.edited(); ctx.paint('character'); }));
+      aliasRow.append(
+        pill(
+          textInput(alias.text, L.alias, `别名 ${index + 1}`, (v) => (alias.text = v)),
+          feel,
+          () => {
+            identity.aliases.splice(index, 1);
+            ctx.edited();
+            ctx.paint('character');
+          },
+        ),
+      );
     });
     if (edit && identity.aliases.length < L.aliases)
-      aliasRow.append(addPill('加一个别名', () => { identity.aliases.push({ id: '', text: '', attitude: 'ok' }); ctx.edited(); ctx.paint('character'); }));
+      aliasRow.append(
+        addPill('加一个别名', () => {
+          identity.aliases.push({ id: '', text: '', attitude: 'ok' });
+          ctx.edited();
+          ctx.paint('character');
+        }),
+      );
     aliases.append(aliasRow);
     const prototype = h('select', { attrs: { 'aria-label': '原型' } });
     prototype.append(h('option', { text: '不用原型', attrs: { value: '' } }));
@@ -96,12 +159,36 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
     prototype.value = identity.prototype?.personId ?? '';
     if (!edit) prototype.setAttribute('data-locked', 'true');
     prototype.addEventListener('change', () => {
-      identity.prototype = prototype.value ? { personId: prototype.value, inherited: identity.prototype?.personId === prototype.value ? identity.prototype.inherited : '', notInherited: identity.prototype?.personId === prototype.value ? identity.prototype.notInherited : '' } : null;
+      identity.prototype = prototype.value
+        ? {
+            personId: prototype.value,
+            inherited: identity.prototype?.personId === prototype.value ? identity.prototype.inherited : '',
+            notInherited: identity.prototype?.personId === prototype.value ? identity.prototype.notInherited : '',
+          }
+        : null;
       ctx.edited(true);
     });
     host.append(
-      h('div', { class: 'cs-card-head' }, h('h2', {}, dot(ctx.colour(character.characterId), 10), `${name} 的名片`, h('span', { class: 'cs-hint-line', text: '别的角色只知道这些' })), link),
-      h('div', { class: 'cs-namecard' }, h('label', { class: 'cs-lb' }, h('span', { text: '一句话' }), oneLiner), names, aliases, h('label', { class: 'cs-lb' }, h('span', { text: '原型' }), prototype)),
+      h(
+        'div',
+        { class: 'cs-card-head' },
+        h(
+          'h2',
+          {},
+          dot(ctx.colour(character.characterId), 10),
+          `${name} 的名片`,
+          h('span', { class: 'cs-hint-line', text: '别的角色只知道这些' }),
+        ),
+        link,
+      ),
+      h(
+        'div',
+        { class: 'cs-namecard' },
+        h('label', { class: 'cs-lb' }, h('span', { text: '一句话' }), oneLiner),
+        names,
+        aliases,
+        h('label', { class: 'cs-lb' }, h('span', { text: '原型' }), prototype),
+      ),
     );
   };
   return { paint };

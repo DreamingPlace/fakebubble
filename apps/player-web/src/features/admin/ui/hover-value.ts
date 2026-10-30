@@ -25,12 +25,6 @@ export function hoverValue<T extends HTMLElement>(anchor: T, text: string): T {
     anchor.setAttribute('tabindex', '0');
   return anchor;
 }
-/** Replaces the bubble text of a target made with `hoverValue` (no-op when it has none). */
-export function setHoverValue(anchor: HTMLElement, text: string) {
-  const tip = bubbles.get(anchor);
-  if (tip) tip.textContent = text;
-}
-
 /** The exact forms the boards show. Money keeps its full precision: $0.071 204; parts read 注册 31 / 访客 27. */
 export const exactMoney = (micros: number) => {
   const dollars = micros / 1_000_000;
@@ -43,6 +37,3 @@ export const exactMoney = (micros: number) => {
 export const exactCount = (value: number) => value.toLocaleString('en-US');
 export const partsText = (parts: ReadonlyArray<readonly [name: string, value: number]>) =>
   parts.map(([name, value]) => `${name} ${exactCount(value)}`).join(' / ');
-/** UTC date and time as the console writes them everywhere: 2026-10-28 14:02 UTC. */
-export const utcMinute = (ms: number) => `${new Date(ms).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
-export const utcDay = (ms: number) => `${new Date(ms).toISOString().slice(0, 10)} UTC`;

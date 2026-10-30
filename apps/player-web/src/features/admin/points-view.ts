@@ -320,7 +320,12 @@ export function pointsView(
     // Not merely hidden: for anyone but the owner the button does not exist on the page at all.
     if (!deps.isOwner()) return resetBox.replaceChildren();
     resetBox.replaceChildren(
-      h('div', { class: 'pt-head' }, h('h3', { text: '重置全部额度' }), h('span', { text: '每天补充的人：加 7 天的量，不超过上限。不限量的人不变。' })),
+      h(
+        'div',
+        { class: 'pt-head' },
+        h('h3', { text: '重置全部额度' }),
+        h('span', { text: '每天补充的人：加 7 天的量，不超过上限。不限量的人不变。' }),
+      ),
       resetOutcome,
       resetZone.root,
     );
@@ -330,21 +335,46 @@ export function pointsView(
   const ccBox = h('section', { class: 'points-cocreation pt-cc', attrs: { id: 'points-cocreation' }, hidden: true });
   let ccRevision = 0;
   let ccBase: CocreationPointsSettings | null = null;
-  type CcField = { key: keyof CocreationPointsSettings; input: HTMLInputElement; suffix: HTMLElement; tip: () => string; node: HTMLElement };
+  type CcField = {
+    key: keyof CocreationPointsSettings;
+    input: HTMLInputElement;
+    suffix: HTMLElement;
+    tip: () => string;
+    node: HTMLElement;
+  };
   const ccInput = (key: keyof CocreationPointsSettings, label: string, unit: string, tip: () => string): CcField => {
     const limits = COCREATION_POINTS_LIMITS[key];
     const input = h('input', {
       class: 'admin-input pt-small',
-      attrs: { type: 'number', min: String(limits.min), max: String(limits.max), step: '1', id: `points-cc-${key}`, inputmode: 'numeric', 'aria-label': `${label}（${limits.min}–${limits.max}）` },
+      attrs: {
+        type: 'number',
+        min: String(limits.min),
+        max: String(limits.max),
+        step: '1',
+        id: `points-cc-${key}`,
+        inputmode: 'numeric',
+        'aria-label': `${label}（${limits.min}–${limits.max}）`,
+      },
     });
     const suffix = h('span', { text: unit });
     hoverValue(suffix, '');
-    return { key, input, suffix, tip, node: h('label', { class: 'pt-lb' }, label, h('span', { class: 'pt-with' }, input, suffix)) };
+    return {
+      key,
+      input,
+      suffix,
+      tip,
+      node: h('label', { class: 'pt-lb' }, label, h('span', { class: 'pt-with' }, input, suffix)),
+    };
   };
   const num = (el: HTMLInputElement) => Number(el.value);
   const ccFields: CcField[] = [
     ccInput('notePoints', '每条留言', '点', () => `每条共创留言 ${num(ccFields[0]!.input)} 点`),
-    ccInput('dailyCap', '每天最多算几条', '条', () => `今天最多 ${num(ccFields[0]!.input) * num(ccFields[1]!.input) || 0} 点`),
+    ccInput(
+      'dailyCap',
+      '每天最多算几条',
+      '条',
+      () => `今天最多 ${num(ccFields[0]!.input) * num(ccFields[1]!.input) || 0} 点`,
+    ),
     ccInput('adoptPoints', '被采用', '点 · 不限次数', () => `被采用一次 ${num(ccFields[2]!.input)} 点`),
   ];
   const ccProblem = h('p', { class: 'admin-error', attrs: { role: 'alert' }, hidden: true });
@@ -390,14 +420,28 @@ export function pointsView(
       }),
   );
   ccBox.replaceChildren(
-    h('div', { class: 'pt-head' }, h('h3', { text: '共创积分' }), hoverValue(h('span', { text: '玩家写共创留言得到的点数' }), '写给制作组的留言不算')),
+    h(
+      'div',
+      { class: 'pt-head' },
+      h('h3', { text: '共创积分' }),
+      hoverValue(h('span', { text: '玩家写共创留言得到的点数' }), '写给制作组的留言不算'),
+    ),
     ...ccFields.map((field) => field.node),
     ccProblem,
     ccSave,
   );
 
-  const kindSwitch = h('span', { class: 'pt-seg', attrs: { role: 'group', 'aria-label': '发给谁' } }, ...kinds.map((k) => k.node));
-  const field = h('div', { class: 'pt-lb pt-field' }, h('span', { text: '对象' }), h('span', { class: 'pt-with' }, everyone, tier, number, email));
+  const kindSwitch = h(
+    'span',
+    { class: 'pt-seg', attrs: { role: 'group', 'aria-label': '发给谁' } },
+    ...kinds.map((k) => k.node),
+  );
+  const field = h(
+    'div',
+    { class: 'pt-lb pt-field' },
+    h('span', { text: '对象' }),
+    h('span', { class: 'pt-with' }, everyone, tier, number, email),
+  );
   const label = (text: string, control: HTMLElement) => h('label', { class: 'pt-lb' }, text, control);
 
   root.replaceChildren(

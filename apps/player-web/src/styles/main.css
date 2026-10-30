@@ -6019,73 +6019,7 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   border-radius: 999px;
 } /* ---- 关系与故事 ---- */
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- /* Never set is a dashed empty cell; 0 stars is a filled, lightest one. The two are never the same picture. */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/* Never set is a dashed empty cell; 0 stars is a filled, lightest one. The two are never the same picture. */
 
 @keyframes csPop {
   0% {
@@ -6098,41 +6032,7 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
     transform: scale(1);
   }
 }
- /* 未设置 is written out, in italics and a dashed pill: it must never read as a 0. */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/* 未设置 is written out, in italics and a dashed pill: it must never read as a 0. */
 
 .account-admin-page.admin-shell .is-lived {
   background: var(--ad-tint);
@@ -6146,27 +6046,9 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   background: #f3f0ec;
   color: var(--ad-muted);
 }
- /* A setting somebody made by hand is outlined in orange; the computed default has no outline. */
+/* A setting somebody made by hand is outlined in orange; the computed default has no outline. */
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- /* ---- 共创收件箱: filters are chips, the detail sits to the right of the list ---- */
+/* ---- 共创收件箱: filters are chips, the detail sits to the right of the list ---- */
 .account-admin-page.admin-shell #admin-cocreation {
   display: flex;
   flex-direction: column;
@@ -6298,19 +6180,12 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   }
 } /* The console's generic button (padding, minimum size) must not reach the grid cells and the half-star hit areas. */
 
-
-
-
-
 .account-admin-page.admin-shell .cs-group-card,
 .account-admin-page.admin-shell .cs-story-title,
 .account-admin-page.admin-shell .cs-chip:not([aria-pressed="true"]),
 .account-admin-page.admin-shell .cc-filter-chip:not([aria-pressed="true"]) {
   color: var(--ad-text);
 }
-
-
-
 
 .account-admin-page.admin-shell .cc-row-open {
   background: transparent;
@@ -6737,9 +6612,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   color: var(--ad-tint-ink);
   font-weight: 700;
 }
-
-
-
 
 /* ---- 角色工作台: a row of role pills, then the editor (one section at a time) and 预演 ---- */
 .account-admin-page.admin-shell .wb-roster,
@@ -7337,26 +7209,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 
 /* ---- 关系与故事: sections in a row at the top of the character panel; cards of one row share top and bottom ---- */
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* ---- the view roots share the page gap; long tables scroll inside their card under a sticky header ---- */
 .account-admin-page.admin-shell .admin-content > section[data-panel] > div[id^="admin-"]:not(#admin-characters) {
   display: flex;
@@ -7552,7 +7404,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 
 /* standard (36): the publish bar, the start card and the inline forms of the cast */
-
 
 .account-admin-page.admin-shell .admin-pick-row {
   height: 40px;
@@ -7753,84 +7604,14 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 
 /* ---- 关系与故事 ---- */
 
-
-
-
-
-
-
 /* ---- 关系与故事: 导入文件 (24b-5) ---- */
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 /* no growing cells: a scaled cell at the edge of the grid would leave the card */
-
-
-
-
-
-
-
-
-
-
-
-
 
 .account-admin-page.admin-shell .cs-field :is(input, textarea) {
   width: 100%;
   color: var(--ad-text);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 /* ======================================================================================================================
    Part 24b-6: admin V3 (design/burbur-v2/v3). Same D1 palette; the layers above stay, this block repaints and adds.
@@ -7866,7 +7647,9 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
     transform: scaleY(0.6);
   }
 }
-.account-admin-page.admin-shell .admin-content > section[data-panel]:not([hidden], [data-panel="login"], [data-panel="token"], [data-panel="reset"]) {
+.account-admin-page.admin-shell
+  .admin-content
+  > section[data-panel]:not([hidden], [data-panel="login"], [data-panel="token"], [data-panel="reset"]) {
   animation: adPageIn var(--ad-t-page) var(--ad-ease) both;
 }
 
@@ -9381,7 +9164,9 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-size: 13px;
   text-align: right;
 }
-.account-admin-page.admin-shell .tiers-table :is(td:nth-child(4), td:nth-child(5), td:nth-child(7), td:nth-child(8), td:nth-child(6)) {
+.account-admin-page.admin-shell
+  .tiers-table
+  :is(td:nth-child(4), td:nth-child(5), td:nth-child(7), td:nth-child(8), td:nth-child(6)) {
   font-family: "DM Mono", ui-monospace, monospace;
   font-size: 13px;
 }

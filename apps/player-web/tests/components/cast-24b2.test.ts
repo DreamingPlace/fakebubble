@@ -351,7 +351,10 @@ test('page: a story override gets the orange outline; ✕ returns the cell to it
   const story = doc.stories[0]!;
   f.root
     .querySelectorAll('.cs-cell[data-from]')
-    .find((c) => c.getAttribute('data-from') === story.participants[0] && c.getAttribute('data-to') === story.participants[1])!
+    .find(
+      (c) =>
+        c.getAttribute('data-from') === story.participants[0] && c.getAttribute('data-to') === story.participants[1],
+    )!
     .click();
   f.root.querySelectorAll('.cs-story-title')[0]!.click();
   const target = doc.characters
@@ -645,7 +648,10 @@ test('24b-4 a person is added, edited and removed on the page; removing takes th
   await flush();
   row.querySelectorAll('.dz-go')[0]!.click();
   await flush();
-  assert.equal(f.view.state.doc!.people.some((p) => p.id === fresh.id), false);
+  assert.equal(
+    f.view.state.doc!.people.some((p) => p.id === fresh.id),
+    false,
+  );
   assert.equal(f.view.state.doc!.stories[0]!.participants.includes(fresh.id), false);
 });
 
@@ -657,7 +663,10 @@ test('24b-4 the participant and member pickers show every character and person a
   const story0 = doc.stories[0]!;
   f.root
     .querySelectorAll('.cs-cell[data-from]')
-    .find((c) => c.getAttribute('data-from') === story0.participants[0] && c.getAttribute('data-to') === story0.participants[1])!
+    .find(
+      (c) =>
+        c.getAttribute('data-from') === story0.participants[0] && c.getAttribute('data-to') === story0.participants[1],
+    )!
     .click();
   f.root.querySelectorAll('.cs-story-title')[0]!.click();
   const picker = f.root.querySelectorAll('.cs-story-card .cs-picker')[0]!;
@@ -675,4 +684,39 @@ test('24b-4 the participant and member pickers show every character and person a
   }
   assert.equal(story.participants.length >= 3, true);
   assert.ok(names.every((n) => n.length > 0));
+});
+
+// ---- Part 24b-6 -----------------------------------------------------------------------------------------------------------
+// The per-character personal sections (profile, personality, speech, experiences, 演绎说明, hidden, unmapped) are not on this page any
+// more, but the working copy is the whole document: saving after an edit must send every one of them untouched.
+test('24b-6 the personal sections are not drawn, yet a save sends them exactly as they were', async (t) => {
+  const f = page(t);
+  await f.view.load();
+  const before = structuredClone(f.server().doc);
+  assert.ok(
+    before.characters.some(
+      (c) => c.profile || c.personality || c.performance || c.hidden.length || c.unmapped !== undefined,
+    ),
+  );
+  const shown = f.root.textContent;
+  for (const c of before.characters)
+    for (const private_ of [c.performance, c.unmapped, ...c.hidden.map((h) => h.text)].filter(
+      (text) => text.length > 6,
+    ))
+      assert.equal(shown.includes(private_), false, 'a personal section is not drawn on this page');
+  f.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
+  f.root
+    .querySelectorAll('.cs-star-hit')
+    .find((x) => x.getAttribute('aria-label') === '4.5 星')!
+    .click();
+  f.buttons('保存草稿')[0]!.click();
+  await flush();
+  const sent = f.calls.saves[0]!.doc;
+  assert.deepEqual(
+    sent.characters,
+    before.characters,
+    'profile, personality, speech, experiences, performance, hidden and unmapped are all as read',
+  );
+  assert.deepEqual({ ...sent, ratings: null }, { ...before, ratings: null }, 'only the rating changed');
+  assert.notDeepEqual(sent.ratings, before.ratings);
 });

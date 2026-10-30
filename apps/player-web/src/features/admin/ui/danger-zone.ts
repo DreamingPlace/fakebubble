@@ -40,7 +40,10 @@ export function dangerZone(options: DangerZoneOptions) {
   const impactHost = h('div', { class: 'dz-impact' });
   const note = options.note ? h('p', { class: 'dz-note', text: options.note }) : null;
   const typed = options.typeName
-    ? h('input', { class: 'dz-type', attrs: { type: 'text', 'aria-label': options.typeLabel ?? '输入名字确认', autocomplete: 'off' } })
+    ? h('input', {
+        class: 'dz-type',
+        attrs: { type: 'text', 'aria-label': options.typeLabel ?? '输入名字确认', autocomplete: 'off' },
+      })
     : null;
   // The hold variant carries a fill that sweeps across the button and a label above it; the plain one is just its text.
   const label = h('span', { class: 'dz-label' });
@@ -147,9 +150,7 @@ export function dangerZone(options: DangerZoneOptions) {
       try {
         const impact = await options.impact();
         impactHost.replaceChildren(
-          ...impact.map((item) =>
-            h('span', { class: 'dz-card' }, h('b', { text: item.n }), item.label),
-          ),
+          ...impact.map((item) => h('span', { class: 'dz-card' }, h('b', { text: item.n }), item.label)),
         );
       } catch {
         impactHost.replaceChildren(h('span', { class: 'dz-wait', text: '影响范围暂时读不到' }));

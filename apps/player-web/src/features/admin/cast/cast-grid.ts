@@ -83,14 +83,24 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
     grid.append(h('span', { class: 'cs-corner' }));
     const nameOf = (id: string) => ctx.nameOf(id);
     const cols = ids.map((id) => {
-      const head = h('button', { class: 'cs-head cs-head-col', attrs: { type: 'button', 'aria-label': `打开 ${nameOf(id)}` } }, dot(ctx.colour(id), 8), h('span', { class: 'cs-head-name', text: nameOf(id) }));
+      const head = h(
+        'button',
+        { class: 'cs-head cs-head-col', attrs: { type: 'button', 'aria-label': `打开 ${nameOf(id)}` } },
+        dot(ctx.colour(id), 8),
+        h('span', { class: 'cs-head-name', text: nameOf(id) }),
+      );
       head.addEventListener('click', () => ctx.openCharacter(id));
       grid.append(head);
       return head;
     });
     ids.forEach((rowId, r) => {
       const rowName = nameOf(rowId);
-      const head = h('button', { class: 'cs-head cs-head-row', attrs: { type: 'button', 'aria-label': `打开 ${rowName}` } }, dot(ctx.colour(rowId), 8), h('span', { class: 'cs-head-name', text: rowName }));
+      const head = h(
+        'button',
+        { class: 'cs-head cs-head-row', attrs: { type: 'button', 'aria-label': `打开 ${rowName}` } },
+        dot(ctx.colour(rowId), 8),
+        h('span', { class: 'cs-head-name', text: rowName }),
+      );
       head.addEventListener('click', () => ctx.openCharacter(rowId));
       grid.append(head);
       heads.push({ row: head, col: cols[r]!, id: rowId });
@@ -108,7 +118,8 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
         });
         cell.style.setProperty('--heat', value === null ? 'transparent' : HEAT[heatIndex(value)!]!);
         if (value !== null) cell.textContent = ratingShort(value);
-        if (storiesOfPair(doc, rowId, colId).length) cell.append(h('i', { class: 'cs-story-dot', attrs: { 'aria-hidden': 'true' } }));
+        if (storiesOfPair(doc, rowId, colId).length)
+          cell.append(h('i', { class: 'cs-story-dot', attrs: { 'aria-hidden': 'true' } }));
         markDirty(cell, ratingOf(base, rowId, colId) !== value);
         hoverValue(cell, tip);
         cell.addEventListener('click', () => {
@@ -125,7 +136,12 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
         cell.addEventListener('focus', hover);
         cell.addEventListener('keydown', (event) => {
           const key = (event as KeyboardEvent).key;
-          const delta: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+          const delta: Record<string, [number, number]> = {
+            ArrowUp: [-1, 0],
+            ArrowDown: [1, 0],
+            ArrowLeft: [0, -1],
+            ArrowRight: [0, 1],
+          };
           if (!delta[key]) return;
           event.preventDefault();
           move(rowId, colId, delta[key]![0], delta[key]![1]);
@@ -135,7 +151,12 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
       });
     });
     host.replaceChildren(
-      h('div', { class: 'cs-card-head' }, h('h2', { text: '关系' }), h('span', { class: 'cs-hint-line', text: '点名字看这个人 · 点格子看两个人 · 行 → 列' })),
+      h(
+        'div',
+        { class: 'cs-card-head' },
+        h('h2', { text: '关系' }),
+        h('span', { class: 'cs-hint-line', text: '点名字看这个人 · 点格子看两个人 · 行 → 列' }),
+      ),
       grid,
       h(
         'span',
@@ -154,7 +175,13 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
 export const STAR_PATH = 'M12 2.6l2.85 5.95 6.55.85-4.8 4.55 1.25 6.5L12 17.3l-5.85 3.15 1.25-6.5-4.8-4.55 6.55-.85z';
 
 /** Five stars, each half a button: the left half sets n − 0.5, the right half n. A pressed state is told apart by more than colour. */
-function stars(ctx: CastCtx, label: string, get: () => number | null, set: (value: number | null) => void, again: () => void) {
+function stars(
+  ctx: CastCtx,
+  label: string,
+  get: () => number | null,
+  set: (value: number | null) => void,
+  again: () => void,
+) {
   const row = h('div', { class: 'cs-stars', attrs: { role: 'radiogroup', 'aria-label': label } });
   const value = get();
   for (let n = 1; n <= 5; n++) {
@@ -163,13 +190,21 @@ function stars(ctx: CastCtx, label: string, get: () => number | null, set: (valu
     const svg = svgNode('svg', { viewBox: '0 0 24 24', width: '28', height: '28', 'aria-hidden': 'true' });
     svg.append(svgNode('path', { d: STAR_PATH, fill: '#ece8e3', class: 'cs-star-back' }));
     if (fill === 1) svg.append(svgNode('path', { d: STAR_PATH, fill: '#e0a100', class: 'cs-star-full' }));
-    if (fill === 0.5) svg.append(svgNode('path', { d: STAR_PATH, fill: '#e0a100', class: 'cs-star-half', 'clip-path': 'url(#cs-half)' }));
+    if (fill === 0.5)
+      svg.append(
+        svgNode('path', { d: STAR_PATH, fill: '#e0a100', class: 'cs-star-half', 'clip-path': 'url(#cs-half)' }),
+      );
     star.append(svg);
     for (const half of [true, false]) {
       const target = starValue(n, half);
       const button = h('button', {
         class: `cs-star-hit ${half ? 'is-half' : 'is-whole'}`,
-        attrs: { type: 'button', role: 'radio', 'aria-checked': String(value === target), 'aria-label': `${target} 星` },
+        attrs: {
+          type: 'button',
+          role: 'radio',
+          'aria-checked': String(value === target),
+          'aria-label': `${target} 星`,
+        },
       });
       if (!ctx.canEdit()) {
         button.setAttribute('data-locked', 'true');
@@ -204,7 +239,17 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
       ctx.edited();
       ctx.paint('grid', 'side', 'groups');
     };
-    host.append(h('h2', { class: 'cs-pair-title' }, dot(ctx.colour(a), 10), nameA, h('span', { class: 'cs-with', text: '与' }), dot(ctx.colour(b), 10), nameB));
+    host.append(
+      h(
+        'h2',
+        { class: 'cs-pair-title' },
+        dot(ctx.colour(a), 10),
+        nameA,
+        h('span', { class: 'cs-with', text: '与' }),
+        dot(ctx.colour(b), 10),
+        nameB,
+      ),
+    );
     for (const [from, to, fromName, toName] of [
       [a, b, nameA, nameB],
       [b, a, nameB, nameA],
@@ -215,22 +260,56 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
       const head = h(
         'div',
         { class: 'cs-dir-head' },
-        h('span', { class: 'cs-dir-label' }, dot(ctx.colour(from), 8), h('b', { class: 'cs-dir-name', text: fromName }), h('i', { class: 'cs-arrow', text: '→' }), dot(ctx.colour(to), 8), h('b', { class: 'cs-dir-name', text: toName })),
+        h(
+          'span',
+          { class: 'cs-dir-label' },
+          dot(ctx.colour(from), 8),
+          h('b', { class: 'cs-dir-name', text: fromName }),
+          h('i', { class: 'cs-arrow', text: '→' }),
+          dot(ctx.colour(to), 8),
+          h('b', { class: 'cs-dir-name', text: toName }),
+        ),
         h(
           'span',
           { class: 'cs-dir-rate' },
-          stars(ctx, `${fromName} 对 ${toName}`, () => ratingOf(doc, from, to), (next) => setRating(doc, from, to, next), again),
-          h('b', { class: `cs-rating${value === null ? ' is-unset' : ''}`, text: ratingText(value), attrs: { 'data-rating': value === null ? 'unset' : String(value), 'data-dirty': String(value !== base) } }),
+          stars(
+            ctx,
+            `${fromName} 对 ${toName}`,
+            () => ratingOf(doc, from, to),
+            (next) => setRating(doc, from, to, next),
+            again,
+          ),
+          h('b', {
+            class: `cs-rating${value === null ? ' is-unset' : ''}`,
+            text: ratingText(value),
+            attrs: { 'data-rating': value === null ? 'unset' : String(value), 'data-dirty': String(value !== base) },
+          }),
         ),
       );
       if (ctx.canEdit()) {
-        const zero = h('button', { class: 'cs-mini', text: '0', attrs: { type: 'button', 'aria-label': `${fromName} 对 ${toName}：设为 0 星`, 'aria-pressed': String(value === 0) } });
+        const zero = h('button', {
+          class: 'cs-mini',
+          text: '0',
+          attrs: {
+            type: 'button',
+            'aria-label': `${fromName} 对 ${toName}：设为 0 星`,
+            'aria-pressed': String(value === 0),
+          },
+        });
         hoverValue(zero, '陌生人');
         zero.addEventListener('click', () => {
           setRating(doc, from, to, 0);
           again();
         });
-        const unset = h('button', { class: 'cs-mini', text: '未设置', attrs: { type: 'button', 'aria-label': `${fromName} 对 ${toName}：清除评分`, 'aria-pressed': String(value === null) } });
+        const unset = h('button', {
+          class: 'cs-mini',
+          text: '未设置',
+          attrs: {
+            type: 'button',
+            'aria-label': `${fromName} 对 ${toName}：清除评分`,
+            'aria-pressed': String(value === null),
+          },
+        });
         unset.addEventListener('click', () => {
           setRating(doc, from, to, null);
           again();
@@ -240,7 +319,14 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
       const direction = () => directionOf(doc, from, to);
       const baseDir = directionOf(ctx.base(), from, to);
       const input = (field: 'address' | 'treatment', placeholder: string, max: number) => {
-        const node = h('input', { attrs: { type: 'text', maxlength: String(max), placeholder, 'aria-label': `${fromName} ${field === 'address' ? '叫' : '怎么对'} ${toName}（${placeholder}）` } });
+        const node = h('input', {
+          attrs: {
+            type: 'text',
+            maxlength: String(max),
+            placeholder,
+            'aria-label': `${fromName} ${field === 'address' ? '叫' : '怎么对'} ${toName}（${placeholder}）`,
+          },
+        });
         node.value = direction()?.[field] ?? '';
         if (!ctx.canEdit()) node.setAttribute('readonly', '');
         node.addEventListener('input', () => {
@@ -251,7 +337,10 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
         markDirty(node, node.value !== (baseDir?.[field] ?? ''));
         return node;
       };
-      line.append(head, h('div', { class: 'cs-dir-texts' }, input('address', '称呼', 16), input('treatment', '相处', 100)));
+      line.append(
+        head,
+        h('div', { class: 'cs-dir-texts' }, input('address', '称呼', 16), input('treatment', '相处', 100)),
+      );
       host.append(line);
     }
     const shared = storiesOfPair(doc, a, b);

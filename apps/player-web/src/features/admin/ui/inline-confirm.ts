@@ -36,7 +36,11 @@ export function inlineConfirm(host: HTMLElement, options: InlineConfirmOptions):
         h('div', { class: 'ic-actions' }, cancel, confirm),
       ),
     );
-    const bar = h('div', { class: 'ic', attrs: { role: 'group', 'aria-label': options.title, 'data-state': 'closed' } }, inner);
+    const bar = h(
+      'div',
+      { class: 'ic', attrs: { role: 'group', 'aria-label': options.title, 'data-state': 'closed' } },
+      inner,
+    );
     let settled = false;
     const finish = (value: boolean) => {
       if (settled) return;

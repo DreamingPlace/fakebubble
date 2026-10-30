@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { overviewView } from '../../src/features/admin/overview-view.ts';
-import type { ChartMetric, ChartRange, ChartView, PlayerStatsView, StatsCounts, StatsRange } from '../../../../packages/contracts/web-stats.ts';
+import type {
+  ChartMetric,
+  ChartRange,
+  ChartView,
+  PlayerStatsView,
+  StatsCounts,
+  StatsRange,
+} from '../../../../packages/contracts/web-stats.ts';
 import { flush, installFakeDom, type FakeElement } from './fake-dom.ts';
 
 // Part 24b-6: the V3 behaviours that replaced older, layout-pinned tests (each of those names its successor here).
@@ -84,7 +91,9 @@ function mount(t: test.TestContext, o: { stats?: boolean; chart?: boolean; empty
           stats: {
             load: async (range: StatsRange) => {
               loads.push(range);
-              return o.empty ? { ...players(range), since: null, days: [], byCharacter: [], byModel: [] } : players(range);
+              return o.empty
+                ? { ...players(range), since: null, days: [], byCharacter: [], byModel: [] }
+                : players(range);
             },
             exportCsv: async (range: StatsRange) => {
               exports.push(range);
@@ -129,7 +138,10 @@ test('24b-6 总览: one range in the title row drives the page; the metric and t
   assert.deepEqual(f.loads, [7, 30]);
   press(f.root, '时间范围', '24H');
   await flush();
-  assert.ok(f.charts.some(([metric, range]) => metric === 'replies' && range === '24h'), 'the hourly chart is asked for');
+  assert.ok(
+    f.charts.some(([metric, range]) => metric === 'replies' && range === '24h'),
+    'the hourly chart is asked for',
+  );
   assert.equal(all(f.root, '.ovx-line .xy-hit').length, 24, 'one hover target per hour');
   const before = f.loads.length + f.charts.length;
   press(f.root, '图表类型', '柱状');
@@ -186,4 +198,216 @@ test('24b-6 总览: an empty window says so instead of an empty table of zeros',
   await f.api.load();
   assert.equal(all(f.root, '.ov-days .ot-row').length, 0);
   assert.match(text(one(f.root, '.ov-days .ot-empty')), /还没有统计数据/);
+});
+
+// ---- shared pieces -----------------------------------------------------------------------------------------------------------
+import { canonEditors, CanonError } from '../../src/features/admin/character-canon.ts';
+import { dangerZone, HOLD_MS } from '../../src/features/admin/ui/danger-zone.ts';
+import { openTable } from '../../src/features/admin/ui/open-table.ts';
+import { exactMoney, hoverValue, partsText } from '../../src/features/admin/ui/hover-value.ts';
+import { rolePicker } from '../../src/features/admin/shell/role-picker.ts';
+
+test("24b-6 hover values: full precision money, parts, and the bubble is the anchor's last child with a description", (t) => {
+  const doc = installFakeDom(t);
+  assert.equal(exactMoney(71_204), '$0.071 204');
+  assert.equal(exactMoney(1_234_567_890), '$1,234.567 890');
+  assert.equal(
+    partsText([
+      ['注册', 31],
+      ['访客', 27],
+    ]),
+    '注册 31 / 访客 27',
+  );
+  const cell = doc.createElement('span') as unknown as HTMLElement;
+  hoverValue(cell, '注册 31 / 访客 27');
+  const tip = (cell as unknown as FakeElement).children.at(-1)! as FakeElement;
+  assert.equal(tip.textContent, '注册 31 / 访客 27');
+  assert.equal(cell.getAttribute('aria-describedby'), tip.getAttribute('id'));
+  assert.equal(cell.getAttribute('tabindex'), '0', 'keyboard focus shows the same bubble');
+  hoverValue(cell, '新的');
+  assert.equal((cell as unknown as FakeElement).children.length, 1, 'a second call updates the one bubble');
+  assert.equal(tip.textContent, '新的');
+});
+
+test('24b-6 open-below table: a row opens its detail under itself, one at a time, a second click closes it, ticks stop at the max', async (t) => {
+  installFakeDom(t);
+  const ticks: string[][] = [];
+  const table = openTable<{ id: string }>({
+    label: '示例',
+    columns: [{ key: 'id', label: '编号', cell: (r) => r.id }],
+    rowKey: (r) => r.id,
+    detail: (r) => {
+      const node = document.createElement('div');
+      node.textContent = `详情 ${r.id}`;
+      return node;
+    },
+    tick: { label: '选', max: 2, onChange: (keys) => ticks.push(keys) },
+    emptyText: '空',
+  });
+  table.setRows([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+  const rowOf = (key: string) => one(table.root, `[data-key="${key}"] .ot-row`);
+  rowOf('a').click();
+  await flush();
+  assert.equal(table.openKey, 'a');
+  assert.match(text(one(table.root, '[data-key="a"] .ot-panel')), /详情 a/);
+  assert.equal(one(table.root, '[data-key="a"]').getAttribute('data-open'), 'true');
+  rowOf('b').click();
+  await flush();
+  assert.equal(table.openKey, 'b');
+  assert.equal(one(table.root, '[data-key="a"]').getAttribute('data-open'), 'false', 'only one open');
+  rowOf('b').click();
+  assert.equal(table.openKey, null);
+  const boxes = all(table.root, '.ot-tick input');
+  for (const box of boxes) {
+    box.checked = true;
+    box.dispatch('change');
+  }
+  assert.deepEqual(table.ticked(), ['a', 'b'], 'the third tick is refused');
+  assert.equal(boxes[2]!.checked, false);
+  assert.deepEqual(ticks.at(-1), ['a', 'b']);
+});
+
+test('24b-6 danger zone: opens in place with the impact; the big ones need the typed name and a full hold, letting go starts over', async (t) => {
+  installFakeDom(t);
+  let ran = 0;
+  const zone = dangerZone({
+    open: '删除角色',
+    openerId: 'dz-test',
+    typeName: 'JOJO',
+    impact: () => [{ n: '12', label: '个私人会话' }],
+    confirm: '永久删除',
+    holdMs: 30,
+    run: async () => {
+      ran++;
+    },
+  });
+  assert.equal(HOLD_MS, 1500, 'the real hold is 1.5 s');
+  const root = zone.root as unknown as FakeElement;
+  assert.equal(root.getAttribute('data-open'), 'false');
+  one(root, '#dz-test').click();
+  await flush();
+  assert.equal(root.getAttribute('data-open'), 'true');
+  assert.match(text(one(root, '.dz-impact')), /12个私人会话/);
+  const go = one(root, '.dz-go');
+  assert.equal(go.disabled, true, 'the name is not typed');
+  one(root, '.dz-type').type_('jojo');
+  assert.equal(go.disabled, true, 'the name must match exactly');
+  one(root, '.dz-type').type_('JOJO');
+  assert.equal(go.disabled, false);
+  go.dispatch('pointerdown');
+  assert.equal(go.getAttribute('data-hold'), 'on');
+  go.dispatch('pointerup');
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(ran, 0, 'released early: nothing ran');
+  go.dispatch('pointerdown');
+  await new Promise((r) => setTimeout(r, 60));
+  await flush();
+  assert.equal(ran, 1, 'held for the whole time: it ran once');
+});
+
+test('24b-6 danger zone: a small one has one confirm button and no typing', async (t) => {
+  installFakeDom(t);
+  let ran = 0;
+  const zone = dangerZone({ open: '放弃服务器草稿', confirm: '确认放弃', run: async () => void ran++ });
+  const root = zone.root as unknown as FakeElement;
+  one(root, '.dz-open').click();
+  await flush();
+  assert.equal(all(root, '.dz-type').length, 0);
+  one(root, '.dz-go').click();
+  await flush();
+  assert.equal(ran, 1);
+});
+
+test('24b-6 the rail shows names only: no version or draft inside a name; the state is its own small line', (t) => {
+  const doc = installFakeDom(t);
+  const host = doc.createElement('div') as unknown as HTMLElement;
+  const picker = rolePicker(host, {
+    emptyText: '无',
+    onPick: () => {},
+    compact: { colour: () => '#E8561E' },
+  });
+  picker.show([{ characterId: 'jojo', displayName: 'JOJO', publishedVersion: 2, draftRevision: 3 }]);
+  picker.setSeed('jojo', true);
+  const pick = one(host, '.admin-pick');
+  assert.equal(one(pick, '.admin-pick-text strong').textContent, 'JOJO');
+  assert.equal(pick.getAttribute('data-seed'), 'true', 'the dashed ring marks a growing character');
+  assert.equal(all(pick, '.admin-pick-st').length, 1, 'one small status dot');
+});
+
+// ---- structured editors over authorCanon.settings --------------------------------------------------------------------------
+
+const canon = () => ({
+  selfIdentity: { names: ['测试人物', '保留别名'], truthScope: 'fictional_world', representsRealPerson: false },
+  speechStyle: ['温柔', '爱用“嗯”'],
+  basicInfo: { birthDate: '2000-01-01' },
+  dialogueStyle: '短句，不爱解释',
+  background: [{ title: '小时候', text: '住在海边' }, '后来搬了家'],
+  dialogueExamples: [
+    { situation: '日常聊天', player: '你好', reply: ['嗯？', '你好呀'] },
+    { player: '吃了吗', reply: [] },
+  ],
+  hobbies: ['画画'],
+});
+const keys = (value: object) => Object.keys(value);
+
+test('24b-6 canon editors: open → save with no edits is deep-equal to the input (same key order, nothing dropped, no type change)', (t) => {
+  installFakeDom(t);
+  const input = canon();
+  const editors = canonEditors(structuredClone(input) as never, () => {});
+  const out = editors.assemble(editors.rest);
+  assert.deepEqual(out, input);
+  assert.deepEqual(keys(out), keys(input), "the key order is the input's");
+  assert.equal(typeof out.dialogueStyle, 'string', 'a text stays a text');
+  assert.ok(Array.isArray(out.speechStyle), 'a list stays a list');
+  assert.equal(JSON.stringify(out), JSON.stringify(input));
+});
+
+test('24b-6 canon editors: a shape that is not recognised falls back to the JSON editor and still round-trips', (t) => {
+  installFakeDom(t);
+  const input = {
+    ...canon(),
+    speechStyle: { 口头禅: ['嗯'] },
+    background: [1, 2],
+    dialogueExamples: [{ player: 'x', extra: true }],
+  } as never;
+  const editors = canonEditors(structuredClone(input), () => {});
+  const rest = JSON.parse(editors.rest) as Record<string, unknown>;
+  for (const key of ['speechStyle', 'background', 'dialogueExamples'])
+    assert.ok(key in rest, `${key} is in the JSON editor`);
+  assert.deepEqual(editors.assemble(editors.rest), input);
+});
+
+test('24b-6 canon editors: editing one key rebuilds only that key; the others stay as they came in', (t) => {
+  installFakeDom(t);
+  const editors = canonEditors(canon() as never, () => {});
+  const chips = all(editors.speech, '.cn-chip-input');
+  chips[0]!.type_('很温柔');
+  const out = editors.assemble(editors.rest);
+  assert.deepEqual(out.speechStyle, ['很温柔', '爱用“嗯”']);
+  assert.deepEqual({ ...out, speechStyle: null }, { ...canon(), speechStyle: null });
+  assert.deepEqual(keys(out), keys(canon()));
+  // 经历: a card's text, and a card added
+  const cards = all(editors.past, '.cn-card textarea');
+  cards[1]!.type_('后来搬去了山里');
+  const added = all(editors.past, 'button.cn-add')[0]!;
+  added.click();
+  const next = editors.assemble(editors.rest);
+  assert.equal((next.background as unknown[])[1], '后来搬去了山里', 'a plain text stays plain');
+  assert.equal((next.background as unknown[]).length, 3);
+  // 对话样例: the reply lines
+  const reply = all(editors.speech, '.cn-reply')[0]!;
+  reply.type_('嗯？\n你好呀\n再见');
+  const examples = editors.assemble(editors.rest).dialogueExamples as { reply: string[] }[];
+  assert.deepEqual(examples[0]!.reply, ['嗯？', '你好呀', '再见']);
+});
+
+test('24b-6 canon editors: the JSON editor is for the other keys only; a key an editor owns is refused there', (t) => {
+  installFakeDom(t);
+  const editors = canonEditors(canon() as never, () => {});
+  assert.deepEqual(Object.keys(JSON.parse(editors.rest)), ['selfIdentity', 'basicInfo', 'hobbies']);
+  const bad = JSON.stringify({ ...JSON.parse(editors.rest), speechStyle: ['x'] });
+  assert.throws(() => editors.assemble(bad), CanonError);
+  assert.throws(() => editors.assemble('[1]'), CanonError);
+  const added = JSON.stringify({ ...JSON.parse(editors.rest), 外貌: '短发' });
+  assert.equal(editors.assemble(added).外貌, '短发');
 });

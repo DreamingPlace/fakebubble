@@ -182,7 +182,10 @@ export function systemView(
         if (limited) {
           used.style?.setProperty('--w', share(row.spentMicros));
           held.style?.setProperty('--w', share(row.heldMicros));
-          hoverValue(bar, `已用 ${dollars(row.spentMicros)} · 占用中 ${dollars(row.heldMicros)} · 剩余 ${dollars(row.remainingMicros!)}`);
+          hoverValue(
+            bar,
+            `已用 ${dollars(row.spentMicros)} · 占用中 ${dollars(row.heldMicros)} · 剩余 ${dollars(row.remainingMicros!)}`,
+          );
         }
         return h(
           'div',
@@ -192,11 +195,22 @@ export function systemView(
             { class: 'sys-budget-line' },
             h('span', { text: PROVIDER_LABELS[row.provider] }),
             limited
-              ? h('span', { class: 'sys-budget-left' }, '剩余 ', h('b', { text: dollars(row.remainingMicros!) }), ` / ${dollars(cap)}`)
+              ? h(
+                  'span',
+                  { class: 'sys-budget-left' },
+                  '剩余 ',
+                  h('b', { text: dollars(row.remainingMicros!) }),
+                  ` / ${dollars(cap)}`,
+                )
               : statusBadge('不限额', 'info'),
           ),
           limited ? bar : null,
-          limited ? h('span', { class: 'sys-budget-used', text: `已用 ${dollars(row.spentMicros)} · 占用中 ${dollars(row.heldMicros)}` }) : null,
+          limited
+            ? h('span', {
+                class: 'sys-budget-used',
+                text: `已用 ${dollars(row.spentMicros)} · 占用中 ${dollars(row.heldMicros)}`,
+              })
+            : null,
           limited && deps.isOwner() ? topUpControls(row) : null,
         );
       }),
@@ -330,12 +344,22 @@ export function systemView(
           { class: 'sys-flags' },
           pill('注册赠点', 'SIGNUP_BONUS_ENABLED', on(flags.signupBonus), tone(flags.signupBonus)),
           pill('玩家选模型', 'PLAYER_MODEL_CHOICE_ENABLED', on(flags.playerModelChoice), tone(flags.playerModelChoice)),
-          pill('可选文字模型', 'PLAYER_TEXT_MODELS', flags.playerTextModels ? flags.playerTextModels.join('、') : '未启用', 'plain'),
+          pill(
+            '可选文字模型',
+            'PLAYER_TEXT_MODELS',
+            flags.playerTextModels ? flags.playerTextModels.join('、') : '未启用',
+            'plain',
+          ),
           pill('语音模型', 'FISH_VOICE_MODEL', flags.fishVoiceModel, 'plain'),
           pill('测试对话', 'CHAT_REVIEW_ENABLED', on(flags.chatReview), tone(flags.chatReview)),
           pill('Turnstile', 'Turnstile', on(flags.turnstile), tone(flags.turnstile)),
           pill('告警', 'ALERTS', on(flags.alerts), tone(flags.alerts)),
-          pill('告警邮件绑定', 'ALERT_MAIL_BINDING', have(flags.alertMailBindingPresent), tone(flags.alertMailBindingPresent)),
+          pill(
+            '告警邮件绑定',
+            'ALERT_MAIL_BINDING',
+            have(flags.alertMailBindingPresent),
+            tone(flags.alertMailBindingPresent),
+          ),
           pill('告警收件人', 'ALERT_RECIPIENT', have(flags.alertRecipientSet), tone(flags.alertRecipientSet)),
         )
       : h('p', { class: 'admin-hint', text: '这个环境没有提供开关信息。' });

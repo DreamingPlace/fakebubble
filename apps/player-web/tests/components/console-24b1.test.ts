@@ -69,7 +69,10 @@ test('24b-1 nav: the groups and pages are exactly the board (as amended by 24b-2
   // 测试对话 joins 运营 behind its switch, after 消耗表.
   const everything = labelsOf(access([], { owner: true, cast: true }));
   // Named exception (Part 24b-6): 玩家统计 is not in the nav; 消耗表 then 测试对话 are what remains of this check.
-  assert.deepEqual(everything.slice(everything.indexOf('消耗表'), everything.indexOf('消耗表') + 2), ['消耗表', '测试对话']);
+  assert.deepEqual(everything.slice(everything.indexOf('消耗表'), everything.indexOf('消耗表') + 2), [
+    '消耗表',
+    '测试对话',
+  ]);
   assert.ok(everything.includes('关系与故事'));
   assert.ok(!everything.includes('预演测试'));
   assert.ok(!navMarkup().includes('data-page="preview"'));
@@ -275,7 +278,9 @@ const visiblePane = (root: unknown) =>
 // has 回复/聊天人数/活跃 x 折线/柱状/饼图 and the 按天 table is under it, so the old 14天 range and the 表格 view do not exist. The same
 // behaviours (one call per range/metric, pie shares, newest-first table, no chart without the client or stats.read) are asserted
 // against the new page in console-24b6.test.ts.
-test('24b-1 总览: one chart card; metric, range and view switch with the real endpoint shape', { skip: 'superseded in Part 24b-6 by console-24b6.test.ts (Overview3)' }, async (t) => {
+test('24b-1 总览: one chart card; metric, range and view switch with the real endpoint shape', {
+  skip: 'superseded in Part 24b-6 by console-24b6.test.ts (Overview3)',
+}, async (t) => {
   const f = mountOverview(t);
   await f.api.load();
   // One card, opening on 回复 · 14天 · 折线, fed by exactly one call.
@@ -330,7 +335,9 @@ test('24b-1 总览: one chart card; metric, range and view switch with the real 
 // has 回复/聊天人数/活跃 x 折线/柱状/饼图 and the 按天 table is under it, so the old 14天 range and the 表格 view do not exist. The same
 // behaviours (one call per range/metric, pie shares, newest-first table, no chart without the client or stats.read) are asserted
 // against the new page in console-24b6.test.ts.
-test('24b-1 总览: the pie shows shares with the total in the middle; the table is newest first with — before the counters', { skip: 'superseded in Part 24b-6 by console-24b6.test.ts (Overview3)' }, async (t) => {
+test('24b-1 总览: the pie shows shares with the total in the middle; the table is newest first with — before the counters', {
+  skip: 'superseded in Part 24b-6 by console-24b6.test.ts (Overview3)',
+}, async (t) => {
   const f = mountOverview(t);
   await f.api.load();
   btn(f.root, '7天').click();
@@ -370,7 +377,9 @@ test('24b-1 总览: the pie shows shares with the total in the middle; the table
 // has 回复/聊天人数/活跃 x 折线/柱状/饼图 and the 按天 table is under it, so the old 14天 range and the 表格 view do not exist. The same
 // behaviours (one call per range/metric, pie shares, newest-first table, no chart without the client or stats.read) are asserted
 // against the new page in console-24b6.test.ts.
-test('24b-1 总览: no chart card without the client or without stats.read; the numbers above it stay', { skip: 'superseded in Part 24b-6 by console-24b6.test.ts (Overview3)' }, async (t) => {
+test('24b-1 总览: no chart card without the client or without stats.read; the numbers above it stay', {
+  skip: 'superseded in Part 24b-6 by console-24b6.test.ts (Overview3)',
+}, async (t) => {
   const without = mountOverview(t, { chart: false });
   await without.api.load();
   assert.equal(one(without.root, '.ov-chart').hidden, true);
@@ -493,7 +502,9 @@ test('24b-1 邀请与额度: right after creating, every code opens with its own
   assert.deepEqual(f.copied, ['B'.repeat(43), 'C'.repeat(43), 'A'.repeat(43)]);
   // 复制全部未使用 copies them all, in order.
   // Named exception (Part 24b-6): the button carries the number it copies, "复制全部未使用（3）".
-  all(f.root, 'button').find((b) => b.textContent.startsWith('复制全部未使用'))!.click();
+  all(f.root, 'button')
+    .find((b) => b.textContent.startsWith('复制全部未使用'))!
+    .click();
   await flush();
   assert.equal(f.copied.at(-1), ['A', 'B', 'C'].map((c) => c.repeat(43)).join('\n'));
 });
@@ -860,7 +871,10 @@ test('24b-1 fix: 邀请与额度 shows the form above the list; a click on a row
   assert.equal(all(f.root, '.tiers-list .tiers-table').length, 1);
   const labels = all(f.root, 'button').map((b) => b.textContent);
   for (const gone of ['新建批次', '取消', '查看', '收起', '刷新']) assert.ok(!labels.includes(gone), gone);
-  assert.ok(labels.includes('撤销整批') || all(f.root, '.dz-open').length === 0, 'the batch actions are in its open row');
+  assert.ok(
+    labels.includes('撤销整批') || all(f.root, '.dz-open').length === 0,
+    'the batch actions are in its open row',
+  );
   assert.equal(all(f.root, '.tiers-detail').length, 0, 'nothing open yet: the detail is not in the page');
   one(f.root, 'tr[data-batch="b1"]').click();
   await flush();

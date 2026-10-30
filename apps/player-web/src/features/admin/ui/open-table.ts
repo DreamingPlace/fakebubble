@@ -44,7 +44,10 @@ export function openTable<T>(options: OpenTableOptions<T>) {
     ...(hasDetail ? ['20px'] : []),
     ...options.columns.map((c) => c.width ?? 'minmax(0, 1fr)'),
   ].join(' ');
-  const root = h('div', { class: `ot${options.className ? ` ${options.className}` : ''}`, attrs: { role: 'table', 'aria-label': options.label } });
+  const root = h('div', {
+    class: `ot${options.className ? ` ${options.className}` : ''}`,
+    attrs: { role: 'table', 'aria-label': options.label },
+  });
   root.style?.setProperty('--cols', tracks);
   const head = h('div', { class: 'ot-head', attrs: { role: 'row' } });
   if (options.tick) head.append(h('span', { attrs: { role: 'columnheader', 'aria-label': options.tick.label } }));
@@ -138,13 +141,7 @@ export function openTable<T>(options: OpenTableOptions<T>) {
         line.append(h('span', { class: 'ot-tick', attrs: { role: 'cell' } }, box));
       }
       if (hasDetail)
-        line.append(
-          h(
-            'span',
-            { class: 'ot-chev', attrs: { role: 'cell', 'aria-hidden': 'true' } },
-            chevron(),
-          ),
-        );
+        line.append(h('span', { class: 'ot-chev', attrs: { role: 'cell', 'aria-hidden': 'true' } }, chevron()));
       for (const column of options.columns) {
         const value = column.cell(row);
         const cell = h('span', {

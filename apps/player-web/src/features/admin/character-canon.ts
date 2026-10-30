@@ -80,7 +80,11 @@ function textOrChips(key: string, original: JsonValue | undefined, onEdit: () =>
   if (typeof original === 'string') {
     const text = area(original, label, onEdit, 3);
     box.append(text);
-    return { node: box, changed: () => text.value !== original, read: () => (text.value !== original ? text.value : original) };
+    return {
+      node: box,
+      changed: () => text.value !== original,
+      read: () => (text.value !== original ? text.value : original),
+    };
   }
   let items: string[] = Array.isArray(original) ? [...(original as string[])] : [];
   const chips = h('div', { class: 'cn-chips' });
@@ -89,10 +93,15 @@ function textOrChips(key: string, original: JsonValue | undefined, onEdit: () =>
     chips.replaceChildren();
     fields.length = 0;
     items.forEach((item, index) => {
-      const field = input(item, label, () => {
-        items[index] = field.value;
-        onEdit();
-      }, 'cn-chip-input');
+      const field = input(
+        item,
+        label,
+        () => {
+          items[index] = field.value;
+          onEdit();
+        },
+        'cn-chip-input',
+      );
       field.size = Math.max(4, [...field.value].length + 1);
       field.addEventListener('input', () => {
         field.size = Math.max(4, [...field.value].length + 1);
@@ -107,12 +116,16 @@ function textOrChips(key: string, original: JsonValue | undefined, onEdit: () =>
       chips.append(h('span', { class: 'cn-chip' }, field, remove));
     });
     chips.append(
-      adder('+', () => {
-        items = [...items, ''];
-        paint();
-        fields[fields.length - 1]?.focus();
-        onEdit();
-      }, 'cn-chip cn-add'),
+      adder(
+        '+',
+        () => {
+          items = [...items, ''];
+          paint();
+          fields[fields.length - 1]?.focus();
+          onEdit();
+        },
+        'cn-chip cn-add',
+      ),
     );
   };
   paint();
@@ -121,7 +134,12 @@ function textOrChips(key: string, original: JsonValue | undefined, onEdit: () =>
   return {
     node: box,
     changed,
-    read: () => (original === undefined && !items.length ? undefined : changed() ? items.filter((item) => item.trim() !== '') : (original as JsonValue)),
+    read: () =>
+      original === undefined && !items.length
+        ? undefined
+        : changed()
+          ? items.filter((item) => item.trim() !== '')
+          : (original as JsonValue),
   };
 }
 
@@ -144,10 +162,15 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
         row.player = player.value;
         onEdit();
       });
-      const reply = area(row.reply, '他回', () => {
-        row.reply = reply.value;
-        onEdit();
-      }, 2);
+      const reply = area(
+        row.reply,
+        '他回',
+        () => {
+          row.reply = reply.value;
+          onEdit();
+        },
+        2,
+      );
       reply.className = 'cn-reply';
       const remove = h('button', { class: 'cn-x', text: '×', attrs: { type: 'button', 'aria-label': '去掉' } });
       remove.addEventListener('click', () => {
@@ -157,20 +180,29 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
       });
       const parts: HTMLElement[] = [];
       if (row.situation !== undefined) {
-        const situation = input(row.situation, '场景', () => {
-          row.situation = situation.value;
-          onEdit();
-        }, 'cn-situation');
+        const situation = input(
+          row.situation,
+          '场景',
+          () => {
+            row.situation = situation.value;
+            onEdit();
+          },
+          'cn-situation',
+        );
         parts.push(situation);
       }
       list.append(h('div', { class: 'cn-pair' }, ...parts, player, reply, remove));
     });
     list.append(
-      adder('+ 样例', () => {
-        rows = [...rows, { player: '', reply: '' }];
-        paint();
-        onEdit();
-      }, 'cn-add cn-add-wide'),
+      adder(
+        '+ 样例',
+        () => {
+          rows = [...rows, { player: '', reply: '' }];
+          paint();
+          onEdit();
+        },
+        'cn-add cn-add-wide',
+      ),
     );
   };
   paint();
@@ -197,7 +229,11 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
     (Array.isArray(original) ? (original as (string | Record<string, JsonValue>)[]) : []).map((item) =>
       typeof item === 'string'
         ? { text: item, shape: 'string' as const }
-        : { ...(item.title !== undefined ? { title: String(item.title) } : {}), text: String(item.text ?? ''), shape: 'object' as const },
+        : {
+            ...(item.title !== undefined ? { title: String(item.title) } : {}),
+            text: String(item.text ?? ''),
+            shape: 'object' as const,
+          },
     );
   let rows = toRows();
   const cards = h('div', { class: 'cn-cards' });
@@ -206,16 +242,26 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
     rows.forEach((row, index) => {
       const parts: HTMLElement[] = [];
       if (row.title !== undefined) {
-        const title = input(row.title, '标题', () => {
-          row.title = title.value;
-          onEdit();
-        }, 'cn-title');
+        const title = input(
+          row.title,
+          '标题',
+          () => {
+            row.title = title.value;
+            onEdit();
+          },
+          'cn-title',
+        );
         parts.push(title);
       }
-      const text = area(row.text, '经历', () => {
-        row.text = text.value;
-        onEdit();
-      }, 4);
+      const text = area(
+        row.text,
+        '经历',
+        () => {
+          row.text = text.value;
+          onEdit();
+        },
+        4,
+      );
       const remove = h('button', { class: 'cn-x', text: '×', attrs: { type: 'button', 'aria-label': '去掉' } });
       remove.addEventListener('click', () => {
         rows = rows.filter((_, at) => at !== index);
@@ -225,17 +271,23 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
       cards.append(h('div', { class: 'cn-card' }, ...parts, text, remove));
     });
     cards.append(
-      adder('+ 经历', () => {
-        rows = [...rows, { title: '', text: '', shape: 'object' }];
-        paint();
-        onEdit();
-      }, 'cn-add cn-card cn-add-card'),
+      adder(
+        '+ 经历',
+        () => {
+          rows = [...rows, { title: '', text: '', shape: 'object' }];
+          paint();
+          onEdit();
+        },
+        'cn-add cn-card cn-add-card',
+      ),
     );
   };
   paint();
   box.append(cards);
   const emit = (): JsonValue =>
-    rows.map((row) => (row.shape === 'string' ? row.text : { ...(row.title !== undefined ? { title: row.title } : {}), text: row.text }));
+    rows.map((row) =>
+      row.shape === 'string' ? row.text : { ...(row.title !== undefined ? { title: row.title } : {}), text: row.text },
+    );
   const changed = () => !same(rows, toRows());
   return {
     node: box,

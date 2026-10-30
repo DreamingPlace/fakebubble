@@ -38,7 +38,8 @@ export function rolePicker(
         ? h('i', { class: 'admin-pick-dot', text: [...role.displayName][0] ?? '', attrs: { 'aria-hidden': 'true' } })
         : null;
       dot?.style?.setProperty('--dot', compact!.colour(role.characterId, index));
-      const tone = unread > 0 ? 'cc' : role.publishedVersion === null ? 'off' : role.draftRevision !== null ? 'draft' : '';
+      const tone =
+        unread > 0 ? 'cc' : role.publishedVersion === null ? 'off' : role.draftRevision !== null ? 'draft' : '';
       const state =
         role.publishedVersion === null
           ? role.draftRevision === null
@@ -58,7 +59,9 @@ export function rolePicker(
           },
         },
         dot,
-        compact && tone ? h('i', { class: 'admin-pick-st', attrs: { 'data-tone': tone, 'aria-hidden': 'true' } }) : null,
+        compact && tone
+          ? h('i', { class: 'admin-pick-st', attrs: { 'data-tone': tone, 'aria-hidden': 'true' } })
+          : null,
         compact
           ? h(
               'span',

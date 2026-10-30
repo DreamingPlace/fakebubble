@@ -95,7 +95,8 @@ function bench(t: test.TestContext, withDraft: boolean) {
 // visit elsewhere, a dot on the section, 预演后发布 jumps to 发布 and hides there) are unchanged.
 const railItems = (rail: FakeElement) => rail.querySelectorAll('.wb-tab');
 const labels = (rail: FakeElement) => railItems(rail).map((b) => b.textContent);
-const current = (rail: FakeElement) => railItems(rail).find((b) => b.getAttribute('aria-current') === 'true')!.textContent;
+const current = (rail: FakeElement) =>
+  railItems(rail).find((b) => b.getAttribute('aria-current') === 'true')!.textContent;
 
 test('24b-3 角色工作台: a saved role gets a bar of sections, 发布 among them (删除角色 inside it), and shows only the first', async (t) => {
   const f = bench(t, true);
@@ -116,7 +117,10 @@ test('24b-3 角色工作台: a saved role gets a bar of sections, 发布 among t
   const shown = form.children.filter((c) => !(c as FakeElement).hidden);
   assert.equal(shown.length, 1, 'one section of the form at a time');
   assert.equal(f.root.querySelector('.wb-savebar')!.querySelectorAll('button').length, 2);
-  assert.ok(f.root.querySelector('#wb-delete'), '删除角色 is a danger zone at the foot of 发布, not an item of the bar');
+  assert.ok(
+    f.root.querySelector('#wb-delete'),
+    '删除角色 is a danger zone at the foot of 发布, not an item of the bar',
+  );
   assert.ok(f.root.querySelector('#wb-discard'), '放弃服务器草稿 is the other one');
 });
 

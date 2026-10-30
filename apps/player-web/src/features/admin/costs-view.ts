@@ -96,7 +96,11 @@ export type CostsDeps = {
 
 /** 13,812,440 → 13.8M; 88,000 → 88K. The exact figure is the hover. */
 const compact = (n: number) =>
-  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 1 : 2).replace(/\.?0+$/, '')}M` : n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1).replace(/\.0$/, '')}K` : String(n);
+  n >= 1_000_000
+    ? `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 1 : 2).replace(/\.?0+$/, '')}M`
+    : n >= 1000
+      ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1).replace(/\.0$/, '')}K`
+      : String(n);
 const dash = (n: number, show: boolean) => (show ? compact(n) : '—');
 const micros = (dollarsValue: number) => Math.round(dollarsValue * 1_000_000);
 
@@ -116,41 +120,139 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
 
   const tiles = h('section', { class: 'ov-tiles cs-tiles', attrs: { 'aria-label': '本月' } });
   const tile = (label: string, value: string, sub: string, tip: string) =>
-    h('div', { class: 'ov-tile' }, h('span', { class: 'ov-tile-label', text: label }), hoverValue(h('span', { class: 'ov-big', text: value }), tip), h('span', { class: 'ov-tile-sub', text: sub }));
+    h(
+      'div',
+      { class: 'ov-tile' },
+      h('span', { class: 'ov-tile-label', text: label }),
+      hoverValue(h('span', { class: 'ov-big', text: value }), tip),
+      h('span', { class: 'ov-tile-sub', text: sub }),
+    );
 
   // ---- 按模型 ----
   type Total = Omit<CostRow, 'day'> & { key: string };
   const modelColumns: OpenColumn<Total>[] = [
-    { key: 'who', label: '供应商 / 模型 / 阶段', width: 'minmax(0, 2.4fr)', mono: true, cell: (r) => `${r.provider} / ${r.model} / ${PHASES[r.phase]}` },
-    { key: 'calls', label: '调用次数', align: 'end', mono: true, cell: (r) => exactCount(r.calls), tip: (r) => `${exactCount(r.calls)} 次 · 回复 ${exactCount(r.replies)}` },
-    { key: 'in', label: '输入令牌', align: 'end', mono: true, cell: (r) => dash(r.inputTokens, r.phase !== 'speech'), tip: (r) => (r.phase === 'speech' ? null : `${exactCount(r.inputTokens)} 令牌`) },
-    { key: 'out', label: '输出令牌', align: 'end', mono: true, cell: (r) => dash(r.outputTokens, r.phase !== 'speech'), tip: (r) => (r.phase === 'speech' ? null : `${exactCount(r.outputTokens)} 令牌`) },
     {
-      key: 'cache', label: '缓存命中', align: 'end', mono: true,
-      cell: (r) => (r.phase === 'speech' || r.inputTokens === 0 ? '—' : `${Math.round((r.cachedInputTokens / r.inputTokens) * 100)}%`),
+      key: 'who',
+      label: '供应商 / 模型 / 阶段',
+      width: 'minmax(0, 2.4fr)',
+      mono: true,
+      cell: (r) => `${r.provider} / ${r.model} / ${PHASES[r.phase]}`,
+    },
+    {
+      key: 'calls',
+      label: '调用次数',
+      align: 'end',
+      mono: true,
+      cell: (r) => exactCount(r.calls),
+      tip: (r) => `${exactCount(r.calls)} 次 · 回复 ${exactCount(r.replies)}`,
+    },
+    {
+      key: 'in',
+      label: '输入令牌',
+      align: 'end',
+      mono: true,
+      cell: (r) => dash(r.inputTokens, r.phase !== 'speech'),
+      tip: (r) => (r.phase === 'speech' ? null : `${exactCount(r.inputTokens)} 令牌`),
+    },
+    {
+      key: 'out',
+      label: '输出令牌',
+      align: 'end',
+      mono: true,
+      cell: (r) => dash(r.outputTokens, r.phase !== 'speech'),
+      tip: (r) => (r.phase === 'speech' ? null : `${exactCount(r.outputTokens)} 令牌`),
+    },
+    {
+      key: 'cache',
+      label: '缓存命中',
+      align: 'end',
+      mono: true,
+      cell: (r) =>
+        r.phase === 'speech' || r.inputTokens === 0
+          ? '—'
+          : `${Math.round((r.cachedInputTokens / r.inputTokens) * 100)}%`,
       tip: (r) => (r.phase === 'speech' ? null : `${exactCount(r.cachedInputTokens)} 令牌命中缓存`),
     },
-    { key: 'bytes', label: '语音字节', align: 'end', mono: true, cell: (r) => dash(r.bytes, r.phase === 'speech'), tip: (r) => (r.phase === 'speech' ? `${exactCount(r.bytes)} 字节` : null) },
-    { key: 'cost', label: '列表价合计', align: 'end', mono: true, cell: (r) => dollars(r.listCostMicros), tip: (r) => `${exactMoney(r.listCostMicros)}${r.ledgerChargedMicros === null ? '' : ` · 账本扣 ${exactMoney(r.ledgerChargedMicros)}`}` },
+    {
+      key: 'bytes',
+      label: '语音字节',
+      align: 'end',
+      mono: true,
+      cell: (r) => dash(r.bytes, r.phase === 'speech'),
+      tip: (r) => (r.phase === 'speech' ? `${exactCount(r.bytes)} 字节` : null),
+    },
+    {
+      key: 'cost',
+      label: '列表价合计',
+      align: 'end',
+      mono: true,
+      cell: (r) => dollars(r.listCostMicros),
+      tip: (r) =>
+        `${exactMoney(r.listCostMicros)}${r.ledgerChargedMicros === null ? '' : ` · 账本扣 ${exactMoney(r.ledgerChargedMicros)}`}`,
+    },
   ];
-  const totals = openTable<Total>({ label: '消耗表（按模型合计）', className: 'cs-table', rowKey: (r) => r.key, columns: modelColumns, emptyText: '这段时间还没有供应商调用记录。' });
+  const totals = openTable<Total>({
+    label: '消耗表（按模型合计）',
+    className: 'cs-table',
+    rowKey: (r) => r.key,
+    columns: modelColumns,
+    emptyText: '这段时间还没有供应商调用记录。',
+  });
 
   // ---- 按天明细: a day opens its calls below ----
   type DayRow = CostDay & { ledger: number | null; calls: CostRow[] };
   const dayColumns: OpenColumn<DayRow>[] = [
     { key: 'day', label: '日期 UTC', width: '140px', mono: true, cell: (r) => r.day },
-    { key: 'ok', label: '成功回复', align: 'end', mono: true, cell: (r) => exactCount(r.publishedReplies), tip: (r) => `${exactCount(r.publishedReplies)} 条` },
-    { key: 'list', label: '列表价', align: 'end', mono: true, cell: (r) => dollars(r.listCostMicros), tip: (r) => exactMoney(r.listCostMicros) },
-    { key: 'ledger', label: '账本扣', align: 'end', mono: true, cell: (r) => (r.ledger === null ? '—' : dollars(r.ledger)), tip: (r) => (r.ledger === null ? '这一天还没有账本记录' : exactMoney(r.ledger)) },
-    { key: 'pts', label: '消耗积分', align: 'end', mono: true, cell: (r) => exactCount(r.pointsSpent), tip: (r) => `${exactCount(r.pointsSpent)} 点` },
-    { key: 'per', label: '每条成功回复成本', align: 'end', mono: true, headTip: '列表价 ÷ 成功回复', cell: (r) => usd(r.costPerReplyMicros), tip: (r) => (r.costPerReplyMicros === null ? null : exactMoney(r.costPerReplyMicros)) },
+    {
+      key: 'ok',
+      label: '成功回复',
+      align: 'end',
+      mono: true,
+      cell: (r) => exactCount(r.publishedReplies),
+      tip: (r) => `${exactCount(r.publishedReplies)} 条`,
+    },
+    {
+      key: 'list',
+      label: '列表价',
+      align: 'end',
+      mono: true,
+      cell: (r) => dollars(r.listCostMicros),
+      tip: (r) => exactMoney(r.listCostMicros),
+    },
+    {
+      key: 'ledger',
+      label: '账本扣',
+      align: 'end',
+      mono: true,
+      cell: (r) => (r.ledger === null ? '—' : dollars(r.ledger)),
+      tip: (r) => (r.ledger === null ? '这一天还没有账本记录' : exactMoney(r.ledger)),
+    },
+    {
+      key: 'pts',
+      label: '消耗积分',
+      align: 'end',
+      mono: true,
+      cell: (r) => exactCount(r.pointsSpent),
+      tip: (r) => `${exactCount(r.pointsSpent)} 点`,
+    },
+    {
+      key: 'per',
+      label: '每条成功回复成本',
+      align: 'end',
+      mono: true,
+      headTip: '列表价 ÷ 成功回复',
+      cell: (r) => usd(r.costPerReplyMicros),
+      tip: (r) => (r.costPerReplyMicros === null ? null : exactMoney(r.costPerReplyMicros)),
+    },
   ];
   const callsOf = (row: DayRow): HTMLElement => {
     const grid = '1.8fr repeat(5, minmax(0, 1fr))';
     const line = (cells: Array<string | HTMLElement>, headRow = false) => {
       const node = h('div', { class: `cs-call${headRow ? ' is-head' : ''}` });
       node.style?.setProperty('--grid', grid);
-      cells.forEach((c, i) => node.append(typeof c === 'string' ? h('span', { class: i === 0 ? 'is-name' : '', text: c }) : c));
+      cells.forEach((c, i) =>
+        node.append(typeof c === 'string' ? h('span', { class: i === 0 ? 'is-name' : '', text: c }) : c),
+      );
       return node;
     };
     const money = (m: number) => hoverValue(h('span', { text: dollars(m) }), exactMoney(m));
@@ -159,28 +261,66 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
       { class: 'ot-detail cs-calls' },
       line(['供应商 / 模型 / 阶段', '调用', '输入', '输出', '语音字节', '列表价'], true),
       ...(row.calls.length
-        ? row.calls.map((c) => line([`${c.provider} / ${c.model} / ${PHASES[c.phase]}`, exactCount(c.calls), dash(c.inputTokens, c.phase !== 'speech'), dash(c.outputTokens, c.phase !== 'speech'), dash(c.bytes, c.phase === 'speech'), money(c.listCostMicros)]))
+        ? row.calls.map((c) =>
+            line([
+              `${c.provider} / ${c.model} / ${PHASES[c.phase]}`,
+              exactCount(c.calls),
+              dash(c.inputTokens, c.phase !== 'speech'),
+              dash(c.outputTokens, c.phase !== 'speech'),
+              dash(c.bytes, c.phase === 'speech'),
+              money(c.listCostMicros),
+            ]),
+          )
         : [h('p', { class: 'ot-empty', text: '这一天没有供应商调用记录。' })]),
     );
   };
-  const daily = openTable<DayRow>({ label: '消耗表（按天明细）', className: 'cs-table', rowKey: (r) => r.day, columns: dayColumns, detail: (row) => callsOf(row), emptyText: '这段时间还没有消耗记录。' });
+  const daily = openTable<DayRow>({
+    label: '消耗表（按天明细）',
+    className: 'cs-table',
+    rowKey: (r) => r.day,
+    columns: dayColumns,
+    detail: (row) => callsOf(row),
+    emptyText: '这段时间还没有消耗记录。',
+  });
 
   // ---- controls ---------------------------------------------------------------------------------------------------------
-  const rangeSwitch = segmented('时间范围', STATS_RANGES.map((days) => ({ id: String(days), label: `${days}天` })), String(range), (id) => {
-    range = Number(id) as StatsRange;
-    void deps.run(() => load());
-  }, 'm');
+  const rangeSwitch = segmented(
+    '时间范围',
+    STATS_RANGES.map((days) => ({ id: String(days), label: `${days}天` })),
+    String(range),
+    (id) => {
+      range = Number(id) as StatsRange;
+      void deps.run(() => load());
+    },
+    'm',
+  );
   const exportButton = h('button', { text: '导出表格', attrs: { type: 'button' } });
   exportButton.addEventListener('click', () => void deps.run(() => exportTable()));
-  const splitSwitch = segmented('拆分方式', [{ id: 'user' as SpendSplit, label: '按用户' }, { id: 'kind' as SpendSplit, label: '文字 / 语音' }], split, (id) => {
-    split = id;
-    off.clear();
-    paintChart(true);
-  });
-  const modeSwitch = segmented('图表类型', [{ id: 'bar' as const, label: '柱状' }, { id: 'line' as const, label: '折线' }], mode, (id) => {
-    mode = id;
-    paintChart(true);
-  });
+  const splitSwitch = segmented(
+    '拆分方式',
+    [
+      { id: 'user' as SpendSplit, label: '按用户' },
+      { id: 'kind' as SpendSplit, label: '文字 / 语音' },
+    ],
+    split,
+    (id) => {
+      split = id;
+      off.clear();
+      paintChart(true);
+    },
+  );
+  const modeSwitch = segmented(
+    '图表类型',
+    [
+      { id: 'bar' as const, label: '柱状' },
+      { id: 'line' as const, label: '折线' },
+    ],
+    mode,
+    (id) => {
+      mode = id;
+      paintChart(true);
+    },
+  );
   const chips = h('div', { class: 'cost-chips', attrs: { role: 'group', 'aria-label': '显示哪些' } });
   const alertKey = h('span', { class: 'cost-alert-key', hidden: true }, h('i'), h('span'));
   const chart = xyChart();
@@ -188,7 +328,12 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
   const chartCard = h(
     'section',
     { class: 'ov-card cost-chart', attrs: { 'aria-label': '每天花费' }, hidden: true },
-    h('div', { class: 'ovx-bar' }, h('h3', { text: '每天花费' }), h('div', { class: 'ovx-tools' }, splitSwitch.root, modeSwitch.root)),
+    h(
+      'div',
+      { class: 'ovx-bar' },
+      h('h3', { text: '每天花费' }),
+      h('div', { class: 'ovx-tools' }, splitSwitch.root, modeSwitch.root),
+    ),
     h('div', { class: 'cost-chips-row' }, chips, alertKey),
     chart.root,
     empty,
@@ -198,8 +343,18 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
     pageHead('消耗表', since, rangeSwitch.root, exportButton),
     tiles,
     chartCard,
-    h('section', { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按模型' } }, h('h3', { text: '按模型' }), totals.root),
-    h('section', { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按天明细' } }, h('h3', { text: '按天明细' }), daily.root),
+    h(
+      'section',
+      { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按模型' } },
+      h('h3', { text: '按模型' }),
+      totals.root,
+    ),
+    h(
+      'section',
+      { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按天明细' } },
+      h('h3', { text: '按天明细' }),
+      daily.root,
+    ),
   );
 
   // ---- the chart --------------------------------------------------------------------------------------------------------
@@ -213,14 +368,22 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
     const known = built.series.some((s) => s.values.some((v) => v !== null));
     empty.hidden = known;
     chart.root.hidden = !known;
-    const series: XySeries[] = built.series.map((s) => ({ id: s.id, name: s.name, color: s.color, values: s.values, on: !off.has(s.id) }));
+    const series: XySeries[] = built.series.map((s) => ({
+      id: s.id,
+      name: s.name,
+      color: s.color,
+      values: s.values,
+      on: !off.has(s.id),
+    }));
     const step = Math.max(1, Math.ceil(built.buckets.length / 7));
     const scale = chart.update(
       {
         mode,
         series,
         buckets: built.buckets,
-        ticks: built.buckets.map((bucket, index) => ({ index, label: bucket.slice(5) })).filter((tick) => tick.index % step === 0 || tick.index === built.buckets.length - 1),
+        ticks: built.buckets
+          .map((bucket, index) => ({ index, label: bucket.slice(5) }))
+          .filter((tick) => tick.index % step === 0 || tick.index === built.buckets.length - 1),
         axisLabel: dollarLabel,
         valueLabel: cents,
         alert: spend.alertMicros === null ? null : toUsd(spend.alertMicros),
@@ -233,18 +396,31 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
           const known = visible.some((s) => s.values[i] != null);
           return [
             `${built.buckets[i]} UTC${known ? ` · 合计 ${exactMoney(micros(total))}` : ''}`,
-            ...(known ? series.map((s) => `${s.name}  ${s.values[i] == null ? '—' : exactMoney(micros(s.values[i]!))}${s.on ? '' : '（已隐藏）'}`) : ['这一天没有按用户的记录']),
+            ...(known
+              ? series.map(
+                  (s) =>
+                    `${s.name}  ${s.values[i] == null ? '—' : exactMoney(micros(s.values[i]!))}${s.on ? '' : '（已隐藏）'}`,
+                )
+              : ['这一天没有按用户的记录']),
           ];
         },
       },
       replay,
     );
     alertKey.hidden = !scale.alertShown;
-    if (scale.alertShown) (alertKey.querySelector('span') as HTMLElement).textContent = dollarLabel(toUsd(spend.alertMicros!));
+    if (scale.alertShown)
+      (alertKey.querySelector('span') as HTMLElement).textContent = dollarLabel(toUsd(spend.alertMicros!));
     chips.replaceChildren(
       ...built.series.map((s) => {
         const on = !off.has(s.id);
-        const chip = h('button', { class: 'cost-chip', attrs: { type: 'button', 'aria-pressed': String(on), 'data-chip': s.id } }, h('span', { class: 'cost-chip-dot' }), s.name, ' ', h('b', { text: cents(s.sum) }));
+        const chip = h(
+          'button',
+          { class: 'cost-chip', attrs: { type: 'button', 'aria-pressed': String(on), 'data-chip': s.id } },
+          h('span', { class: 'cost-chip-dot' }),
+          s.name,
+          ' ',
+          h('b', { text: cents(s.sum) }),
+        );
         chip.style.setProperty('--c', s.color);
         hoverValue(chip, exactMoney(micros(s.sum)));
         chip.addEventListener('click', () => {
@@ -272,21 +448,42 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
         held.bytes += row.bytes;
         held.listCostMicros += row.listCostMicros;
         held.replies += row.replies;
-        if (row.ledgerChargedMicros !== null) held.ledgerChargedMicros = (held.ledgerChargedMicros ?? 0) + row.ledgerChargedMicros;
+        if (row.ledgerChargedMicros !== null)
+          held.ledgerChargedMicros = (held.ledgerChargedMicros ?? 0) + row.ledgerChargedMicros;
       }
     }
     return [...map.values()].sort((a, b) => b.listCostMicros - a.listCostMicros);
   }
   async function load() {
-    const [view, spent] = await Promise.all([deps.load(range), deps.spend ? deps.spend(range).catch(() => null) : Promise.resolve(null)]);
+    const [view, spent] = await Promise.all([
+      deps.load(range),
+      deps.spend ? deps.spend(range).catch(() => null) : Promise.resolve(null),
+    ]);
     if (deps.disposed()) return;
     costs = view;
     const m = view.month;
     fillStatus(since, h('span', { class: 'is-mono', text: `UTC ${m.month}` }));
     tiles.replaceChildren(
-      tile('本月花费', dollars(m.listCostMicros), `≈ ${rmb(m.listCostRmbFen)}`, `列表价 ${exactMoney(m.listCostMicros)} · 汇率 ${view.usdCny}`),
-      tile('每条成功回复', usd(m.costPerReplyMicros), `${exactCount(m.publishedReplies)} 条`, m.costPerReplyMicros === null ? '还没有成功回复' : `${exactMoney(m.costPerReplyMicros)} · ${exactCount(m.publishedReplies)} 条`),
-      tile('账本扣的', m.ledgerChargedMicros === null ? '—' : dollars(m.ledgerChargedMicros), '', m.ledgerChargedMicros === null ? '这个月还没有账本记录' : exactMoney(m.ledgerChargedMicros)),
+      tile(
+        '本月花费',
+        dollars(m.listCostMicros),
+        `≈ ${rmb(m.listCostRmbFen)}`,
+        `列表价 ${exactMoney(m.listCostMicros)} · 汇率 ${view.usdCny}`,
+      ),
+      tile(
+        '每条成功回复',
+        usd(m.costPerReplyMicros),
+        `${exactCount(m.publishedReplies)} 条`,
+        m.costPerReplyMicros === null
+          ? '还没有成功回复'
+          : `${exactMoney(m.costPerReplyMicros)} · ${exactCount(m.publishedReplies)} 条`,
+      ),
+      tile(
+        '账本扣的',
+        m.ledgerChargedMicros === null ? '—' : dollars(m.ledgerChargedMicros),
+        '',
+        m.ledgerChargedMicros === null ? '这个月还没有账本记录' : exactMoney(m.ledgerChargedMicros),
+      ),
       tile('用掉的点数', exactCount(m.pointsSpent), '', `${exactCount(m.pointsSpent)} 点`),
     );
     const byDay = new Map<string, CostRow[]>();
@@ -295,7 +492,11 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
       view.daily.map((d) => {
         const rows = byDay.get(d.day) ?? [];
         const known = rows.filter((r) => r.ledgerChargedMicros !== null);
-        return { ...d, ledger: known.length ? known.reduce((a, r) => a + (r.ledgerChargedMicros ?? 0), 0) : null, calls: rows };
+        return {
+          ...d,
+          ledger: known.length ? known.reduce((a, r) => a + (r.ledgerChargedMicros ?? 0), 0) : null,
+          calls: rows,
+        };
       }),
     );
     totals.setRows(aggregate(view.rows));

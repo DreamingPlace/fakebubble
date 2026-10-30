@@ -56,9 +56,7 @@ export const NAV_TREE: readonly NavGroup[] = [
   {
     id: 'ops',
     label: '运营',
-    items: [
-      { page: 'costs', label: '消耗表' },
-    ],
+    items: [{ page: 'costs', label: '消耗表' }],
   },
   {
     id: 'system',

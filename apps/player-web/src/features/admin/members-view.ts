@@ -1,4 +1,8 @@
-import { ADMIN_PERMISSION_PRESETS, itemPermission, type AdminPermission } from '../../../../../packages/contracts/web-admin-permissions.ts';
+import {
+  ADMIN_PERMISSION_PRESETS,
+  itemPermission,
+  type AdminPermission,
+} from '../../../../../packages/contracts/web-admin-permissions.ts';
 import type { AccountAdminApi } from '../../services/account-admin-api.ts';
 import { h } from '../cocreation/h.ts';
 import { dateTimeText } from './system-format.ts';
@@ -11,7 +15,16 @@ type MembersResult = Awaited<ReturnType<AccountAdminApi['members']>>;
 type Member = MembersResult['members'][number];
 
 /** Part 24b-6 (Members3): one fixed mark colour per administrator, by member order, from this palette. (A colour picker is a later Part.) */
-export const MARK_COLOURS = ['#5B4FC4', '#0E7490', '#B45309', '#9D174D', '#4D7C0F', '#1D4ED8', '#C2410C', '#6D28D9'] as const;
+export const MARK_COLOURS = [
+  '#5B4FC4',
+  '#0E7490',
+  '#B45309',
+  '#9D174D',
+  '#4D7C0F',
+  '#1D4ED8',
+  '#C2410C',
+  '#6D28D9',
+] as const;
 export const markColour = (index: number) => MARK_COLOURS[index % MARK_COLOURS.length]!;
 
 export type MembersViewOptions = {
@@ -58,7 +71,11 @@ export function membersView(options: MembersViewOptions) {
     for (const [id, button] of presetButtons) button.setAttribute('aria-pressed', String(id === preset));
   };
   for (const item of ADMIN_PERMISSION_PRESETS) {
-    const button = h('button', { class: 'mb-preset', text: item.label, attrs: { type: 'button', 'aria-pressed': 'false' } });
+    const button = h('button', {
+      class: 'mb-preset',
+      text: item.label,
+      attrs: { type: 'button', 'aria-pressed': 'false' },
+    });
     button.addEventListener('click', () => {
       preset = item.id;
       paintPresets();
@@ -69,7 +86,10 @@ export function membersView(options: MembersViewOptions) {
   paintPresets();
   const presetPermissions = (): AdminPermission[] => {
     const chosenPreset = ADMIN_PERMISSION_PRESETS.find((p) => p.id === preset) ?? ADMIN_PERMISSION_PRESETS[0]!;
-    return chosenPreset.items.filter((item) => options.shown(item)).map(itemPermission).sort();
+    return chosenPreset.items
+      .filter((item) => options.shown(item))
+      .map(itemPermission)
+      .sort();
   };
   const issuePermissions = () => presetPermissions();
 

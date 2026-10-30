@@ -184,7 +184,10 @@ export function modelsView(
     readonly.hidden = !view || manage;
     voiceInput.disabled = !manage;
     const n = changes().length;
-    const pill = h('span', { class: view?.featureOn ? 'models-pill is-on' : 'models-pill', text: `玩家选模型 · ${view?.featureOn ? '开' : '关'}` });
+    const pill = h('span', {
+      class: view?.featureOn ? 'models-pill is-on' : 'models-pill',
+      text: `玩家选模型 · ${view?.featureOn ? '开' : '关'}`,
+    });
     hoverValue(pill, 'PLAYER_MODEL_CHOICE_ENABLED');
     fillStatus(headStatus, view ? pill : null, n > 0 ? h('span', { class: 'is-warn', text: unsavedText(n) }) : null);
     // A changed value is amber until it is saved.
@@ -205,7 +208,10 @@ export function modelsView(
   /** 最近修改 of a row: the UTC day and who; the whole line (before → after) is the hover. */
   function lastChange(change: ModelChangeView | undefined): Node {
     if (!change) return h('span', { class: 'models-at', text: '—' });
-    const node = h('span', { class: 'models-at', text: `${new Date(change.at).toISOString().slice(5, 10)} · ${change.admin}` });
+    const node = h('span', {
+      class: 'models-at',
+      text: `${new Date(change.at).toISOString().slice(5, 10)} · ${change.admin}`,
+    });
     return hoverValue(node, changeLine(change, labels()));
   }
   function cell(label: string, ...children: Node[]) {
@@ -276,12 +282,12 @@ export function modelsView(
         'tr',
         { class: 'models-voice' },
         h('th', { text: '语音加点', attrs: { scope: 'row' } }),
-        cell('', ),
-        cell('', ),
-        cell('', ),
-        cell('', ),
+        cell(''),
+        cell(''),
+        cell(''),
+        cell(''),
         cell('语音加点', voiceInput, h('span', { class: 'models-unit', text: '每条' })),
-        cell('', ),
+        cell(''),
         cell('最近修改', lastChange(view.recent.find((c) => c.field === 'voice_points'))),
       ),
     );

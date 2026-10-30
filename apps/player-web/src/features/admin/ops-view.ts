@@ -22,7 +22,10 @@ export function opsView(
   },
 ) {
   let days = 14;
-  const stage = (label: string, pick: (d: StageLatencyDay) => { samples: number; p50Ms: number | null; p95Ms: number | null }): OpenColumn<StageLatencyDay> => ({
+  const stage = (
+    label: string,
+    pick: (d: StageLatencyDay) => { samples: number; p50Ms: number | null; p95Ms: number | null },
+  ): OpenColumn<StageLatencyDay> => ({
     key: label,
     label,
     align: 'end',
@@ -30,7 +33,9 @@ export function opsView(
     cell: (d) => ms(pick(d)),
     tip: (d) => {
       const p = pick(d);
-      return p.samples === 0 ? '这一天没有样本' : `中位 ${seconds(p.p50Ms)} · 最慢 ${seconds(p.p95Ms)} · ${p.samples} 个样本`;
+      return p.samples === 0
+        ? '这一天没有样本'
+        : `中位 ${seconds(p.p50Ms)} · 最慢 ${seconds(p.p95Ms)} · ${p.samples} 个样本`;
     },
   });
   const table = openTable<StageLatencyDay>({
@@ -40,26 +45,50 @@ export function opsView(
     emptyText: '还没有运营数据。玩家产生回复后，每日统计会显示在这里。',
     columns: [
       { key: 'day', label: '日期（UTC）', width: '110px', mono: true, cell: (d) => d.day },
-      { key: 'operations', label: '回复数', align: 'end', mono: true, cell: (d) => String(d.operations), tip: (d) => `${d.operations.toLocaleString('en-US')} 条` },
+      {
+        key: 'operations',
+        label: '回复数',
+        align: 'end',
+        mono: true,
+        cell: (d) => String(d.operations),
+        tip: (d) => `${d.operations.toLocaleString('en-US')} 条`,
+      },
       stage('文字排队 p50/p95', (d) => d.textQueueWait),
       stage('文字阶段 p50/p95', (d) => d.textStage),
       stage('语音排队 p50/p95', (d) => d.audioQueueWait),
       stage('语音阶段 p50/p95', (d) => d.audioStage),
       {
-        key: 'review', label: '审核改写率', align: 'end', mono: true,
+        key: 'review',
+        label: '审核改写率',
+        align: 'end',
+        mono: true,
         cell: (d) => (d.review.samples ? `${percent(d.review.rate)}（${d.review.changed}/${d.review.samples}）` : '—'),
         tip: (d) => (d.review.samples ? `${d.review.changed} 条被改写，共 ${d.review.samples} 条审核` : null),
       },
-      { key: 'memoryDropped', label: '话题/事实丢弃', align: 'end', mono: true, cell: (d) => `${d.memoryDropped?.topics ?? 0}/${d.memoryDropped?.facts ?? 0}`, tip: (d) => `话题 ${d.memoryDropped?.topics ?? 0} · 事实 ${d.memoryDropped?.facts ?? 0}` },
+      {
+        key: 'memoryDropped',
+        label: '话题/事实丢弃',
+        align: 'end',
+        mono: true,
+        cell: (d) => `${d.memoryDropped?.topics ?? 0}/${d.memoryDropped?.facts ?? 0}`,
+        tip: (d) => `话题 ${d.memoryDropped?.topics ?? 0} · 事实 ${d.memoryDropped?.facts ?? 0}`,
+      },
       { key: 'rateLimitRetries', label: '限流重试', align: 'end', mono: true, cell: (d) => String(d.rateLimitRetries) },
       { key: 'fallbacks', label: '回退', align: 'end', mono: true, cell: (d) => String(d.fallbacks) },
       {
-        key: 'cache', label: '缓存命中 草稿/审核', align: 'end', mono: true,
+        key: 'cache',
+        label: '缓存命中 草稿/审核',
+        align: 'end',
+        mono: true,
         cell: (d) => `${percent(d.cache.draft.hitRatio)} / ${percent(d.cache.review.hitRatio)}`,
-        tip: (d) => `草稿命中 ${d.cache.draft.hitTokens.toLocaleString('en-US')} 令牌 · 审核命中 ${d.cache.review.hitTokens.toLocaleString('en-US')} 令牌`,
+        tip: (d) =>
+          `草稿命中 ${d.cache.draft.hitTokens.toLocaleString('en-US')} 令牌 · 审核命中 ${d.cache.review.hitTokens.toLocaleString('en-US')} 令牌`,
       },
       {
-        key: 'embedding', label: '向量化 调用/失败/未知', align: 'end', mono: true,
+        key: 'embedding',
+        label: '向量化 调用/失败/未知',
+        align: 'end',
+        mono: true,
         cell: (d) => `${d.embedding.calls}/${d.embedding.failures}/${d.embedding.unknowns}`,
         tip: (d) => `调用 ${d.embedding.calls} · 失败 ${d.embedding.failures} · 未知 ${d.embedding.unknowns}`,
       },

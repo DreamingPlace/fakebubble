@@ -41,7 +41,10 @@ test('24b-4 one layout system: the content is as wide as the window lets it be (
   // 3fr/2fr and 1fr/1.1fr proportions of those three pages do not exist any more; their V3 layouts are pinned instead.
   assert.match(css, /\.cs-main \{\s*display: grid;\s*grid-template-columns: max-content minmax\(0, 1fr\);/);
   assert.match(css, /#admin-cocreation \.cc-layout \{\s*display: flex;\s*flex-direction: column;/);
-  assert.match(css, /#admin-cocreation \.cc-list \{\s*display: grid;\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
+  assert.match(
+    css,
+    /#admin-cocreation \.cc-list \{\s*display: grid;\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/,
+  );
 });
 
 test('24b-4 colours: one palette of fifteen, dealt by place in the sorted roster, so a character has the same dot on every page', () => {

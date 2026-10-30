@@ -211,7 +211,12 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   root.replaceChildren(
     pageHead('邀请与额度', status),
     form,
-    h('div', { class: 'tiers-list' }, empty, h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table))),
+    h(
+      'div',
+      { class: 'tiers-list' },
+      empty,
+      h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table)),
+    ),
   );
 
   /** Copy to the clipboard and say so; a refusal (no permission, no secure context) is told, never silent. */
@@ -272,7 +277,12 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       const bar = h('span', { class: 'iv-bar' }, h('i'));
       (bar.querySelector?.('i') as HTMLElement | null)?.style.setProperty('--w', `${pct}%`);
       const redeemed = hoverValue(
-        h('span', { class: 'iv-redeemed' }, bar, h('span', { class: 'iv-fig', text: `${batch.redeemed} / ${batch.codes}` })),
+        h(
+          'span',
+          { class: 'iv-redeemed' },
+          bar,
+          h('span', { class: 'iv-fig', text: `${batch.redeemed} / ${batch.codes}` }),
+        ),
         `已兑换 ${exactCount(batch.redeemed)} 个 · ${pct}% · 未使用 ${exactCount(unusedOf(batch))}`,
       );
       rows.push(
@@ -281,7 +291,12 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
             'tr',
             {
               class: `tiers-row${isOpen ? ' is-selected' : ''}`,
-              attrs: { 'data-batch': batch.id, tabindex: '0', 'aria-selected': String(isOpen), 'aria-expanded': String(isOpen) },
+              attrs: {
+                'data-batch': batch.id,
+                tabindex: '0',
+                'aria-selected': String(isOpen),
+                'aria-expanded': String(isOpen),
+              },
             },
             h('td', { class: 'ot-chev', attrs: { 'aria-hidden': 'true' } }, chevron()),
             h(
@@ -296,15 +311,28 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
             cell('邀请码', String(batch.codes)),
             cell('兑换', redeemed),
             cell('撤销', String(batch.revoked)),
-            cell('持有中', hoverValue(h('b', { text: String(batch.holders) }), `${batch.holders} 位玩家现在持有这批邀请`)),
+            cell(
+              '持有中',
+              hoverValue(h('b', { text: String(batch.holders) }), `${batch.holders} 位玩家现在持有这批邀请`),
+            ),
           ),
           batch,
         ),
       );
       if (isOpen) {
-        const panel = h('div', { class: 'ot-panel', attrs: { 'data-state': 'open' } }, h('div', { class: 'ot-inner' }, detail));
+        const panel = h(
+          'div',
+          { class: 'ot-panel', attrs: { 'data-state': 'open' } },
+          h('div', { class: 'ot-inner' }, detail),
+        );
         panel.dataset.settled = 'true';
-        rows.push(h('tr', { class: 'tiers-open-row', attrs: { 'data-open-for': batch.id } }, h('td', { attrs: { colspan: '8' } }, panel)));
+        rows.push(
+          h(
+            'tr',
+            { class: 'tiers-open-row', attrs: { 'data-open-for': batch.id } },
+            h('td', { attrs: { colspan: '8' } }, panel),
+          ),
+        );
       }
     }
     body.replaceChildren(...rows);
@@ -387,7 +415,10 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       .filter((c): c is string => c !== null);
     const copyAll = button(
       '复制全部未使用',
-      () => void copyText(unusedPlain.join('\n')).then((ok) => ok && (copyAll.textContent = `已复制 ${unusedPlain.length} 个未使用`)),
+      () =>
+        void copyText(unusedPlain.join('\n')).then(
+          (ok) => ok && (copyAll.textContent = `已复制 ${unusedPlain.length} 个未使用`),
+        ),
       'admin-secondary tiers-copy-all iv-chip',
     );
     copyAll.setAttribute('aria-label', `复制全部未使用（${unusedPlain.length} 个）`);
@@ -405,35 +436,61 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       };
       n.addEventListener('input', dirtyCheck);
       c.addEventListener('input', dirtyCheck);
-      const save = button('修改额度', () => {
-        const nextN = Number(n.value),
-          nextCap = Number(c.value);
-        if (!Number.isSafeInteger(nextN) || !Number.isSafeInteger(nextCap) || nextN < 1 || nextN > TIER_FORM.amountMax || nextCap < nextN || nextCap > TIER_FORM.capMax) {
-          message.textContent = '每天补充需要是正整数，总上限不能低于每天补充。';
-          return;
-        }
-        if (nextN === batch.dailyAmount && nextCap === batch.cap) {
-          message.textContent = '没有改动。';
-          return;
-        }
-        message.textContent = '';
-        void deps.run(async () => {
-          const ok = await deps.confirm(
-            { title: '确认修改额度', message: editConfirmation(batch, nextN, nextCap), confirmLabel: '确认修改' },
-            confirmHost,
-          );
-          if (!ok || deps.disposed()) return;
-          const signature = `${batch.id}:${nextN}:${nextCap}`;
-          if (!editPending || editPending.signature !== signature) editPending = { id: deps.newRequestId(), signature };
-          await port.editInviteBatch!({ requestId: editPending.id, batchId: batch.id, dailyAmount: nextN, cap: nextCap });
-          editPending = null;
-          deps.toast('额度已修改');
-          await load();
-        });
-      }, 'admin-secondary tiers-save');
+      const save = button(
+        '修改额度',
+        () => {
+          const nextN = Number(n.value),
+            nextCap = Number(c.value);
+          if (
+            !Number.isSafeInteger(nextN) ||
+            !Number.isSafeInteger(nextCap) ||
+            nextN < 1 ||
+            nextN > TIER_FORM.amountMax ||
+            nextCap < nextN ||
+            nextCap > TIER_FORM.capMax
+          ) {
+            message.textContent = '每天补充需要是正整数，总上限不能低于每天补充。';
+            return;
+          }
+          if (nextN === batch.dailyAmount && nextCap === batch.cap) {
+            message.textContent = '没有改动。';
+            return;
+          }
+          message.textContent = '';
+          void deps.run(async () => {
+            const ok = await deps.confirm(
+              { title: '确认修改额度', message: editConfirmation(batch, nextN, nextCap), confirmLabel: '确认修改' },
+              confirmHost,
+            );
+            if (!ok || deps.disposed()) return;
+            const signature = `${batch.id}:${nextN}:${nextCap}`;
+            if (!editPending || editPending.signature !== signature)
+              editPending = { id: deps.newRequestId(), signature };
+            await port.editInviteBatch!({
+              requestId: editPending.id,
+              batchId: batch.id,
+              dailyAmount: nextN,
+              cap: nextCap,
+            });
+            editPending = null;
+            deps.toast('额度已修改');
+            await load();
+          });
+        },
+        'admin-secondary tiers-save',
+      );
       hoverValue(save, '从每人下一次每日补充起生效');
       editNow = { amount: n, cap: c };
-      return h('span', { class: 'iv-edit' }, h('span', { text: '每天 +' }), n, h('span', { text: '上限' }), c, save, message);
+      return h(
+        'span',
+        { class: 'iv-edit' },
+        h('span', { text: '每天 +' }),
+        n,
+        h('span', { text: '上限' }),
+        c,
+        save,
+        message,
+      );
     })();
     const zone = dangerZone({
       open: '撤销整批',
@@ -462,7 +519,12 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       toolbar,
       confirmHost,
       ...(masked
-        ? [h('p', { class: 'admin-hint tiers-masked-note', text: '这批邀请码由其他管理员创建，邀请码已隐藏；批次信息和兑换情况仍然可见。' })]
+        ? [
+            h('p', {
+              class: 'admin-hint tiers-masked-note',
+              text: '这批邀请码由其他管理员创建，邀请码已隐藏；批次信息和兑换情况仍然可见。',
+            }),
+          ]
         : []),
       h(
         'div',
@@ -473,7 +535,13 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
           h(
             'thead',
             {},
-            h('tr', {}, ...['序号', '邀请码', '状态', '兑换时间 (UTC)', '玩家编号', '额度到期', '操作'].map((label) => h('th', { text: label, attrs: { scope: 'col' } }))),
+            h(
+              'tr',
+              {},
+              ...['序号', '邀请码', '状态', '兑换时间 (UTC)', '玩家编号', '额度到期', '操作'].map((label) =>
+                h('th', { text: label, attrs: { scope: 'col' } }),
+              ),
+            ),
           ),
           h(
             'tbody',
@@ -488,14 +556,21 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
                   '状态',
                   statusBadge(
                     STATE_LABEL[code.state],
-                    code.state === 'redeemed' || code.state === 'expired' ? 'ok' : code.state === 'unused' ? 'neutral' : 'warn',
+                    code.state === 'redeemed' || code.state === 'expired'
+                      ? 'ok'
+                      : code.state === 'unused'
+                        ? 'neutral'
+                        : 'warn',
                   ),
                 ),
                 cell(
                   '兑换 UTC',
                   code.redeemedAt === null
                     ? '—'
-                    : hoverValue(h('span', { text: utcDateTime(code.redeemedAt).slice(0, 16) }), `${utcDateTime(code.redeemedAt)} UTC`),
+                    : hoverValue(
+                        h('span', { text: utcDateTime(code.redeemedAt).slice(0, 16) }),
+                        `${utcDateTime(code.redeemedAt)} UTC`,
+                      ),
                 ),
                 cell('玩家', code.playerNumber ?? (code.redeemedAt === null ? '—' : '旧邀请')),
                 cell(
@@ -504,14 +579,21 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
                     ? code.redeemedAt === null
                       ? '—'
                       : '长期'
-                    : hoverValue(h('span', { text: utcDateTime(code.expiresAt).slice(0, 16) }), `${utcDateTime(code.expiresAt)} UTC`),
+                    : hoverValue(
+                        h('span', { text: utcDateTime(code.expiresAt).slice(0, 16) }),
+                        `${utcDateTime(code.expiresAt)} UTC`,
+                      ),
                 ),
                 cell(
                   '操作',
                   code.state === 'unused'
                     ? button('撤销', () => void deps.run(() => revokeCode(code)), 'admin-secondary iv-small iv-danger')
                     : code.state === 'redeemed'
-                      ? button('结束额度', () => void deps.run(() => revokeEntitlement(code)), 'admin-secondary iv-small iv-danger')
+                      ? button(
+                          '结束额度',
+                          () => void deps.run(() => revokeEntitlement(code)),
+                          'admin-secondary iv-small iv-danger',
+                        )
                       : '',
                 ),
               ),

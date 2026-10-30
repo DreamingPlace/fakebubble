@@ -163,14 +163,14 @@ export function xyChart() {
     const count = state.buckets.length;
     const at = state.mode === 'bar' ? (index + 0.5) / count : index / Math.max(1, count - 1);
     guide.style.setProperty('--gx', percent(at * 100));
-    const lines =
-      state.tipLines?.(index) ??
-      [
-        state.buckets[index]!,
-        ...state.series
-          .filter((series) => series.on)
-          .map((series) => `${series.name} ${series.values[index] == null ? '—' : state.valueLabel(series.values[index]!)}`),
-      ];
+    const lines = state.tipLines?.(index) ?? [
+      state.buckets[index]!,
+      ...state.series
+        .filter((series) => series.on)
+        .map(
+          (series) => `${series.name} ${series.values[index] == null ? '—' : state.valueLabel(series.values[index]!)}`,
+        ),
+    ];
     tip.replaceChildren(
       ...lines.map((line, k) => {
         const row = el('span', k === 0 ? 'xy-tip-head' : 'xy-tip-row', line);
@@ -243,12 +243,12 @@ export function xyChart() {
     // Hover text per bucket: the bubble is built when a bucket is entered; the column also carries it as its accessible name.
     const columns = hits.querySelectorAll<HTMLElement>('.xy-hit');
     columns.forEach((hit, i) => {
-      const lines =
-        state.tipLines?.(i) ??
-        [
-          state.buckets[i]!,
-          ...visible.map((series) => `${series.name} ${series.values[i] == null ? '—' : state.valueLabel(series.values[i]!)}`),
-        ];
+      const lines = state.tipLines?.(i) ?? [
+        state.buckets[i]!,
+        ...visible.map(
+          (series) => `${series.name} ${series.values[i] == null ? '—' : state.valueLabel(series.values[i]!)}`,
+        ),
+      ];
       hit.setAttribute('aria-label', lines.join(' · '));
       if (state.mode === 'line') {
         // A column through the point, kept inside the plot at both ends.

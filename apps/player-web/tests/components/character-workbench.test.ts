@@ -300,6 +300,51 @@ test('complete profile form round-trips approved canon, precise probabilities an
   );
 });
 
+// Part 24b-6 (required): 说话方式 / 经历 / 其余设定 are structured editors over the existing authorCanon.settings keys. Opening a role and
+// saving without an edit must hand back a template deep-equal to the input: same keys in the same order, nothing dropped, no type changed.
+test('24b-6 structured editors: open → save without edits produces a template deep-equal to the input (order, keys and types kept)', (t) => {
+  dom(t);
+  const base = profile();
+  base.template.authorCanon = {
+    kind: 'author_canon',
+    settings: {
+      selfIdentity: { names: ['测试人物', '保留别名'], truthScope: 'fictional_world', representsRealPerson: false },
+      speechStyle: ['温柔', '爱用“嗯”'],
+      basicInfo: { birthDate: '2000-01-01' },
+      dialogueStyle: '短句，不爱解释',
+      background: [{ title: '小时候', text: '住在海边' }, '后来搬了家'],
+      dialogueExamples: [
+        { situation: '日常聊天', player: '你好', reply: ['嗯？', '你好呀'] },
+        { player: '吃了吗', reply: [] },
+      ],
+      speechExamples: ['保留样例'],
+      hobbies: { 爱好: ['画画'], 宠物: null },
+    },
+  } as never;
+  const before = structuredClone(base);
+  const form = characterForm(
+    new Element() as unknown as HTMLElement,
+    base,
+    false,
+    () => {},
+    (e) => {
+      throw e;
+    },
+  );
+  const saved = form.read();
+  assert.deepEqual(saved.template, before.template);
+  assert.equal(
+    JSON.stringify(saved.template.authorCanon),
+    JSON.stringify(before.template.authorCanon),
+    "byte for byte, so the key order is the input's too",
+  );
+  assert.deepEqual(base, before, 'the source is not mutated');
+  assert.deepEqual(
+    form.panes.map((pane) => pane.label),
+    ['身份与展示', '欢迎内容', '性格', '说话方式', '经历', '其余设定', '声音'],
+  );
+});
+
 test('name/birthday synchronization is narrow; invalid canon never overwrites the original', () => {
   const base = profile(),
     values = {

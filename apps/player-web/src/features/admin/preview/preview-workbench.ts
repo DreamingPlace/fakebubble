@@ -428,7 +428,10 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
           label: '费用',
           align: 'end',
           render: (p) =>
-            hovered(micros(p.cost.chargedMicros), `实收 ${micros(p.cost.chargedMicros)} · 仍保留 ${micros(p.cost.heldMicros)}`),
+            hovered(
+              micros(p.cost.chargedMicros),
+              `实收 ${micros(p.cost.chargedMicros)} · 仍保留 ${micros(p.cost.heldMicros)}`,
+            ),
         },
         {
           key: 'latency',
@@ -472,7 +475,11 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     columns: [
       { key: 'title', label: '运行', width: 'minmax(0, 1.6fr)', cell: (run) => runTitle(run, runs.indexOf(run)) },
       { key: 'at', label: '时间', cell: (run) => when(run.createdAt) },
-      { key: 'rel', label: '关系', cell: (run) => RELATIONS.find(([v]) => v === run.relationship)?.[1] ?? run.relationship },
+      {
+        key: 'rel',
+        label: '关系',
+        cell: (run) => RELATIONS.find(([v]) => v === run.relationship)?.[1] ?? run.relationship,
+      },
       {
         key: 'sim',
         label: '模拟时间',
@@ -498,13 +505,15 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
           text: kind === 'json' ? '导出 JSON' : '导出 CSV',
           attrs: { type: 'button', 'data-export': kind },
         });
-        button.addEventListener('click', () =>
-          void host.run(async () => {
-            const full = await ensureRun(run.runId, true);
-            const save = host.download ?? downloadText;
-            if (kind === 'json') save(exportName(full.run, 'json'), runToJson(full), 'application/json');
-            else save(exportName(full.run, 'csv'), runToCsv(full), 'text/csv');
-          }),
+        button.addEventListener(
+          'click',
+          () =>
+            void host.run(async () => {
+              const full = await ensureRun(run.runId, true);
+              const save = host.download ?? downloadText;
+              if (kind === 'json') save(exportName(full.run, 'json'), runToJson(full), 'application/json');
+              else save(exportName(full.run, 'csv'), runToCsv(full), 'text/csv');
+            }),
         );
         return button;
       });

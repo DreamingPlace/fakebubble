@@ -122,8 +122,6 @@ export const blankGroup = (members: string[] = []): CastGroup => ({
   stories: [],
 });
 
-export const sharedGroups = (doc: CastDoc, a: string, b: string) =>
-  doc.groups.filter((g) => g.members.includes(a) && g.members.includes(b));
 export const storiesOfPair = (doc: CastDoc, a: string, b: string) =>
   doc.stories.filter((s) => s.participants.includes(a) && s.participants.includes(b));
 
@@ -207,13 +205,16 @@ export function changeCount(base: CastDoc, doc: CastDoc): number {
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
   let n = 0;
   const ratingKeys = new Set<string>();
-  for (const [from, row] of Object.entries(base.ratings)) for (const to of Object.keys(row)) ratingKeys.add(`${from}\n${to}`);
-  for (const [from, row] of Object.entries(doc.ratings)) for (const to of Object.keys(row)) ratingKeys.add(`${from}\n${to}`);
+  for (const [from, row] of Object.entries(base.ratings))
+    for (const to of Object.keys(row)) ratingKeys.add(`${from}\n${to}`);
+  for (const [from, row] of Object.entries(doc.ratings))
+    for (const to of Object.keys(row)) ratingKeys.add(`${from}\n${to}`);
   for (const key of ratingKeys) {
     const [from, to] = key.split('\n') as [string, string];
     if (ratingOf(base, from, to) !== ratingOf(doc, from, to)) n++;
   }
-  const byKey = <T>(list: readonly T[], key: (item: T, index: number) => string) => new Map(list.map((item, i) => [key(item, i), item]));
+  const byKey = <T>(list: readonly T[], key: (item: T, index: number) => string) =>
+    new Map(list.map((item, i) => [key(item, i), item]));
   const compare = <T>(before: readonly T[], after: readonly T[], key: (item: T, index: number) => string) => {
     const a = byKey(before, key);
     const b = byKey(after, key);
