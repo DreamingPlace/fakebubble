@@ -206,25 +206,17 @@ try {
   await overview.getByText('本月花费').waitFor();
   await shot(overview, 'overview-with-stats-line');
 
-  // ---- 玩家统计: 7 days, 30 days, 按角色, 按模型 ----
+  // ---- 总览's player statistics: 7 days, 30 days, 按角色, 按模型 ----
+  // Named exception (Part 24b-6): 玩家统计 is part of 总览 now (#/stats redirects there). The same numbers are asserted on that page:
+  // the range is the one in the title row (7天 / 30天), the day table is an open-below grid (.ov-days), 按角色 / 按模型 are its cards.
   const stats = await open(owner, 'stats');
-  await stats.getByText('统计自 2026-11-03 起（UTC）').waitFor({ timeout: 20_000 });
-  await stats.locator('#admin-stats table tbody tr').first().waitFor();
-  assert.equal(
-    await stats.locator('#admin-stats table:has(caption:text-is("玩家统计（按天）")) tbody tr').count(),
-    8,
-    '7 days and the totals row',
-  );
+  await stats.waitForFunction(() => location.hash === '#/overview', null, { timeout: 20_000 });
+  await stats.locator('.ov-days .ot-row').first().waitFor({ timeout: 20_000 });
+  assert.equal(await stats.locator('.ov-days .ot-row').count(), 8, '7 days and the totals row');
   await shot(stats, 'player-stats-7-days');
-  await stats.locator('#admin-stats [aria-label="时间范围"] button', { hasText: '最近 30 天' }).click();
-  await stats.waitForFunction(
-    () => (document.querySelectorAll('#admin-stats table tbody tr') as NodeListOf<Element>).length > 10,
-  );
-  assert.equal(
-    await stats.locator('#admin-stats table:has(caption:text-is("玩家统计（按天）")) tbody tr').count(),
-    19,
-    'from the start day: 18 days and the totals',
-  );
+  await stats.locator('#admin-overview [aria-label="时间范围"] button', { hasText: '30天' }).click();
+  await stats.waitForFunction(() => document.querySelectorAll('.ov-days .ot-row').length > 10);
+  assert.equal(await stats.locator('.ov-days .ot-row').count(), 19, 'from the start day: 18 days and the totals');
   await shot(stats, 'player-stats-30-days', true);
   await shot(stats, 'player-stats-by-character');
   await shot(stats, 'player-stats-by-model');
@@ -242,7 +234,11 @@ try {
   const costs = await open(owner, 'costs');
   // Part 24b-1: the rate is the tooltip of the ¥ figure (not in the header) and there is no hardcoded price note.
   await costs.getByText('本月花费').waitFor({ timeout: 20_000 });
-  assert.equal(await costs.locator('#admin-costs [title="按 $1 ≈ ¥6.7"]').count(), 1);
+  // Named exception (Part 24b-6): the rate is the hover value of the ¥ tile (汇率 6.7), not a title attribute.
+  assert.match(
+    (await costs.locator('#admin-costs .ov-tile', { hasText: '¥' }).first().textContent()) ?? '',
+    /汇率 6\.7/,
+  );
   assert.equal(await costs.getByText('Fish Drama 3').count(), 0);
   await shot(costs, 'costs-month-spanning-2026-11-12', true);
   const [costsCsv] = await Promise.all([
@@ -254,7 +250,7 @@ try {
   // ---- an administrator without stats.read sees neither page ----
   const other = await open(plain, 'stats');
   await other.waitForTimeout(1500);
-  assert.equal(await other.getByText('统计自').count(), 0);
+  assert.equal(await other.locator('.ov-days').count() === 0 || (await other.locator('.ov-days').isHidden()), true);
   assert.equal(await other.getByRole('link', { name: '玩家统计' }).count(), 0);
   assert.equal(await other.getByRole('link', { name: '消耗表' }).count(), 0);
   assert.equal(

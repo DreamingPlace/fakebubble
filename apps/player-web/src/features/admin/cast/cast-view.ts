@@ -484,7 +484,8 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     const have = new Set(doc.characters.map((c) => c.characterId));
     const added: string[] = [];
     for (const id of state.roster) {
-      if (have.has(id)) continue;
+      // The server keeps 15 characters at most: a roster that would pass it (a cast entry of a deleted role still counts) gets no more.
+      if (have.has(id) || doc.characters.length >= CAST_LIMITS.chatCharacters) continue;
       doc.characters.push(blankCharacter(id, state.rosterNames.get(id) ?? id));
       added.push(id);
     }
