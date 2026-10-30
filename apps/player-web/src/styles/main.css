@@ -11255,6 +11255,13 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   color: var(--ink, #fff);
 }
 
+.account-admin-page.admin-shell .xy-plot:has(.xy-hit:hover, .xy-hit:focus) > .xy-guide {
+  opacity: 1;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-chip.cc-chip-star {
+  color: var(--ad-warn);
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

@@ -2,21 +2,6 @@ import { h } from '../../cocreation/h.ts';
 import { formatRoute } from './admin-router.ts';
 import { statusBadge } from '../ui/status-badge.ts';
 
-/** The ink of a colour circle's initial: white or the console's text colour, whichever reads better on that colour (≥ 4.5:1). */
-const inkFor = (hex: string) => {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return '#2b2833';
-  const n = Number.parseInt(m[1]!, 16);
-  const lin = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
-    const c = v / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  });
-  const l = 0.2126 * lin[0]! + 0.7152 * lin[1]! + 0.0722 * lin[2]!;
-  const white = 1.05 / (l + 0.05);
-  const dark = (l + 0.05) / (0.0222 + 0.05);
-  return white >= dark ? '#fff' : '#2b2833';
-};
-
 export type PickerRole = {
   characterId: string;
   displayName: string;
@@ -49,11 +34,8 @@ export function rolePicker(
       const compact = options.compact;
       const unread = options.badges?.()[role.characterId] ?? 0;
       const seed = seeds.get(role.characterId) === true;
-      const dot = compact
-        ? h('i', { class: 'admin-pick-dot', text: [...role.displayName][0] ?? '', attrs: { 'aria-hidden': 'true' } })
-        : null;
+      const dot = compact ? h('i', { class: 'admin-pick-dot', attrs: { 'aria-hidden': 'true' } }) : null;
       dot?.style?.setProperty('--dot', compact!.colour(role.characterId, index));
-      dot?.style?.setProperty('--ink', inkFor(compact!.colour(role.characterId, index)));
       const tone =
         unread > 0 ? 'cc' : role.publishedVersion === null ? 'off' : role.draftRevision !== null ? 'draft' : '';
       const state =

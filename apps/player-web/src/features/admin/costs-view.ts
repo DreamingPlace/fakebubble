@@ -202,7 +202,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
   // ---- 按天明细: a day opens its calls below ----
   type DayRow = CostDay & { ledger: number | null; calls: CostRow[] };
   const dayColumns: OpenColumn<DayRow>[] = [
-    { key: 'day', label: '日期 UTC', width: '140px', mono: true, cell: (r) => r.day },
+    { key: 'day', label: '日期 UTC', width: '140px', mono: true, cell: (r) => r.day, tip: (r) => `${r.day} UTC` },
     {
       key: 'ok',
       label: '成功回复',

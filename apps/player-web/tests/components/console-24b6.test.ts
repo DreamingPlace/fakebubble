@@ -156,7 +156,7 @@ test('24b-6 总览: the 按天 table is newest first with a 合计 row, retentio
   await f.api.load();
   const rows = all(f.root, '.ov-days .ot-row').map((r) => r.querySelectorAll('.ot-cell').map((c) => c.textContent));
   assert.deepEqual(
-    rows.map((r) => r[0]),
+    rows.map((r) => (r[0] === '合计' ? r[0] : r[0]!.slice(0, 10))), // a day also carries its UTC date as the hover value
     ['2026-11-20', '2026-11-19', '2026-11-18', '合计'],
   );
   assert.equal(rows[0]![9]!.startsWith('—'), true, 'retention is — while the cohort is open');

@@ -177,7 +177,14 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
   type DayRow = { key: string; label: string; counts: PlayerStatsDay | PlayerStatsView['totals']; total: boolean };
   const num = (n: number) => String(n);
   const dayColumns: OpenColumn<DayRow>[] = [
-    { key: 'day', label: '日期 UTC', width: '130px', mono: true, cell: (r) => r.label },
+    {
+      key: 'day',
+      label: '日期 UTC',
+      width: '130px',
+      mono: true,
+      cell: (r) => r.label,
+      tip: (r) => (r.total ? null : `${r.label} UTC`),
+    },
     {
       key: 'signups',
       label: '新注册',
