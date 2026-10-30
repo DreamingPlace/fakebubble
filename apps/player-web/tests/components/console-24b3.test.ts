@@ -89,38 +89,45 @@ function bench(t: test.TestContext, withDraft: boolean) {
   });
   return { root, rail: root, header, workbench };
 }
-const railItems = (rail: FakeElement) => rail.querySelectorAll('.wb-rail-item');
+// Named exception (Part 24b-6, Workbench4): the rail of sections is ONE section bar of .wb-tab buttons across the top of the card; it has no
+// 删除角色 any more (that is a danger zone at the foot of 发布), 作者设定与样例 is 说话方式 / 经历 / 其余设定, and the title row shows the name
+// alone, the status line and 预演后发布. The assertions below follow those; the behaviours they test (one section at a time, edits survive a
+// visit elsewhere, a dot on the section, 预演后发布 jumps to 发布 and hides there) are unchanged.
+const railItems = (rail: FakeElement) => rail.querySelectorAll('.wb-tab');
 const labels = (rail: FakeElement) => railItems(rail).map((b) => b.textContent);
+const current = (rail: FakeElement) => railItems(rail).find((b) => b.getAttribute('aria-current') === 'true')!.textContent;
 
-test('24b-3 角色工作台: a saved role gets a rail of sections, 发布 and 删除角色 among them, and shows only the first', async (t) => {
+test('24b-3 角色工作台: a saved role gets a bar of sections, 发布 among them (删除角色 inside it), and shows only the first', async (t) => {
   const f = bench(t, true);
   await f.workbench.open('jojo');
   assert.deepEqual(labels(f.rail), [
     '身份与展示',
     '欢迎内容',
     '性格',
-    '作者设定与样例',
+    '说话方式',
+    '经历',
+    '其余设定',
     '声音',
     '资料改动',
     '发布',
-    '删除角色',
   ]);
-  assert.equal(f.root.querySelector('.wb-card-head h2')!.textContent, '身份与展示');
+  assert.equal(current(f.rail), '身份与展示');
   const form = f.root.querySelector('form')!;
   const shown = form.children.filter((c) => !(c as FakeElement).hidden);
   assert.equal(shown.length, 1, 'one section of the form at a time');
   assert.equal(f.root.querySelector('.wb-savebar')!.querySelectorAll('button').length, 2);
-  assert.ok(railItems(f.rail)[7]!.className.includes('is-danger'), '删除角色 is the danger item');
+  assert.ok(f.root.querySelector('#wb-delete'), '删除角色 is a danger zone at the foot of 发布, not an item of the bar');
+  assert.ok(f.root.querySelector('#wb-discard'), '放弃服务器草稿 is the other one');
 });
 
 test('24b-3 角色工作台: switching sections keeps what was typed, a dot marks the section with changes and clears when it is typed back', async (t) => {
   const f = bench(t, false);
   await f.workbench.open('jojo');
-  assert.deepEqual(labels(f.rail), ['身份与展示', '欢迎内容', '性格', '作者设定与样例', '声音', '发布', '删除角色']);
+  assert.deepEqual(labels(f.rail), ['身份与展示', '欢迎内容', '性格', '说话方式', '经历', '其余设定', '声音', '发布']);
   const items = railItems(f.rail);
   const persona = f.root.querySelectorAll('textarea')[1]!;
   items[2]!.click();
-  assert.equal(f.root.querySelector('.wb-card-head h2')!.textContent, '性格');
+  assert.equal(current(f.rail), '性格');
   assert.equal(items[2]!.getAttribute('aria-current'), 'true');
   assert.equal(items[0]!.getAttribute('aria-current'), 'false');
   const dot = (i: number) => items[i]!.querySelector('.wb-dot')!;
@@ -129,9 +136,9 @@ test('24b-3 角色工作台: switching sections keeps what was typed, a dot mark
   persona.type_('改过的人设');
   assert.equal(dot(2).hidden, false, 'the 性格 dot shows');
   assert.equal(dot(0).hidden, true, 'no other dot');
-  assert.match(f.root.querySelector('.wb-savestate')!.textContent, /未保存 1 处/);
+  assert.match(f.root.querySelector('.wb-savestate')!.textContent, /1 处未保存/);
   items[0]!.click();
-  items[6]!.click();
+  items[7]!.click();
   items[2]!.click();
   assert.equal(persona.value, '改过的人设', 'the edit survived the visit elsewhere');
   persona.type_(original);
@@ -141,13 +148,13 @@ test('24b-3 角色工作台: switching sections keeps what was typed, a dot mark
 test('24b-3 角色工作台: the title row says how many sections the draft changes and 预演后发布 opens 发布 (and hides there)', async (t) => {
   const f = bench(t, true);
   await f.workbench.open('jojo');
-  const chip = f.header.querySelector('.wb-chip')!;
-  assert.match(chip.textContent, /JOJO 草稿有 1 处改动/);
+  const chip = f.header.querySelector('.head-status')!;
+  assert.match(chip.textContent, /草稿有 1 处改动/);
   const go = f.header.querySelector('.admin-primary')!;
   assert.equal(go.textContent, '预演后发布');
   assert.equal(go.hidden, false);
   go.click();
-  assert.equal(f.root.querySelector('.wb-card-head h2')!.textContent, '发布');
+  assert.equal(current(f.rail), '发布');
   assert.equal(go.hidden, true, 'the one solid button is the confirm inside 发布 now');
   await flush();
 });
@@ -160,7 +167,8 @@ test('24b-3 changedSections names the editor sections a draft changes', () => {
   b.presentation.welcome.text = '新欢迎';
   b.presentation.color = '#2BA84A';
   assert.deepEqual(changedSections(a, b), ['identity', 'welcome', 'persona']);
-  assert.equal(changedSections(null, b).length, 5, 'a role with no published profile changes every section');
+  // Named exception (Part 24b-6): 作者设定与样例 became 说话方式 / 经历 / 其余设定, so there are seven sections, not five.
+  assert.equal(changedSections(null, b).length, 7, 'a role with no published profile changes every section');
 });
 
 test('24b-3 every page starts with the same title row: the name on the left, the one status or action on the right', (t) => {
@@ -218,9 +226,10 @@ test('24b-3 no endless pages: the workbench, the inbox, the permission grid and 
   assert.match(block, /\.wb-card-body > :not\(\[hidden\]\)/);
   assert.match(block, /\.wb-savebar \{[^}]*position: sticky;[^}]*bottom: 0;/);
   assert.match(block, /\.wb-preview \{[^}]*position: sticky;/);
-  assert.match(block, /\.cc-list-column \.cc-list \{[^}]*overflow-y: auto;/);
-  assert.match(block, /\.cc-detail \{[^}]*overflow-y: auto;/);
-  assert.match(block, /\.cc-row-open \{[^}]*grid-template-columns: 112px minmax\(0, 1fr\) 152px 68px;/);
+  // Named exception (Part 24b-6, Inbox3): the inbox is a grid of fixed 176 px cards with the detail under the open row; the page itself
+  // scrolls (the next page is read at the window's end), so the old inner scrollers and the 4-column row grid are replaced by these.
+  assert.match(consoleCss, /\.cc-row \{[^}]*height: 176px;/);
+  assert.match(consoleCss, /\.cc-list \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/);
   assert.match(block, /\.cc-chip \{[^}]*white-space: nowrap;/);
   assert.match(block, /\.admin-member \.permission-matrix \{[^}]*overflow-y: auto;/);
   assert.match(block, /\.admin-table-wrap \{[^}]*max-height:[^}]*overflow: auto;/);
@@ -254,7 +263,8 @@ test('24b-3 the roles are one row of pills: colour dot, full name, one compact s
   assert.doesNotMatch(rows[0]!.textContent, /正式/, 'one compact state, not two badges');
   assert.equal(rows[0]!.querySelector('.admin-pick-dot')!.style.getPropertyValue('--dot'), '#E8561E');
   assert.equal(rows[0]!.querySelector('.cocreation-badge')!.textContent, '2 条新共创');
-  assert.match(rows[1]!.textContent, /未发布/);
+  // Named exception (Part 24b-6): the rail says 未上线 for a role that was never published (Workbench4).
+  assert.match(rows[1]!.textContent, /未上线/);
 });
 
 test('24b-3 an issue of the cast is read with names, not ids, and grouped by character', () => {

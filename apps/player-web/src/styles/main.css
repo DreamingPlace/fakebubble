@@ -8089,7 +8089,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   inset: 0;
   width: 0;
   background: var(--ad-danger);
-  transition: width 80ms linear;
+  transition: width calc(80ms * var(--ad-motion)) linear;
 }
 .account-admin-page.admin-shell button.dz-go[data-hold="on"] > i {
   width: 100%;
@@ -8312,7 +8312,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   border-color: var(--ad-amber);
   background: var(--ad-amber-soft);
 }
-@media (max-width: 1400px) {
+@container adc (max-width: 1160px) {
   .account-admin-page.admin-shell .mb-add {
     grid-template-columns: minmax(200px, 1fr) auto;
   }
@@ -9701,8 +9701,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   display: block;
   min-height: 0;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(180deg, #000 66%, transparent);
-  mask-image: linear-gradient(180deg, #000 66%, transparent);
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 66%, transparent);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1) 66%, transparent);
 }
 .account-admin-page.admin-shell #admin-cocreation .cc-first {
   display: block;
@@ -10874,6 +10874,589 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   flex-wrap: wrap;
   justify-content: flex-end;
   row-gap: 4px;
+}
+
+/* ---- 角色工作台 (Workbench4): the rail, ONE section bar, the save bar, the danger zones, 预演 ---- */
+.account-admin-page.admin-shell #admin-characters {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.account-admin-page.admin-shell #admin-characters [hidden] {
+  display: none !important;
+}
+/* the rail: 64 px, grows over the page (no reflow) on hover / focus */
+.account-admin-page.admin-shell #admin-characters .wb-roster {
+  position: sticky;
+  top: 16px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 2px;
+  box-sizing: border-box;
+  width: 64px;
+  padding: 8px 0;
+  overflow: hidden;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 20px;
+  background: #fff;
+  transition:
+    width var(--ad-t-slide) var(--ad-ease),
+    box-shadow var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) {
+  width: 212px;
+  box-shadow: 0 12px 32px rgba(43, 40, 51, 0.16);
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 2px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles .admin-pick-row {
+  position: relative;
+  display: block;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles .admin-pick-row:has(.admin-pick[aria-current="true"]) {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles .admin-pick {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles .admin-pick:hover {
+  background: #faf9f7;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  box-shadow: none;
+  color: var(--ad-text);
+  font-style: normal;
+  font-size: 15px;
+  font-weight: 900;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick[data-seed="true"] .admin-pick-dot {
+  outline: 2px dashed #2f7a4f;
+  outline-offset: 2px;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-st {
+  position: absolute;
+  top: 8px;
+  left: 40px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-st[data-tone="cc"] {
+  background: #c2410c;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-st[data-tone="draft"] {
+  background: var(--ad-amber);
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) .admin-pick-text {
+  opacity: 1;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-text strong {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 900;
+  text-overflow: clip;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-text small {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles .cocreation-badge {
+  position: absolute;
+  top: 16px;
+  right: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) .cocreation-badge {
+  opacity: 1;
+  pointer-events: auto;
+}
+.account-admin-page.admin-shell #admin-characters #wb-new {
+  box-sizing: border-box;
+  width: calc(100% - 16px);
+  height: 40px;
+  margin: 6px 8px 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px dashed #c9c2b8;
+  background: transparent;
+  color: var(--ad-muted);
+  font-size: 0;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-characters #wb-new::before {
+  content: "+";
+  font-size: 18px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) #wb-new {
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) #wb-new::before {
+  content: none;
+}
+/* the middle column */
+.account-admin-page.admin-shell #admin-characters .wb {
+  display: block;
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-characters .wb-editor {
+  display: block;
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
+  padding: 0;
+}
+.account-admin-page.admin-shell #admin-characters .wb-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-card-radius) var(--ad-card-radius) 0 0;
+  background: #fff;
+}
+.account-admin-page.admin-shell #admin-characters .wb-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background var(--ad-t-slide) var(--ad-ease),
+    color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-characters .wb-tab:hover {
+  background: #f3f1ee;
+}
+.account-admin-page.admin-shell #admin-characters .wb-tab[aria-current="true"] {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell #admin-characters .wb-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ad-amber);
+  animation: adPop var(--ad-t-slide) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card-body {
+  display: block;
+  flex: 1;
+  padding: 24px 28px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card-body > :not([hidden]),
+.account-admin-page.admin-shell #admin-characters .wb-card .character-flow > :not([hidden]) {
+  animation: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card-body [data-pop="in"] {
+  animation: wbPop calc(300ms * var(--ad-motion)) var(--ad-ease) both;
+}
+@keyframes wbPop {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .character-flow {
+  display: block;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card form.character-profile-form fieldset {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.account-admin-page.admin-shell #admin-characters .wb-card form.character-profile-form fieldset.cn-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.account-admin-page.admin-shell #admin-characters textarea[maxlength="20000"] {
+  min-height: 320px;
+}
+.account-admin-page.admin-shell #admin-characters input.wb-switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  margin: 0;
+  border-radius: 999px;
+  background: #d7d2ca;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-characters input.wb-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-characters input.wb-switch:checked {
+  background: #2f7a4f;
+}
+.account-admin-page.admin-shell #admin-characters input.wb-switch:checked::after {
+  transform: translateX(16px);
+}
+/* structured editors */
+.account-admin-page.admin-shell .cn-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+}
+.account-admin-page.admin-shell .cn-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cn-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  box-sizing: border-box;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 6px 0 12px;
+  border: 1px solid #e2ddd6;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cn-chip:has(input[data-dirty="true"]) {
+  border-color: var(--ad-amber);
+  background: var(--ad-amber-soft);
+}
+.account-admin-page.admin-shell #admin-characters .cn-chip input.cn-chip-input {
+  width: auto;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell button.cn-add {
+  border-style: dashed;
+  color: var(--ad-muted);
+  font-weight: 400;
+}
+.account-admin-page.admin-shell button.cn-chip.cn-add {
+  padding: 0 12px;
+}
+.account-admin-page.admin-shell button.cn-x {
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ad-muted);
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .cn-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .cn-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 32px;
+  gap: 10px;
+  align-items: start;
+}
+.account-admin-page.admin-shell .cn-pair .cn-situation {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .cn-pair .cn-reply {
+  min-height: 40px;
+  border-color: #cfc8f2;
+}
+.account-admin-page.admin-shell button.cn-add-wide {
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+}
+.account-admin-page.admin-shell .cn-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.account-admin-page.admin-shell .cn-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e2ddd6;
+  border-radius: 14px;
+}
+.account-admin-page.admin-shell .cn-card .cn-title {
+  padding-right: 28px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cn-card .cn-x {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+.account-admin-page.admin-shell button.cn-add-card {
+  align-items: center;
+  justify-content: center;
+  height: auto;
+  min-height: 140px;
+  border: 1px dashed #c9c2b8;
+  border-radius: 14px;
+  font-size: 14px;
+}
+/* title row + save bar */
+.account-admin-page.admin-shell .wb-seed {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e7f3ec;
+  color: #2f7a4f;
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .wb-unsaved {
+  color: var(--ad-amber-ink);
+}
+.account-admin-page.admin-shell #admin-characters .wb-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 28px;
+  border-top: 1px solid var(--ad-hairline);
+  border-radius: 0 0 var(--ad-card-radius) var(--ad-card-radius);
+  background: #fff;
+}
+.account-admin-page.admin-shell #admin-characters .wb-savestate {
+  flex: 1;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-savestate[data-state="dirty"] {
+  color: var(--ad-amber-ink);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell #admin-characters .wb-savebar-actions {
+  display: flex;
+  gap: 10px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-danger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #f0ece7;
+}
+/* 预演 */
+.account-admin-page.admin-shell #admin-characters .wb-preview {
+  position: static;
+  max-height: none;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell #admin-characters .pw-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 20px 28px;
+  align-items: start;
+}
+.account-admin-page.admin-shell #admin-characters .pw-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-characters .pw-controls .admin-bar {
+  flex-direction: column;
+  align-items: stretch;
+}
+.account-admin-page.admin-shell #admin-characters .pw-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 16px;
+  background: #fbfaf8;
+}
+.account-admin-page.admin-shell #admin-characters .pw-results {
+  margin-top: 20px;
+}
+.account-admin-page.admin-shell #admin-characters .pw-run-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.account-admin-page.admin-shell #admin-characters .pw-run-body {
+  padding: 12px 16px;
+}
+.account-admin-page.admin-shell #admin-characters .pw-compare-bar:not(:empty) {
+  margin-top: 12px;
+}
+
+.account-admin-page.admin-shell #admin-characters .wb-card .character-flow {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster {
+  max-height: calc(100vh - 32px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles .admin-pick-row,
+.account-admin-page.admin-shell #admin-characters .wb-roles .admin-pick {
+  height: 44px;
+  min-height: 44px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles .admin-pick {
+  grid-template-columns: 36px minmax(0, 1fr);
+  padding: 0 13px;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-dot {
+  width: 36px;
+  height: 36px;
+  color: #fff;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-st {
+  top: 4px;
+  left: 38px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles .cocreation-badge {
+  top: 12px;
+}
+
+.account-admin-page.admin-shell #admin-characters .wb-preview .pw {
+  max-width: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-preview .pw .admin-bar-title {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-preview .pw-compose {
+  display: grid;
+}
+.account-admin-page.admin-shell #admin-characters .wb-danger {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.account-admin-page.admin-shell #admin-characters .wb-preview,
+.account-admin-page.admin-shell #admin-characters .wb-preview .pw {
+  border: 0;
+  box-shadow: none;
+}
+
+.account-admin-page.admin-shell .cs-know-item {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-know-item > .cs-know {
+  width: 100%;
+}
+.account-admin-page.admin-shell .cs-know-item > button.cs-clear {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #b4560f;
+  font-size: 11px;
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */

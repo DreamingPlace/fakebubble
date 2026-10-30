@@ -8,7 +8,7 @@ export function h<K extends keyof HTMLElementTagNameMap>(
   const node = document.createElement(tag);
   if (props.class) node.className = props.class;
   if (props.text !== undefined) node.textContent = props.text;
-  for (const [name, value] of Object.entries(props.attrs ?? {})) node.setAttribute(name, value);
+  for (const [name, value] of Object.entries(props.attrs ?? {})) node.setAttribute?.(name, value);
   if (props.hidden) node.hidden = true;
   for (const child of children) {
     if (child === null || child === undefined) continue;

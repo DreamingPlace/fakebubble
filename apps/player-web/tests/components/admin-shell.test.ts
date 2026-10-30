@@ -41,7 +41,8 @@ test('the nav tree is exactly the agreed groups and pages; 退出登录 and 我�
       // Named exception (Part 24b-1): 玩家统计 moved from 玩家 to 运营.
       ['玩家', ['邀请与额度', '积分发放']],
       // Named exception (Part 24b-1): 运营 = 玩家统计, 消耗表 (and, behind its switch, 测试对话 - see OPTIONAL_NAV).
-      ['运营', ['玩家统计', '消耗表']],
+      // Named exception (Part 24b-6): 玩家统计 left the nav; its numbers are on 总览 (#/stats redirects there).
+      ['运营', ['消耗表']],
       // Named exception (Part 21g): 系统 → 模型与价格 is the new first page of the system group. No other assertion changed.
       // Named exception (Part 22b): 系统状态 sits between 模型与价格 and 管理员与权限.
       ['系统', ['模型与价格', '系统状态', '管理员与权限']],
@@ -109,13 +110,14 @@ test('hash routes round-trip; unknown pages and malformed ids are not routes', (
     // Named exception (Part 22b): #/ops is no longer a page; the new pages round-trip instead.
     '#/overview',
     '#/points',
-    '#/stats',
+    // Named exception (Part 24b-6): #/stats is no longer a page; it redirects to 总览 (asserted right below the loop).
     '#/costs',
     '#/system',
     '#/members',
     '#/account',
   ])
     assert.equal(formatRoute(parseRoute(hash)!), hash);
+  assert.equal(formatRoute(parseRoute('#/stats')!), '#/overview');
   assert.deepEqual(parseRoute('#/characters/jojo'), { page: 'characters', id: 'jojo' });
   // Named exception (Part 24b-2): the old 预演测试 address redirects into 角色工作台, with its role.
   assert.deepEqual(parseRoute('#/preview/wei-guagua'), { page: 'characters', id: 'wei-guagua' });

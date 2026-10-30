@@ -1,5 +1,7 @@
 import type { CharacterProfile } from '../../services/character-admin-api.ts';
 import { derivePalette, parseColour } from '../brand/character-colour.ts';
+import { CanonError, canonEditors } from './character-canon.ts';
+import { markDirty } from './ui/unsaved.ts';
 import type { JsonValue, Weekday, WeeklySchedule } from '../../../../../packages/contracts/index.ts';
 export class AdminFormError extends Error {}
 export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) => {
@@ -212,17 +214,23 @@ export function changedSections(published: CharacterProfile | null, draft: Chara
   const part = (profile: CharacterProfile | null, id: string) => {
     if (!profile) return null;
     const { template: t, presentation: p } = profile;
+    const settings = (t.authorCanon?.settings ?? {}) as Record<string, unknown>;
+    const { speechStyle, dialogueStyle, dialogueExamples, background, ...rest } = settings;
     return stable(
       {
-        identity: [t.id, t.name, t.birthDate ?? null, p.displayName, p.publicDescription, p.color ?? null],
+        identity: [t.id, t.name, t.birthDate ?? null, p.displayName, p.publicDescription, p.color ?? null, t.seed === true],
         welcome: p.welcome,
-        persona: [t.persona, t.seed === true],
-        canon: t.authorCanon ?? null,
+        persona: t.persona,
+        speech: [speechStyle ?? null, dialogueStyle ?? null, dialogueExamples ?? null],
+        past: background ?? null,
+        raw: t.authorCanon ? rest : null,
         voice: t.voice ?? null,
       }[id] ?? null,
     );
   };
-  return ['identity', 'welcome', 'persona', 'canon', 'voice'].filter((id) => part(published, id) !== part(draft, id));
+  return ['identity', 'welcome', 'persona', 'speech', 'past', 'raw', 'voice'].filter(
+    (id) => part(published, id) !== part(draft, id),
+  );
 }
 
 export function characterForm(
@@ -250,12 +258,14 @@ export function characterForm(
   const birthDate = field(identity, '设定生日（可选）', base.template.birthDate ?? '', { type: 'date' });
   const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { area: true, max: 500 });
   const colour = colourField(identity, base.presentation.color, () => onChange());
+  // 成长中 (Part 24c): a switch in 身份与展示; the title row and the rail show the same state.
+  const seed = check(identity, '成长中');
+  seed.checked = base.template.seed === true;
+  seed.className = 'wb-switch';
   const personaSet = el('fieldset');
   personaSet.append(el('legend', '性格'));
   form.append(personaSet);
   const persona = field(personaSet, '基础人设', base.template.persona, { area: true, required: true, max: 20000 });
-  const seed = check(personaSet, '成长中角色（种子：只有几行人设，其余靠共创慢慢补全）');
-  seed.checked = base.template.seed === true;
   const welcome = el('fieldset');
   welcome.append(el('legend', '欢迎内容'));
   form.append(welcome);
@@ -271,21 +281,16 @@ export function characterForm(
   welcome.append(
     el('p', '修改欢迎词或版本标识后，需要匹配新草稿的欢迎／结束成品批准，保存不会替换玩家当前听到的音频。'),
   );
-  const canonSection = disclosure(form, '结构化作者设定与说话样例');
-  canonSection.append(
-    el(
-      'p',
-      '保留已审定的虚构背景，不是玩家共同经历。修改人设名称会追加到身份别名；生日会同步 basicInfo.birthDate，其余字段保留。',
-    ),
-  );
-  const canon = field(
-    canonSection,
-    '作者设定 JSON',
-    JSON.stringify(base.template.authorCanon?.settings ?? {}, null, 2),
-    { area: true, max: 48000 },
-  );
+  const parts = canonEditors((base.template.authorCanon?.settings ?? {}) as Record<string, JsonValue>, () => onChange());
+  form.append(parts.speech, parts.past);
+  const rawSet = el('fieldset');
+  rawSet.append(el('legend', '其余设定'));
+  form.append(rawSet);
+  const canon = field(rawSet, '其余设定 JSON', parts.rest, { area: true, max: 48000 });
   canon.className = 'admin-json';
-  const voiceSection = disclosure(form, '声音绑定');
+  const voiceSection = el('fieldset');
+  voiceSection.append(el('legend', '声音'));
+  form.append(voiceSection);
   voiceSection.append(el('p', '只登记已有音色的标识与版本，不创建／克隆外部声音。发布新人物须另准备并批准两条成品。'));
   const voiceOn = check(voiceSection, '绑定已有音色');
   voiceOn.checked = !!base.template.voice;
@@ -301,6 +306,18 @@ export function characterForm(
   speed.min = '0.5';
   speed.max = '2';
   speed.step = 'any';
+  // A changed field turns amber until the draft is saved (and the page re-renders from what was saved).
+  for (const control of form.querySelectorAll?.<HTMLInputElement | HTMLTextAreaElement>('input,textarea') ?? [])
+    if (control.getAttribute?.('data-was') === null || control.getAttribute?.('data-was') === undefined)
+      control.setAttribute?.('data-was', control.type === 'checkbox' ? String((control as HTMLInputElement).checked) : control.value);
+  const flag = (event: Event) => {
+    const control = event.target as HTMLInputElement | null;
+    const was = control?.getAttribute?.('data-was');
+    if (!control || was === null || was === undefined) return;
+    markDirty(control, (control.type === 'checkbox' ? String(control.checked) : control.value) !== was);
+  };
+  form.addEventListener('input', flag);
+  form.addEventListener('change', flag);
   form.addEventListener('input', onChange);
   form.addEventListener('change', onChange);
   /** The editor's sections (Part 24b-3), in the order of the console's rail. Each is a node of this one form. */
@@ -308,7 +325,9 @@ export function characterForm(
     { id: 'identity', label: '身份与展示', node: identity },
     { id: 'welcome', label: '欢迎内容', node: welcome },
     { id: 'persona', label: '性格', node: personaSet },
-    { id: 'canon', label: '作者设定与样例', node: canonSection },
+    { id: 'speech', label: '说话方式', node: parts.speech },
+    { id: 'past', label: '经历', node: parts.past },
+    { id: 'raw', label: '其余设定', node: rawSet },
     { id: 'voice', label: '声音', node: voiceSection },
   ];
   const controlsOf = (node: HTMLElement) => [
@@ -319,6 +338,13 @@ export function characterForm(
       control.type === 'checkbox' ? String((control as HTMLInputElement).checked) : control.value,
     );
   const initial = new Map(panes.map((pane) => [pane.id, valuesOf(pane.node).join('\u0000')]));
+  const assembled = () => {
+    try {
+      return JSON.stringify(parts.assemble(canon.value));
+    } catch (error) {
+      throw error instanceof CanonError ? new AdminFormError(error.message) : error;
+    }
+  };
   const read = () => {
     // A control in a section that is not showing cannot take the browser's bubble: show that section first.
     const bad = panes.find((pane) => controlsOf(pane.node).some((c) => c.willValidate && c.validity?.valid === false));
@@ -334,7 +360,7 @@ export function characterForm(
       welcomeText: welcomeText.value,
       welcomeVersion: welcomeVersion.value,
       color: colour.read(),
-      canon: canon.value,
+      canon: assembled(),
       seed: seed.checked,
       voice: voiceOn.checked
         ? { profileId: profileId.value.trim(), version: Number(voiceVersion.value), speed: Number(speed.value) }
@@ -345,6 +371,7 @@ export function characterForm(
     form,
     read,
     panes,
+    seed: () => seed.checked,
     /** The sections whose fields differ from what was loaded (a field typed back to its old value no longer counts). */
     changed: () => panes.filter((pane) => valuesOf(pane.node).join('\u0000') !== initial.get(pane.id)).map((p) => p.id),
     setDisabled: (disabled: boolean) => {

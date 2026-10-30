@@ -276,7 +276,7 @@ export function storyPanel(host: HTMLElement, ctx: CastCtx, state: StoryState) {
         'button',
         {
           class: `cs-know ${LEVEL_CLASS[known.level]}${known.fromOverride ? ' is-override' : ''}`,
-          attrs: { type: 'button', 'data-level': known.level, 'data-override': String(known.fromOverride), 'data-character': id },
+          attrs: { type: 'button', 'data-level': known.level, 'data-override': String(known.fromOverride), 'data-character': id, 'aria-label': `${ctx.nameOf(id)}：${KNOWLEDGE_LABEL[known.level]}` },
         },
         h('span', { class: 'cs-know-name' }, dot(ctx.colour(id), 8), ctx.nameOf(id)),
         h('b', { class: 'cs-know-level', text: KNOWLEDGE_LABEL[known.level] }),
@@ -297,7 +297,16 @@ export function storyPanel(host: HTMLElement, ctx: CastCtx, state: StoryState) {
         ctx.edited();
         ctx.paint('stories');
       });
-      matrix.append(cell);
+      // A manual level (orange outline) has its own ✕ back to the computed one (a double click does the same).
+      const clear = known.fromOverride && edit
+        ? h('button', { class: 'cs-clear', text: '✕', attrs: { type: 'button', 'aria-label': `${ctx.nameOf(id)}：回到默认` } })
+        : null;
+      clear?.addEventListener('click', () => {
+        clearKnowledge(story, id);
+        ctx.edited();
+        ctx.paint('stories');
+      });
+      matrix.append(h('span', { class: 'cs-know-item' }, cell, clear));
     }
     const right = h(
       'div',

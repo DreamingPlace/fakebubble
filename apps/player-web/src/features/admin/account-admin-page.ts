@@ -202,7 +202,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         <button type="submit">完成邮箱绑定</button></form>
       <button id="admin-account-continue" class="admin-back" type="button" data-page="home">进入管理</button></section>
     <section data-panel="invites" hidden><p id="admin-no-permissions" hidden>当前账号没有“邀请与额度”权限，请联系主管理员开通。</p><div id="admin-invites"></div></section>
-    <section data-panel="characters" hidden><div class="page-head"><h2>角色工作台</h2><div class="page-head-actions" id="wb-head"></div></div><div id="admin-characters"></div></section>
+    <section data-panel="characters" hidden><div class="page-head"><h2 id="wb-title">角色工作台</h2><div class="page-head-actions" id="wb-head"></div></div><div id="admin-characters"></div></section>
     <section data-panel="cast" hidden><div id="admin-cast"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
     <section data-panel="members" hidden><div class="page-head"><h2>管理员与权限</h2><div class="page-head-actions" id="admin-members-head"></div></div>
@@ -586,9 +586,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   previewHost.className = 'wb-preview';
   previewHost.setAttribute('aria-label', '预演');
   previewHost.hidden = true;
+  // 预演 is the editor's last section: the workbench mounts this element there.
   const split = document.createElement('div');
   split.className = 'wb';
-  split.append(editorHost, previewHost);
+  split.append(editorHost);
   stage.append(roster, split);
   const picker = rolePicker(rolesHost, {
     emptyText: '当前没有可查看的角色。',
@@ -633,6 +634,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     badges: () => unread,
     directory: 'none',
     headerHost: q('#wb-head'),
+    titleHost: q('#wb-title'),
+    previewMount: previewHost,
+    canPreview: (characterId) => !!previewBench && canPreview(characterId),
+    onSeed: (characterId, seed) => picker.setSeed(characterId, seed),
     onDirectory: (roles) => picker.show(roles),
     preview: 'none',
     onView: (id) => {

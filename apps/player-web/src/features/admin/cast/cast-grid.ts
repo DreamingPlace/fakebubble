@@ -43,6 +43,7 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
       const [from, to] = key.split('\n') as [string, string];
       const lit = group ? group.includes(from) && group.includes(to) : !!at && (from === at[0] || to === at[1]);
       cell.dataset.lit = String(lit);
+      cell.classList?.toggle('is-lit', lit);
       cell.dataset.dim = String((!!at || !!group) && !lit);
       cell.setAttribute('aria-pressed', String(!!state.pair && state.pair[0] === from && state.pair[1] === to));
     }

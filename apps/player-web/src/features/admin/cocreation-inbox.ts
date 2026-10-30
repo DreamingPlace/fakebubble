@@ -863,7 +863,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       void deps.run(() => load(next)).finally(() => (loadingMore = false));
     }
   };
-  window.addEventListener?.('scroll', onWindowScroll, { passive: true });
+  globalThis.window?.addEventListener?.('scroll', onWindowScroll, { passive: true });
   // Held on to, so disposing still works after the page (or a test) has replaced the global document.
   const doc = document;
   doc.addEventListener('keydown', onKey);
@@ -894,7 +894,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     dispose: () => {
       gone = true;
       doc.removeEventListener('keydown', onKey);
-      window.removeEventListener?.('scroll', onWindowScroll);
+      globalThis.window?.removeEventListener?.('scroll', onWindowScroll);
     },
     /** Current selection, for tests and the page's busy state. */
     snapshot: () => ({ items, active, detail }),

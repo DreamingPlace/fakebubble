@@ -256,7 +256,11 @@ function page(
       : {}),
   };
   const view = castView(root as unknown as HTMLElement, host);
-  const buttons = (label: string) => root.querySelectorAll('button').filter((b) => b.textContent === label);
+  // Named exception (Part 24b-6): a button with a hover value (发布 v3, 0) carries the bubble's text after its label.
+  const buttons = (label: string) =>
+    root
+      .querySelectorAll('button')
+      .filter((b) => b.textContent === label || (!!b.querySelector('.ad-tip') && b.textContent.startsWith(label)));
   return {
     root,
     view,
@@ -283,8 +287,9 @@ test('page: the grid is 15×15, a click selects the pair and lights its row and 
   assert.equal(lit.length, 14 + 14 - 1, 'the whole row and the whole column (the shared cell once)');
   cell.click();
   assert.equal(cell.getAttribute('aria-pressed'), 'true');
-  const title = f.root.querySelector('#x') ?? f.root.querySelectorAll('.cs-pair-title h2')[0]!;
-  assert.equal(title.textContent, `${nameOf(sampleCast(), sampleId(1))} · ${nameOf(sampleCast(), sampleId(2))}`);
+  const title = f.root.querySelector('#x') ?? f.root.querySelectorAll('.cs-pair-title')[0]!;
+  // Named exception (Part 24b-6): the pair panel's title reads "A与B" (two dots, "与" between the names), not "A · B".
+  assert.equal(title.textContent, `${nameOf(sampleCast(), sampleId(1))}与${nameOf(sampleCast(), sampleId(2))}`);
   // two directions, two star rows
   assert.equal(f.root.querySelectorAll('.cs-dir').length, 2);
 });
@@ -316,7 +321,8 @@ test('page: clicking the left half of a star saves .5, the right half a whole st
   // 0 is a value: it reads "0" and is marked as set
   dir(from, to)
     .querySelectorAll('.cs-mini')
-    .find((b) => b.textContent === '0')!
+    // Named exception (Part 24b-6): the 0 button carries its meaning in a hover bubble, so its text starts with 0.
+    .find((b) => b.textContent.startsWith('0'))!
     .click();
   assert.equal(f.view.state.doc!.ratings[from]![to], 0);
   assert.equal(dir(from, to).querySelectorAll('.cs-rating')[0]!.textContent, '0');
@@ -341,8 +347,13 @@ test('page: a story override gets the orange outline; ✕ returns the cell to it
   await f.view.load();
   const doc = f.view.state.doc!;
   // open the first story and find a character without an override
-  f.root.querySelectorAll('.cs-story-title')[0]!.click();
+  // Named exception (Part 24b-6): a story is opened from the pair panel (click a cell of one of its pairs), then its row.
   const story = doc.stories[0]!;
+  f.root
+    .querySelectorAll('.cs-cell[data-from]')
+    .find((c) => c.getAttribute('data-from') === story.participants[0] && c.getAttribute('data-to') === story.participants[1])!
+    .click();
+  f.root.querySelectorAll('.cs-story-title')[0]!.click();
   const target = doc.characters
     .map((c) => c.characterId)
     .find((id) => !story.overrides.some((o) => o.characterId === id))!;
@@ -365,10 +376,12 @@ test('page: a story override gets the orange outline; ✕ returns the cell to it
 test('page: save sends the whole working copy with the revision it was read at; publish needs a saved draft; rollback is a new publish', async (t) => {
   const f = page(t);
   await f.view.load();
-  assert.equal(f.buttons('保存草稿').length, 0, 'nothing to save yet');
+  // Named exception (Part 24b-6): 保存草稿 is always in the title row; it is disabled until there is something to save.
+  assert.equal(f.buttons('保存草稿')[0]!.disabled, true, 'nothing to save yet');
   const publish = f.buttons('发布 v3')[0]!;
   assert.equal(publish.disabled, false);
   f.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
+  // Named exception (Part 24b-6): the version chips are .cs-version buttons of the 整页版本 strip (labelled "v1"), not a list.
   f.root
     .querySelectorAll('.cs-star-hit')
     .find((x) => x.getAttribute('aria-label') === '4.5 星')!
@@ -386,9 +399,11 @@ test('page: save sends the whole working copy with the revision it was read at; 
   await flush();
   assert.deepEqual(f.calls.publishes, [8]);
   f.root
-    .querySelectorAll('.cs-version button')
-    .find((b) => b.getAttribute('aria-label')!.includes('v1'))!
+    .querySelectorAll('button.cs-version')
+    .find((b) => b.getAttribute('data-version') === '1')!
     .click();
+  // Named exception (Part 24b-6): a chip opens its line under the strip; 回滚 is the button on that line.
+  f.root.querySelectorAll('.cs-version-open button')[0]!.click();
   await flush();
   assert.deepEqual(f.calls.rollbacks, [1]);
   assert.ok(f.toasts.some((x) => x.includes('已回滚')));
@@ -398,7 +413,7 @@ test('page: a stale revision shows the conflict and keeps what was typed until t
   const f = page(t, { conflictOnce: true });
   await f.view.load();
   f.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
-  const typed = f.root.querySelectorAll('.cs-pair-texts input')[0]!;
+  const typed = f.root.querySelectorAll('.cs-dir-texts input')[0]!;
   typed.type_('小满满');
   assert.equal(f.view.state.dirty, true);
   f.buttons('保存草稿')[0]!.click();
@@ -431,7 +446,7 @@ test('page: taking the latest drops the typed text, on purpose', async (t) => {
   const f = page(t, { conflictOnce: true });
   await f.view.load();
   f.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
-  f.root.querySelectorAll('.cs-pair-texts input')[0]!.type_('小满满');
+  f.root.querySelectorAll('.cs-dir-texts input')[0]!.type_('小满满');
   f.buttons('保存草稿')[0]!.click();
   await flush();
   f.buttons('放弃我的，载入最新')[0]!.click();
@@ -447,10 +462,14 @@ test('page: each button follows its permission (cast.read / cast.edit / cast.pub
   const read = page(t, { permissions: ['cast.read'] });
   await read.view.load();
   assert.equal(read.buttons('发布 v3').length, 0);
-  assert.equal(read.root.querySelectorAll('.cs-version button').length, 0, 'no 回滚');
-  assert.equal(read.buttons('+ 故事').length + read.buttons('+ 组合').length, 0);
+  // Named exception (Part 24b-6): the chips of the strip open a line; 回滚 is the button on it.
+  read.root.querySelectorAll('button.cs-version')[0]!.click();
+  assert.equal(read.root.querySelectorAll('.cs-version-open button').length, 0, 'no 回滚');
+  // Named exception (Part 24b-6): + 写他们的故事 lives in the pair panel (open a cell first); + 组合 in the 组合 card.
+  read.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
+  assert.equal(read.buttons('+ 写他们的故事').length + read.buttons('+ 组合').length, 0);
   assert.equal(
-    read.root.querySelectorAll('.cs-pair-texts input').every((i) => i.hasAttribute('readonly')),
+    read.root.querySelectorAll('.cs-dir-texts input').every((i) => i.hasAttribute('readonly')),
     true,
   );
   assert.equal(
@@ -461,12 +480,18 @@ test('page: each button follows its permission (cast.read / cast.edit / cast.pub
   const edit = page(t, { permissions: ['cast.read', 'cast.edit'] });
   await edit.view.load();
   assert.equal(edit.buttons('发布 v3').length, 0);
-  assert.ok(edit.buttons('+ 故事').length >= 1);
+  edit.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
+  assert.ok(edit.buttons('+ 写他们的故事').length >= 1);
   const publish = page(t, { permissions: ['cast.read', 'cast.publish'] });
   await publish.view.load();
   assert.equal(publish.buttons('发布 v3').length, 1);
-  assert.ok(publish.root.querySelectorAll('.cs-version button').length >= 1);
-  assert.equal(publish.buttons('+ 故事').length, 0, 'publish alone does not edit');
+  publish.root
+    .querySelectorAll('button.cs-version')
+    .find((b) => b.getAttribute('data-version') === '1')!
+    .click();
+  assert.ok(publish.root.querySelectorAll('.cs-version-open button').length >= 1);
+  publish.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
+  assert.equal(publish.buttons('+ 写他们的故事').length, 0, 'publish alone does not edit');
 });
 
 test('page: 从旧资料导入 only while the draft is empty; it needs cast.edit', async (t) => {
@@ -566,50 +591,24 @@ const emptyDoc = () =>
     directions: [],
   }) as CastDoc;
 
-// Named exception (Part 24b-5): the start card also offers 导入文件 (a cast file), between the two buttons pinned here before.
-// Every other assertion in this test is unchanged.
-test('24b-4 an empty draft opens on one clear start: 从旧资料导入 and + 角色, one of each', async (t) => {
+// Named exception (Part 24b-6): the empty draft's start card only says what to do; 从旧资料导入 and 导入文件 are always on the 整页版本
+// strip (once, not twice), and + 角色 is gone from this page (a character is made in 角色工作台). This replaces the three old tests of
+// the start card's + 角色 button: nothing of that button remains to pin, so they now pin that it is not drawn anywhere.
+test('24b-6 an empty draft opens on one clear start; 从旧资料导入 is on the strip once; no + 角色 anywhere', async (t) => {
   const saves: { id: string; revision: number | null; name: string }[] = [];
   const f = page(t, { doc: emptyDoc(), characters: { saves } });
   await f.view.load();
   const start = f.root.querySelectorAll('.cs-start')[0]!;
   assert.equal(start.hidden, false);
-  assert.deepEqual(
-    start.querySelectorAll('button').map((b) => b.textContent),
-    ['从旧资料导入', '导入文件', '+ 角色'],
-  );
+  assert.equal(start.querySelectorAll('button').length, 0);
   assert.equal(f.buttons('从旧资料导入').length, 1);
-  assert.equal(f.buttons('+ 角色').length, 1);
+  assert.equal(f.buttons('导入文件').length, 1);
+  assert.equal(f.buttons('+ 角色').length, 0);
   // the cards that need a character are hidden until there is one
   assert.equal(f.root.querySelectorAll('.cs-grid-card')[0]!.hidden, true);
 });
 
-test('24b-4 + 角色 creates the character through the 角色工作台 route (a draft with a name) and adds it to the cast draft', async (t) => {
-  const saves: { id: string; revision: number | null; name: string }[] = [];
-  const f = page(t, { doc: emptyDoc(), characters: { saves } });
-  await f.view.load();
-  f.buttons('+ 角色')[0]!.click();
-  const adder = f.root.querySelectorAll('.cs-adder')[0]!;
-  assert.equal(adder.hidden, false);
-  adder.querySelectorAll('input')[0]!.type_('小雨');
-  f.buttons('创建')[0]!.click();
-  await flush();
-  assert.equal(saves.length, 1);
-  assert.match(saves[0]!.id, /^role-[0-9a-f]{8}$/);
-  assert.equal(saves[0]!.revision, null, 'a new draft character, like 新建角色');
-  assert.equal(saves[0]!.name, '小雨');
-  const doc = f.view.state.doc!;
-  assert.equal(doc.characters.length, 1);
-  assert.equal(doc.characters[0]!.characterId, saves[0]!.id);
-  assert.equal(doc.characters[0]!.identity.names[0]!.text, '小雨');
-  assert.equal(f.view.state.dirty, true, 'the cast draft still has to be saved');
-  assert.equal(f.root.querySelectorAll('.cs-start')[0]!.hidden, true);
-  assert.ok(f.toasts.some((x) => x.includes('还没有上线')));
-  // the saved draft does not know the character yet: nothing is asked of the server for what it sees
-  assert.match(f.root.querySelectorAll('.cs-sees')[0]!.textContent, /保存草稿后/);
-});
-
-test('24b-4 + 角色 is not drawn without the character API or without characters.create, nor once the cast has 15', async (t) => {
+test('24b-6 + 角色 and 从阵容移除 are not drawn, with or without the character API, characters.create, or a full roster', async (t) => {
   const bare = page(t, { doc: emptyDoc() });
   await bare.view.load();
   assert.equal(bare.buttons('+ 角色').length, 0);
@@ -619,47 +618,55 @@ test('24b-4 + 角色 is not drawn without the character API or without character
   assert.equal(denied.buttons('从旧资料导入').length, 1, 'import only needs cast.edit');
   const full = page(t, { characters: { saves: [] } });
   await full.view.load();
-  assert.equal(full.buttons('+ 角色').length, 0, 'fifteen is the most');
-  const some = page(t, {
-    doc: { ...sampleCast(), characters: sampleCast().characters.slice(0, 3) },
-    characters: { saves: [] },
-  });
-  await some.view.load();
-  assert.equal(some.buttons('+ 角色').length, 1, 'the grid has its own + 角色');
+  assert.equal(full.buttons('+ 角色').length, 0);
+  full.root.querySelectorAll('.cs-head-row')[0]!.click();
+  await flush();
+  assert.equal(full.buttons('从阵容移除').length, 0);
 });
 
+// Named exception (Part 24b-6): people live in the 世界 card (chips, "+ 人", one row to edit), and removing one is a small danger zone.
 test('24b-4 a person is added, edited and removed on the page; removing takes the person out of every story', async (t) => {
   const f = page(t, { characters: { saves: [] } });
   await f.view.load();
   const before = f.view.state.doc!.people.length;
-  f.buttons('+ 人物')[0]!.click();
-  f.root.querySelectorAll('.cs-adder input')[0]!.type_('新来的邻居');
-  f.buttons('创建')[0]!.click();
+  f.buttons('+ 人')[0]!.click();
   const doc = f.view.state.doc!;
   assert.equal(doc.people.length, before + 1);
   const fresh = doc.people.at(-1)!;
   assert.match(fresh.id, /^new-[A-Za-z0-9]+$/, 'a token the server turns into an id');
-  assert.equal(fresh.names[0]!.text, '新来的邻居');
   assert.equal(f.view.state.person, fresh.id);
   // it can be a participant at once
   doc.stories[0]!.participants.push(fresh.id);
-  const chips = f.root.querySelectorAll('.cs-people-card input');
-  chips[0]!.type_('邻居阿姨');
+  const row = f.root.querySelectorAll('.cs-person-row')[0]!;
+  row.querySelectorAll('input')[0]!.type_('邻居阿姨');
   assert.equal(fresh.names[0]!.text, '邻居阿姨');
+  // removing: the zone opens, then its confirm button does it
+  row.querySelectorAll('.dz-open')[0]!.click();
+  await flush();
+  row.querySelectorAll('.dz-go')[0]!.click();
+  await flush();
+  assert.equal(f.view.state.doc!.people.some((p) => p.id === fresh.id), false);
+  assert.equal(f.view.state.doc!.stories[0]!.participants.includes(fresh.id), false);
 });
 
 test('24b-4 the participant and member pickers show every character and person as a chip with a dot, many selected at once', async (t) => {
   const f = page(t);
   await f.view.load();
   const doc = f.view.state.doc!;
+  // Named exception (Part 24b-6): the story opens from its pair's panel, and its card is .cs-story-card (was .cs-stories).
+  const story0 = doc.stories[0]!;
+  f.root
+    .querySelectorAll('.cs-cell[data-from]')
+    .find((c) => c.getAttribute('data-from') === story0.participants[0] && c.getAttribute('data-to') === story0.participants[1])!
+    .click();
   f.root.querySelectorAll('.cs-story-title')[0]!.click();
-  const picker = f.root.querySelectorAll('.cs-stories .cs-picker')[0]!;
+  const picker = f.root.querySelectorAll('.cs-story-card .cs-picker')[0]!;
   const chips = picker.querySelectorAll('.cs-chip');
   assert.equal(chips.length, doc.characters.length + doc.people.length);
   assert.ok(chips.every((c) => c.querySelectorAll('.cs-dot').length === 1));
   const story = doc.stories[0]!;
   const open = f.root
-    .querySelectorAll('.cs-stories .cs-picker')[0]!
+    .querySelectorAll('.cs-story-card .cs-picker')[0]!
     .querySelectorAll('.cs-chip')
     .filter((c) => c.getAttribute('aria-pressed') === 'false');
   const names = open.slice(0, 3).map((c) => c.textContent);

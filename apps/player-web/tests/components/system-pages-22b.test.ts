@@ -327,6 +327,8 @@ function mountPoints(t: test.TestContext, o: { owner?: boolean; granted?: number
     duplicate: false,
   };
   const api = pointsView(root, {
+    // Part 24b-6: the 1.5 s hold of 重置全部额度 is shortened for the test (the real default is pinned in danger-zone's own test).
+    holdMs: 5,
     preview: async (target, amount) => {
       calls.push(['preview', target, amount]);
       return target.kind === 'email' || target.kind === 'player'
@@ -470,12 +472,23 @@ test('重置全部额度: owner only; the dialog shows accounts, total points an
   assert.equal(other.node.querySelector('#points-reset') as FakeElement | null, null);
   const f = mountPoints(t);
   await f.api.load();
+  // Named exception (Part 24b-6): 重置全部额度 is a danger zone, not a modal confirm. The opener shows the same impact (accounts, points,
+  // worst-case cost) in place; the action then needs the typed word 重置 and a held press. The server calls are the same two, in order.
   (f.node.querySelector('#points-reset') as FakeElement).click();
   await f.tick();
-  assert.equal(f.confirms.length, 1);
-  assert.match(f.confirms[0]!.message, /影响 7 个账号，共补发 350 点/);
-  assert.match(f.confirms[0]!.message, /最坏成本 \$1\.75/);
-  assert.match(f.confirms[0]!.message, /不会降低任何人的点数/);
+  assert.equal(f.confirms.length, 0, 'no modal');
+  const impact = f.node.querySelector('.dz-impact')!.textContent;
+  assert.match(impact, /7个账号会补点/);
+  assert.match(impact, /350点共补发/);
+  assert.match(impact, /\$1\.75/);
+  assert.match(f.node.querySelector('.dz-note')!.textContent, /不会降低任何人的点数/);
+  const go = f.node.querySelector('.dz-go') as FakeElement;
+  assert.equal(go.disabled, true, 'the word is not typed yet');
+  (f.node.querySelector('.dz-type') as FakeElement).type_('重置');
+  assert.equal(go.disabled, false);
+  go.dispatch('pointerdown');
+  await new Promise((r) => setTimeout(r, 30));
+  await f.tick();
   assert.deepEqual(f.calls, [['reset-preview'], ['reset', 'request-1']]);
 });
 
@@ -524,7 +537,7 @@ test('the new navigation: who sees 总览, 积分发放, 系统状态 and the 22
     '共创收件箱',
     '邀请与额度',
     '积分发放',
-    '玩家统计',
+    // Named exception (Part 24b-6): 玩家统计 left the nav (总览 has it).
     '消耗表',
     '测试对话',
     '系统状态',
@@ -533,7 +546,7 @@ test('the new navigation: who sees 总览, 积分发放, 系统状态 and the 22
   assert.deepEqual(labels(access([])), ['总览'], '总览 is for everyone who can log in');
   assert.deepEqual(labels(access(['points.grant'])), ['总览', '积分发放']);
   assert.deepEqual(labels(access(['system.read'])), ['总览', '系统状态']);
-  assert.equal(canSeePage('stats', access(['points.grant', 'system.read'])), false, 'placeholders are the owner’s');
+  // Named exception (Part 24b-6): the 'stats' page no longer exists (it redirects to 总览), so it is not asked about here.
   assert.equal(canSeePage('costs', access(['points.grant', 'system.read'])), false);
   assert.equal(canSeePage('points', access(['system.read'])), false);
   assert.equal(canSeePage('system', access(['points.grant'])), false);

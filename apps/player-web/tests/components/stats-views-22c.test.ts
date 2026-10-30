@@ -2,42 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { costsView } from '../../src/features/admin/costs-view.ts';
 import { overviewView } from '../../src/features/admin/overview-view.ts';
-import { statsView } from '../../src/features/admin/stats-view.ts';
 import { canSeePage, visibleNav } from '../../src/features/admin/shell/admin-nav.ts';
-import type { CostsView, PlayerStatsView, StatsCounts, StatsRange } from '../../../../packages/contracts/web-stats.ts';
+import type { CostsView } from '../../../../packages/contracts/web-stats.ts';
 import type { FakeElement } from './fake-dom.ts';
 import { flush, installFakeDom } from './fake-dom.ts';
 
-const counts = (over: Partial<StatsCounts> = {}): StatsCounts => ({
-  signups: 4,
-  newGuests: 12,
-  activeRegistered: 20,
-  activeGuests: 30,
-  chatRegistered: 10,
-  chatGuests: 8,
-  repliesPublished: 100,
-  repliesFailed: 3,
-  repliesUnknown: 1,
-  voiceReplies: 90,
-  deletedAccounts: 1,
-  inactivePurged: 2,
-  expiredPurged: 5,
-  ...over,
-});
-const players = (range: StatsRange = 7): PlayerStatsView => ({
-  since: '2026-11-03',
-  range,
-  days: [
-    { day: '2026-11-20', ...counts(), d1: null, d7: null },
-    { day: '2026-11-18', ...counts(), d1: { cohort: 4, retained: 2 }, d7: { cohort: 0, retained: 0 } },
-  ],
-  totals: { ...counts({ signups: 8 }), d1: { cohort: 4, retained: 2 }, d7: null },
-  byCharacter: [{ name: '瓜瓜', published: 7, failed: 1, unknown: 0, voice: 6 }],
-  byModel: [
-    { model: 'xai', published: 5, failed: 0, unknown: 0, voice: 4 },
-    { model: '', published: 2, failed: 1, unknown: 0, voice: 2 },
-  ],
-});
 const text = (el: unknown) => (el as FakeElement).textContent;
 const rows = (root: unknown, caption: string) =>
   (root as FakeElement)
@@ -46,105 +15,11 @@ const rows = (root: unknown, caption: string) =>
     .querySelectorAll('tbody tr')
     .map((tr) => tr.querySelectorAll('td').map((td) => td.textContent));
 
-function mountStats(t: test.TestContext, view = players()) {
-  const doc = installFakeDom(t);
-  const root = doc.createElement('div') as unknown as HTMLElement;
-  const loads: StatsRange[] = [],
-    exports: StatsRange[] = [],
-    saved: [string, string][] = [];
-  const api = statsView(root, {
-    load: async (range) => {
-      loads.push(range);
-      return { ...view, range };
-    },
-    exportCsv: async (range) => {
-      exports.push(range);
-      return { csv: '﻿a,b\r\n', rows: 2 };
-    },
-    download: (name, body) => void saved.push([name, body]),
-    run: async (work) => {
-      await work();
-    },
-    disposed: () => false,
-  });
-  return { root, api, loads, exports, saved };
-}
-
-test('玩家统计: since line, newest first, a totals row, 次日留存 as "x / y (%)" and — while the cohort is open', async (t) => {
-  const f = mountStats(t);
-  await f.api.load();
-  assert.match(text(f.root), /统计自 2026-11-03 起（UTC）/);
-  const days = rows(f.root, '玩家统计（按天）');
-  assert.deepEqual(
-    days.map((r) => r[0]),
-    ['2026-11-20', '2026-11-18', '合计'],
-  );
-  assert.deepEqual(days[0], [
-    '2026-11-20',
-    '4',
-    '12',
-    '20 / 30',
-    '10 / 8',
-    '100 / 3 / 1',
-    '90',
-    '1',
-    '2',
-    '5',
-    '—',
-    '—',
-  ]);
-  assert.deepEqual(days[1]!.slice(-2), ['2 / 4（50%）', '0 / 0']);
-  assert.deepEqual(days[2]!.slice(0, 3), ['合计', '8', '12']);
-  assert.equal(days[2]![10], '2 / 4（50%）');
-  assert.equal(days[2]![11], '—');
-});
-
-test('玩家统计: 按角色 shows the display name, 按模型 names a reply with no model choice, the range reloads, 导出表格 saves the CSV', async (t) => {
-  const f = mountStats(t);
-  await f.api.load();
-  // Named exception (Part 24b-1): 按角色 is a card per character on the new board (still the display name and the same counts),
-  // with the 聊天人数 of 22d beside them (— while the chart data is not given).
-  const card = (f.root as unknown as FakeElement).querySelector('[data-character="瓜瓜"]')!;
-  assert.match(card.textContent, /7\s*条回复/);
-  assert.match(card.textContent, /语音 6 · 失败 1 · 未知 0/);
-  assert.match(card.textContent, /聊天人数 —/);
-  assert.deepEqual(rows(f.root, '玩家统计（按模型）'), [
-    ['xai', '5', '0', '0', '4'],
-    ['未选择模型', '2', '1', '0', '2'],
-  ]);
-  // Named exception (Part 24b-1 fix): no tabs - 按天 on top, 按角色 and 按模型 side by side under it, all on the page at once.
-  assert.equal((f.root as unknown as FakeElement).querySelectorAll('[role="tab"]').length, 0);
-  assert.deepEqual(
-    (f.root as unknown as FakeElement).querySelectorAll('.stat-detail h3').map((h) => h.textContent),
-    ['按天', '按角色', '按模型'],
-  );
-  assert.equal(
-    (f.root as unknown as FakeElement).querySelector('.stat-pair')!.querySelectorAll('.stat-detail').length,
-    2,
-  );
-  assert.ok(!(f.root as unknown as FakeElement).querySelectorAll('button').some((b) => b.textContent === '刷新'));
-  // Named exception (Part 24b-1): the range is a pill switch (最近 7 / 30 / 90 天), not a select.
-  const range = (f.root as unknown as FakeElement).querySelectorAll('[aria-label="时间范围"] button');
-  assert.deepEqual(
-    range.map((b) => b.textContent),
-    ['最近 7 天', '最近 30 天', '最近 90 天'],
-  );
-  range[1]!.click();
-  await flush();
-  assert.deepEqual(f.loads, [7, 30]);
-  const buttons = (f.root as unknown as FakeElement).querySelectorAll('button');
-  buttons.find((b) => b.textContent === '导出表格')!.click();
-  await flush();
-  assert.deepEqual(f.exports, [30]);
-  assert.deepEqual(f.saved, [['玩家统计-最近30天.csv', '﻿a,b\r\n']]);
-});
-
-test('玩家统计: nothing yet says so instead of an empty table of zeros', async (t) => {
-  const f = mountStats(t, { ...players(), since: null, days: [], byCharacter: [], byModel: [] });
-  await f.api.load();
-  assert.match(text(f.root), /统计尚未开始/);
-  assert.deepEqual(rows(f.root, '玩家统计（按天）'), []);
-});
+// Superseded in Part 24b-6 (reason): the 玩家统计 page (stats-view.ts) no longer exists - its day table, 按角色 / 按模型 and the CSV are
+// part of 总览 now (Overview3). Its three tests here ("since line, newest first, a totals row ...", "按角色 shows the display name ... 导出表格
+// saves the CSV", "nothing yet says so ...") are replaced by the 总览 tests of console-24b6.test.ts, which assert the same behaviours:
+// the newest-first day table with its 合计 row and retention, the splits with 未选择模型, the range reloading, 导出表格 saving the CSV of
+// the showing range, and the empty window.
 
 const costs = (spans: boolean): CostsView => ({
   since: '2026-11-03',
@@ -222,15 +97,30 @@ test('消耗表: the month is in USD with the RMB figure (the rate is its toolti
   assert.match(page, /\$2\.00/);
   assert.match(page, /≈ ¥13\.40/);
   assert.match(page, /\$3\.60/);
-  const yuan = (f.root as unknown as FakeElement)
-    .querySelectorAll('[title]')
-    .find((el) => /¥13\.40/.test(el.textContent))!;
-  assert.equal(yuan.getAttribute('title'), '按 $1 ≈ ¥6.7');
-  const detail = rows(f.root, '消耗表（按供应商、模型、阶段）');
-  assert.deepEqual(detail[0]!.slice(0, 4), ['2026-11-20', 'fish', 'drama-3', '语音']);
-  assert.deepEqual(detail[0]!.slice(-3), ['$0.0500', '$0.0900', '0']);
-  assert.deepEqual(detail[1]!.slice(-3), ['$0.0012', '—', '2'], 'a day before 22c has no ledger amount');
-  assert.deepEqual(rows(f.root, '消耗表（按天）'), [['2026-11-20', '10', '$0.0500', '$0.0050', '120']]);
+  // Named exception (Part 24b-6, Usage3): the rate is the hover value of the ¥ tile (no title attribute); the tables are open-below
+  // grids (.ot) whose numeric cells carry their exact value on hover (the bubble's text follows the visible text), 按模型 merges the days
+  // and 按天明细 has one row per day (its calls open under it). The values asserted are the same ones.
+  const yuan = (f.root as unknown as FakeElement).querySelectorAll('.ov-tile').find((el) => /¥13\.40/.test(el.textContent))!;
+  assert.match(yuan.textContent, /汇率 6\.7/);
+  const grid = (caption: string) =>
+    (f.root as unknown as FakeElement)
+      .querySelectorAll('.ot')
+      .find((o) => o.getAttribute('aria-label') === caption)!
+      .querySelectorAll('.ot-row')
+      .map((r) => r.querySelectorAll('.ot-cell').map((c) => c.textContent));
+  const models = grid('消耗表（按模型合计）');
+  assert.deepEqual(
+    models.map((r) => r[0]),
+    ['fish / drama-3 / 语音', 'deepseek / deepseek-v4-flash / 草稿'],
+  );
+  assert.ok(models[0]![6]!.startsWith('$0.05') && models[0]![6]!.includes('账本扣 $0.090 000'));
+  assert.ok(models[1]![6]!.startsWith('$0.00') && !models[1]![6]!.includes('账本扣'), 'a day before 22c has no ledger amount');
+  const days = grid('消耗表（按天明细）');
+  assert.equal(days.length, 1);
+  assert.deepEqual(
+    days[0]!.map((c, i) => [0, 1, 2, 3, 4, 5].includes(i) && c.startsWith(['2026-11-20', '10', '$0.05', '$0.09', '120', '$0.0050'][i]!)),
+    [true, true, true, true, true, true],
+  );
   const quiet = mountCosts(t, costs(false));
   await quiet.api.load();
   assert.doesNotMatch(text(quiet.root), /Fish Drama 3/);
@@ -265,15 +155,17 @@ test('概览: yesterday and this month in RMB for stats.read, nothing for anyone
     yesterday: { day: '2026-11-19', signups: 3, active: 46, replies: 354 },
     monthListCostRmbFen: 12865,
   });
-  for (const wanted of ['昨日新注册（UTC 2026-11-19）', '46', '354', '¥128.65'])
-    assert.ok(withStats.includes(wanted), wanted);
+  // Named exception (Part 24b-6): the tiles say 昨日新注册 / 昨日活跃 with the UTC day as their hover value; yesterday's replies are a
+  // row of the 按天 table now, not a tile.
+  for (const wanted of ['昨日新注册', '2026-11-19 UTC', '46', '¥128.65']) assert.ok(withStats.includes(wanted), wanted);
   const without = await make(null);
   assert.ok(!without.includes('昨日') && !without.includes('¥'));
 });
 
-test('navigation: 玩家统计 and 消耗表 are for the owner and stats.read, nobody else, and are no placeholder', () => {
+// Named exception (Part 24b-6): 玩家统计 is not a page any more (总览 has it), so only 消耗表 is asked about here.
+test('navigation: 消耗表 is for the owner and stats.read, nobody else, and is no placeholder', () => {
   const access = (permissions: string[], owner = false) => ({ owner, permissions, inbox: true, system: true });
-  for (const page of ['stats', 'costs'] as const) {
+  for (const page of ['costs'] as const) {
     assert.equal(canSeePage(page, access([], true)), true);
     assert.equal(canSeePage(page, access(['stats.read'])), true);
     assert.equal(canSeePage(page, access(['system.read', 'points.grant', 'invites.manage'])), false);
@@ -284,6 +176,7 @@ test('navigation: 玩家统计 and 消耗表 are for the owner and stats.read, n
     );
   }
   const labels = (permissions: string[]) => visibleNav(access(permissions)).flatMap((g) => g.items.map((i) => i.label));
-  assert.ok(labels(['stats.read']).includes('玩家统计') && labels(['stats.read']).includes('消耗表'));
-  assert.ok(!labels(['system.read']).includes('玩家统计'));
+  assert.ok(labels(['stats.read']).includes('消耗表'));
+  assert.ok(!labels(['stats.read']).includes('玩家统计'), 'no such nav item any more');
+  assert.ok(!labels(['system.read']).includes('消耗表'));
 });

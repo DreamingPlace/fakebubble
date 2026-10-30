@@ -17,21 +17,28 @@ export function rolePicker(
     badges?: () => Record<string, number>;
     openInbox?: (characterId: string) => void;
     /**
-     * Pills in one row (Part 24b-3, the approved Workbench board): a colour dot, the full name and ONE compact state ("v2",
-     * "v2 · 草稿", "未发布"). `colour` gives the dot its colour. Without it the list is the old one button per row.
+     * The rail (Part 24b-6, Workbench4): a 64 px column of colour circles with ONE small status dot each (共创 count / has draft /
+     * not live); on hover or keyboard focus it grows over the page to show the name and the state. `colour` gives the circle its colour.
+     * Without it the list is the old one button per row.
      */
     compact?: { colour: (characterId: string, index: number) => string };
   },
 ) {
   let selected: string | null = null;
   let roles: readonly PickerRole[] = [];
+  const seeds = new Map<string, boolean>();
   const paint = () => {
     host.replaceChildren();
     if (!roles.length) host.append(h('p', { class: 'admin-empty', text: options.emptyText }));
     roles.forEach((role, index) => {
       const compact = options.compact;
-      const dot = compact ? h('i', { class: 'admin-pick-dot', attrs: { 'aria-hidden': 'true' } }) : null;
+      const unread = options.badges?.()[role.characterId] ?? 0;
+      const seed = seeds.get(role.characterId) === true;
+      const dot = compact
+        ? h('i', { class: 'admin-pick-dot', text: [...role.displayName][0] ?? '', attrs: { 'aria-hidden': 'true' } })
+        : null;
       dot?.style?.setProperty('--dot', compact!.colour(role.characterId, index));
+      const tone = unread > 0 ? 'cc' : role.publishedVersion === null ? 'off' : role.draftRevision !== null ? 'draft' : '';
       const state =
         role.publishedVersion === null
           ? role.draftRevision === null
@@ -45,20 +52,26 @@ export function rolePicker(
           attrs: {
             type: 'button',
             'data-character': role.characterId,
+            ...(seed ? { 'data-seed': 'true' } : {}),
             ...(role.characterId === selected ? { 'aria-current': 'true' } : {}),
+            ...(compact ? { 'aria-label': role.displayName } : {}),
           },
         },
         dot,
-        h('strong', { text: role.displayName }),
-        (options.badges?.()[role.characterId] ?? 0) > 0
-          ? h('span', {
-              class: 'admin-pick-cc',
-              text: String(options.badges!()[role.characterId]),
-              attrs: { title: '新的共创' },
-            })
+        compact && tone ? h('i', { class: 'admin-pick-st', attrs: { 'data-tone': tone, 'aria-hidden': 'true' } }) : null,
+        compact
+          ? h(
+              'span',
+              { class: 'admin-pick-text' },
+              h('strong', { text: role.displayName }),
+              h('small', { text: role.publishedVersion === null ? '未上线' : seed ? '成长中' : state }),
+            )
+          : h('strong', { text: role.displayName }),
+        !compact && unread > 0
+          ? h('span', { class: 'admin-pick-cc', text: String(unread), attrs: { title: '新的共创' } })
           : null,
         compact
-          ? statusBadge(state, role.publishedVersion === null ? 'warn' : role.draftRevision === null ? 'ok' : 'info')
+          ? null
           : statusBadge(
               role.publishedVersion === null ? '未发布' : `正式 v${role.publishedVersion}`,
               role.publishedVersion === null ? 'warn' : 'ok',
@@ -66,7 +79,6 @@ export function rolePicker(
         compact || role.draftRevision === null ? null : statusBadge(`草稿 ${role.draftRevision}`, 'info'),
       );
       row.addEventListener('click', () => options.onPick(role.characterId));
-      const unread = options.badges?.()[role.characterId] ?? 0;
       if (unread <= 0) {
         host.append(compact ? h('div', { class: 'admin-pick-row' }, row) : row);
         return;
@@ -96,6 +108,12 @@ export function rolePicker(
     },
     select(characterId: string | null) {
       selected = characterId;
+      paint();
+    },
+    /** The editor's 成长中 switch, whenever it changes: the circle gets (or loses) its dashed ring. */
+    setSeed(characterId: string, seed: boolean) {
+      if ((seeds.get(characterId) === true) === seed) return;
+      seeds.set(characterId, seed);
       paint();
     },
     clear() {

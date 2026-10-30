@@ -93,7 +93,11 @@ function mount(t: test.TestContext, o: { owner?: boolean; confirm?: boolean; fai
   const view = inviteTiersView(root, deps);
   const q = (selector: string) => node.querySelector(selector) as FakeElement;
   const tick = () => new Promise((r) => setTimeout(r, 0));
-  const find = (label: string) => node.querySelectorAll('button').find((b) => b.textContent === label)!;
+  // Named exception (Part 24b-6): a button with a hover value (修改额度) carries the bubble's text after its label.
+  const find = (label: string) =>
+    node
+      .querySelectorAll('button')
+      .find((b) => b.textContent === label || (!!b.querySelector('.ad-tip') && b.textContent.startsWith(label)))!;
   return {
     view,
     node,
@@ -187,7 +191,9 @@ test('22a the list shows tier, N / cap, created, codes, redeemed, revoked and ho
   await f.view.load();
   assert.deepEqual(
     f.node.querySelectorAll('thead th').map((th) => th.textContent),
-    ['批次', '类型', '创建', '邀请码', '已兑换', '已撤销', '持有中', '操作'],
+    // Named exception (Part 24b-6, Invites3): a leading chevron column, 创建 UTC, and the counts as 兑换 / 撤销; the row's actions moved
+    // into the open batch (its codes open directly below it), so there is no 操作 column.
+    ['', '批次', '类型', '创建 UTC', '邀请码', '兑换', '撤销', '持有中'],
   );
   const row = f.node.querySelectorAll('tbody tr')[0]!;
   assert.match(row.textContent, /春季内测/);
@@ -199,10 +205,12 @@ test('22a the list shows tier, N / cap, created, codes, redeemed, revoked and ho
 test('22a the owner edits N and the cap behind a confirmation that names the change and the holders; nobody else sees the button', async (t) => {
   const f = mount(t);
   await f.view.load();
-  f.find('修改额度').click();
+  // Named exception (Part 24b-6): the two numbers and 修改额度 are in the open batch's toolbar; the one button saves (no 保存 step).
+  f.node.querySelector('tr[data-batch]')!.click();
+  await f.tick();
   f.q('#tiers-edit-amount').value = '40';
   f.q('#tiers-edit-cap').value = '800';
-  f.find('保存').click();
+  f.find('修改额度').click();
   await f.tick();
   assert.equal(f.confirms.length, 1);
   assert.match(f.confirms[0]!.message, /「春季内测」/);
@@ -215,6 +223,8 @@ test('22a the owner edits N and the cap behind a confirmation that names the cha
   assert.equal(editConfirmation(batch(), 40, 800), f.confirms[0]!.message);
   const other = mount(t, { owner: false });
   await other.view.load();
+  other.node.querySelector('tr[data-batch]')!.click();
+  await other.tick();
   assert.equal(
     other.node.querySelectorAll('button').some((b) => b.textContent === '修改额度'),
     false,
@@ -224,20 +234,22 @@ test('22a the owner edits N and the cap behind a confirmation that names the cha
 test('22a declining the owner’s confirmation changes nothing; a no-op or invalid edit never asks', async (t) => {
   const f = mount(t, { confirm: false });
   await f.view.load();
-  f.find('修改额度').click();
+  // Named exception (Part 24b-6): open the batch first; 修改额度 itself saves.
+  f.node.querySelector('tr[data-batch]')!.click();
+  await f.tick();
   f.q('#tiers-edit-amount').value = '40';
   f.q('#tiers-edit-cap').value = '30';
-  f.find('保存').click();
+  f.find('修改额度').click();
   await f.tick();
   assert.equal(f.confirms.length, 0, 'cap below the amount: no dialog');
   f.q('#tiers-edit-amount').value = '50';
   f.q('#tiers-edit-cap').value = '1000';
-  f.find('保存').click();
+  f.find('修改额度').click();
   await f.tick();
   assert.equal(f.confirms.length, 0, 'no change: no dialog');
   f.q('#tiers-edit-amount').value = '40';
   f.q('#tiers-edit-cap').value = '800';
-  f.find('保存').click();
+  f.find('修改额度').click();
   await f.tick();
   assert.equal(f.confirms.length, 1);
   assert.equal(f.edits.length, 0, 'declined');
@@ -251,11 +263,13 @@ test('22a codes by serial with the holder’s 玩家编号; every revoke asks fi
   await f.tick();
   const rows = f.node.querySelectorAll('.tiers-codes-table tbody tr');
   assert.equal(rows.length, 3);
-  assert.match(rows[0]!.textContent, /#1/);
+  // Named exception (Part 24b-6): the serial is the first cell on its own ("1"), the # is the column header.
+  assert.match(rows[0]!.textContent, /^1/);
   assert.match(rows[0]!.textContent, /K7M2P9QX/);
   assert.match(rows[0]!.textContent, /2026-11-01/);
   assert.doesNotMatch(f.node.textContent, /@|principal|player-/);
-  f.find('撤销该码').click();
+  // Named exception (Part 24b-6): the code's button reads 撤销 (it is in that code's row).
+  f.find('撤销').click();
   await f.tick();
   assert.equal(f.confirms.at(-1)!.title, '撤销邀请码');
   assert.deepEqual(f.calls, ['code:c2']);
@@ -263,16 +277,21 @@ test('22a codes by serial with the holder’s 玩家编号; every revoke asks fi
   await f.tick();
   assert.match(f.confirms.at(-1)!.message, /K7M2P9QX/);
   assert.deepEqual(f.calls, ['code:c2', 'entitlement:c1']);
-  f.find('撤销整批').click();
+  // Named exception (Part 24b-6): 撤销整批 is a danger zone at the foot of the open batch (impact numbers, one confirm button), not a
+  // modal confirm: the zone opens, its button sends the same revoke, and leaving it unopened sends nothing.
+  f.node.querySelector('.dz-open')!.click();
   await f.tick();
-  assert.equal(f.confirms.at(-1)!.title, '撤销整批');
-  assert.match(f.confirms.at(-1)!.message, /还没兑换/);
+  assert.match(f.node.querySelector('.dz-impact')!.textContent, /还没兑换|未使用/);
+  f.node.querySelector('.dz-go')!.click();
+  await f.tick();
   assert.deepEqual(f.calls.at(-1), 'batch:b1');
-  assert.equal(f.confirms.length, 3);
-  // Declined: nothing is sent.
+  assert.equal(f.confirms.length, 2, 'the two per-code confirms only');
+  // Not confirmed: nothing is sent.
   const declined = mount(t, { confirm: false });
   await declined.view.load();
-  declined.find('撤销整批').click();
+  declined.node.querySelector('tr[data-batch]')!.click();
+  await declined.tick();
+  declined.node.querySelector('.dz-open')!.click();
   await declined.tick();
   assert.deepEqual(declined.calls, []);
 });

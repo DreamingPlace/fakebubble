@@ -386,10 +386,11 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       .map(plainOf)
       .filter((c): c is string => c !== null);
     const copyAll = button(
-      `复制全部未使用（${unusedPlain.length}）`,
+      '复制全部未使用',
       () => void copyText(unusedPlain.join('\n')).then((ok) => ok && (copyAll.textContent = `已复制 ${unusedPlain.length} 个未使用`)),
       'admin-secondary tiers-copy-all iv-chip',
     );
+    copyAll.setAttribute('aria-label', `复制全部未使用（${unusedPlain.length} 个）`);
     // 修改额度 sits in the toolbar (owner, daily refill): the two numbers and one button, confirmed in place.
     const edit = (() => {
       if (batch.tier !== 'daily_refill' || !deps.isOwner()) return null;
@@ -472,7 +473,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
           h(
             'thead',
             {},
-            h('tr', {}, ...['#', '邀请码', '状态', '兑换 UTC', '玩家', '额度到期', ''].map((label) => h('th', { text: label, attrs: { scope: 'col' } }))),
+            h('tr', {}, ...['序号', '邀请码', '状态', '兑换时间 (UTC)', '玩家编号', '额度到期', '操作'].map((label) => h('th', { text: label, attrs: { scope: 'col' } }))),
           ),
           h(
             'tbody',
@@ -497,7 +498,14 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
                     : hoverValue(h('span', { text: utcDateTime(code.redeemedAt).slice(0, 16) }), `${utcDateTime(code.redeemedAt)} UTC`),
                 ),
                 cell('玩家', code.playerNumber ?? (code.redeemedAt === null ? '—' : '旧邀请')),
-                cell('额度到期', code.expiresAt === null ? (code.redeemedAt === null ? '—' : '长期') : utcDateTime(code.expiresAt).slice(0, 16)),
+                cell(
+                  '额度到期',
+                  code.expiresAt === null
+                    ? code.redeemedAt === null
+                      ? '—'
+                      : '长期'
+                    : hoverValue(h('span', { text: utcDateTime(code.expiresAt).slice(0, 16) }), `${utcDateTime(code.expiresAt)} UTC`),
+                ),
                 cell(
                   '操作',
                   code.state === 'unused'

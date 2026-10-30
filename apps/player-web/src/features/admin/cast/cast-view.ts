@@ -299,14 +299,6 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       h('h2', { text: '还没有角色' }),
       h('p', { class: 'cs-hint', text: canEdit() ? '先在角色工作台建一个角色，或者导入一份阵容文件。' : '阵容里还没有角色（你只有查看权限）。' }),
     );
-    const actions = h('div', { class: 'cs-start-actions' });
-    if (canEdit() && state.serverEmpty && !state.dirty) {
-      const importLegacy = h('button', { class: 'cs-quiet', text: '从旧资料导入', attrs: { type: 'button' } });
-      importLegacy.addEventListener('click', () => void importOld());
-      actions.append(importLegacy);
-    }
-    if (canEdit()) actions.append(fileButton());
-    if (actions.children.length) frame.start.append(actions);
   }
 
   // ---- title row: the status line, 保存草稿 and the one solid 发布 -------------------------------------------------

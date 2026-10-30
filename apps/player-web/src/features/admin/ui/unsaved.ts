@@ -3,7 +3,7 @@
  * "n 处未保存". Callers set `data-dirty` on the control (or its wrapper); the CSS does the rest.
  */
 export const markDirty = (node: Element, dirty: boolean) => {
-  if (dirty) node.setAttribute('data-dirty', 'true');
-  else node.removeAttribute('data-dirty');
+  if (dirty) node.setAttribute?.('data-dirty', 'true');
+  else node.removeAttribute?.('data-dirty');
 };
 export const unsavedText = (count: number) => `${count} 处未保存`;

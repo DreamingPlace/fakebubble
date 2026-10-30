@@ -32,8 +32,10 @@ test('运营数据 shows the daily count of replies delivered with dropped topic
   });
   await view.load();
   const node = root as unknown as FakeElement;
-  const headers = node.querySelectorAll('th').map((th) => th.textContent);
+  // Named exception (Part 24b-6): the table is an open-below grid now (header cells .ot-cell in .ot-head, rows .ot-row).
+  const headers = node.querySelectorAll('.ot-head .ot-cell').map((th) => th.textContent);
   assert.ok(headers.includes('话题/事实丢弃'), headers.join('|'));
-  const cells = node.querySelectorAll('tbody td').map((td) => td.textContent);
-  assert.ok(cells.includes('3/1'), cells.join('|'));
+  const cells = node.querySelectorAll('.ot-row .ot-cell').map((td) => td.textContent);
+  // A numeric cell carries its hover value (Part 24b-6), so the visible text starts the cell's text.
+  assert.ok(cells.some((c) => c.startsWith('3/1')), cells.join('|'));
 });
