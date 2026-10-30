@@ -722,8 +722,8 @@ try {
         Math.min(png.width - 1, Math.round(png.width * fx)),
         Math.min(png.height - 1, Math.round(png.height * fy)),
       );
-    const left = px(0.3, 0.55);
-    const right = px(0.72, 0.55);
+    const left = px(0.36, 0.55);
+    const right = px(0.64, 0.55);
     check(GOLD(left), `关系与故事 half star (${state}): the left half is ${left}, not gold`);
     check(
       !GOLD(right) && near(right, [236, 232, 227], 16),
@@ -744,7 +744,23 @@ try {
       );
     }
     void box;
-    if (shots && state === 'rest') await star.screenshot({ path: join(shots, 'half-star-2.5.png') });
+    if (shots && state === 'rest') {
+      await star.screenshot({ path: join(shots, 'half-star-2.5.png') });
+      // and at 200 % browser zoom
+      await page.evaluate(() => {
+        document.documentElement.style.zoom = '2';
+      });
+      await wait(300);
+      await page
+        .locator('.cs-dir')
+        .first()
+        .locator('.cs-stars')
+        .screenshot({ path: join(shots, 'half-star-2.5-zoom200.png') });
+      await page.evaluate(() => {
+        document.documentElement.style.zoom = '';
+      });
+      await wait(300);
+    }
   };
   await page.locator('.cs-dir').first().locator('.cs-star-hit[aria-label="2.5 星"]').click();
   await starPixels('just clicked');
@@ -904,29 +920,31 @@ try {
   // (the first card is the one that is open on arrival)
   await page.locator('.cc-row.is-active').waitFor({ timeout: 10_000 });
   await wait(900);
-  // (a 1.5 px border is only 1.5 px on a 2x screen: a 1x one rounds it, so this is read on a 2x page)
-  const crisp = await f.browser.newContext({
-    ignoreHTTPSErrors: true,
-    deviceScaleFactor: 2,
-    viewport: { width: 1440, height: 900 },
-    storageState: await f.context.storageState(),
-  });
-  const crispPage: Page = await crisp.newPage();
-  await crispPage.goto(`${f.origin}/?mode=provider-admin#/cocreation`);
-  await crispPage.locator('.cc-row.is-active').waitFor({ timeout: 20_000 });
-  await crispPage.waitForTimeout(1200);
-  const card = await crispPage.evaluate(() => {
-    const s = getComputedStyle(document.querySelector('.cc-row.is-active') as HTMLElement);
+  // The four border widths are read as the browser computes them (it rounds 1.5 px down to a whole pixel on this build), and the rule that
+  // wins is read from the stylesheet: it must say 1.5px solid #5B4FC4 for all four sides.
+  const card = await page.evaluate(() => {
+    const el = document.querySelector('.cc-row.is-active') as HTMLElement;
+    const s = getComputedStyle(el);
+    const authored: string[] = [];
+    const walk = (rules: CSSRuleList) => {
+      for (const r of rules) {
+        const rule = r as CSSStyleRule;
+        if (rule.selectorText && el.matches(rule.selectorText) && rule.style.getPropertyValue('border'))
+          authored.push(rule.style.getPropertyValue('border'));
+        if ((r as CSSGroupingRule).cssRules) walk((r as CSSGroupingRule).cssRules);
+      }
+    };
+    for (const sheet of document.styleSheets) walk(sheet.cssRules);
     return {
       widths: [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth],
       color: s.borderTopColor,
       shadow: s.boxShadow,
+      authored: authored.at(-1) ?? '',
     };
   });
-  await crisp.close();
   check(
-    new Set(card.widths).size === 1 && card.widths[0] === '1.5px',
-    `共创收件箱: the open card's borders are ${card.widths} (all 1.5px)`,
+    new Set(card.widths).size === 1 && /^1\.5px solid rgb\(91, 79, 196\)$/.test(card.authored),
+    `共创收件箱: the open card's borders are ${card.widths} (all equal), authored "${card.authored}" (1.5px solid #5B4FC4)`,
   );
   check(card.color === 'rgb(91, 79, 196)', `共创收件箱: the open card's border is ${card.color}`);
   check(card.shadow === 'none', `共创收件箱: the open card has a shadow edge (${card.shadow})`);

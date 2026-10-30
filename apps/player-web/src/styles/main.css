@@ -11581,6 +11581,14 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   margin: 3px 0 0;
 }
 
+/* the hold fill is a light tint and the label stays dark red on it, so the whole label reads before, during and after the fill */
+.account-admin-page.admin-shell button.dz-go > i {
+  background: #f1b9ae;
+}
+.account-admin-page.admin-shell button.dz-go[data-hold="on"] > .dz-label {
+  color: #6f1d10;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;
