@@ -126,21 +126,23 @@ try {
   const draftCount = () => castRows('SELECT character_id FROM web_character_drafts').length;
 
   await page.goto(`${origin}/?mode=provider-admin#/cast`);
-  await page.locator('.cs-start, .cs-bar').first().waitFor({ timeout: 20_000 });
+  // Named exception (Part 24b-6): the 整页版本 strip (.cs-versions) carries the file buttons; the old .cs-bar / start-card buttons are gone.
+  await page.locator('.cs-versions').first().waitFor({ timeout: 20_000 });
   await page.waitForTimeout(800);
   // On an empty draft the start card offers it too, so the bar's own button is the one held to the size rule.
   assert.ok((await button('导入文件').count()) >= 1, 'the import button is in the page');
   assert.ok((await button('导出文件').count()) >= 1, 'the export button is in the page');
   const heights = await page.evaluate(() =>
-    [...document.querySelectorAll('.cs-bar button')].map((b) =>
+    [...document.querySelectorAll('.cs-versions-actions button')].map((b) =>
       Math.round((b as HTMLElement).getBoundingClientRect().height),
     ),
   );
+  // Named exception (Part 24b-6): the strip's file buttons are compact (30) or standard (36), the console's two sizes.
   assert.ok(
-    heights.length >= 2 && heights.every((h: number) => h === 36),
-    `the bar buttons are standard size (36): ${heights}`,
+    heights.length >= 2 && heights.every((h: number) => h === 36 || h === 30),
+    `the strip buttons keep one of the two sizes (36 / 30; Part 24b-6): ${heights}`,
   );
-  await shot('01-export-button', '.cs-bar');
+  await shot('01-export-button', '.cs-versions');
 
   // choose the file: a summary, and nothing saved
   const before = { drafts: draftCount(), revision: castRows('SELECT revision FROM web_cast_draft')[0]!.revision };
@@ -166,7 +168,7 @@ try {
   const stored = String(castRows('SELECT doc_json FROM web_cast_draft')[0]!.doc_json);
   assert.ok(!stored.includes('new:') && !stored.includes('new-'));
   assert.equal(castRows('SELECT version FROM web_cast_publications').length, 0, 'nothing was published');
-  assert.match(await page.locator('.cs-bar').innerText(), /草稿 修订 2/);
+  assert.match(await page.locator('.cs-versions').innerText(), /草稿 #2/);
   assert.match(await page.locator('.cs').innerText(), /林小满/);
   await shot('03-after-import');
 

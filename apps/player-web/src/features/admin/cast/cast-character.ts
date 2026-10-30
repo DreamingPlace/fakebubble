@@ -7,311 +7,189 @@ import {
 } from '../../../../../../packages/contracts/web-cast.ts';
 import type { CastCompilePreviewResult } from '../../../services/cast-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
-import { KNOWLEDGE_LABEL, nameOf } from './cast-model.ts';
-import { bound, dot, toggleChip, type CastCtx } from './cast-ui.ts';
+import { KNOWLEDGE_LABEL } from './cast-model.ts';
+import { dot, type CastCtx } from './cast-ui.ts';
+import { markDirty } from '../ui/unsaved.ts';
 
 const L = CAST_LIMITS;
 const ATTITUDE_LABEL: Record<CastAliasAttitude, string> = { likes: '喜欢', ok: '无所谓', dislikes: '不喜欢' };
 
-/** A list of short texts (names, catchphrases, ...): each its own field, + to add, ✕ to remove, capped like the server. */
-function textList(
-  ctx: CastCtx,
-  label: string,
-  items: CastText[],
-  max: number,
-  textMax: number,
-  minItems = 0,
-  after?: () => void,
-) {
-  const box = h('div', { class: 'cs-list' }, h('span', { class: 'cs-label', text: label }));
-  const paint = () => {
-    box.replaceChildren(h('span', { class: 'cs-label', text: label }));
-    items.forEach((item) => {
-      const row = h(
-        'div',
-        { class: 'cs-list-row' },
-        bound(
-          ctx,
-          label,
-          () => item.text,
-          (v) => (item.text = v),
-          { max: textMax, after },
-        ).input,
-      );
-      if (ctx.canEdit() && items.length > minItems) {
-        const remove = h('button', {
-          class: 'cs-clear',
-          text: '✕',
-          attrs: { type: 'button', 'aria-label': `删除这条${label}` },
-        });
-        remove.addEventListener('click', () => {
-          items.splice(items.indexOf(item), 1);
-          ctx.edited();
-          paint();
-          after?.();
-        });
-        row.append(remove);
-      }
-      box.append(row);
-    });
-    if (ctx.canEdit() && items.length < max) {
-      const add = h('button', { class: 'cs-add', text: '+ 添加', attrs: { type: 'button' } });
-      add.addEventListener('click', () => {
-        items.push({ id: '', text: '' });
-        ctx.edited();
-        paint();
-      });
-      box.append(add);
-    }
-  };
-  paint();
-  return box;
-}
-
 /**
- * One character: identity (names, aliases and how they feel about each), profile, personality, speech, experiences, 演绎说明
- * and hidden settings. Opened from the grid's row header. Nothing here is folded or tabbed.
+ * 名片 (Cast3): what the OTHER characters know of one character, and nothing else: a one-liner, the names (the first is the one
+ * said out loud), the nicknames with how he feels about each, and the prototype he is modelled on. Everything else about a
+ * character (人设, 说话, 经历 ...) lives in 角色工作台 and is not drawn here; it is carried through a save untouched.
  */
-export function characterPanel(
-  host: HTMLElement,
-  ctx: CastCtx,
-  selected: () => string | null,
-  /** 从阵容移除: the page asks, then takes the character (and every mention of them) out of the working copy. */
-  removeFromCast: (characterId: string) => void,
-) {
-  // Part 24b-3: one section at a time, picked from a rail; which one stays while the panel is painted again for the same character.
-  let shown = { character: '', section: 0 };
+export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string | null) {
   const paint = () => {
     const doc = ctx.doc();
     host.replaceChildren();
-    const character: CastCharacter | undefined = doc.characters.find((c) => c.characterId === selected());
-    if (!character) {
-      host.append(
-        h('div', { class: 'cs-card-head' }, h('h2', { text: '角色' })),
-        h('p', { class: 'cs-hint', text: '点关系网左边的头像，打开这个角色。' }),
+    const id = selected();
+    const character: CastCharacter | undefined = doc.characters.find((c) => c.characterId === id);
+    host.hidden = !character;
+    if (!character) return;
+    const name = ctx.nameOf(character.characterId);
+    const identity = character.identity;
+    const edit = ctx.canEdit();
+    const repaintNames = () => ctx.paint('grid', 'side', 'groups', 'stories');
+    const link = h('a', {
+      class: 'cs-go',
+      text: '人设、说话、经历在角色工作台 →',
+      attrs: { href: `#/characters/${character.characterId}` },
+    });
+    const oneLiner = h('input', { attrs: { type: 'text', maxlength: String(L.oneLiner), 'aria-label': '一句话' } });
+    oneLiner.value = identity.oneLiner;
+    if (!edit) oneLiner.setAttribute('readonly', '');
+    oneLiner.addEventListener('input', () => {
+      identity.oneLiner = oneLiner.value;
+      markDirty(
+        oneLiner,
+        oneLiner.value !==
+          (ctx.base().characters.find((c) => c.characterId === character.characterId)?.identity.oneLiner ?? ''),
       );
-      return;
-    }
-    const repaintNames = () => ctx.paint('grid', 'stories', 'side', 'groups');
-    const head = h('div', { class: 'cs-card-head' }, h('h2', { text: nameOf(doc, character.characterId) }));
-    if (ctx.canEdit()) {
-      const out = h('button', { class: 'cs-danger', text: '从阵容移除', attrs: { type: 'button' } });
-      out.addEventListener('click', () => removeFromCast(character.characterId));
-      head.append(out);
-    }
-    // Everyone of the cast, one click away: a roster of fifteen is picked here as well as from the grid's row headers.
-    const roster = h('div', { class: 'cs-chips cs-roster', attrs: { role: 'group', 'aria-label': '切换角色' } });
-    for (const c of doc.characters)
-      roster.append(
-        toggleChip(
-          nameOf(doc, c.characterId),
-          c.characterId === character.characterId,
-          true,
-          () => ctx.openCharacter(c.characterId),
-          dot(ctx.colour(c.characterId)),
+      ctx.edited(true);
+    });
+    const pill = (input: HTMLInputElement, extra: Node | null, remove: (() => void) | null) => {
+      const node = h('span', { class: 'cs-pill' }, input, extra);
+      if (remove && edit) {
+        const x = h('button', { class: 'cs-pill-x', text: '×', attrs: { type: 'button', 'aria-label': '去掉' } });
+        x.addEventListener('click', remove);
+        node.append(x);
+      }
+      return node;
+    };
+    const textInput = (value: string, max: number, label: string, set: (v: string) => void, after?: () => void) => {
+      const input = h('input', {
+        class: 'cs-pill-input',
+        attrs: {
+          type: 'text',
+          maxlength: String(max),
+          'aria-label': label,
+          size: String(Math.max(2, [...value].length + 1)),
+        },
+      });
+      input.value = value;
+      if (!edit) input.setAttribute('readonly', '');
+      input.addEventListener('input', () => {
+        set(input.value);
+        input.setAttribute('size', String(Math.max(2, [...input.value].length + 1)));
+        ctx.edited(true);
+      });
+      if (after) input.addEventListener('change', after);
+      return input;
+    };
+    const addPill = (label: string, onAdd: () => void) => {
+      const button = h('button', {
+        class: 'cs-pill is-add',
+        text: '+',
+        attrs: { type: 'button', 'aria-label': label },
+      });
+      button.addEventListener('click', onAdd);
+      return button;
+    };
+    const names = h('div', { class: 'cs-lb' }, h('span', { text: '名字 · 第一个是对外的' }));
+    const nameRow = h('span', { class: 'cs-pills' });
+    identity.names.forEach((entry, index) => {
+      nameRow.append(
+        pill(
+          textInput(entry.text, L.name, `名字 ${index + 1}`, (v) => (entry.text = v), repaintNames),
+          null,
+          identity.names.length > 1
+            ? () => {
+                identity.names.splice(index, 1);
+                ctx.edited();
+                repaintNames();
+                ctx.paint('character');
+              }
+            : null,
         ),
       );
-    host.append(head, roster);
-    const id = character.identity;
-    const parts: HTMLElement[] = [];
-    const section = (title: string, ...nodes: Node[]) =>
-      h('section', { class: 'cs-section', attrs: { 'data-title': title } }, h('h3', { text: title }), ...nodes);
-    const body = {
-      append: (...nodes: HTMLElement[]) => {
-        parts.push(...nodes);
-      },
-    };
-    body.append(
-      section(
-        '身份',
-        bound(
-          ctx,
-          `一句话（≤${L.oneLiner} 字）`,
-          () => id.oneLiner,
-          (v) => (id.oneLiner = v),
-          { max: L.oneLiner },
-        ).wrap,
-        textList(ctx, '名字（第一个是对外的名字）', id.names, L.names, L.name, 1, repaintNames),
-      ),
-    );
-    const aliases = h(
-      'div',
-      { class: 'cs-list' },
-      h('span', { class: 'cs-label', text: '别名，和他对这个叫法的感觉' }),
-    );
-    const paintAliases = () => {
-      aliases.replaceChildren(h('span', { class: 'cs-label', text: '别名，和他对这个叫法的感觉' }));
-      for (const alias of id.aliases) {
-        const feel = h('select', { attrs: { 'aria-label': `对「${alias.text}」的感觉` } });
-        for (const a of CAST_ALIAS_ATTITUDES)
-          feel.append(h('option', { text: ATTITUDE_LABEL[a], attrs: { value: a } }));
-        feel.value = alias.attitude;
-        if (!ctx.canEdit()) feel.setAttribute('data-locked', 'true');
-        feel.addEventListener('change', () => {
-          alias.attitude = feel.value as CastAliasAttitude;
-          ctx.edited(true);
-        });
-        const row = h(
-          'div',
-          { class: 'cs-list-row' },
-          bound(
-            ctx,
-            '别名',
-            () => alias.text,
-            (v) => (alias.text = v),
-            { max: L.alias },
-          ).input,
+    });
+    if (edit && identity.names.length < L.names)
+      nameRow.append(
+        addPill('加一个名字', () => {
+          identity.names.push({ id: '', text: '' });
+          ctx.edited();
+          ctx.paint('character');
+        }),
+      );
+    names.append(nameRow);
+    const aliases = h('div', { class: 'cs-lb' }, h('span', { text: '别名 · 他对这个叫法的感觉' }));
+    const aliasRow = h('span', { class: 'cs-pills' });
+    identity.aliases.forEach((alias, index) => {
+      const feel = h('button', {
+        class: `cs-feel is-${alias.attitude}`,
+        text: ATTITUDE_LABEL[alias.attitude],
+        attrs: {
+          type: 'button',
+          'aria-label': `对「${alias.text}」的感觉：${ATTITUDE_LABEL[alias.attitude]}，点一下换`,
+        },
+      });
+      feel.disabled = !edit;
+      feel.addEventListener('click', () => {
+        alias.attitude =
+          CAST_ALIAS_ATTITUDES[(CAST_ALIAS_ATTITUDES.indexOf(alias.attitude) + 1) % CAST_ALIAS_ATTITUDES.length]!;
+        ctx.edited();
+        ctx.paint('character');
+      });
+      aliasRow.append(
+        pill(
+          textInput(alias.text, L.alias, `别名 ${index + 1}`, (v) => (alias.text = v)),
           feel,
-        );
-        if (ctx.canEdit()) {
-          const remove = h('button', {
-            class: 'cs-clear',
-            text: '✕',
-            attrs: { type: 'button', 'aria-label': '删除这个别名' },
-          });
-          remove.addEventListener('click', () => {
-            id.aliases.splice(id.aliases.indexOf(alias), 1);
+          () => {
+            identity.aliases.splice(index, 1);
             ctx.edited();
-            paintAliases();
-          });
-          row.append(remove);
-        }
-        aliases.append(row);
-      }
-      if (ctx.canEdit() && id.aliases.length < L.aliases) {
-        const add = h('button', { class: 'cs-add', text: '+ 添加', attrs: { type: 'button' } });
-        add.addEventListener('click', () => {
-          id.aliases.push({ id: '', text: '', attitude: 'ok' });
+            ctx.paint('character');
+          },
+        ),
+      );
+    });
+    if (edit && identity.aliases.length < L.aliases)
+      aliasRow.append(
+        addPill('加一个别名', () => {
+          identity.aliases.push({ id: '', text: '', attitude: 'ok' });
           ctx.edited();
-          paintAliases();
-        });
-        aliases.append(add);
-      }
-    };
-    paintAliases();
-    body.append(
-      section(
-        '别名',
+          ctx.paint('character');
+        }),
+      );
+    aliases.append(aliasRow);
+    const prototype = h('select', { attrs: { 'aria-label': '原型' } });
+    prototype.append(h('option', { text: '不用原型', attrs: { value: '' } }));
+    for (const person of doc.people.filter((p) => p.kind === 'prototype'))
+      prototype.append(h('option', { text: person.names[0]?.text ?? person.id, attrs: { value: person.id } }));
+    prototype.value = identity.prototype?.personId ?? '';
+    if (!edit) prototype.setAttribute('data-locked', 'true');
+    prototype.addEventListener('change', () => {
+      identity.prototype = prototype.value
+        ? {
+            personId: prototype.value,
+            inherited: identity.prototype?.personId === prototype.value ? identity.prototype.inherited : '',
+            notInherited: identity.prototype?.personId === prototype.value ? identity.prototype.notInherited : '',
+          }
+        : null;
+      ctx.edited(true);
+    });
+    host.append(
+      h(
+        'div',
+        { class: 'cs-card-head' },
+        h(
+          'h2',
+          {},
+          dot(ctx.colour(character.characterId), 10),
+          `${name} 的名片`,
+          h('span', { class: 'cs-hint-line', text: '别的角色只知道这些' }),
+        ),
+        link,
+      ),
+      h(
+        'div',
+        { class: 'cs-namecard' },
+        h('label', { class: 'cs-lb' }, h('span', { text: '一句话' }), oneLiner),
+        names,
         aliases,
-        bound(
-          ctx,
-          '自我认知',
-          () => id.selfConcept,
-          (v) => (id.selfConcept = v),
-          { area: true, max: L.selfConcept, rows: 3 },
-        ).wrap,
-      ),
-      section(
-        '资料',
-        bound(
-          ctx,
-          '简介',
-          () => character.profile,
-          (v) => (character.profile = v),
-          { area: true, max: L.profile, rows: 5 },
-        ).wrap,
-      ),
-      section(
-        '性格',
-        bound(
-          ctx,
-          '性格与行为',
-          () => character.personality,
-          (v) => (character.personality = v),
-          { area: true, max: L.personality, rows: 5 },
-        ).wrap,
-      ),
-      section(
-        '说话方式',
-        textList(ctx, '口头禅', character.speech.catchphrases, L.catchphrases, L.catchphrase),
-        textList(ctx, '说话样例', character.speech.samples, L.samples, L.sample),
-        textList(ctx, '不会这样说', character.speech.avoid, L.avoid, L.avoidText),
+        h('label', { class: 'cs-lb' }, h('span', { text: '原型' }), prototype),
       ),
     );
-    const experiences = h('div', { class: 'cs-list' });
-    const paintExperiences = () => {
-      experiences.replaceChildren();
-      for (const e of character.experiences) {
-        const card = h(
-          'div',
-          { class: 'cs-exp' },
-          bound(
-            ctx,
-            '标题',
-            () => e.title,
-            (v) => (e.title = v),
-            { max: L.experienceTitle },
-          ).wrap,
-          bound(
-            ctx,
-            '内容',
-            () => e.text,
-            (v) => (e.text = v),
-            { area: true, max: L.experienceText, rows: 3 },
-          ).wrap,
-        );
-        if (ctx.canEdit()) {
-          const remove = h('button', { class: 'cs-danger', text: '删除', attrs: { type: 'button' } });
-          remove.addEventListener('click', () => {
-            character.experiences.splice(character.experiences.indexOf(e), 1);
-            ctx.edited();
-            paintExperiences();
-          });
-          card.append(remove);
-        }
-        experiences.append(card);
-      }
-      if (ctx.canEdit() && character.experiences.length < L.experiences) {
-        const add = h('button', { class: 'cs-add', text: '+ 经历', attrs: { type: 'button' } });
-        add.addEventListener('click', () => {
-          character.experiences.push({ id: '', title: '', text: '' });
-          ctx.edited();
-          paintExperiences();
-        });
-        experiences.append(add);
-      }
-    };
-    paintExperiences();
-    body.append(
-      section('经历', experiences),
-      section(
-        '演绎说明',
-        bound(
-          ctx,
-          '只给他自己的模型看',
-          () => character.performance,
-          (v) => (character.performance = v),
-          { area: true, max: L.performance, rows: 4 },
-        ).wrap,
-      ),
-      section('不公开设定', textList(ctx, '他知道、但绝不直接说出口的设定', character.hidden, L.hidden, L.hiddenText)),
-    );
-    if (character.unmapped)
-      body.append(section('旧资料里没能放进去的', h('pre', { class: 'cs-unmapped', text: character.unmapped })));
-    // ---- the rail ----
-    const rail = h('nav', {
-      class: 'wb-rail cs-rail',
-      attrs: { 'aria-label': `${nameOf(doc, character.characterId)} 的分区` },
-    });
-    const items = parts.map((part, index) => {
-      const item = h('button', {
-        class: 'wb-rail-item',
-        text: part.getAttribute('data-title') ?? '',
-        attrs: { type: 'button', 'aria-current': 'false' },
-      });
-      item.addEventListener('click', () => show(index));
-      rail.append(item);
-      return item;
-    });
-    const show = (index: number) => {
-      shown = { character: character.characterId, section: index };
-      parts.forEach((part, i) => {
-        part.hidden = i !== index;
-        items[i]!.setAttribute('aria-current', String(i === index));
-      });
-    };
-    host.append(h('div', { class: 'cs-character-split' }, rail, h('div', { class: 'cs-character-body' }, ...parts)));
-    show(shown.character === character.characterId && shown.section < parts.length ? shown.section : 0);
   };
   return { paint };
 }

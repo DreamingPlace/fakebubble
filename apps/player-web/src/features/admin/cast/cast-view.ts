@@ -16,29 +16,31 @@ import {
 import { InviteLocalApiError } from '../../../services/invite-local-api.ts';
 import { browserDownload } from '../invite-tiers-view.ts';
 import { h } from '../../cocreation/h.ts';
-import type { ConfirmOptions } from '../ui/confirm-dialog.ts';
+import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
 import { dateTimeText } from '../system-format.ts';
 import { castGrid, pairPanel, type GridState } from './cast-grid.ts';
-import { characterPanel, seesPanel } from './cast-character.ts';
-import { ISSUE_LABEL, blankCharacter, blankPerson, humanIssue, nameOf, removeCharacter } from './cast-model.ts';
-import { groupsPanel, peoplePanel, storiesPanel, type StoryState } from './cast-stories.ts';
-import { lock, type CastCtx, type Region } from './cast-ui.ts';
-import { pageHead } from '../ui/page-head.ts';
+import { nameCard, seesPanel } from './cast-character.ts';
+import { ISSUE_LABEL, blankCharacter, changeCount, humanIssue, nameOf } from './cast-model.ts';
+import { groupsPanel, storyPanel, worldPanel, type StoryState } from './cast-stories.ts';
+import { lock, svgNode, type CastCtx, type Region } from './cast-ui.ts';
+import { hoverValue } from '../ui/hover-value.ts';
+import { fillStatus, pageHead } from '../ui/page-head.ts';
+import { unsavedText } from '../ui/unsaved.ts';
 import { rosterColours } from '../ui/character-colour.ts';
 import type { CharacterAdminClient } from '../../../services/character-admin-api.ts';
-import { emptyCharacter } from '../character-form.ts';
 
 export type CastViewHost = {
   api: CastAdminClient | null;
   can: (permission: CastAdminPermission) => boolean;
   run: (work: () => Promise<void>) => Promise<void>;
   status: (text: string) => void;
-  confirm: (options: ConfirmOptions) => Promise<boolean>;
+  /** The question opens in place, inside the host it is given (no dialog). */
+  confirm: ConfirmInPlace;
   toast: (text: string, tone?: 'ok' | 'info' | 'warn' | 'danger') => void;
   disposed: () => boolean;
   /**
-   * The character API of 角色工作台 (list for the colours, save for 新建角色). Without it, or without `canCreateCharacter`, the page has
-   * no + 角色 button (a control the administrator may not use is not drawn).
+   * The character API of 角色工作台: its roster is the fixed grid of this page (and deals the colours). Without it the grid is the
+   * cast's own characters.
    */
   characters?: Pick<CharacterAdminClient, 'list' | 'save'> | null;
   canCreateCharacter?: () => boolean;
@@ -109,8 +111,12 @@ const isEmptyDraft = (doc: CastDoc) =>
 export function castView(root: HTMLElement, host: CastViewHost) {
   const state = {
     doc: null as CastDoc | null,
+    /** The draft as last read or saved: what "not saved yet" (amber) is measured against. */
+    base: null as CastDoc | null,
     revision: 0,
     dirty: false,
+    /** The draft on the server had nothing in it (so 从旧资料导入 is still possible). */
+    serverEmpty: false,
     versions: [] as CastVersion[],
     latest: null as number | null,
     publishIssues: [] as CastIssue[],
@@ -121,18 +127,21 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     sees: null as CastCompilePreviewResult | null,
     seesLoading: false,
     seesFailed: false,
-    /** Characters added since the draft was last read or saved: the server's draft does not know them yet, so there is nothing to compile. */
+    /** Characters that are in the working copy but not on the server's draft yet: there is nothing to compile for them. */
     fresh: new Set<string>(),
     pair: null as GridState['pair'],
     hover: null as GridState['hover'],
     sel: null as string | null,
-    group: 0,
+    lit: null as string[] | null,
+    group: null as string | null,
+    groupsAll: false,
     story: null as number | null,
     person: null as string | null,
-    /** Which inline form is open under the publish bar: a new character or a new person. */
-    adding: null as 'character' | 'person' | null,
-    /** Every character id the colours are dealt over (the roster of 角色工作台 when it can be read, else the cast). */
+    /** The version whose line is open under the 整页版本 strip. */
+    openVersion: null as number | null,
+    /** The workbench roster (角色工作台): the fixed grid, with each display name. */
     roster: [] as string[],
+    rosterNames: new Map<string, string>(),
     /** A chosen cast file and what importing it would do; the server saved nothing yet. */
     importing: null as { file: unknown; preview: CastImportPreview; requestId: string } | null,
   };
@@ -142,49 +151,68 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   const canPublish = () => host.can('cast.publish');
 
   const frame = {
-    bar: h('section', { class: 'cs-bar', attrs: { 'aria-label': '发布阵容' } }),
-    versions: h('section', { class: 'cs-versions', attrs: { 'aria-label': '已发布的版本' } }),
+    versions: h('section', { class: 'cs-versions', attrs: { 'aria-label': '整页版本' } }),
+    confirm: h('div', { class: 'cs-confirm' }),
     notice: h('div', { class: 'cs-notices' }),
     start: h('section', { class: 'cs-card cs-start' }),
-    adder: h('section', { class: 'cs-card cs-adder', attrs: { 'aria-label': '新建' } }),
     importer: h('section', { class: 'cs-card cs-adder cs-import', attrs: { 'aria-label': '导入文件' } }),
     grid: h('section', { class: 'cs-card cs-grid-card' }),
-    side: h('section', { class: 'cs-card cs-side-card' }),
-    groups: h('section', { class: 'cs-card cs-split cs-groups-card' }),
-    stories: h('section', { class: 'cs-card cs-split cs-stories' }),
-    people: h('section', { class: 'cs-card cs-split cs-people-card' }),
-    character: h('section', { class: 'cs-card cs-character' }),
-    sees: h('section', { class: 'cs-card cs-sees' }),
+    pair: h('section', { class: 'cs-card cs-side-card cs-pair', hidden: true }),
+    sees: h('section', { class: 'cs-card cs-side-card cs-sees', hidden: true }),
+    character: h('section', { class: 'cs-card cs-character cs-open', hidden: true }),
+    stories: h('section', { class: 'cs-card cs-story-card cs-open', hidden: true }),
+    groups: h('section', { class: 'cs-card cs-groups-card' }),
+    world: h('section', { class: 'cs-card cs-world-card' }),
   };
-  const sidePair = frame.side;
-  const title = pageHead('关系与故事', h('span', { class: 'cs-mono cs-count' }));
+  const side = h('div', { class: 'cs-side' }, frame.pair, frame.sees);
+  const head = h('span', { class: 'cs-head-right' });
+  const title = pageHead('关系与故事', head);
+  const half = svgNode('svg', { class: 'cs-defs', width: '0', height: '0', 'aria-hidden': 'true' });
+  half.append(
+    (() => {
+      const defs = svgNode('defs');
+      const clip = svgNode('clipPath', { id: 'cs-half' });
+      clip.append(svgNode('rect', { x: '0', y: '0', width: '12', height: '24' }));
+      defs.append(clip);
+      return defs;
+    })(),
+  );
   const page = h(
     'div',
     { class: 'cs' },
+    half,
     title,
-    frame.bar,
-    frame.notice,
     frame.versions,
+    frame.confirm,
+    frame.notice,
     frame.start,
-    frame.adder,
     frame.importer,
-    h('div', { class: 'cs-main' }, frame.grid, frame.side),
-    frame.groups,
+    h('div', { class: 'cs-main' }, frame.grid, side),
+    frame.character,
     frame.stories,
-    frame.people,
-    h('div', { class: 'cs-people' }, frame.character, frame.sees),
+    frame.groups,
+    frame.world,
   );
-  /** Everything below the publish bar that needs at least one character; the start card stands in until there is one. */
   const picker = h('input', {
     attrs: { type: 'file', accept: '.json,application/json', hidden: '', 'data-cast-file': '', tabindex: '-1' },
   });
-  const body = [frame.grid, frame.side, frame.groups, frame.stories, frame.people, frame.character, frame.sees];
+  const body = [frame.grid, side, frame.groups, frame.world];
   root.append(page, picker);
 
   const reveal = (node: HTMLElement) => {
     const quiet = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     node.scrollIntoView?.({ behavior: quiet ? 'auto' : 'smooth', block: 'nearest' });
   };
+  /** The grid is the workbench roster; a cast character the roster does not list is added after it. */
+  const ids = () => {
+    const doc = state.doc;
+    const own = doc ? doc.characters.map((c) => c.characterId) : [];
+    return [...new Set([...state.roster, ...own])];
+  };
+  const nameFor = (id: string) =>
+    state.doc && state.doc.characters.some((c) => c.characterId === id)
+      ? nameOf(state.doc, id)
+      : (state.rosterNames.get(id) ?? id);
   const ctx: CastCtx = {
     doc: () => state.doc!,
     canEdit,
@@ -201,290 +229,210 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     openCharacter: (characterId) => openCharacter(characterId),
     reveal,
     colour: (id) => colourOf()(id),
-    addCharacter: () =>
-      canCreate() && (state.doc?.characters.length ?? 0) < CAST_LIMITS.chatCharacters
-        ? () => openAdder('character')
-        : null,
+    ids,
+    nameOf: nameFor,
+    base: () => state.base ?? state.doc!,
+    openStory: (index) => {
+      state.story = index;
+      paint.stories();
+      reveal(frame.stories);
+    },
+    light: () => grid.light(),
   };
   const colourOf = () =>
     rosterColours(state.roster.length ? state.roster : (state.doc?.characters ?? []).map((c) => c.characterId));
 
-  // ---- the three panels that share the grid's state -----------------------------------------------------------------
+  // ---- the regions that share the grid's state ---------------------------------------------------------------------
   const view = state as typeof state & GridState & StoryState;
   const grid = castGrid(frame.grid, ctx, view);
-  const pair = pairPanel(sidePair, ctx, view);
-  const groups = groupsPanel(frame.groups, ctx, view, host.confirm);
-  const stories = storiesPanel(frame.stories, ctx, view, host.confirm);
-  const people = peoplePanel(frame.people, ctx, view, host.confirm, () => {
-    state.adding = 'person';
-    paint.adder();
-    ctx.reveal(frame.adder);
-  });
-  const character = characterPanel(
-    frame.character,
-    ctx,
-    () => state.sel,
-    (id) => void removeFromCast(id),
-  );
+  const pair = pairPanel(frame.pair, ctx, view);
+  const card = nameCard(frame.character, ctx, () => state.sel);
+  const stories = storyPanel(frame.stories, ctx, view);
+  const groups = groupsPanel(frame.groups, ctx, view);
+  const world = worldPanel(frame.world, ctx, view);
 
-  const seesNow = () =>
+  const seesNow = () => {
+    const show = !state.pair && !!state.sel;
+    frame.sees.hidden = !show;
+    if (!show) return;
     seesPanel(frame.sees, state.sees, {
       loading: state.seesLoading,
       failed: state.seesFailed,
       unsaved: !!state.sel && state.fresh.has(state.sel),
       stale: state.dirty,
-      names: (id) => (state.doc ? nameOf(state.doc, id) : id),
+      names: nameFor,
       storyTitle: (id) => state.doc?.stories.find((s) => s.id === id)?.title ?? '（已删除的故事）',
       selected: state.sel,
       limit: CAST_LIMITS.viewMax,
     });
+  };
+  const paintSide = () => {
+    pair.paint();
+    seesNow();
+    side.hidden = frame.pair.hidden && frame.sees.hidden;
+  };
 
   const paint: Record<Region, () => void> = {
     bar: () => paintBar(),
     versions: () => paintVersions(),
     notice: () => paintNotice(),
     start: () => paintStart(),
-    adder: () => paintAdder(),
     grid: () => grid.paint(),
-    side: () => pair.paint(),
+    side: paintSide,
     groups: () => groups.paint(),
     stories: () => stories.paint(),
-    people: () => people.paint(),
-    character: () => character.paint(),
+    world: () => world.paint(),
+    character: () => card.paint(),
     sees: seesNow,
   };
   const paintAll = () => {
     if (!state.doc) return;
-    const none = state.doc.characters.length === 0;
-    title.querySelector('.cs-count')!.textContent = `${state.doc.characters.length} 人`;
+    const none = ids().length === 0;
     frame.start.hidden = !none;
     paintImporter();
     for (const node of body) node.hidden = none;
-    // Nothing to draw in the cards while there are no characters; the start card is the page.
     for (const region of Object.keys(paint) as Region[])
-      if (
-        !none ||
-        region === 'start' ||
-        region === 'adder' ||
-        region === 'bar' ||
-        region === 'versions' ||
-        region === 'notice'
-      )
+      if (!none || region === 'start' || region === 'bar' || region === 'versions' || region === 'notice')
         paint[region]();
   };
 
-  // ---- the first step, and adding people to the cast ------------------------------------------------------------------
-  const canCreate = () => canEdit() && !!host.characters && (host.canCreateCharacter?.() ?? true);
-  const openAdder = (kind: 'character' | 'person') => {
-    state.adding = kind;
-    paint.adder();
-    ctx.reveal(frame.adder);
-    frame.adder.querySelector('input')?.focus?.();
-  };
+  // ---- the first step: only when there is no character at all --------------------------------------------------------
   function paintStart() {
     frame.start.replaceChildren();
-    if (!state.doc || state.doc.characters.length) return;
+    if (!state.doc || ids().length) return;
     frame.start.append(
       h('h2', { text: '还没有角色' }),
       h('p', {
         class: 'cs-hint',
-        text: canEdit()
-          ? '先把已有的角色导入，或者新建一个。两条路都只改这份阵容草稿，玩家现在看到的内容不变。'
-          : '阵容里还没有角色（你只有查看权限）。',
+        text: canEdit() ? '先在角色工作台建一个角色，或者导入一份阵容文件。' : '阵容里还没有角色（你只有查看权限）。',
       }),
     );
-    const actions = h('div', { class: 'cs-start-actions' });
-    if (canEdit() && isEmptyDraft(state.doc) && !state.dirty) {
-      const importLegacy = h('button', { class: 'cs-quiet', text: '从旧资料导入', attrs: { type: 'button' } });
-      importLegacy.addEventListener('click', () => void importOld());
-      actions.append(importLegacy);
-    }
-    if (canEdit()) actions.append(fileButton());
-    if (canCreate()) {
-      const create = h('button', { class: 'cs-quiet', text: '+ 角色', attrs: { type: 'button' } });
-      create.addEventListener('click', () => openAdder('character'));
-      actions.append(create);
-    }
-    if (actions.children.length) frame.start.append(actions);
-  }
-  function paintAdder() {
-    frame.adder.replaceChildren();
-    frame.adder.hidden = !state.adding || !state.doc;
-    if (!state.adding || !state.doc) return;
-    const character = state.adding === 'character';
-    const name = h('input', {
-      attrs: {
-        type: 'text',
-        maxlength: String(CAST_LIMITS.name),
-        'aria-label': character ? '新角色的名字' : '新人物的名字',
-        placeholder: character ? '新角色的名字' : '新人物的名字',
-      },
-    });
-    const submit = h('button', { class: 'cs-primary', text: '创建', attrs: { type: 'button' } });
-    const cancel = h('button', { class: 'cs-quiet', text: '取消', attrs: { type: 'button' } });
-    const go = () => {
-      const value = name.value.trim();
-      if (!value) return;
-      if (character) void createCharacter(value);
-      else createPerson(value);
-    };
-    submit.addEventListener('click', go);
-    name.addEventListener('keydown', (event) => {
-      if ((event as KeyboardEvent).key === 'Enter') {
-        event.preventDefault();
-        go();
-      }
-    });
-    cancel.addEventListener('click', () => {
-      state.adding = null;
-      paintAdder();
-    });
-    frame.adder.append(
-      h('h2', { text: character ? '新建角色' : '新建人物' }),
-      h('p', {
-        class: 'cs-hint',
-        text: character
-          ? '和 角色工作台 的「新建角色」同一个入口：先建一个角色草稿（还没有上线，暂时不能聊天），再加进下面的阵容草稿。它的人设和欢迎语以后在 角色工作台 里补。'
-          : '不是聊天角色的人（家人、老师、某个原型）。建好后可以在故事里选他。',
-      }),
-      h('div', { class: 'cs-adder-row' }, name, submit, cancel),
-    );
-  }
-  async function createCharacter(name: string) {
-    if (!host.characters || !state.doc || !canCreate()) return;
-    const taken = new Set([...state.roster, ...state.doc.characters.map((c) => c.characterId)]);
-    let id = '';
-    do id = `role-${globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
-    while (taken.has(id));
-    await host.run(async () => {
-      const profile = emptyCharacter();
-      profile.template.id = id;
-      profile.template.name = name;
-      profile.template.persona = `${name}是一个虚构人物，设定待补充。`;
-      profile.presentation.displayName = name;
-      profile.presentation.welcome.text = `你好，我是${name}。`;
-      await host.characters!.save(id, null, profile);
-      if (gone() || !state.doc) return;
-      state.doc.characters.push(blankCharacter(id, name));
-      state.roster = [...new Set([...state.roster, id])];
-      state.fresh.add(id);
-      state.adding = null;
-      state.sel = id;
-      state.pair = state.doc.characters.length > 1 ? [id, state.doc.characters[0]!.characterId] : null;
-      state.sees = null;
-      ctx.edited();
-      paintAll();
-      ctx.reveal(frame.character);
-      host.toast(`已建立角色草稿「${name}」并加入阵容草稿；还没有上线。记得保存草稿。`, 'ok');
-      void refreshSees();
-    });
-  }
-  function createPerson(name: string) {
-    if (!state.doc || !canEdit()) return;
-    const person = blankPerson(name);
-    state.doc.people.push(person);
-    state.person = person.id;
-    state.adding = null;
-    ctx.edited();
-    paint.adder();
-    paint.people();
-    paint.stories();
-    ctx.reveal(frame.people);
-  }
-  async function removeFromCast(characterId: string) {
-    if (!state.doc || !canEdit()) return;
-    const name = nameOf(state.doc, characterId);
-    const yes = await host.confirm({
-      title: '从阵容移除',
-      message: `把「${name}」从阵容草稿里移除，连同他的评分、称呼、组合成员和故事参与。角色本身不会被删除。保存草稿后才生效。`,
-      confirmLabel: '移除',
-      danger: true,
-    });
-    if (!yes || gone() || !state.doc) return;
-    removeCharacter(state.doc, characterId);
-    const rest = state.doc.characters.map((c) => c.characterId);
-    state.sel = rest[0] ?? null;
-    state.pair = rest.length > 1 ? [rest[0]!, rest[1]!] : null;
-    state.sees = null;
-    ctx.edited();
-    paintAll();
-    void refreshSees();
   }
 
-  // ---- publish bar --------------------------------------------------------------------------------------------------
+  // ---- title row: the status line, 保存草稿 and the one solid 发布 -------------------------------------------------
   function paintBar() {
-    frame.bar.replaceChildren();
-    if (!state.doc) return;
+    head.replaceChildren();
+    if (!state.doc || !state.base) return;
     const next = (state.latest ?? 0) + 1;
     const blocked = state.publishIssues.length > 0;
-    frame.bar.append(
-      h(
-        'h2',
-        { class: 'cs-bar-title' },
-        '发布阵容 ',
-        h('span', { class: 'cs-mono', text: `v${state.latest ?? 0} → v${next}` }),
-      ),
-      h('span', { class: 'cs-chip-static', text: `草稿 修订 ${state.revision}` }),
-    );
-    if (state.dirty) frame.bar.append(h('span', { class: 'cs-chip-static is-warn', text: '有没保存的修改' }));
-    frame.bar.append(
+    const changes = changeCount(state.base, state.doc);
+    const status = h('span', { class: 'head-status' });
+    fillStatus(
+      status,
+      h('span', { class: 'is-mono', text: state.latest ? `线上 v${state.latest}` : '还没发布' }),
+      h('span', { class: 'is-mono', text: `草稿 #${state.revision}` }),
       blocked
         ? h('span', {
-            class: 'cs-chip-static is-bad',
+            class: 'cs-tag is-bad',
             text: `${state.publishIssues.length} 个问题挡着发布`,
             attrs: { role: 'status' },
           })
         : h('span', {
-            class: 'cs-chip-static is-ok',
+            class: 'cs-tag is-ok',
             text: state.warnings ? `可以发布 · ${state.warnings} 条提醒` : '可以发布',
             attrs: { role: 'status' },
           }),
-      h('span', { class: 'cs-spacer' }),
+      state.dirty ? h('span', { class: 'is-warn', text: changes > 0 ? unsavedText(changes) : '有没保存的修改' }) : null,
     );
-    const exportButton = h('button', { class: 'cs-quiet', text: '导出文件', attrs: { type: 'button' } });
-    exportButton.addEventListener('click', () => void exportNow());
-    frame.bar.append(exportButton);
-    if (canEdit()) frame.bar.append(fileButton());
-    if (canEdit() && state.dirty) {
-      const save = h('button', { class: 'cs-quiet', text: '保存草稿', attrs: { type: 'button' } });
+    head.append(status);
+    if (canEdit()) {
+      const save = h('button', { class: 'cs-save', text: '保存草稿', attrs: { type: 'button' } });
+      lock(save, !state.dirty);
       save.addEventListener('click', () => void saveDraft(false));
-      frame.bar.append(save);
+      head.append(save);
     }
     if (canPublish()) {
-      const publish = h('button', { class: 'cs-primary cs-publish', text: `发布 v${next}`, attrs: { type: 'button' } });
+      const publish = h('button', {
+        class: 'admin-primary cs-primary cs-publish',
+        text: `发布 v${next}`,
+        attrs: { type: 'button' },
+      });
       lock(publish, state.dirty || blocked || !state.doc.characters.length, state.dirty ? '先保存草稿' : undefined);
+      hoverValue(publish, '这一页的全部内容一起发布成 v' + next);
       publish.addEventListener('click', () => void publishNow(next));
-      frame.bar.append(publish);
+      head.append(publish);
     }
   }
+  // ---- 整页版本: the published versions and the draft, on one line --------------------------------------------------
   function paintVersions() {
     frame.versions.replaceChildren();
-    if (!state.versions.length) return;
-    const list = h('ol', { class: 'cs-version-list' });
-    for (const v of state.versions) {
-      const item = h(
-        'li',
-        { class: 'cs-version', attrs: { 'data-version': String(v.version) } },
-        h('b', { class: 'cs-mono', text: `v${v.version}` }),
-        h('span', { text: v.kind === 'rollback' ? `回滚自 v${v.fromVersion}` : '发布' }),
-        h('span', { class: 'cs-mono', text: dateTimeText(v.publishedAt) }),
-        h('span', {
-          class: 'cs-mono',
-          text: `角色 ${v.counts.characters} · 组合 ${v.counts.groups} · 故事 ${v.counts.stories}`,
-        }),
+    if (!state.doc) return;
+    const label = hoverValue(
+      h('span', { class: 'cs-versions-label', text: '整页版本' }),
+      '关系、组合、故事、世界、名片一起，发布成一个版本',
+    );
+    const line = h('div', { class: 'cs-version-line' });
+    const ordered = [...state.versions].sort((a, b) => a.version - b.version);
+    ordered.forEach((v, index) => {
+      const chip = h(
+        'button',
+        {
+          class: 'cs-version',
+          attrs: {
+            type: 'button',
+            'data-version': String(v.version),
+            'aria-pressed': String(state.openVersion === v.version),
+          },
+        },
+        h('i', { class: 'cs-version-mark' }),
+        h('span', { class: 'cs-mono', text: `v${v.version}` }),
       );
-      if (canPublish() && v.version !== state.latest) {
-        const back = h('button', {
-          class: 'cs-quiet',
-          text: '回滚',
-          attrs: { type: 'button', 'aria-label': `回滚到 v${v.version}（作为新版本发布）` },
-        });
-        back.addEventListener('click', () => void rollbackTo(v.version));
-        item.append(back);
-      }
-      list.append(item);
+      hoverValue(
+        chip,
+        `${dateTimeText(v.publishedAt)} · 角色 ${v.counts.characters} · 组合 ${v.counts.groups} · 故事 ${v.counts.stories}${v.kind === 'rollback' ? ` · 回滚自 v${v.fromVersion}` : ''}`,
+      );
+      chip.addEventListener('click', () => {
+        state.openVersion = state.openVersion === v.version ? null : v.version;
+        paintVersions();
+      });
+      line.append(chip, h('i', { class: 'cs-version-rule', attrs: { 'aria-hidden': 'true' } }));
+      void index;
+    });
+    line.append(
+      h(
+        'span',
+        {
+          class: `cs-version is-draft${state.dirty ? ' is-dirty' : ''}`,
+          attrs: { 'data-draft': String(state.revision) },
+        },
+        h('i', { class: 'cs-version-mark' }),
+        h('span', { class: 'cs-mono', text: `草稿 #${state.revision}` }),
+      ),
+    );
+    const actions = h('span', { class: 'cs-versions-actions' });
+    if (canEdit() && state.serverEmpty && !state.dirty) {
+      const legacy = h('button', { class: 'cs-quiet', text: '从旧资料导入', attrs: { type: 'button' } });
+      legacy.addEventListener('click', () => void importOld());
+      actions.append(legacy);
     }
-    frame.versions.append(list);
+    const exportButton = h('button', { class: 'cs-quiet', text: '导出文件', attrs: { type: 'button' } });
+    exportButton.addEventListener('click', () => void exportNow());
+    actions.append(exportButton);
+    if (canEdit()) actions.append(fileButton());
+    frame.versions.append(h('div', { class: 'cs-versions-row' }, label, line, actions));
+    const open = state.versions.find((v) => v.version === state.openVersion);
+    if (open)
+      frame.versions.append(
+        h(
+          'div',
+          { class: 'cs-version-open' },
+          h('b', { class: 'cs-mono', text: `v${open.version}` }),
+          h('span', {
+            class: 'cs-version-sub',
+            text: `${open.kind === 'rollback' ? `回滚自 v${open.fromVersion}` : '发布'} · ${dateTimeText(open.publishedAt)} · 角色 ${open.counts.characters} · 组合 ${open.counts.groups} · 故事 ${open.counts.stories}`,
+          }),
+          canPublish() && open.version !== state.latest ? rollbackButton(open.version) : null,
+        ),
+      );
+  }
+  function rollbackButton(version: number) {
+    const back = h('button', {
+      class: 'cs-quiet is-tint',
+      text: `回滚到 v${version}`,
+      attrs: { type: 'button', 'aria-label': `回滚到 v${version}（作为新版本发布）` },
+    });
+    back.addEventListener('click', () => void rollbackTo(version));
+    return back;
   }
   function paintNotice() {
     frame.notice.replaceChildren();
@@ -531,32 +479,72 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   }
 
   // ---- data ---------------------------------------------------------------------------------------------------------
+  /** A roster character with no cast entry yet shows empty; the entry is made here and goes to the server with the next save. */
+  function ensureEntries(doc: CastDoc) {
+    const have = new Set(doc.characters.map((c) => c.characterId));
+    const added: string[] = [];
+    for (const id of state.roster) {
+      // The server keeps 15 characters at most: a roster that would pass it (a cast entry of a deleted role still counts) gets no more.
+      if (have.has(id) || doc.characters.length >= CAST_LIMITS.chatCharacters) continue;
+      doc.characters.push(blankCharacter(id, state.rosterNames.get(id) ?? id));
+      added.push(id);
+    }
+    return added;
+  }
   function adopt(doc: CastDoc, revision: number) {
+    state.serverEmpty =
+      !doc.characters.length &&
+      !doc.people.length &&
+      !doc.groups.length &&
+      !doc.stories.length &&
+      !doc.memes.length &&
+      !Object.keys(doc.ratings).length &&
+      !doc.directions.length;
     state.doc = structuredClone(doc);
+    const added = ensureEntries(state.doc);
+    // The new entries are part of the baseline, so they are not "unsaved changes"; they are saved with the next save.
+    state.base = structuredClone(state.doc);
     state.revision = revision;
     state.dirty = false;
-    state.fresh.clear();
+    state.fresh = new Set(added);
     state.saveIssues = [];
     state.pending = null;
-    const ids = state.doc.characters.map((c) => c.characterId);
-    if (!state.sel || !ids.includes(state.sel)) state.sel = ids[0] ?? null;
-    if (!state.pair || !ids.includes(state.pair[0]) || !ids.includes(state.pair[1]))
-      state.pair = ids.length > 1 ? [ids[0]!, ids[1]!] : null;
-    if (state.group >= state.doc.groups.length) state.group = 0;
+    const known = ids();
+    if (state.sel && !known.includes(state.sel)) state.sel = null;
+    if (state.pair && (!known.includes(state.pair[0]) || !known.includes(state.pair[1]))) state.pair = null;
     if (state.story !== null && !state.doc.stories[state.story]) state.story = null;
     if (state.person && !state.doc.people.some((p) => p.id === state.person)) state.person = null;
-    // Something is always open beside each list, so no editor pane starts empty.
-    if (state.story === null && state.doc.stories.length) state.story = 0;
-    if (!state.person && state.doc.people.length) state.person = state.doc.people[0]!.id;
+    state.group = null;
+    // The right side is never empty: the first pair that shares a story, else the first character.
+    if (!state.pair && !state.sel) {
+      const together = state.doc.stories
+        .map((story) => story.participants.filter((id) => known.includes(id)))
+        .find((people) => people.length >= 2);
+      if (together) state.pair = [together[0]!, together[1]!];
+      else if (known[0]) state.sel = known[0];
+    }
   }
   async function readAll() {
     const api = host.api!;
     const [draft, versions, validation] = await Promise.all([api.draft(), api.versions(), api.validate()]);
     return { draft, versions, validation };
   }
+  async function readRoster() {
+    if (!host.characters) return;
+    // The colours and the grid follow 角色工作台's roster, so a character is the same dot on every page.
+    try {
+      const roster = await host.characters.list();
+      if (gone()) return;
+      state.roster = roster.characters.map((c) => c.characterId);
+      state.rosterNames = new Map(roster.characters.map((c) => [c.characterId, c.displayName]));
+    } catch {
+      state.roster = [];
+      state.rosterNames = new Map();
+    }
+  }
   async function load() {
     if (!host.api) return;
-    const { draft, versions, validation } = await readAll();
+    const [{ draft, versions, validation }] = await Promise.all([readAll(), readRoster()]);
     if (gone()) return;
     state.versions = versions.versions;
     state.latest = versions.latest;
@@ -564,16 +552,6 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     state.warnings = validation.validation.warnings.length;
     if (!state.doc || !state.dirty) adopt(draft.doc, draft.revision);
     else if (draft.revision !== state.revision) state.conflict = { revision: draft.revision, doc: draft.doc };
-    if (host.characters) {
-      // The colours are dealt over 角色工作台's roster, so a character has the same dot on every page; without access: the cast's own.
-      try {
-        const roster = await host.characters.list();
-        if (gone()) return;
-        state.roster = roster.characters.map((c) => c.characterId);
-      } catch {
-        state.roster = [];
-      }
-    }
     paintAll();
     void refreshSees();
   }
@@ -591,7 +569,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   async function refreshSees() {
     const api = host.api;
     const selected = state.sel;
-    if (!api || !selected || !state.doc) return;
+    if (!api || !selected || !state.doc || state.pair) return;
     if (state.fresh.has(selected)) {
       state.sees = null;
       state.seesFailed = false;
@@ -617,10 +595,9 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   function openCharacter(characterId: string) {
     if (!state.doc) return;
     state.sel = characterId;
-    const other = state.doc.characters.find((c) => c.characterId !== characterId)?.characterId;
-    if (!state.pair || state.pair[0] !== characterId) state.pair = other ? [characterId, other] : null;
+    state.pair = null;
     state.sees = null;
-    for (const region of ['grid', 'side', 'stories', 'character', 'sees'] as Region[]) paint[region]();
+    for (const region of ['grid', 'side', 'groups', 'character'] as Region[]) paint[region]();
     ctx.reveal(frame.character);
     void refreshSees();
   }
@@ -662,11 +639,14 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   }
   async function publishNow(version: number) {
     if (!host.api || !canPublish() || state.dirty) return;
-    const yes = await host.confirm({
-      title: `发布 v${version}`,
-      message: '把整份草稿发布为新版本。CAST_CONTEXT_ENABLED 打开之前，玩家聊天不会用到它。',
-      confirmLabel: '发布',
-    });
+    const yes = await host.confirm(
+      {
+        title: `发布 v${version}`,
+        message: '把整份草稿发布为新版本。CAST_CONTEXT_ENABLED 打开之前，玩家聊天不会用到它。',
+        confirmLabel: '发布',
+      },
+      frame.confirm,
+    );
     if (!yes || gone()) return;
     await host.run(async () => {
       const result = await host.api!.publish(state.revision);
@@ -676,11 +656,14 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   }
   async function rollbackTo(version: number) {
     if (!host.api || !canPublish()) return;
-    const yes = await host.confirm({
-      title: `回滚到 v${version}`,
-      message: `把 v${version} 的内容作为新版本重新发布；旧版本都保留。`,
-      confirmLabel: '回滚',
-    });
+    const yes = await host.confirm(
+      {
+        title: `回滚到 v${version}`,
+        message: `把 v${version} 的内容作为新版本重新发布；旧版本都保留。`,
+        confirmLabel: '回滚',
+      },
+      frame.confirm,
+    );
     if (!yes || gone()) return;
     await host.run(async () => {
       const result = await host.api!.rollback(version);
@@ -830,11 +813,14 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   }
   async function importOld() {
     if (!host.api || !canEdit()) return;
-    const yes = await host.confirm({
-      title: '从旧资料导入',
-      message: '用已发布角色里的旧设定生成阵容草稿（草稿现在是空的）。不会改动任何角色。',
-      confirmLabel: '导入',
-    });
+    const yes = await host.confirm(
+      {
+        title: '从旧资料导入',
+        message: '用已发布角色里的旧设定生成阵容草稿（草稿现在是空的）。不会改动任何角色。',
+        confirmLabel: '导入',
+      },
+      frame.confirm,
+    );
     if (!yes || gone()) return;
     await host.run(async () => {
       await host.api!.importLegacy(state.revision);
@@ -852,6 +838,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       state.sees = null;
       state.importing = null;
       for (const node of Object.values(frame)) node.replaceChildren();
+      head.replaceChildren();
     },
     /** Unsaved edits block leaving the page the same way an unsaved character does. */
     canLeave: () => !state.dirty,

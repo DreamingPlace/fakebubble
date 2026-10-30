@@ -33,7 +33,8 @@ import type {
 import type { CharacterAdminClient } from '../../services/character-admin-api.ts';
 import { characterAdminError } from './character-workbench.ts';
 import { h } from '../cocreation/h.ts';
-import { pageHead } from './ui/page-head.ts';
+import { exactCount, hoverValue } from './ui/hover-value.ts';
+import { fillStatus, pageHead } from './ui/page-head.ts';
 import { dot } from './cast/cast-ui.ts';
 import { rosterColours } from './ui/character-colour.ts';
 
@@ -55,8 +56,11 @@ type Deps = {
   /** The unread badge in the character workbench follows every change of status. */
   onChanged?: () => void;
   copy?: (text: string) => Promise<void>;
+  /** The points a player gets when a note is adopted (积分发放 → 共创积分); shown as 采用 +N when known. */
+  adoptPoints?: () => Promise<number | null>;
 };
 
+type Template = { persona?: string; authorCanon?: { settings?: Record<string, unknown> } } & Record<string, unknown>;
 const STATUS_LABEL: Record<InboxStatus, string> = { new: '新', processed: '已处理', archived: '已归档' };
 const when = (ms: number) => dateTimeText(ms);
 const isField = (node: unknown) => {
@@ -83,6 +87,11 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   let gone = false;
   let activated = false;
   let loadingMore = false;
+  /** Which answer's field the right-hand pane shows, and the adoption just saved (its link to 角色工作台). */
+  let viewing: number | null = null;
+  let saved: { ordinal: number; revision: number } | null = null;
+  const drafts = new Map<string, Promise<Template | null>>();
+  let adoptPoints: number | null | undefined;
 
   const nameOf = (id: string) => names[id] ?? id;
   /** The dot of a character: the same colour as in 角色工作台 and 关系与故事. */
@@ -107,7 +116,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     },
   });
   // The bulk bar (Part 24b-4): shown while rows are ticked, every action written out.
-  const bulkCount = h('span', { class: 'cc-bulk-count' });
+  // Bulk select lives in the title row (Inbox3): while cards are ticked it replaces the counts.
+  const bulkCount = h('b', { class: 'cc-bulk-count' });
   const processSelected = h('button', { class: 'cc-process-selected', attrs: { type: 'button' } });
   const archiveSelected = h('button', {
     text: '归档所选',
@@ -124,18 +134,19 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     archiveSelected,
     clearSelected,
   );
+  const counts = h('span', { class: 'head-status cc-counts' });
+  // Cards in a fixed grid, three to a row; the detail of the open card is a full-width row under ITS row.
   const list = h('ul', { class: 'cc-list', attrs: { 'aria-label': '共创列表' } });
   const empty = h('p', { class: 'cc-empty', text: '还没有玩家的想法。' });
   const pane = h('section', { class: 'cc-detail', attrs: { 'aria-live': 'polite' } });
   const listColumn = h(
     'div',
     { class: 'cc-list-column' },
-    h('div', { class: 'cc-toolbar' }, characterChips, h('div', { class: 'cc-chip-row' }, statusChips, starChip), query),
-    bulk,
+    h('div', { class: 'cc-toolbar' }, characterChips, h('div', { class: 'cc-chip-row' }, statusChips, starChip, query)),
     empty,
     list,
   );
-  root.replaceChildren(pageHead('共创收件箱'), h('div', { class: 'cc-layout' }, listColumn, pane));
+  root.replaceChildren(pageHead('共创收件箱', counts, bulk), h('div', { class: 'cc-layout' }, listColumn));
 
   // ---- list -----------------------------------------------------------------------------------------------------
   const chip = (label: string, on: boolean, pick: () => void, count?: number, lead?: Node) => {
@@ -148,7 +159,15 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     node.addEventListener('click', pick);
     return node;
   };
+  /** The notes still new, per character: the number after a character's name (of what is loaded). */
+  const newPer = () => {
+    const found = new Map<string, number>();
+    for (const item of items)
+      if (item.status === 'new') found.set(item.characterId, (found.get(item.characterId) ?? 0) + 1);
+    return found;
+  };
   const renderFilters = () => {
+    const fresh = newPer();
     characterChips.replaceChildren(
       chip('全部角色', filter.characterId === null, () => pickFilter({ characterId: null })),
       ...Object.entries(names).map(([id, name]) =>
@@ -156,8 +175,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           name,
           filter.characterId === id,
           () => pickFilter({ characterId: id }),
-          undefined,
-          dot(colourOf()(id), 10),
+          fresh.get(id),
+          dot(colourOf()(id), 8),
         ),
       ),
     );
@@ -169,75 +188,101 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     );
     starChip.setAttribute('aria-pressed', String(filter.starred));
   };
+  const ROW = 3;
   const renderList = () => {
     empty.hidden = items.length > 0;
     empty.textContent =
       filter.query || filter.status || filter.starred || filter.characterId
         ? '没有符合条件的想法。'
         : '还没有玩家的想法。';
-    archiveSelected.hidden = !deps.canManage() || selected.size === 0;
+    const manage = deps.canManage();
+    archiveSelected.hidden = !manage || selected.size === 0;
     bulk.hidden = archiveSelected.hidden;
+    counts.hidden = !bulk.hidden;
     archiveSelected.textContent = `归档所选（${selected.size}）`;
     processSelected.textContent = `标为已处理（${selected.size}）`;
     bulkCount.textContent = `已选 ${selected.size} 条`;
+    fillStatus(
+      counts,
+      h('span', {}, '新 ', h('b', { class: 'is-mono', text: String(items.filter((i) => i.status === 'new').length) })),
+      h('span', {}, '星标 ', h('b', { class: 'is-mono', text: String(items.filter((i) => i.starred).length) })),
+    );
     const colour = colourOf();
-    list.replaceChildren(
-      ...items.map((item, index) => {
-        const check = h('input', {
-          attrs: { type: 'checkbox', 'aria-label': `选择 ${item.pseudonym} 的想法` },
-        });
-        check.checked = selected.has(item.id);
-        check.hidden = !deps.canManage();
-        check.addEventListener('change', () => {
-          if (check.checked) selected.add(item.id);
-          else selected.delete(item.id);
-          renderList();
-        });
-        // One fixed grid per row (Part 24b-3): who | the text, left-aligned and cut after two lines | when | state.
-        const open = h(
-          'button',
-          { class: 'cc-row-open', attrs: { type: 'button', 'aria-current': String(index === active) } },
-          h(
-            'span',
-            { class: 'cc-who' },
-            h('span', { class: 'cc-name' }, dot(colour(item.characterId), 12), h('strong', { text: whoOf(item) })),
-            h('span', { class: 'cc-pseudonym', text: item.pseudonym }),
-          ),
-          h(
-            'span',
-            { class: 'cc-text' },
-            h('span', { class: 'cc-first', text: item.firstLine }),
-            h(
-              'span',
-              { class: 'cc-chips' },
-              item.kind === 'memo' ? h('span', { class: 'cc-chip cc-chip-memo', text: '留言条' }) : null,
-              item.kind === 'pair' ? h('span', { class: 'cc-chip cc-chip-pair', text: '关系与故事' }) : null,
-              h('span', { class: 'cc-count', text: `${item.answerCount} 条` }),
-              item.starred ? h('span', { class: 'cc-chip cc-chip-star', text: '★' }) : null,
-              item.hasNote ? h('span', { class: 'cc-chip', text: '有备注' }) : null,
-              item.adoptedCount > 0
-                ? h('span', { class: 'cc-chip', text: `已采用 ${item.adoptedCount}/${item.answerCount}` })
-                : null,
-            ),
-          ),
-          h(
-            'time',
-            { class: 'cc-when' },
-            h('span', { text: when(item.createdAt).slice(0, 10) }),
-            h('span', { text: when(item.createdAt).slice(11) }),
-          ),
+    const nodes: HTMLElement[] = [];
+    items.forEach((item, index) => {
+      const check = h('input', {
+        class: 'cc-check',
+        attrs: { type: 'checkbox', 'aria-label': `选择 ${item.pseudonym} 的想法` },
+      });
+      check.checked = selected.has(item.id);
+      check.hidden = !manage;
+      check.addEventListener('change', () => {
+        if (check.checked) selected.add(item.id);
+        else selected.delete(item.id);
+        renderList();
+      });
+      const time = h('time', { class: 'cc-when' }, `${when(item.createdAt).slice(5, 16)}`);
+      hoverValue(time, when(item.createdAt));
+      // One fixed card: who | the text, fading out at the foot | how many, star, state. It never grows.
+      const open = h(
+        'button',
+        {
+          class: 'cc-row-open',
+          attrs: {
+            type: 'button',
+            'aria-current': String(index === active),
+            'aria-expanded': String(index === active),
+          },
+        },
+        h(
+          'span',
+          { class: 'cc-who' },
+          h('span', { class: 'cc-name' }, dot(colour(item.characterId), 8), h('strong', { text: whoOf(item) })),
+          h('span', { class: 'cc-pseudonym', text: item.pseudonym }),
+          time,
+        ),
+        h('span', { class: 'cc-text' }, h('span', { class: 'cc-first', text: item.firstLine })),
+        h(
+          'span',
+          { class: 'cc-chips' },
+          item.kind === 'memo' ? h('span', { class: 'cc-chip cc-chip-memo', text: '留言条' }) : null,
+          item.kind === 'pair' ? h('span', { class: 'cc-chip cc-chip-pair', text: '关系与故事' }) : null,
+          h('span', { class: 'cc-count', text: `${item.answerCount} 条` }),
+          item.adoptedCount > 0
+            ? h('span', { class: 'cc-chip', text: `已采用 ${item.adoptedCount}/${item.answerCount}` })
+            : null,
+          h('span', { class: 'cc-spacer' }),
+          item.starred
+            ? h('span', { class: 'cc-chip cc-chip-star', text: '★', attrs: { role: 'img', 'aria-label': '已星标' } })
+            : null,
           h('span', { class: `cc-chip cc-state cc-chip-${item.status}`, text: STATUS_LABEL[item.status] }),
-        );
-        open.addEventListener('click', () => select(index));
-        const row = h(
+        ),
+      );
+      open.addEventListener('click', () => {
+        // The open card closes on a second click; any other card opens its own detail under its row.
+        if (index === active) {
+          active = -1;
+          renderList();
+          renderDetail();
+        } else select(index);
+      });
+      nodes.push(
+        h(
           'li',
-          { class: `cc-row${index === active ? ' is-active' : ''}`, attrs: { 'data-id': item.id } },
+          {
+            class: `cc-row${index === active ? ' is-active' : ''}${selected.has(item.id) ? ' is-selected' : ''}`,
+            attrs: { 'data-id': item.id },
+          },
           check,
           open,
-        );
-        return row;
-      }),
-    );
+        ),
+      );
+      // The detail opens directly under the row of the open card, over the full width.
+      const endsRow = index % ROW === ROW - 1 || index === items.length - 1;
+      if (endsRow && active >= 0 && Math.floor(active / ROW) === Math.floor(index / ROW))
+        nodes.push(h('li', { class: 'cc-detail-row' }, pane));
+    });
+    list.replaceChildren(...nodes);
   };
 
   const load = async (cursor: InboxCursor | null = null) => {
@@ -298,6 +343,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   const select = (index: number) => {
     if (index < 0 || index >= items.length) return;
     active = index;
+    viewing = null;
+    saved = null;
     renderList();
     void pump();
   };
@@ -374,11 +421,18 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     );
   };
 
-  const adoptEditor = (current: InboxDetail, answer: InboxAnswer) => {
+  const adoptEditor = (
+    current: InboxDetail,
+    answer: InboxAnswer,
+    onField: (field: AdoptField) => void,
+    valueNode: Node,
+  ) => {
     const character = nameOf(current.characterId);
     const suggested: AdoptField = answer.targetField === 'free' ? 'persona' : (answer.targetField as AdoptField);
     const source = answer.kind === 'text' ? { text: answer.text } : { player: answer.player, replies: answer.replies };
     const form = h('form', { class: 'cc-adopt', attrs: { 'aria-label': '加入草稿' } });
+    // The new text is amber: it is not in the draft yet.
+    form.dataset.dirty = 'true';
     const field = h('select', { attrs: { 'aria-label': '加入到哪个字段' } });
     for (const value of ADOPT_FIELDS)
       field.append(h('option', { text: COCREATION_FIELD_LABELS[value], attrs: { value } }));
@@ -407,9 +461,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       h('label', { text: '再回一句（可选）' }, replyTwo),
     );
     const error = h('p', { class: 'cc-adopt-error', attrs: { role: 'alert' }, hidden: true });
-    const save = h('button', { text: '保存到草稿', attrs: { type: 'submit' }, class: 'cc-adopt-save' });
-    const cancel = h('button', { text: '取消', attrs: { type: 'button' }, class: 'cc-adopt-cancel' });
-    const where = h('p', { class: 'cc-adopt-help' });
+    const save = h('button', { text: '保存草稿', attrs: { type: 'submit' }, class: 'cc-adopt-save' });
+    const cancel = h('button', { text: '撤回', attrs: { type: 'button' }, class: 'cc-adopt-cancel' });
 
     const fill = (value: AdoptField) => {
       const draft = suggestAdoptDraft(value, source, character);
@@ -424,18 +477,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       const isExample = field.value === 'dialogueExamples';
       example.hidden = !isExample;
       text.hidden = isExample;
-      where.textContent =
-        field.value === 'persona'
-          ? '会作为新的一段追加到人设文字末尾。'
-          : isExample
-            ? '会作为一条 {情境、玩家说、角色回复} 追加到对话示例。'
-            : '会追加到该字段（文字接在后面，列表增加一项）。';
     };
     fill(suggested);
     layout();
     field.addEventListener('change', () => {
       fill(field.value as AdoptField);
       layout();
+      onField(field.value as AdoptField);
     });
     const draftInput = (): AdoptDraft =>
       field.value === 'dialogueExamples'
@@ -470,11 +518,11 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           // No draft yet: start one from the published version, one version ahead, exactly as the workbench does.
           if (!target.draft) profile.template.version = target.published!.version + 1;
           profile.template = adoptIntoTemplate(profile.template, input);
-          const saved = await deps.characters.save(current.characterId, target.draft?.revision ?? null, profile);
+          const saved_ = await deps.characters.save(current.characterId, target.draft?.revision ?? null, profile);
           try {
             await deps.api.adopt(current.id, answer.ordinal);
           } catch {
-            fail(`草稿已保存（修订 ${saved.revision}），但没能把这条标为“已采用”。请勿重复加入；可稍后刷新核对。`);
+            fail(`草稿已保存（修订 ${saved_.revision}），但没能把这条标为“已采用”。请勿重复加入；可稍后刷新核对。`);
             return;
           }
           const stamp = Date.now();
@@ -491,10 +539,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           });
           adopting = null;
           adoptError = '';
+          saved = { ordinal: answer.ordinal, revision: saved_.revision };
+          drafts.delete(current.characterId);
           renderList();
           renderDetail();
           changed();
-          deps.status(`已加入草稿（修订 ${saved.revision}）。尚未发布：请在“角色资料”里预览，确认后再发布。`);
+          deps.status(`已加入草稿（修订 ${saved_.revision}）。尚未发布：请在“角色资料”里预览，确认后再发布。`);
         } catch (caught) {
           if (caught instanceof CocreationAdoptError) fail(ADOPT_ERROR_TEXT[caught.code] ?? '内容不符合要求。');
           else fail(characterAdminError(caught) ?? '保存草稿没有成功，请核对后重试；本次没有标记为已采用。');
@@ -506,19 +556,162 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       adoptError = '';
       renderDetail();
     });
+    // The field picker is a compact select above the box, only when the suggested field may be wrong (a free answer).
+    field.hidden = answer.targetField !== 'free';
+    // The suggestion goes INSIDE the draft box, after what the draft already has, in amber, editable in place.
     form.append(
-      h('label', { text: '加入到' }, field),
-      where,
-      text,
-      example,
+      field,
+      h('div', { class: 'cc-draft-box' }, valueNode, text, example),
       error,
       h('div', { class: 'cc-adopt-actions' }, cancel, save),
     );
     return form;
   };
 
+  /** The character's CURRENT draft template (the published one while there is no draft), fetched once per open detail. */
+  const templateOf = (characterId: string): Promise<Template | null> => {
+    let found = drafts.get(characterId);
+    if (!found) {
+      found = deps.characters
+        .detail(characterId)
+        .then(
+          (target) => ((target.draft?.profile ?? target.published?.profile)?.template as unknown as Template) ?? null,
+        )
+        .catch(() => null);
+      drafts.set(characterId, found);
+    }
+    return found;
+  };
+  /** The value of one field as the draft holds it: text, a list of lines, or dialogue pairs. */
+  const fieldValue = (template: Template | null, field: AdoptField): Node => {
+    if (!template) return h('p', { class: 'cc-target-empty', text: '读不到这个角色的草稿。' });
+    const raw = field === 'persona' ? template.persona : template.authorCanon?.settings?.[field];
+    if (raw === undefined || raw === null || raw === '')
+      return h('p', { class: 'cc-target-empty', text: '（还没有内容）' });
+    if (typeof raw === 'string') return h('p', { class: 'cc-target-text', text: raw });
+    if (Array.isArray(raw) && raw.every((entry) => typeof entry === 'string'))
+      return h('ul', { class: 'cc-target-list' }, ...(raw as string[]).map((line) => h('li', { text: line })));
+    if (Array.isArray(raw))
+      return h(
+        'div',
+        { class: 'cc-target-pairs' },
+        ...raw.map((entry) => {
+          const e = entry as { situation?: unknown; player?: unknown; reply?: unknown };
+          const replies = Array.isArray(e.reply) ? e.reply : [];
+          return h(
+            'div',
+            { class: 'cc-target-pair' },
+            h('span', { class: 'cc-pair-situation', text: String(e.situation ?? '') }),
+            h('span', { text: `玩家：${String(e.player ?? '')}` }),
+            ...replies.map((reply) => h('span', { text: String(reply) })),
+          );
+        }),
+      );
+    return h('p', { class: 'cc-target-text', text: JSON.stringify(raw) });
+  };
+
+  /** Right-hand pane: the target field of that character's DRAFT; the amber editor appends the suggestion there. */
+  const targetPane = (current: InboxDetail): HTMLElement => {
+    const pane_ = h('div', { class: 'cc-target' });
+    if (current.kind === 'memo') {
+      pane_.hidden = true;
+      return pane_;
+    }
+    const character = nameOf(current.characterId);
+    if (current.kind === 'pair') {
+      const adopted = current.answers.some((answer) => answer.adoptedAt !== null);
+      pane_.append(
+        h(
+          'div',
+          { class: 'cc-target-head' },
+          dot(colourOf()(current.characterId), 8),
+          h('b', { text: `${whoOf(current)} · 新故事` }),
+          h('span', { class: 'cc-chip cc-chip-draft', text: '草稿' }),
+          h('span', { class: 'cc-spacer' }),
+          h('span', { class: 'cc-target-where', text: '在关系与故事里发布' }),
+        ),
+        h('p', {
+          class: 'cc-target-text',
+          text: adopted ? '已存成关系与故事的草稿故事。' : '这条会作为新故事存进关系与故事的草稿，参与者是这两位。',
+        }),
+      );
+      if (adopted) pane_.append(h('a', { class: 'cc-go', text: '去关系与故事发布 →', attrs: { href: '#/cast' } }));
+      return pane_;
+    }
+    const picked = current.answers.find((answer) => answer.ordinal === viewing) ?? current.answers[0];
+    if (!picked) return pane_;
+    let field: AdoptField = picked.targetField === 'free' ? 'persona' : (picked.targetField as AdoptField);
+    const label = h('b', { class: 'cc-target-label' });
+    const value = h('div', { class: 'cc-target-value' });
+    const paintField = () => {
+      label.textContent = `${character} · ${COCREATION_FIELD_LABELS[field]}`;
+      value.replaceChildren(h('p', { class: 'cc-target-empty', text: '…' }));
+      void templateOf(current.characterId).then((template) => {
+        if (!gone && !deps.disposed()) value.replaceChildren(fieldValue(template, field));
+      });
+    };
+    const points = h('span', { class: 'cc-chip cc-chip-points', hidden: true });
+    if (deps.adoptPoints) {
+      const show = (n: number | null) => {
+        if (n === null) return;
+        points.textContent = `采用 +${n}`;
+        points.hidden = false;
+        hoverValue(points, '采用后玩家得到的积分，在积分发放里改');
+      };
+      if (adoptPoints !== undefined) show(adoptPoints);
+      else
+        void deps
+          .adoptPoints()
+          .then((n) => {
+            adoptPoints = n;
+            show(n);
+          })
+          .catch(() => {});
+    }
+    pane_.append(
+      h(
+        'div',
+        { class: 'cc-target-head' },
+        dot(colourOf()(current.characterId), 8),
+        label,
+        h('span', { class: 'cc-chip cc-chip-draft', text: '草稿' }),
+        h('span', { class: 'cc-spacer' }),
+        points,
+        h('span', { class: 'cc-target-where', text: '在角色工作台里发布' }),
+      ),
+    );
+    if (adopting?.ordinal === picked.ordinal) {
+      pane_.append(
+        adoptEditor(
+          current,
+          picked,
+          (next) => {
+            field = next;
+            paintField();
+          },
+          value,
+        ),
+      );
+    } else pane_.append(h('div', { class: 'cc-draft-box' }, value));
+    if (saved && saved.ordinal === picked.ordinal && picked.adoptedAt !== null)
+      pane_.append(
+        h(
+          'div',
+          { class: 'cc-saved' },
+          h('b', { text: `已存进角色草稿（修订 ${saved.revision}），这条标为已处理` }),
+          h('a', {
+            class: 'cc-go',
+            text: '去角色工作台发布 →',
+            attrs: { href: `#/characters/${current.characterId}` },
+          }),
+        ),
+      );
+    paintField();
+    return pane_;
+  };
+
   const renderDetail = () => {
-    if (!detail) {
+    if (!detail || active < 0) {
       pane.replaceChildren();
       pane.hidden = true;
       return;
@@ -546,41 +739,15 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         button.addEventListener('click', () => void setStatus([current.id], status));
         return button;
       });
-    const note = h('textarea', {
-      class: 'cc-note',
-      attrs: { rows: '3', maxlength: String(COCREATION_LIMITS.note), 'aria-label': '管理员备注（玩家看不到）' },
-    });
-    note.value = current.adminNote ?? '';
-    note.disabled = !manage;
-    const saveNote = h('button', { text: '保存备注', attrs: { type: 'button' }, class: 'cc-save-note' });
-    saveNote.disabled = !manage;
-    saveNote.addEventListener(
-      'click',
-      () =>
-        void deps.run(async () => {
-          const saved = await deps.api.note(current.id, note.value);
-          detail = { ...current, adminNote: saved };
-          patchItem(current.id, { hasNote: saved !== null });
-          renderList();
-          deps.status(saved === null ? '备注已清空。' : '备注已保存。');
-        }),
-    );
 
     const groups = COCREATION_TARGET_FIELDS.map((field) => ({
       field,
       answers: current.answers.filter((answer) => answer.targetField === field),
     })).filter((group) => group.answers.length > 0);
 
-    pane.replaceChildren(
-      h(
-        'header',
-        { class: 'cc-detail-head' },
-        h('h3', {}, dot(colourOf()(current.characterId), 12), `${whoOf(current)} · ${current.pseudonym}`),
-        h('p', {
-          text: `${when(current.createdAt)}${current.batch ? ` · 邀请批次：${current.batch}` : ''} · ${STATUS_LABEL[current.status]}${current.processedAt ? `（${when(current.processedAt)}）` : ''}`,
-        }),
-        h('div', { class: 'cc-detail-actions' }, star, ...statusButtons),
-      ),
+    const left = h(
+      'div',
+      { class: 'cc-left' },
       ...groups.map((group) =>
         h(
           'section',
@@ -590,15 +757,20 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
             const card = cocreationCard(answer.cardId);
             const copy = h('button', { text: '复制', attrs: { type: 'button' }, class: 'cc-copy' });
             copy.addEventListener('click', () => void copyText(plain(answer, character)));
-            const add = h('button', { text: '加入草稿', attrs: { type: 'button' }, class: 'cc-adopt-open' });
-            add.disabled = !manage;
+            const add = h('button', { text: '+ 加入草稿 →', attrs: { type: 'button' }, class: 'cc-adopt-open' });
+            add.disabled = !manage || adopting?.ordinal === answer.ordinal;
             add.addEventListener('click', () => {
               adopting = { ordinal: answer.ordinal };
+              viewing = answer.ordinal;
               adoptError = '';
               renderDetail();
             });
             // Part 24c: a pair note goes to the cast draft as a story; a memo is for the team and has no adoption at all.
-            const story = h('button', { text: '加入关系与故事', attrs: { type: 'button' }, class: 'cc-adopt-story' });
+            const story = h('button', {
+              text: '+ 加入关系与故事 →',
+              attrs: { type: 'button' },
+              class: 'cc-adopt-story',
+            });
             story.disabled = !manage || (deps.canEditCast ? !deps.canEditCast() : false);
             story.addEventListener('click', () => void addStory(current, answer.ordinal));
             const undo = h('button', { text: '取消采用', attrs: { type: 'button' }, class: 'cc-unadopt' });
@@ -607,17 +779,19 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
             return h(
               'article',
               { class: 'cc-answer', attrs: { 'data-ordinal': String(answer.ordinal) } },
-              h('p', {
-                class: 'cc-card-prompt',
-                text:
-                  current.kind === 'memo'
-                    ? '给制作组的留言条'
-                    : current.kind === 'pair'
-                      ? `${nameOf(current.characterId)}和${nameOf(current.partnerId ?? '')}之间的故事`
-                      : card
-                        ? cocreationPrompt(card, character)
-                        : answer.cardId,
-              }),
+              current.kind === 'memo' || current.kind === 'pair' || card
+                ? h('p', {
+                    class: 'cc-card-prompt',
+                    text:
+                      current.kind === 'memo'
+                        ? '给制作组的留言条'
+                        : current.kind === 'pair'
+                          ? `${nameOf(current.characterId)}和${nameOf(current.partnerId ?? '')}之间的故事`
+                          : card
+                            ? cocreationPrompt(card, character)
+                            : '',
+                  })
+                : null,
               bubbles(answer, character),
               h(
                 'div',
@@ -635,12 +809,23 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                 answer.adoptedAt !== null ? h('span', { class: 'cc-chip cc-chip-adopted', text: '已采用' }) : null,
                 answer.adoptedAt !== null && current.kind !== 'memo' ? undo : null,
               ),
-              adopting?.ordinal === answer.ordinal ? adoptEditor(current, answer) : null,
             );
           }),
         ),
       ),
-      h('div', { class: 'cc-note-box' }, h('label', { text: '管理员备注（玩家看不到）' }, note), saveNote),
+    );
+
+    pane.replaceChildren(
+      h(
+        'header',
+        { class: 'cc-detail-head' },
+        h('h3', {}, dot(colourOf()(current.characterId), 10), `${whoOf(current)} · ${current.pseudonym}`),
+        h('p', {
+          text: `${when(current.createdAt)}${current.batch ? ` · 邀请批次：${current.batch}` : ''} · ${STATUS_LABEL[current.status]}${current.processedAt ? `（${when(current.processedAt)}）` : ''}`,
+        }),
+        h('div', { class: 'cc-detail-actions' }, star, ...statusButtons),
+      ),
+      h('div', { class: `cc-detail-grid${current.kind === 'memo' ? ' is-single' : ''}` }, left, targetPane(current)),
     );
   };
 
@@ -735,6 +920,16 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     else return;
     e.preventDefault?.();
   };
+  // The page scrolls (no inner list): the next page is read when the window reaches the end of the cards.
+  const onWindowScroll = () => {
+    const root_ = document.documentElement;
+    if (!activated || !next || loadingMore || typeof window === 'undefined') return;
+    if (window.innerHeight + window.scrollY >= root_.scrollHeight - 240) {
+      loadingMore = true;
+      void deps.run(() => load(next)).finally(() => (loadingMore = false));
+    }
+  };
+  globalThis.window?.addEventListener?.('scroll', onWindowScroll, { passive: true });
   // Held on to, so disposing still works after the page (or a test) has replaced the global document.
   const doc = document;
   doc.addEventListener('keydown', onKey);
@@ -765,6 +960,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     dispose: () => {
       gone = true;
       doc.removeEventListener('keydown', onKey);
+      globalThis.window?.removeEventListener?.('scroll', onWindowScroll);
     },
     /** Current selection, for tests and the page's busy state. */
     snapshot: () => ({ items, active, detail }),

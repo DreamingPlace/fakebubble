@@ -119,7 +119,8 @@ test('the table: one row per model with 总开关 / 游客 / 注册玩家 / 受�
   await f.api.load();
   assert.deepEqual(
     f.node.querySelectorAll('thead th').map((th) => th.textContent),
-    ['模型', '总开关', '游客', '注册玩家', '受邀玩家', '每条点数', '状态'],
+    // Named exception (Part 24b-6): Models3 adds the 最近修改 column (the last change of each row, in the table).
+    ['模型', '总开关', '游客', '注册玩家', '受邀玩家', '每条点数', '状态', '最近修改'],
   );
   assert.deepEqual(
     f.node.querySelectorAll('tbody tr').map((tr) => tr.querySelectorAll('th')[0]!.textContent),
@@ -133,9 +134,10 @@ test('the table: one row per model with 总开关 / 游客 / 注册玩家 / 受�
   assert.equal(f.box('gemini', 'guest').checked, false);
   assert.equal((f.node.querySelector('input[data-model="xai"][data-field="points"]') as FakeElement).value, '25');
   assert.equal((f.node.querySelector('#models-voice') as FakeElement).value, '2');
-  // The last-changes list: label, model, field, before → after; no ids.
+  // The last change of a row: label, model, field, before → after; no ids.
+  // Named exception (Part 24b-6): the separate 最近修改 list became a column of the table; the whole line is its hover value.
   assert.match(
-    f.node.querySelector('.models-recent li')!.textContent,
+    f.node.querySelectorAll('.models-at')[1]!.textContent,
     /主管理员 · Gemini 3.8 Flash 每条点数：15 点 → 20 点/,
   );
   assert.equal(f.save().hidden === false && f.save().disabled, true, 'nothing to save yet');

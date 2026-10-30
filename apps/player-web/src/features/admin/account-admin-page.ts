@@ -3,14 +3,15 @@ import { characterWorkbench, characterAdminError } from './character-workbench.t
 import { previewWorkbench } from './preview/preview-workbench.ts';
 import type { PreviewAdminClient } from '../../services/preview-admin-api.ts';
 import { permissionMatrixEditor } from './permission-matrix.ts';
+import { membersView } from './members-view.ts';
 import { overviewView } from './overview-view.ts';
 import { pointsView } from './points-view.ts';
 import { systemView } from './system-view.ts';
-import { statsView } from './stats-view.ts';
 import { costsView } from './costs-view.ts';
 import { modelsView } from './models-view.ts';
 import { dateTimeText } from './system-format.ts';
 import { confirmDialog } from './ui/confirm-dialog.ts';
+import { inlineConfirm } from './ui/inline-confirm.ts';
 import { rolePicker } from './shell/role-picker.ts';
 import { wordmarkSvg } from '../brand/wordmark.ts';
 import {
@@ -34,6 +35,7 @@ import type { ConversationsAdminClient } from '../../services/conversations-admi
 import type { CocreationAdminClient } from '../../services/cocreation-admin-api.ts';
 import { browserDownload, inviteTiersView } from './invite-tiers-view.ts';
 import {
+  ADMIN_PERMISSION_ITEMS,
   ADMIN_PERMISSION_LIMIT,
   canCreateCharacter,
   hasCastPermission,
@@ -200,19 +202,18 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         <button type="submit">完成邮箱绑定</button></form>
       <button id="admin-account-continue" class="admin-back" type="button" data-page="home">进入管理</button></section>
     <section data-panel="invites" hidden><p id="admin-no-permissions" hidden>当前账号没有“邀请与额度”权限，请联系主管理员开通。</p><div id="admin-invites"></div></section>
-    <section data-panel="characters" hidden><div class="page-head"><h2>角色工作台</h2><div class="page-head-actions" id="wb-head"></div></div><div id="admin-characters"></div></section>
+    <section data-panel="characters" hidden><div class="page-head"><h2 id="wb-title">角色工作台</h2><div class="page-head-actions" id="wb-head"></div></div><div id="admin-characters"></div></section>
     <section data-panel="cast" hidden><div id="admin-cast"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
-    <section data-panel="members" hidden><div class="page-head"><h2>管理员与权限</h2><div class="page-head-actions"></div></div>
-      <div class="members-layout"><div class="members-side"><form id="admin-member-issue"><h3>添加管理员</h3><label for="admin-member-label">管理员备注</label><input id="admin-member-label" maxlength="80" required>
-        <div id="admin-new-permissions"></div>
-        <button type="submit">签发管理员一次性凭据</button></form></div>
-      <div class="members-main"><div id="admin-members-table" class="members-table-card"></div><div id="admin-members-list" class="members-list"></div></div></div>
+    <section data-panel="members" hidden><div class="page-head"><h2>管理员与权限</h2><div class="page-head-actions" id="admin-members-head"></div></div>
+      <form id="admin-member-issue" class="mb-add"><label class="mb-field" for="admin-member-label"><span>新管理员备注</span><input id="admin-member-label" maxlength="80" placeholder="例：共创写手 · 小雨" required></label>
+        <div class="mb-field"><span>先给哪套权限</span><span id="admin-new-permissions" class="mb-presets"></span></div>
+        <button class="admin-primary" type="submit">添加并签发一次性凭据</button></form>
+      <div id="admin-members-table" class="members-table-card"></div><div id="admin-members-list" class="members-list"></div>
     </section>
     <section data-panel="overview" hidden><div id="admin-overview"></div></section>
     <section data-panel="points" hidden><div id="admin-points"></div></section>
     <section data-panel="system" hidden><div id="admin-system"></div></section>
-    <section data-panel="stats" hidden><div id="admin-stats"></div></section>
     <section data-panel="costs" hidden><div id="admin-costs"></div></section>
     <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
     <section data-panel="models" hidden><div id="admin-models"></div></section>
@@ -252,12 +253,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     busy = true,
     disposed = false;
   let bindId: string | null = null,
-    resetId: string | null = null,
-    memberUnknown = false;
+    resetId: string | null = null;
   const cleanups: Array<() => void> = [];
-  // The administrator whose permission grid is open (a click on a name); the first one until another is picked.
-  let chosenMember: string | null = null;
-  let membersResult: Awaited<ReturnType<Port['members']>> | null = null;
   const can = (permission: InviteAdminPermission) =>
     session?.member.role === 'owner' || (!!session && hasInvitePermission(session.member.permissions, permission));
   const access = (): NavAccess => ({
@@ -286,10 +283,15 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   // New (unread) co-creation submissions per character: the badge in the character workbench.
   let unread: Record<string, number> = {};
   /** Grouped permissions with 共生项 and presets; the inbox group only when this page has an inbox. */
-  const permissionControls = (host: HTMLElement, initial: readonly AdminPermission[]) =>
+  const permissionControls = (
+    host: HTMLElement,
+    initial: readonly AdminPermission[],
+    onChange?: (dirty: number) => void,
+  ) =>
     permissionMatrixEditor(host, initial, {
       cocreation: !!port.cocreation,
       conversations: !!port.conversations && session?.features?.chatReview === true,
+      ...(onChange ? { onChange } : {}),
     });
   const canCocreation = (permission: CocreationAdminPermission) =>
     !!port.cocreation &&
@@ -307,7 +309,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       /* The badge is a convenience; the inbox itself reports real errors. */
     }
   };
-  let newPermissions: ReturnType<typeof permissionControls> | null = null;
   // Opening a page loads its list and then the role in the address; the workbench's own "view changed" reports are muted meanwhile.
   let quiet = 0;
   const canPreview = (characterId: string) =>
@@ -315,7 +316,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     (!!session &&
       hasCharacterPermission(session.member.permissions, 'read', characterId) &&
       hasCharacterPermission(session.member.permissions, 'preview', characterId));
-  const reissueUnknown = new Set<string>();
   const passwordIds = ['admin-password', 'admin-bind-password', 'admin-reset-password'];
   const concealPassword = (id: string) => {
     q<HTMLInputElement>(`#${id}`).type = 'password';
@@ -373,8 +373,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     ))
       control.disabled = busy || control.dataset.locked === 'true';
     q<HTMLButtonElement>('#admin-bind-start button').disabled = busy || !session?.emailDeliveryAvailable;
-    q<HTMLButtonElement>('#admin-member-issue button').disabled = busy || memberUnknown || !newPermissions;
-    newPermissions?.setDisabled(busy || memberUnknown);
+    q<HTMLButtonElement>('#admin-member-issue button').disabled = busy || members.issueLocked;
     q<HTMLElement>('main').setAttribute('data-surface', session ? page : 'login');
     // 系统 → 模型与价格 is the one page that is usable on a phone: its route lifts the desktop-only notice (and the login in front of it).
     // The Access notice is usable on a phone as well: it is the only thing shown until Access has been passed.
@@ -457,12 +456,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         if (routeId) inbox!.showCharacter(routeId);
         return inbox!.load();
       };
-    if (page === 'members') return loadMembers;
+    if (page === 'members') return members.load;
     if (page === 'invites' && can('invites.manage') && port.inviteBatches) return () => tiers.load();
     if (page === 'overview' && canSeePage('overview', access())) return () => overview.load();
     if (page === 'points' && canSeePage('points', access())) return () => points.load();
     if (page === 'system' && canSeePage('system', access())) return () => system.load();
-    if (page === 'stats' && canSeePage('stats', access())) return () => stats.load();
     if (page === 'costs' && canSeePage('costs', access())) return () => costs.load();
     if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
     if (page === 'models' && port.modelSettings) return () => models.load();
@@ -588,13 +586,21 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   previewHost.className = 'wb-preview';
   previewHost.setAttribute('aria-label', '预演');
   previewHost.hidden = true;
+  // 预演 is the editor's last section: the workbench mounts this element there.
   const split = document.createElement('div');
   split.className = 'wb';
-  split.append(editorHost, previewHost);
+  split.append(editorHost);
   stage.append(roster, split);
+  const rosterColourOf = new Map<string, string>();
   const picker = rolePicker(rolesHost, {
     emptyText: '当前没有可查看的角色。',
-    compact: { colour: (_id, index) => ROSTER_COLOURS[index % ROSTER_COLOURS.length]! },
+    compact: {
+      colour: (id, index) => {
+        const colour = ROSTER_COLOURS[index % ROSTER_COLOURS.length]!;
+        rosterColourOf.set(id, colour);
+        return colour;
+      },
+    },
     badges: () => unread,
     openInbox: (characterId) => {
       if (busy || disposed || !navigate('cocreation', characterId)) return;
@@ -635,6 +641,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     badges: () => unread,
     directory: 'none',
     headerHost: q('#wb-head'),
+    colourOf: (characterId) => rosterColourOf.get(characterId),
+    previewMount: previewHost,
+    canPreview: (characterId) => !!previewBench && canPreview(characterId),
+    onSeed: (characterId, seed) => picker.setSeed(characterId, seed),
     onDirectory: (roles) => picker.show(roles),
     preview: 'none',
     onView: (id) => {
@@ -680,6 +690,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
                 (!!session && hasCastPermission(session.member.permissions, 'cast.edit')),
             }
           : {}),
+        ...(port.cocreationPoints
+          ? { adoptPoints: () => port.cocreationPoints!().then((points) => points.adoptPoints) }
+          : {}),
         run,
         status: (text) => {
           if (!disposed) status.textContent = text;
@@ -701,7 +714,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     status: (text) => {
       if (!disposed) status.textContent = text;
     },
-    confirm: (options) => confirmDialog(q('main'), options),
+    confirm: (options, host) => inlineConfirm(host, options),
     toast: (text, tone) => toasts.show(text, tone ?? 'info'),
     disposed: () => disposed,
     download: browserDownload,
@@ -714,7 +727,15 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     run,
     disposed: () => disposed,
     chart: port.chart
-      ? { load: (metric, range) => port.chart!(metric, range), available: () => canSeePage('stats', access()) }
+      ? { load: (metric, range) => port.chart!(metric, range), available: () => canSeePage('costs', access()) }
+      : undefined,
+    stats: port.playerStats
+      ? {
+          load: (range) => port.playerStats!(range),
+          exportCsv: (range) => (port.exportPlayerStats ? port.exportPlayerStats(range) : unavailable()),
+          download: browserDownload,
+          available: () => canSeePage('costs', access()),
+        }
       : undefined,
   });
   const system = systemView(q('#admin-system'), {
@@ -723,17 +744,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     topUp: (input) => (port.budgetTopUp ? port.budgetTopUp(input) : unavailable()),
     isOwner: () => session?.member.role === 'owner',
     run,
-    confirm: (options) => confirmDialog(q('main'), options),
+    confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
     newRequestId: () => globalThis.crypto.randomUUID(),
-    disposed: () => disposed,
-  });
-  const stats = statsView(q('#admin-stats'), {
-    load: (range) => (port.playerStats ? port.playerStats(range) : unavailable()),
-    chatUsers: port.chart ? () => port.chart!('chat_users', '14d') : undefined,
-    exportCsv: (range) => (port.exportPlayerStats ? port.exportPlayerStats(range) : unavailable()),
-    download: browserDownload,
-    run,
     disposed: () => disposed,
   });
   const costs = costsView(q('#admin-costs'), {
@@ -755,7 +768,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       : {}),
     isOwner: () => session?.member.role === 'owner',
     run,
-    confirm: (options) => confirmDialog(q('main'), options),
+    confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
     newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
@@ -764,7 +777,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     port,
     isOwner: () => session?.member.role === 'owner',
     run,
-    confirm: (options) => confirmDialog(q('main'), options),
+    confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
     newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
@@ -774,7 +787,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     save: (input) =>
       port.saveModelSettings ? port.saveModelSettings(input) : Promise.reject(new Error('ADMIN_MODELS_UNAVAILABLE')),
     run,
-    confirm: (options) => confirmDialog(q('main'), options),
+    confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
     newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
@@ -792,24 +805,35 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     },
     disposed: () => disposed,
   });
-  const clearMemberControls = () => {
-    q('#admin-members-list').replaceChildren();
-    q('#admin-members-table').replaceChildren();
-    membersResult = null;
-    chosenMember = null;
-    q('#admin-new-permissions').replaceChildren();
-    newPermissions = null;
-  };
+  const members = membersView({
+    head: q('#admin-members-head'),
+    presetHost: q('#admin-new-permissions'),
+    table: q('#admin-members-table'),
+    list: q('#admin-members-list'),
+    shown: (item) =>
+      (!!port.cocreation || !item.startsWith('cocreation.')) &&
+      (session?.features?.chatReview === true || !item.startsWith('conversations.')),
+    permissionControls,
+    run,
+    busy: () => busy,
+    api: port,
+    showSecret,
+    status: (text) => {
+      if (!disposed) status.textContent = text;
+    },
+    disposed: () => disposed,
+    permissionLimit: ADMIN_PERMISSION_LIMIT,
+    totalPermissions: ADMIN_PERMISSION_ITEMS.length,
+  });
   const clearManagement = () => {
     tiers.clear();
-    clearMemberControls();
+    members.clear();
     workbench?.clear();
     previewBench?.clear();
     castPage?.clear();
     picker.clear();
     overview.clear();
     system.clear();
-    stats.clear();
     costs.clear();
     points.clear();
     reviews.clear();
@@ -823,187 +847,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       clearManagement();
       bindId = null;
       resetId = null;
-      memberUnknown = false;
-      reissueUnknown.clear();
       page = 'account';
       status.textContent = '登录身份或会话已改变，已清除上一会话的本页资料与请求；没有自动提交。';
     }
     session = current;
-  };
-  const paintMembers = () => {
-    const result = membersResult;
-    if (!result) return;
-    const list = q<HTMLElement>('#admin-members-list');
-    list.replaceChildren();
-    const chosen =
-      result.members.find((m) => m.id === chosenMember)?.id ??
-      (result.members.find((m) => m.role !== 'owner') ?? result.members[0])?.id ??
-      null;
-    // The table (Part 24b-4): name, role, how many permissions, last sign-in (UTC). A row picks whose grid is shown below it.
-    const tableHost = q<HTMLElement>('#admin-members-table');
-    const table = document.createElement('table');
-    table.className = 'members-table';
-    const head = document.createElement('thead');
-    const headRow = document.createElement('tr');
-    for (const text of ['名称', '角色', '权限数', '最近登录'] as const) {
-      const cell = document.createElement('th');
-      cell.scope = 'col';
-      cell.textContent = text;
-      headRow.append(cell);
-    }
-    head.append(headRow);
-    const body = document.createElement('tbody');
-    for (const member of result.members) {
-      const row = document.createElement('tr');
-      row.dataset.member = member.id;
-      if (member.id === chosen) row.setAttribute('aria-selected', 'true');
-      const pick = document.createElement('button');
-      pick.type = 'button';
-      pick.className = 'members-pick';
-      pick.setAttribute('aria-pressed', String(member.id === chosen));
-      pick.textContent = member.label;
-      pick.addEventListener('click', () => {
-        if (chosenMember === member.id) return;
-        chosenMember = member.id;
-        paintMembers();
-      });
-      const name = document.createElement('td');
-      name.append(pick);
-      if (member.email) {
-        const mail = document.createElement('span');
-        mail.className = 'members-mail';
-        mail.textContent = member.email;
-        name.append(mail);
-      }
-      const cells = [
-        member.role === 'owner' ? '主管理员' : '管理员',
-        member.role === 'owner' ? '全部' : String(member.permissions.length),
-        dateTimeText(member.lastSignInAt ?? null),
-      ];
-      row.append(name);
-      for (const text of cells) {
-        const cell = document.createElement('td');
-        cell.textContent = text;
-        row.append(cell);
-      }
-      body.append(row);
-    }
-    table.append(head, body);
-    tableHost.replaceChildren(table);
-    for (const member of result.members) {
-      if (member.id !== chosen) continue;
-      const item = document.createElement('div');
-      item.className = 'admin-member';
-      const heading = document.createElement('h3');
-      heading.className = 'admin-member-head';
-      heading.textContent = `${member.label} · ${member.role === 'owner' ? '主管理员' : `已分配 ${member.permissions.length} 项授权`}${member.email ? ` · ${member.email}` : ''}`;
-      item.append(heading);
-      if (member.role === 'owner') {
-        const owner = document.createElement('p');
-        owner.textContent = '主管理员保留所有功能权限，不能在此撤权。';
-        item.append(owner);
-      } else {
-        const controls = document.createElement('div');
-        item.append(controls);
-        const editor = permissionControls(controls, member.permissions);
-        const save = document.createElement('button');
-        save.type = 'button';
-        save.className = 'admin-primary';
-        save.textContent = `保存 ${member.label} 的权限`;
-        save.addEventListener('click', () => {
-          void run(async () => {
-            const selected = editor.value();
-            if (selected.length > ADMIN_PERMISSION_LIMIT) {
-              status.textContent = '原授权数据异常，请重新读取后处理。';
-              return;
-            }
-            await port.setPermissions(member.id, selected, member.permissions);
-            await loadMembers();
-            if (!disposed) status.textContent = '权限已更新，对方账号和登录会话保持不变。';
-          });
-        });
-        item.append(save);
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'admin-danger';
-        remove.textContent = '收回全部功能权限';
-        remove.addEventListener('click', () => {
-          if (busy) return;
-          // Asked before the request starts: while one runs, every control (the dialog's too) is locked.
-          void confirmDialog(q('main'), {
-            title: `收回 ${member.label} 的全部功能权限`,
-            message: '只收回管理功能。此账号仍可登录，所有会话、邮箱和玩家聊天保持不变。',
-            confirmLabel: '确认收回',
-            danger: true,
-          }).then((sure) => {
-            if (!sure || disposed) return;
-            return run(async () => {
-              await port.setPermissions(member.id, [], member.permissions);
-              await loadMembers();
-              if (!disposed) status.textContent = '已收回全部管理功能权限，账号及登录会话保留。';
-            });
-          });
-        });
-        item.append(remove);
-        const reissue = document.createElement('button');
-        reissue.type = 'button';
-        reissue.className = 'admin-secondary';
-        reissue.textContent = reissueUnknown.has(member.id)
-          ? '上次签发结果未确认，请核对未用凭据'
-          : '为此管理员签发新登录凭据';
-        reissue.dataset.locked = String(reissueUnknown.has(member.id));
-        reissue.addEventListener('click', () => {
-          if (reissueUnknown.has(member.id)) return;
-          void run(async () => {
-            reissueUnknown.add(member.id);
-            reissue.dataset.locked = 'true';
-            let result: Awaited<ReturnType<typeof port.issueMember>>;
-            try {
-              result = await port.issueMember({
-                requestId: crypto.randomUUID(),
-                label: member.label,
-                memberId: member.id,
-                permissions: member.permissions,
-              });
-            } catch (error) {
-              // An unconfirmed issue is shown at once (the button stays locked) instead of waiting for a reload.
-              paintMembers();
-              throw error;
-            }
-            reissueUnknown.delete(member.id);
-            showSecret('管理员一次性登录凭据 · 权限保持原样', result.token);
-            await loadMembers();
-          });
-        });
-        item.append(reissue);
-      }
-      for (const grant of result.grants.filter(
-        (g) => g.memberId === member.id && !g.consumed && g.revokedAt === null && g.expiresAt > Date.now(),
-      )) {
-        if (member.role === 'owner') continue;
-        const revoke = document.createElement('button');
-        revoke.type = 'button';
-        revoke.className = 'admin-secondary';
-        revoke.textContent = `撤销未用登录凭据 · ${dateTimeText(grant.expiresAt)} 到期`;
-        revoke.addEventListener('click', () => {
-          void run(async () => {
-            await port.revokeCredential(grant.id);
-            await loadMembers();
-          });
-        });
-        item.append(revoke);
-      }
-      list.append(item);
-    }
-  };
-  const loadMembers = async () => {
-    const result = await port.members();
-    if (disposed) return;
-    const selected = newPermissions?.value() ?? [];
-    q('#admin-new-permissions').replaceChildren();
-    newPermissions = permissionControls(q('#admin-new-permissions'), selected);
-    membersResult = result;
-    paintMembers();
   };
   for (const button of root.querySelectorAll<HTMLElement>('[data-page]'))
     listen(button, 'click', (event) => {
@@ -1096,26 +943,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     status.textContent = '密码已重置，请用新密码登录。';
   });
   submit('#admin-member-issue', async () => {
-    if (memberUnknown || session?.member.role !== 'owner') return;
-    if (!newPermissions) return;
-    const permissions = newPermissions.value();
-    if (permissions.length > ADMIN_PERMISSION_LIMIT) {
-      status.textContent = '原授权数据异常，请重新读取后处理。';
-      return;
-    }
-    try {
-      const result = await port.issueMember({
-        requestId: crypto.randomUUID(),
-        label: value('admin-member-label').trim(),
-        memberId: null,
-        permissions,
-      });
-      showSecret('管理员一次性登录凭据 · 1 小时内使用', result.token);
-      await loadMembers();
-    } catch (error) {
-      memberUnknown = true;
-      throw error;
-    }
+    if (session?.member.role !== 'owner') return;
+    await members.issue(value('admin-member-label').trim());
   });
   listen(q('#admin-secret-close'), 'click', clearSecrets);
   listen(q('#admin-logout'), 'click', () => {
@@ -1141,7 +970,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       if (disposed) return;
       adoptSession(current);
       if (current.member.role !== 'owner') {
-        clearMemberControls();
+        members.clear();
         if (page === 'members') page = 'account';
       }
       // A page whose permission was just taken away is no longer offered; the pages that explain themselves stay.

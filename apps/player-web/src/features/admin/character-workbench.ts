@@ -15,6 +15,11 @@ import {
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { dateTimeText } from './system-format.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
+import { dangerZone } from './ui/danger-zone.ts';
+import { fillStatus } from './ui/page-head.ts';
+import { hoverValue } from './ui/hover-value.ts';
+import { diffSideBySide, type Piece } from './preview/diff.ts';
+import { unsavedText } from './ui/unsaved.ts';
 import { formatRoute } from './shell/admin-router.ts';
 import {
   AdminFormError,
@@ -57,6 +62,13 @@ type Host = {
   onView?: (id: string | null) => void;
   /** The console's title row (right side): the draft status chip and 预演后发布. Only with directory `none`. */
   headerHost?: HTMLElement;
+  /** The role's dot colour (the rail's), for the status line. */
+  colourOf?: (characterId: string) => string | undefined;
+  /** Where the paid 预演 lives: shown as the last section when the role may be previewed. */
+  previewMount?: HTMLElement;
+  canPreview?: (characterId: string) => boolean;
+  /** Whether the role is 成长中 (seed), as the editor has it now: the rail's dashed ring follows. */
+  onSeed?: (characterId: string, seed: boolean) => void;
 };
 type Section = { id: string; label: string; nodes: HTMLElement[]; danger?: boolean };
 /** One client-side submission. The body (including requestId) is fixed when it is created. */
@@ -132,6 +144,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   // The console shows one section of the editor at a time; the one showing is kept across a save of the same role.
   let lastSection: { id: string; section: string } = { id: '', section: '' };
   let paintDirty: (() => void) | null = null;
+  let zones: Array<{ paint: () => void }> = [];
   const urls = new Set<string>();
   const pending = new Map<string, { input: unknown; uncertain: boolean; send: () => Promise<unknown> }>();
   const items: QueueItem[] = [];
@@ -163,6 +176,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   const sync = () => {
     if (gone()) return;
     editor?.setDisabled(busy || (detail ? !can('edit', id ?? '') : !canCreate()));
+    for (const zone of zones) zone.paint();
     for (const c of controls) {
       if (c.text) c.node.textContent = c.text();
       const lock = c.locked();
@@ -221,6 +235,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     paintResults = null;
     previewsChanged = null;
     paintDirty = null;
+    zones = [];
     host.headerHost?.replaceChildren();
     root.replaceChildren();
   };
@@ -516,9 +531,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     );
   }
   /**
-   * The console's editor (Part 24b-3): one card with ONE section of the role at a time, a rail of sections under the role list, the
-   * draft status and 预演后发布 in the title row, and a save bar at the foot of the card. Every section stays in the page (only
-   * `hidden` changes), so what was typed in one survives a visit to another; a dot on the rail marks the sections with changes.
+   * The console's editor (Part 24b-3, V3 in 24b-6): ONE section bar over one card; clicking a section pops it in and replaces the
+   * one showing (300 ms). The sections stay in the page (only `hidden` changes), so what was typed in one survives a visit to another;
+   * a dot on the section's name marks the ones with unsaved changes. The save bar sticks to the foot of the card; the title row
+   * carries the name, a status line and 预演后发布, which jumps to 发布.
    */
   function renderConsole(
     snapshot: CharacterDetail | null,
@@ -529,26 +545,20 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     discardLocal: () => void,
   ) {
     const card = el('section'),
-      head = el('header'),
-      title = el('h2'),
-      meta = el('p'),
+      bar = el('nav'),
       body = el('div'),
-      bar = el('footer'),
+      foot = el('footer'),
       state = el('span'),
-      barActions = el('div');
+      footActions = el('div');
     card.className = 'wb-card';
-    head.className = 'wb-card-head';
-    meta.className = 'wb-card-meta';
-    meta.textContent = snapshot
-      ? `${target} · ${snapshot.published ? `正式 v${snapshot.published.version}` : '未发布'} · 编辑版本 v${profile.template.version}${snapshot.draft ? ` · 草稿修订 ${snapshot.draft.revision}` : ' · 尚无已保存草稿'}`
-      : '从空白资料建立 AI 虚构人物，不复制其他角色的资料或声音。保存后仍不会出现在玩家目录。';
-    head.append(title, meta);
+    bar.className = 'wb-bar';
+    bar.setAttribute('aria-label', '角色分区');
     body.className = 'wb-card-body';
-    bar.className = 'wb-savebar';
+    foot.className = 'wb-savebar';
     state.className = 'wb-savestate';
-    barActions.className = 'wb-savebar-actions';
-    bar.append(state, barActions);
-    card.append(head, body, bar);
+    footActions.className = 'wb-savebar-actions';
+    foot.append(state, footActions);
+    card.append(bar, body, foot);
     if (snapshot && !can('edit')) {
       const note = el('p', '当前只有被授予的操作可用；资料编辑只读。');
       note.className = 'wb-readonly';
@@ -571,18 +581,16 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       event.preventDefault();
       submit();
     });
-    button(barActions, '放弃本页未保存修改', () => !dirty, discardLocal, true);
+    const discard = button(footActions, '放弃本页修改', () => !dirty, discardLocal, true);
     const save = el('button', '保存草稿');
     save.type = 'button';
     save.className = 'admin-secondary';
-    barActions.append(save);
+    footActions.append(save);
     controls.push({ node: save, locked: () => !canEdit() });
     save.addEventListener('click', () => submit());
 
-    // ---- the sections: the form's five, then what only a saved role has ----
+    // ---- the sections: the form's seven, then what only a saved role has ----
     const sections: Section[] = editor.panes.map((pane) => ({ id: pane.id, label: pane.label, nodes: [pane.node] }));
-    for (const pane of editor.panes)
-      if (pane.node.tagName.toLowerCase() === 'details') (pane.node as HTMLDetailsElement).open = true;
     if (snapshot) {
       const flow = el('section');
       flow.className = 'character-flow';
@@ -599,75 +607,106 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         sections.push({ id: 'diff', label: '资料改动', nodes: changes });
       }
       const publish = made(() => publication(flow, snapshot));
-      if (snapshot.draft) publish.push(...made(() => discardFold(flow, snapshot)));
+      const danger = el('div');
+      danger.className = 'wb-danger';
+      if (snapshot.draft) danger.append(discardZone(snapshot));
+      if (snapshot.published) danger.append(deleteZone(snapshot, profile.presentation.displayName || target));
+      if (danger.children.length) {
+        flow.append(danger);
+        publish.push(danger);
+      }
       sections.push({ id: 'publish', label: '发布', nodes: publish });
-      const removal = made(() => deletion(flow, snapshot));
-      if (removal.length) sections.push({ id: 'delete', label: '删除角色', nodes: removal, danger: true });
+      if (host.previewMount && host.canPreview?.(target)) {
+        const wrap = el('div');
+        wrap.className = 'wb-preview-section';
+        wrap.append(host.previewMount);
+        body.append(wrap);
+        sections.push({ id: 'preview', label: '预演', nodes: [wrap] });
+      }
     }
     for (const section of sections)
       if (section.nodes.length === 1) section.nodes[0]!.className = `${section.nodes[0]!.className} wb-sole`.trim();
 
-    // ---- the rail ----
-    const rail = el('nav'),
-      railItems = new Map<string, HTMLElement>(),
-      railDots = new Map<string, HTMLElement>();
-    rail.className = 'wb-rail';
-    rail.setAttribute('aria-label', '角色分区');
-    rail.setAttribute('role', 'group');
+    // ---- the section bar ----
+    const tabs = new Map<string, HTMLElement>(),
+      dots = new Map<string, HTMLElement>();
     for (const section of sections) {
-      const item = el('button'),
+      const tab = el('button'),
         dot = el('i');
-      item.type = 'button';
-      item.className = `wb-rail-item${section.danger ? ' is-danger' : ''}`;
-      item.append(el('span', section.label), dot);
+      tab.type = 'button';
+      tab.className = 'wb-tab';
+      tab.append(el('span', section.label), dot);
       dot.className = 'wb-dot';
       dot.hidden = true;
       dot.setAttribute('aria-hidden', 'true');
-      item.addEventListener('click', () => showing.show(section.id));
-      rail.append(item);
-      railItems.set(section.id, item);
-      railDots.set(section.id, dot);
+      tab.addEventListener('click', () => showing.show(section.id));
+      bar.append(tab);
+      tabs.set(section.id, tab);
+      dots.set(section.id, dot);
     }
-    card.replaceChildren(rail, head, body, bar);
 
-    // ---- the title row: draft status and 预演后发布 ----
+    // ---- the title row: the name alone, a status line, 预演后发布 ----
     const name = profile.presentation.displayName || target || '新角色';
-    const chip = el('span'),
+    host.onSeed?.(target, profile.template.seed === true);
+    const line = el('span'),
       publishLink = el('button', '预演后发布');
-    chip.className = 'wb-chip';
+    line.className = 'head-status';
     publishLink.type = 'button';
     publishLink.className = 'admin-primary';
     publishLink.addEventListener('click', () => showing.show('publish'));
-    host.headerHost?.append(chip, publishLink);
+    host.headerHost?.append(line, publishLink);
+    const meta = snapshot
+      ? `${snapshot.published ? `正式 v${snapshot.published.version}` : '未发布'}${snapshot.draft ? ` · 草稿修订 ${snapshot.draft.revision}` : ''}`
+      : '新角色';
+    // Workbench4: the title row says 角色工作台 like every page; the role (dot, name) is the first part of the status line.
+    const who = el('span');
+    who.className = 'wb-who';
+    const whoDot = el('i');
+    whoDot.style?.setProperty('--dot', host.colourOf?.(target) ?? profile.presentation.color ?? '#8c8697');
+    who.append(whoDot, el('strong', name));
     let current = '';
     const paint = () => {
       const changed = new Set(editor?.changed() ?? []);
-      for (const [section, dot] of railDots) dot.hidden = !changed.has(section);
+      for (const [section, dot] of dots) dot.hidden = !changed.has(section);
       const unsaved = Math.max(changed.size, dirty ? 1 : 0);
-      state.textContent = dirty ? `未保存 ${unsaved} 处` : snapshot?.draft ? '草稿已保存' : '没有未保存的修改';
+      state.textContent = dirty ? unsavedText(unsaved) : snapshot?.draft ? '草稿已保存' : '';
       state.dataset.state = dirty ? 'dirty' : 'saved';
+      discard.hidden = !dirty;
       const drafted = snapshot?.draft
         ? changedSections(snapshot.published?.profile ?? null, snapshot.draft.profile).length
         : 0;
-      chip.hidden = !dirty && !snapshot?.draft;
-      chip.dataset.tone = dirty || drafted ? 'warn' : 'quiet';
-      chip.textContent = dirty
-        ? `${name} 有 ${unsaved} 处未保存`
-        : drafted
-          ? `${name} 草稿有 ${drafted} 处改动`
-          : `${name} 草稿与正式版一致`;
+      const seed = editor?.seed() ?? profile.template.seed === true;
+      const tag = seed ? el('span', '成长中') : null;
+      if (tag) {
+        tag.className = 'wb-seed';
+        tag.title = '设定还少：不编细节，多问玩家';
+      }
+      const unsavedPart = el('b', unsavedText(unsaved));
+      unsavedPart.className = 'wb-unsaved';
+      fillStatus(
+        line,
+        who,
+        tag,
+        meta,
+        dirty ? unsavedPart : drafted ? `草稿有 ${drafted} 处改动` : snapshot?.draft ? '草稿与正式版一致' : null,
+      );
       publishLink.hidden = !snapshot?.draft || !can('publish') || current === 'publish';
+      host.onSeed?.(target, seed);
     };
     paintDirty = paint;
     showing.show = (sectionId: string) => {
       if (!sections.some((section) => section.id === sectionId)) return;
+      const changedSection = current !== sectionId;
       current = sectionId;
       lastSection = { id: target, section: sectionId };
       for (const section of sections) {
         const on = section.id === sectionId;
-        for (const node of section.nodes) node.hidden = !on;
-        railItems.get(section.id)!.setAttribute('aria-current', String(on));
-        if (on) title.textContent = section.label;
+        for (const node of section.nodes) {
+          node.hidden = !on;
+          // The section that comes in pops in (300 ms, CSS); the class is dropped first so a second visit plays again.
+          node.dataset.pop = on && changedSection ? 'in' : 'idle';
+        }
+        tabs.get(section.id)!.setAttribute('aria-current', String(on));
       }
       paint();
     };
@@ -678,6 +717,70 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     );
     root.append(card);
     sync();
+  }
+  /** 放弃服务器草稿: a small danger zone (one confirm button) at the foot of 发布. */
+  function discardZone(snapshot: CharacterDetail) {
+    const target = snapshot.characterId;
+    const zone = dangerZone({
+      open: '放弃服务器草稿',
+      openerId: 'wb-discard',
+      impact: () => [
+        { n: String(snapshot.draft!.revision), label: '草稿修订' },
+        {
+          n: String(changedSections(snapshot.published?.profile ?? null, snapshot.draft!.profile).length),
+          label: '处改动',
+        },
+      ],
+      confirm: '确认放弃此修订草稿',
+      busy: () => busy || dirty || !can('discard'),
+      run: async () => {
+        await host.api.discard(target, snapshot.draft!.revision);
+        if (gone()) return;
+        dirty = false;
+        await list();
+        host.status('服务器草稿已放弃，正式版本不变。');
+      },
+    });
+    zones.push(zone);
+    return zone.root;
+  }
+  /** 删除角色: impact numbers, the typed name, then a 1.5 s hold. The preview hash and the idempotent request are the old flow's. */
+  function deleteZone(snapshot: CharacterDetail, displayName: string) {
+    const target = snapshot.characterId,
+      key = `delete:${target}`;
+    let impact: Awaited<ReturnType<CharacterAdminClient['deletePreview']>> | null = null;
+    const zone = dangerZone({
+      open: '删除角色',
+      openerId: 'wb-delete',
+      typeName: displayName,
+      typeLabel: `输入 ${displayName} 确认`,
+      impact: async () => {
+        const token = view;
+        impact = await host.api.deletePreview(target);
+        if (gone() || token !== view) return [];
+        return [
+          { n: String(impact.conversations), label: '个私人会话' },
+          { n: String(impact.messages), label: '条消息' },
+          { n: String(impact.pendingOperations), label: '个未终结任务' },
+        ];
+      },
+      confirm: '永久删除',
+      busy: () => busy || dirty || !can('delete'),
+      run: async () => {
+        if (!impact && !pending.has(key)) return;
+        const result = await exact(
+          key,
+          { requestId: crypto.randomUUID(), previewHash: impact?.previewHash ?? '', acknowledgeDeleteAllChats: true },
+          (input) => host.api.deleteStart(target, input),
+        );
+        if (gone()) return;
+        dirty = false;
+        await list();
+        host.status(`删除任务 ${result.deletionId} 已建立，清理状态 ${result.state}；可在删除记录中继续核对。`);
+      },
+    });
+    zones.push(zone);
+    return zone.root;
   }
   function profileDiff(parent: HTMLElement, snapshot: CharacterDetail) {
     const section = fold(parent, '查看资料改动（不调用供应商）'),
@@ -696,17 +799,56 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       for (const [name, before, after] of groups) {
         if (JSON.stringify(before) === JSON.stringify(after)) continue;
         const group = fold(output, name),
-          columns = el('div');
-        columns.className = 'profile-diff';
-        for (const [label, value] of [
-          ['正式', before],
-          ['草稿', after],
-        ] as const) {
-          const side = el('section');
-          side.append(el('h4', label), el('pre', value === undefined ? '尚无正式版本' : stringify(value)));
-          columns.append(side);
-        }
-        group.append(columns);
+          grid = el('div');
+        grid.className = 'pd-grid';
+        // A text is compared as it is; anything else line by line in its readable (indented) form.
+        const text = (value: unknown) => (value === undefined ? '' : stringify(value));
+        const head = el('div');
+        head.className = 'pd-row pd-head';
+        const l = el('span', '正式'),
+          r = el('span', '草稿');
+        l.className = 'pd-cell pd-left';
+        r.className = 'pd-cell pd-right';
+        head.append(l, r);
+        grid.append(head);
+        const side = (cell: HTMLElement, pieces: Piece[] | null) => {
+          if (pieces === null) {
+            cell.className = `${cell.className} pd-empty`;
+            return;
+          }
+          for (const piece of pieces) {
+            if (piece.kind === 'same') cell.append(piece.text);
+            else {
+              const mark = el('span', piece.text);
+              mark.className = piece.kind === 'del' ? 'pd-del' : 'pd-add';
+              cell.append(mark);
+            }
+          }
+        };
+        if (before === undefined) {
+          const row = el('div');
+          row.className = 'pd-row';
+          const left = el('span', '尚无正式版本'),
+            right = el('span');
+          left.className = 'pd-cell pd-left pd-empty';
+          right.className = 'pd-cell pd-right';
+          side(right, [{ kind: 'add', text: text(after) }]);
+          row.append(left, right);
+          grid.append(row);
+        } else
+          for (const diffRow of diffSideBySide(text(before), text(after))) {
+            const row = el('div');
+            row.className = 'pd-row';
+            const left = el('span'),
+              right = el('span');
+            left.className = 'pd-cell pd-left';
+            right.className = 'pd-cell pd-right';
+            side(left, diffRow.left);
+            side(right, diffRow.right);
+            row.append(left, right);
+            grid.append(row);
+          }
+        group.append(grid);
       }
       if (!output.childElementCount) output.append(el('p', '没有资料差异。'));
       if (!embedded) host.status('静态资料比较完成；这不是付费预演或发布审核证明。');
@@ -1058,16 +1200,15 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       target = snapshot.characterId,
       key = `material:${target}`,
       output = el('div');
-    section.append(
-      el(
-        'p',
-        '仅使用已有音色 referenceId 和明确选取的两条成品；不会创建或克隆声音，不自动上传样本。每个素材版本固定本次草稿。',
-      ),
-    );
     const reference = guarded(
       field(section, '已有 Fish 音色 referenceId', '', { max: 128 }),
       () => dirty || pending.has(key) || !can('materials'),
     );
+    if (reference.parentElement)
+      hoverValue(
+        reference.parentElement as HTMLElement,
+        '仅使用已有音色 referenceId 和明确选取的两条成品；不会创建或克隆声音，不自动上传样本。每个素材版本固定本次草稿。',
+      );
     // Replies follow the site voice model (FISH_VOICE_MODEL). Pin only when this clone sounds wrong on Drama 3.
     const pinS21 = guarded(
       check(section, '固定使用 s2.1-pro：这个克隆在 Drama 3 上听起来不对时勾选，不随站点语音模型切换'),
@@ -1103,8 +1244,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       controls = controls.filter((c) => !output.contains(c.node));
       revokeAudio();
       output.replaceChildren();
-      if (!items.length)
-        output.append(el('p', '还没有管理工作台创建的素材版本。原已批准音色与欢迎词完全不变时，发布可沿用原成品。'));
+      if (!items.length) {
+        const none = el('p', '还没有素材版本。');
+        hoverValue(none, '还没有管理工作台创建的素材版本。原已批准音色与欢迎词完全不变时，发布可沿用原成品。');
+        output.append(none);
+      }
       for (const material of items) materialRow(output, snapshot, material);
       sync();
     }
@@ -1231,9 +1375,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       target = snapshot.characterId,
       key = `publish:${target}`,
       saved = snapshot.draft;
-    section.append(
-      el('p', '发布会将已存资料和批准成品提供给玩家。不会自动生成审核或声音；在途玩家任务／未知调用不被取消或重发。'),
-    );
+    const publishNote =
+      '发布会将已存资料和批准成品提供给玩家。不会自动生成审核或声音；在途玩家任务／未知调用不被取消或重发。';
     const previews = () =>
       jobsOf(target)
         .filter((p) => p.status === 'succeeded' && sameDraft(p, snapshot))
@@ -1294,9 +1437,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       section,
       colourOnly ? '我已核对主色，确认将本版本发布给玩家' : '我已查看资料差异和该预演结果，确认将本版本发布给玩家',
     );
+    // The sentence about what publishing does is the hover tip of the confirmation line.
+    if (ack.parentElement) hoverValue(ack.parentElement as HTMLElement, publishNote);
     for (const input of [preview, material, ack]) guarded(input, () => dirty || pending.has(key) || !can('publish'));
     section.append(noProof);
-    button(
+    const confirmPublish = button(
       section,
       () => (pending.has(key) ? '按原请求核对发布回执' : '确认发布此版本'),
       () =>
@@ -1322,6 +1467,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         host.status(`正式 v${result.version} 已发布。`);
       },
     );
+    // In the console the title row's 预演后发布 has led here, so this is the screen's one solid button.
+    if (embedded) confirmPublish.className = 'admin-primary';
     ack.addEventListener('change', sync);
   }
   function deletion(parent: HTMLElement, snapshot: CharacterDetail) {

@@ -117,10 +117,11 @@ test('buttons: 导出文件 for anyone who can read, 导入文件 only with cast
   await editor.view.load();
   assert.equal(editor.buttons('导出文件').length, 1);
   assert.equal(editor.buttons('导入文件').length, 1);
-  const bar = editor.root.querySelector('.cs-bar')!;
+  // Named exception (Part 24b-6): both buttons sit on the 整页版本 strip (.cs-versions), which replaced the old button bar.
+  const bar = editor.root.querySelector('.cs-versions')!;
   assert.ok(
     bar.querySelectorAll('button').some((b) => b.textContent === '导入文件'),
-    'in the bar, beside 保存草稿 / 发布',
+    'on the 整页版本 strip, with the export',
   );
   const reader = page(t, { permissions: ['cast.read'] });
   await reader.view.load();

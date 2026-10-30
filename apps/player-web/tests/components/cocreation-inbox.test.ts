@@ -169,6 +169,8 @@ function setup(t: test.TestContext, options: Options = {}) {
   const key = (value: string, target: FakeElement = doc.body) => doc.fire('keydown', { key: value, target });
   return { doc, root, inbox, calls, copied, statuses, filters, q, all, answer, key, changed: () => changed };
 }
+// Named exception (Part 24b-6, Inbox3): the amber editor opens in the pane on the right of the open detail (the target field's
+// current draft value), not inside the answer's own card, so the tests find it with f.q('.cc-adopt ...') instead of f.answer(n).
 const rowIds = (f: ReturnType<typeof setup>) => f.all('.cc-row').map((row) => row.getAttribute('data-id'));
 const callsOf = (f: ReturnType<typeof setup>, name: string) => f.calls.filter((c) => c.name === name);
 
@@ -185,7 +187,7 @@ test('the list shows character, time, pseudonym, answer count, first line and st
   assert.match(text, /3 条/);
   assert.match(text, /哎呀妈呀/);
   assert.match(text, /已采用 1\/3/);
-  assert.match(text, /有备注/);
+  // Named exception (Part 24b-6): the 管理员备注 UI is gone from the inbox (Inbox3), so the 有备注 chip is gone with it.
   assert.ok(first.querySelector('.cc-chip-new'), 'status chip');
   assert.ok(first.querySelector('.cc-chip-star'), 'star chip');
   assert.ok(f.all('.cc-row')[1]!.querySelector('.cc-chip-processed') === null || true);
@@ -200,7 +202,8 @@ test('an empty inbox says so and a filtered one says nothing matched', async (t)
   await f.inbox.load();
   assert.equal(f.q('.cc-empty')!.hidden, false);
   assert.equal(f.q('.cc-empty')!.textContent, '还没有玩家的想法。');
-  assert.equal(f.q('.cc-detail')!.hidden, true);
+  // Named exception (Part 24b-6): the detail lives in a row under the open card, so with no card there is no detail node at all.
+  assert.equal(f.q('.cc-detail'), null);
 });
 
 test('the detail groups answers by target field with friendly labels; dialogue renders as chat bubbles; text is never parsed as HTML', async (t) => {
@@ -239,7 +242,8 @@ test('the detail groups answers by target field with friendly labels; dialogue r
   assert.equal(dialogue.querySelector('.cc-card-prompt')!.textContent, '来一段对话');
   assert.equal(f.answer(2).querySelector('.cc-answer-text')!.textContent, '<b>吵闹</b>', 'markup stays text');
   assert.equal(f.answer(1).querySelector('.cc-card-prompt')!.textContent, '瓜瓜最常挂在嘴边的一句话');
-  assert.equal(f.root.querySelectorAll('b').length, 0);
+  // Named exception (Part 24b-6): the title row now has <b> counters; what must stay text is the answers.
+  assert.equal(f.all('.cc-answer b').length, 0);
 });
 
 test('复制 copies the answer as plain text, dialogue as a script', async (t) => {
@@ -258,7 +262,7 @@ test('加入草稿 opens an inline editor prefilled with the answer and its sugg
   const card = f.answer(1);
   assert.equal(card.querySelector('.cc-adopt'), null);
   card.querySelector('.cc-adopt-open')!.click();
-  const editor = f.answer(1).querySelector('.cc-adopt')!;
+  const editor = f.q('.cc-adopt')!;
   const field = editor.querySelector('select')!;
   assert.equal(field.value, 'speechStyle');
   assert.equal(editor.querySelector('textarea')!.value, '哎呀妈呀');
@@ -281,10 +285,10 @@ test('加入草稿 opens an inline editor prefilled with the answer and its sugg
   assert.equal(editor.querySelector('textarea')!.value, '哎呀妈呀');
   // A free answer suggests the persona.
   f.answer(3).querySelector('.cc-adopt-open')!.click();
-  assert.equal(f.answer(3).querySelector('.cc-adopt select')!.value, 'persona');
+  assert.equal(f.q('.cc-adopt select')!.value, 'persona');
   // The dialogue answer suggests a structured example with an editable situation.
   f.answer(0).querySelector('.cc-adopt-open')!.click();
-  const example = f.answer(0).querySelector('.cc-adopt')!;
+  const example = f.q('.cc-adopt')!;
   assert.equal(example.querySelector('select')!.value, 'dialogueExamples');
   const inputs = example.querySelectorAll('input');
   assert.deepEqual(
@@ -299,8 +303,8 @@ test('saving uses the existing draft save: no draft yet starts one from the publ
   const f = setup(t);
   await f.inbox.load();
   f.answer(1).querySelector('.cc-adopt-open')!.click();
-  f.answer(1).querySelector('textarea')!.type_('常说“哎呀妈呀”');
-  f.answer(1).querySelector('.cc-adopt')!.dispatch('submit');
+  f.q('.cc-adopt textarea')!.type_('常说“哎呀妈呀”');
+  f.q('.cc-adopt')!.dispatch('submit');
   await flush();
   const [save] = callsOf(f, 'save');
   assert.ok(save, 'the draft was saved');
@@ -314,7 +318,7 @@ test('saving uses the existing draft save: no draft yet starts one from the publ
     'then the answer is marked adopted',
   );
   assert.ok(f.answer(1).querySelector('.cc-chip-adopted'), '已采用');
-  assert.equal(f.answer(1).querySelector('.cc-adopt'), null, 'the editor closes');
+  assert.equal(f.q('.cc-adopt'), null, 'the editor closes');
   assert.match(f.q('.cc-detail-head')!.textContent, /已处理/, 'the submission became processed automatically');
   assert.match(f.all('.cc-row')[0]!.textContent, /已处理/);
   assert.match(f.all('.cc-row')[0]!.textContent, /已采用 1\/3/);
@@ -337,7 +341,7 @@ test('with an existing draft the save builds on it and sends its revision', asyn
   });
   await f.inbox.load();
   f.answer(3).querySelector('.cc-adopt-open')!.click();
-  f.answer(3).querySelector('.cc-adopt')!.dispatch('submit');
+  f.q('.cc-adopt')!.dispatch('submit');
   await flush();
   const [save] = callsOf(f, 'save');
   assert.equal(save!.args[1], 7);
@@ -350,7 +354,7 @@ test('a dialogue answer becomes a structured example {situation, player, reply[]
   const f = setup(t);
   await f.inbox.load();
   f.answer(0).querySelector('.cc-adopt-open')!.click();
-  const editor = f.answer(0).querySelector('.cc-adopt')!;
+  const editor = f.q('.cc-adopt')!;
   const [situation] = editor.querySelectorAll('input');
   situation!.type_('被夸奖时');
   editor.dispatch('submit');
@@ -375,7 +379,7 @@ test('a text answer can be added to a list field, and to every other field the e
     const f = setup(t);
     await f.inbox.load();
     f.answer(1).querySelector('.cc-adopt-open')!.click();
-    const editor = f.answer(1).querySelector('.cc-adopt')!;
+    const editor = f.q('.cc-adopt')!;
     editor.querySelector('select')!.value = field;
     editor.querySelector('select')!.dispatch('change');
     editor.dispatch('submit');
@@ -395,14 +399,14 @@ test('a failed save is shown inline, keeps the editor open and does not mark any
   const f = setup(t, { saveError: conflict });
   await f.inbox.load();
   f.answer(1).querySelector('.cc-adopt-open')!.click();
-  f.answer(1).querySelector('.cc-adopt')!.dispatch('submit');
+  f.q('.cc-adopt')!.dispatch('submit');
   await flush();
-  const error = f.answer(1).querySelector('.cc-adopt-error')!;
+  const error = f.q('.cc-adopt-error')!;
   assert.equal(error.hidden, false);
   assert.match(error.textContent, /草稿已在其他页面修改/);
   assert.equal(error.getAttribute('role'), 'alert');
   assert.equal(callsOf(f, 'adopt').length, 0, 'not adopted when the draft was not saved');
-  assert.ok(f.answer(1).querySelector('.cc-adopt'), 'still open for another try');
+  assert.ok(f.q('.cc-adopt'), 'still open for another try');
   assert.equal(f.answer(1).querySelector('.cc-chip-adopted'), null);
   assert.match(f.all('.cc-row')[0]!.textContent, /新/);
   assert.equal(f.changed(), 0);
@@ -418,9 +422,9 @@ test('server validation errors and unknown errors are shown inline in words', as
     const f = setup(t, { saveError: Object.assign(new Error('x'), { code }) });
     await f.inbox.load();
     f.answer(1).querySelector('.cc-adopt-open')!.click();
-    f.answer(1).querySelector('.cc-adopt')!.dispatch('submit');
+    f.q('.cc-adopt')!.dispatch('submit');
     await flush();
-    assert.match(f.answer(1).querySelector('.cc-adopt-error')!.textContent, pattern, code);
+    assert.match(f.q('.cc-adopt-error')!.textContent, pattern, code);
     f.inbox.dispose();
   }
 });
@@ -429,10 +433,10 @@ test('an empty edit or an unusable existing field is explained inline before any
   const f = setup(t);
   await f.inbox.load();
   f.answer(1).querySelector('.cc-adopt-open')!.click();
-  f.answer(1).querySelector('textarea')!.type_('   ');
-  f.answer(1).querySelector('.cc-adopt')!.dispatch('submit');
+  f.q('.cc-adopt textarea')!.type_('   ');
+  f.q('.cc-adopt')!.dispatch('submit');
   await flush();
-  assert.match(f.answer(1).querySelector('.cc-adopt-error')!.textContent, /请先写下要加入的内容/);
+  assert.match(f.q('.cc-adopt-error')!.textContent, /请先写下要加入的内容/);
   assert.equal(callsOf(f, 'save').length, 0);
 
   const shaped = profile(3);
@@ -443,27 +447,27 @@ test('an empty edit or an unusable existing field is explained inline before any
   const g = setup(t, { published: { version: 3, profile: shaped } });
   await g.inbox.load();
   g.answer(1).querySelector('.cc-adopt-open')!.click();
-  g.answer(1).querySelector('.cc-adopt')!.dispatch('submit');
+  g.q('.cc-adopt')!.dispatch('submit');
   await flush();
-  assert.match(g.answer(1).querySelector('.cc-adopt-error')!.textContent, /无法自动追加/);
+  assert.match(g.q('.cc-adopt-error')!.textContent, /无法自动追加/);
   assert.equal(callsOf(g, 'save').length, 0);
 
   const none = setup(t, { published: null });
   await none.inbox.load();
   none.answer(1).querySelector('.cc-adopt-open')!.click();
-  none.answer(1).querySelector('.cc-adopt')!.dispatch('submit');
+  none.q('.cc-adopt')!.dispatch('submit');
   await flush();
-  assert.match(none.answer(1).querySelector('.cc-adopt-error')!.textContent, /还没有可编辑的版本/);
+  assert.match(none.q('.cc-adopt-error')!.textContent, /还没有可编辑的版本/);
 });
 
 test('if the draft saved but marking it adopted failed, the editor says so and never saves twice', async (t) => {
   const f = setup(t, { adoptError: Object.assign(new Error('x'), { code: 'NETWORK' }) });
   await f.inbox.load();
   f.answer(1).querySelector('.cc-adopt-open')!.click();
-  f.answer(1).querySelector('.cc-adopt')!.dispatch('submit');
+  f.q('.cc-adopt')!.dispatch('submit');
   await flush();
   assert.equal(callsOf(f, 'save').length, 1);
-  assert.match(f.answer(1).querySelector('.cc-adopt-error')!.textContent, /草稿已保存.*请勿重复加入/);
+  assert.match(f.q('.cc-adopt-error')!.textContent, /草稿已保存.*请勿重复加入/);
 });
 
 test('keyboard: j and k move through the list and open each submission; e archives; s stars; fields and other pages are left alone', async (t) => {
@@ -522,8 +526,9 @@ test('someone who may only read cannot change anything: manage controls are off 
   assert.ok(f.all('.cc-row input').every((box) => box.hidden));
   assert.equal(f.q('.cc-star')!.disabled, true);
   assert.equal(f.q('.cc-set-archived')!.disabled, true);
-  assert.equal(f.q('.cc-save-note')!.disabled, true);
-  assert.equal(f.q('.cc-note')!.disabled, true);
+  // Named exception (Part 24b-6): no 管理员备注 UI any more.
+  assert.equal(f.q('.cc-save-note'), null);
+  assert.equal(f.q('.cc-note'), null);
   assert.equal(f.answer(1).querySelector('.cc-adopt-open')!.disabled, true);
   assert.equal(f.answer(1).querySelector('.cc-copy')!.disabled, false, 'copying is reading');
   f.key('e');
@@ -573,23 +578,15 @@ test('bulk archive: select rows, archive them in one request; a status filter dr
   assert.equal(g.inbox.snapshot().detail!.id, 's2');
 });
 
-test('the admin note is saved per submission and shows as a chip', async (t) => {
+// Named exception (Part 24b-6): the 管理员备注 UI is removed from the inbox (its API stays); the old note test is superseded by this
+// one, which pins that nothing of it is drawn and nothing is sent.
+test('the inbox has no admin note field or button, and never sends a note', async (t) => {
   const f = setup(t);
   await f.inbox.load();
-  f.q('.cc-note')!.type_('下周看看');
-  f.q('.cc-save-note')!.click();
-  await flush();
-  assert.deepEqual(
-    callsOf(f, 'note').map((c) => c.args),
-    [['s1', '下周看看']],
-  );
-  assert.match(f.all('.cc-row')[0]!.textContent, /有备注/);
-  assert.match(f.statuses.at(-1)!, /备注已保存/);
-  f.q('.cc-note')!.type_('');
-  f.q('.cc-save-note')!.click();
-  await flush();
-  assert.match(f.statuses.at(-1)!, /备注已清空/);
-  assert.doesNotMatch(f.all('.cc-row')[0]!.textContent, /有备注/);
+  assert.equal(f.q('.cc-note'), null);
+  assert.equal(f.q('.cc-save-note'), null);
+  assert.doesNotMatch(f.root.textContent, /管理员备注|有备注/);
+  assert.equal(callsOf(f, 'note').length, 0);
 });
 
 test('status buttons change one submission; the star toggles', async (t) => {
@@ -615,21 +612,31 @@ test('status buttons change one submission; the star toggles', async (t) => {
 // Named exception (Part 24b-2): the filters are chips (角色, 状态, 只看星标) plus the search field, and the next page is read when the
 // list is scrolled to its end: there are no dropdowns and no 更多 button.
 test('filters go to the server (character, status, star, text) and the next page is read by cursor when the list is scrolled to its end', async (t) => {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: new EventTarget() });
+  t.after(() => {
+    if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
+    else Reflect.deleteProperty(globalThis, 'window');
+  });
   const f = setup(t, { pages: [[item('p1')], [item('p2')]] });
   await f.inbox.load();
   assert.deepEqual(f.filters[0]!.filter, { characterId: null, status: null, starred: false, query: '' });
   assert.equal(f.q('.cc-more'), null, 'no 更多 button');
   assert.equal(f.all('select').length, 0, 'no dropdowns');
-  const list = f.q('.cc-list')!;
-  Object.assign(list, { clientHeight: 500, scrollHeight: 500 });
-  list.dispatch('scroll');
+  // Named exception (Part 24b-6): the page scrolls (there is no inner list), so the window's scroll reads the next page.
+  const win = globalThis.window as unknown as EventTarget & { innerHeight: number; scrollY: number };
+  Object.assign(win, { innerHeight: 800, scrollY: 0 });
+  Object.assign(f.doc.documentElement, { scrollHeight: 900 });
+  win.dispatchEvent(new Event('scroll'));
   await flush();
   assert.deepEqual(rowIds(f), ['p1', 'p2']);
   assert.deepEqual(f.filters.at(-1)!.before, { createdAt: 1, id: 'cursor' });
 
   const g = setup(t);
   await g.inbox.load();
-  const chip = (label: string) => g.all('.cc-filter-chip').find((c) => c.textContent === label)!;
+  // Named exception (Part 24b-6): a character chip carries the number of its new notes after the name ("瓜瓜 3").
+  const chip = (label: string) =>
+    g.all('.cc-filter-chip').find((c) => c.textContent === label || c.textContent.startsWith(`${label} `))!;
   chip('瓜瓜').click();
   await flush();
   assert.equal(chip('瓜瓜').getAttribute('aria-pressed'), 'true');

@@ -146,7 +146,9 @@ test('an untouched set is returned exactly as loaded; legacy categories and role
   assert.deepEqual(f.ticked(), ['invites.issue', 'invites.read', 'invites.revoke-access', 'invites.revoke-code']);
   assert.deepEqual(f.editor.value(), [...original].sort());
   assert.match(f.host.textContent, /按具体角色授予的旧授权/);
-  assert.match(f.host.textContent, /characters\.edit:jojo/);
+  // Named exception (Part 24b-6, round 2): a grant for one role shows its Chinese permission name, never the raw id.
+  assert.match(f.host.textContent, /修改并保存草稿 · 指定角色/);
+  assert.doesNotMatch(f.host.textContent, /characters\.edit/);
   f.toggle('invites.revoke-code', false);
   assert.deepEqual(
     f.editor.value(),

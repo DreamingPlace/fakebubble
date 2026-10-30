@@ -37,6 +37,8 @@ import { evalSetEditor } from './eval-set-editor.ts';
 import { downloadText, exportName, runToCsv, runToJson } from './export.ts';
 import { previewPoller, type PollerHost } from './poller.ts';
 import { bindTip } from '../ui/tooltip.ts';
+import { openTable } from '../ui/open-table.ts';
+import { hoverValue } from '../ui/hover-value.ts';
 
 export const RUN_MAX = 50;
 const INPUT_MAX = 4000;
@@ -110,7 +112,8 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     singles: PreviewRow[] = [],
     sets: EvalSet[] = [];
   const loaded = new Map<string, RunDetail>();
-  const open = new Set<string>();
+  /** The run to open once the table has it (a run just submitted, or the newest on open). */
+  let wantOpen: string | null = null;
   const chosen: string[] = [];
   const known = new Map<string, string>();
   const gone = () => disposed || host.disposed();
@@ -282,12 +285,15 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     runSet,
     editSets,
   );
+  // Controls on the left, the inputs (the "chat") on the right; the results table below them takes the full width.
   composeHost.append(
-    bar.root,
-    h('div', { class: 'pw-compose-row' }, single, sendSingle),
-    h('div', { class: 'pw-compose-row' }, batch, h('div', { class: 'pw-compose-col' }, label, sendBatch)),
-    ackLine,
-    unavailable,
+    h('div', { class: 'pw-controls' }, bar.root, ackLine, unavailable),
+    h(
+      'div',
+      { class: 'pw-chat' },
+      h('div', { class: 'pw-compose-row' }, single, sendSingle),
+      h('div', { class: 'pw-compose-row' }, batch, h('div', { class: 'pw-compose-col' }, label, sendBatch)),
+    ),
   );
   for (const input of [relation, simMode, simTime, setPicker, single, batch, label, ack]) {
     input.addEventListener('input', lock);
@@ -332,7 +338,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       if (gone() || characterId !== id) return;
       batch.value = '';
       ack.checked = false;
-      open.add(result.runId);
+      wantOpen = result.runId;
       host.status('已提交一次运行；各条按顺序排队，不会自动重发。');
       await refresh([result.runId]);
       poller.kick();
@@ -387,6 +393,12 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     if (p.status === 'failed') return h('span', { class: 'pw-fail', text: errorText(p.errorCode) });
     return h('span', { class: 'admin-hint', text: STATUS_LABEL[p.status] });
   };
+  /** A value with its breakdown in the light bubble (hover and keyboard focus). */
+  const hovered = (text: string, tip: string) => {
+    const cell = h('span', { text });
+    hoverValue(cell, tip);
+    return cell;
+  };
   function rowsTable(run: RunSummary, filterValue: () => string) {
     const table = dataTable<PreviewRow>({
       columns: [
@@ -411,7 +423,16 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
         },
         { key: 'changed', label: '审核改动', render: (p) => (p.final ? (p.final.reviewChanged ? '是' : '否') : '—') },
         { key: 'coverage', label: '覆盖', render: coverageText },
-        { key: 'cost', label: '费用', align: 'end', render: (p) => micros(p.cost.chargedMicros) },
+        {
+          key: 'cost',
+          label: '费用',
+          align: 'end',
+          render: (p) =>
+            hovered(
+              micros(p.cost.chargedMicros),
+              `实收 ${micros(p.cost.chargedMicros)} · 仍保留 ${micros(p.cost.heldMicros)}`,
+            ),
+        },
         {
           key: 'latency',
           label: '耗时',
@@ -419,7 +440,10 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
           render: (p) =>
             p.latency.draftMs === null && p.latency.reviewMs === null
               ? '—'
-              : `草稿 ${seconds(p.latency.draftMs)} · 审核 ${seconds(p.latency.reviewMs)}`,
+              : hovered(
+                  `${seconds((p.latency.draftMs ?? 0) + (p.latency.reviewMs ?? 0))}`,
+                  `草稿 ${seconds(p.latency.draftMs)} · 审核 ${seconds(p.latency.reviewMs)}`,
+                ),
         },
       ],
       rowKey: (p) => p.previewId,
@@ -435,98 +459,89 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     };
     return { table, paint };
   }
+  const runsTable = openTable<RunSummary>({
+    label: '预演运行',
+    className: 'pw-results',
+    emptyText: '还没有运行。',
+    rowKey: (run) => run.runId,
+    tick: {
+      label: '选择此运行用于对比',
+      max: 2,
+      onChange: (keys) => {
+        chosen.splice(0, chosen.length, ...keys);
+        paintCompare();
+      },
+    },
+    columns: [
+      { key: 'title', label: '运行', width: 'minmax(0, 1.6fr)', cell: (run) => runTitle(run, runs.indexOf(run)) },
+      { key: 'at', label: '时间', cell: (run) => when(run.createdAt) },
+      {
+        key: 'rel',
+        label: '关系',
+        cell: (run) => RELATIONS.find(([v]) => v === run.relationship)?.[1] ?? run.relationship,
+      },
+      {
+        key: 'sim',
+        label: '模拟时间',
+        cell: (run) => (run.simulatedTime ? `${zoneLabel(run.timeZone)} ${run.simulatedTime.time}` : '真实时间'),
+      },
+      { key: 'rev', label: '草稿', cell: (run) => String(run.draftRevision) },
+      {
+        key: 'pass',
+        label: '通过',
+        align: 'end',
+        cell: (run) => `${run.counts.succeeded}/${run.itemCount}`,
+        tip: (run) =>
+          `${STATUS_LABEL.succeeded} ${run.counts.succeeded} · ${STATUS_LABEL.failed} ${run.counts.failed} · ${STATUS_LABEL.generating} ${run.counts.generating} · ${STATUS_LABEL.queued} ${run.counts.queued}`,
+      },
+    ],
+    detail: async (run) => {
+      const filter = toolbar({ filters: [{ kind: 'select', id: 'status', label: '状态', options: FILTER_STATUSES }] });
+      const table = rowsTable(run, () => filter.values().status ?? '');
+      filter.root.addEventListener('change', () => table.paint());
+      const exportButtons = (['json', 'csv'] as const).map((kind) => {
+        const button = h('button', {
+          class: 'admin-secondary',
+          text: kind === 'json' ? '导出 JSON' : '导出 CSV',
+          attrs: { type: 'button', 'data-export': kind },
+        });
+        button.addEventListener(
+          'click',
+          () =>
+            void host.run(async () => {
+              const full = await ensureRun(run.runId, true);
+              const save = host.download ?? downloadText;
+              if (kind === 'json') save(exportName(full.run, 'json'), runToJson(full), 'application/json');
+              else save(exportName(full.run, 'csv'), runToCsv(full), 'text/csv');
+            }),
+        );
+        return button;
+      });
+      await ensureRun(run.runId, false).catch(() => undefined);
+      table.paint();
+      return h(
+        'div',
+        { class: 'pw-run-body', attrs: { 'data-run': run.runId } },
+        h('div', { class: 'pw-run-tools' }, filter.root, ...exportButtons),
+        table.table.root,
+      );
+    },
+  });
+  runsHost.append(runsTable.root);
+  function paintCompare() {
+    if (gone()) return;
+    compareHost.replaceChildren();
+    if (chosen.length !== 2) return;
+    const go = h('button', { text: '对比所选 2 次', attrs: { type: 'button', 'data-compare-go': '' } });
+    go.addEventListener('click', () => void showCompare());
+    compareHost.append(h('div', { class: 'admin-bar' }, go));
+  }
   function paintRuns() {
     if (gone()) return;
-    runsHost.replaceChildren();
-    compareHost.replaceChildren();
-    if (!runs.length) {
-      runsHost.append(h('p', { class: 'admin-empty', text: '还没有运行。' }));
-      return;
-    }
-    runs.forEach((run, index) => {
-      const section = h('details', {
-        class: 'pw-run',
-        attrs: { 'data-run': run.runId, ...(open.has(run.runId) ? { open: '' } : {}) },
-      });
-      const pick = h('input', {
-        attrs: { type: 'checkbox', 'aria-label': '选择此运行用于对比', 'data-compare': run.runId },
-      });
-      pick.checked = chosen.includes(run.runId);
-      pick.addEventListener('click', (event) => event.stopPropagation());
-      pick.addEventListener('change', () => {
-        const at = chosen.indexOf(run.runId);
-        if (pick.checked && at < 0) chosen.push(run.runId);
-        if (!pick.checked && at >= 0) chosen.splice(at, 1);
-        while (chosen.length > 2) chosen.shift();
-        paintRuns();
-      });
-      const exportJson = h('button', {
-        class: 'admin-secondary',
-        text: '导出 JSON',
-        attrs: { type: 'button', 'data-export': 'json' },
-      });
-      const exportCsv = h('button', {
-        class: 'admin-secondary',
-        text: '导出 CSV',
-        attrs: { type: 'button', 'data-export': 'csv' },
-      });
-      for (const [button, kind] of [
-        [exportJson, 'json'],
-        [exportCsv, 'csv'],
-      ] as const)
-        button.addEventListener('click', (event) => {
-          event.stopPropagation();
-          void host.run(async () => {
-            const full = await ensureRun(run.runId, true);
-            const save = host.download ?? downloadText;
-            if (kind === 'json') save(exportName(full.run, 'json'), runToJson(full), 'application/json');
-            else save(exportName(full.run, 'csv'), runToCsv(full), 'text/csv');
-          });
-        });
-      const filter = toolbar({ filters: [{ kind: 'select', id: 'status', label: '状态', options: FILTER_STATUSES }] });
-      let table: ReturnType<typeof rowsTable> | null = null;
-      const fill = () => {
-        if (!table) {
-          table = rowsTable(run, () => filter.values().status ?? '');
-          body.append(filter.root, table.table.root);
-        }
-        table.paint();
-      };
-      const body = h('div', { class: 'pw-run-body' });
-      section.append(
-        h(
-          'summary',
-          {},
-          h('strong', { text: runTitle(run, index) }),
-          h('span', { class: 'admin-hint', text: ` ${summaryLine(run)}` }),
-          h(
-            'span',
-            { class: 'pw-run-actions' },
-            h('label', { class: 'admin-check' }, pick, h('span', { text: '对比' })),
-            exportJson,
-            exportCsv,
-          ),
-        ),
-        body,
-      );
-      filter.root.addEventListener('change', () => table?.paint());
-      section.addEventListener('toggle', () => {
-        if (section.hasAttribute('open')) {
-          open.add(run.runId);
-          void ensureRun(run.runId, false).then(fill);
-        } else open.delete(run.runId);
-      });
-      runsHost.append(section);
-      if (open.has(run.runId)) {
-        if (loaded.has(run.runId)) fill();
-        else void ensureRun(run.runId, false).then(fill);
-      }
-    });
-    if (chosen.length === 2) {
-      const go = h('button', { text: '对比所选两次运行', attrs: { type: 'button', 'data-compare-go': '' } });
-      go.addEventListener('click', () => void showCompare());
-      compareHost.append(h('div', { class: 'admin-bar' }, h('span', { text: '已选 2 次运行' }), go));
-    }
+    runsTable.setRows(runs);
+    if (wantOpen && runs.some((run) => run.runId === wantOpen)) runsTable.open(wantOpen);
+    wantOpen = null;
+    paintCompare();
   }
   async function ensureRun(runId: string, force: boolean) {
     const characterId = id!;
@@ -547,7 +562,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     runs = next.runs;
     singles = next.singles;
     for (const row of singles) known.set(row.previewId, `${row.status}|${row.settlement}|${row.errorCode}`);
-    for (const runId of new Set([...runIds, ...open]))
+    for (const runId of new Set([...runIds, ...(runsTable.openKey ? [runsTable.openKey] : [])]))
       if (runs.some((r) => r.runId === runId)) await ensureRun(runId, true);
     if (gone() || characterId !== id) return;
     paintRuns();
@@ -769,7 +784,9 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     runs = [];
     singles = [];
     loaded.clear();
-    open.clear();
+    wantOpen = null;
+    runsTable.closeAll();
+    runsTable.clearTicks();
     chosen.length = 0;
     known.clear();
     pendingRun = null;
@@ -788,7 +805,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     singles = list.singles;
     sets = setList;
     for (const row of singles) known.set(row.previewId, `${row.status}|${row.settlement}|${row.errorCode}`);
-    if (runs[0]) open.add(runs[0].runId);
+    if (runs[0]) wantOpen = runs[0].runId;
     unavailable.hidden = !!d.draft && d.previewAvailable;
     unavailable.textContent = !d.draft
       ? '这个角色还没有已保存的草稿，不能预演。'
@@ -817,7 +834,9 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       poller.stop();
       side.close();
       compareDrawer.close();
-      runsHost.replaceChildren();
+      runsTable.closeAll();
+      runsTable.clearTicks();
+      runsTable.setRows([]);
       compareHost.replaceChildren();
       singlesHost.replaceChildren();
     },

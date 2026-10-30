@@ -389,10 +389,12 @@ test('owner explicitly confirms all-permission removal without logout and does n
   await flush();
   let nodes = descendants(f.root.querySelector('#admin-members-list'));
   // Named exception (Part 24b-2): 收回全部功能权限 is a plain button now, not a fold; it asks in a confirm dialog (确认收回).
+  // Named exception (Part 24b-6): the confirm dialog is replaced by the danger zone (shared piece 4): the same button opens the
+  // zone in place under the person's grid, and 确认收回 is its one confirm button there. Nothing else about the flow changed.
   nodes.find((n) => n.textContent === '收回全部功能权限')!.fire();
   await flush();
   assert.equal(saved, undefined, 'nothing is revoked before the confirmation');
-  descendants(f.root.querySelector('main'))
+  descendants(f.root.querySelector('#admin-members-list'))
     .find((n) => n.textContent === '确认收回')!
     .fire();
   await flush();
@@ -400,7 +402,8 @@ test('owner explicitly confirms all-permission removal without logout and does n
   assert.deepEqual(saved, []);
   assert.equal(f.logouts(), 0);
   nodes = descendants(f.root.querySelector('#admin-members-list'));
-  nodes.find((n) => n.textContent === '为此管理员签发新登录凭据')!.fire();
+  // Named exception (Part 24b-6): the v3 board's copy of this button is 签发新登录凭据.
+  nodes.find((n) => n.textContent === '签发新登录凭据')!.fire();
   await flush();
   // Named exception (Part 24b-1 fix): 刷新权限列表 is gone; the list reloads by itself after every action (the reissue above did).
   const frozen = descendants(f.root.querySelector('#admin-members-list')).find((n) =>

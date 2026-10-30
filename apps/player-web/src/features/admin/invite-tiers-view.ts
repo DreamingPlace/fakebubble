@@ -1,7 +1,12 @@
 import type { InviteBatch, InviteBatchCode, NewInviteBatch } from '../../services/account-admin-api.ts';
 import { h } from '../cocreation/h.ts';
+import { dangerZone } from './ui/danger-zone.ts';
+import { exactCount, hoverValue } from './ui/hover-value.ts';
+import { chevron } from './ui/open-table.ts';
+import type { ConfirmInPlace } from './ui/inline-confirm.ts';
+import { fillStatus, pageHead } from './ui/page-head.ts';
+import { markDirty } from './ui/unsaved.ts';
 import { statusBadge } from './ui/status-badge.ts';
-import { pageHead } from './ui/page-head.ts';
 
 /** Limits the server enforces (BATCH_LIMITS in invites/web-invite-tiers.ts); the form only mirrors them. */
 export const TIER_FORM = Object.freeze({
@@ -72,7 +77,8 @@ export interface InviteTiersDeps {
   /** Editing N and cap is the owner's alone. */
   isOwner: () => boolean;
   run: (work: () => Promise<void>) => Promise<void>;
-  confirm: (options: { title: string; message: string; confirmLabel: string }) => Promise<boolean>;
+  /** Every question opens in place, inside the host it is given (no dialog). */
+  confirm: ConfirmInPlace;
   toast: (text: string) => void;
   newRequestId: () => string;
   disposed: () => boolean;
@@ -106,7 +112,6 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   /** `fresh`: the batch was created a moment ago - the detail says so, and the codes returned at creation back up each 复制. */
   let open: { batch: InviteBatch; codes: InviteBatchCode[]; fresh: string[] | null } | null = null;
   const copied = new Set<string>();
-  let editing: string | null = null;
   // A creation or an edit whose outcome was never seen is retried under the same request id, so it never applies twice.
   let createPending: { id: string; signature: string } | null = null;
   let editPending: { id: string; signature: string } | null = null;
@@ -135,7 +140,8 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   const amount = num('tiers-amount', 1, TIER_FORM.amountMax, String(TIER_FORM.defaultAmount));
   const cap = num('tiers-cap', 1, TIER_FORM.capMax, String(TIER_FORM.defaultCap));
   const duration = num('tiers-duration', 1, TIER_FORM.durationMax);
-  const redeemBy = h('input', { attrs: { id: 'tiers-redeem-by', type: 'date' } });
+  duration.setAttribute('placeholder', '长期');
+  const redeemBy = h('input', { attrs: { id: 'tiers-redeem-by', type: 'date', 'aria-label': '兑换截止日期（UTC）' } });
   // Part 22d: a test batch (测试组) is marked here, at creation, and never changed afterwards.
   const testBox = h('input', { attrs: { type: 'checkbox', id: 'tiers-test' } });
   const testField = h(
@@ -152,14 +158,14 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   const refillFields = h(
     'div',
     { class: 'tiers-refill' },
-    field('tiers-amount', '每天补充（点）', amount),
-    field('tiers-cap', '总上限（点）', cap),
+    field('tiers-amount', '每天 +点', amount),
+    field('tiers-cap', '上限 点', cap),
   );
   const form = h(
     'form',
     { class: 'tiers-form', attrs: { id: 'admin-tiers-create', novalidate: 'novalidate' } },
     field('tiers-name', '批次名称', name),
-    field('tiers-count', '邀请码数量（1–500）', count),
+    field('tiers-count', '数量', count),
     h(
       'div',
       { class: 'tiers-field tiers-kind-field' },
@@ -172,8 +178,8 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       ),
     ),
     refillFields,
-    field('tiers-duration', '额度有效天数（可选，不填为长期）', duration),
-    field('tiers-redeem-by', '兑换截止日期（UTC，可选）', redeemBy),
+    field('tiers-duration', '有效天数', duration),
+    field('tiers-redeem-by', '兑换截止 UTC', redeemBy),
     testField,
     problem,
     h('div', { class: 'tiers-form-actions' }, create),
@@ -186,44 +192,30 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     { class: 'admin-table tiers-table', attrs: { 'aria-label': '邀请批次' } },
     h('caption', { text: '邀请批次' }),
     h(
-      'colgroup',
-      {},
-      ...['name', 'tier', 'created', 'num', 'num', 'num', 'num', 'actions'].map((c) =>
-        h('col', { class: `tiers-col-${c}` }),
-      ),
-    ),
-    h(
       'thead',
       {},
       h(
         'tr',
         {},
-        ...['批次', '类型', '创建', '邀请码', '已兑换', '已撤销', '持有中', '操作'].map((label) =>
-          h('th', { text: label, attrs: { scope: 'col' } }),
+        ...['', '批次', '类型', '创建 UTC', '邀请码', '兑换', '撤销', '持有中'].map((label, i) =>
+          h('th', { text: label, attrs: { scope: 'col' }, class: i >= 4 && i !== 5 ? 'is-end' : '' }),
         ),
       ),
     ),
     body,
   );
   const empty = h('p', { class: 'admin-hint', text: '还没有邀请批次。', hidden: true });
+  // The open batch's codes: one element that moves under whichever row is open (a row of the same table, full width).
   const detail = h('section', { class: 'tiers-detail', hidden: true });
-  const summary = h('span', { class: 'tiers-summary' });
-  // Two columns, nothing folded: the creation form on the left; on the right the batches, and under them the codes of the
-  // batch that is selected (a click on its row; a new batch is selected as soon as it exists).
+  const status = h('span', { class: 'head-status' });
   root.replaceChildren(
-    pageHead('邀请与额度'),
+    pageHead('邀请与额度', status),
+    form,
     h(
       'div',
-      { class: 'tiers-layout' },
-      h('div', { class: 'tiers-side' }, form),
-      h(
-        'div',
-        { class: 'tiers-main' },
-        h('div', { class: 'tiers-list-head' }, h('h3', { text: '批次' }), summary),
-        empty,
-        h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table)),
-        detail,
-      ),
+      { class: 'tiers-list' },
+      empty,
+      h('div', { class: 'admin-table-region' }, h('div', { class: 'admin-table-wrap' }, table)),
     ),
   );
 
@@ -245,7 +237,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     return node;
   };
 
-  /** Clicking a batch row (not one of its buttons) selects it: its codes show under the list. Enter and Space do the same. */
+  /** Clicking a batch row (not one of its buttons) opens its codes directly under it; clicking it again closes them. */
   const insideControl = (target: unknown, row: unknown) => {
     for (
       let node = target as { tagName?: string; parentNode?: unknown; parent?: unknown } | null;
@@ -258,7 +250,11 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   };
   function selectable(row: HTMLElement, batch: InviteBatch) {
     const pick = () => {
-      if (open?.batch.id !== batch.id) void deps.run(() => show(batch));
+      if (open?.batch.id === batch.id) {
+        open = null;
+        paintDetail();
+        paintList();
+      } else void deps.run(() => show(batch));
     };
     row.addEventListener('click', (event) => {
       if (!insideControl(event.target, row)) pick();
@@ -272,133 +268,85 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     });
     return row;
   }
+  const unusedOf = (batch: InviteBatch) => Math.max(0, batch.codes - batch.redeemed - batch.revoked);
   function paintList() {
-    body.replaceChildren(
-      ...batches
-        .map((batch) => {
-          const actions = h(
-            'div',
-            { class: 'tiers-actions' },
-            batch.tier === 'daily_refill' && deps.isOwner()
-              ? button('修改额度', () => {
-                  editing = batch.id;
-                  paintList();
-                })
-              : null,
-            button('撤销整批', () => void deps.run(() => revokeBatch(batch)), 'admin-secondary tiers-danger'),
-          );
-          const rows: HTMLElement[] = [
-            selectable(
-              h(
-                'tr',
-                {
-                  class: open?.batch.id === batch.id ? 'is-selected' : '',
-                  attrs: {
-                    'data-batch': batch.id,
-                    tabindex: '0',
-                    'aria-selected': String(open?.batch.id === batch.id),
-                  },
-                },
-                h(
-                  'th',
-                  { attrs: { scope: 'row' } },
-                  h('span', { class: 'tiers-name', text: batch.name }),
-                  batch.test ? h('span', { class: 'tiers-test-badge', text: '测试' }) : null,
-                ),
-                cell('类型', tierText(batch), batch.durationDays ? ` · ${batch.durationDays} 天` : ''),
-                cell('创建', utcDay(batch.createdAt)),
-                cell('邀请码', String(batch.codes)),
-                cell('已兑换', String(batch.redeemed)),
-                cell('已撤销', String(batch.revoked)),
-                cell('持有中', String(batch.holders)),
-                cell('操作', actions),
-              ),
-              batch,
+    const rows: HTMLElement[] = [];
+    for (const batch of batches) {
+      const isOpen = open?.batch.id === batch.id;
+      const pct = batch.codes > 0 ? Math.round((batch.redeemed / batch.codes) * 100) : 0;
+      const bar = h('span', { class: 'iv-bar' }, h('i'));
+      (bar.querySelector?.('i') as HTMLElement | null)?.style.setProperty('--w', `${pct}%`);
+      const redeemed = hoverValue(
+        h(
+          'span',
+          { class: 'iv-redeemed' },
+          bar,
+          h('span', { class: 'iv-fig', text: `${batch.redeemed} / ${batch.codes}` }),
+        ),
+        `已兑换 ${exactCount(batch.redeemed)} 个 · ${pct}% · 未使用 ${exactCount(unusedOf(batch))}`,
+      );
+      rows.push(
+        selectable(
+          h(
+            'tr',
+            {
+              class: `tiers-row${isOpen ? ' is-selected' : ''}`,
+              attrs: {
+                'data-batch': batch.id,
+                tabindex: '0',
+                'aria-selected': String(isOpen),
+                'aria-expanded': String(isOpen),
+              },
+            },
+            h('td', { class: 'ot-chev', attrs: { 'aria-hidden': 'true' } }, chevron()),
+            h(
+              'th',
+              { attrs: { scope: 'row' } },
+              h('span', { class: 'tiers-name', text: batch.name }),
+              batch.test ? h('span', { class: 'tiers-test-badge', text: '测试' }) : null,
+              batch.id === freshId ? h('span', { class: 'tiers-new-badge', text: '刚生成' }) : null,
             ),
-          ];
-          if (editing === batch.id) rows.push(editorRow(batch));
-          return rows;
-        })
-        .flat(),
-    );
+            cell('类型', tierText(batch), batch.durationDays ? ` · ${batch.durationDays} 天` : ''),
+            cell('创建 UTC', utcDay(batch.createdAt)),
+            cell('邀请码', String(batch.codes)),
+            cell('兑换', redeemed),
+            cell('撤销', String(batch.revoked)),
+            cell(
+              '持有中',
+              hoverValue(h('b', { text: String(batch.holders) }), `${batch.holders} 位玩家现在持有这批邀请`),
+            ),
+          ),
+          batch,
+        ),
+      );
+      if (isOpen) {
+        const panel = h(
+          'div',
+          { class: 'ot-panel', attrs: { 'data-state': 'open' } },
+          h('div', { class: 'ot-inner' }, detail),
+        );
+        panel.dataset.settled = 'true';
+        rows.push(
+          h(
+            'tr',
+            { class: 'tiers-open-row', attrs: { 'data-open-for': batch.id } },
+            h('td', { attrs: { colspan: '8' } }, panel),
+          ),
+        );
+      }
+    }
+    body.replaceChildren(...rows);
     empty.hidden = batches.length > 0;
     table.hidden = batches.length === 0;
-    const held = (tier: InviteBatch['tier']) =>
-      batches.filter((b) => b.tier === tier).reduce((n, b) => n + b.holders, 0);
-    summary.textContent = batches.length
-      ? `持有中 ${held('unlimited') + held('daily_refill')} 人 · 不限量 ${held('unlimited')} · 每天补充 ${held('daily_refill')}`
-      : '';
-  }
-
-  function editorRow(batch: InviteBatch) {
-    const n = num('tiers-edit-amount', 1, TIER_FORM.amountMax, String(batch.dailyAmount ?? ''));
-    const c = num('tiers-edit-cap', 1, TIER_FORM.capMax, String(batch.cap ?? ''));
-    const message = h('span', { class: 'admin-hint', attrs: { role: 'alert' } });
-    const save = button(
-      '保存',
-      () => {
-        const nextN = Number(n.value),
-          nextCap = Number(c.value);
-        if (
-          !Number.isSafeInteger(nextN) ||
-          !Number.isSafeInteger(nextCap) ||
-          nextN < 1 ||
-          nextN > TIER_FORM.amountMax ||
-          nextCap < nextN ||
-          nextCap > TIER_FORM.capMax
-        ) {
-          message.textContent = '每天补充需要是正整数，总上限不能低于每天补充。';
-          return;
-        }
-        if (nextN === batch.dailyAmount && nextCap === batch.cap) {
-          message.textContent = '没有改动。';
-          return;
-        }
-        void deps.run(async () => {
-          const ok = await deps.confirm({
-            title: '确认修改额度',
-            message: editConfirmation(batch, nextN, nextCap),
-            confirmLabel: '确认修改',
-          });
-          if (!ok || deps.disposed()) return;
-          const signature = `${batch.id}:${nextN}:${nextCap}`;
-          if (!editPending || editPending.signature !== signature) editPending = { id: deps.newRequestId(), signature };
-          await port.editInviteBatch!({
-            requestId: editPending.id,
-            batchId: batch.id,
-            dailyAmount: nextN,
-            cap: nextCap,
-          });
-          editPending = null;
-          editing = null;
-          deps.toast('额度已修改');
-          await load();
-        });
-      },
-      'tiers-save',
-    );
-    const cancel = button('取消', () => {
-      editing = null;
-      paintList();
-    });
-    return h(
-      'tr',
-      { class: 'tiers-edit-row', attrs: { 'data-edit': batch.id } },
-      h(
-        'td',
-        { attrs: { colspan: '8' } },
-        h(
-          'div',
-          { class: 'tiers-edit' },
-          field('tiers-edit-amount', '每天补充（点）', n),
-          field('tiers-edit-cap', '总上限（点）', c),
-          save,
-          cancel,
-          message,
-        ),
-      ),
+    const holders = batches.reduce((n, b) => n + b.holders, 0);
+    const unused = batches.reduce((n, b) => n + unusedOf(b), 0);
+    fillStatus(
+      status,
+      batches.length ? h('span', {}, '持有中 ', h('b', { class: 'is-mono', text: String(holders) }), ' 人') : null,
+      batches.length ? h('span', {}, '未使用 ', h('b', { class: 'is-mono', text: String(unused) }), ' 个') : null,
     );
   }
+  let freshId: string | null = null;
 
   async function show(batch: InviteBatch, fresh: string[] | null = null) {
     const codes = await port.inviteBatchDetail!(batch.id);
@@ -450,9 +398,12 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     download(`${batch.name}-邀请码.csv`, csv);
     deps.toast('已导出');
   }
+  let editNow: { amount: HTMLInputElement; cap: HTMLInputElement } | null = null;
+  const confirmHost = h('div', { class: 'tiers-confirm' });
   function paintDetail() {
     if (!open) {
       detail.hidden = true;
+      editNow = null;
       return;
     }
     const { batch, codes } = open;
@@ -464,28 +415,109 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       .filter((c): c is string => c !== null);
     const copyAll = button(
       '复制全部未使用',
-      () => void copyText(unusedPlain.join('\n')).then((ok) => ok && (copyAll.textContent = '已复制全部未使用')),
-      'admin-secondary tiers-copy-all',
+      () =>
+        void copyText(unusedPlain.join('\n')).then(
+          (ok) => ok && (copyAll.textContent = `已复制 ${unusedPlain.length} 个未使用`),
+        ),
+      'admin-secondary tiers-copy-all iv-chip',
+    );
+    copyAll.setAttribute('aria-label', `复制全部未使用（${unusedPlain.length} 个）`);
+    // 修改额度 sits in the toolbar (owner, daily refill): the two numbers and one button, confirmed in place.
+    const edit = (() => {
+      if (batch.tier !== 'daily_refill' || !deps.isOwner()) return null;
+      const n = num('tiers-edit-amount', 1, TIER_FORM.amountMax, String(batch.dailyAmount ?? ''));
+      const c = num('tiers-edit-cap', 1, TIER_FORM.capMax, String(batch.cap ?? ''));
+      n.setAttribute('aria-label', '每天补充');
+      c.setAttribute('aria-label', '总上限');
+      const message = h('span', { class: 'admin-hint', attrs: { role: 'alert' } });
+      const dirtyCheck = () => {
+        markDirty(n, n.value !== String(batch.dailyAmount));
+        markDirty(c, c.value !== String(batch.cap));
+      };
+      n.addEventListener('input', dirtyCheck);
+      c.addEventListener('input', dirtyCheck);
+      const save = button(
+        '修改额度',
+        () => {
+          const nextN = Number(n.value),
+            nextCap = Number(c.value);
+          if (
+            !Number.isSafeInteger(nextN) ||
+            !Number.isSafeInteger(nextCap) ||
+            nextN < 1 ||
+            nextN > TIER_FORM.amountMax ||
+            nextCap < nextN ||
+            nextCap > TIER_FORM.capMax
+          ) {
+            message.textContent = '每天补充需要是正整数，总上限不能低于每天补充。';
+            return;
+          }
+          if (nextN === batch.dailyAmount && nextCap === batch.cap) {
+            message.textContent = '没有改动。';
+            return;
+          }
+          message.textContent = '';
+          void deps.run(async () => {
+            const ok = await deps.confirm(
+              { title: '确认修改额度', message: editConfirmation(batch, nextN, nextCap), confirmLabel: '确认修改' },
+              confirmHost,
+            );
+            if (!ok || deps.disposed()) return;
+            const signature = `${batch.id}:${nextN}:${nextCap}`;
+            if (!editPending || editPending.signature !== signature)
+              editPending = { id: deps.newRequestId(), signature };
+            await port.editInviteBatch!({
+              requestId: editPending.id,
+              batchId: batch.id,
+              dailyAmount: nextN,
+              cap: nextCap,
+            });
+            editPending = null;
+            deps.toast('额度已修改');
+            await load();
+          });
+        },
+        'admin-secondary tiers-save',
+      );
+      hoverValue(save, '从每人下一次每日补充起生效');
+      editNow = { amount: n, cap: c };
+      return h(
+        'span',
+        { class: 'iv-edit' },
+        h('span', { text: '每天 +' }),
+        n,
+        h('span', { text: '上限' }),
+        c,
+        save,
+        message,
+      );
+    })();
+    const zone = dangerZone({
+      open: '撤销整批',
+      impact: () => [
+        { n: String(unusedOf(batch)), label: '个未使用的码会作废' },
+        { n: String(batch.redeemed), label: '个已兑换的不受影响' },
+      ],
+      confirm: '确认撤销整批',
+      run: async () => {
+        await deps.run(async () => {
+          await port.revokeInviteBatch!(batch.id);
+          deps.toast('已撤销整批');
+          await load();
+        });
+      },
+    });
+    const toolbar = h(
+      'div',
+      { class: 'iv-tools' },
+      unusedPlain.length ? copyAll : null,
+      button('导出表格', () => void deps.run(() => exportTable(batch)), 'admin-secondary tiers-export iv-chip'),
+      edit ? h('i', { class: 'head-sep' }) : null,
+      edit,
     );
     detail.replaceChildren(
-      h(
-        'div',
-        { class: 'tiers-detail-head' },
-        h('h3', { text: `${batch.name} · ${tierText(batch)}` }),
-        h(
-          'span',
-          { class: 'tiers-chips' },
-          batch.durationDays ? h('span', { text: `${batch.durationDays} 天` }) : h('span', { text: '长期' }),
-          h('span', { class: 'tiers-chip-date', text: utcDay(batch.createdAt) }),
-          batch.test ? h('span', { class: 'tiers-test-badge', text: '测试' }) : null,
-        ),
-        h(
-          'div',
-          { class: 'tiers-detail-actions' },
-          unusedPlain.length ? copyAll : null,
-          button('导出表格', () => void deps.run(() => exportTable(batch)), 'admin-secondary tiers-export'),
-        ),
-      ),
+      toolbar,
+      confirmHost,
       ...(masked
         ? [
             h('p', {
@@ -496,68 +528,80 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
         : []),
       h(
         'div',
-        { class: 'admin-table-region' },
+        { class: 'tiers-codes-card' },
         h(
-          'div',
-          { class: 'admin-table-wrap' },
+          'table',
+          { class: 'admin-table tiers-codes-table', attrs: { 'aria-label': '邀请码' } },
           h(
-            'table',
-            { class: 'admin-table tiers-codes-table', attrs: { 'aria-label': '邀请码' } },
+            'thead',
+            {},
             h(
-              'colgroup',
+              'tr',
               {},
-              ...['serial', 'code', 'state', 'at', 'player', 'until', 'action'].map((c) =>
-                h('col', { class: `tiers-dcol-${c}` }),
+              ...['序号', '邀请码', '状态', '兑换时间 (UTC)', '玩家编号', '额度到期', '操作'].map((label) =>
+                h('th', { text: label, attrs: { scope: 'col' } }),
               ),
             ),
-            h(
-              'thead',
-              {},
+          ),
+          h(
+            'tbody',
+            {},
+            ...codes.map((code) =>
               h(
                 'tr',
-                {},
-                ...['序号', '邀请码', '状态', '兑换时间 (UTC)', '玩家编号', '额度到期', '操作'].map((label) =>
-                  h('th', { text: label, attrs: { scope: 'col' } }),
+                { attrs: { 'data-code': code.id, 'data-state': code.state } },
+                h('th', { text: `${code.serial}`, attrs: { scope: 'row' } }),
+                codeCell(code),
+                cell(
+                  '状态',
+                  statusBadge(
+                    STATE_LABEL[code.state],
+                    code.state === 'redeemed' || code.state === 'expired'
+                      ? 'ok'
+                      : code.state === 'unused'
+                        ? 'neutral'
+                        : 'warn',
+                  ),
                 ),
-              ),
-            ),
-            h(
-              'tbody',
-              {},
-              ...codes.map((code) =>
-                h(
-                  'tr',
-                  { attrs: { 'data-code': code.id, 'data-state': code.state } },
-                  h('th', { text: `#${code.serial}`, attrs: { scope: 'row' } }),
-                  codeCell(code),
-                  cell(
-                    '状态',
-                    statusBadge(
-                      STATE_LABEL[code.state],
-                      code.state === 'redeemed' || code.state === 'expired'
-                        ? 'ok'
-                        : code.state === 'unused'
-                          ? 'neutral'
-                          : 'warn',
-                    ),
-                  ),
-                  cell('兑换时间 (UTC)', code.redeemedAt === null ? '' : utcDateTime(code.redeemedAt)),
-                  cell('玩家编号', code.playerNumber ?? (code.redeemedAt === null ? '' : '旧邀请')),
-                  cell('额度到期', code.expiresAt === null ? '' : utcDateTime(code.expiresAt)),
-                  cell(
-                    '操作',
-                    code.state === 'unused'
-                      ? button('撤销该码', () => void deps.run(() => revokeCode(code)))
-                      : code.state === 'redeemed'
-                        ? button('结束额度', () => void deps.run(() => revokeEntitlement(code)))
-                        : '',
-                  ),
+                cell(
+                  '兑换 UTC',
+                  code.redeemedAt === null
+                    ? '—'
+                    : hoverValue(
+                        h('span', { text: utcDateTime(code.redeemedAt).slice(0, 16) }),
+                        `${utcDateTime(code.redeemedAt)} UTC`,
+                      ),
+                ),
+                cell('玩家', code.playerNumber ?? (code.redeemedAt === null ? '—' : '旧邀请')),
+                cell(
+                  '额度到期',
+                  code.expiresAt === null
+                    ? code.redeemedAt === null
+                      ? '—'
+                      : '长期'
+                    : hoverValue(
+                        h('span', { text: utcDateTime(code.expiresAt).slice(0, 16) }),
+                        `${utcDateTime(code.expiresAt)} UTC`,
+                      ),
+                ),
+                cell(
+                  '操作',
+                  code.state === 'unused'
+                    ? button('撤销', () => void deps.run(() => revokeCode(code)), 'admin-secondary iv-small iv-danger')
+                    : code.state === 'redeemed'
+                      ? button(
+                          '结束额度',
+                          () => void deps.run(() => revokeEntitlement(code)),
+                          'admin-secondary iv-small iv-danger',
+                        )
+                      : '',
                 ),
               ),
             ),
           ),
         ),
       ),
+      zone.root,
     );
   }
 
@@ -572,39 +616,29 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     await show(batch);
   }
   async function revokeCode(code: InviteBatchCode) {
-    const ok = await deps.confirm({
-      title: '撤销邀请码',
-      message: `撤销 #${code.serial}：这个邀请码不能再被兑换。`,
-      confirmLabel: '确认撤销',
-    });
+    const ok = await deps.confirm(
+      { title: '撤销邀请码', message: `撤销 #${code.serial}：这个邀请码不能再被兑换。`, confirmLabel: '确认撤销' },
+      confirmHost,
+    );
     if (!ok || deps.disposed()) return;
     await port.revokeTierCode!(code.id);
     deps.toast('已撤销');
     await load();
   }
   async function revokeEntitlement(code: InviteBatchCode) {
-    const ok = await deps.confirm({
-      title: '结束额度',
-      message: `结束 #${code.serial} 的额度：持有它的玩家（玩家编号 ${code.playerNumber ?? '—'}）立即变回普通注册玩家，保留现有点数。`,
-      confirmLabel: '确认结束',
-    });
+    const ok = await deps.confirm(
+      {
+        title: '结束额度',
+        message: `结束 #${code.serial} 的额度：持有它的玩家（玩家编号 ${code.playerNumber ?? '—'}）立即变回普通注册玩家，保留现有点数。`,
+        confirmLabel: '确认结束',
+      },
+      confirmHost,
+    );
     if (!ok || deps.disposed()) return;
     await port.revokeEntitlement!(code.id);
     deps.toast('额度已结束');
     await load();
   }
-  async function revokeBatch(batch: InviteBatch) {
-    const ok = await deps.confirm({
-      title: '撤销整批',
-      message: `撤销「${batch.name}」：这一批所有还没兑换的邀请码都不能再用。已经兑换的玩家不受影响。`,
-      confirmLabel: '确认撤销整批',
-    });
-    if (!ok || deps.disposed()) return;
-    await port.revokeInviteBatch!(batch.id);
-    deps.toast('已撤销整批');
-    await load();
-  }
-
   async function load() {
     if (!port.inviteBatches) throw new Error('ADMIN_INVITES_UNAVAILABLE');
     const next = await port.inviteBatches();
@@ -685,7 +719,10 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
       await load();
       // Right away: the new batch's codes, each with its own 复制.
       const made = batches.find((entry) => entry.id === result.batchId);
-      if (made && port.inviteBatchDetail) await show(made, result.codes);
+      if (made && port.inviteBatchDetail) {
+        freshId = made.id;
+        await show(made, result.codes);
+      }
     });
   });
 
@@ -698,9 +735,9 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     clear() {
       batches = [];
       open = null;
-      editing = null;
       createPending = null;
       editPending = null;
+      freshId = null;
       body.replaceChildren();
       detail.replaceChildren();
       detail.hidden = true;
