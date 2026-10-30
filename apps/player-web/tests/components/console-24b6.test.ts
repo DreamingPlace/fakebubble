@@ -411,3 +411,90 @@ test('24b-6 canon editors: the JSON editor is for the other keys only; a key an 
   const added = JSON.stringify({ ...JSON.parse(editors.rest), 外貌: '短发' });
   assert.equal(editors.assemble(added).外貌, '短发');
 });
+
+// ---- round 2 -----------------------------------------------------------------------------------------------------------------
+import { diffSideBySide } from '../../src/features/admin/preview/diff.ts';
+import { spendSeries } from '../../src/features/admin/costs-view.ts';
+
+test('24b-6 rail: the circle has the first character; the row has the name and ONE mark, never a version or the word 草稿', (t) => {
+  const doc = installFakeDom(t);
+  const host = doc.createElement('div') as unknown as HTMLElement;
+  const picker = rolePicker(host, {
+    emptyText: '无',
+    onPick: () => {},
+    badges: () => ({ a: 3 }),
+    compact: { colour: () => '#2F7BEA' },
+  });
+  picker.show([
+    { characterId: 'a', displayName: '甲', publishedVersion: 2, draftRevision: 1 },
+    { characterId: 'b', displayName: '乙', publishedVersion: null, draftRevision: null },
+    { characterId: 'c', displayName: '丙', publishedVersion: 1, draftRevision: 4 },
+    { characterId: 'd', displayName: '丁', publishedVersion: 1, draftRevision: null },
+  ]);
+  picker.setSeed('d', true);
+  const rows = all(host, '.admin-pick-row');
+  assert.deepEqual(
+    all(host, '.admin-pick-dot').map((n) => n.textContent),
+    ['甲', '乙', '丙', '丁'],
+  );
+  for (const row of rows) assert.doesNotMatch(row.textContent, /v\d|草稿|条新共创|修订/);
+  const marks = rows.map(
+    (r) => r.querySelectorAll('.admin-pick-mark').length + r.querySelectorAll('.cocreation-badge').length,
+  );
+  assert.deepEqual(marks, [1, 1, 1, 1]);
+  assert.equal(one(rows[0], '.cocreation-badge').textContent, '3', 'a 共创 count is a number badge');
+  assert.equal(one(rows[1], '.admin-pick-mark').textContent, '未上线');
+  assert.equal(all(rows[2], '.is-draft').length, 1, 'a draft is a dot');
+  assert.equal(one(rows[3], '.admin-pick-mark').textContent, '成长中');
+});
+
+test('24b-6 资料改动: removed text only on the left, added text only on the right, equal text on both, far-away equal lines folded', () => {
+  const before = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'old line', 'i'].join('\n');
+  const after = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'new line', 'i'].join('\n');
+  const rows = diffSideBySide(before, after);
+  const changed = rows.filter((r) => r.changed);
+  assert.equal(changed.length, 1);
+  assert.ok(changed[0]!.left!.some((p) => p.kind === 'del'));
+  assert.ok(changed[0]!.right!.some((p) => p.kind === 'add'));
+  assert.ok(!changed[0]!.left!.some((p) => p.kind === 'add') && !changed[0]!.right!.some((p) => p.kind === 'del'));
+  assert.ok(
+    rows.some((r) => r.left?.[0]?.text === '…'),
+    'the unchanged lines far from the change are folded',
+  );
+  assert.deepEqual(
+    diffSideBySide('same', 'same').filter((r) => r.changed),
+    [],
+  );
+  const added = diffSideBySide('x', 'x\ny');
+  assert.equal(added.at(-1)!.left, null, 'a line that only the draft has leaves the left empty');
+});
+
+test('24b-6 消耗表: a chip of a group with no figure for any day of the range reads —, not $0.00', () => {
+  const view = {
+    since: null,
+    range: 30,
+    usdCny: 6.7,
+    days: [{ day: '2026-11-20', types: null, unclassifiedMicros: null, totalMicros: null }],
+    totals: null,
+    alertMicros: null,
+    priceChanges: [],
+  } as never;
+  const built = spendSeries(view, 'user');
+  assert.ok(built.series.every((s) => s.sum === null));
+  const known = spendSeries(
+    {
+      ...(view as object),
+      days: [
+        {
+          day: '2026-11-20',
+          types: [{ userType: 'guest', textMicros: 5_000_000, voiceMicros: 0 }],
+          unclassifiedMicros: 0,
+          totalMicros: 5_000_000,
+        },
+      ],
+    } as never,
+    'user',
+  );
+  assert.equal(known.series.find((s) => s.id === 'guest')!.sum, 5);
+  assert.equal(known.series.find((s) => s.id === 'registered')!.sum, 0, 'a known day with nothing for a group is 0');
+});

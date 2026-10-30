@@ -64,7 +64,8 @@ export function spendSeries(view: SpendView, split: SpendSplit) {
         name: p.name,
         color: p.color,
         values,
-        sum: values.reduce<number>((a, b) => a + (b ?? 0), 0),
+        /** null when no day of the range has a figure for it (shown —, never $0.00). */
+        sum: values.every((v) => v === null) ? null : values.reduce<number>((a, b) => a + (b ?? 0), 0),
       };
     }),
   };
@@ -246,13 +247,20 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
     },
   ];
   const callsOf = (row: DayRow): HTMLElement => {
-    const grid = '1.8fr repeat(5, minmax(0, 1fr))';
+    const grid = 'minmax(300px, 2.6fr) repeat(5, minmax(0, 1fr))';
     const line = (cells: Array<string | HTMLElement>, headRow = false) => {
       const node = h('div', { class: `cs-call${headRow ? ' is-head' : ''}` });
       node.style?.setProperty('--grid', grid);
-      cells.forEach((c, i) =>
-        node.append(typeof c === 'string' ? h('span', { class: i === 0 ? 'is-name' : '', text: c }) : c),
-      );
+      // The first column is "provider / model / phase": it may wrap, but only after a slash (never in the middle of a word).
+      const named = (text: string) => {
+        const span = h('span', { class: 'is-name' });
+        text.split(' / ').forEach((part, k) => {
+          if (k > 0) span.append(' / ', document.createElement('wbr'));
+          span.append(part);
+        });
+        return span;
+      };
+      cells.forEach((c, i) => node.append(typeof c === 'string' ? (i === 0 ? named(c) : h('span', { text: c })) : c));
       return node;
     };
     const money = (m: number) => hoverValue(h('span', { text: dollars(m) }), exactMoney(m));
@@ -419,10 +427,10 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
           h('span', { class: 'cost-chip-dot' }),
           s.name,
           ' ',
-          h('b', { text: cents(s.sum) }),
+          h('b', { text: s.sum === null ? '—' : cents(s.sum) }),
         );
         chip.style.setProperty('--c', s.color);
-        hoverValue(chip, exactMoney(micros(s.sum)));
+        hoverValue(chip, s.sum === null ? '这段时间没有按用户的记录' : exactMoney(micros(s.sum)));
         chip.addEventListener('click', () => {
           if (off.has(s.id)) off.delete(s.id);
           else off.add(s.id);

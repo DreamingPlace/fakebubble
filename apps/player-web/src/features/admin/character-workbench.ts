@@ -17,6 +17,8 @@ import { dateTimeText } from './system-format.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { dangerZone } from './ui/danger-zone.ts';
 import { fillStatus } from './ui/page-head.ts';
+import { hoverValue } from './ui/hover-value.ts';
+import { diffSideBySide, type Piece } from './preview/diff.ts';
 import { unsavedText } from './ui/unsaved.ts';
 import { formatRoute } from './shell/admin-router.ts';
 import {
@@ -60,8 +62,8 @@ type Host = {
   onView?: (id: string | null) => void;
   /** The console's title row (right side): the draft status chip and 预演后发布. Only with directory `none`. */
   headerHost?: HTMLElement;
-  /** The console's title: the role's name, and nothing else. */
-  titleHost?: HTMLElement;
+  /** The role's dot colour (the rail's), for the status line. */
+  colourOf?: (characterId: string) => string | undefined;
   /** Where the paid 预演 lives: shown as the last section when the role may be previewed. */
   previewMount?: HTMLElement;
   canPreview?: (characterId: string) => boolean;
@@ -235,7 +237,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     paintDirty = null;
     zones = [];
     host.headerHost?.replaceChildren();
-    if (host.titleHost) host.titleHost.textContent = '角色工作台';
     root.replaceChildren();
   };
   async function exact<I, T>(key: string, input: I, send: (input: I) => Promise<T>): Promise<T> {
@@ -646,7 +647,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
 
     // ---- the title row: the name alone, a status line, 预演后发布 ----
     const name = profile.presentation.displayName || target || '新角色';
-    if (host.titleHost) host.titleHost.textContent = name;
     host.onSeed?.(target, profile.template.seed === true);
     const line = el('span'),
       publishLink = el('button', '预演后发布');
@@ -658,6 +658,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     const meta = snapshot
       ? `${snapshot.published ? `正式 v${snapshot.published.version}` : '未发布'}${snapshot.draft ? ` · 草稿修订 ${snapshot.draft.revision}` : ''}`
       : '新角色';
+    // Workbench4: the title row says 角色工作台 like every page; the role (dot, name) is the first part of the status line.
+    const who = el('span');
+    who.className = 'wb-who';
+    const whoDot = el('i');
+    whoDot.style?.setProperty('--dot', host.colourOf?.(target) ?? profile.presentation.color ?? '#8c8697');
+    who.append(whoDot, el('strong', name));
     let current = '';
     const paint = () => {
       const changed = new Set(editor?.changed() ?? []);
@@ -679,8 +685,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       unsavedPart.className = 'wb-unsaved';
       fillStatus(
         line,
+        who,
         tag,
-        target ? `${target} · ${meta}` : meta,
+        meta,
         dirty ? unsavedPart : drafted ? `草稿有 ${drafted} 处改动` : snapshot?.draft ? '草稿与正式版一致' : null,
       );
       publishLink.hidden = !snapshot?.draft || !can('publish') || current === 'publish';
@@ -792,17 +799,56 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       for (const [name, before, after] of groups) {
         if (JSON.stringify(before) === JSON.stringify(after)) continue;
         const group = fold(output, name),
-          columns = el('div');
-        columns.className = 'profile-diff';
-        for (const [label, value] of [
-          ['正式', before],
-          ['草稿', after],
-        ] as const) {
-          const side = el('section');
-          side.append(el('h4', label), el('pre', value === undefined ? '尚无正式版本' : stringify(value)));
-          columns.append(side);
-        }
-        group.append(columns);
+          grid = el('div');
+        grid.className = 'pd-grid';
+        // A text is compared as it is; anything else line by line in its readable (indented) form.
+        const text = (value: unknown) => (value === undefined ? '' : stringify(value));
+        const head = el('div');
+        head.className = 'pd-row pd-head';
+        const l = el('span', '正式'),
+          r = el('span', '草稿');
+        l.className = 'pd-cell pd-left';
+        r.className = 'pd-cell pd-right';
+        head.append(l, r);
+        grid.append(head);
+        const side = (cell: HTMLElement, pieces: Piece[] | null) => {
+          if (pieces === null) {
+            cell.className = `${cell.className} pd-empty`;
+            return;
+          }
+          for (const piece of pieces) {
+            if (piece.kind === 'same') cell.append(piece.text);
+            else {
+              const mark = el('span', piece.text);
+              mark.className = piece.kind === 'del' ? 'pd-del' : 'pd-add';
+              cell.append(mark);
+            }
+          }
+        };
+        if (before === undefined) {
+          const row = el('div');
+          row.className = 'pd-row';
+          const left = el('span', '尚无正式版本'),
+            right = el('span');
+          left.className = 'pd-cell pd-left pd-empty';
+          right.className = 'pd-cell pd-right';
+          side(right, [{ kind: 'add', text: text(after) }]);
+          row.append(left, right);
+          grid.append(row);
+        } else
+          for (const diffRow of diffSideBySide(text(before), text(after))) {
+            const row = el('div');
+            row.className = 'pd-row';
+            const left = el('span'),
+              right = el('span');
+            left.className = 'pd-cell pd-left';
+            right.className = 'pd-cell pd-right';
+            side(left, diffRow.left);
+            side(right, diffRow.right);
+            row.append(left, right);
+            grid.append(row);
+          }
+        group.append(grid);
       }
       if (!output.childElementCount) output.append(el('p', '没有资料差异。'));
       if (!embedded) host.status('静态资料比较完成；这不是付费预演或发布审核证明。');
@@ -1154,16 +1200,15 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       target = snapshot.characterId,
       key = `material:${target}`,
       output = el('div');
-    section.append(
-      el(
-        'p',
-        '仅使用已有音色 referenceId 和明确选取的两条成品；不会创建或克隆声音，不自动上传样本。每个素材版本固定本次草稿。',
-      ),
-    );
     const reference = guarded(
       field(section, '已有 Fish 音色 referenceId', '', { max: 128 }),
       () => dirty || pending.has(key) || !can('materials'),
     );
+    if (reference.parentElement)
+      hoverValue(
+        reference.parentElement as HTMLElement,
+        '仅使用已有音色 referenceId 和明确选取的两条成品；不会创建或克隆声音，不自动上传样本。每个素材版本固定本次草稿。',
+      );
     // Replies follow the site voice model (FISH_VOICE_MODEL). Pin only when this clone sounds wrong on Drama 3.
     const pinS21 = guarded(
       check(section, '固定使用 s2.1-pro：这个克隆在 Drama 3 上听起来不对时勾选，不随站点语音模型切换'),
@@ -1199,8 +1244,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       controls = controls.filter((c) => !output.contains(c.node));
       revokeAudio();
       output.replaceChildren();
-      if (!items.length)
-        output.append(el('p', '还没有管理工作台创建的素材版本。原已批准音色与欢迎词完全不变时，发布可沿用原成品。'));
+      if (!items.length) {
+        const none = el('p', '还没有素材版本。');
+        hoverValue(none, '还没有管理工作台创建的素材版本。原已批准音色与欢迎词完全不变时，发布可沿用原成品。');
+        output.append(none);
+      }
       for (const material of items) materialRow(output, snapshot, material);
       sync();
     }
@@ -1327,9 +1375,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       target = snapshot.characterId,
       key = `publish:${target}`,
       saved = snapshot.draft;
-    section.append(
-      el('p', '发布会将已存资料和批准成品提供给玩家。不会自动生成审核或声音；在途玩家任务／未知调用不被取消或重发。'),
-    );
+    const publishNote =
+      '发布会将已存资料和批准成品提供给玩家。不会自动生成审核或声音；在途玩家任务／未知调用不被取消或重发。';
     const previews = () =>
       jobsOf(target)
         .filter((p) => p.status === 'succeeded' && sameDraft(p, snapshot))
@@ -1390,6 +1437,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       section,
       colourOnly ? '我已核对主色，确认将本版本发布给玩家' : '我已查看资料差异和该预演结果，确认将本版本发布给玩家',
     );
+    // The sentence about what publishing does is the hover tip of the confirmation line.
+    if (ack.parentElement) hoverValue(ack.parentElement as HTMLElement, publishNote);
     for (const input of [preview, material, ack]) guarded(input, () => dirty || pending.has(key) || !can('publish'));
     section.append(noProof);
     const confirmPublish = button(

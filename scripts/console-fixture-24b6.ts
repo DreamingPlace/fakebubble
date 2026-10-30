@@ -225,6 +225,46 @@ export async function startConsoleFixture() {
     if (rnd(2)) usage(d, 'fish', 'drama-3', 'speech', 10 + rnd(30), 0, (10 + rnd(30)) * 280);
   }
 
+  // Per-type spend for every day the counters ran (from 2026-11-03), split from what the ledger charged that day; text and voice.
+  store.run("DELETE FROM web_stats_daily WHERE metric='extras_started'");
+  store.run(
+    "INSERT INTO web_stats_daily(day,metric,character_id,model,value) VALUES ('2026-11-03','extras_started','','',1)",
+  );
+  const shares: [string, number][] = [
+    ['guest', 0.2],
+    ['registered', 0.3],
+    ['daily_refill', 0.25],
+    ['unlimited', 0.15],
+    ['test', 0.1],
+  ];
+  for (let at = STARTED; at <= NOW; at += DAY) {
+    const d = day(at);
+    for (const [kind, phases] of [
+      ['text', ['draft', 'review']],
+      ['voice', ['speech']],
+    ] as const) {
+      const total =
+        store.get<{ n: number | null }>(
+          `SELECT sum(ledger_charged_micros) n FROM web_provider_usage WHERE day=? AND phase IN (${phases.map(() => '?').join(',')})`,
+          d,
+          ...phases,
+        )?.n ?? 0;
+      let left = total;
+      shares.forEach(([type, share], i) => {
+        const part = i === shares.length - 1 ? left : Math.round(total * share);
+        left -= part;
+        store.run(
+          'INSERT INTO web_stats_spend(day,user_type,kind,calls,charged_micros) VALUES (?,?,?,?,?)',
+          d,
+          type,
+          kind,
+          1,
+          part,
+        );
+      });
+    }
+  }
+
   await app.listen();
   const { chromium } = loadPlaywright();
   const browser = await chromium.launch(
@@ -253,7 +293,9 @@ export async function startConsoleFixture() {
   const detail = await (await post('characters/jojo/detail', {})).json();
   const next = structuredClone(detail.published.profile);
   next.template.version = detail.published.version + 1;
-  next.template.persona += ' 说话更慢一点。';
+  // A removal and an addition, so 资料改动 has both colours to show.
+  next.template.persona = next.template.persona.replace('合成角色，非真实材料', '合成角色，说话更慢一点');
+  if (next.template.persona === detail.published.profile.template.persona) next.template.persona += ' 说话更慢一点。';
   next.presentation.welcome.text += '（新）';
   // The structured editors have something to show: chips, a text, example pairs and 经历 cards (all existing settings keys).
   next.template.authorCanon = {
@@ -345,6 +387,7 @@ export async function startConsoleFixture() {
   for (const [label, permissions] of [
     ['共创写手 · 小雨', ['characters.read:*', 'cast.read', 'cocreation.read']],
     ['运营 · 阿杰', ['stats.read', 'invites.read', 'points.grant']],
+    ['指定角色 · 小林', ['characters.read:jojo', 'characters.edit:jojo', 'cast.read']],
   ] as const)
     await post('members/issue', { requestId: randomUUID(), label, memberId: null, permissions });
 

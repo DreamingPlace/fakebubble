@@ -19,10 +19,10 @@ export function hoverValue<T extends HTMLElement>(anchor: T, text: string): T {
   anchor.append(tip);
   bubbles.set(anchor, tip);
   bindTip(anchor, tip);
-  anchor.setAttribute('aria-describedby', tip.id);
+  anchor.setAttribute?.('aria-describedby', tip.id);
   const tag = anchor.tagName;
   if (!anchor.getAttribute?.('tabindex') && tag !== 'BUTTON' && tag !== 'A' && tag !== 'INPUT' && tag !== 'SELECT')
-    anchor.setAttribute('tabindex', '0');
+    anchor.setAttribute?.('tabindex', '0');
   return anchor;
 }
 /** The exact forms the boards show. Money keeps its full precision: $0.071 204; parts read 注册 31 / 访客 27. */

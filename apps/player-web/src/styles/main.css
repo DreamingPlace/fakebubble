@@ -11307,6 +11307,280 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   grid-column: 1 / -1;
 }
 
+/* the half star: the hit areas never paint anything (no button background, no ring); the star itself glows on hover / focus */
+.account-admin-page.admin-shell .cs button.cs-star-hit,
+.account-admin-page.admin-shell .cs button.cs-star-hit:hover,
+.account-admin-page.admin-shell .cs button.cs-star-hit:active,
+.account-admin-page.admin-shell .cs button.cs-star-hit:focus,
+.account-admin-page.admin-shell .cs button.cs-star-hit:focus-visible {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+.account-admin-page.admin-shell .cs-star svg {
+  transition: filter var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .cs-star:has(.cs-star-hit:hover) svg {
+  filter: drop-shadow(0 0 2px rgba(224, 161, 0, 0.75));
+}
+.account-admin-page.admin-shell .cs-star:has(.cs-star-hit:focus-visible) svg {
+  filter: drop-shadow(0 0 2px var(--ad-primary));
+}
+
+/* 关系与故事: the pair panel is at least 400 wide; the grid takes what is left (smaller cells and names under ~1100 of content) */
+.account-admin-page.admin-shell .cs-main {
+  grid-template-columns: minmax(0, 1fr) minmax(400px, 440px);
+}
+.account-admin-page.admin-shell .cs-main:has(> .cs-side[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+.account-admin-page.admin-shell .cs-grid {
+  grid-template-columns: minmax(64px, max-content) repeat(var(--n, 15), minmax(var(--cell-min, 36px), 46px));
+}
+.account-admin-page.admin-shell .cs-dir-rate {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+@container adc (max-width: 1100px) {
+  .account-admin-page.admin-shell .cs-grid-card {
+    --cell-min: 28px;
+    padding: 12px;
+  }
+  .account-admin-page.admin-shell .cs-grid {
+    grid-template-columns: minmax(56px, max-content) repeat(var(--n, 15), minmax(28px, 1fr));
+    gap: 2px;
+  }
+  .account-admin-page.admin-shell .cs-head-col {
+    padding: 0;
+    font-size: 10px;
+  }
+  .account-admin-page.admin-shell .cs-head-row {
+    padding: 0 4px;
+    font-size: 12px;
+  }
+}
+
+.account-admin-page.admin-shell #admin-characters .admin-pick-dot {
+  color: #fff;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-text {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-text strong {
+  flex: 0 1 auto;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-mark {
+  flex: none;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-style: normal;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-mark.is-seed {
+  color: #2f7a4f;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-mark.is-draft {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ad-amber);
+}
+.account-admin-page.admin-shell #admin-characters .wb-roles .cocreation-badge {
+  top: 12px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #c2410c;
+  color: #fff;
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* danger zone: a full-width row in its section; the impact numbers side by side, then the name field and the hold button */
+.account-admin-page.admin-shell .wb-danger .dz,
+.account-admin-page.admin-shell .dz[data-open="true"] {
+  align-self: stretch;
+  width: 100%;
+}
+.account-admin-page.admin-shell .dz-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  align-items: end;
+}
+.account-admin-page.admin-shell .dz-impact {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .dz-card {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .dz-note,
+.account-admin-page.admin-shell .dz-wait {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .dz-field {
+  grid-column: 1;
+}
+.account-admin-page.admin-shell button.dz-go {
+  grid-column: 2;
+  flex: none;
+  width: auto;
+  min-width: max-content;
+  padding: 0 24px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .dz-body:not(:has(.dz-field)) > button.dz-go {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.account-admin-page.admin-shell button.dz-go > .dz-label {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .wb-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .wb-who i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--dot, #8c8697);
+}
+.account-admin-page.admin-shell .wb-who strong {
+  color: var(--ad-text);
+  font-weight: 900;
+}
+
+/* 共创收件箱: the open card has one uniform border; the draft box holds the draft and, in amber, what is being added to it */
+.account-admin-page.admin-shell #admin-cocreation .cc-row.is-active {
+  border: 1.5px solid #5b4fc4;
+  box-shadow: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+  min-height: 150px;
+  padding: 12px 14px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 12px;
+  background: #fbfaf8;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-box .cc-target-value {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-box textarea {
+  min-height: 84px;
+}
+.account-admin-page.admin-shell #admin-cocreation form.cc-adopt {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell #admin-cocreation form.cc-adopt > select {
+  align-self: flex-start;
+  height: 32px;
+  min-height: 32px;
+  width: auto;
+  max-width: 100%;
+  font-size: 13px;
+}
+
+.account-admin-page.admin-shell .cs-call > .is-name {
+  font-size: 12px;
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+
+/* a chart column is a hover / focus target, never a drawn rectangle: guide line, point and bubble are the whole look */
+.account-admin-page.admin-shell .xy-hit,
+.account-admin-page.admin-shell .xy-hit:hover,
+.account-admin-page.admin-shell .xy-hit:focus,
+.account-admin-page.admin-shell .xy-hit:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+.account-admin-page.admin-shell .xy-hit .xy-dot {
+  transition: transform var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .xy-hit:is(:hover, :focus) .xy-dot {
+  transform: scale(1.5);
+}
+
+/* 资料改动: the formal text on the left, the draft on the right; removed in danger-soft, added in success-soft */
+.account-admin-page.admin-shell .pd-grid {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 12px;
+}
+.account-admin-page.admin-shell .pd-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.account-admin-page.admin-shell .pd-row + .pd-row {
+  border-top: 1px solid #f3f0ec;
+}
+.account-admin-page.admin-shell .pd-head {
+  background: #fbfaf8;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .pd-cell {
+  min-width: 0;
+  padding: 5px 12px;
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .pd-left {
+  border-right: 1px solid #f3f0ec;
+}
+.account-admin-page.admin-shell .pd-del {
+  background: var(--ad-danger-soft);
+}
+.account-admin-page.admin-shell .pd-add {
+  background: var(--ad-ok-soft);
+}
+.account-admin-page.admin-shell .pd-empty {
+  background: #faf9f7;
+}
+
+.account-admin-page.admin-shell .permission-item {
+  gap: 8px;
+}
+.account-admin-page.admin-shell .permission-item > input {
+  flex: none;
+  margin: 3px 0 0;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

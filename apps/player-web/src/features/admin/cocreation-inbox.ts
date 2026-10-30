@@ -421,7 +421,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     );
   };
 
-  const adoptEditor = (current: InboxDetail, answer: InboxAnswer, onField: (field: AdoptField) => void) => {
+  const adoptEditor = (
+    current: InboxDetail,
+    answer: InboxAnswer,
+    onField: (field: AdoptField) => void,
+    valueNode: Node,
+  ) => {
     const character = nameOf(current.characterId);
     const suggested: AdoptField = answer.targetField === 'free' ? 'persona' : (answer.targetField as AdoptField);
     const source = answer.kind === 'text' ? { text: answer.text } : { player: answer.player, replies: answer.replies };
@@ -458,7 +463,6 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     const error = h('p', { class: 'cc-adopt-error', attrs: { role: 'alert' }, hidden: true });
     const save = h('button', { text: '保存草稿', attrs: { type: 'submit' }, class: 'cc-adopt-save' });
     const cancel = h('button', { text: '撤回', attrs: { type: 'button' }, class: 'cc-adopt-cancel' });
-    const where = h('p', { class: 'cc-adopt-help' });
 
     const fill = (value: AdoptField) => {
       const draft = suggestAdoptDraft(value, source, character);
@@ -473,12 +477,6 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       const isExample = field.value === 'dialogueExamples';
       example.hidden = !isExample;
       text.hidden = isExample;
-      where.textContent =
-        field.value === 'persona'
-          ? '会作为新的一段追加到人设文字末尾。'
-          : isExample
-            ? '会作为一条 {情境、玩家说、角色回复} 追加到对话示例。'
-            : '会追加到该字段（文字接在后面，列表增加一项）。';
     };
     fill(suggested);
     layout();
@@ -558,11 +556,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       adoptError = '';
       renderDetail();
     });
+    // The field picker is a compact select above the box, only when the suggested field may be wrong (a free answer).
+    field.hidden = answer.targetField !== 'free';
+    // The suggestion goes INSIDE the draft box, after what the draft already has, in amber, editable in place.
     form.append(
-      h('label', { text: '加入到' }, field),
-      where,
-      text,
-      example,
+      field,
+      h('div', { class: 'cc-draft-box' }, valueNode, text, example),
       error,
       h('div', { class: 'cc-adopt-actions' }, cancel, save),
     );
@@ -680,16 +679,20 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         points,
         h('span', { class: 'cc-target-where', text: '在角色工作台里发布' }),
       ),
-      value,
     );
     if (adopting?.ordinal === picked.ordinal) {
       pane_.append(
-        adoptEditor(current, picked, (next) => {
-          field = next;
-          paintField();
-        }),
+        adoptEditor(
+          current,
+          picked,
+          (next) => {
+            field = next;
+            paintField();
+          },
+          value,
+        ),
       );
-    }
+    } else pane_.append(h('div', { class: 'cc-draft-box' }, value));
     if (saved && saved.ordinal === picked.ordinal && picked.adoptedAt !== null)
       pane_.append(
         h(
@@ -776,17 +779,19 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
             return h(
               'article',
               { class: 'cc-answer', attrs: { 'data-ordinal': String(answer.ordinal) } },
-              h('p', {
-                class: 'cc-card-prompt',
-                text:
-                  current.kind === 'memo'
-                    ? '给制作组的留言条'
-                    : current.kind === 'pair'
-                      ? `${nameOf(current.characterId)}和${nameOf(current.partnerId ?? '')}之间的故事`
-                      : card
-                        ? cocreationPrompt(card, character)
-                        : answer.cardId,
-              }),
+              current.kind === 'memo' || current.kind === 'pair' || card
+                ? h('p', {
+                    class: 'cc-card-prompt',
+                    text:
+                      current.kind === 'memo'
+                        ? '给制作组的留言条'
+                        : current.kind === 'pair'
+                          ? `${nameOf(current.characterId)}和${nameOf(current.partnerId ?? '')}之间的故事`
+                          : card
+                            ? cocreationPrompt(card, character)
+                            : '',
+                  })
+                : null,
               bubbles(answer, character),
               h(
                 'div',

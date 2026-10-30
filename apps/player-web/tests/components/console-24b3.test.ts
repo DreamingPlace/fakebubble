@@ -263,10 +263,17 @@ test('24b-3 the roles are one row of pills: colour dot, full name, one compact s
   const rows = host.querySelectorAll('.admin-pick-row');
   assert.equal(rows.length, 2, 'every role is one pill');
   assert.match(rows[0]!.textContent, /JOJO/);
-  assert.match(rows[0]!.textContent, /v2 · 草稿/);
-  assert.doesNotMatch(rows[0]!.textContent, /正式/, 'one compact state, not two badges');
-  assert.equal(rows[0]!.querySelector('.admin-pick-dot')!.style.getPropertyValue('--dot'), '#E8561E');
-  assert.equal(rows[0]!.querySelector('.cocreation-badge')!.textContent, '2 条新共创');
+  // Named exception (Part 24b-6, round 2): the rail row has the name and ONE mark; no version and no "草稿" word in it (a draft is a dot).
+  assert.doesNotMatch(rows[0]!.textContent, /v2|草稿|正式/, 'one mark, no version');
+  assert.equal(
+    rows[0]!.querySelectorAll('.admin-pick-mark').length + rows[0]!.querySelectorAll('.cocreation-badge').length,
+    1,
+  );
+  // Named exception (Part 24b-6, round 2): the circle carries its initial in white, so a tint too light for 4.5:1 is darkened a step
+  // (same hue): #E8561E becomes #c4491a. Colours that already read keep their value.
+  assert.equal(rows[0]!.querySelector('.admin-pick-dot')!.style.getPropertyValue('--dot'), '#c4491a');
+  assert.equal(rows[0]!.querySelector('.admin-pick-dot')!.textContent, 'J');
+  assert.equal(rows[0]!.querySelector('.cocreation-badge')!.textContent, '2');
   // Named exception (Part 24b-6): the rail says 未上线 for a role that was never published (Workbench4).
   assert.match(rows[1]!.textContent, /未上线/);
 });

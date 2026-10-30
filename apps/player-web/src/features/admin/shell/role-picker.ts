@@ -2,6 +2,26 @@ import { h } from '../../cocreation/h.ts';
 import { formatRoute } from './admin-router.ts';
 import { statusBadge } from '../ui/status-badge.ts';
 
+/**
+ * The circle's initial is white when that reads (≥ 4.5:1); on a lighter tint the circle itself is darkened a step at a time (the same
+ * hue, the darkest tint that is needed) until it does.
+ */
+function legible(hex: string): { background: string } {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return { background: '#6e6875' };
+  let channels = [0, 8, 16].map((shift) => (Number.parseInt(m[1]!, 16) >> (16 - shift)) & 255);
+  const luminance = (c: number[]) => {
+    const lin = c.map((v) => {
+      const s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * lin[0]! + 0.7152 * lin[1]! + 0.0722 * lin[2]!;
+  };
+  for (let step = 0; step < 12 && 1.05 / (luminance(channels) + 0.05) < 4.6; step++)
+    channels = channels.map((v) => Math.round(v * 0.92));
+  return { background: `#${channels.map((v) => v.toString(16).padStart(2, '0')).join('')}` };
+}
+
 export type PickerRole = {
   characterId: string;
   displayName: string;
@@ -34,16 +54,23 @@ export function rolePicker(
       const compact = options.compact;
       const unread = options.badges?.()[role.characterId] ?? 0;
       const seed = seeds.get(role.characterId) === true;
-      const dot = compact ? h('i', { class: 'admin-pick-dot', attrs: { 'aria-hidden': 'true' } }) : null;
-      dot?.style?.setProperty('--dot', compact!.colour(role.characterId, index));
+      const dot = compact
+        ? h('i', { class: 'admin-pick-dot', text: [...role.displayName][0] ?? '', attrs: { 'aria-hidden': 'true' } })
+        : null;
+      if (compact) dot?.style?.setProperty('--dot', legible(compact.colour(role.characterId, index)).background);
       const tone =
         unread > 0 ? 'cc' : role.publishedVersion === null ? 'off' : role.draftRevision !== null ? 'draft' : '';
-      const state =
-        role.publishedVersion === null
-          ? role.draftRevision === null
-            ? '未发布'
-            : '未发布 · 草稿'
-          : `v${role.publishedVersion}${role.draftRevision === null ? '' : ' · 草稿'}`;
+      // The expanded rail: the name and ONE state mark (a 共创 count, 未上线, 成长中 or a dot for a draft).
+      const mark =
+        unread > 0
+          ? null
+          : role.publishedVersion === null
+            ? h('span', { class: 'admin-pick-mark', text: '未上线' })
+            : seed
+              ? h('span', { class: 'admin-pick-mark is-seed', text: '成长中' })
+              : role.draftRevision !== null
+                ? h('i', { class: 'admin-pick-mark is-draft', attrs: { 'aria-label': '有草稿', role: 'img' } })
+                : null;
       const row = h(
         'button',
         {
@@ -61,12 +88,7 @@ export function rolePicker(
           ? h('i', { class: 'admin-pick-st', attrs: { 'data-tone': tone, 'aria-hidden': 'true' } })
           : null,
         compact
-          ? h(
-              'span',
-              { class: 'admin-pick-text' },
-              h('strong', { text: role.displayName }),
-              h('small', { text: role.publishedVersion === null ? '未上线' : seed ? '成长中' : state }),
-            )
+          ? h('span', { class: 'admin-pick-text' }, h('strong', { text: role.displayName }), mark)
           : h('strong', { text: role.displayName }),
         !compact && unread > 0
           ? h('span', { class: 'admin-pick-cc', text: String(unread), attrs: { title: '新的共创' } })
@@ -84,13 +106,14 @@ export function rolePicker(
         host.append(compact ? h('div', { class: 'admin-pick-row' }, row) : row);
         return;
       }
-      // New 共创 ideas: a visible link (its address names the filtered inbox) beside the role, opened in place on click.
+      // New 共创 ideas: the number badge is a visible link (its address names the filtered inbox), opened in place on click.
       const badge = h('a', {
         class: 'cocreation-badge',
-        text: `${unread} 条新共创`,
+        text: compact ? String(unread) : `${unread} 条新共创`,
         attrs: {
           href: formatRoute({ page: 'cocreation', id: role.characterId }),
-          title: '共创收件箱里有新的玩家想法，点击查看',
+          title: `${unread} 条新共创：共创收件箱里有新的玩家想法，点击查看`,
+          ...(compact ? { 'aria-label': `${unread} 条新共创` } : {}),
         },
       });
       badge.addEventListener('click', (event) => {

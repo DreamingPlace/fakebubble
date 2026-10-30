@@ -591,9 +591,16 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   split.className = 'wb';
   split.append(editorHost);
   stage.append(roster, split);
+  const rosterColourOf = new Map<string, string>();
   const picker = rolePicker(rolesHost, {
     emptyText: '当前没有可查看的角色。',
-    compact: { colour: (_id, index) => ROSTER_COLOURS[index % ROSTER_COLOURS.length]! },
+    compact: {
+      colour: (id, index) => {
+        const colour = ROSTER_COLOURS[index % ROSTER_COLOURS.length]!;
+        rosterColourOf.set(id, colour);
+        return colour;
+      },
+    },
     badges: () => unread,
     openInbox: (characterId) => {
       if (busy || disposed || !navigate('cocreation', characterId)) return;
@@ -634,7 +641,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     badges: () => unread,
     directory: 'none',
     headerHost: q('#wb-head'),
-    titleHost: q('#wb-title'),
+    colourOf: (characterId) => rosterColourOf.get(characterId),
     previewMount: previewHost,
     canPreview: (characterId) => !!previewBench && canPreview(characterId),
     onSeed: (characterId, seed) => picker.setSeed(characterId, seed),

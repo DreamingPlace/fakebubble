@@ -184,6 +184,8 @@ export function modelsView(
     readonly.hidden = !view || manage;
     voiceInput.disabled = !manage;
     const n = changes().length;
+    // 保存 says how many changes it will save (and is off until there is one).
+    saveButton.textContent = n > 0 ? `保存 ${n} 处改动` : '保存';
     const pill = h('span', {
       class: view?.featureOn ? 'models-pill is-on' : 'models-pill',
       text: `玩家选模型 · ${view?.featureOn ? '开' : '关'}`,

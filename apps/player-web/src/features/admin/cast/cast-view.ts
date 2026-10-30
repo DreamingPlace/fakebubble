@@ -515,6 +515,14 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     if (state.story !== null && !state.doc.stories[state.story]) state.story = null;
     if (state.person && !state.doc.people.some((p) => p.id === state.person)) state.person = null;
     state.group = null;
+    // The right side is never empty: the first pair that shares a story, else the first character.
+    if (!state.pair && !state.sel) {
+      const together = state.doc.stories
+        .map((story) => story.participants.filter((id) => known.includes(id)))
+        .find((people) => people.length >= 2);
+      if (together) state.pair = [together[0]!, together[1]!];
+      else if (known[0]) state.sel = known[0];
+    }
   }
   async function readAll() {
     const api = host.api!;

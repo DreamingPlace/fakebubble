@@ -1,6 +1,7 @@
 import type { CharacterProfile } from '../../services/character-admin-api.ts';
 import { derivePalette, parseColour } from '../brand/character-colour.ts';
 import { CanonError, canonEditors } from './character-canon.ts';
+import { hoverValue } from './ui/hover-value.ts';
 import { markDirty } from './ui/unsaved.ts';
 import type { JsonValue, Weekday, WeeklySchedule } from '../../../../../packages/contracts/index.ts';
 export class AdminFormError extends Error {}
@@ -286,9 +287,12 @@ export function characterForm(
     required: true,
     max: 128,
   });
-  welcome.append(
-    el('p', '修改欢迎词或版本标识后，需要匹配新草稿的欢迎／结束成品批准，保存不会替换玩家当前听到的音频。'),
-  );
+  // Part 24b-6: the sentence is the hover tip of the version field, not a paragraph on the page.
+  if (welcomeVersion.parentElement)
+    hoverValue(
+      welcomeVersion.parentElement as HTMLElement,
+      '修改欢迎词或版本标识后，需要匹配新草稿的欢迎／结束成品批准，保存不会替换玩家当前听到的音频。',
+    );
   const parts = canonEditors((base.template.authorCanon?.settings ?? {}) as Record<string, JsonValue>, () =>
     onChange(),
   );
@@ -301,8 +305,12 @@ export function characterForm(
   const voiceSection = el('fieldset');
   voiceSection.append(el('legend', '声音'));
   form.append(voiceSection);
-  voiceSection.append(el('p', '只登记已有音色的标识与版本，不创建／克隆外部声音。发布新人物须另准备并批准两条成品。'));
   const voiceOn = check(voiceSection, '绑定已有音色');
+  if (voiceOn.parentElement)
+    hoverValue(
+      voiceOn.parentElement as HTMLElement,
+      '只登记已有音色的标识与版本，不创建／克隆外部声音。发布新人物须另准备并批准两条成品。',
+    );
   voiceOn.checked = !!base.template.voice;
   const profileId = field(voiceSection, '音色档案 ID', base.template.voice?.profileId ?? '', { max: 128 });
   const voiceVersion = field(voiceSection, '音色档案版本', String(base.template.voice?.version ?? 1), {

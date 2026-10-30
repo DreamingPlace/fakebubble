@@ -188,7 +188,16 @@ function stars(
     const fill = starFill(value, n);
     const star = h('span', { class: 'cs-star', attrs: { 'data-fill': String(fill) } });
     const svg = svgNode('svg', { viewBox: '0 0 24 24', width: '28', height: '28', 'aria-hidden': 'true' });
-    svg.append(svgNode('path', { d: STAR_PATH, fill: '#ece8e3', class: 'cs-star-back' }));
+    svg.append(
+      svgNode('path', {
+        d: STAR_PATH,
+        fill: '#ece8e3',
+        stroke: '#d8d1c7',
+        'stroke-width': '0.8',
+        'stroke-linejoin': 'round',
+        class: 'cs-star-back',
+      }),
+    );
     if (fill === 1) svg.append(svgNode('path', { d: STAR_PATH, fill: '#e0a100', class: 'cs-star-full' }));
     if (fill === 0.5)
       svg.append(

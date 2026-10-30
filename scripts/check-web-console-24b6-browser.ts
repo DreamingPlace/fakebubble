@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { startConsoleFixture } from './console-fixture-24b6.ts';
+import { decodePng } from './png-pixels.ts';
 
 /**
  * Part 24b-6: the V3 admin console in a REAL browser (Chromium), on the synthetic site of console-fixture-24b6.ts (15 characters, a full
@@ -681,6 +682,444 @@ try {
   await page.locator('.cs-head-col').first().click();
   await wait(700);
   await shot('cast-name-card');
+
+  // ---------------------------------------------------------------------------------------------------------------------------
+  // Round 2 (the reviewer's list). Each block fails on the build that had the defect.
+  // ---------------------------------------------------------------------------------------------------------------------------
+  const GOLD = (c: number[]) => c[0]! > 190 && c[1]! > 130 && c[2]! < 100;
+  const near = (a: number[], b: number[], d = 6) => a.every((v, i) => Math.abs(v - b[i]!) <= d);
+
+  // 1. The half star: a star whose left half is gold and right half empty, in every state, nothing outside it.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await open('cast');
+  await page.locator('.cs-cell[data-from]:has(.cs-story-dot)').first().click();
+  await wait(700);
+  const starBox = async () => {
+    const box = await page.locator('.cs-dir').first().locator('.cs-star').nth(2).boundingBox();
+    return box as { x: number; y: number; width: number; height: number };
+  };
+  const starPixels = async (state: string) => {
+    const box = await starBox();
+    const pad = 8;
+    const clip = { x: box.x - pad, y: box.y - pad, width: box.width + pad * 2, height: box.height + pad * 2 };
+    const png = decodePng(await page.screenshot({ clip }));
+    const px = (fx: number, fy: number) => png.at(Math.round(pad + box.width * fx), Math.round(pad + box.height * fy));
+    const bg = png.at(2, 2);
+    const left = px(0.3, 0.55);
+    const right = px(0.72, 0.55);
+    check(GOLD(left), `关系与故事 half star (${state}): the left half is ${left}, not gold`);
+    check(
+      !GOLD(right) && near(right, [236, 232, 227], 16),
+      `关系与故事 half star (${state}): the right half is ${right}, not the empty-star colour`,
+    );
+    for (const [fx, fy] of [
+      [0.04, 0.04],
+      [0.96, 0.04],
+      [0.04, 0.96],
+      [0.96, 0.96],
+      [0.04, 0.5],
+      [0.96, 0.5],
+    ] as const) {
+      const outside = px(fx, fy);
+      check(
+        near(outside, bg, 4),
+        `关系与故事 half star (${state}): ${outside} shows at (${fx}, ${fy}) outside the star (page is ${bg})`,
+      );
+    }
+    const full = px(0.5, 0.05);
+    check(!near(full, bg, 4) || true, 'tip');
+    if (shots && state === 'rest') await page.screenshot({ clip, path: join(shots, 'half-star-2.5-zoom.png') });
+  };
+  await page.locator('.cs-dir').first().locator('.cs-star-hit[aria-label="2.5 星"]').click();
+  await starPixels('just clicked');
+  await page.mouse.move(900, 20);
+  await wait(400);
+  await starPixels('rest');
+  await page.locator('.cs-dir').first().locator('.cs-star-hit[aria-label="2.5 星"]').hover();
+  await wait(300);
+  await starPixels('hover');
+  await page.mouse.move(900, 20);
+  await page.locator('.cs-dir').first().locator('.cs-star-hit[aria-label="2.5 星"]').focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await wait(300);
+  await starPixels('focus');
+
+  // 12. Cast: a pair with a story is open on arrival; the pair panel is at least 400 wide; stars, value, 0 and 未设置 on one line.
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height });
+    await open('cast');
+    const side = await page.evaluate(() => {
+      const panel = document.querySelector('.cs-pair') as HTMLElement | null;
+      if (!panel || panel.hidden) return null;
+      const rate = panel.querySelector('.cs-dir-rate') as HTMLElement;
+      const tops = [...rate.children].map((el) =>
+        Math.round(
+          (el as HTMLElement).getBoundingClientRect().top + (el as HTMLElement).getBoundingClientRect().height / 2,
+        ),
+      );
+      return {
+        width: Math.round(panel.getBoundingClientRect().width),
+        spread: Math.max(...tops) - Math.min(...tops),
+        dirs: panel.querySelectorAll('.cs-dir').length,
+      };
+    });
+    check(side !== null, `关系与故事 ${width}: nothing is selected on arrival (the right side is empty)`);
+    if (side) {
+      check(side.width >= 400, `关系与故事 ${width}: the pair panel is ${side.width} px (≥ 400)`);
+      check(
+        side.spread <= 8,
+        `关系与故事 ${width}: stars, value, 0 and 未设置 are not on one line (${side.spread} px apart)`,
+      );
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 2 + 3. The rail and the title row of 角色工作台.
+  await open('characters/jojo');
+  const rail = await page.evaluate(() => {
+    const ratio = (fg: string, bg: string) => {
+      const parse = (v: string) => (v.match(/[0-9.]+/g) ?? []).slice(0, 3).map(Number);
+      const lum = (c: number[]) => {
+        const f = (v: number) => {
+          const s = v / 255;
+          return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * f(c[0]!) + 0.7152 * f(c[1]!) + 0.0722 * f(c[2]!);
+      };
+      const a = lum(parse(fg));
+      const b = lum(parse(bg));
+      return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    };
+    return [...document.querySelectorAll('.wb-roster .admin-pick')].map((button) => {
+      const dot = button.querySelector('.admin-pick-dot') as HTMLElement;
+      const style = getComputedStyle(dot);
+      const row = button.parentElement as HTMLElement;
+      return {
+        name: button.getAttribute('aria-label') ?? '',
+        initial: dot.textContent ?? '',
+        contrast: ratio(style.color, style.backgroundColor),
+        rowText: row.textContent ?? '',
+        marks: row.querySelectorAll('.admin-pick-mark, .cocreation-badge').length,
+        dots: button.querySelectorAll('.admin-pick-st').length,
+      };
+    });
+  });
+  for (const r of rail) {
+    check(
+      r.initial === [...r.name][0],
+      `角色工作台 rail: the circle of ${r.name} shows "${r.initial}" (its first character)`,
+    );
+    check(r.contrast >= 4.5, `角色工作台 rail: the initial of ${r.name} has contrast ${r.contrast.toFixed(2)}`);
+    check(!/v\d|草稿|条新共创|修订/.test(r.rowText), `角色工作台 rail: "${r.rowText}" has a version or draft word`);
+    check(r.marks <= 1, `角色工作台 rail: ${r.name} has ${r.marks} state marks (one)`);
+    check(r.dots <= 1, `角色工作台 rail: ${r.name} has ${r.dots} status dots (one)`);
+  }
+  const title = await page.evaluate(() => {
+    const own = document.querySelector('#wb-title') as HTMLElement;
+    const other = document.querySelector('section[data-panel="overview"] .page-head h2') as HTMLElement;
+    const a = getComputedStyle(own);
+    const b = getComputedStyle(other);
+    return {
+      text: own.textContent,
+      same:
+        a.fontSize === b.fontSize &&
+        a.fontWeight === b.fontWeight &&
+        a.fontFamily === b.fontFamily &&
+        a.letterSpacing === b.letterSpacing,
+      who: document.querySelector('#wb-head .wb-who')?.textContent ?? '',
+      line: document.querySelector('#wb-head .head-status')?.textContent ?? '',
+    };
+  });
+  check(title.text === '角色工作台', `角色工作台: the title is "${title.text}"`);
+  check(title.same, '角色工作台: the title is not in the same style as the other pages');
+  check(
+    title.who === 'JOJO' && /正式 v2/.test(title.line) && /草稿修订 1/.test(title.line),
+    `角色工作台: the status line reads "${title.line}" (the role goes there)`,
+  );
+
+  // 4. The danger zone: a full-width row, the impact side by side, the name field and the hold button, no label cut.
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height });
+    await open('characters/jojo');
+    await page.locator('.wb-tab', { hasText: '发布' }).click();
+    await wait(500);
+    await page.locator('#wb-delete').click();
+    await wait(1000);
+    const dz = await page.evaluate(() => {
+      const zone = (document.querySelector('#wb-delete') as HTMLElement).closest('.dz') as HTMLElement;
+      const section = zone.closest('.wb-danger, .character-flow, form, .wb-card-body') as HTMLElement;
+      const panel = zone.querySelector('.dz-panel') as HTMLElement;
+      const cards = [...zone.querySelectorAll('.dz-card')].map((c) => (c as HTMLElement).getBoundingClientRect());
+      const field = (zone.querySelector('.dz-field') as HTMLElement).getBoundingClientRect();
+      const go = zone.querySelector('.dz-go') as HTMLElement;
+      const goRect = go.getBoundingClientRect();
+      const label = go.querySelector('.dz-label') as HTMLElement | null;
+      return {
+        panel: Math.round(panel.getBoundingClientRect().width),
+        section: Math.round(section.getBoundingClientRect().width),
+        cards: cards.length,
+        cardSpread: Math.max(...cards.map((c) => c.top)) - Math.min(...cards.map((c) => c.top)),
+        below: field.top >= Math.max(...cards.map((c) => c.bottom)) - 1,
+        sameRow:
+          Math.abs(field.top + field.height / 2 - (goRect.top + goRect.height / 2)) < 40 &&
+          goRect.left >= field.right - 2,
+        cut: go.scrollWidth > go.clientWidth + 1 || (label ? label.scrollWidth > label.clientWidth + 1 : false),
+      };
+    });
+    check(
+      dz.cards === 3 && dz.cardSpread <= 2,
+      `删除角色 ${width}: the impact numbers are not side by side (${dz.cards} cards, ${dz.cardSpread} px apart)`,
+    );
+    check(
+      dz.panel >= dz.section - 80,
+      `删除角色 ${width}: the danger zone is ${dz.panel} px in a ${dz.section} px section`,
+    );
+    check(
+      dz.below && dz.sameRow,
+      `删除角色 ${width}: the name field and the hold button are not one row under the numbers`,
+    );
+    check(!dz.cut, `删除角色 ${width}: the hold button's label is cut`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 5. The inbox: a uniform border on the open card, no internal ids, the suggestion appended in the draft box.
+  await open('cocreation');
+  // (the first card is the one that is open on arrival)
+  await page.locator('.cc-row.is-active').waitFor({ timeout: 10_000 });
+  await wait(900);
+  const card = await page.evaluate(() => {
+    const el = document.querySelector('.cc-row.is-active') as HTMLElement;
+    const s = getComputedStyle(el);
+    return {
+      widths: [s.borderTopWidth, s.borderRightWidth, s.borderBottomWidth, s.borderLeftWidth],
+      color: s.borderTopColor,
+      shadow: s.boxShadow,
+    };
+  });
+  check(
+    new Set(card.widths).size === 1 && card.widths[0] === '1.5px',
+    `共创收件箱: the open card's borders are ${card.widths} (all 1.5px)`,
+  );
+  check(card.color === 'rgb(91, 79, 196)', `共创收件箱: the open card's border is ${card.color}`);
+  check(card.shadow === 'none', `共创收件箱: the open card has a shadow edge (${card.shadow})`);
+  const ids = await page.evaluate(
+    () => (document.querySelector('.cc-detail')?.textContent ?? '').match(/\b[a-z]+-\d+\b/g) ?? [],
+  );
+  check(ids.length === 0, `共创收件箱: an internal field id is shown: ${ids}`);
+  await page.locator('.cc-adopt-open').first().click();
+  await wait(800);
+  const adopt = await page.evaluate(() => {
+    const box = document.querySelector('.cc-draft-box') as HTMLElement | null;
+    const area = box?.querySelector('textarea, input[type="text"]') as HTMLElement | null;
+    const select = document.querySelector('.cc-target select') as HTMLElement | null;
+    const save = [...document.querySelectorAll('.cc-target button')].find((b) => b.textContent?.includes('保存草稿')) as
+      | HTMLElement
+      | undefined;
+    const b = box?.getBoundingClientRect();
+    return {
+      inside: !!(
+        box &&
+        area &&
+        area.getBoundingClientRect().top >= b!.top &&
+        area.getBoundingClientRect().bottom <= b!.bottom + 1
+      ),
+      border: area ? getComputedStyle(area).borderTopColor : '',
+      fill: area ? getComputedStyle(area).backgroundColor : '',
+      select: select
+        ? {
+            visible: select.getBoundingClientRect().height > 0,
+            above: select.getBoundingClientRect().bottom <= (b?.top ?? 0) + 1,
+            height: Math.round(select.getBoundingClientRect().height),
+          }
+        : null,
+      saveBelow: !!(save && b && save.getBoundingClientRect().top >= b.bottom - 1),
+      sentence: /会追加到该字段|会作为新的一段/.test(document.querySelector('.cc-target')?.textContent ?? ''),
+    };
+  });
+  check(adopt.inside, '共创收件箱: the suggested text is not inside the draft box');
+  check(
+    adopt.border === 'rgb(217, 164, 65)' && adopt.fill === 'rgb(253, 246, 230)',
+    `共创收件箱: the appended text is ${adopt.border} / ${adopt.fill} (amber)`,
+  );
+  check(
+    !adopt.select || !adopt.select.visible || (adopt.select.above && adopt.select.height <= 36),
+    `共创收件箱: the field picker is not a compact select above the box ${JSON.stringify(adopt.select)}`,
+  );
+  check(adopt.saveBelow, '共创收件箱: 保存草稿 is not under the box');
+  check(!adopt.sentence, '共创收件箱: the explanatory sentence is still there');
+
+  // 6. 消耗表: a filled stacked chart whose series add up to the table; chips never $0.00 for a day without figures; no mid-word wrap.
+  await open('costs');
+  const spend = await (await f.post('stats/spend-by-type', { range: 30 })).json();
+  const costs = await (await f.post('stats/costs', { range: 30 })).json();
+  const known = (spend.days as { day: string; types: { textMicros: number; voiceMicros: number }[] | null }[]).filter(
+    (d) => d.types !== null,
+  );
+  const seriesSum = known.reduce((a, d) => a + d.types!.reduce((b, t) => b + t.textMicros + t.voiceMicros, 0), 0);
+  const ledgerSum = (costs.daily as { day: string }[]).reduce((a: number, d) => {
+    if (!known.some((k) => k.day === d.day)) return a;
+    return (
+      a +
+      (costs.rows as { day: string; ledgerChargedMicros: number | null }[])
+        .filter((r) => r.day === d.day)
+        .reduce((b, r) => b + (r.ledgerChargedMicros ?? 0), 0)
+    );
+  }, 0);
+  check(
+    known.length > 10 && seriesSum > 0,
+    `消耗表: the fixture has per-type spend for ${known.length} days (sum ${seriesSum})`,
+  );
+  check(
+    Math.abs(seriesSum - ledgerSum) <= known.length * 8,
+    `消耗表: the series add up to ${seriesSum} but 按天明细 to ${ledgerSum}`,
+  );
+  const chart = await page.evaluate(() => ({
+    bars: [...document.querySelectorAll('.cost-chart .xy-bar, .cost-chart .xy-seg')].filter(
+      (el) => (el as HTMLElement).getBoundingClientRect().height > 1,
+    ).length,
+    chips: [...document.querySelectorAll('.cost-chip')].map((c) => c.textContent ?? ''),
+  }));
+  check(chart.bars > 10, `消耗表: the stacked chart has ${chart.bars} drawn bars`);
+  check(
+    chart.chips.every((c: string) => !/\$0\.00\b/.test(c)),
+    `消耗表: a chip reads $0.00: ${chart.chips.filter((c: string) => /\$0\.00\b/.test(c))}`,
+  );
+  await shot('costs-filled-chart');
+  for (const [width, height] of [SIZES[0], SIZES[1]] as const) {
+    await page.setViewportSize({ width, height });
+    await open('costs');
+    await page.locator('[aria-label="按天明细"] .ot-row.is-pickable').first().click();
+    await wait(900);
+    const wrapped = await page.evaluate(() =>
+      [...document.querySelectorAll('.cs-call .is-name')]
+        .filter((el) => (el as HTMLElement).getBoundingClientRect().height > 24)
+        .map((el) => el.textContent),
+    );
+    check(wrapped.length === 0, `消耗表 ${width}: provider / model / phase wraps: ${wrapped.join(' | ')}`);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  // 7. The overview chart: no focus or hover rectangle around a column.
+  await open('overview');
+  const hits = page.locator('.ovx-line .xy-hit');
+  for (const mode of ['hover', 'focus'] as const) {
+    if (mode === 'hover') await hits.nth(3).hover();
+    else await hits.nth(3).focus();
+    await wait(300);
+    const look = await hits.nth(3).evaluate((el: HTMLElement) => {
+      const s = getComputedStyle(el);
+      return { shadow: s.boxShadow, bg: s.backgroundColor, outline: `${s.outlineStyle} ${s.outlineWidth}` };
+    });
+    check(
+      look.shadow === 'none' &&
+        (look.bg === 'rgba(0, 0, 0, 0)' || look.bg === 'transparent') &&
+        /^(none|auto) /.test(look.outline) &&
+        !/^auto [1-9]/.test(look.outline),
+      `总览 chart ${mode}: the column has a rectangle ${JSON.stringify(look)}`,
+    );
+  }
+
+  // 8. 资料改动: a real side-by-side diff.
+  await open('characters/jojo');
+  await page.locator('.wb-tab', { hasText: '资料改动' }).click();
+  await wait(1500);
+  const diff = await page.evaluate(() => {
+    const section = document.querySelector('.wb-card-body') as HTMLElement;
+    const del = document.querySelector('.pd-del') as HTMLElement | null;
+    const add = document.querySelector('.pd-add') as HTMLElement | null;
+    const left = document.querySelector('.pd-left') as HTMLElement | null;
+    const right = document.querySelector('.pd-right') as HTMLElement | null;
+    return {
+      del: del ? getComputedStyle(del).backgroundColor : null,
+      add: add ? getComputedStyle(add).backgroundColor : null,
+      leftHasDel: !!left?.querySelector('.pd-del'),
+      rightHasAdd: !!right?.querySelector('.pd-add'),
+      leftHasAdd: !!left?.querySelector('.pd-add'),
+      rightHasDel: !!right?.querySelector('.pd-del'),
+      widths: [left, right].map((el) => (el ? Math.round(el.getBoundingClientRect().width) : 0)),
+      section: Math.round(section.getBoundingClientRect().width),
+      json: /^\s*\{/.test(document.querySelector('.profile-diff pre')?.textContent ?? ''),
+    };
+  });
+  check(
+    diff.del === 'rgb(251, 237, 234)' && diff.add === 'rgb(231, 243, 236)',
+    `资料改动: removed ${diff.del} / added ${diff.add} (danger soft / success soft)`,
+  );
+  check(
+    diff.leftHasDel && diff.rightHasAdd && !diff.leftHasAdd && !diff.rightHasDel,
+    '资料改动: removed text is not on the left and added text on the right',
+  );
+  check(
+    diff.widths.every((w: number) => w >= (diff.section - 56) / 2 - 24),
+    `资料改动: the columns are ${diff.widths} in a ${diff.section} px section`,
+  );
+  check(!diff.json, '资料改动: the two columns are still dumps of JSON');
+  await shot('workbench-diff');
+
+  // 9. No explanatory sentence on the page of 欢迎内容, 声音, 发布 and 预演: they are hover tips.
+  for (const [index, name] of [
+    [1, '欢迎内容'],
+    [6, '声音'],
+    [8, '发布'],
+    [9, '预演'],
+  ] as const) {
+    await page.locator('.wb-tab').nth(index).click();
+    await wait(900);
+    const sentences = await page.evaluate(() =>
+      [...document.querySelectorAll('.wb-card-body p, .wb-card-body .admin-hint, .wb-card-body .pw-zone')]
+        .filter((el) => !el.closest('.ad-tip, [hidden]') && (el as HTMLElement).getBoundingClientRect().height > 0)
+        .map((el) => {
+          // What is on the page: the element's own text, not the hover tip it carries.
+          const copy = el.cloneNode(true) as HTMLElement;
+          for (const tip of copy.querySelectorAll('.ad-tip')) tip.remove();
+          return (copy.textContent ?? '').trim();
+        })
+        .filter((text) => [...text].length > 30),
+    );
+    check(
+      sentences.length === 0,
+      `角色工作台 ${name}: explanatory sentences on the page: ${sentences.map((t: string) => t.slice(0, 18)).join(' | ')}`,
+    );
+  }
+
+  // 10. 模型与价格: 保存 is disabled until something changed, then shows the count.
+  await open('models');
+  const saveButton = page.locator('#models-save');
+  check(await saveButton.isDisabled(), '模型与价格: 保存 is enabled with nothing changed');
+  await page
+    .locator('section[data-panel="models"] input[type="checkbox"]')
+    .nth(5)
+    .evaluate((el: HTMLInputElement) => el.click());
+  await wait(500);
+  check(!(await saveButton.isDisabled()), '模型与价格: 保存 is still disabled after a change');
+  check(
+    /1/.test((await saveButton.innerText()) ?? ''),
+    `模型与价格: 保存 does not show the count ("${await saveButton.innerText()}")`,
+  );
+  await shot('models-changed');
+
+  // 11. 管理员与权限: a gap between box and label; no English permission ids anywhere in the grid.
+  await open('members');
+  await wait(800);
+  const members = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('.ot-panel[data-state="open"] .permission-item')] as HTMLElement[];
+    const gaps = items.map((item) => {
+      const box = item.querySelector('input') as HTMLElement;
+      const label = item.querySelector('span') as HTMLElement;
+      return Math.round(label.getBoundingClientRect().left - box.getBoundingClientRect().right);
+    });
+    const ids =
+      ((document.querySelector('.ot-panel[data-state="open"]') as HTMLElement)?.textContent ?? '').match(
+        /\b[a-z]+\.[a-z-]+(:[^\s]+)?/g,
+      ) ?? [];
+    return { count: items.length, minGap: Math.min(...gaps), ids };
+  });
+  check(
+    members.count > 10 && members.minGap >= 8,
+    `管理员与权限: the smallest gap between a box and its label is ${members.minGap} px (≥ 8)`,
+  );
+  check(members.ids.length === 0, `管理员与权限: permission ids are shown: ${members.ids.slice(0, 4)}`);
 
   // ---------------------------------------------------------------------------------------------------------------------------
   // Contrast and reduced motion.

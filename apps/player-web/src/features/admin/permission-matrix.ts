@@ -130,6 +130,12 @@ function decompose(initial: readonly AdminPermission[]) {
   }
   return { items, legacy };
 }
+/** A grant for one specific role, in the permission names of the grid (never the raw id): "查看角色 · 指定角色". */
+const legacyName = (permission: string) => {
+  const scoped = /^(characters\.[a-z-]+):.+$/.exec(permission)?.[1];
+  const name = NAMES.get((scoped ?? permission) as AdminPermissionItem);
+  return name ? `${name}${scoped ? ' · 指定角色' : ''}` : '其他授权';
+};
 const sameSet = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => a.size === b.size && [...a].every((v) => b.has(v));
 
 /**
@@ -236,7 +242,7 @@ export function permissionMatrixEditor(
         touched = true;
         options.onChange?.(dirtyCount());
       });
-      section.append(h('label', { class: 'permission-item' }, input, h('span', { text: permission })));
+      section.append(h('label', { class: 'permission-item' }, input, h('span', { text: legacyName(permission) })));
     }
     areas.append(section);
   }
