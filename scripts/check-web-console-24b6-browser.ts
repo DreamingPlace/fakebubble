@@ -1181,8 +1181,10 @@ try {
       ((document.querySelector('.ot-panel[data-state="open"]') as HTMLElement)?.textContent ?? '').match(
         /\b[a-z]+\.[a-z-]+(:[^\s]+)?/g,
       ) ?? [];
-    return { count: items.length, minGap: Math.min(...gaps), ids };
+    const unnamed = items.filter((item) => item.textContent?.trim() === '其他授权').length;
+    return { count: items.length, minGap: Math.min(...gaps), ids, unnamed };
   });
+  check(members.unnamed === 0, `管理员与权限: ${members.unnamed} old grants have no Chinese name ("其他授权")`);
   check(
     members.count > 10 && members.minGap >= 8,
     `管理员与权限: the smallest gap between a box and its label is ${members.minGap} px (≥ 8)`,

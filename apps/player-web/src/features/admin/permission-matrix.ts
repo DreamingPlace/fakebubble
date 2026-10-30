@@ -131,7 +131,9 @@ function decompose(initial: readonly AdminPermission[]) {
   return { items, legacy };
 }
 /** A grant for one specific role, in the permission names of the grid (never the raw id): "查看角色 · 指定角色". */
+const OTHER_NAMES: Record<string, string> = { 'stats.read': '查看消耗表与统计', 'points.grant': '积分发放' };
 const legacyName = (permission: string) => {
+  if (OTHER_NAMES[permission]) return OTHER_NAMES[permission];
   const scoped = /^(characters\.[a-z-]+):.+$/.exec(permission)?.[1];
   const name = NAMES.get((scoped ?? permission) as AdminPermissionItem);
   return name ? `${name}${scoped ? ' · 指定角色' : ''}` : '其他授权';
