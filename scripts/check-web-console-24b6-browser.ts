@@ -224,7 +224,7 @@ try {
       .hover();
     await wait(450);
     const guide = await page.evaluate(() => {
-      const el = document.querySelector('.xy-guide') as HTMLElement | null;
+      const el = document.querySelector('section[data-panel]:not([hidden]) .xy-guide') as HTMLElement | null;
       return el ? getComputedStyle(el).opacity : 'none';
     });
     check(guide !== 'none' && Number(guide) > 0, `${route}: no vertical guide line on hover (${guide})`);
