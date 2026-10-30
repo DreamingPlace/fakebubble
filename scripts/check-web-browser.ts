@@ -593,9 +593,11 @@ try {
     );
     assert.ok(between.length > 0, `reduced motion still slides or fades (${dragStartX} -> ${rest.x})`);
     assert.equal(
-      await view.locator('.card-slot.is-active').evaluate((el: Element) => getComputedStyle(el).animationName),
-      'bb-turn-in',
-      'the front card fades in briefly and does not breathe',
+      await view
+        .locator('.card-slot.is-active .card-shell')
+        .evaluate((el: Element) => getComputedStyle(el).animationName),
+      'turn-fade',
+      'the new front card fades in briefly',
     );
     await phone.close();
   }

@@ -13162,7 +13162,7 @@ html.theme-fade *::after {
   }
 }
 /* Under reduced motion a card turn is a short slide and fade (180 ms ease-out), never a dry jump: no spring, no breathing. */
-@keyframes bb-turn-in {
+@keyframes turn-fade {
   from {
     opacity: 0.6;
   }
@@ -13173,8 +13173,9 @@ html.theme-fade *::after {
       transform 180ms ease-out,
       opacity 180ms ease-out;
   }
-  .page-shell .card-slot.is-active:not(.is-chat) {
-    animation: bb-turn-in 180ms ease-out;
+  /* Not a bb- animation on purpose: it is the reduced-motion alternative itself, so the skin's cancel rule must not list it. */
+  .card-slot.is-active:not(.is-chat) .card-shell {
+    animation: turn-fade 180ms ease-out;
   }
 }
 /* The thank-you's sub-line may now carry the guest's hint: it wraps inside the sheet and is never cut off. */
@@ -13192,4 +13193,33 @@ html.theme-fade *::after {
 }
 :root[data-theme="dark"] .cc-sheet .cc-thanks-sub {
   color: var(--bb-sub);
+}
+/* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
+@media (prefers-reduced-motion: reduce) {
+  .card-slot.is-active:not(.is-chat) .face-sheen,
+  .page-shell .card-slot.is-active:not(.is-chat),
+  .card-slot.is-active .face-name,
+  .page-shell .avatar-choice-mark,
+  .page-shell .message-row,
+  .card-slot.is-chat :is(.chat-head, .chat-body, .composer),
+  .acct-sheet,
+  .acct-sheet:not(.mp-sheet),
+  .mi-sheet,
+  .mi-section,
+  .mi-fill,
+  .invite-dialog[open],
+  .invite-dialog::backdrop,
+  .mp-sheet,
+  .mp-panel,
+  .mp-brain,
+  .mp-brain:hover,
+  .mp-confirm-box:not(:empty),
+  .bl-tables,
+  .bl-row,
+  .cc-sheet,
+  .cc-sheet .cc-editor,
+  .shared-sticker,
+  .shared-card {
+    animation: none;
+  }
 }
