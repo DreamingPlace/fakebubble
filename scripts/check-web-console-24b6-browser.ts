@@ -722,13 +722,42 @@ try {
         Math.min(png.width - 1, Math.round(png.width * fx)),
         Math.min(png.height - 1, Math.round(png.height * fy)),
       );
-    const left = px(0.36, 0.55);
-    const right = px(0.64, 0.55);
-    check(GOLD(left), `关系与故事 half star (${state}): the left half is ${left}, not gold`);
+    // Where the star is, from the pixels: gold ones, empty-star ones (pale grey), and the page. The star's own centre line splits them.
+    const kind = (c: number[]) =>
+      GOLD(c) ? 'gold' : near(c, page_bg, 6) ? 'bg' : near(c, [236, 232, 227], 22) ? 'empty' : 'edge';
+    let minX = 99999;
+    let maxX = -1;
+    for (let y = 0; y < png.height; y++)
+      for (let x = 0; x < png.width; x++)
+        if (kind(png.at(x, y)) !== 'bg') {
+          minX = Math.min(minX, x);
+          maxX = Math.max(maxX, x);
+        }
+    const centre = (minX + maxX) / 2;
+    let gold = 0;
+    let goldRight = 0;
+    let empty = 0;
+    let emptyLeft = 0;
+    for (let y = 0; y < png.height; y++)
+      for (let x = 0; x < png.width; x++) {
+        const k = kind(png.at(x, y));
+        if (k === 'gold') {
+          gold++;
+          if (x > centre + 1.5) goldRight++;
+        } else if (k === 'empty') {
+          empty++;
+          if (x < centre - 1.5) emptyLeft++;
+        }
+      }
     check(
-      !GOLD(right) && near(right, [236, 232, 227], 16),
-      `关系与故事 half star (${state}): the right half is ${right}, not the empty-star colour`,
+      gold >= 20 && goldRight === 0,
+      `关系与故事 half star (${state}): ${gold} gold pixels, ${goldRight} of them right of the centre line`,
     );
+    check(
+      empty >= 20 && emptyLeft === 0,
+      `关系与故事 half star (${state}): ${empty} empty-star pixels, ${emptyLeft} of them left of the centre line`,
+    );
+    void px;
     for (const [fx, fy] of [
       [0.04, 0.04],
       [0.96, 0.04],
