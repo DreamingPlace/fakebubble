@@ -13172,10 +13172,14 @@ html.theme-fade *::after {
     transition:
       transform 180ms ease-out,
       opacity 180ms ease-out;
+    /* The blanket reduced-motion rule above cuts every duration to 0.01 ms with !important; this one slide is the exception
+       (the whole point of this block), and so is the fade below. Nothing else is let through. */
+    transition-duration: 180ms !important;
   }
   /* Not a bb- animation on purpose: it is the reduced-motion alternative itself, so the skin's cancel rule must not list it. */
   .card-slot.is-active:not(.is-chat) .card-shell {
     animation: turn-fade 180ms ease-out;
+    animation-duration: 180ms !important;
   }
 }
 /* The thank-you's sub-line may now carry the guest's hint: it wraps inside the sheet and is never cut off. */
