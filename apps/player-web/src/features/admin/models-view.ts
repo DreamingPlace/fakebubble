@@ -181,6 +181,8 @@ export function modelsView(
     problem.textContent = message ?? '';
     saveButton.hidden = !manage;
     saveButton.disabled = !manage || !dirty || !!message;
+    // The page re-enables controls after every request; a lock is what keeps 保存 off until something changed.
+    saveButton.dataset.locked = String(saveButton.disabled);
     readonly.hidden = !view || manage;
     voiceInput.disabled = !manage;
     const n = changes().length;
