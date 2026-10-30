@@ -11294,6 +11294,19 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   width: 100%;
 }
 
+.account-admin-page.admin-shell .members-list .admin-member > .mb-grid {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .members-list .permission-areas {
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 16px 12px;
+}
+
+.account-admin-page.admin-shell .permission-matrix > :is(.permission-areas, .permission-presets, .permission-note) {
+  grid-column: 1 / -1;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;
