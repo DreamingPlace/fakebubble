@@ -255,6 +255,23 @@ export async function startConsoleFixture() {
   next.template.version = detail.published.version + 1;
   next.template.persona += ' 说话更慢一点。';
   next.presentation.welcome.text += '（新）';
+  // The structured editors have something to show: chips, a text, example pairs and 经历 cards (all existing settings keys).
+  next.template.authorCanon = {
+    kind: 'author_canon',
+    settings: {
+      ...(next.template.authorCanon?.settings ?? {}),
+      speechStyle: ['温柔', '爱用“嗯”', '不说脏话'],
+      dialogueStyle: '短句，不爱解释，偶尔吐槽',
+      dialogueExamples: [
+        { situation: '日常聊天', player: '你今天好厉害', reply: ['才没有', '哼'] },
+        { situation: '熬夜', player: '我再玩十分钟', reply: ['十分钟？你上次说十分钟玩到三点。睡。'] },
+      ],
+      background: [
+        { title: '小时候', text: '在海边的小镇长大，夏天总在码头边写作业。' },
+        { title: '高中', text: '加入了游戏社，第一次学会开黑。' },
+      ],
+    },
+  };
   await post('characters/jojo/save', { expectedRevision: null, profile: next });
 
   // ---- the full cast, as the draft ----

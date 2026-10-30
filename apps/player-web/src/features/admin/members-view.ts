@@ -187,8 +187,9 @@ export function membersView(options: MembersViewOptions) {
       dirty = count;
       paintHead();
     });
+    // The add bar's button is the page's one solid primary; this one is a standard button.
     const save = h('button', {
-      class: 'admin-primary',
+      class: 'mb-save',
       text: `保存 ${member.label} 的权限`,
       attrs: { type: 'button' },
     });

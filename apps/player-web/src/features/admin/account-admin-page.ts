@@ -208,7 +208,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="members" hidden><div class="page-head"><h2>管理员与权限</h2><div class="page-head-actions" id="admin-members-head"></div></div>
       <form id="admin-member-issue" class="mb-add"><label class="mb-field" for="admin-member-label"><span>新管理员备注</span><input id="admin-member-label" maxlength="80" placeholder="例：共创写手 · 小雨" required></label>
         <div class="mb-field"><span>先给哪套权限</span><span id="admin-new-permissions" class="mb-presets"></span></div>
-        <button type="submit">添加并签发一次性凭据</button></form>
+        <button class="admin-primary" type="submit">添加并签发一次性凭据</button></form>
       <div id="admin-members-table" class="members-table-card"></div><div id="admin-members-list" class="members-list"></div>
     </section>
     <section data-panel="overview" hidden><div id="admin-overview"></div></section>

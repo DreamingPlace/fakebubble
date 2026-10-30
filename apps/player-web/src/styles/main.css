@@ -7967,10 +7967,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   background: var(--ad-tint);
   color: var(--ad-tint-ink);
 }
-.account-admin-page.admin-shell .mb-add > button[type="submit"] {
-  border-color: var(--ad-tint-line);
-  color: var(--ad-tint-ink);
-}
+/* the add bar's button is the page's one solid primary (.admin-primary) */
 .account-admin-page.admin-shell .members-table-card {
   overflow: visible;
   border: 0;
@@ -11242,6 +11239,20 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   background: transparent;
   color: #b4560f;
   font-size: 11px;
+}
+
+.account-admin-page.admin-shell form.mb-add {
+  max-width: none;
+}
+.account-admin-page.admin-shell .pt-bar {
+  grid-template-columns: auto minmax(140px, 1fr) 120px minmax(120px, 1fr) auto;
+}
+.account-admin-page.admin-shell .cc-chip-star {
+  color: var(--ad-warn);
+}
+
+.account-admin-page.admin-shell #admin-characters .admin-pick-dot {
+  color: var(--ink, #fff);
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
