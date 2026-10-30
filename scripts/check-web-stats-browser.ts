@@ -250,7 +250,7 @@ try {
   // ---- an administrator without stats.read sees neither page ----
   const other = await open(plain, 'stats');
   await other.waitForTimeout(1500);
-  assert.equal(await other.locator('.ov-days').count() === 0 || (await other.locator('.ov-days').isHidden()), true);
+  assert.equal((await other.locator('.ov-days').count()) === 0 || (await other.locator('.ov-days').isHidden()), true);
   assert.equal(await other.getByRole('link', { name: '玩家统计' }).count(), 0);
   assert.equal(await other.getByRole('link', { name: '消耗表' }).count(), 0);
   assert.equal(

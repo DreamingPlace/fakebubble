@@ -588,10 +588,14 @@ try {
   check(await go.isDisabled(), '角色工作台: a part of the name is enough');
   await typed.fill('JOJO');
   check(!(await go.isDisabled()), '角色工作台: the full name does not unlock the button');
+  // The sticky save bar must not sit on the button: scroll it clear first, then hold.
+  await go.evaluate((el: HTMLElement) => el.scrollIntoView({ block: 'center' }));
+  await wait(300);
   const box = await go.boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   await wait(700);
+  check((await go.getAttribute('data-hold')) === 'on', '角色工作台: holding the button did not start the hold');
   await shot('danger-zone-mid-hold');
   await page.mouse.up();
   await wait(500);

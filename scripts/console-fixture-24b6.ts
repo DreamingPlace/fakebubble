@@ -341,6 +341,13 @@ export async function startConsoleFixture() {
     );
   });
 
+  // ---- two more administrators, so 管理员与权限 has people whose permission grid opens below their row ----
+  for (const [label, permissions] of [
+    ['共创写手 · 小雨', ['characters.read:*', 'cast.read', 'cocreation.read']],
+    ['运营 · 阿杰', ['stats.read', 'invites.read', 'points.grant']],
+  ] as const)
+    await post('members/issue', { requestId: randomUUID(), label, memberId: null, permissions });
+
   // ---- four invite batches ----
   const batches = [
     { name: '十月朋友', count: 30, tier: { kind: 'daily_refill', dailyAmount: 50, cap: 1000 }, durationDays: null },
