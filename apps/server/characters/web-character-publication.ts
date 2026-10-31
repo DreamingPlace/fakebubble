@@ -1,5 +1,9 @@
 import { webCharacterDeleted } from './web-character-deleted.ts';
-import type { TextGenerationRequest, TextGenerationResult } from '../../../packages/contracts/index.ts';
+import type {
+  CharacterTemplate,
+  TextGenerationRequest,
+  TextGenerationResult,
+} from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { dialogueCandidate, dialogueWire } from '../../../packages/domain/dialogue.ts';
 import { contentHash } from './admin-content-hash.ts';
@@ -209,7 +213,8 @@ export function publishWebCharacter(
           template.voice &&
           template.voice.profileId === binding.profile_id &&
           template.voice.version === binding.voice_revision &&
-          contentHash(template.voice) === contentHash(live.template.voice),
+          // Part 23b: the voice direction is text-side wording, not a voice identity: changing it needs no new clips.
+          contentHash(withoutDirection(template.voice)) === contentHash(withoutDirection(live.template.voice)),
         'CHARACTER_MATERIALS_REQUIRED',
       );
       ensure(
@@ -293,4 +298,8 @@ export function publishWebCharacter(
       };
     return dto(store.get<Publication>('SELECT * FROM web_character_publications WHERE request_id=?', requestId)!);
   });
+}
+
+function withoutDirection({ direction: _direction, ...voice }: NonNullable<CharacterTemplate['voice']>) {
+  return voice;
 }

@@ -108,7 +108,8 @@ export function characterAdminError(error: unknown): string | null {
         INVALID_SCHEDULE: '周作息须每天连续覆盖 00:00–24:00，概率 0–100%，每日至少一段、最多48段。',
         NO_CATCH_UP_WINDOW: '一周至少保留一个补聊时段。',
         INVALID_TIME_ZONE: '时区无效，请使用例如 Asia/Singapore 的 IANA 时区。',
-        INVALID_VOICE_BINDING: '音色 ID、正整数版本和 0.5–2 之间语速必须有效。',
+        INVALID_VOICE_BINDING:
+          '音色 ID、正整数版本和 0.5–2 之间语速必须有效；语音指引须为 1–40 个字，不含方括号、尖括号或换行。只写说话节奏和语气，如：语速舒缓，句尾常拖长。不写音高、音色或数字。',
         INVALID_CANON_VALUE: '结构化设定包含无效值，请核对 JSON 层级和字段。',
         INVALID_CHARACTER_ALIASES: '身份别名需包含人设名称，并明确为虚构人物。',
         INVALID_CANON_EVENTS: '设定事件需明确作者设定、虚构世界及本人物知情范围。',
@@ -691,6 +692,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       const groups: [string, unknown, unknown][] = [
         ['人设', result.published?.template.persona, result.draft.profile.template.persona],
         ['网页展示', result.published?.presentation, result.draft.profile.presentation],
+        [
+          '语音指引',
+          result.published?.template.voice?.direction ?? '（无）',
+          result.draft.profile.template.voice?.direction ?? '（无）',
+        ],
         ['完整模板', result.published?.template, result.draft.profile.template],
       ];
       for (const [name, before, after] of groups) {

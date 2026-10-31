@@ -6,6 +6,11 @@ export interface VoiceBinding {
   speed: number;
   /** Per-character channel preference, not voice identity. Omitted legacy bindings retain voice-only delivery. */
   messageProbability?: number;
+  /**
+   * Part 23b: a short Chinese base direction for Drama 3 (1-40 characters, no brackets or newline). Absent unless set; the
+   * server adds the square brackets. Versioned and published with the profile; ignored on the s2.x wire.
+   */
+  direction?: string;
 }
 export interface VoiceProfile {
   id: string;

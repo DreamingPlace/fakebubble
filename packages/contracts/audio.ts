@@ -41,6 +41,8 @@ export interface SpeechRequest {
   deliveryStyle?: SpeechDeliveryStyle;
   /** Rendered only for Drama 3; ignored for s2 models. */
   soundCue?: SoundCue;
+  /** Part 23b: the character's base direction, rendered first and only for Drama 3 (plain text, the server adds [ ]). */
+  direction?: string;
 }
 export interface PCMInfo {
   sampleRate: number;

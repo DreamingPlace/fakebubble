@@ -52,10 +52,14 @@ export async function renderVoiceSamples(
     voice_revision: number;
     profile_id: string;
     reference_id: string;
+    direction: string | null;
   }>(
-    `SELECT character_id,voice_version,voice_revision,profile_id,reference_id
+    `SELECT character_id,voice_version,voice_revision,profile_id,reference_id,
+      (SELECT json_extract(t.config_json,'$.voice.direction') FROM character_templates t WHERE t.id=character_id) direction
     FROM web_provider_voice_bindings WHERE source='user_selected' AND approved=1 ORDER BY character_id`,
   )) {
+    // Part 23b: the live character's base direction, heard only on Drama 3 (the s2 wire ignores it, so nothing else moves).
+    const direction = options.model === 'drama-3' && binding.direction !== null ? binding.direction : undefined;
     for (const expression of EXPRESSIONS) {
       const speech: SpeechRequest = {
         jobId: `sample-${binding.character_id}-${expression}`,
@@ -67,6 +71,7 @@ export async function renderVoiceSamples(
         model: options.model,
         // Same as replies: the user-selected voices were verified with quality guard on (s2 only; Drama 3 ignores it).
         qualityGuard: true,
+        ...(direction === undefined ? {} : { direction }),
       };
       const prepared = fishSpeechRequest(speech, options.model);
       const id = JSON.stringify([
@@ -76,6 +81,7 @@ export async function renderVoiceSamples(
         expression,
         options.model,
         binding.voice_version,
+        ...(direction === undefined ? [] : [direction]),
       ]);
       const fingerprint = createHash('sha256')
         .update(JSON.stringify([prepared.requestHash, binding.voice_version, prepared.bytes]))
