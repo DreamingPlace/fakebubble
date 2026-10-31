@@ -24,6 +24,8 @@ import type { WebSpeechWire } from '../../../packages/contracts/web-generation-r
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { checkWebV7SceneAtDispatch, readWebV7Request } from './web-v7-request.ts';
+import { readInputSnapshot } from './web-input-snapshot.ts';
+import { validateVoiceDirection } from '../characters/voices.ts';
 import type { WebStageClaim, WebCoordinatorLease } from '../admission/web-stage-queue.ts';
 import { WebProviderOffline } from './web-provider-offline.ts';
 import { WebVerticalPublisher } from '../conversation/web-vertical-publisher.ts';
@@ -144,6 +146,30 @@ export class WebProviderRunner {
       inputMessageId: row.input_message_id,
     };
     return { request, row, scope };
+  }
+  /**
+   * Part 23b: the character's voice direction as the operation froze it (the input snapshot's template), never the live
+   * template. Absent = no direction. It is only read here, so a replay or recovery rebuilds the very same wire text.
+   */
+  private frozenDirection(row: {
+    operation_id: string;
+    principal_id: string;
+    world_id: string;
+    conversation_id: string;
+    character_id: string;
+    input_message_id: string;
+  }): string | undefined {
+    const snapshot = readInputSnapshot(this.store as WebStore, row);
+    let template: unknown;
+    try {
+      template = JSON.parse(snapshot.template_json);
+    } catch {
+      throw new DomainError('WEB_INPUT_SNAPSHOT_STALE');
+    }
+    const voice = (template as { voice?: { direction?: unknown } } | null)?.voice;
+    if (voice?.direction === undefined) return undefined;
+    validateVoiceDirection(voice.direction);
+    return voice.direction;
   }
   async runText(claim: WebStageClaim, signal: AbortSignal): Promise<DialogueCandidate | null> {
     await this.whenReady();
@@ -374,6 +400,7 @@ export class WebProviderRunner {
     // The binding is a pin or "unpinned"; the model actually sent (and reserved, priced, hashed) is resolved once, here.
     const model = resolveVoiceModel(voice.model, this.siteVoiceModel);
     const deliveryStyle = checkWebV7SceneAtDispatch(this.store as WebStore, claim.operationId, this.clock.now());
+    const direction = this.frozenDirection(row);
     const speech: SpeechRequest = {
       jobId: `${claim.operationId}-${key.ordinal}`,
       text: bubble.text,
@@ -385,6 +412,8 @@ export class WebProviderRunner {
       ...(voice.source === 'user_selected' ? { qualityGuard: true } : {}),
       deliveryStyle,
       ...(bubble.soundCue === undefined ? {} : { soundCue: bubble.soundCue }),
+      // Part 23b: part of the wire request and its hash, so the reservation (payload.text bytes) counts it as well.
+      ...(direction === undefined ? {} : { direction }),
     };
     const prepared = fishSpeechRequest(speech, model);
     const { body, bytes: maxUnits, requestHash: wireRequestHash } = prepared;

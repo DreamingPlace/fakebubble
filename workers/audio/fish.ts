@@ -87,10 +87,21 @@ export function speechPayload(request: SpeechRequest, model: FishModel = request
   } as const;
   ensure(Object.hasOwn(deliveryCues, style), 'INVALID_SPEECH_STYLE');
   ensure(request.soundCue === undefined || Object.hasOwn(dramaSoundTags, request.soundCue), 'INVALID_SOUND_CUE');
+  // Part 23b: validated on every model, rendered on Drama 3 only. Absent = the request is exactly what it was.
+  ensure(
+    request.direction === undefined ||
+      (typeof request.direction === 'string' &&
+        request.direction === request.direction.trim() &&
+        [...request.direction].length >= 1 &&
+        [...request.direction].length <= 40 &&
+        !/[\[\]<>\u0000-\u001f\u2028\u2029]/u.test(request.direction)),
+    'INVALID_VOICE_DIRECTION',
+  );
   const drama = model === 'drama-3';
   let text = `${expressions[request.expression]}${deliveryCues[style]}${request.text}`;
   if (drama) {
     const directions = [
+      request.direction ? `[${request.direction}]` : '',
       dramaExpressions[request.expression],
       dramaDeliveryCues[style],
       request.soundCue ? dramaSoundTags[request.soundCue] : '',

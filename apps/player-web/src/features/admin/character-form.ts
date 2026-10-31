@@ -2,6 +2,15 @@ import type { CharacterProfile } from '../../services/character-admin-api.ts';
 import { derivePalette, parseColour } from '../brand/character-colour.ts';
 import type { JsonValue, Weekday, WeeklySchedule } from '../../../../../packages/contracts/index.ts';
 export class AdminFormError extends Error {}
+export const DIRECTION_HINT = '只写说话节奏和语气，如：语速舒缓，句尾常拖长。不写音高、音色或数字。';
+/** Part 23b: '' = no direction (the key stays absent); otherwise 1-40 characters without brackets or line breaks. */
+function directionOf(raw: string): { direction?: string } {
+  const text = raw.trim();
+  if (!text) return {};
+  if ([...text].length > 40 || /[\[\]<>\r\n\u2028\u2029\u0000-\u001f]/u.test(text))
+    throw new AdminFormError(`语音指引须为 1–40 个字，不含方括号、尖括号或换行。${DIRECTION_HINT}`);
+  return { direction: text };
+}
 export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) => {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
@@ -70,7 +79,7 @@ export function editedCharacter(
     /** '' = no main colour (the player page keeps its built-in palette); otherwise '#RRGGBB'. */
     color?: string;
     canon: string;
-    voice: null | { profileId: string; version: number; speed: number };
+    voice: null | { profileId: string; version: number; speed: number; direction?: string };
     /** Part 24c: 成长中 (seed character). Absent = keep what the base says. */
     seed?: boolean;
   },
@@ -103,8 +112,13 @@ export function editedCharacter(
   }
   if (base.template.authorCanon || Object.keys(settings).length) t.authorCanon = { kind: 'author_canon', settings };
   else delete t.authorCanon;
-  if (values.voice) t.voice = { ...t.voice, ...values.voice };
-  else delete t.voice;
+  if (values.voice) {
+    const { direction, ...rest } = values.voice;
+    t.voice = { ...t.voice, ...rest };
+    // Part 23b: absent, never empty, unless set: a profile without a direction hashes exactly as it always did.
+    if (direction) t.voice.direction = direction;
+    else delete t.voice.direction;
+  } else delete t.voice;
   next.presentation = {
     displayName: values.displayName,
     publicDescription: values.publicDescription,
@@ -301,6 +315,9 @@ export function characterForm(
   speed.min = '0.5';
   speed.max = '2';
   speed.step = 'any';
+  // Part 23b: minimal and unstyled; the admin redesign owns the look. Sent to Drama 3 only, in front of every line.
+  const direction = field(voiceSection, '语音指引（Drama 3）', base.template.voice?.direction ?? '');
+  voiceSection.append(el('p', DIRECTION_HINT));
   form.addEventListener('input', onChange);
   form.addEventListener('change', onChange);
   /** The editor's sections (Part 24b-3), in the order of the console's rail. Each is a node of this one form. */
@@ -337,7 +354,12 @@ export function characterForm(
       canon: canon.value,
       seed: seed.checked,
       voice: voiceOn.checked
-        ? { profileId: profileId.value.trim(), version: Number(voiceVersion.value), speed: Number(speed.value) }
+        ? {
+            profileId: profileId.value.trim(),
+            version: Number(voiceVersion.value),
+            speed: Number(speed.value),
+            ...directionOf(direction.value),
+          }
         : null,
     });
   };

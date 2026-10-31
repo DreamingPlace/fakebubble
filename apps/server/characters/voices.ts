@@ -14,10 +14,24 @@ function object(value: unknown, fields: string[]): asserts value is Record<strin
     'INVALID_VOICE_PROFILE',
   );
 }
+/** Part 23b: plain Chinese text, 1-40 characters once trimmed; the server alone adds the brackets. */
+export function validateVoiceDirection(value: unknown): asserts value is string {
+  ensure(
+    typeof value === 'string' &&
+      value === value.trim() &&
+      [...value].length >= 1 &&
+      [...value].length <= 40 &&
+      !/[\[\]<>\r\n\u2028\u2029\u0000-\u001f]/u.test(value),
+    'INVALID_VOICE_BINDING',
+  );
+}
 export function validateVoiceBinding(value: unknown): asserts value is VoiceBinding {
-  const optional =
-    value && typeof value === 'object' && Object.hasOwn(value, 'messageProbability') ? ['messageProbability'] : [];
+  const optional = [
+    ...(value && typeof value === 'object' && Object.hasOwn(value, 'messageProbability') ? ['messageProbability'] : []),
+    ...(value && typeof value === 'object' && Object.hasOwn(value, 'direction') ? ['direction'] : []),
+  ];
   object(value, ['profileId', 'version', 'speed', ...optional]);
+  if (Object.hasOwn(value, 'direction')) validateVoiceDirection(value.direction);
   id(value.profileId);
   ensure(
     value.messageProbability === undefined ||
