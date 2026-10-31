@@ -12,6 +12,7 @@ import { readWebV7Request } from '../apps/server/generation/web-v7-request.ts';
 import { syntheticTone } from '../apps/server/platform/web-local-fake.ts';
 import { SYNTHETIC_TRIAL_FOOTER } from '../apps/server/conversation/web-vertical-publisher.ts';
 import { WEB_PROVIDER_WELCOME } from '../config/web-v1.ts';
+import { cocreationCopy } from '../apps/player-web/src/features/cocreation/cocreation-sheet.ts';
 import { WebProviderBudget } from '../apps/server/budget/web-provider-budget.ts';
 import { migrateProvider, openProviderStore } from './web-provider.ts';
 import { syntheticSelection } from '../tests/web/fixtures/provider-selection.ts';
@@ -399,6 +400,357 @@ try {
     await phone.close();
   }
 
+  // ---- Part 25c: the phone home is locked, the cards turn with real motion, the guest's co-creation hint ------------------------
+  // A phone with a real touch (CDP touch events, not the mouse), so a drag goes through the browser's own gesture handling.
+  const motionPhone = async (reduced = false, colorScheme: 'light' | 'dark' = 'light', width = 390, height = 844) => {
+    const phone = await browser.newContext({
+      ignoreHTTPSErrors: true,
+      viewport: { width, height },
+      isMobile: true,
+      hasTouch: true,
+      colorScheme,
+      ...(reduced ? { reducedMotion: 'reduce' } : {}),
+    });
+    const view = await phone.newPage();
+    view.on('pageerror', (error: unknown) => errors.push(String(error)));
+    await view.goto(`${origin}/?mode=provider`);
+    await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
+    await view.waitForTimeout(1500);
+    const cdp = await phone.newCDPSession(view);
+    const touch = (type: string, x: number, y: number) =>
+      cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
+    return { phone, view, touch };
+  };
+  // Marks the nearest card on the right (the one a swipe left brings to the front) and reports its centre x and opacity.
+  const markNext = (view: any) =>
+    view.evaluate(() => {
+      document.querySelectorAll('[data-probe]').forEach((el) => el.removeAttribute('data-probe'));
+      const centre = (el: Element) => {
+        const r = el.getBoundingClientRect();
+        return r.x + r.width / 2;
+      };
+      const next = [...document.querySelectorAll('.card-slot[data-side="r"]:not(.is-hidden-slot)')].sort(
+        (a, b) => centre(a) - centre(b),
+      )[0]!;
+      next.setAttribute('data-probe', '1');
+      return centre(next);
+    });
+  const probe = (view: any) =>
+    view.evaluate(() => {
+      const el = document.querySelector('[data-probe]')!;
+      const r = el.getBoundingClientRect();
+      return {
+        x: r.x + r.width / 2,
+        opacity: Number(getComputedStyle(el).opacity),
+        active: el.classList.contains('is-active'),
+      };
+    });
+  // Records the marked card's centre x and opacity on every animation frame for 1.1 s, so a check can tell a card that moves
+  // from one that jumps without depending on how soon the first frame is painted (a slow runner paints late, never in one step).
+  type Frame = { t: number; x: number; opacity: number };
+  const watchFrames = (view: any) =>
+    view.evaluate(() => {
+      const w = window as unknown as { __frames: Frame[] };
+      w.__frames = [];
+      const t0 = performance.now();
+      const tick = () => {
+        const el = document.querySelector('[data-probe]')!;
+        const r = el.getBoundingClientRect();
+        w.__frames.push({
+          t: performance.now() - t0,
+          x: r.x + r.width / 2,
+          opacity: Number(getComputedStyle(el).opacity),
+        });
+        if (performance.now() - t0 < 1100) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  const framesOf = async (view: any): Promise<Frame[]> => {
+    await view.waitForTimeout(1250);
+    return view.evaluate(() => (window as unknown as { __frames: Frame[] }).__frames);
+  };
+  /** The card travels from `start` to rest through at least one frame in between, and its first move is not the rest position. */
+  const assertTravels = (frames: Frame[], start: number, label: string) => {
+    const end = frames.at(-1)!.x;
+    assert.ok(Math.abs(end - 195) < 2 || Math.abs(end - start) > 20, `${label}: the card came to rest (${end})`);
+    const between = frames.filter((f) => f.x < start - 0.5 && f.x > end + 0.5);
+    assert.ok(
+      between.length > 0,
+      `${label} moves instead of jumping: ${start} -> ${end}, frames ${frames.map((f) => Math.round(f.x))}`,
+    );
+    const first = frames.find((f) => Math.abs(f.x - start) > 0.5)!;
+    assert.ok(
+      first.x > end + 0.5 && first.x < start,
+      `${label}: the first frame that moves is not already at rest (${first.x})`,
+    );
+  };
+  const swipeLeft = async (touch: any, view: any, dy: number) => {
+    await touch('touchStart', 280, 400);
+    for (let i = 1; i <= 10; i++) {
+      await touch('touchMove', 280 - 16 * i, 400 + (dy * i) / 10);
+      await view.waitForTimeout(16);
+    }
+    const start = (await probe(view)).x;
+    await touch('touchEnd', 0, 0);
+    return start;
+  };
+  {
+    const { phone, view, touch } = await motionPhone();
+    // The page does not scroll: a pure vertical drag leaves the document where it was, and nothing is taller than the screen.
+    const doc = () =>
+      view.evaluate(() => ({
+        top: document.scrollingElement!.scrollTop,
+        scrollHeight: document.scrollingElement!.scrollHeight,
+        innerHeight,
+        overflow: getComputedStyle(document.documentElement).overflow,
+        touchAction: getComputedStyle(document.querySelector('.carousel')!).touchAction,
+      }));
+    const end = 195;
+    const before = await doc();
+    assert.equal(before.overflow, 'hidden', 'the phone home locks the document');
+    assert.equal(before.touchAction, 'none', 'the browser leaves a drag on the stack to the page');
+    if (shots) await view.screenshot({ path: join(shots, 'phone-home-before-vdrag.png') });
+    await touch('touchStart', 195, 560);
+    for (let i = 1; i <= 10; i++) {
+      await touch('touchMove', 195, 560 - 40 * i);
+      await view.waitForTimeout(16);
+    }
+    await touch('touchEnd', 0, 0);
+    await view.waitForTimeout(500);
+    const after = await doc();
+    assert.equal(after.top, 0, 'a vertical drag does not scroll the phone home');
+    assert.ok(
+      after.scrollHeight <= after.innerHeight,
+      `the phone home fits the screen (${after.scrollHeight}/${after.innerHeight})`,
+    );
+    if (shots) await view.screenshot({ path: join(shots, 'phone-home-after-vdrag.png') });
+
+    // A swipe with some vertical drift: ~120 ms after release the new front card is on its way, not already there.
+    await markNext(view);
+    await touch('touchStart', 280, 400);
+    for (let i = 1; i <= 10; i++) {
+      await touch('touchMove', 280 - 16 * i, 400 + (30 * i) / 10);
+      await view.waitForTimeout(16);
+    }
+    const swipeStart = (await probe(view)).x;
+    await watchFrames(view);
+    await touch('touchEnd', 0, 0);
+    const swipeFrames = await framesOf(view);
+    assert.ok((await probe(view)).active, 'the swipe turned to the card that was next');
+    assertTravels(swipeFrames, swipeStart, 'a swipe with vertical drift');
+    assert.ok(Math.abs(swipeFrames.at(-1)!.x - end) < 2, 'and comes to rest in the middle');
+    // A tap on the neighbour turns to it with the same motion.
+    const tapStart = await markNext(view);
+    await watchFrames(view);
+    await view.touchscreen.tap(Math.min(380, tapStart + 130), 400);
+    const tapFrames = await framesOf(view);
+    assert.ok((await probe(view)).active, 'a tap on the neighbour turns to it');
+    assertTravels(tapFrames, tapStart, 'a tap on the neighbour');
+    // The avatar row too.
+    const avatarStart = await markNext(view);
+    await watchFrames(view);
+    await view
+      .locator('.avatar-choice')
+      .nth(
+        await view.evaluate(() =>
+          [...document.querySelectorAll('.card-slot')].findIndex((el) => el.hasAttribute('data-probe')),
+        ),
+      )
+      .click();
+    assertTravels(await framesOf(view), avatarStart, 'an avatar tap');
+    // A toolbar sliding (a resize that keeps the width) does not move the stack sideways, in the middle of a swipe or after it.
+    await touch('touchStart', 280, 400);
+    for (let i = 1; i <= 5; i++) {
+      await touch('touchMove', 280 - 16 * i, 410);
+      await view.waitForTimeout(16);
+    }
+    const dragX = () => view.locator('.card-slot.is-active').evaluate((el: Element) => el.getBoundingClientRect().x);
+    const beforeResize = await dragX();
+    await view.setViewportSize({ width: 390, height: 780 });
+    await view.waitForTimeout(60);
+    assert.ok(Math.abs((await dragX()) - beforeResize) < 1, 'a height-only resize mid-swipe does not move the stack');
+    await touch('touchEnd', 0, 0);
+    await view.setViewportSize({ width: 390, height: 844 });
+    await view.waitForTimeout(900);
+    await phone.close();
+  }
+  {
+    // Reduced motion: no dry jump - the turn is a short slide and fade, with at least one frame between start and end.
+    const { phone, view, touch } = await motionPhone(true);
+    await markNext(view);
+    await touch('touchStart', 280, 400);
+    for (let i = 1; i <= 10; i++) {
+      await touch('touchMove', 280 - 16 * i, 400 + (30 * i) / 10);
+      await view.waitForTimeout(16);
+    }
+    const dragStartX = (await probe(view)).x;
+    await watchFrames(view);
+    await touch('touchEnd', 0, 0);
+    const frames = await framesOf(view);
+    const rest = frames.at(-1)!;
+    const between = frames.filter(
+      (f) => (f.x < dragStartX - 0.5 && f.x > rest.x + 0.5) || (f.opacity > 0.01 && f.opacity < 0.99),
+    );
+    assert.ok(between.length > 0, `reduced motion still slides or fades (${dragStartX} -> ${rest.x})`);
+    assert.equal(
+      await view
+        .locator('.card-slot.is-active .card-shell')
+        .evaluate((el: Element) => getComputedStyle(el).animationName),
+      'turn-fade',
+      'the new front card fades in briefly',
+    );
+    await phone.close();
+  }
+  {
+    // Desktop: the wheel and the arrow keys still animate, and the page is laid out as before.
+    const desk = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1280, height: 800 } });
+    const view = await desk.newPage();
+    view.on('pageerror', (error: unknown) => errors.push(String(error)));
+    await view.goto(`${origin}/?mode=provider`);
+    await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
+    await view.waitForTimeout(1500);
+    const lay = await view.evaluate(() => ({
+      overflow: getComputedStyle(document.documentElement).overflow,
+      touchAction: getComputedStyle(document.querySelector('.carousel')!).touchAction,
+    }));
+    assert.notEqual(lay.overflow, 'hidden', 'the desktop page is not locked');
+    assert.equal(lay.touchAction, 'pan-y', 'the desktop carousel keeps its touch-action');
+    const markDesktop = (view2: any) =>
+      view2.evaluate(() => {
+        document.querySelectorAll('[data-probe]').forEach((el) => el.removeAttribute('data-probe'));
+        const next = [...document.querySelectorAll('.card-slot[data-side="r"]:not(.is-hidden-slot)')]
+          .map((el) => ({ el, x: el.getBoundingClientRect().x }))
+          .sort((a, b) => a.x - b.x)[0]!;
+        next.el.setAttribute('data-probe', '1');
+        return next.x + next.el.getBoundingClientRect().width / 2;
+      });
+    const box = (await view.locator('.carousel').boundingBox())!;
+    await view.mouse.move(box.x + box.width / 2, box.y + 40);
+    const turns: [string, () => Promise<void>][] = [
+      ['wheel', () => view.mouse.wheel(80, 0)],
+      [
+        'arrow key',
+        async () => {
+          await view.locator('.carousel').focus();
+          await view.keyboard.press('ArrowRight');
+        },
+      ],
+    ];
+    for (const [label, turn] of turns) {
+      const start = await markDesktop(view);
+      await watchFrames(view);
+      await turn();
+      assertTravels(await framesOf(view), start, `desktop ${label}`);
+    }
+    if (shots) await view.screenshot({ path: join(shots, 'desktop-home.png') });
+    await desk.close();
+  }
+  {
+    // Co-creation thank-you: a guest is told that signing up earns points; a signed-up player is not; a memo shows neither.
+    const hintText = cocreationCopy.guestHint;
+    const open = async (view: any) => {
+      await view.locator('.avatar-choice[aria-label^="选择"]').first().click();
+      await view.waitForTimeout(700);
+      await view.mouse.click(195, 380);
+      await view.waitForSelector('.page-shell[data-phase="chat"]');
+      await view.waitForTimeout(700);
+      await view
+        .locator('.chat-guide')
+        .click({ timeout: 1000 })
+        .catch(() => {});
+      await view.locator('.card-slot.is-chat .chat-more').click();
+      await view.getByRole('menuitem', { name: /一起共创角色/ }).click();
+      await view.locator('.cc-sheet').waitFor();
+      await view.waitForTimeout(500);
+    };
+    const submitCards = async (view: any) => {
+      await view.locator('.cc-face').first().click();
+      await view.locator('.cc-editor textarea:visible').first().fill('爱吃甜的，笑起来像猫');
+      await view.locator('.cc-send').click();
+      await view.locator('.cc-thanks:not([hidden])').waitFor({ timeout: 10_000 });
+      return view.locator('.cc-thanks-sub').innerText();
+    };
+    {
+      const { phone, view } = await phoneContext('light');
+      await open(view);
+      const sub = await submitCards(view);
+      assert.ok(sub.includes(hintText), `a guest's thank-you carries the hint: ${sub}`);
+      assert.equal(sub.includes('共创奖励'), false);
+      await view.waitForTimeout(500);
+      if (shots) await view.screenshot({ path: join(shots, 'guest-thanks-390.png') });
+      await phone.close();
+    }
+    {
+      // A pair-story note is a co-creation submission too.
+      const { phone, view } = await phoneContext('light');
+      await open(view);
+      const area = view.locator('.cc-pair textarea').first();
+      assert.equal(await area.count(), 1, 'the pair story card is on offer');
+      await area.fill('她们在雨天一起分过一把伞');
+      await view.locator('.cc-send').click();
+      await view.locator('.cc-thanks:not([hidden])').waitFor({ timeout: 10_000 });
+      assert.ok(
+        (await view.locator('.cc-thanks-sub').innerText()).includes(hintText),
+        'a guest pair note carries the hint',
+      );
+      await phone.close();
+    }
+    {
+      const { phone, view } = await phoneContext('light');
+      await open(view);
+      await view.locator('.cc-memo-open').click();
+      await view.locator('.cc-memo-area').fill('给制作组的一句话');
+      await view.locator('.cc-memo-send').click();
+      await view.getByText(cocreationCopy.memoThanks).waitFor({ timeout: 10_000 });
+      assert.equal(await view.locator('.cc-thanks:not([hidden])').count(), 0, 'a memo has no thank-you screen');
+      assert.equal(await view.locator('.cc-sheet').getByText(hintText).count(), 0, 'a memo carries no hint');
+      assert.equal(await view.locator('.cc-sheet').getByText('共创奖励').count(), 0);
+      await phone.close();
+    }
+    {
+      // A signed-up player (the account made above) logs in on a fresh phone: the hint is gone, whether or not they earned.
+      const phone = await browser.newContext({
+        ignoreHTTPSErrors: true,
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+      });
+      const view = await phone.newPage();
+      view.on('pageerror', (error: unknown) => errors.push(String(error)));
+      await phone.addCookies([
+        { name: cookieName, value: 'dead-cookie-value', url: origin, httpOnly: true, secure: true, sameSite: 'Lax' },
+      ]);
+      await view.goto(`${origin}/?mode=provider`);
+      await view.getByRole('button', { name: '登录', exact: true }).click();
+      await view.getByLabel('邮箱').fill(EMAIL);
+      await view.locator('input[type=password]').first().fill(PASSWORD);
+      await view.getByRole('button', { name: '登录', exact: true }).last().click();
+      await view.getByRole('button', { name: /阿泡/ }).first().waitFor({ timeout: 15_000 });
+      await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
+      await view.waitForTimeout(1200);
+      // The server pays out only when points are configured; the check pins both answers by rewriting the reply's `earned`.
+      for (const earned of [0, 3]) {
+        await view.route('**/cocreation/submit', async (route: any) => {
+          const response = await route.fetch();
+          const json = await response.json();
+          json.earned = earned;
+          await route.fulfill({ response, json });
+        });
+        await view.reload();
+        await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
+        await view.waitForTimeout(1200);
+        await open(view);
+        const sub = await submitCards(view);
+        assert.equal(sub.includes(hintText), false, `a signed-up player never sees the hint (earned ${earned})`);
+        assert.equal(
+          sub.includes('共创奖励'),
+          earned > 0,
+          `a signed-up player sees 共创奖励 only when they earned (${earned})`,
+        );
+        await view.unroute('**/cocreation/submit');
+      }
+      await phone.close();
+    }
+  }
   {
     // Reduced motion: the sheets do not slide and the top bar does not animate, whatever the page would otherwise do.
     const calm = await browser.newContext({

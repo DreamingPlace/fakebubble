@@ -13141,3 +13141,89 @@ html.theme-fade *::after {
     animation: none;
   }
 }
+
+/* ==========================================================================================================================
+   Part 25c: the phone home stays put, the cards turn with real motion, and the guest's co-creation hint. Player selectors only.
+   ========================================================================================================================== */
+@media (max-width: 600px) {
+  /* The home never scrolls the document, in any phase (the chat already locked it with html.chat-open): no bounce, no toolbar
+     sliding in and out, so the dvh heights hold still. Only a page that has the stack is locked; the sign-in and legal pages scroll. */
+  html:has(.page-shell .carousel),
+  html:has(.page-shell .carousel) body,
+  html:has(.page-shell .carousel) #app {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  /* preview.ts owns the horizontal swipe, so the browser is told to leave every drag alone while the stack is showing. Taps still
+     open and turn cards. In the chat the carousel keeps its own touch-action, so the chat's scrolling is unchanged. */
+  .page-shell:is([data-phase="browse"], [data-phase="hover"]) .carousel {
+    touch-action: none;
+  }
+}
+/* Under reduced motion a card turn is a short slide and fade (180 ms ease-out), never a dry jump: no spring, no breathing. */
+@keyframes turn-fade {
+  from {
+    opacity: 0.6;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-shell .carousel:not(.is-dragging) .card-slot:not(.orbit-wrap) {
+    transition:
+      transform 180ms ease-out,
+      opacity 180ms ease-out;
+    /* The blanket reduced-motion rule above cuts every duration to 0.01 ms with !important; this one slide is the exception
+       (the whole point of this block), and so is the fade below. Nothing else is let through. */
+    transition-duration: 180ms !important;
+  }
+  /* Not a bb- animation on purpose: it is the reduced-motion alternative itself, so the skin's cancel rule must not list it. */
+  .card-slot.is-active:not(.is-chat) .card-shell {
+    animation: turn-fade 180ms ease-out;
+    animation-duration: 180ms !important;
+  }
+}
+/* The thank-you's sub-line may now carry the guest's hint: it wraps inside the sheet and is never cut off. */
+.cc-sheet .cc-thanks-sub {
+  max-width: 100%;
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+/* Night: the thank-you is the sheet's own dark paper, not the day's beige with light words on it. */
+:root[data-theme="dark"] .cc-sheet .cc-thanks {
+  background:
+    radial-gradient(70% 36% at 50% 42%, color-mix(in srgb, var(--accent, #8b5cff) 22%, transparent) 0%, transparent 70%),
+    var(--bb-paper);
+}
+:root[data-theme="dark"] .cc-sheet .cc-thanks-sub {
+  color: var(--bb-sub);
+}
+/* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
+@media (prefers-reduced-motion: reduce) {
+  .card-slot.is-active:not(.is-chat) .face-sheen,
+  .page-shell .card-slot.is-active:not(.is-chat),
+  .card-slot.is-active .face-name,
+  .page-shell .avatar-choice-mark,
+  .page-shell .message-row,
+  .card-slot.is-chat :is(.chat-head, .chat-body, .composer),
+  .acct-sheet,
+  .acct-sheet:not(.mp-sheet),
+  .mi-sheet,
+  .mi-section,
+  .mi-fill,
+  .invite-dialog[open],
+  .invite-dialog::backdrop,
+  .mp-sheet,
+  .mp-panel,
+  .mp-brain,
+  .mp-brain:hover,
+  .mp-confirm-box:not(:empty),
+  .bl-tables,
+  .bl-row,
+  .cc-sheet,
+  .cc-sheet .cc-editor,
+  .shared-sticker,
+  .shared-card {
+    animation: none;
+  }
+}

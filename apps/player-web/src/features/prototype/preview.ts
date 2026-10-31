@@ -1,7 +1,7 @@
 /** The visual shell: a carousel of the characters the server's catalog lists, every chat driven by the live binding. */
 import { orbitStyle, ringOffset } from './orbit.js';
 import { appendLegalLinks, footerNote } from './legal-links.ts';
-import { followChatViewport, stackCardWidth, swipeStep } from './mobile-layout.js';
+import { followChatViewport, stackCardWidth, swipeStep, widthChanged } from './mobile-layout.js';
 import type { LiveBinding } from './provider-binding.js';
 import { providerPeople, escapeCardText, type Person } from './provider-catalog-view.js';
 import { wordmarkSvg } from '../brand/wordmark.js';
@@ -534,6 +534,7 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     deck.style.setProperty('--drag-x', '0px');
     if (dragged && step) switchTo(active + step);
     else updateBackground();
+    if (resizeDeferred) relayout();
     if (dragged)
       setTimeout(() => {
         dragged = false;
@@ -545,7 +546,19 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     if (event.key === 'Escape' && !(event.target instanceof HTMLTextAreaElement)) closeChat();
   });
   reduced.addEventListener('change', () => updateBackground());
-  window.addEventListener('resize', render);
+  // Part 25c: only a change of width lays the stack out again (a toolbar sliding changes the height alone), and never mid-swipe.
+  let laidOutWidth = window.innerWidth;
+  let resizeDeferred = false;
+  const relayout = () => {
+    resizeDeferred = false;
+    laidOutWidth = window.innerWidth;
+    render();
+  };
+  window.addEventListener('resize', () => {
+    if (!widthChanged(laidOutWidth, window.innerWidth)) return;
+    if (dragStart && dragged) resizeDeferred = true;
+    else relayout();
+  });
   render();
   live.attach({
     say,

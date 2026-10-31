@@ -58,6 +58,8 @@ export type CocreationSheetOptions = {
   newRequestId?: () => string;
   /** How long the thank-you stays before the sheet closes. */
   thanksMs?: number;
+  /** Part 25c: a guest (no signed-up account, not unlimited): the thank-you hints that signing up earns points. */
+  guest?: boolean;
 };
 
 export const BATCH_SIZE = 5;
@@ -80,6 +82,8 @@ export const cocreationCopy = {
   thanksSub: '谢谢你，这份心意已经交到了。',
   /** Part 24c: shown under the thank-you when the notes earned points. */
   earned: (points: number) => `共创奖励 +${points} 点`,
+  /** Part 25c: the guest's version of the line above, in the same place: a guest earns nothing, a signed-up player does. */
+  guestHint: '注册后，共创还能得点数～',
   /** The pair story card: "{name} 和 [select] [🎲] 之间的故事". */
   pairWith: (name: string) => `${name} 和`,
   pairBetween: '之间的故事',
@@ -735,6 +739,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     busy = false;
     if (closed) return;
     if (earned > 0) thanksSub.textContent = `${cocreationCopy.thanksSub} ${cocreationCopy.earned(earned)}`;
+    else if (options.guest === true) thanksSub.textContent = `${cocreationCopy.thanksSub}\n${cocreationCopy.guestHint}`;
     thanks.hidden = false;
     sheet.className = 'cc-sheet is-thanked';
     sendButton.disabled = true;
