@@ -274,7 +274,14 @@ export class LiveBinding {
         .filter((entry) => entry.characterId !== characterId)
         .map((entry) => ({ characterId: entry.characterId, name: shell.name(entry.characterId) })),
       say: (message) => shell.say(message),
+      guest: this.cocreationGuest,
     });
+  }
+  /** Part 25c: no signed-up account and not an unlimited player - the co-creation thank-you hints that signing up earns points. */
+  private get cocreationGuest() {
+    if (this.hasLogin) return false;
+    const account = this.account;
+    return !(account.signedIn && (account.tier?.unlimited === true || account.kind === 'unlimited'));
   }
   /** 获得点数: the character whose chat is open (else the first one) is where co-creation opens. */
   private openEarn() {

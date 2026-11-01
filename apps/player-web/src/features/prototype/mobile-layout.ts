@@ -31,3 +31,11 @@ export function followChatViewport(page: HTMLElement) {
 export function stackCardWidth(viewportWidth: number) {
   return viewportWidth <= 600 ? Math.min(300, viewportWidth - 96) : Math.min(376, viewportWidth - 108);
 }
+
+/**
+ * Part 25c: the stack is laid out from the width alone (--card-w, --orbit-x). A resize that keeps the width - the phone's toolbar
+ * sliding in and out - changes nothing it is laid out from, so it must not re-lay the stack out under a running card transition.
+ */
+export function widthChanged(laidOutWidth: number, width: number): boolean {
+  return laidOutWidth !== width;
+}
