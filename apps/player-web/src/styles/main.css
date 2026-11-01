@@ -11734,6 +11734,35 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   margin: 0;
 }
 
+/* the code's middle is cut by the paint only: the head shrinks with an ellipsis, the last eight characters always show */
+.account-admin-page.admin-shell .tiers-detail .tiers-code-text {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+.account-admin-page.admin-shell .tiers-code-text .tc-head {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .tiers-code-text .tc-tail {
+  flex: none;
+}
+
+/* the saved line keeps its sentence whole; the link drops to its own line when they do not fit */
+.account-admin-page.admin-shell #admin-cocreation .cc-saved {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-saved b {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation a.cc-go {
+  white-space: nowrap;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

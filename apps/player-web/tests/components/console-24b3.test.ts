@@ -294,7 +294,9 @@ test('24b-3 an issue of the cast is read with names, not ids, and grouped by cha
 
 test('24b-3 hard rules in CSS: no ellipsis, chips never wrap, two columns with 预演 at 420 px that goes under below ~1360 px', () => {
   assert.match(block, /\.admin-shell \* \{\s*text-overflow: clip;/);
-  assert.doesNotMatch(block, /text-overflow: ellipsis/);
+  // Named exception (Part 24b-6, round 3): the owner asked for a middle ellipsis on invite codes only (the whole code stays in the page and
+  // is what 复制 copies); that one rule, `.tc-head`, is the only ellipsis allowed.
+  assert.doesNotMatch(block.replace(/\.tiers-code-text \.tc-head \{[^}]*\}/, ''), /text-overflow: ellipsis/);
   assert.doesNotMatch(block, /line-clamp|-webkit-box/);
   assert.match(block, /\.cc-chip,[\s\S]*?\) \{\s*white-space: nowrap;/);
   assert.match(block, /grid-template-columns: minmax\(600px, 1fr\) 420px;/);

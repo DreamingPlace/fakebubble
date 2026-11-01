@@ -1368,16 +1368,14 @@ try {
       await page.locator('.tiers-codes-table tbody tr').last().locator('button', { hasText: '复制' }).click();
       await wait(500);
       const copied = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
-      const tip = await page
+      const shownCode = await page
         .locator('.tiers-codes-table tbody tr')
         .last()
-        .locator('.ad-tip')
-        .first()
-        .textContent()
-        .catch(() => null);
+        .locator('.tiers-code-text')
+        .textContent();
       check(
-        copied.length >= 30 && (tip === null || tip === copied),
-        `邀请与额度 ${width}: the copied code (${copied.length} characters) is not the whole one shown on hover`,
+        copied.length >= 30 && copied === shownCode,
+        `邀请与额度 ${width}: the copied code (${copied.length} characters) is not the whole code on the row`,
       );
     }
   }
