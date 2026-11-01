@@ -11726,6 +11726,14 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   text-align: left;
 }
 
+.account-admin-page.admin-shell .cn-pair > .cn-lab:not(.cn-situation-lab) {
+  grid-column: auto;
+  margin: 0;
+}
+.account-admin-page.admin-shell .cn-pair > .cn-situation-lab {
+  margin: 0;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

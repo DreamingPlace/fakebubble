@@ -47,7 +47,11 @@ test('24b-4 one layout system: the content is as wide as the window lets it be (
   );
 });
 
-test('24b-4 colours: one palette of fifteen, dealt by place in the sorted roster, so a character has the same dot on every page', () => {
+// Superseded (Part 24b-6, round 3): a character's colour is its 主色 or a stable mapping of its id, never its place in the roster (deleting
+// one character moved every later one). The palette-of-fifteen half is kept in 'console-24b6' next to the stability check.
+test('24b-4 colours: one palette of fifteen, dealt by place in the sorted roster, so a character has the same dot on every page', {
+  skip: 'superseded by 24b-6 round 3: the colour no longer depends on the roster',
+}, () => {
   assert.equal(new Set(ROSTER_COLOURS).size, 15);
   const colour = rosterColours(['b', 'a', 'c']);
   assert.equal(colour('a'), ROSTER_COLOURS[0]);

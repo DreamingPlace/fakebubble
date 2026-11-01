@@ -502,10 +502,16 @@ test('24b-6 消耗表: a chip of a group with no figure for any day of the range
 // ---- Part 24b-6, round 3 ----
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { characterColour, rosterColours, setMainColour } from '../../src/features/admin/ui/character-colour.ts';
+import {
+  characterColour,
+  ROSTER_COLOURS,
+  rosterColours,
+  setMainColour,
+} from '../../src/features/admin/ui/character-colour.ts';
 
 test('24b-6 round 3: a character keeps its colour whoever else is added or deleted; its 主色 wins when set', () => {
   const ids = ['chen-jimi', 'jojo', 'wei-guagua', 'zhou-yu'];
+  assert.equal(new Set(ROSTER_COLOURS).size, 15, 'one palette of fifteen');
   const all = rosterColours(ids);
   const without = rosterColours(ids.filter((id) => id !== 'chen-jimi'));
   for (const id of ids.filter((x) => x !== 'chen-jimi')) assert.equal(all(id), without(id), id);

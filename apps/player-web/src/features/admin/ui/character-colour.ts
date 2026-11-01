@@ -51,26 +51,3 @@ export const rosterColours = (ids: Iterable<string>): ((id: string) => string) =
   const known = new Set(ids);
   return (id) => (known.has(id) ? characterColour(id) : PERSON_COLOUR);
 };
-/** Reads each role's profile once, quietly, so every page can show the 主色 (a convenience: a failed read keeps the id colour). */
-export async function warmMainColours(
-  detail: (id: string) => Promise<{
-    published: { profile: { presentation: { color?: string } } } | null;
-    draft: { profile: { presentation: { color?: string } } } | null;
-  }>,
-  ids: readonly string[],
-): Promise<boolean> {
-  let changed = false;
-  await Promise.all(
-    ids.map(async (id) => {
-      try {
-        const d = await detail(id);
-        const before = MAIN.get(id);
-        setMainColour(id, (d.published ?? d.draft)?.profile.presentation.color);
-        changed ||= before !== MAIN.get(id);
-      } catch {
-        /* keep the id colour */
-      }
-    }),
-  );
-  return changed;
-}

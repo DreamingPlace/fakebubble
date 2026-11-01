@@ -26,7 +26,7 @@ import {
 } from './shell/admin-nav.ts';
 import { addressBar, sameRoute, type AdminRoute } from './shell/admin-router.ts';
 import { toastHost } from './ui/toast.ts';
-import { characterColour, rememberName, warmMainColours } from './ui/character-colour.ts';
+import { characterColour, rememberName } from './ui/character-colour.ts';
 import { castView } from './cast/cast-view.ts';
 import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
@@ -433,33 +433,27 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     }
     return true;
   };
-  /** Every role's 主色 and name, read once before the first page paints, so each page colours a character the same way (a failure keeps the id colour). */
-  let warm: Promise<void> | null = null;
-  const warmColours = () =>
-    (warm ??= (async () => {
+  /** 总览 names a character by its display name only: one roster read (names, never profiles) lets its pie use the colour of that character's id. */
+  let namesRead: Promise<void> | null = null;
+  const readNames = () =>
+    (namesRead ??= (async () => {
       const api = port.characters;
-      if (!api || typeof api.list !== 'function' || typeof api.detail !== 'function') return;
+      if (!api || typeof api.list !== 'function') return;
       try {
-        const { characters } = await api.list();
-        for (const role of characters) rememberName(role.characterId, role.displayName);
-        await warmMainColours(
-          (id) => api.detail(id),
-          characters.map((role) => role.characterId),
-        );
+        for (const role of (await api.list()).characters) rememberName(role.characterId, role.displayName);
       } catch {
-        /* a convenience */
+        /* a convenience: the pie keeps its own colours */
       }
     })());
   /** What opening the current page has to load, or null when it only shows what is already there. */
   const loader = (): (() => Promise<void>) | null => {
     const load = pageLoader();
-    return (
-      load &&
-      (async () => {
-        await warmColours();
-        await load();
-      })
-    );
+    return page === 'overview' && load
+      ? async () => {
+          await readNames();
+          await load();
+        }
+      : load;
   };
   const pageLoader = (): (() => Promise<void>) | null => {
     if (!session) return null;
