@@ -26,7 +26,7 @@ import {
 } from './shell/admin-nav.ts';
 import { addressBar, sameRoute, type AdminRoute } from './shell/admin-router.ts';
 import { toastHost } from './ui/toast.ts';
-import { ROSTER_COLOURS } from './ui/character-colour.ts';
+import { characterColour, rememberName, warmMainColours } from './ui/character-colour.ts';
 import { castView } from './cast/cast-view.ts';
 import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
@@ -433,8 +433,35 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     }
     return true;
   };
+  /** Every role's 主色 and name, read once before the first page paints, so each page colours a character the same way (a failure keeps the id colour). */
+  let warm: Promise<void> | null = null;
+  const warmColours = () =>
+    (warm ??= (async () => {
+      const api = port.characters;
+      if (!api || typeof api.list !== 'function' || typeof api.detail !== 'function') return;
+      try {
+        const { characters } = await api.list();
+        for (const role of characters) rememberName(role.characterId, role.displayName);
+        await warmMainColours(
+          (id) => api.detail(id),
+          characters.map((role) => role.characterId),
+        );
+      } catch {
+        /* a convenience */
+      }
+    })());
   /** What opening the current page has to load, or null when it only shows what is already there. */
   const loader = (): (() => Promise<void>) | null => {
+    const load = pageLoader();
+    return (
+      load &&
+      (async () => {
+        await warmColours();
+        await load();
+      })
+    );
+  };
+  const pageLoader = (): (() => Promise<void>) | null => {
     if (!session) return null;
     if (page === 'characters')
       return async () => {
@@ -595,8 +622,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const picker = rolePicker(rolesHost, {
     emptyText: '当前没有可查看的角色。',
     compact: {
-      colour: (id, index) => {
-        const colour = ROSTER_COLOURS[index % ROSTER_COLOURS.length]!;
+      colour: (id) => {
+        const colour = characterColour(id);
         rosterColourOf.set(id, colour);
         return colour;
       },
@@ -645,7 +672,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     previewMount: previewHost,
     canPreview: (characterId) => !!previewBench && canPreview(characterId),
     onSeed: (characterId, seed) => picker.setSeed(characterId, seed),
-    onDirectory: (roles) => picker.show(roles),
+    onDirectory: (roles) => {
+      picker.show(roles);
+    },
     preview: 'none',
     onView: (id) => {
       if (quiet || page !== 'characters') return;

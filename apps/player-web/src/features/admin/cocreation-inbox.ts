@@ -511,7 +511,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           const target = await deps.characters.detail(current.characterId);
           const base = target.draft?.profile ?? target.published?.profile;
           if (!base) {
-            fail('这个角色还没有可编辑的版本，请先在角色资料中创建草稿。');
+            fail('这个角色还没有可编辑的版本，请先在角色工作台中创建草稿。');
             return;
           }
           const profile = structuredClone(base);
@@ -544,7 +544,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           renderList();
           renderDetail();
           changed();
-          deps.status(`已加入草稿（修订 ${saved_.revision}）。尚未发布：请在“角色资料”里预览，确认后再发布。`);
+          deps.status(`已加入草稿（修订 ${saved_.revision}）。尚未发布：请在“角色工作台”里预览，确认后再发布。`);
         } catch (caught) {
           if (caught instanceof CocreationAdoptError) fail(ADOPT_ERROR_TEXT[caught.code] ?? '内容不符合要求。');
           else fail(characterAdminError(caught) ?? '保存草稿没有成功，请核对后重试；本次没有标记为已采用。');

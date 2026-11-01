@@ -46,11 +46,14 @@ export function dangerZone(options: DangerZoneOptions) {
       })
     : null;
   // The hold variant carries a fill that sweeps across the button and a label above it; the plain one is just its text.
+  // Two stacked labels: the danger-coloured one on the white button, and a white copy on a danger-coloured layer that the hold uncovers
+  // from the left (clip-path), so the words read over both the filled and the unfilled part.
   const label = h('span', { class: 'dz-label' });
+  const labelOn = h('span', { class: 'dz-label dz-label-on' });
   const go = h(
     'button',
     { class: `dz-go${options.typeName ? ' is-hold' : ''}`, attrs: { type: 'button' } },
-    ...(options.typeName ? [h('i', { attrs: { 'aria-hidden': 'true' } }), label] : []),
+    ...(options.typeName ? [label, h('i', { attrs: { 'aria-hidden': 'true' } }, labelOn)] : []),
   );
   const zone = h(
     'div',
@@ -89,8 +92,10 @@ export function dangerZone(options: DangerZoneOptions) {
     if (typed) typed.disabled = locked;
     go.disabled = locked || !matches();
     const text = typed ? (matches() ? `按住 1.5 秒${options.confirm}` : '输入名字后才能按') : options.confirm;
-    if (typed) label.textContent = text;
-    else go.textContent = text;
+    if (typed) {
+      label.textContent = text;
+      labelOn.textContent = text;
+    } else go.textContent = text;
   };
   const stopHold = () => {
     if (timer) clearTimeout(timer);

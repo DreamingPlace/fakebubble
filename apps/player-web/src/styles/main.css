@@ -11589,6 +11589,143 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   color: #6f1d10;
 }
 
+/* ==== Part 24b-6, round 3 ==== */
+
+/* the hold button: the label is danger red on the white part and white on the filled part (a second label under a clip) */
+.account-admin-page.admin-shell button.dz-go.is-hold {
+  background: #fff;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell button.dz-go.is-hold > i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inset: 0;
+  width: 100%;
+  background: var(--ad-danger);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path calc(80ms * var(--ad-motion)) linear;
+}
+.account-admin-page.admin-shell button.dz-go.is-hold[data-hold="on"] > i {
+  width: 100%;
+  clip-path: inset(0 0 0 0);
+  transition: clip-path calc(1500ms * var(--ad-motion)) linear;
+}
+.account-admin-page.admin-shell button.dz-go.is-hold > .dz-label {
+  position: relative;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell button.dz-go.is-hold[data-hold="on"] > .dz-label {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell button.dz-go.is-hold > i > .dz-label-on {
+  color: #fff;
+}
+.account-admin-page.admin-shell button.dz-go.is-hold:disabled > .dz-label {
+  color: var(--ad-muted);
+}
+
+/* 邀请与额度: an opened batch grows to show every code (no height cap, no inner scroll), header labels never wrap, no rule under them */
+.account-admin-page.admin-shell .admin-table-region,
+.account-admin-page.admin-shell .admin-table-region .admin-table-wrap,
+.account-admin-page.admin-shell .tiers-detail .admin-table-wrap,
+.account-admin-page.admin-shell .tiers-codes-card {
+  max-height: none;
+  overflow: visible;
+}
+.account-admin-page.admin-shell .tiers-table thead th,
+.account-admin-page.admin-shell .tiers-codes-table thead th {
+  position: static;
+  box-shadow: none;
+  border-bottom: 0;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .tiers-detail .tiers-codes-table tr {
+  grid-template-columns: 40px 264px 76px 140px 92px 136px 76px;
+  gap: 10px;
+  padding: 0 12px;
+}
+.account-admin-page.admin-shell .tiers-detail .tiers-codes-table :is(th, td) {
+  white-space: nowrap;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .tiers-code-cell {
+  flex-wrap: nowrap;
+}
+.account-admin-page.admin-shell .tiers-code-cell .tiers-code-text {
+  min-width: 0;
+}
+.account-admin-page.admin-shell form.tiers-form {
+  grid-template-columns:
+    minmax(0, 1.2fr) minmax(0, 0.6fr) minmax(176px, 1.3fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.8fr)
+    minmax(156px, 1fr) auto auto;
+}
+.account-admin-page.admin-shell form.tiers-form input[type="date"] {
+  min-width: 0;
+  width: 100%;
+}
+
+/* 关系与故事: under ~1040 of content the pair panel sits BELOW the grid, full width, and the cells stay at 34 px or more */
+@container adc (max-width: 1040px) {
+  .account-admin-page.admin-shell .cs-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .account-admin-page.admin-shell .cs-grid-card {
+    --cell-min: 34px;
+    padding: 16px 20px;
+  }
+  .account-admin-page.admin-shell .cs-grid {
+    grid-template-columns: minmax(64px, max-content) repeat(var(--n, 15), minmax(34px, 46px));
+    gap: 4px;
+  }
+  .account-admin-page.admin-shell .cs-head-col {
+    padding: 0;
+    font-size: 11px;
+  }
+}
+
+/* 消耗表 按模型: provider / model / phase never breaks inside a word */
+.account-admin-page.admin-shell .cs-table .ot-cell.is-mono {
+  white-space: nowrap;
+}
+
+/* 共创收件箱: the target header keeps each part whole; the link drops to its own line as a whole */
+.account-admin-page.admin-shell #admin-cocreation .cc-target-head {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target-head > * {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target-head > .cc-spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* 说话方式: each example field carries its short label (情境 / 玩家说 / 他回) */
+.account-admin-page.admin-shell .cn-pair .cn-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cn-pair .cn-lab > span {
+  color: var(--ad-muted);
+  font-size: 11px;
+  line-height: 1;
+}
+.account-admin-page.admin-shell .cn-pair .cn-situation-lab {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .cn-pair > .cn-x {
+  margin-top: 15px;
+}
+
+/* 邀请码表: the player number reads from the left under its header, like every other column */
+.account-admin-page.admin-shell .tiers-detail .tiers-codes-table :is(th, td) {
+  text-align: left;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

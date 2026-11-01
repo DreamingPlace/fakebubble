@@ -1276,15 +1276,369 @@ try {
   }
   await page.emulateMedia({ reducedMotion: 'no-preference' });
 
+  // ---------------------------------------------------------------------------------------------------------------------------
+  // The last, destructive step: the held press really deletes (once), and the recordings.
+  // ---------------------------------------------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------------------------------------------
+  // Round 3 (the reviewer's second list). Each block fails on the build that had the defect; most of it only breaks at 1280.
+  // ---------------------------------------------------------------------------------------------------------------------------
+  // 1. 邀请与额度: an opened 10-code batch is never clipped; no header wraps; the date input shows its value; no rule under the labels.
+  await f.context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: f.origin }).catch(() => {});
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height });
+    await open('invites');
+    const batchRows = page.locator('tr[data-batch]');
+    for (let i = 0; i < (await batchRows.count()); i++)
+      if ((await batchRows.nth(i).innerText()).includes('第二批')) {
+        await batchRows.nth(i).click({ position: { x: 14, y: 8 } });
+        break;
+      }
+    await wait(1000);
+    const lastCode = page.locator('.tiers-codes-table tbody tr').last();
+    await lastCode.scrollIntoViewIfNeeded();
+    await wait(300);
+    const invites = await page.evaluate(() => {
+      const root = document.querySelector('section[data-panel="invites"]') as HTMLElement;
+      const rows = [...root.querySelectorAll('.tiers-codes-table tbody tr')] as HTMLElement[];
+      const last = rows.at(-1)?.getBoundingClientRect();
+      const revoke = [...root.querySelectorAll('.tiers-detail button')].find((b) =>
+        b.textContent?.includes('撤销整批'),
+      ) as HTMLElement | undefined;
+      const clipped: string[] = [];
+      for (const el of root.querySelectorAll('*')) {
+        const e = el as HTMLElement;
+        if (
+          e.clientHeight > 0 &&
+          e.scrollHeight > e.clientHeight + 1 &&
+          getComputedStyle(e).overflowY !== 'visible' &&
+          !e.matches('textarea, select, input')
+        )
+          clipped.push(`${e.tagName}.${String(e.className).slice(0, 24)} ${e.clientHeight}<${e.scrollHeight}`);
+      }
+      const heads = [...root.querySelectorAll('thead th')]
+        .filter((th) => (th as HTMLElement).offsetParent && th.textContent?.trim())
+        .map((th) => ({ text: th.textContent!.trim(), height: Math.round(th.getBoundingClientRect().height) }));
+      const lines = [...root.querySelectorAll('thead th')]
+        .filter((th) => (th as HTMLElement).offsetParent && th.textContent?.trim())
+        .filter((th) => {
+          const s = getComputedStyle(th);
+          return parseFloat(s.borderBottomWidth) > 0 || (s.boxShadow !== 'none' && s.boxShadow !== '');
+        }).length;
+      const date = root.querySelector('#tiers-redeem-by') as HTMLElement;
+      const expiry = [...rows[0]!.querySelectorAll('td')].find((td) => td.getAttribute('data-label') === '额度到期');
+      const code = rows.at(-1)!.querySelector('.tiers-code-text') as HTMLElement;
+      return {
+        count: rows.length,
+        lastInView: !!last && last.bottom <= window.innerHeight + 1 && last.top >= 0,
+        revokeExists: !!revoke,
+        clipped,
+        tall: heads.filter((h) => h.height > 24).map((h) => `${h.text}:${h.height}`),
+        lines,
+        dateWidth: Math.round(date.getBoundingClientRect().width),
+        expiry: expiry?.textContent?.trim() ?? null,
+        aligned: (() => {
+          const heads = [...root.querySelectorAll('.tiers-codes-table thead th')] as HTMLElement[];
+          const cells = [...rows[0]!.children] as HTMLElement[];
+          return heads.every((th, i) => getComputedStyle(th).textAlign === getComputedStyle(cells[i]!).textAlign);
+        })(),
+        codeText: code.textContent ?? '',
+        codeCut:
+          code.getBoundingClientRect().right > (code.closest('td') as HTMLElement).getBoundingClientRect().right + 0.5,
+      };
+    });
+    check(invites.count === 10, `邀请与额度 ${width}: the opened batch shows ${invites.count} codes (10)`);
+    check(invites.lastInView, `邀请与额度 ${width}: the last code is not visible after scrolling to it`);
+    check(invites.revokeExists, `邀请与额度 ${width}: 撤销整批 is missing from the opened batch`);
+    check(invites.clipped.length === 0, `邀请与额度 ${width}: clipped boxes ${invites.clipped.join('; ')}`);
+    check(invites.tall.length === 0, `邀请与额度 ${width}: header labels wrap: ${invites.tall.join(', ')}`);
+    check(invites.lines === 0, `邀请与额度 ${width}: ${invites.lines} header labels have a rule under them`);
+    check(invites.dateWidth >= 140, `邀请与额度 ${width}: the 兑换截止 input is ${invites.dateWidth} px (≥ 140)`);
+    check(invites.expiry === '—', `邀请与额度 ${width}: an empty 额度到期 reads "${invites.expiry}" (—)`);
+    check(
+      invites.aligned,
+      `邀请与额度 ${width}: a code-table column reads right-aligned under a left-aligned header (— —)`,
+    );
+    check(!invites.codeCut, `邀请与额度 ${width}: a code is cut inside its cell`);
+    if (width === 1280 || width === 1440) {
+      const reveal = page.locator('.tiers-detail button', { hasText: '撤销整批' }).first();
+      await reveal.scrollIntoViewIfNeeded();
+      await reveal.click();
+      await wait(900);
+      await shot(`invites-10-codes-revoke-${width}`);
+      await page.locator('.tiers-codes-table tbody tr').last().locator('button', { hasText: '复制' }).click();
+      await wait(500);
+      const copied = await page.evaluate(() => navigator.clipboard.readText()).catch(() => '');
+      const tip = await page
+        .locator('.tiers-codes-table tbody tr')
+        .last()
+        .locator('.ad-tip')
+        .first()
+        .textContent()
+        .catch(() => null);
+      check(
+        copied.length >= 30 && (tip === null || tip === copied),
+        `邀请与额度 ${width}: the copied code (${copied.length} characters) is not the whole one shown on hover`,
+      );
+    }
+  }
+
+  // 2. 关系与故事: all fifteen columns inside the grid card at every width, no two headers overlap; the pair panel is below the grid
+  // where grid + 400 px do not fit side by side.
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height });
+    await open('cast');
+    const cast = await page.evaluate(() => {
+      const card = document.querySelector('.cs-grid-card') as HTMLElement;
+      const box = card.getBoundingClientRect();
+      const heads = [...card.querySelectorAll('.cs-head-col')] as HTMLElement[];
+      const cells = [...card.querySelectorAll('.cs-cell')] as HTMLElement[];
+      const outside = [...heads, ...cells].filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left < box.left - 0.5 || r.right > box.right + 0.5;
+      }).length;
+      const rects = heads.map((el) => el.getBoundingClientRect()).sort((a, b) => a.left - b.left);
+      let overlap = 0;
+      for (let i = 1; i < rects.length; i++) if (rects[i - 1]!.right > rects[i]!.left + 0.5) overlap++;
+      const side = document.querySelector('.cs-side') as HTMLElement | null;
+      const sideBox = side?.getBoundingClientRect();
+      return {
+        outside,
+        overlap,
+        minCell: Math.round(Math.min(...cells.map((c) => c.getBoundingClientRect().width))),
+        sideWidth: sideBox ? Math.round(sideBox.width) : 0,
+        sideBelow: !!sideBox && sideBox.top >= box.bottom - 1,
+        sideBeside: !!sideBox && sideBox.left >= box.right - 1,
+        cardWidth: Math.round(box.width),
+      };
+    });
+    check(cast.outside === 0, `关系与故事 ${width}: ${cast.outside} columns/cells are outside the grid card`);
+    check(cast.overlap === 0, `关系与故事 ${width}: ${cast.overlap} headers overlap`);
+    check(cast.minCell >= 34, `关系与故事 ${width}: the smallest cell is ${cast.minCell} px (≥ 34)`);
+    check(
+      cast.sideWidth >= 400 && (cast.sideBelow || cast.sideBeside),
+      `关系与故事 ${width}: the pair panel is ${cast.sideWidth} px, below ${cast.sideBelow}, beside ${cast.sideBeside}`,
+    );
+    if (width === 1280) await shot('cast-1280-no-clipping');
+  }
+
+  // 6. 消耗表 按模型: provider / model / phase on one line, at every width.
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height });
+    await open('costs');
+    const models = await page.evaluate(() => {
+      const card = document.querySelector('section[data-panel="costs"] [aria-label="按模型"]') as HTMLElement;
+      const cells = [...card.querySelectorAll('.ot-row')].map((row) => row.querySelector('.ot-cell') as HTMLElement);
+      return {
+        count: cells.length,
+        wrapped: cells.filter((c) => c.getBoundingClientRect().height > 28).map((c) => c.textContent?.slice(0, 40)),
+      };
+    });
+    check(models.count >= 4, `消耗表 ${width}: ${models.count} 按模型 rows`);
+    check(models.wrapped.length === 0, `消耗表 ${width}: 按模型 wraps ${models.wrapped.join(' | ')}`);
+    if (width === 1280) await shot('costs-models-1280');
+  }
+
+  // 7. 共创收件箱: the target header keeps every part whole; 加入草稿 → 保存草稿 says 角色工作台, never 角色资料.
+  for (const [width, height] of SIZES) {
+    await page.setViewportSize({ width, height });
+    await open('cocreation');
+    await page.locator('.cc-row.is-active').waitFor({ timeout: 10_000 });
+    await wait(700);
+    const head = await page.evaluate(() =>
+      [...document.querySelectorAll('.cc-target-head > *')]
+        .filter((el) => (el as HTMLElement).getBoundingClientRect().width > 0 && el.textContent?.trim())
+        .map((el) => ({
+          text: el.textContent!.trim().slice(0, 16),
+          height: Math.round(el.getBoundingClientRect().height),
+        }))
+        .filter((part) => part.height > 26),
+    );
+    check(head.length === 0, `共创收件箱 ${width}: the target header breaks lines inside ${JSON.stringify(head)}`);
+    if (width === 1280) await shot('inbox-1280-header');
+  }
+  for (const [width, height] of [SIZES[0], SIZES[1]] as const) {
+    await page.setViewportSize({ width, height });
+    await open('cocreation');
+    await page.locator('.cc-row.is-active').waitFor({ timeout: 10_000 });
+    await wait(700);
+    await page.locator('.cc-adopt-open').first().click();
+    await wait(800);
+    const textarea = page.locator('.cc-draft-box textarea').first();
+    if (await textarea.count()) {
+      await textarea.fill(`${await textarea.inputValue()}（改）`);
+      await wait(300);
+    }
+    await shot(`inbox-amber-edit-${width}`);
+    await page.locator('.cc-target button', { hasText: '保存草稿' }).first().click();
+    await wait(1200);
+    const message = await page.locator('.invite-admin-status').textContent();
+    check(
+      !!message && message.includes('角色工作台') && !message.includes('角色资料'),
+      `共创收件箱 ${width}: the status after saving reads "${message}"`,
+    );
+  }
+
+  // 8. 说话方式: each example has a short 情境 label.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open('characters/jojo');
+  await page.locator('.wb-tab', { hasText: '说话方式' }).click();
+  await wait(700);
+  const speech = await page.evaluate(() => ({
+    // the visible label is the field's own caption, so it stays when the field is filled
+    situations: [...document.querySelectorAll('.cn-situation-lab > span')].map((el) => el.textContent ?? ''),
+    unlabelled: [...document.querySelectorAll('.cn-pair input, .cn-pair textarea')].filter(
+      (el) => !(el.closest('label')?.querySelector('span')?.textContent ?? '').trim(),
+    ).length,
+  }));
+  check(
+    speech.situations.length > 0 && speech.situations.every((label: string) => label === '情境'),
+    `说话方式: the situation fields are labelled ${JSON.stringify(speech.situations)} (情境)`,
+  );
+  check(speech.unlabelled === 0, `说话方式: ${speech.unlabelled} example fields have no label`);
+  await page.locator('.cn-add', { hasText: '样例' }).first().click();
+  await wait(500);
+  await shot('speech-example-added-1280');
+  await page.locator('.cn-pair .cn-x').last().click();
+  await page.goto('about:blank'); // the page's unsaved-changes guard would hold the next route otherwise
+  await wait(300);
+
+  // 3 + 4. A fixed colour per character, and a deletion that names no ids: delete 陈吉米 to the end; JOJO and 周屿 keep their colour
+  // on the rail, in 关系与故事 and in 共创收件箱.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const colours = async () => {
+    const read = async (route: string, selector: string) => {
+      await open(route);
+      await page
+        .locator(selector)
+        .first()
+        .waitFor({ timeout: 15_000 })
+        .catch(async (error: unknown) => {
+          await page.screenshot({ path: '/tmp/colour-fail.png' });
+          throw error;
+        });
+      await wait(900);
+      return page.evaluate((sel: string) => {
+        const out: Record<string, string> = {};
+        for (const el of document.querySelectorAll(sel)) {
+          const name = (el.textContent ?? '').replace(/\s+/g, ' ').trim().split(' ')[0] ?? '';
+          const dot = (el.matches('i') ? el : el.querySelector('i')) as HTMLElement | null;
+          if (dot && name && !out[name])
+            out[name] =
+              dot.style.getPropertyValue('--dot').trim().toLowerCase() || getComputedStyle(dot).backgroundColor;
+        }
+        return out;
+      }, selector);
+    };
+    return {
+      cast: await read('cast', '.cs-head-row'),
+      inbox: await read('cocreation', '.cc-chip-row[aria-label="角色"] button'),
+      rail: await page.evaluate(() => ({})),
+    };
+  };
+  const railColours = async () => {
+    await open('characters/jojo');
+    await page.locator('.wb-roles .admin-pick').first().waitFor({ timeout: 10_000 });
+    await wait(900);
+    return page.evaluate(() =>
+      Object.fromEntries(
+        [...document.querySelectorAll('.wb-roles .admin-pick')].map((el) => [
+          (el.getAttribute('data-character') ?? '') as string,
+          getComputedStyle(el.querySelector('.admin-pick-dot') as HTMLElement)
+            .getPropertyValue('--dot')
+            .trim(),
+        ]),
+      ),
+    );
+  };
+  const before = { ...(await colours()), rail: await railColours() };
+  await open('characters/chen-jimi');
+  await page.locator('.wb-tab', { hasText: '发布' }).click();
+  await wait(600);
+  await page.locator('#wb-delete').scrollIntoViewIfNeeded();
+  await page.locator('#wb-delete').click();
+  await wait(900);
+  const zone = page.locator('#wb-delete').locator('xpath=ancestor::*[contains(@class,"dz")][1]');
+  await zone.locator('.dz-type').fill('陈吉米');
+  await wait(300);
+  const goButton = zone.locator('.dz-go');
+  await goButton.evaluate((el: HTMLElement) => el.scrollIntoView({ block: 'center' }));
+  await wait(300);
+  const gb = await goButton.boundingBox();
+  await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2);
+  await page.mouse.down();
+  await wait(750);
+  // 5. Mid-hold: the label reads over the unfilled part (danger on white) and over the filled part (white on danger), ≥ 4.5:1 each.
+  const hold = await goButton.evaluate((el: HTMLElement) => {
+    const parse = (c: string) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+    const lum = (rgb: number[]) => {
+      const [r, g, b] = rgb.map((v) => {
+        const x = v / 255;
+        return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    const ratio = (a: number[], b: number[]) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+      return (hi! + 0.05) / (lo! + 0.05);
+    };
+    const base = el.querySelector('.dz-label:not(.dz-label-on)') as HTMLElement | null;
+    const on = el.querySelector('.dz-label-on') as HTMLElement | null;
+    const fill = el.querySelector('i') as HTMLElement | null;
+    return {
+      holding: el.dataset.hold === 'on',
+      stacked: !!base && !!on,
+      unfilled: base ? ratio(parse(getComputedStyle(base).color), parse(getComputedStyle(el).backgroundColor)) : 0,
+      filled: on && fill ? ratio(parse(getComputedStyle(on).color), parse(getComputedStyle(fill).backgroundColor)) : 0,
+    };
+  });
+  check(hold.holding, '删除角色: the hold did not start');
+  check(hold.stacked, '删除角色: the hold button has no second (white) label for the filled part');
+  check(hold.unfilled >= 4.5, `删除角色: the label on the unfilled part is ${hold.unfilled.toFixed(2)}:1 (≥ 4.5)`);
+  check(hold.filled >= 4.5, `删除角色: the label on the filled part is ${hold.filled.toFixed(2)}:1 (≥ 4.5)`);
+  await shot('danger-zone-hold-labels');
+  await wait(1300);
+  await page.mouse.up();
+  await wait(2500);
+  check(deleted.length === 1, `删除角色: ${deleted.length} delete requests after a full hold (1)`);
+  const afterText = await page.evaluate(
+    () => document.body.innerText + ' ' + (document.querySelector('.invite-admin-status')?.textContent ?? ''),
+  );
+  check(!/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i.test(afterText), '删除角色: a UUID is shown after deleting');
+  check(!/purging|deleted\b/i.test(afterText), '删除角色: an English state is shown after deleting');
+  const statusMessage = await page.locator('.invite-admin-status').textContent();
+  check(
+    !!statusMessage && statusMessage.includes('删除已开始') && !/[A-Za-z0-9]{8,}/.test(statusMessage),
+    `删除角色: the status reads "${statusMessage}"`,
+  );
+  const record = await page.evaluate(() => {
+    const row = document.querySelector('.character-deletion-row');
+    return row ? { name: row.querySelector('h3')?.textContent ?? '', text: row.textContent ?? '' } : null;
+  });
+  check(
+    record !== null && record.name === '陈吉米' && /清理中|已完成|失败/.test(record.text),
+    `删除角色: the deletion record reads ${JSON.stringify(record)}`,
+  );
+  await shot('delete-record');
+  const after = { ...(await colours()), rail: await railColours() };
+  for (const name of ['JOJO', '周屿']) {
+    check(
+      before.inbox[name] !== undefined && before.inbox[name] === after.inbox[name],
+      `角色颜色: ${name} was ${before.inbox[name]} in 共创收件箱 and is ${after.inbox[name]} after a deletion`,
+    );
+  }
+  check(
+    before.cast['周屿'] !== undefined && before.cast['周屿'] === after.cast['周屿'],
+    `角色颜色: 周屿 was ${before.cast['周屿']} in 关系与故事 and is ${after.cast['周屿']}`,
+  );
+  const moved = Object.keys(after.rail).filter((id) => before.rail[id] !== after.rail[id]);
+  check(moved.length === 0, `角色颜色: the rail colour of ${moved.join(', ')} changed after a deletion`);
+
   assert.deepEqual(errors, [], 'no uncaught page errors');
   if (problems.length) {
     process.stderr.write(`${problems.length} problem(s):\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
     throw new Error('console 24b-6 browser check failed');
   }
 
-  // ---------------------------------------------------------------------------------------------------------------------------
-  // The last, destructive step: the held press really deletes (once), and the recordings.
-  // ---------------------------------------------------------------------------------------------------------------------------
   if (shots) {
     const video = await f.browser.newContext({
       ignoreHTTPSErrors: true,

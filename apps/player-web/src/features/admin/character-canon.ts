@@ -50,7 +50,10 @@ const isPast = (value: unknown) =>
   );
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const input = (value: string, label: string, onEdit: () => void, extra = '') => {
-  const node = h('input', { class: extra, attrs: { type: 'text', 'aria-label': label, 'data-was': value } });
+  const node = h('input', {
+    class: extra,
+    attrs: { type: 'text', 'aria-label': label, placeholder: label, 'data-was': value },
+  });
   node.value = value;
   node.addEventListener('input', () => {
     markDirty(node, node.value !== node.getAttribute('data-was'));
@@ -59,7 +62,9 @@ const input = (value: string, label: string, onEdit: () => void, extra = '') => 
   return node;
 };
 const area = (value: string, label: string, onEdit: () => void, rows = 3) => {
-  const node = h('textarea', { attrs: { rows: String(rows), 'aria-label': label, 'data-was': value } });
+  const node = h('textarea', {
+    attrs: { rows: String(rows), 'aria-label': label, placeholder: label, 'data-was': value },
+  });
   node.value = value;
   node.addEventListener('input', () => {
     markDirty(node, node.value !== node.getAttribute('data-was'));
@@ -182,7 +187,7 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
       if (row.situation !== undefined) {
         const situation = input(
           row.situation,
-          '场景',
+          '情境',
           () => {
             row.situation = situation.value;
             onEdit();
@@ -191,7 +196,18 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
         );
         parts.push(situation);
       }
-      list.append(h('div', { class: 'cn-pair' }, ...parts, player, reply, remove));
+      const lab = (text: string, node: HTMLElement, extra = '') =>
+        h('label', { class: `cn-lab${extra}` }, h('span', { text }), node);
+      list.append(
+        h(
+          'div',
+          { class: 'cn-pair' },
+          ...parts.map((part) => lab('情境', part, ' cn-situation-lab')),
+          lab('玩家说', player),
+          lab('他回', reply),
+          remove,
+        ),
+      );
     });
     list.append(
       adder(

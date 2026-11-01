@@ -1,4 +1,5 @@
 import type { OverviewView } from '../../../../../packages/contracts/web-system.ts';
+import { colourOfName } from './ui/character-colour.ts';
 import {
   STATS_RANGES,
   type ChartMetric,
@@ -419,7 +420,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
   function grouped<T extends { name: string }>(rows: readonly T[], value: (row: T) => number) {
     const head = rows
       .slice(0, SHOWN_CHARACTERS)
-      .map((row, i) => ({ name: row.name, color: colorOf(i), value: value(row) }));
+      .map((row, i) => ({ name: row.name, color: colourOfName(row.name) ?? colorOf(i), value: value(row) }));
     const rest = rows.slice(SHOWN_CHARACTERS);
     if (rest.length)
       head.push({ name: `其他 ${rest.length} 位`, color: OTHER_COLOUR, value: rest.reduce((a, r) => a + value(r), 0) });
@@ -600,7 +601,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       const index = chart.buckets.indexOf(addDays(todayDay, -1));
       return index < 0 ? null : (chart.characters.find((c) => c.name === name)?.values[index] ?? null);
     };
-    const shown = chars.slice(0, SHOWN_CHARACTERS).map((c, i) => ({ c, color: colorOf(i) }));
+    const shown = chars.slice(0, SHOWN_CHARACTERS).map((c, i) => ({ c, color: colourOfName(c.name) ?? colorOf(i) }));
     const rest = chars.slice(SHOWN_CHARACTERS);
     const rows = shown.map(({ c, color }) => {
       const chat = chatFor(c.name);

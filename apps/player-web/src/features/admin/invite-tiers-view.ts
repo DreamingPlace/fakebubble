@@ -362,6 +362,14 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     if (code.codeView === undefined && open?.fresh) return open.fresh[code.serial - 1] ?? null;
     return null;
   };
+  /** The code with its middle cut out ("abcdefghijkl…uvwxyz12") and the whole code on hover; 复制 always copies the whole one. */
+  const middleCut = (plain: string) => {
+    const node = h('code', {
+      class: 'tiers-code-text',
+      text: plain.length > 30 ? `${plain.slice(0, 18)}…${plain.slice(-8)}` : plain,
+    });
+    return plain.length > 30 ? hoverValue(node, plain) : node;
+  };
   /** The 邀请码 cell: the code with its own 复制 (plain), the mask, or the notice for a code that was never kept. */
   function codeCell(code: InviteBatchCode) {
     const plain = plainOf(code);
@@ -378,10 +386,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
           copyButton.setAttribute('aria-pressed', 'true');
         });
       });
-      return cell(
-        '邀请码',
-        h('div', { class: 'tiers-code-cell' }, h('code', { class: 'tiers-code-text', text: plain }), copyButton),
-      );
+      return cell('邀请码', h('div', { class: 'tiers-code-cell' }, middleCut(plain), copyButton));
     }
     return cell(
       '邀请码',

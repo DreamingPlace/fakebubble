@@ -135,7 +135,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
     {
       key: 'who',
       label: '供应商 / 模型 / 阶段',
-      width: 'minmax(0, 2.4fr)',
+      width: 'minmax(300px, 2.4fr)',
       mono: true,
       cell: (r) => `${r.provider} / ${r.model} / ${PHASES[r.phase]}`,
     },

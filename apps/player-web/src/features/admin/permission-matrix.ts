@@ -16,7 +16,7 @@ type Group = { id: string; title: string; items: readonly ItemInfo[] };
 export const PERMISSION_GROUPS: readonly Group[] = [
   {
     id: 'characters',
-    title: '角色资料',
+    title: '角色工作台',
     items: [
       { item: 'characters.read', name: '查看角色', help: '打开角色目录和资料。其他角色功能都以它为前提。' },
       { item: 'characters.create', name: '新建角色', help: '建立新的角色草稿。' },

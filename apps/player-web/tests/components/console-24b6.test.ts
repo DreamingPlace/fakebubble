@@ -498,3 +498,39 @@ test('24b-6 消耗表: a chip of a group with no figure for any day of the range
   assert.equal(known.series.find((s) => s.id === 'guest')!.sum, 5);
   assert.equal(known.series.find((s) => s.id === 'registered')!.sum, 0, 'a known day with nothing for a group is 0');
 });
+
+// ---- Part 24b-6, round 3 ----
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { characterColour, rosterColours, setMainColour } from '../../src/features/admin/ui/character-colour.ts';
+
+test('24b-6 round 3: a character keeps its colour whoever else is added or deleted; its 主色 wins when set', () => {
+  const ids = ['chen-jimi', 'jojo', 'wei-guagua', 'zhou-yu'];
+  const all = rosterColours(ids);
+  const without = rosterColours(ids.filter((id) => id !== 'chen-jimi'));
+  for (const id of ids.filter((x) => x !== 'chen-jimi')) assert.equal(all(id), without(id), id);
+  assert.equal(all('jojo'), characterColour('jojo'));
+  assert.notEqual(
+    rosterColours([])('jojo'),
+    characterColour('jojo'),
+    'a person who is not a chat character stays grey',
+  );
+  setMainColour('jojo', '#123456');
+  assert.equal(rosterColours(ids)('jojo'), '#123456');
+  setMainColour('jojo', '');
+  assert.equal(characterColour('jojo'), all('jojo'));
+});
+
+test('24b-6 round 3: the old page name 角色资料 is not on any console page (the page is 角色工作台)', () => {
+  const root = join(import.meta.dirname, '../../src/features/admin');
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true }))
+      entry.isDirectory()
+        ? walk(join(dir, entry.name))
+        : entry.name.endsWith('.ts') && files.push(join(dir, entry.name));
+  };
+  walk(root);
+  const found = files.filter((file) => readFileSync(file, 'utf8').includes('角色资料'));
+  assert.deepEqual(found, []);
+});

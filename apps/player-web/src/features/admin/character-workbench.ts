@@ -1,4 +1,5 @@
 import { InviteLocalApiError } from '../../services/invite-local-api.ts';
+import { setMainColour } from './ui/character-colour.ts';
 import type { AdminMember } from '../../services/account-admin-api.ts';
 import type {
   CharacterAdminClient,
@@ -132,6 +133,8 @@ export function characterAdminError(error: unknown): string | null {
 
 /** All mutations are explicit buttons. No storage, implicit generation, or player-content queries; the only timer polls the status of previews this admin already submitted. */
 export function characterWorkbench(root: HTMLElement, host: Host) {
+  /** Display names seen while the roster was listed or a role opened: the deletion record names a character, never shows its id. */
+  const names = new Map<string, string>();
   let disposed = false,
     busy = false,
     dirty = false,
@@ -275,15 +278,15 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     row.className = 'character-deletion-row';
     parent.append(row);
     protectedRows.push({ characterId: job.characterId, node: row });
-    row.append(el('h3', job.characterId), progress, error);
+    row.append(el('h3', names.get(job.characterId) ?? '已删除的角色'), progress, error);
     const show = (current: DeletionStatus) => {
       progress.textContent =
         current.state === 'deleted'
-          ? '已删除，内容清理完成。'
-          : `清理中：数据库 ${current.databaseCleared}/${current.total}；音频 ${current.audioCleared}/${current.total}`;
-      error.textContent = current.errorCode
-        ? `清理暂未完成：${current.errorCode}。原任务保留；刷新核对，不要重新删除或释放未知费用。`
-        : '';
+          ? '已完成'
+          : current.errorCode
+            ? '失败'
+            : `清理中：数据库 ${current.databaseCleared}/${current.total}；音频 ${current.audioCleared}/${current.total}`;
+      error.textContent = current.errorCode ? '清理暂未完成。原任务保留；刷新核对，不要重新删除或释放未知费用。' : '';
     };
     show(job);
     button(
@@ -303,6 +306,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     const current = ++view,
       result = await host.api.list();
     if (gone() || current !== view) return;
+    for (const role of result.characters) names.set(role.characterId, role.displayName);
     clearView();
     id = null;
     detail = null;
@@ -323,7 +327,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       host.onView?.(null);
       return;
     }
-    root.append(el('h2', '角色资料'));
+    root.append(el('h2', '角色工作台'));
     const tools = el('div');
     tools.className = 'admin-toolbar';
     root.append(tools);
@@ -388,6 +392,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     if (gone() || current !== view) return;
     id = target;
     detail = next;
+    setMainColour(target, (next.published ?? next.draft)?.profile.presentation.color);
+    const shownName = (next.published ?? next.draft)?.profile.presentation.displayName;
+    if (shownName) names.set(target, shownName);
     renderDetail();
 
     host.onView?.(target);
@@ -397,7 +404,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     detail = null;
     dirty = false;
     renderDetail();
-    host.status('请填写空白角色资料；保存后仍须预演与批准才能发布。');
+    host.status('请填写空白角色工作台；保存后仍须预演与批准才能发布。');
   }
   function renderDetail() {
     clearView();
@@ -420,7 +427,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       }
       const role = next.template.id;
       act(async () => {
-        if (!can('edit', role)) throw new AdminFormError('没有角色资料管理权限，请联系主管理员。');
+        if (!can('edit', role)) throw new AdminFormError('没有角色工作台管理权限，请联系主管理员。');
         const saved = await host.api.save(role, snapshot?.draft?.revision ?? null, next);
         if (gone()) return;
         dirty = false;
@@ -458,7 +465,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     if (snapshot) for (const job of snapshot.previews) mergeLive(job);
     if (host.preview === 'only') {
       if (snapshot?.draft) previewPanel(root, snapshot);
-      else root.append(el('p', '此角色还没有已保存的草稿。请先在“角色资料”保存草稿，再回来预演。'));
+      else root.append(el('p', '此角色还没有已保存的草稿。请先在“角色工作台”保存草稿，再回来预演。'));
       sync();
       return;
     }
@@ -776,7 +783,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         if (gone()) return;
         dirty = false;
         await list();
-        host.status(`删除任务 ${result.deletionId} 已建立，清理状态 ${result.state}；可在删除记录中继续核对。`);
+        host.status('删除已开始，进度见下方删除记录。');
       },
     });
     zones.push(zone);
@@ -1518,7 +1525,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
             if (gone()) return;
             dirty = false;
             await list();
-            host.status(`删除任务 ${result.deletionId} 已建立，清理状态 ${result.state}；可在删除记录中继续核对。`);
+            host.status('删除已开始，进度见下方删除记录。');
           },
         );
         for (const node of [typed, ack]) node.addEventListener('input', sync);
