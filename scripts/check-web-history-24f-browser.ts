@@ -323,9 +323,10 @@ try {
   );
   await rows(page).nth(1).locator('[data-restore]').click();
   await page.locator('.admin-dialog').getByRole('button', { name: '恢复此版本' }).click();
-  await page.waitForTimeout(800);
-  await snap(page, '05-restore-busy');
   await page.locator('.vh .vh-note[role="status"]:not([hidden])').waitFor({ timeout: 5000 });
+  // The toast says the same as the note under the intro; the picture is taken once it has gone, so it covers nothing.
+  await page.locator('.admin-toast').waitFor({ state: 'detached', timeout: 8000 });
+  await snap(page, '05-restore-busy');
   assert.match(await page.locator('.vh .vh-note[role="status"]').innerText(), /未结束的玩家任务.*不会取消或重发/);
   assert.equal(
     store.get<{ status: string }>("SELECT status FROM web_operations WHERE id='busy-op'")!.status,
@@ -411,10 +412,11 @@ try {
   assert.equal(await rows(view).count(), 6, 'the non-owner sees every version');
   assert.equal(await view.locator('[data-restore]').count(), 0, 'no restore button for a non-owner');
   assert.match(await view.locator('.vh .vh-note').first().innerText(), /只有主管理员可以做/);
+  await snap(view, '08-non-owner-list');
   await rows(view).nth(2).click();
   await view.locator('.admin-drawer:not([hidden]) .admin-kv').first().waitFor();
   assert.equal(await view.locator('.admin-drawer [data-restore]').count(), 0, 'nor in the snapshot');
-  await snap(view, '08-non-owner-history');
+  await snap(view, '08b-non-owner-snapshot');
   expected.push(`/characters/${ID}/delete-preview`, `/characters/${ID}/delete-start`, `/characters/${ID}/restore`);
   for (const [path, body] of [
     ['delete-preview', {}],
