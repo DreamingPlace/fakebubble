@@ -504,6 +504,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
 
     form.addEventListener('submit', (event) => {
       event.preventDefault();
+      if (answer.adoptedAt !== null) return;
       void deps.run(async () => {
         fail('');
         const input = draftInput();
@@ -758,8 +759,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
             const copy = h('button', { text: '复制', attrs: { type: 'button' }, class: 'cc-copy' });
             copy.addEventListener('click', () => void copyText(plain(answer, character)));
             const add = h('button', { text: '+ 加入草稿 →', attrs: { type: 'button' }, class: 'cc-adopt-open' });
-            add.disabled = !manage || adopting?.ordinal === answer.ordinal;
+            // Part 24b-6, round 4: a note that is already adopted cannot be added again (the draft would carry it twice) until 取消采用.
+            add.disabled = !manage || adopting?.ordinal === answer.ordinal || answer.adoptedAt !== null;
+            // The page's busy pass re-enables every control it finds; an adopted note stays locked until 取消采用.
+            add.dataset.locked = String(add.disabled);
             add.addEventListener('click', () => {
+              if (answer.adoptedAt !== null) return;
               adopting = { ordinal: answer.ordinal };
               viewing = answer.ordinal;
               adoptError = '';
@@ -771,7 +776,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
               attrs: { type: 'button' },
               class: 'cc-adopt-story',
             });
-            story.disabled = !manage || (deps.canEditCast ? !deps.canEditCast() : false);
+            story.disabled = !manage || (deps.canEditCast ? !deps.canEditCast() : false) || answer.adoptedAt !== null;
+            story.dataset.locked = String(story.disabled);
             story.addEventListener('click', () => void addStory(current, answer.ordinal));
             const undo = h('button', { text: '取消采用', attrs: { type: 'button' }, class: 'cc-unadopt' });
             undo.disabled = !manage;
@@ -838,6 +844,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   /** 加入关系与故事: reads the cast draft's revision, then adds the story to THAT revision (a draft that moved on is refused). */
   async function addStory(current: InboxDetail, ordinal: number) {
     if (!deps.castRevision || !deps.api.addToCastStory) return;
+    if (current.answers.find((entry) => entry.ordinal === ordinal)?.adoptedAt) return;
     await deps.run(async () => {
       const revision = await deps.castRevision!();
       await deps.api.addToCastStory!(current.id, ordinal, revision);

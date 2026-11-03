@@ -503,28 +503,95 @@ test('24b-6 消耗表: a chip of a group with no figure for any day of the range
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  assignColours,
   characterColour,
+  colourOfName,
+  legibleColour,
   ROSTER_COLOURS,
   rosterColours,
   setMainColour,
+  setRoster,
 } from '../../src/features/admin/ui/character-colour.ts';
 
-test('24b-6 round 3: a character keeps its colour whoever else is added or deleted; its 主色 wins when set', () => {
-  const ids = ['chen-jimi', 'jojo', 'wei-guagua', 'zhou-yu'];
+// Superseded by round 4: the hash of the id let characters share colours; the colour is now the 主色 (from the admin list) or the first
+// unused palette colour. The round-3 stability check lives on, below, for characters that have a 主色.
+test('24b-6 round 4: every character with a 主色 wears it; one without gets the first palette colour nobody else uses', () => {
   assert.equal(new Set(ROSTER_COLOURS).size, 15, 'one palette of fifteen');
-  const all = rosterColours(ids);
-  const without = rosterColours(ids.filter((id) => id !== 'chen-jimi'));
-  for (const id of ids.filter((x) => x !== 'chen-jimi')) assert.equal(all(id), without(id), id);
-  assert.equal(all('jojo'), characterColour('jojo'));
-  assert.notEqual(
-    rosterColours([])('jojo'),
-    characterColour('jojo'),
-    'a person who is not a chat character stays grey',
-  );
-  setMainColour('jojo', '#123456');
-  assert.equal(rosterColours(ids)('jojo'), '#123456');
-  setMainColour('jojo', '');
-  assert.equal(characterColour('jojo'), all('jojo'));
+  const rows = [
+    { characterId: 'a', color: ROSTER_COLOURS[0] },
+    { characterId: 'b', color: null },
+    { characterId: 'c', color: ROSTER_COLOURS[1] },
+    { characterId: 'd', color: null },
+  ];
+  const dealt = assignColours(rows);
+  assert.equal(dealt.get('a'), ROSTER_COLOURS[0]);
+  assert.equal(dealt.get('c'), ROSTER_COLOURS[1]);
+  // colour-less ones in sorted-id order take the first colours that no 主色 uses
+  assert.equal(dealt.get('b'), ROSTER_COLOURS[2]);
+  assert.equal(dealt.get('d'), ROSTER_COLOURS[3]);
+  assert.equal(new Set(dealt.values()).size, 4);
+  // a 主色 outside the palette is kept as it is, and a colour-less character never takes it
+  const own = assignColours([{ characterId: 'x', color: ROSTER_COLOURS[0].toLowerCase() }, { characterId: 'y' }]);
+  assert.equal(own.get('x'), ROSTER_COLOURS[0]);
+  assert.notEqual(own.get('y'), own.get('x'));
+});
+
+test('24b-6 round 4: with fifteen different 主色 all fifteen dots differ, and deleting one changes no other', () => {
+  const rows = ROSTER_COLOURS.map((color, i) => ({ characterId: `c${String(i).padStart(2, '0')}`, color }));
+  const all = assignColours(rows);
+  assert.equal(new Set(all.values()).size, 15);
+  const without = assignColours(rows.filter((row) => row.characterId !== 'c03'));
+  for (const [id, colour] of without) assert.equal(colour, all.get(id), id);
+  // and the shared roster is what every page reads
+  setRoster(rows.map((row) => ({ ...row, displayName: `名${row.characterId}` })));
+  for (const row of rows) assert.equal(characterColour(row.characterId), row.color);
+  assert.equal(colourOfName('名c05'), ROSTER_COLOURS[5]);
+  assert.equal(rosterColours(['c00', 'c01'])('c01'), ROSTER_COLOURS[1]);
+  assert.equal(rosterColours(['c00'])('someone-else'), '#8C8697', 'a person who is not in the roster stays grey');
+  // a colour-less character takes the one palette colour nobody uses
+  setRoster([...rows.slice(0, 14), { characterId: 'zz', color: null }]);
+  assert.equal(characterColour('zz'), ROSTER_COLOURS[14]);
+  // changing one 主色 (a draft was saved) moves nobody else when everyone has one
+  setMainColour('c02', '#123456');
+  assert.equal(characterColour('c02'), '#123456');
+  assert.equal(characterColour('c01'), ROSTER_COLOURS[1]);
+  setRoster([]);
+});
+
+test('24b-6 round 4: white on every palette colour reads at 4.5:1 or more, and the rail circle keeps the colour as it is', () => {
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const v = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  };
+  for (const hex of ROSTER_COLOURS) {
+    assert.ok(1.05 / (luminance(hex) + 0.05) >= 4.5, `${hex}`);
+    assert.equal(legibleColour(hex).toLowerCase(), hex.toLowerCase(), `${hex} needs no darker circle`);
+  }
+  // a pale 主色 is darkened until the initial reads
+  assert.ok(1.05 / (luminance(legibleColour('#F2A33A')) + 0.05) >= 4.5);
+});
+
+test('24b-6 round 4: the palette colours are far apart (CIE76 ΔE ≥ 20)', () => {
+  const lab = (hex: string) => {
+    const lin = [1, 3, 5].map((i) => {
+      const v = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+    const [r, g, b] = lin as [number, number, number];
+    const f = (t: number) => (t > 0.008856 ? t ** (1 / 3) : 7.787 * t + 16 / 116);
+    const x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047,
+      y = 0.2126 * r + 0.7152 * g + 0.0722 * b,
+      z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+    return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))] as const;
+  };
+  for (let i = 0; i < ROSTER_COLOURS.length; i++)
+    for (let j = i + 1; j < ROSTER_COLOURS.length; j++) {
+      const [a, b] = [lab(ROSTER_COLOURS[i]!), lab(ROSTER_COLOURS[j]!)];
+      assert.ok(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) >= 20, `${ROSTER_COLOURS[i]} ${ROSTER_COLOURS[j]}`);
+    }
 });
 
 test('24b-6 round 3: the old page name 角色资料 is not on any console page (the page is 角色工作台)', () => {

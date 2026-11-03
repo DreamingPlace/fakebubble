@@ -1,5 +1,5 @@
 import { InviteLocalApiError } from '../../services/invite-local-api.ts';
-import { setMainColour } from './ui/character-colour.ts';
+import { characterColour, setMainColour, setRoster } from './ui/character-colour.ts';
 import type { AdminMember } from '../../services/account-admin-api.ts';
 import type {
   CharacterAdminClient,
@@ -63,6 +63,8 @@ type Host = {
   onView?: (id: string | null) => void;
   /** The console's title row (right side): the draft status chip and 预演后发布. Only with directory `none`. */
   headerHost?: HTMLElement;
+  /** A role's 主色 changed (opened, saved, discarded): the rail paints again. */
+  onColour?: () => void;
   /** The role's dot colour (the rail's), for the status line. */
   colourOf?: (characterId: string) => string | undefined;
   /** Where the paid 预演 lives: shown as the last section when the role may be previewed. */
@@ -307,6 +309,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       result = await host.api.list();
     if (gone() || current !== view) return;
     for (const role of result.characters) names.set(role.characterId, role.displayName);
+    setRoster(result.characters);
     clearView();
     id = null;
     detail = null;
@@ -392,7 +395,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     if (gone() || current !== view) return;
     id = target;
     detail = next;
-    setMainColour(target, (next.published ?? next.draft)?.profile.presentation.color);
+    // The draft's colour when there is a draft, else the published one (what the admin list returns, too).
+    const wore = characterColour(target);
+    setMainColour(target, (next.draft ?? next.published)?.profile.presentation.color);
+    if (characterColour(target) !== wore) host.onColour?.();
     const shownName = (next.published ?? next.draft)?.profile.presentation.displayName;
     if (shownName) names.set(target, shownName);
     renderDetail();

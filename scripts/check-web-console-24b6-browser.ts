@@ -1459,6 +1459,11 @@ try {
     await open('cocreation');
     await page.locator('.cc-row.is-active').waitFor({ timeout: 10_000 });
     await wait(700);
+    // (an adopted note cannot be adopted again: the second size starts by taking the mark off, as an administrator would)
+    if (await page.locator('.cc-adopt-open').first().isDisabled()) {
+      await page.locator('.cc-unadopt').first().click();
+      await wait(900);
+    }
     await page.locator('.cc-adopt-open').first().click();
     await wait(800);
     const textarea = page.locator('.cc-draft-box textarea').first();
@@ -1467,6 +1472,7 @@ try {
       await wait(300);
     }
     await shot(`inbox-amber-edit-${width}`);
+    if (!shots) await page.screenshot({ path: '/tmp/inbox-debug.png' });
     await page.locator('.cc-target button', { hasText: '保存草稿' }).first().click();
     await wait(1200);
     const message = await page.locator('.invite-admin-status').textContent();
@@ -1499,6 +1505,198 @@ try {
   await page.locator('.cn-pair .cn-x').last().click();
   await page.goto('about:blank'); // the page's unsaved-changes guard would hold the next route otherwise
   await wait(300);
+
+  // Round 4. One distinct, fixed colour per character, from the 主色 the admin list returns; adopted notes cannot be added twice.
+  type Dot = { name: string; colour: string };
+  const dots = async (
+    route: string,
+    selector: string,
+    nameOf: string,
+    dotOf: string,
+    wanted: number,
+  ): Promise<Dot[]> => {
+    await open(route);
+    await page
+      .locator(selector)
+      .nth(wanted - 1)
+      .waitFor({ timeout: 15_000 });
+    await wait(1100);
+    return page.evaluate(
+      ({ selector: sel, nameOf: nameSel, dotOf: dotSel }: { selector: string; nameOf: string; dotOf: string }) =>
+        [...document.querySelectorAll(sel)]
+          .filter((el) => (el as HTMLElement).offsetParent !== null)
+          .map((el) => {
+            const name = ((nameSel ? el.querySelector(nameSel) : el)?.textContent ?? '').replace(/\s+\d+$/, '').trim();
+            const dot = (dotSel ? el.querySelector(dotSel) : el) as HTMLElement | null;
+            if (!dot) return null;
+            const colour =
+              (dot?.style.getPropertyValue('--dot') || dot?.style.getPropertyValue('--c') || '').trim().toLowerCase() ||
+              (dot ? getComputedStyle(dot).backgroundColor : '');
+            return { name, colour };
+          })
+          .filter(Boolean),
+      { selector, nameOf, dotOf },
+    );
+  };
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => {
+      const v = Number.parseInt(hex.slice(i, i + 2), 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  };
+  const distinct = (list: { name: string; colour: string }[]) => new Set(list.map((entry) => entry.colour)).size;
+  const allPages = async () => ({
+    rail: await dots('characters/jojo', '.wb-roles .admin-pick', '.admin-pick-text strong', '.admin-pick-dot', 15),
+    cast: await dots('cast', '.cs-head-row', '.cs-head-name', 'i', 15),
+    inbox: await dots('cocreation', '.cc-chip-row[aria-label="角色"] button', '', 'i', 15),
+    pie: await dots('overview', '.ov-split-name', '', 'i', 3),
+  });
+  for (const [width, height] of [SIZES[0], SIZES[1]] as const) {
+    await page.setViewportSize({ width, height });
+    const shown = await allPages();
+    check(shown.rail.length === 15, `角色颜色 ${width}: ${shown.rail.length} characters on the rail (15)`);
+    check(
+      distinct(shown.rail) === 15 && distinct(shown.cast) === 15 && distinct(shown.inbox) === 15,
+      `角色颜色 ${width}: distinct dots — rail ${distinct(shown.rail)}, 关系与故事 ${distinct(shown.cast)}, 共创收件箱 ${distinct(shown.inbox)} (15 each)`,
+    );
+    check(
+      distinct(shown.pie) === shown.pie.length && shown.pie.length >= 3,
+      `角色颜色 ${width}: 总览 shows ${shown.pie.length} characters in ${distinct(shown.pie)} colours`,
+    );
+    const railOf = new Map(shown.rail.map((entry) => [entry.name, entry.colour]));
+    for (const entry of [...shown.inbox, ...shown.pie])
+      if (railOf.has(entry.name))
+        check(
+          railOf.get(entry.name) === entry.colour,
+          `角色颜色 ${width}: ${entry.name} is ${entry.colour} here, ${railOf.get(entry.name)} on the rail`,
+        );
+    check(
+      shown.cast.every((entry) => [...railOf.values()].includes(entry.colour)),
+      `角色颜色 ${width}: a 关系与故事 dot is a colour no rail circle has`,
+    );
+    const weak = shown.rail.filter((entry) => 1.05 / (lum(entry.colour) + 0.05) < 4.5).map((entry) => entry.name);
+    check(weak.length === 0, `角色颜色 ${width}: the white initial is under 4.5:1 on ${weak.join(', ')}`);
+    if (width === 1280) await shot('colours-rail-1280');
+  }
+
+  // 身份与展示: the swatches mark the colours others wear; a clash shows the amber 和 X 同色; a custom colour then shows on every page
+  // after a reload (JOJO, without opening any other role); a colour-less character gets the one palette colour nobody uses.
+  for (const [width, height] of [SIZES[0], SIZES[1]] as const) {
+    await page.setViewportSize({ width, height });
+    await open('characters/jojo');
+    await page.locator('.colour-field input[type="text"]').waitFor({ timeout: 15_000 });
+    const colourInput = page.locator('.colour-field input[type="text"]');
+    const others = await page.locator('.colour-swatch.is-used').count();
+    check(others >= 13, `主色 ${width}: ${others} swatches are marked as used by other characters (≥ 13)`);
+    const used = page.locator('.colour-swatch.is-used').first();
+    if (others > 0) {
+      check(
+        ((await used.getAttribute('data-initial')) ?? '') !== '',
+        `主色 ${width}: a used swatch carries no initial of the character that wears it`,
+      );
+      await used.click();
+      await wait(300);
+      const mark = await page.locator('.colour-same').first().textContent();
+      check(/^和 .+ 同色$/.test(mark ?? ''), `主色 ${width}: picking a used colour shows "${mark}" (和 X 同色)`);
+      await used.hover();
+      await wait(300);
+      await shot(`colour-used-swatch-${width}`);
+    }
+    await colourInput.fill('#0B7285');
+    await page.locator('.colour-field input').first().dispatchEvent('input');
+    await wait(300);
+    check(
+      !(await page.locator('.colour-same:visible').count()),
+      `主色 ${width}: the clash mark stays after the colour was changed to an unused one`,
+    );
+    await page.getByRole('button', { name: '保存草稿' }).click();
+    await wait(1500);
+    const changed = await allPages();
+    const jojo = (list: { name: string; colour: string }[]) =>
+      list.find((entry) => entry.name.startsWith('JOJO'))?.colour;
+    check(
+      jojo(changed.rail) === '#0b7285',
+      `主色 ${width}: JOJO is ${jojo(changed.rail)} on the rail after saving #0B7285`,
+    );
+    check(
+      jojo(changed.inbox) === '#0b7285',
+      `主色 ${width}: JOJO is ${jojo(changed.inbox)} in 共创收件箱 after a reload`,
+    );
+    check(
+      changed.cast.some((entry) => entry.colour === '#0b7285'),
+      `主色 ${width}: no 关系与故事 dot is #0B7285 after a reload`,
+    );
+    check(
+      jojo(changed.pie) === undefined || jojo(changed.pie) === '#0b7285',
+      `主色 ${width}: JOJO is ${jojo(changed.pie)} in 总览`,
+    );
+    check(
+      distinct(changed.rail) === 15,
+      `主色 ${width}: ${distinct(changed.rail)} different circles after the change (15)`,
+    );
+    await shot(`colour-changed-rail-${width}`);
+    // no colour at all: the first palette colour that nobody wears
+    await open('characters/jojo');
+    await page.locator('.colour-field input[type="text"]').fill('');
+    await page.locator('.colour-field input[type="text"]').dispatchEvent('input');
+    await page.getByRole('button', { name: '保存草稿' }).click();
+    await wait(1500);
+    const bare = await allPages();
+    const mine = jojo(bare.rail);
+    const rest = bare.rail.filter((entry) => !entry.name.startsWith('JOJO')).map((entry) => entry.colour);
+    check(
+      !!mine && !rest.includes(mine) && mine !== '#0b7285',
+      `主色 ${width}: a character without 主色 wears ${mine}, which another character already has or is not from the palette`,
+    );
+    // back to a colour of its own, so the next size starts from the same state
+    await open('characters/jojo');
+    await page.locator('.colour-field input[type="text"]').fill('#3D62F5');
+    await page.locator('.colour-field input[type="text"]').dispatchEvent('input');
+    await page.getByRole('button', { name: '保存草稿' }).click();
+    await wait(1500);
+  }
+
+  // 共创收件箱: once a note is adopted, 加入草稿 is disabled (and cannot be pressed again) until 取消采用.
+  for (const [width, height] of [SIZES[0], SIZES[1]] as const) {
+    await page.setViewportSize({ width, height });
+    await open('cocreation');
+    await page.locator('.cc-row.is-active').waitFor({ timeout: 10_000 });
+    await wait(700);
+    const openButton = page.locator('.cc-adopt-open').first();
+    if (await openButton.isDisabled())
+      await page
+        .locator('.cc-unadopt')
+        .first()
+        .click()
+        .catch(() => {});
+    await wait(700);
+    await openButton.click();
+    await wait(600);
+    await page.locator('.cc-target button', { hasText: '保存草稿' }).first().click();
+    await wait(1400);
+    const adoptedState = await page.evaluate(() => ({
+      open: [...document.querySelectorAll('.cc-adopt-open')].map((b) => (b as HTMLButtonElement).disabled),
+      story: [...document.querySelectorAll('.cc-adopt-story')].map((b) => (b as HTMLButtonElement).disabled),
+      chip: document.querySelectorAll('.cc-chip-adopted').length,
+    }));
+    check(adoptedState.chip >= 1, `共创收件箱 ${width}: the note is not marked 已采用 after saving`);
+    check(
+      adoptedState.open.length > 0 && adoptedState.open.every(Boolean),
+      `共创收件箱 ${width}: 加入草稿 stays enabled on an adopted note (${adoptedState.open})`,
+    );
+    check(adoptedState.story.every(Boolean), `共创收件箱 ${width}: 加入关系与故事 stays enabled on an adopted note`);
+    await shot(`inbox-adopted-disabled-${width}`);
+    await page.locator('.cc-unadopt').first().click();
+    await wait(1200);
+    const undone = await page.evaluate(() =>
+      [...document.querySelectorAll('.cc-adopt-open')].map((b) => (b as HTMLButtonElement).disabled),
+    );
+    check(
+      undone.some((disabled: boolean) => !disabled),
+      `共创收件箱 ${width}: 加入草稿 is still disabled after 取消采用`,
+    );
+  }
 
   // 3 + 4. A fixed colour per character, and a deletion that names no ids: delete 陈吉米 to the end; JOJO and 周屿 keep their colour
   // on the rail, in 关系与故事 and in 共创收件箱.

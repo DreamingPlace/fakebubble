@@ -11763,6 +11763,81 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   white-space: nowrap;
 }
 
+/* ==== Part 24b-6, round 4 ==== */
+
+/* 主色: the palette swatches (a used one wears the other character's initial on hover) and the amber "和 X 同色" mark */
+.account-admin-page.admin-shell .colour-field {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+.account-admin-page.admin-shell .colour-swatches {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-admin-page.admin-shell button.colour-swatch {
+  position: relative;
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--sw);
+  box-shadow: 0 0 0 1px var(--ad-hairline);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  transition:
+    transform calc(120ms * var(--ad-motion)) var(--ad-ease),
+    box-shadow calc(120ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell button.colour-swatch:hover,
+.account-admin-page.admin-shell button.colour-swatch:focus-visible {
+  transform: scale(1.12);
+}
+.account-admin-page.admin-shell button.colour-swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--ad-primary),
+    0 0 0 4px #fff;
+}
+.account-admin-page.admin-shell button.colour-swatch.is-used {
+  background: color-mix(in srgb, var(--sw) 38%, #fff);
+  box-shadow: 0 0 0 1px var(--ad-hairline);
+}
+.account-admin-page.admin-shell button.colour-swatch.is-used[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--ad-primary),
+    0 0 0 4px #fff;
+}
+.account-admin-page.admin-shell button.colour-swatch.is-used:is(:hover, :focus-visible)::after {
+  content: attr(data-initial);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sw);
+}
+.account-admin-page.admin-shell .colour-same {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--ad-amber);
+  border-radius: 999px;
+  background: var(--ad-amber-soft);
+  color: var(--ad-amber-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .colour-same[hidden] {
+  display: none;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

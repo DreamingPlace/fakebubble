@@ -1,5 +1,6 @@
 import type { CharacterProfile } from '../../services/character-admin-api.ts';
 import { derivePalette, parseColour } from '../brand/character-colour.ts';
+import { ROSTER_COLOURS, whoUses } from './ui/character-colour.ts';
 import { CanonError, canonEditors } from './character-canon.ts';
 import { hoverValue } from './ui/hover-value.ts';
 import { markDirty } from './ui/unsaved.ts';
@@ -145,7 +146,12 @@ export function isColourOnlyChange(published: CharacterProfile | null, draft: Ch
  * tint, its ink and the three aura clouds that the player page will derive. Empty means "no colour". Anything else that does not
  * parse is flagged on the field and refused when the form is read.
  */
-export function colourField(parent: HTMLElement, initial: string | undefined, onChange: () => void) {
+export function colourField(
+  parent: HTMLElement,
+  initial: string | undefined,
+  onChange: () => void,
+  selfId: string | null = null,
+) {
   const row = el('div');
   row.className = 'colour-field';
   const label = el('label'),
@@ -192,9 +198,51 @@ export function colourField(parent: HTMLElement, initial: string | undefined, on
     paint();
     onChange();
   });
-  row.append(label, picker, chip);
+  // The palette: one swatch per colour; a colour another character already wears shows that character's initial on hover (no text),
+  // and a chosen colour that equals another character's gets a small amber mark.
+  const swatches = el('div'),
+    same = el('span');
+  swatches.className = 'colour-swatches';
+  same.className = 'colour-same';
+  same.hidden = true;
+  const swatchOf = new Map<string, HTMLElement>();
+  for (const hex of ROSTER_COLOURS) {
+    const swatch = el('button');
+    swatch.type = 'button';
+    swatch.className = 'colour-swatch';
+    swatch.style?.setProperty('--sw', hex);
+    swatch.dataset.color = hex;
+    swatch.setAttribute?.('aria-label', `主色 ${hex}`);
+    swatch.addEventListener('click', () => {
+      input.value = hex;
+      paint();
+      paintSwatches();
+      onChange();
+    });
+    swatchOf.set(hex, swatch);
+    swatches.append(swatch);
+  }
+  const paintSwatches = () => {
+    const parsed = input.value.trim() === '' ? '' : parseColour(input.value);
+    for (const [hex, swatch] of swatchOf) {
+      const others = whoUses(hex, selfId);
+      const initial = others[0]?.name ? [...others[0].name][0]! : '';
+      swatch.classList?.toggle('is-used', others.length > 0);
+      swatch.dataset.initial = others.length ? initial : '';
+      swatch.setAttribute?.('aria-pressed', String(!!parsed && parsed.toUpperCase() === hex));
+      if (others.length) swatch.setAttribute?.('title', others.map((o) => o.name).join('、'));
+      else swatch.removeAttribute?.('title');
+    }
+    const clash = parsed ? whoUses(parsed, selfId) : [];
+    same.hidden = clash.length === 0;
+    same.textContent = clash.length ? `和 ${clash[0]!.name} 同色` : '';
+  };
+  input.addEventListener('input', paintSwatches);
+  picker.addEventListener('input', paintSwatches);
+  row.append(label, picker, chip, same, swatches);
   parent.append(row);
   paint();
+  paintSwatches();
   return {
     input,
     picker,
@@ -266,7 +314,7 @@ export function characterForm(
   const displayName = field(identity, '网页展示名', base.presentation.displayName, { required: true, max: 100 });
   const birthDate = field(identity, '设定生日（可选）', base.template.birthDate ?? '', { type: 'date' });
   const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { area: true, max: 500 });
-  const colour = colourField(identity, base.presentation.color, () => onChange());
+  const colour = colourField(identity, base.presentation.color, () => onChange(), isNew ? null : base.template.id);
   // 成长中 (Part 24c): a switch in 身份与展示; the title row and the rail show the same state.
   const seed = check(identity, '成长中');
   seed.checked = base.template.seed === true;

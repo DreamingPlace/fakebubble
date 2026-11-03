@@ -17,6 +17,7 @@ import { WEB_PROVIDER_WELCOME } from '../config/web-v1.ts';
 import { migrateProvider, openProviderStore } from './web-provider.ts';
 import { syntheticSelection } from '../tests/web/fixtures/provider-selection.ts';
 import { SAMPLE_NAMES, sampleCastRaw, sampleId } from '../tests/web/fixtures/cast-sample.ts';
+import { ROSTER_COLOURS } from '../apps/player-web/src/features/admin/ui/character-colour.ts';
 import { characterProfileHash } from '../apps/server/characters/web-character-catalog.ts';
 
 /**
@@ -44,20 +45,13 @@ export function loadPlaywright(): any {
 }
 
 export const OWN = ['wei-guagua', 'jojo', 'chen-jimi'] as const;
-const TINTS = [
-  '#E8561E',
-  '#2F7DE1',
-  '#7C4DDB',
-  '#F2A33A',
-  '#3FA776',
-  '#E4568F',
-  '#2BA6C7',
-  '#8E6BD0',
-  '#D98B3A',
-  '#6CAB4B',
-  '#D96A6A',
-  '#4F74D9',
-];
+// Every one of the fifteen characters has its own 主色, one from the console's 15-colour palette (c04 … c15 take the first twelve).
+const TINTS = ROSTER_COLOURS.slice(0, 12);
+const OWN_COLOURS: Record<(typeof OWN)[number], string> = {
+  'chen-jimi': ROSTER_COLOURS[12],
+  jojo: ROSTER_COLOURS[13],
+  'wei-guagua': ROSTER_COLOURS[14],
+};
 const DAY = 86_400_000;
 export const NOW = Date.parse('2026-11-20T10:00:00Z');
 const STARTED = Date.parse('2026-11-03T08:00:00Z');
@@ -314,7 +308,22 @@ export async function startConsoleFixture() {
       ],
     },
   };
+  next.presentation.color = OWN_COLOURS.jojo;
   await post('characters/jojo/save', { expectedRevision: null, profile: next });
+  // The other two own characters get theirs as a colour-only publication (no 预演 is needed for a colour and nothing else).
+  for (const id of ['chen-jimi', 'wei-guagua'] as const) {
+    const was = await (await post(`characters/${id}/detail`, {})).json();
+    const profile = structuredClone(was.published.profile);
+    profile.template.version = was.published.version + 1;
+    profile.presentation.color = OWN_COLOURS[id];
+    const draft = await (await post(`characters/${id}/save`, { expectedRevision: null, profile })).json();
+    await post(`characters/${id}/publish`, {
+      requestId: randomUUID(),
+      draftRevision: draft.revision,
+      profileHash: draft.contentHash,
+      acknowledgeReview: true,
+    });
+  }
 
   // ---- the full cast, as the draft ----
   const castDoc = JSON.parse(

@@ -76,6 +76,8 @@ type Options = {
   saveError?: unknown;
   adoptError?: unknown;
   pages?: InboxItem[][];
+  /** Part 24b-6, round 4: gives the inbox 取消采用 and 加入关系与故事 (a cast draft at revision 5). */
+  cast?: boolean;
 };
 function setup(t: test.TestContext, options: Options = {}) {
   const doc = installFakeDom(t);
@@ -114,6 +116,17 @@ function setup(t: test.TestContext, options: Options = {}) {
       if (options.adoptError) throw options.adoptError;
       return { ordinal, status: 'processed' as const };
     },
+    ...(options.cast
+      ? {
+          unadopt: async (id: string, ordinal: number) => {
+            log('unadopt', id, ordinal);
+          },
+          addToCastStory: async (id: string, ordinal: number, revision: number) => {
+            log('addToCastStory', id, ordinal, revision);
+            return { ordinal, castRevision: revision };
+          },
+        }
+      : {}),
   };
   const published = options.published === undefined ? { version: 3, profile: profile(3) } : options.published;
   const characters = {
@@ -149,6 +162,7 @@ function setup(t: test.TestContext, options: Options = {}) {
     api,
     characters: characters as never,
     canManage: () => options.manage !== false,
+    ...(options.cast ? { castRevision: async () => 5 } : {}),
     run: async (work) => {
       try {
         await work();
@@ -732,4 +746,53 @@ test('24b-4 every row starts with the character colour dot and the full name; no
       .map((b) => b.textContent),
     ['☆ 星标', '标为已处理', '归档'],
   );
+});
+
+// ---- Part 24b-6, round 4: a note that is adopted cannot be added a second time until 取消采用 ----
+test('an adopted note has 加入草稿 disabled and cannot be adopted twice; 取消采用 enables it again', async (t) => {
+  const f = setup(t, { cast: true });
+  await f.inbox.load();
+  f.answer(1).querySelector('.cc-adopt-open')!.click();
+  f.q('.cc-adopt textarea')!.type_('常说“哎呀妈呀”');
+  f.q('.cc-adopt')!.dispatch('submit');
+  await flush();
+  assert.equal(callsOf(f, 'adopt').length, 1);
+  const add = () => f.answer(1).querySelector('.cc-adopt-open')!;
+  assert.equal(add().disabled, true, '加入草稿 is disabled once the note is adopted');
+  add().click();
+  assert.equal(f.q('.cc-adopt'), null, 'a click on the disabled button opens nothing');
+  assert.equal(callsOf(f, 'adopt').length, 1, 'never a second adoption');
+  f.answer(1).querySelector('.cc-unadopt')!.click();
+  await flush();
+  assert.equal(callsOf(f, 'unadopt').length, 1);
+  assert.equal(add().disabled, false, '取消采用 makes it available again');
+});
+
+test('a pair note that is added to 关系与故事 has that button disabled too, until 取消采用', async (t) => {
+  const f = setup(t, {
+    cast: true,
+    items: [item('p1', { characterId: 'wei-guagua' })],
+    details: {
+      p1: detail('p1', {
+        kind: 'pair',
+        partnerId: 'jojo',
+        answers: [
+          { ordinal: 0, cardId: 'pair', targetField: 'free', kind: 'text', text: '雨夜的告白', adoptedAt: null },
+        ],
+      } as never),
+    },
+  });
+  await f.inbox.load();
+  const story = () => f.answer(0).querySelector('.cc-adopt-story')!;
+  assert.equal(story().disabled, false);
+  story().click();
+  await flush();
+  assert.equal(callsOf(f, 'addToCastStory').length, 1);
+  assert.equal(story().disabled, true, '加入关系与故事 is disabled once the story is in the cast draft');
+  story().click();
+  await flush();
+  assert.equal(callsOf(f, 'addToCastStory').length, 1, 'never added twice');
+  f.answer(0).querySelector('.cc-unadopt')!.click();
+  await flush();
+  assert.equal(story().disabled, false);
 });

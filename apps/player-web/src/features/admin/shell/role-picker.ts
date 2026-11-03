@@ -1,26 +1,7 @@
 import { h } from '../../cocreation/h.ts';
 import { formatRoute } from './admin-router.ts';
+import { legibleColour } from '../ui/character-colour.ts';
 import { statusBadge } from '../ui/status-badge.ts';
-
-/**
- * The circle's initial is white when that reads (≥ 4.5:1); on a lighter tint the circle itself is darkened a step at a time (the same
- * hue, the darkest tint that is needed) until it does.
- */
-function legible(hex: string): { background: string } {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return { background: '#6e6875' };
-  let channels = [0, 8, 16].map((shift) => (Number.parseInt(m[1]!, 16) >> (16 - shift)) & 255);
-  const luminance = (c: number[]) => {
-    const lin = c.map((v) => {
-      const s = v / 255;
-      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * lin[0]! + 0.7152 * lin[1]! + 0.0722 * lin[2]!;
-  };
-  for (let step = 0; step < 12 && 1.05 / (luminance(channels) + 0.05) < 4.6; step++)
-    channels = channels.map((v) => Math.round(v * 0.92));
-  return { background: `#${channels.map((v) => v.toString(16).padStart(2, '0')).join('')}` };
-}
 
 export type PickerRole = {
   characterId: string;
@@ -57,7 +38,7 @@ export function rolePicker(
       const dot = compact
         ? h('i', { class: 'admin-pick-dot', text: [...role.displayName][0] ?? '', attrs: { 'aria-hidden': 'true' } })
         : null;
-      if (compact) dot?.style?.setProperty('--dot', legible(compact.colour(role.characterId, index)).background);
+      if (compact) dot?.style?.setProperty('--dot', legibleColour(compact.colour(role.characterId, index)));
       const tone =
         unread > 0 ? 'cc' : role.publishedVersion === null ? 'off' : role.draftRevision !== null ? 'draft' : '';
       // The expanded rail: the name and ONE state mark (a 共创 count, 未上线, 成长中 or a dot for a draft).

@@ -26,7 +26,7 @@ import {
 } from './shell/admin-nav.ts';
 import { addressBar, sameRoute, type AdminRoute } from './shell/admin-router.ts';
 import { toastHost } from './ui/toast.ts';
-import { characterColour, rememberName } from './ui/character-colour.ts';
+import { characterColour, setRoster } from './ui/character-colour.ts';
 import { castView } from './cast/cast-view.ts';
 import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
@@ -433,24 +433,24 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     }
     return true;
   };
-  /** 总览 names a character by its display name only: one roster read (names, never profiles) lets its pie use the colour of that character's id. */
-  let namesRead: Promise<void> | null = null;
-  const readNames = () =>
-    (namesRead ??= (async () => {
+  /** One roster read (names and 主色, never profiles) before any page but the workbench paints, so every dot is the character's own colour. */
+  let rosterRead: Promise<void> | null = null;
+  const readRoster = () =>
+    (rosterRead ??= (async () => {
       const api = port.characters;
       if (!api || typeof api.list !== 'function') return;
       try {
-        for (const role of (await api.list()).characters) rememberName(role.characterId, role.displayName);
+        setRoster((await api.list()).characters);
       } catch {
-        /* a convenience: the pie keeps its own colours */
+        /* a convenience: without it the ids are dealt the palette */
       }
     })());
   /** What opening the current page has to load, or null when it only shows what is already there. */
   const loader = (): (() => Promise<void>) | null => {
     const load = pageLoader();
-    return page === 'overview' && load
+    return page !== 'characters' && load
       ? async () => {
-          await readNames();
+          await readRoster();
           await load();
         }
       : load;
@@ -613,6 +613,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   split.append(editorHost);
   stage.append(roster, split);
   const rosterColourOf = new Map<string, string>();
+  let lastRoles: Parameters<typeof picker.show>[0] = [];
   const picker = rolePicker(rolesHost, {
     emptyText: '当前没有可查看的角色。',
     compact: {
