@@ -21,7 +21,6 @@ export const PERMISSION_GROUPS: readonly Group[] = [
       { item: 'characters.create', name: '新建角色', help: '建立新的角色草稿。' },
       { item: 'characters.edit', name: '修改并保存草稿', help: '保存草稿不会改变正式角色和玩家聊天。' },
       { item: 'characters.discard', name: '放弃服务器草稿', help: '只移除未发布草稿，正式版本不变。' },
-      { item: 'characters.delete', name: '删除角色', help: '删除时仍须确认该角色旧聊天的清理范围。' },
     ],
   },
   {
@@ -104,13 +103,7 @@ const named = (items: readonly AdminPermissionItem[]) => items.map((i) => `「${
 
 /** Old coarse grants stay readable: each shows as the items it contains. */
 const CATEGORY_ITEMS: Record<string, readonly AdminPermissionItem[]> = {
-  'category.characters': [
-    'characters.read',
-    'characters.create',
-    'characters.edit',
-    'characters.discard',
-    'characters.delete',
-  ],
+  'category.characters': ['characters.read', 'characters.create', 'characters.edit', 'characters.discard'],
   'category.publication': ['characters.read', 'characters.preview', 'characters.publish'],
   'category.materials': ['characters.read', 'characters.materials', 'characters.approve-materials'],
   'category.invites': ['invites.read', 'invites.issue', 'invites.revoke-code', 'invites.revoke-access'],
@@ -129,6 +122,9 @@ function decompose(initial: readonly AdminPermission[]) {
   }
   return { items, legacy };
 }
+/** A delete grant stored before Part 24f stays in the database, shown as what it is: 已失效 (only the owner deletes a character now). */
+const legacyLabel = (permission: string) =>
+  /^characters\.delete:/.test(permission) ? `${permission}（已失效）` : permission;
 const sameSet = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => a.size === b.size && [...a].every((v) => b.has(v));
 
 /**
@@ -232,7 +228,7 @@ export function permissionMatrixEditor(
       input.checked = true;
       legacyBoxes.set(permission, input);
       input.addEventListener('change', () => (touched = true));
-      section.append(h('label', { class: 'permission-item' }, input, h('span', { text: permission })));
+      section.append(h('label', { class: 'permission-item' }, input, h('span', { text: legacyLabel(permission) })));
     }
     areas.append(section);
   }

@@ -15,6 +15,7 @@ import {
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { dateTimeText } from './system-format.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
+import { versionHistory } from './history/version-history.ts';
 import { formatRoute } from './shell/admin-router.ts';
 import {
   AdminFormError,
@@ -212,8 +213,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     controls.push({ node, locked });
     return node;
   }
+  const historyViews: { dispose: () => void }[] = [];
   const clearView = () => {
     view++;
+    for (const panel of historyViews.splice(0)) panel.dispose();
     revokeAudio();
     controls = [];
     protectedRows = [];
@@ -601,6 +604,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       const publish = made(() => publication(flow, snapshot));
       if (snapshot.draft) publish.push(...made(() => discardFold(flow, snapshot)));
       sections.push({ id: 'publish', label: '发布', nodes: publish });
+      const past = made(() => historyPanel(flow, snapshot));
+      if (past.length) sections.push({ id: 'history', label: '版本历史', nodes: past });
       const removal = made(() => deletion(flow, snapshot));
       if (removal.length) sections.push({ id: 'delete', label: '删除角色', nodes: removal, danger: true });
     }
@@ -1324,8 +1329,36 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     );
     ack.addEventListener('change', sync);
   }
-  function deletion(parent: HTMLElement, snapshot: CharacterDetail) {
+  /** 版本历史 lives in its own module (history/version-history.ts); this only hands it the client and what to do after a restore. */
+  function historyPanel(parent: HTMLElement, snapshot: CharacterDetail) {
     if (!snapshot.published) return;
+    const section = fold(parent, '版本历史');
+    const target = snapshot.characterId;
+    const panel = versionHistory(section, {
+      api: host.api,
+      isOwner: () => host.member()?.role === 'owner',
+      status: host.status,
+      run: (work) => host.run(work),
+      disposed: gone,
+      errorText: characterAdminError,
+      overlay: () => (root.closest?.('.admin-shell') as HTMLElement | null) ?? root,
+      // The live version, the draft's base and the publish step all moved: read the role again (an unsaved edit is never thrown away).
+      onRestored: async () => {
+        if (!dirty) await open(target);
+      },
+    });
+    historyViews.push(panel);
+    const read = () =>
+      panel.load(target).catch((error) => host.status(characterAdminError(error) ?? '版本历史没有读取成功。'));
+    if (embedded) void read();
+    else {
+      button(section, '读取版本历史', () => dirty || !can('read'), read, true);
+    }
+  }
+  function deletion(parent: HTMLElement, snapshot: CharacterDetail) {
+    // Part 24f: deleting is the owner's alone, so for anyone else there is no 删除角色 section, button or rail entry at all
+    // (the server refuses a direct call as well).
+    if (!snapshot.published || !can('delete')) return;
     const section = fold(parent, '删除角色及所有旧聊天');
     section.className = 'admin-confirm';
     const target = snapshot.characterId,

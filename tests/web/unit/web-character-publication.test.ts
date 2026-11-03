@@ -236,7 +236,8 @@ test('catalog v1 upgrades additively and unknown schema hashes fail without over
   installWebCharacterCatalog(f.store);
   assert.deepEqual(f.store.all('SELECT * FROM web_character_versions'), before);
   assert.equal(f.store.get<{ sha256: string }>('SELECT sha256 FROM web_character_schema WHERE version=1')!.sha256, v1);
-  assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_character_schema')!.n, 2);
+  // Named exception (Part 24f): the schema chain gained step 3 (web_character_restores), which stayed in place here: 2 -> 3 rows.
+  assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_character_schema')!.n, 3);
   f.store.run("UPDATE web_character_schema SET sha256='changed' WHERE version=2");
   assert.throws(() => installWebCharacterCatalog(f.store), /SCHEMA_MISMATCH/);
   assert.deepEqual(f.store.all('SELECT * FROM web_character_versions'), before);

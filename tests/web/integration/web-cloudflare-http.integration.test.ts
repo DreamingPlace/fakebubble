@@ -820,7 +820,10 @@ test('scoped role deletion over actual HTTP keeps another role, identities and u
     permissions: ['characters.read:wei-guagua', 'characters.delete:wei-guagua'],
   });
   const memberCookie = member.cookie;
-  await f.call(`${base}/delete-start`, member, input, 202);
+  // Named exception (Part 24f): deleting is the owner's alone, so the stored characters.delete:wei-guagua grant no longer opens it
+  // (403 for the member); the owner starts the same deletion and the member still follows its status (read).
+  await f.call(`${base}/delete-start`, member, input, 403);
+  await f.call(`${base}/delete-start`, owner, input, 202);
   await f.call(oldPath, invited, undefined, 404);
   await f.call(goneAudio, invited, undefined, 404);
   await f.call(`${API}/operations/${ops[0]}`, invited, undefined, 404);

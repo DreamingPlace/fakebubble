@@ -103,6 +103,8 @@ test('24b-3 角色工作台: a saved role gets a rail of sections, 发布 and �
     '声音',
     '资料改动',
     '发布',
+    // Named exception (Part 24f): 版本历史 sits between 发布 and 删除角色 (so the danger item is index 8, not 7).
+    '版本历史',
     '删除角色',
   ]);
   assert.equal(f.root.querySelector('.wb-card-head h2')!.textContent, '身份与展示');
@@ -110,13 +112,23 @@ test('24b-3 角色工作台: a saved role gets a rail of sections, 发布 and �
   const shown = form.children.filter((c) => !(c as FakeElement).hidden);
   assert.equal(shown.length, 1, 'one section of the form at a time');
   assert.equal(f.root.querySelector('.wb-savebar')!.querySelectorAll('button').length, 2);
-  assert.ok(railItems(f.rail)[7]!.className.includes('is-danger'), '删除角色 is the danger item');
+  assert.ok(railItems(f.rail)[8]!.className.includes('is-danger'), '删除角色 is the danger item');
 });
 
 test('24b-3 角色工作台: switching sections keeps what was typed, a dot marks the section with changes and clears when it is typed back', async (t) => {
   const f = bench(t, false);
   await f.workbench.open('jojo');
-  assert.deepEqual(labels(f.rail), ['身份与展示', '欢迎内容', '性格', '作者设定与样例', '声音', '发布', '删除角色']);
+  // Named exception (Part 24f): 版本历史 between 发布 and 删除角色.
+  assert.deepEqual(labels(f.rail), [
+    '身份与展示',
+    '欢迎内容',
+    '性格',
+    '作者设定与样例',
+    '声音',
+    '发布',
+    '版本历史',
+    '删除角色',
+  ]);
   const items = railItems(f.rail);
   const persona = f.root.querySelectorAll('textarea')[1]!;
   items[2]!.click();

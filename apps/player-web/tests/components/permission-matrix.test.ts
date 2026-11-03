@@ -43,11 +43,12 @@ test('permissions are grouped by area with every item present', (t) => {
     ['角色资料', '预演与发布', '声音成品', '玩家邀请', '共创收件箱', '关系与故事', '模型与价格'],
   );
   // Named exception (Part 22a): the new invites.manage item (邀请与额度) is in the 玩家邀请 group; counts are one higher.
-  assert.equal(f.host.querySelectorAll('[data-permission]').length, 20);
+  // Named exception (Part 24f): characters.delete is not an item any more (deleting is the owner's alone): 20 -> 19, 18 -> 17 below.
+  assert.equal(f.host.querySelectorAll('[data-permission]').length, 19);
   const without = mount(t, [], false);
   assert.equal(
     without.host.querySelectorAll('[data-permission]').length,
-    18,
+    17,
     'no inbox group on a page without an inbox',
   );
 });
@@ -128,7 +129,8 @@ test('presets: 共创写手 has no publish; 运营 is invites plus inbox; 全部
   f.preset('all');
   // Named exception (Part 21g): 全部 now also ticks models.manage (16 items). Part 22a: and invites.manage (17).
   // Named exception (Part 24b-2): and the three cast permissions (20).
-  assert.equal(f.ticked().length, 20);
+  // Named exception (Part 24f): without characters.delete (19).
+  assert.equal(f.ticked().length, 19);
   f.toggle('characters.read', false);
   assert.deepEqual(
     f.ticked().filter((x) => x.startsWith('characters')),

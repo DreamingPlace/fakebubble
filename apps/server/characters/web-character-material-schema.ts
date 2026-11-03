@@ -99,3 +99,27 @@ export function installWebCharacterMaterials(store: BusinessStore) {
     );
   });
 }
+
+/**
+ * Part 24f, restore only. A voice binding may normally move only to a bundle that a promotion of the LIVE version names, and a
+ * material can be promoted exactly once, so an old bundle can never be re-promoted. A restore makes an old, already approved
+ * bundle current again, so inside its own transaction the guard is lifted, the one row is rewritten and the guard is recreated
+ * from its stored text, byte for byte. DDL is transactional: if anything fails the whole restore, guard included, is rolled back.
+ */
+export function withVoiceBindingGuardLifted<T>(store: BusinessStore, work: () => T): T {
+  const guard = store.get<{ sql: string }>(
+    "SELECT sql FROM sqlite_master WHERE type='trigger' AND name='web_provider_voice_bindings_no_update'",
+  );
+  if (!guard) return work();
+  store.all('DROP TRIGGER web_provider_voice_bindings_no_update');
+  const result = work();
+  store.all(guard.sql);
+  ensure(
+    normalize(
+      store.get<{ sql: string }>("SELECT sql FROM sqlite_master WHERE name='web_provider_voice_bindings_no_update'")
+        ?.sql ?? '',
+    ) === normalize(guard.sql),
+    'WEB_MATERIAL_SCHEMA_MISMATCH',
+  );
+  return result;
+}

@@ -55,6 +55,26 @@ const publicationStatements = [
   ),
 ] as const;
 
+/**
+ * Step 3 (Part 24f): a restore publishes an OLD version's exact profile again as a new version. It has no 预演, so it cannot be a
+ * web_character_publications row (those name the 预演 they stand on); this row is its marker, its idempotency record (request id +
+ * hash) and the answer to 「恢复自 vN」. Like every history table it is append-only. voice_version names the approved voice bundle
+ * (binding, welcome and footer clips) that was made current again.
+ */
+const restoreStatements = [
+  `CREATE TABLE web_character_restores(request_id TEXT PRIMARY KEY,request_hash TEXT NOT NULL,
+    character_id TEXT NOT NULL,version INTEGER NOT NULL,from_version INTEGER NOT NULL,profile_hash TEXT NOT NULL,
+    voice_version TEXT NOT NULL,member_id TEXT NOT NULL REFERENCES web_admin_members(id),
+    session_id TEXT NOT NULL REFERENCES admin_sessions(id),created_at INTEGER NOT NULL,
+    UNIQUE(character_id,version),CHECK(from_version<version),
+    FOREIGN KEY(character_id,version) REFERENCES web_character_versions(character_id,version),
+    FOREIGN KEY(character_id,from_version) REFERENCES web_character_versions(character_id,version)) STRICT`,
+  ...['UPDATE', 'DELETE'].map(
+    (action) => `CREATE TRIGGER web_character_restores_${action.toLowerCase()}
+    BEFORE ${action} ON web_character_restores BEGIN SELECT RAISE(ABORT,'WEB_CHARACTER_HISTORY_IMMUTABLE'); END`,
+  ),
+] as const;
+
 /** One-time import of the approved seed; subsequent construction reads durable publication pointers. */
 export function installWebCharacterCatalog(store: BusinessStore) {
   const digest = createHash('sha256').update(statements.join(';\n')).digest('hex');
@@ -105,16 +125,27 @@ export function installWebCharacterCatalog(store: BusinessStore) {
     }
     const rows = store.all<{ version: number; sha256: string }>('SELECT * FROM web_character_schema');
     const publicationDigest = createHash('sha256').update(publicationStatements.join(';\n')).digest('hex');
+    const restoreDigest = createHash('sha256').update(restoreStatements.join(';\n')).digest('hex');
     ensure(
       rows.length >= 1 &&
-        rows.length <= 2 &&
+        rows.length <= 3 &&
         rows.find((row) => row.version === 1)?.sha256 === digest &&
-        rows.every((row) => row.version === 1 || (row.version === 2 && row.sha256 === publicationDigest)),
+        rows.every(
+          (row) =>
+            row.version === 1 ||
+            (row.version === 2 && row.sha256 === publicationDigest) ||
+            (row.version === 3 && row.sha256 === restoreDigest),
+        ),
       'WEB_CHARACTER_SCHEMA_MISMATCH',
     );
     if (!rows.some((row) => row.version === 2)) {
       for (const sql of publicationStatements) store.all(sql);
       store.run('INSERT INTO web_character_schema VALUES (2,?)', publicationDigest);
+    }
+    // An authority at step 2 gains step 3 here, on the next start (version 3 never exists without version 2).
+    if (!rows.some((row) => row.version === 3)) {
+      for (const sql of restoreStatements) store.all(sql);
+      store.run('INSERT INTO web_character_schema VALUES (3,?)', restoreDigest);
     }
     publishedWebCharacters(store);
   });

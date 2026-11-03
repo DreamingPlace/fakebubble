@@ -185,7 +185,7 @@ export async function routeWebAccountAdmin(
     }
     const match = path.match(
       new RegExp(
-        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-audio|material-approve|delete-preview|delete-start|delete-status)$`,
+        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-audio|material-approve|delete-preview|delete-start|delete-status|history|history-version|restore)$`,
       ),
     );
     ensure(match, 'NOT_FOUND');
@@ -241,6 +241,14 @@ export async function routeWebAccountAdmin(
           ]),
         ),
       };
+    if (match[2] === 'history') {
+      body([]);
+      return { status: 200, body: characters.history(actor, id) };
+    }
+    if (match[2] === 'history-version')
+      return { status: 200, body: characters.historyVersion(actor, id, body(['version']).version) };
+    if (match[2] === 'restore')
+      return { status: 200, body: characters.restore(actor, id, body(['requestId', 'version', 'liveVersion'])) };
     if (match[2] === 'publish')
       return {
         status: 200,

@@ -53,6 +53,11 @@ export const ADMIN_CAST_PERMISSIONS = ['cast.read', 'cast.edit', 'cast.publish']
 export type CastAdminPermission = (typeof ADMIN_CAST_PERMISSIONS)[number];
 // Read legacy scoped grants without silently migrating them. New UI grants only four categories.
 export const ADMIN_PERMISSION_LIMIT = 128;
+/**
+ * Part 24f: deleting a character is the OWNER's alone. `delete` stays in this list only so that grants already stored
+ * (`characters.delete:*`, `characters.delete:<id>`) still parse and are kept untouched in the database; no grant, category or
+ * preset opens it (see hasCharacterPermission) and the permission editor has no row for it.
+ */
 export const ADMIN_CHARACTER_ACTIONS = [
   'read',
   'edit',
@@ -105,6 +110,8 @@ export function isAdminPermission(value: unknown): value is AdminPermission {
   );
 }
 export function hasCharacterPermission(grants: readonly string[], action: CharacterAdminAction, id: string) {
+  // Owner-only (the owner role is checked by the caller): neither category.characters, nor 全部, nor a stored delete grant counts.
+  if (action === 'delete') return false;
   const category =
     action === 'preview' || action === 'publish'
       ? 'category.publication'
@@ -177,7 +184,7 @@ export function canCreateCharacter(grants: readonly string[]) {
  * An "item" is a permission as the editor shows it; characters items are granted for every character (`:*`).
  */
 export type AdminPermissionItem =
-  | `characters.${CharacterAdminAction}`
+  | `characters.${Exclude<CharacterAdminAction, 'delete'>}`
   | 'characters.create'
   | InviteAdminPermission
   | CocreationAdminPermission
@@ -195,7 +202,6 @@ export const ADMIN_PERMISSION_REQUIRES: Readonly<Record<AdminPermissionItem, rea
   'characters.discard': ['characters.read'],
   'characters.preview': ['characters.read'],
   'characters.materials': ['characters.read'],
-  'characters.delete': ['characters.read'],
   'characters.publish': ['characters.preview', 'characters.read'],
   'characters.approve-materials': ['characters.materials'],
   'invites.read': [],
@@ -245,7 +251,10 @@ export function normalizePermissions(granted: readonly AdminPermission[]): Admin
   const result = new Set<AdminPermission>(granted);
   for (const permission of granted) {
     const scoped = /^characters\.([a-z-]+):(.+)$/.exec(permission);
-    if (scoped && (ADMIN_CHARACTER_ACTIONS as readonly string[]).includes(scoped[1]!))
+    if (scoped && scoped[1] === 'delete')
+      // A grant stored before Part 24f: kept as it was (and still needing read in its scope), but it opens nothing.
+      result.add(`characters.read:${scoped[2]}` as AdminPermission);
+    else if (scoped && (ADMIN_CHARACTER_ACTIONS as readonly string[]).includes(scoped[1]!))
       for (const need of requiredItems(`characters.${scoped[1]}` as AdminPermissionItem))
         result.add(`${need}:${scoped[2]}` as AdminPermission);
     else if ((ADMIN_PERMISSION_ITEMS as readonly string[]).includes(permission))
