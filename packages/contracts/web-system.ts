@@ -95,6 +95,8 @@ export type SystemRetentionFailure = {
   sub: string;
   errorName: string;
   messageShape: string;
+  /** Part 24h: the failing table name or check label of an unexpected-world-data refusal. */
+  table?: string;
   count: number;
 };
 export type SystemWarnings = { priceExpiring: number; retentionFailing: number; unknownNew: number };

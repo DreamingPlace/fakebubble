@@ -1,5 +1,5 @@
 import type { Clock } from '../../../packages/contracts/index.ts';
-import { DomainError, ensure } from '../../../packages/domain/errors.ts';
+import { DetailedError, DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { emptySession } from '../../../packages/domain/schedule.ts';
 import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
 import { auditWebLifecycleWorld } from '../admission/web-lifecycle-audit.ts';
@@ -53,6 +53,8 @@ export type RetentionReport = {
   /** The call that threw, and the fixed label of the statement group inside it. */
   phase?: RetentionPhase;
   sub?: string;
+  /** Part 24h: for WEB_RETENTION_UNEXPECTED_WORLD_DATA, the table name or fixed check label that failed (never an id). */
+  table?: string;
   errorName?: string;
   messageShape?: string;
   at?: string;
@@ -85,6 +87,8 @@ export type RetentionFailureDetail = {
   sub: string;
   errorName: string;
   messageShape: string;
+  /** Part 24h: the failing table name or check label of an unexpected-world-data refusal. Absent for every other failure. */
+  table?: string;
 };
 export type RetentionMemory = { load(): Promise<RetentionLedger>; save(ledger: RetentionLedger): Promise<void> };
 const emptyLedger = (): RetentionLedger => ({ failures: {}, lastSuccessAt: null });
@@ -121,8 +125,16 @@ export function durableRetentionMemory(storage: {
     save: (ledger) => storage.put(LEDGER_KEY, ledger),
   };
 }
+/** A table name from the schema or one of the audit's fixed check labels; anything else is dropped. */
+const SAFE_TABLE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+const tableOf = (error: unknown): string | undefined => {
+  if (!(error instanceof DetailedError) || error.code !== 'WEB_RETENTION_UNEXPECTED_WORLD_DATA') return undefined;
+  const table = error.detail.table;
+  return typeof table === 'string' && SAFE_TABLE.test(table) ? table : undefined;
+};
 const failureDetail = (value: unknown): RetentionFailureDetail | undefined => {
   const v = value as Partial<Record<keyof RetentionFailureDetail, unknown>> | null | undefined;
+  const table = typeof v?.table === 'string' && SAFE_TABLE.test(v.table) ? v.table : undefined;
   return v &&
     typeof v.code === 'string' &&
     typeof v.phase === 'string' &&
@@ -135,6 +147,7 @@ const failureDetail = (value: unknown): RetentionFailureDetail | undefined => {
         sub: v.sub.slice(0, 64),
         errorName: v.errorName.slice(0, 40),
         messageShape: v.messageShape.slice(0, 160),
+        ...(table ? { table } : {}),
       } satisfies RetentionFailureDetail)
     : undefined;
 };
@@ -306,6 +319,7 @@ export class WebCloudRetention {
         names,
       ),
       ...(firstFrame(error) ? { at: firstFrame(error)! } : {}),
+      ...(tableOf(error) ? { table: tableOf(error)! } : {}),
       ...info,
     };
   }
@@ -318,6 +332,7 @@ export class WebCloudRetention {
       sub: found.sub,
       errorName: found.errorName,
       messageShape: found.messageShape,
+      ...(found.table ? { table: found.table } : {}),
     };
   }
   async sweep(limit = 8) {
@@ -347,6 +362,7 @@ export class WebCloudRetention {
         found.sub,
         found.errorName,
         found.messageShape,
+        found.table,
         found.at,
         found.principalKind,
         found.state,
@@ -482,6 +498,7 @@ export class WebCloudRetention {
           sub: found.sub,
           errorName: found.errorName,
           messageShape: found.messageShape,
+          ...(found.table ? { table: found.table } : {}),
         },
       ];
       await this.memory.save(ledger).catch(() => {});

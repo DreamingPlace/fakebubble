@@ -4574,6 +4574,20 @@ body:has(.admin-shell) {
 .account-admin-page.admin-shell .admin-table tbody tr:hover {
   background: var(--ad-bg);
 }
+/* Part 24h: the failing table of a retention failure. A schema name can be 64 characters: it stays on one line, is cut with an
+   ellipsis at 24ch, and the full name is in the hover bubble (focusable, so the keyboard sees it too). */
+.account-admin-page.admin-shell .sys-table-name {
+  display: inline-block;
+  max-width: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .sys-table-none {
+  color: var(--ad-muted);
+}
 .account-admin-page.admin-shell .admin-table .is-end {
   text-align: right;
   font-variant-numeric: tabular-nums;
