@@ -100,5 +100,3 @@ export interface CompareStartInput {
   /** The explicit paid-call confirmation: the number of paid calls the administrator was shown. */
   confirmPaidCalls: number;
 }
-
-export const compareRate = (side: CompareSummarySide) => (side.total === 0 ? null : side.passed / side.total);

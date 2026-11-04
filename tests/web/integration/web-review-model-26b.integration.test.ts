@@ -42,11 +42,12 @@ function priced(store: Store, now: number, withFlash: boolean) {
   const ledger = new WebProviderOffline(store, { now: () => now });
   ledger.configureBudget('deepseek', 3_000_000);
   ledger.configureBudget('fish', 3_000_000);
-  for (const [model, phase, upper] of [
+  const rowsToPrice: ReadonlyArray<readonly [string, 'draft' | 'review', number]> = [
     [FLASH, 'draft', 2],
     [PRO, 'review', 4],
-    ...(withFlash ? [[FLASH, 'review', 2]] : []),
-  ] as const)
+    ...(withFlash ? [[FLASH, 'review', 2] as const] : []),
+  ];
+  for (const [model, phase, upper] of rowsToPrice)
     ledger.configurePrice({
       id: `deepseek-${model}-${phase}-${now}`,
       provider: 'deepseek',
@@ -384,7 +385,7 @@ test('a store at schema 131 gains ONLY the missing Flash review row at start; no
   const store = plain(t);
   const now = 1_800_000_000_000;
   priced(store, now, false);
-  const everything = () => store.all('SELECT * FROM web_provider_prices ORDER BY id');
+  const everything = () => store.all<{ id: string }>('SELECT * FROM web_provider_prices ORDER BY id');
   const before = everything();
   assert.deepEqual(
     reviewRows(store).map((r) => r.model),
