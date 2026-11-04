@@ -7587,7 +7587,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   display: none;
 }
 .account-admin-page.admin-shell .wb-rail {
-  flex-wrap: nowrap;
+  /* One row while it fits; with a draft and 版本历史 the nine entries wrap to a second row inside the same pill (Part 24f). */
+  flex-wrap: wrap;
   align-items: center;
 }
 
@@ -11838,6 +11839,122 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   display: none;
 }
 
+/* 版本历史 (Part 24f): the table and the drawer come from the shared admin components; only the history's own parts are styled here. */
+.vh {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.vh .vh-note {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.vh .admin-table-region {
+  display: block;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 0;
+  box-shadow: 0 0 0 1px var(--ad-border);
+}
+.vh .admin-table-wrap {
+  overflow-x: auto;
+}
+.vh .admin-table td {
+  vertical-align: middle;
+}
+.vh .admin-table tbody tr {
+  cursor: pointer;
+}
+.vh .admin-table td:has(.vh-what) {
+  white-space: normal;
+}
+.vh-stack {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vh-stack small {
+  color: var(--ad-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.vh-what {
+  min-width: 9em;
+}
+.vh-what small.vh-why {
+  max-width: none;
+  color: #a4402f;
+}
+.vh-version {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.vh-actions {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.vh-actions button,
+.vh-head button {
+  margin: 0;
+}
+.vh-lost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.vh-why {
+  max-width: 28ch;
+  color: var(--ad-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+}
+.admin-drawer-body .vh-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.admin-drawer-body .vh-head .vh-lost {
+  margin-left: auto;
+}
+.admin-drawer-body .vh-title {
+  margin: 20px 0 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ad-border);
+  font-size: 14px;
+}
+.admin-drawer-body .vh-subtitle,
+.admin-drawer-body .vh-group {
+  margin: 14px 0 6px;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.permission-group[data-area="legacy"] .permission-item span.permission-dead {
+  /* 「删除角色（已失效）」 reads as one phrase, not broken inside 已失效 (Part 24f). */
+  white-space: nowrap;
+}
+.vh-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.admin-drawer-body .vh-text {
+  line-height: 1.7;
+}
+.admin-drawer-body .admin-kv {
+  margin: 0;
+}
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

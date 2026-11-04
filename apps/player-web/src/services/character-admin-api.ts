@@ -1,4 +1,12 @@
 import type { CharacterTemplate } from '../../../../packages/contracts/index.ts';
+import {
+  RESTORE_PROBLEMS,
+  type RestoreProblem,
+  type VersionActor,
+  type VersionHistory,
+  type VersionOrigin,
+  type VersionRow,
+} from '../../../../packages/contracts/web-character-history.ts';
 export type CharacterProfile = {
   template: CharacterTemplate;
   presentation: {
@@ -44,6 +52,14 @@ export type PreviewJob = {
   input?: string;
   createdAt?: number;
   result: unknown;
+};
+export type VersionSnapshot = VersionRow & {
+  characterId: string;
+  profile: CharacterProfile;
+  profileHash: string;
+  /** The same for a version and for the restore of it (the version number set aside). */
+  contentKey: string;
+  liveProfile: CharacterProfile | null;
 };
 export type CharacterDetail = {
   characterId: string;
@@ -110,6 +126,26 @@ function profile(v: unknown): CharacterProfile {
       welcome: { text: string(w.text), version: string(w.version) },
       ...(d.color === undefined ? {} : { color: string(d.color) }),
     },
+  };
+}
+function versionRow(v: unknown): VersionRow {
+  const r = object(v),
+    o = object(r.origin),
+    by = string(r.by);
+  if (!['owner', 'admin', 'system'].includes(by)) throw invalid();
+  const kind = string(o.kind);
+  if (!['publish', 'colour', 'restore'].includes(kind)) throw invalid();
+  const problem = r.problem === null ? null : string(r.problem);
+  if (problem !== null && !(RESTORE_PROBLEMS as readonly string[]).includes(problem)) throw invalid();
+  return {
+    version: num(r.version),
+    publishedAt: r.publishedAt === null ? null : num(r.publishedAt),
+    by: by as VersionActor,
+    origin: (kind === 'restore' ? { kind, from: num(o.from) } : { kind }) as VersionOrigin,
+    summary: string(r.summary),
+    live: flag(r.live),
+    restorable: flag(r.restorable),
+    problem: problem as RestoreProblem | null,
   };
 }
 function draft(v: unknown): CharacterDraft {
@@ -276,6 +312,31 @@ export class CharacterAdminClient {
   ) {
     const r = object(await this.call(id, 'publish', input));
     return { version: num(r.version) };
+  }
+  /** 版本历史: every published version, newest first. Roles and snapshots only. */
+  async history(id: string): Promise<VersionHistory> {
+    const r = object(await this.call(id, 'history'));
+    return {
+      characterId: string(r.characterId),
+      live: r.live === null ? null : num(r.live),
+      versions: rows(r.versions).map(versionRow),
+    };
+  }
+  async historyVersion(id: string, version: number): Promise<VersionSnapshot> {
+    const r = object(await this.call(id, 'history-version', { version }));
+    return {
+      ...versionRow(r),
+      characterId: string(r.characterId),
+      profile: profile(r.profile),
+      profileHash: string(r.profileHash),
+      contentKey: string(r.contentKey),
+      liveProfile: r.liveProfile === null ? null : profile(r.liveProfile),
+    };
+  }
+  /** 恢复此版本 (owner only): publishes version `version` again as the next version. Same requestId = same answer. */
+  async restore(id: string, input: { requestId: string; version: number; liveVersion: number }) {
+    const r = object(await this.call(id, 'restore', input));
+    return { version: num(r.version), restoredFrom: num(r.restoredFrom), publishedAt: num(r.publishedAt) };
   }
   async deletePreview(id: string): Promise<DeleteImpact> {
     const r = object(await this.call(id, 'delete-preview'));
