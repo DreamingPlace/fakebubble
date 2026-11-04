@@ -565,6 +565,6 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     head: root.querySelector<HTMLElement>('.site-head')!,
     card: (characterId) => cards[people.findIndex((person) => person.characterId === characterId)]!,
     mark: (characterId) => people.find((person) => person.characterId === characterId)!.mark,
-    name: (characterId) => people.find((person) => person.characterId === characterId)!.name,
+    name: (characterId) => people.find((person) => person.characterId === characterId)?.name ?? '',
   });
 }

@@ -1,4 +1,4 @@
-import { ensure } from '../../../packages/domain/errors.ts';
+import { DetailedError, RetryAfterError, ensure } from '../../../packages/domain/errors.ts';
 import { isWorkerdReservedTable } from '../platform/workerd-reserved-tables.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { cocreationRemains } from '../cocreation/web-cocreation-purge.ts';
@@ -43,6 +43,58 @@ export const conversationContent = [
   'outbox',
 ];
 export const worldCharacterContent = ['relationship_daily_budgets', 'relationship_states'];
+/**
+ * Part 24g: account-level ledgers that a character deletion neither reads nor writes. The player purge
+ * (identity/web-player-purge.ts) erases them and the lifecycle audit lists them as account-level; a character's
+ * conversation is not their owner. Each is skipped by the audit ONLY while its columns are exactly the list below
+ * (in table order, as PRAGMA table_info reports them). A table that gains or loses a column fails closed with
+ * CHARACTER_DELETION_SCHEMA_CHANGED until someone has reviewed the new column and updated this list.
+ */
+export const accountLedgerColumns: Readonly<Record<string, readonly string[]>> = {
+  // the player's own name card (world_id)
+  player_profile_versions: ['world_id', 'revision', 'profile_json', 'updated_at'],
+  player_profile_requests: ['world_id', 'request_id', 'request_hash', 'revision'],
+  // quota, points, model choice and backup receipts (operation_id): kept as quota history and financial receipts
+  web_free_operations: ['operation_id', 'principal_id', 'tier', 'ip_hash'],
+  web_points_events: [
+    'id',
+    'principal_id',
+    'operation_id',
+    'source',
+    'reason',
+    'delta',
+    'admin_id',
+    'price_version',
+    'created_at',
+    'ref',
+  ],
+  web_operation_models: [
+    'operation_id',
+    'chosen',
+    'voice',
+    'points_charged',
+    'price_version',
+    'settled',
+    'draft_provider',
+    'draft_model',
+    'review_provider',
+    'review_model',
+    'backup',
+    'created_at',
+  ],
+  web_provider_backups: [
+    'operation_id',
+    'phase',
+    'generation',
+    'provider',
+    'model',
+    'code',
+    'held_micros',
+    'abandoned_at',
+  ],
+};
+/** Retry hint (ms) while a retention purge holds one of the scope's principals. */
+const RETENTION_BUSY_RETRY_MS = 5000;
 export interface DeletionScope {
   deletion_id: string;
   principal_id: string;
@@ -70,6 +122,15 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
     ),
     'CHARACTER_DELETION_SCOPE_UNSAFE',
   );
+  // A retention purge in flight for this principal or world owns the same rows: wait for it, write nothing.
+  if (
+    store.get(
+      'SELECT 1 FROM web_retention_purge_gate WHERE principal_id=? OR world_id=? LIMIT 1',
+      s.principal_id,
+      s.world_id,
+    )
+  )
+    throw new RetryAfterError('CHARACTER_DELETION_BUSY', RETENTION_BUSY_RETRY_MS);
   const allowed = new Set([
     'web_operations',
     'web_external_attempts',
@@ -108,7 +169,14 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
     if (isWorkerdReservedTable(name)) continue;
     ensure(/^[A-Za-z_][A-Za-z0-9_]*$/.test(name), 'CHARACTER_DELETION_SCOPE_UNSAFE');
     if (allowed.has(name)) continue;
-    const columns = new Set(store.all<{ name: string }>(`PRAGMA table_info("${name}")`).map((c) => c.name));
+    const columnList = store.all<{ name: string }>(`PRAGMA table_info("${name}")`).map((c) => c.name);
+    const pinned = accountLedgerColumns[name];
+    if (pinned) {
+      if (columnList.length !== pinned.length || columnList.some((c, i) => c !== pinned[i]))
+        throw new DetailedError('CHARACTER_DELETION_SCHEMA_CHANGED', { table: name });
+      continue;
+    }
+    const columns = new Set(columnList);
     if (columns.has('world_id') && columns.has('conversation_id'))
       ensure(
         !store.get(
