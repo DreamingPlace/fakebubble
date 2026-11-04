@@ -196,7 +196,9 @@ test('the character list asks for the unread counts first and shows the badge', 
   );
   assert.equal(badge.length, 1, 'only 瓜瓜 has unread ideas');
   // Part 16 (named exception): the badge's visible text is now "N 条新共创" and it is a link, no longer a bare number.
-  assert.equal(badge[0]!.textContent, '2 条新共创');
+  // Named exception (Part 24b-6, round 2): in the rail the badge is the number alone (the words are its label and title).
+  assert.equal(badge[0]!.textContent, '2');
+  assert.equal(badge[0]!.attributes.get('aria-label'), '2 条新共创');
 });
 
 test('a member without the permission never asks for counts and sees no badge', async (t) => {
@@ -222,7 +224,9 @@ test('the badge on a card is a link that opens the 共创收件箱 filtered to t
   const [badge] = descendants(f.root.querySelector('#admin-characters')).filter(
     (n) => n.className === 'cocreation-badge',
   );
-  assert.equal(badge!.textContent, '2 条新共创', 'visible text, not only a tooltip');
+  // Named exception (Part 24b-6, round 2): the rail shows the number as the mark; "条新共创" is its label and title.
+  assert.equal(badge!.textContent, '2', 'visible text, not only a tooltip');
+  assert.equal(badge!.attributes.get('aria-label'), '2 条新共创');
   assert.equal(badge!.attributes.get('href'), '#/cocreation/wei-guagua');
   let prevented = false;
   badge!.addEventListener('click', (event) => {

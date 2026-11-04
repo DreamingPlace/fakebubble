@@ -160,11 +160,15 @@ export class WebCharacterAdmin {
         .map((id) => {
           const current = live.find((row) => row.characterId === id),
             draft = this.draft(id);
+          // Part 24b-6, round 4 (read-only): the main colour the console paints this character with: the draft's when a draft exists,
+          // else the published one, else null. Both are validated #RRGGBB on save, and anything else reads as null here.
+          const colour = (draft ? draftDTO(draft).profile.presentation.color : current?.presentation.color) ?? null;
           return {
             characterId: id,
             displayName: current?.presentation.displayName ?? draftDTO(draft!).profile.presentation.displayName,
             publishedVersion: current?.version ?? null,
             draftRevision: draft?.revision ?? null,
+            color: typeof colour === 'string' && /^#[0-9A-F]{6}$/.test(colour) ? colour : null,
           };
         }),
     };

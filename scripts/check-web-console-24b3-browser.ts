@@ -29,6 +29,19 @@ import { characterProfileHash } from '../apps/server/characters/web-character-ca
  * usage: node scripts/check-web-console-24b3-browser.ts [screenshot-dir]   (run `pnpm web:player:build` first)
  * Playwright is resolved like check-web-stats-browser.ts.
  */
+/**
+ * SUPERSEDED in Part 24b-6 (reason): this walk-through pins the Part 24b-3/24b-4 layouts - the pill row of roles, the rail of sections with
+ * 删除角色 in it, the start card's + 角色, vertical grid headers, the two-column inbox, modal confirms. The V3 console replaced every one of
+ * those (a 64 px rail, one section bar, danger zones, a roster grid with horizontal headers, rows of fixed cards). What it checked that still
+ * holds - no sideways scroll at 1280 / 1440 / 1680, one title-row height, the sidebar staying, colours out of pure black, one section at a
+ * time - is checked by scripts/check-web-console-24b6-browser.ts on the V3 pages. The body below is kept as it was, unchanged, for history.
+ */
+if (!process.env.RUN_SUPERSEDED_24B3) {
+  process.stdout.write(
+    'check-web-console-24b3-browser: SUPERSEDED by check-web-console-24b6-browser.ts (Part 24b-6); not run.\n',
+  );
+  process.exit(0);
+}
 const shots = process.argv[2] ? resolve(process.argv[2]) : null;
 if (shots) mkdirSync(shots, { recursive: true });
 

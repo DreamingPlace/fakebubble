@@ -244,6 +244,8 @@ try {
 
   await page.goto(`${origin}/?mode=provider-admin#/characters/jojo`);
   await page.locator('.wb-editor form.character-profile-form').waitFor({ timeout: 20_000 });
+  // Named exception (Part 24b-6, Workbench4): 预演 is the editor's last section (one section shows at a time), so it is opened from the bar.
+  await page.locator('.wb-tab', { hasText: '预演' }).click();
   await page.locator('#wb-preview .pw').waitFor({ timeout: 20_000 });
   // the old 预演测试 address lands here
   await page.goto(`${origin}/?mode=provider-admin#/preview/jojo`);
@@ -256,6 +258,7 @@ try {
   assert.deepEqual(await castSwitch.allInnerTexts(), ['不用', '已发布', '草稿']);
   assert.equal(await castSwitch.first().getAttribute('aria-pressed'), 'true');
   await shot('workbench-with-preview');
+  await page.locator('.wb-tab', { hasText: '身份与展示' }).click();
   await shot('colour-field', page.locator('.colour-field'));
   // the colour field takes RGB and refuses nonsense
   const colourInput = page.locator('.colour-field input[type="text"]');
@@ -272,7 +275,8 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
 
   // The colour field was typed into: leaving needs the edit saved or dropped, as for any unsaved role.
-  await page.getByRole('button', { name: '放弃本页未保存修改' }).click();
+  // Named exception (Part 24b-6): the button reads 放弃本页修改 and sits in the save bar.
+  await page.getByRole('button', { name: '放弃本页修改' }).click();
   // 关系与故事
   await page.locator('.admin-nav [data-page="cast"]').click();
   await page
@@ -283,7 +287,9 @@ try {
       process.stderr.write(`cast page text: ${(await page.locator('.admin-content').innerText()).slice(0, 600)}\n`);
       throw error;
     });
-  assert.equal(await page.locator('.cs-cell[data-from]').count(), 15 * 14);
+  // Named exception (Part 24b-6, Cast3): the grid is the workbench roster (3 roles here) plus any cast entry that is not in it (15 sample
+  // characters c01..c15), 18 in all; with a real roster the two are the same fifteen.
+  assert.equal(await page.locator('.cs-cell[data-from]').count(), 18 * 17);
   const cell = page.locator('.cs-cell[data-from="c02"][data-to="c03"]');
   await cell.hover();
   await cell.click();
@@ -319,7 +325,16 @@ try {
   await film.waitForTimeout(500);
   assert.equal(await pair.locator('.cs-rating').getAttribute('data-rating'), '4');
   await film.getByRole('button', { name: '保存草稿' }).click();
-  await film.getByText('草稿已保存').waitFor({ timeout: 10_000 });
+  await film
+    .getByText('草稿已保存')
+    .first()
+    .waitFor({ timeout: 10_000 })
+    .catch(async (error: unknown) => {
+      process.stderr.write(
+        `film toasts: ${await film.locator('.admin-toasts').innerText()} / ${await film.locator('.cs-notices').innerText()}\n`,
+      );
+      throw error;
+    });
   await film.waitForTimeout(600);
   await video.close();
   if (shots) {
@@ -335,13 +350,15 @@ try {
   await page.locator('.cs-cell[data-from="c02"][data-to="c03"]').hover();
   await page.locator('.cs-cell[data-from="c02"][data-to="c03"]').click();
   await shot('cast-selected-cell');
-  await page.locator('.cs-group-card').first().click();
+  // Named exceptions (Part 24b-6, Cast3): a group is a row of the 组合 table that opens below it; a story opens from the panel of a pair
+  // that shares it (the cell marked with the small story dot); its card is .cs-story-card.
+  await page.locator('.cs-groups-table .ot-row').first().click();
   await shot('cast-group-panel');
-  // a story with one override
+  await page.locator('.cs-cell[data-from]:has(.cs-story-dot)').first().click();
   await page.locator('.cs-story-title').first().click();
   await page.locator('.cs-know-matrix .cs-know:not(.is-override)').nth(4).click();
   assert.equal((await page.locator('.cs-know-matrix .cs-know.is-override').count()) >= 1, true);
-  await shot('cast-story-with-override', page.locator('.cs-stories'));
+  await shot('cast-story-with-override', page.locator('.cs-story-card'));
   // what a character sees
   await page.locator('.cs-head-row').nth(4).click();
   await page.getByText('看到的').first().waitFor();
@@ -381,14 +398,19 @@ try {
     permissions: ['characters.read:*', 'cast.read', 'cocreation.read'],
   });
   await page.locator('.admin-nav [data-page="members"]').click();
+  // Named exception (Part 24b-6, Members3): a person's permission grid opens below their row.
+  await page.locator('#admin-members-table .ot-row', { hasText: '共创写手' }).waitFor({ timeout: 20_000 });
+  await wait(1200);
+  // (the first administrator who is not the owner is already open when the page loads)
+  await page.locator('.ot-panel[data-state="open"] .permission-matrix').waitFor({ timeout: 20_000 });
   await page.locator('.permission-matrix').first().waitFor({ timeout: 20_000 });
   assert.equal(await page.locator('.permission-help').count(), 0, 'no description lines in the grid');
   assert.equal(await page.locator('details.admin-confirm').count(), 0, 'no fold around 收回全部功能权限');
   await page.getByRole('button', { name: '收回全部功能权限' }).waitFor();
-  await page.locator('.permission-row').first().hover();
+  await page.locator('.ot-panel[data-state="open"] .permission-row').first().hover();
   await wait(300);
   assert.equal(
-    await page.locator('.permission-row:hover .permission-tip').first().isVisible(),
+    await page.locator('.ot-panel[data-state="open"] .permission-row:hover .permission-tip').first().isVisible(),
     true,
     'the tooltip shows on hover',
   );

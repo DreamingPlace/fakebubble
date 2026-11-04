@@ -22,6 +22,8 @@ export type CharacterSummary = {
   displayName: string;
   publishedVersion: number | null;
   draftRevision: number | null;
+  /** The main colour ('#RRGGBB'): the draft's, else the published one, else null (Part 24b-6, round 4). */
+  color: string | null;
 };
 export type DeletionStatus = {
   characterId: string;
@@ -169,6 +171,7 @@ export class CharacterAdminClient {
           displayName: string(c.displayName),
           publishedVersion: c.publishedVersion === null ? null : num(c.publishedVersion),
           draftRevision: c.draftRevision === null ? null : num(c.draftRevision),
+          color: typeof c.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.color) ? c.color.toUpperCase() : null,
         };
       }),
       deletions: rows(r.deletions).map(deletion),
