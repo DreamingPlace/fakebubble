@@ -4574,14 +4574,31 @@ body:has(.admin-shell) {
 .account-admin-page.admin-shell .admin-table tbody tr:hover {
   background: var(--ad-bg);
 }
+/* Part 24h: six columns do not fit the half-width card; the failures table scrolls INSIDE its card (the 邀请与额度 rule above makes
+   every region overflow visible, which pushed the whole page 349 px sideways). */
+.account-admin-page.admin-shell .sys-failures {
+  min-width: 0;
+  max-width: 100%;
+}
+.account-admin-page.admin-shell .sys-failures .admin-table-region,
+.account-admin-page.admin-shell .sys-failures .admin-table-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+}
 /* Part 24h: the failing table of a retention failure. A schema name can be 64 characters: it stays on one line, is cut with an
    ellipsis at 24ch, and the full name is in the hover bubble (focusable, so the keyboard sees it too). */
-.account-admin-page.admin-shell .sys-table-name {
+.account-admin-page.admin-shell .sys-table-cell {
   display: inline-block;
+  max-width: 24ch;
+}
+/* the clipped text is a child of the anchor that carries the bubble, so the bubble itself is never clipped */
+.account-admin-page.admin-shell .sys-table-name {
+  display: block;
   max-width: 24ch;
   overflow: hidden;
   text-overflow: ellipsis;
-  vertical-align: bottom;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 12px;
 }
