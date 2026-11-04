@@ -6413,12 +6413,6 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
     margin-left: 0;
   }
 }
-/* Part 26b: a wide drawer opened inside 角色工作台 sits above the role picker and the draft bar (they overlapped its header). */
-.account-admin-page.admin-shell .admin-drawer-wide,
-.account-admin-page.admin-shell .admin-drawer-wide + .admin-backdrop,
-.account-admin-page.admin-shell .admin-backdrop:has(+ .admin-drawer-wide) {
-  z-index: 450;
-}
 .account-admin-page.admin-shell .wb-editor pre.rc-export {
   max-height: none;
   overflow-x: auto;
