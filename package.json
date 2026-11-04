@@ -23,6 +23,7 @@
     "check:web:browser": "node scripts/check-web-browser.ts",
     "check:web:invite-codes": "node scripts/check-web-invite-codes-browser.ts",
     "check:web:stats": "node scripts/check-web-stats-browser.ts",
+    "check:web:history": "node scripts/check-web-history-24f-browser.ts",
     "check:web:restart": "node scripts/test-web-data-lifecycle-restart.ts",
     "format": "biome format --write .",
     "format:check": "biome format .",

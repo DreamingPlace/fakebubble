@@ -13,6 +13,7 @@ import { identifier, keys, nonempty, record, validatedTemplate } from './templat
 import { characterProfileHash, publishedWebCharacters, type WebCharacterProfile } from './web-character-catalog.ts';
 import { WebCharacterPreviews, readWebPreview, webPreviewDTO } from './web-character-preview.ts';
 import { publishWebCharacter } from './web-character-publication.ts';
+import { characterHistory, characterVersion, restoreWebCharacter } from './web-character-history.ts';
 import {
   evalSetDelete,
   evalSetList,
@@ -443,6 +444,26 @@ export class WebCharacterAdmin {
     this.require(auth, 'read', id);
     ensure(this.deletion, 'DELETION_UNAVAILABLE');
     return this.deletion.status(id);
+  }
+  /** 版本历史: everyone who may read the character. Snapshots only, no player data. */
+  history(auth: Auth, id: string) {
+    this.require(auth, 'read', id);
+    return characterHistory(this.store, id);
+  }
+  historyVersion(auth: Auth, id: string, version: unknown) {
+    this.require(auth, 'read', id);
+    return characterVersion(this.store, id, version);
+  }
+  /** 恢复此版本: the owner's alone (no grant opens it). */
+  restore(auth: Auth, id: string, input: unknown) {
+    identifier(id);
+    const owner = () => {
+      const actor = this.actor(auth);
+      ensure(actor.role === 'owner', 'ADMIN_OWNER_REQUIRED');
+      return actor;
+    };
+    owner();
+    return this.store.transaction(() => restoreWebCharacter(this.store, this.clock.now(), owner(), id, input));
   }
   publish(auth: Auth, id: string, input: unknown) {
     return this.store.transaction(() => {

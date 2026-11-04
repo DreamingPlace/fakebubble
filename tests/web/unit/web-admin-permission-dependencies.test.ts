@@ -21,7 +21,7 @@ test('the dependency table is the one the owner decided, with transitive closure
     'characters.discard',
     'characters.preview',
     'characters.materials',
-    'characters.delete',
+    // Named exception (Part 24f): characters.delete is no longer a grantable item (deleting is the owner's alone), so it has no row.
   ] as const)
     assert.deepEqual(direct(item), ['characters.read'], item);
   assert.deepEqual(direct('characters.publish'), ['characters.preview', 'characters.read']);
@@ -34,7 +34,8 @@ test('the dependency table is the one the owner decided, with transitive closure
   // approve-materials needs materials, which needs read.
   assert.deepEqual(requiredItems('characters.approve-materials'), ['characters.read', 'characters.materials']);
   assert.deepEqual(requiredItems('characters.publish'), ['characters.read', 'characters.preview']);
-  assert.equal(dependentItems('characters.read').length, 7, 'every other character action but create');
+  // Named exception (Part 24f): 7 -> 6, delete is not an item any more.
+  assert.equal(dependentItems('characters.read').length, 6, 'every other grantable character action but create');
   assert.ok(dependentItems('characters.preview').includes('characters.publish'));
   assert.ok(dependentItems('characters.materials').includes('characters.approve-materials'));
   assert.deepEqual(dependentItems('invites.read'), ['invites.issue', 'invites.revoke-code', 'invites.revoke-access']);

@@ -485,6 +485,8 @@ try {
         '声音',
         '资料改动',
         '发布',
+        // Named exception (Part 24f): 版本历史 is one more entry of the bar, after 发布.
+        '版本历史',
         '预演',
       ]),
     `角色工作台: the bar reads ${tabs.join(' / ')}`,
