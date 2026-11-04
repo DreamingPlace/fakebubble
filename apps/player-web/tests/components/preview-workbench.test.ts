@@ -275,9 +275,12 @@ test('runs table: one table per run with the agreed columns, each final bubble o
   const f = setup(t);
   await f.bench.open('jojo');
   await flush();
+  // Named exception (Part 24b-6, Workbench4): the runs are ONE full-width results table whose row is the run (label, time, relation,
+  // the simulated time, draft, passed) and whose lines open directly below it; the run's own table is in that opened part.
   const run = f.root.querySelector('[data-run="r1"]') as FakeElement;
-  assert.match(text(run.querySelector('summary') as FakeElement), /改人设前/);
-  assert.match(text(run.querySelector('summary') as FakeElement), /模拟 北京时间 05:50/);
+  const runRow = f.root.querySelector('[data-key="r1"] .ot-row') as FakeElement;
+  assert.match(text(runRow), /改人设前/);
+  assert.match(text(runRow), /北京时间 05:50/);
   assert.deepEqual(
     run.querySelectorAll('th').map((th) => text(th)),
     ['#', '输入', '最终气泡', '状态', '审核改动', '覆盖', '费用', '耗时'],
@@ -445,7 +448,8 @@ test('compare: two runs side by side, matched by input text, unmatched inputs ke
   const f = setup(t, { runs: [a, b] });
   await f.bench.open('jojo');
   await flush();
-  const picks = f.root.querySelectorAll('[data-compare]');
+  // Named exception (Part 24b-6): the two runs are ticked with the row's own checkbox, and the button reads 对比所选 2 次.
+  const picks = f.root.querySelectorAll('.ot-tick input');
   assert.equal(picks.length, 2);
   assert.equal(f.root.querySelector('[data-compare-go]'), null, 'needs two runs');
   picks[0]!.checked = true;

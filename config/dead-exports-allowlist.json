@@ -89,6 +89,16 @@
       "file": "apps/player-web/src/features/admin/ui/split-pane.ts",
       "names": ["splitPane"],
       "reason": "Part 24b-3: the 角色工作台 no longer has a draggable list column (the roles are one row of pills), so no page uses the list | detail pane today; it stays, with its own tests, as the console's pane component."
+    },
+    {
+      "file": "apps/player-web/src/features/admin/cast/cast-model.ts",
+      "names": ["removeCharacter"],
+      "reason": "Part 24b-6 removed 从阵容移除 from 关系与故事 (a character is made and removed in 角色工作台); the model function stays, pinned by console-24b4's test that a removed character leaves a cast the server still accepts."
+    },
+    {
+      "file": "apps/player-web/src/features/admin/ui/chart-math.ts",
+      "names": ["conicGradient"],
+      "reason": "Part 24b-6: the pie draws SVG arcs now; the old conic-gradient helper stays because console-24b1's chart arithmetic test pins it."
     }
   ]
 }

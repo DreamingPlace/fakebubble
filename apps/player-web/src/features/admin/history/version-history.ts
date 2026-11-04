@@ -12,6 +12,8 @@ import { confirmDialog } from '../ui/confirm-dialog.ts';
 import { dataTable } from '../ui/data-table.ts';
 import { drawer } from '../ui/drawer.ts';
 import { keyValuePanel } from '../ui/key-value-panel.ts';
+import { diffSideBySide, type Piece } from '../preview/diff.ts';
+import { presentationFields, readableGroups, templateFields } from './readable.ts';
 import { statusBadge } from '../ui/status-badge.ts';
 
 /**
@@ -56,22 +58,6 @@ const problemOf = (error: unknown) => {
     ? RESTORE_PROBLEM_TEXT[problem as keyof typeof RESTORE_PROBLEM_TEXT]
     : null;
 };
-
-const stringify = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value, null, 2));
-/** The number a version is published under is not content: a restore of v1 must show no difference from v1 in the full template. */
-const withoutNumber = (profile: CharacterProfile) => {
-  const { version: _number, ...rest } = profile.template;
-  return rest;
-};
-/** The same groups as 资料改动: 人设, 网页展示, 完整模板 (the version number aside). */
-export const snapshotGroups = (
-  live: CharacterProfile | null,
-  version: CharacterProfile,
-): [string, unknown, unknown][] => [
-  ['人设', live?.template.persona, version.template.persona],
-  ['网页展示', live?.presentation, version.presentation],
-  ['完整模板', live ? withoutNumber(live) : undefined, withoutNumber(version)],
-];
 
 export function versionHistory(root: HTMLElement, host: HistoryHost) {
   let disposed = false,
@@ -183,6 +169,7 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
       title: `恢复 v${row.version}`,
       message: `将以 v${row.version} 的内容发布为新版本 v${next}，玩家下一条消息起生效。`,
       confirmLabel: '恢复此版本',
+      primary: true,
     });
     if (!ok || gone()) return;
     show(null);
@@ -237,7 +224,7 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
 
   function paintSnapshot(snapshot: VersionSnapshot) {
     const body = panel.body,
-      { template, presentation } = snapshot.profile;
+      { template } = snapshot.profile;
     body.replaceChildren();
     const controls = [snapshot.live ? statusBadge('现行', 'ok') : null, ...restoreControls(snapshot, false)].filter(
       (node): node is Node => node !== null,
@@ -253,24 +240,12 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
       h('h4', { class: 'vh-title', text: '与现行版本的差异' }),
       ...diffNodes(snapshot),
       h('h4', { class: 'vh-title', text: '完整快照（只读）' }),
-      keyValuePanel([
-        ['固定人物 ID', template.id],
-        ['人设名称', template.name],
-        ['网页展示名', presentation.displayName],
-        ['公开简介', presentation.publicDescription || null],
-        ['主色', presentation.color ?? null],
-        ['欢迎词', `${presentation.welcome.text}（${presentation.welcome.version}）`],
-        [
-          '声音',
-          template.voice
-            ? `${template.voice.profileId} · 版本 ${template.voice.version} · 语速 ${template.voice.speed}`
-            : null,
-        ],
-      ]),
-      h('h4', { class: 'vh-subtitle', text: '人设' }),
-      h('pre', { class: 'vh-pre', text: template.persona }),
-      h('h4', { class: 'vh-subtitle', text: '完整模板' }),
-      h('pre', { class: 'vh-pre', text: stringify(template) }),
+      h('h5', { class: 'vh-group', text: '网页展示' }),
+      keyValuePanel(presentationFields(snapshot.profile).map(([label, value]) => [label, fieldNode(value)] as const)),
+      h('h5', { class: 'vh-group', text: '人设' }),
+      h('div', { class: 'vh-text', text: template.persona }),
+      h('h5', { class: 'vh-group', text: '完整模板' }),
+      keyValuePanel(templateFields(snapshot.profile).map(([label, value]) => [label, fieldNode(value)] as const)),
     );
   }
 
@@ -279,17 +254,9 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
     if (snapshot.live || !snapshot.liveProfile)
       return [h('p', { class: 'vh-note', text: snapshot.live ? '这就是现行版本。' : '现在没有现行版本。' })];
     const nodes: Node[] = [];
-    for (const [name, before, after] of snapshotGroups(snapshot.liveProfile, snapshot.profile)) {
-      if (JSON.stringify(before) === JSON.stringify(after)) continue;
-      const columns = h('div', { class: 'profile-diff' });
-      for (const [label, value] of [
-        ['现行', before],
-        [`v${snapshot.version}`, after],
-      ] as const)
-        columns.append(
-          h('section', {}, h('h4', { text: label }), h('pre', { text: value === undefined ? '无' : stringify(value) })),
-        );
-      nodes.push(h('h5', { class: 'vh-group', text: name }), columns);
+    for (const [name, before, after] of readableGroups(snapshot.liveProfile, snapshot.profile)) {
+      if (before === after) continue;
+      nodes.push(h('h5', { class: 'vh-group', text: name }), diffGrid(before ?? '', after, `v${snapshot.version}`));
     }
     nodes.push(
       h('p', {
@@ -306,9 +273,7 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
     const result = await host.api.history(id);
     if (gone() || mine !== token) return;
     history = result;
-    intro.textContent = host.isOwner()
-      ? '每次发布都留下一个不可改动的版本。恢复＝把旧版本的内容发布为新版本，历史不会被改写。'
-      : '每次发布都留下一个不可改动的版本。恢复版本只有主管理员可以做。';
+    intro.hidden = true;
     table.setRows(result.versions);
     table.root.hidden = false;
   }
@@ -321,4 +286,38 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
       box.remove();
     },
   };
+}
+
+/** A value in a read-only field: its own lines kept, never JSON. */
+const fieldNode = (value: string) => h('span', { class: 'vh-text', text: value });
+
+/** The 资料改动 comparison (the same side-by-side lines and classes), the live text on the left and the version on the right. */
+function diffGrid(before: string, after: string, label: string) {
+  const grid = h('div', { class: 'pd-grid' });
+  grid.append(
+    h(
+      'div',
+      { class: 'pd-row pd-head' },
+      h('span', { class: 'pd-cell pd-left', text: '现行' }),
+      h('span', { class: 'pd-cell pd-right', text: label }),
+    ),
+  );
+  const side = (cell: HTMLElement, pieces: Piece[] | null) => {
+    if (pieces === null) {
+      cell.className = `${cell.className} pd-empty`;
+      return;
+    }
+    for (const piece of pieces) {
+      if (piece.kind === 'same') cell.append(piece.text);
+      else cell.append(h('span', { class: piece.kind === 'del' ? 'pd-del' : 'pd-add', text: piece.text }));
+    }
+  };
+  for (const row of diffSideBySide(before, after)) {
+    const left = h('span', { class: 'pd-cell pd-left' }),
+      right = h('span', { class: 'pd-cell pd-right' });
+    side(left, row.left);
+    side(right, row.right);
+    grid.append(h('div', { class: 'pd-row' }, left, right));
+  }
+  return grid;
 }

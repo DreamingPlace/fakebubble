@@ -36,15 +36,22 @@ test('24b-4 one layout system: the content is as wide as the window lets it be (
     /\.permission-tip \{[^}]*background: var\(--ad-text\)/,
   );
   // two-column pages use fixed proportions
-  assert.match(block, /\.cs-main \{\s*display: grid;\s*grid-template-columns: minmax\(0, 7fr\) minmax\(0, 5fr\);/);
-  assert.match(block, /\.cc-layout \{\s*display: grid;\s*grid-template-columns: minmax\(0, 3fr\) minmax\(0, 2fr\);/);
+  // Named exception (Part 24b-6, V3): the cast is its fixed grid (its own width) beside the pair panel, the inbox is rows of fixed cards
+  // with the detail under the open row (one column), and 管理员与权限 is a table whose rows open below (one column). The old 7fr/5fr,
+  // 3fr/2fr and 1fr/1.1fr proportions of those three pages do not exist any more; their V3 layouts are pinned instead.
+  assert.match(css, /\.cs-main \{\s*display: grid;\s*grid-template-columns: max-content minmax\(0, 1fr\);/);
+  assert.match(css, /#admin-cocreation \.cc-layout \{\s*display: flex;\s*flex-direction: column;/);
   assert.match(
-    block,
-    /\.members-layout \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1\.1fr\);/,
+    css,
+    /#admin-cocreation \.cc-list \{\s*display: grid;\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/,
   );
 });
 
-test('24b-4 colours: one palette of fifteen, dealt by place in the sorted roster, so a character has the same dot on every page', () => {
+// Superseded (Part 24b-6, round 3): a character's colour is its 主色 or a stable mapping of its id, never its place in the roster (deleting
+// one character moved every later one). The palette-of-fifteen half is kept in 'console-24b6' next to the stability check.
+test('24b-4 colours: one palette of fifteen, dealt by place in the sorted roster, so a character has the same dot on every page', {
+  skip: 'superseded by 24b-6 round 3: the colour no longer depends on the roster',
+}, () => {
   assert.equal(new Set(ROSTER_COLOURS).size, 15);
   const colour = rosterColours(['b', 'a', 'c']);
   assert.equal(colour('a'), ROSTER_COLOURS[0]);

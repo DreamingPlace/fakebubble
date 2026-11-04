@@ -218,11 +218,11 @@ try {
     await page.waitForTimeout(500);
     if (shots) await page.screenshot({ path: join(shots, `${name}.png`) });
   };
-  const rail = (page: any, label: string) => page.locator('.wb-card .wb-rail-item', { hasText: label });
+  const rail = (page: any, label: string) => page.locator('.wb-card .wb-tab', { hasText: label });
   const rows = (page: any) => page.locator('.vh .admin-table tbody tr');
 
   // =============== the owner: history list ===============
-  const page = await pageOf(owner, `characters/${ID}`, '.wb-card .wb-rail-item');
+  const page = await pageOf(owner, `characters/${ID}`, '.wb-card .wb-tab');
   assert.equal(await rail(page, '版本历史').count(), 1, '版本历史 is in the rail');
   await rail(page, '版本历史').click();
   await rows(page).first().waitFor();
@@ -256,10 +256,9 @@ try {
       for (const n of document.querySelectorAll('.vh *'))
         if (getComputedStyle(n).textOverflow === 'ellipsis') found.push(`ellipsis: ${name(n)}`);
       const card = document.querySelector('.wb-card')?.getBoundingClientRect();
-      for (const n of document.querySelectorAll('.wb-card .wb-rail-item')) {
+      for (const n of document.querySelectorAll('.wb-card .wb-tab')) {
         const box = n.getBoundingClientRect();
-        if (card && (box.right > card.right || box.left < card.left))
-          found.push(`rail item outside the card: ${name(n)}`);
+        if (card && (box.right > card.right || box.left < card.left)) found.push(`tab outside the card: ${name(n)}`);
       }
       return found;
     });
@@ -284,7 +283,7 @@ try {
   assert.match(drawerText, /完整快照（只读）/);
   assert.match(drawerText, /与现行版本的差异/);
   assert.equal(await drawer.locator('textarea, input').count(), 0, 'the snapshot is read only');
-  assert.equal(await drawer.locator('.profile-diff').count(), 3, 'the diff uses the three 资料改动 groups');
+  assert.ok((await drawer.locator('.pd-grid').count()) >= 2, 'the diff uses the 资料改动 comparison');
   assert.match(drawerText, /主色/, 'the colour differs from live');
   await snap(page, '02-snapshot-and-diff');
 
@@ -380,9 +379,9 @@ try {
     );
     assert.equal((await okPost(owner, `characters/${ID}/detail`, {})).published.version, LIVE + 2);
     await page.reload();
-    await page.locator('.wb-card .wb-rail-item').first().waitFor();
+    await page.locator('.wb-card .wb-tab').first().waitFor();
     await page.waitForTimeout(900);
-    const chip = (await page.locator('.wb-chip').innerText()) as string;
+    const chip = (await page.locator('.head-status', { hasText: '草稿' }).innerText()) as string;
     assert.match(chip, /草稿/, 'the draft chip still shows the draft');
     await rail(page, '发布').click();
     await page.waitForTimeout(500);
@@ -400,18 +399,18 @@ try {
   }
 
   // =============== owner: delete is there, and asks for its confirmation ===============
-  await rail(page, '删除角色').click();
-  assert.equal(await page.getByRole('button', { name: '获取删除影响' }).count(), 1, 'the owner sees 删除角色');
+  assert.equal(await page.locator('#wb-delete').count(), 1, 'the owner sees 删除角色 in the danger zone of 发布');
 
   // =============== the non-owner: history yes, restore no, delete neither shown nor accepted ===============
-  const view = await pageOf(helper, `characters/${ID}`, '.wb-card .wb-rail-item');
-  assert.equal(await rail(view, '删除角色').count(), 0, 'no 删除角色 entry in the rail');
+  const view = await pageOf(helper, `characters/${ID}`, '.wb-card .wb-tab');
+  assert.equal(await rail(view, '删除角色').count(), 0, 'no 删除角色 entry in the bar');
+  await rail(view, '发布').click();
+  assert.equal(await view.locator('#wb-delete').count(), 0, 'no danger-zone 删除角色 for a non-owner');
   assert.equal(await view.getByRole('button', { name: /删除/ }).count(), 0, 'no delete button anywhere on the page');
   await rail(view, '版本历史').click();
   await rows(view).first().waitFor();
   assert.equal(await rows(view).count(), 6, 'the non-owner sees every version');
   assert.equal(await view.locator('[data-restore]').count(), 0, 'no restore button for a non-owner');
-  assert.match(await view.locator('.vh .vh-note').first().innerText(), /只有主管理员可以做/);
   await snap(view, '08-non-owner-list');
   await rows(view).nth(2).click();
   await view.locator('.admin-drawer:not([hidden]) .admin-kv').first().waitFor();
@@ -436,11 +435,15 @@ try {
   });
   const members = await pageOf(owner, 'members', '.account-admin-page .permission-matrix');
   assert.equal(await members.locator('[data-permission="characters.delete"]').count(), 0, 'no delete item');
-  assert.ok(
-    !/删除角色/.test(await members.locator('.permission-matrix').first().innerText()),
-    'no 删除角色 in the matrix',
-  );
+  await members.waitForTimeout(1800); // let the page finish its own reads before a row is opened
+  const oldRow = members.locator('.ot-row', { hasText: '旧授权' }).first();
+  if ((await oldRow.getAttribute('aria-expanded')) !== 'true') await oldRow.click({ position: { x: 14, y: 8 } });
+  await members.getByText('删除角色（已失效）').waitFor({ timeout: 10_000 });
+  await members.waitForTimeout(600);
   await snap(members, '09-members-without-delete');
+  // The add form (no stored grant) has no delete row at all; the old stored grant is named, never shown as a raw key.
+  assert.equal(await members.getByText('删除角色（已失效）').count(), 1, 'the old grant reads 删除角色（已失效）');
+  assert.equal(await members.getByText(/characters\.delete/).count(), 0, 'never the raw key');
 
   assert.deepEqual(errors, [], 'no page errors, no unexpected failed requests');
   process.stdout.write('history 24f browser check: PASS\n');

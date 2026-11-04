@@ -7,6 +7,8 @@ export type ConfirmOptions = {
   cancelLabel?: string;
   /** Irreversible or outward-facing: the confirm button is drawn as a danger action and is not the default focus. */
   danger?: boolean;
+  /** The confirm button is the dialog's primary action (solid), for a confirm that is the point of the dialog. */
+  primary?: boolean;
 };
 /**
  * Modal confirmation. Resolves true only for an explicit press of the confirm button; Escape, the backdrop and
@@ -15,7 +17,7 @@ export type ConfirmOptions = {
 export function confirmDialog(parent: HTMLElement, options: ConfirmOptions): Promise<boolean> {
   return new Promise((resolve) => {
     const confirm = h('button', {
-      class: options.danger ? 'admin-danger' : '',
+      class: options.danger ? 'admin-danger' : options.primary ? 'admin-primary' : '',
       text: options.confirmLabel ?? '确认',
       attrs: { type: 'button' },
     });

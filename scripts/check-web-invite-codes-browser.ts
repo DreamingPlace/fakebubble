@@ -256,14 +256,16 @@ try {
     await page.goto(`${origin}/?mode=provider-admin#/invites`);
     const row = page.locator('tr', { hasText: name }).first();
     await row.waitFor({ timeout: 20_000 });
-    await row.getByRole('button', { name: '查看' }).click();
+    // Named exception (Part 24b-6, Invites3): there is no 查看 button; a click on the batch's row opens its codes directly below it.
+    await row.click();
     await page.locator('.tiers-codes-table tbody tr').first().waitFor({ timeout: 15_000 });
-    await page.locator('.tiers-detail h3').scrollIntoViewIfNeeded();
+    await page.locator('.tiers-detail').scrollIntoViewIfNeeded();
     return page;
   };
   const ownerPage = await open(owner, '管理员A批次');
   for (const code of aBatch.codes) await ownerPage.getByText(code).waitFor();
-  assert.equal(await ownerPage.getByRole('button', { name: '复制' }).count(), 3, 'every plain code has its own 复制');
+  // Named exception (Part 24b-6): 复制全部未使用 also contains 复制, so the per-code buttons are counted by their class.
+  assert.equal(await ownerPage.locator('.tiers-copy').count(), 3, 'every plain code has its own 复制');
   await shot(ownerPage, 'batch-detail-owner');
   const [download] = await Promise.all([
     ownerPage.waitForEvent('download'),
@@ -276,7 +278,7 @@ try {
 
   const bPage = await open(adminB, '管理员A批次');
   assert.equal((await bPage.getByText('********').count()) >= 3, true);
-  assert.equal(await bPage.getByRole('button', { name: '复制' }).count(), 0, 'no 复制 for a masked code');
+  assert.equal(await bPage.locator('.tiers-copy').count(), 0, 'no 复制 for a masked code');
   const bText = await bPage.locator('body').innerText();
   for (const code of [...aBatch.codes, ...ownerBatch.codes])
     assert.equal(bText.includes(code), false, 'no plain code in the page');

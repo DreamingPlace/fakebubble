@@ -40,7 +40,8 @@ test('permissions are grouped by area with every item present', (t) => {
     f.host.querySelectorAll('.permission-group h4').map((h) => h.textContent),
     // Named exception (Part 21g): the new 模型与价格 group (models.manage) is last; counts below are one higher. Nothing weakened.
     // Named exception (Part 24b-2): the new 关系与故事 group (cast.read / cast.edit / cast.publish) follows 共创收件箱; counts are 3 higher.
-    ['角色资料', '预演与发布', '声音成品', '玩家邀请', '共创收件箱', '关系与故事', '模型与价格'],
+    // Named exception (Part 24b-6, round 3): the first area is named after the page, 角色工作台 (it was the old page name 角色资料).
+    ['角色工作台', '预演与发布', '声音成品', '玩家邀请', '共创收件箱', '关系与故事', '模型与价格'],
   );
   // Named exception (Part 22a): the new invites.manage item (邀请与额度) is in the 玩家邀请 group; counts are one higher.
   // Named exception (Part 24f): characters.delete is not an item any more (deleting is the owner's alone): 20 -> 19, 18 -> 17 below.
@@ -148,7 +149,9 @@ test('an untouched set is returned exactly as loaded; legacy categories and role
   assert.deepEqual(f.ticked(), ['invites.issue', 'invites.read', 'invites.revoke-access', 'invites.revoke-code']);
   assert.deepEqual(f.editor.value(), [...original].sort());
   assert.match(f.host.textContent, /按具体角色授予的旧授权/);
-  assert.match(f.host.textContent, /characters\.edit:jojo/);
+  // Named exception (Part 24b-6, round 2): a grant for one role shows its Chinese permission name, never the raw id.
+  assert.match(f.host.textContent, /修改并保存草稿 · 指定角色/);
+  assert.doesNotMatch(f.host.textContent, /characters\.edit/);
   f.toggle('invites.revoke-code', false);
   assert.deepEqual(
     f.editor.value(),

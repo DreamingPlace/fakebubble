@@ -17,7 +17,6 @@ export type AdminPage =
   | 'cocreation'
   | 'invites'
   | 'points'
-  | 'stats'
   | 'conversations'
   | 'costs'
   | 'models'
@@ -27,7 +26,6 @@ export type AdminPage =
 export type NavItem = {
   page: Exclude<AdminPage, 'account'>;
   label: string;
-  icon: string;
   /** Pages that belong under this one (indented beneath it in the sidebar). */
   subs?: readonly NavItem[];
 };
@@ -36,40 +34,37 @@ export type NavGroup = { id: string; label: string; items: readonly NavItem[] };
 /** First-level navigation (Part 24b-1). The order is also the order of "the first page this administrator may use". */
 export const NAV_TREE: readonly NavGroup[] = [
   // 总览 stands alone at the top: its group has no title of its own.
-  { id: 'overview', label: '', items: [{ page: 'overview', label: '总览', icon: 'home' }] },
+  { id: 'overview', label: '', items: [{ page: 'overview', label: '总览' }] },
   {
     id: 'roles',
     label: '角色',
     items: [
       // 预演 lives inside 角色工作台 (Part 24b-2); the old 预演测试 address still arrives there.
-      { page: 'characters', label: '角色工作台', icon: 'user' },
-      { page: 'cast', label: '关系与故事', icon: 'web' },
-      { page: 'cocreation', label: '共创收件箱', icon: 'inbox' },
+      { page: 'characters', label: '角色工作台' },
+      { page: 'cast', label: '关系与故事' },
+      { page: 'cocreation', label: '共创收件箱' },
     ],
   },
   {
     id: 'players',
     label: '玩家',
     items: [
-      { page: 'invites', label: '邀请与额度', icon: 'ticket' },
-      { page: 'points', label: '积分发放', icon: 'coin' },
+      { page: 'invites', label: '邀请与额度' },
+      { page: 'points', label: '积分发放' },
     ],
   },
   {
     id: 'ops',
     label: '运营',
-    items: [
-      { page: 'stats', label: '玩家统计', icon: 'chart' },
-      { page: 'costs', label: '消耗表', icon: 'table' },
-    ],
+    items: [{ page: 'costs', label: '消耗表' }],
   },
   {
     id: 'system',
     label: '系统',
     items: [
-      { page: 'models', label: '模型与价格', icon: 'sliders' },
-      { page: 'system', label: '系统状态', icon: 'pulse' },
-      { page: 'members', label: '管理员与权限', icon: 'shield' },
+      { page: 'models', label: '模型与价格' },
+      { page: 'system', label: '系统状态' },
+      { page: 'members', label: '管理员与权限' },
     ],
   },
 ];
@@ -80,7 +75,7 @@ export const NAV_TREE: readonly NavGroup[] = [
  * them unless the session says the switch is on and the administrator holds the permission.
  */
 export const OPTIONAL_NAV: ReadonlyArray<NavItem & { group: string; first?: boolean }> = [
-  { group: 'ops', page: 'conversations', label: '测试对话', icon: 'chat' },
+  { group: 'ops', page: 'conversations', label: '测试对话' },
 ];
 /** NAV_TREE plus the switch-gated pages, in their groups (an item marked `first` goes before the group's own pages). */
 export const navTree = (): NavGroup[] =>
@@ -112,7 +107,7 @@ export type NavAccess = {
   cast?: boolean;
   /** This page was given a client for 模型与价格. Any administrator may read it (saving is decided by the server and `canManage`). */
   models?: boolean;
-  /** This page was given the clients for 概览 / 系统状态 / 积分发放 (Part 22b) and 玩家统计 / 消耗表 (Part 22c). Absent = those pages do not exist here. */
+  /** This page was given the clients for 概览 / 系统状态 / 积分发放 (Part 22b) and 消耗表 (Part 22c). Absent = those pages do not exist here. */
   system?: boolean;
 };
 export const PAGES: readonly AdminPage[] = [...navTree().flatMap((g) => groupPages(g).map((i) => i.page)), 'account'];
@@ -136,8 +131,7 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
       return owner || hasAnyInvitePermission(permissions);
     case 'points':
       return access.system === true && (owner || hasPointsPermission(permissions));
-    // 玩家统计 and 消耗表 (Part 22c): the owner, or an administrator holding stats.read.
-    case 'stats':
+    // 消耗表 (Part 22c): the owner, or an administrator holding stats.read. (玩家统计 moved into 总览 in Part 24b-6.)
     case 'costs':
       return access.system === true && (owner || hasStatsPermission(permissions));
     case 'system':
@@ -162,27 +156,8 @@ export const visibleNav = (access: NavAccess): NavGroup[] =>
 /** Where to land: the first sidebar page the administrator may use, else their account. */
 export const firstAllowedPage = (access: NavAccess): AdminPage => visibleNav(access)[0]?.items[0]?.page ?? 'account';
 
-// Icons: simple 24px strokes drawn for this console in the style of Tabler Icons (MIT, https://tabler.io/icons).
-const ICON_PATHS: Record<string, string> = {
-  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
-  web: '<circle cx="6" cy="7" r="2.5"/><circle cx="18" cy="7" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.5 7h7M7.4 9.3l3.5 6.6M16.6 9.3l-3.5 6.6"/>',
-  inbox: '<path d="M3 13l3-8h12l3 8v6H3z"/><path d="M3 13h5l1 3h6l1-3h5"/>',
-  ticket: '<path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/><path d="M14 7v12"/>',
-  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
-  chart: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
-  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
-  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
-  home: '<path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/>',
-  coin: '<circle cx="12" cy="12" r="9"/><path d="M9 10h6M9 14h6M12 7v10"/>',
-  table: '<rect x="4" y="5" width="16" height="14" rx="1"/><path d="M4 10h16M10 5v14"/>',
-  pulse: '<path d="M3 12h4l3-7 4 14 3-7h4"/>',
-  sliders:
-    '<path d="M5 4v16M12 4v16M19 4v16"/><circle cx="5" cy="9" r="2"/><circle cx="12" cy="15" r="2"/><circle cx="19" cy="8" r="2"/>',
-};
-const icon = (name: string) =>
-  `<svg class="admin-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] ?? ''}</svg>`;
 const link = (item: NavItem, sub = false) =>
-  `<a class="admin-nav-item${sub ? ' admin-nav-sub' : ''}" href="#/${item.page}" data-page="${item.page}" title="${item.label}">${icon(item.icon)}<span>${item.label}</span></a>`;
+  `<a class="admin-nav-item${sub ? ' admin-nav-sub' : ''}" href="#/${item.page}" data-page="${item.page}"><i class="admin-nav-dot" aria-hidden="true"></i><span>${item.label}</span></a>`;
 /** Static markup for every item; `render()` of the page then hides what the administrator may not use. */
 export const navMarkup = () =>
   navTree()

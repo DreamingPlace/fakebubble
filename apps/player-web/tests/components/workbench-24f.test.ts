@@ -95,16 +95,15 @@ function bench(t: test.TestContext, withDraft: boolean, who: typeof owner = owne
   return { root, rail: root, header, workbench };
 }
 
-const railItems = (rail: FakeElement) => rail.querySelectorAll('.wb-rail-item');
+const railItems = (rail: FakeElement) => rail.querySelectorAll('.wb-tab');
 const labels = (rail: FakeElement) => railItems(rail).map((b) => b.textContent);
 const helper = (permissions: string[]) =>
   ({ ...owner, id: 'h', role: 'admin' as const, permissions }) as never as typeof owner;
 
-test('the owner is shown 删除角色 in the rail and its confirm step stays', async (t) => {
+test('the owner is shown 删除角色 in the danger zone and its confirm step stays', async (t) => {
   const f = bench(t, false);
   await f.workbench.open('jojo');
-  assert.ok(labels(f.rail).includes('删除角色'));
-  assert.ok(f.root.querySelectorAll('button').some((b) => b.textContent === '获取删除影响'));
+  assert.ok(f.root.querySelector('#wb-delete'), '删除角色 opens the danger zone of 发布');
 });
 
 test('an administrator with every grant that used to open deletion sees no 删除角色 anywhere, but does see 版本历史', async (t) => {
@@ -117,10 +116,10 @@ test('an administrator with every grant that used to open deletion sees no 删�
     const f = bench(t, false, helper(permissions));
     await f.workbench.open('jojo');
     await flush();
+    assert.equal(f.root.querySelector('#wb-delete'), null, permissions.join());
     assert.ok(!labels(f.rail).includes('删除角色'), permissions.join());
     assert.ok(labels(f.rail).includes('版本历史'), permissions.join());
-    assert.ok(!f.root.querySelectorAll('button').some((b) => /删除/.test(b.textContent)), 'no delete button');
-    assert.ok(!/删除角色及所有旧聊天|获取删除影响/.test(f.root.textContent));
+    assert.ok(!f.root.querySelectorAll('button').some((b) => /删除角色/.test(b.textContent)), 'no delete button');
     assert.equal(f.root.querySelectorAll('[data-restore]').length, 0, 'and no restore button');
   }
 });

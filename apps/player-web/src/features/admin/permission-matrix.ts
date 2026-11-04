@@ -8,6 +8,7 @@ import {
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { h } from '../cocreation/h.ts';
 import { bindTip } from './ui/tooltip.ts';
+import { markDirty } from './ui/unsaved.ts';
 
 type ItemInfo = { item: AdminPermissionItem; name: string; help: string };
 type Group = { id: string; title: string; items: readonly ItemInfo[] };
@@ -15,7 +16,7 @@ type Group = { id: string; title: string; items: readonly ItemInfo[] };
 export const PERMISSION_GROUPS: readonly Group[] = [
   {
     id: 'characters',
-    title: '角色资料',
+    title: '角色工作台',
     items: [
       { item: 'characters.read', name: '查看角色', help: '打开角色目录和资料。其他角色功能都以它为前提。' },
       { item: 'characters.create', name: '新建角色', help: '建立新的角色草稿。' },
@@ -122,9 +123,16 @@ function decompose(initial: readonly AdminPermission[]) {
   }
   return { items, legacy };
 }
-/** A delete grant stored before Part 24f stays in the database, shown as what it is: 已失效 (only the owner deletes a character now). */
-const legacyLabel = (permission: string) =>
-  /^characters\.delete:/.test(permission) ? `${permission}（已失效）` : permission;
+/** A grant for one specific role, in the permission names of the grid (never the raw id): "查看角色 · 指定角色". */
+const OTHER_NAMES: Record<string, string> = { 'stats.read': '查看消耗表与统计', 'points.grant': '积分发放' };
+const legacyName = (permission: string) => {
+  if (OTHER_NAMES[permission]) return OTHER_NAMES[permission];
+  // Part 24f: a delete grant stored earlier stays in the database but opens nothing (only the owner deletes a character).
+  if (/^characters\.delete:/.test(permission)) return '删除角色（已失效）';
+  const scoped = /^(characters\.[a-z-]+):.+$/.exec(permission)?.[1];
+  const name = NAMES.get((scoped ?? permission) as AdminPermissionItem);
+  return name ? `${name}${scoped ? ' · 指定角色' : ''}` : '其他授权';
+};
 const sameSet = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => a.size === b.size && [...a].every((v) => b.has(v));
 
 /**
@@ -135,7 +143,7 @@ const sameSet = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => a.size === b.size &
 export function permissionMatrixEditor(
   root: HTMLElement,
   initial: readonly AdminPermission[],
-  options: { cocreation?: boolean; conversations?: boolean } = {},
+  options: { cocreation?: boolean; conversations?: boolean; onChange?: (dirty: number) => void } = {},
 ) {
   const base = decompose(initial);
   const state = new Set<AdminPermissionItem>(base.items);
@@ -227,14 +235,37 @@ export function permissionMatrixEditor(
       input.type = 'checkbox';
       input.checked = true;
       legacyBoxes.set(permission, input);
-      input.addEventListener('change', () => (touched = true));
-      section.append(h('label', { class: 'permission-item' }, input, h('span', { text: legacyLabel(permission) })));
+      input.addEventListener('change', () => {
+        touched = true;
+        options.onChange?.(dirtyCount());
+      });
+      section.append(
+        h(
+          'label',
+          { class: 'permission-item' },
+          input,
+          h('span', {
+            text: legacyName(permission),
+            ...(/^characters\.delete:/.test(permission) ? { class: 'permission-dead' } : {}),
+          }),
+        ),
+      );
     }
     areas.append(section);
   }
   group.append(note);
+  const rows = new Map<AdminPermissionItem, HTMLElement>();
+  for (const [item, input] of boxes) rows.set(item, input.parentElement ?? input);
+  const dirtyCount = () =>
+    [...boxes.keys()].filter((item) => state.has(item) !== base.items.has(item)).length +
+    [...legacyBoxes.values()].filter((input) => !input.checked).length;
   const paint = () => {
-    for (const [item, input] of boxes) input.checked = state.has(item);
+    for (const [item, input] of boxes) {
+      input.checked = state.has(item);
+      // Part 24b-6: a changed permission is amber until it is saved.
+      markDirty(rows.get(item) ?? input, state.has(item) !== base.items.has(item));
+    }
+    options.onChange?.(dirtyCount());
   };
   paint();
 
@@ -248,6 +279,8 @@ export function permissionMatrixEditor(
       for (const [permission, input] of legacyBoxes) if (input.checked) result.add(permission);
       return [...result].sort();
     },
+    dirty: dirtyCount,
+    /** Ticks every item of an area-independent preset (the add bar and 快速设置 use the same list). */
     setDisabled: (disabled: boolean) => {
       for (const input of [...boxes.values(), ...legacyBoxes.values()]) input.disabled = disabled;
       for (const button of presets.children) (button as HTMLButtonElement).disabled = disabled;

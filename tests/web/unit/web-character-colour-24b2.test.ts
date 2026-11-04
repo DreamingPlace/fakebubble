@@ -185,3 +185,36 @@ test('the admin routes let castSource through on both 预演 starts and let a co
     /INVALID_REQUEST/,
   );
 });
+
+// Part 24b-6, round 4: the admin character list also returns each character's main colour, read-only, so every console page can
+// colour a character without opening it.
+test('the admin list returns each 主色: the draft colour, else the published one, else null; always #RRGGBB or null', (t) => {
+  const f = fixture(t);
+  const listed = () => f.service.list(f.auth).characters as Array<{ characterId: string; color: string | null }>;
+  const of = (id: string) => listed().find((row) => row.characterId === id)!;
+  // nothing set anywhere: null (never undefined, never an empty string)
+  for (const row of listed()) assert.equal(row.color, null, row.characterId);
+  // a draft with a colour
+  const saved = colourDraft(f);
+  assert.equal(of('wei-guagua').color, '#3366CC');
+  // the published colour when the draft is gone
+  f.service.publish(f.auth, 'wei-guagua', colourPublish(f, saved));
+  assert.equal(f.service.detail(f.auth, 'wei-guagua').draft, null);
+  assert.equal(of('wei-guagua').color, '#3366CC');
+  // a draft that clears the colour wins over the published one
+  const back = structuredClone(f.service.detail(f.auth, 'wei-guagua').published!.profile);
+  delete back.presentation.color;
+  back.template.version++;
+  f.service.save(f.auth, 'wei-guagua', { expectedRevision: null, profile: back });
+  assert.equal(of('wei-guagua').color, null);
+  // every character, whatever its source, is #RRGGBB in capitals or null
+  for (const row of listed()) assert.ok(row.color === null || /^#[0-9A-F]{6}$/.test(row.color), `${row.characterId}`);
+  // nothing else changed shape: the same four fields as before plus colour
+  assert.deepEqual(Object.keys(of('wei-guagua')).sort(), [
+    'characterId',
+    'color',
+    'displayName',
+    'draftRevision',
+    'publishedVersion',
+  ]);
+});

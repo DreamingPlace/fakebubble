@@ -266,8 +266,8 @@ test('the sidebar item 运营 → 测试对话: hidden without the switch, for t
     ops.items.map((i) => [i.page, i.label]),
     // Named exception (Part 22b): 运营数据 left the nav (its numbers are 系统状态 → 技术指标).
     // Named exception (Part 24b-1): 运营 = 玩家统计, 消耗表, 测试对话 - 测试对话 moved from first to last (and 玩家统计 joined 运营).
+    // Named exception (Part 24b-6): 玩家统计 left the nav (it is part of 总览 now), so 运营 = 消耗表, 测试对话.
     [
-      ['stats', '玩家统计'],
       ['costs', '消耗表'],
       ['conversations', '测试对话'],
     ],

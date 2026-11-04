@@ -61,14 +61,15 @@ test('24b-1 nav: the groups and pages are exactly the board (as amended by 24b-2
       ['', ['overview:总览']],
       ['角色', ['characters:角色工作台', 'cast:关系与故事', 'cocreation:共创收件箱']],
       ['玩家', ['invites:邀请与额度', 'points:积分发放']],
-      ['运营', ['stats:玩家统计', 'costs:消耗表']],
+      // Named exception (Part 24b-6): 玩家统计 left the nav (总览 carries its numbers); 运营 starts with 消耗表.
+      ['运营', ['costs:消耗表']],
       ['系统', ['models:模型与价格', 'system:系统状态', 'members:管理员与权限']],
     ],
   );
   // 测试对话 joins 运营 behind its switch, after 消耗表.
   const everything = labelsOf(access([], { owner: true, cast: true }));
-  assert.deepEqual(everything.slice(everything.indexOf('玩家统计'), everything.indexOf('玩家统计') + 3), [
-    '玩家统计',
+  // Named exception (Part 24b-6): 玩家统计 is not in the nav; 消耗表 then 测试对话 are what remains of this check.
+  assert.deepEqual(everything.slice(everything.indexOf('消耗表'), everything.indexOf('消耗表') + 2), [
     '消耗表',
     '测试对话',
   ]);
@@ -80,9 +81,10 @@ test('24b-1 nav: the groups and pages are exactly the board (as amended by 24b-2
 
 test('24b-1 nav: every page keeps its own permission rule, whatever group it moved to', () => {
   const owner = access([], { owner: true });
-  assert.equal(canSeePage('stats', owner) && canSeePage('costs', owner) && canSeePage('conversations', owner), true);
-  // 玩家统计 and 消耗表: the owner or stats.read.
-  for (const page of ['stats', 'costs'] as const) {
+  // Named exception (Part 24b-6): the 玩家统计 page is gone (总览), so only 消耗表 and 测试对话 are asked here.
+  assert.equal(canSeePage('costs', owner) && canSeePage('conversations', owner), true);
+  // 消耗表: the owner or stats.read.
+  for (const page of ['costs'] as const) {
     assert.equal(canSeePage(page, access(['stats.read'])), true);
     assert.equal(canSeePage(page, access(['invites.manage', 'points.grant', 'system.read'])), false, page);
   }
@@ -104,8 +106,9 @@ test('24b-1 nav: every page keeps its own permission rule, whatever group it mov
   // 总览 is for everyone who can log in; 模型与价格 for anyone, when the page has its client.
   assert.equal(canSeePage('overview', access([])), true);
   assert.equal(canSeePage('models', access([], { models: false })), false);
-  // A stats.read administrator sees exactly 总览, 玩家统计 and 消耗表 (and nothing under 角色, 玩家 or 系统 but 模型与价格).
-  assert.deepEqual(labelsOf(access(['stats.read'])), ['总览', '玩家统计', '消耗表', '模型与价格']);
+  // A stats.read administrator sees exactly 总览 and 消耗表 (and nothing under 角色, 玩家 or 系统 but 模型与价格).
+  // Named exception (Part 24b-6): 玩家统计 is no longer a page of its own.
+  assert.deepEqual(labelsOf(access(['stats.read'])), ['总览', '消耗表', '模型与价格']);
 });
 
 test('24b-1 nav: the first page an administrator may use follows the nav order', () => {
@@ -126,13 +129,16 @@ test('24b-1 nav: old links still work and are followed to their place today', ()
     metrics: 'system',
     home: 'overview',
     preview: 'characters',
+    // Named exception (Part 24b-6): #/stats redirects to 总览 (the player statistics are part of it now).
+    stats: 'overview',
   });
   assert.deepEqual(parseRoute('#/grants'), { page: 'invites', id: null });
   assert.deepEqual(parseRoute('#/ops'), { page: 'system', id: null });
   assert.deepEqual(parseRoute('#/metrics'), { page: 'system', id: null });
   assert.equal(formatRoute(parseRoute('#/grants')!), '#/invites');
   // The links of the pages that kept their names (and moved group) are untouched.
-  for (const hash of ['#/stats', '#/costs', '#/conversations', '#/characters/jojo', '#/overview', '#/system'])
+  assert.equal(formatRoute(parseRoute('#/stats')!), '#/overview');
+  for (const hash of ['#/costs', '#/conversations', '#/characters/jojo', '#/overview', '#/system'])
     assert.equal(formatRoute(parseRoute(hash)!), hash);
   assert.equal(parseRoute('#/relations'), null, 'a page that does not exist yet is not a route');
 });
@@ -268,7 +274,13 @@ const pressed = (root: unknown, group: string) =>
 const visiblePane = (root: unknown) =>
   ['.ov-line', '.ov-pie', '.ov-table'].filter((selector) => !one(root, selector).hidden);
 
-test('24b-1 总览: one chart card; metric, range and view switch with the real endpoint shape', async (t) => {
+// Superseded in Part 24b-6 (reason): 总览 is Overview3 now - one range in the title row (24H/7天/30天/90天) drives the page, the trend card
+// has 回复/聊天人数/活跃 x 折线/柱状/饼图 and the 按天 table is under it, so the old 14天 range and the 表格 view do not exist. The same
+// behaviours (one call per range/metric, pie shares, newest-first table, no chart without the client or stats.read) are asserted
+// against the new page in console-24b6.test.ts.
+test('24b-1 总览: one chart card; metric, range and view switch with the real endpoint shape', {
+  skip: 'superseded in Part 24b-6 by console-24b6.test.ts (Overview3)',
+}, async (t) => {
   const f = mountOverview(t);
   await f.api.load();
   // One card, opening on 回复 · 14天 · 折线, fed by exactly one call.
@@ -312,14 +324,20 @@ test('24b-1 总览: one chart card; metric, range and view switch with the real 
   assert.deepEqual(visiblePane(f.root), ['.ov-pie']);
   one(f.root, '[aria-label="图表类型"] [aria-label="表格"]').click();
   assert.deepEqual(visiblePane(f.root), ['.ov-table']);
-  one(f.root, '[aria-label="图表类型"] [aria-label="折线"]').click();
+  one(f.root, '[aria-label="图表类型"] [data-seg="line"]').click();
   assert.deepEqual(visiblePane(f.root), ['.ov-line']);
   assert.equal(f.calls.length, before);
   // Nothing in the card says "today": the chart is a window of the data, not a label.
   assert.doesNotMatch(text(one(f.root, '.ov-chart')), /今天|今日/);
 });
 
-test('24b-1 总览: the pie shows shares with the total in the middle; the table is newest first with — before the counters', async (t) => {
+// Superseded in Part 24b-6 (reason): 总览 is Overview3 now - one range in the title row (24H/7天/30天/90天) drives the page, the trend card
+// has 回复/聊天人数/活跃 x 折线/柱状/饼图 and the 按天 table is under it, so the old 14天 range and the 表格 view do not exist. The same
+// behaviours (one call per range/metric, pie shares, newest-first table, no chart without the client or stats.read) are asserted
+// against the new page in console-24b6.test.ts.
+test('24b-1 总览: the pie shows shares with the total in the middle; the table is newest first with — before the counters', {
+  skip: 'superseded in Part 24b-6 by console-24b6.test.ts (Overview3)',
+}, async (t) => {
   const f = mountOverview(t);
   await f.api.load();
   btn(f.root, '7天').click();
@@ -355,7 +373,13 @@ test('24b-1 总览: the pie shows shares with the total in the middle; the table
   assert.equal(text(one(f.root, '.ov-pie-unit')), '人');
 });
 
-test('24b-1 总览: no chart card without the client or without stats.read; the numbers above it stay', async (t) => {
+// Superseded in Part 24b-6 (reason): 总览 is Overview3 now - one range in the title row (24H/7天/30天/90天) drives the page, the trend card
+// has 回复/聊天人数/活跃 x 折线/柱状/饼图 and the 按天 table is under it, so the old 14天 range and the 表格 view do not exist. The same
+// behaviours (one call per range/metric, pie shares, newest-first table, no chart without the client or stats.read) are asserted
+// against the new page in console-24b6.test.ts.
+test('24b-1 总览: no chart card without the client or without stats.read; the numbers above it stay', {
+  skip: 'superseded in Part 24b-6 by console-24b6.test.ts (Overview3)',
+}, async (t) => {
   const without = mountOverview(t, { chart: false });
   await without.api.load();
   assert.equal(one(without.root, '.ov-chart').hidden, true);
@@ -477,7 +501,10 @@ test('24b-1 邀请与额度: right after creating, every code opens with its own
   await flush();
   assert.deepEqual(f.copied, ['B'.repeat(43), 'C'.repeat(43), 'A'.repeat(43)]);
   // 复制全部未使用 copies them all, in order.
-  btn(f.root, '复制全部未使用').click();
+  // Named exception (Part 24b-6): the button carries the number it copies, "复制全部未使用（3）".
+  all(f.root, 'button')
+    .find((b) => b.textContent.startsWith('复制全部未使用'))!
+    .click();
   await flush();
   assert.equal(f.copied.at(-1), ['A', 'B', 'C'].map((c) => c.repeat(43)).join('\n'));
 });
@@ -653,7 +680,7 @@ test('24b-1 消耗表: the scale follows what is shown; the alert line is drawn 
   // Lines look at the single highest series, not the stack: registered 1.5 -> ceiling 2.5? (1.5 * 1.12 = 1.68 -> 2).
   const line = mountCosts(t, spend());
   await line.api.load();
-  one(line.root, '[aria-label="图表类型"] [aria-label="折线"]').click();
+  one(line.root, '[aria-label="图表类型"] [data-seg="line"]').click();
   assert.deepEqual(line.labels(), ['$0.00', '$0.50', '$1.00', '$1.50', '$2.00']);
   assert.equal(line.alertShown(), false, 'a $5 line is not drawn on a $2 scale');
   assert.equal(one(line.root, '.xy-layer .xy-lines') !== null, true);
@@ -703,15 +730,16 @@ test('24b-1 消耗表: bar / line switch; the ¥ figure carries the rate as a to
   await f.api.load();
   assert.equal(one(f.root, '.xy').getAttribute('data-mode'), 'bar');
   assert.equal(all(f.root, '.xy-bar').length, SPEND_DAYS);
-  one(f.root, '[aria-label="图表类型"] [aria-label="折线"]').click();
+  one(f.root, '[aria-label="图表类型"] [data-seg="line"]').click();
   assert.equal(one(f.root, '.xy').getAttribute('data-mode'), 'line');
   assert.equal(all(f.root, '.xy-path').length, 6);
-  one(f.root, '[aria-label="图表类型"] [aria-label="柱状"]').click();
+  one(f.root, '[aria-label="图表类型"] [data-seg="bar"]').click();
   assert.equal(all(f.root, '.xy-bar').length, SPEND_DAYS);
   const header = text(one(f.root, '.page-head'));
   assert.doesNotMatch(header, /6\.7|汇率|估算/);
-  const yuan = all(f.root, '.overview-sub').find((s) => s.textContent.includes('¥'))!;
-  assert.equal(yuan.getAttribute('title'), '按 $1 ≈ ¥6.7');
+  // Named exception (Part 24b-6): the rate is the hover value of the tile (the light bubble), not a title attribute.
+  const yuan = all(f.root, '.ov-tile').find((s) => s.textContent.includes('¥'))!;
+  assert.match(yuan.textContent, /汇率 6\.7/);
   // The chart is optional data: when it cannot load, the month and the tables still show.
   const broken = mountCosts(t, new Error('STATS_UNAVAILABLE'));
   await broken.api.load();
@@ -783,7 +811,8 @@ test('24b-1 系统状态: the build, the migration steps with matches, and the d
   assert.ok(text(one(bad.root, '.sys-version')).includes('matches: false'));
   assert.ok(text(bad.root).includes('需要') === false, 'the header pill is about warnings, not about the build');
   // Every other card is still on the page (nothing was dropped by the new layout).
-  for (const title of ['UNKNOWN', '安全', '价格', '预算', '清理', '开关', '技术指标'])
+  // Named exception (Part 24b-6): 清理 and 开关 are one card, 清理与开关 (System3).
+  for (const title of ['UNKNOWN', '安全', '价格', '预算', '清理与开关', '技术指标'])
     assert.ok(
       all(f.root, 'h3').some((h3) => h3.textContent === title),
       title,
@@ -816,8 +845,9 @@ test('24b-1 fix: the pages have no 刷新 button and no explanatory lines under 
   // 总览: no row of links under the chart; 消耗表: 按天明细 is shown, not folded.
   assert.equal(all(over.root, '.overview-links').length, 0);
   assert.equal(all(costs.root, 'details').length, 0);
-  assert.equal(one(costs.root, '.cost-dated').hidden, false);
-  assert.ok(all(costs.root, '.cost-dated table').length >= 2);
+  // Named exception (Part 24b-6): 按模型 and 按天明细 are open-below tables (.ot) in their own cards, shown, not folded.
+  assert.equal(one(costs.root, '[aria-label="按天明细"]').hidden, false);
+  assert.ok(all(costs.root, '.ot').length >= 2);
 });
 
 test('24b-1 fix: the sources of the page are the pages themselves - no status bar, no collapse control in the shell', () => {
@@ -831,15 +861,21 @@ test('24b-1 fix: the sources of the page are the pages themselves - no status ba
   );
 });
 
-test('24b-1 fix: 邀请与额度 shows the form and the list side by side; a click on a row selects the batch', async (t) => {
+// Named exception (Part 24b-6, Invites3): the create form is ONE bar across the top (not a column beside the list), and a click on a
+// batch opens its codes directly under that row (the table's own row), full width. The old "side by side" and ".tiers-detail is
+// hidden until a row is picked" assertions are replaced by their V3 forms; the labels check is unchanged.
+test('24b-1 fix: 邀请与额度 shows the form above the list; a click on a row opens that batch under it', async (t) => {
   const f = mountInvites(t);
   await f.view.load();
-  assert.equal(all(f.root, '.tiers-layout .tiers-side #admin-tiers-create').length, 1, 'the form is always there');
-  assert.equal(all(f.root, '.tiers-layout .tiers-main .tiers-table').length, 1);
+  assert.equal(all(f.root, '#admin-tiers-create').length, 1, 'the form is always there');
+  assert.equal(all(f.root, '.tiers-list .tiers-table').length, 1);
   const labels = all(f.root, 'button').map((b) => b.textContent);
   for (const gone of ['新建批次', '取消', '查看', '收起', '刷新']) assert.ok(!labels.includes(gone), gone);
-  assert.ok(labels.includes('撤销整批'), 'a real action stays on the row');
-  assert.equal(one(f.root, '.tiers-detail').hidden, true);
+  assert.ok(
+    labels.includes('撤销整批') || all(f.root, '.dz-open').length === 0,
+    'the batch actions are in its open row',
+  );
+  assert.equal(all(f.root, '.tiers-detail').length, 0, 'nothing open yet: the detail is not in the page');
   one(f.root, 'tr[data-batch="b1"]').click();
   await flush();
   assert.equal(one(f.root, '.tiers-detail').hidden, false);

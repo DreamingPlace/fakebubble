@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  originText,
-  snapshotGroups,
-  versionHistory,
-  type HistoryHost,
-} from '../../src/features/admin/history/version-history.ts';
+import { originText, versionHistory, type HistoryHost } from '../../src/features/admin/history/version-history.ts';
+import { readableGroups } from '../../src/features/admin/history/readable.ts';
 import { permissionMatrixEditor, PERMISSION_GROUPS } from '../../src/features/admin/permission-matrix.ts';
 import { RESTORE_PROBLEM_TEXT, type VersionRow } from '../../../../packages/contracts/web-character-history.ts';
 import type { CharacterProfile, VersionSnapshot } from '../../src/services/character-admin-api.ts';
@@ -122,7 +118,11 @@ test('a non-owner sees the history and the same 不可恢复 note, but no restor
   const f = fixture(t, false);
   await f.view.load('jojo');
   assert.equal(el(f.root).querySelectorAll('[data-restore]').length, 0);
-  assert.match(el(f.root).querySelector('.vh-note')!.textContent, /只有主管理员可以做/);
+  assert.equal(
+    el(f.root).querySelector('.vh-note[role="status"]')!.hidden,
+    true,
+    'no explanatory sentence on the page',
+  );
   bodyRows(f.root)[1]!.click();
   await flush();
   assert.equal(el(f.root).querySelectorAll('[data-restore]').length, 0);
@@ -137,14 +137,21 @@ test('a snapshot is read only, with the 人设 / 网页展示 / 完整模板 gro
   const drawer = el(f.root).querySelector('.admin-drawer')!;
   assert.equal(drawer.hidden, false);
   assert.equal(drawer.querySelectorAll('textarea').length + drawer.querySelectorAll('input').length, 0);
-  assert.equal(drawer.querySelectorAll('.profile-diff').length, 3);
+  assert.equal(
+    drawer.querySelectorAll('.pd-grid').length,
+    2,
+    '人设 and 网页展示 differ here; the template fields do not (the number is not content)',
+  );
+  assert.ok(!/[{}]|"displayName"|"template"/.test(drawer.textContent), 'readable fields, never raw JSON');
+  assert.match(drawer.textContent, /网页展示名：|网页展示名/);
+  assert.match(drawer.textContent, /设定生日/);
   assert.match(drawer.textContent, /与现行版本的差异/);
-  const groups = snapshotGroups(profile('甲'), {
+  const groups = readableGroups(profile('甲'), {
     ...profile('甲'),
     template: { ...profile('甲').template, version: 9 },
   });
   assert.deepEqual(
-    groups.filter(([, a, b]) => JSON.stringify(a) !== JSON.stringify(b)),
+    groups.filter(([, a, b]) => a !== b),
     [],
     'only the number differs: no difference',
   );
@@ -158,6 +165,7 @@ test('restore asks once, in the words of the spec, then sends one request with t
   const dialog = el(f.root).querySelector('.admin-dialog')!;
   assert.equal(dialog.querySelector('p')!.textContent, '将以 v2 的内容发布为新版本 v4，玩家下一条消息起生效。');
   assert.equal(f.log.restore.length, 0, 'nothing is sent before the answer');
+  assert.equal(dialog.querySelectorAll('button')[1]!.className, 'admin-primary', '恢复此版本 is the primary action');
   dialog.querySelectorAll('button')[1]!.click();
   await flush();
   await flush();
@@ -215,8 +223,9 @@ test('delete is no longer a permission row: 管理员与权限 has no 删除角�
     root as unknown as HTMLElement,
     ['characters.read:*', 'characters.delete:*'] as never,
   );
-  assert.ok(!/删除角色/.test(root.textContent));
-  assert.match(root.textContent, /characters\.delete:\*（已失效）/);
+  assert.equal(root.querySelectorAll('[data-permission="characters.delete"]').length, 0);
+  assert.match(root.textContent, /删除角色（已失效）/);
+  assert.ok(!/characters\.delete/.test(root.textContent), 'never the raw key');
   assert.deepEqual(editor.value(), ['characters.delete:*', 'characters.read:*'], 'untouched: saved exactly as loaded');
   assert.equal(root.querySelectorAll('[data-permission="characters.delete"]').length, 0);
 });
