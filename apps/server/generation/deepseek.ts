@@ -43,6 +43,7 @@ import {
 import type { ModelRef, TextProviderId, TextRoute } from './text-wire.ts';
 import { PLAYER_MODELS } from '../../../packages/contracts/player-models.ts';
 import { SUPPORTED_TEXT_MODELS } from '../platform/config.ts';
+import { isReviewModelId } from '../../../packages/contracts/review-model.ts';
 
 function object(value: unknown): asserts value is Record<string, unknown> {
   ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_TEXT_RESPONSE');
@@ -287,7 +288,9 @@ export class DeepSeekTextGenerator implements TextGenerator {
       for (const ref of chain)
         ensure(
           ref.provider === 'deepseek'
-            ? ref.model === this.#policy.stages[stage].model
+            ? stage === 'review'
+              ? isReviewModelId(ref.model) || ref.model === this.#policy.stages.review.model
+              : ref.model === this.#policy.stages[stage].model
             : ref.provider === 'xai'
               ? ref.model === PLAYER_MODELS.xai.model
               : ref.provider === 'gemini' && ref.model === PLAYER_MODELS.gemini.model,
@@ -399,6 +402,8 @@ export class DeepSeekTextGenerator implements TextGenerator {
           ref.provider === 'deepseek'
             ? JSON.stringify({
                 ...textRequestParameters(this.#policy, stage, outputTool.function.name),
+                // Part 26b: the model of THIS call (the route's review model); the policy's own model for every other call.
+                model,
                 messages,
                 tools: [outputTool],
                 user_id: createHash('sha256')

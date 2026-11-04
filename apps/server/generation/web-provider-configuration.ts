@@ -19,6 +19,9 @@ import { PLAYER_MODELS } from '../../../packages/contracts/player-models.ts';
 export const PROVIDER_PRICES = [
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.draft, phase: 'draft', unit: 'token', upper: 2 },
   { provider: 'deepseek', model: DEFAULT_TEXT_MODELS.review, phase: 'review', unit: 'token', upper: 4 },
+  // Part 26b: the owner may switch the review model to V4.1 Flash ($0.30 / $1.20 per million at the peak list price, so a token
+  // is bounded by 2 micro-USD). Both review rows must exist whenever either can be chosen (installMissingDeepSeekPrices).
+  { provider: 'deepseek', model: 'deepseek-flash', phase: 'review', unit: 'token', upper: 2 },
   { provider: 'fish', model: 's2.1-pro', phase: 'speech', unit: 'byte', upper: 15 },
   // Drama 3 is billed per CHARACTER: $10/M during the launch discount (until 2026-11-12), $50/M after it. The ledger reserves
   // per UTF-8 byte (never fewer than the characters, so never an understatement) at the list price of $50/M, from the day
@@ -100,6 +103,50 @@ export function renewProviderPrices(store: WebRuntimeStore, now: number): PriceR
       });
       return { ...base, result: 'renewed', validFrom, validUntil };
     });
+  });
+}
+
+/**
+ * Part 26b, at business-object start: adds every DeepSeek row of PROVIDER_PRICES that has no row AT ALL yet, so a review can
+ * never fail with WEB_PROVIDER_PRICE_REQUIRED after a deploy or after the owner switches the review model. It only ADDS: a
+ * (provider, model, phase) that already has any row, in force or expired, is left exactly as it is (expiry and price changes
+ * are `renew-prices`' job). The new row is a normal 90-day version-1 row, so `renew-prices` reports it not-due. Other providers
+ * stay with `renew-prices` (their availability is the owner's decision). Before initialization (no DeepSeek spending row) it
+ * does nothing. Returns the rows it added.
+ */
+export function installMissingDeepSeekPrices(store: WebRuntimeStore, now: number): string[] {
+  const has = (name: string) => !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", name);
+  if (!has('web_provider_prices') || !has('web_provider_spending')) return [];
+  if (!store.get("SELECT 1 FROM web_provider_spending WHERE provider='deepseek'")) return [];
+  return store.transaction(() => {
+    const added: string[] = [];
+    for (const price of PROVIDER_PRICES) {
+      if (price.provider !== 'deepseek') continue;
+      if (
+        store.get(
+          'SELECT 1 FROM web_provider_prices WHERE provider=? AND model=? AND phase=?',
+          price.provider,
+          price.model,
+          price.phase,
+        )
+      )
+        continue;
+      const id = `${price.provider}-${price.model}-${price.phase}-${now}`;
+      store.run(
+        `INSERT INTO web_provider_prices(id,provider,model,phase,currency,unit,upper_micros_per_unit,valid_from,valid_until,version)
+        VALUES (?,?,?,?,'USD',?,?,?,?,1)`,
+        id,
+        price.provider,
+        price.model,
+        price.phase,
+        price.unit,
+        price.upper,
+        now,
+        now + PRICE_RENEWAL_MS,
+      );
+      added.push(id);
+    }
+    return added;
   });
 }
 

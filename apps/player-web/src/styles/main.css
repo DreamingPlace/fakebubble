@@ -15786,3 +15786,206 @@ html.theme-fade *::after {
     animation: none;
   }
 }
+
+/* Part 26b: 审核模型 (the switch on 模型与价格) and 审核对比 (a section of 预演). Tokens only; no inline styles. */
+.account-admin-page.admin-shell .models-review {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+}
+.account-admin-page.admin-shell .models-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.account-admin-page.admin-shell .models-review-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.account-admin-page.admin-shell .models-review-head .seg {
+  margin-left: auto;
+}
+.account-admin-page.admin-shell .models-review-note {
+  margin: 8px 0 0;
+}
+.account-admin-page.admin-shell .models-review h4 {
+  margin: 14px 0 4px;
+  font-size: 13px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .models-review-recent {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.account-admin-page.admin-shell .pw-review-section {
+  margin: 16px 0 0;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+}
+.account-admin-page.admin-shell .pw-review-section > summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-weight: 600;
+}
+.account-admin-page.admin-shell .pw-review-section > summary:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: -2px;
+}
+.account-admin-page.admin-shell .rc {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+.account-admin-page.admin-shell .rc h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.account-admin-page.admin-shell .rc-start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ad-hairline, var(--ad-border));
+  border-radius: var(--ad-radius);
+  background: var(--ad-bg);
+}
+.account-admin-page.admin-shell .rc-start p {
+  margin: 0;
+}
+.account-admin-page.admin-shell .rc-runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .rc-runs .seg-button {
+  border: 1px solid var(--ad-border);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+.account-admin-page.admin-shell .rc-runs .seg-button[aria-pressed="true"],
+.account-admin-page.admin-shell .rc-marks .seg-button[aria-pressed="true"] {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-weight: 600;
+}
+.account-admin-page.admin-shell .rc-table th[scope="row"] {
+  font-weight: 500;
+  text-align: left;
+}
+.account-admin-page.admin-shell .rc-table td {
+  font-variant-numeric: tabular-nums;
+}
+.account-admin-page.admin-shell .rc-actions {
+  display: flex;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .rc-export {
+  margin: 0;
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-bg);
+  font-size: 12.5px;
+  line-height: 1.7;
+  tab-size: 16;
+  white-space: pre;
+  height: auto;
+  max-height: none;
+}
+.account-admin-page.admin-shell .rc-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.account-admin-page.admin-shell .rc-side {
+  padding: 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  min-width: 0;
+}
+.account-admin-page.admin-shell .rc-side h4 {
+  margin: 0 0 4px;
+}
+.account-admin-page.admin-shell .rc-expect {
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .rc-metrics {
+  margin: 6px 0;
+}
+.account-admin-page.admin-shell .rc-marks {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.account-admin-page.admin-shell .rc-marks .seg-button {
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  padding: 4px 12px;
+}
+.account-admin-page.admin-shell .rc-diff del {
+  background: var(--ad-danger-soft);
+  color: var(--ad-danger);
+  text-decoration: line-through;
+}
+.account-admin-page.admin-shell .rc-diff ins {
+  background: var(--ad-ok-soft);
+  color: var(--ad-ok);
+  text-decoration: none;
+}
+.account-admin-page.admin-shell .rc-vs {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .rc-vs-head,
+.account-admin-page.admin-shell .rc-vs-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 6px 10px;
+}
+.account-admin-page.admin-shell .rc-vs-head {
+  background: var(--ad-bg);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.account-admin-page.admin-shell .rc-vs-row + .rc-vs-row {
+  border-top: 1px solid var(--ad-hairline, var(--ad-border));
+}
+@media (max-width: 1023px) {
+  .account-admin-page.admin-shell .rc-sides {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .account-admin-page.admin-shell .models-review-head .seg {
+    margin-left: 0;
+  }
+}
+/* Part 26b: a wide drawer opened inside 角色工作台 sits above the role picker and the draft bar (they overlapped its header). */
+.account-admin-page.admin-shell .admin-drawer-wide,
+.account-admin-page.admin-shell .admin-drawer-wide + .admin-backdrop,
+.account-admin-page.admin-shell .admin-backdrop:has(+ .admin-drawer-wide) {
+  z-index: 450;
+}
+.account-admin-page.admin-shell .wb-editor pre.rc-export {
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+  white-space: pre;
+  border-radius: var(--ad-radius);
+}

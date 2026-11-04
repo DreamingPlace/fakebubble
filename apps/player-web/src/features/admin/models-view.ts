@@ -9,7 +9,15 @@ import {
   type SettingField,
 } from '../../../../../packages/contracts/model-settings.ts';
 import type { PlayerModelId } from '../../../../../packages/contracts/player-models.ts';
+import {
+  REVIEW_MODELS,
+  REVIEW_MODEL_LABELS,
+  type ReviewModelId,
+  type ReviewModelSaveInput,
+  type ReviewModelView,
+} from '../../../../../packages/contracts/review-model.ts';
 import { h } from '../cocreation/h.ts';
+import { segmented } from './ui/segmented.ts';
 import { statusBadge } from './ui/status-badge.ts';
 import { hoverValue } from './ui/hover-value.ts';
 import type { ConfirmInPlace } from './ui/inline-confirm.ts';
@@ -86,6 +94,8 @@ export function modelsView(
   deps: {
     load: () => Promise<ModelAdminView>;
     save: (input: ModelSaveInput) => Promise<unknown>;
+    /** Part 26b: the review model (审核模型) switch. Absent = the page has no such section (an older server). */
+    review?: { load: () => Promise<ReviewModelView>; save: (input: ReviewModelSaveInput) => Promise<unknown> };
     run: (work: () => Promise<void>) => Promise<void>;
     /** 保存 opens the list of changes in place (no dialog); 确认保存 is its confirm button. */
     confirm: ConfirmInPlace;
@@ -146,12 +156,97 @@ export function modelsView(
     hidden: true,
   });
 
+  // ---- 审核模型 (Part 26b) -----------------------------------------------------------------------------------
+  let reviewView: ReviewModelView | null = null;
+  let reviewPending: { id: string; to: ReviewModelId } | null = null;
+  const reviewHost = h('section', {
+    class: 'models-card models-review',
+    attrs: { 'aria-label': '审核模型' },
+    hidden: true,
+  });
+  const reviewConfirm = h('div', { class: 'models-confirm' });
+  const reviewNote = h('p', { class: 'admin-hint models-review-note' });
+  const reviewRecent = h('ul', { class: 'models-review-recent', attrs: { 'aria-label': '审核模型最近修改' } });
+  let reviewSwitch: ReturnType<typeof segmented<ReviewModelId>> | null = null;
+  function paintReview() {
+    const r = reviewView;
+    reviewHost.hidden = !r;
+    if (!r) return;
+    reviewSwitch = segmented<ReviewModelId>(
+      '审核模型',
+      REVIEW_MODELS.map((id) => ({ id, label: REVIEW_MODEL_LABELS[id] })),
+      r.current,
+      (to) => void chooseReview(to),
+      'm',
+    );
+    // The page re-enables controls after every request; the lock is what keeps these off for a reader.
+    for (const button of reviewSwitch.buttons.values()) {
+      button.disabled = !r.canManage;
+      button.dataset.locked = String(!r.canManage);
+    }
+    reviewNote.textContent = r.canManage
+      ? '审核是每条回复的第二步：检查草稿、必要时改写，并写下记忆。切换只影响此后发送的消息；已在处理的消息按原来的模型和价格完成。默认 V4 Pro。'
+      : '只读：需要“模型与价格”管理权限才能切换。';
+    reviewRecent.replaceChildren(
+      ...r.recent.map((c) =>
+        h('li', {
+          text: `${when(c.at)} · ${c.admin} · 审核模型：${REVIEW_MODEL_LABELS[c.from]} → ${REVIEW_MODEL_LABELS[c.to]}`,
+        }),
+      ),
+    );
+    if (r.recent.length === 0) reviewRecent.append(h('li', { class: 'admin-hint', text: '尚无修改' }));
+    reviewHost.replaceChildren(
+      h(
+        'div',
+        { class: 'models-review-head' },
+        h('h3', { text: '审核模型' }),
+        h('span', { class: 'models-pill is-on', text: `当前：${REVIEW_MODEL_LABELS[r.current]}` }),
+        reviewSwitch.root,
+      ),
+      reviewNote,
+      reviewConfirm,
+      h('h4', { text: '最近修改' }),
+      reviewRecent,
+    );
+  }
+  async function chooseReview(to: ReviewModelId) {
+    const r = reviewView;
+    if (!r || !r.canManage || !deps.review || to === r.current) return;
+    await deps.run(async () => {
+      const ok = await deps.confirm(
+        {
+          title: '确认切换审核模型',
+          message: `审核模型将从 ${REVIEW_MODEL_LABELS[r.current]} 切换为 ${REVIEW_MODEL_LABELS[to]}。只影响此后发送的消息；已在处理的消息仍用原来的模型和价格。`,
+          confirmLabel: `确认切换为 ${REVIEW_MODEL_LABELS[to]}`,
+        },
+        reviewConfirm,
+      );
+      if (!ok || deps.disposed()) {
+        reviewSwitch?.set(r.current);
+        return;
+      }
+      // A switch whose outcome was never seen is retried under the same request id, so it can never apply twice.
+      if (!reviewPending || reviewPending.to !== to) reviewPending = { id: deps.newRequestId(), to };
+      await deps.review!.save({ requestId: reviewPending.id, expectedRevision: r.revision, reviewModel: to });
+      reviewPending = null;
+      deps.toast('已切换审核模型');
+      const next = await deps.review!.load();
+      if (deps.disposed()) return;
+      reviewView = next;
+      // The switch bumped the page's revision; the table's own unsaved edits stay, and quote the new revision.
+      if (view) view.revision = next.revision;
+      paintReview();
+    });
+    if (reviewView && reviewSwitch && reviewSwitch.value !== reviewView.current) reviewSwitch.set(reviewView.current);
+  }
+
   root.replaceChildren(
     pageHead('模型与价格', headStatus, saveButton),
     banner,
     confirmHost,
     readonly,
     problem,
+    reviewHost,
     h('div', { class: 'models-card' }, table),
   );
 
@@ -310,6 +405,14 @@ export function modelsView(
     draft = copy(next);
     pending = null;
     paint();
+    if (deps.review) {
+      const review = await deps.review.load();
+      if (deps.disposed()) return;
+      reviewView = review;
+      // One revision for the whole page: the switch and the table quote the same one.
+      if (view) view.revision = review.revision;
+      paintReview();
+    }
   }
   saveButton.addEventListener(
     'click',
@@ -343,6 +446,9 @@ export function modelsView(
   return {
     load,
     clear() {
+      reviewView = null;
+      reviewPending = null;
+      reviewHost.hidden = true;
       view = null;
       draft = null;
       pending = null;

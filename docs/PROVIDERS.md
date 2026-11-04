@@ -151,3 +151,35 @@ Gemini error codes: [errors](https://ai.google.dev/gemini-api/docs/api-errors). 
 
 ## Placement (outbound region)
 Cloudflare documents `"placement": {"region": "aws:us-east-1"}` ([placement](https://developers.cloudflare.com/workers/configuration/placement/)); it is set in `generation.json.example`. **The same page says placement affects only `fetch` handlers, not RPC methods or named entrypoints** — and our generation Worker is called by RPC. See DEPLOYMENT.md for what that means and the lever that does work.
+
+## DeepSeek review model: V4 Pro or V4.1 Flash (Part 26b) — verified 2026-11-04
+
+Every statement below was read on the pages linked next to it on **2026-11-04**. Re-verify before changing a model name in the
+code: `deepseek-v4-pro` and `deepseek-flash` are the only two review models the switch accepts (`packages/contracts/review-model.ts`).
+
+- **The API name serving V4.1 Flash is `deepseek-flash`** (version `DeepSeek-V4.1-Flash-1017`). [Models & pricing](https://api-docs.deepseek.com/quick_start/pricing)
+  lists it as the current Flash model; [List models](https://api-docs.deepseek.com/api/list-models) returns `deepseek-flash`
+  (display name DeepSeek-V4.1-Flash, text and image input) and `deepseek-v4-pro` (DeepSeek-V4-Pro, text input only). This is also
+  the model that drafts every reply (`DEFAULT_TEXT_MODELS.draft`).
+- **`deepseek-v4-pro` is still its own model, NOT routed to Flash** (version `DeepSeek-V4-Pro-0813`). The pricing page says only the
+  legacy names `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` are "still accepted" but retired and "served by the
+  DeepSeek-V4.1-Flash-1017 model and billed at the Flash price"; it does not say that of `deepseek-v4-pro`. The side-by-side
+  comparison therefore compares two different models. (If the page ever lists Pro as an alias of Flash, the comparison becomes
+  moot: change nothing here until that is read on the page again.)
+- **Prices per million tokens, USD** ([pricing](https://api-docs.deepseek.com/quick_start/pricing)). Peak hours are 01:00–04:00 and
+  06:00–10:00 UTC, Monday to Friday, excluding Chinese public holidays; every other hour is off-peak.
+
+  | | cache hit | cache miss | output |
+  |---|---|---|---|
+  | `deepseek-flash` peak | 0.006 | 0.30 | 1.20 |
+  | `deepseek-flash` off-peak | 0.003 | 0.15 | 0.60 |
+  | `deepseek-v4-pro` peak | 0.044 | 1.32 | 3.96 |
+  | `deepseek-v4-pro` off-peak | 0.022 | 0.66 | 1.98 |
+
+  `TOKEN_LIST_PRICES` (usage report, comparison cost) holds the **peak** rows, unchanged from before this Part: they already
+  matched. The budget ledger bounds a token at the dearer rate rounded up: `deepseek-flash` review **2**, `deepseek-v4-pro`
+  review **4** micro-USD per token (`PROVIDER_PRICES`; the Flash row is new).
+- **How the switch reaches the wire.** The generation policy (and therefore every pinned policy hash) still names V4 Pro as the
+  review model and is not touched; the model of the review call comes from the route the business object builds for the operation
+  (`web-text-routing.ts`), from the choice frozen at admission, and the generator sends that model in the request body instead of
+  the policy's. The model name is never put into any prompt.

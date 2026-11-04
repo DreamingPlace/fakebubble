@@ -28,6 +28,7 @@ import {
   recordUnmetered,
 } from './web-points.ts';
 import { effectiveTier } from './web-model-settings.ts';
+import { freezeReviewModel } from './web-review-model.ts';
 import { ensureRegisteredBonus, type BonusEmailKey } from './web-registered.ts';
 import type { WebStats } from '../stats/web-stats.ts';
 import { lockedCharacterIds } from './web-guest-lock.ts';
@@ -468,6 +469,8 @@ export class WebAdmission {
       // Part 22d: the same message counts for this character (per day and hour), and the user type of the reply is frozen here.
       this.stats?.markChat(principal.id, input.characterId, now);
       this.stats?.freezeUserType(this.store, operationId, principal.id, now);
+      // Part 26b: the review model is frozen here too; a later switch only affects messages admitted after it.
+      freezeReviewModel(this.store, operationId, now);
       return {
         operationId,
         conversationId: conversation.id,

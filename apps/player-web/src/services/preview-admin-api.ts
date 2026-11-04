@@ -1,3 +1,15 @@
+import {
+  COMPARE_MARKS,
+  type CompareCaseResult,
+  type CompareEstimate,
+  type CompareMark,
+  type CompareRunDetail,
+  type CompareRunInfo,
+  type CompareSide,
+  type CompareSideResult,
+  type CompareStartInput,
+  type CompareSummarySide,
+} from '../../../../packages/contracts/review-compare.ts';
 /**
  * Client for the 预演测试 workbench (Part 13b): runs, per-preview detail, the batched status call and eval sets.
  * Strict about shape: anything the server did not promise is a protocol error, never rendered.
@@ -284,9 +296,15 @@ type Request = (path: string, body: Record<string, unknown>) => Promise<unknown>
 export class PreviewAdminClient {
   private readonly characters: Request;
   private readonly sets: Request;
-  constructor(characters: Request, sets: Request) {
+  private readonly compare: Request | undefined;
+  /** Part 26b: `compare` is the 审核对比 endpoint; without it the page simply has no such section. */
+  constructor(characters: Request, sets: Request, compare?: Request) {
     this.characters = characters;
     this.sets = sets;
+    this.compare = compare;
+  }
+  get reviewCompare() {
+    return this.compare ? new ReviewCompareClient(this.compare) : null;
   }
   private call(id: string, action: string, body: Record<string, unknown> = {}) {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw invalid();
@@ -348,5 +366,123 @@ export class PreviewAdminClient {
   }
   async deleteEvalSet(id: string, expectedVersion: number) {
     await this.sets('delete', { id, expectedVersion });
+  }
+}
+
+const COMPARE_STATES = ['ok', 'invalid', 'unknown', 'pending'];
+const COMPARE_CASE_STATUSES = ['queued', 'generating', 'done', 'failed'];
+const numberOrNull = (v: unknown) => (v === null ? null : int(v));
+const strings = (v: unknown) => rows(v).map(string);
+const compareSide = (v: unknown): CompareSideResult => {
+  const o = object(v);
+  if (!COMPARE_STATES.includes(o.state as string)) throw invalid();
+  const quotes = object(o.quotes);
+  const tokens = o.tokens === null ? null : object(o.tokens);
+  const mark =
+    o.mark === null
+      ? null
+      : COMPARE_MARKS.includes(o.mark as CompareMark)
+        ? (o.mark as CompareMark)
+        : (() => {
+            throw invalid();
+          })();
+  return {
+    state: o.state as CompareSideResult['state'],
+    errorCode: nstring(o.errorCode),
+    bubbles: o.bubbles === null ? null : strings(o.bubbles),
+    changed: o.changed === null ? null : o.changed === true,
+    needlessRewrite: o.needlessRewrite === true,
+    quotes: { checked: int(quotes.checked), failed: int(quotes.failed) },
+    expectations: rows(o.expectations).map((e) => {
+      const x = object(e);
+      return { label: string(x.label), pass: x.pass === true, detail: string(x.detail) };
+    }),
+    latencyMs: numberOrNull(o.latencyMs),
+    tokens: tokens ? { hit: int(tokens.hit), miss: int(tokens.miss), out: int(tokens.out) } : null,
+    costMicros: numberOrNull(o.costMicros),
+    mark,
+  };
+};
+const compareSummarySide = (v: unknown): CompareSummarySide => {
+  const o = object(v);
+  return {
+    reviews: int(o.reviews),
+    invalid: int(o.invalid),
+    unknown: int(o.unknown),
+    passed: int(o.passed),
+    total: int(o.total),
+    quoteChecked: int(o.quoteChecked),
+    quoteFailures: int(o.quoteFailures),
+    needlessRewrites: int(o.needlessRewrites),
+    changed: int(o.changed),
+    avgLatencyMs: numberOrNull(o.avgLatencyMs),
+    p90LatencyMs: numberOrNull(o.p90LatencyMs),
+    avgCostMicros: numberOrNull(o.avgCostMicros),
+  };
+};
+const compareInfo = (v: unknown): CompareRunInfo => {
+  const o = object(v);
+  return {
+    runId: string(o.runId),
+    createdAt: int(o.createdAt),
+    cases: int(o.cases),
+    done: int(o.done),
+    failed: int(o.failed),
+    running: o.running === true,
+    estimatedMicros: int(o.estimatedMicros),
+    chargedMicros: int(o.chargedMicros),
+  };
+};
+/** Part 26b: 审核对比. Strict parsing like the rest of this file: a shape that is not the documented one is rejected. */
+export class ReviewCompareClient {
+  private readonly call: Request;
+  constructor(call: Request) {
+    this.call = call;
+  }
+  async estimate(): Promise<CompareEstimate> {
+    const o = object(await this.call('estimate', {}));
+    return {
+      cases: int(o.cases),
+      calls: int(o.calls),
+      typicalMicros: int(o.typicalMicros),
+      holdMicros: int(o.holdMicros),
+    };
+  }
+  async start(input: CompareStartInput) {
+    const o = object(await this.call('start', input as unknown as Record<string, unknown>));
+    return { runId: string(o.runId), replayed: o.replayed === true };
+  }
+  async list() {
+    return rows(object(await this.call('list', {})).runs).map(compareInfo);
+  }
+  async detail(runId: string): Promise<CompareRunDetail> {
+    const o = object(await this.call('detail', { runId }));
+    const summary = object(o.summary);
+    return {
+      run: compareInfo(o.run),
+      summary: { pro: compareSummarySide(summary.pro), flash: compareSummarySide(summary.flash) },
+      cases: rows(o.cases).map((c): CompareCaseResult => {
+        const x = object(c);
+        if (!COMPARE_CASE_STATUSES.includes(x.status as string)) throw invalid();
+        return {
+          ordinal: int(x.ordinal),
+          group: string(x.group),
+          title: string(x.title),
+          input: strings(x.input),
+          status: x.status as CompareCaseResult['status'],
+          errorCode: nstring(x.errorCode),
+          draft: x.draft === null ? null : strings(x.draft),
+          expected: strings(x.expected),
+          pro: compareSide(x.pro),
+          flash: compareSide(x.flash),
+        };
+      }),
+    };
+  }
+  async mark(input: { runId: string; ordinal: number; side: CompareSide; mark: CompareMark | null }) {
+    await this.call('mark', input as unknown as Record<string, unknown>);
+  }
+  async exportText(runId: string) {
+    return string(object(await this.call('export', { runId })).text);
   }
 }

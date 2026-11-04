@@ -98,6 +98,8 @@ type Port = Pick<
   revokeEntitlement?: AccountAdminApi['revokeEntitlement'];
   /** 系统 → 模型与价格 (any administrator may read; saving needs the owner role or models.manage). Optional: a page without it has no such page. */
   modelSettings?: AccountAdminApi['modelSettings'];
+  reviewModel?: AccountAdminApi['reviewModel'];
+  saveReviewModel?: AccountAdminApi['saveReviewModel'];
   saveModelSettings?: AccountAdminApi['saveModelSettings'];
   /** 共创收件箱. Optional: a page without it simply has no inbox tab. */
   cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
@@ -810,6 +812,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     load: () => (port.modelSettings ? port.modelSettings() : Promise.reject(new Error('ADMIN_MODELS_UNAVAILABLE'))),
     save: (input) =>
       port.saveModelSettings ? port.saveModelSettings(input) : Promise.reject(new Error('ADMIN_MODELS_UNAVAILABLE')),
+    ...(port.reviewModel && port.saveReviewModel
+      ? { review: { load: () => port.reviewModel!(), save: (input) => port.saveReviewModel!(input) } }
+      : {}),
     run,
     confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
