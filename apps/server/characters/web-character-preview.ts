@@ -102,16 +102,6 @@ function previewInput(requestJson: string): string | null {
     return null;
   }
 }
-function reviewerOf(resultJson: string | null): string | null {
-  try {
-    const stages = (JSON.parse(resultJson ?? 'null') as { stages?: Array<{ stage?: string; model?: string }> } | null)
-      ?.stages;
-    const model = stages?.find((stage) => stage.stage === 'review')?.model;
-    return typeof model === 'string' ? model : null;
-  } catch {
-    return null;
-  }
-}
 export function webPreviewDTO(row: WebPreviewJob) {
   return {
     previewId: row.id,
@@ -123,8 +113,6 @@ export function webPreviewDTO(row: WebPreviewJob) {
     input: previewInput(row.request_json),
     createdAt: row.created_at,
     result: row.result_json ? JSON.parse(row.result_json) : null,
-    // Part 26b: which reviewer made this proof (the model of its review stage), or null while there is no result.
-    reviewer: reviewerOf(row.result_json),
   };
 }
 

@@ -2,7 +2,6 @@ import type { DialogueCandidate, TextGenerationRequest } from '../../../packages
 import type { SceneState } from '../../../packages/contracts/scenes.ts';
 import type { RelationshipContext } from '../../../packages/contracts/relationships.ts';
 import { defaultSchedule } from '../../../packages/domain/defaults.ts';
-import { instantAtLocalMinute } from '../../../packages/domain/schedule.ts';
 import { bubbleLimits } from '../../../packages/domain/bubbles.ts';
 
 /**
@@ -411,13 +410,14 @@ export const COMPARE_SEED_CHARACTER = Object.freeze({
   schedule: defaultSchedule(),
 });
 /** One fixed fictional day, so a case is the same request every run. */
-const FICTIONAL_DAY = Date.parse('2026-11-04T00:00:00Z');
+// The characters' zone is Asia/Singapore (UTC+8, no daylight saving), so a local minute is a fixed offset from local midnight.
+const FICTIONAL_DAY = Date.parse('2026-11-04T00:00:00+08:00');
 
 export function compareRequest(c: CompareCase, runId: string, ordinal: number): TextGenerationRequest {
   const character = c.seed ? COMPARE_SEED_CHARACTER : COMPARE_CHARACTER;
   const worldId = `admin-compare-${runId}`;
   const conversationId = `${runId}-${ordinal}`;
-  const now = instantAtLocalMinute(FICTIONAL_DAY, character.schedule.timeZone, c.minute ?? 12 * 60);
+  const now = FICTIONAL_DAY + (c.minute ?? 12 * 60) * 60_000;
   const messages = c.messages.map((text, i) => ({
     id: `${c.key}-m${i + 1}`,
     worldId,

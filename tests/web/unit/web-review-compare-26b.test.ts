@@ -601,7 +601,13 @@ test('a 预演 proof records which reviewer made it, and a publish accepts a val
     await f.runner().run(f.runner().claim()!, signal());
     const status = f.chars.previewStatus(f.auth, 'wei-guagua', job.previewId);
     assert.equal(status.status, 'succeeded', JSON.stringify(status));
-    assert.equal(status.reviewer, reviewer, 'the proof records which reviewer ran it');
+    const stageModel = (r: typeof status) =>
+      (r.result.stages as Array<{ stage: string; model: string }>).find((x) => x.stage === 'review')!.model;
+    assert.equal(
+      stageModel(status),
+      reviewer,
+      'the proof records which reviewer ran it (the model of its review stage)',
+    );
     assert.deepEqual(
       f.bodies.map((b) => b.model),
       ['deepseek-flash', reviewer],
@@ -622,7 +628,7 @@ test('a 预演 proof records which reviewer made it, and a publish accepts a val
       'UPDATE web_review_model_setting SET review_model=?',
       reviewer === 'deepseek-flash' ? 'deepseek-v4-pro' : 'deepseek-flash',
     );
-    assert.equal(f.chars.previewStatus(f.auth, 'wei-guagua', job.previewId).reviewer, reviewer);
+    assert.equal(stageModel(f.chars.previewStatus(f.auth, 'wei-guagua', job.previewId)), reviewer);
     const published = f.chars.publish(f.auth, 'wei-guagua', {
       requestId: `publish-${reviewer}`,
       draftRevision: saved.revision,
