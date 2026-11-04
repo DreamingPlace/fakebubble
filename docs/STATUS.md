@@ -426,3 +426,17 @@ Player only: **no migration**, no server route, no prompt or hash change. Test f
 - **共创收件箱:** once a note is adopted, 加入草稿 and 加入关系与故事 are disabled (and locked against the page's busy pass) until 取消采用.
 - **Tests:** server test above; `console-24b6` (assignColours, distinctness, stability, contrast, ΔE), `cocreation-inbox` (adopted note and pair note), audit sections "Round 4" in `scripts/check-web-console-24b6-browser.ts` (30 problems on the round-3 build, 0 now). The round-3 "hash of the id" unit test is replaced (superseded: it asserted the behaviour this round removes).
 - **Impeccable:** critique / audit / polish in a single context again (the two-context review was not used); detector `[]`; nothing it writes is committed.
+
+## Part 24g (character deletion no longer refused for characters with real players)
+
+- **Defect:** `auditCharacterDeletionScope` failed closed (`CHARACTER_DELETION_UNHANDLED_CONTENT`) on six account-level tables, so any character a real player had talked to was refused at preview, start and sweep.
+- **Fix (server only, no migration):** the audit skips those six tables, but only while each one's columns are exactly the pinned list in `accountLedgerColumns` (`web-character-deletion-audit.ts`). A table that gains or loses a column fails closed with `CHARACTER_DELETION_SCHEMA_CHANGED` (detail names the table) until the list is reviewed. The deletion never reads or writes these tables.
+  - `player_profile_versions`: world_id, revision, profile_json, updated_at
+  - `player_profile_requests`: world_id, request_id, request_hash, revision
+  - `web_free_operations`: operation_id, principal_id, tier, ip_hash
+  - `web_points_events`: id, principal_id, operation_id, source, reason, delta, admin_id, price_version, created_at, ref
+  - `web_operation_models`: operation_id, chosen, voice, points_charged, price_version, settled, draft_provider, draft_model, review_provider, review_model, backup, created_at
+  - `web_provider_backups`: operation_id, phase, generation, provider, model, code, held_micros, abandoned_at
+- **Retention gate:** `web_retention_purge_gate` is not skipped. A row for the scope's principal or world answers `CHARACTER_DELETION_BUSY` (a `RetryAfterError`, 429 with `retry-after`) at preview and start; a running sweep records it and retries. Nothing is written first.
+- **消费记录:** a character that no longer exists is shown as 已删除的角色 (was 角色), and the player page's name lookup no longer throws for an id missing from the catalogue.
+- Anything else unknown that holds scoped rows still blocks. No prompt, policy hash or migration changed.

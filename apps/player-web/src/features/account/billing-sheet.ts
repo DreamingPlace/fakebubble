@@ -41,7 +41,7 @@ export const billingCopy = {
   cocreationAdopted: '被采用',
   voice: (on: boolean) => (on ? '语音' : '无语音'),
   backup: (chosen: string) => `（${chosen} 繁忙，已改用）`,
-  unknownCharacter: '角色',
+  unknownCharacter: '已删除的角色',
   points: (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)} 点`,
 };
 

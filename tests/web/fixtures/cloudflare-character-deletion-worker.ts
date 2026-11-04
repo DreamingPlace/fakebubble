@@ -66,7 +66,15 @@ export class WebCharacterDeletionFixture extends WebRetentionFixture {
       else return new Response(null, { status: 404 });
       return Response.json(value);
     } catch (error) {
-      return Response.json({ error: error instanceof DomainError ? error.code : String(error) }, { status: 409 });
+      return Response.json(
+        {
+          error: error instanceof DomainError ? error.code : String(error),
+          // Part 24g: the structured parts of a refusal (the table of a schema change, the retry hint of a busy answer).
+          detail: (error as { detail?: unknown }).detail,
+          retryAfterMs: (error as { retryAfterMs?: unknown }).retryAfterMs,
+        },
+        { status: 409 },
+      );
     }
   }
 }
