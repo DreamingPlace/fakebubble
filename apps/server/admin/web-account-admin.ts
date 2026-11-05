@@ -1,5 +1,7 @@
 import { metricsEnabled } from '../admission/web-stage-metrics.ts';
 import { readAdminView, saveModelSettings, type ModelFlags } from '../admission/web-model-settings.ts';
+import { parseReviewModelSave } from '../../../packages/contracts/review-model.ts';
+import { readReviewModelView, saveReviewModel } from '../admission/web-review-model.ts';
 import { parseModelSave } from '../../../packages/contracts/model-settings.ts';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
@@ -439,6 +441,31 @@ export class WebAccountAdmin extends WebInviteAdmin {
     return this.db.transaction(() => {
       const result = saveModelSettings(this.db as BusinessStore & ModelFlags, this.at(), actor.memberId, input);
       if (!result.duplicate && result.changes > 0) this.audit(actor.memberId, 'models-saved', 'models');
+      return result;
+    });
+  }
+  /** Part 26b, read side: any administrator sees the live review model; `canManage` follows models.manage, like the page's other saves. */
+  reviewModelView(cookie: unknown, csrf: unknown, origin: unknown) {
+    const actor = this.authorize(cookie, csrf, origin),
+      member = this.current(cookie);
+    const canManage = actor.role === 'owner' || hasModelsPermission(JSON.parse(member.permissions_json));
+    const view = readReviewModelView(this.db as BusinessStore, canManage);
+    ensure(view, 'NOT_FOUND');
+    return view;
+  }
+  /** Part 26b, write side: the owner, or models.manage. Session, CSRF, origin, request id and page revision as for every save of that page. */
+  saveReviewModel(cookie: unknown, csrf: unknown, origin: unknown, body: unknown) {
+    const actor = this.authorize(cookie, csrf, origin),
+      member = this.current(cookie);
+    ensure(
+      actor.role === 'owner' || hasModelsPermission(JSON.parse(member.permissions_json)),
+      'ADMIN_PERMISSION_REQUIRED',
+    );
+    const input = parseReviewModelSave(body);
+    ensure(input, 'INVALID_REQUEST');
+    return this.db.transaction(() => {
+      const result = saveReviewModel(this.db as BusinessStore, this.at(), actor.memberId, input);
+      if (!result.duplicate && result.changed) this.audit(actor.memberId, 'review-model-saved', 'models');
       return result;
     });
   }

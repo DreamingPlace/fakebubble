@@ -1,4 +1,6 @@
 import { effectiveTier } from '../admission/web-model-settings.ts';
+import { installReviewModelSchema } from '../admission/web-review-model.ts';
+import { installMissingDeepSeekPrices } from './web-provider-configuration.ts';
 import { cheapestReplyPoints, hasPoints, modelChoiceState, modelChoiceTablesExist } from '../admission/web-points.ts';
 import { ensureRegisteredBonus, signupBonusEmailKey, type BonusEmailKey } from '../admission/web-registered.ts';
 import { DEFAULT_PLAYER_MODEL, isPlayerModelId } from '../../../packages/contracts/player-models.ts';
@@ -202,6 +204,10 @@ export class WebProviderApplication {
         ),
       'WEB_IDENTITY_KEYS_REQUIRED',
     );
+    // Part 26b: business-object start. The review-model tables (idempotent, no migration) and any missing DeepSeek price row, so
+    // that either review model can be chosen at any time and no review ever fails with WEB_PROVIDER_PRICE_REQUIRED.
+    installReviewModelSchema(store, clock.now());
+    installMissingDeepSeekPrices(store, clock.now());
     this.store = store;
     this.clock = clock;
     this.graceMs = players.graceMs ?? 0;

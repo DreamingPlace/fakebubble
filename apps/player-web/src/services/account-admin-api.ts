@@ -1,4 +1,11 @@
 import { CharacterAdminClient } from './character-admin-api.ts';
+import {
+  isReviewModelId,
+  parseReviewModelView,
+  type ReviewModelId,
+  type ReviewModelSaveInput,
+  type ReviewModelView,
+} from '../../../../packages/contracts/review-model.ts';
 import { cocreationPointsOk, type CocreationPointsSettings } from '../../../../packages/contracts/cocreation-cards.ts';
 import { CastAdminClient } from './cast-admin-api.ts';
 import { CocreationAdminClient } from './cocreation-admin-api.ts';
@@ -202,6 +209,7 @@ export class AccountAdminApi extends InviteAdminApi {
   readonly previews = new PreviewAdminClient(
     (path, body) => this.request('/characters/' + path, body),
     (path, body) => this.request('/eval-sets/' + path, body),
+    (path, body) => this.request('/review-compare/' + path, body),
   );
   readonly cast = new CastAdminClient((path, body) => this.request('/cast/' + path, body));
   readonly cocreation = new CocreationAdminClient((path, body) => this.request('/cocreation/' + path, body));
@@ -346,6 +354,23 @@ export class AccountAdminApi extends InviteAdminApi {
     const view = parseModelAdminView(await this.request('/models/read', {}));
     if (!view) throw invalid();
     return view;
+  }
+  /** Part 26b: the live review model (any administrator may read; saving needs models.manage, the server checks). */
+  async reviewModel(): Promise<ReviewModelView> {
+    const view = parseReviewModelView(await this.request('/models/review-read', {}));
+    if (!view) throw invalid();
+    return view;
+  }
+  async saveReviewModel(input: ReviewModelSaveInput) {
+    const row = object(await this.request('/models/review-save', input as unknown as Record<string, unknown>));
+    if (
+      !Number.isSafeInteger(row.revision) ||
+      typeof row.changed !== 'boolean' ||
+      typeof row.duplicate !== 'boolean' ||
+      !isReviewModelId(row.reviewModel)
+    )
+      throw invalid();
+    return row as { revision: number; reviewModel: ReviewModelId; changed: boolean; duplicate: boolean };
   }
   /** The owner, or an administrator holding models.manage; the server checks again. */
   async saveModelSettings(input: ModelSaveInput) {

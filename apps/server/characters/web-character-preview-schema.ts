@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
+import { reviewCompareRunning } from './web-review-compare-schema.ts';
 
 const statements = [
   `CREATE TABLE web_character_preview_jobs(preview_id TEXT PRIMARY KEY REFERENCES admin_previews(id),
@@ -58,7 +59,12 @@ export function installWebCharacterPreviews(store: BusinessStore) {
 }
 /** Optional extension: legacy/synthetic runtimes never install this queue. */
 export function webCharacterPreviewsRunning(store: BusinessStore) {
-  if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_preview_jobs'")) return 0;
-  return store.get<{ n: number }>(`SELECT count(*) n FROM web_character_preview_jobs j
-    JOIN admin_previews p ON p.id=j.preview_id WHERE p.status='generating'`)!.n;
+  // Part 26b: a 审核对比 case being generated takes the same one text slot as a preview.
+  const compare = reviewCompareRunning(store);
+  if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_preview_jobs'")) return compare;
+  return (
+    compare +
+    store.get<{ n: number }>(`SELECT count(*) n FROM web_character_preview_jobs j
+    JOIN admin_previews p ON p.id=j.preview_id WHERE p.status='generating'`)!.n
+  );
 }

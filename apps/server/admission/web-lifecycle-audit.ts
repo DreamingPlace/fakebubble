@@ -88,6 +88,8 @@ export function auditWebLifecycleWorld(
     'web_provider_backups',
     // Part 22d: the frozen user type of an operation (an enum next to the operation id, like the model row).
     'web_operation_user_types',
+    // Part 26b: the review model frozen at admission (an operation id and an enum, no content)
+    'web_operation_review_models',
   ]);
   const operationContent = new Set([
     'web_provider_outputs',

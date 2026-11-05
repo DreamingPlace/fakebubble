@@ -151,6 +151,8 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
     'web_attempt_rejections',
     // Part 22d: the frozen user type of an operation: an operation id and an enum, no content
     'web_operation_user_types',
+    // Part 26b: the review model frozen at admission (an operation id and an enum, no content)
+    'web_operation_review_models',
   ]);
   if (!cleared)
     for (const name of [

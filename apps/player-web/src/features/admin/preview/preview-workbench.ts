@@ -38,6 +38,7 @@ import { downloadText, exportName, runToCsv, runToJson } from './export.ts';
 import { previewPoller, type PollerHost } from './poller.ts';
 import { bindTip } from '../ui/tooltip.ts';
 import { openTable } from '../ui/open-table.ts';
+import { reviewCompareView } from './review-compare-view.ts';
 import { hoverValue } from '../ui/hover-value.ts';
 
 export const RUN_MAX = 50;
@@ -128,8 +129,42 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   const compareHost = h('div', { class: 'pw-compare-bar' });
   const runsHost = h('div', { class: 'pw-runs' });
   const singlesHost = h('div', { class: 'pw-singles' });
-  const page = h('div', { class: 'pw' }, composeHost, compareHost, runsHost, singlesHost);
+  // Part 26b: 审核对比 (V4 Pro against V4.1 Flash) is a section of 预演; it loads when it is opened.
+  const reviewApi = host.api.reviewCompare;
+  const reviewHost = h('div', { class: 'pw-review-compare' });
+  const reviewSection = reviewApi
+    ? h(
+        'details',
+        { class: 'pw-review-section', attrs: { 'data-section': 'review-compare' } },
+        h('summary', { text: '审核对比（V4 Pro / V4.1 Flash）' }),
+        reviewHost,
+      )
+    : null;
+  const page = h('div', { class: 'pw' }, composeHost, compareHost, runsHost, singlesHost, reviewSection);
   root.append(page);
+  const reviewCompare = reviewApi
+    ? reviewCompareView(reviewHost, {
+        api: reviewApi,
+        canStart: () => {
+          const m = host.member();
+          return !!m && (m.role === 'owner' || hasCharacterPermission(m.permissions, 'preview', '*'));
+        },
+        run: host.run,
+        toast: host.toast,
+        disposed: () => disposed || host.disposed(),
+        modalParent: host.modalParent,
+        ...(host.newId ? { newId: host.newId } : {}),
+        ...(host.download ? { download: host.download } : {}),
+        ...(host.poll ? { poll: host.poll } : {}),
+      })
+    : null;
+  let reviewOpened = false;
+  reviewSection?.addEventListener('toggle', () => {
+    if ((reviewSection as HTMLDetailsElement).open && !reviewOpened) {
+      reviewOpened = true;
+      void reviewCompare?.open();
+    }
+  });
   const side = drawer(root, { title: '预演详情' });
   const compareDrawer = drawer(root, { title: '运行对比', wide: true });
   const editor = evalSetEditor(root, {
@@ -846,6 +881,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       side.dispose();
       compareDrawer.dispose();
       editor.dispose();
+      reviewCompare?.dispose();
     },
     /** Test seam: the poller's state. */
     poller,
