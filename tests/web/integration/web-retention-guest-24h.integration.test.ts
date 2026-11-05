@@ -202,6 +202,8 @@ test('every table with a world_id or operation_id that holds this guest’s rows
   // table must be added to a list on purpose, and a content table to a cleaner.
   const known = new Set([
     ...SHELLS,
+    // Part 26b: frozen review model, shell (no content)
+    'web_operation_review_models',
     'web_local_events',
     'web_user_events',
     'web_input_snapshots',
