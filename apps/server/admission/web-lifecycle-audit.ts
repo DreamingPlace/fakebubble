@@ -1,9 +1,24 @@
-import { ensure } from '../../../packages/domain/errors.ts';
+import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
 import { isWorkerdReservedTable } from '../platform/workerd-reserved-tables.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { cocreationRemains } from '../cocreation/web-cocreation-purge.ts';
 import { playerLoginsRemain } from '../identity/web-player-purge.ts';
 import { archiveHasIdentityColumn } from '../review/web-chat-review.ts';
+
+/**
+ * Part 24h. The one refusal of this audit that says WHICH check failed: a table name (only a name read from sqlite_master that
+ * matches the identifier pattern) or one of the fixed labels: reply_items, invite_grant_live, cocreation, player_logins,
+ * archive_identity, legacy_non_web. Never an id, a world, a principal or any content.
+ */
+const UNEXPECTED_WORLD_DATA = 'WEB_RETENTION_UNEXPECTED_WORLD_DATA';
+const SAFE_DETAIL = /^[A-Za-z_][A-Za-z0-9_]*$/;
+export function unexpectedWorldData(table: string): DetailedError {
+  return new DetailedError(UNEXPECTED_WORLD_DATA, { table: SAFE_DETAIL.test(table) ? table.slice(0, 64) : 'unknown' });
+}
+/** Throws the labelled refusal when `clean` is false. */
+function ensureClean(clean: unknown, table: string): asserts clean {
+  if (!clean) throw unexpectedWorldData(table);
+}
 
 const shells = new Set([
   'web_principals',
@@ -111,6 +126,13 @@ export function auditWebLifecycleWorld(
     'web_user_events',
     // Part 21b: removed with the player by purgePlayerLogins; playerLoginsRemain checks they are gone.
     'web_points_events',
+    // Part 24h: the reply-time embedding of an account / signup-bonus player's input (schema 116, kind 'query') names the
+    // operation as well as the world, so this operation_id check saw it before the cleaner (DELETE ... WHERE world_id=?)
+    // had run, and a guest with one could never be purged (table web_embed_attempts, audit_source, for ever). The row holds
+    // ids, an enum, counts and times (never the text or the vector); it is deleted with the player in the same transaction
+    // and is checked gone in the cleared phase, where this list no longer applies. An unsent hold is returned by
+    // releaseUnsentEmbedHolds first; a sent or UNKNOWN hold stays in web_provider_spending, as everywhere.
+    'web_embed_attempts',
   ]);
   const tables = store.all<{ name: string }>(`SELECT name FROM sqlite_master
     WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`);
@@ -128,13 +150,13 @@ export function auditWebLifecycleWorld(
       !providerShells.has(name) &&
       !(phase === 'source' && operationContent.has(name))
     )
-      ensure(
+      ensureClean(
         !store.get(
           `SELECT 1 FROM "${name}"
         WHERE operation_id IN (SELECT id FROM web_operations WHERE world_id=?) LIMIT 1`,
           worldId,
         ),
-        'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
+        name,
       );
     if (!columns.some((column) => column.name === 'world_id')) continue;
     if (
@@ -143,12 +165,9 @@ export function auditWebLifecycleWorld(
       (phase === 'source' && (handled.has(name) || (provider && operationContent.has(name))))
     )
       continue;
-    ensure(
-      !store.get(`SELECT 1 FROM "${name}" WHERE world_id=? LIMIT 1`, worldId),
-      'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
-    );
+    ensureClean(!store.get(`SELECT 1 FROM "${name}" WHERE world_id=? LIMIT 1`, worldId), name);
   }
-  ensure(
+  ensureClean(
     !store.get(
       `SELECT 1 FROM reply_items r WHERE
     EXISTS (SELECT 1 FROM messages m WHERE m.id=r.message_id AND m.world_id=?) OR
@@ -156,7 +175,7 @@ export function auditWebLifecycleWorld(
       worldId,
       worldId,
     ),
-    'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
+    'reply_items',
   );
   // Part 22c: xAI and Gemini attempts (Part 21b: a reply written by the chosen model, or the last model of an exhausted chain) are
   // provider attempts too; without them in this list a player with such a reply could never be purged.
@@ -185,31 +204,31 @@ export function auditWebLifecycleWorld(
       'WEB_RETENTION_EXTERNAL_INTENT_UNSAFE',
     );
   if (phase === 'cleared' && store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_invite_grants'"))
-    ensure(
+    ensureClean(
       !store.get('SELECT 1 FROM web_invite_grants WHERE world_id=? AND revoked_at IS NULL LIMIT 1', worldId),
-      'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
+      'invite_grant_live',
     );
   // Co-creation ideas (117) carry the principal, not the world: a cleared world has none left for its principals.
   if (phase === 'cleared')
-    ensure(
+    ensureClean(
       !cocreationRemains(store, {
         principalIds: store
           .all<{ id: string }>('SELECT id FROM web_principals WHERE world_id=?', worldId)
           .map((row) => row.id),
       }),
-      'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
+      'cocreation',
     );
   // The email login (118) carries the principal too: a cleared world leaves none of its players' logins or challenges.
   if (phase === 'cleared')
-    ensure(
+    ensureClean(
       !playerLoginsRemain(
         store,
         store.all<{ id: string }>('SELECT id FROM web_principals WHERE world_id=?', worldId).map((row) => row.id),
       ),
-      'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
+      'player_logins',
     );
   // Part 19: the anonymous review archive may never name an account: no principal / world / player / ... column at all.
-  ensure(!archiveHasIdentityColumn(store), 'WEB_RETENTION_UNEXPECTED_WORLD_DATA');
+  ensureClean(!archiveHasIdentityColumn(store), 'archive_identity');
   if (phase === 'source') {
     ensure(
       !store.get(

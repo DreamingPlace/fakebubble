@@ -324,10 +324,27 @@ export function systemView(
       : h('p', { class: 'admin-hint', text: '这个环境没有提供清理状态。' });
     const failures =
       v.retention && v.retention.failures.length > 0
-        ? table(
-            ['阶段 phase', '语句组 sub', '错误类 errorName', '信息形状 messageShape', '连续失败'],
-            v.retention.failures.map((f) => [f.phase, f.sub, f.errorName, f.messageShape, `${f.count} 次`]),
-            '清理失败明细（不含任何 id）',
+        ? h(
+            'div',
+            { class: 'sys-failures' },
+            table(
+              ['阶段 phase', '语句组 sub', '表 table', '错误类 errorName', '信息形状 messageShape', '连续失败'],
+              v.retention.failures.map((f) => [
+                f.phase,
+                f.sub,
+                // Part 24h: the table (or check label) a WEB_RETENTION_UNEXPECTED_WORLD_DATA refusal names; absent for every other failure.
+                f.table
+                  ? hoverValue(
+                      h('span', { class: 'sys-table-cell' }, h('span', { class: 'sys-table-name', text: f.table })),
+                      f.table,
+                    )
+                  : h('span', { class: 'sys-table-none', text: '—' }),
+                f.errorName,
+                f.messageShape,
+                `${f.count} 次`,
+              ]),
+              '清理失败明细（不含任何 id）',
+            ),
           )
         : null;
     /** A switch as a pill: its plain name and state, the environment variable on hover. */

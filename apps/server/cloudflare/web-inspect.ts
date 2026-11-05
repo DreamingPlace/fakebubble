@@ -65,6 +65,8 @@ export interface WebInspectRetentionHealth {
     sub: string;
     errorName: string;
     messageShape: string;
+    /** Part 24h: the failing table name or check label of an unexpected-world-data refusal. */
+    table?: string;
     count: number;
   }[];
 }

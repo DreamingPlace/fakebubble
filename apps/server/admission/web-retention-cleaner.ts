@@ -6,7 +6,7 @@ import type { WebStore } from '../platform/store.ts';
 import { readLocalConfig } from '../platform/web-local-config.ts';
 import { WebPrivateAudioFiles } from '../audio/web-private-audio-files.ts';
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from './web-retention.ts';
-import { auditWebLifecycleWorld } from './web-lifecycle-audit.ts';
+import { auditWebLifecycleWorld, unexpectedWorldData } from './web-lifecycle-audit.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
 import { archivePlayerChats, chatReviewTablesExist, sweepReviewArchive } from '../review/web-chat-review.ts';
@@ -299,7 +299,7 @@ export class WebRetentionCleaner {
       // Non-Web rows require an explicit, separately audited cleanup graph.
       for (const table of ['proactive_intents', 'media', 'moment_threads', 'group_conversations', 'speech_tasks']) {
         if (this.store.get(`SELECT 1 FROM ${table} WHERE world_id=? LIMIT 1`, world))
-          ensure(false, 'WEB_RETENTION_UNEXPECTED_WORLD_DATA');
+          throw unexpectedWorldData('legacy_non_web');
       }
       this.store.run('INSERT INTO web_retention_purge_gate VALUES (?,?,?)', principalId, world, row.revision);
       const operationScope = `SELECT id FROM web_operations WHERE principal_id=? AND world_id=?`;

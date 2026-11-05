@@ -101,6 +101,16 @@ const status = (over: Partial<SystemStatusView> = {}): SystemStatusView => ({
         messageShape: 'not <tok>: <tok>',
         count: 3,
       },
+      // Part 24h: a refusal that names the table (or check label) that failed.
+      {
+        code: 'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
+        phase: 'clearDatabase',
+        sub: 'audit_source',
+        errorName: 'DetailedError',
+        messageShape: 'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
+        table: 'web_character_association_version_history_entries_v2',
+        count: 62,
+      },
     ],
   },
   metrics: [
@@ -574,12 +584,24 @@ test('系统状态 清理: each failing principal shows phase / sub / errorName 
   await f.api.load();
   const cells = f.node.querySelectorAll('td').map((td) => td.textContent);
   const start = cells.indexOf('clearDatabase');
-  assert.deepEqual(cells.slice(start, start + 5), [
+  // Part 24h: the table column sits after sub; '—' when the failure names none, the full name otherwise (the hover bubble's
+  // text is part of the cell, which is how the keyboard and a screen reader get the name past the ellipsis).
+  assert.deepEqual(cells.slice(start, start + 6), [
     'clearDatabase',
     'audit_source',
+    '—',
     'Error',
     'not <tok>: <tok>',
     '3 次',
+  ]);
+  const named = cells.indexOf('clearDatabase', start + 1);
+  assert.deepEqual(cells.slice(named, named + 6), [
+    'clearDatabase',
+    'audit_source',
+    'web_character_association_version_history_entries_v2web_character_association_version_history_entries_v2',
+    'DetailedError',
+    'WEB_RETENTION_UNEXPECTED_WORLD_DATA',
+    '62 次',
   ]);
   const none = mountSystem(
     t,

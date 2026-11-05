@@ -127,12 +127,13 @@ async function retentionOf(
   const purge = purgeDiagnostics(store, now);
   return {
     ...health,
-    failures: (health.failures ?? []).map(({ code, phase, sub, errorName, messageShape, count }) => ({
+    failures: (health.failures ?? []).map(({ code, phase, sub, errorName, messageShape, table, count }) => ({
       code,
       phase,
       sub,
       errorName,
       messageShape,
+      ...(table ? { table } : {}),
       count,
     })),
     purging: purge.purging,

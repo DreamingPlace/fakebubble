@@ -234,6 +234,78 @@ export class WebRetentionWorldFixture extends WebHTTPFixture {
       });
       return Response.json({ seeded: true });
     }
+    if (path === '/fixture/world/seed-query-embeds') {
+      // Part 24h: the reply-time embedding of a player's input (schema 116, kind 'query') is written once per operation for an
+      // account / signup-bonus player, in the shape WebEmbedLedger.reserve + settleQuery/markUnknown leave: one 'known' row
+      // (the vector and the text are never stored) and one UNKNOWN row that keeps its hold. Seeded here because the HTTP
+      // fixture has no embedding service.
+      const { principalId } = input as { principalId: string };
+      const s = this.scopeOf(principalId);
+      this.store.run(
+        "INSERT OR IGNORE INTO web_provider_spending(provider,currency,limit_micros) VALUES ('cloudflare','USD',1000000)",
+      );
+      const operations = this.store.all<{ id: string }>(
+        'SELECT id FROM web_operations WHERE principal_id=? ORDER BY created_at',
+        principalId,
+      );
+      operations.forEach((operation, index) => {
+        const unknown = index % 2 === 1;
+        this.store.run(
+          `INSERT INTO web_embed_attempts(id,kind,world_id,conversation_id,character_id,operation_id,model,texts,max_units,
+          price_micros_per_million,held_micros,items_json,state,outcome,usage_units,charged_micros,lease_expires_at,
+          created_at,sent_at,settled_at)
+          VALUES (?,'query',?,?,?,?,'@cf/baai/bge-m3',1,10,11800,5,NULL,?,?,?,?,?,?,?,?)`,
+          `query-${operation.id}`,
+          s.world_id,
+          s.conversation_id,
+          s.character_id,
+          operation.id,
+          unknown ? 'unknown' : 'known',
+          unknown ? null : 'succeeded',
+          unknown ? null : 7,
+          unknown ? null : 1,
+          now + 60_000,
+          now,
+          now,
+          unknown ? null : now,
+        );
+      });
+      return Response.json({ seeded: operations.length });
+    }
+    if (path === '/fixture/world/table-map') {
+      // Part 24h: every table of the live provider schema that has a world_id or operation_id column, how many rows of the
+      // given player's world / operations it holds, and which audit list it falls in. Names, columns and counts only.
+      const { principalId } = input as { principalId?: string };
+      const world = principalId
+        ? this.store.get<{ world_id: string }>('SELECT world_id FROM web_principals WHERE id=?', principalId)?.world_id
+        : undefined;
+      const tables = this.store
+        .all<{ name: string }>(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB '_cf*' ORDER BY name",
+        )
+        .map((t) => t.name);
+      const map = tables.flatMap((name) => {
+        const columns = this.store.all<{ name: string }>(`PRAGMA table_info("${name}")`).map((c) => c.name);
+        const byWorld = columns.includes('world_id'),
+          byOperation = columns.includes('operation_id');
+        if (!byWorld && !byOperation) return [];
+        const count = (sql: string) => (world ? this.store.get<{ n: number }>(sql, world)!.n : 0);
+        return [
+          {
+            table: name,
+            worldId: byWorld,
+            operationId: byOperation,
+            worldRows: byWorld ? count(`SELECT count(*) n FROM "${name}" WHERE world_id=?`) : 0,
+            operationRows: byOperation
+              ? count(
+                  `SELECT count(*) n FROM "${name}" WHERE operation_id IN (SELECT id FROM web_operations WHERE world_id=?)`,
+                )
+              : 0,
+          },
+        ];
+      });
+      return Response.json(map);
+    }
     if (path === '/fixture/world/state') {
       // Every table that names this player's world or principal, with the rows it still holds (names and counts only).
       const { principalId } = input as { principalId: string };
