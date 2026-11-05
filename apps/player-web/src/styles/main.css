@@ -11944,7 +11944,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .system-section[data-section="cleanup"] .admin-table {
   width: 100%;
-  table-layout: fixed;
 }
 .account-admin-page.admin-shell .system-section[data-section="cleanup"] .admin-table th {
   white-space: normal;
