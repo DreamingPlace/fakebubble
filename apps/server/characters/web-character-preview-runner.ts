@@ -20,6 +20,10 @@ import { budgetHash } from '../budget/web-provider-budget-contract.ts';
 import { currentWebPreview, previewDigest, previewPolicy, readWebPreview } from './web-character-preview.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { webCharacterPreviewsRunning } from './web-character-preview-schema.ts';
+import { WebReviewCompareRunner, type CompareClaim } from './web-review-compare-runner.ts';
+import { previewReviewModel } from '../admission/web-review-model.ts';
+import { DEFAULT_REVIEW_MODEL } from '../../../packages/contracts/review-model.ts';
+import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
 
 /** Same authority used by chat and material generation; no new allowance or budget reset. */
 export interface WebPreviewBudget {
@@ -63,6 +67,8 @@ export class WebCharacterPreviewRunner {
   private readonly budget: WebPreviewBudget;
   private readonly nextId: () => string;
   private readonly hasRuns: boolean;
+  /** Part 26b: the 审核对比 runs in this queue's single text slot (preview claims first). */
+  private readonly compare: WebReviewCompareRunner;
   constructor(
     store: BusinessStore,
     clock: Clock,
@@ -79,6 +85,7 @@ export class WebCharacterPreviewRunner {
     this.generator = generator;
     this.budget = budget;
     this.nextId = nextId;
+    this.compare = new WebReviewCompareRunner(store, clock, generator, budget, nextId);
     this.hasRuns = !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_preview_rejected'");
   }
   /**
@@ -156,7 +163,14 @@ export class WebCharacterPreviewRunner {
       token,
     );
   }
-  claim() {
+  /** A preview first; when none is due, one case of a 审核对比 run. */
+  claim(): { id: string; token: string; compare?: CompareClaim } | null {
+    const preview = this.claimPreview();
+    if (preview) return preview;
+    const compare = this.compare.claim();
+    return compare ? { id: `compare-${compare.runId}-${compare.ordinal}`, token: compare.token, compare } : null;
+  }
+  private claimPreview() {
     return this.store.transaction(() => {
       const now = this.now();
       for (const { id } of this.store.all<{ id: string }>(
@@ -207,6 +221,12 @@ export class WebCharacterPreviewRunner {
     });
   }
   nextDue() {
+    const own = this.previewDue(),
+      other = this.compare.nextDue();
+    const at = Math.min(own ?? Infinity, other ?? Infinity);
+    return Number.isFinite(at) ? at : null;
+  }
+  private previewDue() {
     const row = this.store.get<{ due: number | null }>(
       `SELECT min(min(j.deadline_at,
       CASE p.status WHEN 'queued' THEN max(j.retry_at,?) ELSE p.lease_until END)) due
@@ -234,11 +254,12 @@ export class WebCharacterPreviewRunner {
     );
   }
   async recoverBills() {
+    const other = await this.compare.recoverBills();
     const rows = this.store.all<Attempt>(
       "SELECT * FROM web_character_preview_attempts WHERE state='known' AND shared_settled=0 LIMIT 16",
     );
     for (const row of rows) await this.settle(row);
-    return rows.length;
+    return rows.length + other;
   }
   private reserve(id: string, token: string, spec: ProviderCallSpec, wireHash: string, bytes: number) {
     return this.store.transaction(() => {
@@ -471,7 +492,8 @@ export class WebCharacterPreviewRunner {
       );
     });
   }
-  async run(claim: { id: string; token: string }, signal: AbortSignal) {
+  async run(claim: { id: string; token: string; compare?: CompareClaim }, signal: AbortSignal) {
+    if (claim.compare) return this.compare.run(claim.compare, signal);
     const { id, token } = claim,
       observations = new Map<Phase, ProviderObservation>(),
       rejected = new Map<Phase, { raw: string; errorCode: string }>();
@@ -548,8 +570,18 @@ export class WebCharacterPreviewRunner {
         ensure(!signal.aborted, 'PREVIEW_INTERRUPTED');
         this.live(id, token);
       };
-      if (known) await this.generator.generateAcceptedReviewFromKnownDraft(request, signal, known, accept, meter);
-      else await this.generator.generateAcceptedStages(request, signal, accept, meter);
+      // Part 26b: the reviewer frozen when this 预演 was queued. V4 Pro is today's behaviour and sends no route.
+      const reviewer = previewReviewModel(this.store, id);
+      const route =
+        reviewer === DEFAULT_REVIEW_MODEL
+          ? undefined
+          : {
+              draft: [{ provider: 'deepseek' as const, model: DEFAULT_TEXT_MODELS.draft }],
+              review: [{ provider: 'deepseek' as const, model: reviewer }],
+            };
+      if (known)
+        await this.generator.generateAcceptedReviewFromKnownDraft(request, signal, known, accept, meter, route);
+      else await this.generator.generateAcceptedStages(request, signal, accept, meter, route);
       ensure(!signal.aborted, 'PREVIEW_INTERRUPTED');
       this.commit(id, token);
     } catch (error) {

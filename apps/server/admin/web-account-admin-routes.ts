@@ -158,6 +158,28 @@ export async function routeWebAccountAdmin(
     }
     ensure(false, 'NOT_FOUND');
   }
+  // Part 26b: 审核对比 (V4 Pro against V4.1 Flash on a built-in set of synthetic cases), part of 预演.
+  if (path.startsWith(`${base}/review-compare/`)) {
+    auth();
+    ensure(characters, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/review-compare/`.length);
+    if (action === 'estimate') {
+      body([]);
+      return { status: 200, body: characters.compareEstimate(actor) };
+    }
+    if (action === 'list') {
+      body([]);
+      return { status: 200, body: characters.compareList(actor) };
+    }
+    if (action === 'start')
+      return { status: 200, body: characters.compareStart(actor, body(['requestId', 'confirmPaidCalls'])) };
+    if (action === 'mark')
+      return { status: 200, body: characters.compareMark(actor, body(['runId', 'ordinal', 'side', 'mark'])) };
+    if (action === 'detail') return { status: 200, body: characters.compareDetail(actor, body(['runId']).runId) };
+    if (action === 'export') return { status: 200, body: characters.compareExport(actor, body(['runId']).runId) };
+    ensure(false, 'NOT_FOUND');
+  }
   if (path.startsWith(`${base}/eval-sets/`)) {
     auth();
     ensure(characters, 'NOT_FOUND');
@@ -368,6 +390,16 @@ export async function routeWebAccountAdmin(
     auth();
     ensure(req.body && typeof req.body === 'object' && !Array.isArray(req.body), 'INVALID_REQUEST');
     return { status: 200, body: admin.saveModelSettings(req.adminCookie, req.csrf, req.origin, req.body) };
+  }
+  if (path === `${base}/models/review-read`) {
+    auth();
+    body([]);
+    return { status: 200, body: admin.reviewModelView(req.adminCookie, req.csrf, req.origin) };
+  }
+  if (path === `${base}/models/review-save`) {
+    auth();
+    ensure(req.body && typeof req.body === 'object' && !Array.isArray(req.body), 'INVALID_REQUEST');
+    return { status: 200, body: admin.saveReviewModel(req.adminCookie, req.csrf, req.origin, req.body) };
   }
   if (path === `${base}/members/list`) {
     auth();

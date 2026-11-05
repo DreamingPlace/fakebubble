@@ -12,6 +12,7 @@ import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { identifier, keys, nonempty, record, validatedTemplate } from './template-validation.ts';
 import { characterProfileHash, publishedWebCharacters, type WebCharacterProfile } from './web-character-catalog.ts';
 import { WebCharacterPreviews, readWebPreview, webPreviewDTO } from './web-character-preview.ts';
+import { WebReviewCompare } from './web-review-compare.ts';
 import { publishWebCharacter } from './web-character-publication.ts';
 import { characterHistory, characterVersion, restoreWebCharacter } from './web-character-history.ts';
 import {
@@ -89,8 +90,11 @@ export class WebCharacterAdmin {
     this.materials = materials;
   }
   private previews: WebCharacterPreviews | null = null;
+  private compare: WebReviewCompare | null = null;
   enablePreviews(previews: WebCharacterPreviews) {
     this.previews = previews;
+    // Part 26b: the reviewer comparison lives next to 预演: same permission, same queue.
+    this.compare = new WebReviewCompare(this.store, this.clock);
   }
   constructor(store: BusinessStore, clock: Clock, admin: WebAccountAdmin) {
     this.store = store;
@@ -377,6 +381,37 @@ export class WebCharacterAdmin {
       'ADMIN_PERMISSION_REQUIRED',
     );
     return actor;
+  }
+  /** Part 26b 审核对比: reading needs any preview grant; starting and marking need preview on every character (or the owner). */
+  compareEstimate(auth: Auth) {
+    this.evalActor(auth, false);
+    ensure(this.compare, 'PREVIEW_UNAVAILABLE');
+    return this.compare.estimate();
+  }
+  compareStart(auth: Auth, input: unknown) {
+    const actor = this.evalActor(auth, true);
+    ensure(this.compare, 'PREVIEW_UNAVAILABLE');
+    return this.compare.start(actor, input);
+  }
+  compareList(auth: Auth) {
+    this.evalActor(auth, false);
+    ensure(this.compare, 'PREVIEW_UNAVAILABLE');
+    return { runs: this.compare.list() };
+  }
+  compareDetail(auth: Auth, runId: unknown) {
+    this.evalActor(auth, false);
+    ensure(this.compare, 'PREVIEW_UNAVAILABLE');
+    return this.compare.detail(runId);
+  }
+  compareMark(auth: Auth, input: unknown) {
+    const actor = this.evalActor(auth, true);
+    ensure(this.compare, 'PREVIEW_UNAVAILABLE');
+    return this.compare.mark(actor, input);
+  }
+  compareExport(auth: Auth, runId: unknown) {
+    this.evalActor(auth, false);
+    ensure(this.compare, 'PREVIEW_UNAVAILABLE');
+    return this.compare.exportText(runId);
   }
   evalSetList(auth: Auth) {
     this.evalActor(auth, false);

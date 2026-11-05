@@ -11,6 +11,7 @@ import { textPolicyHash } from '../generation/text-generation-policy.ts';
 import { instantAtLocalMinute } from '../../../packages/domain/schedule.ts';
 import { characterProfileHash, type WebCharacterProfile } from './web-character-catalog.ts';
 import { installWebCharacterPreviews } from './web-character-preview-schema.ts';
+import { freezePreviewReviewModel } from '../admission/web-review-model.ts';
 import { castContextEnabled, castForPreview, castTablesExist, latestPublication } from '../cast/cast-store.ts';
 
 export const previewDigest = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -469,6 +470,8 @@ export class WebCharacterPreviews {
       q.deadlineAt(now),
       now,
     );
+    // Part 26b: the reviewer that will produce this proof is frozen with the 预演 (a publish accepts either).
+    freezePreviewReviewModel(this.store, id, now);
     if (q.simulatedMinute !== null)
       this.store.run('INSERT INTO web_preview_marks VALUES (?,?,?)', id, q.simulatedMinute, zone);
     this.store.run(
