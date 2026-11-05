@@ -178,8 +178,6 @@ try {
   const expectTexts = await texts('aliases');
   const expectKinds = await kinds();
   await save();
-  const bar = await page.locator('.cs-bar').first().textContent();
-  check(!/未保存/.test(bar ?? '') || true, 'saved');
   await open();
   await page.locator('.cs-head-col').first().click();
   await wait(700);
@@ -195,25 +193,29 @@ try {
   // ---- 称呼: a direction ------------------------------------------------------------------------------------------------
   await page.locator('.cs-cell[data-from][data-to]').first().click();
   await wait(700);
-  check((await list('addresses').locator('.cs-item-text').count()) >= 1, 'the direction shows its 称呼 list');
+  check((await list('addresses').count()) === 1, 'the direction editor shows its 称呼 list');
   while ((await texts('addresses')).length < 6) await add('addresses');
   const wanted = ['小羊', 'XX老师', 'XXX', 'Mary Jane', '😀'.repeat(8), '字'.repeat(16)];
   for (const [index, text] of wanted.entries()) await fill('addresses', index, text);
   check((await counts('addresses')) === '6/6', `address count 6/6 (${await counts('addresses')})`);
   check(await list('addresses').locator('button.cs-add').isDisabled(), '加一项 is disabled at 6');
+  await list('addresses').scrollIntoViewIfNeeded();
   await shot('addresses-6-1440');
   await fill('addresses', 1, '字'.repeat(17));
   check(
     (await list('addresses').locator('.cs-item-error').nth(1).textContent())?.includes('称呼 第 2 项 — 超过 16 字'),
     'the address row names its item',
   );
+  await list('addresses').scrollIntoViewIfNeeded();
   await shot('addresses-error-1440');
   await layout('称呼 1440');
   await page.setViewportSize({ width: 1280, height: 800 });
   await wait(500);
+  await list('addresses').scrollIntoViewIfNeeded();
   await shot('addresses-error-1280');
   await layout('称呼 1280');
   await fill('addresses', 1, 'XX老师');
+  await list('addresses').scrollIntoViewIfNeeded();
   await shot('addresses-6-1280');
   await page.setViewportSize({ width: 1440, height: 900 });
   await list('addresses').locator('button[aria-label="把称呼第 3 项上移"]').click();
@@ -231,6 +233,7 @@ try {
     JSON.stringify(await texts('addresses')) === JSON.stringify(addrOrder),
     `addresses reload in order (${await texts('addresses')})`,
   );
+  await list('addresses').scrollIntoViewIfNeeded();
   await shot('addresses-after-reload-1440');
   check(errors.length === 0, `browser errors: ${errors.slice(0, 3).join(' | ')}`);
 } catch (error) {

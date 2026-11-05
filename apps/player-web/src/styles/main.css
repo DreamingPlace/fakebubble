@@ -10769,11 +10769,19 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   white-space: nowrap;
   padding: 0 8px;
 }
-.account-admin-page.admin-shell .cs-item-error {
+.account-admin-page.admin-shell .cs-item > p.cs-item-error {
   margin: 0 0 0 26px;
   color: var(--ad-danger);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.5;
+}
+/* A row that breaks a rule is red, even when it is also unsaved (the amber mark would otherwise hide the problem). */
+.account-admin-page.admin-shell .cs-item[data-invalid="true"] input.cs-item-text[data-dirty="true"],
+.account-admin-page.admin-shell .cs-item[data-invalid="true"] input.cs-item-text {
+  border-color: var(--ad-danger) !important;
+  border-width: 1.5px;
+  background: var(--ad-danger-soft) !important;
 }
 .account-admin-page.admin-shell .cs-item-error[hidden] {
   display: none;
