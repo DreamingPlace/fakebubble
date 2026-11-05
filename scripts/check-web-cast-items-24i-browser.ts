@@ -44,7 +44,9 @@ try {
   };
   const list = (kind: 'aliases' | 'addresses') => page.locator(`.cs-items[data-list="${kind}"]`).first();
   const texts = (kind: 'aliases' | 'addresses') =>
-    list(kind).locator('.cs-item-text').evaluateAll((nodes: HTMLInputElement[]) => nodes.map((n) => n.value));
+    list(kind)
+      .locator('.cs-item-text')
+      .evaluateAll((nodes: HTMLInputElement[]) => nodes.map((n) => n.value));
   const kinds = () =>
     list('aliases')
       .locator('.cs-item')
@@ -116,12 +118,24 @@ try {
   check(await list('aliases').locator('button.cs-add').isDisabled(), '加一项 is disabled at 12');
   for (const [index, text] of names.entries()) {
     await fill('aliases', index, text);
-    await list('aliases').locator('select.cs-item-kind').nth(index).selectOption({ label: KINDS[index % 4]! });
-    await list('aliases').locator('select.cs-item-attitude').nth(index).selectOption({ label: FEELS[index % 3]! });
+    await list('aliases')
+      .locator('select.cs-item-kind')
+      .nth(index)
+      .selectOption({ label: KINDS[index % 4]! });
+    await list('aliases')
+      .locator('select.cs-item-attitude')
+      .nth(index)
+      .selectOption({ label: FEELS[index % 3]! });
   }
   const counted = await list('aliases').locator('.cs-item-count').allTextContents();
-  check(counted[1] === '16/16' && counted[10] === '16/16' && counted[11] === '16/16', `16-unit items count 16/16 (${counted})`);
-  check((await list('aliases').locator('.cs-item[data-invalid="true"]').count()) === 0, 'no error row for 16-unit items');
+  check(
+    counted[1] === '16/16' && counted[10] === '16/16' && counted[11] === '16/16',
+    `16-unit items count 16/16 (${counted})`,
+  );
+  check(
+    (await list('aliases').locator('.cs-item[data-invalid="true"]').count()) === 0,
+    'no error row for 16-unit items',
+  );
   await shot('aliases-12-1440');
   // a 17-unit item: kept as typed, flagged on its own row
   await fill('aliases', 3, '字'.repeat(17));
@@ -130,7 +144,10 @@ try {
   const sentence = (await flagged.locator('.cs-item-error').textContent()) ?? '';
   check(/别名 第 4 项 — 超过 16 字/.test(sentence), `the row says 「…别名 第 4 项 — 超过 16 字」 (${sentence})`);
   check((await texts('aliases'))[3]!.length === 17, 'the 17 units are kept, not cut');
-  check((await list('aliases').locator('.cs-item-count').nth(3).textContent()) === '17/16', 'the row count reads 17/16');
+  check(
+    (await list('aliases').locator('.cs-item-count').nth(3).textContent()) === '17/16',
+    'the row count reads 17/16',
+  );
   await shot('aliases-error-1440');
   await layout('别名 1440');
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -147,7 +164,10 @@ try {
   await wait(100);
   const moved = await texts('aliases');
   check(moved[1] === order[2] && moved[2] === order[1], `上移 swaps rows 2 and 3 (${moved.slice(0, 3)})`);
-  check(await list('aliases').locator('button[aria-label="把别名第 1 项上移"]').isDisabled(), 'the first row cannot move up');
+  check(
+    await list('aliases').locator('button[aria-label="把别名第 1 项上移"]').isDisabled(),
+    'the first row cannot move up',
+  );
   // delete the last row and add it back
   await list('aliases').locator('button[aria-label="删除别名第 12 项"]').click();
   await wait(100);
@@ -163,8 +183,14 @@ try {
   await open();
   await page.locator('.cs-head-col').first().click();
   await wait(700);
-  check(JSON.stringify(await texts('aliases')) === JSON.stringify(expectTexts), `aliases reload in order (${await texts('aliases')})`);
-  check(JSON.stringify(await kinds()) === JSON.stringify(expectKinds), `kind and attitude reload per row (${JSON.stringify(await kinds())})`);
+  check(
+    JSON.stringify(await texts('aliases')) === JSON.stringify(expectTexts),
+    `aliases reload in order (${await texts('aliases')})`,
+  );
+  check(
+    JSON.stringify(await kinds()) === JSON.stringify(expectKinds),
+    `kind and attitude reload per row (${JSON.stringify(await kinds())})`,
+  );
 
   // ---- 称呼: a direction ------------------------------------------------------------------------------------------------
   await page.locator('.cs-cell[data-from][data-to]').first().click();
@@ -177,7 +203,10 @@ try {
   check(await list('addresses').locator('button.cs-add').isDisabled(), '加一项 is disabled at 6');
   await shot('addresses-6-1440');
   await fill('addresses', 1, '字'.repeat(17));
-  check((await list('addresses').locator('.cs-item-error').nth(1).textContent())?.includes('称呼 第 2 项 — 超过 16 字'), 'the address row names its item');
+  check(
+    (await list('addresses').locator('.cs-item-error').nth(1).textContent())?.includes('称呼 第 2 项 — 超过 16 字'),
+    'the address row names its item',
+  );
   await shot('addresses-error-1440');
   await layout('称呼 1440');
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -198,7 +227,10 @@ try {
   await open();
   await page.locator('.cs-cell[data-from][data-to]').first().click();
   await wait(700);
-  check(JSON.stringify(await texts('addresses')) === JSON.stringify(addrOrder), `addresses reload in order (${await texts('addresses')})`);
+  check(
+    JSON.stringify(await texts('addresses')) === JSON.stringify(addrOrder),
+    `addresses reload in order (${await texts('addresses')})`,
+  );
   await shot('addresses-after-reload-1440');
   check(errors.length === 0, `browser errors: ${errors.slice(0, 3).join(' | ')}`);
 } catch (error) {

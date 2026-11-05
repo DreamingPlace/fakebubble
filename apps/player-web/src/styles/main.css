@@ -12952,6 +12952,121 @@ body.legal-page {
   }
 }
 
+/* ---- Part 24i: the ordered item lists (别名 of a character, 称呼 of a direction) ---- */
+.account-admin-page.admin-shell .cs-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-items-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-items-label {
+  color: var(--ad-text);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs-items-count {
+  margin-left: auto;
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .cs-items-count.is-over,
+.account-admin-page.admin-shell .cs-item-count.is-over {
+  color: var(--ad-danger);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .cs-item-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .cs-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.account-admin-page.admin-shell .cs-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cs-item-no {
+  flex: none;
+  width: 18px;
+  color: var(--ad-muted);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 12px;
+  text-align: right;
+}
+.account-admin-page.admin-shell .cs-item-row input.cs-item-text {
+  flex: 1 1 140px;
+  min-width: 0;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .cs-item[data-invalid="true"] input.cs-item-text {
+  border-color: var(--ad-danger);
+  background: var(--ad-danger-soft);
+}
+.account-admin-page.admin-shell .cs-item-row select {
+  flex: none;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cs-item-row select.cs-item-kind {
+  width: 108px;
+}
+.account-admin-page.admin-shell .cs-item-row select.cs-item-attitude {
+  width: 88px;
+}
+.account-admin-page.admin-shell .cs-item-row select.is-likes {
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell .cs-item-row select.is-dislikes {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .cs-item-count {
+  flex: none;
+  min-width: 40px;
+  color: var(--ad-muted);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .cs-item-tools {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+}
+.account-admin-page.admin-shell .cs-item-tools .cs-mini {
+  white-space: nowrap;
+  padding: 0 8px;
+}
+.account-admin-page.admin-shell .cs-item-error {
+  margin: 0 0 0 26px;
+  color: var(--ad-danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.account-admin-page.admin-shell .cs-item-error[hidden] {
+  display: none;
+}
+
 /* Part 25a: the Burbur skin of the player site (design/burbur-v2). Player selectors only. Everything here repaints what exists:
    the 小卡 cards and the aura page, the chat bubbles, 我的信息, the model sheet, login, 消费记录, 共创 and the motion between
    them. One curve everywhere (cubic-bezier(.2,.82,.24,1)); every animation below is switched off by prefers-reduced-motion. */
@@ -15984,119 +16099,4 @@ html.theme-fade *::after {
   .shared-card {
     animation: none;
   }
-}
-
-/* ---- Part 24i: the ordered item lists (别名 of a character, 称呼 of a direction) ---- */
-.account-admin-page.admin-shell .cs-items {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .cs-items-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-  color: var(--ad-muted);
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .cs-items-label {
-  color: var(--ad-text);
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .cs-items-count {
-  margin-left: auto;
-  font-family: "DM Mono", ui-monospace, monospace;
-  font-size: 12px;
-  color: var(--ad-muted);
-}
-.account-admin-page.admin-shell .cs-items-count.is-over,
-.account-admin-page.admin-shell .cs-item-count.is-over {
-  color: var(--ad-danger);
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .cs-item-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .cs-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.account-admin-page.admin-shell .cs-item-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .cs-item-no {
-  flex: none;
-  width: 18px;
-  color: var(--ad-muted);
-  font-family: "DM Mono", ui-monospace, monospace;
-  font-size: 12px;
-  text-align: right;
-}
-.account-admin-page.admin-shell .cs-item-row input.cs-item-text {
-  flex: 1 1 140px;
-  min-width: 0;
-  height: 36px;
-  min-height: 36px;
-  padding: 0 10px;
-  border-radius: 10px;
-  font-size: 14px;
-}
-.account-admin-page.admin-shell .cs-item[data-invalid="true"] input.cs-item-text {
-  border-color: var(--ad-danger);
-  background: var(--ad-danger-soft);
-}
-.account-admin-page.admin-shell .cs-item-row select {
-  flex: none;
-  height: 36px;
-  min-height: 36px;
-  padding: 0 8px;
-  border-radius: 10px;
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .cs-item-row select.cs-item-kind {
-  width: 108px;
-}
-.account-admin-page.admin-shell .cs-item-row select.cs-item-attitude {
-  width: 88px;
-}
-.account-admin-page.admin-shell .cs-item-row select.is-likes {
-  color: var(--ad-ok);
-}
-.account-admin-page.admin-shell .cs-item-row select.is-dislikes {
-  color: var(--ad-danger);
-}
-.account-admin-page.admin-shell .cs-item-count {
-  flex: none;
-  min-width: 40px;
-  color: var(--ad-muted);
-  font-family: "DM Mono", ui-monospace, monospace;
-  font-size: 12px;
-  text-align: right;
-  white-space: nowrap;
-}
-.account-admin-page.admin-shell .cs-item-tools {
-  display: inline-flex;
-  flex: none;
-  gap: 4px;
-}
-.account-admin-page.admin-shell .cs-item-tools .cs-mini {
-  white-space: nowrap;
-  padding: 0 8px;
-}
-.account-admin-page.admin-shell .cs-item-error {
-  margin: 0 0 0 26px;
-  color: var(--ad-danger);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.account-admin-page.admin-shell .cs-item-error[hidden] {
-  display: none;
 }
