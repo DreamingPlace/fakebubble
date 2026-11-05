@@ -1,6 +1,10 @@
 import {
+  CAST_ALIAS_KIND_LABEL,
+  CAST_DO_NOT_CALL_RULE,
   CAST_KNOWLEDGE_LABEL,
   CAST_LIMITS,
+  type CastAlias,
+  type CastCard,
   type CastCharacter,
   type CastDoc,
   type CastKnowledge,
@@ -61,6 +65,19 @@ export function castKnowledge(doc: CastDoc, characterId: string): CastKnowledgeR
   });
 }
 
+/**
+ * What the OTHER characters are told about a character's names. Usable: kind 'other' / 'neutral' whose attitude is likes / ok.
+ * Listed apart as "do not call": every 黑称, and every other / neutral name he dislikes. His 自称 is never shown to anyone else.
+ */
+function othersAliases(aliases: readonly CastAlias[]): Pick<CastCard, 'aliases' | 'doNotCall'> {
+  const usable = aliases.filter((a) => (a.kind === 'other' || a.kind === 'neutral') && a.attitude !== 'dislikes');
+  const avoid = aliases.filter((a) => a.kind === 'insult' || (a.kind !== 'self' && a.attitude === 'dislikes'));
+  return {
+    aliases: usable.map((a) => a.text),
+    ...(avoid.length ? { doNotCall: { rule: CAST_DO_NOT_CALL_RULE, items: avoid.map((a) => a.text) } } : {}),
+  };
+}
+
 const HIDDEN_RULE = '你知道这些设定，但绝不直接说出口。';
 
 /** Oldest first: by period start (an undated story first), then by its place in the document. */
@@ -88,7 +105,7 @@ function build(doc: CastDoc, characterId: string): Parts {
       .map((c) => ({
         name: nameOf(c.characterId),
         names: c.identity.names.map((n) => n.text),
-        aliases: c.identity.aliases.map((a) => a.text),
+        ...othersAliases(c.identity.aliases),
         oneLiner: c.identity.oneLiner,
       })),
     ...doc.people.map((p) => ({
@@ -113,7 +130,7 @@ function build(doc: CastDoc, characterId: string): Parts {
     relations.push({
       to: nameOf(id),
       ...(rating === undefined ? {} : { rating }),
-      ...(direction?.address ? { address: direction.address } : {}),
+      ...(direction?.addresses.length ? { addresses: direction.addresses.map((a) => a.text) } : {}),
       ...(direction?.treatment ? { treatment: direction.treatment } : {}),
     });
     ratings.push(rating ?? null);
@@ -177,7 +194,11 @@ function build(doc: CastDoc, characterId: string): Parts {
       name: nameOf(characterId),
       oneLiner: self.identity.oneLiner,
       names: self.identity.names.map((n) => n.text),
-      aliases: self.identity.aliases.map((a) => ({ text: a.text, attitude: a.attitude })),
+      aliases: self.identity.aliases.map((a) => ({
+        text: a.text,
+        kind: CAST_ALIAS_KIND_LABEL[a.kind],
+        attitude: a.attitude,
+      })),
       selfConcept: self.identity.selfConcept,
       prototype: prototype
         ? { name: nameOf(prototype.personId), inherited: prototype.inherited, notInherited: prototype.notInherited }
@@ -230,7 +251,7 @@ export function compileCastViewDetailed(
   const groupQueue = [...groupStoryAges].sort(byAge).map((item) => view.groups[item.group]!.stories[item.at]!);
   const withTexts = view.relations
     .map((relation, at) => ({ relation, at, rating: ratings[at] ?? -1 }))
-    .filter((item) => item.relation.address !== undefined || item.relation.treatment !== undefined)
+    .filter((item) => item.relation.addresses !== undefined || item.relation.treatment !== undefined)
     .sort((a, b) => a.rating - b.rating || b.at - a.at);
   const remove = <T>(list: T[], item: T) => list.splice(list.indexOf(item), 1);
   while (size(view) > max) {
@@ -249,7 +270,7 @@ export function compileCastViewDetailed(
       dropped.livedStories++;
     } else if (withTexts.length) {
       const { relation } = withTexts.shift()!;
-      delete relation.address;
+      delete relation.addresses;
       delete relation.treatment;
       dropped.relationTexts++;
     } else break;
@@ -267,7 +288,7 @@ export function minimalViewSize(doc: CastDoc, characterId: string): number {
   view.stories = [];
   for (const group of view.groups) group.stories = [];
   for (const relation of view.relations) {
-    delete relation.address;
+    delete relation.addresses;
     delete relation.treatment;
   }
   return size(view);

@@ -1,18 +1,23 @@
 import {
+  CAST_ALIAS_ATTITUDE_LABEL,
   CAST_ALIAS_ATTITUDES,
+  CAST_ALIAS_KIND_LABEL,
+  CAST_ALIAS_KINDS,
   CAST_LIMITS,
+  type CastAlias,
   type CastAliasAttitude,
+  type CastAliasKind,
   type CastCharacter,
   type CastText,
 } from '../../../../../../packages/contracts/web-cast.ts';
 import type { CastCompilePreviewResult } from '../../../services/cast-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
 import { KNOWLEDGE_LABEL } from './cast-model.ts';
+import { itemList } from './cast-items.ts';
 import { dot, type CastCtx } from './cast-ui.ts';
 import { markDirty } from '../ui/unsaved.ts';
 
 const L = CAST_LIMITS;
-const ATTITUDE_LABEL: Record<CastAliasAttitude, string> = { likes: '喜欢', ok: '无所谓', dislikes: '不喜欢' };
 
 /**
  * 名片 (Cast3): what the OTHER characters know of one character, and nothing else: a one-liner, the names (the first is the one
@@ -113,45 +118,67 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
         }),
       );
     names.append(nameRow);
-    const aliases = h('div', { class: 'cs-lb' }, h('span', { text: '别名 · 他对这个叫法的感觉' }));
-    const aliasRow = h('span', { class: 'cs-pills' });
-    identity.aliases.forEach((alias, index) => {
-      const feel = h('button', {
-        class: `cs-feel is-${alias.attitude}`,
-        text: ATTITUDE_LABEL[alias.attitude],
-        attrs: {
-          type: 'button',
-          'aria-label': `对「${alias.text}」的感觉：${ATTITUDE_LABEL[alias.attitude]}，点一下换`,
-        },
-      });
-      feel.disabled = !edit;
-      feel.addEventListener('click', () => {
-        alias.attitude =
-          CAST_ALIAS_ATTITUDES[(CAST_ALIAS_ATTITUDES.indexOf(alias.attitude) + 1) % CAST_ALIAS_ATTITUDES.length]!;
-        ctx.edited();
-        ctx.paint('character');
-      });
-      aliasRow.append(
-        pill(
-          textInput(alias.text, L.alias, `别名 ${index + 1}`, (v) => (alias.text = v)),
-          feel,
-          () => {
-            identity.aliases.splice(index, 1);
-            ctx.edited();
-            ctx.paint('character');
+    const select = <V extends string>(
+      label: string,
+      values: readonly V[],
+      names: Readonly<Record<V, string>>,
+      current: V,
+      set: (value: V) => void,
+      className: string,
+    ) => {
+      const node = h('select', { class: className, attrs: { 'aria-label': label } });
+      for (const value of values) node.append(h('option', { text: names[value], attrs: { value } }));
+      node.value = current;
+      if (!edit) node.setAttribute('data-locked', 'true');
+      node.disabled = !edit;
+      node.addEventListener('change', () => set(node.value as V));
+      return node;
+    };
+    const base = ctx.base().characters.find((c) => c.characterId === character.characterId)?.identity.aliases ?? null;
+    const aliases = itemList<CastAlias>({
+      ctx,
+      label: '别名',
+      hint: '自称、别人可以怎么叫他、中性称呼、黑称；右边是他对这个叫法的感觉',
+      items: identity.aliases,
+      base,
+      max: L.aliases,
+      maxText: L.alias,
+      blank: () => ({ id: '', text: '', kind: 'other', attitude: 'ok' }),
+      path: (index) => `characters[${character.characterId}].identity.aliases[${index}].text`,
+      listPath: `characters[${character.characterId}].identity.aliases`,
+      testId: 'aliases',
+      extra: (alias, changed) => {
+        const saved = () => base?.find((b) => b.id === alias.id);
+        const kind = select(
+          '类型',
+          CAST_ALIAS_KINDS,
+          CAST_ALIAS_KIND_LABEL,
+          alias.kind,
+          (value: CastAliasKind) => {
+            alias.kind = value;
+            markDirty(kind, saved()?.kind !== value);
+            changed();
           },
-        ),
-      );
+          'cs-item-kind',
+        );
+        const attitude = select(
+          '他对这个叫法的感觉',
+          CAST_ALIAS_ATTITUDES,
+          CAST_ALIAS_ATTITUDE_LABEL,
+          alias.attitude,
+          (value: CastAliasAttitude) => {
+            alias.attitude = value;
+            attitude.className = `cs-item-attitude is-${value}`;
+            markDirty(attitude, saved()?.attitude !== value);
+            changed();
+          },
+          `cs-item-attitude is-${alias.attitude}`,
+        );
+        markDirty(kind, !!alias.id && saved()?.kind !== alias.kind);
+        markDirty(attitude, !!alias.id && saved()?.attitude !== alias.attitude);
+        return [kind, attitude];
+      },
     });
-    if (edit && identity.aliases.length < L.aliases)
-      aliasRow.append(
-        addPill('加一个别名', () => {
-          identity.aliases.push({ id: '', text: '', attitude: 'ok' });
-          ctx.edited();
-          ctx.paint('character');
-        }),
-      );
-    aliases.append(aliasRow);
     const prototype = h('select', { attrs: { 'aria-label': '原型' } });
     prototype.append(h('option', { text: '不用原型', attrs: { value: '' } }));
     for (const person of doc.people.filter((p) => p.kind === 'prototype'))
@@ -186,8 +213,8 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
         { class: 'cs-namecard' },
         h('label', { class: 'cs-lb' }, h('span', { text: '一句话' }), oneLiner),
         names,
-        aliases,
         h('label', { class: 'cs-lb' }, h('span', { text: '原型' }), prototype),
+        aliases,
       ),
     );
   };
@@ -274,7 +301,12 @@ export function seesPanel(
   block(
     '他对别人',
     ...view.relations.map((r) =>
-      [r.to, r.rating === undefined ? null : `${r.rating} 星`, r.address ? `叫：${r.address}` : null, r.treatment]
+      [
+        r.to,
+        r.rating === undefined ? null : `${r.rating} 星`,
+        r.addresses?.length ? `叫：${r.addresses.join(' / ')}` : null,
+        r.treatment,
+      ]
         .filter(Boolean)
         .join(' · '),
     ),

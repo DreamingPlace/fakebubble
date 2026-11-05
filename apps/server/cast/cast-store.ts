@@ -1,3 +1,4 @@
+import { isLegacyCastDoc, upgradeCastDoc } from './cast-upgrade.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import type { CastDoc, CastRequestContext, CastValidation, CastView } from '../../../packages/contracts/web-cast.ts';
 import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
@@ -68,9 +69,13 @@ export const castCounts = (doc: CastDoc): CastCounts => ({
 
 const parse = (json: string): CastDoc => {
   // A stored document went through normalizeCastDoc before it was written; reading it back re-normalizes with its own ids.
-  const raw = JSON.parse(json) as unknown;
-  const doc = normalizeCastDoc(raw, { known: castEntryIds(raw as CastDoc), fresh: freshCastId });
-  ensure(canonicalCastJson(doc) === json, 'CAST_STORED_DOC_INVALID');
+  // A schema-1 document is upgraded in memory (cast-upgrade.ts); what is stored is never rewritten by a read.
+  const parsed = JSON.parse(json) as unknown;
+  const legacy = isLegacyCastDoc(parsed);
+  const raw = upgradeCastDoc(parsed, { deriveIds: true });
+  const doc = normalizeCastDoc(raw, { known: castEntryIds(raw as CastDoc), fresh: freshCastId, legacy });
+  // A schema-2 document must read back byte for byte; an upgraded one is by construction a different spelling.
+  if (!legacy) ensure(canonicalCastJson(doc) === json, 'CAST_STORED_DOC_INVALID');
   return doc;
 };
 

@@ -5,9 +5,39 @@
  * Every editable entry carries a stable, server-generated `id` (kept across edits; later overrides and the console refer to it).
  * A chat character is keyed by its character_templates id (`characterId`); a person who is not a chat character is a `people` entry.
  */
-export const CAST_SCHEMA = 1;
+export const CAST_SCHEMA = 2;
+/** The previous document schema. Read (in memory, losslessly) and never written; see apps/server/cast/cast-upgrade.ts. */
+export const CAST_LEGACY_SCHEMA = 1;
 
-/** Per-field caps (JavaScript string length) and counts. The document as a whole is capped by CAST_DOC_MAX. */
+/**
+ * LENGTH CONVENTION. Every text limit of the cast is JavaScript string length, i.e. UTF-16 code units: one 汉字 = 1, one ASCII letter
+ * = 1, one emoji outside the BMP = 2, a combining mark = 1. Spaces inside an item are part of it ("Mary Jane" is 9) and are never
+ * split on or collapsed. Leading / trailing whitespace, line breaks and control characters in an alias or an address are REJECTED
+ * with a located error, never trimmed. `castLength` and `castItemProblem` are the one implementation of this, used by the server
+ * validator and the admin editor alike (docs/CAST_FILE.md says the same in words).
+ */
+export const castLength = (value: string): number => value.length;
+/** Why an alias / address item is refused (null: it is fine). */
+export type CastItemProblem = 'empty' | 'control' | 'space' | 'long';
+// C0 and C1 controls (this includes tab, CR, LF, NEL) and the Unicode line / paragraph separators.
+const ITEM_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/u;
+const ITEM_EDGE_SPACE = /^\s|\s$/u;
+export function castItemProblem(value: string, max: number): CastItemProblem | null {
+  if (value.length === 0) return 'empty';
+  if (ITEM_CONTROL.test(value)) return 'control';
+  if (ITEM_EDGE_SPACE.test(value)) return 'space';
+  return castLength(value) > max ? 'long' : null;
+}
+
+/** The issue code of each item problem (the server validator and the admin editor report the same code, so the same sentence). */
+export const CAST_ITEM_CODE: Readonly<Record<CastItemProblem, string>> = Object.freeze({
+  empty: 'CAST_ITEM_EMPTY',
+  control: 'CAST_ITEM_CONTROL',
+  space: 'CAST_ITEM_EDGE_SPACE',
+  long: 'CAST_ITEM_TOO_LONG',
+});
+
+/** Per-field caps (JavaScript string length, see above) and counts. The document as a whole is capped by CAST_DOC_MAX. */
 export const CAST_LIMITS = Object.freeze({
   /** doc_json (and so a draft or a publication) never exceeds this many characters. */
   docMax: 300_000,
@@ -26,8 +56,8 @@ export const CAST_LIMITS = Object.freeze({
   names: 3,
   peopleNames: 2,
   name: 12,
-  aliases: 3,
-  alias: 12,
+  aliases: 12,
+  alias: 16,
   selfConcept: 240,
   prototypeText: 150,
   // sections of a chat character
@@ -47,8 +77,13 @@ export const CAST_LIMITS = Object.freeze({
   hidden: 5,
   hiddenText: 120,
   // relationships
+  /** 称呼: forms of address for one direction, in order. */
+  addresses: 6,
   address: 16,
   treatment: 100,
+  /** Document totals. 180 is 15 characters x 12 aliases, so it only binds if the character cap is ever raised; 1,200 binds. */
+  aliasesTotal: 180,
+  addressesTotal: 1_200,
   // groups and stories
   groupName: 20,
   groupBackground: 120,
@@ -73,6 +108,20 @@ export const CAST_BODY_LIMIT = 1_000_000;
 
 export type CastAliasAttitude = 'likes' | 'ok' | 'dislikes';
 export const CAST_ALIAS_ATTITUDES: readonly CastAliasAttitude[] = ['likes', 'ok', 'dislikes'];
+export const CAST_ALIAS_ATTITUDE_LABEL: Readonly<Record<CastAliasAttitude, string>> = Object.freeze({
+  likes: '喜欢',
+  ok: '可以',
+  dislikes: '不喜欢',
+});
+/** self 自称: how he refers to himself. other 别名: an alias / English name / nickname others may call him. neutral 中性称呼. insult 黑称. */
+export type CastAliasKind = 'self' | 'other' | 'neutral' | 'insult';
+export const CAST_ALIAS_KINDS: readonly CastAliasKind[] = ['self', 'other', 'neutral', 'insult'];
+export const CAST_ALIAS_KIND_LABEL: Readonly<Record<CastAliasKind, string>> = Object.freeze({
+  self: '自称',
+  other: '别名',
+  neutral: '中性称呼',
+  insult: '黑称',
+});
 /** 亲历 / 听说 / 不知道. */
 export type CastKnowledge = 'lived' | 'heard' | 'unknown';
 export const CAST_KNOWLEDGE: readonly CastKnowledge[] = ['lived', 'heard', 'unknown'];
@@ -83,12 +132,17 @@ export const CAST_KNOWLEDGE_LABEL: Readonly<Record<CastKnowledge, string>> = Obj
   unknown: '不知道',
 });
 
+/** The rule printed in a compiled view next to the names a character must not be called by. */
+export const CAST_DO_NOT_CALL_RULE = '不要主动这样叫';
+
 export interface CastText {
   id: string;
   text: string;
 }
 export interface CastAlias extends CastText {
-  /** How the character feels about being called this. */
+  /** What kind of name this is. Kept as written; never inferred from `attitude`. */
+  kind: CastAliasKind;
+  /** How the character feels about being called this. Kept as written; never inferred from `kind`. */
   attitude: CastAliasAttitude;
 }
 export interface CastExperience {
@@ -134,7 +188,8 @@ export interface CastDirection {
   id: string;
   from: string;
   to: string;
-  address: string;
+  /** 称呼: every form of address `from` uses for `to`, in order (0..6 items, each 1-16). */
+  addresses: CastText[];
   treatment: string;
 }
 export interface CastGroupStory {
@@ -208,7 +263,10 @@ export interface CastValidation {
 export interface CastCard {
   name: string;
   names: string[];
+  /** Names others may use: kind 'other' / 'neutral' whose attitude is likes / ok. Never 自称, never 黑称. */
   aliases: string[];
+  /** 黑称 and every name he dislikes: listed so they are NOT used. Absent when there are none. */
+  doNotCall?: { rule: string; items: string[] };
   oneLiner: string;
 }
 export interface CastViewStory {
@@ -227,7 +285,8 @@ export interface CastView {
     name: string;
     oneLiner: string;
     names: string[];
-    aliases: { text: string; attitude: CastAliasAttitude }[];
+    /** `kind` is spelled for the model: 自称 / 别名 / 中性称呼 / 黑称. */
+    aliases: { text: string; kind: string; attitude: CastAliasAttitude }[];
     selfConcept: string;
     prototype: { name: string; inherited: string; notInherited: string } | null;
     profile: string;
@@ -238,7 +297,7 @@ export interface CastView {
     hiddenSettings: { rule: string; items: string[] };
   };
   others: CastCard[];
-  relations: { to: string; rating?: number; address?: string; treatment?: string }[];
+  relations: { to: string; rating?: number; addresses?: string[]; treatment?: string }[];
   groups: {
     name: string;
     members: string[];

@@ -1,7 +1,7 @@
 {
   "format": "burbur-cast",
   "version": 1,
-  "schema": 1,
+  "schema": 2,
   "world": {
     "background": "虚构的海滨小城「澄港」，一群在同一条老街上开店、读书、排练的年轻人。一切人物与事件均为虚构。"
   },
@@ -11,7 +11,13 @@
       "identity": {
         "oneLiner": "老街唱片店的店员，嘴硬心软",
         "names": [{ "text": "周小禾" }],
-        "aliases": [{ "text": "小禾", "attitude": "likes" }, { "text": "周店员", "attitude": "dislikes" }],
+        "aliases": [
+          { "text": "小禾", "kind": "other", "attitude": "likes" },
+          { "text": "Hazel Zhou", "kind": "other", "attitude": "ok" },
+          { "text": "我这种守店的", "kind": "self", "attitude": "ok" },
+          { "text": "周店员", "kind": "neutral", "attitude": "dislikes" },
+          { "text": "冷场王", "kind": "insult", "attitude": "dislikes" }
+        ],
         "selfConcept": "觉得自己只是个守店的人，其实很在意别人有没有被好好听见。",
         "prototype": null
       },
@@ -58,7 +64,7 @@
       "identity": {
         "oneLiner": "总在老街写生的美术生",
         "names": [{ "text": "林小满" }],
-        "aliases": [{ "text": "满满", "attitude": "ok" }],
+        "aliases": [{ "text": "满满", "kind": "other", "attitude": "ok" }],
         "selfConcept": "觉得画下来的东西才算真正记住了。",
         "prototype": null
       },
@@ -98,13 +104,13 @@
     {
       "from": "role-example01",
       "to": "new:林小满",
-      "address": "小满",
+      "addresses": [{ "text": "小满" }, { "text": "林同学" }, { "text": "Mary Jane" }],
       "treatment": "嘴上嫌她慢，其实会替她留靠窗的位置。"
     },
     {
       "from": "new:林小满",
       "to": "role-example01",
-      "address": "小禾姐",
+      "addresses": [{ "text": "小禾姐" }],
       "treatment": "有点怕她的直接，但总忍不住靠近。"
     }
   ],
