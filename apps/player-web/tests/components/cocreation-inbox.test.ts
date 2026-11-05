@@ -270,16 +270,38 @@ test('复制 copies the answer as plain text, dialogue as a script', async (t) =
   assert.deepEqual(f.copied, ['哎呀妈呀', '玩家：你今天好厉害\n瓜瓜：才没有\n瓜瓜：哼']);
 });
 
-test('加入草稿 opens an inline editor prefilled with the answer and its suggested field, which can be changed', async (t) => {
+// Part 24b-6b: 加入草稿 no longer opens a new amber box. The right side always shows the target field's CURRENT draft text as ONE
+// editable box, and 加入草稿 puts the note INTO that text (at the caret, else at the end on its own line). The tests below keep what the
+// old ones guarded (the existing compare-and-swap save, the error words, the adopted lock) and say, per test, what moved.
+const box = (f: ReturnType<typeof setup>) => f.q('.cc-draft-field textarea')!;
+const add = async (f: ReturnType<typeof setup>, ordinal: number) => {
+  f.answer(ordinal).querySelector('.cc-adopt-open')!.click();
+  await flush();
+  await flush();
+};
+const saveDraft = async (f: ReturnType<typeof setup>) => {
+  f.q('.cc-adopt-save')!.click();
+  await flush();
+  await flush();
+};
+
+test('加入草稿 puts the note into the field the right side shows (one box, nothing new), and a free note can pick its field', async (t) => {
+  // Named exception (Part 24b-6b): replaces "opens an inline editor prefilled with the answer". There is no editor form; the box is
+  // the draft's own text and the note is inserted into it.
   const f = setup(t);
   await f.inbox.load();
-  const card = f.answer(1);
-  assert.equal(card.querySelector('.cc-adopt'), null);
-  card.querySelector('.cc-adopt-open')!.click();
-  const editor = f.q('.cc-adopt')!;
-  const field = editor.querySelector('select')!;
-  assert.equal(field.value, 'speechStyle');
-  assert.equal(editor.querySelector('textarea')!.value, '哎呀妈呀');
+  assert.equal(f.q('.cc-adopt'), null, 'no separate editor form exists');
+  await add(f, 1);
+  assert.equal(f.all('.cc-draft-field').length, 1, 'ONE box on the right');
+  assert.equal(box(f).value, '哎呀妈呀', 'the note is in the speechStyle text (which was empty)');
+  assert.equal(f.q('.cc-target-label')!.textContent, '瓜瓜 · 说话风格 · 口头禅');
+  assert.equal(f.answer(1).querySelector('.cc-adopt-open')!.disabled, true, 'the note cannot go in twice');
+  // A free answer picks its field: the destinations are the eight fields, never the free bucket, and it starts at the persona.
+  f.answer(3).querySelector('.cc-adopt-open')!.click();
+  await flush();
+  await flush();
+  const field = f.q('.cc-target select')!;
+  assert.equal(field.value, 'persona');
   assert.deepEqual(
     field.children.map((o) => (o as FakeElement).getAttribute('value')),
     [
@@ -294,32 +316,66 @@ test('加入草稿 opens an inline editor prefilled with the answer and its sugg
     ],
     'the free bucket is not a destination',
   );
-  field.value = 'interests';
-  field.dispatch('change');
-  assert.equal(editor.querySelector('textarea')!.value, '哎呀妈呀');
-  // A free answer suggests the persona.
-  f.answer(3).querySelector('.cc-adopt-open')!.click();
-  assert.equal(f.q('.cc-adopt select')!.value, 'persona');
-  // The dialogue answer suggests a structured example with an editable situation.
-  f.answer(0).querySelector('.cc-adopt-open')!.click();
-  const example = f.q('.cc-adopt')!;
-  assert.equal(example.querySelector('select')!.value, 'dialogueExamples');
-  const inputs = example.querySelectorAll('input');
+  assert.equal(box(f).value, '合成角色，非真实材料\n其实很怕黑', 'at the end, on its own line');
+  // The dialogue answer goes into a 示例对话 card: situation, what the player said, and the replies, one per line.
+  await add(f, 0);
+  const card = f.q('.cc-draft-card.is-example')!;
   assert.deepEqual(
-    inputs.map((i) => i.value),
-    ['日常聊天', '你今天好厉害', '才没有', '哼'],
+    card.querySelectorAll('input').map((i) => i.value),
+    ['日常聊天', '你今天好厉害'],
   );
-  assert.equal(example.querySelector('textarea')!.hidden, true);
-  assert.equal(example.querySelector('.cc-example')!.hidden, false);
+  assert.equal(card.querySelector('textarea')!.value, '才没有\n哼');
+  assert.equal(f.all('.cc-draft-card').length, 1, 'no card was added');
+});
+
+test('the note goes in at the caret: the text before and after is unchanged, no box or card appears, and it is saved exactly once', async (t) => {
+  const draftProfile = profile(4);
+  draftProfile.template.persona = '甲乙丙丁';
+  const f = setup(t, {
+    draft: {
+      characterId: 'wei-guagua',
+      revision: 7,
+      baseVersion: 3,
+      profile: draftProfile,
+      contentHash: 'h',
+      savedAt: 1,
+    },
+  });
+  await f.inbox.load();
+  await add(f, 3);
+  const area = box(f);
+  assert.equal(area.value, '甲乙丙丁\n其实很怕黑', 'never clicked in the box: at the end, on its own line');
+  assert.equal(f.all('textarea').length, 1);
+  // Back out, and do it again with the caret between 乙 and 丙.
+  f.q('.cc-adopt-cancel')!.click();
+  await flush();
+  await flush();
+  const again = box(f);
+  assert.equal(again.value, '甲乙丙丁');
+  again.selectionStart = again.selectionEnd = 2;
+  again.dispatch('click');
+  await add(f, 3);
+  assert.equal(box(f).value, '甲乙其实很怕黑丙丁', 'before and after are exactly what they were');
+  assert.equal(f.all('textarea').length, 1, 'no new box');
+  assert.equal(f.q('.cc-hit')!.textContent, '其实很怕黑', 'the passage is lit');
+  // It stays ordinary text: the administrator moves it to the end, then saves.
+  box(f).type_('甲乙丙丁其实很怕黑');
+  await saveDraft(f);
+  const [save] = callsOf(f, 'save');
+  assert.equal(save!.args[1], 7, 'compare-and-swap on the revision the box was read at');
+  const saved = save!.args[2] as CharacterProfile;
+  assert.equal(saved.template.persona, '甲乙丙丁其实很怕黑');
+  assert.equal(saved.template.persona.split('其实很怕黑').length - 1, 1, 'the note is in the saved draft exactly once');
+  assert.equal(callsOf(f, 'save').length, 1);
 });
 
 test('saving uses the existing draft save: no draft yet starts one from the published version, one version ahead', async (t) => {
+  // Named exception (Part 24b-6b): the text comes from the box (note inserted, then rewritten), not from a separate editor.
   const f = setup(t);
   await f.inbox.load();
-  f.answer(1).querySelector('.cc-adopt-open')!.click();
-  f.q('.cc-adopt textarea')!.type_('常说“哎呀妈呀”');
-  f.q('.cc-adopt')!.dispatch('submit');
-  await flush();
+  await add(f, 1);
+  box(f).type_('常说“哎呀妈呀”');
+  await saveDraft(f);
   const [save] = callsOf(f, 'save');
   assert.ok(save, 'the draft was saved');
   assert.equal(save!.args[1], null, 'expectedRevision is null without a draft');
@@ -332,7 +388,6 @@ test('saving uses the existing draft save: no draft yet starts one from the publ
     'then the answer is marked adopted',
   );
   assert.ok(f.answer(1).querySelector('.cc-chip-adopted'), '已采用');
-  assert.equal(f.q('.cc-adopt'), null, 'the editor closes');
   assert.match(f.q('.cc-detail-head')!.textContent, /已处理/, 'the submission became processed automatically');
   assert.match(f.all('.cc-row')[0]!.textContent, /已处理/);
   assert.match(f.all('.cc-row')[0]!.textContent, /已采用 1\/3/);
@@ -354,25 +409,23 @@ test('with an existing draft the save builds on it and sends its revision', asyn
     },
   });
   await f.inbox.load();
-  f.answer(3).querySelector('.cc-adopt-open')!.click();
-  f.q('.cc-adopt')!.dispatch('submit');
-  await flush();
+  await add(f, 3);
+  await saveDraft(f);
   const [save] = callsOf(f, 'save');
   assert.equal(save!.args[1], 7);
   const saved = save!.args[2] as CharacterProfile;
   assert.equal(saved.template.version, 4, 'the draft keeps its own version');
-  assert.equal(saved.template.persona, '草稿里的人设\n\n其实很怕黑', 'appended as a new paragraph');
+  // Named exception (Part 24b-6b): the note is added on its own line at the end ("\n"), where it was a new paragraph ("\n\n").
+  assert.equal(saved.template.persona, '草稿里的人设\n其实很怕黑', 'inserted on its own line');
 });
 
 test('a dialogue answer becomes a structured example {situation, player, reply[]} with the edited situation', async (t) => {
   const f = setup(t);
   await f.inbox.load();
-  f.answer(0).querySelector('.cc-adopt-open')!.click();
-  const editor = f.q('.cc-adopt')!;
-  const [situation] = editor.querySelectorAll('input');
+  await add(f, 0);
+  const [situation] = f.q('.cc-draft-card')!.querySelectorAll('input');
   situation!.type_('被夸奖时');
-  editor.dispatch('submit');
-  await flush();
+  await saveDraft(f);
   const saved = callsOf(f, 'save')[0]!.args[2] as CharacterProfile;
   assert.deepEqual((saved.template.authorCanon!.settings as { dialogueExamples: unknown }).dialogueExamples, [
     { situation: '被夸奖时', player: '你今天好厉害', reply: ['才没有', '哼'] },
@@ -380,7 +433,55 @@ test('a dialogue answer becomes a structured example {situation, player, reply[]
   assert.equal(callsOf(f, 'adopt').length, 1);
 });
 
+test('a list field keeps its cards: the note goes into the card with the caret, else the last card, and no card is added', async (t) => {
+  const listed = profile(3);
+  (listed.template as { authorCanon?: unknown }).authorCanon = {
+    kind: 'author_canon',
+    settings: {
+      interests: ['画画', '天文'],
+      dialogueExamples: [
+        { situation: 'A', player: 'p1', reply: ['r1'] },
+        { situation: 'B', player: 'p2', reply: ['r2'] },
+      ],
+    },
+  };
+  const f = setup(t, { published: { version: 3, profile: listed } });
+  await f.inbox.load();
+  // 兴趣话题 (a list of short items): the free note picks it after its first press (which went to the persona); two cards show.
+  await add(f, 3);
+  const pick = f.q('.cc-target select')!;
+  pick.value = 'interests';
+  pick.dispatch('change');
+  await flush();
+  await flush();
+  assert.equal(f.all('.cc-draft-card').length, 2);
+  const first = f.all('.cc-draft-card textarea')[0]!;
+  first.selectionStart = first.selectionEnd = 1;
+  first.dispatch('click');
+  await add(f, 3);
+  assert.deepEqual(
+    f.all('.cc-draft-card textarea').map((a) => a.value),
+    ['画其实很怕黑画', '天文'],
+    'into the card that held the caret, at the caret',
+  );
+  assert.equal(f.all('.cc-draft-card').length, 2, 'no card was added');
+  // 示例对话: with no click anywhere the note goes into the LAST card (its reply), at the end on its own line.
+  const g = setup(t, { published: { version: 3, profile: listed } });
+  await g.inbox.load();
+  await add(g, 1);
+  const g2 = g.answer(0);
+  g2.querySelector('.cc-adopt-open')!.click();
+  await flush();
+  await flush();
+  assert.equal(g.all('.cc-draft-card.is-example').length, 2);
+  const replies = g.all('.cc-draft-card.is-example textarea').map((a) => a.value);
+  assert.equal(replies[0], 'r1');
+  assert.equal(replies[1], 'r2\n才没有\n哼');
+  assert.equal(g.all('.cc-draft-card.is-example').length, 2, 'never a third card');
+});
+
 test('a text answer can be added to a list field, and to every other field the editor offers', async (t) => {
+  // Named exception (Part 24b-6b): the field is picked on the free note's select and the note goes into the box of that field.
   for (const field of [
     'persona',
     'speechStyle',
@@ -392,35 +493,36 @@ test('a text answer can be added to a list field, and to every other field the e
   ]) {
     const f = setup(t);
     await f.inbox.load();
-    f.answer(1).querySelector('.cc-adopt-open')!.click();
-    const editor = f.q('.cc-adopt')!;
-    editor.querySelector('select')!.value = field;
-    editor.querySelector('select')!.dispatch('change');
-    editor.dispatch('submit');
+    await add(f, 3);
+    const pick = f.q('.cc-target select')!;
+    pick.value = field;
+    pick.dispatch('change');
     await flush();
+    await flush();
+    await add(f, 3);
+    await saveDraft(f);
     const saved = callsOf(f, 'save')[0]!.args[2] as CharacterProfile;
-    if (field === 'persona') assert.match(saved.template.persona, /\n\n哎呀妈呀$/, field);
+    if (field === 'persona') assert.match(saved.template.persona, /\n其实很怕黑$/, field);
     else {
       const value = (saved.template.authorCanon!.settings as Record<string, unknown>)[field];
-      assert.ok(value === '哎呀妈呀' || (Array.isArray(value) && value[0] === '哎呀妈呀'), field);
+      assert.ok(value === '其实很怕黑' || (Array.isArray(value) && value[0] === '其实很怕黑'), field);
     }
     f.inbox.dispose();
   }
 });
 
-test('a failed save is shown inline, keeps the editor open and does not mark anything adopted', async (t) => {
+test('a failed save is shown inline, keeps the box open and does not mark anything adopted', async (t) => {
   const conflict = Object.assign(new Error('x'), { code: 'DRAFT_CONFLICT' });
   const f = setup(t, { saveError: conflict });
   await f.inbox.load();
-  f.answer(1).querySelector('.cc-adopt-open')!.click();
-  f.q('.cc-adopt')!.dispatch('submit');
-  await flush();
+  await add(f, 1);
+  await saveDraft(f);
   const error = f.q('.cc-adopt-error')!;
   assert.equal(error.hidden, false);
   assert.match(error.textContent, /草稿已在其他页面修改/);
   assert.equal(error.getAttribute('role'), 'alert');
   assert.equal(callsOf(f, 'adopt').length, 0, 'not adopted when the draft was not saved');
-  assert.ok(f.q('.cc-adopt'), 'still open for another try');
+  assert.equal(box(f).value, '哎呀妈呀', 'what was written is still there for another try');
   assert.equal(f.answer(1).querySelector('.cc-chip-adopted'), null);
   assert.match(f.all('.cc-row')[0]!.textContent, /新/);
   assert.equal(f.changed(), 0);
@@ -435,9 +537,8 @@ test('server validation errors and unknown errors are shown inline in words', as
   ] as const) {
     const f = setup(t, { saveError: Object.assign(new Error('x'), { code }) });
     await f.inbox.load();
-    f.answer(1).querySelector('.cc-adopt-open')!.click();
-    f.q('.cc-adopt')!.dispatch('submit');
-    await flush();
+    await add(f, 1);
+    await saveDraft(f);
     assert.match(f.q('.cc-adopt-error')!.textContent, pattern, code);
     f.inbox.dispose();
   }
@@ -446,10 +547,9 @@ test('server validation errors and unknown errors are shown inline in words', as
 test('an empty edit or an unusable existing field is explained inline before anything is saved', async (t) => {
   const f = setup(t);
   await f.inbox.load();
-  f.answer(1).querySelector('.cc-adopt-open')!.click();
-  f.q('.cc-adopt textarea')!.type_('   ');
-  f.q('.cc-adopt')!.dispatch('submit');
-  await flush();
+  await add(f, 1);
+  box(f).type_('   ');
+  await saveDraft(f);
   assert.match(f.q('.cc-adopt-error')!.textContent, /请先写下要加入的内容/);
   assert.equal(callsOf(f, 'save').length, 0);
 
@@ -460,26 +560,21 @@ test('an empty edit or an unusable existing field is explained inline before any
   };
   const g = setup(t, { published: { version: 3, profile: shaped } });
   await g.inbox.load();
-  g.answer(1).querySelector('.cc-adopt-open')!.click();
-  g.q('.cc-adopt')!.dispatch('submit');
-  await flush();
+  await add(g, 1);
   assert.match(g.q('.cc-adopt-error')!.textContent, /无法自动追加/);
   assert.equal(callsOf(g, 'save').length, 0);
 
   const none = setup(t, { published: null });
   await none.inbox.load();
-  none.answer(1).querySelector('.cc-adopt-open')!.click();
-  none.q('.cc-adopt')!.dispatch('submit');
-  await flush();
+  await add(none, 1);
   assert.match(none.q('.cc-adopt-error')!.textContent, /还没有可编辑的版本/);
 });
 
-test('if the draft saved but marking it adopted failed, the editor says so and never saves twice', async (t) => {
+test('if the draft saved but marking it adopted failed, the box says so and never saves twice', async (t) => {
   const f = setup(t, { adoptError: Object.assign(new Error('x'), { code: 'NETWORK' }) });
   await f.inbox.load();
-  f.answer(1).querySelector('.cc-adopt-open')!.click();
-  f.q('.cc-adopt')!.dispatch('submit');
-  await flush();
+  await add(f, 1);
+  await saveDraft(f);
   assert.equal(callsOf(f, 'save').length, 1);
   assert.match(f.q('.cc-adopt-error')!.textContent, /草稿已保存.*请勿重复加入/);
 });
@@ -752,20 +847,21 @@ test('24b-4 every row starts with the character colour dot and the full name; no
 test('an adopted note has 加入草稿 disabled and cannot be adopted twice; 取消采用 enables it again', async (t) => {
   const f = setup(t, { cast: true });
   await f.inbox.load();
-  f.answer(1).querySelector('.cc-adopt-open')!.click();
-  f.q('.cc-adopt textarea')!.type_('常说“哎呀妈呀”');
-  f.q('.cc-adopt')!.dispatch('submit');
-  await flush();
+  await add(f, 1);
+  box(f).type_('常说“哎呀妈呀”');
+  await saveDraft(f);
   assert.equal(callsOf(f, 'adopt').length, 1);
-  const add = () => f.answer(1).querySelector('.cc-adopt-open')!;
-  assert.equal(add().disabled, true, '加入草稿 is disabled once the note is adopted');
-  add().click();
-  assert.equal(f.q('.cc-adopt'), null, 'a click on the disabled button opens nothing');
+  const addButton = () => f.answer(1).querySelector('.cc-adopt-open')!;
+  assert.equal(addButton().disabled, true, '加入草稿 is disabled once the note is adopted');
+  const before = box(f).value;
+  addButton().click();
+  await flush();
+  assert.equal(box(f).value, before, 'a click on the disabled button puts nothing in');
   assert.equal(callsOf(f, 'adopt').length, 1, 'never a second adoption');
   f.answer(1).querySelector('.cc-unadopt')!.click();
   await flush();
   assert.equal(callsOf(f, 'unadopt').length, 1);
-  assert.equal(add().disabled, false, '取消采用 makes it available again');
+  assert.equal(addButton().disabled, false, '取消采用 makes it available again');
 });
 
 test('a pair note that is added to 关系与故事 has that button disabled too, until 取消采用', async (t) => {

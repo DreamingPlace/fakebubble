@@ -252,6 +252,18 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
           },
     );
   let rows = toRows();
+  // Part 24b-6b: a card the administrator has not written in yet (the one shown for a character with none, or one added with
+  // "+ 经历") is not part of the data until it has text: an empty untouched card is never saved. Kept out of the rows themselves,
+  // so a card that came in with the data is compared and re-emitted exactly as before.
+  const blank = new WeakSet<Past>();
+  const newCard = (): Past => {
+    const row: Past = { title: '', text: '', shape: 'object' };
+    blank.add(row);
+    return row;
+  };
+  if (!rows.length) rows = [newCard()];
+  const kept = () =>
+    rows.filter((row) => !(blank.has(row) && row.text.trim() === '' && (row.title ?? '').trim() === ''));
   const cards = h('div', { class: 'cn-cards' });
   const paint = () => {
     cards.replaceChildren();
@@ -281,6 +293,7 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
       const remove = h('button', { class: 'cn-x', text: '×', attrs: { type: 'button', 'aria-label': '去掉' } });
       remove.addEventListener('click', () => {
         rows = rows.filter((_, at) => at !== index);
+        if (!rows.length) rows = [newCard()];
         paint();
         onEdit();
       });
@@ -290,7 +303,7 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
       adder(
         '+ 经历',
         () => {
-          rows = [...rows, { title: '', text: '', shape: 'object' }];
+          rows = [...rows, newCard()];
           paint();
           onEdit();
         },
@@ -301,14 +314,14 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
   paint();
   box.append(cards);
   const emit = (): JsonValue =>
-    rows.map((row) =>
+    kept().map((row) =>
       row.shape === 'string' ? row.text : { ...(row.title !== undefined ? { title: row.title } : {}), text: row.text },
     );
-  const changed = () => !same(rows, toRows());
+  const changed = () => !same(kept(), toRows());
   return {
     node: box,
     changed,
-    read: () => (original === undefined && !rows.length ? undefined : changed() ? emit() : (original as JsonValue)),
+    read: () => (original === undefined && !kept().length ? undefined : changed() ? emit() : (original as JsonValue)),
   };
 }
 

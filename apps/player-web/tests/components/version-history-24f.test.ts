@@ -88,13 +88,25 @@ function fixture(t: { after(fn: () => void): void }, owner: boolean, extra: Part
   const view = versionHistory(root as unknown as HTMLElement, host);
   return { doc, root, view, log };
 }
-const bodyRows = (root: unknown) => el(root).querySelectorAll('.vh tbody tr');
+// Named exception (Part 24b-6b): the list is the console's open-below table (.ot-row), not a <table>; a row opens its detail below it.
+const bodyRows = (root: unknown) => el(root).querySelectorAll('.vh .ot-row');
+const openRow = async (root: unknown, index: number) => {
+  bodyRows(root)[index]!.click();
+  await flush();
+  await flush();
+};
+const detailOf = (root: unknown, version: number) => el(root).querySelector(`[data-key="${version}"] .ot-panel`)!;
+const ask = async (root: unknown, version: number) => {
+  el(root).querySelector(`[data-restore="${version}"]`)!.click();
+  await flush();
+};
 
 test('the list shows every version newest first: number, UTC time, role, origin, summary; the live one is marked', async (t) => {
   const f = fixture(t, true);
   await f.view.load('jojo');
   const lines = bodyRows(f.root).map((tr) => tr.textContent);
   assert.equal(lines.length, 3);
+  assert.equal(el(f.root).querySelector('.vh-more')!.hidden, true, 'three versions: nothing was cut off');
   assert.match(lines[0]!, /v3现行2026-10-24 09:30 UTC主管理员恢复自 v1改动：人设/);
   assert.match(lines[1]!, /v22026-10-23 09:30 UTC管理员仅改主色只改了主色/);
   assert.match(lines[2]!, /v1无记录系统导入发布初始版本/);
@@ -123,8 +135,7 @@ test('a non-owner sees the history and the same 不可恢复 note, but no restor
     true,
     'no explanatory sentence on the page',
   );
-  bodyRows(f.root)[1]!.click();
-  await flush();
+  await openRow(f.root, 1);
   assert.equal(el(f.root).querySelectorAll('[data-restore]').length, 0);
   assert.match(el(f.root).textContent, /完整快照（只读）/);
 });
@@ -132,10 +143,15 @@ test('a non-owner sees the history and the same 不可恢复 note, but no restor
 test('a snapshot is read only, with the 人设 / 网页展示 / 完整模板 groups against live and the version number set aside', async (t) => {
   const f = fixture(t, true);
   await f.view.load('jojo');
-  bodyRows(f.root)[1]!.click();
-  await flush();
-  const drawer = el(f.root).querySelector('.admin-drawer')!;
-  assert.equal(drawer.hidden, false);
+  await openRow(f.root, 1);
+  // Named exception (Part 24b-6b): the snapshot opens BELOW its row (V3), not in a side drawer; the checks on its content are unchanged.
+  const drawer = detailOf(f.root, 2);
+  assert.equal(drawer.getAttribute('data-state'), 'open');
+  assert.equal(
+    el(f.root).querySelectorAll('.admin-drawer, [role="dialog"], .admin-dialog').length,
+    0,
+    'no drawer, no dialog',
+  );
   assert.equal(drawer.querySelectorAll('textarea').length + drawer.querySelectorAll('input').length, 0);
   assert.equal(
     drawer.querySelectorAll('.pd-grid').length,
@@ -157,16 +173,21 @@ test('a snapshot is read only, with the 人设 / 网页展示 / 完整模板 gro
   );
 });
 
-test('restore asks once, in the words of the spec, then sends one request with the live version and the version asked for', async (t) => {
+test('restore asks once IN THE ROW, in the words of the spec, then sends one request with the live version and the version asked for', async (t) => {
   const f = fixture(t, true);
   await f.view.load('jojo');
-  el(f.root).querySelector('[data-restore]')!.click();
-  await flush();
-  const dialog = el(f.root).querySelector('.admin-dialog')!;
-  assert.equal(dialog.querySelector('p')!.textContent, '将以 v2 的内容发布为新版本 v4，玩家下一条消息起生效。');
+  await ask(f.root, 2);
+  // Named exception (Part 24b-6b): the question is the row's own inline confirm (no dialog element); 确认恢复 is that row's solid button.
+  const row = el(f.root).querySelector('[data-key="2"]')!;
+  const confirm = row.querySelector('.vh-confirm')!;
+  assert.equal(confirm.querySelector('.vh-confirm-text')!.textContent, '以 v4 重新发布 v2 的内容');
+  assert.equal(el(f.root).querySelectorAll('.admin-dialog, dialog, [role="dialog"]').length, 0, 'no dialog is opened');
   assert.equal(f.log.restore.length, 0, 'nothing is sent before the answer');
-  assert.equal(dialog.querySelectorAll('button')[1]!.className, 'admin-primary', '恢复此版本 is the primary action');
-  dialog.querySelectorAll('button')[1]!.click();
+  const go = confirm.querySelector('[data-restore-go]')!;
+  assert.equal(go.className, 'admin-primary', '确认恢复 is the primary action');
+  assert.equal(go.textContent, '确认恢复');
+  assert.equal(confirm.querySelector('[data-restore-cancel]')!.textContent, '取消');
+  go.click();
   await flush();
   await flush();
   assert.equal(f.log.restore.length, 1);
@@ -174,12 +195,52 @@ test('restore asks once, in the words of the spec, then sends one request with t
   assert.match((f.log.restore[0] as { requestId: string }).requestId, /^[0-9a-f-]{36}$/);
   assert.deepEqual(f.log.restored, [['jojo', 4]]);
   assert.match(f.log.status.at(-1)!, /v2 的内容已发布为新版本 v4/);
-  // Cancel sends nothing.
-  el(f.root).querySelector('[data-restore]')!.click();
-  await flush();
-  el(f.root).querySelector('.admin-dialog')!.querySelectorAll('button')[0]!.click();
+  assert.equal(f.log.loads, 2, 'the list is read again after the restore');
+  // Cancel sends nothing, and closes the question.
+  await ask(f.root, 2);
+  el(f.root).querySelector('[data-restore-cancel]')!.click();
   await flush();
   assert.equal(f.log.restore.length, 1);
+  assert.equal(el(f.root).querySelectorAll('.vh-confirm').length, 0);
+  assert.ok(el(f.root).querySelector('[data-restore="2"]'), '恢复此版本 is back');
+});
+
+test('a character with 7 versions lists only the latest 5, newest first, and says the older ones are kept', async (t) => {
+  const many: VersionRow[] = Array.from({ length: 7 }, (_, i) => ({
+    version: 7 - i,
+    publishedAt: AT - i * 86_400_000,
+    by: 'admin' as const,
+    origin: { kind: 'publish' as const },
+    summary: `第 ${7 - i} 次`,
+    live: i === 0,
+    restorable: i !== 0,
+    problem: null,
+  }));
+  const f = fixture(t, true, { history: async () => ({ characterId: 'jojo', live: 7, versions: many }) });
+  await f.view.load('jojo');
+  const lines = bodyRows(f.root).map((tr) => tr.textContent);
+  assert.equal(lines.length, 5);
+  assert.match(lines[0]!, /^v7现行/);
+  assert.match(lines[4]!, /^v3/);
+  assert.ok(!lines.some((line) => /^v[12]/.test(line)), 'v1 and v2 are not listed');
+  assert.match(el(f.root).querySelector('.vh-more')!.textContent, /只列出最近 5 个版本，共 7 个/);
+  assert.equal(el(f.root).querySelector('.vh-more')!.hidden, false);
+});
+
+test('opening a second row closes the first; an unanswered restore question goes with it; the detail sits under its own row', async (t) => {
+  const f = fixture(t, true);
+  await f.view.load('jojo');
+  await ask(f.root, 2);
+  await openRow(f.root, 0);
+  assert.equal(
+    el(f.root).querySelectorAll('.vh-confirm').length,
+    0,
+    'the question is dropped when another row is looked at',
+  );
+  assert.equal(detailOf(f.root, 3).getAttribute('data-state'), 'open');
+  await openRow(f.root, 1);
+  assert.equal(detailOf(f.root, 3).getAttribute('data-state'), 'closed');
+  assert.equal(detailOf(f.root, 2).getAttribute('data-state'), 'open');
 });
 
 test('an uncertain failure keeps the request id, so the same click asks the same question; a refusal ends the attempt and says why', async (t) => {
@@ -194,23 +255,24 @@ test('an uncertain failure keeps the request id, so the same click asks the same
     },
   });
   await f.view.load('jojo');
-  const ask = async () => {
+  // Named exception (Part 24b-6b): the answer is 确认恢复 in the row, not a dialog button.
+  const again = async () => {
     el(f.root).querySelector('[data-restore]')!.click();
     await flush();
-    el(f.root).querySelector('.admin-dialog')!.querySelectorAll('button')[1]!.click();
+    el(f.root).querySelector('[data-restore-go]')!.click();
     await flush();
     await flush();
   };
-  await ask();
-  await ask();
+  await again();
+  await again();
   assert.equal(seen[0], seen[1], 'same id after a lost answer');
   assert.match(el(f.root).querySelector('.vh-note[role="status"]')!.textContent, /没有改动任何版本/);
   mode = 'busy';
-  await ask();
+  await again();
   assert.equal(seen[2], seen[0], 'still the same attempt');
   assert.match(el(f.root).querySelector('.vh-note[role="status"]')!.textContent, /未结束的玩家任务.*不会取消或重发/);
   mode = 'ok';
-  await ask();
+  await again();
   assert.notEqual(seen[3], seen[0], 'a definite refusal ended the attempt: the next one is a new request');
 });
 

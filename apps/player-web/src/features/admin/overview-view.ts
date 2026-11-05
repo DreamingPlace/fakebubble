@@ -410,7 +410,13 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     const utc = h('span', { class: 'is-mono', text: `UTC ${view.day}` });
     if (stats?.since) hoverValue(utc, `统计自 ${stats.since} 起`);
     const pill = note
-      ? h('a', { class: 'ov-warn', attrs: { href: '#/system' } }, h('i'), note)
+      ? h(
+          'a',
+          // A failing cleanup goes straight to its section (and its table) in 系统状态; the other warnings to the page.
+          { class: 'ov-warn', attrs: { href: view.warnings.retentionFailing > 0 ? '#/system/cleanup' : '#/system' } },
+          h('i'),
+          note,
+        )
       : h('span', { class: 'is-ok', text: '正常' });
     fillStatus(status, utc, pill);
   }

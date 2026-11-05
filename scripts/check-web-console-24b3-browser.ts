@@ -453,7 +453,8 @@ try {
   await page.waitForFunction(() => !document.body.innerText.includes('有没保存的修改'), null, { timeout: 20_000 });
   await page.getByRole('button', { name: /^发布 v1$/ }).click();
   await page.getByRole('button', { name: '发布', exact: true }).click();
-  await page.waitForSelector('.cs-version[data-version="1"]', { timeout: 20_000 });
+  // Named exception (Part 24b-6b): 整页版本 is the shared version list; a version is the row [data-key] of its open-below table.
+  await page.waitForSelector('.cs-versions [data-key="1"]', { timeout: 20_000 });
   const published = await (await post('cast/versions', {})).json();
   assert.equal(published.latest, 1, 'the cast was published with three characters that are not live');
   assert.equal(published.versions[0].counts.characters, 15);
@@ -701,7 +702,7 @@ try {
   // ---- 关系与故事: every editor, with cast.edit and with cast.read only ----
   await go('cast', '.cs-cell[data-from]');
   await wait(900);
-  assert.equal(await page.locator('.cs-version[data-version="1"]').count(), 1);
+  assert.equal(await page.locator('.cs-versions [data-key="1"]').count(), 1);
   // a group with members picked
   await page.locator('.cs-group-card').nth(1).click();
   const memberChips = page.locator('.cs-groups-card .cs-picker .cs-chip');
@@ -783,7 +784,7 @@ try {
   const readerState = await reader.p2.evaluate(() => ({
     editable: document.querySelectorAll('.cs input[type="text"]:not([readonly]), .cs textarea:not([readonly])').length,
     adds: [...document.querySelectorAll('.cs button')].filter((b) =>
-      /^\+ |^删除|^从阵容移除|^保存草稿$|^发布 v|^回滚/.test((b.textContent ?? '').trim()),
+      /^\+ |^删除|^从阵容移除|^保存草稿$|^发布 v|^恢复此版本/.test((b.textContent ?? '').trim()),
     ).length,
     stars: [...document.querySelectorAll('.cs-star-hit')].every((b) => (b as HTMLButtonElement).disabled),
     know: [...document.querySelectorAll('.cs-know')].every((b) => (b as HTMLButtonElement).disabled),

@@ -1504,7 +1504,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       run: (work) => host.run(work),
       disposed: gone,
       errorText: characterAdminError,
-      overlay: () => (root.closest?.('.admin-shell') as HTMLElement | null) ?? root,
       // The live version, the draft's base and the publish step all moved: read the role again (an unsaved edit is never thrown away).
       onRestored: async () => {
         if (!dirty) await open(target);

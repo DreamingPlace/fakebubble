@@ -3,11 +3,12 @@ import { mkdirSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { startConsoleFixture } from './console-fixture-24b6.ts';
 import { decodePng } from './png-pixels.ts';
+import { run24b6bChecks } from './console-24b6b-checks.ts';
 
 /**
  * Part 24b-6: the V3 admin console in a REAL browser (Chromium), on the synthetic site of console-fixture-24b6.ts (15 characters, a full
  * cast, 9 inbox notes - and then 1 -, 4 invite batches, a month of counters and spend). Every page is opened at 1280×800, 1440×900 and
- * 1680×1050 and holds to the rules the owner set for V3:
+ * 1920×1080 and holds to the rules the owner set for V3:
  *   - no sideways scroll, nothing outside its box (the 生成邀请码 button sits inside its card);
  *   - at most one solid primary per screen (exactly one on the pages that act);
  *   - every chart point and numeric cell shows its exact value in the light bubble;
@@ -27,7 +28,8 @@ if (shots) mkdirSync(shots, { recursive: true });
 const SIZES = [
   [1280, 800],
   [1440, 900],
-  [1680, 1050],
+  // Named exception (Part 24b-6b): the third size is 1920×1080 (the owner's three sizes), where it was 1680×1050.
+  [1920, 1080],
 ] as const;
 // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
 type Page = any;
@@ -47,6 +49,7 @@ const PAGES: { route: string; panel: string; name: string; primary: 0 | 1 }[] = 
 
 const f = await startConsoleFixture();
 let failure: unknown = null;
+let mainPassed = false;
 const errors: string[] = [];
 const problems: string[] = [];
 const check = (condition: unknown, message: string) => {
@@ -390,22 +393,24 @@ try {
       );
       check(under?.full === true, '共创收件箱: the detail is not as wide as the grid');
       await shot('cocreation-detail');
-      // the amber edit: 加入草稿 opens the suggested text in amber, editable in place
-      const adopt = page.locator('.cc-adopt-open').first();
+      // Named exception (Part 24b-6b): 加入草稿 no longer opens an amber editor of its own. It puts the note INTO the draft's text (the one
+      // box on the right), highlighted for a moment and editable; the precise checks (caret, no new box, saved once) are in 24b-6b's checks.
+      const adopt = page.locator('.cc-adopt-open:not([disabled])').first();
       if ((await adopt.count()) > 0) {
+        const boxCount = await page.locator('.cc-detail-grid textarea').count();
         await adopt.click();
         await wait(700);
-        const amber = await page.evaluate(() => {
-          const form = document.querySelector('.cc-adopt') as HTMLElement | null;
-          if (!form) return null;
-          const field = form.querySelector('textarea, input') as HTMLElement | null;
-          return field ? getComputedStyle(field).borderColor : null;
-        });
+        const put = await page.evaluate(() => ({
+          form: !!document.querySelector('.cc-adopt'),
+          lit: !!document.querySelector('.cc-mirror mark.cc-hit'),
+          boxes: document.querySelectorAll('.cc-detail-grid textarea').length,
+        }));
         check(
-          amber === 'rgb(217, 164, 65)' || amber !== null,
-          `共创收件箱: the adopt field has no amber border (${amber})`,
+          !put.form && put.lit,
+          `共创收件箱: 加入草稿 did not put the note into the draft box (${JSON.stringify(put)})`,
         );
-        await shot('cocreation-amber-edit');
+        check(put.boxes === boxCount, `共创收件箱: 加入草稿 added a box (${boxCount} → ${put.boxes})`);
+        await shot('cocreation-note-in-draft');
       }
     }
   }
@@ -996,6 +1001,7 @@ try {
         area.getBoundingClientRect().top >= b!.top &&
         area.getBoundingClientRect().bottom <= b!.bottom + 1
       ),
+      lit: !!document.querySelector('.cc-mirror mark.cc-hit'),
       border: area ? getComputedStyle(area).borderTopColor : '',
       fill: area ? getComputedStyle(area).backgroundColor : '',
       select: select
@@ -1010,10 +1016,9 @@ try {
     };
   });
   check(adopt.inside, '共创收件箱: the suggested text is not inside the draft box');
-  check(
-    adopt.border === 'rgb(217, 164, 65)' && adopt.fill === 'rgb(253, 246, 230)',
-    `共创收件箱: the appended text is ${adopt.border} / ${adopt.fill} (amber)`,
-  );
+  // Named exception (Part 24b-6b): the appended note is no longer an amber box of its own; it is part of the draft's one text box,
+  // highlighted for a moment (a <mark> in the mirror under the text) and ordinary text after that.
+  check(adopt.lit, `共创收件箱: the note put into the draft box is not highlighted (box border ${adopt.border})`);
   check(
     !adopt.select || !adopt.select.visible || (adopt.select.above && adopt.select.height <= 36),
     `共创收件箱: the field picker is not a compact select above the box ${JSON.stringify(adopt.select)}`,
@@ -1871,12 +1876,48 @@ try {
     if (sectionFilm) renameSync(sectionFilm, join(shots, 'workbench-sections.webm'));
     if (castPath) renameSync(castPath, join(shots, 'cast-cell-to-story.webm'));
   }
-  process.stdout.write('console 24b-6 browser check: PASS\n');
+  mainPassed = true;
 } catch (error) {
   failure = error;
   process.stderr.write(`page errors so far: ${JSON.stringify(errors)}\n`);
 } finally {
   await f.close();
+}
+// Part 24b-6b: the checks of this part. They change data (versions, a saved draft, a restore), so they run on a site of their own: the
+// same synthetic site started afresh, once this one is closed (both listen on the same port).
+if (mainPassed) {
+  const g = await startConsoleFixture();
+  try {
+    const page2: Page = await g.context.newPage();
+    page2.on('pageerror', (error: unknown) => problems.push(`24b-6b pageerror ${String(error)}`));
+    await run24b6bChecks({
+      f: g,
+      page: page2,
+      wait: (ms = 600) => page2.waitForTimeout(ms),
+      open: async (route: string) => {
+        await page2.goto(`${g.origin}/?mode=provider-admin#/${route}`);
+        await page2.reload();
+        await page2.locator('.admin-content').first().waitFor({ timeout: 20_000 });
+        await page2.waitForTimeout(1400);
+      },
+      shot: async (name: string) => {
+        if (!shots) return;
+        await page2.waitForTimeout(300);
+        await page2.screenshot({ path: join(shots, `${name}.png`) });
+      },
+      check,
+      sizes: SIZES,
+    });
+  } catch (error) {
+    failure = error;
+  } finally {
+    await g.close();
+  }
+  if (!failure && problems.length) {
+    process.stderr.write(`${problems.length} problem(s):\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
+    failure = new Error('console 24b-6b checks failed');
+  }
+  if (!failure) process.stdout.write('console 24b-6 browser check: PASS (with the 24b-6b checks)\n');
 }
 if (failure) {
   console.error(failure);

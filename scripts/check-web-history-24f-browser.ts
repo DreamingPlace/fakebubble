@@ -219,7 +219,11 @@ try {
     if (shots) await page.screenshot({ path: join(shots, `${name}.png`) });
   };
   const rail = (page: any, label: string) => page.locator('.wb-card .wb-tab', { hasText: label });
-  const rows = (page: any) => page.locator('.vh .admin-table tbody tr');
+  // Named exception (Part 24b-6b): the list is the console's open-below table (.ot-row), one row per version; the snapshot opens BELOW its
+  // row and 恢复此版本 asks IN its row (no side drawer, no dialog), and only the latest 5 versions are listed.
+  const rows = (page: any) => page.locator('.vh .ot-row');
+  const detailOf = (page: any, version: number) =>
+    page.locator(`.vh [data-key="${version}"] .ot-panel[data-state="open"]`);
 
   // =============== the owner: history list ===============
   const page = await pageOf(owner, `characters/${ID}`, '.wb-card .wb-tab');
@@ -245,7 +249,7 @@ try {
       const found: string[] = [];
       const name = (n: Element) =>
         `${n.tagName.toLowerCase()}.${String((n as HTMLElement).className).split(' ')[0]} "${(n.textContent ?? '').trim().slice(0, 16)}"`;
-      const wrap = document.querySelector('.vh .admin-table-wrap') as HTMLElement | null;
+      const wrap = document.querySelector('.vh .ot') as HTMLElement | null;
       if (wrap && wrap.scrollWidth > wrap.clientWidth + 1) found.push('the table scrolls sideways');
       if (document.documentElement.scrollWidth > document.documentElement.clientWidth)
         found.push('the page scrolls sideways');
@@ -276,10 +280,17 @@ try {
 
   // =============== a snapshot with its difference from the live version ===============
   await rows(page).nth(3).click();
-  await page.locator('.admin-drawer:not([hidden]) .vh-head').waitFor();
-  const drawer = page.locator('.admin-drawer:not([hidden])');
+  const drawer = detailOf(page, SEED);
+  await drawer.locator('.vh-title').first().waitFor();
   const drawerText = (await drawer.innerText()) as string;
-  assert.match(drawerText, new RegExp(`v${SEED}\\n`));
+  assert.equal(
+    await page.locator('.admin-drawer:not([hidden]), .admin-dialog').count(),
+    0,
+    'no drawer and no dialog is open',
+  );
+  const rowBox = await rows(page).nth(3).boundingBox();
+  const panelBox = await drawer.boundingBox();
+  assert.ok(panelBox.y >= rowBox.y + rowBox.height - 2, 'the detail opens directly below its row');
   assert.match(drawerText, /完整快照（只读）/);
   assert.match(drawerText, /与现行版本的差异/);
   assert.equal(await drawer.locator('textarea, input').count(), 0, 'the snapshot is read only');
@@ -288,17 +299,18 @@ try {
   await snap(page, '02-snapshot-and-diff');
 
   // =============== the restore confirm ===============
-  await drawer.locator('[data-restore]').click();
-  const dialog = page.locator('.admin-dialog');
-  await dialog.waitFor();
+  await rows(page).nth(3).locator('[data-restore]').click();
+  const confirm = page.locator('.vh .vh-confirm');
+  await confirm.waitFor();
   assert.equal(
-    ((await dialog.locator('p').innerText()) as string).trim(),
-    `将以 v${SEED} 的内容发布为新版本 v${LIVE + 1}，玩家下一条消息起生效。`,
+    ((await confirm.locator('.vh-confirm-text').innerText()) as string).trim(),
+    `以 v${LIVE + 1} 重新发布 v${SEED} 的内容`,
   );
+  assert.equal(await page.locator('.admin-dialog, dialog[open]').count(), 0, 'the question is inline, not a dialog');
   await snap(page, '03-restore-confirm');
-  await dialog.getByRole('button', { name: '取消' }).click();
-  assert.equal(await page.locator('.admin-dialog').count(), 0);
-  await page.locator('.admin-drawer:not([hidden]) .admin-drawer-head .admin-secondary').click();
+  await confirm.getByRole('button', { name: '取消' }).click();
+  assert.equal(await page.locator('.vh .vh-confirm').count(), 0);
+  await rows(page).nth(3).click();
 
   // =============== 不可恢复: the row, and a direct call ===============
   await snap(page, '04-unrestorable-row');
@@ -321,7 +333,7 @@ try {
     NOW + 60_000,
   );
   await rows(page).nth(1).locator('[data-restore]').click();
-  await page.locator('.admin-dialog').getByRole('button', { name: '恢复此版本' }).click();
+  await page.locator('.vh').getByRole('button', { name: '确认恢复' }).click();
   await page.locator('.vh .vh-note[role="status"]:not([hidden])').waitFor({ timeout: 5000 });
   // The toast says the same as the note under the intro; the picture is taken once it has gone, so it covers nothing.
   await page.locator('.admin-toast').waitFor({ state: 'detached', timeout: 8000 });
@@ -342,8 +354,8 @@ try {
   // =============== restore, for real ===============
   const draftBase = (await okPost(owner, `characters/${ID}/detail`, {})).draft;
   await rows(page).nth(1).locator('[data-restore]').click();
-  await page.locator('.admin-dialog').getByRole('button', { name: '恢复此版本' }).click();
-  await page.locator('.vh .admin-table tbody tr').nth(4).waitFor();
+  await page.locator('.vh').getByRole('button', { name: '确认恢复' }).click();
+  await page.locator('.vh .ot-row').nth(4).waitFor();
   assert.equal(await rows(page).count(), 5);
   assert.match(await text(0), new RegExp(`v${LIVE + 1} 现行 .* 主管理员 恢复自 v${SEED + 2}`));
   assert.equal(
@@ -409,12 +421,14 @@ try {
   assert.equal(await view.getByRole('button', { name: /删除/ }).count(), 0, 'no delete button anywhere on the page');
   await rail(view, '版本历史').click();
   await rows(view).first().waitFor();
-  assert.equal(await rows(view).count(), 6, 'the non-owner sees every version');
+  // Named exception (Part 24b-6b): six versions exist by now, and the list shows the latest 5 (the older one stays in the database).
+  assert.equal(await rows(view).count(), 5, 'the non-owner sees the latest five versions');
+  assert.match(await view.locator('.vh .vh-more').innerText(), /只列出最近 5 个版本，共 6 个/);
   assert.equal(await view.locator('[data-restore]').count(), 0, 'no restore button for a non-owner');
   await snap(view, '08-non-owner-list');
   await rows(view).nth(2).click();
-  await view.locator('.admin-drawer:not([hidden]) .admin-kv').first().waitFor();
-  assert.equal(await view.locator('.admin-drawer [data-restore]').count(), 0, 'nor in the snapshot');
+  await view.locator('.vh .ot-panel[data-state="open"] .admin-kv').first().waitFor();
+  assert.equal(await view.locator('.vh [data-restore]').count(), 0, 'nor in the snapshot');
   await snap(view, '08b-non-owner-snapshot');
   expected.push(`/characters/${ID}/delete-preview`, `/characters/${ID}/delete-start`, `/characters/${ID}/restore`);
   for (const [path, body] of [

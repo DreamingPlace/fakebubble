@@ -1,4 +1,4 @@
-import type { CharacterAdminClient, CharacterProfile, VersionSnapshot } from '../../../services/character-admin-api.ts';
+import type { CharacterAdminClient, VersionSnapshot } from '../../../services/character-admin-api.ts';
 import {
   RESTORE_PROBLEM_TEXT,
   type VersionActor,
@@ -8,18 +8,17 @@ import {
 } from '../../../../../../packages/contracts/web-character-history.ts';
 import { h } from '../../cocreation/h.ts';
 import { dateTimeText } from '../system-format.ts';
-import { confirmDialog } from '../ui/confirm-dialog.ts';
-import { dataTable } from '../ui/data-table.ts';
-import { drawer } from '../ui/drawer.ts';
+import { historyList, type HistoryEntry } from './history-list.ts';
 import { keyValuePanel } from '../ui/key-value-panel.ts';
 import { diffSideBySide, type Piece } from '../preview/diff.ts';
 import { presentationFields, readableGroups, templateFields } from './readable.ts';
-import { statusBadge } from '../ui/status-badge.ts';
 
 /**
  * 版本历史 (Part 24f): the published versions of one character, a read-only snapshot of each with its difference from the live
  * version, and (owner only) 恢复此版本. It is a module of its own on the shared admin components, so the console can be restyled
  * without touching its logic: the host only hands in the client, who is looking, and what to do after a restore.
+ * Part 24b-6b: the list is the console's shared one (history-list.ts): the latest 5, a row opens its snapshot BELOW it, and 恢复此版本
+ * asks in the same row. There is no drawer and no dialog any more.
  */
 export type HistoryHost = {
   api: Pick<CharacterAdminClient, 'history' | 'historyVersion' | 'restore'>;
@@ -33,8 +32,6 @@ export type HistoryHost = {
   onRestored: (characterId: string, version: number) => void | Promise<void>;
   /** The page's own wording for an error code (null: none). */
   errorText?: (error: unknown) => string | null;
-  /** Where the drawer and the confirm dialog hang (default: inside `root`). */
-  overlay?: () => HTMLElement;
 };
 
 const ACTOR: Record<VersionActor, string> = { owner: '主管理员', admin: '管理员', system: '系统导入' };
@@ -68,110 +65,30 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
   const attempts = new Map<string, string>();
   const gone = () => disposed || host.disposed();
   const intro = h('p', { class: 'vh-note' });
-  const failure = h('p', { class: 'vh-note', hidden: true, attrs: { role: 'status' } });
-  const table = dataTable<VersionRow>({
-    caption: '版本历史',
-    emptyText: '还没有已发布的版本。',
-    rowKey: (row) => String(row.version),
-    openOn: 'click',
-    onRowOpen: (row) => void openVersion(row),
-    columns: [
-      {
-        key: 'version',
-        label: '版本',
-        render: (row) =>
-          h('span', { class: 'vh-version' }, `v${row.version}`, row.live ? statusBadge('现行', 'ok') : null),
-      },
-      {
-        key: 'publishedAt',
-        label: '时间 · 发布者',
-        render: (row) =>
-          h(
-            'span',
-            { class: 'vh-stack' },
-            h('span', { text: row.publishedAt === null ? '无记录' : dateTimeText(row.publishedAt) }),
-            h('small', { text: ACTOR[row.by] }),
-          ),
-      },
-      {
-        key: 'origin',
-        label: '来源 · 改动',
-        render: (row) =>
-          h(
-            'span',
-            { class: 'vh-stack vh-what' },
-            h('span', { text: originText(row.origin) }),
-            h('small', { text: row.summary }),
-            row.problem && !row.live ? h('small', { class: 'vh-why', text: RESTORE_PROBLEM_TEXT[row.problem] }) : null,
-          ),
-      },
-      { key: 'actions', label: '', align: 'end', render: (row) => actions(row) },
-    ],
+  const list = historyList({
+    label: '版本历史',
+    detail: (entry) => openVersion(entry),
+    canRestore: () => host.isOwner(),
+    restore: (entry) => host.run(() => restore(entry)),
   });
   intro.textContent = '读取版本历史…';
-  table.root.hidden = true;
-  const box = h('div', { class: 'vh' }, intro, failure, table.root);
+  list.root.hidden = true;
+  const box = h('div', { class: 'vh-wrap' }, intro, list.root);
   root.append(box);
-  // The drawer and the confirm dialog are fixed to the window, so they hang on the console's frame, not inside the editor card
-  // (a card that animates or clips would carry them along).
-  const overlay = host.overlay?.() ?? root;
-  const panel = drawer(overlay, { title: '版本', wide: true });
 
-  /** What can be done with a version: look at it, and (owner) restore it, or why it cannot be restored. */
-  function actions(row: VersionRow) {
-    const cell = h('span', { class: 'vh-actions' });
-    const view = h('button', {
-      class: 'admin-secondary',
-      text: '查看',
-      attrs: { type: 'button', 'aria-label': `查看 v${row.version}` },
-    });
-    view.addEventListener('click', (event) => {
-      event.stopPropagation();
-      void openVersion(row);
-    });
-    cell.append(view);
-    cell.append(...restoreControls(row, true));
-    return cell;
-  }
-  function restoreControls(row: VersionRow, compact: boolean): Node[] {
-    if (row.live) return [];
-    if (row.problem)
-      return [
-        h(
-          'span',
-          { class: 'vh-lost' },
-          statusBadge('不可恢复', 'danger'),
-          compact ? null : h('span', { class: 'vh-why', text: RESTORE_PROBLEM_TEXT[row.problem] }),
-        ),
-      ];
-    if (!host.isOwner()) return [];
-    const button = h('button', {
-      class: compact ? 'admin-secondary' : 'admin-primary',
-      text: '恢复此版本',
-      attrs: {
-        type: 'button',
-        'data-restore': String(row.version),
-        ...(compact ? { 'aria-label': `恢复此版本 v${row.version}` } : {}),
-      },
-    });
-    button.addEventListener('click', (event) => {
-      event.stopPropagation();
-      void host.run(() => restore(row));
-    });
-    return [button];
-  }
+  const entryOf = (row: VersionRow): HistoryEntry => ({
+    version: row.version,
+    live: row.live,
+    when: row.publishedAt === null ? '无记录' : dateTimeText(row.publishedAt),
+    by: ACTOR[row.by],
+    origin: originText(row.origin),
+    summary: row.summary,
+    problem: row.problem ? RESTORE_PROBLEM_TEXT[row.problem] : null,
+  });
 
-  async function restore(row: VersionRow) {
+  async function restore(row: HistoryEntry) {
     const live = history?.live;
     if (live === null || live === undefined || !host.isOwner()) return;
-    const next = live + 1;
-    const ok = await confirmDialog(overlay, {
-      title: `恢复 v${row.version}`,
-      message: `将以 v${row.version} 的内容发布为新版本 v${next}，玩家下一条消息起生效。`,
-      confirmLabel: '恢复此版本',
-      primary: true,
-    });
-    if (!ok || gone()) return;
     show(null);
     const key = `${characterId}:${row.version}:${live}`;
     if (!attempts.has(key)) attempts.set(key, crypto.randomUUID());
@@ -183,7 +100,7 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
       });
       attempts.delete(key);
       if (gone()) return;
-      panel.close();
+      list.closeAll();
       host.status(`已恢复：v${result.restoredFrom} 的内容已发布为新版本 v${result.version}，玩家下一条消息起生效。`);
       await host.onRestored(characterId, result.version);
       if (!gone()) await load(characterId);
@@ -200,37 +117,30 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
   }
 
   function show(text: string | null) {
-    failure.hidden = text === null;
-    failure.textContent = text ?? '';
+    list.setNote(text);
     if (text) host.status(text);
   }
 
-  async function openVersion(row: VersionRow) {
+  /** The detail under a row: returned at once ("读取中…"), filled when the snapshot has been read. */
+  function openVersion(row: HistoryEntry): Node {
     const mine = token;
-    panel.setTitle(row.publishedAt === null ? `v${row.version}` : `v${row.version} · ${dateTimeText(row.publishedAt)}`);
-    panel.body.replaceChildren(h('p', { class: 'vh-note', text: '读取中…' }));
-    panel.open();
-    let snapshot: VersionSnapshot;
-    try {
-      snapshot = await host.api.historyVersion(characterId, row.version);
-    } catch (error) {
-      if (gone() || mine !== token) return;
-      panel.body.replaceChildren(h('p', { class: 'vh-note', text: host.errorText?.(error) ?? '这一版没有读取成功。' }));
-      return;
-    }
-    if (gone() || mine !== token) return;
-    paintSnapshot(snapshot);
+    const detail = h('div', { class: 'vh-detail ot-detail' }, h('p', { class: 'vh-note', text: '读取中…' }));
+    void (async () => {
+      try {
+        const snapshot = await host.api.historyVersion(characterId, row.version);
+        if (gone() || mine !== token) return;
+        detail.replaceChildren(...snapshotNodes(snapshot));
+      } catch (error) {
+        if (gone() || mine !== token) return;
+        detail.replaceChildren(h('p', { class: 'vh-note', text: host.errorText?.(error) ?? '这一版没有读取成功。' }));
+      }
+    })();
+    return detail;
   }
 
-  function paintSnapshot(snapshot: VersionSnapshot) {
-    const body = panel.body,
-      { template } = snapshot.profile;
-    body.replaceChildren();
-    const controls = [snapshot.live ? statusBadge('现行', 'ok') : null, ...restoreControls(snapshot, false)].filter(
-      (node): node is Node => node !== null,
-    );
-    body.append(
-      ...(controls.length ? [h('div', { class: 'vh-head' }, ...controls)] : []),
+  function snapshotNodes(snapshot: VersionSnapshot): Node[] {
+    const { template } = snapshot.profile;
+    return [
       keyValuePanel([
         ['发布时间', snapshot.publishedAt === null ? '无记录（初始导入）' : dateTimeText(snapshot.publishedAt)],
         ['发布者', ACTOR[snapshot.by]],
@@ -246,7 +156,7 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
       h('div', { class: 'vh-text', text: template.persona }),
       h('h5', { class: 'vh-group', text: '完整模板' }),
       keyValuePanel(templateFields(snapshot.profile).map(([label, value]) => [label, fieldNode(value)] as const)),
-    );
+    ];
   }
 
   /** The difference from the live version, in the groups 资料改动 uses. */
@@ -274,15 +184,14 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
     if (gone() || mine !== token) return;
     history = result;
     intro.hidden = true;
-    table.setRows(result.versions);
-    table.root.hidden = false;
+    list.setEntries(result.versions.map(entryOf), result.live);
+    list.root.hidden = false;
   }
 
   return {
     load,
     dispose() {
       disposed = true;
-      panel.dispose();
       box.remove();
     },
   };
