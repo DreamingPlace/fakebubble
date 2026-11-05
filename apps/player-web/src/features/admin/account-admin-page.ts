@@ -408,7 +408,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     const wanted = next === 'home' && session ? firstAllowedPage(access()) : next;
     const target =
       session && isAdminPage(wanted) && !canSeePage(wanted, access()) ? firstAllowedPage(access()) : wanted;
-    const targetId = WITH_ID.includes(target) && target === wanted ? id : null;
+    const targetId =
+      WITH_ID.includes(target) && target === wanted
+        ? id
+        : target === 'system' && wanted === 'system' && id === 'cleanup'
+          ? id
+          : null;
     if (
       page === 'characters' &&
       workbench &&
@@ -483,7 +488,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (page === 'invites' && can('invites.manage') && port.inviteBatches) return () => tiers.load();
     if (page === 'overview' && canSeePage('overview', access())) return () => overview.load();
     if (page === 'points' && canSeePage('points', access())) return () => points.load();
-    if (page === 'system' && canSeePage('system', access())) return () => system.load();
+    if (page === 'system' && canSeePage('system', access()))
+      return async () => {
+        await system.load();
+        // #/system/cleanup (the 总览 warning) lands on the cleanup section with its failure table in view.
+        if (routeId === 'cleanup') system.reveal('cleanup');
+      };
     if (page === 'costs' && canSeePage('costs', access())) return () => costs.load();
     if (page === 'conversations' && canSeePage('conversations', access())) return () => reviews.load();
     if (page === 'models' && port.modelSettings) return () => models.load();

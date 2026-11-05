@@ -73,7 +73,7 @@ export const PERMISSION_GROUPS: readonly Group[] = [
     items: [
       { item: 'cast.read', name: '查看', help: '打开关系网、故事和角色设定的草稿与已发布版本。' },
       { item: 'cast.edit', name: '修改草稿', help: '保存阵容草稿、从旧资料导入。不会改变玩家看到的任何内容。' },
-      { item: 'cast.publish', name: '发布与回滚', help: '把草稿发布为新版本，或把旧版本重新发布。' },
+      { item: 'cast.publish', name: '发布与恢复版本', help: '把草稿发布为新版本，或把旧版本重新发布。' },
     ],
   },
   {

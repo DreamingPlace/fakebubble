@@ -363,8 +363,16 @@ export function systemView(
           pill('告警收件人', 'ALERT_RECIPIENT', have(flags.alertRecipientSet), tone(flags.alertRecipientSet)),
         )
       : h('p', { class: 'admin-hint', text: '这个环境没有提供开关信息。' });
-    const cleanupCard = section('清理与开关', cleanup, failures, switches);
+    // What to do about a failing cleanup: the server retries every day by itself and has no retry button (the cause is the backend's).
+    const retryNote = failures
+      ? h('p', {
+          class: 'admin-hint sys-cleanup-note',
+          text: '系统每天会自动重试。连续失败说明需要修代码：把这张表交给开发。',
+        })
+      : null;
+    const cleanupCard = section('清理与开关', cleanup, failures, retryNote, switches);
     cleanupCard.classList.add('sys-switches');
+    cleanupCard.dataset.section = 'cleanup';
     sections.replaceChildren(
       row('top', version, unknown, security),
       row('wide', priceSection(v)),
@@ -382,6 +390,11 @@ export function systemView(
   }
   return {
     load: refresh,
+    /** Scrolls to one section (the 总览 warning's link goes to the cleanup one, whose failure table is then in view). */
+    reveal(name: 'cleanup') {
+      const target = sections.querySelector?.(`[data-section="${name}"]`) as HTMLElement | null;
+      target?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+    },
     clear() {
       view = null;
       pending.clear();

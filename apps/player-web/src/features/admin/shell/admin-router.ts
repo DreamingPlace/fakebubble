@@ -25,7 +25,10 @@ export function parseRoute(hash: string): AdminRoute | null {
   const legacy = LEGACY_ROUTES[match[1]!];
   if (!legacy && !isAdminPage(match[1]!)) return null;
   const page = (legacy ?? match[1]) as AdminPage;
-  return { page, id: match[2] && WITH_ID.includes(page) ? match[2] : null };
+  // 总览's cleanup warning links to #/system/cleanup: 系统状态 scrolled to its cleanup section. No other page takes that id.
+  const id =
+    match[2] && WITH_ID.includes(page) ? match[2] : page === 'system' && match[2] === 'cleanup' ? 'cleanup' : null;
+  return { page, id };
 }
 export const formatRoute = (route: AdminRoute) => `#/${route.page}${route.id ? `/${route.id}` : ''}`;
 export const sameRoute = (a: AdminRoute | null, b: AdminRoute | null) => a?.page === b?.page && a?.id === b?.id;

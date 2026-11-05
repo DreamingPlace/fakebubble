@@ -67,6 +67,9 @@ export class FakeElement extends FakeNode {
   attributes = new Map<string, string>();
   listeners = new Map<string, { fn: Handler; capture: boolean }[]>();
   value = '';
+  /** The caret of a text control (Part 24b-6b: 加入草稿 inserts at it); null until a test sets it. */
+  selectionStart: number | null = null;
+  selectionEnd: number | null = null;
   checked = false;
   scrollTop = 0;
   scrollLeft = 0;

@@ -401,15 +401,15 @@ test('page: save sends the whole working copy with the revision it was read at; 
   f.buttons('发布 v3')[0]!.click();
   await flush();
   assert.deepEqual(f.calls.publishes, [8]);
-  f.root
-    .querySelectorAll('button.cs-version')
-    .find((b) => b.getAttribute('data-version') === '1')!
-    .click();
-  // Named exception (Part 24b-6): a chip opens its line under the strip; 回滚 is the button on that line.
-  f.root.querySelectorAll('.cs-version-open button')[0]!.click();
+  // Named exception (Part 24b-6b): 整页版本 is the shared version list: 恢复此版本 (was 回滚) asks in its own row, 确认恢复 sends.
+  f.root.querySelector('[data-restore="1"]')!.click();
+  assert.equal(f.calls.rollbacks.length, 0, 'asking sends nothing');
+  assert.equal(f.root.querySelectorAll('.admin-dialog, dialog, [role="dialog"]').length, 0, 'no dialog');
+  f.root.querySelector('[data-restore-go]')!.click();
   await flush();
   assert.deepEqual(f.calls.rollbacks, [1]);
-  assert.ok(f.toasts.some((x) => x.includes('已回滚')));
+  assert.ok(f.toasts.some((x) => x.includes('已恢复') && x.includes('恢复自 v1')));
+  assert.ok(!f.root.textContent.includes('回滚'), 'no 回滚 anywhere on the page');
 });
 
 test('page: a stale revision shows the conflict and keeps what was typed until the administrator chooses', async (t) => {
@@ -465,9 +465,8 @@ test('page: each button follows its permission (cast.read / cast.edit / cast.pub
   const read = page(t, { permissions: ['cast.read'] });
   await read.view.load();
   assert.equal(read.buttons('发布 v3').length, 0);
-  // Named exception (Part 24b-6): the chips of the strip open a line; 回滚 is the button on it.
-  read.root.querySelectorAll('button.cs-version')[0]!.click();
-  assert.equal(read.root.querySelectorAll('.cs-version-open button').length, 0, 'no 回滚');
+  // Named exception (Part 24b-6b): the shared list; without cast.publish there is no 恢复此版本 on any row.
+  assert.equal(read.root.querySelectorAll('[data-restore]').length, 0, 'no 恢复此版本');
   // Named exception (Part 24b-6): + 写他们的故事 lives in the pair panel (open a cell first); + 组合 in the 组合 card.
   read.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
   assert.equal(read.buttons('+ 写他们的故事').length + read.buttons('+ 组合').length, 0);
@@ -488,11 +487,7 @@ test('page: each button follows its permission (cast.read / cast.edit / cast.pub
   const publish = page(t, { permissions: ['cast.read', 'cast.publish'] });
   await publish.view.load();
   assert.equal(publish.buttons('发布 v3').length, 1);
-  publish.root
-    .querySelectorAll('button.cs-version')
-    .find((b) => b.getAttribute('data-version') === '1')!
-    .click();
-  assert.ok(publish.root.querySelectorAll('.cs-version-open button').length >= 1);
+  assert.ok(publish.root.querySelectorAll('[data-restore]').length >= 1, 'cast.publish sees 恢复此版本');
   publish.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
   assert.equal(publish.buttons('+ 写他们的故事').length, 0, 'publish alone does not edit');
 });

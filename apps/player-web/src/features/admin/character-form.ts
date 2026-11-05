@@ -239,7 +239,11 @@ export function colourField(
   };
   input.addEventListener('input', paintSwatches);
   picker.addEventListener('input', paintSwatches);
-  row.append(label, picker, chip, same, swatches);
+  // Part 24b-6b: the swatch and the live chip sit together in the second grid column, so the text field is one column wide like every other field.
+  const tools = el('span');
+  tools.className = 'colour-tools';
+  tools.append(picker, chip);
+  row.append(label, tools, same, swatches);
   parent.append(row);
   paint();
   paintSwatches();

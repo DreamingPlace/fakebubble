@@ -393,7 +393,11 @@ test('24b-6 canon editors: editing one key rebuilds only that key; the others st
   added.click();
   const next = editors.assemble(editors.rest);
   assert.equal((next.background as unknown[])[1], '后来搬去了山里', 'a plain text stays plain');
-  assert.equal((next.background as unknown[]).length, 3);
+  // Named exception (Part 24b-6b): a card added with "+ 经历" that nobody has written in is NOT saved (an empty untouched card never is);
+  // it counts as soon as it has text. Before 24b-6b the empty card was saved, so this said 3 right after the click.
+  assert.equal((next.background as unknown[]).length, 2, 'the empty added card is not saved');
+  all(editors.past, '.cn-card textarea')[2]!.type_('第三段');
+  assert.equal((editors.assemble(editors.rest).background as unknown[]).length, 3);
   // 对话样例: the reply lines
   const reply = all(editors.speech, '.cn-reply')[0]!;
   reply.type_('嗯？\n你好呀\n再见');

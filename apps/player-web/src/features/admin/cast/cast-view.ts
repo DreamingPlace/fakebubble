@@ -18,6 +18,8 @@ import { browserDownload } from '../invite-tiers-view.ts';
 import { h } from '../../cocreation/h.ts';
 import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
 import { dateTimeText } from '../system-format.ts';
+import { historyList, type HistoryEntry } from '../history/history-list.ts';
+import { keyValuePanel } from '../ui/key-value-panel.ts';
 import { castGrid, pairPanel, type GridState } from './cast-grid.ts';
 import { nameCard, seesPanel } from './cast-character.ts';
 import { ISSUE_LABEL, blankCharacter, changeCount, humanIssue, nameOf } from './cast-model.ts';
@@ -137,8 +139,6 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     groupsAll: false,
     story: null as number | null,
     person: null as string | null,
-    /** The version whose line is open under the 整页版本 strip. */
-    openVersion: null as number | null,
     /** The workbench roster (角色工作台): the fixed grid, with each display name. */
     roster: [] as string[],
     rosterNames: new Map<string, string>(),
@@ -353,51 +353,71 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       head.append(publish);
     }
   }
-  // ---- 整页版本: the published versions and the draft, on one line --------------------------------------------------
+  // ---- 整页版本: the console's shared version list (history-list.ts), the same as 角色工作台 → 版本历史 --------------------
+  // Latest 5, newest first, the live one marked; a row opens its detail below it; 恢复此版本 asks in the same row.
+  const castEntry = (v: CastVersion): HistoryEntry => ({
+    version: v.version,
+    live: v.version === state.latest,
+    when: dateTimeText(v.publishedAt),
+    by: null,
+    origin: v.kind === 'rollback' ? `恢复自 v${v.fromVersion}` : '发布',
+    summary: `角色 ${v.counts.characters} · 组合 ${v.counts.groups} · 故事 ${v.counts.stories}`,
+    problem: null,
+  });
+  /** The detail under a row: the counts of that version against the live one (the server keeps no readable snapshot of a cast). */
+  const castDetail = (entry: HistoryEntry): Node => {
+    const version = state.versions.find((v) => v.version === entry.version);
+    const live = state.versions.find((v) => v.version === state.latest);
+    if (!version)
+      return h('div', { class: 'vh-detail ot-detail' }, h('p', { class: 'vh-note', text: '没有找到这一版。' }));
+    const rows: [string, number][] = [
+      ['角色', version.counts.characters],
+      ['人物', version.counts.people],
+      ['组合', version.counts.groups],
+      ['故事', version.counts.stories],
+      ['梗', version.counts.memes],
+    ];
+    const against = (label: string, n: number) => {
+      const now = live
+        ? {
+            角色: live.counts.characters,
+            人物: live.counts.people,
+            组合: live.counts.groups,
+            故事: live.counts.stories,
+            梗: live.counts.memes,
+          }[label]
+        : undefined;
+      return now === undefined || entry.live ? String(n) : `${n}（现行 ${now}）`;
+    };
+    return h(
+      'div',
+      { class: 'vh-detail ot-detail' },
+      keyValuePanel([
+        ['发布时间', entry.when],
+        ['来源', entry.origin],
+        ...rows.map(([label, n]) => [label, against(label, n)] as const),
+      ]),
+      h('p', {
+        class: 'vh-note',
+        text: entry.live ? '这就是现行版本。' : '数字是这一版的内容；括号里是现行版本现在的数字。',
+      }),
+    );
+  };
+  // One restore request is fixed once it has been asked for: after an uncertain answer the same id is sent again.
+  const rollbackIds = new Map<string, string>();
+  const history = historyList({
+    label: '整页版本',
+    detail: castDetail,
+    canRestore: () => canPublish(),
+    restore: (entry) => restoreVersion(entry.version),
+  });
+  let shownVersions = '';
   function paintVersions() {
     frame.versions.replaceChildren();
     if (!state.doc) return;
     const label = hoverValue(
       h('span', { class: 'cs-versions-label', text: '整页版本' }),
       '关系、组合、故事、世界、名片一起，发布成一个版本',
-    );
-    const line = h('div', { class: 'cs-version-line' });
-    const ordered = [...state.versions].sort((a, b) => a.version - b.version);
-    ordered.forEach((v, index) => {
-      const chip = h(
-        'button',
-        {
-          class: 'cs-version',
-          attrs: {
-            type: 'button',
-            'data-version': String(v.version),
-            'aria-pressed': String(state.openVersion === v.version),
-          },
-        },
-        h('i', { class: 'cs-version-mark' }),
-        h('span', { class: 'cs-mono', text: `v${v.version}` }),
-      );
-      hoverValue(
-        chip,
-        `${dateTimeText(v.publishedAt)} · 角色 ${v.counts.characters} · 组合 ${v.counts.groups} · 故事 ${v.counts.stories}${v.kind === 'rollback' ? ` · 回滚自 v${v.fromVersion}` : ''}`,
-      );
-      chip.addEventListener('click', () => {
-        state.openVersion = state.openVersion === v.version ? null : v.version;
-        paintVersions();
-      });
-      line.append(chip, h('i', { class: 'cs-version-rule', attrs: { 'aria-hidden': 'true' } }));
-      void index;
-    });
-    line.append(
-      h(
-        'span',
-        {
-          class: `cs-version is-draft${state.dirty ? ' is-dirty' : ''}`,
-          attrs: { 'data-draft': String(state.revision) },
-        },
-        h('i', { class: 'cs-version-mark' }),
-        h('span', { class: 'cs-mono', text: `草稿 #${state.revision}` }),
-      ),
     );
     const actions = h('span', { class: 'cs-versions-actions' });
     if (canEdit() && state.serverEmpty && !state.dirty) {
@@ -409,30 +429,25 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     exportButton.addEventListener('click', () => void exportNow());
     actions.append(exportButton);
     if (canEdit()) actions.append(fileButton());
-    frame.versions.append(h('div', { class: 'cs-versions-row' }, label, line, actions));
-    const open = state.versions.find((v) => v.version === state.openVersion);
-    if (open)
-      frame.versions.append(
-        h(
-          'div',
-          { class: 'cs-version-open' },
-          h('b', { class: 'cs-mono', text: `v${open.version}` }),
-          h('span', {
-            class: 'cs-version-sub',
-            text: `${open.kind === 'rollback' ? `回滚自 v${open.fromVersion}` : '发布'} · ${dateTimeText(open.publishedAt)} · 角色 ${open.counts.characters} · 组合 ${open.counts.groups} · 故事 ${open.counts.stories}`,
-          }),
-          canPublish() && open.version !== state.latest ? rollbackButton(open.version) : null,
-        ),
-      );
-  }
-  function rollbackButton(version: number) {
-    const back = h('button', {
-      class: 'cs-quiet is-tint',
-      text: `回滚到 v${version}`,
-      attrs: { type: 'button', 'aria-label': `回滚到 v${version}（作为新版本发布）` },
-    });
-    back.addEventListener('click', () => void rollbackTo(version));
-    return back;
+    const draft = h(
+      'span',
+      {
+        class: `cs-version is-draft${state.dirty ? ' is-dirty' : ''}`,
+        attrs: { 'data-draft': String(state.revision) },
+      },
+      h('i', { class: 'cs-version-mark' }),
+      h('span', { class: 'cs-mono', text: `草稿 #${state.revision}` }),
+    );
+    frame.versions.append(
+      h('div', { class: 'cs-versions-row' }, label, draft, h('span', { class: 'cs-spacer' }), actions),
+    );
+    // The list is repainted only when the versions changed, so an open row stays open while the draft is edited.
+    const signature = JSON.stringify([state.latest, state.versions.map((v) => v.version), canPublish()]);
+    if (signature !== shownVersions) {
+      shownVersions = signature;
+      history.setEntries(state.versions.map(castEntry), state.latest);
+    }
+    if (state.versions.length) frame.versions.append(history.root);
   }
   function paintNotice() {
     frame.notice.replaceChildren();
@@ -654,21 +669,17 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       if (!gone()) host.toast(`已发布 v${result.version}`, 'ok');
     });
   }
-  async function rollbackTo(version: number) {
+  /** 恢复此版本 (confirmed in its row): the existing cast rollback, which republishes that version's content as the next version. */
+  async function restoreVersion(version: number) {
     if (!host.api || !canPublish()) return;
-    const yes = await host.confirm(
-      {
-        title: `回滚到 v${version}`,
-        message: `把 v${version} 的内容作为新版本重新发布；旧版本都保留。`,
-        confirmLabel: '回滚',
-      },
-      frame.confirm,
-    );
-    if (!yes || gone()) return;
+    const key = `${version}:${state.latest}`;
+    if (!rollbackIds.has(key)) rollbackIds.set(key, crypto.randomUUID());
     await host.run(async () => {
-      const result = await host.api!.rollback(version);
+      const result = await host.api!.rollback(version, rollbackIds.get(key)!);
+      rollbackIds.delete(key);
+      history.closeAll();
       await afterChange();
-      if (!gone()) host.toast(`已回滚，发布为 v${result.version}`, 'ok');
+      if (!gone()) host.toast(`已恢复，发布为 v${result.version}（恢复自 v${version}）`, 'ok');
     });
   }
   // ---- cast file: export, and import with a summary first ----------------------------------------------------------------

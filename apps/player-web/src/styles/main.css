@@ -10109,30 +10109,24 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   color: var(--ad-tint-ink);
   font-weight: 700;
 }
-/* ---- 整页版本 ---- */
+/* ---- 整页版本 (Part 24b-6b: the shared version list under one header row) ---- */
 .account-admin-page.admin-shell .cs-versions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   padding: 14px 20px;
 }
 .account-admin-page.admin-shell .cs-versions-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 12px 16px;
 }
 .account-admin-page.admin-shell .cs-versions-label {
   flex: none;
   color: var(--ad-muted);
   font-size: 13px;
 }
-.account-admin-page.admin-shell .cs-version-line {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .cs button.cs-version,
 .account-admin-page.admin-shell .cs .cs-version.is-draft {
   display: inline-flex;
   flex: none;
@@ -10147,18 +10141,9 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-size: 12px;
   font-weight: 700;
 }
-.account-admin-page.admin-shell .cs button.cs-version[aria-pressed="true"] {
-  border-color: var(--ad-tint-line);
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-}
 .account-admin-page.admin-shell .cs-version-mark {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  background: var(--ad-primary);
-}
-.account-admin-page.admin-shell .cs .cs-version.is-draft .cs-version-mark {
   border-radius: 2px;
   background: var(--ad-warn);
   transform: rotate(45deg);
@@ -10167,25 +10152,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   border-color: var(--ad-amber);
   background: var(--ad-amber-soft);
 }
-.account-admin-page.admin-shell .cs-version-rule {
+.account-admin-page.admin-shell .cs-versions .cs-spacer {
   flex: 1;
-  min-width: 16px;
-  height: 1px;
-  background: var(--ad-tint-line);
-}
-.account-admin-page.admin-shell .cs-version-open {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--ad-wash);
-  font-size: 13px;
-  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell .cs-version-sub {
-  flex: 1;
-  color: var(--ad-muted);
 }
 .account-admin-page.admin-shell .cs-confirm:empty {
   display: none;
@@ -12035,122 +12003,470 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   display: none;
 }
 
-/* 版本历史 (Part 24f): the table and the drawer come from the shared admin components; only the history's own parts are styled here. */
-.vh {
+/* 版本历史 (Part 24f, Part 24b-6b): ONE list for the workbench and for 关系与故事 (history/history-list.ts), on the open-below table. */
+.account-admin-page.admin-shell .vh {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
 }
-.vh .vh-note {
+.account-admin-page.admin-shell .vh-wrap {
+  min-width: 0;
+}
+.account-admin-page.admin-shell .vh .vh-note {
   margin: 0;
   color: var(--ad-muted);
   font-size: 13px;
   line-height: 1.6;
 }
-.vh .admin-table-region {
-  display: block;
-  overflow: hidden;
-  border-radius: 10px;
-  border: 0;
-  box-shadow: 0 0 0 1px var(--ad-border);
+.account-admin-page.admin-shell .vh-table .ot-row {
+  padding-block: 8px;
 }
-.vh .admin-table-wrap {
-  overflow-x: auto;
-}
-.vh .admin-table td {
-  vertical-align: middle;
-}
-.vh .admin-table tbody tr {
-  cursor: pointer;
-}
-.vh .admin-table td:has(.vh-what) {
-  white-space: normal;
-}
-.vh-stack {
+.account-admin-page.admin-shell .vh-stack {
   display: inline-flex;
   flex-direction: column;
   gap: 2px;
 }
-.vh-stack small {
+.account-admin-page.admin-shell .vh-stack small {
   color: var(--ad-muted);
   font-size: 12px;
   line-height: 1.5;
 }
-.vh-what {
-  min-width: 9em;
-}
-.vh-what small.vh-why {
-  max-width: none;
+.account-admin-page.admin-shell .vh-what small.vh-why {
   color: #a4402f;
 }
-.vh-version {
+.account-admin-page.admin-shell .vh-version {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
-.vh-actions {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.vh-actions button,
-.vh-head button {
-  margin: 0;
-}
-.vh-lost {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.vh-why {
-  max-width: 28ch;
-  color: var(--ad-muted);
-  font-size: 12px;
-  line-height: 1.5;
-  text-align: left;
-}
-.admin-drawer-body .vh-head {
+.account-admin-page.admin-shell .vh-actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  justify-content: flex-end;
+  min-width: 0;
 }
-.admin-drawer-body .vh-head .vh-lost {
-  margin-left: auto;
+.account-admin-page.admin-shell .vh-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 400;
+  text-align: right;
+  animation: adPageIn var(--ad-t-slide) var(--ad-ease) both;
 }
-.admin-drawer-body .vh-title {
-  margin: 20px 0 8px;
+.account-admin-page.admin-shell .vh-confirm-buttons {
+  display: flex;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .vh-detail {
+  min-width: 0;
+}
+.account-admin-page.admin-shell .vh-detail .vh-title {
+  margin: 18px 0 8px;
   padding-top: 14px;
   border-top: 1px solid var(--ad-border);
   font-size: 14px;
 }
-.admin-drawer-body .vh-subtitle,
-.admin-drawer-body .vh-group {
+.account-admin-page.admin-shell .vh-detail .vh-group {
   margin: 14px 0 6px;
   color: var(--ad-muted);
   font-size: 12px;
   font-weight: 600;
 }
+.account-admin-page.admin-shell .vh-detail .admin-kv {
+  margin: 0;
+}
+.account-admin-page.admin-shell .vh-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
 .permission-group[data-area="legacy"] .permission-item span.permission-dead {
   /* 「删除角色（已失效）」 reads as one phrase, not broken inside 已失效 (Part 24f). */
   white-space: nowrap;
 }
-.vh-text {
+/* ======================================================================================================================
+   Part 24b-6b: admin console fixes. Every rule is scoped to the admin shell (.account-admin-page.admin-shell); nothing here
+   touches the player pages.
+   ====================================================================================================================== */
+.account-admin-page.admin-shell {
+  /* One rule for the fields of 角色工作台: a single line is 40 px; a multi-line box is at least four lines (14 px / 1.6 + padding)
+     and grows with its text up to --ta-max, then scrolls inside itself. */
+  --fld-h: 40px;
+  --ta-min: 112px;
+  --ta-max: 360px;
+  --wb-rail-top: 100px;
+}
+/* ---- the page itself never scrolls sideways, and the left navigation never moves ---- */
+.account-admin-page.admin-shell .admin-frame,
+.account-admin-page.admin-shell .admin-content,
+.account-admin-page.admin-shell .admin-content > section {
+  min-width: 0;
+}
+/* 共创收件箱: the page (and so the frame the navigation is sticky in) grows with the cards; before, the section was a zero-height
+   flex item whose content overflowed the frame, and the navigation scrolled away with the window. */
+.account-admin-page.admin-shell[data-surface="cocreation"] .admin-content > section[data-panel]:not([hidden]),
+.account-admin-page.admin-shell[data-surface="cocreation"] #admin-cocreation,
+.account-admin-page.admin-shell[data-surface="preview"] .admin-content > section[data-panel]:not([hidden]),
+.account-admin-page.admin-shell[data-surface="preview"] #admin-preview {
+  flex: none;
+  min-height: auto;
+}
+/* 角色工作台: the rail holds its place while the page scrolls (it scrolls inside itself when it is taller than the window). */
+.account-admin-page.admin-shell #admin-characters .wb-roster {
+  top: var(--wb-rail-top);
+  /* leaves the page's own bottom padding free, so the rail is never pushed up when the page is scrolled to its end */
+  max-height: calc(100dvh - var(--wb-rail-top) - 48px);
+}
+/* 共创收件箱: the list column is as tall as its cards (it was cut at one window height, and the cards ran out of it) */
+.account-admin-page.admin-shell #admin-cocreation .cc-list-column {
+  position: static;
+  max-height: none;
+}
+/* 系统状态: a table never makes the page wider; long tokens wrap inside their cells */
+.account-admin-page.admin-shell .sys-row > .system-section,
+.account-admin-page.admin-shell .system-section {
+  min-width: 0;
+}
+.account-admin-page.admin-shell .system-section .admin-table-wrap {
+  overflow-x: auto;
+}
+.account-admin-page.admin-shell .system-section .admin-table :is(th, td) {
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .system-section[data-section="cleanup"] .admin-table {
+  width: 100%;
+}
+.account-admin-page.admin-shell .system-section[data-section="cleanup"] .admin-table th {
+  white-space: normal;
+}
+.account-admin-page.admin-shell .admin-tag {
+  font-size: 11px;
+}
+
+/* 版本历史 uses the card's whole width (the forms keep their reading measure) */
+.account-admin-page.admin-shell #admin-characters .wb-card .character-flow:has(.vh) {
+  max-width: none;
+}
+
+/* ---- 角色工作台: one rule for every field, on every tab ---- */
+.account-admin-page.admin-shell
+  #admin-characters
+  .wb-card
+  :is(
+    input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [type="range"]):not(.cn-chip-input),
+    select
+  ) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: var(--fld-h);
+  min-height: var(--fld-h);
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card input[type="color"] {
+  width: var(--fld-h);
+  height: var(--fld-h);
+  min-height: var(--fld-h);
+  padding: 2px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--ta-min);
+  max-height: var(--ta-max);
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  field-sizing: content;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card textarea.admin-json {
+  min-height: var(--ta-min);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card textarea[maxlength="20000"] {
+  min-height: var(--ta-min);
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair .cn-reply {
+  min-height: var(--ta-min);
+  border-color: var(--ad-border);
+}
+/* labels: the same small grey line above its field, everywhere */
+.account-admin-page.admin-shell #admin-characters .wb-card label,
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-label,
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair .cn-lab > span {
+  color: var(--ad-muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card label.admin-check {
+  color: var(--ad-text);
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair .cn-lab {
+  gap: 6px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair > .cn-x {
+  margin-top: 25px;
+}
+/* 说话方式 / 经历: the cards are columns of the same grid, the dashed add box is one card of it */
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-cards {
+  grid-auto-rows: auto;
+  align-items: stretch;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card button.cn-add-card {
+  min-height: calc(var(--ta-min) + var(--fld-h) + 8px + 24px);
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-card textarea {
+  flex: 1 1 auto;
+}
+/* 主色 sits in the grid like every other field: its text box is one column wide, the swatch (a square of the same height) and the live
+   chip sit in the second column, the palette runs under both */
+.account-admin-page.admin-shell #admin-characters .wb-card .colour-field {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px 20px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .colour-field > label {
+  flex: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .colour-tools {
+  display: flex;
+  align-self: start;
+  align-items: center;
+  height: var(--fld-h);
+  margin: 34px 0 0; /* level with the text box under the label line */
+  gap: 10px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .colour-tools .colour-chip {
+  height: var(--fld-h);
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .colour-field > :is(.colour-swatches, .colour-same) {
+  grid-column: 1 / -1;
+}
+/* 声音: the folded sections lay their fields out on the same two columns as the fieldsets */
+.account-admin-page.admin-shell #admin-characters .wb-card details::details-content {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 32px;
+}
+/* 声音: the referenceId and the checkboxes share the grid's columns */
+.account-admin-page.admin-shell #admin-characters .wb-card label:has(> input[aria-label*="referenceId"]),
+.account-admin-page.admin-shell #admin-characters .wb-card label:has(> input[type="text"]) {
+  max-width: none;
+}
+/* 预演: top labels, two columns of controls, the same field heights */
+.account-admin-page.admin-shell #admin-characters .wb-preview .admin-filter,
+.account-admin-page.admin-shell #admin-characters .pw-controls .admin-filter {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  white-space: normal;
+}
+.account-admin-page.admin-shell #admin-characters .pw-controls .admin-filter:has(input[type="time"]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px 12px;
+}
+.account-admin-page.admin-shell #admin-characters .pw-controls .admin-filter:has(input[type="time"]) > span {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell #admin-characters .pw-controls .pw-zone {
+  padding-left: 0;
+  text-align: left;
+}
+.account-admin-page.admin-shell #admin-characters .pw button {
+  height: var(--fld-h);
+  min-height: var(--fld-h);
+}
+.account-admin-page.admin-shell #admin-characters .pw-compose-row > :is(input, textarea) {
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-characters .wb-preview .pw-compose-row > textarea {
+  height: auto;
+}
+
+/* targets of at least 24 px (WCAG 2.5.8): the × of a chip / card / example and the inbox card's tick */
+.account-admin-page.admin-shell button.cn-x {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-row input.cc-check {
+  left: 12px;
+  top: 12px;
+  width: 24px;
+  height: 24px;
+}
+
+/* ---- 共创收件箱: 加入草稿 puts the note into the draft's own text (one box, no new one) ---- */
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-box {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-area-wrap {
+  position: relative;
+  min-width: 0;
+  border-radius: 12px;
+  background: #fff;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-mirror,
+.account-admin-page.admin-shell #admin-cocreation .cc-area {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.admin-drawer-body .vh-text {
-  line-height: 1.7;
+.account-admin-page.admin-shell #admin-cocreation .cc-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-color: transparent;
+  color: transparent;
+  pointer-events: none;
 }
-.admin-drawer-body .admin-kv {
+.account-admin-page.admin-shell #admin-cocreation .cc-area {
+  position: relative;
+  display: block;
+  min-height: var(--ta-min);
+  max-height: var(--ta-max);
+  overflow-y: auto;
+  background: transparent;
+  color: var(--ad-text);
+  resize: vertical;
+  field-sizing: content;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-area:focus {
+  border-color: var(--ad-primary);
+}
+/* the inserted passage: lit for a moment (the select motion, 200 ms; no motion at all with reduced motion) */
+.account-admin-page.admin-shell #admin-cocreation .cc-mirror mark.cc-hit {
+  border-radius: 4px;
+  background: transparent;
+  color: transparent;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-mirror mark.cc-hit.is-on {
+  background: #f6dfa8;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 14px;
+  background: #fbfaf8;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-card .cc-area-wrap,
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-card input {
+  background: #fff;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-card input {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--fld-h);
+  padding: 0 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  font-size: 14px;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-draft-card input.is-just-added {
+  background: #f6dfa8;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-target > select {
+  align-self: flex-start;
+  height: 32px;
+  max-width: 100%;
+  font-size: 13px;
+}
+
+/* ---- 关系与故事 → 世界: the name cards and the dashed add boxes are one size on one grid ---- */
+.account-admin-page.admin-shell .cs-world-card .cs-people-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 136px);
+  gap: 8px;
+  align-items: stretch;
+}
+.account-admin-page.admin-shell .cs-world-card .cs-people-row > .cs-label {
+  grid-column: 1 / -1;
   margin: 0;
 }
+.account-admin-page.admin-shell .cs-world-card .cs-people-row > :is(button.cs-chip, button.cs-dashed) {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 136px;
+  height: 36px;
+  min-width: 0;
+  padding: 0 12px;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 16px;
+  text-align: left;
+  overflow-wrap: anywhere; /* a long name wraps inside its card (never an ellipsis); the whole name is the hover value */
+}
+.account-admin-page.admin-shell .cs-world-card .cs-people-row > button.cs-dashed {
+  align-self: stretch;
+  justify-content: center;
+  text-align: center;
+}
+.account-admin-page.admin-shell .cs-world-card .cs-people-row .cs-dot {
+  flex: none;
+  margin-right: 6px;
+}
+
+/* ---- 系统状态: the failing cleanup says what to do with its table ---- */
+.account-admin-page.admin-shell .sys-cleanup-note {
+  margin: 4px 0 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.account-admin-page.admin-shell .system-section[data-section="cleanup"] {
+  scroll-margin-top: 16px;
+}
+.account-admin-page.admin-shell a.ov-warn {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;
