@@ -533,12 +533,14 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
    * Part 24j, 身份与展示: the 角色代码 (its own save: it is not part of the draft) and the checklist of what a profile import could
    * not place yet. The checklist stays until each item is dismissed or the next import no longer produces it.
    */
-  function identityExtras(pane: HTMLElement, snapshot: CharacterDetail) {
+  function identityExtras(snapshot: CharacterDetail): HTMLElement | null {
     const meta = snapshot.profileMeta,
       target = snapshot.characterId;
-    if (!meta?.available) return;
-    const row = el('div'),
+    if (!meta?.available) return null;
+    const wrap = el('div'),
+      row = el('div'),
       list = el('div');
+    wrap.className = 'wb-identity-extras';
     row.className = 'wb-code';
     list.className = 'wb-checklist';
     const label = el('label'),
@@ -600,9 +602,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       list.append(el('h5', '待办清单（导入时没能放进去的）'), ul);
     };
     paint();
-    // Right after the 人设名称 / 展示名 fields, before the rest of the identity pane.
-    pane.insertBefore(row, pane.children[4] ?? null);
-    pane.append(list);
+    wrap.append(row, list);
+    return wrap;
   }
   /** 只移除当前未发布草稿: its own fold, in the publish section of the console and after the deletion fold elsewhere. */
   function discardFold(parent: HTMLElement, snapshot: CharacterDetail) {
@@ -670,7 +671,6 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       },
     );
     const form = editor.form;
-    if (snapshot) identityExtras(editor.panes[0]!.node, snapshot);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       submit();
@@ -689,6 +689,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       const flow = el('section');
       flow.className = 'character-flow';
       body.append(flow);
+      // Part 24j: the 角色代码 and the checklist belong to 身份与展示 (shown and hidden with it) but are not fields of the draft.
+      const extras = identityExtras(snapshot);
+      if (extras) {
+        flow.append(extras);
+        sections.find((section) => section.id === 'identity')!.nodes.push(extras);
+      }
       // What a builder appended to the flow, so it can be shown and hidden as one section.
       const made = (build: () => void) => {
         const before = new Set(Array.from(flow.children));

@@ -12722,14 +12722,16 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   vertical-align: top;
   font-weight: 400;
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: pre-wrap;
+  max-height: 14em;
+  overflow: auto;
 }
 .account-admin-page.admin-shell .pi-changes tr {
   display: grid;
   grid-template-columns: 22% 1fr 1fr;
+}
+.account-admin-page.admin-shell .pi-changes.pi-fresh tr {
+  grid-template-columns: 22% 1fr;
 }
 .account-admin-page.admin-shell .pi-changes thead tr {
   color: var(--ad-muted);
@@ -12758,8 +12760,16 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   flex: 1 1 auto;
   min-width: 0;
 }
+.account-admin-page.admin-shell .wb-identity-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
 .account-admin-page.admin-shell .wb-checklist {
-  margin-top: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 0;
   padding: 10px 12px;
   border: 1px solid var(--ad-warn);
   border-radius: 10px;
@@ -12776,11 +12786,21 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .wb-code {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
+  align-items: flex-end;
   gap: 8px 10px;
+  min-width: 0;
 }
 .account-admin-page.admin-shell .wb-code label {
-  flex: 0 1 220px;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .wb-code button {
+  flex: none;
+  align-self: flex-end;
+  height: 40px;
+}
+.account-admin-page.admin-shell .wb-code-note {
+  align-self: center;
 }
 .account-admin-page.admin-shell .wb-code-note {
   color: var(--ad-muted);

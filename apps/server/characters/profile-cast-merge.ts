@@ -22,7 +22,7 @@ import {
   type CastText,
 } from '../../../packages/contracts/web-cast.ts';
 import type { ProfileProblem, ReadProfile } from './profile-template.ts';
-import { show, type Change } from './profile-merge.ts';
+import { same, show, type Change } from './profile-merge.ts';
 
 export interface CastSubject {
   characterId: string;
@@ -99,7 +99,7 @@ export function mergeCast(
     );
   };
   const log = (who: string, field: string, before: unknown, after: unknown) => {
-    if (show(before) !== show(after)) changes.push({ who, field, old: show(before), new: show(after) });
+    if (!same(before, after)) changes.push({ who, field, old: show(before), new: show(after) });
   };
 
   // ---- name cards ----
@@ -137,10 +137,14 @@ export function mergeCast(
     }
     const label = (c: CastCharacter | null) =>
       c
-        ? `${c.identity.names.map((n) => n.text).join('、')} · ${c.identity.oneLiner} · ${c.identity.aliases
-            .map((a) => `${KIND_LABEL[a.kind]}「${a.text}」`)
-            .join('')}`
-        : '（新名片）';
+        ? [
+            c.identity.names.map((n) => n.text).join('、'),
+            c.identity.oneLiner,
+            c.identity.aliases.map((a) => `${KIND_LABEL[a.kind]}「${a.text}」`).join(''),
+          ]
+            .filter((part) => part !== '')
+            .join(' · ')
+        : '';
     log(read.name, '名片', label(was), label(card));
     if (card.identity.names.length > CAST_LIMITS.names) card.identity.names.length = CAST_LIMITS.names;
   }
@@ -188,12 +192,9 @@ export function mergeCast(
           direction.addresses = texts(direction.addresses, relation.addresses) as CastText[];
         if (relation.attitude !== '') direction.treatment = relation.attitude;
         const to = nameOf(targetId);
-        log(
-          subject.read.name,
-          `称呼与相处 → ${to}`,
-          was && `${was.addresses.map((a) => `「${a.text}」`).join('')} · ${was.treatment}`,
-          `${direction.addresses.map((a) => `「${a.text}」`).join('')} · ${direction.treatment}`,
-        );
+        const line = (d: NoId<CastDirection>) =>
+          [d.addresses.map((a) => `「${a.text}」`).join(''), d.treatment].filter((part) => part !== '').join(' · ');
+        log(subject.read.name, `称呼与相处 → ${to}`, was ? line(was) : '', line(direction));
       }
     }
   }

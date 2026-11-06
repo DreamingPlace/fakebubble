@@ -103,11 +103,23 @@ export function profileImportView(
         h('li', {}, h('span', { class: 'pi-place', text: placeOf(p) }), h('span', { class: 'pi-text', text: p.text })),
       ),
     );
-  const changeTable = (rows: ImportChange[], first: string) =>
-    h(
+  /** Nothing there yet (a new character): two columns. Otherwise 现在 → 导入后. */
+  const changeTable = (rows: ImportChange[], first: string) => {
+    const fresh = rows.every((row) => row.old === '');
+    return h(
       'table',
-      { class: 'pi-changes' },
-      h('thead', {}, h('tr', {}, h('th', { text: first }), h('th', { text: '现在' }), h('th', { text: '导入后' }))),
+      { class: fresh ? 'pi-changes pi-fresh' : 'pi-changes' },
+      h(
+        'thead',
+        {},
+        h(
+          'tr',
+          {},
+          h('th', { text: first }),
+          ...(fresh ? [] : [h('th', { text: '现在' })]),
+          h('th', { text: '导入后' }),
+        ),
+      ),
       h(
         'tbody',
         {},
@@ -116,16 +128,21 @@ export function profileImportView(
             'tr',
             {},
             h('th', { text: row.field, attrs: { scope: 'row' } }),
-            h('td', {
-              class: row.old === '' ? 'pi-none' : '',
-              text: row.old === '' ? '（空）' : row.old,
-              attrs: { title: row.old },
-            }),
+            ...(fresh
+              ? []
+              : [
+                  h('td', {
+                    class: row.old === '' ? 'pi-none' : '',
+                    text: row.old === '' ? '（空）' : row.old,
+                    attrs: { title: row.old },
+                  }),
+                ]),
             h('td', { text: row.new, attrs: { title: row.new } }),
           ),
         ),
       ),
     );
+  };
 
   function paint() {
     result.replaceChildren();
@@ -167,7 +184,10 @@ export function profileImportView(
     }
     if (preview.ok && preview.unchanged)
       result.append(h('p', { class: 'pi-none', text: '没有变化：这些文件和现在的草稿完全一致。' }));
-    confirm.disabled = !preview.ok || preview.unchanged;
+    // The page re-enables every control after a run; data-locked keeps this one off while there is an error or nothing to do.
+    const off = !preview.ok || preview.unchanged;
+    confirm.dataset.locked = String(off);
+    confirm.disabled = off;
     confirm.title = !preview.ok ? '先解决上面的错误' : preview.unchanged ? '没有变化' : '';
   }
 

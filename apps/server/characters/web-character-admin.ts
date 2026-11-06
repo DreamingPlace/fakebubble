@@ -303,13 +303,7 @@ export class WebCharacterAdmin {
       draft: draft ? draftDTO(draft) : null,
       // Part 24j: the 角色代码, the avatar file name and Fish voice id recorded against it, and the open checklist.
       profileMeta: this.profileImport
-        ? {
-            available: true as const,
-            code: codeOf(this.store, id)?.code ?? null,
-            avatarFile: codeOf(this.store, id)?.avatar_file ?? null,
-            voiceReferenceId: codeOf(this.store, id)?.voice_reference_id ?? null,
-            checklist: checklistOf(this.store, id),
-          }
+        ? this.profileImport.meta(id)
         : { available: false as const, code: null, avatarFile: null, voiceReferenceId: null, checklist: [] },
     };
   }

@@ -453,15 +453,13 @@ test('repeated import: 没有变化, no new revisions; a changed file changes on
 
   const edited = files(['syz.md', example().replace('身高：181cm', '身高：182cm')], ['lqy.md', LQY]);
   const q = preview(f, edited);
+  const facts = draftOf(f, 'SYZ').template.authorCanon!.settings.profileFacts as Record<string, string>;
+  const lines = (o: Record<string, string>) =>
+    Object.entries(o)
+      .map(([k, v]) => `${k}：${v}`)
+      .join('\n');
   assert.deepEqual(q.characters.find((c) => c.code === 'SYZ')!.changes, [
-    {
-      field: '其余设定 · profileFacts',
-      old: JSON.stringify(draftOf(f, 'SYZ').template.authorCanon!.settings.profileFacts),
-      new: JSON.stringify({
-        ...(draftOf(f, 'SYZ').template.authorCanon!.settings.profileFacts as object),
-        身高: '182cm',
-      }),
-    },
+    { field: '其余设定 · profileFacts', old: lines(facts), new: lines({ ...facts, 身高: '182cm' }) },
   ]);
   assert.equal(q.characters.find((c) => c.code === 'LQY')!.unchanged, true);
   apply(f, edited, q.basis);
@@ -832,6 +830,9 @@ test('the checklist stays until dismissed; a re-import with the item resolved re
   const id = idOf(f, 'CHK');
   assert.equal(f.characters.detail(f.ownerAuth, id).profileMeta.checklist.length, 2);
   const dismissed = f.characters.profileChecklistDismiss(f.ownerAuth, id, { key: 'welcome:2' });
+  // every answer of the three calls has the one shape the console's strict client reads (it once lacked `available`)
+  assert.deepEqual(Object.keys(dismissed).sort(), Object.keys(f.characters.detail(f.ownerAuth, id).profileMeta).sort());
+  assert.equal(dismissed.available, true);
   assert.deepEqual(
     dismissed.checklist.map((c) => [c.key, c.state]),
     [

@@ -27,8 +27,28 @@ export interface Change {
   old: string;
   new: string;
 }
-export const show = (value: unknown): string =>
-  value === undefined || value === null ? '' : typeof value === 'string' ? value : JSON.stringify(value);
+/** Two values are the same when their JSON is (the comparison never goes through the readable text below). */
+export const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const readableItem = (item: unknown): string => {
+  if (typeof item === 'string') return item;
+  if (item && typeof item === 'object' && !Array.isArray(item)) {
+    const r = item as Record<string, unknown>;
+    if (typeof r.hex === 'string') return `${r.hex} ${String(r.name ?? '')}${r.role === 'main' ? '（主）' : ''}`.trim();
+    if (typeof r.title === 'string') return `${r.title}：${String(r.text ?? '')}`;
+  }
+  return JSON.stringify(item);
+};
+/** What the preview shows for a value: lines, never raw JSON (the palette as 「#2F4858 深墨蓝（主）」, a settings object as 「键：值」). */
+export const show = (value: unknown): string => {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(readableItem).join('\n');
+  if (typeof value === 'object')
+    return Object.entries(value)
+      .map(([k, v]) => `${k}：${readableItem(v)}`)
+      .join('\n');
+  return String(value);
+};
 
 export function blankProfile(id: string): WebCharacterProfile {
   const days: Record<number, unknown[]> = {};
@@ -82,7 +102,7 @@ export function mergeProfile(
   const t = next.template;
   const p = next.presentation as WebCharacterPresentation;
   const set = <T>(field: string, before: T | undefined, after: T, assign: () => void) => {
-    if (show(before) === show(after)) return;
+    if (same(before, after)) return;
     changes.push({ field, old: show(before), new: show(after) });
     assign();
   };
@@ -142,7 +162,7 @@ export function mergeProfile(
     const settings: Record<string, JsonValue> = structuredClone(had?.settings ?? {});
     const before = structuredClone(settings);
     const touch = (key: string, value: JsonValue, label: string) => {
-      if (show(before[key]) !== show(value)) changes.push({ field: label, old: show(before[key]), new: show(value) });
+      if (!same(before[key], value)) changes.push({ field: label, old: show(before[key]), new: show(value) });
       settings[key] = value;
     };
     if (read.speech.length) {
@@ -236,7 +256,7 @@ export function mergeProfile(
       '5 背景与生活',
     );
     merged('boundaries', BOUNDARY_FIELDS, read.boundaries, '8 边界与隐藏设定');
-    if (show(settings) !== show(before) || !had) t.authorCanon = { kind: 'author_canon', settings };
+    if (!same(settings, before) || !had) t.authorCanon = { kind: 'author_canon', settings };
   }
 
   // ---- what a NEW character cannot be without ----

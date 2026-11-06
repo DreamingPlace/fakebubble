@@ -608,6 +608,8 @@ test('24b-6 round 3: the old page name 角色资料 is not on any console page (
         : entry.name.endsWith('.ts') && files.push(join(dir, entry.name));
   };
   walk(root);
-  const found = files.filter((file) => readFileSync(file, 'utf8').includes('角色资料'));
+  // Named exception (Part 24j): the button and drawer 导入角色资料 (角色工作台 → 导入角色资料, the name the owner asked for) are not the old
+  // page name; every other use of 角色资料 is still refused.
+  const found = files.filter((file) => readFileSync(file, 'utf8').replaceAll('导入角色资料', '').includes('角色资料'));
   assert.deepEqual(found, []);
 });

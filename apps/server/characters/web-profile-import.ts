@@ -1,5 +1,5 @@
 import type { Clock } from '../../../packages/contracts/index.ts';
-import type { CastDoc } from '../../../packages/contracts/web-cast.ts';
+import { CAST_LIMITS, type CastDoc } from '../../../packages/contracts/web-cast.ts';
 import { issueSentence } from '../../../packages/contracts/web-cast-text.ts';
 import { DetailedError, DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { once, requestHash } from '../admin/web-admin-actions.ts';
@@ -269,41 +269,51 @@ export class WebProfileImport {
       problems.push(...merged.problems);
       warnings.push(...merged.warnings);
       castChanges = merged.changes;
-      try {
-        const normalized = normalizeCastDoc(merged.doc, { known: castEntryIds(draft!.doc), fresh: freshCastId });
-        const lookup = characterLookup(this.store);
-        const newIds = new Set(planned.filter((p) => p.mode === 'new').map((p) => p.characterId));
-        const validation = validateCastDoc(normalized, 'draft', {
-          exists: (id) => newIds.has(id) || lookup.exists(id),
-          deleted: lookup.deleted,
+      if (merged.doc.characters.length > CAST_LIMITS.chatCharacters)
+        problems.push({
+          code: 'PROFILE_CAST_FULL',
+          file: planned[0]!.file,
+          section: '关系与故事',
+          field: null,
+          item: null,
+          text: `关系与故事最多 ${CAST_LIMITS.chatCharacters} 个聊天角色，这次导入会超出（${merged.doc.characters.length}）`,
         });
-        for (const issue of validation.errors)
+      else
+        try {
+          const normalized = normalizeCastDoc(merged.doc, { known: castEntryIds(draft!.doc), fresh: freshCastId });
+          const lookup = characterLookup(this.store);
+          const newIds = new Set(planned.filter((p) => p.mode === 'new').map((p) => p.characterId));
+          const validation = validateCastDoc(normalized, 'draft', {
+            exists: (id) => newIds.has(id) || lookup.exists(id),
+            deleted: lookup.deleted,
+          });
+          for (const issue of validation.errors)
+            problems.push({
+              code: 'PROFILE_CAST_INVALID',
+              file: planned[0]!.file,
+              section: '关系与故事',
+              field: null,
+              item: null,
+              text: issueSentence(normalized, issue.code, issue.path).text,
+            });
+          castChanged = canonicalCastJson(normalized) !== canonicalCastJson(draft!.doc);
+          castDoc = normalized;
+        } catch (error) {
+          const detail =
+            error instanceof DetailedError
+              ? (error.detail.issues as { code: string; path: string }[] | undefined)
+              : undefined;
           problems.push({
             code: 'PROFILE_CAST_INVALID',
             file: planned[0]!.file,
             section: '关系与故事',
             field: null,
             item: null,
-            text: issueSentence(normalized, issue.code, issue.path).text,
+            text: detail?.[0]
+              ? issueSentence(draft!.doc, detail[0].code, detail[0].path).text
+              : '合并后的关系与故事不符合要求',
           });
-        castChanged = canonicalCastJson(normalized) !== canonicalCastJson(draft!.doc);
-        castDoc = normalized;
-      } catch (error) {
-        const detail =
-          error instanceof DetailedError
-            ? (error.detail.issues as { code: string; path: string }[] | undefined)
-            : undefined;
-        problems.push({
-          code: 'PROFILE_CAST_INVALID',
-          file: planned[0]!.file,
-          section: '关系与故事',
-          field: null,
-          item: null,
-          text: detail?.[0]
-            ? issueSentence(draft!.doc, detail[0].code, detail[0].path).text
-            : '合并后的关系与故事不符合要求',
-        });
-      }
+        }
       for (const p of planned) p.castChanges = castChanges.filter((c) => c.who === p.read.name);
     }
     const basis: Basis = {
@@ -460,6 +470,7 @@ export class WebProfileImport {
   meta(characterId: string) {
     const row = codeOf(this.store, characterId);
     return {
+      available: true as const,
       code: row?.code ?? null,
       avatarFile: row?.avatar_file ?? null,
       voiceReferenceId: row?.voice_reference_id ?? null,
