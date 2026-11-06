@@ -1,0 +1,2 @@
+Part 24j screenshots (1440x900 and 1280x800), all on the synthetic console fixture: the preview of 3 characters (new / existing / 将绑定代码), a blocking error with its located items, the same files again (没有变化), 身份与展示 with the 角色代码 field and the checklist, the code field, and the Fish referenceId prefilled on 声音.
+Made by `node scripts/check-web-profile-import-24j-browser.ts <dir>` on branch claude/part-24j-profile-import.
