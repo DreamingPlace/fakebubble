@@ -19,7 +19,6 @@ export interface ProfileProblem {
 }
 export type ChecklistItem = { key: string; text: string };
 
-export const TEMPLATE_VERSION = 1;
 export const CODE_PATTERN = /^[A-Za-z0-9_-]{2,12}$/;
 /** Caps of this importer on top of the cast's and the workbench's own (all JavaScript string length, no cutting). */
 export const PROFILE_LIMITS = Object.freeze({

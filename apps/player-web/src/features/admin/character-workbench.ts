@@ -692,7 +692,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       // Part 24j: the 角色代码 and the checklist belong to 身份与展示 (shown and hidden with it) but are not fields of the draft.
       const extras = identityExtras(snapshot);
       if (extras) {
-        flow.append(extras);
+        // Not inside .character-flow: that holds what only a saved role has (资料改动, 发布, 声音成品…), and 身份与展示 shows none of it.
+        body.append(extras);
         sections.find((section) => section.id === 'identity')!.nodes.push(extras);
       }
       // What a builder appended to the flow, so it can be shown and hidden as one section.
