@@ -42,7 +42,13 @@ const refused = (work: () => unknown, code = 'CAST_INVALID') =>
 test('the empty document is exactly what migration 129 inserts as the draft', () => {
   const sql = readFileSync(new URL('../../../apps/server/web-migrations/129_cast.sql', import.meta.url), 'utf8');
   const literal = /VALUES \(1,1,'(\{[^']*\})',0\)/.exec(sql)?.[1];
-  assert.equal(literal, canonicalCastJson(emptyCastDoc()));
+  // Part 24i: migration 129 is immutable and seeds the schema-1 empty document. A read upgrades it in memory (cast-upgrade.ts), so
+  // the schema-2 empty document is what that literal becomes - everything but the schema number is byte for byte the same.
+  assert.equal(
+    canonicalCastJson(normalizeCastDoc(JSON.parse(literal!), { known: new Set(), fresh: counterIds() })),
+    canonicalCastJson(emptyCastDoc()),
+  );
+  assert.equal(literal, canonicalCastJson(emptyCastDoc()).replace('"schema":2', '"schema":1'));
 });
 
 test('ids: the server assigns them, keeps the ones it knows and refuses any it did not hand out', () => {
@@ -101,7 +107,8 @@ test('the shape is strict: unknown keys, wrong types, control characters, over-l
   );
   bad((r) => (r.characters = [...r.characters, ...r.characters]));
   refused(() => normalize(null));
-  refused(() => normalize({ ...sampleCastRaw(), schema: 2 }));
+  // Part 24i: schema 2 is current; 1 is upgraded on the way in (see web-cast-24i.test.ts) and anything else is refused.
+  refused(() => normalize({ ...sampleCastRaw(), schema: 3 }));
 });
 
 test('the document as a whole is capped at 300,000 characters, and so is a field list at its count', () => {
@@ -153,7 +160,14 @@ test('meaning: duplicates, unknown references, self-ratings and values off the 0
       String(value),
     );
   assert.deepEqual(
-    with_((d) => d.directions.push({ ...d.directions[0]!, id: 'dup' })),
+    // Part 24i: the copy gets its own address item ids (ids are unique over the whole document).
+    with_((d) =>
+      d.directions.push({
+        ...d.directions[0]!,
+        id: 'dup',
+        addresses: d.directions[0]!.addresses.map((a, i) => ({ ...a, id: `dup-a${i}` })),
+      }),
+    ),
     ['CAST_DUPLICATE_DIRECTION'],
   );
   assert.deepEqual(
@@ -257,11 +271,11 @@ test('the compiled view: own sections in full, cards for the others, outgoing re
   // outgoing ratings, 称呼 and 相处; never what the others think of him
   assert.deepEqual(
     view.relations.find((r) => r.to === '陈阿杰'),
-    { to: '陈阿杰', rating: 4, address: '阿杰', treatment: '嘴上互怼，其实最信任他' },
+    { to: '陈阿杰', rating: 4, addresses: ['阿杰'], treatment: '嘴上互怼，其实最信任他' },
   );
   assert.equal(view.relations.length, 3 + 1, 'three ratings and the direction to the mother');
   assert.ok(!json.includes('嘴硬，会替她出头'), 'the 相处 text of c02 toward c01 is incoming');
-  assert.equal(compileCastView(doc, 'c02').relations.find((r) => r.to === '林小满')!.address, '小满');
+  assert.deepEqual(compileCastView(doc, 'c02').relations.find((r) => r.to === '林小满')!.addresses, ['小满']);
   // groups with their stories, memes he is party to
   assert.deepEqual(
     view.groups.map((g) => g.name),
@@ -396,7 +410,7 @@ test('over the cap, items are dropped in the documented order and the character�
     memes: c01.view.memes.length,
     group: c01.view.groups.reduce((n, g) => n + g.stories.length, 0),
     lived: c01.view.stories.length,
-    texts: c01.view.relations.filter((r) => r.address !== undefined || r.treatment !== undefined).length,
+    texts: c01.view.relations.filter((r) => r.addresses !== undefined || r.treatment !== undefined).length,
   };
   assert.deepEqual(total, { memes: 1, group: 1, lived: 3, texts: 2 });
   let seen = { memes: 0, group: 0, lived: 0, texts: 0 };
@@ -424,7 +438,7 @@ test('over the cap, items are dropped in the documented order and the character�
   assert.deepEqual(tiny.view.memes, []);
   assert.deepEqual(tiny.view.stories, []);
   assert.deepEqual(tiny.view.groups[0]!.stories, []);
-  assert.ok(tiny.view.relations.every((r) => r.address === undefined && r.treatment === undefined));
+  assert.ok(tiny.view.relations.every((r) => r.addresses === undefined && r.treatment === undefined));
   assert.ok(
     tiny.view.relations.some((r) => r.rating !== undefined),
     'the ratings stay',
@@ -437,10 +451,10 @@ test('prompt files: the cast prompts are pinned, separate from PROMPTS_V7, and g
     renderCastPromptsModule(),
   );
   assert.deepEqual(Object.keys(PROMPTS_CAST), ['castContext', 'castReview']);
-  // Part 24a: pinned on purpose. Changing either file changes castPromptHash(), which every request that carries `cast` records.
-  assert.equal(sha(CAST_CONTEXT_PROMPT), '8389e2006b9330e713fb5757dd57bbc6af4246a1123dbd185e18345f570fc6e6');
+  // Part 24a: pinned on purpose (Part 24i changed cast-context.md on purpose: addresses[], alias kinds, doNotCall; see docs/STATUS.md). Changing either file changes castPromptHash(), which every request that carries `cast` records.
+  assert.equal(sha(CAST_CONTEXT_PROMPT), 'a95eb911271eefc96a73366b8481ac465bdfe325d92e1ec51f4b0a4354e379e8');
   assert.equal(sha(CAST_REVIEW_PROMPT), 'f16fc9a093e1554de20d4f0fdca0ed771b5ae7ca764896e462b48139c12b9100');
-  assert.equal(castPromptHash(), '1462d09ed4627be98191b4ad6c423fe234934a54a248ffc1b3c009a59067de35');
+  assert.equal(castPromptHash(), 'e0ca5ed96889c34b2da6eca3d903ea89ee74f42e24b489bd81b9c087ec49c2b7');
   for (const marker of ['亲历', '听说', '不知道', 'narrationBoundary', 'hiddenSettings'])
     assert.ok(CAST_CONTEXT_PROMPT.includes(marker), marker);
   for (const marker of ['hiddenSettings', '不知道', 'narrationBoundary'])

@@ -203,11 +203,13 @@ test('import-legacy maps the known fields, sends the rest to the per-character u
     ['甲甲', '合成a', '阿瓜'],
   );
   assert.deepEqual(
-    a.identity.aliases.map((x) => [x.text, x.attitude]),
+    a.identity.aliases.map((x) => [x.text, x.kind, x.attitude]),
+    // Part 24i: the alias cap is 12 (was 3), so the 4th alias is kept as an alias; every legacy alias is kind 'other', attitude 'ok'.
     [
-      ['瓜瓜', 'ok'],
-      ['小魏', 'ok'],
-      ['别名三号', 'ok'],
+      ['瓜瓜', 'other', 'ok'],
+      ['小魏', 'other', 'ok'],
+      ['别名三号', 'other', 'ok'],
+      ['别名四号', 'other', 'ok'],
     ],
   );
   assert.equal(a.identity.oneLiner, '甲的一句话简介');
@@ -247,7 +249,7 @@ test('import-legacy maps the known fields, sends the rest to the per-character u
   assert.match(a.unmapped, /【名字（超出上限）】瓜/);
   assert.match(a.unmapped, /【名字（超出上限）】第五个名字/);
   assert.match(a.unmapped, /【名字】这是一个很长很长很长很长的名字/);
-  assert.match(a.unmapped, /【别名（超出上限）】别名四号/);
+  assert.doesNotMatch(a.unmapped, /别名（超出上限）/, 'Part 24i: four aliases fit the new cap of 12');
   assert.equal(doc.characters[2]!.unmapped, '', 'a character without canon has nothing to put aside');
   // stories: the same event in two canons is ONE story; defaultKnowers become overrides only where they differ from the rule
   assert.deepEqual(

@@ -7,14 +7,18 @@ import {
   ratingOf,
   ratingShort,
   ratingText,
-  setDirection,
+  syncDirection,
+  blankDirection,
+  addressesText,
   setRating,
   starFill,
   starValue,
   storiesOfPair,
   blankStory,
 } from './cast-model.ts';
+import { itemList } from './cast-items.ts';
 import { dot, svgNode, type CastCtx } from './cast-ui.ts';
+import { CAST_LIMITS } from '../../../../../../packages/contracts/web-cast.ts';
 import { markDirty } from '../ui/unsaved.ts';
 
 export type GridState = {
@@ -110,7 +114,7 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
           return;
         }
         const value = ratingOf(doc, rowId, colId);
-        const address = directionOf(doc, rowId, colId)?.address ?? '';
+        const address = addressesText(directionOf(doc, rowId, colId));
         const tip = `${rowName} → ${nameOf(colId)} · ${value === null ? '未设置' : `${ratingText(value)} 星`}${address ? ` · 叫他“${address}”` : ''}`;
         const cell = h('button', {
           class: `cs-cell${value === null ? ' is-unset' : ''}`,
@@ -325,31 +329,45 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
         });
         head.querySelector?.('.cs-dir-rate')?.append(zero, unset);
       }
-      const direction = () => directionOf(doc, from, to);
+      // The entry is found once: a pair with nothing written yet gets a detached blank one that joins doc.directions (syncDirection)
+      // as soon as it holds an item or a 相处 text, so the list editor and the 相处 field always change the same object.
+      const entry = directionOf(doc, from, to) ?? blankDirection(from, to);
       const baseDir = directionOf(ctx.base(), from, to);
-      const input = (field: 'address' | 'treatment', placeholder: string, max: number) => {
-        const node = h('input', {
-          attrs: {
-            type: 'text',
-            maxlength: String(max),
-            placeholder,
-            'aria-label': `${fromName} ${field === 'address' ? '叫' : '怎么对'} ${toName}（${placeholder}）`,
-          },
-        });
-        node.value = direction()?.[field] ?? '';
-        if (!ctx.canEdit()) node.setAttribute('readonly', '');
-        node.addEventListener('input', () => {
-          setDirection(doc, from, to, field, node.value);
-          markDirty(node, node.value !== (baseDir?.[field] ?? ''));
-          ctx.edited(true);
-        });
-        markDirty(node, node.value !== (baseDir?.[field] ?? ''));
-        return node;
-      };
-      line.append(
-        head,
-        h('div', { class: 'cs-dir-texts' }, input('address', '称呼', 16), input('treatment', '相处', 100)),
-      );
+      const treatment = h('input', {
+        attrs: {
+          type: 'text',
+          maxlength: String(CAST_LIMITS.treatment),
+          placeholder: '相处',
+          'aria-label': `${fromName} 怎么对 ${toName}（相处）`,
+        },
+      });
+      treatment.value = entry.treatment;
+      if (!ctx.canEdit()) treatment.setAttribute('readonly', '');
+      treatment.addEventListener('input', () => {
+        entry.treatment = treatment.value;
+        syncDirection(doc, entry);
+        markDirty(treatment, treatment.value !== (baseDir?.treatment ?? ''));
+        ctx.edited(true);
+      });
+      markDirty(treatment, treatment.value !== (baseDir?.treatment ?? ''));
+      const addresses = itemList({
+        ctx,
+        label: '称呼',
+        hint: `${fromName} 怎么叫 ${toName}，按顺序`,
+        items: entry.addresses,
+        base: baseDir?.addresses ?? null,
+        max: CAST_LIMITS.addresses,
+        maxText: CAST_LIMITS.address,
+        blank: () => ({ id: '', text: '' }),
+        path: (index) => `directions[${entry.id || doc.directions.indexOf(entry)}].addresses[${index}].text`,
+        listPath: `directions[${entry.id || doc.directions.indexOf(entry)}].addresses`,
+        structure: () => {
+          syncDirection(doc, entry);
+          ctx.paint('grid');
+        },
+        testId: 'addresses',
+      });
+      line.append(head, h('div', { class: 'cs-dir-texts' }, addresses, treatment));
       host.append(line);
     }
     const shared = storiesOfPair(doc, a, b);

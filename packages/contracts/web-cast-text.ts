@@ -1,4 +1,4 @@
-import type { CastDoc } from './web-cast.ts';
+import { CAST_LIMITS, type CastDoc } from './web-cast.ts';
 
 /**
  * How cast validation problems are spelled for people (the 关系与故事 page, the cast file import and scripts/cast-file.ts share it):
@@ -32,6 +32,15 @@ export const ISSUE_LABEL: Record<string, string> = {
   CAST_EMPTY: '阵容里还没有角色',
   CAST_GROUP_TOO_SMALL: '组合不足两人',
   CAST_DUPLICATE_NAME: '有角色重名',
+  CAST_ITEM_EMPTY: '不能为空',
+  CAST_ITEM_CONTROL: '含有换行或控制字符',
+  CAST_ITEM_EDGE_SPACE: '开头或结尾有空格（不会自动去掉）',
+  CAST_ITEM_TOO_LONG: `超过 ${CAST_LIMITS.alias} 字`,
+  CAST_TOO_MANY_ITEMS: '项数超过上限',
+  CAST_DUPLICATE_ITEM: '与同一列表里的另一项重复',
+  CAST_ALIAS_TOTAL: `全部角色的别名合计超过 ${CAST_LIMITS.aliasesTotal} 项`,
+  CAST_ADDRESS_TOTAL: `全部称呼合计超过 ${CAST_LIMITS.addressesTotal} 项`,
+  CAST_FILE_OLD_FORMAT: '旧格式文件，已按原值转换',
   CAST_FILE_HEADER: '文件头不对（应为 format "burbur-cast"、version 1）',
   CAST_FILE_NEW_KEY: '新角色的临时编号写法不对（应为 new:名字）',
   CAST_FILE_WORKBENCH: '角色工作台资料不符合要求',
@@ -41,10 +50,14 @@ export const ISSUE_LABEL: Record<string, string> = {
   CAST_FILE_UNKNOWN_ID: '文件里的编号在当前草稿里找不到',
 };
 
+const ITEM_FIELDS = new Set(['aliases', 'addresses']);
 const FIELD_LABEL: Record<string, string> = {
   identity: '身份',
   names: '名字',
   aliases: '别名',
+  addresses: '称呼',
+  kind: '类型',
+  attitude: '态度',
   oneLiner: '一句话',
   selfConcept: '自我认知',
   profile: '简介',
@@ -83,7 +96,9 @@ export function humanIssue(doc: CastDoc, rawPath: string): { who: string | null;
   const path = rawPath.replace(/^doc\.?/, '');
   let who: string | null = null;
   const parts: string[] = [];
-  for (const [, head, key = '', rest = ''] of path.matchAll(/([A-Za-z]+)(?:\[([^\]]*)\])?((?:\.[A-Za-z]+)*)/g)) {
+  for (const [, head, key = '', rest = ''] of path.matchAll(
+    /([A-Za-z]+)(?:\[([^\]]*)\])?((?:\.[A-Za-z]+(?:\[\d+\])?)*)/g,
+  )) {
     if (head === 'characters' || head === 'people') {
       const character = pick(doc.characters, key, (c) => c.characterId);
       const person = pick(doc.people, key, (p) => p.id);
@@ -103,13 +118,55 @@ export function humanIssue(doc: CastDoc, rawPath: string): { who: string | null;
       // the key is the entry's id (or its index); the entry belongs to the character it is FROM
       const direction = pick(doc.directions, key, (d) => d.id);
       if (direction) who ??= nameOf(doc, direction.from);
-      parts.push('称呼与相处');
+      // An address item reads "沈砚舟 → 林青野 · 称呼 第 2 项"; anything else in the entry stays "称呼与相处".
+      parts.push(direction && /\.addresses\b/.test(rest) ? `→ ${nameOf(doc, direction.to)}` : '称呼与相处');
     } else if (head) {
       const label = FIELD_LABEL[head];
       if (label) parts.push(label);
       else if (key) parts.push(nameOf(doc, key));
     }
-    for (const field of rest.split('.').filter(Boolean)) if (FIELD_LABEL[field]) parts.push(FIELD_LABEL[field]!);
+    for (const part of rest.split('.').filter(Boolean)) {
+      const [, field = '', index] = /^([A-Za-z]+)(?:\[(\d+)\])?$/.exec(part) ?? [];
+      const label = FIELD_LABEL[field];
+      // Only the two item lists carry a 1-based item number; other indexes stay silent as they always did.
+      if (label)
+        parts.push(index !== undefined && ITEM_FIELDS.has(field) ? `${label} 第 ${Number(index) + 1} 项` : label);
+    }
   }
   return { who, where: parts.join(' · ') };
+}
+
+/** The label of a code at a path: the two limits that depend on WHICH list the path is in are spelled with their own number. */
+export function issueLabel(code: string, path: string): string {
+  if (code === 'CAST_TOO_MANY_ITEMS')
+    return `最多 ${path.includes('addresses') ? CAST_LIMITS.addresses : CAST_LIMITS.aliases} 项`;
+  if (code === 'CAST_ITEM_TOO_LONG')
+    return `超过 ${path.includes('addresses') ? CAST_LIMITS.address : CAST_LIMITS.alias} 字`;
+  return ISSUE_LABEL[code] ?? code;
+}
+
+/** Codes about ONE item of an alias / address list: they read "角色 · 别名 第 4 项 — 超过 16 字". */
+const ITEM_CODES = new Set([
+  'CAST_ITEM_EMPTY',
+  'CAST_ITEM_CONTROL',
+  'CAST_ITEM_EDGE_SPACE',
+  'CAST_ITEM_TOO_LONG',
+  'CAST_TOO_MANY_ITEMS',
+  'CAST_DUPLICATE_ITEM',
+]);
+
+/**
+ * One problem as one sentence, the same in the page, the import summary and scripts/cast-file.ts. An item problem is
+ * 「沈砚舟 · 别名 第 4 项 — 超过 16 字」 / 「沈砚舟 → 林青野 · 称呼 第 2 项 — 超过 16 字」; the rest keep 「说明（位置）」.
+ */
+export function issueSentence(doc: CastDoc | null, code: string, path: string): { who: string | null; text: string } {
+  const label = issueLabel(code, path);
+  const human = doc ? humanIssue(doc, path) : { who: null, where: '' };
+  const { who } = human;
+  const where = ITEM_CODES.has(code) ? human.where.replace(/^身份 · /, '') : human.where;
+  if (ITEM_CODES.has(code) && where) {
+    const subject = !who ? where : where.startsWith('→') ? `${who} ${where}` : `${who} · ${where}`;
+    return { who, text: `${subject} — ${label}` };
+  }
+  return { who, text: where ? `${label}（${where}）` : label };
 }

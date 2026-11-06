@@ -9,7 +9,7 @@ import { emptyCastDoc, freshCastId, normalizeCastDoc } from './cast-validation.t
  *
  *  authorCanon.settings.…                      → cast
  *  selfIdentity.names, template.name           → identity.names (the template name first; over the cap → unmapped)
- *  aliases                                     → identity.aliases (attitude 'ok')
+ *  aliases                                     → identity.aliases (kind 'other', attitude 'ok')
  *  basicInfo                                   → profile ("键：值" lines)
  *  speechStyle                                 → speech.catchphrases (short) / speech.samples (long)
  *  dialogueStyle                               → speech.samples
@@ -320,7 +320,7 @@ export function buildLegacyCast(sources: readonly LegacySource[], fresh: () => s
       identity: {
         oneLiner,
         names: names.map((text) => ({ text })),
-        aliases: aliases.map((text) => ({ text, attitude: 'ok' })),
+        aliases: aliases.map((text) => ({ text, kind: 'other', attitude: 'ok' })),
         selfConcept: '',
         prototype: null,
       },

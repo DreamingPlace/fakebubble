@@ -1,6 +1,7 @@
 import {
   CAST_KNOWLEDGE,
   type CastCharacter,
+  type CastDirection,
   type CastDoc,
   type CastPerson,
   type CastGroup,
@@ -8,9 +9,9 @@ import {
   type CastKnowledge,
   type CastStory,
 } from '../../../../../../packages/contracts/web-cast.ts';
-import { ISSUE_LABEL, humanIssue, nameOf } from '../../../../../../packages/contracts/web-cast-text.ts';
+import { ISSUE_LABEL, humanIssue, issueSentence, nameOf } from '../../../../../../packages/contracts/web-cast-text.ts';
 
-export { ISSUE_LABEL, humanIssue, nameOf };
+export { ISSUE_LABEL, humanIssue, issueSentence, nameOf };
 
 /**
  * The cast document as the 关系与故事 page edits it. Everything here works on a plain CastDoc and changes it in place
@@ -83,17 +84,23 @@ export function clearKnowledge(story: CastStory, characterId: string) {
 
 export const directionOf = (doc: CastDoc, from: string, to: string) =>
   doc.directions.find((d) => d.from === from && d.to === to) ?? null;
-/** 称呼 / 相处 of `from` toward `to`. An entry whose two texts are both empty is not kept. */
-export function setDirection(doc: CastDoc, from: string, to: string, field: 'address' | 'treatment', value: string) {
-  let entry = directionOf(doc, from, to);
-  if (!entry) {
-    if (!value) return;
-    entry = { id: '', from, to, address: '', treatment: '' };
-    doc.directions.push(entry);
-  }
-  entry[field] = value;
-  if (!entry.address && !entry.treatment) doc.directions.splice(doc.directions.indexOf(entry), 1);
+export const blankDirection = (from: string, to: string): CastDirection => ({
+  id: '',
+  from,
+  to,
+  addresses: [],
+  treatment: '',
+});
+/** Keeps the document's list in step with one entry: it is in `doc.directions` exactly while it has a 称呼 item or a 相处 text. */
+export function syncDirection(doc: CastDoc, entry: CastDirection) {
+  const at = doc.directions.indexOf(entry);
+  const needed = entry.addresses.length > 0 || entry.treatment !== '';
+  if (needed && at < 0) doc.directions.push(entry);
+  else if (!needed && at >= 0) doc.directions.splice(at, 1);
 }
+/** The addresses as the grid's hover text shows them: joined for display only (never validated, never stored). */
+export const addressesText = (entry: CastDirection | null | undefined) =>
+  (entry?.addresses ?? []).map((a) => a.text).join(' / ');
 
 export const blankPeriod = () => ({ start: '', end: '' });
 export const blankStory = (participants: string[] = []): CastStory => ({

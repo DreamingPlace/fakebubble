@@ -3,7 +3,9 @@ import {
   CAST_FILE_LIMITS,
   CAST_FILE_NEW_PREFIX,
   CAST_FILE_VERSION,
+  CAST_LEGACY_SCHEMA,
   CAST_LIMITS,
+  CAST_SCHEMA,
   type CastDoc,
   type CastFileProblem,
   type CastFileSummary,
@@ -11,9 +13,10 @@ import {
   type CastIssue,
   type CastWorkbenchSeed,
 } from '../../../packages/contracts/web-cast.ts';
-import { ISSUE_LABEL, humanIssue } from '../../../packages/contracts/web-cast-text.ts';
+import { issueSentence } from '../../../packages/contracts/web-cast-text.ts';
 import { DetailedError } from '../../../packages/domain/errors.ts';
 import { compileCastViewDetailed } from './cast-compile.ts';
+import { upgradeCastDoc } from './cast-upgrade.ts';
 import {
   canonicalCastJson,
   freshCastId,
@@ -194,9 +197,8 @@ export function prepareCastFile(file: unknown, input: PrepareInput): PreparedCas
   });
   /** Names a problem with the document it is about (any shape: the document may not have passed the shape check yet). */
   const note = (list: CastFileProblem[], about: CastDoc | null, code: string, path: string) => {
-    const { who, where } = about ? humanIssue(about, path) : { who: null, where: '' };
-    const label = ISSUE_LABEL[code] ?? code;
-    list.push({ code, path, who, text: where ? `${label}（${where}）` : label });
+    const { who, text } = issueSentence(about, code, path);
+    list.push({ code, path, who, text });
   };
 
   if (!isObj(file)) {
@@ -207,22 +209,28 @@ export function prepareCastFile(file: unknown, input: PrepareInput): PreparedCas
     note(problems, null, 'CAST_FILE_HEADER', 'file');
   for (const key of Object.keys(file))
     if (![...HEADER_KEYS, ...DOC_KEYS].includes(key)) note(problems, null, 'CAST_SHAPE', `file.${key}`);
-  if (file.schema !== 1) note(problems, null, 'CAST_SHAPE', 'doc.schema');
+  // Schema 1 (one `address` string, aliases without a kind) is read and converted item by item; schema 2 is what is written.
+  const oldFormat = file.schema === CAST_LEGACY_SCHEMA;
+  if (file.schema !== CAST_SCHEMA && !oldFormat) note(problems, null, 'CAST_SHAPE', 'doc.schema');
   if (problems.length) return result();
 
   // The document part. Collections a file may leave out are empty.
   // A copy: keys are rewritten in place below, and the caller's file (which the request hash was made from) must stay as it came.
-  const raw: Obj = structuredClone({
-    schema: file.schema,
-    world: file.world ?? { background: '' },
-    characters: file.characters ?? [],
-    people: file.people ?? [],
-    ratings: file.ratings ?? {},
-    directions: file.directions ?? [],
-    groups: file.groups ?? [],
-    stories: file.stories ?? [],
-    memes: file.memes ?? [],
-  });
+  const raw = upgradeCastDoc(
+    structuredClone({
+      schema: file.schema,
+      world: file.world ?? { background: '' },
+      characters: file.characters ?? [],
+      people: file.people ?? [],
+      ratings: file.ratings ?? {},
+      directions: file.directions ?? [],
+      groups: file.groups ?? [],
+      stories: file.stories ?? [],
+      memes: file.memes ?? [],
+    }),
+    { deriveIds: false },
+  ) as Obj;
+  if (oldFormat) note(warnings, null, 'CAST_FILE_OLD_FORMAT', 'doc.schema');
   const shell = raw as unknown as CastDoc;
 
   // New characters: pull the workbench block out, give each key an id (or find the draft character it already is).
@@ -331,7 +339,7 @@ export function prepareCastFile(file: unknown, input: PrepareInput): PreparedCas
         ),
       ];
       const texts = (view: typeof full) =>
-        view.relations.filter((r) => r.address !== undefined || r.treatment !== undefined).length;
+        view.relations.filter((r) => r.addresses !== undefined || r.treatment !== undefined).length;
       if (texts(full) > texts(capped)) dropped.push(`${texts(full) - texts(capped)} 条称呼与相处`);
       views.push({
         name: nameOf(c.characterId),

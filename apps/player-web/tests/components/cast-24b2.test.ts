@@ -20,7 +20,9 @@ import {
   nextKnowledge,
   ratingOf,
   ratingText,
-  setDirection,
+  syncDirection,
+  blankDirection,
+  directionOf,
   setKnowledge,
   setRating,
   starFill,
@@ -135,11 +137,20 @@ test('group stories are lived by every member (server view) and 称呼/相处 ar
     );
   }
   const [a, b] = [sampleId(3), sampleId(4)];
-  setDirection(doc, a, b, 'address', '小顾');
-  setDirection(doc, b, a, 'treatment', '总是抢他的笔');
-  assert.equal(doc.directions.find((d) => d.from === a && d.to === b)!.address, '小顾');
-  assert.equal(doc.directions.find((d) => d.from === b && d.to === a)!.address, '');
-  setDirection(doc, a, b, 'address', '');
+  // Part 24i: 称呼 is a list the editor changes in place (cast-items.ts); syncDirection keeps the entry in the document.
+  const toB = directionOf(doc, a, b) ?? blankDirection(a, b);
+  toB.addresses = [{ id: '', text: '小顾' }];
+  syncDirection(doc, toB);
+  const toA = directionOf(doc, b, a) ?? blankDirection(b, a);
+  toA.treatment = '总是抢他的笔';
+  syncDirection(doc, toA);
+  assert.deepEqual(
+    doc.directions.find((d) => d.from === a && d.to === b)!.addresses.map((x) => x.text),
+    ['小顾'],
+  );
+  assert.deepEqual(doc.directions.find((d) => d.from === b && d.to === a)!.addresses, []);
+  toB.addresses = [];
+  syncDirection(doc, toB);
   assert.equal(
     doc.directions.some((d) => d.from === a && d.to === b && !d.treatment),
     false,
@@ -416,6 +427,7 @@ test('page: a stale revision shows the conflict and keeps what was typed until t
   const f = page(t, { conflictOnce: true });
   await f.view.load();
   f.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
+  // Part 24i: the first input of the direction editor is the first 称呼 item (c01 → c02 has one).
   const typed = f.root.querySelectorAll('.cs-dir-texts input')[0]!;
   typed.type_('小满满');
   assert.equal(f.view.state.dirty, true);
@@ -426,7 +438,7 @@ test('page: a stale revision shows the conflict and keeps what was typed until t
   assert.equal(f.view.state.conflict!.revision, 8);
   assert.equal(typed.value, '小满满', 'the field still holds the typed text');
   assert.equal(
-    f.view.state.doc!.directions.some((d) => d.address === '小满满'),
+    f.view.state.doc!.directions.some((d) => d.addresses.some((x) => x.text === '小满满')),
     true,
     'and so does the working copy',
   );
@@ -440,7 +452,7 @@ test('page: a stale revision shows the conflict and keeps what was typed until t
   assert.equal(f.view.state.conflict, null);
   assert.equal(f.view.state.dirty, false);
   assert.equal(
-    f.view.state.doc!.directions.some((d) => d.address === '小满满'),
+    f.view.state.doc!.directions.some((d) => d.addresses.some((x) => x.text === '小满满')),
     true,
   );
 });
@@ -456,7 +468,7 @@ test('page: taking the latest drops the typed text, on purpose', async (t) => {
   assert.equal(f.view.state.revision, 8);
   assert.equal(f.view.state.dirty, false);
   assert.equal(
-    f.view.state.doc!.directions.some((d) => d.address === '小满满'),
+    f.view.state.doc!.directions.some((d) => d.addresses.some((x) => x.text === '小满满')),
     false,
   );
 });

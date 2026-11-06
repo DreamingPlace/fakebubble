@@ -22,7 +22,7 @@ import { historyList, type HistoryEntry } from '../history/history-list.ts';
 import { keyValuePanel } from '../ui/key-value-panel.ts';
 import { castGrid, pairPanel, type GridState } from './cast-grid.ts';
 import { nameCard, seesPanel } from './cast-character.ts';
-import { ISSUE_LABEL, blankCharacter, changeCount, humanIssue, nameOf } from './cast-model.ts';
+import { ISSUE_LABEL, blankCharacter, changeCount, humanIssue, issueSentence, nameOf } from './cast-model.ts';
 import { groupsPanel, storyPanel, worldPanel, type StoryState } from './cast-stories.ts';
 import { lock, svgNode, type CastCtx, type Region } from './cast-ui.ts';
 import { hoverValue } from '../ui/hover-value.ts';
@@ -51,10 +51,7 @@ export type CastViewHost = {
 };
 
 /** The issue as a person reads it: what is wrong, and where (a name or a title, never an id). */
-const issueText = (doc: CastDoc, issue: CastIssue) => {
-  const { where } = humanIssue(doc, issue.path);
-  return `${ISSUE_LABEL[issue.code] ?? issue.code}${where ? `（${where}）` : ''}`;
-};
+const issueText = (doc: CastDoc, issue: CastIssue) => issueSentence(doc, issue.code, issue.path).text;
 /** The issues grouped by the character they are about (the rest under 其他), in a box that scrolls by itself. */
 function issueBox(doc: CastDoc, issues: readonly CastIssue[]) {
   const groups = new Map<string, string[]>();

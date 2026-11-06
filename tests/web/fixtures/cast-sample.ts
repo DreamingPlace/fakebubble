@@ -42,8 +42,8 @@ export function sampleCastRaw() {
       oneLiner: `${name}，高二（${(index % 4) + 1}）班`,
       names: [text(name), text(`小${name.slice(-1)}`)],
       aliases: [
-        { text: `${name.slice(-1)}${name.slice(-1)}`, attitude: 'likes' },
-        { text: `${name.slice(0, 1)}同学`, attitude: index % 2 ? 'ok' : 'dislikes' },
+        { text: `${name.slice(-1)}${name.slice(-1)}`, kind: 'other', attitude: 'likes' },
+        { text: `${name.slice(0, 1)}同学`, kind: 'other', attitude: index % 2 ? 'ok' : 'dislikes' },
       ],
       selfConcept: `${name}觉得自己是个${index % 2 ? '慢热但靠谱' : '外向爱热闹'}的人。`,
       prototype:
@@ -73,7 +73,7 @@ export function sampleCastRaw() {
   // c05 rates c01 at 3.5; nobody else among the participants of story 1 is rated that high by her
   ratings.c05 = { c01: 3.5, c06: 2, c07: 1 };
   return {
-    schema: 1,
+    schema: 2,
     world: { background: '一座南方小城的高中，学生们在同一条老街上长大。' },
     characters,
     people: [
@@ -86,10 +86,10 @@ export function sampleCastRaw() {
     ],
     ratings,
     directions: [
-      { from: 'c01', to: 'c02', address: '阿杰', treatment: '嘴上互怼，其实最信任他' },
-      { from: 'c02', to: 'c01', address: '小满', treatment: '嘴硬，会替她出头' },
-      { from: 'c05', to: 'c01', address: '林同学', treatment: '客气，保持距离' },
-      { from: 'c01', to: 'new-mom', address: '妈', treatment: '撒娇，报喜不报忧' },
+      { from: 'c01', to: 'c02', addresses: [text('阿杰')], treatment: '嘴上互怼，其实最信任他' },
+      { from: 'c02', to: 'c01', addresses: [text('小满')], treatment: '嘴硬，会替她出头' },
+      { from: 'c05', to: 'c01', addresses: [text('林同学')], treatment: '客气，保持距离' },
+      { from: 'c01', to: 'new-mom', addresses: [text('妈')], treatment: '撒娇，报喜不报忧' },
     ],
     groups: [
       {
@@ -224,7 +224,11 @@ export function maxCastRaw(options: { directionTargets?: number; groupStories?: 
     identity: {
       oneLiner: fill(L.oneLiner, `${index}句`),
       names: names(`人${index}`, L.names),
-      aliases: Array.from({ length: L.aliases }, (_, i) => ({ text: fill(L.alias, `别${i}`), attitude: 'ok' })),
+      aliases: Array.from({ length: L.aliases }, (_, i) => ({
+        text: fill(L.alias, `别${i}`),
+        kind: 'other',
+        attitude: 'ok',
+      })),
       selfConcept: fill(L.selfConcept, '自我认知'),
       prototype: {
         personId: peopleIds[0]!,
@@ -257,10 +261,10 @@ export function maxCastRaw(options: { directionTargets?: number; groupStories?: 
     everyone
       .filter((to) => to !== from)
       .slice(0, directionTargets)
-      .map((to) => ({ from, to, address: fill(L.address, '称'), treatment: fill(L.treatment, '相处') })),
+      .map((to) => ({ from, to, addresses: [text(fill(L.address, '称'))], treatment: fill(L.treatment, '相处') })),
   );
   return {
-    schema: 1,
+    schema: 2,
     world: { background: fill(L.worldBackground, '世界') },
     characters,
     people: peopleIds.map((id, i) => ({

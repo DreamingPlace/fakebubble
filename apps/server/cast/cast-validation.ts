@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import {
   CAST_ALIAS_ATTITUDES,
+  CAST_ALIAS_KINDS,
+  CAST_ITEM_CODE,
+  castItemProblem,
   CAST_KNOWLEDGE,
   CAST_LIMITS,
   CAST_SCHEMA,
@@ -21,6 +24,7 @@ import {
 } from '../../../packages/contracts/web-cast.ts';
 import { DetailedError } from '../../../packages/domain/errors.ts';
 import { minimalViewSize } from './cast-compile.ts';
+import { upgradeCastDoc } from './cast-upgrade.ts';
 
 /**
  * Validation of the cast document (Part 24a). Two layers:
@@ -35,8 +39,25 @@ const SHORT_CONTROL = /[\u0000-\u001f\u007f]/u;
 const LONG_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f]/u;
 
 export type Obj = Record<string, unknown>;
-const fail = (path: string): never => {
-  throw new DetailedError('CAST_INVALID', { issues: [{ code: 'CAST_SHAPE', path }] });
+const fail = (path: string, code = 'CAST_SHAPE'): never => {
+  throw new DetailedError('CAST_INVALID', { issues: [{ code, path }] });
+};
+/**
+ * An alias or an address: refused (never trimmed, never cut) when empty, longer than `max` UTF-16 units, holding a control character
+ * or line break, or starting / ending with whitespace. `legacy` (a schema-1 document being read) skips only the edge-space rule, so
+ * an old stored document is always readable; the next save then shows that row's located error.
+ */
+function itemText(value: unknown, path: string, max: number, legacy: boolean): string {
+  if (typeof value !== 'string') return fail(path);
+  const problem = castItemProblem(value, max);
+  if (problem && !(legacy && problem === 'space')) return fail(path, CAST_ITEM_CODE[problem]);
+  return value;
+}
+/** A list with its own code for "too many", so the editor can say which list and how many it allows. */
+const itemList = (value: unknown, path: string, max: number): unknown[] => {
+  if (!Array.isArray(value)) return fail(path);
+  if (value.length > max) return fail(path, 'CAST_TOO_MANY_ITEMS');
+  return value;
 };
 const object = (value: unknown, path: string, keys: readonly string[], optional: readonly string[] = []): Obj => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return fail(path);
@@ -72,6 +93,8 @@ export interface IdSource {
   /** Ids the previous draft already carries: the only ids a client may send. */
   known: ReadonlySet<string>;
   fresh: () => string;
+  /** The document is an upgraded schema-1 one (see cast-upgrade.ts): historical items are not held to the edge-space rule. */
+  legacy?: boolean;
 }
 export const freshCastId = () => `e_${randomUUID().replaceAll('-', '').slice(0, 20)}`;
 
@@ -92,7 +115,10 @@ export function castEntryIds(doc: CastDoc): Set<string> {
     ids.add(person.id);
     texts(person.names);
   }
-  texts(doc.directions);
+  for (const direction of doc.directions) {
+    ids.add(direction.id);
+    texts(direction.addresses);
+  }
   for (const group of doc.groups) {
     ids.add(group.id);
     texts(group.stories);
@@ -133,10 +159,17 @@ function entryId(value: Obj, path: string, ids: IdSource, tokens?: ReadonlyMap<s
   if (typeof given !== 'string' || !ID.test(given) || !ids.known.has(given)) return fail(`${path}.id`);
   return given;
 }
-const entries = <T>(value: unknown, path: string, max: number, one: (item: unknown, path: string) => T): T[] =>
-  list(value, path, max).map((item, index) => one(item, `${path}[${index}]`));
+const entries = <T>(
+  value: unknown,
+  path: string,
+  max: number,
+  one: (item: unknown, path: string) => T,
+  lister: typeof list = list,
+): T[] => lister(value, path, max).map((item, index) => one(item, `${path}[${index}]`));
 
-export function normalizeCastDoc(input: unknown, ids: IdSource): CastDoc {
+export function normalizeCastDoc(rawInput: unknown, ids: IdSource): CastDoc {
+  // A schema-1 document (an old client, an old file) is converted item by item first; it is saved as schema 2.
+  const input = upgradeCastDoc(rawInput, { deriveIds: false });
   const root = object(input, 'doc', [
     'schema',
     'world',
@@ -151,6 +184,7 @@ export function normalizeCastDoc(input: unknown, ids: IdSource): CastDoc {
   if (root.schema !== CAST_SCHEMA) fail('doc.schema');
   const world = object(root.world, 'doc.world', ['background']);
   const L = CAST_LIMITS;
+  const legacy = ids.legacy === true;
   const tokens = new Map<string, string>();
   if (Array.isArray(root.people))
     for (const person of root.people) {
@@ -219,15 +253,23 @@ export function normalizeCastDoc(input: unknown, ids: IdSource): CastDoc {
       identity: {
         oneLiner: text(identity.oneLiner, `${path}.identity.oneLiner`, L.oneLiner),
         names: names(identity.names, `${path}.identity.names`),
-        aliases: entries(identity.aliases, `${path}.identity.aliases`, L.aliases, (a, at): CastAlias => {
-          const { value: x, id } = withId(a, at, ['text', 'attitude']);
-          if (!(CAST_ALIAS_ATTITUDES as readonly unknown[]).includes(x.attitude)) fail(`${at}.attitude`);
-          return {
-            id,
-            text: text(x.text, `${at}.text`, L.alias, { min: 1 }),
-            attitude: x.attitude as CastAlias['attitude'],
-          };
-        }),
+        aliases: entries(
+          identity.aliases,
+          `${path}.identity.aliases`,
+          L.aliases,
+          (a, at): CastAlias => {
+            const { value: x, id } = withId(a, at, ['text', 'kind', 'attitude']);
+            if (!(CAST_ALIAS_KINDS as readonly unknown[]).includes(x.kind)) fail(`${at}.kind`);
+            if (!(CAST_ALIAS_ATTITUDES as readonly unknown[]).includes(x.attitude)) fail(`${at}.attitude`);
+            return {
+              id,
+              text: itemText(x.text, `${at}.text`, L.alias, legacy),
+              kind: x.kind as CastAlias['kind'],
+              attitude: x.attitude as CastAlias['attitude'],
+            };
+          },
+          itemList,
+        ),
         selfConcept: text(identity.selfConcept, `${path}.identity.selfConcept`, L.selfConcept, { multiline: true }),
         prototype,
       },
@@ -277,14 +319,23 @@ export function normalizeCastDoc(input: unknown, ids: IdSource): CastDoc {
     ratings[ref(from)] = Object.fromEntries(Object.entries(out).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   }
   const direction = (item: unknown, path: string): CastDirection => {
-    const { value: v, id } = withId(item, path, ['from', 'to', 'address', 'treatment']);
+    const { value: v, id } = withId(item, path, ['from', 'to', 'addresses', 'treatment']);
     if (typeof v.from !== 'string' || !ID.test(v.from)) fail(`${path}.from`);
     if (typeof v.to !== 'string' || !ID.test(v.to)) fail(`${path}.to`);
     return {
       id,
       from: ref(v.from as string),
       to: ref(v.to as string),
-      address: text(v.address, `${path}.address`, L.address),
+      addresses: entries(
+        v.addresses,
+        `${path}.addresses`,
+        L.addresses,
+        (a, at): CastText => {
+          const { value: x, id: aid } = withId(a, at, ['text']);
+          return { id: aid, text: itemText(x.text, `${at}.text`, L.address, legacy) };
+        },
+        itemList,
+      ),
       treatment: text(v.treatment, `${path}.treatment`, L.treatment, { multiline: true }),
     };
   };
@@ -362,8 +413,17 @@ export function normalizeCastDoc(input: unknown, ids: IdSource): CastDoc {
     memes: entries(root.memes, 'doc.memes', L.memes, meme),
   };
   if (canonicalCastJson(doc).length > L.docMax) fail('doc');
+  const totals = castItemTotals(doc);
+  if (totals.aliases > L.aliasesTotal) fail('doc.characters', 'CAST_ALIAS_TOTAL');
+  if (totals.addresses > L.addressesTotal) fail('doc.directions', 'CAST_ADDRESS_TOTAL');
   return doc;
 }
+
+/** How many aliases (over all characters) and addresses (over all directions) a document holds. */
+export const castItemTotals = (doc: CastDoc) => ({
+  aliases: doc.characters.reduce((n, c) => n + c.identity.aliases.length, 0),
+  addresses: doc.directions.reduce((n, d) => n + d.addresses.length, 0),
+});
 
 /** The one stored spelling of a document: the key order normalizeCastDoc builds (ratings sorted). */
 export const canonicalCastJson = (doc: CastDoc) => JSON.stringify(doc);
@@ -416,7 +476,10 @@ export function validateCastDoc(
     once(p.id, `people[${i}]`);
     for (const entry of p.names) once(entry.id, `people[${p.id}]`);
   });
-  for (const d of doc.directions) once(d.id, `directions[${d.id}]`);
+  for (const d of doc.directions) {
+    once(d.id, `directions[${d.id}]`);
+    for (const entry of d.addresses) once(entry.id, `directions[${d.id}]`);
+  }
   for (const g of doc.groups) {
     once(g.id, `groups[${g.id}]`);
     for (const s of g.stories) once(s.id, `groups[${g.id}].stories[${s.id}]`);
@@ -445,6 +508,15 @@ export function validateCastDoc(
     }
   }
 
+  // the same text twice in one list (one character's aliases, one direction's addresses): the later item is the error
+  const duplicates = (items: readonly CastText[], path: string) => {
+    const texts = new Set<string>();
+    items.forEach((item, index) => {
+      if (texts.has(item.text)) err('CAST_DUPLICATE_ITEM', `${path}[${index}].text`);
+      texts.add(item.text);
+    });
+  };
+
   // directions: unique per (from, to)
   const pairs = new Set<string>();
   for (const d of doc.directions) {
@@ -454,7 +526,12 @@ export function validateCastDoc(
     if (d.from === d.to) err('CAST_SELF_RELATION', path);
     if (pairs.has(`${d.from}\n${d.to}`)) err('CAST_DUPLICATE_DIRECTION', path);
     pairs.add(`${d.from}\n${d.to}`);
+    duplicates(d.addresses, `${path}.addresses`);
   }
+  for (const c of doc.characters) duplicates(c.identity.aliases, `characters[${c.characterId}].identity.aliases`);
+  const totals = castItemTotals(doc);
+  if (totals.aliases > L.aliasesTotal) err('CAST_ALIAS_TOTAL', 'doc.characters');
+  if (totals.addresses > L.addressesTotal) err('CAST_ADDRESS_TOTAL', 'doc.directions');
 
   for (const g of doc.groups) {
     const path = `groups[${g.id}]`;
