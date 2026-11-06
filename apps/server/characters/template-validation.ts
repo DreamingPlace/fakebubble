@@ -99,6 +99,8 @@ export function validatedTemplate(value: unknown): CharacterTemplate {
       'pets',
       'fears',
       'boundaries',
+      // Part 24j: 性别 / 身高 / 学校-年级 / … written by the profile import; read by the model as facts (see draft-system-body.md).
+      'profileFacts',
       'audienceReception',
       'fictionalLocations',
       'fictionalPeople',

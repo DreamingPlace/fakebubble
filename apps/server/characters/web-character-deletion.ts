@@ -1,3 +1,4 @@
+import { clearProfileMeta } from './web-profile-schema.ts';
 import { purgePreviewWorkbench } from './web-character-preview-purge.ts';
 import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
@@ -145,6 +146,8 @@ export class WebCharacterDeletion {
         );
       this.store.run('DELETE FROM web_character_catalog WHERE character_id=?', id);
       this.store.run('DELETE FROM web_character_drafts WHERE character_id=?', id);
+      // Part 24j: the 角色代码 (and the avatar / voice id / checklist recorded against it) go with the character, so the code is free again.
+      clearProfileMeta(this.store, id);
       // Players' co-creation ideas for this character go at once, including those of players who never opened a chat.
       purgeCocreation(this.store, { characterId: id });
       // The character's admin-only preview runs, time marks and rejected model output go at once as well.

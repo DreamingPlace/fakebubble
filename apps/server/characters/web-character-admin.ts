@@ -3,6 +3,7 @@ import { webCharacterDeleted } from './web-character-deleted.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import {
   canCreateCharacter,
+  hasCastPermission,
   hasCharacterPermission,
   type CharacterAdminAction,
 } from '../../../packages/contracts/web-admin-permissions.ts';
@@ -26,6 +27,8 @@ import {
 } from './web-character-preview-read.ts';
 
 import { WebCharacterMaterials } from './web-character-materials.ts';
+import { WebProfileImport, type ImportContext } from './web-profile-import.ts';
+import { checklistOf, codeOf } from './web-profile-schema.ts';
 
 type Auth = { cookie: unknown; csrf: unknown; origin: unknown };
 type DraftRow = {
@@ -51,7 +54,7 @@ function profile(value: unknown): WebCharacterProfile {
   const template = validatedTemplate(value.template),
     display = value.presentation;
   record(display);
-  keys(display, ['displayName', 'publicDescription', 'welcome', 'color']);
+  keys(display, ['displayName', 'publicDescription', 'welcome', 'color', 'palette']);
   nonempty(display.displayName, 100);
   ensure(
     typeof display.publicDescription === 'string' && display.publicDescription.length <= 500,
@@ -72,8 +75,24 @@ function profile(value: unknown): WebCharacterProfile {
       publicDescription: display.publicDescription,
       welcome: { text: display.welcome.text, version: display.welcome.version },
       ...(display.color === undefined ? {} : { color: display.color }),
+      ...(display.palette === undefined ? {} : { palette: palette(display.palette) }),
     },
   };
+}
+/** Part 24j: the template's colours: 1-12 entries of {hex, name (<=24), role}; at most one 'main', and exactly one when there are several. */
+function palette(value: unknown): NonNullable<WebCharacterProfile['presentation']['palette']> {
+  ensure(Array.isArray(value) && value.length > 0 && value.length <= 12, 'INVALID_ADMIN_REQUEST');
+  const out = value.map((entry) => {
+    record(entry);
+    keys(entry, ['hex', 'name', 'role']);
+    ensure(typeof entry.hex === 'string' && /^#[0-9A-F]{6}$/.test(entry.hex), 'INVALID_ADMIN_REQUEST');
+    ensure(typeof entry.name === 'string' && entry.name.length <= 24, 'INVALID_ADMIN_REQUEST');
+    ensure(entry.role === 'main' || entry.role === 'accent', 'INVALID_ADMIN_REQUEST');
+    return { hex: entry.hex, name: entry.name, role: entry.role as 'main' | 'accent' };
+  });
+  const mains = out.filter((entry) => entry.role === 'main').length;
+  ensure(mains <= 1, 'INVALID_ADMIN_REQUEST');
+  return out;
 }
 
 /** Editing and static preview never generate or publish; publication is a separate guarded command. */
@@ -88,6 +107,88 @@ export class WebCharacterAdmin {
   private materials: WebCharacterMaterials | null = null;
   enableMaterials(materials: WebCharacterMaterials) {
     this.materials = materials;
+  }
+  /** Part 24j: 导入角色资料 and the 角色代码. Off (no tables, nothing offered) until enabled. */
+  private profileImport: WebProfileImport | null = null;
+  enableProfileImport() {
+    this.profileImport = new WebProfileImport(this.store, this.clock, {
+      characters: () => {
+        const ids = new Set([
+          ...publishedWebCharacters(this.store).map((row) => row.characterId),
+          ...this.store
+            .all<{ character_id: string }>('SELECT character_id FROM web_character_drafts')
+            .map((r) => r.character_id),
+        ]);
+        return [...ids].sort().map((id) => {
+          const draft = this.draft(id),
+            live = this.live(id);
+          return {
+            id,
+            name: draft ? draftDTO(draft).profile.template.name : live!.template.name,
+            draftRevision: draft?.revision ?? null,
+            liveVersion: live?.version ?? null,
+          };
+        });
+      },
+      base: (id) => {
+        const draft = this.draft(id),
+          live = this.live(id);
+        if (draft) return draftDTO(draft).profile;
+        if (!live) return null;
+        const profile = structuredClone({ template: live.template, presentation: live.presentation });
+        profile.template.version = live.version + 1;
+        return profile;
+      },
+      normalize: (value) => profile(value),
+      write: (actor, id, next, now) => {
+        const checked = profile(next);
+        ensure(checked.template.id === id, 'CHARACTER_ID_MISMATCH');
+        const current = this.draft(id),
+          live = this.live(id);
+        const base = current ? current.base_version : (live?.version ?? null);
+        ensure((live?.version ?? null) === base, 'LIVE_VERSION_CONFLICT');
+        ensure(checked.template.version === (base ?? 0) + 1, 'INVALID_DRAFT_VERSION');
+        const digest = characterProfileHash(checked);
+        if (current?.content_hash === digest) return null;
+        return this.writeRevision(actor, id, base, checked, digest, now);
+      },
+      create: (actor, next, now) => this.createDraftForCast(actor, next, now),
+    });
+  }
+  /** What the import may do for this session. A session that can write none of it is refused before any body is read. */
+  private importContext(auth: Auth): ImportContext {
+    const actor = this.actor(auth);
+    const grants = actor.member.permissions;
+    const owner = actor.role === 'owner';
+    const mayCreate = owner || canCreateCharacter(grants);
+    const anyEdit = grants.includes('category.characters') || grants.some((p) => p.startsWith('characters.edit:'));
+    ensure(owner || (hasCastPermission(grants, 'cast.edit') && (mayCreate || anyEdit)), 'ADMIN_PERMISSION_REQUIRED');
+    ensure(this.profileImport, 'PROFILE_IMPORT_UNAVAILABLE');
+    return {
+      actor: { memberId: actor.memberId, sessionId: actor.sessionId },
+      mayCreate,
+      mayEdit: (id) => owner || hasCharacterPermission(grants, 'edit', id),
+      mayCast: owner || hasCastPermission(grants, 'cast.edit'),
+    };
+  }
+  profileImportPreview(auth: Auth, input: unknown) {
+    const ctx = this.importContext(auth);
+    return this.profileImport!.preview(ctx, input);
+  }
+  profileImportApply(auth: Auth, input: unknown) {
+    const ctx = this.importContext(auth);
+    return this.profileImport!.apply(ctx, input);
+  }
+  /** 角色代码 by hand, on 身份与展示 (character edit). */
+  profileCodeSave(auth: Auth, id: string, input: unknown) {
+    this.require(auth, 'edit', id);
+    ensure(this.profileImport, 'PROFILE_IMPORT_UNAVAILABLE');
+    return this.profileImport.saveCode(id, input);
+  }
+  profileChecklistDismiss(auth: Auth, id: string, input: unknown) {
+    this.require(auth, 'edit', id);
+    ensure(this.profileImport, 'PROFILE_IMPORT_UNAVAILABLE');
+    return this.profileImport.dismiss(id, input);
   }
   private previews: WebCharacterPreviews | null = null;
   private compare: WebReviewCompare | null = null;
@@ -200,6 +301,16 @@ export class WebCharacterAdmin {
         ? { version: current.version, profile: { template: current.template, presentation: current.presentation } }
         : null,
       draft: draft ? draftDTO(draft) : null,
+      // Part 24j: the 角色代码, the avatar file name and Fish voice id recorded against it, and the open checklist.
+      profileMeta: this.profileImport
+        ? {
+            available: true as const,
+            code: codeOf(this.store, id)?.code ?? null,
+            avatarFile: codeOf(this.store, id)?.avatar_file ?? null,
+            voiceReferenceId: codeOf(this.store, id)?.voice_reference_id ?? null,
+            checklist: checklistOf(this.store, id),
+          }
+        : { available: false as const, code: null, avatarFile: null, voiceReferenceId: null, checklist: [] },
     };
   }
   save(auth: Auth, id: string, input: unknown) {

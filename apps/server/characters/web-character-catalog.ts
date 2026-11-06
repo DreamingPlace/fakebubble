@@ -10,6 +10,11 @@ export interface WebCharacterPresentation {
   welcome: { text: string; version: string };
   /** The character's main chat colour, '#RRGGBB' in capitals. Absent = the player page keeps its built-in palette. */
   color?: string;
+  /**
+   * Part 24j: the character's colours as the profile template lists them, in order. Stored now, used by the player page only after
+   * Part 24k's design board. Every entry has a hex ('#RRGGBB'); exactly one is 'main' when there are several, and `color` is its hex.
+   */
+  palette?: { hex: string; name: string; role: 'main' | 'accent' }[];
 }
 export interface WebCharacterProfile {
   template: CharacterTemplate;

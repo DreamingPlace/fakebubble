@@ -129,6 +129,8 @@ export function characterAdminError(error: unknown): string | null {
         INVALID_CHARACTER_ALIASES: '身份别名需包含人设名称，并明确为虚构人物。',
         INVALID_CANON_EVENTS: '设定事件需明确作者设定、虚构世界及本人物知情范围。',
         INVALID_ADMIN_REQUEST: '资料字段无效或超出长度，请核对必填内容和结构化设定。',
+        PROFILE_CODE_TAKEN: '这个角色代码已被别的角色使用（大小写不分）。',
+        INVALID_PROFILE_CODE: '角色代码须是 2–12 位的字母、数字、_ 或 -。',
       } as Record<string, string>
     )[code] ?? null
   );
@@ -527,6 +529,81 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     sectionIndex(index, sections);
     sync();
   }
+  /**
+   * Part 24j, 身份与展示: the 角色代码 (its own save: it is not part of the draft) and the checklist of what a profile import could
+   * not place yet. The checklist stays until each item is dismissed or the next import no longer produces it.
+   */
+  function identityExtras(pane: HTMLElement, snapshot: CharacterDetail) {
+    const meta = snapshot.profileMeta,
+      target = snapshot.characterId;
+    if (!meta?.available) return;
+    const row = el('div'),
+      list = el('div');
+    row.className = 'wb-code';
+    list.className = 'wb-checklist';
+    const label = el('label'),
+      input = el('input'),
+      save = el('button', '保存代码'),
+      note = el('span');
+    input.type = 'text';
+    input.value = meta.code ?? '';
+    input.placeholder = '如 SYZ';
+    input.setAttribute('data-wb-code', '');
+    input.maxLength = 12;
+    input.setAttribute('aria-label', '角色代码');
+    save.type = 'button';
+    save.className = 'admin-secondary';
+    note.className = 'wb-code-note';
+    // The code is saved on its own: typing here must not mark the draft as changed.
+    for (const type of ['input', 'change']) input.addEventListener(type, (event) => event.stopPropagation());
+    label.append(el('span', '角色代码'), input);
+    row.append(label, save, note);
+    controls.push({ node: input, locked: () => !can('edit', target) });
+    controls.push({ node: save, locked: () => !can('edit', target) });
+    save.addEventListener('click', () => {
+      if (busy || !can('edit', target)) return;
+      act(async () => {
+        try {
+          const next = await host.api.saveCode(target, input.value.trim());
+          if (gone()) return;
+          snapshot.profileMeta = next;
+          note.textContent = '已保存';
+        } catch (error) {
+          note.textContent = characterAdminError(error) ?? '没有保存。';
+        }
+      });
+    });
+    const paint = () => {
+      list.replaceChildren();
+      const open = (snapshot.profileMeta?.checklist ?? []).filter((item) => item.state === 'open');
+      list.hidden = open.length === 0;
+      if (!open.length) return;
+      const ul = el('ul');
+      for (const item of open) {
+        const li = el('li'),
+          done = el('button', '已处理');
+        done.type = 'button';
+        done.className = 'admin-secondary';
+        done.addEventListener('click', () => {
+          if (busy || !can('edit', target)) return;
+          act(async () => {
+            const next = await host.api.dismissChecklist(target, item.key);
+            if (gone()) return;
+            snapshot.profileMeta = next;
+            paint();
+          });
+        });
+        controls.push({ node: done, locked: () => !can('edit', target) });
+        li.append(el('span', item.text), done);
+        ul.append(li);
+      }
+      list.append(el('h5', '待办清单（导入时没能放进去的）'), ul);
+    };
+    paint();
+    // Right after the 人设名称 / 展示名 fields, before the rest of the identity pane.
+    pane.insertBefore(row, pane.children[4] ?? null);
+    pane.append(list);
+  }
   /** 只移除当前未发布草稿: its own fold, in the publish section of the console and after the deletion fold elsewhere. */
   function discardFold(parent: HTMLElement, snapshot: CharacterDetail) {
     const target = snapshot.characterId;
@@ -593,6 +670,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       },
     );
     const form = editor.form;
+    if (snapshot) identityExtras(editor.panes[0]!.node, snapshot);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       submit();
@@ -1222,7 +1300,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       key = `material:${target}`,
       output = el('div');
     const reference = guarded(
-      field(section, '已有 Fish 音色 referenceId', '', { max: 128 }),
+      // Part 24j: the id a profile import recorded against the 角色代码 is offered here; nothing is generated, approved or called.
+      field(section, '已有 Fish 音色 referenceId', snapshot.profileMeta?.voiceReferenceId ?? '', { max: 128 }),
       () => dirty || pending.has(key) || !can('materials'),
     );
     if (reference.parentElement)

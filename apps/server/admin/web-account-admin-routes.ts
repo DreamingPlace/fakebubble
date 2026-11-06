@@ -197,6 +197,16 @@ export async function routeWebAccountAdmin(
     }
     ensure(false, 'NOT_FOUND');
   }
+  // Part 24j: 导入角色资料. The session, CSRF and Origin are checked before anything; the permission before the body is read.
+  if (path.startsWith(`${base}/profile-import/`)) {
+    auth();
+    ensure(characters, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/profile-import/`.length);
+    if (action === 'preview') return { status: 200, body: characters.profileImportPreview(actor, req.body) };
+    if (action === 'apply') return { status: 200, body: characters.profileImportApply(actor, req.body) };
+    ensure(false, 'NOT_FOUND');
+  }
   if (path.startsWith(`${base}/characters/`)) {
     auth();
     ensure(characters, 'NOT_FOUND');
@@ -207,7 +217,7 @@ export async function routeWebAccountAdmin(
     }
     const match = path.match(
       new RegExp(
-        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-audio|material-approve|delete-preview|delete-start|delete-status|history|history-version|restore)$`,
+        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-audio|material-approve|delete-preview|delete-start|delete-status|history|history-version|restore|code-save|checklist-dismiss)$`,
       ),
     );
     ensure(match, 'NOT_FOUND');
@@ -225,6 +235,9 @@ export async function routeWebAccountAdmin(
       body([]);
       return { status: 200, body: characters.deletionStatus(actor, id) };
     }
+    if (match[2] === 'code-save') return { status: 200, body: characters.profileCodeSave(actor, id, req.body) };
+    if (match[2] === 'checklist-dismiss')
+      return { status: 200, body: characters.profileChecklistDismiss(actor, id, req.body) };
     if (match[2] === 'detail') {
       body([]);
       return { status: 200, body: characters.detail(actor, id) };

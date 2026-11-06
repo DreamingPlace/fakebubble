@@ -251,6 +251,8 @@ export class WebProviderApplication {
     this.characterAdmin = new WebCharacterAdmin(store, clock, this.inviteAdmin);
     this.characterAdmin.enableMaterials(new WebCharacterMaterials(store, clock));
     this.characterAdmin.enableDeletion(this.characterDeletion);
+    // Part 24j: 角色代码 table (installed idempotently, digest-checked) and the profile import.
+    this.characterAdmin.enableProfileImport();
     this.cast?.enableCharacters(this.characterAdmin);
     const inviteTiers = new WebInviteTiers(store, {
       clock,

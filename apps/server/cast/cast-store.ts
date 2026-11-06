@@ -272,6 +272,33 @@ export function replaceDraftWithImport(
   });
 }
 
+/**
+ * Part 24j: change the draft by a function of the current document (the profile import's merge), inside the caller's transaction.
+ * Compare-and-swap on the revision; the result is normalized and validated like any save. Returns null when the merge changed
+ * nothing, so an import of the same files writes no revision.
+ */
+export function mergeCastDraft(
+  store: Store,
+  now: number,
+  expectedRevision: unknown,
+  merge: (current: CastDoc) => CastDoc,
+) {
+  ensure(Number.isSafeInteger(expectedRevision) && Number(expectedRevision) > 0, 'INVALID_REQUEST');
+  return store.transaction(() => {
+    const current = readDraft(store);
+    if (current.revision !== expectedRevision)
+      throw new DetailedError('CAST_REVISION_CONFLICT', { currentRevision: current.revision });
+    const doc = normalizeCastDoc(merge(structuredClone(current.doc)), {
+      known: castEntryIds(current.doc),
+      fresh: freshCastId,
+    });
+    if (canonicalCastJson(doc) === canonicalCastJson(current.doc)) return null;
+    const validation = validateCastDoc(doc, 'draft', characterLookup(store));
+    if (validation.errors.length) throw new DetailedError('CAST_INVALID', { issues: validation.errors });
+    return writeDraft(store, now, current.revision, doc, validation);
+  });
+}
+
 export interface CastCompilePreview extends CastCompiled {
   source: { kind: 'draft'; revision: number } | { kind: 'published'; version: number };
   size: number;
@@ -379,7 +406,7 @@ export function castForPreview(
 }
 
 /** An id for a character created by a cast file: the form 新建角色 uses (`role-` and 8 hex), free in every place an id lives. */
-function newCharacterId(store: ReadStore, taken: Set<string>): string {
+export function newCharacterId(store: ReadStore, taken: Set<string>): string {
   const lookup = characterLookup(store);
   for (;;) {
     const id = `role-${randomUUID().replaceAll('-', '').slice(0, 8)}`;

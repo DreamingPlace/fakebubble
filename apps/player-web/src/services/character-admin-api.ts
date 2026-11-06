@@ -15,7 +15,18 @@ export type CharacterProfile = {
     welcome: { text: string; version: string };
     /** The main chat colour, '#RRGGBB'; absent = the player page's built-in palette. */
     color?: string;
+    /** Part 24j: the colours the profile template listed, in order (stored now, used by the player page after 24k). */
+    palette?: { hex: string; name: string; role: 'main' | 'accent' }[];
   };
+};
+/** Part 24j: the 角色代码 and what a profile import recorded against it. */
+export type ProfileMeta = {
+  available: boolean;
+  code: string | null;
+  avatarFile: string | null;
+  /** The Fish voice reference id from the file: the 声音 page prefills its referenceId field with it. */
+  voiceReferenceId: string | null;
+  checklist: { key: string; text: string; state: 'open' | 'dismissed' }[];
 };
 export type CharacterDraft = {
   characterId: string;
@@ -67,6 +78,8 @@ export type CharacterDetail = {
   draft: CharacterDraft | null;
   previews: PreviewJob[];
   previewAvailable: boolean;
+  /** Part 24j. Absent (an older answer, a test double) reads as 'not available': no code field, no checklist. */
+  profileMeta?: ProfileMeta;
 };
 export type Material = {
   materialId: string;
@@ -125,7 +138,30 @@ function profile(v: unknown): CharacterProfile {
       publicDescription: string(d.publicDescription),
       welcome: { text: string(w.text), version: string(w.version) },
       ...(d.color === undefined ? {} : { color: string(d.color) }),
+      ...(d.palette === undefined
+        ? {}
+        : {
+            palette: rows(d.palette).map((v) => {
+              const c = object(v);
+              if (c.role !== 'main' && c.role !== 'accent') throw invalid();
+              return { hex: string(c.hex), name: string(c.name), role: c.role };
+            }),
+          }),
     },
+  };
+}
+function profileMeta(v: unknown): ProfileMeta {
+  const r = object(v);
+  return {
+    available: flag(r.available),
+    code: nullable(r.code),
+    avatarFile: nullable(r.avatarFile),
+    voiceReferenceId: nullable(r.voiceReferenceId),
+    checklist: rows(r.checklist).map((item) => {
+      const c = object(item);
+      if (c.state !== 'open' && c.state !== 'dismissed') throw invalid();
+      return { key: string(c.key), text: string(c.text), state: c.state };
+    }),
   };
 }
 function versionRow(v: unknown): VersionRow {
@@ -224,7 +260,16 @@ export class CharacterAdminClient {
       draft: r.draft === null ? null : draft(r.draft),
       previews: rows(r.previews).map(preview),
       previewAvailable: flag(r.previewAvailable),
+      ...(r.profileMeta === undefined ? {} : { profileMeta: profileMeta(r.profileMeta) }),
     };
+  }
+  /** 角色代码 by hand (身份与展示). */
+  async saveCode(id: string, code: string) {
+    return profileMeta(await this.call(id, 'code-save', { code }));
+  }
+  /** 清单: mark one item dismissed. */
+  async dismissChecklist(id: string, key: string) {
+    return profileMeta(await this.call(id, 'checklist-dismiss', { key }));
   }
   async save(id: string, expectedRevision: number | null, p: CharacterProfile) {
     return draft(await this.call(id, 'save', { expectedRevision, profile: p }));
