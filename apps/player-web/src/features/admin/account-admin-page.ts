@@ -659,6 +659,15 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       },
     },
     badges: () => unread,
+    // Part 24l: this admin's own order of one sidebar group; a refusal puts the rail back and says so.
+    onReorder: async (group, ids) => {
+      try {
+        await port.characters!.saveOrder(group, ids);
+      } catch (error) {
+        toasts.show(characterAdminError(error) ?? '排序没有保存。', 'warn');
+        throw error;
+      }
+    },
     openInbox: (characterId) => {
       if (busy || disposed || !navigate('cocreation', characterId)) return;
       const load = loader();

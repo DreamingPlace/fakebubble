@@ -21,8 +21,9 @@ const L = CAST_LIMITS;
 
 /**
  * 名片 (Cast3): what the OTHER characters know of one character, and nothing else: a one-liner, the names (the first is the one
- * said out loud), the nicknames with how he feels about each, and the prototype he is modelled on. Everything else about a
- * character (人设, 说话, 经历 ...) lives in 角色工作台 and is not drawn here; it is carried through a save untouched.
+ * said out loud) and the nicknames with how he feels about each. Part 24l: this is also ALL the cast tells the character about
+ * himself. Everything else about a character (人设, 说话, 经历, 原型 ...) lives in 角色工作台; the stored fields stay in the cast
+ * document, are carried through a save untouched, and are neither compiled nor editable here.
  */
 export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string | null) {
   const paint = () => {
@@ -179,22 +180,6 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
         return [kind, attitude];
       },
     });
-    const prototype = h('select', { attrs: { 'aria-label': '原型' } });
-    prototype.append(h('option', { text: '不用原型', attrs: { value: '' } }));
-    for (const person of doc.people.filter((p) => p.kind === 'prototype'))
-      prototype.append(h('option', { text: person.names[0]?.text ?? person.id, attrs: { value: person.id } }));
-    prototype.value = identity.prototype?.personId ?? '';
-    if (!edit) prototype.setAttribute('data-locked', 'true');
-    prototype.addEventListener('change', () => {
-      identity.prototype = prototype.value
-        ? {
-            personId: prototype.value,
-            inherited: identity.prototype?.personId === prototype.value ? identity.prototype.inherited : '',
-            notInherited: identity.prototype?.personId === prototype.value ? identity.prototype.notInherited : '',
-          }
-        : null;
-      ctx.edited(true);
-    });
     host.append(
       h(
         'div',
@@ -213,7 +198,6 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
         { class: 'cs-namecard' },
         h('label', { class: 'cs-lb' }, h('span', { text: '一句话' }), oneLiner),
         names,
-        h('label', { class: 'cs-lb' }, h('span', { text: '原型' }), prototype),
         aliases,
       ),
     );
@@ -284,18 +268,12 @@ export function seesPanel(
     );
   };
   block('世界', view.world.background);
+  // Part 24l: view.self is the name card only; persona, speech and boundaries come from the character profile.
   block(
-    '他自己',
+    '他的名片',
     view.self.oneLiner,
     view.self.names.join(' / '),
-    view.self.profile,
-    view.self.personality,
-    view.self.performance,
-  );
-  block(
-    '说话',
-    ...view.self.speech.catchphrases.map((t) => `口头禅：${t}`),
-    ...view.self.speech.samples.map((t) => `样例：${t}`),
+    ...view.self.aliases.map((a) => `${a.kind}：${a.text}`),
   );
   block('别人（只有名片）', ...view.others.map((o) => `${o.name}：${o.oneLiner}`));
   block(

@@ -19,12 +19,16 @@ export const guestLockApplies = (store: Reader, principalId: string, now: number
 
 /** The characters this guest already has a message with (in first-contact order). */
 export function guestCharacterIds(store: Reader, principalId: string): string[] {
+  // Part 24l: only characters that are in the catalog count; one that went offline no longer holds the guest.
+  const onlyCatalog = store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_catalog'")
+    ? 'AND c.private_character_id IN (SELECT character_id FROM web_character_catalog)'
+    : '';
   return store
     .all<{ character_id: string }>(
       `SELECT c.private_character_id character_id FROM web_principals p
       JOIN conversations c ON c.world_id=p.world_id AND c.kind='private'
       JOIN messages m ON m.world_id=c.world_id AND m.conversation_id=c.id AND m.author_kind='player'
-      WHERE p.id=? AND c.private_character_id IS NOT NULL
+      WHERE p.id=? AND c.private_character_id IS NOT NULL ${onlyCatalog}
       GROUP BY c.private_character_id ORDER BY min(m.seq)`,
       principalId,
     )

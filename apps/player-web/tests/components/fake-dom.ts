@@ -251,6 +251,11 @@ export class FakeElement extends FakeNode {
     this.focused = true;
   }
   scrollIntoView() {}
+  /** Element.closest: this element or the nearest ancestor that matches. */
+  closest(selector: string): FakeElement | null {
+    for (let node: FakeElement | null = this; node; node = node.parent) if (node.matches(selector)) return node;
+    return null;
+  }
   getBoundingClientRect() {
     return { left: 0, top: 0, width: 0, height: 0 };
   }

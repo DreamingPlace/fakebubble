@@ -2,13 +2,18 @@ import { h } from '../../cocreation/h.ts';
 import { formatRoute } from './admin-router.ts';
 import { legibleColour } from '../ui/character-colour.ts';
 import { statusBadge } from '../ui/status-badge.ts';
+import { dragOrder } from '../ui/drag-order.ts';
+import { SIDEBAR_GROUPS, SIDEBAR_GROUP_LABEL, type SidebarGroup } from '../../../services/character-admin-api.ts';
 
 export type PickerRole = {
   characterId: string;
   displayName: string;
   publishedVersion: number | null;
   draftRevision: number | null;
+  /** Part 24l, from the server: 当前阵容 / 未发布草稿 / 已下线. Absent = the old rule (never published = a draft). */
+  group?: SidebarGroup;
 };
+const groupOf = (role: PickerRole): SidebarGroup => role.group ?? (role.publishedVersion === null ? 'draft' : 'live');
 /** The list pane of a list | detail page: one button per role, the open one marked, with an empty state. */
 export function rolePicker(
   host: HTMLElement,
@@ -23,14 +28,49 @@ export function rolePicker(
      * Without it the list is the old one button per row.
      */
     compact?: { colour: (characterId: string, index: number) => string };
+    /**
+     * Part 24l: this admin dragged one group into a new order (ALL of its ids, in order). A rejection puts the list back as it was.
+     * Without it the rows are not draggable.
+     */
+    onReorder?: (group: SidebarGroup, ids: string[]) => Promise<void>;
   },
 ) {
   let selected: string | null = null;
   let roles: readonly PickerRole[] = [];
   const seeds = new Map<string, boolean>();
+  const drops: (() => void)[] = [];
   const paint = () => {
+    for (const stop of drops.splice(0)) stop();
     host.replaceChildren();
     if (!roles.length) host.append(h('p', { class: 'admin-empty', text: options.emptyText }));
+    // Part 24l: one block per non-empty group, each with a small heading and its count. The order inside a group is this admin's.
+    const lists = new Map<SidebarGroup, HTMLElement>();
+    if (options.compact || options.onReorder)
+      for (const group of SIDEBAR_GROUPS) {
+        const members = roles.filter((role) => groupOf(role) === group);
+        if (!members.length) continue;
+        const list = h('div', { class: 'admin-pick-list', attrs: { 'data-group': group, role: 'list' } });
+        host.append(
+          h(
+            'section',
+            { class: 'admin-pick-group', attrs: { 'data-group': group } },
+            h(
+              'h3',
+              { class: 'admin-pick-head' },
+              h('span', { text: SIDEBAR_GROUP_LABEL[group] }),
+              h('b', { text: String(members.length), attrs: { 'aria-label': `${members.length} 个` } }),
+            ),
+            list,
+          ),
+        );
+        lists.set(group, list);
+      }
+    const out = (role: PickerRole, node: HTMLElement) => {
+      const list = lists.get(groupOf(role));
+      node.setAttribute('data-drag-row', '');
+      if (list) list.append(node);
+      else host.append(node);
+    };
     roles.forEach((role, index) => {
       const compact = options.compact;
       const unread = options.badges?.()[role.characterId] ?? 0;
@@ -39,19 +79,28 @@ export function rolePicker(
         ? h('i', { class: 'admin-pick-dot', text: [...role.displayName][0] ?? '', attrs: { 'aria-hidden': 'true' } })
         : null;
       if (compact) dot?.style?.setProperty('--dot', legibleColour(compact.colour(role.characterId, index)));
+      const offline = groupOf(role) === 'offline';
       const tone =
-        unread > 0 ? 'cc' : role.publishedVersion === null ? 'off' : role.draftRevision !== null ? 'draft' : '';
+        unread > 0
+          ? 'cc'
+          : role.publishedVersion === null || offline
+            ? 'off'
+            : role.draftRevision !== null
+              ? 'draft'
+              : '';
       // The expanded rail: the name and ONE state mark (a 共创 count, 未上线, 成长中 or a dot for a draft).
       const mark =
         unread > 0
           ? null
-          : role.publishedVersion === null
-            ? h('span', { class: 'admin-pick-mark', text: '未上线' })
-            : seed
-              ? h('span', { class: 'admin-pick-mark is-seed', text: '成长中' })
-              : role.draftRevision !== null
-                ? h('i', { class: 'admin-pick-mark is-draft', attrs: { 'aria-label': '有草稿', role: 'img' } })
-                : null;
+          : offline
+            ? h('span', { class: 'admin-pick-mark is-offline', text: '已下线' })
+            : role.publishedVersion === null
+              ? h('span', { class: 'admin-pick-mark', text: '未上线' })
+              : seed
+                ? h('span', { class: 'admin-pick-mark is-seed', text: '成长中' })
+                : role.draftRevision !== null
+                  ? h('i', { class: 'admin-pick-mark is-draft', attrs: { 'aria-label': '有草稿', role: 'img' } })
+                  : null;
       const row = h(
         'button',
         {
@@ -59,6 +108,7 @@ export function rolePicker(
           attrs: {
             type: 'button',
             'data-character': role.characterId,
+            ...(offline ? { 'data-offline': 'true' } : {}),
             ...(seed ? { 'data-seed': 'true' } : {}),
             ...(role.characterId === selected ? { 'aria-current': 'true' } : {}),
             ...(compact ? { 'aria-label': role.displayName } : {}),
@@ -84,7 +134,7 @@ export function rolePicker(
       );
       row.addEventListener('click', () => options.onPick(role.characterId));
       if (unread <= 0) {
-        host.append(compact ? h('div', { class: 'admin-pick-row' }, row) : row);
+        out(role, compact ? h('div', { class: 'admin-pick-row' }, row) : row);
         return;
       }
       // New 共创 ideas: the number badge is a visible link (its address names the filtered inbox), opened in place on click.
@@ -103,8 +153,30 @@ export function rolePicker(
         event.stopPropagation();
         options.openInbox(role.characterId);
       });
-      host.append(h('div', { class: 'admin-pick-row' }, row, badge));
+      out(role, h('div', { class: 'admin-pick-row' }, row, badge));
     });
+    const reorder = options.onReorder;
+    if (reorder)
+      for (const [group, list] of lists)
+        drops.push(
+          dragOrder(list, {
+            rows: () => Array.from(list.children) as HTMLElement[],
+            idOf: (row) => row.querySelector('[data-character]')?.getAttribute('data-character') ?? '',
+            ignore: '.cocreation-badge',
+            onOrder: (ids) => {
+              const before = roles;
+              const first = roles.findIndex((role) => groupOf(role) === group);
+              const inGroup = new Map(roles.filter((role) => groupOf(role) === group).map((r) => [r.characterId, r]));
+              // The group's members take, in the new order, the places the group held; every other role stays where it is.
+              const rest = roles.filter((role) => groupOf(role) !== group);
+              roles = [...rest.slice(0, first), ...ids.map((id) => inGroup.get(id)!), ...rest.slice(first)];
+              reorder(group, ids).catch(() => {
+                roles = before;
+                paint();
+              });
+            },
+          }),
+        );
   };
   return {
     show(next: readonly PickerRole[]) {
@@ -122,6 +194,7 @@ export function rolePicker(
       paint();
     },
     clear() {
+      for (const stop of drops.splice(0)) stop();
       roles = [];
       selected = null;
       host.replaceChildren();

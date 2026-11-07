@@ -7,7 +7,8 @@ import { emptySession } from '../../../packages/domain/schedule.ts';
 import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
 import { contentHash } from './admin-content-hash.ts';
 import { identifier, keys, record } from './template-validation.ts';
-import { publishedWebCharacters, characterProfileHash } from './web-character-catalog.ts';
+import { webCharacterAtLive, characterProfileHash } from './web-character-catalog.ts';
+import { clearCharacterOrder } from './web-character-availability.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
@@ -60,7 +61,7 @@ export class WebCharacterDeletion {
   preview(id: string) {
     identifier(id);
     ensure(!webCharacterDeleted(this.store, id), 'CHARACTER_DELETED');
-    const role = publishedWebCharacters(this.store).find((c) => c.characterId === id);
+    const role = webCharacterAtLive(this.store, id);
     ensure(role, 'NOT_FOUND');
     const scopes = this.scopes(id),
       counts = scopes.map((s) => {
@@ -148,6 +149,7 @@ export class WebCharacterDeletion {
       this.store.run('DELETE FROM web_character_drafts WHERE character_id=?', id);
       // Part 24j: the 角色代码 (and the avatar / voice id / checklist recorded against it) go with the character, so the code is free again.
       clearProfileMeta(this.store, id);
+      clearCharacterOrder(this.store, id);
       // Players' co-creation ideas for this character go at once, including those of players who never opened a chat.
       purgeCocreation(this.store, { characterId: id });
       // The character's admin-only preview runs, time marks and rejected model output go at once as well.

@@ -468,3 +468,49 @@ test('the example file is schema 2 with a 3-address direction and a 4-kind alias
   assert.equal(ok, true, output.join('\n'));
   assert.ok(!prepared!.warnings.some((w) => w.code === 'CAST_FILE_OLD_FORMAT'));
 });
+
+// ---- Part 24l: the cast view carries only the name card; the stored per-character fields stay lossless -----------------------
+
+test('24l the per-character fields stay in the document and round-trip through export → import byte for byte, though they are not compiled', () => {
+  const doc = sampleCast();
+  const kept = (d: CastDoc) =>
+    JSON.stringify(
+      d.characters.map((c) => [
+        c.profile,
+        c.personality,
+        c.speech,
+        c.experiences,
+        c.performance,
+        c.hidden,
+        c.identity.selfConcept,
+        c.identity.prototype,
+      ]),
+    );
+  const before = kept(doc),
+    json = canonicalCastJson(doc);
+  assert.ok(doc.characters.every((c) => c.profile && c.personality && c.performance && c.hidden.length));
+  assert.ok(
+    doc.characters.some((c) => c.identity.prototype),
+    'the sample has a prototype to keep',
+  );
+  // Compiling reads the document and changes nothing in it.
+  for (const c of doc.characters) compileCastView(doc, c.characterId);
+  assert.equal(canonicalCastJson(doc), json);
+  const prepared = prepareCastFile(exportCastFile(doc), {
+    current: doc,
+    known: castEntryIds(doc),
+    lookup: present,
+    newId: () => 'role-test0001',
+    entryId: counterIds(),
+  });
+  assert.deepEqual(prepared.problems, []);
+  assert.equal(canonicalCastJson(prepared.doc!), json, 'the whole document is byte-identical after the round trip');
+  assert.equal(kept(prepared.doc!), before);
+  // None of it is in what the character is told, and view.self is exactly the name card.
+  const view = compileCastView(doc, doc.characters[0]!.characterId);
+  assert.deepEqual(Object.keys(view.self).sort(), ['aliases', 'name', 'names', 'oneLiner']);
+  const told = JSON.stringify(view.self);
+  const mine = doc.characters[0]!;
+  for (const text of [mine.profile, mine.personality, mine.performance, mine.identity.selfConcept])
+    assert.ok(!text || !told.includes(text));
+});

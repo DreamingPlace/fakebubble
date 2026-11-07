@@ -11,7 +11,22 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { identifier, keys, nonempty, record, validatedTemplate } from './template-validation.ts';
-import { characterProfileHash, publishedWebCharacters, type WebCharacterProfile } from './web-character-catalog.ts';
+import {
+  characterProfileHash,
+  offlineWebCharacters,
+  publishedWebCharacters,
+  webCharacterAtLive,
+  type WebCharacterProfile,
+} from './web-character-catalog.ts';
+import {
+  installWebAvailability,
+  orderGroup,
+  savedOrder,
+  saveGroupOrder,
+  setWebCharacterAvailability,
+  SIDEBAR_GROUPS,
+  type SidebarGroup,
+} from './web-character-availability.ts';
 import { WebCharacterPreviews, readWebPreview, webPreviewDTO } from './web-character-preview.ts';
 import { WebReviewCompare } from './web-review-compare.ts';
 import { publishWebCharacter } from './web-character-publication.ts';
@@ -104,6 +119,10 @@ export class WebCharacterAdmin {
   enableDeletion(deletion: WebCharacterDeletion) {
     this.deletion = deletion;
   }
+  /** Part 24l: 下线 / 重新上线 and the per-admin sidebar order. Off (no tables) until enabled. */
+  enableAvailability() {
+    installWebAvailability(this.store);
+  }
   private materials: WebCharacterMaterials | null = null;
   enableMaterials(materials: WebCharacterMaterials) {
     this.materials = materials;
@@ -115,6 +134,7 @@ export class WebCharacterAdmin {
       characters: () => {
         const ids = new Set([
           ...publishedWebCharacters(this.store).map((row) => row.characterId),
+          ...offlineWebCharacters(this.store).map((row) => row.characterId),
           ...this.store
             .all<{ character_id: string }>('SELECT character_id FROM web_character_drafts')
             .map((r) => r.character_id),
@@ -222,8 +242,13 @@ export class WebCharacterAdmin {
       id,
     );
   }
+  /** The character at its current live version: on the home page or, once 下线, not (its live version stays). */
   private live(id: string) {
-    return publishedWebCharacters(this.store).find((row) => row.characterId === id);
+    return webCharacterAtLive(this.store, id);
+  }
+  /** Where a character stands, from the catalog and the versions (never from the cast). null = nothing to show (deleted or unknown). */
+  private groupOf(id: string, inCatalog: ReadonlySet<string>, offline: ReadonlySet<string>): SidebarGroup {
+    return inCatalog.has(id) ? 'live' : offline.has(id) ? 'offline' : 'draft';
   }
   private audit(actor: string, action: string, target: string, now: number) {
     this.store.run(
@@ -234,15 +259,45 @@ export class WebCharacterAdmin {
       now,
     );
   }
-  list(auth: Auth) {
-    const actor = this.actor(auth),
-      live = publishedWebCharacters(this.store);
+  /** The characters this admin may read, each with its group, in this admin's own order (groups: 当前阵容 / 未发布草稿 / 已下线). */
+  private sidebar(actor: { role: string; memberId: string; member: { permissions: string[] } }) {
+    const live = publishedWebCharacters(this.store),
+      offline = offlineWebCharacters(this.store);
+    const inCatalog = new Set(live.map((row) => row.characterId)),
+      isOffline = new Set(offline.map((row) => row.characterId));
     const ids = new Set([
-      ...live.map((row) => row.characterId),
+      ...inCatalog,
+      ...isOffline,
       ...this.store
         .all<{ character_id: string }>('SELECT character_id FROM web_character_drafts')
         .map((row) => row.character_id),
     ]);
+    const visible = [...ids]
+      .filter((id) => !webCharacterDeleted(this.store, id))
+      .filter((id) => actor.role === 'owner' || hasCharacterPermission(actor.member.permissions, 'read', id))
+      .sort();
+    // Default order inside a group: the home page order for 当前阵容, the id for the others. A saved order only reorders.
+    const position = new Map(live.map((row) => [row.characterId, row.position] as const));
+    const byDefault = [...visible].sort(
+      (a, b) => (position.get(a) ?? 99) - (position.get(b) ?? 99) || (a < b ? -1 : a > b ? 1 : 0),
+    );
+    const grouped = byDefault.map((id) => ({ id, group: this.groupOf(id, inCatalog, isOffline) }));
+    const saved = savedOrder(this.store, actor.memberId);
+    return {
+      grouped,
+      ordered: SIDEBAR_GROUPS.flatMap((group) =>
+        orderGroup(
+          grouped.filter((c) => c.group === group).map((c) => c.id),
+          saved,
+        ).map((id) => ({ id, group })),
+      ),
+      live,
+      offline,
+    };
+  }
+  list(auth: Auth) {
+    const actor = this.actor(auth),
+      { ordered, live, offline } = this.sidebar(actor);
     const allDeleted = actor.role === 'owner' || hasCharacterPermission(actor.member.permissions, 'read', '*');
     const deletedScope = actor.member.permissions
       .filter((p) => p.startsWith('characters.read:'))
@@ -260,24 +315,46 @@ export class WebCharacterAdmin {
       : [];
     return {
       deletions,
-      characters: [...ids]
-        .filter((id) => actor.role === 'owner' || hasCharacterPermission(actor.member.permissions, 'read', id))
-        .sort()
-        .map((id) => {
-          const current = live.find((row) => row.characterId === id),
-            draft = this.draft(id);
-          // Part 24b-6, round 4 (read-only): the main colour the console paints this character with: the draft's when a draft exists,
-          // else the published one, else null. Both are validated #RRGGBB on save, and anything else reads as null here.
-          const colour = (draft ? draftDTO(draft).profile.presentation.color : current?.presentation.color) ?? null;
-          return {
-            characterId: id,
-            displayName: current?.presentation.displayName ?? draftDTO(draft!).profile.presentation.displayName,
-            publishedVersion: current?.version ?? null,
-            draftRevision: draft?.revision ?? null,
-            color: typeof colour === 'string' && /^#[0-9A-F]{6}$/.test(colour) ? colour : null,
-          };
-        }),
+      characters: ordered.map(({ id, group }) => {
+        const current = live.find((row) => row.characterId === id) ?? offline.find((row) => row.characterId === id),
+          draft = this.draft(id);
+        // Part 24b-6, round 4 (read-only): the main colour the console paints this character with: the draft's when a draft exists,
+        // else the published one, else null. Both are validated #RRGGBB on save, and anything else reads as null here.
+        const colour = (draft ? draftDTO(draft).profile.presentation.color : current?.presentation.color) ?? null;
+        return {
+          characterId: id,
+          displayName: current?.presentation.displayName ?? draftDTO(draft!).profile.presentation.displayName,
+          publishedVersion: current?.version ?? null,
+          draftRevision: draft?.revision ?? null,
+          color: typeof colour === 'string' && /^#[0-9A-F]{6}$/.test(colour) ? colour : null,
+          // Part 24l: server truth for the sidebar groups. online = on the home page.
+          group,
+          online: group === 'live',
+        };
+      }),
     };
+  }
+  /** 拖动排序: this admin's own order of one sidebar group. Never read by another admin, the home page or a player. */
+  saveOrder(auth: Auth, input: unknown) {
+    const actor = this.actor(auth);
+    record(input);
+    keys(input, ['group', 'ids']);
+    return this.store.transaction(() =>
+      saveGroupOrder(this.store, actor.memberId, this.sidebar(actor).grouped, input.group, input.ids),
+    );
+  }
+  /** 下线 / 重新上线: the owner's alone (no grant opens it), like deletion. */
+  setAvailability(auth: Auth, id: string, action: 'offline' | 'online', input: unknown) {
+    identifier(id);
+    const owner = () => {
+      const actor = this.actor(auth);
+      ensure(actor.role === 'owner', 'ADMIN_OWNER_REQUIRED');
+      return actor;
+    };
+    owner();
+    return this.store.transaction(() =>
+      setWebCharacterAvailability(this.store, this.clock.now(), owner(), id, action, input),
+    );
   }
   detail(auth: Auth, id: string) {
     this.require(auth, 'read', id);
@@ -300,6 +377,8 @@ export class WebCharacterAdmin {
       published: current
         ? { version: current.version, profile: { template: current.template, presentation: current.presentation } }
         : null,
+      // Part 24l: on the home page now (a published character that is not is 已下线; its live version above stays).
+      online: !!publishedWebCharacters(this.store).some((row) => row.characterId === id),
       draft: draft ? draftDTO(draft) : null,
       // Part 24j: the 角色代码, the avatar file name and Fish voice id recorded against it, and the open checklist.
       profileMeta: this.profileImport

@@ -3,6 +3,7 @@ import type { CharacterTemplate } from '../../../packages/contracts/index.ts';
 import { WEB_PROVIDER_CATALOG, WEB_PROVIDER_WELCOME } from '../../../config/web-v1.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
+import { webCharacterDeleted } from './web-character-deleted.ts';
 
 export interface WebCharacterPresentation {
   displayName: string;
@@ -182,6 +183,60 @@ export function publishedWebCharacters(store: BusinessStore): CatalogEntry[] {
     );
     return { ...profile, characterId: row.character_id, version: row.version, position: row.position };
   });
+}
+
+/**
+ * Part 24l: is the character ON the home page? That is exactly: it has a row in web_character_catalog. (Before the durable catalog
+ * exists there is nothing to refuse against, as in requirePublishedWebCharacter.)
+ */
+export function webCharacterOnline(store: Pick<BusinessStore, 'get'>, characterId: string) {
+  if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_schema'")) return true;
+  return !!store.get('SELECT 1 FROM web_character_catalog WHERE character_id=?', characterId);
+}
+
+export type OfflineEntry = WebCharacterProfile & { characterId: string; version: number };
+const profileOf = (row: { profile_json: string; content_hash: string; character_id: string; version: number }) => {
+  const profile = JSON.parse(row.profile_json) as WebCharacterProfile;
+  ensure(
+    characterProfileHash(profile) === row.content_hash &&
+      profile.template.id === row.character_id &&
+      profile.template.version === row.version,
+    'WEB_PROVIDER_CATALOG_INVALID',
+  );
+  return profile;
+};
+/**
+ * Part 24l: characters that were published once (they have a live template version) but have no catalog row now and are not
+ * deleted: 已下线. Each is read at its current live version, the one 重新上线 puts back.
+ */
+export function offlineWebCharacters(store: BusinessStore, only?: string): OfflineEntry[] {
+  if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_schema'")) return [];
+  return store
+    .all<{ character_id: string; version: number; profile_json: string; content_hash: string; config_json: string }>(
+      `SELECT t.id character_id,t.version,v.profile_json,v.content_hash,t.config_json FROM character_templates t
+      JOIN web_character_versions v ON v.character_id=t.id AND v.version=t.version
+      WHERE NOT EXISTS(SELECT 1 FROM web_character_catalog c WHERE c.character_id=t.id)
+      AND (? IS NULL OR t.id=?) ORDER BY t.id`,
+      only ?? null,
+      only ?? null,
+    )
+    .filter((row) => !webCharacterDeleted(store, row.character_id))
+    .map((row) => {
+      const profile = profileOf(row);
+      ensure(
+        JSON.stringify(profile.template) === JSON.stringify(JSON.parse(row.config_json)),
+        'WEB_PROVIDER_CATALOG_INVALID',
+      );
+      return { ...profile, characterId: row.character_id, version: row.version };
+    });
+}
+
+/** The character at its current live version, on the home page or not (an offline one keeps its live version). */
+export function webCharacterAtLive(store: BusinessStore, characterId: string): OfflineEntry | undefined {
+  return (
+    publishedWebCharacters(store).find((entry) => entry.characterId === characterId) ??
+    offlineWebCharacters(store, characterId)[0]
+  );
 }
 
 /** No fallback to the seed once the durable catalog exists. Draft IDs are never playable. */

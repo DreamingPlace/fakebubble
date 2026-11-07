@@ -253,6 +253,8 @@ export class WebProviderApplication {
     this.characterAdmin.enableDeletion(this.characterDeletion);
     // Part 24j: 角色代码 table (installed idempotently, digest-checked) and the profile import.
     this.characterAdmin.enableProfileImport();
+    // Part 24l: 下线 / 重新上线 requests and the per-admin sidebar order (installed idempotently, digest-checked).
+    this.characterAdmin.enableAvailability();
     this.cast?.enableCharacters(this.characterAdmin);
     const inviteTiers = new WebInviteTiers(store, {
       clock,

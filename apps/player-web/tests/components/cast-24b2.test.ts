@@ -541,7 +541,10 @@ test('page: "what this character sees" is the compile-preview of the saved draft
   for (const row of castKnowledge(doc, id))
     assert.ok(text.includes(doc.stories.find((s) => s.id === row.storyId)!.title));
   const mine = compileCastViewDetailed(doc, id).view;
-  assert.ok(text.includes(mine.self.profile));
+  // Part 24l (named exception, replaces `text.includes(mine.self.profile)`): what he sees of himself is the name card only; the
+  // persona now reaches the prompt from the workbench profile alone.
+  assert.ok(text.includes(mine.self.oneLiner));
+  assert.ok(!text.includes(doc.characters.find((c) => c.characterId === id)!.profile));
 });
 
 test('nav: 关系与故事 follows 角色工作台, needs the client and cast.read; the permission grid has its three, with the help as tooltips', (t) => {

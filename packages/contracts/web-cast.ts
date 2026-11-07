@@ -287,14 +287,6 @@ export interface CastView {
     names: string[];
     /** `kind` is spelled for the model: 自称 / 别名 / 中性称呼 / 黑称. */
     aliases: { text: string; kind: string; attitude: CastAliasAttitude }[];
-    selfConcept: string;
-    prototype: { name: string; inherited: string; notInherited: string } | null;
-    profile: string;
-    personality: string;
-    speech: { catchphrases: string[]; samples: string[]; avoid: string[] };
-    experiences: { title: string; text: string }[];
-    performance: string;
-    hiddenSettings: { rule: string; items: string[] };
   };
   others: CastCard[];
   relations: { to: string; rating?: number; addresses?: string[]; treatment?: string }[];

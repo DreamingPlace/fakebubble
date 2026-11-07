@@ -429,11 +429,13 @@ test('24b-6 rail: the circle has the first character; the row has the name and O
     badges: () => ({ a: 3 }),
     compact: { colour: () => '#2F7BEA' },
   });
+  // Part 24l (named exception): the rail now groups by the server's `group`, and a never-published character without one would move
+  // to 未发布草稿 below the others. This test is about the marks of each row, so all four are given the one group; nothing else changed.
   picker.show([
-    { characterId: 'a', displayName: '甲', publishedVersion: 2, draftRevision: 1 },
-    { characterId: 'b', displayName: '乙', publishedVersion: null, draftRevision: null },
-    { characterId: 'c', displayName: '丙', publishedVersion: 1, draftRevision: 4 },
-    { characterId: 'd', displayName: '丁', publishedVersion: 1, draftRevision: null },
+    { characterId: 'a', displayName: '甲', publishedVersion: 2, draftRevision: 1, group: 'live' },
+    { characterId: 'b', displayName: '乙', publishedVersion: null, draftRevision: null, group: 'live' },
+    { characterId: 'c', displayName: '丙', publishedVersion: 1, draftRevision: 4, group: 'live' },
+    { characterId: 'd', displayName: '丁', publishedVersion: 1, draftRevision: null, group: 'live' },
   ]);
   picker.setSeed('d', true);
   const rows = all(host, '.admin-pick-row');

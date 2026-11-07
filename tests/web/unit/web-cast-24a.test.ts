@@ -235,24 +235,19 @@ test('the compiled view: own sections in full, cards for the others, outgoing re
   const doc = sampleCast();
   const view = compileCastView(doc, 'c01');
   assert.deepEqual(Object.keys(view), ['world', 'self', 'others', 'relations', 'groups', 'stories', 'memes']);
-  assert.deepEqual(Object.keys(view.self), [
-    'name',
-    'oneLiner',
-    'names',
-    'aliases',
-    'selfConcept',
-    'prototype',
-    'profile',
-    'personality',
-    'speech',
-    'experiences',
-    'performance',
-    'hiddenSettings',
-  ]);
+  // Part 24l (intentional, replaces the 24a assertion of the full self): view.self is the name card ONLY. Persona, speech, experiences,
+  // 演绎说明, hidden settings, self-concept and prototype stay in the stored document but are no longer compiled.
+  assert.deepEqual(Object.keys(view.self), ['name', 'oneLiner', 'names', 'aliases']);
   assert.equal(view.self.name, '林小满');
-  assert.equal(view.self.hiddenSettings.rule, '你知道这些设定，但绝不直接说出口。');
-  assert.deepEqual(view.self.hiddenSettings.items, ['林小满其实怕黑，从没告诉过别人。']);
-  assert.equal(view.self.prototype!.name, '舞台上的她');
+  const mine = doc.characters[0]!;
+  for (const text of [
+    mine.hidden[0]!.text,
+    mine.performance,
+    mine.profile,
+    mine.personality,
+    mine.speech.samples[0]!.text,
+  ])
+    assert.ok(!JSON.stringify(view).includes(text), 'per-character content is not compiled');
   const json = JSON.stringify(view);
   // other people: a compact card and nothing else
   for (const other of doc.characters.slice(1)) {
@@ -429,7 +424,11 @@ test('over the cap, items are dropped in the documented order and the character�
   }
   assert.deepEqual(seen, total, 'with a small enough cap every droppable class is eventually dropped');
   const last = compileCastViewDetailed(doc, 'c01', 1);
-  assert.equal(last.view.self.hiddenSettings.items.length, 1, 'the hidden settings are never dropped');
+  assert.deepEqual(
+    Object.keys(last.view.self),
+    ['name', 'oneLiner', 'names', 'aliases'],
+    'the name card is never dropped (Part 24l: it is all view.self carries)',
+  );
   // never the character's own sections, whatever the cap
   const tiny = compileCastViewDetailed(doc, 'c01', 1);
   assert.deepEqual(tiny.view.self, compileCastView(doc, 'c01').self);
@@ -451,11 +450,12 @@ test('prompt files: the cast prompts are pinned, separate from PROMPTS_V7, and g
     renderCastPromptsModule(),
   );
   assert.deepEqual(Object.keys(PROMPTS_CAST), ['castContext', 'castReview']);
+  // Part 24l: pinned on purpose again: cast-context.md now says view.self is a name card only (see docs/STATUS.md for old -> new).
   // Part 24a: pinned on purpose (Part 24i changed cast-context.md on purpose: addresses[], alias kinds, doNotCall; see docs/STATUS.md). Changing either file changes castPromptHash(), which every request that carries `cast` records.
-  assert.equal(sha(CAST_CONTEXT_PROMPT), 'a95eb911271eefc96a73366b8481ac465bdfe325d92e1ec51f4b0a4354e379e8');
+  assert.equal(sha(CAST_CONTEXT_PROMPT), '49cb84f120d4bcf06a936fead7b39b6c11e62a1f4dfff6df27a8b76ea1f3ce7f');
   assert.equal(sha(CAST_REVIEW_PROMPT), 'f16fc9a093e1554de20d4f0fdca0ed771b5ae7ca764896e462b48139c12b9100');
-  assert.equal(castPromptHash(), 'e0ca5ed96889c34b2da6eca3d903ea89ee74f42e24b489bd81b9c087ec49c2b7');
-  for (const marker of ['亲历', '听说', '不知道', 'narrationBoundary', 'hiddenSettings'])
+  assert.equal(castPromptHash(), 'a36f8845e200e876b8b6dd30fd80294b475dc97586c1a1bd142dda02ffcba076');
+  for (const marker of ['亲历', '听说', '不知道', 'narrationBoundary', '名片'])
     assert.ok(CAST_CONTEXT_PROMPT.includes(marker), marker);
   for (const marker of ['hiddenSettings', '不知道', 'narrationBoundary'])
     assert.ok(CAST_REVIEW_PROMPT.includes(marker), marker);

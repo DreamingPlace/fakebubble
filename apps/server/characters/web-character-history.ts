@@ -294,6 +294,8 @@ export function restoreWebCharacter(
       return dto(prior);
     }
     const live = publishedWebCharacters(store).find((c) => c.characterId === id);
+    // Part 24l: an offline character is restored only after 重新上线.
+    ensure(live || !store.get('SELECT 1 FROM character_templates WHERE id=?', id), 'CHARACTER_OFFLINE');
     ensure(live, 'NOT_FOUND');
     // The dialog named v(live)+1; if the live version moved meanwhile, nothing is published under a number nobody agreed to.
     ensure(live.version === input.liveVersion, 'LIVE_VERSION_CONFLICT');

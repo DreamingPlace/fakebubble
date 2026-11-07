@@ -671,7 +671,13 @@ test('switch ON with a publication: the compiled view is frozen with the snapsho
   assert.ok(draft[0]!.content.endsWith(CAST_CONTEXT_PROMPT));
   assert.ok(!draft[0]!.content.includes(CAST_REVIEW_PROMPT));
   assert.ok(review[0]!.content.endsWith(CAST_REVIEW_PROMPT));
-  assert.ok(JSON.parse(review[1]!.content).cast.view.self.hiddenSettings.items.length === 1);
+  // Part 24l (named exception, replaces `view.self.hiddenSettings.items.length === 1`): the review sees the same name-card-only self.
+  assert.deepEqual(Object.keys(JSON.parse(review[1]!.content).cast.view.self), [
+    'name',
+    'oneLiner',
+    'names',
+    'aliases',
+  ]);
   // the same request without the cast keeps the old system prompt as a strict prefix
   assert.ok(draft[0]!.content.startsWith(OFF_MAIN.prompts.voice.draft[0]!.content));
   // the part of the user content BEFORE `cast` is the same as without it (the per-character prefix stays stable for caching)

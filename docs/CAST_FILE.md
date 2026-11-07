@@ -56,6 +56,8 @@ node scripts/cast-file.ts validate <你的文件>
 | `background` 世界背景 | 1000 |
 
 ### characters[]（聊天角色）
+
+> 第 24l 部分起，cast 只告诉角色**他自己的名片**：`name`、`names`、`aliases`（含类型和态度）、`oneLiner`。下面从 `identity.selfConcept` 起的字段（`selfConcept`、`prototype`、`profile`、`personality`、`speech`、`experiences`、`performance`、`hidden`）仍然保存、导出、导入，原样不变，但**不再进入提示词，也不再在“关系与故事”里编辑**；这些内容在“角色工作台”里，由角色资料进入提示词。
 | 字段 | 上限 / 说明 |
 |---|---|
 | `characterId` | 已有编号，或 `new:…` |
