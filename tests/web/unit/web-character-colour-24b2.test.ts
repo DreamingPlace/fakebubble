@@ -215,6 +215,9 @@ test('the admin list returns each 主色: the draft colour, else the published o
     'color',
     'displayName',
     'draftRevision',
+    // Part 24l (named exception): the list also says where the sidebar puts the character.
+    'group',
+    'online',
     'publishedVersion',
   ]);
 });

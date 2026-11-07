@@ -372,16 +372,15 @@ test('预演 uses the same compile as production: castSource none | published | 
   // draft: edit the draft (not published) and see it in the preview
   const draft = f.cast.draft(f.auth, {});
   const edited = structuredClone(draft.doc);
-  edited.characters.find((c) => c.characterId === 'wei-guagua')!.hidden.push({ id: '', text: '只在草稿里的隐藏设定' });
+  // Part 24l (named exception): view.self is the name card only, so the draft-only edit is the one-liner (it was a hidden setting).
+  edited.characters.find((c) => c.characterId === 'wei-guagua')!.identity.oneLiner = '只在草稿里的一句话';
   const saved = f.cast.save(f.auth, { requestId: f.request(), expectedRevision: draft.revision, doc: edited });
   const fromDraft = f.requestOf(f.preview({ castSource: 'draft' }).previewId);
-  assert.ok(JSON.stringify(fromDraft.cast!.view).includes('只在草稿里的隐藏设定'));
+  assert.ok(JSON.stringify(fromDraft.cast!.view).includes('只在草稿里的一句话'));
   assert.equal(fromDraft.cast!.version, saved.revision, 'a draft view carries the draft revision');
   assert.deepEqual(fromDraft.cast!.view, compileCastView(readDraft(f.store).doc, 'wei-guagua'));
   assert.ok(
-    !JSON.stringify(f.requestOf(f.preview({ castSource: 'published' }).previewId).cast).includes(
-      '只在草稿里的隐藏设定',
-    ),
+    !JSON.stringify(f.requestOf(f.preview({ castSource: 'published' }).previewId).cast).includes('只在草稿里的一句话'),
   );
   // a preview writes no snapshot and nothing of a player's
   assert.deepEqual(playerState(), before);
