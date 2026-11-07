@@ -216,6 +216,9 @@ export class FakeElement extends FakeNode {
     );
   }
   dispatch(type: string, extra: Partial<FakeEvent> = {}) {
+    // Part 24j (named exception to this helper): stopPropagation stops the bubbling after the current element's listeners, as in a
+    // browser. It used to do nothing; no test relied on that (all component tests pass with it).
+    let stopped = false;
     const event: FakeEvent = {
       type,
       target: this,
@@ -223,10 +226,12 @@ export class FakeElement extends FakeNode {
       preventDefault() {
         this.defaultPrevented = true;
       },
-      stopPropagation() {},
+      stopPropagation() {
+        stopped = true;
+      },
       ...extra,
     };
-    for (let node: FakeElement | null = this; node; node = node.parent)
+    for (let node: FakeElement | null = this; node && !stopped; node = node.parent)
       for (const entry of [...(node.listeners.get(type) ?? [])]) entry.fn(event);
     return event;
   }

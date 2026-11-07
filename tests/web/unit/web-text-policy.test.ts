@@ -25,8 +25,12 @@ import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server
 // Part 21c (intentional, Drama 3): the voice draft schema gained the optional enum `soundCue` (none | small_laugh |
 // shaky_breath) on utterance and afterthoughts, and speech-draft-task.md explains it: policy a140e333…, prompt
 // 53df95a8…, fingerprint b753fb40… (was b42431c9…). Replacement bubbles from the review stay cue-free.
-const POLICY_HASH = 'a140e333d7d52daa44090318f74de1609f731d2cbcda7e1eb5924baadd2c2c68';
-const PROMPT_HASH = '53df95a8f05b4b29e0513e21ba77fd695d287e6f4086abeb862fc71d8d7e133b';
+// Part 24j (intentional, named exception): text-content-rules.md gained the rule that authorCanon.profileFacts is read as facts and
+// authorCanon.boundaries as rules (never state 知道但不会说出口的事, never contradict 不可改变的核心设定, never invent 不应擅自补充的事实,
+// never do 不符合角色的行为·表达): policy a140e333…2c68 -> 5741d1b9…09b3, prompt 53df95a8…133b -> 6cfe2616…b8868; the protocol
+// fingerprint is unchanged.
+const POLICY_HASH = '5741d1b9726e1d30fa092ece141d497a3deffe587040a9caf168f8d7b96f09b3';
+const PROMPT_HASH = '6cfe26169b956526fb9d297dac5d520bf17a181a6582b6ad2b2e1fa364cb8868';
 const FINGERPRINT_DIGEST = 'b753fb4057ca9e8a63884d5db6d29c7055c957202ede44759f13635619f1dae8';
 
 test('accepted-v7 policy hash, prompt hash and protocol fingerprint are pinned', () => {

@@ -8,6 +8,7 @@ import {
 } from '../../../../packages/contracts/review-model.ts';
 import { cocreationPointsOk, type CocreationPointsSettings } from '../../../../packages/contracts/cocreation-cards.ts';
 import { CastAdminClient } from './cast-admin-api.ts';
+import { ProfileImportClient } from './profile-import-api.ts';
 import { CocreationAdminClient } from './cocreation-admin-api.ts';
 import { ConversationsAdminClient } from './conversations-admin-api.ts';
 import { PreviewAdminClient } from './preview-admin-api.ts';
@@ -212,6 +213,8 @@ export class AccountAdminApi extends InviteAdminApi {
     (path, body) => this.request('/review-compare/' + path, body),
   );
   readonly cast = new CastAdminClient((path, body) => this.request('/cast/' + path, body));
+  /** Part 24j: 导入角色资料. */
+  readonly profileImport = new ProfileImportClient((path, body) => this.request('/profile-import/' + path, body));
   readonly cocreation = new CocreationAdminClient((path, body) => this.request('/cocreation/' + path, body));
   readonly conversations = new ConversationsAdminClient((path, body) => this.request('/conversations/' + path, body));
   constructor(fetcher?: typeof fetch) {

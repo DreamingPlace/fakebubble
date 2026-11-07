@@ -12623,6 +12623,218 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   text-underline-offset: 3px;
 }
 
+/* ---- Part 24j: 导入角色资料 (drawer) and the 角色代码 / checklist of 身份与展示 ---- */
+.account-admin-page.admin-shell .pi-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.account-admin-page.admin-shell .pi-chosen,
+.account-admin-page.admin-shell .pi-file,
+.account-admin-page.admin-shell .pi-none {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pi-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .pi-block {
+  padding: 10px 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: 10px;
+}
+.account-admin-page.admin-shell .pi-block[data-tone="danger"] {
+  border-color: var(--ad-danger);
+  background: var(--ad-danger-soft);
+}
+.account-admin-page.admin-shell .pi-block[data-tone="warn"] {
+  border-color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .pi-block h4,
+.account-admin-page.admin-shell .pi-checklist h5 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .pi-block[data-tone="danger"] h4 {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .pi-problems {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell .pi-problems li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pi-place {
+  color: var(--ad-muted);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .pi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: 12px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .pi-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.account-admin-page.admin-shell .pi-code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--ad-tint);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .pi-file {
+  margin-left: auto;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .pi-changes {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pi-changes th,
+.account-admin-page.admin-shell .pi-changes td {
+  padding: 4px 8px;
+  border-top: 1px solid var(--ad-line);
+  text-align: left;
+  vertical-align: top;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  max-height: 14em;
+  overflow: auto;
+}
+.account-admin-page.admin-shell .pi-changes tr {
+  display: grid;
+  grid-template-columns: 22% 1fr 1fr;
+}
+.account-admin-page.admin-shell .pi-changes.pi-fresh tr {
+  grid-template-columns: 22% 1fr;
+}
+.account-admin-page.admin-shell .pi-changes thead tr {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .pi-changes tbody th {
+  color: var(--ad-text);
+  font-weight: 600;
+}
+.account-admin-page.admin-shell .pi-checklist ul,
+.account-admin-page.admin-shell .wb-checklist ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .pi-checklist li,
+.account-admin-page.admin-shell .wb-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .wb-checklist li span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .wb-identity-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+}
+.account-admin-page.admin-shell .wb-checklist {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ad-warn);
+  border-radius: 10px;
+}
+.account-admin-page.admin-shell .wb-checklist h5 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pi-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+.account-admin-page.admin-shell .wb-code {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 10px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .wb-code label {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .wb-code button {
+  flex: none;
+  align-self: flex-end;
+  height: 40px;
+}
+.account-admin-page.admin-shell .wb-code-note {
+  align-self: center;
+}
+.account-admin-page.admin-shell .wb-code-note {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #wb-import {
+  flex: none;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px dashed #c9c2b8;
+  background: transparent;
+  color: var(--ad-muted);
+  white-space: nowrap;
+}
+/* in the collapsed role rail it is a glyph, like 新建角色, and says its name when the rail opens */
+.account-admin-page.admin-shell #admin-characters #wb-import {
+  box-sizing: border-box;
+  width: calc(100% - 16px);
+  height: 40px;
+  margin: 6px 8px 0;
+  padding: 0;
+  overflow: hidden;
+  font-size: 0;
+}
+.account-admin-page.admin-shell #admin-characters #wb-import::before {
+  content: "↥";
+  font-size: 18px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) #wb-import {
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) #wb-import::before {
+  content: none;
+}
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

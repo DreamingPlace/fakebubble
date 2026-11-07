@@ -29,6 +29,8 @@ import { toastHost } from './ui/toast.ts';
 import { characterColour, setRoster } from './ui/character-colour.ts';
 import { castView } from './cast/cast-view.ts';
 import type { CastAdminClient } from '../../services/cast-admin-api.ts';
+import type { ProfileImportClient } from '../../services/profile-import-api.ts';
+import { profileImportView } from './profile-import/profile-import-view.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
 import { conversationsView } from './conversations-view.ts';
 import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
@@ -68,6 +70,8 @@ type Port = Pick<
   previews?: PreviewAdminClient;
   /** 关系与故事. Optional: a page without it has no such page in the nav. */
   cast?: CastAdminClient;
+  /** Part 24j: 导入角色资料 in 角色工作台. Optional: a page without it has no such button. */
+  profileImport?: ProfileImportClient;
   /** 概览, 系统状态 and 积分发放 (Part 22b). Optional: a page without `overview` has none of them in the nav. */
   overview?: AccountAdminApi['overview'];
   systemStatus?: AccountAdminApi['systemStatus'];
@@ -270,6 +274,19 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   });
   const canCreateRole = () =>
     session?.member.role === 'owner' || (!!session && canCreateCharacter(session.member.permissions));
+  /** The same gate the server applies before it reads the body: cast.edit, and the right to create or to edit characters. */
+  const canImportProfiles = () => {
+    const member = session?.member;
+    if (!member || !port.profileImport) return false;
+    if (member.role === 'owner') return true;
+    const grants = member.permissions;
+    return (
+      hasCastPermission(grants, 'cast.edit') &&
+      (canCreateCharacter(grants) ||
+        grants.includes('category.characters') ||
+        grants.some((p) => p.startsWith('characters.edit:')))
+    );
+  };
   const canEditCharacter = (characterId: string) =>
     session?.member.role === 'owner' ||
     (!!session && hasCharacterPermission(session.member.permissions, 'edit', characterId));
@@ -387,6 +404,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     workbench?.update(busy);
     previewBench?.update(busy);
     newRole.hidden = !session || !canCreateRole();
+    importRoles.hidden = !canImportProfiles();
     for (const nav of root.querySelectorAll<HTMLElement>('.admin-nav [data-page]')) {
       if (nav.dataset.page === page) nav.setAttribute('aria-current', 'page');
       else nav.removeAttribute('aria-current');
@@ -603,6 +621,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   newRole.id = 'wb-new';
   newRole.textContent = '+ 新建角色';
   newRole.hidden = true;
+  const importRoles = document.createElement('button');
+  importRoles.type = 'button';
+  importRoles.id = 'wb-import';
+  importRoles.textContent = '导入角色资料';
+  importRoles.hidden = true;
   const rolesHost = document.createElement('div');
   rolesHost.id = 'wb-roles';
   rolesHost.className = 'wb-roles';
@@ -610,7 +633,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   roster.className = 'wb-roster';
   roster.setAttribute('role', 'group');
   roster.setAttribute('aria-label', '角色');
-  roster.append(rolesHost, newRole);
+  roster.append(rolesHost, newRole, importRoles);
   const editorHost = document.createElement('div');
   editorHost.id = 'wb-editor';
   editorHost.className = 'wb-editor';
@@ -688,6 +711,23 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       routeId = id;
       address.push({ page: 'characters', id });
     },
+  });
+  const profileImporter = port.profileImport
+    ? profileImportView(q('main'), {
+        api: port.profileImport,
+        run,
+        toast: (text, tone) => toasts.show(text, tone ?? 'info'),
+        disposed: () => disposed,
+        // The roster and the open role are read again: new roles, new draft revisions, the code and the checklist.
+        onImported: async () => {
+          const load = loader();
+          if (load) await load();
+        },
+      })
+    : null;
+  listen(importRoles, 'click', () => {
+    if (busy || disposed || !workbench!.canLeave()) return;
+    profileImporter?.open();
   });
   listen(newRole, 'click', () => {
     if (busy || disposed || !workbench!.canLeave()) return;
@@ -1062,6 +1102,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     session = null;
     workbench?.dispose();
     previewBench?.dispose();
+    profileImporter?.dispose();
     castPage.dispose();
     toasts.dispose();
     inbox?.dispose();

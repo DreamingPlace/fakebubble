@@ -115,6 +115,8 @@ export function editedCharacter(
     welcome: { text: values.welcomeText, version: values.welcomeVersion.trim() },
     // The key is absent, not empty, when there is no colour: a profile without one hashes exactly as it always did.
     ...(values.color ? { color: values.color } : {}),
+    // Part 24j: the template's palette is not edited here; it is kept as it came in.
+    ...(base.presentation.palette ? { palette: structuredClone(base.presentation.palette) } : {}),
   };
   return next;
 }
