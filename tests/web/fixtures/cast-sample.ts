@@ -212,8 +212,10 @@ export function maxCastRaw(options: { directionTargets?: number; groupStories?: 
   const L = CAST_LIMITS;
   // Counts that, with every character at the maximum of every field, still leave the whole document under its own cap.
   const directionTargets = options.directionTargets ?? 12;
-  const groupStories = options.groupStories ?? 2;
-  const storyCount = options.stories ?? 30;
+  // Part 24l (named exception): the summary and details caps grew (200→600, 500→2,000), so fewer stories fit under the 300,000 cap
+  // (it was 2 and 30). Nothing else about the fixture changed.
+  const groupStories = options.groupStories ?? 1;
+  const storyCount = options.stories ?? 12;
   const fill = (length: number, seed: string) => (seed.repeat(Math.ceil(length / seed.length)) + '').slice(0, length);
   const ids = SAMPLE_NAMES.map((_, i) => sampleId(i));
   const peopleIds = Array.from({ length: L.people }, (_, i) => `new-p${String(i).padStart(2, '0')}`);

@@ -26,7 +26,10 @@ export const PROFILE_LIMITS = Object.freeze({
   fileChars: 60_000,
   name: CAST_LIMITS.name,
   displayName: 100,
-  oneLiner: CAST_LIMITS.oneLiner,
+  /** 一句话描述 = publicDescription (the workbench's own cap). */
+  oneLiner: 500,
+  /** 名片一句话 = the cast name card's one-liner. */
+  cardOneLiner: CAST_LIMITS.oneLiner,
   welcome: 500,
   welcomeLines: 12,
   text: 2_000,
@@ -59,6 +62,7 @@ const SECTIONS = [
       '身高',
       '头像／形象图片文件',
       '一句话描述',
+      '名片一句话',
       '音色模型 ID（Fish Audio）',
     ],
   },
@@ -305,6 +309,8 @@ export interface ReadProfile {
   birthDate: string;
   avatarFile: string;
   oneLiner: string;
+  /** The name card's one-liner: 名片一句话, else 一句话描述 when it fits, else '' (left as it is; a checklist item says so). */
+  cardOneLiner: string;
   voiceId: string;
   welcome: string[];
   palette: PaletteItem[];
@@ -419,6 +425,8 @@ export function readProfile(parsed: ParsedTemplate): { profile: ReadProfile | nu
     for (const label of def.fields) {
       if (def.n === 1 && oldAliases && (label === '自称' || label === '别名（含英文名）')) continue;
       if (def.n === 6 && label === '近况' && map.has('近况')) continue;
+      // 名片一句话 is optional: an older file without it still imports.
+      if (def.n === 1 && label === '名片一句话') continue;
       if (!map.has(label)) problem('PROFILE_MISSING_FIELD', sectionName(def.n), label, '缺少这个字段');
     }
   }
@@ -478,9 +486,20 @@ export function readProfile(parsed: ParsedTemplate): { profile: ReadProfile | nu
   }
   const neutralNames = names(1, '中性称呼');
   const insultNames = names(1, '黑称');
-  const allNames = [...selfNames, ...aliases, ...neutralNames, ...insultNames];
-  if (new Set(allNames).size !== allNames.length)
-    problem('PROFILE_ITEM_REPEATED', where(1), '自称/别名/中性称呼/黑称', '同一个名字出现在多个称呼列表里');
+  // One name may be a 黑称 AND one other kind of 别名 / 中性称呼 (one alias per kind); any other repeat is still refused.
+  const kindOf = new Map<string, string[]>();
+  for (const [kind, list] of [
+    ['self', selfNames],
+    ['other', aliases],
+    ['neutral', neutralNames],
+    ['insult', insultNames],
+  ] as const)
+    for (const item of list) kindOf.set(item, [...(kindOf.get(item) ?? []), kind]);
+  for (const kinds of kindOf.values()) {
+    const pairOk = kinds.length === 2 && kinds.includes('insult') && !kinds.includes('self');
+    if (kinds.length > 1 && !pairOk)
+      problem('PROFILE_ITEM_REPEATED', where(1), '自称/别名/中性称呼/黑称', '同一个名字出现在多个称呼列表里');
+  }
   const totalAliases = selfNames.length + aliases.length + neutralNames.length + insultNames.length;
   if (totalAliases > CAST_LIMITS.aliases)
     problem(
@@ -504,6 +523,17 @@ export function readProfile(parsed: ParsedTemplate): { profile: ReadProfile | nu
     else checklist.push({ key: `avatar:${avatarFile}`, text: `头像 ${avatarFile} 待 25e 上传` });
   }
   const oneLiner = text(1, '一句话描述', PROFILE_LIMITS.oneLiner);
+  const named = text(1, '名片一句话', PROFILE_LIMITS.cardOneLiner);
+  if (/[\r\n]/.test(get(1, '名片一句话')))
+    problem('PROFILE_CONTROL_CHARACTER', where(1), '名片一句话', '名片一句话只能是一行');
+  let cardOneLiner = '';
+  if (named !== '') cardOneLiner = named;
+  else if (oneLiner !== '' && oneLiner.length <= PROFILE_LIMITS.cardOneLiner) cardOneLiner = oneLiner;
+  else if (oneLiner.length > PROFILE_LIMITS.cardOneLiner)
+    checklist.push({
+      key: 'card-oneliner',
+      text: `名片一句话待填（一句话描述超过 ${PROFILE_LIMITS.cardOneLiner} 字）`,
+    });
   const voiceId = get(1, '音色模型 ID（Fish Audio）').trim();
   if (voiceId !== '' && !/^[A-Za-z0-9_-]{1,128}$/.test(voiceId))
     problem(
@@ -723,6 +753,7 @@ export function readProfile(parsed: ParsedTemplate): { profile: ReadProfile | nu
       birthDate,
       avatarFile,
       oneLiner,
+      cardOneLiner,
       voiceId,
       welcome,
       palette,

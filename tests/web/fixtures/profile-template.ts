@@ -21,6 +21,7 @@ const SECTIONS: [number, string, string[]][] = [
       '身高',
       '头像／形象图片文件',
       '一句话描述',
+      '名片一句话',
       '音色模型 ID（Fish Audio）',
     ],
   ],
@@ -80,6 +81,8 @@ export function templateFile(
     out.push(`## ${n} ${title}`, '');
     for (const field of fields) {
       if (options.omit?.includes(field)) continue;
+      // 名片一句话 is optional: a file without it is an old (still valid) file, so it is written only when a test gives it.
+      if (field === '名片一句话' && values[field] === undefined) continue;
       const value = values[field] ?? '';
       const lines = value.split('\n');
       out.push(`- ${field}：${lines[0]}`);

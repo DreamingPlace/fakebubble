@@ -164,9 +164,9 @@ test('save → export → import: three addresses and four alias kinds survive t
       ['怂包', 'insult', 'dislikes'],
     ],
   );
-  // a 17-unit item is refused by save, with the located path
+  // a 26-unit alias (Part 24l: the cap is 25, was 16) is refused by save, with the located path
   const bad = clone(exported);
-  bad.characters[0].identity.aliases[3].text = '字'.repeat(17);
+  bad.characters[0].identity.aliases[3].text = '字'.repeat(26);
   assert.throws(
     () =>
       f.cast.save(f.auth, {

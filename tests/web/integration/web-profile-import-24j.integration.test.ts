@@ -6,6 +6,7 @@ import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts
 import { installWebAdminActions } from '../../../apps/server/admin/web-admin-actions.ts';
 import { WebCastAdmin } from '../../../apps/server/admin/web-cast-admin.ts';
 import { readDraft } from '../../../apps/server/cast/cast-store.ts';
+import { compileCastView } from '../../../apps/server/cast/cast-compile.ts';
 import { WebCharacterAdmin } from '../../../apps/server/characters/web-character-admin.ts';
 import { installWebCharacterCatalog } from '../../../apps/server/characters/web-character-catalog.ts';
 import { installWebCharacterDeletion } from '../../../apps/server/characters/web-character-deletion-schema.ts';
@@ -626,6 +627,7 @@ test('the cast merge leaves an unrelated character, its directions, stories and 
   assert.equal(after.memes.length, 2);
 });
 
+// Part 24l (named exception): the over-limit alias is now 26 units (the cap is 25, was 16).
 test('errors are located and nothing is written: duplicate codes, a bad date, two （主）, an over-limit item, a missing field', (t) => {
   const f = fixture(t);
   const ok = (code: string, extra: Record<string, string> = {}) =>
@@ -647,7 +649,12 @@ test('errors are located and nothing is written: duplicate codes, a bad date, tw
       'PROFILE_COLOUR_MAIN_REPEATED',
       '角色主色',
     ],
-    ['over limit', files(['a.md', ok('AAA', { 自称: '「0123456789abcdefg」' })]), 'CAST_ITEM_TOO_LONG', '自称'],
+    [
+      'over limit',
+      files(['a.md', ok('AAA', { 自称: '「0123456789abcdefghijklmnopq」' })]),
+      'CAST_ITEM_TOO_LONG',
+      '自称',
+    ],
     [
       'missing field',
       files(['a.md', templateFile({ 角色代码: 'AAA' }, [], { omit: ['身高'] })]),
@@ -916,4 +923,98 @@ test("the import writes through the draft path only: the draft passes the workbe
   assert.equal(again.contentHash, draft.contentHash);
   assert.equal(again.revision, draft.revision);
   assert.equal(canonicalCastJson(readDraft(f.store).doc).length > 0, true);
+});
+
+// ---- Part 24l addenda ------------------------------------------------------------------------------------------------------
+
+test('24l a 133-character 一句话描述 imports whole into the public description, the card keeps its one-liner, and the checklist says so', (t) => {
+  const f = fixture(t);
+  const long = '长'.repeat(133);
+  const file = templateFile({
+    角色代码: 'LONG',
+    人设名称: '长简介',
+    '网页展示名／昵称': '长',
+    一句话描述: long,
+    欢迎词: '「嗨」',
+    陌生时的相处方式: '好。',
+  });
+  const p = preview(f, files(['long.md', file]));
+  assert.deepEqual(p.problems, [], 'no longer an error');
+  apply(f, files(['long.md', file]), p.basis);
+  const d = detail(f, 'LONG');
+  assert.equal(d.draft!.profile.presentation.publicDescription, long, 'whole, not cut');
+  assert.equal(card(f, idOf(f, 'LONG')).identity.oneLiner, '', 'the name card is left as it was');
+  assert.ok(d.profileMeta.checklist.some((c) => c.text === '名片一句话待填（一句话描述超过 40 字）'));
+  // 名片一句话 given: it is the card's one-liner; 一句话描述 stays the public description
+  const next = templateFile({
+    角色代码: 'LONG',
+    人设名称: '长简介',
+    '网页展示名／昵称': '长',
+    一句话描述: long,
+    名片一句话: '爱讲长故事的人',
+    欢迎词: '「嗨」',
+    陌生时的相处方式: '好。',
+  });
+  const q = preview(f, files(['long.md', next]));
+  assert.deepEqual(q.problems, []);
+  apply(f, files(['long.md', next]), q.basis);
+  assert.equal(card(f, idOf(f, 'LONG')).identity.oneLiner, '爱讲长故事的人');
+  assert.equal(detail(f, 'LONG').draft!.profile.presentation.publicDescription, long);
+});
+
+test('24l 名片一句话 of 40 passes and 41 fails located; an old file without the field still imports', (t) => {
+  const f = fixture(t);
+  const make = (card: string | undefined) =>
+    templateFile({
+      角色代码: 'CARD',
+      人设名称: '名片',
+      '网页展示名／昵称': '名',
+      ...(card === undefined ? {} : { 名片一句话: card }),
+      欢迎词: '「嗨」',
+      陌生时的相处方式: '好。',
+    });
+  const ok = files(['c.md', make('卡'.repeat(40))]);
+  assert.deepEqual(preview(f, ok).problems, []);
+  const bad = preview(f, files(['c.md', make('卡'.repeat(41))]));
+  assert.equal(bad.ok, false);
+  const found = bad.problems.find((x) => x.code === 'PROFILE_TOO_LONG')!;
+  assert.deepEqual([found.file, found.section, found.field], ['c.md', '1 基本信息', '名片一句话']);
+  const old = files(['c.md', make(undefined)]);
+  assert.deepEqual(preview(f, old).problems, []);
+});
+
+test('24l a 273-character shared history imports whole as the story summary; one name may be a 别名 and a 黑称 and shows only under doNotCall in others’ cards', (t) => {
+  const f = fixture(t);
+  const history = '一起'.repeat(136) + '。';
+  assert.equal(history.length, 273);
+  const mine = templateFile(
+    {
+      角色代码: 'LQY',
+      人设名称: '林青野',
+      '网页展示名／昵称': '青野',
+      '别名（含英文名）': '「小野」',
+      黑称: '「小野」「野猴」',
+      欢迎词: '「嗨」',
+      陌生时的相处方式: '爱笑。',
+    },
+    [{ code: 'SYZ', cp: '旧巷双人组', addresses: '「阿舟」', attitude: '朋友。', shared: history }],
+  );
+  const { p } = run(f, files(['syz.md', example()], ['lqy.md', mine]));
+  assert.deepEqual(p.problems, []);
+  const doc = readDraft(f.store).doc;
+  const story = doc.stories.find((s) => s.summary.includes('一起'))!;
+  assert.equal(story.summary, history, 'whole, as the summary');
+  const lqy = card(f, idOf(f, 'LQY'));
+  assert.deepEqual(
+    lqy.identity.aliases.map((a) => [a.text, a.kind]).sort(),
+    [
+      ['小野', 'insult'],
+      ['小野', 'other'],
+      ['野猴', 'insult'],
+    ].sort(),
+  );
+  const view = compileCastView(doc, idOf(f, 'SYZ'));
+  const seen = view.others.find((o) => o.name === '林青野')!;
+  assert.ok(!seen.aliases.includes('小野'), 'a 黑称 is never offered as a usable name');
+  assert.deepEqual(seen.doNotCall?.items.sort(), ['小野', '野猴']);
 });

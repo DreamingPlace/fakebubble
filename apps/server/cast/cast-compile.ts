@@ -72,11 +72,17 @@ export function castKnowledge(doc: CastDoc, characterId: string): CastKnowledgeR
  * Listed apart as "do not call": every 黑称, and every other / neutral name he dislikes. His 自称 is never shown to anyone else.
  */
 function othersAliases(aliases: readonly CastAlias[]): Pick<CastCard, 'aliases' | 'doNotCall'> {
-  const usable = aliases.filter((a) => (a.kind === 'other' || a.kind === 'neutral') && a.attitude !== 'dislikes');
+  // Part 24l: a name that is a 黑称 for him goes ONLY under doNotCall, even when it is also an alias or a neutral name.
+  const insults = new Set(aliases.filter((a) => a.kind === 'insult').map((a) => a.text));
+  const usable = aliases.filter(
+    (a) => (a.kind === 'other' || a.kind === 'neutral') && a.attitude !== 'dislikes' && !insults.has(a.text),
+  );
   const avoid = aliases.filter((a) => a.kind === 'insult' || (a.kind !== 'self' && a.attitude === 'dislikes'));
   return {
     aliases: usable.map((a) => a.text),
-    ...(avoid.length ? { doNotCall: { rule: CAST_DO_NOT_CALL_RULE, items: avoid.map((a) => a.text) } } : {}),
+    ...(avoid.length
+      ? { doNotCall: { rule: CAST_DO_NOT_CALL_RULE, items: [...new Set(avoid.map((a) => a.text))] } }
+      : {}),
   };
 }
 

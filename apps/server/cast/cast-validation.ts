@@ -509,11 +509,13 @@ export function validateCastDoc(
   }
 
   // the same text twice in one list (one character's aliases, one direction's addresses): the later item is the error
-  const duplicates = (items: readonly CastText[], path: string) => {
+  // Part 24l: for aliases "the same" is the same text AND the same kind (one name may be a 别名 and a 黑称); addresses have no kind.
+  const duplicates = (items: readonly (CastText & { kind?: string })[], path: string) => {
     const texts = new Set<string>();
     items.forEach((item, index) => {
-      if (texts.has(item.text)) err('CAST_DUPLICATE_ITEM', `${path}[${index}].text`);
-      texts.add(item.text);
+      const key = `${item.kind ?? ''}\n${item.text}`;
+      if (texts.has(key)) err('CAST_DUPLICATE_ITEM', `${path}[${index}].text`);
+      texts.add(key);
     });
   };
 

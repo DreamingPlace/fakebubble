@@ -128,7 +128,7 @@ export const COCREATION_MEMO_CARD = 'memo';
 export const COCREATION_PAIR_CARD = 'pair-story';
 /** A memo is one free text of up to this many code points (the same rule as the free card). */
 export const COCREATION_NOTE_MAX = COCREATION_LIMITS.free;
-/** A pair story becomes the summary of a cast story, which holds 200 code points (CAST_LIMITS.storySummary; a test keeps them equal). */
+/** A pair story becomes the summary of a cast story. Its own cap stays 200 code points (Part 24l: a cast summary now holds 600, so it always fits). */
 export const COCREATION_PAIR_NOTE_MAX = 200;
 
 /** The three editable numbers of points for notes: +note per note, at most dailyCap paid notes per UTC day, +adopt when adopted. */
