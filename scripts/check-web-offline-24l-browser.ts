@@ -111,6 +111,26 @@ try {
     assert.deepEqual(await idsIn(page, 'offline'), ['c09']);
     // never from the cast: the rail holds no id of a group it was not given
     assert.ok(!(await idsIn(page, 'live')).includes('c09'));
+    // Collapsed (no hover): the group boundaries show without hovering - a thin divider and each group's count.
+    await page.mouse.move(700, 400);
+    await page.waitForTimeout(500);
+    const dividers = await page
+      .locator('.wb-roster .admin-pick-group + .admin-pick-group')
+      .evaluateAll((nodes: Element[]) => nodes.map((n) => getComputedStyle(n, '::before').height));
+    assert.deepEqual(dividers, ['1px', '1px'], 'a thin divider before 未发布草稿 and 已下线');
+    assert.deepEqual(await heads(page), ['当前阵容14', '未发布草稿1', '已下线1']);
+    const counts = await page
+      .locator('.wb-roster .admin-pick-head b')
+      .evaluateAll((nodes: Element[]) => nodes.map((n) => (n as HTMLElement).getBoundingClientRect().width > 0));
+    assert.deepEqual(counts, [true, true, true], 'the counts show while collapsed');
+    await page.locator('.wb-roster').evaluate((n: HTMLElement) => {
+      n.scrollTop = n.scrollHeight;
+    });
+    await snap(page, `01c-collapsed-rail-${width}`);
+    await page.locator('.wb-roster').evaluate((n: HTMLElement) => {
+      n.scrollTop = 0;
+    });
+    await snap(page, `01d-collapsed-rail-top-${width}`);
     await expand(page);
     // the rail stays inside the window and shows every character
     const box = await page.locator('.wb-roster').boundingBox();
@@ -221,6 +241,12 @@ try {
     const confirm = owner.locator('.wb-avail-confirm .ic');
     await confirm.waitFor();
     await owner.waitForTimeout(450);
+    assert.equal(
+      await owner.locator('.wb-avail-go').isVisible(),
+      false,
+      'the original button steps aside: one 下线 only',
+    );
+    assert.equal(await owner.getByRole('button', { name: '下线' }).count(), 1, 'only the confirm’s 下线 is on the tab');
     assert.equal(await owner.locator('.admin-dialog, dialog[open]').count(), 0, 'the question is inline, not a dialog');
     await snap(owner, `06-offline-confirm-${width}`);
     await confirm.getByRole('button', { name: '取消' }).click();

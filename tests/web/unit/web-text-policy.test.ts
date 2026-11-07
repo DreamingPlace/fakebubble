@@ -29,8 +29,11 @@ import { createTextGenerationPolicy, textPolicyHash } from '../../../apps/server
 // authorCanon.boundaries as rules (never state 知道但不会说出口的事, never contradict 不可改变的核心设定, never invent 不应擅自补充的事实,
 // never do 不符合角色的行为·表达): policy a140e333…2c68 -> 5741d1b9…09b3, prompt 53df95a8…133b -> 6cfe2616…b8868; the protocol
 // fingerprint is unchanged.
-const POLICY_HASH = '5741d1b9726e1d30fa092ece141d497a3deffe587040a9caf168f8d7b96f09b3';
-const PROMPT_HASH = '6cfe26169b956526fb9d297dac5d520bf17a181a6582b6ad2b2e1fa364cb8868';
+// Part 24l (intentional, named exception): review-system-body.md gained the 隐藏知识 rule (a draft that states, quotes, paraphrases or hints at
+// authorCanon.settings.boundaries 「知道但不会说出口的事」 is rewritten with accept + replacementBubbles, with or without the cast): policy
+// 5741d1b9…09b3 -> c0618605…997f, prompt 6cfe2616…b8868 -> c5f8018e…b7fa; the protocol fingerprint is unchanged.
+const POLICY_HASH = 'c0618605d181d90dbf3aef863ef1d043985495b820b7f75459d90daa0fff997f';
+const PROMPT_HASH = 'c5f8018e564754d8f1fd968388fd1b6c164d231e94dc5add9df67460292ab7fa';
 const FINGERPRINT_DIGEST = 'b753fb4057ca9e8a63884d5db6d29c7055c957202ede44759f13635619f1dae8';
 
 test('accepted-v7 policy hash, prompt hash and protocol fingerprint are pinned', () => {

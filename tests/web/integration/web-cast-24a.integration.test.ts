@@ -33,6 +33,7 @@ const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 // Named exception (Part 24j): the frozen fixture's prompt bytes were regenerated ONCE for the intentional prompt change of Part 24j
 // (text-content-rules.md gained the profileFacts / boundaries rule, prompt hash 53df95a8…133b -> 6cfe2616…b8868): only the system
 // text of `prompts`, `promptSha256` and `request.prompt_digest` differ from the capture on main; every other byte is as captured.
+// Part 24l regenerated it a second time for the review-system-body.md 隐藏知识 rule (prompt hash 6cfe2616…b8868 -> c5f8018e…b7fa).
 const OFF_MAIN = JSON.parse(
   readFileSync(new URL('../fixtures/cast-off-main.json', import.meta.url), 'utf8'),
 ) as ReturnType<typeof captureFreeze> & { capturedFrom: string };

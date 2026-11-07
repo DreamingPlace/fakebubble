@@ -12841,9 +12841,15 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   flex-direction: column;
 }
 .account-admin-page.admin-shell #admin-characters .admin-pick-group + .admin-pick-group {
-  margin-top: 6px;
-  padding-top: 4px;
-  border-top: 1px solid var(--ad-hairline);
+  margin-top: 8px;
+}
+/* the thin divider is inset (a line of its own), so the rows of every group stay in one column */
+.account-admin-page.admin-shell #admin-characters .admin-pick-group + .admin-pick-group::before {
+  display: block;
+  height: 1px;
+  margin: 0 10px 6px;
+  background: rgba(43, 40, 51, 0.22);
+  content: "";
 }
 .account-admin-page.admin-shell #admin-characters .admin-pick-list {
   display: flex;
@@ -12876,10 +12882,15 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--ad-tint);
+  color: var(--ad-primary, #5b4bc4);
   font-family: "DM Mono", ui-monospace, monospace;
   font-size: 11px;
   font-weight: 700;
   text-align: center;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-group[data-group="offline"] .admin-pick-head b {
+  background: #eceae6;
+  color: var(--ad-muted);
 }
 .account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) .admin-pick-head {
   justify-content: flex-start;

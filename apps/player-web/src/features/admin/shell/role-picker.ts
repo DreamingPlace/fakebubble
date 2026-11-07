@@ -56,7 +56,7 @@ export function rolePicker(
             { class: 'admin-pick-group', attrs: { 'data-group': group } },
             h(
               'h3',
-              { class: 'admin-pick-head' },
+              { class: 'admin-pick-head', attrs: { title: `${SIDEBAR_GROUP_LABEL[group]} ${members.length}` } },
               h('span', { text: SIDEBAR_GROUP_LABEL[group] }),
               h('b', { text: String(members.length), attrs: { 'aria-label': `${members.length} 个` } }),
             ),

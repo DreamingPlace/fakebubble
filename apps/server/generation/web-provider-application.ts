@@ -20,7 +20,11 @@ import {
   type WebProviderMessage,
   type WebProviderOperation,
 } from '../../../packages/contracts/web-provider.ts';
-import { installWebCharacterCatalog, publishedWebCharacters } from '../characters/web-character-catalog.ts';
+import {
+  installWebCharacterCatalog,
+  publishedWebCharacters,
+  webCharacterOnline,
+} from '../characters/web-character-catalog.ts';
 import { installWebCharacterMaterials } from '../characters/web-character-material-schema.ts';
 import { WebCharacterMaterials } from '../characters/web-character-materials.ts';
 import { WebCharacterAdmin } from '../characters/web-character-admin.ts';
@@ -527,7 +531,12 @@ export class WebProviderApplication {
     // trial window is. The signup bonus is spent after the trial, works with any character and has no time window.
     const extraLeft = tier.on && !expired ? extraTrialRemaining(this.store, principal.principalId, ipHash) : 0;
     const remaining = counterRemaining + extraLeft;
-    const trialCanSend = !expired && remaining > 0 && (locked === null || !webCharacterDeleted(this.store, locked));
+    // Part 24l: a trial character that is OFFLINE is treated exactly like a deleted one here (trial_character_id is never rebound:
+    // the store-open preflight needs every trial operation to match it). When it comes back online the trial resumes as before.
+    const trialCanSend =
+      !expired &&
+      remaining > 0 &&
+      (locked === null || (!webCharacterDeleted(this.store, locked) && webCharacterOnline(this.store, locked)));
     if (hasPoints(this.store, principal.principalId, now))
       return pointsAccess(retention.expires_at ?? null, expired && !retained && !registered);
     // Part 22a: a holder of an entitlement with points switched off chats unmetered (admission: holderFree); it is never shown

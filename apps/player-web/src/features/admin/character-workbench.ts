@@ -1520,6 +1520,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     controls.push({ node: toggle, locked: () => dirty });
     toggle.addEventListener('click', async () => {
       if (busy || dirty || gone()) return;
+      // While the question is open it is the only 下线 / 重新上线 on the tab: the original button steps aside.
+      toggle.hidden = true;
       const ok = await inlineConfirm(confirmHost, {
         title: online ? `下线 ${name}` : `重新上线 ${name}`,
         message: online
@@ -1527,6 +1529,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           : `${name} 以 v${live.version} 回到玩家首页。原来的聊天和记忆都在。`,
         confirmLabel: online ? '下线' : '重新上线',
       });
+      toggle.hidden = false;
       if (!ok || gone()) return;
       act(async () => {
         await exact(key, { requestId: crypto.randomUUID(), liveVersion: live.version }, (input) =>

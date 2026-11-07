@@ -23,7 +23,11 @@ import {
   CAST_REVIEW_PROMPT,
   castPromptHash,
 } from '../../../apps/server/generation/cast-prompt.ts';
-import { promptMessages, reviewPromptMessages } from '../../../apps/server/generation/accepted-text-prompt.ts';
+import {
+  promptMessages,
+  reviewPromptMessages,
+  TEXT_REVIEW_PROMPT,
+} from '../../../apps/server/generation/accepted-text-prompt.ts';
 import { PROMPTS_CAST } from '../../../apps/server/generation/cast-prompts.generated.ts';
 import { renderCastPromptsModule } from '../../../scripts/build-prompts.ts';
 import { textRequest } from '../../text-fixtures.ts';
@@ -450,13 +454,22 @@ test('prompt files: the cast prompts are pinned, separate from PROMPTS_V7, and g
     renderCastPromptsModule(),
   );
   assert.deepEqual(Object.keys(PROMPTS_CAST), ['castContext', 'castReview']);
+  // Part 24l (second change): cast-review.md lost item 1 (the hiddenSettings leak check moved to review-system-body.md): castReview
+  // sha f16fc9a0…9100 -> 086b4d3a…1447, castPromptHash a36f8845…a076 -> 5f9fdbc3…9ddc.
   // Part 24l: pinned on purpose again: cast-context.md now says view.self is a name card only (see docs/STATUS.md for old -> new).
   // Part 24a: pinned on purpose (Part 24i changed cast-context.md on purpose: addresses[], alias kinds, doNotCall; see docs/STATUS.md). Changing either file changes castPromptHash(), which every request that carries `cast` records.
   assert.equal(sha(CAST_CONTEXT_PROMPT), '49cb84f120d4bcf06a936fead7b39b6c11e62a1f4dfff6df27a8b76ea1f3ce7f');
-  assert.equal(sha(CAST_REVIEW_PROMPT), 'f16fc9a093e1554de20d4f0fdca0ed771b5ae7ca764896e462b48139c12b9100');
-  assert.equal(castPromptHash(), 'a36f8845e200e876b8b6dd30fd80294b475dc97586c1a1bd142dda02ffcba076');
+  assert.equal(sha(CAST_REVIEW_PROMPT), '086b4d3aa94599ff9ccbd7900f01d4b6c51cbde4c4b0943137d5e34eafa21447');
+  assert.equal(castPromptHash(), '5f9fdbc37f507ede35f3d71f3d75ef17342888a1c85934bf9512051ca67b9ddc');
   for (const marker of ['亲历', '听说', '不知道', 'narrationBoundary', '名片'])
     assert.ok(CAST_CONTEXT_PROMPT.includes(marker), marker);
-  for (const marker of ['hiddenSettings', '不知道', 'narrationBoundary'])
-    assert.ok(CAST_REVIEW_PROMPT.includes(marker), marker);
+  for (const marker of ['不知道', 'narrationBoundary']) assert.ok(CAST_REVIEW_PROMPT.includes(marker), marker);
+  // Part 24l: the leak check moved out of the cast review: the cast review no longer mentions hiddenSettings (it no longer exists),
+  // and the main review prompt carries the rule, so it applies with or without the cast.
+  assert.ok(!CAST_REVIEW_PROMPT.includes('hiddenSettings'));
+  assert.ok(!CAST_REVIEW_PROMPT.includes('cast.view.self'));
+  assert.match(TEXT_REVIEW_PROMPT, /隐藏知识/);
+  assert.match(TEXT_REVIEW_PROMPT, /authorCanon\.settings\.boundaries/);
+  assert.match(TEXT_REVIEW_PROMPT, /知道但不会说出口的事/);
+  assert.match(TEXT_REVIEW_PROMPT, /accept加replacementBubbles/);
 });
