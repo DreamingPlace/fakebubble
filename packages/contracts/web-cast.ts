@@ -14,7 +14,8 @@ export const CAST_LEGACY_SCHEMA = 1;
  * = 1, one emoji outside the BMP = 2, a combining mark = 1. Spaces inside an item are part of it ("Mary Jane" is 9) and are never
  * split on or collapsed. Leading / trailing whitespace, line breaks and control characters in an alias or an address are REJECTED
  * with a located error, never trimmed. `castLength` and `castItemProblem` are the one implementation of this, used by the server
- * validator and the admin editor alike (docs/CAST_FILE.md says the same in words).
+ * validator and the admin editor alike (docs/CAST_FILE.md says the same in words). Part 24l: an identity alias (any kind) holds up to
+ * CAST_LIMITS.alias = 25 units; an address (称呼) item stays at CAST_LIMITS.address = 16.
  */
 export const castLength = (value: string): number => value.length;
 /** Why an alias / address item is refused (null: it is fine). */
@@ -57,7 +58,7 @@ export const CAST_LIMITS = Object.freeze({
   peopleNames: 2,
   name: 12,
   aliases: 12,
-  alias: 16,
+  alias: 25,
   selfConcept: 240,
   prototypeText: 150,
   // sections of a chat character
@@ -89,8 +90,8 @@ export const CAST_LIMITS = Object.freeze({
   groupBackground: 120,
   groupMembers: 15,
   storyTitle: 30,
-  storySummary: 200,
-  storyDetails: 500,
+  storySummary: 600,
+  storyDetails: 2_000,
   storyBoundary: 100,
   storyPeriod: 20,
   storyParticipants: 20,
@@ -287,14 +288,6 @@ export interface CastView {
     names: string[];
     /** `kind` is spelled for the model: 自称 / 别名 / 中性称呼 / 黑称. */
     aliases: { text: string; kind: string; attitude: CastAliasAttitude }[];
-    selfConcept: string;
-    prototype: { name: string; inherited: string; notInherited: string } | null;
-    profile: string;
-    personality: string;
-    speech: { catchphrases: string[]; samples: string[]; avoid: string[] };
-    experiences: { title: string; text: string }[];
-    performance: string;
-    hiddenSettings: { rule: string; items: string[] };
   };
   others: CastCard[];
   relations: { to: string; rating?: number; addresses?: string[]; treatment?: string }[];

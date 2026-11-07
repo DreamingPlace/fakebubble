@@ -129,24 +129,25 @@ try {
   }
   const counted = await list('aliases').locator('.cs-item-count').allTextContents();
   check(
-    counted[1] === '16/16' && counted[10] === '16/16' && counted[11] === '16/16',
-    `16-unit items count 16/16 (${counted})`,
+    // Part 24l addendum 3: alias cap 25 (the 16-unit items now count 16/25; 称呼 stays x/16)
+    counted[1] === '16/25' && counted[10] === '16/25' && counted[11] === '16/25',
+    `16-unit items count 16/25 (${counted})`,
   );
   check(
     (await list('aliases').locator('.cs-item[data-invalid="true"]').count()) === 0,
     'no error row for 16-unit items',
   );
   await shot('aliases-12-1440');
-  // a 17-unit item: kept as typed, flagged on its own row
-  await fill('aliases', 3, '字'.repeat(17));
+  // Part 24l addendum 3: alias cap 25 - a 26-unit item: kept as typed, flagged on its own row
+  await fill('aliases', 3, '字'.repeat(26));
   const flagged = list('aliases').locator('.cs-item').nth(3);
-  check((await flagged.getAttribute('data-invalid')) === 'true', 'the 17-unit row is flagged');
+  check((await flagged.getAttribute('data-invalid')) === 'true', 'the 26-unit row is flagged');
   const sentence = (await flagged.locator('.cs-item-error').textContent()) ?? '';
-  check(/别名 第 4 项 — 超过 16 字/.test(sentence), `the row says 「…别名 第 4 项 — 超过 16 字」 (${sentence})`);
-  check((await texts('aliases'))[3]!.length === 17, 'the 17 units are kept, not cut');
+  check(/别名 第 4 项 — 超过 25 字/.test(sentence), `the row says 「…别名 第 4 项 — 超过 25 字」 (${sentence})`);
+  check((await texts('aliases'))[3]!.length === 26, 'the 26 units are kept, not cut');
   check(
-    (await list('aliases').locator('.cs-item-count').nth(3).textContent()) === '17/16',
-    'the row count reads 17/16',
+    (await list('aliases').locator('.cs-item-count').nth(3).textContent()) === '26/25',
+    'the row count reads 26/25',
   );
   await shot('aliases-error-1440');
   await layout('别名 1440');

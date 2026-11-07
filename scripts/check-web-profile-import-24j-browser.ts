@@ -117,7 +117,8 @@ try {
           角色代码: 'BAD1',
           人设名称: '错误示例',
           生日: '2001-02-30',
-          自称: '「0123456789abcdefg」',
+          // Part 24l (named exception): 26 units, one over the new alias cap of 25 (was a 17-unit item over 16).
+          自称: `「${'字'.repeat(26)}」`,
           角色主色: '「#111111 一（主）」「#222222 二（主）」',
         }),
       ),

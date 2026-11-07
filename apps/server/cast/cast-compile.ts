@@ -18,7 +18,9 @@ import { DomainError } from '../../../packages/domain/errors.ts';
  * compileCastView (Part 24a): the one function that turns the cast document into what ONE character is told. Pure and
  * deterministic (no clock, no randomness, a fixed key order), and called by both the production prompt and the 预演.
  *
- * What the character gets: his own sections in full (including his hidden settings, marked "known to you, never state directly");
+ * What the character gets: his own NAME CARD only (name, names, aliases with kinds and attitudes, one-liner; Part 24l: persona,
+ * speech, experiences, 演绎说明, hidden settings, self-concept and prototype stay in the cast document, lossless, but are never
+ * compiled: the workbench profile is the one place the prompt reads them from);
  * a compact card (names, aliases, one-liner) of every other character and person - never their hidden settings, 演绎说明 or
  * speech samples; his OUTGOING ratings, 称呼 and 相处 (nobody's feelings toward him); the groups he belongs to with their stories;
  * and only the stories he lived (亲历) or heard of (听说) - a 听说 story is its summary alone; the memes he is a party to.
@@ -70,15 +72,19 @@ export function castKnowledge(doc: CastDoc, characterId: string): CastKnowledgeR
  * Listed apart as "do not call": every 黑称, and every other / neutral name he dislikes. His 自称 is never shown to anyone else.
  */
 function othersAliases(aliases: readonly CastAlias[]): Pick<CastCard, 'aliases' | 'doNotCall'> {
-  const usable = aliases.filter((a) => (a.kind === 'other' || a.kind === 'neutral') && a.attitude !== 'dislikes');
+  // Part 24l: a name that is a 黑称 for him goes ONLY under doNotCall, even when it is also an alias or a neutral name.
+  const insults = new Set(aliases.filter((a) => a.kind === 'insult').map((a) => a.text));
+  const usable = aliases.filter(
+    (a) => (a.kind === 'other' || a.kind === 'neutral') && a.attitude !== 'dislikes' && !insults.has(a.text),
+  );
   const avoid = aliases.filter((a) => a.kind === 'insult' || (a.kind !== 'self' && a.attitude === 'dislikes'));
   return {
     aliases: usable.map((a) => a.text),
-    ...(avoid.length ? { doNotCall: { rule: CAST_DO_NOT_CALL_RULE, items: avoid.map((a) => a.text) } } : {}),
+    ...(avoid.length
+      ? { doNotCall: { rule: CAST_DO_NOT_CALL_RULE, items: [...new Set(avoid.map((a) => a.text))] } }
+      : {}),
   };
 }
-
-const HIDDEN_RULE = '你知道这些设定，但绝不直接说出口。';
 
 /** Oldest first: by period start (an undated story first), then by its place in the document. */
 const byAge = <T extends { period: CastPeriod; index: number }>(a: T, b: T) =>
@@ -187,7 +193,6 @@ function build(doc: CastDoc, characterId: string): Parts {
       prohibited: meme.prohibited,
     }));
 
-  const prototype = self.identity.prototype;
   const view: CastView = {
     world: { background: doc.world.background },
     self: {
@@ -199,20 +204,6 @@ function build(doc: CastDoc, characterId: string): Parts {
         kind: CAST_ALIAS_KIND_LABEL[a.kind],
         attitude: a.attitude,
       })),
-      selfConcept: self.identity.selfConcept,
-      prototype: prototype
-        ? { name: nameOf(prototype.personId), inherited: prototype.inherited, notInherited: prototype.notInherited }
-        : null,
-      profile: self.profile,
-      personality: self.personality,
-      speech: {
-        catchphrases: self.speech.catchphrases.map((t) => t.text),
-        samples: self.speech.samples.map((t) => t.text),
-        avoid: self.speech.avoid.map((t) => t.text),
-      },
-      experiences: self.experiences.map((e) => ({ title: e.title, text: e.text })),
-      performance: self.performance,
-      hiddenSettings: { rule: HIDDEN_RULE, items: self.hidden.map((t) => t.text) },
     },
     others,
     relations,

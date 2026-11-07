@@ -45,7 +45,7 @@ function editor(t: test.TestContext, texts: string[], options: { edit?: boolean;
 
 test('rows show the live per-item count and the list count', (t) => {
   const e = editor(t, ['小满', '字'.repeat(16), 'Mary Jane']);
-  assert.deepEqual(e.text('.cs-item-count'), ['2/16', '16/16', '9/16']);
+  assert.deepEqual(e.text('.cs-item-count'), ['2/25', '16/25', '9/25']);
   assert.deepEqual(e.text('.cs-items-count'), ['3/12']);
   assert.equal(e.rows().length, 3);
   assert.deepEqual(
@@ -55,14 +55,15 @@ test('rows show the live per-item count and the list count', (t) => {
   );
 });
 
-test('typing past 16 units is NOT cut: the row is flagged with the shared sentence, 17/16', (t) => {
+// Part 24l (named exception): the alias cap is 25 (was 16), so the row counts /25 and the over-limit text is 26 units.
+test('typing past 25 units is NOT cut: the row is flagged with the shared sentence, 26/25', (t) => {
   const e = editor(t, ['小满']);
   const input = e.root.querySelectorAll('.cs-item-text')[0]!;
-  input.type_('字'.repeat(17));
-  assert.equal(e.items[0]!.text.length, 17, 'the working copy holds all 17');
-  assert.deepEqual(e.text('.cs-item-count'), ['17/16']);
+  input.type_('字'.repeat(26));
+  assert.equal(e.items[0]!.text.length, 26, 'the working copy holds all 26');
+  assert.deepEqual(e.text('.cs-item-count'), ['26/25']);
   assert.equal(e.rows()[0]!.getAttribute('data-invalid'), 'true');
-  assert.equal(e.text('.cs-item-error')[0], `${e.name} · 别名 第 1 项 — 超过 16 字`);
+  assert.equal(e.text('.cs-item-error')[0], `${e.name} · 别名 第 1 项 — 超过 25 字`);
   assert.ok(e.calls.edited > 0);
   input.type_(' 小满');
   assert.match(e.text('.cs-item-error')[0]!, /开头或结尾有空格（不会自动去掉）/);

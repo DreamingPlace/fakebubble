@@ -33,6 +33,7 @@ const sha = (value: string) => createHash('sha256').update(value).digest('hex');
 // Named exception (Part 24j): the frozen fixture's prompt bytes were regenerated ONCE for the intentional prompt change of Part 24j
 // (text-content-rules.md gained the profileFacts / boundaries rule, prompt hash 53df95a8…133b -> 6cfe2616…b8868): only the system
 // text of `prompts`, `promptSha256` and `request.prompt_digest` differ from the capture on main; every other byte is as captured.
+// Part 24l regenerated it a second time for the review-system-body.md 隐藏知识 rule (prompt hash 6cfe2616…b8868 -> c5f8018e…b7fa).
 const OFF_MAIN = JSON.parse(
   readFileSync(new URL('../fixtures/cast-off-main.json', import.meta.url), 'utf8'),
 ) as ReturnType<typeof captureFreeze> & { capturedFrom: string };
@@ -671,7 +672,13 @@ test('switch ON with a publication: the compiled view is frozen with the snapsho
   assert.ok(draft[0]!.content.endsWith(CAST_CONTEXT_PROMPT));
   assert.ok(!draft[0]!.content.includes(CAST_REVIEW_PROMPT));
   assert.ok(review[0]!.content.endsWith(CAST_REVIEW_PROMPT));
-  assert.ok(JSON.parse(review[1]!.content).cast.view.self.hiddenSettings.items.length === 1);
+  // Part 24l (named exception, replaces `view.self.hiddenSettings.items.length === 1`): the review sees the same name-card-only self.
+  assert.deepEqual(Object.keys(JSON.parse(review[1]!.content).cast.view.self), [
+    'name',
+    'oneLiner',
+    'names',
+    'aliases',
+  ]);
   // the same request without the cast keeps the old system prompt as a strict prefix
   assert.ok(draft[0]!.content.startsWith(OFF_MAIN.prompts.voice.draft[0]!.content));
   // the part of the user content BEFORE `cast` is the same as without it (the per-character prefix stays stable for caching)

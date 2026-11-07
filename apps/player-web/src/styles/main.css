@@ -12835,6 +12835,103 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) #wb-import::before {
   content: none;
 }
+/* Part 24l: the workbench rail in three groups (当前阵容 / 未发布草稿 / 已下线), each a small heading with its count; drag to order. */
+.account-admin-page.admin-shell #admin-characters .admin-pick-group {
+  display: flex;
+  flex-direction: column;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-group + .admin-pick-group {
+  margin-top: 8px;
+}
+/* the thin divider is inset (a line of its own), so the rows of every group stay in one column */
+.account-admin-page.admin-shell #admin-characters .admin-pick-group + .admin-pick-group::before {
+  display: block;
+  height: 1px;
+  margin: 0 10px 6px;
+  background: rgba(43, 40, 51, 0.22);
+  content: "";
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 4px 0 2px;
+  color: var(--ad-muted);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: padding var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head span {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-width var(--ad-t-slide) var(--ad-ease),
+    opacity var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head b {
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-primary, #5b4bc4);
+  font-family: "DM Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-group[data-group="offline"] .admin-pick-head b {
+  background: #eceae6;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) .admin-pick-head {
+  justify-content: flex-start;
+  padding-left: 16px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) .admin-pick-head span {
+  max-width: 120px;
+  opacity: 1;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick[data-offline="true"] .admin-pick-dot {
+  opacity: 0.45;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-mark.is-offline {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-list .admin-pick-row {
+  cursor: grab;
+  user-select: none;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-list .admin-pick-row.is-dragging {
+  z-index: 2;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(43, 40, 51, 0.2);
+  cursor: grabbing;
+}
+/* 现行版本 and 下线 / 重新上线 on the 发布 tab */
+.account-admin-page.admin-shell .wb-avail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 8px;
+}
+.account-admin-page.admin-shell .wb-avail-v {
+  font-size: 15px;
+  font-weight: 800;
+}
+.account-admin-page.admin-shell .wb-avail .wb-avail-go {
+  margin-left: auto;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

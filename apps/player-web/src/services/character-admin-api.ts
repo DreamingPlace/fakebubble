@@ -36,6 +36,14 @@ export type CharacterDraft = {
   contentHash: string;
   savedAt: number;
 };
+/** Part 24l: where the workbench sidebar puts a character (server truth): 当前阵容 / 未发布草稿 / 已下线. */
+export type SidebarGroup = 'live' | 'draft' | 'offline';
+export const SIDEBAR_GROUPS: readonly SidebarGroup[] = ['live', 'draft', 'offline'];
+export const SIDEBAR_GROUP_LABEL: Record<SidebarGroup, string> = {
+  live: '当前阵容',
+  draft: '未发布草稿',
+  offline: '已下线',
+};
 export type CharacterSummary = {
   characterId: string;
   displayName: string;
@@ -43,6 +51,9 @@ export type CharacterSummary = {
   draftRevision: number | null;
   /** The main colour ('#RRGGBB'): the draft's, else the published one, else null (Part 24b-6, round 4). */
   color: string | null;
+  group: SidebarGroup;
+  /** On the home page now (Part 24l). */
+  online: boolean;
 };
 export type DeletionStatus = {
   characterId: string;
@@ -78,6 +89,8 @@ export type CharacterDetail = {
   draft: CharacterDraft | null;
   previews: PreviewJob[];
   previewAvailable: boolean;
+  /** Part 24l: on the home page now. A published character that is not is 已下线 (its live version stays). Absent = online. */
+  online?: boolean;
   /** Part 24j. Absent (an older answer, a test double) reads as 'not available': no code field, no checklist. */
   profileMeta?: ProfileMeta;
 };
@@ -223,6 +236,12 @@ function deletion(v: unknown): DeletionStatus {
     errorCode: nullable(r.errorCode),
   };
 }
+/** An older answer without a group reads as the old rule: never published = a draft, else on the home page. */
+function sidebarGroup(value: unknown, publishedVersion: unknown): SidebarGroup {
+  if (value === undefined) return publishedVersion === null ? 'draft' : 'live';
+  if (value !== 'live' && value !== 'draft' && value !== 'offline') throw invalid();
+  return value;
+}
 /** Shares the owning admin client's current in-memory CSRF; never stores a credential or request body. */
 export class CharacterAdminClient {
   private readonly request: (path: string, body: Record<string, unknown>) => Promise<unknown>;
@@ -244,6 +263,8 @@ export class CharacterAdminClient {
           publishedVersion: c.publishedVersion === null ? null : num(c.publishedVersion),
           draftRevision: c.draftRevision === null ? null : num(c.draftRevision),
           color: typeof c.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.color) ? c.color.toUpperCase() : null,
+          group: sidebarGroup(c.group, c.publishedVersion),
+          online: c.online === undefined ? c.publishedVersion !== null : flag(c.online),
         };
       }),
       deletions: rows(r.deletions).map(deletion),
@@ -260,6 +281,7 @@ export class CharacterAdminClient {
       draft: r.draft === null ? null : draft(r.draft),
       previews: rows(r.previews).map(preview),
       previewAvailable: flag(r.previewAvailable),
+      ...(r.online === undefined ? {} : { online: flag(r.online) }),
       ...(r.profileMeta === undefined ? {} : { profileMeta: profileMeta(r.profileMeta) }),
     };
   }
@@ -382,6 +404,17 @@ export class CharacterAdminClient {
   async restore(id: string, input: { requestId: string; version: number; liveVersion: number }) {
     const r = object(await this.call(id, 'restore', input));
     return { version: num(r.version), restoredFrom: num(r.restoredFrom), publishedAt: num(r.publishedAt) };
+  }
+  /** 下线 / 重新上线 (owner only). Same requestId = same answer. `liveVersion` is the version the confirm named. */
+  async setAvailability(id: string, action: 'offline' | 'online', input: { requestId: string; liveVersion: number }) {
+    const r = object(await this.call(id, action, input));
+    if (r.action !== action) throw invalid();
+    return { version: num(r.version), position: r.position === null ? null : num(r.position) };
+  }
+  /** 拖动排序: this admin's own order of one group (all of its members, in the new order). Never affects anyone else. */
+  async saveOrder(group: SidebarGroup, ids: readonly string[]) {
+    const r = object(await this.request('order', { group, ids: [...ids] }));
+    if (r.group !== group) throw invalid();
   }
   async deletePreview(id: string): Promise<DeleteImpact> {
     const r = object(await this.call(id, 'delete-preview'));

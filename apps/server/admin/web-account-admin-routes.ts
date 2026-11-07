@@ -215,13 +215,16 @@ export async function routeWebAccountAdmin(
       body([]);
       return { status: 200, body: characters.list(actor) };
     }
+    if (path === `${base}/characters/order`) return { status: 200, body: characters.saveOrder(actor, req.body) };
     const match = path.match(
       new RegExp(
-        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-audio|material-approve|delete-preview|delete-start|delete-status|history|history-version|restore|code-save|checklist-dismiss)$`,
+        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-audio|material-approve|delete-preview|delete-start|delete-status|history|history-version|restore|code-save|checklist-dismiss)$`,
       ),
     );
     ensure(match, 'NOT_FOUND');
     const id = match[1]!;
+    if (match[2] === 'offline' || match[2] === 'online')
+      return { status: 200, body: characters.setAvailability(actor, id, match[2], body(['requestId', 'liveVersion'])) };
     if (match[2] === 'delete-preview') {
       body([]);
       return { status: 200, body: characters.deletionPreview(actor, id) };

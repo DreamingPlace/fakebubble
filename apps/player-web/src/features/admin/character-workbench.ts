@@ -18,6 +18,8 @@ import { dateTimeText } from './system-format.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { versionHistory } from './history/version-history.ts';
 import { dangerZone } from './ui/danger-zone.ts';
+import { inlineConfirm } from './ui/inline-confirm.ts';
+import { statusBadge } from './ui/status-badge.ts';
 import { fillStatus } from './ui/page-head.ts';
 import { hoverValue } from './ui/hover-value.ts';
 import { diffSideBySide, type Piece } from './preview/diff.ts';
@@ -117,6 +119,10 @@ export function characterAdminError(error: unknown): string | null {
         CHARACTER_VOICE_REQUIRED: '请先在资料中绑定已有音色并保存草稿。',
         CHARACTER_PUBLICATION_BUSY: '此人物仍有未终结的玩家任务。暂不能发布；不会取消或重发未知调用。',
         CHARACTER_CATALOG_FULL: '已达到 15 个人物，请先明确处理已有角色。',
+        CHARACTER_OFFLINE: '这个角色已下线。先重新上线，才能发布。',
+        CHARACTER_ONLINE: '这个角色已经在线。',
+        ADMIN_OWNER_REQUIRED: '只有主管理员可以下线或重新上线角色。',
+        CHARACTER_ORDER_CONFLICT: '角色列表刚刚变过，请刷新后再排序。',
         MATERIAL_AUDIO_IMMUTABLE: '这一成品位置已有不同音频，不能覆盖。请准备新的素材版本。',
         INVALID_MATERIAL_AUDIO: '请选择有效的单声道 24kHz PCM16 WAV，非静音，最长 60 秒且不超过 6 MB。',
         DELETION_PREVIEW_CHANGED: '删除影响已变化。请重新获取影响，并再次核对确认。',
@@ -707,7 +713,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         sections.find((section) => section.id === 'voice')!.nodes.push(...made(() => materials(flow, snapshot)));
         sections.push({ id: 'diff', label: '资料改动', nodes: changes });
       }
-      const publish = made(() => publication(flow, snapshot));
+      // Part 24l: 下线 / 重新上线 sits first on the 发布 tab, next to the live version (the owner's buttons; others see the state).
+      const publish = [...made(() => availability(flow, snapshot)), ...made(() => publication(flow, snapshot))];
       const danger = el('div');
       danger.className = 'wb-danger';
       if (snapshot.draft) danger.append(discardZone(snapshot));
@@ -1477,11 +1484,75 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       for (const node of [rights, welcome, footer, note]) node.addEventListener('input', sync);
     }
   }
+  /** The roster read again after 下线 / 重新上线: the sidebar groups follow the server. */
+  async function refreshRoster() {
+    const result = await host.api.list();
+    if (gone()) return;
+    for (const role of result.characters) names.set(role.characterId, role.displayName);
+    setRoster(result.characters);
+    host.onDirectory?.(result.characters);
+  }
+  /**
+   * Part 24l: 现行版本 and whether it is on the home page. The owner alone has 下线 / 重新上线 (each asks first, in place); every other
+   * administrator sees the state and no button. 下线 removes only the home page entry: chats, memory and every version stay.
+   */
+  function availability(parent: HTMLElement, snapshot: CharacterDetail) {
+    const live = snapshot.published;
+    if (!live) return;
+    const target = snapshot.characterId,
+      online = snapshot.online !== false,
+      name = live.profile.presentation.displayName || target;
+    const row = el('div');
+    row.className = 'wb-avail';
+    row.dataset.state = online ? 'online' : 'offline';
+    const version = el('span', `现行 v${live.version}`);
+    version.className = 'wb-avail-v';
+    row.append(version, statusBadge(online ? '在线' : '已下线', online ? 'ok' : 'warn'));
+    parent.append(row);
+    if (host.member()?.role !== 'owner') return;
+    const action = online ? 'offline' : 'online',
+      key = `${action}:${target}`;
+    const confirmHost = el('div');
+    confirmHost.className = 'wb-avail-confirm';
+    const toggle = el('button', online ? '下线' : '重新上线');
+    toggle.type = 'button';
+    toggle.className = online ? 'admin-secondary wb-avail-go is-off' : 'admin-primary wb-avail-go';
+    controls.push({ node: toggle, locked: () => dirty });
+    toggle.addEventListener('click', async () => {
+      if (busy || dirty || gone()) return;
+      // While the question is open it is the only 下线 / 重新上线 on the tab: the original button steps aside.
+      toggle.hidden = true;
+      const ok = await inlineConfirm(confirmHost, {
+        title: online ? `下线 ${name}` : `重新上线 ${name}`,
+        message: online
+          ? `${name} 会从玩家首页消失，不能再发新消息。聊天和记忆都保留。`
+          : `${name} 以 v${live.version} 回到玩家首页。原来的聊天和记忆都在。`,
+        confirmLabel: online ? '下线' : '重新上线',
+      });
+      toggle.hidden = false;
+      if (!ok || gone()) return;
+      act(async () => {
+        await exact(key, { requestId: crypto.randomUUID(), liveVersion: live.version }, (input) =>
+          host.api.setAvailability(target, action, input),
+        );
+        if (gone()) return;
+        await Promise.all([open(target), refreshRoster()]);
+        host.status(online ? `${name} 已下线。` : `${name} 已重新上线。`);
+      });
+    });
+    row.append(toggle);
+    parent.append(confirmHost);
+  }
   function publication(parent: HTMLElement, snapshot: CharacterDetail) {
     const section = fold(parent, '发布角色版本'),
       target = snapshot.characterId,
       key = `publish:${target}`,
       saved = snapshot.draft;
+    // Part 24l: publishing never brings a character back; 重新上线 is the owner's own action, above.
+    if (snapshot.published && snapshot.online === false) {
+      section.append(el('p', '已下线。先重新上线，才能发布这份草稿。'));
+      return;
+    }
     const publishNote =
       '发布会将已存资料和批准成品提供给玩家。不会自动生成审核或声音；在途玩家任务／未知调用不被取消或重发。';
     const previews = () =>

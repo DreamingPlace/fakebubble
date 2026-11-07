@@ -64,7 +64,8 @@ test('length convention: UTF-16 code units, spaces are part of the item, nothing
   assert.equal(castLength('😀'), 2, 'an astral emoji is two units');
   assert.equal(castLength('é'), 1);
   assert.equal(castLength('é'), 2, 'a combining mark is one unit of its own');
-  assert.equal(CAST_LIMITS.alias, 16);
+  // Part 24l (named exception, was 16): identity aliases of every kind hold 25; a 称呼 item stays 16.
+  assert.equal(CAST_LIMITS.alias, 25);
   assert.equal(CAST_LIMITS.address, 16, 'the sentence for "too long" is shared by both lists');
 });
 
@@ -88,13 +89,23 @@ test('an item of exactly 16 units passes and 17 is refused, for 汉字, astral e
   fail('', 'empty');
 });
 
-test('the validator names the item: 16 passes, 17 is refused at the right path with the right sentence (aliases and addresses)', () => {
-  assert.equal(firstIssue(withAlias('字'.repeat(16))), null);
-  assert.deepEqual(firstIssue(withAlias('字'.repeat(17))), {
+// Part 24l (named exception): the alias half is now 25 passes / 26 refused (was 16 / 17); the address half is unchanged.
+test('the validator names the item: 25 passes, 26 is refused at the right path with the right sentence (aliases); addresses 16 / 17', () => {
+  assert.equal(firstIssue(withAlias('字'.repeat(25))), null);
+  assert.equal(
+    firstIssue(withAlias(`${'Mary Jane '.repeat(2)}Watsonn`.slice(0, 25))),
+    null,
+    'an English alias with spaces of 25',
+  );
+  assert.deepEqual(firstIssue(withAlias('字'.repeat(26))), {
     code: 'CAST_ITEM_TOO_LONG',
     path: 'doc.characters[0].identity.aliases[0].text',
   });
   assert.equal(firstIssue(withAddresses('😀'.repeat(8))), null);
+  assert.deepEqual(firstIssue(withAddresses('字'.repeat(17))), {
+    code: 'CAST_ITEM_TOO_LONG',
+    path: 'doc.directions[0].addresses[0].text',
+  });
   assert.deepEqual(firstIssue(withAddresses('小羊', 'a'.repeat(15) + '😀')), {
     code: 'CAST_ITEM_TOO_LONG',
     path: 'doc.directions[0].addresses[1].text',
@@ -114,12 +125,12 @@ test('errors read the way people read them, with 1-based item numbers', () => {
   const id = doc.characters[0]!.characterId;
   assert.deepEqual(issueSentence(doc, 'CAST_ITEM_TOO_LONG', `characters[${id}].identity.aliases[3].text`), {
     who: name,
-    text: `${name} · 别名 第 4 项 — 超过 16 字`,
+    text: `${name} · 别名 第 4 项 — 超过 25 字`,
   });
   // the same sentence for a shape path (the index form the save answer uses)
   assert.equal(
     issueSentence(doc, 'CAST_ITEM_TOO_LONG', 'doc.characters[0].identity.aliases[3].text').text,
-    `${name} · 别名 第 4 项 — 超过 16 字`,
+    `${name} · 别名 第 4 项 — 超过 25 字`,
   );
   const d = doc.directions[0]!;
   assert.equal(
@@ -203,16 +214,24 @@ test('document totals: 180 aliases and 1,200 addresses are enforced; a repeat in
       (e) => e.code === 'CAST_ADDRESS_TOTAL',
     ),
   );
-  // duplicates within one list: the later item is the error; the same text in another list is fine
+  // duplicates within one list: the later item is the error; the same text in another list is fine.
+  // Part 24l (named exception): "the same" is now the same text AND the same kind, so the cross-kind pair that was an error here
+  // (别名 + 黑称) is allowed (asserted below), and the repeat is a second 别名.
   const dup = clone(doc);
   const id = dup.characters[0]!.characterId;
   dup.characters[0]!.identity.aliases = [
     { id: 'a1', text: '阿福', kind: 'other', attitude: 'ok' },
-    { id: 'a2', text: '阿福', kind: 'insult', attitude: 'dislikes' },
+    { id: 'a2', text: '阿福', kind: 'other', attitude: 'dislikes' },
   ];
   assert.deepEqual(validateCastDoc(dup, 'draft', present).errors, [
     { code: 'CAST_DUPLICATE_ITEM', path: `characters[${id}].identity.aliases[1].text` },
   ]);
+  const crossKind = clone(doc);
+  crossKind.characters[0]!.identity.aliases = [
+    { id: 'a1', text: '阿福', kind: 'other', attitude: 'ok' },
+    { id: 'a2', text: '阿福', kind: 'insult', attitude: 'dislikes' },
+  ];
+  assert.deepEqual(validateCastDoc(crossKind, 'draft', present).errors, [], 'one alias per kind: 别名 + 黑称 is fine');
   const dupAddress = clone(doc);
   dupAddress.directions[0]!.addresses = [
     { id: 'p1', text: '小羊' },
@@ -467,4 +486,135 @@ test('the example file is schema 2 with a 3-address direction and a 4-kind alias
   const { prepared, ok, output } = checkCastFile(JSON.stringify(example));
   assert.equal(ok, true, output.join('\n'));
   assert.ok(!prepared!.warnings.some((w) => w.code === 'CAST_FILE_OLD_FORMAT'));
+});
+
+// ---- Part 24l: the cast view carries only the name card; the stored per-character fields stay lossless -----------------------
+
+test('24l the per-character fields stay in the document and round-trip through export → import byte for byte, though they are not compiled', () => {
+  const doc = sampleCast();
+  const kept = (d: CastDoc) =>
+    JSON.stringify(
+      d.characters.map((c) => [
+        c.profile,
+        c.personality,
+        c.speech,
+        c.experiences,
+        c.performance,
+        c.hidden,
+        c.identity.selfConcept,
+        c.identity.prototype,
+      ]),
+    );
+  const before = kept(doc),
+    json = canonicalCastJson(doc);
+  assert.ok(doc.characters.every((c) => c.profile && c.personality && c.performance && c.hidden.length));
+  assert.ok(
+    doc.characters.some((c) => c.identity.prototype),
+    'the sample has a prototype to keep',
+  );
+  // Compiling reads the document and changes nothing in it.
+  for (const c of doc.characters) compileCastView(doc, c.characterId);
+  assert.equal(canonicalCastJson(doc), json);
+  const prepared = prepareCastFile(exportCastFile(doc), {
+    current: doc,
+    known: castEntryIds(doc),
+    lookup: present,
+    newId: () => 'role-test0001',
+    entryId: counterIds(),
+  });
+  assert.deepEqual(prepared.problems, []);
+  assert.equal(canonicalCastJson(prepared.doc!), json, 'the whole document is byte-identical after the round trip');
+  assert.equal(kept(prepared.doc!), before);
+  // None of it is in what the character is told, and view.self is exactly the name card.
+  const view = compileCastView(doc, doc.characters[0]!.characterId);
+  assert.deepEqual(Object.keys(view.self).sort(), ['aliases', 'name', 'names', 'oneLiner']);
+  const told = JSON.stringify(view.self);
+  const mine = doc.characters[0]!;
+  for (const text of [mine.profile, mine.personality, mine.performance, mine.identity.selfConcept])
+    assert.ok(!text || !told.includes(text));
+});
+
+// ---- Part 24l addenda: room for shared stories; the same name as two kinds of alias ----------------------------------------------
+
+test('24l story summary holds 600 and details 2,000, in stories[] and in groups[].stories[]; one over is a located error', () => {
+  assert.equal(CAST_LIMITS.storySummary, 600);
+  assert.equal(CAST_LIMITS.storyDetails, 2_000);
+  assert.equal(CAST_LIMITS.viewMax, 24_000, 'the per-character view cap is unchanged');
+  const edit = (change: (raw: ReturnType<typeof sampleCastRaw>) => void) => {
+    const raw = sampleCastRaw();
+    change(raw);
+    return firstIssue(raw);
+  };
+  const story = (raw: ReturnType<typeof sampleCastRaw>) => raw.stories[0] as unknown as Record<string, string>;
+  const groupStory = (raw: ReturnType<typeof sampleCastRaw>) =>
+    (raw.groups[0] as unknown as { stories: Record<string, string>[] }).stories[0]!;
+  for (const [field, max] of [
+    ['summary', 600],
+    ['details', 2_000],
+  ] as const) {
+    assert.equal(
+      edit((r) => (story(r)[field] = '长'.repeat(max))),
+      null,
+      `${field} ${max} passes`,
+    );
+    assert.deepEqual(
+      edit((r) => (story(r)[field] = '长'.repeat(max + 1))),
+      { code: 'CAST_SHAPE', path: `doc.stories[0].${field}` },
+      `${field} ${max + 1} fails, located`,
+    );
+    assert.equal(
+      edit((r) => (groupStory(r)[field] = '长'.repeat(max))),
+      null,
+    );
+    assert.deepEqual(
+      edit((r) => (groupStory(r)[field] = '长'.repeat(max + 1))),
+      { code: 'CAST_SHAPE', path: `doc.groups[0].stories[0].${field}` },
+    );
+  }
+});
+
+test('24l a view over the cap still gives up the oldest stories first, with the bigger stories', () => {
+  const raw = sampleCastRaw();
+  const stories = raw.stories as unknown as Record<string, unknown>[];
+  stories.forEach((s, i) => {
+    s.summary = '史'.repeat(600);
+    s.details = '节'.repeat(2_000);
+    s.period = { start: `20${10 + i}-01`, end: '' };
+  });
+  const doc = normalize(raw);
+  const id = doc.characters[0]!.characterId;
+  const full = compileCastViewDetailed(doc, id);
+  const cap = JSON.stringify(full.view).length - 1;
+  const cut = compileCastViewDetailed(doc, id, cap);
+  assert.ok(JSON.stringify(cut.view).length <= cap);
+  const dropped = cut.dropped.memes + cut.dropped.heardStories + cut.dropped.groupStories + cut.dropped.livedStories;
+  assert.ok(dropped >= 1, 'something was given up');
+  // within one level, what was given up is older than (or as old as) every story that is left: oldest first
+  for (const level of ['听说', '亲历'] as const) {
+    const before = full.view.stories.filter((x) => x.level === level);
+    const left = new Set(cut.view.stories.filter((x) => x.level === level).map((x) => x.title));
+    const gone = before.filter((x) => !left.has(x.title));
+    const stay = before.filter((x) => left.has(x.title));
+    for (const g of gone) for (const k of stay) assert.ok(g.period.start <= k.period.start, `${level}: oldest first`);
+  }
+  assert.ok(cut.dropped.memes >= 0 && dropped >= 1);
+});
+
+test('24l one name as 别名 and 黑称 is two aliases; in others’ cards it is only under doNotCall, once', () => {
+  const doc = sampleCast();
+  const [first, second] = doc.characters;
+  first!.identity.aliases = [
+    { id: 'x1', text: '小野', kind: 'other', attitude: 'ok' },
+    { id: 'x2', text: '小野', kind: 'insult', attitude: 'dislikes' },
+    { id: 'x3', text: '阿野', kind: 'neutral', attitude: 'ok' },
+    { id: 'x4', text: 'Mary Jane Watson Zhou 25ch', kind: 'other', attitude: 'likes' },
+  ];
+  assert.deepEqual(validateCastDoc(doc, 'draft', present).errors, []);
+  const card = compileCastView(doc, second!.characterId).others.find((o) => o.name === first!.identity.names[0]!.text)!;
+  assert.ok(!card.aliases.includes('小野'));
+  assert.ok(card.aliases.includes('阿野'));
+  assert.deepEqual(card.doNotCall?.items, ['小野']);
+  // his own view of himself is the name card: both aliases are there, each with its kind
+  const own = compileCastView(doc, first!.characterId).self.aliases.filter((a) => a.text === '小野');
+  assert.deepEqual(own.map((a) => a.kind).sort(), ['别名', '黑称']);
 });

@@ -5,7 +5,12 @@ import { dialogueCandidate, dialogueWire } from '../../../packages/domain/dialog
 import { contentHash } from './admin-content-hash.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { textPolicyHash } from '../generation/text-generation-policy.ts';
-import { characterProfileHash, publishedWebCharacters, type WebCharacterProfile } from './web-character-catalog.ts';
+import {
+  characterProfileHash,
+  publishedWebCharacters,
+  webCharacterOnline,
+  type WebCharacterProfile,
+} from './web-character-catalog.ts';
 import { identifier, keys, record, validatedTemplate } from './template-validation.ts';
 
 import { approvedCharacterMaterial, promoteCharacterMaterial } from './web-character-materials.ts';
@@ -63,6 +68,11 @@ export function publishWebCharacter(
       ensure(prior.request_hash === requestHash, 'IDEMPOTENCY_CONFLICT');
       return dto(prior);
     }
+    // Part 24l: publishing never brings an offline character back; 重新上线 is its own owner action.
+    ensure(
+      webCharacterOnline(store, id) || !store.get('SELECT 1 FROM character_templates WHERE id=?', id),
+      'CHARACTER_OFFLINE',
+    );
     const draft = store.get<{
       revision: number;
       base_version: number | null;

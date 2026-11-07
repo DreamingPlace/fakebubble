@@ -115,7 +115,7 @@ export function mergeCast(
       ...card.identity.names.filter((n) => n.text !== read.name),
     ].slice(0, CAST_LIMITS.names) as CastText[];
     card.identity.names = names;
-    if (read.oneLiner !== '') card.identity.oneLiner = read.oneLiner;
+    if (read.cardOneLiner !== '') card.identity.oneLiner = read.cardOneLiner;
     const files: Record<CastAliasKind, string[]> = {
       self: read.selfNames,
       other: read.aliases,

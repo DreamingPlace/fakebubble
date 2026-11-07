@@ -46,7 +46,11 @@ export interface ItemListSpec<T extends CastText> {
 export function itemCode(items: readonly CastText[], index: number, maxText: number): string | null {
   const problem = castItemProblem(items[index]!.text, maxText);
   if (problem) return CAST_ITEM_CODE[problem];
-  return items.findIndex((other, at) => at < index && other.text === items[index]!.text) >= 0
+  // Part 24l: an alias is a repeat only with the same text AND the same kind (a name may be a 别名 and a 黑称).
+  const kindOf = (item: CastText) => (item as { kind?: string }).kind;
+  return items.findIndex(
+    (other, at) => at < index && other.text === items[index]!.text && kindOf(other) === kindOf(items[index]!),
+  ) >= 0
     ? 'CAST_DUPLICATE_ITEM'
     : null;
 }

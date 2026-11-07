@@ -155,10 +155,13 @@ test('birthday, code, seed and voice id errors carry their field', () => {
   assert.equal(only(base({ 是否为成长中角色: '否' })).seed, false);
 });
 
-test('over-limit items are refused with the item number, never cut: alias 17, 一句话描述 41, 称呼 17, a persona line 2001', () => {
-  const alias = read(base({ 自称: '「一」「0123456789abcdefg」' })).problems[0]!;
+// Part 24l (named exception): the alias cap is 25 (was 16) and 一句话描述 is checked against 500 (was 40); 名片一句话 holds the 40.
+test('over-limit items are refused with the item number, never cut: alias 26, 名片一句话 41, 称呼 17, a persona line 2001', () => {
+  const alias = read(base({ 自称: `「一」「${'字'.repeat(26)}」` })).problems[0]!;
   assert.deepEqual([alias.code, alias.field, alias.item], ['CAST_ITEM_TOO_LONG', '自称', 2]);
-  assert.equal(read(base({ 一句话描述: 'x'.repeat(41) })).problems[0]!.code, 'PROFILE_TOO_LONG');
+  const card = read(base({ 名片一句话: 'x'.repeat(41) })).problems[0]!;
+  assert.deepEqual([card.code, card.field], ['PROFILE_TOO_LONG', '名片一句话']);
+  assert.equal(read(base({ 一句话描述: 'x'.repeat(501) })).problems[0]!.code, 'PROFILE_TOO_LONG');
   const address = read(base(), [{ code: 'XY', addresses: '「甲」「0123456789abcdefg」' }]).problems[0]!;
   assert.deepEqual([address.code, address.field, address.item], ['CAST_ITEM_TOO_LONG', '本角色如何称呼对方', 2]);
   assert.equal(read(base({ 熟悉后的变化: 'x'.repeat(2001) })).problems[0]!.code, 'PROFILE_TOO_LONG');
@@ -181,6 +184,77 @@ test('relation blocks are identified by 对方角色代码: the number means not
   assert.equal(read(base(), [{ code: 'abc' }]).problems[0]!.code, 'PROFILE_RELATION_SELF');
 });
 
-test('the four alias lists may not repeat a name across lists', () => {
+test('the four alias lists may not repeat a name across lists, except a 黑称 that is also one other kind (Part 24l)', () => {
   assert.equal(read(base({ 自称: '「甲」', 黑称: '「甲」' })).problems[0]!.code, 'PROFILE_ITEM_REPEATED');
+  assert.equal(
+    read(base({ '别名（含英文名）': '「甲」', 中性称呼: '「甲」' })).problems[0]!.code,
+    'PROFILE_ITEM_REPEATED',
+  );
+  assert.equal(
+    read(base({ '别名（含英文名）': '「甲」', 中性称呼: '「甲」', 黑称: '「甲」' })).problems[0]!.code,
+    'PROFILE_ITEM_REPEATED',
+  );
+  const as别名 = only(base({ '别名（含英文名）': '「小满」', 黑称: '「小满」' }));
+  assert.deepEqual([as别名.aliases, as别名.insultNames], [['小满'], ['小满']]);
+  const asNeutral = only(base({ 中性称呼: '「小满」', 黑称: '「小满」' }));
+  assert.deepEqual([asNeutral.neutralNames, asNeutral.insultNames], [['小满'], ['小满']]);
+});
+
+test('名片一句话 (Part 24l): 一句话描述 goes to the public description only; the card takes 名片一句话, else a short 一句话描述, else nothing', () => {
+  const long = '长'.repeat(133);
+  const whole = read(base({ 一句话描述: long }));
+  assert.deepEqual(whole.problems, [], 'a 133-character 一句话描述 is no longer an error');
+  assert.equal(whole.profile!.oneLiner, long);
+  assert.equal(whole.profile!.cardOneLiner, '');
+  assert.deepEqual(
+    whole.profile!.checklist.filter((c) => c.key === 'card-oneliner').map((c) => c.text),
+    ['名片一句话待填（一句话描述超过 40 字）'],
+  );
+  const given = only(base({ 一句话描述: long, 名片一句话: '爱笑的邻家同学' }));
+  assert.equal(given.cardOneLiner, '爱笑的邻家同学');
+  assert.deepEqual(
+    given.checklist.filter((c) => c.key === 'card-oneliner'),
+    [],
+  );
+  const short = only(base({ 一句话描述: '慢热的邻家同学' }));
+  assert.equal(short.cardOneLiner, '慢热的邻家同学');
+  assert.equal(only(base({ 一句话描述: 'x'.repeat(40) })).cardOneLiner, 'x'.repeat(40));
+  assert.equal(only(base({ 名片一句话: 'y'.repeat(40) })).cardOneLiner, 'y'.repeat(40));
+  const over = read(base({ 名片一句话: 'y'.repeat(41) })).problems;
+  assert.deepEqual(
+    over.map((p) => [p.code, p.section, p.field]),
+    [['PROFILE_TOO_LONG', '1 基本信息', '名片一句话']],
+    '41 fails, located',
+  );
+  // an old file without the field still imports
+  const old = readTemplateFile('old.md', templateFile(base({ 一句话描述: '短描述' })));
+  assert.deepEqual(old.problems, []);
+  assert.equal(old.profile!.cardOneLiner, '短描述');
+  assert.ok(!templateFile(base()).includes('名片一句话'));
+});
+
+test('共同经历 (Part 24l): each side holds up to 600; 273 passes whole, 601 fails located', () => {
+  const side = '共'.repeat(273);
+  const ok = only(base(), [{ code: 'XY', shared: side }]);
+  assert.equal(ok.relations[0]!.shared, side);
+  assert.equal(only(base(), [{ code: 'XY', shared: '共'.repeat(600) }]).relations[0]!.shared.length, 600);
+  const bad = read(base(), [{ code: 'XY', shared: '共'.repeat(601) }]).problems;
+  assert.deepEqual(
+    bad.map((p) => [p.code, p.field]),
+    [['PROFILE_TOO_LONG', '相处方式及共同经历']],
+  );
+});
+
+test('an alias of 25 passes (English with spaces too) and 26 fails located to the field and item; a 称呼 of 17 still fails (Part 24l)', () => {
+  const english = 'Hazel Jane Watson Zhou x2'.slice(0, 25);
+  assert.equal(english.length, 25);
+  assert.deepEqual(only(base({ '别名（含英文名）': `「${english}」` })).aliases, [english]);
+  assert.deepEqual(only(base({ 黑称: `「${'字'.repeat(25)}」` })).insultNames, ['字'.repeat(25)]);
+  const bad = read(base({ 中性称呼: `「甲」「${'字'.repeat(26)}」` })).problems;
+  assert.deepEqual(
+    bad.map((p) => [p.code, p.section, p.field, p.item]),
+    [['CAST_ITEM_TOO_LONG', '1 基本信息', '中性称呼', 2]],
+  );
+  const address = read(base(), [{ code: 'XY', addresses: `「${'称'.repeat(17)}」` }]).problems;
+  assert.equal(address[0]!.code, 'CAST_ITEM_TOO_LONG');
 });

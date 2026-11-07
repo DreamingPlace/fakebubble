@@ -32,7 +32,7 @@ import { freezeReviewModel } from './web-review-model.ts';
 import { ensureRegisteredBonus, type BonusEmailKey } from './web-registered.ts';
 import type { WebStats } from '../stats/web-stats.ts';
 import { lockedCharacterIds } from './web-guest-lock.ts';
-import { requirePublishedWebCharacter } from '../characters/web-character-catalog.ts';
+import { requirePublishedWebCharacter, webCharacterOnline } from '../characters/web-character-catalog.ts';
 
 interface PrincipalRow {
   id: string;
@@ -159,6 +159,8 @@ export class WebAdmission {
         ),
         'WEB_CHARACTER_UNAVAILABLE',
       );
+      // Part 24l: an offline character (no catalog row) takes no new message, whatever its conversations hold.
+      ensure(webCharacterOnline(this.store, input.characterId), 'WEB_CHARACTER_UNAVAILABLE');
       const eff = effectiveTier(this.store, principal.id, this.clock.now());
       // Part 22a: a HOLDER is a signed-in player with an active entitlement (the principal stays a guest). Its tier and liveness
       // never depend on the free-tier switch. unlimited is never charged; daily_refill is charged in points while points exist.
