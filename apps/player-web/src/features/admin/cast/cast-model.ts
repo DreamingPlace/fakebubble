@@ -19,8 +19,6 @@ export { ISSUE_LABEL, humanIssue, issueSentence, nameOf };
  * on a 0.5 grid, "not set" is the ABSENCE of an entry (not 0), and knowledge defaults follow castKnowledge().
  */
 export const RATING_STEP = 0.5;
-/** A character rated at least this much toward a participant has heard of the story (the 24a rule, CAST_HEARD_RATING). */
-export const HEARD_RATING = 3;
 
 export const ratingOf = (doc: CastDoc, from: string, to: string): number | null => doc.ratings[from]?.[to] ?? null;
 
@@ -50,11 +48,9 @@ export const starValue = (n: number, half: boolean) => (half ? n - 0.5 : n);
 
 export const ratingText = (value: number | null) => (value === null ? '未设置' : value === 0 ? '0' : value.toFixed(1));
 
-/** What a character knows of a story when nobody has overridden it: participants lived it, a rating >= 3 toward one has heard of it. */
-export function defaultKnowledge(doc: CastDoc, story: CastStory, characterId: string): CastKnowledge {
-  if (story.participants.includes(characterId)) return 'lived';
-  const row = doc.ratings[characterId] ?? {};
-  return story.participants.some((id) => id !== characterId && (row[id] ?? -1) >= HEARD_RATING) ? 'heard' : 'unknown';
+/** What a character knows of a story when nobody has overridden it: participants lived it, everyone else does not know it (stars never decide). */
+export function defaultKnowledge(_doc: CastDoc, story: CastStory, characterId: string): CastKnowledge {
+  return story.participants.includes(characterId) ? 'lived' : 'unknown';
 }
 export function knowledgeOf(doc: CastDoc, story: CastStory, characterId: string) {
   const override = story.overrides.find((o) => o.characterId === characterId);

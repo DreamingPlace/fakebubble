@@ -207,26 +207,30 @@ test('draft saves only warn about characters that are not published (yet); publi
   assert.deepEqual(codes(doc, 'publish', present), { errors: [], warnings: [] });
 });
 
-test('knowledge rule: participants lived it; a rating of 3 or more toward a participant means heard; everyone else does not know; an override wins', () => {
+// Part 24m (named, replaces the 24a rule test): a rating of 3 or more used to make a story "heard". Stars are only an attitude now;
+// a story is known as 亲历 by a participant, or as the admin's override says, and is otherwise not known at all.
+test('knowledge rule: participants lived it; everyone else does not know; only an admin override says heard; stars never decide', () => {
   const doc = sampleCast();
   const level = (id: string, title: string) => {
     const story = doc.stories.find((s) => s.title === title)!;
     return castKnowledge(doc, id).find((k) => k.storyId === story.id)!;
   };
   assert.deepEqual(level('c01', '雨夜的告白'), { storyId: doc.stories[0]!.id, level: 'lived', fromOverride: false });
-  // c05 rates c01 at 3.5: heard, by the rating alone
-  assert.deepEqual(level('c05', '雨夜的告白'), { storyId: doc.stories[0]!.id, level: 'heard', fromOverride: false });
-  // exactly 3 counts, 2.5 does not
+  // c05 rates c01 at 3.5, but what makes her hear of it is the admin's override
+  assert.equal(doc.ratings.c05!.c01, 3.5);
+  assert.deepEqual(level('c05', '雨夜的告白'), { storyId: doc.stories[0]!.id, level: 'heard', fromOverride: true });
+  // without the override, no star value (5 included) makes a story known
   const edge = clone(doc);
-  edge.ratings.c06 = { c01: 3 };
-  edge.ratings.c07 = { c01: 2.5 };
-  assert.equal(castKnowledge(edge, 'c06')[0]!.level, 'heard');
-  assert.equal(castKnowledge(edge, 'c07')[0]!.level, 'unknown');
-  // not set is not 0, and neither reaches 3
-  assert.equal(castKnowledge(edge, 'c09')[0]!.level, 'unknown');
-  // someone who rates a PARTICIPANT high hears; someone rated by the participant does not
-  edge.ratings.c01 = { ...edge.ratings.c01, c08: 5 };
-  assert.equal(castKnowledge(edge, 'c08')[0]!.level, 'unknown', 'incoming ratings do not count');
+  edge.stories[0]!.overrides = [];
+  edge.ratings.c06 = { c01: 5, c02: 5 };
+  edge.ratings.c05 = { c01: 5 };
+  for (const id of ['c05', 'c06', 'c09'])
+    assert.deepEqual(
+      castKnowledge(edge, id)[0],
+      { storyId: edge.stories[0]!.id, level: 'unknown', fromOverride: false },
+      id,
+    );
+  assert.ok(!compileCastView(edge, 'c06').stories.some((s) => s.title === '雨夜的告白'), 'not in his view at all');
   // override: c01 lived the school show without taking part; c07 does not know the photo although he is a participant
   assert.deepEqual(level('c01', '校庆演出'), { storyId: doc.stories[1]!.id, level: 'lived', fromOverride: true });
   assert.deepEqual(level('c07', '旧照片'), { storyId: doc.stories[2]!.id, level: 'unknown', fromOverride: true });
@@ -456,11 +460,13 @@ test('prompt files: the cast prompts are pinned, separate from PROMPTS_V7, and g
   assert.deepEqual(Object.keys(PROMPTS_CAST), ['castContext', 'castReview']);
   // Part 24l (second change): cast-review.md lost item 1 (the hiddenSettings leak check moved to review-system-body.md): castReview
   // sha f16fc9a0…9100 -> 086b4d3a…1447, castPromptHash a36f8845…a076 -> 5f9fdbc3…9ddc.
+  // Part 24m: pinned on purpose again: cast-context.md says rating 0-5 with 2 = neutral, lower = dislike, higher = like, unset = no view.
+  // cast-context sha 49cb84f1…3e7f -> 573834da…8bc7, castPromptHash 5f9fdbc3…9ddc -> ce208d50…3a19 (castReview unchanged).
   // Part 24l: pinned on purpose again: cast-context.md now says view.self is a name card only (see docs/STATUS.md for old -> new).
   // Part 24a: pinned on purpose (Part 24i changed cast-context.md on purpose: addresses[], alias kinds, doNotCall; see docs/STATUS.md). Changing either file changes castPromptHash(), which every request that carries `cast` records.
-  assert.equal(sha(CAST_CONTEXT_PROMPT), '49cb84f120d4bcf06a936fead7b39b6c11e62a1f4dfff6df27a8b76ea1f3ce7f');
+  assert.equal(sha(CAST_CONTEXT_PROMPT), '573834da095bc7cea0421135ab562f19ad1638dd6a4e1f86e65a1af0e78b8bc7');
   assert.equal(sha(CAST_REVIEW_PROMPT), '086b4d3aa94599ff9ccbd7900f01d4b6c51cbde4c4b0943137d5e34eafa21447');
-  assert.equal(castPromptHash(), '5f9fdbc37f507ede35f3d71f3d75ef17342888a1c85934bf9512051ca67b9ddc');
+  assert.equal(castPromptHash(), 'ce208d50681e04f32c56b940ba017fa2780d410ab9f6b3dc4cb17a909a4e3a19');
   for (const marker of ['亲历', '听说', '不知道', 'narrationBoundary', '名片'])
     assert.ok(CAST_CONTEXT_PROMPT.includes(marker), marker);
   for (const marker of ['不知道', 'narrationBoundary']) assert.ok(CAST_REVIEW_PROMPT.includes(marker), marker);

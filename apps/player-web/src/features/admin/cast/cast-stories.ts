@@ -13,7 +13,6 @@ import { hoverValue } from '../ui/hover-value.ts';
 import { openTable } from '../ui/open-table.ts';
 import { markDirty } from '../ui/unsaved.ts';
 import {
-  HEARD_RATING,
   KNOWLEDGE_LABEL,
   blankGroup,
   blankGroupStory,
@@ -80,12 +79,8 @@ export function knowledgeReason(ctx: CastCtx, story: CastStory, characterId: str
   if (known.fromOverride)
     return `${who}：${KNOWLEDGE_LABEL[known.level]}（手动设置）· 再点几下回到自动那一档就恢复自动`;
   if (known.level === 'lived') return `${who}：亲历 · 他是这个故事的参与者`;
-  if (known.level === 'heard') {
-    const row = doc.ratings[characterId] ?? {};
-    const friend = story.participants.find((id) => id !== characterId && (row[id] ?? -1) >= HEARD_RATING);
-    return `${who}：听说 · 他对${friend ? ctx.nameOf(friend) : '参与者'}评了 ${friend ? ratingOf(doc, characterId, friend) : HEARD_RATING} 星（≥ ${HEARD_RATING}）`;
-  }
-  return `${who}：不知道 · 不是参与者，也没有对参与者评到 ${HEARD_RATING} 星`;
+  if (known.level === 'heard') return `${who}：听说 · 手动设置`;
+  return `${who}：不知道 · 不是参与者，也没有手动设置`;
 }
 
 /** 组合: only the groups that hold ALL the selected people (or every group), each a row that opens below. */

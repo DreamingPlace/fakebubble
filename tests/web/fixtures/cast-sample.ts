@@ -32,8 +32,9 @@ const text = (value: string) => ({ text: value });
 
 /**
  * A cast of 15 chat characters, 6 people, 3 groups and 6 stories. c05 (顾北... see SAMPLE_NAMES[4]) hears "雨夜的告白" only because
- * she rates c01 at 3.5; c01 has an override on "校庆演出" (lived, though not a participant); c07 is told by an override
- * that he does NOT know "旧照片" although he is a participant.
+ * an override says so (Part 24m: stars no longer make a story known; she still rates c01 at 3.5, which now means liking only);
+ * c01 has an override on "校庆演出" (lived, though not a participant); c07 is told by an override that he does NOT know
+ * "旧照片" although he is a participant.
  */
 export function sampleCastRaw() {
   const characters = SAMPLE_NAMES.map((name, index) => ({
@@ -135,7 +136,7 @@ export function sampleCastRaw() {
         period: { start: '2026-04-12', end: '' },
         participants: ['c01', 'c02'],
         boundary: '只能点到为止，不能复述原话。',
-        overrides: [],
+        overrides: [{ characterId: 'c05', level: 'heard' }],
       },
       {
         title: '校庆演出',
@@ -180,7 +181,10 @@ export function sampleCastRaw() {
         period: { start: '2025-06', end: '' },
         participants: ['c01', 'c13'],
         boundary: '',
-        overrides: [{ characterId: 'c10', level: 'heard' }],
+        overrides: [
+          { characterId: 'c10', level: 'heard' },
+          { characterId: 'c05', level: 'heard' },
+        ],
       },
     ],
     memes: [
@@ -277,7 +281,9 @@ export function maxCastRaw(options: { directionTargets?: number; groupStories?: 
     })),
     ratings,
     directions,
-    groups: Array.from({ length: L.groups }, (_, g) => ({
+    // Part 24m (named): the cap is now 120 groups, which at the maximum of every field would not fit the document cap; the
+    // "maximum" cast keeps the 6 groups it always had.
+    groups: Array.from({ length: 6 }, (_, g) => ({
       name: fill(L.groupName, `组合${g}`),
       members: ids.slice(0, L.groupMembers),
       background: fill(L.groupBackground, '组合背景'),

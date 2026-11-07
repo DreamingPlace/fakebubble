@@ -23,13 +23,12 @@ import { DomainError } from '../../../packages/domain/errors.ts';
  * compiled: the workbench profile is the one place the prompt reads them from);
  * a compact card (names, aliases, one-liner) of every other character and person - never their hidden settings, 演绎说明 or
  * speech samples; his OUTGOING ratings, 称呼 and 相处 (nobody's feelings toward him); the groups he belongs to with their stories;
- * and only the stories he lived (亲历) or heard of (听说) - a 听说 story is its summary alone; the memes he is a party to.
+ * and only the stories he lived (亲历) or an admin marked as heard of (听说) - a 听说 story is its summary alone; the memes he is a party to.
  *
- * Knowledge rule for a story and a character (an override always wins):
- *   participant → 亲历; rating toward at least one participant >= 3 → 听说; otherwise 不知道 (the story is not in his view at all).
+ * Knowledge rule for a story and a character (an admin override always wins):
+ *   participant → 亲历; otherwise 不知道 (the story is not in his view at all). Stars never make a story known (Part 24m).
  * Group stories: every member lived them.
  */
-export const CAST_HEARD_RATING = 3;
 
 /** The documented order in which a view that is over CAST_LIMITS.viewMax gives things up, one item at a time. */
 export const CAST_DROP_ORDER = [
@@ -57,13 +56,11 @@ const find = (doc: CastDoc, characterId: string): CastCharacter => {
 /** What this character knows of every story (all of them, 不知道 included): the console's table and the compiler's input. */
 export function castKnowledge(doc: CastDoc, characterId: string): CastKnowledgeRow[] {
   find(doc, characterId);
-  const row = doc.ratings[characterId] ?? {};
   return doc.stories.map((story) => {
     const override = story.overrides.find((o) => o.characterId === characterId);
     if (override) return { storyId: story.id, level: override.level, fromOverride: true };
     if (story.participants.includes(characterId)) return { storyId: story.id, level: 'lived', fromOverride: false };
-    const heard = story.participants.some((id) => id !== characterId && (row[id] ?? -1) >= CAST_HEARD_RATING);
-    return { storyId: story.id, level: heard ? 'heard' : 'unknown', fromOverride: false };
+    return { storyId: story.id, level: 'unknown', fromOverride: false };
   });
 }
 

@@ -87,15 +87,15 @@ test('the default knowledge table is exactly the server compile-preview table', 
     });
   }
   assert.ok(compared >= 15 * 6);
-  // The rule itself: a participant lived it, a rating of 3 or more toward one has heard, else unknown.
+  // The rule itself (Part 24m, named: stars no longer decide): a participant lived it, everyone else does not know it.
   const story = doc.stories.find((s) => s.overrides.length === 0 && s.participants.length > 1)!;
   const outsider = doc.characters.map((c) => c.characterId).find((id) => !story.participants.includes(id))!;
   const probe = structuredClone(doc);
   const copy = probe.stories.find((s) => s.id === story.id)!;
   probe.ratings[outsider] = { [story.participants[0]!]: 2.5 };
   assert.equal(defaultKnowledge(probe, copy, outsider), 'unknown');
-  probe.ratings[outsider] = { [story.participants[0]!]: 3 };
-  assert.equal(defaultKnowledge(probe, copy, outsider), 'heard');
+  probe.ratings[outsider] = { [story.participants[0]!]: 5 };
+  assert.equal(defaultKnowledge(probe, copy, outsider), 'unknown');
   assert.equal(defaultKnowledge(probe, copy, story.participants[0]!), 'lived');
 });
 
