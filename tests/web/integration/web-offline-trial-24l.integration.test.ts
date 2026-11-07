@@ -119,7 +119,7 @@ test('24l a counted trial bound to a character that goes offline reads like a de
   access = boot.access;
   // The same state as for a deleted trial character: cannot send, the replies it has are kept, no error page.
   assert.deepEqual([access.kind, access.canSend, access.remainingReplies], ['guest', false, 4]);
-  assert.ok(!boot.characters.some((c) => c.characterId === 'wei-guagua'), 'it is not listed');
+  assert.ok(!boot.characters.some((c: { characterId: string }) => c.characterId === 'wei-guagua'), 'it is not listed');
   assert.equal((await f.send(guest, 'wei-guagua', 404)).error.code, 'NOT_FOUND');
   const principal = await f.fixture<any>('/fixture/bonus-state', { principalId });
   assert.equal(principal.principal.trial_used + principal.principal.trial_reserved >= 1, true);
