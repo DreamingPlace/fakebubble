@@ -3,6 +3,7 @@ import { probeModelKeys } from '../../apps/server/admission/web-model-settings.t
 import { WebCharacterDeletion } from '../../apps/server/characters/web-character-deletion.ts';
 import { WebCharacterPreviews } from '../../apps/server/characters/web-character-preview.ts';
 import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-character-preview-runner.ts';
+import { WebAdminSpeech } from '../../apps/server/characters/web-admin-speech.ts';
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -449,6 +450,16 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           new WebCloudTextGenerator(this.env.GENERATION),
           this.env.BUDGET,
         );
+        // Part 24k-1: admin speech (生成 a 成品, 预演 试听) through the same Fish transport and budget as a live reply.
+        const speech = new WebAdminSpeech(
+          this.store,
+          this.clock,
+          webCloudSpeech(this.env.GENERATION),
+          this.env.BUDGET,
+          siteVoiceModelFromEnv(this.env.FISH_VOICE_MODEL),
+        );
+        previews.useSpeech(speech);
+        app.characterAdmin.enableSpeech(speech);
         const execution = new WebCloudExecutor(
           this.context,
           this.store,

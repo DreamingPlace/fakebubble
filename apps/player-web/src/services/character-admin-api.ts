@@ -1,3 +1,4 @@
+import { speechEstimate } from './speech-admin-api.ts';
 import type { CharacterTemplate } from '../../../../packages/contracts/index.ts';
 import {
   RESTORE_PROBLEMS,
@@ -93,6 +94,8 @@ export type CharacterDetail = {
   online?: boolean;
   /** Part 24j. Absent (an older answer, a test double) reads as 'not available': no code field, no checklist. */
   profileMeta?: ProfileMeta;
+  /** Part 24k-1. Absent reads as 'not available': no 生成 and no 试听 are offered. */
+  speech?: { available: boolean; hasVoice: boolean };
 };
 export type Material = {
   materialId: string;
@@ -101,7 +104,15 @@ export type Material = {
   approved: boolean;
   createdAt: number;
   voice: { profileId: string; version: number; referenceId: string; model: string };
-  assets: { kind: 'welcome' | 'footer'; body: string; sha256: string; durationMs: number; byteLength: number }[];
+  assets: {
+    kind: 'welcome' | 'footer';
+    body: string;
+    sha256: string;
+    durationMs: number;
+    byteLength: number;
+    /** Part 24k-1: where the audio came from. Absent in an older answer. */
+    origin?: 'generated' | 'uploaded';
+  }[];
 };
 export type DeleteImpact = {
   previewHash: string;
@@ -283,6 +294,9 @@ export class CharacterAdminClient {
       previewAvailable: flag(r.previewAvailable),
       ...(r.online === undefined ? {} : { online: flag(r.online) }),
       ...(r.profileMeta === undefined ? {} : { profileMeta: profileMeta(r.profileMeta) }),
+      ...(r.speech === undefined
+        ? {}
+        : { speech: { available: flag(object(r.speech).available), hasVoice: flag(object(r.speech).hasVoice) } }),
     };
   }
   /** 角色代码 by hand (身份与展示). */
@@ -339,6 +353,7 @@ export class CharacterAdminClient {
             sha256: string(a.sha256),
             durationMs: num(a.durationMs),
             byteLength: num(a.byteLength),
+            ...(a.origin === 'generated' || a.origin === 'uploaded' ? { origin: a.origin } : {}),
           };
         }),
       };
@@ -352,6 +367,17 @@ export class CharacterAdminClient {
   }
   async upload(id: string, materialId: string, kind: 'welcome' | 'footer', base64: string) {
     await this.call(id, 'material-upload', { materialId, kind, base64 });
+  }
+  /** What 生成 of one slot would say and cost, or why it is not offered. Holds nothing. */
+  async speechEstimate(id: string, materialId: string, slot: 'welcome' | 'footer') {
+    return speechEstimate(await this.call(id, 'speech-estimate', { kind: 'material', materialId, slot }));
+  }
+  /** 生成: one paid Fish call, confirmed with the estimate the person saw. Never approves. */
+  async generate(
+    id: string,
+    input: { requestId: string; materialId: string; kind: 'welcome' | 'footer'; acknowledgeMicros: number },
+  ) {
+    await this.call(id, 'material-generate', input);
   }
   async audio(id: string, materialId: string, kind: 'welcome' | 'footer') {
     return string(object(await this.call(id, 'material-audio', { materialId, kind })).base64);

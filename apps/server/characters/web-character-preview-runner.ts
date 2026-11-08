@@ -21,6 +21,7 @@ import { currentWebPreview, previewDigest, previewPolicy, readWebPreview } from 
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { webCharacterPreviewsRunning } from './web-character-preview-schema.ts';
 import { WebReviewCompareRunner, type CompareClaim } from './web-review-compare-runner.ts';
+import type { WebAdminSpeech } from './web-admin-speech.ts';
 import { previewReviewModel } from '../admission/web-review-model.ts';
 import { DEFAULT_REVIEW_MODEL } from '../../../packages/contracts/review-model.ts';
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
@@ -69,6 +70,14 @@ export class WebCharacterPreviewRunner {
   private readonly hasRuns: boolean;
   /** Part 26b: the 审核对比 runs in this queue's single text slot (preview claims first). */
   private readonly compare: WebReviewCompareRunner;
+  /**
+   * Part 24k-1: the admin speech path shares this owner's timer. It adds no queue; this runner only drives its recovery
+   * (an interrupted call becomes unknown, a known bill that was not settled is settled) next to the 预演 bills.
+   */
+  speech: WebAdminSpeech | null = null;
+  useSpeech(speech: WebAdminSpeech) {
+    this.speech = speech;
+  }
   constructor(
     store: BusinessStore,
     clock: Clock,
@@ -237,7 +246,11 @@ export class WebCharacterPreviewRunner {
     const pending = this.store.get(
       "SELECT 1 FROM web_character_preview_attempts WHERE state='known' AND shared_settled=0 LIMIT 1",
     );
-    const at = Math.min(row?.due ?? Infinity, pending ? this.now() + 10_000 : Infinity);
+    const at = Math.min(
+      row?.due ?? Infinity,
+      pending ? this.now() + 10_000 : Infinity,
+      this.speech?.nextDue() ?? Infinity,
+    );
     return Number.isFinite(at) ? at : null;
   }
   private async settle(row: Attempt) {
@@ -259,7 +272,7 @@ export class WebCharacterPreviewRunner {
       "SELECT * FROM web_character_preview_attempts WHERE state='known' AND shared_settled=0 LIMIT 16",
     );
     for (const row of rows) await this.settle(row);
-    return rows.length + other;
+    return rows.length + other + (this.speech ? await this.speech.recoverBills() : 0);
   }
   private reserve(id: string, token: string, spec: ProviderCallSpec, wireHash: string, bytes: number) {
     return this.store.transaction(() => {

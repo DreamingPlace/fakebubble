@@ -9,6 +9,8 @@ import type { BusinessStore } from '../platform/store-contract.ts';
 import type { WebCharacterProfile } from './web-character-catalog.ts';
 import { characterProfileHash } from './web-character-catalog.ts';
 import { identifier, keys, nonempty, record } from './template-validation.ts';
+import type { WebAdminSpeech } from './web-admin-speech.ts';
+import { webAdminSpeechInstalled } from './web-admin-speech-schema.ts';
 import {
   checkAudioReference,
   fixedObjectScope,
@@ -125,6 +127,11 @@ export class WebCharacterMaterials {
   private readonly store: MaterialStore;
   private readonly clock: Clock;
   private readonly nextId: () => string;
+  /** Part 24k-1: the admin speech path (生成). Off until enabled; uploads work without it. */
+  private speech: WebAdminSpeech | null = null;
+  enableSpeech(speech: WebAdminSpeech) {
+    this.speech = speech;
+  }
   constructor(store: MaterialStore, clock: Clock, nextId: () => string = randomUUID) {
     this.store = store;
     this.clock = clock;
@@ -161,7 +168,7 @@ export class WebCharacterMaterials {
           referenceId: row.reference_id,
           model: row.model,
         },
-        assets: materialAssets(this.store, row.id).map(assetDTO),
+        assets: materialAssets(this.store, row.id).map((asset) => this.view(asset)),
         approved: !!this.store.get('SELECT 1 FROM web_character_material_approvals WHERE material_id=?', row.id),
         createdAt: row.created_at,
       }));
@@ -237,15 +244,31 @@ export class WebCharacterMaterials {
     );
     const bytes = Buffer.from(input.base64, 'base64');
     ensure(bytes.toString('base64') === input.base64 && bytes.length <= 6_000_000, 'INVALID_MATERIAL_AUDIO');
+    return this.place(id, input.materialId, input.kind, bytes, authorize);
+  }
+  /** An asset as the page sees it: the stored facts plus where the audio came from. Never part of the manifest hash. */
+  private view(asset: AssetRow) {
+    const generated =
+      !!this.speech &&
+      webAdminSpeechInstalled(this.store) &&
+      this.speech.generatedFor(`material-${asset.kind}`, asset.material_id, asset.sha256);
+    return { ...assetDTO(asset), origin: generated ? ('generated' as const) : ('uploaded' as const) };
+  }
+  /** The checks every slot audio passes, uploaded or generated: PCM16 WAV, mono, 24 kHz, not silent, at most 60 s, 6 MB. */
+  private checked(bytes: Uint8Array) {
+    ensure(bytes.length > 0 && bytes.length <= 6_000_000, 'INVALID_MATERIAL_AUDIO');
     const info = inspectPCM(bytes, 60_000),
       duration = Math.round(info.durationMs);
     ensure(
       info.channels === 1 && info.sampleRate === 24000 && duration > 0 && pcmLevels(bytes).rms > 0.001,
       'INVALID_MATERIAL_AUDIO',
     );
-    const row = this.row(id, input.materialId),
-      kind = input.kind,
-      digest = sha(bytes);
+    return { duration, digest: sha(bytes) };
+  }
+  /** Put audio into a slot (upload and 生成 share this): same checks, same immutability, same staging. */
+  private async place(id: string, materialId: unknown, kind: MaterialKind, bytes: Uint8Array, authorize: () => Actor) {
+    const { duration, digest } = this.checked(bytes);
+    const row = this.row(id, materialId);
     const guard = () => {
       authorize();
       exactDraft(this.store, row);
@@ -288,6 +311,81 @@ export class WebCharacterMaterials {
       );
       return assetDTO(materialAssets(this.store, row.id).find((item) => item.kind === kind)!);
     });
+  }
+  private slotText(profile: WebCharacterProfile, kind: MaterialKind) {
+    return kind === 'welcome' ? profile.presentation.welcome.text : SYNTHETIC_TRIAL_FOOTER;
+  }
+  /** What 生成 would say and cost for one slot, or why it cannot be offered. Reads only; nothing is held. */
+  estimateGenerate(id: string, input: unknown) {
+    record(input);
+    keys(input, ['materialId', 'kind']);
+    ensure(input.kind === 'welcome' || input.kind === 'footer', 'INVALID_MATERIAL_KIND');
+    ensure(this.speech, 'SPEECH_UNAVAILABLE');
+    const row = this.row(id, input.materialId),
+      kind = input.kind;
+    if (materialAssets(this.store, row.id).some((asset) => asset.kind === kind))
+      return { ok: false as const, reason: 'SLOT_HAS_AUDIO' };
+    const profile = exactDraft(this.store, row);
+    return this.speech.estimateCalls(id, row.revision, [
+      {
+        characterId: id,
+        revision: row.revision,
+        purpose: `material-${kind}`,
+        targetId: row.id,
+        requestId: 'estimate',
+        ordinal: 0,
+        text: this.slotText(profile, kind),
+        voice: { profileId: row.profile_id, version: row.voice_revision, referenceId: row.reference_id },
+      },
+    ]);
+  }
+  /**
+   * 生成: speak exactly the slot's text in the voice this 素材版本 was prepared with, then register the clip like an upload
+   * (origin 'generated'). It never approves. A slot that already has audio is not regenerated (MATERIAL_AUDIO_IMMUTABLE) unless
+   * this is a replay of the very request that filled it.
+   */
+  async generate(id: string, input: unknown, authorize: () => Actor) {
+    authorize();
+    record(input);
+    keys(input, ['requestId', 'materialId', 'kind', 'acknowledgeMicros']);
+    identifier(input.requestId);
+    ensure(input.kind === 'welcome' || input.kind === 'footer', 'INVALID_MATERIAL_KIND');
+    ensure(
+      typeof input.acknowledgeMicros === 'number' && Number.isSafeInteger(input.acknowledgeMicros),
+      'INVALID_MATERIAL_REQUEST',
+    );
+    ensure(this.speech, 'SPEECH_UNAVAILABLE');
+    const row = this.row(id, input.materialId),
+      kind = input.kind,
+      requestId = input.requestId,
+      acknowledgeMicros = input.acknowledgeMicros;
+    const guard = () => {
+      authorize();
+      exactDraft(this.store, row);
+    };
+    guard();
+    const profile = exactDraft(this.store, row);
+    if (materialAssets(this.store, row.id).some((asset) => asset.kind === kind))
+      ensure(this.speech.hasRequest(requestId, 0), 'MATERIAL_AUDIO_IMMUTABLE');
+    const { audio } = await this.speech.speak(
+      () => {
+        guard();
+        return authorize();
+      },
+      {
+        characterId: id,
+        revision: row.revision,
+        purpose: `material-${kind}`,
+        targetId: row.id,
+        requestId,
+        ordinal: 0,
+        text: this.slotText(profile, kind),
+        voice: { profileId: row.profile_id, version: row.voice_revision, referenceId: row.reference_id },
+        acknowledgeMicros,
+      },
+    );
+    await this.place(id, row.id, kind, audio, authorize);
+    return this.view(materialAssets(this.store, row.id).find((asset) => asset.kind === kind)!);
   }
   async audio(id: string, input: unknown, authorize: () => Actor) {
     authorize();

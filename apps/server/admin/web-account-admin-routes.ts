@@ -218,7 +218,7 @@ export async function routeWebAccountAdmin(
     if (path === `${base}/characters/order`) return { status: 200, body: characters.saveOrder(actor, req.body) };
     const match = path.match(
       new RegExp(
-        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-audio|material-approve|delete-preview|delete-start|delete-status|history|history-version|restore|code-save|checklist-dismiss)$`,
+        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-generate|material-audio|material-approve|speech-estimate|preview-listen|speech-clips|speech-audio|delete-preview|delete-start|delete-status|history|history-version|restore|code-save|checklist-dismiss)$`,
       ),
     );
     ensure(match, 'NOT_FOUND');
@@ -262,6 +262,35 @@ export async function routeWebAccountAdmin(
       };
     if (match[2] === 'material-upload')
       return { status: 200, body: await characters.materialUpload(actor, id, body(['materialId', 'kind', 'base64'])) };
+    if (match[2] === 'material-generate')
+      return {
+        status: 200,
+        body: await characters.materialGenerate(
+          actor,
+          id,
+          body(['requestId', 'materialId', 'kind', 'acknowledgeMicros']),
+        ),
+      };
+    if (match[2] === 'speech-estimate')
+      return {
+        status: 200,
+        body: characters.speechEstimate(
+          actor,
+          id,
+          body([
+            'kind',
+            ...(req.body && Object.hasOwn(req.body, 'previewId') ? ['previewId'] : ['materialId', 'slot']),
+          ]),
+        ),
+      };
+    if (match[2] === 'preview-listen')
+      return {
+        status: 200,
+        body: await characters.previewListen(actor, id, body(['requestId', 'previewId', 'acknowledgeMicros'])),
+      };
+    if (match[2] === 'speech-clips')
+      return { status: 200, body: characters.speechClips(actor, id, body(['previewId'])) };
+    if (match[2] === 'speech-audio') return { status: 200, body: characters.speechAudio(actor, id, body(['callId'])) };
     if (match[2] === 'material-audio')
       return { status: 200, body: await characters.materialAudio(actor, id, body(['materialId', 'kind'])) };
     if (match[2] === 'material-approve')

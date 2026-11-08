@@ -1,3 +1,4 @@
+import { speechAudio, speechClips, speechEstimate } from './speech-admin-api.ts';
 import {
   COMPARE_MARKS,
   type CompareCaseResult,
@@ -332,6 +333,21 @@ export class PreviewAdminClient {
   private call(id: string, action: string, body: Record<string, unknown> = {}) {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw invalid();
     return this.characters(`${id}/${action}`, body);
+  }
+  /** Part 24k-1: what 试听 of a succeeded 预演 would cost (one call per final bubble), or why it is not offered. */
+  async speechEstimate(id: string, previewId: string) {
+    return speechEstimate(await this.call(id, 'speech-estimate', { kind: 'preview', previewId }));
+  }
+  /** 试听: speak the final bubbles (one confirmed cost, idempotent by requestId). */
+  async listen(id: string, input: { requestId: string; previewId: string; acknowledgeMicros: number }) {
+    return speechClips(await this.call(id, 'preview-listen', input));
+  }
+  /** The clips already spoken for a 预演 (playing them again costs nothing). */
+  async clips(id: string, previewId: string) {
+    return speechClips(await this.call(id, 'speech-clips', { previewId }));
+  }
+  async clipAudio(id: string, callId: string) {
+    return speechAudio(await this.call(id, 'speech-audio', { callId }));
   }
   async startRun(id: string, input: RunInput) {
     const r = object(await this.call(id, 'run-start', input));

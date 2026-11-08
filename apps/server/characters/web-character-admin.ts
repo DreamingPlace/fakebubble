@@ -42,6 +42,7 @@ import {
 } from './web-character-preview-read.ts';
 
 import { WebCharacterMaterials } from './web-character-materials.ts';
+import type { WebAdminSpeech } from './web-admin-speech.ts';
 import { WebProfileImport, type ImportContext } from './web-profile-import.ts';
 import { checklistOf, codeOf } from './web-profile-schema.ts';
 
@@ -126,6 +127,13 @@ export class WebCharacterAdmin {
   private materials: WebCharacterMaterials | null = null;
   enableMaterials(materials: WebCharacterMaterials) {
     this.materials = materials;
+    if (this.speech) materials.enableSpeech(this.speech);
+  }
+  /** Part 24k-1: the admin speech path (生成 on a 成品 slot, 预演 试听). Off until the runtime that can call Fish enables it. */
+  private speech: WebAdminSpeech | null = null;
+  enableSpeech(speech: WebAdminSpeech) {
+    this.speech = speech;
+    this.materials?.enableSpeech(speech);
   }
   /** Part 24j: 导入角色资料 and the 角色代码. Off (no tables, nothing offered) until enabled. */
   private profileImport: WebProfileImport | null = null;
@@ -374,6 +382,11 @@ export class WebCharacterAdmin {
       characterId: id,
       previews,
       previewAvailable: !!this.previews,
+      // Part 24k-1: whether 生成 / 试听 exist here, and whether the draft has a voice reference to speak with.
+      speech: {
+        available: !!this.speech,
+        hasVoice: !!this.speech?.voiceFor(id, draft?.revision ?? 0),
+      },
       published: current
         ? { version: current.version, profile: { template: current.template, presentation: current.presentation } }
         : null,
@@ -641,6 +654,56 @@ export class WebCharacterAdmin {
     this.require(auth, 'read', id);
     ensure(this.materials, 'MATERIALS_UNAVAILABLE');
     return this.materials.audio(id, input, () => this.require(auth, 'read', id));
+  }
+  /** Part 24k-1: 生成 a slot's 成品 through the admin speech path. Same permission as an upload; never approves. */
+  materialGenerate(auth: Auth, id: string, input: unknown) {
+    this.require(auth, 'materials', id);
+    ensure(this.materials, 'MATERIALS_UNAVAILABLE');
+    return this.materials.generate(id, input, () => this.require(auth, 'materials', id));
+  }
+  /** What a paid speech call would say and cost (no hold), or why it is not offered. */
+  speechEstimate(auth: Auth, id: string, input: unknown) {
+    this.require(auth, 'read', id);
+    ensure(this.speech && this.materials, 'SPEECH_UNAVAILABLE');
+    record(input);
+    if (input.kind === 'preview') {
+      keys(input, ['kind', 'previewId']);
+      identifier(input.previewId);
+      return this.speech.estimatePreview(id, input.previewId);
+    }
+    ensure(input.kind === 'material', 'INVALID_REQUEST');
+    keys(input, ['kind', 'materialId', 'slot']);
+    return this.materials.estimateGenerate(id, { materialId: input.materialId, kind: input.slot });
+  }
+  /** 试听: speak the final bubbles of a succeeded 预演 (one confirmed cost), then the page plays them. */
+  previewListen(auth: Auth, id: string, input: unknown) {
+    this.require(auth, 'preview', id);
+    ensure(this.speech, 'SPEECH_UNAVAILABLE');
+    record(input);
+    keys(input, ['requestId', 'previewId', 'acknowledgeMicros']);
+    identifier(input.previewId);
+    return this.speech.listenPreview(
+      () => this.require(auth, 'preview', id),
+      id,
+      input.previewId,
+      String(input.requestId),
+      input.acknowledgeMicros,
+    );
+  }
+  speechClips(auth: Auth, id: string, input: unknown) {
+    this.require(auth, 'read', id);
+    ensure(this.speech, 'SPEECH_UNAVAILABLE');
+    record(input);
+    keys(input, ['previewId']);
+    identifier(input.previewId);
+    return { clips: this.speech.clips(id, 'preview', input.previewId) };
+  }
+  speechAudio(auth: Auth, id: string, input: unknown) {
+    this.require(auth, 'read', id);
+    ensure(this.speech, 'SPEECH_UNAVAILABLE');
+    record(input);
+    keys(input, ['callId']);
+    return this.speech.audio(id, input.callId);
   }
   materialApprove(auth: Auth, id: string, input: unknown) {
     this.require(auth, 'approve-materials', id);
