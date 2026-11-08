@@ -46,7 +46,7 @@ export const CAST_LIMITS = Object.freeze({
   viewMax: 24_000,
   chatCharacters: 15,
   people: 40,
-  groups: 6,
+  groups: 120,
   stories: 60,
   memes: 30,
   groupStories: 8,
@@ -86,7 +86,7 @@ export const CAST_LIMITS = Object.freeze({
   aliasesTotal: 180,
   addressesTotal: 1_200,
   // groups and stories
-  groupName: 20,
+  groupName: 30,
   groupBackground: 120,
   groupMembers: 15,
   storyTitle: 30,

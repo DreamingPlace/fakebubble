@@ -2,10 +2,12 @@
  * Part 24j: what the read templates do to the cast DRAFT (关系与故事). PURE: the current document and the imported characters in; the
  * merged document, a readable change list and located problems / warnings out. MERGED, never replaced:
  *  - only the imported characters' name cards (names, aliases with kind and attitude, one-liner), the directions A→B named by a
- *    relation block, one story and one meme per unordered pair are touched;
- *  - every other entry (other characters, people, groups, stories, memes, ratings, world) is passed through untouched, so it stays
+ *    relation block and, for each unordered pair {A, B}, ONE GROUP of exactly those two members are touched (Part 24m): named by the
+ *    CP名 (else 「A与B」), its story is the pair's 相处方式及共同经历. An earlier import's story 「A与B」 (participants exactly [A, B])
+ *    and meme (key = CP名, parties exactly [A, B]) for the pair are replaced by the group; no meme is made any more;
+ *  - every other entry (other characters, people, other groups, stories, memes, ratings, world) is passed through untouched, so it stays
  *    byte-identical;
- *  - an entry the import already made is found again by what identifies it (text+kind, from+to, title+participants, key+parties) and
+ *  - an entry the import already made is found again by what identifies it (text+kind, from+to, exact member pair) and
  *    keeps its id, so importing the same files twice writes nothing; new entries get ids from normalizeCastDoc;
  *  - ratings are never written.
  */
@@ -17,8 +19,8 @@ import {
   type CastCharacter,
   type CastDirection,
   type CastDoc,
-  type CastMeme,
-  type CastStory,
+  type CastGroup,
+  type CastGroupStory,
   type CastText,
 } from '../../../packages/contracts/web-cast.ts';
 import type { ProfileProblem, ReadProfile } from './profile-template.ts';
@@ -199,7 +201,7 @@ export function mergeCast(
     }
   }
 
-  // ---- one story and one meme per unordered pair ----
+  // ---- one group per unordered pair (Part 24m) ----
   for (const { a, b, sides } of pairs.values()) {
     // The first side is the one with the smaller 角色代码 (case-insensitive), so the order never depends on the file order.
     const codeOf = (id: string) =>
@@ -214,12 +216,49 @@ export function mergeCast(
     const text = (id: string) => side(id)?.relation.shared ?? '';
     const title = `${firstName}与${secondName}`;
     const participants = [first, second];
+    const here = (s: Side) => `7 人物关系 · 关系 ${s.relation.block}`;
+
+    const cps = [...new Set(sides.map((s) => s.relation.cp).filter((cp) => cp !== ''))];
+    if (cps.length > 1) {
+      for (const s of sides)
+        problems.push({
+          code: 'PROFILE_CP_MISMATCH',
+          file: s.subject.read.file,
+          section: here(s),
+          field: 'CP名',
+          item: s.relation.block,
+          text: `与对方文件里的 CP名 不一致（「${cps.join('」「')}」）`,
+        });
+      continue;
+    }
+    const cp = cps[0] ?? '';
+    const limit = (field: string, value: string, max: number, name: string) => {
+      if (value.length > max) {
+        const owner = sides[0]!.subject.read;
+        problems.push({
+          code: 'PROFILE_TOO_LONG',
+          file: owner.file,
+          section: `关系与故事 · ${title}`,
+          field,
+          item: null,
+          text: `${name}超过 ${max} 字（${value.length}）`,
+        });
+      }
+    };
+
+    // The group of exactly this pair. A new one is named by the CP名, else 「A与B」; an existing one keeps its name unless a CP名 is given.
+    let group: NoId<CastGroup> | undefined = doc.groups.find(
+      (g) => g.members.length === participants.length && sameSet(g.members, participants),
+    );
+    const was = group ? structuredClone(group) : null;
+    if (!group) {
+      group = { name: cp !== '' ? cp : title, members: participants, background: '', stories: [] };
+      doc.groups.push(group as CastGroup);
+    } else if (cp !== '') group.name = cp;
+    limit('CP名', group.name, CAST_LIMITS.groupName, '组合名');
 
     if (text(first) !== '' || text(second) !== '') {
-      let story: NoId<CastStory> | undefined = doc.stories.find(
-        (s) => s.title === title && sameSet(s.participants, participants),
-      );
-      const was = story ? structuredClone(story) : null;
+      let story: NoId<CastGroupStory> | undefined = group.stories.find((s) => s.title === title);
       const { lead, sides: have } = splitSides(story?.details ?? '', [firstName, secondName]);
       if (text(first) !== '') have.set(firstName, text(first));
       if (text(second) !== '') have.set(secondName, text(second));
@@ -229,68 +268,37 @@ export function mergeCast(
       ].join('\n');
       const summary = text(first) !== '' ? text(first) : story && story.summary !== '' ? story.summary : text(second);
       if (!story) {
-        story = { title, summary, details, period: { start: '', end: '' }, participants, boundary: '', overrides: [] };
-        doc.stories.push(story as CastStory);
+        story = { title, summary, details, period: { start: '', end: '' }, boundary: '' };
+        group.stories.push(story as CastGroupStory);
       } else {
         story.summary = summary;
         story.details = details;
       }
-      const limit = (field: string, value: string, max: number, name: string) => {
-        if (value.length > max) {
-          const owner = sides[0]!.subject.read;
-          problems.push({
-            code: 'PROFILE_TOO_LONG',
-            file: owner.file,
-            section: `关系与故事 · ${title}`,
-            field,
-            item: null,
-            text: `${name}超过 ${max} 字（${value.length}）`,
-          });
-        }
-      };
       limit('标题', title, CAST_LIMITS.storyTitle, '故事标题');
       limit('相处方式及共同经历', details, CAST_LIMITS.storyDetails, '两侧合并后的详情');
-      log(firstName, `故事「${title}」`, was && `${was.summary}｜${was.details}`, `${summary}｜${details}`);
-    }
-
-    const cps = [...new Set(sides.map((s) => s.relation.cp).filter((cp) => cp !== ''))];
-    if (cps.length > 1) {
-      for (const s of sides)
-        problems.push({
-          code: 'PROFILE_CP_MISMATCH',
-          file: s.subject.read.file,
-          section: `7 人物关系 · 关系 ${s.relation.block}`,
-          field: 'CP名',
-          item: s.relation.block,
-          text: `与对方文件里的 CP名 不一致（「${cps.join('」「')}」）`,
-        });
-    } else if (cps.length === 1) {
-      const cp = cps[0]!;
-      const sameKey = doc.memes.find((m) => m.key === cp);
-      if (sameKey && !sameSet(sameKey.parties, participants))
-        problems.push({
-          code: 'PROFILE_CP_KEY_TAKEN',
-          file: sides[0]!.subject.read.file,
-          section: `7 人物关系 · 关系 ${sides[0]!.relation.block}`,
-          field: 'CP名',
-          item: sides[0]!.relation.block,
-          text: `梗「${cp}」已属于别的两个人`,
-        });
-      else {
-        // The meme this import made for the pair: the same key, or (a renamed CP) the one whose meaning is its own key.
-        let meme: NoId<CastMeme> | undefined =
-          sameKey ?? doc.memes.find((m) => sameSet(m.parties, participants) && m.meaning === m.key);
-        const was = meme ? structuredClone(meme) : null;
-        if (!meme) {
-          meme = { key: cp, parties: participants, meaning: cp, trigger: '', prohibited: '' };
-          doc.memes.push(meme as CastMeme);
-        } else {
-          meme.key = cp;
-          meme.meaning = cp;
-        }
-        log(firstName, `梗「${cp}」`, was && `${was.key}｜${was.meaning}`, `${cp}｜${cp}`);
+      // What an earlier import wrote for this pair as a story of the cast is replaced by the group's story: the story titled
+      // 「A与B」 whose participants are exactly [A, B]. Nothing else is touched.
+      const old = doc.stories.findIndex((s) => s.title === title && sameSet(s.participants, participants));
+      if (old >= 0) {
+        const gone = doc.stories.splice(old, 1)[0]!;
+        log(firstName, `故事「${title}」`, `${gone.summary}｜${gone.details}`, '（已并入组合）');
       }
     }
+    // The meme an earlier import made for the CP名: keyed by it, with exactly this pair as its parties. No meme is made any more.
+    if (cp !== '') {
+      const old = doc.memes.findIndex(
+        (m) => m.key === cp && m.parties.length === 2 && sameSet(m.parties, participants),
+      );
+      if (old >= 0) {
+        const gone = doc.memes.splice(old, 1)[0]!;
+        log(firstName, `梗「${cp}」`, `${gone.key}｜${gone.meaning}`, '（已并入组合）');
+      }
+    }
+    const line = (g: NoId<CastGroup> | null) =>
+      g
+        ? `${g.name}｜${g.members.map(nameOf).join('、')}｜${g.stories.map((s) => `${s.summary}｜${s.details}`).join('；')}`
+        : '';
+    log(firstName, `组合「${group.name}」`, line(was), line(group));
   }
   return { doc, changes, problems, warnings };
 }

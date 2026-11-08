@@ -282,7 +282,8 @@ test('a fully filled synthetic file: every value lands in its listed field or th
   );
   assert.deepEqual(syz.speech, { catchphrases: [], samples: [], avoid: [] });
   assert.deepEqual(cast.ratings, {}, 'ratings are never written');
-  assert.deepEqual([cast.people.length, cast.groups.length], [0, 0]);
+  // Part 24m (named): each relation pair is now one group (two pairs here); no people are made.
+  assert.deepEqual([cast.people.length, cast.groups.length], [0, 2]);
   const lqyId = idOf(f, 'LQY');
   const direction = cast.directions.find((x) => x.from === idOf(f, 'SYZ') && x.to === lqyId)!;
   assert.deepEqual(
@@ -298,16 +299,18 @@ test('a fully filled synthetic file: every value lands in its listed field or th
     xj.addresses.map((a) => a.text),
     ['小羊/XX'],
   );
-  assert.equal(cast.stories.length, 1);
-  const story = cast.stories[0]!;
-  assert.equal(story.title, '林青野与沈砚舟', 'LQY < SYZ by code');
-  assert.deepEqual(story.participants, [lqyId, idOf(f, 'SYZ')]);
+  // Part 24m (named, replaces the 24j assertions of one story and one meme per pair): the pair is ONE GROUP of exactly its two
+  // members, named by the CP名; the shared history is that group's story; no story of the cast and no meme is made.
+  assert.equal(cast.stories.length, 0);
+  assert.deepEqual(cast.memes, []);
+  const group = cast.groups.find((g) => g.members.includes(lqyId) && g.members.includes(idOf(f, 'SYZ')))!;
+  assert.equal(group.name, '旧巷双人组');
+  assert.deepEqual(group.members, [lqyId, idOf(f, 'SYZ')], 'LQY < SYZ by code');
+  assert.equal(group.stories.length, 1);
+  const story = group.stories[0]!;
+  assert.equal(story.title, '林青野与沈砚舟');
   assert.equal(story.summary, '一起修过一本旧书。');
   assert.equal(story.details, '（林青野侧）一起修过一本旧书。\n（沈砚舟侧）常一起去夜市；一起修过一本被雨泡过的旧书。');
-  assert.deepEqual(
-    cast.memes.map((m) => [m.key, m.meaning, m.parties]),
-    [['旧巷双人组', '旧巷双人组', [lqyId, idOf(f, 'SYZ')]]],
-  );
 });
 
 test('character A: 生日, 一句话描述 and 成长中 land in their fields; three colours keep order and roles; a colour without a hex is a checklist item', (t) => {
@@ -603,7 +606,10 @@ test('the cast merge leaves an unrelated character, its directions, stories and 
       d.people,
       d.ratings,
       d.characters.find((c) => c.characterId === y),
-      d.groups,
+      // Part 24m (named): the pair of the new file becomes a group of its own; every other group is untouched.
+      d.groups.filter(
+        (g) => !g.members.includes(d.characters.find((c) => c.identity.names[0]?.text === '新来')?.characterId ?? ''),
+      ),
       d.directions.filter((r) => r.from === x && r.to === y),
       d.stories.filter((s) => s.title === '旧事'),
       d.memes.filter((m) => m.key === '老梗'),
@@ -623,8 +629,10 @@ test('the cast merge leaves an unrelated character, its directions, stories and 
   assert.equal(after.characters.length, 3);
   assert.equal(after.directions.length, 2);
   assert.equal(after.directions[1]!.to, x, 'the code resolved to a character already in the cast');
-  assert.equal(after.stories.length, 2);
-  assert.equal(after.memes.length, 2);
+  // Part 24m (named): the new pair is a group, not a story or a meme; the old 旧事 and 老梗 stay as they were.
+  assert.equal(after.stories.length, 1);
+  assert.equal(after.memes.length, 1);
+  assert.equal(after.groups.length, 1);
 });
 
 // Part 24l (named exception): the over-limit alias is now 26 units (the cap is 25, was 16).
@@ -1002,7 +1010,8 @@ test('24l a 273-character shared history imports whole as the story summary; one
   const { p } = run(f, files(['syz.md', example()], ['lqy.md', mine]));
   assert.deepEqual(p.problems, []);
   const doc = readDraft(f.store).doc;
-  const story = doc.stories.find((s) => s.summary.includes('一起'))!;
+  // Part 24m (named): the pair's shared history is the story of the pair's group.
+  const story = doc.groups.flatMap((g) => g.stories).find((s) => s.summary.includes('一起'))!;
   assert.equal(story.summary, history, 'whole, as the summary');
   const lqy = card(f, idOf(f, 'LQY'));
   assert.deepEqual(
@@ -1017,4 +1026,110 @@ test('24l a 273-character shared history imports whole as the story summary; one
   const seen = view.others.find((o) => o.name === '林青野')!;
   assert.ok(!seen.aliases.includes('小野'), 'a 黑称 is never offered as a usable name');
   assert.deepEqual(seen.doNotCall?.items.sort(), ['小野', '野猴']);
+});
+
+// ---- Part 24m: each relation pair is a group ---------------------------------------------------------------------------------
+test('24m a relation pair is one group: named by the CP名 or 「A与B」, its story is the shared history, re-import finds the same group by its exact pair', (t) => {
+  const f = fixture(t);
+  const a = (cp: string, shared: string) =>
+    templateFile(
+      { 角色代码: 'AAA', 人设名称: '甲', '网页展示名／昵称': '甲', 欢迎词: '「嗨」', 陌生时的相处方式: '好。' },
+      [{ code: 'BBB', cp, addresses: '「乙乙」', attitude: '尊敬。', shared }],
+    );
+  const b = templateFile(
+    { 角色代码: 'BBB', 人设名称: '乙', '网页展示名／昵称': '乙', 欢迎词: '「嗨」', 陌生时的相处方式: '好。' },
+    [{ code: 'AAA', addresses: '「甲甲」', attitude: '随意。', shared: '' }],
+  );
+  // no CP名 at all: 「A与B」
+  run(f, files(['a.md', a('', '同桌。')], ['b.md', b]));
+  let cast = readDraft(f.store).doc;
+  const [ida, idb] = [idOf(f, 'AAA'), idOf(f, 'BBB')];
+  assert.equal(cast.groups.length, 1);
+  assert.equal(cast.groups[0]!.name, '甲与乙');
+  assert.deepEqual(cast.groups[0]!.members, [ida, idb]);
+  assert.deepEqual([cast.stories.length, cast.memes.length], [0, 0], 'no story of the cast and no meme');
+  assert.deepEqual(cast.ratings, {}, 'ratings are never written');
+  const groupId = cast.groups[0]!.id;
+  // the same files again: nothing changes
+  const again = preview(f, files(['a.md', a('', '同桌。')], ['b.md', b]));
+  assert.equal(again.unchanged, true);
+  // a CP名 names the same group (found by its exact member pair), it does not make a second one
+  run(f, files(['a.md', a('甲乙组', '同桌。')]));
+  cast = readDraft(f.store).doc;
+  assert.equal(cast.groups.length, 1);
+  assert.equal(cast.groups[0]!.id, groupId);
+  assert.equal(cast.groups[0]!.name, '甲乙组');
+  assert.equal(cast.groups[0]!.stories.length, 1);
+  assert.equal(cast.groups[0]!.stories[0]!.title, '甲与乙');
+  // the longest CP名 the template allows (24) is a valid group name (the cap is 30 now, so 「A与B」 of two 12-character names fits too)
+  assert.deepEqual(preview(f, files(['a.md', a('字'.repeat(24), '同桌。')])).problems, []);
+});
+
+test('24m an earlier import’s story and meme for the pair are replaced by the group; nothing else is touched', (t) => {
+  const f = fixture(t);
+  const a = templateFile(
+    { 角色代码: 'AAA', 人设名称: '甲', '网页展示名／昵称': '甲', 欢迎词: '「嗨」', 陌生时的相处方式: '好。' },
+    [{ code: 'BBB', cp: '甲乙组', addresses: '「乙乙」', attitude: '尊敬。', shared: '同桌。' }],
+  );
+  const b = templateFile({
+    角色代码: 'BBB',
+    人设名称: '乙',
+    '网页展示名／昵称': '乙',
+    欢迎词: '「嗨」',
+    陌生时的相处方式: '好。',
+  });
+  const c = templateFile({
+    角色代码: 'CCC',
+    人设名称: '丙',
+    '网页展示名／昵称': '丙',
+    欢迎词: '「嗨」',
+    陌生时的相处方式: '好。',
+  });
+  run(f, files(['a.md', a], ['b.md', b], ['c.md', c]));
+  const [ida, idb, idc] = [idOf(f, 'AAA'), idOf(f, 'BBB'), idOf(f, 'CCC')];
+  // Put the entries a 24j import used to make for this pair, plus look-alikes that must survive.
+  const doc = structuredClone(readDraft(f.store).doc);
+  const story = (title: string, participants: string[]) => ({
+    title,
+    summary: '旧',
+    details: '旧',
+    period: { start: '', end: '' },
+    participants,
+    boundary: '',
+    overrides: [],
+  });
+  // The ids are given by the cast's own normalizer when it saves.
+  doc.stories.push(
+    ...([
+      story('甲与乙', [ida, idb]),
+      story('甲与乙', [ida, idb, idc]),
+      story('别的故事', [ida, idb]),
+    ] as unknown as CastDoc['stories']),
+  );
+  doc.memes.push(
+    ...([
+      { key: '甲乙组', parties: [ida, idb], meaning: '甲乙组', trigger: '', prohibited: '' },
+      { key: '另一个梗', parties: [ida, idb], meaning: '含义', trigger: '', prohibited: '' },
+    ] as unknown as CastDoc['memes']),
+  );
+  doc.groups = [];
+  f.cast.save(f.ownerAuth, { requestId: f.request(), expectedRevision: readDraft(f.store).revision, doc });
+  run(f, files(['a.md', a.replace('同桌。', '同桌，一起值日。')], ['b.md', b]));
+  const after = readDraft(f.store).doc;
+  assert.deepEqual(
+    after.stories.map((s) => [s.title, s.participants.length]),
+    [
+      ['甲与乙', 3],
+      ['别的故事', 2],
+    ],
+    'only the story titled 「A与B」 with exactly [A, B] is replaced',
+  );
+  assert.deepEqual(
+    after.memes.map((m) => m.key),
+    ['另一个梗'],
+    'only the meme keyed by the CP名 with exactly [A, B] is replaced',
+  );
+  assert.equal(after.groups.length, 1);
+  assert.equal(after.groups[0]!.name, '甲乙组');
+  assert.match(after.groups[0]!.stories[0]!.details, /同桌，一起值日/);
 });

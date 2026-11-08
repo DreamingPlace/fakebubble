@@ -1,4 +1,5 @@
 import type { AccountAdminApi, AccountAdminSession } from '../../services/account-admin-api.ts';
+import { REFUSED, UNKNOWN_OUTCOME } from './error-sentences.ts';
 import { characterWorkbench, characterAdminError } from './character-workbench.ts';
 import { previewWorkbench } from './preview/preview-workbench.ts';
 import type { PreviewAdminClient } from '../../services/preview-admin-api.ts';
@@ -152,7 +153,11 @@ export function adminAccountError(error: unknown) {
         ACCESS_REQUIRED: '需要先通过 Cloudflare Access 验证身份。',
         ORIGIN_INVALID: '请从管理页面操作，不要直接打开接口地址。',
       } as Record<string, string>
-    )[code] ?? '操作结果未确认。请重新打开本页核对当前状态，不要重复提交发码请求。'
+    )[code] ??
+    // Only a request whose outcome is truly unknown (no answer, a 5xx) gets the "unconfirmed" text; a named 4xx refusal changed nothing.
+    (error instanceof InviteLocalApiError && error.status >= 400 && error.status < 500 && error.status !== 408
+      ? REFUSED
+      : UNKNOWN_OUTCOME)
   );
 }
 
@@ -424,6 +429,15 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     menu.hidden = !menu.hidden;
     q<HTMLElement>('#admin-account-toggle').setAttribute('aria-expanded', String(!menu.hidden));
   };
+  /** Leaving the workbench with unsaved changes asks first (保存 / 不保存 / 取消); anything else leaves at once. */
+  const clean = () => page !== 'characters' || !workbench || workbench.canLeave();
+  /** Runs `go` at once on a clean page (no await: the click keeps its synchronous effect), else after the answer says to leave. */
+  const whenLeaveOk = (go: () => void) => {
+    if (clean()) return go();
+    void workbench!.confirmLeave().then((ok) => {
+      if (ok && !disposed) go();
+    });
+  };
   /** Which page the administrator is on, as the address bar shows it. */
   const here = (): AdminRoute | null => (session && isAdminPage(page) ? { page, id: routeId } : null);
   const navigate = (next: string, id: string | null = null, options: { replaceUrl?: boolean } = {}) => {
@@ -673,16 +687,24 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       }
     },
     openInbox: (characterId) => {
-      if (busy || disposed || !navigate('cocreation', characterId)) return;
-      const load = loader();
-      if (load) void run(load);
+      if (busy || disposed) return;
+      whenLeaveOk(() => {
+        if (!navigate('cocreation', characterId)) return;
+        const load = loader();
+        if (load) void run(load);
+      });
     },
     onPick: (characterId) => {
-      if (disposed || !navigate('characters', characterId)) return;
-      // Still the picked role when its turn comes (a later pick, or leaving the page, replaces this one).
-      runLatest(async () => {
-        if (page === 'characters' && routeId === characterId) await openRole(characterId);
-      });
+      if (disposed) return;
+      const go = () => {
+        if (!navigate('characters', characterId)) return;
+        // Still the picked role when its turn comes (a later pick, or leaving the page, replaces this one).
+        runLatest(async () => {
+          if (page === 'characters' && routeId === characterId) await openRole(characterId);
+        });
+      };
+      if (page === 'characters' && routeId === characterId) go();
+      else whenLeaveOk(go);
     },
   });
   const openRole = async (characterId: string) => {
@@ -713,6 +735,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     headerHost: q('#wb-head'),
     colourOf: (characterId) => rosterColourOf.get(characterId),
     previewMount: previewHost,
+    modalParent: () => q('main'),
     canPreview: (characterId) => !!previewBench && canPreview(characterId),
     onSeed: (characterId, seed) => picker.setSeed(characterId, seed),
     onDirty: () => previewBench?.refresh(),
@@ -740,16 +763,18 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       })
     : null;
   listen(importRoles, 'click', () => {
-    if (busy || disposed || !workbench!.canLeave()) return;
-    profileImporter?.open();
+    if (busy || disposed) return;
+    whenLeaveOk(() => profileImporter?.open());
   });
   listen(newRole, 'click', () => {
-    if (busy || disposed || !workbench!.canLeave()) return;
-    previewBench?.clear();
-    previewHost.hidden = true;
-    picker.select(null);
-    routeId = null;
-    workbench!.openNew();
+    if (busy || disposed) return;
+    whenLeaveOk(() => {
+      previewBench?.clear();
+      previewHost.hidden = true;
+      picker.select(null);
+      routeId = null;
+      workbench!.openNew();
+    });
   });
   previewBench = port.previews
     ? previewWorkbench(previewHost, {
@@ -960,9 +985,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       if (busy || disposed) return;
       // Already on this page: nothing to do (each page has its own refresh button).
       if (isAdminPage(button.dataset.page!) && sameRoute({ page: button.dataset.page, id: null }, here())) return;
-      if (!navigate(button.dataset.page!)) return;
-      const load = loader();
-      if (load) void run(load);
+      whenLeaveOk(() => {
+        if (!navigate(button.dataset.page!)) return;
+        const load = loader();
+        if (load) void run(load);
+      });
     });
   listen(q('#admin-account-toggle'), 'click', toggleMenu);
   const onWindowClick = (event: Event) => {
@@ -989,8 +1016,23 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       return;
     }
     const before = here();
-    if (busy || !navigate(wanted.page, wanted.id, { replaceUrl: true })) {
-      if (busy) status.textContent = '请等待当前操作完成后再切换。';
+    if (busy) {
+      status.textContent = '请等待当前操作完成后再切换。';
+      address.replace(before);
+      return;
+    }
+    // Back, Forward or an edited address with unsaved changes: the address goes back at once, the question is asked, and the move
+    // is made only if the answer lets it.
+    if (page === 'characters' && workbench && !workbench.canLeave()) {
+      address.replace(before);
+      whenLeaveOk(() => {
+        if (!navigate(wanted.page, wanted.id)) return;
+        const load = loader();
+        if (load) void run(load);
+      });
+      return;
+    }
+    if (!navigate(wanted.page, wanted.id, { replaceUrl: true })) {
       address.replace(before);
       return;
     }
@@ -1047,19 +1089,17 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   });
   listen(q('#admin-secret-close'), 'click', clearSecrets);
   listen(q('#admin-logout'), 'click', () => {
-    void run(async () => {
-      if (!workbench?.canLeave()) {
-        status.textContent = '请先保存草稿，或放弃本页修改后退出。';
-        return;
-      }
-      clearSecrets();
-      await port.logout();
-      if (disposed) return;
-      session = null;
-      clearManagement();
-      navigate('login');
-      address.replace(null);
-      status.textContent = '已退出登录。';
+    whenLeaveOk(() => {
+      void run(async () => {
+        clearSecrets();
+        await port.logout();
+        if (disposed) return;
+        session = null;
+        clearManagement();
+        navigate('login');
+        address.replace(null);
+        status.textContent = '已退出登录。';
+      });
     });
   });
   const refresh = () => {

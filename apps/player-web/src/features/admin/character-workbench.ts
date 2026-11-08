@@ -23,7 +23,9 @@ import { statusBadge } from './ui/status-badge.ts';
 import { fillStatus } from './ui/page-head.ts';
 import { hoverValue } from './ui/hover-value.ts';
 import { diffSideBySide, type Piece } from './preview/diff.ts';
+import { ERROR_SENTENCES } from './error-sentences.ts';
 import { unsavedText } from './ui/unsaved.ts';
+import { leaveDialog } from './ui/leave-dialog.ts';
 import { formatRoute } from './shell/admin-router.ts';
 import {
   AdminFormError,
@@ -75,6 +77,8 @@ type Host = {
   canPreview?: (characterId: string) => boolean;
   /** Whether the role is 成长中 (seed), as the editor has it now: the rail's dashed ring follows. */
   onSeed?: (characterId: string, seed: boolean) => void;
+  /** Where the leave dialog is drawn (default: the editor's own root). */
+  modalParent?: () => HTMLElement;
   /** Part 24b-6c: the form holds (or no longer holds) unsaved changes. 预演 sends the SAVED draft, so its reason line follows. */
   onDirty?: (dirty: boolean) => void;
 };
@@ -109,39 +113,7 @@ const stringify = (value: unknown) => (typeof value === 'string' ? value : JSON.
 export function characterAdminError(error: unknown): string | null {
   if (error instanceof AdminFormError) return error.message;
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
-  return (
-    (
-      {
-        DRAFT_CONFLICT: '草稿已在其他页面修改。请保留本页文字，放弃本页修改后重新读取；本次未覆盖新草稿。',
-        LIVE_VERSION_CONFLICT: '正式版本已变，请重新读取资料后编辑。',
-        VALID_PREVIEW_REQUIRED: '当前草稿还缺少有效的两阶段预演证明；刷新预演结果后核对，不会自动补发调用。',
-        PREVIEW_UNAVAILABLE: '此运行环境未开启真实预演。资料可保存；不能用静态预览代替发布审核。',
-        PREVIEW_QUEUE_FULL: '预演队列已满，请先核对已有任务。',
-        CHARACTER_MATERIALS_REQUIRED: '当前草稿需要匹配的、已批准的欢迎和结束成品。',
-        CHARACTER_VOICE_REQUIRED: '请先在资料中绑定已有音色并保存草稿。',
-        CHARACTER_PUBLICATION_BUSY: '此人物仍有未终结的玩家任务。暂不能发布；不会取消或重发未知调用。',
-        CHARACTER_CATALOG_FULL: '已达到 15 个人物，请先明确处理已有角色。',
-        CHARACTER_OFFLINE: '这个角色已下线。先重新上线，才能发布。',
-        CHARACTER_ONLINE: '这个角色已经在线。',
-        ADMIN_OWNER_REQUIRED: '只有主管理员可以下线或重新上线角色。',
-        CHARACTER_ORDER_CONFLICT: '角色列表刚刚变过，请刷新后再排序。',
-        MATERIAL_AUDIO_IMMUTABLE: '这一成品位置已有不同音频，不能覆盖。请准备新的素材版本。',
-        INVALID_MATERIAL_AUDIO: '请选择有效的单声道 24kHz PCM16 WAV，非静音，最长 60 秒且不超过 6 MB。',
-        DELETION_PREVIEW_CHANGED: '删除影响已变化。请重新获取影响，并再次核对确认。',
-        CHARACTER_DELETED: '人物已删除，不能继续编辑、发布或复用此 ID。',
-        INVALID_SCHEDULE: '周作息须每天连续覆盖 00:00–24:00，概率 0–100%，每日至少一段、最多48段。',
-        NO_CATCH_UP_WINDOW: '一周至少保留一个补聊时段。',
-        INVALID_TIME_ZONE: '时区无效，请使用例如 Asia/Singapore 的 IANA 时区。',
-        INVALID_VOICE_BINDING: '音色 ID、正整数版本和 0.5–2 之间语速必须有效。',
-        INVALID_CANON_VALUE: '结构化设定包含无效值，请核对 JSON 层级和字段。',
-        INVALID_CHARACTER_ALIASES: '身份别名需包含人设名称，并明确为虚构人物。',
-        INVALID_CANON_EVENTS: '设定事件需明确作者设定、虚构世界及本人物知情范围。',
-        INVALID_ADMIN_REQUEST: '资料字段无效或超出长度，请核对必填内容和结构化设定。',
-        PROFILE_CODE_TAKEN: '这个角色代码已被别的角色使用（大小写不分）。',
-        INVALID_PROFILE_CODE: '角色代码须是 2–12 位的字母、数字、_ 或 -。',
-      } as Record<string, string>
-    )[code] ?? null
-  );
+  return ERROR_SENTENCES[code] ?? null;
 }
 
 /** All mutations are explicit buttons. No storage, implicit generation, or player-content queries; the only timer polls the status of previews this admin already submitted. */
@@ -160,6 +132,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   // The console shows one section of the editor at a time; the one showing is kept across a save of the same role.
   let lastSection: { id: string; section: string } = { id: '', section: '' };
   let paintDirty: (() => void) | null = null;
+  let saveCurrent: (() => Promise<boolean>) | null = null;
   let zones: Array<{ paint: () => void }> = [];
   const urls = new Set<string>();
   const pending = new Map<string, { input: unknown; uncertain: boolean; send: () => Promise<unknown> }>();
@@ -207,11 +180,40 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       c.node.disabled = busy || lock;
     }
   };
+  /** 草稿已在别处更新: a bar above the editor with 重新载入 (reads the newer draft; the edits on this page are given up). */
+  const showConflict = (role: string) => {
+    root.querySelector('.wb-conflict')?.remove();
+    const bar = el('div'),
+      reload = el('button', '重新载入');
+    bar.className = 'wb-conflict';
+    bar.setAttribute('role', 'alert');
+    reload.type = 'button';
+    reload.className = 'admin-secondary';
+    reload.addEventListener('click', () => {
+      if (busy) return;
+      act(async () => {
+        dirty = false;
+        await open(role);
+      });
+    });
+    bar.append(el('span', ERROR_SENTENCES.DRAFT_CONFLICT), reload);
+    root.prepend(bar);
+  };
   const setDirty = () => {
+    // Only a real difference counts: an event that leaves every field as it was loaded (an opened draft, a value typed back) is not
+    // an unsaved change, so a clean page never asks anything when it is left.
+    if (!editor || editor.changed().length === 0) {
+      if (dirty) {
+        dirty = false;
+        sync();
+        paintDirty?.();
+      }
+      return;
+    }
     const was = dirty;
     dirty = true;
     // In the console the save bar and the rail's dots say it; the message is for the first change only.
-    if (!embedded || !was) host.status('有未保存修改。请先保存草稿，或放弃本页修改后切换／预览。');
+    if (!embedded || !was) host.status('有未保存修改。');
     sync();
     paintDirty?.();
   };
@@ -442,25 +444,45 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       : emptyCharacter();
     if (snapshot && !snapshot.draft) profile.template.version = snapshot.published!.version + 1;
     const canEdit = () => (snapshot ? can('edit', target) : canCreate());
-    const submit = () => {
-      if (busy || !canEdit()) return;
+    /** Reads the form and saves it as a new draft revision. Resolves true only when the draft was saved (the page then shows it). */
+    const saveDraft = async (): Promise<boolean> => {
+      if (busy || !canEdit()) return false;
       let next;
       try {
         next = editor!.read();
       } catch (error) {
         host.status(characterAdminError(error) ?? '请核对资料字段。');
-        return;
+        return false;
       }
       const role = next.template.id;
-      act(async () => {
+      let saved_ = false;
+      await host.run(async () => {
+        if (gone()) return;
         if (!can('edit', role)) throw new AdminFormError('没有角色工作台管理权限，请联系主管理员。');
-        const saved = await host.api.save(role, snapshot?.draft?.revision ?? null, next);
+        let saved;
+        try {
+          saved = await host.api.save(role, snapshot?.draft?.revision ?? null, next);
+        } catch (error) {
+          // The draft moved on the server: the edits stay on the page, with a button that reads the newer draft instead. The bar
+          // (an alert) says it; no toast repeats it.
+          if (error instanceof InviteLocalApiError && error.code === 'DRAFT_CONFLICT') {
+            showConflict(role);
+            return;
+          }
+          throw error;
+        }
         if (gone()) return;
         dirty = false;
         await open(saved.characterId);
         host.status(`草稿修订 ${saved.revision} 已保存；尚未发布。`);
+        saved_ = true;
       });
+      return saved_;
     };
+    const submit = () => {
+      void saveDraft();
+    };
+    saveCurrent = saveDraft;
     const discardLocal = () => {
       renderDetail();
       host.status('已放弃本页修改；服务器草稿和正式版本不变。');
@@ -1790,6 +1812,20 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     openNew,
     syncPreviews,
     canLeave: () => !dirty,
+    /**
+     * Asks before leaving when the editor holds unsaved changes. 保存 saves, then leaves (a failed save stays, with its message);
+     * 不保存 drops the local changes (nothing is written) and leaves; 取消 stays. Nothing is ever saved without the click.
+     */
+    async confirmLeave(): Promise<boolean> {
+      if (!dirty) return true;
+      const choice = await leaveDialog(host.modalParent?.() ?? root);
+      if (choice === 'cancel') return false;
+      if (choice === 'discard') {
+        renderDetail();
+        return true;
+      }
+      return (await saveCurrent?.()) === true && !dirty;
+    },
     isDirty: () => dirty,
     saveDraft: () => saveHook?.(),
     update: (working: boolean) => {

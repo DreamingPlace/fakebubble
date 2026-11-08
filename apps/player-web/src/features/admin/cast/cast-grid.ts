@@ -168,6 +168,8 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
         h('span', { class: 'cs-legend-item' }, h('i', { class: 'cs-legend-dot' }), '有故事'),
         h('span', { class: 'cs-legend-item' }, h('i', { class: 'cs-legend-amber' }), '未保存'),
         h('span', { class: 'cs-legend-item' }, h('i', { class: 'cs-legend-unset' }), '未设置'),
+        // Part 24m: what a star means (the stars are the admin's alone).
+        h('span', { class: 'cs-legend-item cs-legend-stars' }, '2 星 普通 · 更低 不喜欢 · 更高 喜欢'),
       ),
     );
     light();
@@ -309,7 +311,7 @@ export function pairPanel(host: HTMLElement, ctx: CastCtx, state: GridState) {
             'aria-pressed': String(value === 0),
           },
         });
-        hoverValue(zero, '陌生人');
+        hoverValue(zero, '最低：反感');
         zero.addEventListener('click', () => {
           setRating(doc, from, to, 0);
           again();

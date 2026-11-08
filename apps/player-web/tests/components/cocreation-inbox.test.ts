@@ -519,7 +519,7 @@ test('a failed save is shown inline, keeps the box open and does not mark anythi
   await saveDraft(f);
   const error = f.q('.cc-adopt-error')!;
   assert.equal(error.hidden, false);
-  assert.match(error.textContent, /草稿已在其他页面修改/);
+  assert.match(error.textContent, /草稿已在别处更新/);
   assert.equal(error.getAttribute('role'), 'alert');
   assert.equal(callsOf(f, 'adopt').length, 0, 'not adopted when the draft was not saved');
   assert.equal(box(f).value, '哎呀妈呀', 'what was written is still there for another try');

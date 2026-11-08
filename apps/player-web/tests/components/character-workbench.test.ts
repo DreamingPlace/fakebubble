@@ -416,7 +416,10 @@ test('editing a published role without a draft uses next version and null CAS; e
 test('scope revocation disables edits, permits abandoning local edits and clears removed read data without changing identity', async (t) => {
   const f = fixture(t);
   await f.open();
-  f.input('基础人设').fire('input');
+  // Part 24m (named): only a field that really differs is an unsaved change, so the edit changes the value.
+  const persona = f.input('基础人设');
+  persona.value = `${persona.value}改`;
+  persona.fire('input');
   const member = { ...f.member(), role: 'admin' as const, permissions: ['characters.read:jojo' as const] };
   f.setMember(member);
   assert.equal(f.input('基础人设').disabled, true);
@@ -477,7 +480,7 @@ test('known preview refusal restores inputs, while a discovered queued/UNKNOWN t
   });
   await f.click('发起付费文字预演');
   assert.equal(f.input('预演输入（不是玩家消息）').disabled, false);
-  assert.match(f.status(), /其他页面修改/);
+  assert.match(f.status(), /草稿已在别处更新/);
   f.respond(null);
   f.detail.previews = [
     {
