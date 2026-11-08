@@ -8,6 +8,7 @@ import { billedModelAt } from '../admission/web-model-settings.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
 import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
+import { chooseWelcome, welcomeClipFor } from '../characters/web-welcome-choice.ts';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
@@ -357,7 +358,7 @@ export class WebProviderApplication {
       // Part 22c: opened the site this UTC day (once per day and principal; the marker names nobody).
       this.stats.markActive(principal.principalId, 'visit', this.clock.now());
       const { inaccessible, ...access } = this.access(principal, ipHash);
-      const characters = this.characters(),
+      const characters = this.characters(inaccessible ? undefined : { worldId: principal.world_id }),
         ids = new Set(characters.map((entry) => entry.characterId));
       if (!inaccessible)
         for (const entry of characters)
@@ -577,23 +578,34 @@ export class WebProviderApplication {
     };
   }
 
-  characters() {
+  /**
+   * Part 24k-2: the catalog. With a player (`for`), each card carries THAT player's welcome line (drawn by weight and stored on
+   * the first meeting) and the clip of that line; without one it carries the first line (nothing is drawn or stored).
+   */
+  characters(forPlayer?: { worldId: string }) {
     return publishedWebCharacters(this.store).map((entry) => {
-      const line = entry.presentation.welcome;
+      const chosen = forPlayer
+        ? chooseWelcome(this.store, {
+            worldId: forPlayer.worldId,
+            characterId: entry.characterId,
+            version: entry.version,
+            lines: entry.presentation.welcomes,
+            now: this.clock.now(),
+          })
+        : { lineId: entry.presentation.welcomes[0]!.id, text: entry.presentation.welcomes[0]!.text };
+      const stillPublished = entry.presentation.welcomes.some(
+        (candidate) => candidate.id === chosen.lineId && candidate.text === chosen.text,
+      );
+      const line = { text: chosen.text, version: chosen.lineId };
       const approved = this.store.get(
         `SELECT 1 FROM web_provider_voice_bindings WHERE character_id=?
         AND approved=1 AND source='user_selected'`,
         entry.characterId,
       );
-      const clip = this.store.get<{ media_id: string; text_version: string; sha256: string; duration_ms: number }>(
-        `SELECT w.media_id,w.text_version,w.sha256,w.duration_ms
-        FROM web_provider_welcome_assets w JOIN web_provider_voice_bindings v
-          ON v.character_id=w.character_id AND v.voice_version=w.voice_version
-        WHERE w.character_id=? AND w.body=? AND w.text_version=? AND v.approved=1 AND v.source='user_selected'`,
-        entry.characterId,
-        line.text,
-        line.version,
-      );
+      const found = welcomeClipFor(this.store, entry.characterId, chosen, !stillPublished);
+      const clip = found
+        ? { media_id: found.mediaId, text_version: chosen.lineId, sha256: found.sha256, duration_ms: found.durationMs }
+        : null;
       return {
         characterId: entry.characterId,
         displayName: entry.presentation.displayName,
@@ -601,6 +613,9 @@ export class WebProviderApplication {
         portraitUrl: null,
         theme: null,
         mainColor: entry.presentation.color ?? null,
+        // Part 24k-2: the colours as the profile lists them (hex only) and the birthday, both public and non-sensitive.
+        palette: entry.presentation.palette?.map((c) => ({ hex: c.hex, role: c.role })) ?? null,
+        birthDate: entry.template.birthDate ?? null,
         availability: approved
           ? { state: 'available' as const, personaVersion: entry.version }
           : { state: 'unavailable' as const, reason: 'voice_unverified' as const },

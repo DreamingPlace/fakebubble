@@ -30,12 +30,14 @@ export const PROFILE_LIMITS = Object.freeze({
   oneLiner: 500,
   /** 名片一句话 = the cast name card's one-liner. */
   cardOneLiner: CAST_LIMITS.oneLiner,
-  welcome: 500,
-  welcomeLines: 12,
+  /** Part 24k-2: a welcome line is at most 200 characters, and a character has 1-8 of them. */
+  welcome: 200,
+  welcomeLines: 8,
   text: 2_000,
   listItem: 100,
   listItems: 30,
-  paletteItems: 12,
+  /** Part 24k-2: one 主 and up to 4 点缀 are stored (the player uses the 主 and the first 2). */
+  paletteItems: 5,
   colourName: 24,
   persona: 20_000,
   canon: 48_000,
@@ -565,8 +567,6 @@ export function readProfile(parsed: ParsedTemplate): { profile: ReadProfile | nu
       problem('PROFILE_TOO_LONG', where(2), '欢迎词', `超过 ${PROFILE_LIMITS.welcome} 字（${line.length}）`, i + 1);
     else if (CONTROL.test(line)) problem('PROFILE_CONTROL_CHARACTER', where(2), '欢迎词', '含不允许的控制字符', i + 1);
   });
-  for (let i = 1; i < welcome.length; i++)
-    checklist.push({ key: `welcome:${i + 1}`, text: `欢迎词 第 ${i + 1} 条 等 24k 多欢迎词` });
 
   const palette: PaletteItem[] = [];
   const colourRaw = get(2, '角色主色');

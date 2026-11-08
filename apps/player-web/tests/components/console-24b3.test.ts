@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -20,7 +21,11 @@ const block = css.slice(css.indexOf('Part 24b-3: calmer colour'), css.indexOf('/
 const profile = (): CharacterProfile => {
   const p = emptyCharacter();
   Object.assign(p.template, { id: 'jojo', name: 'JOJO', persona: '离线合成人设', version: 3 });
-  p.presentation = { displayName: 'JOJO', publicDescription: '', welcome: { text: '你好', version: 'welcome-v1' } };
+  p.presentation = {
+    displayName: 'JOJO',
+    publicDescription: '',
+    welcomes: [{ id: 'welcome-v1', text: '你好', weight: 100 }],
+  };
   return p;
 };
 const owner = { id: 'm', label: 'o', role: 'owner' as const, email: null, permissions: [], createdAt: 1 };
@@ -181,7 +186,7 @@ test('24b-3 changedSections names the editor sections a draft changes', () => {
   const b = structuredClone(a);
   assert.deepEqual(changedSections(a, b), []);
   b.template.persona = '别的';
-  b.presentation.welcome.text = '新欢迎';
+  b.presentation.welcomes[0]!.text = '新欢迎';
   b.presentation.color = '#2BA84A';
   assert.deepEqual(changedSections(a, b), ['identity', 'welcome', 'persona']);
   // Named exception (Part 24b-6): 作者设定与样例 became 说话方式 / 经历 / 其余设定, so there are seven sections, not five.

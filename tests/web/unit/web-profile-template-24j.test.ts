@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -90,12 +91,13 @@ test('colours: two （主） and no （主） with several colours are located e
   }
 });
 
-test('welcome lines: the second and later ones are checklist items, not stored', () => {
+// Part 24k-2 (named exception): the second and later welcome lines are real lines now, not checklist items.
+test('welcome lines: every line is read and none is left on the checklist', () => {
   const p = only(base({ 欢迎词: '「甲」\n「乙」\n「丙」' }));
   assert.deepEqual(p.welcome, ['甲', '乙', '丙']);
   assert.deepEqual(
     p.checklist.map((c) => c.text),
-    ['欢迎词 第 2 条 等 24k 多欢迎词', '欢迎词 第 3 条 等 24k 多欢迎词'],
+    [],
   );
 });
 

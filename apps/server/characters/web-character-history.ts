@@ -10,7 +10,15 @@ import {
 import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
 import { contentHash } from './admin-content-hash.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { characterProfileHash, publishedWebCharacters, type WebCharacterProfile } from './web-character-catalog.ts';
+import {
+  characterProfileHash,
+  publishedWebCharacters,
+  upgradedProfile,
+  type StoredWebCharacterProfile,
+  type WebCharacterProfile,
+} from './web-character-catalog.ts';
+import { slotsComplete } from './web-character-materials.ts';
+import { webWelcomeLinesInstalled } from './web-welcome-schema.ts';
 import { withVoiceBindingGuardLifted } from './web-character-material-schema.ts';
 import { identifier, keys, record, validatedTemplate } from './template-validation.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
@@ -23,7 +31,10 @@ import { webCharacterDeleted } from './web-character-deleted.ts';
 type VersionRecord = { version: number; profile_json: string; content_hash: string; created_at: number | null };
 const has = (store: BusinessStore, name: string) =>
   !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", name);
-const parse = (row: VersionRecord) => JSON.parse(row.profile_json) as WebCharacterProfile;
+/** The stored profile exactly as written (an old one still has `welcome`); hashes are checked against this. */
+const parseRaw = (row: VersionRecord) => JSON.parse(row.profile_json) as StoredWebCharacterProfile;
+/** The profile as the rest of the system reads it: upgraded in memory (Part 24k-2), nothing stored is rewritten. */
+const parse = (row: VersionRecord) => upgradedProfile(parseRaw(row));
 
 /**
  * The profile with the number it is published under taken out. A restored version must carry its own number inside the profile
@@ -53,7 +64,14 @@ const clipIntact = (row: Record<string, unknown>, deep: boolean) => {
   return !deep || createHash('sha256').update(bytes).digest('hex') === row.sha256;
 };
 
-export type RestorePlan = { ok: true; profile: WebCharacterProfile; voiceVersion: string; switchBinding: boolean };
+export type RestorePlan = {
+  ok: true;
+  profile: WebCharacterProfile;
+  /** The stored profile, byte for byte (what a restore publishes again, with only the version number changed). */
+  raw: StoredWebCharacterProfile;
+  voiceVersion: string;
+  switchBinding: boolean;
+};
 /**
  * What it takes to make version `version` current again, or the first thing that is missing. Pure reads. `deep` also hashes the
  * clip bytes (a restore does; the list only checks that they exist and have their length).
@@ -65,22 +83,41 @@ export function restorePlan(
   deep: boolean,
 ): RestorePlan | { ok: false; problem: RestoreProblem } {
   const bad = (problem: RestoreProblem) => ({ ok: false as const, problem });
-  let profile: WebCharacterProfile;
+  let profile: WebCharacterProfile, raw: StoredWebCharacterProfile;
   try {
-    profile = parse(row);
-    if (characterProfileHash(profile) !== row.content_hash || profile.template.id !== id) return bad('PROFILE_INVALID');
+    raw = parseRaw(row);
+    profile = upgradedProfile(raw);
+    if (characterProfileHash(raw) !== row.content_hash || profile.template.id !== id) return bad('PROFILE_INVALID');
     validatedTemplate(profile.template);
   } catch {
     return bad('PROFILE_INVALID');
   }
   const voice = profile.template.voice;
   if (!voice) return bad('VOICE_BINDING_MISSING');
-  const welcome = store.all<Clip>(
-    `SELECT * FROM web_provider_welcome_assets WHERE character_id=? AND body=? AND text_version=? AND origin='operator_approved'`,
-    id,
-    profile.presentation.welcome.text,
-    profile.presentation.welcome.version,
-  );
+  // Part 24k-2: a version's whole bundle. One line: the single welcome clip with that text. Several: every line's clip
+  // (its id and exact text) in the SAME voice bundle.
+  const lines = profile.presentation.welcomes;
+  const clipsByBundle = new Map<string, Clip[]>();
+  if (lines.length === 1)
+    for (const clip of store.all<Clip>(
+      `SELECT * FROM web_provider_welcome_assets WHERE character_id=? AND body=? AND origin='operator_approved'`,
+      id,
+      lines[0]!.text,
+    ))
+      clipsByBundle.set(clip.voice_version, [clip]);
+  else if (webWelcomeLinesInstalled(store)) {
+    const all = store.all<Clip & { line_id: string; body: string }>(
+      'SELECT * FROM web_provider_welcome_lines WHERE character_id=?',
+      id,
+    );
+    for (const version of new Set(all.map((clip) => clip.voice_version))) {
+      const clips = lines.map((line) =>
+        all.find((clip) => clip.voice_version === version && clip.line_id === line.id && clip.body === line.text),
+      );
+      if (clips.every((clip) => clip)) clipsByBundle.set(version, clips as Clip[]);
+    }
+  }
+  const welcome = [...clipsByBundle].map(([voice_version, clips]) => ({ voice_version, clips }));
   if (!welcome.length) return bad('CLIP_MISSING');
   const history = has(store, 'web_character_voice_history'),
     materials = has(store, 'web_character_materials'),
@@ -129,7 +166,8 @@ export function restorePlan(
         id,
         w.voice_version,
       );
-      if (!footer || !clipIntact(w, deep) || !clipIntact(footer, deep)) return 'CLIP_MISSING';
+      if (!footer || !w.clips.every((clip) => clipIntact(clip, deep)) || !clipIntact(footer, deep))
+        return 'CLIP_MISSING';
       if (materials) {
         const material = store.get<{ id: string }>(
           'SELECT id FROM web_character_materials WHERE character_id=? AND voice_version=?',
@@ -140,10 +178,7 @@ export function restorePlan(
           material &&
           !(
             store.get('SELECT 1 FROM web_character_material_approvals WHERE material_id=?', material.id) &&
-            store.get<{ n: number }>(
-              'SELECT count(*) n FROM web_character_material_assets WHERE material_id=?',
-              material.id,
-            )!.n === 2
+            slotsComplete(store, material.id, profile)
           )
         )
           return 'MATERIAL_MISSING';
@@ -154,6 +189,7 @@ export function restorePlan(
       return {
         ok: true,
         profile,
+        raw,
         voiceVersion: w.voice_version,
         switchBinding: current?.voice_version !== w.voice_version,
       };
@@ -242,7 +278,8 @@ export function characterVersion(store: BusinessStore, id: string, version: unkn
   return {
     ...entry,
     characterId: id,
-    profile: parse(row),
+    // The snapshot is exactly the stored profile_json (an old one still has `welcome`); the page upgrades it in memory.
+    profile: parseRaw(row),
     profileHash: row.content_hash,
     contentKey: profileContentKey(parse(row)),
     liveProfile: live ? { template: live.template, presentation: live.presentation } : null,
@@ -313,7 +350,8 @@ export function restoreWebCharacter(
       'CHARACTER_PUBLICATION_BUSY',
     );
     const version = live.version + 1,
-      profile = structuredClone(plan.profile);
+      // The stored bytes again, with only the version number changed: a restored v1 is v1, not an upgraded copy of it.
+      profile = structuredClone(plan.raw);
     profile.template.version = version;
     const json = JSON.stringify(profile),
       hash = characterProfileHash(profile),

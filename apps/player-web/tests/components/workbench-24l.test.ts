@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { emptyCharacter } from '../../src/features/admin/character-form.ts';
@@ -148,7 +149,11 @@ test('24l the client reads group and online (an older answer falls back to the o
 const profile = (): CharacterProfile => {
   const p = emptyCharacter();
   Object.assign(p.template, { id: 'jojo', name: 'JOJO', persona: '离线合成人设', version: 3 });
-  p.presentation = { displayName: 'JOJO', publicDescription: '', welcome: { text: '你好', version: 'welcome-v1' } };
+  p.presentation = {
+    displayName: 'JOJO',
+    publicDescription: '',
+    welcomes: [{ id: 'welcome-v1', text: '你好', weight: 100 }],
+  };
   return p;
 };
 const owner = { id: 'm', label: 'o', role: 'owner' as const, email: null, permissions: [], createdAt: 1 };

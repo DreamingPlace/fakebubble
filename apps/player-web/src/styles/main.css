@@ -5917,18 +5917,18 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
 .account-admin-page.admin-shell .wb-editor .admin-section-index button:hover {
   background: #f3f0ec;
 }
-.account-admin-page.admin-shell .wb-editor form.character-profile-form {
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form {
   display: grid;
   gap: 14px;
 }
-.account-admin-page.admin-shell .wb-editor form.character-profile-form fieldset {
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form fieldset {
   border: 0;
   padding: 0;
   margin: 0;
   display: grid;
   gap: 10px;
 }
-.account-admin-page.admin-shell .wb-editor form.character-profile-form legend {
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form legend {
   padding: 0;
   margin-bottom: 8px;
   font-size: 15px;
@@ -17183,11 +17183,447 @@ html.theme-fade *::after {
 :root[data-theme="dark"] .cc-sheet .cc-thanks-sub {
   color: var(--bb-sub);
 }
+/* ---- Part 24k-2: 欢迎内容 list and 色板 (the 24i list pattern: a grip, the fields, 删除) ---- */
+.account-admin-page.admin-shell .wl,
+.account-admin-page.admin-shell .pl {
+  display: grid;
+  gap: 10px;
+  /* the console's one textarea rule (a four-line minimum) is too tall for a welcome line */
+  --ta-min: 44px;
+}
+.account-admin-page.admin-shell .wl-rows,
+.account-admin-page.admin-shell .pl-rows {
+  display: grid;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .wl-row {
+  display: grid;
+  grid-template-columns: 18px 22px minmax(0, 1fr) 92px auto;
+  align-items: start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  transition:
+    opacity calc(220ms * var(--ad-motion)) var(--ad-ease),
+    transform calc(220ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    box-shadow calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .wl-row.is-entering,
+.account-admin-page.admin-shell .pl-row.is-entering {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.account-admin-page.admin-shell .wl-row.is-leaving,
+.account-admin-page.admin-shell .pl-row.is-leaving {
+  opacity: 0;
+  transform: translateX(10px);
+}
+.account-admin-page.admin-shell .wl-row.is-dragging {
+  box-shadow: 0 6px 18px rgba(31, 42, 38, 0.16);
+  border-color: var(--ad-primary);
+  z-index: 2;
+}
+.account-admin-page.admin-shell .wl-row[data-invalid="true"] {
+  border-color: #c2862b;
+}
+.account-admin-page.admin-shell .wl-grip {
+  cursor: grab;
+  color: var(--ad-muted);
+  line-height: 32px;
+  user-select: none;
+  touch-action: none;
+}
+.account-admin-page.admin-shell .wl-no {
+  color: var(--ad-muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 32px;
+}
+.account-admin-page.admin-shell .wl-text {
+  width: 100%;
+  min-height: 44px;
+  resize: vertical;
+}
+.account-admin-page.admin-shell .wl-weight-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.account-admin-page.admin-shell .wl-weight {
+  width: 64px;
+  text-align: right;
+}
+.account-admin-page.admin-shell .wl-pct {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .wl-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .wl-total {
+  margin-right: auto;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+  transition:
+    background-color calc(200ms * var(--ad-motion)) var(--ad-ease),
+    color calc(200ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .wl-total[data-state="off"] {
+  background: #fbefd5;
+  color: #8a5a00;
+}
+.account-admin-page.admin-shell .wl-problem {
+  margin: 0;
+  min-height: 1.2em;
+  color: #8a5a00;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .wl-problem[data-state="ok"] {
+  visibility: hidden;
+}
+.account-admin-page.admin-shell .pl-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .pl-hint {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pl-row {
+  display: grid;
+  grid-template-columns: 74px 22px minmax(0, 1.1fr) 34px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  transition:
+    opacity calc(220ms * var(--ad-motion)) var(--ad-ease),
+    transform calc(220ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .pl-row.pl-main {
+  grid-template-columns: 74px 22px minmax(0, 1.1fr) minmax(0, 1fr);
+}
+.account-admin-page.admin-shell .pl-row[data-used="false"] {
+  opacity: 0.6;
+}
+.account-admin-page.admin-shell .pl-tag {
+  font-size: 13px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .pl-main .pl-tag {
+  color: var(--ad-primary);
+  font-weight: 600;
+}
+.account-admin-page.admin-shell .pl-swatch,
+.account-admin-page.admin-shell .pl-dot {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--dot, transparent);
+  box-shadow: inset 0 0 0 1px rgba(31, 42, 38, 0.18);
+  transition: background-color calc(200ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .pl-picker {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+}
+.account-admin-page.admin-shell .pl-hex {
+  font-family: var(--bb-mono, ui-monospace, monospace);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pl-chip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.account-admin-page.admin-shell .pl-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+.account-admin-page.admin-shell .pl-strip[data-mode="night"] {
+  background: #0c0b10;
+}
+.account-admin-page.admin-shell .pl-strip[data-mode="day"] {
+  background: #faf8f6;
+  box-shadow: inset 0 0 0 1px var(--ad-border);
+}
+.account-admin-page.admin-shell .pl-strip[data-mode="night"] .pl-mode {
+  color: #cfcbd8;
+}
+.account-admin-page.admin-shell .pl-strip[data-mode="day"] .pl-mode {
+  color: #5b5764;
+}
+.account-admin-page.admin-shell .pl-mode {
+  font-size: 12px;
+  font-weight: 600;
+  margin-right: 2px;
+}
+@media (max-width: 720px) {
+  .account-admin-page.admin-shell .wl-row {
+    grid-template-columns: 18px 22px minmax(0, 1fr);
+  }
+  .account-admin-page.admin-shell .wl-weight-wrap,
+  .account-admin-page.admin-shell .wl-del {
+    grid-column: 3;
+  }
+  .account-admin-page.admin-shell .pl-row {
+    grid-template-columns: 74px 22px minmax(0, 1fr);
+  }
+}
+/* the editor's generic field rules (full-width, round, stacked labels) would otherwise win inside these lists */
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .wl-row {
+  grid-template-columns: 16px 20px minmax(0, 1fr) 96px auto;
+  padding: 8px 10px;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .wl-row[data-invalid="true"] {
+  border-style: dashed;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .wl-text {
+  padding: 8px 12px;
+  border-radius: 12px;
+  min-height: 44px;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form label.wl-weight-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-weight: 400;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form input.wl-weight {
+  width: 68px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  text-align: right;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .wl-del,
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-del,
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-move,
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .wl-add,
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .wl-even,
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-add {
+  padding: 4px 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .wl-del:hover:not(:disabled),
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-del:hover:not(:disabled),
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-move:hover:not(:disabled),
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .wl-add:hover:not(:disabled),
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .wl-even:hover:not(:disabled),
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-add:hover:not(:disabled) {
+  background: var(--ad-primary-soft);
+  border-color: var(--ad-primary);
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form button:disabled.wl-del,
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form button:disabled.wl-add,
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form button:disabled.wl-even,
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form button:disabled.pl-add {
+  opacity: 0.45;
+  cursor: default;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-row input.pl-hex-in,
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-row input.pl-name {
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-row input.pl-picker {
+  width: 34px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-row .pl-tag {
+  font-weight: 400;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-row.pl-main .pl-tag {
+  font-weight: 700;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl {
+  padding-top: 6px;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-row {
+  grid-template-columns: 52px 22px minmax(88px, 1.2fr) 34px minmax(64px, 1fr) auto auto;
+  gap: 6px;
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form .pl-row.pl-main {
+  grid-template-columns: 52px 22px minmax(88px, 1.2fr) minmax(64px, 1fr);
+}
+.account-admin-page.admin-shell :is(.wb-editor, .wb-card) form.character-profile-form textarea.wl-text {
+  min-height: 44px;
+  max-height: 150px;
+  /* grows with its words (up to a point); browsers without field-sizing keep one resizable box */
+  field-sizing: content;
+}
+/* ---- Part 24k-2: 主色 + 点缀 (design board). Static soft shapes behind the card and the chat; the main on the play button, the
+   played part of each progress and the light on the name. No layout is touched: shapes are absolute, behind everything. ---- */
+@property --pk-k {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 1;
+}
+.card-slot[data-skin] .card-shell,
+.card-slot[data-skin] .card-face,
+.shared-face {
+  isolation: isolate;
+}
+.pk-shapes {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  contain: layout paint;
+}
+.pk-shape {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  width: var(--w);
+  height: var(--h);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) rotate(var(--r));
+  background: radial-gradient(closest-side, var(--c-d), transparent);
+  filter: blur(var(--blur));
+  opacity: calc(var(--o) * 0.8);
+  will-change: transform;
+}
+:root[data-theme="dark"] .pk-shape {
+  background: radial-gradient(closest-side, var(--c-n), transparent);
+  opacity: var(--o);
+}
+/* the main: the play button (a readable glyph), the played part of the progress */
+.card-slot[data-skin] .face-play {
+  background: var(--pk-d-main);
+  color: var(--pk-d-glyph);
+}
+:root[data-theme="dark"] .card-slot[data-skin] .face-play {
+  background: var(--pk-n-main);
+  color: var(--pk-n-glyph);
+}
+.card-slot[data-skin] .play-button > svg:first-child {
+  background: var(--pk-d-main);
+  color: var(--pk-d-glyph);
+}
+:root[data-theme="dark"] .card-slot[data-skin] .play-button > svg:first-child {
+  background: var(--pk-n-main);
+  color: var(--pk-n-glyph);
+}
+.face-progress {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  transform: scaleX(var(--pk-progress, 0));
+  transform-origin: left center;
+  transition: transform 180ms linear;
+  pointer-events: none;
+}
+:root[data-theme="dark"] .face-progress {
+  background: var(--n-accent, var(--accent));
+}
+.sound-bars {
+  position: relative;
+  display: inline-flex;
+}
+.sound-bars .pk-played {
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--accent);
+  clip-path: inset(0 calc((1 - var(--pk-progress, 0)) * 100%) 0 0);
+  transition: clip-path 180ms linear;
+}
+:root[data-theme="dark"] .sound-bars .pk-played {
+  color: var(--n-accent, var(--accent));
+}
+/* the accents: the Latin name, the No., the sticker tape */
+.card-slot[data-skin] .face-latin,
+.shared-page[data-skin] .shared-latin {
+  color: var(--pk-d-t1);
+}
+.card-slot[data-skin] .face-top span:last-child,
+.shared-page[data-skin] .shared-top span:last-child {
+  color: var(--pk-d-t1);
+}
+:root[data-theme="dark"] .card-slot[data-skin] .face-latin,
+:root[data-theme="dark"] .shared-page[data-skin] .shared-latin {
+  color: var(--pk-n-t1);
+}
+:root[data-theme="dark"] .card-slot[data-skin] .face-top span:last-child,
+:root[data-theme="dark"] .shared-page[data-skin] .shared-top span:last-child {
+  color: var(--pk-n-t1);
+}
+.shared-page[data-skin] .shared-sticker::before {
+  background: color-mix(in srgb, var(--pk-d-a2) 55%, transparent);
+}
+:root[data-theme="dark"] .shared-page[data-skin] .shared-sticker::before {
+  background: color-mix(in srgb, var(--pk-n-a2) 55%, transparent);
+}
+/* the light on the name: it sweeps in once from the top-left, like a door opening, then stays */
+.card-slot[data-skin] .face-name {
+  --pk-nl: var(--pk-d-name);
+  background: linear-gradient(
+    118deg,
+    var(--pk-nl) 0%,
+    var(--pk-nl) calc(16% * var(--pk-k)),
+    var(--bb-ink) calc(42% * var(--pk-k)),
+    var(--bb-ink) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+:root[data-theme="dark"] .card-slot[data-skin] .face-name {
+  --pk-nl: var(--pk-n-name);
+}
+.card-slot[data-skin].is-active:not(.is-chat) .face-name {
+  animation: pk-door 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+@keyframes pk-door {
+  from {
+    --pk-k: 0;
+  }
+  to {
+    --pk-k: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .face-progress,
+  .sound-bars .pk-played {
+    transition: none;
+  }
+}
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
 @media (prefers-reduced-motion: reduce) {
   .card-slot.is-active:not(.is-chat) .face-sheen,
   .page-shell .card-slot.is-active:not(.is-chat),
   .card-slot.is-active .face-name,
+  .card-slot[data-skin].is-active:not(.is-chat) .face-name,
   .page-shell .avatar-choice-mark,
   .page-shell .message-row,
   .card-slot.is-chat :is(.chat-head, .chat-body, .composer),

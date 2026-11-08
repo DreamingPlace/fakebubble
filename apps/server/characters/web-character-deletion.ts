@@ -1,5 +1,6 @@
 import { clearProfileMeta } from './web-profile-schema.ts';
 import { purgePreviewWorkbench } from './web-character-preview-purge.ts';
+import { purgeWelcomeChoices } from './web-welcome-choice.ts';
 import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
@@ -154,6 +155,8 @@ export class WebCharacterDeletion {
       purgeCocreation(this.store, { characterId: id });
       // The character's admin-only preview runs, time marks and rejected model output go at once as well.
       purgePreviewWorkbench(this.store, id);
+      // Part 24k-2: the welcome line every player was given for this character goes at once, players who never opened a chat included.
+      purgeWelcomeChoices(this.store, { characterId: id });
       this.store.run(
         'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',
         actor.memberId,
@@ -337,6 +340,7 @@ export class WebCharacterDeletion {
       for (const table of conversationContent)
         if (!LATE_TABLES.has(table) || embeddingTableExists(this.store, table))
           this.store.run(`DELETE FROM ${table} WHERE world_id=? AND conversation_id=?`, s.world_id, s.conversation_id);
+      purgeWelcomeChoices(this.store, { characterId: s.character_id });
       for (const table of worldCharacterContent)
         this.store.run(`DELETE FROM ${table} WHERE world_id=? AND character_id=?`, s.world_id, s.character_id);
       this.store.run(

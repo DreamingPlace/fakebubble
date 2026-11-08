@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, realpathSync } from 'node:fs';
@@ -572,8 +573,8 @@ test('a 预演 proof records which reviewer made it, and a publish accepts a val
       `INSERT INTO web_provider_welcome_assets(character_id,voice_version,text_version,body,media_id,origin,sha256,byte_length,duration_ms,audio_bytes,created_at)
       VALUES ('wei-guagua',?,?,?,'welcome-media','operator_approved',?,?,1000,?,?)`,
       binding.voice_version,
-      profile.presentation.welcome.version,
-      profile.presentation.welcome.text,
+      profile.presentation.welcomes[0]!.id,
+      profile.presentation.welcomes[0]!.text,
       'a'.repeat(64),
       audio.length,
       audio,

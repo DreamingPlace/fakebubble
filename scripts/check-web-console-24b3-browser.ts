@@ -189,7 +189,7 @@ try {
   const next = structuredClone(detail.published.profile);
   next.template.version = detail.published.version + 1;
   next.template.persona += ' 说话更慢一点。';
-  next.presentation.welcome.text += '（新）';
+  next.presentation.welcomes[0]!.text += '（新）';
   await post('characters/jojo/save', { expectedRevision: null, profile: next });
 
   // A player's first visit creates the principal the synthetic notes belong to.

@@ -10,6 +10,8 @@ import type { Aura } from '../brand/character-colour.ts';
 import { handElement } from '../brand/wordmark.ts';
 import { h } from '../cocreation/h.ts';
 import { formatDuration } from '../prototype/voice-pill.ts';
+import { mountShapes, setSkinProperties } from '../brand/palette-render.ts';
+import type { Skin } from '../brand/palette-skin.ts';
 
 export const sharedCopy = {
   received: '收到一张语音小卡',
@@ -33,6 +35,9 @@ export interface SharedCardData {
   date: string;
   aura: Aura;
   night: Aura;
+  /** Part 24k-2: the character's 主色 + 点缀 (night and day) and its id (the seed of the shapes). Absent = the plain aura card. */
+  skin?: { night: Skin; day: Skin };
+  characterId?: string;
 }
 export interface SharedCardOptions {
   /** Plays the card's voice; without it the pill is shown but cannot be pressed. */
@@ -117,6 +122,13 @@ export function renderSharedCard(root: HTMLElement, data: SharedCardData, option
   );
   data.aura.forEach((colour, i) => page.style.setProperty(i === 3 ? '--accent' : `--aura-${i + 1}`, colour));
   data.night.forEach((colour, i) => page.style.setProperty(i === 3 ? '--n-accent' : `--n-aura-${i + 1}`, colour));
+  if (data.skin && data.characterId) {
+    setSkinProperties(page, data.skin);
+    page.style.setProperty('--accent', data.skin.day.main);
+    page.style.setProperty('--n-accent', data.skin.night.main);
+    const face = page.querySelector<HTMLElement>('.shared-face');
+    if (face) mountShapes(face, data.characterId, 'card');
+  }
   root.replaceChildren(page);
   return page;
 }

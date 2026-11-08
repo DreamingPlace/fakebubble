@@ -9,7 +9,12 @@ import { openingFrom } from '../generation/opening-line.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
 import { textPolicyHash } from '../generation/text-generation-policy.ts';
 import { instantAtLocalMinute } from '../../../packages/domain/schedule.ts';
-import { characterProfileHash, type WebCharacterProfile } from './web-character-catalog.ts';
+import {
+  characterProfileHash,
+  upgradedProfile,
+  type StoredWebCharacterProfile,
+  type WebCharacterProfile,
+} from './web-character-catalog.ts';
 import { installWebCharacterPreviews } from './web-character-preview-schema.ts';
 import { freezePreviewReviewModel } from '../admission/web-review-model.ts';
 import { castContextEnabled, castForPreview, castTablesExist, latestPublication } from '../cast/cast-store.ts';
@@ -370,9 +375,9 @@ export class WebCharacterPreviews {
       revision,
     );
     ensure(draft?.content_hash === profileHash, 'DRAFT_CONFLICT');
-    const profile = JSON.parse(draft.profile_json) as WebCharacterProfile;
-    ensure(characterProfileHash(profile) === profileHash, 'DRAFT_CONFLICT');
-    return { profile, baseVersion: draft.base_version };
+    const stored = JSON.parse(draft.profile_json) as StoredWebCharacterProfile;
+    ensure(characterProfileHash(stored) === profileHash, 'DRAFT_CONFLICT');
+    return { profile: upgradedProfile(stored), baseVersion: draft.base_version };
   }
   /**
    * The cast view of a preview: the SAME compile as production (castForPreview -> compileCastView), only read from the published
@@ -410,8 +415,9 @@ export class WebCharacterPreviews {
       evidence: [],
       deliveryMode: profile.template.voice ? 'voice' : 'text',
       // Part 26a: a preview is the start of a chat; it says the draft's welcome line, as a live chat says its published one.
-      ...(openingFrom(profile.presentation.welcome.text)
-        ? { opening: openingFrom(profile.presentation.welcome.text)! }
+      // (a character with several welcome lines previews with its first)
+      ...(openingFrom(profile.presentation.welcomes[0]?.text)
+        ? { opening: openingFrom(profile.presentation.welcomes[0]?.text)! }
         : {}),
       messages: [
         {

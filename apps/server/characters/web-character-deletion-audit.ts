@@ -93,6 +93,11 @@ export const accountLedgerColumns: Readonly<Record<string, readonly string[]>> =
     'abandoned_at',
   ],
 };
+/** The refusal names the TABLE (a name read from sqlite_master that matched the identifier pattern; never an id or content). */
+const unhandled = (table: string) => new DetailedError('CHARACTER_DELETION_UNHANDLED_CONTENT', { table });
+function ensureClear(condition: unknown, table: string): asserts condition {
+  if (!condition) throw unhandled(table);
+}
 /** Retry hint (ms) while a retention purge holds one of the scope's principals. */
 const RETENTION_BUSY_RETRY_MS = 5000;
 export interface DeletionScope {
@@ -154,8 +159,12 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
     // Part 26b: the review model frozen at admission (an operation id and an enum, no content)
     'web_operation_review_models',
   ]);
+  // Part 24k-2: the welcome line a player was given (world + character). It is the character's own to remove (the deletion deletes it
+  // at once and again per scope), so it may exist BEFORE the purge and must be gone AFTER it: the generic world+character check below
+  // then proves it.
   if (!cleared)
     for (const name of [
+      'web_welcome_choices',
       ...operationContent,
       ...conversationContent,
       ...worldCharacterContent,
@@ -180,28 +189,25 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
     }
     const columns = new Set(columnList);
     if (columns.has('world_id') && columns.has('conversation_id'))
-      ensure(
+      ensureClear(
         !store.get(
           `SELECT 1 FROM "${name}" WHERE world_id=? AND conversation_id=? LIMIT 1`,
           s.world_id,
           s.conversation_id,
         ),
-        'CHARACTER_DELETION_UNHANDLED_CONTENT',
+        name,
       );
     else if (columns.has('world_id') && columns.has('character_id'))
-      ensure(
+      ensureClear(
         !store.get(`SELECT 1 FROM "${name}" WHERE world_id=? AND character_id=? LIMIT 1`, s.world_id, s.character_id),
-        'CHARACTER_DELETION_UNHANDLED_CONTENT',
+        name,
       );
     else if (columns.has('world_id'))
-      ensure(
-        !store.get(`SELECT 1 FROM "${name}" WHERE world_id=? LIMIT 1`, s.world_id),
-        'CHARACTER_DELETION_UNHANDLED_CONTENT',
-      );
+      ensureClear(!store.get(`SELECT 1 FROM "${name}" WHERE world_id=? LIMIT 1`, s.world_id), name);
     if (columns.has('operation_id'))
-      ensure(
+      ensureClear(
         !store.get(`SELECT 1 FROM "${name}" WHERE operation_id IN (${operationScope}) LIMIT 1`, ...scopeArgs(s)),
-        'CHARACTER_DELETION_UNHANDLED_CONTENT',
+        name,
       );
   }
   ensure(

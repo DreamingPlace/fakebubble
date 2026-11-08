@@ -3,6 +3,9 @@ import { derivePalette, parseColour } from '../brand/character-colour.ts';
 import { ROSTER_COLOURS, whoUses } from './ui/character-colour.ts';
 import { CanonError, canonEditors } from './character-canon.ts';
 import { hoverValue } from './ui/hover-value.ts';
+import { evenWeights, upgradeWelcomes, type WelcomeLine } from '../../../../../packages/contracts/web-welcomes.ts';
+import { newLineId, welcomeList } from './welcome-list.ts';
+import { paletteList, type PaletteEntry } from './palette-list.ts';
 import { markDirty } from './ui/unsaved.ts';
 import type { JsonValue, Weekday, WeeklySchedule } from '../../../../../packages/contracts/index.ts';
 export class AdminFormError extends Error {}
@@ -56,7 +59,12 @@ export function emptyCharacter(): CharacterProfile {
       persona: '',
       schedule: { timeZone: 'Asia/Singapore', days },
     },
-    presentation: { displayName: '', publicDescription: '', welcome: { text: '', version: 'welcome-v1' } },
+    // A new character starts with three (empty) welcome lines, 34 / 33 / 33.
+    presentation: {
+      displayName: '',
+      publicDescription: '',
+      welcomes: evenWeights(3).map((weight) => ({ id: newLineId(), text: '', weight })),
+    },
   };
 }
 /** Preserves the entire approved template. Only linked identity/name and birthday are synchronized. */
@@ -69,8 +77,10 @@ export function editedCharacter(
     persona: string;
     displayName: string;
     publicDescription: string;
-    welcomeText: string;
-    welcomeVersion: string;
+    /** Part 24k-2: the welcome lines with their percents. */
+    welcomes: WelcomeLine[];
+    /** Part 24k-2: 主 + 点缀 (null = none). Absent = keep what the base says. */
+    palette?: PaletteEntry[] | null;
     /** '' = no main colour (the player page keeps its built-in palette); otherwise '#RRGGBB'. */
     color?: string;
     canon: string;
@@ -112,11 +122,17 @@ export function editedCharacter(
   next.presentation = {
     displayName: values.displayName,
     publicDescription: values.publicDescription,
-    welcome: { text: values.welcomeText, version: values.welcomeVersion.trim() },
+    welcomes: values.welcomes.map((line) => ({ id: line.id, text: line.text, weight: line.weight })),
     // The key is absent, not empty, when there is no colour: a profile without one hashes exactly as it always did.
     ...(values.color ? { color: values.color } : {}),
-    // Part 24j: the template's palette is not edited here; it is kept as it came in.
-    ...(base.presentation.palette ? { palette: structuredClone(base.presentation.palette) } : {}),
+    // Part 24k-2: 主 + 点缀, edited here; `color` is always the 主's hex. Absent = kept as it came in.
+    ...(values.palette === undefined
+      ? base.presentation.palette
+        ? { palette: structuredClone(base.presentation.palette) }
+        : {}
+      : values.palette
+        ? { palette: values.palette }
+        : {}),
   };
   return next;
 }
@@ -135,9 +151,15 @@ const stable = (value: unknown): string =>
  * published under aside). Such a draft is published without a 预演; the server makes the same comparison and has the last word.
  */
 export function isColourOnlyChange(published: CharacterProfile | null, draft: CharacterProfile): boolean {
-  if (!published || published.presentation.color === draft.presentation.color) return false;
+  // Part 24k-2: 主色 and 点缀 are both colour; the server's gate (withoutColour) says the same.
+  if (
+    !published ||
+    (published.presentation.color === draft.presentation.color &&
+      stable(published.presentation.palette ?? null) === stable(draft.presentation.palette ?? null))
+  )
+    return false;
   const bare = (profile: CharacterProfile) => {
-    const { color: _color, ...presentation } = profile.presentation;
+    const { color: _color, palette: _palette, ...presentation } = profile.presentation;
     return stable({ template: { ...profile.template, version: 0 }, presentation });
   };
   return bare(published) === bare(draft);
@@ -280,9 +302,10 @@ export function changedSections(published: CharacterProfile | null, draft: Chara
           p.displayName,
           p.publicDescription,
           p.color ?? null,
+          p.palette ?? null,
           t.seed === true,
         ],
-        welcome: p.welcome,
+        welcome: upgradeWelcomes(p),
         persona: t.persona,
         speech: [speechStyle ?? null, dialogueStyle ?? null, dialogueExamples ?? null],
         past: background ?? null,
@@ -321,6 +344,22 @@ export function characterForm(
   const birthDate = field(identity, '设定生日（可选）', base.template.birthDate ?? '', { type: 'date' });
   const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { area: true, max: 500 });
   const colour = colourField(identity, base.presentation.color, () => onChange(), isNew ? null : base.template.id);
+  // Part 24k-2: the colours as a list (主 mirrors the field above; 点缀 follow); the chip shows what a player will see.
+  const colours = paletteList(
+    base.presentation.palette,
+    () => {
+      try {
+        return colour.read();
+      } catch {
+        return null;
+      }
+    },
+    () => onChange(),
+  );
+  identity.append(colours.node);
+  colour.input.addEventListener('input', () => colours.refresh());
+  colour.picker.addEventListener('input', () => colours.refresh());
+  identity.addEventListener('click', () => colours.refresh());
   // 成长中 (Part 24c): a switch in 身份与展示; the title row and the rail show the same state.
   const seed = check(identity, '成长中');
   seed.checked = base.template.seed === true;
@@ -332,21 +371,11 @@ export function characterForm(
   const welcome = el('fieldset');
   welcome.append(el('legend', '欢迎内容'));
   form.append(welcome);
-  const welcomeText = field(welcome, '欢迎词', base.presentation.welcome.text, {
-    area: true,
-    required: true,
-    max: 500,
-  });
-  const welcomeVersion = field(welcome, '欢迎词版本标识', base.presentation.welcome.version, {
-    required: true,
-    max: 128,
-  });
-  // Part 24b-6: the sentence is the hover tip of the version field, not a paragraph on the page.
-  if (welcomeVersion.parentElement)
-    hoverValue(
-      welcomeVersion.parentElement as HTMLElement,
-      '修改欢迎词或版本标识后，需要匹配新草稿的欢迎／结束成品批准，保存不会替换玩家当前听到的音频。',
-    );
+  // Part 24k-2: 1-8 weighted lines; each player gets one of them (by weight, once) and hears that line's clip.
+  const welcomes = welcomeList(upgradeWelcomes(base.presentation), () => onChange());
+  welcome.append(welcomes.node);
+  welcomes.node.title =
+    '每位玩家第一次见到这个角色时，按比例抽中一条并固定下来。改动欢迎词的文字后，需要为新草稿准备并批准每一条的成品，保存不会替换玩家当前听到的音频。';
   const parts = canonEditors((base.template.authorCanon?.settings ?? {}) as Record<string, JsonValue>, () =>
     onChange(),
   );
@@ -425,6 +454,11 @@ export function characterForm(
     const bad = panes.find((pane) => controlsOf(pane.node).some((c) => c.willValidate && c.validity?.valid === false));
     if (bad) onInvalid?.(bad.id);
     if (!form.reportValidity()) throw new AdminFormError('请先补齐或修正标记的资料字段。');
+    const problem = welcomes.problems()[0];
+    if (problem) {
+      onInvalid?.('welcome');
+      throw new AdminFormError(problem.message);
+    }
     return editedCharacter(base, {
       id: id.value,
       name: name.value,
@@ -432,9 +466,16 @@ export function characterForm(
       persona: persona.value,
       displayName: displayName.value,
       publicDescription: publicDescription.value,
-      welcomeText: welcomeText.value,
-      welcomeVersion: welcomeVersion.value,
+      welcomes: welcomes.read(),
+      // (the 主色 is read first: its own refusal is the one to show)
       color: colour.read(),
+      palette: (() => {
+        try {
+          return colours.read();
+        } catch {
+          throw new AdminFormError('点缀请填 #RRGGBB（如 #E8561E）或 r, g, b（0–255）。');
+        }
+      })(),
       canon: assembled(),
       seed: seed.checked,
       voice: voiceOn.checked
@@ -456,6 +497,9 @@ export function characterForm(
         input.dataset.locked = String(disabled);
         input.disabled = disabled;
       }
+      // (after the generic pass above: the lists keep their own limits, e.g. no ninth line, when they are enabled again)
+      welcomes.setDisabled(disabled);
+      colours.setDisabled(disabled);
     },
   };
 }

@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cocreationInbox } from '../../src/features/admin/cocreation-inbox.ts';
@@ -18,7 +19,7 @@ const profile = (version = 3): CharacterProfile => ({
     persona: '合成角色，非真实材料',
     schedule: defaultSchedule(),
   } as never,
-  presentation: { displayName: NAME, publicDescription: '', welcome: { text: '你好', version: 'w1' } },
+  presentation: { displayName: NAME, publicDescription: '', welcomes: [{ id: 'w1', text: '你好', weight: 100 }] },
 });
 const item = (id: string, over: Partial<InboxItem> = {}): InboxItem => ({
   id,

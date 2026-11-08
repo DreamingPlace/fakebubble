@@ -69,6 +69,8 @@ const handled = new Set([
   // Nickname 名片 revisions written at signup; the cleaners delete them with the player (schema 118).
   'player_profile_versions',
   'player_profile_requests',
+  // Part 24k-2: the welcome line a player was given for a character; deleted with the player (purgePlayerLogins).
+  'web_welcome_choices',
 ]);
 
 /** Check the actual schema, not merely the list of tables current code knows to delete. */

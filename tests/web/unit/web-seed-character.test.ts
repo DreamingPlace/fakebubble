@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): welcomeText/welcomeVersion became welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -97,8 +98,7 @@ test('seed character: the editor sets and clears the flag and leaves other profi
     persona: 'p',
     displayName: 'd',
     publicDescription: '',
-    welcomeText: 'w',
-    welcomeVersion: 'welcome-v1',
+    welcomes: [{ id: 'welcome-v1', text: 'w', weight: 100 }],
     canon: '{}',
     voice: null,
     ...over,

@@ -1,4 +1,5 @@
 /** The visual shell: a carousel of the characters the server's catalog lists, every chat driven by the live binding. */
+import { mountShapes, setSkinProperties } from '../brand/palette-render.ts';
 import { orbitStyle, ringOffset } from './orbit.js';
 import { appendLegalLinks, footerNote } from './legal-links.ts';
 import { followChatViewport, stackCardWidth, swipeStep, widthChanged } from './mobile-layout.js';
@@ -82,6 +83,24 @@ function createCard(person: Person) {
   card.style.setProperty('--avatar-ink', person.ink);
   card.style.setProperty('--card-color', person.color);
   card.classList.toggle('is-reserve', !configured);
+  // Part 24k-2: 主色 + 点缀 — the colours, and the soft shapes behind the home card and behind the chat.
+  if (person.skin && person.characterId && configured) {
+    setSkinProperties(card, person.skin);
+    // --accent / --n-accent feed the play button, the playing state and the status dot already; the main takes them over.
+    card.style.setProperty('--accent', person.skin.day.main);
+    card.style.setProperty('--n-accent', person.skin.night.main);
+    // the avatar ring takes the accents (a segment each) and the glow
+    setFrameProperties(
+      card,
+      {
+        ring: [person.skin.day.accents[0], person.skin.day.accents[1], person.skin.day.glow],
+        fill: [person.skin.day.accents[1], person.skin.day.glow],
+      },
+      'frame',
+    );
+    mountShapes(card.querySelector<HTMLElement>('.card-shell')!, person.characterId, 'chat');
+    mountShapes(card.querySelector<HTMLElement>('.card-face')!, person.characterId, 'card');
+  }
   return card;
 }
 

@@ -26,6 +26,10 @@ export interface WebProviderCharacter {
   theme: WebTheme | null;
   /** The character's published main colour ('#RRGGBB'), or null: the player page then keeps its built-in palette. */
   mainColor: string | null;
+  /** Part 24k-2: the template's colours in order (one 'main', then accents), hex and role only; null/absent = only `mainColor`. */
+  palette?: { hex: string; role: 'main' | 'accent' }[] | null;
+  /** Part 24k-2: 'YYYY-MM-DD' (the card's No. is its month + day); null/absent = the number shown before. */
+  birthDate?: string | null;
   availability:
     | { state: 'available'; personaVersion: number }
     | { state: 'unavailable'; reason: WebProviderUnavailableReason };
@@ -330,7 +334,29 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
       'mainColor',
       'availability',
       'welcome',
+      ...['palette', 'birthDate'].filter((key) => key in c),
     ]);
+    if (
+      !(
+        c.palette === undefined ||
+        c.palette === null ||
+        (Array.isArray(c.palette) &&
+          c.palette.length <= 12 &&
+          c.palette.every((entry) => {
+            const e = record(entry);
+            exact(e, ['hex', 'role']);
+            return (
+              typeof e.hex === 'string' && /^#[0-9A-F]{6}$/.test(e.hex) && (e.role === 'main' || e.role === 'accent')
+            );
+          }))
+      ) ||
+      !(
+        c.birthDate === undefined ||
+        c.birthDate === null ||
+        (typeof c.birthDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c.birthDate))
+      )
+    )
+      invalid();
     if (
       !characterId(c.characterId) ||
       seen.has(c.characterId) ||

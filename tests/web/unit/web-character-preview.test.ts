@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtempSync, readFileSync, readdirSync, rmSync, realpathSync } from 'node:fs';
@@ -463,9 +464,9 @@ test('Part 26a: a preview is the start of a chat, so it says the DRAFT welcome l
     job.previewId,
   )!;
   const request = JSON.parse(row.request_json);
-  assert.deepEqual(request.opening, { text: f.profile.presentation.welcome.text });
+  assert.deepEqual(request.opening, { text: f.profile.presentation.welcomes[0]!.text });
   const messages = promptMessages(request);
   assert.deepEqual(JSON.parse(messages[1]!.content).opening, [
-    { authorKind: 'character', delivery: 'voice', text: f.profile.presentation.welcome.text },
+    { authorKind: 'character', delivery: 'voice', text: f.profile.presentation.welcomes[0]!.text },
   ]);
 });

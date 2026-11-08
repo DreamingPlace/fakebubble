@@ -8,12 +8,14 @@ import {
   type VersionOrigin,
   type VersionRow,
 } from '../../../../packages/contracts/web-character-history.ts';
+import { upgradeWelcomes, type WelcomeLine } from '../../../../packages/contracts/web-welcomes.ts';
 export type CharacterProfile = {
   template: CharacterTemplate;
   presentation: {
     displayName: string;
     publicDescription: string;
-    welcome: { text: string; version: string };
+    /** Part 24k-2: 1-8 weighted lines; the weights are whole percents summing to 100. */
+    welcomes: WelcomeLine[];
     /** The main chat colour, '#RRGGBB'; absent = the player page's built-in palette. */
     color?: string;
     /** Part 24j: the colours the profile template listed, in order (stored now, used by the player page after 24k). */
@@ -113,6 +115,15 @@ export type Material = {
     /** Part 24k-1: where the audio came from. Absent in an older answer. */
     origin?: 'generated' | 'uploaded';
   }[];
+  /** Part 24k-2: the welcome slots of a profile with 2+ lines, one per line (a one-line profile uses `assets`). */
+  lines: {
+    lineId: string;
+    body: string;
+    sha256: string;
+    durationMs: number;
+    byteLength: number;
+    origin?: 'generated' | 'uploaded';
+  }[];
 };
 export type DeleteImpact = {
   previewHash: string;
@@ -144,11 +155,25 @@ function rows(v: unknown) {
   return v as unknown[];
 }
 const nullable = (v: unknown) => (v === null ? null : string(v));
+/** `welcomes` as the server sends it; a stored snapshot of an old version still has the single `welcome` (upgraded here, in memory). */
+function welcomes(d: Record<string, unknown>): WelcomeLine[] {
+  if (d.welcomes === undefined) {
+    const w = object(d.welcome);
+    string(w.text);
+    return upgradeWelcomes({ welcome: { text: w.text } });
+  }
+  const list = rows(d.welcomes);
+  if (list.length < 1 || list.length > 8) throw invalid();
+  return list.map((entry) => {
+    const l = object(entry);
+    if (!Number.isInteger(l.weight)) throw invalid();
+    return { id: string(l.id), text: string(l.text), weight: l.weight as number };
+  });
+}
 function profile(v: unknown): CharacterProfile {
   const p = object(v),
     t = object(p.template),
-    d = object(p.presentation),
-    w = object(d.welcome);
+    d = object(p.presentation);
   string(t.id);
   string(t.name);
   string(t.persona);
@@ -160,7 +185,7 @@ function profile(v: unknown): CharacterProfile {
     presentation: {
       displayName: string(d.displayName),
       publicDescription: string(d.publicDescription),
-      welcome: { text: string(w.text), version: string(w.version) },
+      welcomes: welcomes(d),
       ...(d.color === undefined ? {} : { color: string(d.color) }),
       ...(d.palette === undefined
         ? {}
@@ -344,6 +369,20 @@ export class CharacterAdminClient {
           referenceId: string(voice.referenceId),
           model: string(voice.model),
         },
+        lines:
+          r.lines === undefined
+            ? []
+            : rows(r.lines).map((v) => {
+                const a = object(v);
+                return {
+                  lineId: string(a.lineId),
+                  body: string(a.body),
+                  sha256: string(a.sha256),
+                  durationMs: num(a.durationMs),
+                  byteLength: num(a.byteLength),
+                  ...(a.origin === 'generated' || a.origin === 'uploaded' ? { origin: a.origin } : {}),
+                };
+              }),
         assets: rows(r.assets).map((v) => {
           const a = object(v);
           if (a.kind !== 'welcome' && a.kind !== 'footer') throw invalid();
@@ -365,29 +404,46 @@ export class CharacterAdminClient {
   ) {
     return string(object(await this.call(id, 'material-prepare', input)).materialId);
   }
-  async upload(id: string, materialId: string, kind: 'welcome' | 'footer', base64: string) {
-    await this.call(id, 'material-upload', { materialId, kind, base64 });
+  async upload(id: string, materialId: string, kind: 'welcome' | 'footer', base64: string, lineId?: string) {
+    await this.call(id, 'material-upload', { materialId, kind, base64, ...(lineId === undefined ? {} : { lineId }) });
   }
   /** What 生成 of one slot would say and cost, or why it is not offered. Holds nothing. */
-  async speechEstimate(id: string, materialId: string, slot: 'welcome' | 'footer') {
-    return speechEstimate(await this.call(id, 'speech-estimate', { kind: 'material', materialId, slot }));
+  async speechEstimate(id: string, materialId: string, slot: 'welcome' | 'footer', lineId?: string) {
+    return speechEstimate(
+      await this.call(id, 'speech-estimate', {
+        kind: 'material',
+        materialId,
+        slot,
+        ...(lineId === undefined ? {} : { lineId }),
+      }),
+    );
   }
   /** 生成: one paid Fish call, confirmed with the estimate the person saw. Never approves. */
   async generate(
     id: string,
-    input: { requestId: string; materialId: string; kind: 'welcome' | 'footer'; acknowledgeMicros: number },
+    input: {
+      requestId: string;
+      materialId: string;
+      kind: 'welcome' | 'footer';
+      lineId?: string;
+      acknowledgeMicros: number;
+    },
   ) {
     await this.call(id, 'material-generate', input);
   }
-  async audio(id: string, materialId: string, kind: 'welcome' | 'footer') {
-    return string(object(await this.call(id, 'material-audio', { materialId, kind })).base64);
+  async audio(id: string, materialId: string, kind: 'welcome' | 'footer', lineId?: string) {
+    return string(
+      object(await this.call(id, 'material-audio', { materialId, kind, ...(lineId === undefined ? {} : { lineId }) }))
+        .base64,
+    );
   }
-  async approve(id: string, materialId: string, note: string) {
+  /** `lineIds`: the lines heard and ticked, for a welcome of 2+ lines (a single welcome is ticked as before). */
+  async approve(id: string, materialId: string, note: string, lineIds?: string[]) {
     await this.call(id, 'material-approve', {
       materialId,
       note,
       acknowledgeRights: true,
-      acknowledgeWelcomeListening: true,
+      ...(lineIds ? { acknowledgeLines: lineIds } : { acknowledgeWelcomeListening: true }),
       acknowledgeFooterListening: true,
     });
   }

@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -68,7 +69,7 @@ function full(t: test.TestContext) {
     offline.registerWelcome({
       characterId: role.characterId,
       voiceVersion: version,
-      body: role.presentation.welcome.text,
+      body: role.presentation.welcomes[0]!.text,
       wav: syntheticTone(),
     });
     offline.registerApprovedFooter({
@@ -267,7 +268,8 @@ test("restore v1 after v2 publishes v3 with v1's profile, voice binding and clip
     ON v.character_id=w.character_id AND v.voice_version=w.voice_version WHERE w.character_id=?`,
     ID,
   )!;
-  assert.equal(welcome.body, p1.presentation.welcome.text);
+  // Part 24k-2 (named exception): p1 is the STORED v1, which still has the old single `welcome` (nothing stored is rewritten).
+  assert.equal(welcome.body, p1.presentation.welcome!.text);
   // The guard on the binding is back, byte for byte, and the schema check still passes.
   assert.throws(
     () => f.store.run("UPDATE web_provider_voice_bindings SET reference_id='unapproved' WHERE character_id=?", ID),

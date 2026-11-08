@@ -28,6 +28,7 @@ import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
+import { webWelcomeLinesInstalled } from '../characters/web-welcome-schema.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
 import { routeWebInvite } from '../invites/web-invite-routes.ts';
@@ -367,13 +368,23 @@ export class WebProviderServer {
 
   /** Welcome clips are approved public catalog media; private chat audio is never served here. */
   private publicAudio(res: ServerResponse, mediaId: string) {
-    const row = this.store.get<{ audio_bytes: Uint8Array; byte_length: number }>(
-      `SELECT w.audio_bytes,w.byte_length
+    const row =
+      this.store.get<{ audio_bytes: Uint8Array; byte_length: number }>(
+        `SELECT w.audio_bytes,w.byte_length
       FROM web_provider_welcome_assets w JOIN web_provider_voice_bindings v
         ON v.character_id=w.character_id AND v.voice_version=w.voice_version
       JOIN web_character_catalog c ON c.character_id=w.character_id WHERE w.media_id=?`,
-      mediaId,
-    );
+        mediaId,
+      ) ??
+      // Part 24k-2: the clip of one line of a multi-line welcome, under the same catalog gate.
+      (webWelcomeLinesInstalled(this.store)
+        ? this.store.get<{ audio_bytes: Uint8Array; byte_length: number }>(
+            `SELECT l.audio_bytes,l.byte_length FROM web_provider_welcome_lines l
+          JOIN web_provider_voice_bindings v ON v.character_id=l.character_id AND v.voice_version=l.voice_version
+          JOIN web_character_catalog c ON c.character_id=l.character_id WHERE l.media_id=?`,
+            mediaId,
+          )
+        : undefined);
     ensure(row && row.audio_bytes.length === row.byte_length, 'NOT_FOUND');
     res.writeHead(200, {
       'Cache-Control': 'public, max-age=86400, immutable',

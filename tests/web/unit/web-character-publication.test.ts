@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Store } from '../../../apps/server/platform/store.ts';
@@ -200,8 +201,8 @@ test('unapproved voice changes and unmatched welcome clips cannot publish; trans
   assert.throws(() => f.service.publish(f.auth, 'wei-guagua', input), /CHARACTER_MATERIALS_REQUIRED/);
   f.store.run(
     "INSERT INTO web_provider_welcome_assets VALUES ('wei-guagua','voice-v1',?,?,'operator_approved')",
-    f.profile.presentation.welcome.text,
-    f.profile.presentation.welcome.version,
+    f.profile.presentation.welcomes[0]!.text,
+    f.profile.presentation.welcomes[0]!.id,
   );
   f.store.all(
     "CREATE TRIGGER fixture_fail BEFORE INSERT ON web_admin_audit WHEN NEW.action LIKE 'character-published:%' BEGIN SELECT RAISE(ABORT,'FIXTURE_DISK_FAIL'); END",

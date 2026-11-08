@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { originText, versionHistory, type HistoryHost } from '../../src/features/admin/history/version-history.ts';
@@ -49,7 +50,7 @@ const profile = (persona: string, color?: string): CharacterProfile =>
     presentation: {
       displayName: '乔乔',
       publicDescription: '',
-      welcome: { text: '来啦', version: 'w1' },
+      welcomes: [{ id: 'w1', text: '来啦', weight: 100 }],
       ...(color ? { color } : {}),
     },
   }) as unknown as CharacterProfile;

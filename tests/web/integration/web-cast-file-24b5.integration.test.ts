@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import type { TestContext } from 'node:test';
@@ -232,7 +233,7 @@ test('confirm: ONE action creates the draft characters, rewrites the keys and sa
   assert.equal(detail.draft!.profile.template.fictional, true);
   assert.equal(detail.draft!.profile.presentation.displayName, '小满');
   assert.equal(detail.draft!.profile.template.persona, '十九岁的美术生。');
-  assert.equal(detail.draft!.profile.presentation.welcome.text, '嗨，我是小满。');
+  assert.equal(detail.draft!.profile.presentation.welcomes[0]!.text, '嗨，我是小满。');
   // never published: no publication, no live template for it, the other templates untouched
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_cast_publications')!.n, 0);
   assert.equal(f.store.get('SELECT 1 FROM character_templates WHERE id=?', made.characterId), undefined);

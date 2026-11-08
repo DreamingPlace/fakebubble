@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { characterForm, editedCharacter, emptyCharacter } from '../../src/features/admin/character-form.ts';
@@ -133,7 +134,7 @@ function profile(): CharacterProfile {
   p.presentation = {
     displayName: '合成人物',
     publicDescription: '仅供离线测试',
-    welcome: { text: '欢迎', version: 'welcome-v1' },
+    welcomes: [{ id: 'welcome-v1', text: '欢迎', weight: 100 }],
   };
   return p;
 }
@@ -354,8 +355,7 @@ test('name/birthday synchronization is narrow; invalid canon never overwrites th
       persona: base.template.persona,
       displayName: base.presentation.displayName,
       publicDescription: '',
-      welcomeText: '欢迎',
-      welcomeVersion: 'welcome-v1',
+      welcomes: [{ id: 'welcome-v1', text: '欢迎', weight: 100 }],
       canon: JSON.stringify(base.template.authorCanon!.settings),
       schedule: base.template.schedule,
       voice: base.template.voice!,

@@ -7,7 +7,8 @@ import {
   hasCharacterPermission,
   type CharacterAdminAction,
 } from '../../../packages/contracts/web-admin-permissions.ts';
-import { ensure } from '../../../packages/domain/errors.ts';
+import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
+import { upgradeWelcomes, welcomeProblems, welcomeTextProblem } from '../../../packages/contracts/web-welcomes.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { identifier, keys, nonempty, record, validatedTemplate } from './template-validation.ts';
@@ -16,6 +17,8 @@ import {
   offlineWebCharacters,
   publishedWebCharacters,
   webCharacterAtLive,
+  upgradedProfile,
+  type StoredWebCharacterProfile,
   type WebCharacterProfile,
 } from './web-character-catalog.ts';
 import {
@@ -59,10 +62,35 @@ const draftDTO = (row: DraftRow) => ({
   characterId: row.character_id,
   revision: row.revision,
   baseVersion: row.base_version,
-  profile: JSON.parse(row.profile_json) as WebCharacterProfile,
+  // Old drafts upgrade in memory; contentHash stays the hash of the stored bytes.
+  profile: upgradedProfile(JSON.parse(row.profile_json) as StoredWebCharacterProfile),
   contentHash: row.content_hash,
   savedAt: row.created_at,
 });
+
+/**
+ * Part 24k-2: the lines of a saved profile. `welcomes` (1-8 weighted lines, summing to 100) is the format; the old single
+ * `welcome {text, version}` is still accepted as input and becomes one line of weight 100. A refusal names the line.
+ */
+function welcomeLines(display: Record<string, unknown>) {
+  ensure(display.welcomes !== undefined || display.welcome !== undefined, 'INVALID_ADMIN_REQUEST');
+  // A request that still carries the old `welcome` is an explicit edit of the one welcome: it replaces the whole list with one
+  // line (a client that sends the new format never sends `welcome`).
+  if (display.welcome !== undefined) {
+    record(display.welcome);
+    keys(display.welcome, ['text', 'version']);
+    ensure(!welcomeTextProblem(display.welcome.text), 'INVALID_ADMIN_REQUEST');
+    identifier(display.welcome.version);
+    return upgradeWelcomes({ welcome: display.welcome });
+  }
+  const problems = welcomeProblems(display.welcomes);
+  if (problems.length) throw new DetailedError('WELCOMES_INVALID', { problems });
+  return (display.welcomes as { id: string; text: string; weight: number }[]).map((line) => {
+    record(line);
+    keys(line, ['id', 'text', 'weight']);
+    return { id: line.id, text: line.text, weight: line.weight };
+  });
+}
 
 function profile(value: unknown): WebCharacterProfile {
   record(value);
@@ -70,16 +98,13 @@ function profile(value: unknown): WebCharacterProfile {
   const template = validatedTemplate(value.template),
     display = value.presentation;
   record(display);
-  keys(display, ['displayName', 'publicDescription', 'welcome', 'color', 'palette']);
+  keys(display, ['displayName', 'publicDescription', 'welcome', 'welcomes', 'color', 'palette']);
   nonempty(display.displayName, 100);
   ensure(
     typeof display.publicDescription === 'string' && display.publicDescription.length <= 500,
     'INVALID_ADMIN_REQUEST',
   );
-  record(display.welcome);
-  keys(display.welcome, ['text', 'version']);
-  nonempty(display.welcome.text, 500);
-  identifier(display.welcome.version);
+  const welcomes = welcomeLines(display);
   ensure(
     display.color === undefined || (typeof display.color === 'string' && /^#[0-9A-F]{6}$/.test(display.color)),
     'INVALID_ADMIN_REQUEST',
@@ -89,15 +114,15 @@ function profile(value: unknown): WebCharacterProfile {
     presentation: {
       displayName: display.displayName,
       publicDescription: display.publicDescription,
-      welcome: { text: display.welcome.text, version: display.welcome.version },
+      welcomes,
       ...(display.color === undefined ? {} : { color: display.color }),
       ...(display.palette === undefined ? {} : { palette: palette(display.palette) }),
     },
   };
 }
-/** Part 24j: the template's colours: 1-12 entries of {hex, name (<=24), role}; at most one 'main', and exactly one when there are several. */
+/** Parts 24j/24k-2: the template's colours: 1-5 entries (one 主 and up to 4 点缀) of {hex, name (<=24), role}; at most one 'main'. */
 function palette(value: unknown): NonNullable<WebCharacterProfile['presentation']['palette']> {
-  ensure(Array.isArray(value) && value.length > 0 && value.length <= 12, 'INVALID_ADMIN_REQUEST');
+  ensure(Array.isArray(value) && value.length > 0 && value.length <= 5, 'INVALID_ADMIN_REQUEST');
   const out = value.map((entry) => {
     record(entry);
     keys(entry, ['hex', 'name', 'role']);
@@ -672,8 +697,12 @@ export class WebCharacterAdmin {
       return this.speech.estimatePreview(id, input.previewId);
     }
     ensure(input.kind === 'material', 'INVALID_REQUEST');
-    keys(input, ['kind', 'materialId', 'slot']);
-    return this.materials.estimateGenerate(id, { materialId: input.materialId, kind: input.slot });
+    keys(input, ['kind', 'materialId', 'slot', 'lineId']);
+    return this.materials.estimateGenerate(id, {
+      materialId: input.materialId,
+      kind: input.slot,
+      ...(input.lineId === undefined ? {} : { lineId: input.lineId }),
+    });
   }
   /** 试听: speak the final bubbles of a succeeded 预演 (one confirmed cost), then the page plays them. */
   previewListen(auth: Auth, id: string, input: unknown) {

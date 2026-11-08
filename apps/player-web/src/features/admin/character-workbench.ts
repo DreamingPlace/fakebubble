@@ -1425,12 +1425,44 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         `音色 ${material.voice.profileId} v${material.voice.version} · ${material.voice.model} · referenceId ${material.voice.referenceId}`,
       ),
     );
-    for (const kind of ['welcome', 'footer'] as const) {
-      const name = kind === 'welcome' ? '欢迎成品' : '结束成品',
-        asset = material.assets.find((a) => a.kind === kind),
+    // Part 24k-2: one welcome slot per line when the profile has 2+ lines (bound to the line's id and exact text), then the footer.
+    const draftLines = snapshot.draft?.profile.presentation.welcomes ?? [];
+    const multi = material.lines.length > 0 || (current && draftLines.length > 1);
+    type Slot = {
+      kind: 'welcome' | 'footer';
+      lineId?: string;
+      name: string;
+      asset?: {
+        body: string;
+        sha256: string;
+        durationMs: number;
+        byteLength: number;
+        origin?: 'generated' | 'uploaded';
+      };
+    };
+    const slots: Slot[] = [];
+    if (multi) {
+      const lines = current
+        ? draftLines.map((line) => ({ id: line.id, text: line.text }))
+        : material.lines.map((line) => ({ id: line.lineId, text: line.body }));
+      lines.forEach((line, i) => {
+        const found = material.lines.find((l) => l.lineId === line.id && l.body === line.text);
+        slots.push({ kind: 'welcome', lineId: line.id, name: `欢迎成品 ${i + 1}`, ...(found ? { asset: found } : {}) });
+      });
+    } else {
+      const found = material.assets.find((a) => a.kind === 'welcome');
+      slots.push({ kind: 'welcome', name: '欢迎成品', ...(found ? { asset: found } : {}) });
+    }
+    {
+      const found = material.assets.find((a) => a.kind === 'footer');
+      slots.push({ kind: 'footer', name: '结束成品', ...(found ? { asset: found } : {}) });
+    }
+    for (const slot of slots) {
+      const { kind, lineId, name, asset } = slot,
         row = el('section');
       section.append(row);
       row.append(el('h4', name));
+      if (lineId) row.dataset.line = lineId;
       if (asset) {
         const body = el('p', asset.body);
         // Part 24k-1: where the audio came from (a generated clip says so; an upload stays unmarked).
@@ -1451,7 +1483,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           () => !can('read'),
           async () => {
             const token = view,
-              base64 = await host.api.audio(target, material.materialId, kind);
+              base64 = await host.api.audio(target, material.materialId, kind, lineId);
             if (gone() || token !== view) return;
             const bytes = Uint8Array.from(atob(base64), (v) => v.charCodeAt(0)),
               digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
@@ -1492,7 +1524,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
             let binary = '';
             for (let i = 0; i < bytes.length; i += 32768)
               binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
-            await host.api.upload(target, material.materialId, kind, btoa(binary));
+            await host.api.upload(target, material.materialId, kind, btoa(binary), lineId);
             if (gone()) return;
             await open(target);
             host.status('成品已上传。请重新读取该素材版本并试听，两条都批准后才能发布。');
@@ -1501,7 +1533,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         file.addEventListener('change', sync);
         rights.addEventListener('change', sync);
         // Part 24k-1: 生成 beside the upload. One paid Fish call that speaks exactly this slot's text; never approves.
-        if (snapshot.speech?.available) generateSlot(row, upload, snapshot, material, kind, name);
+        if (snapshot.speech?.available) generateSlot(row, upload, snapshot, material, kind, name, lineId);
       }
     }
     if (current && !material.approved) {
@@ -1509,9 +1541,15 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           check(section, '我确认有权使用这个音色和两条成品'),
           () => dirty || !can('approve-materials'),
         ),
-        welcome = guarded(
-          check(section, '我已完整试听并确认欢迎成品与欢迎词一致'),
-          () => dirty || !can('approve-materials'),
+        // one tick per welcome line (or the single welcome): every slot must have been heard
+        welcomeTicks = (multi ? draftLines : [null]).map((line, i) =>
+          guarded(
+            check(
+              section,
+              line ? `我已完整试听并确认第 ${i + 1} 条欢迎成品与欢迎词一致` : '我已完整试听并确认欢迎成品与欢迎词一致',
+            ),
+            () => dirty || !can('approve-materials'),
+          ),
         ),
         footer = guarded(check(section, '我已完整试听并确认结束成品'), () => dirty || !can('approve-materials')),
         note = guarded(field(section, '批准说明', '', { max: 1000 }), () => dirty || !can('approve-materials'));
@@ -1521,19 +1559,26 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         () =>
           dirty ||
           !can('approve-materials') ||
-          material.assets.length !== 2 ||
+          (multi
+            ? material.lines.length !== draftLines.length || material.assets.length !== 1
+            : material.assets.length !== 2) ||
           !rights.checked ||
-          !welcome.checked ||
+          !welcomeTicks.every((tick) => tick.checked) ||
           !footer.checked ||
           !note.value.trim(),
         async () => {
-          await host.api.approve(target, material.materialId, note.value);
+          await host.api.approve(
+            target,
+            material.materialId,
+            note.value,
+            multi ? draftLines.map((line) => line.id) : undefined,
+          );
           if (gone()) return;
           await open(target);
           host.status('成品已批准；尚未发布角色。');
         },
       );
-      for (const node of [rights, welcome, footer, note]) node.addEventListener('input', sync);
+      for (const node of [rights, ...welcomeTicks, footer, note]) node.addEventListener('input', sync);
     }
   }
   /**
@@ -1548,9 +1593,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     material: Material,
     kind: 'welcome' | 'footer',
     name: string,
+    lineId?: string,
   ) {
     const target = snapshot.characterId,
-      key = `generate:${material.materialId}:${kind}`;
+      key = `generate:${material.materialId}:${kind}${lineId ? `:${lineId}` : ''}`;
     let estimate: SpeechEstimate | null = null;
     const why = (): string => {
       if (dirty) return '先保存草稿';
@@ -1563,7 +1609,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     };
     const cost = () => (estimate?.ok ? micros(estimate.estimateMicros) : '');
     const gen = paidButton({
-      name: `generate-${material.materialId}-${kind}`,
+      name: `generate-${material.materialId}-${kind}${lineId ? `-${lineId}` : ''}`,
       label: () => (cost() ? `生成${name} · 约 ${cost()}` : `生成${name}`),
       confirmLabel: () => `确认付费 · ${cost()}`,
       reason: why,
@@ -1577,6 +1623,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
               requestId: crypto.randomUUID(),
               materialId: material.materialId,
               kind,
+              ...(lineId ? { lineId } : {}),
               acknowledgeMicros: confirmed.estimateMicros,
             },
             (input) => host.api.generate(target, input),
@@ -1596,7 +1643,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     zones.push({ paint: () => gen.refresh() });
     const token = view;
     void host.api
-      .speechEstimate(target, material.materialId, kind)
+      .speechEstimate(target, material.materialId, kind, lineId)
       .then((value) => {
         if (gone() || token !== view) return;
         estimate = value;

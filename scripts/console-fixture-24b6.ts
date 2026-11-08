@@ -348,7 +348,7 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
   // A removal and an addition, so 资料改动 has both colours to show.
   next.template.persona = next.template.persona.replace('合成角色，非真实材料', '合成角色，说话更慢一点');
   if (next.template.persona === detail.published.profile.template.persona) next.template.persona += ' 说话更慢一点。';
-  next.presentation.welcome.text += '（新）';
+  next.presentation.welcomes[0]!.text += '（新）';
   // The structured editors have something to show: chips, a text, example pairs and 经历 cards (all existing settings keys).
   next.template.authorCanon = {
     kind: 'author_canon',
