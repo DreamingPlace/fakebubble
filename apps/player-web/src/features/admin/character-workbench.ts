@@ -20,6 +20,9 @@ import { versionHistory } from './history/version-history.ts';
 import { dangerZone } from './ui/danger-zone.ts';
 import { inlineConfirm } from './ui/inline-confirm.ts';
 import { statusBadge } from './ui/status-badge.ts';
+import { paidButton } from './ui/paid-button.ts';
+import { micros } from './preview/copy.ts';
+import type { SpeechEstimate } from '../../services/speech-admin-api.ts';
 import { fillStatus } from './ui/page-head.ts';
 import { hoverValue } from './ui/hover-value.ts';
 import { diffSideBySide, type Piece } from './preview/diff.ts';
@@ -1429,8 +1432,15 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       section.append(row);
       row.append(el('h4', name));
       if (asset) {
+        const body = el('p', asset.body);
+        // Part 24k-1: where the audio came from (a generated clip says so; an upload stays unmarked).
+        if (asset.origin === 'generated') {
+          const tag = el('span', '生成');
+          tag.className = 'vc-origin';
+          body.append(' ', tag);
+        }
         row.append(
-          el('p', asset.body),
+          body,
           el('p', `${(asset.durationMs / 1000).toFixed(2)} 秒 · ${asset.byteLength} 字节 · SHA256 ${asset.sha256}`),
         );
         const mount = el('div');
@@ -1471,7 +1481,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           check(row, '这是我有权使用的成品，不是待克隆的原始声音样本'),
           () => dirty || !can('materials'),
         );
-        button(
+        const upload = button(
           row,
           `上传所选${name}`,
           () => dirty || !can('materials') || !rights.checked || file.files?.length !== 1,
@@ -1490,6 +1500,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         );
         file.addEventListener('change', sync);
         rights.addEventListener('change', sync);
+        // Part 24k-1: 生成 beside the upload. One paid Fish call that speaks exactly this slot's text; never approves.
+        if (snapshot.speech?.available) generateSlot(row, upload, snapshot, material, kind, name);
       }
     }
     if (current && !material.approved) {
@@ -1523,6 +1535,78 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       );
       for (const node of [rights, welcome, footer, note]) node.addEventListener('input', sync);
     }
+  }
+  /**
+   * Part 24k-1: 生成 for one empty slot of the current 素材版本. The shared paid-button carries the confirm: the first click names the
+   * cost (characters x list price, from the server), the second sends. The clip lands in the slot like an upload (the same checks),
+   * and approval stays with the person: they load 试听, tick, and press 批准此素材版本.
+   */
+  function generateSlot(
+    row: HTMLElement,
+    upload: HTMLElement,
+    snapshot: CharacterDetail,
+    material: Material,
+    kind: 'welcome' | 'footer',
+    name: string,
+  ) {
+    const target = snapshot.characterId,
+      key = `generate:${material.materialId}:${kind}`;
+    let estimate: SpeechEstimate | null = null;
+    const why = (): string => {
+      if (dirty) return '先保存草稿';
+      if (!can('materials')) return '你没有素材权限';
+      if (!snapshot.speech?.hasVoice) return '先填音色 referenceId';
+      if (!estimate) return '正在读取费用';
+      if (!estimate.ok)
+        return estimate.reason === 'PRICE_MISSING' ? 'Fish 价格未生效，先到「系统」续期价格' : '暂不能生成';
+      return busy ? '处理中' : '';
+    };
+    const cost = () => (estimate?.ok ? micros(estimate.estimateMicros) : '');
+    const gen = paidButton({
+      name: `generate-${material.materialId}-${kind}`,
+      label: () => (cost() ? `生成${name} · 约 ${cost()}` : `生成${name}`),
+      confirmLabel: () => `确认付费 · ${cost()}`,
+      reason: why,
+      onConfirm: () => {
+        const confirmed = estimate;
+        if (!confirmed?.ok) return;
+        act(async () => {
+          await exact(
+            key,
+            {
+              requestId: crypto.randomUUID(),
+              materialId: material.materialId,
+              kind,
+              acknowledgeMicros: confirmed.estimateMicros,
+            },
+            (input) => host.api.generate(target, input),
+          );
+          if (gone()) return;
+          await open(target);
+          host.status(`${name}已生成。请加载试听，听完再勾选并批准；生成不会批准。`);
+        });
+      },
+    });
+    gen.root.classList.add('vc-gen');
+    // 生成 sits beside the upload, in one row.
+    const actions = el('div');
+    actions.className = 'vc-actions';
+    upload.replaceWith(actions);
+    actions.append(upload, gen.root);
+    zones.push({ paint: () => gen.refresh() });
+    const token = view;
+    void host.api
+      .speechEstimate(target, material.materialId, kind)
+      .then((value) => {
+        if (gone() || token !== view) return;
+        estimate = value;
+        gen.refresh();
+      })
+      .catch(() => {
+        if (gone() || token !== view) return;
+        estimate = { ok: false, reason: 'UNAVAILABLE' };
+        gen.refresh();
+      });
   }
   /** The roster read again after 下线 / 重新上线: the sidebar groups follow the server. */
   async function refreshRoster() {

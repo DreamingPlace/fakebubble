@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { localRuntime, initProviderInstance } from '../apps/server/platform/web-local-config.ts';
 import { WebProviderOffline } from '../apps/server/generation/web-provider-offline.ts';
+import { WebAdminSpeech } from '../apps/server/characters/web-admin-speech.ts';
 import { WebCharacterPreviewRunner } from '../apps/server/characters/web-character-preview-runner.ts';
 import { WebProviderRunner } from '../apps/server/generation/web-provider-runner.ts';
 import { WebProviderServer } from '../apps/server/generation/web-provider-server.ts';
@@ -64,7 +65,11 @@ const day = (at: number) => new Date(at).toISOString().slice(0, 10);
  * every call with a 500, as before.
  */
 export type FixtureProvider = { draftMs: number; reviewMs: number };
-export type FixtureOptions = { provider?: FixtureProvider; cdpPort?: number };
+/**
+ * Part 24k-1: `speech` turns the admin speech path on with an OFFLINE Fish stand-in (a short wait, then a synthetic tone), so 生成 and
+ * 试听 can be looked at. Off by default: every earlier check sees the page as it was.
+ */
+export type FixtureOptions = { provider?: FixtureProvider; cdpPort?: number; speech?: boolean };
 
 export async function startConsoleFixture(options: FixtureOptions = {}) {
   const { parent } = localRuntime();
@@ -133,6 +138,19 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
     usageUnits: request.billedTextBytes,
   }));
   const previews = new WebCharacterPreviewRunner(store, clock, offlineText, { reserve() {}, settle() {} });
+  if (options.speech)
+    previews.useSpeech(
+      new WebAdminSpeech(
+        store,
+        clock,
+        async (request) => {
+          await sleep(500);
+          return { audio: syntheticTone(900), receipt: { id: 'fake-speech' }, usageUnits: request.billedTextBytes };
+        },
+        { reserve() {}, settle() {} },
+        's2.1-pro',
+      ),
+    );
   const app = new WebProviderServer(store, config, clock, runner, undefined, previews, { signupEnabled: false });
 
   // ---- twelve more live characters (c04 … c15), written straight into the catalog tables as a publication would ----

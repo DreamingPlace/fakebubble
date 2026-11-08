@@ -43,6 +43,8 @@ import { privateIPv4, WebProviderServer, type ProviderNetwork } from '../apps/se
 import { WebAccountAdmin } from '../apps/server/admin/web-account-admin.ts';
 import { FishAudio } from '../workers/audio/fish.ts';
 import { randomUUID } from 'node:crypto';
+import { WebAdminSpeech } from '../apps/server/characters/web-admin-speech.ts';
+import { DEFAULT_SITE_VOICE_MODEL } from '../packages/contracts/audio.ts';
 import { WebProviderBudget } from '../apps/server/budget/web-provider-budget.ts';
 import {
   liveBudgetPath,
@@ -552,7 +554,15 @@ if (fileURLToPath(import.meta.url) === process.argv[1]) {
           : undefined,
       ),
       network,
-      new WebCharacterPreviewRunner(store, clock, live.text, budget),
+      (() => {
+        const previews = new WebCharacterPreviewRunner(store, clock, live.text, budget);
+        // Part 24k-1: admin speech (生成 a 成品, 预演 试听) through the live Fish transport and the shared budget.
+        // The local runner replies on the site default model (its Fish transport is s2.1-pro), so admin speech does too.
+        previews.useSpeech(
+          new WebAdminSpeech(store, clock, fishTransport(live.fish), budget, DEFAULT_SITE_VOICE_MODEL),
+        );
+        return previews;
+      })(),
     );
     let stopping = false;
     const stop = async () => {

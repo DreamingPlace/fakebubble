@@ -33,6 +33,7 @@ import {
 } from './copy.ts';
 import { diffBubbles } from './diff.ts';
 import { evalSetEditor } from './eval-set-editor.ts';
+import { listenBar } from './listen.ts';
 import { downloadText, exportName, runToCsv, runToJson } from './export.ts';
 import { previewPoller, type PollerHost } from './poller.ts';
 import { reviewCompareView } from './review-compare-view.ts';
@@ -691,6 +692,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     );
   }
   const closeLine = (entry: LineEntry) => {
+    for (const bar of listeners.splice(0)) bar.dispose();
     entry.row.setAttribute('aria-expanded', 'false');
     entry.el.dataset.open = 'false';
     setPanel(entry.panel, false);
@@ -723,6 +725,8 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       entry.inner.replaceChildren(renderDetail(full));
     });
   }
+  /** The 试听 bars of the rows that were opened: their object URLs and players go when the row closes or the page does. */
+  const listeners: { dispose: () => void }[] = [];
   function renderDetail(p: PreviewDetail) {
     const body = h('div', { class: 'pw-detail' });
     const section = (title: string, ...nodes: Node[]) =>
@@ -769,6 +773,23 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
         ),
         diff,
       );
+      if (p.status === 'succeeded' && detail?.speech?.available === true) {
+        const bar = listenBar({
+          api: host.api,
+          characterId: p.characterId,
+          previewId: p.previewId,
+          available: () => detail?.speech?.available === true,
+          hasVoice: () => detail?.speech?.hasVoice === true,
+          allowed: () => can('preview'),
+          run: host.run,
+          newId: nextId,
+          disposed: gone,
+          ...(host.poll?.setTimer ? { setTimer: host.poll.setTimer } : {}),
+          ...(host.poll?.clearTimer ? { clearTimer: host.poll.clearTimer } : {}),
+        });
+        listeners.push(bar);
+        section('试听', bar.root);
+      }
     }
     if (p.review?.coverage) {
       const list = h('ul', { class: 'pw-coverage' });
@@ -1467,6 +1488,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       resetTitle();
       poller.dispose();
       send.dispose();
+      for (const bar of listeners.splice(0)) bar.dispose();
       editor.dispose();
       reviewCompare?.dispose();
     },

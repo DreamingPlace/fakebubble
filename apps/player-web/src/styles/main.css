@@ -13244,6 +13244,111 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   margin: 0;
   padding: 10px 16px 14px;
 }
+/* Part 24k-1: 生成 on a 成品 slot (声音) and 试听 on a 预演 use the shared paid button; this is its compact form outside the 预演 compose bar. */
+.account-admin-page.admin-shell .vc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.account-admin-page.admin-shell .vc-gen,
+.account-admin-page.admin-shell .pw-listen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .pw-listen {
+  margin-top: 8px;
+}
+.account-admin-page.admin-shell .pw-listen .pw-sendbar {
+  flex: 0 1 auto;
+}
+.account-admin-page.admin-shell .vc-gen button.pw-send,
+.account-admin-page.admin-shell .pw-listen button.pw-send,
+.account-admin-page.admin-shell .pw-listen button.pw-play {
+  flex: 0 1 auto;
+  height: auto;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid var(--ad-tint-line);
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: center;
+  transition:
+    background calc(220ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(220ms * var(--ad-motion)) var(--ad-ease),
+    color calc(220ms * var(--ad-motion)) var(--ad-ease),
+    transform calc(220ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-gen button.pw-send:active:not(:disabled),
+.account-admin-page.admin-shell .pw-listen button.pw-send:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.account-admin-page.admin-shell .vc-gen button.pw-send[data-state="confirm"],
+.account-admin-page.admin-shell .pw-listen button.pw-send[data-state="confirm"] {
+  border-color: var(--ad-amber);
+  background: var(--ad-amber-soft);
+  color: var(--ad-amber-ink);
+}
+.account-admin-page.admin-shell .vc-gen button.pw-send:disabled,
+.account-admin-page.admin-shell .pw-listen button.pw-send:disabled {
+  opacity: 1;
+  border-color: var(--ad-hairline);
+  background: #f4f2ef;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .vc-gen .pw-reason,
+.account-admin-page.admin-shell .pw-listen .pw-reason {
+  flex: 1 1 auto;
+}
+.account-admin-page.admin-shell .vc-gen .pw-reason:not([hidden]),
+.account-admin-page.admin-shell .pw-listen .pw-reason:not([hidden]) {
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .pw-listen[hidden],
+.account-admin-page.admin-shell .pw-listen [hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .pw-listen-status {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pw-listen[data-state="speaking"] .pw-listen-status::before,
+.account-admin-page.admin-shell .pw-listen[data-state="playing"] .pw-listen-status::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ad-primary);
+  animation: pwListenPulse calc(900ms * var(--ad-motion)) ease-in-out infinite alternate;
+}
+@keyframes pwListenPulse {
+  from {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+.account-admin-page.admin-shell .vc-origin {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
 .account-admin-page.admin-shell .pw-compare-result {
   display: flex;
   flex-direction: column;

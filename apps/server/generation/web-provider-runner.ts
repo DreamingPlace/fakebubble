@@ -17,6 +17,7 @@ import {
 } from '../../../packages/contracts/audio.ts';
 import type { SoundCue } from '../../../packages/contracts/index.ts';
 import { FishAudio, fishSpeechRequest } from '../../../workers/audio/fish.ts';
+import { webSpeechRequest } from './web-speech-request.ts';
 import { finalizeFishWav, inspectPCM, pcmLevels } from '../../../workers/audio/wav.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
 import type { DeepSeekTextGenerator } from './deepseek.ts';
@@ -374,18 +375,17 @@ export class WebProviderRunner {
     // The binding is a pin or "unpinned"; the model actually sent (and reserved, priced, hashed) is resolved once, here.
     const model = resolveVoiceModel(voice.model, this.siteVoiceModel);
     const deliveryStyle = checkWebV7SceneAtDispatch(this.store as WebStore, claim.operationId, this.clock.now());
-    const speech: SpeechRequest = {
+    const speech: SpeechRequest = webSpeechRequest({
       jobId: `${claim.operationId}-${key.ordinal}`,
       text: bubble.text,
       expression: bubble.expression,
-      speed: 1,
       voice: { profileId: voice.profile_id, referenceId: voice.reference_id, version: voice.voice_revision },
       model,
       // The user heard and selected these voices with Fish quality-guard on (verified on import).
-      ...(voice.source === 'user_selected' ? { qualityGuard: true } : {}),
+      userSelected: voice.source === 'user_selected',
       deliveryStyle,
       ...(bubble.soundCue === undefined ? {} : { soundCue: bubble.soundCue }),
-    };
+    });
     const prepared = fishSpeechRequest(speech, model);
     const { body, bytes: maxUnits, requestHash: wireRequestHash } = prepared;
     this.ledger.reserveForClaim(claim, {
