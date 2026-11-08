@@ -1,7 +1,6 @@
 import { h } from '../../cocreation/h.ts';
 import type { EvalItem, EvalSet, PreviewAdminClient } from '../../../services/preview-admin-api.ts';
-import { confirmDialog } from '../ui/confirm-dialog.ts';
-import { drawer } from '../ui/drawer.ts';
+import { inlineConfirm } from '../ui/inline-confirm.ts';
 
 export const EVAL_LINE_MAX = 50;
 export const EVAL_TEXT_MAX = 4000;
@@ -42,11 +41,26 @@ type Host = {
   toast: (text: string, tone?: 'ok' | 'info' | 'warn' | 'danger') => void;
   /** Called after any change so the picker in the toolbar can refresh. */
   changed: (sets: EvalSet[]) => void;
-  confirmParent: () => HTMLElement;
 };
-/** The 评测集 editor: a drawer with the saved sets on the left and a one-line-per-input editor on the right. */
+/**
+ * The 评测集 editor (Part 24b-6c): opens INLINE under the 评测集 control (no drawer, no dialog), the saved sets on the left and a
+ * one-line-per-input editor on the right. Deleting asks in place, like 版本历史.
+ */
 export function evalSetEditor(parent: HTMLElement, host: Host) {
-  const panel = drawer(parent, { title: '评测集' });
+  const bodyHost = h('div', { class: 'pw-eval-body' });
+  const inner = h('div', { class: 'ot-inner' }, bodyHost);
+  const panel = h('div', { class: 'ot-panel pw-eval-panel', attrs: { 'data-state': 'closed' } }, inner);
+  parent.append(panel);
+  let isOpen = false;
+  const setOpen = (open: boolean) => {
+    isOpen = open;
+    panel.dataset.state = open ? 'open' : 'closed';
+    panel.dataset.settled = 'false';
+    if (open)
+      setTimeout(() => {
+        if (isOpen) panel.dataset.settled = 'true';
+      }, 280);
+  };
   let sets: EvalSet[] = [];
   let current: EvalSet | null = null;
   const list = h('div', { class: 'pw-eval-list' });
@@ -60,9 +74,11 @@ export function evalSetEditor(parent: HTMLElement, host: Host) {
       placeholder: '每行一条输入。可在输入后用 Tab 或 “ || ” 追加期望/备注（≤300 字）。',
     },
   });
-  const note = h('p', { class: 'admin-hint' });
+  const note = h('p', { class: 'admin-hint', attrs: { role: 'status' } });
   const save = h('button', { text: '保存（生成新版本）', attrs: { type: 'button' } });
   const remove = h('button', { class: 'admin-danger', text: '删除', attrs: { type: 'button' } });
+  const close = h('button', { class: 'admin-secondary', text: '收起', attrs: { type: 'button' } });
+  const confirmHost = h('div', { class: 'pw-eval-confirm' });
   const fresh = h('button', { class: 'admin-secondary', text: '新建评测集', attrs: { type: 'button' } });
   const form = h(
     'div',
@@ -70,9 +86,10 @@ export function evalSetEditor(parent: HTMLElement, host: Host) {
     h('label', {}, h('span', { text: '名称' }), name),
     h('label', {}, h('span', { text: '输入（每行一条，最多 50 行）' }), lines),
     note,
-    h('div', { class: 'admin-dialog-actions' }, remove, save),
+    h('div', { class: 'pw-eval-actions' }, remove, save, close),
+    confirmHost,
   );
-  panel.body.append(h('div', { class: 'pw-eval' }, h('div', {}, fresh, list), form));
+  bodyHost.append(h('div', { class: 'pw-eval' }, h('div', {}, fresh, list), form));
 
   const problem = () => evalLineProblem(parseEvalLines(lines.value)) || (name.value.trim() ? '' : '请填写名称。');
   const paintNote = () => {
@@ -134,11 +151,10 @@ export function evalSetEditor(parent: HTMLElement, host: Host) {
     const target = current;
     if (!target || remove.disabled) return;
     void host.run(async () => {
-      const yes = await confirmDialog(host.confirmParent(), {
+      const yes = await inlineConfirm(confirmHost, {
         title: '删除评测集',
         message: `删除“${target.name}”及其全部版本？已运行的结果不受影响。`,
         confirmLabel: '删除',
-        danger: true,
       });
       if (!yes) return;
       await host.api.deleteEvalSet(target.id, target.version);
@@ -147,14 +163,17 @@ export function evalSetEditor(parent: HTMLElement, host: Host) {
       host.toast('评测集已删除。', 'ok');
     });
   });
+  close.addEventListener('click', () => setOpen(false));
   return {
     open(next: EvalSet[]) {
       reload(next);
       load(current ? (next.find((s) => s.id === current!.id) ?? null) : null);
-      panel.open();
+      setOpen(true);
     },
+    close: () => setOpen(false),
+    isOpen: () => isOpen,
     setSets: reload,
-    dispose: () => panel.dispose(),
+    dispose: () => panel.remove(),
     panel,
   };
 }

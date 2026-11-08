@@ -634,17 +634,18 @@ try {
   assert.ok(tip.x > rowBox.x + 40, 'to the right of the pointer');
   assert.ok(tip.y >= rowBox.y + rowBox.height - 1, 'below the hovered item: it does not cover it');
   await shot('members-tooltip');
-  // the cost line of 预演 is a tooltip as well
-  await go('characters/jojo', '.pw-ack');
-  await wait(800);
-  await page.locator('.pw-ack').hover();
+  // Named exception (Part 24b-6c): the cost of 预演 is no tooltip any more; it is the send button's own label ("预演 1 条 · 2 次付费调用"),
+  // and the longer breakdown is that button's hover text.
+  await go('characters/jojo', '.wb-tab');
+  await page.locator('.wb-tab', { hasText: '预演' }).click();
+  await wait(600);
+  await page.locator('textarea[aria-label="预演输入"]').fill('你好');
   await wait(300);
-  const costTip = await page
-    .locator('.pw-estimate')
-    .evaluate((n: Element) => [getComputedStyle(n).display, getComputedStyle(n).backgroundColor, n.textContent]);
-  assert.notEqual(costTip[0], 'none');
-  assert.equal(costTip[1], 'rgb(255, 255, 255)');
-  assert.match(String(costTip[2]), /次付费调用/);
+  const costLabel = await page
+    .locator('[data-pw-send="preview"]')
+    .evaluate((n: Element) => [n.textContent, n.getAttribute('title')]);
+  assert.match(String(costLabel[0]), /2 次付费调用/);
+  assert.match(String(costLabel[1]), /次付费调用/);
   assert.equal(await page.getByText('固定身份不可修改').count(), 0, 'the leftover explanation line is gone');
 
   // ---- 共创收件箱: dots with the full name, labelled actions, a bulk bar for several rows ----

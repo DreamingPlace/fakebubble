@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { startConsoleFixture } from './console-fixture-24b6.ts';
 import { decodePng } from './png-pixels.ts';
 import { run24b6bChecks } from './console-24b6b-checks.ts';
+import { run24b6cChecks } from './console-24b6c-checks.ts';
 
 /**
  * Part 24b-6: the V3 admin console in a REAL browser (Chromium), on the synthetic site of console-fixture-24b6.ts (15 characters, a full
@@ -559,17 +560,22 @@ try {
   await page.locator('.wb-tab').nth(0).click();
   await page.getByRole('button', { name: '预演后发布' }).click();
   await wait(500);
+  // Named exception (Part 24b-6c): 预演后发布 goes straight to the 预演 column with its box focused (it opened 发布).
   check(
-    (await page.locator('.wb-tab[aria-current="true"]').innerText()).trim() === '发布',
-    '角色工作台: 预演后发布 did not open 发布',
+    (await page.locator('.wb-tab[aria-current="true"]').innerText()).trim() === '预演',
+    '角色工作台: 预演后发布 did not open 预演',
+  );
+  check(
+    await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === '预演输入'),
+    '角色工作台: 预演后发布 did not focus the 预演 box',
   );
 
-  // 预演: the controls, the results table across the whole width
+  // 预演: the settings line across the whole width (Part 24b-6c: one column; the results table is the feed below the box)
   await page.locator('.wb-tab').nth(9).click();
   await wait(900);
   const preview = await page.evaluate(() => {
     const section = document.querySelector('.wb-preview-section') as HTMLElement;
-    const table = document.querySelector('.pw-results') as HTMLElement | null;
+    const table = document.querySelector('.pw-summary') as HTMLElement | null;
     return {
       section: Math.round(section.getBoundingClientRect().width),
       table: table ? Math.round(table.getBoundingClientRect().width) : 0,
@@ -577,7 +583,7 @@ try {
   });
   check(
     preview.table >= preview.section - 4,
-    `角色工作台 预演: the results table is ${preview.table} wide in a ${preview.section} section`,
+    `角色工作台 预演: the settings line is ${preview.table} wide in a ${preview.section} section`,
   );
   await shot('workbench-preview');
 
@@ -1917,7 +1923,42 @@ if (mainPassed) {
     process.stderr.write(`${problems.length} problem(s):\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
     failure = new Error('console 24b-6b checks failed');
   }
-  if (!failure) process.stdout.write('console 24b-6 browser check: PASS (with the 24b-6b checks)\n');
+}
+// Part 24b-6c: the permission options of 管理员与权限 and the one-column 预演. Another fresh site, now WITH the offline provider (a scripted answer
+// after a short wait; nothing reaches a real provider), once the previous one is closed (same port).
+if (mainPassed && !failure) {
+  const h = await startConsoleFixture({ provider: { draftMs: 700, reviewMs: 700 } });
+  try {
+    const page3: Page = await h.context.newPage();
+    page3.on('pageerror', (error: unknown) => problems.push(`24b-6c pageerror ${String(error)}`));
+    await run24b6cChecks({
+      f: h,
+      page: page3,
+      wait: (ms = 600) => page3.waitForTimeout(ms),
+      open: async (route: string) => {
+        await page3.goto(`${h.origin}/?mode=provider-admin#/${route}`);
+        await page3.reload();
+        await page3.locator('.admin-content').first().waitFor({ timeout: 20_000 });
+        await page3.waitForTimeout(1400);
+      },
+      shot: async (name: string) => {
+        if (!shots) return;
+        await page3.waitForTimeout(300);
+        await page3.screenshot({ path: join(shots, `${name}.png`) });
+      },
+      check,
+      sizes: SIZES,
+    });
+  } catch (error) {
+    failure = error;
+  } finally {
+    await h.close();
+  }
+  if (!failure && problems.length) {
+    process.stderr.write(`${problems.length} problem(s):\n${problems.map((p) => `  - ${p}`).join('\n')}\n`);
+    failure = new Error('console 24b-6c checks failed');
+  }
+  if (!failure) process.stdout.write('console 24b-6 browser check: PASS (with the 24b-6b and 24b-6c checks)\n');
 }
 if (failure) {
   console.error(failure);

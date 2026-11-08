@@ -14,8 +14,8 @@ import {
 } from '../../../../../../packages/contracts/review-compare.ts';
 import type { ReviewCompareClient } from '../../../services/preview-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
-import { dataTable } from '../ui/data-table.ts';
-import { drawer } from '../ui/drawer.ts';
+import { openTable } from '../ui/open-table.ts';
+import { paidButton } from '../ui/paid-button.ts';
 import { statusBadge } from '../ui/status-badge.ts';
 import { micros, when } from './copy.ts';
 import { diffBubbles, diffSideBySide, type Piece } from './diff.ts';
@@ -38,6 +38,7 @@ export type ReviewCompareHost = {
 };
 
 const SIDE_NAME = COMPARE_SIDE_LABELS;
+type CaseOf = CompareCaseResult;
 const pct = (passed: number, total: number) => (total === 0 ? '—' : `${Math.round((passed / total) * 1000) / 10}%`);
 const ms = (value: number | null) => (value === null ? '—' : `${value} ms`);
 const stateText = (r: CompareSideResult) =>
@@ -87,18 +88,27 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
     host.poll?.hidden ?? (() => (globalThis as { document?: { hidden?: boolean } }).document?.hidden === true);
 
   // ---- start card -------------------------------------------------------------------------------------------------
-  // The cost stays visible next to the confirmation: a paid call is never confirmed blind.
-  const costLine = h('p', { class: 'admin-hint rc-estimate', attrs: { id: 'rc-estimate-tip', role: 'note' } });
-  const ack = h('input', { attrs: { type: 'checkbox', 'aria-label': '确认发起付费审核对比' } });
-  const ackLine = h('label', { class: 'admin-check pw-ack' }, ack, h('span', { text: '确认发起付费审核对比' }));
-  ack.setAttribute('aria-describedby', 'rc-estimate-tip');
-  const startButton = h('button', { class: 'admin-primary', text: '开始审核对比', attrs: { type: 'button' } });
-  const startHint = h('p', { class: 'admin-hint', hidden: true });
-  const intro = h('p', {
-    class: 'admin-hint',
-    text: '用内置的合成用例（不含任何玩家数据）：每个用例先写一份草稿，再让 V4 Pro 和 V4.1 Flash 各审核同一份草稿。结果只用来选择审核模型，不会影响线上。',
+  // The paid-call confirmation is ON the button (the same pattern as 预演): it says what it will do and what it costs, the first
+  // click asks again, and when it cannot start the reason sits beside it. The longer cost breakdown is the button's hover text.
+  const start = paidButton({
+    name: 'review-compare',
+    label: () => (estimate ? `审核对比 ${estimate.cases} 个用例 · ${estimate.calls} 次付费调用` : '审核对比'),
+    confirmLabel: () => `确认付费 · ${estimate?.calls ?? 0} 次`,
+    reason: () =>
+      !host.canStart()
+        ? '需要全部角色的预演权限'
+        : !estimate
+          ? '正在读取'
+          : busy
+            ? '正在提交'
+            : runs.some((r) => r.running)
+              ? '有一次运行还在进行'
+              : '',
+    onConfirm: () => startNow(),
+    ...(host.poll?.setTimer ? { setTimer: host.poll.setTimer } : {}),
+    ...(host.poll?.clearTimer ? { clearTimer: host.poll.clearTimer } : {}),
   });
-  const startCard = h('div', { class: 'rc-start' }, intro, ackLine, costLine, startButton, startHint);
+  const startCard = h('div', { class: 'rc-start' }, start.root);
 
   // ---- results ----------------------------------------------------------------------------------------------------
   const runsHost = h('div', { class: 'rc-runs', attrs: { role: 'group', 'aria-label': '审核对比的运行' } });
@@ -110,7 +120,6 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
   const wrap = h(
     'div',
     { class: 'rc' },
-    h('h3', { text: '审核对比 · V4 Pro 与 V4.1 Flash' }),
     startCard,
     runsHost,
     progress,
@@ -120,26 +129,23 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
     casesHost,
   );
   root.append(wrap);
-  // On the page's main element, not inside the preview column: the role picker of 角色工作台 would otherwise sit over its header.
-  const side = drawer(host.modalParent(), { title: '用例对比', wide: true });
-
-  const canGo = () => host.canStart() && !busy && ack.checked && !!estimate && !runs.some((r) => r.running);
   // The page re-enables controls after every request; `data-locked` is what keeps a control off.
   const off = (control: HTMLButtonElement | HTMLInputElement, value: boolean) => {
     control.disabled = value;
     control.dataset.locked = String(value);
   };
   const lock = () => {
-    off(startButton, !canGo());
-    off(ack, !host.canStart() || busy);
-    startHint.hidden = host.canStart();
-    startHint.textContent = host.canStart() ? '' : '只读：发起审核对比需要“预演”的全部角色权限';
+    start.refresh();
     off(exportButton, !detail);
   };
   const paintEstimate = () => {
-    costLine.textContent = estimate
-      ? `${estimate.cases} 个用例 = ${estimate.calls} 次付费调用（每个用例：1 次草稿 + V4 Pro、V4.1 Flash 各 1 次审核）；预计花费约 ${micros(estimate.typicalMicros)}（官方标价估算），单次调用最多预留 ${micros(estimate.holdMicros)}。用例在预演队列里逐个运行，不会自动重发。`
-      : '';
+    start.button.setAttribute(
+      'title',
+      estimate
+        ? `每个用例：1 次草稿 + V4 Pro、V4.1 Flash 各 1 次审核；预计约 ${micros(estimate.typicalMicros)}（官方标价估算），单次调用最多预留 ${micros(estimate.holdMicros)}；逐个运行，不会自动重发`
+        : '',
+    );
+    lock();
   };
 
   // ---- summary table ----------------------------------------------------------------------------------------------
@@ -205,32 +211,38 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
       passed === r.expectations.length && r.state === 'ok' ? 'ok' : 'warn',
     );
   };
-  const table = dataTable<CompareCaseResult>({
+  const table = openTable<CompareCaseResult>({
+    label: '用例',
+    className: 'rc-table-open',
+    emptyText: '还没有审核对比的运行。',
+    rowKey: (c) => String(c.ordinal),
     columns: [
-      { key: 'ordinal', label: '#', sortable: true, sortValue: (c) => c.ordinal, render: (c) => String(c.ordinal) },
-      { key: 'group', label: '类别', sortable: true, render: (c) => c.group },
-      { key: 'title', label: '用例', render: (c) => c.title },
-      { key: 'status', label: '状态', render: (c) => statusBadge(caseLabel[c.status], caseTone[c.status]) },
-      { key: 'pro', label: SIDE_NAME.pro, render: (c) => passCell(c.pro) },
-      { key: 'flash', label: SIDE_NAME.flash, render: (c) => passCell(c.flash) },
+      { key: 'ordinal', label: '#', width: '36px', cell: (c) => String(c.ordinal) },
+      { key: 'group', label: '类别', cell: (c) => c.group },
+      { key: 'title', label: '用例', width: 'minmax(0, 1.6fr)', cell: (c) => c.title },
+      { key: 'status', label: '状态', cell: (c) => statusBadge(caseLabel[c.status], caseTone[c.status]) },
+      { key: 'pro', label: SIDE_NAME.pro, cell: (c) => passCell(c.pro) },
+      { key: 'flash', label: SIDE_NAME.flash, cell: (c) => passCell(c.flash) },
       {
         key: 'marks',
         label: '标记',
-        render: (c) =>
+        cell: (c) =>
           [c.pro.mark, c.flash.mark].some(Boolean)
             ? `${c.pro.mark ? COMPARE_MARK_LABELS[c.pro.mark] : '—'} / ${c.flash.mark ? COMPARE_MARK_LABELS[c.flash.mark] : '—'}`
             : '—',
       },
     ],
-    rowKey: (c) => String(c.ordinal),
-    emptyText: '还没有审核对比的运行。',
-    caption: '用例',
-    onRowOpen: (c) => openCase(c.ordinal),
-    openOn: 'click',
+    detail: (c) => {
+      openOrdinal = c.ordinal;
+      return caseDetail(c);
+    },
+    onToggle: (key) => {
+      openOrdinal = key === null ? null : Number(key);
+    },
   });
   casesHost.append(table.root);
 
-  function resultColumn(c: CompareCaseResult, s: CompareSide) {
+  function resultColumn(c: CaseOf, s: CompareSide) {
     const r = c[s];
     const col = h('section', { class: 'rc-side', attrs: { 'aria-label': SIDE_NAME[s], 'data-side': s } });
     col.append(h('h4', { text: SIDE_NAME[s] }), h('p', { class: 'admin-hint', text: `状态：${stateText(r)}` }));
@@ -289,13 +301,10 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
     col.append(marks);
     return col;
   }
-  function openCase(ordinal: number) {
-    const c = detail?.cases.find((x) => x.ordinal === ordinal);
-    if (!c) return;
-    openOrdinal = ordinal;
-    side.setTitle(`用例 ${c.ordinal} · ${c.title}`);
-    const body = side.body;
-    body.replaceChildren(
+  /** The case, opened BELOW its row: the player's input, the one draft both reviewers saw, each reviewer's side and the difference. */
+  function caseDetail(c: CaseOf): Node {
+    const body = h('div', { class: 'rc-detail' });
+    body.append(
       h('p', { class: 'admin-hint', text: `玩家输入：${c.input.join(' / ')}` }),
       h('p', { class: 'admin-hint', text: `期望：${c.expected.join('；')}` }),
       h('h4', { text: '草稿（两个审核模型审核的是同一份）' }),
@@ -328,14 +337,13 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
         );
       body.append(h('h4', { text: '两个审核模型的最终回复差异' }), grid);
     }
-    side.open();
+    return body;
   }
   async function setMark(c: CompareCaseResult, s: CompareSide, mark: CompareMark | null) {
     if (!current || busy) return;
     await host.run(async () => {
       await host.api.mark({ runId: current!, ordinal: c.ordinal, side: s, mark });
       await load(current!);
-      if (openOrdinal === c.ordinal) openCase(c.ordinal);
     });
   }
 
@@ -406,7 +414,6 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
             detail = next;
             runs = runs.map((r) => (r.runId === next.run.runId ? next.run : r));
             paint();
-            if (openOrdinal !== null && side.isOpen()) openCase(openOrdinal);
             schedule();
           },
           () => schedule(),
@@ -414,9 +421,8 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
     }, 5000);
   }
 
-  [ack].forEach((input) => input.addEventListener('change', lock));
-  startButton.addEventListener('click', () => {
-    if (!canGo() || !estimate) return;
+  function startNow() {
+    if (!estimate || busy) return;
     busy = true;
     lock();
     // The same submission is retried under the same request id, so a lost reply can never queue a second run.
@@ -426,7 +432,6 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
       .run(async () => {
         const result = await host.api.start(request);
         pendingStart = null;
-        ack.checked = false;
         host.toast(
           result.replayed ? '这次审核对比已经提交过' : '已提交审核对比；用例会按顺序在预演队列里运行。',
           'info',
@@ -438,7 +443,7 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
         busy = false;
         lock();
       });
-  });
+  }
   exportButton.addEventListener('click', () => {
     if (!current || !detail) return;
     const runId = current;
@@ -462,12 +467,11 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
       timer = null;
       current = null;
       detail = null;
-      side.close();
     },
     dispose() {
       disposed = true;
       if (timer !== null) clear(timer);
-      side.dispose();
+      start.dispose();
     },
   };
 }

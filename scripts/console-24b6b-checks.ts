@@ -290,9 +290,15 @@ export async function run24b6bChecks(ctx: Ctx) {
     const top = maxV();
     const total = versionsOf();
     check(rows === 5, `版本历史 ${at}: ${rows} rows for ${total} versions (5 wanted)`);
+    // Named exception (Part 24b-6c): the explanatory line under the list is gone. The count (共 N 个) is the visible text and the
+    // "only the latest 5, the older ones are kept" sentence is its hover tip.
     check(
-      new RegExp(`只列出最近 5 个版本，共 ${total} 个`).test(await page.locator('.vh .vh-more').innerText()),
-      `版本历史 ${at}: the "older ones are kept" line is missing`,
+      (await page.locator('.vh .vh-more').innerText()).replace(/\s+/g, '') === `共${total}个`,
+      `版本历史 ${at}: the count under the list is missing`,
+    );
+    check(
+      new RegExp(`只列出最近 5 个版本，共 ${total} 个`).test((await page.locator('.vh .vh-more').textContent()) ?? ''),
+      `版本历史 ${at}: the hover tip of the count is missing`,
     );
     const firstText = (await page.locator('.vh .ot-row').first().innerText()).replace(/\s+/g, ' ');
     check(

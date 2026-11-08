@@ -423,7 +423,9 @@ try {
   await rows(view).first().waitFor();
   // Named exception (Part 24b-6b): six versions exist by now, and the list shows the latest 5 (the older one stays in the database).
   assert.equal(await rows(view).count(), 5, 'the non-owner sees the latest five versions');
-  assert.match(await view.locator('.vh .vh-more').innerText(), /只列出最近 5 个版本，共 6 个/);
+  // Named exception (Part 24b-6c): the count is the visible text, the explanation is its hover tip.
+  assert.equal((await view.locator('.vh .vh-more').innerText()).replace(/\s+/g, ''), '共6个');
+  assert.match((await view.locator('.vh .vh-more').textContent()) ?? '', /只列出最近 5 个版本，共 6 个/);
   assert.equal(await view.locator('[data-restore]').count(), 0, 'no restore button for a non-owner');
   await snap(view, '08-non-owner-list');
   await rows(view).nth(2).click();
@@ -452,11 +454,14 @@ try {
   await members.waitForTimeout(1800); // let the page finish its own reads before a row is opened
   const oldRow = members.locator('.ot-row', { hasText: '旧授权' }).first();
   if ((await oldRow.getAttribute('aria-expanded')) !== 'true') await oldRow.click({ position: { x: 14, y: 8 } });
-  await members.getByText('删除角色（已失效）').waitFor({ timeout: 10_000 });
+  // Named exception (Part 24b-6c): the row's hover tip now lists what is held by name, so the same words also sit in that tip. The grid's own
+  // entry (class permission-dead) is what these checks look at.
+  const dead = members.locator('.permission-dead', { hasText: '删除角色（已失效）' });
+  await dead.waitFor({ timeout: 10_000 });
   await members.waitForTimeout(600);
   await snap(members, '09-members-without-delete');
   // The add form (no stored grant) has no delete row at all; the old stored grant is named, never shown as a raw key.
-  assert.equal(await members.getByText('删除角色（已失效）').count(), 1, 'the old grant reads 删除角色（已失效）');
+  assert.equal(await dead.count(), 1, 'the old grant reads 删除角色（已失效）');
   assert.equal(await members.getByText(/characters\.delete/).count(), 0, 'never the raw key');
 
   assert.deepEqual(errors, [], 'no page errors, no unexpected failed requests');

@@ -19,6 +19,7 @@ import { syntheticSelection } from '../tests/web/fixtures/provider-selection.ts'
 import { SAMPLE_NAMES, sampleCastRaw, sampleId } from '../tests/web/fixtures/cast-sample.ts';
 import { ROSTER_COLOURS } from '../apps/player-web/src/features/admin/ui/character-colour.ts';
 import { characterProfileHash } from '../apps/server/characters/web-character-catalog.ts';
+import { acceptedAuditEnvelope, draftEnvelope } from '../tests/text-fixtures.ts';
 
 /**
  * Part 24b-6: the synthetic site the V3 console is looked at on (the browser audit and the screenshots). A real migrated
@@ -57,14 +58,24 @@ export const NOW = Date.parse('2026-11-20T10:00:00Z');
 const STARTED = Date.parse('2026-11-03T08:00:00Z');
 const day = (at: number) => new Date(at).toISOString().slice(0, 10);
 
-export async function startConsoleFixture() {
+/**
+ * Part 24b-6c: the OFFLINE provider the 预演 checks drive. Nothing leaves the machine. `draftMs` / `reviewMs` hold each phase long enough to
+ * be looked at; an input that contains 「失败」 is answered with a provider error (the failed row). Without `provider` the fixture answers
+ * every call with a 500, as before.
+ */
+export type FixtureProvider = { draftMs: number; reviewMs: number };
+export type FixtureOptions = { provider?: FixtureProvider; cdpPort?: number };
+
+export async function startConsoleFixture(options: FixtureOptions = {}) {
   const { parent } = localRuntime();
   mkdirSync(parent, { recursive: true, mode: 0o700 });
   const root = join(parent, `provider-console-${randomUUID().slice(0, 12)}`);
   initProviderInstance(root);
   migrateProvider(root, syntheticSelection(), STARTED);
   const { config, store } = openProviderStore(root);
-  const clock = { now: () => NOW };
+  // With the offline provider the clock moves on (a preview's rows must be ordered by when they were made); otherwise it stands on NOW.
+  const started = Date.now();
+  const clock = { now: () => (options.provider ? NOW + (Date.now() - started) : NOW) };
   // Points and model choice are on (the Models and Points pages, daily-refill batches).
   Object.assign(store, { publicFreeTier: true, playerModelChoice: ['deepseek', 'gemini', 'xai'] });
   const ledger = new WebProviderOffline(store, clock);
@@ -84,10 +95,38 @@ export async function startConsoleFixture() {
       wav: syntheticTone(),
     });
   }
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const offlineText = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
-    fetch: async () => new Response('{}', { status: 500 }),
+    fetch: async (_url, init) => {
+      const provider = options.provider;
+      if (!provider) return new Response('{}', { status: 500 });
+      const body = JSON.parse(String(init!.body));
+      const tool = body.tools[0].function.name as string;
+      const compare = store.get<{ request_json: string }>(
+        "SELECT request_json FROM web_review_compare_cases WHERE status='generating'",
+      );
+      const generating =
+        compare ??
+        store.get<{ request_json: string }>("SELECT request_json FROM admin_previews WHERE status='generating'");
+      if (!generating) return new Response('{}', { status: 500 });
+      const request = JSON.parse(generating.request_json);
+      const text = String(request.messages?.[0]?.text ?? '');
+      const draftPhase = tool === 'submit_dialogue_draft';
+      await sleep(draftPhase ? provider.draftMs : provider.reviewMs);
+      if (!compare && text.includes('失败')) return new Response('{}', { status: 500 });
+      if (draftPhase) return Response.json(draftEnvelope(request));
+      const envelope = acceptedAuditEnvelope(request);
+      if (compare) {
+        const args = JSON.parse(envelope.choices[0]!.message.tool_calls![0]!.function.arguments);
+        for (const id of request.requiredMessageIds as string[])
+          args.coverage[id] = { status: 'answered', supportQuote: '嗯', missingInformation: '' };
+        envelope.choices[0]!.message.tool_calls![0]!.function.arguments = JSON.stringify(args);
+      }
+      return Response.json(envelope);
+    },
   });
+
   const runner = new WebProviderRunner(store, clock, offlineText, async (request) => ({
     audio: syntheticTone(),
     receipt: { id: 'fake' },
@@ -261,9 +300,10 @@ export async function startConsoleFixture() {
 
   await app.listen();
   const { chromium } = loadPlaywright();
-  const browser = await chromium.launch(
-    process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {},
-  );
+  const browser = await chromium.launch({
+    ...(process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {}),
+    ...(options.cdpPort ? { args: [`--remote-debugging-port=${options.cdpPort}`] } : {}),
+  });
   const origin = new URL(config.origin).origin;
   const API = `${origin}/api/web/provider`;
   const admins = new WebAccountAdmin(store, clock, config.origin);

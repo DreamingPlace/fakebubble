@@ -1,10 +1,11 @@
 import {
   ADMIN_PERMISSION_PRESETS,
-  itemPermission,
   type AdminPermission,
+  type AdminPermissionItem,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import type { AccountAdminApi } from '../../services/account-admin-api.ts';
 import { h } from '../cocreation/h.ts';
+import { grantedNames } from './permission-matrix.ts';
 import { dateTimeText } from './system-format.ts';
 import { dangerZone } from './ui/danger-zone.ts';
 import { openTable } from './ui/open-table.ts';
@@ -30,8 +31,13 @@ export const markColour = (index: number) => MARK_COLOURS[index % MARK_COLOURS.l
 export type MembersViewOptions = {
   /** The title row host (the page keeps its own heading element, the view fills the right side). */
   head: HTMLElement;
-  /** The add bar's preset buttons, and the table / detail hosts of the page. */
+  /** The add bar: the preset buttons (they only tick the grid), the grid under the name field, the one issue button and its reason. */
   presetHost: HTMLElement;
+  gridHost: HTMLElement;
+  nameInput: HTMLInputElement;
+  issueButton: HTMLButtonElement;
+  reasonHost: HTMLElement;
+  /** The table / detail hosts of the page. */
   table: HTMLElement;
   list: HTMLElement;
   /** Items the preset buttons may grant on this page (the same filter as the grid). */
@@ -40,7 +46,15 @@ export type MembersViewOptions = {
     host: HTMLElement,
     initial: readonly AdminPermission[],
     onChange: (dirty: number) => void,
-  ) => { value(): AdminPermission[]; setDisabled(disabled: boolean): void; dirty(): number };
+    adding?: boolean,
+  ) => {
+    value(): AdminPermission[];
+    setDisabled(disabled: boolean): void;
+    dirty(): number;
+    count(): number;
+    setItems(items: readonly AdminPermissionItem[]): void;
+    items(): AdminPermissionItem[];
+  };
   run: (work: () => Promise<void>) => Promise<void> | void;
   busy: () => boolean;
   api: Pick<AccountAdminApi, 'members' | 'issueMember' | 'setPermissions' | 'revokeCredential'>;
@@ -65,33 +79,55 @@ export function membersView(options: MembersViewOptions) {
   const headStatus = h('span', { class: 'head-status' });
   options.head.replaceChildren(headStatus);
 
-  // ---- add bar ----
+  // ---- add bar: name, the same grouped grid an open administrator has, presets that only tick it, one issue button ----
   const presetButtons = new Map<string, HTMLButtonElement>();
+  let applied: { id: string; key: string } | null = null;
+  let adder: ReturnType<MembersViewOptions['permissionControls']> | null = null;
+  const tickedKey = () => (adder ? [...adder.items()].sort().join(',') : '');
   const paintPresets = () => {
-    for (const [id, button] of presetButtons) button.setAttribute('aria-pressed', String(id === preset));
+    for (const [id, button] of presetButtons)
+      button.setAttribute('aria-pressed', String(applied?.id === id && applied.key === tickedKey()));
+  };
+  const issueState = () => {
+    const n = adder?.count() ?? 0;
+    if (unknownIssue) return { n, why: '上次签发结果未确认，请重新打开本页' };
+    if (!options.nameInput.value.trim()) return { n, why: '先填写备注' };
+    if (n === 0) return { n, why: '没有勾选任何权限' };
+    if (n > options.permissionLimit) return { n, why: `最多 ${options.permissionLimit} 项` };
+    return { n, why: '' };
+  };
+  const paintIssue = () => {
+    if (!adder) return;
+    const { n, why } = issueState();
+    options.issueButton.textContent = `签发凭据 · ${n} 项`;
+    options.issueButton.dataset.locked = String(why !== '');
+    options.issueButton.disabled = why !== '' || options.busy();
+    options.reasonHost.textContent = why;
+    options.reasonHost.hidden = why === '';
+    paintPresets();
+  };
+  adder = options.permissionControls(options.gridHost, [], paintIssue, true);
+  const ticking = adder;
+  // A preset only TICKS the grid (it replaces the ticks); the owner can then tick or untick anything.
+  const applyPreset = (item: (typeof ADMIN_PERMISSION_PRESETS)[number]) => {
+    ticking.setItems(item.items.filter((permission) => options.shown(permission)));
+    applied = { id: item.id, key: tickedKey() };
+    paintIssue();
   };
   for (const item of ADMIN_PERMISSION_PRESETS) {
     const button = h('button', {
       class: 'mb-preset',
       text: item.label,
-      attrs: { type: 'button', 'aria-pressed': 'false' },
+      attrs: { type: 'button', 'aria-pressed': 'false', 'data-preset': item.id },
     });
-    button.addEventListener('click', () => {
-      preset = item.id;
-      paintPresets();
-    });
+    button.addEventListener('click', () => applyPreset(item));
     presetButtons.set(item.id, button);
     options.presetHost.append(button);
   }
-  paintPresets();
-  const presetPermissions = (): AdminPermission[] => {
-    const chosenPreset = ADMIN_PERMISSION_PRESETS.find((p) => p.id === preset) ?? ADMIN_PERMISSION_PRESETS[0]!;
-    return chosenPreset.items
-      .filter((item) => options.shown(item))
-      .map(itemPermission)
-      .sort();
-  };
-  const issuePermissions = () => presetPermissions();
+  options.nameInput.addEventListener('input', paintIssue);
+  // The first preset is the starting point, so the grid is never silently empty and never silently full.
+  applyPreset(ADMIN_PERMISSION_PRESETS[0]!);
+  const issuePermissions = (): AdminPermission[] => ticking.value();
 
   const paintHead = () => {
     if (!result) return;
@@ -139,7 +175,7 @@ export function membersView(options: MembersViewOptions) {
         tip: (member) =>
           member.role === 'owner'
             ? `主管理员总是全部 ${options.totalPermissions} 项`
-            : `${member.permissions.length} / ${options.totalPermissions} 项`,
+            : `${member.permissions.length} / ${options.totalPermissions} 项：${grantedNames(member.permissions).join('、') || '无'}`,
       },
       {
         key: 'last',
@@ -271,17 +307,22 @@ export function membersView(options: MembersViewOptions) {
   // ---- add form ----
   const issue = async (label: string) => {
     if (unknownIssue) return;
+    const permissions = issuePermissions();
+    if (issueState().why !== '') return;
     try {
       const issued = await options.api.issueMember({
         requestId: crypto.randomUUID(),
         label,
         memberId: null,
-        permissions: issuePermissions(),
+        permissions,
       });
       options.showSecret('管理员一次性登录凭据 · 1 小时内使用', issued.token);
+      options.nameInput.value = '';
+      paintIssue();
       await load();
     } catch (error) {
       unknownIssue = true;
+      paintIssue();
       throw error;
     }
   };
@@ -304,6 +345,11 @@ export function membersView(options: MembersViewOptions) {
     get issueLocked() {
       return unknownIssue;
     },
+    /** The add bar's button is off for any reason the line beside it names (the page re-enables controls after every request). */
+    get issueBlocked() {
+      return issueState().why !== '';
+    },
+    paintIssue,
     clear() {
       options.table.replaceChildren();
       options.list.replaceChildren();
