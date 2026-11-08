@@ -170,6 +170,29 @@ const stage = (v: unknown): StageCost | null => {
     wallMs: nint(r.wallMs),
   };
 };
+/** The short answer of review-start: what a just-queued single preview is, with the rest of the row empty until it is read again. */
+export function previewStartRow(v: unknown): PreviewRow {
+  const r = object(v);
+  return {
+    previewId: string(r.previewId),
+    characterId: string(r.characterId),
+    draftRevision: int(r.draftRevision),
+    profileHash: string(r.profileHash),
+    status: status(r.status),
+    errorCode: nstring(r.errorCode),
+    input: nstring(r.input),
+    createdAt: int(r.createdAt),
+    finishedAt: null,
+    runId: null,
+    ordinal: null,
+    note: null,
+    simulatedTime: null,
+    settlement: null,
+    cost: { draft: null, review: null, chargedMicros: 0, heldMicros: 0 },
+    latency: { draftMs: null, reviewMs: null },
+    final: null,
+  };
+}
 export function previewRow(v: unknown): PreviewRow {
   const r = object(v),
     cost = object(r.cost),
@@ -326,7 +349,10 @@ export class PreviewAdminClient {
       castSource?: PreviewCastSource;
     },
   ) {
-    return previewRow(await this.call(id, 'review-start', input));
+    const r = object(await this.call(id, 'review-start', input));
+    // The server answers a started single preview with the short start shape (no cost, latency or result rows yet); the full
+    // row arrives with the next status read. Both shapes are accepted, so the row can be shown at once as 排队中.
+    return 'cost' in r ? previewRow(r) : previewStartRow(r);
   }
   async list(id: string) {
     const r = object(await this.call(id, 'run-list'));

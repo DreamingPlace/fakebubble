@@ -8,12 +8,6 @@ export const STATUS_LABEL: Record<PreviewRow['status'], string> = {
   succeeded: '已通过',
   failed: '失败',
 };
-export const STATUS_TONE: Record<PreviewRow['status'], BadgeTone> = {
-  queued: 'neutral',
-  generating: 'info',
-  succeeded: 'ok',
-  failed: 'danger',
-};
 export const COVERAGE_LABEL = { answered: '已回答', later: '稍后续答', needs_player: '待玩家补充' } as const;
 export const SETTLEMENT_LABEL: Record<Settlement, string> = {
   settled_known: '已按实际用量结算',

@@ -3231,49 +3231,7 @@ body:has(.admin-shell) {
   align-self: center;
   margin: 0;
 }
-.pw-compose {
-  display: grid;
-  gap: 8px;
-}
-.pw-compose-row {
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
-}
-.pw-compose-row input[type="text"],
-.pw-compose-row textarea {
-  flex: 1;
-  min-width: 0;
-}
-.pw-compose-col {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-  width: 260px;
-}
-.pw-estimate {
-  margin: 0;
-}
-.pw-run {
-  background: var(--ad-surface);
-  border: 1px solid var(--ad-border);
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-.pw-run > summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-}
-.pw-run-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
+
 .pw-run-body {
   padding: 0 10px 10px;
 }
@@ -7361,34 +7319,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-size: 13px;
   white-space: nowrap;
 }
-.account-admin-page.admin-shell .wb-preview .pw-compose {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.account-admin-page.admin-shell .wb-preview .pw-compose-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .wb-preview .pw-compose-row > input {
-  flex: 1 1 0;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .wb-preview .pw-compose-row > textarea {
-  flex: 1 1 100%;
-  height: 84px;
-}
-.account-admin-page.admin-shell .wb-preview .pw-compose-col {
-  display: flex;
-  flex: 1 1 100%;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .wb-preview .pw-compose-col > input {
-  flex: 1;
-  min-width: 0;
-}
+
 .account-admin-page.admin-shell .wb-preview .pw .admin-hint,
 .account-admin-page.admin-shell .wb-preview .pw .admin-empty {
   margin: 0;
@@ -7853,15 +7784,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
     opacity: 1;
   }
 }
-.account-admin-page.admin-shell .pw-ack {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .pw-ack-i {
-  color: var(--ad-muted);
-  font-size: 13px;
-}
 
 /* ---- 角色工作台: the editor takes the width, 预演 keeps 420 and stretches with it; the sections fit on one row ---- */
 @container adc (min-width: 1064px) {
@@ -8037,7 +7959,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .ot-cell {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .account-admin-page.admin-shell .ot-cell.is-end {
   text-align: right;
@@ -11511,35 +11433,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   border-radius: 0;
   background: transparent;
 }
-.account-admin-page.admin-shell #admin-characters .pw-compose {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: 20px 28px;
-  align-items: start;
-}
-.account-admin-page.admin-shell #admin-characters .pw-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell #admin-characters .pw-controls .admin-bar {
-  flex-direction: column;
-  align-items: stretch;
-}
-.account-admin-page.admin-shell #admin-characters .pw-chat {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--ad-hairline);
-  border-radius: 16px;
-  background: #fbfaf8;
-}
-.account-admin-page.admin-shell #admin-characters .pw-results {
-  margin-top: 20px;
-}
+
 .account-admin-page.admin-shell #admin-characters .pw-run-tools {
   display: flex;
   flex-wrap: wrap;
@@ -11595,9 +11489,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell #admin-characters .wb-preview .pw .admin-bar-title {
   display: none;
 }
-.account-admin-page.admin-shell #admin-characters .wb-preview .pw-compose {
-  display: grid;
-}
+
 .account-admin-page.admin-shell #admin-characters .wb-danger {
   flex-direction: column;
   align-items: flex-start;
@@ -12493,35 +12385,17 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   max-width: none;
 }
 /* 预演: top labels, two columns of controls, the same field heights */
-.account-admin-page.admin-shell #admin-characters .wb-preview .admin-filter,
-.account-admin-page.admin-shell #admin-characters .pw-controls .admin-filter {
+.account-admin-page.admin-shell #admin-characters .wb-preview .admin-filter {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
   white-space: normal;
 }
-.account-admin-page.admin-shell #admin-characters .pw-controls .admin-filter:has(input[type="time"]) {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 6px 12px;
-}
-.account-admin-page.admin-shell #admin-characters .pw-controls .admin-filter:has(input[type="time"]) > span {
-  grid-column: 1 / -1;
-}
-.account-admin-page.admin-shell #admin-characters .pw-controls .pw-zone {
-  padding-left: 0;
-  text-align: left;
-}
+
 .account-admin-page.admin-shell #admin-characters .pw button {
   height: var(--fld-h);
   min-height: var(--fld-h);
-}
-.account-admin-page.admin-shell #admin-characters .pw-compose-row > :is(input, textarea) {
-  min-width: 0;
-}
-.account-admin-page.admin-shell #admin-characters .wb-preview .pw-compose-row > textarea {
-  height: auto;
 }
 
 /* targets of at least 24 px (WCAG 2.5.8): the × of a chip / card / example and the inbox card's tick */
@@ -13001,6 +12875,405 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .wb-avail .wb-avail-go {
   margin-left: auto;
+}
+
+/* ---- Part 24b-6c: 管理员与权限 (the add bar has the grid) and 预演 (one working column) ----
+   Tokens only; every rule is scoped to the admin shell. Motion follows --ad-motion, so nothing moves under reduced motion. */
+.account-admin-page.admin-shell form.mb-add {
+  grid-template-columns: minmax(200px, 1fr) auto;
+  gap: 12px 20px;
+}
+.account-admin-page.admin-shell form.mb-add > .mb-new-grid,
+.account-admin-page.admin-shell form.mb-add > .mb-issue {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .mb-new-grid {
+  padding: 14px 0 2px;
+  border-top: 1px solid #f0ece7;
+  border-bottom: 0;
+}
+.account-admin-page.admin-shell .mb-new-grid .permission-matrix {
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+}
+.account-admin-page.admin-shell .mb-new-grid .permission-group h3 {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .mb-new-grid .permission-areas {
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 16px 12px;
+}
+.account-admin-page.admin-shell .mb-new-grid .permission-matrix > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.account-admin-page.admin-shell .mb-issue {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .mb-reason {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mb-reason[hidden] {
+  display: none;
+}
+/* a changed checkbox keeps a visible focus ring (the amber outline of "changed" has the same specificity as the ring) */
+.account-admin-page.admin-shell input[type="checkbox"][data-dirty="true"]:focus-visible,
+.account-admin-page.admin-shell [data-dirty="true"]:focus-within input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 2px;
+}
+
+/* 预演: the settings line */
+.account-admin-page.admin-shell .wb-preview .pw {
+  max-width: none;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .wb-preview .pw button.pw-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  height: auto;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ad-text);
+  font-size: 13px;
+  text-align: left;
+  white-space: normal;
+}
+.account-admin-page.admin-shell .wb-preview .pw button.pw-summary:hover {
+  background: #f7f5f2;
+}
+.account-admin-page.admin-shell .pw-summary-text {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.account-admin-page.admin-shell .pw-chev {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--ad-muted);
+  transform: rotate(-45deg);
+  transition: transform var(--ad-t-open) var(--ad-ease);
+}
+.account-admin-page.admin-shell [aria-expanded="true"] > .pw-chev,
+.account-admin-page.admin-shell [aria-expanded="true"] > .pw-tick + .pw-chev {
+  transform: rotate(45deg);
+}
+.account-admin-page.admin-shell .pw-set-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 24px;
+  padding: 14px 4px 4px;
+}
+.account-admin-page.admin-shell .wb-preview .pw .pw-set-row > .admin-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .pw-sim-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .wb-preview .pw .pw-set-row > .pw-zone {
+  flex: 1 1 100%;
+  padding: 0;
+}
+.account-admin-page.admin-shell .pw-eval-host:empty,
+.account-admin-page.admin-shell .pw-eval-host:not(:has(.pw-eval-panel[data-state="open"])) {
+  min-height: 0;
+}
+.account-admin-page.admin-shell .pw-eval-body {
+  padding: 12px 4px 4px;
+}
+.account-admin-page.admin-shell .pw-eval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* 预演: the box, and the one send button beside it */
+.account-admin-page.admin-shell .pw-compose-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 248px;
+  gap: 12px 16px;
+  align-items: start;
+}
+.account-admin-page.admin-shell .pw-compose-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .pw-compose-fields textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+}
+.account-admin-page.admin-shell .pw-sendbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .wb-preview .pw button.pw-send {
+  flex: 1 1 100%;
+  height: auto;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--ad-tint-line);
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: center;
+  transition:
+    background var(--ad-t-slide) var(--ad-ease),
+    border-color var(--ad-t-slide) var(--ad-ease),
+    color var(--ad-t-slide) var(--ad-ease);
+}
+/* the second click: the unsaved colour (amber), with 取消 beside it */
+.account-admin-page.admin-shell .wb-preview .pw button.pw-send[data-state="confirm"] {
+  border-color: var(--ad-amber);
+  background: var(--ad-amber-soft);
+  color: var(--ad-amber-ink);
+}
+.account-admin-page.admin-shell .wb-preview .pw button.pw-send:disabled {
+  opacity: 1;
+  border-color: var(--ad-hairline);
+  background: #f4f2ef;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .wb-preview .pw button.pw-cancel {
+  flex: 0 0 auto;
+}
+.account-admin-page.admin-shell .pw-reason {
+  flex: 1 1 100%;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pw-reason[hidden],
+.account-admin-page.admin-shell .pw-cancel[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .wb-preview .pw button.pw-link {
+  display: inline;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ad-primary);
+  text-decoration: underline;
+}
+
+/* 预演: the results, newest first, directly under the box */
+.account-admin-page.admin-shell .pw-feed {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--ad-hairline);
+  border-bottom: 1px solid var(--ad-hairline);
+  background: transparent;
+}
+.account-admin-page.admin-shell .pw-feed:empty,
+.account-admin-page.admin-shell .pw-empty[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .pw-empty {
+  margin: 0;
+  padding: 18px 0;
+  color: var(--ad-muted);
+  text-align: center;
+}
+.account-admin-page.admin-shell .pw-item {
+  /* the sticky save bar covers the bottom edge: a row scrolled into view stops above it */
+  scroll-margin: 16px 0 96px;
+}
+.account-admin-page.admin-shell .pw-item + .pw-item {
+  border-top: 1px solid #f0ece7;
+}
+.account-admin-page.admin-shell .pw-item[data-enter="true"] {
+  animation: adIn var(--ad-t-slide) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .pw-row,
+.account-admin-page.admin-shell .pw-run-head {
+  display: grid;
+  align-items: center;
+  column-gap: 12px;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .pw-row {
+  grid-template-columns: 96px minmax(0, 1.1fr) minmax(0, 1.6fr) 76px 52px;
+}
+.account-admin-page.admin-shell .pw-run-head {
+  grid-template-columns: 28px 14px minmax(0, 1fr) minmax(0, 1.5fr) 150px;
+}
+.account-admin-page.admin-shell .pw-row:hover,
+.account-admin-page.admin-shell .pw-run-head:hover {
+  background: #f7f5f2;
+}
+.account-admin-page.admin-shell .pw-item[data-open="true"] > :is(.pw-row, .pw-run-head) {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell .pw-row:focus-visible,
+.account-admin-page.admin-shell .pw-run-head:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: -2px;
+}
+.account-admin-page.admin-shell .pw-input,
+.account-admin-page.admin-shell .pw-result,
+.account-admin-page.admin-shell .pw-run-title,
+.account-admin-page.admin-shell .pw-run-meta {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+.account-admin-page.admin-shell .pw-run-title {
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .pw-run-meta,
+.account-admin-page.admin-shell .pw-num {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pw-num {
+  text-align: right;
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+.account-admin-page.admin-shell .pw-state {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .pw-state .admin-badge {
+  transition:
+    background var(--ad-t-slide) var(--ad-ease),
+    color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .pw-fail {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .pw-tick {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+.account-admin-page.admin-shell .pw-tick input {
+  width: 24px;
+  height: 24px;
+}
+.account-admin-page.admin-shell .pw-run-count {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+/* the thin progress bar of a run */
+.account-admin-page.admin-shell .pw-progress {
+  display: block;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: #ece8e2;
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .pw-progress > i {
+  display: block;
+  width: var(--pw-p, 0%);
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ad-primary);
+  transition: width var(--ad-t-number) var(--ad-ease);
+}
+.account-admin-page.admin-shell .pw-batch .pw-run-body {
+  padding: 4px 0 8px;
+  background: #fbfaf8;
+}
+.account-admin-page.admin-shell .pw-batch .pw-run-tools {
+  margin: 0;
+  padding: 8px 16px;
+}
+.account-admin-page.admin-shell #admin-characters .pw-batch .pw-run-tools select {
+  flex: 0 0 160px;
+  width: 160px;
+  min-width: 160px;
+  max-width: 160px;
+}
+.account-admin-page.admin-shell .pw-batch .pw-lines > .pw-line + .pw-line {
+  border-top: 1px solid #f0ece7;
+}
+.account-admin-page.admin-shell .pw-batch .pw-lines > .pw-line:first-child {
+  border-top: 1px solid #f0ece7;
+}
+.account-admin-page.admin-shell .pw-detail {
+  margin: 4px 16px 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--ad-wash);
+}
+.account-admin-page.admin-shell .pw-reading {
+  margin: 0;
+  padding: 10px 16px 14px;
+}
+.account-admin-page.admin-shell .pw-compare-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .rc-start {
+  margin-bottom: 12px;
+}
+.account-admin-page.admin-shell .rc-start .pw-sendbar {
+  max-width: 320px;
+}
+
+/* the toast's one action (查看) */
+.account-admin-page.admin-shell .admin-toast {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .admin-toast .admin-toast-action {
+  flex: none;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .admin-toast .admin-toast-action:hover {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */

@@ -99,6 +99,7 @@ export const PERMISSION_GROUPS: readonly Group[] = [
     ],
   },
 ];
+let matrixCount = 0;
 const NAMES = new Map(PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => [i.item, i.name] as const)));
 const named = (items: readonly AdminPermissionItem[]) => items.map((i) => `「${NAMES.get(i) ?? i}」`).join('、');
 
@@ -133,6 +134,22 @@ const legacyName = (permission: string) => {
   const name = NAMES.get((scoped ?? permission) as AdminPermissionItem);
   return name ? `${name}${scoped ? ' · 指定角色' : ''}` : '其他授权';
 };
+/**
+ * Part 24b-6c: what a stored grant set holds, by the grid's Chinese names (a grant for one role reads "查看角色 · 指定角色"). A name the
+ * grid uses in two areas (查看, 处理…) says its area as well, so the list is readable without the grid beside it.
+ */
+export function grantedNames(permissions: readonly AdminPermission[]): string[] {
+  const { items, legacy } = decompose(permissions);
+  const areas = PERMISSION_GROUPS.flatMap((g) => g.items.map((i) => ({ ...i, area: g.title })));
+  const uses = new Map<string, number>();
+  for (const { name } of areas) uses.set(name, (uses.get(name) ?? 0) + 1);
+  return [
+    ...areas
+      .filter(({ item }) => items.has(item))
+      .map(({ name, area }) => ((uses.get(name) ?? 0) > 1 ? `${area}·${name}` : name)),
+    ...legacy.map((permission) => legacyName(permission)),
+  ];
+}
 const sameSet = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => a.size === b.size && [...a].every((v) => b.has(v));
 
 /**
@@ -143,7 +160,13 @@ const sameSet = <T>(a: ReadonlySet<T>, b: ReadonlySet<T>) => a.size === b.size &
 export function permissionMatrixEditor(
   root: HTMLElement,
   initial: readonly AdminPermission[],
-  options: { cocreation?: boolean; conversations?: boolean; onChange?: (dirty: number) => void } = {},
+  options: {
+    cocreation?: boolean;
+    conversations?: boolean;
+    onChange?: (dirty: number) => void;
+    /** Part 24b-6c: the add bar's grid. No 快速设置 row inside (the add bar's own presets tick it) and no amber "unsaved" marks. */
+    adding?: boolean;
+  } = {},
 ) {
   const base = decompose(initial);
   const state = new Set<AdminPermissionItem>(base.items);
@@ -173,7 +196,7 @@ export function permissionMatrixEditor(
     });
     presets.append(button);
   }
-  group.append(presets);
+  if (options.adding !== true) group.append(presets);
   // The areas flow down three columns (same grid on the add form and on a member's grid); the fieldset itself stays a plain block.
   const areas = h('div', { class: 'permission-areas' });
   group.append(areas);
@@ -181,10 +204,13 @@ export function permissionMatrixEditor(
   for (const area of PERMISSION_GROUPS) {
     const items = area.items.filter((i) => shown(i.item));
     if (!items.length) continue;
+    // Part 24b-6c: each area is a labelled group, so "查看" is heard with its area.
+    const headingId = `perm-area-${area.id}-${++matrixCount}`;
     const section = h(
       'div',
-      { class: 'permission-group', attrs: { 'data-area': area.id } },
-      h('h4', { text: area.title }),
+      { class: 'permission-group', attrs: { 'data-area': area.id, role: 'group', 'aria-labelledby': headingId } },
+      // (the add bar's grid sits right under the page's h2: its area titles are h3, so no level is skipped)
+      h(options.adding === true ? 'h3' : 'h4', { text: area.title, attrs: { id: headingId } }),
     );
     for (const { item, name, help } of items) {
       const input = h('input');
@@ -263,7 +289,7 @@ export function permissionMatrixEditor(
     for (const [item, input] of boxes) {
       input.checked = state.has(item);
       // Part 24b-6: a changed permission is amber until it is saved.
-      markDirty(rows.get(item) ?? input, state.has(item) !== base.items.has(item));
+      if (options.adding !== true) markDirty(rows.get(item) ?? input, state.has(item) !== base.items.has(item));
     }
     options.onChange?.(dirtyCount());
   };
@@ -280,6 +306,22 @@ export function permissionMatrixEditor(
       return [...result].sort();
     },
     dirty: dirtyCount,
+    /** How many items are ticked (the add bar's 签发凭据 · N 项). */
+    count: () => state.size + [...legacyBoxes.values()].filter((input) => input.checked).length,
+    /** Replaces the ticks with exactly these items (a preset click): required items come along; nothing else is kept. */
+    setItems(items: readonly AdminPermissionItem[]) {
+      touched = true;
+      state.clear();
+      for (const item of items)
+        if (shown(item)) {
+          state.add(item);
+          for (const required of requiredItems(item)) if (shown(required)) state.add(required);
+        }
+      note.textContent = '';
+      paint();
+    },
+    /** The ticked items, for matching them against a preset. */
+    items: (): AdminPermissionItem[] => [...state],
     /** Ticks every item of an area-independent preset (the add bar and 快速设置 use the same list). */
     setDisabled: (disabled: boolean) => {
       for (const input of [...boxes.values(), ...legacyBoxes.values()]) input.disabled = disabled;

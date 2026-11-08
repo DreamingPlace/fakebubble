@@ -79,6 +79,8 @@ type Host = {
   onSeed?: (characterId: string, seed: boolean) => void;
   /** Where the leave dialog is drawn (default: the editor's own root). */
   modalParent?: () => HTMLElement;
+  /** Part 24b-6c: the form holds (or no longer holds) unsaved changes. 预演 sends the SAVED draft, so its reason line follows. */
+  onDirty?: (dirty: boolean) => void;
 };
 type Section = { id: string; label: string; nodes: HTMLElement[]; danger?: boolean };
 /** One client-side submission. The body (including requestId) is fixed when it is created. */
@@ -160,8 +162,15 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     for (const url of urls) URL.revokeObjectURL(url);
     urls.clear();
   };
+  let reportedDirty = false;
+  /** Part 24b-6c: saves the open draft (the 预演 reason line's 保存草稿 link). Set by the editor view. */
+  let saveHook: (() => void) | null = null;
   const sync = () => {
     if (gone()) return;
+    if (reportedDirty !== dirty) {
+      reportedDirty = dirty;
+      host.onDirty?.(dirty);
+    }
     editor?.setDisabled(busy || (detail ? !can('edit', id ?? '') : !canCreate()));
     for (const zone of zones) zone.paint();
     for (const c of controls) {
@@ -454,8 +463,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         try {
           saved = await host.api.save(role, snapshot?.draft?.revision ?? null, next);
         } catch (error) {
-          // The draft moved on the server: the edits stay on the page, with a button that reads the newer draft instead.
-          if (error instanceof InviteLocalApiError && error.code === 'DRAFT_CONFLICT') showConflict(role);
+          // The draft moved on the server: the edits stay on the page, with a button that reads the newer draft instead. The bar
+          // (an alert) says it; no toast repeats it.
+          if (error instanceof InviteLocalApiError && error.code === 'DRAFT_CONFLICT') {
+            showConflict(role);
+            return;
+          }
           throw error;
         }
         if (gone()) return;
@@ -706,6 +719,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     footActions.append(save);
     controls.push({ node: save, locked: () => !canEdit() });
     save.addEventListener('click', () => submit());
+    saveHook = () => {
+      if (!save.disabled) save.click();
+    };
 
     // ---- the sections: the form's seven, then what only a saved role has ----
     const sections: Section[] = editor.panes.map((pane) => ({ id: pane.id, label: pane.label, nodes: [pane.node] }));
@@ -784,7 +800,13 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     line.className = 'head-status';
     publishLink.type = 'button';
     publishLink.className = 'admin-primary';
-    publishLink.addEventListener('click', () => showing.show('publish'));
+    // 预演后发布 goes to the preview column with its box focused (the publish step is one tab further, once a preview passed).
+    publishLink.addEventListener('click', () => {
+      if (sections.some((section) => section.id === 'preview')) {
+        showing.show('preview');
+        host.previewMount?.dispatchEvent(new CustomEvent('pw-focus'));
+      } else showing.show('publish');
+    });
     host.headerHost?.append(line, publishLink);
     const meta = snapshot
       ? `${snapshot.published ? `正式 v${snapshot.published.version}` : '未发布'}${snapshot.draft ? ` · 草稿修订 ${snapshot.draft.revision}` : ''}`
@@ -1804,6 +1826,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       }
       return (await saveCurrent?.()) === true && !dirty;
     },
+    isDirty: () => dirty,
+    saveDraft: () => saveHook?.(),
     update: (working: boolean) => {
       busy = working;
       if (id && detail && !can('read', id)) {
