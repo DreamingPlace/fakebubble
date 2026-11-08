@@ -122,6 +122,9 @@ function setup(
     member?: AdminMember;
     previewAvailable?: boolean;
     hidden?: boolean;
+    /** Part 24b-6c: no saved draft / unsaved edits beside the panel. */
+    draft?: boolean;
+    unsaved?: boolean;
   } = {},
 ) {
   installFakeDom(t);
@@ -131,6 +134,9 @@ function setup(
   const timers: Array<{ fn: () => void; ms: number }> = [];
   const downloads: Array<{ name: string; text: string; type: string }> = [];
   const toasts: string[] = [];
+  const toastActions: Array<{ text: string; label: string; run: () => void }> = [];
+  const saves: string[] = [];
+  const held: { startSingle: null | Promise<unknown> } = { startSingle: null };
   let active = 0,
     statuses: StatusEntry[] = [];
   const state = { hidden: options.hidden ?? false, visible: [] as Array<() => void> };
@@ -194,11 +200,13 @@ function setup(
     startSingle: async (_id: string, body: unknown) => {
       calls.push('startSingle');
       (api as unknown as { lastSingle: unknown }).lastSingle = body;
+      if (held.startSingle) await held.startSingle;
       return row({
         ordinal: 0,
         input: (body as { message: string }).message,
         runId: null,
         ordinal_: 0,
+        createdAt: 1_800_000_001_000,
       } as never) as PreviewRow;
     },
     evalSets: async () => options.sets ?? [],
@@ -212,14 +220,20 @@ function setup(
         ({
           characterId: 'jojo',
           published: null,
-          draft: {
-            characterId: 'jojo',
-            revision: 3,
-            baseVersion: null,
-            contentHash: 'a'.repeat(64),
-            savedAt: 1,
-            profile: { template: { schedule: { timeZone: 'Asia/Singapore' } } },
-          },
+          draft:
+            options.draft === false
+              ? null
+              : {
+                  characterId: 'jojo',
+                  revision: 3,
+                  baseVersion: null,
+                  contentHash: 'a'.repeat(64),
+                  savedAt: 1,
+                  profile: {
+                    template: { schedule: { timeZone: 'Asia/Singapore' } },
+                    presentation: { displayName: 'JOJO' },
+                  },
+                },
           previews: [],
           previewAvailable: options.previewAvailable ?? true,
         }) as never,
@@ -234,8 +248,13 @@ function setup(
     },
     status: () => {},
     disposed: () => false,
-    toast: (message) => toasts.push(message),
+    toast: (message, _tone, action) => {
+      toasts.push(message);
+      if (action) toastActions.push({ text: message, label: action.label, run: action.run });
+    },
     modalParent: () => root,
+    draftUnsaved: () => options.unsaved === true,
+    saveDraft: () => saves.push('save'),
     poll: {
       setTimer: (fn, ms) => timers.push({ fn, ms }) && timers.length,
       clearTimer: () => {},
@@ -260,6 +279,9 @@ function setup(
     timers,
     downloads,
     toasts,
+    toastActions,
+    saves,
+    held,
     state,
     setStatus(next: StatusEntry[], n: number) {
       statuses = next;
@@ -267,78 +289,89 @@ function setup(
     },
   };
 }
-const rowsOf = (root: FakeElement, runId = 'r1') =>
-  el(root.querySelector(`[data-run="${runId}"]`)).querySelectorAll('tbody tr');
-const cells = (tr: FakeElement) => tr.querySelectorAll('td');
+/** Part 24b-6c: the lines of a run, in the results (each `.pw-line` carries its previewId as data-key). */
+const linesOf = (root: FakeElement, runId = 'r1') =>
+  el(root.querySelector(`[data-run="${runId}"]`)).querySelectorAll('.pw-line');
+const sendButton = (root: FakeElement) => root.querySelector('[data-pw-send="preview"]') as FakeElement;
+const reasonOf = (root: FakeElement) => text(root.querySelector('[data-pw-reason="preview"]') as FakeElement);
+/** The two clicks of a paid call: the first asks, the second sends. */
+const confirmSend = (root: FakeElement) => {
+  sendButton(root).click();
+  sendButton(root).click();
+};
 
-test('runs table: one table per run with the agreed columns, each final bubble on its own line with an expression badge', async (t) => {
+// Named exceptions (Part 24b-6c, one working column): the runs are no longer a table of tables. A run is ONE row (title, time, relation,
+// simulated time, "n / m 完成" and a thin bar) whose lines open directly below it; each line is a row with its own live state, result, cost
+// and time. What a line says is unchanged: the final bubbles, the error wording, the settlement badge that follows the ledger label.
+test('results: a run is one row with its count and bar; its lines carry state, result, cost and time', async (t) => {
   const f = setup(t);
   await f.bench.open('jojo');
   await flush();
-  // Named exception (Part 24b-6, Workbench4): the runs are ONE full-width results table whose row is the run (label, time, relation,
-  // the simulated time, draft, passed) and whose lines open directly below it; the run's own table is in that opened part.
-  const run = f.root.querySelector('[data-run="r1"]') as FakeElement;
-  const runRow = f.root.querySelector('[data-key="r1"] .ot-row') as FakeElement;
-  assert.match(text(runRow), /改人设前/);
-  assert.match(text(runRow), /北京时间 05:50/);
-  assert.deepEqual(
-    run.querySelectorAll('th').map((th) => text(th)),
-    ['#', '输入', '最终气泡', '状态', '审核改动', '覆盖', '费用', '耗时'],
-  );
-  const rows = rowsOf(f.root);
-  assert.equal(rows.length, 3);
-  const first = cells(rows[0]!);
-  assert.equal(text(first[0]!), '1');
-  assert.equal(text(first[1]!), '早上好');
-  const bubbles = first[2]!.querySelectorAll('.pw-bubble');
-  assert.deepEqual(
-    bubbles.map((b) => text(b.querySelector('span') as FakeElement)),
-    ['早呀', '今天想吃什么？'],
-  );
-  assert.deepEqual(
-    bubbles.map((b) => text(b.querySelectorAll('.admin-badge')[0] as FakeElement)),
-    ['upbeat', 'soft'],
-  );
-  assert.match(text(first[3]!), /已通过/);
-  assert.equal(text(first[4]!), '是');
-  assert.equal(text(first[5]!), '已回答');
-  assert.match(text(first[6]!), /µ\$|\$/);
-  assert.match(text(first[7]!), /草稿 2\.3s · 审核 1\.5s/);
+  const head = f.root.querySelector('[data-key="r1"] .pw-run-head') as FakeElement;
+  assert.match(text(head), /改人设前/);
+  assert.match(text(head), /北京时间 05:50/);
+  assert.match(text(head), /3 \/ 3 完成 · 2 失败/);
+  const bar = head.querySelector('.pw-progress') as FakeElement;
+  assert.equal(bar.getAttribute('aria-valuenow'), '3');
+  assert.equal(bar.getAttribute('aria-valuemax'), '3');
+  const lines = linesOf(f.root);
+  assert.equal(lines.length, 3);
+  const first = lines[0]!;
+  assert.equal(text(first.querySelector('.pw-state') as FakeElement), '完成');
+  assert.match(text(first.querySelector('.pw-input') as FakeElement), /早上好/);
+  assert.equal(text(first.querySelector('.pw-result') as FakeElement), '早呀 / 今天想吃什么？');
+  assert.match(text(first.querySelectorAll('.pw-num')[0] as FakeElement), /µ\$|\$/);
+  assert.match(text(first.querySelectorAll('.pw-num')[1] as FakeElement), /草稿 2\.3s · 审核 1\.5s/);
   // Failed rows say why, and the settlement badge follows the label, not the error code.
-  assert.match(text(cells(rows[1]!)[2]!), /INVALID_TOPICS/);
-  assert.match(text(cells(rows[1]!)[3]!), /失败/);
-  assert.match(text(cells(rows[1]!)[3]!), /已按实际用量结算/);
-  assert.match(text(cells(rows[2]!)[3]!), /结果未知，额度保留/);
+  assert.equal(text(lines[1]!.querySelector('.pw-state') as FakeElement), '失败');
+  assert.match(text(lines[1]!.querySelector('.pw-result') as FakeElement), /INVALID_TOPICS/);
+  assert.match(text(lines[1]!.querySelector('.pw-result') as FakeElement), /已按实际用量结算/);
+  assert.match(text(lines[2]!.querySelector('.pw-result') as FakeElement), /结果未知，额度保留/);
   // Nothing was polled: nothing is queued or running.
   assert.equal(f.timers.length, 0);
 });
 
-test('runs table: filter by status and sort by #', async (t) => {
+test('results: a run in progress shows each line as 排队中 / 生成草稿 / 审核中 and "n / m 完成" with a bar that follows', async (t) => {
+  const working = detailOf(
+    'r1',
+    [
+      row({ ordinal: 1, input: '甲' }),
+      row({ ordinal: 2, input: '乙', status: 'generating', final: null, latency: { draftMs: null, reviewMs: null } }),
+      row({ ordinal: 3, input: '丙', status: 'generating', final: null, latency: { draftMs: 900, reviewMs: null } }),
+      row({ ordinal: 4, input: '丁', status: 'queued', final: null, latency: { draftMs: null, reviewMs: null } }),
+    ],
+    { itemCount: 4, counts: { queued: 1, generating: 2, succeeded: 1, failed: 0 } },
+  );
+  const f = setup(t, { runs: [working] });
+  await f.bench.open('jojo');
+  await flush();
+  assert.deepEqual(
+    linesOf(f.root).map((l) => text(l.querySelector('.pw-state') as FakeElement)),
+    ['完成', '生成草稿', '审核中', '排队中'],
+  );
+  assert.match(text(f.root.querySelector('[data-key="r1"] .pw-run-head') as FakeElement), /1 \/ 4 完成/);
+  assert.equal(f.root.querySelector('[data-key="r1"] .pw-progress')!.getAttribute('aria-valuenow'), '1');
+  // Something is running: the poller is on, and the page announces it politely.
+  assert.ok(f.timers.length > 0);
+  assert.equal(f.root.querySelector('.pw-feed')!.getAttribute('aria-live'), 'polite');
+});
+
+test('results: the lines of a run can be filtered by status and stay in order', async (t) => {
   const f = setup(t);
   await f.bench.open('jojo');
   await flush();
+  const keys = () => linesOf(f.root).map((l) => l.getAttribute('data-key'));
+  assert.deepEqual(keys(), ['px1', 'px2', 'px3']);
   const select = el(f.root.querySelector('[data-run="r1"]')).querySelector('select') as FakeElement;
   select.value = 'failed';
   select.dispatch('change');
-  assert.deepEqual(
-    rowsOf(f.root).map((tr) => text(cells(tr)[0]!)),
-    ['2', '3'],
-  );
+  assert.deepEqual(keys(), ['px2', 'px3']);
   select.value = 'succeeded';
   select.dispatch('change');
-  assert.deepEqual(
-    rowsOf(f.root).map((tr) => text(cells(tr)[0]!)),
-    ['1'],
-  );
+  assert.deepEqual(keys(), ['px1']);
   select.value = '';
   select.dispatch('change');
-  const sort = el(f.root.querySelector('[data-run="r1"]')).querySelector('th .admin-sort') as FakeElement;
-  sort.click();
-  assert.deepEqual(
-    rowsOf(f.root).map((tr) => text(cells(tr)[0]!)),
-    ['3', '2', '1'],
-    'second click sorts descending',
-  );
+  assert.deepEqual(keys(), ['px1', 'px2', 'px3']);
 });
 
 test('copy follows the settlement label: a known failure never says 未知调用, an unknown one does', () => {
@@ -355,16 +388,20 @@ test('copy follows the settlement label: a known failure never says 未知调用
   assert.equal(settlementCopy({ status: 'queued', settlement: null, cost: failedKnown.cost }), '尚未发送。');
 });
 
-test("row click opens the drawer: draft vs final with the reviewer's changes marked, coverage and quotes, ids", async (t) => {
+// Named exceptions (Part 24b-6c): a result opens BELOW its row (no side drawer). What it shows is unchanged.
+test("row click opens the result below its row: draft vs final with the reviewer's changes marked, coverage and quotes, ids", async (t) => {
   const f = setup(t);
   await f.bench.open('jojo');
   await flush();
-  cells(rowsOf(f.root)[0]!)[1]!.dispatch('click');
+  const line = linesOf(f.root)[0]!;
+  (line.querySelector('.pw-row') as FakeElement).dispatch('click');
   await flush();
   assert.ok(f.calls.includes('detail:px1'), f.calls.join());
-  const drawer = el(f.root.querySelectorAll('.admin-drawer')[0]);
-  assert.equal(drawer.hidden, false);
-  const body = text(drawer);
+  const panel = line.querySelector('.pw-panel') as FakeElement;
+  assert.equal(panel.getAttribute('data-state'), 'open');
+  assert.equal(f.root.querySelectorAll('.admin-drawer').length, 0, 'no drawer anywhere in 预演');
+  assert.equal(f.root.querySelectorAll('.admin-dialog').length, 0, 'no dialog anywhere in 预演');
+  const body = text(panel);
   assert.match(body, /早上好/);
   assert.match(body, /草稿与最终气泡（审核改动已标出）/);
   assert.match(body, /引用：“今天想吃什么？”/);
@@ -372,33 +409,35 @@ test("row click opens the drawer: draft vs final with the reviewer's changes mar
   assert.match(body, /已按实际用量结算/);
   assert.match(body, /b-1/);
   assert.match(body, /北京时间/);
-  const marks = drawer.querySelectorAll('.pw-del, .pw-add').map((n) => [n.className, text(n)]);
+  const marks = panel.querySelectorAll('.pw-del, .pw-add').map((n) => [n.className, text(n)]);
   assert.ok(
     marks.some(([c]) => c === 'pw-add'),
     'something the reviewer added is highlighted',
   );
 });
 
-test("a failed row's drawer shows the rejected output and the error; a settled failure is not described as unknown", async (t) => {
+test("a failed row's result shows the rejected output and the error; a settled failure is not described as unknown", async (t) => {
   const f = setup(t);
   await f.bench.open('jojo');
   await flush();
-  cells(rowsOf(f.root)[1]!)[1]!.dispatch('click');
+  (linesOf(f.root)[1]!.querySelector('.pw-row') as FakeElement).dispatch('click');
   await flush();
-  const drawer = el(f.root.querySelectorAll('.admin-drawer')[0]);
-  const body = text(drawer);
+  const panel = linesOf(f.root)[1]!.querySelector('.pw-panel') as FakeElement;
+  const body = text(panel);
   assert.match(body, /INVALID_TOPICS/);
   assert.match(body, /被拒收的模型输出/);
-  assert.equal(text(drawer.querySelector('.pw-raw') as FakeElement), '{"topics":[1,2,3,4]}');
+  assert.equal(text(panel.querySelector('.pw-raw') as FakeElement), '{"topics":[1,2,3,4]}');
   assert.doesNotMatch(body, /未知调用/);
   assert.match(body, /重新预演/);
-  // The unknown call: the copy that forbids resend is shown, and no rejected output exists to show.
-  cells(rowsOf(f.root)[2]!)[1]!.dispatch('click');
+  // The unknown call: the copy that forbids resend is shown, no rejected output exists to show, and only one result is open at a time.
+  (linesOf(f.root)[2]!.querySelector('.pw-row') as FakeElement).dispatch('click');
   await flush();
-  const unknown = text(el(f.root.querySelectorAll('.admin-drawer')[0]));
+  const unknown = text(linesOf(f.root)[2]!.querySelector('.pw-panel') as FakeElement);
   assert.match(unknown, /未知调用不能重发或释放/);
   assert.match(unknown, /没有保留模型输出/);
   assert.doesNotMatch(unknown, /被拒收的模型输出/);
+  assert.equal(linesOf(f.root)[1]!.getAttribute('data-open'), 'false');
+  assert.equal(f.root.querySelectorAll('.pw-line[data-open="true"]').length, 1);
 });
 
 test('diff: a changed bubble carries a character diff, a removed one and an added one are marked whole', () => {
@@ -448,9 +487,10 @@ test('compare: two runs side by side, matched by input text, unmatched inputs ke
   const f = setup(t, { runs: [a, b] });
   await f.bench.open('jojo');
   await flush();
-  // Named exception (Part 24b-6): the two runs are ticked with the row's own checkbox, and the button reads 对比所选 2 次.
-  const picks = f.root.querySelectorAll('.ot-tick input');
-  assert.equal(picks.length, 2);
+  // Named exceptions (Part 24b-6, 24b-6c): the two runs are ticked with the run row's own checkbox, the button reads 对比所选 2 次, and the
+  // comparison opens INLINE above the results (it was a drawer).
+  const picks = ['r1', 'r2'].map((id) => f.root.querySelector(`[data-key="${id}"] .pw-tick input`) as FakeElement);
+  assert.equal(f.root.querySelectorAll('.pw-tick input').length, 2);
   assert.equal(f.root.querySelector('[data-compare-go]'), null, 'needs two runs');
   picks[0]!.checked = true;
   picks[0]!.dispatch('change');
@@ -459,20 +499,21 @@ test('compare: two runs side by side, matched by input text, unmatched inputs ke
   const go = f.root.querySelector('[data-compare-go]') as FakeElement;
   go.click();
   await flush();
-  const drawer = el(f.root.querySelectorAll('.admin-drawer')[1]);
-  assert.equal(drawer.hidden, false);
+  assert.equal(f.root.querySelectorAll('.admin-drawer').length, 0, 'inline, not a drawer');
+  const result = f.root.querySelector('.pw-compare-result') as FakeElement;
   assert.deepEqual(
-    drawer
+    result
       .querySelectorAll('th')
       .map((th) => text(th))
       .slice(0, 3),
     ['输入', 'A：改人设前 · 05:50', 'B：下午三点 · 15:00'],
   );
-  const body = drawer.querySelectorAll('tbody tr');
+  const body = result.querySelectorAll('tbody tr');
   assert.equal(body.length, 3);
-  assert.match(text(cells(body[0]!)[2]!), /十五点好/);
-  assert.equal(text(cells(body[1]!)[2]!), '—');
-  assert.equal(text(cells(body[2]!)[1]!), '—');
+  const cellsOf = (tr: FakeElement) => tr.querySelectorAll('td');
+  assert.match(text(cellsOf(body[0]!)[2]!), /十五点好/);
+  assert.equal(text(cellsOf(body[1]!)[2]!), '—');
+  assert.equal(text(cellsOf(body[2]!)[1]!), '—');
 });
 
 test('export: JSON and CSV (UTF-8 with BOM, CRLF, formula-safe) of one run, no extra network read of other runs', async (t) => {
@@ -501,25 +542,22 @@ test('export: JSON and CSV (UTF-8 with BOM, CRLF, formula-safe) of one run, no e
   assert.equal(JSON.parse(runToJson(detailOf('r9', []))).previews.length, 0);
 });
 
-test('submitting: the paid-call confirmation gates every button; a run carries label, time and relationship, and a retry reuses its requestId', async (t) => {
+// Named exceptions (Part 24b-6c): there is ONE box (one line = one preview, several = one run) and ONE send button. The paid-call
+// confirmation is the button's own second click (the separate checkbox is gone); everything it sends is unchanged, requestId included.
+test('submitting: the first click only asks, the second sends; a run carries label, time and relationship, and a retry reuses its requestId', async (t) => {
   const f = setup(t, {
     sets: [{ id: 'e1', name: '16 例', version: 2, items: [{ text: 'a', note: null }], updatedBy: 'm', updatedAt: 1 }],
   });
   await f.bench.open('jojo');
   await flush();
-  const batch = label(f.root, '批量输入'),
-    ack = label(f.root, '确认发起真实付费预演'),
-    send = byText(f.root, 'button', '批量运行'),
-    single = byText(f.root, 'button', '单条预演');
+  const box = label(f.root, '预演输入');
   const zone = text(f.root.querySelector('.pw-zone') as FakeElement);
   assert.match(zone, /北京时间/);
   assert.match(zone, /Asia\/Singapore/);
-  batch.type_('第一条\n\n第二条 \n');
-  assert.equal(send.disabled, true, 'not confirmed');
-  assert.match(text(f.root.querySelector('.pw-estimate') as FakeElement), /约 2 条预演 = 4 次付费调用/);
-  ack.checked = true;
-  ack.dispatch('change');
-  assert.equal(send.disabled, false);
+  assert.equal(sendButton(f.root).disabled, true);
+  assert.equal(reasonOf(f.root), '没有输入');
+  box.type_('第一条\n\n第二条 \n');
+  assert.equal(text(sendButton(f.root)), '运行 2 条 · 4 次付费调用');
   label(f.root, '运行备注').type_('改前');
   label(f.root, '预演关系').value = 'friend';
   label(f.root, '模拟时间').value = 'set';
@@ -527,7 +565,12 @@ test('submitting: the paid-call confirmation gates every button; a run carries l
   (f.root.querySelector('[aria-label="模拟的当地时间"]') as FakeElement).value = '05:50';
   (f.root.querySelector('[aria-label="模拟的当地时间"]') as FakeElement).dispatch('input');
   (f.api as unknown as { failNext: boolean }).failNext = true;
-  send.click();
+  sendButton(f.root).click();
+  await flush();
+  assert.equal(f.calls.filter((c) => c === 'startRun').length, 0, 'a first click alone never calls the API');
+  assert.equal(text(sendButton(f.root)), '确认付费 · 4 次');
+  assert.equal(sendButton(f.root).getAttribute('data-state'), 'confirm');
+  sendButton(f.root).click();
   await flush();
   const first = (f.api as unknown as { lastRun: Record<string, unknown> }).lastRun;
   assert.deepEqual(
@@ -548,48 +591,68 @@ test('submitting: the paid-call confirmation gates every button; a run carries l
     },
   );
   assert.ok(f.calls.includes('error:network'));
-  assert.equal(batch.value, '第一条\n\n第二条 \n', 'a failed submission keeps the box');
+  assert.equal(box.value, '第一条\n\n第二条 \n', 'a failed submission keeps the box');
+  assert.equal(
+    f.root.querySelectorAll('.pw-batch').length,
+    1,
+    'the lines shown for the failed submission are gone again',
+  );
   // Same content again: the SAME requestId, so a lost reply can never queue a second run.
-  send.click();
+  confirmSend(f.root);
   await flush();
   assert.equal(
     (f.api as unknown as { lastRun: { requestId: string } }).lastRun.requestId,
     (first as { requestId: string }).requestId,
   );
   assert.equal(f.calls.filter((c) => c === 'startRun').length, 2);
-  // Success clears the box and the confirmation: the next paid call needs a fresh tick.
-  assert.equal(batch.value, '');
-  assert.equal(ack.checked, false);
-  assert.equal(send.disabled, true);
-  assert.equal(single.disabled, true);
-  // A run of a saved eval set sends only its id.
-  ack.checked = true;
-  ack.dispatch('change');
+  // Success clears the box: the next paid call needs its own two clicks.
+  assert.equal(box.value, '');
+  assert.equal(sendButton(f.root).disabled, true);
+  // With the box empty a chosen eval set runs, and sends only its id.
   label(f.root, '评测集').value = 'e1';
   label(f.root, '评测集').dispatch('change');
-  const runSet = byText(f.root, 'button', '运行评测集');
-  assert.equal(runSet.disabled, false);
-  assert.match(text(f.root.querySelector('.pw-estimate') as FakeElement), /评测集“16 例” v2/);
-  runSet.click();
+  assert.equal(text(sendButton(f.root)), '运行评测集「16 例」v2 · 2 次付费调用');
+  confirmSend(f.root);
   await flush();
   const set = (f.api as unknown as { lastRun: Record<string, unknown> }).lastRun;
   assert.equal(set.evalSetId, 'e1');
   assert.equal('inputs' in set, false);
 });
 
-test('a single preview sends the simulated time too, and appears in the 单条预演 list; permissions and availability gate the buttons', async (t) => {
+test('the confirmation lapses: 取消, a changed box and Escape all go back to the first click without sending', async (t) => {
+  const f = setup(t);
+  await f.bench.open('jojo');
+  await flush();
+  const box = label(f.root, '预演输入');
+  box.type_('你好');
+  assert.equal(text(sendButton(f.root)), '预演 1 条 · 2 次付费调用');
+  sendButton(f.root).click();
+  (f.root.querySelector('[data-pw-cancel="preview"]') as FakeElement).click();
+  assert.equal(sendButton(f.root).getAttribute('data-state'), 'idle');
+  sendButton(f.root).click();
+  box.type_('你好\n再见');
+  assert.equal(sendButton(f.root).getAttribute('data-state'), 'idle', 'what would be sent changed');
+  assert.equal(text(sendButton(f.root)), '运行 2 条 · 4 次付费调用');
+  assert.equal(f.calls.filter((c) => c === 'startSingle' || c === 'startRun').length, 0);
+});
+
+test('a single preview shows its row at once as 排队中, sends the simulated time too, and is announced when it is done', async (t) => {
   const f = setup(t, { singles: [row({ ordinal: 0, input: '老的单条', runId: null, previewId: 'solo1' } as never)] });
   await f.bench.open('jojo');
   await flush();
-  assert.match(text(f.root.querySelector('.pw-singles') as FakeElement), /单条预演/);
-  assert.match(text(f.root.querySelector('.pw-singles') as FakeElement), /老的单条/);
-  const ack = label(f.root, '确认发起真实付费预演');
-  ack.checked = true;
-  ack.dispatch('change');
-  label(f.root, '单条预演输入').type_('你好');
-  const send = byText(f.root, 'button', '单条预演');
-  assert.equal(send.disabled, false);
-  send.click();
+  assert.match(text(f.root.querySelector('.pw-feed') as FakeElement), /老的单条/);
+  let release: () => void = () => {};
+  f.held.startSingle = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  label(f.root, '预演输入').type_('你好');
+  confirmSend(f.root);
+  await flush();
+  // The server has not answered yet, and the row is already there with its state.
+  const pendingRow = f.root.querySelectorAll('.pw-line').find((l) => /你好/.test(text(l))) as FakeElement;
+  assert.ok(pendingRow, 'the submitted line is on screen before the answer');
+  assert.equal(text(pendingRow.querySelector('.pw-state') as FakeElement), '排队中');
+  release();
   await flush();
   assert.equal((f.api as unknown as { lastSingle: { message: string } }).lastSingle.message, '你好');
   assert.equal(
@@ -597,18 +660,60 @@ test('a single preview sends the simulated time too, and appears in the 单条�
     false,
     'real clock when no time is set',
   );
-  // No preview permission: nothing can be sent. No draft / preview unavailable: said so.
-  const ro = setup(t, { member: READER });
-  await ro.bench.open('jojo');
+  // Newest first: the new line is above the old one.
+  const keys = Array.from(f.root.querySelector('.pw-feed')!.children).map((c) =>
+    (c as FakeElement).getAttribute('data-key'),
+  );
+  assert.ok(keys.indexOf('px0') >= 0 && keys.indexOf('px0') < keys.indexOf('solo1'), keys.join());
+});
+
+test('a run shows its lines at once, then a toast with 查看 when it is done', async (t) => {
+  const f = setup(t);
+  await f.bench.open('jojo');
   await flush();
-  label(ro.root, '确认发起真实付费预演').checked = true;
-  label(ro.root, '确认发起真实付费预演').dispatch('change');
-  label(ro.root, '批量输入').type_('x');
-  assert.equal(byText(ro.root, 'button', '批量运行').disabled, true);
-  const off = setup(t, { previewAvailable: false });
-  await off.bench.open('jojo');
+  label(f.root, '预演输入').type_('甲\n乙\n丙');
+  confirmSend(f.root);
   await flush();
-  assert.ok(off.root.querySelectorAll('.admin-empty').some((n) => !n.hidden && /未开启预演/.test(text(n))));
+  // The stub answers with the finished run r1 (1 passed, 2 failed): the toast names the character and the counts.
+  assert.equal(f.toasts.at(-1), 'JOJO 预演完成 · 3 条，2 条失败');
+  assert.equal(f.toastActions.at(-1)?.label, '查看');
+  f.toastActions.at(-1)!.run();
+});
+
+test('every reason a send is impossible is said next to the button, never a silent grey one', async (t) => {
+  const reason = async (options: Parameters<typeof setup>[1], type?: string) => {
+    const f = setup(t, options);
+    await f.bench.open('jojo');
+    await flush();
+    if (type !== undefined) label(f.root, '预演输入').type_(type);
+    return { f, button: sendButton(f.root), why: reasonOf(f.root) };
+  };
+  const none = await reason({ draft: false }, '你好');
+  assert.equal(none.button.disabled, true);
+  assert.equal(none.why, '没有草稿');
+  const unsaved = await reason({ unsaved: true }, '你好');
+  assert.equal(unsaved.button.disabled, true);
+  assert.match(unsaved.why, /草稿未保存/);
+  byText(unsaved.f.root, 'button', '保存草稿').click();
+  assert.equal(unsaved.f.saves.length, 1, 'the 保存草稿 link saves the draft');
+  const readOnly = await reason({ member: READER }, '你好');
+  assert.equal(readOnly.button.disabled, true);
+  assert.equal(readOnly.why, '你没有预演权限');
+  const off = await reason({ previewAvailable: false }, '你好');
+  assert.equal(off.button.disabled, true);
+  assert.equal(off.why, '预演暂不可用');
+  const many = await reason({}, Array.from({ length: 51 }, (_, i) => `第${i}条`).join('\n'));
+  assert.equal(many.button.disabled, true);
+  assert.equal(many.why, '超过 50 条');
+  const long = await reason({}, `短\n${'长'.repeat(4001)}`);
+  assert.equal(long.button.disabled, true);
+  assert.equal(long.why, '第 2 行过长');
+  const empty = await reason({});
+  assert.equal(empty.why, '没有输入');
+  // Nothing wrong: no reason at all.
+  const fine = await reason({}, '你好');
+  assert.equal(fine.button.disabled, false);
+  assert.equal(fine.why, '');
 });
 
 test('the poller: ONE batched call per tick, 2 s growing to 10 s, reset on change, stops when idle, pauses while hidden', async (t) => {
@@ -805,7 +910,7 @@ test('eval-set lines: tab or " || " separate an optional note, limits are explai
   assert.equal(evalLineProblem([{ text: 'x', note: null }]), '');
 });
 
-test('eval-set editor: saves a new version with the expected version, respects write permission, and confirms before deleting', async (t) => {
+test('eval-set editor: saves a new version with the expected version, respects write permission, and confirms in place before deleting', async (t) => {
   installFakeDom(t);
   const parent = document.createElement('div') as unknown as HTMLElement;
   const saved: unknown[] = [];
@@ -834,7 +939,6 @@ test('eval-set editor: saves a new version with the expected version, respects w
     },
     toast: (m) => toasts.push(m),
     changed: () => {},
-    confirmParent: () => parent,
   });
   editor.open(sets);
   const root = el(parent);
@@ -857,17 +961,20 @@ test('eval-set editor: saves a new version with the expected version, respects w
     },
   ]);
   assert.match(toasts.at(-1)!, /已保存：16 例 v3/);
-  // Delete asks first; Escape / 取消 does nothing, 删除 sends the version it read.
+  // Named exception (Part 24b-6c): the editor opens inline (no drawer) and deleting asks IN PLACE (no dialog), like 版本历史.
+  // Delete asks first; 取消 does nothing, 删除 sends the version it read.
   byText(root, 'button', '删除').click();
   await flush();
   assert.deepEqual(deleted, []);
-  const dialog = root.querySelector('.admin-dialog') as FakeElement;
-  byText(dialog, 'button', '取消').click();
+  assert.equal(root.querySelectorAll('.admin-dialog').length, 0);
+  assert.equal(root.querySelectorAll('.admin-drawer').length, 0);
+  byText(root.querySelector('.ic') as FakeElement, 'button', '取消').click();
   await flush();
   assert.deepEqual(deleted, []);
   byText(root, 'button', '删除').click();
   await flush();
-  byText(root.querySelector('.admin-dialog') as FakeElement, 'button', '删除').click();
+  // (the bar of the cancelled question is still fading out: the answer is on the newest one)
+  byText(root.querySelectorAll('.ic').at(-1) as FakeElement, 'button', '删除').click();
   await flush();
   assert.deepEqual(deleted, [['e1', 3]]);
   // Too many lines disable saving; without write permission nothing can be saved or deleted.
@@ -890,20 +997,16 @@ test('预演 reads the cast named by the 关系与故事 switch: 不用 / 已发
     ['published', '已发布'],
     ['draft', '草稿'],
   ]);
-  const ack = label(f.root, '确认发起真实付费预演');
   for (const source of ['none', 'published', 'draft'] as const) {
     (f.root.querySelector(`[data-seg="${source}"]`) as FakeElement).click();
     assert.equal((f.root.querySelector(`[data-seg="${source}"]`) as FakeElement).getAttribute('aria-pressed'), 'true');
-    ack.checked = true;
-    ack.dispatch('change');
-    label(f.root, '批量输入').type_(`来自${source}`);
-    byText(f.root, 'button', '批量运行').click();
+    // Named exception (Part 24b-6c): several lines in the one box are a run, one line is a single preview.
+    label(f.root, '预演输入').type_(`来自${source}\n再来一条`);
+    confirmSend(f.root);
     await flush();
     assert.equal((f.api as unknown as { lastRun: { castSource: string } }).lastRun.castSource, source);
-    ack.checked = true;
-    ack.dispatch('change');
-    label(f.root, '单条预演输入').type_('你好');
-    byText(f.root, 'button', '单条预演').click();
+    label(f.root, '预演输入').type_('你好');
+    confirmSend(f.root);
     await flush();
     assert.equal((f.api as unknown as { lastSingle: { castSource: string } }).lastSingle.castSource, source);
   }

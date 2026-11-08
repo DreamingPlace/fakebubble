@@ -1,4 +1,5 @@
 import { h } from '../../cocreation/h.ts';
+import { hoverValue } from '../ui/hover-value.ts';
 import { openTable } from '../ui/open-table.ts';
 import { statusBadge } from '../ui/status-badge.ts';
 
@@ -44,7 +45,9 @@ export function historyList(options: HistoryListOptions) {
   let busy = false;
   const cells = new Map<number, HTMLElement>();
   const note = h('p', { class: 'vh-note', hidden: true, attrs: { role: 'status' } });
-  const more = h('p', { class: 'vh-note vh-more', hidden: true });
+  // Part 24b-6c: the count is the visible text; what it leaves out is the hover tip (no explanatory sentence under the list).
+  const moreCount = h('span');
+  const more = h('p', { class: 'vh-note vh-more', hidden: true }, moreCount);
   const table = openTable<HistoryEntry>({
     label: options.label,
     className: 'vh-table',
@@ -185,7 +188,8 @@ export function historyList(options: HistoryListOptions) {
       confirming = null;
       table.setRows(entries);
       more.hidden = total <= entries.length;
-      more.textContent = `只列出最近 ${HISTORY_SHOWN} 个版本，共 ${total} 个；更早的版本都保留着，不受影响。`;
+      moreCount.textContent = `共 ${total} 个`;
+      hoverValue(more, `只列出最近 ${HISTORY_SHOWN} 个版本，共 ${total} 个；更早的版本都保留着，不受影响。`);
     },
     /** A line under the list for a refusal or an uncertain answer (null clears it). */
     setNote(text: string | null) {

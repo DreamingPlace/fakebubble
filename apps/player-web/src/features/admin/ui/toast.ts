@@ -9,17 +9,29 @@ export function toastHost(parent: HTMLElement, options: { ttlMs?: number } = {})
   const ttl = options.ttlMs ?? 4000;
   return {
     region,
-    show(text: string, tone: BadgeTone = 'info') {
+    /** `action` is one link-button in the toast (查看): the toast then stays longer, so there is time to use it. */
+    show(text: string, tone: BadgeTone = 'info', action?: { label: string; run: () => void }) {
       // One at a time: a new message replaces the one on screen.
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
       region.replaceChildren();
-      const toast = h('div', { class: 'admin-toast', text, attrs: { 'data-tone': tone } });
+      const toast = h('div', { class: 'admin-toast', attrs: { 'data-tone': tone } }, h('span', { text }));
+      if (action) {
+        const go = h('button', { class: 'admin-toast-action', text: action.label, attrs: { type: 'button' } });
+        go.addEventListener('click', () => {
+          action.run();
+          toast.remove();
+        });
+        toast.append(go);
+      }
       region.append(toast);
-      const timer = setTimeout(() => {
-        timers.delete(timer);
-        toast.remove();
-      }, ttl);
+      const timer = setTimeout(
+        () => {
+          timers.delete(timer);
+          toast.remove();
+        },
+        action ? Math.max(ttl, 10_000) : ttl,
+      );
       timers.add(timer);
       return toast;
     },

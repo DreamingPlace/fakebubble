@@ -212,9 +212,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="cast" hidden><div id="admin-cast"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
     <section data-panel="members" hidden><div class="page-head"><h2>管理员与权限</h2><div class="page-head-actions" id="admin-members-head"></div></div>
-      <form id="admin-member-issue" class="mb-add"><label class="mb-field" for="admin-member-label"><span>新管理员备注</span><input id="admin-member-label" maxlength="80" placeholder="例：共创写手 · 小雨" required></label>
-        <div class="mb-field"><span>先给哪套权限</span><span id="admin-new-permissions" class="mb-presets"></span></div>
-        <button class="admin-primary" type="submit">添加并签发一次性凭据</button></form>
+      <form id="admin-member-issue" class="mb-add"><label class="mb-field mb-name-field" for="admin-member-label"><span>新管理员备注</span><input id="admin-member-label" maxlength="80" placeholder="例：共创写手 · 小雨" required></label>
+        <div class="mb-field mb-preset-field" role="group" aria-labelledby="admin-new-permissions-label"><span id="admin-new-permissions-label">权限预设</span><span id="admin-new-permissions" class="mb-presets"></span></div>
+        <div id="admin-new-grid" class="mb-grid mb-new-grid"></div>
+        <div class="mb-issue"><button class="admin-primary" type="submit">签发凭据 · 0 项</button><span id="admin-issue-reason" class="mb-reason" aria-live="polite"></span></div></form>
       <div id="admin-members-table" class="members-table-card"></div><div id="admin-members-list" class="members-list"></div>
     </section>
     <section data-panel="overview" hidden><div id="admin-overview"></div></section>
@@ -295,6 +296,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   let previewBench: {
     open(id: string): Promise<void>;
     update(busy: boolean): void;
+    refresh(): void;
     clear(): void;
     dispose(): void;
   } | null = null;
@@ -306,11 +308,13 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     host: HTMLElement,
     initial: readonly AdminPermission[],
     onChange?: (dirty: number) => void,
+    adding?: boolean,
   ) =>
     permissionMatrixEditor(host, initial, {
       cocreation: !!port.cocreation,
       conversations: !!port.conversations && session?.features?.chatReview === true,
       ...(onChange ? { onChange } : {}),
+      ...(adding ? { adding } : {}),
     });
   const canCocreation = (permission: CocreationAdminPermission) =>
     !!port.cocreation &&
@@ -392,7 +396,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     ))
       control.disabled = busy || control.dataset.locked === 'true';
     q<HTMLButtonElement>('#admin-bind-start button').disabled = busy || !session?.emailDeliveryAvailable;
-    q<HTMLButtonElement>('#admin-member-issue button').disabled = busy || members.issueLocked;
+    members.paintIssue();
     q<HTMLElement>('main').setAttribute('data-surface', session ? page : 'login');
     // 系统 → 模型与价格 is the one page that is usable on a phone: its route lifts the desktop-only notice (and the login in front of it).
     // The Access notice is usable on a phone as well: it is the only thing shown until Access has been passed.
@@ -711,6 +715,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     previewMount: previewHost,
     canPreview: (characterId) => !!previewBench && canPreview(characterId),
     onSeed: (characterId, seed) => picker.setSeed(characterId, seed),
+    onDirty: () => previewBench?.refresh(),
     onDirectory: (roles) => {
       picker.show(roles);
     },
@@ -756,9 +761,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
           if (!disposed) status.textContent = text;
         },
         disposed: () => disposed,
-        toast: (text, tone) => toasts.show(text, tone ?? 'info'),
+        toast: (text, tone, action) => toasts.show(text, tone ?? 'info', action),
         modalParent: () => q('main'),
         changed: () => void workbench?.syncPreviews().catch(() => {}),
+        draftUnsaved: () => workbench?.isDirty() === true,
+        saveDraft: () => workbench?.saveDraft(),
       })
     : null;
   inbox = port.cocreation
@@ -896,6 +903,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const members = membersView({
     head: q('#admin-members-head'),
     presetHost: q('#admin-new-permissions'),
+    gridHost: q('#admin-new-grid'),
+    nameInput: q<HTMLInputElement>('#admin-member-label'),
+    issueButton: q<HTMLButtonElement>('#admin-member-issue button[type="submit"]'),
+    reasonHost: q('#admin-issue-reason'),
     table: q('#admin-members-table'),
     list: q('#admin-members-list'),
     shown: (item) =>

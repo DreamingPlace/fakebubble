@@ -386,19 +386,14 @@ export function castView(root: HTMLElement, host: CastViewHost) {
         : undefined;
       return now === undefined || entry.live ? String(n) : `${n}（现行 ${now}）`;
     };
-    return h(
-      'div',
-      { class: 'vh-detail ot-detail' },
-      keyValuePanel([
-        ['发布时间', entry.when],
-        ['来源', entry.origin],
-        ...rows.map(([label, n]) => [label, against(label, n)] as const),
-      ]),
-      h('p', {
-        class: 'vh-note',
-        text: entry.live ? '这就是现行版本。' : '数字是这一版的内容；括号里是现行版本现在的数字。',
-      }),
-    );
+    const panel = keyValuePanel([
+      ['发布时间', entry.when],
+      ['来源', entry.origin],
+      ...rows.map(([label, n]) => [label, against(label, n)] as const),
+    ]);
+    // Part 24b-6c: no explanatory line under the numbers; the one thing worth saying is a hover tip.
+    if (!entry.live) hoverValue(panel, '数字是这一版的内容；括号里是现行版本现在的数字。');
+    return h('div', { class: 'vh-detail ot-detail' }, panel);
   };
   // One restore request is fixed once it has been asked for: after an uncertain answer the same id is sent again.
   const rollbackIds = new Map<string, string>();

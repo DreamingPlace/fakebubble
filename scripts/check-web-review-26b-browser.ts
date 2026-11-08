@@ -398,14 +398,19 @@ try {
   await cmp.setViewportSize({ width: 1440, height: 1500 });
   const section = cmp.locator('.pw-review-section');
   await section.locator('summary').click();
-  await section.locator('.rc-estimate').waitFor();
-  await cmp.waitForFunction(() => /次付费调用/.test(document.querySelector('.rc-estimate')?.textContent ?? ''));
-  const estimate = ((await section.locator('.rc-estimate').innerText()) as string).replace(/\s+/g, ' ');
-  assert.match(estimate, /30 个用例 = 90 次付费调用.*预计花费约.*预留/, estimate);
-  const start = section.getByRole('button', { name: '开始审核对比' });
-  assert.equal(await start.isDisabled(), true, 'a paid run needs the explicit confirmation first');
-  await section.getByLabel('确认发起付费审核对比').check();
+  // Named exception (Part 24b-6c): the paid-call confirmation is ON the button (no checkbox, no estimate paragraph): the label says what it
+  // does and costs, the first click asks again (amber), only the second starts. The cost breakdown is the button's hover text.
+  const start = section.locator('[data-pw-send="review-compare"]');
+  await start.waitFor();
+  await cmp.waitForFunction(() =>
+    /30 个用例 · 90 次付费调用/.test(document.querySelector('[data-pw-send="review-compare"]')?.textContent ?? ''),
+  );
+  assert.match((await start.getAttribute('title')) ?? '', /预计约.*单次调用最多预留/);
   assert.equal(await start.isDisabled(), false);
+  await start.click();
+  assert.equal(await start.getAttribute('data-state'), 'confirm', 'the first click asks again');
+  assert.equal((await start.innerText()).replace(/\s+/g, ' '), '确认付费 · 90 次');
+  assert.equal(await cmp.locator('.rc-runs button').count(), 0, 'a first click alone started nothing');
   await snap(cmp, '05-run-confirm');
   await start.click();
   // the queue: progress is shown, then the table fills in
@@ -416,7 +421,7 @@ try {
     null,
     { timeout: 180_000 },
   );
-  assert.equal(await start.isDisabled(), true, 'the confirmation is cleared after a run is queued');
+  assert.equal(await start.getAttribute('data-state'), 'idle', 'the confirmation is cleared after a run is queued');
 
   // the summary table, Pro against Flash
   const rows = section.locator('.rc-table tbody tr');
@@ -438,11 +443,13 @@ try {
   await snap(cmp, '07-summary');
 
   // a case side by side
-  await section.locator('.rc-cases tbody tr', { hasText: '亲密关系里，称呼' }).click();
-  const drawer = cmp.locator('.admin-drawer:not([hidden])');
+  // Named exception (Part 24b-6c): a case opens BELOW its row (it was a drawer).
+  await section.locator('.rc-cases .ot-row', { hasText: '亲密关系里，称呼' }).click();
+  const drawer = cmp.locator('.rc-cases .rc-detail');
+  assert.equal(await cmp.locator('.admin-drawer:not([hidden])').count(), 0, 'no drawer in 预演');
   await drawer.locator('.rc-sides').waitFor();
   const text = ((await drawer.innerText()) as string).replace(/\s+/g, ' ');
-  assert.match(text, /用例 1/);
+  assert.match(text, /玩家输入：/);
   assert.match(text, /草稿（两个审核模型审核的是同一份）/);
   assert.match(text, /宝宝今天辛苦啦/, 'the shared draft');
   assert.equal(await drawer.locator('.rc-side').count(), 2);
@@ -463,38 +470,31 @@ try {
   await mark('pro', 'better').click();
   await mark('flash', 'worse').click();
   await cmp.waitForFunction(() =>
-    document.querySelector(
-      '.admin-drawer:not([hidden]) .rc-side[data-side="flash"] [data-mark="worse"][aria-pressed="true"]',
-    ),
+    document.querySelector('.rc-detail .rc-side[data-side="flash"] [data-mark="worse"][aria-pressed="true"]'),
   );
   const runId = store.get<{ id: string }>('SELECT id FROM web_review_compare_runs')!.id;
   const saved = await okPost(owner, 'review-compare/detail', { runId });
   assert.deepEqual([saved.cases[0].pro.mark, saved.cases[0].flash.mark], ['better', 'worse']);
   await mark('flash', 'worse').click(); // pressing the pressed one again clears it
   await cmp.waitForFunction(
-    () =>
-      !document.querySelector(
-        '.admin-drawer:not([hidden]) .rc-side[data-side="flash"] [data-mark="worse"][aria-pressed="true"]',
-      ),
+    () => !document.querySelector('.rc-detail .rc-side[data-side="flash"] [data-mark="worse"][aria-pressed="true"]'),
   );
   assert.equal((await okPost(owner, 'review-compare/detail', { runId })).cases[0].flash.mark, null);
   await mark('flash', 'same').click();
   await cmp.waitForFunction(() =>
-    document.querySelector(
-      '.admin-drawer:not([hidden]) .rc-side[data-side="flash"] [data-mark="same"][aria-pressed="true"]',
-    ),
+    document.querySelector('.rc-detail .rc-side[data-side="flash"] [data-mark="same"][aria-pressed="true"]'),
   );
-  await drawer.locator('.admin-drawer-head button').click();
+  await section.locator('.rc-cases .ot-row', { hasText: '亲密关系里，称呼' }).click();
 
   // a case where the two reviewers differ in what they wrote
-  await section.locator('.rc-cases tbody tr', { hasText: '简单的早安' }).click();
+  await section.locator('.rc-cases .ot-row', { hasText: '简单的早安' }).click();
   await drawer.locator('.rc-vs').waitFor();
   assert.ok(
     (await drawer.locator('.rc-vs .rc-vs-row.is-changed').count()) >= 1,
     'the diff between the two final replies',
   );
   await snap(cmp, '09-needless-rewrite');
-  await drawer.locator('.admin-drawer-head button').click();
+  await section.locator('.rc-cases .ot-row', { hasText: '简单的早安' }).click();
 
   // export: plain text, no ids
   await section.getByRole('button', { name: '导出摘要' }).click();
@@ -537,11 +537,8 @@ try {
   const lim = await openPreview(scoped);
   await lim.locator('.pw-review-section summary').click();
   await lim.locator('.pw-review-section .rc-progress', { hasText: /已完成 30\/30/ }).waitFor({ timeout: 20_000 });
-  assert.equal(await lim.getByLabel('确认发起付费审核对比').isDisabled(), true);
-  assert.match(
-    await lim.locator('.pw-review-section .rc-start').innerText(),
-    /只读：发起审核对比需要“预演”的全部角色权限/,
-  );
+  assert.equal(await lim.locator('[data-pw-send="review-compare"]').isDisabled(), true);
+  assert.match(await lim.locator('.pw-review-section .rc-start').innerText(), /需要全部角色的预演权限/);
   expected.push('/review-compare/start', '/review-compare/mark');
   const noStart = await scoped.post('review-compare/start', { requestId: randomUUID(), confirmPaidCalls: 90 });
   assert.equal(noStart.status(), 403);
