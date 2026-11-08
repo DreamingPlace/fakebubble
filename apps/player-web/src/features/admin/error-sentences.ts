@@ -39,7 +39,7 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   // ---- profile import ----
   PROFILE_IMPORT_INVALID: '导入文件有问题，整次导入没有写入。请按提示修改后重新选择。',
   PROFILE_IMPORT_CONFLICT: '导入期间有内容被改动，本次没有写入。请重新选择文件再预览。',
-  PROFILE_IMPORT_UNAVAILABLE: '这个站点还没有开启导入角色资料。',
+  PROFILE_IMPORT_UNAVAILABLE: '这个站点还没有开启导入。',
   INVALID_CAST_SOURCE: '关系与故事的来源无效，请重新载入。',
   // ---- 预演 / review ----
   VALID_PREVIEW_REQUIRED: '当前草稿还缺少有效的两阶段预演证明；刷新预演结果后核对，不会自动补发调用。',
@@ -108,7 +108,7 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   ADMIN_UNAUTHORIZED: '登录已过期，请重新登录。',
   WEB_DISPATCH_CAPACITY: '服务器现在太忙，请稍后再试。',
   WEB_LOCAL_INSTANCE_MISMATCH: '这个站点的实例标识不一致，请联系主管理员。',
-  WEB_PROFILE_SCHEMA_MISMATCH: '这个站点的角色资料表与程序不一致，请联系主管理员。',
+  WEB_PROFILE_SCHEMA_MISMATCH: '这个站点的导入表与程序不一致，请联系主管理员。',
   WEB_AVAILABILITY_SCHEMA_MISMATCH: '这个站点的上下线表与程序不一致，请联系主管理员。',
   WEB_PROVIDER_BUDGET_EXHAUSTED: '供应商预算已用完，没有发起调用。请先充值。',
   WEB_PROVIDER_CATALOG_INVALID: '供应商目录无效，请联系主管理员。',

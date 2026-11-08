@@ -463,8 +463,9 @@ test('compile-preview: the view of one character from the draft or from a versio
   assert.equal(draft.size, JSON.stringify(draft.view).length);
   assert.deepEqual(draft.dropped, { memes: 0, heardStories: 0, groupStories: 0, livedStories: 0, relationTexts: 0 });
   const heard = draft.knowledge.filter((k) => k.level === 'heard');
-  assert.equal(heard.length, 2, 'c05 hears two stories only because she rates c01 at 3.5');
-  assert.ok(heard.every((k) => !k.fromOverride));
+  // Part 24m (named): stars no longer make a story heard; c05 hears these two because the admin set it (overrides).
+  assert.equal(heard.length, 2, 'c05 hears two stories only because of the admin overrides, not her 3.5 stars');
+  assert.ok(heard.every((k) => k.fromOverride));
   assert.equal(draft.knowledge.length, 6, 'every story, 不知道 included, for the console table');
   refused(
     () => f.cast.compilePreview(f.ownerAuth, { characterId: 'nobody', source: 'draft' }),

@@ -426,7 +426,14 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     q<HTMLElement>('#admin-account-toggle').setAttribute('aria-expanded', String(!menu.hidden));
   };
   /** Leaving the workbench with unsaved changes asks first (保存 / 不保存 / 取消); anything else leaves at once. */
-  const leaveOk = async () => page !== 'characters' || !workbench || (await workbench.confirmLeave());
+  const clean = () => page !== 'characters' || !workbench || workbench.canLeave();
+  /** Runs `go` at once on a clean page (no await: the click keeps its synchronous effect), else after the answer says to leave. */
+  const whenLeaveOk = (go: () => void) => {
+    if (clean()) return go();
+    void workbench!.confirmLeave().then((ok) => {
+      if (ok && !disposed) go();
+    });
+  };
   /** Which page the administrator is on, as the address bar shows it. */
   const here = (): AdminRoute | null => (session && isAdminPage(page) ? { page, id: routeId } : null);
   const navigate = (next: string, id: string | null = null, options: { replaceUrl?: boolean } = {}) => {
@@ -677,22 +684,23 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     },
     openInbox: (characterId) => {
       if (busy || disposed) return;
-      void (async () => {
-        if (!(await leaveOk()) || disposed || !navigate('cocreation', characterId)) return;
+      whenLeaveOk(() => {
+        if (!navigate('cocreation', characterId)) return;
         const load = loader();
         if (load) void run(load);
-      })();
+      });
     },
     onPick: (characterId) => {
       if (disposed) return;
-      void (async () => {
-        if (!(page === 'characters' && routeId === characterId) && !(await leaveOk())) return;
-        if (disposed || !navigate('characters', characterId)) return;
+      const go = () => {
+        if (!navigate('characters', characterId)) return;
         // Still the picked role when its turn comes (a later pick, or leaving the page, replaces this one).
         runLatest(async () => {
           if (page === 'characters' && routeId === characterId) await openRole(characterId);
         });
-      })();
+      };
+      if (page === 'characters' && routeId === characterId) go();
+      else whenLeaveOk(go);
     },
   });
   const openRole = async (characterId: string) => {
@@ -751,21 +759,17 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     : null;
   listen(importRoles, 'click', () => {
     if (busy || disposed) return;
-    void (async () => {
-      if (!(await leaveOk()) || disposed) return;
-      profileImporter?.open();
-    })();
+    whenLeaveOk(() => profileImporter?.open());
   });
   listen(newRole, 'click', () => {
     if (busy || disposed) return;
-    void (async () => {
-      if (!(await leaveOk()) || disposed) return;
+    whenLeaveOk(() => {
       previewBench?.clear();
       previewHost.hidden = true;
       picker.select(null);
       routeId = null;
       workbench!.openNew();
-    })();
+    });
   });
   previewBench = port.previews
     ? previewWorkbench(previewHost, {
@@ -970,11 +974,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       if (busy || disposed) return;
       // Already on this page: nothing to do (each page has its own refresh button).
       if (isAdminPage(button.dataset.page!) && sameRoute({ page: button.dataset.page, id: null }, here())) return;
-      void (async () => {
-        if (!(await leaveOk()) || disposed || !navigate(button.dataset.page!)) return;
+      whenLeaveOk(() => {
+        if (!navigate(button.dataset.page!)) return;
         const load = loader();
         if (load) void run(load);
-      })();
+      });
     });
   listen(q('#admin-account-toggle'), 'click', toggleMenu);
   const onWindowClick = (event: Event) => {
@@ -1010,11 +1014,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     // is made only if the answer lets it.
     if (page === 'characters' && workbench && !workbench.canLeave()) {
       address.replace(before);
-      void (async () => {
-        if (!(await leaveOk()) || disposed || !navigate(wanted.page, wanted.id)) return;
+      whenLeaveOk(() => {
+        if (!navigate(wanted.page, wanted.id)) return;
         const load = loader();
         if (load) void run(load);
-      })();
+      });
       return;
     }
     if (!navigate(wanted.page, wanted.id, { replaceUrl: true })) {
@@ -1074,9 +1078,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   });
   listen(q('#admin-secret-close'), 'click', clearSecrets);
   listen(q('#admin-logout'), 'click', () => {
-    void (async () => {
-      if (!(await leaveOk())) return;
-      await run(async () => {
+    whenLeaveOk(() => {
+      void run(async () => {
         clearSecrets();
         await port.logout();
         if (disposed) return;
@@ -1086,7 +1089,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         address.replace(null);
         status.textContent = '已退出登录。';
       });
-    })();
+    });
   });
   const refresh = () => {
     if (!session || busy || disposed) return;
