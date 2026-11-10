@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Store } from '../../../apps/server/platform/store.ts';
@@ -123,7 +124,7 @@ test('every other change still requires its 预演, with or without a colour', (
     (p) => void (p.template.persona += '新的资料'),
     (p) => void (p.presentation.displayName = '新的显示名'),
     (p) => void (p.presentation.publicDescription = '新的简介'),
-    (p) => void (p.presentation.welcome.version = 'welcome-v9'),
+    (p) => void (p.presentation.welcomes[0]!.text += '（改）'),
     (p) => void (p.template.voice = { profileId: 'other', version: 1, speed: 1 }),
   ];
   for (const edit of edits) {

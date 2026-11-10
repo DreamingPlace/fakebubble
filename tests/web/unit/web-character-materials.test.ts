@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -59,7 +60,7 @@ function fixture(t: test.TestContext) {
     offline.registerWelcome({
       characterId: role.characterId,
       voiceVersion: version,
-      body: role.presentation.welcome.text,
+      body: role.presentation.welcomes[0]!.text,
       wav: syntheticTone(),
     });
     offline.registerApprovedFooter({

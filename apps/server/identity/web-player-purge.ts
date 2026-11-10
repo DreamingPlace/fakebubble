@@ -1,5 +1,6 @@
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { purgeReviewRows, reviewRowsRemain } from '../review/web-chat-review.ts';
+import { purgeWelcomeChoices } from '../characters/web-welcome-choice.ts';
 
 const tableExists = (store: Pick<BusinessStore, 'get'>, name: string) =>
   !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", name);
@@ -122,6 +123,9 @@ export function purgePlayerLogins(
   /** Part 17g: told the fixed name of each statement group just before it runs (retention diagnostics). */
   mark: (group: string) => void = () => {},
 ) {
+  // Part 24k-2: the welcome line this player was given for each character is the player's own data.
+  mark('welcome_choices');
+  purgeWelcomeChoices(store, { worldId: scope.worldId });
   mark('legacy_invites');
   purgeLegacyInvites(store, { principalId: scope.principalId, now: scope.now ?? Date.now() });
   mark('player_profiles');

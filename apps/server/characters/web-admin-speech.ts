@@ -23,8 +23,8 @@ export interface WebAdminSpeechBudget {
 }
 export type SpeechPurpose = 'material-welcome' | 'material-footer' | 'preview';
 type Actor = { memberId: string; sessionId: string };
-/** One line of text is bounded so one clip always fits a database row (about 35 s of 24 kHz audio). */
-export const ADMIN_SPEECH_TEXT_MAX = 160;
+/** One line of text is bounded so one clip always fits a database row (a welcome line may be 200 characters). */
+export const ADMIN_SPEECH_TEXT_MAX = 200;
 const AUDIO_MAX_BYTES = 1_900_000;
 /** A preview is at most this many bubbles; each is one Fish call. */
 export const ADMIN_SPEECH_BUBBLES_MAX = 12;

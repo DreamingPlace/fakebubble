@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
@@ -712,17 +713,21 @@ test('native materials: private upload, two-clip approval, new role and voice pr
     assert.deepEqual(await f.call(base + '/publish', owner, input), published);
     const current = await f.boot(player),
       role = current.characters.find((c) => c.characterId === id)!;
-    assert.equal(role.welcome.text, profile.presentation.welcome.text);
+    // Part 24k-2 (named exception): this player already has a chat with wei-guagua, so they KEEP the welcome line they were given
+    // (the opening of that chat); only the new role, whose welcome the player meets for the first time, shows the new text.
+    const keeps = id === 'wei-guagua';
+    assert.equal(role.welcome.text, keeps ? source.presentation.welcomes[0].text : profile.presentation.welcome!.text);
     assert.equal(role.welcome.audio.state, 'available');
     if (role.welcome.audio.state !== 'available') throw Error('missing clip');
     const audio = await f.request(role.welcome.audio.url, client());
     assert.equal(audio.status, 200);
-    assert.equal(
-      createHash('sha256')
-        .update(Buffer.from(await audio.arrayBuffer()))
-        .digest('hex'),
-      read.sha256,
-    );
+    if (!keeps)
+      assert.equal(
+        createHash('sha256')
+          .update(Buffer.from(await audio.arrayBuffer()))
+          .digest('hex'),
+        read.sha256,
+      );
   }
   assert.deepEqual(await f.call(historyPath, player), history);
   assert.deepEqual((await f.boot(player)).access, before.access);

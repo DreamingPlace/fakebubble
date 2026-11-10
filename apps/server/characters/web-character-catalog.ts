@@ -4,11 +4,19 @@ import { WEB_PROVIDER_CATALOG, WEB_PROVIDER_WELCOME } from '../../../config/web-
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
+import { installWebWelcomeLines } from './web-welcome-schema.ts';
+import { upgradeProfile, type WelcomeLine } from '../../../packages/contracts/web-welcomes.ts';
 
 export interface WebCharacterPresentation {
   displayName: string;
   publicDescription: string;
-  welcome: { text: string; version: string };
+  /** Part 24k-2: 1-8 weighted lines (weights are whole percents summing to 100). Old profiles are upgraded in memory on read. */
+  welcomes: WelcomeLine[];
+  /**
+   * The old single welcome. INPUT ONLY (a save that still carries it replaces the list with that one line): a profile the server
+   * reads or returns never has it.
+   */
+  welcome?: { text: string; version: string };
   /** The character's main chat colour, '#RRGGBB' in capitals. Absent = the player page keeps its built-in palette. */
   color?: string;
   /**
@@ -22,8 +30,20 @@ export interface WebCharacterProfile {
   presentation: WebCharacterPresentation;
 }
 export type CatalogEntry = WebCharacterProfile & { characterId: string; version: number; position: number };
-export const characterProfileHash = (value: WebCharacterProfile) =>
+/** What is on disk: an old profile still has `presentation.welcome`; anything written from Part 24k-2 on has `welcomes`. */
+export type StoredWebCharacterProfile = {
+  template: CharacterTemplate;
+  presentation: Omit<WebCharacterPresentation, 'welcomes'> & {
+    welcome?: { text: string; version: string };
+    welcomes?: WelcomeLine[];
+  };
+};
+/** The hash is over the STORED bytes (never the upgraded view), so stored history keeps verifying. */
+export const characterProfileHash = (value: StoredWebCharacterProfile | WebCharacterProfile) =>
   createHash('sha256').update(JSON.stringify(value)).digest('hex');
+/** Parse a stored profile and upgrade it in memory. The caller verifies the hash against the stored text FIRST. */
+export const upgradedProfile = (stored: StoredWebCharacterProfile): WebCharacterProfile =>
+  upgradeProfile(stored) as unknown as WebCharacterProfile;
 
 const statements = [
   `CREATE TABLE web_character_versions(character_id TEXT NOT NULL,version INTEGER NOT NULL CHECK(version>0),
@@ -105,14 +125,14 @@ export function installWebCharacterCatalog(store: BusinessStore) {
       for (const sql of statements) store.all(sql);
       for (const [position, entry] of WEB_PROVIDER_CATALOG.entries()) {
         const live = templates.find((row) => row.id === entry.characterId)!;
-        const profile: WebCharacterProfile = {
+        const profile = {
           template: JSON.parse(live.config_json),
           presentation: {
             displayName: entry.displayName,
             publicDescription: '',
             welcome: { ...WEB_PROVIDER_WELCOME[entry.characterId] },
           },
-        };
+        } as StoredWebCharacterProfile;
         ensure(
           profile.template.id === live.id && profile.template.version === live.version,
           'WEB_PROVIDER_CATALOG_INVALID',
@@ -153,6 +173,8 @@ export function installWebCharacterCatalog(store: BusinessStore) {
       for (const sql of restoreStatements) store.all(sql);
       store.run('INSERT INTO web_character_schema VALUES (3,?)', restoreDigest);
     }
+    // Part 24k-2: the weighted 欢迎词 tables (one idempotent, digest-checked step; not a numbered migration).
+    installWebWelcomeLines(store);
     publishedWebCharacters(store);
   });
 }
@@ -172,15 +194,16 @@ export function publishedWebCharacters(store: BusinessStore): CatalogEntry[] {
     JOIN character_templates t ON t.id=c.character_id ORDER BY c.position`);
   ensure(rows.length <= 15, 'WEB_PROVIDER_CATALOG_INVALID');
   return rows.map((row) => {
-    const profile = JSON.parse(row.profile_json) as WebCharacterProfile;
+    const stored = JSON.parse(row.profile_json) as StoredWebCharacterProfile;
     ensure(
-      characterProfileHash(profile) === row.content_hash &&
-        profile.template.id === row.character_id &&
-        profile.template.version === row.version &&
+      characterProfileHash(stored) === row.content_hash &&
+        stored.template.id === row.character_id &&
+        stored.template.version === row.version &&
         row.version === row.live_version &&
-        JSON.stringify(profile.template) === JSON.stringify(JSON.parse(row.config_json)),
+        JSON.stringify(stored.template) === JSON.stringify(JSON.parse(row.config_json)),
       'WEB_PROVIDER_CATALOG_INVALID',
     );
+    const profile = upgradedProfile(stored);
     return { ...profile, characterId: row.character_id, version: row.version, position: row.position };
   });
 }
@@ -196,14 +219,14 @@ export function webCharacterOnline(store: Pick<BusinessStore, 'get'>, characterI
 
 export type OfflineEntry = WebCharacterProfile & { characterId: string; version: number };
 const profileOf = (row: { profile_json: string; content_hash: string; character_id: string; version: number }) => {
-  const profile = JSON.parse(row.profile_json) as WebCharacterProfile;
+  const stored = JSON.parse(row.profile_json) as StoredWebCharacterProfile;
   ensure(
-    characterProfileHash(profile) === row.content_hash &&
-      profile.template.id === row.character_id &&
-      profile.template.version === row.version,
+    characterProfileHash(stored) === row.content_hash &&
+      stored.template.id === row.character_id &&
+      stored.template.version === row.version,
     'WEB_PROVIDER_CATALOG_INVALID',
   );
-  return profile;
+  return upgradedProfile(stored);
 };
 /**
  * Part 24l: characters that were published once (they have a live template version) but have no catalog row now and are not
@@ -252,10 +275,13 @@ export function requirePublishedWebCharacter(store: BusinessStore, characterId: 
   );
 }
 
-export function webWelcomeLine(store: BusinessStore, characterId: string) {
+/** Part 24k-2: every published welcome line of the character (the seed's single line while no catalog exists). */
+export function webWelcomeLines(store: BusinessStore, characterId: string): WelcomeLine[] | undefined {
   if (store.get("SELECT 1 FROM sqlite_master WHERE name='web_character_schema'"))
-    return publishedWebCharacters(store).find((entry) => entry.characterId === characterId)?.presentation.welcome;
+    return publishedWebCharacters(store).find((entry) => entry.characterId === characterId)?.presentation.welcomes;
   return Object.hasOwn(WEB_PROVIDER_WELCOME, characterId)
-    ? WEB_PROVIDER_WELCOME[characterId as keyof typeof WEB_PROVIDER_WELCOME]
+    ? upgradeProfile({
+        presentation: { welcome: WEB_PROVIDER_WELCOME[characterId as keyof typeof WEB_PROVIDER_WELCOME] },
+      }).presentation.welcomes
     : undefined;
 }

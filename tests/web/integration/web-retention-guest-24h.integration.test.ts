@@ -249,6 +249,8 @@ test('every table with a world_id or operation_id that holds this guest’s rows
     'outbox',
     'player_profile_versions',
     'player_profile_requests',
+    // Part 24k-2 (named exception): the welcome line a player was given; removed with the player by purgePlayerLogins.
+    'web_welcome_choices',
     'web_retention_file_cleanup',
   ]);
   assert.deepEqual(

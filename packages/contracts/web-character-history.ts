@@ -2,6 +2,8 @@
  * 角色版本历史 (Part 24f). Shapes shared by the server and the admin page. A version is an immutable snapshot of a published
  * profile; nothing here carries an email, an id of a person or any player content.
  */
+import { upgradeWelcomes } from './web-welcomes.ts';
+
 export type VersionOrigin = { kind: 'publish' } | { kind: 'colour' } | { kind: 'restore'; from: number };
 /** Who published it, as a role: never an email, a label or an id. 'system' is the first import of a seed character. */
 export type VersionActor = 'owner' | 'admin' | 'system';
@@ -43,7 +45,14 @@ type ProfileLike = {
     authorCanon?: unknown;
     voice?: unknown;
   };
-  presentation: { displayName: string; publicDescription: string; color?: unknown; welcome: unknown };
+  presentation: {
+    displayName: string;
+    publicDescription: string;
+    color?: unknown;
+    palette?: unknown;
+    welcome?: unknown;
+    welcomes?: unknown;
+  };
 };
 const stable = (value: unknown): string =>
   Array.isArray(value)
@@ -66,8 +75,9 @@ const GROUPS: readonly [string, (p: ProfileLike) => unknown][] = [
       p.presentation.publicDescription,
     ],
   ],
-  ['主色', (p) => p.presentation.color ?? null],
-  ['欢迎词', (p) => p.presentation.welcome],
+  ['主色', (p) => [p.presentation.color ?? null, p.presentation.palette ?? null]],
+  // Part 24k-2: an old single welcome and the one-line list that upgrades from it are the same.
+  ['欢迎词', (p) => upgradeWelcomes(p.presentation)],
   ['人设', (p) => [p.template.persona, p.template.seed === true]],
   ['设定', (p) => p.template.authorCanon ?? null],
   ['声音', (p) => p.template.voice ?? null],

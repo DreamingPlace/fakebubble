@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import { WebCharacterPreviews } from '../../../apps/server/characters/web-character-preview.ts';
 import { legacySchema } from './legacy-schema.ts';
 import { WebCharacterPreviewRunner } from '../../../apps/server/characters/web-character-preview-runner.ts';
@@ -291,7 +292,8 @@ export class WebHTTPFixture extends WebBusinessFixture {
         presentation: {
           displayName: '<img src=x onerror="alert(1)">',
           publicDescription: '离线动态目录',
-          welcome: { text: '合成第四人物欢迎词', version: 'welcome-v1' },
+          // Part 24k-2 (named exception): welcome → welcomes.
+          welcomes: [{ id: 'welcome-v1', text: '合成第四人物欢迎词', weight: 100 }],
         },
       };
       this.store.transaction(() => {
@@ -317,7 +319,7 @@ export class WebHTTPFixture extends WebBusinessFixture {
       await new WebProviderOffline(this.store, this.clock).registerFixedAudio('welcome', {
         characterId: id,
         voiceVersion: version,
-        body: profile.presentation.welcome.text,
+        body: profile.presentation.welcomes[0]!.text,
         wav: syntheticTone(),
       });
       return Response.json({ characterId: id });

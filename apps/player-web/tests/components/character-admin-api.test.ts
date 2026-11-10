@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CharacterAdminClient } from '../../src/services/character-admin-api.ts';
@@ -15,7 +16,7 @@ const profile = {
   presentation: {
     displayName: '合成人物',
     publicDescription: '离线展示',
-    welcome: { text: '你好', version: 'welcome-v1' },
+    welcomes: [{ id: 'welcome-v1', text: '你好', weight: 100 }],
   },
 };
 const draft = { characterId: 'role', revision: 1, baseVersion: 1, profile, contentHash: 'a'.repeat(64), savedAt: 1 };

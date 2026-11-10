@@ -9,11 +9,36 @@ import {
   characterProfileHash,
   publishedWebCharacters,
   webCharacterOnline,
+  upgradedProfile,
+  type StoredWebCharacterProfile,
   type WebCharacterProfile,
 } from './web-character-catalog.ts';
 import { identifier, keys, record, validatedTemplate } from './template-validation.ts';
 
 import { approvedCharacterMaterial, promoteCharacterMaterial } from './web-character-materials.ts';
+import { webWelcomeLinesInstalled } from './web-welcome-schema.ts';
+
+/** Is there an approved clip of exactly this line in this voice bundle (the single welcome clip, or the line's own)? */
+const lineClipApproved = (
+  store: BusinessStore,
+  characterId: string,
+  voiceVersion: string,
+  line: { id: string; text: string },
+) =>
+  !!store.get(
+    `SELECT 1 FROM web_provider_welcome_assets WHERE character_id=? AND voice_version=? AND body=? AND origin='operator_approved'`,
+    characterId,
+    voiceVersion,
+    line.text,
+  ) ||
+  (webWelcomeLinesInstalled(store) &&
+    !!store.get(
+      'SELECT 1 FROM web_provider_welcome_lines WHERE character_id=? AND voice_version=? AND line_id=? AND body=?',
+      characterId,
+      voiceVersion,
+      line.id,
+      line.text,
+    ));
 
 type Publication = {
   character_id: string;
@@ -35,7 +60,8 @@ const dto = (row: Publication) => ({
 
 /** The profile as the colour-only gate compares it: everything but the colour and the version number it is published under. */
 const withoutColour = (value: WebCharacterProfile) => {
-  const { color: _color, ...presentation } = value.presentation;
+  // Part 24k-2: the palette (主色 + 点缀) is colour too.
+  const { color: _color, palette: _palette, ...presentation } = value.presentation;
   return { template: { ...value.template, version: 0 }, presentation };
 };
 
@@ -84,11 +110,12 @@ export function publishWebCharacter(
       id,
     );
     ensure(draft && draft.revision === input.draftRevision, 'DRAFT_CONFLICT');
-    const profile = JSON.parse(draft.profile_json) as WebCharacterProfile;
+    const stored = JSON.parse(draft.profile_json) as StoredWebCharacterProfile;
     ensure(
-      characterProfileHash(profile) === draft.content_hash && draft.content_hash === input.profileHash,
+      characterProfileHash(stored) === draft.content_hash && draft.content_hash === input.profileHash,
       'DRAFT_CONFLICT',
     );
+    const profile = upgradedProfile(stored);
     const template = validatedTemplate(profile.template),
       catalog = publishedWebCharacters(store);
     const live = catalog.find((row) => row.characterId === id);
@@ -99,7 +126,9 @@ export function publishWebCharacter(
     if (colourOnly)
       ensure(
         live &&
-          profile.presentation.color !== live.presentation.color &&
+          (profile.presentation.color !== live.presentation.color ||
+            JSON.stringify(profile.presentation.palette ?? null) !==
+              JSON.stringify(live.presentation.palette ?? null)) &&
           contentHash(withoutColour(profile)) === contentHash(withoutColour(live)),
         'VALID_PREVIEW_REQUIRED',
       );
@@ -222,15 +251,9 @@ export function publishWebCharacter(
           contentHash(template.voice) === contentHash(live.template.voice),
         'CHARACTER_MATERIALS_REQUIRED',
       );
+      // Part 24k-2: EVERY line needs its approved clip in the current bundle (and the footer).
       ensure(
-        store.get(
-          `SELECT 1 FROM web_provider_welcome_assets WHERE character_id=? AND voice_version=?
-        AND body=? AND text_version=? AND origin='operator_approved'`,
-          id,
-          binding.voice_version,
-          profile.presentation.welcome.text,
-          profile.presentation.welcome.version,
-        ) &&
+        profile.presentation.welcomes.every((line) => lineClipApproved(store, id, binding.voice_version, line)) &&
           store.get(
             `SELECT 1 FROM web_provider_footer_assets WHERE character_id=? AND voice_version=? AND origin='operator_approved'`,
             id,

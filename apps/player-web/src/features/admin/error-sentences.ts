@@ -114,9 +114,12 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   WEB_PROVIDER_CATALOG_INVALID: '供应商目录无效，请联系主管理员。',
   WEB_PROVIDER_PRICE_REQUIRED: '这个模型还没有价格，不能发起付费调用。',
   WEB_QUOTA_STATE_INVALID: '额度状态异常，请联系主管理员核对。',
+  // ---- 欢迎词 (Part 24k-2) ----
+  WELCOMES_INVALID: '欢迎词没有通过检查：需要 1–8 条，每条 1–200 字，比例是 1–100 的整数且合计恰好 100%。',
+  WEB_WELCOME_SCHEMA_MISMATCH: '欢迎词的数据表与预期不符，没有改动任何内容。请联系站点维护者。',
   // ---- 朗读: 生成 a 成品, 预演 试听 (Part 24k-1) ----
   SPEECH_PRICE_REQUIRED: 'Fish 语音价格未生效，没有发起调用。到「系统」续期价格。',
-  SPEECH_TEXT_INVALID: '这段文字不能朗读：超过 160 字，或含 [ ] < > 符号。',
+  SPEECH_TEXT_INVALID: '这段文字不能朗读：超过 200 字，或含 [ ] < > 符号。',
   SPEECH_REQUEST_INVALID: '朗读请求无效，请重新载入后再试。',
   SPEECH_VOICE_REQUIRED: '先填音色 referenceId。',
   SPEECH_ESTIMATE_CHANGED: '费用或文字已变，没有发起调用。请重新核对费用。',

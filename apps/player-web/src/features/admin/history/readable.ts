@@ -1,4 +1,5 @@
 import type { CharacterProfile } from '../../../services/character-admin-api.ts';
+import { upgradeWelcomes } from '../../../../../../packages/contracts/web-welcomes.ts';
 
 /** A value of the profile as plain words: text as it is, lists as lines, groups as "名：值" lines. Never JSON. */
 export function plain(value: unknown, depth = 0): string {
@@ -25,8 +26,20 @@ export const presentationFields = (profile: CharacterProfile): Field[] => {
     ['网页展示名', p.displayName],
     ['公开简介', plain(p.publicDescription)],
     ['主色', plain(p.color)],
-    ['欢迎词', p.welcome.text],
-    ['欢迎词版本', p.welcome.version],
+    // Part 24k-2: line by line, each with its percent.
+    ...upgradeWelcomes(p).map(
+      (line, i, all) =>
+        [
+          all.length === 1 ? '欢迎词' : `欢迎词 ${i + 1}`,
+          all.length === 1 ? line.text : `${line.text}（${line.weight}%）`,
+        ] as Field,
+    ),
+    [
+      '色板',
+      p.palette?.length
+        ? p.palette.map((c) => `${c.role === 'main' ? '主' : '点缀'} ${c.hex}${c.name ? ` ${c.name}` : ''}`).join('\n')
+        : '—',
+    ],
   ];
 };
 /** 完整模板 as labelled fields; the version number it is published under is not content and is left out. */

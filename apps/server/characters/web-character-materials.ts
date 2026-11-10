@@ -6,8 +6,9 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import { inspectPCM, pcmLevels } from '../../../workers/audio/wav.ts';
 import { contentHash } from './admin-content-hash.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import type { WebCharacterProfile } from './web-character-catalog.ts';
-import { characterProfileHash } from './web-character-catalog.ts';
+import type { StoredWebCharacterProfile, WebCharacterProfile } from './web-character-catalog.ts';
+import { characterProfileHash, upgradedProfile } from './web-character-catalog.ts';
+import { webWelcomeLinesInstalled } from './web-welcome-schema.ts';
 import { identifier, keys, nonempty, record } from './template-validation.ts';
 import type { WebAdminSpeech } from './web-admin-speech.ts';
 import { webAdminSpeechInstalled } from './web-admin-speech-schema.ts';
@@ -48,6 +49,50 @@ type AssetRow = {
   audio_ref_json: string | null;
   created_at: number;
 };
+/** Part 24k-2: the welcome slot of one line of a multi-line profile (a one-line profile keeps the single welcome asset). */
+type LineRow = {
+  material_id: string;
+  line_id: string;
+  body: string;
+  media_id: string;
+  sha256: string;
+  byte_length: number;
+  duration_ms: number;
+  audio_bytes: Uint8Array | null;
+  audio_ref_json: string | null;
+  created_at: number;
+};
+const lineDTO = (row: LineRow) => ({
+  kind: 'welcome' as const,
+  lineId: row.line_id,
+  sha256: row.sha256,
+  byteLength: row.byte_length,
+  durationMs: row.duration_ms,
+  body: row.body,
+});
+export function materialLines(store: BusinessStore, id: string, includeAudio = false): LineRow[] {
+  if (!webWelcomeLinesInstalled(store)) return [];
+  const columns = includeAudio
+    ? '*'
+    : 'material_id,line_id,body,media_id,sha256,byte_length,duration_ms,created_at,NULL audio_bytes,NULL audio_ref_json';
+  return store.all<LineRow>(
+    `SELECT ${columns} FROM web_welcome_material_lines WHERE material_id=? ORDER BY line_id`,
+    id,
+  );
+}
+/** Is every slot of this profile filled? One line: the welcome and the footer. Several: one per line, and the footer. */
+export function slotsComplete(store: BusinessStore, materialId: string, profile: WebCharacterProfile) {
+  const lines = profile.presentation.welcomes,
+    assets = materialAssets(store, materialId);
+  if (lines.length === 1) return assets.length === 2 && assets.some((a) => a.kind === 'welcome');
+  const filled = new Map(materialLines(store, materialId).map((row) => [row.line_id, row.body]));
+  return (
+    assets.length === 1 &&
+    assets[0]!.kind === 'footer' &&
+    filled.size === lines.length &&
+    lines.every((line) => filled.get(line.id) === line.text)
+  );
+}
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const assetDTO = (row: AssetRow) => ({
   kind: row.kind,
@@ -80,6 +125,8 @@ export function materialManifest(store: BusinessStore, row: MaterialRow) {
     row.model,
     row.evidence_json,
     materialAssets(store, row.id).map(assetDTO),
+    // Part 24k-2: only a material that has line slots adds them, so every earlier manifest hash is what it was.
+    ...(materialLines(store, row.id).length ? [materialLines(store, row.id).map(lineDTO)] : []),
   ]);
 }
 function exactDraft(store: BusinessStore, row: Pick<MaterialRow, 'character_id' | 'revision' | 'profile_hash'>) {
@@ -91,9 +138,9 @@ function exactDraft(store: BusinessStore, row: Pick<MaterialRow, 'character_id' 
     row.revision,
   );
   ensure(draft && draft.content_hash === row.profile_hash, 'DRAFT_CONFLICT');
-  const profile = JSON.parse(draft.profile_json) as WebCharacterProfile;
-  ensure(characterProfileHash(profile) === row.profile_hash, 'DRAFT_CONFLICT');
-  return profile;
+  const stored = JSON.parse(draft.profile_json) as StoredWebCharacterProfile;
+  ensure(characterProfileHash(stored) === row.profile_hash, 'DRAFT_CONFLICT');
+  return upgradedProfile(stored);
 }
 export function approvedCharacterMaterial(
   store: BusinessStore,
@@ -116,7 +163,7 @@ export function approvedCharacterMaterial(
   ensure(
     approval &&
       approval.manifest_hash === materialManifest(store, row) &&
-      materialAssets(store, materialId).length === 2,
+      slotsComplete(store, materialId, exactDraft(store, row)),
     'CHARACTER_MATERIALS_REQUIRED',
   );
   return row;
@@ -169,6 +216,7 @@ export class WebCharacterMaterials {
           model: row.model,
         },
         assets: materialAssets(this.store, row.id).map((asset) => this.view(asset)),
+        lines: materialLines(this.store, row.id).map((line) => this.lineView(line)),
         approved: !!this.store.get('SELECT 1 FROM web_character_material_approvals WHERE material_id=?', row.id),
         createdAt: row.created_at,
       }));
@@ -236,7 +284,7 @@ export class WebCharacterMaterials {
   async upload(id: string, input: unknown, authorize: () => Actor) {
     authorize();
     record(input);
-    keys(input, ['materialId', 'kind', 'base64']);
+    keys(input, ['materialId', 'kind', 'lineId', 'base64']);
     ensure(input.kind === 'welcome' || input.kind === 'footer', 'INVALID_MATERIAL_KIND');
     ensure(
       typeof input.base64 === 'string' && input.base64.length > 0 && input.base64.length <= 8_000_000,
@@ -244,7 +292,37 @@ export class WebCharacterMaterials {
     );
     const bytes = Buffer.from(input.base64, 'base64');
     ensure(bytes.toString('base64') === input.base64 && bytes.length <= 6_000_000, 'INVALID_MATERIAL_AUDIO');
-    return this.place(id, input.materialId, input.kind, bytes, authorize);
+    return this.place(id, input.materialId, input.kind, bytes, authorize, input.lineId);
+  }
+  /**
+   * Which slot a request names. A footer is the footer. A welcome slot is the single welcome of a one-line profile (a lineId,
+   * when given, must be that line) or, for 2+ lines, the slot of the named line: its id and exact text.
+   */
+  private slot(profile: WebCharacterProfile, kind: MaterialKind, lineId: unknown) {
+    if (kind === 'footer') {
+      ensure(lineId === undefined, 'INVALID_MATERIAL_KIND');
+      return { kind, line: null, multi: false, text: SYNTHETIC_TRIAL_FOOTER };
+    }
+    const lines = profile.presentation.welcomes;
+    if (lines.length === 1) {
+      ensure(lineId === undefined || lineId === lines[0]!.id, 'INVALID_MATERIAL_KIND');
+      return { kind, line: lines[0]!, multi: false, text: lines[0]!.text };
+    }
+    identifier(lineId);
+    const line = lines.find((item) => item.id === lineId);
+    ensure(line, 'INVALID_MATERIAL_KIND');
+    return { kind, line, multi: true, text: line.text };
+  }
+  /** The scope string of a slot's private object: the single welcome and the footer as before, a line clip names its line. */
+  private scopeVersion(row: MaterialRow, slot: { multi: boolean; line: { id: string } | null }) {
+    return slot.multi ? `${row.voice_version}#${slot.line!.id}` : row.voice_version;
+  }
+  private lineView(line: LineRow) {
+    const generated =
+      !!this.speech &&
+      webAdminSpeechInstalled(this.store) &&
+      this.speech.generatedFor('material-welcome', `${line.material_id}#${line.line_id}`, line.sha256);
+    return { ...lineDTO(line), origin: generated ? ('generated' as const) : ('uploaded' as const) };
   }
   /** An asset as the page sees it: the stored facts plus where the audio came from. Never part of the manifest hash. */
   private view(asset: AssetRow) {
@@ -266,7 +344,14 @@ export class WebCharacterMaterials {
     return { duration, digest: sha(bytes) };
   }
   /** Put audio into a slot (upload and 生成 share this): same checks, same immutability, same staging. */
-  private async place(id: string, materialId: unknown, kind: MaterialKind, bytes: Uint8Array, authorize: () => Actor) {
+  private async place(
+    id: string,
+    materialId: unknown,
+    kind: MaterialKind,
+    bytes: Uint8Array,
+    authorize: () => Actor,
+    lineId?: unknown,
+  ) {
     const { duration, digest } = this.checked(bytes);
     const row = this.row(id, materialId);
     const guard = () => {
@@ -274,13 +359,17 @@ export class WebCharacterMaterials {
       exactDraft(this.store, row);
     };
     guard();
-    const prior = materialAssets(this.store, row.id).find((item) => item.kind === kind);
+    const profile = exactDraft(this.store, row),
+      slot = this.slot(profile, kind, lineId);
+    const priorLine = slot.multi
+      ? materialLines(this.store, row.id).find((item) => item.line_id === slot.line!.id)
+      : null;
+    const prior = slot.multi ? priorLine : materialAssets(this.store, row.id).find((item) => item.kind === kind);
     if (prior) {
       ensure(prior.sha256 === digest && prior.byte_length === bytes.length, 'MATERIAL_AUDIO_IMMUTABLE');
-      return assetDTO(prior);
+      return slot.multi ? lineDTO(priorLine!) : assetDTO(prior as AssetRow);
     }
-    const profile = exactDraft(this.store, row),
-      scope = fixedObjectScope(this.store, kind, id, row.voice_version);
+    const scope = fixedObjectScope(this.store, kind, id, this.scopeVersion(row, slot));
     const reference = this.store.providerAudio
       ? await this.store.providerAudio.stage(scope, bytes, async () => {
           guard();
@@ -289,19 +378,36 @@ export class WebCharacterMaterials {
     if (reference) checkAudioReference(reference, scope, bytes);
     return this.store.transaction(() => {
       guard();
-      const existing = materialAssets(this.store, row.id).find((item) => item.kind === kind);
+      const existing = slot.multi
+        ? materialLines(this.store, row.id).find((item) => item.line_id === slot.line!.id)
+        : materialAssets(this.store, row.id).find((item) => item.kind === kind);
       if (existing) {
         ensure(existing.sha256 === digest && existing.byte_length === bytes.length, 'MATERIAL_AUDIO_IMMUTABLE');
-        return assetDTO(existing);
+        return slot.multi ? lineDTO(existing as LineRow) : assetDTO(existing as AssetRow);
       }
-      const body = kind === 'welcome' ? profile.presentation.welcome.text : SYNTHETIC_TRIAL_FOOTER;
+      if (slot.multi) {
+        this.store.run(
+          'INSERT INTO web_welcome_material_lines VALUES (?,?,?,?,?,?,?,?,?,?)',
+          row.id,
+          slot.line!.id,
+          slot.text,
+          this.nextId(),
+          digest,
+          bytes.length,
+          duration,
+          reference ? null : bytes,
+          reference ? JSON.stringify(reference) : null,
+          this.now(),
+        );
+        return lineDTO(materialLines(this.store, row.id).find((item) => item.line_id === slot.line!.id)!);
+      }
       this.store.run(
         'INSERT INTO web_character_material_assets VALUES (?,?,?,?,?,?,?,?,?,?,?)',
         row.id,
         kind,
         this.nextId(),
-        body,
-        kind === 'welcome' ? profile.presentation.welcome.version : null,
+        slot.text,
+        kind === 'welcome' ? slot.line!.id : null,
         digest,
         bytes.length,
         duration,
@@ -312,32 +418,38 @@ export class WebCharacterMaterials {
       return assetDTO(materialAssets(this.store, row.id).find((item) => item.kind === kind)!);
     });
   }
-  private slotText(profile: WebCharacterProfile, kind: MaterialKind) {
-    return kind === 'welcome' ? profile.presentation.welcome.text : SYNTHETIC_TRIAL_FOOTER;
-  }
   /** What 生成 would say and cost for one slot, or why it cannot be offered. Reads only; nothing is held. */
   estimateGenerate(id: string, input: unknown) {
     record(input);
-    keys(input, ['materialId', 'kind']);
+    keys(input, ['materialId', 'kind', 'lineId']);
     ensure(input.kind === 'welcome' || input.kind === 'footer', 'INVALID_MATERIAL_KIND');
     ensure(this.speech, 'SPEECH_UNAVAILABLE');
     const row = this.row(id, input.materialId),
       kind = input.kind;
-    if (materialAssets(this.store, row.id).some((asset) => asset.kind === kind))
-      return { ok: false as const, reason: 'SLOT_HAS_AUDIO' };
-    const profile = exactDraft(this.store, row);
+    const profile = exactDraft(this.store, row),
+      slot = this.slot(profile, kind, input.lineId);
+    if (this.filled(row.id, slot)) return { ok: false as const, reason: 'SLOT_HAS_AUDIO' };
     return this.speech.estimateCalls(id, row.revision, [
       {
         characterId: id,
         revision: row.revision,
         purpose: `material-${kind}`,
-        targetId: row.id,
+        targetId: this.targetId(row.id, slot),
         requestId: 'estimate',
         ordinal: 0,
-        text: this.slotText(profile, kind),
+        text: slot.text,
         voice: { profileId: row.profile_id, version: row.voice_revision, referenceId: row.reference_id },
       },
     ]);
+  }
+  private filled(materialId: string, slot: { kind: MaterialKind; multi: boolean; line: { id: string } | null }) {
+    return slot.multi
+      ? materialLines(this.store, materialId).some((item) => item.line_id === slot.line!.id)
+      : materialAssets(this.store, materialId).some((asset) => asset.kind === slot.kind);
+  }
+  /** The ledger's target for a slot: the 素材版本, plus `#line` for a line of a multi-line welcome. */
+  private targetId(materialId: string, slot: { multi: boolean; line: { id: string } | null }) {
+    return slot.multi ? `${materialId}#${slot.line!.id}` : materialId;
   }
   /**
    * 生成: speak exactly the slot's text in the voice this 素材版本 was prepared with, then register the clip like an upload
@@ -347,7 +459,7 @@ export class WebCharacterMaterials {
   async generate(id: string, input: unknown, authorize: () => Actor) {
     authorize();
     record(input);
-    keys(input, ['requestId', 'materialId', 'kind', 'acknowledgeMicros']);
+    keys(input, ['requestId', 'materialId', 'kind', 'lineId', 'acknowledgeMicros']);
     identifier(input.requestId);
     ensure(input.kind === 'welcome' || input.kind === 'footer', 'INVALID_MATERIAL_KIND');
     ensure(
@@ -364,9 +476,9 @@ export class WebCharacterMaterials {
       exactDraft(this.store, row);
     };
     guard();
-    const profile = exactDraft(this.store, row);
-    if (materialAssets(this.store, row.id).some((asset) => asset.kind === kind))
-      ensure(this.speech.hasRequest(requestId, 0), 'MATERIAL_AUDIO_IMMUTABLE');
+    const profile = exactDraft(this.store, row),
+      slot = this.slot(profile, kind, input.lineId);
+    if (this.filled(row.id, slot)) ensure(this.speech.hasRequest(requestId, 0), 'MATERIAL_AUDIO_IMMUTABLE');
     const { audio } = await this.speech.speak(
       () => {
         guard();
@@ -376,33 +488,42 @@ export class WebCharacterMaterials {
         characterId: id,
         revision: row.revision,
         purpose: `material-${kind}`,
-        targetId: row.id,
+        targetId: this.targetId(row.id, slot),
         requestId,
         ordinal: 0,
-        text: this.slotText(profile, kind),
+        text: slot.text,
         voice: { profileId: row.profile_id, version: row.voice_revision, referenceId: row.reference_id },
         acknowledgeMicros,
       },
     );
-    await this.place(id, row.id, kind, audio, authorize);
-    return this.view(materialAssets(this.store, row.id).find((asset) => asset.kind === kind)!);
+    await this.place(id, row.id, kind, audio, authorize, input.lineId);
+    return slot.multi
+      ? this.lineView(materialLines(this.store, row.id).find((item) => item.line_id === slot.line!.id)!)
+      : this.view(materialAssets(this.store, row.id).find((asset) => asset.kind === kind)!);
   }
   async audio(id: string, input: unknown, authorize: () => Actor) {
     authorize();
     record(input);
-    keys(input, ['materialId', 'kind']);
+    keys(input, ['materialId', 'kind', 'lineId']);
     ensure(input.kind === 'welcome' || input.kind === 'footer', 'INVALID_MATERIAL_KIND');
     const row = this.row(id, input.materialId),
-      asset = this.store.get<AssetRow>(
-        'SELECT * FROM web_character_material_assets WHERE material_id=? AND kind=?',
-        row.id,
-        input.kind,
-      );
+      slot = this.slot(exactDraft(this.store, row), input.kind, input.lineId);
+    const asset = slot.multi
+      ? this.store.get<LineRow>(
+          'SELECT * FROM web_welcome_material_lines WHERE material_id=? AND line_id=?',
+          row.id,
+          slot.line!.id,
+        )
+      : this.store.get<AssetRow>(
+          'SELECT * FROM web_character_material_assets WHERE material_id=? AND kind=?',
+          row.id,
+          input.kind,
+        );
     ensure(asset, 'NOT_FOUND');
     const bytes = await loadProviderAudio(
       this.store,
       asset,
-      fixedObjectScope(this.store, asset.kind, id, row.voice_version),
+      fixedObjectScope(this.store, input.kind, id, this.scopeVersion(row, slot)),
       async () => {
         authorize();
       },
@@ -410,7 +531,11 @@ export class WebCharacterMaterials {
     );
     ensure(sha(bytes) === asset.sha256 && bytes.length === asset.byte_length, 'INVALID_MATERIAL_AUDIO');
     authorize();
-    return { ...assetDTO(asset), mimeType: 'audio/wav', base64: Buffer.from(bytes).toString('base64') };
+    return {
+      ...(slot.multi ? lineDTO(asset as LineRow) : assetDTO(asset as AssetRow)),
+      mimeType: 'audio/wav',
+      base64: Buffer.from(bytes).toString('base64'),
+    };
   }
   async approve(id: string, input: unknown, authorize: () => Actor) {
     authorize();
@@ -419,27 +544,36 @@ export class WebCharacterMaterials {
       'materialId',
       'acknowledgeRights',
       'acknowledgeWelcomeListening',
+      'acknowledgeLines',
       'acknowledgeFooterListening',
       'note',
     ]);
-    ensure(
-      input.acknowledgeRights === true &&
-        input.acknowledgeWelcomeListening === true &&
-        input.acknowledgeFooterListening === true,
-      'MATERIAL_APPROVAL_REQUIRED',
-    );
     nonempty(input.note, 1000);
     const note = input.note,
       row = this.row(id, input.materialId);
+    // Every slot must have been heard and ticked: the single welcome, or EVERY line of a multi-line welcome, and the footer.
+    const lines = exactDraft(this.store, row).presentation.welcomes,
+      heard = Array.isArray(input.acknowledgeLines) ? new Set(input.acknowledgeLines as unknown[]) : new Set<unknown>();
+    ensure(
+      input.acknowledgeRights === true &&
+        input.acknowledgeFooterListening === true &&
+        (lines.length === 1
+          ? input.acknowledgeWelcomeListening === true
+          : heard.size === lines.length && lines.every((line) => heard.has(line.id))),
+      'MATERIAL_APPROVAL_REQUIRED',
+    );
     const guard = () => {
       const actor = authorize();
       exactDraft(this.store, row);
       return actor;
     };
     guard();
-    ensure(materialAssets(this.store, row.id).length === 2, 'CHARACTER_MATERIALS_REQUIRED');
+    ensure(slotsComplete(this.store, row.id, exactDraft(this.store, row)), 'CHARACTER_MATERIALS_REQUIRED');
     // Re-read and hash private objects before approval; stale permissions/drafts cannot commit after R2 awaits.
-    for (const kind of ['welcome', 'footer'] as const) await this.audio(id, { materialId: row.id, kind }, guard);
+    await this.audio(id, { materialId: row.id, kind: 'footer' }, guard);
+    if (lines.length === 1) await this.audio(id, { materialId: row.id, kind: 'welcome' }, guard);
+    else
+      for (const line of lines) await this.audio(id, { materialId: row.id, kind: 'welcome', lineId: line.id }, guard);
     return this.store.transaction(() => {
       const actor = guard(),
         manifest = materialManifest(this.store, row),
@@ -495,6 +629,23 @@ export function promoteCharacterMaterial(store: BusinessStore, row: MaterialRow,
   const external = store
     .all<{ name: string }>('PRAGMA table_info(web_provider_welcome_assets)')
     .some((c) => c.name === 'audio_ref_json');
+  for (const line of materialLines(store, row.id, true)) {
+    ensure(external === (line.audio_ref_json !== null), 'WEB_AUDIO_REFERENCE_INVALID');
+    store.run(
+      'INSERT INTO web_provider_welcome_lines VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      row.character_id,
+      row.voice_version,
+      line.line_id,
+      line.body,
+      line.media_id,
+      line.sha256,
+      line.byte_length,
+      line.duration_ms,
+      line.audio_bytes,
+      line.audio_ref_json,
+      line.created_at,
+    );
+  }
   for (const asset of materialAssets(store, row.id, true)) {
     ensure(external === (asset.audio_ref_json !== null), 'WEB_AUDIO_REFERENCE_INVALID');
     const welcome = asset.kind === 'welcome';

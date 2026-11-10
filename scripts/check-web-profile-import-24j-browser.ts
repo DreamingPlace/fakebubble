@@ -190,7 +190,8 @@ try {
       `${w}: the three modes are named`,
     );
     check(
-      text.includes('欢迎词 第 2 条 等 24k 多欢迎词') && text.includes('颜色 雾蓝 没有色值'),
+      // Part 24k-2 (named exception): the second welcome line is a line now, not a checklist item.
+      !text.includes('欢迎词 第 2 条 等 24k 多欢迎词') && text.includes('颜色 雾蓝 没有色值'),
       `${w}: the checklist is in the preview`,
     );
     const after = await (await f.post('characters/list', {})).json();
@@ -265,8 +266,8 @@ try {
       `${w}: the avatar item is on the checklist`,
     );
     check(
-      items.some((x: string) => x.includes('欢迎词 第 2 条 等 24k 多欢迎词')),
-      `${w}: the welcome item is on the checklist`,
+      !items.some((x: string) => x.includes('欢迎词 第 2 条 等 24k 多欢迎词')),
+      `${w}: the welcome item is gone from the checklist (24k-2: every line imports)`,
     );
     check(
       items.some((x: string) => x.includes('颜色 雾蓝 没有色值，请在工作台选色')),

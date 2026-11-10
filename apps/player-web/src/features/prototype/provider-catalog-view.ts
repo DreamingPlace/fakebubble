@@ -1,5 +1,6 @@
 import type { WebProviderBootstrap } from '../../../../../packages/contracts/web-provider.ts';
 import { derivePalette, nightAura } from '../brand/character-colour.ts';
+import { birthdayNo, skinFor, skinSources, type Skin } from '../brand/palette-skin.ts';
 
 export type Person = {
   id: string;
@@ -20,6 +21,8 @@ export type Person = {
   };
   /** Part 25b: the welcome voice's length on the card's play pill; null when it has no audio (the pill then shows no time). */
   welcomeMs?: number | null;
+  /** Part 24k-2: 主色 + 点缀 as the player uses them, for night and day. Absent = the built-in palette stays as it is. */
+  skin?: { night: Skin; day: Skin };
 };
 /** The aura of a slot nobody lives in (design/burbur-v2 Language/Main boards): a neutral cloud and a black accent. */
 const NEUTRAL_AURA = ['#E9E2F2', '#F2EEE9', '#DCD6E6', '#141414'] as const;
@@ -98,6 +101,9 @@ export function providerPeople(view: Pick<WebProviderBootstrap, 'characters' | '
     const base = known ?? { color: '#CFD7D2', ink: '#344A43', mark: [...character.displayName][0] ?? '' };
     // A published main colour wins; without one the built-in palette (or the neutral one) stays exactly as it was.
     const derived = character.mainColor ? derivePalette(character.mainColor) : null;
+    const sources = skinSources(character.mainColor, character.palette);
+    // (the running number is consumed either way, so the numbers of characters without a birthday never move)
+    const fallbackNo = known ? known.no : String(nextNo++).padStart(3, '0');
     const palette = derived ? { ...base, color: derived.color, ink: derived.ink } : base;
     const latin = known
       ? known.latin
@@ -112,13 +118,22 @@ export function providerPeople(view: Pick<WebProviderBootstrap, 'characters' | '
       color: palette.color,
       ink: palette.ink,
       card: {
-        no: known ? known.no : String(nextNo++).padStart(3, '0'),
+        // Part 24k-2: the No. is the birthday's month + day when there is one; else the number shown before.
+        no: birthdayNo(character.birthDate) ?? fallbackNo,
         latin,
         aura: derived ? derived.aura : known ? known.aura : NEUTRAL_AURA,
         // A published colour gets a night aura derived from it; otherwise the design's own night colours (or the neutral ones).
         night: derived ? nightAura(derived.aura) : known ? known.night : nightAura(NEUTRAL_AURA),
         nameSize: nameSize(character.displayName),
       },
+      ...(sources.main
+        ? {
+            skin: {
+              night: skinFor(sources.main, sources.accents, 'night'),
+              day: skinFor(sources.main, sources.accents, 'day'),
+            },
+          }
+        : {}),
       ...(character.availability.state === 'available'
         ? {
             transcript: character.welcome.text ?? '',

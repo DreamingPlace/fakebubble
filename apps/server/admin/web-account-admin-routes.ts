@@ -30,6 +30,8 @@ export async function routeWebAccountAdmin(
     );
     return req.body as Record<string, unknown>;
   };
+  /** A key the body may carry or leave out (the exact-keys check then expects it only when it is there). */
+  const optional = (key: string) => (req.body && Object.hasOwn(req.body, key) ? [key] : []);
   const auth = () => {
     admin.authorize(req.adminCookie, req.csrf, req.origin);
   };
@@ -261,14 +263,17 @@ export async function routeWebAccountAdmin(
         ),
       };
     if (match[2] === 'material-upload')
-      return { status: 200, body: await characters.materialUpload(actor, id, body(['materialId', 'kind', 'base64'])) };
+      return {
+        status: 200,
+        body: await characters.materialUpload(actor, id, body(['materialId', 'kind', 'base64', ...optional('lineId')])),
+      };
     if (match[2] === 'material-generate')
       return {
         status: 200,
         body: await characters.materialGenerate(
           actor,
           id,
-          body(['requestId', 'materialId', 'kind', 'acknowledgeMicros']),
+          body(['requestId', 'materialId', 'kind', 'acknowledgeMicros', ...optional('lineId')]),
         ),
       };
     if (match[2] === 'speech-estimate')
@@ -279,7 +284,9 @@ export async function routeWebAccountAdmin(
           id,
           body([
             'kind',
-            ...(req.body && Object.hasOwn(req.body, 'previewId') ? ['previewId'] : ['materialId', 'slot']),
+            ...(req.body && Object.hasOwn(req.body, 'previewId')
+              ? ['previewId']
+              : ['materialId', 'slot', ...optional('lineId')]),
           ]),
         ),
       };
@@ -292,7 +299,10 @@ export async function routeWebAccountAdmin(
       return { status: 200, body: characters.speechClips(actor, id, body(['previewId'])) };
     if (match[2] === 'speech-audio') return { status: 200, body: characters.speechAudio(actor, id, body(['callId'])) };
     if (match[2] === 'material-audio')
-      return { status: 200, body: await characters.materialAudio(actor, id, body(['materialId', 'kind'])) };
+      return {
+        status: 200,
+        body: await characters.materialAudio(actor, id, body(['materialId', 'kind', ...optional('lineId')])),
+      };
     if (match[2] === 'material-approve')
       return {
         status: 200,
@@ -302,9 +312,11 @@ export async function routeWebAccountAdmin(
           body([
             'materialId',
             'acknowledgeRights',
-            'acknowledgeWelcomeListening',
             'acknowledgeFooterListening',
             'note',
+            // Part 24k-2: a one-line welcome is ticked as before; several lines are ticked one by one (acknowledgeLines).
+            ...optional('acknowledgeWelcomeListening'),
+            ...optional('acknowledgeLines'),
           ]),
         ),
       };

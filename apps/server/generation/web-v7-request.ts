@@ -312,7 +312,9 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   // Part 26a: the welcome line of the frozen revision is the character's first line when nothing was cut from the eligible history:
   // every published prior turn and the current input fit the window. Unpublished or failed inputs are not eligible history.
   const opening =
-    orderedIds.length <= HISTORY_WINDOW ? frozenOpening(store, scope.characterId, input.template_version) : undefined;
+    orderedIds.length <= HISTORY_WINDOW
+      ? frozenOpening(store, scope.characterId, input.template_version, scope.worldId)
+      : undefined;
   const introduction = playerIntroduction(userStore(store), scope);
   const facts = recalls ? recallPlayerFacts(userStore(store), scope) : [];
   const request: TextGenerationRequest = {

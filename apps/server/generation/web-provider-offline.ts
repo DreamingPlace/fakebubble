@@ -34,7 +34,9 @@ import { requireWebRuntime, type WebRuntimeStore as WebStore } from '../platform
 import { requireCurrentInputSnapshot } from './web-input-snapshot.ts';
 import { checkWebV7SceneAtDispatch } from './web-v7-request.ts';
 import { SYNTHETIC_TRIAL_FOOTER } from '../conversation/web-vertical-publisher.ts';
-import { webWelcomeLine } from '../characters/web-character-catalog.ts';
+import { webWelcomeLines } from '../characters/web-character-catalog.ts';
+import { welcomeClipServable } from '../characters/web-welcome-choice.ts';
+import { webWelcomeLinesInstalled } from '../characters/web-welcome-schema.ts';
 import type { BusinessStore as Store } from '../platform/store-contract.ts';
 import type { MediaObjectReference } from '../cloudflare/media-objects.ts';
 import {
@@ -1697,8 +1699,8 @@ export class WebProviderOffline {
     audioReference?: MediaObjectReference;
   }) {
     this.check();
-    const line = webWelcomeLine(this.store, input.characterId);
-    ensure(line && input.body === line.text && input.wav.byteLength <= 6_000_000, 'WEB_PROVIDER_WELCOME_INVALID');
+    const line = webWelcomeLines(this.store, input.characterId)?.find((candidate) => candidate.text === input.body);
+    ensure(line && input.wav.byteLength <= 6_000_000, 'WEB_PROVIDER_WELCOME_INVALID');
     const bytes = Buffer.from(input.wav),
       info = inspectPCM(bytes, 60_000);
     const durationMs = Math.round(info.durationMs),
@@ -1739,7 +1741,7 @@ export class WebProviderOffline {
         VALUES (?,?,?,?,?,'operator_approved',?,?,?,?,?${external ? ',?' : ''})`,
         input.characterId,
         input.voiceVersion,
-        line.version,
+        line.id,
         input.body,
         mediaId,
         sha256,
@@ -1827,7 +1829,7 @@ export class WebProviderOffline {
     const bytes = Buffer.from(input.wav);
     ensure(
       kind === 'welcome'
-        ? input.body === webWelcomeLine(this.store, input.characterId)?.text
+        ? !!webWelcomeLines(this.store, input.characterId)?.some((line) => line.text === input.body)
         : kind === 'footer' && input.body === SYNTHETIC_TRIAL_FOOTER,
       'WEB_PROVIDER_FIXED_AUDIO_INVALID',
     );
@@ -1857,39 +1859,42 @@ export class WebProviderOffline {
   /** Only approved browse-card audio is public; footer/narrative IDs never match this lookup. */
   async readWelcomeAudio(mediaId: string) {
     this.check();
+    type Row = ProviderAudioRow & {
+      character_id: string;
+      voice_version: string;
+      body: string;
+      sha256: string;
+      byte_length: number;
+      duration_ms: number;
+      scope_version: string;
+      current_version: string;
+    };
     const read = () =>
-      this.store.get<
-        ProviderAudioRow & {
-          character_id: string;
-          voice_version: string;
-          body: string;
-          text_version: string;
-          sha256: string;
-          byte_length: number;
-          duration_ms: number;
-        }
-      >(
-        `SELECT w.* FROM web_provider_welcome_assets w JOIN web_provider_voice_bindings v
-        ON v.character_id=w.character_id AND v.voice_version=w.voice_version
+      this.store.get<Row>(
+        `SELECT w.*,w.voice_version scope_version,v.voice_version current_version FROM web_provider_welcome_assets w
+        JOIN web_provider_voice_bindings v ON v.character_id=w.character_id
         WHERE w.media_id=? AND w.origin='operator_approved' AND v.source='user_selected' AND v.approved=1`,
         mediaId,
-      );
+      ) ??
+      // Part 24k-2: the clip of one line of a multi-line welcome (its object scope names the line).
+      (webWelcomeLinesInstalled(this.store)
+        ? this.store.get<Row>(
+            `SELECT l.*,l.voice_version||'#'||l.line_id scope_version,v.voice_version current_version
+            FROM web_provider_welcome_lines l JOIN web_provider_voice_bindings v ON v.character_id=l.character_id
+            WHERE l.media_id=? AND v.source='user_selected' AND v.approved=1`,
+            mediaId,
+          )
+        : undefined);
     const row = read();
     ensure(!row || !webCharacterDeleted(this.store, row.character_id), 'NOT_FOUND');
-    ensure(
-      row &&
-        row.body === webWelcomeLine(this.store, row.character_id)?.text &&
-        row.text_version === webWelcomeLine(this.store, row.character_id)?.version,
-      'WEB_PROVIDER_WELCOME_UNAVAILABLE',
-    );
+    ensure(row && welcomeClipServable(this.store, row, row.current_version), 'WEB_PROVIDER_WELCOME_UNAVAILABLE');
     const authorize = async () => {
       const current = read();
       ensure(!webCharacterDeleted(this.store, row.character_id), 'NOT_FOUND');
       ensure(
         current?.sha256 === row.sha256 &&
           current.voice_version === row.voice_version &&
-          row.body === webWelcomeLine(this.store, row.character_id)?.text &&
-          row.text_version === webWelcomeLine(this.store, row.character_id)?.version &&
+          welcomeClipServable(this.store, row, current.current_version) &&
           current.audio_ref_json === row.audio_ref_json,
         'WEB_PROVIDER_WELCOME_UNAVAILABLE',
       );
@@ -1898,7 +1903,7 @@ export class WebProviderOffline {
     const bytes = await loadProviderAudio(
       this.store as WebStore,
       row,
-      fixedObjectScope(this.store as WebStore, 'welcome', row.character_id, row.voice_version),
+      fixedObjectScope(this.store as WebStore, 'welcome', row.character_id, row.scope_version),
       authorize,
       cache,
     );

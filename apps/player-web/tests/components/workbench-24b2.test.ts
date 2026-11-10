@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -15,7 +16,11 @@ import { flush, installFakeDom, type FakeElement } from './fake-dom.ts';
 const published = (): CharacterProfile => {
   const p = emptyCharacter();
   Object.assign(p.template, { id: 'jojo', name: 'JOJO', persona: '离线合成人设', version: 3 });
-  p.presentation = { displayName: 'JOJO', publicDescription: '', welcome: { text: '你好', version: 'welcome-v1' } };
+  p.presentation = {
+    displayName: 'JOJO',
+    publicDescription: '',
+    welcomes: [{ id: 'welcome-v1', text: '你好', weight: 100 }],
+  };
   return p;
 };
 /** The two element classes the form code tests with instanceof, matched by tag on the fake DOM. */
@@ -147,8 +152,7 @@ test('主色: a profile without a colour keeps no colour key (so its hash does n
     persona: base.template.persona,
     displayName: 'JOJO',
     publicDescription: '',
-    welcomeText: '你好',
-    welcomeVersion: 'welcome-v1',
+    welcomes: [{ id: 'welcome-v1', text: '你好', weight: 100 }],
     canon: '{}',
     voice: null,
   };
@@ -168,7 +172,7 @@ test('主色: only a draft that differs from the published profile in the colour
   for (const edit of [
     (p: CharacterProfile) => void (p.template.persona += '新'),
     (p: CharacterProfile) => void (p.presentation.displayName = '别名'),
-    (p: CharacterProfile) => void (p.presentation.welcome.version = 'welcome-v2'),
+    (p: CharacterProfile) => void (p.presentation.welcomes[0]!.text += '（改）'),
     (p: CharacterProfile) => void (p.template.voice = { profileId: 'x', version: 1, speed: 1 }),
   ]) {
     const changed = structuredClone(next);

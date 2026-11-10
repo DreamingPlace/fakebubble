@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import type { TestContext } from 'node:test';
@@ -165,9 +166,14 @@ test('a fully filled synthetic file: every value lands in its listed field or th
   assert.equal(profile.template.birthDate, '2000-11-02');
   assert.equal('seed' in profile.template, false, '否 = absent');
   assert.equal(d.profileMeta.code, 'SYZ');
-  // ---- 欢迎内容: line 1 only
-  assert.equal(profile.presentation.welcome.text, '来了。先坐，水刚烧好。');
-  assert.equal(JSON.stringify(profile).includes('今天书店人少'), false, 'line 2 is not stored anywhere');
+  // ---- 欢迎内容 (Part 24k-2, named exception: this used to be "line 1 only"; now EVERY line imports, with even weights)
+  assert.equal(profile.presentation.welcomes[0]!.text, '来了。先坐，水刚烧好。');
+  assert.equal(profile.presentation.welcomes.length, 2);
+  assert.ok(profile.presentation.welcomes[1]!.text.includes('今天书店人少'), 'line 2 is stored too');
+  assert.deepEqual(
+    profile.presentation.welcomes.map((line) => line.weight),
+    [50, 50],
+  );
   // ---- 主色
   assert.equal(profile.presentation.color, '#2F4858');
   assert.deepEqual(profile.presentation.palette, [
@@ -241,12 +247,11 @@ test('a fully filled synthetic file: every value lands in its listed field or th
     'displayName',
     'palette',
     'publicDescription',
-    'welcome',
+    'welcomes',
   ]);
-  // ---- checklist
+  // ---- checklist (Part 24k-2, named exception: the second welcome line is a line now, no longer a checklist item)
   assert.deepEqual(d.profileMeta.checklist, [
     { key: 'avatar:syz-main.png', text: '头像 syz-main.png 待 25e 上传', state: 'open' },
-    { key: 'welcome:2', text: '欢迎词 第 2 条 等 24k 多欢迎词', state: 'open' },
   ]);
 
   // ---- 关系与故事: the name card only, plus the relation, one story, one meme; nothing in 演绎说明 and friends
@@ -494,7 +499,7 @@ test('empty values never clear an existing character, and a re-import fills only
   const profile = draftOf(f, 'KEP');
   assert.equal(profile.presentation.publicDescription, '原话。');
   assert.equal(profile.template.birthDate, '2001-01-01');
-  assert.equal(profile.presentation.welcome.text, '嗯');
+  assert.equal(profile.presentation.welcomes[0]!.text, '嗯');
   assert.equal((profile.template.authorCanon!.settings.profileFacts as Record<string, string>).身高, '170cm');
   assert.equal(profile.template.persona, '陌生时的相处方式：好。\n熟悉后的变化：更好。');
 });
@@ -801,7 +806,11 @@ test('an existing live character: the import makes a draft revision on the live 
   assert.equal(d.draft!.profile.template.version, 2);
   assert.equal(d.published!.version, 1, 'the live version is untouched');
   assert.deepEqual(f.store.all('SELECT * FROM web_character_catalog ORDER BY position'), catalogBefore);
-  assert.equal(d.draft!.profile.presentation.welcome.version, 'welcome-v1');
+  // Part 24k-2 (named exception): the welcome has no version any more; an import that gives none leaves the single line as it was.
+  assert.deepEqual(
+    d.draft!.profile.presentation.welcomes.map((line) => line.weight),
+    [100],
+  );
   assert.equal(d.draft!.profile.presentation.displayName, live.displayName, 'empty 网页展示名 leaves the current one');
   assert.equal(f.store.all('SELECT 1 FROM web_character_publications').length, 0);
 });
@@ -843,6 +852,15 @@ test('the checklist stays until dismissed; a re-import with the item resolved re
   });
   run(f, files(['chk.md', text]));
   const id = idOf(f, 'CHK');
+  // Part 24k-2 (named exception): the import no longer makes a 「欢迎词 第 2 条 等 24k」 item; a character imported BEFORE 24k-2 still has
+  // one stored, and the re-import below resolves it. That old item is put back by hand here, as the earlier import would have left it.
+  assert.equal(f.characters.detail(f.ownerAuth, id).profileMeta.checklist.length, 1);
+  f.store.run(
+    "INSERT INTO web_profile_checklist(character_id,item_key,item_text,state,created_at) VALUES (?,?,?,'open',1)",
+    id,
+    'welcome:2',
+    '欢迎词 第 2 条 等 24k 多欢迎词',
+  );
   assert.equal(f.characters.detail(f.ownerAuth, id).profileMeta.checklist.length, 2);
   const dismissed = f.characters.profileChecklistDismiss(f.ownerAuth, id, { key: 'welcome:2' });
   // every answer of the three calls has the one shape the console's strict client reads (it once lacked `available`)
@@ -856,13 +874,10 @@ test('the checklist stays until dismissed; a re-import with the item resolved re
     ],
   );
   refused(() => f.characters.profileChecklistDismiss(f.ownerAuth, id, { key: 'nope' }), 'NOT_FOUND');
-  // the same file again keeps both rows as they are (a dismissed item stays dismissed)
-  const p = preview(f, files(['chk.md', text]));
-  assert.equal(p.unchanged, true);
-  // 24k fills the second welcome: the file without it resolves the item
-  const resolved = text.replace('「一」\n  「二」', '「一」').replace('- 欢迎词：「一」\n「二」', '- 欢迎词：「一」');
-  const q = preview(f, files(['chk.md', resolved.replace('chk.png', 'chk.png')]));
-  apply(f, files(['chk.md', resolved]), q.basis);
+  // Part 24k-2: a re-import of the same file resolves the old welcome item (the item is dropped whether it was open or dismissed);
+  // the avatar item, which the file still asks for, stays as it was.
+  const q = preview(f, files(['chk.md', text]));
+  apply(f, files(['chk.md', text]), q.basis);
   assert.deepEqual(
     f.characters.detail(f.ownerAuth, id).profileMeta.checklist.map((c) => c.key),
     ['avatar:chk.png'],

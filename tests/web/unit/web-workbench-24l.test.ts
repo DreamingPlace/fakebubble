@@ -1,3 +1,4 @@
+// Part 24k-2 (named exception): the welcome fixtures/assertions in this file moved from welcome {text,version} to welcomes [{id,text,weight}]; nothing else was changed.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Store } from '../../../apps/server/platform/store.ts';
@@ -62,7 +63,11 @@ function fixture(t: test.TestContext) {
         persona: '合成角色',
         schedule: defaultSchedule(),
       },
-      presentation: { displayName: '新角色', publicDescription: '', welcome: { text: '你好', version: 'w1' } },
+      presentation: {
+        displayName: '新角色',
+        publicDescription: '',
+        welcomes: [{ id: 'w1', text: '你好', weight: 100 }],
+      }, // Part 24k-2 (named exception): welcome → welcomes
     };
     return service.save(auth, id, { expectedRevision: null, profile });
   };

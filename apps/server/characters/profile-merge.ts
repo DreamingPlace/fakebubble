@@ -10,6 +10,7 @@
  *  - a field whose existing shape cannot take the value (boundaries that is a list, profileFacts that is text) is a located
  *    problem, never an overwrite.
  */
+import { evenWeights, legacyWelcomeId } from '../../../packages/contracts/web-welcomes.ts';
 import type { JsonValue } from '../../../packages/contracts/index.ts';
 import type { WebCharacterPresentation, WebCharacterProfile } from './web-character-catalog.ts';
 import {
@@ -62,7 +63,11 @@ export function blankProfile(id: string): WebCharacterProfile {
       persona: '',
       schedule: { timeZone: 'Asia/Singapore', days },
     } as never,
-    presentation: { displayName: '', publicDescription: '', welcome: { text: '', version: 'welcome-v1' } },
+    presentation: {
+      displayName: '',
+      publicDescription: '',
+      welcomes: [{ id: legacyWelcomeId(''), text: '', weight: 100 }],
+    },
   };
 }
 
@@ -128,7 +133,25 @@ export function mergeProfile(
   else if (read.seed === false) set('成长中', t.seed === true ? '是' : '否', '否', () => delete t.seed);
 
   // ---- 欢迎内容 ----
-  if (read.welcome.length) set('欢迎词', p.welcome.text, read.welcome[0]!, () => (p.welcome.text = read.welcome[0]!));
+  // Part 24k-2: every line imports, with even weights. A line whose text is already in the list keeps its id (so its clip slot
+  // and a player's stored line stay valid); a new one gets an id derived from its text.
+  if (read.welcome.length) {
+    const before = p.welcomes,
+      weights = evenWeights(read.welcome.length),
+      taken = new Set<string>();
+    const after = read.welcome.map((text, index) => {
+      let id = before.find((line) => line.text === text && !taken.has(line.id))?.id ?? legacyWelcomeId(text);
+      if (taken.has(id)) id = `${id}-${index + 1}`;
+      taken.add(id);
+      return { id, text, weight: weights[index]! };
+    });
+    set(
+      '欢迎词',
+      before.map((line) => `${line.text} ${line.weight}%`),
+      after.map((line) => `${line.text} ${line.weight}%`),
+      () => (p.welcomes = after),
+    );
+  }
 
   // ---- 主色 and the palette ----
   const main = read.palette.find((c) => c.role === 'main');

@@ -156,12 +156,12 @@ try {
   };
   // SEED+1: a new welcome line (its clip was never made: this version can never be restored) and a longer persona.
   publishRow(NOW - 12 * DAY, (p) => {
-    p.presentation.welcome = { text: '（示例）新的欢迎词，还没有配音', version: 'welcome-draft' };
+    p.presentation.welcomes = [{ id: 'welcome-draft', text: '（示例）新的欢迎词，还没有配音', weight: 100 }];
     p.template.persona += '\n她偶尔会提起自己的奶茶店。';
   });
   // SEED+2: back to the approved welcome line, a different persona.
   publishRow(NOW - 6 * DAY, (p) => {
-    p.presentation.welcome = structuredClone(seed.profile.presentation.welcome);
+    p.presentation.welcomes = structuredClone(seed.profile.presentation.welcomes);
     p.template.persona = `${seed.profile.template.persona}\n说话更慢一点，爱用省略号。`;
     p.presentation.publicDescription = '（示例）慢热的邻家同学';
   });

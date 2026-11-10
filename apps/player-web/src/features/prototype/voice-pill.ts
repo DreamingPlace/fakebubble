@@ -18,5 +18,5 @@ export function voicePill(name: string, durationMs: number | null | undefined) {
   const time = typeof durationMs === 'number' && durationMs > 0 ? formatDuration(durationMs) : '';
   return `<button class="face-voice" type="button" aria-label="播放${escapeCardText(name)}的语音"><span class="face-play" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span><svg class="face-wave" viewBox="0 0 106 24" preserveAspectRatio="none" aria-hidden="true"><path d="${wave()}" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>${
     time ? `<span class="face-dur">${time}</span>` : ''
-  }</button>`;
+  }<i class="face-progress" aria-hidden="true"></i></button>`;
 }
