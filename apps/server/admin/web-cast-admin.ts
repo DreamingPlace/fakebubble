@@ -15,6 +15,7 @@ import {
   listVersions,
   publishDraft,
   readDraft,
+  readPublication,
   replaceDraftWithImport,
   rollbackTo,
   saveDraft,
@@ -109,6 +110,15 @@ export class WebCastAdmin {
     this.actor(auth, 'cast.read');
     exactly(input, []);
     return { versions: listVersions(this.store), latest: latestPublication(this.store)?.version ?? null };
+  }
+
+  /** Part 24b-7: one stored version's document, exactly as stored (cast.read). A version that does not exist is NOT_FOUND. */
+  version(auth: Auth, input: unknown) {
+    this.actor(auth, 'cast.read');
+    const body = exactly(input, ['version']);
+    ensure(Number.isSafeInteger(body.version) && (body.version as number) > 0, 'INVALID_REQUEST');
+    const found = readPublication(this.store, body.version as number);
+    return { version: found.version, digest: found.digest, doc: found.doc };
   }
 
   /** What would block publishing the draft right now (errors), and what is only a warning (cast.read). */
