@@ -750,10 +750,25 @@ try {
       await view.locator('.cc-face').first().waitFor();
       await finished(view);
     };
+    // 交给 is enabled by the text: wait for the button (the condition), and when a fill landed before the editor was listening, type it
+    // again once - the same text, the same click. Nothing is skipped: a send that never enables still fails with its own message.
+    const sendWhenReady = async (view: any, area: any, text: string) => {
+      await area.waitFor({ state: 'visible', timeout: 10_000 });
+      await area.fill(text);
+      const ready = () =>
+        view.waitForFunction(() => !(document.querySelector('.cc-send') as HTMLButtonElement)?.disabled, null, {
+          timeout: 5000,
+        });
+      await ready().catch(async () => {
+        await area.fill('');
+        await area.pressSequentially(text);
+        await ready();
+      });
+      await view.locator('.cc-send').click();
+    };
     const submitCards = async (view: any) => {
       await view.locator('.cc-face').first().click();
-      await view.locator('.cc-editor textarea:visible').first().fill('爱吃甜的，笑起来像猫');
-      await view.locator('.cc-send').click();
+      await sendWhenReady(view, view.locator('.cc-editor textarea:visible').first(), '爱吃甜的，笑起来像猫');
       await view.locator('.cc-thanks:not([hidden])').waitFor({ timeout: 10_000 });
       return view.locator('.cc-thanks-sub').innerText();
     };
@@ -773,8 +788,7 @@ try {
       await open(view);
       const area = view.locator('.cc-pair textarea').first();
       assert.equal(await area.count(), 1, 'the pair story card is on offer');
-      await area.fill('她们在雨天一起分过一把伞');
-      await view.locator('.cc-send').click();
+      await sendWhenReady(view, area, '她们在雨天一起分过一把伞');
       await view.locator('.cc-thanks:not([hidden])').waitFor({ timeout: 10_000 });
       assert.ok(
         (await view.locator('.cc-thanks-sub').innerText()).includes(hintText),
