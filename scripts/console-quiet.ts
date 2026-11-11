@@ -8,22 +8,26 @@
 // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
 type Page = any;
 
-const inflight = new WeakMap<object, { n: number }>();
+const inflight = new WeakMap<object, { open: Set<object>; readonly n: number }>();
 const track = (page: Page) => {
-  let state = inflight.get(page);
-  if (state) return state;
-  const counter = { n: 0 };
-  state = counter;
-  inflight.set(page, counter);
-  const done = () => {
-    counter.n = Math.max(0, counter.n - 1);
+  const known = inflight.get(page);
+  if (known) return known;
+  const open = new Set<object>();
+  const state = {
+    open,
+    get n() {
+      return open.size;
+    },
   };
-  page.on('request', () => {
-    counter.n++;
+  inflight.set(page, state);
+  // A request cut off by a navigation never reports back, so a new main-frame navigation starts the count again.
+  page.on('request', (request: object) => open.add(request));
+  page.on('requestfinished', (request: object) => open.delete(request));
+  page.on('requestfailed', (request: object) => open.delete(request));
+  page.on('framenavigated', (frame: { parentFrame: () => unknown }) => {
+    if (!frame.parentFrame()) open.clear();
   });
-  page.on('requestfinished', done);
-  page.on('requestfailed', done);
-  return counter;
+  return state;
 };
 
 /** Call once per page so its requests are counted from the start. */
