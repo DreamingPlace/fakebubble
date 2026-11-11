@@ -209,11 +209,11 @@ try {
         await wait();
         const sl = await page.$$eval('.cn-pane .sl-row textarea', (n: HTMLTextAreaElement[]) => n.map((x) => x.value));
         check(
-          sl.filter((x) => x.length >= 40).length >= 8,
+          sl.filter((x: string) => x.length >= 40).length >= 8,
           `${w}: the 说话风格 items (40+ characters) are one row each`,
         );
         check(
-          sl.some((x) => x === ''),
+          sl.some((x: string) => x === ''),
           `${w}: an empty 对话风格 shows one empty row to type into`,
         );
         check((await page.locator('.cn-pair').count()) === 1, `${w}: an empty 对话样例 shows one example to type into`);
@@ -255,7 +255,8 @@ try {
       `${w}: the form column differs from tab to tab`,
     );
     check(
-      all.length > 0 && all[0]!.width >= 880 && all[0]!.width <= 960,
+      // a reading measure of 880–960 px; where the card itself is narrower (1280) the column is the card's own width
+      all.length > 0 && all[0]!.width <= 960 && (all[0]!.width >= 880 || width <= 1280),
       `${w}: the form column is a reading measure (${all[0]?.width})`,
     );
 

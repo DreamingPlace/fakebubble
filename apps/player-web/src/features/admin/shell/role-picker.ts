@@ -46,6 +46,34 @@ export function rolePicker(
   let roles: readonly PickerRole[] = [];
   const seeds = new Map<string, boolean>();
   const drops: (() => void)[] = [];
+  /**
+   * The open circle is scrolled into view once the rail has a size: a page that is still hidden when the rail is painted (the shell
+   * keeps every page mounted) has none yet, so the scroll waits for the first size the rail gets.
+   */
+  let pendingView = false;
+  let watching = false;
+  const scrollOpen = () =>
+    (host.querySelector?.('.admin-pick[aria-current="true"]') as HTMLElement | null)?.scrollIntoView?.({
+      block: 'nearest',
+    });
+  const keepOpenInView = () => {
+    if (host.clientHeight > 0) {
+      pendingView = false;
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(scrollOpen);
+      else scrollOpen();
+      return;
+    }
+    pendingView = true;
+    if (!watching && typeof ResizeObserver === 'function') {
+      watching = true;
+      new ResizeObserver(() => {
+        if (pendingView && host.clientHeight > 0) {
+          pendingView = false;
+          scrollOpen();
+        }
+      }).observe(host);
+    }
+  };
   /** The groups this administrator folded (kept while the page is open). */
   const collapsed = new Set<SidebarGroup>();
   const paint = () => {
@@ -180,9 +208,7 @@ export function rolePicker(
       out(role, h('div', { class: 'admin-pick-row' }, row, badge));
     });
     // the rail scrolls inside itself: the open character is in view after every paint
-    (host.querySelector?.('.admin-pick[aria-current="true"]') as HTMLElement | null)?.scrollIntoView?.({
-      block: 'nearest',
-    });
+    keepOpenInView();
     const reorder = options.onReorder;
     if (reorder)
       for (const [group, list] of lists)
@@ -218,8 +244,7 @@ export function rolePicker(
       if (mine) collapsed.delete(groupOf(mine));
       paint();
       // the rail scrolls inside itself: the open character is always in view
-      const open = host.querySelector?.('.admin-pick[aria-current="true"]') as HTMLElement | null;
-      open?.scrollIntoView?.({ block: 'nearest' });
+      keepOpenInView();
     },
     /** The editor's 成长中 switch, whenever it changes: the circle gets (or loses) its dashed ring. */
     setSeed(characterId: string, seed: boolean) {
