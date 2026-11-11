@@ -159,7 +159,7 @@ export function castGrid(host: HTMLElement, ctx: CastCtx, state: GridState) {
         'div',
         { class: 'cs-card-head' },
         h('h2', { text: '关系' }),
-        h('span', { class: 'cs-hint-line', text: '点名字看这个人 · 点格子看两个人 · 行 → 列' }),
+        hoverValue(h('span', { class: 'cs-hint-line', text: '怎么看' }), '点名字看这个人 · 点格子看两个人 · 行 → 列'),
       ),
       grid,
       h(

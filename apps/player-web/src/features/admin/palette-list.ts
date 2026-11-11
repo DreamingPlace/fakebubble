@@ -70,7 +70,10 @@ export function paletteList(
 ): PaletteList {
   const root = node('div', 'pl');
   const head = node('div', 'pl-head');
-  head.append(node('strong', undefined, '色板'), node('span', 'pl-hint', '主 ＋ 最多 4 个点缀；玩家用主和前 2 个点缀'));
+  const hint = node('span', 'pl-hint', '规则');
+  // A hover tip, not a sentence (a plain title: this list also runs on the component tests' small DOM, which has no bubble).
+  hint.title = '主 ＋ 最多 4 个点缀；玩家用主和前 2 个点缀';
+  head.append(node('strong', undefined, '色板'), hint);
   const mainRow = node('div', 'pl-row pl-main');
   const mainSwatch = node('i', 'pl-swatch');
   const mainText = node('output', 'pl-hex');

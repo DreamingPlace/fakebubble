@@ -3125,7 +3125,8 @@ body:has(.admin-shell) {
 .admin-toasts {
   position: fixed;
   right: 20px;
-  bottom: 44px;
+  /* above the sticky save bar (Part 24b-7: a toast never covers 保存草稿) */
+  bottom: 96px;
   z-index: 60;
   display: grid;
   gap: 8px;
@@ -12208,6 +12209,41 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   /* 「删除角色（已失效）」 reads as one phrase, not broken inside 已失效 (Part 24f). */
   white-space: nowrap;
 }
+/* Part 24b-7: the rail's list scrolls on its own; 新建角色 / 导入角色资料 stay pinned at its foot, never pushed out of view */
+.account-admin-page.admin-shell #admin-characters .wb-roster {
+  overflow: hidden;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster > .wb-roles {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster > :is(#wb-new, #wb-import) {
+  flex: none;
+}
+/* Part 24b-7: a welcome line is ONE row: grip, number, the words, the percent (with its % beside it), 删除 */
+.account-admin-page.admin-shell .wl .wl-row {
+  align-items: center;
+}
+.account-admin-page.admin-shell #admin-characters .wl .wl-weight-wrap {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+}
+.account-admin-page.admin-shell #admin-characters .wl .wl-weight-wrap .wl-weight {
+  flex: none;
+  width: 72px !important;
+  min-width: 0;
+  margin: 0;
+}
+.account-admin-page.admin-shell .wl .wl-row > button {
+  align-self: center;
+  margin: 0;
+}
 /* ---- Part 24b-7: 导入角色资料 as an inline panel, 草稿记录, and the content of an opened cast version (admin shell only) ---- */
 .account-admin-page.admin-shell .pi-panel {
   box-sizing: border-box;
@@ -13567,10 +13603,15 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   display: grid;
   gap: 8px;
 }
+.account-admin-page.admin-shell .wl {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+}
 .account-admin-page.admin-shell .wl-row {
   display: grid;
-  grid-template-columns: 18px 22px minmax(0, 1fr) 92px auto;
-  align-items: start;
+  grid-template-columns: 18px 22px minmax(0, 1fr) 116px 72px;
+  align-items: center;
   gap: 8px;
   padding: 10px;
   border: 1px solid var(--ad-border);
@@ -13618,6 +13659,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   resize: vertical;
 }
 .account-admin-page.admin-shell .wl-weight-wrap {
+  white-space: nowrap;
   display: flex;
   align-items: center;
   gap: 4px;

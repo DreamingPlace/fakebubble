@@ -637,7 +637,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   // Part 24b-7: 导入角色资料 opens in this row, between the title row and the rail / editor (no drawer).
   const importHost = document.createElement('div');
   importHost.id = 'wb-import-host';
-  stage.before(importHost);
+  // (the component tests' small DOM has no before(): the host then simply follows the stage)
+  if (typeof stage.before === 'function') stage.before(importHost);
+  else stage.parentNode?.appendChild(importHost);
   const newRole = document.createElement('button');
   newRole.type = 'button';
   newRole.id = 'wb-new';
