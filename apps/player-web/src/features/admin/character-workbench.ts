@@ -17,6 +17,8 @@ import {
 import { dateTimeText } from './system-format.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { versionHistory } from './history/version-history.ts';
+import { draftHistory } from './history/draft-history.ts';
+import { withoutIds } from './history/readable.ts';
 import { dangerZone } from './ui/danger-zone.ts';
 import { inlineConfirm } from './ui/inline-confirm.ts';
 import { statusBadge } from './ui/status-badge.ts';
@@ -112,7 +114,8 @@ const previewLabel = (value: string) =>
   (({ queued: '排队中', generating: '运行中', succeeded: '已通过', failed: '失败' }) as Record<string, string>)[
     value
   ] ?? value;
-const stringify = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+// Part 24b-7: no id string in the comparison (welcome-line ids and the like are left out).
+const stringify = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(withoutIds(value), null, 2));
 export function characterAdminError(error: unknown): string | null {
   if (error instanceof AdminFormError) return error.message;
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
@@ -746,7 +749,13 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         return (Array.from(flow.children) as unknown as HTMLElement[]).filter((node) => !before.has(node));
       };
       if (snapshot.draft) {
-        const changes = made(() => profileDiff(flow, snapshot));
+        const changes = made(() => {
+          // Part 24b-7: who last changed each group (above the comparison), the comparison, then 草稿记录 (below it).
+          const record = draftRecord(snapshot);
+          if (record) flow.append(record.groups);
+          profileDiff(flow, snapshot);
+          if (record) fold(flow, '草稿记录').append(record.root);
+        });
         sections.find((section) => section.id === 'voice')!.nodes.push(...made(() => materials(flow, snapshot)));
         sections.push({ id: 'diff', label: '资料改动', nodes: changes });
       }
@@ -937,6 +946,47 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     });
     zones.push(zone);
     return zone.root;
+  }
+  /**
+   * 草稿记录 (Part 24b-7): read when the draft opens. 恢复到这一稿 never publishes: it saves that revision's profile as the NEXT draft
+   * revision with the ordinary compare-and-swap save. With unsaved changes on the page it asks the existing question first.
+   */
+  function draftRecord(snapshot: CharacterDetail) {
+    if (!embedded || !can('read')) return null;
+    const role = snapshot.characterId;
+    const record = draftHistory({
+      api: host.api,
+      canRestore: () => can('edit', role),
+      disposed: gone,
+      errorText: characterAdminError,
+      restore: async (profile, revision) => {
+        if (busy || !can('edit', role)) return;
+        if (!(await confirmLeave())) return;
+        // The draft may have been re-read (a save, or the dropped edits): the revision to swap against is the current one.
+        const expected = detail?.draft?.revision ?? null;
+        await host.run(async () => {
+          if (gone()) return;
+          let saved;
+          try {
+            saved = await host.api.save(role, expected, structuredClone(profile));
+          } catch (error) {
+            if (error instanceof InviteLocalApiError && error.code === 'DRAFT_CONFLICT') {
+              showConflict(role);
+              return;
+            }
+            throw error;
+          }
+          if (gone()) return;
+          dirty = false;
+          await open(saved.characterId);
+          host.status(`草稿已恢复到修订 ${revision} 的内容，保存为修订 ${saved.revision}；没有发布。`);
+        });
+      },
+    });
+    const read = () =>
+      record.load(role).catch((error) => host.status(characterAdminError(error) ?? '草稿记录没有读取成功。'));
+    void read();
+    return record;
   }
   function profileDiff(parent: HTMLElement, snapshot: CharacterDetail) {
     const section = fold(parent, '查看资料改动（不调用供应商）'),
@@ -1389,7 +1439,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         );
         if (gone()) return;
         await load();
-        host.status(`素材版本 ${materialId} 已准备，请明确选择欢迎和结束成品。`);
+        // Part 24b-7: no id string in the message.
+        host.status('新的素材版本已准备，请明确选择欢迎和结束成品。');
       },
     );
     if (!embedded) button(section, '读取已有成品版本', () => dirty || !can('read'), load, true);
@@ -1930,6 +1981,17 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     previewsChanged?.();
     sync();
   }
+  /** The unsaved-changes question (保存 / 不保存 / 取消), shared by leaving the page and 恢复到这一稿. */
+  async function confirmLeave(): Promise<boolean> {
+    if (!dirty) return true;
+    const choice = await leaveDialog(host.modalParent?.() ?? root);
+    if (choice === 'cancel') return false;
+    if (choice === 'discard') {
+      renderDetail();
+      return true;
+    }
+    return (await saveCurrent?.()) === true && !dirty;
+  }
   const beforeUnload = (event: BeforeUnloadEvent) => {
     if (dirty) {
       event.preventDefault();
@@ -1947,16 +2009,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
      * Asks before leaving when the editor holds unsaved changes. 保存 saves, then leaves (a failed save stays, with its message);
      * 不保存 drops the local changes (nothing is written) and leaves; 取消 stays. Nothing is ever saved without the click.
      */
-    async confirmLeave(): Promise<boolean> {
-      if (!dirty) return true;
-      const choice = await leaveDialog(host.modalParent?.() ?? root);
-      if (choice === 'cancel') return false;
-      if (choice === 'discard') {
-        renderDetail();
-        return true;
-      }
-      return (await saveCurrent?.()) === true && !dirty;
-    },
+    confirmLeave,
     isDirty: () => dirty,
     saveDraft: () => saveHook?.(),
     update: (working: boolean) => {

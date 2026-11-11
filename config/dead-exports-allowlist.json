@@ -104,6 +104,11 @@
       "file": "packages/contracts/cocreation-adopt.ts",
       "names": ["adoptIntoTemplate", "suggestAdoptDraft"],
       "reason": "Part 24b-6b: 加入草稿 now inserts the note into the draft's own text in the inbox (cocreation-draft-box.ts). These pure append rules stay, with their unit tests, as the reference for what an adopted note becomes; no server code changed."
+    },
+    {
+      "file": "apps/player-web/src/features/admin/ui/drawer.ts",
+      "names": ["drawer"],
+      "reason": "Part 24b-7: the last page that used the side drawer (导入角色资料) is now an inline panel. The component is kept, with its own component test, until a later Part removes both together; no page opens it."
     }
   ]
 }

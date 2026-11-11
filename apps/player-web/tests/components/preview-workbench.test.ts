@@ -407,7 +407,10 @@ test("row click opens the result below its row: draft vs final with the reviewer
   assert.match(body, /引用：“今天想吃什么？”/);
   assert.match(body, /已回答/);
   assert.match(body, /已按实际用量结算/);
-  assert.match(body, /b-1/);
+  // Named exception (Part 24b-7): the opened result shows NO id (the budget id b-1 used to be listed under 标识); the place of the
+  // quote is its number (第 1 条). Nothing else of this test changed.
+  assert.doesNotMatch(body, /b-1/);
+  assert.match(body, /第 1 条/);
   assert.match(body, /北京时间/);
   const marks = panel.querySelectorAll('.pw-del, .pw-add').map((n) => [n.className, text(n)]);
   assert.ok(
