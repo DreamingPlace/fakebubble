@@ -10,6 +10,8 @@ const CLOSE_MS = 160;
  */
 export function leaveDialog(parent: HTMLElement): Promise<LeaveChoice> {
   return new Promise((resolve) => {
+    // Part 24b-7: focus returns to where it was, and Tab stays inside the dialog while it is open.
+    const opener = document.activeElement as HTMLElement | null;
     const button = (text: string, choice: LeaveChoice, className: string) => {
       const node = h('button', { class: className, text, attrs: { type: 'button', 'data-leave': choice } });
       node.addEventListener('click', () => finish(choice));
@@ -21,9 +23,14 @@ export function leaveDialog(parent: HTMLElement): Promise<LeaveChoice> {
       'div',
       {
         class: 'admin-dialog admin-leave-dialog',
-        attrs: { role: 'alertdialog', 'aria-modal': 'true', 'aria-label': '有未保存的修改', 'data-state': 'open' },
+        attrs: {
+          role: 'alertdialog',
+          'aria-modal': 'true',
+          'aria-labelledby': 'admin-leave-title',
+          'data-state': 'open',
+        },
       },
-      h('h3', { text: '有未保存的修改' }),
+      h('h3', { text: '有未保存的修改', attrs: { id: 'admin-leave-title' } }),
       h(
         'div',
         { class: 'admin-dialog-actions' },
@@ -37,6 +44,7 @@ export function leaveDialog(parent: HTMLElement): Promise<LeaveChoice> {
       if (settled) return;
       settled = true;
       document.removeEventListener('keydown', onKey);
+      opener?.focus?.();
       backdrop.setAttribute('data-state', 'closing');
       dialog.setAttribute('data-state', 'closing');
       const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
@@ -50,7 +58,24 @@ export function leaveDialog(parent: HTMLElement): Promise<LeaveChoice> {
       resolve(choice);
     };
     const onKey = (event: Event) => {
-      if ((event as KeyboardEvent).key === 'Escape') finish('cancel');
+      const key = event as KeyboardEvent;
+      if (key.key === 'Escape') finish('cancel');
+      if (key.key !== 'Tab') return;
+      const stops = Array.from(dialog.querySelectorAll<HTMLElement>('button'));
+      if (!stops.length) return;
+      const first = stops[0]!,
+        last = stops[stops.length - 1]!;
+      const at = document.activeElement;
+      if (!dialog.contains(at as Node)) {
+        key.preventDefault();
+        first.focus();
+      } else if (key.shiftKey && at === first) {
+        key.preventDefault();
+        last.focus();
+      } else if (!key.shiftKey && at === last) {
+        key.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     backdrop.addEventListener('click', () => finish('cancel'));

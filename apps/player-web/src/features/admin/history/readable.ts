@@ -70,3 +70,16 @@ export const readableGroups = (
   ['网页展示', live ? fieldsText(presentationFields(live)) : undefined, fieldsText(presentationFields(version))],
   ['完整模板', live ? fieldsText(templateFields(live)) : undefined, fieldsText(templateFields(version))],
 ];
+
+/** Part 24b-7: no id string in an admin view: keys that carry ids (id, xxxId, xxxIds) and uuid-looking values are left out. */
+const ID_VALUE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function withoutIds(value: unknown): unknown {
+  if (Array.isArray(value)) return value.filter((v) => !(typeof v === 'string' && ID_VALUE.test(v))).map(withoutIds);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key, v]) => !/^id$|Ids?$/.test(key) && !(typeof v === 'string' && ID_VALUE.test(v)))
+        .map(([key, v]) => [key, withoutIds(v)]),
+    );
+  return value;
+}

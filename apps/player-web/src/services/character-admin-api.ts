@@ -78,6 +78,14 @@ export type PreviewJob = {
   createdAt?: number;
   result: unknown;
 };
+/** Part 24b-7: who saved a draft revision (the place in the 管理员与权限 order, the initial and the label; never an id). */
+export type DraftBy = { index: number | null; initial: string; label: string };
+export type DraftHistory = {
+  draftRevision: number | null;
+  revisions: { revision: number; savedAt: number; by: DraftBy; summary: string; profile: CharacterProfile }[];
+  earlier: CharacterProfile | null;
+  groups: { group: string; by: DraftBy }[];
+};
 export type VersionSnapshot = VersionRow & {
   characterId: string;
   profile: CharacterProfile;
@@ -535,6 +543,32 @@ export class CharacterAdminClient {
       characterId: string(r.characterId),
       live: r.live === null ? null : num(r.live),
       versions: rows(r.versions).map(versionRow),
+    };
+  }
+  /** 草稿记录: the revisions of the current draft line (newest first, up to 20) and who last changed each group. Read-only. */
+  async draftHistory(id: string): Promise<DraftHistory> {
+    const r = object(await this.call(id, 'draft-history'));
+    const by = (v: unknown): DraftBy => {
+      const b = object(v);
+      return { index: b.index === null ? null : num(b.index), initial: string(b.initial), label: string(b.label) };
+    };
+    return {
+      draftRevision: r.draftRevision === null ? null : num(r.draftRevision),
+      revisions: rows(r.revisions).map((raw) => {
+        const row = object(raw);
+        return {
+          revision: num(row.revision),
+          savedAt: num(row.savedAt),
+          by: by(row.by),
+          summary: string(row.summary),
+          profile: profile(row.profile),
+        };
+      }),
+      earlier: r.earlier === null ? null : profile(r.earlier),
+      groups: rows(r.groups).map((raw) => {
+        const row = object(raw);
+        return { group: string(row.group), by: by(row.by) };
+      }),
     };
   }
   async historyVersion(id: string, version: number): Promise<VersionSnapshot> {

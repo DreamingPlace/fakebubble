@@ -201,13 +201,13 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
 const fieldNode = (value: string) => h('span', { class: 'vh-text', text: value });
 
 /** The 资料改动 comparison (the same side-by-side lines and classes), the live text on the left and the version on the right. */
-function diffGrid(before: string, after: string, label: string) {
+export function diffGrid(before: string, after: string, label: string, beforeLabel = '现行') {
   const grid = h('div', { class: 'pd-grid' });
   grid.append(
     h(
       'div',
       { class: 'pd-row pd-head' },
-      h('span', { class: 'pd-cell pd-left', text: '现行' }),
+      h('span', { class: 'pd-cell pd-left', text: beforeLabel }),
       h('span', { class: 'pd-cell pd-right', text: label }),
     ),
   );

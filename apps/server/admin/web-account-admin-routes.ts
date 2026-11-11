@@ -106,6 +106,7 @@ export async function routeWebAccountAdmin(
     const action = path.slice(`${base}/cast/`.length);
     if (action === 'draft') return { status: 200, body: cast.draft(actor, req.body) };
     if (action === 'versions') return { status: 200, body: cast.versions(actor, req.body) };
+    if (action === 'version') return { status: 200, body: cast.version(actor, req.body) };
     if (action === 'validate') return { status: 200, body: cast.validate(actor, req.body) };
     if (action === 'compile-preview') return { status: 200, body: cast.compilePreview(actor, req.body) };
     if (action === 'save') return { status: 200, body: cast.save(actor, req.body) };
@@ -220,7 +221,7 @@ export async function routeWebAccountAdmin(
     if (path === `${base}/characters/order`) return { status: 200, body: characters.saveOrder(actor, req.body) };
     const match = path.match(
       new RegExp(
-        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-generate|material-audio|material-approve|speech-estimate|preview-listen|speech-clips|speech-audio|delete-preview|delete-start|delete-status|history|history-version|restore|code-save|checklist-dismiss)$`,
+        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-generate|material-audio|material-approve|speech-estimate|preview-listen|speech-clips|speech-audio|delete-preview|delete-start|delete-status|history|history-version|draft-history|restore|code-save|checklist-dismiss)$`,
       ),
     );
     ensure(match, 'NOT_FOUND');
@@ -325,6 +326,10 @@ export async function routeWebAccountAdmin(
     if (match[2] === 'history') {
       body([]);
       return { status: 200, body: characters.history(actor, id) };
+    }
+    if (match[2] === 'draft-history') {
+      body([]);
+      return { status: 200, body: characters.draftHistory(actor, id) };
     }
     if (match[2] === 'history-version')
       return { status: 200, body: characters.historyVersion(actor, id, body(['version']).version) };

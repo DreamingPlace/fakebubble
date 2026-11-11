@@ -337,7 +337,8 @@ export function characterForm(
   identity.append(el('legend', '身份与网页展示'));
   form.append(identity);
   const id = field(identity, '固定人物 ID', base.template.id, { required: true, max: 128 }) as HTMLInputElement;
-  id.pattern = '[A-Za-z0-9_-]{1,128}';
+  // `\-` (not a bare trailing `-`): the browser compiles `pattern` with the v flag, where a bare `-` in a class is a syntax error.
+  id.pattern = '[A-Za-z0-9_\\-]{1,128}';
   id.readOnly = !isNew;
   // The fixed-id sentence of an existing role is gone (Part 24b-4): the field is read-only, which says it. A new role keeps the id rule.
   if (isNew) identity.append(el('p', '使用英文、数字、短横线或下划线；保存后不能改 ID。删除后的 ID 也不能复用。'));

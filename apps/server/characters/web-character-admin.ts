@@ -34,6 +34,7 @@ import { WebCharacterPreviews, readWebPreview, webPreviewDTO } from './web-chara
 import { WebReviewCompare } from './web-review-compare.ts';
 import { publishWebCharacter } from './web-character-publication.ts';
 import { characterHistory, characterVersion, restoreWebCharacter } from './web-character-history.ts';
+import { draftHistory } from './web-character-draft-history.ts';
 import {
   evalSetDelete,
   evalSetList,
@@ -784,6 +785,11 @@ export class WebCharacterAdmin {
   history(auth: Auth, id: string) {
     this.require(auth, 'read', id);
     return characterHistory(this.store, id);
+  }
+  /** Part 24b-7: 草稿记录, the revisions of the current draft line with a mark per admin. Read-only; characters.read. */
+  draftHistory(auth: Auth, id: string) {
+    this.require(auth, 'read', id);
+    return draftHistory(this.store, id);
   }
   historyVersion(auth: Auth, id: string, version: unknown) {
     this.require(auth, 'read', id);

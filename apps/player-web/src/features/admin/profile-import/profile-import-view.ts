@@ -1,9 +1,11 @@
 import { InviteLocalApiError } from '../../../services/invite-local-api.ts';
 import { h } from '../../cocreation/h.ts';
-import { drawer } from '../ui/drawer.ts';
 import { statusBadge, type BadgeTone } from '../ui/status-badge.ts';
 
 /**
+ * Part 24b-7: it is an inline panel under the title row (no drawer): three steps, 选择文件 → 预览 → 确认导入 (the panel's one solid
+ * button), and the result stays in the panel until it is closed.
+ *
  * Part 24j: 角色工作台 → 导入角色资料. Choose one or more .md files, read the preview (nothing is written), then confirm. The preview
  * says, per character, whether it is new / existing / 将绑定代码, every change old → new, the checklist of what cannot be stored
  * yet, and every error or warning with its place. Any error blocks the whole import.
@@ -69,7 +71,6 @@ export function profileImportView(
     disposed: () => boolean;
   },
 ) {
-  const panel = drawer(parent, { title: '导入角色资料', wide: true, onClose: () => reset() });
   const picker = h('input', {
     attrs: { type: 'file', multiple: '', accept: '.md,text/markdown,text/plain' },
   }) as HTMLInputElement;
@@ -78,9 +79,35 @@ export function profileImportView(
   const chosenLine = h('span', { class: 'pi-chosen' });
   const result = h('div', { class: 'pi-result' });
   const confirm = h('button', { class: 'admin-primary', text: '确认导入', attrs: { type: 'button' } });
-  const cancel = h('button', { class: 'admin-secondary', text: '取消', attrs: { type: 'button' } });
-  const foot = h('div', { class: 'pi-foot', hidden: true }, confirm, cancel);
-  panel.body.append(h('div', { class: 'pi-pick' }, choose, chosenLine, picker), result, foot);
+  const closeButton = h('button', { class: 'admin-secondary', text: '关闭', attrs: { type: 'button' } });
+  const foot = h('div', { class: 'pi-foot', hidden: true }, confirm);
+  const STEPS = ['选择文件', '预览', '确认导入'] as const;
+  const steps = h(
+    'ol',
+    { class: 'pi-steps', attrs: { 'aria-label': '导入步骤' } },
+    ...STEPS.map((text) => h('li', { text })),
+  );
+  const body = h('div', { class: 'pi-body' }, h('div', { class: 'pi-pick' }, choose, chosenLine, picker), result, foot);
+  const panel = h(
+    'section',
+    { class: 'pi-panel', hidden: true, attrs: { 'aria-label': '导入角色资料' } },
+    h('header', { class: 'pi-head' }, h('h3', { text: '导入角色资料' }), steps, closeButton),
+    body,
+  );
+  // `parent` is a row of its own under the title row (the page puts it above the rail and the editor).
+  parent.append(panel);
+  let isOpen = false;
+  /** Which step the panel is on (0 选择文件, 1 预览, 2 确认导入 = the result stays here). */
+  const stepTo = (index: number) =>
+    Array.from(steps.children).forEach((li, i) => {
+      li.setAttribute('data-state', i < index ? 'done' : i === index ? 'now' : 'next');
+      if (i === index) li.setAttribute('aria-current', 'step');
+      else li.removeAttribute('aria-current');
+    });
+  stepTo(0);
+  const onKey = (event: Event) => {
+    if ((event as KeyboardEvent).key === 'Escape' && panel.contains(document.activeElement)) api.close();
+  };
   let files: ImportFile[] = [];
   let shown: ImportPreview | null = null;
   let requestId = '';
@@ -92,6 +119,8 @@ export function profileImportView(
     chosenLine.textContent = '';
     foot.hidden = true;
     picker.value = '';
+    choose.textContent = '选择 .md 文件';
+    stepTo(0);
   }
   const section = (title: string, tone: BadgeTone | null, ...nodes: (Node | null)[]) =>
     h('section', { class: 'pi-block', attrs: tone ? { 'data-tone': tone } : {} }, h('h4', { text: title }), ...nodes);
@@ -148,6 +177,7 @@ export function profileImportView(
     result.replaceChildren();
     const preview = shown;
     foot.hidden = !preview;
+    stepTo(preview ? 1 : 0);
     if (!preview) return;
     if (preview.problems.length)
       result.append(
@@ -189,8 +219,40 @@ export function profileImportView(
     confirm.dataset.locked = String(off);
     confirm.disabled = off;
     confirm.title = !preview.ok ? '先解决上面的错误' : preview.unchanged ? '没有变化' : '';
+    // The reason is a hover tip on the (off) button, never a sentence beside it.
   }
 
+  /** The result stays in the panel (step 3) until it is closed: one row per character, what happened to it. */
+  function showDone(preview: ImportPreview, done: ImportResult) {
+    shown = null;
+    result.replaceChildren();
+    foot.hidden = true;
+    stepTo(2);
+    const nameOf = (code: string) => preview.characters.find((c) => c.code === code)?.name ?? code;
+    const rows = done.characters.map((c) =>
+      h(
+        'li',
+        {},
+        statusBadge(MODE[c.mode][0], MODE[c.mode][1]),
+        h('strong', { text: nameOf(c.code) }),
+        h('code', { class: 'pi-code', text: c.code }),
+        h('span', {
+          class: 'pi-file',
+          text: c.changed ? (c.revision === null ? '已导入' : `草稿修订 ${c.revision}`) : '没有变化',
+        }),
+      ),
+    );
+    result.append(
+      section(
+        done.unchanged ? '没有变化' : '已导入，还没有发布',
+        done.unchanged ? null : 'ok',
+        h('ul', { class: 'pi-done' }, ...rows),
+      ),
+    );
+    chosenLine.textContent = '';
+    choose.textContent = '再导入一批';
+    picker.value = '';
+  }
   async function read(list: File[]) {
     if (list.length > IMPORT_FILES) return host.toast(`一次最多 ${IMPORT_FILES} 个文件。`, 'warn');
     const loaded: ImportFile[] = [];
@@ -218,7 +280,7 @@ export function profileImportView(
     const chosen = Array.from(picker.files ?? []);
     if (chosen.length) void read(chosen);
   });
-  cancel.addEventListener('click', () => panel.close());
+  closeButton.addEventListener('click', () => api.close());
   confirm.addEventListener('click', () => {
     const preview = shown;
     if (!preview?.ok || preview.unchanged) return;
@@ -227,7 +289,7 @@ export function profileImportView(
         const done = await host.api.profileImportApply({ requestId, files, basis: preview.basis });
         if (host.disposed()) return;
         const count = done.characters.filter((c) => c.changed).length;
-        panel.close();
+        showDone(preview, done);
         host.toast(done.unchanged ? '没有变化。' : `已导入 ${count} 个角色的草稿。还没有发布。`, 'ok');
         await host.onImported();
       } catch (error) {
@@ -246,13 +308,33 @@ export function profileImportView(
       }
     });
   });
-  return {
-    open: () => panel.open(),
+  const api = {
+    open() {
+      if (isOpen) return;
+      isOpen = true;
+      reset();
+      panel.hidden = false;
+      document.addEventListener('keydown', onKey);
+      panel.scrollIntoView?.({ block: 'nearest' });
+      choose.focus();
+    },
+    close() {
+      if (!isOpen) return;
+      isOpen = false;
+      panel.hidden = true;
+      document.removeEventListener('keydown', onKey);
+      reset();
+    },
     /** Test seam. */
     chooseFiles: (list: ImportFile[]) => {
       files = list;
       return refresh();
     },
-    dispose: () => panel.dispose(),
+    dispose() {
+      isOpen = false;
+      document.removeEventListener('keydown', onKey);
+      panel.remove();
+    },
   };
+  return api;
 }
