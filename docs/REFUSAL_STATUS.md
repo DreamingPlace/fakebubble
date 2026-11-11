@@ -91,7 +91,6 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `GUEST_SESSION_EXPIRED`
 - `PLAYER_EMAIL_NOT_REGISTERED`
 - `PLAYER_LOGIN_INVALID`
-- `PLAYER_LOGIN_REQUIRED` (was 409)
 - `PLAYER_PASSWORD_WRONG`
 - `SESSION_EXPIRED`
 
@@ -187,6 +186,7 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `WEB_INVITE_TERMS_REQUIRED`
 - `WEB_INVITE_UNAVAILABLE`
 - `WEB_INVITE_UNUSABLE`
+- `PLAYER_LOGIN_REQUIRED` (player flow, kept 409: the page keys on the code, and a 401 would read as an ended session)
 
 ## 410 — gone (1)
 

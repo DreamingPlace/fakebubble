@@ -8,7 +8,6 @@ import type { VoiceBinding } from '../../../packages/contracts/media.ts';
 import { freeTier } from '../admission/web-free-tier.ts';
 import { SYNTHETIC_TRIAL_FOOTER } from '../conversation/web-vertical-publisher.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { contentHash } from './admin-content-hash.ts';
 import { codeOf } from './web-profile-schema.ts';
 
 /**
@@ -155,4 +154,3 @@ export function clipManifest(
     voice: { referenceId: voice.referenceId, model: resolveVoiceModel(modelBinding, siteVoiceModel(store)) },
   };
 }
-export const clipManifestHash = (manifest: ClipManifest) => contentHash([manifest.slots, manifest.voice]);

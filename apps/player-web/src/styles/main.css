@@ -13419,13 +13419,39 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-size: 13px;
 }
 .account-admin-page.admin-shell .vc-upload > summary {
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   width: fit-content;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 8px;
   color: var(--ad-primary);
-  transition: opacity calc(160ms * var(--ad-motion)) var(--ad-ease);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background-color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-upload > summary::-webkit-details-marker {
+  display: none;
+}
+.account-admin-page.admin-shell .vc-upload > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform calc(180ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-upload[open] > summary::before {
+  transform: rotate(45deg);
 }
 .account-admin-page.admin-shell .vc-upload > summary:hover {
-  opacity: 0.75;
+  background: var(--ad-primary-soft);
+  border-color: var(--ad-primary);
 }
 .account-admin-page.admin-shell .vc-upload[open] {
   display: grid;
