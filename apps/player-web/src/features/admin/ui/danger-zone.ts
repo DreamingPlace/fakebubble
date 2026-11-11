@@ -1,3 +1,4 @@
+import { disclosureButton } from './disclosure.ts';
 import { h } from '../../cocreation/h.ts';
 
 /** How long the biggest actions have to be held (Framework3: "按住 1.5 秒"). */
@@ -37,6 +38,8 @@ export function dangerZone(options: DangerZoneOptions) {
     text: options.open,
     attrs: { type: 'button', 'aria-expanded': 'false', ...(options.openerId ? { id: options.openerId } : {}) },
   });
+  // Part 24b-7b: it opens something, so it shows the chevron like every other disclosure.
+  disclosureButton(opener, options.open, false);
   const impactHost = h('div', { class: 'dz-impact' });
   const note = options.note ? h('p', { class: 'dz-note', text: options.note }) : null;
   const typed = options.typeName

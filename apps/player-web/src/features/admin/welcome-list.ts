@@ -5,6 +5,7 @@ import {
   type WelcomeLine,
 } from '../../../../../packages/contracts/web-welcomes.ts';
 import { dragOrder } from './ui/drag-order.ts';
+import { growBox } from './ui/grow-box.ts';
 
 /**
  * Part 24k-2: the 欢迎内容 list. One row per line: the words and a whole percent; add (the lines split evenly), delete, reorder
@@ -96,8 +97,8 @@ export function welcomeList(initial: readonly WelcomeLine[], onChange: () => voi
     const grip = node('span', 'wl-grip', '⋮⋮');
     grip.setAttribute?.('aria-hidden', 'true');
     const no = node('span', 'wl-no');
-    const text = node('textarea', 'wl-text');
-    text.rows = 2;
+    // Part 24b-7b: a welcome line is ONE sentence (at most 200 characters): a box that starts at one line and grows as it wraps.
+    const text = growBox(node('textarea', 'wl-text'), 'one');
     text.maxLength = WELCOME_LIMITS.text;
     text.value = line.text;
     text.placeholder = '欢迎词';

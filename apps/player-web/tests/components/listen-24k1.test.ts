@@ -10,6 +10,15 @@ const el = (node: unknown) => node as FakeElement;
 const wav = Buffer.from('RIFF-fake-wav-bytes');
 const sha = createHash('sha256').update(wav).digest('hex');
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+/**
+ * Part 24b-7b: waits until `done()` holds (at most 5 s), a tick at a time. The clip is hashed with `crypto.subtle.digest`, which
+ * finishes on a thread-pool thread, not on the next event-loop turn: a fixed number of ticks passed on an idle machine and failed
+ * under load (9 runs in 15). Waiting for the condition itself keeps every assertion below exactly as it was.
+ */
+async function until(done: () => boolean) {
+  const limit = Date.now() + 5000;
+  while (!done() && Date.now() < limit) await tick();
+}
 
 function setup(t: test.TestContext, over: { voice?: boolean; spoken?: boolean } = {}) {
   installFakeDom(t);
@@ -72,15 +81,12 @@ test('试听: the first click only asks (the cost on the button), the second pay
   assert.equal(f.calls.listen.length, 0, 'a first click calls nothing');
   assert.equal(f.button().textContent, '确认付费 · 600 µ$');
   f.button().click();
-  await tick();
-  await tick();
-  await tick();
+  await until(() => f.calls.played.length >= 1);
   assert.deepEqual(f.calls.listen, [{ requestId: 'req-1', previewId: 'p1', acknowledgeMicros: 600 }]);
   assert.equal(f.calls.played.length, 1, 'the clips are played after they are spoken');
   assert.equal(f.play().hidden, false, 'a free 播放 replaces the paid button');
   f.play().click();
-  await tick();
-  await tick();
+  await until(() => f.calls.played.length >= 2);
   assert.equal(f.calls.played.length, 2);
   assert.equal(f.calls.listen.length, 1, 'playing again never pays again');
 });

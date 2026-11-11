@@ -1,6 +1,8 @@
 import type { JsonValue } from '../../../../../packages/contracts/index.ts';
 import { h } from '../cocreation/h.ts';
 import { markDirty } from './ui/unsaved.ts';
+import { growBox, shortInput, type GrowKind } from './ui/grow-box.ts';
+import { sentenceList, type SentenceList } from './ui/sentence-list.ts';
 
 /**
  * Part 24b-6: structured editors over the EXISTING authorCanon.settings keys (no schema change).
@@ -49,22 +51,27 @@ const isPast = (value: unknown) =>
         (item.text === undefined || typeof item.text === 'string')),
   );
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const input = (value: string, label: string, onEdit: () => void, extra = '') => {
+/** A one-line value (a title): a single-line input as wide as its limit says, wider when the text is. */
+const input = (value: string, label: string, onEdit: () => void, limit: number, extra = '') => {
   const node = h('input', {
     class: extra,
-    attrs: { type: 'text', 'aria-label': label, placeholder: label, 'data-was': value },
+    attrs: { type: 'text', 'aria-label': label, placeholder: label, 'data-was': value, autocomplete: 'off' },
   });
   node.value = value;
+  shortInput(node, limit);
   node.addEventListener('input', () => {
     markDirty(node, node.value !== node.getAttribute('data-was'));
     onEdit();
   });
   return node;
 };
-const area = (value: string, label: string, onEdit: () => void, rows = 3) => {
-  const node = h('textarea', {
-    attrs: { rows: String(rows), 'aria-label': label, placeholder: label, 'data-was': value },
-  });
+/** A growing box: 'one' starts at a line, 'para' at four; both grow with the text. */
+const area = (value: string, label: string, onEdit: () => void, kind: GrowKind, multiline = false) => {
+  const node = growBox(
+    h('textarea', { attrs: { 'aria-label': label, placeholder: label, 'data-was': value } }),
+    kind,
+    multiline ? { multiline } : {},
+  );
   node.value = value;
   node.addEventListener('input', () => {
     markDirty(node, node.value !== node.getAttribute('data-was'));
@@ -78,73 +85,37 @@ const adder = (text: string, onClick: () => void, className = 'cn-add') => {
   return node;
 };
 
-/** A short text: one text box, or a list of chips (each editable in place, × removes it, + adds one). */
-function textOrChips(key: string, original: JsonValue | undefined, onEdit: () => void): Piece {
+/**
+ * A short text. A string is one growing box (a sentence); a list is a SENTENCE LIST, one growing row per item (items can be 40–100
+ * characters, so never chips). An empty list shows one empty row to type into.
+ */
+function textOrRows(
+  key: string,
+  original: JsonValue | undefined,
+  onEdit: () => void,
+): Piece & { lists: SentenceList[] } {
   const label = KEY_LABEL[key] ?? key;
   const box = h('div', { class: 'cn-field' }, h('span', { class: 'cn-label', text: label }));
   if (typeof original === 'string') {
-    const text = area(original, label, onEdit, 3);
+    const text = area(original, label, onEdit, 'one', original.includes('\n'));
     box.append(text);
     return {
       node: box,
+      lists: [],
       changed: () => text.value !== original,
       read: () => (text.value !== original ? text.value : original),
     };
   }
-  let items: string[] = Array.isArray(original) ? [...(original as string[])] : [];
-  const chips = h('div', { class: 'cn-chips' });
-  const fields: HTMLInputElement[] = [];
-  const paint = () => {
-    chips.replaceChildren();
-    fields.length = 0;
-    items.forEach((item, index) => {
-      const field = input(
-        item,
-        label,
-        () => {
-          items[index] = field.value;
-          onEdit();
-        },
-        'cn-chip-input',
-      );
-      field.size = Math.max(4, [...field.value].length + 1);
-      field.addEventListener('input', () => {
-        field.size = Math.max(4, [...field.value].length + 1);
-      });
-      fields.push(field);
-      const remove = h('button', { class: 'cn-x', text: '×', attrs: { type: 'button', 'aria-label': '去掉' } });
-      remove.addEventListener('click', () => {
-        items = items.filter((_, at) => at !== index);
-        paint();
-        onEdit();
-      });
-      chips.append(h('span', { class: 'cn-chip' }, field, remove));
-    });
-    chips.append(
-      adder(
-        '+',
-        () => {
-          items = [...items, ''];
-          paint();
-          fields[fields.length - 1]?.focus();
-          onEdit();
-        },
-        'cn-chip cn-add',
-      ),
-    );
-  };
-  paint();
-  box.append(chips);
-  const changed = () => !same(items, original ?? []);
+  const items: string[] = Array.isArray(original) ? [...(original as string[])] : [];
+  const rows = sentenceList(items, { label, onChange: onEdit, limit: 100 });
+  box.append(rows.node);
+  const changed = () => rows.changed();
   return {
     node: box,
+    lists: [rows],
     changed,
     read: () =>
-      original === undefined && !items.length
-        ? undefined
-        : changed()
-          ? items.filter((item) => item.trim() !== '')
-          : (original as JsonValue),
+      original === undefined && !rows.read().length ? undefined : changed() ? rows.read() : (original as JsonValue),
   };
 }
 
@@ -159,14 +130,29 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
       reply: ((item.reply as string[] | undefined) ?? []).join('\n'),
     }));
   let rows = toRows();
+  // An empty list shows one empty example to type into; it is not data until it has text (the same rule as a new 经历 card).
+  const blank = new WeakSet<Example>();
+  const newExample = (): Example => {
+    const row: Example = { player: '', reply: '' };
+    blank.add(row);
+    return row;
+  };
+  if (!rows.length) rows = [newExample()];
+  const kept = () => rows.filter((row) => !(blank.has(row) && row.player.trim() === '' && row.reply.trim() === ''));
   const list = h('div', { class: 'cn-pairs' });
   const paint = () => {
     list.replaceChildren();
     rows.forEach((row, index) => {
-      const player = input(row.player, '玩家说', () => {
-        row.player = player.value;
-        onEdit();
-      });
+      const player = area(
+        row.player,
+        '玩家说',
+        () => {
+          row.player = player.value;
+          onEdit();
+        },
+        'one',
+      );
+      // 他回: one box; a line break inside it separates the replies, so it keeps its Enter
       const reply = area(
         row.reply,
         '他回',
@@ -174,25 +160,27 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
           row.reply = reply.value;
           onEdit();
         },
-        2,
+        'one',
+        true,
       );
-      reply.className = 'cn-reply';
+      reply.className = `${reply.className} cn-reply`;
       const remove = h('button', { class: 'cn-x', text: '×', attrs: { type: 'button', 'aria-label': '去掉' } });
       remove.addEventListener('click', () => {
         rows = rows.filter((_, at) => at !== index);
+        if (!rows.length) rows = [newExample()];
         paint();
         onEdit();
       });
       const parts: HTMLElement[] = [];
       if (row.situation !== undefined) {
-        const situation = input(
+        const situation = area(
           row.situation,
           '情境',
           () => {
             row.situation = situation.value;
             onEdit();
           },
-          'cn-situation',
+          'one',
         );
         parts.push(situation);
       }
@@ -211,9 +199,9 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
     });
     list.append(
       adder(
-        '+ 样例',
+        '＋ 样例',
         () => {
-          rows = [...rows, { player: '', reply: '' }];
+          rows = [...rows, newExample()];
           paint();
           onEdit();
         },
@@ -224,16 +212,16 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
   paint();
   box.append(list);
   const emit = (): JsonValue =>
-    rows.map((row) => ({
+    kept().map((row) => ({
       ...(row.situation !== undefined ? { situation: row.situation } : {}),
       player: row.player,
       reply: row.reply === '' ? [] : row.reply.split('\n'),
     }));
-  const changed = () => !same(rows, toRows());
+  const changed = () => !same(kept(), toRows());
   return {
     node: box,
     changed,
-    read: () => (original === undefined && !rows.length ? undefined : changed() ? emit() : (original as JsonValue)),
+    read: () => (original === undefined && !kept().length ? undefined : changed() ? emit() : (original as JsonValue)),
   };
 }
 
@@ -277,10 +265,12 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
             row.title = title.value;
             onEdit();
           },
+          24,
           'cn-title',
         );
         parts.push(title);
       }
+      // 经历 text: a paragraph (a card is up to 2,000 characters across several paragraphs): four lines at first, then the text's own height
       const text = area(
         row.text,
         '经历',
@@ -288,7 +278,8 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
           row.text = text.value;
           onEdit();
         },
-        4,
+        'para',
+        true,
       );
       const remove = h('button', { class: 'cn-x', text: '×', attrs: { type: 'button', 'aria-label': '去掉' } });
       remove.addEventListener('click', () => {
@@ -301,7 +292,7 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
     });
     cards.append(
       adder(
-        '+ 经历',
+        '＋ 经历',
         () => {
           rows = [...rows, newCard()];
           paint();
@@ -337,14 +328,15 @@ export function canonEditors(settings: Settings, onEdit: () => void) {
   const pastPane = h('fieldset', { class: 'cn-pane' });
   speech.append(h('legend', { text: '说话方式' }));
   pastPane.append(h('legend', { text: '经历' }));
-  const grid = h('div', { class: 'cn-grid' });
-  speech.append(grid);
+  const lists: SentenceList[] = [];
+  // One column: 说话风格, 对话风格, then 对话样例 share the form's reading measure (no side-by-side halves).
   for (const key of ['speechStyle', 'dialogueStyle'] as const) {
     const value = settings[key];
     if (value === undefined || typeof value === 'string' || isStrings(value)) {
-      const piece = textOrChips(key, value, onEdit);
+      const piece = textOrRows(key, value, onEdit);
       pieces.set(key, piece);
-      grid.append(piece.node);
+      lists.push(...piece.lists);
+      speech.append(piece.node);
     }
   }
   if (settings.dialogueExamples === undefined || isExamples(settings.dialogueExamples)) {
@@ -391,5 +383,9 @@ export function canonEditors(settings: Settings, onEdit: () => void) {
     /** The JSON text of the keys no structured editor owns. */
     rest: JSON.stringify(rest, null, 2),
     assemble,
+    /** The lists keep their own limits (a delete button on a lone empty row stays off) when the form is enabled again. */
+    setDisabled: (disabled: boolean) => {
+      for (const list of lists) list.setDisabled(disabled);
+    },
   };
 }

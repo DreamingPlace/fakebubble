@@ -18,7 +18,7 @@ import { dateTimeText } from './system-format.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { versionHistory } from './history/version-history.ts';
 import { draftHistory } from './history/draft-history.ts';
-import { withoutIds } from './history/readable.ts';
+import { readableGroups, withoutIds } from './history/readable.ts';
 import { dangerZone } from './ui/danger-zone.ts';
 import { inlineConfirm } from './ui/inline-confirm.ts';
 import { statusBadge } from './ui/status-badge.ts';
@@ -783,6 +783,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         sections.push({ id: 'preview', label: '预演', nodes: [wrap] });
       }
     }
+    // Part 24b-7b: tables, comparisons and 预演 use the card's whole width; every form keeps the one reading column.
+    for (const section of sections)
+      if (['diff', 'history', 'preview'].includes(section.id))
+        for (const node of section.nodes) node.className = `${node.className} wb-wide`.trim();
     for (const section of sections)
       if (section.nodes.length === 1) section.nodes[0]!.className = `${section.nodes[0]!.className} wb-sole`.trim();
 
@@ -997,11 +1001,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         result = await host.api.profilePreview(snapshot.characterId, snapshot.draft!.revision);
       if (gone() || token !== view) return;
       output.replaceChildren();
-      const groups: [string, unknown, unknown][] = [
-        ['人设', result.published?.template.persona, result.draft.profile.template.persona],
-        ['网页展示', result.published?.presentation, result.draft.profile.presentation],
-        ['完整模板', result.published?.template, result.draft.profile.template],
-      ];
+      // Part 24b-7b: the readable field form of 24f (label, old → new, list items as lines, no ids), never the profile as JSON.
+      const groups: [string, unknown, unknown][] = readableGroups(result.published ?? null, result.draft.profile);
       for (const [name, before, after] of groups) {
         if (JSON.stringify(before) === JSON.stringify(after)) continue;
         const group = fold(output, name),
@@ -1214,7 +1215,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       option.value = value!;
       relationship.append(option);
     }
-    const message = field(section, '预演输入（不是玩家消息）', '', { area: true, max: PREVIEW_INPUT_MAX }),
+    const message = field(section, '预演输入（不是玩家消息）', '', { kind: 'para', max: PREVIEW_INPUT_MAX }),
       ack = check(section, '我确认发起真实付费文字预演，并已核对当前草稿与输入');
     if (!snapshot.previewAvailable) section.append(el('p', '当前运行未开启预演，不能通过静态比较绕过发布审核。'));
     const unknownNote = el('p');
@@ -1603,7 +1604,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           ),
         ),
         footer = guarded(check(section, '我已完整试听并确认结束成品'), () => dirty || !can('approve-materials')),
-        note = guarded(field(section, '批准说明', '', { max: 1000 }), () => dirty || !can('approve-materials'));
+        note = guarded(
+          field(section, '批准说明', '', { kind: 'one', max: 1000 }),
+          () => dirty || !can('approve-materials'),
+        );
       button(
         section,
         '批准此素材版本',

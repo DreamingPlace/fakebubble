@@ -18,6 +18,8 @@ export type OpenColumn<T> = {
   /** Column header hover (what the column means). */
   headTip?: string;
   mono?: boolean;
+  /** Part 24b-7b: the header becomes a button that sorts by `sortValue` (ascending first, then descending). */
+  sortValue?: (row: T) => number | string | null;
 };
 export type OpenTableOptions<T> = {
   label: string;
@@ -35,6 +37,8 @@ export type OpenTableOptions<T> = {
   hover?: (row: T | null) => void;
   /** Reports the open row's key (or null when closed). */
   onToggle?: (key: string | null) => void;
+  /** A row that stays last whatever the sort (a 合计 row). */
+  pinLast?: (row: T) => boolean;
 };
 
 export function openTable<T>(options: OpenTableOptions<T>) {
@@ -52,15 +56,43 @@ export function openTable<T>(options: OpenTableOptions<T>) {
   const head = h('div', { class: 'ot-head', attrs: { role: 'row' } });
   if (options.tick) head.append(h('span', { attrs: { role: 'columnheader', 'aria-label': options.tick.label } }));
   if (hasDetail) head.append(h('span', { attrs: { role: 'columnheader', 'aria-hidden': 'true' } }));
+  let sort: { key: string; dir: 'asc' | 'desc' } | null = null;
+  const sortButtons = new Map<string, { cell: HTMLElement; button: HTMLButtonElement }>();
   for (const column of options.columns) {
     const cell = h('span', {
       class: column.align === 'end' ? 'ot-cell is-end' : 'ot-cell',
-      text: column.label,
       attrs: { role: 'columnheader' },
     });
+    if (column.sortValue) {
+      const button = h('button', {
+        class: 'ot-sort',
+        text: column.label,
+        attrs: { type: 'button', 'data-sort': column.key },
+      });
+      cell.className = `${cell.className} is-head-sort`;
+      cell.setAttribute('aria-sort', 'none');
+      cell.append(button);
+      sortButtons.set(column.key, { cell, button });
+      button.addEventListener('click', () => {
+        sort =
+          sort?.key === column.key && sort.dir === 'asc'
+            ? { key: column.key, dir: 'desc' }
+            : { key: column.key, dir: 'asc' };
+        paintSort();
+        paint();
+      });
+    } else cell.textContent = column.label;
     if (column.headTip) hoverValue(cell, column.headTip);
     head.append(cell);
   }
+  const paintSort = () => {
+    for (const [key, entry] of sortButtons) {
+      const on = sort?.key === key;
+      entry.cell.setAttribute('aria-sort', on ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : 'none');
+      if (on) entry.button.dataset.dir = sort!.dir;
+      else delete entry.button.dataset.dir;
+    }
+  };
   const body = h('div', { class: 'ot-body', attrs: { role: 'rowgroup' } });
   const empty = h('p', { class: 'ot-empty', text: options.emptyText, hidden: true });
   root.append(head, body, empty);
@@ -112,12 +144,31 @@ export function openTable<T>(options: OpenTableOptions<T>) {
     } else void open(key, row);
   };
 
+  const ordered = (): T[] => {
+    const column = sort ? options.columns.find((c) => c.key === sort!.key) : null;
+    if (!sort || !column?.sortValue) return rows;
+    const pinned = options.pinLast ? rows.filter(options.pinLast) : [];
+    const free = options.pinLast ? rows.filter((r) => !options.pinLast!(r)) : rows;
+    const sign = sort.dir === 'asc' ? 1 : -1;
+    const value = column.sortValue;
+    const sorted = [...free].sort((a, b) => {
+      const x = value(a),
+        y = value(b);
+      if (x === y) return 0;
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return (
+        (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'zh-CN')) * sign
+      );
+    });
+    return [...sorted, ...pinned];
+  };
   const paint = () => {
     body.replaceChildren();
     items.clear();
     empty.hidden = rows.length > 0;
     head.hidden = rows.length === 0;
-    for (const row of rows) {
+    for (const row of ordered()) {
       const key = options.rowKey(row);
       const item = h('div', { class: 'ot-item', attrs: { role: 'rowgroup', 'data-key': key, 'data-open': 'false' } });
       const line = h('div', {

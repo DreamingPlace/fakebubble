@@ -164,9 +164,11 @@ test('24b-6 总览: the 按天 table is newest first with a 合计 row, retentio
   assert.match(rows[1]![9]!, /2 \/ 4/, 'the cohort is the hover value');
   assert.match(rows[0]![3]!, /^50/, 'active = 20 + 30');
   assert.match(rows[0]![3]!, /注册 20/);
-  assert.match(text(one(f.root, '[aria-label="按角色"]')), /瓜瓜/);
-  assert.match(text(one(f.root, '[aria-label="按模型"]')), /xai/);
-  assert.match(text(one(f.root, '[aria-label="按模型"]')), /未选择模型/);
+  // Named exception (Part 24b-7b): 按角色 and 按模型 are no longer two cards beside the table; they are two more positions of the SAME
+  // table (the 按天 / 按角色 / 按模型 switch, one card). The same names and rows are asserted, now on the table of each position.
+  assert.match(text(one(f.root, '[aria-label="玩家统计（按角色）"]')), /瓜瓜/);
+  assert.match(text(one(f.root, '[aria-label="玩家统计（按模型）"]')), /xai/);
+  assert.match(text(one(f.root, '[aria-label="玩家统计（按模型）"]')), /未选择模型/);
   assert.match(text(one(f.root, '.head-status')), /UTC 2026-11-20/);
 });
 
@@ -380,7 +382,9 @@ test('24b-6 canon editors: a shape that is not recognised falls back to the JSON
 test('24b-6 canon editors: editing one key rebuilds only that key; the others stay as they came in', (t) => {
   installFakeDom(t);
   const editors = canonEditors(canon() as never, () => {});
-  const chips = all(editors.speech, '.cn-chip-input');
+  // Named exception (Part 24b-7b): a 说话风格 item can be 40–80 characters, so the list is one growing row per item (not chips);
+  // the same edit is made on the first row. Everything asserted after it is unchanged.
+  const chips = all(editors.speech, '.sl-row textarea');
   chips[0]!.type_('很温柔');
   const out = editors.assemble(editors.rest);
   assert.deepEqual(out.speechStyle, ['很温柔', '爱用“嗯”']);

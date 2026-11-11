@@ -55,7 +55,7 @@ export const templateFields = (profile: CharacterProfile): Field[] => {
     ['声音', t.voice ? `${t.voice.profileId} · 版本 ${t.voice.version} · 语速 ${t.voice.speed}` : '—'],
     ['作息', `${t.schedule?.timeZone ?? '—'} · 每周 ${days.reduce((n, d) => n + d.length, 0)} 个时段`],
     ['主动联系', t.autonomy ? plain(t.autonomy) : '无'],
-    ...Object.entries(canon).map(([key, value]) => [`设定 · ${key}`, plain(value)] as Field),
+    ...Object.entries(canon).map(([key, value]) => [`设定 · ${key}`, plain(withoutIds(value))] as Field),
   ];
 };
 export const fieldsText = (fields: readonly Field[]) =>

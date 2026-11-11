@@ -7,6 +7,8 @@ import { evenWeights, upgradeWelcomes, type WelcomeLine } from '../../../../../p
 import { newLineId, welcomeList } from './welcome-list.ts';
 import { paletteList, type PaletteEntry } from './palette-list.ts';
 import { markDirty } from './ui/unsaved.ts';
+import { growBox, shortInput } from './ui/grow-box.ts';
+import { disclosureDetails } from './ui/disclosure.ts';
 import type { JsonValue, Weekday, WeeklySchedule } from '../../../../../packages/contracts/index.ts';
 export class AdminFormError extends Error {}
 export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string) => {
@@ -14,20 +16,32 @@ export const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string)
   if (text !== undefined) node.textContent = text;
   return node;
 };
+/**
+ * One labelled field, shaped by what it holds (Part 24b-7b). `kind`:
+ *   'short' — a single-line input as wide as its limit (names, codes, ids, a date, a number);
+ *   'one'   — one sentence: a box that starts at one line and grows as the text wraps;
+ *   'para'  — a paragraph: starts at four lines and grows with the text.
+ * Without `kind`: `area` means 'para', anything else 'short'.
+ */
+export type FieldKind = 'short' | 'one' | 'para';
 export function field(
   parent: HTMLElement,
   label: string,
   value: string,
-  options: { area?: boolean; type?: string; required?: boolean; max?: number } = {},
+  options: { area?: boolean; type?: string; required?: boolean; max?: number; kind?: FieldKind } = {},
 ) {
+  const kind: FieldKind = options.kind ?? (options.area ? 'para' : 'short');
   const row = el('label'),
     text = el('span', label),
-    input = options.area ? el('textarea') : el('input');
+    input = kind === 'short' ? el('input') : el('textarea');
+  row.dataset.kind = kind;
   if (input instanceof HTMLInputElement) input.type = options.type ?? 'text';
   input.value = value;
   input.required = options.required ?? false;
   if (options.max) input.maxLength = options.max;
-  if (input instanceof HTMLTextAreaElement) input.rows = 5;
+  if (kind !== 'short') growBox(input as HTMLTextAreaElement, kind === 'one' ? 'one' : 'para');
+  else if (!options.type || options.type === 'text') shortInput(input as HTMLInputElement, options.max ?? 24);
+  else input.className = `${input.className} si si-${options.type}`.trim();
   row.append(text, input);
   parent.append(row);
   return input;
@@ -43,7 +57,7 @@ export function check(parent: HTMLElement, label: string) {
 }
 export function disclosure(parent: HTMLElement, title: string) {
   const section = el('details');
-  section.append(el('summary', title));
+  disclosureDetails(section, title);
   parent.append(section);
   return section;
 }
@@ -187,6 +201,8 @@ export function colourField(
   input.maxLength = 40;
   input.placeholder = '#RRGGBB 或 r, g, b';
   input.value = initial ?? '';
+  // #RRGGBB or r, g, b: sixteen visible characters; the field still takes forty and widens with its text.
+  shortInput(input, 16);
   input.autocomplete = 'off';
   picker.type = 'color';
   // The swatch starts on a soft tint, not the browser's black: the text field decides whether there is a colour at all.
@@ -319,6 +335,12 @@ export function changedSections(published: CharacterProfile | null, draft: Chara
   );
 }
 
+/** A small heading that opens a group of fields inside a tab (Part 24b-7b). */
+const sec = (parent: HTMLElement, text: string) => {
+  const node = el('h4', text);
+  node.className = 'wb-sec';
+  parent.append(node);
+};
 export function characterForm(
   parent: HTMLElement,
   base: CharacterProfile,
@@ -334,16 +356,27 @@ export function characterForm(
   const identity = el('fieldset');
   identity.append(el('legend', '身份与网页展示'));
   form.append(identity);
-  const id = field(identity, '固定人物 ID', base.template.id, { required: true, max: 128 }) as HTMLInputElement;
+  sec(identity, '基本信息');
+  const id = field(identity, '固定人物 ID', base.template.id, {
+    required: true,
+    max: 128,
+    kind: 'short',
+  }) as HTMLInputElement;
   // `\-` (not a bare trailing `-`): the browser compiles `pattern` with the v flag, where a bare `-` in a class is a syntax error.
   id.pattern = '[A-Za-z0-9_\\-]{1,128}';
   id.readOnly = !isNew;
   // The fixed-id sentence of an existing role is gone (Part 24b-4): the field is read-only, which says it. A new role keeps the id rule.
   if (isNew) identity.append(el('p', '使用英文、数字、短横线或下划线；保存后不能改 ID。删除后的 ID 也不能复用。'));
-  const name = field(identity, '人设名称', base.template.name, { required: true, max: 100 });
-  const displayName = field(identity, '网页展示名', base.presentation.displayName, { required: true, max: 100 });
+  // 人设名称 / 网页展示名 are names (the template caps 人设名称 at 12): a single-line input sized to a name, wider only when the text is.
+  const name = field(identity, '人设名称', base.template.name, { required: true, max: 100, kind: 'short' });
+  const displayName = field(identity, '网页展示名', base.presentation.displayName, {
+    required: true,
+    max: 100,
+    kind: 'short',
+  });
   const birthDate = field(identity, '设定生日（可选）', base.template.birthDate ?? '', { type: 'date' });
-  const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { area: true, max: 500 });
+  const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { kind: 'one', max: 500 });
+  sec(identity, '颜色');
   const colour = colourField(identity, base.presentation.color, () => onChange(), isNew ? null : base.template.id);
   // Part 24k-2: the colours as a list (主 mirrors the field above; 点缀 follow); the chip shows what a player will see.
   const colours = paletteList(
@@ -362,13 +395,14 @@ export function characterForm(
   colour.picker.addEventListener('input', () => colours.refresh());
   identity.addEventListener('click', () => colours.refresh());
   // 成长中 (Part 24c): a switch in 身份与展示; the title row and the rail show the same state.
+  sec(identity, '状态');
   const seed = check(identity, '成长中');
   seed.checked = base.template.seed === true;
   seed.className = 'wb-switch';
   const personaSet = el('fieldset');
   personaSet.append(el('legend', '性格'));
   form.append(personaSet);
-  const persona = field(personaSet, '基础人设', base.template.persona, { area: true, required: true, max: 20000 });
+  const persona = field(personaSet, '基础人设', base.template.persona, { kind: 'para', required: true, max: 20000 });
   const welcome = el('fieldset');
   welcome.append(el('legend', '欢迎内容'));
   form.append(welcome);
@@ -384,11 +418,12 @@ export function characterForm(
   const rawSet = el('fieldset');
   rawSet.append(el('legend', '其余设定'));
   form.append(rawSet);
-  const canon = field(rawSet, '其余设定 JSON', parts.rest, { area: true, max: 48000 });
-  canon.className = 'admin-json';
+  const canon = field(rawSet, '其余设定 JSON', parts.rest, { kind: 'para', max: 48000 });
+  canon.className = `${canon.className} admin-json`.trim();
   const voiceSection = el('fieldset');
   voiceSection.append(el('legend', '声音'));
   form.append(voiceSection);
+  sec(voiceSection, '音色绑定');
   const voiceOn = check(voiceSection, '绑定已有音色');
   if (voiceOn.parentElement)
     hoverValue(
@@ -501,6 +536,7 @@ export function characterForm(
       // (after the generic pass above: the lists keep their own limits, e.g. no ninth line, when they are enabled again)
       welcomes.setDisabled(disabled);
       colours.setDisabled(disabled);
+      parts.setDisabled(disabled);
     },
   };
 }

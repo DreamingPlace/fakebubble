@@ -223,6 +223,421 @@ textarea:focus-visible,
 .icon-button:active {
   transform: scale(0.96);
 }
+/* ======================================================================================================================
+   Part 24b-7b: fields shaped by their content, one page layout for 角色工作台, one disclosure pattern. Every rule is scoped to the
+   admin shell (.account-admin-page.admin-shell); nothing here touches the player pages.
+   ====================================================================================================================== */
+.account-admin-page.admin-shell {
+  --wb-measure: 920px;
+  --wb-card-top: 101px;
+}
+
+/* ---- A. growing boxes and short inputs ---- */
+.account-admin-page.admin-shell textarea.gb {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  padding: 8px 12px;
+  overflow: hidden;
+  line-height: 1.5;
+  resize: none;
+}
+.account-admin-page.admin-shell .wb-card textarea.gb {
+  width: 100%;
+}
+.account-admin-page.admin-shell textarea.gb[data-grow="one"] {
+  min-height: 40px;
+}
+.account-admin-page.admin-shell textarea.gb[data-grow="para"] {
+  min-height: calc(4 * 1.5em + 18px);
+}
+.account-admin-page.admin-shell .wb-card textarea.admin-json.gb {
+  min-height: calc(4 * 1.5em + 18px);
+}
+/* a short value is as wide as its limit says (--short, in characters), never the page */
+.account-admin-page.admin-shell
+  #admin-characters
+  .wb-card
+  input.si:not([type="checkbox"], [type="color"], [type="file"]),
+.account-admin-page.admin-shell input.si:not([type="checkbox"], [type="color"], [type="file"]) {
+  width: calc(var(--short, 24ch) + 28px);
+  max-width: 100%;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card input.si[type="date"] {
+  width: 168px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card input.si[type="number"] {
+  width: 96px;
+}
+.account-admin-page.admin-shell .wb-card label > input.si,
+.account-admin-page.admin-shell .wb-card label > textarea.gb {
+  align-self: flex-start;
+}
+.account-admin-page.admin-shell .wb-card label > textarea.gb {
+  align-self: stretch;
+}
+
+/* the console's old textarea rule (four lines, 360 px, then scroll) gives way: a box is as tall as its text */
+.account-admin-page.admin-shell #admin-characters .wb-card textarea.gb {
+  box-sizing: border-box;
+  min-height: 0;
+  max-height: none;
+  padding: 8px 12px;
+  overflow: hidden;
+  field-sizing: fixed;
+  line-height: 1.5;
+  resize: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card textarea.gb[data-grow="one"] {
+  min-height: 40px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card textarea.gb[data-grow="para"] {
+  min-height: calc(4 * 1.5em + 18px);
+}
+
+/* ---- a list of sentences: one row per item ---- */
+.account-admin-page.admin-shell .sl,
+.account-admin-page.admin-shell .sl-rows {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .sl-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 64px;
+  align-items: start;
+  gap: 8px;
+  padding: 0;
+  transition:
+    opacity var(--ad-t-slide) var(--ad-ease),
+    transform var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sl-row.is-entering {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+.account-admin-page.admin-shell .sl-row.is-dragging {
+  z-index: 2;
+  box-shadow: 0 6px 18px rgba(31, 42, 38, 0.16);
+}
+.account-admin-page.admin-shell .sl-grip {
+  color: var(--ad-muted);
+  cursor: grab;
+  line-height: 40px;
+  user-select: none;
+  touch-action: none;
+}
+.account-admin-page.admin-shell .sl-del {
+  height: 40px;
+  padding: 0 10px;
+}
+.account-admin-page.admin-shell button.sl-add,
+.account-admin-page.admin-shell button.cn-add-wide {
+  justify-self: start;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px dashed #c9c2b8;
+  border-radius: var(--ad-radius);
+  background: transparent;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell button.sl-add:hover,
+.account-admin-page.admin-shell button.cn-add-wide:hover {
+  background: #f3f1ee;
+}
+
+/* ---- 欢迎内容: the words grow, the percent is one aligned column with its unit beside it ---- */
+.account-admin-page.admin-shell .wl-row {
+  grid-template-columns: 18px 22px minmax(0, 1fr) 84px 64px;
+  align-items: start;
+}
+.account-admin-page.admin-shell .wl-grip,
+.account-admin-page.admin-shell .wl-no {
+  line-height: 40px;
+}
+.account-admin-page.admin-shell .wl-text {
+  resize: none;
+}
+.account-admin-page.admin-shell .wl-weight-wrap {
+  justify-content: flex-end;
+  height: 40px;
+}
+.account-admin-page.admin-shell .wl-weight {
+  width: 56px;
+}
+.account-admin-page.admin-shell .wl-row > .wl-del {
+  height: 40px;
+}
+
+/* ---- 对话样例 / 经历: one column, the label above, every box the width of the reading measure ---- */
+.account-admin-page.admin-shell .cn-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.account-admin-page.admin-shell .cn-pair {
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius);
+}
+.account-admin-page.admin-shell .cn-pair > .cn-lab {
+  grid-column: 1;
+}
+.account-admin-page.admin-shell .cn-pair > .cn-x {
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: 15px;
+}
+.account-admin-page.admin-shell .cn-pair .cn-lab > span {
+  font-size: 12px;
+  line-height: 1.2;
+}
+.account-admin-page.admin-shell .cn-cards {
+  grid-template-columns: minmax(0, 1fr);
+}
+.account-admin-page.admin-shell .cn-card input.cn-title.si {
+  align-self: flex-start;
+}
+.account-admin-page.admin-shell button.cn-add-card {
+  min-height: 40px;
+  justify-self: start;
+  padding: 0 14px;
+}
+.account-admin-page.admin-shell .cn-card .cn-x {
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+}
+
+/* ---- B. one page layout for every 角色工作台 tab ---- */
+/* the card is at least as tall as the window, so the save bar rests at the bottom of the window on a short tab and sticks there on a long one */
+.account-admin-page.admin-shell #admin-characters .wb-card {
+  min-height: calc(100dvh - var(--wb-card-top));
+}
+.account-admin-page.admin-shell #admin-characters .wb-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 28px;
+}
+/* ONE column: left-aligned, a reading measure; wide content (tables, diffs, 预演) takes the card */
+.account-admin-page.admin-shell #admin-characters .wb-card-body > :not([hidden]),
+.account-admin-page.admin-shell #admin-characters .wb-card-body > form.character-profile-form > :not([hidden]) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--wb-measure);
+}
+.account-admin-page.admin-shell #admin-characters .wb-card-body > .wb-wide:not([hidden]) {
+  max-width: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .character-flow:has(.vh) {
+  max-width: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card form.character-profile-form {
+  display: contents;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card form.character-profile-form fieldset,
+.account-admin-page.admin-shell #admin-characters .wb-card form.character-profile-form details,
+.account-admin-page.admin-shell #admin-characters .wb-card details::details-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  grid-template-columns: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card form.character-profile-form fieldset[hidden],
+.account-admin-page.admin-shell #admin-characters .wb-card form.character-profile-form details[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .wb-sec {
+  margin: 6px 0 -6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ad-hairline);
+  color: var(--ad-text);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card legend + .wb-sec {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+/* labels sit in the same place on every tab: above the field, left edge on the column */
+.account-admin-page.admin-shell #admin-characters .wb-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card label.admin-check {
+  flex-direction: row;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-label {
+  font-size: 13px;
+}
+/* tabs: hover is a light background only; the selected one keeps the tint, the weight and an underline */
+.account-admin-page.admin-shell #admin-characters .wb-tab:hover:not([aria-current="true"]) {
+  background: #f6f4f1;
+  color: var(--ad-text);
+}
+.account-admin-page.admin-shell #admin-characters .wb-tab[aria-current="true"] {
+  position: relative;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell #admin-characters .wb-tab[aria-current="true"]::after {
+  position: absolute;
+  right: 14px;
+  bottom: 0;
+  left: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ad-primary);
+  content: "";
+}
+.account-admin-page.admin-shell #admin-characters .wb-tab:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 2px;
+}
+/* the rail: group headings are readable at rest (the name above, the fold and the count under it) */
+.account-admin-page.admin-shell #admin-characters .admin-pick-head {
+  flex-wrap: wrap;
+  width: 100%;
+  min-height: 0;
+  padding: 6px 2px 4px;
+  border: 0;
+  border-radius: var(--ad-radius);
+  background: transparent;
+  line-height: 1.2;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head > .dc-text {
+  max-width: none;
+  opacity: 1;
+  display: block;
+  flex-basis: 100%;
+  text-align: center;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head > .dc-text span {
+  max-width: none;
+  opacity: 1;
+  font-size: 11px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) .admin-pick-head > .dc-text {
+  flex-basis: auto;
+  text-align: left;
+  order: 2;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head h3 {
+  margin: 0;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-group > h3 {
+  margin: 0;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ---- C. one disclosure pattern ---- */
+.account-admin-page.admin-shell .dc,
+.account-admin-page.admin-shell .wb-editor details > summary.dc,
+.account-admin-page.admin-shell .wb-card details > summary.dc,
+.account-admin-page.admin-shell details > summary.dc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--ad-radius);
+  transition: background var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell details > summary.dc::-webkit-details-marker {
+  display: none;
+}
+.account-admin-page.admin-shell .dc:hover,
+.account-admin-page.admin-shell .ot-row.is-pickable:hover {
+  background: #f6f4f1;
+}
+.account-admin-page.admin-shell .dc:focus-visible,
+.account-admin-page.admin-shell .ot-row.is-pickable:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 2px;
+}
+.account-admin-page.admin-shell .ot-row.is-pickable {
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .dc > .dc-chev {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--ad-muted);
+  transition: transform var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell [aria-expanded="true"] .dc-chev {
+  transform: rotate(90deg);
+}
+.account-admin-page.admin-shell [aria-expanded] .dc-chev {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--ad-muted);
+  transition: transform var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell .admin-account-toggle .dc-chev {
+  order: -1;
+}
+.account-admin-page.admin-shell .cc-name .dc-chev {
+  margin-right: 2px;
+}
+.account-admin-page.admin-shell .wb-card details > summary.dc {
+  padding: 6px 8px;
+  margin-bottom: 10px;
+}
+
+/* ---- D. 总览: one table with a switch ---- */
+.account-admin-page.admin-shell .ov-table-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.account-admin-page.admin-shell .ot-cell.is-head-sort {
+  padding: 0;
+}
+.account-admin-page.admin-shell .ot-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .ot-sort:hover {
+  background: #f6f4f1;
+}
+.account-admin-page.admin-shell .ot-sort:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 1px;
+}
+.account-admin-page.admin-shell .ot-sort[data-dir="asc"]::after {
+  content: "↑";
+}
+.account-admin-page.admin-shell .ot-sort[data-dir="desc"]::after {
+  content: "↓";
+}
+
 /* Part 25a: the hand-lettered wordmark and names (.hand) size themselves from their view box. */
 svg:where(:not(.hand)) {
   width: 23px;
@@ -8595,24 +9010,29 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   gap: 20px;
   align-items: stretch;
 }
-.account-admin-page.admin-shell .ov-days {
+.account-admin-page.admin-shell .ov-days,
+.account-admin-page.admin-shell .ov-by {
   border-radius: 12px;
 }
-.account-admin-page.admin-shell .ov-days .ot-head {
+.account-admin-page.admin-shell .ov-days .ot-head,
+.account-admin-page.admin-shell .ov-by .ot-head {
   position: sticky;
   top: 0;
   z-index: 3;
   background: #fff;
   border-radius: 12px 12px 0 0;
 }
-.account-admin-page.admin-shell .ov-days .ot-row {
+.account-admin-page.admin-shell .ov-days .ot-row,
+.account-admin-page.admin-shell .ov-by .ot-row {
   min-height: 40px;
   padding: 0 14px;
 }
-.account-admin-page.admin-shell .ov-days .ot-head {
+.account-admin-page.admin-shell .ov-days .ot-head,
+.account-admin-page.admin-shell .ov-by .ot-head {
   padding: 0 14px;
 }
-.account-admin-page.admin-shell .ov-days .ot-row.is-total {
+.account-admin-page.admin-shell .ov-days .ot-row.is-total,
+.account-admin-page.admin-shell .ov-by .ot-row.is-total {
   border-top: 1px solid var(--ad-hairline);
   font-weight: 700;
 }

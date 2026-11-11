@@ -288,6 +288,22 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       tip: (r) => (r.counts.d7 ? `${r.counts.d7.retained} / ${r.counts.d7.cohort}` : '要满 7 天才有'),
     },
   ];
+  // Part 24b-7b: every column sorts (the 合计 row stays last).
+  const ratio = (c: CohortRetention | null) => (c && c.cohort ? c.retained / c.cohort : null);
+  const daySort: Record<string, (r: DayRow) => number | string | null> = {
+    day: (r) => r.label,
+    signups: (r) => r.counts.signups,
+    guests: (r) => r.counts.newGuests,
+    active: (r) => r.counts.activeRegistered + r.counts.activeGuests,
+    chat: (r) => r.counts.chatRegistered + r.counts.chatGuests,
+    replies: (r) => r.counts.repliesPublished + r.counts.repliesFailed + r.counts.repliesUnknown,
+    voice: (r) => r.counts.voiceReplies,
+    deleted: (r) => r.counts.deletedAccounts,
+    clean: (r) => r.counts.inactivePurged + r.counts.expiredPurged,
+    d1: (r) => ratio(r.counts.d1),
+    d7: (r) => ratio(r.counts.d7),
+  };
+  for (const column of dayColumns) column.sortValue = daySort[column.key]!;
   const days = openTable<DayRow>({
     label: '玩家统计（按天）',
     className: 'ov-days',
@@ -295,31 +311,127 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     columns: dayColumns,
     emptyText: '还没有统计数据。玩家访问或聊天之后，每日数字会显示在这里。',
     rowClass: (r) => (r.total ? 'is-total' : ''),
+    pinLast: (r) => r.total,
   });
+
+  // ---- 按角色 / 按模型: the same table, other rows (the columns that apply: 成功 / 失败 / 未知 / 回复 / 语音回复) ----
+  type SplitRow = {
+    key: string;
+    label: string;
+    published: number;
+    failed: number;
+    unknown: number;
+    voice: number;
+    total: boolean;
+    tip: string | null;
+  };
+  const splitColumns = (first: string): OpenColumn<SplitRow>[] => [
+    { key: 'name', label: first, mono: false, cell: (r) => r.label, tip: (r) => r.tip, sortValue: (r) => r.label },
+    {
+      key: 'published',
+      label: '成功',
+      align: 'end',
+      mono: true,
+      cell: (r) => num(r.published),
+      tip: (r) => exactCount(r.published),
+      sortValue: (r) => r.published,
+    },
+    {
+      key: 'failed',
+      label: '失败',
+      align: 'end',
+      mono: true,
+      cell: (r) => num(r.failed),
+      tip: (r) => exactCount(r.failed),
+      sortValue: (r) => r.failed,
+    },
+    {
+      key: 'unknown',
+      label: '未知',
+      align: 'end',
+      mono: true,
+      cell: (r) => num(r.unknown),
+      tip: (r) => exactCount(r.unknown),
+      sortValue: (r) => r.unknown,
+    },
+    {
+      key: 'replies',
+      label: '回复',
+      align: 'end',
+      mono: true,
+      headTip: '成功 + 失败 + 未知',
+      cell: (r) => num(r.published + r.failed + r.unknown),
+      tip: (r) =>
+        partsText([
+          ['成功', r.published],
+          ['失败', r.failed],
+          ['未知', r.unknown],
+        ]),
+      sortValue: (r) => r.published + r.failed + r.unknown,
+    },
+    {
+      key: 'voice',
+      label: '语音回复',
+      align: 'end',
+      mono: true,
+      cell: (r) => num(r.voice),
+      tip: (r) => exactCount(r.voice),
+      sortValue: (r) => r.voice,
+    },
+  ];
+  const byCharacter = openTable<SplitRow>({
+    label: '玩家统计（按角色）',
+    className: 'ov-by',
+    rowKey: (r) => r.key,
+    columns: splitColumns('角色'),
+    emptyText: '这段时间还没有回复。',
+    rowClass: (r) => (r.total ? 'is-total' : ''),
+    pinLast: (r) => r.total,
+  });
+  const byModel = openTable<SplitRow>({
+    label: '玩家统计（按模型）',
+    className: 'ov-by',
+    rowKey: (r) => r.key,
+    columns: splitColumns('模型'),
+    emptyText: '这段时间还没有回复。',
+    rowClass: (r) => (r.total ? 'is-total' : ''),
+    pinLast: (r) => r.total,
+  });
+  type TableMode = 'day' | 'character' | 'model';
+  let tableMode: TableMode = 'day';
+  const tableSwitch = segmented<TableMode>(
+    '统计维度',
+    [
+      { id: 'day', label: '按天' },
+      { id: 'character', label: '按角色' },
+      { id: 'model', label: '按模型' },
+    ],
+    tableMode,
+    (next) => {
+      tableMode = next;
+      paintTableMode();
+    },
+  );
+  const tableNote = h('span', { class: 'ov-table-note', hidden: true });
+  const tableTitle = h('h3', { text: '统计表' });
   const daysCard = h(
     'section',
-    { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按天' } },
-    h('h3', { text: '按天' }),
+    { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '统计表' } },
+    h('div', { class: 'ov-table-head' }, tableTitle, h('div', { class: 'ovx-tools' }, tableNote, tableSwitch.root)),
     days.root,
+    byCharacter.root,
+    byModel.root,
   );
+  function paintTableMode() {
+    days.root.hidden = tableMode !== 'day';
+    byCharacter.root.hidden = tableMode !== 'character';
+    byModel.root.hidden = tableMode !== 'model';
+    tableNote.hidden = !(span === '24h' && tableMode !== 'day');
+    tableNote.textContent = '近 7 天';
+  }
+  paintTableMode();
 
-  // ---- splits ----
-  const characterHost = h('div', { class: 'ov-split-rows' });
-  const modelHost = h('div', { class: 'ov-split-rows' });
-  const modelTitle = h('h3', { text: '按模型' });
-  const split = h(
-    'div',
-    { class: 'ov-pair' },
-    h(
-      'section',
-      { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按角色' } },
-      h('h3', { text: '按角色' }),
-      characterHost,
-    ),
-    h('section', { class: 'ov-card ad-tip-bounds', attrs: { 'aria-label': '按模型' } }, modelTitle, modelHost),
-  );
-
-  root.replaceChildren(head, tiles, trend, daysCard, split);
+  root.replaceChildren(head, tiles, trend, daysCard);
 
   function setMetric(next: Metric) {
     metric = next;
@@ -575,31 +687,20 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
   function paintSplits() {
     const view = stats;
     if (!view) {
-      characterHost.replaceChildren();
-      modelHost.replaceChildren();
+      byCharacter.setRows([]);
+      byModel.setRows([]);
       return;
     }
-    const rowFor = (name: string, color: string, value: number, top: number, round: string, tip: string) => {
-      const bar = h('span', { class: 'ov-bar' }, h('i'));
-      (bar.querySelector?.('i') as HTMLElement | null)?.style.setProperty(
-        '--w',
-        `${top > 0 ? Math.round((value / top) * 100) : 0}%`,
-      );
-      (bar.querySelector?.('i') as HTMLElement | null)?.style.setProperty('--c', color);
-      const dot = h('i', { class: 'ov-rdot' });
-      dot.style.setProperty('--c', color);
-      dot.style.setProperty('--r', round);
-      const row = h(
-        'div',
-        { class: 'ov-split-row' },
-        h('span', { class: 'ov-split-name' }, dot, name),
-        bar,
-        h('span', { class: 'ov-split-value', text: exactCount(value) }),
-      );
-      return hoverValue(row, tip);
-    };
-    const chars = view.byCharacter;
-    const charTop = Math.max(0, ...chars.map((c) => c.published));
+    const totalRow = (rows: SplitRow[]): SplitRow => ({
+      key: 'total',
+      label: '合计',
+      published: rows.reduce((n, r) => n + r.published, 0),
+      failed: rows.reduce((n, r) => n + r.failed, 0),
+      unknown: rows.reduce((n, r) => n + r.unknown, 0),
+      voice: rows.reduce((n, r) => n + r.voice, 0),
+      total: true,
+      tip: null,
+    });
     const chatFor = (name: string) => {
       const chart = people;
       if (!chart || chart.bucket !== 'day') return null;
@@ -607,53 +708,32 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       const index = chart.buckets.indexOf(addDays(todayDay, -1));
       return index < 0 ? null : (chart.characters.find((c) => c.name === name)?.values[index] ?? null);
     };
-    const shown = chars.slice(0, SHOWN_CHARACTERS).map((c, i) => ({ c, color: colourOfName(c.name) ?? colorOf(i) }));
-    const rest = chars.slice(SHOWN_CHARACTERS);
-    const rows = shown.map(({ c, color }) => {
+    const chars: SplitRow[] = view.byCharacter.map((c) => {
       const chat = chatFor(c.name);
-      return rowFor(
-        c.name,
-        color,
-        c.published,
-        charTop,
-        '50%',
-        `${c.name} · 成功 ${exactCount(c.published)} / 失败 ${exactCount(c.failed)} / 未知 ${exactCount(c.unknown)} · 语音 ${exactCount(c.voice)}${chat === null ? '' : ` · 昨日聊天 ${exactCount(chat)} 人`}`,
-      );
+      return {
+        key: c.name,
+        label: c.name,
+        published: c.published,
+        failed: c.failed,
+        unknown: c.unknown,
+        voice: c.voice,
+        total: false,
+        tip: chat === null ? null : `${c.name} · 昨日聊天 ${exactCount(chat)} 人`,
+      };
     });
-    if (rest.length) {
-      const value = rest.reduce((a, c) => a + c.published, 0);
-      rows.push(
-        rowFor(
-          `其他 ${rest.length} 位`,
-          OTHER_COLOUR,
-          value,
-          charTop,
-          '50%',
-          `其他 ${rest.length} 位 · ${exactCount(value)} 条回复`,
-        ),
-      );
-    }
-    characterHost.replaceChildren(
-      ...(rows.length ? rows : [h('p', { class: 'ot-empty', text: '这段时间还没有回复。' })]),
-    );
-    const models = view.byModel;
-    const modelTop = Math.max(0, ...models.map((m) => m.published));
-    const palette = [PRIMARY, '#0E7490', '#B45309', '#9D174D'];
-    modelHost.replaceChildren(
-      ...(models.length
-        ? models.map((m, i) =>
-            rowFor(
-              modelLabel(m.model),
-              m.model === '' ? OTHER_COLOUR : palette[i % palette.length]!,
-              m.published,
-              modelTop,
-              '2px',
-              `${modelLabel(m.model)} · 成功 ${exactCount(m.published)} / 失败 ${exactCount(m.failed)} / 未知 ${exactCount(m.unknown)} · 语音 ${exactCount(m.voice)}`,
-            ),
-          )
-        : [h('p', { class: 'ot-empty', text: '这段时间还没有回复。' })]),
-    );
-    modelTitle.textContent = span === '24h' ? '按模型 · 7 天' : '按模型';
+    byCharacter.setRows(chars.length ? [...chars, totalRow(chars)] : []);
+    const models: SplitRow[] = view.byModel.map((m) => ({
+      key: m.model || '(none)',
+      label: modelLabel(m.model),
+      published: m.published,
+      failed: m.failed,
+      unknown: m.unknown,
+      voice: m.voice,
+      total: false,
+      tip: null,
+    }));
+    byModel.setRows(models.length ? [...models, totalRow(models)] : []);
+    paintTableMode();
   }
   function paintDays() {
     const view = stats;
@@ -700,7 +780,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     overview = view;
     trend.hidden = !statsOn() && !chartOn();
     tiles.dataset.full = String(!!view.stats);
-    daysCard.hidden = split.hidden = !statsOn();
+    daysCard.hidden = !statsOn();
     exportButton.hidden = !statsOn();
     if (!statsOn()) {
       stats = null;
@@ -727,8 +807,8 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       status.replaceChildren();
       legend.replaceChildren();
       days.setRows([]);
-      characterHost.replaceChildren();
-      modelHost.replaceChildren();
+      byCharacter.setRows([]);
+      byModel.setRows([]);
       overview = null;
       stats = null;
       hourly = { replies: null, chat: null };

@@ -3,6 +3,7 @@ import { formatRoute } from './admin-router.ts';
 import { legibleColour } from '../ui/character-colour.ts';
 import { statusBadge } from '../ui/status-badge.ts';
 import { dragOrder } from '../ui/drag-order.ts';
+import { disclosureButton } from '../ui/disclosure.ts';
 import { SIDEBAR_GROUPS, SIDEBAR_GROUP_LABEL, type SidebarGroup } from '../../../services/character-admin-api.ts';
 
 export type PickerRole = {
@@ -12,6 +13,12 @@ export type PickerRole = {
   draftRevision: number | null;
   /** Part 24l, from the server: 当前阵容 / 未发布草稿 / 已下线. Absent = the old rule (never published = a draft). */
   group?: SidebarGroup;
+};
+/** What the small dot on a rail circle means (the same words the expanded rail uses). */
+const RAIL_TONE_TIP: Record<string, string> = {
+  cc: '有新的共创想法（数字是条数）',
+  off: '没有上线：未发布或已下线',
+  draft: '有未发布的草稿',
 };
 const groupOf = (role: PickerRole): SidebarGroup => role.group ?? (role.publishedVersion === null ? 'draft' : 'live');
 /** The list pane of a list | detail page: one button per role, the open one marked, with an empty state. */
@@ -39,6 +46,8 @@ export function rolePicker(
   let roles: readonly PickerRole[] = [];
   const seeds = new Map<string, boolean>();
   const drops: (() => void)[] = [];
+  /** The groups this administrator folded (kept while the page is open). */
+  const collapsed = new Set<SidebarGroup>();
   const paint = () => {
     for (const stop of drops.splice(0)) stop();
     host.replaceChildren();
@@ -50,18 +59,26 @@ export function rolePicker(
         const members = roles.filter((role) => groupOf(role) === group);
         if (!members.length) continue;
         const list = h('div', { class: 'admin-pick-list', attrs: { 'data-group': group, role: 'list' } });
+        // Part 24b-7b: the group heading is a disclosure (chevron, aria-expanded): it folds its circles away and opens them again.
+        const heading = h('button', {
+          class: 'admin-pick-head',
+          attrs: { type: 'button', title: `${SIDEBAR_GROUP_LABEL[group]} ${members.length}：点击折叠或展开` },
+        });
+        const count = h('b', {
+          text: String(members.length),
+          attrs: { 'aria-label': `${members.length} 个`, title: `这一组有 ${members.length} 个角色` },
+        });
+        disclosureButton(heading, h('span', { text: SIDEBAR_GROUP_LABEL[group] }), !collapsed.has(group));
+        heading.append(count);
+        list.hidden = collapsed.has(group);
+        heading.addEventListener('click', () => {
+          if (collapsed.has(group)) collapsed.delete(group);
+          else collapsed.add(group);
+          list.hidden = collapsed.has(group);
+          heading.setAttribute('aria-expanded', String(!collapsed.has(group)));
+        });
         host.append(
-          h(
-            'section',
-            { class: 'admin-pick-group', attrs: { 'data-group': group } },
-            h(
-              'h3',
-              { class: 'admin-pick-head', attrs: { title: `${SIDEBAR_GROUP_LABEL[group]} ${members.length}` } },
-              h('span', { text: SIDEBAR_GROUP_LABEL[group] }),
-              h('b', { text: String(members.length), attrs: { 'aria-label': `${members.length} 个` } }),
-            ),
-            list,
-          ),
+          h('section', { class: 'admin-pick-group', attrs: { 'data-group': group } }, h('h3', {}, heading), list),
         );
         lists.set(group, list);
       }
@@ -105,18 +122,25 @@ export function rolePicker(
         'button',
         {
           class: 'admin-pick',
+          ...(compact && seed ? {} : {}),
           attrs: {
             type: 'button',
             'data-character': role.characterId,
             ...(offline ? { 'data-offline': 'true' } : {}),
-            ...(seed ? { 'data-seed': 'true' } : {}),
+            ...(seed
+              ? { 'data-seed': 'true', title: `${role.displayName} · 成长中（虚线圈）：设定还少，不编细节，多问玩家` }
+              : {}),
             ...(role.characterId === selected ? { 'aria-current': 'true' } : {}),
             ...(compact ? { 'aria-label': role.displayName } : {}),
           },
         },
         dot,
+        // Part 24b-7b: every mark on the rail says what it means on hover (a plain title: it also runs on the small test DOM).
         compact && tone
-          ? h('i', { class: 'admin-pick-st', attrs: { 'data-tone': tone, 'aria-hidden': 'true' } })
+          ? h('i', {
+              class: 'admin-pick-st',
+              attrs: { 'data-tone': tone, 'aria-hidden': 'true', title: RAIL_TONE_TIP[tone] ?? '' },
+            })
           : null,
         compact
           ? h('span', { class: 'admin-pick-text' }, h('strong', { text: role.displayName }), mark)
@@ -185,7 +209,13 @@ export function rolePicker(
     },
     select(characterId: string | null) {
       selected = characterId;
+      // the open character's group is never folded away
+      const mine = roles.find((role) => role.characterId === characterId);
+      if (mine) collapsed.delete(groupOf(mine));
       paint();
+      // the rail scrolls inside itself: the open character is always in view
+      const open = host.querySelector?.('.admin-pick[aria-current="true"]') as HTMLElement | null;
+      open?.scrollIntoView?.({ block: 'nearest' });
     },
     /** The editor's 成长中 switch, whenever it changes: the circle gets (or loses) its dashed ring. */
     setSeed(characterId: string, seed: boolean) {
