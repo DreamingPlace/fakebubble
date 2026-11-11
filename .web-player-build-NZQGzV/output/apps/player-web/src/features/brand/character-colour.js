@@ -1,0 +1,112 @@
+const hex2 = (n) => Math.max(0, Math.min(255, Math.round(n)))
+    .toString(16)
+    .padStart(2, '0')
+    .toUpperCase();
+const toHex = ([r, g, b]) => `#${hex2(r)}${hex2(g)}${hex2(b)}`;
+const channel = (text) => (/^\d{1,3}$/.test(text) && Number(text) <= 255 ? Number(text) : null);
+/**
+ * '#RRGGBB' (any case, a leading # optional) or 'r, g, b' / 'rgb(r, g, b)' with 0-255 integers, to '#RRGGBB' in capitals.
+ * Anything else - three-digit hex, percentages, a fourth channel, 256 - is refused with null.
+ */
+export function parseColour(input) {
+    const text = input.trim();
+    const hex = /^#?([0-9a-fA-F]{6})$/.exec(text);
+    if (hex)
+        return `#${hex[1].toUpperCase()}`;
+    const rgb = /^(?:rgb\(\s*)?(\d{1,3})\s*[,\s]\s*(\d{1,3})\s*[,\s]\s*(\d{1,3})\s*\)?$/i.exec(text);
+    if (!rgb || text.includes('(') !== text.includes(')'))
+        return null;
+    const parts = [channel(rgb[1]), channel(rgb[2]), channel(rgb[3])];
+    return parts.every((p) => p !== null) ? toHex(parts) : null;
+}
+const rgbOf = (hex) => [
+    Number.parseInt(hex.slice(1, 3), 16),
+    Number.parseInt(hex.slice(3, 5), 16),
+    Number.parseInt(hex.slice(5, 7), 16),
+];
+function toHsl([r, g, b]) {
+    const [x, y, z] = [r / 255, g / 255, b / 255];
+    const max = Math.max(x, y, z), min = Math.min(x, y, z), l = (max + min) / 2, d = max - min;
+    if (d === 0)
+        return [0, 0, l];
+    const s = d / (1 - Math.abs(2 * l - 1));
+    const h = max === x ? ((y - z) / d) % 6 : max === y ? (z - x) / d + 2 : (x - y) / d + 4;
+    return [(h * 60 + 360) % 360, s, l];
+}
+function fromHsl(h, s, l) {
+    const hue = ((h % 360) + 360) % 360, c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((hue / 60) % 2) - 1)), m = l - c / 2;
+    const [r, g, b] = hue < 60
+        ? [c, x, 0]
+        : hue < 120
+            ? [x, c, 0]
+            : hue < 180
+                ? [0, c, x]
+                : hue < 240
+                    ? [0, x, c]
+                    : hue < 300
+                        ? [x, 0, c]
+                        : [c, 0, x];
+    return toHex([(r + m) * 255, (g + m) * 255, (b + m) * 255]);
+}
+const luminance = (hex) => {
+    const lin = rgbOf(hex).map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+};
+/** WCAG contrast ratio, 1-21. */
+export function contrastRatio(a, b) {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((p, q) => q - p);
+    return (hi + 0.05) / (lo + 0.05);
+}
+/** The same hue and saturation, darkened one percent at a time until it reads at `ratio` against `background`. */
+function readableOn(background, hue, saturation, ratio) {
+    let lightness = 0.5;
+    let colour = fromHsl(hue, saturation, lightness);
+    while (contrastRatio(colour, background) < ratio && lightness > 0) {
+        lightness = Math.max(0, lightness - 0.01);
+        colour = fromHsl(hue, saturation, lightness);
+    }
+    return colour;
+}
+/**
+ * Palette from one colour:
+ *   accent  the colour itself, darkened only if white text on it would be under 3:1;
+ *   clouds  the same hue at lightness 85% / 91% / 78%, the second and third turned +18 / -12 degrees (a little warmer / cooler);
+ *   color   hue at 20% saturation, 76% lightness (the card's tint);
+ *   ink     the hue at 30% saturation, darkened until it is at least 4.5:1 on the tint.
+ */
+export function derivePalette(hex) {
+    const [h, s] = toHsl(rgbOf(hex));
+    const saturation = Math.max(0.35, Math.min(1, s));
+    const accent = contrastRatio(hex, '#FFFFFF') >= 3 ? hex : readableOn('#FFFFFF', h, s, 3);
+    const color = fromHsl(h, 0.2, 0.76);
+    return {
+        color,
+        ink: readableOn(color, h, 0.3, 4.5),
+        aura: [
+            fromHsl(h, saturation, 0.85),
+            fromHsl(h + 18, saturation * 0.9, 0.91),
+            fromHsl(h - 12, saturation, 0.78),
+            accent,
+        ],
+    };
+}
+/**
+ * The same card at night (design/burbur-v2 Main board): the hue kept, the clouds saturated so they glow on a dark page, and the
+ * accent lifted. A neutral aura (an empty slot, a black accent) stays neutral. The three built-in characters carry the design's
+ * own night colours instead (provider-catalog-view); this is for every colour an administrator publishes.
+ */
+export function nightAura(aura) {
+    const [h, s] = toHsl(rgbOf(aura[3]));
+    if (s < 0.1)
+        return ['#3A3450', '#2A2638', '#4A4060', '#F5F3F7'];
+    const saturation = Math.max(0.55, Math.min(1, s));
+    return [
+        fromHsl(h, saturation, 0.58),
+        fromHsl(h + 22, saturation, 0.62),
+        fromHsl(h - 24, saturation * 0.7, 0.42),
+        fromHsl(h, saturation, 0.68),
+    ];
+}

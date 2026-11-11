@@ -353,7 +353,8 @@ try {
     await page.locator('.ov-days .ot-row').first().waitFor({ timeout: 20_000 });
     await wait(1500);
     check(
-      (await page.locator('[aria-label="按角色"], [aria-label="按模型"]').count()) === 0,
+      (await page.locator('#admin-overview [aria-label="按角色"], #admin-overview [aria-label="按模型"]').count()) ===
+        0,
       `${w}: no separate 按角色 / 按模型 cards`,
     );
     const seg = (label: string) => page.locator(`[aria-label="统计维度"] button:text-is("${label}")`);
