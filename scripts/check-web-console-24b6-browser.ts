@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { startConsoleFixture } from './console-fixture-24b6.ts';
+import { quietWait, watchRequests } from './console-quiet.ts';
 import { decodePng } from './png-pixels.ts';
 import { run24b6bChecks } from './console-24b6b-checks.ts';
 import { run24b6cChecks } from './console-24b6c-checks.ts';
@@ -82,7 +83,8 @@ try {
     if (request.method() === 'POST' && /\/characters\/[^/]+\/delete-start/.test(request.url()))
       deleted.push(request.url());
   });
-  const wait = (ms = 600) => page.waitForTimeout(ms);
+  watchRequests(page);
+  const wait = (ms = 600) => quietWait(page, ms);
   const open = async (route: string) => {
     await page.goto(`${f.origin}/?mode=provider-admin#/${route}`);
     await page.reload();
@@ -1918,16 +1920,17 @@ if (mainPassed) {
   const g = await startConsoleFixture();
   try {
     const page2: Page = await g.context.newPage();
+    watchRequests(page2);
     page2.on('pageerror', (error: unknown) => problems.push(`24b-6b pageerror ${String(error)}`));
     await run24b6bChecks({
       f: g,
       page: page2,
-      wait: (ms = 600) => page2.waitForTimeout(ms),
+      wait: (ms = 600) => quietWait(page2, ms),
       open: async (route: string) => {
         await page2.goto(`${g.origin}/?mode=provider-admin#/${route}`);
         await page2.reload();
         await page2.locator('.admin-content').first().waitFor({ timeout: 20_000 });
-        await page2.waitForTimeout(1400);
+        await quietWait(page2, 1400);
       },
       shot: async (name: string) => {
         if (!shots) return;
@@ -1954,16 +1957,17 @@ if (mainPassed && !failure) {
   const h = await startConsoleFixture({ provider: { draftMs: 700, reviewMs: 700 } });
   try {
     const page3: Page = await h.context.newPage();
+    watchRequests(page3);
     page3.on('pageerror', (error: unknown) => problems.push(`24b-6c pageerror ${String(error)}`));
     await run24b6cChecks({
       f: h,
       page: page3,
-      wait: (ms = 600) => page3.waitForTimeout(ms),
+      wait: (ms = 600) => quietWait(page3, ms),
       open: async (route: string) => {
         await page3.goto(`${h.origin}/?mode=provider-admin#/${route}`);
         await page3.reload();
         await page3.locator('.admin-content').first().waitFor({ timeout: 20_000 });
-        await page3.waitForTimeout(1400);
+        await quietWait(page3, 1400);
       },
       shot: async (name: string) => {
         if (!shots) return;
