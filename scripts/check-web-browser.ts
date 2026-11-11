@@ -767,8 +767,11 @@ try {
       await view.locator('.cc-send').click();
     };
     const submitCards = async (view: any) => {
-      await view.locator('.cc-face').first().click();
-      await sendWhenReady(view, view.locator('.cc-editor textarea:visible').first(), '爱吃甜的，笑起来像猫');
+      // The deck is shuffled: the first card can be the dialogue card (two fields, written only when both are) or the pair card. A
+      // single-field card is the one this check writes into, so the send enables with one text.
+      const card = view.locator('.cc-card:not(.cc-pair):not(.is-dialogue)').first();
+      await card.locator('.cc-face').click();
+      await sendWhenReady(view, card.locator('.cc-editor textarea:visible').first(), '爱吃甜的，笑起来像猫');
       await view.locator('.cc-thanks:not([hidden])').waitFor({ timeout: 10_000 });
       return view.locator('.cc-thanks-sub').innerText();
     };
