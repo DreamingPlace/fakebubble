@@ -84,7 +84,7 @@ export function editedCharacter(
     /** '' = no main colour (the player page keeps its built-in palette); otherwise '#RRGGBB'. */
     color?: string;
     canon: string;
-    voice: null | { profileId: string; version: number; speed: number };
+    voice: null | { profileId: string; version: number; speed: number; referenceId?: string };
     /** Part 24c: 成长中 (seed character). Absent = keep what the base says. */
     seed?: boolean;
   },
@@ -327,6 +327,8 @@ export function characterForm(
   onError: (e: unknown) => void,
   /** A required or malformed field sits in this section (null: unknown); the console shows it before the browser complains. */
   onInvalid?: (pane: string | null) => void,
+  /** The voice the character speaks with now (from the server): the form's Fish id and 语速 start from it. */
+  voiceHint?: { referenceId: string; profileId: string; version: number; speed: number } | null,
 ) {
   const form = el('form');
   form.className = 'character-profile-form';
@@ -389,20 +391,18 @@ export function characterForm(
   const voiceSection = el('fieldset');
   voiceSection.append(el('legend', '声音'));
   form.append(voiceSection);
-  const voiceOn = check(voiceSection, '绑定已有音色');
-  if (voiceOn.parentElement)
-    hoverValue(
-      voiceOn.parentElement as HTMLElement,
-      '只登记已有音色的标识与版本，不创建／克隆外部声音。发布新人物须另准备并批准两条成品。',
-    );
-  voiceOn.checked = !!base.template.voice;
-  const profileId = field(voiceSection, '音色档案 ID', base.template.voice?.profileId ?? '', { max: 128 });
-  const voiceVersion = field(voiceSection, '音色档案版本', String(base.template.voice?.version ?? 1), {
-    type: 'number',
+  // Part 29 B: ONE voice field. The binding (profile id, version) is derived from the Fish id; only a hand-made one is kept as it is.
+  const effective = voiceHint ?? null;
+  const fishId = field(voiceSection, 'Fish 音色 ID', base.template.voice?.referenceId ?? effective?.referenceId ?? '', {
+    max: 128,
   }) as HTMLInputElement;
-  voiceVersion.min = '1';
-  voiceVersion.step = '1';
-  const speed = field(voiceSection, '语速', String(base.template.voice?.speed ?? 1), {
+  fishId.pattern = '[A-Za-z0-9_-]{1,128}';
+  if (fishId.parentElement)
+    hoverValue(
+      fishId.parentElement as HTMLElement,
+      '只登记已有音色的 ID，不创建／克隆外部声音。导入资料时填的 Fish 音色 ID 会直接带到这里。',
+    );
+  const speed = field(voiceSection, '语速', String(base.template.voice?.speed ?? effective?.speed ?? 1), {
     type: 'number',
   }) as HTMLInputElement;
   speed.min = '0.5';
@@ -450,6 +450,29 @@ export function characterForm(
       throw error instanceof CanonError ? new AdminFormError(error.message) : error;
     }
   };
+  /**
+   * What the draft's voice binding becomes. Nothing typed changed -> the binding as it is (none for an imported character: the
+   * binding stays derived and no revision is written for it). A changed id or speed -> a binding with a derived profile id and a
+   * version one higher when the id changed; a hand-made binding keeps its own profile id.
+   */
+  const readVoice = (): { profileId: string; version: number; speed: number; referenceId?: string } | null => {
+    const typed = fishId.value.trim(),
+      rate = Number(speed.value);
+    const bound = base.template.voice ?? null;
+    const was = bound?.referenceId ?? effective?.referenceId ?? '';
+    const wasRate = bound?.speed ?? effective?.speed ?? 1;
+    if (typed === was && rate === wasRate) return bound;
+    if (!typed) return bound;
+    const prior = bound ?? effective;
+    const idChanged = typed !== was;
+    return {
+      ...(bound ?? {}),
+      profileId: prior?.profileId ?? base.template.id,
+      version: (prior?.version ?? 0) + (prior ? (idChanged ? 1 : 0) : 1),
+      speed: rate,
+      referenceId: typed,
+    };
+  };
   const read = () => {
     // A control in a section that is not showing cannot take the browser's bubble: show that section first.
     const bad = panes.find((pane) => controlsOf(pane.node).some((c) => c.willValidate && c.validity?.valid === false));
@@ -479,9 +502,7 @@ export function characterForm(
       })(),
       canon: assembled(),
       seed: seed.checked,
-      voice: voiceOn.checked
-        ? { profileId: profileId.value.trim(), version: Number(voiceVersion.value), speed: Number(speed.value) }
-        : null,
+      voice: readVoice(),
     });
   };
   return {

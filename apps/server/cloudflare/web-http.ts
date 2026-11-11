@@ -10,7 +10,9 @@ import {
   type WebProviderPrincipal,
 } from '../generation/web-provider-application.ts';
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
+import { PROFILE_BODY_LIMIT } from '../characters/web-profile-limits.ts';
 import { webProviderHTTPError } from '../platform/web-provider-http-error.ts';
+import { logRefusal } from '../platform/web-refusal-status.ts';
 import { routeWebInvite } from '../invites/web-invite-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
@@ -52,7 +54,7 @@ export class WebProviderHTTP {
     ensure(app.config.mode === 'provider-cloud' && app.store.providerAudio, 'WEB_CLOUD_MEDIA_MODE_MISMATCH');
     this.app = app;
     this.execution = execution;
-    this.limits = new CloudRequestLimits(app.store, app.clock);
+    this.limits = new CloudRequestLimits(app.store, app.clock, () => app.security.overflow());
   }
   close() {
     for (const close of [...this.streams.values()]) close();
@@ -104,7 +106,9 @@ export class WebProviderHTTP {
     let value: unknown;
     try {
       value = await cloudJSON(request, maximum);
-    } catch {
+    } catch (error) {
+      // A body that is too large says so (413); every other body failure stays the generic INVALID_REQUEST.
+      if (error instanceof DomainError && error.code === 'PAYLOAD_TOO_LARGE') throw error;
       ensure(false, 'INVALID_REQUEST');
     }
     ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_REQUEST');
@@ -116,6 +120,7 @@ export class WebProviderHTTP {
       response = await this.route(request, trustedPeer);
     } catch (error) {
       const failure = webProviderHTTPError(error);
+      logRefusal(new URL(request.url).pathname, failure.status, failure.body.error.code);
       response = Response.json(failure.body, { status: failure.status });
       if (failure.status >= 500) this.options.onServerError?.();
       if (failure.status === 429)
@@ -246,7 +251,7 @@ export class WebProviderHTTP {
               : bulkWrite
                 ? 786_432
                 : characterWrite
-                  ? 131072
+                  ? PROFILE_BODY_LIMIT
                   : path.startsWith(`${API}/cocreation/`)
                     ? COCREATION_BODY_LIMIT
                     : 8192,

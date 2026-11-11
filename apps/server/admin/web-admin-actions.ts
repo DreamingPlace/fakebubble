@@ -1,3 +1,4 @@
+import { unknownRefusalCount } from '../platform/web-provider-http-error.ts';
 import { createHash } from 'node:crypto';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { REQUEST_ID_PATTERN } from '../../../packages/contracts/web-system.ts';
@@ -76,6 +77,17 @@ export class WebSecurityCounters {
     this.store = store;
     this.clock = clock;
   }
+  /** Per-IP rate checks let through because the table was full (counted in memory per UTC day; the global limit still held). */
+  private overflowDay = '';
+  private overflowToday = 0;
+  overflow() {
+    const today = day(this.clock.now());
+    if (today !== this.overflowDay) {
+      this.overflowDay = today;
+      this.overflowToday = 0;
+    }
+    this.overflowToday++;
+  }
   record(outcome: 'failed' | 'unavailable') {
     const now = this.clock.now();
     this.store.transaction(() => {
@@ -100,6 +112,8 @@ export class WebSecurityCounters {
       failuresLast7Days: sum('failed', false),
       unavailableToday: sum('unavailable', true),
       unavailableLast7Days: sum('unavailable', false),
+      rateOverflowToday: this.overflowDay === day(now) ? this.overflowToday : 0,
+      unknownRefusals: unknownRefusalCount(),
     };
   }
 }

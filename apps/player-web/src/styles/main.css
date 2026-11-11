@@ -13572,6 +13572,115 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   line-height: 18px;
   animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
 }
+/* ---- Part 29 E: the 声音 tab in order: voice line, 准备, then per slot 生成 (primary) with the upload folded under it ---- */
+.account-admin-page.admin-shell .vc-voice {
+  margin: 0 0 8px;
+  color: var(--ad-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .vc-why {
+  margin: 6px 0 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vc-why:not([hidden]) {
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-prepare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 4px 0 0;
+}
+.account-admin-page.admin-shell .vc-prepare label {
+  margin: 0;
+}
+.account-admin-page.admin-shell .vc-prepare > button {
+  min-width: 160px;
+}
+.account-admin-page.admin-shell .vc-materials {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.account-admin-page.admin-shell .vc-slot > button,
+.account-admin-page.admin-shell .vc-upload > button {
+  justify-self: start;
+  width: fit-content;
+  min-width: 120px;
+}
+.account-admin-page.admin-shell [data-vc="material"][data-state="stale"] > summary {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .vc-slot {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--ad-hairline);
+  transition: background-color calc(200ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-slot h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .vc-slot p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .vc-meta {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vc-issue {
+  justify-self: start;
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-upload {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vc-upload > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 8px;
+  color: var(--ad-primary);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background-color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-upload > summary::-webkit-details-marker {
+  display: none;
+}
+.account-admin-page.admin-shell .vc-upload > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform calc(180ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-upload[open] > summary::before {
+  transform: rotate(45deg);
+}
+.account-admin-page.admin-shell .vc-upload > summary:hover {
+  background: var(--ad-primary-soft);
+  border-color: var(--ad-primary);
+}
+.account-admin-page.admin-shell .vc-upload[open] {
+  display: grid;
+  gap: 8px;
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
 .account-admin-page.admin-shell .pw-compare-result {
   display: flex;
   flex-direction: column;

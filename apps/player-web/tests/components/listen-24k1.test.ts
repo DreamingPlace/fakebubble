@@ -72,15 +72,14 @@ test('试听: the first click only asks (the cost on the button), the second pay
   assert.equal(f.calls.listen.length, 0, 'a first click calls nothing');
   assert.equal(f.button().textContent, '确认付费 · 600 µ$');
   f.button().click();
-  await tick();
-  await tick();
-  await tick();
+  // Part 29 (named exception, no assertion changed): this waited three fixed ticks for a clip whose hash is computed on the
+  // thread pool (crypto.subtle), so it flaked on main as well (2 of 12 runs). It now waits, bounded, until the clip is played.
+  for (let i = 0; i < 400 && f.calls.played.length === 0; i++) await tick();
   assert.deepEqual(f.calls.listen, [{ requestId: 'req-1', previewId: 'p1', acknowledgeMicros: 600 }]);
   assert.equal(f.calls.played.length, 1, 'the clips are played after they are spoken');
   assert.equal(f.play().hidden, false, 'a free 播放 replaces the paid button');
   f.play().click();
-  await tick();
-  await tick();
+  for (let i = 0; i < 400 && f.calls.played.length < 2; i++) await tick();
   assert.equal(f.calls.played.length, 2);
   assert.equal(f.calls.listen.length, 1, 'playing again never pays again');
 });

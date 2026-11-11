@@ -463,17 +463,20 @@ export class WebVerticalPublisher {
             )
           : this.store.get<Footer>('SELECT * FROM web_footer_assets WHERE character_id=?', claim.characterId)
         : undefined;
+    // A reply never fails for a missing footer: it is skipped and logged (Part 29 D).
     if (
       principal.kind === 'guest' &&
       op.metering_type === 'trial' &&
       principal.trial_used === 2 &&
-      !freeTier(this.store).on
-    )
-      ensure(
+      !freeTier(this.store).on &&
+      !(
         footer?.origin === (this.schema() >= 113 ? 'operator_approved' : 'synthetic_test') &&
-          footer.body === SYNTHETIC_TRIAL_FOOTER,
-        'WEB_FOOTER_NOT_READY',
-      );
+        footer.body === SYNTHETIC_TRIAL_FOOTER
+      )
+    ) {
+      console.log(JSON.stringify({ event: 'footer_skipped', reason: 'not_ready' }));
+      return { assets, footer: undefined };
+    }
     if (footer) {
       if (this.schema() >= 113) {
         const row = this.store.get<ProviderAudioRow>(
@@ -536,14 +539,14 @@ export class WebVerticalPublisher {
           claim.characterId,
           claim.operationId,
         );
-        ensure(footer, 'WEB_FOOTER_NOT_READY');
-        await loadProviderAudio(
-          this.store,
-          footer,
-          fixedObjectScope(this.store, 'footer', claim.characterId, footer.voice_version),
-          authorize,
-          audio,
-        );
+        if (footer)
+          await loadProviderAudio(
+            this.store,
+            footer,
+            fixedObjectScope(this.store, 'footer', claim.characterId, footer.voice_version),
+            authorize,
+            audio,
+          );
       }
     }
     return this.publish(claim, audio);
@@ -812,7 +815,7 @@ export class WebVerticalPublisher {
         op.metering_type === 'trial' &&
         principal.trial_used === 2 &&
         !freeTier(this.store).on;
-      const footer = footerRequired
+      const found = footerRequired
         ? this.schema() >= 113
           ? this.store.get<Footer>(
               `SELECT media_id,body,origin,'wav_pcm16' AS format,byte_length,sha256,
@@ -822,15 +825,16 @@ export class WebVerticalPublisher {
             )
           : this.store.get<Footer>('SELECT * FROM web_footer_assets WHERE character_id=?', claim.characterId)
         : undefined;
-      ensure(
-        !footerRequired ||
-          (footer &&
-            checked.footer &&
-            footer.media_id === checked.footer.media_id &&
-            footer.sha256 === checked.footer.sha256 &&
-            footer.body === SYNTHETIC_TRIAL_FOOTER),
-        'WEB_FOOTER_NOT_READY',
-      );
+      const footer =
+        found &&
+        checked.footer &&
+        found.media_id === checked.footer.media_id &&
+        found.sha256 === checked.footer.sha256 &&
+        found.body === SYNTHETIC_TRIAL_FOOTER
+          ? found
+          : undefined;
+      // A reply never fails for a missing footer: it is skipped and logged (Part 29 D).
+      if (footerRequired && !footer) console.log(JSON.stringify({ event: 'footer_skipped', reason: 'not_ready' }));
       // Compatibility record exists only at successful publication; old workers never lease it.
       this.store.run(
         `INSERT INTO jobs(id,world_id,conversation_id,character_id,kind,epoch,status,

@@ -16,9 +16,12 @@ function object(value: unknown, fields: string[]): asserts value is Record<strin
 }
 export function validateVoiceBinding(value: unknown): asserts value is VoiceBinding {
   const optional =
-    value && typeof value === 'object' && Object.hasOwn(value, 'messageProbability') ? ['messageProbability'] : [];
+    value && typeof value === 'object'
+      ? ['messageProbability', 'referenceId'].filter((key) => Object.hasOwn(value, key))
+      : [];
   object(value, ['profileId', 'version', 'speed', ...optional]);
   id(value.profileId);
+  if (value.referenceId !== undefined) id(value.referenceId);
   ensure(
     value.messageProbability === undefined ||
       (typeof value.messageProbability === 'number' &&
