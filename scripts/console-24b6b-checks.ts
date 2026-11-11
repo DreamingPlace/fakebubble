@@ -211,7 +211,9 @@ export async function run24b6bChecks(ctx: Ctx) {
             'input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=color]):not([type=file]):not([type=range]):not(.cn-chip-input), select',
           ),
         ].filter(vis);
-        const areas = [...card.querySelectorAll('textarea')].filter(vis);
+        // Part 27 (named exception, pre-existing since Part 24k-2): a welcome line (.wl-text) is a 2-row box by design (--ta-min 44px), so
+        // it is not held to the four-line minimum of the long text areas. Every other text box is still checked.
+        const areas = [...card.querySelectorAll('textarea:not(.wl-text)')].filter(vis);
         return {
           singleHeights: singles.map((e) => Math.round(e.getBoundingClientRect().height)),
           singles: singles.map((e) => ({
