@@ -177,7 +177,12 @@ try {
           const n = (lines.draft?.profile ?? lines.published.profile).presentation.welcomes.length;
           check(n === 3, `${label}: xj has three welcome lines (${n})`);
           await shot('xj-voice-3-lines');
-          await shot('xj-voice-3-lines-full', true);
+          await page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)');
+          await page.evaluate(
+            "document.querySelector('.wb-card-body').lastElementChild?.scrollIntoView({ block: 'end' })",
+          );
+          await shot('xj-voice-3-lines-scrolled');
+          await page.evaluate('window.scrollTo(0, 0)');
         }
       }
       if (who === 'lqy') {

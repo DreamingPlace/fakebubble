@@ -14123,6 +14123,22 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   overscroll-behavior: contain;
 }
 
+/* 主色: the swatch and the live chip sit right beside the field, not at the far end of the column */
+.account-admin-page.admin-shell #admin-characters .wb-card .colour-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .colour-field > label {
+  flex: 0 0 auto;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .colour-field .colour-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 /* ---- C. one disclosure pattern ---- */
 .account-admin-page.admin-shell .dc,
 .account-admin-page.admin-shell .wb-editor details > summary.dc,
