@@ -3124,9 +3124,10 @@ body:has(.admin-shell) {
 
 .admin-toasts {
   position: fixed;
-  right: 20px;
-  /* above the sticky save bar (Part 24b-7: a toast never covers 保存草稿) */
-  bottom: 96px;
+  /* Part 24b-7: bottom centre of the window: the save bar's middle is empty at every width, so a toast covers neither 保存草稿 nor a panel's 关闭 */
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 16px;
   z-index: 60;
   display: grid;
   gap: 8px;
@@ -3542,6 +3543,8 @@ body:has(.admin-shell) {
   .account-admin-page.admin-shell[data-mobile-ok] > .admin-toasts {
     display: grid !important;
     right: 12px;
+    left: auto;
+    transform: none;
     bottom: 48px;
   }
   .account-admin-page.admin-shell[data-mobile-ok] .admin-content {
@@ -12249,6 +12252,11 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 /* the import panel's row takes no room (and no grid gap) while the panel is closed */
 .account-admin-page.admin-shell #wb-import-host:not(:has(.pi-panel:not([hidden]))) {
   display: none;
+}
+/* 色板 spans the form like 欢迎内容 (the 点缀 hex fields are not clipped at 1280) */
+.account-admin-page.admin-shell #admin-characters .pl {
+  grid-column: 1 / -1;
+  min-width: 0;
 }
 /* ---- Part 24b-7: 导入角色资料 as an inline panel, 草稿记录, and the content of an opened cast version (admin shell only) ---- */
 .account-admin-page.admin-shell .pi-panel {

@@ -18,6 +18,7 @@ import { dateTimeText } from './system-format.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { versionHistory } from './history/version-history.ts';
 import { draftHistory } from './history/draft-history.ts';
+import { withoutIds } from './history/readable.ts';
 import { dangerZone } from './ui/danger-zone.ts';
 import { inlineConfirm } from './ui/inline-confirm.ts';
 import { statusBadge } from './ui/status-badge.ts';
@@ -113,7 +114,8 @@ const previewLabel = (value: string) =>
   (({ queued: '排队中', generating: '运行中', succeeded: '已通过', failed: '失败' }) as Record<string, string>)[
     value
   ] ?? value;
-const stringify = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+// Part 24b-7: no id string in the comparison (welcome-line ids and the like are left out).
+const stringify = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(withoutIds(value), null, 2));
 export function characterAdminError(error: unknown): string | null {
   if (error instanceof AdminFormError) return error.message;
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
@@ -1437,7 +1439,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         );
         if (gone()) return;
         await load();
-        host.status(`素材版本 ${materialId} 已准备，请明确选择欢迎和结束成品。`);
+        // Part 24b-7: no id string in the message.
+        host.status('新的素材版本已准备，请明确选择欢迎和结束成品。');
       },
     );
     if (!embedded) button(section, '读取已有成品版本', () => dirty || !can('read'), load, true);

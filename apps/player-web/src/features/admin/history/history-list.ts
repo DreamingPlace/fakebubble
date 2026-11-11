@@ -163,7 +163,10 @@ export function historyList(options: HistoryListOptions) {
       go.addEventListener('click', () => void run(row));
       const box = h(
         'span',
-        { class: 'vh-confirm', attrs: { role: 'group', 'aria-label': `恢复 ${words.numberText(row.version)}` } },
+        {
+          class: 'vh-confirm',
+          attrs: { role: 'group', 'aria-live': 'polite', 'aria-label': `恢复 ${words.numberText(row.version)}` },
+        },
         h('span', { class: 'vh-confirm-text', text: words.confirm(row.version, live) }),
         h('span', { class: 'vh-confirm-buttons' }, cancel, go),
       );

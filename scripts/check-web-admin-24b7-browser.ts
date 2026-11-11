@@ -201,6 +201,11 @@ try {
     const recordText = (await page.locator('.dh').innerText()) as string;
     check(!UUID.test(recordText) && !/@/.test(recordText), `${w}: 草稿记录 shows no id or email`);
     check(/小安/.test(recordText), `${w}: the label of the saver is shown`);
+    const tabText = (await page.locator('.wb-card-body').innerText()) as string;
+    check(
+      !/"id"\s*:/.test(tabText) && !/\bw-[0-9a-f]{8,}/.test(tabText),
+      `${w}: 资料改动 shows no id (welcome-line ids are left out)`,
+    );
     await shot('05-draft-record');
     // open an older revision: its difference from the one before it opens BELOW the row
     const rows = page.locator('.dh .ot-item');
