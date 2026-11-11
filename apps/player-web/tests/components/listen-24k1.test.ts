@@ -10,6 +10,11 @@ const el = (node: unknown) => node as FakeElement;
 const wav = Buffer.from('RIFF-fake-wav-bytes');
 const sha = createHash('sha256').update(wav).digest('hex');
 const tick = () => new Promise((resolve) => setImmediate(resolve));
+/** Part 27: waits for the condition (ticks until it holds, 5 s at most) instead of a fixed number of ticks: under load the flow needs more. */
+const until = async (done: () => boolean) => {
+  const end = Date.now() + 5000;
+  while (!done() && Date.now() < end) await tick();
+};
 
 function setup(t: test.TestContext, over: { voice?: boolean; spoken?: boolean } = {}) {
   installFakeDom(t);
@@ -72,9 +77,7 @@ test('试听: the first click only asks (the cost on the button), the second pay
   assert.equal(f.calls.listen.length, 0, 'a first click calls nothing');
   assert.equal(f.button().textContent, '确认付费 · 600 µ$');
   f.button().click();
-  await tick();
-  await tick();
-  await tick();
+  await until(() => f.calls.played.length > 0);
   assert.deepEqual(f.calls.listen, [{ requestId: 'req-1', previewId: 'p1', acknowledgeMicros: 600 }]);
   assert.equal(f.calls.played.length, 1, 'the clips are played after they are spoken');
   assert.equal(f.play().hidden, false, 'a free 播放 replaces the paid button');

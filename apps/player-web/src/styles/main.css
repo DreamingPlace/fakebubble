@@ -13444,11 +13444,10 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .ad-file-name {
   min-width: 0;
-  overflow: hidden;
   color: var(--ad-muted);
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* the console has no ellipsis (24b-3): a long file name wraps */
+  overflow-wrap: anywhere;
 }
 
 /* ---- Part 27: the shared row controls of the ordered lists - a drag handle and one × (features/admin/ui/item-controls.ts) ---- */
