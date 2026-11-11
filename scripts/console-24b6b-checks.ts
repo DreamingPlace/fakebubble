@@ -208,10 +208,12 @@ export async function run24b6bChecks(ctx: Ctx) {
         };
         const singles = [
           ...card.querySelectorAll(
-            'input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=color]):not([type=file]):not([type=range]):not(.cn-chip-input), select',
+            'input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=color]):not([type=file]):not([type=range]):not(.cn-chip-input):not(.si), select',
           ),
         ].filter(vis);
-        const areas = [...card.querySelectorAll('textarea')].filter(vis);
+        // Named exception (Part 24b-7b): a one-sentence box (data-grow="one": 欢迎词, 一句话描述, a list item, 情境 / 玩家说 / 他回) starts at ONE
+        // line and grows with its text, by the owner's rule; the four-line minimum below is the rule for paragraph boxes (data-grow="para").
+        const areas = [...card.querySelectorAll('textarea:not([data-grow="one"])')].filter(vis);
         return {
           singleHeights: singles.map((e) => Math.round(e.getBoundingClientRect().height)),
           singles: singles.map((e) => ({
