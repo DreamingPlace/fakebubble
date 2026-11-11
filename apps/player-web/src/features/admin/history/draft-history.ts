@@ -45,6 +45,7 @@ export function draftHistory(host: DraftHistoryHost) {
     hidden: true,
   });
   const list = historyList({
+    rootClass: 'dh-list',
     label: '草稿记录',
     words: {
       numberText: (n) => `#${n}`,

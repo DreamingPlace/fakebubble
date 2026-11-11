@@ -131,7 +131,9 @@ try {
     if (message.type() === 'error') errors.push(`console: ${message.text()}`);
   });
   const wait = (ms = 500) => page.waitForTimeout(ms);
-  const drawer = '.admin-drawer[aria-label="导入角色资料"]';
+  // Named exception (Part 24b-7): 导入角色资料 is an inline panel under the title row, not a drawer; same steps, requests and results.
+  // The result now stays in the panel, so a panel that is left open is closed with its own 关闭 (it used to close itself).
+  const drawer = '.pi-panel';
   const open = async (hash = '#/characters') => {
     await page.goto(`${f.origin}/?mode=provider-admin${hash}`);
     await page.reload();
@@ -245,7 +247,7 @@ try {
     );
     check(await page.getByRole('button', { name: '确认导入' }).isDisabled(), `${w}: and there is nothing to confirm`);
     await shot('preview-unchanged');
-    await page.keyboard.press('Escape');
+    await page.locator(`${drawer}`).getByRole('button', { name: '关闭' }).click();
 
     // ---- 身份与展示 of the new character: the code field and the checklist -----------------------------------------
     await page.goto(`${f.origin}/?mode=provider-admin#/characters/${made.characterId}`);

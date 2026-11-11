@@ -12124,7 +12124,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 
 /* 版本历史 (Part 24f, Part 24b-6b): ONE list for the workbench and for 关系与故事 (history/history-list.ts), on the open-below table. */
-.account-admin-page.admin-shell .vh {
+.account-admin-page.admin-shell .vh,
+.account-admin-page.admin-shell .dh-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -12133,7 +12134,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .vh-wrap {
   min-width: 0;
 }
-.account-admin-page.admin-shell .vh .vh-note {
+.account-admin-page.admin-shell .vh .vh-note,
+.account-admin-page.admin-shell .dh-list .vh-note {
   margin: 0;
   color: var(--ad-muted);
   font-size: 13px;
@@ -12243,6 +12245,10 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .wl .wl-row > button {
   align-self: center;
   margin: 0;
+}
+/* the import panel's row takes no room (and no grid gap) while the panel is closed */
+.account-admin-page.admin-shell #wb-import-host:not(:has(.pi-panel:not([hidden]))) {
+  display: none;
 }
 /* ---- Part 24b-7: 导入角色资料 as an inline panel, 草稿记录, and the content of an opened cast version (admin shell only) ---- */
 .account-admin-page.admin-shell .pi-panel {
@@ -13595,8 +13601,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .pl {
   display: grid;
   gap: 10px;
-  /* the console's one textarea rule (a four-line minimum) is too tall for a welcome line */
-  --ta-min: 44px;
+  /* Part 24b-7: a welcome line's words follow the console's one textarea rule (a four-line minimum), like every text box of the other tabs */
 }
 .account-admin-page.admin-shell .wl-rows,
 .account-admin-page.admin-shell .pl-rows {
@@ -13655,7 +13660,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .wl-text {
   width: 100%;
-  min-height: 44px;
   resize: vertical;
 }
 .account-admin-page.admin-shell .wl-weight-wrap {

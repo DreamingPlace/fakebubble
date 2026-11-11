@@ -52,6 +52,8 @@ const VERSION_WORDS: HistoryWords = {
 };
 
 export type HistoryListOptions = {
+  /** The list's own class (default `vh`): 草稿记录 uses another, so a check that looks for 版本历史 by `.vh` finds only that. */
+  rootClass?: string;
   words?: Partial<HistoryWords>;
   label: string;
   /** The detail that opens under a row. Returned at once and filled in later when it has to be read. */
@@ -135,7 +137,7 @@ export function historyList(options: HistoryListOptions) {
       },
     ],
   });
-  const root = h('div', { class: 'vh' }, note, table.root, more);
+  const root = h('div', { class: options.rootClass ?? 'vh' }, note, table.root, more);
 
   function paintActions(row: HistoryEntry, cell: HTMLElement) {
     cell.replaceChildren();
