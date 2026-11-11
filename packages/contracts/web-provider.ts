@@ -1,6 +1,9 @@
 import type { WebAudioStatus, WebErrorCode, WebOperationStatus, WebTheme } from './web-v1.ts';
 import type { PlayerModelId, PlayerPlan } from './player-models.ts';
 
+/** Part 29 H (audit F-02 step 1): the size of the card ring, named once. Raising it is a separate, ordered change (see the audit). */
+export const CATALOG_MAX = 15;
+
 /** Separate provider-web protocol. Synthetic local-1/2/3 wire objects are not assignable. */
 export const WEB_PROVIDER_CONTRACT = 'web-v1-provider-2' as const;
 /** Initial approved seed only, never the operational runtime allowlist. */
@@ -71,7 +74,7 @@ export interface WebProviderBootstrap {
   csrf: string;
   access: WebProviderAccess;
   characters: WebProviderCharacter[];
-  /** Exactly 15 visual slots; previews are never sendable identities. */
+  /** Exactly CATALOG_MAX visual slots; previews are never sendable identities. */
   slots: WebProviderSlot[];
   conversations: WebProviderConversation[];
   syncCursor: string;
@@ -301,7 +304,7 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
     (hasLocks &&
       !(
         Array.isArray(access.lockedCharacterIds) &&
-        access.lockedCharacterIds.length <= 15 &&
+        access.lockedCharacterIds.length <= CATALOG_MAX &&
         new Set(access.lockedCharacterIds).size === access.lockedCharacterIds.length &&
         access.lockedCharacterIds.every(characterId)
       )) ||
@@ -313,9 +316,9 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
     invalid();
   if (
     !Array.isArray(root.characters) ||
-    root.characters.length > 15 ||
+    root.characters.length > CATALOG_MAX ||
     !Array.isArray(root.slots) ||
-    root.slots.length !== 15 ||
+    root.slots.length !== CATALOG_MAX ||
     !Array.isArray(root.conversations)
   )
     invalid();
@@ -428,7 +431,7 @@ export function parseWebProviderBootstrap(value: unknown): WebProviderBootstrap 
       previews.add(slot.slotId as string);
     } else invalid();
   }
-  if (slotted.size !== seen.size || previews.size !== 15 - seen.size) invalid();
+  if (slotted.size !== seen.size || previews.size !== CATALOG_MAX - seen.size) invalid();
   const conversationIds = new Set<string>();
   for (const raw of conversations) {
     const conversation = record(raw);

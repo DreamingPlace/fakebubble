@@ -97,7 +97,25 @@ export type CharacterDetail = {
   /** Part 24j. Absent (an older answer, a test double) reads as 'not available': no code field, no checklist. */
   profileMeta?: ProfileMeta;
   /** Part 24k-1. Absent reads as 'not available': no 生成 and no 试听 are offered. */
-  speech?: { available: boolean; hasVoice: boolean };
+  speech?: {
+    available: boolean;
+    hasVoice: boolean;
+    /** Part 29 B: the one voice the character speaks with. null = no binding and no recorded Fish id. */
+    voice?: { referenceId: string; profileId: string; version: number; speed: number; derived: boolean } | null;
+    /** The model that will actually speak for an un-pinned voice. */
+    siteModel?: string;
+    /** The 结束成品 exists only while the free tier is off. */
+    footerRequired?: boolean;
+  };
+};
+/** Part 29 C: one slot of a 素材版本 against the draft's clip manifest. */
+export type MaterialSlot = {
+  kind: 'welcome' | 'footer';
+  lineId: string | null;
+  text: string;
+  state: 'ready' | 'empty' | 'stale';
+  /** A call for this slot ended UNKNOWN or released: the underlying code (a fixed string), shown on the slot. */
+  issue?: { state: 'unknown' | 'released'; code: string } | null;
 };
 export type Material = {
   materialId: string;
@@ -105,7 +123,12 @@ export type Material = {
   profileHash: string;
   approved: boolean;
   createdAt: number;
-  voice: { profileId: string; version: number; referenceId: string; model: string };
+  voice: { profileId: string; version: number; referenceId: string; model: string; pinned?: boolean };
+  /** Part 29: N in creation order for this character ("素材版本 N"). */
+  number?: number;
+  /** Why it cannot be used with the draft as it is now (null: usable). */
+  stale?: 'voice' | 'text' | 'slots' | null;
+  slots?: MaterialSlot[];
   assets: {
     kind: 'welcome' | 'footer';
     body: string;
@@ -134,6 +157,28 @@ export type DeleteImpact = {
   pendingOperations: number;
 };
 const invalid = () => new Error('ADMIN_CHARACTER_PROTOCOL_INVALID');
+function speechOf(r: Record<string, unknown>): NonNullable<CharacterDetail['speech']> {
+  const v = r.voice && typeof r.voice === 'object' ? (r.voice as Record<string, unknown>) : null;
+  return {
+    available: flag(r.available),
+    hasVoice: flag(r.hasVoice),
+    ...(v
+      ? {
+          voice: {
+            referenceId: string(v.referenceId),
+            profileId: string(v.profileId),
+            version: num(v.version),
+            speed: num(v.speed),
+            derived: flag(v.derived),
+          },
+        }
+      : r.voice === null
+        ? { voice: null }
+        : {}),
+    ...(typeof r.siteModel === 'string' ? { siteModel: r.siteModel } : {}),
+    ...(typeof r.footerRequired === 'boolean' ? { footerRequired: r.footerRequired } : {}),
+  };
+}
 function object(v: unknown): Record<string, unknown> {
   if (!v || typeof v !== 'object' || Array.isArray(v)) throw invalid();
   return v as Record<string, unknown>;
@@ -319,9 +364,7 @@ export class CharacterAdminClient {
       previewAvailable: flag(r.previewAvailable),
       ...(r.online === undefined ? {} : { online: flag(r.online) }),
       ...(r.profileMeta === undefined ? {} : { profileMeta: profileMeta(r.profileMeta) }),
-      ...(r.speech === undefined
-        ? {}
-        : { speech: { available: flag(object(r.speech).available), hasVoice: flag(object(r.speech).hasVoice) } }),
+      ...(r.speech === undefined ? {} : { speech: speechOf(object(r.speech)) }),
     };
   }
   /** 角色代码 by hand (身份与展示). */
@@ -368,7 +411,29 @@ export class CharacterAdminClient {
           version: num(voice.version),
           referenceId: string(voice.referenceId),
           model: string(voice.model),
+          ...(typeof voice.pinned === 'boolean' ? { pinned: voice.pinned } : {}),
         },
+        ...(typeof r.number === 'number' ? { number: r.number } : {}),
+        ...(r.stale === 'voice' || r.stale === 'text' || r.stale === 'slots' ? { stale: r.stale } : {}),
+        ...(Array.isArray(r.slots)
+          ? {
+              slots: rows(r.slots).map((v) => {
+                const a = object(v);
+                if (a.kind !== 'welcome' && a.kind !== 'footer') throw invalid();
+                if (a.state !== 'ready' && a.state !== 'empty' && a.state !== 'stale') throw invalid();
+                const issue = a.issue && typeof a.issue === 'object' ? (a.issue as Record<string, unknown>) : null;
+                return {
+                  kind: a.kind,
+                  lineId: typeof a.lineId === 'string' ? a.lineId : null,
+                  text: string(a.text),
+                  state: a.state,
+                  ...(issue && (issue.state === 'unknown' || issue.state === 'released')
+                    ? { issue: { state: issue.state, code: string(issue.code) } }
+                    : {}),
+                };
+              }),
+            }
+          : {}),
         lines:
           r.lines === undefined
             ? []
@@ -400,7 +465,7 @@ export class CharacterAdminClient {
   }
   async prepareMaterial(
     id: string,
-    input: { requestId: string; draftRevision: number; profileHash: string; referenceId: string; model: string },
+    input: { requestId: string; draftRevision: number; profileHash: string; model?: string },
   ) {
     return string(object(await this.call(id, 'material-prepare', input)).materialId);
   }
@@ -438,13 +503,14 @@ export class CharacterAdminClient {
     );
   }
   /** `lineIds`: the lines heard and ticked, for a welcome of 2+ lines (a single welcome is ticked as before). */
-  async approve(id: string, materialId: string, note: string, lineIds?: string[]) {
+  async approve(id: string, materialId: string, note: string, lineIds?: string[], footer = true) {
     await this.call(id, 'material-approve', {
       materialId,
       note,
       acknowledgeRights: true,
       ...(lineIds ? { acknowledgeLines: lineIds } : { acknowledgeWelcomeListening: true }),
-      acknowledgeFooterListening: true,
+      // Part 29 D: the footer is listened to only while it exists (the free tier is off).
+      ...(footer ? { acknowledgeFooterListening: true } : {}),
     });
   }
   async publish(

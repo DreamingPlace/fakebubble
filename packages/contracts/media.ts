@@ -6,6 +6,8 @@ export interface VoiceBinding {
   speed: number;
   /** Per-character channel preference, not voice identity. Omitted legacy bindings retain voice-only delivery. */
   messageProbability?: number;
+  /** Part 29: the Fish voice id typed in the 声音 form. Absent on every binding made before, and on a derived one. */
+  referenceId?: string;
 }
 export interface VoiceProfile {
   id: string;

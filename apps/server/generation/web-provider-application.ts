@@ -55,6 +55,7 @@ import {
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
 import { bonusRemaining, extraTrialRemaining, freeTier, isRegistered } from '../admission/web-free-tier.ts';
 import { lockedCharacterIds } from '../admission/web-guest-lock.ts';
+import { CATALOG_MAX } from '../../../packages/contracts/web-provider.ts';
 
 /** A cookie that names nothing recoverable: the transport expires it so the next visit starts from the signed-out page. */
 export class SessionClearedError extends DomainError {
@@ -398,7 +399,7 @@ export class WebProviderApplication {
         characters,
         slots: [
           ...characters.map((entry) => ({ kind: 'character' as const, characterId: entry.characterId })),
-          ...Array.from({ length: 15 - characters.length }, (_, index) => ({
+          ...Array.from({ length: CATALOG_MAX - characters.length }, (_, index) => ({
             kind: 'preview' as const,
             slotId: `preview-${index + 1}`,
             label: '敬请期待',

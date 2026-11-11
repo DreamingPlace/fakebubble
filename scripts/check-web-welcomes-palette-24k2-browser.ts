@@ -24,7 +24,8 @@ if (shots) mkdirSync(shots, { recursive: true });
 // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
 type Page = any;
 
-const f = await startConsoleFixture({ provider: { draftMs: 300, reviewMs: 300 }, speech: true });
+// Part 29 D (named exception): the free tier is OFF here, as before, so the 结束成品 slot this check looks at exists.
+const f = await startConsoleFixture({ provider: { draftMs: 300, reviewMs: 300 }, speech: true, freeTier: false });
 const problems: string[] = [];
 const errors: string[] = [];
 const check = (condition: unknown, message: string) => {
@@ -118,17 +119,20 @@ try {
     }
 
   // Save a three-line welcome through the API, then prepare a 素材版本 and look at the slots.
-  if (only !== 'player') {
-    const was = await (await f.post('characters/jojo/detail', {})).json();
-    const profile = structuredClone(was.draft?.profile ?? was.published.profile);
-    profile.template.version = (was.published?.version ?? 1) + 1;
-    profile.presentation.welcomes = [
-      { id: 'w-one', text: '来了？先坐。', weight: 34 },
-      { id: 'w-two', text: '今天也要加油哦。', weight: 33 },
-      { id: 'w-three', text: '我等你好久了。', weight: 33 },
-    ];
-    await f.post('characters/jojo/save', { expectedRevision: was.draft?.revision ?? null, profile });
-  }
+  // Part 29 C (named exception): a new 素材版本 carries over the clips of an earlier one with the same text and voice, so each
+  // viewport gets its own character (a fresh one has empty slots, as this check expects).
+  if (only !== 'player')
+    for (const who of ['jojo', 'chen-jimi']) {
+      const was = await (await f.post(`characters/${who}/detail`, {})).json();
+      const profile = structuredClone(was.draft?.profile ?? was.published.profile);
+      profile.template.version = (was.published?.version ?? 1) + 1;
+      profile.presentation.welcomes = [
+        { id: 'w-one', text: '来了？先坐。', weight: 34 },
+        { id: 'w-two', text: '今天也要加油哦。', weight: 33 },
+        { id: 'w-three', text: '我等你好久了。', weight: 33 },
+      ];
+      await f.post(`characters/${who}/save`, { expectedRevision: was.draft?.revision ?? null, profile });
+    }
   if (only !== 'player')
     for (const [width, height] of [
       [1440, 900],
@@ -136,12 +140,15 @@ try {
     ] as const) {
       const at = `${width}x${height}`;
       await page.setViewportSize({ width, height });
-      await open('characters/jojo');
+      await open(`characters/${width === 1440 ? 'jojo' : 'chen-jimi'}`);
       await tab('声音');
-      await page
-        .locator('label:has-text("已有 Fish 音色 referenceId") input')
-        .first()
-        .fill(`fake-reference-24k2-${width}`);
+      // Part 29 B (named exception): one Fish id field on the 声音 tab; the draft is saved with it, then the 素材版本 is prepared.
+      const fishId = page.locator('label:has-text("Fish 音色 ID") input').first();
+      if (!(await fishId.inputValue())) {
+        await fishId.fill(`fake-reference-24k2-${width}`);
+        await page.locator('button:has-text("保存草稿")').first().click();
+        await wait(1500);
+      }
       await page.locator('button:has-text("准备新素材版本")').first().click();
       const slot = (name: string) =>
         page.locator(`section:has(> h4:text-is("${name}")):has([data-pw-send^="generate-"])`).first();

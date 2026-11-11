@@ -119,6 +119,10 @@ export type SystemSecurity = {
   failuresLast7Days: number;
   unavailableToday: number;
   unavailableLast7Days: number;
+  /** Per-IP rate checks let through today because the limiter table was full (the global limit still held). */
+  rateOverflowToday: number;
+  /** Refusal codes answered 400 because the status table does not list them (Part 29 G); counted since the object started. */
+  unknownRefusals: number;
 };
 export type BudgetTopUpResult = {
   provider: 'deepseek' | 'fish';

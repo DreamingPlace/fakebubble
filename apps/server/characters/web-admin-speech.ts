@@ -13,8 +13,9 @@ import { contentHash } from './admin-content-hash.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { installWebAdminSpeech } from './web-admin-speech-schema.ts';
 import { readWebPreview } from './web-character-preview.ts';
-import { codeOf } from './web-profile-schema.ts';
 import { identifier } from './template-validation.ts';
+import { effectiveVoice } from './web-clip-manifest.ts';
+import type { VoiceBinding } from '../../../packages/contracts/media.ts';
 
 /** Same shared authority the live reply and the 预演 use. Provider is always 'fish' here. */
 export interface WebAdminSpeechBudget {
@@ -66,6 +67,10 @@ export class WebAdminSpeech {
     this.model = model;
     this.nextId = nextId;
   }
+  /** The model every un-pinned voice speaks with. */
+  get siteModel(): FishModel {
+    return this.model;
+  }
   private now() {
     const now = this.clock.now();
     ensure(Number.isSafeInteger(now) && now >= 0, 'INVALID_TIME');
@@ -73,60 +78,46 @@ export class WebAdminSpeech {
   }
 
   // ---- what a call would be ---------------------------------------------------------------------------------------
-  /** The voice of a draft: the newest 素材版本 prepared for it, else the character's current binding, else the 24j Fish ID. */
+  /** The voice of a draft: its binding exactly, else the one derived from the Fish id a profile import recorded. */
   voiceFor(characterId: string, revision: number): VoiceIdentity | null {
-    const has = (name: string) => !!this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", name);
-    if (has('web_character_materials')) {
-      const m = this.store.get<{ profile_id: string; voice_revision: number; reference_id: string }>(
-        `SELECT profile_id,voice_revision,reference_id FROM web_character_materials
-        WHERE character_id=? AND revision=? ORDER BY created_at DESC,id DESC LIMIT 1`,
-        characterId,
-        revision,
-      );
-      if (m) return { profileId: m.profile_id, version: m.voice_revision, referenceId: m.reference_id };
-    }
-    if (has('web_provider_voice_bindings')) {
-      const b = this.store.get<{ profile_id: string; voice_revision: number; reference_id: string }>(
-        'SELECT profile_id,voice_revision,reference_id FROM web_provider_voice_bindings WHERE character_id=?',
-        characterId,
-      );
-      if (b) return { profileId: b.profile_id, version: b.voice_revision, referenceId: b.reference_id };
-    }
-    const recorded = codeOf(this.store, characterId)?.voice_reference_id;
-    if (!recorded) return null;
     const draft = this.store.get<{ profile_json: string }>(
       'SELECT profile_json FROM web_character_revisions WHERE character_id=? AND revision=?',
       characterId,
       revision,
     );
-    const voice = draft
-      ? (JSON.parse(draft.profile_json) as { template?: { voice?: { profileId?: string; version?: number } } }).template
-          ?.voice
-      : undefined;
-    return {
-      profileId: voice?.profileId ?? characterId,
-      version: Number.isSafeInteger(voice?.version) && Number(voice?.version) > 0 ? Number(voice?.version) : 1,
-      referenceId: recorded,
-    };
+    if (!draft) return null;
+    const effective = effectiveVoice(
+      this.store,
+      characterId,
+      (JSON.parse(draft.profile_json) as { template?: { voice?: VoiceBinding } }).template ?? {},
+    );
+    return effective
+      ? {
+          profileId: effective.binding.profileId,
+          version: effective.binding.version,
+          referenceId: effective.referenceId,
+        }
+      : null;
   }
-  private price() {
+  private price(model: FishModel = this.model) {
     const now = this.now();
     return this.store.get<{ id: string; upper_micros_per_unit: number }>(
       `SELECT id,upper_micros_per_unit FROM web_provider_prices
       WHERE provider='fish' AND model=? AND phase='speech' AND unit='byte' AND currency='USD' AND valid_from<=? AND valid_until>?
       ORDER BY version DESC LIMIT 1`,
-      this.model,
+      model,
       now,
       now,
     );
   }
-  private requirePrice() {
-    const price = this.price();
+  private requirePrice(model: FishModel = this.model) {
+    const price = this.price(model);
     // A located refusal: it names the provider and the model whose price row is not in force, before anything is held.
-    if (!price) throw new DetailedError('SPEECH_PRICE_REQUIRED', { provider: 'fish', model: this.model, unit: 'byte' });
+    if (!price) throw new DetailedError('SPEECH_PRICE_REQUIRED', { provider: 'fish', model, unit: 'byte' });
     return price;
   }
   private speech(call: Call, voice: VoiceIdentity, jobId: string) {
+    const model = call.model ?? this.model;
     ensure(
       typeof call.text === 'string' &&
         call.text.trim() &&
@@ -142,19 +133,20 @@ export class WebAdminSpeech {
       text: call.text,
       expression: call.expression ?? 'neutral',
       voice,
-      model: this.model,
+      model,
       deliveryStyle: 'conversational',
       ...(call.soundCue === undefined ? {} : { soundCue: call.soundCue }),
       // Admin-bound voices were heard and chosen by a person: the same quality guard as a live reply on such a voice.
       userSelected: true,
     });
-    return { request, prepared: fishSpeechRequest(request, this.model) };
+    return { request, prepared: fishSpeechRequest(request, model), model };
   }
   /** What one call would cost, without holding anything. Never throws for a state the page can show (it says why instead). */
   estimateCalls(characterId: string, revision: number, calls: Call[]) {
     const voice = this.voiceFor(characterId, revision);
     if (!voice) return { ok: false as const, reason: 'NO_VOICE_REFERENCE' };
-    const price = this.price();
+    const model = calls[0]?.model ?? this.model;
+    const price = this.price(model);
     if (!price) return { ok: false as const, reason: 'PRICE_MISSING' };
     let bytes = 0,
       characters = 0;
@@ -173,7 +165,7 @@ export class WebAdminSpeech {
       bytes,
       microsPerUnit: price.upper_micros_per_unit,
       estimateMicros: bytes * price.upper_micros_per_unit,
-      model: this.model,
+      model,
     };
   }
 
@@ -207,11 +199,13 @@ export class WebAdminSpeech {
       input.expression ?? 'neutral',
       input.soundCue ?? null,
       voice,
+      ...(input.model === undefined ? [] : [input.model]),
     ]);
     const prior = this.byRequest(input.requestId, input.ordinal);
     if (prior) return this.replay(prior, requestHash);
     ensure(this.inFlight.size < IN_FLIGHT_MAX, 'SPEECH_BUSY');
-    const price = this.requirePrice();
+    const callModel = input.model ?? this.model;
+    const price = this.requirePrice(callModel);
     const callId = this.nextId();
     const { request, prepared } = this.speech(input, voice, `adm-${callId}`);
     const held = prepared.bytes * price.upper_micros_per_unit;
@@ -228,7 +222,7 @@ export class WebAdminSpeech {
       input.ordinal,
       requestHash,
       prepared.requestHash,
-      this.model,
+      callModel,
       price.id,
       prepared.bytes,
       held,
@@ -271,7 +265,7 @@ export class WebAdminSpeech {
         input.targetId,
         createHash('sha256').update(input.text).digest('hex'),
         [...input.text].length,
-        this.model,
+        callModel,
         prepared.requestHash,
         price.id,
         prepared.bytes,
@@ -293,7 +287,7 @@ export class WebAdminSpeech {
           this.release(callId, held, error.code);
           throw error;
         }
-        this.markUnknown(callId);
+        this.markUnknown(callId, causeCode(error));
         throw new DomainError('SPEECH_CALL_UNKNOWN');
       }
       // 3. The possible-send boundary, with the permission rechecked after the awaits.
@@ -309,7 +303,7 @@ export class WebAdminSpeech {
         });
       } catch (error) {
         // Reserved but not sent: there is no release API, so both holds stay and the call is never made.
-        this.markUnknown(callId);
+        this.markUnknown(callId, causeCode(error));
         throw error;
       }
       // 4. The call. Any failure from here on is UNKNOWN: kept, never retried.
@@ -319,19 +313,29 @@ export class WebAdminSpeech {
           {
             body: prepared.body,
             wireRequestHash: prepared.requestHash,
-            model: this.model,
+            model: callModel,
             billedTextBytes: prepared.bytes,
             speech: request,
           },
           new AbortController().signal,
+          // The send gate, exactly as a live reply passes one: the provider Worker calls it at the last moment before the
+          // request leaves. A missing gate is refused by the transport (WEB_PROVIDER_SEND_GATE_REQUIRED).
+          () => {
+            authorize();
+            ensure(!webCharacterDeleted(this.store, input.characterId), 'CHARACTER_DELETED');
+            ensure(
+              this.store.get("SELECT 1 FROM web_speech_admin_calls WHERE id=? AND state='sent'", callId) !== undefined,
+              'SPEECH_REQUEST_INVALID',
+            );
+          },
         );
-      } catch {
-        this.markUnknown(callId);
+      } catch (error) {
+        this.markUnknown(callId, causeCode(error));
         throw new DomainError('SPEECH_CALL_UNKNOWN');
       }
       const units = result.usageUnits;
       if (!Number.isSafeInteger(units) || units < 0 || units > prepared.bytes || result.receipt === undefined) {
-        this.markUnknown(callId);
+        this.markUnknown(callId, 'WEB_PROVIDER_USAGE_MISMATCH');
         throw new DomainError('SPEECH_CALL_UNKNOWN');
       }
       // 5. The bill is known. Whatever the audio turns out to be, the bill is recorded once and settled once.
@@ -357,12 +361,12 @@ export class WebAdminSpeech {
   hasRequest(requestId: string, ordinal = 0) {
     return this.byRequest(requestId, ordinal) !== undefined;
   }
-  /** The slot's clip is a generated one: a succeeded call for this target whose output is exactly these bytes. */
-  generatedFor(purpose: SpeechPurpose, targetId: string, sha256: string) {
+  /** The slot's clip is a generated one: a succeeded call of this character and purpose whose output is exactly these bytes. */
+  generatedFor(characterId: string, purpose: SpeechPurpose, sha256: string) {
     return !!this.store.get(
-      "SELECT 1 FROM web_speech_admin_calls WHERE purpose=? AND target_id=? AND outcome='succeeded' AND output_sha256=? LIMIT 1",
+      "SELECT 1 FROM web_speech_admin_calls WHERE character_id=? AND purpose=? AND outcome='succeeded' AND output_sha256=? LIMIT 1",
+      characterId,
       purpose,
-      targetId,
       sha256,
     );
   }
@@ -388,12 +392,20 @@ export class WebAdminSpeech {
     if (prior.state === 'released') throw new DomainError(prior.error_code ?? 'WEB_SHARED_BUDGET_EXHAUSTED');
     if (this.inFlight.has(prior.id)) throw new DomainError('SPEECH_IN_PROGRESS');
     // Not running in this process: it may have been sent. It stays unknown and is never sent again.
-    this.markUnknown(prior.id);
+    this.markUnknown(prior.id, 'SPEECH_RESTARTED');
     throw new DomainError('SPEECH_CALL_UNKNOWN');
   }
   /** Reserved or sent, outcome not known: both holds stay for ever. */
-  private markUnknown(id: string) {
-    this.store.run("UPDATE web_speech_admin_calls SET state='unknown' WHERE id=? AND state IN ('intent','sent')", id);
+  private markUnknown(id: string, code: string) {
+    // The underlying error code (a fixed string, never an id or content) is kept on the row, shown on the slot and logged once.
+    const changed = this.store.run(
+      "UPDATE web_speech_admin_calls SET state='unknown',error_code=? WHERE id=? AND state IN ('intent','sent')",
+      code,
+      id,
+    ).changes;
+    if (changed !== 1) return;
+    const row = this.store.get<{ purpose: string }>('SELECT purpose FROM web_speech_admin_calls WHERE id=?', id);
+    console.log(JSON.stringify({ event: 'admin_speech_unknown', purpose: row?.purpose ?? 'unknown', code }));
   }
   /** Refused before any reservation existed: the local hold goes back; the row stays as the record. */
   private release(id: string, held: number, code: string) {
@@ -488,7 +500,7 @@ export class WebAdminSpeech {
       "SELECT id FROM web_speech_admin_calls WHERE state IN ('intent','sent') LIMIT 16",
     ))
       if (!this.inFlight.has(row.id)) {
-        this.markUnknown(row.id);
+        this.markUnknown(row.id, 'SPEECH_RESTARTED');
         n++;
       }
     for (const row of this.store.all<{ id: string }>(
@@ -537,6 +549,27 @@ export class WebAdminSpeech {
         targetId,
       )
       .map((row) => this.clipOf(row.id));
+  }
+  /**
+   * Calls of a 素材版本's slots that ended UNKNOWN or released, with the underlying code (a fixed string). An UNKNOWN call is
+   * never resent and keeps its hold, so the slot shows it for as long as it has no clip.
+   */
+  slotIssues(characterId: string, materialId: string) {
+    return this.store
+      .all<{ purpose: string; target_id: string; state: string; error_code: string | null }>(
+        `SELECT purpose,target_id,state,error_code FROM web_speech_admin_calls
+        WHERE character_id=? AND purpose IN ('material-welcome','material-footer') AND (target_id=? OR target_id GLOB ?)
+        AND state IN ('unknown','released') ORDER BY created_at DESC,id`,
+        characterId,
+        materialId,
+        `${materialId}#*`,
+      )
+      .map((row) => ({
+        kind: row.purpose === 'material-footer' ? ('footer' as const) : ('welcome' as const),
+        lineId: row.target_id.includes('#') ? row.target_id.slice(row.target_id.indexOf('#') + 1) : null,
+        state: row.state as 'unknown' | 'released',
+        code: row.error_code ?? (row.state === 'unknown' ? 'SPEECH_CALL_UNKNOWN' : 'WEB_SHARED_BUDGET_EXHAUSTED'),
+      }));
   }
   /** Admin-only audio of one call, scoped to the character in the URL. */
   audio(characterId: string, callId: unknown) {
@@ -630,6 +663,12 @@ export class WebAdminSpeech {
   }
 }
 
+/** A fixed, safe code for whatever ended a call: a DomainError's code, else a generic one. Never a message. */
+function causeCode(error: unknown) {
+  const code = (error as { code?: unknown } | null)?.code ?? (error instanceof Error ? error.message : '');
+  return typeof code === 'string' && /^[A-Z][A-Z0-9_]{2,63}$/.test(code) ? code : 'SPEECH_PROVIDER_FAILED';
+}
+
 export type Call = {
   characterId: string;
   revision: number;
@@ -643,6 +682,8 @@ export type Call = {
   soundCue?: SoundCue;
   /** Overrides the draft's voice (a 素材版本 speaks in the voice it was prepared with). */
   voice?: VoiceIdentity;
+  /** The model that will actually speak (a 素材版本's resolved model). Absent: the site's voice model. */
+  model?: FishModel;
 };
 export interface AdminClip {
   callId: string;

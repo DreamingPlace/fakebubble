@@ -198,7 +198,8 @@ test('the 声音 page offers the Fish id from the import prefilled; nothing is p
   const f = bench(t, true, structuredClone(meta));
   await f.workbench.open('jojo');
   await flush();
-  const field = f.root.querySelectorAll('label').find((l) => l.textContent.includes('已有 Fish 音色 referenceId'))!;
+  // Part 29 B (named exception): the one voice field is 「Fish 音色 ID」 (it was 「已有 Fish 音色 referenceId」 on the materials fold).
+  const field = f.root.querySelectorAll('label').find((l) => l.textContent.includes('Fish 音色 ID'))!;
   assert.equal(field.querySelector('input')!.value, 'fish_ref_001');
   assert.equal(f.calls.filter((c) => c.op === 'prepare').length, 0);
 });

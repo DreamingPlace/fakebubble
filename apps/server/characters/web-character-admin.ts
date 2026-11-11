@@ -46,6 +46,7 @@ import {
 
 import { WebCharacterMaterials } from './web-character-materials.ts';
 import type { WebAdminSpeech } from './web-admin-speech.ts';
+import { effectiveVoice, footerRequired, siteVoiceModel } from './web-clip-manifest.ts';
 import { WebProfileImport, type ImportContext } from './web-profile-import.ts';
 import { checklistOf, codeOf } from './web-profile-schema.ts';
 
@@ -394,6 +395,11 @@ export class WebCharacterAdmin {
     const current = this.live(id),
       draft = this.draft(id);
     ensure(current || draft, 'NOT_FOUND');
+    const voice = effectiveVoice(
+      this.store,
+      id,
+      (draft ? upgradedProfile(JSON.parse(draft.profile_json) as StoredWebCharacterProfile) : current)?.template ?? {},
+    );
     const previews = this.previews
       ? this.store
           .all<{ id: string }>(
@@ -410,7 +416,20 @@ export class WebCharacterAdmin {
       // Part 24k-1: whether 生成 / 试听 exist here, and whether the draft has a voice reference to speak with.
       speech: {
         available: !!this.speech,
-        hasVoice: !!this.speech?.voiceFor(id, draft?.revision ?? 0),
+        hasVoice: !!voice,
+        /** Part 29 B: the ONE voice the character speaks with (its binding, or the one derived from the recorded Fish id). */
+        voice: voice
+          ? {
+              referenceId: voice.referenceId,
+              profileId: voice.binding.profileId,
+              version: voice.binding.version,
+              speed: voice.binding.speed,
+              derived: voice.derived,
+            }
+          : null,
+        /** The model that will ACTUALLY speak for an un-pinned voice: the site's voice model (FISH_VOICE_MODEL). */
+        siteModel: siteVoiceModel(this.store),
+        footerRequired: footerRequired(this.store),
       },
       published: current
         ? { version: current.version, profile: { template: current.template, presentation: current.presentation } }
@@ -669,6 +688,11 @@ export class WebCharacterAdmin {
     const actor = this.require(auth, 'materials', id);
     ensure(this.materials, 'MATERIALS_UNAVAILABLE');
     return this.materials.prepare(actor, id, input);
+  }
+  /** After materialPrepare: carry unchanged clips into the new 素材版本. Never throws. */
+  async materialCarry(auth: Auth, id: string, materialId: string) {
+    const actor = this.require(auth, 'materials', id);
+    await this.materials?.carry(actor, id, materialId);
   }
   materialUpload(auth: Auth, id: string, input: unknown) {
     this.require(auth, 'materials', id);

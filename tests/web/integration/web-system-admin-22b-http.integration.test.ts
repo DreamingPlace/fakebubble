@@ -738,6 +738,8 @@ test('22b 概览 and 系统状态 numbers come from real data: today’s replies
     failuresLast7Days: 2,
     unavailableToday: 1,
     unavailableLast7Days: 1,
+    rateOverflowToday: 0,
+    unknownRefusals: 0,
   });
 
   // A real reply today.

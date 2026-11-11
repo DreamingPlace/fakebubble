@@ -34,7 +34,7 @@ export const USER_PARTS: ReadonlyArray<{ id: StatsUserType | 'unclassified'; nam
 ];
 export const KIND_PARTS = [
   { id: 'text', name: '文字', color: '#BDB5AC' },
-  { id: 'voice', name: '语音', color: '#2B2833' },
+  { id: 'voice', name: '语音（按字节上限估算）', color: '#2B2833' },
   { id: 'unclassified', name: '未归类', color: '#E8561E' },
 ] as const;
 const toUsd = (micros: number) => micros / 1_000_000;
@@ -267,7 +267,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
     return h(
       'div',
       { class: 'ot-detail cs-calls' },
-      line(['供应商 / 模型 / 阶段', '调用', '输入', '输出', '语音字节', '列表价'], true),
+      line(['供应商 / 模型 / 阶段', '调用', '输入', '输出', '语音字节', '列表价（Fish 按字节上限估算）'], true),
       ...(row.calls.length
         ? row.calls.map((c) =>
             line([

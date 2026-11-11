@@ -1,12 +1,9 @@
+import { REFUSAL_STATUS } from './web-refusal-status.ts';
 import { DetailedError, DomainError, RetryAfterError } from '../../../packages/domain/errors.ts';
 
-/** Co-creation submit failures that are the player's input (400) rather than state (409). */
-const cocreationInvalid = new Set([
-  'COCREATION_EMPTY',
-  'COCREATION_TOO_MANY_ANSWERS',
-  'COCREATION_CARD_INVALID',
-  'COCREATION_TEXT_INVALID',
-]);
+/** Codes that reached the transport without a row in REFUSAL_STATUS (answered 400). Counted, never expected. */
+let unknownRefusals = 0;
+export const unknownRefusalCount = () => unknownRefusals;
 
 /** Same redacted failure contract for Node and Cloudflare transports. */
 export function webProviderHTTPError(error: unknown) {
@@ -34,72 +31,13 @@ export function webProviderHTTPError(error: unknown) {
         WEB_OPERATION_NOT_FOUND: 'NOT_FOUND',
       } as Record<string, string>
     )[code] ?? (code.startsWith('WEB_') ? 'INTERNAL_ERROR' : code);
-  const status =
-    publicCode === 'ADMIN_EMAIL_UNAVAILABLE' || publicCode === 'TURNSTILE_UNAVAILABLE'
-      ? 503
-      : publicCode === 'TRIAL_EXPIRED'
-        ? 410
-        : publicCode === 'NOT_FOUND' || publicCode === 'PLAYER_NOT_FOUND'
-          ? 404
-          : publicCode === 'AUTH_REQUIRED' ||
-              publicCode === 'SESSION_EXPIRED' ||
-              publicCode === 'GUEST_SESSION_EXPIRED' ||
-              publicCode === 'GUEST_GRACE_ENDED' ||
-              publicCode === 'ADMIN_UNAUTHORIZED' ||
-              publicCode === 'PLAYER_LOGIN_INVALID' ||
-              publicCode === 'PLAYER_EMAIL_NOT_REGISTERED' ||
-              publicCode === 'PLAYER_PASSWORD_WRONG' ||
-              publicCode === 'ADMIN_LOGIN_INVALID'
-            ? 401
-            : publicCode === 'CSRF_INVALID' ||
-                publicCode === 'ORIGIN_INVALID' ||
-                publicCode === 'TRIAL_EXHAUSTED' ||
-                publicCode === 'POINTS_INSUFFICIENT' ||
-                publicCode === 'TRIAL_CHARACTER_LOCKED' ||
-                publicCode === 'GUEST_CHARACTER_LOCKED' ||
-                publicCode === 'ADMIN_INVALID_GRANT' ||
-                publicCode === 'ADMIN_CSRF_REQUIRED' ||
-                publicCode === 'ADMIN_PERMISSION_REQUIRED' ||
-                publicCode === 'ADMIN_OWNER_REQUIRED' ||
-                publicCode === 'ADMIN_OWNER_PROTECTED' ||
-                publicCode === 'PLAYER_SIGNUP_DISABLED' ||
-                publicCode === 'TURNSTILE_REQUIRED' ||
-                publicCode === 'TURNSTILE_FAILED' ||
-                publicCode === 'PLAYER_ACCESS_REVOKED' ||
-                publicCode === 'ACCOUNT_DELETE_UNAVAILABLE'
-              ? 403
-              : publicCode === 'INVALID_CURSOR' ||
-                  publicCode === 'INVALID_REQUEST' ||
-                  publicCode === 'INVALID_TEXT' ||
-                  publicCode === 'ADMIN_EMAIL_INVALID' ||
-                  publicCode === 'ADMIN_PASSWORD_INVALID' ||
-                  publicCode === 'ADMIN_CODE_INVALID' ||
-                  publicCode === 'PLAYER_EMAIL_INVALID' ||
-                  publicCode === 'PLAYER_PASSWORD_INVALID' ||
-                  publicCode === 'PLAYER_NICKNAME_INVALID' ||
-                  publicCode === 'PLAYER_CODE_INVALID' ||
-                  publicCode === 'AGE_CONFIRMATION_REQUIRED' ||
-                  publicCode === 'MODEL_NOT_AVAILABLE' ||
-                  publicCode === 'ACCOUNT_DELETE_CONFIRM_INVALID' ||
-                  publicCode === 'CAST_INVALID' ||
-                  cocreationInvalid.has(publicCode)
-                ? 400
-                : publicCode === 'QUEUE_FULL' ||
-                    publicCode === 'RATE_LIMITED' ||
-                    publicCode === 'WEB_DAILY_LIMIT_REACHED' ||
-                    publicCode === 'COCREATION_DAILY_LIMIT' ||
-                    publicCode === 'COCREATION_IP_LIMIT' ||
-                    publicCode === 'PLAYER_RATE_LIMITED' ||
-                    publicCode === 'PLAYER_EMAIL_DAILY_CAP' ||
-                    publicCode === 'PLAYER_SIGNUP_IP_LIMIT' ||
-                    publicCode === 'CHARACTER_DELETION_BUSY'
-                  ? 429
-                  : publicCode === 'INTERNAL_ERROR'
-                    ? 500
-                    : 409;
+  const known = Object.hasOwn(REFUSAL_STATUS, publicCode);
+  if (!known) unknownRefusals++;
+  const status = known ? REFUSAL_STATUS[publicCode]! : 400;
   const retryAfterMs = error instanceof RetryAfterError ? error.retryAfterMs : null;
   return {
     status,
+    known,
     body: {
       error: {
         code: publicCode,
