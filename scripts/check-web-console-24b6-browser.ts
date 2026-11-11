@@ -49,6 +49,17 @@ const PAGES: { route: string; panel: string; name: string; primary: 0 | 1 }[] = 
   { route: 'account', panel: 'account', name: '我的账号', primary: 0 },
 ];
 
+// Part 27: where the time goes. LAPS=1 prints how long each section took (nothing is checked or skipped by it).
+const lapStart = Date.now();
+let lapLast = lapStart;
+let lapName = 'start (fixture)';
+const lap = (next: string) => {
+  const now = Date.now();
+  if (process.env.LAPS)
+    process.stderr.write(`LAP ${String(Math.round((now - lapLast) / 1000)).padStart(4)}s  ${lapName}\n`);
+  lapLast = now;
+  lapName = next;
+};
 const f = await startConsoleFixture();
 let failure: unknown = null;
 let mainPassed = false;
@@ -88,6 +99,7 @@ try {
   // ---------------------------------------------------------------------------------------------------------------------------
   // The rules every page keeps, at the three window sizes.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('The rules every page keeps, at the three window sizes.');
   const PRIMARY = 'rgb(91, 79, 196)';
   const frame = async (label: string, panel: string) => {
     const read = await page.evaluate(
@@ -176,6 +188,7 @@ try {
   // ---------------------------------------------------------------------------------------------------------------------------
   // Hover values: every chart point and every numeric cell.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('Hover values: every chart point and every numeric cell.');
   const hoverCoverage = async (route: string, label: string, expectPoints: boolean) => {
     await open(route);
     const stat = await page.evaluate(() => {
@@ -240,6 +253,7 @@ try {
   // ---------------------------------------------------------------------------------------------------------------------------
   // Open-below rows.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('Open-below rows.');
   const openBelow = async (route: string, table: string, label: string, reopen = true) => {
     if (reopen) await open(route);
     const rows = page.locator(`${table} .ot-row.is-pickable, ${table} tr[data-batch]`);
@@ -341,6 +355,7 @@ try {
   // ---------------------------------------------------------------------------------------------------------------------------
   // The inbox: identical cards with 9 notes and with 1.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('The inbox: identical cards with 9 notes and with 1.');
   for (const [width, height] of SIZES) {
     await page.setViewportSize({ width, height });
     await open('cocreation');
@@ -436,6 +451,7 @@ try {
   // ---------------------------------------------------------------------------------------------------------------------------
   // 角色工作台: the rail, the section bar, one section at a time, names only.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('角色工作台: the rail, the section bar, one section at a time, ');
   for (const [width, height] of SIZES) {
     await page.setViewportSize({ width, height });
     await open('characters/jojo');
@@ -623,6 +639,7 @@ try {
   // ---------------------------------------------------------------------------------------------------------------------------
   // 关系与故事: horizontal headers, the half star, the story under the pair.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('关系与故事: horizontal headers, the half star, the story under');
   for (const [width, height] of SIZES) {
     await page.setViewportSize({ width, height });
     await open('cast');
@@ -702,6 +719,7 @@ try {
   // ---------------------------------------------------------------------------------------------------------------------------
   // Round 2 (the reviewer's list). Each block fails on the build that had the defect.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('Round 2 (the reviewers list). Each block fails on the bu');
   const GOLD = (c: number[]) => c[0]! > 190 && c[1]! > 130 && c[2]! < 100;
   const near = (a: number[], b: number[], d = 6) => a.every((v, i) => Math.abs(v - b[i]!) <= d);
 
@@ -1208,6 +1226,7 @@ try {
   // ---------------------------------------------------------------------------------------------------------------------------
   // Contrast and reduced motion.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('Contrast and reduced motion.');
   for (const entry of PAGES) {
     await open(entry.route);
     const low: string[] = await page.evaluate((key: string) => {
@@ -1293,9 +1312,11 @@ try {
   // ---------------------------------------------------------------------------------------------------------------------------
   // The last, destructive step: the held press really deletes (once), and the recordings.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('The last, destructive step: the held press really deletes');
   // ---------------------------------------------------------------------------------------------------------------------------
   // Round 3 (the reviewer's second list). Each block fails on the build that had the defect; most of it only breaks at 1280.
   // ---------------------------------------------------------------------------------------------------------------------------
+  lap('Round 3 (the reviewers second list). Each block fails on');
   // 1. 邀请与额度: an opened 10-code batch is never clipped; no header wraps; the date input shows its value; no rule under the labels.
   await f.context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: f.origin }).catch(() => {});
   for (const [width, height] of SIZES) {
@@ -1893,6 +1914,7 @@ try {
 // Part 24b-6b: the checks of this part. They change data (versions, a saved draft, a restore), so they run on a site of their own: the
 // same synthetic site started afresh, once this one is closed (both listen on the same port).
 if (mainPassed) {
+  lap('fixture g + the 24b-6b suite');
   const g = await startConsoleFixture();
   try {
     const page2: Page = await g.context.newPage();
@@ -1928,6 +1950,7 @@ if (mainPassed) {
 // Part 24b-6c: the permission options of 管理员与权限 and the one-column 预演. Another fresh site, now WITH the offline provider (a scripted answer
 // after a short wait; nothing reaches a real provider), once the previous one is closed (same port).
 if (mainPassed && !failure) {
+  lap('fixture h + the 24b-6c suite');
   const h = await startConsoleFixture({ provider: { draftMs: 700, reviewMs: 700 } });
   try {
     const page3: Page = await h.context.newPage();
@@ -1970,3 +1993,4 @@ if (failure) {
 function width1440(page: Page) {
   return page.viewportSize()?.width === 1440 && shots !== null;
 }
+lap('end');
