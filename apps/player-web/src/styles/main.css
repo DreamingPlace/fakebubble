@@ -12208,6 +12208,152 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   /* 「删除角色（已失效）」 reads as one phrase, not broken inside 已失效 (Part 24f). */
   white-space: nowrap;
 }
+/* ---- Part 24b-7: 导入角色资料 as an inline panel, 草稿记录, and the content of an opened cast version (admin shell only) ---- */
+.account-admin-page.admin-shell .pi-panel {
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  border: 1px solid var(--ad-line);
+  border-radius: 14px;
+  background: var(--ad-surface, #fff);
+  animation: adIn var(--ad-t-slide) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .pi-panel[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .pi-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--ad-line);
+}
+.account-admin-page.admin-shell .pi-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.account-admin-page.admin-shell .pi-head .admin-secondary {
+  margin-left: auto;
+}
+.account-admin-page.admin-shell .pi-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: pi;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .pi-steps li {
+  counter-increment: pi;
+}
+.account-admin-page.admin-shell .pi-steps li::before {
+  content: counter(pi) " ";
+  font-family: "DM Mono", ui-monospace, monospace;
+}
+.account-admin-page.admin-shell .pi-steps li[data-state="now"] {
+  color: var(--ad-primary);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .pi-steps li[data-state="done"] {
+  color: var(--ad-text);
+}
+.account-admin-page.admin-shell .pi-body {
+  padding: 16px 20px 20px;
+  max-height: min(60vh, 560px);
+  overflow-y: auto;
+}
+.account-admin-page.admin-shell .pi-done {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell .pi-done li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+/* 草稿记录: the strip of marks above the list; a mark never carries an id (the label is the hover tip) */
+.account-admin-page.admin-shell .dh-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.account-admin-page.admin-shell .dh-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 6px;
+  border: 1px solid var(--ad-line);
+  border-radius: 999px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vh-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .vh-by .mb-mark {
+  flex: none;
+}
+.account-admin-page.admin-shell .mb-mark[data-removed="true"] {
+  background: var(--ad-muted);
+}
+/* the content of an opened cast version: name cards, directions, groups, stories, memes, marked against live */
+.account-admin-page.admin-shell .cv-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .cv-part h5 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .cv-part h5 small,
+.account-admin-page.admin-shell .cv-note,
+.account-admin-page.admin-shell .cv-world {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .cv-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell .cv-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--ad-line);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .cv-list li[data-kind="same"] {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .cv-note {
+  flex-basis: 100%;
+}
+
 /* ======================================================================================================================
    Part 24b-6b: admin console fixes. Every rule is scoped to the admin shell (.account-admin-page.admin-shell); nothing here
    touches the player pages.
@@ -12568,7 +12714,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   text-underline-offset: 3px;
 }
 
-/* ---- Part 24j: 导入角色资料 (drawer) and the 角色代码 / checklist of 身份与展示 ---- */
+/* ---- Part 24j: 导入角色资料 (inline panel, 24b-7) and the 角色代码 / checklist of 身份与展示 ---- */
 .account-admin-page.admin-shell .pi-pick {
   display: flex;
   flex-wrap: wrap;
@@ -12974,8 +13120,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   transform: rotate(-45deg);
   transition: transform var(--ad-t-open) var(--ad-ease);
 }
-.account-admin-page.admin-shell [aria-expanded="true"] > .pw-chev,
-.account-admin-page.admin-shell [aria-expanded="true"] > .pw-tick + .pw-chev {
+.account-admin-page.admin-shell [aria-expanded="true"] > .pw-chev {
   transform: rotate(45deg);
 }
 .account-admin-page.admin-shell .pw-set-row {
@@ -13133,8 +13278,36 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .pw-row {
   grid-template-columns: 96px minmax(0, 1.1fr) minmax(0, 1.6fr) 76px 52px;
 }
+/* Part 24b-7: the run header is a row of two controls: the checkbox, then the open/close button (a grid of its own). */
 .account-admin-page.admin-shell .pw-run-head {
-  grid-template-columns: 28px 14px minmax(0, 1fr) minmax(0, 1.5fr) 150px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  padding: 0 16px;
+}
+.account-admin-page.admin-shell .pw-run-toggle {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) minmax(0, 1.5fr) 150px;
+  align-items: center;
+  column-gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .pw-run-toggle:focus-visible,
+.account-admin-page.admin-shell .pw-tick:has(input:focus-visible) {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: -2px;
+}
+.account-admin-page.admin-shell .pw-place {
+  margin-right: 8px;
+  color: var(--ad-muted);
+  font-size: 13px;
 }
 .account-admin-page.admin-shell .pw-row:hover,
 .account-admin-page.admin-shell .pw-run-head:hover {

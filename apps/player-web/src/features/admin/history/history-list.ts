@@ -14,6 +14,8 @@ import { statusBadge } from '../ui/status-badge.ts';
 export const HISTORY_SHOWN = 5;
 
 export type HistoryEntry = {
+  /** Part 24b-7: who saved it, as the administrator's mark (the 管理员与权限 colour and initial); the label is the hover tip. */
+  mark?: { initial: string; colour: string | null; label: string };
   version: number;
   live: boolean;
   /** Already formatted (UTC), or the words for "no record". */
@@ -27,7 +29,30 @@ export type HistoryEntry = {
   problem: string | null;
 };
 
+/** The words of the list; the defaults are 版本历史's. 草稿记录 (Part 24b-7) says 修订, 当前, 恢复到这一稿 and lists 20. */
+export type HistoryWords = {
+  numberText: (version: number) => string;
+  current: string;
+  restore: string;
+  confirm: (version: number, live: number) => string;
+  shown: number;
+  empty: string;
+  more: (total: number, shown: number) => string;
+  columns: [string, string, string];
+};
+const VERSION_WORDS: HistoryWords = {
+  numberText: (version) => `v${version}`,
+  current: '现行',
+  restore: '恢复此版本',
+  confirm: (version, live) => `以 v${live + 1} 重新发布 v${version} 的内容`,
+  shown: HISTORY_SHOWN,
+  empty: '还没有已发布的版本。',
+  more: (total, shown) => `只列出最近 ${shown} 个版本，共 ${total} 个；更早的版本都保留着，不受影响。`,
+  columns: ['版本', '时间 · 发布者', '来源 · 改动'],
+};
+
 export type HistoryListOptions = {
+  words?: Partial<HistoryWords>;
   label: string;
   /** The detail that opens under a row. Returned at once and filled in later when it has to be read. */
   detail: (entry: HistoryEntry) => Node | Promise<Node>;
@@ -38,6 +63,7 @@ export type HistoryListOptions = {
 };
 
 export function historyList(options: HistoryListOptions) {
+  const words: HistoryWords = { ...VERSION_WORDS, ...options.words };
   let entries: HistoryEntry[] = [];
   let total = 0;
   let live: number | null = null;
@@ -51,7 +77,7 @@ export function historyList(options: HistoryListOptions) {
   const table = openTable<HistoryEntry>({
     label: options.label,
     className: 'vh-table',
-    emptyText: '还没有已发布的版本。',
+    emptyText: words.empty,
     rowKey: (row) => String(row.version),
     detail: (row) => options.detail(row),
     onToggle: () => {
@@ -61,27 +87,37 @@ export function historyList(options: HistoryListOptions) {
     columns: [
       {
         key: 'version',
-        label: '版本',
+        label: words.columns[0],
         width: '120px',
         cell: (row) =>
-          h('span', { class: 'vh-version' }, `v${row.version}`, row.live ? statusBadge('现行', 'ok') : null),
+          h(
+            'span',
+            { class: 'vh-version' },
+            words.numberText(row.version),
+            row.live ? statusBadge(words.current, 'ok') : null,
+          ),
       },
       {
         key: 'publishedAt',
-        label: '时间 · 发布者',
+        label: words.columns[1],
         width: 'minmax(0, 190px)',
         cell: (row) =>
-          h('span', { class: 'vh-stack' }, h('span', { text: row.when }), row.by ? h('small', { text: row.by }) : null),
+          h(
+            'span',
+            { class: 'vh-stack' },
+            h('span', { text: row.when }),
+            row.mark ? markNode(row.mark) : row.by ? h('small', { text: row.by }) : null,
+          ),
       },
       {
         key: 'origin',
-        label: '来源 · 改动',
+        label: words.columns[2],
         cell: (row) =>
           h(
             'span',
             { class: 'vh-stack vh-what' },
             h('span', { text: row.origin }),
-            h('small', { text: row.summary }),
+            row.summary ? h('small', { text: row.summary }) : null,
             row.problem && !row.live ? h('small', { class: 'vh-why', text: row.problem }) : null,
           ),
       },
@@ -125,8 +161,8 @@ export function historyList(options: HistoryListOptions) {
       go.addEventListener('click', () => void run(row));
       const box = h(
         'span',
-        { class: 'vh-confirm', attrs: { role: 'group', 'aria-label': `恢复 v${row.version}` } },
-        h('span', { class: 'vh-confirm-text', text: `以 v${live + 1} 重新发布 v${row.version} 的内容` }),
+        { class: 'vh-confirm', attrs: { role: 'group', 'aria-label': `恢复 ${words.numberText(row.version)}` } },
+        h('span', { class: 'vh-confirm-text', text: words.confirm(row.version, live) }),
         h('span', { class: 'vh-confirm-buttons' }, cancel, go),
       );
       box.addEventListener('keydown', (event) => {
@@ -142,8 +178,12 @@ export function historyList(options: HistoryListOptions) {
     }
     const button = h('button', {
       class: 'admin-secondary',
-      text: '恢复此版本',
-      attrs: { type: 'button', 'data-restore': String(row.version), 'aria-label': `恢复此版本 v${row.version}` },
+      text: words.restore,
+      attrs: {
+        type: 'button',
+        'data-restore': String(row.version),
+        'aria-label': `${words.restore} ${words.numberText(row.version)}`,
+      },
     });
     button.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -183,13 +223,13 @@ export function historyList(options: HistoryListOptions) {
       live = liveVersion;
       const ordered = [...next].sort((a, b) => b.version - a.version);
       total = ordered.length;
-      entries = ordered.slice(0, HISTORY_SHOWN);
+      entries = ordered.slice(0, words.shown);
       cells.clear();
       confirming = null;
       table.setRows(entries);
       more.hidden = total <= entries.length;
       moreCount.textContent = `共 ${total} 个`;
-      hoverValue(more, `只列出最近 ${HISTORY_SHOWN} 个版本，共 ${total} 个；更早的版本都保留着，不受影响。`);
+      hoverValue(more, words.more(total, words.shown));
     },
     /** A line under the list for a refusal or an uncertain answer (null clears it). */
     setNote(text: string | null) {
@@ -204,4 +244,14 @@ export function historyList(options: HistoryListOptions) {
       return entries.length;
     },
   };
+}
+
+/** The administrator's mark: a coloured square with the initial; the label sits beside it and is also the hover tip. */
+function markNode(mark: NonNullable<HistoryEntry['mark']>) {
+  const square = h('b', { class: 'mb-mark', text: mark.initial, attrs: { 'aria-hidden': 'true' } });
+  if (mark.colour) square.style?.setProperty('--mark', mark.colour);
+  else square.dataset.removed = 'true';
+  const node = h('small', { class: 'vh-by' }, square, h('span', { text: mark.label }));
+  hoverValue(node, mark.label);
+  return node;
 }

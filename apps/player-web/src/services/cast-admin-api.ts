@@ -142,6 +142,11 @@ export class CastAdminClient {
       latest: r.latest === null ? null : int(r.latest),
     };
   }
+  /** Part 24b-7: one stored version's document, exactly as stored (read-only). */
+  async version(version: number): Promise<{ version: number; digest: string; doc: CastDoc }> {
+    const r = object(await this.send('version', { version }));
+    return { version: int(r.version), digest: String(r.digest), doc: object(r.doc) as unknown as CastDoc };
+  }
   async validate(): Promise<{ revision: number; validation: CastValidation }> {
     const r = object(await this.send('validate', {}));
     return { revision: int(r.revision), validation: validation(r.validation) };

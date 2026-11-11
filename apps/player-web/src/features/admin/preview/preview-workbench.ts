@@ -1,3 +1,4 @@
+import { plain } from '../history/readable.ts';
 import { h } from '../../cocreation/h.ts';
 import type { AdminMember } from '../../../services/account-admin-api.ts';
 import type { CharacterAdminClient, CharacterDetail } from '../../../services/character-admin-api.ts';
@@ -104,6 +105,18 @@ const bubbleList = (bubbles: readonly Bubble[]) => {
     );
   return list;
 };
+/** Part 24b-7: no id string in an admin view: keys that carry ids (id, xxxId, xxxIds) and uuid-looking values are left out. */
+const ID_VALUE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function withoutIds(value: unknown): unknown {
+  if (Array.isArray(value)) return value.filter((v) => !(typeof v === 'string' && ID_VALUE.test(v))).map(withoutIds);
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([key, v]) => !/^id$|Ids?$/.test(key) && !(typeof v === 'string' && ID_VALUE.test(v)))
+        .map(([key, v]) => [key, withoutIds(v)]),
+    );
+  return value;
+}
 const coverageText = (p: PreviewRow) =>
   p.final?.coverage.length ? p.final.coverage.map((c) => COVERAGE_LABEL[c.status]).join('、') : '—';
 const signature = (p: Pick<PreviewRow, 'status' | 'settlement' | 'errorCode'>) =>
@@ -132,6 +145,8 @@ type RunEntry = {
   key: string;
   el: HTMLElement;
   head: HTMLElement;
+  /** The open/close button of the run header (it holds aria-expanded; the checkbox is its sibling). */
+  toggle: HTMLElement;
   title: HTMLElement;
   meta: HTMLElement;
   count: HTMLElement;
@@ -793,26 +808,28 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     }
     if (p.review?.coverage) {
       const list = h('ul', { class: 'pw-coverage' });
-      for (const [messageId, item] of Object.entries(p.review.coverage))
+      // The place is the message's number in this preview (第 N 条), never the message's id.
+      Object.values(p.review.coverage).forEach((item, index) =>
         list.append(
           h(
             'li',
             {},
+            h('span', { class: 'pw-place', text: `第 ${index + 1} 条` }),
             statusBadge(
               COVERAGE_LABEL[item.status as keyof typeof COVERAGE_LABEL] ?? item.status,
               item.status === 'answered' ? 'ok' : 'warn',
             ),
             h('span', { text: item.supportQuote ? ` 引用：“${item.supportQuote}”` : '' }),
             item.missingInformation ? h('span', { text: ` 缺少：${item.missingInformation}` }) : null,
-            h('code', { class: 'admin-hint', text: ` ${messageId}` }),
           ),
-        );
+        ),
+      );
       section('覆盖与引用', list);
     }
     const topics = p.final?.topics ?? p.review?.topics ?? [];
     const factOps = p.final?.factOps ?? p.review?.factOps ?? [];
     if (topics.length || factOps.length)
-      section('话题 / 事实', h('pre', { class: 'pw-pre', text: JSON.stringify({ topics, factOps }, null, 2) }));
+      section('话题 / 事实', h('pre', { class: 'pw-pre', text: plain(withoutIds({ topics, factOps })) }));
     if (p.status === 'failed') {
       const parts: Node[] = [h('p', { class: 'pw-fail', text: errorText(p.errorCode) })];
       for (const r of p.rejected)
@@ -849,11 +866,10 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       ]),
     );
     section(
-      '标识',
+      // Part 24b-7: no id string in an admin view (the preview, run, budget and provider-request ids are not shown).
+      '预演条件',
       keyValuePanel([
-        ['预演 ID', p.ids.previewId],
-        ['运行 ID', p.ids.runId],
-        ['草稿 / 资料哈希', `${p.draftRevision} / ${p.profileHash.slice(0, 12)}`],
+        ['草稿修订', String(p.draftRevision)],
         [
           '模拟时间',
           p.simulatedTime
@@ -861,8 +877,6 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
             : '真实时间',
         ],
         ['提交时间', when(p.createdAt)],
-        ...p.ids.budgetIds.map((b) => [`预算 ${b.phase}`, b.budgetId] as const),
-        ...p.ids.providerRequestIds.map((b) => [`供应商请求 ${b.phase}`, b.requestId] as const),
       ]),
     );
     return body;
@@ -902,15 +916,17 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     const count = h('span', { class: 'pw-count' });
     const barFill = h('i');
     const bar = h('span', { class: 'pw-progress', attrs: { role: 'progressbar', 'aria-valuemin': '0' } }, barFill);
-    const head = h(
-      'div',
-      { class: 'pw-run-head', attrs: { role: 'button', tabindex: '0', 'aria-expanded': 'false' } },
-      h('span', { class: 'pw-tick' }, tick),
+    // Part 24b-7: the checkbox and the open/close control are two elements, each with its own label and keys (a role=button
+    // never holds a checkbox). The button carries aria-expanded; a click on the empty part of the row still opens it (mouse).
+    const toggle = h(
+      'button',
+      { class: 'pw-run-toggle', attrs: { type: 'button', 'aria-expanded': 'false' } },
       h('i', { class: 'pw-chev', attrs: { 'aria-hidden': 'true' } }),
       title,
       meta,
       h('span', { class: 'pw-run-count' }, count, bar),
     );
+    const head = h('div', { class: 'pw-run-head' }, h('label', { class: 'pw-tick' }, tick), toggle);
     const filter = h('select', { attrs: { 'aria-label': '状态' } });
     for (const [value, text] of FILTER_STATUSES) filter.append(h('option', { text, attrs: { value } }));
     const exportButtons = (['json', 'csv'] as const).map((kind) => {
@@ -945,6 +961,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       key,
       el,
       head,
+      toggle,
       title,
       meta,
       count,
@@ -957,17 +974,12 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       filter,
       rows: new Map(),
     };
+    // The button is the control (Enter / Space are the browser's own); the row's empty part opens it for the mouse.
+    toggle.addEventListener('click', () => toggleRun(entry));
     head.addEventListener('click', (event) => {
       const target = event.target as HTMLElement | null;
-      if (target?.closest?.('button, a, input, select, textarea, .ad-tip')) return;
+      if (target?.closest?.('button, a, input, select, textarea, label, .ad-tip')) return;
       toggleRun(entry);
-    });
-    head.addEventListener('keydown', (event) => {
-      const k = (event as KeyboardEvent).key;
-      if ((k === 'Enter' || k === ' ') && event.target === head) {
-        event.preventDefault();
-        toggleRun(entry);
-      }
     });
     tick.addEventListener('click', (event) => event.stopPropagation());
     tick.addEventListener('change', () => {
@@ -1041,7 +1053,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     void openRun(entry);
   }
   async function openRun(entry: RunEntry) {
-    entry.head.setAttribute('aria-expanded', 'true');
+    entry.toggle.setAttribute('aria-expanded', 'true');
     entry.el.dataset.open = 'true';
     if (!loaded.has(entry.key)) await host.run(async () => void (await ensureRun(entry.key, false)));
     if (gone() || openRunKey !== entry.key) return;
@@ -1049,7 +1061,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     setPanel(entry.panel, true);
   }
   function closeRun(entry: RunEntry) {
-    entry.head.setAttribute('aria-expanded', 'false');
+    entry.toggle.setAttribute('aria-expanded', 'false');
     entry.el.dataset.open = 'false';
     setPanel(entry.panel, false);
   }
@@ -1103,7 +1115,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
               if (previous) closeRun(previous);
             }
             openRunKey = p.key;
-            entry.head.setAttribute('aria-expanded', 'true');
+            entry.toggle.setAttribute('aria-expanded', 'true');
             entry.el.dataset.open = 'true';
             setPanel(entry.panel, true);
           }

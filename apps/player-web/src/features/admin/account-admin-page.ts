@@ -634,6 +634,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   // 角色工作台: a row of role pills, then the editor (one section at a time) and the paid 预演 beside it (under it on a narrow window);
   // the shell opens a role in both.
   const stage = q('#admin-characters');
+  // Part 24b-7: 导入角色资料 opens in this row, between the title row and the rail / editor (no drawer).
+  const importHost = document.createElement('div');
+  importHost.id = 'wb-import-host';
+  stage.before(importHost);
   const newRole = document.createElement('button');
   newRole.type = 'button';
   newRole.id = 'wb-new';
@@ -750,7 +754,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     },
   });
   const profileImporter = port.profileImport
-    ? profileImportView(q('main'), {
+    ? profileImportView(importHost, {
         api: port.profileImport,
         run,
         toast: (text, tone) => toasts.show(text, tone ?? 'info'),
