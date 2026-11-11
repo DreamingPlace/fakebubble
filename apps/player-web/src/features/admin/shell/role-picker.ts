@@ -179,6 +179,10 @@ export function rolePicker(
       });
       out(role, h('div', { class: 'admin-pick-row' }, row, badge));
     });
+    // the rail scrolls inside itself: the open character is in view after every paint
+    (host.querySelector?.('.admin-pick[aria-current="true"]') as HTMLElement | null)?.scrollIntoView?.({
+      block: 'nearest',
+    });
     const reorder = options.onReorder;
     if (reorder)
       for (const [group, list] of lists)

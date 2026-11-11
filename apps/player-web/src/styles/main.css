@@ -13994,6 +13994,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 /* the card is at least as tall as the window, so the save bar rests at the bottom of the window on a short tab and sticks there on a long one */
 .account-admin-page.admin-shell #admin-characters .wb-card {
   min-height: calc(100dvh - var(--wb-card-top));
+  /* the card runs through the page's bottom padding: its save bar rests on the window's bottom edge, short tab or long */
+  margin-bottom: -40px;
 }
 .account-admin-page.admin-shell #admin-characters .wb-card-body {
   display: flex;
