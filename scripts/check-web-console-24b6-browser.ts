@@ -1,3 +1,4 @@
+import './player-build-guard.ts';
 import assert from 'node:assert/strict';
 import { mkdirSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';

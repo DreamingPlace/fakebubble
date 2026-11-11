@@ -1,3 +1,4 @@
+import './player-build-guard.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';

@@ -337,6 +337,7 @@ export function systemView(
                   ? hoverValue(
                       h('span', { class: 'sys-table-cell' }, h('span', { class: 'sys-table-name', text: f.table })),
                       f.table,
+                      true, // the failures table scrolls sideways inside its card: the bubble is placed in the viewport, never clipped
                     )
                   : h('span', { class: 'sys-table-none', text: '—' }),
                 f.errorName,

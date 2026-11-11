@@ -1,3 +1,4 @@
+import './player-build-guard.ts';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { startConsoleFixture } from './console-fixture-24b6.ts';

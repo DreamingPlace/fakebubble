@@ -4,12 +4,12 @@ import { bindTip } from './tooltip.ts';
 /**
  * Part 24b-6: "指到哪，数字就在哪". Any element becomes a hover target for its exact value, in the console's one light bubble
  * (ui/tooltip.ts). Mouse and keyboard focus show the same bubble. The anchor stays what it was (a table cell, a chip, a bar
- * segment); it only gains the bubble as its last child, tabindex 0 (unless it already is focusable) and an accessible description.
+ * segment); `viewport` is for an anchor inside a scrolling box (the bubble is then fixed to the viewport, ui/tooltip.ts); it only gains the bubble as its last child, tabindex 0 (unless it already is focusable) and an accessible description.
  */
 let counter = 0;
 /** The bubble of each target (a WeakMap, so the stub DOMs of the component tests need no querySelector). */
 const bubbles = new WeakMap<HTMLElement, HTMLElement>();
-export function hoverValue<T extends HTMLElement>(anchor: T, text: string): T {
+export function hoverValue<T extends HTMLElement>(anchor: T, text: string, viewport = false): T {
   const existing = bubbles.get(anchor);
   if (existing) {
     existing.textContent = text;
@@ -18,7 +18,7 @@ export function hoverValue<T extends HTMLElement>(anchor: T, text: string): T {
   const tip = h('span', { class: 'ad-tip', text, attrs: { id: `hv-${++counter}` } });
   anchor.append(tip);
   bubbles.set(anchor, tip);
-  bindTip(anchor, tip);
+  bindTip(anchor, tip, anchor, viewport);
   anchor.setAttribute?.('aria-describedby', tip.id);
   const tag = anchor.tagName;
   if (!anchor.getAttribute?.('tabindex') && tag !== 'BUTTON' && tag !== 'A' && tag !== 'INPUT' && tag !== 'SELECT')

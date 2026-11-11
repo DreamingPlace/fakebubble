@@ -38,6 +38,10 @@ export type DragOrderOptions = {
   onOrder: (ids: string[]) => void;
   /** A press that starts on one of these (a link, a count badge) is never a drag. */
   ignore?: string;
+  /** Part 27: when set, a drag starts only from an element matching this selector inside the row (the drag handle). */
+  handle?: string;
+  /** Part 27: called after every completed move (drop or Alt+arrow) with the row's new index, for a screen-reader announcement. */
+  announce?: (row: HTMLElement, to: number, total: number) => void;
 };
 
 const frame = (work: () => void) =>
@@ -77,7 +81,8 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
   const onDown = (event: PointerEvent) => {
     const row = (event.target as HTMLElement | null)?.closest?.('[data-drag-row]') as HTMLElement | null;
     if (!row || !list.contains(row) || event.button !== 0 || drag) return;
-    if (options.ignore && (event.target as HTMLElement).closest(options.ignore)) return;
+    if (options.handle && !(event.target as HTMLElement).closest(options.handle)) return;
+    if (!options.handle && options.ignore && (event.target as HTMLElement).closest(options.ignore)) return;
     const rows = options.rows();
     const rects = rows.map((r) => r.getBoundingClientRect());
     const from = rows.indexOf(row);
@@ -131,6 +136,7 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
         const order = moved(rows, from, to);
         for (const r of order) list.append(r);
         options.onOrder(order.map(options.idOf));
+        options.announce?.(row, to, rows.length);
       }
       // One frame later the rows may animate again.
       frame(() => {
@@ -193,8 +199,10 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
         }
       });
     }
-    (row.querySelector('button') ?? row).focus?.();
+    // The focus stays on what had it (a moved node loses it): the handle, or the field the key was pressed in.
+    (event.target as HTMLElement | null)?.focus?.();
     options.onOrder(order.map(options.idOf));
+    options.announce?.(row, to, rows.length);
   };
 
   list.addEventListener('pointerdown', onDown as EventListener);

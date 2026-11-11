@@ -5,6 +5,8 @@ import {
   type CastText,
 } from '../../../../../../packages/contracts/web-cast.ts';
 import { h } from '../../cocreation/h.ts';
+import { dragOrder } from '../ui/drag-order.ts';
+import { dragHandle, liveRegion, movedSentence, removeButton } from '../ui/item-controls.ts';
 import { markDirty } from '../ui/unsaved.ts';
 import { issueSentence } from './cast-model.ts';
 import type { CastCtx } from './cast-ui.ts';
@@ -61,9 +63,14 @@ export function itemList<T extends CastText>(spec: ItemListSpec<T>): HTMLElement
   const root = h('div', { class: 'cs-items', attrs: { 'data-list': spec.testId } });
   const sentence = (code: string, path: string) => issueSentence(ctx.doc(), code, path).text;
 
+  // Kept across renders: the drag / keyboard listeners are on it, and the live region announces the moves.
+  const rows = h('div', { class: 'cs-item-rows' });
+  const live = liveRegion();
+  let focusKind: 'text' | 'handle' = 'text';
   const render = (focusAt: number | null = null) => {
     refreshers.length = 0;
     root.replaceChildren();
+    rows.replaceChildren();
     const over = items.length > spec.max;
     const count = h('span', {
       class: `cs-items-count${over ? ' is-over' : ''}`,
@@ -87,7 +94,6 @@ export function itemList<T extends CastText>(spec: ItemListSpec<T>): HTMLElement
           attrs: { role: 'alert' },
         }),
       );
-    const rows = h('div', { class: 'cs-item-rows' });
     items.forEach((item, index) => {
       const input = h('input', {
         class: 'cs-item-text',
@@ -122,15 +128,10 @@ export function itemList<T extends CastText>(spec: ItemListSpec<T>): HTMLElement
         refreshAll();
         ctx.edited(true);
       });
-      const tools = edit
-        ? h(
-            'span',
-            { class: 'cs-item-tools' },
-            tool('上移', `把${spec.label}第 ${index + 1} 项上移`, index === 0, () => move(index, -1)),
-            tool('下移', `把${spec.label}第 ${index + 1} 项下移`, index === items.length - 1, () => move(index, 1)),
-            tool('删除', `删除${spec.label}第 ${index + 1} 项`, false, () => remove(index), true),
-          )
-        : null;
+      const tools = edit ? removeButton(`删除${spec.label}第 ${index + 1} 项`, 'ad-remove cs-item-remove') : null;
+      tools?.addEventListener('click', () => remove(index));
+      const handle = edit ? dragHandle(`${spec.label}第 ${index + 1} 项`, 'ad-handle cs-item-handle') : null;
+      wrap.setAttribute('data-drag-row', '');
       const extras = spec.extra
         ? spec.extra(item, () => {
             ctx.edited(true);
@@ -140,6 +141,7 @@ export function itemList<T extends CastText>(spec: ItemListSpec<T>): HTMLElement
         h(
           'div',
           { class: 'cs-item-row' },
+          handle,
           h('span', { class: 'cs-item-no', text: String(index + 1) }),
           input,
           ...extras,
@@ -152,7 +154,7 @@ export function itemList<T extends CastText>(spec: ItemListSpec<T>): HTMLElement
       refreshers.push(refresh);
       refresh();
     });
-    root.append(rows);
+    root.append(rows, live.node);
     if (!items.length) root.append(h('p', { class: 'cs-hint-line', text: '还没有' }));
     if (edit) {
       const add = h('button', {
@@ -167,21 +169,17 @@ export function itemList<T extends CastText>(spec: ItemListSpec<T>): HTMLElement
       });
       root.append(add);
     }
-    if (focusAt !== null) (rows.querySelectorAll('.cs-item-text')[focusAt] as HTMLInputElement | undefined)?.focus?.();
+    if (focusAt !== null)
+      (
+        rows.querySelectorAll(focusKind === 'handle' ? '.cs-item-handle' : '.cs-item-text')[focusAt] as
+          | HTMLElement
+          | undefined
+      )?.focus?.();
+    focusKind = 'text';
   };
   const refreshers: (() => void)[] = [];
   const refreshAll = () => {
     for (const refresh of refreshers) refresh();
-  };
-  const tool = (text: string, label: string, disabled: boolean, run: () => void, danger = false) => {
-    const button = h('button', {
-      class: `cs-mini${danger ? ' cs-danger' : ''}`,
-      text,
-      attrs: { type: 'button', 'aria-label': label },
-    });
-    button.disabled = disabled;
-    button.addEventListener('click', run);
-    return button;
   };
   const changed = (focusAt: number | null) => {
     ctx.edited();
@@ -189,16 +187,29 @@ export function itemList<T extends CastText>(spec: ItemListSpec<T>): HTMLElement
     spec.structure?.();
     render(focusAt);
   };
-  const move = (index: number, by: -1 | 1) => {
-    const to = index + by;
-    if (to < 0 || to >= items.length) return;
-    [items[index], items[to]] = [items[to]!, items[index]!];
-    changed(to);
-  };
   const remove = (index: number) => {
     items.splice(index, 1);
     changed(null);
   };
   render();
+  if (edit)
+    dragOrder(rows, {
+      rows: () => Array.from(rows.children) as HTMLElement[],
+      idOf: (row) => row.getAttribute('data-index') ?? '',
+      handle: '.ad-handle',
+      onOrder: (ids) => {
+        const before = [...items];
+        // The row that had the focus (the handle or its field) keeps it at its new place.
+        const active = (globalThis.document?.activeElement as HTMLElement | null)?.closest?.('[data-index]');
+        const was = active && rows.contains(active) ? active.getAttribute('data-index') : null;
+        focusKind = (globalThis.document?.activeElement as HTMLElement | null)?.classList?.contains('cs-item-handle')
+          ? 'handle'
+          : 'text';
+        items.splice(0, items.length, ...ids.map((id) => before[Number(id)]!));
+        changed(was === null ? null : ids.indexOf(was));
+      },
+      announce: (row, to, total) =>
+        live.say(movedSentence(`${spec.label}第 ${Number(row.getAttribute('data-index')) + 1} 项`, to, total)),
+    });
   return root;
 }

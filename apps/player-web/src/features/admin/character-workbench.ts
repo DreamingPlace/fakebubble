@@ -1356,6 +1356,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       target = snapshot.characterId,
       key = `material:${target}`,
       output = el('div');
+    // Part 27: a version is named by its number among this character's versions, in creation order (1, 2, 3 …), never by its id.
+    const materialNumbers = new Map<string, number>();
     const reference = guarded(
       // Part 24j: the id a profile import recorded against the 角色代码 is offered here; nothing is generated, approved or called.
       field(section, '已有 Fish 音色 referenceId', snapshot.profileMeta?.voiceReferenceId ?? '', { max: 128 }),
@@ -1389,7 +1391,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         );
         if (gone()) return;
         await load();
-        host.status(`素材版本 ${materialId} 已准备，请明确选择欢迎和结束成品。`);
+        const number = materialNumbers.get(materialId);
+        host.status(`${number ? `素材版本 ${number}` : '新素材版本'} 已准备，请明确选择欢迎和结束成品。`);
       },
     );
     if (!embedded) button(section, '读取已有成品版本', () => dirty || !can('read'), load, true);
@@ -1406,18 +1409,23 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         hoverValue(none, '还没有管理工作台创建的素材版本。原已批准音色与欢迎词完全不变时，发布可沿用原成品。');
         output.append(none);
       }
-      for (const material of items) materialRow(output, snapshot, material);
+      materialNumbers.clear();
+      [...items]
+        .sort((a, b) => a.createdAt - b.createdAt)
+        .forEach((material, index) => materialNumbers.set(material.materialId, index + 1));
+      for (const material of items)
+        materialRow(output, snapshot, material, materialNumbers.get(material.materialId) ?? 0);
       sync();
     }
     reference.addEventListener('input', sync);
     if (embedded) void load().catch((error) => host.status(characterAdminError(error) ?? '成品版本没有读取成功。'));
   }
-  function materialRow(parent: HTMLElement, snapshot: CharacterDetail, material: Material) {
+  function materialRow(parent: HTMLElement, snapshot: CharacterDetail, material: Material, number: number) {
     const target = snapshot.characterId,
       current = sameDraft(material, snapshot),
       section = fold(
         parent,
-        `${material.materialId} · ${material.approved ? '已批准' : '待批准'}${current ? ' · 当前草稿' : ' · 旧修订'}`,
+        `素材版本 ${number} · ${material.approved ? '已批准' : '待批准'}${current ? ' · 当前草稿' : ' · 旧修订'}`,
       );
     section.append(
       el(
@@ -1505,8 +1513,18 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         const file = el('input');
         file.type = 'file';
         file.accept = '.wav,audio/wav';
+        // Part 27: the console's own button (the native picker is hidden but stays the focusable control), then the chosen file name.
         const label = el('label');
-        label.append(el('span', `选择${name} WAV`), file);
+        label.className = 'ad-file';
+        file.className = 'ad-file-input';
+        const pick = el('span', `选择${name} WAV`);
+        pick.className = 'ad-file-button';
+        const picked = el('span', '未选择文件');
+        picked.className = 'ad-file-name';
+        file.addEventListener('change', () => {
+          picked.textContent = file.files?.[0]?.name ?? '未选择文件';
+        });
+        label.append(pick, file, picked);
         row.append(label);
         guarded(file, () => dirty || !can('materials'));
         const rights = guarded(

@@ -168,12 +168,7 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
       if (before === after) continue;
       nodes.push(h('h5', { class: 'vh-group', text: name }), diffGrid(before ?? '', after, `v${snapshot.version}`));
     }
-    nodes.push(
-      h('p', {
-        class: 'vh-note',
-        text: nodes.length ? '版本号不计入差异。' : '内容与现行版本完全相同（版本号除外）。',
-      }),
-    );
+    if (!nodes.length) nodes.push(h('p', { class: 'vh-note', text: '内容与现行版本完全相同（版本号除外）。' }));
     return nodes;
   }
 

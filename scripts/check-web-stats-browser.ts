@@ -1,3 +1,4 @@
+import './player-build-guard.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync } from 'node:fs';
