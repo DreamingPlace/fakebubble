@@ -52,6 +52,54 @@ function loadPlaywright(): any {
   throw new Error('Playwright is not installed: set PLAYWRIGHT_MODULE to its directory');
 }
 
+/**
+ * Part 27: waits until the page is AT REST - the cards and the avatar row have not moved for `quiet` ms - instead of sleeping for a
+ * time that a slow machine overruns. It looks at where things are (to 0.5 px), so a turn still in flight keeps it waiting, and it
+ * fails with a clear message when nothing settles within `limit` ms.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+const settle = (page: any, quiet = 300, limit = 15_000): Promise<void> =>
+  page.evaluate(
+    ({ quiet, limit }: { quiet: number; limit: number }) =>
+      new Promise<void>((resolve, reject) => {
+        const started = performance.now();
+        let last = '';
+        let since = started;
+        const look = () =>
+          [...document.querySelectorAll('.card-slot, .avatar-choice')]
+            .map((el) => {
+              const r = el.getBoundingClientRect();
+              return `${Math.round(r.x * 2)},${Math.round(r.y * 2)},${Math.round(r.width * 2)},${el.className}`;
+            })
+            .join('|');
+        const tick = () => {
+          const now = performance.now();
+          const seen = look();
+          if (seen !== last) {
+            last = seen;
+            since = now;
+          }
+          if (now - since >= quiet) return resolve();
+          if (now - started > limit) return reject(new Error('the page did not come to rest'));
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    { quiet, limit },
+  );
+
+/** Part 27: waits for every finite animation on the page (a sheet sliding in, a fade) to finish; endless ones (a breathing card) are not waited for. */
+// biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+const finished = (page: any): Promise<void> =>
+  page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Number.POSITIVE_INFINITY)
+        .map((a) => a.finished.catch(() => {})),
+    ).then(() => {}),
+  );
+
 const PASSWORD = 'correct horse battery';
 const EMAIL = 'browser.player@example.com';
 const { parent } = localRuntime();
@@ -248,7 +296,7 @@ try {
       });
     await view.goto(`${origin}/?mode=provider`);
     await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
-    await view.waitForTimeout(1200);
+    await settle(view);
     return { phone, view };
   };
   const selectedName = (view: any) => view.locator('.avatar-choice.selected').getAttribute('aria-label');
@@ -284,14 +332,14 @@ try {
     await view.mouse.down();
     for (let step = 1; step <= 8; step++) await view.mouse.move(195 - step * 20, 420, { steps: 2 });
     await view.mouse.up();
-    await view.waitForTimeout(900);
+    await settle(view);
     assert.notEqual(await selectedName(view), before, 'a swipe turns to another card');
     // Back to a character, then open its chat: the top bar fades and lifts (it is not removed), the chat fills the screen.
     await view.locator('.avatar-choice[aria-label^="选择"]').first().click();
-    await view.waitForTimeout(900);
+    await settle(view);
     await view.mouse.click(195, 380);
     await view.waitForSelector('.page-shell[data-phase="chat"]');
-    await view.waitForTimeout(700);
+    await settle(view);
     const bar = await view.locator('.site-head').evaluate((el: Element) => {
       const style = getComputedStyle(el);
       return {
@@ -312,7 +360,7 @@ try {
     // 外观: a preset, then a custom colour - applied at once, and still there after a reload.
     await view
       .locator('.chat-guide')
-      .click({ timeout: 1000 })
+      .click({ timeout: 5000 })
       .catch(() => {});
     await view.locator('.card-slot.is-chat .chat-more').click();
     await view.getByRole('menuitem', { name: '外观' }).click();
@@ -335,12 +383,12 @@ try {
     await view.locator('.look-sheet .acct-close').click();
     await view.reload();
     await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
-    await view.waitForTimeout(900);
+    await settle(view);
     await view.locator('.avatar-choice[aria-label^="选择"]').first().click();
-    await view.waitForTimeout(700);
+    await settle(view);
     await view.mouse.click(195, 380);
     await view.waitForSelector('.page-shell[data-phase="chat"]');
-    await view.waitForTimeout(900);
+    await settle(view);
     assert.equal(await shellColour(), 'rgb(127, 214, 194)', 'the colour is remembered for that character');
     assert.equal(
       await view.evaluate(() =>
@@ -358,10 +406,10 @@ try {
     // The guest's line: in the middle of the chat area, below the header and above the input.
     const { phone, view } = await phoneContext('light', true);
     await view.locator('.avatar-choice[aria-label^="选择"]').first().click();
-    await view.waitForTimeout(700);
+    await settle(view);
     await view.mouse.click(195, 380);
     await view.waitForSelector('.page-shell[data-phase="chat"]');
-    await view.waitForTimeout(900);
+    await settle(view);
     const note = await view.locator('.card-slot.is-chat .guest-note').boundingBox();
     const head = await view.locator('.card-slot.is-chat .chat-head').boundingBox();
     const composer = await view.locator('.card-slot.is-chat .composer').boundingBox();
@@ -384,11 +432,21 @@ try {
     await view.getByRole('button', { name: '我的信息' }).first().click();
     const motion = await view.locator('.mi-sheet').evaluate((el: Element) => getComputedStyle(el).animationName);
     assert.equal(motion, 'bb-sheet', '我的信息 slides up');
-    await view.waitForTimeout(900);
+    await settle(view);
     if (shots) await view.screenshot({ path: join(shots, 'my-info-night-390.png') });
     await view.getByText('日间', { exact: true }).click();
-    await view.waitForTimeout(900);
+    await settle(view);
     assert.equal(await theme(), 'light', 'the toggle overrides the system');
+    // The paper colour fades over a transition: wait for the colour itself (the assertion below is unchanged).
+    await view
+      .waitForFunction(
+        () => getComputedStyle(document.documentElement).backgroundColor === 'rgb(250, 248, 246)',
+        null,
+        {
+          timeout: 10_000,
+        },
+      )
+      .catch(() => {});
     assert.equal(await paper(), 'rgb(250, 248, 246)');
     await view.reload();
     await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
@@ -416,7 +474,7 @@ try {
     view.on('pageerror', (error: unknown) => errors.push(String(error)));
     await view.goto(`${origin}/?mode=provider`);
     await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
-    await view.waitForTimeout(1500);
+    await settle(view);
     const cdp = await phone.newCDPSession(view);
     const touch = (type: string, x: number, y: number) =>
       cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y }] });
@@ -446,28 +504,34 @@ try {
         active: el.classList.contains('is-active'),
       };
     });
-  // Records the marked card's centre x and opacity on every animation frame for 1.1 s, so a check can tell a card that moves
-  // from one that jumps without depending on how soon the first frame is painted (a slow runner paints late, never in one step).
+  // Records the marked card's centre x and opacity on every animation frame until the card has been still for 250 ms (at least 300 ms
+  // of recording, at most 8 s), so a check can tell a card that moves from one that jumps without depending on how soon the first
+  // frame is painted or how long the turn takes (a slow runner paints late, never in one step).
   type Frame = { t: number; x: number; opacity: number };
   const watchFrames = (view: any) =>
     view.evaluate(() => {
-      const w = window as unknown as { __frames: Frame[] };
+      const w = window as unknown as { __frames: Frame[]; __framesDone: boolean };
       w.__frames = [];
+      w.__framesDone = false;
       const t0 = performance.now();
+      let still = t0;
       const tick = () => {
         const el = document.querySelector('[data-probe]')!;
         const r = el.getBoundingClientRect();
-        w.__frames.push({
-          t: performance.now() - t0,
-          x: r.x + r.width / 2,
-          opacity: Number(getComputedStyle(el).opacity),
-        });
-        if (performance.now() - t0 < 1100) requestAnimationFrame(tick);
+        const now = performance.now();
+        const frame = { t: now - t0, x: r.x + r.width / 2, opacity: Number(getComputedStyle(el).opacity) };
+        const prev = w.__frames.at(-1);
+        if (!prev || Math.abs(prev.x - frame.x) > 0.05 || Math.abs(prev.opacity - frame.opacity) > 0.002) still = now;
+        w.__frames.push(frame);
+        if ((now - t0 > 300 && now - still > 250) || now - t0 > 8000) w.__framesDone = true;
+        else requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
     });
   const framesOf = async (view: any): Promise<Frame[]> => {
-    await view.waitForTimeout(1250);
+    await view.waitForFunction(() => (window as unknown as { __framesDone: boolean }).__framesDone, null, {
+      timeout: 15_000,
+    });
     return view.evaluate(() => (window as unknown as { __frames: Frame[] }).__frames);
   };
   /** The card travels from `start` to rest through at least one frame in between, and its first move is not the rest position. */
@@ -565,14 +629,35 @@ try {
       await touch('touchMove', 280 - 16 * i, 410);
       await view.waitForTimeout(16);
     }
-    const dragX = () => view.locator('.card-slot.is-active').evaluate((el: Element) => el.getBoundingClientRect().x);
+    // The front card's x once it has stopped easing toward the finger (the same number on 8 frames in a row; 5 s at most): the check is
+    // about where the stack IS before and after the resize, not about a position caught while it is still settling.
+    const dragX = () =>
+      view.evaluate(
+        () =>
+          new Promise<number>((resolve) => {
+            const el = document.querySelector('.card-slot.is-active')!;
+            const started = performance.now();
+            let last = Number.NaN;
+            let same = 0;
+            const tick = () => {
+              const x = el.getBoundingClientRect().x;
+              same = Math.abs(x - last) < 0.05 ? same + 1 : 0;
+              last = x;
+              if (same >= 8 || performance.now() - started > 5000) resolve(x);
+              else requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          }),
+      );
     const beforeResize = await dragX();
     await view.setViewportSize({ width: 390, height: 780 });
-    await view.waitForTimeout(60);
+    // The condition, not a delay: the page has seen the new height and has painted two frames since.
+    await view.waitForFunction(() => innerHeight === 780);
+    await view.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
     assert.ok(Math.abs((await dragX()) - beforeResize) < 1, 'a height-only resize mid-swipe does not move the stack');
     await touch('touchEnd', 0, 0);
     await view.setViewportSize({ width: 390, height: 844 });
-    await view.waitForTimeout(900);
+    await settle(view);
     await phone.close();
   }
   {
@@ -609,7 +694,7 @@ try {
     view.on('pageerror', (error: unknown) => errors.push(String(error)));
     await view.goto(`${origin}/?mode=provider`);
     await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
-    await view.waitForTimeout(1500);
+    await settle(view);
     const lay = await view.evaluate(() => ({
       overflow: getComputedStyle(document.documentElement).overflow,
       touchAction: getComputedStyle(document.querySelector('.carousel')!).touchAction,
@@ -651,18 +736,19 @@ try {
     const hintText = cocreationCopy.guestHint;
     const open = async (view: any) => {
       await view.locator('.avatar-choice[aria-label^="选择"]').first().click();
-      await view.waitForTimeout(700);
+      await settle(view);
       await view.mouse.click(195, 380);
       await view.waitForSelector('.page-shell[data-phase="chat"]');
-      await view.waitForTimeout(700);
+      await settle(view);
       await view
         .locator('.chat-guide')
-        .click({ timeout: 1000 })
+        .click({ timeout: 5000 })
         .catch(() => {});
       await view.locator('.card-slot.is-chat .chat-more').click();
       await view.getByRole('menuitem', { name: /一起共创角色/ }).click();
       await view.locator('.cc-sheet').waitFor();
-      await view.waitForTimeout(500);
+      await view.locator('.cc-face').first().waitFor();
+      await finished(view);
     };
     const submitCards = async (view: any) => {
       await view.locator('.cc-face').first().click();
@@ -727,7 +813,7 @@ try {
       await view.getByRole('button', { name: '登录', exact: true }).last().click();
       await view.getByRole('button', { name: /阿泡/ }).first().waitFor({ timeout: 15_000 });
       await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
-      await view.waitForTimeout(1200);
+      await settle(view);
       // The server pays out only when points are configured; the check pins both answers by rewriting the reply's `earned`.
       for (const earned of [0, 3]) {
         await view.route('**/cocreation/submit', async (route: any) => {
@@ -738,7 +824,7 @@ try {
         });
         await view.reload();
         await view.locator('.card-slot.is-active .face-voice').waitFor({ timeout: 15_000 });
-        await view.waitForTimeout(1200);
+        await settle(view);
         await open(view);
         const sub = await submitCards(view);
         assert.equal(sub.includes(hintText), false, `a signed-up player never sees the hint (earned ${earned})`);
