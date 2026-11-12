@@ -405,6 +405,7 @@ try {
         (await page.locator('.cn-boundary textarea').nth(2).inputValue()) === boundaryNow,
         `${w}: the boundary is there after a reload`,
       );
+      await shot('r2-other-settings-filled');
       await tab('资料改动').click();
       await wait(900);
       const diffText = (await page.locator('.wb-card-body').innerText()) as string;
@@ -413,7 +414,7 @@ try {
         `${w}: 资料改动 shows the edit with the same labels`,
       );
       check(!/[{}]|"[A-Za-z]+"\s*:|profileFacts/.test(diffText), `${w}: 资料改动 shows no JSON or key names`);
-      await shot('r2-other-settings-filled');
+      await shot('r2-diff-readable');
       // 其余设定 (empty facts, another key): a key no editor owns (here interests, once) stays under 其他（JSON）
       {
         const d = await (await f.post('characters/jojo/detail', {})).json();

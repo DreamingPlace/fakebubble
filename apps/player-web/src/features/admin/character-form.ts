@@ -431,6 +431,9 @@ export function characterForm(
     jsonHost = fold;
   }
   const canon = field(jsonHost, '其他（JSON）', parts.rest, { kind: 'para', max: 48000 });
+  // inside its fold the summary already names the box: the label stays for a screen reader only
+  if (parts.hasRest && canon.parentElement?.firstElementChild)
+    canon.parentElement.firstElementChild.className = 'sr-only';
   canon.className = `${canon.className} admin-json`.trim();
   const voiceSection = el('fieldset');
   voiceSection.append(el('legend', '声音'));
