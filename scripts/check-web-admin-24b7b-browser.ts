@@ -555,8 +555,7 @@ try {
         await page.evaluate("document.activeElement?.classList.contains('ad-handle') === true"),
         `${w}: the handle keeps the focus after a move`,
       );
-      const saidFact =
-        (await page.locator('.cn-facts ~ [role=status], .cn-field [role=status]').first().textContent()) ?? '';
+      const saidFact = (await page.locator('.cn-facts ~ [role=status]').first().textContent()) ?? '';
       check(new RegExp(`${factsBefore[0]}移到第 3 位`).test(saidFact), `${w}: the move names the row (${saidFact})`);
       const countBefore = await page.locator('.cn-fact').count();
       await page.locator('.cn-fact .ad-remove').nth(1).focus();
