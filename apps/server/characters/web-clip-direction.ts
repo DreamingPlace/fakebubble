@@ -360,7 +360,7 @@ export class WebClipDirection {
   issues(characterId: string) {
     return this.store.all<{ slot_key: string; state: string; error_code: string | null; created_at: number }>(
       `SELECT slot_key,state,error_code,created_at FROM web_clip_direction_calls
-      WHERE character_id=? AND (state IN ('unknown','released') OR (state='known' AND outcome='failed')) ORDER BY created_at DESC,id`,
+      WHERE character_id=? AND (state IN ('unknown','released') OR (state='known' AND outcome='failed')) ORDER BY created_at DESC,rowid DESC`,
       characterId,
     );
   }

@@ -17,7 +17,7 @@ import { clipManifest, effectiveVoice, footerRequired, siteVoiceModel } from './
 import { installWebClipTakes } from './web-clip-takes-schema.ts';
 import { CLIP_FEEDBACK_MAX, type WebClipDirection } from './web-clip-direction.ts';
 import { webWelcomeLinesInstalled } from './web-welcome-schema.ts';
-import { webAdminSpeechInstalled } from './web-admin-speech-schema.ts';
+import { adminSpeechGenerated, adminSpeechTakeIssues } from './web-admin-speech-schema.ts';
 
 /**
  * Part 30 section 1: SLOTS and TAKES. A slot is one welcome line (by line id) or the footer (only while required), identified by
@@ -186,7 +186,9 @@ export class WebClipTakes {
             m.character_id,
             clip.slotKey,
             ordinal,
-            this.wasGenerated(m.character_id, clip.kind, clip.row.sha256) ? 'generated' : 'uploaded',
+            adminSpeechGenerated(this.store, m.character_id, `material-${clip.kind}`, clip.row.sha256)
+              ? 'generated'
+              : 'uploaded',
             `第 ${ordinal} 条`,
             clip.row.body,
             m.reference_id,
@@ -215,17 +217,6 @@ export class WebClipTakes {
         }
         this.store.run('INSERT INTO web_clip_migrated VALUES (?)', m.id);
       });
-  }
-  private wasGenerated(characterId: string, kind: 'welcome' | 'footer', sha256: string) {
-    return (
-      webAdminSpeechInstalled(this.store) &&
-      !!this.store.get(
-        "SELECT 1 FROM web_speech_admin_calls WHERE character_id=? AND purpose=? AND outcome='succeeded' AND output_sha256=? LIMIT 1",
-        characterId,
-        `material-${kind}`,
-        sha256,
-      )
-    );
   }
   private nextOrdinal(characterId: string, slotKey: string) {
     return (
@@ -284,7 +275,7 @@ export class WebClipTakes {
     const ctx = this.context(id);
     const takes = this.takesOf(id),
       choices = this.choices(id);
-    const issues = [...(this.materials.speechPath ? this.speechIssues(id) : []), ...this.directionIssues(id)];
+    const issues = [...this.speechIssues(id), ...this.directionIssues(id)];
     const slots = ctx.slots.map((slot) => {
       const mine = takes.filter((take) => take.slot_key === slot.key);
       const choice = choices.find((c) => c.slot_key === slot.key);
@@ -336,21 +327,12 @@ export class WebClipTakes {
     };
   }
   private speechIssues(id: string) {
-    const speech = this.materials.speechPath;
-    if (!speech || !webAdminSpeechInstalled(this.store)) return [];
-    return this.store
-      .all<{ target_id: string; state: string; error_code: string | null; created_at: number }>(
-        `SELECT target_id,state,error_code,created_at FROM web_speech_admin_calls
-        WHERE character_id=? AND purpose IN ('material-welcome','material-footer') AND target_id GLOB 'take:*'
-        AND (state IN ('unknown','released') OR (state='known' AND outcome='failed')) ORDER BY created_at DESC,id`,
-        id,
-      )
-      .map((row) => ({
-        slotKey: row.target_id.slice('take:'.length),
-        state: row.state === 'known' ? ('failed' as const) : (row.state as 'unknown' | 'released'),
-        code: row.error_code ?? (row.state === 'unknown' ? 'SPEECH_CALL_UNKNOWN' : 'WEB_SHARED_BUDGET_EXHAUSTED'),
-        at: row.created_at,
-      }));
+    return adminSpeechTakeIssues(this.store, id).map((row) => ({
+      slotKey: row.target_id.slice('take:'.length),
+      state: row.state === 'known' ? ('failed' as const) : (row.state as 'unknown' | 'released'),
+      code: row.error_code ?? (row.state === 'unknown' ? 'SPEECH_CALL_UNKNOWN' : 'WEB_SHARED_BUDGET_EXHAUSTED'),
+      at: row.created_at,
+    }));
   }
   private directionIssues(id: string) {
     if (!this.direction) return [];

@@ -35,6 +35,8 @@ export type PanelEnv = {
   paint: (zone: { node: HTMLElement; paint: () => void }) => void;
   sync: () => void;
   status: (text: string) => void;
+  /** Every time the slots were read (the 发布 tab shows each slot's 选用 take name). */
+  changed: (value: ClipTakes) => void;
   /** Blob URLs the page owns (revoked when the role is left). */
   urls: Set<string>;
 };
@@ -64,6 +66,7 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     const next = await env.api.takes(env.target);
     if (env.gone() || token !== env.view()) return;
     state = next;
+    env.changed(next);
     paint();
     if (!next.speechAvailable || !next.voice) return;
     const empty = next.slots.filter((slot) => !slot.takes.some((take) => take.usable));
@@ -111,18 +114,10 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
       line.append(el('p', '先填 Fish 音色 ID。'));
       return;
     }
-    const part = (label: string, value: string) => {
-      const item = el('span');
-      item.className = 'vc-kv';
-      const k = el('span', label),
-        v = el('strong', value);
-      k.className = 'vc-k';
-      item.append(k, v);
-      line.append(item);
-    };
-    part('Fish 音色 ID', current.voice.referenceId);
-    part('语速', String(current.voice.speed));
-    part('将用', `${current.voice.model} 朗读`);
+    // The Fish 音色 ID and 语速 are the form's own fields right above; this line says what will speak and where the voice lives.
+    const will = el('span', `将用 ${current.voice.model} 朗读`);
+    will.className = 'vc-k';
+    line.append(will);
     const link = el('a', '在 fish.audio 打开这个音色');
     link.href = current.voice.url;
     link.target = '_blank';
@@ -469,6 +464,7 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     }
   }
 
+  /** 上传: choosing a file never uploads by itself. The file name appears with the rights tick and an explicit 上传 button. */
   function upload(bar: HTMLElement, slot: Slot) {
     const file = el('input');
     file.type = 'file';
@@ -476,16 +472,29 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     const pick = el('label');
     pick.className = 'ad-file vc-pick';
     file.className = 'ad-file-input';
-    const label = el('span', '上传 WAV');
+    const label = el('span', `选择${slotName(slot, slotIndexOf(slot))} WAV`);
     label.className = 'ad-file-button';
     pick.append(label, file);
     env.guard(file, () => env.dirty() || !env.can('materials'));
     bar.append(pick);
-    file.addEventListener('change', () => {
-      const selected = file.files?.[0];
-      if (!selected) return;
-      env.act(async () => {
-        if (selected.size > 6_000_000) throw new AdminFormError('请选择一条不超过 6 MB 的成品 WAV。');
+    const chosen = el('div');
+    chosen.className = 'vc-chosen';
+    chosen.hidden = true;
+    bar.append(chosen);
+    const name = el('span', '');
+    name.className = 'vc-meta';
+    chosen.append(name);
+    const rights = env.guard(
+      check(chosen, '这是我有权使用的成品，不是待克隆的原始声音样本'),
+      () => env.dirty() || !env.can('materials'),
+    );
+    const send = env.button(
+      chosen,
+      '上传',
+      () => env.dirty() || !env.can('materials') || !rights.checked || file.files?.length !== 1,
+      async () => {
+        const selected = file.files?.[0];
+        if (!selected || selected.size > 6_000_000) throw new AdminFormError('请选择一条不超过 6 MB 的成品 WAV。');
         const bytes = new Uint8Array(await selected.arrayBuffer());
         let binary = '';
         for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
@@ -493,9 +502,17 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
         if (env.gone()) return;
         await reload();
         env.status('已加一条上传的。请试听。');
-      });
+      },
+    );
+    send.className = 'admin-primary vc-small';
+    file.addEventListener('change', () => {
+      name.textContent = file.files?.[0]?.name ?? '';
+      chosen.hidden = !file.files?.length;
+      env.sync();
     });
+    rights.addEventListener('change', env.sync);
   }
+  const slotIndexOf = (slot: Slot) => (state?.slots ?? []).findIndex((item) => item.slotKey === slot.slotKey);
 
   let refreshApproval: (() => void) | null = null;
   /** Per-slot ticks side by side, 全选, one 批准. A slot's tick opens once its 选用 take played to the end. */
@@ -512,19 +529,17 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     const boxes = new Map<string, HTMLInputElement>();
     const slotIndex = new Map(current.slots.map((slot, index) => [slot.slotKey, index]));
     for (const slot of current.slots) {
+      const heardNow = () => !!slot.selectedTakeId && heard.has(slot.selectedTakeId);
+      // A slot opens for ticking once its 选用 take played to the end; an approved one stays ticked and closed.
       const box = env.guard(
         check(ticks, slotName(slot, slotIndex.get(slot.slotKey)!)),
-        () => env.dirty() || !env.can('approve-materials'),
+        () => env.dirty() || !env.can('approve-materials') || slot.approved || !heardNow(),
       );
       box.dataset.slot = slot.slotKey;
       const wrap = box.parentElement as HTMLElement;
       wrap.classList.add('vc-tick');
       boxes.set(slot.slotKey, box);
-      const heardNow = () => !!slot.selectedTakeId && heard.has(slot.selectedTakeId);
-      if (slot.approved) {
-        box.checked = true;
-        box.disabled = true;
-      }
+      if (slot.approved) box.checked = true;
       hoverValue(wrap, slot.approved ? '已批准' : '听完这一条的选用版本后才能勾选');
     }
     const rights = env.guard(
@@ -536,11 +551,7 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     const apply = () => {
       for (const slot of current.slots) {
         const box = boxes.get(slot.slotKey)!;
-        if (slot.approved) continue;
-        const ok = !!slot.selectedTakeId && heard.has(slot.selectedTakeId);
-        box.dataset.locked = String(!ok);
-        box.disabled = !ok || env.dirty() || !env.can('approve-materials');
-        if (!ok) box.checked = false;
+        if (!slot.approved && !(slot.selectedTakeId && heard.has(slot.selectedTakeId))) box.checked = false;
       }
     };
     all.addEventListener('change', () => {

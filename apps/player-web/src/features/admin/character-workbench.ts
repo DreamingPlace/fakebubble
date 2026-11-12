@@ -152,6 +152,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   let paintDirty: (() => void) | null = null;
   let saveCurrent: (() => Promise<boolean>) | null = null;
   let zones: Array<{ paint: () => void }> = [];
+  /** The 发布 tab's summary of each slot's 选用 take follows the 声音 tab whenever it reads the slots. */
+  let onTakes: ((value: Awaited<ReturnType<CharacterAdminClient['takes']>>) => void) | null = null;
   const urls = new Set<string>();
   const pending = new Map<string, { input: unknown; uncertain: boolean; send: () => Promise<unknown> }>();
   const items: QueueItem[] = [];
@@ -280,6 +282,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     paintResults = null;
     previewsChanged = null;
     paintDirty = null;
+    onTakes = null;
     zones = [];
     host.headerHost?.replaceChildren();
     root.replaceChildren();
@@ -1448,6 +1451,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       paint: (zone) => zones.push(zone),
       sync,
       status: (text) => host.status(text),
+      changed: (value) => onTakes?.(value),
       urls,
     });
     const show = () => panel.load().catch((error) => host.status(characterAdminError(error) ?? '成品没有读取成功。'));
@@ -1579,6 +1583,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         line.className = 'vc-used-row';
         const k = el('span', label);
         const v = el('input');
+        v.className = 'vc-used-input';
         v.readOnly = true;
         v.tabIndex = -1;
         v.value = value;
@@ -1591,6 +1596,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         const take = slot.takes.find((item) => item.takeId === slot.selectedTakeId);
         row(slot.kind === 'footer' ? '结束' : `欢迎 ${index + 1}`, take?.name ?? '', slot.kind === 'footer');
       });
+    };
+    onTakes = (value) => {
+      clips = value;
+      paintUsed();
     };
     const loadUsed = async () => {
       const token = view;

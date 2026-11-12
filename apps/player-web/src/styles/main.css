@@ -13701,6 +13701,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   gap: 8px;
   animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
 }
+/* The doubled class names below out-rank the character editor's `#admin-characters .wb-card :is(input...)` full-width rule. */
 /* ---- Part 30: slots and takes (features/admin/clip-takes-panel.ts). One row per take, every action one of two button sizes. ---- */
 .account-admin-page.admin-shell .vc-panel {
   display: grid;
@@ -13769,7 +13770,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .vc-take[data-usable="false"] {
   opacity: 0.6;
 }
-.account-admin-page.admin-shell .vc-take-name {
+.account-admin-page.admin-shell #admin-characters .vc-take input.vc-take-name.vc-take-name {
+  flex: none;
   box-sizing: content-box;
   width: 9ch;
   min-height: 0;
@@ -13781,8 +13783,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-weight: 600;
   transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
 }
-.account-admin-page.admin-shell .vc-take-name:hover,
-.account-admin-page.admin-shell .vc-take-name:focus {
+.account-admin-page.admin-shell #admin-characters .vc-take input.vc-take-name.vc-take-name:hover,
+.account-admin-page.admin-shell #admin-characters .vc-take input.vc-take-name.vc-take-name:focus {
   border-color: var(--ad-border);
   background: #fff;
 }
@@ -13791,7 +13793,9 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   max-width: 100%;
   height: 32px;
 }
-.account-admin-page.admin-shell .vc-small {
+.account-admin-page.admin-shell #admin-characters .vc-take button.vc-small,
+.account-admin-page.admin-shell #admin-characters .vc-chosen button.vc-small {
+  height: 32px;
   min-height: 32px;
   padding: 4px 12px;
   font-size: 13px;
@@ -13811,14 +13815,28 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .vc-feedback[hidden] {
   display: none;
 }
-.account-admin-page.admin-shell .vc-feedback-input,
-.account-admin-page.admin-shell .vc-markup-input {
+.account-admin-page.admin-shell #admin-characters .vc-feedback textarea.vc-feedback-input.vc-feedback-input,
+.account-admin-page.admin-shell #admin-characters .vc-markup textarea.vc-markup-input.vc-markup-input {
   width: min(520px, 100%);
+  min-height: 0;
+  height: 64px;
+  resize: vertical;
 }
 .account-admin-page.admin-shell .vc-markup {
   display: grid;
   gap: 8px;
   animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-chosen {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-chosen[hidden] {
+  display: none;
 }
 .account-admin-page.admin-shell .vc-approval {
   display: flex;
@@ -13845,12 +13863,12 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   flex-wrap: wrap;
   gap: 8px 20px;
 }
-.account-admin-page.admin-shell .vc-used-row {
+.account-admin-page.admin-shell #admin-characters .vc-used .vc-used-row.vc-used-row {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.account-admin-page.admin-shell .vc-used-row input {
+.account-admin-page.admin-shell #admin-characters .vc-used-row input.vc-used-input {
   width: auto;
   max-width: 100%;
 }
