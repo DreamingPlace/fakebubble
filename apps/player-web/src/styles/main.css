@@ -11120,14 +11120,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   color: var(--ad-muted);
   font-size: 12px;
 }
-.account-admin-page.admin-shell #admin-characters .wb-roles .cocreation-badge {
-  position: absolute;
-  top: 16px;
-  right: 10px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--ad-t-slide) var(--ad-ease);
-}
+
 .account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) .cocreation-badge {
   opacity: 1;
   pointer-events: auto;
@@ -14467,13 +14460,11 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 
 /* the rail's group headings keep their own room: never under the open character's row */
 .account-admin-page.admin-shell #admin-characters .admin-pick-group > h3 {
-  /* the heading of the group in view stays at the top of the rail while it scrolls */
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  /* in the flow, not sticky: a sticky heading covered the first row of its group (and the 共创 badge beside it took a click aimed at the row) */
+  position: relative;
   margin: 0;
   padding: 6px 0 6px;
-  background: #fff;
+  background: transparent;
 }
 .account-admin-page.admin-shell #admin-characters .admin-pick-head {
   position: relative;
