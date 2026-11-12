@@ -58,6 +58,18 @@ const dramaSoundTags = { small_laugh: '[small laugh]', shaky_breath: '[shaky bre
   SoundCue,
   string
 >;
+/**
+ * Part 30: the direction markup a feedback take may carry inside its sentence: `[direction]` groups (as the live path writes
+ * before words) and one `<whisper>…</whisper>` pair. Returns the plain text, or null when anything else is present (a stray
+ * bracket, another tag, an empty or over-long direction). A direction may be followed by one space, which goes with it.
+ */
+export function stripDirectionMarkup(markup: string): string | null {
+  const plain = markup
+    .replace(/\[[^[\]<>\n]{1,80}\] ?/gu, '')
+    .replace(/<whisper>/gu, '')
+    .replace(/<\/whisper>/gu, '');
+  return /[[\]<>]/u.test(plain) ? null : plain;
+}
 function id(value: unknown): asserts value is string {
   ensure(typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value), 'INVALID_VOICE_ID');
 }
@@ -73,6 +85,14 @@ export function speechPayload(request: SpeechRequest, model: FishModel = request
     'INVALID_SPEECH_TEXT',
   );
   ensure(!/[\[\]<>]/u.test(request.text), 'AUDIO_CONTROL_MARKER_FORBIDDEN');
+  ensure(
+    request.markup === undefined ||
+      (typeof request.markup === 'string' &&
+        [...request.markup].length <= 900 &&
+        stripDirectionMarkup(request.markup) === request.text),
+    'AUDIO_CONTROL_MARKER_FORBIDDEN',
+  );
+  const spokenText = request.markup ?? request.text;
   ensure(Object.hasOwn(expressions, request.expression), 'INVALID_AUDIO_EXPRESSION');
   ensure(Number.isFinite(request.speed) && request.speed >= 0.5 && request.speed <= 2, 'INVALID_SPEECH_SPEED');
   ensure(
@@ -88,14 +108,14 @@ export function speechPayload(request: SpeechRequest, model: FishModel = request
   ensure(Object.hasOwn(deliveryCues, style), 'INVALID_SPEECH_STYLE');
   ensure(request.soundCue === undefined || Object.hasOwn(dramaSoundTags, request.soundCue), 'INVALID_SOUND_CUE');
   const drama = model === 'drama-3';
-  let text = `${expressions[request.expression]}${deliveryCues[style]}${request.text}`;
+  let text = `${expressions[request.expression]}${deliveryCues[style]}${spokenText}`;
   if (drama) {
     const directions = [
       dramaExpressions[request.expression],
       dramaDeliveryCues[style],
       request.soundCue ? dramaSoundTags[request.soundCue] : '',
     ].filter(Boolean);
-    const spoken = style === 'tender_whisper' ? `<whisper>${request.text}</whisper>` : request.text;
+    const spoken = style === 'tender_whisper' ? `<whisper>${spokenText}</whisper>` : spokenText;
     text = [...directions, spoken].join(' ');
   }
   return {

@@ -18,6 +18,8 @@ export function webSpeechRequest(input: {
   soundCue?: SoundCue;
   /** The voice was heard and selected by a person with Fish quality-guard on (s2 only; Drama 3 ignores it). */
   userSelected: boolean;
+  /** Part 30: the text with direction markup (an admin take made from feedback). */
+  markup?: string;
 }): SpeechRequest {
   return {
     jobId: input.jobId,
@@ -29,5 +31,6 @@ export function webSpeechRequest(input: {
     ...(input.userSelected ? { qualityGuard: true } : {}),
     deliveryStyle: input.deliveryStyle,
     ...(input.soundCue === undefined ? {} : { soundCue: input.soundCue }),
+    ...(input.markup === undefined ? {} : { markup: input.markup }),
   };
 }

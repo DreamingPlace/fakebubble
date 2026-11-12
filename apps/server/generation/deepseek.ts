@@ -254,6 +254,64 @@ export class DeepSeekTextGenerator implements TextGenerator {
     return this.run(request, signal, meter);
   }
 
+  /**
+   * Part 30: ONE plain-text completion on the draft model (no tools, no thinking), for the clip-direction rewrite of an admin
+   * take. The caller has reserved the budget; this only sends. Returns the text and the usage the provider reported.
+   */
+  async completePlain(
+    input: { system: string; user: string; maxTokens: number },
+    signal: AbortSignal,
+  ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string; receipt: unknown }> {
+    ensure(!signal.aborted, 'TEXT_REQUEST_ABORTED');
+    const body = JSON.stringify({
+      model: this.model,
+      thinking: { type: 'disabled' },
+      stream: false,
+      temperature: 0.3,
+      max_tokens: input.maxTokens,
+      messages: [
+        { role: 'system', content: input.system },
+        { role: 'user', content: input.user },
+      ],
+    });
+    let response: Response;
+    try {
+      response = await this.#fetch(this.#policy.endpoint, {
+        method: 'POST',
+        redirect: 'manual',
+        signal: AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)]),
+        headers: { Authorization: `Bearer ${this.#apiKey}`, 'Content-Type': 'application/json' },
+        body,
+      });
+    } catch (error) {
+      throw connectFailure(error) ?? error;
+    }
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new DomainError(statusFailure('deepseek', response.status, ''));
+    }
+    const value = (await readBody(response)) as {
+      choices?: { message?: { content?: unknown } }[];
+      usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+      id?: unknown;
+    };
+    const text = value.choices?.[0]?.message?.content,
+      input_ = value.usage?.prompt_tokens,
+      output = value.usage?.completion_tokens;
+    ensure(typeof text === 'string', 'INVALID_TEXT_RESPONSE');
+    ensure(
+      Number.isSafeInteger(input_) && Number.isSafeInteger(output) && Number(input_) >= 0 && Number(output) >= 0,
+      'INVALID_TEXT_RESPONSE',
+    );
+    return {
+      text,
+      inputTokens: Number(input_),
+      outputTokens: Number(output),
+      model: this.model,
+      receipt: { id: typeof value.id === 'string' ? value.id.slice(0, 128) : null },
+    };
+  }
+
   /** The caller must durably accept each validated tool payload before the next provider stage starts. */
   async generateAcceptedStages(
     request: TextGenerationRequest,
