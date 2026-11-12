@@ -1,11 +1,13 @@
 import { dragOrder } from './drag-order.ts';
 import { growBox } from './grow-box.ts';
+import { dragHandle, liveRegion, movedSentence, removeButton } from './item-controls.ts';
 import { markDirty } from './unsaved.ts';
 
 /**
- * Part 24b-7b: a list whose items are SENTENCES (说话风格, 对话风格, 边界 …; any list whose items can pass 25 characters): one row per
- * item, each a growing one-sentence box, with add / remove / reorder like the 欢迎内容 list (a grip, drag, Alt+↑ / Alt+↓). An empty
- * list shows ONE empty row to type into; that row is not data until it has text (read() never returns an empty item).
+ * Part 24b-7b: a list whose items are SENTENCES (说话风格, 对话风格 …; any list whose items can pass 25 characters): one row per item,
+ * each a growing one-sentence box. Round 2: the row controls are the console's shared ones (ui/item-controls.ts): one drag handle, one ×,
+ * Alt+↑ / Alt+↓ and the polite live announcement, exactly like 欢迎内容 and 色板. An empty list shows ONE empty row to type into;
+ * that row is not data until it has text (read() never returns an empty item).
  */
 export type SentenceList = {
   node: HTMLElement;
@@ -15,7 +17,7 @@ export type SentenceList = {
   changed: () => boolean;
   setDisabled: (disabled: boolean) => void;
 };
-type Row = { id: number; row: HTMLElement; box: HTMLTextAreaElement; del: HTMLButtonElement };
+type Row = { id: number; row: HTMLElement; handle: HTMLElement; box: HTMLTextAreaElement; del: HTMLButtonElement };
 const node = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => {
   const n = document.createElement(tag);
   if (className) n.className = className;
@@ -32,7 +34,8 @@ export function sentenceList(
   list.setAttribute?.('role', 'list');
   const add = node('button', 'sl-add', options.addText ?? '＋ 添加一条');
   add.type = 'button';
-  root.append(list, add);
+  const live = liveRegion();
+  root.append(list, add, live.node);
   // Empty items of the incoming data are not rows to show; `changed` compares what is typed with the non-empty ones.
   const original = initial.filter((text) => text.trim() !== '');
   let rows: Row[] = [];
@@ -44,10 +47,11 @@ export function sentenceList(
     rows.forEach((r, i) => {
       r.row.dataset.index = String(i + 1);
       r.box.setAttribute?.('aria-label', `${options.label} 第 ${i + 1} 条`);
-      // the one row of an empty list is only a place to type: it has nothing to delete
+      r.handle.setAttribute?.('aria-label', `${options.label}第 ${i + 1} 条：拖动排序（键盘：Alt+↑ / Alt+↓）`);
+      r.del.setAttribute?.('aria-label', `删除${options.label}第 ${i + 1} 条`);
+      // the lone empty row is only a place to type: it has nothing to remove, so no × is shown for it
       const idle = rows.length === 1 && r.box.value === '';
       r.del.disabled = locked || idle;
-      // the lone empty row is only a place to type: its 删除 is not shown (a dead control reads as broken)
       r.del.dataset.idle = String(idle);
     });
     add.disabled = locked;
@@ -62,16 +66,14 @@ export function sentenceList(
     const id = ++seq;
     row.dataset.dragRow = '';
     row.dataset.id = String(id);
-    const grip = node('span', 'sl-grip', '⋮⋮');
-    grip.setAttribute?.('aria-hidden', 'true');
+    const handle = dragHandle(options.label, 'ad-handle sl-grip');
     const box = growBox(node('textarea'), 'one');
     box.value = text;
     if (options.limit) box.maxLength = options.limit;
     box.setAttribute?.('data-was', text);
-    const del = node('button', 'sl-del', '删除');
-    del.type = 'button';
-    row.append(grip, box, del);
-    const record: Row = { id, row, box, del };
+    const del = removeButton(`删除${options.label}`, 'ad-remove sl-del');
+    row.append(handle, box, del);
+    const record: Row = { id, row, handle, box, del };
     box.addEventListener('input', () => {
       markDirty(box, box.value !== box.getAttribute('data-was'));
       touched();
@@ -111,7 +113,8 @@ export function sentenceList(
       rows = ids.map((id) => rows.find((r) => String(r.id) === id)!);
       touched();
     },
-    ignore: 'textarea,input,button',
+    handle: '.ad-handle',
+    announce: (_row, to, total) => live.say(movedSentence(options.label, to, total)),
   });
   paint();
   return {

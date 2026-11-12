@@ -1,3 +1,4 @@
+import './player-build-guard.ts';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -283,7 +284,8 @@ try {
     // ---- 声音: the Fish id is prefilled ------------------------------------------------------------------------------
     await page.locator('.wb-tab', { hasText: '声音' }).first().click();
     await wait(500);
-    const reference = page.locator('label', { hasText: '已有 Fish 音色 referenceId' }).locator('input').first();
+    // Part 29 B (named exception): the one voice field is 「Fish 音色 ID」 (it was 「已有 Fish 音色 referenceId」 on the materials fold).
+    const reference = page.locator('label', { hasText: 'Fish 音色 ID' }).locator('input').first();
     check(
       (await reference.inputValue()) === `fish_ref_new${pass}`,
       `${w}: the voice page prefills the Fish referenceId`,

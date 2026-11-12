@@ -6320,6 +6320,14 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   font-size: 13px;
   line-height: 1.7;
 }
+.account-admin-page.admin-shell .rc-table-open:has(> .ot-empty:not([hidden])) {
+  border: 0;
+  background: transparent;
+}
+/* Part 27: no runs yet reads like every other empty list of the console (.admin-empty), not a thin-bordered strip. */
+.account-admin-page.admin-shell .rc-table-open > .ot-empty {
+  padding: 24px 12px;
+}
 .account-admin-page.admin-shell .pw-review-section {
   margin: 16px 0 0;
   border: 1px solid var(--ad-border);
@@ -7912,6 +7920,11 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .has-tip > .ad-tip {
   z-index: 60;
+}
+/* Part 27: a bubble of an anchor inside a scrolling box lives in the viewport (tooltip.ts sets --tip-x / --tip-y from the pointer). */
+.account-admin-page.admin-shell .ad-tip.is-fixed {
+  position: fixed;
+  top: var(--tip-y, 0);
 }
 
 /* ---- open-below table (Framework3 B) ---- */
@@ -12150,6 +12163,13 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-size: 13px;
   line-height: 1.6;
 }
+/* Part 27: the history table sits right under the card's tab strip, which already draws a hairline: its own frame made a faint double
+   line at the top. It is an open table now - the header and row hairlines, one line under the last row, no box. */
+.account-admin-page.admin-shell .vh-table {
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+}
 .account-admin-page.admin-shell .vh-table .ot-row {
   padding-block: 8px;
 }
@@ -13578,6 +13598,115 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   line-height: 18px;
   animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
 }
+/* ---- Part 29 E: the 声音 tab in order: voice line, 准备, then per slot 生成 (primary) with the upload folded under it ---- */
+.account-admin-page.admin-shell .vc-voice {
+  margin: 0 0 8px;
+  color: var(--ad-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .vc-why {
+  margin: 6px 0 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vc-why:not([hidden]) {
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-prepare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 4px 0 0;
+}
+.account-admin-page.admin-shell .vc-prepare label {
+  margin: 0;
+}
+.account-admin-page.admin-shell .vc-prepare > button {
+  min-width: 160px;
+}
+.account-admin-page.admin-shell .vc-materials {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.account-admin-page.admin-shell .vc-slot > button,
+.account-admin-page.admin-shell .vc-upload > button {
+  justify-self: start;
+  width: fit-content;
+  min-width: 120px;
+}
+.account-admin-page.admin-shell [data-vc="material"][data-state="stale"] > summary {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .vc-slot {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--ad-hairline);
+  transition: background-color calc(200ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-slot h4 {
+  margin: 0;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .vc-slot p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .vc-meta {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vc-issue {
+  justify-self: start;
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-upload {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vc-upload > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: 8px;
+  color: var(--ad-primary);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background-color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-upload > summary::-webkit-details-marker {
+  display: none;
+}
+.account-admin-page.admin-shell .vc-upload > summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform calc(180ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-upload[open] > summary::before {
+  transform: rotate(45deg);
+}
+.account-admin-page.admin-shell .vc-upload > summary:hover {
+  background: var(--ad-primary-soft);
+  border-color: var(--ad-primary);
+}
+.account-admin-page.admin-shell .vc-upload[open] {
+  display: grid;
+  gap: 8px;
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
 .account-admin-page.admin-shell .pw-compare-result {
   display: flex;
   flex-direction: column;
@@ -13610,6 +13739,114 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   background: rgba(255, 255, 255, 0.16);
 }
 
+/* ---- Part 27: the WAV pickers of 声音 use the console's secondary button; the native input is hidden over it ---- */
+.account-admin-page.admin-shell .ad-file {
+  position: relative;
+  align-self: flex-start;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+}
+.account-admin-page.admin-shell .ad-file-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: var(--ad-radius);
+  border: 1px solid var(--ad-border);
+  background: #fff;
+  color: var(--ad-text);
+  font-size: 14px;
+  white-space: nowrap;
+  transition: filter calc(140ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .ad-file:hover .ad-file-button {
+  filter: brightness(0.94);
+}
+.account-admin-page.admin-shell .ad-file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .ad-file:has(.ad-file-input:focus-visible) .ad-file-button {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 2px;
+}
+.account-admin-page.admin-shell .ad-file:has(.ad-file-input:disabled) {
+  opacity: 0.5;
+}
+.account-admin-page.admin-shell .ad-file-name {
+  min-width: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+  /* the console has no ellipsis (24b-3): a long file name wraps */
+  overflow-wrap: anywhere;
+}
+
+/* ---- Part 27: the shared row controls of the ordered lists - a drag handle and one × (features/admin/ui/item-controls.ts) ---- */
+.account-admin-page.admin-shell .ad-handle,
+.account-admin-page.admin-shell .ad-remove {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ad-muted);
+  line-height: 1;
+  transition:
+    background calc(140ms * var(--ad-motion)) var(--ad-ease),
+    color calc(140ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .ad-handle {
+  cursor: grab;
+  font-size: 14px;
+  letter-spacing: -2px;
+  user-select: none;
+  /* a finger on the handle drags the row; it never scrolls the page */
+  touch-action: none;
+}
+.account-admin-page.admin-shell .ad-handle:active {
+  cursor: grabbing;
+}
+.account-admin-page.admin-shell .ad-remove {
+  font-size: 20px;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .ad-handle:hover,
+.account-admin-page.admin-shell .ad-remove:hover {
+  background: var(--ad-bg);
+  color: var(--ad-text);
+}
+.account-admin-page.admin-shell .ad-remove:hover {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .ad-handle:focus-visible,
+.account-admin-page.admin-shell .ad-remove:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 1px;
+}
+.account-admin-page.admin-shell .ad-remove:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.account-admin-page.admin-shell .cs-item.is-dragging {
+  position: relative;
+  z-index: 2;
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  box-shadow: 0 6px 18px rgba(31, 42, 38, 0.16);
+}
+
 /* ---- Part 24k-2: 欢迎内容 list and 色板 (the 24i list pattern: a grip, the fields, 删除) ---- */
 .account-admin-page.admin-shell .wl,
 .account-admin-page.admin-shell .pl {
@@ -13629,7 +13866,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .wl-row {
   display: grid;
-  grid-template-columns: 18px 22px minmax(0, 1fr) 116px 72px;
+  /* Part 27 handle and × (28 px each) in Part 29's wider weight column */
+  grid-template-columns: 28px 22px minmax(0, 1fr) 116px 28px;
   align-items: center;
   gap: 8px;
   padding: 10px;
@@ -13652,7 +13890,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   opacity: 0;
   transform: translateX(10px);
 }
-.account-admin-page.admin-shell .wl-row.is-dragging {
+.account-admin-page.admin-shell .wl-row.is-dragging,
+.account-admin-page.admin-shell .pl-row.is-dragging {
   box-shadow: 0 6px 18px rgba(31, 42, 38, 0.16);
   border-color: var(--ad-primary);
   z-index: 2;
@@ -13729,7 +13968,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .pl-row {
   display: grid;
-  grid-template-columns: 74px 22px minmax(0, 1.1fr) 34px minmax(0, 1fr) auto auto;
+  grid-template-columns: 28px 74px 22px minmax(0, 1.1fr) 34px minmax(0, 1fr) 28px;
   align-items: center;
   gap: 8px;
   transition:
@@ -13737,7 +13976,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
     transform calc(220ms * var(--ad-motion)) var(--ad-ease);
 }
 .account-admin-page.admin-shell .pl-row.pl-main {
-  grid-template-columns: 74px 22px minmax(0, 1.1fr) minmax(0, 1fr);
+  grid-template-columns: 28px 74px 22px minmax(0, 1.1fr) minmax(0, 1fr);
 }
 .account-admin-page.admin-shell .pl-row[data-used="false"] {
   opacity: 0.6;
@@ -13881,7 +14120,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .sl-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 64px;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
   align-items: start;
   gap: 8px;
   padding: 0;
@@ -13929,8 +14168,21 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 
 /* ---- 欢迎内容: the words grow, the percent is one aligned column with its unit beside it ---- */
 .account-admin-page.admin-shell .wl-row {
-  grid-template-columns: 18px 22px minmax(0, 1fr) 84px 64px;
+  /* Part 27's handle and × (28 px each), Part 29's weight column; the words grow, so everything aligns to the first line */
+  grid-template-columns: 28px 22px minmax(0, 1fr) 116px 28px;
   align-items: start;
+}
+.account-admin-page.admin-shell .wl-row > .ad-handle,
+.account-admin-page.admin-shell .wl-row > .ad-remove,
+.account-admin-page.admin-shell .sl-row > .ad-handle,
+.account-admin-page.admin-shell .sl-row > .ad-remove,
+.account-admin-page.admin-shell .cn-fact > .ad-handle,
+.account-admin-page.admin-shell .cn-fact > .ad-remove,
+.account-admin-page.admin-shell .cn-pair > .ad-handle,
+.account-admin-page.admin-shell .cn-pair > .ad-remove,
+.account-admin-page.admin-shell .cn-card > .ad-handle,
+.account-admin-page.admin-shell .cn-card > .ad-remove {
+  height: 40px;
 }
 .account-admin-page.admin-shell .wl-grip,
 .account-admin-page.admin-shell .wl-no {
@@ -13957,21 +14209,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   flex-direction: column;
   gap: 20px;
 }
-.account-admin-page.admin-shell .cn-pair {
-  grid-template-columns: minmax(0, 1fr) 32px;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--ad-hairline);
-  border-radius: var(--ad-radius);
-}
-.account-admin-page.admin-shell .cn-pair > .cn-lab {
-  grid-column: 1;
-}
-.account-admin-page.admin-shell .cn-pair > .cn-x {
-  grid-column: 2;
-  grid-row: 1;
-  margin-top: 15px;
-}
 .account-admin-page.admin-shell .cn-pair .cn-lab > span {
   font-size: 12px;
   line-height: 1.2;
@@ -13986,14 +14223,6 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   min-height: 40px;
   justify-self: start;
   padding: 0 14px;
-}
-.account-admin-page.admin-shell .cn-card .cn-x {
-  top: 12px;
-  right: 12px;
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
-  padding: 0;
 }
 
 /* ---- B. one page layout for every 角色工作台 tab ---- */
@@ -14134,19 +14363,54 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   overscroll-behavior: contain;
 }
 
-/* 对话样例: 情境 / 玩家说 / 他回 each take the row's whole width, one under the other, the × beside the first */
-.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair {
-  grid-template-columns: minmax(0, 1fr) 32px;
+/* 对话样例 / 经历 / 个人资料: every row is handle | fields | ×, the same three parts as every other list of the console */
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair,
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-card {
+  position: static;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  align-items: start;
+  gap: 8px;
+  padding: 12px 10px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius);
 }
-.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair > .cn-lab,
-.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair > .cn-lab:not(.cn-situation-lab),
-.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair > .cn-situation-lab {
-  grid-column: 1;
-  margin: 0;
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair-fields,
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
 }
-.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair > .cn-x {
-  grid-column: 2;
-  grid-row: 1;
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-pair .cn-x,
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-card .cn-x {
+  position: static;
+  width: 28px;
+  height: 40px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-facts {
+  display: grid;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-fact {
+  display: grid;
+  grid-template-columns: 28px auto minmax(0, 1fr) 28px;
+  align-items: start;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-fact-label {
+  align-self: start;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .cn-boundary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.account-admin-page.admin-shell .cn-other {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 /* fields of a group sit a steady distance apart */
 .account-admin-page.admin-shell #admin-characters .wb-card form.character-profile-form fieldset > label,
@@ -14185,6 +14449,59 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   min-height: 24px;
   display: inline-flex;
   align-items: center;
+}
+
+.account-admin-page.admin-shell #admin-characters .wb-publish-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-reason {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-reason:empty {
+  display: none;
+}
+
+/* the rail's group headings keep their own room: never under the open character's row */
+.account-admin-page.admin-shell #admin-characters .admin-pick-group > h3 {
+  /* the heading of the group in view stays at the top of the rail while it scrolls */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0;
+  padding: 6px 0 6px;
+  background: #fff;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 2px;
+  height: auto;
+  min-height: 34px;
+  padding: 4px 2px 6px;
+  overflow: visible;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head > .dc-text {
+  order: 0;
+  flex: none;
+  text-align: center;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head > .dc-chev {
+  order: 1;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-head > b {
+  order: 2;
+}
+.account-admin-page.admin-shell #admin-characters .admin-pick-list {
+  position: relative;
+  z-index: 0;
+  padding-top: 2px;
 }
 
 /* ---- C. one disclosure pattern ---- */
@@ -16679,6 +16996,30 @@ html:has(.signed-out-page) {
 .card-slot.is-near-empty .face-empty-text,
 .card-slot.is-active .face-reserve .face-empty-text {
   display: block;
+}
+/* Part 27: a peeking empty card shows only a ~50px sliver beside the front card, and the card's own centre is off-screen. Its words
+   stand upright in one column inside that sliver (its start worked out from the card's own --card-w / --orbit-x / --orbit-scale),
+   so 「新朋友还未到来」 is whole; the front card keeps the horizontal line. */
+.card-slot:not(.is-active) .face-reserve .face-empty-text {
+  width: 1.1em;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  line-height: 1.2;
+  text-align: center;
+}
+.card-slot[data-side="r"]:not(.is-active) .face-reserve .face-empty {
+  align-items: flex-start;
+  padding-inline-start: max(
+    0px,
+    calc(((var(--card-w) / 2 - var(--orbit-x)) / var(--orbit-scale) + var(--card-w) / 2) + 12px - 16px)
+  );
+}
+.card-slot[data-side="l"]:not(.is-active) .face-reserve .face-empty {
+  align-items: flex-end;
+  padding-inline-end: max(
+    0px,
+    calc(((var(--card-w) / 2 + var(--orbit-x)) / var(--orbit-scale) + var(--card-w) / 2) + 12px - 16px)
+  );
 }
 .face-reserve .face-top {
   visibility: hidden;

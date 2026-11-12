@@ -765,6 +765,8 @@ const status = (over: Partial<SystemStatusView> = {}): SystemStatusView =>
       failuresLast7Days: 0,
       unavailableToday: 0,
       unavailableLast7Days: 0,
+      rateOverflowToday: 0,
+      unknownRefusals: 0,
     },
     warnings: { priceExpiring: 0, retentionFailing: 0, unknownNew: 0 },
     ...over,

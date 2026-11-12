@@ -1,6 +1,7 @@
 import type { WebProviderBootstrap } from '../../../../../packages/contracts/web-provider.ts';
 import { derivePalette, nightAura } from '../brand/character-colour.ts';
 import { birthdayNo, skinFor, skinSources, type Skin } from '../brand/palette-skin.ts';
+import { CATALOG_MAX } from '../../../../../packages/contracts/web-provider.ts';
 
 export type Person = {
   id: string;
@@ -143,7 +144,7 @@ export function providerPeople(view: Pick<WebProviderBootstrap, 'characters' | '
     };
   });
   // Preserve the approved centred three-person orbit without baking identities into the shell.
-  const padding = Math.floor((15 - view.characters.length) / 2);
+  const padding = Math.floor((CATALOG_MAX - view.characters.length) / 2);
   return padding ? [...slots.slice(-padding), ...slots.slice(0, -padding)] : slots;
 }
 export const escapeCardText = (text: string) =>

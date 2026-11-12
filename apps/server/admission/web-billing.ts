@@ -110,7 +110,13 @@ export function playerBilling(
           m.draft_provider draft_provider,m.backup backup,m.points_charged points_charged,
           (SELECT coalesce(sum(e.delta),0) FROM web_points_events e WHERE e.operation_id=o.id AND e.principal_id=o.principal_id) net,
           (SELECT coalesce(sum(e.delta),0) FROM web_points_events e WHERE e.operation_id=o.id AND e.principal_id=o.principal_id AND e.source='refund' AND e.reason='no_reply') refunded,
-          EXISTS (SELECT 1 FROM web_publication_items i WHERE i.operation_id=o.id AND i.origin='narrative' AND i.media_id IS NOT NULL) voiced,
+          -- Part 27: the voice flag belongs to the operation. While the chat content exists it is the audio the reply carries; once a
+          -- character deletion has removed the content (no publication item is left for the operation), it is what the ledger kept:
+          -- the voice was ordered (web_operation_models.voice) and no 'no_voice' refund was paid.
+          (EXISTS (SELECT 1 FROM web_publication_items i WHERE i.operation_id=o.id AND i.origin='narrative' AND i.media_id IS NOT NULL)
+            OR (NOT EXISTS (SELECT 1 FROM web_publication_items i WHERE i.operation_id=o.id)
+              AND coalesce(m.voice,0)=1
+              AND NOT EXISTS (SELECT 1 FROM web_points_events e WHERE e.operation_id=o.id AND e.principal_id=o.principal_id AND e.source='refund' AND e.reason='no_voice'))) voiced,
           NULL source,NULL delta,${TRIAL_ROW} trial,'o:'||o.id sort_key
         FROM web_operations o
         JOIN web_principals p ON p.id=o.principal_id

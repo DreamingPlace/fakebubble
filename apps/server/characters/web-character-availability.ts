@@ -5,6 +5,7 @@ import { contentHash } from './admin-content-hash.ts';
 import { publishedWebCharacters } from './web-character-catalog.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { identifier, keys, record } from './template-validation.ts';
+import { CATALOG_MAX } from '../../../packages/contracts/web-provider.ts';
 
 /**
  * Part 24l: 下线 / 重新上线 and the per-admin sidebar order. NO numbered migration: installed idempotently and digest-checked at
@@ -119,7 +120,7 @@ export function setWebCharacterAvailability(
     } else {
       ensure(!live, 'CHARACTER_ONLINE');
       noInFlight(store, id);
-      const free = Array.from({ length: 15 }, (_, i) => i).find((i) => !catalog.some((c) => c.position === i));
+      const free = Array.from({ length: CATALOG_MAX }, (_, i) => i).find((i) => !catalog.some((c) => c.position === i));
       ensure(free !== undefined, 'CHARACTER_CATALOG_FULL');
       position = free;
       store.run('INSERT INTO web_character_catalog VALUES (?,?,?)', id, template.version, position);

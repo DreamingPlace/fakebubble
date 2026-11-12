@@ -58,12 +58,24 @@ function setup(t: test.TestContext) {
       { requestId: randomUUID(), text: '免费消息', delivery: 'voice' },
       status,
     );
+  /**
+   * Part 27: waits for the operation to FINISH, not for a clock. The deadline is a stall limit: it restarts every time the operation
+   * moves (a new status or revision), so a slow machine running the audio stage late no longer fails the wait while the operation is
+   * still progressing; an operation that stops moving for 60 s (or takes over 5 minutes in all) still fails with its last state.
+   */
   const settle = async (actor: Client, id: string) => {
-    const end = Date.now() + 30_000;
+    const hardEnd = Date.now() + 300_000;
+    let progress = '';
+    let stallEnd = Date.now() + 60_000;
     while (true) {
       const operation = await call(`${API}/operations/${id}`, actor);
       if (['published', 'failed', 'cancelled'].includes(operation.status)) return operation;
-      assert.ok(Date.now() < end, JSON.stringify(operation));
+      const now = `${operation.status}:${operation.revision}`;
+      if (now !== progress) {
+        progress = now;
+        stallEnd = Date.now() + 60_000;
+      }
+      assert.ok(Date.now() < Math.min(stallEnd, hardEnd), JSON.stringify(operation));
       await sleep(100);
     }
   };

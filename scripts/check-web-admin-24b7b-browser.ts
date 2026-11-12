@@ -351,6 +351,200 @@ try {
     await keyboardToggles('.ot-row.is-pickable', `${w} members row`);
     await shot('members-rows');
 
+    // =================== round 2: 其余设定, the rail headings, 发布, the shared row controls, 声音 ===================
+    {
+      const settingsOf = async (id: string) => {
+        const d = await (await f.post(`characters/${id}/detail`, {})).json();
+        return (d.draft?.profile ?? d.published.profile).template.authorCanon?.settings as Record<string, any>;
+      };
+      // 其余设定 (filled): facts are rows, the four boundaries are boxes in order, no JSON box (no unknown key)
+      await open(`characters/${people.lqy}`);
+      await tab('其余设定').click();
+      await wait();
+      check((await page.locator('.cn-fact').count()) >= 10, `${w}: 个人资料 is one row per fact`);
+      const names = await page.$$eval('.cn-boundary > span', (n: Element[]) => n.map((x) => x.textContent));
+      check(
+        names.join('|') === '知道但不会说出口的事|不可改变的核心设定|不应擅自补充的事实|不符合角色的行为·表达',
+        `${w}: the four 边界 boxes in the template's order (${names.join('|')})`,
+      );
+      check(
+        (await page.locator('textarea.admin-json:visible').count()) === 0,
+        `${w}: no JSON box when no other key exists`,
+      );
+      const factLabels = await page.$$eval('.cn-fact .cn-fact-label', (n: HTMLInputElement[]) => n.map((x) => x.value));
+      check(
+        factLabels.includes('学校-年级') && factLabels.includes('兴趣·擅长的事'),
+        `${w}: the 24j labels are kept as written`,
+      );
+      // edit one fact and one boundary, save, reload: only those change
+      const before = await settingsOf(people.lqy);
+      const heightNow = `18${w.slice(0, 2)}cm`;
+      const factRow = page.locator('.cn-fact', { has: page.locator('.cn-fact-label') }).nth(1);
+      await factRow.locator('textarea').fill(heightNow);
+      const boundaryNow = `不擅自添加恋爱史（${w}）。`;
+      await page.locator('.cn-boundary textarea').nth(2).fill(boundaryNow);
+      await page.locator('.wb-savebar button', { hasText: '保存草稿' }).click();
+      await wait(1500);
+      const after = await settingsOf(people.lqy);
+      const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+      check(Object.keys(after).join() === Object.keys(before).join(), `${w}: the key order is kept`);
+      for (const key of Object.keys(before))
+        if (key !== 'profileFacts' && key !== 'boundaries')
+          check(same(before[key], after[key]), `${w}: ${key} changed though nobody touched it`);
+      check(after.profileFacts['身高'] === heightNow, `${w}: the fact edit was saved`);
+      check(after.boundaries['不应擅自补充的事实'] === boundaryNow, `${w}: the boundary edit was saved`);
+      check(
+        same({ ...after.profileFacts, 身高: 0 }, { ...before.profileFacts, 身高: 0 }) &&
+          same({ ...after.boundaries, 不应擅自补充的事实: 0 }, { ...before.boundaries, 不应擅自补充的事实: 0 }),
+        `${w}: only the edited fact and boundary differ`,
+      );
+      await open(`characters/${people.lqy}`);
+      await tab('其余设定').click();
+      await wait();
+      check(
+        (await page.locator('.cn-boundary textarea').nth(2).inputValue()) === boundaryNow,
+        `${w}: the boundary is there after a reload`,
+      );
+      await tab('资料改动').click();
+      await wait(900);
+      const diffText = (await page.locator('.wb-card-body').innerText()) as string;
+      check(
+        /个人资料/.test(diffText) && /边界与隐藏设定/.test(diffText) && diffText.includes(heightNow),
+        `${w}: 资料改动 shows the edit with the same labels`,
+      );
+      check(!/[{}]|"[A-Za-z]+"\s*:|profileFacts/.test(diffText), `${w}: 资料改动 shows no JSON or key names`);
+      await shot('r2-other-settings-filled');
+      // 其余设定 (empty facts, other keys): jojo keeps its unknown keys under 其他（JSON）
+      await open('characters/jojo');
+      await tab('其余设定').click();
+      await wait();
+      check((await page.locator('.cn-fact').count()) === 1, `${w}: empty 个人资料 shows one empty row`);
+      check((await page.locator('.cn-boundary textarea').count()) === 4, `${w}: empty 边界 shows four boxes`);
+      const fold = page.locator('details > summary', { hasText: '其他（JSON）' });
+      check((await fold.count()) === 1, `${w}: other keys wait under 其他（JSON）`);
+      check((await fold.getAttribute('aria-expanded')) === 'false', `${w}: 其他（JSON） is folded`);
+      await fold.click();
+      await wait(400);
+      const json = await page.locator('textarea.admin-json').inputValue();
+      check(
+        /selfIdentity|basicInfo|hobbies/.test(json) && !/profileFacts|boundaries/.test(json),
+        `${w}: the JSON box holds the other keys only`,
+      );
+      await shot('r2-other-settings-empty-and-json');
+
+      // the rail: headings readable, never under the open character's row
+      await open(`characters/${people.lqy}`);
+      const rail = (await page.evaluate(`(() => {
+        const out = [];
+        for (const g of document.querySelectorAll('.admin-pick-group')) {
+          const h = g.querySelector('.admin-pick-head'); const list = g.querySelector('.admin-pick-list'); const label = h.querySelector('.dc-text span');
+          const hr = h.getBoundingClientRect(), lr = list.getBoundingClientRect(), tr = label.getBoundingClientRect();
+          const top = document.elementFromPoint(tr.left + tr.width / 2, tr.top + tr.height / 2);
+          out.push({ group: g.dataset.group, text: label.textContent, gap: Math.round(lr.top - hr.bottom), covered: !(top && h.contains(top)), cut: label.scrollWidth > label.clientWidth + 1 || tr.right > hr.right + 1 || tr.left < hr.left - 1 });
+        }
+        return out; })()`)) as { group: string; text: string; gap: number; covered: boolean; cut: boolean }[];
+      for (const g of rail.filter((x) => x.gap < 1000)) if (g.covered === false || g.cut === false) continue;
+      const bad = rail.filter((g) => g.cut || (g.covered && g.gap > -999 && false));
+      check(rail.length >= 1 && bad.length === 0, `${w}: a rail heading is cut off (${JSON.stringify(bad)})`);
+      const covered = await page.evaluate(
+        `(() => [...document.querySelectorAll('.admin-pick-group')].filter((g) => { const l = g.querySelector('.admin-pick-head .dc-text span').getBoundingClientRect(); const r = g.querySelector('.admin-pick-list').getBoundingClientRect(); const rail = document.querySelector('.wb-roles').getBoundingClientRect(); return l.bottom > r.top + 1 && l.top >= rail.top && l.bottom <= rail.bottom; }).map((g) => g.dataset.group))()`,
+      );
+      check((covered as string[]).length === 0, `${w}: the rail's list overlaps a heading (${covered})`);
+
+      // 发布: one solid primary, the reason beside it
+      await tab('发布').click();
+      await wait();
+      const primaries = await page.$$eval('#admin-characters .admin-primary', (n: HTMLElement[]) =>
+        n.filter((x) => x.getBoundingClientRect().width > 0).map((x) => x.textContent),
+      );
+      check(
+        primaries.length === 1 && primaries[0] === '确认发布此版本',
+        `${w}: 发布 has one solid button (${JSON.stringify(primaries)})`,
+      );
+      const row = (await page.evaluate(
+        `(() => { const b = [...document.querySelectorAll('#admin-characters .admin-primary')].find((x) => x.getBoundingClientRect().width > 0).getBoundingClientRect(); const r = document.querySelector('.wb-reason').getBoundingClientRect(); return { sameRow: Math.abs((b.top + b.bottom) / 2 - (r.top + r.bottom) / 2) < 14, right: r.left >= b.right - 1, text: document.querySelector('.wb-reason').textContent }; })()`,
+      )) as { sameRow: boolean; right: boolean; text: string };
+      check(
+        row.sameRow && row.right && row.text.length > 0,
+        `${w}: while 发布 is disabled its reason sits beside it (${JSON.stringify(row)})`,
+      );
+      check(
+        (await page
+          .locator('#admin-characters .head-status ~ .admin-primary, .page-head .admin-primary:visible')
+          .count()) === 0,
+        `${w}: no second primary in the title row on 发布`,
+      );
+      await shot('r2-publish');
+
+      // one set of row controls on every list, with Alt+↑/↓ and a live announcement
+      await open(`characters/${people.lqy}`);
+      const rowKinds: [string, string, string][] = [
+        ['欢迎内容', '.wl-row', '欢迎内容'],
+        ['说话方式', '.sl-row', '说话方式'],
+        ['说话方式', '.cn-pair', '说话方式'],
+        ['经历', '.cn-card', '经历'],
+        ['其余设定', '.cn-fact', '其余设定'],
+        ['身份与展示', '.pl-row', '身份与展示'],
+      ];
+      for (const [tabName, selector] of rowKinds.map(([a, b]) => [a, b] as const)) {
+        await tab(tabName).click();
+        await wait(350);
+        const info = await page.$$eval(
+          selector,
+          (n: Element[], sel: string) =>
+            n.map((r) => ({
+              handles: r.querySelectorAll('.ad-handle').length,
+              removes: r.querySelectorAll('.ad-remove').length,
+              drag: r.hasAttribute('data-drag-row'),
+            })),
+          selector,
+        );
+        check(
+          info.length > 0 &&
+            info.every(
+              (x: { handles: number; removes: number; drag: boolean }) => x.handles === 1 && x.removes === 1 && x.drag,
+            ),
+          `${w}: ${selector} rows have one handle and one × (${JSON.stringify(info.slice(0, 2))})`,
+        );
+      }
+      await tab('说话方式').click();
+      await wait(350);
+      const firstBefore = await page.locator('.sl-row textarea').first().inputValue();
+      await page.locator('.sl-row .ad-handle').first().focus();
+      await page.keyboard.press('Alt+ArrowDown');
+      await wait(400);
+      check(
+        (await page.locator('.sl-row textarea').nth(1).inputValue()) === firstBefore,
+        `${w}: Alt+↓ on the handle moves the row`,
+      );
+      const said =
+        (await page
+          .locator('.sl-row')
+          .first()
+          .locator('xpath=ancestor::*[contains(@class,"sl")][1]')
+          .locator('[role=status]')
+          .first()
+          .textContent()) ?? '';
+      check(/移到第 2 位/.test(said), `${w}: the move is announced (${said})`);
+      await page.keyboard.press('Alt+ArrowUp');
+      await wait(300);
+      // 声音: one Fish ID field and 语速 (Part 29)
+      await tab('声音').click();
+      await wait(400);
+      const voiceLabels = await page.$$eval('.wb-card-body label > span:first-child', (n: Element[]) =>
+        n.filter((x) => x.getBoundingClientRect().width > 0).map((x) => x.textContent),
+      );
+      check(
+        voiceLabels.includes('Fish 音色 ID') && voiceLabels.includes('语速') && !voiceLabels.includes('音色档案 ID'),
+        `${w}: 声音 has the one Fish 音色 ID field and 语速 (${voiceLabels.join('|')})`,
+      );
+      const fishWidth = await page
+        .locator('label:has(> span:text-is("Fish 音色 ID")) input')
+        .evaluate((n: HTMLElement) => Math.round(n.getBoundingClientRect().width));
+      check(fishWidth < 560, `${w}: the Fish ID is a short field (${fishWidth}px)`);
+      await shot('r2-voice');
+    }
+
     // =================== D: 总览, one table ===================
     const today = await (await f.post('stats/players', { range: 7 })).json();
     await page.goto(`${f.origin}/?mode=provider-admin#/overview`);

@@ -1,11 +1,13 @@
 import { parseColour } from '../brand/character-colour.ts';
 import { skinFor, type Mode } from '../brand/palette-skin.ts';
 import { shortInput } from './ui/grow-box.ts';
+import { dragOrder } from './ui/drag-order.ts';
+import { dragHandle, liveRegion, movedSentence, removeButton } from './ui/item-controls.ts';
 
 /**
  * Part 24k-2: the colours of a character as a list: one 主 (the 主色 above, mirrored here) and then 点缀 in order, each a hex and a
  * name. At most 1 + 4 are stored; the player uses the 主 and the first 2 点缀. A small chip previews main / glow / accents as the
- * player will see them, at night and by day. Rows are records (no selector queries) so the list runs on the component tests' DOM.
+ * player will see them, at night and by day. Reorder by dragging the handle (or Alt+↑ / Alt+↓ on a focused row); one × removes a row. Rows are records (no selector queries) so the list runs on the component tests' DOM.
  */
 export const PALETTE_MAX = 5;
 export type PaletteEntry = { hex: string; name: string; role: 'main' | 'accent' };
@@ -55,6 +57,7 @@ export type PaletteList = {
 };
 
 type Row = {
+  id: string;
   row: HTMLElement;
   tag: HTMLElement;
   swatch: HTMLElement;
@@ -86,16 +89,18 @@ export function paletteList(
   mainName.value = initial?.find((e) => e.role === 'main')?.name ?? '';
   // Part 24b-7b: a colour name is short (24): an input sized to it, wider only when its text is.
   shortInput(mainName, 24);
-  mainRow.append(node('span', 'pl-tag', '主'), mainSwatch, mainText, mainName);
+  mainRow.append(node('span', 'pl-spacer'), node('span', 'pl-tag', '主'), mainSwatch, mainText, mainName);
   const list = node('div', 'pl-rows');
   const foot = node('div', 'pl-foot');
   const add = node('button', 'pl-add', '＋ 添加点缀');
   add.type = 'button';
   const chipHost = node('div', 'pl-chip-host');
   foot.append(add);
-  root.append(head, mainRow, list, foot, chipHost);
+  const live = liveRegion();
+  root.append(head, mainRow, list, foot, chipHost, live.node);
 
   let rows: Row[] = [];
+  let rowCounter = 0;
   const parsed = (r: Row) => (r.hex.value.trim() === '' ? '' : parseColour(r.hex.value));
   const refresh = () => {
     const main = mainHex();
@@ -148,13 +153,12 @@ export function paletteList(
     name.value = entry.name;
     shortInput(name, 24);
     name.setAttribute?.('aria-label', '点缀名称');
-    const up = node('button', 'pl-move', '↑');
-    up.type = 'button';
-    up.setAttribute?.('aria-label', '上移');
-    const del = node('button', 'pl-del', '删除');
-    del.type = 'button';
-    row.append(tag, swatch, hex, picker, name, up, del);
-    const record: Row = { row, tag, swatch, hex, picker, name };
+    const grip = dragHandle('点缀色', 'ad-handle pl-grip');
+    const del = removeButton('删除这个点缀色', 'ad-remove pl-del');
+    row.dataset.dragRow = '';
+    row.dataset.id = `pl-${++rowCounter}`;
+    row.append(grip, tag, swatch, hex, picker, name, del);
+    const record: Row = { id: row.dataset.id, row, tag, swatch, hex, picker, name };
     hex.addEventListener('input', () => {
       const p = parseColour(hex.value);
       if (p) picker.value = p.toLowerCase();
@@ -165,13 +169,6 @@ export function paletteList(
       changed();
     });
     name.addEventListener('input', changed);
-    up.addEventListener('click', () => {
-      const at = rows.indexOf(record);
-      if (at < 1) return;
-      rows = [...rows.slice(0, at - 1), record, rows[at - 1]!, ...rows.slice(at + 1)];
-      list.replaceChildren(...rows.map((r) => r.row));
-      changed();
-    });
     del.addEventListener('click', () => {
       const remove = () => {
         if (!rows.includes(record)) return;
@@ -202,6 +199,16 @@ export function paletteList(
     list.append(r.row);
     changed();
     r.hex.focus?.();
+  });
+  dragOrder(list, {
+    rows: () => rows.map((r) => r.row),
+    idOf: (row) => row.dataset.id!,
+    onOrder: (ids) => {
+      rows = ids.map((id) => rows.find((r) => r.id === id)!);
+      changed();
+    },
+    handle: '.ad-handle',
+    announce: (_row, to, total) => live.say(movedSentence('点缀色', to, total)),
   });
   mainName.addEventListener('input', onChange);
   refresh();

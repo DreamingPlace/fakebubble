@@ -254,15 +254,16 @@ export async function routeWebAccountAdmin(
       body([]);
       return { status: 200, body: characters.materialList(actor, id) };
     }
-    if (match[2] === 'material-prepare')
-      return {
-        status: 200,
-        body: characters.materialPrepare(
-          actor,
-          id,
-          body(['requestId', 'draftRevision', 'profileHash', 'referenceId', 'model']),
-        ),
-      };
+    if (match[2] === 'material-prepare') {
+      const prepared = characters.materialPrepare(
+        actor,
+        id,
+        body(['requestId', 'draftRevision', 'profileHash', ...optional('referenceId'), ...optional('model')]),
+      );
+      // Clips of an earlier 素材版本 with the same text and voice come along (best effort, no provider call).
+      await characters.materialCarry(actor, id, prepared.materialId);
+      return { status: 200, body: prepared };
+    }
     if (match[2] === 'material-upload')
       return {
         status: 200,
@@ -313,8 +314,9 @@ export async function routeWebAccountAdmin(
           body([
             'materialId',
             'acknowledgeRights',
-            'acknowledgeFooterListening',
             'note',
+            // Part 29 D: only while the footer exists (free tier off).
+            ...optional('acknowledgeFooterListening'),
             // Part 24k-2: a one-line welcome is ticked as before; several lines are ticked one by one (acknowledgeLines).
             ...optional('acknowledgeWelcomeListening'),
             ...optional('acknowledgeLines'),

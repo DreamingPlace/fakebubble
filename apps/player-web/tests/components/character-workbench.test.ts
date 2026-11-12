@@ -803,7 +803,15 @@ test('double click never double-submits a single or batch preview', async (t) =>
 });
 
 test('a new material follows the site voice model unless the admin pins the character back to s2.1-pro', async (t) => {
+  // Part 29 B/E (named exception): the voice is the character's own (one Fish id, derived binding), so there is no referenceId field
+  // to type into and the request carries no model unless pinned (the server resolves the model that will actually speak).
   const f = fixture(t);
+  f.detail.speech = {
+    available: true,
+    hasVoice: true,
+    voice: { referenceId: 'ref-1', profileId: 'jojo', version: 1, speed: 1, derived: true },
+    siteModel: 'drama-3',
+  };
   await f.open();
   const prepared: unknown[] = [];
   f.respond(async (path, body) => {
@@ -811,14 +819,11 @@ test('a new material follows the site voice model unless the admin pins the char
     prepared.push(body.model);
     return { materialId: 'mat-' + prepared.length };
   });
-  const reference = f.input('已有 Fish 音色 referenceId');
-  reference.value = 'ref-1';
-  reference.fire('input');
   await f.click('准备新素材版本');
-  const pin = f.input('固定使用 s2.1-pro：这个克隆在 Drama 3 上听起来不对时勾选，不随站点语音模型切换');
+  const pin = f.input('固定使用 s2.1-pro（不跟随站点语音模型）');
   assert.equal(pin.checked, false, 'unpinned by default');
   pin.checked = true;
   pin.fire('change');
   await f.click('准备新素材版本');
-  assert.deepEqual(prepared, ['s2.1-pro', 'pin:s2.1-pro']);
+  assert.deepEqual(prepared, [undefined, 'pin:s2.1-pro']);
 });

@@ -1,3 +1,4 @@
+import './player-build-guard.ts';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { startConsoleFixture } from './console-fixture-24b6.ts';
@@ -20,7 +21,8 @@ const dir = args.find((a) => !a.startsWith('--'));
 const shots = dir ? resolve(dir) : null;
 if (shots) mkdirSync(shots, { recursive: true });
 
-const f = await startConsoleFixture({ provider: { draftMs: 300, reviewMs: 300 }, speech: !baseline });
+// Part 29 D (named exception): the free tier is OFF here, as before, so the 结束成品 slot this check looks at exists.
+const f = await startConsoleFixture({ provider: { draftMs: 300, reviewMs: 300 }, speech: !baseline, freeTier: false });
 const problems: string[] = [];
 const errors: string[] = [];
 const check = (condition: unknown, message: string) => {
@@ -76,6 +78,16 @@ try {
   next.template.version = was.published.version + 1;
   await f.post('characters/c04/save', { expectedRevision: null, profile: next });
 
+  // Part 29 (named exception): a second character with a saved draft for the second viewport (see 声音: 生成 below).
+  {
+    const second = await (await f.post('characters/chen-jimi/detail', {})).json();
+    if (!second.draft) {
+      const again = structuredClone(second.published.profile);
+      again.template.version = second.published.version + 1;
+      await f.post('characters/chen-jimi/save', { expectedRevision: null, profile: again });
+    }
+  }
+
   /** Submits one line on the open 预演 tab (two clicks: ask, then send) and opens its finished row. */
   const runPreview = async (text: string) => {
     await tab('预演');
@@ -109,10 +121,18 @@ try {
       await page.setViewportSize({ width, height });
 
       // ============================== 声音: 生成 ==============================
-      await open('characters/jojo');
+      // Part 29 C (named exception): a new 素材版本 now carries over the clips of an earlier one whose text and voice are unchanged,
+      // so the second viewport uses another character (a fresh one has empty slots, as this check expects).
+      const voiceOf = width === 1440 ? 'jojo' : 'chen-jimi';
+      await open(`characters/${voiceOf}`);
       await tab('声音');
-      const reference = page.locator('label:has-text("已有 Fish 音色 referenceId") input').first();
-      await reference.fill('fake-reference-24k1');
+      // Part 29 B (named exception): one Fish id field on the 声音 tab; the draft is saved with it, then the 素材版本 is prepared.
+      const reference = page.locator('label:has-text("Fish 音色 ID") input').first();
+      if (!(await reference.inputValue())) {
+        await reference.fill('fake-reference-24k1');
+        await page.locator('button:has-text("保存草稿")').first().click();
+        await wait(1500);
+      }
       await page.locator('button:has-text("准备新素材版本")').first().click();
       // The newest 素材版本 is not always listed first: a slot is found by still offering 生成 (a filled slot has none).
       const slotOf = (n: string) =>

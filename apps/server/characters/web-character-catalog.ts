@@ -6,6 +6,7 @@ import type { BusinessStore } from '../platform/store-contract.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { installWebWelcomeLines } from './web-welcome-schema.ts';
 import { upgradeProfile, type WelcomeLine } from '../../../packages/contracts/web-welcomes.ts';
+import { CATALOG_MAX } from '../../../packages/contracts/web-provider.ts';
 
 export interface WebCharacterPresentation {
   displayName: string;
@@ -50,7 +51,7 @@ const statements = [
     profile_json TEXT NOT NULL CHECK(json_valid(profile_json)),content_hash TEXT NOT NULL,created_at INTEGER,
     PRIMARY KEY(character_id,version)) STRICT`,
   `CREATE TABLE web_character_catalog(character_id TEXT PRIMARY KEY REFERENCES character_templates(id),
-    version INTEGER NOT NULL,position INTEGER NOT NULL UNIQUE CHECK(position>=0 AND position<15),
+    version INTEGER NOT NULL,position INTEGER NOT NULL UNIQUE CHECK(position>=0 AND position<${CATALOG_MAX}),
     FOREIGN KEY(character_id,version) REFERENCES web_character_versions(character_id,version)) STRICT`,
   `CREATE TABLE web_character_revisions(character_id TEXT NOT NULL,revision INTEGER NOT NULL CHECK(revision>0),
     base_version INTEGER,profile_json TEXT NOT NULL CHECK(json_valid(profile_json)),content_hash TEXT NOT NULL,
@@ -192,7 +193,7 @@ export function publishedWebCharacters(store: BusinessStore): CatalogEntry[] {
     t.config_json,t.version live_version FROM web_character_catalog c
     JOIN web_character_versions v ON v.character_id=c.character_id AND v.version=c.version
     JOIN character_templates t ON t.id=c.character_id ORDER BY c.position`);
-  ensure(rows.length <= 15, 'WEB_PROVIDER_CATALOG_INVALID');
+  ensure(rows.length <= CATALOG_MAX, 'WEB_PROVIDER_CATALOG_INVALID');
   return rows.map((row) => {
     const stored = JSON.parse(row.profile_json) as StoredWebCharacterProfile;
     ensure(

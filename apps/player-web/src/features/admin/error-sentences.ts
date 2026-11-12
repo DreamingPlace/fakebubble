@@ -1,3 +1,4 @@
+import { CATALOG_MAX } from '../../../../../packages/contracts/web-provider.ts';
 /**
  * Part 24m: one short sentence for every code the server can answer the workbench with (save, discard, 预演 start / status / runs,
  * materials, publish, restore, 下线 / 上线, code and checklist, profile import, deletion). The generic "result unknown" text is
@@ -12,7 +13,7 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   INVALID_DRAFT_VERSION: '草稿的版本号与当前正式版不衔接，请重新载入后再保存。',
   CHARACTER_ID_MISMATCH: '资料里的人物 ID 与当前人物不一致，请重新载入。',
   CHARACTER_DRAFT_LIMIT: '草稿已达上限（100 个），请先清理不用的草稿。',
-  CHARACTER_CATALOG_FULL: '已达到 15 个人物，请先明确处理已有角色。',
+  CHARACTER_CATALOG_FULL: `已达到 ${CATALOG_MAX} 个人物，请先明确处理已有角色。`,
   CHARACTER_DELETED: '人物已删除，不能继续编辑、发布或复用此 ID。',
   NOT_FOUND: '没有找到这项内容，可能已被删除。请重新载入。',
   INVALID_TIME: '服务器时间读取异常，本次没有保存，请稍后再试。',
@@ -61,6 +62,9 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   INVALID_RELATIONSHIP: '预演关系无效，请重新选择。',
   INVALID_PROFILE_HASH: '资料摘要与当前草稿不一致，请重新载入后再试。',
   INVALID_REQUEST: '填写的内容不符合要求，请核对后再试。',
+  PAYLOAD_TOO_LARGE: '内容太大，服务器没有收下。资料正文建议精简后再保存（上限约 48000 字的设定、20000 字的人设）。',
+  MATERIAL_STALE: '需重新准备：这个素材版本与当前的音色或欢迎词不再一致，请点「准备新素材版本」。',
+  FOOTER_NOT_REQUIRED: '免费体验开启时不需要结束成品。',
   IDEMPOTENCY_CONFLICT: '这次提交与之前的同一请求内容不一致，请重新打开本页后重试。',
   // ---- runs, eval sets, compare ----
   COMPARE_RUN_ACTIVE: '这个角色已有一组对比正在运行，请等它结束。',
@@ -75,7 +79,7 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   SIMULATED_TIME_PREVIEW_ONLY: '模拟时间只能用于预演，不能用于发布。',
   // ---- materials ----
   CHARACTER_MATERIALS_REQUIRED: '当前草稿需要匹配的、已批准的欢迎和结束成品。',
-  CHARACTER_VOICE_REQUIRED: '请先在资料中绑定已有音色并保存草稿。',
+  CHARACTER_VOICE_REQUIRED: '先填 Fish 音色 ID。',
   MATERIALS_UNAVAILABLE: '这个站点还没有开启成品素材。',
   MATERIAL_APPROVAL_IMMUTABLE: '已批准的成品不能再改。请准备新的素材版本。',
   MATERIAL_APPROVAL_REQUIRED: '这一成品还没有批准，请先试听并批准。',

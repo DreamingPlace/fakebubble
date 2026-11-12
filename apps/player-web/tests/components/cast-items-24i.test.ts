@@ -102,8 +102,11 @@ test('add, move and delete change the list in place and keep order and ids; 加�
   assert.match(e.text('.cs-item-error')[3]!, /不能为空/, 'an empty row is flagged, not dropped');
   assert.equal(e.button('加一项')[0]!.disabled, true, 'full at 4/4');
   assert.deepEqual(e.text('.cs-items-count'), ['4/4']);
+  // Part 27 (named exception): 上移 / 下移 buttons became a drag handle; the keyboard move is Alt+↑ / Alt+↓ on the focused row.
+  const altArrow = (label: string, key: 'ArrowUp' | 'ArrowDown') =>
+    e.button(label)[0]!.dispatch('keydown', { altKey: true, key } as never);
   // move 丙 up: 甲 丙 乙
-  e.button('把别名第 3 项上移')[0]!.click();
+  altArrow('别名第 3 项：拖动排序', 'ArrowUp');
   assert.deepEqual(
     e.items.slice(0, 3).map((i) => [i.id, i.text]),
     [
@@ -112,7 +115,17 @@ test('add, move and delete change the list in place and keep order and ids; 加�
       ['i1', '乙'],
     ],
   );
-  assert.equal(e.button('把别名第 1 项上移')[0]!.disabled, true, 'the first row cannot go up');
+  altArrow('别名第 1 项：拖动排序', 'ArrowUp');
+  assert.deepEqual(
+    e.items.slice(0, 3).map((i) => i.id),
+    ['i0', 'i2', 'i1'],
+    'the first row cannot go up',
+  );
+  assert.match(
+    e.root.querySelectorAll('[role="status"]')[0]!.textContent,
+    /移到第 2 位，共 4 项/,
+    'the move is announced',
+  );
   // delete the first
   e.button('删除别名第 1 项')[0]!.click();
   assert.deepEqual(
@@ -126,5 +139,5 @@ test('without cast.edit the rows are read-only and there are no tools', (t) => {
   const e = editor(t, ['小满'], { edit: false });
   assert.equal(e.root.querySelectorAll('.cs-item-text')[0]!.hasAttribute('readonly'), true);
   assert.equal(e.button('加一项').length, 0);
-  assert.equal(e.root.querySelectorAll('.cs-item-tools').length, 0);
+  assert.equal(e.root.querySelectorAll('.ad-handle').length + e.root.querySelectorAll('.ad-remove').length, 0);
 });

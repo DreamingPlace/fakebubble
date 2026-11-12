@@ -1,3 +1,4 @@
+import './player-build-guard.ts';
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -159,16 +160,30 @@ try {
   await shot('aliases-12-1280');
   await page.setViewportSize({ width: 1440, height: 900 });
   await wait(400);
-  // reorder: row 3 goes up; the first row's 上移 is disabled
+  // Part 27 (named exception): 上移 / 下移 are gone. Reorder: row 3's handle is dragged up with the pointer (with motion), and the
+  // first row cannot move up with Alt+↑ either.
   const order = await texts('aliases');
-  await list('aliases').locator('button[aria-label="把别名第 3 项上移"]').click();
-  await wait(100);
+  const handleOf = (kind: 'aliases' | 'addresses', n: number) =>
+    list(kind)
+      .locator('.cs-item-handle')
+      .nth(n - 1);
+  const from = (await handleOf('aliases', 3).boundingBox())!;
+  const to = (await handleOf('aliases', 2).boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, (from.y + to.y) / 2, { steps: 4 });
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2 - 4, { steps: 6 });
+  await page.mouse.up();
+  await wait(500);
   const moved = await texts('aliases');
-  check(moved[1] === order[2] && moved[2] === order[1], `上移 swaps rows 2 and 3 (${moved.slice(0, 3)})`);
   check(
-    await list('aliases').locator('button[aria-label="把别名第 1 项上移"]').isDisabled(),
-    'the first row cannot move up',
+    moved[1] === order[2] && moved[2] === order[1],
+    `dragging row 3's handle up swaps rows 2 and 3 (${moved.slice(0, 3)})`,
   );
+  await handleOf('aliases', 1).focus();
+  await page.keyboard.press('Alt+ArrowUp');
+  await wait(150);
+  check(JSON.stringify(await texts('aliases')) === JSON.stringify(moved), 'the first row cannot move up');
   // delete the last row and add it back
   await list('aliases').locator('button[aria-label="删除别名第 12 项"]').click();
   await wait(100);
@@ -219,8 +234,18 @@ try {
   await list('addresses').scrollIntoViewIfNeeded();
   await shot('addresses-6-1280');
   await page.setViewportSize({ width: 1440, height: 900 });
-  await list('addresses').locator('button[aria-label="把称呼第 3 项上移"]').click();
-  await wait(100);
+  // Part 27 (named exception): keyboard reorder, Alt+↑ on the focused handle of item 3, announced to screen readers.
+  await handleOf('addresses', 3).focus();
+  await page.keyboard.press('Alt+ArrowUp');
+  await wait(200);
+  check(
+    /移到第 2 位，共 6 项/.test((await list('addresses').locator('[role="status"]').textContent()) ?? ''),
+    'the keyboard move is announced',
+  );
+  check(
+    (await page.evaluate(() => document.activeElement?.classList.contains('cs-item-handle'))) === true,
+    'the focus stays on the handle after the keyboard move',
+  );
   const addrOrder = await texts('addresses');
   check(addrOrder[1] === 'XXX' && addrOrder[2] === 'XX老师', `称呼 reorder (${addrOrder.slice(0, 3)})`);
   const joined = addrOrder.join(' / ');

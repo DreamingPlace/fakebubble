@@ -309,6 +309,8 @@ export function systemView(
         ['最近 7 天未通过', String(v.security.failuresLast7Days)],
         ['今天无法验证（Turnstile 服务不可达）', String(v.security.unavailableToday)],
         ['最近 7 天无法验证', String(v.security.unavailableLast7Days)],
+        ['今天限流表已满、逐 IP 检查被放行（全站限流仍有效）', String(v.security.rateOverflowToday)],
+        ['未登记的拒绝码（按 400 回答，自启动起）', String(v.security.unknownRefusals)],
       ]),
     );
     const cleanup = v.retention
@@ -337,6 +339,7 @@ export function systemView(
                   ? hoverValue(
                       h('span', { class: 'sys-table-cell' }, h('span', { class: 'sys-table-name', text: f.table })),
                       f.table,
+                      true, // the failures table scrolls sideways inside its card: the bubble is placed in the viewport, never clipped
                     )
                   : h('span', { class: 'sys-table-none', text: '—' }),
                 f.errorName,

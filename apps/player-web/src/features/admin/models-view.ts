@@ -184,9 +184,7 @@ export function modelsView(
       button.disabled = !r.canManage;
       button.dataset.locked = String(!r.canManage);
     }
-    reviewNote.textContent = r.canManage
-      ? '审核是每条回复的第二步：检查草稿、必要时改写，并写下记忆。切换只影响此后发送的消息；已在处理的消息按原来的模型和价格完成。默认 V4 Pro。'
-      : '只读：需要“模型与价格”管理权限才能切换。';
+    reviewNote.textContent = r.canManage ? '只影响此后发送的消息。' : '只读：需要“模型与价格”管理权限才能切换。';
     reviewRecent.replaceChildren(
       ...r.recent.map((c) =>
         h('li', {
@@ -216,7 +214,7 @@ export function modelsView(
       const ok = await deps.confirm(
         {
           title: '确认切换审核模型',
-          message: `审核模型将从 ${REVIEW_MODEL_LABELS[r.current]} 切换为 ${REVIEW_MODEL_LABELS[to]}。只影响此后发送的消息；已在处理的消息仍用原来的模型和价格。`,
+          message: `审核模型将从 ${REVIEW_MODEL_LABELS[r.current]} 切换为 ${REVIEW_MODEL_LABELS[to]}，只影响此后发送的消息。`,
           confirmLabel: `确认切换为 ${REVIEW_MODEL_LABELS[to]}`,
         },
         reviewConfirm,

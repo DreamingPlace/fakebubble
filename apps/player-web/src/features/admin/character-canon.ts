@@ -3,6 +3,8 @@ import { h } from '../cocreation/h.ts';
 import { markDirty } from './ui/unsaved.ts';
 import { growBox, shortInput, type GrowKind } from './ui/grow-box.ts';
 import { sentenceList, type SentenceList } from './ui/sentence-list.ts';
+import { dragOrder } from './ui/drag-order.ts';
+import { dragHandle, liveRegion, movedSentence, removeButton } from './ui/item-controls.ts';
 
 /**
  * Part 24b-6: structured editors over the EXISTING authorCanon.settings keys (no schema change).
@@ -17,11 +19,22 @@ type Settings = Record<string, JsonValue>;
 type Piece = { node: HTMLElement; changed: () => boolean; read: () => JsonValue | undefined };
 
 const PAST_KEY = 'background';
+const FACTS_KEY = 'profileFacts';
+const BOUNDARIES_KEY = 'boundaries';
+/** The four fixed 边界与隐藏设定 items of the 24j template, in the template's order (always shown, even when empty). */
+export const BOUNDARY_LABELS = [
+  '知道但不会说出口的事',
+  '不可改变的核心设定',
+  '不应擅自补充的事实',
+  '不符合角色的行为·表达',
+] as const;
 const KEY_LABEL: Record<string, string> = {
   speechStyle: '说话风格',
   dialogueStyle: '对话风格',
   dialogueExamples: '对话样例',
   background: '经历',
+  [FACTS_KEY]: '个人资料',
+  [BOUNDARIES_KEY]: '边界与隐藏设定',
 };
 
 const isObject = (value: unknown): value is Record<string, JsonValue> =>
@@ -40,6 +53,8 @@ const isExamples = (value: unknown) =>
       (item.player === undefined || typeof item.player === 'string') &&
       (item.reply === undefined || isStrings(item.reply)),
   );
+const isStringMap = (value: unknown): value is Record<string, string> =>
+  isObject(value) && Object.values(value).every((item) => typeof item === 'string');
 const isPast = (value: unknown) =>
   Array.isArray(value) &&
   value.every(
@@ -119,6 +134,40 @@ function textOrRows(
   };
 }
 
+/** A row of a card list keeps one id for as long as it lives (the drag order and the live announcements name rows by it). */
+const rowIds = new WeakMap<object, number>();
+let rowSeq = 0;
+const idOf = (row: object) => {
+  let id = rowIds.get(row);
+  if (!id) {
+    id = ++rowSeq;
+    rowIds.set(row, id);
+  }
+  return id;
+};
+/** The shared drag order (handle, Alt+↑ / Alt+↓, live announcement) over a list that repaints itself from its rows. */
+function orderable<T extends object>(
+  list: HTMLElement,
+  selector: string,
+  name: string,
+  live: { say: (message: string) => void },
+  access: { get: () => T[]; set: (rows: T[]) => void; paint: () => void; edit: () => void },
+) {
+  dragOrder(list, {
+    rows: () => Array.from(list.querySelectorAll(selector)) as HTMLElement[],
+    idOf: (row) => row.dataset.id!,
+    onOrder: (ids) => {
+      const now = access.get();
+      access.set(ids.map((id) => now.find((r) => String(idOf(r)) === id)!));
+      access.paint();
+      access.edit();
+    },
+    handle: '.ad-handle',
+    announce: (_row, to, total) => live.say(movedSentence(name, to, total)),
+  });
+}
+const cardAttrs = (row: object) => ({ role: 'listitem', 'data-drag-row': '', 'data-id': String(idOf(row)) });
+
 type Example = { situation?: string; player: string; reply: string };
 function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
   const label = KEY_LABEL.dialogueExamples!;
@@ -139,7 +188,8 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
   };
   if (!rows.length) rows = [newExample()];
   const kept = () => rows.filter((row) => !(blank.has(row) && row.player.trim() === '' && row.reply.trim() === ''));
-  const list = h('div', { class: 'cn-pairs' });
+  const list = h('div', { class: 'cn-pairs', attrs: { role: 'list' } });
+  const live = liveRegion();
   const paint = () => {
     list.replaceChildren();
     rows.forEach((row, index) => {
@@ -164,7 +214,7 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
         true,
       );
       reply.className = `${reply.className} cn-reply`;
-      const remove = h('button', { class: 'cn-x', text: '×', attrs: { type: 'button', 'aria-label': '去掉' } });
+      const remove = removeButton(`删除${label}第 ${index + 1} 个`, 'ad-remove cn-x');
       remove.addEventListener('click', () => {
         rows = rows.filter((_, at) => at !== index);
         if (!rows.length) rows = [newExample()];
@@ -189,10 +239,15 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
       list.append(
         h(
           'div',
-          { class: 'cn-pair' },
-          ...parts.map((part) => lab('情境', part, ' cn-situation-lab')),
-          lab('玩家说', player),
-          lab('他回', reply),
+          { class: 'cn-pair', attrs: cardAttrs(row) },
+          dragHandle(`${label}第 ${index + 1} 个`, 'ad-handle cn-handle'),
+          h(
+            'div',
+            { class: 'cn-pair-fields' },
+            ...parts.map((part) => lab('情境', part, ' cn-situation-lab')),
+            lab('玩家说', player),
+            lab('他回', reply),
+          ),
           remove,
         ),
       );
@@ -210,7 +265,8 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
     );
   };
   paint();
-  box.append(list);
+  orderable(list, '.cn-pair', label, live, { get: () => rows, set: (next) => (rows = next), paint, edit: onEdit });
+  box.append(list, live.node);
   const emit = (): JsonValue =>
     kept().map((row) => ({
       ...(row.situation !== undefined ? { situation: row.situation } : {}),
@@ -252,7 +308,8 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
   if (!rows.length) rows = [newCard()];
   const kept = () =>
     rows.filter((row) => !(blank.has(row) && row.text.trim() === '' && (row.title ?? '').trim() === ''));
-  const cards = h('div', { class: 'cn-cards' });
+  const cards = h('div', { class: 'cn-cards', attrs: { role: 'list' } });
+  const live = liveRegion();
   const paint = () => {
     cards.replaceChildren();
     rows.forEach((row, index) => {
@@ -281,14 +338,22 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
         'para',
         true,
       );
-      const remove = h('button', { class: 'cn-x', text: '×', attrs: { type: 'button', 'aria-label': '去掉' } });
+      const remove = removeButton(`删除${label}第 ${index + 1} 张`, 'ad-remove cn-x');
       remove.addEventListener('click', () => {
         rows = rows.filter((_, at) => at !== index);
         if (!rows.length) rows = [newCard()];
         paint();
         onEdit();
       });
-      cards.append(h('div', { class: 'cn-card' }, ...parts, text, remove));
+      cards.append(
+        h(
+          'div',
+          { class: 'cn-card', attrs: cardAttrs(row) },
+          dragHandle(`${label}第 ${index + 1} 张`, 'ad-handle cn-handle'),
+          h('div', { class: 'cn-card-fields' }, ...parts, text),
+          remove,
+        ),
+      );
     });
     cards.append(
       adder(
@@ -298,12 +363,13 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
           paint();
           onEdit();
         },
-        'cn-add cn-card cn-add-card',
+        'cn-add cn-add-card',
       ),
     );
   };
   paint();
-  box.append(cards);
+  orderable(cards, '.cn-card', label, live, { get: () => rows, set: (next) => (rows = next), paint, edit: onEdit });
+  box.append(cards, live.node);
   const emit = (): JsonValue =>
     kept().map((row) =>
       row.shape === 'string' ? row.text : { ...(row.title !== undefined ? { title: row.title } : {}), text: row.text },
@@ -313,6 +379,131 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
     node: box,
     changed,
     read: () => (original === undefined && !kept().length ? undefined : changed() ? emit() : (original as JsonValue)),
+  };
+}
+
+/**
+ * Part 24b-7b round 2, 其余设定 · 个人资料 (profileFacts): label → value rows, in the order they came: the label a short single-line
+ * input, the value a one-sentence growing box; add / remove / reorder with the shared row controls. The 24j labels (性别, 身高, 学校-年级,
+ * 家庭成员 …) are kept as written. A label can only be used once (an object has one value per key): a repeat is refused when the form is read.
+ */
+function facts(original: Record<string, string> | undefined, onEdit: () => void): Piece {
+  const label = KEY_LABEL[FACTS_KEY]!;
+  const box = h('div', { class: 'cn-field cn-wide' }, h('span', { class: 'cn-label', text: label }));
+  type Fact = { label: string; value: string };
+  const toRows = (): Fact[] => Object.entries(original ?? {}).map(([k, v]) => ({ label: k, value: v }));
+  let rows = toRows();
+  const blank = new WeakSet<Fact>();
+  const newFact = (): Fact => {
+    const row: Fact = { label: '', value: '' };
+    blank.add(row);
+    return row;
+  };
+  if (!rows.length) rows = [newFact()];
+  const kept = () => rows.filter((row) => !(blank.has(row) && row.label.trim() === '' && row.value.trim() === ''));
+  const list = h('div', { class: 'cn-facts', attrs: { role: 'list' } });
+  const live = liveRegion();
+  const paint = () => {
+    list.replaceChildren();
+    rows.forEach((row, index) => {
+      const name = input(
+        row.label,
+        '名称（如 身高）',
+        () => {
+          row.label = name.value;
+          onEdit();
+        },
+        24,
+        'cn-fact-label',
+      );
+      const value = area(
+        row.value,
+        `${label}：内容`,
+        () => {
+          row.value = value.value;
+          onEdit();
+        },
+        'one',
+        true,
+      );
+      const remove = removeButton(`删除${label}第 ${index + 1} 项`, 'ad-remove cn-x');
+      remove.addEventListener('click', () => {
+        rows = rows.filter((_, at) => at !== index);
+        if (!rows.length) rows = [newFact()];
+        paint();
+        onEdit();
+      });
+      list.append(
+        h(
+          'div',
+          { class: 'cn-fact', attrs: cardAttrs(row) },
+          dragHandle(`${label}第 ${index + 1} 项`, 'ad-handle cn-handle'),
+          name,
+          value,
+          remove,
+        ),
+      );
+    });
+    list.append(
+      adder(
+        '＋ 添加一项',
+        () => {
+          rows = [...rows, newFact()];
+          paint();
+          onEdit();
+        },
+        'cn-add cn-add-wide',
+      ),
+    );
+  };
+  paint();
+  orderable(list, '.cn-fact', label, live, { get: () => rows, set: (next) => (rows = next), paint, edit: onEdit });
+  box.append(list, live.node);
+  const changed = () =>
+    !same(
+      kept().map((r) => [r.label, r.value]),
+      toRows().map((r) => [r.label, r.value]),
+    );
+  const emit = (): JsonValue => {
+    const out: Record<string, string> = {};
+    kept().forEach((row, at) => {
+      if (row.label.trim() === '') throw new CanonError(`${label}第 ${at + 1} 项缺少名称。`);
+      if (row.label in out) throw new CanonError(`${label}里“${row.label}”出现了两次；一个名称只能有一项。`);
+      out[row.label] = row.value;
+    });
+    return out;
+  };
+  return {
+    node: box,
+    changed,
+    read: () => (original === undefined && !kept().length ? undefined : changed() ? emit() : (original as JsonValue)),
+  };
+}
+
+/**
+ * 其余设定 · 边界与隐藏设定 (boundaries): the four fixed items of the 24j template, each a labelled paragraph box (four lines at first,
+ * then the text's own height), always shown in the template's order, even when empty. Only an object with those keys and text
+ * values is edited here; anything else stays in the JSON box.
+ */
+function boundaries(original: Record<string, string> | undefined, onEdit: () => void): Piece {
+  const label = KEY_LABEL[BOUNDARIES_KEY]!;
+  const box = h('div', { class: 'cn-field cn-wide' }, h('span', { class: 'cn-label', text: label }));
+  const texts = new Map<string, HTMLTextAreaElement>();
+  for (const name of BOUNDARY_LABELS) {
+    const text = area(original?.[name] ?? '', name, onEdit, 'para', true);
+    texts.set(name, text);
+    box.append(h('label', { class: 'cn-lab cn-boundary' }, h('span', { text: name }), text));
+  }
+  const changed = () => BOUNDARY_LABELS.some((name) => (texts.get(name)!.value ?? '') !== (original?.[name] ?? ''));
+  const emit = (): JsonValue => {
+    const out: Record<string, string> = {};
+    for (const name of BOUNDARY_LABELS) if (texts.get(name)!.value.trim() !== '') out[name] = texts.get(name)!.value;
+    return out;
+  };
+  return {
+    node: box,
+    changed,
+    read: () => (original === undefined && !changed() ? undefined : changed() ? emit() : (original as JsonValue)),
   };
 }
 
@@ -326,6 +517,8 @@ export function canonEditors(settings: Settings, onEdit: () => void) {
   const pieces = new Map<string, Piece>();
   const speech = h('fieldset', { class: 'cn-pane' });
   const pastPane = h('fieldset', { class: 'cn-pane' });
+  // Round 2: the facts and the four boundaries of 其余设定 are structured too (the other keys stay in the JSON box).
+  const other = h('div', { class: 'cn-pane cn-other' });
   speech.append(h('legend', { text: '说话方式' }));
   pastPane.append(h('legend', { text: '经历' }));
   const lists: SentenceList[] = [];
@@ -348,6 +541,19 @@ export function canonEditors(settings: Settings, onEdit: () => void) {
     const piece = past(settings[PAST_KEY], onEdit);
     pieces.set(PAST_KEY, piece);
     pastPane.append(piece.node);
+  }
+  if (settings[FACTS_KEY] === undefined || isStringMap(settings[FACTS_KEY])) {
+    const piece = facts(settings[FACTS_KEY] as Record<string, string> | undefined, onEdit);
+    pieces.set(FACTS_KEY, piece);
+    other.append(piece.node);
+  }
+  if (
+    settings[BOUNDARIES_KEY] === undefined ||
+    (isStringMap(settings[BOUNDARIES_KEY]) && onlyKeys(settings[BOUNDARIES_KEY], BOUNDARY_LABELS))
+  ) {
+    const piece = boundaries(settings[BOUNDARIES_KEY] as Record<string, string> | undefined, onEdit);
+    pieces.set(BOUNDARIES_KEY, piece);
+    other.append(piece.node);
   }
   const rest: Settings = {};
   for (const [key, value] of Object.entries(settings)) if (!pieces.has(key)) rest[key] = value;
@@ -380,6 +586,9 @@ export function canonEditors(settings: Settings, onEdit: () => void) {
   return {
     speech,
     past: pastPane,
+    other,
+    /** Whether any key is left for the JSON box (it is shown, folded, only then). */
+    hasRest: Object.keys(rest).length > 0,
     /** The JSON text of the keys no structured editor owns. */
     rest: JSON.stringify(rest, null, 2),
     assemble,

@@ -1608,3 +1608,190 @@ test('Part 21i: a fresh deployment prices drama-3 at 50 from the first row; an o
   assert.throws(again(1, now + DAY), /PRICE_OVERLAP|UNIQUE|SQLITE|constraint/i, 'same version inside an existing row');
   again(2, now + DAY)();
 });
+
+test('Part 29 D: a guest reply whose trial footer is missing is published without it; it never fails with WEB_FOOTER_NOT_READY', async (t) => {
+  let clockNow = now;
+  const f = fixture(t),
+    clock = { now: () => clockNow };
+  let textCalls = 0,
+    fishCalls = 0;
+  const generator = new DeepSeekTextGenerator({
+    apiKey: 'offline-only',
+    fetch: async (_url, init) => {
+      textCalls++;
+      const tool = JSON.parse(String(init?.body)).tools[0].function.name;
+      if (tool === 'submit_dialogue_draft') return Response.json(draftEnvelope(f.request));
+      const envelope = acceptedAuditEnvelope(f.request);
+      const call = envelope.choices[0]!.message.tool_calls[0]!.function;
+      const audit = JSON.parse(call.arguments);
+      audit.replacementBubbles = [
+        { text: '第一段合成语音。', expression: 'neutral' },
+        { text: '第二段合成语音。', expression: 'neutral' },
+      ];
+      audit.coverage.input.supportQuote = '第一段合成语音。';
+      call.arguments = JSON.stringify(audit);
+      return Response.json(envelope);
+    },
+  });
+  const runner = new WebProviderRunner(f.store, clock, generator, async (request) => {
+    fishCalls++;
+    const text = fishCalls === 1 ? '第一段合成语音。' : '第二段合成语音。';
+    const expected = fishSpeechRequest(
+      {
+        jobId: `operation-${fishCalls - 1}`,
+        text,
+        expression: 'neutral',
+        speed: 1,
+        voice: { profileId: 'synthetic-profile', referenceId: 'synthetic-reference', version: 1 },
+        model: 's2.1-pro',
+        deliveryStyle: 'conversational',
+      },
+      's2.1-pro',
+    );
+    assert.deepEqual(request, {
+      body: expected.body,
+      wireRequestHash: expected.requestHash,
+      model: 's2.1-pro',
+      billedTextBytes: expected.bytes,
+      speech: {
+        jobId: `operation-${fishCalls - 1}`,
+        text,
+        expression: 'neutral',
+        speed: 1,
+        voice: { profileId: 'synthetic-profile', referenceId: 'synthetic-reference', version: 1 },
+        model: 's2.1-pro',
+        deliveryStyle: 'conversational',
+      },
+    });
+    if (fishCalls === 1) clockNow = now + 11;
+    return { audio: syntheticTone(), receipt: { id: 'fake-fish' }, usageUnits: expected.bytes };
+  });
+  f.ledger.configureBudget('deepseek', 3_000_000);
+  for (const phase of ['draft', 'review'] as const) {
+    f.ledger.configurePrice({
+      id: `deepseek-${phase}`,
+      provider: 'deepseek',
+      model: phase === 'draft' ? generator.model : generator.reviewModel,
+      phase,
+      currency: 'USD',
+      unit: 'token',
+      upperMicrosPerUnit: 1,
+      validFrom: now - 1,
+      validUntil: now + 1000,
+      version: 1,
+    });
+    new WebDispatchLedger(f.store as WebStore, clock).configureBudget({
+      provider: 'deepseek',
+      stage: 'text',
+      phase,
+      capacity: 1,
+    });
+  }
+  f.store.run(
+    `UPDATE web_scheduler_state SET epoch=1,coordinator_token='coordinator',
+    coordinator_expires_at=? WHERE singleton=1`,
+    now + 1000,
+  );
+  f.store.run(
+    `UPDATE web_operations SET status='text_running',stage_version=2,
+    lease_epoch=1,lease_token='text-lease',lease_owner='text-worker',lease_expires_at=?
+    WHERE id='operation'`,
+    now + 1000,
+  );
+  const textClaim = {
+    operationId: 'operation',
+    stage: 'text' as const,
+    stageVersion: 2,
+    epoch: 1,
+    token: 'text-lease',
+    owner: 'text-worker',
+    principalId: 'principal',
+    worldId: 'world',
+    conversationId: 'conversation',
+    characterId: 'character',
+    inputMessageId: 'input',
+    deadlineAt: now + 100_000,
+    leaseExpiresAt: now + 1000,
+  };
+  await runner.runText(textClaim, new AbortController().signal);
+  assert.equal(textCalls, 2);
+  for (const row of f.store.all<{ phase: string; max_units: number }>(`SELECT phase,max_units
+    FROM web_provider_attempts WHERE operation_id='operation' AND phase IN ('draft','review')`))
+    assert.ok(row.max_units < 1_048_576, `${row.phase} hold is bounded by wire bytes`);
+  assert.equal(
+    f.store.get<{ status: string }>("SELECT status FROM web_operations WHERE id='operation'")?.status,
+    'text_ready',
+  );
+  f.ledger.configureBudget('fish', 3_000_000);
+  f.ledger.configurePrice({
+    id: 'fish-speech',
+    provider: 'fish',
+    model: 's2.1-pro',
+    phase: 'speech',
+    currency: 'USD',
+    unit: 'byte',
+    upperMicrosPerUnit: 1,
+    validFrom: now - 1,
+    validUntil: now + 1000,
+    version: 1,
+  });
+  new WebDispatchLedger(f.store as WebStore, clock).configureBudget({
+    provider: 'fish',
+    stage: 'audio',
+    phase: 'speech',
+    capacity: 1,
+  });
+  f.ledger.configureVoice({
+    characterId: 'character',
+    voiceVersion: f.voiceVersion,
+    voiceRevision: 1,
+    profileId: 'synthetic-profile',
+    referenceId: 'synthetic-reference',
+    model: 's2.1-pro',
+    approved: true,
+  });
+  const coordinator = { epoch: 1, token: 'coordinator', owner: 'coordinator', expiresAt: now + 1000 };
+  const queue = new WebStageQueue(f.store as WebStore, clock, () => 'audio-lease');
+  const audioClaim = queue.claimAudio(coordinator, 'audio-worker')!;
+  f.store.run(
+    `INSERT INTO scene_states(world_id,conversation_id,character_id,revision,
+    scene_json,updated_at,expires_at) VALUES ('world','conversation','character',1,?,?,NULL)`,
+    JSON.stringify({ kind: 'remote', setting: null, plan: null, proximity: 'ordinary', speaking: 'normal' }),
+    now,
+  );
+  await assert.rejects(runner.runSpeech(audioClaim, new AbortController().signal), /SCENE_CONTEXT_CHANGED/);
+  assert.equal(fishCalls, 0, 'scene drift must reject before transport');
+  assert.equal(
+    f.store.get<{ n: number }>(`SELECT count(*) n FROM web_provider_attempts
+    WHERE operation_id='operation' AND phase='speech'`)?.n,
+    0,
+  );
+  f.store.run(
+    "DELETE FROM scene_states WHERE world_id='world' AND conversation_id='conversation' AND character_id='character'",
+  );
+  f.store.run("UPDATE web_operations SET lease_expires_at=? WHERE id='operation'", now + 10);
+  await assert.rejects(runner.runSpeech(audioClaim, new AbortController().signal), /WEB_PROVIDER_CLAIM_STALE/);
+  assert.equal(
+    f.store.get<{ state: string }>(`SELECT state FROM web_provider_attempts
+    WHERE operation_id='operation' AND phase='speech' AND ordinal=0`)?.state,
+    'known',
+  );
+  const recovery = new WebDispatchLedger(f.store as WebStore, clock);
+  assert.deepEqual(recovery.recover(coordinator, recovery.fence('operation')), { status: 'audio_pending' });
+  const recoveredClaim = queue.claimAudio(coordinator, 'audio-worker')!;
+  assert.equal(recoveredClaim.ordinal, 0);
+  await runner.runSpeech(recoveredClaim, new AbortController().signal);
+  assert.equal(fishCalls, 1, 'known WAV must attach without a second transport call');
+  const secondAudioClaim = queue.claimAudio(coordinator, 'audio-worker')!;
+  assert.equal(secondAudioClaim.ordinal, 1);
+  await runner.runSpeech(secondAudioClaim, new AbortController().signal);
+  assert.equal(fishCalls, 2);
+  // Part 29 D: NO footer is registered. The reply must still be published (the footer is skipped and logged).
+  f.store.run("UPDATE web_principals SET trial_used=2,revision=revision+1 WHERE id='principal'");
+  f.store.run("UPDATE web_ip_windows SET used=2 WHERE id='window'");
+  f.store.run("UPDATE web_ip_lifetime_quota SET used_total=2 WHERE ip_hash='ip'");
+  const receipt = runner.publish(coordinator, 'operation');
+  assert.equal(receipt.messageIds.length, 2);
+  assert.equal(receipt.footerMessageId, null, 'no footer was there: skipped, not an error');
+  assert.deepEqual(runner.publish(coordinator, 'operation'), receipt);
+});

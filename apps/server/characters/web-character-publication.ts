@@ -16,7 +16,9 @@ import {
 import { identifier, keys, record, validatedTemplate } from './template-validation.ts';
 
 import { approvedCharacterMaterial, promoteCharacterMaterial } from './web-character-materials.ts';
+import { effectiveVoice, footerRequired } from './web-clip-manifest.ts';
 import { webWelcomeLinesInstalled } from './web-welcome-schema.ts';
+import { CATALOG_MAX } from '../../../packages/contracts/web-provider.ts';
 
 /** Is there an approved clip of exactly this line in this voice bundle (the single welcome clip, or the line's own)? */
 const lineClipApproved = (
@@ -227,38 +229,38 @@ export function publishWebCharacter(
     const material =
       colourOnly || input.materialId === undefined || input.materialId === null
         ? null
-        : approvedCharacterMaterial(store, id, input.materialId as string, draft.revision, draft.content_hash);
-    if (material)
-      ensure(
-        template.voice &&
-          template.voice.profileId === material.profile_id &&
-          template.voice.version === material.voice_revision,
-        'CHARACTER_MATERIALS_REQUIRED',
-      );
+        : approvedCharacterMaterial(store, id, input.materialId as string);
+    // Part 29 B: a draft with no binding publishes the one derived from its recorded Fish id; a binding is kept exactly.
+    const effective = effectiveVoice(store, id, template);
+    const publishedTemplate = template.voice || !effective ? template : { ...template, voice: effective.binding };
+    if (material) ensure(effective && effective.referenceId === material.reference_id, 'CHARACTER_MATERIALS_REQUIRED');
     else if (!colourOnly) {
       // Unchanged voice and welcome can reuse existing approval; changes require an exact bundle.
       const binding = store.get<{ voice_version: string; profile_id: string; voice_revision: number }>(
         `SELECT * FROM web_provider_voice_bindings WHERE character_id=? AND source='user_selected' AND approved=1`,
         id,
       );
+      const voice = template.voice ?? effective?.binding;
       ensure(
         live &&
           live.template.voice &&
           binding &&
-          template.voice &&
-          template.voice.profileId === binding.profile_id &&
-          template.voice.version === binding.voice_revision &&
-          contentHash(template.voice) === contentHash(live.template.voice),
+          voice &&
+          voice.profileId === binding.profile_id &&
+          voice.version === binding.voice_revision &&
+          contentHash(voice) === contentHash(live.template.voice),
         'CHARACTER_MATERIALS_REQUIRED',
       );
       // Part 24k-2: EVERY line needs its approved clip in the current bundle (and the footer).
       ensure(
         profile.presentation.welcomes.every((line) => lineClipApproved(store, id, binding.voice_version, line)) &&
-          store.get(
-            `SELECT 1 FROM web_provider_footer_assets WHERE character_id=? AND voice_version=? AND origin='operator_approved'`,
-            id,
-            binding.voice_version,
-          ),
+          // The footer plays only while the free tier is off, so it is required only then.
+          (!footerRequired(store) ||
+            store.get(
+              `SELECT 1 FROM web_provider_footer_assets WHERE character_id=? AND voice_version=? AND origin='operator_approved'`,
+              id,
+              binding.voice_version,
+            )),
         'CHARACTER_MATERIALS_REQUIRED',
       );
     }
@@ -273,9 +275,15 @@ export function publishWebCharacter(
       'CHARACTER_PUBLICATION_BUSY',
     );
     const position =
-      live?.position ?? Array.from({ length: 15 }, (_, i) => i).find((i) => !catalog.some((c) => c.position === i));
+      live?.position ??
+      Array.from({ length: CATALOG_MAX }, (_, i) => i).find((i) => !catalog.some((c) => c.position === i));
     ensure(position !== undefined, 'CHARACTER_CATALOG_FULL');
-    const config = JSON.stringify(template);
+    const config = JSON.stringify(publishedTemplate);
+    // The published version carries the binding (a derived one is written here, once, never into the draft). The catalog requires
+    // the live template to be exactly the stored profile's template, so the stored profile and its hash carry it too.
+    const published = publishedTemplate === template ? null : { ...stored, template: publishedTemplate };
+    const publishedJson = published ? JSON.stringify(published) : draft.profile_json;
+    const publishedHash = published ? characterProfileHash(published) : draft.content_hash;
     store.run('INSERT INTO character_template_versions VALUES (?,?,?,?)', id, template.version, config, now);
     if (live)
       store.run('UPDATE character_templates SET version=?,config_json=? WHERE id=?', template.version, config, id);
@@ -284,8 +292,8 @@ export function publishWebCharacter(
       'INSERT INTO web_character_versions VALUES (?,?,?,?,?)',
       id,
       template.version,
-      draft.profile_json,
-      draft.content_hash,
+      publishedJson,
+      publishedHash,
       now,
     );
     if (live) store.run('UPDATE web_character_catalog SET version=? WHERE character_id=?', template.version, id);
@@ -306,7 +314,8 @@ export function publishWebCharacter(
         actor.sessionId,
         now,
       );
-    if (material) promoteCharacterMaterial(store, material, template.version);
+    if (material)
+      promoteCharacterMaterial(store, material, template.version, effective!.binding, profile.presentation.welcomes);
     store.run('DELETE FROM web_character_drafts WHERE character_id=?', id);
     store.run(
       'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',

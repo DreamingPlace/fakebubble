@@ -134,9 +134,9 @@ function fixture(t: test.TestContext) {
     new WebAdminSpeech(raw, clock, fish, over.authority ?? authority, over.model ?? 's2.1-pro');
   const service = speech();
   chars.enableSpeech(service);
-  const draftMaterial = () =>
+  const draftMaterial = (requestId = 'material-1') =>
     chars.materialPrepare(auth, 'wei-guagua', {
-      requestId: 'material-1',
+      requestId,
       draftRevision: saved.revision,
       profileHash: saved.contentHash,
       referenceId: 'draft-reference',
@@ -393,8 +393,7 @@ test('a restart settles a known bill whose shared settlement was lost, exactly o
 });
 
 test('a price row out of force refuses with a located error before anything is held or sent', async (t) => {
-  const f = fixture(t),
-    id = f.draftMaterial();
+  const f = fixture(t);
   // s2-pro has a row, but one whose window has ended: not in force.
   const row = f.store.get<{ upper_micros_per_unit: number }>(
     "SELECT * FROM web_provider_prices WHERE provider='fish' AND model='s2.1-pro' AND phase='speech'",
@@ -406,6 +405,9 @@ test('a price row out of force refuses with a located error before anything is h
   );
   const late = f.speech({ model: 's2-pro' });
   f.chars.enableSpeech(late);
+  // Part 29 C (named exception): a site voice-model change makes an earlier 素材版本 stale (its resolved model is part of the
+  // clip manifest), so this test prepares a version AFTER the switch; what it checks (the price row) is unchanged.
+  const id = f.draftMaterial('material-after-switch');
   assert.deepEqual(
     f.chars.speechEstimate(f.auth, 'wei-guagua', { kind: 'material', materialId: id, slot: 'welcome' }),
     {

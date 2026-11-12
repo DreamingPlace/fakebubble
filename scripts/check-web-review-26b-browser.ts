@@ -1,3 +1,4 @@
+import './player-build-guard.ts';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -319,7 +320,8 @@ try {
   await seg(FLASH).click();
   await page.locator('.models-review .ic[data-state="open"]').waitFor();
   const barText = ((await page.locator('.models-review .ic').innerText()) as string).replace(/\s+/g, ' ');
-  assert.match(barText, /V4 Pro 切换为 V4\.1 Flash.*此后发送的消息.*原来的模型和价格/);
+  // Part 27 (named exception): the confirmation is one short line; it still names both models and what the switch affects.
+  assert.match(barText, /V4 Pro 切换为 V4\.1 Flash.*只影响此后发送的消息/);
   assert.equal(live(), PRO, 'nothing changes before the confirmation');
   await snap(page, '02-switch-confirm', page.locator('main'));
   // cancel: nothing saved, the control returns to the live choice
@@ -445,7 +447,9 @@ try {
   // a case side by side
   // Named exception (Part 24b-6c): a case opens BELOW its row (it was a drawer).
   await section.locator('.rc-cases .ot-row', { hasText: '亲密关系里，称呼' }).click();
-  const drawer = cmp.locator('.rc-cases .rc-detail');
+  // Part 27: the OPEN case's detail only. A case that was just closed keeps its content for the length of its collapse, so a bare
+  // `.rc-detail` can match two elements (the strict-mode violation).
+  const drawer = cmp.locator('.rc-cases .ot-panel[data-state="open"] .rc-detail');
   assert.equal(await cmp.locator('.admin-drawer:not([hidden])').count(), 0, 'no drawer in 预演');
   await drawer.locator('.rc-sides').waitFor();
   const text = ((await drawer.innerText()) as string).replace(/\s+/g, ' ');
@@ -470,19 +474,26 @@ try {
   await mark('pro', 'better').click();
   await mark('flash', 'worse').click();
   await cmp.waitForFunction(() =>
-    document.querySelector('.rc-detail .rc-side[data-side="flash"] [data-mark="worse"][aria-pressed="true"]'),
+    document.querySelector(
+      '.rc-cases .ot-panel[data-state="open"] .rc-detail .rc-side[data-side="flash"] [data-mark="worse"][aria-pressed="true"]',
+    ),
   );
   const runId = store.get<{ id: string }>('SELECT id FROM web_review_compare_runs')!.id;
   const saved = await okPost(owner, 'review-compare/detail', { runId });
   assert.deepEqual([saved.cases[0].pro.mark, saved.cases[0].flash.mark], ['better', 'worse']);
   await mark('flash', 'worse').click(); // pressing the pressed one again clears it
   await cmp.waitForFunction(
-    () => !document.querySelector('.rc-detail .rc-side[data-side="flash"] [data-mark="worse"][aria-pressed="true"]'),
+    () =>
+      !document.querySelector(
+        '.rc-cases .ot-panel[data-state="open"] .rc-detail .rc-side[data-side="flash"] [data-mark="worse"][aria-pressed="true"]',
+      ),
   );
   assert.equal((await okPost(owner, 'review-compare/detail', { runId })).cases[0].flash.mark, null);
   await mark('flash', 'same').click();
   await cmp.waitForFunction(() =>
-    document.querySelector('.rc-detail .rc-side[data-side="flash"] [data-mark="same"][aria-pressed="true"]'),
+    document.querySelector(
+      '.rc-cases .ot-panel[data-state="open"] .rc-detail .rc-side[data-side="flash"] [data-mark="same"][aria-pressed="true"]',
+    ),
   );
   await section.locator('.rc-cases .ot-row', { hasText: '亲密关系里，称呼' }).click();
 

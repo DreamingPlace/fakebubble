@@ -141,9 +141,7 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
   const paintEstimate = () => {
     start.button.setAttribute(
       'title',
-      estimate
-        ? `每个用例：1 次草稿 + V4 Pro、V4.1 Flash 各 1 次审核；预计约 ${micros(estimate.typicalMicros)}（官方标价估算），单次调用最多预留 ${micros(estimate.holdMicros)}；逐个运行，不会自动重发`
-        : '',
+      estimate ? `预计约 ${micros(estimate.typicalMicros)}，单次调用最多预留 ${micros(estimate.holdMicros)}` : '',
     );
     lock();
   };

@@ -2,7 +2,8 @@
 import { WebCharacterPreviews } from '../../../apps/server/characters/web-character-preview.ts';
 import { legacySchema } from './legacy-schema.ts';
 import { WebCharacterPreviewRunner } from '../../../apps/server/characters/web-character-preview-runner.ts';
-import { WebCloudTextGenerator } from '../../../apps/server/cloudflare/web-generators.ts';
+import { WebAdminSpeech } from '../../../apps/server/characters/web-admin-speech.ts';
+import { WebCloudTextGenerator, webCloudSpeech } from '../../../apps/server/cloudflare/web-generators.ts';
 import type { WebGenerationBinding } from '../../../packages/contracts/web-generation-rpc.ts';
 import type { WebBudgetStatusRPC, WebBudgetTopUpRPC } from '../../../apps/server/cloudflare/web-budget-client.ts';
 import { WebBudgetObject } from '../../../workers/web-cloudflare/budget.ts';
@@ -68,6 +69,8 @@ import { WebProviderOffline } from '../../../apps/server/generation/web-provider
 import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { syntheticCharacterReview } from './character-review.ts';
 
+/** Part 29: a fixture worker module switches the admin speech path on (as business.ts builds it) before its objects are made. */
+export const fixtureSpeech = { on: false };
 /** Real HTTP, SQL, R2 and Alarm with synthetic transports; these operator routes never ship. */
 export class WebHTTPFixture extends WebBusinessFixture {
   private app: WebProviderApplication;
@@ -157,6 +160,13 @@ export class WebHTTPFixture extends WebBusinessFixture {
           }
         },
       });
+    }
+    if (fixtureSpeech.on && env.PREVIEW_BUDGET && env.GENERATION) {
+      // The production wiring: business object -> WebAdminSpeech -> webCloudSpeech(env.GENERATION) -> generation worker -> Fish.
+      const budget = env.PREVIEW_BUDGET.get(env.PREVIEW_BUDGET.idFromName('budget'));
+      this.app.characterAdmin.enableSpeech(
+        new WebAdminSpeech(this.store, this.clock, webCloudSpeech(env.GENERATION), budget, 's2.1-pro'),
+      );
     }
     this.execution = new WebCloudExecutor(ctx, this.store, this.clock, this.createRunner(), undefined, previews);
     this.http = this.transport();
@@ -276,6 +286,21 @@ export class WebHTTPFixture extends WebBusinessFixture {
           'SELECT preview_id,phase,state,outcome,shared_settled FROM web_character_preview_attempts',
         ),
         jobs: this.store.all('SELECT id,status,error_code FROM admin_previews'),
+      });
+    if (path === '/fixture/speech/mode') {
+      // Part 29: how the fake Fish answers (the generation worker's synthetic modes); the worker itself is the real session.
+      await (this.generation as unknown as { configure(mode: string): Promise<void> }).configure(
+        new URL(request.url).searchParams.get('mode') ?? '',
+      );
+      return Response.json({ configured: true });
+    }
+    if (path === '/fixture/speech/stats')
+      return Response.json({
+        budget: await this.previewBudget!.summary(),
+        fishCalls: await this.generation!.stats(),
+        calls: this.store.all(
+          'SELECT purpose,state,outcome,error_code,shared_settled,held_micros,charged_micros FROM web_speech_admin_calls ORDER BY created_at,ordinal',
+        ),
       });
     if (path === '/fixture/request') return Response.json({ url: request.url, headers: [...request.headers] });
     if (path === '/fixture/assets') return super.fetch(new Request('http://fixture.invalid/assets'));

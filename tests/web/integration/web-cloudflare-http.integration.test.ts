@@ -617,7 +617,8 @@ test('cloud HTTP rejects forged origin/cookie/CSRF/body, cancels before first Al
   const sendPath = `${API}/characters/wei-guagua/operations`;
   await f.call(sendPath, guest, body, 403, { 'x-csrf-token': 'bad' });
   await f.call(sendPath, guest, { ...body, provider: 'fake' }, 400);
-  await f.call(sendPath, guest, { ...body, text: 'a'.repeat(9000) }, 400);
+  // Part 29 G (named exception): a body over the route's size is now its own refusal, 413 PAYLOAD_TOO_LARGE, not a generic 400.
+  await f.call(sendPath, guest, { ...body, text: 'a'.repeat(9000) }, 413);
   const sent = await f.send(guest);
   const cancelled = await f.call(`${API}/operations/${sent.operation.operationId}/cancel`, guest, {});
   assert.equal(cancelled.status, 'cancelled');
@@ -721,13 +722,20 @@ test('native materials: private upload, two-clip approval, new role and voice pr
     if (role.welcome.audio.state !== 'available') throw Error('missing clip');
     const audio = await f.request(role.welcome.audio.url, client());
     assert.equal(audio.status, 200);
-    if (!keeps)
-      assert.equal(
-        createHash('sha256')
-          .update(Buffer.from(await audio.arrayBuffer()))
-          .digest('hex'),
-        read.sha256,
-      );
+    const served = createHash('sha256')
+      .update(Buffer.from(await audio.arrayBuffer()))
+      .digest('hex');
+    if (!keeps) assert.equal(served, read.sha256);
+    else {
+      // Part 27: voice and text must match. The kept line's audio is the clip of THAT line: the one in the player's earlier bundle
+      // (read before the new material existed), byte for byte - and not the new material's clip.
+      const earlier = before.characters.find((c) => c.characterId === id)!.welcome.audio;
+      assert.equal(earlier.state, 'available');
+      if (earlier.state !== 'available') throw Error('missing earlier clip');
+      assert.equal(served, earlier.sha256, 'the kept welcome line plays its own earlier clip');
+      assert.notEqual(served, read.sha256, 'and not the clip of the new welcome text');
+      assert.equal(role.welcome.audio.sha256, earlier.sha256, 'the catalogue names the same clip');
+    }
   }
   assert.deepEqual(await f.call(historyPath, player), history);
   assert.deepEqual((await f.boot(player)).access, before.access);

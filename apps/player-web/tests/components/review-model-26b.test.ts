@@ -105,7 +105,8 @@ test('审核模型: one confirmation, then a save with the page revision and a r
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(f.confirms.length, 1, 'exactly one confirm dialog');
   assert.match(f.confirms[0]!.message, /V4 Pro 切换为 V4\.1 Flash/);
-  assert.match(f.confirms[0]!.message, /已在处理的消息仍用原来的模型和价格/);
+  // Part 27 (named exception): the confirmation is one short line now; it still says what the switch affects.
+  assert.match(f.confirms[0]!.message, /只影响此后发送的消息/);
   assert.deepEqual(f.saves, [{ requestId: 'switch-1', expectedRevision: 3, reviewModel: 'deepseek-flash' }]);
   assert.equal(f.button('deepseek-flash').getAttribute('aria-pressed'), 'true');
   assert.match(f.node.textContent, /当前：V4\.1 Flash/);

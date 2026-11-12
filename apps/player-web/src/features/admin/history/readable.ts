@@ -42,6 +42,15 @@ export const presentationFields = (profile: CharacterProfile): Field[] => {
     ],
   ];
 };
+/** The labels the editors give the settings keys (so 资料改动 says 个人资料, not profileFacts). */
+const CANON_LABEL: Record<string, string> = {
+  speechStyle: '说话风格',
+  dialogueStyle: '对话风格',
+  dialogueExamples: '对话样例',
+  background: '经历',
+  profileFacts: '个人资料',
+  boundaries: '边界与隐藏设定',
+};
 /** 完整模板 as labelled fields; the version number it is published under is not content and is left out. */
 export const templateFields = (profile: CharacterProfile): Field[] => {
   const t = profile.template;
@@ -55,7 +64,9 @@ export const templateFields = (profile: CharacterProfile): Field[] => {
     ['声音', t.voice ? `${t.voice.profileId} · 版本 ${t.voice.version} · 语速 ${t.voice.speed}` : '—'],
     ['作息', `${t.schedule?.timeZone ?? '—'} · 每周 ${days.reduce((n, d) => n + d.length, 0)} 个时段`],
     ['主动联系', t.autonomy ? plain(t.autonomy) : '无'],
-    ...Object.entries(canon).map(([key, value]) => [`设定 · ${key}`, plain(withoutIds(value))] as Field),
+    ...Object.entries(canon).map(
+      ([key, value]) => [`设定 · ${CANON_LABEL[key] ?? key}`, plain(withoutIds(value))] as Field,
+    ),
   ];
 };
 export const fieldsText = (fields: readonly Field[]) =>
