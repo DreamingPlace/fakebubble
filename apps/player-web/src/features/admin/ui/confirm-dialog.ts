@@ -16,6 +16,8 @@ export type ConfirmOptions = {
  */
 export function confirmDialog(parent: HTMLElement, options: ConfirmOptions): Promise<boolean> {
   return new Promise((resolve) => {
+    // Part 24b-7: focus returns to the opener, and Tab stays inside the dialog while it is open.
+    const opener = document.activeElement as HTMLElement | null;
     const confirm = h('button', {
       class: options.danger ? 'admin-danger' : options.primary ? 'admin-primary' : '',
       text: options.confirmLabel ?? '确认',
@@ -39,12 +41,27 @@ export function confirmDialog(parent: HTMLElement, options: ConfirmOptions): Pro
       if (settled) return;
       settled = true;
       document.removeEventListener('keydown', onKey);
+      opener?.focus?.();
       backdrop.remove();
       dialog.remove();
       resolve(value);
     };
     const onKey = (event: Event) => {
-      if ((event as KeyboardEvent).key === 'Escape') finish(false);
+      const key = event as KeyboardEvent;
+      if (key.key === 'Escape') finish(false);
+      if (key.key !== 'Tab') return;
+      const stops = Array.from(dialog.querySelectorAll<HTMLElement>('button'));
+      const first = stops[0],
+        last = stops[stops.length - 1];
+      if (!first || !last) return;
+      const at = document.activeElement;
+      if (!dialog.contains(at as Node) || (key.shiftKey && at === first)) {
+        key.preventDefault();
+        (key.shiftKey && dialog.contains(at as Node) ? last : first).focus();
+      } else if (!key.shiftKey && at === last) {
+        key.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     backdrop.addEventListener('click', () => finish(false));

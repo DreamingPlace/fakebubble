@@ -129,7 +129,15 @@ const status = (over: Partial<SystemStatusView> = {}): SystemStatusView => ({
       embedding: { calls: 0, texts: 0, failures: 0, unknowns: 0, queryFallbacks: 0, queryTimeouts: 0 },
     },
   ],
-  security: { turnstile: true, failuresToday: 3, failuresLast7Days: 11, unavailableToday: 0, unavailableLast7Days: 1 },
+  security: {
+    turnstile: true,
+    failuresToday: 3,
+    failuresLast7Days: 11,
+    unavailableToday: 0,
+    unavailableLast7Days: 1,
+    rateOverflowToday: 0,
+    unknownRefusals: 0,
+  },
   warnings: { priceExpiring: 1, retentionFailing: 1, unknownNew: 2 },
   ...over,
 });

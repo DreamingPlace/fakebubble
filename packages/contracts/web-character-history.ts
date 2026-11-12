@@ -82,10 +82,13 @@ const GROUPS: readonly [string, (p: ProfileLike) => unknown][] = [
   ['设定', (p) => p.template.authorCanon ?? null],
   ['声音', (p) => p.template.voice ?? null],
 ];
+/** The names of the groups in which two profiles differ (the version number itself never counts). Part 24b-7 reads it for 草稿记录. */
+export const changedGroups = (before: ProfileLike, after: ProfileLike): string[] =>
+  GROUPS.filter(([, part]) => stable(part(before)) !== stable(part(after))).map(([name]) => name);
 /** One line for the history list. The version number itself never counts as a change. */
 export function describeChange(before: ProfileLike | null, after: ProfileLike): string {
   if (!before) return '初始版本';
-  const changed = GROUPS.filter(([, part]) => stable(part(before)) !== stable(part(after))).map(([name]) => name);
+  const changed = changedGroups(before, after);
   if (!changed.length) return '内容与上一版相同';
   if (changed.length === 1 && changed[0] === '主色') return '只改了主色';
   return `改动：${changed.join('、')}`;

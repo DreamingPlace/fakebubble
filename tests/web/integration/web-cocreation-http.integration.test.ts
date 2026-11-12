@@ -114,7 +114,8 @@ test('co-creation over real HTTP: open to every session, idempotent, limited per
   assert.ok(Buffer.byteLength(JSON.stringify(largest)) > 8192 * 1.2);
   assert.equal((await submit(invited, body('req-big', { answers: largest, characterId: 'jojo' }))).answered, 12);
   // But there is a ceiling.
-  await submit(invited, body('req-huge', { answers: [{ cardId: 'free', text: '字'.repeat(40_000) }] }), 400);
+  // Part 29 G (named exception): a body over the route's size is its own refusal, 413 PAYLOAD_TOO_LARGE, not a generic 400.
+  await submit(invited, body('req-huge', { answers: [{ cardId: 'free', text: '字'.repeat(40_000) }] }), 413);
 
   // One entry per player and character per UTC day: the second one for the same character answers 429.
   const limited = await submit(invited, body('req-7x'), 429);

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { localRuntime, initProviderInstance } from '../apps/server/platform/web-local-config.ts';
 import { WebProviderOffline } from '../apps/server/generation/web-provider-offline.ts';
+import { DomainError } from '../packages/domain/errors.ts';
 import { WebAdminSpeech } from '../apps/server/characters/web-admin-speech.ts';
 import { WebCharacterPreviewRunner } from '../apps/server/characters/web-character-preview-runner.ts';
 import { WebProviderRunner } from '../apps/server/generation/web-provider-runner.ts';
@@ -69,7 +70,11 @@ export type FixtureProvider = { draftMs: number; reviewMs: number };
  * Part 24k-1: `speech` turns the admin speech path on with an OFFLINE Fish stand-in (a short wait, then a synthetic tone), so 生成 and
  * 试听 can be looked at. Off by default: every earlier check sees the page as it was.
  */
-export type FixtureOptions = { provider?: FixtureProvider; cdpPort?: number; speech?: boolean };
+/**
+ * Part 29 D: `freeTier: false` turns the free tier OFF (production has it on, and so does this fixture by default): only then does a
+ * 结束成品 exist, so the checks that look at the footer slot ask for it.
+ */
+export type FixtureOptions = { provider?: FixtureProvider; cdpPort?: number; speech?: boolean; freeTier?: boolean };
 
 export async function startConsoleFixture(options: FixtureOptions = {}) {
   const { parent } = localRuntime();
@@ -82,7 +87,10 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
   const started = Date.now();
   const clock = { now: () => (options.provider ? NOW + (Date.now() - started) : NOW) };
   // Points and model choice are on (the Models and Points pages, daily-refill batches).
-  Object.assign(store, { publicFreeTier: true, playerModelChoice: ['deepseek', 'gemini', 'xai'] });
+  Object.assign(store, {
+    publicFreeTier: options.freeTier !== false,
+    playerModelChoice: ['deepseek', 'gemini', 'xai'],
+  });
   const ledger = new WebProviderOffline(store, clock);
   for (const characterId of OWN) {
     const voiceVersion = `${characterId}-fish:v1`;
@@ -145,6 +153,8 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
         clock,
         async (request) => {
           await sleep(500);
+          // Part 29: a text with 「失败」 in it is answered as a provider failure (the UNKNOWN slot with its code).
+          if (JSON.parse(request.body).text.includes('失败')) throw new DomainError('WEB_PROVIDER_WIRE_MISMATCH');
           return { audio: syntheticTone(900), receipt: { id: 'fake-speech' }, usageUnits: request.billedTextBytes };
         },
         { reserve() {}, settle() {} },

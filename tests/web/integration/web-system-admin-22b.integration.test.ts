@@ -495,6 +495,8 @@ test('Turnstile failures: counted per UTC day in the business object (counts onl
     failuresLast7Days: 3,
     unavailableToday: 0,
     unavailableLast7Days: 1,
+    rateOverflowToday: 0,
+    unknownRefusals: 0,
   });
   now = Date.UTC(2026, 9, 30, 12); // the window is today and the 6 days before it: the 23rd is out of it
   assert.deepEqual(counters.read(now), {
@@ -502,6 +504,8 @@ test('Turnstile failures: counted per UTC day in the business object (counts onl
     failuresLast7Days: 0,
     unavailableToday: 0,
     unavailableLast7Days: 0,
+    rateOverflowToday: 0,
+    unknownRefusals: 0,
   });
   counters.record('failed');
   assert.ok(

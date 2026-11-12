@@ -292,7 +292,9 @@ test('stale draft cannot upload, approve or consume an approved old bundle; no s
   f.accounts.setPermissions(f.auth.cookie, f.auth.csrf, f.auth.origin, grant.memberId, []);
   assert.throws(() => f.chars.materialList(auth, d.id), /PERMISSION_REQUIRED/);
   assert.equal(f.accounts.session(auth.cookie).member.id, grant.memberId);
-  d.profile.template.persona += 'changed';
+  // Part 29 C (named exception): a 素材版本 is bound to the clip manifest, not to the draft revision, so a persona change no
+  // longer makes it stale. What makes it stale is the VOICE (the Fish id), so this test moves the voice instead.
+  d.profile.template.voice = { ...d.profile.template.voice!, referenceId: 'another-fish-voice' };
   const next = f.chars.save(f.auth, d.id, { expectedRevision: d.saved.revision, profile: d.profile });
   await assert.rejects(
     f.chars.materialUpload(f.auth, d.id, {
@@ -300,9 +302,9 @@ test('stale draft cannot upload, approve or consume an approved old bundle; no s
       kind: 'welcome',
       base64: syntheticTone().toString('base64'),
     }),
-    /DRAFT_CONFLICT/,
+    /MATERIAL_STALE/,
   );
-  await assert.rejects(f.approve(d), /DRAFT_CONFLICT/);
+  await assert.rejects(f.approve(d), /MATERIAL_STALE/);
   const input = await f.publication(d);
   assert.throws(
     () => f.chars.publish(f.auth, d.id, { ...input, draftRevision: next.revision, profileHash: next.contentHash }),
@@ -406,10 +408,11 @@ test('permission revoked during private R2 stage leaves only an unreferenced pri
   ]);
   onRead = () => {
     onRead = undefined;
-    d.profile.template.persona += '草稿已变化';
+    // Part 29 C (named exception): the draft moves by its VOICE; a persona change alone keeps the 素材版本 valid.
+    d.profile.template.voice = { ...d.profile.template.voice!, referenceId: 'another-fish-voice' };
     f.chars.save(f.auth, d.id, { expectedRevision: d.saved.revision, profile: d.profile });
   };
-  await assert.rejects(f.chars.materialApprove(auth, d.id, approval), /DRAFT_CONFLICT/);
+  await assert.rejects(f.chars.materialApprove(auth, d.id, approval), /MATERIAL_STALE/);
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_character_material_approvals')!.n, 0);
 });
 

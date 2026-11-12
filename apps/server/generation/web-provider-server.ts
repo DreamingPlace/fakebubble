@@ -37,7 +37,9 @@ import {
   WebProviderApplication,
   type WebPlayerAccountsConfig,
 } from './web-provider-application.ts';
+import { PROFILE_BODY_LIMIT } from '../characters/web-profile-limits.ts';
 import { webProviderHTTPError } from '../platform/web-provider-http-error.ts';
+import { logRefusal } from '../platform/web-refusal-status.ts';
 import { peerIpHash } from '../admission/ip-key-input.ts';
 
 const privateHeaders = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
@@ -271,7 +273,7 @@ export class WebProviderServer {
     for await (const chunk of req) {
       const bytes = Buffer.from(chunk as Uint8Array);
       size += bytes.length;
-      ensure(size <= maximum, 'INVALID_REQUEST');
+      ensure(size <= maximum, 'PAYLOAD_TOO_LARGE');
       chunks.push(bytes);
     }
     let data: unknown;
@@ -485,7 +487,7 @@ export class WebProviderServer {
                 : bulkWrite
                   ? 786_432
                   : characterWrite
-                    ? 131072
+                    ? PROFILE_BODY_LIMIT
                     : path.startsWith(`${API}/cocreation/`)
                       ? COCREATION_BODY_LIMIT
                       : 8192,
@@ -665,6 +667,7 @@ export class WebProviderServer {
         return;
       }
       const failure = webProviderHTTPError(error);
+      logRefusal(String(req.url ?? ''), failure.status, failure.body.error.code);
       this.json(res, failure.status, failure.body);
     }
   }

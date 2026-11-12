@@ -19,7 +19,8 @@ import { h } from '../../cocreation/h.ts';
 import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
 import { dateTimeText } from '../system-format.ts';
 import { historyList, type HistoryEntry } from '../history/history-list.ts';
-import { keyValuePanel } from '../ui/key-value-panel.ts';
+import { statusBadge } from '../ui/status-badge.ts';
+import { castDiff, worldChanged } from './cast-version-diff.ts';
 import { castGrid, pairPanel, type GridState } from './cast-grid.ts';
 import { nameCard, seesPanel } from './cast-character.ts';
 import { ISSUE_LABEL, blankCharacter, changeCount, humanIssue, issueSentence, nameOf } from './cast-model.ts';
@@ -358,43 +359,82 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     when: dateTimeText(v.publishedAt),
     by: null,
     origin: v.kind === 'rollback' ? `恢复自 v${v.fromVersion}` : '发布',
-    summary: `角色 ${v.counts.characters} · 组合 ${v.counts.groups} · 故事 ${v.counts.stories}`,
+    summary: `角色 ${v.counts.characters} · 人物 ${v.counts.people} · 组合 ${v.counts.groups} · 故事 ${v.counts.stories} · 梗 ${v.counts.memes}`,
     problem: null,
   });
-  /** The detail under a row: the counts of that version against the live one (the server keeps no readable snapshot of a cast). */
-  const castDetail = (entry: HistoryEntry): Node => {
-    const version = state.versions.find((v) => v.version === entry.version);
-    const live = state.versions.find((v) => v.version === state.latest);
-    if (!version)
-      return h('div', { class: 'vh-detail ot-detail' }, h('p', { class: 'vh-note', text: '没有找到这一版。' }));
-    const rows: [string, number][] = [
-      ['角色', version.counts.characters],
-      ['人物', version.counts.people],
-      ['组合', version.counts.groups],
-      ['故事', version.counts.stories],
-      ['梗', version.counts.memes],
-    ];
-    const against = (label: string, n: number) => {
-      const now = live
-        ? {
-            角色: live.counts.characters,
-            人物: live.counts.people,
-            组合: live.counts.groups,
-            故事: live.counts.stories,
-            梗: live.counts.memes,
-          }[label]
-        : undefined;
-      return now === undefined || entry.live ? String(n) : `${n}（现行 ${now}）`;
-    };
-    const panel = keyValuePanel([
-      ['发布时间', entry.when],
-      ['来源', entry.origin],
-      ...rows.map(([label, n]) => [label, against(label, n)] as const),
-    ]);
-    // Part 24b-6c: no explanatory line under the numbers; the one thing worth saying is a hover tip.
-    if (!entry.live) hoverValue(panel, '数字是这一版的内容；括号里是现行版本现在的数字。');
-    return h('div', { class: 'vh-detail ot-detail' }, panel);
+  /**
+   * The detail under a row (Part 24b-7): the stored document of that version, read when the row opens, in words (names, never ids),
+   * with what differs from the live version marked 新增 / 删除 / 改动. The counts are only the summary line of the row.
+   */
+  const docs = new Map<number, Promise<CastDoc>>();
+  const docOf = (version: number) => {
+    let found = docs.get(version);
+    if (!found) {
+      found = host.api!.version(version).then((r) => r.doc);
+      found.catch(() => docs.delete(version));
+      docs.set(version, found);
+    }
+    return found;
   };
+  const castDetail = (entry: HistoryEntry): Node => {
+    const box = h('div', { class: 'vh-detail ot-detail cv' }, h('p', { class: 'vh-note', text: '读取中…' }));
+    if (!host.api || !state.versions.some((v) => v.version === entry.version)) {
+      box.replaceChildren(h('p', { class: 'vh-note', text: '没有找到这一版。' }));
+      return box;
+    }
+    void (async () => {
+      try {
+        const [doc, liveDoc] = await Promise.all([
+          docOf(entry.version),
+          entry.live || state.latest === null ? Promise.resolve(null) : docOf(state.latest),
+        ]);
+        if (gone()) return;
+        box.replaceChildren(versionContent(doc, liveDoc));
+      } catch {
+        if (!gone())
+          box.replaceChildren(h('p', { class: 'vh-note', text: '这一版的内容没有读取成功，请再点开一次。' }));
+      }
+    })();
+    return box;
+  };
+  const KIND_TEXT = { added: '新增', removed: '删除', changed: '改动', same: '' } as const;
+  const KIND_TONE = { added: 'ok', removed: 'danger', changed: 'warn', same: 'neutral' } as const;
+  function versionContent(doc: CastDoc, liveDoc: CastDoc | null): Node {
+    const root = h('div', { class: 'cv-body' });
+    if (worldChanged(doc, liveDoc)) root.append(h('p', { class: 'cv-world', text: '世界背景与现行版本不同。' }));
+    for (const { part, rows } of castDiff(doc, liveDoc)) {
+      if (!rows.length) continue;
+      const count = (kind: string) => rows.filter((row) => row.kind === kind).length;
+      const marks = (['added', 'removed', 'changed'] as const)
+        .filter((kind) => count(kind))
+        .map((kind) => `${KIND_TEXT[kind]} ${count(kind)}`);
+      const list = h('ul', { class: 'cv-list' });
+      for (const row of rows)
+        list.append(
+          h(
+            'li',
+            { attrs: { 'data-kind': row.kind } },
+            row.kind === 'same' ? null : statusBadge(KIND_TEXT[row.kind], KIND_TONE[row.kind]),
+            h('strong', { text: row.label }),
+            row.note ? h('span', { class: 'cv-note', text: row.note, attrs: { title: row.note } }) : null,
+          ),
+        );
+      root.append(
+        h(
+          'section',
+          { class: 'cv-part' },
+          h(
+            'h5',
+            {},
+            h('span', { text: `${part} ${rows.filter((row) => row.kind !== 'removed').length}` }),
+            marks.length ? h('small', { text: marks.join(' · ') }) : null,
+          ),
+          list,
+        ),
+      );
+    }
+    return root;
+  }
   // One restore request is fixed once it has been asked for: after an uncertain answer the same id is sent again.
   const rollbackIds = new Map<string, string>();
   const history = historyList({

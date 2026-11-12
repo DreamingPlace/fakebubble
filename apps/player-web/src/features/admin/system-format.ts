@@ -1,6 +1,6 @@
 /** Number and time formats shared by 概览, 系统状态 and 积分发放: whole dollars and cents from micro-dollars, ages in plain words. */
 export const dollars = (micros: number) => `$${(micros / 1_000_000).toFixed(2)}`;
-export const PROVIDER_LABELS = { deepseek: 'DeepSeek（文字）', fish: 'Fish（语音）' } as const;
+export const PROVIDER_LABELS = { deepseek: 'DeepSeek（文字）', fish: 'Fish（语音 · 按字节上限估算）' } as const;
 export const ageText = (ms: number | null) => {
   if (ms === null) return '—';
   const minutes = Math.floor(ms / 60_000);

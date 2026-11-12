@@ -132,7 +132,9 @@ try {
     if (message.type() === 'error') errors.push(`console: ${message.text()}`);
   });
   const wait = (ms = 500) => page.waitForTimeout(ms);
-  const drawer = '.admin-drawer[aria-label="导入角色资料"]';
+  // Named exception (Part 24b-7): 导入角色资料 is an inline panel under the title row, not a drawer; same steps, requests and results.
+  // The result now stays in the panel, so a panel that is left open is closed with its own 关闭 (it used to close itself).
+  const drawer = '.pi-panel';
   const open = async (hash = '#/characters') => {
     await page.goto(`${f.origin}/?mode=provider-admin${hash}`);
     await page.reload();
@@ -246,7 +248,7 @@ try {
     );
     check(await page.getByRole('button', { name: '确认导入' }).isDisabled(), `${w}: and there is nothing to confirm`);
     await shot('preview-unchanged');
-    await page.keyboard.press('Escape');
+    await page.locator(`${drawer}`).getByRole('button', { name: '关闭' }).click();
 
     // ---- 身份与展示 of the new character: the code field and the checklist -----------------------------------------
     await page.goto(`${f.origin}/?mode=provider-admin#/characters/${made.characterId}`);
@@ -282,7 +284,8 @@ try {
     // ---- 声音: the Fish id is prefilled ------------------------------------------------------------------------------
     await page.locator('.wb-tab', { hasText: '声音' }).first().click();
     await wait(500);
-    const reference = page.locator('label', { hasText: '已有 Fish 音色 referenceId' }).locator('input').first();
+    // Part 29 B (named exception): the one voice field is 「Fish 音色 ID」 (it was 「已有 Fish 音色 referenceId」 on the materials fold).
+    const reference = page.locator('label', { hasText: 'Fish 音色 ID' }).locator('input').first();
     check(
       (await reference.inputValue()) === `fish_ref_new${pass}`,
       `${w}: the voice page prefills the Fish referenceId`,

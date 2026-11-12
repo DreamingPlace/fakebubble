@@ -617,7 +617,8 @@ test('cloud HTTP rejects forged origin/cookie/CSRF/body, cancels before first Al
   const sendPath = `${API}/characters/wei-guagua/operations`;
   await f.call(sendPath, guest, body, 403, { 'x-csrf-token': 'bad' });
   await f.call(sendPath, guest, { ...body, provider: 'fake' }, 400);
-  await f.call(sendPath, guest, { ...body, text: 'a'.repeat(9000) }, 400);
+  // Part 29 G (named exception): a body over the route's size is now its own refusal, 413 PAYLOAD_TOO_LARGE, not a generic 400.
+  await f.call(sendPath, guest, { ...body, text: 'a'.repeat(9000) }, 413);
   const sent = await f.send(guest);
   const cancelled = await f.call(`${API}/operations/${sent.operation.operationId}/cancel`, guest, {});
   assert.equal(cancelled.status, 'cancelled');

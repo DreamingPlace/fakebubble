@@ -22,6 +22,7 @@ import { webWelcomeLinesInstalled } from './web-welcome-schema.ts';
 import { withVoiceBindingGuardLifted } from './web-character-material-schema.ts';
 import { identifier, keys, record, validatedTemplate } from './template-validation.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
+import { footerRequired } from './web-clip-manifest.ts';
 
 /**
  * 版本历史 and 恢复此版本 (Part 24f). Every published version is already an immutable row (web_character_versions: the exact
@@ -166,7 +167,12 @@ export function restorePlan(
         id,
         w.voice_version,
       );
-      if (!footer || !w.clips.every((clip) => clipIntact(clip, deep)) || !clipIntact(footer, deep))
+      // The footer is part of a bundle only while the free tier is off (Part 29 D).
+      if (
+        (footerRequired(store) && !footer) ||
+        !w.clips.every((clip) => clipIntact(clip, deep)) ||
+        (footer && !clipIntact(footer, deep))
+      )
         return 'CLIP_MISSING';
       if (materials) {
         const material = store.get<{ id: string }>(
