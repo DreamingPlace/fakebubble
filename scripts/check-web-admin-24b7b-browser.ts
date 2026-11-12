@@ -414,7 +414,19 @@ try {
       );
       check(!/[{}]|"[A-Za-z]+"\s*:|profileFacts/.test(diffText), `${w}: 资料改动 shows no JSON or key names`);
       await shot('r2-other-settings-filled');
-      // 其余设定 (empty facts, other keys): jojo keeps its unknown keys under 其他（JSON）
+      // 其余设定 (empty facts, another key): a key no editor owns (here a made-up one, once) stays under 其他（JSON）
+      {
+        const d = await (await f.post('characters/jojo/detail', {})).json();
+        const profile = structuredClone((d.draft?.profile ?? d.published.profile) as any);
+        if (!d.draft) profile.template.version = d.published.version + 1;
+        const settings = (profile.template.authorCanon?.settings ?? {}) as Record<string, unknown>;
+        if (!('其他键' in settings)) {
+          settings['其他键'] = { 备注: ['保留原样', 1, null] };
+          profile.template.authorCanon = { kind: 'author_canon', settings };
+          const saved = await f.post('characters/jojo/save', { expectedRevision: d.draft?.revision ?? null, profile });
+          check(saved.status() === 200, `${w}: the fixture saved a draft with another key`);
+        }
+      }
       await open('characters/jojo');
       await tab('其余设定').click();
       await wait();
