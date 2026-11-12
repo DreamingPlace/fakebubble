@@ -11,7 +11,7 @@ import { characterProfileHash } from '../apps/server/characters/web-character-ca
  *  ADMIN (1440×900 and 1280×800)
  *   - 欢迎内容: an old one-line profile reads as one line at 100%; adding lines splits evenly (three are 34 / 33 / 33); a total that is not
  *     100% shows amber and the located message; 平均分配 puts it right; reordering keeps the text with its percent; 8 lines is the end;
- *   - 声音: after 准备新素材版本 there is one welcome slot per line (and the footer), each with 生成 (the paid button asks first);
+ *   - 声音 (Part 30: slots and takes): there is one welcome slot per line (and the footer), each with 生成 (the paid button asks first);
  *   - 身份与展示: the 色板 list (主 mirrors 主色, up to 4 点缀) with the night / day chip.
  *  PLAYER (390×844, night and day)
  *   - the home card and the chat of four characters: (a) dark main + 1 accent, (b) light main + 2 accents, (c) a main above 80% saturation,
@@ -119,7 +119,7 @@ try {
       await sideways(`欢迎内容 ${at}`);
     }
 
-  // Save a three-line welcome through the API, then prepare a 素材版本 and look at the slots.
+  // Save a three-line welcome through the API, then look at the slots.
   // Part 29 C (named exception): a new 素材版本 carries over the clips of an earlier one with the same text and voice, so each
   // viewport gets its own character (a fresh one has empty slots, as this check expects).
   if (only !== 'player')
@@ -150,19 +150,20 @@ try {
         await page.locator('button:has-text("保存草稿")').first().click();
         await wait(1500);
       }
-      await page.locator('button:has-text("准备新素材版本")').first().click();
+      // Part 30 (named exception): no 准备新素材版本; the slots are on the tab at once. One slot per welcome line (欢迎 1-3) and the
+      // footer (结束), each empty one with its 生成 (the paid button asks first); the generated take lands marked 生成.
       const slot = (name: string) =>
-        page.locator(`section:has(> h4:text-is("${name}")):has([data-pw-send^="generate-"])`).first();
-      await slot('欢迎成品 1').waitFor({ timeout: 15_000 });
-      await slot('欢迎成品 2').waitFor({ timeout: 15_000 });
-      for (const name of ['欢迎成品 1', '欢迎成品 2', '欢迎成品 3', '结束成品']) {
+        page.locator(`section.vc-slot[data-state="empty"]:has(> .vc-slot-head > h4:text-is("${name}"))`).first();
+      await slot('欢迎 1').waitFor({ timeout: 15_000 });
+      await slot('欢迎 2').waitFor({ timeout: 15_000 });
+      for (const name of ['欢迎 1', '欢迎 2', '欢迎 3', '结束']) {
         check((await slot(name).count()) === 1, `声音 ${at}: no empty slot named ${name}`);
         check(
-          (await slot(name).locator('[data-pw-send^="generate-"]').count()) === 1,
+          (await slot(name).locator('[data-pw-send^="generate-"]:not([data-pw-send="generate-all"])').count()) === 1,
           `声音 ${at}: ${name} has no 生成`,
         );
       }
-      const gen = slot('欢迎成品 2').locator('[data-pw-send^="generate-"]');
+      const gen = slot('欢迎 2').locator('[data-pw-send^="generate-"]:not([data-pw-send="generate-all"])');
       await page.waitForFunction(
         (el: HTMLElement | null) => !!el && /约/.test(el.textContent ?? ''),
         await gen.elementHandle(),
@@ -174,13 +175,12 @@ try {
       check((await gen.getAttribute('data-state')) === 'confirm', `声音 ${at}: the first click did not ask`);
       await shot(`voice-slots-${at}`);
       await gen.click();
-      await page.locator(`section:has(> h4:text-is("欢迎成品 2")) .vc-origin`).first().waitFor({ timeout: 30_000 });
-      check(
-        (await page.locator(`section:has(> h4:text-is("欢迎成品 2")) .vc-origin`).count()) >= 1,
-        `声音 ${at}: the generated clip is not marked 生成`,
+      const generated = page.locator(
+        'section.vc-slot:has(> .vc-slot-head > h4:text-is("欢迎 2")) .vc-take .vc-meta:has-text("生成")',
       );
+      await generated.first().waitFor({ timeout: 30_000 });
+      check((await generated.count()) >= 1, `声音 ${at}: the generated take is not marked 生成`);
       await sideways(`声音 ${at}`);
-      // a later iteration prepares another 素材版本 for the same draft: that is fine (the page lists them all)
     }
 
   // 色板

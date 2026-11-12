@@ -6,8 +6,8 @@ import { startConsoleFixture } from './console-fixture-24b6.ts';
 /**
  * Part 24k-1 in a REAL browser (Chromium) on the synthetic site of console-fixture-24b6.ts, started with its offline provider AND its offline
  * Fish stand-in (a short wait, then a synthetic tone; nothing reaches a provider), at 1440x900 and 1280x800:
- *   - 声音: after 准备新素材版本 each empty slot offers 生成 next to the upload. The first click only asks (amber, the cost on the button, the API
- *     not called); the second sends; the clip lands in the slot marked 生成; 加载…试听 plays it; 批准此素材版本 stays off until the human ticks;
+ *   - 声音 (Part 30: slots and takes, no 素材版本): each empty slot offers 生成 next to the upload. The first click only asks (amber, the cost on
+ *     the button, the API not called); the second sends; the take lands in the slot marked 生成 with its own player; 批准 stays off until the human ticks;
  *   - 预演: a succeeded row opens with 试听: first click asks, second speaks the final bubbles and plays them; afterwards a free 播放 replaces
  *     the paid button (no second charge); a character without a voice reference shows the button off with 「先填音色 referenceId」;
  *   - no sideways scroll, no layer opened, nothing outside its box.
@@ -133,16 +133,22 @@ try {
         await page.locator('button:has-text("保存草稿")').first().click();
         await wait(1500);
       }
-      await page.locator('button:has-text("准备新素材版本")').first().click();
-      // The newest 素材版本 is not always listed first: a slot is found by still offering 生成 (a filled slot has none).
-      const slotOf = (n: string) =>
-        page.locator(`section:has(> h4:text-is("${n}")):has([data-pw-send^="generate-"])`).first();
-      await slotOf('欢迎成品').waitFor({ timeout: 15_000 });
-      for (const name of ['欢迎成品', '结束成品'] as const) {
-        const slot = slotOf(name);
-        const gen = slot.locator('[data-pw-send^="generate-"]');
-        const upload = slot.locator(`button:has-text("上传所选${name}")`);
-        check((await upload.count()) === 1, `声音 ${at} ${name}: the upload is gone`);
+      // Part 30 (named exception): there is no 准备新素材版本 any more; the slots are on the tab at once (one per welcome line, the footer
+      // while it is required) and each empty one offers 生成 next to its upload. The steps below are the same ones the Part 24k-1 check
+      // made, in the take layout: the first click asks (amber, the cost on the button, the API not called); the second sends; the take
+      // lands in the slot marked 生成 with its own player (no 加载 button); 批准 stays off until a slot is heard and ticked.
+      const emptySlots = 'section.vc-slot[data-state="empty"]';
+      const generateOne = `${emptySlots} [data-pw-send^="generate-"]:not([data-pw-send="generate-all"])`;
+      await page.locator(emptySlots).first().waitFor({ timeout: 15_000 });
+      const total = await page.locator('section.vc-slot').count();
+      check(total >= 1, `声音 ${at}: no slots`);
+      for (let n = 1; n <= total; n++) {
+        const gen = page.locator(generateOne).first();
+        const name = `位置 ${n}`;
+        check(
+          (await page.locator('button:has-text("上传")').count()) >= 1 || (await page.locator('.vc-pick').count()) >= 1,
+          `声音 ${at} ${name}: the upload is gone`,
+        );
         await page.waitForFunction(
           (el: HTMLElement | null) => !!el && /约/.test(el.textContent ?? ''),
           await gen.elementHandle(),
@@ -150,46 +156,41 @@ try {
         );
         check(!(await gen.isDisabled()), `声音 ${at} ${name}: 生成 is off (${await gen.innerText()})`);
         check(/约 .*[$µ]/.test(await gen.innerText()), `声音 ${at} ${name}: the cost is not on the button`);
-        const before = calls(/material-generate/);
-        const loadedBefore = await page.locator(`button:has-text("加载${name}试听")`).count();
-        const genBefore = await page.locator('[data-pw-send^="generate-"]').count();
+        const before = calls(/take-generate$/);
+        const takesBefore = await page.locator('.vc-take').count();
         await gen.click();
         check((await gen.getAttribute('data-state')) === 'confirm', `声音 ${at} ${name}: the first click did not ask`);
         check(/确认付费/.test(await gen.innerText()), `声音 ${at} ${name}: the armed button does not say 确认付费`);
-        check(calls(/material-generate/) === before, `声音 ${at} ${name}: the first click called the API`);
-        if (name === '欢迎成品') await shot(`generate-confirm-${at}`);
+        check(calls(/take-generate$/) === before, `声音 ${at} ${name}: the first click called the API`);
+        if (n === 1) await shot(`generate-confirm-${at}`);
         await gen.click();
-        // The page re-reads after generating, so the slot is found again by what changed: one more loaded clip, one fewer 生成.
         await page
-          .waitForFunction(
-            ({ n, k }: { n: string; k: number }) =>
-              [...document.querySelectorAll('button')].filter((b) => b.textContent === `加载${n}试听`).length > k,
-            { n: name, k: loadedBefore },
-            { timeout: 20_000 },
-          )
-          .catch(() => check(false, `声音 ${at} ${name}: no clip appeared in the slot`));
-        check(calls(/material-generate/) === before + 1, `声音 ${at} ${name}: not exactly one generate call`);
+          .waitForFunction((k: number) => document.querySelectorAll('.vc-take').length > k, takesBefore, {
+            timeout: 20_000,
+          })
+          .catch(() => check(false, `声音 ${at} ${name}: no take appeared in the slot`));
+        check(calls(/take-generate$/) === before + 1, `声音 ${at} ${name}: not exactly one generate call`);
+        await wait(800);
         check(
-          (await page.locator('.vc-origin').count()) >= 1 &&
-            (await page.locator('.vc-origin').first().innerText()) === '生成',
-          `声音 ${at} ${name}: the clip is not marked 生成`,
-        );
-        check(
-          (await page.locator('[data-pw-send^="generate-"]').count()) === genBefore - 1,
-          `声音 ${at} ${name}: 生成 stays on a filled slot`,
+          (await page.locator('.vc-take .vc-meta:has-text("生成")').count()) >= 1,
+          `声音 ${at} ${name}: the take is not marked 生成`,
         );
         await sideways(`声音 ${at} ${name}`);
       }
-      for (const name of ['欢迎成品', '结束成品'])
-        await page.locator(`button:has-text("加载${name}试听")`).first().click();
+      check(
+        (await page.locator(generateOne).count()) === 0,
+        `声音 ${at}: an empty slot is left after every slot was generated`,
+      );
       await page
-        .waitForFunction(() => document.querySelectorAll('audio[src^="blob:"]').length >= 2, null, { timeout: 10_000 })
-        .catch(() => check(false, `声音 ${at}: both clips are not loaded for listening`));
-      const approve = page.locator('button:has-text("批准此素材版本")').first();
+        .waitForFunction((k: number) => document.querySelectorAll('audio.vc-player[src^="blob:"]').length >= k, total, {
+          timeout: 10_000,
+        })
+        .catch(() => check(false, `声音 ${at}: the players are not ready for listening`));
+      const approve = page.locator('.vc-approval button:text-is("批准")').first();
       check(await approve.isDisabled(), `声音 ${at}: 批准 is on before the human ticked anything`);
-      check(calls(/material-approve/) === 0, `声音 ${at}: generation approved`);
+      check(calls(/take-approve/) === 0 && calls(/material-approve/) === 0, `声音 ${at}: generation approved`);
       await shot(`generated-ready-${at}`);
-      await inside(`声音 ${at}`, '[data-pw-send^="generate-"]', '.admin-content');
+      await inside(`声音 ${at}`, '.vc-take', '.admin-content');
       await noLayers(`声音 ${at}`);
 
       // ============================== 预演: 试听 ==============================
