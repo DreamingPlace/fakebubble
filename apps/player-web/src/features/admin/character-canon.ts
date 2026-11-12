@@ -152,6 +152,8 @@ function orderable<T extends object>(
   name: string,
   live: { say: (message: string) => void },
   access: { get: () => T[]; set: (rows: T[]) => void; paint: () => void; edit: () => void },
+  /** The row's own name for the announcement (a fact's label); defaults to the list's. */
+  rowName?: (row: T) => string,
 ) {
   dragOrder(list, {
     rows: () => Array.from(list.querySelectorAll(selector)) as HTMLElement[],
@@ -163,8 +165,21 @@ function orderable<T extends object>(
       access.edit();
     },
     handle: '.ad-handle',
-    announce: (_row, to, total) => live.say(movedSentence(name, to, total)),
+    announce: (row, to, total) => {
+      const id = row.dataset.id!;
+      const item = access.get().find((r) => String(idOf(r)) === id);
+      // the list was repainted: the focus goes back to the moved row's handle, so Alt+↑ / Alt+↓ can be pressed again
+      (list.querySelector(`[data-id="${id}"] .ad-handle`) as HTMLElement | null)?.focus?.();
+      live.say(movedSentence((item && rowName?.(item)) || name, to, total));
+    },
   });
+}
+/** After a row was removed and the list repainted: the focus lands on the next row's ×, or the adder, and the removal is said. */
+function afterRemove(list: HTMLElement, index: number, live: { say: (message: string) => void }, said: string) {
+  const removes = Array.from(list.querySelectorAll('.ad-remove')) as HTMLElement[];
+  const target = removes[Math.min(index, removes.length - 1)] ?? (list.querySelector('.cn-add') as HTMLElement | null);
+  target?.focus?.();
+  live.say(said);
 }
 const cardAttrs = (row: object) => ({ role: 'listitem', 'data-drag-row': '', 'data-id': String(idOf(row)) });
 
@@ -220,6 +235,7 @@ function examples(original: JsonValue | undefined, onEdit: () => void): Piece {
         if (!rows.length) rows = [newExample()];
         paint();
         onEdit();
+        afterRemove(list, index, live, `已删除${label}第 ${index + 1} 个`);
       });
       const parts: HTMLElement[] = [];
       if (row.situation !== undefined) {
@@ -344,6 +360,7 @@ function past(original: JsonValue | undefined, onEdit: () => void): Piece {
         if (!rows.length) rows = [newCard()];
         paint();
         onEdit();
+        afterRemove(cards, index, live, `已删除${label}第 ${index + 1} 张`);
       });
       cards.append(
         h(
@@ -428,10 +445,12 @@ function facts(original: Record<string, string> | undefined, onEdit: () => void)
       );
       const remove = removeButton(`删除${label}第 ${index + 1} 项`, 'ad-remove cn-x');
       remove.addEventListener('click', () => {
+        const gone = row.label.trim() || `第 ${index + 1} 项`;
         rows = rows.filter((_, at) => at !== index);
         if (!rows.length) rows = [newFact()];
         paint();
         onEdit();
+        afterRemove(list, index, live, `已删除${label}：${gone}`);
       });
       list.append(
         h(
@@ -457,7 +476,14 @@ function facts(original: Record<string, string> | undefined, onEdit: () => void)
     );
   };
   paint();
-  orderable(list, '.cn-fact', label, live, { get: () => rows, set: (next) => (rows = next), paint, edit: onEdit });
+  orderable(
+    list,
+    '.cn-fact',
+    label,
+    live,
+    { get: () => rows, set: (next) => (rows = next), paint, edit: onEdit },
+    (r) => r.label.trim(),
+  );
   box.append(list, live.node);
   const changed = () =>
     !same(

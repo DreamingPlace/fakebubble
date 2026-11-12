@@ -536,6 +536,44 @@ try {
       check(/移到第 2 位/.test(said), `${w}: the move is announced (${said})`);
       await page.keyboard.press('Alt+ArrowUp');
       await wait(300);
+      // a repainted list keeps the keyboard: after Alt+↓ the handle still has the focus, so the row can be moved again; × lands on the next row
+      await tab('其余设定').click();
+      await wait(350);
+      const labelsOf = () => page.$$eval('.cn-fact .cn-fact-label', (n: HTMLInputElement[]) => n.map((x) => x.value));
+      const factsBefore = await labelsOf();
+      await page.locator('.cn-fact .ad-handle').first().focus();
+      await page.keyboard.press('Alt+ArrowDown');
+      await wait(300);
+      await page.keyboard.press('Alt+ArrowDown');
+      await wait(300);
+      const factsAfter = await labelsOf();
+      check(
+        factsAfter[2] === factsBefore[0],
+        `${w}: two Alt+↓ presses move a fact two places (${factsAfter.slice(0, 3).join('|')})`,
+      );
+      check(
+        await page.evaluate("document.activeElement?.classList.contains('ad-handle') === true"),
+        `${w}: the handle keeps the focus after a move`,
+      );
+      const saidFact =
+        (await page.locator('.cn-facts ~ [role=status], .cn-field [role=status]').first().textContent()) ?? '';
+      check(new RegExp(`${factsBefore[0]}移到第 3 位`).test(saidFact), `${w}: the move names the row (${saidFact})`);
+      const countBefore = await page.locator('.cn-fact').count();
+      await page.locator('.cn-fact .ad-remove').nth(1).focus();
+      await page.keyboard.press('Enter');
+      await wait(300);
+      check((await page.locator('.cn-fact').count()) === countBefore - 1, `${w}: × removes the row from the keyboard`);
+      check(
+        await page.evaluate("document.activeElement?.classList.contains('ad-remove') === true"),
+        `${w}: the focus lands on the next row's × after a removal`,
+      );
+      await page.keyboard.press('Alt+ArrowUp');
+      // leave nothing unsaved behind (the next step moves on to another tab and page)
+      const discard = page.locator('.wb-savebar button', { hasText: '放弃本页修改' });
+      if (await discard.isVisible()) {
+        await discard.click();
+        await wait(500);
+      }
       // 声音: one Fish ID field and 语速 (Part 29)
       await tab('声音').click();
       await wait(400);

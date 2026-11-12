@@ -2009,6 +2009,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     // In the console the title row's 预演后发布 hides on this tab (it led here), so this is the screen's one solid button.
     if (embedded) confirmPublish.className = 'admin-primary';
     publishRow.append(noProof);
+    // a disabled button is skipped by Tab: its reason is linked to it for a screen reader
+    noProof.setAttribute?.('id', `wb-reason-${target}`);
+    confirmPublish.setAttribute?.('aria-describedby', `wb-reason-${target}`);
     ack.addEventListener('change', sync);
   }
   /** 版本历史 lives in its own module (history/version-history.ts); this only hands it the client and what to do after a restore. */
