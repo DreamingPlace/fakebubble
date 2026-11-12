@@ -14614,6 +14614,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   --ad-w-l: 920px; /* the form column */
   --ad-gap: var(--ad-sp-5); /* card → card, header → body: the section step */
   --ad-card-pad: 20px;
+  --wb-rail-top: 104px; /* the header (56) + the section step (24) above it: where the rail rests, so a scrolled page does not move it */
 }
 
 /* ---- buttons: standard by default, compact where the surrounding is dense, square when icon-only ---- */
@@ -14631,6 +14632,7 @@ button:not(
   .wb-rail-item,
   .cs-cell,
   .cs-head,
+  .cs-star-hit,
   .seg-button,
   .wb-tab,
   [class*="swatch"]
@@ -14676,7 +14678,7 @@ button:not(
   padding-inline: 12px;
   font-size: 13px;
 }
-/* the 关系 matrix's cells and headings (.cs-cell, .cs-head) are the grid itself: they keep their own geometry (named exemption) */
+/* the 关系 matrix's cells and headings (.cs-cell, .cs-head, and the .cs-star-hit overlays of a rating) are the grid itself: they keep their own geometry (named exemption) */
 /* controls inside a segmented bar and the tabs: compact inside a 40 high track */
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.seg-button:not(.vc-materials *),
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.wb-tab:not(.vc-materials *) {
@@ -15138,7 +15140,7 @@ button:not(
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles {
   gap: 0;
   flex: none;
-  max-height: round(down, calc(100dvh - 261px), 46px);
+  max-height: round(down, calc(100dvh - 265px), 46px);
 }
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick-group {
   margin: 0;
@@ -15150,6 +15152,9 @@ button:not(
   height: 92px;
   margin: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick-list {
   gap: 0;
@@ -15214,6 +15219,12 @@ button:not(
   box-sizing: border-box;
   min-height: var(--ad-h-standard);
   align-items: center;
+}
+
+/* a checkbox line is as wide as its label, so its hover tip sits beside the box and not at the far end of the column */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label.admin-check:not(.vc-materials *) {
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */

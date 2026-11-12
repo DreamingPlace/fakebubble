@@ -9,7 +9,7 @@ export const AUDIT_SOURCE = `(() => {
   const STEP = 24;
   const WIDTH = { xs: 120, s: 176, m: 352, l: 920 };  // max width of a single-line field per width class
   // Buttons that are not row actions: whole-card / whole-row hit areas, the navigation and the rail. Each has its own spec.
-  const EXEMPT_BUTTON = '.admin-nav-item, .admin-account-toggle, .admin-pick, .admin-pick-head, .cc-row-open, .cn-add-card, .wb-rail-item, .cs-card, .cs-cell, .cs-head, .cc-card-open, .admin-menu-item, .admin-nav-collapse';
+  const EXEMPT_BUTTON = '.admin-nav-item, .admin-account-toggle, .admin-pick, .admin-pick-head, .cc-row-open, .cn-add-card, .wb-rail-item, .cs-card, .cs-cell, .cs-head, .cs-star-hit, .cc-card-open, .admin-menu-item, .admin-nav-collapse';
   const VOICE = '.vc-materials';
   const root = document.querySelector('.admin-frame') || document.querySelector('.admin-shell');
   const out = { primary: [], buttonHeight: [], buttonGroup: [], fieldWidth: [], pair: [], gaps: [], emptyHeading: [], checkGroup: [], sideways: [], cut: [], rail: [] };
