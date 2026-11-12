@@ -208,6 +208,7 @@ export function colourField(
   // The swatch starts on a soft tint, not the browser's black: the text field decides whether there is a colour at all.
   picker.value = '#ddd8f0';
   picker.title = '取色';
+  picker.setAttribute?.('aria-label', '取色');
   chip.className = 'colour-chip';
   chip.setAttribute?.('role', 'img');
   const paint = () => {

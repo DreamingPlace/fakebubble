@@ -13923,6 +13923,10 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   background: #f3f1ee;
 }
 
+.account-admin-page.admin-shell .sl-del[data-idle="true"] {
+  visibility: hidden;
+}
+
 /* ---- 欢迎内容: the words grow, the percent is one aligned column with its unit beside it ---- */
 .account-admin-page.admin-shell .wl-row {
   grid-template-columns: 18px 22px minmax(0, 1fr) 84px 64px;
@@ -13941,6 +13945,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .wl-weight {
   width: 56px;
+  font-variant-numeric: tabular-nums;
 }
 .account-admin-page.admin-shell .wl-row > .wl-del {
   height: 40px;
@@ -14172,6 +14177,14 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   display: inline-flex;
   align-items: center;
   gap: 10px;
+}
+
+/* 关系与故事: the link and the name pills are at least 24 px tall */
+.account-admin-page.admin-shell a.cs-go,
+.account-admin-page.admin-shell input.cs-pill-input {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* ---- C. one disclosure pattern ---- */

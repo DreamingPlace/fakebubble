@@ -45,7 +45,10 @@ export function sentenceList(
       r.row.dataset.index = String(i + 1);
       r.box.setAttribute?.('aria-label', `${options.label} 第 ${i + 1} 条`);
       // the one row of an empty list is only a place to type: it has nothing to delete
-      r.del.disabled = locked || (rows.length === 1 && r.box.value === '');
+      const idle = rows.length === 1 && r.box.value === '';
+      r.del.disabled = locked || idle;
+      // the lone empty row is only a place to type: its 删除 is not shown (a dead control reads as broken)
+      r.del.dataset.idle = String(idle);
     });
     add.disabled = locked;
   };
