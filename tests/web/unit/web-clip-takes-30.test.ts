@@ -28,9 +28,29 @@ import { onsetMsOf } from '../../../workers/audio/leading-onset.ts';
 
 /** Part 30 (synthetic only: a fake Fish transport and a fake text model, never a real call). */
 const ORIGIN = 'https://fixture.invalid';
-type Take = { takeId: string; name: string; origin: string; status: string; selected: boolean; usable: boolean; errorCode?: string };
-type Slot = { slotKey: string; text: string; takes: Take[]; selectedTakeId: string | null; approved: boolean; issue: { code: string; state: string } | null };
-type View = { slots: Slot[]; ready: boolean; footerRequired: boolean; voice: { url: string; referenceId: string } | null };
+type Take = {
+  takeId: string;
+  name: string;
+  origin: string;
+  status: string;
+  selected: boolean;
+  usable: boolean;
+  errorCode?: string;
+};
+type Slot = {
+  slotKey: string;
+  text: string;
+  takes: Take[];
+  selectedTakeId: string | null;
+  approved: boolean;
+  issue: { code: string; state: string } | null;
+};
+type View = {
+  slots: Slot[];
+  ready: boolean;
+  footerRequired: boolean;
+  voice: { url: string; referenceId: string } | null;
+};
 
 function fixture(t: test.TestContext, freeTier = false) {
   const raw = new Store(':memory:');
@@ -47,13 +67,19 @@ function fixture(t: test.TestContext, freeTier = false) {
   const store = Object.assign(raw, {
     instanceId: 'takes-30',
     publicFreeTier: freeTier,
-    webReceiptDigest: (kind: string, json: string) => createHash('sha256').update(`${kind}:fixture:${json}`).digest('hex'),
+    webReceiptDigest: (kind: string, json: string) =>
+      createHash('sha256').update(`${kind}:fixture:${json}`).digest('hex'),
   }) as unknown as WebRuntimeStore & { publicFreeTier: boolean };
   const now = 1_800_000_000_000,
     clock = { now: () => now },
     selected = syntheticSelection();
   for (const item of selected)
-    raw.run('INSERT INTO character_templates VALUES (?,?,?)', item.characterId, item.personaVersion, JSON.stringify(item.template));
+    raw.run(
+      'INSERT INTO character_templates VALUES (?,?,?)',
+      item.characterId,
+      item.personaVersion,
+      JSON.stringify(item.template),
+    );
   configureWebProvider(store, selected, now);
   const accounts = new WebAccountAdmin(raw, clock, ORIGIN);
   installWebCharacterCatalog(raw);
@@ -64,7 +90,10 @@ function fixture(t: test.TestContext, freeTier = false) {
   chars.enableProfileImport();
   const sent: string[] = [],
     order: string[] = [];
-  const behaviour = { fish: (_text: string): Buffer | 'fail' => syntheticTone(300), model: (_user: string): string | 'fail' => '' };
+  const behaviour = {
+    fish: (_text: string): Buffer | 'fail' => syntheticTone(300),
+    model: (_user: string): string | 'fail' => '',
+  };
   const fish: FakeFish = async (request) => {
     const text = JSON.parse(request.body).text as string;
     order.push('fish');
@@ -125,10 +154,18 @@ function fixture(t: test.TestContext, freeTier = false) {
   const call = (id: string, action: string, input: unknown = {}) => chars.takeCall(auth, id, action, input);
   const view = async (id: string) => (await call(id, 'list')) as View;
   const estimate = async (id: string, slotKeys: string[], markup?: string) =>
-    (await call(id, 'estimate', { slotKeys, ...(markup ? { markup } : {}) })) as { ok: boolean; estimateMicros: number };
+    (await call(id, 'estimate', { slotKeys, ...(markup ? { markup } : {}) })) as {
+      ok: boolean;
+      estimateMicros: number;
+    };
   const gen = async (id: string, slotKey: string, extra: Record<string, unknown> = {}) => {
     const est = await estimate(id, [slotKey], extra.markup as string | undefined);
-    return (await call(id, 'generate', { requestId: `gen-${++seq}`, slotKey, acknowledgeMicros: est.estimateMicros, ...extra })) as Take & { slotKey: string };
+    return (await call(id, 'generate', {
+      requestId: `gen-${++seq}`,
+      slotKey,
+      acknowledgeMicros: est.estimateMicros,
+      ...extra,
+    })) as Take & { slotKey: string };
   };
   const approveAll = async (id: string) => {
     const v = await view(id);
@@ -146,12 +183,37 @@ function fixture(t: test.TestContext, freeTier = false) {
       acknowledgeReview: true,
       ...(materialId ? { materialId } : {}),
     });
-  return { raw, store, clock, materials, chars, auth, sent, order, reserves, asked, behaviour, draft, code, call, view, estimate, gen, approveAll, publish, lines };
+  return {
+    raw,
+    store,
+    clock,
+    materials,
+    chars,
+    auth,
+    sent,
+    order,
+    reserves,
+    asked,
+    behaviour,
+    draft,
+    code,
+    call,
+    view,
+    estimate,
+    gen,
+    approveAll,
+    publish,
+    lines,
+  };
 }
 const pcm = (b64: string) => {
   const bytes = Buffer.from(b64, 'base64'),
     info = inspectPCM(bytes, 60_000);
-  return { bytes, samples: Int16Array.from({ length: info.dataLength / 2 }, (_, i) => bytes.readInt16LE(info.dataOffset + i * 2)), info };
+  return {
+    bytes,
+    samples: Int16Array.from({ length: info.dataLength / 2 }, (_, i) => bytes.readInt16LE(info.dataOffset + i * 2)),
+    info,
+  };
 };
 async function ready(t: test.TestContext, freeTier = false) {
   const f = fixture(t, freeTier);
@@ -163,13 +225,22 @@ async function ready(t: test.TestContext, freeTier = false) {
 test('a slot per line and the footer; 重录 adds a take and keeps the others; names are 第 N 条; the first take is 选用', async (t) => {
   const { f, id } = await ready(t);
   const v0 = await f.view(id);
-  assert.deepEqual(v0.slots.map((s) => s.slotKey), ['line:line-a', 'line:line-b', 'footer']);
+  assert.deepEqual(
+    v0.slots.map((s) => s.slotKey),
+    ['line:line-a', 'line:line-b', 'footer'],
+  );
   assert.ok(v0.slots.every((s) => s.takes.length === 0));
   assert.equal(v0.voice?.url, 'https://fish.audio/m/fish-a');
   const one = await f.gen(id, 'line:line-a');
   const two = await f.gen(id, 'line:line-a');
   const slot = (await f.view(id)).slots[0]!;
-  assert.deepEqual(slot.takes.map((x) => [x.name, x.origin, x.selected]), [['第 1 条', 'generated', true], ['第 2 条', 'generated', false]]);
+  assert.deepEqual(
+    slot.takes.map((x) => [x.name, x.origin, x.selected]),
+    [
+      ['第 1 条', 'generated', true],
+      ['第 2 条', 'generated', false],
+    ],
+  );
   assert.equal(slot.selectedTakeId, one.takeId);
   assert.notEqual(one.takeId, two.takeId);
   assert.equal(f.sent.length, 2, 'one paid call per take, nothing else');
@@ -188,7 +259,11 @@ test('rename in place (≤ 20), select another take, and a changed 选用 clears
   await f.call(id, 'select', { takeId: b.takeId });
   const v = await f.view(id);
   assert.equal(v.slots[0]!.approved, false, 'the slot whose 选用 changed needs approving again');
-  assert.deepEqual(v.slots.slice(1).map((s) => s.approved), [true, true], 'the others keep theirs');
+  assert.deepEqual(
+    v.slots.slice(1).map((s) => s.approved),
+    [true, true],
+    'the others keep theirs',
+  );
   assert.equal(v.slots[0]!.takes.find((x) => x.takeId === b.takeId)!.name, '更懒一点');
   assert.ok(a.takeId);
 });
@@ -220,7 +295,10 @@ test('changing line 2 leaves slot 1 and the footer approved; only slot 2 needs a
   await f.approveAll(id);
   f.draft(id, (p) => void (p.presentation.welcomes = f.lines('换一句新的话')), first.saved.revision);
   const v = await f.view(id);
-  assert.deepEqual(v.slots.map((s) => s.approved), [true, false, true]);
+  assert.deepEqual(
+    v.slots.map((s) => s.approved),
+    [true, false, true],
+  );
   assert.equal(v.slots[1]!.takes[0]!.usable, false, 'the old take is for the old text');
   assert.equal(v.slots[1]!.selectedTakeId, null);
   assert.equal(v.ready, false);
@@ -237,13 +315,17 @@ test('publishing needs an approved 选用 take in every current slot; the bundle
   const { materialId } = (await f.call(id, 'bundle')) as { materialId: string };
   assert.deepEqual(await f.call(id, 'bundle'), { materialId }, 'an identical unpublished bundle is reused');
   assert.equal((await f.publish(id, first.saved, materialId)).version, 1);
-  const live = f.raw.all<{ line_id: string }>('SELECT line_id FROM web_provider_welcome_lines WHERE character_id=?', id);
+  const live = f.raw.all<{ line_id: string }>(
+    'SELECT line_id FROM web_provider_welcome_lines WHERE character_id=?',
+    id,
+  );
   assert.deepEqual(live.map((r) => r.line_id).sort(), ['line-a', 'line-b']);
   // v2 (persona only) reuses the live approval; restoring v1 then reuses the very bundle v1 published.
   const next = f.draft(id, (p) => void ((p.template.persona += ' 再改一点'), (p.template.version = 2)));
   const v2 = await f.publish(id, next.saved);
   assert.equal(v2.version, 2);
-  const bundles = () => f.raw.get<{ n: number }>('SELECT count(*) n FROM web_character_materials WHERE character_id=?', id)!.n;
+  const bundles = () =>
+    f.raw.get<{ n: number }>('SELECT count(*) n FROM web_character_materials WHERE character_id=?', id)!.n;
   const before = bundles();
   const restored = f.chars.restore(f.auth, id, { requestId: 'restore-30', version: 1, liveVersion: 2 });
   assert.equal(restored.version, 3);
@@ -253,25 +335,36 @@ test('publishing needs an approved 选用 take in every current slot; the bundle
 test('生成全部: one confirm for the total; a call per slot, each reserved first; one UNKNOWN stops nothing and is never resent', async (t) => {
   const { f, id } = await ready(t);
   const all = await f.estimate(id, ['line:line-a', 'line:line-b', 'footer']);
-  await assert.rejects(f.call(id, 'generate-all', { requestId: 'all-1', acknowledgeMicros: all.estimateMicros + 1 }), /SPEECH_ESTIMATE_CHANGED/);
+  await assert.rejects(
+    f.call(id, 'generate-all', { requestId: 'all-1', acknowledgeMicros: all.estimateMicros + 1 }),
+    /SPEECH_ESTIMATE_CHANGED/,
+  );
   assert.equal(f.sent.length, 0, 'a wrong confirm sends nothing');
   f.behaviour.fish = (text) => (text.includes('今天也是你') ? 'fail' : syntheticTone(300));
   const run = (await f.call(id, 'generate-all', { requestId: 'all-1', acknowledgeMicros: all.estimateMicros })) as {
     results: { slotKey: string; takeId?: string; code?: string }[];
   };
-  assert.deepEqual(run.results.map((r) => [r.slotKey, !!r.takeId, r.code]), [
-    ['line:line-a', true, undefined],
-    ['line:line-b', false, 'SPEECH_CALL_UNKNOWN'],
-    ['footer', true, undefined],
-  ]);
+  assert.deepEqual(
+    run.results.map((r) => [r.slotKey, !!r.takeId, r.code]),
+    [
+      ['line:line-a', true, undefined],
+      ['line:line-b', false, 'SPEECH_CALL_UNKNOWN'],
+      ['footer', true, undefined],
+    ],
+  );
   assert.equal(f.sent.length, 3);
   assert.equal(f.reserves.filter((p) => p === 'fish').length, 3, 'reserved per call');
   for (let i = 0; i < f.order.length; i++) if (f.order[i] === 'fish') assert.equal(f.order[i - 1], 'reserve:fish');
   const v = await f.view(id);
-  assert.deepEqual(v.slots[1]!.issue && [v.slots[1]!.issue.state, v.slots[1]!.issue.code], ['unknown', 'FAKE_FISH_DOWN'.replace('FAKE_FISH_DOWN', v.slots[1]!.issue!.code)]);
+  assert.deepEqual(v.slots[1]!.issue && [v.slots[1]!.issue.state, v.slots[1]!.issue.code], [
+    'unknown',
+    'FAKE_FISH_DOWN'.replace('FAKE_FISH_DOWN', v.slots[1]!.issue!.code),
+  ]);
   // the same run again: nothing is sent twice (the UNKNOWN stays UNKNOWN, the others answer from their takes)
   f.behaviour.fish = () => syntheticTone(300);
-  const again = (await f.call(id, 'generate-all', { requestId: 'all-1', acknowledgeMicros: 0 })) as { results: { code?: string }[] };
+  const again = (await f.call(id, 'generate-all', { requestId: 'all-1', acknowledgeMicros: 0 })) as {
+    results: { code?: string }[];
+  };
   assert.equal(f.sent.length, 3);
   assert.equal(again.results[1]!.code, 'SPEECH_CALL_UNKNOWN');
   const holds = f.raw.get<{ n: number }>("SELECT count(*) n FROM web_speech_admin_calls WHERE state='unknown'")!.n;
@@ -291,7 +384,10 @@ test('generated takes start with exactly 280 ms of zero samples and the voice at
   };
   const take = await f.gen(id, 'line:line-a');
   const out = pcm(((await f.call(id, 'audio', { takeId: take.takeId })) as { base64: string }).base64);
-  assert.ok(out.samples.subarray(0, 6720).every((v) => v === 0), 'the first 280 ms are zero');
+  assert.ok(
+    out.samples.subarray(0, 6720).every((v) => v === 0),
+    'the first 280 ms are zero',
+  );
   assert.ok(Math.abs((onsetMsOf(out.bytes) ?? 0) - 300) <= 10);
   const view = (await f.view(id)).slots[0]!.takes[0] as Take & { durationMs: number; sha256: string };
   assert.equal(view.sha256, createHash('sha256').update(out.bytes).digest('hex'), 'sha256 is of the final audio');
@@ -328,15 +424,24 @@ test('audio with no voice is an unusable take WEB_SPEECH_NO_ONSET; the paid call
 
 test('feedback: both calls go through the budget (reserved first); the markup must strip to the exact line; a mismatch is rejected', async (t) => {
   const { f, id } = await ready(t);
-  const est = (await f.call(id, 'estimate-direction', { slotKey: 'line:line-a', feedback: '开头更懒一点' })) as { ok: boolean };
+  const est = (await f.call(id, 'estimate-direction', { slotKey: 'line:line-a', feedback: '开头更懒一点' })) as {
+    ok: boolean;
+  };
   assert.equal(est.ok, true);
   f.behaviour.model = () => '[lazy, drawn out]你好[small laugh]呀';
-  const out = (await f.call(id, 'rewrite', { requestId: 'rw-1', slotKey: 'line:line-a', feedback: '开头更懒一点' })) as { markup: string };
+  const out = (await f.call(id, 'rewrite', {
+    requestId: 'rw-1',
+    slotKey: 'line:line-a',
+    feedback: '开头更懒一点',
+  })) as { markup: string };
   assert.equal(out.markup, '[lazy, drawn out]你好[small laugh]呀');
   assert.deepEqual(JSON.parse(f.asked[0]!), { line: '你好呀', feedback: '开头更懒一点' });
   assert.equal(f.order.at(-2), 'reserve:deepseek');
   assert.equal(f.order.at(-1), 'model');
-  const take = (await f.gen(id, 'line:line-a', { feedback: '开头更懒一点', markup: out.markup })) as Take & { feedback: string; markup: string };
+  const take = (await f.gen(id, 'line:line-a', { feedback: '开头更懒一点', markup: out.markup })) as unknown as Take & {
+    feedback: string;
+    markup: string;
+  };
   assert.equal(take.origin, 'feedback');
   assert.equal(take.markup, out.markup);
   assert.equal(take.feedback, '开头更懒一点');
@@ -344,7 +449,10 @@ test('feedback: both calls go through the budget (reserved first); the markup mu
   assert.ok(f.order.lastIndexOf('fish') > f.order.lastIndexOf('reserve:fish'));
   // a mismatch (a word changed) is rejected after the bill is recorded; nothing else is stored
   f.behaviour.model = () => '[soft]你好啊';
-  await assert.rejects(f.call(id, 'rewrite', { requestId: 'rw-2', slotKey: 'line:line-a', feedback: '轻一点' }), /CLIP_MARKUP_MISMATCH/);
+  await assert.rejects(
+    f.call(id, 'rewrite', { requestId: 'rw-2', slotKey: 'line:line-a', feedback: '轻一点' }),
+    /CLIP_MARKUP_MISMATCH/,
+  );
   const ledger = f.raw.get<{ state: string; outcome: string; error_code: string }>(
     "SELECT state,outcome,error_code FROM web_clip_direction_calls WHERE request_id='rw-2'",
   )!;
@@ -353,15 +461,27 @@ test('feedback: both calls go through the budget (reserved first); the markup mu
   const sentBefore = f.sent.length;
   assert.equal((await f.estimate(id, ['line:line-a'], '[soft]你好啊')).ok, false, 'the estimate refuses it too');
   await assert.rejects(
-    f.call(id, 'generate', { requestId: 'bad-1', slotKey: 'line:line-a', acknowledgeMicros: 1, feedback: 'x', markup: '[soft]你好啊' }),
+    f.call(id, 'generate', {
+      requestId: 'bad-1',
+      slotKey: 'line:line-a',
+      acknowledgeMicros: 1,
+      feedback: 'x',
+      markup: '[soft]你好啊',
+    }),
     /CLIP_MARKUP_MISMATCH/,
   );
   assert.equal(f.sent.length, sentBefore);
   // an UNKNOWN text call is never resent
   f.behaviour.model = 'fail' as never;
   const modelCalls = f.asked.length;
-  await assert.rejects(f.call(id, 'rewrite', { requestId: 'rw-3', slotKey: 'line:line-a', feedback: '再轻一点' }), /CLIP_DIRECTION_UNKNOWN/);
-  await assert.rejects(f.call(id, 'rewrite', { requestId: 'rw-3', slotKey: 'line:line-a', feedback: '再轻一点' }), /CLIP_DIRECTION_UNKNOWN/);
+  await assert.rejects(
+    f.call(id, 'rewrite', { requestId: 'rw-3', slotKey: 'line:line-a', feedback: '再轻一点' }),
+    /CLIP_DIRECTION_UNKNOWN/,
+  );
+  await assert.rejects(
+    f.call(id, 'rewrite', { requestId: 'rw-3', slotKey: 'line:line-a', feedback: '再轻一点' }),
+    /CLIP_DIRECTION_UNKNOWN/,
+  );
   assert.equal(f.asked.length, modelCalls + 1);
   const v = await f.view(id);
   assert.equal(v.slots[0]!.issue?.state, 'unknown');
@@ -370,14 +490,19 @@ test('feedback: both calls go through the budget (reserved first); the markup mu
 test('the prompt is pinned: its sha256 is documented', () => {
   assert.equal(clipPromptHash(), CLIP_DIRECTION_PROMPT_SHA256);
   assert.equal(
-    createHash('sha256').update(readFileSync(new URL('../../../prompts/v7/clip-direction-task.md', import.meta.url))).digest('hex'),
+    createHash('sha256')
+      .update(readFileSync(new URL('../../../prompts/v7/clip-direction-task.md', import.meta.url)))
+      .digest('hex'),
     CLIP_DIRECTION_PROMPT_SHA256,
   );
 });
 
 test('the footer slot exists only while it is required (free tier off)', async (t) => {
   const on = await ready(t, true);
-  assert.deepEqual((await on.f.view(on.id)).slots.map((s) => s.slotKey), ['line:line-a', 'line:line-b']);
+  assert.deepEqual(
+    (await on.f.view(on.id)).slots.map((s) => s.slotKey),
+    ['line:line-a', 'line:line-b'],
+  );
   assert.equal((await on.f.view(on.id)).footerRequired, false);
 });
 
@@ -413,7 +538,14 @@ test('migration: an existing 素材版本 becomes takes of its slots; approved s
   // a new runtime step over the existing database (the first instance ran before the version existed)
   const fresh = new WebClipTakes(f.store as never, f.clock, f.materials);
   const v = fresh.view('old-one') as unknown as View;
-  assert.deepEqual(v.slots.map((s) => [s.takes.length, s.approved]), [[1, true], [1, true], [1, true]]);
+  assert.deepEqual(
+    v.slots.map((s) => [s.takes.length, s.approved]),
+    [
+      [1, true],
+      [1, true],
+      [1, true],
+    ],
+  );
   assert.equal(v.ready, true);
   assert.equal(v.slots[0]!.takes[0]!.name, '第 1 条');
   assert.equal(published(), before, 'nothing published changed');
@@ -421,6 +553,8 @@ test('migration: an existing 素材版本 becomes takes of its slots; approved s
   assert.equal(f.raw.get<{ n: number }>('SELECT count(*) n FROM web_clip_takes')!.n, 3, 'the step runs once');
   // and the migrated takes play and can be bundled
   const takeId = v.slots[0]!.takes[0]!.takeId;
-  const heard = (await fresh.audio('old-one', { takeId }, () => ({ memberId: 'x', sessionId: 'y' }))) as { sha256: string };
+  const heard = (await fresh.audio('old-one', { takeId }, () => ({ memberId: 'x', sessionId: 'y' }))) as {
+    sha256: string;
+  };
   assert.ok(heard.sha256);
 });

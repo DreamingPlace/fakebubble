@@ -326,7 +326,15 @@ export async function routeWebAccountAdmin(
     if (match[2]!.startsWith('take-')) {
       const action = match[2]!.slice('take-'.length);
       // The body is validated key by key inside the business object; here it only has to be a JSON object.
-      return { status: 200, body: await characters.takeCall(actor, id, action, action === 'list' || action === 'bundle' ? body([]) : (req.body ?? {})) };
+      return {
+        status: 200,
+        body: await characters.takeCall(
+          actor,
+          id,
+          action,
+          action === 'list' || action === 'bundle' ? body([]) : (req.body ?? {}),
+        ),
+      };
     }
     if (match[2] === 'history') {
       body([]);

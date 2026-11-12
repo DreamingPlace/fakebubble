@@ -13701,6 +13701,159 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   gap: 8px;
   animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
 }
+/* ---- Part 30: slots and takes (features/admin/clip-takes-panel.ts). One row per take, every action one of two button sizes. ---- */
+.account-admin-page.admin-shell .vc-panel {
+  display: grid;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .vc-voice-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 20px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vc-voice-line p {
+  margin: 0;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .vc-kv {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .vc-k {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .vc-link {
+  color: var(--ad-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-link:hover,
+.account-admin-page.admin-shell .vc-link:focus-visible {
+  border-bottom-color: currentColor;
+}
+.account-admin-page.admin-shell .vc-all {
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-slot-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell .vc-takes {
+  display: grid;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .vc-take {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius);
+  transition:
+    background-color calc(200ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(200ms * var(--ad-motion)) var(--ad-ease),
+    opacity calc(200ms * var(--ad-motion)) var(--ad-ease);
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-take[data-selected="true"] {
+  border-color: var(--ad-primary);
+  background: var(--ad-primary-soft);
+}
+.account-admin-page.admin-shell .vc-take[data-usable="false"] {
+  opacity: 0.6;
+}
+.account-admin-page.admin-shell .vc-take-name {
+  box-sizing: content-box;
+  width: 9ch;
+  min-height: 0;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-take-name:hover,
+.account-admin-page.admin-shell .vc-take-name:focus {
+  border-color: var(--ad-border);
+  background: #fff;
+}
+.account-admin-page.admin-shell .vc-player {
+  width: 240px;
+  max-width: 100%;
+  height: 32px;
+}
+.account-admin-page.admin-shell .vc-small {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vc-note {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .vc-feedback {
+  display: grid;
+  gap: 8px;
+  padding: 8px 0 0;
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-feedback[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .vc-feedback-input,
+.account-admin-page.admin-shell .vc-markup-input {
+  width: min(520px, 100%);
+}
+.account-admin-page.admin-shell .vc-markup {
+  display: grid;
+  gap: 8px;
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-approval {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ad-hairline);
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .vc-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+.account-admin-page.admin-shell .vc-tick {
+  transition: opacity calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-tick:has(input:disabled:not(:checked)) {
+  opacity: 0.55;
+}
+.account-admin-page.admin-shell .vc-used {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+}
+.account-admin-page.admin-shell .vc-used-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .vc-used-row input {
+  width: auto;
+  max-width: 100%;
+}
 .account-admin-page.admin-shell .pw-compare-result {
   display: flex;
   flex-direction: column;

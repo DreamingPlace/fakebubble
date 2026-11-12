@@ -92,7 +92,8 @@ export class WebClipDirection {
   }
   /** Most tokens the request can use: every input byte is at least one token, plus the output bound. */
   private bound(text: string, feedback: string) {
-    const bytes = Buffer.byteLength(CLIP_DIRECTION_PROMPT, 'utf8') + Buffer.byteLength(userMessage(text, feedback), 'utf8');
+    const bytes =
+      Buffer.byteLength(CLIP_DIRECTION_PROMPT, 'utf8') + Buffer.byteLength(userMessage(text, feedback), 'utf8');
     return bytes + OUTPUT_TOKENS;
   }
   private valid(text: string, feedback: unknown): asserts feedback is string {
@@ -141,7 +142,16 @@ export class WebClipDirection {
     ensure(instance, 'WEB_LOCAL_INSTANCE_MISMATCH');
     const id = this.nextId(),
       budgetId = JSON.stringify([instance.instance_id, 'clip-direction', id]),
-      fingerprint = budgetHash([actor.memberId, input.characterId, input.requestId, requestHash, this.model.model, price.id, max, held]);
+      fingerprint = budgetHash([
+        actor.memberId,
+        input.characterId,
+        input.requestId,
+        requestHash,
+        this.model.model,
+        price.id,
+        max,
+        held,
+      ]);
     ensure(this.inFlight.size < 2, 'SPEECH_BUSY');
     // 1. The local hold and the intent row are one transaction.
     this.store.transaction(() => {
@@ -195,7 +205,8 @@ export class WebClipDirection {
         this.store.transaction(() => {
           authorize();
           ensure(
-            this.store.run("UPDATE web_clip_direction_calls SET state='sent' WHERE id=? AND state='intent'", id).changes === 1,
+            this.store.run("UPDATE web_clip_direction_calls SET state='sent' WHERE id=? AND state='intent'", id)
+              .changes === 1,
             'SPEECH_REQUEST_INVALID',
           );
         });
@@ -221,7 +232,8 @@ export class WebClipDirection {
       }
       // 5. The bill is known: recorded once, whatever the text turns out to be.
       const markup = result.text.trim();
-      const code = stripDirectionMarkup(markup) === input.text && [...markup].length <= 900 ? null : 'CLIP_MARKUP_MISMATCH';
+      const code =
+        stripDirectionMarkup(markup) === input.text && [...markup].length <= 900 ? null : 'CLIP_MARKUP_MISMATCH';
       this.confirm(id, code, units, result.receipt, code ? null : markup);
       await this.settleShared(id).catch(() => undefined);
       if (code) throw new DomainError(code);
@@ -311,7 +323,10 @@ export class WebClipDirection {
     try {
       const row = this.store.get<Row>('SELECT * FROM web_clip_direction_calls WHERE id=?', id);
       if (!row || row.shared_settled === 1) return;
-      ensure(row.state === 'known' && row.charged_micros !== null && row.receipt_json !== null, 'SPEECH_BILL_UNCONFIRMED');
+      ensure(
+        row.state === 'known' && row.charged_micros !== null && row.receipt_json !== null,
+        'SPEECH_BILL_UNCONFIRMED',
+      );
       await this.budget.settle(row.budget_id, row.fingerprint, row.charged_micros, JSON.parse(row.receipt_json));
       this.store.run("UPDATE web_clip_direction_calls SET shared_settled=1 WHERE id=? AND state='known'", id);
     } finally {

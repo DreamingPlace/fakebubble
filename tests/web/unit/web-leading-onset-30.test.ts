@@ -62,7 +62,10 @@ for (const lead of [0, 120, 300, 800, 1500])
 test('the first 280 ms are exact zero samples, and the pre-roll fades in without a step', () => {
   for (const lead of [0, 120, 800]) {
     const out = samplesOf(placeVoiceStart(wav(speech(lead))).audio);
-    assert.ok(out.subarray(0, ms(SILENCE_MS)).every((v) => v === 0), `lead ${lead}: the first 280 ms are zero`);
+    assert.ok(
+      out.subarray(0, ms(SILENCE_MS)).every((v) => v === 0),
+      `lead ${lead}: the first 280 ms are zero`,
+    );
     let jump = 0;
     for (let i = 1; i < out.length; i++) jump = Math.max(jump, Math.abs(out[i]! - out[i - 1]!));
     // a 220 Hz tone of amplitude 9000 moves at most ~519 per sample; a splice step would be far above that

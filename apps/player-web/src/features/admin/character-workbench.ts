@@ -22,9 +22,7 @@ import { withoutIds } from './history/readable.ts';
 import { dangerZone } from './ui/danger-zone.ts';
 import { inlineConfirm } from './ui/inline-confirm.ts';
 import { statusBadge } from './ui/status-badge.ts';
-import { paidButton } from './ui/paid-button.ts';
-import { micros } from './preview/copy.ts';
-import type { SpeechEstimate } from '../../services/speech-admin-api.ts';
+import { clipTakesPanel } from './clip-takes-panel.ts';
 import { fillStatus } from './ui/page-head.ts';
 import { hoverValue } from './ui/hover-value.ts';
 import { diffSideBySide, type Piece } from './preview/diff.ts';
@@ -1422,414 +1420,46 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     schedulePoll();
   }
   /**
-   * Part 29 E: the 声音 tab, in order. ONE voice (the Fish id), 准备新素材版本 (saves nothing), then per slot one primary action
-   * (生成, a paid button) with 或上传自己的 WAV tucked under it, then 试听 → 批准. A 素材版本 is "素材版本 N" (N in creation order),
-   * never an id. A version that no longer matches the draft's clips says 需重新准备 and offers the button; it never fails silently.
+   * Part 30: the 声音 tab. One slot per welcome line (and the footer while it is required), several takes per slot, one 选用 take
+   * and one approval per slot. There is no 素材版本 on the screen: the bundle a publication stands on is made from the approved
+   * takes when 发布 asks for it. The panel itself lives in clip-takes-panel.ts; this hands it the console's helpers.
    */
   function materials(parent: HTMLElement, snapshot: CharacterDetail) {
     const section = fold(parent, '声音成品'),
-      saved = snapshot.draft!,
       target = snapshot.characterId,
-      key = `material:${target}`,
       output = el('div');
     output.className = 'vc-materials';
-    // Part 29 B: the voice is the character's own (its binding, or the one derived from the Fish id an import recorded).
-    const voice = voiceOf(snapshot);
-    const siteModel = snapshot.speech?.siteModel ?? 's2.1-pro';
-    const line = el('p');
-    line.className = 'vc-voice';
-    section.append(line);
-    // 准备 and the pin sit in one row: the pin is the quiet option, 准备 the step.
-    const bar = el('div');
-    bar.className = 'vc-prepare';
-    section.append(bar);
-    // Replies follow the site voice model (FISH_VOICE_MODEL). Pin only when this clone sounds wrong on it.
-    const pinS21 = guarded(
-      check(bar, '固定使用 s2.1-pro（不跟随站点语音模型）'),
-      () => dirty || pending.has(key) || !can('materials'),
-    );
-    const paintVoice = () => {
-      line.textContent = voice
-        ? `将用 ${pinS21.checked ? 's2.1-pro' : siteModel} 朗读 · Fish 音色 ${voice.referenceId}`
-        : '先填 Fish 音色 ID。';
-    };
-    paintVoice();
-    pinS21.addEventListener('change', paintVoice);
-    const why = el('p');
-    why.className = 'vc-why';
-    const reason = () =>
-      dirty
-        ? '先保存草稿。'
-        : !can('materials')
-          ? '你没有素材权限。'
-          : !voice && !pending.has(key)
-            ? '先填 Fish 音色 ID。'
-            : '';
-    zones.push({
-      paint: () => {
-        why.textContent = reason();
-        why.hidden = !why.textContent;
+    section.append(output);
+    const panel = clipTakesPanel(output, {
+      api: host.api,
+      target,
+      dirty: () => dirty,
+      can: (action) => can(action),
+      gone,
+      view: () => view,
+      button,
+      guard: guarded,
+      act,
+      exact,
+      release: (container) => {
+        controls = controls.filter((c) => !container.contains(c.node));
+        zones = zones.filter((z) => !('node' in z) || !container.contains((z as { node: HTMLElement }).node));
       },
+      paint: (zone) => zones.push(zone),
+      sync,
+      status: (text) => host.status(text),
+      urls,
     });
-    const prepareNew = async () => {
-      const materialId = await exact(
-        key,
-        {
-          requestId: crypto.randomUUID(),
-          draftRevision: saved.revision,
-          profileHash: saved.contentHash,
-          ...(pinS21.checked ? { model: 'pin:s2.1-pro' } : {}),
-        },
-        (input) => host.api.prepareMaterial(target, input),
-      );
-      if (gone()) return;
-      const items = await load();
-      const number = items?.find((m) => m.materialId === materialId)?.number;
-      host.status(`素材版本${number ? ` ${number}` : ''} 已准备。给每个空位生成成品，再试听、批准。`);
-    };
-    button(
-      bar,
-      () => (pending.has(key) ? '按原请求核对素材准备' : '准备新素材版本'),
-      () => dirty || !can('materials') || (!pending.has(key) && !voice),
-      prepareNew,
-    ).className = 'admin-primary';
-    section.append(why);
-    if (!embedded)
+    const show = () => panel.load().catch((error) => host.status(characterAdminError(error) ?? '成品没有读取成功。'));
+    if (embedded) void show();
+    else
       button(
         section,
-        '读取已有成品版本',
+        '读取成品',
         () => dirty || !can('read'),
-        () => void load(),
+        () => show(),
         true,
       );
-    section.append(output);
-    async function load() {
-      const token = view,
-        items = await host.api.materials(target);
-      if (gone() || token !== view) return null;
-      controls = controls.filter((c) => !output.contains(c.node));
-      revokeAudio();
-      output.replaceChildren();
-      if (!items.length) {
-        const none = el('p', '还没有素材版本。');
-        hoverValue(none, '原已批准音色与欢迎词完全不变时，发布可沿用原成品。');
-        output.append(none);
-      }
-      for (const material of items) materialRow(output, snapshot, material, prepareNew);
-      sync();
-      return items;
-    }
-    if (embedded) void load().catch((error) => host.status(characterAdminError(error) ?? '成品版本没有读取成功。'));
-  }
-  /** Is this 素材版本 usable with the draft as it is? Part 29: by its clip manifest (an older answer: by the exact revision). */
-  const usable = (material: Material, snapshot: CharacterDetail) =>
-    material.stale !== undefined || material.slots ? !material.stale : sameDraft(material, snapshot);
-  function materialRow(
-    parent: HTMLElement,
-    snapshot: CharacterDetail,
-    material: Material,
-    prepareNew: () => Promise<void>,
-  ) {
-    const target = snapshot.characterId,
-      current = usable(material, snapshot),
-      state = !current ? '需重新准备' : material.approved ? '已批准' : '待批准',
-      label = material.number ? `素材版本 ${material.number}` : '素材版本',
-      section = fold(parent, `${label} · ${state}`);
-    section.dataset.vc = 'material';
-    section.dataset.state = !current ? 'stale' : material.approved ? 'approved' : 'draft';
-    const model = el(
-      'p',
-      `${material.voice.model}${material.voice.pinned ? '（已固定）' : ''} · Fish 音色 ${material.voice.referenceId}`,
-    );
-    model.className = 'vc-voice';
-    section.append(model);
-    if (!current) {
-      const note = el('p', '需重新准备：音色或欢迎词已与这个版本不一致。没有变的成品会带到新版本。');
-      note.className = 'vc-why';
-      section.append(note);
-      button(section, '准备新素材版本', () => dirty || !can('materials') || !snapshot.speech?.voice, prepareNew);
-      return;
-    }
-    // One slot per manifest entry: each welcome line (a one-line profile has one), and the footer only while it is required.
-    type Slot = {
-      kind: 'welcome' | 'footer';
-      lineId?: string;
-      name: string;
-      text: string;
-      issue?: { state: 'unknown' | 'released'; code: string } | null;
-      asset?: {
-        body: string;
-        sha256: string;
-        durationMs: number;
-        byteLength: number;
-        origin?: 'generated' | 'uploaded';
-      };
-    };
-    const draftLines = snapshot.draft?.profile.presentation.welcomes ?? [];
-    const multi = material.lines.length > 0 || draftLines.length > 1;
-    const footerOn = snapshot.speech?.footerRequired !== false;
-    const slots: Slot[] = [];
-    const welcomeSlots = material.slots?.filter((s) => s.kind === 'welcome');
-    const lines = welcomeSlots
-      ? welcomeSlots.map((s) => ({ id: s.lineId ?? '', text: s.text, issue: s.issue ?? null }))
-      : draftLines.map((l) => ({ id: l.id, text: l.text, issue: null }));
-    lines.forEach((l, i) => {
-      const found = multi
-        ? material.lines.find((x) => x.lineId === l.id && x.body === l.text)
-        : material.assets.find((a) => a.kind === 'welcome');
-      slots.push({
-        kind: 'welcome',
-        ...(multi ? { lineId: l.id } : {}),
-        name: multi ? `欢迎成品 ${i + 1}` : '欢迎成品',
-        text: l.text,
-        issue: l.issue,
-        ...(found ? { asset: found } : {}),
-      });
-    });
-    if (footerOn) {
-      const found = material.assets.find((a) => a.kind === 'footer');
-      const meta = material.slots?.find((s) => s.kind === 'footer');
-      slots.push({
-        kind: 'footer',
-        name: '结束成品',
-        text: meta?.text ?? '',
-        issue: meta?.issue ?? null,
-        ...(found ? { asset: found } : {}),
-      });
-    }
-    for (const slot of slots) {
-      const { kind, lineId, name, asset } = slot,
-        row = el('section');
-      row.className = 'vc-slot';
-      row.dataset.state = asset ? 'ready' : 'empty';
-      section.append(row);
-      row.append(el('h4', name));
-      if (lineId) row.dataset.line = lineId;
-      if (slot.text) row.append(el('p', slot.text));
-      if (asset) {
-        const meta = el('p', `${(asset.durationMs / 1000).toFixed(2)} 秒`);
-        meta.className = 'vc-meta';
-        // Part 24k-1: where the audio came from (a generated clip says so; an upload stays unmarked).
-        if (asset.origin === 'generated') {
-          const tag = el('span', '生成');
-          tag.className = 'vc-origin';
-          meta.append(' ', tag);
-        }
-        hoverValue(meta, `${asset.byteLength} 字节 · SHA256 ${asset.sha256}`);
-        row.append(meta);
-        const mount = el('div');
-        row.append(mount);
-        button(
-          row,
-          `加载${name}试听`,
-          () => !can('read'),
-          async () => {
-            const token = view,
-              base64 = await host.api.audio(target, material.materialId, kind, lineId);
-            if (gone() || token !== view) return;
-            const bytes = Uint8Array.from(atob(base64), (v) => v.charCodeAt(0)),
-              digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
-                .map((b) => b.toString(16).padStart(2, '0'))
-                .join('');
-            if (digest !== asset.sha256) throw new AdminFormError('成品哈希不匹配，拒绝试听或批准。');
-            if (gone() || token !== view) return;
-            const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
-            urls.add(url);
-            const audio = el('audio');
-            audio.controls = true;
-            audio.preload = 'none';
-            audio.src = url;
-            mount.replaceChildren(audio);
-          },
-          true,
-        );
-        continue;
-      }
-      if (material.approved) continue;
-      // The slot has no clip: ONE primary action (生成, paid), and the upload folded under it.
-      if (slot.issue) {
-        const badge = statusBadge(
-          `${slot.issue.state === 'unknown' ? '未确认' : '未生成'} · ${slot.issue.code}`,
-          'warn',
-        );
-        badge.className = `${badge.className} vc-issue`.trim();
-        hoverValue(
-          badge,
-          ERROR_SENTENCES[slot.issue.state === 'unknown' ? 'SPEECH_CALL_UNKNOWN' : slot.issue.code] ?? slot.issue.code,
-        );
-        row.append(badge);
-      }
-      const generating = !!snapshot.speech?.available;
-      if (generating) generateSlot(row, snapshot, material, kind, name, lineId);
-      const more = el('details');
-      more.className = 'vc-upload';
-      if (!generating) more.open = true;
-      more.append(el('summary', '或上传自己的 WAV'));
-      row.append(more);
-      const file = el('input');
-      file.type = 'file';
-      file.accept = '.wav,audio/wav';
-      // Part 27: the console's own button (the native picker is hidden over it but stays the focusable control), then the file name.
-      const pick = el('label');
-      pick.className = 'ad-file';
-      file.className = 'ad-file-input';
-      const pickButton = el('span', `选择${name} WAV`);
-      pickButton.className = 'ad-file-button';
-      const picked = el('span', '未选择文件');
-      picked.className = 'ad-file-name';
-      file.addEventListener('change', () => {
-        picked.textContent = file.files?.[0]?.name ?? '未选择文件';
-      });
-      pick.append(pickButton, file, picked);
-      more.append(pick);
-      guarded(file, () => dirty || !can('materials'));
-      const rights = guarded(
-        check(more, '这是我有权使用的成品，不是待克隆的原始声音样本'),
-        () => dirty || !can('materials'),
-      );
-      button(
-        more,
-        `上传所选${name}`,
-        () => dirty || !can('materials') || !rights.checked || file.files?.length !== 1,
-        async () => {
-          const selected = file.files?.[0];
-          if (!selected || selected.size > 6_000_000) throw new AdminFormError('请选择一条不超过 6 MB 的成品 WAV。');
-          const bytes = new Uint8Array(await selected.arrayBuffer());
-          let binary = '';
-          for (let i = 0; i < bytes.length; i += 32768) binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
-          await host.api.upload(target, material.materialId, kind, btoa(binary), lineId);
-          if (gone()) return;
-          await open(target);
-          host.status('成品已上传。请试听，全部听完再批准。');
-        },
-      );
-      file.addEventListener('change', sync);
-      rights.addEventListener('change', sync);
-    }
-    // The approval waits until every slot has its clip: 试听 first, then 批准.
-    if (!material.approved && slots.every((slot) => !!slot.asset)) {
-      const rights = guarded(check(section, '我确认有权使用这个音色和成品'), () => dirty || !can('approve-materials')),
-        // one tick per welcome line (or the single welcome): every slot must have been heard
-        welcomeTicks = (multi ? draftLines : [null]).map((l, i) =>
-          guarded(
-            check(
-              section,
-              l ? `我已完整试听并确认第 ${i + 1} 条欢迎成品与欢迎词一致` : '我已完整试听并确认欢迎成品与欢迎词一致',
-            ),
-            () => dirty || !can('approve-materials'),
-          ),
-        ),
-        footer = footerOn
-          ? guarded(check(section, '我已完整试听并确认结束成品'), () => dirty || !can('approve-materials'))
-          : null,
-        note = guarded(field(section, '批准说明', '', { max: 1000 }), () => dirty || !can('approve-materials'));
-      const filled = (slot: Slot) => !!slot.asset;
-      button(
-        section,
-        '批准此素材版本',
-        () =>
-          dirty ||
-          !can('approve-materials') ||
-          !slots.every(filled) ||
-          !rights.checked ||
-          !welcomeTicks.every((tick) => tick.checked) ||
-          (footer !== null && !footer.checked) ||
-          !note.value.trim(),
-        async () => {
-          await host.api.approve(
-            target,
-            material.materialId,
-            note.value,
-            multi ? draftLines.map((l) => l.id) : undefined,
-            footerOn,
-          );
-          if (gone()) return;
-          await open(target);
-          host.status('成品已批准；尚未发布角色。');
-        },
-      );
-      for (const node of [rights, ...welcomeTicks, ...(footer ? [footer] : []), note])
-        node.addEventListener('input', sync);
-    }
-  }
-  /**
-   * Part 24k-1: 生成 for one empty slot of the current 素材版本: the slot's ONE primary action. The shared paid-button carries the
-   * confirm: the first click names the cost (from the server), the second sends. The clip lands in the slot like an upload, and
-   * approval stays with the person: they 试听, tick, and press 批准此素材版本.
-   */
-  function generateSlot(
-    row: HTMLElement,
-    snapshot: CharacterDetail,
-    material: Material,
-    kind: 'welcome' | 'footer',
-    name: string,
-    lineId?: string,
-  ) {
-    const target = snapshot.characterId,
-      key = `generate:${material.materialId}:${kind}${lineId ? `:${lineId}` : ''}`;
-    let estimate: SpeechEstimate | null = null;
-    const why = (): string => {
-      if (dirty) return '先保存草稿';
-      if (!can('materials')) return '你没有素材权限';
-      if (!snapshot.speech?.hasVoice) return '先填 Fish 音色 ID';
-      if (!estimate) return '正在读取费用';
-      if (!estimate.ok)
-        return estimate.reason === 'PRICE_MISSING'
-          ? 'Fish 价格未生效，先到「系统」续期价格'
-          : estimate.reason === 'STALE'
-            ? '需重新准备'
-            : '暂不能生成';
-      return busy ? '处理中' : '';
-    };
-    const cost = () => (estimate?.ok ? micros(estimate.estimateMicros) : '');
-    const gen = paidButton({
-      name: `generate-${material.materialId}-${kind}${lineId ? `-${lineId}` : ''}`,
-      label: () => (cost() ? `生成${name} · 约 ${cost()}` : `生成${name}`),
-      confirmLabel: () => `确认付费 · ${cost()}`,
-      reason: why,
-      onConfirm: () => {
-        const confirmed = estimate;
-        if (!confirmed?.ok) return;
-        act(async () => {
-          try {
-            await exact(
-              key,
-              {
-                requestId: crypto.randomUUID(),
-                materialId: material.materialId,
-                kind,
-                ...(lineId ? { lineId } : {}),
-                acknowledgeMicros: confirmed.estimateMicros,
-              },
-              (input) => host.api.generate(target, input),
-            );
-          } catch (error) {
-            // An UNKNOWN call keeps its hold and is never resent: read the slot again so it shows 「未确认 · CODE」, then say why.
-            if (!gone()) await open(target).catch(() => undefined);
-            throw error;
-          }
-          if (gone()) return;
-          await open(target);
-          host.status(`${name}已生成。请试听，听完再勾选并批准；生成不会批准。`);
-        });
-      },
-    });
-    gen.root.classList.add('vc-gen');
-    row.append(gen.root);
-    zones.push({ paint: () => gen.refresh() });
-    const token = view;
-    void host.api
-      .speechEstimate(target, material.materialId, kind, lineId)
-      .then((value) => {
-        if (gone() || token !== view) return;
-        estimate = value;
-        gen.refresh();
-      })
-      .catch(() => {
-        if (gone() || token !== view) return;
-        estimate = { ok: false, reason: 'UNAVAILABLE' };
-        gen.refresh();
-      });
   }
   /** The roster read again after 下线 / 重新上线: the sidebar groups follow the server. */
   async function refreshRoster() {
@@ -1935,36 +1565,51 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     };
     fillPreviews();
     previewsChanged = fillPreviews;
-    const materialLabel = el('label'),
-      material = el('select');
-    materialLabel.append(el('span', '发布使用的成品版本'), material);
-    materialLabel.hidden = colourOnly;
-    section.append(materialLabel);
-    const reuse = el('option', '沿用原成品（仅声音与欢迎词完全不变）');
-    reuse.value = '';
-    material.append(reuse);
-    const loadApproved = async () => {
-      const token = view,
-        items = await host.api.materials(target);
+    // Part 30: what the publication uses, read from the slots: each welcome line's 选用 take, and the footer only while it exists.
+    const used = el('div');
+    used.className = 'vc-used';
+    used.hidden = colourOnly;
+    section.append(used);
+    let clips: Awaited<ReturnType<CharacterAdminClient['takes']>> | null = null;
+    const paintUsed = () => {
+      used.replaceChildren();
+      if (!clips) return;
+      const row = (label: string, value: string, field: boolean) => {
+        const line = el('label');
+        line.className = 'vc-used-row';
+        const k = el('span', label);
+        const v = el('input');
+        v.readOnly = true;
+        v.tabIndex = -1;
+        v.value = value;
+        v.size = Math.max(6, [...value].length + 1);
+        v.setAttribute('data-used', field ? 'footer' : 'line');
+        line.append(k, v);
+        used.append(line);
+      };
+      clips.slots.forEach((slot, index) => {
+        const take = slot.takes.find((item) => item.takeId === slot.selectedTakeId);
+        row(slot.kind === 'footer' ? '结束' : `欢迎 ${index + 1}`, take?.name ?? '', slot.kind === 'footer');
+      });
+    };
+    const loadUsed = async () => {
+      const token = view;
+      const value = await host.api.takes(target);
       if (gone() || token !== view) return;
-      material.replaceChildren(reuse);
-      for (const item of items.filter((m) => m.approved && usable(m, snapshot))) {
-        const option = el('option', item.number ? `素材版本 ${item.number}` : '素材版本');
-        option.value = item.materialId;
-        material.append(option);
-      }
+      clips = value;
+      paintUsed();
     };
     if (embedded) {
       if (!colourOnly)
-        void loadApproved().catch((error) => host.status(characterAdminError(error) ?? '成品版本没有读取成功。'));
-    } else button(section, '读取当前草稿的已批准成品', () => dirty || !can('read'), loadApproved, true);
+        void loadUsed().catch((error) => host.status(characterAdminError(error) ?? '成品没有读取成功。'));
+    } else button(section, '读取所选成品', () => dirty || !can('read'), loadUsed, true);
     const ack = check(
       section,
       colourOnly ? '我已核对主色，确认将本版本发布给玩家' : '我已查看资料差异和该预演结果，确认将本版本发布给玩家',
     );
     // The sentence about what publishing does is the hover tip of the confirmation line.
     if (ack.parentElement) hoverValue(ack.parentElement as HTMLElement, publishNote);
-    for (const input of [preview, material, ack]) guarded(input, () => dirty || pending.has(key) || !can('publish'));
+    for (const input of [preview, ack]) guarded(input, () => dirty || pending.has(key) || !can('publish'));
     section.append(noProof);
     const confirmPublish = button(
       section,
@@ -1975,6 +1620,13 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         (!pending.has(key) &&
           (!saved || !ack.checked || !(colourOnly || previews().some((p) => p.previewId === preview.value)))),
       async () => {
+        // Part 30: with an approved 选用 take in every slot the bundle is made now; otherwise the server decides (an unchanged
+        // voice and welcome reuse the live approval, anything else says why it cannot be published).
+        let materialId: string | undefined;
+        if (!colourOnly && !pending.has(key)) {
+          const slots = await host.api.takes(target).catch(() => null);
+          if (slots?.ready) materialId = await host.api.takeBundle(target);
+        }
         const result = await exact(
           key,
           {
@@ -1983,7 +1635,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
             profileHash: saved?.contentHash ?? '',
             ...(colourOnly ? {} : { previewId: preview.value }),
             acknowledgeReview: true,
-            ...(material.value && !colourOnly ? { materialId: material.value } : {}),
+            ...(materialId ? { materialId } : {}),
           },
           (input) => host.api.publish(target, input),
         );

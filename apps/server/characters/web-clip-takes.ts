@@ -119,7 +119,8 @@ export class WebClipTakes {
           m.id,
         );
         const evidence = JSON.parse(m.evidence_json) as { resolvedModel?: string };
-        const made = evidence.resolvedModel ?? resolveVoiceModel(m.model as VoiceModelBinding, siteVoiceModel(this.store));
+        const made =
+          evidence.resolvedModel ?? resolveVoiceModel(m.model as VoiceModelBinding, siteVoiceModel(this.store));
         const voiceVersion = this.store.get<{ voice_version: string }>(
           'SELECT voice_version FROM web_character_materials WHERE id=?',
           m.id,
@@ -151,12 +152,26 @@ export class WebClipTakes {
           slotKey: string;
           kind: 'welcome' | 'footer';
           scope: string;
-          row: { body: string; sha256: string; byte_length: number; duration_ms: number; audio_bytes: Uint8Array | null; audio_ref_json: string | null; created_at: number };
+          row: {
+            body: string;
+            sha256: string;
+            byte_length: number;
+            duration_ms: number;
+            audio_bytes: Uint8Array | null;
+            audio_ref_json: string | null;
+            created_at: number;
+          };
         }[] = [];
         for (const line of lines)
-          found.push({ slotKey: `line:${line.line_id}`, kind: 'welcome', scope: `${voiceVersion}#${line.line_id}`, row: line });
+          found.push({
+            slotKey: `line:${line.line_id}`,
+            kind: 'welcome',
+            scope: `${voiceVersion}#${line.line_id}`,
+            row: line,
+          });
         for (const asset of assets) {
-          if (asset.kind === 'footer') found.push({ slotKey: 'footer', kind: 'footer', scope: voiceVersion, row: asset });
+          if (asset.kind === 'footer')
+            found.push({ slotKey: 'footer', kind: 'footer', scope: voiceVersion, row: asset });
           else if (asset.text_version)
             found.push({ slotKey: `line:${asset.text_version}`, kind: 'welcome', scope: voiceVersion, row: asset });
         }
@@ -226,7 +241,10 @@ export class WebClipTakes {
   private context(id: string) {
     const profile = currentDraft(this.store, { character_id: id });
     const effective = effectiveVoice(this.store, id, profile.template);
-    const draft = this.store.get<{ revision: number }>('SELECT revision FROM web_character_drafts WHERE character_id=?', id);
+    const draft = this.store.get<{ revision: number }>(
+      'SELECT revision FROM web_character_drafts WHERE character_id=?',
+      id,
+    );
     ensure(draft, 'DRAFT_CONFLICT');
     const manifest = clipManifest(this.store, profile, { referenceId: effective?.referenceId ?? '' }, NEW_TAKE_BINDING);
     return {
@@ -352,11 +370,7 @@ export class WebClipTakes {
   }
   private takeRow(id: string, takeId: unknown, withAudio = false) {
     identifier(takeId);
-    const row = this.store.get<TakeRow>(
-      `SELECT * FROM web_clip_takes WHERE id=? AND character_id=?`,
-      takeId,
-      id,
-    );
+    const row = this.store.get<TakeRow>(`SELECT * FROM web_clip_takes WHERE id=? AND character_id=?`, takeId, id);
     ensure(row, 'NOT_FOUND');
     if (!withAudio) return { ...row, audio_bytes: null, audio_ref_json: null };
     return row;
@@ -372,7 +386,13 @@ export class WebClipTakes {
     keys(input, ['takeId']);
     const take = this.takeRow(id, input.takeId, true);
     ensure(take.status === 'ready' && take.sha256, 'NOT_FOUND');
-    const bytes = await loadProviderAudio(this.store, take, this.scopeOf(id, take), async () => void authorize(), new Map());
+    const bytes = await loadProviderAudio(
+      this.store,
+      take,
+      this.scopeOf(id, take),
+      async () => void authorize(),
+      new Map(),
+    );
     ensure(
       createHash('sha256').update(bytes).digest('hex') === take.sha256 && bytes.length === take.byte_length,
       'INVALID_MATERIAL_AUDIO',
@@ -420,7 +440,10 @@ export class WebClipTakes {
     return this.store.transaction(() => {
       authorize();
       if (take.requestId) {
-        const prior = this.store.get<{ id: string }>('SELECT id FROM web_clip_takes WHERE request_id=?', take.requestId);
+        const prior = this.store.get<{ id: string }>(
+          'SELECT id FROM web_clip_takes WHERE request_id=?',
+          take.requestId,
+        );
         if (prior) return prior.id;
       }
       const ordinal = this.nextOrdinal(id, slotKey);
@@ -497,13 +520,25 @@ export class WebClipTakes {
     const bytes = Buffer.from(input.base64, 'base64');
     ensure(bytes.toString('base64') === input.base64 && bytes.length <= 6_000_000, 'INVALID_MATERIAL_AUDIO');
     const { ctx, slot } = this.slot(id, input.slotKey);
-    const takeId = await this.insert(id, slot.key, ctx, slot, { requestId: null, origin: 'uploaded', audio: bytes }, authorize);
+    const takeId = await this.insert(
+      id,
+      slot.key,
+      ctx,
+      slot,
+      { requestId: null, origin: 'uploaded', audio: bytes },
+      authorize,
+    );
     if (input.name !== undefined) this.renameTake(id, takeId, input.name, undefined);
     return this.takeView(id, takeId);
   }
 
   // ---- 生成 ---------------------------------------------------------------------------------------------------------
-  private speechCall(id: string, slot: { key: string; kind: 'welcome' | 'footer'; text: string }, ctx: ReturnType<WebClipTakes['context']>, extra: { requestId: string; markup?: string }) {
+  private speechCall(
+    id: string,
+    slot: { key: string; kind: 'welcome' | 'footer'; text: string },
+    ctx: ReturnType<WebClipTakes['context']>,
+    extra: { requestId: string; markup?: string },
+  ) {
     ensure(ctx.effective, 'CHARACTER_VOICE_REQUIRED');
     return {
       characterId: id,
@@ -528,7 +563,10 @@ export class WebClipTakes {
     keys(input, ['slotKeys', 'markup']);
     const speech = this.materials.speechPath;
     ensure(speech, 'SPEECH_UNAVAILABLE');
-    ensure(Array.isArray(input.slotKeys) && input.slotKeys.length > 0 && input.slotKeys.length <= 64, 'INVALID_MATERIAL_KIND');
+    ensure(
+      Array.isArray(input.slotKeys) && input.slotKeys.length > 0 && input.slotKeys.length <= 64,
+      'INVALID_MATERIAL_KIND',
+    );
     const ctx = this.context(id);
     const calls = input.slotKeys.map((key) => {
       const slot = ctx.slots.find((item) => item.key === key);
@@ -606,7 +644,11 @@ export class WebClipTakes {
       id,
       slot,
       ctx,
-      { requestId: input.requestId, ...(markup === undefined ? {} : { markup }), ...(feedback === undefined ? {} : { feedback }) },
+      {
+        requestId: input.requestId,
+        ...(markup === undefined ? {} : { markup }),
+        ...(feedback === undefined ? {} : { feedback }),
+      },
       input.acknowledgeMicros as number,
       authorize,
     );
@@ -639,7 +681,10 @@ export class WebClipTakes {
     ensure(open.length > 0, 'CLIP_NOTHING_TO_GENERATE');
     const per = open.map(({ slot, index }) => {
       const done = !!this.store.get('SELECT 1 FROM web_clip_takes WHERE request_id=?', requestOf(index));
-      const priced = done || speech.hasRequest(requestOf(index), 0) ? null : speech.estimateCalls(id, ctx.revision, [this.speechCall(id, slot, ctx, { requestId: 'estimate' })]);
+      const priced =
+        done || speech.hasRequest(requestOf(index), 0)
+          ? null
+          : speech.estimateCalls(id, ctx.revision, [this.speechCall(id, slot, ctx, { requestId: 'estimate' })]);
       ensure(!priced || priced.ok, 'SPEECH_ESTIMATE_CHANGED');
       return { slot, index, micros: priced && priced.ok ? priced.estimateMicros : 0 };
     });
@@ -756,7 +801,10 @@ export class WebClipTakes {
     record(input);
     keys(input, ['slots', 'acknowledgeRights', 'note']);
     ensure(input.acknowledgeRights === true, 'MATERIAL_APPROVAL_REQUIRED');
-    ensure(Array.isArray(input.slots) && input.slots.length > 0 && input.slots.length <= 64, 'MATERIAL_APPROVAL_REQUIRED');
+    ensure(
+      Array.isArray(input.slots) && input.slots.length > 0 && input.slots.length <= 64,
+      'MATERIAL_APPROVAL_REQUIRED',
+    );
     const note = typeof input.note === 'string' ? input.note.slice(0, 1000) : '';
     const picked = input.slots.map((entry: unknown) => {
       record(entry);
@@ -778,7 +826,9 @@ export class WebClipTakes {
         const take = this.takeRow(id, entry.takeId);
         // The take the person heard must still be the 选用 take, and usable for the slot as it is now.
         ensure(
-          choice?.take_id === take.id && take.slot_key === slot.key && this.usable(take, slot, ctx.effective?.referenceId ?? null),
+          choice?.take_id === take.id &&
+            take.slot_key === slot.key &&
+            this.usable(take, slot, ctx.effective?.referenceId ?? null),
           'TAKE_NOT_USABLE',
         );
         this.store.run(
@@ -817,7 +867,9 @@ export class WebClipTakes {
     let binding: VoiceModelBinding | null = null;
     for (const slot of ctx.slots) {
       const choice = choices.find((c) => c.slot_key === slot.key);
-      const take = choice ? this.store.get<TakeRow>('SELECT * FROM web_clip_takes WHERE id=?', choice.take_id) : undefined;
+      const take = choice
+        ? this.store.get<TakeRow>('SELECT * FROM web_clip_takes WHERE id=?', choice.take_id)
+        : undefined;
       ensure(
         take && this.usable(take, slot, ctx.effective.referenceId) && this.approvedTake(choice, take),
         'CHARACTER_MATERIALS_REQUIRED',
@@ -825,7 +877,13 @@ export class WebClipTakes {
       // One voice per bundle: every take must speak with the same binding word.
       binding ??= take.binding as VoiceModelBinding;
       ensure(take.binding === binding, 'CHARACTER_MATERIALS_REQUIRED');
-      const bytes = await loadProviderAudio(this.store, take, this.scopeOf(id, take), async () => void authorize(), new Map());
+      const bytes = await loadProviderAudio(
+        this.store,
+        take,
+        this.scopeOf(id, take),
+        async () => void authorize(),
+        new Map(),
+      );
       ensure(createHash('sha256').update(bytes).digest('hex') === take.sha256, 'INVALID_MATERIAL_AUDIO');
       picks.push({ kind: slot.kind, lineId: slot.lineId, bytes, sha256: take.sha256! });
     }
@@ -833,4 +891,3 @@ export class WebClipTakes {
     return { materialId: await this.materials.buildBundle(actor, id, binding, picks, authorize) };
   }
 }
-
