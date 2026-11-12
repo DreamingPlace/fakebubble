@@ -5,6 +5,7 @@ import {
   type WelcomeLine,
 } from '../../../../../packages/contracts/web-welcomes.ts';
 import { dragOrder } from './ui/drag-order.ts';
+import { growBox } from './ui/grow-box.ts';
 import { dragHandle, liveRegion, movedSentence, removeButton } from './ui/item-controls.ts';
 
 /**
@@ -100,8 +101,8 @@ export function welcomeList(initial: readonly WelcomeLine[], onChange: () => voi
     row.dataset.dragRow = '';
     const grip = dragHandle(`欢迎词第 ${rows.length + 1} 条`, 'ad-handle wl-grip');
     const no = node('span', 'wl-no');
-    const text = node('textarea', 'wl-text');
-    text.rows = 2;
+    // Part 24b-7b: a welcome line is ONE sentence (at most 200 characters): a box that starts at one line and grows as it wraps.
+    const text = growBox(node('textarea', 'wl-text'), 'one');
     text.maxLength = WELCOME_LIMITS.text;
     text.value = line.text;
     text.placeholder = '欢迎词';

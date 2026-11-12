@@ -37,6 +37,8 @@ import { evalSetEditor } from './eval-set-editor.ts';
 import { listenBar } from './listen.ts';
 import { downloadText, exportName, runToCsv, runToJson } from './export.ts';
 import { previewPoller, type PollerHost } from './poller.ts';
+import { disclosureButton, disclosureDetails } from '../ui/disclosure.ts';
+import { growBox } from '../ui/grow-box.ts';
 import { reviewCompareView } from './review-compare-view.ts';
 import { STAGE_LABEL, isFinished, progressText, stageOf, type Stage } from './stage.ts';
 
@@ -213,13 +215,12 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   const reviewApi = host.api.reviewCompare;
   const reviewHost = h('div', { class: 'pw-review-compare' });
   const reviewSection = reviewApi
-    ? h(
-        'details',
-        { class: 'pw-review-section', attrs: { 'data-section': 'review-compare' } },
-        h('summary', { text: '审核对比（V4 Pro / V4.1 Flash）' }),
-        reviewHost,
-      )
+    ? h('details', { class: 'pw-review-section', attrs: { 'data-section': 'review-compare' } })
     : null;
+  if (reviewSection) {
+    disclosureDetails(reviewSection, '审核对比（V4 Pro / V4.1 Flash）');
+    reviewSection.append(reviewHost);
+  }
   const page = h('div', { class: 'pw' }, settingsHost, composeHost, compareHost, feed, empty, reviewSection);
   root.append(page);
   const reviewCompare = reviewApi
@@ -287,7 +288,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     attrs: { type: 'button', 'aria-expanded': 'false', 'data-pw-summary': '' },
   });
   const summaryText = h('span', { class: 'pw-summary-text' });
-  summary.append(h('i', { class: 'pw-chev', attrs: { 'aria-hidden': 'true' } }), summaryText);
+  disclosureButton(summary, summaryText, false);
   const controls = h(
     'div',
     { class: 'pw-set-row' },
@@ -349,9 +350,12 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   });
 
   // ---- the box and the one send button ---------------------------------------------------------------------------
-  const input = h('textarea', {
-    attrs: { rows: '3', placeholder: '输入（一行一条）', 'aria-label': '预演输入', 'data-pw-input': '' },
-  });
+  // one line per input, so the box keeps its Enter; it starts at four lines and grows with what is typed
+  const input = growBox(
+    h('textarea', { attrs: { placeholder: '输入（一行一条）', 'aria-label': '预演输入', 'data-pw-input': '' } }),
+    'para',
+    { multiline: true },
+  );
   const label = h('input', {
     attrs: { type: 'text', maxlength: '60', placeholder: '运行备注（可选）', 'aria-label': '运行备注' },
   });

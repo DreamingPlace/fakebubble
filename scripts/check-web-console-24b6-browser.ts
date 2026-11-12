@@ -1555,8 +1555,10 @@ try {
     nameOf: string,
     dotOf: string,
     wanted: number,
+    prepare?: () => Promise<void>,
   ): Promise<Dot[]> => {
     await open(route);
+    if (prepare) await prepare();
     await page
       .locator(selector)
       .nth(wanted - 1)
@@ -1591,7 +1593,12 @@ try {
     rail: await dots('characters/jojo', '.wb-roles .admin-pick', '.admin-pick-text strong', '.admin-pick-dot', 15),
     cast: await dots('cast', '.cs-head-row', '.cs-head-name', 'i', 15),
     inbox: await dots('cocreation', '.cc-chip-row[aria-label="角色"] button', '', 'i', 15),
-    pie: await dots('overview', '.ov-split-name', '', 'i', 3),
+    // Named exception (Part 24b-7b): 按角色 is no longer a card of coloured rows but a position of the one table, which has no dots. The
+    // colours of the characters on 总览 are read where they still are: the trend card's pie (图表类型 → 饼图), one row per character.
+    pie: await dots('overview', '.pie-row', 'span:not(.pie-figure)', 'i', 3, async () => {
+      await page.locator('[aria-label="图表类型"] button[data-seg="pie"]').click();
+      await wait(600);
+    }),
   });
   for (const [width, height] of [SIZES[0], SIZES[1]] as const) {
     await page.setViewportSize({ width, height });

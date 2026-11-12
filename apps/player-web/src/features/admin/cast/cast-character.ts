@@ -11,6 +11,7 @@ import {
   type CastText,
 } from '../../../../../../packages/contracts/web-cast.ts';
 import type { CastCompilePreviewResult } from '../../../services/cast-admin-api.ts';
+import { shortInput } from '../ui/grow-box.ts';
 import { h } from '../../cocreation/h.ts';
 import { KNOWLEDGE_LABEL } from './cast-model.ts';
 import { itemList } from './cast-items.ts';
@@ -44,6 +45,8 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
     });
     const oneLiner = h('input', { attrs: { type: 'text', maxlength: String(L.oneLiner), 'aria-label': '一句话' } });
     oneLiner.value = identity.oneLiner;
+    // 名片一句话 holds at most 40 characters: one line sized to it (wider only when its text is)
+    shortInput(oneLiner, L.oneLiner);
     if (!edit) oneLiner.setAttribute('readonly', '');
     oneLiner.addEventListener('input', () => {
       identity.oneLiner = oneLiner.value;
