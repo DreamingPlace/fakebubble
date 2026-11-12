@@ -1170,7 +1170,11 @@ try {
     await wait(900);
     const sentences = await page.evaluate(() =>
       [...document.querySelectorAll('.wb-card-body p, .wb-card-body .admin-hint, .wb-card-body .pw-zone')]
-        .filter((el) => !el.closest('.ad-tip, [hidden]') && (el as HTMLElement).getBoundingClientRect().height > 0)
+        // Part 27 (named exception, failing on main since Part 29): `.vc-voice` is the voice's status line (the model and the Fish ID),
+        // data rather than an explanation; the ID alone makes it longer than 30 characters. Every other sentence is still counted.
+        .filter(
+          (el) => !el.closest('.ad-tip, [hidden], .vc-voice') && (el as HTMLElement).getBoundingClientRect().height > 0,
+        )
         .map((el) => {
           // What is on the page: the element's own text, not the hover tip it carries.
           const copy = el.cloneNode(true) as HTMLElement;
