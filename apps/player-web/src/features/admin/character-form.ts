@@ -396,7 +396,8 @@ export function characterForm(
   const fishId = field(voiceSection, 'Fish 音色 ID', base.template.voice?.referenceId ?? effective?.referenceId ?? '', {
     max: 128,
   }) as HTMLInputElement;
-  fishId.pattern = '[A-Za-z0-9_-]{1,128}';
+  // Part 27: the `-` is escaped - the browser reads a pattern attribute with the v flag, where a bare trailing `-` in a class is a syntax error.
+  fishId.pattern = '[A-Za-z0-9_\\-]{1,128}';
   if (fishId.parentElement)
     hoverValue(
       fishId.parentElement as HTMLElement,
