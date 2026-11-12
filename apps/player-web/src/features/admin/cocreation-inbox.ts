@@ -25,6 +25,7 @@ import type {
 } from '../../services/cocreation-admin-api.ts';
 import type { CharacterAdminClient, CharacterProfile } from '../../services/character-admin-api.ts';
 import { characterAdminError } from './character-workbench.ts';
+import { disclosureChevron } from './ui/disclosure.ts';
 import { h } from '../cocreation/h.ts';
 import { exactCount, hoverValue } from './ui/hover-value.ts';
 import { fillStatus, pageHead } from './ui/page-head.ts';
@@ -229,7 +230,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         h(
           'span',
           { class: 'cc-who' },
-          h('span', { class: 'cc-name' }, dot(colour(item.characterId), 8), h('strong', { text: whoOf(item) })),
+          h(
+            'span',
+            { class: 'cc-name' },
+            disclosureChevron(),
+            dot(colour(item.characterId), 8),
+            h('strong', { text: whoOf(item) }),
+          ),
           h('span', { class: 'cc-pseudonym', text: item.pseudonym }),
           time,
         ),

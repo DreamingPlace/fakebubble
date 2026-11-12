@@ -1,5 +1,6 @@
 import { parseColour } from '../brand/character-colour.ts';
 import { skinFor, type Mode } from '../brand/palette-skin.ts';
+import { shortInput } from './ui/grow-box.ts';
 import { dragOrder } from './ui/drag-order.ts';
 import { dragHandle, liveRegion, movedSentence, removeButton } from './ui/item-controls.ts';
 
@@ -86,6 +87,8 @@ export function paletteList(
   mainName.placeholder = '名称（可选）';
   mainName.setAttribute?.('aria-label', '主色名称');
   mainName.value = initial?.find((e) => e.role === 'main')?.name ?? '';
+  // Part 24b-7b: a colour name is short (24): an input sized to it, wider only when its text is.
+  shortInput(mainName, 24);
   mainRow.append(node('span', 'pl-spacer'), node('span', 'pl-tag', '主'), mainSwatch, mainText, mainName);
   const list = node('div', 'pl-rows');
   const foot = node('div', 'pl-foot');
@@ -136,6 +139,8 @@ export function paletteList(
     hex.placeholder = '#RRGGBB';
     hex.autocomplete = 'off';
     hex.value = entry.hex;
+    // a colour is #RRGGBB or r, g, b (at most 16 visible characters in practice; the field takes 40)
+    shortInput(hex, 16);
     hex.setAttribute?.('aria-label', '点缀色值');
     const picker = node('input', 'pl-picker');
     picker.type = 'color';
@@ -146,6 +151,7 @@ export function paletteList(
     name.maxLength = 24;
     name.placeholder = '名称（可选）';
     name.value = entry.name;
+    shortInput(name, 24);
     name.setAttribute?.('aria-label', '点缀名称');
     const grip = dragHandle('点缀色', 'ad-handle pl-grip');
     const del = removeButton('删除这个点缀色', 'ad-remove pl-del');

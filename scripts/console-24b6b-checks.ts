@@ -208,12 +208,14 @@ export async function run24b6bChecks(ctx: Ctx) {
         };
         const singles = [
           ...card.querySelectorAll(
-            'input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=color]):not([type=file]):not([type=range]):not(.cn-chip-input), select',
+            'input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=color]):not([type=file]):not([type=range]):not(.cn-chip-input):not(.si), select',
           ),
         ].filter(vis);
-        // Part 27 (named exception, pre-existing since Part 24k-2): a welcome line (.wl-text) is a 2-row box by design (--ta-min 44px), so
-        // it is not held to the four-line minimum of the long text areas. Every other text box is still checked.
-        const areas = [...card.querySelectorAll('textarea:not(.wl-text)')].filter(vis);
+        // Named exception (Part 24b-7b field rules; it replaces Part 27's "a welcome line is a 2-row box"): a one-sentence box
+        // (data-grow="one": 欢迎词, 一句话描述, a list item, 情境 / 玩家说 / 他回) starts at ONE line and grows as its text wraps, so it is not
+        // held to the four-line minimum of the paragraph boxes (data-grow="para"), which are still checked; the one-line rule is asserted below.
+        const areas = [...card.querySelectorAll('textarea:not([data-grow="one"])')].filter(vis);
+        const sentences = [...card.querySelectorAll('textarea[data-grow="one"]')].filter(vis);
         return {
           singleHeights: singles.map((e) => Math.round(e.getBoundingClientRect().height)),
           singles: singles.map((e) => ({
@@ -224,6 +226,7 @@ export async function run24b6bChecks(ctx: Ctx) {
           areaMins: areas.map((e) => getComputedStyle(e).minHeight),
           areaHeights: areas.map((e) => Math.round(e.getBoundingClientRect().height)),
           areaLine: areas.map((e) => parseFloat(getComputedStyle(e).lineHeight)),
+          sentenceMins: sentences.map((e) => getComputedStyle(e).minHeight),
           labelSizes: [...card.querySelectorAll('label > span:first-child, .cn-label')]
             .filter(vis)
             .map((e) => getComputedStyle(e).fontSize),
@@ -244,6 +247,10 @@ export async function run24b6bChecks(ctx: Ctx) {
       check(
         m.areaMins.every((v: string, k: number) => parseFloat(v) >= 4 * m.areaLine[k]),
         `角色工作台 ${names[i]} ${at}: a text box is shorter than four lines (${JSON.stringify(m.areaMins)})`,
+      );
+      check(
+        m.sentenceMins.every((v: string) => parseFloat(v) <= 44),
+        `角色工作台 ${names[i]} ${at}: a one-sentence box starts at more than one line (${JSON.stringify(m.sentenceMins)})`,
       );
       check(
         m.areaHeights.every((h: number, k: number) => h >= parseFloat(m.areaMins[k]) - 1),

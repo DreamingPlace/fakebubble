@@ -1,4 +1,5 @@
 import { h } from '../../cocreation/h.ts';
+import { growBox, shortInput } from '../ui/grow-box.ts';
 import type { CastDoc } from '../../../../../../packages/contracts/web-cast.ts';
 
 /** What every region of the page shares: the working document, who may do what, and how to tell the others something changed. */
@@ -48,10 +49,22 @@ export function bound(
   set: (value: string) => void,
   options: { area?: boolean; max?: number; rows?: number; placeholder?: string; after?: (() => void) | undefined } = {},
 ) {
-  const input = options.area ? h('textarea') : h('input', { attrs: { type: 'text' } });
+  // Part 24b-7b: the field is shaped by its limit: a short value (≤40) is a single-line input sized to it; one sentence (≤200, or a
+  // single line with a longer limit) a box that starts at one line and grows; a paragraph starts at four lines and grows.
+  const kind = options.area
+    ? options.max && options.max <= 200
+      ? 'one'
+      : 'para'
+    : options.max && options.max > 40
+      ? 'one'
+      : 'short';
+  const input = (kind === 'short' ? h('input', { attrs: { type: 'text' } }) : h('textarea')) as
+    | HTMLInputElement
+    | HTMLTextAreaElement;
   input.value = get();
   if (options.max) input.maxLength = options.max;
-  if (options.area) (input as HTMLTextAreaElement).rows = options.rows ?? 3;
+  if (kind === 'short') shortInput(input as HTMLInputElement, options.max ?? 24);
+  else growBox(input as HTMLTextAreaElement, kind === 'para' ? 'para' : 'one');
   if (options.placeholder) input.setAttribute('placeholder', options.placeholder);
   const edit = () => {
     set(input.value);

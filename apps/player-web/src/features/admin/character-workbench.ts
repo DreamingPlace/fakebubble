@@ -18,7 +18,7 @@ import { dateTimeText } from './system-format.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { versionHistory } from './history/version-history.ts';
 import { draftHistory } from './history/draft-history.ts';
-import { withoutIds } from './history/readable.ts';
+import { readableGroups, withoutIds } from './history/readable.ts';
 import { dangerZone } from './ui/danger-zone.ts';
 import { inlineConfirm } from './ui/inline-confirm.ts';
 import { statusBadge } from './ui/status-badge.ts';
@@ -805,6 +805,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         sections.push({ id: 'preview', label: '预演', nodes: [wrap] });
       }
     }
+    // Part 24b-7b: tables, comparisons and 预演 use the card's whole width; every form keeps the one reading column.
+    for (const section of sections)
+      if (['diff', 'history', 'preview'].includes(section.id))
+        for (const node of section.nodes) node.className = `${node.className} wb-wide`.trim();
     for (const section of sections)
       if (section.nodes.length === 1) section.nodes[0]!.className = `${section.nodes[0]!.className} wb-sole`.trim();
 
@@ -1019,11 +1023,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         result = await host.api.profilePreview(snapshot.characterId, snapshot.draft!.revision);
       if (gone() || token !== view) return;
       output.replaceChildren();
-      const groups: [string, unknown, unknown][] = [
-        ['人设', result.published?.template.persona, result.draft.profile.template.persona],
-        ['网页展示', result.published?.presentation, result.draft.profile.presentation],
-        ['完整模板', result.published?.template, result.draft.profile.template],
-      ];
+      // Part 24b-7b: the readable field form of 24f (label, old → new, list items as lines, no ids), never the profile as JSON.
+      const groups: [string, unknown, unknown][] = readableGroups(result.published ?? null, result.draft.profile);
       for (const [name, before, after] of groups) {
         if (JSON.stringify(before) === JSON.stringify(after)) continue;
         const group = fold(output, name),
@@ -1236,7 +1237,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       option.value = value!;
       relationship.append(option);
     }
-    const message = field(section, '预演输入（不是玩家消息）', '', { area: true, max: PREVIEW_INPUT_MAX }),
+    const message = field(section, '预演输入（不是玩家消息）', '', { kind: 'para', max: PREVIEW_INPUT_MAX }),
       ack = check(section, '我确认发起真实付费文字预演，并已核对当前草稿与输入');
     if (!snapshot.previewAvailable) section.append(el('p', '当前运行未开启预演，不能通过静态比较绕过发布审核。'));
     const unknownNote = el('p');
@@ -1551,7 +1552,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     label.append(el('span', '已查看且匹配当前草稿的预演'), preview);
     label.hidden = colourOnly;
     section.append(label);
-    const noProof = el('p', '尚无匹配当前草稿的成功预演，不能发布。');
+    // Round 2: the reason a disabled 确认发布此版本 gives sits beside the button (one row), not a sentence further up the page.
+    const noProof = el('span', '尚无匹配当前草稿的成功预演，不能发布。');
+    noProof.className = 'wb-reason';
     const fillPreviews = () => {
       const keep = preview.value;
       preview.replaceChildren();
@@ -1559,6 +1562,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         const option = el('option', job.previewId);
         option.value = job.previewId;
         preview.append(option);
+      }
+      // an empty list says so in the box itself (it was a blank select)
+      if (!previews().length) {
+        const none = el('option', colourOnly ? '不需要预演' : '尚无匹配当前草稿的成功预演');
+        none.value = '';
+        preview.append(none);
       }
       if (keep && previews().some((p) => p.previewId === keep)) preview.value = keep;
       noProof.textContent = colourOnly
@@ -1619,9 +1628,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     // The sentence about what publishing does is the hover tip of the confirmation line.
     if (ack.parentElement) hoverValue(ack.parentElement as HTMLElement, publishNote);
     for (const input of [preview, ack]) guarded(input, () => dirty || pending.has(key) || !can('publish'));
-    section.append(noProof);
+    const publishRow = el('div');
+    publishRow.className = 'wb-publish-row';
+    section.append(publishRow);
     const confirmPublish = button(
-      section,
+      publishRow,
       () => (pending.has(key) ? '按原请求核对发布回执' : '确认发布此版本'),
       () =>
         dirty ||
@@ -1653,8 +1664,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         host.status(`正式 v${result.version} 已发布。`);
       },
     );
-    // In the console the title row's 预演后发布 has led here, so this is the screen's one solid button.
+    // In the console the title row's 预演后发布 hides on this tab (it led here), so this is the screen's one solid button.
     if (embedded) confirmPublish.className = 'admin-primary';
+    publishRow.append(noProof);
+    // a disabled button is skipped by Tab: its reason is linked to it for a screen reader
+    noProof.setAttribute?.('id', `wb-reason-${target}`);
+    confirmPublish.setAttribute?.('aria-describedby', `wb-reason-${target}`);
     ack.addEventListener('change', sync);
   }
   /** 版本历史 lives in its own module (history/version-history.ts); this only hands it the client and what to do after a restore. */

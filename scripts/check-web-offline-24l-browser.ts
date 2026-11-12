@@ -247,7 +247,13 @@ try {
       false,
       'the original button steps aside: one 下线 only',
     );
-    assert.equal(await owner.getByRole('button', { name: '下线' }).count(), 1, 'only the confirm’s 下线 is on the tab');
+    // Named exception (Part 24b-7b): the rail's group headings are buttons now (a fold, with a chevron), so the one called 已下线 contains
+    // the text 下线; the match is exact, which is what the sentence always meant (the confirm's own button).
+    assert.equal(
+      await owner.getByRole('button', { name: '下线', exact: true }).count(),
+      1,
+      'only the confirm’s 下线 is on the tab',
+    );
     assert.equal(await owner.locator('.admin-dialog, dialog[open]').count(), 0, 'the question is inline, not a dialog');
     await snap(owner, `06-offline-confirm-${width}`);
     await confirm.getByRole('button', { name: '取消' }).click();

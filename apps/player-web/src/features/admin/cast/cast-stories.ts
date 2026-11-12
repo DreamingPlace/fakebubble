@@ -8,6 +8,7 @@ import {
   type CastStory,
 } from '../../../../../../packages/contracts/web-cast.ts';
 import { h } from '../../cocreation/h.ts';
+import { growBox } from '../ui/grow-box.ts';
 import { dangerZone } from '../ui/danger-zone.ts';
 import { hoverValue } from '../ui/hover-value.ts';
 import { openTable } from '../ui/open-table.ts';
@@ -452,9 +453,11 @@ export function worldPanel(host: HTMLElement, ctx: CastCtx, state: StoryState) {
     if (state.person && !doc.people.some((p) => p.id === state.person)) state.person = null;
     const edit = ctx.canEdit();
     const base = ctx.base();
-    const background = h('textarea', {
-      attrs: { 'aria-label': '世界背景', maxlength: String(L.worldBackground), rows: '3' },
-    });
+    const background = growBox(
+      h('textarea', { attrs: { 'aria-label': '世界背景', maxlength: String(L.worldBackground) } }),
+      'para',
+      { multiline: true },
+    );
     background.value = doc.world.background;
     if (!edit) background.setAttribute('readonly', '');
     background.addEventListener('input', () => {

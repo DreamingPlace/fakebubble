@@ -1,3 +1,4 @@
+import { disclosureChevron } from './ui/disclosure.ts';
 import type { AccountAdminApi, AccountAdminSession } from '../../services/account-admin-api.ts';
 import { REFUSED, UNKNOWN_OUTCOME } from './error-sentences.ts';
 import { characterWorkbench, characterAdminError } from './character-workbench.ts';
@@ -366,7 +367,13 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     q<HTMLElement>('.admin-identity').textContent = session
       ? `${session.member.role === 'owner' ? '主管理员' : '管理员'} · ${who}`
       : '';
-    q<HTMLElement>('#admin-account-toggle').textContent = who ? `${who} ▾` : '';
+    const toggle = q<HTMLElement>('#admin-account-toggle');
+    // the name, then the shared chevron (drawn first by the CSS: it is the first thing the eye meets, like every disclosure)
+    toggle.textContent = who ?? '';
+    if (who) {
+      toggle.className = /\bdc\b/.test(toggle.className) ? toggle.className : `${toggle.className} dc`;
+      toggle.append(disclosureChevron());
+    }
     q<HTMLElement>('.admin-account').hidden = !session;
     if (!session) closeMenu();
     q<HTMLElement>('.admin-nav').hidden = !session;
