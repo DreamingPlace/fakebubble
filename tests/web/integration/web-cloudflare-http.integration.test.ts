@@ -722,13 +722,20 @@ test('native materials: private upload, two-clip approval, new role and voice pr
     if (role.welcome.audio.state !== 'available') throw Error('missing clip');
     const audio = await f.request(role.welcome.audio.url, client());
     assert.equal(audio.status, 200);
-    if (!keeps)
-      assert.equal(
-        createHash('sha256')
-          .update(Buffer.from(await audio.arrayBuffer()))
-          .digest('hex'),
-        read.sha256,
-      );
+    const served = createHash('sha256')
+      .update(Buffer.from(await audio.arrayBuffer()))
+      .digest('hex');
+    if (!keeps) assert.equal(served, read.sha256);
+    else {
+      // Part 27: voice and text must match. The kept line's audio is the clip of THAT line: the one in the player's earlier bundle
+      // (read before the new material existed), byte for byte - and not the new material's clip.
+      const earlier = before.characters.find((c) => c.characterId === id)!.welcome.audio;
+      assert.equal(earlier.state, 'available');
+      if (earlier.state !== 'available') throw Error('missing earlier clip');
+      assert.equal(served, earlier.sha256, 'the kept welcome line plays its own earlier clip');
+      assert.notEqual(served, read.sha256, 'and not the clip of the new welcome text');
+      assert.equal(role.welcome.audio.sha256, earlier.sha256, 'the catalogue names the same clip');
+    }
   }
   assert.deepEqual(await f.call(historyPath, player), history);
   assert.deepEqual((await f.boot(player)).access, before.access);

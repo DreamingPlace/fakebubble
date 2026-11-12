@@ -16,7 +16,7 @@ const setup = (t: test.TestContext) =>
     ['MEDIA'],
   );
 type Runtime = ReturnType<typeof setup>;
-async function player(f: Runtime, tables?: string[]) {
+async function player(f: Runtime, tables?: string[], voice = 0) {
   await f.call('/assets');
   const guest = await f.call<Guest>('/bootstrap', {});
   const op = await f.call<{ operationId: string }>('/admit', {
@@ -27,7 +27,7 @@ async function player(f: Runtime, tables?: string[]) {
     input: { requestId: randomUUID(), characterId: 'wei-guagua', text: '这条私人消息会随角色一起删除' },
   });
   await f.call('/run', op);
-  await f.call('/ledger/seed', { principalId: guest.principalId, tables });
+  await f.call('/ledger/seed', { principalId: guest.principalId, tables, voice });
   return guest;
 }
 const snapshot = (f: Runtime) => f.call<Record<string, unknown[]>>('/ledger/snapshot', {});
@@ -142,4 +142,20 @@ test('24g: a player with a name card, points, a free operation, a model snapshot
   await f.restart();
   assert.equal((await f.call<any>('/deletion/sweep')).state, 'deleted');
   await check();
+});
+
+// Part 27: 消费记录 keeps the 语音 flag of a reply whose character was deleted later: it comes from the operation (the ledger).
+test('27: the voice flag of a reply survives the deletion of its character', async (t) => {
+  const f = setup(t);
+  const guest = await player(f, undefined, 1);
+  const before = await f.call<any>('/ledger/billing', { principalId: guest.principalId });
+  const reply = (page: any) => page.items.find((i: any) => i.kind === 'reply');
+  assert.equal(reply(before).voice, true, 'the reply carried a voice');
+  await start(f);
+  assert.equal((await f.call<any>('/deletion/sweep')).state, 'deleted');
+  assert.equal((await f.call<any>('/retention/state', guest)).outputs, 0, 'the chat content and audio are gone');
+  const after = await f.call<any>('/ledger/billing', { principalId: guest.principalId });
+  assert.deepEqual(after.items, before.items, '消费记录 is identical, 语音 included');
+  assert.equal(billingRow(reply(after), () => '').sub.endsWith('语音'), true);
+  assert.equal(billingRow(reply(after), () => '').sub.includes('无语音'), false);
 });

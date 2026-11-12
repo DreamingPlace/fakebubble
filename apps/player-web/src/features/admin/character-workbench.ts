@@ -1669,8 +1669,18 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       const file = el('input');
       file.type = 'file';
       file.accept = '.wav,audio/wav';
+      // Part 27: the console's own button (the native picker is hidden over it but stays the focusable control), then the file name.
       const pick = el('label');
-      pick.append(el('span', `选择${name} WAV`), file);
+      pick.className = 'ad-file';
+      file.className = 'ad-file-input';
+      const pickButton = el('span', `选择${name} WAV`);
+      pickButton.className = 'ad-file-button';
+      const picked = el('span', '未选择文件');
+      picked.className = 'ad-file-name';
+      file.addEventListener('change', () => {
+        picked.textContent = file.files?.[0]?.name ?? '未选择文件';
+      });
+      pick.append(pickButton, file, picked);
       more.append(pick);
       guarded(file, () => dirty || !can('materials'));
       const rights = guarded(

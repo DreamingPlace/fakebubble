@@ -39,8 +39,9 @@ export class WebCharacterDeletion24gFixture extends WebCharacterDeletionFixture 
             ),
           web_operation_models: () =>
             this.store.run(
-              "INSERT INTO web_operation_models VALUES (?,'deepseek',0,3,1,1,'deepseek','m-draft','deepseek','m-review',1,?)",
+              "INSERT INTO web_operation_models VALUES (?,'deepseek',?,3,1,1,'deepseek','m-draft','deepseek','m-review',1,?)",
               op.id,
+              body.voice === 1 ? 1 : 0, // Part 27: a real operation orders the voice (1); the older seeds keep 0
               now,
             ),
           web_provider_backups: () =>

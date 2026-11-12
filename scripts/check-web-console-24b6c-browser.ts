@@ -1,5 +1,7 @@
+import './player-build-guard.ts';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { quietWait, watchRequests } from './console-quiet.ts';
 import { startConsoleFixture } from './console-fixture-24b6.ts';
 import { run24b6cChecks } from './console-24b6c-checks.ts';
 
@@ -17,7 +19,8 @@ let failure: unknown = null;
 try {
   const page = await f.context.newPage();
   page.on('pageerror', (error: unknown) => errors.push(`pageerror ${String(error)}`));
-  const wait = (ms = 600) => page.waitForTimeout(ms);
+  watchRequests(page);
+  const wait = (ms = 600) => quietWait(page, ms);
   await run24b6cChecks({
     f,
     page,
