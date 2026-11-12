@@ -296,7 +296,7 @@ export class WebClipTakes {
         selectedTakeId: selectedOk ? choice!.take_id : null,
         approved: selectedOk && this.approvedTake(choice, chosen),
         /** Calls of this slot that ended UNKNOWN or refused after its newest take: 「未确认 · CODE」. */
-        issue: issues.find((issue) => issue.slotKey === slot.key && issue.at > newest) ?? null,
+        issue: issues.find((issue) => issue.slotKey === slot.key && issue.at >= newest) ?? null,
       };
     });
     return {

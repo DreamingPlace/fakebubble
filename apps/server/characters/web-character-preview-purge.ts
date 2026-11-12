@@ -1,5 +1,6 @@
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { purgeAdminSpeechAudio } from './web-admin-speech-schema.ts';
+import { webClipTakesInstalled } from './web-clip-takes-schema.ts';
 
 /**
  * Character deletion (schema 119): the admin-only workbench data of the character goes with it, in the deletion's own
@@ -10,6 +11,11 @@ import { purgeAdminSpeechAudio } from './web-admin-speech-schema.ts';
 export function purgePreviewWorkbench(store: BusinessStore, characterId: string) {
   // Part 24k-1: the admin-only audio of the character's 试听 and generated clips goes with them (the ledger keeps the bills).
   purgeAdminSpeechAudio(store, { characterId });
+  // Part 30: the takes (admin-only audio) and their choices go too; the text-model ledger keeps its bills.
+  if (webClipTakesInstalled(store)) {
+    store.run('DELETE FROM web_clip_choices WHERE character_id=?', characterId);
+    store.run('DELETE FROM web_clip_takes WHERE character_id=?', characterId);
+  }
   if (!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_preview_rejected'")) return;
   const mine = 'SELECT id FROM admin_previews WHERE character_id=?';
   store.run(`DELETE FROM web_preview_rejected WHERE preview_id IN (${mine})`, characterId);

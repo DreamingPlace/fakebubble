@@ -221,7 +221,7 @@ export async function routeWebAccountAdmin(
     if (path === `${base}/characters/order`) return { status: 200, body: characters.saveOrder(actor, req.body) };
     const match = path.match(
       new RegExp(
-        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-generate|material-audio|material-approve|speech-estimate|preview-listen|speech-clips|speech-audio|delete-preview|delete-start|delete-status|history|history-version|draft-history|restore|code-save|checklist-dismiss)$`,
+        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-generate|material-audio|material-approve|take-(?:list|audio|estimate|estimate-direction|upload|generate|generate-all|rewrite|select|rename|delete|approve|bundle)|speech-estimate|preview-listen|speech-clips|speech-audio|delete-preview|delete-start|delete-status|history|history-version|draft-history|restore|code-save|checklist-dismiss)$`,
       ),
     );
     ensure(match, 'NOT_FOUND');
@@ -323,6 +323,11 @@ export async function routeWebAccountAdmin(
           ]),
         ),
       };
+    if (match[2]!.startsWith('take-')) {
+      const action = match[2]!.slice('take-'.length);
+      // The body is validated key by key inside the business object; here it only has to be a JSON object.
+      return { status: 200, body: await characters.takeCall(actor, id, action, action === 'list' || action === 'bundle' ? body([]) : (req.body ?? {})) };
+    }
     if (match[2] === 'history') {
       body([]);
       return { status: 200, body: characters.history(actor, id) };

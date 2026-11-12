@@ -7,7 +7,7 @@ import {
   hasCharacterPermission,
   type CharacterAdminAction,
 } from '../../../packages/contracts/web-admin-permissions.ts';
-import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
+import { DetailedError, DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { upgradeWelcomes, welcomeProblems, welcomeTextProblem } from '../../../packages/contracts/web-welcomes.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
@@ -46,6 +46,8 @@ import {
 } from './web-character-preview-read.ts';
 
 import { WebCharacterMaterials } from './web-character-materials.ts';
+import { WebClipTakes } from './web-clip-takes.ts';
+import type { WebClipDirection } from './web-clip-direction.ts';
 import type { WebAdminSpeech } from './web-admin-speech.ts';
 import { effectiveVoice, footerRequired, siteVoiceModel } from './web-clip-manifest.ts';
 import { WebProfileImport, type ImportContext } from './web-profile-import.ts';
@@ -152,9 +154,19 @@ export class WebCharacterAdmin {
     installWebAvailability(this.store);
   }
   private materials: WebCharacterMaterials | null = null;
+  /** Part 30: the slot/take layer on top of the materials (the 素材版本 is now only the bundle a publication stands on). */
+  private takes: WebClipTakes | null = null;
   enableMaterials(materials: WebCharacterMaterials) {
     this.materials = materials;
     if (this.speech) materials.enableSpeech(this.speech);
+    this.takes = new WebClipTakes(this.store as never, this.clock, materials);
+    if (this.direction) this.takes.enableDirection(this.direction);
+  }
+  /** Part 30: 按反馈重录 (the text model that places direction markup). Off until the runtime that can call it enables it. */
+  private direction: WebClipDirection | null = null;
+  enableDirection(direction: WebClipDirection) {
+    this.direction = direction;
+    this.takes?.enableDirection(direction);
   }
   /** Part 24k-1: the admin speech path (生成 on a 成品 slot, 预演 试听). Off until the runtime that can call Fish enables it. */
   private speech: WebAdminSpeech | null = null;
@@ -758,6 +770,38 @@ export class WebCharacterAdmin {
     record(input);
     keys(input, ['callId']);
     return this.speech.audio(id, input.callId);
+  }
+  /** Part 30: slots and takes. Reads need 'read'; changing a take 'materials'; approving 'approve-materials'; the bundle 'publish'. */
+  async takeCall(auth: Auth, id: string, action: string, input: unknown) {
+    const takes = this.takes;
+    ensure(takes, 'MATERIALS_UNAVAILABLE');
+    const need = (permission: CharacterAdminAction) => {
+      this.require(auth, permission, id);
+      return () => this.require(auth, permission, id);
+    };
+    if (action === 'list') {
+      need('read')();
+      return takes.view(id);
+    }
+    if (action === 'audio') return takes.audio(id, input, need('read'));
+    if (action === 'estimate') {
+      need('read')();
+      return takes.estimate(id, input);
+    }
+    if (action === 'estimate-direction') {
+      need('read')();
+      return takes.estimateDirection(id, input);
+    }
+    if (action === 'upload') return takes.upload(id, input, need('materials'));
+    if (action === 'generate') return takes.generate(id, input, need('materials'));
+    if (action === 'generate-all') return takes.generateAll(id, input, need('materials'));
+    if (action === 'rewrite') return takes.rewrite(id, input, need('materials'));
+    if (action === 'select') return takes.select(id, input, need('materials'));
+    if (action === 'rename') return takes.rename(id, input, need('materials'));
+    if (action === 'delete') return takes.remove(id, input, need('materials'));
+    if (action === 'approve') return takes.approve(id, input, need('approve-materials'));
+    if (action === 'bundle') return takes.bundle(id, need('publish'));
+    throw new DomainError('NOT_FOUND');
   }
   materialApprove(auth: Auth, id: string, input: unknown) {
     this.require(auth, 'approve-materials', id);
