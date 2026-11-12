@@ -1597,7 +1597,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         v.tabIndex = -1;
         v.value = value;
         v.size = Math.max(6, [...value].length + 1);
-        v.setAttribute('data-used', field ? 'footer' : 'line');
+        v.dataset.used = field ? 'footer' : 'line';
         line.append(k, v);
         used.append(line);
       };
