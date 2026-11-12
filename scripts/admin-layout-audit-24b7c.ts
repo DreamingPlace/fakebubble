@@ -134,13 +134,13 @@ export const AUDIT_SOURCE = `(() => {
   }
 
   // 8. the rail: no avatar half hidden under the group count (an avatar is wholly in view or wholly out of it)
-  const rail = root.querySelector('.wb-rail');
+  const rail = root.querySelector('.wb-roles');
   if (rail && vis(rail)) {
-    const rr = R(rail), heads = [...rail.querySelectorAll('.admin-pick-head')].filter(vis);
+    const rr = R(rail);
     for (const a of rail.querySelectorAll('.admin-pick')) {
       if (!vis(a)) continue; const ar = R(a);
       if (ar.top < rr.top - 1 && ar.bottom > rr.top + 1) out.rail.push('avatar half cut at the top of the rail ' + label(a));
-      for (const h of heads) { const hr = R(h); const overlap = Math.min(ar.bottom, hr.bottom) - Math.max(ar.top, hr.top); if (overlap > 1 && getComputedStyle(h).position === 'sticky') out.rail.push('avatar under the group count ' + label(a)); }
+      if (ar.top < rr.bottom - 1 && ar.bottom > rr.bottom + 1) out.rail.push('avatar half cut at the bottom of the rail ' + label(a));
     }
   }
   const counts = {}; let total = 0;

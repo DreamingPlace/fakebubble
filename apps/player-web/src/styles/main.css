@@ -14951,7 +14951,6 @@ button:not(
 /* ---- the rail: avatars snap to the top edge of the scroller, so none is left half cut under the top edge or a group count ---- */
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-roles {
   scroll-snap-type: y mandatory;
-  scroll-padding-block: var(--ad-sp-1);
 }
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-roles .admin-pick,
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-roles .admin-pick-group > h3 {
@@ -15125,6 +15124,96 @@ button:not(
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-kind label {
   flex: none;
   padding-inline: var(--ad-sp-3);
+}
+
+/* a select takes the width of its longest option, also where a page rule gave it the whole column */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-card select[data-w="fit"] {
+  width: auto;
+  min-width: var(--ad-w-s);
+  max-width: min(100%, var(--ad-w-m));
+}
+
+/* the rail: every item is a multiple of one pitch (46: an avatar and its gap; a group heading is two pitches) and the scroller is a
+   whole number of pitches high, so a scrolled rail ends on a whole avatar — never one cut in half under a group count */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles {
+  gap: 0;
+  flex: none;
+  max-height: round(down, calc(100dvh - 261px), 46px);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick-group {
+  margin: 0;
+  padding: 0;
+  gap: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick-group > h3 {
+  box-sizing: border-box;
+  height: 92px;
+  margin: 0;
+  overflow: hidden;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick-list {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick {
+  box-sizing: border-box;
+  flex: none;
+  margin: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-roles .admin-pick-row {
+  box-sizing: border-box;
+  flex: none;
+  height: 46px;
+  min-height: 46px;
+  margin: 0;
+  padding-block: 1px;
+}
+
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  .wb-roles
+  .admin-pick-group
+  + .admin-pick-group {
+  position: relative;
+  margin-top: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  .wb-roles
+  .admin-pick-group
+  + .admin-pick-group::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  margin: 0 10px;
+}
+
+/* 积分发放: the send button and the static 对象 sit on the field line */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pt-bar > button {
+  align-self: end;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pt-bar .pt-field .pt-with {
+  min-height: var(--ad-h-standard);
+}
+/* 账号: the address and its button are one row; the label sits above both */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-bind-start {
+  display: grid;
+  grid-template-columns: var(--ad-w-m) auto;
+  align-items: end;
+  justify-content: start;
+  gap: var(--ad-sp-1) var(--ad-sp-3);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-bind-start > label {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pt-bar .pt-seg {
+  box-sizing: border-box;
+  min-height: var(--ad-h-standard);
+  align-items: center;
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
