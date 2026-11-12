@@ -150,13 +150,18 @@ export function rolePicker(
         'button',
         {
           class: 'admin-pick',
-          ...(compact && seed ? {} : {}),
           attrs: {
             type: 'button',
             'data-character': role.characterId,
             ...(offline ? { 'data-offline': 'true' } : {}),
-            ...(seed
-              ? { 'data-seed': 'true', title: `${role.displayName} · 成长中（虚线圈）：设定还少，不编细节，多问玩家` }
+            // the circle shows one initial: its name is its hover tip (成长中 adds what the dashed ring means)
+            ...(seed ? { 'data-seed': 'true' } : {}),
+            ...(seed || compact
+              ? {
+                  title: seed
+                    ? `${role.displayName} · 成长中（虚线圈）：设定还少，不编细节，多问玩家`
+                    : role.displayName,
+                }
               : {}),
             ...(role.characterId === selected ? { 'aria-current': 'true' } : {}),
             ...(compact ? { 'aria-label': role.displayName } : {}),

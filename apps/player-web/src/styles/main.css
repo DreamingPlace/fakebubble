@@ -11636,7 +11636,8 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   justify-content: flex-end;
   white-space: nowrap;
 }
-@container adc (max-width: 1100px) {
+/* Part 24b-7b: 1250 (was 1100): with eighteen characters the grid no longer fits a 1440 window at full cell size and scrolled sideways */
+@container adc (max-width: 1250px) {
   .account-admin-page.admin-shell .cs-grid-card {
     --cell-min: 28px;
     padding: 12px;
@@ -14149,6 +14150,13 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell #admin-characters .wb-card form.character-profile-form fieldset {
   gap: 16px;
+}
+.account-admin-page.admin-shell .wb-roles .cocreation-badge {
+  min-width: 24px;
+  min-height: 24px;
+  box-sizing: border-box;
+  line-height: 20px;
+  text-align: center;
 }
 /* 主色: the swatch and the live chip sit right beside the field, not at the far end of the column */
 .account-admin-page.admin-shell #admin-characters .wb-card .colour-field {
