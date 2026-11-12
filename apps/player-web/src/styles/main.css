@@ -14594,6 +14594,539 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   content: "↓";
 }
 
+/* ======================================================================================================================
+   Part 24b-7c: ONE layout system for the administrator console (docs/ADMIN_LAYOUT.md). Layout and styling only; scoped to the admin
+   shell; nothing here selects inside the 声音 tab (.vc-materials, Part 30): every generic rule says :not(.vc-materials *).
+   Rules below carry the specificity of an id (:is(.admin-shell, #ad-layout) takes the id's weight) so that this one system, written last,
+   wins over the page-by-page rules above it. Tokens: two button heights, one spacing scale, four field widths. Everything below reads them.
+   ====================================================================================================================== */
+.account-admin-page.admin-shell {
+  --ad-h-compact: 32px; /* row actions, chips, table cells, tabs */
+  --ad-h-standard: 40px; /* everything else; also the height of a field, so a field and its button line up */
+  --ad-sp-1: 4px; /* label → field, a title and its caption */
+  --ad-sp-2: 8px; /* related checkboxes / radios, buttons of one group */
+  --ad-sp-3: 12px; /* inside a row of controls */
+  --ad-sp-4: 16px; /* field → field */
+  --ad-sp-5: 24px; /* section → section: the largest gap anywhere */
+  --ad-w-xs: 120px; /* a number or a percentage */
+  --ad-w-s: 176px; /* a code, an id, a hex */
+  --ad-w-m: 352px; /* a name, a short note */
+  --ad-w-l: 920px; /* the form column */
+  --ad-gap: var(--ad-sp-5); /* card → card, header → body: the section step */
+  --ad-card-pad: 20px;
+}
+
+/* ---- buttons: standard by default, compact where the surrounding is dense, square when icon-only ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+button:not(
+  .vc-materials *,
+  .admin-pick,
+  .admin-pick-head,
+  .admin-nav-item,
+  .admin-account-toggle,
+  .admin-menu-item,
+  .admin-nav-collapse,
+  .cc-row-open,
+  .cn-add-card,
+  .wb-rail-item,
+  .cs-cell,
+  .cs-head,
+  .seg-button,
+  .wb-tab,
+  [class*="swatch"]
+) {
+  box-sizing: border-box;
+  height: var(--ad-h-standard);
+  min-height: var(--ad-h-standard);
+  padding-block: 0;
+  padding-inline: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ad-sp-2);
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  :is(
+    .ot-sort,
+    .cc-filter-chip,
+    .cost-chip,
+    .cs-quiet,
+    .cs-add,
+    .cs-pill,
+    .cc-star,
+    .cc-set-processed,
+    .cc-set-archived,
+    .cc-copy,
+    .cc-adopt-open,
+    .cc-adopt-save,
+    .cc-adopt-cancel,
+    .ad-handle,
+    .ad-remove,
+    .mb-preset,
+    .sl-del,
+    .tiers-copy,
+    .iv-small,
+    .ad-compact
+  ):is(button):not(.vc-materials *) {
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+  padding-inline: 12px;
+  font-size: 13px;
+}
+/* the 关系 matrix's cells and headings (.cs-cell, .cs-head) are the grid itself: they keep their own geometry (named exemption) */
+/* controls inside a segmented bar and the tabs: compact inside a 40 high track */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.seg-button:not(.vc-materials *),
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.wb-tab:not(.vc-materials *) {
+  box-sizing: border-box;
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+  padding-block: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .seg:not(.vc-materials *) {
+  box-sizing: border-box;
+  min-height: var(--ad-h-standard);
+  align-items: center;
+}
+/* an icon-only button is a square of its own height; a compact one a 32 square */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.ad-handle:not(.vc-materials *),
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.ad-remove:not(.vc-materials *),
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.sl-del:not(.vc-materials *) {
+  width: var(--ad-h-compact);
+  padding-inline: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.colour-swatch:not(.vc-materials *) {
+  box-sizing: border-box;
+  width: var(--ad-h-compact);
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+}
+/* one solid primary per screen: a second solid primary in view is drawn as a secondary (docs/ADMIN_LAYOUT.md) */
+
+/* ---- fields: sized by what they hold (ui/field-width.ts sets data-w from the real limit) ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) [data-w="xs"]:not(.vc-materials *) {
+  max-width: var(--ad-w-xs);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) [data-w="s"]:not(.vc-materials *) {
+  max-width: var(--ad-w-s);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) [data-w="m"]:not(.vc-materials *) {
+  max-width: var(--ad-w-m);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) [data-w="l"]:not(.vc-materials *) {
+  max-width: var(--ad-w-l);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) select[data-w="fit"]:not(.vc-materials *) {
+  field-sizing: content;
+  min-width: var(--ad-w-s);
+  max-width: min(100%, var(--ad-w-l));
+}
+/* fields line up with the buttons beside them */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+:is(input, select):not(
+  [type="checkbox"],
+  [type="radio"],
+  [type="color"],
+  [type="file"],
+  [type="range"],
+  .vc-materials *
+) {
+  box-sizing: border-box;
+  height: var(--ad-h-standard);
+  min-height: var(--ad-h-standard);
+  border-radius: var(--ad-radius);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) input[type="search"]:not(.vc-materials *) {
+  border-radius: var(--ad-radius);
+}
+
+/* ---- the short label with a hover tip: the full sentence stays the label's text (its accessible name) ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label > span[data-short] {
+  font-size: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label > span[data-short]::before {
+  content: attr(data-short);
+  font-size: 13px;
+}
+
+/* ---- vertical rhythm of the form column: label → field 4, field → field 16, section → section 24 (never more) ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button:not(.vc-materials *) {
+  margin-block: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  label:not(.admin-check, .vc-materials *):has(> span + :is(input, select, textarea)) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-sp-1);
+  margin-block: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) select[data-w="fit"]:not(.vc-materials *) {
+  align-self: flex-start;
+  width: auto;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label.admin-check:not(.vc-materials *) {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--ad-sp-2);
+  min-height: var(--ad-h-compact);
+  height: auto;
+  margin-block: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label.admin-check > input:not(.vc-materials *) {
+  flex: none;
+  margin: 0;
+}
+/* the sections of a role: one step between them; inside a section one field step */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  .wb-card-body
+  details:not(:has(> .vc-materials))
+  > :not(summary) {
+  margin-block: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  .wb-card-body
+  details:not(:has(> .vc-materials))
+  > :not(summary)
+  + :not(summary) {
+  margin-top: var(--ad-sp-4);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  .wb-card-body
+  details:not(:has(> .vc-materials))
+  > summary {
+  margin-bottom: var(--ad-sp-4);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  .character-flow
+  > :not(:has(> .vc-materials))
+  + :not(:has(> .vc-materials)) {
+  margin-top: var(--ad-sp-5);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-danger:not(.vc-materials *) {
+  margin-top: var(--ad-sp-5);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-publish-row {
+  gap: var(--ad-sp-2) var(--ad-sp-4);
+}
+
+/* ---- 预演: the input, then ONE compact row under it — 运行备注 beside the send button and its reason ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--ad-sp-2) var(--ad-sp-3);
+  max-width: var(--ad-w-l);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main > .pw-compose-fields,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main > .pw-sendbar {
+  display: contents;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main .pw-compose-fields > textarea {
+  grid-column: 1 / -1;
+  max-width: none;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main .pw-compose-fields > input {
+  grid-column: 1;
+  max-width: none;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main button.pw-send {
+  width: auto;
+  min-width: 96px;
+  justify-self: start;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main .pw-reason {
+  white-space: nowrap;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+
+/* ---- page by page: only the gaps, alignments and sizes that sat off the system ---- */
+/* inside a card: one control step (12), a heading and its content a field step (16) at most */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+:is(.ovx-trend, .cs-card, .cc-detail, form.tiers-form, .pi-head, .system-section, .system-metrics, .tiers-form) {
+  gap: var(--ad-sp-3);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .cc-detail-head {
+  margin-bottom: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form h4 {
+  margin-top: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.mb-add,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .members-table-card {
+  margin-block: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .system-section {
+  margin-bottom: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .system-section h3,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pi-head h3 {
+  margin-bottom: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-cocreation.pt-cc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ad-sp-3) var(--ad-sp-5);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-cocreation.pt-cc > button {
+  align-self: flex-end;
+  margin-left: auto;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-cocreation .pt-lb {
+  flex: 0 0 auto;
+}
+/* 邀请: one row of fields, labels and fields on shared lines, the button and the checkbox on the field line */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form {
+  align-items: end;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-field {
+  align-self: end;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-field.tiers-test,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-field.tiers-test > label {
+  min-height: var(--ad-h-standard);
+  align-items: center;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-kind {
+  min-height: var(--ad-h-standard);
+  box-sizing: border-box;
+  align-items: center;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-kind-field > .tiers-label {
+  margin: 0;
+}
+
+/* ---- the editable lists of a role (not 声音): handle and × are 32 squares; a row is a control row, not a card with air in it ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wl-row {
+  grid-template-columns: var(--ad-h-compact) 22px minmax(0, 1fr) 116px var(--ad-h-compact);
+  padding: var(--ad-sp-2) var(--ad-sp-3);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wl-weight-wrap {
+  margin-block: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .sl-row {
+  grid-template-columns: var(--ad-h-compact) minmax(0, 1fr) var(--ad-h-compact);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-card .cn-card {
+  grid-template-columns: var(--ad-h-compact) minmax(0, 1fr) var(--ad-h-compact);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  :is(.wl-row, .sl-row, .cn-card, .kv-row)
+  > :is(button.ad-handle, button.ad-remove) {
+  align-self: start;
+  margin-top: var(--ad-sp-1);
+}
+/* 积分发放: the labels, the fields and the send button share their lines */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pt-bar {
+  align-items: end;
+}
+
+/* ---- small corrections found by the audit ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.cn-x,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.pl-del,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.wl-del {
+  width: var(--ad-h-compact);
+  padding-inline: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) :is(.pl-row) > :is(button.ad-handle, button.ad-remove) {
+  align-self: start;
+  margin-top: var(--ad-sp-1);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.cn-add-wide {
+  width: auto;
+  align-self: flex-start;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) input.cs-pill-input {
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .cc-chip-row {
+  align-items: center;
+}
+
+/* ---- the rail: avatars snap to the top edge of the scroller, so none is left half cut under the top edge or a group count ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-roles {
+  scroll-snap-type: y mandatory;
+  scroll-padding-block: var(--ad-sp-1);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-roles .admin-pick,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-roles .admin-pick-group > h3 {
+  scroll-snap-align: start;
+}
+
+/* ---- second round of small corrections ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  :is(.pl-row, .kv-row)
+  > :is(button.ad-handle, button.ad-remove) {
+  align-self: center;
+  margin-top: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.cn-x {
+  align-self: start;
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  :is(.cc-detail-actions, .cc-answer-actions, .cc-adopt-actions)
+  > button {
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+  padding-inline: 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.pw-summary,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .rc-start button.pw-send {
+  width: auto;
+  align-self: flex-start;
+  justify-self: start;
+}
+/* 邀请: the fields keep the width of their class; the row wraps instead of squeezing a number into 72 px */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ad-sp-3) var(--ad-sp-3);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form [data-w="xs"] {
+  width: var(--ad-w-xs);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form [data-w="s"] {
+  width: var(--ad-w-s);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form [data-w="l"],
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form [data-w="m"] {
+  width: var(--ad-w-m);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form .tiers-form-actions {
+  margin-left: auto;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .models-table :is(th, td):first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+/* sentences under a heading, and the binding form: label → field 4, field → button 12 */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  :is(.system-section, .sys-card, .sys-budget-card)
+  :is(h3, h4)
+  + .admin-hint,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-hint + .admin-hint {
+  margin-top: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .system-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-sp-3);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  :is(#admin-bind-start, #admin-bind-finish, #admin-email-login) {
+  gap: var(--ad-sp-3);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) :is(#admin-bind-start, #admin-bind-finish) label {
+  margin-bottom: calc(-1 * var(--ad-sp-2));
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .cn-field {
+  gap: var(--ad-sp-4);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .cs-namecard {
+  margin-top: 0;
+}
+
+/* ---- third round: where an id-weighted page rule still won, the same correction with the page's id ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  :is(.pl-row, .kv-row, .pl-main)
+  > :is(button.ad-handle, button.ad-remove) {
+  align-self: center;
+  margin-top: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  :is(.cn-card, .cn-pair)
+  > :is(button.cn-handle, button.cn-x, button.ad-handle, button.ad-remove) {
+  align-self: start;
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+  width: var(--ad-h-compact);
+  margin-top: var(--ad-sp-1);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .rc-start button.pw-send,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters button.pw-summary {
+  width: auto;
+  align-self: flex-start;
+  justify-self: start;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-cocreation .cc-chip-row {
+  align-items: center;
+}
+
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  #admin-characters
+  .cn-fact
+  > :is(button.cn-handle, button.cn-x) {
+  align-self: start;
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+  width: var(--ad-h-compact);
+  margin-top: var(--ad-sp-1);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-cocreation .cc-chip-row > .cc-star-filter {
+  align-self: center;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .rc-start .pw-sendbar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--ad-sp-3);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .rc-start .pw-sendbar > button.pw-send {
+  flex: none;
+  width: auto;
+  min-width: 96px;
+}
+
+/* a hint is a sentence under its heading or field: one control step below it, none above */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) p.admin-hint:not(.vc-materials *) {
+  margin: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) p.admin-hint:not(:last-child):not(.vc-materials *) {
+  margin-bottom: var(--ad-sp-3);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-list h4 {
+  margin-top: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) fieldset.cn-pane {
+  gap: var(--ad-sp-5);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) p.admin-hint + h4 {
+  margin-top: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters fieldset.cn-pane {
+  gap: var(--ad-sp-5);
+}
+/* an empty confirmation slot takes no row (it was a 24 px gap of nothing between the header and the first card) */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) :is(.models-confirm, .points-confirm):empty {
+  display: none;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .models-card {
+  margin-bottom: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .models-card h4 {
+  margin-top: 0;
+}
+/* the 额度类型 switch keeps its own width: the row wraps before it is squeezed */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-kind-field {
+  flex: none;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-kind label {
+  flex: none;
+  padding-inline: var(--ad-sp-3);
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;
@@ -15390,539 +15923,6 @@ body.legal-page {
   from {
     opacity: 0;
   }
-}
-
-/* ======================================================================================================================
-   Part 24b-7c: ONE layout system for the administrator console (docs/ADMIN_LAYOUT.md). Layout and styling only; scoped to the admin
-   shell; nothing here selects inside the 声音 tab (.vc-materials, Part 30): every generic rule says :not(.vc-materials *).
-   Rules below carry the specificity of an id (:is(.admin-shell, #ad-layout) takes the id's weight) so that this one system, written last,
-   wins over the page-by-page rules above it. Tokens: two button heights, one spacing scale, four field widths. Everything below reads them.
-   ====================================================================================================================== */
-.account-admin-page.admin-shell {
-  --ad-h-compact: 32px; /* row actions, chips, table cells, tabs */
-  --ad-h-standard: 40px; /* everything else; also the height of a field, so a field and its button line up */
-  --ad-sp-1: 4px; /* label → field, a title and its caption */
-  --ad-sp-2: 8px; /* related checkboxes / radios, buttons of one group */
-  --ad-sp-3: 12px; /* inside a row of controls */
-  --ad-sp-4: 16px; /* field → field */
-  --ad-sp-5: 24px; /* section → section: the largest gap anywhere */
-  --ad-w-xs: 120px; /* a number or a percentage */
-  --ad-w-s: 176px; /* a code, an id, a hex */
-  --ad-w-m: 352px; /* a name, a short note */
-  --ad-w-l: 920px; /* the form column */
-  --ad-gap: var(--ad-sp-5); /* card → card, header → body: the section step */
-  --ad-card-pad: 20px;
-}
-
-/* ---- buttons: standard by default, compact where the surrounding is dense, square when icon-only ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-button:not(
-  .vc-materials *,
-  .admin-pick,
-  .admin-pick-head,
-  .admin-nav-item,
-  .admin-account-toggle,
-  .admin-menu-item,
-  .admin-nav-collapse,
-  .cc-row-open,
-  .cn-add-card,
-  .wb-rail-item,
-  .cs-cell,
-  .cs-head,
-  .seg-button,
-  .wb-tab,
-  [class*="swatch"]
-) {
-  box-sizing: border-box;
-  height: var(--ad-h-standard);
-  min-height: var(--ad-h-standard);
-  padding-block: 0;
-  padding-inline: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--ad-sp-2);
-  line-height: 1.2;
-  white-space: nowrap;
-  max-width: 100%;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  :is(
-    .ot-sort,
-    .cc-filter-chip,
-    .cost-chip,
-    .cs-quiet,
-    .cs-add,
-    .cs-pill,
-    .cc-star,
-    .cc-set-processed,
-    .cc-set-archived,
-    .cc-copy,
-    .cc-adopt-open,
-    .cc-adopt-save,
-    .cc-adopt-cancel,
-    .ad-handle,
-    .ad-remove,
-    .mb-preset,
-    .sl-del,
-    .tiers-copy,
-    .iv-small,
-    .ad-compact
-  ):is(button):not(.vc-materials *) {
-  height: var(--ad-h-compact);
-  min-height: var(--ad-h-compact);
-  padding-inline: 12px;
-  font-size: 13px;
-}
-/* the 关系 matrix's cells and headings (.cs-cell, .cs-head) are the grid itself: they keep their own geometry (named exemption) */
-/* controls inside a segmented bar and the tabs: compact inside a 40 high track */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.seg-button:not(.vc-materials *),
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.wb-tab:not(.vc-materials *) {
-  box-sizing: border-box;
-  height: var(--ad-h-compact);
-  min-height: var(--ad-h-compact);
-  padding-block: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .seg:not(.vc-materials *) {
-  box-sizing: border-box;
-  min-height: var(--ad-h-standard);
-  align-items: center;
-}
-/* an icon-only button is a square of its own height; a compact one a 32 square */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.ad-handle:not(.vc-materials *),
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.ad-remove:not(.vc-materials *),
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.sl-del:not(.vc-materials *) {
-  width: var(--ad-h-compact);
-  padding-inline: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.colour-swatch:not(.vc-materials *) {
-  box-sizing: border-box;
-  width: var(--ad-h-compact);
-  height: var(--ad-h-compact);
-  min-height: var(--ad-h-compact);
-}
-/* one solid primary per screen: a second solid primary in view is drawn as a secondary (docs/ADMIN_LAYOUT.md) */
-
-/* ---- fields: sized by what they hold (ui/field-width.ts sets data-w from the real limit) ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) [data-w="xs"]:not(.vc-materials *) {
-  max-width: var(--ad-w-xs);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) [data-w="s"]:not(.vc-materials *) {
-  max-width: var(--ad-w-s);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) [data-w="m"]:not(.vc-materials *) {
-  max-width: var(--ad-w-m);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) [data-w="l"]:not(.vc-materials *) {
-  max-width: var(--ad-w-l);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) select[data-w="fit"]:not(.vc-materials *) {
-  field-sizing: content;
-  min-width: var(--ad-w-s);
-  max-width: min(100%, var(--ad-w-l));
-}
-/* fields line up with the buttons beside them */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-:is(input, select):not(
-  [type="checkbox"],
-  [type="radio"],
-  [type="color"],
-  [type="file"],
-  [type="range"],
-  .vc-materials *
-) {
-  box-sizing: border-box;
-  height: var(--ad-h-standard);
-  min-height: var(--ad-h-standard);
-  border-radius: var(--ad-radius);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) input[type="search"]:not(.vc-materials *) {
-  border-radius: var(--ad-radius);
-}
-
-/* ---- the short label with a hover tip: the full sentence stays the label's text (its accessible name) ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label > span[data-short] {
-  font-size: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label > span[data-short]::before {
-  content: attr(data-short);
-  font-size: 13px;
-}
-
-/* ---- vertical rhythm of the form column: label → field 4, field → field 16, section → section 24 (never more) ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button:not(.vc-materials *) {
-  margin-block: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  label:not(.admin-check, .vc-materials *):has(> span + :is(input, select, textarea)) {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ad-sp-1);
-  margin-block: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) select[data-w="fit"]:not(.vc-materials *) {
-  align-self: flex-start;
-  width: auto;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label.admin-check:not(.vc-materials *) {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--ad-sp-2);
-  min-height: var(--ad-h-compact);
-  height: auto;
-  margin-block: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label.admin-check > input:not(.vc-materials *) {
-  flex: none;
-  margin: 0;
-}
-/* the sections of a role: one step between them; inside a section one field step */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  .wb-card-body
-  details:not(:has(> .vc-materials))
-  > :not(summary) {
-  margin-block: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  .wb-card-body
-  details:not(:has(> .vc-materials))
-  > :not(summary)
-  + :not(summary) {
-  margin-top: var(--ad-sp-4);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  .wb-card-body
-  details:not(:has(> .vc-materials))
-  > summary {
-  margin-bottom: var(--ad-sp-4);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  .character-flow
-  > :not(:has(> .vc-materials))
-  + :not(:has(> .vc-materials)) {
-  margin-top: var(--ad-sp-5);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-danger:not(.vc-materials *) {
-  margin-top: var(--ad-sp-5);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-publish-row {
-  gap: var(--ad-sp-2) var(--ad-sp-4);
-}
-
-/* ---- 预演: the input, then ONE compact row under it — 运行备注 beside the send button and its reason ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--ad-sp-2) var(--ad-sp-3);
-  max-width: var(--ad-w-l);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main > .pw-compose-fields,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main > .pw-sendbar {
-  display: contents;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main .pw-compose-fields > textarea {
-  grid-column: 1 / -1;
-  max-width: none;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main .pw-compose-fields > input {
-  grid-column: 1;
-  max-width: none;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main button.pw-send {
-  width: auto;
-  min-width: 96px;
-  justify-self: start;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pw-compose-main .pw-reason {
-  white-space: nowrap;
-  color: var(--ad-muted);
-  font-size: 13px;
-}
-
-/* ---- page by page: only the gaps, alignments and sizes that sat off the system ---- */
-/* inside a card: one control step (12), a heading and its content a field step (16) at most */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-:is(.ovx-trend, .cs-card, .cc-detail, form.tiers-form, .pi-head, .system-section, .system-metrics, .tiers-form) {
-  gap: var(--ad-sp-3);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .cc-detail-head {
-  margin-bottom: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form h4 {
-  margin-top: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.mb-add,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .members-table-card {
-  margin-block: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .system-section {
-  margin-bottom: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .system-section h3,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pi-head h3 {
-  margin-bottom: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-cocreation.pt-cc {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--ad-sp-3) var(--ad-sp-5);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-cocreation.pt-cc > button {
-  align-self: flex-end;
-  margin-left: auto;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-cocreation .pt-lb {
-  flex: 0 0 auto;
-}
-/* 邀请: one row of fields, labels and fields on shared lines, the button and the checkbox on the field line */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form {
-  align-items: end;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-field {
-  align-self: end;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-field.tiers-test,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-field.tiers-test > label {
-  min-height: var(--ad-h-standard);
-  align-items: center;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-kind {
-  min-height: var(--ad-h-standard);
-  box-sizing: border-box;
-  align-items: center;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-kind-field > .tiers-label {
-  margin: 0;
-}
-
-/* ---- the editable lists of a role (not 声音): handle and × are 32 squares; a row is a control row, not a card with air in it ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wl-row {
-  grid-template-columns: var(--ad-h-compact) 22px minmax(0, 1fr) 116px var(--ad-h-compact);
-  padding: var(--ad-sp-2) var(--ad-sp-3);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wl-weight-wrap {
-  margin-block: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .sl-row {
-  grid-template-columns: var(--ad-h-compact) minmax(0, 1fr) var(--ad-h-compact);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .wb-card .cn-card {
-  grid-template-columns: var(--ad-h-compact) minmax(0, 1fr) var(--ad-h-compact);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  :is(.wl-row, .sl-row, .cn-card, .kv-row)
-  > :is(button.ad-handle, button.ad-remove) {
-  align-self: start;
-  margin-top: var(--ad-sp-1);
-}
-/* 积分发放: the labels, the fields and the send button share their lines */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .pt-bar {
-  align-items: end;
-}
-
-/* ---- small corrections found by the audit ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.cn-x,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.pl-del,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.wl-del {
-  width: var(--ad-h-compact);
-  padding-inline: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) :is(.pl-row) > :is(button.ad-handle, button.ad-remove) {
-  align-self: start;
-  margin-top: var(--ad-sp-1);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.cn-add-wide {
-  width: auto;
-  align-self: flex-start;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) input.cs-pill-input {
-  height: var(--ad-h-compact);
-  min-height: var(--ad-h-compact);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .cc-chip-row {
-  align-items: center;
-}
-
-/* ---- the rail: avatars snap to the top edge of the scroller, so none is left half cut under the top edge or a group count ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-roles {
-  scroll-snap-type: y mandatory;
-  scroll-padding-block: var(--ad-sp-1);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-roles .admin-pick,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .wb-roles .admin-pick-group > h3 {
-  scroll-snap-align: start;
-}
-
-/* ---- second round of small corrections ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  :is(.pl-row, .kv-row)
-  > :is(button.ad-handle, button.ad-remove) {
-  align-self: center;
-  margin-top: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.cn-x {
-  align-self: start;
-  height: var(--ad-h-compact);
-  min-height: var(--ad-h-compact);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  :is(.cc-detail-actions, .cc-answer-actions, .cc-adopt-actions)
-  > button {
-  height: var(--ad-h-compact);
-  min-height: var(--ad-h-compact);
-  padding-inline: 12px;
-  font-size: 13px;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.pw-summary,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .rc-start button.pw-send {
-  width: auto;
-  align-self: flex-start;
-  justify-self: start;
-}
-/* 邀请: the fields keep the width of their class; the row wraps instead of squeezing a number into 72 px */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--ad-sp-3) var(--ad-sp-3);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form [data-w="xs"] {
-  width: var(--ad-w-xs);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form [data-w="s"] {
-  width: var(--ad-w-s);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form [data-w="l"],
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form [data-w="m"] {
-  width: var(--ad-w-m);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form .tiers-form-actions {
-  margin-left: auto;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .models-table :is(th, td):first-child {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-/* sentences under a heading, and the binding form: label → field 4, field → button 12 */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  :is(.system-section, .sys-card, .sys-budget-card)
-  :is(h3, h4)
-  + .admin-hint,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-hint + .admin-hint {
-  margin-top: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .system-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ad-sp-3);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  :is(#admin-bind-start, #admin-bind-finish, #admin-email-login) {
-  gap: var(--ad-sp-3);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) :is(#admin-bind-start, #admin-bind-finish) label {
-  margin-bottom: calc(-1 * var(--ad-sp-2));
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .cn-field {
-  gap: var(--ad-sp-4);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .cs-namecard {
-  margin-top: 0;
-}
-
-/* ---- third round: where an id-weighted page rule still won, the same correction with the page's id ---- */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  #admin-characters
-  :is(.pl-row, .kv-row, .pl-main)
-  > :is(button.ad-handle, button.ad-remove) {
-  align-self: center;
-  margin-top: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  #admin-characters
-  :is(.cn-card, .cn-pair)
-  > :is(button.cn-handle, button.cn-x, button.ad-handle, button.ad-remove) {
-  align-self: start;
-  height: var(--ad-h-compact);
-  min-height: var(--ad-h-compact);
-  width: var(--ad-h-compact);
-  margin-top: var(--ad-sp-1);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .rc-start button.pw-send,
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters button.pw-summary {
-  width: auto;
-  align-self: flex-start;
-  justify-self: start;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-cocreation .cc-chip-row {
-  align-items: center;
-}
-
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
-  #admin-characters
-  .cn-fact
-  > :is(button.cn-handle, button.cn-x) {
-  align-self: start;
-  height: var(--ad-h-compact);
-  min-height: var(--ad-h-compact);
-  width: var(--ad-h-compact);
-  margin-top: var(--ad-sp-1);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-cocreation .cc-chip-row > .cc-star-filter {
-  align-self: center;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .rc-start .pw-sendbar {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  gap: var(--ad-sp-3);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters .rc-start .pw-sendbar > button.pw-send {
-  flex: none;
-  width: auto;
-  min-width: 96px;
-}
-
-/* a hint is a sentence under its heading or field: one control step below it, none above */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) p.admin-hint:not(.vc-materials *) {
-  margin: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) p.admin-hint:not(:last-child):not(.vc-materials *) {
-  margin-bottom: var(--ad-sp-3);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-list h4 {
-  margin-top: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) fieldset.cn-pane {
-  gap: var(--ad-sp-5);
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) p.admin-hint + h4 {
-  margin-top: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) #admin-characters fieldset.cn-pane {
-  gap: var(--ad-sp-5);
-}
-/* an empty confirmation slot takes no row (it was a 24 px gap of nothing between the header and the first card) */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) :is(.models-confirm, .points-confirm):empty {
-  display: none;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .models-card {
-  margin-bottom: 0;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .models-card h4 {
-  margin-top: 0;
-}
-/* the 额度类型 switch keeps its own width: the row wraps before it is squeezed */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-kind-field {
-  flex: none;
-}
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .tiers-kind label {
-  flex: none;
-  padding-inline: var(--ad-sp-3);
 }
 
 /* Part 25a: the Burbur skin of the player site (design/burbur-v2). Player selectors only. Everything here repaints what exists:
