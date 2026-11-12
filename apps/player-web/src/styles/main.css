@@ -13834,6 +13834,10 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   gap: 8px;
   animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
 }
+.account-admin-page.admin-shell .vc-pick .ad-file-button {
+  /* the 24b-6 check wants every label of the editor in one size (13px) */
+  font-size: 13px;
+}
 .account-admin-page.admin-shell .vc-chosen {
   flex: 1 0 100%;
   display: flex;
