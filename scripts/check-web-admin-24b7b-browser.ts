@@ -439,7 +439,7 @@ try {
       await wait(400);
       const json = await page.locator('textarea.admin-json').inputValue();
       check(
-        /selfIdentity|basicInfo|hobbies/.test(json) && !/profileFacts|boundaries/.test(json),
+        /interests/.test(json) && !/profileFacts|boundaries/.test(json),
         `${w}: the JSON box holds the other keys only (${json.slice(0, 160).replace(/\s+/g, ' ')})`,
       );
       await shot('r2-other-settings-empty-and-json');
