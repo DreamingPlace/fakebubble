@@ -440,7 +440,7 @@ try {
       const json = await page.locator('textarea.admin-json').inputValue();
       check(
         /selfIdentity|basicInfo|hobbies/.test(json) && !/profileFacts|boundaries/.test(json),
-        `${w}: the JSON box holds the other keys only`,
+        `${w}: the JSON box holds the other keys only (${json.slice(0, 160).replace(/\s+/g, ' ')})`,
       );
       await shot('r2-other-settings-empty-and-json');
 
@@ -456,8 +456,10 @@ try {
         }
         return out; })()`)) as { group: string; text: string; gap: number; covered: boolean; cut: boolean }[];
       for (const g of rail.filter((x) => x.gap < 1000)) if (g.covered === false || g.cut === false) continue;
-      const bad = rail.filter((g) => g.cut || (g.covered && g.gap > -999 && false));
+      const bad = rail.filter((g) => g.cut);
       check(rail.length >= 1 && bad.length === 0, `${w}: a rail heading is cut off (${JSON.stringify(bad)})`);
+      await page.evaluate("document.querySelector('.wb-roles').scrollTop = 0");
+      await wait(150);
       const covered = await page.evaluate(
         `(() => [...document.querySelectorAll('.admin-pick-group')].filter((g) => { const l = g.querySelector('.admin-pick-head .dc-text span').getBoundingClientRect(); const r = g.querySelector('.admin-pick-list').getBoundingClientRect(); const rail = document.querySelector('.wb-roles').getBoundingClientRect(); return l.bottom > r.top + 1 && l.top >= rail.top && l.bottom <= rail.bottom; }).map((g) => g.dataset.group))()`,
       );
@@ -496,7 +498,7 @@ try {
         ['说话方式', '.cn-pair', '说话方式'],
         ['经历', '.cn-card', '经历'],
         ['其余设定', '.cn-fact', '其余设定'],
-        ['身份与展示', '.pl-row', '身份与展示'],
+        ['身份与展示', '.pl-row:not(.pl-main)', '身份与展示'],
       ];
       for (const [tabName, selector] of rowKinds.map(([a, b]) => [a, b] as const)) {
         await tab(tabName).click();
@@ -529,14 +531,7 @@ try {
         (await page.locator('.sl-row textarea').nth(1).inputValue()) === firstBefore,
         `${w}: Alt+↓ on the handle moves the row`,
       );
-      const said =
-        (await page
-          .locator('.sl-row')
-          .first()
-          .locator('xpath=ancestor::*[contains(@class,"sl")][1]')
-          .locator('[role=status]')
-          .first()
-          .textContent()) ?? '';
+      const said = (await page.locator('.sl [role=status]').first().textContent()) ?? '';
       check(/移到第 2 位/.test(said), `${w}: the move is announced (${said})`);
       await page.keyboard.press('Alt+ArrowUp');
       await wait(300);
