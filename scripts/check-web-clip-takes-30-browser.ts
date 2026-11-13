@@ -332,6 +332,81 @@ async function run(freeTier: boolean) {
       const unknown = page.locator('.vc-issue', { hasText: '未确认 · WEB_PROVIDER_WIRE_MISMATCH' });
       check((await unknown.count()) >= 1, `${at}: the slot does not show 「未确认 · WEB_PROVIDER_WIRE_MISMATCH」`);
       check(calls(/take-generate$/) === failedBefore + 1, `${at}: the failed call was sent more than once`);
+      // Part 30b: 发布 with a slot that is not usable. The summary says so, the dropdown shows times (no ids), and 确认发布此版本
+      // sends nothing: it names the slot.
+      const draftNow = await (await f.post(`characters/${id}/detail`, {})).json();
+      // three finished 预演 of this draft, so the dropdown has a list to show
+      for (const relationship of ['new', 'friend', 'lover']) {
+        await f.post(
+          `characters/${id}/review-start`,
+          {
+            requestId: crypto.randomUUID(),
+            draftRevision: draftNow.draft.revision,
+            profileHash: draftNow.draft.contentHash,
+            relationship,
+            message: '你好',
+          },
+          false,
+        );
+        await wait(1800);
+      }
+      await wait(1500);
+      await open(`characters/${id}`);
+      await tab('发布');
+      await wait(1500);
+      const options = await page
+        .locator('.wb-tab-panel select option, #admin-characters select option')
+        .evaluateAll((nodes: HTMLOptionElement[]) => nodes.map((n) => n.textContent ?? ''));
+      const previewOptions = options.filter((t: string) => /UTC/.test(t));
+      check(previewOptions.length >= 1, `${at}: the 预演 dropdown has no time-labelled option (${options.join('|')})`);
+      check(
+        previewOptions.every((t: string) => /^\d{4}-\d\d-\d\d \d\d:\d\d UTC · 已通过$/.test(t)),
+        `${at}: a 预演 option is not 「时间 · 结果」 (${previewOptions.join('|')})`,
+      );
+      check(!/[0-9a-f]{8}-[0-9a-f]{4}-/.test(options.join(' ')), `${at}: the 预演 dropdown shows an id`);
+      const warn = page.locator('.vc-used-row[data-state="stale"], .vc-used-row[data-state="unapproved"]');
+      check((await warn.count()) === 1, `${at}: the slot that is not usable is not marked`);
+      check(
+        /欢迎 2：.*未批准/.test((await warn.first().textContent()) ?? ''),
+        `${at}: the mark does not read 「欢迎 2：… · 未批准」`,
+      );
+      check(
+        (await page.locator('.vc-used-row[data-state="approved"]').count()) === 2,
+        `${at}: the approved slots are not left unmarked`,
+      );
+      await shot('publish-unapproved-slot');
+      if (shots) {
+        await page
+          .locator('#admin-characters select')
+          .first()
+          .evaluate((el: HTMLSelectElement) => {
+            el.size = el.options.length;
+            el.style.height = 'auto';
+            el.style.borderRadius = '12px';
+          });
+        await shot('publish-preview-dropdown');
+        await page
+          .locator('#admin-characters select')
+          .first()
+          .evaluate(
+            (el: HTMLSelectElement) => (
+              el.removeAttribute('size'), el.style.removeProperty('height'), el.style.removeProperty('border-radius')
+            ),
+          );
+      }
+      const writes = calls(/\/publish$|take-bundle/);
+      await page
+        .locator('.wb-tick:has-text("确认将本版本发布给玩家") input, label:has-text("确认将本版本发布给玩家") input')
+        .first()
+        .check();
+      await wait(300);
+      await page.locator('button:text-is("确认发布此版本")').first().click();
+      await wait(1200);
+      check(calls(/\/publish$|take-bundle/) === writes, `${at}: 发布 sent a request with a slot that is not usable`);
+      check(
+        /欢迎 2 (还没批准|的选用版本已失效，请重录或另选)/.test(await page.locator('body').innerText()),
+        `${at}: the refusal does not name 欢迎 2`,
+      );
     }
   } catch (error) {
     failure = error;

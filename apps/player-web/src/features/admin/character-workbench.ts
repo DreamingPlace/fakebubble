@@ -15,6 +15,7 @@ import {
   type CharacterAdminAction,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { dateTimeText } from './system-format.ts';
+import { publishBlocker, slotLabel, slotState, type SlotState } from './publish-slots.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { versionHistory } from './history/version-history.ts';
 import { draftHistory } from './history/draft-history.ts';
@@ -117,6 +118,12 @@ const stringify = (value: unknown) => (typeof value === 'string' ? value : JSON.
 export function characterAdminError(error: unknown): string | null {
   if (error instanceof AdminFormError) return error.message;
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+  // Part 30b: the server names the slot (欢迎 N / 结束) and nothing else; the standing sentence puts it first.
+  const slot = (error as { detail?: { slot?: unknown } } | null)?.detail?.slot;
+  if (typeof slot === 'string' && /^(欢迎 \d{1,2}|结束)$/.test(slot)) {
+    if (code === 'CLIP_SLOT_NOT_APPROVED') return `${slot} 还没批准。`;
+    if (code === 'CLIP_TAKE_UNUSABLE') return `${slot} 的选用版本已失效，请重录或另选。`;
+  }
   return ERROR_SENTENCES[code] ?? null;
 }
 
@@ -1559,7 +1566,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       const keep = preview.value;
       preview.replaceChildren();
       for (const job of previews()) {
-        const option = el('option', job.previewId);
+        // time and result; the id is only the value
+        const option = el(
+          'option',
+          `${job.createdAt === undefined ? '时间未知' : when(job.createdAt)} · ${previewLabel(job.status)}`,
+        );
         option.value = job.previewId;
         preview.append(option);
       }
@@ -1588,11 +1599,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       used.replaceChildren();
       if (!clips) return;
       // plain text: 「label: take name」 (empty when the slot has no 选用 take)
-      const row = (label: string, value: string, footer: boolean) => {
+      const row = (label: string, value: string, footer: boolean, state: SlotState) => {
         const line = el('div');
         line.className = 'vc-used-row';
+        line.dataset.state = state;
         const k = el('span', `${label}：`),
-          v = el('span', value);
+          v = el('span', state === 'approved' ? value : value ? `${value} · 未批准` : '未批准');
         k.className = 'vc-k';
         v.className = 'vc-used-name';
         v.dataset.used = footer ? 'footer' : 'line';
@@ -1601,7 +1613,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       };
       clips.slots.forEach((slot, index) => {
         const take = slot.takes.find((item) => item.takeId === slot.selectedTakeId);
-        row(slot.kind === 'footer' ? '结束' : `欢迎 ${index + 1}`, take?.name ?? '', slot.kind === 'footer');
+        row(slotLabel(clips!.slots, index), take?.name ?? '', slot.kind === 'footer', slotState(slot));
       });
     };
     onTakes = (value) => {
@@ -1641,12 +1653,17 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         (!pending.has(key) &&
           (!saved || !ack.checked || !(colourOnly || previews().some((p) => p.previewId === preview.value)))),
       async () => {
-        // Part 30: with an approved 选用 take in every slot the bundle is made now; otherwise the server decides (an unchanged
-        // voice and welcome reuse the live approval, anything else says why it cannot be published).
+        // Part 30b: anything but a colour-only change publishes with a bundle made from the approved 选用 takes. A slot that is not
+        // ready stops here, before any request, and says which one; a failed read of the slots is shown as that failure.
         let materialId: string | undefined;
         if (!colourOnly && !pending.has(key)) {
-          const slots = await host.api.takes(target).catch(() => null);
-          if (slots?.ready) materialId = await host.api.takeBundle(target);
+          const slots = await host.api.takes(target);
+          const blocker = publishBlocker(slots);
+          if (blocker) {
+            host.status(`${blocker}。`);
+            return;
+          }
+          if (slots.slots.length) materialId = await host.api.takeBundle(target);
         }
         const result = await exact(
           key,

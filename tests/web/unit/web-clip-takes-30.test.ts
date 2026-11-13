@@ -304,9 +304,11 @@ test('changing line 2 leaves slot 1 and the footer approved; only slot 2 needs a
 
 test('publishing needs an approved 选用 take in every current slot; the bundle is made from them and published; restore reuses it', async (t) => {
   const { f, id, first } = await ready(t);
-  await assert.rejects(f.call(id, 'bundle'), /CHARACTER_MATERIALS_REQUIRED/);
+  // Part 30b, named exception: bundle() no longer answers the generic CHARACTER_MATERIALS_REQUIRED; these two cases are the
+  // specific CLIP_SLOT_NOT_APPROVED (same refusal, same two situations, now naming the slot).
+  await assert.rejects(f.call(id, 'bundle'), /CLIP_SLOT_NOT_APPROVED/);
   for (const key of ['line:line-a', 'line:line-b', 'footer']) await f.gen(id, key);
-  await assert.rejects(f.call(id, 'bundle'), /CHARACTER_MATERIALS_REQUIRED/, 'generated but not approved');
+  await assert.rejects(f.call(id, 'bundle'), /CLIP_SLOT_NOT_APPROVED/, 'generated but not approved');
   await f.approveAll(id);
   const { materialId } = (await f.call(id, 'bundle')) as { materialId: string };
   assert.deepEqual(await f.call(id, 'bundle'), { materialId }, 'an identical unpublished bundle is reused');
@@ -623,4 +625,92 @@ test('migration: three old versions that carry the same clip give one take per s
     ],
   );
   assert.equal(f.raw.get<{ n: number }>('SELECT count(*) n FROM web_clip_takes')!.n, 3);
+});
+
+/** Part 30b: the exact owner shape. Never published, four welcome lines, free tier on (no footer slot). */
+const FOUR = [
+  { id: 'line-1', text: '你好呀', weight: 25 },
+  { id: 'line-2', text: '今天也是你', weight: 25 },
+  { id: 'line-3', text: '好久不见', weight: 25 },
+  { id: 'line-4', text: '想你了呀', weight: 25 },
+];
+async function mixed(t: test.TestContext) {
+  const f = fixture(t, true);
+  f.code('mix-a', 'fish-mix');
+  const first = f.draft('mix-a', (p) => void (p.presentation.welcomes = FOUR));
+  // An old 素材版本, prepared with the pin, carries the clips of 欢迎 3 and 欢迎 4 (and 1, 2).
+  const materialId = f.chars.materialPrepare(f.auth, 'mix-a', {
+    requestId: 'mix-old',
+    draftRevision: first.saved.revision,
+    profileHash: first.saved.contentHash,
+    model: 'pin:s2.1-pro',
+  }).materialId;
+  const wav = syntheticTone().toString('base64');
+  for (const lineId of FOUR.map((l) => l.id))
+    await f.chars.materialUpload(f.auth, 'mix-a', { materialId, kind: 'welcome', lineId, base64: wav });
+  await f.chars.materialApprove(f.auth, 'mix-a', {
+    materialId,
+    acknowledgeRights: true,
+    acknowledgeLines: FOUR.map((l) => l.id),
+    note: '合成',
+  });
+  f.chars.enableMaterials(f.materials); // the import step runs over the existing 素材版本
+  // New takes (unpinned binding) for 欢迎 1 and 欢迎 2, chosen.
+  for (const key of ['line:line-1', 'line:line-2']) {
+    const fresh = await f.gen('mix-a', key);
+    await f.call('mix-a', 'select', { takeId: fresh.takeId });
+  }
+  return { f, id: 'mix-a', first };
+}
+
+test('30b path A: old pin takes (欢迎 3/4) with new takes (欢迎 1/2) bundle and publish; restore reuses the bundle', async (t) => {
+  const { f, id, first } = await mixed(t);
+  const v = await f.view(id);
+  assert.deepEqual(
+    v.slots.map((s) => s.slotKey),
+    ['line:line-1', 'line:line-2', 'line:line-3', 'line:line-4'],
+  );
+  await f.approveAll(id);
+  const { materialId } = (await f.call(id, 'bundle')) as { materialId: string };
+  assert.deepEqual(await f.call(id, 'bundle'), { materialId }, 'the mixed bundle is reused');
+  const row = f.raw.get<{ model: string; evidence_json: string }>(
+    'SELECT model,evidence_json FROM web_character_materials WHERE id=?',
+    materialId,
+  )!;
+  assert.equal(row.model, 's2.1-pro', 'a mixed bundle follows the site model, like every new one');
+  assert.equal(
+    f.raw.all('SELECT 1 FROM web_clip_takes WHERE character_id=? AND binding=?', id, 'pin:s2.1-pro').length,
+    4,
+  );
+  assert.equal((await f.publish(id, first.saved, materialId)).version, 1);
+  const next = f.draft(id, (p) => {
+    p.presentation.welcomes = FOUR;
+    p.template.persona += ' 再改一点';
+    p.template.version = 2;
+  });
+  assert.equal((await f.publish(id, next.saved)).version, 2);
+  const bundles = () =>
+    f.raw.get<{ n: number }>('SELECT count(*) n FROM web_character_materials WHERE character_id=?', id)!.n;
+  const before = bundles();
+  assert.equal(f.chars.restore(f.auth, id, { requestId: 'restore-30b-mixed', version: 1, liveVersion: 2 }).version, 3);
+  assert.equal(bundles(), before, 'a restore makes no new bundle');
+});
+
+test('30b path B: a slot that is not approved is refused with that slot named; a slot whose line changed likewise', async (t) => {
+  const { f, id, first } = await mixed(t);
+  await assert.rejects(
+    f.call(id, 'bundle'),
+    (e: any) => e.code === 'CLIP_SLOT_NOT_APPROVED' && e.detail.slot === '欢迎 1',
+  );
+  await f.approveAll(id);
+  const saved = f.draft(
+    id,
+    (p) => void (p.presentation.welcomes = FOUR.map((l) => (l.id === 'line-3' ? { ...l, text: '换一句新的话' } : l))),
+    first.saved.revision,
+  );
+  await assert.rejects(
+    f.call(id, 'bundle'),
+    (e: any) => e.code === 'CLIP_TAKE_UNUSABLE' && e.detail.slot === '欢迎 3' && Object.keys(e.detail).length === 1,
+  );
+  assert.ok(saved.saved.revision > first.saved.revision);
 });
