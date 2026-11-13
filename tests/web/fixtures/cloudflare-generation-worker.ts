@@ -21,6 +21,17 @@ class SyntheticWebSession extends WebIsolatedGenerationSession {
       async (url, init) => {
         const speech = String(url).includes('fish.audio');
         const body = JSON.parse(String(init!.body));
+        // Part 30: the plain completion of 按反馈重录 (no tools): the DeepSeek answer is faked, the real session code runs.
+        if (!speech && !body.tools) {
+          calls.push('direction');
+          if (mode === 'direction-down') return new Response('{}', { status: 500 });
+          const line = (JSON.parse(body.messages[1].content) as { line: string }).line;
+          return Response.json({
+            id: 'offline-direction',
+            choices: [{ message: { content: `[lazy, drawn out]${line.slice(0, 1)}[small laugh]${line.slice(1)}` } }],
+            usage: { prompt_tokens: 100, completion_tokens: 20 },
+          });
+        }
         calls.push(speech ? 'speech' : body.tools[0].function.name);
         if (mode === 'slow')
           await new Promise<void>((_resolve, reject) => {

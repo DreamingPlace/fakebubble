@@ -14,12 +14,8 @@ import { installWebCharacterMaterials } from '../../../apps/server/characters/we
 import { WebCharacterMaterials } from '../../../apps/server/characters/web-character-materials.ts';
 import { WebAdminSpeech } from '../../../apps/server/characters/web-admin-speech.ts';
 import { WebClipTakes } from '../../../apps/server/characters/web-clip-takes.ts';
-import {
-  CLIP_DIRECTION_PROMPT_SHA256,
-  WebClipDirection,
-  clipPromptHash,
-  type ClipDirectionModel,
-} from '../../../apps/server/characters/web-clip-direction.ts';
+import { WebClipDirection, type ClipDirectionModel } from '../../../apps/server/characters/web-clip-direction.ts';
+import { CLIP_DIRECTION_PROMPT_SHA256, clipPromptHash } from '../../../apps/server/characters/clip-direction-prompt.ts';
 import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { syntheticCharacterReview } from '../fixtures/character-review.ts';
 import type { FakeFish } from '../../../apps/server/generation/web-provider-runner.ts';
@@ -618,6 +614,13 @@ test('migration: three old versions that carry the same clip give one take per s
   assert.equal(f.raw.get<{ n: number }>('SELECT count(*) n FROM web_character_materials')!.n, 3);
   const fresh = new WebClipTakes(f.store as never, f.clock, f.materials);
   const v = fresh.view('old-three') as unknown as View;
-  assert.deepEqual(v.slots.map((s) => [s.takes.length, s.approved]), [[1, true], [1, true], [1, true]]);
+  assert.deepEqual(
+    v.slots.map((s) => [s.takes.length, s.approved]),
+    [
+      [1, true],
+      [1, true],
+      [1, true],
+    ],
+  );
   assert.equal(f.raw.get<{ n: number }>('SELECT count(*) n FROM web_clip_takes')!.n, 3);
 });

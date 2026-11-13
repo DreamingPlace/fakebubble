@@ -261,6 +261,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
   async completePlain(
     input: { system: string; user: string; maxTokens: number },
     signal: AbortSignal,
+    authorize?: () => void | Promise<void>,
   ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string; receipt: unknown }> {
     ensure(!signal.aborted, 'TEXT_REQUEST_ABORTED');
     const body = JSON.stringify({
@@ -274,6 +275,9 @@ export class DeepSeekTextGenerator implements TextGenerator {
         { role: 'user', content: input.user },
       ],
     });
+    // The send gate, exactly as the speech call has one: refused here means nothing was sent.
+    await authorize?.();
+    ensure(!signal.aborted, 'TEXT_REQUEST_ABORTED');
     let response: Response;
     try {
       response = await this.#fetch(this.#policy.endpoint, {

@@ -9,6 +9,8 @@ import type { ProviderMeter } from '../../packages/contracts/provider-calls.ts';
 import type { TextRoute } from '../../packages/contracts/text-route.ts';
 import type {
   WebEmbedRPCResult,
+  WebCompleteRPCResult,
+  WebCompleteWire,
   WebEmbedWire,
   WebGenerationSession,
   WebKnownDraft,
@@ -20,6 +22,7 @@ import {
   WorkersAiEmbeddings,
   type WorkersAiBinding,
 } from '../../apps/server/generation/embedding-provider.ts';
+import { CLIP_DIRECTION_PROMPT, CLIP_DIRECTION_PROMPT_SHA256, clipPromptHash } from '../../apps/server/characters/clip-direction-prompt.ts';
 import type { TextRPCResult, SpeechRPCResult } from '../../packages/contracts/generation-rpc.ts';
 
 export interface WebGenerationEnvironment {
@@ -175,6 +178,41 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
       return { ok: true, value };
     } catch (error) {
       return { ok: false, code: safeCode(error), generation: error instanceof SpeechFailure ? error.generation : null };
+    }
+  }
+  /**
+   * Part 30: one plain completion on the draft model, for the clip-direction rewrite ONLY. The system prompt must be the pinned
+   * text (compared byte for byte AND by hash); any other prompt is refused before anything is sent, so this route cannot be used
+   * to run arbitrary text through the DeepSeek key. The business object has reserved the budget and passes the send gate.
+   */
+  async complete(wire: WebCompleteWire, authorize: () => Promise<void>): Promise<WebCompleteRPCResult> {
+    try {
+      this.begin();
+      wire = structuredClone(wire);
+      ensure(
+        wire.system === CLIP_DIRECTION_PROMPT &&
+          wire.systemSha256 === CLIP_DIRECTION_PROMPT_SHA256 &&
+          clipPromptHash(wire.system) === CLIP_DIRECTION_PROMPT_SHA256 &&
+          typeof wire.user === 'string' &&
+          wire.user.length > 0 &&
+          wire.user.length <= 4000 &&
+          Number.isSafeInteger(wire.maxTokens) &&
+          wire.maxTokens > 0 &&
+          wire.maxTokens <= 1000,
+        'WEB_PROVIDER_WIRE_MISMATCH',
+      );
+      const text = new DeepSeekTextGenerator({
+        apiKey: this.env.DEEPSEEK_API_KEY,
+        fetch: this.fetcher,
+      });
+      const value = await text.completePlain(
+        { system: wire.system, user: wire.user, maxTokens: wire.maxTokens },
+        this.controller.signal,
+        () => callback(authorize),
+      );
+      return { ok: true, value };
+    } catch (error) {
+      return { ok: false, code: safeCode(error) };
     }
   }
   /** One bge-m3 call. The business object has already reserved budget; it stores the vectors this returns. */
