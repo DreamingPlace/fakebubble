@@ -1,4 +1,5 @@
 import { disclosureChevron } from './ui/disclosure.ts';
+import { watchFieldWidths } from './ui/field-width.ts';
 import type { AccountAdminApi, AccountAdminSession } from '../../services/account-admin-api.ts';
 import { REFUSED, UNKNOWN_OUTCOME } from './error-sentences.ts';
 import { characterWorkbench, characterAdminError } from './character-workbench.ts';
@@ -235,6 +236,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <p class="invite-admin-status admin-statusbar sr-only" role="status" aria-live="polite"></p>
   </main>`;
   const q = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
+  // Part 24b-7c: every single-line field gets its width class (docs/ADMIN_LAYOUT.md); layout only.
+  const stopFieldWidths = watchFieldWidths(root);
   const value = (id: string) => q<HTMLInputElement>(`#${id}`).value;
   const statusLine = q<HTMLElement>('.invite-admin-status');
   // Feedback appears where it happened, one message at a time (the toast), and stays readable by a screen reader in the live
@@ -1180,6 +1183,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     toasts.dispose();
     inbox?.dispose();
     for (const cleanup of cleanups) cleanup();
+    stopFieldWidths();
     root.replaceChildren();
   };
 }
