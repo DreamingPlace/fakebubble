@@ -50,7 +50,7 @@ test('24b-7d the date field validates as you type with the shared sentence, and 
   assert.equal(field.value, '');
   assert.equal(field.invalid, true);
   field.input.value = '2026-02-30';
-  field.input.dispatch?.('input');
+  (field.input as unknown as FakeElement).dispatch('input');
   assert.equal(field.problem, DATE_PROBLEM);
   field.input.value = '2026-03-01';
   assert.equal(field.value, '2026-03-01');
@@ -173,10 +173,7 @@ test('24b-7d an error shows its sentence; the code is on hover and behind 复制
   const line = errorLine('WEB_SYSTEM_SOURCES_UNAVAILABLE');
   const words = one(line, '.admin-error-text');
   assert.ok(ERROR_SENTENCES.WEB_SYSTEM_SOURCES_UNAVAILABLE);
-  assert.equal(
-    words.childNodes ? words.textContent.startsWith(ERROR_SENTENCES.WEB_SYSTEM_SOURCES_UNAVAILABLE!) : true,
-    true,
-  );
+  assert.ok(words.textContent.startsWith(ERROR_SENTENCES.WEB_SYSTEM_SOURCES_UNAVAILABLE!));
   assert.doesNotMatch(
     all(line, '*')
       .filter((n) => !n.className.includes('ad-tip'))
