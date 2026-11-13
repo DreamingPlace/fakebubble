@@ -41,6 +41,11 @@ export interface SpeechRequest {
   deliveryStyle?: SpeechDeliveryStyle;
   /** Rendered only for Drama 3; ignored for s2 models. */
   soundCue?: SoundCue;
+  /**
+   * Part 30: `text` with Drama 3 direction markup placed inside the sentence ([direction] groups, <whisper> pairs). Only an
+   * admin take made from feedback carries it; removing the markup must give back `text` exactly (checked by speechPayload).
+   */
+  markup?: string;
 }
 export interface PCMInfo {
   sampleRate: number;

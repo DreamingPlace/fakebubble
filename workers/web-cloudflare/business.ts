@@ -4,6 +4,7 @@ import { WebCharacterDeletion } from '../../apps/server/characters/web-character
 import { WebCharacterPreviews } from '../../apps/server/characters/web-character-preview.ts';
 import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-character-preview-runner.ts';
 import { WebAdminSpeech } from '../../apps/server/characters/web-admin-speech.ts';
+import { WebClipDirection } from '../../apps/server/characters/web-clip-direction.ts';
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -22,6 +23,7 @@ import {
 import {
   WebCloudTextGenerator,
   webCloudEmbeddings,
+  webCloudDirection,
   webCloudSpeech,
 } from '../../apps/server/cloudflare/web-generators.ts';
 import { WebCloudSetup, type WebCloudMaterialPackage } from '../../apps/server/cloudflare/web-setup.ts';
@@ -460,6 +462,16 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         );
         previews.useSpeech(speech);
         app.characterAdmin.enableSpeech(speech);
+        // Part 30: 按反馈重录. The text call goes through the generation Worker (the only provider caller); the budget is
+        // env.BUDGET, reserved before the call; the 预演 runner drives its recovery next to the speech bills.
+        const direction = new WebClipDirection(
+          this.store,
+          this.clock,
+          webCloudDirection(this.env.GENERATION),
+          this.env.BUDGET,
+        );
+        previews.useDirection(direction);
+        app.characterAdmin.enableDirection(direction);
         const execution = new WebCloudExecutor(
           this.context,
           this.store,

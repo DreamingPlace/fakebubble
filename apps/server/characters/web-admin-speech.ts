@@ -138,6 +138,7 @@ export class WebAdminSpeech {
       ...(call.soundCue === undefined ? {} : { soundCue: call.soundCue }),
       // Admin-bound voices were heard and chosen by a person: the same quality guard as a live reply on such a voice.
       userSelected: true,
+      ...(call.markup === undefined ? {} : { markup: call.markup }),
     });
     return { request, prepared: fishSpeechRequest(request, model), model };
   }
@@ -200,6 +201,7 @@ export class WebAdminSpeech {
       input.soundCue ?? null,
       voice,
       ...(input.model === undefined ? [] : [input.model]),
+      ...(input.markup === undefined ? [] : [input.markup]),
     ]);
     const prior = this.byRequest(input.requestId, input.ordinal);
     if (prior) return this.replay(prior, requestHash);
@@ -680,6 +682,8 @@ export type Call = {
   text: string;
   expression?: Expression;
   soundCue?: SoundCue;
+  /** Part 30: `text` with direction markup (a take made from feedback); removing it must give `text` back. */
+  markup?: string;
   /** Overrides the draft's voice (a 素材版本 speaks in the voice it was prepared with). */
   voice?: VoiceIdentity;
   /** The model that will actually speak (a 素材版本's resolved model). Absent: the site's voice model. */

@@ -531,33 +531,48 @@ test('publication requires a successful current proof plus explicit review, then
   assert.equal(calls[0]!.body.previewId, 'proof');
 });
 
+/** Part 30: the answer of take-list for a character with one empty welcome slot. */
+const takeView = (over: Record<string, unknown> = {}) => ({
+  voice: { referenceId: 'ref-1', model: 'drama-3', url: 'https://fish.audio/m/ref-1', speed: 1 },
+  footerRequired: false,
+  speechAvailable: false,
+  directionAvailable: false,
+  ready: false,
+  slots: [
+    {
+      slotKey: 'line:a',
+      kind: 'welcome',
+      lineId: 'a',
+      text: '你好呀',
+      takes: [],
+      selectedTakeId: null,
+      approved: false,
+      issue: null,
+    },
+  ],
+  ...over,
+});
+
 test('file selection never uploads automatically; explicit rights and button are required, late completion after disposal leaves no UI', async (t) => {
+  // Part 30 (named exception): the 素材版本 list is gone, so the slot comes from take-list and the upload goes to take-upload; the
+  // invariant under test is unchanged (choosing a file sends nothing; the rights tick and the 上传 button do).
   const f = fixture(t);
   await f.open();
-  const material = {
-    materialId: 'mat',
-    draftRevision: 3,
-    profileHash: f.detail.draft!.contentHash,
-    approved: false,
-    createdAt: 1,
-    voice: { profileId: 'synthetic', version: 1, referenceId: 'synthetic', model: 's2.1-pro' },
-    assets: [],
-  };
-  f.respond(async () => [material]);
-  await f.click('读取已有成品版本');
-  const file = f.input('选择欢迎成品 WAV');
+  f.respond(async () => takeView());
+  await f.click('读取成品');
+  const file = f.input('选择欢迎 1 WAV');
   file.files = [new File(['offline synthetic not real audio'], 'fixture.wav')];
   file.fire('change');
   await flush();
-  assert.ok(!f.requests.some((r) => r.path.endsWith('/material-upload')));
-  assert.equal(f.button('上传所选欢迎成品').disabled, true);
+  assert.ok(!f.requests.some((r) => r.path.endsWith('/take-upload')));
+  assert.equal(f.button('上传').disabled, true);
   const rights = f.input('这是我有权使用的成品，不是待克隆的原始声音样本');
   rights.checked = true;
   rights.fire('change');
   let done!: (v: unknown) => void;
   f.respond(() => new Promise((r) => (done = r)));
-  await f.click('上传所选欢迎成品');
-  assert.equal(f.requests.at(-1)!.path, 'jojo/material-upload');
+  await f.click('上传');
+  assert.equal(f.requests.at(-1)!.path, 'jojo/take-upload');
   f.dispose();
   done({});
   await flush();
@@ -802,9 +817,10 @@ test('double click never double-submits a single or batch preview', async (t) =>
   gates.splice(0).forEach((g) => g());
 });
 
-test('a new material follows the site voice model unless the admin pins the character back to s2.1-pro', async (t) => {
-  // Part 29 B/E (named exception): the voice is the character's own (one Fish id, derived binding), so there is no referenceId field
-  // to type into and the request carries no model unless pinned (the server resolves the model that will actually speak).
+test('the 声音 tab has no 素材版本 and no pin: a new take follows the site voice model', async (t) => {
+  // Part 30 (named exception, replaces the Part 29 "new material / pin" test): a 素材版本 is no longer on the screen, every take is
+  // generated with the binding that follows the site voice model, so there is nothing to prepare and nothing to pin. The page says
+  // which model will speak (from take-list) and offers 生成 per slot.
   const f = fixture(t);
   f.detail.speech = {
     available: true,
@@ -813,17 +829,11 @@ test('a new material follows the site voice model unless the admin pins the char
     siteModel: 'drama-3',
   };
   await f.open();
-  const prepared: unknown[] = [];
-  f.respond(async (path, body) => {
-    if (path.endsWith('/material-list')) return [];
-    prepared.push(body.model);
-    return { materialId: 'mat-' + prepared.length };
-  });
-  await f.click('准备新素材版本');
-  const pin = f.input('固定使用 s2.1-pro（不跟随站点语音模型）');
-  assert.equal(pin.checked, false, 'unpinned by default');
-  pin.checked = true;
-  pin.fire('change');
-  await f.click('准备新素材版本');
-  assert.deepEqual(prepared, [undefined, 'pin:s2.1-pro']);
+  f.respond(async (path) =>
+    path.endsWith('/take-estimate') ? { ok: false, reason: 'PRICE_MISSING' } : takeView({ speechAvailable: true }),
+  );
+  await f.click('读取成品');
+  assert.match(f.root.textContent, /将用 drama-3 朗读/);
+  assert.doesNotMatch(f.root.textContent, /素材版本|准备新素材版本|固定使用/);
+  assert.equal(f.requests.filter((r) => r.path.endsWith('/material-prepare')).length, 0);
 });

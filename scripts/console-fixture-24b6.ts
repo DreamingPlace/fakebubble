@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { localRuntime, initProviderInstance } from '../apps/server/platform/web-local-config.ts';
 import { WebProviderOffline } from '../apps/server/generation/web-provider-offline.ts';
 import { DomainError } from '../packages/domain/errors.ts';
+import { WebClipDirection } from '../apps/server/characters/web-clip-direction.ts';
 import { WebAdminSpeech } from '../apps/server/characters/web-admin-speech.ts';
 import { WebCharacterPreviewRunner } from '../apps/server/characters/web-character-preview-runner.ts';
 import { WebProviderRunner } from '../apps/server/generation/web-provider-runner.ts';
@@ -159,6 +160,30 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
         },
         { reserve() {}, settle() {} },
         's2.1-pro',
+      ),
+    );
+  // Part 30: 按反馈重录 on the synthetic site: a stand-in text model that places a direction and a laugh inside the line.
+  if (options.speech)
+    previews.useDirection(
+      new WebClipDirection(
+        store,
+        clock,
+        {
+          model: 'deepseek-flash',
+          async completePlain(input) {
+            await sleep(300);
+            const { line } = JSON.parse(input.user) as { line: string };
+            const at = Math.min(2, line.length);
+            return {
+              text: `[lazy, drawn out]${line.slice(0, at)}[small laugh]${line.slice(at)}`,
+              inputTokens: 120,
+              outputTokens: 30,
+              model: 'deepseek-flash',
+              receipt: { id: 'fake-direction' },
+            };
+          },
+        },
+        { reserve() {}, settle() {} },
       ),
     );
   const app = new WebProviderServer(store, config, clock, runner, undefined, previews, { signupEnabled: false });
