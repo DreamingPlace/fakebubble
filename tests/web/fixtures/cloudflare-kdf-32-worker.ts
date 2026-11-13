@@ -8,7 +8,10 @@ import type { WebKdfBinding } from '../../../packages/contracts/web-kdf-rpc.ts';
 // The real entrypoint, exported from the real business Worker script (the same module the deploy uses).
 export { WebKdfService } from '../../../workers/web-cloudflare/business.ts';
 
-type Env = { KDF: WebKdfBinding; PROBE: DurableObjectNamespace<KdfProbe> };
+type Env = {
+  KDF: WebKdfBinding;
+  PROBE: { idFromName(name: string): unknown; get(id: unknown): { fetch(request: Request): Promise<Response> } };
+};
 type Body = { password?: string; encoded?: string | null; kind?: 'admin' | 'player'; inline?: boolean };
 
 /**
@@ -18,6 +21,11 @@ type Body = { password?: string; encoded?: string | null; kind?: 'admin' | 'play
  */
 export class KdfProbe extends DurableObject<Env> {
   private readonly gate = new KdfGate(PLAYER_LIMITS.kdfConcurrent, PLAYER_LIMITS.kdfWaiting);
+  private readonly binding: WebKdfBinding;
+  constructor(ctx: unknown, env: Env) {
+    super(ctx, env);
+    this.binding = env.KDF;
+  }
   async fetch(request: Request) {
     const url = new URL(request.url);
     if (url.pathname === '/poll') return Response.json({ ok: true });
@@ -25,12 +33,12 @@ export class KdfProbe extends DurableObject<Env> {
     // The entrypoint called directly, past the client's policy: what a malformed call looks like from the far side.
     if (url.pathname === '/raw-hash') {
       try {
-        return Response.json({ hash: await this.env.KDF.hash(body.password as string) });
+        return Response.json({ hash: await this.binding.hash(body.password as string) });
       } catch (error) {
         return Response.json({ message: error instanceof Error ? error.message : 'OTHER' }, { status: 400 });
       }
     }
-    const remote = remotePasswords(this.env.KDF),
+    const remote = remotePasswords(this.binding),
       service = body.kind === 'admin' ? remote.admin : remote.player;
     try {
       if (url.pathname === '/hash') {
