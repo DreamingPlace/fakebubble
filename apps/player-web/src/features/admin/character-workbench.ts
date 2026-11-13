@@ -1636,7 +1636,10 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       colourOnly ? '我已核对主色，确认将本版本发布给玩家' : '我已查看资料差异和该预演结果，确认将本版本发布给玩家',
     );
     // The sentence about what publishing does is the hover tip of the confirmation line.
-    if (ack.parentElement) hoverValue(ack.parentElement as HTMLElement, publishNote);
+    // Part 24b-7c: the line shows a short label; the whole sentence stays the label's text (its accessible name) and the hover tip.
+    ack.nextElementSibling?.setAttribute?.('data-short', colourOnly ? '已核对主色' : '已核对差异与预演');
+    if (ack.parentElement)
+      hoverValue(ack.parentElement as HTMLElement, `${ack.nextElementSibling?.textContent ?? ''}。${publishNote}`);
     for (const input of [preview, ack]) guarded(input, () => dirty || pending.has(key) || !can('publish'));
     const publishRow = el('div');
     publishRow.className = 'wb-publish-row';
