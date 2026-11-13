@@ -56,6 +56,7 @@
   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "configure-before-deploy" }],
   "services": [
     { "binding": "BUDGET", "service": "fakebubble-budget", "entrypoint": "WebBudgetService" },
-    { "binding": "GENERATION", "service": "fakebubble-generation", "entrypoint": "WebGenerationService" }
+    { "binding": "GENERATION", "service": "fakebubble-generation", "entrypoint": "WebGenerationService" },
+    { "binding": "KDF", "service": "fakebubble-business", "entrypoint": "WebKdfService" }
   ]
 }

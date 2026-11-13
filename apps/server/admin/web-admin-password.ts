@@ -1,12 +1,22 @@
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
+import { WEB_KDF_LIMITS } from '../../../config/web-v1.ts';
 
 // OWASP's 16 MiB scrypt profile; also exercised in native workerd, not just Node.
 const prefix = 'scrypt-16384-8-5';
 const derive = (password: string, salt: Buffer) =>
   new Promise<Buffer>((resolve, reject) =>
-    scrypt(password, salt, 32, { N: 16384, r: 8, p: 5, maxmem: 32 * 1024 * 1024 }, (error, value) =>
-      error ? reject(error) : resolve(value),
+    scrypt(
+      password,
+      salt,
+      32,
+      {
+        N: WEB_KDF_LIMITS.scryptN,
+        r: WEB_KDF_LIMITS.scryptR,
+        p: WEB_KDF_LIMITS.scryptP,
+        maxmem: WEB_KDF_LIMITS.scryptMaxmemBytes,
+      },
+      (error, value) => (error ? reject(error) : resolve(value)),
     ),
   );
 export function validateAdminPassword(value: unknown): asserts value is string {
@@ -35,12 +45,18 @@ export function validatePlayerPassword(value: unknown): asserts value is string 
     'PLAYER_PASSWORD_INVALID',
   );
 }
-async function hashSecret(password: string) {
+/** What the business object asks of a hasher: a policy-checked hash, and a timing-safe verdict. */
+export interface PasswordService {
+  hash(password: string): Promise<string>;
+  verify(password: string, encoded: string | null): Promise<boolean>;
+}
+/** Part 32: the computation alone, no password policy. The stateless KDF entrypoint runs exactly these two. */
+export async function hashSecret(password: string) {
   const salt = randomBytes(16),
     result = await derive(password, salt);
   return `${prefix}$${salt.toString('hex')}$${result.toString('hex')}`;
 }
-async function verifySecret(password: string, encoded: string | null) {
+export async function verifySecret(password: string, encoded: string | null) {
   const parts = encoded?.split('$');
   ensure(
     !parts ||
@@ -54,7 +70,7 @@ async function verifySecret(password: string, encoded: string | null) {
   const result = await derive(password, Buffer.from(parts?.[1] ?? '0'.repeat(32), 'hex'));
   return timingSafeEqual(result, Buffer.from(parts?.[2] ?? '0'.repeat(64), 'hex')) && encoded !== null;
 }
-export const adminPasswords = {
+export const adminPasswords: PasswordService = {
   async hash(password: string) {
     validateAdminPassword(password);
     return hashSecret(password);
@@ -64,7 +80,7 @@ export const adminPasswords = {
     return verifySecret(password, encoded);
   },
 };
-export const playerPasswords = {
+export const playerPasswords: PasswordService = {
   async hash(password: string) {
     validatePlayerPassword(password);
     return hashSecret(password);
