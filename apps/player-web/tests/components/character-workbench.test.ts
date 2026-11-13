@@ -763,7 +763,8 @@ test('every result card shows its input text, send time, status and bubbles, new
   assert.ok(text.indexOf('较新的输入') < text.indexOf('较旧的输入'), 'newest first');
   // Part 24b-2 exception (named, narrow): the console writes every time as YYYY-MM-DD HH:mm UTC, not in the browser's locale.
   assert.ok(text.includes(dateTimeText(at + 5000)));
-  assert.ok(text.includes('已通过') && text.includes('失败：PROVIDER_REJECTED'));
+  // Named exception (Part 24b-7d): the failed card says the sentence for its code, never the code itself.
+  assert.ok(text.includes('已通过') && text.includes('失败：原因未知') && !text.includes('PROVIDER_REJECTED'));
   assert.ok(text.includes('气泡甲') && text.includes('气泡乙'));
   const full = all(f.root).find((n) => n.tagName === 'details' && n.textContent.startsWith('完整预演与审核数据'));
   assert.ok(full, 'full data stays available');

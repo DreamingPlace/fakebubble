@@ -1,6 +1,7 @@
 import type { CharacterAdminClient } from '../../services/character-admin-api.ts';
 import type { ClipTakes, Slot, Take } from '../../services/clip-takes-api.ts';
 import { ERROR_SENTENCES } from './error-sentences.ts';
+import { copyCodeButton } from './ui/error-line.ts';
 import { AdminFormError, check, el } from './character-form.ts';
 import { paidButton } from './ui/paid-button.ts';
 import { statusBadge } from './ui/status-badge.ts';
@@ -57,7 +58,7 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
   const heard = new Set<string>();
   /** Blob URL by take id + sha (a take's bytes never change). */
   const audioUrls = new Map<string, string>();
-  const sentence = (code: string) => ERROR_SENTENCES[code] ?? code;
+  const sentence = (code: string) => ERROR_SENTENCES[code] ?? '失败，没有更多信息。';
   const reason = (extra = ''): string =>
     env.dirty() ? '先保存草稿' : !env.can('materials') ? '你没有素材权限' : !state?.voice ? '先填 Fish 音色 ID' : extra;
 
@@ -178,10 +179,10 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     if (slot.approved) head.append(statusBadge('已批准', 'ok'));
     block.append(head, el('p', slot.text));
     if (slot.issue) {
-      const badge = statusBadge(`${slot.issue.state === 'unknown' ? '未确认' : '未生成'} · ${slot.issue.code}`, 'warn');
+      const badge = statusBadge(slot.issue.state === 'unknown' ? '结果未确认' : '未生成', 'warn');
       badge.className = `${badge.className} vc-issue`.trim();
-      hoverValue(badge, sentence(slot.issue.state === 'unknown' ? slot.issue.code : slot.issue.code));
-      block.append(badge);
+      hoverValue(badge, sentence(slot.issue.code));
+      block.append(badge, ' ', copyCodeButton(slot.issue.code));
     }
     if (slot.takes.length) {
       const list = el('div');

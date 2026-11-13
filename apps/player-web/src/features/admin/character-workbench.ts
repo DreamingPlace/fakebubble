@@ -29,6 +29,7 @@ import { diffSideBySide, type Piece } from './preview/diff.ts';
 import { ERROR_SENTENCES } from './error-sentences.ts';
 import { unsavedText } from './ui/unsaved.ts';
 import { leaveDialog } from './ui/leave-dialog.ts';
+import { sentenceOf } from './ui/error-line.ts';
 import { formatRoute } from './shell/admin-router.ts';
 import {
   AdminFormError,
@@ -1171,8 +1172,8 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         item.state = 'uncertain';
       } else {
         item.state = 'rejected';
-        item.error = code || (error instanceof Error ? error.message : '请求失败');
-        host.status(characterAdminError(error) ?? `预演未发起：${item.error}`);
+        item.error = code || '';
+        host.status(characterAdminError(error) ?? `预演未发起：${sentenceOf(item.error, '请求没有成功')}`);
       }
     }
     pump(item.characterId);
@@ -1371,7 +1372,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
                       ? '运行中'
                       : item.state === 'uncertain'
                         ? '运行中（回执未确认，可按原请求核对）'
-                        : `失败：${item.error}`
+                        : `失败：${sentenceOf(item.error, '请求没有成功')}`
                 }`,
               ),
             );
@@ -1401,11 +1402,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
               el('p', `发送时间：${job.createdAt === undefined ? '未知' : when(job.createdAt)}`),
               el(
                 'p',
-                `状态：${previewLabel(job.status)}${job.status === 'failed' ? `：${job.errorCode ?? '未知原因'}` : ''} · ${job.previewId}${sameDraft(job, snapshot) ? ' · 当前草稿' : ' · 旧修订'}`,
+                `状态：${previewLabel(job.status)}${job.status === 'failed' ? `：${sentenceOf(job.errorCode, '原因未知')}` : ''}${sameDraft(job, snapshot) ? ' · 当前草稿' : ' · 旧版草稿'}`,
               ),
             );
-            if (job.errorCode && job.status !== 'failed') node.append(el('p', `预演未通过：${job.errorCode}。`));
-            if (job.errorCode) node.append(el('p', '未知调用不能重发或释放。'));
+            if (job.errorCode && job.status !== 'failed')
+              node.append(el('p', `预演未通过：${sentenceOf(job.errorCode)}`));
+            if (job.errorCode) node.append(el('p', '结果未确认的调用不能重发或释放。'));
             for (const text of bubbleTexts(job.result)) node.append(el('p', text));
             if (job.result !== null && job.result !== undefined)
               disclosure(node, '完整预演与审核数据').append(el('pre', stringify(job.result)));
@@ -1709,7 +1711,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     section.append(
       el(
         'p',
-        '不可撤销：删除此人物全部玩家的聊天、记忆和私有音频；不会删除账号、其他人物或已用额度，不释放 UNKNOWN 费用。',
+        '不可撤销：删除此人物全部玩家的聊天、记忆和私有音频；不会删除账号、其他人物或已用额度，不释放结果未确认的预留费用。',
       ),
     );
     button(

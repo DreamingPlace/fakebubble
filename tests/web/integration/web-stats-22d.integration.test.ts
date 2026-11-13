@@ -474,7 +474,8 @@ test('permission gating: chart and spend-by-type need stats.read (the owner alwa
   }
   for (const bad of [
     { metric: 'points', range: '24h' },
-    { metric: 'replies', range: '30d' },
+    // Named exception (Part 24b-7e): 30d is a range now (30d and 90d were added); 60d is still not.
+    { metric: 'replies', range: '60d' },
     { metric: 'replies' },
     { metric: 'replies', range: '7d', extra: 1 },
   ])

@@ -26,7 +26,7 @@ export type ListenHost = {
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
 };
-export const NO_VOICE_REASON = '先填音色 referenceId';
+export const NO_VOICE_REASON = '先填音色编号';
 const REASONS: Record<string, string> = {
   NO_VOICE_REFERENCE: NO_VOICE_REASON,
   PRICE_MISSING: 'Fish 价格未生效，先到「系统」续期价格',

@@ -8559,8 +8559,18 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell .ovx-legend {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   font-size: 13px;
+}
+.account-admin-page.admin-shell .ovx-legend:empty {
+  display: none;
+}
+.account-admin-page.admin-shell .ovx-switches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
 }
 .account-admin-page.admin-shell .ovx-chip {
   display: inline-flex;
@@ -15526,6 +15536,142 @@ button:not(
 /* a number box keeps room for its spin buttons: tighter side padding so 5 digits and a placeholder like 1–10000 fit the xs width */
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) input[type="number"]:not(.vc-materials *) {
   padding-inline: 10px;
+}
+
+/* ---- Part 24b-7d: the one date field, the error line with its 复制代码 action, readable prices. Scoped to the admin shell; 声音 untouched. ---- */
+.account-admin-page.admin-shell .admin-date {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ad-sp-2, 8px);
+}
+.account-admin-page.admin-shell .admin-date-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .admin-date-utc {
+  color: var(--ad-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.account-admin-page.admin-shell .admin-date-picks {
+  display: inline-flex;
+  gap: 4px;
+}
+.account-admin-page.admin-shell .admin-date-problem {
+  flex-basis: 100%;
+  color: var(--ad-danger);
+  font-size: 12.5px;
+}
+.account-admin-page.admin-shell .admin-date-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  box-sizing: border-box;
+  width: 264px;
+  padding: 10px;
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  box-shadow: 0 8px 24px rgb(31 42 38 / 14%);
+}
+.account-admin-page.admin-shell .admin-date-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.account-admin-page.admin-shell .admin-date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.account-admin-page.admin-shell .admin-date-wd {
+  color: var(--ad-muted);
+  font-size: 12px;
+  line-height: 24px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  :is(.admin-date-toggle, .admin-date-pick, .admin-date-nav, .admin-date-day):is(button) {
+  box-sizing: border-box;
+  height: var(--ad-h-compact);
+  min-height: var(--ad-h-compact);
+  padding-inline: 10px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) :is(.admin-date-nav, .admin-date-day):is(button) {
+  width: auto;
+  min-width: var(--ad-h-compact);
+  padding-inline: 0;
+  background: transparent;
+  color: var(--ad-text);
+  border: 1px solid transparent;
+}
+.account-admin-page.admin-shell .admin-date-day.is-today {
+  border-color: var(--ad-border);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-date-day.is-chosen:is(button) {
+  background: var(--ad-primary);
+  color: #fff;
+}
+.account-admin-page.admin-shell .admin-date-day:focus-visible,
+.account-admin-page.admin-shell .admin-date-nav:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 1px;
+}
+.account-admin-page.admin-shell .admin-error-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-copy-code:is(button) {
+  box-sizing: border-box;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ad-muted);
+  background: transparent;
+  border: 1px solid var(--ad-border);
+}
+/* Part 24b-7e: a legend entry of a split is a toggle (click hides or shows its series). */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) button.ovx-chip.is-toggle {
+  box-sizing: border-box;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ad-text);
+  background: transparent;
+  border: 1px solid var(--ad-border);
+  border-radius: 999px;
+}
+.account-admin-page.admin-shell button.ovx-chip.is-toggle.is-off {
+  color: var(--ad-muted);
+  text-decoration: line-through;
+}
+.account-admin-page.admin-shell button.ovx-chip.is-toggle.is-off .ovx-dot {
+  opacity: 0.35;
+}
+.account-admin-page.admin-shell .ov-split-day-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell .ov-split-day-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */

@@ -3,6 +3,7 @@ import { derivePalette, parseColour } from '../brand/character-colour.ts';
 import { ROSTER_COLOURS, whoUses } from './ui/character-colour.ts';
 import { CanonError, canonEditors } from './character-canon.ts';
 import { hoverValue } from './ui/hover-value.ts';
+import { dateField } from './ui/date-field.ts';
 import { evenWeights, upgradeWelcomes, type WelcomeLine } from '../../../../../packages/contracts/web-welcomes.ts';
 import { newLineId, welcomeList } from './welcome-list.ts';
 import { paletteList, type PaletteEntry } from './palette-list.ts';
@@ -377,7 +378,13 @@ export function characterForm(
     max: 100,
     kind: 'short',
   });
-  const birthDate = field(identity, '设定生日（可选）', base.template.birthDate ?? '', { type: 'date' });
+  const birthDate = dateField({ label: '设定生日（可选）', value: base.template.birthDate ?? '' });
+  {
+    const row = el('label');
+    row.dataset.kind = 'short';
+    row.append(el('span', '设定生日（可选）'), birthDate.root);
+    identity.append(row);
+  }
   const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { kind: 'one', max: 500 });
   sec(identity, '颜色');
   const colour = colourField(identity, base.presentation.color, () => onChange(), isNew ? null : base.template.id);

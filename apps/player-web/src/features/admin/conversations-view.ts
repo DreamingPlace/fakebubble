@@ -9,6 +9,7 @@ import { h } from '../cocreation/h.ts';
 import { downloadText } from './preview/export.ts';
 import { dataTable } from './ui/data-table.ts';
 import { toolbar } from './ui/toolbar.ts';
+import { errorLine, sentenceOf } from './ui/error-line.ts';
 
 export const conversationsCopy = {
   title: '测试对话',
@@ -21,7 +22,7 @@ export const conversationsCopy = {
   exportOne: '导出此对话 CSV',
   exportCharacter: '导出该角色全部对话 CSV',
   changed: '审核改动',
-  failedReply: (code: string) => `回复失败 · ${code}`,
+  failedReply: '这条回复没有成功',
   speaker: { player: '玩家', character: '角色', proactive: '角色（主动）' } as const,
   prev: '上一页',
   next: '下一页',
@@ -186,10 +187,12 @@ export function conversationsView(
       { class: `review-line is-${line.speaker}${failed ? ' is-failed' : ''}` },
       h('span', { class: 'review-time', text: line.time }),
       h('span', { class: 'review-speaker', text: conversationsCopy.speaker[line.speaker] }),
-      h('span', {
-        class: 'review-text',
-        text: failed ? conversationsCopy.failedReply(line.errorCode ?? 'UNKNOWN') : line.text,
-      }),
+      failed
+        ? errorLine(line.errorCode, {
+            class: 'review-text',
+            sentence: `${conversationsCopy.failedReply}：${sentenceOf(line.errorCode, '原因未知')}`,
+          })
+        : h('span', { class: 'review-text', text: line.text }),
       line.reviewChanged ? h('span', { class: 'review-changed', text: conversationsCopy.changed }) : null,
     );
   };

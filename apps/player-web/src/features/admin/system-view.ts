@@ -11,6 +11,8 @@ import { opsView } from './ops-view.ts';
 import { warningLine } from './overview-view.ts';
 import { PROVIDER_LABELS, ageText, dateText, dateTimeText, dollars } from './system-format.ts';
 import { hoverValue } from './ui/hover-value.ts';
+import { errorLine, sentenceOf } from './ui/error-line.ts';
+import { priceCell } from './ui/price-format.ts';
 import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { keyValuePanel } from './ui/key-value-panel.ts';
 import { statusBadge } from './ui/status-badge.ts';
@@ -18,11 +20,14 @@ import { pageHead } from './ui/page-head.ts';
 
 const onOff = (value: boolean) => statusBadge(value ? '开' : '关', value ? 'ok' : 'neutral');
 const yesNo = (value: boolean) => statusBadge(value ? '有' : '无', value ? 'ok' : 'neutral');
-const UNIT = { token: '令牌', byte: '字节', call: '次' } as Record<string, string>;
 const KIND_LABELS = { webProvider: '供应商调用', external: '外部调用', embed: '记忆向量化' } as const;
 const BUCKETS = { '<1d': '不到 1 天', '1-7d': '1–7 天', '7-30d': '7–30 天', '>30d': '超过 30 天' } as const;
 
-const priceLabel = (row: SystemPriceRow) => `${row.provider} / ${row.model} / ${row.phase}`;
+/** A value meant for a developer (a step, an error type): kept as it is, in the mono style. */
+const dev = (text: string) => h('span', { class: 'admin-dev is-mono', text });
+/** Provider and model are names (shown as they are); the stage is a word, its raw name is on hover. */
+const priceLabel = (row: SystemPriceRow) =>
+  h('span', { class: 'admin-dev is-mono', text: `${row.provider} / ${row.model} / ${row.phase}` });
 /** The words of the 预算充值 confirmation: provider, amount and what will remain. */
 const topUpMessage = (row: SystemBudgetRow, amount: number) =>
   `向 ${PROVIDER_LABELS[row.provider]} 的预算增加 $${amount}。充值后剩余 ${dollars((row.remainingMicros ?? 0) + amount * 1_000_000)}。`;
@@ -115,7 +120,7 @@ export function systemView(
           const ok = await deps.confirm(
             {
               title: '确认续期价格',
-              message: `将运行与运维命令 renew-prices 相同的续期：现有 ${due} 项价格在 60 天内到期或已过期，会各追加一条新的 90 天价格；其余保持不变。重复点击不会产生重复价格。`,
+              message: `将运行与运维人员命令行里相同的续期：现有 ${due} 项价格在 60 天内到期或已过期，会各追加一条新的 90 天价格；其余保持不变。重复点击不会产生重复价格。`,
               confirmLabel: '确认续期',
             },
             renewHost,
@@ -131,10 +136,10 @@ export function systemView(
     return section(
       '价格',
       table(
-        ['供应商 / 模型 / 阶段', '微美元 / 单位', '版本', '到期（UTC）', '状态'],
+        ['供应商 / 模型 / 阶段', '价格', '版本', '到期（UTC）', '状态'],
         v.prices.map((row) => [
           priceLabel(row),
-          `${row.upperMicrosPerUnit} µ$ / ${UNIT[row.unit] ?? row.unit}`,
+          priceCell(row.upperMicrosPerUnit, row.unit, `版本 v${row.version}`),
           `v${row.version}`,
           dateText(row.validUntil),
           row.state === 'expired'
@@ -156,9 +161,13 @@ export function systemView(
       table(
         ['供应商 / 模型 / 阶段', '结果', '价格', '版本', '到期（UTC）'],
         renewal.rows.map((row) => [
-          `${row.provider} / ${row.model} / ${row.phase}`,
+          dev(`${row.provider} / ${row.model} / ${row.phase}`),
           row.result === 'renewed' ? '已续期' : row.result === 'not-due' ? '未到期' : '已存在',
-          `${row.upperMicrosPerUnit} µ$`,
+          priceCell(
+            row.upperMicrosPerUnit,
+            view?.prices.find((p) => p.provider === row.provider && p.model === row.model && p.phase === row.phase)
+              ?.unit ?? 'token',
+          ),
           `v${row.version}`,
           dateText(row.validUntil),
         ]),
@@ -168,7 +177,14 @@ export function systemView(
 
   const budgetSection = (v: SystemStatusView) => {
     if (!v.budget.available)
-      return section('预算', h('p', { class: 'admin-hint', text: `暂时读不到预算服务（${v.budget.error}）。` }));
+      return section(
+        '预算',
+        h(
+          'p',
+          { class: 'admin-hint' },
+          errorLine(v.budget.error, { sentence: sentenceOf(v.budget.error, '暂时读不到预算服务。') }),
+        ),
+      );
     const rows = v.budget.rows;
     return section(
       '预算',
@@ -293,12 +309,19 @@ export function systemView(
       ]),
     );
     version.classList.add('sys-version');
-    const unknown = section(
-      'UNKNOWN',
+    // The heading's own text stays the heading; what it means is its hover (a title).
+    const unknownHead = h('h3', {
+      text: '结果未知的调用',
+      attrs: { title: '调用已发出，但没有收到明确结果。这类调用不会重发，预留的额度也不会释放。' },
+    });
+    const unknown = h(
+      'section',
+      { class: 'system-section' },
+      unknownHead,
       table(
         ['类别', '数量', '最早的已过'],
         v.unknown.map((kind) => [KIND_LABELS[kind.kind], String(kind.count), ageText(kind.oldestAgeMs)]),
-        'UNKNOWN 调用',
+        '结果未知的调用',
       ),
     );
     const security = section(
@@ -330,20 +353,24 @@ export function systemView(
             'div',
             { class: 'sys-failures' },
             table(
-              ['阶段 phase', '语句组 sub', '表 table', '错误类 errorName', '信息形状 messageShape', '连续失败'],
+              ['阶段', '语句组', '数据表', '错误类型', '信息形状', '连续失败'],
               v.retention.failures.map((f) => [
-                f.phase,
-                f.sub,
+                dev(f.phase),
+                dev(f.sub),
                 // Part 24h: the table (or check label) a WEB_RETENTION_UNEXPECTED_WORLD_DATA refusal names; absent for every other failure.
                 f.table
                   ? hoverValue(
-                      h('span', { class: 'sys-table-cell' }, h('span', { class: 'sys-table-name', text: f.table })),
+                      h(
+                        'span',
+                        { class: 'sys-table-cell' },
+                        h('span', { class: 'sys-table-name admin-dev', text: f.table }),
+                      ),
                       f.table,
                       true, // the failures table scrolls sideways inside its card: the bubble is placed in the viewport, never clipped
                     )
                   : h('span', { class: 'sys-table-none', text: '—' }),
-                f.errorName,
-                f.messageShape,
+                dev(f.errorName),
+                dev(f.messageShape),
                 `${f.count} 次`,
               ]),
               '清理失败明细（不含任何 id）',

@@ -2,6 +2,7 @@ import type { InviteBatch, InviteBatchCode, NewInviteBatch } from '../../service
 import { h } from '../cocreation/h.ts';
 import { dangerZone } from './ui/danger-zone.ts';
 import { exactCount, hoverValue } from './ui/hover-value.ts';
+import { dateField } from './ui/date-field.ts';
 import { chevron } from './ui/open-table.ts';
 import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { fillStatus, pageHead } from './ui/page-head.ts';
@@ -141,7 +142,18 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   const cap = num('tiers-cap', 1, TIER_FORM.capMax, String(TIER_FORM.defaultCap));
   const duration = num('tiers-duration', 1, TIER_FORM.durationMax);
   duration.setAttribute('placeholder', '长期');
-  const redeemBy = h('input', { attrs: { id: 'tiers-redeem-by', type: 'date', 'aria-label': '兑换截止日期（UTC）' } });
+  // Part 24b-7d: the console's one date field; the value is the same YYYY-MM-DD string the native input gave.
+  const redeemBy = dateField({
+    id: 'tiers-redeem-by',
+    label: '兑换截止日期',
+    utc: true,
+    quickPicks: [
+      { label: '7 天', days: 7 },
+      { label: '30 天', days: 30 },
+      { label: '90 天', days: 90 },
+      { label: '不限', days: null },
+    ],
+  });
   // Part 22d: a test batch (测试组) is marked here, at creation, and never changed afterwards.
   const testBox = h('input', { attrs: { type: 'checkbox', id: 'tiers-test' } });
   const testField = h(
@@ -179,7 +191,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     ),
     refillFields,
     field('tiers-duration', '有效天数', duration),
-    field('tiers-redeem-by', '兑换截止 UTC', redeemBy),
+    field('tiers-redeem-by', '兑换截止', redeemBy.root),
     testField,
     problem,
     h('div', { class: 'tiers-form-actions' }, create),
@@ -281,7 +293,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
           'span',
           { class: 'iv-redeemed' },
           bar,
-          h('span', { class: 'iv-fig', text: `${batch.redeemed} / ${batch.codes}` }),
+          h('span', { class: 'iv-fig', text: `${exactCount(batch.redeemed)} / ${exactCount(batch.codes)}` }),
         ),
         `已兑换 ${exactCount(batch.redeemed)} 个 · ${pct}% · 未使用 ${exactCount(unusedOf(batch))}`,
       );
@@ -683,6 +695,7 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
         return `有效天数需要是 1–${TIER_FORM.durationMax}。`;
     }
     let by: number | null = null;
+    if (redeemBy.invalid) return redeemBy.problem;
     if (redeemBy.value) {
       by = Date.parse(`${redeemBy.value}T23:59:59.999Z`);
       if (!Number.isSafeInteger(by) || by <= Date.now()) return '兑换截止日期需要是今天之后。';

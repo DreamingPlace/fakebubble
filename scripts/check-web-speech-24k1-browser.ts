@@ -9,7 +9,7 @@ import { startConsoleFixture } from './console-fixture-24b6.ts';
  *   - 声音 (Part 30: slots and takes, no 素材版本): each empty slot offers 生成 next to the upload. The first click only asks (amber, the cost on
  *     the button, the API not called); the second sends; the take lands in the slot marked 生成 with its own player; 批准 stays off until the human ticks;
  *   - 预演: a succeeded row opens with 试听: first click asks, second speaks the final bubbles and plays them; afterwards a free 播放 replaces
- *     the paid button (no second charge); a character without a voice reference shows the button off with 「先填音色 referenceId」;
+ *     the paid button (no second charge); a character without a voice reference shows the button off with 「先填音色编号」;
  *   - no sideways scroll, no layer opened, nothing outside its box.
  * `--baseline` runs the same site WITHOUT the speech path (the page as it was before this Part) and only takes the two "before" shots.
  *
@@ -240,8 +240,8 @@ try {
       const off = quiet.locator('[data-pw-send^="listen-"]');
       check(await off.isDisabled(), `预演 ${at}: 试听 is on without a voice reference`);
       check(
-        ((await quiet.locator('.pw-listen .pw-reason').innerText()) as string).trim() === '先填音色 referenceId',
-        `预演 ${at}: the reason is not 「先填音色 referenceId」`,
+        ((await quiet.locator('.pw-listen .pw-reason').innerText()) as string).trim() === '先填音色编号', // Part 24b-7d (named exception): was 「先填音色 referenceId」
+        `预演 ${at}: the reason is not 「先填音色编号」`,
       );
       await page.evaluate(() => document.querySelector('.pw-listen')?.scrollIntoView({ block: 'center' }));
       await shot(`listen-disabled-${at}`);

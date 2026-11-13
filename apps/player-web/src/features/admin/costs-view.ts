@@ -21,6 +21,9 @@ import { fillStatus, pageHead, statusLine } from './ui/page-head.ts';
 const usd = (micros: number | null) => (micros === null ? '—' : `$${(micros / 1_000_000).toFixed(4)}`);
 export const rmb = (fen: number) => `¥${(fen / 100).toFixed(2)}`;
 const PHASES = { draft: '草稿', review: '审核', speech: '语音' } as const;
+/** Provider and model are developer values (mono style, `.admin-dev`); the stage is a word. */
+const modelPhase = (provider: string, model: string, phase: keyof typeof PHASES) =>
+  h('span', {}, h('span', { class: 'admin-dev is-mono', text: `${provider} / ${model}` }), ` / ${PHASES[phase]}`);
 
 /** 消耗表 splits a day's spend by who the reply was for, or by text and voice. There is no 管理员: nothing links one to a player. */
 export type SpendSplit = 'user' | 'kind';
@@ -137,7 +140,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
       label: '供应商 / 模型 / 阶段',
       width: 'minmax(300px, 2.4fr)',
       mono: true,
-      cell: (r) => `${r.provider} / ${r.model} / ${PHASES[r.phase]}`,
+      cell: (r) => modelPhase(r.provider, r.model, r.phase),
     },
     {
       key: 'calls',
@@ -271,7 +274,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
       ...(row.calls.length
         ? row.calls.map((c) =>
             line([
-              `${c.provider} / ${c.model} / ${PHASES[c.phase]}`,
+              modelPhase(c.provider, c.model, c.phase),
               exactCount(c.calls),
               dash(c.inputTokens, c.phase !== 'speech'),
               dash(c.outputTokens, c.phase !== 'speech'),
@@ -307,7 +310,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
   const splitSwitch = segmented(
     '拆分方式',
     [
-      { id: 'user' as SpendSplit, label: '按用户' },
+      { id: 'user' as SpendSplit, label: '按玩家类型' },
       { id: 'kind' as SpendSplit, label: '文字 / 语音' },
     ],
     split,
@@ -332,7 +335,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
   const chips = h('div', { class: 'cost-chips', attrs: { role: 'group', 'aria-label': '显示哪些' } });
   const alertKey = h('span', { class: 'cost-alert-key', hidden: true }, h('i'), h('span'));
   const chart = xyChart();
-  const empty = h('p', { class: 'ovx-empty', text: '还没有按用户的花费记录。', hidden: true });
+  const empty = h('p', { class: 'ovx-empty', text: '还没有按玩家类型的花费记录。', hidden: true });
   const chartCard = h(
     'section',
     { class: 'ov-card cost-chart', attrs: { 'aria-label': '每天花费' }, hidden: true },
@@ -409,7 +412,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
                   (s) =>
                     `${s.name}  ${s.values[i] == null ? '—' : exactMoney(micros(s.values[i]!))}${s.on ? '' : '（已隐藏）'}`,
                 )
-              : ['这一天没有按用户的记录']),
+              : ['这一天没有按玩家类型的记录']),
           ];
         },
       },
@@ -430,7 +433,7 @@ export function costsView(root: HTMLElement, deps: CostsDeps) {
           h('b', { text: s.sum === null ? '—' : cents(s.sum) }),
         );
         chip.style.setProperty('--c', s.color);
-        hoverValue(chip, s.sum === null ? '这段时间没有按用户的记录' : exactMoney(micros(s.sum)));
+        hoverValue(chip, s.sum === null ? '这段时间没有按玩家类型的记录' : exactMoney(micros(s.sum)));
         chip.addEventListener('click', () => {
           if (off.has(s.id)) off.delete(s.id);
           else off.add(s.id);
