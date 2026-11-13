@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Part 31 · 头像与落地卡片 · 设计板（待站长确认）</title>
+<style>
+:root{
+  --paper:#FAF8F6; --ink:#1A1822; --muted:#6B6678; --line:#E6E1EA; --canvas:#EFEBF3; --accent:#E8561E;
+  --ease:cubic-bezier(.2,.7,.2,1);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--canvas);color:var(--ink);font:14px/1.5 -apple-system,"PingFang SC","Noto Sans SC",system-ui,sans-serif;
+  background-image:radial-gradient(#d9d3e0 1px,transparent 1px);background-size:24px 24px}
+header.top{padding:32px 40px 8px}
+header.top h1{margin:0;font-size:22px}
+header.top p{margin:4px 0 0;color:var(--muted);max-width:920px}
+.canvas{display:flex;flex-wrap:wrap;gap:40px;padding:24px 40px 80px;align-items:flex-start}
+.board{display:flex;flex-direction:column;gap:10px}
+.board>h2{margin:0;font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.02em}
+.board>h2 b{color:var(--ink)}
+.frame{background:var(--paper);border-radius:28px;box-shadow:0 1px 0 #fff inset,0 18px 40px rgb(40 30 60 / 14%);overflow:hidden;position:relative}
+.m{width:390px;height:844px}
+.d{width:1100px;height:690px}
+/* page backdrop: the soft clouds of the real page */
+.cloud{position:absolute;inset:auto -10% -12% -10%;height:34%;background:radial-gradient(60% 80% at 50% 100%,#f9a1ee 0%,rgba(249,161,238,0) 70%);filter:blur(12px)}
+.top-bar{position:absolute;top:18px;left:20px;right:20px;display:flex;justify-content:space-between;align-items:center}
+.wordmark{font:600 26px/1 "Courier New",monospace;letter-spacing:-.04em}
+.small{color:var(--muted);font-size:12px}
+/* the card */
+.card{position:absolute;left:50%;top:76px;width:300px;height:640px;margin-left:-150px;border-radius:34px;background:#fff;border:9px solid #F6F3F1;
+  background-image:repeating-linear-gradient(135deg,rgba(124,77,235,.07) 0 22px,transparent 22px 44px);box-shadow:0 12px 30px rgb(60 40 90 / 14%)}
+.card.side{width:250px;height:560px;top:110px;opacity:.55;transform:scale(.94)}
+.card.l{margin-left:-300px}.card.r{margin-left:50px}
+.d .card{top:50px;height:560px;width:290px;margin-left:-145px}
+.d .card.side{height:480px;width:240px;top:88px}
+.d .card.l{margin-left:-440px}.d .card.r{margin-left:200px}
+.face-top{display:flex;justify-content:space-between;padding:14px 18px 0;font:12px "Courier New",monospace;color:#5a5566}
+.portrait{margin:36px auto 0;width:148px;height:148px}
+.name{margin:16px 0 0;text-align:center;font-size:34px;font-weight:700;letter-spacing:.02em}
+.latin{display:block;text-align:center;font:italic 14px Georgia,serif;color:var(--tone,#8a4fe0);margin-top:2px}
+.desc{margin:14px 26px 0;text-align:center;color:#4b4658;font-size:14px}
+.pill{margin:22px auto 0;width:168px;height:40px;border-radius:20px;background:var(--tone,#8a4fe0);color:#fff;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px}
+/* avatars */
+.av{position:relative;border-radius:50%;display:grid;place-items:center;flex:none;color:var(--ink);font-weight:600;
+  background:linear-gradient(135deg,var(--f1,#FA94EC),var(--f2,#FBD5E3))}
+.av.ring{padding:0;box-shadow:0 0 0 2.5px var(--paper),0 0 0 5px var(--ra,#DA0B95)}
+.av.ring3{box-shadow:0 0 0 3px #fff,0 0 0 6px var(--ra,#DA0B95),0 0 0 9px #fff,0 0 0 12px var(--rb,#FA94EC)}
+.av .ph{position:absolute;inset:0;border-radius:50%;overflow:hidden;background-size:cover;background-position:center}
+.av .ph.a{background:radial-gradient(circle at 50% 36%,#f7d4c2 0 21%,transparent 22%),radial-gradient(ellipse at 50% 112%,#6c5aa8 0 44%,transparent 45%),linear-gradient(160deg,#ffd9a8,#f59bd0)}
+.av .ph.b{background:radial-gradient(circle at 50% 38%,#e9c3a5 0 22%,transparent 23%),radial-gradient(ellipse at 50% 112%,#2f7bea 0 46%,transparent 47%),linear-gradient(160deg,#c9f1e6,#97c8f5)}
+.av .ph.c{background:radial-gradient(circle at 50% 36%,#f2d0c0 0 21%,transparent 22%),radial-gradient(ellipse at 50% 112%,#d3463a 0 45%,transparent 46%),linear-gradient(160deg,#ffe6c9,#ffb295)}
+.av.sm{width:36px;height:36px;font-size:15px}.av.xs{width:30px;height:30px;font-size:13px}.av.md{width:56px;height:56px;font-size:22px}.av.lg{width:148px;height:148px;font-size:56px}
+/* orbit row */
+.orbit{position:absolute;left:0;right:0;bottom:64px;height:120px}
+.orbit .av{position:absolute;transform:translate(-50%,0)}
+.hint{position:absolute;left:0;right:0;bottom:26px;text-align:center;color:var(--muted);font-size:12px}
+/* chat */
+.chat-head{display:flex;align-items:center;gap:10px;padding:46px 18px 12px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.7)}
+.chat-head .t{font-weight:700;font-size:17px;margin-left:2px}
+.chat-head .back{width:30px;color:#4b4658;font-size:20px}
+.msgs{padding:18px;display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:8px;align-items:flex-end}
+.row.me{justify-content:flex-end}
+.bubble{max-width:236px;padding:10px 14px;border-radius:18px;background:#fff;box-shadow:0 1px 0 rgb(0 0 0 / 5%);font-size:14px}
+.row.me .bubble{background:#2a2433;color:#fff}
+.stack{display:flex;flex-direction:column;gap:4px}
+.composer{position:absolute;left:14px;right:14px;bottom:24px;height:46px;border-radius:23px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;padding:0 16px;color:#9a95a8}
+/* states */
+.states{display:grid;grid-template-columns:repeat(4,160px);gap:24px;padding:28px 28px 8px;width:760px}
+.state{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.state p{margin:0;font-size:12px;color:var(--muted)}
+.state b{font-size:13px;color:var(--ink)}
+.shimmer{background:linear-gradient(110deg,#ece7f2 30%,#f8f5fb 50%,#ece7f2 70%);background-size:200% 100%;animation:sh 1.4s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.fade{animation:fadein 220ms var(--ease) both}
+@keyframes fadein{from{opacity:0}}
+.spec{padding:20px 28px 28px;width:760px}
+.spec table{border-collapse:collapse;width:100%;font-size:13px}
+.spec td,.spec th{border-top:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+.spec th{color:var(--muted);font-weight:500;width:150px}
+.rules{margin:0;padding:0 0 0 18px;font-size:13px;color:#3b3647}
+.rules li{margin:4px 0}
+/* landing storyboard */
+.story{display:grid;grid-template-columns:repeat(4,170px);gap:18px;padding:22px 24px 6px}
+.shot{border-radius:18px;height:200px;background:var(--paper);border:1px solid var(--line);position:relative;overflow:hidden}
+.shot .cap{position:absolute;left:10px;top:8px;font:11px "Courier New",monospace;color:var(--muted)}
+.shot .mini{position:absolute;bottom:14px;left:0;right:0;height:60px}
+.shot .mini .av{position:absolute;transform:translate(-50%,0)}
+.shot .tag{position:absolute;left:10px;bottom:8px;font-size:11px;color:var(--muted)}
+.curve{padding:6px 24px 24px}
+.note{padding:0 24px 20px;margin:0;color:#3b3647;font-size:13px;max-width:740px}
+.badge{display:inline-block;padding:1px 8px;border-radius:10px;background:#EDE7F9;color:#5a39b8;font-size:11px;margin-left:6px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;padding:0 24px 18px;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Part 31 · 头像与落地卡片 <span class="badge">设计板 · 待确认</span></h1>
+  <p>玩家能看到的三处头像（首页卡片、聊天顶栏、消息）和"回到上次看的那张卡"的落地动效。通过后才开始实现。头像一律居中裁成圆，首字母永远是兜底。以下用占位头像示意，真实头像由站长在工作台上传并发布。</p>
+</header>
+<div class="canvas">
+
+<!-- 1 -->
+<section class="board">
+  <h2><b>1 · 首页 · 手机 390</b> 卡片上的头像、底部弧线上的头像</h2>
+  <div class="frame m">
+    <div class="top-bar"><span class="wordmark">burbur</span><span class="small">登录/注册 &nbsp; 我的信息</span></div>
+    <div class="card side l"></div><div class="card side r"></div>
+    <div class="card" style="--tone:#DA0B95">
+      <div class="face-top"><span>burbur</span><span>No.0517</span></div>
+      <div class="portrait"><div class="av lg ring3" style="--ra:#DA0B95;--rb:#FA94EC;"><div class="ph a"></div></div></div>
+      <p class="name">唐小棠</p><span class="latin">Tang Xiaotang</span>
+      <p class="desc">爱画画的高中生，说话很轻，喜欢雨天。</p>
+      <div class="pill">▶ &nbsp;听她说一句</div>
+    </div>
+    <div class="orbit">
+      <div class="av sm" style="left:44px;bottom:32px;opacity:.35;--f1:#C9F1E6;--f2:#97C8F5"><div class="ph b"></div></div>
+      <div class="av sm" style="left:102px;bottom:18px;opacity:.6;--f1:#FFE6C9;--f2:#FFB295"><div class="ph c"></div></div>
+      <div class="av md" style="left:158px;bottom:6px;opacity:.85;--f1:#D5F6EE;--f2:#97C8F5"><span>江</span></div>
+      <div class="av md ring" style="left:195px;bottom:-6px;width:68px;height:68px;--ra:#DA0B95;transform:translate(-50%,0)"><div class="ph a"></div></div>
+      <div class="av md" style="left:232px;bottom:6px;opacity:.85;--f1:#FFE6C9;--f2:#FFB295"><div class="ph c"></div></div>
+      <div class="av sm" style="left:290px;bottom:18px;opacity:.6"><span>叶</span></div>
+      <div class="av sm" style="left:346px;bottom:32px;opacity:.35"><div class="ph b"></div></div>
+    </div>
+    <div class="hint">免费体验 · 回复由AI生成</div>
+    <div class="cloud"></div>
+  </div>
+  <p class="small" style="max-width:390px">卡片上的头像是新增的一块：148 px 圆，叠在名字之上，外面是这个角色已有的三色光环（不改光环）。底部弧线上的圆保持现在的大小和位置，里面从首字母换成头像；没有头像的角色继续显示首字母（上图的"江""叶"）。</p>
+</section>
+
+<!-- 2 -->
+<section class="board">
+  <h2><b>2 · 首页 · 桌面 1440</b> 同一套，弧线更宽</h2>
+  <div class="frame d">
+    <div class="top-bar"><span class="wordmark">burbur</span><span class="small">登录/注册 &nbsp; 我的信息</span></div>
+    <div class="card side l"></div><div class="card side r"></div>
+    <div class="card" style="--tone:#2F7BEA">
+      <div class="face-top"><span>burbur</span><span>No.1102</span></div>
+      <div class="portrait" style="margin-top:26px"><div class="av lg ring3" style="--ra:#2F7BEA;--rb:#97C8F5"><div class="ph b"></div></div></div>
+      <p class="name" style="font-size:30px">JOJO</p><span class="latin" style="color:#2F7BEA">Jojo</span>
+      <p class="desc">合成角色，说话慢一点。</p>
+      <div class="pill" style="width:150px">▶ &nbsp;听他说一句</div>
+    </div>
+    <div class="orbit" style="bottom:36px">
+      <div class="av sm" style="left:330px;bottom:30px;opacity:.35"><span>顾</span></div>
+      <div class="av sm" style="left:420px;bottom:18px;opacity:.55;--f1:#FFE6C9;--f2:#FFB295"><div class="ph c"></div></div>
+      <div class="av md" style="left:500px;bottom:6px;opacity:.85;--f1:#C9F1E6;--f2:#97C8F5"><div class="ph b"></div></div>
+      <div class="av md ring" style="left:550px;bottom:-6px;width:68px;height:68px;--ra:#2F7BEA"><div class="ph b"></div></div>
+      <div class="av md" style="left:600px;bottom:6px;opacity:.85"><div class="ph a"></div></div>
+      <div class="av sm" style="left:680px;bottom:18px;opacity:.55"><span>沈</span></div>
+      <div class="av sm" style="left:770px;bottom:30px;opacity:.35"><span>叶</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section class="board">
+  <h2><b>3 · 聊天 · 手机 390</b> 顶栏头像、消息头像</h2>
+  <div class="frame m">
+    <div class="chat-head"><span class="back">‹</span>
+      <div class="av sm ring" style="--ra:#DA0B95"><div class="ph a"></div></div><span class="t">唐小棠</span></div>
+    <div class="msgs">
+      <div class="row"><div class="av xs"><div class="ph a"></div></div><div class="stack"><div class="bubble">嗯，你来啦。</div><div class="bubble">今天下雨了，我在窗边画画。</div></div></div>
+      <div class="row me"><div class="bubble">画的什么？</div></div>
+      <div class="row"><div class="av xs"><div class="ph a"></div></div><div class="stack"><div class="bubble">一只在屋檐下躲雨的猫。你要看看吗？</div></div></div>
+      <div class="row me"><div class="bubble">要！</div></div>
+      <div class="row"><div class="av xs"><span style="font-size:12px">唐</span></div><div class="bubble" style="color:#8a85a0">（这一条用的是首字母：头像还没加载完或没有头像）</div></div>
+    </div>
+    <div class="composer">回复…</div>
+  </div>
+  <p class="small" style="max-width:390px">顶栏头像 36 px，带 2.5 px 的一圈光环；消息头像 30 px，不带光环（和现在一样，只在一组连续消息的最后一条旁边出现）。玩家自己的头像框不变。头像是装饰：对读屏器仍然只读名字。</p>
+</section>
+
+<!-- 4 -->
+<section class="board">
+  <h2><b>4 · 状态与兜底</b></h2>
+  <div class="frame" style="width:800px">
+    <div class="states">
+      <div class="state"><div class="av md"><span>唐</span></div><b>没有头像</b><p>首字母，今天的样子</p></div>
+      <div class="state"><div class="av md shimmer"></div><b>加载中</b><p>浅色微光，不跳动；首字母先在</p></div>
+      <div class="state"><div class="av md ring fade" style="--ra:#DA0B95"><div class="ph a"></div></div><b>加载完成</b><p>220 ms 淡入，不位移</p></div>
+      <div class="state"><div class="av md"><span>唐</span></div><b>加载失败</b><p>悄悄回到首字母，不报错</p></div>
+    </div>
+    <div class="spec">
+      <table>
+        <tr><th>形状</th><td>圆，居中裁切（服务器已裁成正方形，页面再用 object-fit: cover）。</td></tr>
+        <tr><th>尺寸</th><td>卡片 148 · 弧线 36–68（现有大小）· 顶栏 36 · 消息 30。一份图（最大 512 px），三倍屏也够。</td></tr>
+        <tr><th>光环</th><td>沿用现有角色光环（三色或两色），头像在环内；没有头像时环内是原来的渐变和首字母。</td></tr>
+        <tr><th>加载</th><td>当前卡片和相邻两张立即加载，其余在弧线上滚到近处再加载；同一张图的网址永远不变，浏览器长期缓存。</td></tr>
+        <tr><th>可访问性</th><td>头像是装饰，alt 为空；名字、按钮的读法不变。减少动效时不做淡入。</td></tr>
+        <tr><th>不变</th><td>卡片、聊天、光环、播放条、输入框的位置与大小；没有头像的角色看上去和今天完全一样。</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="board">
+  <h2><b>5 · 落地 · 回到上次看的那张卡</b> 动效故事板（手机 390）</h2>
+  <div class="frame" style="width:880px">
+    <p class="note" style="padding-top:18px"><b>谁看到什么：</b>第一次来的玩家（这台设备没有记录）：第 1 位在正中，和现在的入场一样，没有额外动效。回头的玩家：先看到"第 1 位"的位置，随即转到上次看的那张。设备里只存一个角色编号（和已有的主题、聊天背景同一处），不上传、不进账号。</p>
+    <div class="story">
+      <div class="shot"><span class="cap">t = 0</span><div class="mini">
+        <div class="av md ring" style="left:85px;bottom:0;--ra:#DA0B95"><div class="ph a"></div></div>
+        <div class="av sm" style="left:30px;bottom:12px;opacity:.5"><span>·</span></div>
+        <div class="av sm" style="left:140px;bottom:12px;opacity:.7"><div class="ph b"></div></div></div><span class="tag">第 1 位在中间</span></div>
+      <div class="shot"><span class="cap">t = 140 ms</span><div class="mini">
+        <div class="av md" style="left:60px;bottom:4px;opacity:.9"><div class="ph a"></div></div>
+        <div class="av md ring" style="left:112px;bottom:-2px;--ra:#2F7BEA"><div class="ph b"></div></div>
+        <div class="av sm" style="left:152px;bottom:14px;opacity:.5"><div class="ph c"></div></div></div><span class="tag">弧线开始转，卡片跟着</span></div>
+      <div class="shot"><span class="cap">t = 320 ms</span><div class="mini">
+        <div class="av sm" style="left:30px;bottom:14px;opacity:.5"><div class="ph a"></div></div>
+        <div class="av md" style="left:76px;bottom:4px;opacity:.85"><div class="ph c"></div></div>
+        <div class="av md ring" style="left:100px;bottom:-2px;--ra:#D3463A"><div class="ph c"></div></div></div><span class="tag">减速</span></div>
+      <div class="shot"><span class="cap">t = 520 ms</span><div class="mini">
+        <div class="av md" style="left:45px;bottom:4px;opacity:.85"><div class="ph a"></div></div>
+        <div class="av md ring" style="left:85px;bottom:-4px;--ra:#D3463A;width:68px;height:68px"><div class="ph c"></div></div>
+        <div class="av md" style="left:130px;bottom:4px;opacity:.85"><div class="ph b"></div></div></div><span class="tag">落定，名字扫光一次</span></div>
+    </div>
+    <div class="curve">
+      <svg viewBox="0 0 420 110" width="420" height="110" role="img" aria-label="缓动曲线">
+        <rect x="0" y="0" width="420" height="110" rx="10" fill="#fff" stroke="#E6E1EA"/>
+        <path d="M24 88 C 130 88, 190 20, 396 20" fill="none" stroke="#7C4DEB" stroke-width="2.4"/>
+        <circle cx="24" cy="88" r="3.5" fill="#7C4DEB"/><circle cx="396" cy="20" r="3.5" fill="#7C4DEB"/>
+        <text x="24" y="104" font-size="10" fill="#6B6678">0</text><text x="372" y="104" font-size="10" fill="#6B6678">520 ms</text>
+        <text x="210" y="14" font-size="10" fill="#6B6678" text-anchor="middle">cubic-bezier(.2,.7,.2,1) · 只用 transform 和 opacity</text>
+      </svg>
+    </div>
+    <ul class="rules" style="padding:0 24px 22px 40px">
+      <li>走最短的方向（和现在左右滑动一样），距离再远也是同一个 520 ms，不叠加、不弹跳。</li>
+      <li>如果玩家在转动途中触碰或点了别的卡，立刻交给玩家，不再继续落地。</li>
+      <li>读到的编号只在"是已上线的、这个字符串长得像编号"时才用；否则当作没有，仍是第 1 位。存储被关掉也不影响页面。</li>
+      <li>减少动效：不转，直接落在目标卡，100 ms 淡入。</li>
+      <li>被站长下线或删除的角色：记录当作不存在，不报错，也不清空别的偏好。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="board">
+  <h2><b>6 · 站长怎么排首页顺序</b> 已在后台做好，供对照</h2>
+  <div class="frame" style="width:520px;padding:22px 24px 26px">
+    <p class="small" style="margin:0 0 12px">角色工作台左侧 ⇅「首页顺序」：拖动或 Alt+↑/↓，松手即保存，所有玩家同步生效。第 1 位就是新玩家第一次看到的那张。</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fff">⠿ &nbsp;1 &nbsp;<span style="color:#9b59b6">●</span> 瓜瓜</div>
+      <div style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fff">⠿ &nbsp;2 &nbsp;<span style="color:#aaa">●</span> JOJO</div>
+      <div style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fff">⠿ &nbsp;3 &nbsp;<span style="color:#b5541b">●</span> 陈吉米</div>
+      <div style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fff">⠿ &nbsp;4 &nbsp;<span style="color:#e53">●</span> 周屿</div>
+    </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>
