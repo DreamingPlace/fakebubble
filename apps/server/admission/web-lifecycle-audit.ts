@@ -239,7 +239,9 @@ export function auditWebLifecycleWorld(
   // few documented shells that hold no content or be empty for this world's principals in the cleared phase. An unknown one fails
   // closed with its own name.
   if (phase === 'cleared') {
-    const principals = store.all<{ id: string }>('SELECT id FROM web_principals WHERE world_id=?', worldId).map((row) => row.id);
+    const principals = store
+      .all<{ id: string }>('SELECT id FROM web_principals WHERE world_id=?', worldId)
+      .map((row) => row.id);
     if (principals.length > 0) {
       const marks = principals.map(() => '?').join(',');
       for (const { name } of tables) {
@@ -247,7 +249,10 @@ export function auditWebLifecycleWorld(
         if (principalShells.has(name)) continue;
         const columns = store.all<{ name: string }>(`PRAGMA table_info("${name}")`).map((column) => column.name);
         if (columns.includes('principal_id') && !columns.includes('world_id'))
-          ensureClean(!store.get(`SELECT 1 FROM "${name}" WHERE principal_id IN (${marks}) LIMIT 1`, ...principals), name);
+          ensureClean(
+            !store.get(`SELECT 1 FROM "${name}" WHERE principal_id IN (${marks}) LIMIT 1`, ...principals),
+            name,
+          );
       }
     }
   }

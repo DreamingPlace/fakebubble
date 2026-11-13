@@ -52,6 +52,7 @@ export function arcOrderView(
             class: 'arc-row',
             attrs: {
               'data-id': row.characterId,
+              'data-drag-row': '',
               tabindex: '0',
               'aria-label': `${row.name}，${arcOrderCopy.position(index + 1)}`,
             },
@@ -64,6 +65,13 @@ export function arcOrderView(
       }),
     );
     if (rows.length === 0) list.replaceChildren(h('li', { class: 'admin-empty', text: arcOrderCopy.empty }));
+  };
+  /** The numbers follow a move at once, without rebuilding the rows (so the slide and the focus are kept). */
+  const renumber = () => {
+    list.querySelectorAll<HTMLElement>('.arc-row').forEach((node, index) => {
+      const pos = node.querySelector('.arc-pos');
+      if (pos) pos.textContent = String(index + 1);
+    });
   };
   const load = async () => {
     rows = await deps.api.arcRead();
@@ -78,17 +86,18 @@ export function arcOrderView(
       rows = ids.map((id) => rows.find((r) => r.characterId === id)!).filter(Boolean);
       // the numbers follow the rows at once; the server then says what it saved
       rows = rows.map((row, index) => ({ ...row, position: index + 1 }));
-      paint();
+      renumber();
       void deps.run(async () => {
         try {
           rows = await deps.api.arcSave(ids);
           deps.toast(arcOrderCopy.saved, 'ok');
         } catch (error) {
           rows = before;
+          if (!deps.disposed()) paint();
           deps.toast('首页顺序没有保存，已恢复。', 'warn');
           throw error;
         } finally {
-          if (!deps.disposed()) paint();
+          if (!deps.disposed()) renumber();
         }
       });
     },

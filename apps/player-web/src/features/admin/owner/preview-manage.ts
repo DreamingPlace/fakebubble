@@ -60,8 +60,9 @@ export function previewManage(
     attrs: { type: 'button' },
   });
   const confirmHost = h('div', { class: 'pm-confirm' });
-  const tools = h('div', { class: 'admin-bar pm-tools', hidden: true }, count, all, del);
-  bar.append(h('div', { class: 'admin-bar' }, toggle), tools, confirmHost);
+  const spacer = h('span', { class: 'pm-spacer' });
+  const tools = [spacer, count, all, del];
+  bar.append(h('div', { class: 'pm-bar' }, toggle, ...tools), confirmHost);
   const boxes = new Map<string, HTMLInputElement>();
   const chosen = () => deps.targets().filter((t) => picked.has(t.key) && !t.busy);
   const paint = () => {
@@ -70,7 +71,7 @@ export function previewManage(
     del.disabled = mine.length === 0;
     toggle.textContent = on ? previewManageCopy.done : previewManageCopy.open;
     toggle.setAttribute('aria-pressed', String(on));
-    tools.hidden = !on;
+    for (const node of tools) node.hidden = !on;
   };
   /** Puts a checkbox on every target while the mode is on, and takes them all away when it is off. */
   const sync = () => {
@@ -87,7 +88,8 @@ export function previewManage(
             else picked.delete(t.key);
             paint();
           });
-          const label = h('label', { class: 'pw-tick pm-tick' }, box);
+          // the box sits in the left margin of the run or line (a column of its own), not inside the header's grid
+          const label = h('label', { class: 'pm-tick' }, box);
           t.slot.prepend(label);
           boxes.set(t.key, box);
         }

@@ -1455,7 +1455,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
                     {
                       key: r.runId,
                       el: entry.el,
-                      slot: entry.head,
+                      slot: entry.el,
                       previews: r.itemCount,
                       busy: r.counts.queued + r.counts.generating > 0,
                       isRun: true,

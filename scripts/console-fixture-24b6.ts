@@ -75,7 +75,14 @@ export type FixtureProvider = { draftMs: number; reviewMs: number };
  * Part 29 D: `freeTier: false` turns the free tier OFF (production has it on, and so does this fixture by default): only then does a
  * 结束成品 exist, so the checks that look at the footer slot ask for it.
  */
-export type FixtureOptions = { provider?: FixtureProvider; cdpPort?: number; speech?: boolean; freeTier?: boolean };
+export type FixtureOptions = {
+  provider?: FixtureProvider;
+  cdpPort?: number;
+  speech?: boolean;
+  freeTier?: boolean;
+  /** Part 31: turns 测试对话 on (CHAT_REVIEW_ENABLED) so the owner's deletion and 已关闭账号 can be looked at. */
+  chatReview?: boolean;
+};
 
 export async function startConsoleFixture(options: FixtureOptions = {}) {
   const { parent } = localRuntime();
@@ -90,6 +97,7 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
   // Points and model choice are on (the Models and Points pages, daily-refill batches).
   Object.assign(store, {
     publicFreeTier: options.freeTier !== false,
+    ...(options.chatReview ? { chatReview: true } : {}),
     playerModelChoice: ['deepseek', 'gemini', 'xai'],
   });
   const ledger = new WebProviderOffline(store, clock);

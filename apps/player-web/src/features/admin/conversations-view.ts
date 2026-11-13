@@ -9,6 +9,7 @@ import { h } from '../cocreation/h.ts';
 import { downloadText } from './preview/export.ts';
 import type { OwnerAdminClient } from '../../services/owner-admin-api.ts';
 import { dataTable } from './ui/data-table.ts';
+import { disclosureDetails } from './ui/disclosure.ts';
 import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { segmented } from './ui/segmented.ts';
 import { toolbar } from './ui/toolbar.ts';
@@ -137,9 +138,9 @@ export function conversationsView(
         : {}),
     });
   // The owner's table carries the checkboxes and the delete bar; every other administrator gets the read-only one (the page decides at load).
-  const plainTable = makeTable(false),
-    ownerTable = makeTable(true);
-  ownerTable.root.hidden = true;
+  const plainTable = makeTable(false);
+  // (built the first time the owner opens the list: no other administrator's page holds a checkbox, hidden or not)
+  let ownerTable: ReturnType<typeof makeTable> | null = null;
   let table = plainTable;
   const confirmHost = h('div', { class: 'review-confirm' });
   const characterFilter = toolbar({
@@ -173,7 +174,6 @@ export function conversationsView(
     h('p', { class: 'admin-hint', text: conversationsCopy.hint }),
     confirmHost,
     plainTable.root,
-    ownerTable.root,
     closedNode,
   );
   const pager = h('div', { class: 'review-pager', hidden: true });
@@ -220,10 +220,9 @@ export function conversationsView(
         }),
     );
     const detailsNode = h('details', { class: 'closed-panel', attrs: { open: '' } });
-    const summary = h('summary', { text: conversationsCopy.closedTitle });
+    disclosureDetails(detailsNode, conversationsCopy.closedTitle);
     detailsNode.append(
-      summary,
-      h('div', { class: 'admin-bar' }, h('span', { text: conversationsCopy.closedPolicy }), pick.root),
+      h('div', { class: 'closed-policy' }, h('span', { text: conversationsCopy.closedPolicy }), pick.root),
       hint,
       body,
     );
@@ -292,10 +291,14 @@ export function conversationsView(
     const result = await deps.api.list({ characterId, scope, page: listPage });
     if (deps.disposed()) return;
     const owned = !!deps.owner && deps.isOwner?.() === true;
+    if (owned && !ownerTable) {
+      ownerTable = makeTable(true);
+      plainTable.root.after(ownerTable.root);
+    }
     plainTable.root.hidden = owned;
-    ownerTable.root.hidden = !owned;
+    if (ownerTable) ownerTable.root.hidden = !owned;
     if (closedNode) closedNode.hidden = !owned;
-    table = owned ? ownerTable : plainTable;
+    table = owned && ownerTable ? ownerTable : plainTable;
     setCharacters(result.characters);
     table.setRows(result.rows);
     if (owned && closedLoad) await closedLoad().catch(() => undefined);
@@ -427,7 +430,7 @@ export function conversationsView(
     load,
     clear: () => {
       plainTable.setRows([]);
-      ownerTable.setRows([]);
+      ownerTable?.setRows([]);
       wanted = null;
       open = null;
       detailArea.replaceChildren();
