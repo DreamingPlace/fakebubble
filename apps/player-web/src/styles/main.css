@@ -18817,3 +18817,12 @@ html.theme-fade *::after {
     animation: none;
   }
 }
+
+/* Part 30b: a slot of the 发布 summary that is not approved reads in the warning colour (colour change eases in) */
+.account-admin-page.admin-shell .vc-used-row .vc-used-name {
+  transition: color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .vc-used-row[data-state="unapproved"] .vc-used-name,
+.account-admin-page.admin-shell .vc-used-row[data-state="stale"] .vc-used-name {
+  color: var(--ad-warn);
+}
