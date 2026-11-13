@@ -176,32 +176,46 @@ export class WebClipTakes {
             found.push({ slotKey: `line:${asset.text_version}`, kind: 'welcome', scope: voiceVersion, row: asset });
         }
         for (const clip of found) {
-          const ordinal = this.nextOrdinal(m.character_id, clip.slotKey);
-          const id = `mig-${createHash('sha256').update(`${m.id}|${clip.slotKey}`).digest('hex').slice(0, 40)}`;
-          this.store.run(
-            `INSERT INTO web_clip_takes(id,request_id,character_id,slot_key,ordinal,origin,status,name,note,feedback,markup,body,
-            reference_id,binding,resolved_model,scope_version,sha256,byte_length,duration_ms,audio_bytes,audio_ref_json,call_id,
-            error_code,created_at) VALUES (?,NULL,?,?,?,?,'ready',?,'',NULL,NULL,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?)`,
-            id,
+          // One take per (slot, sha256, voice): a clip identical to a take that is already there (a version that carried it over, a
+          // bundle made from takes) reuses that take; for an approved version the reused take becomes 选用 + approved below.
+          const same = this.store.get<{ id: string }>(
+            `SELECT id FROM web_clip_takes WHERE character_id=? AND slot_key=? AND sha256=? AND reference_id=? AND resolved_model=?
+            AND status='ready' ORDER BY ordinal LIMIT 1`,
             m.character_id,
             clip.slotKey,
-            ordinal,
-            adminSpeechGenerated(this.store, m.character_id, `material-${clip.kind}`, clip.row.sha256)
-              ? 'generated'
-              : 'uploaded',
-            `第 ${ordinal} 条`,
-            clip.row.body,
-            m.reference_id,
-            m.model,
-            made,
-            clip.scope,
             clip.row.sha256,
-            clip.row.byte_length,
-            clip.row.duration_ms,
-            clip.row.audio_bytes,
-            clip.row.audio_ref_json,
-            clip.row.created_at,
+            m.reference_id,
+            made,
           );
+          const id =
+            same?.id ?? `mig-${createHash('sha256').update(`${m.id}|${clip.slotKey}`).digest('hex').slice(0, 40)}`;
+          if (!same) {
+            const ordinal = this.nextOrdinal(m.character_id, clip.slotKey);
+            this.store.run(
+              `INSERT INTO web_clip_takes(id,request_id,character_id,slot_key,ordinal,origin,status,name,note,feedback,markup,body,
+              reference_id,binding,resolved_model,scope_version,sha256,byte_length,duration_ms,audio_bytes,audio_ref_json,call_id,
+              error_code,created_at) VALUES (?,NULL,?,?,?,?,'ready',?,'',NULL,NULL,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?)`,
+              id,
+              m.character_id,
+              clip.slotKey,
+              ordinal,
+              adminSpeechGenerated(this.store, m.character_id, `material-${clip.kind}`, clip.row.sha256)
+                ? 'generated'
+                : 'uploaded',
+              `第 ${ordinal} 条`,
+              clip.row.body,
+              m.reference_id,
+              m.model,
+              made,
+              clip.scope,
+              clip.row.sha256,
+              clip.row.byte_length,
+              clip.row.duration_ms,
+              clip.row.audio_bytes,
+              clip.row.audio_ref_json,
+              clip.row.created_at,
+            );
+          }
           if (approved)
             this.store.run(
               `INSERT INTO web_clip_choices(character_id,slot_key,take_id,approved_sha256,approved_at,updated_at) VALUES (?,?,?,?,?,?)
@@ -870,6 +884,8 @@ export class WebClipTakes {
       picks.push({ kind: slot.kind, lineId: slot.lineId, bytes, sha256: take.sha256! });
     }
     ensure(binding, 'CHARACTER_MATERIALS_REQUIRED');
-    return { materialId: await this.materials.buildBundle(actor, id, binding, picks, authorize) };
+    return { materialId: await this.materials.buildBundle(actor, id, binding, picks, authorize, (materialId) =>
+        void this.store.run('INSERT OR IGNORE INTO web_clip_migrated VALUES (?)', materialId),
+      ) };
   }
 }
