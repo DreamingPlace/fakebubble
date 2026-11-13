@@ -373,7 +373,7 @@ export function systemView(
                 dev(f.messageShape),
                 `${f.count} 次`,
               ]),
-              '清理失败明细（不含任何 id）',
+              '清理失败明细（不含任何编号）',
             ),
           )
         : null;

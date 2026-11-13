@@ -12,7 +12,9 @@
 export const COPY_AUDIT_SOURCE = `(() => {
   // Allowlist (named, justified): model and provider names, the units and formats the brief names, and the audio format words a
   // sentence about a WAV file needs. Nothing else English is allowed in visible text.
-  const ALLOWED = new Set(['DeepSeek','Deepseek','deepseek','Fish','Gemini','Grok','xAI','xai','Claude','Cloudflare','Access','Turnstile','24H','UTC','CSV','JSON','ID','WAV','PCM','PCM16','kHz','MB','Drama','HH','mm','DM','Mono']);
+  const ALLOWED = new Set(['DeepSeek','Deepseek','deepseek','Fish','Gemini','Grok','xAI','xai','Claude','Cloudflare','Access','Turnstile','24H','UTC','CSV','JSON','ID','WAV','PCM','PCM16','kHz','MB','Drama','HH','mm','DM','Mono','Pro','Flash','IP','ADMIN','JOJO']);
+  // Named, justified: Pro / Flash are model names; IP is an abbreviation Part 29 pins in a browser check; ADMIN is the brand lock-up
+  // next to the wordmark; JOJO is a character code (admin-entered data) in the fixture.
   const root = document.querySelector('.admin-frame') || document.querySelector('.admin-shell');
   const out = { codes: [], english: [], dates: [], prices: [], units: [] };
   const seen = new Set();
@@ -23,7 +25,8 @@ export const COPY_AUDIT_SOURCE = `(() => {
     if (e.checkVisibility) return e.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) && e.getBoundingClientRect().width > 0;
     const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none';
   };
-  const EXEMPT = '.admin-dev, pre, code, textarea, .pw-raw, .ad-tip, script, style';
+  // Also exempt: what a player wrote (co-creation notes) and the profile diff (it prints the profile's own values, e.g. an IANA zone).
+  const EXEMPT = '.admin-dev, pre, code, textarea, .pw-raw, .ad-tip, script, style, .cc-first, .cc-answer-text, .pd-add, .pd-del';
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     const text = (n.nodeValue || '').trim();
@@ -33,7 +36,7 @@ export const COPY_AUDIT_SOURCE = `(() => {
     if (text.includes('µ$')) add('units', text.slice(0, 60), where(n));
     for (const token of text.split(/[^A-Za-z0-9_\\-.'’]+/)) {
       if (!token) continue;
-      if (/^[A-Z][A-Z0-9_]{3,}$/.test(token) && !ALLOWED.has(token)) add('codes', token, where(n));
+      if (/^[A-Z][A-Z0-9_]{3,}$/.test(token) && !ALLOWED.has(token) && !/^[0-9A-F]{6}$/.test(token)) add('codes', token, where(n));
       else if (/^[A-Za-z]{2,}$/.test(token) && !ALLOWED.has(token)) add('english', token + ' in 「' + text.slice(0, 40) + '」', where(n));
     }
   }

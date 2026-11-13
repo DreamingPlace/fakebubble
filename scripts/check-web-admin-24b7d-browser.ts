@@ -183,7 +183,7 @@ try {
     await go('overview');
     const press = async (group: string, label: string) => {
       await page
-        .locator(`[aria-label="${group}"] button`, { hasText: new RegExp(`^${label}$`) })
+        .locator(`#admin-overview [aria-label="${group}"] button`, { hasText: new RegExp(`^${label}$`) })
         .first()
         .click();
       await page.waitForTimeout(450);
@@ -194,7 +194,7 @@ try {
         `${size} ${what}: sideways scroll`,
       );
     check(
-      (await page.locator('[aria-label="统计维度"]').count()) === 0,
+      (await page.locator('#admin-overview [aria-label="统计维度"]').count()) === 0,
       `${size}: the 统计表 still has its own switch`,
     );
     for (const span of ['7天', '30天', '90天', '24H']) {
@@ -202,7 +202,9 @@ try {
       for (const metric of ['回复', '聊天人数', '活跃']) {
         await press('指标', metric);
         for (const split of ['全部', '按角色', '按模型']) {
-          const tab = page.locator('[aria-label="分组"] button', { hasText: new RegExp(`^${split}$`) }).first();
+          const tab = page
+            .locator('#admin-overview [aria-label="分组"] button', { hasText: new RegExp(`^${split}$`) })
+            .first();
           const disabled = await tab.isDisabled();
           const expectOff =
             split !== '全部' &&
@@ -225,14 +227,14 @@ try {
             await sideways(name);
             const drawn =
               kind === '饼图'
-                ? await page.locator('.ovx-pie-pane').isVisible()
-                : await page.locator('.ovx-line .xy').isVisible();
+                ? await page.locator('#admin-overview .ovx-pie-pane').isVisible()
+                : await page.locator('#admin-overview .ovx-line .xy').isVisible();
             check(
-              drawn || (await page.locator('.ovx-empty:not([hidden])').count()) > 0,
+              drawn || (await page.locator('#admin-overview .ovx-empty:not([hidden])').count()) > 0,
               `${size} ${name}: nothing drawn`,
             );
             if (split !== '全部' && kind !== '饼图' && span === '30天' && metric === '回复') {
-              const chips = page.locator('.ovx-legend button');
+              const chips = page.locator('#admin-overview .ovx-legend button');
               const n = await chips.count();
               check(n >= 2 && n <= 7, `${size} ${name}: legend has ${n} entries`);
               await chips.first().click();
@@ -245,11 +247,11 @@ try {
                 (await chips.first().getAttribute('aria-pressed')) === 'true',
                 `${size} ${name}: legend click did not show`,
               );
-              const hits = page.locator('.ovx-line .xy-hit');
+              const hits = page.locator('#admin-overview .ovx-line .xy-hit');
               if (await hits.count()) {
                 await hits.nth(Math.floor((await hits.count()) / 2)).hover();
                 await page.waitForTimeout(250);
-                const tip = (await page.locator('.ovx-line .xy-tip').innerText()).replace(/\s+/g, ' ');
+                const tip = (await page.locator('#admin-overview .ovx-line .xy-tip').innerText()).replace(/\s+/g, ' ');
                 check(
                   /合计/.test(tip) && (tip.match(/ 条/g) ?? []).length >= n,
                   `${size} ${name}: the hover shows "${tip.slice(0, 80)}"`,
@@ -271,21 +273,26 @@ try {
             const label =
               split === '全部' ? '玩家统计（按天）' : split === '按角色' ? '玩家统计（按角色）' : '玩家统计（按模型）';
             check(
-              await page.locator(`[aria-label="${label}"]`).isVisible(),
+              await page.locator(`#admin-overview [aria-label="${label}"]`).isVisible(),
               `${size} ${span} ${split}: the table is not ${label}`,
             );
             if (split !== '全部') {
               // every position: the chart's total (the legend's exact figures, from their hover) = the table's 合计 成功
               const chart = await page.evaluate(() =>
-                [...document.querySelectorAll('.ovx-legend button .ad-tip')].reduce(
+                [...document.querySelectorAll('#admin-overview .ovx-legend button .ad-tip')].reduce(
                   (a, t) => a + Number(((t.textContent ?? '').match(/ ([\d,]+) 条/)?.[1] ?? '0').replace(/,/g, '')),
                   0,
                 ),
               );
               const table = await page.evaluate((aria: string) => {
-                const row = document.querySelector(`[aria-label="${aria}"] .is-total`);
+                const row = document.querySelector(`#admin-overview [aria-label="${aria}"] .is-total`);
                 const cells = row ? [...row.querySelectorAll('.ot-cell')] : [];
-                return Number((cells[1]?.textContent ?? '').replace(/[^0-9]/g, '') || -1);
+                return Number(
+                  ((cells[1]?.firstChild?.textContent ?? cells[1]?.textContent ?? '') as string).replace(
+                    /[^0-9]/g,
+                    '',
+                  ) || -1,
+                );
               }, label);
               check(chart === table, `${size} ${span} ${split}: chart total ${chart} != table 合计 成功 ${table}`);
             }

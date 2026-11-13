@@ -530,6 +530,8 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       if (!button) continue;
       const why = splitDisabledReason(id);
       button.disabled = why !== null;
+      // The page re-enables every control after a request; data-locked is the lock it honours.
+      button.dataset.locked = String(why !== null);
       if (why) button.setAttribute('title', why);
       else button.removeAttribute('title');
     }
@@ -544,6 +546,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     const active = metricSwitch.buttons.get('active');
     if (active) {
       active.disabled = span === '24h';
+      active.dataset.locked = String(span === '24h');
       if (span === '24h') active.title = '按小时没有活跃数';
       else active.removeAttribute('title');
     }
