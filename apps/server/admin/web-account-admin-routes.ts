@@ -238,7 +238,7 @@ export async function routeWebAccountAdmin(
     if (path === `${base}/characters/order`) return { status: 200, body: characters.saveOrder(actor, req.body) };
     const match = path.match(
       new RegExp(
-        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-generate|material-audio|material-approve|take-(?:list|audio|estimate|estimate-direction|upload|generate|generate-all|rewrite|select|rename|delete|approve|bundle)|speech-estimate|preview-listen|speech-clips|speech-audio|delete-preview|delete-start|delete-status|history|history-version|draft-history|restore|code-save|checklist-dismiss)$`,
+        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-generate|material-audio|material-approve|take-(?:list|audio|estimate|estimate-direction|upload|generate|generate-all|rewrite|select|rename|delete|approve|bundle)|avatar-upload|avatar-read|speech-estimate|preview-listen|speech-clips|speech-audio|delete-preview|delete-start|delete-status|history|history-version|draft-history|restore|code-save|checklist-dismiss)$`,
       ),
     );
     ensure(match, 'NOT_FOUND');
@@ -281,6 +281,10 @@ export async function routeWebAccountAdmin(
       await characters.materialCarry(actor, id, prepared.materialId);
       return { status: 200, body: prepared };
     }
+    if (match[2] === 'avatar-upload')
+      return { status: 200, body: await characters.avatarUpload(actor, id, body(['base64'])) };
+    if (match[2] === 'avatar-read')
+      return { status: 200, body: await characters.avatarRead(actor, id, body(['avatarId'])) };
     if (match[2] === 'material-upload')
       return {
         status: 200,

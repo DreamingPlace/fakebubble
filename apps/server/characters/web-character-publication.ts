@@ -63,7 +63,8 @@ const dto = (row: Publication) => ({
 /** The profile as the colour-only gate compares it: everything but the colour and the version number it is published under. */
 const withoutColour = (value: WebCharacterProfile) => {
   // Part 24k-2: the palette (主色 + 点缀) is colour too.
-  const { color: _color, palette: _palette, ...presentation } = value.presentation;
+  // Part 31: the picture is no more a change of what the character says than the colour is: it goes live with 发布 and needs no 预演.
+  const { color: _color, palette: _palette, avatar: _avatar, ...presentation } = value.presentation;
   return { template: { ...value.template, version: 0 }, presentation };
 };
 
@@ -130,7 +131,8 @@ export function publishWebCharacter(
         live &&
           (profile.presentation.color !== live.presentation.color ||
             JSON.stringify(profile.presentation.palette ?? null) !==
-              JSON.stringify(live.presentation.palette ?? null)) &&
+              JSON.stringify(live.presentation.palette ?? null) ||
+            (profile.presentation.avatar?.id ?? null) !== (live.presentation.avatar?.id ?? null)) &&
           contentHash(withoutColour(profile)) === contentHash(withoutColour(live)),
         'VALID_PREVIEW_REQUIRED',
       );

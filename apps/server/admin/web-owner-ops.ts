@@ -6,7 +6,12 @@ import { publishedWebCharacters } from '../characters/web-character-catalog.ts';
 import { purgeAdminSpeechAudio } from '../characters/web-admin-speech-schema.ts';
 import { deleteLiveConversation, conversationBusy } from '../characters/web-conversation-deletion.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
-import { chatReviewTablesExist, deleteArchivedChats, deleteArchivedTranscript, REVIEW_ALPHABET } from '../review/web-chat-review.ts';
+import {
+  chatReviewTablesExist,
+  deleteArchivedChats,
+  deleteArchivedTranscript,
+  REVIEW_ALPHABET,
+} from '../review/web-chat-review.ts';
 import { closedChatPolicy, ownerOpsInstalled } from './web-owner-ops-schema.ts';
 import type { WebAccountAdmin } from './web-account-admin.ts';
 
@@ -22,7 +27,10 @@ const DAY = 86_400_000;
 const day = (at: number) => new Date(Math.floor(at / DAY) * DAY).toISOString().slice(0, 10);
 const exact = (value: unknown, names: string[]): Record<string, unknown> => {
   ensure(
-    value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join(',') === [...names].sort().join(','),
+    value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Object.keys(value).sort().join(',') === [...names].sort().join(','),
     'INVALID_REQUEST',
   );
   return value as Record<string, unknown>;
@@ -126,10 +134,7 @@ export class WebOwnerOps {
     const done = this.once('arc-order', actor.memberId, body.requestId, body, () => {
       const live = publishedWebCharacters(this.store);
       // Exactly the characters that are on the arc now (an offline one has no place to order), each once.
-      ensure(
-        ids.length === live.length && ids.every((x) => live.some((c) => c.characterId === x)),
-        'ARC_ORDER_STALE',
-      );
+      ensure(ids.length === live.length && ids.every((x) => live.some((c) => c.characterId === x)), 'ARC_ORDER_STALE');
       for (const c of live) this.store.run('DELETE FROM web_character_catalog WHERE character_id=?', c.characterId);
       ids.forEach((characterId, position) =>
         this.store.run(
@@ -180,7 +185,11 @@ export class WebOwnerOps {
         ensure(row, 'NOT_FOUND');
         ensure(row.status === 'succeeded' || row.status === 'failed', 'PREVIEW_DELETE_BUSY');
         if (this.store.get('SELECT 1 FROM web_preview_erased WHERE preview_id=?', previewId)) continue;
-        this.store.run('INSERT INTO web_preview_erased(preview_id,erased_at) VALUES (?,?)', previewId, this.clock.now());
+        this.store.run(
+          'INSERT INTO web_preview_erased(preview_id,erased_at) VALUES (?,?)',
+          previewId,
+          this.clock.now(),
+        );
         purgeAdminSpeechAudio(this.store, { characterId: row.character_id, previewIds: [previewId] });
         for (const table of ['web_preview_rejected', 'web_preview_marks', 'web_preview_run_items'])
           this.store.run(`DELETE FROM ${table} WHERE preview_id=?`, previewId);
@@ -245,7 +254,11 @@ export class WebOwnerOps {
             )
           : undefined;
         const conversation =
-          owner && world && world.state !== 'purging' && world.state !== 'purged' && !webCharacterDeleted(this.store, item.characterId)
+          owner &&
+          world &&
+          world.state !== 'purging' &&
+          world.state !== 'purged' &&
+          !webCharacterDeleted(this.store, item.characterId)
             ? this.store.get<{ id: string }>(
                 `SELECT id FROM conversations WHERE world_id=? AND kind='private' AND private_character_id=?`,
                 world.world_id,
@@ -307,7 +320,10 @@ export class WebOwnerOps {
     const actor = this.actor(auth, 'owner');
     ensure(chatReviewTablesExist(this.store), 'NOT_FOUND');
     const body = exact(input, ['requestId', 'playerNumber']);
-    ensure(typeof body.playerNumber === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(body.playerNumber), 'INVALID_REQUEST');
+    ensure(
+      typeof body.playerNumber === 'string' && /^[0-9A-HJKMNP-TV-Z]{8}$/.test(body.playerNumber),
+      'INVALID_REQUEST',
+    );
     const done = this.once('closed-delete', actor.memberId, body.requestId, body, () => {
       const row = this.store.get<{ review_code: string }>(
         'SELECT review_code FROM web_closed_accounts WHERE player_number=?',

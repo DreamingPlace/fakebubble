@@ -67,7 +67,10 @@ export function installWebConversationDeletion(store: WebRuntimeStore) {
     const rows = store.all<{ version: number; sha256: string }>('SELECT * FROM web_conversation_deletion_schema');
     ensure(rows.length === 1 && rows[0]!.sha256 === digest, 'WEB_CONVERSATION_DELETION_SCHEMA_MISMATCH');
     for (const entry of guardedTables) {
-      const current = store.get<{ sql: string }>("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?", entry[1])?.sql;
+      const current = store.get<{ sql: string }>(
+        "SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?",
+        entry[1],
+      )?.sql;
       ensure(current, 'WEB_CONVERSATION_DELETION_SCHEMA_MISMATCH');
       const widened = guardedTriggerSql(store, entry, true);
       if (normalize(current) === normalize(widened)) continue;
@@ -186,7 +189,10 @@ export function deleteLiveConversation(store: WebRuntimeStore, clock: Clock, c: 
       ordinal: number;
       receipt_json: string | null;
       usage_json: string | null;
-    }>(`SELECT * FROM web_external_attempts WHERE operation_id IN (${operationScope}) AND dispatch_state='known'`, ...scopeArgs(s)))
+    }>(
+      `SELECT * FROM web_external_attempts WHERE operation_id IN (${operationScope}) AND dispatch_state='known'`,
+      ...scopeArgs(s),
+    ))
       store.run(
         `UPDATE web_external_attempts SET receipt_json=NULL,usage_json=NULL,receipt_digest=coalesce(receipt_digest,?),usage_digest=coalesce(usage_digest,?)
         WHERE operation_id=? AND stage=? AND phase=? AND ordinal=?`,
@@ -210,7 +216,11 @@ export function deleteLiveConversation(store: WebRuntimeStore, clock: Clock, c: 
       c.worldId,
       c.characterId,
     );
-    store.run('DELETE FROM web_conversation_purge_gate WHERE world_id=? AND conversation_id=?', c.worldId, c.conversationId);
+    store.run(
+      'DELETE FROM web_conversation_purge_gate WHERE world_id=? AND conversation_id=?',
+      c.worldId,
+      c.conversationId,
+    );
     auditCharacterDeletionScope(store, s, true, true);
     ensure(!store.get('PRAGMA foreign_key_check'), 'CHARACTER_DELETION_INCOMPLETE');
     store.run(

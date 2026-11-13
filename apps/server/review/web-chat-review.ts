@@ -331,7 +331,10 @@ export function archivePlayerChats(store: Db, principalId: string, worldId: stri
   }
   // Part 31: an account that had a 玩家编号 is listed under 已关闭账号 (number, closure time, the archive's code) until its copy is gone.
   if (lines > 0 && code !== null && ownerOpsInstalled(store) && tableExists(store, 'web_player_numbers')) {
-    const number = store.get<{ number: string }>('SELECT number FROM web_player_numbers WHERE principal_id=?', principalId);
+    const number = store.get<{ number: string }>(
+      'SELECT number FROM web_player_numbers WHERE principal_id=?',
+      principalId,
+    );
     if (number)
       store.run(
         'INSERT OR REPLACE INTO web_closed_accounts(review_code,player_number,closed_at,expires_at) VALUES (?,?,?,?)',
@@ -362,7 +365,10 @@ export function deleteArchivedTranscript(store: Db, reviewCode: string, characte
   const removed = Number(
     store.run('DELETE FROM web_review_archive WHERE review_code=? AND character_id=?', reviewCode, characterId).changes,
   );
-  if (ownerOpsInstalled(store) && !store.get('SELECT 1 FROM web_review_archive WHERE review_code=? LIMIT 1', reviewCode))
+  if (
+    ownerOpsInstalled(store) &&
+    !store.get('SELECT 1 FROM web_review_archive WHERE review_code=? LIMIT 1', reviewCode)
+  )
     store.run('DELETE FROM web_closed_accounts WHERE review_code=?', reviewCode);
   return removed;
 }

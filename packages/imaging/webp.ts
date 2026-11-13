@@ -11,7 +11,11 @@ const fail = (code: string): never => {
  * are read past and never kept. Animations are refused (IMAGE_UNSUPPORTED).
  */
 export function decodeWebp(bytes: Uint8Array, maxPixels: number): Raster {
-  if (bytes.length < 20 || String.fromCharCode(...bytes.subarray(0, 4)) !== 'RIFF' || String.fromCharCode(...bytes.subarray(8, 12)) !== 'WEBP')
+  if (
+    bytes.length < 20 ||
+    String.fromCharCode(...bytes.subarray(0, 4)) !== 'RIFF' ||
+    String.fromCharCode(...bytes.subarray(8, 12)) !== 'WEBP'
+  )
     fail('IMAGE_INVALID');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const riff = view.getUint32(4, true) + 8;

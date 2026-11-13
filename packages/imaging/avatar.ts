@@ -18,7 +18,11 @@ export type AvatarType = (typeof AVATAR_TYPES)[number];
 export function sniffImage(bytes: Uint8Array): 'png' | 'jpeg' | 'webp' | null {
   if (bytes.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((b, i) => bytes[i] === b)) return 'png';
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpeg';
-  if (bytes.length >= 12 && String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP')
+  if (
+    bytes.length >= 12 &&
+    String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF' &&
+    String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP'
+  )
     return 'webp';
   return null;
 }
@@ -87,14 +91,28 @@ export function normalizeAvatar(bytes: Uint8Array): NormalizedAvatar {
   if (!kind) throw new ImageError('AVATAR_FORMAT');
   let picture: Raster;
   try {
-    picture = kind === 'png' ? decodePng(bytes, AVATAR_MAX_PIXELS) : kind === 'jpeg' ? decodeJpeg(bytes, AVATAR_MAX_PIXELS) : decodeWebp(bytes, AVATAR_MAX_PIXELS);
+    picture =
+      kind === 'png'
+        ? decodePng(bytes, AVATAR_MAX_PIXELS)
+        : kind === 'jpeg'
+          ? decodeJpeg(bytes, AVATAR_MAX_PIXELS)
+          : decodeWebp(bytes, AVATAR_MAX_PIXELS);
   } catch (error) {
     if (error instanceof ImageError)
-      throw new ImageError(error.code === 'IMAGE_TOO_LARGE' ? 'AVATAR_DIMENSIONS' : error.code === 'IMAGE_UNSUPPORTED' ? 'AVATAR_FORMAT' : 'AVATAR_INVALID');
+      throw new ImageError(
+        error.code === 'IMAGE_TOO_LARGE'
+          ? 'AVATAR_DIMENSIONS'
+          : error.code === 'IMAGE_UNSUPPORTED'
+            ? 'AVATAR_FORMAT'
+            : 'AVATAR_INVALID',
+      );
     // A decoder that runs off the end of a damaged file is a bad file, not a server fault.
     throw new ImageError('AVATAR_INVALID');
   }
-  if (Math.max(picture.width, picture.height) > AVATAR_MAX_SIDE || Math.min(picture.width, picture.height) < AVATAR_MIN_SIDE)
+  if (
+    Math.max(picture.width, picture.height) > AVATAR_MAX_SIDE ||
+    Math.min(picture.width, picture.height) < AVATAR_MIN_SIDE
+  )
     throw new ImageError('AVATAR_DIMENSIONS');
   const square = squareAndShrink(picture, AVATAR_OUTPUT_SIDE);
   const png = new Uint8Array(encodePng(square));

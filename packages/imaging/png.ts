@@ -170,7 +170,10 @@ export function decodePng(bytes: Uint8Array, maxPixels: number): Raster {
       const py = d.y0 + y * d.dy;
       for (let x = 0; x < d.w; x++) {
         const o = (py * width + d.x0 + x * d.dx) * 4;
-        let r: number, g: number, b: number, a = 255;
+        let r: number,
+          g: number,
+          b: number,
+          a = 255;
         if (color === 0) {
           const v = sample(row, x);
           r = g = b = to8(v);
@@ -182,7 +185,13 @@ export function decodePng(bytes: Uint8Array, maxPixels: number): Raster {
           r = to8(sr);
           g = to8(sg);
           b = to8(sb);
-          if (trns && trns.length >= 6 && sr === ((trns[0]! << 8) | trns[1]!) && sg === ((trns[2]! << 8) | trns[3]!) && sb === ((trns[4]! << 8) | trns[5]!))
+          if (
+            trns &&
+            trns.length >= 6 &&
+            sr === ((trns[0]! << 8) | trns[1]!) &&
+            sg === ((trns[2]! << 8) | trns[3]!) &&
+            sb === ((trns[4]! << 8) | trns[5]!)
+          )
             a = 0;
         } else if (color === 3) {
           const i = sample(row, x);

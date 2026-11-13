@@ -127,7 +127,10 @@ export function installWebCharacterDeletion(store: WebRuntimeStore) {
         current = store.get<{ sql: string }>('SELECT sql FROM sqlite_master WHERE name=?', name)?.sql ?? '';
       if (normalize(current) === normalize(triggers[i]!)) continue;
       // Part 31: the owner's conversation deletion widens each guard by one more gate; its own step installs and checks that form.
-      if (conversationDeletionInstalled(store) && normalize(current) === normalize(guardedTriggerSql(store, entry, true)))
+      if (
+        conversationDeletionInstalled(store) &&
+        normalize(current) === normalize(guardedTriggerSql(store, entry, true))
+      )
         continue;
       // Named repair: a later migration that rebuilds a guarded table (114 rebuilds web_publication_items) recreates
       // its trigger in the pre-deletion form. Only that exact form is replaced; anything else is still a mismatch.

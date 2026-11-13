@@ -307,7 +307,8 @@ export function decodeJpeg(bytes: Uint8Array, maxPixels: number): Raster {
         restartInterval = u16(body);
         break;
       case 0xee:
-        if (length >= 14 && String.fromCharCode(...bytes.subarray(body, body + 5)) === 'Adobe') adobe = bytes[body + 11]!;
+        if (length >= 14 && String.fromCharCode(...bytes.subarray(body, body + 5)) === 'Adobe')
+          adobe = bytes[body + 11]!;
         break;
       case 0xc0:
       case 0xc1:
@@ -383,7 +384,8 @@ export function decodeJpeg(bytes: Uint8Array, maxPixels: number): Raster {
           a = bytes[body + 3 + count * 2]!;
         const ah = a >> 4,
           al = a & 15;
-        if (progressive && (ss > se || se > 63 || (ss === 0 && se !== 0) || (ss > 0 && count !== 1))) fail('IMAGE_INVALID');
+        if (progressive && (ss > se || se > 63 || (ss === 0 && se !== 0) || (ss > 0 && count !== 1)))
+          fail('IMAGE_INVALID');
         if (!progressive && chosen.some((c) => !c.dc || !c.ac)) fail('IMAGE_INVALID');
         if (progressive && ss === 0 && ah === 0 && chosen.some((c) => !c.dc)) fail('IMAGE_INVALID');
         if (progressive && ss > 0 && chosen.some((c) => !c.ac)) fail('IMAGE_INVALID');
@@ -403,7 +405,8 @@ export function decodeJpeg(bytes: Uint8Array, maxPixels: number): Raster {
   // ---- dequantize + inverse DCT into component planes ----------------------------------------------------------------
   const cosine = new Float64Array(64);
   for (let n = 0; n < 8; n++)
-    for (let k = 0; k < 8; k++) cosine[n * 8 + k] = (k === 0 ? Math.SQRT1_2 : 1) * Math.cos(((2 * n + 1) * k * Math.PI) / 16) * 0.5;
+    for (let k = 0; k < 8; k++)
+      cosine[n * 8 + k] = (k === 0 ? Math.SQRT1_2 : 1) * Math.cos(((2 * n + 1) * k * Math.PI) / 16) * 0.5;
   const planes = components.map((c) => {
     const table = quant[c.tq] ?? fail('IMAGE_INVALID');
     const stride = c.blocksPerLineForMcu * 8,

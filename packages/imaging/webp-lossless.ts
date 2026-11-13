@@ -54,8 +54,22 @@ function buildCode(lengths: Uint8Array): Code {
       used++;
       last = s;
     }
-  if (used === 0) return { single: 0, maxcode: new Int32Array(0), valptr: new Int32Array(0), mincode: new Int32Array(0), symbols: new Uint16Array(0) };
-  if (used === 1) return { single: last, maxcode: new Int32Array(0), valptr: new Int32Array(0), mincode: new Int32Array(0), symbols: new Uint16Array(0) };
+  if (used === 0)
+    return {
+      single: 0,
+      maxcode: new Int32Array(0),
+      valptr: new Int32Array(0),
+      mincode: new Int32Array(0),
+      symbols: new Uint16Array(0),
+    };
+  if (used === 1)
+    return {
+      single: last,
+      maxcode: new Int32Array(0),
+      valptr: new Int32Array(0),
+      mincode: new Int32Array(0),
+      symbols: new Uint16Array(0),
+    };
   const symbols = new Uint16Array(used);
   const maxcode = new Int32Array(17).fill(-1),
     valptr = new Int32Array(17),
@@ -83,7 +97,8 @@ function readSymbol(bits: Bits, code: Code): number {
   for (let length = 1; length <= 15; length++) {
     value = (value << 1) | bits.one();
     const max = code.maxcode[length]!;
-    if (max >= 0 && value <= max && value >= code.mincode[length]!) return code.symbols[code.valptr[length]! + value - code.mincode[length]!]!;
+    if (max >= 0 && value <= max && value >= code.mincode[length]!)
+      return code.symbols[code.valptr[length]! + value - code.mincode[length]!]!;
   }
   return fail('IMAGE_INVALID');
 }
@@ -102,7 +117,14 @@ function readCode(bits: Bits, alphabet: number): Code {
       if (second >= alphabet) fail('IMAGE_INVALID');
       lengths[second] = 1;
     }
-    if (count === 1) return { single: first, maxcode: new Int32Array(0), valptr: new Int32Array(0), mincode: new Int32Array(0), symbols: new Uint16Array(0) };
+    if (count === 1)
+      return {
+        single: first,
+        maxcode: new Int32Array(0),
+        valptr: new Int32Array(0),
+        mincode: new Int32Array(0),
+        symbols: new Uint16Array(0),
+      };
     if (lengths.filter((l) => l > 0).length !== 2) fail('IMAGE_INVALID');
     return buildCode(lengths);
   }
@@ -135,15 +157,126 @@ function readCode(bits: Bits, alphabet: number): Code {
 }
 
 const DISTANCE_MAP: [number, number][] = [
-  [0, 1], [1, 0], [1, 1], [-1, 1], [0, 2], [2, 0], [1, 2], [-1, 2], [2, 1], [-2, 1], [2, 2], [-2, 2], [0, 3], [3, 0],
-  [1, 3], [-1, 3], [3, 1], [-3, 1], [2, 3], [-2, 3], [3, 2], [-3, 2], [0, 4], [4, 0], [1, 4], [-1, 4], [4, 1], [-4, 1],
-  [3, 3], [-3, 3], [2, 4], [-2, 4], [4, 2], [-4, 2], [0, 5], [3, 4], [-3, 4], [4, 3], [-4, 3], [5, 0], [1, 5], [-1, 5],
-  [5, 1], [-5, 1], [2, 5], [-2, 5], [5, 2], [-5, 2], [4, 4], [-4, 4], [3, 5], [-3, 5], [5, 3], [-5, 3], [0, 6], [6, 0],
-  [1, 6], [-1, 6], [6, 1], [-6, 1], [2, 6], [-2, 6], [6, 2], [-6, 2], [4, 5], [-4, 5], [5, 4], [-5, 4], [3, 6], [-3, 6],
-  [6, 3], [-6, 3], [0, 7], [7, 0], [1, 7], [-1, 7], [5, 5], [-5, 5], [7, 1], [-7, 1], [4, 6], [-4, 6], [6, 4], [-6, 4],
-  [2, 7], [-2, 7], [7, 2], [-7, 2], [3, 7], [-3, 7], [7, 3], [-7, 3], [5, 6], [-5, 6], [6, 5], [-6, 5], [8, 0], [4, 7],
-  [-4, 7], [7, 4], [-7, 4], [8, 1], [8, 2], [6, 6], [-6, 6], [8, 3], [5, 7], [-5, 7], [7, 5], [-7, 5], [8, 4], [6, 7],
-  [-6, 7], [7, 6], [-7, 6], [8, 5], [7, 7], [-7, 7], [8, 6], [8, 7],
+  [0, 1],
+  [1, 0],
+  [1, 1],
+  [-1, 1],
+  [0, 2],
+  [2, 0],
+  [1, 2],
+  [-1, 2],
+  [2, 1],
+  [-2, 1],
+  [2, 2],
+  [-2, 2],
+  [0, 3],
+  [3, 0],
+  [1, 3],
+  [-1, 3],
+  [3, 1],
+  [-3, 1],
+  [2, 3],
+  [-2, 3],
+  [3, 2],
+  [-3, 2],
+  [0, 4],
+  [4, 0],
+  [1, 4],
+  [-1, 4],
+  [4, 1],
+  [-4, 1],
+  [3, 3],
+  [-3, 3],
+  [2, 4],
+  [-2, 4],
+  [4, 2],
+  [-4, 2],
+  [0, 5],
+  [3, 4],
+  [-3, 4],
+  [4, 3],
+  [-4, 3],
+  [5, 0],
+  [1, 5],
+  [-1, 5],
+  [5, 1],
+  [-5, 1],
+  [2, 5],
+  [-2, 5],
+  [5, 2],
+  [-5, 2],
+  [4, 4],
+  [-4, 4],
+  [3, 5],
+  [-3, 5],
+  [5, 3],
+  [-5, 3],
+  [0, 6],
+  [6, 0],
+  [1, 6],
+  [-1, 6],
+  [6, 1],
+  [-6, 1],
+  [2, 6],
+  [-2, 6],
+  [6, 2],
+  [-6, 2],
+  [4, 5],
+  [-4, 5],
+  [5, 4],
+  [-5, 4],
+  [3, 6],
+  [-3, 6],
+  [6, 3],
+  [-6, 3],
+  [0, 7],
+  [7, 0],
+  [1, 7],
+  [-1, 7],
+  [5, 5],
+  [-5, 5],
+  [7, 1],
+  [-7, 1],
+  [4, 6],
+  [-4, 6],
+  [6, 4],
+  [-6, 4],
+  [2, 7],
+  [-2, 7],
+  [7, 2],
+  [-7, 2],
+  [3, 7],
+  [-3, 7],
+  [7, 3],
+  [-7, 3],
+  [5, 6],
+  [-5, 6],
+  [6, 5],
+  [-6, 5],
+  [8, 0],
+  [4, 7],
+  [-4, 7],
+  [7, 4],
+  [-7, 4],
+  [8, 1],
+  [8, 2],
+  [6, 6],
+  [-6, 6],
+  [8, 3],
+  [5, 7],
+  [-5, 7],
+  [7, 5],
+  [-7, 5],
+  [8, 4],
+  [6, 7],
+  [-6, 7],
+  [7, 6],
+  [-7, 6],
+  [8, 5],
+  [7, 7],
+  [-7, 7],
+  [8, 6],
+  [8, 7],
 ];
 
 const prefixValue = (bits: Bits, symbol: number) => {
@@ -174,7 +307,13 @@ function decodeImage(bits: Bits, width: number, height: number, main: boolean): 
   const cacheSize = cacheBits > 0 ? 1 << cacheBits : 0;
   const codes: Code[][] = [];
   for (let g = 0; g < groups; g++)
-    codes.push([readCode(bits, 256 + 24 + cacheSize), readCode(bits, 256), readCode(bits, 256), readCode(bits, 256), readCode(bits, 40)]);
+    codes.push([
+      readCode(bits, 256 + 24 + cacheSize),
+      readCode(bits, 256),
+      readCode(bits, 256),
+      readCode(bits, 256),
+      readCode(bits, 40),
+    ]);
   const total = width * height;
   const out = new Uint32Array(total);
   const cache = cacheSize ? new Uint32Array(cacheSize) : null;
@@ -185,7 +324,7 @@ function decodeImage(bits: Bits, width: number, height: number, main: boolean): 
   while (i < total) {
     const x = i % width,
       y = (i - x) / width;
-    const group = metaImage ? ((metaImage[(y >> metaBits) * metaWidth + (x >> metaBits)]! >>> 8) & 0xffff) : 0;
+    const group = metaImage ? (metaImage[(y >> metaBits) * metaWidth + (x >> metaBits)]! >>> 8) & 0xffff : 0;
     const c = codes[group]!;
     const s = readSymbol(bits, c[0]!);
     if (s < 256) {
@@ -225,11 +364,22 @@ function decodeImage(bits: Bits, width: number, height: number, main: boolean): 
 }
 
 const channel = (argb: number, shift: number) => (argb >>> shift) & 0xff;
-const pack = (a: number, r: number, g: number, b: number) => (((a & 0xff) << 24) | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff)) >>> 0;
+const pack = (a: number, r: number, g: number, b: number) =>
+  (((a & 0xff) << 24) | ((r & 0xff) << 16) | ((g & 0xff) << 8) | (b & 0xff)) >>> 0;
 const addPixels = (x: number, y: number) =>
-  pack(channel(x, 24) + channel(y, 24), channel(x, 16) + channel(y, 16), channel(x, 8) + channel(y, 8), channel(x, 0) + channel(y, 0));
+  pack(
+    channel(x, 24) + channel(y, 24),
+    channel(x, 16) + channel(y, 16),
+    channel(x, 8) + channel(y, 8),
+    channel(x, 0) + channel(y, 0),
+  );
 const average2 = (a: number, b: number) =>
-  pack((channel(a, 24) + channel(b, 24)) >> 1, (channel(a, 16) + channel(b, 16)) >> 1, (channel(a, 8) + channel(b, 8)) >> 1, (channel(a, 0) + channel(b, 0)) >> 1);
+  pack(
+    (channel(a, 24) + channel(b, 24)) >> 1,
+    (channel(a, 16) + channel(b, 16)) >> 1,
+    (channel(a, 8) + channel(b, 8)) >> 1,
+    (channel(a, 0) + channel(b, 0)) >> 1,
+  );
 const clamp8 = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);
 const select = (l: number, t: number, tl: number) => {
   let pl = 0,
@@ -242,9 +392,23 @@ const select = (l: number, t: number, tl: number) => {
   return pl < pt ? l : t;
 };
 const clampAddSubtractFull = (a: number, b: number, c: number) =>
-  pack(...([24, 16, 8, 0].map((s) => clamp8(channel(a, s) + channel(b, s) - channel(c, s))) as [number, number, number, number]));
+  pack(
+    ...([24, 16, 8, 0].map((s) => clamp8(channel(a, s) + channel(b, s) - channel(c, s))) as [
+      number,
+      number,
+      number,
+      number,
+    ]),
+  );
 const clampAddSubtractHalf = (a: number, b: number) =>
-  pack(...([24, 16, 8, 0].map((s) => clamp8(channel(a, s) + Math.trunc((channel(a, s) - channel(b, s)) / 2))) as [number, number, number, number]));
+  pack(
+    ...([24, 16, 8, 0].map((s) => clamp8(channel(a, s) + Math.trunc((channel(a, s) - channel(b, s)) / 2))) as [
+      number,
+      number,
+      number,
+      number,
+    ]),
+  );
 
 interface Transform {
   type: number;

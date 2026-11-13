@@ -71,7 +71,10 @@ export function installWebOwnerOps(store: BusinessStore) {
   store.transaction(() => {
     if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_owner_ops_schema'")) {
       ensure(
-        !store.get(`SELECT 1 FROM sqlite_master WHERE name IN (${TABLE_NAMES.map(() => '?').join(',')})`, ...TABLE_NAMES),
+        !store.get(
+          `SELECT 1 FROM sqlite_master WHERE name IN (${TABLE_NAMES.map(() => '?').join(',')})`,
+          ...TABLE_NAMES,
+        ),
         'WEB_OWNER_OPS_SCHEMA_MISMATCH',
       );
       for (const sql of tables) store.run(sql);
@@ -85,7 +88,11 @@ export function installWebOwnerOps(store: BusinessStore) {
     // The guard triggers exist once the preview ledger is installed. Only the exact original or the exact new form is accepted.
     if (!previewsInstalled(store)) return;
     for (const [name, sql] of triggers) {
-      const current = store.get<{ sql: string }>('SELECT sql FROM sqlite_master WHERE type=? AND name=?', 'trigger', name)?.sql;
+      const current = store.get<{ sql: string }>(
+        'SELECT sql FROM sqlite_master WHERE type=? AND name=?',
+        'trigger',
+        name,
+      )?.sql;
       ensure(current, 'WEB_OWNER_OPS_SCHEMA_MISMATCH');
       if (normalize(current) === normalize(sql)) continue;
       ensure(normalize(current) === normalize(originalTriggers[name]!), 'WEB_OWNER_OPS_SCHEMA_MISMATCH');

@@ -173,7 +173,10 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
   const tokenReaders: Bool[] = [];
   let at = sizesAt + 3 * (partitions - 1);
   for (let p = 0; p < partitions; p++) {
-    const size = p < partitions - 1 ? data[sizesAt + 3 * p]! | (data[sizesAt + 3 * p + 1]! << 8) | (data[sizesAt + 3 * p + 2]! << 16) : data.length - at;
+    const size =
+      p < partitions - 1
+        ? data[sizesAt + 3 * p]! | (data[sizesAt + 3 * p + 1]! << 8) | (data[sizesAt + 3 * p + 2]! << 16)
+        : data.length - at;
     if (at + size > data.length || size < 0) fail('IMAGE_INVALID');
     tokenReaders.push(new Bool(data, at, at + size));
     at += size;
@@ -211,7 +214,15 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
 
   const coeffs = new Int16Array(25 * 16);
   /** libwebp's GetCoeffs: returns the position after the last token, writes dequantized values (natural order). */
-  const getCoeffs = (br: Bool, type: number, ctx: number, dq: [number, number], first: number, out: Int16Array, base: number) => {
+  const getCoeffs = (
+    br: Bool,
+    type: number,
+    ctx: number,
+    dq: [number, number],
+    first: number,
+    out: Int16Array,
+    base: number,
+  ) => {
     let n = first;
     let p = (type * 8 + BANDS[n]!) * 33 + ctx * 11;
     for (; n < 16; ++n) {
@@ -312,7 +323,16 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
   };
 
   // ---- prediction helpers (work in the frame buffer; edges are 127 above, 129 left)
-  const predictBlock = (plane: Uint8Array, stride: number, x0: number, y0: number, size: number, mode: number, mbx: number, mby: number) => {
+  const predictBlock = (
+    plane: Uint8Array,
+    stride: number,
+    x0: number,
+    y0: number,
+    size: number,
+    mode: number,
+    mbx: number,
+    mby: number,
+  ) => {
     const hasTop = mby > 0,
       hasLeft = mbx > 0;
     const A = (i: number) => (hasTop ? plane[(y0 - 1) * stride + x0 + i]! : 127);
@@ -321,8 +341,8 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
     if (mode === DC_PRED) {
       let sum = 0,
         count = 0;
-      if (hasTop) for (let i = 0; i < size; i++) sum += A(i), count++;
-      if (hasLeft) for (let j = 0; j < size; j++) sum += L(j), count++;
+      if (hasTop) for (let i = 0; i < size; i++) (sum += A(i)), count++;
+      if (hasLeft) for (let j = 0; j < size; j++) (sum += L(j)), count++;
       const shift = size === 16 ? 4 : 3;
       // both edges: 2*size pixels; one edge: size pixels; none: 128 (RFC 6386 12.2)
       const value = count === 0 ? 128 : count === size ? (sum + (size >> 1)) >> shift : (sum + size) >> (shift + 1);
@@ -332,7 +352,8 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
     } else if (mode === H_PRED) {
       for (let j = 0; j < size; j++) plane.fill(L(j), (y0 + j) * stride + x0, (y0 + j) * stride + x0 + size);
     } else {
-      for (let j = 0; j < size; j++) for (let i = 0; i < size; i++) plane[(y0 + j) * stride + x0 + i] = clamp(L(j) + A(i) - P);
+      for (let j = 0; j < size; j++)
+        for (let i = 0; i < size; i++) plane[(y0 + j) * stride + x0 + i] = clamp(L(j) + A(i) - P);
     }
   };
   const predictSub = (x0: number, y0: number, mode: number, mbx: number, mby: number, bx: number, by: number) => {
@@ -383,7 +404,12 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
         }
         break;
       case B_HE: {
-        const rows = [avg3(Pv, Larr[0]!, Larr[1]!), avg3(Larr[0]!, Larr[1]!, Larr[2]!), avg3(Larr[1]!, Larr[2]!, Larr[3]!), avg3(Larr[2]!, Larr[3]!, Larr[3]!)];
+        const rows = [
+          avg3(Pv, Larr[0]!, Larr[1]!),
+          avg3(Larr[0]!, Larr[1]!, Larr[2]!),
+          avg3(Larr[1]!, Larr[2]!, Larr[3]!),
+          avg3(Larr[2]!, Larr[3]!, Larr[3]!),
+        ];
         for (let r = 0; r < 4; r++) B[r]!.fill(rows[r]!);
         break;
       }
@@ -602,7 +628,8 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
     const hev = (t: number, px: Uint8Array, i: number, step: number) =>
       Math.abs(px[i - 2 * step]! - px[i - step]!) > t || Math.abs(px[i + step]! - px[i]!) > t;
     const simpleSegment = (E: number, px: Uint8Array, i: number, step: number) => {
-      if (Math.abs(px[i - step]! - px[i]!) * 2 + (Math.abs(px[i - 2 * step]! - px[i + step]!) >> 1) <= E) commonAdjust(true, px, i, step);
+      if (Math.abs(px[i - step]! - px[i]!) * 2 + (Math.abs(px[i - 2 * step]! - px[i + step]!) >> 1) <= E)
+        commonAdjust(true, px, i, step);
     };
     const subblockFilter = (t: number, I: number, E: number, px: Uint8Array, i: number, step: number) => {
       if (!filterYes(I, E, px, i, step)) return;
@@ -654,9 +681,12 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
           uo = mby * 8 * uvStride + mbx * 8;
         if (simple) {
           if (mbx > 0) for (let j = 0; j < 16; j++) simpleSegment(limit + 4, Y, yo + j * yStride, 1);
-          if (inner) for (const x of [4, 8, 12]) for (let j = 0; j < 16; j++) simpleSegment(limit, Y, yo + j * yStride + x, 1);
+          if (inner)
+            for (const x of [4, 8, 12]) for (let j = 0; j < 16; j++) simpleSegment(limit, Y, yo + j * yStride + x, 1);
           if (mby > 0) for (let i = 0; i < 16; i++) simpleSegment(limit + 4, Y, yo + i, yStride);
-          if (inner) for (const y of [4, 8, 12]) for (let i = 0; i < 16; i++) simpleSegment(limit, Y, yo + y * yStride + i, yStride);
+          if (inner)
+            for (const y of [4, 8, 12])
+              for (let i = 0; i < 16; i++) simpleSegment(limit, Y, yo + y * yStride + i, yStride);
         } else {
           if (mbx > 0) {
             for (let j = 0; j < 16; j++) mbFilter(hevT, ilevel, limit + 4, Y, yo + j * yStride, 1);
@@ -666,7 +696,8 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
             }
           }
           if (inner) {
-            for (const x of [4, 8, 12]) for (let j = 0; j < 16; j++) subblockFilter(hevT, ilevel, limit, Y, yo + j * yStride + x, 1);
+            for (const x of [4, 8, 12])
+              for (let j = 0; j < 16; j++) subblockFilter(hevT, ilevel, limit, Y, yo + j * yStride + x, 1);
             for (let j = 0; j < 8; j++) {
               subblockFilter(hevT, ilevel, limit, U, uo + j * uvStride + 4, 1);
               subblockFilter(hevT, ilevel, limit, V, uo + j * uvStride + 4, 1);
@@ -680,7 +711,8 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
             }
           }
           if (inner) {
-            for (const y of [4, 8, 12]) for (let i = 0; i < 16; i++) subblockFilter(hevT, ilevel, limit, Y, yo + y * yStride + i, yStride);
+            for (const y of [4, 8, 12])
+              for (let i = 0; i < 16; i++) subblockFilter(hevT, ilevel, limit, Y, yo + y * yStride + i, yStride);
             for (let i = 0; i < 8; i++) {
               subblockFilter(hevT, ilevel, limit, U, uo + 4 * uvStride + i, uvStride);
               subblockFilter(hevT, ilevel, limit, V, uo + 4 * uvStride + i, uvStride);
@@ -745,7 +777,8 @@ export function yuvToRgba(yuv: Yuv): Uint8Array {
     }
     if (!(width & 1)) {
       put(topRow, width - 1, Yt(width - 1), (3 * tlU + lU + 2) >> 2, (3 * tlV + lV + 2) >> 2);
-      if (bottomRow !== null) put(bottomRow, width - 1, Yb(width - 1), (3 * lU + tlU + 2) >> 2, (3 * lV + tlV + 2) >> 2);
+      if (bottomRow !== null)
+        put(bottomRow, width - 1, Yb(width - 1), (3 * lU + tlU + 2) >> 2, (3 * lV + tlV + 2) >> 2);
     }
   };
   line(0, null, 0, 0);
