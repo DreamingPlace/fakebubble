@@ -1,0 +1,9 @@
+layout audit totals: {"bars":1,"numbers":0,"barAction":6,"primary":0,"buttonHeight":0,"buttonGroup":0,"fieldWidth":0,"pair":0,"gaps":0,"emptyHeading":0,"checkGroup":0,"sideways":0,"cut":0,"rail":0}
+ - 1440x900 invites · bars · 1: wraps at 1440: 批次名称数量额度类型不限量每天补充每天 +点上限 <form.tiers-form>
+ - 1440x900 invites · barAction · 1: 745px from the field before it: 生成邀请码 <div.tiers-form-actions>
+ - 1440x900 points · barAction · 1: 416px from the field before it: 已保存 <button.>
+ - 1440x900 points open · barAction · 1: 416px from the field before it: 已保存 <button.>
+ - 1280x800 invites · barAction · 1: 453px from the field before it: 生成邀请码 <div.tiers-form-actions>
+ - 1280x800 points · barAction · 1: 256px from the field before it: 已保存 <button.>
+ - 1280x800 points open · barAction · 1: 256px from the field before it: 已保存 <button.>
+admin 24b-7c layout audit: ok
