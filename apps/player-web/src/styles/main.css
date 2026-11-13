@@ -14608,7 +14608,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   --ad-sp-3: 12px; /* inside a row of controls */
   --ad-sp-4: 16px; /* field → field */
   --ad-sp-5: 24px; /* section → section: the largest gap anywhere */
-  --ad-w-xs: 120px; /* a number or a percentage */
+  --ad-w-xs: 104px; /* a number or a percentage */
   --ad-w-s: 176px; /* a code, an id, a hex */
   --ad-w-m: 352px; /* a name, a short note */
   --ad-w-l: 920px; /* the form column */
@@ -15225,6 +15225,84 @@ button:not(
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) label.admin-check:not(.vc-materials *) {
   width: fit-content;
   max-width: 100%;
+}
+
+/* ---- round 2: inline add bars and filter bars. A bar that fits one row at 1440 stays one row; numbers are xs; the action follows the
+   last field it belongs to (one field gap, 8 px) — also where the bar wraps at 1280, never stranded at the far edge. A note in a bar is
+   an m field (its limit is a ceiling, the text scrolls inside the box). ---- */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form {
+  flex-wrap: wrap;
+  gap: var(--ad-sp-3) var(--ad-sp-2);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form [data-w="xs"] {
+  width: var(--ad-w-xs);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form .tiers-field:first-child input {
+  width: 160px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form #tiers-redeem-by {
+  width: 144px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form .tiers-form-actions {
+  margin-left: 0;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form .tiers-field,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.tiers-form .tiers-form-actions {
+  flex: none;
+}
+/* 积分发放: seg, 对象, 点数, 备注, 发放 in one row, the button right after the note */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-form .pt-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ad-sp-3) var(--ad-sp-2);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-form .pt-bar > * {
+  flex: none;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-form .pt-bar input[data-w="xs"] {
+  width: var(--ad-w-xs);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  .points-form
+  .pt-bar
+  label.pt-lb:not(:has(input[data-w="xs"])) {
+  flex: 1 1 160px;
+  max-width: var(--ad-w-m);
+  min-width: 160px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout)
+  .points-form
+  .pt-bar
+  label.pt-lb:not(:has(input[data-w="xs"]))
+  input {
+  width: 100%;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-cocreation.pt-cc {
+  /* named exception: an older rule states `gap: 20px !important` for this bar; the bar's action follows its last field at one field gap */
+  column-gap: var(--ad-sp-2) !important;
+  row-gap: var(--ad-sp-3) !important;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .points-cocreation.pt-cc > button {
+  margin-left: 0;
+}
+/* 管理员与权限: the note field and the presets are one row, the presets right after the note */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.mb-add {
+  grid-template-columns: var(--ad-w-m) auto 1fr;
+  column-gap: var(--ad-sp-4);
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.mb-add > .mb-new-grid,
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.mb-add > .mb-issue {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) form.mb-add > .mb-name-field input {
+  width: 100%;
+  max-width: var(--ad-w-m);
+}
+
+/* a number box keeps room for its spin buttons: tighter side padding so 5 digits and a placeholder like 1–10000 fit the xs width */
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) input[type="number"]:not(.vc-materials *) {
+  padding-inline: 10px;
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */

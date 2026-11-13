@@ -15,11 +15,18 @@ the Part 24b-7c block in `apps/player-web/src/styles/main.css`; the check is `pn
 
 ## 2. Fields are as wide as what they hold
 `ui/field-width.ts` sets `data-w` from the field's real limit (`maxlength`, see the 24b-7b field table):
-`xs` ≤ 8 characters or a number (`--ad-w-xs` 120), `s` ≤ 16 (176), `m` ≤ 40 (352), `l` the 920 px form column, `full` paragraphs
+`xs` ≤ 8 characters or a number (`--ad-w-xs` 104), `s` ≤ 16 (176), `m` ≤ 40 (352), `l` the 920 px form column, `full` paragraphs
 and tables, `fit` a select (the width of its longest option). A short note is an `m` field. A screen may state its own `data-w`.
 
 ## 3. An action sits beside its field
 Field and button on one row, same height, one baseline (预演: 运行备注, send button and its reason in one row under the input).
+
+## 3b. Inline add bars and filter bars (round 2)
+A bar that fits one row at 1440 stays one row (it may wrap cleanly at 1280). Numbers are `xs` (`--ad-w-xs` 104, room for 5 digits and the
+spin buttons); a note in a bar is an `m` box; the action follows the last field it belongs to at one field gap (8 px) and is never alone
+on a row or at the far edge. Covered: 邀请与额度's new-batch form, 积分发放 (send bar, 共创积分), 管理员与权限's note + presets, the page
+header bars (总览, 消耗表, 模型与价格, 系统状态) and 共创收件箱's status/star/search line. The 共创 role-chip list is data-driven (one chip per
+role) and wraps by design: a named exemption. The audit also checks that a placeholder fits its box.
 
 ## 4. Vertical rhythm (tokens)
 `--ad-sp-1` 4 label → field · `--ad-sp-2` 8 related checkboxes, buttons of a group · `--ad-sp-3` 12 inside a row of controls ·

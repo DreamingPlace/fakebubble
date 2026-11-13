@@ -7,12 +7,12 @@ export const AUDIT_SOURCE = `(() => {
   const SCALE_H = [32, 40];                 // button heights: compact, standard (tokens --ad-h-compact / --ad-h-standard)
   const SCALE_GAP = [4, 8, 12, 16, 24];     // vertical rhythm (tokens --ad-sp-1 .. --ad-sp-5); 24 is the section step
   const STEP = 24;
-  const WIDTH = { xs: 120, s: 176, m: 352, l: 920 };  // max width of a single-line field per width class
+  const WIDTH = { xs: 104, s: 176, m: 352, l: 920 };  // max width of a single-line field per width class
   // Buttons that are not row actions: whole-card / whole-row hit areas, the navigation and the rail. Each has its own spec.
   const EXEMPT_BUTTON = '.admin-nav-item, .admin-account-toggle, .admin-pick, .admin-pick-head, .cc-row-open, .cn-add-card, .wb-rail-item, .cs-card, .cs-cell, .cs-head, .cs-star-hit, .cc-card-open, .admin-menu-item, .admin-nav-collapse';
   const VOICE = '.vc-materials';
   const root = document.querySelector('.admin-frame') || document.querySelector('.admin-shell');
-  const out = { primary: [], buttonHeight: [], buttonGroup: [], fieldWidth: [], pair: [], gaps: [], emptyHeading: [], checkGroup: [], sideways: [], cut: [], rail: [] };
+  const out = { bars: [], numbers: [], barAction: [], primary: [], buttonHeight: [], buttonGroup: [], fieldWidth: [], pair: [], gaps: [], emptyHeading: [], checkGroup: [], sideways: [], cut: [], rail: [] };
   const vis = (n) => { const r = n.getBoundingClientRect(); const s = getComputedStyle(n); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none' && !n.closest('[hidden]') && !n.closest(VOICE); };
   const label = (n) => ((n.getAttribute && (n.getAttribute('aria-label') || n.getAttribute('placeholder'))) || n.textContent || n.value || '').toString().trim().replace(/\\s+/g, ' ').slice(0, 24) + ' <' + n.tagName.toLowerCase() + '.' + (n.className || '').toString().split(' ')[0] + '>';
   const R = (n) => n.getBoundingClientRect();
@@ -133,6 +133,17 @@ export const AUDIT_SOURCE = `(() => {
     if (n.scrollWidth - n.clientWidth > 1 || (n.tagName === 'TEXTAREA' && n.scrollHeight - n.clientHeight > 1)) out.cut.push(label(n) + ' ' + n.scrollWidth + '/' + n.clientWidth);
   }
 
+  // 7b. an empty field's placeholder is text too: it must fit the box (the 点数 field showed 「1–1000」 for 「1–10000」)
+  for (const n of root.querySelectorAll('input[placeholder]')) {
+    if (!vis(n) || n.value) continue;
+    const cs = getComputedStyle(n), ph = getComputedStyle(n, '::placeholder'), probe = document.createElement('span');
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-family:' + ph.fontFamily + ';font-size:' + ph.fontSize + ';font-weight:' + ph.fontWeight + ';letter-spacing:' + ph.letterSpacing;
+    probe.textContent = n.getAttribute('placeholder'); document.body.appendChild(probe);
+    const need = probe.getBoundingClientRect().width; probe.remove();
+    const room = n.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - (n.type === 'number' ? 16 : 0); // 16: the spin buttons
+    if (need > room - 4) out.cut.push('placeholder cut ' + Math.round(need) + '/' + Math.round(room) + ' ' + label(n));
+  }
+
   // 8. the rail: no avatar half hidden under the group count (an avatar is wholly in view or wholly out of it)
   const rail = root.querySelector('.wb-roles');
   if (rail && vis(rail)) {
@@ -142,6 +153,40 @@ export const AUDIT_SOURCE = `(() => {
       if (ar.top < rr.top - 1 && ar.bottom > rr.top + 1) out.rail.push('avatar half cut at the top of the rail ' + label(a));
       if (ar.top < rr.bottom - 1 && ar.bottom > rr.bottom + 1) out.rail.push('avatar half cut at the bottom of the rail ' + label(a));
     }
+  }
+
+  // 9. inline add bars and filter bars (round 2): one row at 1440 (or cleanly wrapped at 1280), numbers are xs, an action follows its last field
+  //    The 共创 role-chip list (.cc-role-chips: one chip per role, up to 20) is a list, not a bar: it may wrap (named exemption).
+  const ONE_ROW_AT = 1440;
+  const BARS = ['form.tiers-form', '.points-form .pt-bar', '.points-cocreation', 'form.mb-add > .mb-field', '.page-head-actions', '.cc-filter-bar', '.cc-search-bar'];
+  const flat = (el) => [...el.children].flatMap((c) => (getComputedStyle(c).display === 'contents' ? flat(c) : [c])).filter(vis);
+  const barNodes = new Set();
+  for (const sel of BARS) for (const n of root.querySelectorAll(sel)) if (vis(n)) barNodes.add(n);
+  // members: the note field and the preset chips are the add bar (their parent is the form grid)
+  const mbName = root.querySelector('form.mb-add > .mb-name-field'), mbPreset = root.querySelector('form.mb-add > .mb-preset-field');
+  const rowGroups = [];
+  for (const n of barNodes) if (!n.matches('form.mb-add > .mb-field')) rowGroups.push([n, flat(n)]);
+  if (mbName && vis(mbName) && mbPreset && vis(mbPreset)) rowGroups.push([mbName.parentElement, [mbName, mbPreset]]);
+  // cocreation: the status chips + star + search line (the second .cc-chip-row of the page)
+  const ccRows = [...root.querySelectorAll('.cc-chip-row')].filter((r) => vis(r) && r.querySelector('input'));
+  for (const r of ccRows) rowGroups.push([r, flat(r)]);
+  for (const [bar, kids] of rowGroups) {
+    if (kids.length < 2) continue;
+    const rects = kids.map(R);
+    const oneRow = Math.max(...rects.map((r) => r.top)) < Math.min(...rects.map((r) => r.bottom)) - 1;
+    if (!oneRow && innerWidth >= ONE_ROW_AT) out.bars.push('wraps at ' + innerWidth + ': ' + label(bar));
+    // an action never stranded: a button alone on its own row, or more than one field-gap from the item before it
+    for (let i = 0; i < kids.length; i++) {
+      const k = kids[i]; if (!(k.matches('button') || k.querySelector(':scope > button, :scope > .admin-primary'))) continue;
+      const kr = rects[i], prev = rects.slice(0, i).filter((r) => r.top < kr.bottom && r.bottom > kr.top);
+      if (i > 0 && prev.length === 0) out.barAction.push('stranded alone on its row: ' + label(k));
+      else if (prev.length) { const gap = kr.left - Math.max(...prev.map((r) => r.right)); if (gap > 16.5) out.barAction.push(Math.round(gap) + 'px from the field before it: ' + label(k)); }
+    }
+  }
+  // numbers: every number field is xs and no wider than xs
+  for (const n of root.querySelectorAll('input[type=number], input[inputmode=numeric]')) {
+    if (!vis(n) || n.closest('.admin-login, [data-surface=login]')) continue;
+    if (n.getAttribute('data-w') !== 'xs' || R(n).width > WIDTH.xs + 1) out.numbers.push('number field ' + Math.round(R(n).width) + 'px class=' + n.getAttribute('data-w') + ' ' + label(n));
   }
   const counts = {}; let total = 0;
   for (const k of Object.keys(out)) { counts[k] = out[k].length; total += out[k].length; }
