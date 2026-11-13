@@ -22,7 +22,11 @@ import {
   WorkersAiEmbeddings,
   type WorkersAiBinding,
 } from '../../apps/server/generation/embedding-provider.ts';
-import { CLIP_DIRECTION_PROMPT, CLIP_DIRECTION_PROMPT_SHA256, clipPromptHash } from '../../apps/server/characters/clip-direction-prompt.ts';
+import {
+  CLIP_DIRECTION_PROMPT,
+  CLIP_DIRECTION_PROMPT_SHA256,
+  clipPromptHash,
+} from '../../apps/server/characters/clip-direction-prompt.ts';
 import type { TextRPCResult, SpeechRPCResult } from '../../packages/contracts/generation-rpc.ts';
 
 export interface WebGenerationEnvironment {

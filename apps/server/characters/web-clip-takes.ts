@@ -884,8 +884,15 @@ export class WebClipTakes {
       picks.push({ kind: slot.kind, lineId: slot.lineId, bytes, sha256: take.sha256! });
     }
     ensure(binding, 'CHARACTER_MATERIALS_REQUIRED');
-    return { materialId: await this.materials.buildBundle(actor, id, binding, picks, authorize, (materialId) =>
-        void this.store.run('INSERT OR IGNORE INTO web_clip_migrated VALUES (?)', materialId),
-      ) };
+    return {
+      materialId: await this.materials.buildBundle(
+        actor,
+        id,
+        binding,
+        picks,
+        authorize,
+        (materialId) => void this.store.run('INSERT OR IGNORE INTO web_clip_migrated VALUES (?)', materialId),
+      ),
+    };
   }
 }

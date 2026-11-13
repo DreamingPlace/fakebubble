@@ -769,12 +769,17 @@ export class WebCharacterMaterials {
       const prior = this.store.get<MaterialRow>('SELECT * FROM web_character_materials WHERE request_id=?', requestId);
       if (prior && promoted(prior.id)) continue;
       try {
-        materialId = this.prepare(actor, id, {
-          requestId,
-          draftRevision: draft.revision,
-          profileHash: draft.content_hash,
-          model: binding,
-        }, created).materialId;
+        materialId = this.prepare(
+          actor,
+          id,
+          {
+            requestId,
+            draftRevision: draft.revision,
+            profileHash: draft.content_hash,
+            model: binding,
+          },
+          created,
+        ).materialId;
       } catch (error) {
         if ((error as { code?: string }).code !== 'IDEMPOTENCY_CONFLICT') throw error;
       }

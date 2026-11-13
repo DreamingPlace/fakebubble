@@ -221,20 +221,27 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     meta.className = 'vc-meta';
     if (take.sha256) hoverValue(meta, `SHA256 ${take.sha256}`);
     row.append(meta);
+    // Four fixed columns (name | origin · duration | player | actions): the player and the buttons line up whatever the origin says.
+    const main = el('div');
+    main.className = 'vc-take-main';
+    row.append(main);
     if (take.status === 'unusable') {
       const badge = statusBadge(sentence(take.errorCode ?? 'WEB_SPEECH_NO_ONSET'), 'warn');
       badge.className = `${badge.className} vc-issue`.trim();
-      row.append(badge);
+      main.append(badge);
     } else {
-      row.append(player(take));
-      if (!take.usable) row.append(statusBadge('与现在的欢迎词或音色不符', 'neutral'));
+      main.append(player(take));
+      if (!take.usable) main.append(statusBadge('与现在的欢迎词或音色不符', 'neutral'));
     }
-    // 选用
+    const actions = el('div');
+    actions.className = 'vc-take-actions';
+    row.append(actions);
     if (take.status === 'ready' && take.usable) {
-      if (take.selected) row.append(statusBadge('选用', 'ok'));
+      // the state says 已选用; the action that makes it so says 选用
+      if (take.selected) actions.append(statusBadge('已选用', 'ok'));
       else
         env.button(
-          row,
+          actions,
           '选用',
           () => env.dirty() || !env.can('materials'),
           async () => {
@@ -246,7 +253,7 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     }
     const locked = take.selected && slot.approved;
     const del = env.button(
-      row,
+      actions,
       '删除',
       () => env.dirty() || !env.can('materials') || locked,
       async () => {
@@ -523,6 +530,8 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     const bar = el('div');
     bar.className = 'vc-approval';
     root.append(bar);
+    // order: 全选, the slot ticks, the rights tick, 批准
+    const all = env.guard(check(bar, '全选'), () => env.dirty() || !env.can('approve-materials'));
     const ticks = el('div');
     ticks.className = 'vc-ticks';
     bar.append(ticks);
@@ -546,7 +555,6 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
       check(bar, '我确认有权使用这个音色和成品'),
       () => env.dirty() || !env.can('approve-materials'),
     );
-    const all = env.guard(check(bar, '全选'), () => env.dirty() || !env.can('approve-materials'));
     const playable = () => todo.filter((slot) => heard.has(slot.selectedTakeId!));
     const apply = () => {
       for (const slot of current.slots) {

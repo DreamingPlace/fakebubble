@@ -382,4 +382,3 @@ function causeCode(error: unknown) {
   const code = (error as { code?: unknown } | null)?.code ?? (error instanceof Error ? error.message : '');
   return typeof code === 'string' && /^[A-Z][A-Z0-9_]{2,63}$/.test(code) ? code : 'SPEECH_PROVIDER_FAILED';
 }
-
