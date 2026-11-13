@@ -200,6 +200,15 @@ try {
     for (const span of ['7天', '30天', '90天', '24H']) {
       await press('时间范围', span);
       for (const metric of ['回复', '聊天人数', '活跃']) {
+        if (span === '24H' && metric === '活跃') {
+          // 按小时没有活跃数: the tab is off, with its reason
+          const off = page.locator('#admin-overview [aria-label="指标"] button', { hasText: /^活跃$/ }).first();
+          check(
+            (await off.isDisabled()) && ((await off.getAttribute('title')) ?? '') !== '',
+            `${size} 24H 活跃: not disabled with a reason`,
+          );
+          continue;
+        }
         await press('指标', metric);
         for (const split of ['全部', '按角色', '按模型']) {
           const tab = page
