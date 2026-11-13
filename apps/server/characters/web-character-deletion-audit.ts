@@ -114,7 +114,13 @@ export const operationScope =
 export const scopeArgs = (s: DeletionScope) => [s.principal_id, s.world_id, s.conversation_id, s.character_id] as const;
 
 /** Fail closed for unknown private tables; prove one private conversation before touching any content. */
-export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionScope, cleared = false) {
+export function auditCharacterDeletionScope(
+  store: BusinessStore,
+  s: DeletionScope,
+  cleared = false,
+  /** Part 31: the owner's deletion of ONE conversation (not of a character): other players' ideas for the character are not its business. */
+  conversationOnly = false,
+) {
   ensure(
     store.get(
       `SELECT 1 FROM conversations c JOIN web_principals p ON p.world_id=c.world_id
@@ -147,6 +153,9 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
     'world_characters',
     'web_character_deletion_scopes',
     'web_character_purge_gate',
+    // Part 31: the owner's conversation deletion: its gate (present only inside its transaction) and the audio-erase record (a pair of ids and times).
+    'web_conversation_purge_gate',
+    'web_conversation_deletions',
     'web_principals',
     'web_guest_retention',
     'web_retention_file_cleanup',
@@ -234,6 +243,6 @@ export function auditCharacterDeletionScope(store: BusinessStore, s: DeletionSco
       'CHARACTER_DELETION_UNHANDLED_CONTENT',
     );
   // Players' co-creation ideas (117) are keyed by character, not by conversation: none may survive the purge.
-  if (cleared)
+  if (cleared && !conversationOnly)
     ensure(!cocreationRemains(store, { characterId: s.character_id }), 'CHARACTER_DELETION_UNHANDLED_CONTENT');
 }

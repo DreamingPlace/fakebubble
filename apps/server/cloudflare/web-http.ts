@@ -17,6 +17,7 @@ import { routeWebInvite } from '../invites/web-invite-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
+import { OWNER_BODY_LIMIT } from '../admin/web-owner-ops.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import type { HumanAction, TurnstileGate } from '../identity/web-turnstile.ts';
@@ -252,7 +253,9 @@ export class WebProviderHTTP {
                 ? 786_432
                 : characterWrite
                   ? PROFILE_BODY_LIMIT
-                  : path.startsWith(`${API}/cocreation/`)
+                  : path.startsWith(`${API}/admin/owner/`)
+                    ? OWNER_BODY_LIMIT
+                    : path.startsWith(`${API}/cocreation/`)
                     ? COCREATION_BODY_LIMIT
                     : 8192,
         ),
@@ -267,6 +270,7 @@ export class WebProviderHTTP {
           app.chatReview,
           app.system,
           app.cast,
+          app.ownerOps,
         )) ??
         routeWebCocreation(app.cocreation, input) ??
         routeWebBilling(app.billing, input) ??

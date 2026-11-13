@@ -13,6 +13,7 @@ import { clearCharacterOrder } from './web-character-availability.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
+import { conversationAudioPending, eraseDeletedConversationAudio } from './web-conversation-deletion.ts';
 import {
   auditCharacterDeletionScope,
   operationContent,
@@ -187,10 +188,14 @@ export class WebCharacterDeletion {
     };
   }
   nextDue() {
-    return this.store.get("SELECT 1 FROM web_character_deletions WHERE state='purging'") ? this.now() + 1000 : null;
+    return this.store.get("SELECT 1 FROM web_character_deletions WHERE state='purging'") || conversationAudioPending(this.store)
+      ? this.now() + 1000
+      : null;
   }
   async sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit > 0 && limit <= 16, 'INVALID_DELETE_BATCH');
+    // Part 31: the R2 objects of a conversation the owner deleted (a failure is retried by the next sweep).
+    await eraseDeletedConversationAudio(this.store, this.clock).catch(() => 0);
     const jobs = this.store.all<Deletion>(
       "SELECT * FROM web_character_deletions WHERE state='purging' ORDER BY created_at,id LIMIT ?",
       limit,

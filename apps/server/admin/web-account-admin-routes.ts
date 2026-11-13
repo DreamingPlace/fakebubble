@@ -6,6 +6,7 @@ import type { WebCocreation } from '../cocreation/web-cocreation.ts';
 import type { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 import type { WebSystemAdmin } from './web-system-admin.ts';
 import type { WebCastAdmin } from './web-cast-admin.ts';
+import type { WebOwnerOps } from './web-owner-ops.ts';
 
 export async function routeWebAccountAdmin(
   admin: WebAccountAdmin,
@@ -15,6 +16,7 @@ export async function routeWebAccountAdmin(
   chatReview?: WebChatReviewAdmin | null,
   system?: WebSystemAdmin | null,
   cast?: WebCastAdmin | null,
+  ownerOps?: WebOwnerOps | null,
 ): Promise<WebInviteResult | null> {
   const base = '/api/web/local/admin',
     path = req.path;
@@ -57,6 +59,21 @@ export async function routeWebAccountAdmin(
       };
     if (action === 'export')
       return { status: 200, body: chatReview.export(actor, body(['characterId', 'code', 'archived']) as never) };
+    ensure(false, 'NOT_FOUND');
+  }
+  // Part 31: the owner's operations. Each handler checks the owner (arc order: the 角色 grant too) and the body shape itself.
+  if (ownerOps && path.startsWith(`${base}/owner/`)) {
+    auth();
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/owner/`.length);
+    const raw = req.body ?? {};
+    if (action === 'arc-read') return { status: 200, body: ownerOps.arcOrder(actor) };
+    if (action === 'arc-save') return { status: 200, body: ownerOps.saveArcOrder(actor, raw) };
+    if (action === 'previews-delete') return { status: 200, body: ownerOps.deletePreviews(actor, raw) };
+    if (action === 'conversations-delete') return { status: 200, body: ownerOps.deleteConversations(actor, raw) };
+    if (action === 'closed-read') return { status: 200, body: ownerOps.closedAccounts(actor) };
+    if (action === 'closed-policy') return { status: 200, body: ownerOps.saveClosedPolicy(actor, raw) };
+    if (action === 'closed-delete') return { status: 200, body: ownerOps.deleteClosedAccount(actor, raw) };
     ensure(false, 'NOT_FOUND');
   }
   // Part 22b: 概览, 系统状态 and 积分发放 (Part 22c adds 玩家统计 and 消耗表 under stats/). The body goes to the handler unread: each checks its permission before it looks at the body.

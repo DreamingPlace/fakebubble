@@ -1,3 +1,4 @@
+import { notErasedSql } from '../admin/web-owner-ops-schema.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { PREVIEW_NOTE_MAX, PREVIEW_INPUT_MAX, PREVIEW_RUN_MAX } from './web-character-preview.ts';
@@ -164,7 +165,7 @@ const must = <T>(value: T | undefined | null): T => {
 
 /** The full record behind one table row: draft vs final, the review's coverage and quotes, rejected output, ids. */
 export function previewDetail(store: BusinessStore, characterId: string, previewId: string) {
-  const row = must(store.get<PreviewRow>(`${previewSelect} WHERE p.id=?`, previewId));
+  const row = must(store.get<PreviewRow>(`${previewSelect} WHERE p.id=?${notErasedSql(store)}`, previewId));
   ensure(row.character_id === characterId, 'NOT_FOUND');
   const base = previewRowDTO(store, row);
   const attempts = attemptsOf(store, previewId);
@@ -256,7 +257,7 @@ const runDTO = (r: RunRow) => ({
 const runSummary = (store: BusinessStore, r: RunRow) => {
   const counts = store.all<{ status: string; n: number }>(
     `SELECT p.status,count(*) n FROM web_preview_run_items i JOIN admin_previews p ON p.id=i.preview_id
-    WHERE i.run_id=? GROUP BY p.status`,
+    WHERE i.run_id=?${notErasedSql(store)} GROUP BY p.status`,
     r.id,
   );
   const byStatus = Object.fromEntries(counts.map((c) => [c.status, c.n]));
@@ -269,7 +270,7 @@ export function runList(store: BusinessStore, characterId: string) {
   );
   const singles = store
     .all<PreviewRow>(
-      `${previewSelect} WHERE p.character_id=? AND i.run_id IS NULL ORDER BY p.created_at DESC,p.id DESC LIMIT 30`,
+      `${previewSelect} WHERE p.character_id=? AND i.run_id IS NULL${notErasedSql(store)} ORDER BY p.created_at DESC,p.id DESC LIMIT 30`,
       characterId,
     )
     .map((row) => previewRowDTO(store, row));
@@ -279,7 +280,7 @@ export function runDetail(store: BusinessStore, characterId: string, runId: stri
   const run = must(store.get<RunRow>('SELECT * FROM web_preview_runs WHERE id=?', runId));
   ensure(run.character_id === characterId, 'NOT_FOUND');
   const rows = store
-    .all<PreviewRow>(`${previewSelect} WHERE i.run_id=? ORDER BY i.ordinal`, runId)
+    .all<PreviewRow>(`${previewSelect} WHERE i.run_id=?${notErasedSql(store)} ORDER BY i.ordinal`, runId)
     .map((row) => previewRowDTO(store, row));
   return { run: runSummary(store, run), previews: rows };
 }
@@ -309,7 +310,7 @@ export function previewsStatus(store: BusinessStore, characterId: string, runId:
     (SELECT count(*) FROM web_character_preview_attempts a WHERE a.preview_id=p.id) attempts
     FROM admin_previews p JOIN web_character_preview_jobs j ON j.preview_id=p.id
     LEFT JOIN web_preview_run_items i ON i.preview_id=p.id
-    WHERE p.character_id=? AND (? IS NULL OR i.run_id=?)
+    WHERE p.character_id=? AND (? IS NULL OR i.run_id=?)${notErasedSql(store)}
     ORDER BY ${runId === null ? 'p.created_at DESC,p.id DESC LIMIT 60' : 'i.ordinal'}`,
     characterId,
     runId,

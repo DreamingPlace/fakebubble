@@ -1,3 +1,4 @@
+import { installWebOwnerOps, notErasedSql } from '../admin/web-owner-ops-schema.ts';
 import type { WebCharacterDeletion } from './web-character-deletion.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
@@ -260,6 +261,8 @@ export class WebCharacterAdmin {
   private previews: WebCharacterPreviews | null = null;
   private compare: WebReviewCompare | null = null;
   enablePreviews(previews: WebCharacterPreviews) {
+    // Part 31: the two preview guard triggers learn the owner's content erase once the preview ledger exists.
+    installWebOwnerOps(this.store);
     this.previews = previews;
     // Part 26b: the reviewer comparison lives next to 预演: same permission, same queue.
     this.compare = new WebReviewCompare(this.store, this.clock);
@@ -417,7 +420,7 @@ export class WebCharacterAdmin {
       ? this.store
           .all<{ id: string }>(
             `SELECT p.id FROM admin_previews p JOIN web_character_preview_jobs j ON j.preview_id=p.id
-      WHERE p.character_id=? ORDER BY p.created_at DESC,p.id DESC LIMIT 20`,
+      WHERE p.character_id=?${notErasedSql(this.store)} ORDER BY p.created_at DESC,p.id DESC LIMIT 20`,
             id,
           )
           .map((row) => webPreviewDTO(readWebPreview(this.store, row.id)))

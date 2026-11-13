@@ -3,12 +3,12 @@ import { isWorkerdReservedTable } from '../platform/workerd-reserved-tables.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { cocreationRemains } from '../cocreation/web-cocreation-purge.ts';
 import { playerLoginsRemain } from '../identity/web-player-purge.ts';
-import { archiveHasIdentityColumn } from '../review/web-chat-review.ts';
+import { archiveHasIdentityColumn, closedAccountsHaveIdentityColumn } from '../review/web-chat-review.ts';
 
 /**
  * Part 24h. The one refusal of this audit that says WHICH check failed: a table name (only a name read from sqlite_master that
  * matches the identifier pattern) or one of the fixed labels: reply_items, invite_grant_live, cocreation, player_logins,
- * archive_identity, legacy_non_web. Never an id, a world, a principal or any content.
+ * archive_identity, closed_accounts_identity, legacy_non_web. Never an id, a world, a principal or any content.
  */
 const UNEXPECTED_WORLD_DATA = 'WEB_RETENTION_UNEXPECTED_WORLD_DATA';
 const SAFE_DETAIL = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -231,6 +231,8 @@ export function auditWebLifecycleWorld(
     );
   // Part 19: the anonymous review archive may never name an account: no principal / world / player / ... column at all.
   ensureClean(!archiveHasIdentityColumn(store), 'archive_identity');
+  // Part 31: the 已关闭账号 table holds a 玩家编号, a code and two times: no other column, ever.
+  ensureClean(!closedAccountsHaveIdentityColumn(store), 'closed_accounts_identity');
   if (phase === 'source') {
     ensure(
       !store.get(

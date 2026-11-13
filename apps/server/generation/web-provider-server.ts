@@ -28,6 +28,7 @@ import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
+import { OWNER_BODY_LIMIT } from '../admin/web-owner-ops.ts';
 import { webWelcomeLinesInstalled } from '../characters/web-welcome-schema.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
@@ -489,8 +490,10 @@ export class WebProviderServer {
                   ? 786_432
                   : characterWrite
                     ? PROFILE_BODY_LIMIT
-                    : path.startsWith(`${API}/cocreation/`)
-                      ? COCREATION_BODY_LIMIT
+                    : path.startsWith(`${API}/admin/owner/`)
+                      ? OWNER_BODY_LIMIT
+                      : path.startsWith(`${API}/cocreation/`)
+                        ? COCREATION_BODY_LIMIT
                       : 8192,
           ),
         };
@@ -507,6 +510,7 @@ export class WebProviderServer {
             this.application.chatReview,
             this.application.system,
             this.application.cast,
+            this.application.ownerOps,
           )) ??
           routeWebCocreation(this.application.cocreation, input) ??
           routeWebBilling(this.application.billing, input) ??

@@ -6,6 +6,9 @@ import { ensureRegisteredBonus, signupBonusEmailKey, type BonusEmailKey } from '
 import { DEFAULT_PLAYER_MODEL, isPlayerModelId } from '../../../packages/contracts/player-models.ts';
 import { billedModelAt } from '../admission/web-model-settings.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
+import { installWebConversationDeletion } from '../characters/web-conversation-deletion.ts';
+import { installWebOwnerOps } from '../admin/web-owner-ops-schema.ts';
+import { WebOwnerOps } from '../admin/web-owner-ops.ts';
 import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { chooseWelcome, welcomeClipFor } from '../characters/web-welcome-choice.ts';
@@ -181,6 +184,7 @@ export class WebProviderApplication {
   readonly billing: WebBilling;
   /** CHAT_REVIEW_ENABLED (Part 19): 测试对话. Null with the flag off (and on a database older than schema 122). */
   readonly chatReview: WebChatReviewAdmin | null;
+  readonly ownerOps: WebOwnerOps;
   /** GUEST_GRACE_ENABLED: 0 when off. */
   readonly graceMs: number;
   /** Null on a database older than schema 118. */
@@ -253,6 +257,10 @@ export class WebProviderApplication {
     installWebCharacterCatalog(store);
     installWebCharacterMaterials(store);
     installWebCharacterDeletion(store);
+    // Part 31: the owner's operations (digest-checked runtime steps; no numbered migration).
+    installWebOwnerOps(store);
+    installWebConversationDeletion(store);
+    this.ownerOps = new WebOwnerOps(store, clock, this.inviteAdmin);
     this.characterDeletion = new WebCharacterDeletion(store, clock);
     this.characterAdmin = new WebCharacterAdmin(store, clock, this.inviteAdmin);
     this.characterAdmin.enableMaterials(new WebCharacterMaterials(store, clock));
