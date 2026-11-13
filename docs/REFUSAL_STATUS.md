@@ -22,6 +22,9 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `CHARACTER_DELETION_ACK_REQUIRED` (was 409)
 - `CHARACTER_ID_MISMATCH` (was 409)
 - `CHARACTER_VOICE_REQUIRED` (was 409)
+- `CLIP_FEEDBACK_INVALID`
+- `CLIP_MARKUP_MISMATCH`
+- `CLIP_TAKE_NAME_INVALID`
 - `CLOSING_REQUIRED` (was 409)
 - `COCREATION_CARD_INVALID`
 - `COCREATION_EMPTY`
@@ -153,6 +156,8 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `IDEMPOTENCY_CONFLICT`
 - `INVALID_DRAFT_VERSION`
 - `LIVE_VERSION_CONFLICT`
+- `CLIP_DIRECTION_UNKNOWN`
+- `CLIP_NOTHING_TO_GENERATE`
 - `MATERIAL_APPROVAL_IMMUTABLE`
 - `MATERIAL_AUDIO_IMMUTABLE`
 - `MATERIAL_DRAFT_LIMIT`
@@ -175,6 +180,8 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `SCENE_CONTEXT_MISSING`
 - `SCENE_INPUT_CHANGED`
 - `SPEECH_BUSY`
+- `TAKE_IN_USE`
+- `TAKE_NOT_USABLE`
 - `SPEECH_CALL_UNKNOWN`
 - `SPEECH_ESTIMATE_CHANGED`
 - `SPEECH_IN_PROGRESS`

@@ -1,4 +1,14 @@
 import { speechEstimate } from './speech-admin-api.ts';
+import {
+  bundleResult,
+  clipTakes,
+  directionEstimate,
+  generateAllResult,
+  rewriteResult,
+  takeAudioBase64,
+  takeEstimate,
+  takeOf,
+} from './clip-takes-api.ts';
 import type { CharacterTemplate } from '../../../../packages/contracts/index.ts';
 import {
   RESTORE_PROBLEMS,
@@ -403,6 +413,55 @@ export class CharacterAdminClient {
   }
   async previewStatus(id: string, previewId: string) {
     return preview(await this.call(id, 'review-status', { previewId }));
+  }
+  // ---- Part 30: slots and takes ----
+  async takes(id: string) {
+    return clipTakes(await this.call(id, 'take-list'));
+  }
+  async takeAudio(id: string, takeId: string) {
+    return takeAudioBase64(await this.call(id, 'take-audio', { takeId }));
+  }
+  async takeUpload(id: string, slotKey: string, base64: string) {
+    return takeOf(await this.call(id, 'take-upload', { slotKey, base64 }));
+  }
+  async takeEstimate(id: string, slotKeys: string[], markup?: string) {
+    return takeEstimate(
+      await this.call(id, 'take-estimate', { slotKeys, ...(markup === undefined ? {} : { markup }) }),
+    );
+  }
+  async takeGenerate(
+    id: string,
+    input: { requestId: string; slotKey: string; acknowledgeMicros: number; feedback?: string; markup?: string },
+  ) {
+    return takeOf(await this.call(id, 'take-generate', input));
+  }
+  async takeGenerateAll(id: string, input: { requestId: string; acknowledgeMicros: number }) {
+    return generateAllResult(await this.call(id, 'take-generate-all', input));
+  }
+  async takeSelect(id: string, takeId: string) {
+    await this.call(id, 'take-select', { takeId });
+  }
+  async takeRename(id: string, takeId: string, name: string) {
+    await this.call(id, 'take-rename', { takeId, name });
+  }
+  async takeDelete(id: string, takeId: string) {
+    await this.call(id, 'take-delete', { takeId });
+  }
+  async takeApprove(id: string, slots: { slotKey: string; takeId: string }[]) {
+    await this.call(id, 'take-approve', {
+      acknowledgeRights: true,
+      slots: slots.map((slot) => ({ ...slot, heard: true })),
+    });
+  }
+  async takeEstimateDirection(id: string, slotKey: string, feedback: string) {
+    return directionEstimate(await this.call(id, 'take-estimate-direction', { slotKey, feedback }));
+  }
+  async takeRewrite(id: string, input: { requestId: string; slotKey: string; feedback: string }) {
+    return rewriteResult(await this.call(id, 'take-rewrite', input));
+  }
+  /** The 素材版本 a publication names, made from the approved 选用 takes (never shown). */
+  async takeBundle(id: string) {
+    return bundleResult(await this.call(id, 'take-bundle'));
   }
   async materials(id: string): Promise<Material[]> {
     return rows(await this.call(id, 'material-list')).map((v) => {

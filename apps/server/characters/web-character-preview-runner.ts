@@ -22,6 +22,7 @@ import { webCharacterDeleted } from './web-character-deleted.ts';
 import { webCharacterPreviewsRunning } from './web-character-preview-schema.ts';
 import { WebReviewCompareRunner, type CompareClaim } from './web-review-compare-runner.ts';
 import type { WebAdminSpeech } from './web-admin-speech.ts';
+import type { WebClipDirection } from './web-clip-direction.ts';
 import { previewReviewModel } from '../admission/web-review-model.ts';
 import { DEFAULT_REVIEW_MODEL } from '../../../packages/contracts/review-model.ts';
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
@@ -75,6 +76,11 @@ export class WebCharacterPreviewRunner {
    * (an interrupted call becomes unknown, a known bill that was not settled is settled) next to the 预演 bills.
    */
   speech: WebAdminSpeech | null = null;
+  /** Part 30: the text-model half of 按反馈重录 shares the same recovery (an interrupted call becomes unknown; known bills settle). */
+  direction: WebClipDirection | null = null;
+  useDirection(direction: WebClipDirection) {
+    this.direction = direction;
+  }
   useSpeech(speech: WebAdminSpeech) {
     this.speech = speech;
   }
@@ -250,6 +256,7 @@ export class WebCharacterPreviewRunner {
       row?.due ?? Infinity,
       pending ? this.now() + 10_000 : Infinity,
       this.speech?.nextDue() ?? Infinity,
+      this.direction?.pending() ? this.clock.now() + 10_000 : Infinity,
     );
     return Number.isFinite(at) ? at : null;
   }
@@ -272,7 +279,12 @@ export class WebCharacterPreviewRunner {
       "SELECT * FROM web_character_preview_attempts WHERE state='known' AND shared_settled=0 LIMIT 16",
     );
     for (const row of rows) await this.settle(row);
-    return rows.length + other + (this.speech ? await this.speech.recoverBills() : 0);
+    return (
+      rows.length +
+      other +
+      (this.speech ? await this.speech.recoverBills() : 0) +
+      (this.direction ? await this.direction.recoverBills() : 0)
+    );
   }
   private reserve(id: string, token: string, spec: ProviderCallSpec, wireHash: string, bytes: number) {
     return this.store.transaction(() => {

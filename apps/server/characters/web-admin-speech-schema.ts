@@ -100,3 +100,31 @@ export function purgeAdminSpeechAudio(store: BusinessStore, scope: { characterId
       );
   return removed;
 }
+
+/** Part 30: was this audio produced by a succeeded admin speech call of this character and purpose? (A take's origin.) */
+export function adminSpeechGenerated(
+  store: BusinessStore,
+  characterId: string,
+  purpose: 'material-welcome' | 'material-footer',
+  sha256: string,
+) {
+  return (
+    webAdminSpeechInstalled(store) &&
+    !!store.get(
+      "SELECT 1 FROM web_speech_admin_calls WHERE character_id=? AND purpose=? AND outcome='succeeded' AND output_sha256=? LIMIT 1",
+      characterId,
+      purpose,
+      sha256,
+    )
+  );
+}
+/** Part 30: the calls made for a character's takes that ended UNKNOWN, released or refused (newest first). No text, no audio. */
+export function adminSpeechTakeIssues(store: BusinessStore, characterId: string) {
+  if (!webAdminSpeechInstalled(store)) return [];
+  return store.all<{ target_id: string; state: string; error_code: string | null; created_at: number }>(
+    `SELECT target_id,state,error_code,created_at FROM web_speech_admin_calls
+    WHERE character_id=? AND purpose IN ('material-welcome','material-footer') AND target_id GLOB 'take:*'
+    AND (state IN ('unknown','released') OR (state='known' AND outcome='failed')) ORDER BY created_at DESC,rowid DESC`,
+    characterId,
+  );
+}

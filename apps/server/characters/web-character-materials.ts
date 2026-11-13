@@ -187,7 +187,7 @@ export function materialManifest(store: BusinessStore, row: MaterialRow) {
   ]);
 }
 /** The draft as it is NOW. A 素材版本 is not tied to a revision: it is tied to the clip manifest (see materialState). */
-function currentDraft(store: BusinessStore, row: Pick<MaterialRow, 'character_id'>) {
+export function currentDraft(store: BusinessStore, row: Pick<MaterialRow, 'character_id'>) {
   const draft = store.get<{ profile_json: string }>(
     `SELECT r.* FROM web_character_drafts d
     JOIN web_character_revisions r ON r.character_id=d.character_id AND r.revision=d.revision
@@ -234,6 +234,10 @@ export class WebCharacterMaterials {
   enableSpeech(speech: WebAdminSpeech) {
     this.speech = speech;
     setSiteVoiceModel(this.store, speech.siteModel);
+  }
+  /** Part 30: the slot/take layer reads the same speech path (null until it is enabled). */
+  get speechPath() {
+    return this.speech;
   }
   constructor(store: MaterialStore, clock: Clock, nextId: () => string = randomUUID) {
     this.store = store;
@@ -328,7 +332,7 @@ export class WebCharacterMaterials {
    * Fish id a profile import recorded. Clips of an earlier version whose text and voice are unchanged are carried over by
    * `carry` (called right after), so only what changed needs a new clip.
    */
-  prepare(actor: Actor, id: string, input: unknown) {
+  prepare(actor: Actor, id: string, input: unknown, created?: (materialId: string) => void) {
     record(input);
     keys(input, ['requestId', 'draftRevision', 'profileHash', 'referenceId', 'model']);
     identifier(input.requestId);
@@ -354,6 +358,7 @@ export class WebCharacterMaterials {
       const prior = this.store.get<MaterialRow>('SELECT * FROM web_character_materials WHERE request_id=?', requestId);
       if (prior) {
         ensure(prior.request_hash === requestHash, 'IDEMPOTENCY_CONFLICT');
+        created?.(prior.id);
         return { materialId: prior.id };
       }
       // The draft the page is looking at must still be the draft (the voice it shows is the one that is used).
@@ -401,6 +406,8 @@ export class WebCharacterMaterials {
         actor.sessionId,
         now,
       );
+      // Part 30: a material the take layer makes is marked in the very transaction that creates it (see buildBundle).
+      created?.(materialId);
       return { materialId };
     });
   }
@@ -533,7 +540,7 @@ export class WebCharacterMaterials {
     };
   }
   /** The checks every slot audio passes, uploaded or generated: PCM16 WAV, mono, 24 kHz, not silent, at most 60 s, 6 MB. */
-  private checked(bytes: Uint8Array) {
+  checked(bytes: Uint8Array) {
     ensure(bytes.length > 0 && bytes.length <= 6_000_000, 'INVALID_MATERIAL_AUDIO');
     const info = inspectPCM(bytes, 60_000),
       duration = Math.round(info.durationMs);
@@ -710,6 +717,93 @@ export class WebCharacterMaterials {
     return slot.multi
       ? this.lineView(id, materialLines(this.store, row.id).find((item) => item.line_id === slot.line!.id)!)
       : this.view(id, materialAssets(this.store, row.id).find((asset) => asset.kind === kind)!);
+  }
+  /**
+   * Part 30: the 素材版本 a publication names, made from the approved 选用 takes (the screen no longer shows versions). An approved,
+   * not yet published bundle that already holds exactly these clips is reused; otherwise a new one is prepared, filled and sealed.
+   * A published bundle is never reused (a material is promoted once). The take layer has checked approval; this checks the draft.
+   */
+  async buildBundle(
+    actor: Actor,
+    id: string,
+    binding: VoiceModelBinding,
+    picks: { kind: MaterialKind; lineId: string | null; bytes: Uint8Array; sha256: string }[],
+    authorize: () => Actor,
+    /** Called inside the transaction that creates the material: the take layer marks it as its own (never re-imported as takes). */
+    created: (materialId: string) => void,
+  ) {
+    const draft = this.store.get<{ revision: number; content_hash: string }>(
+      'SELECT revision,content_hash FROM web_character_drafts d JOIN web_character_revisions r USING(character_id,revision) WHERE d.character_id=?',
+      id,
+    );
+    ensure(draft, 'DRAFT_CONFLICT');
+    const profile = currentDraft(this.store, { character_id: id });
+    const effective = effectiveVoice(this.store, id, profile.template);
+    ensure(effective, 'CHARACTER_VOICE_REQUIRED');
+    const promoted = (materialId: string) =>
+      !!this.store.get('SELECT 1 FROM web_character_material_promotions WHERE material_id=?', materialId);
+    const same = (row: MaterialRow) => {
+      const state = materialState(this.store, row, profile);
+      const approval = this.store.get<{ manifest_hash: string }>(
+        'SELECT manifest_hash FROM web_character_material_approvals WHERE material_id=?',
+        row.id,
+      );
+      return (
+        !!approval &&
+        approval.manifest_hash === materialManifest(this.store, row) &&
+        state.complete &&
+        row.reference_id === effective.referenceId &&
+        row.model === binding &&
+        picks.every((pick) => clipFor(this.store, row.id, pick)?.sha256 === pick.sha256)
+      );
+    };
+    for (const row of this.store.all<MaterialRow>(
+      'SELECT * FROM web_character_materials WHERE character_id=? ORDER BY created_at DESC,rowid DESC',
+      id,
+    ))
+      if (!promoted(row.id) && same(row)) return row.id;
+    const sig = contentHash([id, effective.referenceId, binding, picks.map((p) => [p.kind, p.lineId, p.sha256])]);
+    let materialId: string | null = null;
+    for (let k = 0; k < 64 && !materialId; k++) {
+      const requestId = `tb-${sig.slice(0, 32)}-${k}`;
+      const prior = this.store.get<MaterialRow>('SELECT * FROM web_character_materials WHERE request_id=?', requestId);
+      if (prior && promoted(prior.id)) continue;
+      try {
+        materialId = this.prepare(
+          actor,
+          id,
+          {
+            requestId,
+            draftRevision: draft.revision,
+            profileHash: draft.content_hash,
+            model: binding,
+          },
+          created,
+        ).materialId;
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'IDEMPOTENCY_CONFLICT') throw error;
+      }
+    }
+    ensure(materialId, 'MATERIAL_DRAFT_LIMIT');
+    const row = this.row(id, materialId);
+    ensure(!this.approvedAlready(row.id) || same(row), 'MATERIAL_STALE');
+    for (const pick of picks) await this.place(id, row.id, pick.kind, pick.bytes, authorize, pick.lineId ?? undefined);
+    this.store.transaction(() => {
+      const current = authorize();
+      usableDraft(this.store, row);
+      ensure(materialState(this.store, row, profile).complete, 'CHARACTER_MATERIALS_REQUIRED');
+      if (this.approvedAlready(row.id)) return;
+      this.store.run(
+        'INSERT INTO web_character_material_approvals VALUES (?,?,?,?,?,?)',
+        row.id,
+        materialManifest(this.store, row),
+        current.memberId,
+        current.sessionId,
+        'slot-approved-takes',
+        this.now(),
+      );
+    });
+    return materialId;
   }
   async audio(id: string, input: unknown, authorize: () => Actor) {
     authorize();
