@@ -306,7 +306,7 @@ try {
     await panel.waitFor();
     const cells = await panel.locator('tbody td').allTextContents();
     assert.ok(
-      cells.some((c) => /^[0-9A-Z]{8}$/.test(c)),
+      cells.some((c: string) => /^[0-9A-Z]{8}$/.test(c)),
       'a 玩家编号',
     );
     assert.ok(!/@|昵称|principal|world/i.test((await panel.textContent()) ?? ''), 'no email, nickname or id');
