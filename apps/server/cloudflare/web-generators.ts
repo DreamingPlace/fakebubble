@@ -19,6 +19,9 @@ import { textPolicyHash } from '../generation/text-generation-policy.ts';
 import { TextGenerationFailure } from '../generation/text-generation-error.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
 import type { FakeFish } from '../generation/web-provider-runner.ts';
+import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
+import { clipPromptHash } from '../characters/clip-direction-prompt.ts';
+import type { ClipDirectionModel } from '../characters/web-clip-direction.ts';
 
 async function session<T>(
   binding: WebGenerationBinding,
@@ -187,5 +190,35 @@ export function webCloudEmbeddings(binding: WebGenerationBinding): EmbeddingProv
         };
       });
     },
+  };
+}
+
+/**
+ * Part 30: 按反馈重录's text call through the isolated generation Worker (the only provider caller). The model is the draft model
+ * that Worker's DeepSeek generator uses (no model option, so DEFAULT_TEXT_MODELS.draft); the business object prices the hold for it
+ * and refuses an answer from any other model. An older Worker without `complete` fails the call (nothing is sent).
+ */
+export function webCloudDirection(binding: WebGenerationBinding): ClipDirectionModel {
+  return {
+    model: DEFAULT_TEXT_MODELS.draft,
+    completePlain: (input, signal, authorize) =>
+      session(binding, signal, async (remote) => {
+        ensure(remote.complete, 'WEB_GENERATION_ROUTE_MISSING');
+        const result = await remote.complete(
+          {
+            system: input.system,
+            systemSha256: clipPromptHash(input.system),
+            user: input.user,
+            maxTokens: input.maxTokens,
+          },
+          () =>
+            callback(async () => {
+              ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
+              await authorize?.();
+            }),
+        );
+        if (!result.ok) throw new DomainError(result.code);
+        return result.value;
+      }),
   };
 }

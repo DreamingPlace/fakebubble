@@ -111,11 +111,6 @@
       "reason": "Part 24b-7: the last page that used the side drawer (导入角色资料) is now an inline panel. The component is kept, with its own component test, until a later Part removes both together; no page opens it."
     },
     {
-      "file": "apps/server/characters/web-clip-direction.ts",
-      "names": ["CLIP_DIRECTION_PROMPT_SHA256", "clipPromptHash"],
-      "reason": "Part 30: the pinned hash of prompts/v7/clip-direction-task.md, checked by tests/web/unit/web-clip-takes-30.test.ts."
-    },
-    {
       "file": "workers/audio/leading-onset.ts",
       "names": ["SILENCE_MS", "onsetMsOf"],
       "reason": "Part 30: the documented constant and the onset reader, used by the tests and the before/after onset report."

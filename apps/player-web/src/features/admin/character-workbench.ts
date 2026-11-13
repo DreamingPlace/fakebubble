@@ -1587,17 +1587,15 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     const paintUsed = () => {
       used.replaceChildren();
       if (!clips) return;
-      const row = (label: string, value: string, field: boolean) => {
-        const line = el('label');
+      // plain text: 「label: take name」 (empty when the slot has no 选用 take)
+      const row = (label: string, value: string, footer: boolean) => {
+        const line = el('div');
         line.className = 'vc-used-row';
-        const k = el('span', label);
-        const v = el('input');
-        v.className = 'vc-used-input';
-        v.readOnly = true;
-        v.tabIndex = -1;
-        v.value = value;
-        v.size = Math.max(6, [...value].length + 1);
-        v.dataset.used = field ? 'footer' : 'line';
+        const k = el('span', `${label}：`),
+          v = el('span', value);
+        k.className = 'vc-k';
+        v.className = 'vc-used-name';
+        v.dataset.used = footer ? 'footer' : 'line';
         line.append(k, v);
         used.append(line);
       };

@@ -13757,11 +13757,14 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   gap: 6px;
 }
 .account-admin-page.admin-shell .vc-take {
-  display: flex;
-  flex-wrap: wrap;
+  /* name | origin · duration | player | actions: fixed columns, so every row lines up */
+  display: grid;
+  grid-template-columns: 11ch 13ch minmax(0, 260px) max-content;
   align-items: center;
-  gap: 6px 12px;
-  padding: 6px 10px;
+  column-gap: 14px;
+  row-gap: 4px;
+  min-height: 52px;
+  padding: 8px 12px;
   border: 1px solid var(--ad-hairline);
   border-radius: var(--ad-radius);
   transition:
@@ -13795,10 +13798,33 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   border-color: var(--ad-border);
   background: #fff;
 }
-.account-admin-page.admin-shell .vc-player {
-  width: 240px;
+.account-admin-page.admin-shell .vc-take-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .vc-take-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .vc-take-actions .admin-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+.account-admin-page.admin-shell .vc-take .vc-player {
+  display: block;
+  width: 260px;
   max-width: 100%;
   height: 32px;
+  margin: 0;
+}
+.account-admin-page.admin-shell .vc-take .vc-meta {
+  white-space: nowrap;
 }
 .account-admin-page.admin-shell #admin-characters .vc-take button.vc-small,
 .account-admin-page.admin-shell #admin-characters .vc-chosen button.vc-small {
@@ -13808,7 +13834,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   font-size: 13px;
 }
 .account-admin-page.admin-shell .vc-note {
-  flex: 1 0 100%;
+  grid-column: 1 / -1;
   margin: 0;
   color: var(--ad-muted);
   font-size: 13px;
@@ -13837,6 +13863,28 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell .vc-pick .ad-file-button {
   /* the 24b-6 check wants every label of the editor in one size (13px) */
   font-size: 13px;
+}
+/* the editor's global button rule gives buttons margin-top 8px and flex-start; inside a take row or the slot bar they centre */
+.account-admin-page.admin-shell #admin-characters .vc-take-actions > .vc-small.vc-small,
+.account-admin-page.admin-shell #admin-characters .vc-slot > .vc-actions > button.admin-secondary.admin-secondary,
+.account-admin-page.admin-shell #admin-characters .vc-slot > .vc-actions .vc-gen button.pw-send.pw-send,
+.account-admin-page.admin-shell #admin-characters .vc-slot > .vc-actions > .vc-pick.vc-pick {
+  margin: 0;
+  align-self: center;
+}
+/* the slot bar: 重录 / 按反馈重录 / 上传 share one height and one radius; 重录 is the one primary (tinted) */
+.account-admin-page.admin-shell #admin-characters .vc-slot > .vc-actions .vc-gen button.pw-send,
+.account-admin-page.admin-shell #admin-characters .vc-slot > .vc-actions > button,
+.account-admin-page.admin-shell #admin-characters .vc-slot > .vc-actions .vc-pick .ad-file-button {
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--ad-radius);
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1;
 }
 .account-admin-page.admin-shell .vc-chosen {
   flex: 1 0 100%;
@@ -13874,14 +13922,14 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   flex-wrap: wrap;
   gap: 8px 20px;
 }
-.account-admin-page.admin-shell #admin-characters .vc-used .vc-used-row.vc-used-row {
+.account-admin-page.admin-shell .vc-used-row {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 14px;
 }
-.account-admin-page.admin-shell #admin-characters .vc-used-row input.vc-used-input {
-  width: auto;
-  max-width: 100%;
+.account-admin-page.admin-shell .vc-used-name {
+  font-weight: 600;
 }
 .account-admin-page.admin-shell .pw-compare-result {
   display: flex;

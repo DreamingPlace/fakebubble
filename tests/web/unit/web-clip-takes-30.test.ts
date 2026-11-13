@@ -14,12 +14,8 @@ import { installWebCharacterMaterials } from '../../../apps/server/characters/we
 import { WebCharacterMaterials } from '../../../apps/server/characters/web-character-materials.ts';
 import { WebAdminSpeech } from '../../../apps/server/characters/web-admin-speech.ts';
 import { WebClipTakes } from '../../../apps/server/characters/web-clip-takes.ts';
-import {
-  CLIP_DIRECTION_PROMPT_SHA256,
-  WebClipDirection,
-  clipPromptHash,
-  type ClipDirectionModel,
-} from '../../../apps/server/characters/web-clip-direction.ts';
+import { WebClipDirection, type ClipDirectionModel } from '../../../apps/server/characters/web-clip-direction.ts';
+import { CLIP_DIRECTION_PROMPT_SHA256, clipPromptHash } from '../../../apps/server/characters/clip-direction-prompt.ts';
 import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { syntheticCharacterReview } from '../fixtures/character-review.ts';
 import type { FakeFish } from '../../../apps/server/generation/web-provider-runner.ts';
@@ -557,4 +553,74 @@ test('migration: an existing 素材版本 becomes takes of its slots; approved s
     sha256: string;
   };
   assert.ok(heard.sha256);
+});
+
+const takeState = (f: ReturnType<typeof fixture>) => ({
+  takes: f.raw.get<{ n: number }>('SELECT count(*) n FROM web_clip_takes')!.n,
+  choices: JSON.stringify(f.raw.all('SELECT * FROM web_clip_choices ORDER BY character_id,slot_key')),
+});
+
+test('restart after bundle + publish: the bundle is not imported again; take count and every 选用 are unchanged; restore still reuses its bundle', async (t) => {
+  const { f, id, first } = await ready(t);
+  for (const key of ['line:line-a', 'line:line-b', 'footer']) await f.gen(id, key);
+  await f.approveAll(id);
+  const { materialId } = (await f.call(id, 'bundle')) as { materialId: string };
+  assert.equal(
+    f.raw.get<{ n: number }>('SELECT count(*) n FROM web_clip_migrated WHERE material_id=?', materialId)!.n,
+    1,
+    'marked in the transaction that created it',
+  );
+  await f.publish(id, first.saved, materialId);
+  const before = takeState(f);
+  assert.equal(before.takes, 3);
+  new WebClipTakes(f.store as never, f.clock, f.materials);
+  new WebClipTakes(f.store as never, f.clock, f.materials);
+  assert.deepEqual(takeState(f), before);
+  const next = f.draft(id, (p) => void ((p.template.persona += ' 再改一点'), (p.template.version = 2)));
+  await f.publish(id, next.saved);
+  const bundles = () => f.raw.get<{ n: number }>('SELECT count(*) n FROM web_character_materials')!.n;
+  const n = bundles();
+  assert.equal(f.chars.restore(f.auth, id, { requestId: 'restore-30b', version: 1, liveVersion: 2 }).version, 3);
+  assert.equal(bundles(), n);
+  new WebClipTakes(f.store as never, f.clock, f.materials);
+  assert.deepEqual(takeState(f), before);
+});
+
+test('migration: three old versions that carry the same clip give one take per slot; the approved one is 选用 + approved', async (t) => {
+  const f = fixture(t);
+  f.code('old-three', 'fish-old-three');
+  const first = f.draft('old-three');
+  const wav = syntheticTone().toString('base64');
+  const version = async (n: number) => {
+    const materialId = f.chars.materialPrepare(f.auth, 'old-three', {
+      requestId: `old-three-${n}`,
+      draftRevision: first.saved.revision,
+      profileHash: first.saved.contentHash,
+    }).materialId;
+    if (n === 1) {
+      for (const lineId of ['line-a', 'line-b'])
+        await f.chars.materialUpload(f.auth, 'old-three', { materialId, kind: 'welcome', lineId, base64: wav });
+      await f.chars.materialUpload(f.auth, 'old-three', { materialId, kind: 'footer', base64: wav });
+    } else await f.chars.materialCarry(f.auth, 'old-three', materialId);
+    await f.chars.materialApprove(f.auth, 'old-three', {
+      materialId,
+      acknowledgeRights: true,
+      acknowledgeLines: ['line-a', 'line-b'],
+      acknowledgeFooterListening: true,
+      note: '合成',
+    });
+  };
+  for (const n of [1, 2, 3]) await version(n);
+  assert.equal(f.raw.get<{ n: number }>('SELECT count(*) n FROM web_character_materials')!.n, 3);
+  const fresh = new WebClipTakes(f.store as never, f.clock, f.materials);
+  const v = fresh.view('old-three') as unknown as View;
+  assert.deepEqual(
+    v.slots.map((s) => [s.takes.length, s.approved]),
+    [
+      [1, true],
+      [1, true],
+      [1, true],
+    ],
+  );
+  assert.equal(f.raw.get<{ n: number }>('SELECT count(*) n FROM web_clip_takes')!.n, 3);
 });

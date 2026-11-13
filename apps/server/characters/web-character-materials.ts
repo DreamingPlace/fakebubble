@@ -332,7 +332,7 @@ export class WebCharacterMaterials {
    * Fish id a profile import recorded. Clips of an earlier version whose text and voice are unchanged are carried over by
    * `carry` (called right after), so only what changed needs a new clip.
    */
-  prepare(actor: Actor, id: string, input: unknown) {
+  prepare(actor: Actor, id: string, input: unknown, created?: (materialId: string) => void) {
     record(input);
     keys(input, ['requestId', 'draftRevision', 'profileHash', 'referenceId', 'model']);
     identifier(input.requestId);
@@ -358,6 +358,7 @@ export class WebCharacterMaterials {
       const prior = this.store.get<MaterialRow>('SELECT * FROM web_character_materials WHERE request_id=?', requestId);
       if (prior) {
         ensure(prior.request_hash === requestHash, 'IDEMPOTENCY_CONFLICT');
+        created?.(prior.id);
         return { materialId: prior.id };
       }
       // The draft the page is looking at must still be the draft (the voice it shows is the one that is used).
@@ -405,6 +406,8 @@ export class WebCharacterMaterials {
         actor.sessionId,
         now,
       );
+      // Part 30: a material the take layer makes is marked in the very transaction that creates it (see buildBundle).
+      created?.(materialId);
       return { materialId };
     });
   }
@@ -726,6 +729,8 @@ export class WebCharacterMaterials {
     binding: VoiceModelBinding,
     picks: { kind: MaterialKind; lineId: string | null; bytes: Uint8Array; sha256: string }[],
     authorize: () => Actor,
+    /** Called inside the transaction that creates the material: the take layer marks it as its own (never re-imported as takes). */
+    created: (materialId: string) => void,
   ) {
     const draft = this.store.get<{ revision: number; content_hash: string }>(
       'SELECT revision,content_hash FROM web_character_drafts d JOIN web_character_revisions r USING(character_id,revision) WHERE d.character_id=?',
@@ -764,12 +769,17 @@ export class WebCharacterMaterials {
       const prior = this.store.get<MaterialRow>('SELECT * FROM web_character_materials WHERE request_id=?', requestId);
       if (prior && promoted(prior.id)) continue;
       try {
-        materialId = this.prepare(actor, id, {
-          requestId,
-          draftRevision: draft.revision,
-          profileHash: draft.content_hash,
-          model: binding,
-        }).materialId;
+        materialId = this.prepare(
+          actor,
+          id,
+          {
+            requestId,
+            draftRevision: draft.revision,
+            profileHash: draft.content_hash,
+            model: binding,
+          },
+          created,
+        ).materialId;
       } catch (error) {
         if ((error as { code?: string }).code !== 'IDEMPOTENCY_CONFLICT') throw error;
       }

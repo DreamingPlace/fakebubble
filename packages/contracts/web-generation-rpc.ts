@@ -26,6 +26,19 @@ export type WebEmbedRPCResult =
   | { ok: true; value: { vectors: number[][]; usageTokens: number | null; requestId: string | null } }
   /** `known`: the provider rejected the call before running it (or the gate refused it): nothing was billed. */
   | { ok: false; code: string; known: boolean };
+/**
+ * Part 30: ONE plain-text completion on the draft model for 按反馈重录. The Worker accepts only the pinned clip-direction system
+ * prompt (it checks the text and `systemSha256`); the business object has already reserved the budget.
+ */
+export interface WebCompleteWire {
+  system: string;
+  systemSha256: string;
+  user: string;
+  maxTokens: number;
+}
+export type WebCompleteRPCResult =
+  | { ok: true; value: { text: string; inputTokens: number; outputTokens: number; model: string; receipt: unknown } }
+  | { ok: false; code: string };
 export interface WebGenerationSession {
   text(
     request: TextGenerationRequest,
@@ -38,6 +51,8 @@ export interface WebGenerationSession {
   ): Promise<TextRPCResult>;
   speech(wire: WebSpeechWire, authorize: () => Promise<void>): Promise<SpeechRPCResult>;
   embed(wire: WebEmbedWire, authorize: () => Promise<void>): Promise<WebEmbedRPCResult>;
+  /** Part 30: the clip-direction rewrite (absent on an older generation Worker: 按反馈重录 then stays off). */
+  complete?(wire: WebCompleteWire, authorize: () => Promise<void>): Promise<WebCompleteRPCResult>;
   cancel(): Promise<void>;
   [Symbol.dispose](): void;
 }

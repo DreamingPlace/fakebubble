@@ -3,7 +3,12 @@ import { WebCharacterPreviews } from '../../../apps/server/characters/web-charac
 import { legacySchema } from './legacy-schema.ts';
 import { WebCharacterPreviewRunner } from '../../../apps/server/characters/web-character-preview-runner.ts';
 import { WebAdminSpeech } from '../../../apps/server/characters/web-admin-speech.ts';
-import { WebCloudTextGenerator, webCloudSpeech } from '../../../apps/server/cloudflare/web-generators.ts';
+import { WebClipDirection } from '../../../apps/server/characters/web-clip-direction.ts';
+import {
+  WebCloudTextGenerator,
+  webCloudDirection,
+  webCloudSpeech,
+} from '../../../apps/server/cloudflare/web-generators.ts';
 import type { WebGenerationBinding } from '../../../packages/contracts/web-generation-rpc.ts';
 import type { WebBudgetStatusRPC, WebBudgetTopUpRPC } from '../../../apps/server/cloudflare/web-budget-client.ts';
 import { WebBudgetObject } from '../../../workers/web-cloudflare/budget.ts';
@@ -70,7 +75,7 @@ import { syntheticTone } from '../../../apps/server/platform/web-local-fake.ts';
 import { syntheticCharacterReview } from './character-review.ts';
 
 /** Part 29: a fixture worker module switches the admin speech path on (as business.ts builds it) before its objects are made. */
-export const fixtureSpeech = { on: false };
+export const fixtureSpeech = { on: false, direction: false };
 /** Real HTTP, SQL, R2 and Alarm with synthetic transports; these operator routes never ship. */
 export class WebHTTPFixture extends WebBusinessFixture {
   private app: WebProviderApplication;
@@ -167,6 +172,11 @@ export class WebHTTPFixture extends WebBusinessFixture {
       this.app.characterAdmin.enableSpeech(
         new WebAdminSpeech(this.store, this.clock, webCloudSpeech(env.GENERATION), budget, 's2.1-pro'),
       );
+      // Part 30: 按反馈重录 the way business.ts builds it: WebClipDirection over the generation Worker and the shared budget.
+      if (fixtureSpeech.direction)
+        this.app.characterAdmin.enableDirection(
+          new WebClipDirection(this.store, this.clock, webCloudDirection(env.GENERATION), budget),
+        );
     }
     this.execution = new WebCloudExecutor(ctx, this.store, this.clock, this.createRunner(), undefined, previews);
     this.http = this.transport();
@@ -294,12 +304,21 @@ export class WebHTTPFixture extends WebBusinessFixture {
       );
       return Response.json({ configured: true });
     }
+    if (path === '/fixture/direction/sent') return Response.json(await this.generation!.stats());
+    if (path === '/fixture/direction/complete') {
+      // Part 30: a raw wire straight to the generation session's `complete` (the pinned-prompt gate), nothing else.
+      using session = await this.generation!.open();
+      return Response.json(await session.complete!((await request.json()) as never, async () => {}));
+    }
     if (path === '/fixture/speech/stats')
       return Response.json({
         budget: await this.previewBudget!.summary(),
         fishCalls: await this.generation!.stats(),
         calls: this.store.all(
           'SELECT purpose,state,outcome,error_code,shared_settled,held_micros,charged_micros FROM web_speech_admin_calls ORDER BY created_at,ordinal',
+        ),
+        direction: this.store.all(
+          'SELECT state,outcome,error_code,shared_settled,held_micros,charged_micros FROM web_clip_direction_calls ORDER BY created_at,rowid',
         ),
       });
     if (path === '/fixture/request') return Response.json({ url: request.url, headers: [...request.headers] });

@@ -118,7 +118,7 @@ async function run(freeTier: boolean) {
         await tab('发布');
         await wait(800);
         check(
-          (await page.locator('input[data-used="footer"]').count()) === 0,
+          (await page.locator('[data-used="footer"]').count()) === 0,
           `${at}: a footer field is shown with no footer slot`,
         );
         await shot('publish-no-footer');
@@ -199,6 +199,52 @@ async function run(freeTier: boolean) {
         (await takes('line:a').locator('.vc-meta:has-text("按反馈")').count()) === 1,
         `${at}: the feedback take is not marked 按反馈`,
       );
+      // Round 2 layout: fixed columns, centred actions, one slot-bar height, 「已选用」 for the state and 「选用」 for the action.
+      const geometry = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll('section[data-slot="line:a"] .vc-take')];
+        const box = (n: Element | null) => (n ? n.getBoundingClientRect() : null);
+        return {
+          playerX: rows.map((r) => Math.round(box(r.querySelector('.vc-player'))!.x)),
+          actionsX: rows.map((r) => Math.round(box(r.querySelector('.vc-take-actions'))!.x)),
+          centred: rows.map((r) => {
+            // the first grid line (a feedback take has a note line under it)
+            const first = box(r.querySelector('.vc-take-name'))!,
+              mid = first.y + first.height / 2;
+            return [...r.querySelectorAll('.vc-take-actions > *, .vc-take-name, .vc-meta, .vc-player')].map((n) => {
+              const b = box(n)!;
+              return `${n.className.split(' ')[0]}:${Math.round((b.y + b.height / 2 - mid) * 10) / 10}`;
+            });
+          }),
+          bar: [
+            ...document.querySelectorAll(
+              'section[data-slot="line:a"] > .vc-actions .vc-gen button.pw-send, section[data-slot="line:a"] > .vc-actions > button, section[data-slot="line:a"] > .vc-actions .vc-pick .ad-file-button',
+            ),
+          ].map((n) => {
+            const b = n.getBoundingClientRect();
+            return [Math.round(b.height), getComputedStyle(n).borderRadius];
+          }),
+          tags: [...document.querySelectorAll('section[data-slot="line:a"] .vc-take-actions .admin-badge')].map(
+            (n) => n.textContent,
+          ),
+        };
+      });
+      check(new Set(geometry.playerX).size === 1, `${at}: the players do not line up (${geometry.playerX.join(',')})`);
+      check(
+        new Set(geometry.actionsX).size === 1,
+        `${at}: the actions do not line up (${geometry.actionsX.join(',')})`,
+      );
+      check(
+        geometry.centred.every((row: string[]) => row.every((d) => Math.abs(Number(d.split(':')[1])) <= 2)),
+        `${at}: something is not vertically centred in its row (${JSON.stringify(geometry.centred)})`,
+      );
+      check(
+        geometry.bar.length === 3 && new Set(geometry.bar.map((b: (string | number)[]) => b.join('/'))).size === 1,
+        `${at}: the slot bar buttons differ in height or radius (${JSON.stringify(geometry.bar)})`,
+      );
+      check(
+        geometry.tags.length === 1 && geometry.tags[0] === '已选用',
+        `${at}: the state tag is not 「已选用」 (${geometry.tags.join(',')})`,
+      );
       // approval: every selected take heard to the end, 全选, one 批准
       check(
         (await page.locator('.vc-tick input:not(:disabled)').count()) === 0,
@@ -208,6 +254,15 @@ async function run(freeTier: boolean) {
         document.querySelectorAll('audio.vc-player').forEach((a) => a.dispatchEvent(new Event('ended'))),
       );
       await wait(300);
+      const order = await page
+        .locator('.vc-approval')
+        .evaluate((node: HTMLElement) =>
+          [...node.querySelectorAll('label.admin-check, button')].map((n) => (n.textContent ?? '').trim()),
+        );
+      check(
+        order[0] === '全选' && order.at(-1) === '批准' && /有权使用/.test(order.at(-2) ?? ''),
+        `${at}: the approval row is not 全选, the ticks, the rights tick, 批准 (${order.join(' | ')})`,
+      );
       await page.locator('.vc-approval label:has-text("我确认有权使用") input').check();
       await page.locator('.vc-approval label:has-text("全选") input').check();
       check(
@@ -236,12 +291,12 @@ async function run(freeTier: boolean) {
       // 发布 tab: the footer field and each line's 选用 take name
       await tab('发布');
       await wait(1200);
-      const footer = page.locator('input[data-used="footer"]');
+      const footer = page.locator('[data-used="footer"]');
       check((await footer.count()) === 1, `${at}: the footer field is missing with a footer slot`);
-      check((await footer.inputValue()) === '第 1 条', `${at}: the footer field does not show the 选用 take's name`);
+      check((await footer.textContent()) === '第 1 条', `${at}: the footer field does not show the 选用 take's name`);
       const lineNames = await page
-        .locator('input[data-used="line"]')
-        .evaluateAll((nodes: HTMLInputElement[]) => nodes.map((n) => n.value));
+        .locator('[data-used="line"]')
+        .evaluateAll((nodes: HTMLElement[]) => nodes.map((n) => n.textContent ?? ''));
       check(
         lineNames.length === 2 && lineNames[0] === '更懒版',
         `${at}: the lines do not show their 选用 take names (${lineNames.join(',')})`,

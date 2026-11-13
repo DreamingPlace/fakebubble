@@ -1,9 +1,9 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { stripDirectionMarkup } from '../../../workers/audio/fish.ts';
 import { budgetHash } from '../budget/web-provider-budget-contract.ts';
-import { PROMPTS_CLIP } from '../generation/clip-prompts.generated.ts';
+import { CLIP_DIRECTION_PROMPT } from './clip-direction-prompt.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { contentHash } from './admin-content-hash.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
@@ -16,9 +16,6 @@ import { identifier } from './template-validation.ts';
  * a known bill is settled once. The hard rule is checked after the bill is recorded: removing the markup must give back the
  * line's exact text, else the answer is refused (CLIP_MARKUP_MISMATCH) and nothing is stored but the ledger row.
  */
-export const CLIP_DIRECTION_PROMPT = PROMPTS_CLIP.clipDirectionTask;
-/** sha256 of prompts/v7/clip-direction-task.md (the file, with its newline). Pinned in tests/web/unit/web-clip-takes-30.test.ts. */
-export const CLIP_DIRECTION_PROMPT_SHA256 = 'c8b0ce6a1107d754adac4b15054666fbab8f4ad44a3d6fdc4f77cb94403d9a4f';
 export const CLIP_FEEDBACK_MAX = 200;
 const OUTPUT_TOKENS = 700;
 
@@ -31,6 +28,8 @@ export interface ClipDirectionModel {
   completePlain(
     input: { system: string; user: string; maxTokens: number },
     signal: AbortSignal,
+    /** The send gate: called at the last moment before the request leaves (the generation Worker calls it back). */
+    authorize?: () => void | Promise<void>,
   ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string; receipt: unknown }>;
 }
 type Actor = { memberId: string; sessionId: string };
@@ -220,9 +219,22 @@ export class WebClipDirection {
         result = await this.model.completePlain(
           { system: CLIP_DIRECTION_PROMPT, user: userMessage(input.text, feedback), maxTokens: OUTPUT_TOKENS },
           new AbortController().signal,
+          () => {
+            authorize();
+            ensure(!webCharacterDeleted(this.store, input.characterId), 'CHARACTER_DELETED');
+            ensure(
+              this.store.get("SELECT 1 FROM web_clip_direction_calls WHERE id=? AND state='sent'", id) !== undefined,
+              'SPEECH_REQUEST_INVALID',
+            );
+          },
         );
       } catch (error) {
         this.markUnknown(id, causeCode(error));
+        throw new DomainError('CLIP_DIRECTION_UNKNOWN');
+      }
+      // The model that answered must be the one the hold was priced for.
+      if (result.model !== this.model.model) {
+        this.markUnknown(id, 'WEB_PROVIDER_WIRE_MISMATCH');
         throw new DomainError('CLIP_DIRECTION_UNKNOWN');
       }
       const units = result.inputTokens + result.outputTokens;
@@ -370,6 +382,3 @@ function causeCode(error: unknown) {
   const code = (error as { code?: unknown } | null)?.code ?? (error instanceof Error ? error.message : '');
   return typeof code === 'string' && /^[A-Z][A-Z0-9_]{2,63}$/.test(code) ? code : 'SPEECH_PROVIDER_FAILED';
 }
-
-/** The hash a request is bound to (for tests that pin the prompt bytes). */
-export const clipPromptHash = () => createHash('sha256').update(`${CLIP_DIRECTION_PROMPT}\n`).digest('hex');
