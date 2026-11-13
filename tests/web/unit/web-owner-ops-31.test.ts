@@ -34,6 +34,8 @@ import type { TextGenerationRequest } from '../../../packages/contracts/index.ts
 import { acceptedAuditEnvelope, draftEnvelope, toolEnvelope } from '../../text-fixtures.ts';
 
 import { WebOwnerOps } from '../../../apps/server/admin/web-owner-ops.ts';
+import { WebAvatars, installWebAvatars } from '../../../apps/server/characters/web-avatar.ts';
+import { publishedWebCharacters } from '../../../apps/server/characters/web-character-catalog.ts';
 import { installWebOwnerOps } from '../../../apps/server/admin/web-owner-ops-schema.ts';
 const ORIGIN = 'https://fixture.invalid';
 type Mode = 'normal' | 'unknown' | 'invalid-topics' | 'huge-topics';
@@ -148,9 +150,14 @@ function fixture(t: test.TestContext) {
     const session = accounts.login(grant.token, ORIGIN);
     return { cookie: session.cookie, csrf: session.csrf, origin: ORIGIN };
   };
+  installWebAvatars(store);
+  const avatars = new WebAvatars(store, clock);
+  chars.enableAvatars(avatars);
+  chars.enableAvailability();
   const ops = new WebOwnerOps(raw as never, clock, accounts);
   return {
     ops,
+    avatars,
     accounts,
     store: raw,
     chars,
@@ -391,4 +398,148 @@ test('the owner-ops step is digest-checked: a second start changes nothing, and 
   assert.deepEqual(f.store.get('SELECT * FROM web_owner_ops_schema'), digest);
   f.store.run('UPDATE web_owner_ops_schema SET sha256=?', 'f'.repeat(64));
   assert.throws(() => installWebOwnerOps(f.store as never), /WEB_OWNER_OPS_SCHEMA_MISMATCH/);
+});
+
+// ---- 25e: avatars ---------------------------------------------------------------------------------------------------------
+
+const picture = (name: string) =>
+  readFileSync(new URL(`../fixtures/avatars/${name}`, import.meta.url)).toString('base64');
+/** A draft that differs from the live version only by the picture (so it needs no 预演). */
+function avatarDraft(f: ReturnType<typeof fixture>, avatarId: string | null, over: (p: any) => void = () => {}) {
+  const live = f.chars.detail(f.auth, 'jojo').published!.profile;
+  live.template.version++;
+  if (avatarId) live.presentation.avatar = { id: avatarId };
+  over(live);
+  return live;
+}
+const publishNoPreview = (
+  f: ReturnType<typeof fixture>,
+  id: string,
+  saved: { revision: number; contentHash: string },
+  requestId = 'pub-av',
+) =>
+  f.chars.publish(f.auth, id, {
+    requestId,
+    draftRevision: saved.revision,
+    profileHash: saved.contentHash,
+    acknowledgeReview: true,
+  });
+
+test('avatar: upload re-encodes (no metadata), save checks the picture exists, 发布 needs no 预演, the live catalog serves it, a replaced one is erased', async (t) => {
+  const f = fixture(t);
+  const up = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('i.jpg') });
+  assert.equal(up.avatar.source, 'jpeg');
+  assert.equal(up.avatar.width, up.avatar.height);
+  // what is stored is the PNG of pixels only
+  const stored = await f.chars.avatarRead(f.auth, 'jojo', { avatarId: up.avatar.id });
+  const bytes = Buffer.from(stored.base64, 'base64');
+  assert.equal(
+    createHash('sha256').update(bytes).digest('hex'),
+    up.avatar.id,
+    'the id is the hash of the stored bytes',
+  );
+  assert.equal(bytes.includes(Buffer.from('SecretCam')), false);
+  // the draft must name a picture this character has
+  assert.throws(
+    () => f.chars.save(f.auth, 'jojo', { expectedRevision: null, profile: avatarDraft(f, 'f'.repeat(64)) }),
+    /AVATAR_NOT_FOUND/,
+  );
+  assert.throws(
+    () => f.chars.save(f.auth, 'jojo', { expectedRevision: null, profile: avatarDraft(f, 'nothex') }),
+    /INVALID_ADMIN_REQUEST/,
+  );
+  const saved = f.chars.save(f.auth, 'jojo', { expectedRevision: null, profile: avatarDraft(f, up.avatar.id) });
+  // not served before it is published
+  await assert.rejects(f.avatars.readPublic(up.avatar.id), /NOT_FOUND/);
+  const published = publishNoPreview(f, 'jojo', saved);
+  assert.equal(published.previewId, null, 'a picture needs no 预演');
+  assert.equal(
+    f.store.get(
+      "SELECT 1 FROM web_admin_audit WHERE action LIKE 'character-published:%:colour-only' AND target_id='jojo'",
+    ) !== undefined,
+    true,
+  );
+  const served = await f.avatars.readPublic(up.avatar.id);
+  assert.equal(served.contentType, 'image/png');
+  assert.deepEqual(Buffer.from(served.bytes), bytes);
+  assert.equal(
+    publishedWebCharacters(f.store as never).find((c) => c.characterId === 'jojo')!.presentation.avatar!.id,
+    up.avatar.id,
+  );
+  // an unknown or malformed id is a plain NOT_FOUND
+  await assert.rejects(f.avatars.readPublic('a'.repeat(64)), /NOT_FOUND/);
+  await assert.rejects(f.avatars.readPublic('../etc/passwd'), /NOT_FOUND/);
+  // a second picture: the first is still named by a published version, so it stays; an upload nobody saved is erased by the next upload
+  const second = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('l-420.jpg') });
+  const third = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('n-lossy.webp') });
+  const left = f.store
+    .all<{ avatar_id: string; state: string }>(
+      'SELECT avatar_id,state FROM web_character_avatars ORDER BY created_at,avatar_id',
+    )
+    .map((r) => ({ ...r }));
+  assert.equal(left.find((r) => r.avatar_id === up.avatar.id)!.state, 'live');
+  assert.equal(left.find((r) => r.avatar_id === second.avatar.id)!.state, 'erase');
+  assert.equal(left.find((r) => r.avatar_id === third.avatar.id)!.state, 'live');
+  assert.equal(await f.avatars.sweep(), 1);
+  assert.equal(f.store.get('SELECT 1 FROM web_character_avatars WHERE avatar_id=?', second.avatar.id), undefined);
+  assert.throws(() => f.avatars.info('jojo', second.avatar.id) ?? assert.fail('gone'), /gone/);
+});
+
+test('avatar: a picture does not excuse a change of what the character says, and anything else of the profile is still refused without a 预演', async (t) => {
+  const f = fixture(t);
+  const up = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('a.png') });
+  const saved = f.chars.save(f.auth, 'jojo', {
+    expectedRevision: null,
+    profile: avatarDraft(f, up.avatar.id, (p) => (p.template.persona += '，多了一句')),
+  });
+  assert.throws(() => publishNoPreview(f, 'jojo', saved), /VALID_PREVIEW_REQUIRED/);
+  await assert.rejects(f.avatars.readPublic(up.avatar.id), /NOT_FOUND/, 'still not served');
+});
+
+test('avatar: who may upload, what is refused, and 下线 / deletion take the picture out', async (t) => {
+  const f = fixture(t);
+  const reader = f.member(['characters.read:*']);
+  await assert.rejects(
+    Promise.resolve().then(() => f.chars.avatarUpload(reader, 'jojo', { base64: picture('a.png') })),
+    /ADMIN_PERMISSION_REQUIRED/,
+  );
+  await assert.rejects(
+    Promise.resolve().then(() =>
+      f.chars.avatarUpload({ ...f.auth, origin: 'https://evil.invalid' }, 'jojo', { base64: picture('a.png') }),
+    ),
+    /ADMIN_UNAUTHORIZED/,
+  );
+  await assert.rejects(
+    Promise.resolve().then(() =>
+      f.chars.avatarUpload({ ...f.auth, csrf: 'd'.repeat(64) }, 'jojo', { base64: picture('a.png') }),
+    ),
+    /ADMIN_CSRF_REQUIRED/,
+  );
+  for (const [name, code] of [
+    ['icon.svg', 'AVATAR_FORMAT'],
+    ['truncated.jpg', 'AVATAR_INVALID'],
+    ['tiny.png', 'AVATAR_DIMENSIONS'],
+    ['huge-dimensions.png', 'AVATAR_DIMENSIONS'],
+  ] as const)
+    await assert.rejects(f.chars.avatarUpload(f.auth, 'jojo', { base64: picture(name) }), new RegExp(code), name);
+  await assert.rejects(f.chars.avatarUpload(f.auth, 'jojo', { base64: 'not base64!' }), /AVATAR_INVALID/);
+  await assert.rejects(f.chars.avatarUpload(f.auth, 'jojo', { base64: 'A'.repeat(2_900_000) }), /AVATAR_TOO_LARGE/);
+  assert.equal(count(f, 'web_character_avatars'), 0, 'nothing was stored by a refusal');
+  // 发布, then 下线: an offline character's picture is no longer served
+  const up = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('b-alpha.png') });
+  const saved = f.chars.save(f.auth, 'jojo', { expectedRevision: null, profile: avatarDraft(f, up.avatar.id) });
+  const live = publishNoPreview(f, 'jojo', saved);
+  await f.avatars.readPublic(up.avatar.id);
+  f.chars.setAvailability(f.auth, 'jojo', 'offline', { requestId: 'off-1', liveVersion: live.version });
+  await assert.rejects(f.avatars.readPublic(up.avatar.id), /NOT_FOUND/);
+  // deleting the character removes its pictures (local bytes at once)
+  const deletion = new WebCharacterDeletion(f.store as never, f.clock);
+  const impact = deletion.preview('jojo');
+  const actor = f.accounts.authorize(f.auth.cookie, f.auth.csrf, f.auth.origin);
+  deletion.start(actor, 'jojo', {
+    requestId: 'del-jojo',
+    previewHash: impact.previewHash,
+    acknowledgeDeleteAllChats: true,
+  });
+  assert.equal(count(f, 'web_character_avatars'), 0, 'no picture outlives its character');
 });

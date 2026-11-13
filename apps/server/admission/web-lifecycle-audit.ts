@@ -34,6 +34,11 @@ const shells = new Set([
   // record that a code was redeemed. A live grant never survives a cleared world (checked below).
   'web_invite_grants',
 ]);
+/**
+ * Part 31: principal-keyed tables (no world column) that legitimately keep rows after a purge, and why. A revoked session row holds
+ * a token digest and times; the legacy account table is refused outright by the purge itself; a trial_extra row holds the keyed IP hash.
+ */
+const principalShells = new Set(['web_sessions', 'web_accounts', 'web_free_operations']);
 const handled = new Set([
   'web_local_events',
   'web_user_events',
@@ -229,6 +234,23 @@ export function auditWebLifecycleWorld(
       ),
       'player_logins',
     );
+  // Part 31: every table that is keyed by a PRINCIPAL without carrying a world (the checks above are keyed by the world, the lists
+  // below by name) is read from the schema, so a player-keyed table added later cannot be forgotten: it must either be one of the
+  // few documented shells that hold no content or be empty for this world's principals in the cleared phase. An unknown one fails
+  // closed with its own name.
+  if (phase === 'cleared') {
+    const principals = store.all<{ id: string }>('SELECT id FROM web_principals WHERE world_id=?', worldId).map((row) => row.id);
+    if (principals.length > 0) {
+      const marks = principals.map(() => '?').join(',');
+      for (const { name } of tables) {
+        if (provider && isWorkerdReservedTable(name)) continue;
+        if (principalShells.has(name)) continue;
+        const columns = store.all<{ name: string }>(`PRAGMA table_info("${name}")`).map((column) => column.name);
+        if (columns.includes('principal_id') && !columns.includes('world_id'))
+          ensureClean(!store.get(`SELECT 1 FROM "${name}" WHERE principal_id IN (${marks}) LIMIT 1`, ...principals), name);
+      }
+    }
+  }
   // Part 19: the anonymous review archive may never name an account: no principal / world / player / ... column at all.
   ensureClean(!archiveHasIdentityColumn(store), 'archive_identity');
   // Part 31: the 已关闭账号 table holds a 玩家编号, a code and two times: no other column, ever.

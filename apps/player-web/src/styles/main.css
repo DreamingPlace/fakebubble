@@ -19306,6 +19306,170 @@ html.theme-fade *::after {
   }
 }
 
+/* ======================================================================================================================
+   Part 31 (admin only): 首页顺序, the avatar field, 整理预演, 测试对话 deletion and 已关闭账号. Tokens of the 24b-7c system; every
+   transition is a transform or opacity (160-240 ms) and is cancelled under prefers-reduced-motion.
+   ====================================================================================================================== */
+.account-admin-page.admin-shell .is-danger {
+  color: var(--ad-danger);
+  border-color: color-mix(in srgb, var(--ad-danger) 45%, var(--ad-border));
+}
+.account-admin-page.admin-shell .is-danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--ad-danger) 8%, var(--ad-surface));
+}
+.account-admin-page.admin-shell .arc-panel {
+  margin: 0 0 var(--ad-sp-5);
+  padding: var(--ad-card-pad);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  animation: ad31-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.account-admin-page.admin-shell .arc-list {
+  display: grid;
+  gap: var(--ad-sp-2);
+  margin: var(--ad-sp-3) 0 0;
+  padding: 0;
+  list-style: none;
+  max-width: 480px;
+}
+.account-admin-page.admin-shell .arc-row {
+  display: grid;
+  grid-template-columns: 24px 28px 14px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ad-sp-3);
+  min-height: var(--ad-h-standard);
+  padding: 0 var(--ad-sp-3);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  touch-action: none;
+}
+.account-admin-page.admin-shell .arc-row:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 1px;
+}
+.account-admin-page.admin-shell .arc-row[data-dragging],
+.account-admin-page.admin-shell .arc-row.is-dragging {
+  box-shadow: 0 6px 18px rgb(31 42 38 / 18%);
+  background: var(--ad-primary-soft);
+}
+.account-admin-page.admin-shell .arc-grip {
+  cursor: grab;
+  color: var(--ad-muted);
+  text-align: center;
+  user-select: none;
+}
+.account-admin-page.admin-shell .arc-pos {
+  font-variant-numeric: tabular-nums;
+  color: var(--ad-muted);
+  text-align: right;
+}
+.account-admin-page.admin-shell .arc-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--arc-colour, var(--ad-border));
+}
+.account-admin-page.admin-shell .arc-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .av-field {
+  max-width: var(--ad-w-l);
+}
+.account-admin-page.admin-shell .av-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--ad-sp-4);
+  align-items: center;
+}
+.account-admin-page.admin-shell .av-circle {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 36px;
+  font-weight: 600;
+  color: #fff;
+  background-color: var(--av-colour, var(--ad-primary));
+  background-position: center;
+  background-size: cover;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
+  transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.account-admin-page.admin-shell .av-circle[data-empty="false"] {
+  font-size: 0;
+}
+.account-admin-page.admin-shell .av-actions {
+  display: flex;
+  gap: var(--ad-sp-2);
+  flex-wrap: wrap;
+}
+.account-admin-page.admin-shell .av-side p {
+  margin: var(--ad-sp-1) 0 0;
+}
+.account-admin-page.admin-shell .av-line:empty {
+  display: none;
+}
+.account-admin-page.admin-shell .av-line[data-tone="warn"] {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .pw-manage {
+  margin: 0 0 var(--ad-sp-3);
+}
+.account-admin-page.admin-shell .pm-tools {
+  gap: var(--ad-sp-2);
+}
+.account-admin-page.admin-shell .pm-count {
+  color: var(--ad-muted);
+  margin-right: auto;
+}
+.account-admin-page.admin-shell .pm-tick {
+  animation: ad31-in 160ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.account-admin-page.admin-shell [data-pickable="true"] {
+  outline-offset: -1px;
+}
+.account-admin-page.admin-shell .closed-panel {
+  margin-top: var(--ad-sp-5);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  padding: var(--ad-sp-3) var(--ad-card-pad) var(--ad-card-pad);
+}
+.account-admin-page.admin-shell .closed-panel > summary {
+  font-weight: 600;
+  min-height: var(--ad-h-compact);
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .closed-table {
+  max-width: 520px;
+}
+.account-admin-page.admin-shell .closed-table .closed-act {
+  text-align: right;
+}
+.account-admin-page.admin-shell .review-confirm:empty {
+  display: none;
+}
+@keyframes ad31-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-admin-page.admin-shell .arc-panel,
+  .account-admin-page.admin-shell .pm-tick,
+  .account-admin-page.admin-shell .av-circle {
+    animation: none;
+    transition: none;
+  }
+}
+
 /* ==========================================================================================================================
    Part 25c: the phone home stays put, the cards turn with real motion, and the guest's co-creation hint. Player selectors only.
    ========================================================================================================================== */
