@@ -183,6 +183,63 @@ export async function routeWebAccountAdmin(
     if (action === 'export') return { status: 200, body: characters.compareExport(actor, body(['runId']).runId) };
     ensure(false, 'NOT_FOUND');
   }
+  // Part 35: 多轮预演 (scripts, phrase lists, estimate, runs). The session, CSRF and Origin are checked before anything else.
+  if (path.startsWith(`${base}/rehearsal/`)) {
+    auth();
+    ensure(characters, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/rehearsal/`.length);
+    if (action === 'library') {
+      body([]);
+      return { status: 200, body: characters.rehearsalLibrary(actor) };
+    }
+    if (action === 'script-save')
+      return { status: 200, body: characters.rehearsalScriptSave(actor, body(['requestId', 'id', 'name', 'turns'])) };
+    if (action === 'script-delete')
+      return { status: 200, body: characters.rehearsalScriptDelete(actor, body(['requestId', 'id'])) };
+    if (action === 'phrases-save')
+      return {
+        status: 200,
+        body: characters.rehearsalPhrasesSave(actor, body(['requestId', 'customerService', 'advice'])),
+      };
+    const characterId = (value: unknown) => {
+      ensure(typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value), 'INVALID_REQUEST');
+      return value;
+    };
+    if (action === 'items')
+      return { status: 200, body: characters.rehearsalItems(actor, characterId(body(['characterId']).characterId)) };
+    if (action === 'list')
+      return { status: 200, body: characters.rehearsalList(actor, characterId(body(['characterId']).characterId)) };
+    if (action === 'detail') {
+      const value = body(['characterId', 'runId']);
+      return { status: 200, body: characters.rehearsalDetail(actor, characterId(value.characterId), value.runId) };
+    }
+    if (action === 'estimate') {
+      const { characterId: id, ...rest } = body([
+        'characterId',
+        'draftRevision',
+        'profileHash',
+        'source',
+        'models',
+        'withCast',
+      ]);
+      return { status: 200, body: characters.rehearsalEstimate(actor, characterId(id), rest) };
+    }
+    if (action === 'start') {
+      const { characterId: id, ...rest } = body([
+        'characterId',
+        'requestId',
+        'draftRevision',
+        'profileHash',
+        'source',
+        'models',
+        'withCast',
+        'acknowledgeMicros',
+      ]);
+      return { status: 200, body: characters.rehearsalStart(actor, characterId(id), rest) };
+    }
+    ensure(false, 'NOT_FOUND');
+  }
   if (path.startsWith(`${base}/eval-sets/`)) {
     auth();
     ensure(characters, 'NOT_FOUND');

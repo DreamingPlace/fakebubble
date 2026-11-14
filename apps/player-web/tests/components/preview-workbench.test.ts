@@ -97,8 +97,8 @@ const run1 = (over: Partial<RunSummary> = {}): RunSummary => ({
   characterId: 'jojo',
   label: '改人设前',
   draftRevision: 3,
+  // Part 35 (named exception): a run no longer carries a relationship; the line that was here is gone.
   profileHash: 'a'.repeat(64),
-  relationship: 'friend',
   simulatedTime: { time: '05:50', timeZone: 'Asia/Singapore' },
   timeZone: 'Asia/Singapore',
   evalSet: { id: 'e1', version: 2 },
@@ -562,7 +562,7 @@ test('submitting: the first click only asks, the second sends; a run carries lab
   box.type_('第一条\n\n第二条 \n');
   assert.equal(text(sendButton(f.root)), '运行 2 条 · 4 次付费调用');
   label(f.root, '运行备注').type_('改前');
-  label(f.root, '预演关系').value = 'friend';
+  // Part 35 (named exception): there is no 预演关系 control any more, so nothing is chosen here.
   label(f.root, '模拟时间').value = 'set';
   label(f.root, '模拟时间').dispatch('change');
   (f.root.querySelector('[aria-label="模拟的当地时间"]') as FakeElement).value = '05:50';
@@ -582,7 +582,7 @@ test('submitting: the first click only asks, the second sends; a run carries lab
       requestId: undefined,
       draftRevision: 3,
       profileHash: 'a'.repeat(64),
-      relationship: 'friend',
+      // Part 35 (named exception): the body no longer carries a relationship.
       // Named exception (Part 24b-2): the 关系与故事 switch is always sent; its default chip is 不用.
       castSource: 'none',
       label: '改前',

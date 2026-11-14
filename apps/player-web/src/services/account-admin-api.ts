@@ -211,6 +211,7 @@ export class AccountAdminApi extends InviteAdminApi {
     (path, body) => this.request('/characters/' + path, body),
     (path, body) => this.request('/eval-sets/' + path, body),
     (path, body) => this.request('/review-compare/' + path, body),
+    (path, body) => this.request('/rehearsal/' + path, body),
   );
   readonly cast = new CastAdminClient((path, body) => this.request('/cast/' + path, body));
   /** Part 24j: 导入角色资料. */

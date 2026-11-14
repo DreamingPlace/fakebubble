@@ -758,7 +758,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     onDirectory: (roles) => {
       picker.show(roles);
     },
-    preview: 'none',
     onView: (id) => {
       if (quiet || page !== 'characters') return;
       routeId = id;

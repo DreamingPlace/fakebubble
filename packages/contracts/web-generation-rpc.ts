@@ -39,6 +39,19 @@ export interface WebCompleteWire {
 export type WebCompleteRPCResult =
   | { ok: true; value: { text: string; inputTokens: number; outputTokens: number; model: string; receipt: unknown } }
   | { ok: false; code: string };
+/**
+ * Part 35: ONE plain completion on a house reviewer model for 多轮预演 (the hint writer and the verdict). The Worker runs only a system
+ * prompt whose text and `systemSha256` are exactly one of the pinned judge prompts, and only a house reviewer model; the business
+ * object has already reserved the budget.
+ */
+export interface WebJudgeWire {
+  system: string;
+  systemSha256: string;
+  user: string;
+  maxTokens: number;
+  model: string;
+}
+export type WebJudgeRPCResult = WebCompleteRPCResult;
 export interface WebGenerationSession {
   text(
     request: TextGenerationRequest,
@@ -53,6 +66,8 @@ export interface WebGenerationSession {
   embed(wire: WebEmbedWire, authorize: () => Promise<void>): Promise<WebEmbedRPCResult>;
   /** Part 30: the clip-direction rewrite (absent on an older generation Worker: 按反馈重录 then stays off). */
   complete?(wire: WebCompleteWire, authorize: () => Promise<void>): Promise<WebCompleteRPCResult>;
+  /** Part 35: the 多轮预演 judge (absent on an older generation Worker: a run that needs a judge then fails before anything is sent). */
+  judge?(wire: WebJudgeWire, authorize: () => Promise<void>): Promise<WebJudgeRPCResult>;
   cancel(): Promise<void>;
   [Symbol.dispose](): void;
 }

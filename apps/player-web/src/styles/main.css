@@ -3195,16 +3195,8 @@ body:has(.admin-shell) {
   border: 1px solid var(--ad-border);
   border-radius: 8px;
 }
-.account-admin-page.admin-shell .character-flow,
-.account-admin-page.admin-shell .preview-panel {
+.account-admin-page.admin-shell .character-flow {
   max-width: 920px;
-}
-.account-admin-page.admin-shell .preview-card {
-  margin: 10px 0;
-  padding: 10px 14px;
-  background: var(--ad-surface);
-  border: 1px solid var(--ad-border);
-  border-radius: 8px;
 }
 .account-admin-page.admin-shell .admin-toolbar:empty {
   display: none;
@@ -15534,6 +15526,331 @@ button:not(
 /* a number box keeps room for its spin buttons: tighter side padding so 5 digits and a placeholder like 1–10000 fit the xs width */
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) input[type="number"]:not(.vc-materials *) {
   padding-inline: 10px;
+}
+
+/* Part 35: 多轮预演, one wide panel. Compact controls are 32 px high, standard ones 40 px; every transition eases with --ad-motion. */
+.account-admin-page.admin-shell .pw-rehearse {
+  align-self: flex-start;
+  height: var(--ad-h-compact, 32px);
+}
+.account-admin-page.admin-shell .admin-drawer .rh {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  padding: 0;
+  height: 100%;
+}
+.account-admin-page.admin-shell .rh-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 0 16px 16px;
+  overflow: auto;
+  border-right: 1px solid var(--ad-line);
+}
+.account-admin-page.admin-shell .rh-rail h4 {
+  margin: 12px 8px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .rh-pick,
+.account-admin-page.admin-shell .rh-run {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 4px 10px;
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ad-text);
+  cursor: pointer;
+  transition:
+    background calc(160ms * var(--ad-motion)) var(--ad-ease),
+    color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .rh-pick:hover,
+.account-admin-page.admin-shell .rh-run:hover {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell .rh-pick[aria-pressed="true"],
+.account-admin-page.admin-shell .rh-run[aria-pressed="true"] {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-weight: 600;
+}
+.account-admin-page.admin-shell .rh-meta,
+.account-admin-page.admin-shell .rh-note,
+.account-admin-page.admin-shell .rh-count {
+  font-size: 12px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .rh-count[data-bad="true"] {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .rh-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  padding: 16px 16px 16px 0;
+  overflow: auto;
+}
+.account-admin-page.admin-shell .rh-setup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.account-admin-page.admin-shell .rh-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: rhIn calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .rh-editor textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+}
+.account-admin-page.admin-shell .rh-editor input[type="text"] {
+  height: 40px;
+  width: 100%;
+}
+.account-admin-page.admin-shell .rh-title {
+  font-weight: 600;
+  line-height: 40px;
+}
+.account-admin-page.admin-shell .rh-actions,
+.account-admin-page.admin-shell .rh-settings,
+.account-admin-page.admin-shell .rh-models,
+.account-admin-page.admin-shell .rh-chips,
+.account-admin-page.admin-shell .rh-runs,
+.account-admin-page.admin-shell .rh-runhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .rh-settings {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .rh-toggle,
+.account-admin-page.admin-shell .rh-chip {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: 16px;
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  cursor: pointer;
+  transition:
+    background calc(160ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .rh-toggle[aria-pressed="true"],
+.account-admin-page.admin-shell .rh-chip[aria-pressed="true"] {
+  background: var(--ad-tint);
+  border-color: var(--ad-primary);
+  color: var(--ad-tint-ink);
+  font-weight: 600;
+}
+.account-admin-page.admin-shell .rh-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.account-admin-page.admin-shell .rh-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.account-admin-page.admin-shell .rh-run {
+  border: 1px solid var(--ad-border);
+  border-radius: 16px;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .rh-bar {
+  flex: 0 0 120px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--ad-hairline);
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .rh-bar i {
+  display: block;
+  height: 100%;
+  background: var(--ad-primary);
+  transition: width calc(280ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .rh-cost {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.account-admin-page.admin-shell .rh-pane {
+  animation: rhIn calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+  overflow-x: auto;
+}
+.account-admin-page.admin-shell .rh-grid {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) repeat(var(--rh-cols), minmax(190px, 1fr));
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--ad-surface);
+}
+.account-admin-page.admin-shell .rh-row {
+  display: contents;
+}
+.account-admin-page.admin-shell .rh-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ad-muted);
+  background: var(--ad-bg);
+  border-bottom: 1px solid var(--ad-border);
+}
+.account-admin-page.admin-shell .rh-player,
+.account-admin-page.admin-shell .rh-cell {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ad-hairline);
+  animation: rhIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+  animation-delay: calc(var(--rh-i, 0) * 20ms * var(--ad-motion));
+}
+.account-admin-page.admin-shell .rh-player {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  background: var(--ad-bg);
+}
+.account-admin-page.admin-shell .rh-player p,
+.account-admin-page.admin-shell .rh-bubble {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .rh-bubble + .rh-bubble {
+  margin-top: 4px;
+}
+.account-admin-page.admin-shell .rh-n {
+  font-size: 12px;
+  color: var(--ad-muted);
+  min-width: 16px;
+}
+.account-admin-page.admin-shell .rh-wait {
+  font-size: 12px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .rh-cell[data-state="running"] .rh-wait::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--ad-primary);
+  animation: rhPulse calc(1100ms * var(--ad-motion)) ease-in-out infinite;
+}
+.account-admin-page.admin-shell .rh-counts {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--ad-surface);
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+}
+.account-admin-page.admin-shell .rh-counts th,
+.account-admin-page.admin-shell .rh-counts td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--ad-hairline);
+  font-weight: 400;
+}
+.account-admin-page.admin-shell .rh-counts thead th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .rh-counts td {
+  font-variant-numeric: tabular-nums;
+}
+.account-admin-page.admin-shell .rh-memes tr[data-first="true"] th,
+.account-admin-page.admin-shell .rh-memes tr[data-first="true"] td {
+  border-top: 1px solid var(--ad-border);
+}
+.account-admin-page.admin-shell .rh-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-weight: 600;
+}
+.account-admin-page.admin-shell .rh-memes th[rowspan] {
+  vertical-align: top;
+  min-width: 140px;
+}
+.account-admin-page.admin-shell .rh-words {
+  margin-top: 12px;
+}
+.account-admin-page.admin-shell .rh-words-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 8px 0;
+}
+.account-admin-page.admin-shell .rh-words-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .rh-words-grid textarea {
+  width: 100%;
+}
+.account-admin-page.admin-shell .rh-empty {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .rh-settings .pw-send {
+  height: 40px;
+  transition:
+    background calc(160ms * var(--ad-motion)) var(--ad-ease),
+    color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .rh-settings .pw-send[data-state="confirm"] {
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn);
+  border-color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .rh-settings .pw-sendbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+@keyframes rhIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes rhPulse {
+  50% {
+    opacity: 0.25;
+  }
 }
 
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
