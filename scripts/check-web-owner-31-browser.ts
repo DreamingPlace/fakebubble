@@ -124,19 +124,54 @@ try {
     assert.equal(await page.locator('.arc-row').count(), before.length, 'one row per card on the arc');
     assert.equal((await page.locator('.arc-row .arc-pos').first().textContent())?.trim(), '1');
     await snap(page, `arc-open-${width}`);
-    // keyboard: the first row moves one place down (Alt+↓), the numbers follow, and the home page's own order is saved
+    // the 15 cards read as one sequence in rows of 3: Alt+→ moves one place (Part 31b: it was Alt+↓ while the list was a column)
     await page.locator('.arc-row').first().focus();
-    await page.keyboard.press('Alt+ArrowDown');
+    await page.keyboard.press('Alt+ArrowRight');
     await page.waitForTimeout(900);
     const after = catalog();
     assert.deepEqual(after.slice(0, 2), [before[1], before[0]], `saved for everyone at ${width}`);
     assert.equal((await page.locator('.arc-row .arc-name').first().textContent())?.trim() !== '', true);
     await snap(page, `arc-moved-${width}`);
-    // put it back (so the second size starts from the same order)
     await page.locator('.arc-row').nth(1).focus();
-    await page.keyboard.press('Alt+ArrowUp');
+    await page.keyboard.press('Alt+ArrowLeft');
     await page.waitForTimeout(900);
-    assert.deepEqual(catalog(), before);
+    assert.deepEqual(catalog(), before, 'Alt+← puts it back');
+    if (width === 1440) {
+      // Alt+↓ is one row (three places); Alt+↑ brings it back
+      await page.locator('.arc-row').first().focus();
+      await page.keyboard.press('Alt+ArrowDown');
+      await page.waitForTimeout(900);
+      assert.deepEqual(catalog().slice(0, 4), [before[1], before[2], before[3], before[0]], 'one row down');
+      await page.locator('.arc-row').nth(3).focus();
+      await page.keyboard.press('Alt+ArrowUp');
+      await page.waitForTimeout(900);
+      assert.deepEqual(catalog(), before);
+      // pointer drag across rows: the first tile is dropped on the last one (any position), then dragged back to the first
+      const grip = (i: number) => page.locator('.arc-row').nth(i).locator('.arc-grip');
+      const centre = async (i: number) => {
+        const box = (await page.locator('.arc-row').nth(i).boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      const last = before.length - 1;
+      const from = await grip(0).boundingBox();
+      const target = await centre(last);
+      await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(target.x - 40, target.y - 10, { steps: 12 });
+      await snap(page, 'arc-dragging-1440');
+      await page.mouse.move(target.x, target.y, { steps: 4 });
+      await page.mouse.up();
+      await page.waitForTimeout(1100);
+      assert.deepEqual(catalog(), [...before.slice(1), before[0]], 'dropped across rows, at the last place');
+      const g = await grip(last).boundingBox();
+      const top = await centre(0);
+      await page.mouse.move(g!.x + g!.width / 2, g!.y + g!.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(top.x, top.y, { steps: 12 });
+      await page.mouse.up();
+      await page.waitForTimeout(1100);
+      assert.deepEqual(catalog(), before, 'and back to the first place');
+    }
     await page.close();
   }
   {

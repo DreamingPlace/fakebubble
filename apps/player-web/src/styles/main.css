@@ -15549,11 +15549,16 @@ button:not(
 }
 .account-admin-page.admin-shell .arc-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--ad-sp-2);
   margin: 0;
   padding: var(--ad-card-pad);
   list-style: none;
+}
+@media (max-width: 720px) {
+  .account-admin-page.admin-shell .arc-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 /* in the collapsed role rail 首页顺序 is a glyph like 新建角色 / 导入角色资料 and says its name when the rail opens */
 .account-admin-page.admin-shell #wb-arc {
