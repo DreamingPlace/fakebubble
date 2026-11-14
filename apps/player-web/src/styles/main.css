@@ -15879,15 +15879,13 @@ button:not(
 }
 .account-admin-page.admin-shell .rh-model {
   display: grid;
-  grid-template-columns: 148px 64px 64px;
+  grid-template-columns: 160px 64px 64px;
   align-items: center;
   gap: 8px;
 }
 .account-admin-page.admin-shell .rh-model-name {
   color: var(--ad-text);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .account-admin-page.admin-shell .rh-model .rh-toggle {
   padding: 0;
