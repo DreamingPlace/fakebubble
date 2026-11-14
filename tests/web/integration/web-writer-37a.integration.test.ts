@@ -216,7 +216,7 @@ test('v8 end to end (voice): plain draft with no tool, guard with a tool, direct
   // Two provider calls, in order: the plain draft (no tools, the pinned temperature, thinking off) then the guard (one forced tool).
   assert.equal(f.wire.length, 2);
   assert.ok(!('tools' in f.wire[0]!.body) && !('tool_choice' in f.wire[0]!.body));
-  assert.equal(f.wire[0]!.body.temperature, 0.9);
+  assert.equal(f.wire[0]!.body.temperature, 1.3);
   assert.deepEqual(f.wire[0]!.body.thinking, { type: 'disabled' });
   const messages = f.wire[0]!.body.messages as { role: string; content: string }[];
   assert.ok(messages[0]!.content.startsWith('你是快照角色。'));

@@ -22,7 +22,7 @@ test('the generation Worker runs a v8 request on the same route: a plain draft a
   const f = setup(t);
   const out = await f.call<Out>('/', { writer: 'v8', hash: 'v8' });
   assert.equal(out.result.ok, true, JSON.stringify(out));
-  assert.deepEqual(out.calls, [{ plain: true, temperature: 0.9 }, { plain: false }]);
+  assert.deepEqual(out.calls, [{ plain: true, temperature: 1.3 }, { plain: false }]);
 });
 
 test('the Worker refuses a v8 request whose policy hash is not the pinned v8 one (an older business object, or v7 bytes): nothing is sent', async (t) => {

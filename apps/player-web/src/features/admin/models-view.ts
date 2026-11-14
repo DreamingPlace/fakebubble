@@ -291,7 +291,7 @@ export function modelsView(
       const ok = await deps.confirm(
         {
           title: '确认切换回复写法',
-          message: `回复写法将从「${WRITER_LABELS[w.writer]}」切换为「${WRITER_LABELS[to]}」。已在生成的回复不变，只影响此后发送的消息。`,
+          message: `回复写法：「${WRITER_LABELS[w.writer]}」切换为「${WRITER_LABELS[to]}」，已在生成的回复不变。`,
           confirmLabel: `确认切换为「${WRITER_LABELS[to]}」`,
         },
         writerConfirm,

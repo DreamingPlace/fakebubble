@@ -125,7 +125,8 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
   if (options.provider) renewProviderPrices(store as unknown as WebRuntimeStore, clock.now());
   /** The scripted answer of one column to one turn of a 多轮预演: three different manners, so the columns can be told apart. */
   const rehearsalDraft = (request: { scope: { worldId: string }; messages: Array<{ authorKind: string }> }) => {
-    const model = request.scope.worldId.split('-').at(-1);
+    // Part 37a: a 新 column's world ends in -v8; it speaks like its model.
+    const model = request.scope.worldId.replace(/-v8$/, '').split('-').at(-1);
     const turn = request.messages.filter((m) => m.authorKind === 'player').length;
     const say: Record<string, string[][]> = {
       deepseek: [
@@ -160,7 +161,8 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
       const provider = options.provider;
       if (!provider) return new Response('{}', { status: 500 });
       const body = JSON.parse(String(init!.body));
-      const tool = body.tools[0].function.name as string;
+      // Part 37a: a v8 draft is a plain completion (no tools); its second pass is the guard tool.
+      const tool = body.tools ? (body.tools[0].function.name as string) : 'plain';
       const compare = store.get<{ request_json: string }>(
         "SELECT request_json FROM web_review_compare_cases WHERE status='generating'",
       );
@@ -175,8 +177,31 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
       const request = JSON.parse(generating.request_json);
       if (rehearsal) {
         const draft = rehearsalDraft(request);
-        const draftPhase = tool === 'submit_dialogue_draft';
+        const draftPhase = tool === 'submit_dialogue_draft' || tool === 'plain';
         await sleep(draftPhase ? provider.draftMs : provider.reviewMs);
+        if (tool === 'plain') {
+          const usage = { prompt_tokens: 900, completion_tokens: 60, total_tokens: 960 };
+          const message = { role: 'assistant', content: draft.bubbles.map((b) => b.text).join('\n') };
+          return Response.json({
+            id: 'plain',
+            model: body.model,
+            choices: [{ finish_reason: 'stop', message }],
+            usage,
+          });
+        }
+        if (tool === 'submit_reply_check') {
+          const properties = body.tools[0].function.parameters.properties;
+          const answer = {
+            fixes: [],
+            mode: 'casual',
+            endsSession: false,
+            topics: [],
+            factOps: [],
+            ...(properties.sceneUpdate ? { sceneUpdate: null } : {}),
+            ...(properties.relationshipEvents ? { relationshipEvents: [] } : {}),
+          };
+          return Response.json(toolEnvelope('submit_reply_check', answer));
+        }
         if (!draftPhase)
           return Response.json(
             toolEnvelope('submit_dialogue_audit', (({ bubbleChecks: _c, ...a }) => a)(auditReply(request, draft))),

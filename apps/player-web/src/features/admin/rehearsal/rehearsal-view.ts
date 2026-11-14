@@ -195,9 +195,17 @@ export function rehearsalView(host: RehearsalHost) {
   });
   const settings = h('div', { class: 'rh-settings' }, modelBox, castBox, send.root);
   const editor = h('div', { class: 'rh-editor' });
+  // The toggles are built once per library and only re-pressed afterwards, so a press animates instead of being redrawn.
+  let modelsBuiltFor: RehearsalLibrary | null = null;
   const paintModels = () => {
+    if (modelsBuiltFor === library && modelBox.childElementCount > 0) {
+      for (const b of modelBox.querySelectorAll('button'))
+        b.setAttribute('aria-pressed', String(models.has(b.dataset.model ?? '')));
+      return;
+    }
+    modelsBuiltFor = library;
     modelBox.replaceChildren();
-    // One group per model with its two writers: 现行 (the writer every reply has today) and 新.
+    // One row per model with its two writers: 现行 (the writer every reply has today) and 新.
     for (const m of library?.models ?? []) {
       const group = h(
         'div',

@@ -15871,23 +15871,26 @@ button:not(
   opacity: 0.5;
   cursor: not-allowed;
 }
-/* Part 37a: one model with its two writers (现行 / 新), side by side. */
+/* Part 37a: the models as rows and the writers (现行 / 新) as two aligned columns. */
+.account-admin-page.admin-shell .rh-models {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
 .account-admin-page.admin-shell .rh-model {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 148px 64px 64px;
   align-items: center;
-  gap: 6px;
-  padding: 3px 3px 3px 12px;
-  border: 1px solid var(--ad-border);
-  border-radius: 20px;
+  gap: 8px;
 }
 .account-admin-page.admin-shell .rh-model-name {
   color: var(--ad-text);
-  font-size: 13px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .account-admin-page.admin-shell .rh-model .rh-toggle {
-  height: 28px;
-  padding: 0 12px;
+  padding: 0;
 }
 .account-admin-page.admin-shell .rh-result {
   display: flex;

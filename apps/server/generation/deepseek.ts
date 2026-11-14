@@ -512,7 +512,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
                   ...parameters,
                   model,
                   max_tokens: WRITER_V8_MAX_TOKENS,
-                  temperature: WRITER_V8_TEMPERATURE,
+                  temperature: WRITER_V8_TEMPERATURE.deepseek,
                   messages,
                   user_id: user,
                 });
@@ -523,7 +523,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
                   model,
                   messages,
                   maxTokens: WRITER_V8_MAX_TOKENS,
-                  temperature: WRITER_V8_TEMPERATURE,
+                  temperature: WRITER_V8_TEMPERATURE[ref.provider],
                   user: scopeUser([frozen.scope.worldId, frozen.scope.conversationId, frozen.scope.characterId]),
                 });
               })()

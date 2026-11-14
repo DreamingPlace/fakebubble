@@ -321,10 +321,10 @@ test('37a columns: DeepSeek·现行 next to DeepSeek·新 on one run, the live s
   assert.equal(request('deepseek').writer, undefined);
   assert.equal(request('deepseek-v8').writer, 'v8');
   assert.equal('relationship' in request('deepseek-v8'), false);
-  // 现行 is untouched: tool call drafts; 新 drafts are plain completions at 0.9, the second pass is the guard on the house reviewer.
+  // 现行 is untouched: tool call drafts; 新 drafts are plain completions at the per-provider temperature, the second pass is the guard on the house reviewer.
   const plain = f.sent.filter((s) => s.plain);
   assert.equal(plain.length, 2 * 8);
-  assert.ok(plain.every((s) => s.temperature === 0.9));
+  assert.ok(plain.every((s) => s.temperature === (s.provider === 'deepseek' ? 1.3 : 1)));
   assert.deepEqual([...new Set(plain.map((s) => `${s.provider}:${s.model}`))].sort(), [
     'deepseek:deepseek-flash',
     'gemini:gemini-3.8-flash',

@@ -31,8 +31,13 @@ import type { ReviewOptions, TextDraft } from './accepted-text-protocol.ts';
  * writes. Nothing here changes a v7 byte: v7 requests never carry `writer`, and these functions are reached only for one that does.
  */
 export const WRITER_V8_PROTOCOL_VERSION = 'plain_draft_guard_v8';
-/** Higher than v7, which sends no temperature (each provider's own default). Used for the plain draft only. */
-export const WRITER_V8_TEMPERATURE = 0.9;
+/**
+ * Sampling of the plain draft, per provider. v7 sends NO temperature, so each provider's own default applies, and that default is
+ * 1.0 (DeepSeek's documented default is 1.0). So 0.9 would be lower, not higher: DeepSeek gets 1.3 (its own recommendation for
+ * general conversation); Gemini and Grok stay at 1.0, which is their default too (a higher value is not safe there), so for them
+ * v8's draft differs from v7 in the prompt, not the sampling. The guard sends none, like v7's review.
+ */
+export const WRITER_V8_TEMPERATURE = { deepseek: 1.3, xai: 1.0, gemini: 1.0 } as const;
 /** Visible-reply limit of the plain draft (the draft limits below hold 1,200 characters at most). */
 export const WRITER_V8_MAX_TOKENS = 2048;
 
