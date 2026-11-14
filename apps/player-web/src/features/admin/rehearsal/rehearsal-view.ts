@@ -4,7 +4,11 @@ import {
   REHEARSAL_TURN_CHARS,
   REHEARSAL_ITEMS_MAX,
   REHEARSAL_SET_LABELS,
+  REHEARSAL_COLUMN_KEYS,
+  REHEARSAL_WRITER_LABELS,
   charLength,
+  rehearsalColumnKey,
+  parseRehearsalColumn,
   type RehearsalCell,
   type RehearsalCounts,
   type RehearsalEstimate,
@@ -15,7 +19,6 @@ import {
   type RehearsalRunInfo,
   type RehearsalSource,
 } from '../../../../../../packages/contracts/web-rehearsal.ts';
-import type { PlayerModelId } from '../../../../../../packages/contracts/player-models.ts';
 import type { RehearsalAdminClient } from '../../../services/rehearsal-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
 import { micros, when } from '../preview/copy.ts';
@@ -51,7 +54,6 @@ type Pick =
   | { kind: 'script'; id: string }
   | { kind: 'new' };
 const POLL_MS = 2500;
-const MODEL_ORDER: PlayerModelId[] = ['deepseek', 'gemini', 'xai'];
 const lines = (text: string) =>
   text
     .split(/\r?\n/)
@@ -85,7 +87,8 @@ export function rehearsalView(host: RehearsalHost) {
     pick: Pick = { kind: 'set', set: 'chat' },
     items: RehearsalItems = { available: false, items: [] },
     chosenItems = new Set<string>(),
-    models = new Set<PlayerModelId>(['deepseek']),
+    // Part 37a: the chosen COLUMNS, (model, writer) keys: `deepseek` is DeepSeek·现行, `deepseek-v8` DeepSeek·新.
+    models = new Set<string>(['deepseek']),
     withCast = false,
     castTouched = false,
     estimate: RehearsalEstimate | null = null,
@@ -194,21 +197,31 @@ export function rehearsalView(host: RehearsalHost) {
   const editor = h('div', { class: 'rh-editor' });
   const paintModels = () => {
     modelBox.replaceChildren();
+    // One group per model with its two writers: 现行 (the writer every reply has today) and 新.
     for (const m of library?.models ?? []) {
-      const b = h('button', {
-        class: 'rh-toggle',
-        text: m.label,
-        attrs: { type: 'button', 'aria-pressed': String(models.has(m.id)), 'data-model': m.id },
-      });
-      b.disabled = !m.available;
-      if (!m.available) hoverValue(b, '此环境未配置');
-      b.addEventListener('click', () => {
-        if (models.has(m.id)) models.delete(m.id);
-        else models.add(m.id);
-        paintSetup();
-        refreshEstimate();
-      });
-      modelBox.append(b);
+      const group = h(
+        'div',
+        { class: 'rh-model', attrs: { role: 'group', 'aria-label': m.label } },
+        h('span', { class: 'rh-model-name', text: m.label }),
+      );
+      for (const writer of ['v7', 'v8'] as const) {
+        const key = rehearsalColumnKey(m.id, writer);
+        const b = h('button', {
+          class: 'rh-toggle',
+          text: REHEARSAL_WRITER_LABELS[writer],
+          attrs: { type: 'button', 'aria-pressed': String(models.has(key)), 'data-model': key },
+        });
+        b.disabled = !m.available;
+        if (!m.available) hoverValue(b, '此环境未配置');
+        b.addEventListener('click', () => {
+          if (models.has(key)) models.delete(key);
+          else models.add(key);
+          paintSetup();
+          refreshEstimate();
+        });
+        group.append(b);
+      }
+      modelBox.append(group);
     }
   };
   const paintEditor = () => {
@@ -337,7 +350,7 @@ export function rehearsalView(host: RehearsalHost) {
         draftRevision: d.revision,
         profileHash: d.hash,
         source: src,
-        models: MODEL_ORDER.filter((m) => models.has(m)),
+        models: REHEARSAL_COLUMN_KEYS.filter((m) => models.has(m)),
         withCast,
       })
       .then((e) => {
@@ -363,7 +376,7 @@ export function rehearsalView(host: RehearsalHost) {
       draftRevision: d.revision,
       profileHash: d.hash,
       source: src,
-      models: MODEL_ORDER.filter((m) => models.has(m)),
+      models: REHEARSAL_COLUMN_KEYS.filter((m) => models.has(m)),
       withCast,
       acknowledgeMicros: estimate.totalMicros,
     };
@@ -437,7 +450,7 @@ export function rehearsalView(host: RehearsalHost) {
     grid.style.setProperty('--rh-cols', String(d.columns.length));
     grid.append(h('div', { class: 'rh-head rh-corner', text: '玩家' }));
     for (const c of d.columns)
-      grid.append(h('div', { class: 'rh-head', text: c.label, attrs: { 'data-model': c.model } }));
+      grid.append(h('div', { class: 'rh-head', text: c.label, attrs: { 'data-model': c.key } }));
     d.turns.forEach((turn, i) => {
       const row = h('div', { class: 'rh-row', attrs: { role: 'row' } });
       row.style.setProperty('--rh-i', String(Math.min(i, 12)));
@@ -456,7 +469,7 @@ export function rehearsalView(host: RehearsalHost) {
     return grid;
   };
   const COUNT_ROWS: Array<[string, (c: RehearsalCounts) => string, (c: RehearsalCounts) => number | null]> = [
-    ['答全每条', (c) => `${c.answeredAll} / ${c.replies}`, (c) => c.answeredAll],
+    ['答全每条', (c) => (c.answeredAll === null ? '—' : `${c.answeredAll} / ${c.replies}`), (c) => c.answeredAll],
     ['没问的建议', (c) => String(c.unaskedAdvice), (c) => c.unaskedAdvice],
     ['以问句结尾', (c) => `${c.endsWithQuestion} / ${c.replies}`, (c) => c.endsWithQuestion],
     ['平均字数', (c) => (c.avgChars === null ? '—' : String(c.avgChars)), (c) => c.avgChars],
@@ -582,7 +595,7 @@ export function rehearsalView(host: RehearsalHost) {
             h(
               'td',
               {},
-              row.played ? markCell(row.models[c.model], getter, good) : h('span', { class: 'rh-wait', text: '—' }),
+              row.played ? markCell(row.models[c.key], getter, good) : h('span', { class: 'rh-wait', text: '—' }),
             ),
           );
         body.append(tr);
@@ -693,8 +706,8 @@ export function rehearsalView(host: RehearsalHost) {
     }
     if (gone()) return;
     const usable = library.models.filter((m) => m.available).map((m) => m.id);
-    models = new Set([...models].filter((m) => usable.includes(m)));
-    if (models.size === 0 && usable[0]) models.add(usable[0]);
+    models = new Set([...models].filter((m) => usable.includes(parseRehearsalColumn(m)!.model)));
+    if (models.size === 0 && usable[0]) models.add(rehearsalColumnKey(usable[0], 'v7'));
     current = runs[0]?.runId ?? null;
     detail = null;
     render();

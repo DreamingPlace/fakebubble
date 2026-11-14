@@ -786,7 +786,10 @@ export class WebRehearsalRunner {
       this.finish(claim.runId, claim.seq, 'done', null, {
         bubbles: reply.bubbles.map((b) => b.text),
         // A 新 (v8) reply does not track whether it answered the message: null, never a claim.
-        answered: request.writer === 'v8' ? null : reply.coveredMessageIds.includes(required) && reply.deferredMessageIds.length === 0,
+        answered:
+          request.writer === 'v8'
+            ? null
+            : reply.coveredMessageIds.includes(required) && reply.deferredMessageIds.length === 0,
       });
     });
   }

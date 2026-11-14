@@ -16,6 +16,11 @@ import {
   type ReviewModelSaveInput,
   type ReviewModelView,
 } from '../../../../../packages/contracts/review-model.ts';
+import {
+  WRITER_CHOICES,
+  type WriterChoice,
+  type WriterSettingView,
+} from '../../../../../packages/contracts/web-writer.ts';
 import { h } from '../cocreation/h.ts';
 import { segmented } from './ui/segmented.ts';
 import { statusBadge } from './ui/status-badge.ts';
@@ -96,6 +101,12 @@ export function modelsView(
     save: (input: ModelSaveInput) => Promise<unknown>;
     /** Part 26b: the review model (审核模型) switch. Absent = the page has no such section (an older server). */
     review?: { load: () => Promise<ReviewModelView>; save: (input: ReviewModelSaveInput) => Promise<unknown> };
+    /** Part 37a: 回复写法 (owner only). Absent, or not the owner = the page draws no such card. */
+    writer?: {
+      load: () => Promise<WriterSettingView>;
+      save: (input: { requestId: string; writer: WriterChoice }) => Promise<unknown>;
+    };
+    isOwner?: () => boolean;
     run: (work: () => Promise<void>) => Promise<void>;
     /** 保存 opens the list of changes in place (no dialog); 确认保存 is its confirm button. */
     confirm: ConfirmInPlace;
@@ -238,6 +249,70 @@ export function modelsView(
     if (reviewView && reviewSwitch && reviewSwitch.value !== reviewView.current) reviewSwitch.set(reviewView.current);
   }
 
+  // ---- 回复写法 (Part 37a, owner only) --------------------------------------------------------------------------
+  const WRITER_LABELS: Record<WriterChoice, string> = { v7: '现行', v8: '新' };
+  let writerView: WriterSettingView | null = null;
+  let writerPending: { id: string; to: WriterChoice } | null = null;
+  const writerHost = h('section', {
+    class: 'models-card models-review models-writer',
+    attrs: { 'aria-label': '回复写法' },
+    hidden: true,
+  });
+  const writerConfirm = h('div', { class: 'models-confirm' });
+  const writerNote = h('p', { class: 'admin-hint models-review-note', text: '只影响此后发送的消息。' });
+  let writerSwitch: ReturnType<typeof segmented<WriterChoice>> | null = null;
+  function paintWriter() {
+    const w = writerView;
+    writerHost.hidden = !w || !w.available || !deps.isOwner?.();
+    if (!w) return;
+    writerSwitch = segmented<WriterChoice>(
+      '回复写法',
+      WRITER_CHOICES.map((id) => ({ id, label: WRITER_LABELS[id] })),
+      w.writer,
+      (to) => void chooseWriter(to),
+      'm',
+    );
+    writerHost.replaceChildren(
+      h(
+        'div',
+        { class: 'models-review-head' },
+        h('h3', { text: '回复写法' }),
+        h('span', { class: 'models-pill is-on', text: `当前：${WRITER_LABELS[w.writer]}` }),
+        writerSwitch.root,
+      ),
+      writerNote,
+      writerConfirm,
+    );
+  }
+  async function chooseWriter(to: WriterChoice) {
+    const w = writerView;
+    if (!w || !deps.writer || !deps.isOwner?.() || to === w.writer) return;
+    await deps.run(async () => {
+      const ok = await deps.confirm(
+        {
+          title: '确认切换回复写法',
+          message: `回复写法将从「${WRITER_LABELS[w.writer]}」切换为「${WRITER_LABELS[to]}」。已在生成的回复不变，只影响此后发送的消息。`,
+          confirmLabel: `确认切换为「${WRITER_LABELS[to]}」`,
+        },
+        writerConfirm,
+      );
+      if (!ok || deps.disposed()) {
+        writerSwitch?.set(w.writer);
+        return;
+      }
+      // A switch whose outcome was never seen is retried under the same request id, so it can never apply twice.
+      if (!writerPending || writerPending.to !== to) writerPending = { id: deps.newRequestId(), to };
+      await deps.writer!.save({ requestId: writerPending.id, writer: to });
+      writerPending = null;
+      deps.toast('已切换回复写法');
+      const next = await deps.writer!.load();
+      if (deps.disposed()) return;
+      writerView = next;
+      paintWriter();
+    });
+    if (writerView && writerSwitch && writerSwitch.value !== writerView.writer) writerSwitch.set(writerView.writer);
+  }
+
   root.replaceChildren(
     pageHead('模型与价格', headStatus, saveButton),
     banner,
@@ -245,6 +320,7 @@ export function modelsView(
     readonly,
     problem,
     reviewHost,
+    writerHost,
     h('div', { class: 'models-card' }, table),
   );
 
@@ -411,6 +487,12 @@ export function modelsView(
       if (view) view.revision = review.revision;
       paintReview();
     }
+    if (deps.writer && deps.isOwner?.()) {
+      const next = await deps.writer.load();
+      if (deps.disposed()) return;
+      writerView = next;
+      paintWriter();
+    }
   }
   saveButton.addEventListener(
     'click',
@@ -447,6 +529,9 @@ export function modelsView(
       reviewView = null;
       reviewPending = null;
       reviewHost.hidden = true;
+      writerView = null;
+      writerPending = null;
+      writerHost.hidden = true;
       view = null;
       draft = null;
       pending = null;

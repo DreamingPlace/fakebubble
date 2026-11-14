@@ -409,7 +409,9 @@ export class WebRehearsal {
     const v8First = rehearsalRequest(fixed, 'estimate', 'deepseek-v8', 1, players, []);
     const v8Draft = Buffer.byteLength(JSON.stringify(writerDraftMessages(v8First)), 'utf8');
     const v8Guard = Buffer.byteLength(
-      JSON.stringify(writerGuardMessages(v8First, { mode: 'casual', bubbles: [], endsSession: false, markups: [] } as WriterDraft)),
+      JSON.stringify(
+        writerGuardMessages(v8First, { mode: 'casual', bubbles: [], endsSession: false, markups: [] } as WriterDraft),
+      ),
       'utf8',
     );
     let total = 0;

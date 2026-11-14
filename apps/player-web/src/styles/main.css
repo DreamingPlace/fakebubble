@@ -15871,6 +15871,24 @@ button:not(
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* Part 37a: one model with its two writers (现行 / 新), side by side. */
+.account-admin-page.admin-shell .rh-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 3px 3px 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: 20px;
+}
+.account-admin-page.admin-shell .rh-model-name {
+  color: var(--ad-text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .rh-model .rh-toggle {
+  height: 28px;
+  padding: 0 12px;
+}
 .account-admin-page.admin-shell .rh-result {
   display: flex;
   flex-direction: column;

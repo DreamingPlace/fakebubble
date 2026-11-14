@@ -1,3 +1,5 @@
+import { isWriterChoice } from '../../../../packages/contracts/web-writer.ts';
+import type { WriterChoice, WriterSaveResult, WriterSettingView } from '../../../../packages/contracts/web-writer.ts';
 import { CharacterAdminClient } from './character-admin-api.ts';
 import {
   isReviewModelId,
@@ -378,6 +380,18 @@ export class AccountAdminApi extends InviteAdminApi {
     )
       throw invalid();
     return row as { revision: number; reviewModel: ReviewModelId; changed: boolean; duplicate: boolean };
+  }
+  /** Part 37a: 回复写法 (owner only; the server checks). */
+  async writerSetting(): Promise<WriterSettingView> {
+    const row = object(await this.request('/system/writer-read', {}));
+    if (!isWriterChoice(row.writer) || typeof row.available !== 'boolean') throw invalid();
+    return { writer: row.writer, available: row.available };
+  }
+  async saveWriterSetting(input: { requestId: string; writer: WriterChoice }): Promise<WriterSaveResult> {
+    const row = object(await this.request('/system/writer-save', input));
+    if (!isWriterChoice(row.writer) || typeof row.available !== 'boolean' || typeof row.duplicate !== 'boolean')
+      throw invalid();
+    return { writer: row.writer, available: row.available, duplicate: row.duplicate };
   }
   /** The owner, or an administrator holding models.manage; the server checks again. */
   async saveModelSettings(input: ModelSaveInput) {
