@@ -7,8 +7,8 @@ import { startConsoleFixture } from './console-fixture-24b6.ts';
 
 /**
  * Part 31b in a REAL browser: the avatar on the card, the arc, the chat header and the welcome row; the four states (none, loading,
- * loaded, failed); landing (position 1 on a first visit, DIRECTLY on the last-viewed card with a 100 ms fade on a return, an unknown id
- * or storage off falls back to position 1); and the admin's browser-side crop + PNG encode of a JPEG / WebP before upload.
+ * loaded, failed); landing (a random character on a first visit, DIRECTLY on the last-viewed card with a 100 ms fade on a return, an unknown id
+ * or storage off counts as a first visit); and the admin's browser-side crop + PNG encode of a JPEG / WebP before upload.
  * 390 wide and 1440 desktop. usage: node scripts/check-web-player-31b-browser.ts [screenshot-dir]
  */
 const shots = process.argv[2] ? resolve(process.argv[2]) : null;
@@ -66,6 +66,7 @@ try {
     height: number,
     init?: (page: Page) => Promise<void>,
     ctxOptions: object = {},
+    pick = 0,
   ) => {
     const ctx = await f.browser.newContext({
       ignoreHTTPSErrors: true,
@@ -75,6 +76,10 @@ try {
     });
     const page: Page = await ctx.newPage();
     watch(page);
+    // Part 31b: a first visit lands on a random character; the tests choose which one (a fraction of the characters, 0 = the first)
+    await page.addInitScript((r: number) => {
+      Math.random = () => r;
+    }, pick);
     if (init) await init(page);
     await page.goto(`${f.origin}/?mode=provider`);
     await page.locator('.card-slot.is-active').waitFor({ timeout: 20_000 });
@@ -93,7 +98,11 @@ try {
   ] as const) {
     // ---- first visit: position 1 in the centre; the card carries the 148 px picture, the arc has it, the chat header and the welcome row too ----
     const { ctx, page } = await visit(width, height);
-    assert.equal(await active(page), `character-${first}`, 'a first visit shows position 1');
+    assert.equal(
+      await active(page),
+      `character-${first}`,
+      'a first visit (random forced to 0) shows the first character',
+    );
     assert.equal(
       await page.locator('.page-shell').getAttribute('data-landing'),
       null,
@@ -248,11 +257,15 @@ try {
         stored,
       ),
     );
-    assert.equal(await active(page), `character-${first}`, `${label}: position 1, no error`);
+    assert.equal(
+      await active(page),
+      `character-${first}`,
+      `${label}: no memory, a random pick (forced to the first), no error`,
+    );
     await ctx.close();
   }
   {
-    // storage off: the page still opens on position 1
+    // storage off: the page still opens, on a random character
     const { ctx, page } = await visit(390, 844, async (p) =>
       p.addInitScript(() => {
         Object.defineProperty(window, 'localStorage', {
@@ -263,6 +276,20 @@ try {
       }),
     );
     assert.equal(await active(page), `character-${first}`);
+    await ctx.close();
+  }
+  for (const [fraction, expected] of [
+    [0.5, Math.floor(0.5 * order.length)],
+    [0.99, order.length - 1],
+  ] as const) {
+    // a first visit lands on a random character; the neighbours follow the set order
+    const { ctx, page } = await visit(390, 844, undefined, {}, fraction);
+    assert.equal(await active(page), `character-${order[expected]}`, `random ${fraction}: lands on ${order[expected]}`);
+    assert.equal(
+      await page.locator('.page-shell').getAttribute('data-landing'),
+      null,
+      'no landing fade on a first visit',
+    );
     await ctx.close();
   }
   {

@@ -11,6 +11,7 @@ import { playerPrefs } from '../prefs/player-prefs.ts';
 import { applyChatBackground } from './chat-look.ts';
 import { cardFace } from './card-face.ts';
 import { mountPortrait } from '../brand/portrait.ts';
+import { landingIndex } from './landing.ts';
 
 type Phase = 'browse' | 'hover' | 'expanding' | 'chat' | 'collapsing';
 
@@ -146,14 +147,12 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   people.forEach((person, index) => {
     if (person.characterId) applyChatBackground(cards[index]!, prefs.chatBackground(person.characterId));
   });
-  // Part 31b: a first visit shows position 1 in the centre (the first character of the catalog; the ring is built so that it sits at the
-  // centre slot); a returning visitor lands DIRECTLY on the card last viewed, with a 100 ms fade and no spin. A remembered id that is not
-  // on the page now (unknown, offline, deleted, or unreadable storage) is ignored: position 1, no error.
-  const firstReal = people.findIndex((person) => person.characterId !== undefined);
-  const firstIndex = firstReal >= 0 ? firstReal : 7;
-  const rememberedIndex = prefs.lastViewed ? people.findIndex((person) => person.characterId === prefs.lastViewed) : -1;
-  let active = rememberedIndex >= 0 ? rememberedIndex : firstIndex;
-  if (rememberedIndex >= 0) page.dataset.landing = 'resume';
+  // Part 31b: a returning visitor lands DIRECTLY on the card last viewed (100 ms fade, no spin); a first visit lands on a random
+  // character, the neighbours following the set order. A remembered id that is not on the page now (unknown, offline, deleted, or
+  // unreadable storage) counts as no memory.
+  const landing = landingIndex(people, prefs.lastViewed, 7);
+  let active = landing.index;
+  if (landing.resumed) page.dataset.landing = 'resume';
   let phase: Phase = 'browse';
   let dragStart: { x: number; y: number; pointerId: number } | undefined;
   let dragged = false;
