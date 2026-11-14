@@ -14,6 +14,8 @@ export const SPLITS: ReadonlyArray<{ id: Split; label: string }> = [
 ];
 export const SHOWN_SERIES = 6;
 export const OTHER_NAME = '其他';
+/** Reserved id: a character called 其他 can never collide with the summed rest. */
+export const OTHER_ID = '\0other';
 export const OTHER_COLOUR = '#C9C2B8';
 export const NO_MODEL_NAME = '未选择模型';
 /** Roster colours dealt to a character the roster does not know (a stub, a deleted character), in order. */
@@ -54,7 +56,7 @@ export function buildSplit(view: ChartView, split: Exclude<Split, 'all'>): Split
   const rest = ranked.slice(SHOWN_SERIES);
   if (rest.length)
     shown.push({
-      id: OTHER_NAME,
+      id: OTHER_ID,
       name: OTHER_NAME,
       color: OTHER_COLOUR,
       other: true,

@@ -257,10 +257,14 @@ export function dateField(options: {
   };
   // The calendar opens on a click in the field (or ArrowDown / Alt+ArrowDown from the keyboard); Esc closes it.
   input.addEventListener('click', () => {
-    if (!pop) open();
+    if (pop) close(false);
+    else open();
   });
   input.addEventListener('keydown', (event) => {
-    if ((event as KeyboardEvent).key === 'ArrowDown') {
+    if ((event as KeyboardEvent).key === 'Escape' && pop) {
+      event.stopPropagation();
+      close(false);
+    } else if ((event as KeyboardEvent).key === 'ArrowDown') {
       event.preventDefault();
       open();
     }

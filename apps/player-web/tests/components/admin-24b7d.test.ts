@@ -402,4 +402,7 @@ test('24b-7e combinations without data are disabled, with the reason on hover; a
     all(f.root, '[aria-label="分组"] button').find((b) => b.getAttribute('aria-pressed') === 'true')!.textContent,
     '全部',
   );
+  // the 统计表 went back to the days with the switch (regression: it used to stay on 按角色)
+  assert.equal(one(f.root, '.ov-days').hidden, false);
+  assert.equal(all(f.root, '.ov-by').every((n) => n.hidden), true);
 });

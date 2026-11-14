@@ -26,9 +26,9 @@ import { xyChart, type XySeries } from './ui/xy-chart.ts';
 /** The one-line summary of the 系统状态 warnings; null when there is nothing to say. */
 export function warningLine(warnings: OverviewView['warnings']) {
   const parts = [
-    warnings.priceExpiring > 0 ? `${warnings.priceExpiring} 项价格即将到期` : null,
-    warnings.retentionFailing > 0 ? `${warnings.retentionFailing} 位玩家的清理失败` : null,
-    warnings.unknownNew > 0 ? `近 24 小时新增 ${warnings.unknownNew} 次结果未确认的调用` : null,
+    warnings.priceExpiring > 0 ? `${exactCount(warnings.priceExpiring)} 项价格即将到期` : null,
+    warnings.retentionFailing > 0 ? `${exactCount(warnings.retentionFailing)} 位玩家的清理失败` : null,
+    warnings.unknownNew > 0 ? `近 24 小时新增 ${exactCount(warnings.unknownNew)} 次结果未确认的调用` : null,
   ].filter((part): part is string => part !== null);
   return parts.length ? parts.join(' · ') : null;
 }
@@ -539,6 +539,8 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       split = 'all';
       splitSwitch.set('all');
       hiddenSeries.clear();
+      // the 统计表 follows the switch, so it goes back to the days too
+      paintTableMode();
     }
   }
   function paintMetricTabs() {
@@ -571,9 +573,9 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     const list: HTMLElement[] = [
       tile(
         `今日回复`,
-        String(today.replies),
-        `语音 ${today.voiceReplies} · 失败 ${today.failedReplies}`,
-        `成功 ${today.replies} · 失败 ${today.failedReplies} · 语音 ${today.voiceReplies}`,
+        exactCount(today.replies),
+        `语音 ${exactCount(today.voiceReplies)} · 失败 ${exactCount(today.failedReplies)}`,
+        `成功 ${exactCount(today.replies)} · 失败 ${exactCount(today.failedReplies)} · 语音 ${exactCount(today.voiceReplies)}`,
         today.replies,
       ),
       tile(
@@ -720,7 +722,11 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     const view = splitView();
     const data: SplitData | null = view ? buildSplit(view, kindOfSplit) : null;
     const known = !!data && data.series.some((s) => s.values.some((v) => v !== null));
-    trendEmpty.textContent = !view ? '正在读取…' : !data ? '这段时间没有按模型的数据。' : '还没有数据。';
+    trendEmpty.textContent = !view
+      ? '正在读取…'
+      : !data
+        ? `这段时间没有${kindOfSplit === 'model' ? '按模型' : '按角色'}的数据。`
+        : '还没有数据。';
     trendEmpty.hidden = known;
     chartBox.hidden = !known || kind === 'pie';
     pieBox.hidden = !known || kind !== 'pie';
