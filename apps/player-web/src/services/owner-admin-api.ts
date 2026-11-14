@@ -63,6 +63,10 @@ export class OwnerAdminClient {
     const r = object(await this.call('previews-delete', { requestId: this.id(), ...input }));
     return { previews: count(r.previews), runs: count(r.runs) };
   }
+  async deleteRehearsals(runIds: readonly string[]) {
+    const r = object(await this.call('rehearsal-delete', { requestId: this.id(), runIds }));
+    return { runs: count(r.runs) };
+  }
   async deleteConversations(items: readonly DeleteTarget[]) {
     const r = object(await this.call('conversations-delete', { requestId: this.id(), items }));
     return { deleted: count(r.deleted), skipped: count(r.skipped) };

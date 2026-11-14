@@ -148,7 +148,8 @@ try {
   }
 
   // =============== 2. the avatar ===============
-  const png = join(FIXTURES.pathname, 'a.png');
+  // Part 31b (named exception): the server takes only square PNGs now (the browser crops), so the upload uses sq-a.png, not the 97x73 a.png.
+  const png = join(FIXTURES.pathname, 'sq-a.png');
   for (const [width, height] of SIZES) {
     const page = await open(f.context, 'characters/jojo', width, height);
     await page.locator('.wb-card').first().waitFor();
@@ -269,16 +270,18 @@ try {
         ),
       );
     const before = ledger();
-    await page.locator('.pw-manage button:has-text("整理预演")').click();
+    // Part 31b (named exception): the 多轮预演 panel has its own 整理预演 bar, so these selectors name the single-preview bar (.pw > .pw-manage).
+    const bar = page.locator('.pw > .pw-manage');
+    await bar.locator('button:has-text("整理预演")').click();
     await page.locator('.pw-feed .pm-tick input').first().check();
-    assert.match((await page.locator('.pm-count').textContent()) ?? '', /已选 1 项/);
+    assert.match((await bar.locator('.pm-count').textContent()) ?? '', /已选 1 项/);
     await snap(page, 'previews-selected-1440');
-    await page.locator('.pm-bar button:has-text("删除所选…")').click();
-    await page.locator('.review-confirm, .pm-confirm').locator('.ic-text').first().waitFor();
-    const message = (await page.locator('.pm-confirm .ic-text').textContent()) ?? '';
+    await bar.locator('.pm-bar button:has-text("删除所选…")').click();
+    await bar.locator('.pm-confirm').locator('.ic-text').first().waitFor();
+    const message = (await bar.locator('.pm-confirm .ic-text').textContent()) ?? '';
     assert.match(message, /1 个运行.*共 2 条/, 'the question names how many');
     await snap(page, 'previews-confirm-1440');
-    await page.locator('.pm-confirm .ic-go').click();
+    await bar.locator('.pm-confirm .ic-go').click();
     await page.waitForTimeout(1500);
     assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_preview_runs')!.n, 0);
     assert.equal(ledger(), before, 'the bills are exactly as they were');

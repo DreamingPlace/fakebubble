@@ -19828,6 +19828,129 @@ html.theme-fade *::after {
   }
 }
 
+/* ======================================================================================================================
+   Part 31b (player): a character's picture over the initials (card face 148, arc as before, chat header 36 with a 2.5 px halo, message
+   avatars 30 on the last bubble of a group), the four states, and the 100 ms landing fade of a returning visit. Player selectors only.
+   ====================================================================================================================== */
+.page-shell .portrait {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 220ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  pointer-events: none;
+  user-select: none;
+}
+.page-shell [data-portrait="loaded"] > .portrait {
+  opacity: 1;
+}
+/* loading: the circle breathes a pale glow (opacity only, nothing moves); the initials stay until the picture is there */
+.page-shell .has-portrait {
+  position: relative;
+}
+.page-shell [data-portrait="loading"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, rgb(255 255 255 / 70%), rgb(255 255 255 / 0%) 70%);
+  animation: pk-portrait-glow 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes pk-portrait-glow {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+.page-shell .avatar-choice-mark.has-portrait {
+  overflow: hidden;
+}
+/* loaded: the initial is hidden, so the circle shows the picture and nothing else; while loading and after a failure it shows as before */
+.page-shell .avatar-choice-mark[data-portrait="loaded"] {
+  color: transparent;
+  text-shadow: none;
+}
+.page-shell .avatar-choice-mark[data-portrait="loaded"] > .portrait {
+  z-index: 1;
+}
+.page-shell .face-portrait {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 148px;
+  height: 148px;
+  margin: 8px auto 18px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, var(--frame-f1), var(--frame-f2));
+  box-shadow:
+    0 0 0 3px #fff,
+    0 0 0 6px var(--frame-a),
+    0 0 0 9px #fff,
+    0 0 0 12px var(--frame-b);
+  color: #141414;
+  font-size: 56px;
+  font-weight: 900;
+  overflow: hidden;
+}
+:root[data-theme="dark"] .page-shell .face-portrait {
+  background: linear-gradient(140deg, var(--n-aura-3), var(--n-aura-2));
+  box-shadow:
+    0 0 0 3px var(--bb-paper, #0c0b10),
+    0 0 0 6px var(--n-accent),
+    0 0 0 9px var(--bb-paper, #0c0b10),
+    0 0 0 12px var(--n-aura-3);
+}
+.page-shell .chat-head .chat-mark {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+  border-width: 2.5px;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+.page-shell .message-row .message-avatar {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+  position: relative;
+  overflow: hidden;
+}
+/* an avatar only beside the last bubble of a group: the space stays, so the bubbles keep their column */
+.page-shell .message-row.incoming:has(+ .message-row.incoming) > .message-avatar {
+  visibility: hidden;
+}
+/* a returning visit lands on its card at once; the page fades in over 100 ms (no spin from position 1) */
+.page-shell[data-landing="resume"] .carousel,
+.page-shell[data-landing="resume"] .avatar-nav {
+  animation: pk-landing 100ms ease-out both;
+}
+@keyframes pk-landing {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-shell .portrait {
+    transition: none;
+  }
+  .page-shell [data-portrait="loading"]::after {
+    animation: none;
+    opacity: 0.4;
+  }
+  .page-shell[data-landing="resume"] .carousel,
+  .page-shell[data-landing="resume"] .avatar-nav {
+    animation: none;
+  }
+}
+
 /* ==========================================================================================================================
    Part 25c: the phone home stays put, the cards turn with real motion, and the guest's co-creation hint. Player selectors only.
    ========================================================================================================================== */

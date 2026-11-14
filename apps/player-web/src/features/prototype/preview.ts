@@ -10,6 +10,7 @@ import { characterFrame, playerFrame, setFrameProperties } from '../brand/avatar
 import { playerPrefs } from '../prefs/player-prefs.ts';
 import { applyChatBackground } from './chat-look.ts';
 import { cardFace } from './card-face.ts';
+import { mountPortrait } from '../brand/portrait.ts';
 
 type Phase = 'browse' | 'hover' | 'expanding' | 'chat' | 'collapsing';
 
@@ -83,6 +84,14 @@ function createCard(person: Person) {
   card.style.setProperty('--avatar-ink', person.ink);
   card.style.setProperty('--card-color', person.color);
   card.classList.toggle('is-reserve', !configured);
+  // Part 31b: the picture over the initials in the chat header, the welcome row and the card's face.
+  if (person.portrait) {
+    mountPortrait(card.querySelector<HTMLElement>('.chat-mark')!, person.portrait, { eager: true });
+    const welcomeAvatar = card.querySelector<HTMLElement>('.welcome-row .message-avatar');
+    if (welcomeAvatar) mountPortrait(welcomeAvatar, person.portrait);
+    const face = card.querySelector<HTMLElement>('.face-portrait');
+    if (face) mountPortrait(face, person.portrait, { eager: true });
+  }
   // Part 24k-2: 主色 + 点缀 — the colours, and the soft shapes behind the home card and behind the chat.
   if (person.skin && person.characterId && configured) {
     setSkinProperties(card, person.skin);
@@ -137,7 +146,14 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   people.forEach((person, index) => {
     if (person.characterId) applyChatBackground(cards[index]!, prefs.chatBackground(person.characterId));
   });
-  let active = 7;
+  // Part 31b: a first visit shows position 1 in the centre (the first character of the catalog; the ring is built so that it sits at the
+  // centre slot); a returning visitor lands DIRECTLY on the card last viewed, with a 100 ms fade and no spin. A remembered id that is not
+  // on the page now (unknown, offline, deleted, or unreadable storage) is ignored: position 1, no error.
+  const firstReal = people.findIndex((person) => person.characterId !== undefined);
+  const firstIndex = firstReal >= 0 ? firstReal : 7;
+  const rememberedIndex = prefs.lastViewed ? people.findIndex((person) => person.characterId === prefs.lastViewed) : -1;
+  let active = rememberedIndex >= 0 ? rememberedIndex : firstIndex;
+  if (rememberedIndex >= 0) page.dataset.landing = 'resume';
   let phase: Phase = 'browse';
   let dragStart: { x: number; y: number; pointerId: number } | undefined;
   let dragged = false;
@@ -302,6 +318,8 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     if (phase === 'chat' || phase === 'expanding') saveEditor(active);
     animation?.cancel();
     active = next;
+    const seen = people[active]!.characterId;
+    if (seen) prefs.setLastViewed(seen);
     restoreEditor(active);
     render();
     const selected = people[active]!.characterId;
@@ -348,6 +366,7 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
       }
     };
     const opened = people[active]!.characterId;
+    if (opened) prefs.setLastViewed(opened);
     if (opened) void live.open(opened, card);
     if (reduced.matches) settle();
     else settleTimer = window.setTimeout(settle, 220);
@@ -386,6 +405,7 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     button.style.setProperty('--n-aura-1', night1);
     button.style.setProperty('--n-aura-2', night2);
     button.style.setProperty('--n-aura-3', night3);
+    if (person.portrait) mountPortrait(button.querySelector<HTMLElement>('.avatar-choice-mark')!, person.portrait);
     button.addEventListener('click', () => switchTo(index));
     nav.append(button);
   });
@@ -584,6 +604,7 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
     head: root.querySelector<HTMLElement>('.site-head')!,
     card: (characterId) => cards[people.findIndex((person) => person.characterId === characterId)]!,
     mark: (characterId) => people.find((person) => person.characterId === characterId)!.mark,
+    portrait: (characterId) => people.find((person) => person.characterId === characterId)?.portrait ?? null,
     name: (characterId) => people.find((person) => person.characterId === characterId)?.name ?? '',
   });
 }

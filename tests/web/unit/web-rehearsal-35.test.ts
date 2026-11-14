@@ -3,6 +3,9 @@ import { mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { purgePreviewWorkbench } from '../../../apps/server/characters/web-character-preview-purge.ts';
+import { WebOwnerOps } from '../../../apps/server/admin/web-owner-ops.ts';
+import { installRehearsalErase } from '../../../apps/server/characters/web-rehearsal-erase.ts';
 import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
 import { WebProviderBudget } from '../../../apps/server/budget/web-provider-budget.ts';
 import { WebCharacterAdmin } from '../../../apps/server/characters/web-character-admin.ts';
@@ -201,6 +204,8 @@ function fixture(t: test.TestContext, options: { cast?: boolean } = {}) {
     return chars.rehearsalStart(auth, CHARACTER, { ...body, requestId, acknowledgeMicros: estimate.totalMicros });
   };
   return {
+    admin, // Part 31b named exception: the fixture also returns its WebAccountAdmin (the owner-ops tests at the end of this file need it)
+    clock,
     store,
     chars,
     auth,
@@ -736,4 +741,100 @@ test('a 预演 body without a relationship starts (the console no longer sends o
     );
     assert.equal(request.relationship, NEW_PLAYER_RELATIONSHIP);
   }
+});
+
+// ---- Part 31b: deleting 多轮预演 runs (the tests above are unchanged) ------------------------------------------------------------
+
+const moneyRows = (f: ReturnType<typeof fixture>) =>
+  f.store
+    .all<Record<string, unknown>>(
+      'SELECT run_id,seq,phase,state,outcome,charged_micros,held_micros,receipt_json,settled_at,output_hash FROM web_rehearsal_calls ORDER BY run_id,seq,phase',
+    )
+    .map((r) => ({ ...r }));
+
+test('Part 31b: deleting a 多轮预演 run blanks every line, hint, reply and frozen request, keeps every money row, and only the owner may', async (t) => {
+  const f = fixture(t);
+  const ops = new WebOwnerOps(f.store as never, f.clock, f.admin);
+  const source = { kind: 'memes', items: ['meme:落汤鸡', 'story:天台的约定'] };
+  const { runId } = f.start({ source, withCast: true, models: ['deepseek'] });
+  await drain(f);
+  const detail = f.chars.rehearsalDetail(f.auth, CHARACTER, runId);
+  // the table now carries the actual sentences (Part 31b): two hints and the look-alike per item
+  assert.ok(detail.memes!.every((m) => m.hints[0] && m.hints[1] && m.lookAlike));
+  const before = moneyRows(f);
+  assert.ok(before.length > 0 && before.every((r) => r.state === 'known'));
+  assert.ok(
+    f.store.get('SELECT 1 FROM web_rehearsal_calls WHERE output_json IS NOT NULL'),
+    'there is content to delete',
+  );
+
+  const member = f.member(['category.characters', 'characters.preview:*', 'characters.read:*'], 'grant');
+  assert.throws(() => ops.deleteRehearsals(member, { requestId: 'r-0', runIds: [runId] }), /ADMIN_OWNER_REQUIRED/);
+  assert.throws(
+    () => ops.deleteRehearsals({ ...f.auth, origin: 'https://evil.invalid' }, { requestId: 'r-0', runIds: [runId] }),
+    /ADMIN_UNAUTHORIZED/,
+  );
+  assert.deepEqual(ops.deleteRehearsals(f.auth, { requestId: 'r-1', runIds: [runId] }), { runs: 1 });
+  assert.deepEqual(
+    ops.deleteRehearsals(f.auth, { requestId: 'r-1', runIds: [runId] }),
+    { runs: 1 },
+    'a replay answers the same',
+  );
+  assert.throws(() => ops.deleteRehearsals(f.auth, { requestId: 'r-1', runIds: ['x'] }), /IDEMPOTENCY_CONFLICT/);
+
+  assert.equal(f.store.get('SELECT 1 FROM web_rehearsal_turns'), undefined);
+  assert.equal(f.store.get('SELECT 1 FROM web_rehearsal_items'), undefined);
+  assert.equal(
+    f.store.get('SELECT 1 FROM web_rehearsal_units WHERE request_json IS NOT NULL OR result_json IS NOT NULL'),
+    undefined,
+  );
+  assert.equal(
+    f.store.get('SELECT 1 FROM web_rehearsal_calls WHERE output_json IS NOT NULL OR metadata_json IS NOT NULL'),
+    undefined,
+  );
+  assert.equal(f.store.get("SELECT 1 FROM web_rehearsal_runs WHERE frozen_json<>'{}'"), undefined);
+  assert.deepEqual(moneyRows(f), before, 'every money row is exactly as it was');
+  assert.deepEqual(f.chars.rehearsalList(f.auth, CHARACTER).runs, []);
+  assert.throws(() => f.chars.rehearsalDetail(f.auth, CHARACTER, runId), /NOT_FOUND/);
+  // the retain trigger is NOT loosened: a bill can neither be deleted nor changed, erased run or not
+  assert.throws(() => f.store.run('DELETE FROM web_rehearsal_calls'), /WEB_REHEARSAL_IMMUTABLE/);
+  assert.throws(
+    () => f.store.run('UPDATE web_rehearsal_calls SET charged_micros=charged_micros+1'),
+    /WEB_REHEARSAL_IMMUTABLE/,
+  );
+  assert.throws(() => f.store.run('UPDATE web_rehearsal_calls SET receipt_json=?', '{}'), /WEB_REHEARSAL_IMMUTABLE/);
+  assert.throws(() => f.store.run("UPDATE web_rehearsal_units SET request_digest='x'"), /WEB_REHEARSAL_IMMUTABLE/);
+  assert.throws(() => f.store.run("UPDATE web_rehearsal_runs SET script_name='other'"), /WEB_REHEARSAL_IMMUTABLE/);
+  assert.deepEqual(
+    f.store
+      .all<Record<string, unknown>>("SELECT action,target_id FROM web_admin_audit WHERE action='rehearsals-deleted'")
+      .map((r) => ({ ...r })),
+    [{ action: 'rehearsals-deleted', target_id: 'n=1' }],
+  );
+});
+
+test('Part 31b: a run that is queued cannot be deleted; an un-erased run stays frozen; the erase step is digest-checked', (t) => {
+  const f = fixture(t);
+  const ops = new WebOwnerOps(f.store as never, f.clock, f.admin);
+  const { runId } = f.start({ source: { kind: 'set', set: 'chat' }, models: ['deepseek'] });
+  assert.throws(() => ops.deleteRehearsals(f.auth, { requestId: 'b-1', runIds: [runId] }), /REHEARSAL_DELETE_BUSY/);
+  assert.equal(f.store.get('SELECT 1 FROM web_rehearsal_erased'), undefined, 'nothing changed by the refusal');
+  assert.throws(() => f.store.run("UPDATE web_rehearsal_runs SET frozen_json='{}'"), /WEB_REHEARSAL_IMMUTABLE/);
+  const digest = f.store.get('SELECT * FROM web_rehearsal_erase_schema');
+  installRehearsalErase(f.store as never);
+  assert.deepEqual(f.store.get('SELECT * FROM web_rehearsal_erase_schema'), digest);
+  f.store.run('UPDATE web_rehearsal_erase_schema SET sha256=?', 'f'.repeat(64));
+  assert.throws(() => installRehearsalErase(f.store as never), /WEB_REHEARSAL_ERASE_SCHEMA_MISMATCH/);
+});
+
+test('Part 31b: a character\u2019s deletion blanks its 多轮预演 runs too (running ones included) and keeps the bills', async (t) => {
+  const f = fixture(t);
+  const { runId } = f.start({ source: { kind: 'set', set: 'chat' }, models: ['deepseek'] });
+  await drain(f, 3);
+  const before = moneyRows(f);
+  f.store.transaction(() => purgePreviewWorkbench(f.store as never, CHARACTER, f.clock.now()));
+  assert.ok(f.store.get('SELECT 1 FROM web_rehearsal_erased WHERE run_id=?', runId));
+  assert.equal(f.store.get('SELECT 1 FROM web_rehearsal_turns'), undefined);
+  assert.equal(f.store.get('SELECT 1 FROM web_rehearsal_calls WHERE output_json IS NOT NULL'), undefined);
+  assert.deepEqual(moneyRows(f), before);
 });

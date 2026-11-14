@@ -1,3 +1,4 @@
+import { isPortraitUrl } from '../brand/portrait.ts';
 import type { WebProviderBootstrap } from '../../../../../packages/contracts/web-provider.ts';
 import { derivePalette, nightAura } from '../brand/character-colour.ts';
 import { birthdayNo, skinFor, skinSources, type Skin } from '../brand/palette-skin.ts';
@@ -22,6 +23,8 @@ export type Person = {
   };
   /** Part 25b: the welcome voice's length on the card's play pill; null when it has no audio (the pill then shows no time). */
   welcomeMs?: number | null;
+  /** Part 31b: the character's picture (a public, content-addressed URL), when the published profile has one. */
+  portrait?: string;
   /** Part 24k-2: 主色 + 点缀 as the player uses them, for night and day. Absent = the built-in palette stays as it is. */
   skin?: { night: Skin; day: Skin };
 };
@@ -116,6 +119,7 @@ export function providerPeople(view: Pick<WebProviderBootstrap, 'characters' | '
       characterId: character.characterId,
       name: character.displayName,
       mark: palette.mark,
+      ...(isPortraitUrl(character.portraitUrl) ? { portrait: character.portraitUrl } : {}),
       color: palette.color,
       ink: palette.ink,
       card: {

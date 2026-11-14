@@ -71,7 +71,7 @@ export type PreviewWorkbenchHost = {
   download?: (name: string, text: string, type: string) => void;
   newId?: () => string;
   /** Part 31 (owner): deleting 预演 records. Absent (any other administrator, or a page without it) = nothing of it is drawn. */
-  owner?: Pick<OwnerAdminClient, 'deletePreviews'>;
+  owner?: Pick<OwnerAdminClient, 'deletePreviews' | 'deleteRehearsals'>;
   confirm?: ConfirmInPlace;
 };
 const defaultHidden = () => (globalThis as { document?: { hidden?: boolean } }).document?.hidden === true;
@@ -239,6 +239,9 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
         toast: host.toast,
         disposed: () => disposed || host.disposed(),
         modalParent: host.modalParent,
+        ...(host.owner && host.confirm
+          ? { owner: host.owner, confirm: host.confirm, isOwner: () => host.member()?.role === 'owner' }
+          : {}),
         ...(host.newId ? { newId: host.newId } : {}),
         ...(host.poll?.setTimer || host.poll?.clearTimer
           ? {
@@ -1463,7 +1466,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   const manage =
     manageHost && host.owner && host.confirm
       ? previewManage(manageHost, {
-          api: host.owner,
+          remove: async (runIds, previewIds) => (await host.owner!.deletePreviews({ runIds, previewIds })).previews,
           confirm: host.confirm,
           run: host.run,
           toast: host.toast,

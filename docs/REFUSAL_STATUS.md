@@ -141,6 +141,7 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `AVATAR_NOT_FOUND` (Part 31)
 - `CONVERSATION_DELETE_BUSY` (Part 31)
 - `PREVIEW_DELETE_BUSY` (Part 31)
+- `REHEARSAL_DELETE_BUSY` (Part 31b)
 - `CHARACTER_ONLINE`
 - `CHARACTER_ORDER_CONFLICT`
 - `CHARACTER_PUBLICATION_BUSY`

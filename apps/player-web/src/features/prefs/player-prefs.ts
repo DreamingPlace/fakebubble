@@ -9,7 +9,13 @@ import { parseColour } from '../brand/character-colour.ts';
 
 export type ThemePref = 'system' | 'light' | 'dark';
 export type ChatBackground = { kind: 'preset'; id: string } | { kind: 'custom'; color: string };
-export type PlayerPrefsData = { theme: ThemePref; frame: FrameId; chatBg: Record<string, ChatBackground> };
+export type PlayerPrefsData = {
+  theme: ThemePref;
+  frame: FrameId;
+  chatBg: Record<string, ChatBackground>;
+  /** Part 31b: the character whose card this device last looked at (an id and nothing else). Absent = a first visit. */
+  lastViewed?: string;
+};
 
 export const PREFS_KEY = 'fakebubble.player-prefs.v1';
 /** The soft presets of the chat background: a day tone and a night tone each. The first choice, "default", is the character's own aura. */
@@ -54,6 +60,10 @@ export function parsePrefs(raw: string | null): PlayerPrefsData {
   const record = data as Record<string, unknown>;
   if (record.theme === 'light' || record.theme === 'dark' || record.theme === 'system') out.theme = record.theme;
   if (isFrameId(record.frame)) out.frame = record.frame;
+  // Whatever is stored is untrusted: only a string shaped like a character id is kept; whether that character is still on the home page
+  // is decided where it is used (an unknown, offline or deleted one simply means position 1).
+  if (typeof record.lastViewed === 'string' && CHARACTER_KEY.test(record.lastViewed))
+    out.lastViewed = record.lastViewed;
   if (typeof record.chatBg === 'object' && record.chatBg !== null) {
     for (const [key, value] of Object.entries(record.chatBg).slice(0, MAX_CHATS)) {
       const bg = backgroundOf(value);
@@ -82,6 +92,15 @@ export class PlayerPrefs {
   }
   get frame() {
     return this.data.frame;
+  }
+  get lastViewed(): string | null {
+    return this.data.lastViewed ?? null;
+  }
+  setLastViewed(characterId: string) {
+    if (!CHARACTER_KEY.test(characterId) || this.data.lastViewed === characterId) return;
+    this.change(() => {
+      this.data.lastViewed = characterId;
+    });
   }
   chatBackground(characterId: string): ChatBackground | null {
     return this.data.chatBg[characterId] ?? null;
