@@ -1,4 +1,5 @@
 /** Connects the approved visual shell to the provider-local server. No visual redesign here. */
+import { mountPortrait } from '../brand/portrait.ts';
 import type {
   WebProviderBootstrap,
   WebProviderCharacterId,
@@ -26,6 +27,8 @@ type Shell = {
   head: HTMLElement;
   card(id: WebProviderCharacterId): HTMLElement;
   mark(id: WebProviderCharacterId): string;
+  /** Part 31b: the character's picture URL, or null. */
+  portrait?(id: WebProviderCharacterId): string | null;
   name(id: WebProviderCharacterId): string;
 };
 
@@ -983,6 +986,7 @@ export class LiveBinding {
       avatar.className = 'avatar message-avatar';
       avatar.setAttribute('aria-hidden', 'true');
       avatar.textContent = shell.mark(characterId);
+      mountPortrait(avatar, shell.portrait?.(characterId) ?? null);
       const bubble = document.createElement('p');
       bubble.className = 'text-bubble incoming-text';
       bubble.textContent = message.text;
@@ -1005,6 +1009,7 @@ export class LiveBinding {
         <button class="transcript-toggle" type="button" aria-expanded="false">转文字</button>
       </div><p class="transcript" hidden></p></div>`;
     row.querySelector('.message-avatar')!.textContent = shell.mark(characterId);
+    mountPortrait(row.querySelector<HTMLElement>('.message-avatar')!, shell.portrait?.(characterId) ?? null);
     const playButton = row.querySelector<HTMLButtonElement>('.play-button')!;
     playButton.setAttribute('aria-label', `播放${shell.name(characterId)}的语音`);
     if (message.audio?.mediaId) {
