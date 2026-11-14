@@ -1,3 +1,7 @@
+import type { OwnerAdminClient } from '../../../services/owner-admin-api.ts';
+import { previewManage } from '../owner/preview-manage.ts';
+import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
+import { bindTip } from '../ui/tooltip.ts';
 import {
   REHEARSAL_TURNS_MAX,
   REHEARSAL_TURNS_MIN,
@@ -43,6 +47,10 @@ export type RehearsalHost = {
   disposed: () => boolean;
   modalParent: () => HTMLElement;
   newId?: () => string;
+  /** Part 31b (owner): 整理 of the run records. Absent = nothing of it is drawn. */
+  owner?: Record<'deleteRehearsals', OwnerAdminClient['deleteRehearsals']>;
+  confirm?: ConfirmInPlace;
+  isOwner?: () => boolean;
   poll?: { setTimer?: (fn: () => void, ms: number) => unknown; clearTimer?: (handle: unknown) => void };
 };
 type Pick =
@@ -110,7 +118,33 @@ export function rehearsalView(host: RehearsalHost) {
   panel.body.append(rail, main);
   const setup = h('div', { class: 'rh-setup' });
   const result = h('div', { class: 'rh-result' });
-  main.append(setup, result);
+  const manageHost = host.owner && host.confirm ? h('div', { class: 'pw-manage rh-manage' }) : null;
+  main.append(setup);
+  if (manageHost) main.append(manageHost);
+  main.append(result);
+  const manage =
+    manageHost && host.owner && host.confirm
+      ? previewManage(manageHost, {
+          remove: async (runIds) => (await host.owner!.deleteRehearsals(runIds)).runs,
+          confirm: host.confirm,
+          run: host.run,
+          toast: host.toast,
+          disposed: gone,
+          isOwner: () => host.isOwner?.() === true,
+          reload: async () => {
+            current = null;
+            detail = null;
+            await load();
+          },
+          targets: () =>
+            runs.flatMap((r) => {
+              const wrap = result.querySelector<HTMLElement>(`[data-run="${r.runId}"]`);
+              return wrap
+                ? [{ key: r.runId, el: wrap, slot: wrap, previews: 1, busy: r.status === 'running', isRun: true }]
+                : [];
+            }),
+        })
+      : null;
 
   // ---- the rail ---------------------------------------------------------------------------------------------------------
   const railButton = (label: string, target: Pick, meta = '') => {
@@ -557,13 +591,14 @@ export function rehearsalView(host: RehearsalHost) {
     );
     const body = h('tbody');
     for (const row of d.memes ?? []) {
-      const parts: Array<[string, (c: RehearsalMemeCell) => boolean | null, boolean]> = [
-        ['暗示一', (c) => c.hints[0] ?? null, true],
-        ['暗示二', (c) => c.hints[1] ?? null, true],
-        ['相似句', (c) => c.falseTrigger, false],
-        ['自己的视角', (c) => c.ownSide, true],
+      // Part 31b: the sentence behind each phrasing row (on hover, focus or tap), so the owner sees which wording missed.
+      const parts: Array<[string, (c: RehearsalMemeCell) => boolean | null, boolean, string | null]> = [
+        ['暗示一', (c) => c.hints[0] ?? null, true, row.hints[0]],
+        ['暗示二', (c) => c.hints[1] ?? null, true, row.hints[1]],
+        ['相似句', (c) => c.falseTrigger, false, row.lookAlike],
+        ['自己的视角', (c) => c.ownSide, true, null],
       ];
-      parts.forEach(([label, getter, good], i) => {
+      parts.forEach(([label, getter, good, sentence], i) => {
         const tr = h('tr', { attrs: { 'data-first': String(i === 0) } });
         if (i === 0) {
           const inner = h(
@@ -576,7 +611,14 @@ export function rehearsalView(host: RehearsalHost) {
           const th = h('th', { attrs: { rowspan: '4', scope: 'rowgroup' } }, inner);
           tr.append(th);
         }
-        tr.append(h('th', { text: label, attrs: { scope: 'row' } }));
+        const rowHead = h('th', { text: label, attrs: { scope: 'row' } });
+        if (sentence) {
+          const tip = h('span', { class: 'rh-sentence', text: sentence });
+          rowHead.setAttribute('tabindex', '0');
+          rowHead.append(tip);
+          bindTip(rowHead, tip, rowHead, true);
+        }
+        tr.append(rowHead);
         for (const c of d.columns)
           tr.append(
             h(
@@ -608,9 +650,10 @@ export function rehearsalView(host: RehearsalHost) {
         paintResult();
         void load();
       });
-      chips.append(b);
+      chips.append(h('div', { class: 'rh-run-wrap', attrs: { 'data-run': r.runId } }, b));
     }
     if (runs.length) result.append(chips);
+    manage?.sync();
     if (!detail) {
       if (!runs.length) result.append(h('p', { class: 'rh-empty', text: '还没有运行。' }));
       return;

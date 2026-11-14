@@ -4,6 +4,7 @@ import type { WebRuntimeStore } from '../platform/web-store-contract.ts';
 import { contentHash } from '../characters/admin-content-hash.ts';
 import { publishedWebCharacters } from '../characters/web-character-catalog.ts';
 import { purgeAdminSpeechAudio } from '../characters/web-admin-speech-schema.ts';
+import { eraseRehearsalRun, rehearsalRunBusy } from '../characters/web-rehearsal-erase.ts';
 import { deleteLiveConversation, conversationBusy } from '../characters/web-conversation-deletion.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import {
@@ -212,6 +213,25 @@ export class WebOwnerOps {
       return { a: removed, b: runs };
     });
     return { previews: done.a, runs: done.b };
+  }
+
+  /** Part 31b: 多轮预演 runs. Same rules as 预演: content goes, every money row of web_rehearsal_calls stays; a running run is refused whole. */
+  deleteRehearsals(auth: Auth, input: unknown) {
+    const actor = this.actor(auth, 'owner');
+    const body = exact(input, ['requestId', 'runIds']);
+    const runIds = list(body.runIds, id);
+    ensure(runIds.length > 0, 'INVALID_REQUEST');
+    const done = this.once('preview-delete', actor.memberId, body.requestId, body, () => {
+      let erased = 0;
+      for (const runId of runIds) {
+        ensure(this.store.get('SELECT 1 FROM web_rehearsal_runs WHERE id=?', runId), 'NOT_FOUND');
+        ensure(!rehearsalRunBusy(this.store, runId), 'REHEARSAL_DELETE_BUSY');
+      }
+      for (const runId of runIds) if (eraseRehearsalRun(this.store, runId, this.clock.now())) erased++;
+      this.audit(actor.memberId, 'rehearsals-deleted', erased);
+      return { a: erased, b: 0 };
+    });
+    return { runs: done.a };
   }
 
   // ---- C + D. conversations ---------------------------------------------------------------------------------------------------

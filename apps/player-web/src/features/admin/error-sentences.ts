@@ -51,6 +51,8 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
     '删除对话所需的数据保护规则与程序记录的不一致，已停止删除；请联系运维核对。',
   WEB_OWNER_OPS_SCHEMA_MISMATCH: '站长操作的数据表与程序记录的不一致，已停止；请联系运维核对。',
   CONVERSATION_DELETE_BUSY: '这段对话还有没完成的回复，现在不能删除。等回复结束后再试。',
+  REHEARSAL_DELETE_BUSY: '所选的多轮预演里还有排队或运行中的，现在不能删除。等它们结束后再试。',
+  WEB_REHEARSAL_ERASE_SCHEMA_MISMATCH: '多轮预演删除所需的数据保护规则与程序记录的不一致，已停止删除；请联系运维核对。',
   PREVIEW_DELETE_BUSY: '所选预演里还有排队或运行中的，现在不能删除。等它们结束后再试。',
   ARC_ORDER_STALE: '首页上的角色刚刚变了（上线、下线或删除）。请重新打开首页顺序后再排。',
   // ---- profile import ----

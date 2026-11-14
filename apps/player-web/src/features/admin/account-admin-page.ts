@@ -118,7 +118,14 @@ type Port = Pick<
   /** Part 31: the owner's operations. Optional: a page without it draws none of them. */
   owner?: Pick<
     OwnerAdminClient,
-    'arcRead' | 'arcSave' | 'deletePreviews' | 'deleteConversations' | 'closedRead' | 'closedPolicy' | 'closedDelete'
+    | 'arcRead'
+    | 'arcSave'
+    | 'deletePreviews'
+    | 'deleteRehearsals'
+    | 'deleteConversations'
+    | 'closedRead'
+    | 'closedPolicy'
+    | 'closedDelete'
   >;
 };
 export function adminAccountError(error: unknown) {

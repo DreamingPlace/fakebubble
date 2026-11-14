@@ -1,4 +1,3 @@
-import type { OwnerAdminClient } from '../../../services/owner-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
 import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
 
@@ -34,7 +33,8 @@ export type ManageTarget = {
 export function previewManage(
   bar: HTMLElement,
   deps: {
-    api: Pick<OwnerAdminClient, 'deletePreviews'>;
+    /** Deletes the chosen runs and single previews; returns how many records went. */
+    remove: (runIds: string[], previewIds: string[]) => Promise<number>;
     confirm: ConfirmInPlace;
     run: (work: () => Promise<void>) => Promise<void>;
     toast: (text: string, tone?: 'ok' | 'info' | 'warn' | 'danger') => void;
@@ -137,12 +137,12 @@ export function previewManage(
         );
         if (!yes || deps.disposed()) return;
         await deps.run(async () => {
-          const result = await deps.api.deletePreviews({
-            runIds: runs.map((t) => t.key),
-            previewIds: singles.map((t) => t.key),
-          });
+          const count = await deps.remove(
+            runs.map((t) => t.key),
+            singles.map((t) => t.key),
+          );
           picked.clear();
-          deps.toast(previewManageCopy.deleted(result.previews), 'ok');
+          deps.toast(previewManageCopy.deleted(count), 'ok');
           await deps.reload();
         });
       })(),

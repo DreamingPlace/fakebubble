@@ -19,6 +19,12 @@ import {
 import type { PlayerModelId } from '../../../../packages/contracts/player-models.ts';
 
 type Request = (path: string, body: Record<string, unknown>) => Promise<unknown>;
+/** A sentence or null (the phrasing was not written). */
+const text = (v: unknown) => (v === null ? null : string(v));
+const object2 = (v: unknown): unknown[] => {
+  if (!Array.isArray(v) || v.length !== 2) throw invalid();
+  return v;
+};
 const invalid = () => new Error('ADMIN_REHEARSAL_PROTOCOL_INVALID');
 const object = (v: unknown): Record<string, unknown> => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) throw invalid();
@@ -232,6 +238,8 @@ export class RehearsalAdminClient {
                 label: string(x.label),
                 kind: oneOf(x.kind, ['meme', 'story'] as const),
                 played: bool(x.played),
+                hints: x.hints === undefined ? [null, null] : [text(object2(x.hints)[0]), text(object2(x.hints)[1])],
+                lookAlike: x.lookAlike === undefined ? null : text(x.lookAlike),
                 models: byModel,
               };
             }),

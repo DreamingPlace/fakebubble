@@ -46,6 +46,7 @@ import { webCharacterDeleted } from './web-character-deleted.ts';
 import { cleanPhrases, countReplies, DEFAULT_PHRASES, type AnalysedReply } from './web-rehearsal-analysis.ts';
 import { rehearsalRequest, type RehearsalFrozen } from './web-rehearsal-request.ts';
 import { installRehearsal } from './web-rehearsal-schema.ts';
+import { installRehearsalErase, rehearsalNotErased } from './web-rehearsal-erase.ts';
 import { builtinSet, builtinSets, itemSpec, memeItems, memeItemsAllowed, memeTurnPlan } from './web-rehearsal-sets.ts';
 
 export interface RehearsalActor {
@@ -93,6 +94,7 @@ export class WebRehearsal {
     this.clock = clock;
     this.id = nextId;
     installRehearsal(store);
+    installRehearsalErase(store);
   }
   private now() {
     const now = this.clock.now();
@@ -529,7 +531,7 @@ export class WebRehearsal {
     identifier(characterId);
     return this.store
       .all<{ id: string }>(
-        'SELECT id FROM web_rehearsal_runs WHERE character_id=? ORDER BY created_at DESC,id DESC LIMIT 20',
+        `SELECT id FROM web_rehearsal_runs r WHERE character_id=?${rehearsalNotErased(this.store)} ORDER BY created_at DESC,id DESC LIMIT 20`,
         characterId,
       )
       .map((row) => this.info(row.id)!);
@@ -572,7 +574,7 @@ export class WebRehearsal {
     identifier(characterId);
     identifier(runId);
     const run = this.store.get<{ character_id: string; reviewer: string }>(
-      'SELECT character_id,reviewer FROM web_rehearsal_runs WHERE id=?',
+      `SELECT character_id,reviewer FROM web_rehearsal_runs r WHERE id=?${rehearsalNotErased(this.store)}`,
       runId,
     );
     ensure(run && run.character_id === characterId, 'NOT_FOUND');
@@ -632,6 +634,9 @@ export class WebRehearsal {
     let memes: RehearsalMemeRow[] | null = null;
     if (items.length > 0)
       memes = items.map((item) => {
+        const texts = turnRows.filter((t) => t.item_key === item.item_key);
+        const hintTexts = texts.filter((t) => t.role === 'hint').map((t) => t.text ?? '');
+        const negative = texts.find((t) => t.role === 'negative')?.text ?? null;
         const models: Record<string, RehearsalMemeCell> = {};
         for (const model of info.models) {
           const unit = units.find((u) => u.kind === 'judge' && u.model_key === model && u.item_key === item.item_key);
@@ -665,7 +670,14 @@ export class WebRehearsal {
                       : 'pending',
             };
         }
-        return { label: item.label, kind: item.kind, played: item.state !== 'dropped', models };
+        return {
+          label: item.label,
+          kind: item.kind,
+          played: item.state !== 'dropped',
+          hints: [hintTexts[0] ?? null, hintTexts[1] ?? null],
+          lookAlike: negative,
+          models,
+        };
       });
     return {
       run: info,

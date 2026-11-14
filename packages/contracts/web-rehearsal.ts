@@ -143,6 +143,9 @@ export interface RehearsalMemeRow {
   kind: 'meme' | 'story';
   /** false: the hint phrasings could not be written (the item was left out). */
   played: boolean;
+  /** Part 31b: the two hint phrasings the judge wrote and the look-alike sentence, so the owner can see which one missed. null = not written. */
+  hints: [string | null, string | null];
+  lookAlike: string | null;
   models: Record<string, RehearsalMemeCell>;
 }
 export interface RehearsalRunInfo {
