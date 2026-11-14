@@ -19899,15 +19899,16 @@ html.theme-fade *::after {
     0 0 0 9px var(--bb-paper, #0c0b10),
     0 0 0 12px var(--n-aura-3);
 }
-.page-shell .chat-mark {
+.page-shell .chat-head .chat-mark {
   width: 36px;
   height: 36px;
   font-size: 14px;
   border-width: 2.5px;
+  box-sizing: border-box;
   position: relative;
   overflow: hidden;
 }
-.page-shell .message-avatar {
+.page-shell .message-row .message-avatar {
   width: 30px;
   height: 30px;
   font-size: 12px;
