@@ -26,11 +26,6 @@
       "reason": "Memory review: the player-facing memory controls are the next product step; the live memory system and its tests use these."
     },
     {
-      "file": "apps/server/memory/memory.ts",
-      "names": ["selectProactiveTopic"],
-      "reason": "Proactive-message code is out of scope for Part 22x and is wired in a later Part."
-    },
-    {
       "file": "apps/player-web/src/features/share/shared-card.ts",
       "names": ["renderSharedCard"],
       "reason": "The page a shared voice 小卡 opens on (Part 25b, Shared board). The share link and its data are the share feature's own Part; the page, its tests and its review screenshots exist now."

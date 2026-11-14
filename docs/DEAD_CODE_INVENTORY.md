@@ -25,7 +25,6 @@ To fix a failure: delete the symbol and the private helpers, constants and impor
 |---|---|---|
 | Worker entrypoints | every export of `workers/web-cloudflare/{edge,business,budget,generation}.ts` | Bound by name in the Cloudflare deployment (Durable Object classes, RPC services, default `fetch`); nothing imports them. |
 | Memory review | `memory/memory-review.ts`: `correctMemory`, `listCorrections`, `listMemoryTopics`, `readMemoryDetail` | The player-facing memory controls are the next product step; the live memory system and its tests use them. |
-| Proactive messages | `memory/memory.ts`: `selectProactiveTopic` | Proactive-message code is out of scope until its own Part. |
 | Test seams | `resetChatGuide`, `resetCocreationDrafts`, `PLAYER_NUMBER_PATTERN`, `grantPoints`, `memoryAlertState`, `OfflineEmbeddings`, `fixtureVector`, `isPreSend`, `verifyVoiceMaterialEvidence`, `preflightWebDataPolicy`, `syntheticProviderBootstrap` | Helpers that component, unit or fixture-worker tests build on, with no production caller. |
 
 ## Entry points and files outside the import graph
