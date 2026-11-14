@@ -15555,11 +15555,6 @@ button:not(
   padding: var(--ad-card-pad);
   list-style: none;
 }
-@media (max-width: 720px) {
-  .account-admin-page.admin-shell .arc-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 /* in the collapsed role rail 首页顺序 is a glyph like 新建角色 / 导入角色资料 and says its name when the rail opens */
 .account-admin-page.admin-shell #wb-arc {
   flex: none;
@@ -16418,13 +16413,35 @@ body.legal-page {
   margin: 0;
   background: #f6f4ef;
 }
+/* Part 31b: the free-tier offer is a short badge beside the 注册 title (it was a sentence in a box that read like a field). */
+.acct-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
 .acct-bonus {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #e3efe6;
-  font-size: 14px;
-  line-height: 1.6;
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #294b40;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+  animation: acct-badge-in 240ms cubic-bezier(0.2, 0.82, 0.24, 1) both;
+}
+@keyframes acct-badge-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .acct-bonus {
+    animation: none;
+  }
 }
 
 /* Part 19: the one-time chat-review banner (CHAT_REVIEW_ENABLED) and the 18+ tick of the signup sheet. */

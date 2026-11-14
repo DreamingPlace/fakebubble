@@ -28,9 +28,9 @@ export const modelCopy = {
   current: '当前',
   balance: (points: number, messages: number) => `剩余 ${points} 点 · 约可聊 ${messages} 条`,
   confirm: (label: string, points: number, voicePoints: number) =>
-    `之后用 ${label} · ${points} 点/条（语音 +${voicePoints}）。记忆不变。`,
+    `之后用 ${label} · ${points} 点/条（语音 +${voicePoints}）。`,
   /** Invited players are not charged: no prices. */
-  confirmFree: (label: string) => `之后用 ${label}。记忆不变。`,
+  confirmFree: (label: string) => `之后用 ${label}。`,
   confirmButton: '换',
   cancelButton: '取消',
   close: '关闭',

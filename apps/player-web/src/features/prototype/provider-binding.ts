@@ -510,10 +510,7 @@ export class LiveBinding {
     note.textContent = this.headNote();
     // A guest past its trial but inside the 7-day grace period: signing up saves the chats and brings them back.
     if (this.grace && this.accessKnown && !this.invitation.locked) {
-      const hint = document.createElement('span');
-      hint.className = 'head-hint grace-hint';
-      hint.textContent = accountCopy.graceHint;
-      shell.head.append(hint);
+      // (no sentence here: 注册 stays in the top bar)
     } else if (this.accessKnown && !this.invitation.locked && access.remainingReplies === 0) {
       // Trial used up: one short line says what to do next (a signed-up guest already has an account to keep chats in).
       const hint = document.createElement('span');

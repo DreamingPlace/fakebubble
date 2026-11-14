@@ -577,8 +577,8 @@ test('grace: a guest past its trial sees the agreed line and keeps 注册; a sig
   };
   const f = chat(t, grace, { expired: true });
   await f.attach();
-  const hint = f.header.querySelector('.grace-hint')!;
-  assert.equal(hint.textContent, '体验已结束 · 注册即可保存并找回你的聊天（7 天内）');
+  // Part 31b (named exception): the grace sentence is gone (no explanatory text); the top bar keeps 注册
+  assert.equal(f.header.querySelector('.grace-hint'), null);
   assert.ok(
     f.header.querySelectorAll('button').some((b) => b.textContent === '注册'),
     '注册 stays in the top bar',
@@ -647,7 +647,9 @@ test('GET /account: the signup bonus feature is a small positive integer, nothin
 
 test('signup sheet: says what the signup gives, and the done line names the bonus that was granted', async (t) => {
   const on = sheet(t, 'signup', { bonus: 10 });
-  assert.equal(on.root.querySelector('.acct-bonus')!.textContent, '注册即送 10 条免费消息，可以和任何角色聊。');
+  // Part 31b (named exception): the offer is a short badge beside the title, not a sentence in the form
+  assert.equal(on.root.querySelector('.acct-bonus')!.textContent, '送 10 条');
+  assert.equal(on.root.querySelector('.acct-intro'), null);
   assert.equal(sheet(t, 'signup').root.querySelector('.acct-bonus'), null);
   assert.equal(sheet(t, 'login', { bonus: 10 }).root.querySelector('.acct-bonus'), null);
   assert.equal(accountCopy.doneSignupBonus(10), '注册成功，已送你 10 条免费消息');

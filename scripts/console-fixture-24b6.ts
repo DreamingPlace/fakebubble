@@ -85,6 +85,8 @@ export type FixtureOptions = {
   freeTier?: boolean;
   /** Part 31: turns 测试对话 on (CHAT_REVIEW_ENABLED) so the owner's deletion and 已关闭账号 can be looked at. */
   chatReview?: boolean;
+  /** Part 31b: the sign-up sheet is open (PLAYER_SIGNUP), with the legal consent line and the 18+ tick, for the before/after screenshots. */
+  signup?: boolean;
 };
 
 export async function startConsoleFixture(options: FixtureOptions = {}) {
@@ -261,7 +263,15 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
         { reserve() {}, settle() {} },
       ),
     );
-  const app = new WebProviderServer(store, config, clock, runner, undefined, previews, { signupEnabled: false });
+  const app = new WebProviderServer(store, config, clock, runner, undefined, previews, {
+    signupEnabled: options.signup === true,
+    ...(options.signup === true
+      ? {
+          mailer: { send: async () => undefined, waitUntil: (task: Promise<void>) => void task },
+          dailyCap: 50,
+        }
+      : {}),
+  });
 
   // ---- twelve more live characters (c04 … c15), written straight into the catalog tables as a publication would ----
   const template0 = JSON.parse(

@@ -1,5 +1,6 @@
+// Part 31b named exception (owner rule: no explanatory text on player pages): the 记忆不变 sentence left the model confirm line; only those assertions changed.
 // Part 25a (named exceptions, all in the model sheet): a row says "{n} 点/条" (no 约), the confirm sentence is "之后用 {model} · {n} 点/条
-// （语音 +N）。记忆不变。" (unmetered: "之后用 {model}。记忆不变。"), the buttons are 取消 / 换 and success says "已换成 {model}". The chat ⋯ menu's
+// （语音 +N）。记忆不变。" (unmetered: "之后用 {model}。"), the buttons are 取消 / 换 and success says "已换成 {model}". The chat ⋯ menu's
 // "切换回复模型 · 约 N 点/条" is unchanged.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -96,7 +97,7 @@ test('the words: name, one line of character, 约 N 点/条, 语音 +2, the conf
     assert.ok(model.blurb.length > 0 && [...model.blurb].length <= 16, 'one short line');
   assert.equal(doc.body.querySelector('.mp-balance')!.textContent, '剩余 100 点 · 约可聊 8 条');
   assert.equal(modelFooterNote(info), '剩余 100 点 · 约可聊 8 条');
-  assert.equal(modelCopy.confirm('Grok 4.7', 25, 2), '之后用 Grok 4.7 · 25 点/条（语音 +2）。记忆不变。');
+  assert.equal(modelCopy.confirm('Grok 4.7', 25, 2), '之后用 Grok 4.7 · 25 点/条（语音 +2）。');
 });
 
 test('switching asks first: cancel changes nothing; confirm switches once, reports the new state and closes', async (t) => {
@@ -119,7 +120,7 @@ test('switching asks first: cancel changes nothing; confirm switches once, repor
   });
   const grok = () => doc.body.querySelector('[data-model="xai"]')!;
   grok().click();
-  assert.equal(doc.body.querySelector('.mp-confirm')!.textContent, '之后用 Grok 4.7 · 25 点/条（语音 +2）。记忆不变。');
+  assert.equal(doc.body.querySelector('.mp-confirm')!.textContent, '之后用 Grok 4.7 · 25 点/条（语音 +2）。');
   assert.deepEqual(calls, [], 'nothing is sent before the confirmation');
   doc.body
     .querySelectorAll('button')
@@ -389,7 +390,7 @@ test('an invited player picks a model without prices or balance: nothing is char
   assert.equal(doc.body.querySelectorAll('.mp-prices').length, 0);
   assert.equal(doc.body.querySelector('.mp-balance')!.textContent, '');
   doc.body.querySelector('[data-model="xai"]')!.click();
-  assert.equal(doc.body.querySelector('.mp-confirm')!.textContent, '之后用 Grok 4.7。记忆不变。');
+  assert.equal(doc.body.querySelector('.mp-confirm')!.textContent, '之后用 Grok 4.7。');
   assert.equal(modelCopy.menuSub(free), 'DeepSeek');
 });
 
@@ -583,7 +584,7 @@ test('消费记录: top account menu entry opens the page with balance, this mon
   assert.match(rows[1]!.textContent, /回复失败，已退还 22 点/);
   assert.match(rows[2]!.textContent, /注册赠送/);
   assert.equal(rows[2]!.querySelector('.bl-points')!.textContent, '+100 点');
-  assert.ok(sheet.textContent.includes('只显示最近 90 天'));
+  assert.ok(!sheet.textContent.includes('只显示最近 90 天')); // Part 31b (named exception): the note is gone
   assert.equal(sheet.querySelector('.bl-pager')!.hidden, true, 'one page: no pager');
   assert.doesNotMatch(sheet.textContent, /\$|美元|元|principal|operation/);
 });
