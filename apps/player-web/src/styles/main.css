@@ -15603,6 +15603,11 @@ button:not(
   gap: 2px;
   text-align: center;
 }
+.account-admin-page.admin-shell .admin-date-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
 .account-admin-page.admin-shell .admin-date-wd {
   color: var(--ad-muted);
   font-size: 12px;

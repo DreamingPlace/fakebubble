@@ -10,7 +10,8 @@ import { h } from '../../cocreation/h.ts';
  * set value is never cached), and it is '' while the text is not a real date (`invalid` says so).
  */
 const DAY_MS = 86_400_000;
-export const DATE_PROBLEM = '日期格式不对，请按 2026-01-31 这样填写，并且要是真实存在的日期。';
+// The example is this year's: a fixed date in the past reads as stale.
+export const DATE_PROBLEM = `日期格式不对，请按 ${new Date().getUTCFullYear()}-01-31 这样填写，并且要是真实存在的日期。`;
 const SHAPE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 export type DateParse = { ok: true; value: string } | { ok: false };
@@ -100,7 +101,10 @@ export function dateField(options: {
           const button = h('button', {
             class: 'admin-date-pick',
             text: pick.label,
-            attrs: { type: 'button' },
+            attrs: {
+              type: 'button',
+              title: pick.days === null ? '不设截止日期' : `从今天起 ${pick.days} 天（按 UTC 日期）`,
+            },
           });
           button.addEventListener('click', () => {
             set(pick.days === null ? '' : dayFromToday(pick.days, now()));
@@ -162,8 +166,16 @@ export function dateField(options: {
     if (!pop) return;
     const chosen = parseDate(text());
     const today = isoDay(now());
-    const prev = h('button', { class: 'admin-date-nav', text: '‹', attrs: { type: 'button', 'aria-label': '上个月' } });
-    const next = h('button', { class: 'admin-date-nav', text: '›', attrs: { type: 'button', 'aria-label': '下个月' } });
+    const prev = h('button', {
+      class: 'admin-date-nav',
+      text: '‹',
+      attrs: { type: 'button', 'aria-label': '上个月', title: '上个月' },
+    });
+    const next = h('button', {
+      class: 'admin-date-nav',
+      text: '›',
+      attrs: { type: 'button', 'aria-label': '下个月', title: '下个月' },
+    });
     prev.addEventListener('click', () => shiftMonth(-1));
     next.addEventListener('click', () => shiftMonth(1));
     const weeks = monthGrid(shown.year, shown.month);
@@ -217,6 +229,11 @@ export function dateField(options: {
         return button;
       }),
     );
+    const clear = h('button', { class: 'admin-date-pick admin-date-clear', text: '清除', attrs: { type: 'button' } });
+    clear.addEventListener('click', () => {
+      set('');
+      close(true);
+    });
     pop.replaceChildren(
       h(
         'div',
@@ -226,6 +243,7 @@ export function dateField(options: {
         next,
       ),
       body,
+      h('div', { class: 'admin-date-foot' }, clear),
     );
   };
   const open = () => {

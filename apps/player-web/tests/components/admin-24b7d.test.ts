@@ -452,3 +452,25 @@ test('24b-7e 聊天人数 × 按角色: the pie is off with its reason, lines an
   assert.equal(tab('图表类型', '饼图').disabled, false);
   assert.equal(withShare.hidden, false);
 });
+
+test('24b-7d round 2 the calendar has a 清除 button, the quick picks say what they mean, and the error example is this year', (t) => {
+  installFakeDom(t);
+  const field = dateField({
+    label: '日期',
+    value: '2031-05-06',
+    quickPicks: [
+      { label: '30 天', days: 30 },
+      { label: '不限', days: null },
+    ],
+  });
+  (field.input as unknown as FakeElement).click();
+  const clear = all(field.root, 'button').find((b) => b.textContent === '清除')!;
+  assert.ok(clear, 'the popover offers 清除');
+  clear.click();
+  assert.equal(field.value, '');
+  assert.equal(one(field.root, '.admin-date-pop'), null, 'and closes');
+  const picks = all(field.root, '.admin-date-pick');
+  assert.match(picks[0]!.getAttribute('title')!, /从今天起 30 天/);
+  assert.equal(picks[1]!.getAttribute('title'), '不设截止日期');
+  assert.ok(DATE_PROBLEM.includes(`${new Date().getUTCFullYear()}-01-31`));
+});

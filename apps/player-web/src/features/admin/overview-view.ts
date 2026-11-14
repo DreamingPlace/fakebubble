@@ -763,7 +763,9 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       ? '正在读取…'
       : !data
         ? `这段时间没有${kindOfSplit === 'model' ? '按模型' : '按角色'}的数据。`
-        : '还没有数据。';
+        : metric === 'chat' && !known && kindOfSplit === 'character'
+          ? '这段时间没有按角色的聊天人数记录（下面的统计表是回复数）。'
+          : '还没有数据。';
     trendEmpty.hidden = known;
     chartBox.hidden = !known || kind === 'pie';
     pieBox.hidden = !known || kind !== 'pie';
@@ -798,7 +800,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
         });
         return hoverValue(
           chip,
-          `${s.name} ${figure === null ? '—' : exactCount(figure)} ${unit}${metric === 'replies' ? '（这段时间的合计）' : '（最新一格）'}。点一下隐藏或显示。`,
+          `${s.name} ${metric === 'replies' ? '成功回复 ' : ''}${figure === null ? '—' : exactCount(figure)} ${unit}${metric === 'replies' ? '（这段时间的合计）' : '（最新一格）'}。点一下隐藏或显示。`,
         );
       }),
     );
