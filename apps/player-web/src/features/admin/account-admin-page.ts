@@ -109,6 +109,9 @@ type Port = Pick<
   modelSettings?: AccountAdminApi['modelSettings'];
   reviewModel?: AccountAdminApi['reviewModel'];
   saveReviewModel?: AccountAdminApi['saveReviewModel'];
+  /** Part 37a: 回复写法 (owner only; the card is drawn only for the owner). */
+  writerSetting?: AccountAdminApi['writerSetting'];
+  saveWriterSetting?: AccountAdminApi['saveWriterSetting'];
   saveModelSettings?: AccountAdminApi['saveModelSettings'];
   /** 共创收件箱. Optional: a page without it simply has no inbox tab. */
   cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
@@ -956,6 +959,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     ...(port.reviewModel && port.saveReviewModel
       ? { review: { load: () => port.reviewModel!(), save: (input) => port.saveReviewModel!(input) } }
       : {}),
+    ...(port.writerSetting && port.saveWriterSetting
+      ? { writer: { load: () => port.writerSetting!(), save: (input) => port.saveWriterSetting!(input) } }
+      : {}),
+    isOwner: () => session?.member.role === 'owner',
     run,
     confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),

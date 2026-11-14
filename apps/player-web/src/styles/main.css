@@ -6281,24 +6281,29 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
 }
 
 /* Part 26b: 审核模型 (the switch on 模型与价格) and 审核对比 (a section of 预演). Tokens only; no inline styles. */
-.account-admin-page.admin-shell .models-review {
+.account-admin-page.admin-shell .models-review,
+.account-admin-page.admin-shell .models-writer {
   margin: 0 0 16px;
   padding: 14px 16px;
 }
-.account-admin-page.admin-shell .models-review-head {
+.account-admin-page.admin-shell .models-review-head,
+.account-admin-page.admin-shell .models-writer-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 14px;
 }
-.account-admin-page.admin-shell .models-review-head h3 {
+.account-admin-page.admin-shell .models-review-head h3,
+.account-admin-page.admin-shell .models-writer-head h3 {
   margin: 0;
   font-size: 15px;
 }
-.account-admin-page.admin-shell .models-review-head .seg {
+.account-admin-page.admin-shell .models-review-head .seg,
+.account-admin-page.admin-shell .models-writer-head .seg {
   margin-left: auto;
 }
-.account-admin-page.admin-shell .models-review-note {
+.account-admin-page.admin-shell .models-review-note,
+.account-admin-page.admin-shell .models-writer-note {
   margin: 8px 0 0;
 }
 .account-admin-page.admin-shell .models-review h4 {
@@ -6473,7 +6478,8 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   .account-admin-page.admin-shell .rc-sides {
     grid-template-columns: minmax(0, 1fr);
   }
-  .account-admin-page.admin-shell .models-review-head .seg {
+  .account-admin-page.admin-shell .models-review-head .seg,
+  .account-admin-page.admin-shell .models-writer-head .seg {
     margin-left: 0;
   }
 }
@@ -15870,6 +15876,25 @@ button:not(
 .account-admin-page.admin-shell .rh-toggle:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+/* Part 37a: the models as rows and the writers (现行 / 新) as two aligned columns. */
+.account-admin-page.admin-shell .rh-models {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .rh-model {
+  display: grid;
+  grid-template-columns: 160px 64px 64px;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .rh-model-name {
+  color: var(--ad-text);
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .rh-model .rh-toggle {
+  padding: 0;
 }
 .account-admin-page.admin-shell .rh-result {
   display: flex;

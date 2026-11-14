@@ -245,6 +245,8 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `INVALID_CLARIFICATION_CONTEXT` (was 409)
 - `INVALID_COVERAGE` (was 409)
 - `INVALID_DEEPSEEK_KEY` (was 409)
+- `INVALID_DRAFT_SCHEMA`
+- `INVALID_GUARD_FIX`
 - `INVALID_FACT_REFERENCE` (was 409)
 - `INVALID_MEDIA_REFERENCE` (was 409)
 - `INVALID_MEMORY_EVIDENCE` (was 409)
@@ -262,6 +264,7 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `INVALID_TEXT_RESPONSE` (was 409)
 - `INVALID_TEXT_SCOPE` (was 409)
 - `INVALID_TEXT_TIMEOUT` (was 409)
+- `WRITER_V8_REQUIRED`
 - `INVALID_TEXT_TOKEN_LIMIT` (was 409)
 - `INVALID_TEXT_TOOL_RESPONSE` (was 409)
 - `INVALID_TEXT_USAGE` (was 409)

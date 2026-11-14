@@ -79,7 +79,7 @@ const importanceSchema = { type: 'integer', enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 // A topic either continues one of the memories recalled for this request (its catalog id) or starts a new one (null).
 const memoryIdSchema = (ids: string[]): Schema =>
   ids.length ? { anyOf: [{ type: 'string', enum: ids }, { type: 'null' }] } : { type: 'null' };
-function reviewSchema(
+export function reviewSchema(
   requiredIds: string[],
   localIds: string[],
   sourceIds: string[],

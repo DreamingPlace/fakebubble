@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { PLAYER_MODEL_IDS, type PlayerModelId } from '../../../packages/contracts/player-models.ts';
+import { writerDraftMessages, writerGuardMessages } from '../generation/writer-v8.ts';
+import type { WriterDraft } from '../generation/writer-v8.ts';
 import {
+  REHEARSAL_COLUMN_KEYS,
   REHEARSAL_ITEMS_MAX,
   REHEARSAL_MODEL_LABELS,
   REHEARSAL_NAME_CHARS,
@@ -15,6 +18,8 @@ import {
   charLength,
   checkTurns,
   isRehearsalModels,
+  parseRehearsalColumn,
+  rehearsalColumnLabel,
   type RehearsalCell,
   type RehearsalEstimate,
   type RehearsalItems,
@@ -62,7 +67,7 @@ export interface RehearsalPlan {
   turns: Array<{ text: string | null; role: 'hint' | 'negative' | null; item: string | null }>;
   scriptName: string;
   sourceKind: 'script' | 'set' | 'memes';
-  models: PlayerModelId[];
+  models: string[];
   withCast: boolean;
   frozen: RehearsalFrozen;
   items: Array<{ key: string; kind: 'meme' | 'story'; label: string; spec: Record<string, unknown> }>;
@@ -321,9 +326,11 @@ export class WebRehearsal {
     ensure(isRehearsalModels(input.models), 'INVALID_REHEARSAL_MODELS');
     ensure(typeof input.withCast === 'boolean', 'INVALID_REQUEST');
     const source = this.parseSource(input.source);
-    const models = PLAYER_MODEL_IDS.filter((id) => (input.models as PlayerModelId[]).includes(id));
+    // Column keys, in display order (each model's 现行 then 新). A rehearsal never reads the live 回复写法 switch.
+    const models = REHEARSAL_COLUMN_KEYS.filter((key) => (input.models as string[]).includes(key));
     const now = this.now();
-    for (const id of models) ensure(modelUsableHere(this.store, id, now), 'REHEARSAL_MODEL_UNAVAILABLE');
+    for (const key of models)
+      ensure(modelUsableHere(this.store, parseRehearsalColumn(key)!.model, now), 'REHEARSAL_MODEL_UNAVAILABLE');
     ensure(!webCharacterDeleted(this.store, characterId), 'CHARACTER_DELETED');
     const profile = this.draft(characterId, input.draftRevision as number, input.profileHash as string);
     const withCast = input.withCast as boolean;
@@ -390,7 +397,7 @@ export class WebRehearsal {
   private estimateOf(
     frozen: RehearsalFrozen,
     turns: RehearsalPlan['turns'],
-    models: PlayerModelId[],
+    models: string[],
     itemCount: number,
   ): RehearsalEstimate {
     const reviewer = currentReviewModel(this.store);
@@ -398,16 +405,37 @@ export class WebRehearsal {
     const players = turns.map((t) => t.text ?? '你知道那件事吧');
     const first = rehearsalRequest(fixed, 'estimate', 'estimate', 1, players, []);
     const baseBytes = Buffer.byteLength(JSON.stringify(promptMessages(first)), 'utf8');
+    // Part 37a: a 新 column sends the v8 prompt (much shorter) and its second pass is the guard (a bigger prompt, a short answer).
+    const v8First = rehearsalRequest(fixed, 'estimate', 'deepseek-v8', 1, players, []);
+    const v8Draft = Buffer.byteLength(JSON.stringify(writerDraftMessages(v8First)), 'utf8');
+    const v8Guard = Buffer.byteLength(
+      JSON.stringify(
+        writerGuardMessages(v8First, { mode: 'casual', bubbles: [], endsSession: false, markups: [] } as WriterDraft),
+      ),
+      'utf8',
+    );
     let total = 0;
-    for (const id of models) {
-      const ref = draftModelRef(id);
+    for (const key of models) {
+      const column = parseRehearsalColumn(key)!;
+      const ref = draftModelRef(column.model);
       // xAI and Gemini think before they answer: billed as output.
-      const thinking = id === 'deepseek' ? 0 : 1200;
+      const thinking = column.model === 'deepseek' ? 0 : 1200;
       for (let t = 1; t <= turns.length; t++) {
-        const bytes = baseBytes + (t - 1) * (REPLY_CHARS * 3 + 2 * 260);
-        const inTokens = Math.ceil(bytes / 2);
-        total += listPriceMicros(ref.provider, ref.model, { inputTokens: inTokens, outputTokens: 250 + thinking });
-        total += listPriceMicros('deepseek', reviewer, { inputTokens: inTokens + 300, outputTokens: 600 });
+        const growth = (t - 1) * (REPLY_CHARS * 3 + 2 * 260);
+        if (column.writer === 'v8') {
+          total += listPriceMicros(ref.provider, ref.model, {
+            inputTokens: Math.ceil((v8Draft + growth) / 2),
+            outputTokens: 120 + thinking,
+          });
+          total += listPriceMicros('deepseek', reviewer, {
+            inputTokens: Math.ceil((v8Guard + growth) / 2) + 150,
+            outputTokens: 260,
+          });
+        } else {
+          const inTokens = Math.ceil((baseBytes + growth) / 2);
+          total += listPriceMicros(ref.provider, ref.model, { inputTokens: inTokens, outputTokens: 250 + thinking });
+          total += listPriceMicros('deepseek', reviewer, { inputTokens: inTokens + 300, outputTokens: 600 });
+        }
       }
     }
     // Judge calls, on the house reviewer: one hint writer per item, one verdict per model and item.
@@ -558,7 +586,7 @@ export class WebRehearsal {
       runId,
       createdAt: run.created_at,
       scriptName: run.script_name,
-      models: JSON.parse(run.models_json) as PlayerModelId[],
+      models: JSON.parse(run.models_json) as string[],
       turns,
       withCast: run.with_cast === 1,
       status: open ? 'running' : done ? 'done' : 'failed',
@@ -596,11 +624,12 @@ export class WebRehearsal {
     }));
     const cellState = (status: UnitRow['status']): RehearsalCell['state'] =>
       status === 'queued' ? 'pending' : status === 'generating' ? 'running' : status;
-    const columns = info.models.map((model) => {
+    const columns = info.models.map((key) => {
+      const column = parseRehearsalColumn(key)!;
       const cells: RehearsalCell[] = turnRows.map((turn) => {
-        const unit = units.find((u) => u.kind === 'cell' && u.model_key === model && u.turn === turn.turn);
+        const unit = units.find((u) => u.kind === 'cell' && u.model_key === key && u.turn === turn.turn);
         const result = unit?.result_json
-          ? (JSON.parse(unit.result_json) as { bubbles: string[]; answered: boolean })
+          ? (JSON.parse(unit.result_json) as { bubbles: string[]; answered: boolean | null })
           : null;
         return {
           state: unit ? cellState(unit.status) : 'pending',
@@ -615,13 +644,18 @@ export class WebRehearsal {
           analysed.push({
             player: turnRows[index]!.text ?? '',
             bubbles: cell.bubbles,
-            answered: cell.answered === true,
+            answered: column.writer === 'v8' ? null : cell.answered === true,
           });
         }
       });
       return {
-        model,
-        label: REHEARSAL_MODEL_LABELS[model],
+        key,
+        model: column.model,
+        writer: column.writer,
+        // 现行 / 新 is named only when the run compares writers; a run of 现行 columns reads as it always did.
+        label: info.models.some((k) => k.endsWith('-v8'))
+          ? rehearsalColumnLabel(key)
+          : REHEARSAL_MODEL_LABELS[column.model],
         cells,
         counts: countReplies(analysed, lists, {
           unconfirmed: cells.filter((c) => c.state === 'unconfirmed').length,

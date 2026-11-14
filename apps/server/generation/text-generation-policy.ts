@@ -3,6 +3,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import { DEFAULT_TEXT_MODELS, SUPPORTED_TEXT_MODELS } from '../platform/config.ts';
 import { textPromptHash } from './accepted-text-prompt.ts';
 import { TEXT_PROTOCOL_VERSION } from './accepted-text-protocol.ts';
+import { writerPolicyHash } from './writer-v8.ts';
 
 export interface TextGenerationPolicyOptions {
   model?: string;
@@ -69,6 +70,10 @@ export const generationPolicyHash = (policy: TextGenerationPolicy) =>
   createHash('sha256').update(JSON.stringify(policy)).digest('hex');
 export const textPolicyHash = (options: TextGenerationPolicyOptions = {}) =>
   generationPolicyHash(createTextGenerationPolicy(options));
+
+/** Part 37a: the policy hash of a v8 reply for the same options (see writerPolicyHash). */
+export const textWriterPolicyHash = (options: TextGenerationPolicyOptions = {}) =>
+  writerPolicyHash(JSON.stringify(createTextGenerationPolicy(options)));
 
 export function textRequestParameters(policy: TextGenerationPolicy, stage: 'draft' | 'review', outputToolName: string) {
   const { tool_choice: _toolChoice, ...parameters } = policy.stages[stage];

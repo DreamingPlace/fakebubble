@@ -210,6 +210,9 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   REHEARSAL_STAGE_UNCONFIRMED: '多轮预演某个阶段的结果未确认；不会重发。',
   REHEARSAL_USAGE_INVALID: '多轮预演的用量记录无效，请联系主管理员核对。',
   WEB_PROVIDER_WIRE_MISMATCH: '供应商返回的内容与请求不一致，已停止；不会重发。',
+  WEB_WRITER_UNSUPPORTED: '这个版本的生成服务还不支持「新」回复写法，请先部署生成服务；不会重发。',
+  WEB_WRITER_PIN_MISMATCH: '「新」回复写法的提示文件与固定的校验值不一致，已停止；不会重发。',
+  WEB_WRITER_SCHEMA_MISMATCH: '这个站点的回复写法设置表与程序不一致，请联系主管理员。',
   WEB_REHEARSAL_SCHEMA_MISMATCH: '这个站点的多轮预演表与程序不一致，请联系主管理员。',
   WEB_REVIEW_COMPARE_SCHEMA_MISMATCH: '这个站点的对比表与程序不一致，请联系主管理员。',
   // ---- the generic layer ----

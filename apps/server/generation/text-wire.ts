@@ -120,6 +120,35 @@ export function chatBody(provider: Exclude<TextProviderId, 'deepseek'>, input: W
   });
 }
 
+/**
+ * Part 37a (v8 writer): the plain-text draft for xAI or Gemini. No tool, no tool choice, no schema; the sampling temperature is the
+ * one the v8 protocol pins (the same for every provider). Reasoning stays at the low setting of the tool calls.
+ */
+export function chatPlainBody(
+  provider: Exclude<TextProviderId, 'deepseek'>,
+  input: Omit<WireInput, 'tool'> & { temperature: number },
+): string {
+  const limit = outputBound(provider, input.maxTokens);
+  if (provider === 'xai')
+    return JSON.stringify({
+      model: input.model,
+      messages: input.messages,
+      stream: false,
+      max_completion_tokens: limit,
+      reasoning_effort: 'low',
+      temperature: input.temperature,
+      user: input.user,
+    });
+  return JSON.stringify({
+    model: input.model,
+    messages: input.messages,
+    stream: false,
+    max_tokens: limit,
+    reasoning_effort: 'low',
+    temperature: input.temperature,
+  });
+}
+
 const count = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 1_000_000_000_000;
 const record = (value: unknown): Record<string, unknown> => (isObject(value) ? value : {});

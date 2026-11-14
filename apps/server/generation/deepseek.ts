@@ -11,15 +11,20 @@ import type {
 import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { bubbleLimits, BubbleValidationError, inspectBubbles } from '../../../packages/domain/bubbles.ts';
 import { TextGenerationFailure } from './text-generation-error.ts';
-import {
-  applyTextReview,
-  DROP_INVALID_METADATA,
-  draftTool,
-  parseTextDraft,
-  reviewTool,
-} from './accepted-text-protocol.ts';
+import { DROP_INVALID_METADATA, draftTool, reviewTool } from './accepted-text-protocol.ts';
 import type { TextDraft } from './accepted-text-protocol.ts';
 import { promptMessages, reviewPromptMessages } from './accepted-text-prompt.ts';
+import {
+  WRITER_V8_MAX_TOKENS,
+  WRITER_V8_TEMPERATURE,
+  applyReview,
+  parseDraft,
+  writerDraftMessages,
+  writerGuardMessages,
+  writerGuardTool,
+  writerPolicyHash,
+} from './writer-v8.ts';
+import type { WriterDraft } from './writer-v8.ts';
 import { createTextGenerationPolicy, generationPolicyHash, textRequestParameters } from './text-generation-policy.ts';
 import type { TextGenerationPolicy, TextGenerationPolicyOptions } from './text-generation-policy.ts';
 import type {
@@ -33,6 +38,7 @@ import {
   TEXT_ENDPOINTS,
   chatBody,
   chatObservation,
+  chatPlainBody,
   chatUsage,
   connectFailure,
   isNotBilled,
@@ -153,6 +159,24 @@ export function parseDeepSeekToolResponse(
   }
 }
 
+/** Part 37a: the plain-text answer of the v8 writer. No tool call is allowed; the draft payload is `{text}`. */
+export function parsePlainTextResponse(value: unknown): { text: string } {
+  object(value);
+  ensure(Array.isArray(value.choices) && value.choices.length === 1, 'INVALID_TEXT_RESPONSE');
+  const choice: unknown = value.choices[0];
+  object(choice);
+  ensure(choice.finish_reason === 'stop' || choice.finish_reason === 'length', 'TEXT_INCOMPLETE_RESPONSE');
+  object(choice.message);
+  const message = choice.message;
+  ensure(message.role === 'assistant' && !message.refusal, 'TEXT_CONTENT_REJECTED');
+  ensure(
+    message.tool_calls == null || (Array.isArray(message.tool_calls) && message.tool_calls.length === 0),
+    'INVALID_TEXT_RESPONSE',
+  );
+  ensure(typeof message.content === 'string' && message.content.trim().length > 0, 'INVALID_TEXT_RESPONSE');
+  return { text: message.content };
+}
+
 /** The model's own words in a provider response (the tool-call arguments, else any text), for admin diagnosis only. */
 export function rawModelOutput(value: unknown): string {
   try {
@@ -201,6 +225,14 @@ export class DeepSeekTextGenerator implements TextGenerator {
   }
   get policyHash() {
     return generationPolicyHash(this.#policy);
+  }
+  /** Part 37a: the policy hash of a v8 reply (the resolved policy plus the pinned v8 prompts, protocol and sampling). */
+  get writerPolicyHash() {
+    return writerPolicyHash(JSON.stringify(this.#policy));
+  }
+  /** The hash a frozen request must carry: v7's policy hash, or the v8 one when the request froze the v8 writer. */
+  policyHashFor(request: Pick<TextGenerationRequest, 'writer'>) {
+    return request.writer === 'v8' ? this.writerPolicyHash : this.policyHash;
   }
 
   constructor(
@@ -382,10 +414,13 @@ export class DeepSeekTextGenerator implements TextGenerator {
     // A caller changing its request while draft generation awaits cannot broaden the review's scope.
     const frozen = structuredClone(request);
     const requestDigest = createHash('sha256').update(JSON.stringify(frozen)).digest('hex');
+    // Part 37a: a request that froze the v8 writer is read with the v8 pins; every other request is v7, unchanged.
+    const v8 = frozen.writer === 'v8';
+    const policyHash = this.policyHashFor(frozen);
     if (knownDraft)
       ensure(
         knownDraft.requestDigest === requestDigest &&
-          knownDraft.policyHash === this.policyHash &&
+          knownDraft.policyHash === policyHash &&
           knownDraft.metadata.stage === 'draft' &&
           knownDraft.metadata.status === 'succeeded' &&
           (route
@@ -393,8 +428,8 @@ export class DeepSeekTextGenerator implements TextGenerator {
             : knownDraft.metadata.model === this.model),
         'TEXT_STAGE_RESUME_INVALID',
       );
-    const knownParsedDraft = knownDraft ? parseTextDraft(structuredClone(knownDraft.payload), frozen) : null;
-    const messages = promptMessages(frozen);
+    const knownParsedDraft = knownDraft ? parseDraft(structuredClone(knownDraft.payload), frozen) : null;
+    const messages = v8 ? writerDraftMessages(frozen) : promptMessages(frozen);
     const timeout = AbortSignal.timeout(this.timeoutMs);
     const combined = AbortSignal.any([signal, timeout]);
     const started = performance.now();
@@ -440,7 +475,10 @@ export class DeepSeekTextGenerator implements TextGenerator {
       bounds: {
         unit: 'tokens' as const,
         inputTokens: DEEPSEEK_INPUT_RESERVATION,
-        outputTokens: outputBound(ref.provider, stage === 'draft' ? this.maxTokens : this.reviewMaxTokens),
+        outputTokens: outputBound(
+          ref.provider,
+          stage === 'draft' ? (v8 ? WRITER_V8_MAX_TOKENS : this.maxTokens) : this.reviewMaxTokens,
+        ),
       },
     });
     /** One provider call for one stage with one model. A failure that proves nothing was billed is reported to the observer first. */
@@ -450,7 +488,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
       reservationFor: ProviderReservation | undefined,
       willRetry: (error: unknown) => boolean,
       messages: ReturnType<typeof promptMessages>,
-      outputTool: ReturnType<typeof draftTool>,
+      outputTool: ReturnType<typeof draftTool> | null,
       parse: (value: unknown) => T,
     ): Promise<T> => {
       ensure(!combined.aborted, errorCode(null));
@@ -462,8 +500,34 @@ export class DeepSeekTextGenerator implements TextGenerator {
       let parsed!: T;
       let handoff: AcceptedV7StageOutput | undefined;
       try {
-        const body =
-          ref.provider === 'deepseek'
+        const user = createHash('sha256')
+          .update(JSON.stringify([frozen.scope.worldId, frozen.scope.conversationId, frozen.scope.characterId]))
+          .digest('hex');
+        const body = !outputTool
+          ? // Part 37a: the v8 plain-text draft. No tool, thinking stays disabled, the pinned higher temperature.
+            ref.provider === 'deepseek'
+            ? (() => {
+                const { tool_choice: _choice, ...parameters } = this.#policy.stages.draft;
+                return JSON.stringify({
+                  ...parameters,
+                  model,
+                  max_tokens: WRITER_V8_MAX_TOKENS,
+                  temperature: WRITER_V8_TEMPERATURE.deepseek,
+                  messages,
+                  user_id: user,
+                });
+              })()
+            : (() => {
+                if (!this.#keys[ref.provider]) throw new DomainError('MODEL_UNAVAILABLE');
+                return chatPlainBody(ref.provider, {
+                  model,
+                  messages,
+                  maxTokens: WRITER_V8_MAX_TOKENS,
+                  temperature: WRITER_V8_TEMPERATURE[ref.provider],
+                  user: scopeUser([frozen.scope.worldId, frozen.scope.conversationId, frozen.scope.characterId]),
+                });
+              })()
+          : ref.provider === 'deepseek'
             ? JSON.stringify({
                 ...textRequestParameters(this.#policy, stage, outputTool.function.name),
                 // Part 26b: the model of THIS call (the route's review model); the policy's own model for every other call.
@@ -518,7 +582,9 @@ export class DeepSeekTextGenerator implements TextGenerator {
         }
         value = await readBody(response);
         ensure(!combined.aborted, errorCode(null));
-        const payload = parseDeepSeekToolResponse(value, outputTool.function.name, ref.provider);
+        const payload = outputTool
+          ? parseDeepSeekToolResponse(value, outputTool.function.name, ref.provider)
+          : parsePlainTextResponse(value);
         const captured = accept ? structuredClone(payload) : undefined;
         parsed = parse(payload);
         const meta = responseMetadata(value, model, Math.round(performance.now() - stageStarted), ref.provider);
@@ -540,7 +606,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
           handoff = {
             jobId: frozen.jobId,
             requestDigest,
-            policyHash: this.policyHash,
+            policyHash,
             wireRequestHash,
             stage,
             payload: captured,
@@ -604,7 +670,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
     const call = async <T extends TextDraft>(
       stage: TextGenerationStage['stage'],
       messages: ReturnType<typeof promptMessages>,
-      outputTool: ReturnType<typeof draftTool>,
+      outputTool: ReturnType<typeof draftTool> | null,
       parse: (value: unknown) => T,
     ): Promise<T> => {
       const chain = chains[stage];
@@ -639,9 +705,14 @@ export class DeepSeekTextGenerator implements TextGenerator {
         if (knownDraft) stages.push(structuredClone(knownDraft.metadata));
         const draft =
           knownParsedDraft ??
-          (await call('draft', messages, draftTool(frozen.deliveryMode), (value) => parseTextDraft(value, frozen)));
-        const reply = await call('review', reviewPromptMessages(frozen, draft), reviewTool(frozen), (value) =>
-          applyTextReview(value, draft, frozen, DROP_INVALID_METADATA),
+          (await call('draft', messages, v8 ? null : draftTool(frozen.deliveryMode), (value) =>
+            parseDraft(value, frozen),
+          ));
+        const reply = await call(
+          'review',
+          v8 ? writerGuardMessages(frozen, draft as WriterDraft) : reviewPromptMessages(frozen, draft),
+          v8 ? writerGuardTool(frozen) : reviewTool(frozen),
+          (value) => applyReview(value, draft, frozen, DROP_INVALID_METADATA),
         );
         return { ...metadata(), reply };
       } finally {

@@ -58,7 +58,9 @@ export type FakeFish = (
 type WebTextGenerator = Pick<
   DeepSeekTextGenerator,
   'textProtocol' | 'policyHash' | 'generateAcceptedStages' | 'generateAcceptedReviewFromKnownDraft'
->;
+> &
+  // Part 37a: the v8 writer's policy hash. A generator without it (an older one) cannot run a v8 reply: it is refused before a send.
+  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash'>>;
 
 /** Explicit live adapter. Constructing it does not send or read credentials. */
 export function fishTransport(audio: FishAudio): FakeFish {
@@ -150,6 +152,8 @@ export class WebProviderRunner {
     await this.whenReady();
     ensure(claim.stage === 'text' && this.text.textProtocol === 'accepted-v7', 'WEB_PROVIDER_STAGE_INVALID');
     const { request, row, scope } = this.frozen(claim.operationId);
+    const policyHash = request.writer === 'v8' ? this.text.writerPolicyHash : this.text.policyHash;
+    ensure(policyHash, 'WEB_WRITER_UNSUPPORTED');
     const draftKey = { operationId: claim.operationId, phase: 'draft' as const, ordinal: -1 };
     const reviewKey = { operationId: claim.operationId, phase: 'review' as const, ordinal: -1 };
     const draftState = this.ledger.attemptState(draftKey, scope);
@@ -217,7 +221,7 @@ export class WebProviderRunner {
               ...key,
               ...scope,
               requestDigest: row.request_digest,
-              policyHash: this.text.policyHash,
+              policyHash,
               wireRequestHash: requestHash,
               voiceVersion: row.voice_version,
               provider: spec.provider,
@@ -282,7 +286,7 @@ export class WebProviderRunner {
       ensure(
         stage.jobId === claim.operationId &&
           stage.requestDigest === row.request_digest &&
-          stage.policyHash === this.text.policyHash &&
+          stage.policyHash === policyHash &&
           observed?.outcome === 'succeeded' &&
           observed.usage.unit === 'tokens' &&
           observed.usage.inputTokens !== null &&
@@ -366,11 +370,11 @@ export class WebProviderRunner {
       claim.operationId,
     );
     ensure(candidate, 'WEB_PROVIDER_CANDIDATE_INVALID');
-    const bubble = (
-      JSON.parse(candidate.candidate_json) as {
-        bubbles: { text: string; expression: SpeechRequest['expression']; soundCue?: SoundCue }[];
-      }
-    ).bubbles[key.ordinal];
+    const stored = JSON.parse(candidate.candidate_json) as {
+      bubbles: { text: string; expression: SpeechRequest['expression']; soundCue?: SoundCue }[];
+      bubbleMarkup?: (string | null)[];
+    };
+    const bubble = stored.bubbles[key.ordinal];
     ensure(bubble && typeof bubble.text === 'string', 'WEB_PROVIDER_CANDIDATE_INVALID');
     // The binding is a pin or "unpinned"; the model actually sent (and reserved, priced, hashed) is resolved once, here.
     const model = resolveVoiceModel(voice.model, this.siteVoiceModel);
@@ -385,6 +389,11 @@ export class WebProviderRunner {
       userSelected: voice.source === 'user_selected',
       deliveryStyle,
       ...(bubble.soundCue === undefined ? {} : { soundCue: bubble.soundCue }),
+      // Part 37a (v8): inline directions go to Fish only on Drama 3 (an s2 model would read the brackets aloud); the stored,
+      // shown and checked text is the stripped one either way.
+      ...(model === 'drama-3' && typeof stored.bubbleMarkup?.[key.ordinal] === 'string'
+        ? { markup: stored.bubbleMarkup[key.ordinal]! }
+        : {}),
     });
     const prepared = fishSpeechRequest(speech, model);
     const { body, bytes: maxUnits, requestHash: wireRequestHash } = prepared;
