@@ -521,7 +521,11 @@ test('publication requires a successful current proof plus explicit review, then
   const ack = f.input('我已查看资料差异和该预演结果，确认将本版本发布给玩家');
   ack.checked = true;
   ack.fire('change');
-  f.respond(async () => {
+  // Part 30b (named exception): 发布 now reads the slots first and shows a failed read instead of swallowing it, so only the
+  // publish answer is lost here; take-list answers a character with no slots. The invariant under test (the lost answer is
+  // re-sent as the exact same request) is unchanged.
+  f.respond(async (path) => {
+    if (path.endsWith('/take-list')) return takeView({ slots: [], ready: true });
     throw Error('lost publication response');
   });
   await f.click('确认发布此版本');

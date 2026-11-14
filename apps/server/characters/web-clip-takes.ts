@@ -1,7 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { resolveVoiceModel, type VoiceModelBinding } from '../../../packages/contracts/audio.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
-import { ensure } from '../../../packages/domain/errors.ts';
+import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
 import { NO_ONSET_CODE, placeVoiceStart } from '../../../workers/audio/leading-onset.ts';
 import { stripDirectionMarkup } from '../../../workers/audio/fish.ts';
 import {
@@ -860,19 +860,20 @@ export class WebClipTakes {
     ensure(ctx.effective, 'CHARACTER_VOICE_REQUIRED');
     const choices = this.choices(id);
     const picks: { kind: 'welcome' | 'footer'; lineId: string | null; bytes: Uint8Array; sha256: string }[] = [];
-    let binding: VoiceModelBinding | null = null;
+    const bindings = new Set<VoiceModelBinding>();
+    let welcomes = 0;
     for (const slot of ctx.slots) {
+      // The label the owner reads (欢迎 N / 结束); never an id.
+      const label = slot.kind === 'footer' ? '结束' : `欢迎 ${++welcomes}`;
       const choice = choices.find((c) => c.slot_key === slot.key);
       const take = choice
         ? this.store.get<TakeRow>('SELECT * FROM web_clip_takes WHERE id=?', choice.take_id)
         : undefined;
-      ensure(
-        take && this.usable(take, slot, ctx.effective.referenceId) && this.approvedTake(choice, take),
-        'CHARACTER_MATERIALS_REQUIRED',
-      );
-      // One voice per bundle: every take must speak with the same binding word.
-      binding ??= take.binding as VoiceModelBinding;
-      ensure(take.binding === binding, 'CHARACTER_MATERIALS_REQUIRED');
+      if (!take) throw new DetailedError('CLIP_SLOT_NOT_APPROVED', { slot: label });
+      if (!this.usable(take, slot, ctx.effective.referenceId))
+        throw new DetailedError('CLIP_TAKE_UNUSABLE', { slot: label });
+      if (!this.approvedTake(choice, take)) throw new DetailedError('CLIP_SLOT_NOT_APPROVED', { slot: label });
+      bindings.add(take.binding as VoiceModelBinding);
       const bytes = await loadProviderAudio(
         this.store,
         take,
@@ -883,7 +884,12 @@ export class WebClipTakes {
       ensure(createHash('sha256').update(bytes).digest('hex') === take.sha256, 'INVALID_MATERIAL_AUDIO');
       picks.push({ kind: slot.kind, lineId: slot.lineId, bytes, sha256: take.sha256! });
     }
-    ensure(binding, 'CHARACTER_MATERIALS_REQUIRED');
+    ensure(bindings.size > 0, 'CHARACTER_MATERIALS_REQUIRED');
+    // Every take's audio is already rendered and approved, so the bundle may mix bindings (an older 素材版本 prepared with the
+    // pin, newer takes that follow the site model). Each take keeps its own binding and resolved model as evidence. One binding
+    // is kept as it is; a mix takes the unpinned word, which is what any new bundle carries and which materialState,
+    // approvedCharacterMaterial and a restore all accept (they compare the bundle's own recorded model with its own binding).
+    const binding: VoiceModelBinding = bindings.size === 1 ? [...bindings][0]! : NEW_TAKE_BINDING;
     return {
       materialId: await this.materials.buildBundle(
         actor,

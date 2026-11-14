@@ -188,6 +188,8 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   WEB_INVITE_UNUSABLE: 409,
   VALID_PREVIEW_REQUIRED: 409,
   CHARACTER_MATERIALS_REQUIRED: 409,
+  CLIP_SLOT_NOT_APPROVED: 409,
+  CLIP_TAKE_UNUSABLE: 409,
   // Player flow kept as it was: the page keys on the code, and a 401 here would be read as a session that ended.
   PLAYER_LOGIN_REQUIRED: 409,
   // 410: gone for good

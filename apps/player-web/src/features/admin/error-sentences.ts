@@ -88,6 +88,8 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   SIMULATED_TIME_PREVIEW_ONLY: '模拟时间只能用于预演，不能用于发布。',
   // ---- materials ----
   CHARACTER_MATERIALS_REQUIRED: '当前草稿需要匹配的、已批准的欢迎和结束成品。',
+  CLIP_SLOT_NOT_APPROVED: '有一个位置还没批准，请先批准。',
+  CLIP_TAKE_UNUSABLE: '有一个位置的选用版本已失效，请重录或另选。',
   CHARACTER_VOICE_REQUIRED: '先填 Fish 音色 ID。',
   MATERIALS_UNAVAILABLE: '这个站点还没有开启成品素材。',
   MATERIAL_APPROVAL_IMMUTABLE: '已批准的成品不能再改。请准备新的素材版本。',
