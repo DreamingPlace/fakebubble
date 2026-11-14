@@ -15563,12 +15563,15 @@ button:not(
   letter-spacing: 0.04em;
 }
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-date-pick:is(button) {
-  padding-inline: 6px;
-  font-size: 12px;
+  min-width: 0;
+  padding-inline: 0;
+  font-size: 11px;
 }
 .account-admin-page.admin-shell .admin-date-picks {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 2px;
+  width: 144px; /* as wide as the date box: the chips never widen the bar */
 }
 .account-admin-page.admin-shell .admin-date-problem {
   flex-basis: 100%;
