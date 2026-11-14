@@ -2,7 +2,8 @@ import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { DomainError, RetryAfterError, ensure } from '../../../packages/domain/errors.ts';
 import { WEB_IDENTITY_LIMITS } from '../../../config/web-v1.ts';
-import { playerPasswords, validatePlayerPassword } from '../admin/web-admin-password.ts';
+import { playerPasswords, validatePlayerPassword, type PasswordService } from '../admin/web-admin-password.ts';
+import { KdfGate } from './kdf-gate.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import { guestInGrace } from './web-player-purge.ts';
@@ -62,6 +63,8 @@ export interface WebPlayerAccountsOptions {
   graceMs?: number;
   nextId?: () => string;
   random?: (size: number) => Buffer;
+  /** Part 32: where the password hash is computed. Absent = in this process (Node local server, class-level tests). */
+  passwords?: PasswordService;
 }
 
 export const PLAYER_LIMITS = Object.freeze({
@@ -109,25 +112,7 @@ type ChallengeRow = {
 export type PlayerSessionInput = { token: string; csrf: string; origin: string };
 type Scope = ReturnType<WebIdentity['authorizeSessionWrite']>;
 
-/** Bounds scrypt work: a busy gate refuses instead of queueing without limit. */
-class KdfGate {
-  private active = 0;
-  private waiting: (() => void)[] = [];
-  async run<T>(work: () => Promise<T>): Promise<T> {
-    if (this.active >= PLAYER_LIMITS.kdfConcurrent) {
-      ensure(this.waiting.length < PLAYER_LIMITS.kdfWaiting, 'RATE_LIMITED');
-      await new Promise<void>((resolve) => this.waiting.push(resolve));
-    } else this.active++;
-    try {
-      return await work();
-    } finally {
-      const next = this.waiting.shift();
-      if (next) next();
-      else this.active--;
-    }
-  }
-}
-const gate = new KdfGate();
+const gate = new KdfGate(PLAYER_LIMITS.kdfConcurrent, PLAYER_LIMITS.kdfWaiting);
 
 /** The nickname the player chose, as it is stored and shown to the character. */
 export function playerNickname(value: unknown) {
@@ -154,6 +139,7 @@ export class WebPlayerAccounts {
   private readonly store: WebStore;
   private readonly identity: WebIdentity;
   private readonly options: WebPlayerAccountsOptions;
+  private readonly passwords: PasswordService;
   private readonly codeKey: Buffer;
   private readonly throttleKey: Buffer;
   private readonly bonusKey: BonusEmailKey;
@@ -175,6 +161,7 @@ export class WebPlayerAccounts {
     this.store = store;
     this.identity = identity;
     this.options = options;
+    this.passwords = options.passwords ?? playerPasswords;
     this.codeKey = createHmac('sha256', options.requestKey).update('web-player-email-code-v1').digest();
     this.throttleKey = createHmac('sha256', options.requestKey).update('web-player-throttle-v1').digest();
     this.bonusKey = signupBonusEmailKey(options.requestKey);
@@ -742,7 +729,7 @@ export class WebPlayerAccounts {
       challengeId = input.challengeId;
     const first = this.identity.authorizeSessionWrite(input.session.token, input.session.csrf, input.session.origin);
     this.verifiedChallenge(challengeId, [input.purpose], this.now());
-    const hash = await gate.run(() => playerPasswords.hash(password));
+    const hash = await gate.run(() => this.passwords.hash(password));
     return this.store.transaction(() => {
       const now = this.now();
       const scope = this.identity.authorizeSessionWrite(input.session.token, input.session.csrf, input.session.origin);
@@ -833,7 +820,7 @@ export class WebPlayerAccounts {
     } catch {
       throw new DomainError('PLAYER_PASSWORD_WRONG');
     }
-    const valid = await gate.run(() => playerPasswords.verify(password, row.password_hash));
+    const valid = await gate.run(() => this.passwords.verify(password, row.password_hash));
     if (!valid) throw new DomainError('PLAYER_PASSWORD_WRONG');
     return this.store.transaction(() => {
       const now = this.now();
@@ -856,7 +843,7 @@ export class WebPlayerAccounts {
     const password = input.password,
       challengeId = input.challengeId;
     this.verifiedChallenge(challengeId, ['reset'], this.now());
-    const hash = await gate.run(() => playerPasswords.hash(password));
+    const hash = await gate.run(() => this.passwords.hash(password));
     return this.store.transaction(() => {
       const now = this.now();
       const challenge = this.verifiedChallenge(challengeId, ['reset'], now);
@@ -898,9 +885,9 @@ export class WebPlayerAccounts {
     this.store.transaction(() =>
       this.reserve('password-principal', key, PLAYER_LIMITS.passwordPerPrincipal, this.now()),
     );
-    const valid = await gate.run(() => playerPasswords.verify(current, login.password_hash));
+    const valid = await gate.run(() => this.passwords.verify(current, login.password_hash));
     ensure(valid, 'PLAYER_LOGIN_INVALID');
-    const hash = await gate.run(() => playerPasswords.hash(next));
+    const hash = await gate.run(() => this.passwords.hash(next));
     return this.store.transaction(() => {
       const now = this.now();
       const again = this.identity.authorizeSessionWrite(input.session.token, input.session.csrf, input.session.origin);
@@ -966,7 +953,7 @@ export class WebPlayerAccounts {
     if (login) {
       // The same cost and the same refusal as a wrong login password; the counter above bounds the guesses.
       validatePlayerPassword(password);
-      const valid = await gate.run(() => playerPasswords.verify(password, login.password_hash));
+      const valid = await gate.run(() => this.passwords.verify(password, login.password_hash));
       ensure(valid, 'PLAYER_LOGIN_INVALID');
     } else ensure(password === '', 'INVALID_REQUEST');
     this.store.transaction(() => {

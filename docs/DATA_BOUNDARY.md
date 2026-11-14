@@ -15,7 +15,7 @@ Every SQLite table created by the two migration trees (`apps/server/migrations/0
 Each table name was searched (whole word) in all non-test source under `apps/`, `workers/`, `scripts/` and `packages/` outside the `.sql` folders, and again in `tests/`. Every hit was then read:
 
 - Common words were checked by their SQL, not by the word. `media`, `jobs`, `messages` also match JavaScript properties (`media` appears as a property in the player app); only `messages` and `jobs` are real web tables. `media` appears in SQL only as a string in a "must be empty" probe in `admission/web-retention-cleaner.ts`, so it is legacy-unused. Web audio lives in `web_private_audio_assets` and `web_provider_media_assets`.
-- A reference does not count when it sits in a function nothing calls. Part 22x deleted the functions that were the only readers of many legacy tables (`cloudQueueNextDue`, `runningAudioCount`, `freezeContextEvidence`, `VoiceCatalog`, the cloud guard/recovery modules, `budget/beta-costs.ts`); `selectProactiveTopic` still has no caller and is allow-listed.
+- A reference does not count when it sits in a function nothing calls. Part 22x deleted the functions that were the only readers of many legacy tables (`cloudQueueNextDue`, `runningAudioCount`, `freezeContextEvidence`, `VoiceCatalog`, the cloud guard/recovery modules, `budget/beta-costs.ts`); `selectProactiveTopic` (no caller) was removed later.
 - Web stores cannot be beta stores (`WEB_BETA_MODE_CONFLICT`); the Node store stops at migration 24 unless `beta` is set, so migrations 025–033 are never applied to a web instance.
 - A "must be empty" probe or a purge-list entry alone does not make a table used; a table the cleaner deletes from and that another web path writes is used.
 
@@ -60,7 +60,7 @@ Result: 71 user, 27 global, 76 legacy-unused (174 tables including four transien
 | `memory_topics` | migrations/002_dialogue_memory.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
 | `memory_episodes` | migrations/002_dialogue_memory.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
 | `memory_mentions` | migrations/002_dialogue_memory.sql | user | needs join via `web_principals.world_id` (1:1 with the principal; `worlds.owner_id` is the player) | memory/memory.ts, memory/memory-review.ts, memory/context-evidence.ts; purge in admission/web-retention-cleaner.ts |
-| `proactive_topics` | migrations/003_proactive_topics.sql | legacy-unused | — | only in `selectProactiveTopic` (memory/memory.ts, no caller) |
+| `proactive_topics` | migrations/003_proactive_topics.sql | legacy-unused | — | no reader or writer since `selectProactiveTopic` was removed |
 | `api_players` | migrations/004_player_api.sql | user | `id` (the player id, joined by `web_principals.player_id`) | identity/web-identity.ts (insert), admission/web-admission.ts |
 | `api_devices` | migrations/004_player_api.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |
 | `pairing_invites` | migrations/004_player_api.sql | legacy-unused | — | its only readers were deleted in Part 22x (no code reads or writes it) |

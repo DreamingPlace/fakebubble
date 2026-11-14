@@ -1,6 +1,8 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
-  "vcs": { "enabled": false },
+  "vcs": {
+    "enabled": false
+  },
   "files": {
     "ignoreUnknown": true,
     "includes": [
@@ -24,7 +26,58 @@
     "indentWidth": 2,
     "lineWidth": 120
   },
-  "linter": { "enabled": false },
-  "assist": { "enabled": false },
-  "javascript": { "formatter": { "quoteStyle": "single" } }
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "a11y": {
+        "noSvgWithoutTitle": "off"
+      },
+      "complexity": {
+        "noCommaOperator": "off",
+        "noImportantStyles": "off",
+        "noStaticOnlyClass": "off",
+        "noUselessEscapeInRegex": "off",
+        "noUselessLoneBlockStatements": "off",
+        "noUselessThisAlias": "off",
+        "useArrowFunction": "off",
+        "useLiteralKeys": "off",
+        "useOptionalChain": "off"
+      },
+      "correctness": {
+        "noConstantCondition": "off",
+        "noUnsafeFinally": "off",
+        "noUnsafeOptionalChaining": "off",
+        "noUnusedFunctionParameters": "off",
+        "noUnusedImports": "off",
+        "noUnusedVariables": "off"
+      },
+      "style": {
+        "noDescendingSpecificity": "off",
+        "noNonNullAssertion": "off",
+        "useConst": "off",
+        "useExportType": "off",
+        "useImportType": "off",
+        "useTemplate": "off"
+      },
+      "suspicious": {
+        "noAssignInExpressions": "off",
+        "noControlCharactersInRegex": "off",
+        "noDuplicateProperties": "off",
+        "noExplicitAny": "off",
+        "noImplicitAnyLet": "off",
+        "noTemplateCurlyInString": "off",
+        "noUselessEscapeInString": "off",
+        "useIterableCallbackReturn": "off"
+      }
+    }
+  },
+  "assist": {
+    "enabled": false
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  }
 }
