@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { DialogueBubble, DialogueCandidate, TextGenerationRequest } from '../../../packages/contracts/index.ts';
-import { DomainError, ensure } from '../../../packages/domain/errors.ts';
+import { ensure } from '../../../packages/domain/errors.ts';
 import {
   BUBBLE_LIMITS,
   VOICE_BUBBLE_LIMITS,
@@ -14,7 +14,6 @@ import { validBirthDate } from '../characters/characters.ts';
 import { stripDirectionMarkup } from '../../../workers/audio/fish.ts';
 import { PROMPTS_V8 } from './writer-prompts.generated.ts';
 import { SEED_CHARACTER_PROMPT } from './seed-prompt.ts';
-import { castPromptHash } from './cast-prompt.ts';
 import { promptTimestamp } from './accepted-text-prompt.ts';
 import {
   DROP_INVALID_METADATA,
@@ -435,10 +434,3 @@ export const writerPins = () => ({
   protocolDigest: createHash('sha256').update(JSON.stringify(writerProtocolFingerprint())).digest('hex'),
   promptDigest: writerPromptHash(),
 });
-export const writerCastOk = (request: TextGenerationRequest) =>
-  request.cast === undefined || request.cast.promptHash === castPromptHash();
-export class WriterPinMismatch extends DomainError {
-  constructor() {
-    super('WEB_WRITER_PIN_MISMATCH');
-  }
-}

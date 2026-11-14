@@ -32,7 +32,8 @@ export const REHEARSAL_MODEL_LABELS: Readonly<Record<PlayerModelId, string>> = O
  * 回复写法 switch: it runs what its columns say.
  */
 export const REHEARSAL_WRITER_LABELS: Readonly<Record<WriterChoice, string>> = Object.freeze({ v7: '现行', v8: '新' });
-export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterChoice) => (writer === 'v8' ? `${model}-v8` : model);
+export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterChoice) =>
+  writer === 'v8' ? `${model}-v8` : model;
 export function parseRehearsalColumn(key: unknown): { model: PlayerModelId; writer: WriterChoice } | null {
   if (typeof key !== 'string') return null;
   const v8 = key.endsWith('-v8');
