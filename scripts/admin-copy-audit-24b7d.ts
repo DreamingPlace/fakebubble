@@ -6,6 +6,8 @@
  *   dates     a native date or datetime-local input
  *   prices    a price cell (data-price, or text ending 「/ 百万令牌」「/ 百万字节」「/ 次」) without its exact value on hover
  *   units     the unit 「µ$」 in visible text
+ *   terms     (round 2) a word the glossary retired: 修订, 服务器草稿, 现行, 人物 (人物 stays on 关系与故事, the story's word) or 「ID」 as a label
+ *   numbers   (round 2) a count of 1 000 or more shown without its thousands separator (ids, codes, dates and years are not counts)
  * Exempt (named): developer values in the mono style (`.admin-dev`, pre, code), the textarea / input values an admin typed, and the
  * hover bubbles while they are hidden (they are read by the `prices` rule). The 声音 tab is audited for wording too.
  */
@@ -16,7 +18,7 @@ export const COPY_AUDIT_SOURCE = `(() => {
   // Named, justified: Pro / Flash are model names; IP is an abbreviation Part 29 pins in a browser check; ADMIN is the brand lock-up
   // next to the wordmark; JOJO is a character code (admin-entered data) in the fixture.
   const root = document.querySelector('.admin-frame') || document.querySelector('.admin-shell');
-  const out = { codes: [], english: [], dates: [], prices: [], units: [] };
+  const out = { codes: [], english: [], dates: [], prices: [], units: [], terms: [], numbers: [] };
   const seen = new Set();
   const add = (rule, text, where) => { const key = rule + '|' + text + '|' + where; if (seen.has(key)) return; seen.add(key); out[rule].push(text + '  @ ' + where); };
   const where = (n) => { const e = n.nodeType === 3 ? n.parentElement : n; return (e.tagName.toLowerCase() + '.' + String(e.className || '').split(' ')[0]).slice(0, 40); };
@@ -34,6 +36,8 @@ export const COPY_AUDIT_SOURCE = `(() => {
     const el = n.parentElement;
     if (!el || el.closest(EXEMPT) || !visible(el)) continue;
     if (text.includes('µ$')) add('units', text.slice(0, 60), where(n));
+    for (const m of text.matchAll(/修订|服务器草稿|现行|人物|(?:^|[^A-Za-z])ID(?:[^A-Za-z]|$)/g)) if (m[0] !== '人物' || !el.closest('#admin-cast')) add('terms', m[0].trim() + ' in 「' + text.slice(0, 40) + '」', where(n));
+    for (const m of text.matchAll(/(?<![\\w.\\-:/,#])\\d{4,}(?![\\w.\\-:/,%])/g)) if (!/^(19|20)\\d\\d$/.test(m[0])) add('numbers', m[0] + ' in 「' + text.slice(0, 40) + '」', where(n));
     for (const token of text.split(/[^A-Za-z0-9_\\-.'’]+/)) {
       if (!token) continue;
       if (/^[A-Z][A-Z0-9_]{3,}$/.test(token) && !ALLOWED.has(token) && !/^[0-9A-F]{6}$/.test(token)) add('codes', token, where(n));
