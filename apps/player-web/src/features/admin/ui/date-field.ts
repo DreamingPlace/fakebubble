@@ -98,7 +98,7 @@ export function dateField(options: {
       maxlength: '10',
       placeholder: 'YYYY-MM-DD',
       'aria-label': options.label,
-      'data-w': 'xs',
+      'data-w': 's',
       ...(options.id ? { id: options.id } : {}),
     },
   });

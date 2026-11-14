@@ -15610,6 +15610,10 @@ button:not(
   padding-inline: 10px;
   font-size: 13px;
 }
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) input.admin-date-input {
+  width: 122px; /* room for YYYY-MM-DD and its padding; narrower than the s class so a bar stays on one row */
+  min-width: 0;
+}
 /* the calendar button is a field-high square beside the date box (one baseline with the field) */
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-date-toggle:is(button) {
   box-sizing: border-box;
