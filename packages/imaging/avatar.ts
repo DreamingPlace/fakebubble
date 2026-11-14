@@ -13,8 +13,6 @@ export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 /** The picture the server accepts: a square PNG of at most this many pixels per side. */
 export const AVATAR_MAX_SIDE = 512;
 export const AVATAR_MIN_SIDE = 64;
-/** What the admin's browser may pick (checked by the page; the server only ever sees the PNG the page made). */
-export const AVATAR_PICK_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 /** True when the bytes begin with the PNG signature (never the file name or a declared type). */
