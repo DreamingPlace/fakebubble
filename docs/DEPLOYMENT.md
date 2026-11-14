@@ -399,6 +399,8 @@ node scripts/web-cloudflare-operator.ts expected-migrations
 
 **部署顺序（必须）：先部署预算 Worker，再部署业务 Worker。** 业务 Worker 的 `预算充值` 调用预算 Worker 新增的 `WebBudgetService.topUp(requestId, provider, micros)`；业务先上线时，旧预算 Worker 没有这个方法，按钮会以“预算服务暂时没有回应”失败（只是按钮，聊天不受影响）。`topUp` 只在 `WebBudgetService`（只有业务 Worker 的 `BUDGET` 绑定指向它）和 `WebBudgetObject` 上；运维入口 `WebBudgetOperatorService`、边缘和生成 Worker 都没有，不可从 HTTP 到达。
 
+**密码哈希（Part 32）：业务 Worker 新增一个 `services` 绑定指向它自己。** `workers/web-cloudflare/deploy/business.json.example` 的 `services` 多一项：`{ "binding": "KDF", "service": "fakebubble-business", "entrypoint": "WebKdfService" }`。`WebKdfService` 是业务 Worker 脚本里的无状态入口（没有存储、没有密钥、不读 `env`），只负责密码的 hash / verify；业务对象仍是唯一写入者。部署仍是四个 Worker。没有这个绑定时，注册、登录、改密码、管理员登录会以 `WEB_KDF_UNAVAILABLE` 失败（不会在业务对象里计算）。部署后在预发环境做一次注册和登录，并看注册期间聊天轮询的延迟。
+
 **新权限：** `system.read`（查看系统状态）、`points.grant`（积分发放）。只有主管理员能分配（成员权限接口本来就是主管理员专用），不在任何预设里，只在“全部”里。续期价格、预算充值、重置全部额度**不是权限**：服务器要求主管理员角色（`ADMIN_OWNER_REQUIRED`），持有全部权限的管理员也不行。概览对任何能登录的管理员开放。
 
 **路由**（都是 `POST /api/web/provider/admin/...`，会话 + CSRF + Origin，先查权限再读请求体）：`overview/read`、`system/status`、`system/renew-prices`、`system/budget-topup`、`points/preview`、`points/grant`、`points/reset-preview`、`points/reset`。`overview/read`、`system/status`、`points/reset-preview` 走只读预算；`points/preview` 不在只读名单里（它写一条 `points-lookup` 审计行，和 22a2 去掉 `invites/batch-detail` 的理由相同），走写入预算。`/admin/metrics/stage-latency` 仍然存在（主管理员），后台页面不再调用它：同样的数字在 `system/status` 的 `metrics` 里。

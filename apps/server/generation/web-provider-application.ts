@@ -1,3 +1,4 @@
+import type { PasswordService } from '../admin/web-admin-password.ts';
 import { effectiveTier } from '../admission/web-model-settings.ts';
 import { installReviewModelSchema } from '../admission/web-review-model.ts';
 import { installMissingDeepSeekPrices } from './web-provider-configuration.ts';
@@ -83,6 +84,8 @@ export interface WebPlayerAccountsConfig {
   turnstileSiteKey?: string | null | undefined;
   /** The audited purge path behind account deletion (absent = the delete route answers NOT_FOUND). */
   purger?: AccountPurger | undefined;
+  /** Part 32: where password hashes are computed (the business Worker's KDF entrypoint). Absent = in this process. */
+  passwords?: { admin: PasswordService; player: PasswordService } | undefined;
 }
 
 export const WEB_PROVIDER_API = '/api/web/provider';
@@ -237,6 +240,7 @@ export class WebProviderApplication {
     const chatReviewOn = store.chatReview === true && chatReviewTablesExist(store);
     this.inviteAdmin = new WebAccountAdmin(store, clock, config.origin, {
       ...(mailer ? { mailer } : {}),
+      ...(players.passwords ? { passwords: players.passwords.admin } : {}),
       ...(chatReviewOn ? { features: { chatReview: true } } : {}),
     });
     this.chatReview = chatReviewOn ? new WebChatReviewAdmin(store, clock, this.inviteAdmin) : null;
@@ -277,6 +281,7 @@ export class WebProviderApplication {
           requestKey: Buffer.from(config.requestKey, 'base64url'),
           clock,
           mailer: players.mailer ?? null,
+          ...(players.passwords ? { passwords: players.passwords.player } : {}),
           signupEnabled: players.signupEnabled === true && !!players.mailer,
           dailyCap: players.dailyCap ?? PLAYER_LIMITS.defaultDailyCap,
           ...(players.graceMs ? { graceMs: players.graceMs } : {}),
