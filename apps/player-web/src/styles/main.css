@@ -19872,6 +19872,14 @@ html.theme-fade *::after {
 .page-shell .avatar-choice-mark.has-portrait {
   overflow: hidden;
 }
+/* loaded: the initial is hidden, so the circle shows the picture and nothing else; while loading and after a failure it shows as before */
+.page-shell .avatar-choice-mark[data-portrait="loaded"] {
+  color: transparent;
+  text-shadow: none;
+}
+.page-shell .avatar-choice-mark[data-portrait="loaded"] > .portrait {
+  z-index: 1;
+}
 .page-shell .face-portrait {
   position: relative;
   display: grid;

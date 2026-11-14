@@ -110,10 +110,38 @@ try {
         .locator('.card-slot.is-active .face-portrait img')
         .evaluate((n: HTMLImageElement) => n.naturalWidth > 0),
     );
-    await snap(page, `card-avatar-${tag}`);
     // the arc: the character's circle holds the picture, a character without one keeps its initials
     await page.locator('.avatar-choice-mark[data-portrait="loaded"]').first().waitFor({ timeout: 15_000 });
     assert.ok((await page.locator('.avatar-choice-mark .portrait').count()) >= 2);
+    // the picture is what is painted at the circle's centre, and the initial is not visible: the active item and one that is not
+    const arcPaint = (item: string) =>
+      page.locator(item).evaluate((button: Element) => {
+        const mark = button.querySelector<HTMLElement>('.avatar-choice-mark')!;
+        const img = mark.querySelector<HTMLImageElement>('.portrait');
+        if (!img) return { img: false, top: '', color: '', alpha: -1, loaded: mark.dataset.portrait ?? '' };
+        const box = mark.getBoundingClientRect();
+        const before = img.style.pointerEvents;
+        img.style.pointerEvents = 'auto'; // the picture ignores the pointer, so the hit test must be allowed to see it
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        img.style.pointerEvents = before;
+        const color = getComputedStyle(mark).color;
+        const alpha = /rgba\(.*,\s*([\d.]+)\)$/.exec(color)?.[1];
+        return {
+          img: true,
+          top: hit === img ? 'portrait' : `${hit?.tagName}.${hit?.className}`,
+          color,
+          alpha: alpha === undefined ? 1 : Number(alpha),
+          loaded: mark.dataset.portrait ?? '',
+        };
+      });
+    for (const item of ['.avatar-choice.selected', '.avatar-choice:not(.selected):has(.portrait)']) {
+      await page.locator(`${item} .avatar-choice-mark[data-portrait="loaded"]`).first().waitFor({ timeout: 15_000 });
+      await page.waitForTimeout(300); // the 220 ms fade
+      const paint = await arcPaint(`${item}:has(.avatar-choice-mark[data-portrait="loaded"])`);
+      assert.equal(paint.top, 'portrait', `${item}: the circle's centre is the picture (${JSON.stringify(paint)})`);
+      assert.equal(paint.alpha, 0, `${item}: the initial is not visible (${JSON.stringify(paint)})`);
+    }
+    await snap(page, `card-avatar-${tag}`);
     // open the chat of the active card: header avatar 36 px with a 2.5 px ring, the welcome row's avatar 30 px
     await page.locator('.card-slot.is-active').click({ force: true });
     await page.locator('.page-shell[data-phase="chat"]').waitFor({ timeout: 10_000 });
