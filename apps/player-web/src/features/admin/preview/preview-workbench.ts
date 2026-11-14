@@ -1585,6 +1585,21 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     /** The editor beside this panel changed (saved / unsaved): the reason line follows. */
     refresh: () => {
       paintAll();
+      // the second half estimates on its own: a saved draft is a new revision, so the character is read again first (a stale one would
+      // be refused as a conflict); an unsaved edit blocks the run anyway
+      if (rehearsalHalf && id && host.draftUnsaved?.() !== true) {
+        const mine = id;
+        void host.characters
+          .detail(mine)
+          .then((fresh) => {
+            if (gone() || id !== mine) return;
+            detail = fresh;
+            paintAll();
+            rehearsal?.refresh();
+          })
+          .catch(() => rehearsal?.refresh());
+        return;
+      }
       rehearsal?.refresh();
     },
     focusInput,

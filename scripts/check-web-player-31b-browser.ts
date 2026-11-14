@@ -317,6 +317,9 @@ try {
     const ctx = await f.browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 390, height: 844 } });
     const page: Page = await ctx.newPage();
     watch(page);
+    await page.addInitScript(() => {
+      Math.random = () => 0; // a first visit lands on a random character: the first one, which has a picture
+    });
     await page.route('**/public-image/**', (route: { abort: () => Promise<void> }) => route.abort());
     await page.goto(`${f.origin}/?mode=provider`);
     await page.locator('.card-slot.is-active').waitFor();

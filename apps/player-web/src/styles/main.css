@@ -16068,6 +16068,15 @@ button:not(
 .account-admin-page.admin-shell .pw-half {
   min-width: 0;
 }
+/* a half is about 440 px wide: the evaluation-set editor stacks its list over its form, and nothing may be wider than the half */
+.account-admin-page.admin-shell .pw-half .pw-eval {
+  grid-template-columns: minmax(0, 1fr);
+}
+.account-admin-page.admin-shell .pw-half :is(input, textarea, select) {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
 .account-admin-page.admin-shell .pw-half-rehearsal {
   position: sticky;
   top: var(--ad-sp-3, 12px);
