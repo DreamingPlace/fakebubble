@@ -15546,13 +15546,6 @@ button:not(
   align-items: flex-start;
   gap: var(--ad-sp-1, 4px);
 }
-.account-admin-page.admin-shell .admin-date-toggle-text {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-}
 .account-admin-page.admin-shell .admin-date-box {
   position: relative;
   display: inline-flex;
@@ -15560,8 +15553,13 @@ button:not(
   gap: 4px;
 }
 .account-admin-page.admin-shell .admin-date-utc {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
   color: var(--ad-muted);
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.04em;
 }
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-date-pick:is(button) {
@@ -15616,25 +15614,10 @@ button:not(
   font-size: 13px;
 }
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) input.admin-date-input {
-  width: 144px; /* YYYY-MM-DD fits; the calendar button sits inside the box at its right end */
+  width: 140px; /* YYYY-MM-DD and the UTC mark fit; a click opens the calendar */
   min-width: 0;
-  padding-right: 36px;
-}
-/* the calendar button is a field-high square beside the date box (one baseline with the field) */
-.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .admin-date-toggle:is(button) {
-  position: absolute;
-  top: 0;
-  left: 108px; /* the right end of the 144px box */
-  box-sizing: border-box;
-  height: var(--ad-h-standard);
-  min-height: var(--ad-h-standard);
-  width: 36px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 0;
+  padding-right: 34px;
+  font-size: 13px;
 }
 .account-admin-page.admin-shell:is(.admin-shell, #ad-layout) :is(.admin-date-nav, .admin-date-day):is(button) {
   width: auto;

@@ -46,26 +46,6 @@ export function monthGrid(year: number, month: number): (string | null)[][] {
   return weeks;
 }
 
-const NS = 'http://www.w3.org/2000/svg';
-/** A small calendar glyph (a document without namespaces, as in the stub DOMs of the tests, gets nothing: the text label is there). */
-function calendarIcon(): Node {
-  if (typeof document.createElementNS !== 'function') return document.createTextNode('');
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('width', '16');
-  svg.setAttribute('height', '16');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-  svg.setAttribute('aria-hidden', 'true');
-  for (const d of ['M4 6h16v14H4z', 'M4 10h16', 'M8 3v4', 'M16 3v4']) {
-    const path = document.createElementNS(NS, 'path');
-    path.setAttribute('d', d);
-    svg.append(path);
-  }
-  return svg;
-}
-
 export type QuickPick = { label: string; days: number | null };
 export type DateField = {
   root: HTMLElement;
@@ -95,6 +75,7 @@ export function dateField(options: {
     attrs: {
       type: 'text',
       autocomplete: 'off',
+      'aria-haspopup': 'true',
       maxlength: '10',
       placeholder: 'YYYY-MM-DD',
       'aria-label': options.label,
@@ -103,16 +84,6 @@ export function dateField(options: {
     },
   });
   input.value = options.value ?? '';
-  const toggle = h('button', {
-    class: 'admin-date-toggle',
-    attrs: {
-      type: 'button',
-      'aria-haspopup': 'true',
-      'aria-expanded': 'false',
-      'aria-label': `${options.label}：打开日历`,
-    },
-  });
-  toggle.append(calendarIcon(), h('span', { class: 'admin-date-toggle-text', text: '日历' }));
   const say = h('span', { class: 'admin-date-problem', attrs: { role: 'status' } });
   say.hidden = true;
   const field = h(
@@ -120,7 +91,6 @@ export function dateField(options: {
     { class: 'admin-date-box' },
     input,
     options.utc ? h('span', { class: 'admin-date-utc', text: 'UTC' }) : null,
-    toggle,
   );
   const picks = options.quickPicks?.length
     ? h(
@@ -168,9 +138,8 @@ export function dateField(options: {
   const close = (returnFocus: boolean) => {
     pop?.remove();
     pop = null;
-    toggle.setAttribute('aria-expanded', 'false');
     document.removeEventListener?.('pointerdown', outside, true);
-    if (returnFocus) toggle.focus?.();
+    if (returnFocus) input.focus?.();
   };
   const outside = (event: Event) => {
     if (pop && !root.contains(event.target as Node)) close(false);
@@ -276,7 +245,6 @@ export function dateField(options: {
       }
     });
     root.append(pop);
-    toggle.setAttribute('aria-expanded', 'true');
     document.addEventListener?.('pointerdown', outside, true);
     paintPop();
     setTimeout(
@@ -287,9 +255,12 @@ export function dateField(options: {
       0,
     );
   };
-  toggle.addEventListener('click', () => (pop ? close(true) : open()));
+  // The calendar opens on a click in the field (or ArrowDown / Alt+ArrowDown from the keyboard); Esc closes it.
+  input.addEventListener('click', () => {
+    if (!pop) open();
+  });
   input.addEventListener('keydown', (event) => {
-    if ((event as KeyboardEvent).key === 'ArrowDown' && (event as KeyboardEvent).altKey) {
+    if ((event as KeyboardEvent).key === 'ArrowDown') {
       event.preventDefault();
       open();
     }
@@ -318,7 +289,6 @@ export function dateField(options: {
     },
     set disabled(on: boolean) {
       input.disabled = on;
-      toggle.disabled = on;
     },
   };
 }
