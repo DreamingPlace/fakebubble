@@ -14,7 +14,8 @@
 export const COPY_AUDIT_SOURCE = `(() => {
   // Allowlist (named, justified): model and provider names, the units and formats the brief names, and the audio format words a
   // sentence about a WAV file needs. Nothing else English is allowed in visible text.
-  const ALLOWED = new Set(['DeepSeek','Deepseek','deepseek','Fish','Gemini','Grok','xAI','xai','Claude','Cloudflare','Access','Turnstile','24H','UTC','CSV','JSON','ID','WAV','PCM','PCM16','kHz','MB','Drama','HH','mm','DM','Mono','Pro','Flash','IP','ADMIN','JOJO']);
+  const ALLOWED = new Set(['DeepSeek','Deepseek','deepseek','Fish','Gemini','Grok','xAI','xai','Claude','Cloudflare','Access','Turnstile','24H','UTC','CSV','JSON','ID','WAV','PCM','PCM16','kHz','MB','Drama','HH','mm','DM','Mono','Pro','Flash','IP','ADMIN','JOJO','PNG','JPEG','WebP','WEBP']);
+  // PNG / JPEG / WebP are file formats (like CSV and JSON), named in the 头像 hint (Part 31).
   // Named, justified: Pro / Flash are model names; IP is an abbreviation Part 29 pins in a browser check; ADMIN is the brand lock-up
   // next to the wordmark; JOJO is a character code (admin-entered data) in the fixture.
   const root = document.querySelector('.admin-frame') || document.querySelector('.admin-shell');

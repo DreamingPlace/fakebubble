@@ -231,6 +231,24 @@ try {
           }
           await press('分组', split);
           for (const kind of ['折线', '柱状', '饼图']) {
+            if (kind === '饼图' && metric === '聊天人数' && split === '按角色') {
+              // Round 2: the pie is off for 聊天人数 × 按角色 (a player is in every character they chatted with), with its reason;
+              // and the table has no 占比.
+              const pie = page.locator('#admin-overview [aria-label="图表类型"] button', { hasText: /^饼图$/ }).first();
+              check(
+                (await pie.isDisabled()) && ((await pie.getAttribute('title')) ?? '').includes('不能相加成占比'),
+                `${size} ${span} ${metric} ${split}: the pie is not off with its reason`,
+              );
+              const heads = await page.$$eval(
+                '#admin-overview [aria-label="玩家统计（按角色，聊天人数）"] .ot-head .ot-cell',
+                (n: Element[]) => n.map((c) => c.textContent ?? ''),
+              );
+              check(
+                heads.length > 0 && !heads.some((x: string) => x.includes('占比')),
+                `${size} ${span}: the chat table still has 占比 (${heads.join('|')})`,
+              );
+              continue;
+            }
             await press('图表类型', kind);
             const name = `总览 ${span} ${metric} ${split} ${kind}`;
             await sideways(name);

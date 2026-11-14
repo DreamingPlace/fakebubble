@@ -29,7 +29,9 @@ export const utcDateTime = (at: number) => {
 };
 
 export const tierText = (batch: Pick<InviteBatch, 'tier' | 'dailyAmount' | 'cap'>) =>
-  batch.tier === 'unlimited' ? '不限量' : `每天 +${batch.dailyAmount} 点 · 上限 ${batch.cap} 点`;
+  batch.tier === 'unlimited'
+    ? '不限量'
+    : `每天 +${exactCount(batch.dailyAmount ?? 0)} 点 · 上限 ${exactCount(batch.cap ?? 0)} 点`;
 
 /** 状态: 未使用 / 已兑换 / 已撤销 (an ended entitlement is a revoked code; an expired one was redeemed; the date column says when). */
 const STATE_LABEL: Record<InviteBatchCode['state'], string> = {
@@ -50,7 +52,7 @@ export function editConfirmation(batch: InviteBatch, dailyAmount: number, cap: n
   return [
     `「${batch.name}」`,
     `每天补充：+${batch.dailyAmount} 点 → +${dailyAmount} 点`,
-    `总上限：${batch.cap} 点 → ${cap} 点`,
+    `总上限：${exactCount(batch.cap ?? 0)} 点 → ${exactCount(cap)} 点`,
     `目前有 ${batch.holders} 位玩家持有这批邀请，从各自的下一次每日补充起生效。`,
     '调低上限不会收回玩家已有的点数，这些玩家只是在低于上限之前不再补充。',
   ].join('\n');
