@@ -1,5 +1,7 @@
 import {
   REHEARSAL_MODEL_IDS,
+  parseRehearsalColumn,
+  rehearsalColumnLabel,
   type RehearsalCell,
   type RehearsalCellState,
   type RehearsalCounts,
@@ -46,6 +48,11 @@ const model = (v: unknown): PlayerModelId => {
   if (typeof v !== 'string' || !(REHEARSAL_MODEL_IDS as readonly string[]).includes(v)) throw invalid();
   return v as PlayerModelId;
 };
+/** Part 37a: a column key (`deepseek`, `deepseek-v8`). */
+const column = (v: unknown): string => {
+  if (parseRehearsalColumn(v) === null) throw invalid();
+  return v as string;
+};
 const oneOf = <T extends string>(v: unknown, allowed: readonly T[]): T => {
   if (typeof v !== 'string' || !(allowed as readonly string[]).includes(v)) throw invalid();
   return v as T;
@@ -63,7 +70,7 @@ const phrases = (v: unknown): RehearsalPhrases => {
 const estimate = (v: unknown): RehearsalEstimate => {
   const o = object(v);
   return {
-    models: rows(o.models).map(model),
+    models: rows(o.models).map(column),
     turns: int(o.turns),
     replyCalls: int(o.replyCalls),
     judgeCalls: int(o.judgeCalls),
@@ -77,7 +84,7 @@ const info = (v: unknown): RehearsalRunInfo => {
     runId: string(o.runId),
     createdAt: int(o.createdAt),
     scriptName: string(o.scriptName),
-    models: rows(o.models).map(model),
+    models: rows(o.models).map(column),
     turns: int(o.turns),
     withCast: bool(o.withCast),
     status: oneOf(o.status, ['running', 'done', 'failed'] as const),
@@ -104,7 +111,7 @@ const counts = (v: unknown): RehearsalCounts => {
   const o = object(v);
   return {
     replies: int(o.replies),
-    answeredAll: int(o.answeredAll),
+    answeredAll: o.answeredAll === null ? null : int(o.answeredAll),
     unaskedAdvice: int(o.unaskedAdvice),
     endsWithQuestion: int(o.endsWithQuestion),
     avgChars: nnum(o.avgChars),
@@ -214,9 +221,12 @@ export class RehearsalAdminClient {
       }),
       columns: rows(o.columns).map((c) => {
         const x = object(c);
+        const key = column(x.key);
         return {
+          key,
           model: model(x.model),
-          label: string(x.label),
+          writer: oneOf(x.writer, ['v7', 'v8'] as const),
+          label: rehearsalColumnLabel(key),
           cells: rows(x.cells).map(cell),
           counts: counts(x.counts),
         };
@@ -227,7 +237,7 @@ export class RehearsalAdminClient {
           : rows(o.memes).map((m): RehearsalMemeRow => {
               const x = object(m);
               const byModel: Record<string, RehearsalMemeCell> = {};
-              for (const [key, value] of Object.entries(object(x.models))) byModel[model(key)] = memeCell(value);
+              for (const [key, value] of Object.entries(object(x.models))) byModel[column(key)] = memeCell(value);
               return {
                 label: string(x.label),
                 kind: oneOf(x.kind, ['meme', 'story'] as const),

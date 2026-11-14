@@ -3,6 +3,8 @@ import type { CastRequestContext } from '../../../packages/contracts/web-cast.ts
 import { NEW_PLAYER_RELATIONSHIP } from '../../../packages/contracts/relationships.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
+import { writerDraftMessages } from '../generation/writer-v8.ts';
+import { parseRehearsalColumn } from '../../../packages/contracts/web-rehearsal.ts';
 
 /**
  * Part 35: the request one model gets for one turn of a script. Every 预演 starts like a NEW player: the relationship the chat
@@ -24,7 +26,7 @@ export interface RehearsalFrozen {
 
 export const rehearsalJobId = (runId: string, model: string, turn: number) => `${runId}-${model}-${turn}`;
 
-/** `replies[i]` are the bubbles this model said to turn i + 1. */
+/** `model` is a column key (`deepseek`, `deepseek-v8`); `replies[i]` are the bubbles this column said to turn i + 1. */
 export function rehearsalRequest(
   frozen: RehearsalFrozen,
   runId: string,
@@ -34,6 +36,8 @@ export function rehearsalRequest(
   replies: readonly (readonly string[])[],
 ): TextGenerationRequest {
   ensure(turn >= 1 && turn <= players.length && replies.length >= turn - 1, 'REHEARSAL_REQUEST_INVALID');
+  const column = parseRehearsalColumn(model) ?? { model: 'deepseek' as const, writer: 'v7' as const };
+  const v8 = column.writer === 'v8';
   const worldId = `admin-rehearsal-${runId}-${model}`;
   const conversationId = `${runId}-${model}`;
   const characterId = frozen.template.id;
@@ -77,7 +81,8 @@ export function rehearsalRequest(
     now: frozen.baseAt + (turn - 1) * TURN_GAP_MS + 4_000,
     character: structuredClone(frozen.template),
     ...(frozen.cast ? { cast: structuredClone(frozen.cast) } : {}),
-    relationship: NEW_PLAYER_RELATIONSHIP,
+    // Part 37a: a 新 column runs the v8 writer, which sends no relationship preset. Never the live switch: the column decides.
+    ...(v8 ? { writer: 'v8' as const } : { relationship: NEW_PLAYER_RELATIONSHIP }),
     requiredMessageIds: [`p${turn}`],
     mustClose: false,
     evidence: [],
@@ -86,6 +91,7 @@ export function rehearsalRequest(
     ...(frozen.opening && all.length <= REHEARSAL_HISTORY_WINDOW ? { opening: frozen.opening } : {}),
     messages,
   };
-  promptMessages(request);
+  if (v8) writerDraftMessages(request);
+  else promptMessages(request);
   return request;
 }

@@ -11,7 +11,9 @@ import { DomainError, ensure } from '../../../packages/domain/errors.ts';
 import { webConcurrency } from '../../../config/web-concurrency.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { DeepSeekTextGenerator } from '../generation/deepseek.ts';
-import { applyTextReview, DROP_INVALID_METADATA, parseTextDraft } from '../generation/accepted-text-protocol.ts';
+import { DROP_INVALID_METADATA } from '../generation/accepted-text-protocol.ts';
+import { applyReview, parseDraft } from '../generation/writer-v8.ts';
+import { parseRehearsalColumn } from '../../../packages/contracts/web-rehearsal.ts';
 import { draftModelRef } from '../generation/web-text-routing.ts';
 import { budgetHash } from '../budget/web-provider-budget-contract.ts';
 import { previewDigest, requirePreviewActor } from './web-character-preview.ts';
@@ -45,7 +47,9 @@ export interface RehearsalJudgeModel {
 type Generator = Pick<
   DeepSeekTextGenerator,
   'textProtocol' | 'policyHash' | 'generateAcceptedStages' | 'generateAcceptedReviewFromKnownDraft'
->;
+> &
+  // Part 37a: the v8 writer's policy hash (a generator without it cannot run a 新 column: it is refused before anything is sent).
+  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash'>>;
 type Phase = 'draft' | 'review' | 'judge';
 interface Call {
   run_id: string;
@@ -128,6 +132,12 @@ export class WebRehearsalRunner {
     this.generator = generator;
     this.budget = budget;
     this.nextId = nextId;
+  }
+  /** The policy hash a request is bound to: the v7 one, or the pinned v8 one for a 新 column. */
+  private policyHashOf(request: Pick<TextGenerationRequest, 'writer'>) {
+    const hash = request.writer === 'v8' ? this.generator.writerPolicyHash : this.generator.policyHash;
+    ensure(hash, 'WEB_WRITER_UNSUPPORTED');
+    return hash;
   }
   useJudge(judge: RehearsalJudgeModel) {
     this.judge = judge;
@@ -564,7 +574,7 @@ export class WebRehearsalRunner {
       payload: JSON.parse(call.output_json),
       metadata: JSON.parse(call.metadata_json) as AcceptedV7StageOutput['metadata'],
       requestDigest: previewDigest(JSON.stringify(request)),
-      policyHash: this.generator.policyHash!,
+      policyHash: this.policyHashOf(request),
     };
   }
   private confirm(
@@ -596,7 +606,7 @@ export class WebRehearsalRunner {
             stage.jobId === (JSON.parse(row.request_json) as TextGenerationRequest).jobId &&
             stage.stage === phase &&
             stage.requestDigest === row.request_digest &&
-            stage.policyHash === this.generator.policyHash &&
+            stage.policyHash === this.policyHashOf(JSON.parse(row.request_json!) as TextGenerationRequest) &&
             stage.wireRequestHash === call.wire_hash &&
             meta.stage === phase &&
             meta.model === call.model &&
@@ -607,10 +617,10 @@ export class WebRehearsalRunner {
           'REHEARSAL_STAGE_UNCONFIRMED',
         );
         const request = JSON.parse(row.request_json!) as TextGenerationRequest;
-        if (phase === 'draft') parseTextDraft(stage.payload, request);
+        if (phase === 'draft') parseDraft(stage.payload, request);
         else {
           const draft = this.knownDraft(row, request);
-          applyTextReview(stage.payload, parseTextDraft(draft.payload, request), request, DROP_INVALID_METADATA);
+          applyReview(stage.payload, parseDraft(draft.payload, request), request, DROP_INVALID_METADATA);
         }
       }
       const charged = units * this.price(call),
@@ -637,8 +647,10 @@ export class WebRehearsalRunner {
   }
   private async cell(claim: RehearsalClaim, signal: AbortSignal) {
     const row = this.live(claim);
-    const model = row.model_key;
-    ensure(isPlayerModelId(model), 'REHEARSAL_REQUEST_INVALID');
+    // Part 37a: the unit's key is a column (model + writer); `deepseek` is the 现行 column every earlier run stored.
+    const column = parseRehearsalColumn(row.model_key);
+    ensure(column, 'REHEARSAL_REQUEST_INVALID');
+    const model = column.model;
     const request = this.cellRequest(row);
     const have = (phase: Phase) => this.calls(claim.runId, claim.seq).some((c) => c.phase === phase);
     // Bills already known (a requeued unit) are settled before anything new is sent.
@@ -764,16 +776,17 @@ export class WebRehearsalRunner {
         review?.state === 'known' && review.outcome === 'succeeded' && review.output_json,
         'REHEARSAL_OUTPUT_UNCONFIRMED',
       );
-      const reply = applyTextReview(
+      const reply = applyReview(
         JSON.parse(review.output_json),
-        parseTextDraft(draft.payload, request),
+        parseDraft(draft.payload, request),
         request,
         DROP_INVALID_METADATA,
       );
       const required = request.requiredMessageIds[0]!;
       this.finish(claim.runId, claim.seq, 'done', null, {
         bubbles: reply.bubbles.map((b) => b.text),
-        answered: reply.coveredMessageIds.includes(required) && reply.deferredMessageIds.length === 0,
+        // A 新 (v8) reply does not track whether it answered the message: null, never a claim.
+        answered: request.writer === 'v8' ? null : reply.coveredMessageIds.includes(required) && reply.deferredMessageIds.length === 0,
       });
     });
   }

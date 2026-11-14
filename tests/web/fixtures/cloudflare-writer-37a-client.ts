@@ -26,7 +26,8 @@ export default {
     };
     await env.GENERATION.reset();
     const { relationship, ...base } = textRequest();
-    const input: TextGenerationRequest = writer === 'v8' ? { ...base, writer: 'v8' } : { ...base, relationship };
+    const input: TextGenerationRequest =
+      writer === 'v8' ? { ...base, writer: 'v8' } : { ...base, relationship: relationship! };
     const policyHash = hash === 'v7' ? textPolicyHash() : hash === 'v8' ? textWriterPolicyHash() : 'f'.repeat(64);
     const session = await env.GENERATION.open();
     const result = await session.text(input, policyHash, null, meter, async () => {});

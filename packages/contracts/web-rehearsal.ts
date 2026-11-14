@@ -1,4 +1,5 @@
 import { PLAYER_MODEL_IDS, PLAYER_MODELS, isPlayerModelId, type PlayerModelId } from './player-models.ts';
+import type { WriterChoice } from './web-writer.ts';
 
 /**
  * Part 35: 多轮预演. A run is a SCRIPT, an ordered list of player turns (6-20) against ONE character, run on one or more draft
@@ -24,6 +25,29 @@ export const REHEARSAL_MODEL_LABELS: Readonly<Record<PlayerModelId, string>> = O
   gemini: PLAYER_MODELS.gemini.label,
   xai: PLAYER_MODELS.xai.label,
 });
+
+/**
+ * Part 37a: a COLUMN is (model, writer): `deepseek` is DeepSeek·现行 (the v7 writer, the key every earlier run stored) and `deepseek-v8` is
+ * DeepSeek·新 (the v8 writer). The `models` of an estimate, a start and a stored run are column keys. A rehearsal never reads the live
+ * 回复写法 switch: it runs what its columns say.
+ */
+export const REHEARSAL_WRITER_LABELS: Readonly<Record<WriterChoice, string>> = Object.freeze({ v7: '现行', v8: '新' });
+export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterChoice) => (writer === 'v8' ? `${model}-v8` : model);
+export function parseRehearsalColumn(key: unknown): { model: PlayerModelId; writer: WriterChoice } | null {
+  if (typeof key !== 'string') return null;
+  const v8 = key.endsWith('-v8');
+  const model = v8 ? key.slice(0, -3) : key;
+  return isPlayerModelId(model) ? { model, writer: v8 ? 'v8' : 'v7' } : null;
+}
+/** Every column the console can offer, in display order: each model's 现行 then 新. */
+export const REHEARSAL_COLUMN_KEYS: readonly string[] = PLAYER_MODEL_IDS.flatMap((model) => [
+  rehearsalColumnKey(model, 'v7'),
+  rehearsalColumnKey(model, 'v8'),
+]);
+export const rehearsalColumnLabel = (key: string) => {
+  const column = parseRehearsalColumn(key);
+  return column ? `${REHEARSAL_MODEL_LABELS[column.model]}·${REHEARSAL_WRITER_LABELS[column.writer]}` : key;
+};
 
 export const REHEARSAL_SETS = ['chat', 'repeat'] as const;
 export type RehearsalSet = (typeof REHEARSAL_SETS)[number];
@@ -81,7 +105,8 @@ export interface RehearsalItems {
 }
 
 export interface RehearsalEstimate {
-  models: PlayerModelId[];
+  /** Column keys (see rehearsalColumnKey). */
+  models: string[];
   turns: number;
   /** Draft + review calls of every model and turn. */
   replyCalls: number;
@@ -97,7 +122,8 @@ export interface RehearsalStartInput {
   draftRevision: number;
   profileHash: string;
   source: RehearsalSource;
-  models: PlayerModelId[];
+  /** Column keys (see rehearsalColumnKey). */
+  models: string[];
   /** 带关系与故事. */
   withCast: boolean;
   acknowledgeMicros: number;
@@ -108,7 +134,7 @@ export interface RehearsalCell {
   state: RehearsalCellState;
   errorCode: string | null;
   bubbles: string[] | null;
-  /** The reply covers the turn's message and defers nothing. */
+  /** The reply covers the turn's message and defers nothing. null for a 新 column (it does not track that). */
   answered: boolean | null;
 }
 export interface RehearsalTurn {
@@ -119,7 +145,8 @@ export interface RehearsalTurn {
 }
 export interface RehearsalCounts {
   replies: number;
-  answeredAll: number;
+  /** null for a 新 column: the v8 writer does not answer every message, so the count says nothing about it. */
+  answeredAll: number | null;
   unaskedAdvice: number;
   endsWithQuestion: number;
   avgChars: number | null;
@@ -149,7 +176,8 @@ export interface RehearsalRunInfo {
   runId: string;
   createdAt: number;
   scriptName: string;
-  models: PlayerModelId[];
+  /** Column keys. */
+  models: string[];
   turns: number;
   withCast: boolean;
   status: 'running' | 'done' | 'failed';
@@ -161,7 +189,10 @@ export interface RehearsalRunDetail {
   reviewer: string;
   turns: RehearsalTurn[];
   columns: Array<{
+    /** The column key: what `memes[].models` is keyed by. */
+    key: string;
     model: PlayerModelId;
+    writer: WriterChoice;
     label: string;
     cells: RehearsalCell[];
     counts: RehearsalCounts;
@@ -169,12 +200,12 @@ export interface RehearsalRunDetail {
   memes: RehearsalMemeRow[] | null;
 }
 
-export const isRehearsalModels = (value: unknown): value is PlayerModelId[] =>
+export const isRehearsalModels = (value: unknown): value is string[] =>
   Array.isArray(value) &&
   value.length >= 1 &&
-  value.length <= PLAYER_MODEL_IDS.length &&
+  value.length <= REHEARSAL_COLUMN_KEYS.length &&
   new Set(value).size === value.length &&
-  value.every(isPlayerModelId);
+  value.every((key) => parseRehearsalColumn(key) !== null);
 
 /** Characters of a message: code points, so a face does not count twice. */
 export const charLength = (text: string) => [...text].length;
