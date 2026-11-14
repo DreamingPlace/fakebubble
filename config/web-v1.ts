@@ -63,6 +63,28 @@ export const WEB_IDENTITY_LIMITS = Object.freeze({
   kdfWaitMs: 5_000,
 });
 
+/**
+ * Part 32 (audit F-08): password hashing runs in a stateless entrypoint (`WebKdfService`, business Worker script, bound to
+ * itself) instead of the business object. The parameters are the stored hashes' parameters; changing one breaks every login.
+ * Memory: scrypt's working set is 128 x N x r bytes (16 MiB; the p lanes run one after another and reuse it). The entrypoint
+ * isolate's limit is 128 MiB; the hashes it may run at once are bounded so their working sets stay under half of it
+ * (`tests/web/unit/web-kdf-32.test.ts` pins that arithmetic; the measured numbers are in docs/STATUS.md).
+ */
+export const WEB_KDF_LIMITS = Object.freeze({
+  scryptN: 16_384,
+  scryptR: 8,
+  scryptP: 5,
+  /** OpenSSL refuses a derivation that needs more than this. */
+  scryptMaxmemBytes: 32 * 1024 * 1024,
+  /** 128 x N x r. */
+  scryptWorkingSetBytes: 128 * 16_384 * 8,
+  isolateLimitBytes: 128 * 1024 * 1024,
+  /** Hashes the entrypoint runs at once. A further call is refused (RATE_LIMITED), never queued: the business object queues. */
+  isolateConcurrent: 3,
+  /** The longest password the entrypoint will take (bytes); the policies are 128 (players) and 512 (admins). */
+  passwordMaxBytes: 1024,
+});
+
 /** User-fixed browse-card welcome lines (DEC-WEB-WELCOME-001); change only with a new decision. */
 export const WEB_PROVIDER_WELCOME = Object.freeze({
   'wei-guagua': { text: '我才放学回来，让你等久了', version: 'welcome-v1' },

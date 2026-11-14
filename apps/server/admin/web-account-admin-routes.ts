@@ -432,7 +432,8 @@ export async function routeWebAccountAdmin(
             'requestId',
             'draftRevision',
             'profileHash',
-            'relationship',
+            // Part 35: a 预演 has no relationship setting; a body from an older open tab may still carry one (ignored).
+            ...(req.body && Object.hasOwn(req.body, 'relationship') ? ['relationship'] : []),
             'message',
             ...(req.body && Object.hasOwn(req.body, 'simulatedTime') ? ['simulatedTime'] : []),
             ...(req.body && Object.hasOwn(req.body, 'castSource') ? ['castSource'] : []),
@@ -449,7 +450,8 @@ export async function routeWebAccountAdmin(
             'requestId',
             'draftRevision',
             'profileHash',
-            'relationship',
+            // Part 35: a 预演 has no relationship setting; a body from an older open tab may still carry one (ignored).
+            ...(req.body && Object.hasOwn(req.body, 'relationship') ? ['relationship'] : []),
             ...(req.body && Object.hasOwn(req.body, 'label') ? ['label'] : []),
             ...(req.body && Object.hasOwn(req.body, 'simulatedTime') ? ['simulatedTime'] : []),
             ...(req.body && Object.hasOwn(req.body, 'castSource') ? ['castSource'] : []),

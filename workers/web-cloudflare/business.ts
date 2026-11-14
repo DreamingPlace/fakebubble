@@ -11,6 +11,8 @@ import { ensure } from '../../packages/domain/errors.ts';
 import { operatorProof, requireOperatorProof } from '../../apps/server/cloudflare/operator-proof.ts';
 import { safeError } from '../../apps/server/cloudflare/safe-error.ts';
 import type { WebGenerationBinding } from '../../packages/contracts/web-generation-rpc.ts';
+import type { WebKdfBinding } from '../../packages/contracts/web-kdf-rpc.ts';
+import { kdfHash, kdfVerify, remotePasswords } from '../../apps/server/cloudflare/web-kdf.ts';
 import { WebDurableStore } from '../../apps/server/cloudflare/web-store.ts';
 import { PrivateMediaObjects, type PrivateBucket } from '../../apps/server/cloudflare/media-objects.ts';
 import type { DurableSQLStorage } from '../../apps/server/cloudflare/store.ts';
@@ -133,6 +135,8 @@ export interface WebBusinessEnvironment {
   MEDIA: PrivateBucket;
   BUDGET: WebBudgetStatusRPC & WebBudgetTopUpRPC;
   GENERATION: WebGenerationBinding;
+  /** Part 32: this script's own `WebKdfService`, bound to itself. Absent = every password operation answers WEB_KDF_UNAVAILABLE. */
+  KDF?: WebKdfBinding;
 }
 
 /** Private authority: only the edge's native DO Fetch may enter HTTP. No provider keys are bound here. */
@@ -326,6 +330,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
             : undefined,
           dailyCap: cap === undefined ? PLAYER_LIMITS.defaultDailyCap : Number(cap),
           graceMs: this.publicConfig.graceMs,
+          passwords: remotePasswords(this.env.KDF),
           purger: {
             begin: (principalId) => this.retention.beginDeletion(principalId),
             finish: (principalId) => this.retention.finishDeletion(principalId),
@@ -598,6 +603,22 @@ interface OperatorEnvironment {
       renewPrices(proof: string): Promise<unknown>;
     };
   };
+}
+/**
+ * Part 32 (audit F-08): password hashing, outside the business object. Stateless on purpose: it has no storage, no secret and
+ * no binding of its own (it reads nothing from `env`), so a hash is all it can produce. The business object is bound to it as
+ * KDF (a service binding to this same script) and stays the only writer. Called only through that binding: no HTTP route.
+ */
+export class WebKdfService extends WorkerEntrypoint {
+  hash(password: string) {
+    return kdfHash(password);
+  }
+  verify(password: string, encoded: string | null) {
+    return kdfVerify(password, encoded);
+  }
+  fetch() {
+    return new Response(null, { status: 404 });
+  }
 }
 /** Invoked only through an authenticated private service binding, never an HTTP operator route. */
 export class WebOperatorService extends WorkerEntrypoint<OperatorEnvironment> {

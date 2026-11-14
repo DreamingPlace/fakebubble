@@ -723,3 +723,17 @@ test('the pinned policy hash of every reply is the one the generator reports (th
   assert.equal(auditReply().coverage !== undefined, true);
   assert.ok(memeItems.length > 0);
 });
+
+test('a 预演 body without a relationship starts (the console no longer sends one); an old tab\u2019s value is allowed and ignored', (t) => {
+  const f = fixture(t);
+  const body = { draftRevision: f.saved.revision, profileHash: f.saved.contentHash, message: '你好' };
+  const one = f.chars.startPreview(f.auth, CHARACTER, { requestId: 'preview-norel-1', ...body });
+  const two = f.chars.startPreview(f.auth, CHARACTER, { requestId: 'preview-norel-2', ...body, relationship: 'lover' });
+  for (const started of [one, two]) {
+    const request = JSON.parse(
+      f.store.get<{ request_json: string }>('SELECT request_json FROM admin_previews WHERE id=?', started.previewId)!
+        .request_json,
+    );
+    assert.equal(request.relationship, NEW_PLAYER_RELATIONSHIP);
+  }
+});
