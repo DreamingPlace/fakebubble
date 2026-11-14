@@ -404,5 +404,8 @@ test('24b-7e combinations without data are disabled, with the reason on hover; a
   );
   // the 统计表 went back to the days with the switch (regression: it used to stay on 按角色)
   assert.equal(one(f.root, '.ov-days').hidden, false);
-  assert.equal(all(f.root, '.ov-by').every((n) => n.hidden), true);
+  assert.equal(
+    all(f.root, '.ov-by').every((n) => n.hidden),
+    true,
+  );
 });

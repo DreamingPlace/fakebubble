@@ -341,7 +341,9 @@ export function systemView(
           ['清理 · 上次成功', dateTimeText(v.retention.lastSuccessAt)],
           [
             '清理失败',
-            v.retention.failing > 0 ? statusBadge(`${exactCount(v.retention.failing)} 位`, 'danger') : statusBadge('0', 'ok'),
+            v.retention.failing > 0
+              ? statusBadge(`${exactCount(v.retention.failing)} 位`, 'danger')
+              : statusBadge('0', 'ok'),
           ],
           ['最早一条已过', v.retention.oldestAgeBucket ? BUCKETS[v.retention.oldestAgeBucket] : '—'],
           ['正在清理', exactCount(v.retention.purging)],
