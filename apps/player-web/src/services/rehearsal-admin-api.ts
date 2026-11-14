@@ -89,6 +89,7 @@ const info = (v: unknown): RehearsalRunInfo => {
     status: oneOf(o.status, ['running', 'done', 'failed'] as const),
     estimatedMicros: int(o.estimatedMicros),
     chargedMicros: int(o.chargedMicros),
+    liveVersion: o.liveVersion === null || o.liveVersion === undefined ? null : int(o.liveVersion),
   };
 };
 const CELL_STATES = ['pending', 'running', 'done', 'failed', 'unconfirmed', 'skipped'] as const;
@@ -179,8 +180,9 @@ export class RehearsalAdminClient {
   ) {
     return {
       characterId,
-      draftRevision: input.draftRevision,
-      profileHash: input.profileHash,
+      ...(input.liveVersion !== undefined
+        ? { liveVersion: input.liveVersion }
+        : { draftRevision: input.draftRevision, profileHash: input.profileHash }),
       source: input.source as RehearsalSource,
       models: input.models,
       withCast: input.withCast,

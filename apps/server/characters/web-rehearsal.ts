@@ -69,6 +69,7 @@ export interface RehearsalPlan {
   items: Array<{ key: string; kind: 'meme' | 'story'; label: string; spec: Record<string, unknown> }>;
   castView: CastView | null;
   profileHash: string;
+  /** 0 when the run is on the live published version (frozen.liveVersion says which). */
   draftRevision: number;
   estimate: RehearsalEstimate;
 }
@@ -274,6 +275,20 @@ export class WebRehearsal {
     ensure(characterProfileHash(stored) === profileHash, 'DRAFT_CONFLICT');
     return upgradedProfile(stored);
   }
+  /** Part 31b: the live published version of the character, when it is the one the catalog serves now and still reads as `version`. */
+  private live(characterId: string, version: number) {
+    const row = this.store.get<{ profile_json: string; content_hash: string }>(
+      `SELECT v.profile_json,v.content_hash FROM web_character_versions v
+      JOIN web_character_catalog c ON c.character_id=v.character_id AND c.version=v.version
+      WHERE v.character_id=? AND v.version=?`,
+      characterId,
+      version,
+    );
+    ensure(row, 'DRAFT_CONFLICT');
+    const stored = JSON.parse(row.profile_json) as StoredWebCharacterProfile;
+    ensure(characterProfileHash(stored) === row.content_hash, 'DRAFT_CONFLICT');
+    return { profile: upgradedProfile(stored), hash: row.content_hash };
+  }
   /** The cast view of the CURRENT cast file (the draft), whatever CAST_CONTEXT_ENABLED says for live chat. */
   private castOf(characterId: string) {
     return castForPreview(this.store, characterId, 'draft');
@@ -313,11 +328,18 @@ export class WebRehearsal {
   /** What a run with these inputs would be, or why not. The estimate is a function of the plan alone. */
   plan(characterId: string, input: Record<string, unknown>): RehearsalPlan {
     identifier(characterId);
+    // a saved draft (revision + its hash), or - when there is none - the live published version (its number)
+    const onLive = input.liveVersion !== undefined;
     ensure(
-      Number.isSafeInteger(input.draftRevision) &&
-        Number(input.draftRevision) > 0 &&
-        typeof input.profileHash === 'string' &&
-        /^[a-f0-9]{64}$/.test(input.profileHash),
+      onLive
+        ? input.draftRevision === undefined &&
+            input.profileHash === undefined &&
+            Number.isSafeInteger(input.liveVersion) &&
+            Number(input.liveVersion) > 0
+        : Number.isSafeInteger(input.draftRevision) &&
+            Number(input.draftRevision) > 0 &&
+            typeof input.profileHash === 'string' &&
+            /^[a-f0-9]{64}$/.test(input.profileHash),
       'INVALID_DRAFT_REVISION',
     );
     ensure(isRehearsalModels(input.models), 'INVALID_REHEARSAL_MODELS');
@@ -327,7 +349,13 @@ export class WebRehearsal {
     const now = this.now();
     for (const id of models) ensure(modelUsableHere(this.store, id, now), 'REHEARSAL_MODEL_UNAVAILABLE');
     ensure(!webCharacterDeleted(this.store, characterId), 'CHARACTER_DELETED');
-    const profile = this.draft(characterId, input.draftRevision as number, input.profileHash as string);
+    const based = onLive
+      ? this.live(characterId, input.liveVersion as number)
+      : {
+          profile: this.draft(characterId, input.draftRevision as number, input.profileHash as string),
+          hash: input.profileHash as string,
+        };
+    const profile = based.profile;
     const withCast = input.withCast as boolean;
     ensure(source.kind !== 'memes' || withCast, 'REHEARSAL_MEMES_NEED_CAST');
     const cast = withCast ? this.castOf(characterId) : undefined;
@@ -368,6 +396,7 @@ export class WebRehearsal {
         : {}),
       ...(cast ? { cast } : {}),
       baseAt: now,
+      ...(onLive ? { liveVersion: input.liveVersion as number } : {}),
     };
     return {
       turns,
@@ -378,8 +407,8 @@ export class WebRehearsal {
       frozen,
       items,
       castView: cast?.view ?? null,
-      profileHash: input.profileHash as string,
-      draftRevision: input.draftRevision as number,
+      profileHash: based.hash,
+      draftRevision: onLive ? 0 : (input.draftRevision as number),
       estimate: this.estimateOf(frozen, turns, models, items.length),
     };
   }
@@ -422,7 +451,7 @@ export class WebRehearsal {
   }
   estimate(characterId: string, input: unknown): RehearsalEstimate {
     record(input);
-    keys(input, ['draftRevision', 'profileHash', 'source', 'models', 'withCast']);
+    keys(input, ['draftRevision', 'profileHash', 'liveVersion', 'source', 'models', 'withCast']);
     return this.plan(characterId, input).estimate;
   }
 
@@ -430,7 +459,16 @@ export class WebRehearsal {
 
   start(actor: RehearsalActor, characterId: string, input: unknown) {
     record(input);
-    keys(input, ['requestId', 'draftRevision', 'profileHash', 'source', 'models', 'withCast', 'acknowledgeMicros']);
+    keys(input, [
+      'requestId',
+      'draftRevision',
+      'profileHash',
+      'liveVersion',
+      'source',
+      'models',
+      'withCast',
+      'acknowledgeMicros',
+    ]);
     ensure(typeof input.requestId === 'string' && REQUEST_ID.test(input.requestId), 'INVALID_REQUEST');
     ensure(natural(input.acknowledgeMicros), 'INVALID_REQUEST');
     const requestId = input.requestId;
@@ -544,6 +582,7 @@ export class WebRehearsal {
       models_json: string;
       with_cast: number;
       estimated_micros: number;
+      frozen_json: string;
     }>('SELECT * FROM web_rehearsal_runs WHERE id=?', runId);
     if (!run) return null;
     const turns = this.store.get<{ n: number }>('SELECT count(*) n FROM web_rehearsal_turns WHERE run_id=?', runId)!.n;
@@ -566,6 +605,7 @@ export class WebRehearsal {
       status: open ? 'running' : done ? 'done' : 'failed',
       estimatedMicros: run.estimated_micros,
       chargedMicros: charged ?? 0,
+      liveVersion: (JSON.parse(run.frozen_json) as { liveVersion?: number }).liveVersion ?? null,
     };
   }
 

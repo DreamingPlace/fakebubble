@@ -235,8 +235,8 @@ export async function routeWebAccountAdmin(
     if (action === 'estimate') {
       const { characterId: id, ...rest } = body([
         'characterId',
-        'draftRevision',
-        'profileHash',
+        // a saved draft, or (with none) the live published version
+        ...(optional('liveVersion').length ? ['liveVersion'] : ['draftRevision', 'profileHash']),
         'source',
         'models',
         'withCast',
@@ -247,8 +247,7 @@ export async function routeWebAccountAdmin(
       const { characterId: id, ...rest } = body([
         'characterId',
         'requestId',
-        'draftRevision',
-        'profileHash',
+        ...(optional('liveVersion').length ? ['liveVersion'] : ['draftRevision', 'profileHash']),
         'source',
         'models',
         'withCast',

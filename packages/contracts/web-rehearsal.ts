@@ -94,8 +94,11 @@ export interface RehearsalEstimate {
 export interface RehearsalStartInput {
   requestId: string;
   characterId: string;
-  draftRevision: number;
-  profileHash: string;
+  /** The saved draft this run is frozen on; absent when there is none (then `liveVersion` says which published version runs). */
+  draftRevision?: number;
+  profileHash?: string;
+  /** Part 31b: with no draft, the live published version (the run records it). */
+  liveVersion?: number;
   source: RehearsalSource;
   models: PlayerModelId[];
   /** 带关系与故事. */
@@ -158,6 +161,8 @@ export interface RehearsalRunInfo {
   status: 'running' | 'done' | 'failed';
   estimatedMicros: number;
   chargedMicros: number;
+  /** Part 31b: the published version the run used when there was no draft; null for a run on a saved draft. */
+  liveVersion: number | null;
 }
 export interface RehearsalRunDetail {
   run: RehearsalRunInfo;

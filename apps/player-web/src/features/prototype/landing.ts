@@ -5,7 +5,7 @@
  */
 export function landingIndex(
   people: readonly { characterId?: string | undefined }[],
-  remembered: string | undefined,
+  remembered: string | null | undefined,
   fallback: number,
   random: () => number = Math.random,
 ): { index: number; resumed: boolean } {

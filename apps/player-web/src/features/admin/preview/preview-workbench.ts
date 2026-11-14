@@ -229,6 +229,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
         api: rehearsalApi,
         characterId: () => id,
         draft: () => (detail?.draft ? { revision: detail.draft.revision, hash: detail.draft.contentHash } : null),
+        live: () => detail?.published?.version ?? null,
         unsaved: () => host.draftUnsaved?.() === true,
         canStart: () => can('preview'),
         canEdit: () => {

@@ -838,3 +838,45 @@ test('Part 31b: a character\u2019s deletion blanks its 多轮预演 runs too (ru
   assert.equal(f.store.get('SELECT 1 FROM web_rehearsal_calls WHERE output_json IS NOT NULL'), undefined);
   assert.deepEqual(moneyRows(f), before);
 });
+
+test('Part 31b: with no saved draft a run uses the live published version and records which; a draft run records none', async (t) => {
+  const f = fixture(t);
+  const liveVersion = f.chars.detail(f.auth, CHARACTER).published!.version;
+  // a run on the saved draft first: it records no live version
+  const onDraft = f.start({ models: ['deepseek'] });
+  await drain(f);
+  assert.equal(f.chars.rehearsalDetail(f.auth, CHARACTER, onDraft.runId).run.liveVersion, null);
+  // the draft is gone (a published character with nothing unsaved)
+  f.store.run('DELETE FROM web_character_drafts WHERE character_id=?', CHARACTER);
+  const body = (over: Record<string, unknown> = {}) => {
+    const { draftRevision: _d, profileHash: _p, ...rest } = f.input({ models: ['deepseek'], ...over });
+    return { ...rest, liveVersion };
+  };
+  const estimate = f.chars.rehearsalEstimate(f.auth, CHARACTER, body());
+  assert.ok(estimate.totalMicros > 0);
+  const request = { ...body(), requestId: 'rehearsal-live-1', acknowledgeMicros: estimate.totalMicros };
+  const { runId } = f.chars.rehearsalStart(f.auth, CHARACTER, request);
+  assert.deepEqual(f.chars.rehearsalStart(f.auth, CHARACTER, request), { runId, replayed: true }, 'idempotent');
+  await drain(f);
+  assert.equal(f.chars.rehearsalDetail(f.auth, CHARACTER, runId).run.liveVersion, liveVersion);
+  const row = f.store.get<{ draft_revision: number; frozen_json: string }>(
+    'SELECT draft_revision,frozen_json FROM web_rehearsal_runs WHERE id=?',
+    runId,
+  )!;
+  assert.equal(row.draft_revision, 0);
+  assert.equal((JSON.parse(row.frozen_json) as { liveVersion: number }).liveVersion, liveVersion);
+  // a body that names both, or a version the catalog does not serve now, is refused
+  assert.throws(
+    () => f.chars.rehearsalEstimate(f.auth, CHARACTER, { ...body(), draftRevision: 1, profileHash: 'a'.repeat(64) }),
+    /INVALID_DRAFT_REVISION/,
+  );
+  assert.throws(
+    () => f.chars.rehearsalEstimate(f.auth, CHARACTER, { ...body(), liveVersion: liveVersion + 7 }),
+    /DRAFT_CONFLICT/,
+  );
+  // and with no draft, a draft run is still refused (there is nothing to freeze)
+  assert.throws(
+    () => f.chars.rehearsalEstimate(f.auth, CHARACTER, f.input({ models: ['deepseek'] })),
+    /DRAFT_CONFLICT/,
+  );
+});

@@ -36,6 +36,8 @@ export type RehearsalHost = {
   characterId: () => string | null;
   /** The saved draft this run would be frozen on, or null when there is none. */
   draft: () => { revision: number; hash: string } | null;
+  /** Part 31b: the live published version, which a run uses when there is no saved draft. null = never published. */
+  live?: () => number | null;
   /** The form beside holds unsaved changes (a run sends the SAVED draft). */
   unsaved: () => boolean;
   /** `preview` on this character. */
@@ -187,10 +189,17 @@ export function rehearsalView(host: RehearsalHost) {
     return null;
   };
   const turnCount = () => (pick.kind === 'memes' ? chosenItems.size * 3 : (turnsOfPick()?.length ?? 0));
+  /** What a run is frozen on: the saved draft; with none, the live published version. Only an unsaved edit blocks. */
+  const base = () => {
+    const d = host.draft();
+    if (d) return { draftRevision: d.revision, profileHash: d.hash };
+    const live = host.live?.() ?? null;
+    return live === null ? null : { liveVersion: live };
+  };
   const why = (): string => {
     if (!host.canStart()) return '没有预演权限';
-    if (!host.draft()) return '先保存草稿';
-    if (host.unsaved()) return '先保存草稿';
+    if (host.unsaved()) return '有未保存的修改';
+    if (!base()) return '先保存草稿';
     if (pick.kind === 'new') return '先保存脚本';
     if (models.size === 0) return '选一个模型';
     const n = turnCount();
@@ -359,7 +368,7 @@ export function rehearsalView(host: RehearsalHost) {
     const mine = ++seq;
     estimate = null;
     estimateFault = '';
-    const d = host.draft(),
+    const d = base(),
       src = source(),
       id = host.characterId();
     if (!d || !src || !id || models.size === 0 || host.unsaved()) return send.refresh();
@@ -368,8 +377,7 @@ export function rehearsalView(host: RehearsalHost) {
     send.refresh();
     host.api
       .estimate(id, {
-        draftRevision: d.revision,
-        profileHash: d.hash,
+        ...d,
         source: src,
         models: MODEL_ORDER.filter((m) => models.has(m)),
         withCast,
@@ -389,13 +397,12 @@ export function rehearsalView(host: RehearsalHost) {
       });
   }
   async function start() {
-    const d = host.draft(),
+    const d = base(),
       src = source(),
       id = host.characterId();
     if (!d || !src || !id || !estimate || busy) return;
     const body = {
-      draftRevision: d.revision,
-      profileHash: d.hash,
+      ...d,
       source: src,
       models: MODEL_ORDER.filter((m) => models.has(m)),
       withCast,
@@ -688,6 +695,7 @@ export function rehearsalView(host: RehearsalHost) {
         d.run.status === 'running' ? '进行中' : d.run.status === 'done' ? '完成' : '失败',
         d.run.status === 'done' ? 'ok' : d.run.status === 'failed' ? 'danger' : 'info',
       ),
+      ...(d.run.liveVersion === null ? [] : [h('span', { class: 'rh-meta', text: `线上 v${d.run.liveVersion}` })]),
       h('span', { class: 'rh-meta', text: `${done} / ${total}` }),
       bar,
       cost,
