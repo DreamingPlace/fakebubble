@@ -76,15 +76,15 @@ export function avatarField(
     circle.style?.setProperty('--av-colour', host?.colour() ?? '');
     circle.dataset.empty = String(!value);
     if (!value || !host) {
-      circle.style.backgroundImage = '';
+      circle.style?.removeProperty?.('background-image');
       circle.textContent = initials();
       return;
     }
     circle.textContent = '';
     try {
-      circle.style.backgroundImage = `url("${await host.read(value.id)}")`;
+      circle.style?.setProperty?.('background-image', `url("${await host.read(value.id)}")`);
     } catch {
-      circle.style.backgroundImage = '';
+      circle.style?.removeProperty?.('background-image');
       circle.textContent = initials();
     }
   };
