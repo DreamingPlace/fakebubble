@@ -251,7 +251,7 @@ export function decodeVp8(data: Uint8Array, maxPixels: number): Yuv {
           const bit0 = br.bool(probs[p + 9 + bit1]!);
           const cat = 2 * bit1 + bit0;
           v = 0;
-          for (const t of CAT3456[cat]!) v += v + br.bool(t);
+          for (const t of CAT3456[cat]!) v = 2 * v + br.bool(t);
           v += 3 + (8 << cat);
         }
         p = next + 22;
