@@ -6,6 +6,7 @@ import { hoverValue } from './ui/hover-value.ts';
 import { evenWeights, upgradeWelcomes, type WelcomeLine } from '../../../../../packages/contracts/web-welcomes.ts';
 import { newLineId, welcomeList } from './welcome-list.ts';
 import { paletteList, type PaletteEntry } from './palette-list.ts';
+import { avatarField, type AvatarHost } from './owner/avatar-field.ts';
 import { markDirty } from './ui/unsaved.ts';
 import { growBox, shortInput } from './ui/grow-box.ts';
 import { disclosureDetails } from './ui/disclosure.ts';
@@ -101,6 +102,8 @@ export function editedCharacter(
     voice: null | { profileId: string; version: number; speed: number; referenceId?: string };
     /** Part 24c: 成长中 (seed character). Absent = keep what the base says. */
     seed?: boolean;
+    /** Part 31 (25e): the picture; null = none. Absent = keep what the base says. */
+    avatar?: { id: string } | null;
   },
 ): CharacterProfile {
   const next = structuredClone(base),
@@ -147,6 +150,14 @@ export function editedCharacter(
       : values.palette
         ? { palette: values.palette }
         : {}),
+    // Part 31: the picture is a reference to a stored image; the key is absent when there is none.
+    ...(values.avatar === undefined
+      ? base.presentation.avatar
+        ? { avatar: { ...base.presentation.avatar } }
+        : {}
+      : values.avatar
+        ? { avatar: { id: values.avatar.id } }
+        : {}),
   };
   return next;
 }
@@ -165,15 +176,16 @@ const stable = (value: unknown): string =>
  * published under aside). Such a draft is published without a 预演; the server makes the same comparison and has the last word.
  */
 export function isColourOnlyChange(published: CharacterProfile | null, draft: CharacterProfile): boolean {
-  // Part 24k-2: 主色 and 点缀 are both colour; the server's gate (withoutColour) says the same.
+  // Part 24k-2: 主色 and 点缀 are both colour; Part 31: the picture goes live the same way. The server's gate (withoutColour) says the same.
   if (
     !published ||
     (published.presentation.color === draft.presentation.color &&
-      stable(published.presentation.palette ?? null) === stable(draft.presentation.palette ?? null))
+      stable(published.presentation.palette ?? null) === stable(draft.presentation.palette ?? null) &&
+      (published.presentation.avatar?.id ?? null) === (draft.presentation.avatar?.id ?? null))
   )
     return false;
   const bare = (profile: CharacterProfile) => {
-    const { color: _color, palette: _palette, ...presentation } = profile.presentation;
+    const { color: _color, palette: _palette, avatar: _avatar, ...presentation } = profile.presentation;
     return stable({ template: { ...profile.template, version: 0 }, presentation });
   };
   return bare(published) === bare(draft);
@@ -320,6 +332,7 @@ export function changedSections(published: CharacterProfile | null, draft: Chara
           p.publicDescription,
           p.color ?? null,
           p.palette ?? null,
+          p.avatar?.id ?? null,
           t.seed === true,
         ],
         welcome: upgradeWelcomes(p),
@@ -352,6 +365,8 @@ export function characterForm(
   onInvalid?: (pane: string | null) => void,
   /** The voice the character speaks with now (from the server): the form's Fish id and 语速 start from it. */
   voiceHint?: { referenceId: string; profileId: string; version: number; speed: number } | null,
+  /** Part 31 (25e): where a picture is uploaded and read; absent = no upload is offered. */
+  avatarHost?: AvatarHost | null,
 ) {
   const form = el('form');
   form.className = 'character-profile-form';
@@ -381,6 +396,9 @@ export function characterForm(
   const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { kind: 'one', max: 500 });
   sec(identity, '颜色');
   const colour = colourField(identity, base.presentation.color, () => onChange(), isNew ? null : base.template.id);
+  // Part 31 (25e): one picture, shown cropped to a circle; the initials stay as the fallback.
+  sec(identity, '头像');
+  const avatar = avatarField(identity, base.presentation.avatar, avatarHost ?? null, () => onChange());
   // Part 24k-2: the colours as a list (主 mirrors the field above; 点缀 follow); the chip shows what a player will see.
   const colours = paletteList(
     base.presentation.palette,
@@ -552,6 +570,7 @@ export function characterForm(
       canon: assembled(),
       seed: seed.checked,
       voice: readVoice(),
+      avatar: avatar.read() ?? null,
     });
   };
   return {

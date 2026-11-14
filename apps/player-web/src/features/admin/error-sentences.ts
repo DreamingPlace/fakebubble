@@ -37,6 +37,22 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   INVALID_CANON_EVENTS: '设定事件需明确作者设定、虚构世界及本人物知情范围。',
   PROFILE_CODE_TAKEN: '这个角色代码已被别的角色使用（大小写不分）。',
   INVALID_PROFILE_CODE: '角色代码须是 2–12 位的字母、数字、_ 或 -。',
+  // ---- Part 31: 头像, 首页顺序, deleting test records ----
+  AVATAR_TOO_LARGE: '头像文件超过 2 MB，请压缩后再传。',
+  AVATAR_FORMAT: '头像只支持 PNG、JPEG 或 WebP（不支持 SVG 和动图）。',
+  AVATAR_INVALID: '这个头像文件无法读取，请换一张图片。',
+  AVATAR_DIMENSIONS: '图片尺寸不合适：至少 64×64，最长边不超过 4096，总像素不超过 800 万。',
+  AVATAR_UNAVAILABLE: '这个环境还不支持头像。',
+  AVATAR_NOT_FOUND: '草稿里的头像已不在，请重新上传后再保存。',
+  MEDIA_FILE_UNAVAILABLE: '头像文件暂时读不到，请稍后重试。',
+  MEDIA_INTEGRITY_ERROR: '头像文件校验没有通过，请重新上传。',
+  WEB_AVATAR_SCHEMA_MISMATCH: '头像的数据表与程序记录的不一致，已停止使用头像；请联系运维核对。',
+  WEB_CONVERSATION_DELETION_SCHEMA_MISMATCH:
+    '删除对话所需的数据保护规则与程序记录的不一致，已停止删除；请联系运维核对。',
+  WEB_OWNER_OPS_SCHEMA_MISMATCH: '站长操作的数据表与程序记录的不一致，已停止；请联系运维核对。',
+  CONVERSATION_DELETE_BUSY: '这段对话还有没完成的回复，现在不能删除。等回复结束后再试。',
+  PREVIEW_DELETE_BUSY: '所选预演里还有排队或运行中的，现在不能删除。等它们结束后再试。',
+  ARC_ORDER_STALE: '首页上的角色刚刚变了（上线、下线或删除）。请重新打开首页顺序后再排。',
   // ---- profile import ----
   PROFILE_IMPORT_INVALID: '导入文件有问题，整次导入没有写入。请按提示修改后重新选择。',
   PROFILE_IMPORT_CONFLICT: '导入期间有内容被改动，本次没有写入。请重新选择文件再预览。',

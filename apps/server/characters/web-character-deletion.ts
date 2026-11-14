@@ -13,6 +13,8 @@ import { clearCharacterOrder } from './web-character-availability.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { LATE_TABLES, embeddingTableExists, releaseUnsentEmbedHolds } from '../budget/web-embed-purge.ts';
 import { purgeCocreation } from '../cocreation/web-cocreation-purge.ts';
+import { conversationAudioPending, eraseDeletedConversationAudio } from './web-conversation-deletion.ts';
+import { WebAvatars, purgeAvatars } from './web-avatar.ts';
 import {
   auditCharacterDeletionScope,
   operationContent,
@@ -157,6 +159,8 @@ export class WebCharacterDeletion {
       purgePreviewWorkbench(this.store, id);
       // Part 24k-2: the welcome line every player was given for this character goes at once, players who never opened a chat included.
       purgeWelcomeChoices(this.store, { characterId: id });
+      // Part 31: the character's picture goes with it (R2 objects are erased by the alarm sweep).
+      purgeAvatars(this.store, id);
       this.store.run(
         'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',
         actor.memberId,
@@ -187,10 +191,17 @@ export class WebCharacterDeletion {
     };
   }
   nextDue() {
-    return this.store.get("SELECT 1 FROM web_character_deletions WHERE state='purging'") ? this.now() + 1000 : null;
+    return this.store.get("SELECT 1 FROM web_character_deletions WHERE state='purging'") ||
+      conversationAudioPending(this.store) ||
+      new WebAvatars(this.store, this.clock).pending()
+      ? this.now() + 1000
+      : null;
   }
   async sweep(limit = 8) {
     ensure(Number.isSafeInteger(limit) && limit > 0 && limit <= 16, 'INVALID_DELETE_BATCH');
+    // Part 31: the R2 objects of a conversation the owner deleted (a failure is retried by the next sweep).
+    await eraseDeletedConversationAudio(this.store, this.clock).catch(() => 0);
+    await new WebAvatars(this.store, this.clock).sweep().catch(() => 0);
     const jobs = this.store.all<Deletion>(
       "SELECT * FROM web_character_deletions WHERE state='purging' ORDER BY created_at,id LIMIT ?",
       limit,

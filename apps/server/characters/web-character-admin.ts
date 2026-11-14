@@ -1,3 +1,5 @@
+import { WebAvatars, isAvatarId } from './web-avatar.ts';
+import { installWebOwnerOps, notErasedSql } from '../admin/web-owner-ops-schema.ts';
 import type { WebCharacterDeletion } from './web-character-deletion.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
@@ -102,7 +104,7 @@ function profile(value: unknown): WebCharacterProfile {
   const template = validatedTemplate(value.template),
     display = value.presentation;
   record(display);
-  keys(display, ['displayName', 'publicDescription', 'welcome', 'welcomes', 'color', 'palette']);
+  keys(display, ['displayName', 'publicDescription', 'welcome', 'welcomes', 'color', 'palette', 'avatar']);
   nonempty(display.displayName, 100);
   ensure(
     typeof display.publicDescription === 'string' && display.publicDescription.length <= 500,
@@ -121,8 +123,16 @@ function profile(value: unknown): WebCharacterProfile {
       welcomes,
       ...(display.color === undefined ? {} : { color: display.color }),
       ...(display.palette === undefined ? {} : { palette: palette(display.palette) }),
+      ...(display.avatar === undefined ? {} : { avatar: avatarRef(display.avatar) }),
     },
   };
+}
+/** Part 31: `{id}` where id is the sha256 of an uploaded picture. Whether the picture exists is checked by save(). */
+function avatarRef(value: unknown) {
+  record(value);
+  keys(value, ['id']);
+  ensure(isAvatarId(value.id), 'INVALID_ADMIN_REQUEST');
+  return { id: value.id };
 }
 /** Parts 24j/24k-2: the template's colours: 1-5 entries (one 主 and up to 4 点缀) of {hex, name (<=24), role}; at most one 'main'. */
 function palette(value: unknown): NonNullable<WebCharacterProfile['presentation']['palette']> {
@@ -260,6 +270,8 @@ export class WebCharacterAdmin {
   private previews: WebCharacterPreviews | null = null;
   private compare: WebReviewCompare | null = null;
   enablePreviews(previews: WebCharacterPreviews) {
+    // Part 31: the two preview guard triggers learn the owner's content erase once the preview ledger exists.
+    installWebOwnerOps(this.store);
     this.previews = previews;
     // Part 26b: the reviewer comparison lives next to 预演: same permission, same queue.
     this.compare = new WebReviewCompare(this.store, this.clock);
@@ -417,7 +429,7 @@ export class WebCharacterAdmin {
       ? this.store
           .all<{ id: string }>(
             `SELECT p.id FROM admin_previews p JOIN web_character_preview_jobs j ON j.preview_id=p.id
-      WHERE p.character_id=? ORDER BY p.created_at DESC,p.id DESC LIMIT 20`,
+      WHERE p.character_id=?${notErasedSql(this.store)} ORDER BY p.created_at DESC,p.id DESC LIMIT 20`,
             id,
           )
           .map((row) => webPreviewDTO(readWebPreview(this.store, row.id)))
@@ -450,6 +462,14 @@ export class WebCharacterAdmin {
       // Part 24l: on the home page now (a published character that is not is 已下线; its live version above stays).
       online: !!publishedWebCharacters(this.store).some((row) => row.characterId === id),
       draft: draft ? draftDTO(draft) : null,
+      // Part 31 (25e): the draft's picture (else the live one): what the admin sees beside the upload.
+      avatar: {
+        available: !!this.avatars,
+        current: (() => {
+          const named = (draft ? draftDTO(draft).profile : current)?.presentation.avatar?.id;
+          return named && this.avatars ? this.avatars.info(id, named) : null;
+        })(),
+      },
       // Part 24j: the 角色代码, the avatar file name and Fish voice id recorded against it, and the open checklist.
       profileMeta: this.profileImport
         ? this.profileImport.meta(id)
@@ -471,6 +491,8 @@ export class WebCharacterAdmin {
     return this.store.transaction(() => {
       this.require(auth, 'edit', id);
       ensure(!webCharacterDeleted(this.store, id), 'CHARACTER_DELETED');
+      // Part 31: a picture the profile names must be one this character has (uploaded through avatar-upload).
+      if (next.presentation.avatar) ensure(this.avatars?.exists(id, next.presentation.avatar.id), 'AVATAR_NOT_FOUND');
       const current = this.draft(id),
         live = this.live(id);
       if (!current && !live)
@@ -691,6 +713,31 @@ export class WebCharacterAdmin {
   }
   authorizeMaterialUpload(auth: Auth, id: string) {
     return this.require(auth, 'materials', id);
+  }
+  private avatars: WebAvatars | null = null;
+  /** Part 31 (25e): the picture upload. Off (nothing offered) until the runtime enables it. */
+  enableAvatars(avatars: WebAvatars) {
+    this.avatars = avatars;
+  }
+  authorizeAvatarUpload(auth: Auth, id: string) {
+    return this.require(auth, 'edit', id);
+  }
+  avatarUpload(auth: Auth, id: string, input: unknown) {
+    const actor = this.require(auth, 'edit', id);
+    ensure(this.avatars, 'AVATAR_UNAVAILABLE');
+    return this.avatars.upload(id, actor.memberId, input, () => {
+      this.require(auth, 'edit', id);
+    });
+  }
+  /** The admin's view of one picture of the character (the draft's may not be published yet). */
+  avatarRead(auth: Auth, id: string, input: unknown) {
+    this.require(auth, 'read', id);
+    ensure(this.avatars, 'AVATAR_UNAVAILABLE');
+    record(input);
+    keys(input, ['avatarId']);
+    return this.avatars.readForAdmin(id, input.avatarId as string, () => {
+      this.require(auth, 'read', id);
+    });
   }
   materialList(auth: Auth, id: string) {
     this.require(auth, 'read', id);

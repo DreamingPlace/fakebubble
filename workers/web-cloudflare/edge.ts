@@ -71,6 +71,10 @@ export default {
         'NOT_FOUND',
       );
       if (url.pathname.startsWith(api)) {
+        // Part 31 (25e): a character's picture is public and content-addressed. It is fetched without the visitor's cookies and the edge
+        // itself (never the business object's header) lets exactly this verified shape be cached.
+        const picture =
+          request.method === 'GET' && /^\/api\/web\/provider\/public-image\/[a-f0-9]{64}$/.test(url.pathname);
         const peer = request.headers.get('cf-connecting-ip');
         ensure(peer && peer.length <= 128 && /^[0-9a-fA-F:.]+$/.test(peer), 'WEB_EDGE_PEER_REQUIRED');
         const clean = new Headers(request.headers);
@@ -85,12 +89,18 @@ export default {
             key.startsWith('cf-')
           )
             clean.delete(key);
+        if (picture) clean.delete('cookie');
         clean.set(WEB_EDGE_PEER_HEADER, peer);
         // Native DO Fetch carries HTTP cancellation; a generic RPC Response did not
         // release the remote SSE slot on disconnect in actual workerd verification.
         response = await env.BUSINESS.get(env.BUSINESS.idFromString(env.BUSINESS_OBJECT_ID)).fetch(
           new Request(request, { headers: clean }),
         );
+        if (picture && response.status === 200 && response.headers.get('content-type') === 'image/png') {
+          response = new Response(response.body, response);
+          response.headers.delete('set-cookie');
+          assetCache = 'public, max-age=31536000, immutable';
+        }
       } else {
         ensure(!url.pathname.startsWith('/api'), 'NOT_FOUND');
         ensure(request.method === 'GET' || request.method === 'HEAD', 'NOT_FOUND');
