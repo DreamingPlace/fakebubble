@@ -913,7 +913,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       // Part 24b-7: no id string in an admin view (the preview, run, budget and provider-request ids are not shown).
       '预演条件',
       keyValuePanel([
-        ['草稿修订', String(p.draftRevision)],
+        ['草稿', String(p.draftRevision)],
         [
           '模拟时间',
           p.simulatedTime

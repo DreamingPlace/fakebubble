@@ -533,7 +533,7 @@ test('server validation errors and unknown errors are shown inline in words', as
   for (const [code, pattern] of [
     ['INVALID_CANON_VALUE', /结构化设定包含无效值/],
     ['LIVE_VERSION_CONFLICT', /正式版本已变/],
-    ['CHARACTER_DELETED', /人物已删除/],
+    ['CHARACTER_DELETED', /角色已删除/], // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「人物已删除」
     ['SOMETHING_NEW', /保存草稿没有成功/],
   ] as const) {
     const f = setup(t, { saveError: Object.assign(new Error('x'), { code }) });
@@ -577,7 +577,7 @@ test('if the draft saved but marking it adopted failed, the box says so and neve
   await add(f, 1);
   await saveDraft(f);
   assert.equal(callsOf(f, 'save').length, 1);
-  assert.match(f.q('.cc-adopt-error')!.textContent, /草稿已保存.*请勿重复加入/);
+  assert.match(f.q('.cc-adopt-error')!.textContent, /草稿 \d+ 已保存.*请勿重复加入/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「草稿已保存（修订 N）」
 });
 
 test('keyboard: j and k move through the list and open each submission; e archives; s stars; fields and other pages are left alone', async (t) => {

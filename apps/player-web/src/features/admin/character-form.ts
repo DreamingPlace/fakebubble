@@ -376,7 +376,7 @@ export function characterForm(
   identity.append(el('legend', '身份与网页展示'));
   form.append(identity);
   sec(identity, '基本信息');
-  const id = field(identity, '固定人物 ID', base.template.id, {
+  const id = field(identity, '固定角色编号', base.template.id, {
     required: true,
     max: 128,
     kind: 'short',

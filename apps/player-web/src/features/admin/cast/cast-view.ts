@@ -401,7 +401,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   const KIND_TONE = { added: 'ok', removed: 'danger', changed: 'warn', same: 'neutral' } as const;
   function versionContent(doc: CastDoc, liveDoc: CastDoc | null): Node {
     const root = h('div', { class: 'cv-body' });
-    if (worldChanged(doc, liveDoc)) root.append(h('p', { class: 'cv-world', text: '世界背景与现行版本不同。' }));
+    if (worldChanged(doc, liveDoc)) root.append(h('p', { class: 'cv-world', text: '世界背景与正式版本不同。' }));
     for (const { part, rows } of castDiff(doc, liveDoc)) {
       if (!rows.length) continue;
       const count = (kind: string) => rows.filter((row) => row.kind === kind).length;
@@ -502,7 +502,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       const box = h(
         'div',
         { class: 'cs-notice is-bad', attrs: { role: 'alert' } },
-        h('span', { text: `草稿已被另一位管理员存成修订 ${state.conflict.revision}。你写的内容都还在下面。` }),
+        h('span', { text: `草稿已被另一位管理员存成草稿 ${state.conflict.revision}。你写的内容都还在下面。` }),
       );
       if (canEdit()) box.append(keep);
       box.append(take);
@@ -681,7 +681,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
         throw error;
       }
       await afterChange();
-      if (!gone()) host.toast(`草稿已保存（修订 ${state.revision}）`, 'ok');
+      if (!gone()) host.toast(`草稿 ${state.revision} 已保存`, 'ok');
     });
   }
   async function publishNow(version: number) {
@@ -735,7 +735,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
         `${JSON.stringify(file, null, 2)}\n`,
         'application/json;charset=utf-8',
       );
-      host.toast('已导出当前草稿（修订 ' + revision + '）。', 'ok');
+      host.toast('已导出草稿 ' + revision + '。', 'ok');
     });
   }
   async function chooseFile(file: File) {
@@ -833,7 +833,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
           host.toast(
             result.unchanged
               ? '文件和草稿一样，没有改动。'
-              : `已导入到草稿（修订 ${result.revision}）${result.created ? `，并建立了 ${result.created} 个角色草稿` : ''}。还没有发布。`,
+              : `已导入到草稿 ${result.revision}${result.created ? `，并建立了 ${result.created} 个角色草稿` : ''}。还没有发布。`,
             'ok',
           );
       } catch (error) {

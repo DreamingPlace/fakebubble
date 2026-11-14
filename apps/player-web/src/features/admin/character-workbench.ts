@@ -385,7 +385,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       () => !canCreate(),
       () => openNew(),
     );
-    if (!result.characters.length) root.append(el('p', '当前没有可查看的人物。请由主管理员勾选所需功能类别。'));
+    if (!result.characters.length) root.append(el('p', '当前没有可查看的角色。请由主管理员勾选所需功能类别。'));
     const roles = el('div');
     roles.className = 'character-directory';
     root.append(roles);
@@ -414,7 +414,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         heading,
         el(
           'p',
-          `${c.characterId} · ${c.publishedVersion === null ? '未发布' : `正式 v${c.publishedVersion}`}${c.draftRevision === null ? '' : ` · 草稿修订 ${c.draftRevision}`}`,
+          `${c.characterId} · ${c.publishedVersion === null ? '未发布' : `正式 v${c.publishedVersion}`}${c.draftRevision === null ? '' : ` · 草稿 ${c.draftRevision}`}`,
         ),
       );
       button(
@@ -427,7 +427,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     }
     if (result.deletions.length) {
       const jobs = disclosure(root, '角色删除记录与清理进度');
-      jobs.append(el('p', '最近100条可查看任务。已删除 ID 不能复用；账号、其他人物、额度历史和账务保留。'));
+      jobs.append(el('p', '最近100条可查看任务。已删除 ID 不能复用；账号、其他角色、额度历史和账务保留。'));
       for (const job of result.deletions) deletionRow(jobs, job);
     }
     sync();
@@ -497,7 +497,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         if (gone()) return;
         dirty = false;
         await open(saved.characterId);
-        host.status(`草稿修订 ${saved.revision} 已保存；尚未发布。`);
+        host.status(`草稿 ${saved.revision} 已保存；尚未发布。`);
         saved_ = true;
       });
       return saved_;
@@ -508,7 +508,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     saveCurrent = saveDraft;
     const discardLocal = () => {
       renderDetail();
-      host.status('已放弃本页修改；服务器草稿和正式版本不变。');
+      host.status('已放弃本页修改；草稿和正式版本不变。');
     };
     if (embedded) {
       renderConsole(snapshot, target, profile, canEdit, submit, discardLocal);
@@ -517,14 +517,14 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     const tools = el('div');
     tools.className = 'admin-toolbar';
     root.append(tools);
-    button(tools, '返回人物目录', () => dirty, list, true);
+    button(tools, '返回角色目录', () => dirty, list, true);
     root.append(
       el('h2', snapshot ? profile.presentation.displayName : '新建角色草稿'),
       el(
         'p',
         snapshot
-          ? `${target} · ${snapshot.published ? `正式 v${snapshot.published.version}` : '未发布'} · 编辑版本 v${profile.template.version}${snapshot.draft ? ` · 草稿修订 ${snapshot.draft.revision}` : ' · 尚无已保存草稿'}`
-          : '从空白资料建立 AI 虚构人物，不复制其他角色的资料或声音。保存后仍不会出现在玩家目录。',
+          ? `${target} · ${snapshot.published ? `正式 v${snapshot.published.version}` : '未发布'} · 编辑版本 v${profile.template.version}${snapshot.draft ? ` · 草稿 ${snapshot.draft.revision}` : ' · 尚无已保存草稿'}`
+          : '从空白资料建立 AI 虚构角色，不复制其他角色的资料或声音。保存后仍不会出现在玩家目录。',
       ),
     );
     if (snapshot && !can('edit')) root.append(el('p', '当前只有被授予的操作可用；资料编辑只读。'));
@@ -672,19 +672,19 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
   /** 只移除当前未发布草稿: its own fold, in the publish section of the console and after the deletion fold elsewhere. */
   function discardFold(parent: HTMLElement, snapshot: CharacterDetail) {
     const target = snapshot.characterId;
-    const section = fold(parent, '放弃服务器草稿');
+    const section = fold(parent, '放弃草稿');
     section.className = 'admin-confirm';
     section.append(el('p', '只移除当前未发布草稿；正式版本和历史不变。与“放弃本页修改”不同。'));
     button(
       section,
-      '确认放弃此修订草稿',
+      '确认放弃此草稿',
       () => dirty || !can('discard'),
       async () => {
         await host.api.discard(target, snapshot.draft!.revision);
         if (gone()) return;
         dirty = false;
         await list();
-        host.status('服务器草稿已放弃，正式版本不变。');
+        host.status('草稿已放弃，正式版本不变。');
       },
     );
   }
@@ -853,7 +853,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     });
     host.headerHost?.append(line, publishLink);
     const meta = snapshot
-      ? `${snapshot.published ? `正式 v${snapshot.published.version}` : '未发布'}${snapshot.draft ? ` · 草稿修订 ${snapshot.draft.revision}` : ''}`
+      ? `${snapshot.published ? `正式 v${snapshot.published.version}` : '未发布'}${snapshot.draft ? ` · 草稿 ${snapshot.draft.revision}` : ''}`
       : '新角色';
     // Workbench4: the title row says 角色工作台 like every page; the role (dot, name) is the first part of the status line.
     const who = el('span');
@@ -915,27 +915,27 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     root.append(card);
     sync();
   }
-  /** 放弃服务器草稿: a small danger zone (one confirm button) at the foot of 发布. */
+  /** 放弃草稿: a small danger zone (one confirm button) at the foot of 发布. */
   function discardZone(snapshot: CharacterDetail) {
     const target = snapshot.characterId;
     const zone = dangerZone({
-      open: '放弃服务器草稿',
+      open: '放弃草稿',
       openerId: 'wb-discard',
       impact: () => [
-        { n: String(snapshot.draft!.revision), label: '草稿修订' },
+        { n: String(snapshot.draft!.revision), label: '草稿' },
         {
           n: String(changedSections(snapshot.published?.profile ?? null, snapshot.draft!.profile).length),
           label: '处改动',
         },
       ],
-      confirm: '确认放弃此修订草稿',
+      confirm: '确认放弃此草稿',
       busy: () => busy || dirty || !can('discard'),
       run: async () => {
         await host.api.discard(target, snapshot.draft!.revision);
         if (gone()) return;
         dirty = false;
         await list();
-        host.status('服务器草稿已放弃，正式版本不变。');
+        host.status('草稿已放弃，正式版本不变。');
       },
     });
     zones.push(zone);
@@ -1011,7 +1011,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           if (gone()) return;
           dirty = false;
           await open(saved.characterId);
-          host.status(`草稿已恢复到修订 ${revision} 的内容，保存为修订 ${saved.revision}；没有发布。`);
+          host.status(`草稿已恢复到草稿 ${revision} 的内容，保存为草稿 ${saved.revision}；没有发布。`);
         });
       },
     });
@@ -1153,7 +1153,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     host.onDirectory?.(result.characters);
   }
   /**
-   * Part 24l: 现行版本 and whether it is on the home page. The owner alone has 下线 / 重新上线 (each asks first, in place); every other
+   * Part 24l: 正式版本 and whether it is on the home page. The owner alone has 下线 / 重新上线 (each asks first, in place); every other
    * administrator sees the state and no button. 下线 removes only the home page entry: chats, memory and every version stay.
    */
   function availability(parent: HTMLElement, snapshot: CharacterDetail) {
@@ -1165,7 +1165,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     const row = el('div');
     row.className = 'wb-avail';
     row.dataset.state = online ? 'online' : 'offline';
-    const version = el('span', `现行 v${live.version}`);
+    const version = el('span', `正式 v${live.version}`);
     version.className = 'wb-avail-v';
     row.append(version, statusBadge(online ? '在线' : '已下线', online ? 'ok' : 'warn'));
     parent.append(row);
@@ -1397,7 +1397,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     section.append(
       el(
         'p',
-        '不可撤销：删除此人物全部玩家的聊天、记忆和私有音频；不会删除账号、其他人物或已用额度，不释放结果未确认的预留费用。',
+        '不可撤销：删除此角色全部玩家的聊天、记忆和私有音频；不会删除账号、其他角色或已用额度，不释放结果未确认的预留费用。',
       ),
     );
     button(
@@ -1417,13 +1417,13 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           ),
         );
         const typed = guarded(
-            field(output, `输入人物 ID ${target} 确认删除`, '', { max: 128 }),
+            field(output, `输入角色编号 ${target} 确认删除`, '', { max: 128 }),
             () => dirty || !can('delete'),
           ),
-          ack = guarded(check(output, '我确认删除此人物和其全部旧聊天，不能恢复'), () => dirty || !can('delete'));
+          ack = guarded(check(output, '我确认删除此角色和其全部旧聊天，不能恢复'), () => dirty || !can('delete'));
         button(
           output,
-          () => (pending.has(key) ? '按原请求核对删除回执' : '确认永久删除此人物及全部旧聊天'),
+          () => (pending.has(key) ? '按原请求核对删除回执' : '确认永久删除此角色及全部旧聊天'),
           () => dirty || !can('delete') || typed.value !== target || !ack.checked,
           async () => {
             const result = await exact(
@@ -1509,7 +1509,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         id = null;
         detail = null;
         clearView();
-        host.status('此人物的查看权限已收回；账号和会话仍保留。');
+        host.status('此角色的查看权限已收回；账号和会话仍保留。');
       }
       for (const row of protectedRows) if (!can('read', row.characterId)) row.node.remove();
       protectedRows = protectedRows.filter((r) => root.contains(r.node));

@@ -39,12 +39,12 @@ export const originText = (origin: VersionOrigin) =>
   origin.kind === 'restore' ? `恢复自 v${origin.from}` : origin.kind === 'colour' ? '仅改主色' : '发布';
 /** What the page says for an error of the history and restore calls; anything else falls back to the host. */
 const RESTORE_ERRORS: Record<string, string> = {
-  CHARACTER_PUBLICATION_BUSY: '此人物还有未结束的玩家任务，暂不能恢复。不会取消或重发任何任务，请稍后再试。',
+  CHARACTER_PUBLICATION_BUSY: '此角色还有未结束的玩家任务，暂不能恢复。不会取消或重发任何任务，请稍后再试。',
   CHARACTER_VERSION_NOT_RESTORABLE: '这一版已不可恢复，没有任何改动。',
-  CHARACTER_VERSION_IS_LIVE: '这一版就是现行版本，不需要恢复。',
-  LIVE_VERSION_CONFLICT: '现行版本刚刚变过。请重新读取版本历史，核对后再恢复。',
+  CHARACTER_VERSION_IS_LIVE: '这一版就是正式版本，不需要恢复。',
+  LIVE_VERSION_CONFLICT: '正式版本刚刚变过。请重新读取版本历史，核对后再恢复。',
   ADMIN_OWNER_REQUIRED: '只有主管理员可以恢复版本。',
-  CHARACTER_DELETED: '人物已删除，没有版本历史，也不能恢复。',
+  CHARACTER_DELETED: '角色已删除，没有版本历史，也不能恢复。',
 };
 const errorCode = (error: unknown) =>
   error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : '';
@@ -147,7 +147,7 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
         ['来源', originText(snapshot.origin)],
         ['相对上一版', snapshot.summary],
       ]),
-      h('h4', { class: 'vh-title', text: '与现行版本的差异' }),
+      h('h4', { class: 'vh-title', text: '与正式版本的差异' }),
       ...diffNodes(snapshot),
       h('h4', { class: 'vh-title', text: '完整快照（只读）' }),
       h('h5', { class: 'vh-group', text: '网页展示' }),
@@ -162,13 +162,13 @@ export function versionHistory(root: HTMLElement, host: HistoryHost) {
   /** The difference from the live version, in the groups 资料改动 uses. */
   function diffNodes(snapshot: VersionSnapshot): Node[] {
     if (snapshot.live || !snapshot.liveProfile)
-      return [h('p', { class: 'vh-note', text: snapshot.live ? '这就是现行版本。' : '现在没有现行版本。' })];
+      return [h('p', { class: 'vh-note', text: snapshot.live ? '这就是正式版本。' : '现在没有正式版本。' })];
     const nodes: Node[] = [];
     for (const [name, before, after] of readableGroups(snapshot.liveProfile, snapshot.profile)) {
       if (before === after) continue;
       nodes.push(h('h5', { class: 'vh-group', text: name }), diffGrid(before ?? '', after, `v${snapshot.version}`));
     }
-    if (!nodes.length) nodes.push(h('p', { class: 'vh-note', text: '内容与现行版本完全相同（版本号除外）。' }));
+    if (!nodes.length) nodes.push(h('p', { class: 'vh-note', text: '内容与正式版本完全相同（版本号除外）。' }));
     return nodes;
   }
 

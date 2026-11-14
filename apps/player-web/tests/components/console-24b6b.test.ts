@@ -127,7 +127,7 @@ test('24b-6b the shared version list: the latest 5, newest first, the live one m
   list.setEntries(input, 7);
   const rows = all(list.root, '.ot-row').map((r) => r.textContent);
   assert.equal(rows.length, HISTORY_SHOWN);
-  assert.match(rows[0]!, /^v7现行/);
+  assert.match(rows[0]!, /^v7当前/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行」
   assert.match(rows[4]!, /^v3/);
   assert.deepEqual(input, copy, 'the input list is not changed or cut');
   assert.match(one(list.root, '.vh-more').textContent, /共 7 个/);

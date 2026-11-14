@@ -57,7 +57,7 @@ export const templateFields = (profile: CharacterProfile): Field[] => {
   const days = Object.values(t.schedule?.days ?? {}) as unknown[][];
   const canon = (t.authorCanon?.settings ?? {}) as Record<string, unknown>;
   return [
-    ['固定人物 ID', t.id],
+    ['固定角色编号', t.id],
     ['人设名称', t.name],
     ['设定生日', plain(t.birthDate)],
     ['成长中角色', plain(t.seed === true)],

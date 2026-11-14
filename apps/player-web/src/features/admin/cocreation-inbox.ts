@@ -572,7 +572,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         h(
           'div',
           { class: 'cc-saved' },
-          h('b', { text: `已存进角色草稿（修订 ${saved.revision}），这条标为已处理` }),
+          h('b', { text: `已存进角色草稿 ${saved.revision}，这条标为已处理` }),
           h('a', {
             class: 'cc-go',
             text: '去角色工作台发布 →',
@@ -711,7 +711,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           try {
             await deps.api.adopt(current.id, answer.ordinal);
           } catch {
-            fail(`草稿已保存（修订 ${saved_.revision}），但没能把这条标为“已采用”。请勿重复加入；可稍后刷新核对。`);
+            fail(`草稿 ${saved_.revision} 已保存，但没能把这条标为“已采用”。请勿重复加入；可稍后刷新核对。`);
             discardBoxes(current.id);
             return;
           }
@@ -736,8 +736,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         if (adoptedNow) changed();
         deps.status(
           adoptedNow
-            ? `已加入草稿（修订 ${saved_.revision}）。尚未发布：请在“角色工作台”里预览，确认后再发布。`
-            : `草稿已保存（修订 ${saved_.revision}）。尚未发布。`,
+            ? `已加入草稿 ${saved_.revision}。尚未发布：请在“角色工作台”里预览，确认后再发布。`
+            : `草稿 ${saved_.revision} 已保存。尚未发布。`,
         );
       } catch (caught) {
         fail(characterAdminError(caught) ?? '保存草稿没有成功，请核对后重试；本次没有标记为已采用。');
