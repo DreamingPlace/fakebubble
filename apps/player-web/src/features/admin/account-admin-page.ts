@@ -36,6 +36,8 @@ import type { ProfileImportClient } from '../../services/profile-import-api.ts';
 import { profileImportView } from './profile-import/profile-import-view.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
 import { conversationsView } from './conversations-view.ts';
+import { arcOrderView } from './owner/arc-order-view.ts';
+import type { OwnerAdminClient } from '../../services/owner-admin-api.ts';
 import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
 import type { CocreationAdminClient } from '../../services/cocreation-admin-api.ts';
 import { browserDownload, inviteTiersView } from './invite-tiers-view.ts';
@@ -113,6 +115,11 @@ type Port = Pick<
     Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory'>>;
   /** 测试对话 (CHAT_REVIEW_ENABLED; the page only appears when the session says the switch is on). */
   conversations?: Pick<ConversationsAdminClient, 'list' | 'detail' | 'export'>;
+  /** Part 31: the owner's operations. Optional: a page without it draws none of them. */
+  owner?: Pick<
+    OwnerAdminClient,
+    'arcRead' | 'arcSave' | 'deletePreviews' | 'deleteConversations' | 'closedRead' | 'closedPolicy' | 'closedDelete'
+  >;
 };
 export function adminAccountError(error: unknown) {
   const characterError = characterAdminError(error);
@@ -424,6 +431,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     previewBench?.update(busy);
     newRole.hidden = !session || !canCreateRole();
     importRoles.hidden = !canImportProfiles();
+    arcButton.hidden =
+      !port.owner ||
+      !session ||
+      !(session.member.role === 'owner' || session.member.permissions.includes('category.characters'));
     for (const nav of root.querySelectorAll<HTMLElement>('.admin-nav [data-page]')) {
       if (nav.dataset.page === page) nav.setAttribute('aria-current', 'page');
       else nav.removeAttribute('aria-current');
@@ -660,6 +671,16 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   importRoles.id = 'wb-import';
   importRoles.textContent = '导入角色资料';
   importRoles.hidden = true;
+  // Part 31 (A): 首页顺序, an inline panel like 导入角色资料; the owner or anyone with the 角色 category may set it.
+  const arcHost = document.createElement('div');
+  arcHost.id = 'wb-arc-host';
+  if (typeof stage.before === 'function') stage.before(arcHost);
+  else stage.parentNode?.appendChild(arcHost);
+  const arcButton = document.createElement('button');
+  arcButton.type = 'button';
+  arcButton.id = 'wb-arc';
+  arcButton.textContent = '首页顺序';
+  arcButton.hidden = true;
   const rolesHost = document.createElement('div');
   rolesHost.id = 'wb-roles';
   rolesHost.className = 'wb-roles';
@@ -667,7 +688,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   roster.className = 'wb-roster';
   roster.setAttribute('role', 'group');
   roster.setAttribute('aria-label', '角色');
-  roster.append(rolesHost, newRole, importRoles);
+  roster.append(rolesHost, newRole, importRoles, arcButton);
   const editorHost = document.createElement('div');
   editorHost.id = 'wb-editor';
   editorHost.className = 'wb-editor';
@@ -777,6 +798,19 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         },
       })
     : null;
+  const arcOrder = port.owner
+    ? arcOrderView(arcHost, {
+        api: port.owner,
+        run,
+        toast: (text, tone) => toasts.show(text, tone ?? 'info'),
+        disposed: () => disposed,
+      })
+    : null;
+  listen(arcButton, 'click', () => {
+    if (busy || disposed || !arcOrder) return;
+    if (arcOrder.isOpen()) arcOrder.close();
+    else arcOrder.open();
+  });
   listen(importRoles, 'click', () => {
     if (busy || disposed) return;
     whenLeaveOk(() => profileImporter?.open());
@@ -806,6 +840,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         changed: () => void workbench?.syncPreviews().catch(() => {}),
         draftUnsaved: () => workbench?.isDirty() === true,
         saveDraft: () => workbench?.saveDraft(),
+        ...(port.owner ? { owner: port.owner, confirm: (options, hostNode) => inlineConfirm(hostNode, options) } : {}),
       })
     : null;
   inbox = port.cocreation
@@ -939,6 +974,14 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       if (!disposed) status.textContent = text;
     },
     disposed: () => disposed,
+    ...(port.owner
+      ? {
+          owner: port.owner,
+          isOwner: () => session?.member.role === 'owner',
+          confirm: (options, host) => inlineConfirm(host, options),
+          toast: (text, tone) => toasts.show(text, tone ?? 'info'),
+        }
+      : {}),
   });
   const members = membersView({
     head: q('#admin-members-head'),

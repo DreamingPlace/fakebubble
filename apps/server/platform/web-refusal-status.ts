@@ -62,6 +62,9 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   INVALID_RECOVERY_POINT: 400,
   INVALID_RELATIONSHIP: 400,
   INVALID_REQUEST: 400,
+  // Part 31: a picture that is not usable is the request's fault; one that is missing or a state that moved is 409.
+  AVATAR_INVALID: 400,
+  AVATAR_UNAVAILABLE: 503,
   INVALID_REQUEST_ID: 400,
   INVALID_RUN_INPUTS: 400,
   INVALID_RUN_LABEL: 400,
@@ -137,6 +140,10 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   CHARACTER_DELETED: 409,
   CHARACTER_DRAFT_LIMIT: 409,
   CHARACTER_OFFLINE: 409,
+  ARC_ORDER_STALE: 409,
+  AVATAR_NOT_FOUND: 409,
+  CONVERSATION_DELETE_BUSY: 409,
+  PREVIEW_DELETE_BUSY: 409,
   CHARACTER_ONLINE: 409,
   CHARACTER_ORDER_CONFLICT: 409,
   CHARACTER_PUBLICATION_BUSY: 409,
@@ -213,6 +220,7 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   TRIAL_EXPIRED: 410,
   // 413: the request body is larger than the route accepts
   PAYLOAD_TOO_LARGE: 413,
+  AVATAR_TOO_LARGE: 413,
   // 429: too many requests: wait and try again
   CHARACTER_DELETION_BUSY: 429,
   COCREATION_DAILY_LIMIT: 429,

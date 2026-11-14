@@ -17,6 +17,8 @@ import { routeWebInvite } from '../invites/web-invite-routes.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
+import { OWNER_BODY_LIMIT } from '../admin/web-owner-ops.ts';
+import { AVATAR_BODY_LIMIT, avatarHeaders } from '../characters/web-avatar.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import type { HumanAction, TurnstileGate } from '../identity/web-turnstile.ts';
@@ -197,6 +199,14 @@ export class WebProviderHTTP {
         headers: { 'content-type': 'audio/wav', 'content-length': String(bytes.length) },
       });
     }
+    // Part 31 (25e): a character's picture. Public like the welcome clip (no identity is read), served only while the live catalog names it.
+    const image = path.match(new RegExp(`^${API}/public-image/([a-f0-9]{64})$`));
+    if (method === 'GET' && image) {
+      this.limits.rate(`web:image:${ipHash}`, LIMITS.welcomePerIpPerMinute);
+      this.limits.rate('web:image:global', LIMITS.welcomeGlobalPerMinute);
+      const found = await app.avatars.readPublic(image[1]!);
+      return new Response(Uint8Array.from(found.bytes), { headers: avatarHeaders(found.bytes.length) });
+    }
     if (method === 'GET' && path === `${API}/admin/session`)
       return Response.json(app.inviteAdmin.session(this.cookie(request, true)));
     if (
@@ -222,6 +232,18 @@ export class WebProviderHTTP {
           },
           materialUpload[1]!,
         );
+      const avatarUpload = path.match(
+        /^\/api\/web\/provider\/admin\/characters\/([A-Za-z0-9_-]{1,128})\/avatar-upload$/,
+      );
+      if (avatarUpload)
+        app.characterAdmin.authorizeAvatarUpload(
+          {
+            cookie: this.cookie(request, true),
+            csrf: request.headers.get('x-csrf-token'),
+            origin: request.headers.get('origin'),
+          },
+          avatarUpload[1]!,
+        );
       const characterWrite =
         /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save|cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply)|characters\/[A-Za-z0-9_-]{1,128}\/(?:code-save|checklist-dismiss))$/.test(
           path,
@@ -244,17 +266,21 @@ export class WebProviderHTTP {
         trustedIpHash: ipHash,
         body: await this.body(
           request,
-          materialUpload
-            ? 8_001_024
-            : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
-              ? CAST_BODY_LIMIT
-              : bulkWrite
-                ? 786_432
-                : characterWrite
-                  ? PROFILE_BODY_LIMIT
-                  : path.startsWith(`${API}/cocreation/`)
-                    ? COCREATION_BODY_LIMIT
-                    : 8192,
+          avatarUpload
+            ? AVATAR_BODY_LIMIT
+            : materialUpload
+              ? 8_001_024
+              : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
+                ? CAST_BODY_LIMIT
+                : bulkWrite
+                  ? 786_432
+                  : characterWrite
+                    ? PROFILE_BODY_LIMIT
+                    : path.startsWith(`${API}/admin/owner/`)
+                      ? OWNER_BODY_LIMIT
+                      : path.startsWith(`${API}/cocreation/`)
+                        ? COCREATION_BODY_LIMIT
+                        : 8192,
         ),
       };
       const result =
@@ -267,6 +293,7 @@ export class WebProviderHTTP {
           app.chatReview,
           app.system,
           app.cast,
+          app.ownerOps,
         )) ??
         routeWebCocreation(app.cocreation, input) ??
         routeWebBilling(app.billing, input) ??

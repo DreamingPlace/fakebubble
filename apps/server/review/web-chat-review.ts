@@ -1,6 +1,7 @@
 import { ensure } from '../../../packages/domain/errors.ts';
 import { localTime } from '../../../packages/domain/schedule.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
+import { closedChatPolicy, ownerOpsInstalled } from '../admin/web-owner-ops-schema.ts';
 
 /**
  * Tester chat review (Part 19, flag CHAT_REVIEW_ENABLED; tables from 122_chat_review.sql).
@@ -294,6 +295,11 @@ export function charactersWithMessages(store: Reader, worldId: string) {
  */
 export function archivePlayerChats(store: Db, principalId: string, worldId: string, now: number) {
   ensure(chatReviewTablesExist(store), 'REVIEW_UNAVAILABLE');
+  // Part 31 (owner setting 立即): no copy at all. The purge that follows is the existing one; the live code goes now.
+  if (closedChatPolicy(store) === 'immediate') {
+    purgeReviewRows(store, principalId);
+    return 0;
+  }
   const names = nicknamesOfWorld(store, worldId);
   let lines = 0;
   const characters = charactersWithMessages(store, worldId);
@@ -323,19 +329,73 @@ export function archivePlayerChats(store: Db, principalId: string, worldId: stri
       lines++;
     }
   }
+  // Part 31: an account that had a 玩家编号 is listed under 已关闭账号 (number, closure time, the archive's code) until its copy is gone.
+  if (lines > 0 && code !== null && ownerOpsInstalled(store) && tableExists(store, 'web_player_numbers')) {
+    const number = store.get<{ number: string }>(
+      'SELECT number FROM web_player_numbers WHERE principal_id=?',
+      principalId,
+    );
+    if (number)
+      store.run(
+        'INSERT OR REPLACE INTO web_closed_accounts(review_code,player_number,closed_at,expires_at) VALUES (?,?,?,?)',
+        code,
+        number.number,
+        now,
+        now + ARCHIVE_TTL_MS,
+      );
+  }
   // The live code and the banner mark go in the same step, so the archive's code never joins back to the account.
   purgeReviewRows(store, principalId);
   return lines;
 }
 
+/**
+ * Part 31: removes one archived copy (every transcript that carries this code) and its 已关闭账号 row, nothing else. Runs in the
+ * caller's transaction. Returns the number of archived lines removed. The only deleter besides the 180-day sweep.
+ */
+export function deleteArchivedChats(store: Db, reviewCode: string) {
+  if (!tableExists(store, 'web_review_archive')) return 0;
+  const removed = Number(store.run('DELETE FROM web_review_archive WHERE review_code=?', reviewCode).changes);
+  if (ownerOpsInstalled(store)) store.run('DELETE FROM web_closed_accounts WHERE review_code=?', reviewCode);
+  return removed;
+}
+/** Part 31: one archived transcript (a code and a character) removed, and the 已关闭账号 row with it once the code has no lines left. */
+export function deleteArchivedTranscript(store: Db, reviewCode: string, characterId: string) {
+  if (!tableExists(store, 'web_review_archive')) return 0;
+  const removed = Number(
+    store.run('DELETE FROM web_review_archive WHERE review_code=? AND character_id=?', reviewCode, characterId).changes,
+  );
+  if (
+    ownerOpsInstalled(store) &&
+    !store.get('SELECT 1 FROM web_review_archive WHERE review_code=? LIMIT 1', reviewCode)
+  )
+    store.run('DELETE FROM web_closed_accounts WHERE review_code=?', reviewCode);
+  return removed;
+}
+/** The closed-account rows whose archive copy has no line left or has expired: nothing may outlive its copy. */
+export function closedAccountsHaveIdentityColumn(store: Reader) {
+  if (!ownerOpsInstalled(store)) return false;
+  return store
+    .all<{ name: string }>('PRAGMA table_info(web_closed_accounts)')
+    .some((column) => !['review_code', 'player_number', 'closed_at', 'expires_at'].includes(column.name));
+}
+
 /** Deletes archive rows past expires_at, at most one batch per call. Idempotent; the only thing that deletes archive rows. */
 export function sweepReviewArchive(store: Db, now: number) {
   if (!tableExists(store, 'web_review_archive')) return 0;
-  return store.run(
+  const removed = store.run(
     `DELETE FROM web_review_archive WHERE (label,line_order) IN
     (SELECT label,line_order FROM web_review_archive WHERE expires_at<=? LIMIT ${ARCHIVE_SWEEP_BATCH})`,
     now,
   ).changes;
+  // Part 31: a 已关闭账号 row goes with its copy: at its own expiry, or as soon as no archived line carries its code.
+  if (ownerOpsInstalled(store))
+    store.run(
+      `DELETE FROM web_closed_accounts WHERE expires_at<=? OR NOT EXISTS
+      (SELECT 1 FROM web_review_archive a WHERE a.review_code=web_closed_accounts.review_code)`,
+      now,
+    );
+  return removed;
 }
 /** When the archive next has something to delete (so the alarm wakes for it), or null. */
 export function nextReviewArchiveExpiry(store: Reader) {

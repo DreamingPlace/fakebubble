@@ -15528,6 +15528,211 @@ button:not(
   padding-inline: 10px;
 }
 
+/* ======================================================================================================================
+   Part 31 (admin only): 首页顺序, the avatar field, 整理预演, 测试对话 deletion and 已关闭账号. Tokens of the 24b-7c system; every
+   transition is a transform or opacity (160-240 ms) and is cancelled under prefers-reduced-motion.
+   ====================================================================================================================== */
+.account-admin-page.admin-shell .is-danger {
+  color: var(--ad-danger);
+  border-color: color-mix(in srgb, var(--ad-danger) 45%, var(--ad-border));
+}
+.account-admin-page.admin-shell .is-danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--ad-danger) 8%, var(--ad-surface));
+}
+/* the panel is the 导入角色资料 one (.pi-panel); only its list is new. Closed, it takes no room. */
+.account-admin-page.admin-shell #wb-arc-host:not(:has(.arc-panel:not([hidden]))) {
+  display: none;
+}
+.account-admin-page.admin-shell .arc-hint {
+  margin: 0;
+  flex: 1 1 280px;
+}
+.account-admin-page.admin-shell .arc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--ad-sp-2);
+  margin: 0;
+  padding: var(--ad-card-pad);
+  list-style: none;
+}
+/* in the collapsed role rail 首页顺序 is a glyph like 新建角色 / 导入角色资料 and says its name when the rail opens */
+.account-admin-page.admin-shell #wb-arc {
+  flex: none;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px dashed #c9c2b8;
+  background: transparent;
+  color: var(--ad-muted);
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-characters #wb-arc {
+  box-sizing: border-box;
+  width: calc(100% - 16px);
+  height: 40px;
+  margin: 6px 8px 0;
+  padding: 0;
+  overflow: hidden;
+  font-size: 0;
+}
+.account-admin-page.admin-shell #admin-characters #wb-arc::before {
+  content: "⇅";
+  font-size: 18px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) #wb-arc {
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-characters .wb-roster:is(:hover, :focus-within) #wb-arc::before {
+  content: none;
+}
+.account-admin-page.admin-shell .arc-row {
+  display: grid;
+  grid-template-columns: 24px 28px 14px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ad-sp-3);
+  min-height: var(--ad-h-standard);
+  padding: 0 var(--ad-sp-3);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  touch-action: none;
+}
+.account-admin-page.admin-shell .arc-row:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 1px;
+}
+.account-admin-page.admin-shell .arc-row[data-dragging],
+.account-admin-page.admin-shell .arc-row.is-dragging {
+  box-shadow: 0 6px 18px rgb(31 42 38 / 18%);
+  background: var(--ad-primary-soft);
+}
+.account-admin-page.admin-shell .arc-grip {
+  cursor: grab;
+  color: var(--ad-muted);
+  text-align: center;
+  user-select: none;
+}
+.account-admin-page.admin-shell .arc-pos {
+  font-variant-numeric: tabular-nums;
+  color: var(--ad-muted);
+  text-align: right;
+}
+.account-admin-page.admin-shell .arc-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--arc-colour, var(--ad-border));
+}
+.account-admin-page.admin-shell .arc-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .av-field {
+  max-width: var(--ad-w-l);
+}
+.account-admin-page.admin-shell .av-row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--ad-sp-4);
+  align-items: center;
+}
+.account-admin-page.admin-shell .av-circle {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 36px;
+  font-weight: 600;
+  color: #fff;
+  background-color: var(--av-colour, var(--ad-primary));
+  background-position: center;
+  background-size: cover;
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
+  transition: transform calc(200ms * var(--ad-motion)) cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.account-admin-page.admin-shell .av-circle[data-empty="false"] {
+  font-size: 0;
+}
+.account-admin-page.admin-shell .av-actions {
+  display: flex;
+  gap: var(--ad-sp-2);
+  flex-wrap: wrap;
+}
+.account-admin-page.admin-shell .av-side p {
+  margin: var(--ad-sp-1) 0 0;
+}
+.account-admin-page.admin-shell .av-line:empty {
+  display: none;
+}
+.account-admin-page.admin-shell .av-line[data-tone="warn"] {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .pw-manage {
+  margin: 0 0 var(--ad-sp-3);
+}
+.account-admin-page.admin-shell .pw-manage .pm-bar {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ad-sp-2);
+}
+.account-admin-page.admin-shell .pw-manage .pm-spacer {
+  flex: 1 1 0;
+}
+.account-admin-page.admin-shell .pm-count {
+  color: var(--ad-muted);
+  margin-right: var(--ad-sp-2);
+}
+/* the 整理 box sits in the left margin of the run or line it picks, which makes room for it (padding, 160 ms) */
+.account-admin-page.admin-shell [data-pickable="true"] {
+  position: relative;
+  padding-inline-start: 40px;
+  transition: padding-inline-start calc(160ms * var(--ad-motion)) cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.account-admin-page.admin-shell .pm-tick {
+  position: absolute;
+  inset-inline-start: 12px;
+  top: 14px;
+  display: grid;
+  place-items: center;
+  animation: ad31-in calc(160ms * var(--ad-motion)) cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.account-admin-page.admin-shell .pm-tick input {
+  margin: 0;
+}
+.account-admin-page.admin-shell .closed-panel {
+  margin-top: var(--ad-sp-5);
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  padding: var(--ad-sp-3) var(--ad-card-pad) var(--ad-card-pad);
+}
+.account-admin-page.admin-shell .closed-panel > summary {
+  font-weight: 600;
+  min-height: var(--ad-h-compact);
+}
+.account-admin-page.admin-shell .closed-policy {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-sp-3);
+  margin: var(--ad-sp-3) 0 var(--ad-sp-1);
+}
+.account-admin-page.admin-shell .closed-table {
+  max-width: 520px;
+}
+.account-admin-page.admin-shell .closed-table .closed-act {
+  text-align: right;
+}
+.account-admin-page.admin-shell .review-confirm:empty {
+  display: none;
+}
+@keyframes ad31-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
 /* Part 35: 多轮预演, one wide panel. Compact controls are 32 px high, standard ones 40 px; every transition eases with --ad-motion. */
 .account-admin-page.admin-shell .pw-rehearse {
   align-self: flex-start;

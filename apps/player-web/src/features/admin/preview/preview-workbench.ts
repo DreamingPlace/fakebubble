@@ -15,6 +15,9 @@ import type {
 } from '../../../services/preview-admin-api.ts';
 import { hasCharacterPermission } from '../../../../../../packages/contracts/web-admin-permissions.ts';
 import { dataTable } from '../ui/data-table.ts';
+import type { OwnerAdminClient } from '../../../services/owner-admin-api.ts';
+import { previewManage } from '../owner/preview-manage.ts';
+import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
 import { hoverValue } from '../ui/hover-value.ts';
 import { keyValuePanel } from '../ui/key-value-panel.ts';
 import { paidButton } from '../ui/paid-button.ts';
@@ -67,6 +70,9 @@ export type PreviewWorkbenchHost = {
   poll?: Partial<Pick<PollerHost, 'setTimer' | 'clearTimer' | 'hidden' | 'onVisible'>>;
   download?: (name: string, text: string, type: string) => void;
   newId?: () => string;
+  /** Part 31 (owner): deleting 预演 records. Absent (any other administrator, or a page without it) = nothing of it is drawn. */
+  owner?: Pick<OwnerAdminClient, 'deletePreviews'>;
+  confirm?: ConfirmInPlace;
 };
 const defaultHidden = () => (globalThis as { document?: { hidden?: boolean } }).document?.hidden === true;
 const defaultOnVisible = (fn: () => void) => {
@@ -252,6 +258,8 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       })
     : null;
   rehearsalOpen?.addEventListener('click', () => rehearsal?.open());
+  // Part 31: the owner's 整理预演 bar (only when the host can delete; for anyone else the page is exactly as before).
+  const manageHost = host.owner && host.confirm ? h('div', { class: 'pw-manage' }) : null;
   const page = h(
     'div',
     { class: 'pw' },
@@ -259,6 +267,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     composeHost,
     rehearsalOpen,
     compareHost,
+    manageHost,
     feed,
     empty,
     reviewSection,
@@ -1187,6 +1196,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       if (liveSingles.has(key) || [...runEntries.values()].some((r) => r.rows.has(key))) continue;
       else if (!entry.el.parentElement || entry.el.parentElement === feed) lineEntries.delete(key);
     reconcile(feed, nodes);
+    manage?.sync();
     empty.hidden = nodes.length > 0;
     if (wantOpen && runEntries.has(wantOpen) && !pending.length) {
       const entry = runEntries.get(wantOpen)!;
@@ -1449,6 +1459,53 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     ...(host.poll?.clearTimer ? { clearTimer: host.poll.clearTimer } : {}),
     onGiveUp: () => host.toast('状态刷新连续失败，已暂停。点击“刷新”重试。', 'warn'),
   });
+
+  const manage =
+    manageHost && host.owner && host.confirm
+      ? previewManage(manageHost, {
+          api: host.owner,
+          confirm: host.confirm,
+          run: host.run,
+          toast: host.toast,
+          disposed: gone,
+          isOwner: () => host.member()?.role === 'owner',
+          reload: async () => {
+            if (id) await openCharacter(id);
+          },
+          targets: () => [
+            ...runs.flatMap((r) => {
+              const entry = runEntries.get(r.runId);
+              return entry
+                ? [
+                    {
+                      key: r.runId,
+                      el: entry.el,
+                      slot: entry.el,
+                      previews: r.itemCount,
+                      busy: r.counts.queued + r.counts.generating > 0,
+                      isRun: true,
+                    },
+                  ]
+                : [];
+            }),
+            ...singles.flatMap((p) => {
+              const entry = lineEntries.get(p.previewId);
+              return entry
+                ? [
+                    {
+                      key: p.previewId,
+                      el: entry.el,
+                      slot: entry.el,
+                      previews: 1,
+                      busy: p.status === 'queued' || p.status === 'generating',
+                      isRun: false,
+                    },
+                  ]
+                : [];
+            }),
+          ],
+        })
+      : null;
 
   // ---- lifecycle --------------------------------------------------------------------------------------------------
   const reset = () => {

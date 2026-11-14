@@ -1,3 +1,4 @@
+import type { AvatarHost } from './owner/avatar-field.ts';
 import { InviteLocalApiError } from '../../services/invite-local-api.ts';
 import { characterColour, setMainColour, setRoster } from './ui/character-colour.ts';
 import type { AdminMember } from '../../services/account-admin-api.ts';
@@ -109,6 +110,24 @@ export function characterAdminError(error: unknown): string | null {
 
 /** All mutations are explicit buttons. No storage, implicit generation, or player-content queries; the only timer polls the status of previews this admin already submitted. */
 /** The voice the form starts from: the server's (binding or derived), else the Fish id an import recorded (an older answer). */
+/** Part 31 (25e): where the form uploads and reads the picture (absent while the server offers none). */
+function avatarOf(
+  host: Host,
+  snapshot: CharacterDetail | null,
+  colour: () => string | null,
+  initial: () => string,
+): AvatarHost | null {
+  if (!snapshot?.avatar?.available) return null;
+  const id = snapshot.characterId;
+  return {
+    characterId: id,
+    fileHint: snapshot.profileMeta?.avatarFile ?? null,
+    upload: (base64) => host.api.uploadAvatar(id, base64),
+    read: (avatarId) => host.api.readAvatar(id, avatarId),
+    colour,
+    initial,
+  };
+}
 function voiceOf(snapshot: CharacterDetail | null) {
   if (snapshot?.speech?.voice) return snapshot.speech.voice;
   const recorded = snapshot?.profileMeta?.voiceReferenceId;
@@ -522,6 +541,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       (e) => host.status(characterAdminError(e) ?? '请核对资料字段。'),
       undefined,
       voiceOf(snapshot),
+      avatarOf(
+        host,
+        snapshot,
+        () => profile.presentation.color ?? null,
+        () => profile.presentation.displayName || profile.template.name,
+      ),
     );
     // A new ID must be enterable before its scoped edit permission can be evaluated.
     const actions = el('div');
@@ -708,6 +733,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         if (pane) showing.show(pane);
       },
       voiceOf(snapshot),
+      avatarOf(
+        host,
+        snapshot,
+        () => profile.presentation.color ?? null,
+        () => profile.presentation.displayName || profile.template.name,
+      ),
     );
     const form = editor.form;
     form.addEventListener('submit', (event) => {

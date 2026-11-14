@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { maximumScreenshotBytes } from '../audio/feedback-png.ts';
 import { maximumAudioBytes } from '../audio/audio-validation.ts';
+import { AVATAR_MAX_BYTES } from '../../../packages/imaging/avatar.ts';
 
 interface ObjectInfo {
   size: number;
@@ -23,18 +24,20 @@ export interface MediaObjectScope {
   instanceId: string;
   ownerId: string;
   mediaId: string;
-  kind: 'screenshot' | 'speech' | 'audition';
+  kind: 'screenshot' | 'speech' | 'audition' | 'avatar';
 }
 export interface MediaObjectReference extends MediaObjectScope {
   byteLength: number;
   sha256: string;
 }
 const digest = (value: string | Uint8Array) => createHash('sha256').update(value).digest('hex');
-const limit = (kind: MediaObjectScope['kind']) => (kind === 'screenshot' ? maximumScreenshotBytes : maximumAudioBytes);
-const mime = (kind: MediaObjectScope['kind']) => (kind === 'screenshot' ? 'image/png' : 'audio/wav');
+const limit = (kind: MediaObjectScope['kind']) =>
+  kind === 'avatar' ? AVATAR_MAX_BYTES : kind === 'screenshot' ? maximumScreenshotBytes : maximumAudioBytes;
+const mime = (kind: MediaObjectScope['kind']) =>
+  kind === 'screenshot' || kind === 'avatar' ? 'image/png' : 'audio/wav';
 function key(scope: MediaObjectScope) {
   ensure(
-    ['screenshot', 'speech', 'audition'].includes(scope.kind) &&
+    ['screenshot', 'speech', 'audition', 'avatar'].includes(scope.kind) &&
       [scope.instanceId, scope.ownerId, scope.mediaId].every(
         (v) => typeof v === 'string' && v.length > 0 && v.length <= 256,
       ),
