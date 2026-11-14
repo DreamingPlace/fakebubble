@@ -60,7 +60,7 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
   const audioUrls = new Map<string, string>();
   const sentence = (code: string) => ERROR_SENTENCES[code] ?? '失败，没有更多信息。';
   const reason = (extra = ''): string =>
-    env.dirty() ? '先保存草稿' : !env.can('materials') ? '你没有素材权限' : !state?.voice ? '先填 Fish 音色 ID' : extra;
+    env.dirty() ? '先保存草稿' : !env.can('materials') ? '你没有素材权限' : !state?.voice ? '先填 音色编号' : extra;
 
   async function load() {
     const token = env.view();
@@ -112,10 +112,10 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
     line.className = 'vc-voice-line';
     root.append(line);
     if (!current.voice) {
-      line.append(el('p', '先填 Fish 音色 ID。'));
+      line.append(el('p', '先填 音色编号。'));
       return;
     }
-    // The Fish 音色 ID and 语速 are the form's own fields right above; this line says what will speak and where the voice lives.
+    // The 音色编号 and 语速 are the form's own fields right above; this line says what will speak and where the voice lives.
     const will = el('span', `将用 ${current.voice.model} 朗读`);
     will.className = 'vc-k';
     line.append(will);

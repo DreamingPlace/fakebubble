@@ -232,7 +232,8 @@ test('read access: an administrator without the permission sees the table but ca
 test('while the feature flag is off the page says players are not affected yet', async (t) => {
   const f = mount(t, view({ featureOn: false }));
   await f.api.load();
-  assert.match(f.node.querySelector('.models-banner')!.textContent, /PLAYER_MODEL_CHOICE_ENABLED/);
+  // Named exception (Part 24b-7d round 2): the banner is plain Chinese; the variable name is on the 玩家选模型 pill's hover.
+  assert.match(f.node.querySelector('.models-banner')!.textContent, /玩家选模型未开启/);
 });
 
 test('describeChanges / changeLine are plain text with no ids', () => {

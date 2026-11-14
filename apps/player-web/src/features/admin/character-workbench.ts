@@ -427,7 +427,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     }
     if (result.deletions.length) {
       const jobs = disclosure(root, '角色删除记录与清理进度');
-      jobs.append(el('p', '最近100条可查看任务。已删除 ID 不能复用；账号、其他角色、额度历史和账务保留。'));
+      jobs.append(el('p', '最近100条可查看任务。已删除的角色编号不能复用；账号、其他角色、额度历史和账务保留。'));
       for (const job of result.deletions) deletionRow(jobs, job);
     }
     sync();

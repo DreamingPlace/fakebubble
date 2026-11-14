@@ -127,7 +127,8 @@ try {
       await open(`characters/${voiceOf}`);
       await tab('声音');
       // Part 29 B (named exception): one Fish id field on the 声音 tab; the draft is saved with it, then the 素材版本 is prepared.
-      const reference = page.locator('label:has-text("Fish 音色 ID") input').first();
+      // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): the voice field is 「音色编号」, it was 「Fish 音色 ID」.
+      const reference = page.locator('label:has-text("音色编号") input').first();
       if (!(await reference.inputValue())) {
         await reference.fill('fake-reference-24k1');
         await page.locator('button:has-text("保存草稿")').first().click();

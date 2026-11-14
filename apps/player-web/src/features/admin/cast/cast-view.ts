@@ -689,7 +689,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     const yes = await host.confirm(
       {
         title: `发布 v${version}`,
-        message: '把整份草稿发布为新版本。CAST_CONTEXT_ENABLED 打开之前，玩家聊天不会用到它。',
+        message: '把整份草稿发布为新版本。「关系与故事」功能打开之前，玩家聊天不会用到它。',
         confirmLabel: '发布',
       },
       frame.confirm,

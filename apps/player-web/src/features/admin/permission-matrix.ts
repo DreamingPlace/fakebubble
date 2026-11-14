@@ -94,7 +94,7 @@ export const PERMISSION_GROUPS: readonly Group[] = [
       {
         item: 'conversations.read',
         name: '查看测试对话',
-        help: '阅读玩家与角色的聊天全文（只显示匿名编号，不显示邮箱和昵称）。默认只有主管理员；需要打开 CHAT_REVIEW_ENABLED。',
+        help: '阅读玩家与角色的聊天全文（只显示匿名编号，不显示邮箱和昵称）。默认只有主管理员；需要先打开「测试对话」功能（在系统状态里能看到它开了没有）。',
       },
     ],
   },
