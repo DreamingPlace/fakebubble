@@ -11,6 +11,8 @@ import { ensure } from '../../packages/domain/errors.ts';
 import { operatorProof, requireOperatorProof } from '../../apps/server/cloudflare/operator-proof.ts';
 import { safeError } from '../../apps/server/cloudflare/safe-error.ts';
 import type { WebGenerationBinding } from '../../packages/contracts/web-generation-rpc.ts';
+import type { WebKdfBinding } from '../../packages/contracts/web-kdf-rpc.ts';
+import { kdfHash, kdfVerify, remotePasswords } from '../../apps/server/cloudflare/web-kdf.ts';
 import { WebDurableStore } from '../../apps/server/cloudflare/web-store.ts';
 import { PrivateMediaObjects, type PrivateBucket } from '../../apps/server/cloudflare/media-objects.ts';
 import type { DurableSQLStorage } from '../../apps/server/cloudflare/store.ts';
@@ -24,6 +26,7 @@ import {
   WebCloudTextGenerator,
   webCloudEmbeddings,
   webCloudDirection,
+  webCloudJudge,
   webCloudSpeech,
 } from '../../apps/server/cloudflare/web-generators.ts';
 import { WebCloudSetup, type WebCloudMaterialPackage } from '../../apps/server/cloudflare/web-setup.ts';
@@ -132,6 +135,8 @@ export interface WebBusinessEnvironment {
   MEDIA: PrivateBucket;
   BUDGET: WebBudgetStatusRPC & WebBudgetTopUpRPC;
   GENERATION: WebGenerationBinding;
+  /** Part 32: this script's own `WebKdfService`, bound to itself. Absent = every password operation answers WEB_KDF_UNAVAILABLE. */
+  KDF?: WebKdfBinding;
 }
 
 /** Private authority: only the edge's native DO Fetch may enter HTTP. No provider keys are bound here. */
@@ -325,6 +330,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
             : undefined,
           dailyCap: cap === undefined ? PLAYER_LIMITS.defaultDailyCap : Number(cap),
           graceMs: this.publicConfig.graceMs,
+          passwords: remotePasswords(this.env.KDF),
           purger: {
             begin: (principalId) => this.retention.beginDeletion(principalId),
             finish: (principalId) => this.retention.finishDeletion(principalId),
@@ -461,6 +467,8 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           siteVoiceModelFromEnv(this.env.FISH_VOICE_MODEL),
         );
         previews.useSpeech(speech);
+        // Part 35: the 多轮预演 judge goes through the generation Worker as well; its budget is reserved by the runner first.
+        previews.useRehearsalJudge(webCloudJudge(this.env.GENERATION));
         app.characterAdmin.enableSpeech(speech);
         // Part 30: 按反馈重录. The text call goes through the generation Worker (the only provider caller); the budget is
         // env.BUDGET, reserved before the call; the 预演 runner drives its recovery next to the speech bills.
@@ -595,6 +603,22 @@ interface OperatorEnvironment {
       renewPrices(proof: string): Promise<unknown>;
     };
   };
+}
+/**
+ * Part 32 (audit F-08): password hashing, outside the business object. Stateless on purpose: it has no storage, no secret and
+ * no binding of its own (it reads nothing from `env`), so a hash is all it can produce. The business object is bound to it as
+ * KDF (a service binding to this same script) and stays the only writer. Called only through that binding: no HTTP route.
+ */
+export class WebKdfService extends WorkerEntrypoint {
+  hash(password: string) {
+    return kdfHash(password);
+  }
+  verify(password: string, encoded: string | null) {
+    return kdfVerify(password, encoded);
+  }
+  fetch() {
+    return new Response(null, { status: 404 });
+  }
 }
 /** Invoked only through an authenticated private service binding, never an HTTP operator route. */
 export class WebOperatorService extends WorkerEntrypoint<OperatorEnvironment> {

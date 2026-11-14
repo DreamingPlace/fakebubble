@@ -285,7 +285,8 @@ export async function run24b6cChecks(ctx: Ctx) {
     await sideways(`预演 ${at} (empty)`);
     // The settings are one summary line.
     const summary = ((await page.locator('.pw-summary').innerText()) as string).replace(/\s+/g, ' ');
-    check(/关系 .*真实时间/.test(summary), `预演 ${at}: the settings line says "${summary}"`);
+    // Part 35 (named exception): the settings line no longer starts with the 关系 (relationship) part; it reads from the time on.
+    check(/^真实时间/.test(summary), `预演 ${at}: the settings line says "${summary}"`);
     check(
       (await page.locator('.pw-summary').getAttribute('aria-expanded')) === 'false',
       `预演 ${at}: the settings are not folded`,

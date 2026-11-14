@@ -25,6 +25,8 @@ export interface WebCharacterPresentation {
    * Part 24k's design board. Every entry has a hex ('#RRGGBB'); exactly one is 'main' when there are several, and `color` is its hex.
    */
   palette?: { hex: string; name: string; role: 'main' | 'accent' }[];
+  /** Part 31 (25e): the character's one picture, by the sha256 of the stored PNG (see web-avatar.ts). Part of the profile, so it goes live with 发布. */
+  avatar?: { id: string };
 }
 export interface WebCharacterProfile {
   template: CharacterTemplate;

@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import type { Clock, RelationshipPreset, TextGenerationRequest } from '../../../packages/contracts/index.ts';
+import type { Clock, TextGenerationRequest } from '../../../packages/contracts/index.ts';
 import { hasCharacterPermission } from '../../../packages/contracts/web-admin-permissions.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
@@ -16,6 +16,7 @@ import {
   type WebCharacterProfile,
 } from './web-character-catalog.ts';
 import { installWebCharacterPreviews } from './web-character-preview-schema.ts';
+import { NEW_PLAYER_RELATIONSHIP } from '../../../packages/contracts/relationships.ts';
 import { freezePreviewReviewModel } from '../admission/web-review-model.ts';
 import { castContextEnabled, castForPreview, castTablesExist, latestPublication } from '../cast/cast-store.ts';
 
@@ -124,7 +125,6 @@ export function webPreviewDTO(row: WebPreviewJob) {
 export const PREVIEW_INPUT_MAX = 4000;
 export const PREVIEW_RUN_MAX = 50;
 export const PREVIEW_NOTE_MAX = 300;
-const RELATIONSHIPS = ['new', 'friend', 'close_friend', 'lover'];
 /** Part 24a: where a preview takes the character's cast view from: none, the latest publication, or the draft (to test before the switch is on). */
 export const PREVIEW_CAST_SOURCES = ['none', 'published', 'draft'] as const;
 export type PreviewCastSource = (typeof PREVIEW_CAST_SOURCES)[number];
@@ -153,7 +153,6 @@ interface QueuedInput {
   requestId: string;
   draftRevision: number;
   profileHash: string;
-  relationship: string;
   message: string;
   simulatedMinute: number | null;
   castSource: PreviewCastSource | null;
@@ -173,12 +172,12 @@ function startFields(input: Record<string, unknown>) {
       /^[a-f0-9]{64}$/.test(input.profileHash),
     'INVALID_DRAFT_REVISION',
   );
-  ensure(RELATIONSHIPS.includes(String(input.relationship)), 'INVALID_RELATIONSHIP');
+  // Part 35: a 预演 has no relationship setting. A body from a tab opened before this change may still carry one: it is allowed
+  // by `keys()` and ignored; every 预演 starts like a new player (NEW_PLAYER_RELATIONSHIP).
   return {
     requestId: input.requestId as string,
     draftRevision: Number(input.draftRevision),
     profileHash: input.profileHash as string,
-    relationship: input.relationship as string,
     simulatedMinute: parseSimulatedTime(input.simulatedTime),
     // null = not asked: none while CAST_CONTEXT_ENABLED is off, the published cast while it is on (see resolveCast).
     castSource: castSourceField(input.castSource),
@@ -332,7 +331,7 @@ export class WebCharacterPreviews {
         label,
         fields.draftRevision,
         fields.profileHash,
-        fields.relationship,
+        NEW_PLAYER_RELATIONSHIP,
         fields.simulatedMinute,
         first.template.schedule.timeZone,
         evalSet?.id ?? null,
@@ -409,7 +408,7 @@ export class WebCharacterPreviews {
       now: at,
       character: profile.template,
       ...(cast ? { cast } : {}),
-      relationship: q.relationship as RelationshipPreset,
+      relationship: NEW_PLAYER_RELATIONSHIP,
       requiredMessageIds: [messageId],
       mustClose: false,
       evidence: [],

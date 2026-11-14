@@ -25,6 +25,19 @@ const deleteGate = `EXISTS(SELECT 1 FROM web_character_purge_gate g
   JOIN web_operations o ON o.principal_id=s.principal_id AND o.world_id=s.world_id AND o.conversation_id=s.conversation_id AND o.character_id=d.character_id
   WHERE o.id=OLD.operation_id AND d.state='purging' AND s.db_cleared_at IS NULL)`;
 const normalize = (sql: string) => sql.replace(/\s+/g, '').replace(/;$/, '');
+/** Part 31: while a conversation is being deleted by the owner (a gate row exists, inside one transaction) its operations' content may be deleted. */
+const conversationGate = `EXISTS(SELECT 1 FROM web_conversation_purge_gate g
+  JOIN web_operations o ON o.world_id=g.world_id AND o.conversation_id=g.conversation_id WHERE o.id=OLD.operation_id)`;
+/** The guarded delete trigger. `withConversationGate` is the form Part 31's runtime step (web-conversation-deletion-schema.ts) installs. */
+export const guardedTriggerSql = (
+  store: WebRuntimeStore,
+  [table, name, error]: (typeof guarded)[number],
+  withConversationGate: boolean,
+) => `CREATE TRIGGER ${name} BEFORE DELETE ON ${table}
+    WHEN NOT (${table.startsWith('web_provider_') && !store.providerAudio ? '0' : oldGate(table.startsWith('web_provider_'))} OR ${deleteGate}${withConversationGate ? ` OR ${conversationGate}` : ''}) BEGIN SELECT RAISE(ABORT,'${error}'); END`;
+export const guardedTables = guarded;
+export const conversationDeletionInstalled = (store: Pick<WebRuntimeStore, 'get'>) =>
+  !!store.get("SELECT 1 FROM sqlite_master WHERE name='web_conversation_deletion_schema'");
 const tables = [
   `CREATE TABLE web_character_deletions(id TEXT PRIMARY KEY,character_id TEXT NOT NULL UNIQUE,
     request_id TEXT NOT NULL UNIQUE,request_hash TEXT NOT NULL,version INTEGER NOT NULL,profile_hash TEXT NOT NULL,
@@ -53,10 +66,7 @@ const preDeletionTrigger = (store: WebRuntimeStore, [table, name, error]: (typeo
           BEGIN SELECT RAISE(ABORT,'${error}'); END`;
 };
 export function installWebCharacterDeletion(store: WebRuntimeStore) {
-  const triggers = guarded.map(
-    ([table, name, error]) => `CREATE TRIGGER ${name} BEFORE DELETE ON ${table}
-    WHEN NOT (${table.startsWith('web_provider_') && !store.providerAudio ? '0' : oldGate(table.startsWith('web_provider_'))} OR ${deleteGate}) BEGIN SELECT RAISE(ABORT,'${error}'); END`,
-  );
+  const triggers = guarded.map((entry) => guardedTriggerSql(store, entry, false));
   const digest = createHash('sha256')
     .update([...tables, ...triggers].join(';\n'))
     .digest('hex');
@@ -116,6 +126,12 @@ export function installWebCharacterDeletion(store: WebRuntimeStore) {
       const name = entry[1],
         current = store.get<{ sql: string }>('SELECT sql FROM sqlite_master WHERE name=?', name)?.sql ?? '';
       if (normalize(current) === normalize(triggers[i]!)) continue;
+      // Part 31: the owner's conversation deletion widens each guard by one more gate; its own step installs and checks that form.
+      if (
+        conversationDeletionInstalled(store) &&
+        normalize(current) === normalize(guardedTriggerSql(store, entry, true))
+      )
+        continue;
       // Named repair: a later migration that rebuilds a guarded table (114 rebuilds web_publication_items) recreates
       // its trigger in the pre-deletion form. Only that exact form is replaced; anything else is still a mismatch.
       ensure(

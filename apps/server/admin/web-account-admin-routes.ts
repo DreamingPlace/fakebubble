@@ -6,6 +6,7 @@ import type { WebCocreation } from '../cocreation/web-cocreation.ts';
 import type { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 import type { WebSystemAdmin } from './web-system-admin.ts';
 import type { WebCastAdmin } from './web-cast-admin.ts';
+import type { WebOwnerOps } from './web-owner-ops.ts';
 
 export async function routeWebAccountAdmin(
   admin: WebAccountAdmin,
@@ -15,6 +16,7 @@ export async function routeWebAccountAdmin(
   chatReview?: WebChatReviewAdmin | null,
   system?: WebSystemAdmin | null,
   cast?: WebCastAdmin | null,
+  ownerOps?: WebOwnerOps | null,
 ): Promise<WebInviteResult | null> {
   const base = '/api/web/local/admin',
     path = req.path;
@@ -57,6 +59,21 @@ export async function routeWebAccountAdmin(
       };
     if (action === 'export')
       return { status: 200, body: chatReview.export(actor, body(['characterId', 'code', 'archived']) as never) };
+    ensure(false, 'NOT_FOUND');
+  }
+  // Part 31: the owner's operations. Each handler checks the owner (arc order: the 角色 grant too) and the body shape itself.
+  if (ownerOps && path.startsWith(`${base}/owner/`)) {
+    auth();
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/owner/`.length);
+    const raw = req.body ?? {};
+    if (action === 'arc-read') return { status: 200, body: ownerOps.arcOrder(actor) };
+    if (action === 'arc-save') return { status: 200, body: ownerOps.saveArcOrder(actor, raw) };
+    if (action === 'previews-delete') return { status: 200, body: ownerOps.deletePreviews(actor, raw) };
+    if (action === 'conversations-delete') return { status: 200, body: ownerOps.deleteConversations(actor, raw) };
+    if (action === 'closed-read') return { status: 200, body: ownerOps.closedAccounts(actor) };
+    if (action === 'closed-policy') return { status: 200, body: ownerOps.saveClosedPolicy(actor, raw) };
+    if (action === 'closed-delete') return { status: 200, body: ownerOps.deleteClosedAccount(actor, raw) };
     ensure(false, 'NOT_FOUND');
   }
   // Part 22b: 概览, 系统状态 and 积分发放 (Part 22c adds 玩家统计 and 消耗表 under stats/). The body goes to the handler unread: each checks its permission before it looks at the body.
@@ -183,6 +200,63 @@ export async function routeWebAccountAdmin(
     if (action === 'export') return { status: 200, body: characters.compareExport(actor, body(['runId']).runId) };
     ensure(false, 'NOT_FOUND');
   }
+  // Part 35: 多轮预演 (scripts, phrase lists, estimate, runs). The session, CSRF and Origin are checked before anything else.
+  if (path.startsWith(`${base}/rehearsal/`)) {
+    auth();
+    ensure(characters, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/rehearsal/`.length);
+    if (action === 'library') {
+      body([]);
+      return { status: 200, body: characters.rehearsalLibrary(actor) };
+    }
+    if (action === 'script-save')
+      return { status: 200, body: characters.rehearsalScriptSave(actor, body(['requestId', 'id', 'name', 'turns'])) };
+    if (action === 'script-delete')
+      return { status: 200, body: characters.rehearsalScriptDelete(actor, body(['requestId', 'id'])) };
+    if (action === 'phrases-save')
+      return {
+        status: 200,
+        body: characters.rehearsalPhrasesSave(actor, body(['requestId', 'customerService', 'advice'])),
+      };
+    const characterId = (value: unknown) => {
+      ensure(typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value), 'INVALID_REQUEST');
+      return value;
+    };
+    if (action === 'items')
+      return { status: 200, body: characters.rehearsalItems(actor, characterId(body(['characterId']).characterId)) };
+    if (action === 'list')
+      return { status: 200, body: characters.rehearsalList(actor, characterId(body(['characterId']).characterId)) };
+    if (action === 'detail') {
+      const value = body(['characterId', 'runId']);
+      return { status: 200, body: characters.rehearsalDetail(actor, characterId(value.characterId), value.runId) };
+    }
+    if (action === 'estimate') {
+      const { characterId: id, ...rest } = body([
+        'characterId',
+        'draftRevision',
+        'profileHash',
+        'source',
+        'models',
+        'withCast',
+      ]);
+      return { status: 200, body: characters.rehearsalEstimate(actor, characterId(id), rest) };
+    }
+    if (action === 'start') {
+      const { characterId: id, ...rest } = body([
+        'characterId',
+        'requestId',
+        'draftRevision',
+        'profileHash',
+        'source',
+        'models',
+        'withCast',
+        'acknowledgeMicros',
+      ]);
+      return { status: 200, body: characters.rehearsalStart(actor, characterId(id), rest) };
+    }
+    ensure(false, 'NOT_FOUND');
+  }
   if (path.startsWith(`${base}/eval-sets/`)) {
     auth();
     ensure(characters, 'NOT_FOUND');
@@ -221,7 +295,7 @@ export async function routeWebAccountAdmin(
     if (path === `${base}/characters/order`) return { status: 200, body: characters.saveOrder(actor, req.body) };
     const match = path.match(
       new RegExp(
-        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-generate|material-audio|material-approve|take-(?:list|audio|estimate|estimate-direction|upload|generate|generate-all|rewrite|select|rename|delete|approve|bundle)|speech-estimate|preview-listen|speech-clips|speech-audio|delete-preview|delete-start|delete-status|history|history-version|draft-history|restore|code-save|checklist-dismiss)$`,
+        `^${base}/characters/([A-Za-z0-9_-]{1,128})/(offline|online|detail|save|discard|preview|publish|review-start|review-status|run-start|run-list|run-detail|preview-detail|previews-status|material-list|material-prepare|material-upload|material-generate|material-audio|material-approve|take-(?:list|audio|estimate|estimate-direction|upload|generate|generate-all|rewrite|select|rename|delete|approve|bundle)|avatar-upload|avatar-read|speech-estimate|preview-listen|speech-clips|speech-audio|delete-preview|delete-start|delete-status|history|history-version|draft-history|restore|code-save|checklist-dismiss)$`,
       ),
     );
     ensure(match, 'NOT_FOUND');
@@ -264,6 +338,10 @@ export async function routeWebAccountAdmin(
       await characters.materialCarry(actor, id, prepared.materialId);
       return { status: 200, body: prepared };
     }
+    if (match[2] === 'avatar-upload')
+      return { status: 200, body: await characters.avatarUpload(actor, id, body(['base64'])) };
+    if (match[2] === 'avatar-read')
+      return { status: 200, body: await characters.avatarRead(actor, id, body(['avatarId'])) };
     if (match[2] === 'material-upload')
       return {
         status: 200,
@@ -375,7 +453,8 @@ export async function routeWebAccountAdmin(
             'requestId',
             'draftRevision',
             'profileHash',
-            'relationship',
+            // Part 35: a 预演 has no relationship setting; a body from an older open tab may still carry one (ignored).
+            ...(req.body && Object.hasOwn(req.body, 'relationship') ? ['relationship'] : []),
             'message',
             ...(req.body && Object.hasOwn(req.body, 'simulatedTime') ? ['simulatedTime'] : []),
             ...(req.body && Object.hasOwn(req.body, 'castSource') ? ['castSource'] : []),
@@ -392,7 +471,8 @@ export async function routeWebAccountAdmin(
             'requestId',
             'draftRevision',
             'profileHash',
-            'relationship',
+            // Part 35: a 预演 has no relationship setting; a body from an older open tab may still carry one (ignored).
+            ...(req.body && Object.hasOwn(req.body, 'relationship') ? ['relationship'] : []),
             ...(req.body && Object.hasOwn(req.body, 'label') ? ['label'] : []),
             ...(req.body && Object.hasOwn(req.body, 'simulatedTime') ? ['simulatedTime'] : []),
             ...(req.body && Object.hasOwn(req.body, 'castSource') ? ['castSource'] : []),

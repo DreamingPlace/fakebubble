@@ -22,6 +22,7 @@ import type { FakeFish } from '../generation/web-provider-runner.ts';
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
 import { clipPromptHash } from '../characters/clip-direction-prompt.ts';
 import type { ClipDirectionModel } from '../characters/web-clip-direction.ts';
+import type { RehearsalJudgeModel } from '../characters/web-rehearsal-runner.ts';
 
 async function session<T>(
   binding: WebGenerationBinding,
@@ -216,6 +217,27 @@ export function webCloudDirection(binding: WebGenerationBinding): ClipDirectionM
               ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
               await authorize?.();
             }),
+        );
+        if (!result.ok) throw new DomainError(result.code);
+        return result.value;
+      }),
+  };
+}
+
+/**
+ * Part 35: the 多轮预演 judge through the isolated generation Worker. The model is named by the caller (a house reviewer) and the
+ * Worker runs only the pinned judge prompts. An older Worker without `judge` fails the call (nothing is sent).
+ */
+export function webCloudJudge(binding: WebGenerationBinding): RehearsalJudgeModel {
+  return {
+    completeJson: (input, signal, authorize) =>
+      session(binding, signal, async (remote) => {
+        ensure(remote.judge, 'WEB_GENERATION_ROUTE_MISSING');
+        const result = await remote.judge(input, () =>
+          callback(async () => {
+            ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
+            await authorize?.();
+          }),
         );
         if (!result.ok) throw new DomainError(result.code);
         return result.value;

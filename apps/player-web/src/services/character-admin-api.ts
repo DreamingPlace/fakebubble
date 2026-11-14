@@ -30,7 +30,19 @@ export type CharacterProfile = {
     color?: string;
     /** Part 24j: the colours the profile template listed, in order (stored now, used by the player page after 24k). */
     palette?: { hex: string; name: string; role: 'main' | 'accent' }[];
+    /** Part 31 (25e): the character's one picture, by the sha256 of the stored PNG. */
+    avatar?: { id: string };
   };
+};
+/** Part 31 (25e): what the server says about a stored picture (the stored one is a square PNG of at most 512 px). */
+export type AvatarInfo = {
+  id: string;
+  width: number;
+  height: number;
+  bytes: number;
+  source: 'png' | 'jpeg' | 'webp';
+  sourceWidth: number;
+  sourceHeight: number;
 };
 /** Part 24j: the 角色代码 and what a profile import recorded against it. */
 export type ProfileMeta = {
@@ -114,6 +126,8 @@ export type CharacterDetail = {
   online?: boolean;
   /** Part 24j. Absent (an older answer, a test double) reads as 'not available': no code field, no checklist. */
   profileMeta?: ProfileMeta;
+  /** Part 31: whether pictures exist here, and the draft's (else the live) one. Absent = no upload is offered. */
+  avatar?: { available: boolean; current: AvatarInfo | null };
   /** Part 24k-1. Absent reads as 'not available': no 生成 and no 试听 are offered. */
   speech?: {
     available: boolean;
@@ -259,7 +273,21 @@ function profile(v: unknown): CharacterProfile {
               return { hex: string(c.hex), name: string(c.name), role: c.role };
             }),
           }),
+      ...(d.avatar === undefined ? {} : { avatar: { id: string(object(d.avatar).id) } }),
     },
+  };
+}
+function avatarInfo(v: unknown): AvatarInfo {
+  const r = object(v);
+  if (r.source !== 'png' && r.source !== 'jpeg' && r.source !== 'webp') throw invalid();
+  return {
+    id: string(r.id),
+    width: num(r.width),
+    height: num(r.height),
+    bytes: num(r.bytes),
+    source: r.source,
+    sourceWidth: num(r.sourceWidth),
+    sourceHeight: num(r.sourceHeight),
   };
 }
 function profileMeta(v: unknown): ProfileMeta {
@@ -382,6 +410,14 @@ export class CharacterAdminClient {
       previewAvailable: flag(r.previewAvailable),
       ...(r.online === undefined ? {} : { online: flag(r.online) }),
       ...(r.profileMeta === undefined ? {} : { profileMeta: profileMeta(r.profileMeta) }),
+      ...(r.avatar === undefined
+        ? {}
+        : {
+            avatar: {
+              available: flag(object(r.avatar).available),
+              current: object(r.avatar).current === null ? null : avatarInfo(object(r.avatar).current),
+            },
+          }),
       ...(r.speech === undefined ? {} : { speech: speechOf(object(r.speech)) }),
     };
   }
@@ -407,7 +443,7 @@ export class CharacterAdminClient {
   }
   async startPreview(
     id: string,
-    input: { requestId: string; draftRevision: number; profileHash: string; relationship: string; message: string },
+    input: { requestId: string; draftRevision: number; profileHash: string; message: string },
   ) {
     return preview(await this.call(id, 'review-start', input));
   }
@@ -535,6 +571,16 @@ export class CharacterAdminClient {
     input: { requestId: string; draftRevision: number; profileHash: string; model?: string },
   ) {
     return string(object(await this.call(id, 'material-prepare', input)).materialId);
+  }
+  /** Part 31: the picture upload (a file of at most 2 MB as base64). Returns what the server stored; the form then saves the draft with it. */
+  async uploadAvatar(id: string, base64: string): Promise<AvatarInfo> {
+    return avatarInfo(object(await this.call(id, 'avatar-upload', { base64 })).avatar);
+  }
+  /** The stored picture of the character (a draft's may not be published yet) as a data URL. */
+  async readAvatar(id: string, avatarId: string): Promise<string> {
+    const r = object(await this.call(id, 'avatar-read', { avatarId }));
+    if (r.contentType !== 'image/png') throw invalid();
+    return `data:image/png;base64,${string(r.base64)}`;
   }
   async upload(id: string, materialId: string, kind: 'welcome' | 'footer', base64: string, lineId?: string) {
     await this.call(id, 'material-upload', { materialId, kind, base64, ...(lineId === undefined ? {} : { lineId }) });

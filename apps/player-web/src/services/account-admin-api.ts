@@ -10,6 +10,7 @@ import { cocreationPointsOk, type CocreationPointsSettings } from '../../../../p
 import { CastAdminClient } from './cast-admin-api.ts';
 import { ProfileImportClient } from './profile-import-api.ts';
 import { CocreationAdminClient } from './cocreation-admin-api.ts';
+import { OwnerAdminClient } from './owner-admin-api.ts';
 import { ConversationsAdminClient } from './conversations-admin-api.ts';
 import { PreviewAdminClient } from './preview-admin-api.ts';
 import { InviteAdminApi } from './invite-admin-api.ts';
@@ -211,12 +212,15 @@ export class AccountAdminApi extends InviteAdminApi {
     (path, body) => this.request('/characters/' + path, body),
     (path, body) => this.request('/eval-sets/' + path, body),
     (path, body) => this.request('/review-compare/' + path, body),
+    (path, body) => this.request('/rehearsal/' + path, body),
   );
   readonly cast = new CastAdminClient((path, body) => this.request('/cast/' + path, body));
   /** Part 24j: 导入角色资料. */
   readonly profileImport = new ProfileImportClient((path, body) => this.request('/profile-import/' + path, body));
   readonly cocreation = new CocreationAdminClient((path, body) => this.request('/cocreation/' + path, body));
   readonly conversations = new ConversationsAdminClient((path, body) => this.request('/conversations/' + path, body));
+  /** Part 31: the owner's operations (home arc order, deleting test records, closed accounts). */
+  readonly owner = new OwnerAdminClient((path, body) => this.request('/owner/' + path, body));
   constructor(fetcher?: typeof fetch) {
     super(fetcher, '/api/web/provider/admin');
   }

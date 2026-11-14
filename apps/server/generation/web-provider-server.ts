@@ -28,6 +28,8 @@ import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
+import { OWNER_BODY_LIMIT } from '../admin/web-owner-ops.ts';
+import { AVATAR_BODY_LIMIT, avatarHeaders } from '../characters/web-avatar.ts';
 import { webWelcomeLinesInstalled } from '../characters/web-welcome-schema.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
@@ -434,6 +436,13 @@ export class WebProviderServer {
         this.publicAudio(res, welcome[1]!);
         return;
       }
+      const image = path.match(new RegExp(`^${API}/public-image/([a-f0-9]{64})$`));
+      if (req.method === 'GET' && image) {
+        const found = await this.application.avatars.readPublic(image[1]!);
+        res.writeHead(200, avatarHeaders(found.bytes.length));
+        res.end(Buffer.from(found.bytes));
+        return;
+      }
       if (req.method === 'GET' && path === `${API}/admin/session`) {
         this.json(res, 200, this.inviteAdmin.session(this.cookie(req, `${this.config.cookieName}_admin`)));
         return;
@@ -459,6 +468,18 @@ export class WebProviderServer {
             },
             materialUpload[1]!,
           );
+        const avatarUpload = path.match(
+          /^\/api\/web\/provider\/admin\/characters\/([A-Za-z0-9_-]{1,128})\/avatar-upload$/,
+        );
+        if (avatarUpload)
+          this.application.characterAdmin.authorizeAvatarUpload(
+            {
+              cookie: this.cookie(req, `${this.config.cookieName}_admin`),
+              csrf: req.headers['x-csrf-token'],
+              origin: req.headers.origin,
+            },
+            avatarUpload[1]!,
+          );
         const characterWrite =
           /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save|cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply)|characters\/[A-Za-z0-9_-]{1,128}\/(?:code-save|checklist-dismiss))$/.test(
             path,
@@ -481,17 +502,21 @@ export class WebProviderServer {
           trustedIpHash: this.ipHash(req),
           body: await this.body(
             req,
-            materialUpload
-              ? 8_001_024
-              : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
-                ? CAST_BODY_LIMIT
-                : bulkWrite
-                  ? 786_432
-                  : characterWrite
-                    ? PROFILE_BODY_LIMIT
-                    : path.startsWith(`${API}/cocreation/`)
-                      ? COCREATION_BODY_LIMIT
-                      : 8192,
+            avatarUpload
+              ? AVATAR_BODY_LIMIT
+              : materialUpload
+                ? 8_001_024
+                : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
+                  ? CAST_BODY_LIMIT
+                  : bulkWrite
+                    ? 786_432
+                    : characterWrite
+                      ? PROFILE_BODY_LIMIT
+                      : path.startsWith(`${API}/admin/owner/`)
+                        ? OWNER_BODY_LIMIT
+                        : path.startsWith(`${API}/cocreation/`)
+                          ? COCREATION_BODY_LIMIT
+                          : 8192,
           ),
         };
         const result =
@@ -507,6 +532,7 @@ export class WebProviderServer {
             this.application.chatReview,
             this.application.system,
             this.application.cast,
+            this.application.ownerOps,
           )) ??
           routeWebCocreation(this.application.cocreation, input) ??
           routeWebBilling(this.application.billing, input) ??

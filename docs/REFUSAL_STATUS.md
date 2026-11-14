@@ -52,6 +52,7 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `INVALID_RECOVERY_POINT` (was 409)
 - `INVALID_RELATIONSHIP` (was 409)
 - `INVALID_REQUEST`
+- `AVATAR_INVALID` (Part 31)
 - `INVALID_REQUEST_ID` (was 409)
 - `INVALID_RUN_INPUTS` (was 409)
 - `INVALID_RUN_LABEL` (was 409)
@@ -136,6 +137,10 @@ What changed against the old behaviour (everything the old ladder did not name a
 - `CHARACTER_DRAFT_LIMIT`
 - `CHARACTER_MATERIALS_REQUIRED`
 - `CHARACTER_OFFLINE`
+- `ARC_ORDER_STALE` (Part 31)
+- `AVATAR_NOT_FOUND` (Part 31)
+- `CONVERSATION_DELETE_BUSY` (Part 31)
+- `PREVIEW_DELETE_BUSY` (Part 31)
 - `CHARACTER_ONLINE`
 - `CHARACTER_ORDER_CONFLICT`
 - `CHARACTER_PUBLICATION_BUSY`
@@ -202,6 +207,7 @@ What changed against the old behaviour (everything the old ladder did not name a
 ## 413 — body too large (1)
 
 - `PAYLOAD_TOO_LARGE` (was 409)
+- `AVATAR_TOO_LARGE` (Part 31)
 
 ## 429 — too many requests (9)
 

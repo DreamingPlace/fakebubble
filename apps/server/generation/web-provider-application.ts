@@ -1,3 +1,4 @@
+import type { PasswordService } from '../admin/web-admin-password.ts';
 import { effectiveTier } from '../admission/web-model-settings.ts';
 import { installReviewModelSchema } from '../admission/web-review-model.ts';
 import { installMissingDeepSeekPrices } from './web-provider-configuration.ts';
@@ -6,6 +7,10 @@ import { ensureRegisteredBonus, signupBonusEmailKey, type BonusEmailKey } from '
 import { DEFAULT_PLAYER_MODEL, isPlayerModelId } from '../../../packages/contracts/player-models.ts';
 import { billedModelAt } from '../admission/web-model-settings.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
+import { installWebConversationDeletion } from '../characters/web-conversation-deletion.ts';
+import { installWebOwnerOps } from '../admin/web-owner-ops-schema.ts';
+import { WebAvatars, installWebAvatars } from '../characters/web-avatar.ts';
+import { WebOwnerOps } from '../admin/web-owner-ops.ts';
 import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { chooseWelcome, welcomeClipFor } from '../characters/web-welcome-choice.ts';
@@ -83,6 +88,8 @@ export interface WebPlayerAccountsConfig {
   turnstileSiteKey?: string | null | undefined;
   /** The audited purge path behind account deletion (absent = the delete route answers NOT_FOUND). */
   purger?: AccountPurger | undefined;
+  /** Part 32: where password hashes are computed (the business Worker's KDF entrypoint). Absent = in this process. */
+  passwords?: { admin: PasswordService; player: PasswordService } | undefined;
 }
 
 export const WEB_PROVIDER_API = '/api/web/provider';
@@ -181,6 +188,8 @@ export class WebProviderApplication {
   readonly billing: WebBilling;
   /** CHAT_REVIEW_ENABLED (Part 19): 测试对话. Null with the flag off (and on a database older than schema 122). */
   readonly chatReview: WebChatReviewAdmin | null;
+  readonly ownerOps: WebOwnerOps;
+  readonly avatars: WebAvatars;
   /** GUEST_GRACE_ENABLED: 0 when off. */
   readonly graceMs: number;
   /** Null on a database older than schema 118. */
@@ -237,6 +246,7 @@ export class WebProviderApplication {
     const chatReviewOn = store.chatReview === true && chatReviewTablesExist(store);
     this.inviteAdmin = new WebAccountAdmin(store, clock, config.origin, {
       ...(mailer ? { mailer } : {}),
+      ...(players.passwords ? { passwords: players.passwords.admin } : {}),
       ...(chatReviewOn ? { features: { chatReview: true } } : {}),
     });
     this.chatReview = chatReviewOn ? new WebChatReviewAdmin(store, clock, this.inviteAdmin) : null;
@@ -253,10 +263,17 @@ export class WebProviderApplication {
     installWebCharacterCatalog(store);
     installWebCharacterMaterials(store);
     installWebCharacterDeletion(store);
+    // Part 31: the owner's operations (digest-checked runtime steps; no numbered migration).
+    installWebOwnerOps(store);
+    installWebConversationDeletion(store);
+    this.ownerOps = new WebOwnerOps(store, clock, this.inviteAdmin);
+    installWebAvatars(store);
+    this.avatars = new WebAvatars(store, clock);
     this.characterDeletion = new WebCharacterDeletion(store, clock);
     this.characterAdmin = new WebCharacterAdmin(store, clock, this.inviteAdmin);
     this.characterAdmin.enableMaterials(new WebCharacterMaterials(store, clock));
     this.characterAdmin.enableDeletion(this.characterDeletion);
+    this.characterAdmin.enableAvatars(this.avatars);
     // Part 24j: 角色代码 table (installed idempotently, digest-checked) and the profile import.
     this.characterAdmin.enableProfileImport();
     // Part 24l: 下线 / 重新上线 requests and the per-admin sidebar order (installed idempotently, digest-checked).
@@ -277,6 +294,7 @@ export class WebProviderApplication {
           requestKey: Buffer.from(config.requestKey, 'base64url'),
           clock,
           mailer: players.mailer ?? null,
+          ...(players.passwords ? { passwords: players.passwords.player } : {}),
           signupEnabled: players.signupEnabled === true && !!players.mailer,
           dailyCap: players.dailyCap ?? PLAYER_LIMITS.defaultDailyCap,
           ...(players.graceMs ? { graceMs: players.graceMs } : {}),
@@ -611,7 +629,7 @@ export class WebProviderApplication {
         characterId: entry.characterId,
         displayName: entry.presentation.displayName,
         publicDescription: entry.presentation.publicDescription,
-        portraitUrl: null,
+        portraitUrl: entry.presentation.avatar ? `${API}/public-image/${entry.presentation.avatar.id}` : null,
         theme: null,
         mainColor: entry.presentation.color ?? null,
         // Part 24k-2: the colours as the profile lists them (hex only) and the birthday, both public and non-sensitive.

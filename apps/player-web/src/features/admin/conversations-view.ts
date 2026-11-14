@@ -7,7 +7,11 @@ import type {
 } from '../../services/conversations-admin-api.ts';
 import { h } from '../cocreation/h.ts';
 import { downloadText } from './preview/export.ts';
+import type { OwnerAdminClient } from '../../services/owner-admin-api.ts';
 import { dataTable } from './ui/data-table.ts';
+import { disclosureDetails } from './ui/disclosure.ts';
+import type { ConfirmInPlace } from './ui/inline-confirm.ts';
+import { segmented } from './ui/segmented.ts';
 import { toolbar } from './ui/toolbar.ts';
 import { errorLine, sentenceOf } from './ui/error-line.ts';
 
@@ -28,6 +32,25 @@ export const conversationsCopy = {
   next: '下一页',
   page: (page: number, pages: number, total: number) => `第 ${page} / ${pages} 页 · 共 ${total} 条`,
   exported: (name: string, lines: number) => `已导出 ${name}（${lines} 行）。`,
+  // Part 31 (owner): deleting test records for good, and closed accounts.
+  deleteSelected: '删除所选…',
+  deleteOne: '删除此对话…',
+  confirmTitle: '删除测试对话',
+  confirm: (n: number) => `永久删除 ${n} 条测试对话？聊天文字无法恢复；费用、用量和额度记录只保留数量。`,
+  confirmGo: (n: number) => `永久删除 ${n} 条`,
+  done: (deleted: number, skipped: number) =>
+    skipped > 0 ? `已删除 ${deleted} 条；${skipped} 条还有回复进行中，没有删除。` : `已删除 ${deleted} 条。`,
+  closedTitle: '已关闭账号',
+  closedPolicy: '账号关闭后的聊天文字',
+  closedRetention: '按保留期',
+  closedImmediate: '立即',
+  closedPolicyHint: '按保留期：匿名保留 180 天。立即：账号关闭时一并删除。',
+  closedEmpty: '没有保留聊天文字的已关闭账号。',
+  closedDelete: '删除聊天…',
+  closedConfirm: (number: string) => `现在删除玩家编号 ${number} 剩余的全部聊天文字？无法恢复。`,
+  closedConfirmGo: '立即删除',
+  closedDone: (lines: number) => `已删除 ${lines} 行聊天文字。`,
+  closedSaved: '已保存。',
 };
 
 const keyOf = (row: Pick<ReviewListRow, 'characterId' | 'code' | 'archived'>): ReviewKey => ({
@@ -51,6 +74,12 @@ export function conversationsView(
     status: (text: string) => void;
     disposed: () => boolean;
     save?: (filename: string, csv: string) => void;
+    /** Part 31: the owner's deletions and the 已关闭账号 panel. Absent (any other administrator) = none of it is drawn. */
+    owner?: Pick<OwnerAdminClient, 'deleteConversations' | 'closedRead' | 'closedPolicy' | 'closedDelete'>;
+    /** Whether the signed-in administrator is the owner (read when the list loads, after sign-in). */
+    isOwner?: () => boolean;
+    confirm?: ConfirmInPlace;
+    toast?: (text: string, tone?: 'ok' | 'info' | 'warn' | 'danger') => void;
   },
 ) {
   const save = deps.save ?? ((name: string, csv: string) => downloadText(name, csv, 'text/csv'));
@@ -60,42 +89,61 @@ export function conversationsView(
   let wanted: (ReviewKey & { page: number }) | null = null;
   let open: ReviewKey | null = null;
   let pagerShown = false;
+  let closedLoad: (() => Promise<void>) | null = null;
 
-  const table = dataTable<ReviewListRow>({
-    columns: [
-      { key: 'label', label: '对话', sortable: true },
-      {
-        key: 'state',
-        label: '状态',
-        render: (r) => (r.archived ? conversationsCopy.deletedOn(r.expiresOn ?? '') : conversationsCopy.live),
-        sortValue: (r) => (r.archived ? 1 : 0),
-        sortable: true,
-      },
-      {
-        key: 'messages',
-        label: '消息数',
-        align: 'end',
-        sortable: true,
-        sortValue: (r) => r.messages,
-        render: (r) => String(r.messages),
-      },
-      { key: 'firstAt', label: '开始（角色当地时间）', sortable: true },
-      { key: 'lastAt', label: '最近（角色当地时间）', sortable: true },
-      {
-        key: 'failed',
-        label: '失败回复',
-        align: 'end',
-        sortable: true,
-        sortValue: (r) => r.failed,
-        render: (r) => String(r.failed),
-      },
-    ],
-    rowKey: (r) => `${r.characterId}:${r.code}:${r.archived ? 'a' : 'l'}`,
-    emptyText: conversationsCopy.empty,
-    caption: conversationsCopy.title,
-    openOn: 'click',
-    onRowOpen: (r) => openTranscript(keyOf(r), 0),
-  });
+  const makeTable = (owned: boolean) =>
+    dataTable<ReviewListRow>({
+      columns: [
+        { key: 'label', label: '对话', sortable: true },
+        {
+          key: 'state',
+          label: '状态',
+          render: (r) => (r.archived ? conversationsCopy.deletedOn(r.expiresOn ?? '') : conversationsCopy.live),
+          sortValue: (r) => (r.archived ? 1 : 0),
+          sortable: true,
+        },
+        {
+          key: 'messages',
+          label: '消息数',
+          align: 'end',
+          sortable: true,
+          sortValue: (r) => r.messages,
+          render: (r) => String(r.messages),
+        },
+        { key: 'firstAt', label: '开始（角色当地时间）', sortable: true },
+        { key: 'lastAt', label: '最近（角色当地时间）', sortable: true },
+        {
+          key: 'failed',
+          label: '失败回复',
+          align: 'end',
+          sortable: true,
+          sortValue: (r) => r.failed,
+          render: (r) => String(r.failed),
+        },
+      ],
+      rowKey: (r) => `${r.characterId}:${r.code}:${r.archived ? 'a' : 'l'}`,
+      emptyText: conversationsCopy.empty,
+      caption: conversationsCopy.title,
+      openOn: 'click',
+      onRowOpen: (r) => openTranscript(keyOf(r), 0),
+      ...(owned && deps.owner && deps.confirm
+        ? {
+            bulkActions: [
+              {
+                label: conversationsCopy.deleteSelected,
+                danger: true,
+                run: (rows: ReviewListRow[]) => askDelete(rows.map(keyOf)),
+              },
+            ],
+          }
+        : {}),
+    });
+  // The owner's table carries the checkboxes and the delete bar; every other administrator gets the read-only one (the page decides at load).
+  const plainTable = makeTable(false);
+  // (built the first time the owner opens the list: no other administrator's page holds a checkbox, hidden or not)
+  let ownerTable: ReturnType<typeof makeTable> | null = null;
+  let table = plainTable;
+  const confirmHost = h('div', { class: 'review-confirm' });
   const characterFilter = toolbar({
     title: conversationsCopy.title,
     filters: [
@@ -118,17 +166,120 @@ export function conversationsView(
       void deps.run(() => load());
     },
   });
+  const closedNode = deps.owner ? closedPanel() : null;
+  if (closedNode) closedNode.hidden = true;
   const listArea = h(
     'div',
     { class: 'review-list' },
     characterFilter.root,
     h('p', { class: 'admin-hint', text: conversationsCopy.hint }),
-    table.root,
+    confirmHost,
+    plainTable.root,
+    closedNode,
   );
   const pager = h('div', { class: 'review-pager', hidden: true });
   const detailArea = h('div', { class: 'review-detail', hidden: true });
   root.replaceChildren(listArea, pager, detailArea);
 
+  /** Part 31: one question naming the count, then the deletion; the list is read again either way. */
+  async function askDelete(keys: ReviewKey[], afterDone?: () => void) {
+    if (!deps.owner || !deps.confirm || keys.length === 0) return;
+    const yes = await deps.confirm(
+      {
+        title: conversationsCopy.confirmTitle,
+        message: conversationsCopy.confirm(keys.length),
+        confirmLabel: conversationsCopy.confirmGo(keys.length),
+      },
+      confirmHost,
+    );
+    if (!yes || deps.disposed()) return;
+    await deps.run(async () => {
+      const result = await deps.owner!.deleteConversations(keys);
+      deps.toast?.(conversationsCopy.done(result.deleted, result.skipped), result.skipped > 0 ? 'warn' : 'ok');
+      afterDone?.();
+      await load();
+    });
+  }
+  function closedPanel() {
+    const body = h('div', { class: 'closed-body' });
+    const rowsHost = h('div', { class: 'closed-rows' });
+    const hint = h('p', { class: 'admin-hint', text: conversationsCopy.closedPolicyHint });
+    const state = { policy: 'retention' as 'retention' | 'immediate' };
+    const pick = segmented(
+      conversationsCopy.closedPolicy,
+      [
+        { id: 'retention', label: conversationsCopy.closedRetention },
+        { id: 'immediate', label: conversationsCopy.closedImmediate },
+      ] as const,
+      state.policy,
+      (policy) =>
+        void deps.run(async () => {
+          const next = await deps.owner!.closedPolicy(policy);
+          state.policy = next.policy;
+          deps.toast?.(conversationsCopy.closedSaved, 'ok');
+          paintClosed(next);
+        }),
+    );
+    const detailsNode = h('details', { class: 'closed-panel', attrs: { open: '' } });
+    disclosureDetails(detailsNode, conversationsCopy.closedTitle);
+    detailsNode.append(
+      h('div', { class: 'closed-policy' }, h('span', { text: conversationsCopy.closedPolicy }), pick.root),
+      hint,
+      body,
+    );
+    body.append(rowsHost);
+    const paintClosed = (view: Awaited<ReturnType<NonNullable<typeof deps.owner>['closedRead']>>) => {
+      state.policy = view.policy;
+      pick.set(view.policy);
+      if (view.rows.length === 0) {
+        rowsHost.replaceChildren(h('p', { class: 'admin-empty', text: conversationsCopy.closedEmpty }));
+        return;
+      }
+      rowsHost.replaceChildren(
+        h(
+          'table',
+          { class: 'admin-table closed-table', attrs: { 'aria-label': conversationsCopy.closedTitle } },
+          h('thead', {}, h('tr', {}, h('th', { text: '玩家编号' }), h('th', { text: '关闭日期' }), h('th', {}))),
+          h(
+            'tbody',
+            {},
+            ...view.rows.map((row) => {
+              const go = h('button', {
+                class: 'admin-secondary is-danger',
+                text: conversationsCopy.closedDelete,
+                attrs: { type: 'button' },
+              });
+              const cell = h('td', { class: 'closed-act' }, go);
+              go.addEventListener(
+                'click',
+                () =>
+                  void (async () => {
+                    const yes = await deps.confirm?.(
+                      {
+                        title: conversationsCopy.closedTitle,
+                        message: conversationsCopy.closedConfirm(row.playerNumber),
+                        confirmLabel: conversationsCopy.closedConfirmGo,
+                      },
+                      confirmHost,
+                    );
+                    if (!yes || deps.disposed()) return;
+                    await deps.run(async () => {
+                      const result = await deps.owner!.closedDelete(row.playerNumber);
+                      deps.toast?.(conversationsCopy.closedDone(result.lines), 'ok');
+                      paintClosed(await deps.owner!.closedRead());
+                      await load();
+                    });
+                  })(),
+              );
+              return h('tr', {}, h('td', { text: row.playerNumber }), h('td', { text: row.closedOn }), cell);
+            }),
+          ),
+        ),
+      );
+    };
+    closedLoad = async () => paintClosed(await deps.owner!.closedRead());
+    return detailsNode;
+  }
   const setCharacters = (characters: { characterId: string; label: string }[]) => {
     const select = characterFilter.root.querySelector<HTMLSelectElement>('select');
     if (!select) return;
@@ -140,8 +291,18 @@ export function conversationsView(
   async function load() {
     const result = await deps.api.list({ characterId, scope, page: listPage });
     if (deps.disposed()) return;
+    const owned = !!deps.owner && deps.isOwner?.() === true;
+    if (owned && !ownerTable) {
+      ownerTable = makeTable(true);
+      plainTable.root.after(ownerTable.root);
+    }
+    plainTable.root.hidden = owned;
+    if (ownerTable) ownerTable.root.hidden = !owned;
+    if (closedNode) closedNode.hidden = !owned;
+    table = owned && ownerTable ? ownerTable : plainTable;
     setCharacters(result.characters);
     table.setRows(result.rows);
+    if (owned && closedLoad) await closedLoad().catch(() => undefined);
     const pages = Math.max(1, Math.ceil(result.total / result.pageSize));
     pagerShown = pages > 1;
     pager.hidden = !pagerShown;
@@ -240,6 +401,19 @@ export function conversationsView(
         h('span', { class: 'admin-bar-spacer' }),
         exportOne,
         exportAll,
+        ...(deps.owner && deps.confirm && deps.isOwner?.() === true
+          ? [
+              (() => {
+                const del = h('button', {
+                  class: 'admin-secondary is-danger',
+                  text: conversationsCopy.deleteOne,
+                  attrs: { type: 'button' },
+                });
+                del.addEventListener('click', () => void askDelete([key], () => back.click()));
+                return del;
+              })(),
+            ]
+          : []),
       ),
       nav(),
       h('ol', { class: 'review-lines' }, ...detail.lines.map(lineNode)),
@@ -258,7 +432,8 @@ export function conversationsView(
   return {
     load,
     clear: () => {
-      table.setRows([]);
+      plainTable.setRows([]);
+      ownerTable?.setRows([]);
       wanted = null;
       open = null;
       detailArea.replaceChildren();
