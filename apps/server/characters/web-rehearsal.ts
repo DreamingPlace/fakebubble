@@ -652,7 +652,10 @@ export class WebRehearsal {
         key,
         model: column.model,
         writer: column.writer,
-        label: rehearsalColumnLabel(key),
+        // 现行 / 新 is named only when the run compares writers; a run of 现行 columns reads as it always did.
+        label: info.models.some((k) => k.endsWith('-v8'))
+          ? rehearsalColumnLabel(key)
+          : REHEARSAL_MODEL_LABELS[column.model],
         cells,
         counts: countReplies(analysed, lists, {
           unconfirmed: cells.filter((c) => c.state === 'unconfirmed').length,

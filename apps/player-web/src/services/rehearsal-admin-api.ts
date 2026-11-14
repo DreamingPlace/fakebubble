@@ -1,7 +1,6 @@
 import {
   REHEARSAL_MODEL_IDS,
   parseRehearsalColumn,
-  rehearsalColumnLabel,
   type RehearsalCell,
   type RehearsalCellState,
   type RehearsalCounts,
@@ -226,7 +225,7 @@ export class RehearsalAdminClient {
           key,
           model: model(x.model),
           writer: oneOf(x.writer, ['v7', 'v8'] as const),
-          label: rehearsalColumnLabel(key),
+          label: string(x.label),
           cells: rows(x.cells).map(cell),
           counts: counts(x.counts),
         };

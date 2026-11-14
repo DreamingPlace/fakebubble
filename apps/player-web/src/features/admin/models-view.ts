@@ -254,12 +254,12 @@ export function modelsView(
   let writerView: WriterSettingView | null = null;
   let writerPending: { id: string; to: WriterChoice } | null = null;
   const writerHost = h('section', {
-    class: 'models-card models-review models-writer',
+    class: 'models-card models-writer',
     attrs: { 'aria-label': '回复写法' },
     hidden: true,
   });
   const writerConfirm = h('div', { class: 'models-confirm' });
-  const writerNote = h('p', { class: 'admin-hint models-review-note', text: '只影响此后发送的消息。' });
+  const writerNote = h('p', { class: 'admin-hint models-writer-note', text: '只影响此后发送的消息。' });
   let writerSwitch: ReturnType<typeof segmented<WriterChoice>> | null = null;
   function paintWriter() {
     const w = writerView;
@@ -275,7 +275,7 @@ export function modelsView(
     writerHost.replaceChildren(
       h(
         'div',
-        { class: 'models-review-head' },
+        { class: 'models-writer-head' },
         h('h3', { text: '回复写法' }),
         h('span', { class: 'models-pill is-on', text: `当前：${WRITER_LABELS[w.writer]}` }),
         writerSwitch.root,

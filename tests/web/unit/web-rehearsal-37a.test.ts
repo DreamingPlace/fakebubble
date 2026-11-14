@@ -382,7 +382,7 @@ test('37a columns: a run stored before this Part (a model key without a writer) 
   const detail = f.chars.rehearsalDetail(f.auth, CHARACTER, runId);
   assert.deepEqual(
     detail.columns.map((c) => [c.key, c.writer, c.label]),
-    [['deepseek', 'v7', 'DeepSeek·现行']],
+    [['deepseek', 'v7', 'DeepSeek']],
   );
   assert.equal(
     f.store.get<{ models_json: string }>('SELECT models_json FROM web_rehearsal_runs')!.models_json,
