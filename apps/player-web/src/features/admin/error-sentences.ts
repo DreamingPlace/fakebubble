@@ -39,9 +39,9 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   INVALID_PROFILE_CODE: '角色代码须是 2–12 位的字母、数字、_ 或 -。',
   // ---- Part 31: 头像, 首页顺序, deleting test records ----
   AVATAR_TOO_LARGE: '头像文件超过 2 MB，请压缩后再传。',
-  AVATAR_FORMAT: '头像只支持 PNG、JPEG 或 WebP（不支持 SVG 和动图）。',
+  AVATAR_FORMAT: '头像只支持 PNG、JPEG 或 WebP（不支持 SVG 和动图）；请在后台页面里选图。',
   AVATAR_INVALID: '这个头像文件无法读取，请换一张图片。',
-  AVATAR_DIMENSIONS: '图片尺寸不合适：至少 64×64，最长边不超过 4096，总像素不超过 800 万。',
+  AVATAR_DIMENSIONS: '图片太小：至少 64×64。',
   AVATAR_UNAVAILABLE: '这个环境还不支持头像。',
   AVATAR_NOT_FOUND: '草稿里的头像已不在，请重新上传后再保存。',
   MEDIA_FILE_UNAVAILABLE: '头像文件暂时读不到，请稍后重试。',
