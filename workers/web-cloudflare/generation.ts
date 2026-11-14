@@ -13,6 +13,8 @@ import type {
   WebCompleteWire,
   WebEmbedWire,
   WebGenerationSession,
+  WebJudgeRPCResult,
+  WebJudgeWire,
   WebKnownDraft,
   WebSpeechWire,
 } from '../../packages/contracts/web-generation-rpc.ts';
@@ -27,6 +29,11 @@ import {
   CLIP_DIRECTION_PROMPT_SHA256,
   clipPromptHash,
 } from '../../apps/server/characters/clip-direction-prompt.ts';
+import {
+  REHEARSAL_JUDGE_MODELS,
+  REHEARSAL_JUDGE_PROMPTS,
+  promptHash,
+} from '../../apps/server/characters/web-rehearsal-prompts.ts';
 import type { TextRPCResult, SpeechRPCResult } from '../../packages/contracts/generation-rpc.ts';
 
 export interface WebGenerationEnvironment {
@@ -211,6 +218,41 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
       });
       const value = await text.completePlain(
         { system: wire.system, user: wire.user, maxTokens: wire.maxTokens },
+        this.controller.signal,
+        () => callback(authorize),
+      );
+      return { ok: true, value };
+    } catch (error) {
+      return { ok: false, code: safeCode(error) };
+    }
+  }
+  /**
+   * Part 35: one judge completion for 多轮预演. Only a pinned judge prompt (its exact text and hash) and only a house reviewer model
+   * run; arbitrary text never reaches the DeepSeek key. The business object has reserved the budget and passes the send gate.
+   */
+  async judge(wire: WebJudgeWire, authorize: () => Promise<void>): Promise<WebJudgeRPCResult> {
+    try {
+      this.begin();
+      wire = structuredClone(wire);
+      ensure(
+        typeof wire.system === 'string' &&
+          REHEARSAL_JUDGE_PROMPTS[wire.systemSha256] === wire.system &&
+          promptHash(wire.system) === wire.systemSha256 &&
+          REHEARSAL_JUDGE_MODELS.includes(wire.model) &&
+          typeof wire.user === 'string' &&
+          wire.user.length > 0 &&
+          wire.user.length <= 20000 &&
+          Number.isSafeInteger(wire.maxTokens) &&
+          wire.maxTokens > 0 &&
+          wire.maxTokens <= 1000,
+        'WEB_PROVIDER_WIRE_MISMATCH',
+      );
+      const text = new DeepSeekTextGenerator({
+        apiKey: this.env.DEEPSEEK_API_KEY,
+        fetch: this.fetcher,
+      });
+      const value = await text.completePlain(
+        { system: wire.system, user: wire.user, maxTokens: wire.maxTokens, model: wire.model },
         this.controller.signal,
         () => callback(authorize),
       );

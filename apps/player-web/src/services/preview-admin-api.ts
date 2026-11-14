@@ -1,3 +1,4 @@
+import { RehearsalAdminClient } from './rehearsal-admin-api.ts';
 import { speechAudio, speechClips, speechEstimate } from './speech-admin-api.ts';
 import {
   COMPARE_MARKS,
@@ -79,7 +80,6 @@ export type RunSummary = {
   label: string | null;
   draftRevision: number;
   profileHash: string;
-  relationship: string;
   simulatedTime: { time: string; timeZone: string } | null;
   timeZone: string;
   evalSet: { id: string; version: number } | null;
@@ -113,7 +113,6 @@ export type RunInput = {
   requestId: string;
   draftRevision: number;
   profileHash: string;
-  relationship: string;
   label?: string;
   simulatedTime?: string;
   castSource?: PreviewCastSource;
@@ -289,7 +288,6 @@ function runSummary(v: unknown): RunSummary {
     label: nstring(r.label),
     draftRevision: int(r.draftRevision),
     profileHash: string(r.profileHash),
-    relationship: string(r.relationship),
     simulatedTime: sim(r.simulatedTime),
     timeZone: string(r.timeZone),
     evalSet: set && { id: string(set.id), version: int(set.version) },
@@ -321,11 +319,19 @@ export class PreviewAdminClient {
   private readonly characters: Request;
   private readonly sets: Request;
   private readonly compare: Request | undefined;
-  /** Part 26b: `compare` is the 审核对比 endpoint; without it the page simply has no such section. */
-  constructor(characters: Request, sets: Request, compare?: Request) {
+  private readonly rehearse: Request | undefined;
+  /**
+   * Part 26b: `compare` is the 审核对比 endpoint; without it the page simply has no such section. Part 35: `rehearse` is the
+   * 多轮预演 endpoint, with the same rule.
+   */
+  constructor(characters: Request, sets: Request, compare?: Request, rehearse?: Request) {
     this.characters = characters;
     this.sets = sets;
     this.compare = compare;
+    this.rehearse = rehearse;
+  }
+  get rehearsal() {
+    return this.rehearse ? new RehearsalAdminClient(this.rehearse) : null;
   }
   get reviewCompare() {
     return this.compare ? new ReviewCompareClient(this.compare) : null;
@@ -359,7 +365,6 @@ export class PreviewAdminClient {
       requestId: string;
       draftRevision: number;
       profileHash: string;
-      relationship: string;
       message: string;
       simulatedTime?: string;
       castSource?: PreviewCastSource;

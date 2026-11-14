@@ -21,6 +21,7 @@ import { currentWebPreview, previewDigest, previewPolicy, readWebPreview } from 
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { webCharacterPreviewsRunning } from './web-character-preview-schema.ts';
 import { WebReviewCompareRunner, type CompareClaim } from './web-review-compare-runner.ts';
+import { WebRehearsalRunner, type RehearsalClaim, type RehearsalJudgeModel } from './web-rehearsal-runner.ts';
 import type { WebAdminSpeech } from './web-admin-speech.ts';
 import type { WebClipDirection } from './web-clip-direction.ts';
 import { previewReviewModel } from '../admission/web-review-model.ts';
@@ -71,6 +72,8 @@ export class WebCharacterPreviewRunner {
   private readonly hasRuns: boolean;
   /** Part 26b: the 审核对比 runs in this queue's single text slot (preview claims first). */
   private readonly compare: WebReviewCompareRunner;
+  /** Part 35: the 多轮预演 runs in the same single text slot (preview, then compare, then rehearsal). */
+  private readonly rehearsal: WebRehearsalRunner;
   /**
    * Part 24k-1: the admin speech path shares this owner's timer. It adds no queue; this runner only drives its recovery
    * (an interrupted call becomes unknown, a known bill that was not settled is settled) next to the 预演 bills.
@@ -80,6 +83,10 @@ export class WebCharacterPreviewRunner {
   direction: WebClipDirection | null = null;
   useDirection(direction: WebClipDirection) {
     this.direction = direction;
+  }
+  /** Part 35: the judge model of 多轮预演 (hint writing and verdicts). Without it a unit that needs a judge fails before anything is reserved. */
+  useRehearsalJudge(judge: RehearsalJudgeModel) {
+    this.rehearsal.useJudge(judge);
   }
   useSpeech(speech: WebAdminSpeech) {
     this.speech = speech;
@@ -101,6 +108,7 @@ export class WebCharacterPreviewRunner {
     this.budget = budget;
     this.nextId = nextId;
     this.compare = new WebReviewCompareRunner(store, clock, generator, budget, nextId);
+    this.rehearsal = new WebRehearsalRunner(store, clock, generator, budget, nextId);
     this.hasRuns = !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_preview_rejected'");
   }
   /**
@@ -179,11 +187,15 @@ export class WebCharacterPreviewRunner {
     );
   }
   /** A preview first; when none is due, one case of a 审核对比 run. */
-  claim(): { id: string; token: string; compare?: CompareClaim } | null {
+  claim(): { id: string; token: string; compare?: CompareClaim; rehearsal?: RehearsalClaim } | null {
     const preview = this.claimPreview();
     if (preview) return preview;
     const compare = this.compare.claim();
-    return compare ? { id: `compare-${compare.runId}-${compare.ordinal}`, token: compare.token, compare } : null;
+    if (compare) return { id: `compare-${compare.runId}-${compare.ordinal}`, token: compare.token, compare };
+    const rehearsal = this.rehearsal.claim();
+    return rehearsal
+      ? { id: `rehearsal-${rehearsal.runId}-${rehearsal.seq}`, token: rehearsal.token, rehearsal }
+      : null;
   }
   private claimPreview() {
     return this.store.transaction(() => {
@@ -237,8 +249,9 @@ export class WebCharacterPreviewRunner {
   }
   nextDue() {
     const own = this.previewDue(),
-      other = this.compare.nextDue();
-    const at = Math.min(own ?? Infinity, other ?? Infinity);
+      other = this.compare.nextDue(),
+      more = this.rehearsal.nextDue();
+    const at = Math.min(own ?? Infinity, other ?? Infinity, more ?? Infinity);
     return Number.isFinite(at) ? at : null;
   }
   private previewDue() {
@@ -274,7 +287,7 @@ export class WebCharacterPreviewRunner {
     );
   }
   async recoverBills() {
-    const other = await this.compare.recoverBills();
+    const other = (await this.compare.recoverBills()) + (await this.rehearsal.recoverBills());
     const rows = this.store.all<Attempt>(
       "SELECT * FROM web_character_preview_attempts WHERE state='known' AND shared_settled=0 LIMIT 16",
     );
@@ -517,8 +530,12 @@ export class WebCharacterPreviewRunner {
       );
     });
   }
-  async run(claim: { id: string; token: string; compare?: CompareClaim }, signal: AbortSignal) {
+  async run(
+    claim: { id: string; token: string; compare?: CompareClaim; rehearsal?: RehearsalClaim },
+    signal: AbortSignal,
+  ) {
     if (claim.compare) return this.compare.run(claim.compare, signal);
+    if (claim.rehearsal) return this.rehearsal.run(claim.rehearsal, signal);
     const { id, token } = claim,
       observations = new Map<Phase, ProviderObservation>(),
       rejected = new Map<Phase, { raw: string; errorCode: string }>();

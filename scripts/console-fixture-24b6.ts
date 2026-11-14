@@ -22,7 +22,10 @@ import { syntheticSelection } from '../tests/web/fixtures/provider-selection.ts'
 import { SAMPLE_NAMES, sampleCastRaw, sampleId } from '../tests/web/fixtures/cast-sample.ts';
 import { ROSTER_COLOURS } from '../apps/player-web/src/features/admin/ui/character-colour.ts';
 import { characterProfileHash } from '../apps/server/characters/web-character-catalog.ts';
-import { acceptedAuditEnvelope, draftEnvelope } from '../tests/text-fixtures.ts';
+import { acceptedAuditEnvelope, auditReply, draftEnvelope, draftWire, toolEnvelope } from '../tests/text-fixtures.ts';
+import { renewProviderPrices } from '../apps/server/generation/web-provider-configuration.ts';
+import type { WebRuntimeStore } from '../apps/server/platform/web-store-contract.ts';
+import { REHEARSAL_HINT_PROMPT_SHA256 } from '../apps/server/characters/web-rehearsal-prompts.ts';
 
 /**
  * Part 24b-6: the synthetic site the V3 console is looked at on (the browser audit and the screenshots). A real migrated
@@ -118,8 +121,41 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
     });
   }
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  // Part 35: Grok and Gemini are priced and offered on the synthetic site, so a 多轮预演 can run on all three columns.
+  if (options.provider) renewProviderPrices(store as unknown as WebRuntimeStore, clock.now());
+  /** The scripted answer of one column to one turn of a 多轮预演: three different manners, so the columns can be told apart. */
+  const rehearsalDraft = (request: { scope: { worldId: string }; messages: Array<{ authorKind: string }> }) => {
+    const model = request.scope.worldId.split('-').at(-1);
+    const turn = request.messages.filter((m) => m.authorKind === 'player').length;
+    const say: Record<string, string[][]> = {
+      deepseek: [
+        ['嗨～', '刚忙完一阵'],
+        ['嗯嗯，我也是'],
+        ['还没呢，一会儿再吃'],
+        ['哈哈，真的吗'],
+        ['周末想睡个懒觉'],
+      ],
+      gemini: [
+        ['嗨！在呢，刚好有空', '你今天怎么样？'],
+        ['听起来你有点累，早点睡哦'],
+        ['我吃过啦，你呢？'],
+        ['这个我也想知道，你觉得呢？'],
+      ],
+      xai: [
+        ['你好，请问有什么可以帮你的？'],
+        ['我理解你的感受，注意休息'],
+        ['感谢你的分享，随时告诉我'],
+        ['嗯，你说得对'],
+      ],
+    };
+    const list = say[model ?? 'deepseek'] ?? say.deepseek!;
+    const bubbles = list[(turn - 1) % list.length]!.map((text) => ({ text, expression: 'neutral' as const }));
+    return { mode: 'casual' as const, bubbles, endsSession: false };
+  };
   const offlineText = new DeepSeekTextGenerator({
     apiKey: 'offline-only',
+    // Part 35: keys for the two other writing models (offline: nothing is sent anywhere).
+    keys: { xai: 'offline-x', gemini: 'offline-g' },
     fetch: async (_url, init) => {
       const provider = options.provider;
       if (!provider) return new Response('{}', { status: 500 });
@@ -128,11 +164,31 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
       const compare = store.get<{ request_json: string }>(
         "SELECT request_json FROM web_review_compare_cases WHERE status='generating'",
       );
+      const rehearsal = store.get<{ request_json: string }>(
+        "SELECT request_json FROM web_rehearsal_units WHERE status='generating' AND request_json IS NOT NULL",
+      );
       const generating =
         compare ??
+        rehearsal ??
         store.get<{ request_json: string }>("SELECT request_json FROM admin_previews WHERE status='generating'");
       if (!generating) return new Response('{}', { status: 500 });
       const request = JSON.parse(generating.request_json);
+      if (rehearsal) {
+        const draft = rehearsalDraft(request);
+        const draftPhase = tool === 'submit_dialogue_draft';
+        await sleep(draftPhase ? provider.draftMs : provider.reviewMs);
+        if (!draftPhase)
+          return Response.json(
+            toolEnvelope('submit_dialogue_audit', (({ bubbleChecks: _c, ...a }) => a)(auditReply(request, draft))),
+          );
+        const args = draftWire(request, draft);
+        const url = String(_url);
+        const base = toolEnvelope('submit_dialogue_draft', args);
+        const usage = { prompt_tokens: 1500, completion_tokens: 400, total_tokens: 1900 };
+        if (url.includes('x.ai')) return Response.json({ ...base, model: 'grok-4.7', usage });
+        if (url.includes('googleapis')) return Response.json({ ...base, model: 'gemini-3.8-flash', usage });
+        return Response.json(base);
+      }
       const text = String(request.messages?.[0]?.text ?? '');
       const draftPhase = tool === 'submit_dialogue_draft';
       await sleep(draftPhase ? provider.draftMs : provider.reviewMs);
@@ -155,6 +211,17 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
     usageUnits: request.billedTextBytes,
   }));
   const previews = new WebCharacterPreviewRunner(store, clock, offlineText, { reserve() {}, settle() {} });
+  // Part 35: the judge on the synthetic site writes plain hints and says the same thing every time (nothing leaves the machine).
+  previews.useRehearsalJudge({
+    async completeJson(input) {
+      await sleep(150);
+      const hint = input.systemSha256 === REHEARSAL_HINT_PROMPT_SHA256;
+      const text = hint
+        ? JSON.stringify({ hints: ['那次淋了一身的事还记得吗', '上回在海边那档子事'], negative: '你生日哪天' })
+        : JSON.stringify({ hints: [true, false], negative: false, ownSide: true });
+      return { text, inputTokens: 600, outputTokens: 60, model: input.model, receipt: { id: 'fake-judge' } };
+    },
+  });
   if (options.speech)
     previews.useSpeech(
       new WebAdminSpeech(

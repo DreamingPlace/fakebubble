@@ -43,6 +43,7 @@ import { previewPoller, type PollerHost } from './poller.ts';
 import { disclosureButton, disclosureDetails } from '../ui/disclosure.ts';
 import { growBox } from '../ui/grow-box.ts';
 import { reviewCompareView } from './review-compare-view.ts';
+import { rehearsalView } from '../rehearsal/rehearsal-view.ts';
 import { STAGE_LABEL, isFinished, progressText, stageOf, type Stage } from './stage.ts';
 
 export const RUN_MAX = 50;
@@ -78,12 +79,6 @@ const defaultOnVisible = (fn: () => void) => {
   document.addEventListener('visibilitychange', fn);
   return () => document.removeEventListener('visibilitychange', fn);
 };
-const RELATIONS: ReadonlyArray<readonly [string, string]> = [
-  ['new', '初识'],
-  ['friend', '朋友'],
-  ['close_friend', '亲近朋友'],
-  ['lover', '恋人'],
-];
 const FILTER_STATUSES: ReadonlyArray<readonly [string, string]> = [
   ['', '全部状态'],
   ['queued', STATUS_LABEL.queued],
@@ -227,6 +222,42 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     disclosureDetails(reviewSection, '审核对比（V4 Pro / V4.1 Flash）');
     reviewSection.append(reviewHost);
   }
+  // Part 35: 多轮预演 opens its own wide panel (a script on up to three models, side by side).
+  const rehearsalApi = host.api.rehearsal;
+  const rehearsal = rehearsalApi
+    ? rehearsalView({
+        api: rehearsalApi,
+        characterId: () => id,
+        draft: () => (detail?.draft ? { revision: detail.draft.revision, hash: detail.draft.contentHash } : null),
+        unsaved: () => host.draftUnsaved?.() === true,
+        canStart: () => can('preview'),
+        canEdit: () => {
+          const m = host.member();
+          return !!m && (m.role === 'owner' || hasCharacterPermission(m.permissions, 'preview', '*'));
+        },
+        run: host.run,
+        toast: host.toast,
+        disposed: () => disposed || host.disposed(),
+        modalParent: host.modalParent,
+        ...(host.newId ? { newId: host.newId } : {}),
+        ...(host.poll?.setTimer || host.poll?.clearTimer
+          ? {
+              poll: {
+                ...(host.poll.setTimer ? { setTimer: host.poll.setTimer } : {}),
+                ...(host.poll.clearTimer ? { clearTimer: host.poll.clearTimer } : {}),
+              },
+            }
+          : {}),
+      })
+    : null;
+  const rehearsalOpen = rehearsalApi
+    ? h('button', {
+        class: 'admin-secondary pw-rehearse',
+        text: '多轮预演',
+        attrs: { type: 'button', 'data-pw-rehearsal': '' },
+      })
+    : null;
+  rehearsalOpen?.addEventListener('click', () => rehearsal?.open());
   // Part 31: the owner's 整理预演 bar (only when the host can delete; for anyone else the page is exactly as before).
   const manageHost = host.owner && host.confirm ? h('div', { class: 'pw-manage' }) : null;
   const page = h(
@@ -234,6 +265,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     { class: 'pw' },
     settingsHost,
     composeHost,
+    rehearsalOpen,
     compareHost,
     manageHost,
     feed,
@@ -268,8 +300,6 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   // ---- settings: one summary line, the controls under it ----------------------------------------------------------
   let pendingRun: { sig: string; body: Parameters<PreviewAdminClient['startRun']>[1] } | null = null;
   let pendingSingle: { sig: string; body: Parameters<PreviewAdminClient['startSingle']>[1] } | null = null;
-  const relation = h('select', { attrs: { 'aria-label': '预演关系' } });
-  for (const [value, text] of RELATIONS) relation.append(h('option', { text, attrs: { value } }));
   const simMode = h('select', { attrs: { 'aria-label': '模拟时间' } });
   simMode.append(
     h('option', { text: '使用真实时间', attrs: { value: 'none' } }),
@@ -299,8 +329,6 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   );
   const setPicker = h('select', { attrs: { 'aria-label': '评测集' } });
   const editSets = h('button', { class: 'admin-secondary', text: '编辑评测集', attrs: { type: 'button' } });
-  const field = (text: string, ...nodes: Node[]) =>
-    h('label', { class: 'admin-filter' }, h('span', { text }), ...nodes);
   const summary = h('button', {
     class: 'pw-summary',
     attrs: { type: 'button', 'aria-expanded': 'false', 'data-pw-summary': '' },
@@ -310,7 +338,6 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   const controls = h(
     'div',
     { class: 'pw-set-row' },
-    field('关系', relation),
     h(
       'div',
       { class: 'admin-filter pw-sim' },
@@ -451,7 +478,6 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   const summaryLine = () => {
     const set = selectedSet();
     return [
-      `关系 ${RELATIONS.find(([v]) => v === relation.value)?.[1] ?? relation.value}`,
       simulated() ? `模拟 ${simulated()}` : '真实时间',
       castSource === 'none' ? '不用关系与故事' : `关系与故事 ${castSource === 'draft' ? '草稿' : '已发布'}`,
       set ? `评测集 ${set.name} v${set.version}` : null,
@@ -484,7 +510,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     if (sets.some((s) => s.id === keep)) setPicker.value = keep;
     paintAll();
   }
-  for (const control of [relation, simMode, simTime, setPicker, input, label]) {
+  for (const control of [simMode, simTime, setPicker, input, label]) {
     control.addEventListener('input', paintAll);
     control.addEventListener('change', paintAll);
   }
@@ -501,7 +527,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   };
   const draftBody = () => {
     const d = detail!.draft!;
-    return { draftRevision: d.revision, profileHash: d.contentHash, relationship: relation.value || 'new' };
+    return { draftRevision: d.revision, profileHash: d.contentHash };
   };
   const afterSend = () => {
     // The settings fold into their summary line once a send has used them.
@@ -1022,7 +1048,6 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     entry.tick?.setAttribute('aria-label', `选择“${runTitle(run, index)}”用于对比`);
     entry.meta.textContent = [
       when(run.createdAt),
-      RELATIONS.find(([v]) => v === run.relationship)?.[1] ?? run.relationship,
       run.simulatedTime ? `模拟 ${zoneLabel(run.timeZone)} ${run.simulatedTime.time}` : '真实时间',
       `草稿 ${run.draftRevision}`,
       run.evalSet ? `评测集 v${run.evalSet.version}` : null,
@@ -1544,7 +1569,10 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       paintAll();
     },
     /** The editor beside this panel changed (saved / unsaved): the reason line follows. */
-    refresh: paintAll,
+    refresh: () => {
+      paintAll();
+      rehearsal?.refresh();
+    },
     focusInput,
     clear() {
       view++;
@@ -1561,6 +1589,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       for (const bar of listeners.splice(0)) bar.dispose();
       editor.dispose();
       reviewCompare?.dispose();
+      rehearsal?.dispose();
     },
     /** Test seam: the poller's state. */
     poller,

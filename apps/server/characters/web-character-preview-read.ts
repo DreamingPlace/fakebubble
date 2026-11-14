@@ -231,7 +231,6 @@ interface RunRow {
   label: string | null;
   draft_revision: number;
   profile_hash: string;
-  relationship: string;
   simulated_minute: number | null;
   time_zone: string;
   eval_set_id: string | null;
@@ -246,7 +245,6 @@ const runDTO = (r: RunRow) => ({
   label: r.label,
   draftRevision: r.draft_revision,
   profileHash: r.profile_hash,
-  relationship: r.relationship,
   simulatedTime: r.simulated_minute === null ? null : { time: hhmm(r.simulated_minute), timeZone: r.time_zone },
   timeZone: r.time_zone,
   evalSet: r.eval_set_id ? { id: r.eval_set_id, version: r.eval_set_version } : null,

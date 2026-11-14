@@ -199,7 +199,9 @@ test('a batch submission is ONE run: all rows land together, the run is idempote
   assert.equal(detail.run.label, '改人设前');
   assert.equal(detail.run.draftRevision, f.saved.revision);
   assert.equal(detail.run.profileHash, f.saved.contentHash);
-  assert.equal(detail.run.relationship, 'friend');
+  // Part 35 (named exception): a 预演 has no relationship setting any more. The run no longer reports one, and the request body
+  // above (which still carries `relationship: 'friend'`, as an old tab would send it) is accepted and ignored.
+  assert.equal('relationship' in detail.run, false);
   assert.equal(detail.run.itemCount, 3);
   assert.deepEqual(
     detail.previews.map((p) => [p.ordinal, p.input, p.status, p.settlement]),

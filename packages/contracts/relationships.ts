@@ -1,4 +1,13 @@
+import type { RelationshipPreset } from './index.ts';
 import type { MemoryScope } from './memory.ts';
+
+/**
+ * Part 35: there is no relationship setting any more (初识 / 朋友 / 亲近朋友 / 恋人 are gone from the console and from every 预演).
+ * The reply pipeline still wants a preset for a new player's conversation, and the stored 预演 run still has the column: both get
+ * THIS value, today's default for a new player (the one a first visit writes in web-provider-application.ts). The chat prompt still
+ * has its 关系预设 wording; Part 37a removes that slot, and with it this constant.
+ */
+export const NEW_PLAYER_RELATIONSHIP: RelationshipPreset = 'new';
 
 export const RELATIONSHIP_EVENT_KINDS = [
   'support',

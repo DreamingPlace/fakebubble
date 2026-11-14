@@ -259,13 +259,15 @@ export class DeepSeekTextGenerator implements TextGenerator {
    * take. The caller has reserved the budget; this only sends. Returns the text and the usage the provider reported.
    */
   async completePlain(
-    input: { system: string; user: string; maxTokens: number },
+    input: { system: string; user: string; maxTokens: number; model?: string },
     signal: AbortSignal,
     authorize?: () => void | Promise<void>,
   ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string; receipt: unknown }> {
     ensure(!signal.aborted, 'TEXT_REQUEST_ABORTED');
+    // Part 35: a judge names its own (house reviewer) model; every older caller gets the draft model as before.
+    const model = input.model ?? this.model;
     const body = JSON.stringify({
-      model: this.model,
+      model,
       thinking: { type: 'disabled' },
       stream: false,
       temperature: 0.3,
@@ -311,7 +313,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
       text,
       inputTokens: Number(input_),
       outputTokens: Number(output),
-      model: this.model,
+      model,
       receipt: { id: typeof value.id === 'string' ? value.id.slice(0, 128) : null },
     };
   }

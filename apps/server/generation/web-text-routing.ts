@@ -60,6 +60,15 @@ function usable(store: Reader, id: PlayerModelId, phase: 'draft' | 'review', now
   );
 }
 
+/** Part 35: the model a 多轮预演 column drafts with: the same table a player's choice is routed by. */
+export const draftModelRef = (id: PlayerModelId): ModelRef => REF.draft[id];
+/**
+ * Part 35: can THIS environment serve `id` for a draft right now: the player-model ceiling (flag and key) and the price, spending
+ * bound and capacity ticket a call needs. DeepSeek always. The owner's switch for players does not matter: an administrator may
+ * rehearse a model players are not offered.
+ */
+export const modelUsableHere = (store: Reader, id: PlayerModelId, now: number) => usable(store, id, 'draft', now, true);
+
 /**
  * The route of an operation, or undefined for "exactly today's behaviour" (feature off, no frozen choice: guests, invited
  * players, everything admitted before the feature). `abandoned` are the providers already proven not to have run this stage.

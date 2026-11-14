@@ -443,7 +443,7 @@ export class CharacterAdminClient {
   }
   async startPreview(
     id: string,
-    input: { requestId: string; draftRevision: number; profileHash: string; relationship: string; message: string },
+    input: { requestId: string; draftRevision: number; profileHash: string; message: string },
   ) {
     return preview(await this.call(id, 'review-start', input));
   }
