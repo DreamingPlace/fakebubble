@@ -320,12 +320,15 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
             ),
             cell('类型', tierText(batch), batch.durationDays ? ` · ${batch.durationDays} 天` : ''),
             cell('创建 UTC', utcDay(batch.createdAt)),
-            cell('邀请码', String(batch.codes)),
+            cell('邀请码', exactCount(batch.codes)),
             cell('兑换', redeemed),
-            cell('撤销', String(batch.revoked)),
+            cell('撤销', exactCount(batch.revoked)),
             cell(
               '持有中',
-              hoverValue(h('b', { text: String(batch.holders) }), `${batch.holders} 位玩家现在持有这批邀请`),
+              hoverValue(
+                h('b', { text: exactCount(batch.holders) }),
+                `${exactCount(batch.holders)} 位玩家现在持有这批邀请`,
+              ),
             ),
           ),
           batch,
@@ -354,8 +357,8 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     const unused = batches.reduce((n, b) => n + unusedOf(b), 0);
     fillStatus(
       status,
-      batches.length ? h('span', {}, '持有中 ', h('b', { class: 'is-mono', text: String(holders) }), ' 人') : null,
-      batches.length ? h('span', {}, '未使用 ', h('b', { class: 'is-mono', text: String(unused) }), ' 个') : null,
+      batches.length ? h('span', {}, '持有中 ', h('b', { class: 'is-mono', text: exactCount(holders) }), ' 人') : null,
+      batches.length ? h('span', {}, '未使用 ', h('b', { class: 'is-mono', text: exactCount(unused) }), ' 个') : null,
     );
   }
   let freshId: string | null = null;
@@ -512,8 +515,8 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
     const zone = dangerZone({
       open: '撤销整批',
       impact: () => [
-        { n: String(unusedOf(batch)), label: '个未使用的码会作废' },
-        { n: String(batch.redeemed), label: '个已兑换的不受影响' },
+        { n: exactCount(unusedOf(batch)), label: '个未使用的码会作废' },
+        { n: exactCount(batch.redeemed), label: '个已兑换的不受影响' },
       ],
       confirm: '确认撤销整批',
       run: async () => {

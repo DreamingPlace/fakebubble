@@ -320,7 +320,7 @@ export function systemView(
       unknownHead,
       table(
         ['类别', '数量', '最早的已过'],
-        v.unknown.map((kind) => [KIND_LABELS[kind.kind], String(kind.count), ageText(kind.oldestAgeMs)]),
+        v.unknown.map((kind) => [KIND_LABELS[kind.kind], exactCount(kind.count), ageText(kind.oldestAgeMs)]),
         '结果未知的调用',
       ),
     );
@@ -328,12 +328,12 @@ export function systemView(
       '安全',
       keyValuePanel([
         ['Turnstile', onOff(v.security.turnstile)],
-        ['今天未通过（UTC）', String(v.security.failuresToday)],
-        ['最近 7 天未通过', String(v.security.failuresLast7Days)],
-        ['今天无法验证（Turnstile 服务不可达）', String(v.security.unavailableToday)],
-        ['最近 7 天无法验证', String(v.security.unavailableLast7Days)],
-        ['今天限流表已满、逐 IP 检查被放行（全站限流仍有效）', String(v.security.rateOverflowToday)],
-        ['未登记的拒绝码（按 400 回答，自启动起）', String(v.security.unknownRefusals)],
+        ['今天未通过（UTC）', exactCount(v.security.failuresToday)],
+        ['最近 7 天未通过', exactCount(v.security.failuresLast7Days)],
+        ['今天无法验证（Turnstile 服务不可达）', exactCount(v.security.unavailableToday)],
+        ['最近 7 天无法验证', exactCount(v.security.unavailableLast7Days)],
+        ['今天限流表已满、逐 IP 检查被放行（全站限流仍有效）', exactCount(v.security.rateOverflowToday)],
+        ['未登记的拒绝码（按 400 回答，自启动起）', exactCount(v.security.unknownRefusals)],
       ]),
     );
     const cleanup = v.retention

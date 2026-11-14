@@ -1,3 +1,4 @@
+import { exactCount } from './ui/hover-value.ts';
 import type {
   ConversationsAdminClient,
   ReviewKey,
@@ -108,7 +109,7 @@ export function conversationsView(
           align: 'end',
           sortable: true,
           sortValue: (r) => r.messages,
-          render: (r) => String(r.messages),
+          render: (r) => exactCount(r.messages),
         },
         { key: 'firstAt', label: '开始（角色当地时间）', sortable: true },
         { key: 'lastAt', label: '最近（角色当地时间）', sortable: true },
@@ -118,7 +119,7 @@ export function conversationsView(
           align: 'end',
           sortable: true,
           sortValue: (r) => r.failed,
-          render: (r) => String(r.failed),
+          render: (r) => exactCount(r.failed),
         },
       ],
       rowKey: (r) => `${r.characterId}:${r.code}:${r.archived ? 'a' : 'l'}`,

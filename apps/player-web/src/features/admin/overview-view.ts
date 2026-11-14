@@ -217,7 +217,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
 
   // ---- 按天 ----
   type DayRow = { key: string; label: string; counts: PlayerStatsDay | PlayerStatsView['totals']; total: boolean };
-  const num = (n: number) => String(n);
+  const num = (n: number) => exactCount(n);
   const dayColumns: OpenColumn<DayRow>[] = [
     {
       key: 'day',
@@ -594,7 +594,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
   // ---- paint ----
   const tile = (label: string, value: string, sub: string, tip: string, count?: number) => {
     const big = h('span', { class: 'ov-big', text: value });
-    if (count !== undefined) rollNumber(big, count, (v) => String(Math.round(v)));
+    if (count !== undefined) rollNumber(big, count, (v) => exactCount(Math.round(v)));
     return h(
       'div',
       { class: 'ov-tile' },
@@ -633,14 +633,14 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
         tile(`昨日新注册`, exactCount(y.signups), '', `${y.day} UTC · ${exactCount(y.signups)} 人`, y.signups),
         tile(
           '昨日活跃',
-          String(y.active),
+          exactCount(y.active),
           yesterday ? `注册 ${yesterday.activeRegistered} · 访客 ${yesterday.activeGuests}` : '',
           `${y.day} UTC`,
           y.active,
         ),
         tile(
           '昨日聊天人数',
-          yesterday ? String(yesterday.chatRegistered + yesterday.chatGuests) : '—',
+          yesterday ? exactCount(yesterday.chatRegistered + yesterday.chatGuests) : '—',
           yesterday ? `注册 ${yesterday.chatRegistered} · 访客 ${yesterday.chatGuests}` : '',
           `${y.day} UTC`,
         ),

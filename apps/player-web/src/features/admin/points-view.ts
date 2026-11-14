@@ -294,7 +294,7 @@ export function pointsView(
       const preview = await deps.resetPreview();
       const cost = preview.worstCaseMicros === null ? '暂无数据' : dollars(preview.worstCaseMicros);
       return [
-        { n: String(preview.affected), label: '个账号会补点' },
+        { n: exactCount(preview.affected), label: '个账号会补点' },
         { n: exactCount(preview.totalPoints), label: '点共补发' },
         { n: cost, label: '最坏成本（最近 30 天最高每点成本）' },
       ];
