@@ -96,6 +96,9 @@ export async function routeWebAccountAdmin(
       return { status: 200, body: await system.status(actor) };
     }
     if (action === 'system/renew-prices') return { status: 200, body: system.renewPrices(actor, req.body) };
+    // Part 37a: 回复写法, owner only (the handler checks the owner, THEN reads the body).
+    if (action === 'system/writer-read') return { status: 200, body: system.writerRead(actor, req.body) };
+    if (action === 'system/writer-save') return { status: 200, body: system.writerSave(actor, req.body) };
     if (action === 'system/budget-topup') return { status: 200, body: await system.budgetTopUp(actor, req.body) };
     if (action === 'points/preview')
       return { status: 200, body: system.pointsPreview(actor, req.body, req.trustedIpHash) };

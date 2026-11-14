@@ -53,7 +53,7 @@ export const TEXT_REVIEW_PROMPT =
   PROMPTS_V7.reviewFinalCheck +
   TIME_CONTEXT_TASK;
 
-function promptTimestamp(at: number, now: number, timeZone: string) {
+export function promptTimestamp(at: number, now: number, timeZone: string) {
   const local = localTime(at, timeZone),
     current = localTime(now, timeZone);
   const minutes = Math.floor((now - at) / 60_000);
@@ -102,7 +102,10 @@ export function promptMessages(request: TextGenerationRequest) {
     request.priorServiceFailure === undefined || typeof request.priorServiceFailure === 'boolean',
     'INVALID_TEXT_REQUEST',
   );
-  ensure(['new', 'friend', 'close_friend', 'lover'].includes(request.relationship), 'INVALID_RELATIONSHIP');
+  ensure(
+    request.relationship !== undefined && ['new', 'friend', 'close_friend', 'lover'].includes(request.relationship),
+    'INVALID_RELATIONSHIP',
+  );
   ensure(
     Array.isArray(request.requiredMessageIds) &&
       request.requiredMessageIds.length <= 32 &&

@@ -20,19 +20,14 @@ import {
   requestFallback,
 } from '../admission/web-stage-metrics.ts';
 import { inspectPCM } from '../../../workers/audio/wav.ts';
-import {
-  parseTextDraft,
-  applyTextReview,
-  DROP_INVALID_METADATA,
-  protocolFingerprint,
-} from './accepted-text-protocol.ts';
-import { textPromptHash } from './accepted-text-prompt.ts';
+import { DROP_INVALID_METADATA } from './accepted-text-protocol.ts';
+import { applyReview, parseDraft } from './writer-v8.ts';
 import { requireWebContent, webCloudContentExpired } from '../admission/web-retention.ts';
 import type { WebStageClaim } from '../admission/web-stage-queue.ts';
 import { WebDispatchLedger } from '../budget/web-dispatch-ledger.ts';
 import { requireWebRuntime, type WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireCurrentInputSnapshot } from './web-input-snapshot.ts';
-import { checkWebV7SceneAtDispatch } from './web-v7-request.ts';
+import { checkWebV7SceneAtDispatch, framePinsMatch } from './web-v7-request.ts';
 import { SYNTHETIC_TRIAL_FOOTER } from '../conversation/web-vertical-publisher.ts';
 import { webWelcomeLines } from '../characters/web-character-catalog.ts';
 import { welcomeClipServable } from '../characters/web-welcome-choice.ts';
@@ -1460,19 +1455,15 @@ export class WebProviderOffline {
         prompt_digest: string;
         voice_version: string;
       }>('SELECT * FROM web_v7_requests WHERE operation_id=?', claim.operationId);
-      ensure(
-        frozen &&
-          hash(frozen.request_json) === frozen.request_digest &&
-          hash(JSON.stringify(protocolFingerprint())) === frozen.protocol_digest &&
-          textPromptHash() === frozen.prompt_digest,
-        'WEB_V7_REQUEST_INVALID',
-      );
+      ensure(frozen && hash(frozen.request_json) === frozen.request_digest, 'WEB_V7_REQUEST_INVALID');
       let request: TextGenerationRequest;
       try {
         request = JSON.parse(frozen.request_json) as TextGenerationRequest;
       } catch {
         ensure(false, 'WEB_V7_REQUEST_INVALID');
       }
+      // Part 37a: v7 pins for a v7 request, the pinned v8 ones for a v8 request.
+      ensure(framePinsMatch(frozen, request), 'WEB_V7_REQUEST_INVALID');
       ensure(
         request.jobId === claim.operationId &&
           request.scope.worldId === scope.worldId &&
@@ -1485,7 +1476,7 @@ export class WebProviderOffline {
       );
       const draft = this.readKnown({ operationId: claim.operationId, phase: 'draft', ordinal: -1 }, scope);
       const review = this.readKnown({ operationId: claim.operationId, phase: 'review', ordinal: -1 }, scope);
-      const candidate = applyTextReview(review, parseTextDraft(draft, request), request, DROP_INVALID_METADATA);
+      const candidate = applyReview(review, parseDraft(draft, request), request, DROP_INVALID_METADATA);
       const candidateJson = JSON.stringify(candidate),
         candidateDigest = hash(candidateJson);
       const output = this.store.all<{ phase: string; output_digest: string }>(
@@ -1954,11 +1945,7 @@ export class WebProviderOffline {
       operationId,
     );
     ensure(
-      frozen &&
-        hash(frozen.request_json) === frozen.request_digest &&
-        hash(JSON.stringify(protocolFingerprint())) === frozen.protocol_digest &&
-        textPromptHash() === frozen.prompt_digest &&
-        frozen.voice_version === voiceVersion,
+      frozen && hash(frozen.request_json) === frozen.request_digest && frozen.voice_version === voiceVersion,
       'WEB_PROVIDER_PUBLICATION_INVALID',
     );
     let request: TextGenerationRequest;
@@ -1967,6 +1954,7 @@ export class WebProviderOffline {
     } catch {
       ensure(false, 'WEB_PROVIDER_PUBLICATION_INVALID');
     }
+    ensure(framePinsMatch(frozen, request), 'WEB_PROVIDER_PUBLICATION_INVALID');
     ensure(
       request.jobId === operationId &&
         request.scope.worldId === scope.worldId &&
@@ -1981,7 +1969,7 @@ export class WebProviderOffline {
     const reviewKey = { operationId, phase: 'review' as const, ordinal: -1 };
     const draft = this.readKnown(draftKey, scope);
     const review = this.readKnown(reviewKey, scope);
-    const candidate = applyTextReview(review, parseTextDraft(draft, request), request, DROP_INVALID_METADATA);
+    const candidate = applyReview(review, parseDraft(draft, request), request, DROP_INVALID_METADATA);
     ensure(candidate.bubbles.length === speechOrdinals.length, 'WEB_PROVIDER_PUBLICATION_INVALID');
     ensure(
       this.store.get<{ n: number }>(

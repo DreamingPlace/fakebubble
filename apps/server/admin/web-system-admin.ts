@@ -39,6 +39,9 @@ import {
   selectPlayers,
 } from './web-points-admin.ts';
 import { readOverview, readSystemStatus, type WebSystemSources } from './web-system-status.ts';
+import { installWriterSetting, readWriter, writeWriter } from '../generation/web-writer-setting.ts';
+import { isWriterChoice } from '../../../packages/contracts/web-writer.ts';
+import type { WriterSaveResult, WriterSettingView } from '../../../packages/contracts/web-writer.ts';
 import {
   costsCsv,
   parseChart,
@@ -101,6 +104,8 @@ export class WebSystemAdmin {
     this.ops = options.ops;
     this.security = options.security;
     this.emailKey = options.emailKey;
+    // Part 37a: the writer switch's table (digest-checked; STOP WEB_WRITER_SCHEMA_MISMATCH).
+    installWriterSetting(store);
   }
   private actor(auth: Auth, need: 'any' | 'system' | 'points' | 'stats' | 'owner') {
     const actor = this.admin.authorize(auth.cookie, auth.csrf, auth.origin);
@@ -191,6 +196,41 @@ export class WebSystemAdmin {
       metrics: this.admin.stageLatencyRows(31).days,
       security: this.security.read(now),
     });
+  }
+
+  /** 回复写法 (owner only): which writer NEW replies freeze. A reply in flight keeps the writer it started with. */
+  writerRead(auth: Auth, input: unknown): WriterSettingView {
+    this.actor(auth, 'owner');
+    exactly(input ?? {}, []);
+    return { writer: readWriter(this.store), available: true };
+  }
+
+  /**
+   * 回复写法 (owner only), idempotent per request id, one audit row (who, when, the value; never content). The session, CSRF and
+   * Origin are checked by `actor` before the body is read.
+   */
+  writerSave(auth: Auth, input: unknown): WriterSaveResult {
+    const actor = this.actor(auth, 'owner');
+    const body = exactly(input, ['requestId', 'writer']);
+    ensure(isWriterChoice(body.writer), 'INVALID_REQUEST');
+    const writer = body.writer;
+    const result = once(
+      this.store,
+      this.clock.now(),
+      {
+        requestId: body.requestId,
+        action: 'writer-save',
+        hash: requestHash({ action: 'writer-save', writer }),
+        adminId: actor.memberId,
+      },
+      () => {
+        const before = readWriter(this.store);
+        writeWriter(this.store, this.clock.now(), actor.memberId, writer);
+        this.audit(actor.memberId, 'writer-set', `${before}>${writer}`);
+        return { writer, available: true };
+      },
+    );
+    return result;
   }
 
   /** 续期价格 (owner only): the very function the operator's renew-prices runs, then the rows it left. */
