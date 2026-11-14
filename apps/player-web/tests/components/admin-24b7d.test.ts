@@ -63,7 +63,7 @@ test('24b-7d the date field validates as you type with the shared sentence, and 
 test('24b-7d the calendar opens below the field as a popover (not a dialog), picks with a click, closes with Escape', async (t) => {
   installFakeDom(t);
   const field = dateField({ label: '日期', now: () => Date.UTC(2026, 10, 13) });
-  const toggle = all(field.root, 'button').find((b) => b.textContent === '日历')!;
+  const toggle = all(field.root, 'button').find((b) => b.getAttribute('aria-label')!.endsWith('打开日历'))!;
   toggle.click();
   const pop = one(field.root, '.admin-date-pop');
   assert.ok(pop, 'the popover is in the field');
@@ -129,7 +129,7 @@ test('24b-7d 兑换截止: typing, the calendar and a quick pick send the same b
   // by calendar (it opens on the month of the typed date; pick the 20th)
   one(f.root, '#tiers-redeem-by').value = '2099-03-04';
   all(f.root, '.admin-date-box button')
-    .find((b) => b.textContent === '日历')!
+    .find((b) => b.getAttribute('aria-label')!.endsWith('打开日历'))!
     .click();
   const pickDay = all(f.root, '.admin-date-day').find((b) => b.getAttribute('data-day') === '2099-03-20')!;
   pickDay.click();

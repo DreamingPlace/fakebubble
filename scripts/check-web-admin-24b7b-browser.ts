@@ -601,7 +601,9 @@ try {
         0,
       `${w}: no separate 按角色 / 按模型 cards`,
     );
-    const seg = (label: string) => page.locator(`[aria-label="统计维度"] button:text-is("${label}")`);
+    // Named exception (Part 24b-7d): the 统计表 has no switch of its own; the page's 分组 switch (全部 / 按角色 / 按模型) drives it (按天 is 全部).
+    const seg = (label: string) =>
+      page.locator(`#admin-overview [aria-label="分组"] button:text-is("${label === '按天' ? '全部' : label}")`);
     const rowsOf = async (selector: string) =>
       (await page.$$eval(`${selector} .ot-row`, (n: Element[]) =>
         n.map((r) => [...r.querySelectorAll('.ot-cell')].map((c) => (c.firstChild?.textContent ?? '').trim())),
