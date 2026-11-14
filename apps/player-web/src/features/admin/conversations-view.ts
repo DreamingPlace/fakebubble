@@ -358,13 +358,15 @@ export function conversationsView(
     const key = keyOf(detail);
     const pages = Math.max(1, Math.ceil(detail.total / detail.pageSize));
     const back = h('button', { class: 'admin-secondary', text: conversationsCopy.back, attrs: { type: 'button' } });
-    back.addEventListener('click', () => {
+    // (not a click on the button: while a run is going the page has switched every button off, and a click on a disabled one does nothing)
+    const toList = () => {
       wanted = null;
       open = null;
       detailArea.hidden = true;
       listArea.hidden = false;
       pager.hidden = !pagerShown;
-    });
+    };
+    back.addEventListener('click', toList);
     const exportOne = h('button', {
       class: 'admin-secondary',
       text: conversationsCopy.exportOne,
@@ -408,7 +410,7 @@ export function conversationsView(
                   text: conversationsCopy.deleteOne,
                   attrs: { type: 'button' },
                 });
-                del.addEventListener('click', () => void askDelete([key], () => back.click(), detailConfirm));
+                del.addEventListener('click', () => void askDelete([key], toList, detailConfirm));
                 return del;
               })(),
             ]
