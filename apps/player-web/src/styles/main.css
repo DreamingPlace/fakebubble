@@ -16063,6 +16063,47 @@ button:not(
   }
 }
 
+/* Part 31b: on a desktop the 预演 tab is two halves, 单次预演 | 多轮预演 (each keeps all its functions); under 1280 px 多轮预演 is the wide panel. */
+.account-admin-page.admin-shell .pw-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--ad-sp-5, 20px);
+  align-items: start;
+}
+.account-admin-page.admin-shell .pw-half {
+  min-width: 0;
+}
+.account-admin-page.admin-shell .pw-half-rehearsal {
+  position: sticky;
+  top: var(--ad-sp-3, 12px);
+  max-height: calc(100vh - 2 * var(--ad-sp-3, 12px));
+  overflow: auto;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+}
+.account-admin-page.admin-shell .rh-inline.rh {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+}
+.account-admin-page.admin-shell .rh-inline .rh-rail {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: var(--ad-sp-3, 12px);
+  border-right: 0;
+  border-bottom: 1px solid var(--ad-line);
+  overflow: visible;
+}
+.account-admin-page.admin-shell .rh-inline .rh-main {
+  padding: var(--ad-sp-3, 12px);
+  overflow: visible;
+}
+.account-admin-page.admin-shell .rh-inline .rh-setup {
+  grid-template-columns: minmax(0, 1fr);
+}
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

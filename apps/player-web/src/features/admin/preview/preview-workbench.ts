@@ -224,6 +224,12 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   }
   // Part 35: 多轮预演 opens its own wide panel (a script on up to three models, side by side).
   const rehearsalApi = host.api.rehearsal;
+  // Part 31b: on a desktop (>= 1280) the 预演 tab is two halves, 单次预演 and 多轮预演 side by side; below that 多轮预演 is the wide panel
+  const splitQuery = typeof matchMedia === 'function' ? matchMedia('(min-width: 1280px)') : null;
+  const split = !!rehearsalApi && splitQuery?.matches === true;
+  const rehearsalHalf = split
+    ? h('section', { class: 'pw-half pw-half-rehearsal', attrs: { 'aria-label': '多轮预演' } })
+    : null;
   const rehearsal = rehearsalApi
     ? rehearsalView({
         api: rehearsalApi,
@@ -240,6 +246,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
         toast: host.toast,
         disposed: () => disposed || host.disposed(),
         modalParent: host.modalParent,
+        ...(rehearsalHalf ? { inline: rehearsalHalf } : {}),
         ...(host.owner && host.confirm
           ? { owner: host.owner, confirm: host.confirm, isOwner: () => host.member()?.role === 'owner' }
           : {}),
@@ -254,19 +261,20 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
           : {}),
       })
     : null;
-  const rehearsalOpen = rehearsalApi
-    ? h('button', {
-        class: 'admin-secondary pw-rehearse',
-        text: '多轮预演',
-        attrs: { type: 'button', 'data-pw-rehearsal': '' },
-      })
-    : null;
+  const rehearsalOpen =
+    rehearsalApi && !split
+      ? h('button', {
+          class: 'admin-secondary pw-rehearse',
+          text: '多轮预演',
+          attrs: { type: 'button', 'data-pw-rehearsal': '' },
+        })
+      : null;
   rehearsalOpen?.addEventListener('click', () => rehearsal?.open());
   // Part 31: the owner's 整理预演 bar (only when the host can delete; for anyone else the page is exactly as before).
   const manageHost = host.owner && host.confirm ? h('div', { class: 'pw-manage' }) : null;
   const page = h(
     'div',
-    { class: 'pw' },
+    { class: rehearsalHalf ? 'pw pw-half' : 'pw' },
     settingsHost,
     composeHost,
     rehearsalOpen,
@@ -276,7 +284,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     empty,
     reviewSection,
   );
-  root.append(page);
+  root.append(rehearsalHalf ? h('div', { class: 'pw-split' }, page, rehearsalHalf) : page);
   const reviewCompare = reviewApi
     ? reviewCompareView(reviewHost, {
         api: reviewApi,
@@ -1559,6 +1567,8 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     syncFeed();
     paintAll();
     if (isActive()) poller.kick();
+    // the second half reads this character's scripts and runs (the drawer reads them when it is opened)
+    if (rehearsalHalf) rehearsal?.open();
   }
   const focusInput = () => {
     paintSettings();

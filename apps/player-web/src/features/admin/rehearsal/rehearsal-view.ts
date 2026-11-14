@@ -48,6 +48,8 @@ export type RehearsalHost = {
   toast: (text: string, tone?: 'ok' | 'info' | 'warn' | 'danger') => void;
   disposed: () => boolean;
   modalParent: () => HTMLElement;
+  /** Part 31b: a place in the page for the view (the 预演 tab's second half, desktop). Absent = the wide drawer as before. */
+  inline?: HTMLElement;
   newId?: () => string;
   /** Part 31b (owner): 整理 of the run records. Absent = nothing of it is drawn. */
   owner?: Record<'deleteRehearsals', OwnerAdminClient['deleteRehearsals']>;
@@ -83,6 +85,24 @@ const CELL_TEXT: Record<RehearsalCell['state'], string> = {
 };
 const errorText = (code: string | null) => (code ? `代码 ${code}` : '');
 
+/** The drawer's small surface (a body, open, isOpen, dispose) on a node that lives in the page: no overlay, nothing to close. */
+function inlinePanel(host: HTMLElement) {
+  const body = h('div', { class: 'rh-inline' });
+  host.append(body);
+  let open = false;
+  return {
+    body,
+    isOpen: () => open,
+    open() {
+      open = true;
+    },
+    dispose() {
+      open = false;
+      body.remove();
+    },
+  };
+}
+
 /**
  * 多轮预演 (Part 35): a script of 6-20 player lines run on up to three draft models side by side. One wide panel: the scripts on
  * the left, the run settings and the paid button (one total, confirmed once) above, the conversations, counts and (for 梗与故事)
@@ -113,7 +133,9 @@ export function rehearsalView(host: RehearsalHost) {
   const newId = host.newId ?? (() => crypto.randomUUID());
   const gone = () => disposed || host.disposed();
 
-  const panel = drawer(host.modalParent(), { title: '多轮预演', wide: true, onClose: () => stopPoll() });
+  const panel = host.inline
+    ? inlinePanel(host.inline)
+    : drawer(host.modalParent(), { title: '多轮预演', wide: true, onClose: () => stopPoll() });
   panel.body.classList.add('rh');
   const rail = h('nav', { class: 'rh-rail', attrs: { 'aria-label': '脚本' } });
   const main = h('section', { class: 'rh-main' });
