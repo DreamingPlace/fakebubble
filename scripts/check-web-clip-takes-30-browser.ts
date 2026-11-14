@@ -329,8 +329,18 @@ async function run(freeTier: boolean) {
       await open(`characters/${id}`);
       await tab('声音');
       await wait(1500);
-      const unknown = page.locator('.vc-issue', { hasText: '未确认 · WEB_PROVIDER_WIRE_MISMATCH' });
-      check((await unknown.count()) >= 1, `${at}: the slot does not show 「未确认 · WEB_PROVIDER_WIRE_MISMATCH」`);
+      // Named exception (Part 24b-7d): a code is never visible text. The slot says 「结果未确认」, its sentence is on hover, and the code is
+      // behind 复制代码 (it was 「未确认 · WEB_PROVIDER_WIRE_MISMATCH」).
+      const unknown = page.locator('.vc-issue', { hasText: '结果未确认' });
+      check((await unknown.count()) >= 1, `${at}: the slot does not show 「结果未确认」`);
+      check(
+        (await page.locator('.vc-slot .admin-copy-code[data-code="WEB_PROVIDER_WIRE_MISMATCH"]').count()) >= 1,
+        `${at}: the slot's 复制代码 does not carry the code`,
+      );
+      check(
+        !((await page.locator('.vc-slot').first().innerText()) as string).includes('WEB_PROVIDER_WIRE_MISMATCH'),
+        `${at}: the code is in the visible text`,
+      );
       check(calls(/take-generate$/) === failedBefore + 1, `${at}: the failed call was sent more than once`);
       // Part 30b: 发布 with a slot that is not usable. The summary says so, the dropdown shows times (no ids), and 确认发布此版本
       // sends nothing: it names the slot.

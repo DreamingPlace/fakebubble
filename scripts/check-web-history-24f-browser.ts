@@ -233,7 +233,7 @@ try {
   await rows(page).first().waitFor();
   assert.equal(await rows(page).count(), 4, 'every published version is listed');
   const text = async (row: number) => ((await rows(page).nth(row).innerText()) as string).replace(/\s+/g, ' ');
-  assert.match(await text(0), new RegExp(`v${LIVE} 现行 2026-10-24 09:30 UTC 主管理员 仅改主色 只改了主色`));
+  assert.match(await text(0), new RegExp(`v${LIVE} 当前 2026-10-24 09:30 UTC 主管理员 仅改主色 只改了主色`)); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行」
   assert.match(await text(1), new RegExp(`v${SEED + 2} .* 主管理员 发布 改动：身份与展示、欢迎词、人设`));
   assert.match(await text(2), new RegExp(`v${SEED + 1} .* 主管理员 发布 改动：欢迎词、人设 .*不可恢复`));
   assert.match(await text(3), new RegExp(`v${SEED} .* 系统导入 发布 初始版本`));
@@ -293,7 +293,7 @@ try {
   const panelBox = await drawer.boundingBox();
   assert.ok(panelBox.y >= rowBox.y + rowBox.height - 2, 'the detail opens directly below its row');
   assert.match(drawerText, /完整快照（只读）/);
-  assert.match(drawerText, /与现行版本的差异/);
+  assert.match(drawerText, /与正式版本的差异/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「与现行版本的差异」
   assert.equal(await drawer.locator('textarea, input').count(), 0, 'the snapshot is read only');
   assert.ok((await drawer.locator('.pd-grid').count()) >= 2, 'the diff uses the 资料改动 comparison');
   assert.match(drawerText, /主色/, 'the colour differs from live');
@@ -358,9 +358,9 @@ try {
   await page.locator('.vh').getByRole('button', { name: '确认恢复' }).click();
   await page.locator('.vh .ot-row').nth(4).waitFor();
   assert.equal(await rows(page).count(), 5);
-  assert.match(await text(0), new RegExp(`v${LIVE + 1} 现行 .* 主管理员 恢复自 v${SEED + 2}`));
+  assert.match(await text(0), new RegExp(`v${LIVE + 1} 当前 .* 主管理员 恢复自 v${SEED + 2}`)); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行」
   assert.equal(
-    await rows(page).nth(1).locator('.admin-badge', { hasText: '现行' }).count(),
+    await rows(page).nth(1).locator('.admin-badge', { hasText: '当前' }).count(), // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行」
     0,
     'only one live version',
   );

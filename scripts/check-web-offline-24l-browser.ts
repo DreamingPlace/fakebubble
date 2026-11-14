@@ -236,7 +236,7 @@ try {
     await tab(owner, '发布').click();
     await owner.waitForTimeout(500);
     const avail = owner.locator('.wb-avail');
-    assert.match(((await avail.innerText()) as string).replace(/\s+/g, ' '), /现行 v\d+ 在线 下线/);
+    assert.match(((await avail.innerText()) as string).replace(/\s+/g, ' '), /正式 v\d+ 在线 下线/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行 v」
     await snap(owner, `05-publish-tab-owner-${width}`);
     await avail.getByRole('button', { name: '下线' }).click();
     const confirm = owner.locator('.wb-avail-confirm .ic');
@@ -309,7 +309,7 @@ try {
     await tab(page, '发布').click();
     await page.waitForTimeout(500);
     const text = ((await page.locator('.wb-avail').innerText()) as string).replace(/\s+/g, ' ').trim();
-    assert.match(text, /^现行 v\d+ 在线$/);
+    assert.match(text, /^正式 v\d+ 在线$/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行 v」
     assert.equal(await page.getByRole('button', { name: /^(下线|重新上线)$/ }).count(), 0, 'no 下线 / 重新上线 button');
     await snap(page, `10-publish-tab-non-owner-${width}`);
     // the server refuses it too
@@ -327,7 +327,7 @@ try {
   await offlinePage.waitForTimeout(500);
   assert.match(
     ((await offlinePage.locator('.wb-avail').innerText()) as string).replace(/\s+/g, ' '),
-    /^现行 v\d+ 已下线$/,
+    /^正式 v\d+ 已下线$/, // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行 v」
   );
   await snap(offlinePage, '11-publish-tab-non-owner-offline');
 } catch (error) {

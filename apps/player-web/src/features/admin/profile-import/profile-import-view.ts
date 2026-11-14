@@ -238,7 +238,7 @@ export function profileImportView(
         h('code', { class: 'pi-code', text: c.code }),
         h('span', {
           class: 'pi-file',
-          text: c.changed ? (c.revision === null ? '已导入' : `草稿修订 ${c.revision}`) : '没有变化',
+          text: c.changed ? (c.revision === null ? '已导入' : `草稿 ${c.revision}`) : '没有变化',
         }),
       ),
     );

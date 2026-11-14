@@ -1,3 +1,4 @@
+import { exactCount } from './ui/hover-value.ts';
 import {
   ADMIN_PERMISSION_PRESETS,
   type AdminPermission,
@@ -171,7 +172,7 @@ export function membersView(options: MembersViewOptions) {
         key: 'perm',
         label: '权限',
         mono: true,
-        cell: (member) => (member.role === 'owner' ? '全部' : String(member.permissions.length)),
+        cell: (member) => (member.role === 'owner' ? '全部' : exactCount(member.permissions.length)),
         tip: (member) =>
           member.role === 'owner'
             ? `主管理员总是全部 ${options.totalPermissions} 项`
@@ -288,7 +289,7 @@ export function membersView(options: MembersViewOptions) {
     }
     const zone = dangerZone({
       open: '收回全部功能权限',
-      impact: () => [{ n: String(member.permissions.length), label: '项功能权限' }],
+      impact: () => [{ n: exactCount(member.permissions.length), label: '项功能权限' }],
       note: '只收回管理功能。此账号仍可登录，所有会话、邮箱和玩家聊天保持不变。',
       confirm: '确认收回',
       busy: options.busy,

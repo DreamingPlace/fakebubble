@@ -318,7 +318,7 @@ export function modelsView(
     if (!view || !draft) return;
     // Only a warning that changes what the administrator should do: while the switch is off the table has no effect on players.
     // The title row carries the state (玩家选模型 · 开 / 关); the sentence stays for screen readers.
-    banner.textContent = view.featureOn ? '' : '玩家选模型未开启（PLAYER_MODEL_CHOICE_ENABLED）';
+    banner.textContent = view.featureOn ? '' : '玩家选模型未开启';
     banner.hidden = true;
     body.replaceChildren();
     for (const entry of draft.models) {

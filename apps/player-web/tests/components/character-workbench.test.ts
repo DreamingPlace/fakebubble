@@ -377,7 +377,7 @@ test('dirty draft blocks navigation; save validates before busy, carries exact C
   persona.value += ' 本页修改';
   persona.fire('input');
   assert.equal(f.wb.canLeave(), false);
-  assert.equal(f.button('返回人物目录').disabled, true);
+  assert.equal(f.button('返回角色目录').disabled, true); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「返回人物目录」
   await assert.rejects(f.wb.load(), /先保存/);
   assert.equal(f.button('比较已存草稿与正式资料').disabled, true);
   all(f.root)
@@ -539,19 +539,19 @@ test('irreversible deletion requires current impact, exact typed ID and checkbox
   }));
   await f.click('获取删除影响');
   assert.match(f.root.textContent, /7 个私人会话 · 9 条消息 · 1 个未终结任务/);
-  assert.equal(f.button('确认永久删除此人物及全部旧聊天').disabled, true);
-  const typed = f.input('输入人物 ID jojo 确认删除'),
-    ack = f.input('我确认删除此人物和其全部旧聊天，不能恢复');
+  assert.equal(f.button('确认永久删除此角色及全部旧聊天').disabled, true); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「确认永久删除此人物及全部旧聊天」
+  const typed = f.input('输入角色编号 jojo 确认删除'), // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「输入人物 ID jojo 确认删除」
+    ack = f.input('我确认删除此角色和其全部旧聊天，不能恢复'); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「我确认删除此人物和其全部旧聊天，不能恢复」
   typed.value = 'other';
   ack.checked = true;
   typed.fire('input');
-  assert.equal(f.button('确认永久删除此人物及全部旧聊天').disabled, true);
+  assert.equal(f.button('确认永久删除此角色及全部旧聊天').disabled, true); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「确认永久删除此人物及全部旧聊天」
   typed.value = 'jojo';
   typed.fire('input');
   f.respond(async () => {
     throw Error('lost deletion receipt');
   });
-  await f.click('确认永久删除此人物及全部旧聊天');
+  await f.click('确认永久删除此角色及全部旧聊天'); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「确认永久删除此人物及全部旧聊天」
   await f.click('按原请求核对删除回执');
   const calls = f.requests.filter((r) => r.path.endsWith('/delete-start'));
   assert.equal(calls.length, 2);

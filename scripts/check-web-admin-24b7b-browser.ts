@@ -580,11 +580,14 @@ try {
         n.filter((x) => x.getBoundingClientRect().width > 0).map((x) => x.textContent),
       );
       check(
-        voiceLabels.includes('Fish 音色 ID') && voiceLabels.includes('语速') && !voiceLabels.includes('音色档案 ID'),
-        `${w}: 声音 has the one Fish 音色 ID field and 语速 (${voiceLabels.join('|')})`,
+        // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): the voice field is 「音色编号」, it was 「Fish 音色 ID」.
+        voiceLabels.includes('音色编号') && voiceLabels.includes('语速') && !voiceLabels.includes('音色档案 ID'),
+        // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): the voice field is 「音色编号」, it was 「Fish 音色 ID」.
+        `${w}: 声音 has the one 音色编号 field and 语速 (${voiceLabels.join('|')})`,
       );
       const fishWidth = await page
-        .locator('label:has(> span:text-is("Fish 音色 ID")) input')
+        // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): the voice field is 「音色编号」, it was 「Fish 音色 ID」.
+        .locator('label:has(> span:text-is("音色编号")) input')
         .evaluate((n: HTMLElement) => Math.round(n.getBoundingClientRect().width));
       check(fishWidth < 560, `${w}: the Fish ID is a short field (${fishWidth}px)`);
       await shot('r2-voice');
@@ -601,7 +604,9 @@ try {
         0,
       `${w}: no separate 按角色 / 按模型 cards`,
     );
-    const seg = (label: string) => page.locator(`[aria-label="统计维度"] button:text-is("${label}")`);
+    // Named exception (Part 24b-7d): the 统计表 has no switch of its own; the page's 分组 switch (全部 / 按角色 / 按模型) drives it (按天 is 全部).
+    const seg = (label: string) =>
+      page.locator(`#admin-overview [aria-label="分组"] button:text-is("${label === '按天' ? '全部' : label}")`);
     const rowsOf = async (selector: string) =>
       (await page.$$eval(`${selector} .ot-row`, (n: Element[]) =>
         n.map((r) => [...r.querySelectorAll('.ot-cell')].map((c) => (c.firstChild?.textContent ?? '').trim())),

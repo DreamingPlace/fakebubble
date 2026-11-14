@@ -18,7 +18,8 @@ import { dataTable } from '../ui/data-table.ts';
 import type { OwnerAdminClient } from '../../../services/owner-admin-api.ts';
 import { previewManage } from '../owner/preview-manage.ts';
 import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
-import { hoverValue } from '../ui/hover-value.ts';
+import { exactCount, hoverValue } from '../ui/hover-value.ts';
+import { copyCodeButton, errorLine, sentenceOf } from '../ui/error-line.ts';
 import { keyValuePanel } from '../ui/key-value-panel.ts';
 import { paidButton } from '../ui/paid-button.ts';
 import { statusBadge, type BadgeTone } from '../ui/status-badge.ts';
@@ -651,7 +652,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     if (!p) return h('span', { class: 'admin-hint', text: '—' });
     if (p.final) return h('span', { text: p.final.bubbles.map((b) => b.text).join(' / ') });
     if (p.status === 'failed') {
-      const cell = h('span', { class: 'pw-fail', text: errorText(p.errorCode) });
+      const cell = errorLine(p.errorCode, { class: 'pw-fail', sentence: errorText(p.errorCode) });
       if (p.settlement) cell.append(' ', statusBadge(SETTLEMENT_LABEL[p.settlement], SETTLEMENT_TONE[p.settlement]));
       return cell;
     }
@@ -867,12 +868,19 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     if (topics.length || factOps.length)
       section('话题 / 事实', h('pre', { class: 'pw-pre', text: plain(withoutIds({ topics, factOps })) }));
     if (p.status === 'failed') {
-      const parts: Node[] = [h('p', { class: 'pw-fail', text: errorText(p.errorCode) })];
+      const parts: Node[] = [
+        h('p', {}, errorLine(p.errorCode, { class: 'pw-fail', sentence: errorText(p.errorCode) })),
+      ];
       for (const r of p.rejected)
         parts.push(
-          h('h5', {
-            text: `${r.phase === 'draft' ? '草稿' : '审核'}阶段被拒收的模型输出（${r.errorCode}${r.truncated ? `，已截断，原文 ${r.rawBytes} 字节` : ''}）`,
-          }),
+          h(
+            'h5',
+            {
+              text: `${r.phase === 'draft' ? '草稿' : '审核'}阶段被拒收的模型输出（${sentenceOf(r.errorCode, '原因未知').replace(/。$/, '')}${r.truncated ? `，已截断，原文 ${exactCount(r.rawBytes)} 字节` : ''}）`,
+            },
+            ' ',
+            copyCodeButton(r.errorCode),
+          ),
           h('pre', { class: 'pw-pre pw-raw', text: r.rawOutput }),
         );
       if (!p.rejected.length)
@@ -905,7 +913,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       // Part 24b-7: no id string in an admin view (the preview, run, budget and provider-request ids are not shown).
       '预演条件',
       keyValuePanel([
-        ['草稿修订', String(p.draftRevision)],
+        ['草稿', String(p.draftRevision)],
         [
           '模拟时间',
           p.simulatedTime

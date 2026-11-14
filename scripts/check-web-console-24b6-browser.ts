@@ -925,7 +925,7 @@ try {
   check(title.text === '角色工作台', `角色工作台: the title is "${title.text}"`);
   check(title.same, '角色工作台: the title is not in the same style as the other pages');
   check(
-    title.who === 'JOJO' && /正式 v2/.test(title.line) && /草稿修订 1/.test(title.line),
+    title.who === 'JOJO' && /正式 v2/.test(title.line) && /草稿 1/.test(title.line), // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「草稿修订 1」
     `角色工作台: the status line reads "${title.line}" (the role goes there)`,
   );
 

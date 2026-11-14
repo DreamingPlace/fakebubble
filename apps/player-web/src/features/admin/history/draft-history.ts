@@ -51,11 +51,11 @@ export function draftHistory(host: DraftHistoryHost) {
       numberText: (n) => `#${n}`,
       current: '当前',
       restore: '恢复到这一稿',
-      confirm: (n, head) => `把修订 ${n} 的内容保存为修订 ${head + 1}（不发布）`,
+      confirm: (n, head) => `把草稿 ${n} 的内容保存为草稿 ${head + 1}（不发布）`,
       shown: 20,
       empty: '还没有保存过的草稿。',
       more: (total, shown) => `只列出最近 ${shown} 次保存，共 ${total} 次。`,
-      columns: ['修订', '时间 · 保存者', '改动'],
+      columns: ['草稿', '时间 · 保存者', '改动'],
     },
     detail: (entry) => openRevision(entry),
     canRestore: () => host.canRestore(),
@@ -82,10 +82,10 @@ export function draftHistory(host: DraftHistoryHost) {
     const nodes: Node[] = [];
     if (!before) nodes.push(h('p', { class: 'vh-note', text: '这是这份草稿的第一次保存。' }));
     else {
-      const label = data.revisions[index + 1] ? `修订 ${data.revisions[index + 1]!.revision}` : '正式版本';
+      const label = data.revisions[index + 1] ? `草稿 ${data.revisions[index + 1]!.revision}` : '正式版本';
       for (const [name, was, now] of readableGroups(before, row.profile)) {
         if (was === now) continue;
-        nodes.push(h('h5', { class: 'vh-group', text: name }), diffGrid(was ?? '', now, `修订 ${row.revision}`, label));
+        nodes.push(h('h5', { class: 'vh-group', text: name }), diffGrid(was ?? '', now, `草稿 ${row.revision}`, label));
       }
       if (!nodes.length) nodes.push(h('p', { class: 'vh-note', text: '内容与上一稿相同。' }));
     }

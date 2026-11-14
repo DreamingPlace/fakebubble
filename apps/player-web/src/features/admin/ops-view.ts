@@ -1,3 +1,4 @@
+import { exactCount } from './ui/hover-value.ts';
 import type { StageLatencyDay } from '../../services/account-admin-api.ts';
 import { h } from '../cocreation/h.ts';
 import { openTable, type OpenColumn } from './ui/open-table.ts';
@@ -50,7 +51,7 @@ export function opsView(
         label: '回复数',
         align: 'end',
         mono: true,
-        cell: (d) => String(d.operations),
+        cell: (d) => exactCount(d.operations),
         tip: (d) => `${d.operations.toLocaleString('en-US')} 条`,
       },
       stage('文字排队 p50/p95', (d) => d.textQueueWait),

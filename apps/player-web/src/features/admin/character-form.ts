@@ -3,6 +3,7 @@ import { derivePalette, parseColour } from '../brand/character-colour.ts';
 import { ROSTER_COLOURS, whoUses } from './ui/character-colour.ts';
 import { CanonError, canonEditors } from './character-canon.ts';
 import { hoverValue } from './ui/hover-value.ts';
+import { dateField } from './ui/date-field.ts';
 import { evenWeights, upgradeWelcomes, type WelcomeLine } from '../../../../../packages/contracts/web-welcomes.ts';
 import { newLineId, welcomeList } from './welcome-list.ts';
 import { paletteList, type PaletteEntry } from './palette-list.ts';
@@ -375,7 +376,7 @@ export function characterForm(
   identity.append(el('legend', '身份与网页展示'));
   form.append(identity);
   sec(identity, '基本信息');
-  const id = field(identity, '固定人物 ID', base.template.id, {
+  const id = field(identity, '固定角色编号', base.template.id, {
     required: true,
     max: 128,
     kind: 'short',
@@ -384,7 +385,7 @@ export function characterForm(
   id.pattern = '[A-Za-z0-9_\\-]{1,128}';
   id.readOnly = !isNew;
   // The fixed-id sentence of an existing role is gone (Part 24b-4): the field is read-only, which says it. A new role keeps the id rule.
-  if (isNew) identity.append(el('p', '使用英文、数字、短横线或下划线；保存后不能改 ID。删除后的 ID 也不能复用。'));
+  if (isNew) identity.append(el('p', '使用英文、数字、短横线或下划线；保存后不能改编号。删除后的编号也不能复用。'));
   // 人设名称 / 网页展示名 are names (the template caps 人设名称 at 12): a single-line input sized to a name, wider only when the text is.
   const name = field(identity, '人设名称', base.template.name, { required: true, max: 100, kind: 'short' });
   const displayName = field(identity, '网页展示名', base.presentation.displayName, {
@@ -392,7 +393,13 @@ export function characterForm(
     max: 100,
     kind: 'short',
   });
-  const birthDate = field(identity, '设定生日（可选）', base.template.birthDate ?? '', { type: 'date' });
+  const birthDate = dateField({ label: '设定生日（可选）', value: base.template.birthDate ?? '' });
+  {
+    const row = el('label');
+    row.dataset.kind = 'short';
+    row.append(el('span', '设定生日（可选）'), birthDate.root);
+    identity.append(row);
+  }
   const publicDescription = field(identity, '公开简介', base.presentation.publicDescription, { kind: 'one', max: 500 });
   sec(identity, '颜色');
   const colour = colourField(identity, base.presentation.color, () => onChange(), isNew ? null : base.template.id);
@@ -459,7 +466,7 @@ export function characterForm(
   sec(voiceSection, '音色绑定');
   // Part 29 B: ONE voice field. The binding (profile id, version) is derived from the Fish id; only a hand-made one is kept as it is.
   const effective = voiceHint ?? null;
-  const fishId = field(voiceSection, 'Fish 音色 ID', base.template.voice?.referenceId ?? effective?.referenceId ?? '', {
+  const fishId = field(voiceSection, '音色编号', base.template.voice?.referenceId ?? effective?.referenceId ?? '', {
     max: 128,
   }) as HTMLInputElement;
   // Part 27: the `-` is escaped - the browser reads a pattern attribute with the v flag, where a bare trailing `-` in a class is a syntax error.
@@ -467,7 +474,7 @@ export function characterForm(
   if (fishId.parentElement)
     hoverValue(
       fishId.parentElement as HTMLElement,
-      '只登记已有音色的 ID，不创建／克隆外部声音。导入资料时填的 Fish 音色 ID 会直接带到这里。',
+      '只登记已有音色的编号，不创建／克隆外部声音。导入资料时填的 音色编号 会直接带到这里。',
     );
   const speed = field(voiceSection, '语速', String(base.template.voice?.speed ?? effective?.speed ?? 1), {
     type: 'number',
