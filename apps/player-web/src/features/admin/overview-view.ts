@@ -152,6 +152,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       metric = id;
       hiddenSeries.clear();
       paintSplitTabs();
+      paintTableMode();
       if (split === 'all') {
         paintTrend();
         return;
@@ -435,44 +436,62 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
   const shareOf = (r: SplitRow) =>
     r.whole > 0 ? `${Math.round(((r.published + r.failed + r.unknown) / r.whole) * 1000) / 10}%` : '—';
   /** The per-day values of one row, read from the same chart data the 趋势 draws (published replies per UTC day, names only). */
-  const dayDetail = (kindOfSplit: 'character' | 'model') => async (row: SplitRow) => {
-    if (row.total) return h('p', { class: 'admin-hint', text: '合计没有逐日明细。' });
-    if (span === '24h' || !chartOn()) return h('p', { class: 'admin-hint', text: '这段时间没有逐日数据。' });
-    const key = `replies|${rangeId()}`;
-    if (!splitViews.has(key)) splitViews.set(key, await deps.chart!.load('replies', rangeId()));
-    const view = splitViews.get(key)!;
-    const own = (kindOfSplit === 'character' ? view.characters : view.models)?.find(
-      (s) => (kindOfSplit === 'model' ? modelLabel(s.name) : s.name) === row.label,
-    );
-    if (!own) return h('p', { class: 'admin-hint', text: '这段时间没有逐日数据。' });
-    const lines = view.buckets.map((bucket, i) => ({ bucket, value: own.values[i] ?? null })).reverse();
-    return h(
-      'div',
-      { class: 'ov-split-days' },
-      h('p', { class: 'admin-hint', text: `${row.label} · 每天的成功回复（UTC，新的在前）` }),
-      h(
-        'ul',
-        { class: 'ov-split-day-list' },
-        ...lines.map((l) =>
-          h(
-            'li',
-            {},
-            h('span', { class: 'is-mono', text: l.bucket }),
-            hoverValue(
-              h('b', { class: 'is-mono', text: l.value === null ? '—' : exactCount(l.value) }),
-              l.value === null ? '这天还没有开始统计' : `${exactCount(l.value)} 条`,
+  const dayDetail =
+    (kindOfSplit: 'character' | 'model', chat = false) =>
+    async (row: SplitRow) => {
+      if (row.total) return h('p', { class: 'admin-hint', text: '合计没有逐日明细。' });
+      if (span === '24h' || !chartOn()) return h('p', { class: 'admin-hint', text: '这段时间没有逐日数据。' });
+      const metricName: ChartMetric = chat ? 'chat_users' : 'replies';
+      const key = `${metricName}|${rangeId()}`;
+      if (!splitViews.has(key)) splitViews.set(key, await deps.chart!.load(metricName, rangeId()));
+      const view = splitViews.get(key)!;
+      const own = (kindOfSplit === 'character' ? view.characters : view.models)?.find(
+        (s) => (kindOfSplit === 'model' ? modelLabel(s.name) : s.name) === row.label,
+      );
+      if (!own) return h('p', { class: 'admin-hint', text: '这段时间没有逐日数据。' });
+      const lines = view.buckets.map((bucket, i) => ({ bucket, value: own.values[i] ?? null })).reverse();
+      return h(
+        'div',
+        { class: 'ov-split-days' },
+        h('p', {
+          class: 'admin-hint',
+          text: `${row.label} · ${chat ? '每天的聊天人数' : '每天的成功回复'}（UTC，新的在前）`,
+        }),
+        h(
+          'ul',
+          { class: 'ov-split-day-list' },
+          ...lines.map((l) =>
+            h(
+              'li',
+              {},
+              h('span', { class: 'is-mono', text: l.bucket }),
+              hoverValue(
+                h('b', { class: 'is-mono', text: l.value === null ? '—' : exactCount(l.value) }),
+                l.value === null ? '这天还没有开始统计' : `${exactCount(l.value)} ${chat ? '人' : '条'}`,
+              ),
             ),
           ),
         ),
-      ),
-    );
-  };
+      );
+    };
   const byCharacter = openTable<SplitRow>({
     label: '玩家统计（按角色）',
     className: 'ov-by',
     detail: dayDetail('character'),
     rowKey: (r) => r.key,
     columns: splitColumns('角色'),
+    emptyText: '这段时间还没有回复。',
+    rowClass: (r) => (r.total ? 'is-total' : ''),
+    pinLast: (r) => r.total,
+  });
+  // 聊天人数 × 按角色: a player who chatted with two characters is in both rows, so the rows do not add up to a whole and 占比 is not
+  // shown. The counts stay; this is the same table without that column.
+  const byCharacterChat = openTable<SplitRow>({
+    label: '玩家统计（按角色，聊天人数）',
+    className: 'ov-by',
+    detail: dayDetail('character', true),
+    rowKey: (r) => r.key,
+    columns: splitColumns('角色').filter((c) => c.key !== 'share'),
     emptyText: '这段时间还没有回复。',
     rowClass: (r) => (r.total ? 'is-total' : ''),
     pinLast: (r) => r.total,
@@ -498,12 +517,15 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     h('div', { class: 'ov-table-head' }, tableTitle, h('div', { class: 'ovx-tools' }, tableNote)),
     days.root,
     byCharacter.root,
+    byCharacterChat.root,
     byModel.root,
   );
   function paintTableMode() {
     const tableMode = tableModeOf();
     days.root.hidden = tableMode !== 'day';
-    byCharacter.root.hidden = tableMode !== 'character';
+    const chatRoles = metric === 'chat';
+    byCharacter.root.hidden = tableMode !== 'character' || chatRoles;
+    byCharacterChat.root.hidden = tableMode !== 'character' || !chatRoles;
     byModel.root.hidden = tableMode !== 'model';
     tableNote.hidden = !(span === '24h' && tableMode !== 'day');
     tableNote.textContent = '近 7 天';
@@ -524,6 +546,8 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     if (next === 'model' && span === '24h') return '按小时的统计没有记录模型，请选 7 天以上。';
     return null;
   }
+  const pieDisabledReason = (): string | null =>
+    metric === 'chat' && split === 'character' ? '一位玩家可能和几个角色都聊过，按角色的人数不能相加成占比' : null;
   function paintSplitTabs() {
     for (const id of ['character', 'model'] as const) {
       const button = splitSwitch.buttons.get(id);
@@ -534,6 +558,19 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       button.dataset.locked = String(why !== null);
       if (why) button.setAttribute('title', why);
       else button.removeAttribute('title');
+    }
+    // 聊天人数 × 按角色: the pie would show shares of an over-counted whole (a player is in every character they chatted with).
+    const pieButton = kindSwitch.buttons.get('pie');
+    if (pieButton) {
+      const why = pieDisabledReason();
+      pieButton.disabled = why !== null;
+      pieButton.dataset.locked = String(why !== null);
+      if (why) pieButton.setAttribute('title', why);
+      else pieButton.removeAttribute('title');
+      if (why && kind === 'pie') {
+        kind = 'line';
+        kindSwitch.set('line');
+      }
     }
     if (split !== 'all' && splitDisabledReason(split)) {
       split = 'all';
@@ -914,6 +951,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
     const view = stats;
     if (!view) {
       byCharacter.setRows([]);
+      byCharacterChat.setRows([]);
       byModel.setRows([]);
       return;
     }
@@ -953,6 +991,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       };
     });
     byCharacter.setRows(chars.length ? [...chars, totalRow(chars)] : []);
+    byCharacterChat.setRows(chars.length ? [...chars, totalRow(chars)] : []);
     const modelsWhole = wholeOf(view.byModel);
     const models: SplitRow[] = view.byModel.map((m) => ({
       key: m.model || '(none)',
@@ -1045,6 +1084,7 @@ export function overviewView(root: HTMLElement, deps: OverviewDeps) {
       legend.replaceChildren();
       days.setRows([]);
       byCharacter.setRows([]);
+      byCharacterChat.setRows([]);
       byModel.setRows([]);
       overview = null;
       stats = null;

@@ -409,3 +409,46 @@ test('24b-7e combinations without data are disabled, with the reason on hover; a
     true,
   );
 });
+
+test('24b-7e 聊天人数 × 按角色: the pie is off with its reason, lines and bars stay, and the 统计表 has no 占比 (回复 keeps it)', async (t) => {
+  const f = mountOverview(t);
+  await f.api.load();
+  const tab = (group: string, label: string) =>
+    all(f.root, `[aria-label="${group}"] button`).find((b) => b.textContent === label)!;
+  const REASON = '一位玩家可能和几个角色都聊过，按角色的人数不能相加成占比';
+  // 回复 × 按角色: the pie is on, and the table has 占比
+  press(f.root, '指标', '回复');
+  press(f.root, '分组', '按角色');
+  await flush();
+  assert.equal(tab('图表类型', '饼图').disabled, false);
+  const withShare = all(f.root, '.ov-by').find((n) => n.getAttribute('aria-label') === '玩家统计（按角色）')!;
+  assert.equal(withShare.hidden, false);
+  assert.ok(all(withShare, '.ot-head .ot-cell').some((c) => c.textContent.includes('占比')));
+  // 聊天人数 × 按角色
+  press(f.root, '指标', '聊天人数');
+  await flush();
+  assert.equal(tab('图表类型', '饼图').disabled, true);
+  assert.equal(tab('图表类型', '饼图').getAttribute('title'), REASON);
+  assert.equal(tab('图表类型', '折线').disabled, false);
+  assert.equal(tab('图表类型', '柱状').disabled, false);
+  const chatTable = all(f.root, '.ov-by').find((n) => n.getAttribute('aria-label') === '玩家统计（按角色，聊天人数）')!;
+  assert.equal(chatTable.hidden, false);
+  assert.equal(withShare.hidden, true, 'the table with 占比 is not the one shown');
+  const heads = all(chatTable, '.ot-head .ot-cell').map((c) => c.textContent);
+  assert.ok(!heads.some((h) => h.includes('占比')), 'no share column');
+  assert.ok(heads.some((h) => h.includes('成功')) && heads.some((h) => h.includes('回复')), 'the counts stay');
+  assert.ok(all(chatTable, '.ot-row').length >= 3, 'its rows are there');
+  // a pie that was showing falls back to the line when it becomes unavailable
+  press(f.root, '分组', '全部');
+  press(f.root, '图表类型', '饼图');
+  assert.equal(tab('图表类型', '饼图').getAttribute('aria-pressed'), 'true');
+  press(f.root, '分组', '按角色');
+  await flush();
+  assert.equal(tab('图表类型', '饼图').getAttribute('aria-pressed'), 'false');
+  assert.equal(tab('图表类型', '折线').getAttribute('aria-pressed'), 'true');
+  // back to 回复: the pie and 占比 are back
+  press(f.root, '指标', '回复');
+  await flush();
+  assert.equal(tab('图表类型', '饼图').disabled, false);
+  assert.equal(withShare.hidden, false);
+});
