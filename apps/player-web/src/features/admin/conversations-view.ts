@@ -181,7 +181,7 @@ export function conversationsView(
   root.replaceChildren(listArea, pager, detailArea);
 
   /** Part 31: one question naming the count, then the deletion; the list is read again either way. */
-  async function askDelete(keys: ReviewKey[], afterDone?: () => void) {
+  async function askDelete(keys: ReviewKey[], afterDone?: () => void, where: HTMLElement = confirmHost) {
     if (!deps.owner || !deps.confirm || keys.length === 0) return;
     const yes = await deps.confirm(
       {
@@ -189,7 +189,7 @@ export function conversationsView(
         message: conversationsCopy.confirm(keys.length),
         confirmLabel: conversationsCopy.confirmGo(keys.length),
       },
-      confirmHost,
+      where,
     );
     if (!yes || deps.disposed()) return;
     await deps.run(async () => {
@@ -385,6 +385,8 @@ export function conversationsView(
         h('span', { text: conversationsCopy.page(detail.page + 1, pages, detail.total) }),
         pagerButton(conversationsCopy.next, detail.page + 1 < pages, () => openTranscript(key, detail.page + 1)),
       );
+    // Part 31b: inside an open conversation the list (and its confirm place) is hidden, so the question is asked here, under the bar
+    const detailConfirm = h('div', { class: 'review-confirm' });
     detailArea.replaceChildren(
       h(
         'div',
@@ -406,12 +408,13 @@ export function conversationsView(
                   text: conversationsCopy.deleteOne,
                   attrs: { type: 'button' },
                 });
-                del.addEventListener('click', () => void askDelete([key], () => back.click()));
+                del.addEventListener('click', () => void askDelete([key], () => back.click(), detailConfirm));
                 return del;
               })(),
             ]
           : []),
       ),
+      detailConfirm,
       nav(),
       h('ol', { class: 'review-lines' }, ...detail.lines.map(lineNode)),
       nav(),

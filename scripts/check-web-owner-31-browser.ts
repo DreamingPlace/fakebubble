@@ -338,6 +338,26 @@ try {
       await page.locator('.review-confirm .ic-go').click();
       await page.waitForTimeout(1200);
       assert.equal(await owner.locator('tbody tr').count(), 2);
+      // Part 31b: 删除此对话 works from INSIDE an open conversation too: the same question, then back to the list with the row gone
+      await owner.locator('tbody tr', { hasText: 'W3X4' }).click();
+      await page.locator('.review-detail .review-lines').waitFor({ timeout: 10_000 });
+      await page.locator('.review-detail button:has-text("删除此对话…")').click();
+      await page.locator('.review-detail .review-confirm .ic-text').waitFor({ timeout: 5_000 });
+      assert.match(
+        (await page.locator('.review-detail .review-confirm .ic-text').textContent()) ?? '',
+        /永久删除 1 条测试对话/,
+      );
+      await snap(page, 'conversation-detail-delete-1440');
+      await page.locator('.review-detail .review-confirm .ic-go').click();
+      await page.locator('.review-list').waitFor({ state: 'visible', timeout: 10_000 });
+      await page.waitForTimeout(1000);
+      assert.equal(await owner.locator('tbody tr', { hasText: 'W3X4' }).count(), 0, 'the row is gone from the list');
+      assert.equal(await owner.locator('tbody tr').count(), 1);
+      assert.equal(
+        f.store.get<{ n: number }>("SELECT count(*) n FROM web_review_archive WHERE review_code='W3X4'")!.n,
+        0,
+        'and its lines are deleted',
+      );
     }
     // 已关闭账号: 玩家编号 and the closing day only
     const panel = page.locator('.closed-panel');
