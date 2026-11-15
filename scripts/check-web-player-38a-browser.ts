@@ -226,6 +226,18 @@ try {
     await send('第二条');
     await until(2, 0, 'data-queued', 'true');
     assert.equal(await state(1, 0, 'data-playing'), 'true', `${tag}: sending did not stop the clip`);
+    // every character message carries its 30 px avatar (Part 38a), also several in a row
+    assert.equal(
+      await card
+        .locator('.message-row.incoming .message-avatar')
+        .evaluateAll(
+          (nodes: HTMLElement[]) =>
+            nodes.filter((n) => getComputedStyle(n).visibility === 'visible' && n.offsetWidth === 30).length ===
+            nodes.length,
+        ),
+      true,
+      `${tag}: every incoming row shows a 30 px avatar`,
+    );
     await snap('queued');
     // ...and plays in order: 1-0 ends, 1-1, then 2-0
     await until(1, 1, 'data-playing', 'true');

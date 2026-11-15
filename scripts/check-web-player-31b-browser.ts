@@ -164,7 +164,8 @@ try {
       .locator('.card-slot.is-active .welcome-row .message-avatar')
       .evaluate((n: HTMLElement) => n.offsetWidth);
     assert.equal(small, 30, `30 px message avatar at ${tag}`);
-    // an avatar only beside the last bubble of a group (two incoming rows in a row: the first one's avatar keeps its space but is hidden)
+    // Named exception (Part 38a, owner decision 2026-11-15): 31b showed an avatar only beside the last bubble of a group (the first of two
+    // incoming rows was 'hidden'); now every character message shows its avatar, so both rows are 'visible' (and 30 px).
     const hidden = await page.evaluate(() => {
       const body = document.querySelector('.card-slot.is-active .sent-messages')!;
       const make = () => {
@@ -181,7 +182,7 @@ try {
       b.remove();
       return vis;
     });
-    assert.deepEqual(hidden, ['hidden', 'visible']);
+    assert.deepEqual(hidden, ['visible', 'visible']);
     await snap(page, `chat-avatar-${tag}`);
     await ctx.close();
   }

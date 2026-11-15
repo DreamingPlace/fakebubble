@@ -20203,10 +20203,7 @@ html.theme-fade *::after {
   position: relative;
   overflow: hidden;
 }
-/* an avatar only beside the last bubble of a group: the space stays, so the bubbles keep their column */
-.page-shell .message-row.incoming:has(+ .message-row.incoming) > .message-avatar {
-  visibility: hidden;
-}
+/* Part 38a (owner decision 2026-11-15): every character message shows its avatar, not only the last of a group; the player's stay as they are */
 /* a returning visit lands on its card at once; the page fades in over 100 ms (no spin from position 1) */
 .page-shell[data-landing="resume"] .carousel,
 .page-shell[data-landing="resume"] .avatar-nav {
