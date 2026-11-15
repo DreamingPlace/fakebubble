@@ -27,13 +27,14 @@ export const presentationFields = (profile: CharacterProfile): Field[] => {
     ['公开简介', plain(p.publicDescription)],
     ['主色', plain(p.color)],
     // Part 24k-2: line by line, each with its percent.
-    ...upgradeWelcomes(p).map(
-      (line, i, all) =>
-        [
-          all.length === 1 ? '欢迎词' : `欢迎词 ${i + 1}`,
-          all.length === 1 ? line.text : `${line.text}（${line.weight}%）`,
-        ] as Field,
-    ),
+    ...upgradeWelcomes(p).flatMap((line, i, all): Field[] => [
+      [
+        all.length === 1 ? '欢迎词' : `欢迎词 ${i + 1}`,
+        all.length === 1 ? line.text : `${line.text}（${line.weight}%）`,
+      ],
+      // Part 37a-2: the 情境 note, when the line has one.
+      ...(line.context ? ([[all.length === 1 ? '情境' : `情境 ${i + 1}`, line.context]] as Field[]) : []),
+    ]),
     [
       '色板',
       p.palette?.length

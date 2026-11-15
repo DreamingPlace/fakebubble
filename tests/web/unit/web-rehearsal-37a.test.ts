@@ -6,6 +6,8 @@ import test from 'node:test';
 import { WebAccountAdmin } from '../../../apps/server/admin/web-account-admin.ts';
 import { WebProviderBudget } from '../../../apps/server/budget/web-provider-budget.ts';
 import { WebCharacterAdmin } from '../../../apps/server/characters/web-character-admin.ts';
+import { publishedWebCharacters } from '../../../apps/server/characters/web-character-catalog.ts';
+import { writerRoster } from '../../../apps/server/generation/writer-roster.ts';
 import { installWebCharacterCatalog } from '../../../apps/server/characters/web-character-catalog.ts';
 import { WebCharacterPreviews } from '../../../apps/server/characters/web-character-preview.ts';
 import {
@@ -384,4 +386,71 @@ test('37a columns: a run stored before this Part (a model key without a writer) 
     f.store.get<{ models_json: string }>('SELECT models_json FROM web_rehearsal_runs')!.models_json,
     '["deepseek"]',
   );
+});
+
+// ---- Part 37a-2: 开场 (a welcome line with its 情境, then 5 follow-ups) --------------------------------------------------------
+
+test('37a-2 开场: starts from the welcome line with its 情境; only the 新 column is told the note and the teammates', async (t) => {
+  const f = fixture(t);
+  const note = '弟弟家朋用你的账号在他的电话手表上加了玩家，你刚发现。这是你和玩家第一次说话。';
+  const profile = f.chars.detail(f.auth, CHARACTER).draft!.profile;
+  profile.presentation.welcomes[0]!.text = '家朋怎么又拿电话手表乱加人';
+  profile.presentation.welcomes[0]!.context = note;
+  const saved = f.chars.save(f.auth, CHARACTER, { expectedRevision: f.saved.revision, profile });
+  // the note is part of the draft
+  assert.equal(f.chars.detail(f.auth, CHARACTER).draft!.profile.presentation.welcomes[0]!.context, note);
+  const body = f.input({
+    draftRevision: saved.revision,
+    profileHash: saved.contentHash,
+    source: { kind: 'set', set: 'opening' },
+    models: ['deepseek', 'deepseek-v8'],
+  });
+  const estimate = f.chars.rehearsalEstimate(f.auth, CHARACTER, body);
+  assert.equal(estimate.turns, 5, 'five player follow-ups, below the 6 a script of your own needs');
+  f.chars.rehearsalStart(f.auth, CHARACTER, {
+    ...body,
+    requestId: 'rehearsal-0501',
+    acknowledgeMicros: estimate.totalMicros,
+  });
+  await drain(f);
+  const units = f.store.all<{ request_json: string; model_key: string; turn: number }>(
+    'SELECT request_json,model_key,turn FROM web_rehearsal_units ORDER BY model_key,turn',
+  );
+  assert.equal(units.filter((u) => u.model_key === 'deepseek-v8').length, 5);
+  for (const unit of units) {
+    const request = JSON.parse(unit.request_json) as { opening?: { text: string; context?: string }; roster?: unknown };
+    assert.equal(request.opening?.text, '家朋怎么又拿电话手表乱加人');
+    if (unit.model_key === 'deepseek-v8') {
+      assert.equal(request.opening?.context, note, `turn ${unit.turn}: a young chat keeps the note`);
+      assert.ok(Array.isArray(request.roster), 'a 新 column carries the teammates');
+    } else {
+      assert.ok(!('context' in request.opening!), '旧 never carries the note');
+      assert.ok(!('roster' in request), '旧 never carries the roster');
+    }
+  }
+  // a script of your own is still 6 to 20 turns
+  assert.throws(() => f.chars.rehearsalEstimate(f.auth, CHARACTER, f.input({ source: { kind: 'set', set: 'nope' } })), {
+    code: 'INVALID_REHEARSAL_SOURCE',
+  });
+});
+
+test('37a-2 roster: the other published characters in catalog order, cards only (name, aliases, one-liner), never the character itself', (t) => {
+  const f = fixture(t);
+  const catalog = f.store.all<{ character_id: string }>(
+    'SELECT character_id FROM web_character_catalog ORDER BY position',
+  );
+  assert.ok(catalog.length >= 3, 'the fixture publishes several characters');
+  const roster = writerRoster(f.store, CHARACTER);
+  assert.deepEqual(
+    roster.length,
+    catalog.length - 1,
+    'everybody else, whatever CAST_CONTEXT_ENABLED says (the fixture never turns it on)',
+  );
+  for (const card of roster) assert.deepEqual(Object.keys(card).sort(), ['aliases', 'name', 'oneLiner']);
+  const names = roster.map((card) => card.name);
+  const expected = publishedWebCharacters(f.store)
+    .filter((entry) => entry.characterId !== CHARACTER)
+    .map((entry) => entry.presentation.displayName);
+  assert.deepEqual(names, expected, "the console's catalog order (no cast file published: the public names)");
+  assert.ok(!JSON.stringify(roster).includes('persona'), 'no setting travels');
 });

@@ -11,6 +11,12 @@ import type { WriterChoice } from './web-writer.ts';
  */
 export const REHEARSAL_TURNS_MIN = 6;
 export const REHEARSAL_TURNS_MAX = 20;
+/**
+ * Part 37a-2: the built-in 开场 script starts from one of the character's welcome lines (with its 情境) and has 5 player follow-ups,
+ * so it is the one script allowed below REHEARSAL_TURNS_MIN. A script of your own still needs 6.
+ */
+export const REHEARSAL_OPENING_TURNS = 5;
+export const rehearsalTurnsMin = (set?: string) => (set === 'opening' ? REHEARSAL_OPENING_TURNS : REHEARSAL_TURNS_MIN);
 /** Longest player message of a turn, in characters. */
 export const REHEARSAL_TURN_CHARS = 200;
 export const REHEARSAL_NAME_CHARS = 30;
@@ -50,11 +56,12 @@ export const rehearsalColumnLabel = (key: string) => {
   return column ? `${REHEARSAL_MODEL_LABELS[column.model]}·${REHEARSAL_WRITER_LABELS[column.writer]}` : key;
 };
 
-export const REHEARSAL_SETS = ['chat', 'repeat'] as const;
+export const REHEARSAL_SETS = ['chat', 'repeat', 'opening'] as const;
 export type RehearsalSet = (typeof REHEARSAL_SETS)[number];
 export const REHEARSAL_SET_LABELS: Readonly<Record<RehearsalSet | 'memes', string>> = Object.freeze({
   chat: '日常闲聊',
   repeat: '重复检测',
+  opening: '开场',
   memes: '梗与故事',
 });
 

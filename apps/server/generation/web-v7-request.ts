@@ -28,7 +28,8 @@ import { recallsMemory } from '../admission/web-free-tier.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
 import { castRequestContext } from '../cast/cast-store.ts';
 import { castPromptHash } from './cast-prompt.ts';
-import { frozenOpening } from './opening-line.ts';
+import { frozenOpening, openingForWriter } from './opening-line.ts';
+import { writerRoster } from './writer-roster.ts';
 
 /** Messages (published prior turns + the current input) a request carries; the opening is added only when none was cut. */
 const HISTORY_WINDOW = 24;
@@ -373,7 +374,11 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     // Part 24a: only a snapshot that froze a cast view carries `cast`. The key is absent (not null) otherwise, so the serialized
     // request and its digest are what they were before.
     ...(cast ? { cast } : {}),
-    ...(opening ? { opening } : {}),
+    ...(opening
+      ? { opening: openingForWriter(opening, v8, selected.filter((row) => row?.author_kind === 'player').length) }
+      : {}),
+    // Part 37a-2: the v8 writer's teammates (public catalog data); a v7 request gains no key.
+    ...(v8 ? { roster: writerRoster(store as never, scope.characterId) } : {}),
     messages: selected.map((row) => dto(row!)),
     mustClose: false,
     evidence: [],

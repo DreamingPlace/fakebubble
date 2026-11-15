@@ -214,7 +214,15 @@ export interface TextGenerationRequest {
   };
   // Part 26a: the character's welcome line, from the published revision the template was frozen from, said as the character's
   // first line when the history reaches the start of a normal chat. Absent - never null - otherwise.
-  opening?: { text: string };
+  opening?: {
+    text: string /** Part 37a-2 (v8 only): the 情境 note of that line, while the chat is young. Never spoken. */;
+    context?: string;
+  };
+  /**
+   * Part 37a-2 (v8 only): the compact roster of the OTHER published characters, in the console's catalog order: a name, the aliases
+   * others may use and the cast card's one-liner. No hidden setting, no relationship. Absent on a v7 request.
+   */
+  roster?: { name: string; aliases: string[]; oneLiner: string }[];
   messages: MessageDTO[];
   mustClose: boolean;
   // Untrusted source/memory records, never interpolated as developer instructions.

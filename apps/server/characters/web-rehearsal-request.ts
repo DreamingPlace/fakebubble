@@ -4,6 +4,7 @@ import { NEW_PLAYER_RELATIONSHIP } from '../../../packages/contracts/relationshi
 import { ensure } from '../../../packages/domain/errors.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
 import { writerDraftMessages } from '../generation/writer-v8.ts';
+import { openingForWriter } from '../generation/opening-line.ts';
 import { parseRehearsalColumn } from '../../../packages/contracts/web-rehearsal.ts';
 
 /**
@@ -18,7 +19,10 @@ const TURN_GAP_MS = 120_000;
 /** Everything a run freezes when it is queued; the cells are built from it and from the script, never from a live draft. */
 export interface RehearsalFrozen {
   template: TextGenerationRequest['character'];
-  opening?: { text: string };
+  /** Part 37a-2: `context` is the line's 情境 note; only a 新 column reads it. */
+  opening?: { text: string; context?: string };
+  /** Part 37a-2: the teammates a 新 column gets (frozen with the run; absent when no 新 column runs). */
+  roster?: NonNullable<TextGenerationRequest['roster']>;
   cast?: CastRequestContext;
   /** The clock of the first turn. */
   baseAt: number;
@@ -90,7 +94,10 @@ export function rehearsalRequest(
     evidence: [],
     deliveryMode: frozen.template.voice ? 'voice' : 'text',
     // The welcome line is the character's first line only while the history still reaches the start of the chat.
-    ...(frozen.opening && all.length <= REHEARSAL_HISTORY_WINDOW ? { opening: frozen.opening } : {}),
+    ...(frozen.opening && all.length <= REHEARSAL_HISTORY_WINDOW
+      ? { opening: openingForWriter(frozen.opening, v8, turn) }
+      : {}),
+    ...(v8 && frozen.roster ? { roster: structuredClone(frozen.roster) } : {}),
     messages,
   };
   if (v8) writerDraftMessages(request);

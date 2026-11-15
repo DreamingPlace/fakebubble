@@ -16,7 +16,7 @@ import {
   type VoiceModelBinding,
 } from '../../../packages/contracts/audio.ts';
 import type { SoundCue } from '../../../packages/contracts/index.ts';
-import { FishAudio, fishSpeechRequest } from '../../../workers/audio/fish.ts';
+import { FishAudio, dropLoudDirections, fishSpeechRequest } from '../../../workers/audio/fish.ts';
 import { webSpeechRequest } from './web-speech-request.ts';
 import { finalizeFishWav, inspectPCM, pcmLevels } from '../../../workers/audio/wav.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
@@ -392,7 +392,7 @@ export class WebProviderRunner {
       // Part 37a (v8): inline directions go to Fish only on Drama 3 (an s2 model would read the brackets aloud); the stored,
       // shown and checked text is the stripped one either way.
       ...(model === 'drama-3' && typeof stored.bubbleMarkup?.[key.ordinal] === 'string'
-        ? { markup: stored.bubbleMarkup[key.ordinal]! }
+        ? { markup: dropLoudDirections(stored.bubbleMarkup[key.ordinal]!) }
         : {}),
     });
     const prepared = fishSpeechRequest(speech, model);

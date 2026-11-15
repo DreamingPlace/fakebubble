@@ -237,9 +237,12 @@ test('built-in sets: 日常闲聊 and 重复检测 are 6 to 20 turns, there is n
   const sets = builtinSets();
   assert.deepEqual(
     sets.map((s) => s.label),
-    ['日常闲聊', '重复检测'],
+    // NAMED EXCEPTION (Part 37a-2): the owner asked for a built-in 「开场」 set, listed after the two that were here.
+    ['日常闲聊', '重复检测', '开场'],
   );
-  for (const set of sets) assert.ok(set.turns.length >= 6 && set.turns.length <= 20, set.label);
+  // NAMED EXCEPTION (Part 37a-2): 开场 is 5 player follow-ups (the welcome line is the first, character, message); every other set still needs 6.
+  for (const set of sets)
+    assert.ok(set.turns.length >= (set.set === 'opening' ? 5 : 6) && set.turns.length <= 20, set.label);
   const plan = memeTurnPlan(['a', 'b', 'c']);
   assert.equal(plan.length, 9);
   for (let i = 1; i < plan.length; i++) assert.notEqual(plan[i]!.item, plan[i - 1]!.item);
@@ -393,7 +396,8 @@ test('scripts: save, rename and delete are idempotent per request id; 6 to 20 tu
   );
   assert.deepEqual(
     library.sets.map((s) => s.label),
-    ['日常闲聊', '重复检测'],
+    // NAMED EXCEPTION (Part 37a-2): the library lists the built-in 开场 set too.
+    ['日常闲聊', '重复检测', '开场'],
   );
   assert.deepEqual(
     library.models.map((m) => [m.id, m.available]),
