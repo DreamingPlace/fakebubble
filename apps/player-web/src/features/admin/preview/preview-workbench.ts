@@ -1604,7 +1604,8 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
   const focusInput = () => {
     paintSettings();
     input.focus?.();
-    page.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+    // the split (its halves scroll on their own) or the page comes to the top of the window
+    (splitBox ?? page).scrollIntoView?.({ block: 'start', behavior: 'auto' });
   };
   root.addEventListener('pw-focus', focusInput);
   return {

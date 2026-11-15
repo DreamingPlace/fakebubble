@@ -6756,6 +6756,9 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   background: var(--ad-primary);
   color: #fff;
 }
+.account-admin-page.admin-shell button.admin-primary {
+  transition-duration: calc(60ms * var(--ad-motion));
+}
 .account-admin-page.admin-shell button.admin-primary:hover:not(:disabled),
 .account-admin-page.admin-shell .cs button.cs-primary:hover:not(:disabled),
 .account-admin-page.admin-shell button.tiers-new:hover:not(:disabled) {
@@ -16162,7 +16165,7 @@ button:not(
 .account-admin-page.admin-shell .rh-cell {
   padding: 10px 12px;
   border-bottom: 1px solid var(--ad-hairline);
-  animation: rhIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+  animation: rhFade calc(240ms * var(--ad-motion)) var(--ad-ease) both;
   animation-delay: calc(var(--rh-i, 0) * 20ms * var(--ad-motion));
 }
 .account-admin-page.admin-shell .rh-player {
@@ -16283,6 +16286,15 @@ button:not(
   to {
     opacity: 1;
     transform: none;
+  }
+}
+/* a reply that lands fades in where it is: it never moves the row (the cells of a turn stay on one line while it arrives) */
+@keyframes rhFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 @keyframes rhPulse {

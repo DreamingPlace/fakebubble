@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -168,9 +168,25 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
       const compare = store.get<{ request_json: string }>(
         "SELECT request_json FROM web_review_compare_cases WHERE status='generating'",
       );
-      const rehearsal = store.get<{ request_json: string }>(
-        "SELECT request_json FROM web_rehearsal_units WHERE status='generating' AND request_json IS NOT NULL",
+      // Part 40: columns run side by side, so several units generate at once; the call says which one it is for (DeepSeek: the scope
+      // hash it carries; the other two: their own endpoint).
+      const units = store.all<{ request_json: string; model_key: string }>(
+        "SELECT request_json,model_key FROM web_rehearsal_units WHERE status='generating' AND request_json IS NOT NULL",
       );
+      const url0 = String(_url);
+      const named = url0.includes('x.ai') ? 'xai' : url0.includes('googleapis') ? 'gemini' : null;
+      const scopeHash = (json: string) => {
+        const scope = JSON.parse(json).scope;
+        return createHash('sha256')
+          .update(JSON.stringify([scope.worldId, scope.conversationId, scope.characterId]))
+          .digest('hex');
+      };
+      const rehearsal =
+        (typeof body.user_id === 'string'
+          ? units.find((u) => scopeHash(u.request_json) === body.user_id)
+          : undefined) ??
+        (named ? units.find((u) => u.model_key.startsWith(named)) : undefined) ??
+        units[0];
       const generating =
         compare ??
         rehearsal ??
