@@ -16126,6 +16126,12 @@ button:not(
   margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
+.account-admin-page.admin-shell .rh-code {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ad-muted);
+  overflow-wrap: anywhere;
+}
 .account-admin-page.admin-shell .rh-pane {
   animation: rhIn calc(220ms * var(--ad-motion)) var(--ad-ease) both;
   overflow-x: auto;
@@ -20512,12 +20518,6 @@ html.theme-fade *::after {
   position: absolute;
   left: 16px;
   bottom: 14px;
-}
-.account-admin-page.admin-shell .rh-code {
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--ad-muted);
-  overflow-wrap: anywhere;
 }
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
 @media (prefers-reduced-motion: reduce) {
