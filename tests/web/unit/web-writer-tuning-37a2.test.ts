@@ -170,7 +170,7 @@ test('a v8 voice reply with a shouting direction publishes the text and sends Fi
     draft.bubbles.map((bubble) => bubble.text),
     ['太好了', '那我们晚点说好吗'],
   );
-  const markups = (draft as { markups: (string | null)[] }).markups;
+  const markups = (draft as unknown as { markups: (string | null)[] }).markups;
   assert.equal(markups[0], null);
   assert.equal(markups[1], '[慢一点]那我们晚点说[停一下]好吗');
   const candidate = applyReview(
