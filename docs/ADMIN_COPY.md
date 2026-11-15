@@ -26,6 +26,7 @@ date control only: nothing sent to the server and nothing stored changes.
 | The thing a player talks to | **角色** | 人物 (人物 only in the deletion wording that names a character's data) |
 | A player's public id | **玩家编号** | 玩家号, 用户 |
 | Who runs the console | **管理员** (the owner is **主管理员**) | 用户, 账号 (账号 is a player's or admin's login) |
+| The note under a welcome line (what was happening when it was sent; never spoken) | **情境** (hover tip only) | 备注, 旁白 |
 | Voice audio the character plays | **成品** (the slot) · **素材版本** (a set of 成品) | 成品位置, 声音素材 |
 | A provider call whose result is not known | **结果未知的调用** / **结果未确认** | UNKNOWN |
 | Model-run counts per kind of player | **按玩家类型** | 按用户 |

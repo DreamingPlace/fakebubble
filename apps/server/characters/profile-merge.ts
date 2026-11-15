@@ -140,10 +140,12 @@ export function mergeProfile(
       weights = evenWeights(read.welcome.length),
       taken = new Set<string>();
     const after = read.welcome.map((text, index) => {
-      let id = before.find((line) => line.text === text && !taken.has(line.id))?.id ?? legacyWelcomeId(text);
+      const known = before.find((line) => line.text === text && !taken.has(line.id));
+      let id = known?.id ?? legacyWelcomeId(text);
       if (taken.has(id)) id = `${id}-${index + 1}`;
       taken.add(id);
-      return { id, text, weight: weights[index]! };
+      // Part 37a-2: a line that stays keeps its 情境 note (a profile file has no place for one).
+      return { id, text, weight: weights[index]!, ...(known?.context ? { context: known.context } : {}) };
     });
     set(
       '欢迎词',

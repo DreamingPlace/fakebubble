@@ -35,7 +35,8 @@
     "check:web:admin-24b7c": "node scripts/check-web-admin-24b7c-browser.ts",
     "check:web:admin-24b7d": "node scripts/check-web-admin-24b7d-browser.ts",
     "check:web:writer-37a": "node scripts/check-web-writer-37a-browser.ts",
-    "check:web:cocreation-39": "node scripts/check-web-cocreation-39-browser.ts"
+    "check:web:cocreation-39": "node scripts/check-web-cocreation-39-browser.ts",
+    "check:web:welcome-context-37a2": "node scripts/check-web-welcome-context-37a2-browser.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

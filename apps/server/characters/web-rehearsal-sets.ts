@@ -36,7 +36,19 @@ const REPEAT: readonly string[] = [
   '所以猫到底为什么半夜发疯',
   '算了不聊猫了……不过它又去推杯子了',
 ];
-const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = { chat: CHAT, repeat: REPEAT };
+/**
+ * Part 37a-2: 开场. The run starts from one of the character's welcome lines (with its 情境 note), so these are the player's first
+ * five replies to it: who are you, why did you add me, a question about a teammate, small talk, a goodbye. The same five for every
+ * character; what is per character is the welcome line (and note) the conversation starts from.
+ */
+const OPENING: readonly string[] = [
+  '你是谁呀？',
+  '你为什么加我？',
+  '你们团队里是不是还有别人？跟我说说其中一个呗',
+  '那你平时都爱干嘛',
+  '好啦我先去忙了，下次聊',
+];
+const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = { chat: CHAT, repeat: REPEAT, opening: OPENING };
 
 export const builtinSet = (set: RehearsalSet): string[] => [...SETS[set]];
 export const builtinSets = (): RehearsalSetView[] =>
