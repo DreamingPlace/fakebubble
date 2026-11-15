@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Part 39 · 共创 · 设计板</title>
+<style>
+:root{--sand:#d7c8b9;--ink:#29423b;--text:#24302f;--green:#24584e;--mint:#d5e8de;--soft:#8a9690;--line:#e8e1d8;--board:#efeae4}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--board);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+.board{padding:32px 24px 80px;max-width:1500px;margin:0 auto}
+.board>header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:8px}
+.board h1{font-size:22px;margin:0}
+.board .sub{color:#6b6760;font-size:14px;margin:0 0 28px}
+.row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;margin-bottom:44px}
+.frame{display:flex;flex-direction:column;gap:10px}
+.frame>figcaption{font-size:13px;color:#5d5953;max-width:390px}
+.frame>figcaption b{color:#24302f}
+.frame.wide>figcaption{max-width:none}
+h2.sec{font-size:15px;margin:0 0 14px;color:#24302f;letter-spacing:.02em}
+/* ---- the player sheet, at phone size or desktop size ---- */
+.sheet{--cc-color:#d7c8b9;position:relative;width:390px;height:844px;overflow:hidden;border-radius:28px;background:radial-gradient(120% 60% at 50% -10%,rgba(255,255,255,.55),transparent 60%),var(--cc-color);box-shadow:0 20px 50px rgba(44,51,47,.18);display:flex;flex-direction:column}
+.sheet.desk{width:1440px;height:900px;border-radius:18px}
+.s-head{display:flex;align-items:center;gap:12px;padding:18px 18px 8px}
+.s-close{width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.7);font-size:20px;color:var(--ink)}
+.s-title{flex:1;display:flex;flex-direction:column;gap:2px}
+.name-btn{all:unset;cursor:pointer;font-size:20px;font-weight:800;letter-spacing:-.01em;color:var(--ink);border-radius:8px;padding:0 4px;margin-left:-4px;transition:background 160ms}
+.name-btn:hover,.name-btn:focus-visible{background:rgba(255,255,255,.6)}
+.s-progress{font-size:12.5px;color:#5d6c66}
+.s-body{flex:1;overflow:auto;padding:8px 18px 18px;display:flex;flex-direction:column;gap:14px}
+.desk .s-body{flex-direction:row;gap:28px;padding:12px 40px 30px;align-items:flex-start}
+.desk .col-l{flex:0 0 420px;display:flex;flex-direction:column;gap:14px}
+.desk .col-r{flex:1;display:flex;flex-direction:column;gap:14px;max-width:640px}
+.card{background:#fff;border-radius:24px;padding:16px 16px 14px;box-shadow:0 18px 40px rgba(44,51,47,.12),0 3px 8px rgba(44,51,47,.07)}
+.world{padding:14px 16px;border-radius:18px;background:rgba(255,255,255,.55);font-size:14px;line-height:1.7;color:#33413d;max-height:132px;overflow:auto;white-space:pre-wrap}
+.world::-webkit-scrollbar{width:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{position:relative;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 6px 0 12px;border-radius:999px;background:#f3efe9;font-size:14px}
+.chip i{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.chip .nm{all:unset;cursor:pointer;font-weight:700;padding:2px 4px;border-radius:6px}
+.chip .nm:hover,.chip .nm:focus-visible{background:rgba(36,88,78,.12)}
+.chip .x{all:unset;cursor:pointer;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;color:#8a8279;font-size:14px}
+.chip .x:hover{background:rgba(0,0,0,.06)}
+.chip.dice{background:var(--mint);padding:0 14px;font-weight:700;color:var(--green)}
+.chip.plus{all:unset;box-sizing:border-box;cursor:pointer;display:inline-grid;place-items:center;width:36px;height:36px;border-radius:50%;border:1.5px dashed #b9b0a5;color:#6d655b;font-size:20px;line-height:1;position:relative;transition:background 160ms,border-color 160ms}
+.chip.plus:hover,.chip.plus[aria-expanded=true]{background:#fff;border-color:var(--green);color:var(--green)}
+.menu{position:absolute;left:calc(100% + 8px);top:-4px;z-index:5;min-width:170px;max-height:236px;overflow:auto;background:#fff;border-radius:16px;padding:6px;box-shadow:0 14px 34px rgba(44,51,47,.22);animation:menuIn 200ms cubic-bezier(.2,.82,.24,1) both;transform-origin:left top}
+@keyframes menuIn{from{opacity:0;transform:translateX(-6px) scale(.97)}}
+.menu li{list-style:none;display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:10px;font-size:14px;color:#24302f}
+.menu li.sel{background:var(--mint)}
+.menu li i{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.menu ul{margin:0;padding:0}
+.menu li.gone{opacity:.4}
+/* stars */
+.pair-rate{display:flex;flex-direction:column;gap:18px}
+.rate{display:flex;flex-direction:column;gap:6px}
+.rate .who{font-size:14px;font-weight:700}
+.rate .who em{font-style:normal;color:var(--soft);font-weight:400;margin:0 6px}
+.stars{display:flex;align-items:center;gap:6px}
+.star,.zero{all:unset;cursor:pointer;width:40px;height:40px;display:grid;place-items:center;border-radius:12px;transition:background 160ms,transform 160ms}
+.star svg{width:28px;height:28px;fill:none;stroke:#c9bfb2;stroke-width:1.6;transition:fill 180ms,stroke 180ms,transform 200ms cubic-bezier(.3,1.6,.5,1)}
+.star.on svg{fill:#e6a93a;stroke:#e6a93a}
+.star:hover svg{transform:scale(1.12)}
+.star:focus-visible,.zero:focus-visible{outline:3px solid #24584e}
+.zero{width:32px;height:32px;border:1.5px solid #cfc6ba;border-radius:50%;font-size:14px;color:#8a8279;margin-right:4px}
+.zero.on{background:#29423b;border-color:#29423b;color:#fff}
+.word{position:relative;height:18px;margin-left:2px}
+.word span{position:absolute;left:0;top:0;font-size:12.5px;line-height:18px;letter-spacing:.2em;color:var(--soft);white-space:nowrap;opacity:0;transition:opacity 220ms ease}
+.word span.show{opacity:1}
+/* steps */
+.steps{display:flex;gap:6px}
+.steps i{flex:1;height:4px;border-radius:2px;background:rgba(41,66,59,.18);transition:background 220ms}
+.steps i.on{background:var(--ink)}
+.ta{width:100%;min-height:150px;border:0;border-radius:16px;background:#f7f4ef;padding:14px 14px 28px;font:inherit;font-size:16px;line-height:1.65;color:var(--text);resize:none}
+.ta.short{min-height:92px}
+.cnt{display:flex;justify-content:flex-end;font-size:12px;color:var(--soft);margin-top:-24px;padding-right:12px;position:relative}
+.foot{display:flex;gap:10px;padding:10px 18px 22px}
+.btn{all:unset;box-sizing:border-box;cursor:pointer;height:48px;padding:0 22px;border-radius:999px;display:inline-grid;place-items:center;font-weight:800;font-size:15.5px;transition:transform 160ms,background 160ms}
+.btn.main{flex:1;background:var(--ink);color:#fff}
+.btn.main:active{transform:scale(.98)}
+.btn.ghost{background:rgba(255,255,255,.7);color:var(--ink)}
+.btn[disabled]{opacity:.45}
+.prompt{font-size:21px;line-height:1.38;font-weight:800;letter-spacing:-.015em;margin:0 0 12px}
+.label-row{display:flex;gap:8px;align-items:center;margin:0 0 10px}
+.hint{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--soft)}
+/* ladder */
+.ladder{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;width:100%;max-width:720px}
+.ladder div{background:#fff;border-radius:16px;padding:14px 8px;text-align:center}
+.ladder b{display:block;font-size:22px;color:#e6a93a;margin-bottom:6px}
+.ladder span{font-size:12.5px;letter-spacing:.2em;color:var(--soft);white-space:nowrap}
+.note{font-size:13px;color:#5d5953;max-width:760px;line-height:1.7;margin:0 0 18px}
+.legend{font-size:12px;color:#7a746c;background:#fff;border-radius:12px;padding:10px 14px;max-width:390px}
+@media (max-width:480px){.board{padding:18px 10px 60px}.row{gap:18px}.sheet.desk{display:none}.frame.wide{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main class="board">
+<header><h1>Part 39 · 共创 · 玩家端设计板</h1></header>
+<p class="sub">等你确认后才会做玩家端的页面。下面每一块都能点：名字会把名字插到光标处，「＋」会向右展开，星星会让下面的小字渐变。</p>
+
+<h2 class="sec">1 · 进入共创：世界背景（只读）与掷骰</h2>
+<div class="row">
+  <figure class="frame" style="margin:0">
+    <div class="sheet" id="s1">
+      <div class="s-head"><button class="s-close" aria-label="关闭">✕</button><div class="s-title"><button class="name-btn" data-insert>林小满</button><span class="s-progress">共创</span></div></div>
+      <div class="s-body">
+        <div class="world" id="world">放学后的老城区，旧书店二楼常年亮着灯。文学社的四个人在这里熬夜印出了第一期社刊，也在雨天分过同一把伞。
+学校的钟比时间慢三分钟，这是所有人都默认的事。</div>
+        <div class="card"><p class="prompt"><button class="name-btn" data-insert style="font-size:inherit">林小满</button>最常挂在嘴边的一句话</p><textarea class="ta short" id="t1" placeholder=""></textarea></div>
+        <div class="card"><div class="chips" id="c1"><span class="chip dice">🎲 掷一下</span></div></div>
+      </div>
+      <div class="foot"><button class="btn main" disabled>发送</button></div>
+    </div>
+    <figcaption><b>A · 世界背景</b> 灰白底的纯文字，只读，没有编辑框。来自管理员最近一次保存的草稿，保存一次就更新一次；除了背景什么都不显示。顶部主角名字可以点，把名字插进下面的输入框。</figcaption>
+  </figure>
+
+  <figure class="frame" style="margin:0">
+    <div class="sheet" id="s2">
+      <div class="s-head"><button class="s-close" aria-label="关闭">✕</button><div class="s-title"><button class="name-btn" data-insert>林小满</button><span class="s-progress">共创</span></div></div>
+      <div class="s-body">
+        <div class="card" style="overflow:visible">
+          <div class="chips" id="c2">
+            <span class="chip"><i style="--c:#e07a5f"></i><button class="nm" data-insert>陈阿杰</button><button class="x" aria-label="去掉">✕</button></span>
+            <span class="chip"><i style="--c:#3d85c6"></i><button class="nm" data-insert>苏念</button><button class="x" aria-label="去掉">✕</button></span>
+            <span style="flex-basis:100%;height:0"></span><button class="chip plus" aria-expanded="true" aria-label="再加一位">＋
+              <span class="menu"><ul>
+                <li style="--c:#e07a5f" class="gone"><i style="--c:#e07a5f"></i>陈阿杰</li>
+                <li style="--c:#3d85c6" class="gone"><i style="--c:#3d85c6"></i>苏念</li>
+                <li class="sel"><i style="--c:#81b29a"></i>周屿</li>
+                <li><i style="--c:#f2cc8f"></i>许知意</li>
+                <li><i style="--c:#9b8bb4"></i>顾北</li>
+                <li><i style="--c:#e9a3b7"></i>江月</li>
+                <li><i style="--c:#6aa7a0"></i>唐小棠</li>
+              </ul></span>
+            </button>
+          </div>
+        </div>
+        <textarea class="ta" id="t2" style="margin-top:10px"></textarea>
+      </div>
+    </div>
+    <figcaption><b>C · 「＋」</b> 掷骰之后出现，最多加到 8 位。下拉只向右展开；已选的变淡，顺序和管理端「首页顺序」一致。点名字把名字插到下面框里的光标处。</figcaption>
+  </figure>
+</div>
+
+<h2 class="sec">2 · 两位（一对）：四步，按顺序</h2>
+<div class="row">
+  <figure class="frame" style="margin:0">
+    <div class="sheet">
+      <div class="s-head"><button class="s-close" aria-label="返回">←</button><div class="s-title"><span class="s-progress" style="font-size:15px;font-weight:700;color:var(--ink)">陈阿杰 × 苏念</span><span class="s-progress">2 / 4</span></div></div>
+      <div class="s-body">
+        <div class="steps"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+        <div class="card pair-rate" id="rates">
+          <div class="rate" data-rate><div class="who"><button class="name-btn" style="font-size:inherit">陈阿杰</button><em>对</em><button class="name-btn" style="font-size:inherit">苏念</button></div><div class="stars"></div><div class="word"></div></div>
+          <div class="rate" data-rate><div class="who"><button class="name-btn" style="font-size:inherit">苏念</button><em>对</em><button class="name-btn" style="font-size:inherit">陈阿杰</button></div><div class="stars"></div><div class="word"></div></div>
+        </div>
+      </div>
+      <div class="foot"><button class="btn ghost">上一步</button><button class="btn main">下一步</button></div>
+    </div>
+    <figcaption><b>D2 · 整星 0–5</b> 每个方向一行：左边小圆 0，右边五颗星。星星下面一行很淡的小字，换分数时渐变；六个词一样长，永远一行、一个字号。</figcaption>
+  </figure>
+
+  <figure class="frame" style="margin:0">
+    <div class="sheet">
+      <div class="s-head"><button class="s-close" aria-label="返回">←</button><div class="s-title"><span class="s-progress" style="font-size:15px;font-weight:700;color:var(--ink)">陈阿杰 × 苏念</span><span class="s-progress">3 / 4</span></div></div>
+      <div class="s-body">
+        <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+        <div class="card"><p class="prompt">为什么这样打分？</p><textarea class="ta" placeholder="">一个爱闹，一个嫌吵，可是社刊出问题的时候，总是先找对方。</textarea><div class="cnt">31/200</div></div>
+      </div>
+      <div class="foot"><button class="btn ghost">上一步</button><button class="btn main">下一步</button></div>
+    </div>
+    <figcaption><b>D3 · 理由</b> 只有一个输入框，必填。</figcaption>
+  </figure>
+
+  <figure class="frame" style="margin:0">
+    <div class="sheet">
+      <div class="s-head"><button class="s-close" aria-label="返回">←</button><div class="s-title"><span class="s-progress" style="font-size:15px;font-weight:700;color:var(--ink)">陈阿杰 × 苏念</span><span class="s-progress">4 / 4</span></div></div>
+      <div class="s-body">
+        <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+        <div class="card"><div class="chips" style="margin-bottom:12px"><span class="chip"><i style="--c:#e07a5f"></i><button class="nm" data-insert>陈阿杰</button></span><span class="chip"><i style="--c:#3d85c6"></i><button class="nm" data-insert>苏念</button></span></div>
+        <p class="prompt">他们的故事</p><textarea class="ta" id="t4" style="min-height:190px"></textarea><div class="cnt">0/600</div></div>
+      </div>
+      <div class="foot"><button class="btn ghost">上一步</button><button class="btn main" disabled>发送</button></div>
+    </div>
+    <figcaption><b>D4 · 故事</b> 点名字就把名字插到光标处，不用打字。</figcaption>
+  </figure>
+</div>
+
+<h2 class="sec">3 · 三到八位（一个组合）：选人，然后写故事或共同的梗</h2>
+<div class="row">
+  <figure class="frame" style="margin:0">
+    <div class="sheet">
+      <div class="s-head"><button class="s-close" aria-label="关闭">✕</button><div class="s-title"><span class="s-progress" style="font-size:15px;font-weight:700;color:var(--ink)">5 位</span><span class="s-progress">共创</span></div></div>
+      <div class="s-body">
+        <div class="card" style="overflow:visible"><div class="chips">
+          <span class="chip"><i style="--c:#e07a5f"></i><button class="nm" data-insert>陈阿杰</button><button class="x">✕</button></span>
+          <span class="chip"><i style="--c:#3d85c6"></i><button class="nm" data-insert>苏念</button><button class="x">✕</button></span>
+          <span class="chip"><i style="--c:#81b29a"></i><button class="nm" data-insert>周屿</button><button class="x">✕</button></span>
+          <span class="chip"><i style="--c:#9b8bb4"></i><button class="nm" data-insert>顾北</button><button class="x">✕</button></span>
+          <span class="chip"><i style="--c:#6aa7a0"></i><button class="nm" data-insert>唐小棠</button><button class="x">✕</button></span>
+          <button class="chip plus" aria-label="再加一位">＋</button>
+        </div></div>
+        <div class="card"><p class="prompt">这几位的故事，或者只属于他们的梗</p><textarea class="ta" id="t5" style="min-height:200px"></textarea><div class="cnt">0/600</div></div>
+      </div>
+      <div class="foot"><button class="btn main" disabled>发送</button></div>
+    </div>
+    <figcaption><b>E · 组合</b> 没有星星和理由，只写故事或梗。故事是大家的共同经历，不是某一位玩家自己的故事。</figcaption>
+  </figure>
+
+  <figure class="frame wide" style="margin:0;flex:1;min-width:0">
+    <div class="sheet desk" style="width:min(1440px,100%)">
+      <div class="s-head" style="padding:22px 40px 8px"><button class="s-close" aria-label="关闭">✕</button><div class="s-title"><button class="name-btn" data-insert>林小满</button><span class="s-progress">共创</span></div></div>
+      <div class="s-body">
+        <div class="col-l">
+          <div class="world" style="max-height:230px">放学后的老城区，旧书店二楼常年亮着灯。文学社的四个人在这里熬夜印出了第一期社刊，也在雨天分过同一把伞。
+学校的钟比时间慢三分钟，这是所有人都默认的事。</div>
+          <div class="card"><div class="chips"><span class="chip"><i style="--c:#e07a5f"></i><button class="nm" data-insert>陈阿杰</button><button class="x">✕</button></span><span class="chip"><i style="--c:#3d85c6"></i><button class="nm" data-insert>苏念</button><button class="x">✕</button></span><button class="chip plus">＋</button></div></div>
+        </div>
+        <div class="col-r">
+          <div class="steps"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+          <div class="card pair-rate" data-rates-d>
+            <div class="rate" data-rate><div class="who"><button class="name-btn" style="font-size:inherit">陈阿杰</button><em>对</em><button class="name-btn" style="font-size:inherit">苏念</button></div><div class="stars"></div><div class="word"></div></div>
+            <div class="rate" data-rate><div class="who"><button class="name-btn" style="font-size:inherit">苏念</button><em>对</em><button class="name-btn" style="font-size:inherit">陈阿杰</button></div><div class="stars"></div><div class="word"></div></div>
+          </div>
+          <div class="foot" style="padding:0"><button class="btn ghost">上一步</button><button class="btn main">下一步</button></div>
+        </div>
+      </div>
+    </div>
+    <figcaption><b>1440 宽</b> 同一张页：世界背景和选人在左，当前这一步在右；手机上是上下叠起来的同一批内容。</figcaption>
+  </figure>
+</div>
+
+<h2 class="sec">4 · 六个词（一样长，一行，同一字号）</h2>
+<div class="ladder" id="ladder"></div>
+<p class="note" style="margin-top:16px">0 水火不容 · 1 话不投机 · 2 点头之交 · 3 结伴同行 · 4 形影不离 · 5 暗生情愫。每个词四个字，字间距固定，淡灰小字；换分时旧词淡出、新词淡入（约 220ms），位置不动，所以不会跳。</p>
+</main>
+<script>
+const WORDS=['水火不容','话不投机','点头之交','结伴同行','形影不离','暗生情愫'];
+const STAR='<svg viewBox="0 0 24 24"><path d="M12 3.2l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.7 6.6 19.7l1.2-6L3.3 9.5l6.1-.7z" stroke-linejoin="round"/></svg>';
+document.querySelectorAll('[data-rate]').forEach((rate,idx)=>{
+  const stars=rate.querySelector('.stars'),word=rate.querySelector('.word');
+  const zero=document.createElement('button');zero.className='zero';zero.textContent='0';zero.setAttribute('aria-label','0 星');stars.append(zero);
+  const btns=[1,2,3,4,5].map(n=>{const b=document.createElement('button');b.className='star';b.innerHTML=STAR;b.setAttribute('aria-label',n+' 星');stars.append(b);return b});
+  const spans=WORDS.map(w=>{const s=document.createElement('span');s.textContent=w;word.append(s);return s});
+  let cur=-1;
+  const set=v=>{cur=v;zero.classList.toggle('on',v===0);btns.forEach((b,i)=>b.classList.toggle('on',i<v));spans.forEach((s,i)=>s.classList.toggle('show',i===v))};
+  zero.onclick=()=>set(0);btns.forEach((b,i)=>b.onclick=()=>set(i+1));
+  set(idx===0?4:1);
+});
+// ladder
+const lad=document.getElementById('ladder');
+WORDS.forEach((w,i)=>{const d=document.createElement('div');d.innerHTML=`<b>${i}</b><span>${w}</span>`;lad.append(d)});
+// name insertion at the cursor of the nearest text box
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-insert]');if(!b)return;
+  const sheet=b.closest('.sheet');const ta=sheet&&sheet.querySelector('textarea');if(!ta)return;
+  const s=ta.selectionStart??ta.value.length,t=ta.selectionEnd??s;
+  ta.value=ta.value.slice(0,s)+b.textContent+ta.value.slice(t);ta.focus();const p=s+b.textContent.length;ta.setSelectionRange(p,p);
+});
+// the "+" menu toggles to the right
+document.querySelectorAll('.chip.plus').forEach(p=>p.addEventListener('click',()=>{const m=p.querySelector('.menu');if(m)m.hidden=!m.hidden;p.setAttribute('aria-expanded',String(!m||!m.hidden))}));
+document.getElementById('t2').value='陈阿杰和苏念……';
+</script>
+</body>
+</html>
