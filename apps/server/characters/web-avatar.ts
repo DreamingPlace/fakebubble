@@ -188,9 +188,10 @@ export class WebAvatars {
           picture.width,
           picture.height,
           picture.png.length,
-          picture.source,
-          picture.sourceWidth,
-          picture.sourceHeight,
+          // The browser did the decoding (Part 31b): what arrives is a PNG, and its own size is the "source".
+          'png',
+          picture.width,
+          picture.height,
           inR2 ? null : picture.png,
           inR2 ? 1 : 0,
           now,

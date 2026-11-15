@@ -156,7 +156,7 @@ export class WebCharacterDeletion {
       // Players' co-creation ideas for this character go at once, including those of players who never opened a chat.
       purgeCocreation(this.store, { characterId: id });
       // The character's admin-only preview runs, time marks and rejected model output go at once as well.
-      purgePreviewWorkbench(this.store, id);
+      purgePreviewWorkbench(this.store, id, this.now());
       // Part 24k-2: the welcome line every player was given for this character goes at once, players who never opened a chat included.
       purgeWelcomeChoices(this.store, { characterId: id });
       // Part 31: the character's picture goes with it (R2 objects are erased by the alarm sweep).

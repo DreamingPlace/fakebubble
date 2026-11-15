@@ -21,7 +21,6 @@ export const billingCopy = {
   colPoints: '点数',
   empty: '最近 90 天还没有消费记录',
   noMonth: '本月还没有消耗',
-  windowNote: '只显示最近 90 天',
   loading: '正在加载…',
   failed: '没能加载，稍后再试试',
   retry: '重试',
@@ -32,7 +31,6 @@ export const billingCopy = {
   failedRefund: (points: number) => (points > 0 ? `回复失败，已退还 ${points} 点` : '回复失败'),
   pending: '回复中…',
   bonus: '注册赠送',
-  bonusSub: '含没用完的体验回复',
   grant: '管理员发放',
   daily_refill: '每日补充',
   reset: '余额调整',
@@ -93,7 +91,7 @@ export function billingRow(item: BillingItem, name: (characterId: string) => str
     case 'bonus':
       return {
         title: `${when} · ${billingCopy.bonus}`,
-        sub: billingCopy.bonusSub,
+        sub: '',
         points: billingCopy.points(item.points),
       };
     case 'cocreation_note':
@@ -226,7 +224,6 @@ export function openBillingSheet(options: BillingSheetOptions) {
               h('b', { class: 'bl-points', text: row.points }),
             );
           })),
-      h('li', { class: 'bl-window', text: billingCopy.windowNote }),
     );
     const prev = h('button', { class: 'acct-link bl-prev', attrs: { type: 'button' }, text: billingCopy.prev });
     const next = h('button', { class: 'acct-link bl-next', attrs: { type: 'button' }, text: billingCopy.next });

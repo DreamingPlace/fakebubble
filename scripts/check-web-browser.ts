@@ -172,6 +172,16 @@ const { chromium } = loadPlaywright();
 const browser = await chromium.launch(
   process.env.PLAYWRIGHT_CHROMIUM ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM } : {},
 );
+// Part 31b (named exception): a first visit lands on a RANDOM character; this script's steps start from the first card, so every context
+// it opens fixes Math.random to 0 (the first character).
+const openContext = browser.newContext.bind(browser);
+browser.newContext = async (...args: Parameters<typeof openContext>) => {
+  const made = await openContext(...args);
+  await made.addInitScript(() => {
+    Math.random = () => 0;
+  });
+  return made;
+};
 const origin = new URL(config.origin).origin;
 let failure: unknown;
 try {

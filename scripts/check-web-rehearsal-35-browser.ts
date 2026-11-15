@@ -24,6 +24,7 @@ type Page = any;
 const SIZES = [
   [1440, 900],
   [1280, 800],
+  [1100, 800], // Part 31b: under 1280 px 多轮预演 is still the wide drawer
 ] as const;
 const problems: string[] = [];
 const check = (condition: unknown, message: string) => {
@@ -62,7 +63,11 @@ try {
     await page.goto(`${f.origin}/?mode=provider-admin#/characters/wei-guagua`);
     await page.reload();
     await page.getByText('预演', { exact: true }).first().click();
-    await page.locator('[data-pw-rehearsal]').waitFor({ timeout: 20_000 });
+    // Part 31b (named exception): from 1280 px 多轮预演 is the second half of the 预演 tab (no button, no drawer); below it is the drawer as before
+    const split = width >= 1280;
+    if (split)
+      await page.locator('.pw-split .pw-half-rehearsal .rh-rail .rh-pick').first().waitFor({ timeout: 20_000 });
+    else await page.locator('[data-pw-rehearsal]').waitFor({ timeout: 20_000 });
     await wait(1200);
     const at = `${width}`;
 
@@ -77,7 +82,12 @@ try {
     check(page0.ranges === 0, `${at}: a slider on the page`);
     await shot(`preview-no-relationship-${at}`);
 
-    await page.locator('[data-pw-rehearsal]').click();
+    if (split) {
+      const halves = await page.locator('.pw-split > .pw-half').count();
+      check(halves === 2, `${at}: the 预演 tab is two halves (${halves})`);
+      check((await page.locator('[data-pw-rehearsal]').count()) === 0, `${at}: no 多轮预演 button beside the halves`);
+      await shot(`preview-split-${at}`);
+    } else await page.locator('[data-pw-rehearsal]').click();
     await page.locator('.rh-rail .rh-pick').first().waitFor({ timeout: 10_000 });
     await wait(900);
 
@@ -224,6 +234,51 @@ try {
     await page.keyboard.press('Escape');
     await wait(400);
   }
+  // ---- Part 31b (D): with NO saved draft a run uses the live published version; only an unsaved edit blocks it, and says so ----
+  await page.setViewportSize({ width: 1440, height: 900 });
+  f.store.run("DELETE FROM web_character_drafts WHERE character_id='wei-guagua'");
+  await page.goto(`${f.origin}/?mode=provider-admin#/characters/wei-guagua`);
+  await page.reload();
+  await page.getByText('预演', { exact: true }).first().click();
+  await page.locator('.pw-half-rehearsal .rh-rail .rh-pick').first().waitFor({ timeout: 20_000 });
+  await page.locator('.pw-half-rehearsal .rh-rail .rh-pick', { hasText: '日常闲聊' }).click();
+  const live = page.locator('.pw-half-rehearsal [data-pw-send="rehearsal"]');
+  await live.waitFor();
+  await page.waitForFunction(
+    () => /次调用/.test(document.querySelector('.pw-half-rehearsal [data-pw-send="rehearsal"]')?.textContent ?? ''),
+    null,
+    { timeout: 15_000 },
+  );
+  check(!(await live.isDisabled()), 'no draft: the run button is on (the live version runs)');
+  check(
+    !/先保存草稿/.test((await page.locator('.pw-half-rehearsal .pw-reason').textContent()) ?? ''),
+    'no draft: no 先保存草稿',
+  );
+  const liveBefore = bodies.filter((b) => /rehearsal\/start/.test(b.url)).length;
+  await live.click();
+  await live.click();
+  await page.locator('.rh-grid').waitFor({ timeout: 15_000 });
+  const liveBody = JSON.parse(bodies.filter((b) => /rehearsal\/start/.test(b.url)).at(-1)!.body);
+  check(bodies.filter((b) => /rehearsal\/start/.test(b.url)).length === liveBefore + 1, 'no draft: one start was sent');
+  check(
+    Number.isSafeInteger(liveBody.liveVersion) && !('draftRevision' in liveBody) && !('profileHash' in liveBody),
+    `no draft: the request names the live version (${JSON.stringify(Object.keys(liveBody))})`,
+  );
+  await shot('rehearsal-live-1440');
+  // an unsaved local edit blocks, with its own words
+  await page.getByText('性格', { exact: true }).first().click();
+  await page.locator('.wb-card textarea:visible').first().fill('改了一点点（没保存）');
+  await wait(600);
+  await page.getByText('预演', { exact: true }).first().click();
+  await page.locator('.pw-half-rehearsal .rh-rail .rh-pick').first().waitFor({ timeout: 20_000 });
+  await page.locator('.pw-half-rehearsal .rh-rail .rh-pick', { hasText: '日常闲聊' }).click();
+  await wait(700);
+  const blocked = page.locator('.pw-half-rehearsal [data-pw-send="rehearsal"]');
+  check(await blocked.isDisabled(), 'an unsaved edit: the run button is off');
+  check(
+    /有未保存的修改/.test((await page.locator('.pw-half-rehearsal .pw-reason').textContent()) ?? ''),
+    'an unsaved edit: it says 有未保存的修改',
+  );
   check(errors.length === 0, `browser errors: ${errors.join(' | ')}`);
 } finally {
   await f.close();

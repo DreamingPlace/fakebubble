@@ -1,5 +1,6 @@
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { purgeAdminSpeechAudio } from './web-admin-speech-schema.ts';
+import { eraseRehearsalRunsOf } from './web-rehearsal-erase.ts';
 import { webClipTakesInstalled } from './web-clip-takes-schema.ts';
 
 /**
@@ -8,7 +9,9 @@ import { webClipTakesInstalled } from './web-clip-takes-schema.ts';
  * billing ledger are not touched here (the ledger rows are immutable by design). Eval sets are global and not
  * per character, so they stay. A database older than 119 has none of these tables.
  */
-export function purgePreviewWorkbench(store: BusinessStore, characterId: string) {
+export function purgePreviewWorkbench(store: BusinessStore, characterId: string, now: number = Date.now()) {
+  // Part 31b: the character's 多轮预演 runs lose their content too (the money rows of their calls stay).
+  eraseRehearsalRunsOf(store, characterId, now);
   // Part 24k-1: the admin-only audio of the character's 试听 and generated clips goes with them (the ledger keeps the bills).
   purgeAdminSpeechAudio(store, { characterId });
   // Part 30: the takes (admin-only audio) and their choices go too; the text-model ledger keeps its bills.

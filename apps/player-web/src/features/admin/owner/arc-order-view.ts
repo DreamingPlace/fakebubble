@@ -1,10 +1,11 @@
 import type { ArcCharacter, OwnerAdminClient } from '../../../services/owner-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
 import { dragOrder } from '../ui/drag-order.ts';
+import { bindTip } from '../ui/tooltip.ts';
 
 export const arcOrderCopy = {
   title: '首页顺序',
-  hint: '拖动调整，松手即保存。新玩家第一次打开时，第 1 位在正中。',
+  tip: '拖动或按 Alt + 方向键调整，松手即保存。',
   close: '关闭',
   saved: '首页顺序已保存。',
   empty: '没有已上线的角色。',
@@ -26,17 +27,13 @@ export function arcOrderView(
 ) {
   const list = h('ol', { class: 'arc-list', attrs: { 'aria-label': arcOrderCopy.title } });
   const close = h('button', { class: 'admin-secondary', text: arcOrderCopy.close, attrs: { type: 'button' } });
+  const tip = h('span', { text: arcOrderCopy.tip });
+  const title = h('strong', { class: 'admin-bar-title', text: arcOrderCopy.title, attrs: { tabindex: '0' } }, tip);
+  bindTip(title, tip);
   const panel = h(
     'section',
     { class: 'arc-panel', hidden: true, attrs: { 'aria-label': arcOrderCopy.title } },
-    h(
-      'div',
-      { class: 'admin-bar' },
-      h('strong', { class: 'admin-bar-title', text: arcOrderCopy.title }),
-      h('span', { class: 'admin-bar-spacer' }),
-      close,
-    ),
-    h('p', { class: 'admin-hint', text: arcOrderCopy.hint }),
+    h('div', { class: 'admin-bar' }, title, h('span', { class: 'admin-bar-spacer' }), close),
     list,
   );
   host.append(panel);
@@ -102,6 +99,7 @@ export function arcOrderView(
       });
     },
     handle: '.arc-grip',
+    grid: true,
     announce: (row, to, total) => {
       row.setAttribute(
         'aria-label',

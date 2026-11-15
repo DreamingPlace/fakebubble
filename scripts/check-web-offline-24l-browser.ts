@@ -72,6 +72,9 @@ try {
         errors.push(`console: ${message.text()}`);
     });
     page.on('response', (response: { status: () => number; url: () => string }) => {
+      // Part 31b (named exception): the 预演 tab's second half estimates when a character opens; the synthetic c04..c15 are written straight
+      // into the catalog with hashes the preview does not accept, so for them that one estimate is refused (409) - nothing else is let through.
+      if (response.status() === 409 && response.url().endsWith('/admin/rehearsal/estimate')) return;
       if (response.status() >= 400) errors.push(`${response.status()} ${response.url()}`);
     });
   };

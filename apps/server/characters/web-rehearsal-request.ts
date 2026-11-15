@@ -22,6 +22,8 @@ export interface RehearsalFrozen {
   cast?: CastRequestContext;
   /** The clock of the first turn. */
   baseAt: number;
+  /** Part 31b: set when the run used the LIVE published version of the character (no draft); the version it ran on. */
+  liveVersion?: number;
 }
 
 export const rehearsalJobId = (runId: string, model: string, turn: number) => `${runId}-${model}-${turn}`;

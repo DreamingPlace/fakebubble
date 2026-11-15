@@ -70,6 +70,7 @@ export async function routeWebAccountAdmin(
     if (action === 'arc-read') return { status: 200, body: ownerOps.arcOrder(actor) };
     if (action === 'arc-save') return { status: 200, body: ownerOps.saveArcOrder(actor, raw) };
     if (action === 'previews-delete') return { status: 200, body: ownerOps.deletePreviews(actor, raw) };
+    if (action === 'rehearsal-delete') return { status: 200, body: ownerOps.deleteRehearsals(actor, raw) };
     if (action === 'conversations-delete') return { status: 200, body: ownerOps.deleteConversations(actor, raw) };
     if (action === 'closed-read') return { status: 200, body: ownerOps.closedAccounts(actor) };
     if (action === 'closed-policy') return { status: 200, body: ownerOps.saveClosedPolicy(actor, raw) };
@@ -237,8 +238,8 @@ export async function routeWebAccountAdmin(
     if (action === 'estimate') {
       const { characterId: id, ...rest } = body([
         'characterId',
-        'draftRevision',
-        'profileHash',
+        // a saved draft, or (with none) the live published version
+        ...(optional('liveVersion').length ? ['liveVersion'] : ['draftRevision', 'profileHash']),
         'source',
         'models',
         'withCast',
@@ -249,8 +250,7 @@ export async function routeWebAccountAdmin(
       const { characterId: id, ...rest } = body([
         'characterId',
         'requestId',
-        'draftRevision',
-        'profileHash',
+        ...(optional('liveVersion').length ? ['liveVersion'] : ['draftRevision', 'profileHash']),
         'source',
         'models',
         'withCast',

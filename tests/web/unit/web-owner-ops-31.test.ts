@@ -1,3 +1,5 @@
+// Part 31b named exception: the avatar uploads here use square PNG fixtures (sq-*.png) now that the server accepts PNG only; the
+// JPEG/WebP uploads (i.jpg, l-420.jpg, n-lossy.webp) and their refusal rows (truncated.jpg, tiny.png) are replaced one for one.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
@@ -427,8 +429,8 @@ const publishNoPreview = (
 
 test('avatar: upload re-encodes (no metadata), save checks the picture exists, 发布 needs no 预演, the live catalog serves it, a replaced one is erased', async (t) => {
   const f = fixture(t);
-  const up = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('i.jpg') });
-  assert.equal(up.avatar.source, 'jpeg');
+  const up = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('sq-meta.png') });
+  assert.equal(up.avatar.source, 'png');
   assert.equal(up.avatar.width, up.avatar.height);
   // what is stored is the PNG of pixels only
   const stored = await f.chars.avatarRead(f.auth, 'jojo', { avatarId: up.avatar.id });
@@ -438,7 +440,7 @@ test('avatar: upload re-encodes (no metadata), save checks the picture exists, �
     up.avatar.id,
     'the id is the hash of the stored bytes',
   );
-  assert.equal(bytes.includes(Buffer.from('SecretCam')), false);
+  assert.equal(bytes.includes(Buffer.from('SECRET')), false);
   // the draft must name a picture this character has
   assert.throws(
     () => f.chars.save(f.auth, 'jojo', { expectedRevision: null, profile: avatarDraft(f, 'f'.repeat(64)) }),
@@ -470,8 +472,8 @@ test('avatar: upload re-encodes (no metadata), save checks the picture exists, �
   await assert.rejects(f.avatars.readPublic('a'.repeat(64)), /NOT_FOUND/);
   await assert.rejects(f.avatars.readPublic('../etc/passwd'), /NOT_FOUND/);
   // a second picture: the first is still named by a published version, so it stays; an upload nobody saved is erased by the next upload
-  const second = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('l-420.jpg') });
-  const third = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('n-lossy.webp') });
+  const second = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('sq-b-alpha.png') });
+  const third = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('sq-a.png') });
   const left = f.store
     .all<{ avatar_id: string; state: string }>(
       'SELECT avatar_id,state FROM web_character_avatars ORDER BY created_at,avatar_id',
@@ -487,7 +489,7 @@ test('avatar: upload re-encodes (no metadata), save checks the picture exists, �
 
 test('avatar: a picture does not excuse a change of what the character says, and anything else of the profile is still refused without a 预演', async (t) => {
   const f = fixture(t);
-  const up = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('a.png') });
+  const up = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('sq-a.png') });
   const saved = f.chars.save(f.auth, 'jojo', {
     expectedRevision: null,
     profile: avatarDraft(f, up.avatar.id, (p) => (p.template.persona += '，多了一句')),
@@ -500,25 +502,25 @@ test('avatar: who may upload, what is refused, and 下线 / deletion take the pi
   const f = fixture(t);
   const reader = f.member(['characters.read:*']);
   await assert.rejects(
-    Promise.resolve().then(() => f.chars.avatarUpload(reader, 'jojo', { base64: picture('a.png') })),
+    Promise.resolve().then(() => f.chars.avatarUpload(reader, 'jojo', { base64: picture('sq-a.png') })),
     /ADMIN_PERMISSION_REQUIRED/,
   );
   await assert.rejects(
     Promise.resolve().then(() =>
-      f.chars.avatarUpload({ ...f.auth, origin: 'https://evil.invalid' }, 'jojo', { base64: picture('a.png') }),
+      f.chars.avatarUpload({ ...f.auth, origin: 'https://evil.invalid' }, 'jojo', { base64: picture('sq-a.png') }),
     ),
     /ADMIN_UNAUTHORIZED/,
   );
   await assert.rejects(
     Promise.resolve().then(() =>
-      f.chars.avatarUpload({ ...f.auth, csrf: 'd'.repeat(64) }, 'jojo', { base64: picture('a.png') }),
+      f.chars.avatarUpload({ ...f.auth, csrf: 'd'.repeat(64) }, 'jojo', { base64: picture('sq-a.png') }),
     ),
     /ADMIN_CSRF_REQUIRED/,
   );
   for (const [name, code] of [
     ['icon.svg', 'AVATAR_FORMAT'],
-    ['truncated.jpg', 'AVATAR_INVALID'],
-    ['tiny.png', 'AVATAR_DIMENSIONS'],
+    ['svg-as.png', 'AVATAR_INVALID'],
+    ['sq-40.png', 'AVATAR_DIMENSIONS'],
     ['huge-dimensions.png', 'AVATAR_DIMENSIONS'],
   ] as const)
     await assert.rejects(f.chars.avatarUpload(f.auth, 'jojo', { base64: picture(name) }), new RegExp(code), name);
@@ -526,7 +528,7 @@ test('avatar: who may upload, what is refused, and 下线 / deletion take the pi
   await assert.rejects(f.chars.avatarUpload(f.auth, 'jojo', { base64: 'A'.repeat(2_900_000) }), /AVATAR_TOO_LARGE/);
   assert.equal(count(f, 'web_character_avatars'), 0, 'nothing was stored by a refusal');
   // 发布, then 下线: an offline character's picture is no longer served
-  const up = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('b-alpha.png') });
+  const up = await f.chars.avatarUpload(f.auth, 'jojo', { base64: picture('sq-b-alpha.png') });
   const saved = f.chars.save(f.auth, 'jojo', { expectedRevision: null, profile: avatarDraft(f, up.avatar.id) });
   const live = publishNoPreview(f, 'jojo', saved);
   await f.avatars.readPublic(up.avatar.id);

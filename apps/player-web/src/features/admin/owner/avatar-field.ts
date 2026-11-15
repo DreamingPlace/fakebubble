@@ -8,7 +8,7 @@ export const avatarCopy = {
   choose: '上传头像',
   replace: '替换头像',
   clear: '清除头像',
-  note: 'PNG、JPEG 或 WebP，不超过 2 MB。居中裁成正方形，发布后显示为圆形。',
+  note: 'PNG、JPEG 或 WebP，不超过 2 MB。浏览器先居中裁成正方形，再缩到 512 px 上传。',
   hint: (file: string) => `资料里的头像文件：${file}`,
   unsaved: '已更换，保存草稿后发布生效。',
   uploading: '正在处理…',
@@ -35,6 +35,33 @@ const toBase64 = (buffer: ArrayBuffer) => {
   for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return globalThis.btoa(text);
 };
+export const AVATAR_SIDE = 512;
+export const AVATAR_MIN = 64;
+/**
+ * Part 31b: the browser does the decoding. It reads the file (PNG, JPEG or WebP; the browser applies the camera's rotation), crops the
+ * centre to a square, shrinks it to at most 512 px and encodes a PNG. The server then only checks and re-encodes that small PNG.
+ */
+export async function squarePng(file: Blob): Promise<ArrayBuffer> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw Object.assign(new Error('AVATAR_INVALID'), { code: 'AVATAR_INVALID' });
+  }
+  const side = Math.min(bitmap.width, bitmap.height);
+  if (side < AVATAR_MIN) throw Object.assign(new Error('AVATAR_DIMENSIONS'), { code: 'AVATAR_DIMENSIONS' });
+  const out = Math.min(side, AVATAR_SIDE);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = out;
+  const context = canvas.getContext('2d');
+  if (!context) throw Object.assign(new Error('AVATAR_INVALID'), { code: 'AVATAR_INVALID' });
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, out, out);
+  bitmap.close?.();
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw Object.assign(new Error('AVATAR_INVALID'), { code: 'AVATAR_INVALID' });
+  return blob.arrayBuffer();
+}
 
 /**
  * Part 31 (25e), 身份与网页展示 → 头像. A circle (the shape players see), one button, one line of limits and, when a profile import
@@ -113,7 +140,7 @@ export function avatarField(
     say(avatarCopy.uploading);
     button.disabled = true;
     try {
-      const info = await host.upload(toBase64(await file.arrayBuffer()));
+      const info = await host.upload(toBase64(await squarePng(file)));
       value = { id: info.id };
       say(info.id === saved ? '' : avatarCopy.unsaved);
       await paint();
@@ -139,7 +166,7 @@ export const AVATAR_ERRORS: Record<string, string> = {
   AVATAR_TOO_LARGE: avatarCopy.tooBig,
   AVATAR_FORMAT: avatarCopy.type,
   AVATAR_INVALID: '这个文件无法读取，请换一张图片。',
-  AVATAR_DIMENSIONS: '图片尺寸不合适：至少 64×64，最长边不超过 4096，总像素不超过 800 万。',
+  AVATAR_DIMENSIONS: '图片太小：至少 64×64。',
   AVATAR_UNAVAILABLE: '这个环境还不支持头像。',
   CHARACTER_DELETED: '角色已被删除。',
 };

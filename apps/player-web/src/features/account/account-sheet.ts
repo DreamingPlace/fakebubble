@@ -29,12 +29,9 @@ export const accountCopy = {
   closed: '注册暂未开放',
   close: '关闭',
   signupTitle: '注册',
-  signupIntro: '用邮箱注册后，换手机或浏览器也能用邮箱和密码找回你的聊天。',
   resetTitle: '忘记密码',
-  resetIntro: '我们会给这个邮箱发一个 6 位验证码。验证后设置新密码，其他设备会退出登录。',
   loginTitle: '登录',
   nicknameTitle: '我的昵称',
-  nicknameIntro: '角色会用这个名字称呼你。',
   passwordTitle: '修改密码',
   deleteTitle: '删除我的账号',
   deleteIntro:
@@ -51,7 +48,6 @@ export const accountCopy = {
   clearSubmit: '清除体验数据',
   clearing: '正在清除…',
   doneClear: '这台设备的体验数据已清除。',
-  graceHint: '体验已结束 · 注册即可保存并找回你的聊天（7 天内）',
   legalLead: '注册即表示你同意',
   legalTerms: '《用户协议》',
   legalPrivacy: '《隐私政策》',
@@ -61,7 +57,7 @@ export const accountCopy = {
   email: '邮箱',
   sendCode: '发送验证码',
   sending: '正在发送…',
-  codeSent: '验证码已发送，10 分钟内有效。没收到可以看看垃圾邮件。',
+  codeSent: '验证码已发送',
   code: '验证码（6 位数字）',
   verify: '验证',
   verifying: '正在验证…',
@@ -73,16 +69,13 @@ export const accountCopy = {
   passwordMismatch: '两次输入的密码不一致',
   showPassword: '显示密码',
   hidePassword: '隐藏密码',
-  passwordHint: '8 到 128 个字符',
   nickname: '昵称',
-  nicknameHint: '1 到 20 个字，不能换行',
   finishSignup: '完成注册',
   finishReset: '重置密码',
   working: '请稍候…',
   loginSubmit: '登录',
   loginSwitch: '登录并切换',
   loginNoMerge: '当前访客的聊天不会合并',
-  loginNoMergeSub: '登录后会切换到这个邮箱对应的聊天，现在这个访客身份的聊天会留在这台设备的访客里，不会带过去。',
   forgot: '忘记密码',
   toSignup: '没有账号？注册',
   goSignup: '去注册',
@@ -95,7 +88,8 @@ export const accountCopy = {
   freeUsedUp: '免费消息已用完，输入邀请码继续',
   signupForBonus: (n: number) => `注册即送 ${n} 条免费消息，可以和任何角色聊`,
   doneSignupBonus: (n: number) => `注册成功，已送你 ${n} 条免费消息`,
-  signupBonusIntro: (n: number) => `注册即送 ${n} 条免费消息，可以和任何角色聊。`,
+  /** The badge beside the 注册 title (the free tier). */
+  signupBonusBadge: (n: number) => `送 ${n} 条`,
   doneReset: '密码已重置，其他设备已退出登录',
   doneNickname: '昵称已更新',
   donePassword: '密码已修改',
@@ -239,7 +233,20 @@ export function openAccountSheet(options: AccountSheetOptions) {
       class: `acct-sheet acct-${mode}`,
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'acct-title' },
     },
-    h('header', { class: 'acct-head' }, title, closeButton),
+    h(
+      'header',
+      { class: 'acct-head' },
+      h(
+        'span',
+        { class: 'acct-title-row' },
+        title,
+        // the free tier: a short badge beside the title (not a sentence in the form)
+        mode === 'signup' && options.bonus
+          ? h('span', { class: 'acct-bonus', text: accountCopy.signupBonusBadge(options.bonus) })
+          : null,
+      ),
+      closeButton,
+    ),
     // Part 25a: login and signup carry the wordmark (with the logo trail) and an empty line under it, as the board's page does.
     flow || mode === 'login'
       ? h(
@@ -376,7 +383,6 @@ export function openAccountSheet(options: AccountSheetOptions) {
       body.replaceChildren(h('p', { class: 'acct-closed', text: accountCopy.closed }));
       return;
     }
-    const intro = { signup: accountCopy.signupIntro, reset: accountCopy.resetIntro }[purpose];
     const email = input('email', 'email', { autocomplete: 'email', inputmode: 'email', maxlength: '254' });
     // LEGAL_PAGES_ENABLED: signing up needs the "我已年满 18 周岁" tick; it is sent once with the signup request, never stored.
     const adult = input('adult', 'checkbox', { required: '' });
@@ -410,10 +416,6 @@ export function openAccountSheet(options: AccountSheetOptions) {
         { class: 'acct-form' },
         purpose === 'signup' && options.notice
           ? h('p', { class: 'acct-expired', text: options.notice, attrs: { role: 'note' } })
-          : null,
-        h('p', { class: 'acct-intro', text: intro }),
-        purpose === 'signup' && options.bonus
-          ? h('p', { class: 'acct-bonus', text: accountCopy.signupBonusIntro(options.bonus) })
           : null,
         field(accountCopy.email, email),
         legal,
@@ -496,12 +498,10 @@ export function openAccountSheet(options: AccountSheetOptions) {
     };
 
     const stepDetails = () => {
-      const newPassword = passwordField(
-        purpose === 'reset' ? accountCopy.next : accountCopy.passwordNew,
-        'password',
-        { autocomplete: 'new-password', maxlength: '128' },
-        accountCopy.passwordHint,
-      );
+      const newPassword = passwordField(purpose === 'reset' ? accountCopy.next : accountCopy.passwordNew, 'password', {
+        autocomplete: 'new-password',
+        maxlength: '128',
+      });
       const password = newPassword.input;
       // Signup asks twice (Part 21i); the match is checked here, the server still validates the password rules.
       const again =
@@ -526,7 +526,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
         newPassword.field,
         again?.field,
         again ? mismatch : null,
-        purpose === 'reset' ? null : field(accountCopy.nickname, nickname, accountCopy.nicknameHint),
+        purpose === 'reset' ? null : field(accountCopy.nickname, nickname),
         submit,
       );
       const checkMatch = () => {
@@ -604,12 +604,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
       options.onSwitch?.('signup');
     });
     const notice = options.hasGuestChats
-      ? h(
-          'div',
-          { class: 'acct-notice', attrs: { role: 'note' } },
-          h('strong', { text: accountCopy.loginNoMerge }),
-          h('p', { text: accountCopy.loginNoMergeSub }),
-        )
+      ? h('div', { class: 'acct-notice', attrs: { role: 'note' } }, h('strong', { text: accountCopy.loginNoMerge }))
       : null;
     const form = h(
       'form',
@@ -662,13 +657,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
     const nickname = input('nickname', 'text', { autocomplete: 'nickname', maxlength: '40' });
     nickname.value = options.nickname ?? '';
     const submit = button(accountCopy.save, 'acct-primary', 'submit');
-    const form = h(
-      'form',
-      { class: 'acct-form' },
-      h('p', { class: 'acct-intro', text: accountCopy.nicknameIntro }),
-      field(accountCopy.nickname, nickname, accountCopy.nicknameHint),
-      submit,
-    );
+    const form = h('form', { class: 'acct-form' }, field(accountCopy.nickname, nickname), submit);
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       if (!nicknameOk(nickname.value)) {
@@ -687,12 +676,7 @@ export function openAccountSheet(options: AccountSheetOptions) {
       autocomplete: 'current-password',
       maxlength: '128',
     });
-    const nextPassword = passwordField(
-      accountCopy.next,
-      'next',
-      { autocomplete: 'new-password', maxlength: '128' },
-      accountCopy.passwordHint,
-    );
+    const nextPassword = passwordField(accountCopy.next, 'next', { autocomplete: 'new-password', maxlength: '128' });
     const current = currentPassword.input,
       next = nextPassword.input;
     const others = input('logoutOthers', 'checkbox');
