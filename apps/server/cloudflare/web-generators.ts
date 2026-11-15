@@ -21,6 +21,7 @@ import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
 import type { FakeFish } from '../generation/web-provider-runner.ts';
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
 import { clipPromptHash } from '../characters/clip-direction-prompt.ts';
+import { cocreationTidyHash, COCREATION_TIDY_PROMPT } from '../cocreation/web-cocreation-tidy-prompt.ts';
 import type { ClipDirectionModel } from '../characters/web-clip-direction.ts';
 import type { RehearsalJudgeModel } from '../characters/web-rehearsal-runner.ts';
 
@@ -211,6 +212,36 @@ export function webCloudDirection(binding: WebGenerationBinding): ClipDirectionM
           {
             system: input.system,
             systemSha256: clipPromptHash(input.system),
+            user: input.user,
+            maxTokens: input.maxTokens,
+          },
+          () =>
+            callback(async () => {
+              ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
+              await authorize?.();
+            }),
+        );
+        if (!result.ok) throw new DomainError(result.code);
+        return result.value;
+      }),
+  };
+}
+
+/**
+ * Part 39: 整理's text call, the same plain-completion route as 按反馈重录 with its own pinned prompt (text and hash). Anything but the
+ * pinned co-creation prompt is refused by the generation Worker before anything is sent.
+ */
+export function webCloudTidy(binding: WebGenerationBinding): ClipDirectionModel {
+  return {
+    model: DEFAULT_TEXT_MODELS.draft,
+    completePlain: (input, signal, authorize) =>
+      session(binding, signal, async (remote) => {
+        ensure(remote.complete, 'WEB_GENERATION_ROUTE_MISSING');
+        ensure(input.system === COCREATION_TIDY_PROMPT, 'WEB_PROVIDER_WIRE_MISMATCH');
+        const result = await remote.complete(
+          {
+            system: input.system,
+            systemSha256: cocreationTidyHash(input.system),
             user: input.user,
             maxTokens: input.maxTokens,
           },

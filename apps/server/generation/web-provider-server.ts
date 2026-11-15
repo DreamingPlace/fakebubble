@@ -119,6 +119,7 @@ export class WebProviderServer {
       // Part 24k-1: the admin speech path the runner was given (the runner drives its recovery).
       if (previews.speech) this.application.characterAdmin.enableSpeech(previews.speech);
       if (previews.direction) this.application.characterAdmin.enableDirection(previews.direction);
+      if (previews.tidy) this.application.cocreation.enableTidy(previews.tidy);
       this.previews = new WebCharacterPreviewExecutor(previews);
     }
     this.identity = this.application.identity;

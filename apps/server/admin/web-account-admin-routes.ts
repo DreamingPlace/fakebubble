@@ -3,6 +3,7 @@ import type { WebAccountAdmin } from './web-account-admin.ts';
 import type { WebInviteRequest, WebInviteResult } from '../invites/web-invite-routes.ts';
 import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
 import type { WebCocreation } from '../cocreation/web-cocreation.ts';
+import { WebCocreationRelations } from '../cocreation/web-cocreation-relations.ts';
 import type { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 import type { WebSystemAdmin } from './web-system-admin.ts';
 import type { WebCastAdmin } from './web-cast-admin.ts';
@@ -180,6 +181,33 @@ export async function routeWebAccountAdmin(
       const value = body(['id', 'ordinal', 'expectedRevision']);
       return { status: 200, body: cocreation.addToCastStory(actor, value.id, value.ordinal, value.expectedRevision) };
     }
+    // Part 39: relation notes (two to eight characters), 玩家眼中的关系, 不计入, 采纳 / 不采纳, 整理.
+    if (action.startsWith('relation/')) ensure(cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
+    const relations = cocreation as WebCocreationRelations;
+    if (action === 'relation/detail') return { status: 200, body: relations.relationDetail(actor, body(['id']).id) };
+    if (action === 'relation/stats') {
+      body([]);
+      return { status: 200, body: relations.relationStats(actor) };
+    }
+    if (action === 'relation/order') {
+      body([]);
+      return { status: 200, body: relations.consoleOrder(actor) };
+    }
+    if (action === 'relation/exclude') {
+      const value = body(['id', 'excluded']);
+      return { status: 200, body: relations.setExcluded(actor, value.id, value.excluded) };
+    }
+    if (action === 'relation/reject') return { status: 200, body: relations.rejectRelation(actor, body(['id']).id) };
+    if (action === 'relation/adopt')
+      return {
+        status: 200,
+        body: relations.adoptRelation(
+          actor,
+          body(['id', 'requestId', 'expectedRevision', 'text', 'groupName']) as never,
+        ),
+      };
+    if (action === 'relation/tidy')
+      return { status: 200, body: await relations.tidy(actor, body(['id', 'requestId']) as never) };
     ensure(false, 'NOT_FOUND');
   }
   // Part 26b: 审核对比 (V4 Pro against V4.1 Flash on a built-in set of synthetic cases), part of 预演.

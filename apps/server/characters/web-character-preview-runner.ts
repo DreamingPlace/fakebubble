@@ -24,6 +24,7 @@ import { WebReviewCompareRunner, type CompareClaim } from './web-review-compare-
 import { WebRehearsalRunner, type RehearsalClaim, type RehearsalJudgeModel } from './web-rehearsal-runner.ts';
 import type { WebAdminSpeech } from './web-admin-speech.ts';
 import type { WebClipDirection } from './web-clip-direction.ts';
+import type { WebCocreationTidy } from '../cocreation/web-cocreation-tidy.ts';
 import { previewReviewModel } from '../admission/web-review-model.ts';
 import { DEFAULT_REVIEW_MODEL } from '../../../packages/contracts/review-model.ts';
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
@@ -83,6 +84,11 @@ export class WebCharacterPreviewRunner {
   direction: WebClipDirection | null = null;
   useDirection(direction: WebClipDirection) {
     this.direction = direction;
+  }
+  /** Part 39: the 整理 call of the co-creation inbox shares the same recovery (never resent; known bills settle). */
+  tidy: WebCocreationTidy | null = null;
+  useTidy(tidy: WebCocreationTidy) {
+    this.tidy = tidy;
   }
   /** Part 35: the judge model of 多轮预演 (hint writing and verdicts). Without it a unit that needs a judge fails before anything is reserved. */
   useRehearsalJudge(judge: RehearsalJudgeModel) {
@@ -270,6 +276,7 @@ export class WebCharacterPreviewRunner {
       pending ? this.now() + 10_000 : Infinity,
       this.speech?.nextDue() ?? Infinity,
       this.direction?.pending() ? this.clock.now() + 10_000 : Infinity,
+      this.tidy?.pending() ? this.clock.now() + 10_000 : Infinity,
     );
     return Number.isFinite(at) ? at : null;
   }
@@ -296,7 +303,8 @@ export class WebCharacterPreviewRunner {
       rows.length +
       other +
       (this.speech ? await this.speech.recoverBills() : 0) +
-      (this.direction ? await this.direction.recoverBills() : 0)
+      (this.direction ? await this.direction.recoverBills() : 0) +
+      (this.tidy ? await this.tidy.recoverBills() : 0)
     );
   }
   private reserve(id: string, token: string, spec: ProviderCallSpec, wireHash: string, bytes: number) {

@@ -31,6 +31,11 @@ import {
   clipPromptHash,
 } from '../../apps/server/characters/clip-direction-prompt.ts';
 import {
+  COCREATION_TIDY_PROMPT,
+  COCREATION_TIDY_PROMPT_SHA256,
+  cocreationTidyHash,
+} from '../../apps/server/cocreation/web-cocreation-tidy-prompt.ts';
+import {
   REHEARSAL_JUDGE_MODELS,
   REHEARSAL_JUDGE_PROMPTS,
   promptHash,
@@ -198,7 +203,7 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
     }
   }
   /**
-   * Part 30: one plain completion on the draft model, for the clip-direction rewrite ONLY. The system prompt must be the pinned
+   * Part 30 (and 39): one plain completion on the draft model, for the clip-direction rewrite and the co-creation 整理 ONLY. The system prompt must be the pinned
    * text (compared byte for byte AND by hash); any other prompt is refused before anything is sent, so this route cannot be used
    * to run arbitrary text through the DeepSeek key. The business object has reserved the budget and passes the send gate.
    */
@@ -206,10 +211,16 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
     try {
       this.begin();
       wire = structuredClone(wire);
-      ensure(
-        wire.system === CLIP_DIRECTION_PROMPT &&
+      // Part 39: two pinned prompts only - the clip direction and the co-creation 整理 (each by its exact text AND hash).
+      const pinned =
+        (wire.system === CLIP_DIRECTION_PROMPT &&
           wire.systemSha256 === CLIP_DIRECTION_PROMPT_SHA256 &&
-          clipPromptHash(wire.system) === CLIP_DIRECTION_PROMPT_SHA256 &&
+          clipPromptHash(wire.system) === CLIP_DIRECTION_PROMPT_SHA256) ||
+        (wire.system === COCREATION_TIDY_PROMPT &&
+          wire.systemSha256 === COCREATION_TIDY_PROMPT_SHA256 &&
+          cocreationTidyHash(wire.system) === COCREATION_TIDY_PROMPT_SHA256);
+      ensure(
+        pinned &&
           typeof wire.user === 'string' &&
           wire.user.length > 0 &&
           wire.user.length <= 4000 &&

@@ -2,6 +2,22 @@ import type { BusinessStore } from '../platform/store-contract.ts';
 export const cocreationTablesExist = (store: Pick<BusinessStore, 'get'>) =>
   !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_cocreation_submissions'");
 
+/** Part 39's relation tables exist (a runtime step, not a migration). */
+const relationsExist = (store: Pick<BusinessStore, 'get'>) =>
+  !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_cocreation_relation_schema'");
+
+/**
+ * Part 39: a purged submission takes its members, ratings and relation row with it (so a purged player's ratings leave the statistics),
+ * and the text of its 整理 result goes; the 整理 ledger row itself stays (money is never forgotten) and holds no player content.
+ */
+function purgeRelations(store: Pick<BusinessStore, 'run' | 'get'>, condition: string, args: string[]) {
+  if (!relationsExist(store)) return;
+  const ids = `SELECT id FROM web_cocreation_submissions WHERE ${condition}`;
+  store.run(`UPDATE web_cocreation_tidy_calls SET result_json=NULL WHERE submission_id IN (${ids})`, ...args);
+  for (const table of ['web_cocreation_ratings', 'web_cocreation_members', 'web_cocreation_relations'])
+    store.run(`DELETE FROM ${table} WHERE submission_id IN (${ids})`, ...args);
+}
+
 /** Migration 131's pair column exists. */
 const pairsExist = (store: Pick<BusinessStore, 'get'>) =>
   !!store.get("SELECT 1 FROM pragma_table_info('web_cocreation_submissions') WHERE name='partner_id'");
@@ -20,8 +36,13 @@ export function purgeCocreation(
   if (scope.characterId !== undefined) {
     // Part 24c: a pair story is about both of its characters, so it goes with either of them.
     if (pairsExist(store)) {
-      where.push('(character_id=? OR partner_id=?)');
+      where.push(
+        relationsExist(store)
+          ? '(character_id=? OR partner_id=? OR id IN (SELECT submission_id FROM web_cocreation_members WHERE character_id=?))'
+          : '(character_id=? OR partner_id=?)',
+      );
       args.push(scope.characterId, scope.characterId);
+      if (relationsExist(store)) args.push(scope.characterId);
     } else {
       where.push('character_id=?');
       args.push(scope.characterId);
@@ -33,6 +54,7 @@ export function purgeCocreation(
   }
   if (where.length === 0) throw new Error('COCREATION_PURGE_SCOPE_REQUIRED');
   const condition = where.join(' AND ');
+  purgeRelations(store, condition, args);
   store.run(
     `DELETE FROM web_cocreation_answers WHERE submission_id IN (SELECT id FROM web_cocreation_submissions WHERE ${condition})`,
     ...args,
@@ -49,9 +71,15 @@ export function cocreationRemains(
   if (scope.characterId !== undefined)
     return !!store.get(
       pairsExist(store)
-        ? 'SELECT 1 FROM web_cocreation_submissions WHERE character_id=? OR partner_id=? LIMIT 1'
+        ? relationsExist(store)
+          ? 'SELECT 1 FROM web_cocreation_submissions WHERE character_id=? OR partner_id=? OR id IN (SELECT submission_id FROM web_cocreation_members WHERE character_id=?) LIMIT 1'
+          : 'SELECT 1 FROM web_cocreation_submissions WHERE character_id=? OR partner_id=? LIMIT 1'
         : 'SELECT 1 FROM web_cocreation_submissions WHERE character_id=? LIMIT 1',
-      ...(pairsExist(store) ? [scope.characterId, scope.characterId] : [scope.characterId]),
+      ...(pairsExist(store)
+        ? relationsExist(store)
+          ? [scope.characterId, scope.characterId, scope.characterId]
+          : [scope.characterId, scope.characterId]
+        : [scope.characterId]),
     );
   const ids = scope.principalIds ?? [];
   if (ids.length === 0) return false;
