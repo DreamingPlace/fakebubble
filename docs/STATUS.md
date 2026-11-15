@@ -710,3 +710,9 @@ Production stays on **V4 Pro** until the owner switches. The DeepSeek facts belo
 - 预演 tab: from 1280 px, 单次预演 and 多轮预演 are two halves of the tab (the matching is decided when the tab is built); below it 多轮预演 is the wide drawer as before.
 - 测试对话: 删除此对话 works inside an open conversation (it asked in a hidden place, and its "back" was a click on a button the page had switched off); same confirm, then the list without the row.
 - Player pages carry no explanatory text (standing rule). The free-tier offer is a short badge (「送 N 条」) beside the 注册 title. Removed sentences are listed in PR #84. `scripts/shoot-player-pages-31b.ts` takes the before/after screenshots.
+
+## Part 38a — chat playback queue and header
+- **Header.** No avatar and no halo in the chat header, ever (owner decision 2026-11-14; 31b's 36 px header avatar is removed; message avatars 30 px and the card/arc avatars stay). The header shows the nickname; while the character replies it shows only 「正在讲话中」 (same trigger as before), with a 180 ms crossfade (none under reduced motion).
+- **Queue.** One FIFO of voice messages in `LiveBinding`. A reply's clips are queued when it is published; a clip arriving while another plays waits (`data-queued`, bars breathe softly) and plays when the current one ends. Sending never stops playback. A tap on a bubble plays that one at once and the queue continues from it (the rest of its reply, then what was waiting). Leaving the chat, hiding the page or a catalog change empties the queue.
+- Named test exceptions: 31b header avatar checks (browser script), 25b header selectors, and the old "sending stops the old queue" unit test, replaced by three tests. `scripts/check-web-player-38a-browser.ts` covers header and queue at 390 and 1440.
+- The Impeccable skill is not installed in this environment; critique/audit/polish were done by hand on screenshots.

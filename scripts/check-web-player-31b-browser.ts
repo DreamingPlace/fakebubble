@@ -151,27 +151,15 @@ try {
       assert.equal(paint.alpha, 0, `${item}: the initial is not visible (${JSON.stringify(paint)})`);
     }
     await snap(page, `card-avatar-${tag}`);
-    // open the chat of the active card: header avatar 36 px with a 2.5 px ring, the welcome row's avatar 30 px
+    // open the chat of the active card. Named exception (Part 38a, owner decision 2026-11-14): the chat header has NO avatar and no
+    // halo (31b's 36 px header avatar with a 2.5 px ring is gone); only the welcome row's 30 px avatar is checked below.
     await page.locator('.card-slot.is-active').click({ force: true });
     await page.locator('.page-shell[data-phase="chat"]').waitFor({ timeout: 10_000 });
-    await page.locator('.card-slot.is-active .chat-mark[data-portrait="loaded"]').waitFor({ timeout: 15_000 });
-    // (layout size: the card is scaled while it opens, a bounding box would be too)
-    const head = await page
-      .locator('.card-slot.is-active .chat-mark')
-      .evaluate((n: HTMLElement) => [n.offsetWidth, n.offsetHeight]);
-    assert.deepEqual(head, [36, 36], `36 px header avatar at ${tag}`);
-    // the halo ring is 2.5 px in the stylesheet (Chromium snaps a computed border to whole pixels, so the rule itself is read)
-    assert.ok(
-      await page.evaluate(() =>
-        [...document.styleSheets].some((sheet) =>
-          [...sheet.cssRules].some(
-            (r) =>
-              (r as CSSStyleRule).selectorText === '.page-shell .chat-head .chat-mark' &&
-              (r as CSSStyleRule).style.borderWidth === '2.5px',
-          ),
-        ),
-      ),
+    assert.equal(
+      await page.locator('.card-slot.is-active .chat-head .avatar, .card-slot.is-active .chat-head img').count(),
+      0,
     );
+    assert.equal(await page.locator('.card-slot.is-active .chat-mark').count(), 0, 'no header avatar');
     const small = await page
       .locator('.card-slot.is-active .welcome-row .message-avatar')
       .evaluate((n: HTMLElement) => n.offsetWidth);
@@ -208,7 +196,7 @@ try {
     );
     assert.equal(await active(page), 'character-chen-jimi');
     assert.equal(await page.locator('.card-slot.is-active .face-portrait').count(), 0, 'no circle without a picture');
-    assert.equal(await page.locator('.card-slot.is-active .chat-mark.has-portrait').count(), 0);
+    assert.equal(await page.locator('.card-slot.is-active .chat-mark').count(), 0);
     await snap(page, 'card-no-avatar-m');
     await ctx.close();
   }

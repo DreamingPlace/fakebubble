@@ -34,7 +34,8 @@
     "check:web:admin-24b7b": "node scripts/check-web-admin-24b7b-browser.ts",
     "check:web:admin-24b7c": "node scripts/check-web-admin-24b7c-browser.ts",
     "check:web:admin-24b7d": "node scripts/check-web-admin-24b7d-browser.ts",
-    "check:web:writer-37a": "node scripts/check-web-writer-37a-browser.ts"
+    "check:web:writer-37a": "node scripts/check-web-writer-37a-browser.ts",
+    "check:web:player-38a": "node scripts/check-web-player-38a-browser.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
