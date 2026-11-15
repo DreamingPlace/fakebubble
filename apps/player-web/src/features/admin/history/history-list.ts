@@ -42,7 +42,7 @@ export type HistoryWords = {
 };
 const VERSION_WORDS: HistoryWords = {
   numberText: (version) => `v${version}`,
-  current: '现行',
+  current: '当前',
   restore: '恢复此版本',
   confirm: (version, live) => `以 v${live + 1} 重新发布 v${version} 的内容`,
   shown: HISTORY_SHOWN,

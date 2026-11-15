@@ -234,7 +234,7 @@ test('24l the owner has 下线 next to the live version; it asks first, then sen
   await f.workbench.open('jojo');
   await flush();
   const row = one(f.root, '.wb-avail');
-  assert.match(row.textContent, /现行 v3/);
+  assert.match(row.textContent, /正式 v3/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行 v3」
   assert.match(row.textContent, /在线/);
   const button = one(row, '.wb-avail-go');
   assert.equal(button.textContent, '下线');

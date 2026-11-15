@@ -18,6 +18,7 @@ import { openTable } from '../ui/open-table.ts';
 import { paidButton } from '../ui/paid-button.ts';
 import { statusBadge } from '../ui/status-badge.ts';
 import { micros, when } from './copy.ts';
+import { sentenceOf } from '../ui/error-line.ts';
 import { diffBubbles, diffSideBySide, type Piece } from './diff.ts';
 
 export type ReviewCompareHost = {
@@ -45,7 +46,7 @@ const stateText = (r: CompareSideResult) =>
   r.state === 'ok'
     ? '有效'
     : r.state === 'invalid'
-      ? `无效（${r.errorCode ?? '—'}）`
+      ? `无效：${sentenceOf(r.errorCode, '原因未知')}`
       : r.state === 'unknown'
         ? '结果未知'
         : '等待中';
@@ -314,7 +315,7 @@ export function reviewCompareView(root: HTMLElement, host: ReviewCompareHost) {
           )
         : h('p', {
             class: 'admin-empty',
-            text: c.status === 'failed' ? `没有草稿（${c.errorCode ?? '失败'}）` : '草稿尚未生成。',
+            text: c.status === 'failed' ? `没有草稿：${sentenceOf(c.errorCode, '生成失败')}` : '草稿尚未生成。',
           }),
       h('div', { class: 'rc-sides' }, resultColumn(c, 'pro'), resultColumn(c, 'flash')),
     );

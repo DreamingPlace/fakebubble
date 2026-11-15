@@ -253,7 +253,7 @@ export function seesPanel(
     { class: 'cs-sees-meta' },
     h('span', {
       class: 'cs-mono',
-      text: `草稿 修订 ${result.source.kind === 'draft' ? result.source.revision : ''} · ${result.size} / ${state.limit}`,
+      text: `草稿 ${result.source.kind === 'draft' ? result.source.revision : ''} · ${result.size} / ${state.limit}`,
     }),
   );
   if (state.stale) meta.append(h('span', { class: 'cs-tag is-warn', text: '有没保存的修改，这里是已保存的草稿' }));

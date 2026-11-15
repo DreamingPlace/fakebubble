@@ -108,7 +108,7 @@ test('the list shows every version newest first: number, UTC time, role, origin,
   const lines = bodyRows(f.root).map((tr) => tr.textContent);
   assert.equal(lines.length, 3);
   assert.equal(el(f.root).querySelector('.vh-more')!.hidden, true, 'three versions: nothing was cut off');
-  assert.match(lines[0]!, /v3现行2026-10-24 09:30 UTC主管理员恢复自 v1改动：人设/);
+  assert.match(lines[0]!, /v3当前2026-10-24 09:30 UTC主管理员恢复自 v1改动：人设/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「v3现行」
   assert.match(lines[1]!, /v22026-10-23 09:30 UTC管理员仅改主色只改了主色/);
   assert.match(lines[2]!, /v1无记录系统导入发布初始版本/);
   assert.equal(originText({ kind: 'publish' }), '发布');
@@ -162,7 +162,7 @@ test('a snapshot is read only, with the 人设 / 网页展示 / 完整模板 gro
   assert.ok(!/[{}]|"displayName"|"template"/.test(drawer.textContent), 'readable fields, never raw JSON');
   assert.match(drawer.textContent, /网页展示名：|网页展示名/);
   assert.match(drawer.textContent, /设定生日/);
-  assert.match(drawer.textContent, /与现行版本的差异/);
+  assert.match(drawer.textContent, /与正式版本的差异/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「与现行版本的差异」
   const groups = readableGroups(profile('甲'), {
     ...profile('甲'),
     template: { ...profile('甲').template, version: 9 },
@@ -221,7 +221,7 @@ test('a character with 7 versions lists only the latest 5, newest first, and say
   await f.view.load('jojo');
   const lines = bodyRows(f.root).map((tr) => tr.textContent);
   assert.equal(lines.length, 5);
-  assert.match(lines[0]!, /^v7现行/);
+  assert.match(lines[0]!, /^v7当前/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「v7现行」
   assert.match(lines[4]!, /^v3/);
   assert.ok(!lines.some((line) => /^v[12]/.test(line)), 'v1 and v2 are not listed');
   assert.match(el(f.root).querySelector('.vh-more')!.textContent, /只列出最近 5 个版本，共 7 个/);

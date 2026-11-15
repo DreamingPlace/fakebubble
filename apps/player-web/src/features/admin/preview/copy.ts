@@ -1,4 +1,6 @@
 import { dateTimeText } from '../system-format.ts';
+import { sentenceOf } from '../ui/error-line.ts';
+import { exactMoney } from '../ui/hover-value.ts';
 import type { PreviewRow, Settlement } from '../../../services/preview-admin-api.ts';
 import type { BadgeTone } from '../ui/status-badge.ts';
 
@@ -40,7 +42,7 @@ export function settlementCopy(row: Pick<PreviewRow, 'status' | 'settlement' | '
 export function micros(value: number | null): string {
   if (value === null) return '—';
   if (value === 0) return '$0';
-  return value >= 10_000 ? `$${(value / 1_000_000).toFixed(4)}` : `${value} µ$`;
+  return value >= 10_000 ? `$${(value / 1_000_000).toFixed(4)}` : exactMoney(value);
 }
 export function seconds(ms: number | null): string {
   return ms === null ? '—' : `${(ms / 1000).toFixed(1)}s`;
@@ -57,7 +59,8 @@ const ERRORS: Record<string, string> = {
   PREVIEW_INTERRUPTED: '被中断',
   DRAFT_CONFLICT: '草稿在预演期间已变化，未发送',
 };
-export const errorText = (code: string | null) => (code ? `${ERRORS[code] ?? '失败'}（${code}）` : '');
+/** Part 24b-7d: the sentence only. The code is never in the text; `errorNode` (ui/error-line.ts) puts it on hover and behind 复制代码. */
+export const errorText = (code: string | null) => (code ? (ERRORS[code] ?? sentenceOf(code, '失败')) : '');
 /**
  * The zone a simulated time is read in is always the character's own schedule zone. A UTC+8 zone (every character
  * today) reads as “北京时间”; any other is shown by its IANA name and offset. The id is shown beside it in the form.

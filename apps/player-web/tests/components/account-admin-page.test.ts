@@ -440,7 +440,7 @@ test('invitation records show independent actions; revocation requires explicit 
   await flush();
   const text = () => descendants(f.root.querySelector('#admin-invites')).map((n) => n.textContent);
   assert.ok(text().includes('测试批次'));
-  assert.ok(text().some((x) => x === '每天 +50 点 · 上限 1000 点'));
+  assert.ok(text().some((x) => x === '每天 +50 点 · 上限 1,000 点')); // Named exception (Part 24b-7d round 2): was 「上限 1000 点」
   assert.ok(!text().some((x) => x.includes('@') || x.includes('admin@')), 'no player identity on the page');
   assert.equal(f.logouts(), 0);
   window.dispatchEvent(new Event('focus'));

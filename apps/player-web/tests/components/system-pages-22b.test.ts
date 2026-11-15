@@ -226,7 +226,7 @@ test('系统状态 shows version, switches, prices, budget, UNKNOWN, 清理, 安
     'Turnstile',
     '告警邮件绑定',
     'deepseek / deepseek-chat / draft',
-    '2 µ$ / 令牌',
+    '$2.00 / 百万令牌', // Named exception (Part 24b-7d): was 「2 µ$ / 令牌」; the stored value is on hover
     'v3',
     '2026-11-11',
     '20 天后到期',
@@ -275,10 +275,14 @@ test('续期价格 confirms first, runs once per request id and shows each row r
   (f.node.querySelector('#system-renew') as FakeElement).click();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(f.confirms.length, 1);
-  assert.match(f.confirms[0]!.message, /renew-prices/);
+  // Named exception (Part 24b-7d): the command's English name is not shown to the administrator.
+  assert.match(f.confirms[0]!.message, /运维人员命令行里相同的续期/);
   assert.deepEqual(f.calls, [['renew', 'request-1']]);
   const text = f.node.querySelector('.system-result')!.textContent;
-  assert.ok(text.includes('已续期') && text.includes('未到期') && text.includes('v2') && text.includes('2 µ$'), text);
+  assert.ok(
+    text.includes('已续期') && text.includes('未到期') && text.includes('v2') && text.includes('$2.00 / 百万令牌'),
+    text,
+  ); // Named exception (Part 24b-7d): was 「2 µ$」
   // Declining sends nothing.
   const declined = mountSystem(t, status(), { confirm: false });
   await declined.api.load();
@@ -526,7 +530,7 @@ test('概览: today in UTC and the warnings in one line (no row of section links
   });
   await api.load();
   const text = (root as unknown as FakeElement).textContent;
-  for (const wanted of ['12', '9', '$2.50', '2026-10-22', '2 项价格即将到期', '近 24 小时新增 1 个 UNKNOWN 调用'])
+  for (const wanted of ['12', '9', '$2.50', '2026-10-22', '2 项价格即将到期', '近 24 小时新增 1 次结果未确认的调用']) // Named exception (Part 24b-7d): was 「1 个 UNKNOWN 调用」
     assert.ok(text.includes(wanted), wanted);
   assert.ok(!text.includes('清理失败'), 'only the warnings that apply');
   // Named exception (Part 24b-1 fix): the row of links under the chart repeated the navigation and is gone.

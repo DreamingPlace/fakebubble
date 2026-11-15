@@ -103,7 +103,7 @@ export type StatsUserType = (typeof STATS_USER_TYPES)[number];
 /** 总览 chart: what is counted and over what window. 24h is hourly (the last 24 UTC hours); 7d and 14d are daily. */
 export const CHART_METRICS = ['replies', 'chat_users'] as const;
 export type ChartMetric = (typeof CHART_METRICS)[number];
-export const CHART_RANGES = ['24h', '7d', '14d'] as const;
+export const CHART_RANGES = ['24h', '7d', '14d', '30d', '90d'] as const;
 export type ChartRange = (typeof CHART_RANGES)[number];
 /**
  * 总览 chart data, oldest first. `buckets` are UTC hours ('YYYY-MM-DDTHH') for 24h and UTC days ('YYYY-MM-DD') for 7d / 14d; every
@@ -121,6 +121,12 @@ export type ChartView = {
   buckets: string[];
   total: (number | null)[];
   characters: ChartSeries[];
+  /**
+   * Part 24b-7e: replies only, daily ranges only: one series per chosen text model ('' = replies admitted while model choice was off).
+   * Same rows as `characters` (web_stats_daily reply_published), so the series add up to `total`. Absent for chat_users (a player is
+   * counted per character, not per model) and for 24h (the hourly counters carry no model). Model ids only, never player ids.
+   */
+  models?: ChartSeries[];
 };
 
 /** Provider spend of one user type on one day, in USD micros: what the budget ledger charged, text (draft, review) and voice. */

@@ -307,6 +307,7 @@ const requireExtras = (store: Store) => ensure(statsTablesExist(store) && statsE
  * hours); 7d / 14d = the last days (the daily counters, today read live). Nothing here reads a table the purge deletes from, and no
  * id, marker or content leaves: the characters are named by their display name.
  */
+const CHART_DAYS = { '7d': 7, '14d': 14, '30d': 30, '90d': 90 } as const;
 export function readChart(store: Store, now: number, metric: ChartMetric, range: ChartRange): ChartView {
   requireExtras(store);
   const hourly = range === '24h',
@@ -314,10 +315,11 @@ export function readChart(store: Store, now: number, metric: ChartMetric, range:
     since = extrasSince(store);
   const buckets: string[] = [];
   if (hourly) for (let i = 23; i >= 0; i--) buckets.push(statsUtcHour(now - i * 3_600_000));
-  else for (let i = (range === '7d' ? 7 : 14) - 1; i >= 0; i--) buckets.push(addDays(today, -i));
+  else for (let i = CHART_DAYS[range as Exclude<ChartRange, '24h'>] - 1; i >= 0; i--) buckets.push(addDays(today, -i));
   const first = buckets[0]!,
     last = buckets[buckets.length - 1]!;
   const perCharacter = new Map<string, Map<string, number>>(),
+    perModel = new Map<string, Map<string, number>>(),
     totals = new Map<string, number>();
   const put = (map: Map<string, Map<string, number>>, id: string, bucket: string, value: number) => {
     const row = map.get(id) ?? new Map<string, number>();
@@ -337,12 +339,15 @@ export function readChart(store: Store, now: number, metric: ChartMetric, range:
         if (metric === 'replies') totals.set(row.hour, (totals.get(row.hour) ?? 0) + row.value);
       }
   } else if (metric === 'replies') {
-    for (const row of store.all<{ day: string; character_id: string; value: number }>(
-      "SELECT day,character_id,sum(value) value FROM web_stats_daily WHERE metric='reply_published' AND day>=? AND day<=? GROUP BY day,character_id",
+    for (const row of store.all<{ day: string; character_id: string; model: string; value: number }>(
+      "SELECT day,character_id,model,sum(value) value FROM web_stats_daily WHERE metric='reply_published' AND day>=? AND day<=? GROUP BY day,character_id,model",
       first,
       last,
     )) {
-      put(perCharacter, row.character_id, row.day, row.value);
+      const before = perCharacter.get(row.character_id)?.get(row.day) ?? 0;
+      put(perCharacter, row.character_id, row.day, before + row.value);
+      const modelBefore = perModel.get(row.model)?.get(row.day) ?? 0;
+      put(perModel, row.model, row.day, modelBefore + row.value);
       totals.set(row.day, (totals.get(row.day) ?? 0) + row.value);
     }
   } else {
@@ -386,6 +391,17 @@ export function readChart(store: Store, now: number, metric: ChartMetric, range:
     return { name: names.get(id)!, values: series, sum: series.reduce<number>((a, b) => a + (b ?? 0), 0) };
   });
   characters.sort((a, b) => b.sum - a.sum || a.name.localeCompare(b.name, 'zh-CN'));
+  // Part 24b-7e: the same rows by chosen model (replies, daily ranges). The model id is the name; '' is 未选择模型 on the client.
+  const models: ChartSeries[] | undefined =
+    !hourly && metric === 'replies'
+      ? [...perModel]
+          .map(([model, values]) => {
+            const series = column(values);
+            return { name: model, values: series, sum: series.reduce<number>((a, b) => a + (b ?? 0), 0) };
+          })
+          .sort((a, b) => b.sum - a.sum || a.name.localeCompare(b.name))
+          .map(({ name, values }) => ({ name, values }))
+      : undefined;
   return {
     metric,
     range,
@@ -394,6 +410,7 @@ export function readChart(store: Store, now: number, metric: ChartMetric, range:
     buckets,
     total: column(totals),
     characters: characters.map(({ name, values }) => ({ name, values })),
+    ...(models ? { models } : {}),
   };
 }
 

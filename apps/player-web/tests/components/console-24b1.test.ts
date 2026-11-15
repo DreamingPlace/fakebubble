@@ -814,7 +814,8 @@ test('24b-1 系统状态: the build, the migration steps with matches, and the d
   assert.ok(text(bad.root).includes('需要') === false, 'the header pill is about warnings, not about the build');
   // Every other card is still on the page (nothing was dropped by the new layout).
   // Named exception (Part 24b-6): 清理 and 开关 are one card, 清理与开关 (System3).
-  for (const title of ['UNKNOWN', '安全', '价格', '预算', '清理与开关', '技术指标'])
+  // Named exception (Part 24b-7d): the section is 「结果未知的调用」, not the English 「UNKNOWN」.
+  for (const title of ['结果未知的调用', '安全', '价格', '预算', '清理与开关', '技术指标'])
     assert.ok(
       all(f.root, 'h3').some((h3) => h3.textContent === title),
       title,

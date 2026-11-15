@@ -197,7 +197,7 @@ test('22a the list shows tier, N / cap, created, codes, redeemed, revoked and ho
   );
   const row = f.node.querySelectorAll('tbody tr')[0]!;
   assert.match(row.textContent, /春季内测/);
-  assert.match(row.textContent, /每天 \+50 点 · 上限 1000 点/);
+  assert.match(row.textContent, /每天 \+50 点 · 上限 1,000 点/); // Named exception (Part 24b-7d round 2): was 「上限 1000 点」
   assert.match(row.textContent, /2026-10-01/);
   assert.equal(tierText(batch({ tier: 'unlimited', dailyAmount: null, cap: null })), '不限量');
 });
@@ -215,7 +215,7 @@ test('22a the owner edits N and the cap behind a confirmation that names the cha
   assert.equal(f.confirms.length, 1);
   assert.match(f.confirms[0]!.message, /「春季内测」/);
   assert.match(f.confirms[0]!.message, /\+50 点 → \+40 点/);
-  assert.match(f.confirms[0]!.message, /1000 点 → 800 点/);
+  assert.match(f.confirms[0]!.message, /1,000 点 → 800 点/); // Named exception (Part 24b-7d round 2): was 「1000 点 → 800 点」
   assert.match(f.confirms[0]!.message, /4 位玩家持有/);
   assert.match(f.confirms[0]!.message, /下一次每日补充/);
   assert.match(f.confirms[0]!.message, /不会收回/);
