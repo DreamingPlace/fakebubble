@@ -113,6 +113,13 @@ const nnum = (v: unknown) => {
   if (typeof v !== 'number' || !Number.isFinite(v)) throw invalid();
   return v;
 };
+const codes = (v: unknown): Record<string, number> => {
+  if (v === undefined) return {};
+  const o = object(v);
+  const out: Record<string, number> = {};
+  for (const [key, n] of Object.entries(o)) out[key] = int(n);
+  return out;
+};
 const counts = (v: unknown): RehearsalCounts => {
   const o = object(v);
   return {
@@ -126,6 +133,7 @@ const counts = (v: unknown): RehearsalCounts => {
     repeated: int(o.repeated),
     unconfirmed: int(o.unconfirmed),
     failed: int(o.failed),
+    codes: codes(o.codes),
   };
 };
 const memeCell = (v: unknown): RehearsalMemeCell => {

@@ -285,7 +285,30 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     empty,
     reviewSection,
   );
-  root.append(rehearsalHalf ? h('div', { class: 'pw-split' }, page, rehearsalHalf) : page);
+  const splitBox = rehearsalHalf ? h('div', { class: 'pw-split' }, page, rehearsalHalf) : null;
+  root.append(splitBox ?? page);
+  // Part 40: the two halves fill the height from where the split starts to the bottom of the window and scroll on their own
+  // (the CSS takes this one number); measured once drawn and again when the window changes.
+  let splitObserver: ResizeObserver | null = null;
+  const fitSplit = () => {
+    if (!splitBox || !splitBox.isConnected) return;
+    splitBox.style.setProperty(
+      '--pw-split-top',
+      `${Math.max(0, Math.round(splitBox.getBoundingClientRect().top + (globalThis.scrollY ?? 0)))}px`,
+    );
+  };
+  if (splitBox) {
+    globalThis.addEventListener?.('resize', fitSplit);
+    globalThis.requestAnimationFrame?.(() => {
+      fitSplit();
+      setTimeout(fitSplit, 400);
+    });
+    // what is above the split can change height after it is drawn (the tab bar, a banner): measure again whenever the page does
+    if (typeof ResizeObserver === 'function') {
+      splitObserver = new ResizeObserver(fitSplit);
+      splitObserver.observe(document.body);
+    }
+  }
   const reviewCompare = reviewApi
     ? reviewCompareView(reviewHost, {
         api: reviewApi,
@@ -1620,6 +1643,8 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     },
     dispose() {
       disposed = true;
+      globalThis.removeEventListener?.('resize', fitSplit);
+      splitObserver?.disconnect();
       resetTitle();
       poller.dispose();
       send.dispose();
