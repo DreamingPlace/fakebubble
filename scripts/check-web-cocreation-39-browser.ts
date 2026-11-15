@@ -263,7 +263,11 @@ try {
       await view.screenshot({ path: join(shots, `cocreation-39-player-${name}.png`) });
     }
   };
-  await view.goto(`${f.origin}/?mode=provider`);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await view.goto(`${f.origin}/?mode=provider`);
+    await view.waitForTimeout(2500);
+    if (await view.locator('.avatar-choice[aria-label^="选择"]:not([inert])').count()) break;
+  }
   await view.locator('.avatar-choice[aria-label^="选择"]:not([inert])').first().click();
   await view.waitForTimeout(900);
   await view.mouse.click(195, 380);
