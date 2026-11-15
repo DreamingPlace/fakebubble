@@ -63,6 +63,29 @@ const dramaSoundTags = { small_laugh: '[small laugh]', shaky_breath: '[shaky bre
  * before words) and one `<whisper>…</whisper>` pair. Returns the plain text, or null when anything else is present (a stray
  * bracket, another tag, an empty or over-long direction). A direction may be followed by one space, which goes with it.
  */
+/**
+ * Part 37a-2: directions that ask for shouting distort Drama 3's audio, and excitement in a chat stays conversational. A [direction]
+ * group that contains any of these words (the English ones in any letter case, so shouting / Screaming are caught too) is dropped
+ * before Fish; the words around it stay. The same list is used when a v8 reply is read and again right before the speech request.
+ */
+export const LOUD_DIRECTION_WORDS: readonly string[] = [
+  '大喊',
+  '尖叫',
+  '嘶吼',
+  '咆哮',
+  '激动地喊',
+  'shout',
+  'scream',
+  'yell',
+  'roar',
+];
+const DIRECTION_GROUP = /\[[^[\]<>\n]{1,80}\] ?/gu;
+export function dropLoudDirections(markup: string): string {
+  return markup.replace(DIRECTION_GROUP, (group) => {
+    const lower = group.toLowerCase();
+    return LOUD_DIRECTION_WORDS.some((word) => lower.includes(word)) ? '' : group;
+  });
+}
 export function stripDirectionMarkup(markup: string): string | null {
   const plain = markup
     .replace(/\[[^[\]<>\n]{1,80}\] ?/gu, '')

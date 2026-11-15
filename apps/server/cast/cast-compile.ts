@@ -68,7 +68,7 @@ export function castKnowledge(doc: CastDoc, characterId: string): CastKnowledgeR
  * What the OTHER characters are told about a character's names. Usable: kind 'other' / 'neutral' whose attitude is likes / ok.
  * Listed apart as "do not call": every 黑称, and every other / neutral name he dislikes. His 自称 is never shown to anyone else.
  */
-function othersAliases(aliases: readonly CastAlias[]): Pick<CastCard, 'aliases' | 'doNotCall'> {
+export function othersAliases(aliases: readonly CastAlias[]): Pick<CastCard, 'aliases' | 'doNotCall'> {
   // Part 24l: a name that is a 黑称 for him goes ONLY under doNotCall, even when it is also an alias or a neutral name.
   const insults = new Set(aliases.filter((a) => a.kind === 'insult').map((a) => a.text));
   const usable = aliases.filter(

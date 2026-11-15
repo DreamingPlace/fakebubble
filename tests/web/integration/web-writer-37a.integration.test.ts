@@ -297,3 +297,15 @@ test('v8 publishes with no follow-up: the operation set is unchanged and nothing
   assert.deepEqual(stored.deferredMessageIds, []);
   assert.deepEqual(stored.awaitingPlayerMessageIds, []);
 });
+
+test('37a-2: a v8 request freezes the teammates roster (whatever CAST_CONTEXT_ENABLED says); a v7 request gains no roster or note', (t) => {
+  for (const writer of ['v7', 'v8'] as const) {
+    const store = scenario(t, { writer });
+    freezeInputSnapshot(store as unknown as WebStore, 'operation', FREEZE_NOW);
+    freezeWebV7Request(store as unknown as WebStore, 'operation', FREEZE_NOW);
+    const { request } = readWebV7Request(store as unknown as WebStore, 'operation');
+    assert.equal('roster' in request, writer === 'v8', writer);
+    assert.ok(!request.cast, 'CAST_CONTEXT_ENABLED is off here: the roster does not depend on it');
+    if (request.opening) assert.ok(!('context' in request.opening) || writer === 'v8', 'v7 never carries the note');
+  }
+});

@@ -13,12 +13,13 @@ import {
   REHEARSAL_SET_LABELS,
   REHEARSAL_SCRIPTS_MAX,
   REHEARSAL_TURNS_MAX,
-  REHEARSAL_TURNS_MIN,
+  rehearsalTurnsMin,
   REHEARSAL_SETS,
   charLength,
   checkTurns,
   isRehearsalModels,
   parseRehearsalColumn,
+  type RehearsalSet,
   rehearsalColumnLabel,
   type RehearsalCell,
   type RehearsalEstimate,
@@ -42,6 +43,7 @@ import { currentReviewModel } from '../admission/web-review-model.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
 import { listPriceMicros } from '../generation/model-list-prices.ts';
 import { openingFrom } from '../generation/opening-line.ts';
+import { writerRoster } from '../generation/writer-roster.ts';
 import { modelUsableHere, draftModelRef } from '../generation/web-text-routing.ts';
 import { contentHash } from './admin-content-hash.ts';
 import { identifier, keys, record } from './template-validation.ts';
@@ -317,7 +319,7 @@ export class WebRehearsal {
     if (value.kind === 'set') {
       keys(value, ['kind', 'set']);
       ensure((REHEARSAL_SETS as readonly unknown[]).includes(value.set), 'INVALID_REHEARSAL_SOURCE');
-      return { kind: 'set', set: value.set as 'chat' | 'repeat' };
+      return { kind: 'set', set: value.set as RehearsalSet };
     }
     keys(value, ['kind', 'items']);
     ensure(
@@ -395,11 +397,21 @@ export class WebRehearsal {
       turns = memeTurnPlan(source.items).map((slot) => ({ text: null, role: slot.role, item: slot.item }));
       // Turns of one item keep their order: hint 1, look-alike, hint 2 (the plan is the slot order; texts come with the hints).
     }
-    ensure(turns.length >= REHEARSAL_TURNS_MIN && turns.length <= REHEARSAL_TURNS_MAX, 'INVALID_REHEARSAL_SCRIPT');
+    ensure(
+      turns.length >= rehearsalTurnsMin(source.kind === 'set' ? source.set : undefined) &&
+        turns.length <= REHEARSAL_TURNS_MAX,
+      'INVALID_REHEARSAL_SCRIPT',
+    );
+    // The conversation starts from the first welcome line; 开场 starts from the first one that has a 情境 note (else the first).
+    const lines = profile.presentation.welcomes;
+    const line =
+      (source.kind === 'set' && source.set === 'opening' ? lines.find((l) => l.context) : undefined) ?? lines[0];
+    const opening = openingFrom(line?.text, line?.context);
     const frozen: RehearsalFrozen = {
       template: profile.template,
-      ...(openingFrom(profile.presentation.welcomes[0]?.text)
-        ? { opening: openingFrom(profile.presentation.welcomes[0]?.text)! }
+      ...(opening ? { opening } : {}),
+      ...(models.some((key) => parseRehearsalColumn(key)?.writer === 'v8')
+        ? { roster: writerRoster(this.store, characterId) }
         : {}),
       ...(cast ? { cast } : {}),
       baseAt: now,

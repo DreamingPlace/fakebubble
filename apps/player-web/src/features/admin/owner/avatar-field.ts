@@ -8,7 +8,7 @@ export const avatarCopy = {
   choose: '上传头像',
   replace: '替换头像',
   clear: '清除头像',
-  note: 'PNG、JPEG 或 WebP，不超过 2 MB。浏览器先居中裁成正方形，再缩到 512 px 上传。',
+  note: 'PNG、JPEG 或 WebP，不超过 2 MB。浏览器先居中裁成正方形，再缩到 512 像素上传。',
   hint: (file: string) => `资料里的头像文件：${file}`,
   unsaved: '已更换，保存草稿后发布生效。',
   uploading: '正在处理…',

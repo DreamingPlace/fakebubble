@@ -11,7 +11,7 @@ import {
 import { dialogueParts } from '../../../packages/domain/directions.ts';
 import { localTime } from '../../../packages/domain/schedule.ts';
 import { validBirthDate } from '../characters/characters.ts';
-import { stripDirectionMarkup } from '../../../workers/audio/fish.ts';
+import { dropLoudDirections, stripDirectionMarkup } from '../../../workers/audio/fish.ts';
 import { PROMPTS_V8 } from './writer-prompts.generated.ts';
 import { SEED_CHARACTER_PROMPT } from './seed-prompt.ts';
 import { promptTimestamp } from './accepted-text-prompt.ts';
@@ -62,7 +62,7 @@ const sortedPrompts = () => Object.entries(PROMPTS_V8).sort(([a], [b]) => (a < b
 /** sha256 of every prompts/v8 file (name and text). Pinned below and documented in docs/STATUS.md. */
 export const writerPromptBytesHash = () => createHash('sha256').update(JSON.stringify(sortedPrompts())).digest('hex');
 /** The pin: the generation Worker refuses the v8 route when its bundled files do not hash to exactly this. */
-export const WRITER_V8_PROMPT_SHA256 = '0103d2e26ae8a0f18d245b9430fcfe8339fd877b8e76e748ecdf5252898b8f4e';
+export const WRITER_V8_PROMPT_SHA256 = '83f3629bac8c7a58cb37734264c91a3678e30505943333cb526dd2f14ca34475';
 
 const guardReasonSchema = { type: 'string', enum: [...GUARD_REASONS] };
 /** The second pass's output tool: the v7 review schema's bookkeeping fields, without decision, replacement bubbles or coverage. */
@@ -152,7 +152,11 @@ function context(request: TextGenerationRequest, forGuard: boolean) {
     ...(request.cast ? { cast: { view: request.cast.view } } : {}),
     age,
     relationshipContext,
-    playerIntroduction: request.playerIntroduction ?? null,
+    // Part 37a-2: no preset player identity for now: the association and its initial trust / familiarity are not sent. What the
+    // player filled in themselves (name, age, details) still is.
+    playerIntroduction: request.playerIntroduction
+      ? (({ association: _association, ...rest }) => rest)(request.playerIntroduction)
+      : null,
     playerFacts: (request.playerFacts ?? []).map(({ factKey, statement }) => ({ factKey, statement })),
     memories: (request.memories ?? []).map((memory) => ({
       ...memory,
@@ -170,7 +174,18 @@ function context(request: TextGenerationRequest, forGuard: boolean) {
     sceneContext: request.sceneContext ?? null,
     shortTermTurns: (request.shortTermTurns ?? []).map((turn) => ({ ...turn, publishedTime: describe(turn.at) })),
     ...(request.opening
-      ? { opening: [{ authorKind: 'character', delivery: 'voice', text: request.opening.text }] }
+      ? {
+          // The character's OWN first message, before every other message. `situation` (the line's 情境 note, first turns only) is
+          // what was happening when they sent it.
+          opening: [
+            {
+              authorKind: 'character',
+              delivery: 'voice',
+              text: request.opening.text,
+              ...(request.opening.context ? { situation: request.opening.context } : {}),
+            },
+          ],
+        }
       : {}),
     messages: request.messages.map(({ id, authorKind, text, createdAt, replyTo }) => ({
       id,
@@ -186,6 +201,18 @@ function context(request: TextGenerationRequest, forGuard: boolean) {
   };
 }
 
+/** Part 37a-2: the teammates' cards (name, aliases others may use, one-liner), compact. Empty when nobody else is published. */
+const rosterBlock = (request: TextGenerationRequest) =>
+  request.roster?.length
+    ? `\n\n队友名单（JSON，只有名片）：${JSON.stringify(
+        request.roster.map(({ name, aliases, oneLiner }) => ({
+          name,
+          ...(aliases.length ? { aliases } : {}),
+          ...(oneLiner ? { oneLiner } : {}),
+        })),
+      )}`
+    : '';
+
 /** The writer's call: persona first (system), then the pinned rules, then the context. No tool, no schema. */
 export function writerDraftMessages(request: TextGenerationRequest) {
   ensure(request.writer === 'v8', 'WRITER_V8_REQUIRED');
@@ -195,6 +222,28 @@ export function writerDraftMessages(request: TextGenerationRequest) {
   );
   ensure(Number.isSafeInteger(request.now) && request.now >= 0, 'INVALID_TEXT_REQUEST');
   ensure(Array.isArray(request.messages) && request.messages.length <= 64, 'INVALID_TEXT_REQUEST');
+  ensure(
+    request.roster === undefined ||
+      (Array.isArray(request.roster) &&
+        request.roster.length <= 40 &&
+        request.roster.every(
+          (card) =>
+            typeof card.name === 'string' &&
+            card.name.length > 0 &&
+            card.name.length <= 100 &&
+            Array.isArray(card.aliases) &&
+            card.aliases.length <= 12 &&
+            card.aliases.every((alias) => typeof alias === 'string' && alias.length <= 25) &&
+            typeof card.oneLiner === 'string' &&
+            card.oneLiner.length <= 100,
+        )),
+    'INVALID_TEXT_REQUEST',
+  );
+  ensure(
+    request.opening?.context === undefined ||
+      (typeof request.opening.context === 'string' && [...request.opening.context].length <= 200),
+    'INVALID_TEXT_REQUEST',
+  );
   const { character } = request;
   const canon = character.authorCanon ? `\n\n作者设定（JSON）：${JSON.stringify(character.authorCanon)}` : '';
   const system =
@@ -202,7 +251,8 @@ export function writerDraftMessages(request: TextGenerationRequest) {
     WRITER +
     (request.deliveryMode === 'voice' && request.voiceDirections ? DIRECTIONS : '') +
     (request.cast ? `\n${CAST}` : '') +
-    (character.seed === true ? `\n${SEED_CHARACTER_PROMPT}` : '');
+    (character.seed === true ? `\n${SEED_CHARACTER_PROMPT}` : '') +
+    rosterBlock(request);
   const content = JSON.stringify(context(request, false));
   ensure(content.length <= 200_000, 'TEXT_CONTEXT_TOO_LARGE');
   return [
@@ -240,7 +290,9 @@ const WHISPER = /<\/?whisper>/gu;
  * recognised markup (Part 30's rule, `stripDirectionMarkup`), a Drama 3 reply allows it, it fits the Fish limit and has at most one
  * well-ordered whisper pair; every other case sends plain text. Malformed markup never fails a reply.
  */
-export function cleanSpokenLine(line: string, directions: boolean): { text: string; markup: string | null } {
+export function cleanSpokenLine(raw: string, directions: boolean): { text: string; markup: string | null } {
+  // Part 37a-2: a direction that asks for shouting is dropped (the words stay) before anything else is looked at.
+  const line = dropLoudDirections(raw);
   const text = line
     .replace(GROUP, '')
     .replace(WHISPER, '')

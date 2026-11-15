@@ -14400,6 +14400,39 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   visibility: hidden;
 }
 
+/* ---- 欢迎内容: the words and the 情境 note share the wide column, one under the other (Part 37a-2) ---- */
+.account-admin-page.admin-shell .wl-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-sp-1, 4px);
+  min-width: 0;
+}
+.account-admin-page.admin-shell .wl-note {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .wl-note-tag {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  display: flex;
+  align-items: center;
+  height: calc(var(--ad-h-standard, 40px) - 2px);
+  padding: 0 var(--ad-sp-3, 12px);
+  border-radius: calc(var(--ad-radius, 8px) - 1px) 0 0 calc(var(--ad-radius, 8px) - 1px);
+  border-right: 1px solid var(--ad-border);
+  background: var(--ad-primary-soft);
+  color: var(--ad-primary);
+  font-size: 12px;
+  pointer-events: none;
+}
+.account-admin-page.admin-shell #admin-characters .wb-card .wl-note textarea.wl-context.gb {
+  display: block;
+  width: 100%;
+  padding-left: 60px;
+}
+
 /* ---- 欢迎内容: the words grow, the percent is one aligned column with its unit beside it ---- */
 .account-admin-page.admin-shell .wl-row {
   /* Part 27's handle and × (28 px each), Part 29's weight column; the words grow, so everything aligns to the first line */

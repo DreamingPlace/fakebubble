@@ -140,7 +140,12 @@ export function editedCharacter(
   next.presentation = {
     displayName: values.displayName,
     publicDescription: values.publicDescription,
-    welcomes: values.welcomes.map((line) => ({ id: line.id, text: line.text, weight: line.weight })),
+    welcomes: values.welcomes.map((line) => ({
+      id: line.id,
+      text: line.text,
+      weight: line.weight,
+      ...(line.context?.trim() ? { context: line.context.trim() } : {}),
+    })),
     // The key is absent, not empty, when there is no colour: a profile without one hashes exactly as it always did.
     ...(values.color ? { color: values.color } : {}),
     // Part 24k-2: 主 + 点缀, edited here; `color` is always the 主's hex. Absent = kept as it came in.
