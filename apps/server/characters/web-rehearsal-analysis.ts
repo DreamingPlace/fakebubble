@@ -45,8 +45,8 @@ export interface AnalysedReply {
   /** The player's message of the turn. */
   player: string;
   bubbles: string[];
-  /** The reply covers the turn's message and defers nothing. */
-  answered: boolean;
+  /** The reply covers the turn's message and defers nothing. null: a v8 reply (the writer does not track it). */
+  answered: boolean | null;
 }
 
 export const endsWithQuestion = (bubbles: readonly string[]) => {
@@ -95,7 +95,7 @@ export function countReplies(
   const avg = (values: number[]) => (n === 0 ? null : Math.round((sum(values) / n) * 10) / 10);
   return {
     replies: n,
-    answeredAll: replies.filter((r) => r.answered).length,
+    answeredAll: replies.some((r) => r.answered === null) ? null : replies.filter((r) => r.answered).length,
     unaskedAdvice: replies.filter((r) => unaskedAdvice(r, lists.advice)).length,
     endsWithQuestion: replies.filter((r) => endsWithQuestion(r.bubbles)).length,
     avgChars: avg(replies.map((r) => [...flat(r.bubbles)].length)),

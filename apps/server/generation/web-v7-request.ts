@@ -8,6 +8,11 @@ import type {
 import { DIALOGUE } from '../../../packages/domain/dialogue.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import { protocolFingerprint } from './accepted-text-protocol.ts';
+import { resolveVoiceModel, type VoiceModelBinding } from '../../../packages/contracts/audio.ts';
+import { NEW_PLAYER_RELATIONSHIP } from '../../../packages/contracts/relationships.ts';
+import { siteVoiceModel } from '../characters/web-clip-manifest.ts';
+import { readWriter } from './web-writer-setting.ts';
+import { writerPins } from './writer-v8.ts';
 import { textPromptHash } from './accepted-text-prompt.ts';
 import { recallMemories, recallPlayerFacts } from '../memory/memory.ts';
 import { embeddingHash } from '../memory/memory-embeddings.ts';
@@ -83,6 +88,27 @@ export interface QueryEmbedding {
   vector: Float32Array;
   /** sha256 of the exact text that was embedded */
   digest: string;
+}
+
+const withoutTestOverride = <T extends { testOverride?: unknown }>({ testOverride: _drop, ...rest }: T) => rest;
+
+/**
+ * The protocol and prompt digests a stored request must carry: v7's for a request without `writer`, the pinned v8 ones for a v8
+ * request. Anything else (a v8 request holding v7 pins, or the reverse) is refused.
+ */
+export function framePinsMatch(
+  row: { protocol_digest: string; prompt_digest: string },
+  request: Pick<TextGenerationRequest, 'writer'>,
+) {
+  if (request.writer === 'v8') {
+    const pins = writerPins();
+    return row.protocol_digest === pins.protocolDigest && row.prompt_digest === pins.promptDigest;
+  }
+  return (
+    request.writer === undefined &&
+    digest(JSON.stringify(protocolFingerprint())) === row.protocol_digest &&
+    textPromptHash() === row.prompt_digest
+  );
 }
 
 /**
@@ -317,12 +343,27 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       : undefined;
   const introduction = playerIntroduction(userStore(store), scope);
   const facts = recalls ? recallPlayerFacts(userStore(store), scope) : [];
+  // Part 37a: the owner's switch is read ONCE, here, and frozen with the request. v7 requests gain no key at all.
+  const v8 = readWriter(store) === 'v8';
+  const schemaVersion = store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
+  const voiceBinding =
+    schemaVersion >= 113
+      ? store.get<{ voice_version: string; model: VoiceModelBinding }>(
+          `SELECT voice_version,model FROM web_provider_voice_bindings
+      WHERE character_id=? AND approved=1
+        AND source IN ('synthetic_fixture','user_selected')`,
+          scope.characterId,
+        )
+      : undefined;
   const request: TextGenerationRequest = {
     jobId: operation.id,
     scope: { worldId: scope.worldId, conversationId: scope.conversationId, characterId: scope.characterId },
     now,
-    relationship,
-    relationshipContext: relationshipState,
+    ...(v8 ? { writer: 'v8' as const } : { relationship }),
+    ...(v8 && voiceBinding && resolveVoiceModel(voiceBinding.model, siteVoiceModel(store)) === 'drama-3'
+      ? { voiceDirections: true }
+      : {}),
+    relationshipContext: v8 && relationshipState ? withoutTestOverride(relationshipState) : relationshipState,
     sceneContext: scene,
     ...(introduction ? { playerIntroduction: introduction } : {}),
     ...(facts.length ? { playerFacts: facts } : {}),
@@ -353,15 +394,12 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   };
   const serialized = JSON.stringify(request),
     requestDigest = digest(serialized),
-    protocolDigest = digest(JSON.stringify(protocolFingerprint()));
+    pins = v8
+      ? writerPins()
+      : { protocolDigest: digest(JSON.stringify(protocolFingerprint())), promptDigest: textPromptHash() };
   const voiceVersion =
-    (store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1) >= 113
-      ? store.get<{ voice_version: string }>(
-          `SELECT voice_version FROM web_provider_voice_bindings
-      WHERE character_id=? AND approved=1
-        AND source IN ('synthetic_fixture','user_selected')`,
-          scope.characterId,
-        )?.voice_version
+    schemaVersion >= 113
+      ? voiceBinding?.voice_version
       : `synthetic_test:${scope.characterId}:${input.template_version}`;
   ensure(voiceVersion, 'WEB_PROVIDER_VOICE_UNAPPROVED');
   store.run(
@@ -375,8 +413,8 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     input.input_message_id,
     serialized,
     requestDigest,
-    protocolDigest,
-    textPromptHash(),
+    pins.protocolDigest,
+    pins.promptDigest,
     memoryVersion(userStore(store), scope),
     playerContextKey(userStore(store), scope),
     relationshipVersion(userStore(store), scope),
@@ -392,14 +430,9 @@ export function readWebV7Request(
   operationId: string,
 ): { request: TextGenerationRequest; row: RequestRow } {
   const row = store.get<RequestRow>('SELECT * FROM web_v7_requests WHERE operation_id=?', operationId);
-  ensure(
-    row &&
-      digest(row.request_json) === row.request_digest &&
-      digest(JSON.stringify(protocolFingerprint())) === row.protocol_digest &&
-      textPromptHash() === row.prompt_digest,
-    'WEB_V7_REQUEST_INVALID',
-  );
+  ensure(row && digest(row.request_json) === row.request_digest, 'WEB_V7_REQUEST_INVALID');
   const request = JSON.parse(row.request_json) as TextGenerationRequest;
+  ensure(framePinsMatch(row, request), 'WEB_V7_REQUEST_INVALID');
   // Part 24a: a frozen cast view is read with the cast prompt files it was frozen with.
   ensure(request.cast === undefined || request.cast.promptHash === castPromptHash(), 'WEB_V7_REQUEST_INVALID');
   ensure(
@@ -450,7 +483,8 @@ export function checkWebV7SceneAtDispatch(store: WebStore, operationId: string, 
     JSON.parse(stored.candidate_json) as DialogueCandidate,
     request.sceneContext,
     request.messages,
-    request.relationship,
+    // A v8 request has no relationship preset; every live chat is `new` since Part 35, so the speech style is what it was.
+    request.relationship ?? NEW_PLAYER_RELATIONSHIP,
     now,
     snapshot.input_seq,
   );

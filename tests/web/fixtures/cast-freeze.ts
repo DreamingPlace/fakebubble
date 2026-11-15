@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { VoiceModelBinding } from '../../../packages/contracts/audio.ts';
 import type { TextDraft } from '../../../apps/server/generation/accepted-text-protocol.ts';
 import { promptMessages, reviewPromptMessages } from '../../../apps/server/generation/accepted-text-prompt.ts';
 import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
@@ -24,7 +25,12 @@ export function schema128() {
   return store;
 }
 
-export function seedFreezeScenario(store: Store, characterId = 'character') {
+/** `voiceModel` (Part 37a, default as before): the voice binding's model, for the writer tests that need a Drama 3 voice. */
+export function seedFreezeScenario(
+  store: Store,
+  characterId = 'character',
+  voiceModel: VoiceModelBinding = 's2.1-pro',
+) {
   store.run('INSERT INTO web_instance(singleton,instance_id) VALUES (1,?)', 'fixture-instance');
   store.run(
     'INSERT OR REPLACE INTO character_templates VALUES (?,?,?)',
@@ -66,7 +72,7 @@ export function seedFreezeScenario(store: Store, characterId = 'character') {
     voiceRevision: 1,
     profileId: 'synthetic-profile',
     referenceId: 'synthetic-reference',
-    model: 's2.1-pro',
+    model: voiceModel,
     approved: true,
   });
 }

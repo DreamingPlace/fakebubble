@@ -2,6 +2,7 @@ import { WorkerEntrypoint, RpcTarget } from 'cloudflare:workers';
 import { DomainError, ensure } from '../../packages/domain/errors.ts';
 import { DeepSeekTextGenerator } from '../../apps/server/generation/deepseek.ts';
 import { TextGenerationFailure } from '../../apps/server/generation/text-generation-error.ts';
+import { WRITER_V8_PROMPT_SHA256, writerPromptBytesHash } from '../../apps/server/generation/writer-v8.ts';
 import { FishAudio, fishSpeechRequest } from '../audio/fish.ts';
 import { SpeechFailure } from '../audio/validation-error.ts';
 import type { AcceptedV7StageOutput, TextGenerationRequest } from '../../packages/contracts/index.ts';
@@ -100,7 +101,12 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
         fetch: this.fetcher,
         keys: { xai: this.env.XAI_API_KEY, gemini: this.env.GEMINI_API_KEY },
       });
-      ensure(text.policyHash === policyHash, 'WEB_PROVIDER_WIRE_MISMATCH');
+      // Part 37a: a v8 request rides this same route. The Worker builds the v8 prompts from its own bundle and runs them only if
+      // the bytes hash to the pin (WEB_WRITER_PIN_MISMATCH); an older Worker ignores `writer`, computes the v7 policy hash and
+      // refuses the v8 one (WEB_PROVIDER_WIRE_MISMATCH), so nothing is sent.
+      if (request.writer === 'v8')
+        ensure(writerPromptBytesHash() === WRITER_V8_PROMPT_SHA256, 'WEB_WRITER_PIN_MISMATCH');
+      ensure(text.policyHashFor(request) === policyHash, 'WEB_PROVIDER_WIRE_MISMATCH');
       const remote: ProviderMeter = {
         reserve: (specs) =>
           callback(async () => {

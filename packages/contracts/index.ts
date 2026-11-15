@@ -148,6 +148,11 @@ export interface DialogueCandidate extends ReplyCandidate {
   // itself was valid), so no memory is stored for the turn. Counted in the daily metrics.
   topicsDropped?: boolean;
   factsDropped?: boolean;
+  // Part 37a (v8): the voice markup of each bubble (Drama 3 directions), aligned with `bubbles`; `text` is always the stripped
+  // text. Absent on every v7 reply.
+  bubbleMarkup?: (string | null)[];
+  // Part 37a (v8): the guard's reasons for each bubble it replaced (codes only, no content). Absent on v7; [] when it changed nothing.
+  guardReasons?: string[];
 }
 export interface TopicMemory {
   // Only the deferred memory-link experiment adds a catalog ID to model recall.
@@ -185,7 +190,13 @@ export interface TextGenerationRequest {
   now: number;
   // Earlier failed attempts for these covered inputs, not a character's fictional reason for replying late.
   priorServiceFailure?: boolean;
-  relationship: RelationshipPreset;
+  // Part 37a: the v8 writer does not send a relationship preset, so a v8 request has none. Every v7 request still carries it.
+  relationship?: RelationshipPreset;
+  // Part 37a: absent = the v7 writer (every byte of the request is what it was). 'v8' = the plain-text writer; frozen with the
+  // request, so a reply in flight finishes with the writer it started with.
+  writer?: 'v8';
+  // Part 37a (v8, voice only): the frozen voice model of this reply is Drama 3, so a spoken line may carry inline directions.
+  voiceDirections?: boolean;
   sceneContext?: import('./scenes.ts').SceneState;
   relationshipContext?: import('./relationships.ts').RelationshipContext;
   playerIntroduction?: PlayerIntroductionContext;

@@ -44,7 +44,7 @@ export interface CompareCase {
   group: string;
   /** What the case checks, in the owner's words. */
   title: string;
-  relationship: TextGenerationRequest['relationship'];
+  relationship: NonNullable<TextGenerationRequest['relationship']>;
   /** Local time of the (fictional) day, minutes after midnight, in the character's zone. */
   minute?: number;
   seed?: true;
