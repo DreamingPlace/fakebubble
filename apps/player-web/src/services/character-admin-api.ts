@@ -244,7 +244,12 @@ function welcomes(d: Record<string, unknown>): WelcomeLine[] {
   return list.map((entry) => {
     const l = object(entry);
     if (!Number.isInteger(l.weight)) throw invalid();
-    return { id: string(l.id), text: string(l.text), weight: l.weight as number };
+    return {
+      id: string(l.id),
+      text: string(l.text),
+      weight: l.weight as number,
+      ...(typeof l.context === 'string' && l.context ? { context: l.context } : {}),
+    };
   });
 }
 function profile(v: unknown): CharacterProfile {

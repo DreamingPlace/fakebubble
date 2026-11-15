@@ -151,7 +151,11 @@ export class RehearsalAdminClient {
       scripts: rows(o.scripts).map(script),
       sets: rows(o.sets).map((s) => {
         const x = object(s);
-        return { set: oneOf(x.set, ['chat', 'repeat'] as const), label: string(x.label), turns: strings(x.turns) };
+        return {
+          set: oneOf(x.set, ['chat', 'repeat', 'opening'] as const),
+          label: string(x.label),
+          turns: strings(x.turns),
+        };
       }),
       phrases: phrases(o.phrases),
       defaultPhrases: phrases(o.defaultPhrases),

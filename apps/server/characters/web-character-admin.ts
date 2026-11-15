@@ -92,10 +92,12 @@ function welcomeLines(display: Record<string, unknown>) {
   }
   const problems = welcomeProblems(display.welcomes);
   if (problems.length) throw new DetailedError('WELCOMES_INVALID', { problems });
-  return (display.welcomes as { id: string; text: string; weight: number }[]).map((line) => {
+  return (display.welcomes as { id: string; text: string; weight: number; context?: string }[]).map((line) => {
     record(line);
-    keys(line, ['id', 'text', 'weight']);
-    return { id: line.id, text: line.text, weight: line.weight };
+    keys(line, ['id', 'text', 'weight', 'context']);
+    // Part 37a-2: the 情境 note is optional; an empty or blank one is no note (the key is absent, so the profile hashes as before).
+    const context = typeof line.context === 'string' ? line.context.trim() : undefined;
+    return { id: line.id, text: line.text, weight: line.weight, ...(context ? { context } : {}) };
   });
 }
 

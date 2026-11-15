@@ -40,6 +40,7 @@ type Row = {
   grip: HTMLElement;
   no: HTMLElement;
   text: HTMLTextAreaElement;
+  context: HTMLTextAreaElement;
   weight: HTMLInputElement;
   del: HTMLButtonElement;
 };
@@ -68,6 +69,7 @@ export function welcomeList(initial: readonly WelcomeLine[], onChange: () => voi
       id: r.id,
       text: r.text.value,
       weight: r.weight.value === '' ? Number.NaN : Number(r.weight.value),
+      ...(r.context.value ? { context: r.context.value } : {}),
     }));
   const paint = () => {
     const lines = read();
@@ -107,6 +109,17 @@ export function welcomeList(initial: readonly WelcomeLine[], onChange: () => voi
     text.value = line.text;
     text.placeholder = '欢迎词';
     text.setAttribute?.('aria-label', '欢迎词');
+    // Part 37a-2: the 情境 note under the line. Never spoken and never shown to a player; its tip says so (no text on the page).
+    const context = growBox(node('textarea', 'wl-text wl-context'), 'one');
+    context.maxLength = WELCOME_LIMITS.context;
+    context.value = line.context ?? '';
+    context.setAttribute?.('aria-label', '情境');
+    // A short tag stays inside the box (a placeholder would vanish with the first character); the tip is the only explanation.
+    const note = node('div', 'wl-note');
+    note.title = '这句话发出时正在发生什么，只给新写法看；不会被朗读，玩家看不到。';
+    note.append(node('span', 'wl-note-tag', '情境'), context);
+    const body = node('div', 'wl-body');
+    body.append(text, note);
     const weightWrap = node('label', 'wl-weight-wrap');
     const weight = node('input', 'wl-weight');
     weight.type = 'number';
@@ -117,9 +130,10 @@ export function welcomeList(initial: readonly WelcomeLine[], onChange: () => voi
     weight.setAttribute?.('aria-label', '出现比例（%）');
     weightWrap.append(weight, node('span', 'wl-pct', '%'));
     const del = removeButton('删除这条欢迎词', 'ad-remove wl-del');
-    row.append(grip, no, text, weightWrap, del);
-    const record: Row = { id: line.id, row, grip, no, text, weight, del };
+    row.append(grip, no, body, weightWrap, del);
+    const record: Row = { id: line.id, row, grip, no, text, context, weight, del };
     text.addEventListener('input', changed);
+    context.addEventListener('input', changed);
     weight.addEventListener('input', changed);
     del.addEventListener('click', () => {
       if (rows.length <= WELCOME_LIMITS.minLines) return;

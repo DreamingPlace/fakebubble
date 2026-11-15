@@ -5,6 +5,7 @@ import { bindTip } from '../ui/tooltip.ts';
 import {
   REHEARSAL_TURNS_MAX,
   REHEARSAL_TURNS_MIN,
+  rehearsalTurnsMin,
   REHEARSAL_TURN_CHARS,
   REHEARSAL_ITEMS_MAX,
   REHEARSAL_SET_LABELS,
@@ -21,6 +22,7 @@ import {
   type RehearsalMemeCell,
   type RehearsalRunDetail,
   type RehearsalRunInfo,
+  type RehearsalSet,
   type RehearsalSource,
 } from '../../../../../../packages/contracts/web-rehearsal.ts';
 import type { RehearsalAdminClient } from '../../../services/rehearsal-admin-api.ts';
@@ -60,11 +62,7 @@ export type RehearsalHost = {
   isOwner?: () => boolean;
   poll?: { setTimer?: (fn: () => void, ms: number) => unknown; clearTimer?: (handle: unknown) => void };
 };
-type Pick =
-  | { kind: 'set'; set: 'chat' | 'repeat' }
-  | { kind: 'memes' }
-  | { kind: 'script'; id: string }
-  | { kind: 'new' };
+type Pick = { kind: 'set'; set: RehearsalSet } | { kind: 'memes' } | { kind: 'script'; id: string } | { kind: 'new' };
 const POLL_MS = 2500;
 const lines = (text: string) =>
   text
@@ -230,7 +228,8 @@ export function rehearsalView(host: RehearsalHost) {
     const n = turnCount();
     if (pick.kind === 'memes' && (chosenItems.size < 2 || chosenItems.size > REHEARSAL_ITEMS_MAX))
       return `选 2–${REHEARSAL_ITEMS_MAX} 项`;
-    if (n < REHEARSAL_TURNS_MIN || n > REHEARSAL_TURNS_MAX) return `${REHEARSAL_TURNS_MIN}–${REHEARSAL_TURNS_MAX} 轮`;
+    const min = rehearsalTurnsMin(pick.kind === 'set' ? pick.set : undefined);
+    if (n < min || n > REHEARSAL_TURNS_MAX) return `${min}–${REHEARSAL_TURNS_MAX} 轮`;
     if (estimateFault) return estimateFault;
     if (!estimate || estimating) return '估算中';
     if (busy) return '运行中';
@@ -415,7 +414,11 @@ export function rehearsalView(host: RehearsalHost) {
       src = source(),
       id = host.characterId();
     if (!d || !src || !id || models.size === 0 || host.unsaved()) return send.refresh();
-    if (turnCount() < REHEARSAL_TURNS_MIN || turnCount() > REHEARSAL_TURNS_MAX) return send.refresh();
+    if (
+      turnCount() < rehearsalTurnsMin(pick.kind === 'set' ? pick.set : undefined) ||
+      turnCount() > REHEARSAL_TURNS_MAX
+    )
+      return send.refresh();
     estimating = true;
     send.refresh();
     host.api
