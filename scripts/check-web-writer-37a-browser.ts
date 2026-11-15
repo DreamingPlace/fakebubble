@@ -112,9 +112,15 @@ try {
     await page.goto(`${f.origin}/?mode=provider-admin#/characters/wei-guagua`);
     await page.reload();
     await page.getByText('预演', { exact: true }).first().click();
-    await page.locator('[data-pw-rehearsal]').waitFor({ timeout: 20_000 });
-    await wait(1000);
-    await page.locator('[data-pw-rehearsal]').click();
+    // Part 31b: from 1280 px 多轮预演 is the second half of the 预演 tab (no button, no drawer); below it is the drawer as before.
+    if (width >= 1280) {
+      await page.locator('.pw-split .pw-half-rehearsal .rh-rail .rh-pick').first().waitFor({ timeout: 20_000 });
+      await wait(1000);
+    } else {
+      await page.locator('[data-pw-rehearsal]').waitFor({ timeout: 20_000 });
+      await wait(1000);
+      await page.locator('[data-pw-rehearsal]').click();
+    }
     await page.locator('.rh-rail .rh-pick').first().waitFor({ timeout: 10_000 });
     await wait(700);
     await page.locator('.rh-rail .rh-pick', { hasText: '日常闲聊' }).click();
