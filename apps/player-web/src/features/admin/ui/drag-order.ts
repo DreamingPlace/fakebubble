@@ -15,6 +15,36 @@ export function moved<T>(ids: readonly T[], from: number, to: number): T[] {
   return next;
 }
 
+/** The same on a grid: the index whose slot centre (x, y) is nearest to the dragged tile's centre, so a tile can be dropped anywhere. */
+export function slotAtGrid(centres: readonly { x: number; y: number }[], from: number, drag: { x: number; y: number }) {
+  let best = from;
+  let bestGap = Infinity;
+  centres.forEach((centre, index) => {
+    const gap = (centre.x - drag.x) ** 2 + (centre.y - drag.y) ** 2;
+    if (gap < bestGap) {
+      best = index;
+      bestGap = gap;
+    }
+  });
+  return best;
+}
+
+/** Where a keyboard move lands on a grid read in rows: ←/→ one place, ↑/↓ one row; null when that would leave the list. */
+export function gridStep(key: string, from: number, total: number, columns: number): number | null {
+  const delta =
+    key === 'ArrowLeft'
+      ? -1
+      : key === 'ArrowRight'
+        ? 1
+        : key === 'ArrowUp'
+          ? -columns
+          : key === 'ArrowDown'
+            ? columns
+            : 0;
+  const to = from + delta;
+  return delta === 0 || to < 0 || to >= total ? null : to;
+}
+
 /** Where a dragged row ends up: the index whose slot centre is nearest to the dragged row's centre. */
 export function slotAt(centres: readonly number[], from: number, dragCentre: number): number {
   let best = from;
@@ -42,6 +72,8 @@ export type DragOrderOptions = {
   handle?: string;
   /** Part 27: called after every completed move (drop or Alt+arrow) with the row's new index, for a screen-reader announcement. */
   announce?: (row: HTMLElement, to: number, total: number) => void;
+  /** The rows are tiles of a grid read in rows: a tile follows the pointer in both directions, ←/→ move one place, ↑/↓ one row. */
+  grid?: boolean;
 };
 
 const frame = (work: () => void) =>
@@ -57,7 +89,9 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
   let drag: {
     row: HTMLElement;
     pointer: number;
+    startX: number;
     startY: number;
+    points: { x: number; y: number }[];
     from: number;
     to: number;
     rows: HTMLElement[];
@@ -71,6 +105,20 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
     const { rows, from, to, height } = state;
     rows.forEach((row, index) => {
       if (row === state.row) return;
+      if (options.grid) {
+        // a tile between the two ends moves into the slot beside it; every other one stays
+        const next =
+          from < to && index > from && index <= to
+            ? index - 1
+            : from > to && index >= to && index < from
+              ? index + 1
+              : index;
+        const dx = state.points[next]!.x - state.points[index]!.x;
+        const dy = state.points[next]!.y - state.points[index]!.y;
+        row.style.transition = slide;
+        row.style.transform = next === index ? '' : `translate(${dx}px, ${dy}px)`;
+        return;
+      }
       const shift =
         from < to && index > from && index <= to ? -height : from > to && index >= to && index < from ? height : 0;
       row.style.transition = slide;
@@ -91,7 +139,9 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
     drag = {
       row,
       pointer: event.pointerId,
+      startX: event.clientX,
       startY: event.clientY,
+      points: rects.map((r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 })),
       from,
       to: from,
       rows,
@@ -104,15 +154,18 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
   const onMove = (event: PointerEvent) => {
     if (!drag || event.pointerId !== drag.pointer) return;
     const dy = event.clientY - drag.startY;
+    const dx = options.grid ? event.clientX - drag.startX : 0;
     if (!drag.live) {
-      if (Math.abs(dy) < DRAG_START_PX) return;
+      if (Math.abs(dy) < DRAG_START_PX && Math.abs(dx) < DRAG_START_PX) return;
       drag.live = true;
       drag.row.classList.add('is-dragging');
       drag.row.setPointerCapture?.(event.pointerId);
       drag.row.style.transition = 'none';
     }
-    drag.row.style.transform = `translateY(${dy}px)`;
-    const to = slotAt(drag.centres, drag.from, drag.centres[drag.from]! + dy);
+    drag.row.style.transform = options.grid ? `translate(${dx}px, ${dy}px)` : `translateY(${dy}px)`;
+    const to = options.grid
+      ? slotAtGrid(drag.points, drag.from, { x: drag.points[drag.from]!.x + dx, y: drag.points[drag.from]!.y + dy })
+      : slotAt(drag.centres, drag.from, drag.centres[drag.from]! + dy);
     if (to !== drag.to) {
       drag.to = to;
       place(drag);
@@ -123,8 +176,13 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
     // The dragged row glides to the slot it was dropped on; then the DOM takes the new order and every transform is cleared at once.
     const { row, rows, from, to } = state;
     const offset = state.centres[to]! - state.centres[from]!;
+    const away = options.grid
+      ? Math.abs(state.points[to]!.x - state.points[from]!.x) + Math.abs(state.points[to]!.y - state.points[from]!.y)
+      : offset;
     row.style.transition = slide;
-    row.style.transform = `translateY(${offset}px)`;
+    row.style.transform = options.grid
+      ? `translate(${state.points[to]!.x - state.points[from]!.x}px, ${state.points[to]!.y - state.points[from]!.y}px)`
+      : `translateY(${offset}px)`;
     const done = () => {
       row.removeEventListener('transitionend', done);
       for (const r of rows) {
@@ -143,7 +201,7 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
         for (const r of rows) r.style.transition = '';
       });
     };
-    if (slide === 'none' || offset === 0) done();
+    if (slide === 'none' || away === 0) done();
     else {
       row.addEventListener('transitionend', done);
       setTimeout(() => {
@@ -174,15 +232,49 @@ export function dragOrder(list: HTMLElement, options: DragOrderOptions): () => v
   };
 
   const onKey = (event: KeyboardEvent) => {
-    if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+    const arrows = options.grid ? ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
+    if (!event.altKey || !arrows.includes(event.key)) return;
     const row = (event.target as HTMLElement | null)?.closest?.('[data-drag-row]') as HTMLElement | null;
     if (!row || !list.contains(row)) return;
     const rows = options.rows();
     const from = rows.indexOf(row);
-    const to = from + (event.key === 'ArrowUp' ? -1 : 1);
-    if (from < 0 || to < 0 || to >= rows.length) return;
+    if (from < 0) return;
+    let to: number;
+    if (options.grid) {
+      // a row of the grid is every tile that starts at the first tile's height
+      const top = rows[0]!.getBoundingClientRect().top;
+      const columns = Math.max(1, rows.filter((r) => Math.abs(r.getBoundingClientRect().top - top) < 2).length);
+      const step = gridStep(event.key, from, rows.length, columns);
+      if (step === null) return;
+      to = step;
+    } else {
+      to = from + (event.key === 'ArrowUp' ? -1 : 1);
+      if (to < 0 || to >= rows.length) return;
+    }
     event.preventDefault();
     const order = moved(rows, from, to);
+    if (options.grid) {
+      // every tile glides from where it was to where it is now (first, last, invert, play)
+      const before = new Map(rows.map((r) => [r, r.getBoundingClientRect()] as const));
+      for (const r of order) list.append(r);
+      if (slide !== 'none') {
+        for (const r of rows) {
+          const a = before.get(r)!,
+            b = r.getBoundingClientRect();
+          if (a.left === b.left && a.top === b.top) continue;
+          r.style.transition = 'none';
+          r.style.transform = `translate(${a.left - b.left}px, ${a.top - b.top}px)`;
+          frame(() => {
+            r.style.transition = slide;
+            r.style.transform = '';
+          });
+        }
+      }
+      (event.target as HTMLElement | null)?.focus?.();
+      options.onOrder(order.map(options.idOf));
+      options.announce?.(row, to, rows.length);
+      return;
+    }
     // The neighbour swaps places with a slide: both rows start where they were and glide.
     const a = rows[from]!.getBoundingClientRect(),
       b = rows[to]!.getBoundingClientRect();

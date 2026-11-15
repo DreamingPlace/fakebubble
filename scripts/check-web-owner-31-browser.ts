@@ -124,19 +124,54 @@ try {
     assert.equal(await page.locator('.arc-row').count(), before.length, 'one row per card on the arc');
     assert.equal((await page.locator('.arc-row .arc-pos').first().textContent())?.trim(), '1');
     await snap(page, `arc-open-${width}`);
-    // keyboard: the first row moves one place down (Alt+↓), the numbers follow, and the home page's own order is saved
+    // the 15 cards read as one sequence in rows of 3: Alt+→ moves one place (Part 31b: it was Alt+↓ while the list was a column)
     await page.locator('.arc-row').first().focus();
-    await page.keyboard.press('Alt+ArrowDown');
+    await page.keyboard.press('Alt+ArrowRight');
     await page.waitForTimeout(900);
     const after = catalog();
     assert.deepEqual(after.slice(0, 2), [before[1], before[0]], `saved for everyone at ${width}`);
     assert.equal((await page.locator('.arc-row .arc-name').first().textContent())?.trim() !== '', true);
     await snap(page, `arc-moved-${width}`);
-    // put it back (so the second size starts from the same order)
     await page.locator('.arc-row').nth(1).focus();
-    await page.keyboard.press('Alt+ArrowUp');
+    await page.keyboard.press('Alt+ArrowLeft');
     await page.waitForTimeout(900);
-    assert.deepEqual(catalog(), before);
+    assert.deepEqual(catalog(), before, 'Alt+← puts it back');
+    if (width === 1440) {
+      // Alt+↓ is one row (three places); Alt+↑ brings it back
+      await page.locator('.arc-row').first().focus();
+      await page.keyboard.press('Alt+ArrowDown');
+      await page.waitForTimeout(900);
+      assert.deepEqual(catalog().slice(0, 4), [before[1], before[2], before[3], before[0]], 'one row down');
+      await page.locator('.arc-row').nth(3).focus();
+      await page.keyboard.press('Alt+ArrowUp');
+      await page.waitForTimeout(900);
+      assert.deepEqual(catalog(), before);
+      // pointer drag across rows: the first tile is dropped on the last one (any position), then dragged back to the first
+      const grip = (i: number) => page.locator('.arc-row').nth(i).locator('.arc-grip');
+      const centre = async (i: number) => {
+        const box = (await page.locator('.arc-row').nth(i).boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      };
+      const last = before.length - 1;
+      const from = await grip(0).boundingBox();
+      const target = await centre(last);
+      await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(target.x - 40, target.y - 10, { steps: 12 });
+      await snap(page, 'arc-dragging-1440');
+      await page.mouse.move(target.x, target.y, { steps: 4 });
+      await page.mouse.up();
+      await page.waitForTimeout(1100);
+      assert.deepEqual(catalog(), [...before.slice(1), before[0]], 'dropped across rows, at the last place');
+      const g = await grip(last).boundingBox();
+      const top = await centre(0);
+      await page.mouse.move(g!.x + g!.width / 2, g!.y + g!.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(top.x, top.y, { steps: 12 });
+      await page.mouse.up();
+      await page.waitForTimeout(1100);
+      assert.deepEqual(catalog(), before, 'and back to the first place');
+    }
     await page.close();
   }
   {
@@ -148,7 +183,8 @@ try {
   }
 
   // =============== 2. the avatar ===============
-  const png = join(FIXTURES.pathname, 'a.png');
+  // Part 31b (named exception): the server takes only square PNGs now (the browser crops), so the upload uses sq-a.png, not the 97x73 a.png.
+  const png = join(FIXTURES.pathname, 'sq-a.png');
   for (const [width, height] of SIZES) {
     const page = await open(f.context, 'characters/jojo', width, height);
     await page.locator('.wb-card').first().waitFor();
@@ -269,16 +305,18 @@ try {
         ),
       );
     const before = ledger();
-    await page.locator('.pw-manage button:has-text("整理预演")').click();
+    // Part 31b (named exception): the 多轮预演 panel has its own 整理预演 bar, so these selectors name the single-preview bar (.pw > .pw-manage).
+    const bar = page.locator('.pw > .pw-manage');
+    await bar.locator('button:has-text("整理预演")').click();
     await page.locator('.pw-feed .pm-tick input').first().check();
-    assert.match((await page.locator('.pm-count').textContent()) ?? '', /已选 1 项/);
+    assert.match((await bar.locator('.pm-count').textContent()) ?? '', /已选 1 项/);
     await snap(page, 'previews-selected-1440');
-    await page.locator('.pm-bar button:has-text("删除所选…")').click();
-    await page.locator('.review-confirm, .pm-confirm').locator('.ic-text').first().waitFor();
-    const message = (await page.locator('.pm-confirm .ic-text').textContent()) ?? '';
+    await bar.locator('.pm-bar button:has-text("删除所选…")').click();
+    await bar.locator('.pm-confirm').locator('.ic-text').first().waitFor();
+    const message = (await bar.locator('.pm-confirm .ic-text').textContent()) ?? '';
     assert.match(message, /1 个运行.*共 2 条/, 'the question names how many');
     await snap(page, 'previews-confirm-1440');
-    await page.locator('.pm-confirm .ic-go').click();
+    await bar.locator('.pm-confirm .ic-go').click();
     await page.waitForTimeout(1500);
     assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_preview_runs')!.n, 0);
     assert.equal(ledger(), before, 'the bills are exactly as they were');
@@ -300,6 +338,26 @@ try {
       await page.locator('.review-confirm .ic-go').click();
       await page.waitForTimeout(1200);
       assert.equal(await owner.locator('tbody tr').count(), 2);
+      // Part 31b: 删除此对话 works from INSIDE an open conversation too: the same question, then back to the list with the row gone
+      await owner.locator('tbody tr', { hasText: 'W3X4' }).click();
+      await page.locator('.review-detail .review-lines').waitFor({ timeout: 10_000 });
+      await page.locator('.review-detail button:has-text("删除此对话…")').click();
+      await page.locator('.review-detail .review-confirm .ic-text').waitFor({ timeout: 5_000 });
+      assert.match(
+        (await page.locator('.review-detail .review-confirm .ic-text').textContent()) ?? '',
+        /永久删除 1 条测试对话/,
+      );
+      await snap(page, 'conversation-detail-delete-1440');
+      await page.locator('.review-detail .review-confirm .ic-go').click();
+      await page.locator('.review-list').waitFor({ state: 'visible', timeout: 10_000 });
+      await page.waitForTimeout(1000);
+      assert.equal(await owner.locator('tbody tr', { hasText: 'W3X4' }).count(), 0, 'the row is gone from the list');
+      assert.equal(await owner.locator('tbody tr').count(), 1);
+      assert.equal(
+        f.store.get<{ n: number }>("SELECT count(*) n FROM web_review_archive WHERE review_code='W3X4'")!.n,
+        0,
+        'and its lines are deleted',
+      );
     }
     // 已关闭账号: 玩家编号 and the closing day only
     const panel = page.locator('.closed-panel');

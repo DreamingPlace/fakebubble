@@ -1,3 +1,7 @@
+import type { OwnerAdminClient } from '../../../services/owner-admin-api.ts';
+import { previewManage } from '../owner/preview-manage.ts';
+import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
+import { bindTip } from '../ui/tooltip.ts';
 import {
   REHEARSAL_TURNS_MAX,
   REHEARSAL_TURNS_MIN,
@@ -32,6 +36,8 @@ export type RehearsalHost = {
   characterId: () => string | null;
   /** The saved draft this run would be frozen on, or null when there is none. */
   draft: () => { revision: number; hash: string } | null;
+  /** Part 31b: the live published version, which a run uses when there is no saved draft. null = never published. */
+  live?: () => number | null;
   /** The form beside holds unsaved changes (a run sends the SAVED draft). */
   unsaved: () => boolean;
   /** `preview` on this character. */
@@ -42,7 +48,13 @@ export type RehearsalHost = {
   toast: (text: string, tone?: 'ok' | 'info' | 'warn' | 'danger') => void;
   disposed: () => boolean;
   modalParent: () => HTMLElement;
+  /** Part 31b: a place in the page for the view (the 预演 tab's second half, desktop). Absent = the wide drawer as before. */
+  inline?: HTMLElement;
   newId?: () => string;
+  /** Part 31b (owner): 整理 of the run records. Absent = nothing of it is drawn. */
+  owner?: Record<'deleteRehearsals', OwnerAdminClient['deleteRehearsals']>;
+  confirm?: ConfirmInPlace;
+  isOwner?: () => boolean;
   poll?: { setTimer?: (fn: () => void, ms: number) => unknown; clearTimer?: (handle: unknown) => void };
 };
 type Pick =
@@ -72,6 +84,24 @@ const CELL_TEXT: Record<RehearsalCell['state'], string> = {
   skipped: '未发送',
 };
 const errorText = (code: string | null) => (code ? `代码 ${code}` : '');
+
+/** The drawer's small surface (a body, open, isOpen, dispose) on a node that lives in the page: no overlay, nothing to close. */
+function inlinePanel(host: HTMLElement) {
+  const body = h('div', { class: 'rh-inline' });
+  host.append(body);
+  let open = false;
+  return {
+    body,
+    isOpen: () => open,
+    open() {
+      open = true;
+    },
+    dispose() {
+      open = false;
+      body.remove();
+    },
+  };
+}
 
 /**
  * 多轮预演 (Part 35): a script of 6-20 player lines run on up to three draft models side by side. One wide panel: the scripts on
@@ -103,14 +133,42 @@ export function rehearsalView(host: RehearsalHost) {
   const newId = host.newId ?? (() => crypto.randomUUID());
   const gone = () => disposed || host.disposed();
 
-  const panel = drawer(host.modalParent(), { title: '多轮预演', wide: true, onClose: () => stopPoll() });
+  const panel = host.inline
+    ? inlinePanel(host.inline)
+    : drawer(host.modalParent(), { title: '多轮预演', wide: true, onClose: () => stopPoll() });
   panel.body.classList.add('rh');
   const rail = h('nav', { class: 'rh-rail', attrs: { 'aria-label': '脚本' } });
   const main = h('section', { class: 'rh-main' });
   panel.body.append(rail, main);
   const setup = h('div', { class: 'rh-setup' });
   const result = h('div', { class: 'rh-result' });
-  main.append(setup, result);
+  const manageHost = host.owner && host.confirm ? h('div', { class: 'pw-manage rh-manage' }) : null;
+  main.append(setup);
+  if (manageHost) main.append(manageHost);
+  main.append(result);
+  const manage =
+    manageHost && host.owner && host.confirm
+      ? previewManage(manageHost, {
+          remove: async (runIds) => (await host.owner!.deleteRehearsals(runIds)).runs,
+          confirm: host.confirm,
+          run: host.run,
+          toast: host.toast,
+          disposed: gone,
+          isOwner: () => host.isOwner?.() === true,
+          reload: async () => {
+            current = null;
+            detail = null;
+            await load();
+          },
+          targets: () =>
+            runs.flatMap((r) => {
+              const wrap = result.querySelector<HTMLElement>(`[data-run="${r.runId}"]`);
+              return wrap
+                ? [{ key: r.runId, el: wrap, slot: wrap, previews: 1, busy: r.status === 'running', isRun: true }]
+                : [];
+            }),
+        })
+      : null;
 
   // ---- the rail ---------------------------------------------------------------------------------------------------------
   const railButton = (label: string, target: Pick, meta = '') => {
@@ -153,10 +211,17 @@ export function rehearsalView(host: RehearsalHost) {
     return null;
   };
   const turnCount = () => (pick.kind === 'memes' ? chosenItems.size * 3 : (turnsOfPick()?.length ?? 0));
+  /** What a run is frozen on: the saved draft; with none, the live published version. Only an unsaved edit blocks. */
+  const base = () => {
+    const d = host.draft();
+    if (d) return { draftRevision: d.revision, profileHash: d.hash };
+    const live = host.live?.() ?? null;
+    return live === null ? null : { liveVersion: live };
+  };
   const why = (): string => {
     if (!host.canStart()) return '没有预演权限';
-    if (!host.draft()) return '先保存草稿';
-    if (host.unsaved()) return '先保存草稿';
+    if (host.unsaved()) return '有未保存的修改';
+    if (!base()) return '先保存草稿';
     if (pick.kind === 'new') return '先保存脚本';
     if (models.size === 0) return '选一个模型';
     const n = turnCount();
@@ -325,7 +390,7 @@ export function rehearsalView(host: RehearsalHost) {
     const mine = ++seq;
     estimate = null;
     estimateFault = '';
-    const d = host.draft(),
+    const d = base(),
       src = source(),
       id = host.characterId();
     if (!d || !src || !id || models.size === 0 || host.unsaved()) return send.refresh();
@@ -334,8 +399,7 @@ export function rehearsalView(host: RehearsalHost) {
     send.refresh();
     host.api
       .estimate(id, {
-        draftRevision: d.revision,
-        profileHash: d.hash,
+        ...d,
         source: src,
         models: MODEL_ORDER.filter((m) => models.has(m)),
         withCast,
@@ -355,13 +419,12 @@ export function rehearsalView(host: RehearsalHost) {
       });
   }
   async function start() {
-    const d = host.draft(),
+    const d = base(),
       src = source(),
       id = host.characterId();
     if (!d || !src || !id || !estimate || busy) return;
     const body = {
-      draftRevision: d.revision,
-      profileHash: d.hash,
+      ...d,
       source: src,
       models: MODEL_ORDER.filter((m) => models.has(m)),
       withCast,
@@ -557,13 +620,14 @@ export function rehearsalView(host: RehearsalHost) {
     );
     const body = h('tbody');
     for (const row of d.memes ?? []) {
-      const parts: Array<[string, (c: RehearsalMemeCell) => boolean | null, boolean]> = [
-        ['暗示一', (c) => c.hints[0] ?? null, true],
-        ['暗示二', (c) => c.hints[1] ?? null, true],
-        ['相似句', (c) => c.falseTrigger, false],
-        ['自己的视角', (c) => c.ownSide, true],
+      // Part 31b: the sentence behind each phrasing row (on hover, focus or tap), so the owner sees which wording missed.
+      const parts: Array<[string, (c: RehearsalMemeCell) => boolean | null, boolean, string | null]> = [
+        ['暗示一', (c) => c.hints[0] ?? null, true, row.hints[0]],
+        ['暗示二', (c) => c.hints[1] ?? null, true, row.hints[1]],
+        ['相似句', (c) => c.falseTrigger, false, row.lookAlike],
+        ['自己的视角', (c) => c.ownSide, true, null],
       ];
-      parts.forEach(([label, getter, good], i) => {
+      parts.forEach(([label, getter, good, sentence], i) => {
         const tr = h('tr', { attrs: { 'data-first': String(i === 0) } });
         if (i === 0) {
           const inner = h(
@@ -576,7 +640,14 @@ export function rehearsalView(host: RehearsalHost) {
           const th = h('th', { attrs: { rowspan: '4', scope: 'rowgroup' } }, inner);
           tr.append(th);
         }
-        tr.append(h('th', { text: label, attrs: { scope: 'row' } }));
+        const rowHead = h('th', { text: label, attrs: { scope: 'row' } });
+        if (sentence) {
+          const tip = h('span', { class: 'rh-sentence', text: sentence });
+          rowHead.setAttribute('tabindex', '0');
+          rowHead.append(tip);
+          bindTip(rowHead, tip, rowHead, true);
+        }
+        tr.append(rowHead);
         for (const c of d.columns)
           tr.append(
             h(
@@ -608,9 +679,10 @@ export function rehearsalView(host: RehearsalHost) {
         paintResult();
         void load();
       });
-      chips.append(b);
+      chips.append(h('div', { class: 'rh-run-wrap', attrs: { 'data-run': r.runId } }, b));
     }
     if (runs.length) result.append(chips);
+    manage?.sync();
     if (!detail) {
       if (!runs.length) result.append(h('p', { class: 'rh-empty', text: '还没有运行。' }));
       return;
@@ -645,6 +717,7 @@ export function rehearsalView(host: RehearsalHost) {
         d.run.status === 'running' ? '进行中' : d.run.status === 'done' ? '完成' : '失败',
         d.run.status === 'done' ? 'ok' : d.run.status === 'failed' ? 'danger' : 'info',
       ),
+      ...(d.run.liveVersion === null ? [] : [h('span', { class: 'rh-meta', text: `线上 v${d.run.liveVersion}` })]),
       h('span', { class: 'rh-meta', text: `${done} / ${total}` }),
       bar,
       cost,

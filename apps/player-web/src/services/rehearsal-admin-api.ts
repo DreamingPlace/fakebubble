@@ -19,6 +19,12 @@ import {
 import type { PlayerModelId } from '../../../../packages/contracts/player-models.ts';
 
 type Request = (path: string, body: Record<string, unknown>) => Promise<unknown>;
+/** A sentence or null (the phrasing was not written). */
+const text = (v: unknown) => (v === null ? null : string(v));
+const object2 = (v: unknown): unknown[] => {
+  if (!Array.isArray(v) || v.length !== 2) throw invalid();
+  return v;
+};
 const invalid = () => new Error('ADMIN_REHEARSAL_PROTOCOL_INVALID');
 const object = (v: unknown): Record<string, unknown> => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) throw invalid();
@@ -83,6 +89,7 @@ const info = (v: unknown): RehearsalRunInfo => {
     status: oneOf(o.status, ['running', 'done', 'failed'] as const),
     estimatedMicros: int(o.estimatedMicros),
     chargedMicros: int(o.chargedMicros),
+    liveVersion: o.liveVersion === null || o.liveVersion === undefined ? null : int(o.liveVersion),
   };
 };
 const CELL_STATES = ['pending', 'running', 'done', 'failed', 'unconfirmed', 'skipped'] as const;
@@ -173,8 +180,9 @@ export class RehearsalAdminClient {
   ) {
     return {
       characterId,
-      draftRevision: input.draftRevision,
-      profileHash: input.profileHash,
+      ...(input.liveVersion !== undefined
+        ? { liveVersion: input.liveVersion }
+        : { draftRevision: input.draftRevision, profileHash: input.profileHash }),
       source: input.source as RehearsalSource,
       models: input.models,
       withCast: input.withCast,
@@ -232,6 +240,8 @@ export class RehearsalAdminClient {
                 label: string(x.label),
                 kind: oneOf(x.kind, ['meme', 'story'] as const),
                 played: bool(x.played),
+                hints: x.hints === undefined ? [null, null] : [text(object2(x.hints)[0]), text(object2(x.hints)[1])],
+                lookAlike: x.lookAlike === undefined ? null : text(x.lookAlike),
                 models: byModel,
               };
             }),

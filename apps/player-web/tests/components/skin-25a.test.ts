@@ -1,3 +1,4 @@
+// Part 31b named exception (owner rule: no explanatory text on player pages): the 记忆不变 sentence left the model confirm line; only those assertions changed.
 /**
  * Part 25a: the Burbur skin. Component tests for the pieces the design boards changed that are not already pinned by the older
  * files: the hand-lettered wordmark, the 小卡 data, the login / signed-out pages, the model sheet in its states, the 共创 colours
@@ -289,7 +290,7 @@ test('model sheet, unmetered: no prices and no balance; the confirm sentence has
   assert.equal(f.root.querySelector('.mp-balance')!.textContent, '');
   assert.ok(f.root.querySelector('.mp-balance')!.hidden);
   f.row('gemini').click();
-  assert.equal(f.root.querySelector('.mp-confirm')!.textContent, '之后用 Gemini 3.8 Flash。记忆不变。');
+  assert.equal(f.root.querySelector('.mp-confirm')!.textContent, '之后用 Gemini 3.8 Flash。');
 });
 
 test('picking a row lifts it and opens the confirm box under the rows; 取消 puts it back; 换 switches once and says 已换成', async (t) => {
@@ -300,7 +301,7 @@ test('picking a row lifts it and opens the confirm box under the rows; 取消 pu
   assert.ok(f.row('xai').classList.contains('is-picked'));
   assert.equal(f.row('xai').getAttribute('aria-pressed'), 'true');
   assert.equal(f.row('gemini').classList.contains('is-picked'), false);
-  assert.equal(f.root.querySelector('.mp-confirm')!.textContent, '之后用 Grok 4.7 · 25 点/条（语音 +2）。记忆不变。');
+  assert.equal(f.root.querySelector('.mp-confirm')!.textContent, '之后用 Grok 4.7 · 25 点/条（语音 +2）。');
   const buttons = f.root.querySelector('.mp-confirm-box')!.querySelectorAll('button');
   assert.deepEqual(
     buttons.map((b) => b.textContent),

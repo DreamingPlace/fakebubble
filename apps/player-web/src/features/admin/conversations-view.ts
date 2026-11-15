@@ -181,7 +181,7 @@ export function conversationsView(
   root.replaceChildren(listArea, pager, detailArea);
 
   /** Part 31: one question naming the count, then the deletion; the list is read again either way. */
-  async function askDelete(keys: ReviewKey[], afterDone?: () => void) {
+  async function askDelete(keys: ReviewKey[], afterDone?: () => void, where: HTMLElement = confirmHost) {
     if (!deps.owner || !deps.confirm || keys.length === 0) return;
     const yes = await deps.confirm(
       {
@@ -189,7 +189,7 @@ export function conversationsView(
         message: conversationsCopy.confirm(keys.length),
         confirmLabel: conversationsCopy.confirmGo(keys.length),
       },
-      confirmHost,
+      where,
     );
     if (!yes || deps.disposed()) return;
     await deps.run(async () => {
@@ -358,13 +358,15 @@ export function conversationsView(
     const key = keyOf(detail);
     const pages = Math.max(1, Math.ceil(detail.total / detail.pageSize));
     const back = h('button', { class: 'admin-secondary', text: conversationsCopy.back, attrs: { type: 'button' } });
-    back.addEventListener('click', () => {
+    // (not a click on the button: while a run is going the page has switched every button off, and a click on a disabled one does nothing)
+    const toList = () => {
       wanted = null;
       open = null;
       detailArea.hidden = true;
       listArea.hidden = false;
       pager.hidden = !pagerShown;
-    });
+    };
+    back.addEventListener('click', toList);
     const exportOne = h('button', {
       class: 'admin-secondary',
       text: conversationsCopy.exportOne,
@@ -385,6 +387,8 @@ export function conversationsView(
         h('span', { text: conversationsCopy.page(detail.page + 1, pages, detail.total) }),
         pagerButton(conversationsCopy.next, detail.page + 1 < pages, () => openTranscript(key, detail.page + 1)),
       );
+    // Part 31b: inside an open conversation the list (and its confirm place) is hidden, so the question is asked here, under the bar
+    const detailConfirm = h('div', { class: 'review-confirm' });
     detailArea.replaceChildren(
       h(
         'div',
@@ -406,12 +410,13 @@ export function conversationsView(
                   text: conversationsCopy.deleteOne,
                   attrs: { type: 'button' },
                 });
-                del.addEventListener('click', () => void askDelete([key], () => back.click()));
+                del.addEventListener('click', () => void askDelete([key], toList, detailConfirm));
                 return del;
               })(),
             ]
           : []),
       ),
+      detailConfirm,
       nav(),
       h('ol', { class: 'review-lines' }, ...detail.lines.map(lineNode)),
       nav(),
