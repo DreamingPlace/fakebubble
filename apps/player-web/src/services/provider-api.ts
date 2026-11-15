@@ -251,6 +251,34 @@ export class ProviderApi implements WebProviderActions {
       }),
     );
   }
+  /** Part 39: two to eight characters, a pair's whole-star ratings and reason, the story. Idempotent on requestId. */
+  async submitRelation(input: {
+    requestId: string;
+    characterIds: string[];
+    ratings: { from: string; to: string; stars: number }[] | null;
+    reason: string | null;
+    text: string;
+  }) {
+    return this.noteResult(
+      await this.request('/cocreation/relation', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: input.requestId,
+          characterIds: input.characterIds,
+          ratings: input.ratings,
+          reason: input.reason,
+          text: input.text,
+        }),
+      }),
+    );
+  }
+  /** Part 39: the world background of the latest saved cast draft (plain text), or null. */
+  async worldBackground(): Promise<{ background: string | null }> {
+    const value = record(await this.request('/cocreation/world', { method: 'POST', body: JSON.stringify({}) }));
+    if (value.background !== null && typeof value.background !== 'string')
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return { background: value.background };
+  }
   private noteResult(raw: unknown) {
     const value = record(raw);
     if (typeof value.submissionId !== 'string' || typeof value.duplicate !== 'boolean')

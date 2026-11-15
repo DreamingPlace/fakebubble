@@ -273,6 +273,11 @@ export class LiveBinding {
       aura: ['--aura-1', '--aura-2', '--aura-3', '--accent'].map((name) =>
         card.style.getPropertyValue(name),
       ) as unknown as [string, string, string, string],
+      // Part 39: every live character in the home page order (首页顺序): the dice and the ＋ pick from it.
+      everyone: this.view.characters.map((entry) => ({
+        characterId: entry.characterId,
+        name: shell.name(entry.characterId),
+      })),
       others: this.view.characters
         .filter((entry) => entry.characterId !== characterId)
         .map((entry) => ({ characterId: entry.characterId, name: shell.name(entry.characterId) })),
