@@ -16,7 +16,7 @@ import {
   type CocreationCard,
 } from '../../../../../packages/contracts/cocreation-cards.ts';
 import { h, length } from './h.ts';
-import { relationFlow, type RelationSend } from './relation-flow.ts';
+import { relationFlow, resetRelationDraft, type RelationSend } from './relation-flow.ts';
 
 export interface CocreationApi {
   submitCocreation(input: {
@@ -147,6 +147,7 @@ export const resetCocreationDrafts = () => {
   drafts.clear();
   memoDraft.text = '';
   memoDraft.pending = null;
+  resetRelationDraft();
 };
 
 const cardMax = (card: CocreationCard) => (card.id === 'free' ? COCREATION_LIMITS.free : COCREATION_LIMITS.text);
