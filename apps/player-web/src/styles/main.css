@@ -20447,3 +20447,249 @@ html.theme-fade *::after {
     animation: none;
   }
 }
+
+/* ---- Part 39: relation notes in the co-creation inbox, and 玩家眼中的关系 (#57 tokens and components; nothing restyled) ---- */
+.account-admin-page.admin-shell #admin-cocreation .cr-host {
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--ad-bg);
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: 999px;
+  background: var(--ad-surface);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-decided {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-ratings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-rating {
+  display: grid;
+  grid-template-columns: minmax(0, 11em) 8em 1.2em 5em;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-stars {
+  color: var(--ad-tint-ink);
+  letter-spacing: 1px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-stars-word {
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-reason p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-match {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-join {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-tint-line);
+  border-radius: 999px;
+  color: var(--ad-tint-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-join.is-new {
+  border-style: dashed;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-name {
+  box-sizing: border-box;
+  width: 16em;
+  max-width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  font: inherit;
+  transition: border-color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-story-wrap {
+  position: relative;
+  display: block;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-story {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 14px 26px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.7;
+  transition: border-color var(--ad-t-slide) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-count {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-count[data-over="true"] {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-flags {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--ad-radius);
+  background: #fdf6e6;
+  color: #6b4e12;
+  font-size: 13px;
+  list-style: none;
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-flags[hidden],
+.account-admin-page.admin-shell #admin-cocreation .cr-error[hidden],
+.account-admin-page.admin-shell #admin-cocreation .cr-limit[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-error,
+.account-admin-page.admin-shell #admin-cocreation .cr-limit {
+  margin: 0;
+  color: var(--ad-danger);
+  font-size: 13px;
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-actions button {
+  height: 30px;
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-adopt-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-admin-page.admin-shell #admin-cocreation button.cr-adopt {
+  border-color: var(--ad-primary);
+  background: var(--ad-primary);
+  color: #fff;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell #admin-cocreation button.cr-adopt:disabled {
+  border-color: var(--ad-border);
+  background: var(--ad-surface);
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-adopt-note {
+  max-width: 22em;
+  color: var(--ad-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+/* 玩家眼中的关系 */
+.account-admin-page.admin-shell #admin-cocreation .cr-view {
+  animation: adPageIn var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-view[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-pair,
+.account-admin-page.admin-shell #admin-cocreation .cr-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-arrow {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-dist {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 44px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-bar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: 22px;
+  height: 100%;
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-bar i {
+  display: block;
+  width: 100%;
+  height: var(--h, 0%);
+  min-height: 2px;
+  border-radius: 3px 3px 0 0;
+  background: var(--ad-tint-line);
+  transition: height var(--ad-t-open) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cr-bar b {
+  color: var(--ad-muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-admin-page.admin-shell #admin-cocreation .cr-panel,
+  .account-admin-page.admin-shell #admin-cocreation .cr-view,
+  .account-admin-page.admin-shell #admin-cocreation .cr-flags,
+  .account-admin-page.admin-shell #admin-cocreation .cr-bar i {
+    animation: none;
+    transition: none;
+  }
+}

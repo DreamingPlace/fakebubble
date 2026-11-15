@@ -361,7 +361,7 @@ test('39 F: adoption pays the existing points once; the cast limits refuse with 
   const s = setup(t),
     ann = s.player('ann');
   s.draft();
-  const before = s.f.balance(ann.principalId);
+  const before = s.f.balance(ann.principalId)!;
   const note = s.send(ann, 'n1', ['c10', 'c11', 'c12'], { text: '宿舍夜谈' });
   assert.equal(s.f.balance(ann.principalId), before + 5);
   s.adopt(note.submissionId, 'x1', '宿舍夜谈');
@@ -682,7 +682,10 @@ test('39 整理: the prompt is pinned (own hash); chat and clip hashes are uncha
   assert.equal(cocreationTidyHash(), COCREATION_TIDY_PROMPT_SHA256);
   assert.equal(createHash('sha256').update(`${COCREATION_TIDY_PROMPT}\n`).digest('hex'), COCREATION_TIDY_PROMPT_SHA256);
   assert.equal(clipPromptHash(), CLIP_DIRECTION_PROMPT_SHA256);
-  assert.ok(!Object.values(PROMPTS_V7).includes(COCREATION_TIDY_PROMPT), 'the chat prompt module does not carry it');
+  assert.ok(
+    !(Object.values(PROMPTS_V7) as string[]).includes(COCREATION_TIDY_PROMPT),
+    'the chat prompt module does not carry it',
+  );
   const big = tidyUserMessage({
     members: ['甲', '乙'],
     text: '字'.repeat(600),

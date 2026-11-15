@@ -4,6 +4,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
+import { consoleCharacterOrder, sortByConsoleOrder } from '../characters/web-character-order.ts';
 import {
   characterFacts,
   characterLocalTime,
@@ -207,7 +208,11 @@ export class WebChatReviewAdmin {
       page,
       pageSize: REVIEW_LIST_PAGE,
       total: shown.length,
-      characters: [...known].sort().map((id) => ({ characterId: id, label: factsOf(id).label })),
+      // Part 39: the console's order (首页顺序), not the id order.
+      characters: sortByConsoleOrder(consoleCharacterOrder(this.store, known), [...known]).map((id) => ({
+        characterId: id,
+        label: factsOf(id).label,
+      })),
     };
   }
 

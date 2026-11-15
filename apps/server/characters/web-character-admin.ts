@@ -393,6 +393,8 @@ export class WebCharacterAdmin {
           // Part 24l: server truth for the sidebar groups. online = on the home page.
           group,
           online: group === 'live',
+          // Part 39: the console's order (首页顺序): the live characters' place on the home page, null for the others.
+          homePosition: live.find((row) => row.characterId === id)?.position ?? null,
         };
       }),
     };

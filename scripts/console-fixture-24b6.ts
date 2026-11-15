@@ -7,6 +7,7 @@ import { localRuntime, initProviderInstance } from '../apps/server/platform/web-
 import { WebProviderOffline } from '../apps/server/generation/web-provider-offline.ts';
 import { DomainError } from '../packages/domain/errors.ts';
 import { WebClipDirection } from '../apps/server/characters/web-clip-direction.ts';
+import { WebCocreationTidy } from '../apps/server/cocreation/web-cocreation-tidy.ts';
 import { WebAdminSpeech } from '../apps/server/characters/web-admin-speech.ts';
 import { WebCharacterPreviewRunner } from '../apps/server/characters/web-character-preview-runner.ts';
 import { WebProviderRunner } from '../apps/server/generation/web-provider-runner.ts';
@@ -288,6 +289,28 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
         { reserve() {}, settle() {} },
       ),
     );
+  // Part 39: 整理 in the co-creation inbox on the synthetic site: a stand-in text model that returns a tidied story and one flag.
+  previews.useTidy(
+    new WebCocreationTidy(
+      store,
+      clock,
+      {
+        model: 'deepseek-flash',
+        async completePlain(input) {
+          await sleep(300);
+          const { text } = JSON.parse(input.user) as { text: string };
+          return {
+            text: JSON.stringify({ story: `（整理）${text}`.slice(0, 400), flags: ['像是玩家自己的经历'] }),
+            inputTokens: 120,
+            outputTokens: 40,
+            model: 'deepseek-flash',
+            receipt: { id: 'fake-tidy' },
+          };
+        },
+      },
+      { reserve() {}, settle() {} },
+    ),
+  );
   const app = new WebProviderServer(store, config, clock, runner, undefined, previews, {
     signupEnabled: options.signup === true,
     ...(options.signup === true

@@ -79,6 +79,8 @@ export type CharacterSummary = {
   group: SidebarGroup;
   /** On the home page now (Part 24l). */
   online: boolean;
+  /** Part 39: the place on the home page (首页顺序) of a live character, null for any other. Absent on an older server. */
+  homePosition?: number | null;
 };
 export type DeletionStatus = {
   characterId: string;
@@ -392,6 +394,7 @@ export class CharacterAdminClient {
           color: typeof c.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.color) ? c.color.toUpperCase() : null,
           group: sidebarGroup(c.group, c.publishedVersion),
           online: c.online === undefined ? c.publishedVersion !== null : flag(c.online),
+          ...(typeof c.homePosition === 'number' ? { homePosition: c.homePosition } : {}),
         };
       }),
       deletions: rows(r.deletions).map(deletion),

@@ -7,8 +7,6 @@ export const RELATION_MIN_MEMBERS = 2;
 export const RELATION_MAX_MEMBERS = 8;
 export const RELATION_TEXT_MAX = 600;
 export const RELATION_REASON_MAX = 200;
-/** An administrator's story title and a new group's name are bounded by the cast (CAST_LIMITS.groupName). */
-export const RELATION_STARS = [0, 1, 2, 3, 4, 5] as const;
 /** Exactly these words, one line each, the same length on purpose (the label under the stars of the sheet). */
 export const RELATION_STAR_LABELS: readonly string[] = Object.freeze([
   '水火不容',
