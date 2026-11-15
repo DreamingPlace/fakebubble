@@ -337,7 +337,9 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   const load = async (cursor: InboxCursor | null = null) => {
     try {
       // Part 39: the console's order (首页顺序), not this administrator's sidebar order.
-      const roster = consoleOrder((await deps.characters.list()).characters);
+      const listed = (await deps.characters.list()).characters;
+      const order = await (deps.characters as { homeOrder?: () => Promise<string[]> }).homeOrder?.().catch(() => []);
+      const roster = consoleOrder(listed, order ?? []);
       names = Object.fromEntries(roster.map((c) => [c.characterId, c.displayName]));
       orderIds = roster.map((c) => c.characterId);
     } catch {

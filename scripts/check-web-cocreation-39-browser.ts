@@ -111,10 +111,11 @@ try {
   note('rel-group', ['wei-guagua', 'jojo', 'chen-jimi'], [], null, '三个人一起在天台吃过泡面。');
 
   const listed = await json('characters/list', {});
-  const expectedOrder: string[] = listed.characters
-    .filter((c: { homePosition?: number | null }) => typeof c.homePosition === 'number')
-    .sort((a: { homePosition: number }, b: { homePosition: number }) => a.homePosition - b.homePosition)
-    .map((c: { displayName: string }) => c.displayName);
+  const homeIds: string[] = (await json('characters/home-order', {})).order;
+  const nameOf = new Map<string, string>(
+    listed.characters.map((c: { characterId: string; displayName: string }) => [c.characterId, c.displayName]),
+  );
+  const expectedOrder: string[] = homeIds.filter((id) => nameOf.has(id)).map((id) => nameOf.get(id)!);
   const gridBefore = JSON.stringify((await json('cast/draft', {})).doc.ratings);
 
   for (const [width, height] of [

@@ -628,7 +628,8 @@ export class WebCocreationRelations extends WebCocreation {
   async tidy(auth: Auth, input: { id: unknown; requestId: unknown }): Promise<TidyResult> {
     this.actor(auth, 'cocreation.manage');
     ensure(identifier(input.id) && requestIdOk(input.requestId), 'INVALID_REQUEST');
-    ensure(this.tidyService, 'COCREATION_TIDY_UNAVAILABLE');
+    ensure(this.tidyService && relationTablesExist(this.store), 'COCREATION_TIDY_UNAVAILABLE');
+    const tidy = this.tidyService;
     const row = this.row(input.id);
     ensure(row.kind === 'pair', 'COCREATION_NOT_RELATION');
     const rel = relationTablesExist(this.store) ? this.relation(row.id) : undefined;
@@ -652,6 +653,6 @@ export class WebCocreationRelations extends WebCocreation {
       const current = this.actor(auth, 'cocreation.manage') as { memberId: string; sessionId: string };
       return { memberId: current.memberId, sessionId: current.sessionId };
     };
-    return this.tidyService.tidy(authorize, { submissionId: row.id, requestId: input.requestId as string, content });
+    return tidy.tidy(authorize, { submissionId: row.id, requestId: input.requestId as string, content });
   }
 }

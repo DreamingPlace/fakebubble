@@ -123,6 +123,7 @@ export class WebCocreationTidy {
   }
   /** What a 整理 would hold, or why not (the button's hover). */
   estimate(input: TidyInput) {
+    if (!this.installed()) return { ok: false as const, reason: 'UNAVAILABLE' };
     const price = this.price();
     if (!price) return { ok: false as const, reason: 'PRICE_MISSING' };
     return { ok: true as const, estimateMicros: this.bound(tidyUserMessage(input)) * price.upper_micros_per_unit };
@@ -349,13 +350,19 @@ export class WebCocreationTidy {
     }
   }
   /** A call still in flight or a known bill not yet settled: the owner's timer keeps coming back for it. */
+  /** The ledger exists (a database that predates Part 39's step has none: nothing to recover, nothing pending). */
+  private installed() {
+    return !!this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_cocreation_tidy_calls'");
+  }
   pending() {
+    if (!this.installed()) return false;
     return !!this.store.get(
       `SELECT 1 FROM web_cocreation_tidy_calls WHERE (state='known' AND shared_settled=0) OR state IN ('intent','sent') LIMIT 1`,
     );
   }
   /** After a restart: a call that may have been sent becomes unknown (never resent, hold kept); a known bill is settled. */
   async recoverBills() {
+    if (!this.installed()) return 0;
     let n = 0;
     for (const row of this.store.all<{ id: string }>(
       "SELECT id FROM web_cocreation_tidy_calls WHERE state IN ('intent','sent') LIMIT 16",

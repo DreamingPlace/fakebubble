@@ -584,7 +584,8 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       const roster = await host.characters.list();
       if (gone()) return;
       // Part 39: the grid follows the console's order (首页顺序), not this administrator's sidebar order.
-      state.roster = consoleOrder(roster.characters).map((c) => c.characterId);
+      const order = await (host.characters as { homeOrder?: () => Promise<string[]> }).homeOrder?.().catch(() => []);
+      state.roster = consoleOrder(roster.characters, order ?? []).map((c) => c.characterId);
       state.rosterNames = new Map(roster.characters.map((c) => [c.characterId, c.displayName]));
     } catch {
       state.roster = [];

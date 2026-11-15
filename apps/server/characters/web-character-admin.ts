@@ -1,6 +1,7 @@
 import { WebAvatars, isAvatarId } from './web-avatar.ts';
 import { installWebOwnerOps, notErasedSql } from '../admin/web-owner-ops-schema.ts';
 import type { WebCharacterDeletion } from './web-character-deletion.ts';
+import { consoleCharacterOrder } from './web-character-order.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import {
@@ -393,11 +394,14 @@ export class WebCharacterAdmin {
           // Part 24l: server truth for the sidebar groups. online = on the home page.
           group,
           online: group === 'live',
-          // Part 39: the console's order (首页顺序): the live characters' place on the home page, null for the others.
-          homePosition: live.find((row) => row.characterId === id)?.position ?? null,
         };
       }),
     };
+  }
+  /** Part 39: the console's order (首页顺序) of every character id, live first. Any administrator who may open the console. */
+  homeOrder(auth: Auth) {
+    this.actor(auth);
+    return { order: consoleCharacterOrder(this.store) };
   }
   /** 拖动排序: this admin's own order of one sidebar group. Never read by another admin, the home page or a player. */
   saveOrder(auth: Auth, input: unknown) {

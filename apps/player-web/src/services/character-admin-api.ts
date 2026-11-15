@@ -79,8 +79,6 @@ export type CharacterSummary = {
   group: SidebarGroup;
   /** On the home page now (Part 24l). */
   online: boolean;
-  /** Part 39: the place on the home page (首页顺序) of a live character, null for any other. Absent on an older server. */
-  homePosition?: number | null;
 };
 export type DeletionStatus = {
   characterId: string;
@@ -381,6 +379,10 @@ export class CharacterAdminClient {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw invalid();
     return this.request(`${id}/${action}`, body);
   }
+  /** Part 39: every character id in the console's order (首页顺序), live first. */
+  async homeOrder(): Promise<string[]> {
+    return rows(object(await this.request('home-order', {})).order).map(string);
+  }
   async list() {
     const r = object(await this.request('list', {}));
     return {
@@ -394,7 +396,6 @@ export class CharacterAdminClient {
           color: typeof c.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c.color) ? c.color.toUpperCase() : null,
           group: sidebarGroup(c.group, c.publishedVersion),
           online: c.online === undefined ? c.publishedVersion !== null : flag(c.online),
-          ...(typeof c.homePosition === 'number' ? { homePosition: c.homePosition } : {}),
         };
       }),
       deletions: rows(r.deletions).map(deletion),

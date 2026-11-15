@@ -323,6 +323,7 @@ export async function routeWebAccountAdmin(
       body([]);
       return { status: 200, body: characters.list(actor) };
     }
+    if (path === `${base}/characters/home-order`) return { status: 200, body: characters.homeOrder(actor) };
     if (path === `${base}/characters/order`) return { status: 200, body: characters.saveOrder(actor, req.body) };
     const match = path.match(
       new RegExp(
