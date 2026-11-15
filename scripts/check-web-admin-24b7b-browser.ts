@@ -623,11 +623,11 @@ try {
       `${w}: 按角色 has a row per character and 合计 (${chars.length} / ${wantChars.length})`,
     );
     check(
-      wantChars.every((c) => chars.some((r) => r[0] === c.name && Number(r[1]) === c.published)),
+      wantChars.every((c) => chars.some((r) => r[0] === c.name && Number(r[1]!.replace(/,/g, '')) === c.published)), // Named exception (Part 24b-7d round 2): counts carry thousands separators now, so the commas are removed before Number().
       `${w}: 按角色 shows each character's 成功 as the old card did`,
     );
     check(
-      Number(chars.at(-1)![1]) === wantChars.reduce((n, c) => n + c.published, 0),
+      Number(chars.at(-1)![1]!.replace(/,/g, '')) === wantChars.reduce((n, c) => n + c.published, 0), // Named exception (Part 24b-7d round 2): counts carry thousands separators now, so the commas are removed before Number().
       `${w}: 按角色 合计 is the sum of the old card's values`,
     );
     await shot('overview-by-character');
@@ -640,7 +640,7 @@ try {
       `${w}: 按模型 has a row per model and 合计 (${models.length} / ${wantModels.length})`,
     );
     check(
-      Number(models.at(-1)![1]) === wantModels.reduce((n, m) => n + m.published, 0),
+      Number(models.at(-1)![1]!.replace(/,/g, '')) === wantModels.reduce((n, m) => n + m.published, 0), // Named exception (Part 24b-7d round 2): counts carry thousands separators now, so the commas are removed before Number().
       `${w}: 按模型 合计 is the sum of the old card's values`,
     );
     await shot('overview-by-model');
@@ -649,7 +649,7 @@ try {
     await wait(200);
     const sorted = await rowsOf('.ov-by:not([hidden])');
     check(sorted.at(-1)![0] === '合计', `${w}: a sorted table keeps 合计 last`);
-    const values = sorted.slice(0, -1).map((r) => Number(r[1]));
+    const values = sorted.slice(0, -1).map((r) => Number(r[1]!.replace(/,/g, ''))); // Named exception (Part 24b-7d round 2): counts carry thousands separators now, so the commas are removed before Number().
     check(
       values.every((v, i) => i === 0 || values[i - 1]! <= v),
       `${w}: the 成功 column sorts`,
