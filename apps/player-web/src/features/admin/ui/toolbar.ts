@@ -1,4 +1,5 @@
 import { h } from '../../cocreation/h.ts';
+import { hoverValue } from './hover-value.ts';
 
 export type ToolbarFilter =
   | { kind: 'search'; id: string; label: string; placeholder?: string }
@@ -16,12 +17,17 @@ export type ToolbarFilter =
  */
 export function toolbar(options: {
   title?: string;
+  /** Part 24b-7f: what the page is, in the title's hover tip (an admin page carries no explanatory line). */
+  titleTip?: string;
   filters?: readonly ToolbarFilter[];
   actions?: ReadonlyArray<{ label: string; run: () => void; secondary?: boolean }>;
   onChange?: (values: Record<string, string>) => void;
 }) {
   const root = h('div', { class: 'admin-bar', attrs: { role: 'toolbar' } });
-  if (options.title) root.append(h('strong', { class: 'admin-bar-title', text: options.title }));
+  if (options.title) {
+    const title = h('strong', { class: 'admin-bar-title', text: options.title });
+    root.append(options.titleTip ? hoverValue(title, options.titleTip) : title);
+  }
   const inputs = new Map<string, HTMLInputElement | HTMLSelectElement>();
   const values = () => Object.fromEntries([...inputs].map(([id, input]) => [id, input.value]));
   for (const filter of options.filters ?? []) {

@@ -231,14 +231,16 @@ try {
           }
           await press('分组', split);
           for (const kind of ['折线', '柱状', '饼图']) {
-            if (kind === '饼图' && metric === '聊天人数' && split === '按角色') {
+            if (kind === '饼图' && metric === '聊天人数' && split !== '按模型') {
               // Round 2: the pie is off for 聊天人数 × 按角色 (a player is in every character they chatted with), with its reason;
-              // and the table has no 占比.
+              // and the table has no 占比. Named exception (Part 24b-7f): 聊天人数 × 全部 is off too (its pie is the by-character
+              // one, with the same over-count), so the pie rule covers both; the 占比 rule is about the 按角色 table only.
               const pie = page.locator('#admin-overview [aria-label="图表类型"] button', { hasText: /^饼图$/ }).first();
               check(
                 (await pie.isDisabled()) && ((await pie.getAttribute('title')) ?? '').includes('不能相加成占比'),
                 `${size} ${span} ${metric} ${split}: the pie is not off with its reason`,
               );
+              if (split === '全部') continue;
               const heads = await page.$$eval(
                 '#admin-overview [aria-label="玩家统计（按角色，聊天人数）"] .ot-head .ot-cell',
                 (n: Element[]) => n.map((c) => c.textContent ?? ''),

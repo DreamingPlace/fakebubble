@@ -327,8 +327,8 @@ export function pointsView(
       h(
         'div',
         { class: 'pt-head' },
-        h('h3', { text: '重置全部额度' }),
-        h('span', { text: '每天补充的人：加 7 天的量，不超过上限。不限量的人不变。' }),
+        // Part 24b-7f: what the reset does is the heading's hover tip; the zone below keeps its own irreversible-action note and confirm
+        hoverValue(h('h3', { text: '重置全部额度' }), '每天补充的人：加 7 天的量，不超过上限。不限量的人不变。'),
       ),
       resetOutcome,
       resetZone.root,
@@ -424,12 +424,8 @@ export function pointsView(
       }),
   );
   ccBox.replaceChildren(
-    h(
-      'div',
-      { class: 'pt-head' },
-      h('h3', { text: '共创积分' }),
-      hoverValue(h('span', { text: '玩家写共创留言得到的点数' }), '写给制作组的留言不算'),
-    ),
+    // Part 24b-7f: the sub-line is the heading's hover tip (the heading sits in the row of its own fields, no wrapper)
+    hoverValue(h('h3', { text: '共创积分' }), '玩家写共创留言得到的点数。写给制作组的留言不算。'),
     ...ccFields.map((field) => field.node),
     ccProblem,
     ccSave,

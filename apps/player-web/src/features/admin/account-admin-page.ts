@@ -41,6 +41,9 @@ import type { OwnerAdminClient } from '../../services/owner-admin-api.ts';
 import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
 import type { CocreationAdminClient } from '../../services/cocreation-admin-api.ts';
 import { browserDownload, inviteTiersView } from './invite-tiers-view.ts';
+import { bindTip } from './ui/tooltip.ts';
+import { ICON_PATHS, iconTool } from './ui/icon-tool.ts';
+import { h } from '../cocreation/h.ts';
 import {
   ADMIN_PERMISSION_ITEMS,
   ADMIN_PERMISSION_LIMIT,
@@ -255,6 +258,21 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const q = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   // Part 24b-7c: every single-line field gets its width class (docs/ADMIN_LAYOUT.md); layout only.
   const stopFieldWidths = watchFieldWidths(root);
+  // Part 24b-7f: what binding an email is for, as the field's hover tip (the field keeps the focus; the label adds no tab stop)
+  {
+    const label = root.querySelector<HTMLElement>('label[for="admin-bind-email"]');
+    const field = root.querySelector<HTMLElement>('#admin-bind-email');
+    // (the component tests' small DOM answers every selector with a stand-in that is not an element: only a real one gets the tip)
+    if (label && field && typeof label.hasAttribute === 'function' && typeof field.hasAttribute === 'function') {
+      const tip = h('span', {
+        text: '绑定邮箱仅用于以后方便登录，也可以稍后再做。',
+        attrs: { id: 'admin-bind-email-tip' },
+      });
+      label.append(tip);
+      bindTip(label, tip, field);
+      field.setAttribute('aria-describedby', 'admin-bind-email-tip');
+    }
+  }
   const value = (id: string) => q<HTMLInputElement>(`#${id}`).value;
   const statusLine = q<HTMLElement>('.invite-admin-status');
   // Feedback appears where it happened, one message at a time (the toast), and stays readable by a screen reader in the live
@@ -418,8 +436,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     q<HTMLElement>('#admin-account-info').textContent = session?.member.email
       ? `已绑定：${session.member.email}`
       : session?.emailDeliveryAvailable
-        ? '你已可以管理。绑定邮箱仅用于以后方便登录，也可以稍后再做。'
+        ? '你已可以管理。'
         : '你已可以管理。邮件服务尚未就绪，暂不能绑定邮箱。';
+    // Part 24b-7f: why the page is quiet (the mail service is not ready) is a reason and stays; what binding is for is the label's tip.
+    q<HTMLElement>('#admin-account-info').dataset.reason = 'true';
     // 邀请与额度 needs the owner role or invites.manage (the server checks again); anyone else sees why the page is empty.
     q<HTMLElement>('#admin-no-permissions').hidden = can('invites.manage');
     q<HTMLElement>('#admin-invites').hidden = !can('invites.manage');
@@ -674,12 +694,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const newRole = document.createElement('button');
   newRole.type = 'button';
   newRole.id = 'wb-new';
-  newRole.textContent = '+ 新建角色';
   newRole.hidden = true;
   const importRoles = document.createElement('button');
   importRoles.type = 'button';
   importRoles.id = 'wb-import';
-  importRoles.textContent = '导入角色资料';
   importRoles.hidden = true;
   // Part 31 (A): 首页顺序, an inline panel like 导入角色资料; the owner or anyone with the 角色 category may set it.
   const arcHost = document.createElement('div');
@@ -689,8 +707,16 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const arcButton = document.createElement('button');
   arcButton.type = 'button';
   arcButton.id = 'wb-arc';
-  arcButton.textContent = '首页顺序';
   arcButton.hidden = true;
+  // Part 24b-7f: 新建 / 导入 / 排序 are three icon buttons in ONE row at the foot of the rail; the name is the aria-label and the hover tip.
+  const tools = document.createElement('div');
+  tools.className = 'wb-tools';
+  tools.setAttribute('role', 'group');
+  tools.setAttribute('aria-label', '角色操作');
+  iconTool(newRole, '新建角色', ICON_PATHS.add);
+  iconTool(importRoles, '导入角色资料', ICON_PATHS.import);
+  iconTool(arcButton, '首页顺序', ICON_PATHS.sort);
+  tools.append(newRole, importRoles, arcButton);
   const rolesHost = document.createElement('div');
   rolesHost.id = 'wb-roles';
   rolesHost.className = 'wb-roles';
@@ -698,7 +724,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   roster.className = 'wb-roster';
   roster.setAttribute('role', 'group');
   roster.setAttribute('aria-label', '角色');
-  roster.append(rolesHost, newRole, importRoles, arcButton);
+  roster.append(rolesHost, tools);
   const editorHost = document.createElement('div');
   editorHost.id = 'wb-editor';
   editorHost.className = 'wb-editor';

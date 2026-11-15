@@ -163,6 +163,7 @@ export function modelsView(
   });
   const readonly = h('p', {
     class: 'admin-hint',
+    attrs: { 'data-reason': 'true' },
     text: '只读：需要“模型与价格”管理权限',
     hidden: true,
   });
@@ -176,7 +177,7 @@ export function modelsView(
     hidden: true,
   });
   const reviewConfirm = h('div', { class: 'models-confirm' });
-  const reviewNote = h('p', { class: 'admin-hint models-review-note' });
+  const reviewNote = h('p', { class: 'admin-hint models-review-note', attrs: { 'data-reason': 'true' } });
   const reviewRecent = h('ul', { class: 'models-review-recent', attrs: { 'aria-label': '审核模型最近修改' } });
   let reviewSwitch: ReturnType<typeof segmented<ReviewModelId>> | null = null;
   function paintReview() {
@@ -195,7 +196,9 @@ export function modelsView(
       button.disabled = !r.canManage;
       button.dataset.locked = String(!r.canManage);
     }
-    reviewNote.textContent = r.canManage ? '只影响此后发送的消息。' : '只读：需要“模型与价格”管理权限才能切换。';
+    // Part 24b-7f: 「只影响此后发送的消息」 is the heading's hover tip (the switch's confirm says it too); only the reason a reader cannot switch stays.
+    reviewNote.hidden = r.canManage;
+    reviewNote.textContent = r.canManage ? '' : '只读：需要“模型与价格”管理权限才能切换。';
     reviewRecent.replaceChildren(
       ...r.recent.map((c) =>
         h('li', {
@@ -203,12 +206,15 @@ export function modelsView(
         }),
       ),
     );
-    if (r.recent.length === 0) reviewRecent.append(h('li', { class: 'admin-hint', text: '尚无修改' }));
+    if (r.recent.length === 0)
+      reviewRecent.append(h('li', { class: 'admin-hint', text: '尚无修改', attrs: { 'data-empty': 'true' } }));
     reviewHost.replaceChildren(
       h(
         'div',
         { class: 'models-review-head' },
-        h('h3', { text: '审核模型' }),
+        r.canManage
+          ? hoverValue(h('h3', { text: '审核模型' }), '只影响此后发送的消息。')
+          : h('h3', { text: '审核模型' }),
         h('span', { class: 'models-pill is-on', text: `当前：${REVIEW_MODEL_LABELS[r.current]}` }),
         reviewSwitch.root,
       ),
@@ -259,7 +265,6 @@ export function modelsView(
     hidden: true,
   });
   const writerConfirm = h('div', { class: 'models-confirm' });
-  const writerNote = h('p', { class: 'admin-hint models-writer-note', text: '只影响此后发送的消息。' });
   let writerSwitch: ReturnType<typeof segmented<WriterChoice>> | null = null;
   function paintWriter() {
     const w = writerView;
@@ -276,11 +281,11 @@ export function modelsView(
       h(
         'div',
         { class: 'models-writer-head' },
-        h('h3', { text: '回复写法' }),
+        // Part 24b-7f: no explanatory line; the sentence is the heading's hover tip
+        hoverValue(h('h3', { text: '回复写法' }), '只影响此后发送的消息。'),
         h('span', { class: 'models-pill is-on', text: `当前：${WRITER_LABELS[w.writer]}` }),
         writerSwitch.root,
       ),
-      writerNote,
       writerConfirm,
     );
   }

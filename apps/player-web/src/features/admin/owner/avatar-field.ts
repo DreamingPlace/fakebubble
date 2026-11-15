@@ -1,5 +1,6 @@
 import type { AvatarInfo } from '../../../services/character-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
+import { bindTip } from '../ui/tooltip.ts';
 
 /** The limits the server enforces (packages/imaging/avatar.ts); the page checks the cheap ones first and says why in one line. */
 export const AVATAR_PAGE_MAX_BYTES = 2 * 1024 * 1024;
@@ -63,6 +64,7 @@ export async function squarePng(file: Blob): Promise<ArrayBuffer> {
   return blob.arrayBuffer();
 }
 
+let tipCounter = 0;
 /**
  * Part 31 (25e), 身份与网页展示 → 头像. A circle (the shape players see), one button, one line of limits and, when a profile import
  * recorded a file name, that name as a hint. Choosing a file uploads it at once (the server re-encodes it); the draft then names the
@@ -86,13 +88,24 @@ export function avatarField(
     hidden: true,
   });
   const line = h('p', { class: 'av-line', attrs: { role: 'status', 'aria-live': 'polite' } });
-  const note = h('p', { class: 'admin-hint av-note', text: avatarCopy.note });
-  const hint = host?.fileHint ? h('p', { class: 'admin-hint av-hint', text: avatarCopy.hint(host.fileHint) }) : null;
+  // Part 24b-7f: the limits (and the file name a profile import recorded) are the button's hover tip, not lines under it. The tip is
+  // bound to a wrapper so that repainting the button's label never removes it, and the button itself stays the one tab stop.
+  const tip = h('span', {
+    class: 'av-tip',
+    text: host?.fileHint ? `${avatarCopy.note}${avatarCopy.hint(host.fileHint)}` : avatarCopy.note,
+    attrs: { id: `av-tip-${++tipCounter}` },
+  });
+  const pickWrap = h('span', { class: 'av-pick-wrap' }, button, tip);
+  // (the component tests' small DOMs have no attributes on a bare element: there the tip is only text beside the button)
+  if (typeof tip.setAttribute === 'function') {
+    bindTip(pickWrap, tip, button);
+    button.setAttribute('aria-describedby', `av-tip-${tipCounter}`);
+  }
   const row = h(
     'div',
     { class: 'av-row' },
     circle,
-    h('div', { class: 'av-side' }, h('div', { class: 'av-actions' }, button, clear, input), line, note, hint),
+    h('div', { class: 'av-side' }, h('div', { class: 'av-actions' }, pickWrap, clear, input), line),
   );
   const fieldset = h('div', { class: 'av-field' }, row);
   parent.append(fieldset);
