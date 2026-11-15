@@ -13,6 +13,21 @@ date control only: nothing sent to the server and nothing stored changes.
 4. **Money** in the console's format (`$0.07`, `$0.000 071` for a fraction of a cent); never 「µ$」. **Prices** per million tokens
    (`$1.32 / 百万令牌`), per million bytes (`$15 / 百万字节`) or per call; the exact stored value, in its stored unit, is on hover.
    **Counts** have thousands separators.
+5. **No explanatory text on an admin page (standing rule, Part 24b-7f).** A page shows labels, buttons, values, errors, empty states and
+   the reason a control is off. It does not show a sentence that explains what a control or a section is for. The only exception is text
+   beside an **irreversible operation**: delete, publish, permanent deletion, 撤销整批, 下线, 关闭账号, the danger zones and their
+   confirms. Any other explanation is either
+   - **genuinely useful** → the hover tip of the control it explains (`ui/hover-value.ts`, the #57 tooltip of `ui/tooltip.ts`: mouse and
+     keyboard focus show the same bubble; a heading or label takes the tip with `hoverValue`, a toolbar title with `titleTip`), or
+   - **not useful** → removed.
+   Labels, button text, error messages, empty states and the confirms of irreversible actions are never reworded by this rule.
+   **The check:** the `sentences` rule of the copy audit (`scripts/admin-copy-audit-24b7d.ts`, run by `check:web:admin-24b7d` on every page,
+   open row and workbench tab, and by `check:web:admin-24b7f`) fails on any visible sentence (a 。；，！？ in 8+ Chinese characters) or
+   hint / note element outside its allowlist. The allowlist is a list of *contexts*, each named in the audit with its reason: a label,
+   button, link, heading, table value or badge; an error, a status, an empty state or the reason a control is off (mark yours with
+   `data-empty` / `data-reason` or `role="status"` / `role="alert"`); data an administrator or a player wrote; and the irreversible-action
+   contexts (`.dz-*` danger zones, inline confirms and dialogs, 发布's row, and `data-irreversible` for a line or a panel beside one).
+   A new sentence on a page fails the audit until it is a tip, is removed, or sits in one of those contexts.
 
 ## The words
 | One thing | Use | Not |
@@ -47,3 +62,20 @@ date control only: nothing sent to the server and nothing stored changes.
 | 预演 detail | `状态：…：CODE · <预演 id>` | the sentence; no id in the text |
 | 兑换截止, 设定生日 | native date input | the one date field (YYYY-MM-DD, calendar popover, 7 / 30 / 90 天 / 不限 on 兑换截止) |
 | 积分发放, 邀请与额度, 总览 | plain counts | counts with thousands separators |
+
+## Changes made in 24b-7f (explanations out of the page)
+| Page | Sentence | Now |
+|---|---|---|
+| 测试对话 | 只显示匿名编号（角色名-四位编号）。不显示邮箱、昵称或账号；… 仍以匿名编号保留 180 天。 | tip of the page title (`toolbar` `titleTip`) |
+| 模型与价格 · 审核模型 | 只影响此后发送的消息。 | tip of the heading 审核模型 (the switch's confirm says it too); only the reason a reader cannot switch stays |
+| 积分发放 · 重置全部额度 | 每天补充的人：加 7 天的量，不超过上限。不限量的人不变。 | tip of the heading 重置全部额度 (its danger zone keeps its note and confirm) |
+| 积分发放 · 共创积分 | 玩家写共创留言得到的点数（and the older tip 写给制作组的留言不算） | one tip on the heading 共创积分 |
+| 角色工作台 · 身份与展示 · 头像 | PNG、JPEG 或 WebP，不超过 2 MB。浏览器先居中裁成正方形，再缩到 512 px 上传。 / 资料里的头像文件：… | tip of the 上传头像 button |
+| 系统状态 · 清理与开关 | 系统每天会自动重试。连续失败说明需要修代码：把这张表交给开发。 | tip of the heading while a cleanup fails |
+| 我的账号 | 你已可以管理。绑定邮箱仅用于以后方便登录，也可以稍后再做。 | 你已可以管理。 + tip of the email field (the reason the mail service is not ready stays) |
+| 关系与故事 | 别的角色只知道这些 · 自称、别人可以怎么叫他…… · 谁怎么叫谁，按顺序 | tips of the card title and of each list's label |
+
+Left as they are (named): the sentences beside irreversible operations (the danger zones, 立即删除 of a closed account's chat, the cast
+import's confirm step, 发布's reasons and consent line); empty states, errors, statuses and the reason a control is off; **labels that
+carry a short explanation of their own** (e.g. 关系与故事's 「名字 · 第一个是对外的」, 「谁知道 · 自动算，点一下改，橙框是手动」): they are
+labels, and this part does not reword labels.

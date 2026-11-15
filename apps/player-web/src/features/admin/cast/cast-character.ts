@@ -12,6 +12,7 @@ import {
 } from '../../../../../../packages/contracts/web-cast.ts';
 import type { CastCompilePreviewResult } from '../../../services/cast-admin-api.ts';
 import { shortInput } from '../ui/grow-box.ts';
+import { hoverValue } from '../ui/hover-value.ts';
 import { h } from '../../cocreation/h.ts';
 import { KNOWLEDGE_LABEL } from './cast-model.ts';
 import { itemList } from './cast-items.ts';
@@ -191,8 +192,7 @@ export function nameCard(host: HTMLElement, ctx: CastCtx, selected: () => string
           'h2',
           {},
           dot(ctx.colour(character.characterId), 10),
-          `${name} 的名片`,
-          h('span', { class: 'cs-hint-line', text: '别的角色只知道这些' }),
+          hoverValue(h('span', { text: `${name} 的名片` }), '别的角色只知道这些'),
         ),
         link,
       ),
@@ -232,19 +232,23 @@ export function seesPanel(
     ),
   );
   if (!state.selected) {
-    host.append(h('p', { class: 'cs-hint', text: '打开一个角色就能看到。' }));
+    host.append(h('p', { class: 'cs-hint', text: '打开一个角色就能看到。', attrs: { 'data-empty': 'true' } }));
     return;
   }
   if (state.unsaved) {
-    host.append(h('p', { class: 'cs-hint', text: '保存草稿后，这里会显示他看到的内容。' }));
+    host.append(
+      h('p', { class: 'cs-hint', text: '保存草稿后，这里会显示他看到的内容。', attrs: { 'data-empty': 'true' } }),
+    );
     return;
   }
   if (state.failed) {
-    host.append(h('p', { class: 'cs-hint', text: '读取失败（这个角色可能还没存进草稿）。' }));
+    host.append(
+      h('p', { class: 'cs-hint', text: '读取失败（这个角色可能还没存进草稿）。', attrs: { 'data-empty': 'true' } }),
+    );
     return;
   }
   if (!result) {
-    host.append(h('p', { class: 'cs-hint', text: state.loading ? '读取中…' : '' }));
+    host.append(h('p', { class: 'cs-hint', text: state.loading ? '读取中…' : '', attrs: { 'data-empty': 'true' } }));
     return;
   }
   const view = result.view;

@@ -817,6 +817,9 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         for (const node of section.nodes) node.className = `${node.className} wb-wide`.trim();
     for (const section of sections)
       if (section.nodes.length === 1) section.nodes[0]!.className = `${section.nodes[0]!.className} wb-sole`.trim();
+    // Part 24b-7f: the first node of a tab starts the tab's content (CSS: no step above it, a fold's heading as close to the bar as a field's)
+    for (const section of sections)
+      if (section.nodes[0]) section.nodes[0].className = `${section.nodes[0].className} wb-first`.trim();
 
     // ---- the section bar ----
     const tabs = new Map<string, HTMLElement>(),

@@ -44,15 +44,18 @@ export function bindTip(
   const place = (x: number, y: number) => {
     // x / y are relative to the anchor; keep the bubble inside the anchor's card on the right.
     const box = anchor.getBoundingClientRect?.();
-    const card = anchor.closest?.('.ad-tip-bounds, .wb-preview, .admin-member, .cs-card, .system-section') as
+    const card = anchor.closest?.('.ad-tip-bounds, .wb-preview, .admin-member, .cs-card, .system-section, .wb-card') as
       | HTMLElement
       | null
       | undefined;
     const limit = card?.getBoundingClientRect?.();
     let left = x + GAP_X;
-    const width = tip.offsetWidth || 240;
+    // an undrawn bubble has no width yet: assume its widest (280, the CSS max) so it never runs out of its card
+    const width = tip.offsetWidth || 280;
     if (box && limit) left = Math.min(left, limit.right - box.left - width - 8);
-    tip.style?.setProperty('--tip-x', `${Math.max(0, Math.round(left))}px`);
+    // Never right of the card's edge: a bubble wider than the room right of its anchor shifts left, back to the card's own left edge at most.
+    const floor = box && limit ? Math.min(0, limit.left - box.left) : 0;
+    tip.style?.setProperty('--tip-x', `${Math.max(floor, Math.round(left))}px`);
     tip.style?.setProperty('--tip-y', `${Math.round(y + GAP_Y)}px`);
   };
   anchor.addEventListener('mousemove', (event) => {
