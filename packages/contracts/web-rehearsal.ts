@@ -27,11 +27,11 @@ export const REHEARSAL_MODEL_LABELS: Readonly<Record<PlayerModelId, string>> = O
 });
 
 /**
- * Part 37a: a COLUMN is (model, writer): `deepseek` is DeepSeek·现行 (the v7 writer, the key every earlier run stored) and `deepseek-v8` is
+ * Part 37a: a COLUMN is (model, writer): `deepseek` is DeepSeek·旧 (the v7 writer, the key every earlier run stored) and `deepseek-v8` is
  * DeepSeek·新 (the v8 writer). The `models` of an estimate, a start and a stored run are column keys. A rehearsal never reads the live
  * 回复写法 switch: it runs what its columns say.
  */
-export const REHEARSAL_WRITER_LABELS: Readonly<Record<WriterChoice, string>> = Object.freeze({ v7: '现行', v8: '新' });
+export const REHEARSAL_WRITER_LABELS: Readonly<Record<WriterChoice, string>> = Object.freeze({ v7: '旧', v8: '新' });
 export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterChoice) =>
   writer === 'v8' ? `${model}-v8` : model;
 export function parseRehearsalColumn(key: unknown): { model: PlayerModelId; writer: WriterChoice } | null {
@@ -40,7 +40,7 @@ export function parseRehearsalColumn(key: unknown): { model: PlayerModelId; writ
   const model = v8 ? key.slice(0, -3) : key;
   return isPlayerModelId(model) ? { model, writer: v8 ? 'v8' : 'v7' } : null;
 }
-/** Every column the console can offer, in display order: each model's 现行 then 新. */
+/** Every column the console can offer, in display order: each model's 旧 then 新. */
 export const REHEARSAL_COLUMN_KEYS: readonly string[] = PLAYER_MODEL_IDS.flatMap((model) => [
   rehearsalColumnKey(model, 'v7'),
   rehearsalColumnKey(model, 'v8'),

@@ -21,7 +21,7 @@ const audit = (f: ReturnType<typeof system>) =>
     "SELECT actor_id,action,target_id FROM web_admin_audit WHERE action LIKE 'writer-%' ORDER BY seq",
   );
 
-test('37a the switch: 现行 by default, owner only, the session, CSRF and Origin are checked before the body is read', (t) => {
+test('37a the switch: 旧 by default, owner only, the session, CSRF and Origin are checked before the body is read', (t) => {
   const f = system(t);
   assert.deepEqual(f.admin.writerRead(f.owner, {}), { writer: 'v7', available: true });
   const staff = f.member(['points.grant', 'system.read', 'models.manage', 'invites.manage']);
@@ -65,7 +65,7 @@ test('37a the switch: one audit row per change (who, when, the value, never cont
     /IDEMPOTENCY_CONFLICT/,
   );
   assert.equal(readWriter(f.store), 'v8');
-  // Back to 现行 under a new id; unknown values and extra keys are refused.
+  // Back to 旧 under a new id; unknown values and extra keys are refused.
   f.admin.writerSave(f.owner, { requestId: 'writer-request-2', writer: 'v7' });
   assert.equal(readWriter(f.store), 'v7');
   assert.deepEqual(

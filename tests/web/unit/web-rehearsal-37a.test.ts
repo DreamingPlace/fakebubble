@@ -294,7 +294,7 @@ async function drain(f: ReturnType<typeof fixture>, limit = 400) {
 
 // ---- Part 37a: columns are (model, writer) -------------------------------------------------------------------------------
 
-test('37a columns: DeepSeek·现行 next to DeepSeek·新 on one run, the live switch is ignored, 新 sends the plain draft and the guard', async (t) => {
+test('37a columns: DeepSeek·旧 next to DeepSeek·新 on one run, the live switch is ignored, 新 sends the plain draft and the guard', async (t) => {
   const f = fixture(t);
   // The live switch says 新, the columns say what they say: a rehearsal never reads it.
   const columns = ['deepseek', 'deepseek-v8', 'gemini-v8'];
@@ -305,7 +305,7 @@ test('37a columns: DeepSeek·现行 next to DeepSeek·新 on one run, the live s
   assert.deepEqual(
     detail.columns.map((c) => [c.key, c.model, c.writer, c.label]),
     [
-      ['deepseek', 'deepseek', 'v7', 'DeepSeek·现行'],
+      ['deepseek', 'deepseek', 'v7', 'DeepSeek·旧'],
       ['deepseek-v8', 'deepseek', 'v8', 'DeepSeek·新'],
       ['gemini-v8', 'gemini', 'v8', 'Gemini 3.8 Flash·新'],
     ],
@@ -321,7 +321,7 @@ test('37a columns: DeepSeek·现行 next to DeepSeek·新 on one run, the live s
   assert.equal(request('deepseek').writer, undefined);
   assert.equal(request('deepseek-v8').writer, 'v8');
   assert.equal('relationship' in request('deepseek-v8'), false);
-  // 现行 is untouched: tool call drafts; 新 drafts are plain completions at the per-provider temperature, the second pass is the guard on the house reviewer.
+  // 旧 is untouched: tool call drafts; 新 drafts are plain completions at the per-provider temperature, the second pass is the guard on the house reviewer.
   const plain = f.sent.filter((s) => s.plain);
   assert.equal(plain.length, 2 * 8);
   assert.ok(plain.every((s) => s.temperature === (s.provider === 'deepseek' ? 1.3 : 1)));
@@ -332,11 +332,7 @@ test('37a columns: DeepSeek·现行 next to DeepSeek·新 on one run, the live s
   const guards = f.sent.filter((s) => s.guard);
   assert.equal(guards.length, 2 * 8);
   assert.ok(guards.every((s) => s.provider === 'deepseek' && s.model === 'deepseek-v4-pro'));
-  assert.equal(
-    f.sent.filter((s) => s.tool === 'draft' && !s.plain).length,
-    8,
-    'only the 现行 column drafts with a tool',
-  );
+  assert.equal(f.sent.filter((s) => s.tool === 'draft' && !s.plain).length, 8, 'only the 旧 column drafts with a tool');
   // The 新 columns say what the model wrote, line by line, in text; they carry no "answered every message" claim.
   for (const column of detail.columns.filter((c) => c.writer === 'v8')) {
     assert.ok(column.cells.every((c) => c.state === 'done' && c.answered === null));
@@ -350,7 +346,7 @@ test('37a columns: DeepSeek·现行 next to DeepSeek·新 on one run, the live s
   assert.equal(f.store.get<{ n: number }>('SELECT sum(reserved) n FROM web_external_budgets')!.n, 0);
 });
 
-test('37a columns: the estimate follows the columns, 新 costs less to write than 现行, and a changed column set needs a fresh confirmation', (t) => {
+test('37a columns: the estimate follows the columns, 新 costs less to write than 旧, and a changed column set needs a fresh confirmation', (t) => {
   const f = fixture(t);
   const one = f.chars.rehearsalEstimate(f.auth, CHARACTER, f.input({ models: ['deepseek'] }));
   const both = f.chars.rehearsalEstimate(f.auth, CHARACTER, f.input({ models: ['deepseek', 'deepseek-v8'] }));
@@ -375,7 +371,7 @@ test('37a columns: the estimate follows the columns, 新 costs less to write tha
     });
 });
 
-test('37a columns: a run stored before this Part (a model key without a writer) still reads as 现行', async (t) => {
+test('37a columns: a run stored before this Part (a model key without a writer) still reads as 旧', async (t) => {
   const f = fixture(t);
   const { runId } = f.start({ models: ['deepseek'] });
   await drain(f);

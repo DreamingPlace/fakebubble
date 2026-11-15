@@ -4,7 +4,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { WriterChoice } from '../../../packages/contracts/web-writer.ts';
 
 /**
- * Part 37a: the owner's switch 「回复写法：现行 / 新」. ONE row, default 现行 (v7). NO numbered migration (expected-migrations is untouched):
+ * Part 37a: the owner's switch 「回复写法：旧写法 / 新写法」. ONE row, default 旧 (v7). NO numbered migration (expected-migrations is untouched):
  * the table is installed idempotently at business-object start and checked against the digest of its statement. A mismatch stops the
  * start with WEB_WRITER_SCHEMA_MISMATCH. The row holds the choice, who set it and when: no content, no player data, no world id.
  * The request freezes the choice (`writer` in request_json), so a reply in flight finishes with the writer it started with.
@@ -30,7 +30,7 @@ export function installWriterSetting(store: BusinessStore) {
   });
 }
 
-/** The writer new replies freeze: 'v7' (现行) unless the owner chose the new one. A database without the table is always 'v7'. */
+/** The writer new replies freeze: 'v7' (旧) unless the owner chose the new one. A database without the table is always 'v7'. */
 export function readWriter(store: Pick<BusinessStore, 'get'>): WriterChoice {
   if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_writer_setting'")) return 'v7';
   return store.get<{ writer: WriterChoice }>('SELECT writer FROM web_writer_setting WHERE id=1')?.writer ?? 'v7';

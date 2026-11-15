@@ -73,13 +73,13 @@ function mount(t: test.TestContext, options: { owner?: boolean; confirm?: boolea
   return { api, node, saves, confirms, toasts, card, button };
 }
 
-test('回复写法: the owner sees 现行 / 新 with the live choice, and one short line', async (t) => {
+test('回复写法: the owner sees 旧写法 / 新写法 with the live choice, and one short line', async (t) => {
   const f = mount(t);
   await f.api.load();
   assert.equal(f.card().hidden, false);
   assert.equal(f.button('v7').getAttribute('aria-pressed'), 'true');
   assert.equal(f.button('v8').getAttribute('aria-pressed'), 'false');
-  assert.match(f.card().textContent, /当前：现行/);
+  assert.match(f.card().textContent, /当前：旧写法/);
   assert.match(f.card().textContent, /只影响此后发送的消息/);
   assert.doesNotMatch(f.card().textContent, /member|@/);
 });
@@ -97,7 +97,7 @@ test('回复写法: one confirmation, then a save under a request id; the card s
   f.button('v8').click();
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(f.confirms.length, 1);
-  assert.match(f.confirms[0]!.message, /「现行」切换为「新」/);
+  assert.match(f.confirms[0]!.message, /「旧写法」切换为「新写法」/);
   assert.match(f.confirms[0]!.message, /已在生成的回复不变/);
   assert.deepEqual(f.saves, [{ requestId: 'writer-1', writer: 'v8' }]);
   assert.match(f.card().textContent, /当前：新/);

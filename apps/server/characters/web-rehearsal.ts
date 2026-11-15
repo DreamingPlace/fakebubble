@@ -350,7 +350,7 @@ export class WebRehearsal {
     ensure(isRehearsalModels(input.models), 'INVALID_REHEARSAL_MODELS');
     ensure(typeof input.withCast === 'boolean', 'INVALID_REQUEST');
     const source = this.parseSource(input.source);
-    // Column keys, in display order (each model's 现行 then 新). A rehearsal never reads the live 回复写法 switch.
+    // Column keys, in display order (each model's 旧 then 新). A rehearsal never reads the live 回复写法 switch.
     const models = REHEARSAL_COLUMN_KEYS.filter((key) => (input.models as string[]).includes(key));
     const now = this.now();
     for (const key of models)
@@ -694,7 +694,7 @@ export class WebRehearsal {
         key,
         model: column.model,
         writer: column.writer,
-        // 现行 / 新 is named only when the run compares writers; a run of 现行 columns reads as it always did.
+        // 旧 / 新 is named only when the run compares writers; a run of 旧 columns reads as it always did.
         label: info.models.some((k) => k.endsWith('-v8'))
           ? rehearsalColumnLabel(key)
           : REHEARSAL_MODEL_LABELS[column.model],

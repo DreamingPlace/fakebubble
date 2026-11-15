@@ -250,7 +250,7 @@ export function modelsView(
   }
 
   // ---- 回复写法 (Part 37a, owner only) --------------------------------------------------------------------------
-  const WRITER_LABELS: Record<WriterChoice, string> = { v7: '现行', v8: '新' };
+  const WRITER_LABELS: Record<WriterChoice, string> = { v7: '旧写法', v8: '新写法' };
   let writerView: WriterSettingView | null = null;
   let writerPending: { id: string; to: WriterChoice } | null = null;
   const writerHost = h('section', {

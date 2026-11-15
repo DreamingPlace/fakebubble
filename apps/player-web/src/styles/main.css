@@ -16046,7 +16046,7 @@ button:not(
   opacity: 0.5;
   cursor: not-allowed;
 }
-/* Part 37a: the models as rows and the writers (现行 / 新) as two aligned columns. */
+/* Part 37a: the models as rows and the writers (旧 / 新) as two aligned columns. */
 .account-admin-page.admin-shell .rh-models {
   flex-direction: column;
   align-items: flex-start;

@@ -8,9 +8,9 @@ import { quietWait, watchRequests } from './console-quiet.ts';
 /**
  * Part 37a in a REAL browser, on the synthetic site of console-fixture-24b6.ts with its OFFLINE provider (nothing leaves the machine).
  * At 1440×900 and 1280×800:
- *   - 系统 → 模型与价格: the owner sees 回复写法 with 现行 pressed; 新 asks one in-place confirmation; the save carries a request id and
- *     the value and nothing else; the pill and the pressed option move; a reload still says 新; 现行 comes back the same way;
- *   - 多轮预演: each model has its own 现行 / 新; DeepSeek·现行 next to DeepSeek·新 runs, aligned by turn; the 新 column carries no
+ *   - 系统 → 模型与价格: the owner sees 回复写法 with 旧 pressed; 新 asks one in-place confirmation; the save carries a request id and
+ *     the value and nothing else; the pill and the pressed option move; a reload still says 新; 旧 comes back the same way;
+ *   - 多轮预演: each model has its own 旧 / 新; DeepSeek·旧 next to DeepSeek·新 runs, aligned by turn; the 新 column carries no
  *     "answered every message" claim (—), and the live switch plays no part;
  *   - no id, email or nickname on the screen; no sideways scroll; no browser error; no relationship wording.
  *
@@ -68,9 +68,9 @@ try {
     const card = page.locator('.models-writer');
     check(
       (await card.locator('[data-seg="v7"]').getAttribute('aria-pressed')) === 'true',
-      `${at}: 现行 is pressed at first`,
+      `${at}: 旧 is pressed at first`,
     );
-    check(/当前：现行/.test(await card.innerText()), `${at}: the pill says 当前：现行`);
+    check(/当前：旧写法/.test(await card.innerText()), `${at}: the pill says 当前：旧写法`);
     const cardText = await card.innerText();
     check(cardText.replace(/\s+/g, '').length <= 60, `${at}: the card is minimal (${cardText.length} characters)`);
     await shot(`writer-switch-current-${at}`);
@@ -108,7 +108,7 @@ try {
     await wait(700);
     check(/当前：新/.test(await page.locator('.models-writer').innerText()), `${at}: a reload still says 新`);
 
-    // ---- 多轮预演: 现行 next to 新 (the live switch says 新; the columns decide) ----
+    // ---- 多轮预演: 旧 next to 新 (the live switch says 新; the columns decide) ----
     await page.goto(`${f.origin}/?mode=provider-admin#/characters/wei-guagua`);
     await page.reload();
     await page.getByText('预演', { exact: true }).first().click();
@@ -128,7 +128,7 @@ try {
     check(groups === 3, `${at}: one group per model (${groups})`);
     check(
       (await page.locator('.rh-toggle[data-model="deepseek"]').getAttribute('aria-pressed')) === 'true',
-      `${at}: DeepSeek·现行 is on at first`,
+      `${at}: DeepSeek·旧 is on at first`,
     );
     const v8 = page.locator('.rh-toggle[data-model="deepseek-v8"]');
     if ((await v8.getAttribute('aria-pressed')) !== 'true') await v8.click();
@@ -176,7 +176,7 @@ try {
       { timeout: 90_000 },
     );
     const heads = await page.locator('.rh-head').allTextContents();
-    check(heads.slice(1).join(',') === 'DeepSeek·现行,DeepSeek·新', `${at}: the columns are named (${heads})`);
+    check(heads.slice(1).join(',') === 'DeepSeek·旧,DeepSeek·新', `${at}: the columns are named (${heads})`);
     await shot(`rehearsal-run-${at}`);
     await page.locator('.seg-button', { hasText: '统计' }).click();
     await page.locator('.rh-counts').waitFor();
@@ -184,7 +184,7 @@ try {
     const counts = await page
       .locator('.rh-counts tbody tr')
       .evaluateAll((trs: HTMLElement[]) => trs.map((tr) => tr.innerText.replace(/\s+/g, ' ')));
-    check(/答全每条 8 \/ 8 —/.test(counts[0] ?? ''), `${at}: 现行 answers counted, 新 says — (${counts[0]})`);
+    check(/答全每条 8 \/ 8 —/.test(counts[0] ?? ''), `${at}: 旧 answers counted, 新 says — (${counts[0]})`);
     await shot(`rehearsal-counts-${at}`);
 
     // ---- what is on the screen ----
@@ -198,7 +198,7 @@ try {
     await page.keyboard.press('Escape');
     await wait(400);
 
-    // back to 现行 for the next size, the same way
+    // back to 旧 for the next size, the same way
     await page.goto(`${f.origin}/?mode=provider-admin#/models`);
     await page.reload();
     await page.locator('.models-writer').waitFor({ timeout: 20_000 });
@@ -206,7 +206,7 @@ try {
     await page.locator('.models-writer [data-seg="v7"]').click();
     await page.locator('.models-writer .models-confirm button', { hasText: /确认切换/ }).click();
     await page.waitForFunction(
-      () => /当前：现行/.test(document.querySelector('.models-writer')?.textContent ?? ''),
+      () => /当前：旧写法/.test(document.querySelector('.models-writer')?.textContent ?? ''),
       null,
       {
         timeout: 15_000,

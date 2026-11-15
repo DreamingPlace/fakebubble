@@ -647,7 +647,7 @@ export class WebRehearsalRunner {
   }
   private async cell(claim: RehearsalClaim, signal: AbortSignal) {
     const row = this.live(claim);
-    // Part 37a: the unit's key is a column (model + writer); `deepseek` is the 现行 column every earlier run stored.
+    // Part 37a: the unit's key is a column (model + writer); `deepseek` is the 旧 column every earlier run stored.
     const column = parseRehearsalColumn(row.model_key);
     ensure(column, 'REHEARSAL_REQUEST_INVALID');
     const model = column.model;

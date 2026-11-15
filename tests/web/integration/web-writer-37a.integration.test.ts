@@ -34,7 +34,7 @@ function scenario(t: TestContext, options: { writer?: 'v7' | 'v8'; binding?: str
   return store;
 }
 
-test('the switch defaults to 现行: no table, an empty table and an explicit v7 freeze byte-identical requests', (t) => {
+test('the switch defaults to 旧: no table, an empty table and an explicit v7 freeze byte-identical requests', (t) => {
   const bare = scenario(t, { installed: false });
   const fresh = scenario(t);
   const explicit = scenario(t, { writer: 'v7' });

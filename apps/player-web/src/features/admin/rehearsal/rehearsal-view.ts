@@ -117,7 +117,7 @@ export function rehearsalView(host: RehearsalHost) {
     pick: Pick = { kind: 'set', set: 'chat' },
     items: RehearsalItems = { available: false, items: [] },
     chosenItems = new Set<string>(),
-    // Part 37a: the chosen COLUMNS, (model, writer) keys: `deepseek` is DeepSeek·现行, `deepseek-v8` DeepSeek·新.
+    // Part 37a: the chosen COLUMNS, (model, writer) keys: `deepseek` is DeepSeek·旧, `deepseek-v8` DeepSeek·新.
     models = new Set<string>(['deepseek']),
     withCast = false,
     castTouched = false,
@@ -270,7 +270,7 @@ export function rehearsalView(host: RehearsalHost) {
     }
     modelsBuiltFor = library;
     modelBox.replaceChildren();
-    // One row per model with its two writers: 现行 (the writer every reply has today) and 新.
+    // One row per model with its two writers: 旧 (the writer every reply has today) and 新.
     for (const m of library?.models ?? []) {
       const group = h(
         'div',
