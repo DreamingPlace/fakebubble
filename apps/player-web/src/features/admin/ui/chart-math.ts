@@ -41,7 +41,7 @@ export const dollarLabel = (value: number, ticks?: readonly number[]): string =>
 };
 /** Count axis labels: whole numbers, or a decimal for the rare ceiling below 5. */
 export const countLabel = (value: number, _ticks?: readonly number[]): string =>
-  Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
+  Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(1).replace(/\.0$/, '');
 
 /** A line drawn in a viewBox of `width` × `height`: an SVG path, with a gap (a new "M") wherever a value is missing. */
 export function linePath(values: readonly (number | null)[], top: number, width: number, height: number): string {

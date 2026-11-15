@@ -580,11 +580,14 @@ try {
         n.filter((x) => x.getBoundingClientRect().width > 0).map((x) => x.textContent),
       );
       check(
-        voiceLabels.includes('Fish 音色 ID') && voiceLabels.includes('语速') && !voiceLabels.includes('音色档案 ID'),
-        `${w}: 声音 has the one Fish 音色 ID field and 语速 (${voiceLabels.join('|')})`,
+        // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): the voice field is 「音色编号」, it was 「Fish 音色 ID」.
+        voiceLabels.includes('音色编号') && voiceLabels.includes('语速') && !voiceLabels.includes('音色档案 ID'),
+        // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): the voice field is 「音色编号」, it was 「Fish 音色 ID」.
+        `${w}: 声音 has the one 音色编号 field and 语速 (${voiceLabels.join('|')})`,
       );
       const fishWidth = await page
-        .locator('label:has(> span:text-is("Fish 音色 ID")) input')
+        // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): the voice field is 「音色编号」, it was 「Fish 音色 ID」.
+        .locator('label:has(> span:text-is("音色编号")) input')
         .evaluate((n: HTMLElement) => Math.round(n.getBoundingClientRect().width));
       check(fishWidth < 560, `${w}: the Fish ID is a short field (${fishWidth}px)`);
       await shot('r2-voice');
@@ -601,7 +604,9 @@ try {
         0,
       `${w}: no separate 按角色 / 按模型 cards`,
     );
-    const seg = (label: string) => page.locator(`[aria-label="统计维度"] button:text-is("${label}")`);
+    // Named exception (Part 24b-7d): the 统计表 has no switch of its own; the page's 分组 switch (全部 / 按角色 / 按模型) drives it (按天 is 全部).
+    const seg = (label: string) =>
+      page.locator(`#admin-overview [aria-label="分组"] button:text-is("${label === '按天' ? '全部' : label}")`);
     const rowsOf = async (selector: string) =>
       (await page.$$eval(`${selector} .ot-row`, (n: Element[]) =>
         n.map((r) => [...r.querySelectorAll('.ot-cell')].map((c) => (c.firstChild?.textContent ?? '').trim())),
@@ -618,11 +623,11 @@ try {
       `${w}: 按角色 has a row per character and 合计 (${chars.length} / ${wantChars.length})`,
     );
     check(
-      wantChars.every((c) => chars.some((r) => r[0] === c.name && Number(r[1]) === c.published)),
+      wantChars.every((c) => chars.some((r) => r[0] === c.name && Number(r[1]!.replace(/,/g, '')) === c.published)), // Named exception (Part 24b-7d round 2): counts carry thousands separators now, so the commas are removed before Number().
       `${w}: 按角色 shows each character's 成功 as the old card did`,
     );
     check(
-      Number(chars.at(-1)![1]) === wantChars.reduce((n, c) => n + c.published, 0),
+      Number(chars.at(-1)![1]!.replace(/,/g, '')) === wantChars.reduce((n, c) => n + c.published, 0), // Named exception (Part 24b-7d round 2): counts carry thousands separators now, so the commas are removed before Number().
       `${w}: 按角色 合计 is the sum of the old card's values`,
     );
     await shot('overview-by-character');
@@ -635,7 +640,7 @@ try {
       `${w}: 按模型 has a row per model and 合计 (${models.length} / ${wantModels.length})`,
     );
     check(
-      Number(models.at(-1)![1]) === wantModels.reduce((n, m) => n + m.published, 0),
+      Number(models.at(-1)![1]!.replace(/,/g, '')) === wantModels.reduce((n, m) => n + m.published, 0), // Named exception (Part 24b-7d round 2): counts carry thousands separators now, so the commas are removed before Number().
       `${w}: 按模型 合计 is the sum of the old card's values`,
     );
     await shot('overview-by-model');
@@ -644,7 +649,7 @@ try {
     await wait(200);
     const sorted = await rowsOf('.ov-by:not([hidden])');
     check(sorted.at(-1)![0] === '合计', `${w}: a sorted table keeps 合计 last`);
-    const values = sorted.slice(0, -1).map((r) => Number(r[1]));
+    const values = sorted.slice(0, -1).map((r) => Number(r[1]!.replace(/,/g, ''))); // Named exception (Part 24b-7d round 2): counts carry thousands separators now, so the commas are removed before Number().
     check(
       values.every((v, i) => i === 0 || values[i - 1]! <= v),
       `${w}: the 成功 column sorts`,

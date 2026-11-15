@@ -285,7 +285,8 @@ try {
     await page.locator('.wb-tab', { hasText: '声音' }).first().click();
     await wait(500);
     // Part 29 B (named exception): the one voice field is 「Fish 音色 ID」 (it was 「已有 Fish 音色 referenceId」 on the materials fold).
-    const reference = page.locator('label', { hasText: 'Fish 音色 ID' }).locator('input').first();
+    // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): the voice field is 「音色编号」, it was 「Fish 音色 ID」.
+    const reference = page.locator('label', { hasText: '音色编号' }).locator('input').first();
     check(
       (await reference.inputValue()) === `fish_ref_new${pass}`,
       `${w}: the voice page prefills the Fish referenceId`,

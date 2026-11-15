@@ -15,7 +15,7 @@ import { POINTS_GRANT_LIMITS } from '../../../../../packages/contracts/web-syste
 import { h, length } from '../cocreation/h.ts';
 import { dollars } from './system-format.ts';
 import { dangerZone } from './ui/danger-zone.ts';
-import { hoverValue } from './ui/hover-value.ts';
+import { exactCount, hoverValue } from './ui/hover-value.ts';
 import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { pageHead } from './ui/page-head.ts';
 import { markDirty } from './ui/unsaved.ts';
@@ -28,7 +28,7 @@ const TIER_LABELS = {
   account: '账号',
 } as const;
 const lookupLine = (player: PointsLookup) =>
-  `玩家编号 ${player.playerNumber} · ${TIER_LABELS[player.tier]} · 余额 ${player.balance === null ? '还没有' : `${player.balance} 点`}`;
+  `玩家编号 ${player.playerNumber} · ${TIER_LABELS[player.tier]} · 余额 ${player.balance === null ? '还没有' : `${exactCount(player.balance)} 点`}`;
 /** "跳过：访客 a · 不限量 b · 已达上限 c" - only the counts that are not zero; empty text when nothing was skipped. */
 const skippedText = (skipped: PointsSkipped & { alreadyFull?: number }) => {
   const parts = [
@@ -203,7 +203,7 @@ export function pointsView(
   const liveText = (preview: PointsPreview) =>
     [
       preview.player ? lookupLine(preview.player) : null,
-      `将发给 ${preview.granted} 位玩家，共 ${preview.totalPoints} 点。${skippedText(preview.skipped)}。`,
+      `将发给 ${exactCount(preview.granted)} 位玩家，共 ${exactCount(preview.totalPoints)} 点。${skippedText(preview.skipped)}。`,
     ]
       .filter(Boolean)
       .join('\n');
@@ -254,7 +254,7 @@ export function pointsView(
         const ok = await deps.confirm(
           {
             title: '确认积分发放',
-            message: `${preview.player ? `${lookupLine(preview.player)}。` : ''}将发给 ${preview.granted} 位玩家，共 ${preview.totalPoints} 点（每人最多 ${input.points} 点）。${skippedText(preview.skipped)}。`,
+            message: `${preview.player ? `${lookupLine(preview.player)}。` : ''}将发给 ${exactCount(preview.granted)} 位玩家，共 ${exactCount(preview.totalPoints)} 点（每人最多 ${input.points} 点）。${skippedText(preview.skipped)}。`,
             confirmLabel: '确认发放',
           },
           confirmHost,
@@ -276,7 +276,9 @@ export function pointsView(
         pending.delete(key);
         outcome.replaceChildren(
           h('strong', { text: '发放结果' }),
-          h('p', { text: `已发给 ${done.granted} 位玩家，共 ${done.totalPoints} 点。${skippedText(done.skipped)}。` }),
+          h('p', {
+            text: `已发给 ${exactCount(done.granted)} 位玩家，共 ${exactCount(done.totalPoints)} 点。${skippedText(done.skipped)}。`,
+          }),
         );
         email.value = '';
         live.textContent = '';
@@ -292,8 +294,8 @@ export function pointsView(
       const preview = await deps.resetPreview();
       const cost = preview.worstCaseMicros === null ? '暂无数据' : dollars(preview.worstCaseMicros);
       return [
-        { n: String(preview.affected), label: '个账号会补点' },
-        { n: String(preview.totalPoints), label: '点共补发' },
+        { n: exactCount(preview.affected), label: '个账号会补点' },
+        { n: exactCount(preview.totalPoints), label: '点共补发' },
         { n: cost, label: '最坏成本（最近 30 天最高每点成本）' },
       ];
     },
@@ -308,7 +310,9 @@ export function pointsView(
         pending.delete('reset');
         resetOutcome.replaceChildren(
           h('strong', { text: '重置结果' }),
-          h('p', { text: `${done.affected} 个账号补发了 ${done.totalPoints} 点。${skippedText(done.skipped)}。` }),
+          h('p', {
+            text: `${exactCount(done.affected)} 个账号补发了 ${exactCount(done.totalPoints)} 点。${skippedText(done.skipped)}。`,
+          }),
         );
         deps.toast('额度已重置');
         resetZone.close();

@@ -32,7 +32,8 @@
     "check:web:review": "node scripts/check-web-review-26b-browser.ts",
     "check:web:admin-24b7": "node scripts/check-web-admin-24b7-browser.ts",
     "check:web:admin-24b7b": "node scripts/check-web-admin-24b7b-browser.ts",
-    "check:web:admin-24b7c": "node scripts/check-web-admin-24b7c-browser.ts"
+    "check:web:admin-24b7c": "node scripts/check-web-admin-24b7c-browser.ts",
+    "check:web:admin-24b7d": "node scripts/check-web-admin-24b7d-browser.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

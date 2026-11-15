@@ -311,7 +311,7 @@ export async function run24b6bChecks(ctx: Ctx) {
     );
     const firstText = (await page.locator('.vh .ot-row').first().innerText()).replace(/\s+/g, ' ');
     check(
-      new RegExp(`^v${top} 现行`).test(firstText),
+      new RegExp(`^v${top} 当前`).test(firstText), // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行」
       `版本历史 ${at}: the first row is not the live v${top}: ${firstText}`,
     );
     await noSideways(`版本历史 ${at}`);
@@ -384,7 +384,7 @@ export async function run24b6bChecks(ctx: Ctx) {
     );
     const live = (await page.locator('.vh .ot-row').first().innerText()).replace(/\s+/g, ' ');
     check(
-      new RegExp(`^v${maxV()} 现行.*恢复自 v${top - 1}`).test(live),
+      new RegExp(`^v${maxV()} 当前.*恢复自 v${top - 1}`).test(live), // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行」
       `版本历史 ${at}: the live row after a restore reads "${live}"`,
     );
     check(
@@ -480,7 +480,7 @@ export async function run24b6bChecks(ctx: Ctx) {
     const castRows = await page.locator('.cs-versions .ot-row').count();
     check(castRows === 5, `整页版本 ${at}: ${castRows} rows (5 wanted of the published versions)`);
     const castFirst = (await page.locator('.cs-versions .ot-row').first().innerText()).replace(/\s+/g, ' ');
-    check(/现行/.test(castFirst), `整页版本 ${at}: the live version is not marked: ${castFirst}`);
+    check(/当前/.test(castFirst), `整页版本 ${at}: the live version is not marked: ${castFirst}`); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行」
     check(!/回滚/.test(await page.locator('body').innerText()), `关系与故事 ${at}: the word 回滚 is still on the page`);
     await page.locator('.cs-versions').scrollIntoViewIfNeeded();
     await page.locator('.cs-versions .ot-row').nth(2).click();
@@ -521,7 +521,7 @@ export async function run24b6bChecks(ctx: Ctx) {
     );
     const castLive = (await page.locator('.cs-versions .ot-row').first().innerText()).replace(/\s+/g, ' ');
     check(
-      new RegExp(`^v${castBefore + 1} 现行.*恢复自 v${target}`).test(castLive),
+      new RegExp(`^v${castBefore + 1} 当前.*恢复自 v${target}`).test(castLive), // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「现行」
       `整页版本 ${at}: the live row reads "${castLive}"`,
     );
     await shot(`24b6b-cast-restored-${width}`);

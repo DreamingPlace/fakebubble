@@ -87,7 +87,8 @@ try {
     await tab('声音');
     const body = await text();
     check(!/绑定已有音色|音色档案 ID|音色档案版本/.test(body), `${at}: a manual binding field is still shown`);
-    const fish = page.locator('label:has-text("Fish 音色 ID") input').first();
+    // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): the voice field is 「音色编号」, it was 「Fish 音色 ID」.
+    const fish = page.locator('label:has-text("音色编号") input').first();
     check((await fish.inputValue()) === `fish-imported-${width}`, `${at}: the imported Fish id is not in the field`);
     check((await page.locator('label:has-text("语速") input').count()) === 1, `${at}: 语速 is missing`);
     check(

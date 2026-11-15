@@ -112,7 +112,7 @@ test('角色工作台: opening a role shows its editor with the folds open and n
   await f.workbench.load();
   await f.workbench.open('jojo');
   assert.equal(f.root.querySelectorAll('form').length, 1, 'the editor');
-  assert.ok(!buttons(f.root).includes('返回人物目录'));
+  assert.ok(!buttons(f.root).includes('返回角色目录')); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「返回人物目录」
   assert.ok(!buttons(f.root).includes('重新读取资料'));
   assert.ok(!buttons(f.root).includes('比较已存草稿与正式资料'), 'loaded on open, not behind a button');
 });

@@ -434,7 +434,7 @@ test('page: a stale revision shows the conflict and keeps what was typed until t
   f.buttons('保存草稿')[0]!.click();
   await flush();
   const notice = f.root.querySelectorAll('.cs-notice.is-bad')[0]!;
-  assert.match(notice.textContent, /修订 8/);
+  assert.match(notice.textContent, /草稿 8/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「修订 8」
   assert.equal(f.view.state.conflict!.revision, 8);
   assert.equal(typed.value, '小满满', 'the field still holds the typed text');
   assert.equal(

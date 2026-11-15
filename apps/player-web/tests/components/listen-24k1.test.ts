@@ -69,17 +69,19 @@ test('试听: no voice reference turns the button off with the one sentence, and
   await tick();
   assert.equal(f.button().disabled, true);
   assert.equal(f.reason().textContent, NO_VOICE_REASON);
-  assert.equal(NO_VOICE_REASON, '先填音色 referenceId');
+  // Part 24b-7d (named exception): the internal name referenceId is not shown; the sentence says 音色编号.
+  assert.equal(NO_VOICE_REASON, '先填音色编号');
   assert.equal(f.calls.estimates, 0);
 });
 
 test('试听: the first click only asks (the cost on the button), the second pays once, then plays, and a replay is free', async (t) => {
   const f = setup(t);
   await tick();
-  assert.equal(f.button().textContent, '试听 · 约 600 µ$');
+  // Named exception (Part 24b-7d): money is never shown as µ$; a fraction of a cent reads $0.000 600.
+  assert.equal(f.button().textContent, '试听 · 约 $0.000 600');
   f.button().click();
   assert.equal(f.calls.listen.length, 0, 'a first click calls nothing');
-  assert.equal(f.button().textContent, '确认付费 · 600 µ$');
+  assert.equal(f.button().textContent, '确认付费 · $0.000 600'); // Named exception (Part 24b-7d): was 「600 µ$」
   f.button().click();
   await until(() => f.calls.played.length >= 1);
   assert.deepEqual(f.calls.listen, [{ requestId: 'req-1', previewId: 'p1', acknowledgeMicros: 600 }]);

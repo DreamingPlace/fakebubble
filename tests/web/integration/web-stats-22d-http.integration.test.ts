@@ -284,7 +284,8 @@ test('22d the real pipeline: chat users per character, user types frozen at admi
   }
   for (const bad of [
     { metric: 'points', range: '24h' },
-    { metric: 'replies', range: '30d' },
+    // Named exception (Part 24b-7e): 30d is a chart range now; 60d is still refused.
+    { metric: 'replies', range: '60d' },
     { metric: 'replies' },
     {},
   ])

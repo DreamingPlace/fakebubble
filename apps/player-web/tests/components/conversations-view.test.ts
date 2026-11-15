@@ -174,7 +174,10 @@ test('opening a transcript shows both sides in order, the 审核改动 mark, the
   assert.equal(lines[0]!.querySelector('.review-time')!.textContent, '2026-10-12 10:30');
   assert.equal(lines[1]!.querySelector('.review-changed')!.textContent, '审核改动');
   assert.equal(lines[0]!.querySelector('.review-changed'), null);
-  assert.equal(lines[2]!.querySelector('.review-text')!.textContent, '回复失败 · PROVIDER_FAILED');
+  // Named exception (Part 24b-7d): the failed reply shows a sentence, never the code (it is on hover and behind 复制代码).
+  assert.match(lines[2]!.querySelector('.review-text')!.textContent, /^这条回复没有成功/);
+  assert.equal(lines[2]!.querySelector('.review-text .ad-tip')!.textContent, '代码：PROVIDER_FAILED');
+  assert.equal(lines[2]!.querySelector('.admin-copy-code')!.getAttribute('data-code'), 'PROVIDER_FAILED');
   assert.ok(lines[2]!.className.includes('is-failed'));
   assert.equal(lines[0]!.querySelector('.review-text')!.textContent, '我是〔昵称〕');
   assert.deepEqual(f.view.current(), { characterId: 'jojo', code: 'K7M2', archived: false });

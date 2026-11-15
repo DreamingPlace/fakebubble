@@ -21,14 +21,14 @@ export const PERMISSION_GROUPS: readonly Group[] = [
       { item: 'characters.read', name: '查看角色', help: '打开角色目录和资料。其他角色功能都以它为前提。' },
       { item: 'characters.create', name: '新建角色', help: '建立新的角色草稿。' },
       { item: 'characters.edit', name: '修改并保存草稿', help: '保存草稿不会改变正式角色和玩家聊天。' },
-      { item: 'characters.discard', name: '放弃服务器草稿', help: '只移除未发布草稿，正式版本不变。' },
+      { item: 'characters.discard', name: '放弃草稿', help: '只移除未发布草稿，正式版本不变。' },
     ],
   },
   {
     id: 'publication',
     title: '预演与发布',
     items: [
-      { item: 'characters.preview', name: '预演测试', help: '文字预演会产生供应商费用，不主动推送人物消息。' },
+      { item: 'characters.preview', name: '预演测试', help: '文字预演会产生供应商费用，不主动推送角色消息。' },
       { item: 'characters.publish', name: '发布', help: '把预演通过的草稿发布给玩家；需要预演测试。' },
     ],
   },
@@ -94,7 +94,7 @@ export const PERMISSION_GROUPS: readonly Group[] = [
       {
         item: 'conversations.read',
         name: '查看测试对话',
-        help: '阅读玩家与角色的聊天全文（只显示匿名编号，不显示邮箱和昵称）。默认只有主管理员；需要打开 CHAT_REVIEW_ENABLED。',
+        help: '阅读玩家与角色的聊天全文（只显示匿名编号，不显示邮箱和昵称）。默认只有主管理员；需要先打开「测试对话」功能（在系统状态里能看到它开了没有）。',
       },
     ],
   },
