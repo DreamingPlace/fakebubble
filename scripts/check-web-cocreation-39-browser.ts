@@ -228,7 +228,7 @@ try {
     if ((await page.locator('.cr-panel .cr-exclude').innerText()).trim() === '不计入')
       await page.locator('.cr-panel .cr-exclude').click();
     await page.locator('.cr-panel .cr-exclude', { hasText: '计入' }).waitFor();
-    await page.getByRole('button', { name: '玩家眼中的关系' }).click();
+    await page.locator('.seg-button[data-seg="relations"]').click();
     await page.locator('.cr-view .admin-table tbody tr').first().waitFor({ timeout: 15_000 });
     await wait(700);
     const rows: string[] = await page.locator('.cr-view .admin-table tbody tr').allInnerTexts();
