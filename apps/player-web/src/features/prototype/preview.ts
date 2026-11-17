@@ -38,7 +38,7 @@ function createCard(person: Person) {
     <div class="card-shell">
       <div class="chat-head">
         <button class="back-button icon-button" type="button" aria-label="返回人物浏览">${icon('back')}</button>
-        <div class="chat-title"><span class="avatar chat-mark" aria-hidden="true">${mark}</span><strong role="status" aria-live="polite">${name}</strong></div>
+        <div class="chat-title"><strong role="status" aria-live="polite">${name}</strong></div>
         ${configured ? `<button class="chat-more icon-button" type="button" aria-label="更多" aria-haspopup="menu" aria-expanded="false">${icon('more')}</button>` : '<span class="chat-head-gap" aria-hidden="true"></span>'}
       </div>
       <div class="chat-body" role="log" aria-label="${name}的消息">
@@ -85,9 +85,8 @@ function createCard(person: Person) {
   card.style.setProperty('--avatar-ink', person.ink);
   card.style.setProperty('--card-color', person.color);
   card.classList.toggle('is-reserve', !configured);
-  // Part 31b: the picture over the initials in the chat header, the welcome row and the card's face.
+  // Part 31b: the picture over the initials in the welcome row and the card's face.
   if (person.portrait) {
-    mountPortrait(card.querySelector<HTMLElement>('.chat-mark')!, person.portrait, { eager: true });
     const welcomeAvatar = card.querySelector<HTMLElement>('.welcome-row .message-avatar');
     if (welcomeAvatar) mountPortrait(welcomeAvatar, person.portrait);
     const face = card.querySelector<HTMLElement>('.face-portrait');

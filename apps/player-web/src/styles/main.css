@@ -200,12 +200,6 @@ textarea:focus-visible,
   letter-spacing: -0.04em;
   user-select: none;
 }
-.head-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  font-size: 17px;
-}
 .icon-button {
   width: 44px;
   height: 44px;
@@ -19069,7 +19063,7 @@ html.theme-fade *::after {
   color: var(--bb-sub);
 }
 
-/* ---- chat: the header is centred (back | avatar over name | ⋯), as on the Chat board ---- */
+/* ---- chat: the header is centred (back | name | ⋯); no avatar in it, ever (Part 38a) ---- */
 .page-shell .card-slot .chat-head {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr) 56px;
@@ -19098,6 +19092,7 @@ html.theme-fade *::after {
   align-items: center;
   gap: 3px;
   min-width: 0;
+  position: relative;
 }
 .page-shell .chat-head strong {
   position: static;
@@ -19110,10 +19105,23 @@ html.theme-fade *::after {
 .page-shell .chat-head .icon-button {
   color: var(--bb-ink);
 }
+/* the old text of the header, fading out while the new one fades in (Part 38a) */
+.page-shell .chat-head .title-ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--bb-ink);
+  pointer-events: none;
+  white-space: nowrap;
+}
 
 /* ---- avatars: a ring, a thin gap of page colour, then the fill. A character's comes from its colour; the player's from their pick ---- */
-.page-shell .message-avatar,
-.page-shell .chat-mark {
+.page-shell .message-avatar {
   border: 2px solid transparent;
   border-radius: 50%;
   background:
@@ -19123,18 +19131,11 @@ html.theme-fade *::after {
   color: #141414;
   font-weight: 900;
 }
-.page-shell .chat-mark {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  font-size: 10px;
-}
 .page-shell .message-avatar {
   width: 38px;
   height: 38px;
 }
-:root[data-theme="dark"] .page-shell .message-avatar,
-:root[data-theme="dark"] .page-shell .chat-mark {
+:root[data-theme="dark"] .page-shell .message-avatar {
   background:
     linear-gradient(140deg, var(--n-aura-3), var(--n-aura-2)) padding-box,
     conic-gradient(from 200deg, var(--n-accent), var(--n-aura-3), var(--n-aura-2), var(--n-accent)) border-box;
@@ -20156,8 +20157,30 @@ html.theme-fade *::after {
   }
 }
 
+/* ---- Part 38a: a voice message waiting its turn: its bars breathe softly until it plays ---- */
+.page-shell .voice-bubble .play-button[data-queued="true"] .sound-bars {
+  opacity: 0.55;
+  animation: pk-queued 1400ms ease-in-out infinite;
+}
+.page-shell .voice-bubble .play-button .sound-bars {
+  transition: opacity 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes pk-queued {
+  50% {
+    opacity: 0.9;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-shell .voice-bubble .play-button .sound-bars {
+    transition: none;
+  }
+  .page-shell .voice-bubble .play-button[data-queued="true"] .sound-bars {
+    animation: none;
+  }
+}
+
 /* ======================================================================================================================
-   Part 31b (player): a character's picture over the initials (card face 148, arc as before, chat header 36 with a 2.5 px halo, message
+   Part 31b (player): a character's picture over the initials (card face 148, arc as before, message (the chat header has no avatar, Part 38a)
    avatars 30 on the last bubble of a group), the four states, and the 100 ms landing fade of a returning visit. Player selectors only.
    ====================================================================================================================== */
 .page-shell .portrait {
@@ -20235,15 +20258,6 @@ html.theme-fade *::after {
     0 0 0 9px var(--bb-paper, #0c0b10),
     0 0 0 12px var(--n-aura-3);
 }
-.page-shell .chat-head .chat-mark {
-  width: 36px;
-  height: 36px;
-  font-size: 14px;
-  border-width: 2.5px;
-  box-sizing: border-box;
-  position: relative;
-  overflow: hidden;
-}
 .page-shell .message-row .message-avatar {
   width: 30px;
   height: 30px;
@@ -20251,10 +20265,7 @@ html.theme-fade *::after {
   position: relative;
   overflow: hidden;
 }
-/* an avatar only beside the last bubble of a group: the space stays, so the bubbles keep their column */
-.page-shell .message-row.incoming:has(+ .message-row.incoming) > .message-avatar {
-  visibility: hidden;
-}
+/* Part 38a (owner decision 2026-11-15): every character message shows its avatar, not only the last of a group; the player's stay as they are */
 /* a returning visit lands on its card at once; the page fades in over 100 ms (no spin from position 1) */
 .page-shell[data-landing="resume"] .carousel,
 .page-shell[data-landing="resume"] .avatar-nav {
