@@ -64,6 +64,7 @@ export type RehearsalHost = {
 };
 type Pick = { kind: 'set'; set: RehearsalSet } | { kind: 'memes' } | { kind: 'script'; id: string } | { kind: 'new' };
 const POLL_MS = 2500;
+const POLL_MAX_MS = 20_000;
 const lines = (text: string) =>
   text
     .split(/\r?\n/)
@@ -127,6 +128,21 @@ export function rehearsalView(host: RehearsalHost) {
     detail: RehearsalRunDetail | null = null,
     tab: 'chat' | 'counts' | 'memes' = 'chat',
     timer: unknown = null,
+    // Part 40: what the result area shows right now, so a poll can change only what changed (see updateResult).
+    painted: {
+      runId: string;
+      tab: string;
+      shape: string;
+      cells: Map<string, { el: HTMLElement; sig: string }>;
+      head: HTMLElement;
+      pane: HTMLElement;
+      chips: HTMLElement | null;
+      chipsSig: string;
+      paneSig: string;
+      table: HTMLElement | null;
+    } | null = null,
+    lastSig = '',
+    idle = 0,
     seq = 0,
     pending: { id: string; sig: string } | null = null;
   const setTimer = host.poll?.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, ms));
@@ -467,6 +483,9 @@ export function rehearsalView(host: RehearsalHost) {
         runs = await host.api.list(id);
         current = started.runId;
         tab = 'chat';
+        lastSig = '';
+        idle = 0;
+        painted = null;
         await load();
         host.toast('已开始', 'info');
       } catch (error) {
@@ -491,20 +510,31 @@ export function rehearsalView(host: RehearsalHost) {
     const id = host.characterId();
     if (!id || !current || gone()) return;
     const mine = current;
+    let changed = true;
     try {
       const d = await host.api.detail(id, mine);
       if (gone() || mine !== current) return;
+      const sig = JSON.stringify(d);
+      changed = sig !== lastSig;
+      lastSig = sig;
       detail = d;
       runs = runs.map((r) => (r.runId === mine ? d.run : r));
-      paintResult();
+      if (changed || !painted) updateResult();
     } catch {
       /* the next poll asks again */
     }
     stopPoll();
-    if (!gone() && panel.isOpen() && detail?.run.status === 'running') timer = setTimer(() => void load(), POLL_MS);
+    // Part 40: nothing new = the next look comes later (2.5 s, then 4, 6.4 ... up to 20 s); a change starts over; a finished run stops.
+    idle = changed ? 0 : Math.min(idle + 1, 8);
+    if (!gone() && panel.isOpen() && detail?.run.status === 'running')
+      timer = setTimer(() => void load(), Math.min(POLL_MS * 1.6 ** idle, POLL_MAX_MS));
   }
-  const bubbleList = (cell: RehearsalCell) => {
-    const box = h('div', { class: 'rh-cell', attrs: { 'data-state': cell.state } });
+  const cellSig = (cell: RehearsalCell) => JSON.stringify([cell.state, cell.errorCode, cell.bubbles, cell.answered]);
+  const bubbleList = (cell: RehearsalCell, key = '') => {
+    const box = h('div', {
+      class: 'rh-cell',
+      attrs: { 'data-state': cell.state, ...(key ? { 'data-cell': key } : {}) },
+    });
     if (cell.state === 'done' && cell.bubbles) {
       for (const b of cell.bubbles) box.append(h('p', { class: 'rh-bubble', text: b }));
       if (cell.answered === false) box.append(statusBadge('未答全', 'warn'));
@@ -514,7 +544,7 @@ export function rehearsalView(host: RehearsalHost) {
         cell.state === 'running' || cell.state === 'pending'
           ? h('span', { class: 'rh-wait', text: CELL_TEXT[cell.state] })
           : statusBadge(CELL_TEXT[cell.state], tone);
-      if (cell.errorCode) hoverValue(chip, errorText(cell.errorCode));
+      if (cell.errorCode) hoverValue(chip, errorText(cell.errorCode), true);
       box.append(chip);
     }
     return box;
@@ -537,7 +567,7 @@ export function rehearsalView(host: RehearsalHost) {
       if (turn.role)
         who.append(statusBadge(turn.role === 'hint' ? '暗示' : '相似', turn.role === 'hint' ? 'info' : 'neutral'));
       row.append(who);
-      for (const c of d.columns) row.append(bubbleList(c.cells[i]!));
+      for (const c of d.columns) row.append(bubbleList(c.cells[i]!, `${i}:${c.key}`));
       grid.append(row);
     });
     return grid;
@@ -573,6 +603,17 @@ export function rehearsalView(host: RehearsalHost) {
           else span.textContent = finalText;
           td.append(span);
         }
+        tr.append(td);
+      }
+      body.append(tr);
+    }
+    // Part 40: the codes behind the failed, unconfirmed and unsent cells, counted per code.
+    if (d.columns.some((c) => Object.keys(c.counts.codes).length > 0)) {
+      const tr = h('tr', { attrs: { 'data-row': 'codes' } }, h('th', { text: '代码', attrs: { scope: 'row' } }));
+      for (const c of d.columns) {
+        const td = h('td');
+        for (const [code, n] of Object.entries(c.counts.codes).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])))
+          td.append(h('div', { class: 'rh-code', text: `${code} × ${n}` }));
         tr.append(td);
       }
       body.append(tr);
@@ -686,9 +727,28 @@ export function rehearsalView(host: RehearsalHost) {
     table.append(body);
     return table;
   };
-  const paintResult = () => {
-    const keepScroll = result.scrollTop;
-    result.replaceChildren();
+  /** The nearest ancestor that scrolls, so a full repaint puts the page back where it was. */
+  const scroller = () => {
+    for (let el: HTMLElement | null = result; el; el = el.parentElement)
+      if (el.scrollHeight > el.clientHeight && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) return el;
+    return document.scrollingElement as HTMLElement | null;
+  };
+  const shapeOf = (d: RehearsalRunDetail) =>
+    `${d.turns.length}|${d.columns.map((c) => c.key).join(',')}|${d.memes ? 1 : 0}`;
+  const runBadge = (d: RehearsalRunDetail) =>
+    statusBadge(
+      d.run.status === 'running' ? '进行中' : d.run.status === 'done' ? '完成' : '失败',
+      d.run.status === 'done' ? 'ok' : d.run.status === 'failed' ? 'danger' : 'info',
+    );
+  const progress = (d: RehearsalRunDetail) => {
+    const total = d.turns.length * d.columns.length;
+    const done = d.columns.reduce(
+      (n, c) => n + c.cells.filter((x) => !['pending', 'running'].includes(x.state)).length,
+      0,
+    );
+    return { total, done };
+  };
+  const chipsOf = () => {
     const chips = h('div', { class: 'rh-runs', attrs: { role: 'group', 'aria-label': '运行记录' } });
     for (const r of runs) {
       const b = h(
@@ -700,23 +760,41 @@ export function rehearsalView(host: RehearsalHost) {
       b.addEventListener('click', () => {
         current = r.runId;
         detail = null;
+        painted = null;
+        lastSig = '';
+        idle = 0;
         paintResult();
         void load();
       });
       chips.append(h('div', { class: 'rh-run-wrap', attrs: { 'data-run': r.runId } }, b));
     }
+    return chips;
+  };
+  const chipsSigOf = () => JSON.stringify([current, runs.map((r) => [r.runId, r.scriptName, r.createdAt])]);
+  /** Counts and the hit / miss table are replaced as one piece, and only when their numbers changed. */
+  const paneTable = (d: RehearsalRunDetail) =>
+    tab === 'counts' ? countsTable(d) : tab === 'memes' ? memeTable(d) : null;
+  const paneSigOf = (d: RehearsalRunDetail) =>
+    tab === 'counts'
+      ? JSON.stringify(d.columns.map((c) => [c.label, c.counts]))
+      : tab === 'memes'
+        ? JSON.stringify([d.columns.map((c) => c.label), d.memes])
+        : '';
+  /** A whole repaint: a first look, another run, another tab. */
+  const paintResult = () => {
+    const bar0 = scroller(),
+      keep = bar0?.scrollTop ?? 0;
+    result.replaceChildren();
+    const chips = chipsOf();
     if (runs.length) result.append(chips);
     manage?.sync();
     if (!detail) {
+      painted = null;
       if (!runs.length) result.append(h('p', { class: 'rh-empty', text: '还没有运行。' }));
       return;
     }
     const d = detail;
-    const total = d.turns.length * d.columns.length;
-    const done = d.columns.reduce(
-      (n, c) => n + c.cells.filter((x) => !['pending', 'running'].includes(x.state)).length,
-      0,
-    );
+    const { total, done } = progress(d);
     const bar = h(
       'span',
       {
@@ -733,16 +811,14 @@ export function rehearsalView(host: RehearsalHost) {
     (bar.firstChild as HTMLElement).style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
     const cost = h('span', { class: 'rh-cost' });
     rollNumber(cost, d.run.chargedMicros, (v) => dollars(Math.round(v)));
+    const count = h('span', { class: 'rh-meta rh-progress', text: `${done} / ${total}` });
     const head = h(
       'div',
       { class: 'rh-runhead' },
       h('strong', { text: d.run.scriptName }),
-      statusBadge(
-        d.run.status === 'running' ? '进行中' : d.run.status === 'done' ? '完成' : '失败',
-        d.run.status === 'done' ? 'ok' : d.run.status === 'failed' ? 'danger' : 'info',
-      ),
+      runBadge(d),
       ...(d.run.liveVersion === null ? [] : [h('span', { class: 'rh-meta', text: `线上 v${d.run.liveVersion}` })]),
-      h('span', { class: 'rh-meta', text: `${done} / ${total}` }),
+      count,
       bar,
       cost,
     );
@@ -757,11 +833,88 @@ export function rehearsalView(host: RehearsalHost) {
       paintResult();
     });
     const pane = h('div', { class: 'rh-pane', attrs: { 'data-tab': tab } });
-    if (tab === 'chat') pane.append(conversation(d));
-    else if (tab === 'counts') pane.append(countsTable(d), phraseEditor());
-    else pane.append(memeTable(d));
+    const cells = new Map<string, { el: HTMLElement; sig: string }>();
+    let table: HTMLElement | null = null;
+    if (tab === 'chat') {
+      const grid = conversation(d);
+      pane.append(grid);
+      for (const el of grid.querySelectorAll<HTMLElement>('[data-cell]')) {
+        const [i, key] = el.dataset.cell!.split(/:(.*)/s);
+        const column = d.columns.find((c) => c.key === key)!;
+        cells.set(el.dataset.cell!, { el, sig: cellSig(column.cells[Number(i)]!) });
+      }
+    } else {
+      table = paneTable(d);
+      pane.append(table!);
+      if (tab === 'counts') pane.append(phraseEditor());
+    }
     result.append(head, seg.root, pane);
-    result.scrollTop = keepScroll;
+    painted = {
+      runId: d.run.runId,
+      tab,
+      shape: shapeOf(d),
+      cells,
+      head,
+      pane,
+      chips: runs.length ? chips : null,
+      chipsSig: chipsSigOf(),
+      paneSig: paneSigOf(d),
+      table,
+    };
+    if (bar0) bar0.scrollTop = keep;
+  };
+  /**
+   * Part 40: a poll that brought news. Only what changed is touched: a reply that landed replaces its own cell, the progress line,
+   * the bar and the cost change in place, a table is replaced only when its numbers changed. Nothing around them is rebuilt, so the
+   * scroll position, the tab, an open 词表 and the focus stay where they are.
+   */
+  const updateResult = () => {
+    const d = detail;
+    if (!d || !painted || painted.runId !== d.run.runId || painted.tab !== tab || painted.shape !== shapeOf(d))
+      return paintResult();
+    if (painted.chipsSig !== chipsSigOf()) {
+      const fresh = chipsOf();
+      if (painted.chips) painted.chips.replaceWith(fresh);
+      else result.prepend(fresh);
+      painted.chips = fresh;
+      painted.chipsSig = chipsSigOf();
+      manage?.sync();
+    }
+    const { total, done } = progress(d);
+    const head = painted.head;
+    const badge = head.querySelector<HTMLElement>('.admin-badge')!;
+    const nextBadge = runBadge(d);
+    if (badge.textContent !== nextBadge.textContent) badge.replaceWith(nextBadge);
+    const count = head.querySelector<HTMLElement>('.rh-progress');
+    if (count) count.textContent = `${done} / ${total}`;
+    const bar = head.querySelector<HTMLElement>('.rh-bar');
+    if (bar) {
+      bar.setAttribute('aria-valuenow', String(done));
+      (bar.firstChild as HTMLElement).style.width = `${total ? Math.round((done / total) * 100) : 0}%`;
+    }
+    const cost = head.querySelector<HTMLElement>('.rh-cost');
+    if (cost) rollNumber(cost, d.run.chargedMicros, (v) => dollars(Math.round(v)));
+    if (tab === 'chat') {
+      d.turns.forEach((_turn, i) => {
+        for (const c of d.columns) {
+          const key = `${i}:${c.key}`,
+            known = painted!.cells.get(key),
+            sig = cellSig(c.cells[i]!);
+          if (!known || known.sig === sig) continue;
+          const el = bubbleList(c.cells[i]!, key);
+          known.el.replaceWith(el);
+          painted!.cells.set(key, { el, sig });
+        }
+      });
+      return;
+    }
+    const sig = paneSigOf(d);
+    if (sig !== painted.paneSig && painted.table) {
+      const fresh = paneTable(d)!;
+      painted.table.replaceWith(fresh);
+      painted.table = fresh;
+      painted.paneSig = sig;
+    }
   };
 
   // ---- opening ------------------------------------------------------------------------------------------------------------------------

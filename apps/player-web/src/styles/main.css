@@ -6756,6 +6756,9 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   background: var(--ad-primary);
   color: #fff;
 }
+.account-admin-page.admin-shell button.admin-primary {
+  transition-duration: calc(60ms * var(--ad-motion));
+}
 .account-admin-page.admin-shell button.admin-primary:hover:not(:disabled),
 .account-admin-page.admin-shell .cs button.cs-primary:hover:not(:disabled),
 .account-admin-page.admin-shell button.tiers-new:hover:not(:disabled) {
@@ -16126,6 +16129,12 @@ button:not(
   margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
+.account-admin-page.admin-shell .rh-code {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ad-muted);
+  overflow-wrap: anywhere;
+}
 .account-admin-page.admin-shell .rh-pane {
   animation: rhIn calc(220ms * var(--ad-motion)) var(--ad-ease) both;
   overflow-x: auto;
@@ -16156,7 +16165,7 @@ button:not(
 .account-admin-page.admin-shell .rh-cell {
   padding: 10px 12px;
   border-bottom: 1px solid var(--ad-hairline);
-  animation: rhIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+  animation: rhFade calc(240ms * var(--ad-motion)) var(--ad-ease) both;
   animation-delay: calc(var(--rh-i, 0) * 20ms * var(--ad-motion));
 }
 .account-admin-page.admin-shell .rh-player {
@@ -16279,6 +16288,15 @@ button:not(
     transform: none;
   }
 }
+/* a reply that lands fades in where it is: it never moves the row (the cells of a turn stay on one line while it arrives) */
+@keyframes rhFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 @keyframes rhPulse {
   50% {
     opacity: 0.25;
@@ -16305,13 +16323,24 @@ button:not(
   box-sizing: border-box;
 }
 .account-admin-page.admin-shell .pw-half-rehearsal {
-  position: sticky;
-  top: var(--ad-sp-3, 12px);
-  max-height: calc(100vh - 2 * var(--ad-sp-3, 12px));
-  overflow: auto;
   border: 1px solid var(--ad-border);
   border-radius: var(--ad-radius);
   background: var(--ad-surface);
+}
+/* Part 40: both halves are as tall as the window leaves them (from the top of the split to the bar at the bottom), start at the same line and
+   scroll on their own. Nothing inside a half scrolls or clips: the table is cut by the half's edge only, and the half scrolls to it. */
+.account-admin-page.admin-shell .pw-split {
+  align-items: stretch;
+  height: max(360px, calc(100dvh - var(--pw-split-top, 210px) - 80px));
+}
+.account-admin-page.admin-shell .pw-split > .pw-half {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.account-admin-page.admin-shell .pw-half .rh-pane {
+  overflow: visible;
 }
 .account-admin-page.admin-shell .rh-inline.rh {
   display: grid;
@@ -20449,6 +20478,58 @@ html.theme-fade *::after {
   .sound-bars .pk-played {
     transition: none;
   }
+}
+/* Part 40: ONE layout for every home card, the front card and the ones beside it: the avatar circle at the top (the initials in the same
+   circle when there is no picture), the nickname at its own size with its vertical centre at 61.8% of the card's height, the welcome
+   voice bar directly below it. Everything is placed from the card's own box, so no state of the card (front, side, hover) moves it.
+   The one thing a side does keep is the side its text hugs, so the sliver that sticks out still shows the name. */
+.page-shell .card-slot .card-face:not(.face-reserve) {
+  --face-avatar: 148px;
+  --face-name-half: calc(var(--name-size, 0.3) * 47.5cqw);
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-main {
+  display: block;
+  flex: none;
+  padding: 0;
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-portrait {
+  position: absolute;
+  top: 46px;
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+  width: var(--face-avatar);
+  height: var(--face-avatar);
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-name {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 61.8%;
+  translate: 0 -50%;
+  font-size: calc(var(--name-size, 0.3) * 100cqw);
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  text-align: left;
+}
+.page-shell .card-slot[data-side="r"] .card-face:not(.face-reserve) .face-name {
+  text-align: right;
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-voice {
+  display: flex;
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: calc(61.8% + var(--face-name-half) + 14px);
+  width: auto;
+}
+.page-shell .card-slot:not(.is-active) .card-face:not(.face-reserve) .face-voice {
+  pointer-events: none;
+}
+.page-shell .card-slot.is-active .card-face:not(.face-reserve) .face-latin {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
 }
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
 @media (prefers-reduced-motion: reduce) {

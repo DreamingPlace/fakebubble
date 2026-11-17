@@ -7,6 +7,7 @@ import { WebClipDirection } from '../../../apps/server/characters/web-clip-direc
 import {
   WebCloudTextGenerator,
   webCloudDirection,
+  webCloudJudge,
   webCloudSpeech,
 } from '../../../apps/server/cloudflare/web-generators.ts';
 import type { WebGenerationBinding } from '../../../packages/contracts/web-generation-rpc.ts';
@@ -51,6 +52,7 @@ export class PreviewBudgetFixture extends WebBudgetObject {
   }
 }
 import { WebBusinessFixture, fixtureClock } from './cloudflare-business-worker.ts';
+import { renewProviderPrices } from '../../../apps/server/generation/web-provider-configuration.ts';
 import { WebStats } from '../../../apps/server/stats/web-stats.ts';
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
 import type { AlarmStorage } from '../../../apps/server/cloudflare/queue-alarm.ts';
@@ -76,6 +78,8 @@ import { syntheticCharacterReview } from './character-review.ts';
 
 /** Part 29: a fixture worker module switches the admin speech path on (as business.ts builds it) before its objects are made. */
 export const fixtureSpeech = { on: false, direction: false };
+/** Part 40: a fixture module switches on what business.ts builds for 多轮预演: the judge, and the Grok / Gemini prices, bounds and ceiling. */
+export const fixtureRehearsal = { on: false };
 /** Real HTTP, SQL, R2 and Alarm with synthetic transports; these operator routes never ship. */
 export class WebHTTPFixture extends WebBusinessFixture {
   private app: WebProviderApplication;
@@ -165,6 +169,11 @@ export class WebHTTPFixture extends WebBusinessFixture {
           }
         },
       });
+    }
+    if (fixtureRehearsal.on && previews && env.GENERATION) {
+      previews.useRehearsalJudge(webCloudJudge(env.GENERATION));
+      Object.assign(this.store, { playerModelChoice: ['deepseek', 'gemini', 'xai'] });
+      renewProviderPrices(this.store, this.clock.now());
     }
     if (fixtureSpeech.on && env.PREVIEW_BUDGET && env.GENERATION) {
       // The production wiring: business object -> WebAdminSpeech -> webCloudSpeech(env.GENERATION) -> generation worker -> Fish.
@@ -297,6 +306,29 @@ export class WebHTTPFixture extends WebBusinessFixture {
         ),
         jobs: this.store.all('SELECT id,status,error_code FROM admin_previews'),
       });
+    if (path === '/fixture/rehearsal/stats')
+      return Response.json({
+        units: this.store.all('SELECT kind,model_key,turn,status,error_code FROM web_rehearsal_units ORDER BY seq'),
+        calls: await this.generation!.stats(),
+        spending: this.store.all('SELECT provider,limit_micros,spent_micros,held_micros FROM web_provider_spending'),
+      });
+    if (path === '/fixture/rehearsal/limit') {
+      const { provider, micros } = (await request.json()) as { provider: string; micros: number };
+      this.store.run('UPDATE web_provider_spending SET limit_micros=? WHERE provider=?', micros, provider);
+      return Response.json({ configured: true });
+    }
+    if (path === '/fixture/rehearsal/capacity') {
+      // Part 40: every Gemini draft ticket taken (full right now) or given back.
+      const { full } = (await request.json()) as { full: boolean };
+      this.store.run(
+        "UPDATE web_external_budgets SET reserved=? WHERE provider='gemini' AND stage='text' AND phase='draft'",
+        full ? 1 : 0,
+      );
+      this.store.run(
+        "UPDATE web_external_budgets SET capacity=1 WHERE provider='gemini' AND stage='text' AND phase='draft'",
+      );
+      return Response.json({ configured: true });
+    }
     if (path === '/fixture/speech/mode') {
       // Part 29: how the fake Fish answers (the generation worker's synthetic modes); the worker itself is the real session.
       await (this.generation as unknown as { configure(mode: string): Promise<void> }).configure(

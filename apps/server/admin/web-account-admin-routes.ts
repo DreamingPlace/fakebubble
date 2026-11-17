@@ -197,7 +197,11 @@ export async function routeWebAccountAdmin(
       return { status: 200, body: characters.compareList(actor) };
     }
     if (action === 'start')
-      return { status: 200, body: characters.compareStart(actor, body(['requestId', 'confirmPaidCalls'])) };
+      return {
+        status: 200,
+        queuesWork: true,
+        body: characters.compareStart(actor, body(['requestId', 'confirmPaidCalls'])),
+      };
     if (action === 'mark')
       return { status: 200, body: characters.compareMark(actor, body(['runId', 'ordinal', 'side', 'mark'])) };
     if (action === 'detail') return { status: 200, body: characters.compareDetail(actor, body(['runId']).runId) };
@@ -256,7 +260,7 @@ export async function routeWebAccountAdmin(
         'withCast',
         'acknowledgeMicros',
       ]);
-      return { status: 200, body: characters.rehearsalStart(actor, characterId(id), rest) };
+      return { status: 200, queuesWork: true, body: characters.rehearsalStart(actor, characterId(id), rest) };
     }
     ensure(false, 'NOT_FOUND');
   }
@@ -312,6 +316,7 @@ export async function routeWebAccountAdmin(
     if (match[2] === 'delete-start')
       return {
         status: 202,
+        queuesWork: true,
         body: characters.deletionStart(actor, id, body(['requestId', 'previewHash', 'acknowledgeDeleteAllChats'])),
       };
     if (match[2] === 'delete-status') {
@@ -449,6 +454,7 @@ export async function routeWebAccountAdmin(
     if (match[2] === 'review-start')
       return {
         status: 202,
+        queuesWork: true,
         body: characters.startPreview(
           actor,
           id,
@@ -467,6 +473,7 @@ export async function routeWebAccountAdmin(
     if (match[2] === 'run-start')
       return {
         status: 202,
+        queuesWork: true,
         body: characters.startRun(
           actor,
           id,
