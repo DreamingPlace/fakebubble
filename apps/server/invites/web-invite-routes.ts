@@ -19,6 +19,8 @@ export type WebInviteResult = {
   issuedAdminCookie?: string;
   /** The transport expires the player cookie (log-out / abandoning a dead session). */
   clearPlayerCookie?: boolean;
+  /** Part 40: the route queued work for the executor (a 预演, a 审核对比, a 多轮预演, a deletion); the transport wakes it. */
+  queuesWork?: boolean;
 };
 function object(value: unknown, keys: string[]) {
   ensure(

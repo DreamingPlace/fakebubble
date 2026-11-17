@@ -63,6 +63,12 @@ export interface RehearsalActor {
 const REQUEST_ID = /^[A-Za-z0-9_.-]{8,64}$/;
 const natural = (n: unknown): n is number => Number.isSafeInteger(n) && Number(n) >= 0;
 /** The clock every estimate is computed at, so a total is a function of the inputs alone. */
+/** Part 40: how many cells carry each code (a cell without a reply that has one). Codes only: never a message or an id. */
+const errorCodes = (cells: readonly { errorCode: string | null }[]) => {
+  const out: Record<string, number> = {};
+  for (const cell of cells) if (cell.errorCode) out[cell.errorCode] = (out[cell.errorCode] ?? 0) + 1;
+  return out;
+};
 const ESTIMATE_AT = Date.parse('2026-11-04T04:00:00Z');
 const REPLY_CHARS = 60;
 
@@ -714,6 +720,7 @@ export class WebRehearsal {
         counts: countReplies(analysed, lists, {
           unconfirmed: cells.filter((c) => c.state === 'unconfirmed').length,
           failed: cells.filter((c) => c.state === 'failed').length,
+          codes: errorCodes(cells),
         }),
       };
     });

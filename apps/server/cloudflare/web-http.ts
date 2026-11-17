@@ -298,8 +298,8 @@ export class WebProviderHTTP {
         routeWebCocreation(app.cocreation, input) ??
         routeWebBilling(app.billing, input) ??
         routeWebInvite(app.inviteActions, input, app.inviteAdmin);
-      if (/\/admin\/characters\/[A-Za-z0-9_-]{1,128}\/(review-start|run-start|delete-start)$/.test(localPath))
-        await this.execution.wake();
+      // Part 40: a route that queues work for the executor says so itself (queuesWork); the transport wakes it.
+      if (result.queuesWork) await this.execution.wake();
       const response = Response.json(result.body, { status: result.status });
       if (result.issuedToken) this.setCookie(response, result.issuedToken, false, false, true);
       else if (result.clearPlayerCookie) this.setCookie(response, '', false, true);

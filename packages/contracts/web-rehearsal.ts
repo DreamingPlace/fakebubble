@@ -166,6 +166,8 @@ export interface RehearsalCounts {
   repeated: number;
   unconfirmed: number;
   failed: number;
+  /** Part 40: the codes of the cells that did not produce a reply (failed, unconfirmed, not sent), each with how many cells carry it. */
+  codes: Record<string, number>;
 }
 export interface RehearsalMemeCell {
   /** One per hint phrasing: did the reply recognise it. null = not judged. */

@@ -82,6 +82,9 @@ class NodeStub {
   setAttribute(name: string, value: string) {
     this.attributes.set(name, value);
   }
+  removeAttribute(name: string) {
+    this.attributes.delete(name);
+  }
   addEventListener(name: string, listener: (event: { preventDefault(): void }) => void) {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
   }
@@ -909,17 +912,90 @@ test('voice queue: blocked autoplay keeps the notice, and a tap continues the qu
   assert.deepEqual(f.fetched, ['v0', 'v0', 'v1']);
 });
 
-test('voice queue: sending a new message stops the old queue', async (t) => {
+// Named exception (Part 38a, owner decision 2026-11-14): this test said "sending a new message stops the old queue".
+// Sending never stops playback now; the next reply's clips wait behind the current one (see the three tests below).
+function nextReply(f: Awaited<ReturnType<typeof voiceFixture>>, count: number) {
+  f.handlers.wait = async (op) => ({ ...op, operationId: 'op2' });
+  f.handlers.history = async () => ({
+    messages: Array.from(
+      { length: count },
+      (_, i) =>
+        ({
+          conversationId: 'c',
+          characterId: 'wei-guagua',
+          operationId: 'op2',
+          createdAt: 2,
+          messageId: 'w' + i,
+          replyOrdinal: i,
+          author: 'character',
+          origin: 'narrative',
+          text: '新语音' + i,
+          audio: { revision: 1, status: 'ready', mediaId: 'newmedia' + i, durationMs: 1000, errorCode: null },
+        }) as WebProviderMessage,
+    ),
+  });
+}
+
+test('voice queue: sending mid-playback never stops it; the new reply waits and plays when the current clip ends', async (t) => {
   const f = await voiceFixture(t, ['voice', 'voice']);
   await f.send();
   await flush();
   const first = f.audios()[0]!;
-  f.handlers.history = async () => ({ messages: [] });
+  nextReply(f, 1);
   await f.send();
-  assert.equal(first.paused, true);
+  await flush();
+  assert.equal(first.paused, false, 'sending does not stop the clip');
+  assert.equal(f.audios().length, 1, 'the new clip waits');
+  assert.equal(f.button('w0').attributes.get('data-queued'), 'true');
   first.end();
   await flush();
+  assert.deepEqual(f.fetched, ['v0', 'v1'], 'the rest of the first reply is still ahead of the new one');
+  f.audios()[1]!.end();
+  await flush();
+  assert.deepEqual(f.fetched, ['v0', 'v1', 'w0']);
+  assert.equal(f.button('w0').attributes.get('data-queued'), undefined);
+  assert.equal(f.button('w0').attributes.get('data-playing'), 'true');
+});
+
+test('voice queue: a message arriving mid-playback is queued, not played over the current one', async (t) => {
+  const f = await voiceFixture(t, ['voice']);
+  await f.send();
+  await flush();
+  nextReply(f, 2);
+  await f.send();
+  await flush();
   assert.equal(f.audios().length, 1);
+  assert.equal(f.button('w0').attributes.get('data-queued'), 'true');
+  assert.equal(f.button('w1').attributes.get('data-queued'), 'true');
+  f.audios()[0]!.end();
+  await flush();
+  f.audios()[1]!.end();
+  await flush();
+  f.audios()[2]!.end();
+  await flush();
+  assert.deepEqual(f.fetched, ['v0', 'w0', 'w1']);
+});
+
+test('voice queue: a manual tap wins over the queue, which then continues from that message; leaving the chat empties it', async (t) => {
+  const f = await voiceFixture(t, ['voice', 'voice']);
+  await f.send();
+  await flush();
+  nextReply(f, 2);
+  await f.send();
+  await flush();
+  f.button('w0').dispatch('click');
+  await flush();
+  assert.equal(f.audios()[0]!.paused, true, 'the tap interrupts the clip that was playing');
+  assert.deepEqual(f.fetched, ['v0', 'w0']);
+  assert.equal(f.button('w0').attributes.get('data-queued'), undefined);
+  f.audios()[1]!.end();
+  await flush();
+  assert.deepEqual(f.fetched, ['v0', 'w0', 'w1'], 'continues after the tapped message');
+  f.binding.stopVoice();
+  assert.equal(f.button('v1').attributes.get('data-queued'), undefined, 'the queue is empty after leaving');
+  f.audios()[2]!.end();
+  await flush();
+  assert.equal(f.audios().length, 3);
 });
 
 test('welcome audio remains demand-only: connecting/attaching creates no audio, tapping plays only that welcome', async (t) => {

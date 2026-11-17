@@ -19,7 +19,7 @@ import { applyTextReview, DROP_INVALID_METADATA, parseTextDraft } from '../gener
 import { budgetHash } from '../budget/web-provider-budget-contract.ts';
 import { currentWebPreview, previewDigest, previewPolicy, readWebPreview } from './web-character-preview.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
-import { webCharacterPreviewsRunning } from './web-character-preview-schema.ts';
+import { webOwnPreviewsRunning } from './web-character-preview-schema.ts';
 import { WebReviewCompareRunner, type CompareClaim } from './web-review-compare-runner.ts';
 import { WebRehearsalRunner, type RehearsalClaim, type RehearsalJudgeModel } from './web-rehearsal-runner.ts';
 import type { WebAdminSpeech } from './web-admin-speech.ts';
@@ -219,8 +219,9 @@ export class WebCharacterPreviewRunner {
           this.fail(id, row.deadline_at <= now ? 'PREVIEW_EXPIRED' : 'PREVIEW_INTERRUPTED');
         else this.store.run("UPDATE admin_previews SET status='queued',lease_until=NULL WHERE id=?", id);
       }
+      // Part 40: a 预演 is never starved by a 多轮预演 or a 审核对比: only another 预演 and the live chat's own limit hold it back.
       if (
-        webCharacterPreviewsRunning(this.store) >= 1 ||
+        webOwnPreviewsRunning(this.store) >= 1 ||
         this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='text_running'")!.n >=
           webConcurrency(this.store).maxTextRunning
       )

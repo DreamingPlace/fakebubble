@@ -19,7 +19,7 @@ import { budgetHash } from '../budget/web-provider-budget-contract.ts';
 import { previewDigest, requirePreviewActor } from './web-character-preview.ts';
 import { webCharacterDeleted } from './web-character-deleted.ts';
 import { webCharacterPreviewsRunning } from './web-character-preview-schema.ts';
-import { rehearsalInstalled } from './web-rehearsal-schema.ts';
+import { rehearsalInstalled, rehearsalRunning } from './web-rehearsal-schema.ts';
 import { rehearsalRequest, type RehearsalFrozen } from './web-rehearsal-request.ts';
 import { forbiddenWords } from './web-rehearsal-sets.ts';
 import {
@@ -104,6 +104,14 @@ export interface RehearsalClaim {
 }
 const natural = (n: unknown): n is number => Number.isSafeInteger(n) && Number(n) >= 0;
 const TERMINAL = ['done', 'failed', 'unconfirmed', 'skipped'];
+/** Part 40: calls of one run in flight at once (one per column). */
+const REHEARSAL_PARALLEL = 3;
+/**
+ * The refusals that go away by waiting: nothing is sent, nothing is held, and the same call is tried again later. Everything else
+ * that stops a call before it is sent (price missing, no capacity row, provider or writer not supported, pin mismatch, budget
+ * spent, key missing) does not change by waiting: the unit fails at once with its code.
+ */
+const TEMPORARY_REFUSALS: ReadonlySet<string> = new Set(['WEB_DISPATCH_CAPACITY']);
 
 /**
  * Part 35: runs a 多轮预演 one unit at a time inside the preview queue's single text slot. The guarantees are the preview's:
@@ -292,9 +300,13 @@ export class WebRehearsalRunner {
             u.seq,
           );
       }
+      // Part 40: the columns of a run go in parallel, at most REHEARSAL_PARALLEL in flight and never more than the text slots
+      // the live chat leaves (every console call counts against them). A preview of the administrator does not wait for these:
+      // its own gate ignores them.
       if (
-        webCharacterPreviewsRunning(this.store) >= 1 ||
-        this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='text_running'")!.n >=
+        rehearsalRunning(this.store) >= REHEARSAL_PARALLEL ||
+        webCharacterPreviewsRunning(this.store) +
+          this.store.get<{ n: number }>("SELECT count(*) n FROM web_operations WHERE status='text_running'")!.n >=
           webConcurrency(this.store).maxTextRunning
       )
         return null;
@@ -313,6 +325,16 @@ export class WebRehearsalRunner {
           this.finish(row.run_id, row.seq, 'failed', 'CHARACTER_DELETED');
           continue;
         }
+        // One call in flight per column: its turns (and its judges) stay in order.
+        if (
+          row.model_key !== null &&
+          this.store.get(
+            "SELECT 1 FROM web_rehearsal_units WHERE status='generating' AND run_id=? AND model_key=? LIMIT 1",
+            row.run_id,
+            row.model_key,
+          )
+        )
+          continue;
         const ready = this.readiness(row);
         if (ready.go === 'wait') continue;
         if (ready.go === 'skip') {
@@ -413,15 +435,24 @@ export class WebRehearsalRunner {
       const max = Math.min(inputBound, bytes) + outputTokens,
         held = max * price.upper_micros_per_unit;
       ensure(natural(max) && max > 0 && natural(held) && held > 0, 'REHEARSAL_STAGE_INVALID');
-      ensure(
+      if (
         this.store.run(
           `UPDATE web_external_budgets SET reserved=reserved+1
           WHERE provider=? AND stage='text' AND phase=? AND reserved<capacity`,
           ref.provider,
           priceStage,
-        ).changes === 1,
-        'WEB_DISPATCH_CAPACITY',
-      );
+        ).changes !== 1
+      )
+        // Full right now goes away by waiting; no ticket row at all (or none with room ever) does not.
+        throw new DomainError(
+          this.store.get(
+            "SELECT 1 FROM web_external_budgets WHERE provider=? AND stage='text' AND phase=? AND capacity>0",
+            ref.provider,
+            priceStage,
+          )
+            ? 'WEB_DISPATCH_CAPACITY'
+            : 'WEB_PROVIDER_CAPACITY_MISSING',
+        );
       ensure(
         this.store.run(
           `UPDATE web_provider_spending SET held_micros=held_micros+?
@@ -961,8 +992,13 @@ export class WebRehearsalRunner {
         const review = calls.find((c) => c.phase === 'review');
         if (review?.state === 'known' && review.outcome === 'failed')
           return this.finish(claim.runId, claim.seq, 'failed', 'REHEARSAL_REVIEW_FAILED');
-        // Nothing unresolved and a known draft: requeue until the deadline (a transient refusal), never when aborted.
-        if (!signal.aborted && calls.length > 0 && row.deadline_at > this.now()) {
+        // Part 40: only a refusal that waiting can lift (capacity full right now) goes back to the queue until the deadline.
+        if (
+          !signal.aborted &&
+          error instanceof DomainError &&
+          TEMPORARY_REFUSALS.has(error.code) &&
+          row.deadline_at > this.now()
+        ) {
           this.store.run(
             "UPDATE web_rehearsal_units SET status='queued',lease_until=NULL,retry_at=? WHERE run_id=? AND seq=?",
             this.now() + 10_000,

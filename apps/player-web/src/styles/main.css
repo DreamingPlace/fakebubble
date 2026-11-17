@@ -200,12 +200,6 @@ textarea:focus-visible,
   letter-spacing: -0.04em;
   user-select: none;
 }
-.head-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  font-size: 17px;
-}
 .icon-button {
   width: 44px;
   height: 44px;
@@ -7221,6 +7215,9 @@ button:where(:not(.seg-button, .cost-chip, .admin-nav-collapse, .admin-account-t
   border-color: var(--ad-primary);
   background: var(--ad-primary);
   color: #fff;
+}
+.account-admin-page.admin-shell button.admin-primary {
+  transition-duration: calc(60ms * var(--ad-motion));
 }
 .account-admin-page.admin-shell button.admin-primary:hover:not(:disabled),
 .account-admin-page.admin-shell .cs button.cs-primary:hover:not(:disabled),
@@ -16829,6 +16826,12 @@ button:not(
   margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
+.account-admin-page.admin-shell .rh-code {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ad-muted);
+  overflow-wrap: anywhere;
+}
 .account-admin-page.admin-shell .rh-pane {
   animation: rhIn calc(220ms * var(--ad-motion)) var(--ad-ease) both;
   overflow-x: auto;
@@ -16859,7 +16862,7 @@ button:not(
 .account-admin-page.admin-shell .rh-cell {
   padding: 10px 12px;
   border-bottom: 1px solid var(--ad-hairline);
-  animation: rhIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+  animation: rhFade calc(240ms * var(--ad-motion)) var(--ad-ease) both;
   animation-delay: calc(var(--rh-i, 0) * 20ms * var(--ad-motion));
 }
 .account-admin-page.admin-shell .rh-player {
@@ -16982,6 +16985,15 @@ button:not(
     transform: none;
   }
 }
+/* a reply that lands fades in where it is: it never moves the row (the cells of a turn stay on one line while it arrives) */
+@keyframes rhFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 @keyframes rhPulse {
   50% {
     opacity: 0.25;
@@ -17008,13 +17020,24 @@ button:not(
   box-sizing: border-box;
 }
 .account-admin-page.admin-shell .pw-half-rehearsal {
-  position: sticky;
-  top: var(--ad-sp-3, 12px);
-  max-height: calc(100vh - 2 * var(--ad-sp-3, 12px));
-  overflow: auto;
   border: 1px solid var(--ad-border);
   border-radius: var(--ad-radius);
   background: var(--ad-surface);
+}
+/* Part 40: both halves are as tall as the window leaves them (from the top of the split to the bar at the bottom), start at the same line and
+   scroll on their own. Nothing inside a half scrolls or clips: the table is cut by the half's edge only, and the half scrolls to it. */
+.account-admin-page.admin-shell .pw-split {
+  align-items: stretch;
+  height: max(360px, calc(100dvh - var(--pw-split-top, 210px) - 80px));
+}
+.account-admin-page.admin-shell .pw-split > .pw-half {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.account-admin-page.admin-shell .pw-half .rh-pane {
+  overflow: visible;
 }
 .account-admin-page.admin-shell .rh-inline.rh {
   display: grid;
@@ -19743,7 +19766,7 @@ html.theme-fade *::after {
   color: var(--bb-sub);
 }
 
-/* ---- chat: the header is centred (back | avatar over name | ⋯), as on the Chat board ---- */
+/* ---- chat: the header is centred (back | name | ⋯); no avatar in it, ever (Part 38a) ---- */
 .page-shell .card-slot .chat-head {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr) 56px;
@@ -19772,6 +19795,7 @@ html.theme-fade *::after {
   align-items: center;
   gap: 3px;
   min-width: 0;
+  position: relative;
 }
 .page-shell .chat-head strong {
   position: static;
@@ -19784,10 +19808,23 @@ html.theme-fade *::after {
 .page-shell .chat-head .icon-button {
   color: var(--bb-ink);
 }
+/* the old text of the header, fading out while the new one fades in (Part 38a) */
+.page-shell .chat-head .title-ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--bb-ink);
+  pointer-events: none;
+  white-space: nowrap;
+}
 
 /* ---- avatars: a ring, a thin gap of page colour, then the fill. A character's comes from its colour; the player's from their pick ---- */
-.page-shell .message-avatar,
-.page-shell .chat-mark {
+.page-shell .message-avatar {
   border: 2px solid transparent;
   border-radius: 50%;
   background:
@@ -19797,18 +19834,11 @@ html.theme-fade *::after {
   color: #141414;
   font-weight: 900;
 }
-.page-shell .chat-mark {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  font-size: 10px;
-}
 .page-shell .message-avatar {
   width: 38px;
   height: 38px;
 }
-:root[data-theme="dark"] .page-shell .message-avatar,
-:root[data-theme="dark"] .page-shell .chat-mark {
+:root[data-theme="dark"] .page-shell .message-avatar {
   background:
     linear-gradient(140deg, var(--n-aura-3), var(--n-aura-2)) padding-box,
     conic-gradient(from 200deg, var(--n-accent), var(--n-aura-3), var(--n-aura-2), var(--n-accent)) border-box;
@@ -20830,8 +20860,30 @@ html.theme-fade *::after {
   }
 }
 
+/* ---- Part 38a: a voice message waiting its turn: its bars breathe softly until it plays ---- */
+.page-shell .voice-bubble .play-button[data-queued="true"] .sound-bars {
+  opacity: 0.55;
+  animation: pk-queued 1400ms ease-in-out infinite;
+}
+.page-shell .voice-bubble .play-button .sound-bars {
+  transition: opacity 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes pk-queued {
+  50% {
+    opacity: 0.9;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-shell .voice-bubble .play-button .sound-bars {
+    transition: none;
+  }
+  .page-shell .voice-bubble .play-button[data-queued="true"] .sound-bars {
+    animation: none;
+  }
+}
+
 /* ======================================================================================================================
-   Part 31b (player): a character's picture over the initials (card face 148, arc as before, chat header 36 with a 2.5 px halo, message
+   Part 31b (player): a character's picture over the initials (card face 148, arc as before, message (the chat header has no avatar, Part 38a)
    avatars 30 on the last bubble of a group), the four states, and the 100 ms landing fade of a returning visit. Player selectors only.
    ====================================================================================================================== */
 .page-shell .portrait {
@@ -20909,15 +20961,6 @@ html.theme-fade *::after {
     0 0 0 9px var(--bb-paper, #0c0b10),
     0 0 0 12px var(--n-aura-3);
 }
-.page-shell .chat-head .chat-mark {
-  width: 36px;
-  height: 36px;
-  font-size: 14px;
-  border-width: 2.5px;
-  box-sizing: border-box;
-  position: relative;
-  overflow: hidden;
-}
 .page-shell .message-row .message-avatar {
   width: 30px;
   height: 30px;
@@ -20925,10 +20968,7 @@ html.theme-fade *::after {
   position: relative;
   overflow: hidden;
 }
-/* an avatar only beside the last bubble of a group: the space stays, so the bubbles keep their column */
-.page-shell .message-row.incoming:has(+ .message-row.incoming) > .message-avatar {
-  visibility: hidden;
-}
+/* Part 38a (owner decision 2026-11-15): every character message shows its avatar, not only the last of a group; the player's stay as they are */
 /* a returning visit lands on its card at once; the page fades in over 100 ms (no spin from position 1) */
 .page-shell[data-landing="resume"] .carousel,
 .page-shell[data-landing="resume"] .avatar-nav {
@@ -21152,6 +21192,58 @@ html.theme-fade *::after {
   .sound-bars .pk-played {
     transition: none;
   }
+}
+/* Part 40: ONE layout for every home card, the front card and the ones beside it: the avatar circle at the top (the initials in the same
+   circle when there is no picture), the nickname at its own size with its vertical centre at 61.8% of the card's height, the welcome
+   voice bar directly below it. Everything is placed from the card's own box, so no state of the card (front, side, hover) moves it.
+   The one thing a side does keep is the side its text hugs, so the sliver that sticks out still shows the name. */
+.page-shell .card-slot .card-face:not(.face-reserve) {
+  --face-avatar: 148px;
+  --face-name-half: calc(var(--name-size, 0.3) * 47.5cqw);
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-main {
+  display: block;
+  flex: none;
+  padding: 0;
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-portrait {
+  position: absolute;
+  top: 46px;
+  left: 50%;
+  translate: -50% 0;
+  margin: 0;
+  width: var(--face-avatar);
+  height: var(--face-avatar);
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-name {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 61.8%;
+  translate: 0 -50%;
+  font-size: calc(var(--name-size, 0.3) * 100cqw);
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+  text-align: left;
+}
+.page-shell .card-slot[data-side="r"] .card-face:not(.face-reserve) .face-name {
+  text-align: right;
+}
+.page-shell .card-slot .card-face:not(.face-reserve) .face-voice {
+  display: flex;
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: calc(61.8% + var(--face-name-half) + 14px);
+  width: auto;
+}
+.page-shell .card-slot:not(.is-active) .card-face:not(.face-reserve) .face-voice {
+  pointer-events: none;
+}
+.page-shell .card-slot.is-active .card-face:not(.face-reserve) .face-latin {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
 }
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
 @media (prefers-reduced-motion: reduce) {

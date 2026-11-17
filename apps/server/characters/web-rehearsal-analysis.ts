@@ -88,7 +88,7 @@ export function repeatedReplies(replies: readonly AnalysedReply[]) {
 export function countReplies(
   replies: readonly AnalysedReply[],
   lists: RehearsalPhrases,
-  extra: { unconfirmed: number; failed: number },
+  extra: { unconfirmed: number; failed: number; codes?: Record<string, number> },
 ): RehearsalCounts {
   const n = replies.length;
   const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
@@ -104,6 +104,7 @@ export function countReplies(
     repeated: repeatedReplies(replies),
     unconfirmed: extra.unconfirmed,
     failed: extra.failed,
+    codes: extra.codes ?? {},
   };
 }
 

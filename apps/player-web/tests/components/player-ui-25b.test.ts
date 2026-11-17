@@ -316,16 +316,14 @@ test('a character’s frame comes from its colour (published main colour, else t
     assert.ok(entry.ring.every((c) => /^#[0-9A-F]{6}$/.test(c)));
   }
   // The CSS: ring, then a thin gap of the page's colour, then the fill - for characters and for the player.
-  for (const selector of [
-    '.page-shell .message-avatar,\n.page-shell .chat-mark',
-    '.page-shell .message-row.outgoing::after',
-  ])
+  for (const selector of ['.page-shell .message-avatar', '.page-shell .message-row.outgoing::after'])
     assert.match(rule(selector), /box-shadow: inset 0 0 0 1\.5px var\(--bb-paper\)/, selector);
   assert.match(rule('.page-shell .message-row.outgoing::after'), /var\(--own-a, #ffb295\)/);
-  assert.match(rule('.page-shell .message-avatar,\n.page-shell .chat-mark'), /var\(--frame-a\)/);
+  assert.match(rule('.page-shell .message-avatar'), /var\(--frame-a\)/);
 });
 
-test('the chat header is centred - back, avatar over name, ⋯ - and a phone’s top bar leaves with a fade and a lift, not at once', () => {
+// Named exception (Part 38a, owner decision 2026-11-14): the header has no avatar any more; it is back | name | ⋯.
+test('the chat header is centred - back, name, ⋯ - and a phone’s top bar leaves with a fade and a lift, not at once', () => {
   assert.match(rule('.page-shell .card-slot .chat-head'), /grid-template-columns: 56px minmax\(0, 1fr\) 56px/);
   assert.match(rule('.chat-title'), /align-items: center/);
   assert.match(

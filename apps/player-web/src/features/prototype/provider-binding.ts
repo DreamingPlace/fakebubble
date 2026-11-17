@@ -67,6 +67,24 @@ const play =
   '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 9 6-9 6V6Z"/></svg>';
 
 /** One playable voice bubble; bubbles of the same reply (operationId) form a WeChat-style queue. */
+/**
+ * Part 38a: the header swaps between the nickname and 「正在讲话中」 with a short crossfade: the new text fades in while a
+ * copy of the old one fades out above it. Nothing animates under reduced motion, or where the page has no animations.
+ */
+export function crossfadeTitle(title: HTMLElement, previous: string, ms = 180) {
+  if (typeof title.animate !== 'function' || !title.parentElement) return;
+  if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const ghost = document.createElement('span');
+  ghost.className = 'title-ghost';
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.textContent = previous;
+  title.parentElement.append(ghost);
+  const options = { duration: ms, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' };
+  title.animate([{ opacity: 0 }, { opacity: 1 }], options);
+  const out = ghost.animate([{ opacity: 1 }, { opacity: 0 }], { ...options, fill: 'forwards' });
+  out.onfinish = () => ghost.remove();
+}
+
 type VoiceEntry = {
   message: WebProviderMessage;
   characterId: WebProviderCharacterId;
@@ -84,8 +102,12 @@ export class LiveBinding {
   private readonly voices = new Map<string, VoiceEntry>();
   private readonly replies = new Map<string, VoiceEntry[]>();
   private nowPlaying: VoiceEntry | null = null;
-  private voiceReply: string | null = null;
-  private queueIdle = false;
+  /** Voice messages waiting for the current clip to end, in arrival order (Part 38a). Emptied when the player leaves the chat. */
+  private queue: VoiceEntry[] = [];
+  /** A clip is being fetched: the queue must not start another one. */
+  private loading = false;
+  /** Replies whose clips have been handed to the queue; a clip registered later (same reply) joins it. */
+  private readonly queuedReplies = new Set<string>();
   private generation = 0;
   private readonly loaded = new Set<string>();
   private readonly shown = new Set<string>();
@@ -660,6 +682,7 @@ export class LiveBinding {
       this.stopVoice();
       this.voices.clear();
       this.replies.clear();
+      this.queuedReplies.clear();
       this.loaded.clear();
       this.shown.clear();
       for (const character of prior.characters)
@@ -848,8 +871,9 @@ export class LiveBinding {
   /** Stops the current clip and drops the whole voice queue (leaving the chat, new message, page hidden). */
   stopVoice() {
     this.generation++;
-    this.voiceReply = null;
-    this.queueIdle = false;
+    this.clearQueued();
+    this.queue = [];
+    this.loading = false;
     this.stopAudio();
   }
 
@@ -872,7 +896,7 @@ export class LiveBinding {
     const finish = () => {
       if (this.audio !== audio) return;
       this.stopAudio();
-      if (entry) this.advance(entry);
+      this.pump();
     };
     // Part 24k-2: the played part of the pill's progress line and of the chat's sound bars is painted in the character's main.
     audio.addEventListener('timeupdate', () => {
@@ -898,23 +922,48 @@ export class LiveBinding {
     return !document.hidden && !!entry.card?.classList.contains('is-chat');
   }
 
-  private advance(entry: VoiceEntry) {
-    const list = this.replies.get(entry.message.operationId ?? entry.message.messageId) ?? [];
-    const next = list.slice(list.indexOf(entry) + 1).find((item) => !item.played);
-    if (!next) {
-      this.queueIdle = true;
+  private get playbackBusy() {
+    return this.loading || this.audio !== null;
+  }
+
+  /** Puts a voice message at the back of the queue; it plays when the current clip ends (at once if nothing plays). */
+  private enqueue(entry: VoiceEntry) {
+    if (!entry.message.audio?.mediaId || entry.played || this.queue.includes(entry) || this.nowPlaying === entry)
       return;
+    this.queue.push(entry);
+    entry.button?.setAttribute('data-queued', 'true');
+    this.pump();
+  }
+
+  /** Starts the next waiting clip when nothing is playing. Leaving the chat or hiding the page drops the queue. */
+  private pump() {
+    if (this.playbackBusy) return;
+    let next: VoiceEntry | undefined;
+    while ((next = this.queue.shift())) {
+      next.button?.removeAttribute('data-queued');
+      if (!next.played) break;
     }
+    if (!next) return;
     if (this.canContinue(next)) void this.playEntry(next);
     else this.stopVoice();
+  }
+
+  private clearQueued() {
+    for (const entry of this.queue) entry.button?.removeAttribute('data-queued');
+  }
+
+  /** The clips of a freshly published reply go to the queue in order (history never auto-plays). */
+  private queueReply(operationId: string) {
+    this.queuedReplies.add(operationId);
+    for (const entry of this.replies.get(operationId) ?? []) this.enqueue(entry);
   }
 
   private register(entry: VoiceEntry) {
     const operationId = entry.message.operationId ?? entry.message.messageId;
     this.voices.set(entry.message.messageId, entry);
     this.replies.set(operationId, [...(this.replies.get(operationId) ?? []), entry]);
-    // A clip arriving after the queue ran dry joins the same reply's queue.
-    if (this.voiceReply === operationId && this.queueIdle && this.canContinue(entry)) void this.playEntry(entry);
+    // A clip arriving after its reply was queued joins the queue behind whatever is waiting.
+    if (this.queuedReplies.has(operationId)) this.enqueue(entry);
   }
 
   /** The welcome of one character, from the pill on its card or the bubble in its chat; `button` shows that it is playing. */
@@ -942,6 +991,13 @@ export class LiveBinding {
       button: null,
       played: false,
     };
+    // A tap on purpose wins over whatever plays or waits; the queue then continues from this message: the rest of
+    // its own reply first, then what was already waiting.
+    const reply = this.replies.get(message.operationId ?? message.messageId) ?? [];
+    const following = reply.slice(reply.indexOf(entry) + 1).filter((item) => !item.played);
+    this.clearQueued();
+    this.queue = [...new Set([...following, ...this.queue])].filter((item) => item !== entry);
+    for (const item of this.queue) item.button?.setAttribute('data-queued', 'true');
     await this.playEntry(entry);
   }
 
@@ -950,9 +1006,9 @@ export class LiveBinding {
     if (!message.audio?.mediaId || this.catalogChanged) return;
     const revision = this.viewRevision;
     const generation = ++this.generation;
-    this.voiceReply = message.operationId ?? message.messageId;
-    this.queueIdle = false;
+    entry.button?.removeAttribute('data-queued');
     this.stopAudio();
+    this.loading = true;
     try {
       const bytes = await this.api.audio({
         characterId,
@@ -961,11 +1017,13 @@ export class LiveBinding {
         mediaId: message.audio.mediaId,
       });
       if (this.catalogChanged || revision !== this.viewRevision || generation !== this.generation) return;
+      this.loading = false;
       this.start(URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })), entry);
     } catch (error) {
       if (generation !== this.generation) return;
-      this.voiceReply = null;
+      this.loading = false;
       this.fail(error);
+      this.pump();
     }
   }
 
@@ -1047,7 +1105,12 @@ export class LiveBinding {
 
   private speaking(characterId: WebProviderCharacterId, card: HTMLElement, active: boolean) {
     const title = card.querySelector<HTMLElement>('.chat-head strong');
-    if (title) title.textContent = active ? '正在讲话中' : this.shell!.name(characterId);
+    if (!title) return;
+    const next = active ? '正在讲话中' : this.shell!.name(characterId);
+    if (title.textContent === next) return;
+    const previous = title.textContent ?? '';
+    title.textContent = next;
+    crossfadeTitle(title, previous);
   }
 
   private async present(
@@ -1104,7 +1167,7 @@ export class LiveBinding {
       this.shell?.say('上一条还在回复中');
       return;
     }
-    this.stopVoice();
+    // Part 38a: sending never stops playback; a reply's clips wait behind whatever is playing.
     this.busy = true;
     this.sendingCharacter = characterId;
     const revision = this.viewRevision;
@@ -1178,11 +1241,7 @@ export class LiveBinding {
       echo.remove();
       await this.present(characterId, card, page.messages, operation.operationId, revision);
       if (revision !== this.viewRevision || this.catalogChanged) return;
-      const first = page.messages.find(
-        (message) =>
-          message.operationId === operation.operationId && message.author === 'character' && message.audio?.mediaId,
-      );
-      if (first && !document.hidden && card.classList.contains('is-chat')) void this.playMessage(characterId, first);
+      if (!document.hidden && card.classList.contains('is-chat')) this.queueReply(operation.operationId);
     } catch (error) {
       if (revision !== this.viewRevision) {
         this.fail(error);

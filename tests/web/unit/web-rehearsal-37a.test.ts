@@ -454,3 +454,103 @@ test('37a-2 roster: the other published characters in catalog order, cards only 
   assert.deepEqual(names, expected, "the console's catalog order (no cast file published: the public names)");
   assert.ok(!JSON.stringify(roster).includes('persona'), 'no setting travels');
 });
+
+// ---- Part 40: columns in parallel, a 预演 is never starved, refusals ---------------------------------------------------------
+
+test('40 parallel: the columns of a run are claimed side by side (at most 3, one call per column), a column keeps its turns in order', async (t) => {
+  const f = fixture(t);
+  const { runId } = f.start({ models: ['deepseek', 'deepseek-v8', 'gemini', 'xai'] });
+  const r = f.runner();
+  const first = [r.claim(), r.claim(), r.claim()];
+  assert.ok(
+    first.every((c) => c?.rehearsal),
+    'three claims at once',
+  );
+  const keys = first.map(
+    (c) =>
+      f.store.get<{ model_key: string; turn: number }>(
+        'SELECT model_key,turn FROM web_rehearsal_units WHERE run_id=? AND seq=?',
+        runId,
+        c!.rehearsal!.seq,
+      )!,
+  );
+  assert.equal(new Set(keys.map((k) => k.model_key)).size, 3, 'three different columns');
+  assert.ok(
+    keys.every((k) => k.turn === 1),
+    'each is on its first turn',
+  );
+  assert.equal(r.claim(), null, 'a fourth call waits: three in flight');
+  // run them side by side
+  await Promise.all(first.map((c) => r.run(c!, signal())));
+  // the next claims: the fourth column's first turn, then second turns, never the same column twice at once
+  const next = [r.claim(), r.claim(), r.claim()];
+  const nextKeys = next.map(
+    (c) =>
+      f.store.get<{ model_key: string }>(
+        'SELECT model_key FROM web_rehearsal_units WHERE run_id=? AND seq=?',
+        runId,
+        c!.rehearsal!.seq,
+      )!.model_key,
+  );
+  assert.equal(new Set(nextKeys).size, 3);
+  for (const c of next) await r.run(c!, signal());
+  await drain(f);
+  const detail = f.chars.rehearsalDetail(f.auth, CHARACTER, runId);
+  assert.ok(detail.columns.every((c) => c.cells.every((cell) => cell.state === 'done')));
+  assert.equal(f.store.get<{ n: number }>('SELECT sum(reserved) n FROM web_external_budgets')!.n, 0);
+});
+
+test('40 never starved: a 预演 of the administrator is claimed while 多轮预演 calls are in flight', async (t) => {
+  const f = fixture(t);
+  f.start({ models: ['deepseek', 'gemini'] });
+  const r = f.runner();
+  const flying = [r.claim(), r.claim()];
+  assert.ok(flying.every((c) => c?.rehearsal));
+  const preview = f.chars.startPreview(f.auth, CHARACTER, {
+    requestId: 'preview-40-0001',
+    draftRevision: f.saved.revision,
+    profileHash: f.saved.contentHash,
+    message: '你好呀',
+  });
+  const claimed = r.claim();
+  assert.ok(claimed && !claimed.rehearsal && !claimed.compare, 'the preview is taken first');
+  assert.equal(claimed.id, preview.previewId);
+  // another preview waits for this one (one at a time), but the rehearsal calls in flight do not count against it
+  for (const c of flying) await r.run(c!, signal());
+});
+
+test('40 refusals: a refusal waiting cannot lift fails the cell at once with its code; capacity full only waits', async (t) => {
+  const f = fixture(t);
+  const { runId } = f.start({ models: ['gemini'] });
+  const r = f.runner();
+  // capacity full right now: nothing sent, the cell goes back and waits (retry later), no code, not failed
+  f.store.run(
+    "UPDATE web_external_budgets SET reserved=capacity WHERE provider='gemini' AND stage='text' AND phase='draft'",
+  );
+  const waiting = r.claim()!;
+  await r.run(waiting, signal());
+  const unit = (seq: number) =>
+    f.store.get<{ status: string; error_code: string | null; retry_at: number }>(
+      'SELECT status,error_code,retry_at FROM web_rehearsal_units WHERE run_id=? AND seq=?',
+      runId,
+      seq,
+    )!;
+  assert.deepEqual([unit(waiting.rehearsal!.seq).status, unit(waiting.rehearsal!.seq).error_code], ['queued', null]);
+  assert.equal(f.sent.length, 0);
+  assert.equal(r.claim(), null, 'it is not retried before its time');
+  f.store.run("UPDATE web_external_budgets SET reserved=0 WHERE provider='gemini' AND stage='text' AND phase='draft'");
+  // no ticket row: not temporary, the cell fails at once with its code
+  f.store.run("DELETE FROM web_external_budgets WHERE provider='gemini' AND stage='text' AND phase='draft'");
+  f.tick(11_000);
+  const refused = r.claim()!;
+  await r.run(refused, signal());
+  assert.deepEqual(
+    [unit(refused.rehearsal!.seq).status, unit(refused.rehearsal!.seq).error_code],
+    ['failed', 'WEB_PROVIDER_CAPACITY_MISSING'],
+  );
+  assert.equal(f.sent.length, 0, 'nothing was sent');
+  const detail = f.chars.rehearsalDetail(f.auth, CHARACTER, runId);
+  assert.equal(detail.columns[0]!.cells[0]!.errorCode, 'WEB_PROVIDER_CAPACITY_MISSING');
+  assert.equal(detail.columns[0]!.counts.failed, 1);
+  assert.equal(detail.columns[0]!.counts.codes.WEB_PROVIDER_CAPACITY_MISSING, 1);
+});
