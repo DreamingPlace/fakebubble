@@ -196,7 +196,10 @@ try {
       ),
     );
     assert.equal(await active(page), 'character-chen-jimi');
-    assert.equal(await page.locator('.card-slot.is-active .face-portrait').count(), 0, 'no circle without a picture');
+    // Part 40 (named exception, the owner's card spec): every card has the avatar circle at the top; without a picture it holds the initials.
+    assert.equal(await page.locator('.card-slot.is-active .face-portrait').count(), 1, 'the circle holds the initials');
+    assert.equal(await page.locator('.card-slot.is-active .face-portrait img').count(), 0, 'no picture in it');
+    // Part 38a (owner decision 2026-11-14): the chat header has no avatar at all, so no .chat-mark exists (stricter than .has-portrait).
     assert.equal(await page.locator('.card-slot.is-active .chat-mark').count(), 0);
     await snap(page, 'card-no-avatar-m');
     await ctx.close();
