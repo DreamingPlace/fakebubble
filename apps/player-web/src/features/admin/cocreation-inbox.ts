@@ -31,6 +31,11 @@ import { exactCount, hoverValue } from './ui/hover-value.ts';
 import { fillStatus, pageHead } from './ui/page-head.ts';
 import { dot } from './cast/cast-ui.ts';
 import { rosterColours } from './ui/character-colour.ts';
+import { consoleOrder } from './ui/console-order.ts';
+import { segmented } from './ui/segmented.ts';
+import { relationPanel } from './cocreation-relation-panel.ts';
+import { relationsView } from './cocreation-relations-view.ts';
+import type { CocreationRelationsClient, RelationDetail } from '../../services/cocreation-admin-api.ts';
 
 type Deps = {
   api: Pick<CocreationAdminClient, 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
@@ -52,6 +57,10 @@ type Deps = {
   copy?: (text: string) => Promise<void>;
   /** The points a player gets when a note is adopted (积分发放 → 共创积分); shown as 采用 +N when known. */
   adoptPoints?: () => Promise<number | null>;
+  /** Part 39: relation notes (two to eight characters): the panel in the detail and the view 玩家眼中的关系. Absent = neither exists. */
+  relations?: Pick<CocreationRelationsClient, 'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy'>;
+  /** A fresh request id (adoption, 整理); default: crypto.randomUUID. */
+  newId?: () => string;
 };
 
 type Template = { persona?: string; authorCanon?: { settings?: Record<string, unknown> } } & Record<string, unknown>;
@@ -72,6 +81,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   let items: InboxItem[] = [];
   let next: InboxCursor | null = null;
   let names: Record<string, string> = {};
+  /** The characters of the filter chips in the console's order (首页顺序). */
+  let orderIds: string[] = [];
   let active = -1;
   let detail: InboxDetail | null = null;
   let loadingDetail: string | null = null;
@@ -139,7 +150,41 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     empty,
     list,
   );
-  root.replaceChildren(pageHead('共创收件箱', counts, bulk), h('div', { class: 'cc-layout' }, listColumn));
+  const layout = h('div', { class: 'cc-layout' }, listColumn);
+  // Part 39: 玩家眼中的关系 is a second view of this page (only when the page has the relation client).
+  const viewHost = h('div', { class: 'cr-view', hidden: true });
+  let showing: 'inbox' | 'relations' = 'inbox';
+  const viewStatus = h('span', { class: 'head-status', hidden: true });
+  const relations = deps.relations
+    ? relationsView(viewHost, { api: deps.relations, nameOf: (id) => nameOf(id), colour: (id) => colourOf()(id) })
+    : null;
+  const switcher = relations
+    ? segmented(
+        '视图',
+        [
+          { id: 'inbox' as const, label: '投稿' },
+          { id: 'relations' as const, label: '玩家眼中的关系' },
+        ],
+        'inbox',
+        (id) => {
+          showing = id;
+          layout.hidden = id !== 'inbox';
+          viewHost.hidden = id !== 'relations';
+          counts.hidden = id !== 'inbox' || !bulk.hidden;
+          viewStatus.hidden = id !== 'relations';
+          if (id === 'relations')
+            void deps.run(async () => {
+              await relations.load();
+              viewStatus.textContent = relations.status.textContent ?? '';
+            });
+        },
+      )
+    : null;
+  root.replaceChildren(
+    pageHead('共创收件箱', switcher?.root, viewStatus, counts, bulk),
+    layout,
+    ...(relations ? [viewHost] : []),
+  );
 
   // ---- list -----------------------------------------------------------------------------------------------------
   const chip = (label: string, on: boolean, pick: () => void, count?: number, lead?: Node) => {
@@ -163,9 +208,9 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     const fresh = newPer();
     characterChips.replaceChildren(
       chip('全部角色', filter.characterId === null, () => pickFilter({ characterId: null })),
-      ...Object.entries(names).map(([id, name]) =>
+      ...orderIds.map((id) =>
         chip(
-          name,
+          nameOf(id),
           filter.characterId === id,
           () => pickFilter({ characterId: id }),
           fresh.get(id),
@@ -190,8 +235,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         : '还没有玩家的想法。';
     const manage = deps.canManage();
     archiveSelected.hidden = !manage || selected.size === 0;
-    bulk.hidden = archiveSelected.hidden;
-    counts.hidden = !bulk.hidden;
+    bulk.hidden = archiveSelected.hidden || showing !== 'inbox';
+    counts.hidden = !bulk.hidden || showing !== 'inbox';
     archiveSelected.textContent = `归档所选（${selected.size}）`;
     processSelected.textContent = `标为已处理（${selected.size}）`;
     bulkCount.textContent = `已选 ${selected.size} 条`;
@@ -246,6 +291,11 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           { class: 'cc-chips' },
           item.kind === 'memo' ? h('span', { class: 'cc-chip cc-chip-memo', text: '留言条' }) : null,
           item.kind === 'pair' ? h('span', { class: 'cc-chip cc-chip-pair', text: '关系与故事' }) : null,
+          item.kind === 'pair' && item.decision === 'adopted'
+            ? h('span', { class: 'cc-chip cc-chip-adopted', text: '已采纳' })
+            : null,
+          item.kind === 'pair' && item.decision === 'rejected' ? h('span', { class: 'cc-chip', text: '不采纳' }) : null,
+          item.kind === 'pair' && item.excluded ? h('span', { class: 'cc-chip', text: '不计入' }) : null,
           h('span', { class: 'cc-count', text: `${item.answerCount} 条` }),
           item.adoptedCount > 0
             ? h('span', { class: 'cc-chip', text: `已采用 ${item.adoptedCount}/${item.answerCount}` })
@@ -286,7 +336,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
 
   const load = async (cursor: InboxCursor | null = null) => {
     try {
-      names = Object.fromEntries((await deps.characters.list()).characters.map((c) => [c.characterId, c.displayName]));
+      // Part 39: the console's order (首页顺序), not this administrator's sidebar order.
+      const listed = (await deps.characters.list()).characters;
+      const order = await (deps.characters as { homeOrder?: () => Promise<string[]> }).homeOrder?.().catch(() => []);
+      const roster = consoleOrder(listed, order ?? []);
+      names = Object.fromEntries(roster.map((c) => [c.characterId, c.displayName]));
+      orderIds = roster.map((c) => c.characterId);
     } catch {
       /* A reader without character access sees ids instead of names. */
     }
@@ -621,6 +676,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     if (target) drafts.delete(target);
   }
   function forgetBoxes() {
+    relationCache.clear();
     boxes.clear();
     chosen.clear();
     inserted.clear();
@@ -849,24 +905,87 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       ),
     );
 
+    const relational = !!deps.relations && current.kind === 'pair';
     pane.replaceChildren(
       h(
         'header',
         { class: 'cc-detail-head' },
-        h('h3', {}, dot(colourOf()(current.characterId), 10), `${whoOf(current)} · ${current.pseudonym}`),
+        h(
+          'h3',
+          {},
+          dot(colourOf()(current.characterId), 10),
+          `${whoOf(items.find((entry) => entry.id === current.id) ?? current)} · ${current.pseudonym}`,
+        ),
         h('p', {
           text: `${when(current.createdAt)}${current.batch ? ` · 邀请批次：${current.batch}` : ''} · ${STATUS_LABEL[current.status]}${current.processedAt ? `（${when(current.processedAt)}）` : ''}`,
         }),
         h('div', { class: 'cc-detail-actions' }, star, ...statusButtons),
       ),
-      h('div', { class: `cc-detail-grid${current.kind === 'memo' ? ' is-single' : ''}` }, left, targetPane(current)),
+      relational
+        ? h('div', { class: 'cc-detail-grid is-single' }, relationBody(current))
+        : h(
+            'div',
+            { class: `cc-detail-grid${current.kind === 'memo' ? ' is-single' : ''}` },
+            left,
+            targetPane(current),
+          ),
     );
+  };
+
+  // ---- Part 39: a relation note (two to eight characters) ---------------------------------------------------------------------
+  const relationCache = new Map<string, RelationDetail>();
+  const newId = () => deps.newId?.() ?? globalThis.crypto.randomUUID();
+  const relationBody = (current: InboxDetail): HTMLElement => {
+    const host = h('div', { class: 'cr-host' }, h('p', { class: 'cc-target-empty', text: '…' }));
+    const show = (found: RelationDetail) => {
+      host.replaceChildren(
+        relationPanel(found, {
+          api: deps.relations!,
+          nameOf,
+          colour: colourOf(),
+          canManage: deps.canManage,
+          canEditCast: () => (deps.canEditCast ? deps.canEditCast() : true),
+          run: deps.run,
+          status: deps.status,
+          newId,
+          changed: (patch) => {
+            const settled =
+              patch.decision === 'adopted' ? 'processed' : patch.decision === 'rejected' ? 'archived' : null;
+            relationCache.set(current.id, { ...(relationCache.get(current.id) ?? found), ...patch } as RelationDetail);
+            patchItem(current.id, { ...patch, ...(settled ? { status: settled } : {}) });
+            if (settled && detail?.id === current.id) detail = { ...detail, status: settled };
+            renderList();
+            if (settled) renderDetail();
+            changed();
+          },
+        }),
+      );
+    };
+    const cached = relationCache.get(current.id);
+    if (cached) show(cached);
+    else
+      void deps
+        .relations!.detail(current.id)
+        .then((found) => {
+          relationCache.set(current.id, found);
+          if (!gone && !deps.disposed() && detail?.id === current.id) show(found);
+        })
+        .catch((caught) => {
+          host.replaceChildren(
+            h('p', { class: 'cc-adopt-error', text: characterAdminError(caught) ?? '读不到这条投稿的内容。' }),
+          );
+        });
+    return host;
   };
 
   /** Who a note is about: a character, both characters of a pair, or the production team. */
   function whoOf(entry: { kind?: InboxItem['kind']; characterId: string; partnerId?: string | null }) {
     if (entry.kind === 'memo') return '制作组';
-    if (entry.kind === 'pair') return `${nameOf(entry.characterId)} × ${nameOf(entry.partnerId ?? '')}`;
+    if (entry.kind === 'pair') {
+      const members = (entry as { memberIds?: string[] }).memberIds;
+      if (members && members.length > 0) return members.map(nameOf).join(' × ');
+      return `${nameOf(entry.characterId)} × ${nameOf(entry.partnerId ?? '')}`;
+    }
     return nameOf(entry.characterId);
   }
   /** 加入关系与故事: reads the cast draft's revision, then adds the story to THAT revision (a draft that moved on is refused). */

@@ -14,6 +14,10 @@ const kindOf = (v: unknown): InboxKind => {
 export type InboxItem = {
   id: string;
   characterId: string;
+  /** Part 39: every member of a relation note (two to eight) in the console's order; absent on older notes. */
+  memberIds?: string[];
+  excluded?: boolean;
+  decision?: 'adopted' | 'rejected' | null;
   /** Absent on a server before migration 131 (every note is a 'character' note then). */
   kind?: InboxKind;
   partnerId?: string | null;
@@ -88,6 +92,11 @@ const item = (v: unknown): InboxItem => {
     characterId: string(r.characterId),
     kind: kindOf(r.kind),
     partnerId: r.partnerId == null ? null : string(r.partnerId),
+    ...(Array.isArray(r.memberIds) ? { memberIds: rows(r.memberIds).map(string) } : {}),
+    ...(typeof r.excluded === 'boolean' ? { excluded: r.excluded } : {}),
+    ...(r.decision === 'adopted' || r.decision === 'rejected' || r.decision === null
+      ? { decision: r.decision as 'adopted' | 'rejected' | null }
+      : {}),
     createdAt: count(r.createdAt),
     pseudonym: string(r.pseudonym),
     answerCount: count(r.answerCount),
@@ -181,5 +190,139 @@ export class CocreationAdminClient {
   async addToCastStory(id: string, ordinal: number, expectedRevision: number) {
     const r = object(await this.request('cast-story', { id, ordinal, expectedRevision }));
     return { ordinal: count(r.ordinal), castRevision: count(r.castRevision) };
+  }
+}
+
+// ---- Part 39: relation notes (two to eight characters) --------------------------------------------------------------------
+export type RelationMatch =
+  | { kind: 'join'; groupId: string; name: string; stories: number; inDraft: boolean }
+  | { kind: 'new'; suggestedName: string };
+export type RelationDetail = {
+  id: string;
+  /** In the console's order. */
+  members: string[];
+  ratings: { from: string; to: string; stars: number }[];
+  reason: string | null;
+  /** The text the administrator edits (an earlier edit, else what the player wrote). */
+  text: string;
+  originalText: string;
+  excluded: boolean;
+  decision: 'adopted' | 'rejected' | null;
+  match: RelationMatch | null;
+  /** The cast limit that would refuse an adoption right now, as its code (null: none). */
+  blocked: string | null;
+  castRevision: number | null;
+};
+export type RelationPairStat = {
+  from: string;
+  to: string;
+  count: number;
+  average: number | null;
+  distribution: number[];
+  gridValue: number | null;
+};
+export type RelationStats = { pairs: RelationPairStat[]; excludedSubmissions: number; order: string[] };
+export type RelationAdopted = {
+  id: string;
+  groupId: string;
+  joined: boolean;
+  castRevision: number;
+  duplicate: boolean;
+};
+export type TidyResult = { story: string; flags: string[] };
+
+const match = (v: unknown): RelationMatch | null => {
+  if (v === null) return null;
+  const r = object(v);
+  if (r.kind === 'join')
+    return {
+      kind: 'join',
+      groupId: string(r.groupId),
+      name: string(r.name),
+      stories: count(r.stories),
+      inDraft: flag(r.inDraft),
+    };
+  if (r.kind === 'new') return { kind: 'new', suggestedName: string(r.suggestedName) };
+  throw invalid();
+};
+const stars = (v: unknown) => {
+  if (!Number.isInteger(v) || (v as number) < 0 || (v as number) > 5) throw invalid();
+  return v as number;
+};
+
+export class CocreationRelationsClient {
+  private readonly request: (path: string, body: Record<string, unknown>) => Promise<unknown>;
+  constructor(request: (path: string, body: Record<string, unknown>) => Promise<unknown>) {
+    this.request = request;
+  }
+  /** Every character id in the console's order (首页顺序, then the rest by id). */
+  async order(): Promise<string[]> {
+    return rows(object(await this.request('relation/order', {})).order).map(string);
+  }
+  async detail(id: string): Promise<RelationDetail> {
+    const r = object(await this.request('relation/detail', { id }));
+    return {
+      id: string(r.id),
+      members: rows(r.members).map(string),
+      ratings: rows(r.ratings).map((x) => {
+        const e = object(x);
+        return { from: string(e.from), to: string(e.to), stars: stars(e.stars) };
+      }),
+      reason: r.reason === null ? null : string(r.reason),
+      text: string(r.text),
+      originalText: string(r.originalText),
+      excluded: flag(r.excluded),
+      decision: r.decision === null ? null : (string(r.decision) as 'adopted' | 'rejected'),
+      match: match(r.match),
+      blocked: r.blocked === null ? null : string(r.blocked),
+      castRevision: r.castRevision === null ? null : count(r.castRevision),
+    };
+  }
+  async stats(): Promise<RelationStats> {
+    const r = object(await this.request('relation/stats', {}));
+    return {
+      pairs: rows(r.pairs).map((x) => {
+        const e = object(x);
+        const distribution = rows(e.distribution).map(count);
+        if (distribution.length !== 6) throw invalid();
+        return {
+          from: string(e.from),
+          to: string(e.to),
+          count: count(e.count),
+          average: e.average === null ? null : Number(e.average),
+          distribution,
+          gridValue: e.gridValue === null ? null : Number(e.gridValue),
+        };
+      }),
+      excludedSubmissions: count(r.excludedSubmissions),
+      order: rows(r.order).map(string),
+    };
+  }
+  async exclude(id: string, excluded: boolean) {
+    flag(object(await this.request('relation/exclude', { id, excluded })).excluded);
+  }
+  async reject(id: string) {
+    object(await this.request('relation/reject', { id }));
+  }
+  async adopt(input: {
+    id: string;
+    requestId: string;
+    expectedRevision: number;
+    text: string;
+    groupName: string | null;
+  }): Promise<RelationAdopted> {
+    const r = object(await this.request('relation/adopt', input));
+    return {
+      id: string(r.id),
+      groupId: string(r.groupId),
+      joined: flag(r.joined),
+      castRevision: count(r.castRevision),
+      duplicate: flag(r.duplicate),
+    };
+  }
+  /** 整理: one budgeted call; the answer only fills the edit box. */
+  async tidy(id: string, requestId: string): Promise<TidyResult> {
+    const r = object(await this.request('relation/tidy', { id, requestId }));
+    return { story: string(r.story), flags: rows(r.flags).map(string) };
   }
 }

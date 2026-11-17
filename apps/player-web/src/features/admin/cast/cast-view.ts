@@ -20,6 +20,7 @@ import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
 import { dateTimeText } from '../system-format.ts';
 import { historyList, type HistoryEntry } from '../history/history-list.ts';
 import { statusBadge } from '../ui/status-badge.ts';
+import { consoleOrder } from '../ui/console-order.ts';
 import { castDiff, worldChanged } from './cast-version-diff.ts';
 import { castGrid, pairPanel, type GridState } from './cast-grid.ts';
 import { nameCard, seesPanel } from './cast-character.ts';
@@ -582,7 +583,9 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     try {
       const roster = await host.characters.list();
       if (gone()) return;
-      state.roster = roster.characters.map((c) => c.characterId);
+      // Part 39: the grid follows the console's order (首页顺序), not this administrator's sidebar order.
+      const order = await (host.characters as { homeOrder?: () => Promise<string[]> }).homeOrder?.().catch(() => []);
+      state.roster = consoleOrder(roster.characters, order ?? []).map((c) => c.characterId);
       state.rosterNames = new Map(roster.characters.map((c) => [c.characterId, c.displayName]));
     } catch {
       state.roster = [];

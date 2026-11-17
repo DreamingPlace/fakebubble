@@ -5,6 +5,7 @@ import { WebCharacterPreviews } from '../../apps/server/characters/web-character
 import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-character-preview-runner.ts';
 import { WebAdminSpeech } from '../../apps/server/characters/web-admin-speech.ts';
 import { WebClipDirection } from '../../apps/server/characters/web-clip-direction.ts';
+import { WebCocreationTidy } from '../../apps/server/cocreation/web-cocreation-tidy.ts';
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { createHash } from 'node:crypto';
 import { ensure } from '../../packages/domain/errors.ts';
@@ -26,6 +27,7 @@ import {
   WebCloudTextGenerator,
   webCloudEmbeddings,
   webCloudDirection,
+  webCloudTidy,
   webCloudJudge,
   webCloudSpeech,
 } from '../../apps/server/cloudflare/web-generators.ts';
@@ -480,6 +482,10 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         );
         previews.useDirection(direction);
         app.characterAdmin.enableDirection(direction);
+        // Part 39: 整理 in the co-creation inbox: the same Worker route and shared budget, its own pinned prompt.
+        const tidy = new WebCocreationTidy(this.store, this.clock, webCloudTidy(this.env.GENERATION), this.env.BUDGET);
+        previews.useTidy(tidy);
+        app.cocreation.enableTidy(tidy);
         const execution = new WebCloudExecutor(
           this.context,
           this.store,

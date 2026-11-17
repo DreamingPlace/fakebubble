@@ -16,6 +16,7 @@ import {
   type CocreationCard,
 } from '../../../../../packages/contracts/cocreation-cards.ts';
 import { h, length } from './h.ts';
+import { relationFlow, resetRelationDraft, type RelationSend } from './relation-flow.ts';
 
 export interface CocreationApi {
   submitCocreation(input: {
@@ -30,6 +31,10 @@ export interface CocreationApi {
     requestId: string;
     text: string;
   }): Promise<{ submissionId: string; duplicate: boolean; earned?: number }>;
+  /** Part 39: two to eight characters, a pair's ratings and reason, the story. Without it the sheet keeps the old pair card. */
+  submitRelation?(input: RelationSend): Promise<{ submissionId: string; duplicate: boolean; earned?: number }>;
+  /** Part 39: the world background of the latest saved cast draft (plain text), or null. Best effort. */
+  worldBackground?(): Promise<{ background: string | null }>;
   /** Part 24c: the story between this character and another. Without it the sheet has no pair card. */
   submitPair?(input: {
     requestId: string;
@@ -52,6 +57,8 @@ export type CocreationSheetOptions = {
   say?: (message: string) => void;
   /** Part 24c: the other live characters, for the pair story card (id and display name). */
   others?: readonly { characterId: string; name: string }[];
+  /** Part 39: every live character (this one too) in the console order of the home page; the dice and the ＋ pick from it. */
+  everyone?: readonly { characterId: string; name: string }[];
   /** Where the sheet is mounted; defaults to document.body. */
   mount?: HTMLElement;
   random?: () => number;
@@ -140,6 +147,7 @@ export const resetCocreationDrafts = () => {
   drafts.clear();
   memoDraft.text = '';
   memoDraft.pending = null;
+  resetRelationDraft();
 };
 
 const cardMax = (card: CocreationCard) => (card.id === 'free' ? COCREATION_LIMITS.free : COCREATION_LIMITS.text);
@@ -214,7 +222,12 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   ];
 
   // ---- DOM ------------------------------------------------------------------------------------------------------
-  const title = h('strong', { class: 'cc-title', text: cocreationCopy.heading(name), attrs: { id: 'cc-title' } });
+  const relationOn = !!api.submitRelation && (options.everyone?.length ?? 0) >= 2;
+  const title = h('strong', { class: 'cc-title', attrs: { id: 'cc-title' } });
+  // Part 39: with the relation flow the title is the character's name, a button that inserts it at the cursor of the text box.
+  const nameButton = h('button', { class: 'cc-name-btn', text: name, attrs: { type: 'button' } });
+  if (relationOn) title.append(nameButton);
+  else title.textContent = cocreationCopy.heading(name);
   const progress = h('span', { class: 'cc-progress', attrs: { role: 'status', 'aria-live': 'polite' } });
   const closeButton = h('button', {
     class: 'cc-close icon-button',
@@ -246,14 +259,44 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     h('strong', { class: 'cc-thanks-title', text: cocreationCopy.thanks(name) }),
     thanksSub,
   );
+  // Part 39: the world background, plain text, read only (nothing else of the cast).
+  const worldBox = h('div', { class: 'cc-world', hidden: true, attrs: { 'aria-label': '世界背景' } });
+  let lastArea: HTMLTextAreaElement | null = null;
+  const track = (node: HTMLTextAreaElement) => {
+    lastArea = node;
+  };
+  const flow = relationOn
+    ? relationFlow({
+        send: (input) => api.submitRelation!(input),
+        everyone: options.everyone!,
+        random,
+        newRequestId,
+        track,
+        onHead: (head) => {
+          sheet.className = `cc-sheet${head.open ? ' is-rel' : ''}${thankedNow ? ' is-thanked' : ''}`;
+          closeButton.textContent = head.open ? head.glyph : '×';
+          if (head.open) {
+            title.textContent = head.title;
+            progress.textContent = head.progress;
+          } else {
+            title.replaceChildren(nameButton);
+            refresh();
+          }
+        },
+        onSent: (earned) => showThanks(earned),
+      })
+    : null;
+  let thankedNow = false;
   const sheet = h(
     'div',
     { class: 'cc-sheet', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'cc-title' } },
     h('header', { class: 'cc-head' }, closeButton, h('div', { class: 'cc-heading' }, title, progress), shuffleButton),
     usedBanner,
+    worldBox,
     deck,
     dots,
     footer,
+    ...(flow ? [flow.screen] : []),
     thanks,
   );
   // The character's colours travel as custom properties set through the CSSOM (an inline style attribute is refused by the CSP).
@@ -307,6 +350,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     });
     area.value = value;
     const count = h('span', { class: 'cc-count', text: counter(value, max), attrs: { 'aria-hidden': 'true' } });
+    area.addEventListener('focus', () => track(area));
     area.addEventListener('input', () => {
       const next = clean(area.value);
       if (next !== area.value) area.value = next;
@@ -579,7 +623,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     );
     return { root, area, count };
   };
-  const pairCard = others.length > 0 ? buildPairCard() : null;
+  const pairCard = others.length > 0 && !relationOn ? buildPairCard() : null;
 
   // ---- Part 24c: 给制作组的留言条 (a note to the production team; stored and typed as a memo, never rewarded) --------------------
   const memoOpen = h('button', {
@@ -625,7 +669,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
       refs.set(id, ref);
       return ref.root;
     });
-    deck.replaceChildren(...cards, ...(pairCard ? [pairCard.root] : []));
+    deck.replaceChildren(...cards, ...(flow?.available ? [flow.entry] : pairCard ? [pairCard.root] : []));
     dots.replaceChildren(...ids.map((id) => h('i', { class: id === ids[0] ? 'on' : '', attrs: { 'data-dot': id } })));
     refresh();
   };
@@ -738,13 +782,18 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     drafts.delete(characterId);
     busy = false;
     if (closed) return;
+    showThanks(earned);
+  });
+  function showThanks(earned: number) {
+    if (closed) return;
     if (earned > 0) thanksSub.textContent = `${cocreationCopy.thanksSub} ${cocreationCopy.earned(earned)}`;
     else if (options.guest === true) thanksSub.textContent = `${cocreationCopy.thanksSub}\n${cocreationCopy.guestHint}`;
     thanks.hidden = false;
+    thankedNow = true;
     sheet.className = 'cc-sheet is-thanked';
     sendButton.disabled = true;
     timer = setTimeout(() => close(), options.thanksMs ?? 1800);
-  });
+  }
 
   memoSend.addEventListener('click', async () => {
     if (busy || closed || !api.submitMemo || memoDraft.text.trim() === '') return;
@@ -790,10 +839,35 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     opener?.focus?.();
   }
   const onKey = (event: Event) => {
-    if ((event as KeyboardEvent).key === 'Escape' && !busy) close();
+    if ((event as KeyboardEvent).key === 'Escape' && !busy) {
+      if (flow?.isOpen()) flow.back();
+      else close();
+    }
   };
   closeButton.addEventListener('click', () => {
-    if (!busy) close();
+    if (busy) return;
+    // Part 39: in the relation screen this button is one step back (or out to the deck), not the end of the sheet.
+    if (flow?.isOpen()) flow.back();
+    else close();
+  });
+  // Part 39: the character's name inserts itself at the cursor of the text box below (the open card's, else the last one used).
+  nameButton.addEventListener('mousedown', (event) => event.preventDefault());
+  nameButton.addEventListener('click', () => {
+    if (flow?.isOpen()) {
+      flow.insert(name);
+      return;
+    }
+    const target = lastArea ?? (openId ? (refs.get(openId)?.areas[0] ?? null) : null);
+    if (!target) return;
+    const max = Number(target.getAttribute('maxlength') ?? '0') || Infinity;
+    const from = target.selectionStart ?? target.value.length;
+    const to = target.selectionEnd ?? from;
+    const next = clean(target.value.slice(0, from) + name + target.value.slice(to));
+    if (length(next) > max) return;
+    target.value = next;
+    target.setSelectionRange?.(from + name.length, from + name.length);
+    target.focus?.();
+    target.dispatchEvent(new Event('input'));
   });
   document.addEventListener?.('keydown', onKey);
   document.documentElement?.classList?.add('cc-open');
@@ -826,6 +900,16 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     );
   }
 
+  void api.worldBackground?.().then(
+    (world) => {
+      if (closed) return;
+      const text = world.background;
+      worldBox.textContent = text ?? '';
+      worldBox.hidden = !text;
+      flow?.setWorld(text);
+    },
+    () => {},
+  );
   renderDeck();
   mountPoint.append(sheet);
   deck.focus?.();

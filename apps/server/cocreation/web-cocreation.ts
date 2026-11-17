@@ -24,6 +24,7 @@ import type { WebIdentity } from '../identity/web-identity.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { takeIpDaily } from '../admission/web-ip-daily.ts';
 import { cocreationTablesExist } from './web-cocreation-purge.ts';
+import { relationTablesExist } from './web-cocreation-relations-schema.ts';
 import { awardCocreationPoints, cocreationReceiver } from '../admin/web-points-admin.ts';
 import { readDraft, saveDraft } from '../cast/cast-store.ts';
 import {
@@ -34,18 +35,18 @@ import {
   readCocreationPoints,
 } from './web-cocreation-points.ts';
 
-type Auth = { cookie: unknown; csrf: unknown; origin: unknown };
+export type Auth = { cookie: unknown; csrf: unknown; origin: unknown };
 export type CocreationStatus = 'new' | 'processed' | 'archived';
 export type CocreationSubmissionKind = 'character' | 'memo' | 'pair';
 const STATUSES: readonly string[] = ['new', 'processed', 'archived'];
-const identifier = (value: unknown): value is string =>
+export const identifier = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
-const requestIdOk = (value: unknown): value is string =>
+export const requestIdOk = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9_.-]{1,128}$/.test(value);
 const PAGE = 30;
 const BULK_LIMIT = 100;
 
-type SubmissionRow = {
+export type SubmissionRow = {
   id: string;
   character_id: string;
   principal_id: string;
@@ -58,7 +59,7 @@ type SubmissionRow = {
   kind?: CocreationSubmissionKind;
   partner_id?: string | null;
 };
-type AnswerRow = {
+export type AnswerRow = {
   ordinal: number;
   card_id: string;
   target_field: CocreationTargetField;
@@ -83,12 +84,12 @@ const likePattern = (query: string) => `%${query.replace(/[\\%_]/g, (c) => `\\${
  * text that reach a prompt only after an administrator copies them into a draft and publishes it.
  */
 export class WebCocreation {
-  private readonly store: BusinessStore;
-  private readonly clock: Clock;
-  private readonly identity: Pick<WebIdentity, 'authorizeWrite'>;
-  private readonly admin: WebAccountAdmin;
+  protected readonly store: BusinessStore;
+  protected readonly clock: Clock;
+  protected readonly identity: Pick<WebIdentity, 'authorizeWrite'>;
+  protected readonly admin: WebAccountAdmin;
   private readonly key: Buffer;
-  private readonly id: () => string;
+  protected readonly id: () => string;
   constructor(
     store: BusinessStore,
     clock: Clock,
@@ -215,7 +216,7 @@ export class WebCocreation {
    * unpaid; an empty note or one the same player already wrote about the same character / pair earns nothing, silently. Records the
    * digest and the payment on each answer. Returns the points paid. The caller owns the transaction.
    */
-  private payNotes(principalId: string, submissionId: string, scope: string, notes: string[], now: number) {
+  protected payNotes(principalId: string, submissionId: string, scope: string, notes: string[], now: number) {
     if (!cocreationPointsTablesExist(this.store)) return 0;
     const settings = readCocreationPoints(this.store),
       dayStart = Math.floor(now / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs,
@@ -384,7 +385,7 @@ export class WebCocreation {
 
   // ---- administrators -------------------------------------------------------------------------------------------
 
-  private actor(auth: Auth, permission: CocreationAdminPermission) {
+  protected actor(auth: Auth, permission: CocreationAdminPermission) {
     // The tables exist from schema 117; an older database has no inbox.
     ensure(cocreationTablesExist(this.store), 'COCREATION_UNAVAILABLE');
     const actor = this.admin.authorize(auth.cookie, auth.csrf, auth.origin),
@@ -395,7 +396,7 @@ export class WebCocreation {
     );
     return actor;
   }
-  private audit(actor: string, action: string, target: string) {
+  protected audit(actor: string, action: string, target: string) {
     this.store.run(
       'INSERT INTO web_admin_audit(actor_id,action,target_id,created_at) VALUES (?,?,?,?)',
       actor,
@@ -404,7 +405,7 @@ export class WebCocreation {
       this.clock.now(),
     );
   }
-  private row(id: unknown) {
+  protected row(id: unknown) {
     ensure(identifier(id), 'INVALID_REQUEST');
     const row = this.store.get<SubmissionRow>('SELECT * FROM web_cocreation_submissions WHERE id=?', id);
     ensure(row, 'NOT_FOUND');
@@ -455,8 +456,14 @@ export class WebCocreation {
     if (input.characterId !== null) {
       // A pair note is about both of its characters.
       if (this.hasKinds()) {
-        where.push('(s.character_id=? OR s.partner_id=?)');
+        // Part 39: a group of three to eight is about every one of its members.
+        where.push(
+          relationTablesExist(this.store)
+            ? '(s.character_id=? OR s.partner_id=? OR EXISTS (SELECT 1 FROM web_cocreation_members m WHERE m.submission_id=s.id AND m.character_id=?))'
+            : '(s.character_id=? OR s.partner_id=?)',
+        );
         args.push(input.characterId as string, input.characterId as string);
+        if (relationTablesExist(this.store)) args.push(input.characterId as string);
       } else {
         where.push('s.character_id=?');
         args.push(input.characterId as string);
@@ -503,7 +510,7 @@ export class WebCocreation {
       next: rows.length > PAGE ? { createdAt: page.at(-1)!.created_at, id: page.at(-1)!.id } : null,
     };
   }
-  private hasKinds() {
+  protected hasKinds() {
     return cocreationPointsTablesExist(this.store);
   }
   /** `kind` and `partnerId` of a submission; a database before migration 131 only has character notes, and says nothing. */
@@ -630,7 +637,7 @@ export class WebCocreation {
     const actor = this.actor(auth, 'cocreation.manage');
     return this.store.transaction(() => this.adopt(actor.memberId, id, ordinal));
   }
-  private adopt(actorId: string, id: unknown, ordinal: unknown) {
+  protected adopt(actorId: string, id: unknown, ordinal: unknown) {
     ensure(Number.isSafeInteger(ordinal) && (ordinal as number) >= 0 && (ordinal as number) <= 11, 'INVALID_REQUEST');
     const row = this.row(id),
       answer = this.store.get<AnswerRow>(

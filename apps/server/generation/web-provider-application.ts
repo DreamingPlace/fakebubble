@@ -45,7 +45,7 @@ import { castTablesExist } from '../cast/cast-store.ts';
 import { WebSecurityCounters, installWebAdminActions } from '../admin/web-admin-actions.ts';
 import { WebInviteTiers } from '../invites/web-invite-tiers.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
-import { WebCocreation } from '../cocreation/web-cocreation.ts';
+import { WebCocreationRelations } from '../cocreation/web-cocreation-relations.ts';
 import { WebBilling } from '../admission/web-billing.ts';
 import { chatReviewTablesExist } from '../review/web-chat-review.ts';
 import { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
@@ -183,7 +183,7 @@ export class WebProviderApplication {
   readonly characterDeletion: WebCharacterDeletion;
   readonly characterAdmin: WebCharacterAdmin;
   readonly inviteActions: WebInviteActions;
-  readonly cocreation: WebCocreation;
+  readonly cocreation: WebCocreationRelations;
   /** Part 21f: the player's own 消费记录. */
   readonly billing: WebBilling;
   /** CHAT_REVIEW_ENABLED (Part 19): 测试对话. Null with the flag off (and on a database older than schema 122). */
@@ -309,7 +309,7 @@ export class WebProviderApplication {
         })
       : null;
     this.inviteActions = new WebInviteActions(store, clock, config.origin, inviteTiers);
-    this.cocreation = new WebCocreation(
+    this.cocreation = new WebCocreationRelations(
       store,
       clock,
       this.identity,

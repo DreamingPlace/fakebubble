@@ -799,9 +799,19 @@ try {
       // A pair-story note is a co-creation submission too.
       const { phone, view } = await phoneContext('light');
       await open(view);
-      const area = view.locator('.cc-pair textarea').first();
-      assert.equal(await area.count(), 1, 'the pair story card is on offer');
-      await sendWhenReady(view, area, '她们在雨天一起分过一把伞');
+      // Named exception (Part 39, owner-approved board 2026-11-14): the old pair card (a select and a dice) is replaced by the dice card of
+      // the relation flow; the same pair story is now written through its four steps (choose, stars, reason, story).
+      await view.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
+      await view.locator('.cc-rel-dice').click();
+      assert.equal(await view.locator('.cc-rel-chip').count(), 2, 'the dice offers two characters');
+      await view.locator('.cc-rel-next').click();
+      await view.locator('.cc-rate').first().waitFor();
+      for (const row of await view.locator('.cc-rate').all()) await row.locator('[data-stars="3"]').click();
+      await view.locator('.cc-rel-next').click();
+      await view.locator('.cc-rel-area').fill('她们话不多，但互相记得');
+      await view.locator('.cc-rel-next').click();
+      await view.locator('.cc-rel-area').fill('她们在雨天一起分过一把伞');
+      await view.locator('.cc-rel-next').click();
       await view.locator('.cc-thanks:not([hidden])').waitFor({ timeout: 10_000 });
       assert.ok(
         (await view.locator('.cc-thanks-sub').innerText()).includes(hintText),

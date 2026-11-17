@@ -48,3 +48,9 @@ date control only: nothing sent to the server and nothing stored changes.
 | 预演 detail | `状态：…：CODE · <预演 id>` | the sentence; no id in the text |
 | 兑换截止, 设定生日 | native date input | the one date field (YYYY-MM-DD, calendar popover, 7 / 30 / 90 天 / 不限 on 兑换截止) |
 | 积分发放, 邀请与额度, 总览 | plain counts | counts with thousands separators |
+
+## Part 39
+| Where | Words |
+|---|---|
+| 共创收件箱, a relation note | 加入：<组合名> · 新建组合 · 整理 · 采纳 · 不采纳 · 不计入 / 计入 (a story goes into the 草稿; nothing reaches players until 发布) |
+| second view of the inbox | 玩家眼中的关系 (columns 谁对谁 · 评分数 · 平均 · 分布（0–5 星） · 现在的设定) |

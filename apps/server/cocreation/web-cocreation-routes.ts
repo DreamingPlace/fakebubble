@@ -1,6 +1,7 @@
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { WebInviteRequest, WebInviteResult } from '../invites/web-invite-routes.ts';
 import type { WebCocreation } from './web-cocreation.ts';
+import { WebCocreationRelations } from './web-cocreation-relations.ts';
 
 /** The player's one write: POST /api/web/local/cocreation/submit (transport cookie, CSRF header and Origin as for any player write). */
 export const COCREATION_SUBMIT_PATH = '/api/web/local/cocreation/submit';
@@ -15,7 +16,50 @@ export const COCREATION_MEMO_PATH = '/api/web/local/cocreation/memo';
 export const COCREATION_PAIR_PATH = '/api/web/local/cocreation/pair';
 export const COCREATION_REWARDS_PATH = '/api/web/local/cocreation/rewards';
 
+/** Part 39: POST /cocreation/world {} (the public world background), POST /cocreation/relation { requestId, characterIds, ratings, reason, text }. */
+export const COCREATION_WORLD_PATH = '/api/web/local/cocreation/world';
+export const COCREATION_RELATION_PATH = '/api/web/local/cocreation/relation';
+
 export function routeWebCocreation(cocreation: WebCocreation, req: WebInviteRequest): WebInviteResult | null {
+  if (req.path === COCREATION_WORLD_PATH) {
+    ensure(req.method === 'POST' && cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
+    const asked = req.body as Record<string, unknown> | null;
+    ensure(
+      asked !== null && typeof asked === 'object' && !Array.isArray(asked) && Object.keys(asked).length === 0,
+      'INVALID_REQUEST',
+    );
+    ensure(typeof req.playerToken === 'string' && req.playerToken !== '', 'AUTH_REQUIRED');
+    ensure(typeof req.csrf === 'string' && typeof req.origin === 'string', 'CSRF_INVALID');
+    return { status: 200, body: cocreation.worldBackground(req.playerToken, req.csrf, req.origin) };
+  }
+  if (req.path === COCREATION_RELATION_PATH) {
+    ensure(req.method === 'POST' && cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
+    const value = req.body as Record<string, unknown> | null;
+    ensure(
+      value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        Object.keys(value).sort().join(',') === 'characterIds,ratings,reason,requestId,text',
+      'INVALID_REQUEST',
+    );
+    ensure(typeof req.playerToken === 'string' && req.playerToken !== '', 'AUTH_REQUIRED');
+    ensure(typeof req.csrf === 'string' && typeof req.origin === 'string', 'CSRF_INVALID');
+    ensure(typeof req.trustedIpHash === 'string', 'WEB_TRUSTED_IP_REQUIRED');
+    const result = cocreation.submitRelation(
+      req.playerToken,
+      req.csrf,
+      req.origin,
+      {
+        requestId: value.requestId,
+        characterIds: value.characterIds,
+        ratings: value.ratings,
+        reason: value.reason,
+        text: value.text,
+      },
+      req.trustedIpHash,
+    );
+    return { status: result.duplicate ? 200 : 201, body: result };
+  }
   if (req.path === COCREATION_REWARDS_PATH) {
     ensure(req.method === 'POST', 'NOT_FOUND');
     const asked = req.body as Record<string, unknown> | null;
