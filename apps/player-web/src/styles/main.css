@@ -16921,6 +16921,19 @@ button:not(
 .account-admin-page.admin-shell .rh-counts td {
   font-variant-numeric: tabular-nums;
 }
+.account-admin-page.admin-shell .rh-note {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .rh-counts td.rh-over {
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .rh-over-mark {
+  margin-left: 8px;
+  font-size: 12px;
+}
 .account-admin-page.admin-shell .rh-memes tr[data-first="true"] th,
 .account-admin-page.admin-shell .rh-memes tr[data-first="true"] td {
   border-top: 1px solid var(--ad-border);

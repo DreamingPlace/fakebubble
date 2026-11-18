@@ -54,3 +54,10 @@ date control only: nothing sent to the server and nothing stored changes.
 |---|---|
 | 共创收件箱, a relation note | 加入：<组合名> · 新建组合 · 整理 · 采纳 · 不采纳 · 不计入 / 计入 (a story goes into the 草稿; nothing reaches players until 发布) |
 | second view of the inbox | 玩家眼中的关系 (columns 谁对谁 · 评分数 · 平均 · 分布（0–5 星） · 现在的设定) |
+
+## Part 37a-3
+| Where | Words |
+|---|---|
+| 多轮预演 setup, the toggle beside 带关系与故事 | 评估说话方式 (hover: what the judge reads; each column costs one more judge call, already in the total) |
+| 多轮预演 counts, three new rows (only in a run that asked for them) | 说了自己的事 (note: 自己的生活或看法) · 主动起话题 (起了话题或转了话题) · 情绪起伏 (情绪露在用词里). Shown as `n / replies`; 等待 while the judge is out, 未确认 when its result is not known, 未得出 when its answer did not hold |
+| 多轮预演 counts, 以问句结尾 | note 「目标：约三条里不超过一条」; a column above 1 in 3 reads 偏多 |

@@ -24,10 +24,14 @@ import { rehearsalRequest, type RehearsalFrozen } from './web-rehearsal-request.
 import { forbiddenWords } from './web-rehearsal-sets.ts';
 import {
   parseHints,
+  parseStyleVerdict,
   parseVerdict,
   REHEARSAL_HINT_PROMPT,
   REHEARSAL_HINT_PROMPT_SHA256,
   REHEARSAL_JUDGE_OUTPUT_TOKENS,
+  REHEARSAL_STYLE_ITEM,
+  REHEARSAL_STYLE_PROMPT,
+  REHEARSAL_STYLE_PROMPT_SHA256,
   REHEARSAL_VERDICT_PROMPT,
   REHEARSAL_VERDICT_PROMPT_SHA256,
 } from './web-rehearsal-prompts.ts';
@@ -258,6 +262,21 @@ export class WebRehearsalRunner {
         if (unit.status !== 'done') return { go: 'skip', code: 'REHEARSAL_REPLY_MISSING' };
       }
       return { go: 'run' };
+    }
+    if (row.item_key === REHEARSAL_STYLE_ITEM) {
+      // Part 37a-3: the style judge of a column reads every reply of that column, so it waits for all of them.
+      let replies = 0;
+      for (const turn of turns.filter((t) => t.text !== null)) {
+        const unit = this.store.get<Unit>(
+          "SELECT * FROM web_rehearsal_units WHERE run_id=? AND kind='cell' AND model_key=? AND turn=?",
+          row.run_id,
+          row.model_key,
+          turn.turn,
+        );
+        if (!unit || !TERMINAL.includes(unit.status)) return { go: 'wait' };
+        if (unit.status === 'done') replies++;
+      }
+      return replies > 0 ? { go: 'run' } : { go: 'skip', code: 'REHEARSAL_REPLY_MISSING' };
     }
     const item = this.store.get<{ state: string }>(
       'SELECT state FROM web_rehearsal_items WHERE run_id=? AND item_key=?',
@@ -970,11 +989,41 @@ export class WebRehearsalRunner {
     });
   }
 
+  /** Part 37a-3: one call per column: the judge reads all of the column's replies and flags each for the three style readings. */
+  private async style(claim: RehearsalClaim, signal: AbortSignal) {
+    const row = this.live(claim);
+    const turns = this.playerTurns(claim.runId).flatMap((t) => {
+      if (t.text === null) return [];
+      const unit = this.store.get<{ status: string; result_json: string | null }>(
+        "SELECT status,result_json FROM web_rehearsal_units WHERE run_id=? AND kind='cell' AND model_key=? AND turn=?",
+        claim.runId,
+        row.model_key,
+        t.turn,
+      );
+      return unit?.status === 'done' && unit.result_json
+        ? [{ player: t.text, reply: (JSON.parse(unit.result_json) as { bubbles: string[] }).bubbles.join('\n') }]
+        : [];
+    });
+    const text = await this.judgeCall(
+      claim,
+      { system: REHEARSAL_STYLE_PROMPT, sha: REHEARSAL_STYLE_PROMPT_SHA256 },
+      JSON.stringify({ turns }),
+      signal,
+    );
+    const verdict = parseStyleVerdict(text, turns.length);
+    this.store.transaction(() => {
+      this.live(claim);
+      if (!verdict) return this.finish(claim.runId, claim.seq, 'failed', 'REHEARSAL_STYLE_INVALID');
+      this.finish(claim.runId, claim.seq, 'done', null, verdict);
+    });
+  }
+
   async run(claim: RehearsalClaim, signal: AbortSignal) {
     try {
       const row = this.live(claim);
       if (row.kind === 'cell') await this.cell(claim, signal);
       else if (row.kind === 'hint') await this.hint(claim, signal);
+      else if (row.item_key === REHEARSAL_STYLE_ITEM) await this.style(claim, signal);
       else await this.verdict(claim, signal);
       ensure(!signal.aborted, 'REHEARSAL_INTERRUPTED');
     } catch (error) {

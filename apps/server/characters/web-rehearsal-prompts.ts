@@ -18,13 +18,23 @@ export const REHEARSAL_VERDICT_PROMPT = `你在评估一个虚构聊天角色对
 3. ownSide：角色是否站在自己的立场谈这件事（按 item 里的身份：亲历、听说或梗的当事人），没有替别人说、没有当旁白讲解。如果两句暗示都没有被认出，写 null。
 只输出一个 JSON 对象：{"hints":[true,false],"negative":false,"ownSide":true}。不要输出任何别的文字。`;
 
+/** Part 37a-3: the third judge prompt, one call per column: per reply, three yes/no readings of how the character talks. */
+export const REHEARSAL_STYLE_PROMPT = `你在评估一个虚构聊天角色的若干条回复。输入是 JSON：turns 依次是玩家的话 player 和角色的回复 reply。
+请对每条回复分别判断三件事：
+1. own：角色说了自己的事（自己正在做或刚做的事、自己的经历或近况）或自己的看法，而不只是回应对方。
+2. topic：角色自己起了一个话题，或把话题带到了别处，而不只是顺着对方的话答。
+3. emotion：从回复的用词里能读出情绪（高兴、嫌弃、得意、害羞、不耐烦等），而不是平平的陈述。
+只输出一个 JSON 对象，三个数组各与 turns 等长、顺序一致，元素为 true 或 false：{"own":[true,false],"topic":[false,false],"emotion":[true,true]}。不要输出任何别的文字。`;
+
 export const promptHash = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 export const REHEARSAL_HINT_PROMPT_SHA256 = promptHash(REHEARSAL_HINT_PROMPT);
 export const REHEARSAL_VERDICT_PROMPT_SHA256 = promptHash(REHEARSAL_VERDICT_PROMPT);
+export const REHEARSAL_STYLE_PROMPT_SHA256 = promptHash(REHEARSAL_STYLE_PROMPT);
 /** The system prompts the generation Worker will run. */
 export const REHEARSAL_JUDGE_PROMPTS: Readonly<Record<string, string>> = Object.freeze({
   [REHEARSAL_HINT_PROMPT_SHA256]: REHEARSAL_HINT_PROMPT,
   [REHEARSAL_VERDICT_PROMPT_SHA256]: REHEARSAL_VERDICT_PROMPT,
+  [REHEARSAL_STYLE_PROMPT_SHA256]: REHEARSAL_STYLE_PROMPT,
 });
 /** Most tokens a judge answer may use (visible output); the hold adds the input bytes. */
 export const REHEARSAL_JUDGE_OUTPUT_TOKENS = 400;
@@ -90,4 +100,24 @@ export function parseVerdict(text: string): Verdict | null {
   )
     return null;
   return { hints: [hints[0] as boolean, hints[1] as boolean], negative, ownSide };
+}
+
+/** The `item_key` of a column's style judge unit: it is not a meme or a story (their keys never start with a tilde). */
+export const REHEARSAL_STYLE_ITEM = '~style';
+
+export interface StyleVerdict {
+  own: boolean[];
+  topic: boolean[];
+  emotion: boolean[];
+}
+/** The style verdict for exactly `n` replies, or null when it is not exactly the requested shape. */
+export function parseStyleVerdict(text: string, n: number): StyleVerdict | null {
+  const value = parseObject(text);
+  if (!value || Object.keys(value).sort().join(',') !== 'emotion,own,topic') return null;
+  const flags = (v: unknown) =>
+    Array.isArray(v) && v.length === n && v.every((x) => typeof x === 'boolean') ? (v as boolean[]) : null;
+  const own = flags(value.own),
+    topic = flags(value.topic),
+    emotion = flags(value.emotion);
+  return own && topic && emotion ? { own, topic, emotion } : null;
 }

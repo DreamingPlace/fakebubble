@@ -26,7 +26,10 @@ import { characterProfileHash } from '../apps/server/characters/web-character-ca
 import { acceptedAuditEnvelope, auditReply, draftEnvelope, draftWire, toolEnvelope } from '../tests/text-fixtures.ts';
 import { renewProviderPrices } from '../apps/server/generation/web-provider-configuration.ts';
 import type { WebRuntimeStore } from '../apps/server/platform/web-store-contract.ts';
-import { REHEARSAL_HINT_PROMPT_SHA256 } from '../apps/server/characters/web-rehearsal-prompts.ts';
+import {
+  REHEARSAL_HINT_PROMPT_SHA256,
+  REHEARSAL_STYLE_PROMPT_SHA256,
+} from '../apps/server/characters/web-rehearsal-prompts.ts';
 
 /**
  * Part 24b-6: the synthetic site the V3 console is looked at on (the browser audit and the screenshots). A real migrated
@@ -260,6 +263,13 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
     async completeJson(input) {
       await sleep(150);
       const hint = input.systemSha256 === REHEARSAL_HINT_PROMPT_SHA256;
+      // Part 37a-3: the style judge flags each reply in a fixed pattern (the first column shares its own life more often).
+      if (input.systemSha256 === REHEARSAL_STYLE_PROMPT_SHA256) {
+        const n = (JSON.parse(input.user) as { turns: unknown[] }).turns.length;
+        const mod = (k: number) => Array.from({ length: n }, (_, i) => i % k !== 0);
+        const text = JSON.stringify({ own: mod(2), topic: mod(3), emotion: mod(2) });
+        return { text, inputTokens: 600, outputTokens: 60, model: input.model, receipt: { id: 'fake-judge' } };
+      }
       const text = hint
         ? JSON.stringify({ hints: ['那次淋了一身的事还记得吗', '上回在海边那档子事'], negative: '你生日哪天' })
         : JSON.stringify({ hints: [true, false], negative: false, ownSide: true });

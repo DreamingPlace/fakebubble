@@ -37,6 +37,7 @@
     "check:web:writer-37a": "node scripts/check-web-writer-37a-browser.ts",
     "check:web:cocreation-39": "node scripts/check-web-cocreation-39-browser.ts",
     "check:web:welcome-context-37a2": "node scripts/check-web-welcome-context-37a2-browser.ts",
+    "check:web:style-37a3": "node scripts/check-web-style-37a3-browser.ts",
     "check:web:part-40": "node scripts/check-web-part-40-browser.ts",
     "check:web:player-38a": "node scripts/check-web-player-38a-browser.ts"
   },
