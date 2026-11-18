@@ -34,6 +34,15 @@ export const relationCopy = {
   send: '发送',
   sending: '正在发送…',
   vs: '对',
+  /** What each step asks, in the player's words (Part 39b). */
+  chooseTitle: (name: string) => `${name}和谁之间有故事？`,
+  chooseHint: '🎲 随机再加一位，＋ 自己挑；两位可以打分，三位以上写大家的故事。',
+  rateTitle: '他们彼此怎么看？',
+  rateHint: (low: string, high: string) => `0 星是「${low}」，5 星是「${high}」，点星星打分。`,
+  looks: '怎么看',
+  reasonHint: '写一句：你为什么这样打分？比如他们平时怎么相处。',
+  storyHint: '写下他们之间发生过的事。好的故事可能被制作组采纳，成为角色们共同的设定。',
+  groupHint: '写下这几位一起发生过的事，或者只属于他们的梗。好的故事可能被制作组采纳，成为角色们共同的设定。',
   reasonPrompt: '为什么这样打分？',
   pairStory: '他们的故事',
   groupStory: '这几位的故事，或者只属于他们的梗',
@@ -135,7 +144,9 @@ export function relationFlow(options: RelationFlowOptions) {
   // ---- the screen ---------------------------------------------------------------------------------------------------------
   const world = h('div', { class: 'cc-rel-world', hidden: true });
   const chipsRow = h('div', { class: 'cc-rel-chips', attrs: { role: 'list', 'aria-label': '角色' } });
-  const chipsCard = h('div', { class: 'cc-rel-card cc-rel-chipscard' }, chipsRow);
+  const chooseHead = h('p', { class: 'cc-rel-prompt', text: relationCopy.chooseTitle(nameOf(options.anchor)) });
+  const chooseHint = h('p', { class: 'cc-rel-hint', text: relationCopy.chooseHint });
+  const chipsCard = h('div', { class: 'cc-rel-card cc-rel-chipscard' }, chooseHead, chooseHint, chipsRow);
   const bars = h('div', { class: 'cc-rel-bars', attrs: { 'aria-hidden': 'true' } }, ...STEPS.map(() => h('i')));
   const stage = h('div', { class: 'cc-rel-stage' });
   const notice = h('p', { class: 'cc-rel-notice', attrs: { role: 'status', 'aria-live': 'polite' }, hidden: true });
@@ -157,10 +168,23 @@ export function relationFlow(options: RelationFlowOptions) {
     notice.hidden = message === '';
   };
 
-  const area = (label: string, value: string, max: number, onInput: (v: string) => void, rows: number) => {
+  const area = (
+    label: string,
+    hint: string,
+    value: string,
+    max: number,
+    onInput: (v: string) => void,
+    rows: number,
+  ) => {
     const node = h('textarea', {
       class: 'cc-area cc-rel-area',
-      attrs: { rows: String(rows), maxlength: String(max), 'aria-label': label, enterkeyhint: 'done' },
+      attrs: {
+        rows: String(rows),
+        maxlength: String(max),
+        'aria-label': label,
+        placeholder: hint,
+        enterkeyhint: 'done',
+      },
     });
     node.value = value;
     const count = h('span', { class: 'cc-count', text: `${length(value)}/${max}`, attrs: { 'aria-hidden': 'true' } });
@@ -193,6 +217,7 @@ export function relationFlow(options: RelationFlowOptions) {
 
   const renderChips = () => {
     const editable = draft.step === 'choose';
+    chooseHint.hidden = !editable;
     const chips = draft.members.map((id) => {
       const chip = h('span', { class: 'cc-rel-chip', attrs: { role: 'listitem', 'data-member': id } }, nameButton(id));
       if (id === options.anchor) chip.setAttribute('data-anchor', 'true');
@@ -331,8 +356,9 @@ export function relationFlow(options: RelationFlowOptions) {
         'div',
         { class: 'cc-rate-who' },
         nameButton(from, 'cc-rel-name is-inline'),
-        h('em', { text: relationCopy.vs }),
+        h('em', { text: relationCopy.looks }),
         nameButton(to, 'cc-rel-name is-inline'),
+        h('em', { text: '？' }),
       ),
       h('div', { class: 'cc-stars' }, ...buttons),
       wordBox,
@@ -343,6 +369,7 @@ export function relationFlow(options: RelationFlowOptions) {
   const storyBox = () => {
     const { node, count } = area(
       group() ? relationCopy.groupStory : relationCopy.pairStory,
+      group() ? relationCopy.groupHint : relationCopy.storyHint,
       draft.story,
       RELATION_TEXT_MAX,
       (v) => (draft.story = v),
@@ -355,6 +382,7 @@ export function relationFlow(options: RelationFlowOptions) {
       // The names again, right over the box (on a wide screen the left column carries them).
       h('div', { class: 'cc-rel-inline-names' }, ...draft.members.map((id) => nameButton(id))),
       h('p', { class: 'cc-rel-prompt', text: group() ? relationCopy.groupStory : relationCopy.pairStory }),
+      h('p', { class: 'cc-rel-hint', text: group() ? relationCopy.groupHint : relationCopy.storyHint }),
       node,
       h('div', { class: 'cc-meta' }, count),
     );
@@ -369,10 +397,23 @@ export function relationFlow(options: RelationFlowOptions) {
     else if (draft.step === 'rate') {
       const a = options.anchor,
         b = partner();
-      stage.replaceChildren(h('div', { class: 'cc-rel-card cc-rel-rates' }, rate(a, b), rate(b, a)));
+      stage.replaceChildren(
+        h(
+          'div',
+          { class: 'cc-rel-card cc-rel-rates' },
+          h('p', { class: 'cc-rel-prompt', text: relationCopy.rateTitle }),
+          h('p', {
+            class: 'cc-rel-hint',
+            text: relationCopy.rateHint(RELATION_STAR_LABELS[0]!, RELATION_STAR_LABELS[5]!),
+          }),
+          rate(a, b),
+          rate(b, a),
+        ),
+      );
     } else if (draft.step === 'reason') {
       const { node, count } = area(
         relationCopy.reasonPrompt,
+        relationCopy.reasonHint,
         draft.reason,
         RELATION_REASON_MAX,
         (v) => (draft.reason = v),
@@ -384,6 +425,7 @@ export function relationFlow(options: RelationFlowOptions) {
           'div',
           { class: 'cc-rel-card' },
           h('p', { class: 'cc-rel-prompt', text: relationCopy.reasonPrompt }),
+          h('p', { class: 'cc-rel-hint', text: relationCopy.reasonHint }),
           node,
           h('div', { class: 'cc-meta' }, count),
         ),
