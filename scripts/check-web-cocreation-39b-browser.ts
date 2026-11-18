@@ -504,8 +504,17 @@ try {
   await admin.locator('.cc-row-open').first().waitFor({ timeout: 20_000 });
   await quietWait(admin, 900);
   // the note the player just handed over shows its theme AND the question
-  await admin.locator('.cc-row-open', { hasText: '很会逗人' }).first().click();
-  await admin.locator('.cc-card-prompt').first().waitFor({ timeout: 8000 });
+  const noteRow = admin.locator('.cc-row-open', { hasText: '很会逗人' }).first();
+  await noteRow.waitFor({ timeout: 10_000 });
+  // the list may still be settling: open the note again if its detail has not appeared
+  for (let attempt = 0; attempt < 3 && !(await admin.locator('.cc-card-prompt').count()); attempt++) {
+    await noteRow.click();
+    await admin
+      .locator('.cc-card-prompt')
+      .first()
+      .waitFor({ timeout: 4000 })
+      .catch(() => undefined);
+  }
   await quietWait(admin, 600);
   const prompts: string[] = await admin.locator('.cc-card-prompt').allInnerTexts();
   check(
