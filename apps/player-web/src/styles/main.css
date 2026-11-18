@@ -16921,6 +16921,10 @@ button:not(
 .account-admin-page.admin-shell .rh-counts td {
   font-variant-numeric: tabular-nums;
 }
+.account-admin-page.admin-shell .rh-counts tbody th > span {
+  display: block;
+  white-space: nowrap;
+}
 .account-admin-page.admin-shell .rh-note {
   display: block;
   font-size: 12px;
