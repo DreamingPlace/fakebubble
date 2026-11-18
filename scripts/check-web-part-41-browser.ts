@@ -34,7 +34,11 @@ const errors: string[] = [];
 const watch = (page: Page, label: string) => {
   page.on('pageerror', (e: unknown) => errors.push(`${label}: ${String(e)}`));
   page.on('console', (m: { type: () => string; text: () => string }) => {
-    if (m.type() === 'error' && !/Failed to load resource|status of 4\d\d|429/.test(m.text()))
+    // WebKit reports the stylesheet Playwright itself injects while taking a screenshot (it is not the page's): only with a screenshot dir.
+    if (
+      m.type() === 'error' &&
+      !/Failed to load resource|status of 4\d\d|429|Refused to apply a stylesheet/.test(m.text())
+    )
       errors.push(`${label} console: ${m.text()} ${JSON.stringify((m as any).location?.())}`);
   });
 };
