@@ -1948,8 +1948,8 @@ html.cc-open body {
 .cc-rel-plus,
 .cc-rel-x,
 .cc-rel-name,
-.cc-star,
-.cc-zero,
+.cc-rel .cc-star,
+.cc-rel .cc-zero,
 .cc-rel-back,
 .cc-rel-next {
   box-sizing: border-box;
@@ -1993,8 +1993,8 @@ html.cc-open body {
 .cc-rel-plus:focus-visible,
 .cc-rel-x:focus-visible,
 .cc-rel-name:focus-visible,
-.cc-star:focus-visible,
-.cc-zero:focus-visible,
+.cc-rel .cc-star:focus-visible,
+.cc-rel .cc-zero:focus-visible,
 .cc-rel-back:focus-visible,
 .cc-rel-next:focus-visible {
   outline: 3px solid var(--bb-ink);
@@ -2259,8 +2259,8 @@ html.cc-open body {
   gap: 6px;
   min-width: 0;
 }
-.cc-star,
-.cc-zero {
+.cc-rel .cc-star,
+.cc-rel .cc-zero {
   display: grid;
   place-items: center;
   flex: 0 1 44px;
@@ -2275,16 +2275,16 @@ html.cc-open body {
     transform 220ms cubic-bezier(0.3, 1.6, 0.5, 1),
     background 160ms ease;
 }
-.cc-star.is-on {
+.cc-rel .cc-star.is-on {
   color: #f0a62a;
 }
-.cc-star:hover {
+.cc-rel .cc-star:hover {
   transform: scale(1.12);
 }
-.cc-star:active {
+.cc-rel .cc-star:active {
   transform: scale(0.94);
 }
-.cc-zero {
+.cc-rel .cc-zero {
   flex: 0 1 34px;
   margin-right: 4px;
   border: 1.5px solid #cbc4d6;
@@ -2292,7 +2292,7 @@ html.cc-open body {
   font-size: 14px;
   color: #6c6480;
 }
-.cc-zero.is-on {
+.cc-rel .cc-zero.is-on {
   background: var(--bb-ink);
   border-color: var(--bb-ink);
   color: #fff;
@@ -2412,7 +2412,7 @@ html.cc-open body {
   }
 }
 /* Below 900 px the screen is one column, 560 px at most, centred; the chips card only shows while choosing (the names are in the
-   steps themselves) and its menu opens under the chips, so it can never leave the screen. */
+   steps themselves). */
 @media (max-width: 899px) {
   .cc-rel-world {
     display: none;
@@ -2420,15 +2420,14 @@ html.cc-open body {
   .cc-rel:not([data-step="choose"]):not([data-step="group"]) .cc-rel-left {
     display: none;
   }
+  /* ＋ sits on its own row at the left, so its list (which opens to the RIGHT only) always has room on a phone. */
   .cc-rel-plus-wrap {
-    position: static;
+    flex: 0 0 100%;
   }
   .cc-rel-menu {
-    left: 12px;
-    right: 12px;
-    top: calc(100% - 6px);
+    left: 48px;
     min-width: 0;
-    transform-origin: top center;
+    width: min(220px, calc(100vw - 120px));
   }
 }
 /* From 900 px: two columns centred as one block, the people on the left, the steps on the right. */
@@ -10801,6 +10800,138 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell #admin-cocreation .cr-view[hidden] {
   display: none;
 }
+/* ---- Part 39b: 题目, the wording pool in 共创收件箱 ---- */
+.account-admin-page.admin-shell #admin-cocreation .cw-view[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-gap);
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--ad-radius);
+  background: var(--ad-danger-soft);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-error[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-character {
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-card-radius);
+  background: var(--ad-surface);
+  padding: 4px var(--ad-card-pad) var(--ad-card-pad);
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-character > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  cursor: pointer;
+  list-style: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-character > summary::-webkit-details-marker {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-count {
+  margin-left: auto;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-tools {
+  margin: 0 0 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-theme {
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--ad-line);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-theme h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  animation: admin-rise-in var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-row[data-enabled="false"] .cw-text {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-text,
+.account-admin-page.admin-shell #admin-cocreation .cw-new {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-switch,
+.account-admin-page.admin-shell #admin-cocreation .cw-del,
+.account-admin-page.admin-shell #admin-cocreation .cw-add {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-switch[aria-checked="true"] {
+  background: var(--ad-ok-soft);
+  border-color: transparent;
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-del {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
 .account-admin-page.admin-shell #admin-cocreation .cr-pair,
 .account-admin-page.admin-shell #admin-cocreation .cr-who {
   display: inline-flex;
@@ -17990,147 +18121,6 @@ body.legal-page {
 @keyframes guest-note-in {
   from {
     opacity: 0;
-  }
-}
-
-/* ---- Part 39b: 题目, the wording pool in 共创收件箱 ---- */
-.account-admin-page.admin-shell #admin-cocreation .cw-view[hidden] {
-  display: none;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-view {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ad-gap);
-  min-width: 0;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-error {
-  margin: 0;
-  padding: 10px 14px;
-  border-radius: var(--ad-radius);
-  background: var(--ad-danger-soft);
-  color: var(--ad-danger);
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-error[hidden] {
-  display: none;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-character {
-  border: 1px solid var(--ad-line);
-  border-radius: var(--ad-card-radius);
-  background: var(--ad-surface);
-  padding: 4px var(--ad-card-pad) var(--ad-card-pad);
-  min-width: 0;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-character > summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 52px;
-  cursor: pointer;
-  list-style: none;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-character > summary::-webkit-details-marker {
-  display: none;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-count {
-  margin-left: auto;
-  color: var(--ad-muted);
-  font-size: 13px;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-tools {
-  margin: 0 0 12px;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-theme {
-  padding: 10px 0 4px;
-  border-top: 1px solid var(--ad-line);
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-theme h4 {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0 0 8px;
-  padding: 0;
-  list-style: none;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  animation: admin-rise-in var(--ad-t-open) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-row[data-enabled="false"] .cw-text {
-  color: var(--ad-muted);
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-text,
-.account-admin-page.admin-shell #admin-cocreation .cw-new {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid var(--ad-border);
-  border-radius: var(--ad-radius);
-  background: var(--ad-surface);
-  color: var(--ad-text);
-  font: inherit;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-switch,
-.account-admin-page.admin-shell #admin-cocreation .cw-del,
-.account-admin-page.admin-shell #admin-cocreation .cw-add {
-  box-sizing: border-box;
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--ad-border);
-  border-radius: var(--ad-radius);
-  background: var(--ad-surface);
-  color: var(--ad-text);
-  font: inherit;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-switch[aria-checked="true"] {
-  background: var(--ad-ok-soft);
-  border-color: transparent;
-  color: var(--ad-ok);
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-del {
-  color: var(--ad-danger);
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-badge {
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-  font-size: 12px;
-}
-.account-admin-page.admin-shell #admin-cocreation .cw-add-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-}
-@media (max-width: 720px) {
-  .account-admin-page.admin-shell #admin-cocreation .cw-row {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .account-admin-page.admin-shell #admin-cocreation .cw-text {
-    grid-column: 1 / -1;
-    grid-row: 1;
   }
 }
 
