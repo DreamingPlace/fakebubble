@@ -25,6 +25,7 @@ import { WebRehearsalRunner, type RehearsalClaim, type RehearsalJudgeModel } fro
 import type { WebAdminSpeech } from './web-admin-speech.ts';
 import type { WebClipDirection } from './web-clip-direction.ts';
 import type { WebCocreationTidy } from '../cocreation/web-cocreation-tidy.ts';
+import type { WebCocreationWordingGen } from '../cocreation/web-cocreation-wordings-gen.ts';
 import { previewReviewModel } from '../admission/web-review-model.ts';
 import { DEFAULT_REVIEW_MODEL } from '../../../packages/contracts/review-model.ts';
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
@@ -89,6 +90,11 @@ export class WebCharacterPreviewRunner {
   tidy: WebCocreationTidy | null = null;
   useTidy(tidy: WebCocreationTidy) {
     this.tidy = tidy;
+  }
+  /** Part 39b: the 生成 call of the co-creation 「题目」 shares the same recovery (never resent; known bills settle). */
+  wordingGen: WebCocreationWordingGen | null = null;
+  useWordingGen(gen: WebCocreationWordingGen) {
+    this.wordingGen = gen;
   }
   /** Part 35: the judge model of 多轮预演 (hint writing and verdicts). Without it a unit that needs a judge fails before anything is reserved. */
   useRehearsalJudge(judge: RehearsalJudgeModel) {
@@ -278,6 +284,7 @@ export class WebCharacterPreviewRunner {
       this.speech?.nextDue() ?? Infinity,
       this.direction?.pending() ? this.clock.now() + 10_000 : Infinity,
       this.tidy?.pending() ? this.clock.now() + 10_000 : Infinity,
+      this.wordingGen?.pending() ? this.clock.now() + 10_000 : Infinity,
     );
     return Number.isFinite(at) ? at : null;
   }
@@ -305,7 +312,8 @@ export class WebCharacterPreviewRunner {
       other +
       (this.speech ? await this.speech.recoverBills() : 0) +
       (this.direction ? await this.direction.recoverBills() : 0) +
-      (this.tidy ? await this.tidy.recoverBills() : 0)
+      (this.tidy ? await this.tidy.recoverBills() : 0) +
+      (this.wordingGen ? await this.wordingGen.recoverBills() : 0)
     );
   }
   private reserve(id: string, token: string, spec: ProviderCallSpec, wireHash: string, bytes: number) {

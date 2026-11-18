@@ -208,6 +208,30 @@ export async function routeWebAccountAdmin(
       };
     if (action === 'relation/tidy')
       return { status: 200, body: await relations.tidy(actor, body(['id', 'requestId']) as never) };
+    // Part 39b: 「题目」, the wording pool of every character's themes, and its 生成.
+    if (action.startsWith('wordings/')) ensure(cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
+    if (action === 'wordings/list') {
+      body([]);
+      return { status: 200, body: relations.wordingList(actor) };
+    }
+    if (action === 'wordings/add')
+      return {
+        status: 200,
+        body: relations.wordingAdd(actor, body(['characterId', 'themeId', 'text', 'enabled', 'requestId']) as never),
+      };
+    if (action === 'wordings/edit')
+      return { status: 200, body: relations.wordingEdit(actor, body(['id', 'text']) as never) };
+    if (action === 'wordings/toggle')
+      return { status: 200, body: relations.wordingToggle(actor, body(['id', 'enabled']) as never) };
+    if (action === 'wordings/delete')
+      return { status: 200, body: relations.wordingDelete(actor, body(['id']) as never) };
+    if (action === 'wordings/estimate')
+      return { status: 200, body: relations.wordingEstimate(actor, body(['characterIds']) as never) };
+    if (action === 'wordings/generate')
+      return {
+        status: 200,
+        body: await relations.wordingGenerate(actor, body(['characterId', 'requestId', 'acknowledgeMicros']) as never),
+      };
     ensure(false, 'NOT_FOUND');
   }
   // Part 26b: 审核对比 (V4 Pro against V4.1 Flash on a built-in set of synthetic cases), part of 预演.

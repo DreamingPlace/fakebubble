@@ -1,9 +1,11 @@
 /**
- * Part 39: co-creation about the shared world. A dice picks two characters; a 「＋」 adds up to eight (the menu opens to the right only).
- * Two characters (a pair): choose, rate A 对 B and B 对 A in WHOLE stars 0–5 (a small light label under the stars shows the meaning of
- * the value, crossfading), a reason, their story. Three to eight (a group): choose, then the story or running joke. The name of a
- * character is a button that inserts it at the cursor of the text box. Drafts live in memory only. Shared canon: it never creates a
- * player-private story, and the stars are opinions the administrators read.
+ * Part 39 / 39b: co-creation about the shared world, opened FROM one character (A, the anchor). The dice picks a random OTHER character
+ * X (the order of the catalog plays no part) and the relation is A + X; A is always a member and cannot be removed. More members come
+ * from rolling again (🎲 beside the chips) or from the list (＋, opens to the right only), up to eight in all. Exactly two members (a
+ * pair): choose, rate A 对 X and X 对 A in WHOLE stars 0–5 (a small light label under the stars shows the meaning of the value,
+ * crossfading), a reason, their story. Three to eight (a group): choose, then the story or running joke. The name of a character is a
+ * button that inserts it at the cursor of the text box. Drafts live in memory only. Shared canon: it never creates a player-private
+ * story, and the stars are opinions the administrators read.
  */
 import {
   RELATION_MAX_MEMBERS,
@@ -24,6 +26,7 @@ export type RelationSend = {
 };
 export const relationCopy = {
   dice: '🎲 掷一下',
+  rollMore: '再掷一位',
   add: '再加一位',
   remove: '去掉',
   next: '下一步',
@@ -51,6 +54,8 @@ export const relationCopy = {
 type Step = 'choose' | 'rate' | 'reason' | 'story';
 const STEPS: readonly Step[] = ['choose', 'rate', 'reason', 'story'];
 type Draft = {
+  /** The character the screen was opened from: a member for good. A draft of another character is never carried over. */
+  anchor: string;
   members: string[];
   step: Step;
   /** `${from}>${to}` → whole stars; absent = not chosen yet. */
@@ -59,7 +64,15 @@ type Draft = {
   story: string;
   pending: { requestId: string; fingerprint: string } | null;
 };
-const fresh = (): Draft => ({ members: [], step: 'choose', stars: new Map(), reason: '', story: '', pending: null });
+const fresh = (anchor = ''): Draft => ({
+  anchor,
+  members: [],
+  step: 'choose',
+  stars: new Map(),
+  reason: '',
+  story: '',
+  pending: null,
+});
 let draft: Draft = fresh();
 /** Test hook and sign-out: drafts are memory only. */
 export const resetRelationDraft = () => {
@@ -72,6 +85,8 @@ export type RelationFlowOptions = {
   send: (input: RelationSend) => Promise<{ earned?: number }>;
   /** Every live character in the console order of the home page (首页顺序). */
   everyone: readonly RelationPerson[];
+  /** The character the sheet was opened from (Part 39b): always a member of the relation. */
+  anchor: string;
   random: () => number;
   newRequestId: () => string;
   /** The screen opened, moved or closed: what the sheet's header shows. */
@@ -87,8 +102,14 @@ export function relationFlow(options: RelationFlowOptions) {
   const rank = new Map(options.everyone.map((p, at) => [p.characterId, at] as const));
   const nameOf = (id: string) => people.get(id)?.name ?? '';
   const ordered = (ids: readonly string[]) => [...ids].sort((a, b) => (rank.get(a) ?? 1e9) - (rank.get(b) ?? 1e9));
-  // Drop members the live catalog no longer has (a character taken off the home page).
+  // A draft of another character's sheet is not this one's; members the live catalog no longer has are dropped.
+  if (draft.anchor !== options.anchor) draft = fresh(options.anchor);
   draft.members = ordered(draft.members.filter((id) => people.has(id)));
+  if (draft.members.length > 0 && !draft.members.includes(options.anchor)) draft = fresh(options.anchor);
+  /** The one other member of a pair (the anchor is the first side of both ratings). */
+  const partner = () => draft.members.find((id) => id !== options.anchor) ?? '';
+  /** Characters that can still join. */
+  const rest = () => options.everyone.filter((p) => !draft.members.includes(p.characterId));
   let open = false;
   let busy = false;
   let menuOpen = false;
@@ -100,9 +121,7 @@ export function relationFlow(options: RelationFlowOptions) {
   const ready = () => draft.members.length >= RELATION_MIN_MEMBERS;
   const storyOk = () => draft.story.trim() !== '' && length(draft.story) <= RELATION_TEXT_MAX;
   const ratedBoth = () =>
-    pair() &&
-    draft.stars.has(key(draft.members[0]!, draft.members[1]!)) &&
-    draft.stars.has(key(draft.members[1]!, draft.members[0]!));
+    pair() && draft.stars.has(key(options.anchor, partner())) && draft.stars.has(key(partner(), options.anchor));
   const reasonOk = () => draft.reason.trim() !== '' && length(draft.reason) <= RELATION_REASON_MAX;
 
   // ---- the entry card of the deck: the dice ----------------------------------------------------------------------------
@@ -176,7 +195,9 @@ export function relationFlow(options: RelationFlowOptions) {
     const editable = draft.step === 'choose';
     const chips = draft.members.map((id) => {
       const chip = h('span', { class: 'cc-rel-chip', attrs: { role: 'listitem', 'data-member': id } }, nameButton(id));
-      if (editable && draft.members.length > RELATION_MIN_MEMBERS) {
+      if (id === options.anchor) chip.setAttribute('data-anchor', 'true');
+      // The anchor is a member for good; any other can go while two remain.
+      if (editable && id !== options.anchor && draft.members.length > RELATION_MIN_MEMBERS) {
         const x = h('button', {
           class: 'cc-rel-x',
           text: '✕',
@@ -191,8 +212,22 @@ export function relationFlow(options: RelationFlowOptions) {
       }
       return chip;
     });
-    const rest = options.everyone.filter((p) => !draft.members.includes(p.characterId));
-    if (editable && draft.members.length < RELATION_MAX_MEMBERS && rest.length > 0) {
+    const free = rest();
+    if (editable && draft.members.length < RELATION_MAX_MEMBERS && free.length > 0) {
+      const again = h('button', {
+        class: 'cc-rel-again',
+        text: '🎲',
+        attrs: { type: 'button', 'aria-label': relationCopy.rollMore },
+      });
+      again.addEventListener('click', () => {
+        const pool = rest();
+        if (pool.length === 0 || draft.members.length >= RELATION_MAX_MEMBERS) return;
+        draft.members = ordered([...draft.members, pool[Math.floor(options.random() * pool.length)]!.characterId]);
+        menuOpen = false;
+        draft.pending = null;
+        renderAll();
+      });
+      chips.push(again);
       const plus = h('button', {
         class: 'cc-rel-plus',
         text: '＋',
@@ -332,7 +367,8 @@ export function relationFlow(options: RelationFlowOptions) {
     }
     if (draft.step === 'choose') stage.replaceChildren();
     else if (draft.step === 'rate') {
-      const [a, b] = draft.members as [string, string];
+      const a = options.anchor,
+        b = partner();
       stage.replaceChildren(h('div', { class: 'cc-rel-card cc-rel-rates' }, rate(a, b), rate(b, a)));
     } else if (draft.step === 'reason') {
       const { node, count } = area(
@@ -439,10 +475,11 @@ export function relationFlow(options: RelationFlowOptions) {
       return;
     }
     const members = [...draft.members];
+    const other = partner();
     const ratings = pair()
       ? [
-          { from: members[0]!, to: members[1]!, stars: draft.stars.get(key(members[0]!, members[1]!))! },
-          { from: members[1]!, to: members[0]!, stars: draft.stars.get(key(members[1]!, members[0]!))! },
+          { from: options.anchor, to: other, stars: draft.stars.get(key(options.anchor, other))! },
+          { from: other, to: options.anchor, stars: draft.stars.get(key(other, options.anchor))! },
         ]
       : null;
     const input = {
@@ -472,12 +509,12 @@ export function relationFlow(options: RelationFlowOptions) {
 
   // ---- the dice ---------------------------------------------------------------------------------------------------------------
   dice.addEventListener('click', () => {
-    const pool = [...options.everyone];
-    if (pool.length < RELATION_MIN_MEMBERS) return;
-    const first = pool.splice(Math.floor(options.random() * pool.length), 1)[0]!;
-    const second = pool[Math.floor(options.random() * pool.length)]!;
-    draft = fresh();
-    draft.members = ordered([first.characterId, second.characterId]);
+    // A uniformly random OTHER character: the order of the catalog plays no part in the roll.
+    const others = options.everyone.filter((p) => p.characterId !== options.anchor);
+    if (others.length === 0) return;
+    const pick = others[Math.min(others.length - 1, Math.floor(options.random() * others.length))]!;
+    draft = fresh(options.anchor);
+    draft.members = ordered([options.anchor, pick.characterId]);
     open = true;
     renderAll();
   });
@@ -498,6 +535,7 @@ export function relationFlow(options: RelationFlowOptions) {
     },
     insert,
     /** The entry card is only there when at least two characters are live. */
-    available: options.everyone.length >= RELATION_MIN_MEMBERS,
+    available:
+      options.everyone.some((p) => p.characterId === options.anchor) && options.everyone.length >= RELATION_MIN_MEMBERS,
   };
 }

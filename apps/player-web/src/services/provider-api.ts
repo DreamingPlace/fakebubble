@@ -11,6 +11,7 @@ import {
   type CocreationPointsSettings,
 } from '../../../../packages/contracts/cocreation-cards.ts';
 import { parseBillingPage, type BillingPage } from '../../../../packages/contracts/player-billing.ts';
+import { COCREATION_THEME_IDS } from '../../../../packages/contracts/cocreation-wordings.ts';
 import {
   parseWebProviderBootstrap,
   type WebProviderActions,
@@ -271,6 +272,21 @@ export class ProviderApi implements WebProviderActions {
         }),
       }),
     );
+  }
+  /** Part 39b: the ENABLED wordings of one character per theme (text only); the sheet picks one per theme at random. */
+  async cocreationWordings(characterId: string): Promise<{ themes: Record<string, string[]> }> {
+    const value = record(
+      await this.request('/cocreation/wordings', { method: 'POST', body: JSON.stringify({ characterId }) }),
+    );
+    const themes = record(value.themes);
+    const out: Record<string, string[]> = {};
+    for (const id of COCREATION_THEME_IDS) {
+      const list = themes[id];
+      if (!Array.isArray(list) || !list.every((entry) => typeof entry === 'string'))
+        throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+      out[id] = list as string[];
+    }
+    return { themes: out };
   }
   /** Part 39: the world background of the latest saved cast draft (plain text), or null. */
   async worldBackground(): Promise<{ background: string | null }> {

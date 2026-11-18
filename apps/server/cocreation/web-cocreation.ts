@@ -25,6 +25,7 @@ import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { takeIpDaily } from '../admission/web-ip-daily.ts';
 import { cocreationTablesExist } from './web-cocreation-purge.ts';
 import { relationTablesExist } from './web-cocreation-relations-schema.ts';
+import { wordingTablesExist } from './web-cocreation-wordings-schema.ts';
 import { awardCocreationPoints, cocreationReceiver } from '../admin/web-points-admin.ts';
 import { readDraft, saveDraft } from '../cast/cast-store.ts';
 import {
@@ -189,6 +190,14 @@ export class WebCocreation {
           card.kind,
           JSON.stringify(value),
         );
+        // Part 39b: a theme answer records the exact wording that was shown (which theme it answered is its card id).
+        if ('wording' in answer && wordingTablesExist(this.store))
+          this.store.run(
+            'INSERT INTO web_cocreation_answer_wordings(submission_id,ordinal,wording) VALUES (?,?,?)',
+            submissionId,
+            ordinal,
+            answer.wording,
+          );
       });
       // Part 24c: points for the notes, in this same transaction (a refused or rolled-back submission pays nothing).
       const notes = answers.map((answer) =>
@@ -550,9 +559,17 @@ export class WebCocreation {
         .all<AnswerRow>('SELECT * FROM web_cocreation_answers WHERE submission_id=? ORDER BY ordinal', row.id)
         .map((answer) => {
           const value = answerValue(answer);
+          const wording = wordingTablesExist(this.store)
+            ? this.store.get<{ wording: string }>(
+                'SELECT wording FROM web_cocreation_answer_wordings WHERE submission_id=? AND ordinal=?',
+                row.id,
+                answer.ordinal,
+              )?.wording
+            : undefined;
           return {
             ordinal: answer.ordinal,
             cardId: answer.card_id,
+            ...(wording !== undefined ? { wording } : {}),
             targetField: answer.target_field,
             kind: answer.kind,
             ...(typeof value === 'string' ? { text: value } : { player: value.player, replies: value.replies }),

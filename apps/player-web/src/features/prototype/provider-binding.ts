@@ -300,9 +300,6 @@ export class LiveBinding {
         characterId: entry.characterId,
         name: shell.name(entry.characterId),
       })),
-      others: this.view.characters
-        .filter((entry) => entry.characterId !== characterId)
-        .map((entry) => ({ characterId: entry.characterId, name: shell.name(entry.characterId) })),
       say: (message) => shell.say(message),
       guest: this.cocreationGuest,
     });
