@@ -49,6 +49,8 @@ import { STAGE_LABEL, isFinished, progressText, stageOf, type Stage } from './st
 
 export const RUN_MAX = 50;
 const INPUT_MAX = 4000;
+/** Part 41: how long the editor must be still before the 预演 half reads the character and its estimate again. */
+const SECOND_HALF_QUIET_MS = 500;
 export type PreviewToastAction = { label: string; run: () => void };
 export type PreviewWorkbenchHost = {
   api: PreviewAdminClient;
@@ -1601,6 +1603,25 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     // the second half reads this character's scripts and runs (the drawer reads them when it is opened)
     if (rehearsalHalf) rehearsal?.open();
   }
+  let secondHalfTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The second half estimates on its own: a saved draft is a new revision, so the character is read again first (a stale one would
+   * be refused as a conflict); an unsaved edit blocks the run anyway. */
+  function refreshSecondHalf() {
+    if (id && host.draftUnsaved?.() !== true) {
+      const mine = id;
+      void host.characters
+        .detail(mine)
+        .then((fresh) => {
+          if (gone() || id !== mine) return;
+          detail = fresh;
+          paintAll();
+          rehearsal?.refresh();
+        })
+        .catch(() => rehearsal?.refresh());
+      return;
+    }
+    rehearsal?.refresh();
+  }
   const focusInput = () => {
     paintSettings();
     input.focus?.();
@@ -1617,26 +1638,21 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     /** The editor beside this panel changed (saved / unsaved): the reason line follows. */
     refresh: () => {
       paintAll();
-      // the second half estimates on its own: a saved draft is a new revision, so the character is read again first (a stale one would
-      // be refused as a conflict); an unsaved edit blocks the run anyway
-      if (rehearsalHalf && id && host.draftUnsaved?.() !== true) {
-        const mine = id;
-        void host.characters
-          .detail(mine)
-          .then((fresh) => {
-            if (gone() || id !== mine) return;
-            detail = fresh;
-            paintAll();
-            rehearsal?.refresh();
-          })
-          .catch(() => rehearsal?.refresh());
-        return;
-      }
-      rehearsal?.refresh();
+      // Part 41: the reads below (the character, then the estimate) go out once the editor has been quiet, not on every flip of
+      // its saved / unsaved state: a form being typed into flips it on every edit that makes it equal to, or unlike, the saved one.
+      if (!rehearsalHalf) return rehearsal?.refresh();
+      if (secondHalfTimer !== null) clearTimeout(secondHalfTimer);
+      secondHalfTimer = setTimeout(() => {
+        secondHalfTimer = null;
+        if (gone()) return;
+        refreshSecondHalf();
+      }, SECOND_HALF_QUIET_MS);
     },
     focusInput,
     clear() {
       view++;
+      if (secondHalfTimer !== null) clearTimeout(secondHalfTimer);
+      secondHalfTimer = null;
       id = null;
       detail = null;
       reset();
@@ -1644,6 +1660,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
     },
     dispose() {
       disposed = true;
+      if (secondHalfTimer !== null) clearTimeout(secondHalfTimer);
       globalThis.removeEventListener?.('resize', fitSplit);
       splitObserver?.disconnect();
       resetTitle();

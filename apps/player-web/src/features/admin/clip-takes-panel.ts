@@ -41,6 +41,8 @@ export type PanelEnv = {
   /** Blob URLs the page owns (revoked when the role is left). */
   urls: Set<string>;
 };
+/** Part 41: how long the marked-up text must be still before its price is read (one read per pause, not one per key). */
+const ESTIMATE_QUIET_MS = 450;
 const ORIGIN_TEXT = { generated: '生成', feedback: '按反馈', uploaded: '上传' } as const;
 const slotName = (slot: Slot, index: number) => (slot.kind === 'footer' ? '结束' : `欢迎 ${index + 1}`);
 const estimateWhy = (why: string) => (why === 'PRICE_MISSING' ? 'Fish 价格未生效，先到「系统」续期价格' : '暂不能生成');
@@ -417,19 +419,35 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
       markup.setAttribute('aria-label', '带标记的句子');
       result.append(markup);
       let est: Awaited<ReturnType<CharacterAdminClient['takeEstimate']>> | null = null;
-      const refreshEstimate = () => {
-        est = null;
-        paid.refresh();
+      // Part 41: one estimate per pause in typing, never one per key. Typing only clears the figure; the read goes out once the
+      // text has been still for ESTIMATE_QUIET_MS, and a slower answer for older text is dropped.
+      let seq = 0;
+      let quiet: ReturnType<typeof setTimeout> | null = null;
+      const readEstimate = () => {
+        quiet = null;
+        if (env.gone()) return;
+        const mine = ++seq;
         void env.api
           .takeEstimate(env.target, [slot.slotKey], markup!.value)
           .then((value) => {
+            if (mine !== seq || env.gone()) return;
             est = value;
             paid.refresh();
           })
           .catch(() => {
+            if (mine !== seq || env.gone()) return;
             est = { ok: false, reason: 'TEXT_INVALID' };
             paid.refresh();
           });
+      };
+      const refreshEstimate = (now = false) => {
+        est = null;
+        seq++;
+        if (quiet !== null) clearTimeout(quiet);
+        quiet = null;
+        paid.refresh();
+        if (now) readEstimate();
+        else quiet = setTimeout(readEstimate, ESTIMATE_QUIET_MS);
       };
       const cost = () => (est?.ok ? micros(est.estimateMicros) : '');
       const paid = paidButton({
@@ -467,8 +485,8 @@ export function clipTakesPanel(parent: HTMLElement, env: PanelEnv) {
       paid.root.classList.add('vc-gen');
       result.append(paid.root);
       env.paint({ node: paid.root, paint: () => paid.refresh() });
-      markup.addEventListener('input', refreshEstimate);
-      refreshEstimate();
+      markup.addEventListener('input', () => refreshEstimate());
+      refreshEstimate(true);
     }
   }
 

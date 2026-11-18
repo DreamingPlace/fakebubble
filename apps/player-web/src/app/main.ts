@@ -19,6 +19,9 @@ if (mode === 'provider-admin') {
 } else if (mode === 'provider') {
   // Night mode (Part 25b) belongs to the player pages only: the administrator console never reads it.
   startTheme(playerPrefs());
+  // Part 41: Android Chrome rasterises blend modes over the large animated card layers as flat colour blocks; the page marks itself so
+  // the stylesheet can fall back to plain compositing there (desktop and iOS are untouched).
+  if (/Android/i.test(navigator.userAgent)) document.documentElement.dataset.platform = 'android';
   // One API object for the whole page: its CSRF token follows bootstrap, login and the signed-out first page.
   const api = new ProviderApi();
   // Only used when the server answers TURNSTILE_REQUIRED (the flag is off by default): then a token is fetched silently.

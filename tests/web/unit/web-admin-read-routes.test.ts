@@ -77,3 +77,31 @@ test('22b: 概览, 系统状态 and the reset preview are read-only; points/prev
   ])
     assert.equal(isReadOnlyAdminPost(path), false, path);
 });
+
+// Part 41: the clip-takes price reads (one per pause in typing, one per slot on open) and the audio of a take are reads. A new test: the
+// older ones above are unchanged (material-audio stays a write there on purpose).
+test('41: take estimates, take list and take audio are read-only; take writes keep the write limit', () => {
+  for (const action of ['take-list', 'take-estimate', 'take-estimate-direction', 'take-audio'])
+    assert.equal(isReadOnlyAdminPost(`/admin/characters/jojo/${action}`), true, action);
+  for (const action of [
+    'take-generate',
+    'take-generate-all',
+    'take-rewrite',
+    'take-select',
+    'take-rename',
+    'take-delete',
+    'take-approve',
+    'take-upload',
+    'take-bundle',
+  ])
+    assert.equal(isReadOnlyAdminPost(`/admin/characters/jojo/${action}`), false, action);
+  for (const path of [
+    '/admin/owner/arc-read',
+    '/admin/owner/closed-read',
+    '/admin/stats/chart',
+    '/admin/characters/home-order',
+  ])
+    assert.equal(isReadOnlyAdminPost(path), true, path);
+  for (const path of ['/admin/owner/arc-save', '/admin/owner/closed-delete', '/admin/characters/order'])
+    assert.equal(isReadOnlyAdminPost(path), false, path);
+});
