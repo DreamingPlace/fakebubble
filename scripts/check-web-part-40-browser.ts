@@ -156,7 +156,10 @@ try {
         check(Math.abs(c.avatar.cx - 0.5) < 0.01, `${at} ${who2}: the avatar is centred`);
         check(c.sizeOk, `${at} ${who2}: the nickname has its own full size (not the small side size)`);
         check(
-          c.voice.top >= c.name.bottom - 0.002 && c.voice.top - c.name.bottom < 0.05,
+          // Part 41 (owner spec 2026-11-18), named exception: the gap under the nickname is half its font size (0.15 of a 0.30 name
+          // size is up to ~0.12 of the card's height at the largest name), so the old 0.05 ceiling becomes 0.14. The exact figures are
+          // asserted in check-web-part-41-browser.ts.
+          c.voice.top >= c.name.bottom - 0.002 && c.voice.top - c.name.bottom < 0.14,
           `${at} ${who2}: the voice bar is directly below the nickname`,
         );
         check(

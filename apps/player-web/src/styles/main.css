@@ -21071,6 +21071,14 @@ html.theme-fade *::after {
   contain: layout paint;
 }
 .pk-shape {
+  --pk-ease-d:
+    var(--c-d) 0%, color-mix(in srgb, var(--c-d) 78%, transparent) 18%,
+    color-mix(in srgb, var(--c-d) 48%, transparent) 40%, color-mix(in srgb, var(--c-d) 22%, transparent) 62%,
+    color-mix(in srgb, var(--c-d) 7%, transparent) 82%, transparent 100%;
+  --pk-ease-n:
+    var(--c-n) 0%, color-mix(in srgb, var(--c-n) 78%, transparent) 18%,
+    color-mix(in srgb, var(--c-n) 48%, transparent) 40%, color-mix(in srgb, var(--c-n) 22%, transparent) 62%,
+    color-mix(in srgb, var(--c-n) 7%, transparent) 82%, transparent 100%;
   position: absolute;
   left: var(--x);
   top: var(--y);
@@ -21078,13 +21086,13 @@ html.theme-fade *::after {
   height: var(--h);
   border-radius: 50%;
   transform: translate(-50%, -50%) rotate(var(--r));
-  background: radial-gradient(closest-side, var(--c-d), transparent);
-  filter: blur(var(--blur));
+  /* Part 41 (Android Chrome, audit F-15): gradient only. A CSS blur on up to five large, composited shapes per card is what Android
+     Chrome's GPU raster turned into hard colour blocks; the eased stops below give the soft edge the blur used to. */
+  background: radial-gradient(closest-side, var(--pk-ease-d));
   opacity: calc(var(--o) * 0.8);
-  will-change: transform;
 }
 :root[data-theme="dark"] .pk-shape {
-  background: radial-gradient(closest-side, var(--c-n), transparent);
+  background: radial-gradient(closest-side, var(--pk-ease-n));
   opacity: var(--o);
 }
 /* the main: the play button (a readable glyph), the played part of the progress */
@@ -21198,7 +21206,8 @@ html.theme-fade *::after {
    voice bar directly below it. Everything is placed from the card's own box, so no state of the card (front, side, hover) moves it.
    The one thing a side does keep is the side its text hugs, so the sliver that sticks out still shows the name. */
 .page-shell .card-slot .card-face:not(.face-reserve) {
-  --face-avatar: 148px;
+  /* Part 41 (owner spec 2026-11-18): the avatar is 10% smaller than Part 40's 148px, centred at 38.2% from the top (61.8% from the bottom). */
+  --face-avatar: 133.2px;
   --face-name-half: calc(var(--name-size, 0.3) * 47.5cqw);
 }
 .page-shell .card-slot .card-face:not(.face-reserve) .face-main {
@@ -21208,9 +21217,9 @@ html.theme-fade *::after {
 }
 .page-shell .card-slot .card-face:not(.face-reserve) .face-portrait {
   position: absolute;
-  top: 46px;
+  top: 38.2%;
   left: 50%;
-  translate: -50% 0;
+  translate: -50% -50%;
   margin: 0;
   width: var(--face-avatar);
   height: var(--face-avatar);
@@ -21232,10 +21241,15 @@ html.theme-fade *::after {
 .page-shell .card-slot .card-face:not(.face-reserve) .face-voice {
   display: flex;
   position: absolute;
-  left: 16px;
-  right: 16px;
-  top: calc(61.8% + var(--face-name-half) + 14px);
-  width: auto;
+  /* Part 41: 75% of the card; the gap under the nickname is half its font size; the play button (8px inside the bar) starts where the
+     nickname's text starts (16px). On the right-hand side, where the name hugs the right, the bar hugs it too. */
+  left: 8px;
+  width: 75%;
+  top: calc(61.8% + var(--face-name-half) + var(--name-size, 0.3) * 50cqw);
+}
+.page-shell .card-slot[data-side="r"] .card-face:not(.face-reserve) .face-voice {
+  left: auto;
+  right: 8px;
 }
 .page-shell .card-slot:not(.is-active) .card-face:not(.face-reserve) .face-voice {
   pointer-events: none;
@@ -21245,6 +21259,13 @@ html.theme-fade *::after {
   left: 16px;
   bottom: 14px;
 }
+/* Part 41: Android Chrome only. No blend mode over the large card layers: the sheen is a plain, lighter overlay there. */
+:root[data-platform="android"] .face-sheen,
+:root[data-platform="android"] .shared-face::after {
+  mix-blend-mode: normal;
+  opacity: 0.4;
+}
+
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
 @media (prefers-reduced-motion: reduce) {
   .card-slot.is-active:not(.is-chat) .face-sheen,
