@@ -58,10 +58,7 @@ export const NAV_TREE: readonly NavGroup[] = [
   {
     id: 'ops',
     label: '运营',
-    items: [
-      { page: 'costs', label: '消耗表' },
-      { page: 'broadcast', label: '广播' },
-    ],
+    items: [{ page: 'costs', label: '消耗表' }],
   },
   {
     id: 'system',
@@ -81,6 +78,8 @@ export const NAV_TREE: readonly NavGroup[] = [
  */
 export const OPTIONAL_NAV: ReadonlyArray<NavItem & { group: string; first?: boolean }> = [
   { group: 'ops', page: 'conversations', label: '测试对话' },
+  // Part 42: 广播 exists only where the page was given the client (the owner or broadcast.send sees it).
+  { group: 'players', page: 'broadcast', label: '广播' },
 ];
 /** NAV_TREE plus the switch-gated pages, in their groups (an item marked `first` goes before the group's own pages). */
 export const navTree = (): NavGroup[] =>

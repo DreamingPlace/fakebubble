@@ -9196,6 +9196,302 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 
 /* ---- a confirmation that opens in place ---- */
+/* ---- Part 42: 广播 (the console's tokens; every change of state moves: 240 ms open/close, 180 ms hover, a growing bar) ---- */
+.account-admin-page.admin-shell .bc-compose {
+  display: grid;
+  gap: 18px;
+  max-width: 880px;
+}
+.account-admin-page.admin-shell .bc-field {
+  display: grid;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .bc-label {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ad-text);
+  cursor: help;
+  width: fit-content;
+}
+.account-admin-page.admin-shell .bc-charhead,
+.account-admin-page.admin-shell .bc-bubblefoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .bc-chars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .bc-char {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: 999px;
+  background: var(--ad-surface);
+  cursor: pointer;
+  transition:
+    background calc(180ms * var(--ad-motion)) var(--ad-ease, ease),
+    border-color calc(180ms * var(--ad-motion)) var(--ad-ease, ease),
+    transform calc(180ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-char:hover {
+  border-color: var(--ad-primary);
+}
+.account-admin-page.admin-shell .bc-char[data-on="true"] {
+  background: var(--ad-tint);
+  border-color: var(--ad-primary);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-char input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.account-admin-page.admin-shell .bc-char:focus-within {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: 2px;
+}
+.account-admin-page.admin-shell .bc-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.account-admin-page.admin-shell .bc-bubbles {
+  display: grid;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .bc-bubble-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-bubble {
+  flex: 1;
+  min-width: 0;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  font: inherit;
+  transition: border-color calc(180ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-bubble:focus {
+  border-color: var(--ad-primary);
+  outline: none;
+}
+.account-admin-page.admin-shell .bc-count[data-over="true"] {
+  color: var(--ad-danger);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-link,
+.account-admin-page.admin-shell .bc-x,
+.account-admin-page.admin-shell .bc-play {
+  border: 0;
+  background: none;
+  padding: 4px 6px;
+  border-radius: 8px;
+  color: var(--ad-tint-ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background calc(180ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-link:hover,
+.account-admin-page.admin-shell .bc-x:hover,
+.account-admin-page.admin-shell .bc-play:hover {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell .bc-danger {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .bc-danger:hover {
+  background: var(--ad-danger-soft);
+}
+.account-admin-page.admin-shell .bc-voices {
+  display: grid;
+  gap: 8px;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    opacity calc(240ms * var(--ad-motion)) var(--ad-ease, ease),
+    grid-template-rows calc(240ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-voices[data-open="true"] {
+  grid-template-rows: none;
+  opacity: 1;
+}
+.account-admin-page.admin-shell .bc-voices[data-open="false"] {
+  display: none;
+}
+.account-admin-page.admin-shell .bc-voice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--ad-hairline);
+  border-radius: var(--ad-radius);
+  background: var(--ad-bg);
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-vname {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-vctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.account-admin-page.admin-shell .bc-time {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.account-admin-page.admin-shell .bc-when {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-when[data-open="true"] {
+  display: inline-flex;
+}
+.account-admin-page.admin-shell .bc-clock {
+  width: 7ch;
+  padding: 6px 8px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  font: inherit;
+}
+.account-admin-page.admin-shell .bc-sendbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .bc-why {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .bc-editbar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--ad-radius);
+  background: var(--ad-warn-soft);
+  color: var(--ad-warn);
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-editbar[data-open="true"] {
+  display: flex;
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-table {
+  display: grid;
+}
+.account-admin-page.admin-shell .bc-row {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 170px 80px 110px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px;
+  border-top: 1px solid var(--ad-hairline);
+  transition: background calc(180ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-row:not(.bc-row-head):hover {
+  background: var(--ad-bg);
+}
+.account-admin-page.admin-shell .bc-row-head {
+  border-top: 0;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell .bc-state {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 8px;
+}
+.account-admin-page.admin-shell .bc-pct {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .bc-bar {
+  grid-column: 1 / -1;
+  display: block;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--ad-hairline);
+  overflow: hidden;
+}
+.account-admin-page.admin-shell .bc-bar b {
+  display: block;
+  height: 100%;
+  background: var(--ad-primary);
+  transition: width calc(600ms * var(--ad-motion)) var(--ad-ease, ease);
+}
+.account-admin-page.admin-shell .bc-names {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .bc-num,
+.account-admin-page.admin-shell .bc-recipients {
+  font-variant-numeric: tabular-nums;
+}
+.account-admin-page.admin-shell .bc-acts {
+  display: inline-flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+@keyframes bc-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.account-admin-page.admin-shell .bc-charfield {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.account-admin-page.admin-shell .bc-charfield > .bc-chars {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .bc-charfield > .bc-link {
+  justify-self: start;
+}
+.account-admin-page.admin-shell .bc-voicefield {
+  animation: bc-in calc(240ms * var(--ad-motion)) var(--ad-ease, ease) both;
+}
+.account-admin-page.admin-shell .bc-list {
+  max-width: 880px;
+}
+.account-admin-page.admin-shell .bc-row {
+  grid-template-columns: 140px minmax(0, 1fr) 170px 56px 104px;
+}
+
 .account-admin-page.admin-shell .ic {
   display: grid;
   grid-template-rows: 0fr;
@@ -21274,309 +21570,4 @@ html.theme-fade *::after {
   .shared-card {
     animation: none;
   }
-}
-
-/* ---- Part 42: 广播 (the console's tokens; every change of state moves: 240 ms open/close, 180 ms hover, a growing bar) ---- */
-.account-admin-page.admin-shell .bc-compose {
-  display: grid;
-  gap: 18px;
-  max-width: 880px;
-}
-.account-admin-page.admin-shell .bc-field {
-  display: grid;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .bc-label {
-  font-weight: 700;
-  font-size: 13px;
-  color: var(--ad-text);
-  cursor: help;
-  width: fit-content;
-}
-.account-admin-page.admin-shell .bc-charhead,
-.account-admin-page.admin-shell .bc-bubblefoot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 12px;
-  color: var(--ad-muted);
-}
-.account-admin-page.admin-shell .bc-chars {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .bc-char {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px 6px 10px;
-  border: 1px solid var(--ad-border);
-  border-radius: 999px;
-  background: var(--ad-surface);
-  cursor: pointer;
-  transition:
-    background 180ms var(--ad-ease, ease),
-    border-color 180ms var(--ad-ease, ease),
-    transform 180ms var(--ad-ease, ease);
-}
-.account-admin-page.admin-shell .bc-char:hover {
-  border-color: var(--ad-primary);
-}
-.account-admin-page.admin-shell .bc-char[data-on="true"] {
-  background: var(--ad-tint);
-  border-color: var(--ad-primary);
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .bc-char input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-.account-admin-page.admin-shell .bc-char:focus-within {
-  outline: 2px solid var(--ad-primary);
-  outline-offset: 2px;
-}
-.account-admin-page.admin-shell .bc-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex: none;
-}
-.account-admin-page.admin-shell .bc-bubbles {
-  display: grid;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .bc-bubble-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  animation: bc-in 240ms var(--ad-ease, ease) both;
-}
-.account-admin-page.admin-shell .bc-bubble {
-  flex: 1;
-  min-width: 0;
-  resize: vertical;
-  padding: 8px 10px;
-  border: 1px solid var(--ad-border);
-  border-radius: var(--ad-radius);
-  font: inherit;
-  transition: border-color 180ms var(--ad-ease, ease);
-}
-.account-admin-page.admin-shell .bc-bubble:focus {
-  border-color: var(--ad-primary);
-  outline: none;
-}
-.account-admin-page.admin-shell .bc-count[data-over="true"] {
-  color: var(--ad-danger);
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .bc-link,
-.account-admin-page.admin-shell .bc-x,
-.account-admin-page.admin-shell .bc-play {
-  border: 0;
-  background: none;
-  padding: 4px 6px;
-  border-radius: 8px;
-  color: var(--ad-tint-ink);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 180ms var(--ad-ease, ease);
-}
-.account-admin-page.admin-shell .bc-link:hover,
-.account-admin-page.admin-shell .bc-x:hover,
-.account-admin-page.admin-shell .bc-play:hover {
-  background: var(--ad-tint);
-}
-.account-admin-page.admin-shell .bc-danger {
-  color: var(--ad-danger);
-}
-.account-admin-page.admin-shell .bc-danger:hover {
-  background: var(--ad-danger-soft);
-}
-.account-admin-page.admin-shell .bc-voices {
-  display: grid;
-  gap: 8px;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition:
-    opacity 240ms var(--ad-ease, ease),
-    grid-template-rows 240ms var(--ad-ease, ease);
-}
-.account-admin-page.admin-shell .bc-voices[data-open="true"] {
-  grid-template-rows: none;
-  opacity: 1;
-}
-.account-admin-page.admin-shell .bc-voices[data-open="false"] {
-  display: none;
-}
-.account-admin-page.admin-shell .bc-voice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px;
-  border: 1px solid var(--ad-hairline);
-  border-radius: var(--ad-radius);
-  background: var(--ad-bg);
-  animation: bc-in 240ms var(--ad-ease, ease) both;
-}
-.account-admin-page.admin-shell .bc-vname {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .bc-vctl {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.account-admin-page.admin-shell .bc-time {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.account-admin-page.admin-shell .bc-when {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  animation: bc-in 240ms var(--ad-ease, ease) both;
-}
-.account-admin-page.admin-shell .bc-when[data-open="true"] {
-  display: inline-flex;
-}
-.account-admin-page.admin-shell .bc-clock {
-  width: 7ch;
-  padding: 6px 8px;
-  border: 1px solid var(--ad-border);
-  border-radius: var(--ad-radius);
-  font: inherit;
-}
-.account-admin-page.admin-shell .bc-sendbar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.account-admin-page.admin-shell .bc-why {
-  color: var(--ad-muted);
-  font-size: 12px;
-}
-.account-admin-page.admin-shell .bc-editbar {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px;
-  border-radius: var(--ad-radius);
-  background: var(--ad-warn-soft);
-  color: var(--ad-warn);
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .bc-editbar[data-open="true"] {
-  display: flex;
-  animation: bc-in 240ms var(--ad-ease, ease) both;
-}
-.account-admin-page.admin-shell .bc-table {
-  display: grid;
-}
-.account-admin-page.admin-shell .bc-row {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) 170px 80px 110px;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 4px;
-  border-top: 1px solid var(--ad-hairline);
-  transition: background 180ms var(--ad-ease, ease);
-}
-.account-admin-page.admin-shell .bc-row:not(.bc-row-head):hover {
-  background: var(--ad-bg);
-}
-.account-admin-page.admin-shell .bc-row-head {
-  border-top: 0;
-  color: var(--ad-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-.account-admin-page.admin-shell .bc-state {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 4px 8px;
-}
-.account-admin-page.admin-shell .bc-pct {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  color: var(--ad-warn);
-}
-.account-admin-page.admin-shell .bc-bar {
-  grid-column: 1 / -1;
-  display: block;
-  height: 4px;
-  border-radius: 4px;
-  background: var(--ad-hairline);
-  overflow: hidden;
-}
-.account-admin-page.admin-shell .bc-bar b {
-  display: block;
-  height: 100%;
-  background: var(--ad-primary);
-  transition: width 600ms var(--ad-ease, ease);
-}
-.account-admin-page.admin-shell .bc-names {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.account-admin-page.admin-shell .bc-num,
-.account-admin-page.admin-shell .bc-recipients {
-  font-variant-numeric: tabular-nums;
-}
-.account-admin-page.admin-shell .bc-acts {
-  display: inline-flex;
-  gap: 4px;
-  justify-content: flex-end;
-}
-@keyframes bc-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .account-admin-page.admin-shell .bc-bubble-row,
-  .account-admin-page.admin-shell .bc-voice,
-  .account-admin-page.admin-shell .bc-when,
-  .account-admin-page.admin-shell .bc-editbar {
-    animation: none;
-  }
-}
-
-.account-admin-page.admin-shell .bc-charfield {
-  grid-template-columns: auto 1fr;
-  align-items: center;
-}
-.account-admin-page.admin-shell .bc-charfield > .bc-chars {
-  grid-column: 1 / -1;
-}
-.account-admin-page.admin-shell .bc-charfield > .bc-link {
-  justify-self: start;
-}
-.account-admin-page.admin-shell .bc-voicefield {
-  animation: bc-in 240ms var(--ad-ease, ease) both;
-}
-.account-admin-page.admin-shell .bc-list {
-  max-width: 880px;
-}
-.account-admin-page.admin-shell .bc-row {
-  grid-template-columns: 140px minmax(0, 1fr) 170px 56px 104px;
 }

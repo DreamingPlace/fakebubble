@@ -533,12 +533,8 @@ export function broadcastView(
   };
 
   const recipientsLine = h('span', { class: 'bc-recipients' });
-  const sendBar = h(
-    'div',
-    { class: 'bc-sendbar' },
-    send,
-    h('span', { class: 'bc-why', attrs: { 'aria-live': 'polite' } }),
-  );
+  const whyLine = h('span', { class: 'bc-why', attrs: { 'aria-live': 'polite' } });
+  const sendBar = h('div', { class: 'bc-sendbar' }, send, whyLine);
   const label = (text: string, tip: string | null, ...body: Node[]) =>
     h(
       'div',
@@ -551,12 +547,11 @@ export function broadcastView(
     '每个角色单独设置。生成用该角色自己的音色，先试听再发送；也可以上传 WAV。有语音时，玩家看到的是一条语音，文字可「转文字」查看。',
     voiceBox,
   );
-  voiceField.classList.add('bc-voicefield');
+  voiceField.className = 'bc-field bc-voicefield';
   voiceField.hidden = true;
   voiceFieldNode = voiceField;
-  const charField = label('角色', '按首页顺序；只有在线的角色可选。每个角色各发一条。', characterBox);
-  charField.classList.add('bc-charfield');
-  charField.insertBefore(allButton, characterBox);
+  const charField = label('角色', '按首页顺序；只有在线的角色可选。每个角色各发一条。', allButton, characterBox);
+  charField.className = 'bc-field bc-charfield';
   root.replaceChildren(
     pageHead('广播', recipientsLine),
     h(
@@ -578,7 +573,7 @@ export function broadcastView(
     ),
     h('section', { class: 'system-section' }, h('h3', { text: '广播记录' }), listBox),
   );
-  const why = sendBar.querySelector<HTMLElement>('.bc-why')!;
+  const why = whyLine;
   const origPaint = paint;
   void origPaint;
   const refreshWhy = () => {
