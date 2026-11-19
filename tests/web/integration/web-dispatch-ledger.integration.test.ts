@@ -379,7 +379,10 @@ test('C-S3-002 new epoch fences old markSent; unsent recovery fails business, se
   f.advance(90_000);
   const recovered = f.queue.acquireCoordinator('recovered');
   assert.throws(() => f.ledger.markSent(claims[0]!, keyA), /WEB_COORDINATOR_STALE|WEB_STAGE_STALE/);
-  assert.equal(f.ledger.recover(recovered, fenceA).status, 'failed');
+  // Part 43 NAMED EXCEPTION (the only change to this test): a provably unsent text stage is re-queued, no longer failed
+  // with RECOVERED_NOT_SENT. Everything else below is unchanged: its ticket is released once (reserved stays 1, B's),
+  // its attempt reads not_dispatched, and the sent attempt B stays UNKNOWN with its ticket and quota kept.
+  assert.equal(f.ledger.recover(recovered, fenceA).status, 'queued');
   assert.equal(f.ledger.recover(recovered, fenceB).status, 'unknown');
   assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
   assert.equal(

@@ -16,6 +16,7 @@ import {
   parseRehearsalColumn,
   type RehearsalCell,
   type RehearsalCounts,
+  type RehearsalStyle,
   type RehearsalEstimate,
   type RehearsalItems,
   type RehearsalLibrary,
@@ -119,6 +120,7 @@ export function rehearsalView(host: RehearsalHost) {
     // Part 37a: the chosen COLUMNS, (model, writer) keys: `deepseek` is DeepSeek·旧, `deepseek-v8` DeepSeek·新.
     models = new Set<string>(['deepseek']),
     withCast = false,
+    judgeStyle = false,
     castTouched = false,
     estimate: RehearsalEstimate | null = null,
     estimating = false,
@@ -273,7 +275,25 @@ export function rehearsalView(host: RehearsalHost) {
     paintSetup();
     refreshEstimate();
   });
-  const settings = h('div', { class: 'rh-settings' }, modelBox, castBox, send.root);
+  // Part 37a-3: also have the judge read how each column talks (one more call per column, shown in the estimate).
+  const styleBox = h('button', {
+    class: 'rh-toggle',
+    text: '评估说话方式',
+    attrs: { type: 'button', 'aria-pressed': 'false' },
+  });
+  const styleTip = h('span', {
+    class: 'rh-sentence',
+    text: '让评审读每一列的回复：说了自己的事、主动起话题、情绪起伏。每列多一次评审调用，费用已计入。',
+  });
+  styleBox.append(styleTip);
+  styleBox.setAttribute('tabindex', '0');
+  bindTip(styleBox, styleTip, styleBox);
+  styleBox.addEventListener('click', () => {
+    judgeStyle = !judgeStyle;
+    styleBox.setAttribute('aria-pressed', String(judgeStyle));
+    refreshEstimate();
+  });
+  const settings = h('div', { class: 'rh-settings' }, modelBox, castBox, styleBox, send.root);
   const editor = h('div', { class: 'rh-editor' });
   // The toggles are built once per library and only re-pressed afterwards, so a press animates instead of being redrawn.
   let modelsBuiltFor: RehearsalLibrary | null = null;
@@ -443,6 +463,7 @@ export function rehearsalView(host: RehearsalHost) {
         source: src,
         models: REHEARSAL_COLUMN_KEYS.filter((m) => models.has(m)),
         withCast,
+        style: judgeStyle,
       })
       .then((e) => {
         if (mine === seq && !gone()) estimate = e;
@@ -468,6 +489,7 @@ export function rehearsalView(host: RehearsalHost) {
       source: src,
       models: REHEARSAL_COLUMN_KEYS.filter((m) => models.has(m)),
       withCast,
+      ...(judgeStyle ? { style: true } : {}),
       acknowledgeMicros: estimate.totalMicros,
     };
     const sig = JSON.stringify(body);
@@ -572,36 +594,120 @@ export function rehearsalView(host: RehearsalHost) {
     });
     return grid;
   };
-  const COUNT_ROWS: Array<[string, (c: RehearsalCounts) => string, (c: RehearsalCounts) => number | null]> = [
-    ['答全每条', (c) => (c.answeredAll === null ? '—' : `${c.answeredAll} / ${c.replies}`), (c) => c.answeredAll],
-    ['没问的建议', (c) => String(c.unaskedAdvice), (c) => c.unaskedAdvice],
-    ['以问句结尾', (c) => `${c.endsWithQuestion} / ${c.replies}`, (c) => c.endsWithQuestion],
-    ['平均字数', (c) => (c.avgChars === null ? '—' : String(c.avgChars)), (c) => c.avgChars],
-    ['平均气泡', (c) => (c.avgBubbles === null ? '—' : String(c.avgBubbles)), (c) => c.avgBubbles],
-    ['客服腔', (c) => String(c.customerService), (c) => c.customerService],
-    ['重复', (c) => String(c.repeated), (c) => c.repeated],
-    ['未确认', (c) => String(c.unconfirmed), (c) => c.unconfirmed],
+  type Column = RehearsalRunDetail['columns'][number];
+  /** One row of the counts table: its label, an optional note under it, and per column the shown text and the number that rolls. */
+  interface CountRow {
+    label: string;
+    note?: string;
+    value: (c: Column) => { text: string; n: number | null; over?: boolean; state?: RehearsalStyle['state'] };
+  }
+  const plain = (text: (c: RehearsalCounts) => string, num: (c: RehearsalCounts) => number | null) => (c: Column) => ({
+    text: text(c.counts),
+    n: num(c.counts),
+  });
+  /** Part 37a-3: the three counts the judge reads; only a run that has a 新 column judges them. */
+  const styleValue = (pick: (s: RehearsalStyle) => number | null) => (c: Column) => ({
+    text: pick(c.style) === null ? '—' : `${pick(c.style)} / ${c.counts.replies}`,
+    n: pick(c.style),
+    state: c.style.state,
+  });
+  /** The target for 以问句结尾: about one reply in three, or fewer. */
+  const QUESTION_TARGET = 1 / 3;
+  const COUNT_ROWS: CountRow[] = [
+    {
+      label: '答全每条',
+      value: plain(
+        (c) => (c.answeredAll === null ? '—' : `${c.answeredAll} / ${c.replies}`),
+        (c) => c.answeredAll,
+      ),
+    },
+    {
+      label: '没问的建议',
+      value: plain(
+        (c) => String(c.unaskedAdvice),
+        (c) => c.unaskedAdvice,
+      ),
+    },
+    { label: '说了自己的事', note: '自己的生活或看法', value: styleValue((s) => s.sharedOwn) },
+    { label: '主动起话题', note: '起了话题或转了话题', value: styleValue((s) => s.startedTopic) },
+    { label: '情绪起伏', note: '情绪露在用词里', value: styleValue((s) => s.showedEmotion) },
+    {
+      label: '以问句结尾',
+      note: '目标：约三条里不超过一条',
+      value: (c) => ({
+        text: `${c.counts.endsWithQuestion} / ${c.counts.replies}`,
+        n: c.counts.endsWithQuestion,
+        over: c.counts.replies > 0 && c.counts.endsWithQuestion / c.counts.replies > QUESTION_TARGET,
+      }),
+    },
+    {
+      label: '平均字数',
+      value: plain(
+        (c) => (c.avgChars === null ? '—' : String(c.avgChars)),
+        (c) => c.avgChars,
+      ),
+    },
+    {
+      label: '平均气泡',
+      value: plain(
+        (c) => (c.avgBubbles === null ? '—' : String(c.avgBubbles)),
+        (c) => c.avgBubbles,
+      ),
+    },
+    {
+      label: '客服腔',
+      value: plain(
+        (c) => String(c.customerService),
+        (c) => c.customerService,
+      ),
+    },
+    {
+      label: '重复',
+      value: plain(
+        (c) => String(c.repeated),
+        (c) => c.repeated,
+      ),
+    },
+    {
+      label: '未确认',
+      value: plain(
+        (c) => String(c.unconfirmed),
+        (c) => c.unconfirmed,
+      ),
+    },
   ];
+  const STYLE_LABELS = new Set(['说了自己的事', '主动起话题', '情绪起伏']);
   const countsTable = (d: RehearsalRunDetail) => {
     const table = h('table', { class: 'rh-counts' });
     table.append(
       h('thead', {}, h('tr', {}, h('th', { text: '' }), ...d.columns.map((c) => h('th', { text: c.label })))),
     );
     const body = h('tbody');
-    for (const [label, text, num] of COUNT_ROWS) {
-      const tr = h('tr', {}, h('th', { text: label, attrs: { scope: 'row' } }));
+    const judgesStyle = d.columns.some((c) => c.style.state !== 'none');
+    for (const row of COUNT_ROWS) {
+      if (!judgesStyle && STYLE_LABELS.has(row.label)) continue;
+      const head = h('th', { attrs: { scope: 'row' } }, h('span', { text: row.label }));
+      if (row.note) head.append(h('span', { class: 'rh-note', text: row.note }));
+      const tr = h('tr', {}, head);
       for (const c of d.columns) {
         const td = h('td');
-        const n = num(c.counts);
-        if (n === null) td.textContent = '—';
-        else {
+        const { text, n, over, state } = row.value(c);
+        if (over) td.classList.add('rh-over');
+        if (n === null) {
+          // A judged row with no number says why: still waiting, not sure, or the judge's answer did not hold.
+          if (state === 'unconfirmed') td.append(statusBadge('未确认', 'warn'));
+          else if (state === 'failed' || state === 'skipped')
+            td.append(h('span', { class: 'rh-wait', text: '未得出' }));
+          else if (state === 'pending') td.append(h('span', { class: 'rh-wait', text: '等待' }));
+          else td.textContent = '—';
+        } else {
           const span = h('span', { class: 'rh-num' });
-          const finalText = text(c.counts);
           // The value rolls only when it is a plain number.
-          if (/^[\d.]+$/.test(finalText))
+          if (/^[\d.]+$/.test(text))
             rollNumber(span, n, (v) => (Number.isInteger(n) ? String(Math.round(v)) : v.toFixed(1)));
-          else span.textContent = finalText;
+          else span.textContent = text;
           td.append(span);
+          if (over) td.append(h('span', { class: 'rh-over-mark', text: '偏多' }));
         }
         tr.append(td);
       }

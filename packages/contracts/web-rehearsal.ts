@@ -137,6 +137,8 @@ export interface RehearsalStartInput {
   models: string[];
   /** 带关系与故事. */
   withCast: boolean;
+  /** Part 37a-3: also judge how each column talks (自己的事, 起话题, 情绪), one more judge call per column. Absent = no. */
+  style?: boolean;
   acknowledgeMicros: number;
 }
 
@@ -168,6 +170,19 @@ export interface RehearsalCounts {
   failed: number;
   /** Part 40: the codes of the cells that did not produce a reply (failed, unconfirmed, not sent), each with how many cells carry it. */
   codes: Record<string, number>;
+}
+/**
+ * Part 37a-3: what the judge read from the replies of one column, as counts of its replies. null = not judged. `state` says why:
+ * `none` (this run did not ask for it), or where the one judge call of the column stands.
+ */
+export interface RehearsalStyle {
+  state: 'none' | 'pending' | 'judged' | 'unconfirmed' | 'failed' | 'skipped';
+  /** 说了自己的事: the reply shares its own life or opinion. */
+  sharedOwn: number | null;
+  /** 主动起话题: the reply starts or turns a topic. */
+  startedTopic: number | null;
+  /** 情绪起伏: emotion shows in the wording. */
+  showedEmotion: number | null;
 }
 export interface RehearsalMemeCell {
   /** One per hint phrasing: did the reply recognise it. null = not judged. */
@@ -214,6 +229,7 @@ export interface RehearsalRunDetail {
     label: string;
     cells: RehearsalCell[];
     counts: RehearsalCounts;
+    style: RehearsalStyle;
   }>;
   memes: RehearsalMemeRow[] | null;
 }

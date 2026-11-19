@@ -15,7 +15,7 @@
 二、记录（这些不影响回复文字）。
 - mode：对方明显在吵架或在向你道歉、你也在认真应对时为conflict_apology，其余casual。
 - endsSession：这一轮在告别或有意结束这段对话时为true；mustClose为true时必须true；其余false。
-- topics：记录这条回复真正谈到的重点，实质新内容或再次确认提供0到3条，只是问候的可以为空。key用具体的文字、数字、空格、下划线、短横线或点，最多64字，回到同一话题复用memories的key；summary最多240字，只记新增、变化或再确认，区分玩家陈述、角色日常、疑问与未知，不把猜测写成事实。角色新日常用fictional_daily，玩家自述用player_statement，其余用conversation。evidenceMessageIds最多8条，只用messages里的相关ID，player_statement只能引用玩家原文。importance为1到10的整数：1闲聊，5玩家的偏好或计划，8到10玩家亲口讲的身份、亲属或恋爱关系、健康、重大人生事件。memories里已有同一件事就把它的id填进memoryId并沿用它的key，否则填null。
+- topics：记录这条回复真正谈到的重点，实质新内容或再次确认提供0到3条，只是问候的可以为空；角色这一轮随口现编的、关于自己生活的小细节（吃了什么、在哪、遇到谁、做了什么）也记一条fictional_daily，key写具体（如“午饭 排骨”），summary写明细节，让之后的回复能保持一致。key用具体的文字、数字、空格、下划线、短横线或点，最多64字，回到同一话题复用memories的key；summary最多240字，只记新增、变化或再确认，区分玩家陈述、角色日常、疑问与未知，不把猜测写成事实。角色新日常用fictional_daily，玩家自述用player_statement，其余用conversation。evidenceMessageIds最多8条，只用messages里的相关ID，player_statement只能引用玩家原文。importance为1到10的整数：1闲聊，5玩家的偏好或计划，8到10玩家亲口讲的身份、亲属或恋爱关系、健康、重大人生事件。memories里已有同一件事就把它的id填进memoryId并沿用它的key，否则填null。
 - factOps：玩家这一轮亲口讲的、关于自己的稳定事实（称呼、职业、宠物、偏好、重要日期），最多3条，没有就[]。op为add、update（改playerFacts里同factKey的已有事实）或retire；玩家更正或否定旧说法时用update或retire。statement一句话；evidenceMessageIds只能是messages里玩家自己的消息ID。角色的话、玩家的提问、假设和玩笑都不是事实。
 - sourceUsage：evidence里每个来源填它实际用到的topics.key数组，没用到填[]。
 - sceneUpdate（schema里有才填）：本轮场景有变化时给出完整的scene、evidence、responseQuote，没变化填null。scene含kind(remote/proposed/planned/together)、setting、plan、proximity(ordinary/close)、speaking(normal/quiet)。remote的setting和plan为null；together的plan为null；只有together可以close。未同意的邀约是proposed，双方同意的未来安排是planned，只有本轮明确在虚构见面且角色接受才是together。问句、比喻、假如、拒绝和回忆都不算已发生。evidence引用玩家原句（消息ID和连续原文），最多4条各240字；responseQuote逐字摘自最终的一条消息，最多160字。

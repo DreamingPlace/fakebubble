@@ -14,6 +14,7 @@ import {
   type RehearsalRunInfo,
   type RehearsalScriptView,
   type RehearsalSource,
+  type RehearsalStyle,
   type RehearsalStartInput,
   type RehearsalTurn,
 } from '../../../../packages/contracts/web-rehearsal.ts';
@@ -136,6 +137,17 @@ const counts = (v: unknown): RehearsalCounts => {
     codes: codes(o.codes),
   };
 };
+const STYLE_STATES = ['none', 'pending', 'judged', 'unconfirmed', 'failed', 'skipped'] as const;
+const style = (v: unknown): RehearsalStyle => {
+  const o = object(v);
+  const n = (x: unknown) => (x === null ? null : int(x));
+  return {
+    state: oneOf<RehearsalStyle['state']>(o.state, STYLE_STATES),
+    sharedOwn: n(o.sharedOwn),
+    startedTopic: n(o.startedTopic),
+    showedEmotion: n(o.showedEmotion),
+  };
+};
 const memeCell = (v: unknown): RehearsalMemeCell => {
   const o = object(v);
   const hints = rows(o.hints).map(nbool);
@@ -204,6 +216,7 @@ export class RehearsalAdminClient {
       source: input.source as RehearsalSource,
       models: input.models,
       withCast: input.withCast,
+      ...(input.style ? { style: true } : {}),
     };
   }
   async estimate(
@@ -248,6 +261,7 @@ export class RehearsalAdminClient {
           label: string(x.label),
           cells: rows(x.cells).map(cell),
           counts: counts(x.counts),
+          style: style(x.style),
         };
       }),
       memes:
