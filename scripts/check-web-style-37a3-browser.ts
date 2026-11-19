@@ -107,7 +107,7 @@ try {
     await page.locator('.seg-button', { hasText: '统计' }).click();
     await page.locator('.rh-counts').waitFor();
     await wait(900);
-    const rows = await page
+    const rows: string[] = await page
       .locator('.rh-counts tbody tr')
       .evaluateAll((trs: HTMLElement[]) => trs.map((tr) => tr.innerText.replace(/\s+/g, ' ')));
     const own = rows.find((r) => r.startsWith('说了自己的事'));
