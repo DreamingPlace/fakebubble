@@ -63,7 +63,12 @@ function setup(t: test.TestContext) {
     const challenge = await call(a('/request-code'), actor, { purpose: 'signup', email }, 200, 'code');
     const mail = (await mails(before + 1)).at(-1)!;
     await call(a('/verify-code'), actor, { challengeId: challenge.challengeId, code: mail.code });
-    return call(a('/signup'), actor, { challengeId: challenge.challengeId, password: PASSWORD, nickname: '阿泡', adult: true });
+    return call(a('/signup'), actor, {
+      challengeId: challenge.challengeId,
+      password: PASSWORD,
+      nickname: '阿泡',
+      adult: true,
+    });
   };
   const owner = async () => {
     const actor = client();
@@ -136,10 +141,13 @@ test('a scheduled broadcast fires with no other request, reaches registered play
 
   // ---- the player's own view: the character's bubbles, in the conversation that did not exist before
   const seenA = await f.history(A);
-  assert.deepEqual(seenA.messages.map((m) => [m.author, m.origin, m.text, m.operationId]), [
-    ['character', 'narrative', '大家好', null],
-    ['character', 'narrative', '今晚有个小活动', null],
-  ]);
+  assert.deepEqual(
+    seenA.messages.map((m) => [m.author, m.origin, m.text, m.operationId]),
+    [
+      ['character', 'narrative', '大家好', null],
+      ['character', 'narrative', '今晚有个小活动', null],
+    ],
+  );
   assert.equal((await f.history(G)).messages.length, 0, 'the guest received nothing');
   // not the player's chat and no points were spent
   const access = (await f.boot(B)).access;
@@ -147,7 +155,10 @@ test('a scheduled broadcast fires with no other request, reaches registered play
 
   // ---- a voice broadcast, uploaded, sent now: one stored clip, read through the player's own audio route
   const clip = syntheticTone(900);
-  const upload = await f.call(`${base}/upload`, admin, { characterId: 'wei-guagua', base64: Buffer.from(clip).toString('base64') });
+  const upload = await f.call(`${base}/upload`, admin, {
+    characterId: 'wei-guagua',
+    base64: Buffer.from(clip).toString('base64'),
+  });
   assert.equal(upload.origin, 'uploaded');
   const listen = await f.call(`${base}/take-audio`, admin, { takeId: upload.takeId });
   assert.equal(Buffer.from(listen.base64, 'base64').length, clip.length);
@@ -170,10 +181,22 @@ test('a scheduled broadcast fires with no other request, reaches registered play
   const got = await f.request(path, B);
   assert.equal(got.status, 200);
   const bytes = Buffer.from(await got.arrayBuffer());
-  assert.equal(createHash('sha256').update(bytes).digest('hex'), createHash('sha256').update(Buffer.from(clip)).digest('hex'));
+  assert.equal(
+    createHash('sha256').update(bytes).digest('hex'),
+    createHash('sha256').update(Buffer.from(clip)).digest('hex'),
+  );
   assert.equal((await f.request(path, G)).status, 404, 'another visitor cannot read it');
   const seenA2 = await f.history(A);
-  assert.equal((await f.request(`${API}/conversations/${seenA2.conversationId}/messages/${voice.messageId}/audio/${voice.audio.mediaId}`, A)).status, 404, 'a message of another conversation is not found');
+  assert.equal(
+    (
+      await f.request(
+        `${API}/conversations/${seenA2.conversationId}/messages/${voice.messageId}/audio/${voice.audio.mediaId}`,
+        A,
+      )
+    ).status,
+    404,
+    'a message of another conversation is not found',
+  );
 
   // ---- the list: counts only
   const listed = await f.call(`${base}/list`, admin, {});
@@ -181,8 +204,18 @@ test('a scheduled broadcast fires with no other request, reaches registered play
   assert.ok(!JSON.stringify(listed).includes('大家好'), 'no message content in the list');
 
   // ---- purge: deleting an account removes its broadcast messages; the lifecycle audit is clean; the other player keeps them
-  assert.deepEqual(await f.call(a('/delete'), A, { password: PASSWORD, confirm: '删除' }), { deleted: true, complete: true });
-  assert.deepEqual(await f.fixture('/fixture/broadcast/world', { principalId: principalA }), { messages: 0, links: 0, recipients: 0 });
-  assert.deepEqual(await f.fixture('/fixture/audit-world', { principalId: principalA }), { clean: true, loginsRemain: false });
+  assert.deepEqual(await f.call(a('/delete'), A, { password: PASSWORD, confirm: '删除' }), {
+    deleted: true,
+    complete: true,
+  });
+  assert.deepEqual(await f.fixture('/fixture/broadcast/world', { principalId: principalA }), {
+    messages: 0,
+    links: 0,
+    recipients: 0,
+  });
+  assert.deepEqual(await f.fixture('/fixture/audit-world', { principalId: principalA }), {
+    clean: true,
+    loginsRemain: false,
+  });
   assert.equal((await f.history(B)).messages.length, 3, "B's messages are untouched");
 });

@@ -195,13 +195,21 @@ export class WebBroadcast {
   private live() {
     return publishedWebCharacters(this.store).filter((c) => !webCharacterDeleted(this.store, c.characterId));
   }
+  /** The revision whose voice speaks: the draft, else the character's latest revision (a published character always has one). */
   private draftRevision(characterId: string) {
     if (!this.store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_character_drafts'"))
       return undefined;
-    return this.store.get<{ revision: number }>(
-      'SELECT revision FROM web_character_drafts WHERE character_id=?',
-      characterId,
-    )?.revision;
+    return (
+      this.store.get<{ revision: number }>(
+        'SELECT revision FROM web_character_drafts WHERE character_id=?',
+        characterId,
+      )?.revision ??
+      this.store.get<{ revision: number }>(
+        'SELECT max(revision) revision FROM web_character_revisions WHERE character_id=?',
+        characterId,
+      )?.revision ??
+      undefined
+    );
   }
   private hasVoice(characterId: string) {
     const speech = this.speechPath();

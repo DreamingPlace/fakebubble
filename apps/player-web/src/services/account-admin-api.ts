@@ -1,3 +1,4 @@
+import { BroadcastAdminClient } from './broadcast-admin-api.ts';
 import { isWriterChoice } from '../../../../packages/contracts/web-writer.ts';
 import type { WriterChoice, WriterSaveResult, WriterSettingView } from '../../../../packages/contracts/web-writer.ts';
 import { CharacterAdminClient } from './character-admin-api.ts';
@@ -209,6 +210,8 @@ function parseCocreationPoints(value: unknown): CocreationPointsView {
 }
 
 export class AccountAdminApi extends InviteAdminApi {
+  /** Part 42: 广播. */
+  readonly broadcast = new BroadcastAdminClient((path, body) => this.request('/broadcast/' + path, body));
   readonly characters = new CharacterAdminClient((path, body) => this.request('/characters/' + path, body));
   readonly previews = new PreviewAdminClient(
     (path, body) => this.request('/characters/' + path, body),

@@ -801,17 +801,25 @@ test('42 load: 1,000 registered players, two characters, delivered in batches of
     if (!worked) break;
   }
   const total = performance.now() - started;
-  const row = f.store.get<{ state: string; recipients: number; delivered: number; total: number }>('SELECT * FROM web_broadcasts')!;
+  const row = f.store.get<{ state: string; recipients: number; delivered: number; total: number }>(
+    'SELECT * FROM web_broadcasts',
+  )!;
   assert.deepEqual([row.state, row.recipients, row.delivered, row.total], ['sent', 1000, 2000, 2000]);
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_broadcast_messages')!.n, 4000);
   assert.equal(yields, 20, '1,000 players are 20 batches of 50, each followed by a yield');
   const slowest = Math.max(...batches.map((b, i) => (i ? b - batches[i - 1]! : b)));
   console.log(
-    JSON.stringify({ event: 'broadcast_load', batch: 50, batches: yields, totalMs: Math.round(total), slowestBatchMs: Math.round(slowest) }),
+    JSON.stringify({
+      event: 'broadcast_load',
+      batch: 50,
+      batches: yields,
+      totalMs: Math.round(total),
+      slowestBatchMs: Math.round(slowest),
+    }),
   );
 });
 
-test('42 the real writer request (v7 and v8) carries the broadcast as the character\'s own earlier message, before the player\'s input', async (t) => {
+test("42 the real writer request (v7 and v8) carries the broadcast as the character's own earlier message, before the player's input", async (t) => {
   for (const writer of ['v7', 'v8'] as const) {
     const f = fixture(t);
     installWriterSetting(f.store as never);

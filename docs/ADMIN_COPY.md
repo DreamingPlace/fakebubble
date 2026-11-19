@@ -54,3 +54,14 @@ date control only: nothing sent to the server and nothing stored changes.
 |---|---|
 | 共创收件箱, a relation note | 加入：<组合名> · 新建组合 · 整理 · 采纳 · 不采纳 · 不计入 / 计入 (a story goes into the 草稿; nothing reaches players until 发布) |
 | second view of the inbox | 玩家眼中的关系 (columns 谁对谁 · 评分数 · 平均 · 分布（0–5 星） · 现在的设定) |
+
+## Part 42 — 广播
+| Where | Words |
+|---|---|
+| 运营 → 广播 | 角色 · 文字 · 语音（可选） · 时间 · 发送 / 定时发送 · 保存修改 · 广播记录 |
+| status in the list | 已定时 · 发送中 x% · 已发送 · 已取消 (counts of 玩家, never a player; no message text) |
+| voice | 生成 (the cost is on the button, a second click pays) · 上传 WAV · 试听 · 清除 |
+| the one irreversible step | 发送 asks in place: 「将由 N 个角色，向 M 位注册玩家各发送一条消息 … 发出后不能撤回。」 Everything else explains itself on hover only. |
+
+Times are UTC (「UTC」 beside the date and the HH:MM field). A scheduled broadcast can be 修改 or 取消 until it starts. With a voice the player gets
+one voice bubble (its words behind 转文字); without, one text bubble per line.
