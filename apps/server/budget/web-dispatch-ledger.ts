@@ -1283,6 +1283,33 @@ export class WebDispatchLedger {
       )
         return null;
     }
+    // A known success only counts as "already done" while its output is kept; a late receipt that settled cost without
+    // keeping bytes (stale owner) means the call WAS made, so such a stage is never re-sent.
+    for (const a of attempts.filter((x) => x.dispatch_state === 'known' && x.outcome === 'succeeded')) {
+      const kept =
+        stage === 'text'
+          ? this.store.get(
+              `SELECT 1 FROM ${schema >= 113 ? 'web_provider_outputs' : 'web_local_text_outputs'} WHERE operation_id=? AND phase=?`,
+              fence.operationId,
+              a.phase,
+            )
+          : this.store.get(
+              `SELECT 1 FROM ${schema >= 113 ? 'web_provider_outputs' : 'web_local_audio_outputs'} WHERE operation_id=? AND ordinal=?`,
+              fence.operationId,
+              a.ordinal,
+            );
+      if (!kept) return null;
+    }
+    if (stage === 'audio') {
+      const running = this.store.get<{ ordinal: number }>(
+        `SELECT ordinal FROM ${segmentTable} WHERE operation_id=? AND state='running' AND claim_stage_version=?`,
+        fence.operationId,
+        fence.stageVersion,
+      );
+      // The running clip itself must own no settled attempt: a known one means it was sent.
+      if (!running || attempts.some((x) => x.ordinal === running.ordinal && x.dispatch_state !== 'not_sent'))
+        return null;
+    }
     for (const a of unsent) {
       if (hasProviderTables) {
         const held = this.store.get<{ provider: string; held_micros: number }>(
