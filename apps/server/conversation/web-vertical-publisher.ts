@@ -1,3 +1,4 @@
+import { isBroadcastMessage } from '../broadcast/web-broadcast-read.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Clock, DialogueCandidate, MessageDTO } from '../../../packages/contracts/index.ts';
@@ -665,18 +666,28 @@ export class WebVerticalPublisher {
         if (message.id !== claim.inputMessageId)
           ensure(
             message.authorKind === 'character'
-              ? this.store.get(
-                  `SELECT 1 FROM web_publication_items i JOIN web_publications p
+              ? isBroadcastMessage(
+                  this.store,
+                  {
+                    principalId: claim.principalId,
+                    worldId: claim.worldId,
+                    conversationId: claim.conversationId,
+                    characterId: claim.characterId,
+                  },
+                  message.id,
+                ) ||
+                  this.store.get(
+                    `SELECT 1 FROM web_publication_items i JOIN web_publications p
             ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.origin IN ('narrative','text_fallback')
             AND p.principal_id=? AND p.player_id=? AND p.world_id=? AND p.conversation_id=?
             AND p.character_id=?`,
-                  message.id,
-                  claim.principalId,
-                  claim.playerId,
-                  claim.worldId,
-                  claim.conversationId,
-                  claim.characterId,
-                )
+                    message.id,
+                    claim.principalId,
+                    claim.playerId,
+                    claim.worldId,
+                    claim.conversationId,
+                    claim.characterId,
+                  )
               : this.store.get(
                   `SELECT 1 FROM web_publications p
             WHERE p.input_message_id=? AND p.principal_id=? AND p.player_id=? AND p.world_id=?

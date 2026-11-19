@@ -1,3 +1,4 @@
+import { webBroadcastInstalled } from '../broadcast/web-broadcast-schema.ts';
 import { DetailedError, RetryAfterError, ensure } from '../../../packages/domain/errors.ts';
 import { isWorkerdReservedTable } from '../platform/workerd-reserved-tables.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
@@ -181,6 +182,8 @@ export function auditCharacterDeletionScope(
       'jobs',
       'web_local_events',
       'web_user_events',
+      // Part 42: the broadcast messages are purged with the conversation (purgeBroadcastConversation) and audited by the generic check.
+      'web_broadcast_messages',
     ])
       allowed.add(name);
   for (const { name } of store.all<{ name: string }>(
@@ -236,7 +239,11 @@ export function auditCharacterDeletionScope(
         `SELECT 1 FROM messages m WHERE m.world_id=? AND m.conversation_id=? AND NOT EXISTS
     (SELECT 1 FROM web_operations o WHERE o.input_message_id=m.id AND o.world_id=m.world_id AND o.conversation_id=m.conversation_id)
     AND NOT EXISTS(SELECT 1 FROM web_publication_items i JOIN web_publications p ON p.operation_id=i.operation_id
-      WHERE i.message_id=m.id AND p.world_id=m.world_id AND p.conversation_id=m.conversation_id) LIMIT 1`,
+      WHERE i.message_id=m.id AND p.world_id=m.world_id AND p.conversation_id=m.conversation_id)${
+        webBroadcastInstalled(store)
+          ? ' AND NOT EXISTS(SELECT 1 FROM web_broadcast_messages b WHERE b.message_id=m.id AND b.world_id=m.world_id AND b.conversation_id=m.conversation_id)'
+          : ''
+      } LIMIT 1`,
         s.world_id,
         s.conversation_id,
       ),

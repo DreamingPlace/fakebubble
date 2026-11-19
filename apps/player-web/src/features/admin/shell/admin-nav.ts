@@ -4,6 +4,7 @@ import {
   hasCocreationPermission,
   hasCastPermission,
   hasConversationsPermission,
+  hasBroadcastPermission,
   hasPointsPermission,
   hasStatsPermission,
   hasSystemPermission,
@@ -17,6 +18,7 @@ export type AdminPage =
   | 'cocreation'
   | 'invites'
   | 'points'
+  | 'broadcast'
   | 'conversations'
   | 'costs'
   | 'models'
@@ -76,6 +78,8 @@ export const NAV_TREE: readonly NavGroup[] = [
  */
 export const OPTIONAL_NAV: ReadonlyArray<NavItem & { group: string; first?: boolean }> = [
   { group: 'ops', page: 'conversations', label: '测试对话' },
+  // Part 42: 广播 exists only where the page was given the client (the owner or broadcast.send sees it).
+  { group: 'players', page: 'broadcast', label: '广播' },
 ];
 /** NAV_TREE plus the switch-gated pages, in their groups (an item marked `first` goes before the group's own pages). */
 export const navTree = (): NavGroup[] =>
@@ -109,6 +113,8 @@ export type NavAccess = {
   models?: boolean;
   /** This page was given the clients for 概览 / 系统状态 / 积分发放 (Part 22b) and 消耗表 (Part 22c). Absent = those pages do not exist here. */
   system?: boolean;
+  /** Part 42: this page was given the 广播 client. Absent = the page does not exist here. */
+  broadcast?: boolean;
 };
 export const PAGES: readonly AdminPage[] = [...navTree().flatMap((g) => groupPages(g).map((i) => i.page)), 'account'];
 export const isAdminPage = (value: string): value is AdminPage => (PAGES as readonly string[]).includes(value);
@@ -132,6 +138,8 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
     case 'points':
       return access.system === true && (owner || hasPointsPermission(permissions));
     // 消耗表 (Part 22c): the owner, or an administrator holding stats.read. (玩家统计 moved into 总览 in Part 24b-6.)
+    case 'broadcast':
+      return access.broadcast === true && (owner || hasBroadcastPermission(permissions));
     case 'costs':
       return access.system === true && (owner || hasStatsPermission(permissions));
     case 'system':

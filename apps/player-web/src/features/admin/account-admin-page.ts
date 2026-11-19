@@ -9,6 +9,7 @@ import { permissionMatrixEditor } from './permission-matrix.ts';
 import { membersView } from './members-view.ts';
 import { overviewView } from './overview-view.ts';
 import { pointsView } from './points-view.ts';
+import { broadcastView } from './broadcast-view.ts';
 import { systemView } from './system-view.ts';
 import { costsView } from './costs-view.ts';
 import { modelsView } from './models-view.ts';
@@ -92,6 +93,8 @@ type Port = Pick<
   cocreationPoints?: AccountAdminApi['cocreationPoints'];
   saveCocreationPoints?: AccountAdminApi['saveCocreationPoints'];
   resetPoints?: AccountAdminApi['resetPoints'];
+  /** 广播 (Part 42): the owner or broadcast.send. Optional: a page without it has no 广播 in the nav. */
+  broadcast?: AccountAdminApi['broadcast'];
   /** 玩家统计 and 消耗表 (Part 22c): the owner or stats.read. Optional: a page without them has neither in the nav. */
   playerStats?: AccountAdminApi['playerStats'];
   exportPlayerStats?: AccountAdminApi['exportPlayerStats'];
@@ -255,6 +258,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     </section>
     <section data-panel="overview" hidden><div id="admin-overview"></div></section>
     <section data-panel="points" hidden><div id="admin-points"></div></section>
+    <section data-panel="broadcast" hidden><div id="admin-broadcast"></div></section>
     <section data-panel="system" hidden><div id="admin-system"></div></section>
     <section data-panel="costs" hidden><div id="admin-costs"></div></section>
     <section data-panel="conversations" hidden><div id="admin-conversations"></div></section>
@@ -308,6 +312,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     cast: !!port.cast,
     models: !!port.modelSettings,
     system: !!port.overview && !!port.systemStatus,
+    broadcast: !!port.broadcast,
     conversations: !!port.conversations && session?.features?.chatReview === true,
   });
   const canCreateRole = () =>
@@ -566,6 +571,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     if (page === 'invites' && can('invites.manage') && port.inviteBatches) return () => tiers.load();
     if (page === 'overview' && canSeePage('overview', access())) return () => overview.load();
     if (page === 'points' && canSeePage('points', access())) return () => points.load();
+    if (page === 'broadcast' && canSeePage('broadcast', access())) return () => broadcast.load();
     if (page === 'system' && canSeePage('system', access()))
       return async () => {
         await system.load();
@@ -970,6 +976,16 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
   });
+  const broadcast = broadcastView(q('#admin-broadcast'), {
+    api:
+      port.broadcast ??
+      (new Proxy({}, { get: () => () => Promise.reject(new Error('ADMIN_BROADCAST_UNAVAILABLE')) }) as never),
+    run,
+    confirm: (options, host) => inlineConfirm(host, options),
+    toast: (text) => toasts.show(text, 'ok'),
+    newRequestId: () => globalThis.crypto.randomUUID(),
+    disposed: () => disposed,
+  });
   const tiers = inviteTiersView(q('#admin-invites'), {
     port,
     isOwner: () => session?.member.role === 'owner',
@@ -1052,6 +1068,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     system.clear();
     costs.clear();
     points.clear();
+    broadcast.clear();
     reviews.clear();
     models.clear();
     inbox?.clear();

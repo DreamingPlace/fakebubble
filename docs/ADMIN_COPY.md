@@ -61,3 +61,14 @@ date control only: nothing sent to the server and nothing stored changes.
 | 多轮预演 setup, the toggle beside 带关系与故事 | 评估说话方式 (hover: what the judge reads; each column costs one more judge call, already in the total) |
 | 多轮预演 counts, three new rows (only in a run that asked for them) | 说了自己的事 (note: 自己的生活或看法) · 主动起话题 (起了话题或转了话题) · 情绪起伏 (情绪露在用词里). Shown as `n / replies`; 等待 while the judge is out, 未确认 when its result is not known, 未得出 when its answer did not hold |
 | 多轮预演 counts, 以问句结尾 | note 「目标：约三条里不超过一条」; a column above 1 in 3 reads 偏多 |
+
+## Part 42 — 广播
+| Where | Words |
+|---|---|
+| 玩家 → 广播 | 角色 · 文字 · 语音（可选） · 时间 · 发送 / 定时发送 · 保存修改 · 广播记录 |
+| status in the list | 已定时 · 发送中 x% · 已发送 · 已取消 (counts of 玩家, never a player; no message text) |
+| voice | 生成 (the cost is on the button, a second click pays) · 上传 WAV · 试听 · 清除 |
+| the one irreversible step | 发送 asks in place: 「将由 N 个角色，向 M 位注册玩家各发送一条消息 … 发出后不能撤回。」 Everything else explains itself on hover only. |
+
+Times are UTC (「UTC」 beside the date and the HH:MM field). A scheduled broadcast can be 修改 or 取消 until it starts. With a voice the player gets
+one voice bubble (its words behind 转文字); without, one text bubble per line.

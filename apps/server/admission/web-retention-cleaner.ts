@@ -1,3 +1,4 @@
+import { purgeBroadcastWorld } from '../broadcast/web-broadcast-schema.ts';
 import { createHmac } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { emptySession } from '../../../packages/domain/schedule.ts';
@@ -390,6 +391,7 @@ export class WebRetentionCleaner {
           attempt.ordinal,
         );
       }
+      purgeBroadcastWorld(this.store, world);
       this.store.run('DELETE FROM messages WHERE world_id=?', world);
       this.store.run('UPDATE contacts SET state_json=? WHERE world_id=?', JSON.stringify(emptySession()), world);
       this.store.run("UPDATE world_characters SET relationship='new' WHERE world_id=?", world);

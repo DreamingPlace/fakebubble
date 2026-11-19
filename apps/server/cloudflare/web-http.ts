@@ -18,6 +18,7 @@ import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { OWNER_BODY_LIMIT } from '../admin/web-owner-ops.ts';
+import { BROADCAST_UPLOAD_BODY_LIMIT, broadcastAudio } from '../broadcast/web-broadcast-read.ts';
 import { AVATAR_BODY_LIMIT, avatarHeaders } from '../characters/web-avatar.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
@@ -270,17 +271,19 @@ export class WebProviderHTTP {
             ? AVATAR_BODY_LIMIT
             : materialUpload
               ? 8_001_024
-              : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
-                ? CAST_BODY_LIMIT
-                : bulkWrite
-                  ? 786_432
-                  : characterWrite
-                    ? PROFILE_BODY_LIMIT
-                    : path.startsWith(`${API}/admin/owner/`)
-                      ? OWNER_BODY_LIMIT
-                      : path.startsWith(`${API}/cocreation/`)
-                        ? COCREATION_BODY_LIMIT
-                        : 8192,
+              : path === `${API}/admin/broadcast/upload`
+                ? BROADCAST_UPLOAD_BODY_LIMIT
+                : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
+                  ? CAST_BODY_LIMIT
+                  : bulkWrite
+                    ? 786_432
+                    : characterWrite
+                      ? PROFILE_BODY_LIMIT
+                      : path.startsWith(`${API}/admin/owner/`)
+                        ? OWNER_BODY_LIMIT
+                        : path.startsWith(`${API}/cocreation/`)
+                          ? COCREATION_BODY_LIMIT
+                          : 8192,
         ),
       };
       const result =
@@ -294,6 +297,7 @@ export class WebProviderHTTP {
           app.system,
           app.cast,
           app.ownerOps,
+          app.broadcast,
         )) ??
         routeWebCocreation(app.cocreation, input) ??
         routeWebBilling(app.billing, input) ??
@@ -410,6 +414,17 @@ export class WebProviderHTTP {
     );
     if (method === 'GET' && audio) {
       requireWebContent(app.store, app.clock, actor.principalId, actor.world_id, 'read');
+      // Part 42: a broadcast's voice clip (one stored per character per broadcast), read only by the player it was delivered to.
+      const broadcast = broadcastAudio(
+        app.store,
+        { principalId: actor.principalId, worldId: actor.world_id, conversationId: audio[1]! },
+        audio[2]!,
+        audio[3]!,
+      );
+      if (broadcast)
+        return new Response(Uint8Array.from(broadcast), {
+          headers: { 'content-type': 'audio/wav', 'content-length': String(broadcast.length) },
+        });
       const row = app.store.get<{ character_id: string }>(
         `SELECT p.character_id FROM web_publication_items i
         JOIN web_publications p ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.media_id=?

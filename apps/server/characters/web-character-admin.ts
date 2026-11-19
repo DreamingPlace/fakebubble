@@ -184,6 +184,10 @@ export class WebCharacterAdmin {
   }
   /** Part 24k-1: the admin speech path (生成 on a 成品 slot, 预演 试听). Off until the runtime that can call Fish enables it. */
   private speech: WebAdminSpeech | null = null;
+  /** The admin speech path when it is on (Part 42: 广播 generates a voice through it). */
+  get speechPath() {
+    return this.speech;
+  }
   enableSpeech(speech: WebAdminSpeech) {
     this.speech = speech;
     this.materials?.enableSpeech(speech);

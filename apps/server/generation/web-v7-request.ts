@@ -1,3 +1,4 @@
+import { broadcastContextMessages } from '../broadcast/web-broadcast-read.ts';
 import { createHash } from 'node:crypto';
 import type {
   CharacterScope,
@@ -170,6 +171,35 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     }
   }
   orderedIds.push(input.input_message_id);
+  // Part 42: what the character was broadcast to this player is the character's own earlier message in this conversation, in order.
+  const broadcast = broadcastContextMessages(
+    store,
+    {
+      principalId: operation.principal_id,
+      worldId: scope.worldId,
+      conversationId: scope.conversationId,
+      characterId: scope.characterId,
+    },
+    input.input_seq,
+  );
+  if (broadcast.length) {
+    const seqs = new Map(
+      store
+        .all<{ id: string; seq: number }>(
+          `SELECT id,seq FROM messages WHERE world_id=? AND conversation_id=? AND id IN (${orderedIds.map(() => '?').join(',')})`,
+          scope.worldId,
+          scope.conversationId,
+          ...orderedIds,
+        )
+        .map((row) => [row.id, row.seq] as const),
+    );
+    for (const item of broadcast) {
+      allowed.add(item.id);
+      seqs.set(item.id, item.seq);
+      const at = orderedIds.findIndex((id) => (seqs.get(id) ?? Number.MAX_SAFE_INTEGER) > item.seq);
+      orderedIds.splice(at === -1 ? orderedIds.length : at, 0, item.id);
+    }
+  }
   // Reject alien memory before v7 ranking/limit; post-filtering would change which topics were selected.
   const episodes = store.all<{ job_id: string; evidence_ids_json: string }>(
     `SELECT job_id,evidence_ids_json FROM memory_episodes WHERE world_id=? AND conversation_id=? AND character_id=?`,

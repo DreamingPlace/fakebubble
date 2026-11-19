@@ -9,6 +9,9 @@ import { billedModelAt } from '../admission/web-model-settings.ts';
 import { installWebCharacterDeletion } from '../characters/web-character-deletion-schema.ts';
 import { installWebConversationDeletion } from '../characters/web-conversation-deletion.ts';
 import { installWebOwnerOps } from '../admin/web-owner-ops-schema.ts';
+import { WebBroadcast } from '../broadcast/web-broadcast.ts';
+import { installWebBroadcast } from '../broadcast/web-broadcast-schema.ts';
+import { broadcastHistoryRows } from '../broadcast/web-broadcast-read.ts';
 import { WebAvatars, installWebAvatars } from '../characters/web-avatar.ts';
 import { WebOwnerOps } from '../admin/web-owner-ops.ts';
 import { WebCharacterDeletion } from '../characters/web-character-deletion.ts';
@@ -189,6 +192,8 @@ export class WebProviderApplication {
   /** CHAT_REVIEW_ENABLED (Part 19): 测试对话. Null with the flag off (and on a database older than schema 122). */
   readonly chatReview: WebChatReviewAdmin | null;
   readonly ownerOps: WebOwnerOps;
+  /** Part 42: 广播 (its tables are a digest-checked runtime step; no numbered migration). */
+  readonly broadcast: WebBroadcast;
   readonly avatars: WebAvatars;
   /** GUEST_GRACE_ENABLED: 0 when off. */
   readonly graceMs: number;
@@ -271,6 +276,8 @@ export class WebProviderApplication {
     this.avatars = new WebAvatars(store, clock);
     this.characterDeletion = new WebCharacterDeletion(store, clock);
     this.characterAdmin = new WebCharacterAdmin(store, clock, this.inviteAdmin);
+    installWebBroadcast(store);
+    this.broadcast = new WebBroadcast(store, clock, this.inviteAdmin, () => this.characterAdmin.speechPath);
     this.characterAdmin.enableMaterials(new WebCharacterMaterials(store, clock));
     this.characterAdmin.enableDeletion(this.characterDeletion);
     this.characterAdmin.enableAvatars(this.avatars);
@@ -810,13 +817,35 @@ export class WebProviderApplication {
       conversationId,
       before ?? Number.MAX_SAFE_INTEGER,
     );
-    const page = rows.slice(0, 50).reverse();
+    // Part 42: the character's own broadcast messages of this conversation, merged in by their sequence.
+    const broadcast = broadcastHistoryRows(
+      this.store,
+      { principalId: principal.principalId, worldId: principal.world_id, conversationId },
+      before,
+    ).map((row) => ({
+      seq: row.seq,
+      id: row.id,
+      body: row.body,
+      created_at: row.created_at,
+      operation_id: '',
+      origin: 'narrative' as const,
+      ordinal: row.ordinal,
+      media_id: row.media_id,
+      duration_ms: row.duration_ms,
+      via_backup: 0,
+      chosen_model: null,
+      actual_model: null,
+      price_version: null,
+      broadcast: true,
+    }));
+    const all = [...rows.map((row) => ({ ...row, broadcast: false })), ...broadcast].sort((a, b) => b.seq - a.seq);
+    const page = all.slice(0, 50).reverse();
     const character = conversation.private_character_id as WebProviderCharacterId;
     return {
       characterId: character,
       conversationId,
-      messages: page.map((row) =>
-        providerHistoryMessage(
+      messages: page.map((row) => ({
+        ...providerHistoryMessage(
           {
             ...row,
             billed_model:
@@ -827,9 +856,11 @@ export class WebProviderApplication {
           conversationId,
           character,
         ),
-      ),
+        // A broadcast message belongs to no operation.
+        ...(row.broadcast ? { operationId: null } : {}),
+      })),
       before: page.length ? this.cursor(principal.principalId, page[0]!.seq, conversationId) : null,
-      hasMore: rows.length > 50,
+      hasMore: all.length > 50,
     };
   }
 }

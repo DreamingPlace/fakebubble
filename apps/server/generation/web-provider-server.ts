@@ -29,6 +29,7 @@ import { routeWebAccountAdmin } from '../admin/web-account-admin-routes.ts';
 import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { OWNER_BODY_LIMIT } from '../admin/web-owner-ops.ts';
+import { BROADCAST_UPLOAD_BODY_LIMIT, broadcastAudio } from '../broadcast/web-broadcast-read.ts';
 import { AVATAR_BODY_LIMIT, avatarHeaders } from '../characters/web-avatar.ts';
 import { webWelcomeLinesInstalled } from '../characters/web-welcome-schema.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
@@ -80,6 +81,8 @@ export class WebProviderServer {
   private readonly activeStreams = new Set<ServerResponse>();
   private readonly host: string;
   private deletionTimer: NodeJS.Timeout | null = null;
+  private broadcastTimer: NodeJS.Timeout | null = null;
+  private broadcastTask: Promise<void> | null = null;
   private deletionError: string | null = null;
   private deletionTask: Promise<void> | null = null;
   private readonly application: WebProviderApplication;
@@ -178,6 +181,9 @@ export class WebProviderServer {
             });
       }, 1000);
       this.deletionTimer.unref();
+      // Part 42: a scheduled broadcast is started and delivered by the server's own timer, with no other request.
+      this.broadcastTimer = setInterval(() => this.kickBroadcast(), 1000);
+      this.broadcastTimer.unref();
       if (this.previews) {
         this.previewTimer = setInterval(() => this.previews!.kick(), 1000);
         this.previewTimer.unref();
@@ -186,6 +192,24 @@ export class WebProviderServer {
       this.executor.stop();
       throw error;
     }
+  }
+
+  /** Part 42: one pass of 广播 (start what is due, deliver a few batches). Never two at once. */
+  private kickBroadcast() {
+    if (this.broadcastTask) return;
+    this.broadcastTask = this.application.broadcast
+      .pass()
+      .then(
+        () => undefined,
+        (error) => {
+          console.error(
+            JSON.stringify({ event: 'web_broadcast_pass_failed', code: (error as { code?: string }).code ?? 'ERROR' }),
+          );
+        },
+      )
+      .finally(() => {
+        this.broadcastTask = null;
+      });
   }
 
   private portOccupied() {
@@ -203,6 +227,8 @@ export class WebProviderServer {
 
   async close() {
     if (this.deletionTimer) clearInterval(this.deletionTimer);
+    if (this.broadcastTimer) clearInterval(this.broadcastTimer);
+    await this.broadcastTask;
     await this.deletionTask;
     if (this.previewTimer) clearInterval(this.previewTimer);
     await this.previews?.close();
@@ -508,17 +534,21 @@ export class WebProviderServer {
               ? AVATAR_BODY_LIMIT
               : materialUpload
                 ? 8_001_024
-                : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(path)
-                  ? CAST_BODY_LIMIT
-                  : bulkWrite
-                    ? 786_432
-                    : characterWrite
-                      ? PROFILE_BODY_LIMIT
-                      : path.startsWith(`${API}/admin/owner/`)
-                        ? OWNER_BODY_LIMIT
-                        : path.startsWith(`${API}/cocreation/`)
-                          ? COCREATION_BODY_LIMIT
-                          : 8192,
+                : path === `${API}/admin/broadcast/upload`
+                  ? BROADCAST_UPLOAD_BODY_LIMIT
+                  : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(
+                        path,
+                      )
+                    ? CAST_BODY_LIMIT
+                    : bulkWrite
+                      ? 786_432
+                      : characterWrite
+                        ? PROFILE_BODY_LIMIT
+                        : path.startsWith(`${API}/admin/owner/`)
+                          ? OWNER_BODY_LIMIT
+                          : path.startsWith(`${API}/cocreation/`)
+                            ? COCREATION_BODY_LIMIT
+                            : 8192,
           ),
         };
         const result =
@@ -535,10 +565,13 @@ export class WebProviderServer {
             this.application.system,
             this.application.cast,
             this.application.ownerOps,
+            this.application.broadcast,
           )) ??
           routeWebCocreation(this.application.cocreation, input) ??
           routeWebBilling(this.application.billing, input) ??
           routeWebInvite(this.inviteActions, input, this.inviteAdmin);
+        // Part 40/42: a route that queues work says so itself; the executor is woken now rather than at its next tick.
+        if (result.queuesWork) this.kickBroadcast();
         if (result.issuedToken) this.setCookie(res, result.issuedToken, true);
         else if (result.clearPlayerCookie)
           res.setHeader('Set-Cookie', `${this.config.cookieName}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`);
@@ -663,6 +696,18 @@ export class WebProviderServer {
       );
       if (req.method === 'GET' && audio) {
         requireWebContent(this.store, this.clock, principal.principalId, principal.world_id, 'read');
+        // Part 42: a broadcast's voice clip, read only by the player it was delivered to.
+        const broadcast = broadcastAudio(
+          this.store,
+          { principalId: principal.principalId, worldId: principal.world_id, conversationId: audio[1]! },
+          audio[2]!,
+          audio[3]!,
+        );
+        if (broadcast) {
+          res.writeHead(200, { ...privateHeaders, 'Content-Type': 'audio/wav', 'Content-Length': broadcast.length });
+          res.end(broadcast);
+          return;
+        }
         const row = this.store.get<{ character_id: string }>(
           `SELECT p.character_id FROM web_publication_items i
           JOIN web_publications p ON p.operation_id=i.operation_id WHERE i.message_id=? AND i.media_id=?

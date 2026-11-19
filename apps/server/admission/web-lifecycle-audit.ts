@@ -1,3 +1,4 @@
+import { broadcastResidue, webBroadcastInstalled } from '../broadcast/web-broadcast-schema.ts';
 import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
 import { isWorkerdReservedTable } from '../platform/workerd-reserved-tables.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
@@ -40,6 +41,9 @@ const shells = new Set([
  */
 const principalShells = new Set(['web_sessions', 'web_accounts', 'web_free_operations']);
 const handled = new Set([
+  // Part 42: a broadcast's messages and recipient rows are the player's own; the cleaners delete them with the world.
+  'web_broadcast_messages',
+  'web_broadcast_recipients',
   'web_local_events',
   'web_user_events',
   'web_input_snapshots',
@@ -257,6 +261,8 @@ export function auditWebLifecycleWorld(
     }
   }
   // Part 19: the anonymous review archive may never name an account: no principal / world / player / ... column at all.
+  // Part 42: after the purge no broadcast message and no recipient row of the world remains.
+  if (phase !== 'source') ensureClean(broadcastResidue(store, worldId) === 0, 'web_broadcast_messages');
   ensureClean(!archiveHasIdentityColumn(store), 'archive_identity');
   // Part 31: the 已关闭账号 table holds a 玩家编号, a code and two times: no other column, ever.
   ensureClean(!closedAccountsHaveIdentityColumn(store), 'closed_accounts_identity');
@@ -265,7 +271,11 @@ export function auditWebLifecycleWorld(
       !store.get(
         `SELECT 1 FROM messages m WHERE m.world_id=?
       AND NOT EXISTS (SELECT 1 FROM web_operations o WHERE o.input_message_id=m.id)
-      AND NOT EXISTS (SELECT 1 FROM web_publication_items i WHERE i.message_id=m.id) LIMIT 1`,
+      AND NOT EXISTS (SELECT 1 FROM web_publication_items i WHERE i.message_id=m.id)${
+        webBroadcastInstalled(store)
+          ? ' AND NOT EXISTS (SELECT 1 FROM web_broadcast_messages b WHERE b.message_id=m.id)'
+          : ''
+      } LIMIT 1`,
         worldId,
       ) &&
         !store.get(
