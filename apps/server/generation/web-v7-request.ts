@@ -195,6 +195,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     );
     for (const item of broadcast) {
       allowed.add(item.id);
+      seqs.set(item.id, item.seq);
       const at = orderedIds.findIndex((id) => (seqs.get(id) ?? Number.MAX_SAFE_INTEGER) > item.seq);
       orderedIds.splice(at === -1 ? orderedIds.length : at, 0, item.id);
     }

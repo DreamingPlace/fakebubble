@@ -187,7 +187,16 @@ export class WebHTTPFixture extends WebBusinessFixture {
           new WebClipDirection(this.store, this.clock, webCloudDirection(env.GENERATION), budget),
         );
     }
-    this.execution = new WebCloudExecutor(ctx, this.store, this.clock, this.createRunner(), undefined, previews);
+    // Part 42: 广播 is started and delivered by this alarm, as business.ts wires it.
+    this.execution = new WebCloudExecutor(
+      ctx,
+      this.store,
+      this.clock,
+      this.createRunner(),
+      undefined,
+      previews,
+      this.app.broadcast,
+    );
     this.http = this.transport();
   }
   /** Part 17 test switches (set through /fixture/players). The Turnstile verifier is fake: no network, ever. */
@@ -618,6 +627,33 @@ export class WebHTTPFixture extends WebBusinessFixture {
       if (on) this.store.run('INSERT INTO web_retention_purge_gate VALUES (?,?,1)', principalId, world);
       else this.store.run('DELETE FROM web_retention_purge_gate WHERE principal_id=?', principalId);
       return Response.json({ configured: true });
+    }
+    // Part 42: counts only (no player, no content). A read of the object that never goes through the HTTP transport, so it cannot
+    // wake the executor: a broadcast that moves while a test only calls this was moved by the alarm alone.
+    if (path === '/fixture/broadcast/state') {
+      const n = (sql: string, ...args: string[]) => this.store.get<{ n: number }>(sql, ...args)!.n;
+      return Response.json({
+        broadcasts: this.store.all(
+          'SELECT state,revision,recipients,total,delivered,cursor,send_at,started_at FROM web_broadcasts ORDER BY created_at',
+        ),
+        messages: n('SELECT count(*) n FROM web_broadcast_messages'),
+        recipients: n('SELECT count(*) n FROM web_broadcast_recipients'),
+        clips: n('SELECT count(*) n FROM web_broadcast_characters WHERE audio IS NOT NULL'),
+        now: this.clock.now(),
+      });
+    }
+    if (path === '/fixture/broadcast/world') {
+      const { principalId } = (await request.json()) as { principalId: string };
+      const world = this.store.get<{ world_id: string }>(
+        'SELECT world_id FROM web_principals WHERE id=?',
+        principalId,
+      )!.world_id;
+      const n = (sql: string, ...args: string[]) => this.store.get<{ n: number }>(sql, ...args)!.n;
+      return Response.json({
+        messages: n('SELECT count(*) n FROM messages WHERE world_id=?', world),
+        links: n('SELECT count(*) n FROM web_broadcast_messages WHERE world_id=?', world),
+        recipients: n('SELECT count(*) n FROM web_broadcast_recipients WHERE principal_id=?', principalId),
+      });
     }
     if (path === '/fixture/run-alarm') {
       await this.alarm();

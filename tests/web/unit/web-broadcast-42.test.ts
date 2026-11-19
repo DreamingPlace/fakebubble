@@ -29,6 +29,9 @@ import {
   broadcastContextMessages,
   broadcastHistoryRows,
 } from '../../../apps/server/broadcast/web-broadcast-read.ts';
+import { freezeInputSnapshot } from '../../../apps/server/generation/web-input-snapshot.ts';
+import { freezeWebV7Request, readWebV7Request } from '../../../apps/server/generation/web-v7-request.ts';
+import { installWriterSetting, writeWriter } from '../../../apps/server/generation/web-writer-setting.ts';
 import { routeWebAccountAdmin } from '../../../apps/server/admin/web-account-admin-routes.ts';
 
 const ORIGIN = 'https://fixture.invalid';
@@ -118,7 +121,7 @@ function fixture(t: test.TestContext, options: { batch?: number } = {}) {
   const speech = new WebAdminSpeech(raw, clock, fish, authority, 's2.1-pro');
   chars.enableSpeech(speech);
   installWebBroadcast(raw);
-  const make = () => new WebBroadcast(raw, clock, accounts, () => chars.speechPath, { batch: options.batch ?? 50 });
+  const make = () => new WebBroadcast(store, clock, accounts, () => chars.speechPath, { batch: options.batch ?? 50 });
   const broadcast = make();
   let n = 0;
   /** A registered player (kind account) or a guest, each with a world of its own. */
@@ -776,4 +779,81 @@ test('42 routes: send, update and cancel queue work; the body is read after the 
     await code(() => route('broadcast/send', f.body(), { ...f.auth, csrf: 'y'.repeat(64) })),
     'ADMIN_CSRF_REQUIRED',
   );
+});
+
+test('42 load: 1,000 registered players, two characters, delivered in batches of 50 with chat served between them', async (t) => {
+  const f = fixture(t);
+  for (let i = 0; i < 1000; i++) f.player(`p${i}`);
+  for (let i = 0; i < 100; i++) f.player(`g${i}`, 'guest');
+  f.broadcast.create(
+    f.auth,
+    f.body({ characterIds: ['jojo', 'wei-guagua'], acknowledge: { characters: 2, recipients: 1000 } }),
+  );
+  const batches: number[] = [];
+  let yields = 0;
+  const started = performance.now();
+  for (;;) {
+    const at = performance.now();
+    const worked = await f.broadcast.pass(async () => {
+      batches.push(performance.now() - at);
+      yields++;
+    });
+    if (!worked) break;
+  }
+  const total = performance.now() - started;
+  const row = f.store.get<{ state: string; recipients: number; delivered: number; total: number }>('SELECT * FROM web_broadcasts')!;
+  assert.deepEqual([row.state, row.recipients, row.delivered, row.total], ['sent', 1000, 2000, 2000]);
+  assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_broadcast_messages')!.n, 4000);
+  assert.equal(yields, 20, '1,000 players are 20 batches of 50, each followed by a yield');
+  const slowest = Math.max(...batches.map((b, i) => (i ? b - batches[i - 1]! : b)));
+  console.log(
+    JSON.stringify({ event: 'broadcast_load', batch: 50, batches: yields, totalMs: Math.round(total), slowestBatchMs: Math.round(slowest) }),
+  );
+});
+
+test('42 the real writer request (v7 and v8) carries the broadcast as the character\'s own earlier message, before the player\'s input', async (t) => {
+  for (const writer of ['v7', 'v8'] as const) {
+    const f = fixture(t);
+    installWriterSetting(f.store as never);
+    if (writer === 'v8') writeWriter(f.store as never, f.now(), 'owner', 'v8');
+    const a = f.player(`w-${writer}`);
+    f.broadcast.create(f.auth, f.body({ acknowledge: { characters: 1, recipients: 1 } }));
+    await f.broadcast.pass();
+    f.tick(60_000);
+    // the player answers: an input message and an operation, as admission writes them
+    const conversationId = f.store.get<{ id: string }>('SELECT id FROM conversations WHERE world_id=?', a.worldId)!.id;
+    f.store.run(
+      `INSERT INTO messages(id,world_id,conversation_id,author_kind,author_id,body,created_at,delivery,request_id,request_hash)
+      VALUES ('input',?,?,'player',?,?,?,'text','r1','h1')`,
+      a.worldId,
+      conversationId,
+      a.playerId,
+      '收到啦，谢谢',
+      f.now(),
+    );
+    f.store.run(
+      `INSERT INTO web_operations(id,principal_id,request_id,payload_hash,world_id,conversation_id,character_id,input_message_id,
+      ip_window_id,status,quota_state,created_at,deadline_at,metering_type)
+      VALUES ('operation',?,'r1','h1',?,?,'wei-guagua','input',NULL,'queued','reserved',?,?,'entitled')`,
+      a.principalId,
+      a.worldId,
+      conversationId,
+      f.now(),
+      f.now() + 100_000,
+    );
+    freezeInputSnapshot(f.store as never, 'operation', f.now());
+    freezeWebV7Request(f.store as never, 'operation', f.now());
+    const { request } = readWebV7Request(f.store as never, 'operation');
+    assert.equal(request.writer, writer === 'v8' ? 'v8' : undefined);
+    assert.deepEqual(
+      request.messages.map((m) => [m.authorKind, m.authorId, m.text]),
+      [
+        ['character', 'wei-guagua', '大家好'],
+        ['character', 'wei-guagua', '今天有个小消息'],
+        ['player', a.playerId, '收到啦，谢谢'],
+      ],
+      writer,
+    );
+    assert.deepEqual(request.requiredMessageIds, ['input']);
+  }
 });
