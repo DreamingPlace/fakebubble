@@ -1,3 +1,6 @@
+// Part 39b (named exception): the old pair card of Part 24c ("{name} 和 [select] [🎲] 之间的故事", four tests) is gone: the relationship card
+// (🎲 on the deck, opened from THIS character) replaces it and is tested in relation-flow-39.test.ts. The memo, wording, model-sheet
+// and points tests below are unchanged.
 // Part 24c: the player side of notes - the pair story card, the 留言条 entry, the new wording, 获得点数 and 共创奖励 in 消费记录.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -33,7 +36,7 @@ function setup(
   t: test.TestContext,
   over: Partial<CocreationApi> = {},
   random: () => number = () => 0,
-  without: ('submitPair' | 'submitMemo')[] = [],
+  without: 'submitMemo'[] = [],
 ) {
   const doc = installFakeDom(t);
   resetCocreationDrafts();
@@ -43,10 +46,6 @@ function setup(
     submitCocreation: async (input) => {
       calls.cards.push({ characterId: input.characterId, requestId: input.requestId });
       return { submissionId: 's', answered: input.answers.length, duplicate: false };
-    },
-    submitPair: async (input) => {
-      calls.pairs.push(structuredClone(input));
-      return { submissionId: 'p', duplicate: false, earned: 5 };
     },
     submitMemo: async (input) => {
       calls.memos.push(structuredClone(input));
@@ -60,7 +59,6 @@ function setup(
     api,
     characterId: 'wei-guagua',
     name: NAME,
-    others: [{ characterId: 'wei-guagua', name: NAME }, ...OTHERS],
     mount: doc.body as unknown as HTMLElement,
     random,
     newRequestId: () => `request-${++ids}`,
@@ -78,7 +76,6 @@ test('wording: the hint, the co-creation entry and the model sheet title', () =>
   for (const old of ['点这里可以切换回复模型，或和角色一起共创', '点这里可以和角色一起共创', '共创 · 让瓜瓜更像瓜瓜'])
     assert.notEqual(old, guideCopy.text('瓜瓜') + cocreationCopy.title('瓜瓜'));
   assert.equal(cocreationCopy.memoOpen, '给制作组的留言条');
-  assert.equal(cocreationCopy.pairBetween, '之间的故事');
 });
 
 test('model sheet: opens titled 当前大脑', (t) => {
@@ -101,117 +98,6 @@ test('model sheet: opens titled 当前大脑', (t) => {
   assert.equal((picker.element as unknown as FakeElement).querySelector('.mp-brain') !== null, true);
 });
 
-test('pair card: "{name} 和 [select] [🎲] 之间的故事", the select lists the OTHER live characters', (t) => {
-  const f = setup(t);
-  const card = f.root().querySelector('[data-card="pair-story"]')!;
-  assert.ok(card);
-  assert.deepEqual(
-    card
-      .querySelector('.cc-pair-line')!
-      .querySelectorAll('span')
-      .map((node) => node.textContent),
-    ['瓜瓜 和', '之间的故事'],
-  );
-  const options = card.querySelectorAll('option');
-  assert.deepEqual(
-    options.map((option) => [option.getAttribute('value'), option.textContent]),
-    OTHERS.map((entry) => [entry.characterId, entry.name]),
-    'never the character itself',
-  );
-  assert.equal(card.querySelector('.cc-pair-roll')!.textContent, '🎲');
-  assert.equal(card.querySelector('textarea')!.getAttribute('maxlength'), String(COCREATION_PAIR_NOTE_MAX));
-  assert.equal(card.querySelector('textarea')!.getAttribute('placeholder'), '瓜瓜和JOJO之间发生过什么？');
-});
-
-test('pair card: 🎲 picks another character and can be tapped again to re-roll; the choice goes with the note', async (t) => {
-  const picks = [0.1, 0.9, 0.1];
-  let n = 0;
-  const f = setup(t, {}, () => picks[n++ % picks.length]!);
-  const card = f.root().querySelector('[data-card="pair-story"]')!;
-  const select = () => card.querySelector('select')!;
-  const roll = card.querySelector('.cc-pair-roll')!;
-  assert.equal(select().value, 'jojo');
-  roll.click();
-  assert.notEqual(select().value, 'jojo', 'a roll never lands on the character already showing');
-  const first = select().value;
-  roll.click();
-  const second = select().value;
-  assert.notEqual(second, first, 're-rolling changes it again');
-  assert.equal(
-    card
-      .querySelector('textarea')!
-      .getAttribute('placeholder')!
-      .includes(OTHERS.find((e) => e.characterId === second)!.name),
-    true,
-  );
-  // Choosing by hand works too.
-  select().value = 'xiao-an';
-  select().dispatch('change');
-  const send = f.root().querySelector('.cc-send')!;
-  assert.equal(send.disabled, true, 'nothing to hand over yet');
-  card.querySelector('textarea')!.type_('她们一起养过一只猫');
-  assert.equal(send.disabled, false, 'a pair note alone is enough to send');
-  send.click();
-  await flush();
-  assert.deepEqual(f.calls.pairs, [
-    { requestId: 'request-1', characterId: 'wei-guagua', partnerId: 'xiao-an', text: '她们一起养过一只猫' },
-  ]);
-  assert.equal(f.calls.cards.length, 0, 'no cards were written, so no card submission');
-  assert.equal(f.root().querySelector('.cc-thanks-sub')!.textContent.includes(cocreationCopy.earned(5)), true);
-});
-
-test('pair card: sent together with cards; a failed pair keeps its text and the cards that went through are spent', async (t) => {
-  let fail = true;
-  const f = setup(t, {
-    submitPair: async (input) => {
-      if (fail) throw Object.assign(new Error('x'), { code: 'COCREATION_IP_LIMIT' });
-      return { submissionId: 'p', duplicate: false, ...(input.text ? {} : {}) };
-    },
-  });
-  const pairArea = f.root().querySelector('[data-card="pair-story"]')!.querySelector('textarea')!;
-  const textCard = f
-    .root()
-    .querySelectorAll('.cc-card')
-    .find((card) => card.getAttribute('data-card') === 'free')!;
-  textCard.querySelector('.cc-face')!.click();
-  textCard.querySelector('textarea')!.type_('随便写点');
-  pairArea.type_('一个故事');
-  f.root().querySelector('.cc-send')!.click();
-  await flush();
-  assert.equal(f.calls.cards.length, 1, 'the cards were handed over');
-  assert.equal(
-    f.root().querySelector('.cc-notice')!.textContent,
-    cocreationCopy.errors.COCREATION_IP_LIMIT ?? cocreationCopy.errors.unknown,
-  );
-  assert.equal(
-    f.root().querySelector('[data-card="pair-story"]')!.querySelector('textarea')!.value,
-    '一个故事',
-    'the pair text is kept',
-  );
-  // Sending again retries ONLY the pair note (the cards are spent), with the same request id.
-  fail = false;
-  f.root().querySelector('.cc-send')!.click();
-  await flush();
-  assert.equal(f.calls.cards.length, 1, 'cards are never submitted twice');
-});
-
-test('pair card: not shown without other characters or without the route', (t) => {
-  const f = setup(t, {}, () => 0, ['submitPair']);
-  assert.equal(f.root().querySelector('[data-card="pair-story"]'), null);
-  const doc = installFakeDom(t);
-  const alone = openCocreationSheet({
-    api: {
-      submitCocreation: async () => ({ submissionId: 's', answered: 1, duplicate: false }),
-      submitPair: async () => ({ submissionId: 'p', duplicate: false }),
-    },
-    characterId: 'wei-guagua',
-    name: NAME,
-    others: [{ characterId: 'wei-guagua', name: NAME }],
-    mount: doc.body as unknown as HTMLElement,
-  });
-  assert.equal((alone.element as unknown as FakeElement).querySelector('[data-card="pair-story"]'), null);
-});
-
 test('留言条: an entry in the sheet, free text to the production team, sent on its own', async (t) => {
   const f = setup(t);
   const open = f.root().querySelector('.cc-memo-open')!;
@@ -227,7 +113,7 @@ test('留言条: an entry in the sheet, free text to the production team, sent o
   send.click();
   await flush();
   assert.deepEqual(f.calls.memos, [{ requestId: 'request-1', text: '想要更多角色' }]);
-  assert.equal(f.calls.cards.length + f.calls.pairs.length, 0, 'a memo is not a card or a pair note');
+  assert.equal(f.calls.cards.length + f.calls.pairs.length, 0, 'a memo is not a card or a relation note');
   assert.equal(f.root().querySelector('.cc-notice')!.textContent, cocreationCopy.memoThanks);
   assert.equal(panel.hidden, true);
   assert.equal(panel.querySelector('textarea')!.value, '');

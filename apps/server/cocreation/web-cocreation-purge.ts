@@ -18,6 +18,10 @@ function purgeRelations(store: Pick<BusinessStore, 'run' | 'get'>, condition: st
     store.run(`DELETE FROM ${table} WHERE submission_id IN (${ids})`, ...args);
 }
 
+/** Part 39b's wording tables exist (a runtime step, not a migration). */
+const wordingsExist = (store: Pick<BusinessStore, 'get'>) =>
+  !!store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_cocreation_wording_schema'");
+
 /** Migration 131's pair column exists. */
 const pairsExist = (store: Pick<BusinessStore, 'get'>) =>
   !!store.get("SELECT 1 FROM pragma_table_info('web_cocreation_submissions') WHERE name='partner_id'");
@@ -55,6 +59,15 @@ export function purgeCocreation(
   if (where.length === 0) throw new Error('COCREATION_PURGE_SCOPE_REQUIRED');
   const condition = where.join(' AND ');
   purgeRelations(store, condition, args);
+  // Part 39b: the wording a player was shown goes with the answer; a deleted character's pool goes with it (the generation ledger holds no text).
+  if (wordingsExist(store)) {
+    store.run(
+      `DELETE FROM web_cocreation_answer_wordings WHERE submission_id IN (SELECT id FROM web_cocreation_submissions WHERE ${condition})`,
+      ...args,
+    );
+    if (scope.characterId !== undefined && scope.principalId === undefined)
+      store.run('DELETE FROM web_cocreation_wordings WHERE character_id=?', scope.characterId);
+  }
   store.run(
     `DELETE FROM web_cocreation_answers WHERE submission_id IN (SELECT id FROM web_cocreation_submissions WHERE ${condition})`,
     ...args,

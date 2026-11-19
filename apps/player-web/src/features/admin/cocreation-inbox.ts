@@ -12,6 +12,7 @@ import {
   cocreationPrompt,
   type CocreationTargetField,
 } from '../../../../../packages/contracts/cocreation-cards.ts';
+import { cocreationTheme } from '../../../../../packages/contracts/cocreation-wordings.ts';
 import { ADOPT_ERROR_TEXT, ADOPT_FIELDS, type AdoptField } from '../../../../../packages/contracts/cocreation-adopt.ts';
 import { draftBox, withField, type DraftBox as Mounted } from './cocreation-draft-box.ts';
 import type {
@@ -35,7 +36,12 @@ import { consoleOrder } from './ui/console-order.ts';
 import { segmented } from './ui/segmented.ts';
 import { relationPanel } from './cocreation-relation-panel.ts';
 import { relationsView } from './cocreation-relations-view.ts';
-import type { CocreationRelationsClient, RelationDetail } from '../../services/cocreation-admin-api.ts';
+import { wordingsView } from './cocreation-wordings-view.ts';
+import type {
+  CocreationRelationsClient,
+  CocreationWordingsClient,
+  RelationDetail,
+} from '../../services/cocreation-admin-api.ts';
 
 type Deps = {
   api: Pick<CocreationAdminClient, 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
@@ -59,7 +65,9 @@ type Deps = {
   adoptPoints?: () => Promise<number | null>;
   /** Part 39: relation notes (two to eight characters): the panel in the detail and the view 玩家眼中的关系. Absent = neither exists. */
   relations?: Pick<CocreationRelationsClient, 'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy'>;
-  /** A fresh request id (adoption, 整理); default: crypto.randomUUID. */
+  /** Part 39b: 题目, the wording pool of the themes (a third view of this page). Absent = no such view. */
+  wordings?: Pick<CocreationWordingsClient, 'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'>;
+  /** A fresh request id (adoption, 整理, 生成); default: crypto.randomUUID. */
   newId?: () => string;
 };
 
@@ -153,37 +161,57 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   const layout = h('div', { class: 'cc-layout' }, listColumn);
   // Part 39: 玩家眼中的关系 is a second view of this page (only when the page has the relation client).
   const viewHost = h('div', { class: 'cr-view', hidden: true });
-  let showing: 'inbox' | 'relations' = 'inbox';
+  const wordingsHost = h('div', { class: 'cw-view', hidden: true });
+  let showing: 'inbox' | 'relations' | 'wordings' = 'inbox';
   const viewStatus = h('span', { class: 'head-status', hidden: true });
   const relations = deps.relations
     ? relationsView(viewHost, { api: deps.relations, nameOf: (id) => nameOf(id), colour: (id) => colourOf()(id) })
     : null;
-  const switcher = relations
-    ? segmented(
-        '视图',
-        [
-          { id: 'inbox' as const, label: '投稿' },
-          { id: 'relations' as const, label: '玩家眼中的关系' },
-        ],
-        'inbox',
-        (id) => {
-          showing = id;
-          layout.hidden = id !== 'inbox';
-          viewHost.hidden = id !== 'relations';
-          counts.hidden = id !== 'inbox' || !bulk.hidden;
-          viewStatus.hidden = id !== 'relations';
-          if (id === 'relations')
-            void deps.run(async () => {
-              await relations.load();
-              viewStatus.textContent = relations.status.textContent ?? '';
-            });
-        },
-      )
+  const wordings = deps.wordings
+    ? wordingsView(wordingsHost, {
+        api: deps.wordings,
+        nameOf: (id) => nameOf(id),
+        colour: (id) => colourOf()(id),
+        canManage: deps.canManage,
+        newId: () => deps.newId?.() ?? globalThis.crypto.randomUUID(),
+        status: deps.status,
+      })
     : null;
+  const switcher =
+    relations || wordings
+      ? segmented(
+          '视图',
+          [
+            { id: 'inbox' as const, label: '投稿' },
+            ...(relations ? [{ id: 'relations' as const, label: '玩家眼中的关系' }] : []),
+            ...(wordings ? [{ id: 'wordings' as const, label: '题目' }] : []),
+          ],
+          'inbox',
+          (id) => {
+            showing = id;
+            layout.hidden = id !== 'inbox';
+            viewHost.hidden = id !== 'relations';
+            wordingsHost.hidden = id !== 'wordings';
+            counts.hidden = id !== 'inbox' || !bulk.hidden;
+            viewStatus.hidden = id === 'inbox';
+            if (id === 'relations' && relations)
+              void deps.run(async () => {
+                await relations.load();
+                viewStatus.textContent = relations.status.textContent ?? '';
+              });
+            if (id === 'wordings' && wordings)
+              void deps.run(async () => {
+                await wordings.load();
+                viewStatus.textContent = wordings.status.textContent ?? '';
+              });
+          },
+        )
+      : null;
   root.replaceChildren(
     pageHead('共创收件箱', switcher?.root, viewStatus, counts, bulk),
     layout,
     ...(relations ? [viewHost] : []),
+    ...(wordings ? [wordingsHost] : []),
   );
 
   // ---- list -----------------------------------------------------------------------------------------------------
@@ -877,9 +905,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                         ? '给制作组的留言条'
                         : current.kind === 'pair'
                           ? `${nameOf(current.characterId)}和${nameOf(current.partnerId ?? '')}之间的故事`
-                          : card
-                            ? cocreationPrompt(card, character)
-                            : '',
+                          : // Part 39b: a theme answer shows its theme AND the exact question the player was shown.
+                            cocreationTheme(answer.cardId)
+                            ? `${cocreationTheme(answer.cardId)!.label} · ${answer.wording ?? cocreationPrompt(card!, character)}`
+                            : card
+                              ? cocreationPrompt(card, character)
+                              : '',
                   })
                 : null,
               bubbles(answer, character),

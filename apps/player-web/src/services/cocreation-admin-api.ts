@@ -36,6 +36,8 @@ export type InboxAnswer = {
   targetField: CocreationTargetField;
   kind: 'text' | 'dialogue';
   adoptedAt: number | null;
+  /** Part 39b: the exact question the player was shown (theme answers only). */
+  wording?: string;
 } & ({ kind: 'text'; text: string } | { kind: 'dialogue'; player: string; replies: string[] });
 export type InboxDetail = {
   id: string;
@@ -116,6 +118,7 @@ const answer = (v: unknown): InboxAnswer => {
     cardId: string(r.cardId),
     targetField: field as CocreationTargetField,
     adoptedAt: r.adoptedAt === null ? null : count(r.adoptedAt),
+    ...(typeof r.wording === 'string' ? { wording: r.wording } : {}),
   };
   if (r.kind === 'text') return { ...base, kind: 'text', text: string(r.text) };
   if (r.kind === 'dialogue')
@@ -324,5 +327,84 @@ export class CocreationRelationsClient {
   async tidy(id: string, requestId: string): Promise<TidyResult> {
     const r = object(await this.request('relation/tidy', { id, requestId }));
     return { story: string(r.story), flags: rows(r.flags).map(string) };
+  }
+}
+
+// ---- Part 39b: 题目, the wording pool ---------------------------------------------------------------------------------------
+export type WordingEntry = {
+  id: string;
+  characterId: string;
+  themeId: string;
+  text: string;
+  enabled: boolean;
+  source: 'manual' | 'generated';
+};
+export type WordingPool = {
+  themes: { id: string; label: string }[];
+  /** Live characters in the console's order. */
+  order: string[];
+  entries: WordingEntry[];
+};
+export type WordingEstimate =
+  | { ok: true; items: { characterId: string; estimateMicros: number }[]; totalMicros: number }
+  | { ok: false; reason: string };
+const wordingEntry = (v: unknown): WordingEntry => {
+  const r = object(v);
+  const source = string(r.source);
+  if (source !== 'manual' && source !== 'generated') throw invalid();
+  return {
+    id: string(r.id),
+    characterId: string(r.characterId),
+    themeId: string(r.themeId),
+    text: string(r.text),
+    enabled: flag(r.enabled),
+    source,
+  };
+};
+
+export class CocreationWordingsClient {
+  private readonly request: (path: string, body: Record<string, unknown>) => Promise<unknown>;
+  constructor(request: (path: string, body: Record<string, unknown>) => Promise<unknown>) {
+    this.request = request;
+  }
+  async list(): Promise<WordingPool> {
+    const r = object(await this.request('wordings/list', {}));
+    return {
+      themes: rows(r.themes).map((t) => {
+        const e = object(t);
+        return { id: string(e.id), label: string(e.label) };
+      }),
+      order: rows(r.order).map(string),
+      entries: rows(r.entries).map(wordingEntry),
+    };
+  }
+  async add(input: { characterId: string; themeId: string; text: string; enabled: boolean; requestId: string }) {
+    return wordingEntry(await this.request('wordings/add', input));
+  }
+  async edit(id: string, text: string) {
+    return wordingEntry(await this.request('wordings/edit', { id, text }));
+  }
+  async toggle(id: string, enabled: boolean) {
+    return wordingEntry(await this.request('wordings/toggle', { id, enabled }));
+  }
+  async remove(id: string) {
+    object(await this.request('wordings/delete', { id }));
+  }
+  /** What 生成 would hold: one line per character (console order) and the total; `characterIds: null` = every live character. */
+  async estimate(characterIds: string[] | null): Promise<WordingEstimate> {
+    const r = object(await this.request('wordings/estimate', { characterIds }));
+    if (r.ok === false) return { ok: false, reason: string(r.reason) };
+    return {
+      ok: true,
+      items: rows(r.items).map((x) => {
+        const e = object(x);
+        return { characterId: string(e.characterId), estimateMicros: count(e.estimateMicros) };
+      }),
+      totalMicros: count(r.totalMicros),
+    };
+  }
+  /** 生成 for ONE character; the drafts land switched off. */
+  async generate(input: { characterId: string; requestId: string; acknowledgeMicros: number }) {
+    return { added: count(object(await this.request('wordings/generate', input)).added) };
   }
 }

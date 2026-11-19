@@ -110,7 +110,8 @@ try {
     );
     await page.locator('.card-slot.is-active .face-portrait[data-portrait="loaded"]').waitFor({ timeout: 15_000 });
     const box = await page.locator('.card-slot.is-active .face-portrait').boundingBox();
-    assert.ok(Math.abs(box.width - 148) < 1 && Math.abs(box.height - 148) < 1, `148 px at ${tag}`);
+    // Part 41 (owner spec 2026-11-18), named exception: the card's picture is 10% smaller than the 148 px of Part 31b, so 133.2 px.
+    assert.ok(Math.abs(box.width - 133.2) < 1 && Math.abs(box.height - 133.2) < 1, `133.2 px at ${tag}`);
     const src = await page.locator('.card-slot.is-active .face-portrait img.portrait').getAttribute('src');
     assert.equal(src, `/api/web/provider/public-image/${withPicture[first]}`);
     assert.equal(await page.locator('.card-slot.is-active .face-portrait img').getAttribute('alt'), '', 'decorative');

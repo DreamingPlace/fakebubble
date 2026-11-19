@@ -8,6 +8,8 @@ import { WebProviderOffline } from '../apps/server/generation/web-provider-offli
 import { DomainError } from '../packages/domain/errors.ts';
 import { WebClipDirection } from '../apps/server/characters/web-clip-direction.ts';
 import { WebCocreationTidy } from '../apps/server/cocreation/web-cocreation-tidy.ts';
+import { WebCocreationWordingGen } from '../apps/server/cocreation/web-cocreation-wordings-gen.ts';
+import { COCREATION_THEMES } from '../packages/contracts/cocreation-wordings.ts';
 import { WebAdminSpeech } from '../apps/server/characters/web-admin-speech.ts';
 import { WebCharacterPreviewRunner } from '../apps/server/characters/web-character-preview-runner.ts';
 import { WebProviderRunner } from '../apps/server/generation/web-provider-runner.ts';
@@ -331,6 +333,34 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
             outputTokens: 40,
             model: 'deepseek-flash',
             receipt: { id: 'fake-tidy' },
+          };
+        },
+      },
+      { reserve() {}, settle() {} },
+    ),
+  );
+  // Part 39b: 生成 of the wording pool on the synthetic site: a stand-in text model that drafts eight wordings per theme.
+  previews.useWordingGen(
+    new WebCocreationWordingGen(
+      store,
+      clock,
+      {
+        model: 'deepseek-flash',
+        async completePlain(input) {
+          await sleep(300);
+          const { name } = JSON.parse(input.user) as { name: string };
+          const wordings = Object.fromEntries(
+            COCREATION_THEMES.map((theme) => [
+              theme.id,
+              Array.from({ length: 8 }, (_, n) => `{name}的${theme.label}之${n + 1}（为${name}生成）`),
+            ]),
+          );
+          return {
+            text: JSON.stringify({ wordings }),
+            inputTokens: 300,
+            outputTokens: 500,
+            model: 'deepseek-flash',
+            receipt: { id: 'fake-wordings' },
           };
         },
       },

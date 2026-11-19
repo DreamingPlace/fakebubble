@@ -19,6 +19,8 @@ export const COCREATION_REWARDS_PATH = '/api/web/local/cocreation/rewards';
 /** Part 39: POST /cocreation/world {} (the public world background), POST /cocreation/relation { requestId, characterIds, ratings, reason, text }. */
 export const COCREATION_WORLD_PATH = '/api/web/local/cocreation/world';
 export const COCREATION_RELATION_PATH = '/api/web/local/cocreation/relation';
+/** Part 39b: POST /cocreation/wordings { characterId } (the enabled wordings of the character's themes, text only). */
+export const COCREATION_WORDINGS_PATH = '/api/web/local/cocreation/wordings';
 
 export function routeWebCocreation(cocreation: WebCocreation, req: WebInviteRequest): WebInviteResult | null {
   if (req.path === COCREATION_WORLD_PATH) {
@@ -31,6 +33,23 @@ export function routeWebCocreation(cocreation: WebCocreation, req: WebInviteRequ
     ensure(typeof req.playerToken === 'string' && req.playerToken !== '', 'AUTH_REQUIRED');
     ensure(typeof req.csrf === 'string' && typeof req.origin === 'string', 'CSRF_INVALID');
     return { status: 200, body: cocreation.worldBackground(req.playerToken, req.csrf, req.origin) };
+  }
+  if (req.path === COCREATION_WORDINGS_PATH) {
+    ensure(req.method === 'POST' && cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
+    const asked = req.body as Record<string, unknown> | null;
+    ensure(
+      asked !== null &&
+        typeof asked === 'object' &&
+        !Array.isArray(asked) &&
+        Object.keys(asked).join(',') === 'characterId',
+      'INVALID_REQUEST',
+    );
+    ensure(typeof req.playerToken === 'string' && req.playerToken !== '', 'AUTH_REQUIRED');
+    ensure(typeof req.csrf === 'string' && typeof req.origin === 'string', 'CSRF_INVALID');
+    return {
+      status: 200,
+      body: cocreation.playerWordings(req.playerToken, req.csrf, req.origin, asked.characterId),
+    };
   }
   if (req.path === COCREATION_RELATION_PATH) {
     ensure(req.method === 'POST' && cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
