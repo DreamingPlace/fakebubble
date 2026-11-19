@@ -399,7 +399,9 @@ try {
       const boxes: string[] = [];
       for (let el: HTMLElement | null = grid.parentElement; el && el !== half; el = el.parentElement) {
         const cs = getComputedStyle(el);
-        if (/(auto|scroll|hidden|clip)/.test(`${cs.overflowY} ${cs.overflowX}`)) boxes.push(el.className);
+        // Part 44 (named exception, owner decision): the result table scrolls SIDEWAYS inside its own box, `.rh-scroll`
+        if (/(auto|scroll|hidden|clip)/.test(`${cs.overflowY} ${cs.overflowX}`) && !el.classList.contains('rh-scroll'))
+          boxes.push(el.className);
       }
       const rows = grid.querySelectorAll<HTMLElement>('.rh-row');
       const tail = rows[rows.length - 1]!.lastElementChild as HTMLElement; // a row lays out as `contents`: its last cell is the box

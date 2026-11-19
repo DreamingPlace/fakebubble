@@ -745,6 +745,21 @@ try {
     // Co-creation thank-you: a guest is told that signing up earns points; a signed-up player is not; a memo shows neither.
     const hintText = cocreationCopy.guestHint;
     const open = async (view: any) => {
+      // Part 44 (named exception, owner decision): a theme with no ONLINE wording has no card, and this local site has an empty pool, so
+      // the sheet is given one online wording per theme here (the cards themselves are what this check is about).
+      await view.route('**/cocreation/wordings', (route: any) =>
+        route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            themes: Object.fromEntries(
+              ['theme-know', 'theme-experience', 'theme-habit', 'theme-catchphrase', 'theme-recent'].map((id) => [
+                id,
+                [`${id}：你怎么看{name}？`],
+              ]),
+            ),
+          }),
+        }),
+      );
       await view.locator('.avatar-choice[aria-label^="选择"]').first().click();
       await settle(view);
       await view.mouse.click(195, 380);
