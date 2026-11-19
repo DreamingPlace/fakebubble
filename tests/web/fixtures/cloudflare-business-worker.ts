@@ -1,3 +1,4 @@
+import type { WebAttemptBudget } from '../../../apps/server/budget/web-provider-budget-contract.ts';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { legacySchema, resumeLegacySchema } from './legacy-schema.ts';
 import type { DurableSQLStorage } from '../../../apps/server/cloudflare/store.ts';
@@ -147,7 +148,11 @@ export class WebBusinessFixture {
     this.actions = new WebInviteActions(this.store, clock, origin, tiers);
     this.admission = new WebAdmission(this.store, clock, randomUUID);
   }
-  protected createRunner(audioMs = 250, beforeResult?: (provider: string, signal: AbortSignal) => Promise<void>) {
+  protected createRunner(
+    audioMs = 250,
+    beforeResult?: (provider: string, signal: AbortSignal) => Promise<void>,
+    budget?: WebAttemptBudget,
+  ) {
     const called = (provider: string) =>
       this.store.run(
         `INSERT INTO cf_fixture_calls VALUES (?,1)
@@ -177,11 +182,17 @@ export class WebBusinessFixture {
         );
       },
     });
-    return new WebProviderRunner(this.store, this.clock, text, async (wire, signal) => {
-      called('speech');
-      await beforeResult?.('speech', signal);
-      return { audio: syntheticTone(audioMs), receipt: { offline: true }, usageUnits: wire.billedTextBytes };
-    });
+    return new WebProviderRunner(
+      this.store,
+      this.clock,
+      text,
+      async (wire, signal) => {
+        called('speech');
+        await beforeResult?.('speech', signal);
+        return { audio: syntheticTone(audioMs), receipt: { offline: true }, usageUnits: wire.billedTextBytes };
+      },
+      budget,
+    );
   }
   async fetch(request: Request) {
     try {

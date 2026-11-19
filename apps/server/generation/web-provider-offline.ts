@@ -619,6 +619,15 @@ export class WebProviderOffline {
       )
     );
   }
+  /** Part 43: this attempt's stage was re-queued after a restart proved its call was never sent (see WebDispatchLedger.recover). */
+  isRequeued(key: Key) {
+    return !!this.store.get(
+      'SELECT 1 FROM web_stage_attempts WHERE operation_id=? AND stage=? AND provider_request_id=?',
+      key.operationId,
+      key.phase === 'speech' ? 'audio' : 'text',
+      `requeue:${key.phase}:${key.ordinal}`,
+    );
+  }
   private rebindRewound(claim: WebStageClaim, key: Key) {
     this.store.run(
       `UPDATE web_provider_attempts SET stage_version=?,lease_epoch=?,lease_token=?

@@ -16,6 +16,8 @@ import {
   webRegisteredSql,
 } from '../admission/web-retention.ts';
 
+/** Part 43: a stage that provably never crossed the send gate is re-queued at most this many times after a restart. */
+export const WEB_REQUEUE_LIMIT = 2;
 type Stage = 'text' | 'audio';
 type Phase = 'draft' | 'review' | 'speech';
 type AttemptKey = { operationId: string; stage: Stage; phase: Phase; ordinal: number };
@@ -184,25 +186,60 @@ export class WebDispatchLedger {
         ).changes === 1,
         'WEB_EXTERNAL_CAPACITY_UNAVAILABLE',
       );
-      this.store.run(
-        `INSERT INTO web_external_attempts(operation_id,stage,phase,ordinal,provider,provider_request_id,
+      // Part 43: the ticket row of an attempt released by a re-queue is reset in place (its key is the primary key).
+      const released =
+        !!this.store.get(
+          `SELECT 1 FROM web_external_attempts WHERE operation_id=? AND stage=? AND phase=? AND ordinal=?
+          AND dispatch_state='known' AND outcome='not_dispatched'`,
+          claim.operationId,
+          claim.stage,
+          input.phase,
+          input.ordinal,
+        ) &&
+        !!this.store.get(
+          'SELECT 1 FROM web_stage_attempts WHERE operation_id=? AND stage=? AND provider_request_id=?',
+          claim.operationId,
+          claim.stage,
+          `requeue:${input.phase}:${input.ordinal}`,
+        );
+      if (released)
+        this.store.run(
+          `UPDATE web_external_attempts SET provider=?,provider_request_id=?,dispatch_state='not_sent',outcome=NULL,
+          sent_at=NULL,settled_at=NULL,receipt_json=NULL,usage_json=NULL,
+          ${schema >= 113 ? 'receipt_digest=NULL,usage_digest=NULL,' : ''}
+          stage_version=?,lease_epoch=?,lease_token=?,created_at=?
+          WHERE operation_id=? AND stage=? AND phase=? AND ordinal=?`,
+          input.provider,
+          input.providerRequestId,
+          claim.stageVersion,
+          claim.epoch,
+          claim.token,
+          now,
+          claim.operationId,
+          claim.stage,
+          input.phase,
+          input.ordinal,
+        );
+      else
+        this.store.run(
+          `INSERT INTO web_external_attempts(operation_id,stage,phase,ordinal,provider,provider_request_id,
         dispatch_state,stage_version,lease_epoch,lease_token,principal_id,world_id,conversation_id,input_message_id,created_at)
         VALUES (?,?,?,?,?,?,'not_sent',?,?,?,?,?,?,?,?)`,
-        claim.operationId,
-        claim.stage,
-        input.phase,
-        input.ordinal,
-        input.provider,
-        input.providerRequestId,
-        claim.stageVersion,
-        claim.epoch,
-        claim.token,
-        claim.principalId,
-        claim.worldId,
-        claim.conversationId,
-        claim.inputMessageId,
-        now,
-      );
+          claim.operationId,
+          claim.stage,
+          input.phase,
+          input.ordinal,
+          input.provider,
+          input.providerRequestId,
+          claim.stageVersion,
+          claim.epoch,
+          claim.token,
+          claim.principalId,
+          claim.worldId,
+          claim.conversationId,
+          claim.inputMessageId,
+          now,
+        );
       return { operationId: claim.operationId, stage: claim.stage, phase: input.phase, ordinal: input.ordinal };
     });
   }
@@ -1153,9 +1190,225 @@ export class WebDispatchLedger {
         );
         return { status: 'unknown' as const };
       }
-      // No sent attempt exists; terminate instead of silently retrying an old lease.
+      // No sent attempt exists. Part 43: a stage that provably never crossed the send gate goes back to the queue (bounded,
+      // within the operation's deadline) instead of failing the player's reply; anything else terminates as before.
+      const requeued = this.requeueUnsent(fence, now);
+      if (requeued) return requeued;
       return this.terminateInternal(coordinator, fence, fence.principalId, 'failed', 'recovered_unsent');
     });
+  }
+
+  /**
+   * Part 43. PROVABLY UNSENT means: the running stage owns no attempt that is sent/unknown or known-failed, and every attempt
+   * it does own is still `not_sent` (the call only starts after the `sent` mark commits, and that mark is fenced by the stage
+   * lease, so a stale owner can never cross the gate afterwards) or a known success whose output is kept as is. Such a stage
+   * releases its never-used local ticket and hold (once: the rows are deleted in the same transaction) and returns to the
+   * queue; the next claim reserves again exactly like a first attempt. Returns null when the stage must fail as before
+   * (deadline passed, bound used up, a rewound/failed attempt, no running segment).
+   */
+  private requeueUnsent(fence: WebOperationFence, now: number) {
+    const schema = this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
+    const stage: Stage = fence.status === 'text_running' ? 'text' : 'audio';
+    const op = this.store.get<{ deadline_at: number }>(
+      `SELECT deadline_at FROM web_operations WHERE id=? AND quota_state='reserved' AND deadline_at>?
+      AND principal_id=? AND world_id=? AND conversation_id=? AND character_id=? AND input_message_id=?`,
+      fence.operationId,
+      now,
+      fence.principalId,
+      fence.worldId,
+      fence.conversationId,
+      fence.characterId,
+      fence.inputMessageId,
+    );
+    if (!op) return null;
+    const used =
+      this.store.get<{ n: number }>(
+        'SELECT count(*) n FROM web_stage_attempts WHERE operation_id=? AND stage=?',
+        fence.operationId,
+        stage,
+      )?.n ?? 0;
+    if (used >= WEB_REQUEUE_LIMIT) return null;
+    const attempts = this.store.all<{
+      phase: Phase;
+      ordinal: number;
+      provider: string;
+      dispatch_state: string;
+      outcome: string | null;
+    }>(
+      'SELECT phase,ordinal,provider,dispatch_state,outcome FROM web_external_attempts WHERE operation_id=? AND stage=?',
+      fence.operationId,
+      stage,
+    );
+    if (
+      !attempts.every(
+        (a) =>
+          a.dispatch_state === 'not_sent' ||
+          (a.dispatch_state === 'known' && (a.outcome === 'succeeded' || a.outcome === 'not_dispatched')),
+      )
+    )
+      return null;
+    const unsent = attempts.filter((a) => a.dispatch_state === 'not_sent');
+    const hasProviderTables = schema >= 113;
+    if (hasProviderTables) {
+      const provider = this.store.all<{ phase: Phase; ordinal: number; state: string; outcome: string | null }>(
+        `SELECT phase,ordinal,state,outcome FROM web_provider_attempts WHERE operation_id=?
+        AND phase IN (${stage === 'text' ? "'draft','review'" : "'speech'"})`,
+        fence.operationId,
+      );
+      if (!provider.every((a) => a.state === 'not_sent' || (a.state === 'known' && a.outcome === 'succeeded')))
+        return null;
+      // A 429-rewound attempt keeps its reservation by design (rejectForRetry); it is not this path's to release.
+      if (
+        this.store.get(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_attempt_rejections'`) &&
+        this.store.get('SELECT 1 FROM web_attempt_rejections WHERE operation_id=?', fence.operationId)
+      )
+        return null;
+      for (const p of provider.filter((a) => a.state === 'not_sent'))
+        if (!unsent.some((a) => a.phase === p.phase && a.ordinal === p.ordinal)) return null;
+    }
+    let segmentTable: string | null = null;
+    if (stage === 'audio') {
+      segmentTable =
+        schema >= 113 ? 'web_provider_voice_segments' : schema >= 105 ? 'web_synthetic_voice_segments' : null;
+      if (
+        !segmentTable ||
+        !this.store.get(
+          `SELECT 1 FROM ${segmentTable} WHERE operation_id=? AND state='running' AND claim_stage_version=?
+          AND claim_epoch IS ? AND claim_token IS ?`,
+          fence.operationId,
+          fence.stageVersion,
+          fence.leaseEpoch,
+          fence.leaseToken,
+        )
+      )
+        return null;
+    }
+    // A known success only counts as "already done" while its output is kept; a late receipt that settled cost without
+    // keeping bytes (stale owner) means the call WAS made, so such a stage is never re-sent.
+    for (const a of attempts.filter((x) => x.dispatch_state === 'known' && x.outcome === 'succeeded')) {
+      const kept =
+        stage === 'text'
+          ? this.store.get(
+              `SELECT 1 FROM ${schema >= 113 ? 'web_provider_outputs' : 'web_local_text_outputs'} WHERE operation_id=? AND phase=?`,
+              fence.operationId,
+              a.phase,
+            )
+          : this.store.get(
+              `SELECT 1 FROM ${schema >= 113 ? 'web_provider_outputs' : 'web_local_audio_outputs'} WHERE operation_id=? AND ordinal=?`,
+              fence.operationId,
+              a.ordinal,
+            );
+      if (!kept) return null;
+    }
+    if (stage === 'audio') {
+      const running = this.store.get<{ ordinal: number }>(
+        `SELECT ordinal FROM ${segmentTable} WHERE operation_id=? AND state='running' AND claim_stage_version=?`,
+        fence.operationId,
+        fence.stageVersion,
+      );
+      // The running clip itself must own no settled attempt: a known one means it was sent.
+      if (!running || attempts.some((x) => x.ordinal === running.ordinal && x.dispatch_state !== 'not_sent'))
+        return null;
+    }
+    for (const a of unsent) {
+      if (hasProviderTables) {
+        const held = this.store.get<{ provider: string; held_micros: number }>(
+          `SELECT provider,held_micros FROM web_provider_attempts
+          WHERE operation_id=? AND phase=? AND ordinal=? AND state='not_sent'`,
+          fence.operationId,
+          a.phase,
+          a.ordinal,
+        );
+        ensure(held, 'WEB_PROVIDER_ATTEMPT_STALE');
+        ensure(
+          this.store.run(
+            'UPDATE web_provider_spending SET held_micros=held_micros-? WHERE provider=? AND held_micros>=?',
+            held.held_micros,
+            held.provider,
+            held.held_micros,
+          ).changes === 1 &&
+            this.store.run(
+              `DELETE FROM web_provider_attempts WHERE operation_id=? AND phase=? AND ordinal=? AND state='not_sent'`,
+              fence.operationId,
+              a.phase,
+              a.ordinal,
+            ).changes === 1,
+          'WEB_PROVIDER_BUDGET_CONFLICT',
+        );
+      }
+      // The ticket row stays as an audit record (known, not dispatched); reserve() resets it for the next claim.
+      ensure(
+        this.store.run(
+          `UPDATE web_external_attempts SET dispatch_state='known',outcome='not_dispatched',settled_at=?
+          WHERE operation_id=? AND stage=? AND phase=? AND ordinal=? AND dispatch_state='not_sent'`,
+          now,
+          fence.operationId,
+          stage,
+          a.phase,
+          a.ordinal,
+        ).changes === 1,
+        'WEB_DISPATCH_STALE',
+      );
+      this.releaseBudget({
+        operationId: fence.operationId,
+        stage,
+        phase: a.phase,
+        ordinal: a.ordinal,
+        provider: a.provider,
+        dispatch_state: 'not_sent',
+        outcome: null,
+        receipt_json: null,
+        usage_json: null,
+      });
+    }
+    this.store.run(
+      `INSERT INTO web_stage_attempts(operation_id,stage,attempt,dispatch_state,provider_request_id,created_at)
+      VALUES (?,?,?,'not_sent',?,?)`,
+      fence.operationId,
+      stage,
+      used + 1,
+      unsent[0] ? `requeue:${unsent[0].phase}:${unsent[0].ordinal}` : `requeue:${stage}`,
+      now,
+    );
+    if (stage === 'text') {
+      ensure(
+        this.store.run(
+          `UPDATE web_operations SET status='queued',stage_version=stage_version+1,text_queued_at=?,
+          lease_epoch=NULL,lease_token=NULL,lease_owner=NULL,lease_expires_at=NULL
+          WHERE id=? AND status='text_running' AND stage_version=? AND lease_epoch IS ? AND lease_token IS ?`,
+          now,
+          fence.operationId,
+          fence.stageVersion,
+          fence.leaseEpoch,
+          fence.leaseToken,
+        ).changes === 1,
+        'WEB_OPERATION_STALE',
+      );
+      return { status: 'queued' as const, requeued: true as const };
+    }
+    ensure(
+      this.store.run(
+        `UPDATE ${segmentTable} SET state='pending',claim_stage_version=NULL,claim_epoch=NULL,claim_token=NULL
+        WHERE operation_id=? AND state='running' AND claim_stage_version=?`,
+        fence.operationId,
+        fence.stageVersion,
+      ).changes === 1,
+      'WEB_VOICE_SEGMENT_STALE',
+    );
+    ensure(
+      this.store.run(
+        `UPDATE web_operations SET status='audio_pending',stage_version=stage_version+1,audio_wait_started_at=?,
+        lease_epoch=NULL,lease_token=NULL,lease_owner=NULL,lease_expires_at=NULL
+        WHERE id=? AND status='audio_running' AND stage_version=? AND lease_epoch IS ? AND lease_token IS ?`,
+        now,
+        fence.operationId,
+        fence.stageVersion,
+        fence.leaseEpoch,
+        fence.leaseToken,
+      ).changes === 1,
+      'WEB_OPERATION_STALE',
+    );
+    return { status: 'audio_pending' as const, requeued: true as const };
   }
 
   private liveClaim(claim: WebStageClaim, now: number) {

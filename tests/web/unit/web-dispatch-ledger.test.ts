@@ -166,7 +166,9 @@ test('not-sent recovery releases capacity and original quota, but sent recovery 
     fenceB = f.ledger.fence(second.operationId);
   f.advance(90_000);
   const recovered = f.queue.acquireCoordinator('recovered');
-  assert.equal(f.ledger.recover(recovered, fenceA).status, 'failed');
+  // Part 43 NAMED EXCEPTION (only change to this test): a provably unsent stage is re-queued instead of failed; the
+  // not_dispatched outcome, the released ticket (reserved stays 1) and B's UNKNOWN below are asserted unchanged.
+  assert.equal(f.ledger.recover(recovered, fenceA).status, 'queued');
   assert.equal(f.ledger.recover(recovered, fenceB).status, 'unknown');
   assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
   assert.equal(

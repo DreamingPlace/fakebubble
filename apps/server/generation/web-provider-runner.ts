@@ -228,7 +228,7 @@ export class WebProviderRunner {
               model: spec.model,
               maxUnits,
             });
-            await this.budget?.beginAttempt(this.store, key, this.ledger.isRewound(key));
+            await this.budget?.beginAttempt(this.store, key, this.ledger.isRewound(key), this.ledger.isRequeued(key));
             ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
             this.ledger.markSentForClaim(claim, key, scope);
             started.add(stage);
@@ -412,7 +412,7 @@ export class WebProviderRunner {
       model: model,
       maxUnits,
     });
-    await this.budget?.beginAttempt(this.store, key, this.ledger.isRewound(key));
+    await this.budget?.beginAttempt(this.store, key, this.ledger.isRewound(key), this.ledger.isRequeued(key));
     ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
     // markSentForClaim rechecks lease, entitlement, input and scene after the remote await.
     this.ledger.markSentForClaim(claim, key, scope);
