@@ -39,7 +39,11 @@ import { conversationsView } from './conversations-view.ts';
 import { arcOrderView } from './owner/arc-order-view.ts';
 import type { OwnerAdminClient } from '../../services/owner-admin-api.ts';
 import type { ConversationsAdminClient } from '../../services/conversations-admin-api.ts';
-import type { CocreationAdminClient, CocreationRelationsClient } from '../../services/cocreation-admin-api.ts';
+import type {
+  CocreationAdminClient,
+  CocreationRelationsClient,
+  CocreationWordingsClient,
+} from '../../services/cocreation-admin-api.ts';
 import { browserDownload, inviteTiersView } from './invite-tiers-view.ts';
 import {
   ADMIN_PERMISSION_ITEMS,
@@ -118,6 +122,11 @@ type Port = Pick<
     Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory'>>;
   /** Part 39: relation notes and 玩家眼中的关系 (optional; without it the inbox has neither). */
   cocreationRelations?: Pick<CocreationRelationsClient, 'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy'>;
+  /** Part 39b: 题目, the wording pool of the co-creation themes. */
+  cocreationWordings?: Pick<
+    CocreationWordingsClient,
+    'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'
+  >;
   /** 测试对话 (CHAT_REVIEW_ENABLED; the page only appears when the session says the switch is on). */
   conversations?: Pick<ConversationsAdminClient, 'list' | 'detail' | 'export'>;
   /** Part 31: the owner's operations. Optional: a page without it draws none of them. */
@@ -861,6 +870,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         characters: port.characters,
         canManage: () => canCocreation('cocreation.manage'),
         canEditCharacter,
+        ...(port.cocreationWordings ? { wordings: port.cocreationWordings } : {}),
         ...(port.cocreationRelations
           ? {
               relations: port.cocreationRelations,

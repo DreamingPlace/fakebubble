@@ -5,6 +5,7 @@ import { WebCharacterPreviews } from '../../apps/server/characters/web-character
 import { WebCharacterPreviewRunner } from '../../apps/server/characters/web-character-preview-runner.ts';
 import { WebAdminSpeech } from '../../apps/server/characters/web-admin-speech.ts';
 import { WebClipDirection } from '../../apps/server/characters/web-clip-direction.ts';
+import { WebCocreationWordingGen } from '../../apps/server/cocreation/web-cocreation-wordings-gen.ts';
 import { WebCocreationTidy } from '../../apps/server/cocreation/web-cocreation-tidy.ts';
 import { DurableObject, WorkerEntrypoint } from 'cloudflare:workers';
 import { createHash } from 'node:crypto';
@@ -28,6 +29,7 @@ import {
   webCloudEmbeddings,
   webCloudDirection,
   webCloudTidy,
+  webCloudWordings,
   webCloudJudge,
   webCloudSpeech,
 } from '../../apps/server/cloudflare/web-generators.ts';
@@ -486,6 +488,15 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         const tidy = new WebCocreationTidy(this.store, this.clock, webCloudTidy(this.env.GENERATION), this.env.BUDGET);
         previews.useTidy(tidy);
         app.cocreation.enableTidy(tidy);
+        // Part 39b: 生成 of the wording pool: the same Worker route and shared budget, its own pinned prompt.
+        const wordingGen = new WebCocreationWordingGen(
+          this.store,
+          this.clock,
+          webCloudWordings(this.env.GENERATION),
+          this.env.BUDGET,
+        );
+        previews.useWordingGen(wordingGen);
+        app.cocreation.enableWordingGen(wordingGen);
         const execution = new WebCloudExecutor(
           this.context,
           this.store,

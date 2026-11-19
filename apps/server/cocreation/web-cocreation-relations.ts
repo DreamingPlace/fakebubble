@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
+import { COCREATION_THEMES, COCREATION_THEME_IDS } from '../../../packages/contracts/cocreation-wordings.ts';
 import {
   COCREATION_LIMITS,
   COCREATION_PAIR_CARD,
@@ -27,6 +28,9 @@ import { cocreationTablesExist } from './web-cocreation-purge.ts';
 import { cocreationPointsTablesExist, pairScope } from './web-cocreation-points.ts';
 import { installCocreationRelations, relationTablesExist } from './web-cocreation-relations-schema.ts';
 import type { TidyResult, WebCocreationTidy } from './web-cocreation-tidy.ts';
+import { installCocreationWordings, wordingTablesExist } from './web-cocreation-wordings-schema.ts';
+import { WordingPool } from './web-cocreation-wordings.ts';
+import type { WebCocreationWordingGen } from './web-cocreation-wordings-gen.ts';
 import { WebCocreation, identifier, requestIdOk, type Auth, type SubmissionRow } from './web-cocreation.ts';
 
 const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -61,6 +65,8 @@ export type RelationMatch =
  */
 export class WebCocreationRelations extends WebCocreation {
   private tidyService: WebCocreationTidy | null = null;
+  private wordingGen: WebCocreationWordingGen | null = null;
+  private readonly pool: WordingPool;
   constructor(
     store: BusinessStore,
     clock: Clock,
@@ -72,6 +78,16 @@ export class WebCocreationRelations extends WebCocreation {
     super(store, clock, identity, admin, pseudonymKey, nextId);
     // Part 39's tables (digest-checked; STOP WEB_COCREATION_RELATIONS_SCHEMA_MISMATCH).
     installCocreationRelations(store);
+    // Part 39b's tables (digest-checked; STOP WEB_COCREATION_WORDINGS_SCHEMA_MISMATCH).
+    installCocreationWordings(store);
+    this.pool = new WordingPool(
+      store,
+      () => this.clock.now(),
+      () => this.id(),
+    );
+  }
+  enableWordingGen(gen: WebCocreationWordingGen) {
+    this.wordingGen = gen;
   }
   enableTidy(tidy: WebCocreationTidy) {
     this.tidyService = tidy;
@@ -654,5 +670,140 @@ export class WebCocreationRelations extends WebCocreation {
       return { memberId: current.memberId, sessionId: current.sessionId };
     };
     return tidy.tidy(authorize, { submissionId: row.id, requestId: input.requestId as string, content });
+  }
+
+  // ---- Part 39b: the wording pool ---------------------------------------------------------------------------------------
+
+  /** Whether the pool exists (a database without the prerequisites has none: the sheet uses the plain defaults). */
+  wordingsAvailable() {
+    return wordingTablesExist(this.store);
+  }
+  /**
+   * The enabled wordings of one character per theme (text only), for the player's sheet. Same session / CSRF / Origin as any player write;
+   * the same for everyone. Without the pool every theme is empty (the sheet shows the plain defaults).
+   */
+  playerWordings(token: string, csrf: string, origin: string, characterId: unknown) {
+    this.identity.authorizeWrite(token, csrf, origin);
+    ensure(identifier(characterId), 'INVALID_REQUEST');
+    ensure(
+      this.store.get('SELECT 1 FROM web_character_catalog WHERE character_id=?', characterId) &&
+        !webCharacterDeleted(this.store, characterId),
+      'NOT_FOUND',
+    );
+    const themes = this.wordingsAvailable()
+      ? this.pool.enabled(characterId)
+      : Object.fromEntries(COCREATION_THEME_IDS.map((id) => [id, [] as string[]]));
+    return { themes };
+  }
+  private wordingActor(auth: Auth, permission: 'cocreation.read' | 'cocreation.manage') {
+    const actor = this.actor(auth, permission);
+    ensure(wordingTablesExist(this.store), 'COCREATION_UNAVAILABLE');
+    return actor;
+  }
+  /** 「题目」: every wording of every live character, characters in console order. cocreation.read. */
+  wordingList(auth: Auth) {
+    this.wordingActor(auth, 'cocreation.read');
+    return { themes: COCREATION_THEMES.map(({ id, label }) => ({ id, label })), ...this.pool.all() };
+  }
+  wordingAdd(
+    auth: Auth,
+    input: { characterId: unknown; themeId: unknown; text: unknown; enabled: unknown; requestId: unknown },
+  ) {
+    const actor = this.wordingActor(auth, 'cocreation.manage');
+    return this.store.transaction(() => {
+      const added = this.pool.add(input);
+      this.audit(actor.memberId, 'cocreation-wording-add', added.id);
+      return added;
+    });
+  }
+  wordingEdit(auth: Auth, input: { id: unknown; text: unknown }) {
+    const actor = this.wordingActor(auth, 'cocreation.manage');
+    return this.store.transaction(() => {
+      const edited = this.pool.edit(input.id, input.text);
+      this.audit(actor.memberId, 'cocreation-wording-edit', edited.id);
+      return edited;
+    });
+  }
+  wordingToggle(auth: Auth, input: { id: unknown; enabled: unknown }) {
+    const actor = this.wordingActor(auth, 'cocreation.manage');
+    return this.store.transaction(() => {
+      const set = this.pool.setEnabled(input.id, input.enabled);
+      this.audit(actor.memberId, set.enabled ? 'cocreation-wording-on' : 'cocreation-wording-off', set.id);
+      return set;
+    });
+  }
+  wordingDelete(auth: Auth, input: { id: unknown }) {
+    const actor = this.wordingActor(auth, 'cocreation.manage');
+    return this.store.transaction(() => {
+      const gone = this.pool.remove(input.id);
+      this.audit(actor.memberId, 'cocreation-wording-delete', gone.id);
+      return gone;
+    });
+  }
+  /** What a 生成 would hold: one line per character (console order) and the total, or why not. cocreation.manage. */
+  wordingEstimate(auth: Auth, input: { characterIds: unknown }) {
+    this.wordingActor(auth, 'cocreation.manage');
+    const gen = this.wordingGen;
+    if (!gen) return { ok: false as const, reason: 'UNAVAILABLE' };
+    const ids = this.generationTargets(input.characterIds);
+    const items: { characterId: string; estimateMicros: number }[] = [];
+    for (const id of ids) {
+      const estimate = gen.estimate(this.generationContent(id));
+      if (!estimate.ok) return { ok: false as const, reason: estimate.reason };
+      items.push({ characterId: id, estimateMicros: estimate.estimateMicros });
+    }
+    return { ok: true as const, items, totalMicros: items.reduce((sum, item) => sum + item.estimateMicros, 0) };
+  }
+  private generationTargets(characterIds: unknown) {
+    const live = consoleCharacterOrder(this.store).filter((id) => this.pool.characterOk(id));
+    if (characterIds === null) return live;
+    ensure(
+      Array.isArray(characterIds) &&
+        characterIds.length >= 1 &&
+        characterIds.length <= 64 &&
+        characterIds.every(identifier),
+      'INVALID_REQUEST',
+    );
+    const wanted = new Set(characterIds as string[]);
+    ensure(
+      [...wanted].every((id) => live.includes(id)),
+      'NOT_FOUND',
+    );
+    return live.filter((id) => wanted.has(id));
+  }
+  private generationContent(characterId: string) {
+    const draft = castTablesExist(this.store) ? readDraft(this.store).doc : null;
+    const cast = draft?.characters.find((c) => c.characterId === characterId);
+    const [name] = this.castNames([characterId], draft ?? ({ characters: [] } as unknown as CastDoc));
+    return {
+      name: name ?? characterId,
+      personality: cast?.personality ?? '',
+      existing: this.pool.forCharacter(characterId).map((e) => e.text),
+    };
+  }
+  /** 生成 for ONE character (「全部生成」 calls it once per character). Drafts land switched off. cocreation.manage. */
+  async wordingGenerate(
+    auth: Auth,
+    input: { characterId: unknown; requestId: unknown; acknowledgeMicros: unknown },
+  ): Promise<{ added: number }> {
+    this.wordingActor(auth, 'cocreation.manage');
+    ensure(identifier(input.characterId) && requestIdOk(input.requestId), 'INVALID_REQUEST');
+    ensure(Number.isSafeInteger(input.acknowledgeMicros) && (input.acknowledgeMicros as number) > 0, 'INVALID_REQUEST');
+    const gen = this.wordingGen;
+    ensure(gen, 'COCREATION_WORDINGS_UNAVAILABLE');
+    const characterId = input.characterId as string,
+      requestId = input.requestId as string;
+    ensure(this.pool.characterOk(characterId), 'NOT_FOUND');
+    const authorize = () => {
+      const current = this.actor(auth, 'cocreation.manage') as { memberId: string; sessionId: string };
+      return { memberId: current.memberId, sessionId: current.sessionId };
+    };
+    return gen.generate(authorize, {
+      characterId,
+      requestId,
+      acknowledgeMicros: input.acknowledgeMicros as number,
+      content: this.generationContent(characterId),
+      land: (drafts) => this.pool.landDrafts(characterId, requestId, drafts),
+    });
   }
 }

@@ -120,6 +120,7 @@ export class WebProviderServer {
       if (previews.speech) this.application.characterAdmin.enableSpeech(previews.speech);
       if (previews.direction) this.application.characterAdmin.enableDirection(previews.direction);
       if (previews.tidy) this.application.cocreation.enableTidy(previews.tidy);
+      if (previews.wordingGen) this.application.cocreation.enableWordingGen(previews.wordingGen);
       this.previews = new WebCharacterPreviewExecutor(previews);
     }
     this.identity = this.application.identity;
