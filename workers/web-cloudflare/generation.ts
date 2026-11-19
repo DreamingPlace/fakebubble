@@ -36,6 +36,11 @@ import {
   cocreationTidyHash,
 } from '../../apps/server/cocreation/web-cocreation-tidy-prompt.ts';
 import {
+  COCREATION_WORDINGS_PROMPT,
+  COCREATION_WORDINGS_PROMPT_SHA256,
+  cocreationWordingsHash,
+} from '../../apps/server/cocreation/web-cocreation-wordings-prompt.ts';
+import {
   REHEARSAL_JUDGE_MODELS,
   REHEARSAL_JUDGE_PROMPTS,
   promptHash,
@@ -219,14 +224,19 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
         (wire.system === COCREATION_TIDY_PROMPT &&
           wire.systemSha256 === COCREATION_TIDY_PROMPT_SHA256 &&
           cocreationTidyHash(wire.system) === COCREATION_TIDY_PROMPT_SHA256);
+      // Part 39b: the wording pool's 生成 is the third pinned prompt; its answer is longer, so it alone may ask for more output.
+      const wordings =
+        wire.system === COCREATION_WORDINGS_PROMPT &&
+        wire.systemSha256 === COCREATION_WORDINGS_PROMPT_SHA256 &&
+        cocreationWordingsHash(wire.system) === COCREATION_WORDINGS_PROMPT_SHA256;
       ensure(
-        pinned &&
+        (pinned || wordings) &&
           typeof wire.user === 'string' &&
           wire.user.length > 0 &&
           wire.user.length <= 4000 &&
           Number.isSafeInteger(wire.maxTokens) &&
           wire.maxTokens > 0 &&
-          wire.maxTokens <= 1000,
+          wire.maxTokens <= (wordings ? 3000 : 1000),
         'WEB_PROVIDER_WIRE_MISMATCH',
       );
       const text = new DeepSeekTextGenerator({

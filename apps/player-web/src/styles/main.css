@@ -1935,30 +1935,70 @@ html.cc-open body {
 .cc-world[hidden] {
   display: none;
 }
+/* ---- Part 39b: the relationship screen. One self-contained block: every control states its own reset (no `all: unset`), the text
+   direction is fixed, every flex child may shrink (min-width: 0), and the card, the stars and the buttons are sized from the card, not
+   from the viewport, so the screen looks the same at 390, 768, 1280 and 1440. ---- */
 .cc-rel-entry-face {
   min-height: 0;
   padding: 14px 12px;
   cursor: default;
 }
-.cc-rel-dice {
-  all: unset;
+.cc-rel-dice,
+.cc-rel-again,
+.cc-rel-plus,
+.cc-rel-x,
+.cc-rel-name,
+.cc-rel .cc-star,
+.cc-rel .cc-zero,
+.cc-rel-back,
+.cc-rel-next {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: center;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.cc-rel-dice {
   display: inline-flex;
   align-items: center;
-  height: 40px;
-  padding: 0 18px;
+  justify-content: center;
+  height: 44px;
+  padding: 0 20px;
   border-radius: 999px;
-  background: #d5e8de;
-  color: #24584e;
+  background: #fff;
+  color: var(--bb-ink);
   font-size: 15px;
   font-weight: 800;
-  transition: transform 160ms ease;
+  box-shadow: 0 2px 10px rgba(40, 24, 60, 0.12);
+  transition:
+    transform 200ms var(--bb-ease),
+    box-shadow 200ms var(--bb-ease);
 }
 .cc-rel-dice:hover {
-  transform: scale(1.03);
+  transform: scale(1.04);
 }
-.cc-rel-dice:focus-visible {
-  outline: 3px solid #24584e;
+.cc-rel-dice:active {
+  transform: scale(0.97);
+}
+.cc-rel-dice:focus-visible,
+.cc-rel-again:focus-visible,
+.cc-rel-plus:focus-visible,
+.cc-rel-x:focus-visible,
+.cc-rel-name:focus-visible,
+.cc-rel .cc-star:focus-visible,
+.cc-rel .cc-zero:focus-visible,
+.cc-rel-back:focus-visible,
+.cc-rel-next:focus-visible {
+  outline: 3px solid var(--bb-ink);
+  outline-offset: 2px;
 }
 /* The screen replaces the deck while a relation is written. */
 .cc-sheet.is-rel .cc-deck,
@@ -1970,22 +2010,33 @@ html.cc-open body {
   display: none;
 }
 .cc-rel {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
-  display: flex;
-  overflow: auto;
-  animation: cc-card-in 280ms cubic-bezier(0.2, 0.82, 0.24, 1) both;
+  width: 100%;
+  display: block;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+  font-family: inherit;
+  color: var(--bb-ink);
+  animation: bb-in 320ms var(--bb-ease) both;
 }
 .cc-rel[hidden] {
   display: none;
 }
 .cc-rel-grid {
-  width: 100%;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
-  padding: 8px 18px 18px;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 8px 18px max(28px, env(safe-area-inset-bottom));
 }
 .cc-rel-left,
 .cc-rel-right {
@@ -1995,102 +2046,115 @@ html.cc-open body {
   min-width: 0;
 }
 .cc-rel-world {
+  box-sizing: border-box;
+  max-height: 240px;
   padding: 14px 16px;
-  max-height: 230px;
   overflow: auto;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.55);
-  color: #33413d;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.6);
+  color: #2b3835;
   font-size: 14px;
   line-height: 1.7;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .cc-rel-world[hidden] {
   display: none;
 }
 .cc-rel-card {
-  padding: 16px 16px 14px;
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  padding: 18px;
   border-radius: 24px;
   background: #fff;
+  color: #1d2a27;
   box-shadow:
-    0 18px 40px rgba(44, 51, 47, 0.12),
-    0 3px 8px rgba(44, 51, 47, 0.07);
+    0 16px 40px rgba(40, 24, 60, 0.14),
+    0 2px 8px rgba(40, 24, 60, 0.06);
 }
 .cc-rel-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 .cc-rel-chip {
   display: inline-flex;
   align-items: center;
-  height: 36px;
+  max-width: 100%;
+  height: 40px;
   padding: 0 6px 0 8px;
   border-radius: 999px;
   background: #f3efe9;
-  font-size: 14px;
+  font-size: 15px;
+  white-space: nowrap;
+  animation: cc-rel-pop 240ms var(--bb-ease) both;
+}
+.cc-rel-chip[data-anchor="true"] {
+  background: #e9e3f7;
+  padding-right: 10px;
 }
 .cc-rel-name {
-  all: unset;
-  cursor: pointer;
   padding: 2px 6px;
-  border-radius: 6px;
-  font-weight: 700;
+  border-radius: 8px;
+  font-weight: 800;
   transition: background 160ms ease;
 }
-.cc-rel-name:hover,
-.cc-rel-name:focus-visible {
-  background: rgba(36, 88, 78, 0.12);
+.cc-rel-name:hover {
+  background: rgba(20, 20, 20, 0.07);
 }
 .cc-rel-name.is-inline {
   padding: 0 4px;
 }
 .cc-rel-x {
-  all: unset;
-  cursor: pointer;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  color: #8a8279;
+  color: #7a7288;
   font-size: 13px;
   transition: background 160ms ease;
 }
 .cc-rel-x:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.07);
+}
+.cc-rel-again,
+.cc-rel-plus {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  line-height: 1;
+  transition:
+    background 160ms ease,
+    transform 200ms var(--bb-ease);
+}
+.cc-rel-again {
+  background: #e9e3f7;
+  font-size: 18px;
+}
+.cc-rel-again:hover {
+  transform: rotate(-12deg) scale(1.06);
 }
 .cc-rel-plus-wrap {
   position: relative;
   display: inline-flex;
 }
 .cc-rel-plus {
-  all: unset;
-  box-sizing: border-box;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border: 1.5px dashed #b9b0a5;
-  border-radius: 50%;
-  color: #6d655b;
+  border: 1.5px dashed #b9afcb;
+  color: #6c6480;
   font-size: 20px;
-  line-height: 1;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    color 160ms ease;
 }
 .cc-rel-plus:hover,
 .cc-rel-plus[aria-expanded="true"] {
-  background: #fff;
-  border-color: #24584e;
-  color: #24584e;
-}
-.cc-rel-plus:focus-visible {
-  outline: 3px solid #24584e;
+  background: #f3efe9;
+  border-color: #1d2a27;
+  color: #1d2a27;
 }
 /* The menu opens to the RIGHT of the plus and never to the left. */
 .cc-rel-menu {
@@ -2098,38 +2162,32 @@ html.cc-open body {
   z-index: 5;
   left: calc(100% + 8px);
   top: -4px;
-  min-width: 150px;
-  max-width: calc(100vw - 96px);
-  max-height: 236px;
+  min-width: 160px;
+  max-height: 240px;
   margin: 0;
   padding: 6px;
   overflow: auto;
   list-style: none;
   border-radius: 16px;
   background: #fff;
-  box-shadow: 0 14px 34px rgba(44, 51, 47, 0.22);
+  box-shadow: 0 14px 34px rgba(40, 24, 60, 0.24);
   transform-origin: left top;
-  animation: cc-rel-menu-in 200ms cubic-bezier(0.2, 0.82, 0.24, 1) both;
-}
-@keyframes cc-rel-menu-in {
-  from {
-    opacity: 0;
-    transform: translateX(-6px) scale(0.97);
-  }
+  animation: cc-rel-menu-in 200ms var(--bb-ease) both;
 }
 .cc-rel-option {
   display: flex;
   align-items: center;
-  height: 36px;
+  height: 40px;
   padding: 0 12px;
   border-radius: 10px;
-  font-size: 14px;
+  color: #1d2a27;
+  font-size: 14.5px;
   cursor: pointer;
   transition: background 140ms ease;
 }
 .cc-rel-option:hover,
 .cc-rel-option:focus-visible {
-  background: #d5e8de;
+  background: #ece6f8;
   outline: none;
 }
 .cc-rel-option.is-taken {
@@ -2147,14 +2205,15 @@ html.cc-open body {
   display: none;
 }
 .cc-rel-bars i {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   height: 4px;
   border-radius: 2px;
-  background: rgba(41, 66, 59, 0.18);
-  transition: background 220ms ease;
+  background: rgba(20, 20, 20, 0.14);
+  transition: background 260ms var(--bb-ease);
 }
 .cc-rel-bars i.on {
-  background: #29423b;
+  background: var(--bb-ink);
 }
 .cc-rel-stage {
   display: flex;
@@ -2165,73 +2224,78 @@ html.cc-open body {
 .cc-rel-stage:empty {
   display: none;
 }
+.cc-rel-stage > * {
+  animation: cc-rel-step-in 300ms var(--bb-ease) both;
+}
 .cc-rel-rates {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
 }
 .cc-rate {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
 }
 .cc-rate-who {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
+  min-width: 0;
 }
 .cc-rate-who em {
   margin: 0 6px;
   font-style: normal;
   font-weight: 400;
-  color: #8a9690;
+  color: #7f7a8a;
 }
 .cc-stars {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
-.cc-star,
-.cc-zero {
-  all: unset;
-  cursor: pointer;
+.cc-rel .cc-star,
+.cc-rel .cc-zero {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  flex: 0 1 44px;
+  min-width: 0;
+  aspect-ratio: 1;
   border-radius: 12px;
   font-size: 28px;
   line-height: 1;
-  color: #d9d0c4;
+  color: #d9d3e3;
   transition:
     color 180ms ease,
-    transform 200ms cubic-bezier(0.3, 1.6, 0.5, 1),
+    transform 220ms cubic-bezier(0.3, 1.6, 0.5, 1),
     background 160ms ease;
 }
-.cc-star.is-on {
-  color: #e6a93a;
+.cc-rel .cc-star.is-on {
+  color: #f0a62a;
 }
-.cc-star:hover {
+.cc-rel .cc-star:hover {
   transform: scale(1.12);
 }
-.cc-zero {
-  width: 32px;
-  height: 32px;
+.cc-rel .cc-star:active {
+  transform: scale(0.94);
+}
+.cc-rel .cc-zero {
+  flex: 0 1 34px;
   margin-right: 4px;
-  border: 1.5px solid #cfc6ba;
+  border: 1.5px solid #cbc4d6;
   border-radius: 50%;
   font-size: 14px;
-  color: #8a8279;
+  color: #6c6480;
 }
-.cc-zero.is-on {
-  background: #29423b;
-  border-color: #29423b;
+.cc-rel .cc-zero.is-on {
+  background: var(--bb-ink);
+  border-color: var(--bb-ink);
   color: #fff;
-}
-.cc-star:focus-visible,
-.cc-zero:focus-visible {
-  outline: 3px solid #24584e;
 }
 /* The meaning of the value: light, small, one line, one size; the six words are the same length, so nothing moves. */
 .cc-word {
@@ -2246,7 +2310,7 @@ html.cc-open body {
   font-size: 12.5px;
   line-height: 18px;
   letter-spacing: 0.2em;
-  color: #8a9690;
+  color: #7f7a8a;
   white-space: nowrap;
   opacity: 0;
   transition: opacity 220ms ease;
@@ -2258,8 +2322,22 @@ html.cc-open body {
   margin: 0 0 12px;
   font-size: 21px;
   line-height: 1.38;
-  font-weight: 800;
+  font-weight: 900;
   letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+.cc-rel-hint {
+  margin: -6px 0 14px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #5d5868;
+  overflow-wrap: anywhere;
+}
+.cc-rel-hint[hidden] {
+  display: none;
+}
+.cc-rel-rates .cc-rel-prompt {
+  margin-bottom: 8px;
 }
 .cc-rel-inline-names {
   display: flex;
@@ -2271,12 +2349,16 @@ html.cc-open body {
   display: none;
 }
 .cc-rel-area {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
   min-height: 150px;
+  font-family: inherit;
 }
 .cc-rel-notice {
   margin: 0;
   font-size: 13.5px;
-  color: #8a3b2b;
+  color: #a03a29;
 }
 .cc-rel-notice[hidden] {
   display: none;
@@ -2284,12 +2366,10 @@ html.cc-open body {
 .cc-rel-foot {
   display: flex;
   gap: 10px;
+  min-width: 0;
 }
 .cc-rel-back,
 .cc-rel-next {
-  all: unset;
-  box-sizing: border-box;
-  cursor: pointer;
   display: inline-grid;
   place-items: center;
   min-height: 48px;
@@ -2297,60 +2377,81 @@ html.cc-open body {
   border-radius: 999px;
   font-size: 15.5px;
   font-weight: 800;
+  white-space: nowrap;
   transition:
     transform 160ms ease,
     background 160ms ease,
     opacity 160ms ease;
 }
 .cc-rel-back {
-  background: rgba(255, 255, 255, 0.7);
-  color: #29423b;
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--cc-ink, #1d2a27);
+  color: #1d2a27;
 }
 .cc-rel-back[hidden] {
   display: none;
 }
 .cc-rel-next {
-  flex: 1;
-  background: #29423b;
+  flex: 1 1 0;
+  min-width: 0;
+  background: #141414;
   color: #fff;
 }
+.cc-rel-back:active,
 .cc-rel-next:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
 }
 .cc-rel-next:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
 }
-.cc-rel-back:focus-visible,
-.cc-rel-next:focus-visible {
-  outline: 3px solid #24584e;
+@keyframes cc-rel-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
 }
-/* On a phone the chips card only shows while choosing; from 1024 px the screen is two tight columns, centred together so the
-   right column leaves no large empty area below it. */
-@media (max-width: 1023px) {
+@keyframes cc-rel-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+@keyframes cc-rel-menu-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px) scale(0.97);
+  }
+}
+/* Below 900 px the screen is one column, 560 px at most, centred; the chips card only shows while choosing (the names are in the
+   steps themselves). */
+@media (max-width: 899px) {
   .cc-rel-world {
     display: none;
   }
   .cc-rel:not([data-step="choose"]):not([data-step="group"]) .cc-rel-left {
     display: none;
   }
+  /* ＋ sits on its own row at the left, so its list (which opens to the RIGHT only) always has room on a phone. */
+  .cc-rel-plus-wrap {
+    flex: 0 0 100%;
+  }
+  .cc-rel-menu {
+    left: 48px;
+    min-width: 0;
+    width: min(220px, calc(100vw - 120px));
+  }
 }
-@media (min-width: 1024px) {
+/* From 900 px: two columns centred as one block, the people on the left, the steps on the right. */
+@media (min-width: 900px) {
   .cc-rel-grid {
-    flex-direction: row;
-    align-items: flex-start;
+    grid-template-columns: minmax(300px, 400px) minmax(380px, 560px);
     justify-content: center;
+    align-items: start;
     gap: 28px;
-    width: auto;
     max-width: 1100px;
-    margin: auto;
-    padding: 12px 40px 30px;
-  }
-  .cc-rel-left {
-    flex: 0 0 420px;
-  }
-  .cc-rel-right {
-    flex: 0 1 600px;
+    padding: 28px 40px 40px;
   }
   .cc-rel-inline-names {
     display: none;
@@ -2362,6 +2463,29 @@ html.cc-open body {
     margin-inline: auto;
     width: 600px;
   }
+}
+/* The questions of the deck: hidden until the pool has answered, then they appear; ↻ crossfades them. */
+.cc-sheet .cc-prompt {
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+.cc-sheet .cc-prompt.is-shown {
+  opacity: 1;
+}
+.cc-deck.is-swapping .cc-prompt.is-shown {
+  animation: cc-prompt-swap 360ms var(--bb-ease) both;
+}
+@keyframes cc-prompt-swap {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.cc-sheet .cc-shuffle:not(:disabled):active {
+  transform: rotate(180deg);
+}
+.cc-sheet .cc-shuffle {
+  transition: transform 320ms var(--bb-ease);
 }
 /* Part 24c: 获得点数 beside the points of 我的信息, and its sheet. */
 .mi-earn {
@@ -10985,6 +11109,138 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 .account-admin-page.admin-shell #admin-cocreation .cr-view[hidden] {
   display: none;
 }
+/* ---- Part 39b: 题目, the wording pool in 共创收件箱 ---- */
+.account-admin-page.admin-shell #admin-cocreation .cw-view[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ad-gap);
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: var(--ad-radius);
+  background: var(--ad-danger-soft);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-error[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-character {
+  border: 1px solid var(--ad-line);
+  border-radius: var(--ad-card-radius);
+  background: var(--ad-surface);
+  padding: 4px var(--ad-card-pad) var(--ad-card-pad);
+  min-width: 0;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-character > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  cursor: pointer;
+  list-style: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-character > summary::-webkit-details-marker {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-count {
+  margin-left: auto;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-tools {
+  margin: 0 0 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-theme {
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--ad-line);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-theme h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  animation: admin-rise-in var(--ad-t-open) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-row[data-enabled="false"] .cw-text {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-text,
+.account-admin-page.admin-shell #admin-cocreation .cw-new {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-switch,
+.account-admin-page.admin-shell #admin-cocreation .cw-del,
+.account-admin-page.admin-shell #admin-cocreation .cw-add {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-switch[aria-checked="true"] {
+  background: var(--ad-ok-soft);
+  border-color: transparent;
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-del {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
 .account-admin-page.admin-shell #admin-cocreation .cr-pair,
 .account-admin-page.admin-shell #admin-cocreation .cr-who {
   display: inline-flex;
@@ -21367,6 +21623,14 @@ html.theme-fade *::after {
   contain: layout paint;
 }
 .pk-shape {
+  --pk-ease-d:
+    var(--c-d) 0%, color-mix(in srgb, var(--c-d) 78%, transparent) 18%,
+    color-mix(in srgb, var(--c-d) 48%, transparent) 40%, color-mix(in srgb, var(--c-d) 22%, transparent) 62%,
+    color-mix(in srgb, var(--c-d) 7%, transparent) 82%, transparent 100%;
+  --pk-ease-n:
+    var(--c-n) 0%, color-mix(in srgb, var(--c-n) 78%, transparent) 18%,
+    color-mix(in srgb, var(--c-n) 48%, transparent) 40%, color-mix(in srgb, var(--c-n) 22%, transparent) 62%,
+    color-mix(in srgb, var(--c-n) 7%, transparent) 82%, transparent 100%;
   position: absolute;
   left: var(--x);
   top: var(--y);
@@ -21374,13 +21638,13 @@ html.theme-fade *::after {
   height: var(--h);
   border-radius: 50%;
   transform: translate(-50%, -50%) rotate(var(--r));
-  background: radial-gradient(closest-side, var(--c-d), transparent);
-  filter: blur(var(--blur));
+  /* Part 41 (Android Chrome, audit F-15): gradient only. A CSS blur on up to five large, composited shapes per card is what Android
+     Chrome's GPU raster turned into hard colour blocks; the eased stops below give the soft edge the blur used to. */
+  background: radial-gradient(closest-side, var(--pk-ease-d));
   opacity: calc(var(--o) * 0.8);
-  will-change: transform;
 }
 :root[data-theme="dark"] .pk-shape {
-  background: radial-gradient(closest-side, var(--c-n), transparent);
+  background: radial-gradient(closest-side, var(--pk-ease-n));
   opacity: var(--o);
 }
 /* the main: the play button (a readable glyph), the played part of the progress */
@@ -21494,7 +21758,8 @@ html.theme-fade *::after {
    voice bar directly below it. Everything is placed from the card's own box, so no state of the card (front, side, hover) moves it.
    The one thing a side does keep is the side its text hugs, so the sliver that sticks out still shows the name. */
 .page-shell .card-slot .card-face:not(.face-reserve) {
-  --face-avatar: 148px;
+  /* Part 41 (owner spec 2026-11-18): the avatar is 10% smaller than Part 40's 148px, centred at 38.2% from the top (61.8% from the bottom). */
+  --face-avatar: 133.2px;
   --face-name-half: calc(var(--name-size, 0.3) * 47.5cqw);
 }
 .page-shell .card-slot .card-face:not(.face-reserve) .face-main {
@@ -21504,9 +21769,9 @@ html.theme-fade *::after {
 }
 .page-shell .card-slot .card-face:not(.face-reserve) .face-portrait {
   position: absolute;
-  top: 46px;
+  top: 38.2%;
   left: 50%;
-  translate: -50% 0;
+  translate: -50% -50%;
   margin: 0;
   width: var(--face-avatar);
   height: var(--face-avatar);
@@ -21528,10 +21793,15 @@ html.theme-fade *::after {
 .page-shell .card-slot .card-face:not(.face-reserve) .face-voice {
   display: flex;
   position: absolute;
-  left: 16px;
-  right: 16px;
-  top: calc(61.8% + var(--face-name-half) + 14px);
-  width: auto;
+  /* Part 41: 75% of the card; the gap under the nickname is half its font size; the play button (8px inside the bar) starts where the
+     nickname's text starts (16px). On the right-hand side, where the name hugs the right, the bar hugs it too. */
+  left: 8px;
+  width: 75%;
+  top: calc(61.8% + var(--face-name-half) + var(--name-size, 0.3) * 50cqw);
+}
+.page-shell .card-slot[data-side="r"] .card-face:not(.face-reserve) .face-voice {
+  left: auto;
+  right: 8px;
 }
 .page-shell .card-slot:not(.is-active) .card-face:not(.face-reserve) .face-voice {
   pointer-events: none;
@@ -21541,6 +21811,13 @@ html.theme-fade *::after {
   left: 16px;
   bottom: 14px;
 }
+/* Part 41: Android Chrome only. No blend mode over the large card layers: the sheen is a plain, lighter overlay there. */
+:root[data-platform="android"] .face-sheen,
+:root[data-platform="android"] .shared-face::after {
+  mix-blend-mode: normal;
+  opacity: 0.4;
+}
+
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
 @media (prefers-reduced-motion: reduce) {
   .card-slot.is-active:not(.is-chat) .face-sheen,

@@ -779,7 +779,8 @@ try {
     const submitCards = async (view: any) => {
       // The deck is shuffled: the first card can be the dialogue card (two fields, written only when both are) or the pair card. A
       // single-field card is the one this check writes into, so the send enables with one text.
-      const card = view.locator('.cc-card:not(.cc-pair):not(.is-dialogue)').first();
+      // Part 39b (named exception): the deck is five fixed themes (a spent one is disabled), so take the first card that is still open.
+      const card = view.locator('.cc-card[data-card^="theme-"]:not(.is-used)').first();
       await card.locator('.cc-face').click();
       await sendWhenReady(view, card.locator('.cc-editor textarea:visible').first(), '爱吃甜的，笑起来像猫');
       await view.locator('.cc-thanks:not([hidden])').waitFor({ timeout: 10_000 });

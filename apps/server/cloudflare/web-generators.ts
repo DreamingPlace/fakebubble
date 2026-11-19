@@ -22,6 +22,7 @@ import type { FakeFish } from '../generation/web-provider-runner.ts';
 import { DEFAULT_TEXT_MODELS } from '../platform/config.ts';
 import { clipPromptHash } from '../characters/clip-direction-prompt.ts';
 import { cocreationTidyHash, COCREATION_TIDY_PROMPT } from '../cocreation/web-cocreation-tidy-prompt.ts';
+import { cocreationWordingsHash, COCREATION_WORDINGS_PROMPT } from '../cocreation/web-cocreation-wordings-prompt.ts';
 import type { ClipDirectionModel } from '../characters/web-clip-direction.ts';
 import type { RehearsalJudgeModel } from '../characters/web-rehearsal-runner.ts';
 
@@ -242,6 +243,36 @@ export function webCloudTidy(binding: WebGenerationBinding): ClipDirectionModel 
           {
             system: input.system,
             systemSha256: cocreationTidyHash(input.system),
+            user: input.user,
+            maxTokens: input.maxTokens,
+          },
+          () =>
+            callback(async () => {
+              ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
+              await authorize?.();
+            }),
+        );
+        if (!result.ok) throw new DomainError(result.code);
+        return result.value;
+      }),
+  };
+}
+
+/**
+ * Part 39b: 生成's text call (the wording pool), the same plain-completion route with its own pinned prompt (text and hash). Anything but
+ * the pinned prompt is refused by the generation Worker before anything is sent.
+ */
+export function webCloudWordings(binding: WebGenerationBinding): ClipDirectionModel {
+  return {
+    model: DEFAULT_TEXT_MODELS.draft,
+    completePlain: (input, signal, authorize) =>
+      session(binding, signal, async (remote) => {
+        ensure(remote.complete, 'WEB_GENERATION_ROUTE_MISSING');
+        ensure(input.system === COCREATION_WORDINGS_PROMPT, 'WEB_PROVIDER_WIRE_MISMATCH');
+        const result = await remote.complete(
+          {
+            system: input.system,
+            systemSha256: cocreationWordingsHash(input.system),
             user: input.user,
             maxTokens: input.maxTokens,
           },

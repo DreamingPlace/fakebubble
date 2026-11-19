@@ -12,7 +12,7 @@ import {
 import { cocreationPointsOk, type CocreationPointsSettings } from '../../../../packages/contracts/cocreation-cards.ts';
 import { CastAdminClient } from './cast-admin-api.ts';
 import { ProfileImportClient } from './profile-import-api.ts';
-import { CocreationAdminClient, CocreationRelationsClient } from './cocreation-admin-api.ts';
+import { CocreationAdminClient, CocreationRelationsClient, CocreationWordingsClient } from './cocreation-admin-api.ts';
 import { OwnerAdminClient } from './owner-admin-api.ts';
 import { ConversationsAdminClient } from './conversations-admin-api.ts';
 import { PreviewAdminClient } from './preview-admin-api.ts';
@@ -227,6 +227,8 @@ export class AccountAdminApi extends InviteAdminApi {
   readonly cocreationRelations = new CocreationRelationsClient((path, body) =>
     this.request('/cocreation/' + path, body),
   );
+  /** Part 39b: 题目, the wording pool of the co-creation themes (same routes, same session). */
+  readonly cocreationWordings = new CocreationWordingsClient((path, body) => this.request('/cocreation/' + path, body));
   readonly conversations = new ConversationsAdminClient((path, body) => this.request('/conversations/' + path, body));
   /** Part 31: the owner's operations (home arc order, deleting test records, closed accounts). */
   readonly owner = new OwnerAdminClient((path, body) => this.request('/owner/' + path, body));
