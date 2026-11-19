@@ -8,6 +8,7 @@ import type { WebChatReviewAdmin } from '../review/web-chat-review-admin.ts';
 import type { WebSystemAdmin } from './web-system-admin.ts';
 import type { WebCastAdmin } from './web-cast-admin.ts';
 import type { WebOwnerOps } from './web-owner-ops.ts';
+import type { WebBroadcast } from '../broadcast/web-broadcast.ts';
 
 export async function routeWebAccountAdmin(
   admin: WebAccountAdmin,
@@ -18,6 +19,7 @@ export async function routeWebAccountAdmin(
   system?: WebSystemAdmin | null,
   cast?: WebCastAdmin | null,
   ownerOps?: WebOwnerOps | null,
+  broadcast?: WebBroadcast | null,
 ): Promise<WebInviteResult | null> {
   const base = '/api/web/local/admin',
     path = req.path;
@@ -60,6 +62,25 @@ export async function routeWebAccountAdmin(
       };
     if (action === 'export')
       return { status: 200, body: chatReview.export(actor, body(['characterId', 'code', 'archived']) as never) };
+    ensure(false, 'NOT_FOUND');
+  }
+  // Part 42: 广播. The permission (the owner or broadcast.send) is checked before the body is read. 发送, 修改 and the voice routes
+  // that spend money are the routes that queue work: the executor starts the send at its time (Part 40's queuesWork).
+  if (path.startsWith(`${base}/broadcast/`)) {
+    auth();
+    ensure(broadcast, 'NOT_FOUND');
+    const actor = { cookie: req.adminCookie, csrf: req.csrf, origin: req.origin };
+    const action = path.slice(`${base}/broadcast/`.length);
+    if (action === 'options') return { status: 200, body: broadcast.options(actor) };
+    if (action === 'list') return { status: 200, body: broadcast.list(actor) };
+    if (action === 'detail') return { status: 200, body: broadcast.detail(actor, req.body) };
+    if (action === 'estimate') return { status: 200, body: broadcast.estimate(actor, req.body) };
+    if (action === 'speak') return { status: 200, body: await broadcast.speak(actor, req.body) };
+    if (action === 'upload') return { status: 200, body: broadcast.upload(actor, req.body) };
+    if (action === 'take-audio') return { status: 200, body: broadcast.takeAudio(actor, req.body) };
+    if (action === 'send') return { status: 200, queuesWork: true, body: broadcast.create(actor, req.body) };
+    if (action === 'update') return { status: 200, queuesWork: true, body: broadcast.update(actor, req.body) };
+    if (action === 'cancel') return { status: 200, queuesWork: true, body: broadcast.cancel(actor, req.body) };
     ensure(false, 'NOT_FOUND');
   }
   // Part 31: the owner's operations. Each handler checks the owner (arc order: the 角色 grant too) and the body shape itself.

@@ -11,6 +11,7 @@ import { audioStartedSql, metricsEnabled } from '../admission/web-stage-metrics.
 import { DomainError } from '../../../packages/domain/errors.ts';
 import { CloudQueueAlarm, type AlarmStorage } from './queue-alarm.ts';
 import { webEmbedNextDue } from '../generation/web-embed-ledger.ts';
+import type { WebBroadcast } from '../broadcast/web-broadcast.ts';
 
 /** A deadline for uncertain work is a classification wake, never a permission to resend it. */
 export function webProviderNextDue(store: WebRuntimeStore, now: number, ownsCoordinator = false): number | null {
@@ -99,6 +100,8 @@ export class WebCloudExecutor {
     runner: WebProviderRunner,
     maintenanceDue?: () => number | null,
     previews?: WebCharacterPreviewRunner,
+    /** Part 42: 广播 is started and delivered by this alarm (its own batches), with no other request. */
+    broadcast?: WebBroadcast,
   ) {
     this.executor = new WebProviderExecutor(store, clock, runner, {
       hold: (task) => ctx.waitUntil(task),
@@ -117,6 +120,14 @@ export class WebCloudExecutor {
       clock,
       async () => {
         await deletion?.sweep();
+        // A broadcast is written in short batches (a cursor and per-message keys), yielding between them so chat is served.
+        try {
+          await broadcast?.pass();
+        } catch (error) {
+          console.error(
+            JSON.stringify({ event: 'web_broadcast_pass_failed', code: (error as { code?: string }).code ?? 'ERROR' }),
+          );
+        }
         this.previews?.kick();
         try {
           this.executor.managedPass(`web-cloud-${store.instanceId}`);
@@ -135,6 +146,7 @@ export class WebCloudExecutor {
           webEmbedNextDue(store, clock.now()) ?? Infinity,
           this.previews?.nextDue() ?? Infinity,
           deletion?.nextDue() ?? Infinity,
+          broadcast?.nextDue(clock.now()) ?? Infinity,
         );
         return Number.isFinite(next) ? next : null;
       },

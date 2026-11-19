@@ -472,6 +472,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
         // Part 35: the 多轮预演 judge goes through the generation Worker as well; its budget is reserved by the runner first.
         previews.useRehearsalJudge(webCloudJudge(this.env.GENERATION));
         app.characterAdmin.enableSpeech(speech);
+        // Part 42: 广播's voice goes through this same admin speech path (its budget reserved first, UNKNOWN never resent).
         // Part 30: 按反馈重录. The text call goes through the generation Worker (the only provider caller); the budget is
         // env.BUDGET, reserved before the call; the 预演 runner drives its recovery next to the speech bills.
         const direction = new WebClipDirection(
@@ -493,6 +494,7 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           runner,
           () => this.maintenanceDue(),
           previews,
+          app.broadcast,
         );
         const http = new WebProviderHTTP(
           app,
@@ -563,7 +565,18 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       await this.refreshModelKeys();
       return services.execution.alarm();
     }
-    const next = Math.min(this.maintenanceDue() ?? Infinity, deletion?.nextDue() ?? Infinity);
+    // Part 42: a scheduled broadcast fires from here too (it needs no provider), with no other request.
+    const broadcast = this.application().broadcast;
+    try {
+      await broadcast.pass();
+    } catch (error) {
+      console.error(JSON.stringify({ event: 'web_broadcast_pass_failed', ...safeError(error) }));
+    }
+    const next = Math.min(
+      this.maintenanceDue() ?? Infinity,
+      deletion?.nextDue() ?? Infinity,
+      broadcast.nextDue() ?? Infinity,
+    );
     const due = Number.isFinite(next) ? next : null;
     if (due === null) await this.context.storage.deleteAlarm();
     else await this.context.storage.setAlarm(Math.max(this.clock.now() + 1000, due));
