@@ -167,10 +167,12 @@ try {
       .evaluateAll((els: Element[]) => els.map((e) => e.getAttribute('data-card')));
     check(
       JSON.stringify(titles) ===
-        JSON.stringify(['theme-know', 'theme-experience', 'theme-habit', 'theme-catchphrase', 'theme-recent']),
-      `${tag}: five themes in order (${titles})`,
+        // Part 44 (named exception, owner decision 2026-11-19): a theme with no ONLINE wording has no card, so the deck is the two
+        // themes of this pool (it was all five, the empty ones showing a plain default).
+        JSON.stringify(['theme-know', 'theme-habit']),
+      `${tag}: the themes with an online wording, in order (${titles})`,
     );
-    check((await page.locator('.cc-deck .cc-card').count()) === 6, `${tag}: five themes and the relationship card`);
+    check((await page.locator('.cc-deck .cc-card').count()) === 3, `${tag}: two themes and the relationship card`);
     const prompt = (id: string) => page.locator(`[data-card="${id}"] .cc-prompt`).innerText();
     const know = await prompt('theme-know');
     check(enabledKnow.includes(know), `${tag}: the first theme shows an ENABLED wording, got “${know}”`);
@@ -179,9 +181,12 @@ try {
       `${tag}: a switched-off wording is never shown`,
     );
     check((await prompt('theme-habit')) === '瓜瓜睡前一定会做什么？', `${tag}: a pool of one shows that wording`);
-    check((await prompt('theme-experience')) === '瓜瓜经历过哪些事？', `${tag}: an empty pool shows the plain default`);
-    check((await prompt('theme-catchphrase')) === '瓜瓜常挂在嘴边的话', `${tag}: plain default 口头禅`);
-    check((await prompt('theme-recent')) === '瓜瓜最近在忙什么？', `${tag}: plain default 近况`);
+    // Part 44 (named exception): an empty pool shows no card (it showed the plain default)
+    for (const empty of ['theme-experience', 'theme-catchphrase', 'theme-recent'])
+      check(
+        (await page.locator(`[data-card="${empty}"]`).count()) === 0,
+        `${tag}: ${empty} has no online wording, so no card`,
+      );
     for (const old of ['生气时', '怎么安慰人', '被夸时', '小秘密', '怪癖', '随便写点什么'])
       check(!(await page.locator('.cc-sheet').innerText()).includes(old), `${tag}: the old card “${old}” is gone`);
     await shot('1-deck');

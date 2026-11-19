@@ -87,6 +87,7 @@ function setup(t: test.TestContext) {
     } as never);
   return { f, co, player, manager, reader, nobody, admin, asPlayer };
 }
+type S = ReturnType<typeof setup>;
 const add = async (s: S, characterId: string, themeId: string, text: string, requestId: string, enabled = true) =>
   ((await s.admin('wordings/add', { characterId, themeId, text, enabled, requestId })) as { body: { id: string } })
     .body;

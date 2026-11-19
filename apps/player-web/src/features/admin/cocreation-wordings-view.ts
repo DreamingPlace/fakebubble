@@ -196,14 +196,22 @@ export function wordingsView(root: HTMLElement, deps: Deps) {
     bulkOn,
     bulkOff,
   );
+  // the page repaints every control from its `data-locked` (account-admin-page.ts), so a control that is off says so there too
+  const lock = (control: HTMLButtonElement | HTMLInputElement, off: boolean) => {
+    control.disabled = off;
+    control.dataset.locked = String(off);
+  };
+  lock(bulkOn, true);
+  lock(bulkOff, true);
   const refreshBulk = () => {
     const total = pool.entries.length;
     allTick.checked = total > 0 && picked.size === total;
     allTick.indeterminate = picked.size > 0 && picked.size < total;
     pickedCount.textContent = picked.size > 0 ? `已选 ${picked.size} 条` : '';
     const can = deps.canManage() && !busy && picked.size > 0;
-    bulkOn.disabled = bulkOff.disabled = !can;
-    allTick.disabled = !deps.canManage() || total === 0;
+    lock(bulkOn, !can);
+    lock(bulkOff, !can);
+    lock(allTick, !deps.canManage() || total === 0);
     bulkBar.hidden = total === 0 || !deps.api.setEnabled;
   };
   allTick.addEventListener('change', () => {

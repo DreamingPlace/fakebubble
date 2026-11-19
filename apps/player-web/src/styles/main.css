@@ -17436,8 +17436,8 @@ button:not(
 /* Part 44: a result table keeps fixed column widths and scrolls sideways inside its own box (wheel, trackpad, a visible bar). The 玩家
    column (the row labels in the counts tables) stays on the left; a header never truncates. */
 .account-admin-page.admin-shell .rh-scroll {
-  --rh-col: 220px;
-  --rh-first: 168px;
+  --rh-col: 208px;
+  --rh-first: 144px;
   overflow: auto;
   max-height: max(320px, calc(100dvh - 330px));
   border: 1px solid var(--ad-border);
@@ -17547,29 +17547,17 @@ button:not(
   width: var(--rh-lead2, 104px);
 }
 .account-admin-page.admin-shell .rh-counts:not(.rh-memes) tbody th[scope="row"],
-.account-admin-page.admin-shell .rh-counts tbody th[rowspan],
-.account-admin-page.admin-shell .rh-counts thead th:first-child {
+.account-admin-page.admin-shell .rh-counts:not(.rh-memes) thead th:first-child {
   position: sticky;
   left: 0;
   z-index: 1;
   background: var(--ad-bg);
   box-shadow: 1px 0 0 var(--ad-border);
 }
-.account-admin-page.admin-shell .rh-counts thead th:first-child {
+.account-admin-page.admin-shell .rh-counts:not(.rh-memes) thead th:first-child {
   z-index: 3;
 }
-/* the 梗与故事 table has two leading columns: the item, then the phrasing; both stay */
-.account-admin-page.admin-shell .rh-memes thead th:nth-child(2),
-.account-admin-page.admin-shell .rh-memes tbody th[scope="row"] {
-  position: sticky;
-  left: var(--rh-first);
-  z-index: 1;
-  background: var(--ad-bg);
-  box-shadow: 1px 0 0 var(--ad-border);
-}
-.account-admin-page.admin-shell .rh-memes thead th:nth-child(2) {
-  z-index: 3;
-}
+/* the 梗与故事 table has two leading columns (the item, then the phrasing): they scroll with the rest, so the panel keeps room for the models */
 .account-admin-page.admin-shell .rh-counts th,
 .account-admin-page.admin-shell .rh-counts td {
   padding: 8px 12px;
@@ -17587,7 +17575,6 @@ button:not(
 }
 .account-admin-page.admin-shell .rh-counts tbody th > span {
   display: block;
-  white-space: nowrap;
 }
 .account-admin-page.admin-shell .rh-note {
   display: block;

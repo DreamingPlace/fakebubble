@@ -72,3 +72,9 @@ date control only: nothing sent to the server and nothing stored changes.
 
 Times are UTC (「UTC」 beside the date and the HH:MM field). A scheduled broadcast can be 修改 or 取消 until it starts. With a voice the player gets
 one voice bubble (its words behind 转文字); without, one text bubble per line.
+
+## Part 44
+| Where | Words |
+|---|---|
+| 共创收件箱 → 题目 | 全选 · 已选 N 条 · 上线 · 下线 (online status only; the wording text is never touched). Bulk 上线 / 下线 can be undone, so there is no explanation line: hover tips only. A wording that did not switch is named: 「N 条没有上线：「…」」 / 「N 条没有下线：「…」」. |
+| 多轮预演 result tables | 对话 and 统计 scroll sideways inside the result panel; the 玩家 column (the row labels in 统计) stays on the left. No new words. |
