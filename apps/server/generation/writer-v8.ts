@@ -57,12 +57,22 @@ const WRITER = PROMPTS_V8.writer;
 const DIRECTIONS = PROMPTS_V8.writerDirections;
 const GUARD = PROMPTS_V8.guard;
 const CAST = PROMPTS_V8.castContext;
+/**
+ * Part 37a-3: the small per-model addendum, one pinned file each (prompts/v8/writer-addendum-*.md), chosen by the model that writes
+ * the draft. They are part of the hashed v8 files, so changing one changes the pin. The guard never gets one.
+ */
+export const WRITER_ADDENDA = {
+  deepseek: PROMPTS_V8.writerAddendumDeepseek,
+  gemini: PROMPTS_V8.writerAddendumGemini,
+  xai: PROMPTS_V8.writerAddendumGrok,
+} as const;
+export type WriterDraftProvider = keyof typeof WRITER_ADDENDA;
 
 const sortedPrompts = () => Object.entries(PROMPTS_V8).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 /** sha256 of every prompts/v8 file (name and text). Pinned below and documented in docs/STATUS.md. */
 export const writerPromptBytesHash = () => createHash('sha256').update(JSON.stringify(sortedPrompts())).digest('hex');
 /** The pin: the generation Worker refuses the v8 route when its bundled files do not hash to exactly this. */
-export const WRITER_V8_PROMPT_SHA256 = '83f3629bac8c7a58cb37734264c91a3678e30505943333cb526dd2f14ca34475';
+export const WRITER_V8_PROMPT_SHA256 = '5cb15ed6ebc66b4826f7c127fadc1a7c3240d5c7632f1658ac46faa6461432ba';
 
 const guardReasonSchema = { type: 'string', enum: [...GUARD_REASONS] };
 /** The second pass's output tool: the v7 review schema's bookkeeping fields, without decision, replacement bubbles or coverage. */
@@ -214,8 +224,9 @@ const rosterBlock = (request: TextGenerationRequest) =>
     : '';
 
 /** The writer's call: persona first (system), then the pinned rules, then the context. No tool, no schema. */
-export function writerDraftMessages(request: TextGenerationRequest) {
+export function writerDraftMessages(request: TextGenerationRequest, provider?: WriterDraftProvider) {
   ensure(request.writer === 'v8', 'WRITER_V8_REQUIRED');
+  ensure(provider === undefined || Object.hasOwn(WRITER_ADDENDA, provider), 'WRITER_V8_REQUIRED');
   ensure(
     request.character.id === request.scope.characterId && request.character.fictional === true,
     'INVALID_TEXT_SCOPE',
@@ -249,6 +260,7 @@ export function writerDraftMessages(request: TextGenerationRequest) {
   const system =
     `你是${character.name}。\n${character.persona}${canon}\n\n` +
     WRITER +
+    (provider ? `\n${WRITER_ADDENDA[provider]}` : '') +
     (request.deliveryMode === 'voice' && request.voiceDirections ? DIRECTIONS : '') +
     (request.cast ? `\n${CAST}` : '') +
     (character.seed === true ? `\n${SEED_CHARACTER_PROMPT}` : '') +

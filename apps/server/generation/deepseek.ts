@@ -429,7 +429,7 @@ export class DeepSeekTextGenerator implements TextGenerator {
         'TEXT_STAGE_RESUME_INVALID',
       );
     const knownParsedDraft = knownDraft ? parseDraft(structuredClone(knownDraft.payload), frozen) : null;
-    const messages = v8 ? writerDraftMessages(frozen) : promptMessages(frozen);
+    const messages = v8 ? writerDraftMessages(frozen, chains.draft[0]!.provider) : promptMessages(frozen);
     const timeout = AbortSignal.timeout(this.timeoutMs);
     const combined = AbortSignal.any([signal, timeout]);
     const started = performance.now();
@@ -487,11 +487,13 @@ export class DeepSeekTextGenerator implements TextGenerator {
       ref: ModelRef,
       reservationFor: ProviderReservation | undefined,
       willRetry: (error: unknown) => boolean,
-      messages: ReturnType<typeof promptMessages>,
+      stageMessages: ReturnType<typeof promptMessages>,
       outputTool: ReturnType<typeof draftTool> | null,
       parse: (value: unknown) => T,
     ): Promise<T> => {
       ensure(!combined.aborted, errorCode(null));
+      // Part 37a-3: the v8 draft carries the addendum of the model that writes THIS call (a fallback model gets its own).
+      const messages = v8 && !outputTool ? writerDraftMessages(frozen, ref.provider) : stageMessages;
       const stageStarted = performance.now();
       const model = ref.model;
       let value: unknown;

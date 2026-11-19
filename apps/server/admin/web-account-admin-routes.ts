@@ -299,6 +299,7 @@ export async function routeWebAccountAdmin(
         'source',
         'models',
         'withCast',
+        ...(optional('style').length ? ['style'] : []),
       ]);
       return { status: 200, body: characters.rehearsalEstimate(actor, characterId(id), rest) };
     }
@@ -310,6 +311,7 @@ export async function routeWebAccountAdmin(
         'source',
         'models',
         'withCast',
+        ...(optional('style').length ? ['style'] : []),
         'acknowledgeMicros',
       ]);
       return { status: 200, queuesWork: true, body: characters.rehearsalStart(actor, characterId(id), rest) };
