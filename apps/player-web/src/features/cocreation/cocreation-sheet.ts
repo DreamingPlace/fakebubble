@@ -1,6 +1,7 @@
 /**
  * 共创 sheet: five theme cards for one official character, then the relationship card (🎲). Each theme shows ONE question picked at
- * random from the character's enabled wording pool (the plain default of the theme when the pool is empty), when the sheet opens and on ↻.
+ * random from the character's ONLINE wording pool, a new pick each time the sheet opens (and on ↻); a theme with no online wording has no card
+ * (Part 44; the plain default of a theme is only for a pool that could not be read).
  * The player writes what they like, skips the rest, and hands everything written so far over in one go; the note records the theme and the
  * exact question shown. Nothing is reviewed or answered; the only feedback is a thank-you. Drafts live in memory only (never
  * localStorage), so they survive closing the sheet but not a page reload.
@@ -13,6 +14,8 @@ import {
 } from '../../../../../packages/contracts/cocreation-cards.ts';
 import {
   COCREATION_THEMES,
+  cocreationWordingOk,
+  pickOnlineWording,
   pickWording,
   type CocreationTheme,
 } from '../../../../../packages/contracts/cocreation-wordings.ts';
@@ -148,7 +151,13 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const isWritten = (id: string) => !used.has(id) && (draft.text.get(id) ?? '').trim() !== '';
   const writtenIds = () => draft.order.filter(isWritten);
   const writtenCount = () => writtenIds().length;
-  const deckIds = () => COCREATION_THEMES.map((theme) => theme.id as string);
+  // Part 44: with the pool known a theme with no online wording has no card (unless a note for it is already written: the note keeps
+  // its wording). Until the pool has answered, and when it could not be read, every theme is on the deck (the plain defaults).
+  let poolKnown = false;
+  const onCard = (theme: CocreationTheme) =>
+    !poolKnown || isWritten(theme.id) || (wordings[theme.id] ?? []).some(cocreationWordingOk);
+  const deckThemes = () => COCREATION_THEMES.filter(onCard);
+  const deckIds = () => deckThemes().map((theme) => theme.id as string);
 
   // ---- the questions: one enabled wording per theme, picked at random -------------------------------------------------
   let wordings: Record<string, string[]> = {};
@@ -160,8 +169,14 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   /** A theme with a written answer keeps its question: the note records the one it answered. */
   const pickAll = () => {
     if (!ready) return;
-    for (const theme of COCREATION_THEMES)
-      if (!isWritten(theme.id)) current.set(theme.id, pickWording(theme, wordings[theme.id] ?? [], name, random));
+    for (const theme of COCREATION_THEMES) {
+      if (isWritten(theme.id)) continue;
+      const wording = poolKnown
+        ? pickOnlineWording(wordings[theme.id] ?? [], name, random)
+        : pickWording(theme, wordings[theme.id] ?? [], name, random);
+      if (wording === null) current.delete(theme.id);
+      else current.set(theme.id, wording);
+    }
     renderDeck();
   };
 
@@ -196,7 +211,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     attrs: { role: 'status', 'aria-live': 'polite' },
     hidden: true,
   });
-  const allUsed = () => COCREATION_THEMES.every((theme) => used.has(theme.id));
+  const allUsed = () => deckThemes().length > 0 && deckThemes().every((theme) => used.has(theme.id));
   const sendButton = h('button', { class: 'cc-send', attrs: { type: 'button' }, text: cocreationCopy.send(name) });
   const footer = h('footer', { class: 'cc-foot' }, notice, sendButton);
   const thanksSub = h('p', { class: 'cc-thanks-sub', text: cocreationCopy.thanksSub });
@@ -435,7 +450,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   const renderDeck = () => {
     refs.clear();
     const ids = deckIds();
-    const cards = COCREATION_THEMES.map((theme) => {
+    const cards = deckThemes().map((theme) => {
       const ref = buildCard(theme);
       refs.set(theme.id, ref);
       return ref.root;
@@ -622,6 +637,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     (pool) => {
       if (closed) return;
       wordings = pool.themes;
+      poolKnown = true;
       ready = true;
       pickAll();
     },

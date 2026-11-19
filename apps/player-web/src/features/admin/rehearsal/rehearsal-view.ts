@@ -571,6 +571,9 @@ export function rehearsalView(host: RehearsalHost) {
     }
     return box;
   };
+  /** Part 44: every result table scrolls sideways inside its own box (wheel, trackpad, a visible bar); the 玩家 column stays put. */
+  const scrollBox = (inner: HTMLElement) =>
+    h('div', { class: 'rh-scroll', attrs: { tabindex: '0', role: 'region', 'aria-label': '结果表' } }, inner);
   const conversation = (d: RehearsalRunDetail) => {
     const grid = h('div', { class: 'rh-grid', attrs: { role: 'table' } });
     grid.style.setProperty('--rh-cols', String(d.columns.length));
@@ -592,7 +595,7 @@ export function rehearsalView(host: RehearsalHost) {
       for (const c of d.columns) row.append(bubbleList(c.cells[i]!, `${i}:${c.key}`));
       grid.append(row);
     });
-    return grid;
+    return scrollBox(grid);
   };
   type Column = RehearsalRunDetail['columns'][number];
   /** One row of the counts table: its label, an optional note under it, and per column the shown text and the number that rolls. */
@@ -679,6 +682,7 @@ export function rehearsalView(host: RehearsalHost) {
   const STYLE_LABELS = new Set(['说了自己的事', '主动起话题', '情绪起伏']);
   const countsTable = (d: RehearsalRunDetail) => {
     const table = h('table', { class: 'rh-counts' });
+    table.style.setProperty('--rh-cols', String(d.columns.length));
     table.append(
       h('thead', {}, h('tr', {}, h('th', { text: '' }), ...d.columns.map((c) => h('th', { text: c.label })))),
     );
@@ -782,6 +786,7 @@ export function rehearsalView(host: RehearsalHost) {
   };
   const memeTable = (d: RehearsalRunDetail) => {
     const table = h('table', { class: 'rh-counts rh-memes' });
+    table.style.setProperty('--rh-cols', String(d.columns.length));
     table.append(
       h(
         'thead',
@@ -879,7 +884,7 @@ export function rehearsalView(host: RehearsalHost) {
   const chipsSigOf = () => JSON.stringify([current, runs.map((r) => [r.runId, r.scriptName, r.createdAt])]);
   /** Counts and the hit / miss table are replaced as one piece, and only when their numbers changed. */
   const paneTable = (d: RehearsalRunDetail) =>
-    tab === 'counts' ? countsTable(d) : tab === 'memes' ? memeTable(d) : null;
+    tab === 'counts' ? scrollBox(countsTable(d)) : tab === 'memes' ? scrollBox(memeTable(d)) : null;
   const paneSigOf = (d: RehearsalRunDetail) =>
     tab === 'counts'
       ? JSON.stringify(d.columns.map((c) => [c.label, c.counts]))

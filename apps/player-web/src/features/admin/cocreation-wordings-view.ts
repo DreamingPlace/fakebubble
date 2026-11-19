@@ -9,11 +9,13 @@ import type { CocreationWordingsClient, WordingEntry, WordingPool } from '../../
 import { h } from '../cocreation/h.ts';
 import { dot } from './cast/cast-ui.ts';
 import { sentenceOf } from './ui/error-line.ts';
+import { hoverValue } from './ui/hover-value.ts';
 import { dollarText } from './ui/price-format.ts';
 import { paidButton } from './ui/paid-button.ts';
 
 type Deps = {
-  api: Pick<CocreationWordingsClient, 'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'>;
+  api: Pick<CocreationWordingsClient, 'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'> &
+    Partial<Pick<CocreationWordingsClient, 'setEnabled'>>;
   nameOf: (id: string) => string;
   colour: (id: string) => string;
   canManage: () => boolean;
@@ -27,6 +29,8 @@ export function wordingsView(root: HTMLElement, deps: Deps) {
   let pool: WordingPool = { themes: [], order: [], entries: [] };
   let estimate: Awaited<ReturnType<Deps['api']['estimate']>> | null = null;
   let busy = false;
+  /** Part 44: the wordings ticked for 上线 / 下线 (ids of entries that exist in `pool`). */
+  const picked = new Set<string>();
   const error = h('p', { class: 'cw-error', attrs: { role: 'alert' }, hidden: true });
   const showError = (caught: unknown) => {
     error.textContent = sentenceOf(codeOf(caught));
@@ -113,6 +117,14 @@ export function wordingsView(root: HTMLElement, deps: Deps) {
       if (key.key === 'Enter' && !key.isComposing) (text as HTMLInputElement).blur();
       if (key.key === 'Escape') text.value = entry.text;
     });
+    const tick = h('input', { class: 'cw-tick', attrs: { type: 'checkbox', 'aria-label': '选择这条题目' } });
+    tick.checked = picked.has(entry.id);
+    tick.disabled = !manage;
+    tick.addEventListener('change', () => {
+      if (tick.checked) picked.add(entry.id);
+      else picked.delete(entry.id);
+      refreshBulk();
+    });
     const sw = h('button', {
       class: 'cw-switch',
       text: entry.enabled ? '已启用' : '未启用',
@@ -129,6 +141,7 @@ export function wordingsView(root: HTMLElement, deps: Deps) {
           sw.setAttribute('aria-checked', String(next.enabled));
           row.setAttribute('data-enabled', String(next.enabled));
           refreshCounts();
+          refreshBulk();
         }),
     );
     const del = h('button', { class: 'cw-del', text: '删除', attrs: { type: 'button', 'aria-label': '删除这条题目' } });
@@ -139,8 +152,10 @@ export function wordingsView(root: HTMLElement, deps: Deps) {
         void guard(async () => {
           await deps.api.remove(entry.id);
           pool.entries = pool.entries.filter((e) => e.id !== entry.id);
+          picked.delete(entry.id);
           row.remove();
           refreshCounts();
+          refreshBulk();
         }),
     );
     const row = h(
@@ -149,6 +164,7 @@ export function wordingsView(root: HTMLElement, deps: Deps) {
         class: 'cw-row',
         attrs: { 'data-wording': entry.id, 'data-enabled': String(entry.enabled), 'data-source': entry.source },
       },
+      tick,
       sw,
       text,
       entry.source === 'generated' ? h('span', { class: 'cw-badge', text: '生成' }) : null,
@@ -156,6 +172,88 @@ export function wordingsView(root: HTMLElement, deps: Deps) {
     );
     return row;
   };
+
+  // ---- Part 44: 全选 and the bulk 上线 / 下线 (online status only; the wording text is never touched) ----
+  const allTick = h('input', { class: 'cw-tick', attrs: { type: 'checkbox', 'aria-label': '全选' } });
+  const allLabel = hoverValue(
+    h('label', { class: 'cw-all' }, allTick, h('span', { text: '全选' })),
+    '选中全部角色的全部题目',
+  );
+  const pickedCount = h('span', { class: 'cw-picked', attrs: { 'aria-live': 'polite' } });
+  const bulkOn = hoverValue(
+    h('button', { class: 'cw-bulk', text: '上线', attrs: { type: 'button' } }),
+    '让选中的题目出现在玩家的卡片里',
+  );
+  const bulkOff = hoverValue(
+    h('button', { class: 'cw-bulk', text: '下线', attrs: { type: 'button' } }),
+    '选中的题目不再出现，已写的纸条不受影响',
+  );
+  const bulkBar = h(
+    'div',
+    { class: 'cw-bulkbar', attrs: { role: 'group', 'aria-label': '批量上线或下线' } },
+    allLabel,
+    pickedCount,
+    bulkOn,
+    bulkOff,
+  );
+  const refreshBulk = () => {
+    const total = pool.entries.length;
+    allTick.checked = total > 0 && picked.size === total;
+    allTick.indeterminate = picked.size > 0 && picked.size < total;
+    pickedCount.textContent = picked.size > 0 ? `已选 ${picked.size} 条` : '';
+    const can = deps.canManage() && !busy && picked.size > 0;
+    bulkOn.disabled = bulkOff.disabled = !can;
+    allTick.disabled = !deps.canManage() || total === 0;
+    bulkBar.hidden = total === 0 || !deps.api.setEnabled;
+  };
+  allTick.addEventListener('change', () => {
+    picked.clear();
+    if (allTick.checked) for (const entry of pool.entries) picked.add(entry.id);
+    for (const box of body.querySelectorAll<HTMLInputElement>('.cw-row .cw-tick')) box.checked = allTick.checked;
+    refreshBulk();
+  });
+  /** Paint the rows from `pool` and `picked` without rebuilding them, so a switch animates instead of flashing. */
+  const repaint = () => {
+    for (const row of body.querySelectorAll<HTMLElement>('.cw-row')) {
+      const entry = pool.entries.find((e) => e.id === row.dataset.wording);
+      if (!entry) continue;
+      row.setAttribute('data-enabled', String(entry.enabled));
+      const sw = row.querySelector<HTMLElement>('.cw-switch')!;
+      sw.textContent = entry.enabled ? '已启用' : '未启用';
+      sw.setAttribute('aria-checked', String(entry.enabled));
+      row.querySelector<HTMLInputElement>('.cw-tick')!.checked = picked.has(entry.id);
+    }
+    refreshCounts();
+    refreshBulk();
+  };
+  const bulk = (enabled: boolean) => {
+    if (busy || picked.size === 0) return;
+    const ids = [...picked];
+    busy = true;
+    refreshBulk();
+    void guard(async () => {
+      const done = await deps.api.setEnabled!(ids, enabled);
+      const word = enabled ? '上线' : '下线';
+      // Never a silent half-success: whatever did not switch is named (its text), and stays ticked so it can be tried again.
+      const textOf = (id: string) => pool.entries.find((e) => e.id === id)?.text ?? '（已不存在）';
+      for (const entry of pool.entries) if (done.switched.includes(entry.id)) entry.enabled = enabled;
+      picked.clear();
+      for (const f of done.failed) picked.add(f.id);
+      if (done.failed.length > 0) {
+        error.textContent = `${done.failed.length} 条没有${word}：${done.failed.map((f) => `「${textOf(f.id)}」`).join('')}`;
+        error.hidden = false;
+      }
+      deps.status(
+        `${done.switched.length} 条已${word}${done.unchanged.length ? `，${done.unchanged.length} 条本来就是` : ''}。`,
+      );
+      repaint();
+    }).finally(() => {
+      busy = false;
+      refreshBulk();
+    });
+  };
+  bulkOn.addEventListener('click', () => bulk(true));
+  bulkOff.addEventListener('click', () => bulk(false));
 
   const countNodes = new Map<string, HTMLElement>();
   const refreshCounts = () => {
@@ -238,15 +336,17 @@ export function wordingsView(root: HTMLElement, deps: Deps) {
     for (const button of one.values()) button.refresh();
   };
   const body = h('div', { class: 'cw-body' });
-  root.replaceChildren(h('div', { class: 'cw-head' }, all.root), error, body);
+  root.replaceChildren(h('div', { class: 'cw-head' }, all.root), bulkBar, error, body);
   const status = h('span', { class: 'head-status cw-status' });
 
   const reload = async () => {
     one.clear();
     countNodes.clear();
     pool = await deps.api.list();
+    for (const id of [...picked]) if (!pool.entries.some((e) => e.id === id)) picked.delete(id);
     body.replaceChildren(...pool.order.map((id, at) => characterBlock(id, at === 0)));
     refreshCounts();
+    refreshBulk();
     status.textContent = `${pool.order.length} 个角色 · ${pool.entries.length} 条题目`;
     estimate = null;
     paint();

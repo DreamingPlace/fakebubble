@@ -1,4 +1,5 @@
 /** The visual shell: a carousel of the characters the server's catalog lists, every chat driven by the live binding. */
+import { watchCardName } from './card-name.ts';
 import { mountShapes, setSkinProperties } from '../brand/palette-render.ts';
 import { orbitStyle, ringOffset } from './orbit.js';
 import { appendLegalLinks, footerNote } from './legal-links.ts';
@@ -110,6 +111,7 @@ function createCard(person: Person) {
     mountShapes(card.querySelector<HTMLElement>('.card-shell')!, person.characterId, 'chat');
     mountShapes(card.querySelector<HTMLElement>('.card-face')!, person.characterId, 'card');
   }
+  if (configured) watchCardName(card);
   return card;
 }
 

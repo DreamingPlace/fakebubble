@@ -20,7 +20,11 @@ import {
   COCREATION_TARGET_FIELDS,
   type CocreationAnswer,
 } from '../../../../packages/contracts/cocreation-cards.ts';
-import { COCREATION_THEMES, COCREATION_THEME_IDS } from '../../../../packages/contracts/cocreation-wordings.ts';
+import {
+  COCREATION_THEMES,
+  COCREATION_THEME_IDS,
+  pickOnlineWording,
+} from '../../../../packages/contracts/cocreation-wordings.ts';
 import { parseWebProviderBootstrap, syntheticProviderBootstrap } from '../../../../packages/contracts/web-provider.ts';
 import { FakeElement, flush, installFakeDom } from './fake-dom.ts';
 
@@ -154,9 +158,14 @@ test('each theme shows ONE question picked at random from the character’s ENAB
   assert.deepEqual(asked, ['wei-guagua']);
   assert.ok(['瓜瓜给你的第一印象？', '瓜瓜是个怎样的人？', '说说瓜瓜的性格'].includes(promptOf(f, 'theme-know')));
   assert.equal(promptOf(f, 'theme-habit'), '瓜瓜睡前会做什么？', 'a pool of one shows that one');
-  assert.equal(promptOf(f, 'theme-experience'), PLAIN[1], 'an empty pool falls back to the plain default');
-  assert.equal(promptOf(f, 'theme-catchphrase'), PLAIN[3]);
-  assert.equal(promptOf(f, 'theme-recent'), PLAIN[4]);
+  // Part 44 (named exception, owner decision 2026-11-19): a theme whose pool has no ONLINE wording shows no card (it used to show the
+  // plain default). The plain default stays only for a pool that could not be read (the next test).
+  for (const id of ['theme-experience', 'theme-catchphrase', 'theme-recent'])
+    assert.equal(f.card(id), null, `${id}: no online wording, no card`);
+  assert.deepEqual(
+    f.ids().filter((id: string) => id.startsWith('theme-')),
+    ['theme-know', 'theme-habit'],
+  );
   // ↻ visits every wording of a pool in time, and never anything outside it.
   const seen = new Set<string>();
   for (let i = 0; i < 40; i++) {
@@ -190,16 +199,20 @@ test('a failing wording lookup changes nothing: the plain defaults are shown', a
 
 test('a theme answer carries its theme and the exact question that was shown', async (t) => {
   const f = setup(t, {
-    api: { cocreationWordings: async () => ({ themes: { 'theme-know': ['{name}给你的第一印象？'] } as never }) },
+    api: {
+      cocreationWordings: async () =>
+        ({ themes: { 'theme-know': ['{name}给你的第一印象？'], 'theme-habit': ['{name}睡前会做什么？'] } }) as never,
+    },
   });
   await flush();
   f.write('theme-know', '很会逗人');
-  f.write('theme-recent', '在练鼓');
+  // Part 44 (named exception): a theme with no online wording has no card, so the second note is on a theme that has one.
+  f.write('theme-habit', '在练鼓');
   f.send().click();
   await flush();
   assert.deepEqual(f.calls[0]!.answers, [
     { cardId: 'theme-know', text: '很会逗人', wording: '瓜瓜给你的第一印象？' },
-    { cardId: 'theme-recent', text: '在练鼓', wording: '瓜瓜最近在忙什么？' },
+    { cardId: 'theme-habit', text: '在练鼓', wording: '瓜瓜睡前会做什么？' },
   ]);
 });
 
@@ -590,4 +603,155 @@ test('ProviderApi.cocreationWordings posts the character and parses all five the
   assert.deepEqual(JSON.parse(seen[0]!.body), { characterId: 'jojo' });
   const missing = new ProviderApi(async () => Response.json({ themes: { 'theme-know': [] } }));
   await assert.rejects(missing.cocreationWordings('jojo'), /PROTOCOL_INVALID/);
+});
+
+// ---- Part 44: one ONLINE wording per theme, a new random pick each time the cards open ----
+test('Part 44 pick rule: pickOnlineWording is one entry of the online list, null when there is none, never the default', () => {
+  assert.equal(
+    pickOnlineWording([], NAME, () => 0.5),
+    null,
+  );
+  assert.equal(
+    pickOnlineWording(['  坏的\n'], NAME, () => 0.5),
+    null,
+    'an invalid wording is not a pick',
+  );
+  const pool = ['{name}一', '{name}二', '{name}三'];
+  assert.equal(
+    pickOnlineWording(pool, NAME, () => 0),
+    '瓜瓜一',
+  );
+  assert.equal(
+    pickOnlineWording(pool, NAME, () => 0.5),
+    '瓜瓜二',
+  );
+  assert.equal(
+    pickOnlineWording(pool, NAME, () => 0.999999),
+    '瓜瓜三',
+  );
+  assert.equal(
+    pickOnlineWording(pool, NAME, () => 1),
+    '瓜瓜三',
+    'a random() of 1 stays inside the list',
+  );
+  assert.equal(
+    pickOnlineWording(['只有一条'], NAME, () => 0.7),
+    '只有一条',
+  );
+});
+
+const openWith = (t: test.TestContext, themes: Record<string, string[]>, random: () => number) => {
+  const doc = installFakeDom(t);
+  resetCocreationDrafts();
+  t.after(resetCocreationDrafts);
+  const api: CocreationApi = {
+    submitCocreation: async (input) => ({ submissionId: 's', answered: input.answers.length, duplicate: false }),
+    cocreationWordings: async () => ({ themes }),
+  };
+  const open = () =>
+    openCocreationSheet({
+      api,
+      characterId: 'wei-guagua',
+      name: NAME,
+      mount: doc.body as unknown as HTMLElement,
+      random,
+    });
+  return { open, doc };
+};
+const shown = (sheet: { element: unknown }, id: string) =>
+  (sheet.element as FakeElement).querySelector(`[data-card="${id}"] .cc-prompt`)?.textContent ?? null;
+
+test('Part 44: a theme shows exactly ONE of its online wordings, and a new pick is made each time the cards open', async (t) => {
+  const themes = {
+    'theme-know': ['{name}一', '{name}二', '{name}三', '{name}四'],
+    'theme-experience': [],
+    'theme-habit': ['{name}甲', '{name}乙'],
+    'theme-catchphrase': [],
+    'theme-recent': [],
+  };
+  const f = openWith(t, themes, seeded(11));
+  const seen = new Set<string>();
+  for (let i = 0; i < 40; i++) {
+    const sheet = f.open();
+    await flush();
+    const root = sheet.element as unknown as FakeElement;
+    // one card per theme with an online wording, each with exactly one question
+    const ids = root
+      .querySelectorAll('.cc-card')
+      .map((c) => c.getAttribute('data-card')!)
+      .filter((id) => id.startsWith('theme-'));
+    assert.deepEqual(ids, ['theme-know', 'theme-habit']);
+    assert.equal(root.querySelectorAll('[data-card="theme-know"] .cc-prompt').length, 1);
+    const know = shown(sheet, 'theme-know')!;
+    assert.ok(['瓜瓜一', '瓜瓜二', '瓜瓜三', '瓜瓜四'].includes(know), know);
+    assert.ok(['瓜瓜甲', '瓜瓜乙'].includes(shown(sheet, 'theme-habit')!));
+    seen.add(know);
+    sheet.close();
+  }
+  assert.ok(seen.size >= 3, `a new pick on each open visits the pool (${[...seen]})`);
+});
+
+test('Part 44: an offline wording is never shown (the pool the sheet gets holds online ones only) and a theme with none has no card', async (t) => {
+  const f = openWith(
+    t,
+    { 'theme-know': [], 'theme-experience': [], 'theme-habit': [], 'theme-catchphrase': [], 'theme-recent': [] },
+    seeded(3),
+  );
+  const sheet = f.open();
+  await flush();
+  const root = sheet.element as unknown as FakeElement;
+  assert.deepEqual(
+    root
+      .querySelectorAll('.cc-card')
+      .map((c) => c.getAttribute('data-card'))
+      .filter((id) => id!.startsWith('theme-')),
+    [],
+  );
+  assert.equal(root.querySelector('.cc-used')!.hidden, true, 'no cards is not 「今天的问题都回答过了」');
+  assert.equal(shown(sheet, 'theme-know'), null);
+});
+
+test('Part 44: a note already written keeps its wording after the wording goes offline, and across opens', async (t) => {
+  let pool: Record<string, string[]> = {
+    'theme-know': ['{name}原来的问题'],
+    'theme-experience': [],
+    'theme-habit': ['{name}另一个'],
+    'theme-catchphrase': [],
+    'theme-recent': [],
+  };
+  const doc = installFakeDom(t);
+  resetCocreationDrafts();
+  t.after(resetCocreationDrafts);
+  const sent: CocreationAnswer[][] = [];
+  const api: CocreationApi = {
+    submitCocreation: async (input) => {
+      sent.push(structuredClone(input.answers));
+      return { submissionId: 's', answered: input.answers.length, duplicate: false };
+    },
+    cocreationWordings: async () => ({ themes: pool }),
+  };
+  const open = () =>
+    openCocreationSheet({
+      api,
+      characterId: 'wei-guagua',
+      name: NAME,
+      mount: doc.body as unknown as HTMLElement,
+      random: seeded(5),
+      thanksMs: 0,
+    });
+  let sheet = open();
+  await flush();
+  let root = sheet.element as unknown as FakeElement;
+  root.querySelector('[data-card="theme-know"] .cc-face')!.click();
+  root.querySelector('[data-card="theme-know"] textarea')!.type_('写好了');
+  sheet.close();
+  // the wording goes offline; the note stays tied to it, and still has its card
+  pool = { ...pool, 'theme-know': [] };
+  sheet = open();
+  await flush();
+  root = sheet.element as unknown as FakeElement;
+  assert.equal(shown(sheet, 'theme-know'), '瓜瓜原来的问题', 'the written card keeps the question it answered');
+  root.querySelector('.cc-send')!.click();
+  await flush();
+  assert.deepEqual(sent[0], [{ cardId: 'theme-know', text: '写好了', wording: '瓜瓜原来的问题' }]);
 });

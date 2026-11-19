@@ -362,6 +362,12 @@ const wordingEntry = (v: unknown): WordingEntry => {
   };
 };
 
+export type WordingBulkResult = {
+  enabled: boolean;
+  switched: string[];
+  unchanged: string[];
+  failed: { id: string; code: string }[];
+};
 export class CocreationWordingsClient {
   private readonly request: (path: string, body: Record<string, unknown>) => Promise<unknown>;
   constructor(request: (path: string, body: Record<string, unknown>) => Promise<unknown>) {
@@ -386,6 +392,19 @@ export class CocreationWordingsClient {
   }
   async toggle(id: string, enabled: boolean) {
     return wordingEntry(await this.request('wordings/toggle', { id, enabled }));
+  }
+  /** Part 44: 上线 / 下线 for a selection (online status only); says which ones switched, which already were so, which failed. */
+  async setEnabled(ids: string[], enabled: boolean): Promise<WordingBulkResult> {
+    const r = object(await this.request('wordings/set-enabled', { ids, enabled }));
+    return {
+      enabled: r.enabled === true,
+      switched: rows(r.switched).map(string),
+      unchanged: rows(r.unchanged).map(string),
+      failed: rows(r.failed).map((x) => {
+        const e = object(x);
+        return { id: string(e.id), code: string(e.code) };
+      }),
+    };
   }
   async remove(id: string) {
     object(await this.request('wordings/delete', { id }));
