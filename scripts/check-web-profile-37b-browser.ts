@@ -1,7 +1,7 @@
 import './player-build-guard.ts';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { startConsoleFixture } from './console-fixture-24b6.ts';
+import { startConsoleFixture, NOW as FIXTURE_NOW } from './console-fixture-24b6.ts';
 import { quietWait } from './console-quiet.ts';
 
 /**
@@ -70,7 +70,7 @@ try {
       principal,
       `req-${id}`,
       'c'.repeat(64),
-      Date.now() - 1000,
+      FIXTURE_NOW - 1000,
     );
     f.store.run(
       `INSERT INTO web_cocreation_answers(submission_id,ordinal,card_id,target_field,kind,text_json) VALUES (?,0,'free-1','free','text',?)`,
