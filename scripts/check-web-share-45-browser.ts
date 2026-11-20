@@ -509,7 +509,13 @@ try {
     offset = DAY + 1_000;
     await open.locator('.face-voice').click({ force: true });
     await open.locator('.share-page.is-expired').waitFor({ timeout: 10_000 });
-    await wait(isIos(name) ? 2500 : 900);
+    await wait(900);
+    // (named exception, WebKit: its fade can still be running under load, so ask for the settled state rather than a fixed time)
+    await open
+      .waitForFunction(() => Number(getComputedStyle(document.querySelector('.face-main')!).opacity) === 0, null, {
+        timeout: 8_000,
+      })
+      .catch(() => undefined);
     // (the card's own words fade to nothing in place, so they are asked by what shows, not by what is in the page)
     const inPlace = await open.evaluate(() => ({
       sticker: document.querySelector('.share-sticker')?.textContent,
