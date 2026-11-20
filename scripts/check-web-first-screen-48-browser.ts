@@ -107,6 +107,12 @@ const swipe = async (page: Any, direction = 1) => {
   );
   return [before, await activePerson(page)];
 };
+/** A tap on the front card, once the hand-over from the skeleton has finished (it is 240 ms; the card also settles into place). */
+const tapCard = async (page: Any) => {
+  await page.waitForFunction(() => !document.querySelector('.is-skeleton'), null, { timeout: 5000 });
+  await page.waitForTimeout(700);
+  await page.locator('.card-slot.is-active .card-face').click({ position: { x: 60, y: 200 }, force: true });
+};
 const notBlack = (png: Buffer) => {
   const image = decodePng(png);
   let sum = 0;
@@ -332,7 +338,7 @@ try {
       !(await page.locator('.vs-root[data-open="true"]').count()),
       'the sheet is NOT shown before the player does anything',
     );
-    await page.locator('.card-slot.is-active .card-face').click({ position: { x: 60, y: 200 }, force: true });
+    await tapCard(page);
     await page.locator('.vs-root[data-open="true"]').waitFor({ timeout: 5000 });
     await page.waitForTimeout(400);
     const sheet = await page.evaluate(() => ({
@@ -395,7 +401,7 @@ try {
       const started = Date.now();
       await page.goto(`${f.origin}/?mode=provider`);
       await page.waitForSelector('.card-slot.is-active .face-name-text', { timeout: 20_000 });
-      await page.locator('.card-slot.is-active .card-face').click({ position: { x: 60, y: 200 }, force: true });
+      await tapCard(page);
       await page.waitForFunction(
         () => document.querySelector('.vs-root')?.getAttribute('data-state') === 'failed',
         null,
@@ -455,7 +461,7 @@ try {
       "one refusal without a token, one pass with the real widget's token",
     );
     check(stats.writes.length === 0, 'no write before the player acts');
-    await page.locator('.card-slot.is-active .card-face').click({ position: { x: 60, y: 200 }, force: true });
+    await tapCard(page);
     await page.locator('.page-shell[data-phase="chat"]').waitFor({ timeout: 8000 });
     check(
       !(await page.locator('.vs-root[data-open="true"]').count()),
