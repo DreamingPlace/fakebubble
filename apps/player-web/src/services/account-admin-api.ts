@@ -36,6 +36,7 @@ import type {
   SystemPriceRow,
   SystemRetention,
   SystemSecurity,
+  SystemShares,
   SystemUnknownKind,
   SystemWarnings,
 } from '../../../../packages/contracts/web-system.ts';
@@ -115,6 +116,8 @@ export type SystemStatusView = {
   retention: SystemRetention;
   metrics: StageLatencyDay[];
   security: SystemSecurity;
+  /** Part 45: shareable voice-card links, counts only; absent where the share tables are not wired. */
+  shares?: SystemShares;
   warnings: SystemWarnings;
 };
 /** 邀请与额度 (Part 22a): one batch as the list shows it - counts only, no player. */

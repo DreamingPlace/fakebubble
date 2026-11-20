@@ -10,7 +10,14 @@ const root = document.getElementById('app');
 if (!root) throw new Error('APP_ROOT_MISSING');
 const params = new URLSearchParams(location.search);
 const mode = params.get('mode');
-if (mode === 'provider-admin') {
+// Part 45: /s/<token> is a shared voice card. It needs no sign-in: the page asks the public share route and nothing else (no
+// bootstrap, so no guest session is made for a visitor who only opens a link).
+const shared = /^\/s\/([A-Za-z0-9_-]{32})$/.exec(location.pathname);
+if (shared) {
+  startTheme(playerPrefs());
+  if (/Android/i.test(navigator.userAgent)) document.documentElement.dataset.platform = 'android';
+  void import('../features/share/share-page.js').then((module) => module.startSharePage(root, shared[1]!));
+} else if (mode === 'provider-admin') {
   void import('./admin-mode.js')
     .then((module) => module.startAdminMode(root))
     .catch(() => {

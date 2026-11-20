@@ -21,6 +21,7 @@ import { backupNote, modelCopy, modelFooterNote, modelMenuItem, openModelPicker 
 import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
 import { playerPrefs } from '../prefs/player-prefs.ts';
 import { lookCopy, openLookSheet } from './chat-look.ts';
+import { openShareSheet, shareButton } from '../share/share-sheet.ts';
 
 type Shell = {
   say(message: string): void;
@@ -30,6 +31,8 @@ type Shell = {
   /** Part 31b: the character's picture URL, or null. */
   portrait?(id: WebProviderCharacterId): string | null;
   name(id: WebProviderCharacterId): string;
+  /** Part 45: the number printed on the character's card (for the share sheet's small card). */
+  cardNo?(id: WebProviderCharacterId): string;
 };
 
 /** Part 26a: the two lines of the one-character rule (GUEST_ONE_CHARACTER_ENABLED); 注册 in the second one opens the signup sheet. */
@@ -1082,6 +1085,26 @@ export class LiveBinding {
       toggle.textContent = visible ? '收起文字' : '转文字';
       toggle.setAttribute('aria-expanded', String(visible));
     });
+    // Part 45: every character voice message that has audio (a reply's voice, a broadcast's) can be shared as a link. The trial
+    // footer, the welcome clip and a reply delivered as text have no icon: they are not the character's voice message.
+    if (message.author === 'character' && message.origin === 'narrative' && message.audio?.mediaId) {
+      const button = shareButton();
+      button.addEventListener('click', () => {
+        const target = {
+          name: shell.name(characterId),
+          mark: shell.mark(characterId),
+          portrait: shell.portrait?.(characterId) ?? null,
+          no: shell.cardNo?.(characterId) ?? '',
+          durationMs: message.audio?.durationMs ?? null,
+        };
+        openShareSheet(button, target, {
+          say: (text) => shell.say(text),
+          create: (requestId) =>
+            this.api.share({ requestId, conversationId: message.conversationId, messageId: message.messageId }),
+        });
+      });
+      row.append(button);
+    }
     // Part 21b: a reply the backup model wrote says so, once, under its first voice bubble.
     if (message.viaBackup && message.replyOrdinal === 0)
       row.querySelector('.voice-stack')?.append(backupNote(message.viaBackup, this.modelChoice?.metered !== false));

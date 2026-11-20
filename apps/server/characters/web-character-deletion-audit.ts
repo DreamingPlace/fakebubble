@@ -184,6 +184,8 @@ export function auditCharacterDeletionScope(
       'web_user_events',
       // Part 42: the broadcast messages are purged with the conversation (purgeBroadcastConversation) and audited by the generic check.
       'web_broadcast_messages',
+      // Part 45: the share links of the conversation and the character are purged with it (purgeShareConversation / purgeShareCharacter).
+      'web_shares',
     ])
       allowed.add(name);
   for (const { name } of store.all<{ name: string }>(

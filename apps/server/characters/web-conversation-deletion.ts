@@ -1,4 +1,5 @@
 import { purgeBroadcastConversation } from '../broadcast/web-broadcast-schema.ts';
+import { purgeShareConversation } from '../share/web-share-schema.ts';
 import { createHash } from 'node:crypto';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
@@ -206,6 +207,8 @@ export function deleteLiveConversation(store: WebRuntimeStore, clock: Clock, c: 
       );
     // Part 42: the broadcast messages of this conversation go with its messages.
     purgeBroadcastConversation(store, c.worldId, c.conversationId);
+    // Part 45: the share links of this conversation die with it (and with them the voice URL).
+    purgeShareConversation(store, c.worldId, c.conversationId);
     store.run('DELETE FROM messages WHERE world_id=? AND conversation_id=?', c.worldId, c.conversationId);
     store.run(
       'UPDATE contacts SET state_json=? WHERE world_id=? AND conversation_id=? AND character_id=?',
