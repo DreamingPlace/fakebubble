@@ -887,7 +887,7 @@ test('45 a broadcast voice message can be shared; its text bubble and another pl
   await f.broadcast.pass();
   const clock = { now: () => 1_800_000_000_500 };
   const shares = new WebShare(
-    f.store,
+    f.store as unknown as WebRuntimeStore,
     clock,
     Buffer.alloc(32, 7),
     {

@@ -21124,13 +21124,13 @@ html.theme-fade *::after {
 .share-page .carousel {
   pointer-events: none;
 }
-.share-page .card-slot.is-active {
+.page-shell.share-page .carousel .card-slot.is-active {
   pointer-events: auto;
   cursor: default;
-  width: 276px;
-  height: min(520px, calc(100dvh - 320px));
-  min-height: 360px;
-  top: 44%;
+  width: 276px !important;
+  height: min(520px, calc(100dvh - 300px)) !important;
+  min-height: 0 !important;
+  top: 44% !important;
 }
 .share-sticker {
   position: absolute;
@@ -21173,7 +21173,7 @@ html.theme-fade *::after {
 }
 .share-actions {
   position: fixed;
-  z-index: 5;
+  z-index: 200;
   left: 0;
   right: 0;
   bottom: 0;
@@ -21238,7 +21238,17 @@ html.theme-fade *::after {
   background: transparent;
   box-shadow: none;
   color: var(--bb-sub);
+  top: -44px;
   transform: translateX(-50%);
+}
+/* the neutral card of an expired link: a plain soft surface (no character, no colours) */
+.share-page .share-blank,
+.share-page.is-expired .card-slot .card-face {
+  background: linear-gradient(160deg, #dedbe3, #eeecf1);
+}
+:root[data-theme="dark"] .share-page .share-blank,
+:root[data-theme="dark"] .share-page.is-expired .card-slot .card-face {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
 }
 .share-page.is-expired .share-sticker::before {
   opacity: 0;

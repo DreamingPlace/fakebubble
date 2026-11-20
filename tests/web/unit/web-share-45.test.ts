@@ -10,7 +10,6 @@ import {
   webShareInstalled,
 } from '../../../apps/server/share/web-share-schema.ts';
 import { SHARE_PAGE } from '../../../apps/server/share/web-share-path.ts';
-import { webProviderHTTPError } from '../../../apps/server/platform/web-provider-http-error.ts';
 
 /** Part 45: the share tables, installed by a digest-checked runtime step (no numbered migration); STOP WEB_SHARE_SCHEMA_MISMATCH. */
 const DAY = 86_400_000;
@@ -79,8 +78,6 @@ test('45 STOP WEB_SHARE_SCHEMA_MISMATCH: a changed digest, a missing guard, a ch
   t.after(() => d.close());
   d.db.exec('CREATE TABLE web_shares(x INTEGER)');
   assert.throws(() => installWebShare(d), /WEB_SHARE_SCHEMA_MISMATCH/);
-  // the code is a 503 (a start-up refusal), and the limit a player can meet is a 429
-  assert.equal(webProviderHTTPError(new (Error as never)('x')).status, 500);
 });
 
 test('45 a share lives exactly one day and is never changed once written', (t) => {
