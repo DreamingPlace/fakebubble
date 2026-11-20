@@ -22200,6 +22200,9 @@ html.theme-fade *::after {
   .page-shell.is-skeleton .site-head {
     height: 68px;
   }
+  .page-shell.is-skeleton .avatar-nav {
+    height: 86px;
+  }
 }
 /* (a phone hides every card that is not .is-active, and the skeleton's are not) */
 .page-shell.is-skeleton .card-slot.sk-slot {

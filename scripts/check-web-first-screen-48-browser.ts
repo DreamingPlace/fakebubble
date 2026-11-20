@@ -76,11 +76,30 @@ const swipe = async (page: Any) => {
   const before = await activePerson(page);
   const box = await page.locator('.carousel').boundingBox();
   const y = box.y + box.height / 2;
-  const x = box.x + box.width / 2 + 40;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  for (let step = 1; step <= 8; step++) await page.mouse.move(x - step * 20, y, { steps: 2 });
-  await page.mouse.up();
+  // a finger swipe, as the page sees it: pointer events of a touch on the carousel
+  await page.evaluate(
+    async ({ x, y }: { x: number; y: number }) => {
+      const carousel = document.querySelector('.carousel')!;
+      const fire = (type: string, clientX: number) =>
+        carousel.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            pointerId: 7,
+            pointerType: 'touch',
+            clientX,
+            clientY: y,
+            isPrimary: true,
+          }),
+        );
+      fire('pointerdown', x);
+      for (let step = 1; step <= 8; step++) {
+        fire('pointermove', x - step * 20);
+        await new Promise((r) => setTimeout(r, 16));
+      }
+      fire('pointerup', x - 160);
+    },
+    { x: box.x + box.width / 2 + 40, y },
+  );
   await page.waitForFunction(
     (was: string) => document.querySelector('.card-slot.is-active')?.getAttribute('data-person') !== was,
     before,
