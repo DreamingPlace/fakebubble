@@ -208,6 +208,24 @@ export class WebProviderHTTP {
       const found = await app.avatars.readPublic(image[1]!);
       return new Response(Uint8Array.from(found.bytes), { headers: avatarHeaders(found.bytes.length) });
     }
+    // Part 45: the two public share reads. No session or cookie is read; the visitor needs only the token. Rate-limited per IP and
+    // globally. Unknown, expired and purged links answer identically (NOT_FOUND); nothing is cached and the page is not named.
+    const shareRead = path.match(new RegExp(`^${API}/shares/([^/]{1,128})(/audio)?$`));
+    if (method === 'GET' && shareRead) {
+      this.limits.rate(`web:share:${ipHash}`, LIMITS.sharePerIpPerMinute);
+      this.limits.rate('web:share:global', LIMITS.shareGlobalPerMinute);
+      const shareHeaders = { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' };
+      if (shareRead[2]) {
+        const bytes = await app.shares.audio(shareRead[1]!);
+        ensure(bytes, 'NOT_FOUND');
+        return new Response(Uint8Array.from(bytes), {
+          headers: { ...shareHeaders, 'content-type': 'audio/wav', 'content-length': String(bytes.length) },
+        });
+      }
+      const card = app.shares.open(shareRead[1]!);
+      ensure(card, 'NOT_FOUND');
+      return Response.json(card, { headers: shareHeaders });
+    }
     if (method === 'GET' && path === `${API}/admin/session`)
       return Response.json(app.inviteAdmin.session(this.cookie(request, true)));
     if (
@@ -361,6 +379,25 @@ export class WebProviderHTTP {
           { operation: app.operation(actor, result.operationId), duplicate: result.duplicate },
           { status: result.duplicate ? 200 : 202 },
         );
+      });
+    }
+    if (method === 'POST' && path === `${API}/shares`) {
+      this.write(request);
+      const body = await this.body(request);
+      ensure(
+        typeof body.requestId === 'string' &&
+          typeof body.conversationId === 'string' &&
+          typeof body.messageId === 'string' &&
+          Object.keys(body).sort().join(',') === 'conversationId,messageId,requestId',
+        'INVALID_REQUEST',
+      );
+      return app.store.transaction(() => {
+        const made = app.shares.create(this.write(request), {
+          requestId: body.requestId as string,
+          conversationId: body.conversationId as string,
+          messageId: body.messageId as string,
+        });
+        return Response.json({ token: made.token, expiresAt: made.expiresAt });
       });
     }
     const token = this.cookie(request);

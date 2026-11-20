@@ -471,6 +471,25 @@ export class ProviderApi implements WebProviderActions {
     );
     return { operation: operation(receipt.operation), duplicate: receipt.duplicate === true };
   }
+  /**
+   * Part 45: a link to one of the character's voice messages. One request id per sheet opening makes a repeat answer the same link;
+   * the answer is the token alone (the page builds the address from it).
+   */
+  async share(input: { requestId: string; conversationId: string; messageId: string }) {
+    const answer = record(
+      await this.request('/shares', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: input.requestId,
+          conversationId: input.conversationId,
+          messageId: input.messageId,
+        }),
+      }),
+    );
+    if (typeof answer.token !== 'string' || !/^[A-Za-z0-9_-]{32}$/.test(answer.token))
+      throw new ProviderApiError(0, 'PROTOCOL_INVALID');
+    return { token: answer.token };
+  }
   async history(input: { characterId: WebProviderCharacterId; conversationId: string; before: string | null }) {
     const page = record(
       await this.request(

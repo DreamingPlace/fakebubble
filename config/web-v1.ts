@@ -40,6 +40,9 @@ export const WEB_HTTP_LIMITS = Object.freeze({
   adminReadsPerIpPerMinute: 300,
   welcomePerIpPerMinute: 60,
   welcomeGlobalPerMinute: 300,
+  /** Part 45: the public share routes (card and voice), per IP and over all visitors. */
+  sharePerIpPerMinute: 60,
+  shareGlobalPerMinute: 300,
   requestsGlobalPerMinute: 6000,
   streamMaxMs: 30_000,
   streamPollMs: 1000,

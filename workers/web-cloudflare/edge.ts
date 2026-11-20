@@ -3,6 +3,7 @@ import { CloudWebAssets } from '../../apps/server/cloudflare/web-assets.ts';
 import type { AssetBinding } from '../../apps/server/cloudflare/admin-assets.ts';
 import { safeError } from '../../apps/server/cloudflare/safe-error.ts';
 import { WEB_EDGE_PEER_HEADER } from '../../apps/server/cloudflare/web-edge-request.ts';
+import { SHARE_PAGE } from '../../apps/server/share/web-share-path.ts';
 
 export const WEB_CLOUD_COMPATIBILITY_FLAGS = ['nodejs_compat', 'enable_request_signal'] as const;
 export interface WebBusinessEndpoint {
@@ -104,7 +105,13 @@ export default {
       } else {
         ensure(!url.pathname.startsWith('/api'), 'NOT_FOUND');
         ensure(request.method === 'GET' || request.method === 'HEAD', 'NOT_FOUND');
-        if (url.pathname === '/' || url.pathname === '/index.html') {
+        if (SHARE_PAGE.test(url.pathname)) {
+          // Part 45: a share link's page is the player's own index (the page reads the token from its address). Nothing is read or
+          // stored here; there is no mode redirect, so the link stays exactly as it was shared.
+          ensure(!url.search, 'NOT_FOUND');
+          response = await staticAsset(new Request(new URL('/', url.origin), request), env);
+          assetCache = response.headers.get('cache-control');
+        } else if (url.pathname === '/' || url.pathname === '/index.html') {
           const modes = url.searchParams.getAll('mode');
           ensure(
             modes.length <= 1 && (!modes.length || ['provider', 'provider-admin'].includes(modes[0]!)),

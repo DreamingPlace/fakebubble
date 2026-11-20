@@ -30,6 +30,7 @@ import { routeWebPlayerAccounts } from '../identity/web-player-routes.ts';
 import { COCREATION_BODY_LIMIT, routeWebCocreation } from '../cocreation/web-cocreation-routes.ts';
 import { OWNER_BODY_LIMIT } from '../admin/web-owner-ops.ts';
 import { BROADCAST_UPLOAD_BODY_LIMIT, broadcastAudio } from '../broadcast/web-broadcast-read.ts';
+import { SHARE_PAGE } from '../share/web-share-path.ts';
 import { AVATAR_BODY_LIMIT, avatarHeaders } from '../characters/web-avatar.ts';
 import { webWelcomeLinesInstalled } from '../characters/web-welcome-schema.ts';
 import { routeWebBilling } from '../admission/web-billing-routes.ts';
@@ -46,6 +47,8 @@ import { logRefusal } from '../platform/web-refusal-status.ts';
 import { peerIpHash } from '../admission/ip-key-input.ts';
 
 const privateHeaders = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
+/** Part 45: a share's public answers are never cached and never name the page they were opened from. */
+const shareHeaders = { ...privateHeaders, 'Referrer-Policy': 'no-referrer' };
 const API = '/api/web/provider';
 type Principal = ReturnType<WebIdentity['authenticate']>;
 const characterId = isWebProviderCharacterId;
@@ -87,6 +90,7 @@ export class WebProviderServer {
   private deletionTask: Promise<void> | null = null;
   private readonly application: WebProviderApplication;
 
+  private readonly playerRoot: string;
   constructor(
     store: WebStore,
     config: WebLocalConfig,
@@ -95,7 +99,10 @@ export class WebProviderServer {
     network?: ProviderNetwork,
     previews?: WebCharacterPreviewRunner,
     players?: WebPlayerAccountsConfig,
+    /** Where the built player site is served from; the built site by default (a test may point it at a stub). */
+    playerRoot = fileURLToPath(new URL('../../player-web/dist', import.meta.url)),
   ) {
+    this.playerRoot = playerRoot;
     store.requireProviderRuntime();
     ensure(
       config.mode === 'provider-local' &&
@@ -458,7 +465,29 @@ export class WebProviderServer {
         // Local demos remain available on the synthetic listener, not on the live service.
         ensure(modes.length === 1 && ['provider', 'provider-admin'].includes(modes[0]!), 'NOT_FOUND');
       }
-      if (serveLocalStatic(req, res, fileURLToPath(new URL('../../player-web/dist', import.meta.url)))) return;
+      // Part 45: a share link's page is the player's own page; the page reads the token from its address and asks the public route.
+      if ((req.method === 'GET' || req.method === 'HEAD') && SHARE_PAGE.test(path) && !url.search) {
+        req.url = '/';
+        res.setHeader('Referrer-Policy', 'no-referrer');
+      }
+      if (serveLocalStatic(req, res, this.playerRoot)) return;
+      // Part 45: the two public share reads (no session, no cookie is read): the card, and the voice. Unknown, expired and purged
+      // links answer identically (NOT_FOUND). Only the token is in the address.
+      const shareRead = path.match(new RegExp(`^${API}/shares/([^/]{1,128})(/audio)?$`));
+      if (req.method === 'GET' && shareRead) {
+        const card = shareRead[2] ? null : this.application.shares.open(shareRead[1]!);
+        if (shareRead[2]) {
+          const bytes = await this.application.shares.audio(shareRead[1]!);
+          ensure(bytes, 'NOT_FOUND');
+          res.writeHead(200, { ...shareHeaders, 'Content-Type': 'audio/wav', 'Content-Length': bytes.length });
+          res.end(Buffer.from(bytes));
+          return;
+        }
+        ensure(card, 'NOT_FOUND');
+        res.writeHead(200, { ...shareHeaders, 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(card));
+        return;
+      }
       const welcome = path.match(new RegExp(`^${API}/public-audio/([A-Za-z0-9_-]{1,128})$`));
       if (req.method === 'GET' && welcome) {
         this.publicAudio(res, welcome[1]!);
@@ -628,6 +657,26 @@ export class WebProviderServer {
           operation: this.operation(principal, admitted.operationId),
           duplicate: admitted.duplicate,
         });
+        return;
+      }
+      if (req.method === 'POST' && path === `${API}/shares`) {
+        this.authorizeWrite(req);
+        const body = await this.body(req);
+        ensure(
+          typeof body.requestId === 'string' &&
+            typeof body.conversationId === 'string' &&
+            typeof body.messageId === 'string' &&
+            Object.keys(body).sort().join(',') === 'conversationId,messageId,requestId',
+          'INVALID_REQUEST',
+        );
+        const made = this.store.transaction(() =>
+          this.application.shares.create(this.authorizeWrite(req).principal, {
+            requestId: body.requestId as string,
+            conversationId: body.conversationId as string,
+            messageId: body.messageId as string,
+          }),
+        );
+        this.json(res, 200, { token: made.token, expiresAt: made.expiresAt });
         return;
       }
       const token = this.cookie(req);
