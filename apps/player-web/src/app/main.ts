@@ -9,7 +9,8 @@ import { startTheme } from '../features/prefs/theme.ts';
 const root = document.getElementById('app');
 if (!root) throw new Error('APP_ROOT_MISSING');
 const params = new URLSearchParams(location.search);
-const mode = params.get('mode');
+// The bare address (Part 48: no redirect any more) and every other mode open the player; only the console asks for its own.
+const mode = params.get('mode') === 'provider-admin' ? 'provider-admin' : 'provider';
 // Part 45: /s/<token> is a shared voice card. It needs no sign-in: the page asks the public share route and nothing else (no
 // bootstrap, so no guest session is made for a visitor who only opens a link).
 const shared = /^\/s\/([A-Za-z0-9_-]{32})$/.exec(location.pathname);
@@ -41,7 +42,7 @@ if (shared) {
     .catch(() => {
       root.textContent = '管理入口未能加载，请查看构建状态。';
     });
-} else {
+} else if (mode === 'provider') {
   // The player: ?mode=provider, and (Part 48) the bare address, which no longer redirects there first.
   // Night mode (Part 25b) belongs to the player pages only: the administrator console never reads it.
   startTheme(playerPrefs());

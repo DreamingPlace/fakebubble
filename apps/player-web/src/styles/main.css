@@ -22103,39 +22103,6 @@ html.theme-fade *::after {
 }
 
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
-@media (prefers-reduced-motion: reduce) {
-  .card-slot.is-active:not(.is-chat) .face-sheen,
-  .page-shell .card-slot.is-active:not(.is-chat),
-  .card-slot.is-active .face-name,
-  .card-slot[data-skin].is-active:not(.is-chat) .face-name,
-  .page-shell .avatar-choice-mark,
-  .page-shell .message-row,
-  .card-slot.is-chat :is(.chat-head, .chat-body, .composer),
-  .acct-sheet,
-  .acct-sheet:not(.mp-sheet),
-  .mi-sheet,
-  .mi-section,
-  .mi-fill,
-  .invite-dialog[open],
-  .invite-dialog::backdrop,
-  .mp-sheet,
-  .mp-panel,
-  .mp-brain,
-  .mp-brain:hover,
-  .mp-confirm-box:not(:empty),
-  .bl-tables,
-  .bl-row,
-  .cc-sheet,
-  .cc-sheet .cc-editor,
-  .share-sticker,
-  .share-cta,
-  .share-sheet,
-  .share-pop,
-  .share-scrim {
-    animation: none;
-  }
-}
-
 /* ======================================================================================================================
    Part 48: the first-paint skeleton (static markup in index.html) and its hand-over to the real cards.
    It uses the real cards' own classes and the same orbit numbers (orbit.ts: offset ±1 = x .382 card widths, y 8, scale .96, opacity .83;
@@ -22432,9 +22399,9 @@ html.theme-fade *::after {
 /* What fills in when the session arrives eases in; nothing around it moves. */
 .face-dur.is-new,
 .preview-note.is-filled {
-  animation: bb-fill-in 200ms ease both;
+  animation: vs-fill-in 200ms ease both;
 }
-@keyframes bb-fill-in {
+@keyframes vs-fill-in {
   from {
     opacity: 0;
   }
@@ -22442,6 +22409,39 @@ html.theme-fade *::after {
 @media (prefers-reduced-motion: reduce) {
   .face-dur.is-new,
   .preview-note.is-filled {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-slot.is-active:not(.is-chat) .face-sheen,
+  .page-shell .card-slot.is-active:not(.is-chat),
+  .card-slot.is-active .face-name,
+  .card-slot[data-skin].is-active:not(.is-chat) .face-name,
+  .page-shell .avatar-choice-mark,
+  .page-shell .message-row,
+  .card-slot.is-chat :is(.chat-head, .chat-body, .composer),
+  .acct-sheet,
+  .acct-sheet:not(.mp-sheet),
+  .mi-sheet,
+  .mi-section,
+  .mi-fill,
+  .invite-dialog[open],
+  .invite-dialog::backdrop,
+  .mp-sheet,
+  .mp-panel,
+  .mp-brain,
+  .mp-brain:hover,
+  .mp-confirm-box:not(:empty),
+  .bl-tables,
+  .bl-row,
+  .cc-sheet,
+  .cc-sheet .cc-editor,
+  .share-sticker,
+  .share-cta,
+  .share-sheet,
+  .share-pop,
+  .share-scrim {
     animation: none;
   }
 }

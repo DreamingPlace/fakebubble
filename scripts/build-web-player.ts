@@ -186,11 +186,12 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
       if (!lstatSync(stylesheet).isFile() || lstatSync(stylesheet).size > 2_000_000)
         throw new Error('PLAYER_ASSET_UNSAFE');
       const whole = readFileSync(stylesheet, 'utf8');
-      const player = transformSync(playerCss(whole, playerSources(join(source, 'src')).join('\n')), {
-        loader: 'css',
-        minify: true,
-        target: ['safari16', 'chrome110'],
-      }).code;
+      const kept = playerCss(whole, playerSources(join(source, 'src')).join('\n'));
+      // Nothing to take out (a tiny stylesheet): the one file serves both, unchanged. Otherwise the player's is minified.
+      const player =
+        kept === whole
+          ? whole
+          : transformSync(kept, { loader: 'css', minify: true, target: ['safari16', 'chrome110'] }).code;
       addBytes(Buffer.from(player), styleDest);
       addBytes(Buffer.from(whole), adminDest);
     }
