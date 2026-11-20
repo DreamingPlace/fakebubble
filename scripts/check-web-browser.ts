@@ -196,7 +196,9 @@ try {
 
   // The bare URL opens the player (the demo prototype is gone).
   const first = await page.goto(`${origin}/`);
-  assert.equal(new URL(page.url()).searchParams.get('mode'), 'provider', 'the bare URL redirects to ?mode=provider');
+  // Part 48 (named exception to "the bare URL redirects to ?mode=provider"): the bare URL serves the player directly (no 302, no extra
+  // round trip), so the address stays as it was typed; the page is the same player.
+  assert.equal(new URL(page.url()).searchParams.get('mode'), null, 'the bare URL is served directly, with no redirect');
   assert.ok(first && first.status() === 200);
   await page.locator('button:visible').first().waitFor({ timeout: 15_000 });
   const cookieName = config.cookieName;

@@ -22245,18 +22245,10 @@ html.theme-fade *::after {
     background-position: -120% 0;
   }
 }
-/* The hand-over: the real page is already in place under the skeleton, which fades out above it. */
-.page-shell.is-skeleton.is-leaving {
-  position: fixed;
-  inset: 0;
-  z-index: 900;
-  pointer-events: none;
-  animation: sk-leave 240ms cubic-bezier(0.2, 0.82, 0.24, 1) forwards;
-}
-@keyframes sk-leave {
-  to {
-    opacity: 0;
-  }
+/* The hand-over: the real page replaces the skeleton in one frame; the faces ease in over the same card shapes. */
+.page-shell.is-entering .card-face,
+.page-shell.is-entering .site-head .brand {
+  animation: vs-fill-in 240ms cubic-bezier(0.2, 0.82, 0.24, 1) both;
 }
 @media (prefers-reduced-motion: reduce) {
   .sk-bar,
@@ -22264,9 +22256,9 @@ html.theme-fade *::after {
   .sk-play {
     animation: none;
   }
-  .page-shell.is-skeleton.is-leaving {
+  .page-shell.is-entering .card-face,
+  .page-shell.is-entering .site-head .brand {
     animation: none;
-    opacity: 0;
   }
 }
 

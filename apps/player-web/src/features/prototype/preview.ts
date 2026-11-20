@@ -131,19 +131,15 @@ function startShell(root: HTMLElement, people: Person[], live: ShellLive): Shell
       <div class="toast" role="status" aria-live="polite"></div>
     </div>`;
   const page = holder.firstElementChild as HTMLElement;
-  // Part 48: the first-paint skeleton (static markup in index.html) stays under the new page until the page is in place, then fades out
-  // above it: its cards are where the real ones are, so nothing moves. Anything else in the root goes, as it always did.
+  // Part 48: the first-paint skeleton (static markup in index.html) is replaced by the real page in the same frame: its cards are where
+  // the real ones are, so nothing moves; only the faces ease in over the same card shapes (no second `.page-shell` ever lingers).
+  // Anything else in the root goes, as it always did.
   const skeleton = root.querySelector<HTMLElement>(':scope > .page-shell.is-skeleton');
-  for (const child of [...root.children]) if (child !== skeleton) child.remove();
+  for (const child of [...root.children]) child.remove();
   root.prepend(page);
   if (skeleton) {
-    skeleton.classList.add('is-leaving');
-    skeleton.removeAttribute('aria-busy');
-    const remove = () => skeleton.remove();
-    skeleton.addEventListener('animationend', remove, { once: true });
-    // (no animation under reduced motion, or in a document that has none: it goes at once)
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches || typeof skeleton.animate !== 'function') remove();
-    else setTimeout(remove, 600);
+    page.classList.add('is-entering');
+    setTimeout(() => page.classList.remove('is-entering'), 500);
   }
   const fillFooter = () => {
     const note = page.querySelector<HTMLElement>('.preview-note')!;
