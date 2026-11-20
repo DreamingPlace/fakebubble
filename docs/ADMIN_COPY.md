@@ -88,3 +88,6 @@ one voice bubble (its words behind 转文字); without, one text bubble per line
 | 多轮预演 | third column 「新+档案」 beside 旧 and 新 (model·新+档案); rail group 「说话档案 · 八个情境」 (the eight built-in scripts, four turns each: 日常 · 调侃 · 抱怨 · 安慰 · 吵架 · 分享日常 · 内部梗 · 认真); ⭐ on a character line |
 
 Everything here goes into the 草稿; **正式版本** changes only with 发布. There are no explanation lines (hover tips only: nothing in this Part is irreversible, because the 草稿 and 版本历史 are the review and the rollback). The word 「现行」 is not used.
+
+### Part 37b follow-up — 回复写法
+系统 → 模型与价格 → 回复写法: three options **旧写法 · 新写法 · 新+档案** (the pill says 当前：新+档案); owner only, one confirmation as before. Nothing else changes.
