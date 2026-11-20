@@ -13,3 +13,7 @@ Proposal
 No explanatory text anywhere on player pages (no "valid for 1 day").
 
 Owner decision needed: the expired/unknown page cannot say 也和{角色}聊聊 without revealing that the token existed and which character it was (you asked unknown and expired to look identical). Proposed: one generic 也来聊聊 for both. Alternative: show the character only for expired tokens (leaks existence).
+
+## Built pages (real screenshots of the finished feature, `scripts/check-web-share-45-browser.ts <dir>`)
+part-45/built/{android,desktop}-{light,dark}-N-*.png: Android = Pixel 7 profile at 412x915 @3.5 (Chrome, Android UA), desktop = 1440x900. N: 1 chat with the 分享 icon, 2 sheet while the link is made, 3 sheet ready, 4 copied (the voice message keeps playing underneath), 5 the opened link, 6 the link while the voice plays, 7 expired (same page for unknown tokens).
+WebKit is not installed in this build container, so there are no real iOS WebKit frames; the live board opens in the viewer's own browser.
