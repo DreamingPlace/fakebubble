@@ -134,7 +134,8 @@ try {
     }
     console.log(`${label}: ${cards} cards, ${samples.length} samples, twitching cards: ${twitching}`);
     // the fit writes a bounded number of times after load and fonts, and none while idle
-    const idleWrites = after.reduce((a, b) => a + b, 0) - before.reduce((a, b) => a + b, 0);
+    const idleWrites =
+      after.reduce((a: number, b: number) => a + b, 0) - before.reduce((a: number, b: number) => a + b, 0);
     check(idleWrites === 0, `${label}: ${idleWrites} --name-size changes while idle`);
     const most = Math.max(...before);
     console.log(`${label}: most --name-size changes on one card since load: ${most}`);
