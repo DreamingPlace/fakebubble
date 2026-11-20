@@ -11125,6 +11125,52 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   gap: 12px;
   flex-wrap: wrap;
 }
+/* Part 44: 全选 and the bulk 上线 / 下线 */
+.account-admin-page.admin-shell #admin-cocreation .cw-bulkbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ad-sp-2, 8px);
+  min-height: var(--ad-h-compact, 32px);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-bulkbar[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ad-sp-2, 8px);
+  cursor: pointer;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-picked {
+  min-width: 5em;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-bulk {
+  box-sizing: border-box;
+  min-height: var(--ad-h-compact, 32px);
+  padding: 0 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    opacity calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-bulk:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.account-admin-page.admin-shell #admin-cocreation .cw-row,
+.account-admin-page.admin-shell #admin-cocreation .cw-row .cw-text,
+.account-admin-page.admin-shell #admin-cocreation .cw-row .cw-switch {
+  transition:
+    color calc(160ms * var(--ad-motion)) var(--ad-ease),
+    background-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
 .account-admin-page.admin-shell #admin-cocreation .cw-error {
   margin: 0;
   padding: 10px 14px;
@@ -11185,7 +11231,7 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
 }
 .account-admin-page.admin-shell #admin-cocreation .cw-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 8px;
   animation: admin-rise-in var(--ad-t-open) var(--ad-ease) both;
@@ -17386,15 +17432,55 @@ button:not(
 }
 .account-admin-page.admin-shell .rh-pane {
   animation: rhIn calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+/* Part 44: a result table keeps fixed column widths and scrolls sideways inside its own box (wheel, trackpad, a visible bar). The 玩家
+   column (the row labels in the counts tables) stays on the left; a header never truncates. */
+.account-admin-page.admin-shell .rh-scrollwrap {
+  position: relative;
+}
+.account-admin-page.admin-shell .rh-scroll {
+  --rh-col: 208px;
+  --rh-first: 144px;
   overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  background: var(--ad-surface);
+  /* the visible, draggable bar is .rh-hbar (sticky at the bottom of the panel); this one is only the scroll box */
+  scrollbar-width: none;
+}
+.account-admin-page.admin-shell .rh-scroll::-webkit-scrollbar {
+  display: none;
+}
+.account-admin-page.admin-shell .rh-scroll:focus-visible {
+  outline: 2px solid var(--ad-primary);
+  outline-offset: -2px;
+}
+.account-admin-page.admin-shell .rh-hbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin-top: 4px;
+  height: 16px;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  border-radius: 8px;
+  background: var(--ad-bg);
+  scrollbar-width: auto;
+}
+.account-admin-page.admin-shell .rh-hbar[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .rh-hbar > i {
+  display: block;
+  height: 1px;
+  width: var(--rh-fill, 100%);
 }
 .account-admin-page.admin-shell .rh-grid {
   display: grid;
-  grid-template-columns: minmax(150px, 0.7fr) repeat(var(--rh-cols), minmax(190px, 1fr));
-  border: 1px solid var(--ad-border);
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--ad-surface);
+  grid-template-columns: var(--rh-first) repeat(var(--rh-cols), var(--rh-col));
+  width: max-content;
+  min-width: 100%;
 }
 .account-admin-page.admin-shell .rh-row {
   display: contents;
@@ -17402,13 +17488,24 @@ button:not(
 .account-admin-page.admin-shell .rh-head {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
   color: var(--ad-muted);
   background: var(--ad-bg);
   border-bottom: 1px solid var(--ad-border);
+}
+.account-admin-page.admin-shell .rh-head.rh-corner,
+.account-admin-page.admin-shell .rh-player {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  box-shadow: 1px 0 0 var(--ad-border);
+}
+.account-admin-page.admin-shell .rh-head.rh-corner {
+  z-index: 3;
 }
 .account-admin-page.admin-shell .rh-player,
 .account-admin-page.admin-shell .rh-cell {
@@ -17452,12 +17549,41 @@ button:not(
   animation: rhPulse calc(1100ms * var(--ad-motion)) ease-in-out infinite;
 }
 .account-admin-page.admin-shell .rh-counts {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--ad-surface);
-  border: 1px solid var(--ad-border);
-  border-radius: 12px;
+  table-layout: fixed;
+  width: calc(var(--rh-first) + var(--rh-cols) * var(--rh-col));
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
 }
+.account-admin-page.admin-shell .rh-memes {
+  width: calc(var(--rh-first) + var(--rh-lead2, 104px) + var(--rh-cols) * var(--rh-col));
+}
+.account-admin-page.admin-shell .rh-counts thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  white-space: nowrap;
+  background: var(--ad-bg);
+  width: var(--rh-col);
+}
+.account-admin-page.admin-shell .rh-counts thead th:first-child {
+  width: var(--rh-first);
+}
+.account-admin-page.admin-shell .rh-memes thead th:nth-child(2) {
+  width: var(--rh-lead2, 104px);
+}
+.account-admin-page.admin-shell .rh-counts:not(.rh-memes) tbody th[scope="row"],
+.account-admin-page.admin-shell .rh-counts:not(.rh-memes) thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--ad-bg);
+  box-shadow: 1px 0 0 var(--ad-border);
+}
+.account-admin-page.admin-shell .rh-counts:not(.rh-memes) thead th:first-child {
+  z-index: 3;
+}
+/* the 梗与故事 table has two leading columns (the item, then the phrasing): they scroll with the rest, so the panel keeps room for the models */
 .account-admin-page.admin-shell .rh-counts th,
 .account-admin-page.admin-shell .rh-counts td {
   padding: 8px 12px;
@@ -17475,7 +17601,13 @@ button:not(
 }
 .account-admin-page.admin-shell .rh-counts tbody th > span {
   display: block;
+}
+/* the row's name stays on one line; only its note (under it) wraps in the narrow sticky column */
+.account-admin-page.admin-shell .rh-counts tbody th > span:first-child {
   white-space: nowrap;
+}
+.account-admin-page.admin-shell .rh-counts tbody th > .rh-note {
+  white-space: normal;
 }
 .account-admin-page.admin-shell .rh-note {
   display: block;
@@ -17604,9 +17736,6 @@ button:not(
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-}
-.account-admin-page.admin-shell .pw-half .rh-pane {
-  overflow: visible;
 }
 .account-admin-page.admin-shell .rh-inline.rh {
   display: grid;
@@ -18647,12 +18776,26 @@ body.legal-page {
   justify-content: center;
   gap: 4px;
 }
+/* Part 44: the Latin of a nickname comes from ONE family on every phone (the first of these the device has: its own UI face, never a
+   metrics-different fallback), then the CJK faces; one weight for both, no synthesised bold, so 「三点水的vuan」 reads as one name. */
 .face-name {
+  font-family:
+    Inter, Roboto, "SF Pro Text", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, "PingFang SC",
+    "Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
   font-size: calc(var(--name-size, 0.3) * 100cqw);
-  font-weight: 900;
-  letter-spacing: -0.05em;
+  font-weight: 800;
+  font-synthesis: none;
+  letter-spacing: -0.02em;
   line-height: 0.95;
   white-space: nowrap;
+}
+/* Part 44: the text sits in an inner box that is bigger than the line it takes (padding, undone by the same negative margin), so the
+   gradient that is clipped to the glyphs also paints the descenders (g, y, p, q), the overhang of the last glyph and the side
+   bearings. Where the name sits and how tall its line is do not change. */
+.face-name-text {
+  display: inline-block;
+  padding: 0.16em 0.12em 0.24em;
+  margin: -0.16em -0.12em -0.24em;
 }
 .face-latin {
   height: 44px;
@@ -21738,6 +21881,8 @@ html.theme-fade *::after {
 /* the light on the name: it sweeps in once from the top-left, like a door opening, then stays */
 .card-slot[data-skin] .face-name {
   --pk-nl: var(--pk-d-name);
+}
+.card-slot[data-skin] .face-name-text {
   background: linear-gradient(
     118deg,
     var(--pk-nl) 0%,
@@ -21800,7 +21945,7 @@ html.theme-fade *::after {
   top: 61.8%;
   translate: 0 -50%;
   font-size: calc(var(--name-size, 0.3) * 100cqw);
-  letter-spacing: -0.05em;
+  letter-spacing: -0.02em;
   line-height: 0.95;
   text-align: left;
 }

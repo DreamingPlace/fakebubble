@@ -129,7 +129,8 @@ type Port = Pick<
   cocreationWordings?: Pick<
     CocreationWordingsClient,
     'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'
-  >;
+  > &
+    Partial<Pick<CocreationWordingsClient, 'setEnabled'>>;
   /** 测试对话 (CHAT_REVIEW_ENABLED; the page only appears when the session says the switch is on). */
   conversations?: Pick<ConversationsAdminClient, 'list' | 'detail' | 'export'>;
   /** Part 31: the owner's operations. Optional: a page without it draws none of them. */

@@ -42,7 +42,8 @@
     "check:web:part-40": "node scripts/check-web-part-40-browser.ts",
     "check:web:part-41": "node scripts/check-web-part-41-browser.ts",
     "check:web:player-38a": "node scripts/check-web-player-38a-browser.ts",
-    "check:web:part-42": "node scripts/check-web-part-42-browser.ts"
+    "check:web:part-42": "node scripts/check-web-part-42-browser.ts",
+    "check:web:part-44": "node scripts/check-web-part-44-browser.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
