@@ -22192,6 +22192,15 @@ html.theme-fade *::after {
   justify-content: center;
   padding-top: 0;
 }
+/* the real bar holds the account row on a phone (68 px), the footer note is one line (32 px) */
+.page-shell.is-skeleton .preview-note {
+  min-height: 32px;
+}
+@media (max-width: 600px) {
+  .page-shell.is-skeleton .site-head {
+    height: 68px;
+  }
+}
 /* (a phone hides every card that is not .is-active, and the skeleton's are not) */
 .page-shell.is-skeleton .card-slot.sk-slot {
   visibility: visible;

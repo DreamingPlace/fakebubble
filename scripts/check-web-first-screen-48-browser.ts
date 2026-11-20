@@ -76,10 +76,10 @@ const swipe = async (page: Any) => {
   const before = await activePerson(page);
   const box = await page.locator('.carousel').boundingBox();
   const y = box.y + box.height / 2;
-  await page.mouse.move(box.x + box.width * 0.8, y);
+  const x = box.x + box.width / 2 + 40;
+  await page.mouse.move(x, y);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.5, y, { steps: 6 });
-  await page.mouse.move(box.x + box.width * 0.2, y, { steps: 6 });
+  for (let step = 1; step <= 8; step++) await page.mouse.move(x - step * 20, y, { steps: 2 });
   await page.mouse.up();
   await page.waitForFunction(
     (was: string) => document.querySelector('.card-slot.is-active')?.getAttribute('data-person') !== was,
