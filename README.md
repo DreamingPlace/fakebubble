@@ -1,0 +1,1 @@
+Part 46 review pictures. home-cards-before/after: Android 412x915 @3.5 home cards + 5 s idle recording (before = Part 44/45 fit, after = Part 46). share-sheet: Android sheet opened by touch, light and dark (the sheet looks the same before and after; only a failure state is new).
