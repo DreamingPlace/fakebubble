@@ -36,6 +36,8 @@ import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import type { ProfileImportClient } from '../../services/profile-import-api.ts';
 import { profileImportView } from './profile-import/profile-import-view.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
+import { adoptBox } from './speech-profile/adopt-box.ts';
+import { othersReader } from './speech-profile/profile-draft.ts';
 import { conversationsView } from './conversations-view.ts';
 import { arcOrderView } from './owner/arc-order-view.ts';
 import type { OwnerAdminClient } from '../../services/owner-admin-api.ts';
@@ -335,6 +337,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     session?.member.role === 'owner' ||
     (!!session && hasCharacterPermission(session.member.permissions, 'edit', characterId));
   const address = addressBar(window);
+  const roleNames = new Map<string, string>();
   let workbench: ReturnType<typeof characterWorkbench> | null = null;
   let previewBench: {
     open(id: string): Promise<void>;
@@ -805,6 +808,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     onSeed: (characterId, seed) => picker.setSeed(characterId, seed),
     onDirty: () => previewBench?.refresh(),
     onDirectory: (roles) => {
+      for (const role of roles) roleNames.set(role.characterId, role.displayName);
       picker.show(roles);
     },
     onView: (id) => {
@@ -853,8 +857,22 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       workbench!.openNew();
     });
   });
+  // Part 37b: the one 说话档案 adopt box (⭐ in 多轮预演 and 测试对话, 加入说话档案 in 共创收件箱).
+  const profileOthers = othersReader(port.characters);
+  const profileBox = adoptBox({
+    characters: port.characters,
+    others: profileOthers,
+    parent: () => q('main'),
+    canEdit: canEditCharacter,
+    nameOf: (characterId) => roleNames.get(characterId) ?? '这个角色',
+    run,
+    toast: (text, tone) => toasts.show(text, tone ?? 'info'),
+    errorText: characterAdminError,
+    disposed: () => disposed,
+  });
   previewBench = port.previews
     ? previewWorkbench(previewHost, {
+        adopt: (input) => void profileBox.open(input),
         api: port.previews,
         characters: port.characters,
         member: () => session?.member ?? null,
@@ -877,6 +895,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         characters: port.characters,
         canManage: () => canCocreation('cocreation.manage'),
         canEditCharacter,
+        adoptProfile: (input) => void profileBox.open(input),
+        others: profileOthers,
         ...(port.cocreationWordings ? { wordings: port.cocreationWordings } : {}),
         ...(port.cocreationRelations
           ? {
@@ -1025,6 +1045,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       if (!disposed) status.textContent = text;
     },
     disposed: () => disposed,
+    adoptLine: (input) => void profileBox.open(input),
     ...(port.owner
       ? {
           owner: port.owner,

@@ -1,5 +1,6 @@
 import {
   REHEARSAL_MODEL_IDS,
+  REHEARSAL_SETS,
   parseRehearsalColumn,
   type RehearsalCell,
   type RehearsalCellState,
@@ -172,7 +173,7 @@ export class RehearsalAdminClient {
       sets: rows(o.sets).map((s) => {
         const x = object(s);
         return {
-          set: oneOf(x.set, ['chat', 'repeat', 'opening'] as const),
+          set: oneOf(x.set, REHEARSAL_SETS),
           label: string(x.label),
           turns: strings(x.turns),
         };

@@ -76,6 +76,8 @@ export type PreviewWorkbenchHost = {
   /** Part 31 (owner): deleting 预演 records. Absent (any other administrator, or a page without it) = nothing of it is drawn. */
   owner?: Pick<OwnerAdminClient, 'deletePreviews' | 'deleteRehearsals'>;
   confirm?: ConfirmInPlace;
+  /** Part 37b: ⭐ on a 多轮预演 line (the 说话档案 adopt box). */
+  adopt?: (input: { characterId: string; player: string; reply: string }) => void;
 };
 const defaultHidden = () => (globalThis as { document?: { hidden?: boolean } }).document?.hidden === true;
 const defaultOnVisible = (fn: () => void) => {
@@ -249,6 +251,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
         toast: host.toast,
         disposed: () => disposed || host.disposed(),
         modalParent: host.modalParent,
+        ...(host.adopt ? { adopt: host.adopt } : {}),
         ...(rehearsalHalf ? { inline: rehearsalHalf } : {}),
         ...(host.owner && host.confirm
           ? { owner: host.owner, confirm: host.confirm, isOwner: () => host.member()?.role === 'owner' }

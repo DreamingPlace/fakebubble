@@ -11,6 +11,8 @@ import {
   REHEARSAL_SET_LABELS,
   REHEARSAL_COLUMN_KEYS,
   REHEARSAL_WRITER_LABELS,
+  REHEARSAL_PROFILE_LABEL,
+  isProfileSet,
   charLength,
   rehearsalColumnKey,
   parseRehearsalColumn,
@@ -62,6 +64,8 @@ export type RehearsalHost = {
   confirm?: ConfirmInPlace;
   isOwner?: () => boolean;
   poll?: { setTimer?: (fn: () => void, ms: number) => unknown; clearTimer?: (handle: unknown) => void };
+  /** Part 37b: ⭐ on a character line opens the adopt box (destination + situation) for this character's draft. Absent = no ⭐. */
+  adopt?: (input: { characterId: string; player: string; reply: string }) => void;
 };
 type Pick = { kind: 'set'; set: RehearsalSet } | { kind: 'memes' } | { kind: 'script'; id: string } | { kind: 'new' };
 const POLL_MS = 2500;
@@ -202,10 +206,19 @@ export function rehearsalView(host: RehearsalHost) {
   };
   const paintRail = () => {
     rail.replaceChildren(h('h4', { text: '内置' }));
-    for (const set of library?.sets ?? [])
+    for (const set of (library?.sets ?? []).filter((s) => !isProfileSet(s.set)))
       rail.append(railButton(set.label, { kind: 'set', set: set.set }, `${set.turns.length} 轮`));
     if (items.available)
       rail.append(railButton(REHEARSAL_SET_LABELS.memes, { kind: 'memes' }, `${items.items.length} 项`));
+    // Part 37b: one script per 说话档案 situation, together.
+    const profileSets = (library?.sets ?? []).filter((s) => isProfileSet(s.set));
+    if (profileSets.length) {
+      rail.append(h('h4', { text: '说话档案 · 八个情境' }));
+      for (const set of profileSets)
+        rail.append(
+          railButton(set.label.replace('档案 · ', ''), { kind: 'set', set: set.set }, `${set.turns.length} 轮`),
+        );
+    }
     rail.append(h('h4', { text: '我的脚本' }));
     for (const s of library?.scripts ?? [])
       rail.append(railButton(s.name, { kind: 'script', id: s.id }, `${s.turns.length} 轮`));
@@ -312,11 +325,15 @@ export function rehearsalView(host: RehearsalHost) {
         { class: 'rh-model', attrs: { role: 'group', 'aria-label': m.label } },
         h('span', { class: 'rh-model-name', text: m.label }),
       );
-      for (const writer of ['v7', 'v8'] as const) {
-        const key = rehearsalColumnKey(m.id, writer);
+      for (const [writer, profile] of [
+        ['v7', false],
+        ['v8', false],
+        ['v8', true],
+      ] as const) {
+        const key = rehearsalColumnKey(m.id, writer, profile);
         const b = h('button', {
           class: 'rh-toggle',
-          text: REHEARSAL_WRITER_LABELS[writer],
+          text: profile ? REHEARSAL_PROFILE_LABEL : REHEARSAL_WRITER_LABELS[writer],
           attrs: { type: 'button', 'aria-pressed': String(models.has(key)), 'data-model': key },
         });
         b.disabled = !m.available;
@@ -552,13 +569,30 @@ export function rehearsalView(host: RehearsalHost) {
       timer = setTimer(() => void load(), Math.min(POLL_MS * 1.6 ** idle, POLL_MAX_MS));
   }
   const cellSig = (cell: RehearsalCell) => JSON.stringify([cell.state, cell.errorCode, cell.bubbles, cell.answered]);
-  const bubbleList = (cell: RehearsalCell, key = '') => {
+  const bubbleList = (cell: RehearsalCell, key = '', player = '') => {
     const box = h('div', {
       class: 'rh-cell',
       attrs: { 'data-state': cell.state, ...(key ? { 'data-cell': key } : {}) },
     });
     if (cell.state === 'done' && cell.bubbles) {
-      for (const b of cell.bubbles) box.append(h('p', { class: 'rh-bubble', text: b }));
+      for (const b of cell.bubbles) {
+        // Part 37b: ⭐ opens the 说话档案 adopt box for this character's draft with this line (and what the player said).
+        const star = host.adopt
+          ? h('button', {
+              class: 'rh-star',
+              text: '⭐',
+              attrs: { type: 'button', 'aria-label': '加入说话档案', 'data-star': '1' },
+            })
+          : null;
+        if (star) {
+          hoverValue(star, '加入说话档案');
+          star.addEventListener('click', () => {
+            const id = host.characterId();
+            if (id) host.adopt!({ characterId: id, player, reply: b });
+          });
+        }
+        box.append(h('p', { class: 'rh-bubble' }, h('span', { class: 'rh-bubble-text', text: b }), star));
+      }
       if (cell.answered === false) box.append(statusBadge('未答全', 'warn'));
     } else {
       const tone = cell.state === 'unconfirmed' ? 'warn' : cell.state === 'failed' ? 'danger' : 'neutral';
@@ -625,7 +659,7 @@ export function rehearsalView(host: RehearsalHost) {
       if (turn.role)
         who.append(statusBadge(turn.role === 'hint' ? '暗示' : '相似', turn.role === 'hint' ? 'info' : 'neutral'));
       row.append(who);
-      for (const c of d.columns) row.append(bubbleList(c.cells[i]!, `${i}:${c.key}`));
+      for (const c of d.columns) row.append(bubbleList(c.cells[i]!, `${i}:${c.key}`, turn.text ?? ''));
       grid.append(row);
     });
     return scrollBox(grid);
@@ -1039,13 +1073,13 @@ export function rehearsalView(host: RehearsalHost) {
     const cost = head.querySelector<HTMLElement>('.rh-cost');
     if (cost) rollNumber(cost, d.run.chargedMicros, (v) => dollars(Math.round(v)));
     if (tab === 'chat') {
-      d.turns.forEach((_turn, i) => {
+      d.turns.forEach((turn, i) => {
         for (const c of d.columns) {
           const key = `${i}:${c.key}`,
             known = painted!.cells.get(key),
             sig = cellSig(c.cells[i]!);
           if (!known || known.sig === sig) continue;
-          const el = bubbleList(c.cells[i]!, key);
+          const el = bubbleList(c.cells[i]!, key, turn.text ?? '');
           known.el.replaceWith(el);
           painted!.cells.set(key, { el, sig });
         }

@@ -53,7 +53,7 @@ type Generator = Pick<
   'textProtocol' | 'policyHash' | 'generateAcceptedStages' | 'generateAcceptedReviewFromKnownDraft'
 > &
   // Part 37a: the v8 writer's policy hash (a generator without it cannot run a 新 column: it is refused before anything is sent).
-  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash'>>;
+  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash' | 'writerProfilePolicyHash'>>;
 type Phase = 'draft' | 'review' | 'judge';
 interface Call {
   run_id: string;
@@ -146,8 +146,13 @@ export class WebRehearsalRunner {
     this.nextId = nextId;
   }
   /** The policy hash a request is bound to: the v7 one, or the pinned v8 one for a 新 column. */
-  private policyHashOf(request: Pick<TextGenerationRequest, 'writer'>) {
-    const hash = request.writer === 'v8' ? this.generator.writerPolicyHash : this.generator.policyHash;
+  private policyHashOf(request: Pick<TextGenerationRequest, 'writer' | 'writerProfile'>) {
+    const hash =
+      request.writer === 'v8'
+        ? request.writerProfile === true
+          ? this.generator.writerProfilePolicyHash
+          : this.generator.writerPolicyHash
+        : this.generator.policyHash;
     ensure(hash, 'WEB_WRITER_UNSUPPORTED');
     return hash;
   }

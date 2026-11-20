@@ -134,7 +134,10 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
   /** The scripted answer of one column to one turn of a 多轮预演: three different manners, so the columns can be told apart. */
   const rehearsalDraft = (request: { scope: { worldId: string }; messages: Array<{ authorKind: string }> }) => {
     // Part 37a: a 新 column's world ends in -v8; it speaks like its model.
-    const model = request.scope.worldId.replace(/-v8$/, '').split('-').at(-1);
+    const model = request.scope.worldId
+      .replace(/-v8p?$/, '')
+      .split('-')
+      .at(-1);
     const turn = request.messages.filter((m) => m.authorKind === 'player').length;
     const say: Record<string, string[][]> = {
       deepseek: [

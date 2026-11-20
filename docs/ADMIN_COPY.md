@@ -78,3 +78,13 @@ one voice bubble (its words behind 转文字); without, one text bubble per line
 |---|---|
 | 共创收件箱 → 题目 | 全选 · 已选 N 条 · 上线 · 下线 (online status only; the wording text is never touched). Bulk 上线 / 下线 can be undone, so there is no explanation line: hover tips only. A wording that did not switch is named: 「N 条没有上线：「…」」 / 「N 条没有下线：「…」」. |
 | 多轮预演 result tables | 对话 and 统计 scroll sideways inside the result panel; the 玩家 column (the row labels in 统计) stays on the left. No new words. |
+
+## Part 37b — 说话档案
+| Where | Words |
+|---|---|
+| 角色工作台, a section after 资料改动 | **说话档案** · 核心卡 (说话习惯 · 幽默方式 · 绝不会说的话 · 回复长短) · 说话样本 grouped by 日常闲聊 · 调侃 · 抱怨 · 安慰 · 吵架 · 分享日常 · 内部梗 · 认真 (count `x/6`) and **未分类** (an old sample whose situation is not one of the eight: it is never rewritten until the owner moves it) · 保存核心卡 · 删除 · 移到… |
+| the adopt box (共创收件箱 → 「+ 加入说话档案」, ⭐ in 多轮预演, ⭐ in 测试对话) | 加入说话档案 · 去向: 说话样本 / 核心卡 · 栏目 · 情境（x/6） · 玩家说 · 保存到草稿 (hover: 只存进草稿，发布后玩家才看得到) |
+| refusals | 这一栏最多 300 字，请先精简现有内容。 · 这个情境已有 6 条样本，请先删掉一条。 · 这句话和别的角色太像了，不能保存。 (names the other character and the line) · a close line: 「和别的角色有点接近」, the button becomes 仍然保存 |
+| 多轮预演 | third column 「新+档案」 beside 旧 and 新 (model·新+档案); rail group 「说话档案 · 八个情境」 (the eight built-in scripts, four turns each: 日常 · 调侃 · 抱怨 · 安慰 · 吵架 · 分享日常 · 内部梗 · 认真); ⭐ on a character line |
+
+Everything here goes into the 草稿; **正式版本** changes only with 发布. There are no explanation lines (hover tips only: nothing in this Part is irreversible, because the 草稿 and 版本历史 are the review and the rollback). The word 「现行」 is not used.

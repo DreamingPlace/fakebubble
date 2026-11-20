@@ -100,10 +100,10 @@ const withoutTestOverride = <T extends { testOverride?: unknown }>({ testOverrid
  */
 export function framePinsMatch(
   row: { protocol_digest: string; prompt_digest: string },
-  request: Pick<TextGenerationRequest, 'writer'>,
+  request: Pick<TextGenerationRequest, 'writer' | 'writerProfile'>,
 ) {
   if (request.writer === 'v8') {
-    const pins = writerPins();
+    const pins = writerPins(request.writerProfile === true);
     return row.protocol_digest === pins.protocolDigest && row.prompt_digest === pins.promptDigest;
   }
   return (

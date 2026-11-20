@@ -15,7 +15,11 @@ import {
   parseEmbeddingVectors,
   type EmbeddingProvider,
 } from '../generation/embedding-provider.ts';
-import { textPolicyHash, textWriterPolicyHash } from '../generation/text-generation-policy.ts';
+import {
+  textPolicyHash,
+  textWriterPolicyHash,
+  textWriterProfilePolicyHash,
+} from '../generation/text-generation-policy.ts';
 import { TextGenerationFailure } from '../generation/text-generation-error.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
 import type { FakeFish } from '../generation/web-provider-runner.ts';
@@ -93,6 +97,8 @@ export class WebCloudTextGenerator {
   readonly policyHash = textPolicyHash();
   /** Part 37a: what a v8 reply's policy hashes to (the resolved policy plus the pinned v8 prompts, protocol and sampling). */
   readonly writerPolicyHash = textWriterPolicyHash();
+  /** Part 37b: a 新+档案 reply's policy hash. */
+  readonly writerProfilePolicyHash = textWriterProfilePolicyHash();
   private readonly binding: WebGenerationBinding;
   constructor(binding: WebGenerationBinding) {
     this.binding = binding;
@@ -109,7 +115,11 @@ export class WebCloudTextGenerator {
     return session(this.binding, signal, async (remote) => {
       const result = await remote.text(
         request,
-        request.writer === 'v8' ? this.writerPolicyHash : this.policyHash,
+        request.writer === 'v8'
+          ? request.writerProfile === true
+            ? this.writerProfilePolicyHash
+            : this.writerPolicyHash
+          : this.policyHash,
         known,
         meterCallbacks(meter, signal),
         (stage) => callback(() => accept(stage)),
