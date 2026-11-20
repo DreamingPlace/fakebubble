@@ -50,7 +50,8 @@ export function fitCardName(card: HTMLElement) {
   try {
     // the room is the face's own content width (its width less its padding): it does not depend on the name, whatever the name's box does
     const faceStyle = getComputedStyle(face);
-    const room = face.clientWidth - Number.parseFloat(faceStyle.paddingLeft) - Number.parseFloat(faceStyle.paddingRight);
+    const room =
+      face.clientWidth - Number.parseFloat(faceStyle.paddingLeft) - Number.parseFloat(faceStyle.paddingRight);
     if (!(room > 0)) return;
     if (Math.abs(room - state.width) > 0.5) {
       state.width = room;

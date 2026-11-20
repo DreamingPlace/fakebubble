@@ -87,7 +87,9 @@ try {
   const players: { name: string; theme: string; ctx: Page; page: Page }[] = [];
   for (const [name, theme, device] of configs) {
     const ctx = await engine(name).newContext({ ...device, ignoreHTTPSErrors: true });
-    await ctx.grantPermissions(isIos(name) ? [] : ['clipboard-read', 'clipboard-write'], { origin: f.origin }).catch(() => undefined);
+    await ctx
+      .grantPermissions(isIos(name) ? [] : ['clipboard-read', 'clipboard-write'], { origin: f.origin })
+      .catch(() => undefined);
     const page: Page = await ctx.newPage();
     watch(page, name);
     await page.addInitScript(
@@ -318,9 +320,13 @@ try {
       check((await main.getAttribute('data-state')) !== 'failed', `${name}: closing the system sheet is not a failure`);
       await page.evaluate(() => ((window as any).__shareMode = 'NotAllowedError'));
       await tap(main);
-      await page.waitForFunction(() => document.querySelector('.share-act-main')?.getAttribute('data-state') === 'failed', null, {
-        timeout: 3_000,
-      });
+      await page.waitForFunction(
+        () => document.querySelector('.share-act-main')?.getAttribute('data-state') === 'failed',
+        null,
+        {
+          timeout: 3_000,
+        },
+      );
       check(
         (await main.textContent())?.trim() === '暂时无法分享',
         `${name}: a refused system share says so, in a few words: ${await main.textContent()}`,

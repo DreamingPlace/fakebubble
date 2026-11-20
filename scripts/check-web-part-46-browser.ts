@@ -49,14 +49,19 @@ try {
       ...device,
       ignoreHTTPSErrors: true,
       // the review recording: 5 s of idle home cards on Android
-      ...(shots && label === 'android' ? { recordVideo: { dir: `${shots}/video`, size: { width: 412, height: 915 } } } : {}),
+      ...(shots && label === 'android'
+        ? { recordVideo: { dir: `${shots}/video`, size: { width: 412, height: 915 } } }
+        : {}),
     });
     await ctx.addCookies(await f.context.cookies());
     const page: Page = await ctx.newPage();
     page.on('pageerror', (e: unknown) => errors.push(`${label}: pageerror ${String(e)}`));
     page.on('console', (m: { type: () => string; text: () => string }) => {
       // (WebKit: Playwright's own screenshot style is refused by the page's CSP; that is the tool, not the page)
-      if (m.type() === 'error' && !/status of 4\d\d|Failed to load resource|Refused to apply a stylesheet/.test(m.text()))
+      if (
+        m.type() === 'error' &&
+        !/status of 4\d\d|Failed to load resource|Refused to apply a stylesheet/.test(m.text())
+      )
         errors.push(`${label}: console ${m.text()}`);
     });
     // every write of a card's inline style, from the first byte of the page (the fit writes --name-size there)
@@ -79,9 +84,9 @@ try {
       watch();
     });
     await openNamedHome(page, f.origin, TEST_NAMES);
-    const before = await page.evaluate(() =>
-      [...(window as unknown as { __nameWrites: Map<string, number> }).__nameWrites.values()],
-    );
+    const before = await page.evaluate(() => [
+      ...(window as unknown as { __nameWrites: Map<string, number> }).__nameWrites.values(),
+    ]);
     // 5 s with no input at all: sample every card's --name-size, the name's box and the text's width every 100 ms
     const samples: string[][] = await page.evaluate(
       () =>
@@ -111,9 +116,9 @@ try {
           }, 5000);
         }),
     );
-    const after: number[] = await page.evaluate(() =>
-      [...(window as unknown as { __nameWrites: Map<string, number> }).__nameWrites.values()],
-    );
+    const after: number[] = await page.evaluate(() => [
+      ...(window as unknown as { __nameWrites: Map<string, number> }).__nameWrites.values(),
+    ]);
     const cards = samples[0]!.length;
     check(samples.length >= 45 && cards >= 15, `${label}: sampled ${samples.length} times, ${cards} cards`);
     let twitching = 0;
@@ -121,7 +126,10 @@ try {
       const seen = new Set(samples.map((s) => s[c]));
       if (seen.size > 1) {
         twitching++;
-        check(false, `${label}: card ${c} moved while idle (${seen.size} different readings: ${[...seen].slice(0, 3).join(' ; ')})`);
+        check(
+          false,
+          `${label}: card ${c} moved while idle (${seen.size} different readings: ${[...seen].slice(0, 3).join(' ; ')})`,
+        );
       }
     }
     console.log(`${label}: ${cards} cards, ${samples.length} samples, twitching cards: ${twitching}`);
