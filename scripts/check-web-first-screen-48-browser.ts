@@ -406,7 +406,14 @@ try {
         took >= min && took <= max,
         `${label}: the failure shows after ${took.toFixed(1)} s (expected ${min}-${max} s)`,
       );
-      check(await page.locator('.vs-retry').isVisible(), `${label}: 重试 is visible`);
+      const retryShown = await page
+        .locator('.vs-retry')
+        .waitFor({ state: 'visible', timeout: 3000 })
+        .then(
+          () => true,
+          () => false,
+        );
+      check(retryShown, `${label}: 重试 is visible`);
       metrics[label] = `${took.toFixed(1)} s`;
       await ctx.close();
     };
