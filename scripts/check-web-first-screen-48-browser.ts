@@ -74,12 +74,12 @@ const activePerson = (page: Any) =>
   page.evaluate(() => document.querySelector('.card-slot.is-active')?.getAttribute('data-person'));
 const swipe = async (page: Any) => {
   const before = await activePerson(page);
-  const box = await page.locator('.carousel').boundingBox();
+  const box = await page.locator('.page-shell:not(.is-skeleton) .carousel').boundingBox();
   const y = box.y + box.height / 2;
   // a finger swipe, as the page sees it: pointer events of a touch on the carousel
   await page.evaluate(
     async ({ x, y }: { x: number; y: number }) => {
-      const carousel = document.querySelector('.carousel')!;
+      const carousel = document.querySelector('.page-shell:not(.is-skeleton) .carousel')!;
       const fire = (type: string, clientX: number) =>
         carousel.dispatchEvent(
           new PointerEvent(type, {
