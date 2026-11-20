@@ -29,3 +29,19 @@ Not available in this build environment (no WebKit binary), so there is NO iOS s
 - One rule: fixed size 0.20 of the name box's width, shrunk only to fit the width (min 0.065), measured per card.
 - The text sits in an inner box with padding (undone by negative margins), so the gradient covers descenders and overhang; letter-spacing −0.02em; line box unchanged.
 - One font stack for Latin + CJK, one weight (800), no synthesised bold.
+
+---
+# Update (owner approved the board above; this adds the bold-CJK and iOS shots)
+Re-shot with Noto Sans CJK installed (real bold weights, so the CJK now matches the Latin weight) and on iOS WebKit (Playwright WebKit 26.6, iPhone 15 profile). Left = `origin/main`, right = the fix. Names: 三点水的vuan · 阿杰Jay · 陈吉米 · 秦川.
+
+## Android emulation 412×915 @3.5
+![android](fix3-fonts-android.png)
+## iOS WebKit (iPhone 15)
+![ios](fix3-fonts-ios.png)
+## Desktop 1440
+![desktop](fix3-fonts-desktop.png)
+
+All 15 names again on Android with the CJK font (5 rows per picture):
+![1](fix3-android-cjk-1.png)
+![2](fix3-android-cjk-2.png)
+![3](fix3-android-cjk-3.png)
