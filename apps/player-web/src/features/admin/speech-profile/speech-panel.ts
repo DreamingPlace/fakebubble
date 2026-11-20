@@ -10,6 +10,7 @@ import {
   deleteSample,
   moveSample,
   readBank,
+  readCoreCard,
   settingsOf,
   writeCoreCard,
   type CoreField,
@@ -70,6 +71,7 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
   };
   const template = base.template;
   const settings = settingsOf(template);
+  const current = readCoreCard(template);
   const locked = () => !deps.canEdit() || deps.unsaved();
   /** The controls that are read-only while the section is locked (the 保存核心卡 button follows its own rule in sync()). */
   const lockables: { disabled: boolean }[] = [];
@@ -137,7 +139,7 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
   const counters = new Map<CoreField, HTMLElement>();
   for (const field of CORE_FIELDS) {
     const editable = cardEditable(settings, field);
-    const original = cardText(settings, field);
+    const original = current[field];
     const box = h('textarea', {
       class: 'sp-text',
       attrs: { 'aria-label': CORE_FIELD_LABELS[field], rows: '3', 'data-sp': 'card', 'data-field': field },
@@ -175,7 +177,7 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     attrs: { type: 'button', 'data-sp': 'save' },
   });
   hoverValue(saveCard, '只存进草稿，发布后玩家才看得到');
-  const changedFields = () => CORE_FIELDS.filter((field) => boxes.get(field)!.value !== cardText(settings, field));
+  const changedFields = () => CORE_FIELDS.filter((field) => boxes.get(field)!.value !== current[field]);
   function sync() {
     for (const field of CORE_FIELDS) {
       const total = count(boxes.get(field)!.value.trim());
