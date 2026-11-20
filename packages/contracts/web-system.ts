@@ -112,6 +112,8 @@ export type SystemFlags = {
   alertMailBindingPresent: boolean;
   alertRecipientSet: boolean;
 };
+/** Part 45: shareable voice-card links, counts only (never a token, an id or content). `expired` = links that passed their day. */
+export type SystemShares = { created: number; opened: number; expired: number; active: number };
 export type SystemSecurity = {
   turnstile: boolean;
   /** UTC today / the last 7 UTC days including today. `unavailable` = siteverify could not be reached. */

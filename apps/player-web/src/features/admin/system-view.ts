@@ -334,6 +334,15 @@ export function systemView(
         ['最近 7 天无法验证', exactCount(v.security.unavailableLast7Days)],
         ['今天限流表已满、逐 IP 检查被放行（全站限流仍有效）', exactCount(v.security.rateOverflowToday)],
         ['未登记的拒绝码（按 400 回答，自启动起）', exactCount(v.security.unknownRefusals)],
+        // Part 45: shareable voice-card links, counts only (no token, id, nickname or content).
+        ...(v.shares
+          ? ([
+              ['语音小卡链接 · 已创建', exactCount(v.shares.created)],
+              ['语音小卡链接 · 已打开', exactCount(v.shares.opened)],
+              ['语音小卡链接 · 已过期', exactCount(v.shares.expired)],
+              ['语音小卡链接 · 有效中', exactCount(v.shares.active)],
+            ] as Array<[string, string]>)
+          : []),
       ]),
     );
     const cleanup = v.retention

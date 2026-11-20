@@ -230,6 +230,9 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   BROADCAST_NOT_EDITABLE: 409,
   BROADCAST_NOT_CANCELLABLE: 409,
   WEB_BROADCAST_SCHEMA_MISMATCH: 503,
+  // Part 45: shareable voice-card links. The STOP code is a start-up refusal; the limit answers a player with too many live links.
+  WEB_SHARE_SCHEMA_MISMATCH: 503,
+  SHARE_LIMIT_REACHED: 429,
   SPEECH_BUSY: 409,
   TAKE_IN_USE: 409,
   TAKE_NOT_USABLE: 409,

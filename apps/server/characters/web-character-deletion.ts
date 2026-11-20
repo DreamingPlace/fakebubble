@@ -1,4 +1,5 @@
 import { purgeBroadcastCharacter, purgeBroadcastConversation } from '../broadcast/web-broadcast-schema.ts';
+import { purgeShareCharacter, purgeShareConversation } from '../share/web-share-schema.ts';
 import { clearProfileMeta } from './web-profile-schema.ts';
 import { purgePreviewWorkbench } from './web-character-preview-purge.ts';
 import { purgeWelcomeChoices } from './web-welcome-choice.ts';
@@ -394,6 +395,9 @@ export class WebCharacterDeletion {
       // Part 42: the broadcast messages of this conversation (and the character's own voice clips and takes) go with its messages.
       purgeBroadcastConversation(this.store, s.world_id, s.conversation_id);
       purgeBroadcastCharacter(this.store, s.character_id);
+      // Part 45: the share links of this conversation and of the character.
+      purgeShareConversation(this.store, s.world_id, s.conversation_id);
+      purgeShareCharacter(this.store, s.character_id);
       this.store.run('DELETE FROM messages WHERE world_id=? AND conversation_id=?', s.world_id, s.conversation_id);
       this.store.run(
         'UPDATE contacts SET state_json=? WHERE world_id=? AND conversation_id=? AND character_id=?',

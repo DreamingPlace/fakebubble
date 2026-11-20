@@ -33,6 +33,8 @@ import { freezeInputSnapshot } from '../../../apps/server/generation/web-input-s
 import { freezeWebV7Request, readWebV7Request } from '../../../apps/server/generation/web-v7-request.ts';
 import { installWriterSetting, writeWriter } from '../../../apps/server/generation/web-writer-setting.ts';
 import { routeWebAccountAdmin } from '../../../apps/server/admin/web-account-admin-routes.ts';
+import { WebShare } from '../../../apps/server/share/web-share.ts';
+import { installWebShare, purgeShareConversation } from '../../../apps/server/share/web-share-schema.ts';
 
 const ORIGIN = 'https://fixture.invalid';
 type Mode = 'normal' | 'throw';
@@ -864,4 +866,95 @@ test("42 the real writer request (v7 and v8) carries the broadcast as the charac
     );
     assert.deepEqual(request.requiredMessageIds, ['input']);
   }
+});
+
+// Part 45 (an addition to this file because the broadcast fixture lives here): a character's broadcast VOICE message can be shared
+// like a reply's voice, and a broadcast text message cannot. The link opens to the character and the clip, and nothing names the player.
+test('45 a broadcast voice message can be shared; its text bubble and another player cannot', async (t) => {
+  const f = fixture(t);
+  const a = f.player('a'),
+    b = f.player('b');
+  const take = f.broadcast.upload(f.auth, { characterId: 'wei-guagua', base64: f.wav() });
+  f.broadcast.create(
+    f.auth,
+    f.body({
+      bubbles: ['听我说', '一件事'],
+      characterIds: ['wei-guagua'],
+      voices: { 'wei-guagua': take.takeId },
+      acknowledge: { characters: 1, recipients: 2 },
+    }),
+  );
+  await f.broadcast.pass();
+  const clock = { now: () => 1_800_000_000_500 };
+  const shares = new WebShare(
+    f.store,
+    clock,
+    Buffer.alloc(32, 7),
+    {
+      readPublishedAudioAsync: async () => {
+        throw new Error('a broadcast voice is not read through the publisher');
+      },
+    },
+    () => [
+      {
+        characterId: 'wei-guagua',
+        displayName: '瓜瓜',
+        portraitUrl: null,
+        mainColor: null,
+        palette: null,
+        birthDate: null,
+      },
+    ],
+    '/api/web/provider',
+  );
+  installWebShare(f.store);
+  // an account's data is protected (the retention gate the share checks)
+  for (const p of [a, b])
+    f.store.run(
+      "INSERT OR IGNORE INTO web_guest_retention(principal_id,world_id,state) VALUES (?,?,'protected')",
+      p.principalId,
+      p.worldId,
+    );
+  const rows = f.messagesOf(a.worldId, 'wei-guagua');
+  assert.ok(rows.length >= 1);
+  const voice = rows.find((row) => row.media_id)!;
+  const conversationId = f.store.get<{ id: string }>('SELECT id FROM conversations WHERE world_id=?', a.worldId)!.id;
+  const principal = { principalId: a.principalId, player_id: a.playerId, world_id: a.worldId };
+  const made = f.store.transaction(() =>
+    shares.create(principal, { requestId: 'share-1', conversationId, messageId: voice.id }),
+  );
+  assert.equal(made.duplicate, false);
+  const card = shares.open(made.token)!;
+  assert.equal(card.characterId, 'wei-guagua');
+  assert.ok(card.durationMs && card.durationMs > 0);
+  assert.equal(card.voiceUrl, `/api/web/provider/shares/${made.token}/audio`);
+  const clip = await shares.audio(made.token);
+  assert.ok(clip && clip.length > 100, 'the stored clip, read through the token');
+  assert.deepEqual(Object.keys(card).sort(), [
+    'birthDate',
+    'characterId',
+    'displayName',
+    'durationMs',
+    'mainColor',
+    'noRank',
+    'palette',
+    'portraitUrl',
+    'voiceUrl',
+  ]);
+  // not the other player's: a message of the same broadcast in b's conversation, shared by a
+  const bConversation = f.store.get<{ id: string }>('SELECT id FROM conversations WHERE world_id=?', b.worldId)!.id;
+  const bVoice = f.messagesOf(b.worldId, 'wei-guagua').find((row) => row.media_id)!;
+  for (const ids of [
+    { conversationId: bConversation, messageId: bVoice.id },
+    { conversationId, messageId: bVoice.id },
+    { conversationId: bConversation, messageId: voice.id },
+  ])
+    assert.throws(
+      () => f.store.transaction(() => shares.create(principal, { requestId: `x-${ids.messageId}`, ...ids })),
+      /NOT_FOUND/,
+    );
+  // a conversation's deletion (the purge) closes it
+  f.store.transaction(() => purgeShareConversation(f.store, a.worldId, conversationId));
+  assert.equal(shares.open(made.token), null);
+  assert.equal(await shares.audio(made.token), null);
 });

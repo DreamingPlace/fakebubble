@@ -92,6 +92,11 @@ export class WebSystemAdmin {
   private readonly ops: WebSystemOps | undefined;
   private readonly security: WebSecurityCounters;
   private readonly emailKey: Buffer;
+  /** Part 45: the share counters (counts only), wired by the application once the share service exists. */
+  private shareStats: (() => { created: number; opened: number; expired: number; active: number }) | null = null;
+  enableShares(stats: () => { created: number; opened: number; expired: number; active: number }) {
+    this.shareStats = stats;
+  }
   constructor(
     store: BusinessStore,
     clock: Clock,
@@ -195,6 +200,7 @@ export class WebSystemAdmin {
     return readSystemStatus(this.store, now, this.ops, {
       metrics: this.admin.stageLatencyRows(31).days,
       security: this.security.read(now),
+      ...(this.shareStats ? { shares: this.shareStats() } : {}),
     });
   }
 

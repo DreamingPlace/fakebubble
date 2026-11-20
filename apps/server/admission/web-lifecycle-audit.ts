@@ -1,4 +1,5 @@
 import { broadcastResidue, webBroadcastInstalled } from '../broadcast/web-broadcast-schema.ts';
+import { shareResidue } from '../share/web-share-schema.ts';
 import { DetailedError, ensure } from '../../../packages/domain/errors.ts';
 import { isWorkerdReservedTable } from '../platform/workerd-reserved-tables.ts';
 import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
@@ -44,6 +45,11 @@ const handled = new Set([
   // Part 42: a broadcast's messages and recipient rows are the player's own; the cleaners delete them with the world.
   'web_broadcast_messages',
   'web_broadcast_recipients',
+  // Part 45: a share link and its request row are the player's own; the cleaners delete them with the world.
+  'web_shares',
+  'web_share_requests',
+  // Part 45: three counters (created / opened / expired), no world and no identity.
+  'web_share_counts',
   'web_local_events',
   'web_user_events',
   'web_input_snapshots',
@@ -263,6 +269,8 @@ export function auditWebLifecycleWorld(
   // Part 19: the anonymous review archive may never name an account: no principal / world / player / ... column at all.
   // Part 42: after the purge no broadcast message and no recipient row of the world remains.
   if (phase !== 'source') ensureClean(broadcastResidue(store, worldId) === 0, 'web_broadcast_messages');
+  // Part 45: after the purge no share link and no share request of the world remains.
+  if (phase !== 'source') ensureClean(shareResidue(store, worldId) === 0, 'web_shares');
   ensureClean(!archiveHasIdentityColumn(store), 'archive_identity');
   // Part 31: the 已关闭账号 table holds a 玩家编号, a code and two times: no other column, ever.
   ensureClean(!closedAccountsHaveIdentityColumn(store), 'closed_accounts_identity');

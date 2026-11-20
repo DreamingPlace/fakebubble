@@ -11,6 +11,8 @@ import { installWebConversationDeletion } from '../characters/web-conversation-d
 import { installWebOwnerOps } from '../admin/web-owner-ops-schema.ts';
 import { WebBroadcast } from '../broadcast/web-broadcast.ts';
 import { installWebBroadcast } from '../broadcast/web-broadcast-schema.ts';
+import { installWebShare } from '../share/web-share-schema.ts';
+import { WebShare } from '../share/web-share.ts';
 import { broadcastHistoryRows } from '../broadcast/web-broadcast-read.ts';
 import { WebAvatars, installWebAvatars } from '../characters/web-avatar.ts';
 import { WebOwnerOps } from '../admin/web-owner-ops.ts';
@@ -194,6 +196,8 @@ export class WebProviderApplication {
   readonly ownerOps: WebOwnerOps;
   /** Part 42: 广播 (its tables are a digest-checked runtime step; no numbered migration). */
   readonly broadcast: WebBroadcast;
+  /** Part 45: shareable voice-card links (the only writer of the share tables). */
+  readonly shares: WebShare;
   readonly avatars: WebAvatars;
   /** GUEST_GRACE_ENABLED: 0 when off. */
   readonly graceMs: number;
@@ -278,6 +282,25 @@ export class WebProviderApplication {
     this.characterAdmin = new WebCharacterAdmin(store, clock, this.inviteAdmin);
     installWebBroadcast(store);
     this.broadcast = new WebBroadcast(store, clock, this.inviteAdmin, () => this.characterAdmin.speechPath);
+    // Part 45: the share tables (digest-checked runtime step; no numbered migration; STOP WEB_SHARE_SCHEMA_MISMATCH).
+    installWebShare(store);
+    this.shares = new WebShare(
+      store,
+      clock,
+      createHmac('sha256', Buffer.from(config.requestKey, 'base64url')).update('web-share-token-v1').digest(),
+      this.publisher,
+      () =>
+        this.characters().map((character) => ({
+          characterId: character.characterId,
+          displayName: character.displayName,
+          portraitUrl: character.portraitUrl,
+          mainColor: character.mainColor,
+          palette: character.palette ?? null,
+          birthDate: character.birthDate ?? null,
+        })),
+      API,
+    );
+    this.system.enableShares(() => this.shares.stats());
     this.characterAdmin.enableMaterials(new WebCharacterMaterials(store, clock));
     this.characterAdmin.enableDeletion(this.characterDeletion);
     this.characterAdmin.enableAvatars(this.avatars);
