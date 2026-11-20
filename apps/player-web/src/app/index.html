@@ -4,14 +4,34 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#faf8f6">
+  <meta name="admin-css" content="/apps/player-web/src/styles/admin.css">
   <title>Burbur · 邀请体验</title>
   <link rel="icon" type="image/svg+xml" href="/apps/player-web/src/assets/favicon.svg">
   <link rel="icon" type="image/png" sizes="180x180" href="/apps/player-web/src/assets/favicon.png">
   <link rel="apple-touch-icon" href="/apps/player-web/src/assets/favicon.png">
   <link rel="stylesheet" href="/apps/player-web/src/styles/main.css">
+  <link rel="preload" as="fetch" href="/api/web/provider/catalog" crossorigin>
   <script type="module" src="/apps/player-web/src/app/main.js"></script>
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app"><!-- Part 48: the first frame is never empty. Static skeleton in the real cards' geometry; the page replaces it with the real cards. -->
+    <div class="page-shell is-skeleton" aria-busy="true">
+      <div class="aura-stack" aria-hidden="true"><div class="aura-set aura-day"><div class="aura sk-aura"></div></div></div>
+      <header class="site-head"><div class="brand"><i class="sk-bar sk-wordmark"></i></div><span class="head-note">捡到一窝小四四</span></header>
+      <main class="main-area">
+        <div class="carousel"><div class="card-deck">
+          <article class="card-slot sk-slot sk-left" data-side="l" aria-hidden="true"><div class="card-shell"><div class="card-face sk-face"></div></div></article>
+          <article class="card-slot sk-slot sk-right" data-side="r" aria-hidden="true"><div class="card-shell"><div class="card-face sk-face"></div></div></article>
+          <article class="card-slot sk-slot sk-center" data-side="c" aria-hidden="true"><div class="card-shell"><div class="card-face sk-face">
+            <div class="face-top"><span>burbur</span><i class="sk-bar sk-no"></i></div>
+            <div class="face-main"><i class="sk-portrait"></i><i class="sk-bar sk-name"></i><i class="sk-bar sk-latin"></i></div>
+            <div class="sk-voice"><i class="sk-play"></i><i class="sk-bar sk-wave"></i></div>
+          </div></div></article>
+        </div></div>
+        <div class="avatar-nav"></div>
+      </main>
+      <footer class="preview-note"></footer>
+    </div>
+  </div>
 </body>
 </html>

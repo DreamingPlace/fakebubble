@@ -44,7 +44,8 @@
     "check:web:player-38a": "node scripts/check-web-player-38a-browser.ts",
     "check:web:part-42": "node scripts/check-web-part-42-browser.ts",
     "check:web:part-44": "node scripts/check-web-part-44-browser.ts",
-    "check:web:share-45": "node scripts/check-web-share-45-browser.ts"
+    "check:web:share-45": "node scripts/check-web-share-45-browser.ts",
+    "check:web:first-screen-48": "node scripts/check-web-first-screen-48-browser.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
