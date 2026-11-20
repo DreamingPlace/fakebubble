@@ -90,6 +90,7 @@ export class WebProviderServer {
   private deletionTask: Promise<void> | null = null;
   private readonly application: WebProviderApplication;
 
+  private readonly playerRoot: string;
   constructor(
     store: WebStore,
     config: WebLocalConfig,
@@ -98,7 +99,10 @@ export class WebProviderServer {
     network?: ProviderNetwork,
     previews?: WebCharacterPreviewRunner,
     players?: WebPlayerAccountsConfig,
+    /** Where the built player site is served from; the built site by default (a test may point it at a stub). */
+    playerRoot = fileURLToPath(new URL('../../player-web/dist', import.meta.url)),
   ) {
+    this.playerRoot = playerRoot;
     store.requireProviderRuntime();
     ensure(
       config.mode === 'provider-local' &&
@@ -466,7 +470,7 @@ export class WebProviderServer {
         req.url = '/';
         res.setHeader('Referrer-Policy', 'no-referrer');
       }
-      if (serveLocalStatic(req, res, fileURLToPath(new URL('../../player-web/dist', import.meta.url)))) return;
+      if (serveLocalStatic(req, res, this.playerRoot)) return;
       // Part 45: the two public share reads (no session, no cookie is read): the card, and the voice. Unknown, expired and purged
       // links answer identically (NOT_FOUND). Only the token is in the address.
       const shareRead = path.match(new RegExp(`^${API}/shares/([^/]{1,128})(/audio)?$`));

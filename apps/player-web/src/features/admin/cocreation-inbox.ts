@@ -66,7 +66,8 @@ type Deps = {
   /** Part 39: relation notes (two to eight characters): the panel in the detail and the view 玩家眼中的关系. Absent = neither exists. */
   relations?: Pick<CocreationRelationsClient, 'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy'>;
   /** Part 39b: 题目, the wording pool of the themes (a third view of this page). Absent = no such view. */
-  wordings?: Pick<CocreationWordingsClient, 'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'>;
+  wordings?: Pick<CocreationWordingsClient, 'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'> &
+    Partial<Pick<CocreationWordingsClient, 'setEnabled'>>;
   /** A fresh request id (adoption, 整理, 生成); default: crypto.randomUUID. */
   newId?: () => string;
 };

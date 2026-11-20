@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { request as httpsRequest } from 'node:https';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -111,7 +111,16 @@ test('45 voice-card links over HTTPS: create (owner, voice only, idempotent), op
     },
     shared,
   );
-  let app = new WebProviderServer(store, config, clock, runner);
+  // the page is served from a stub player site of its own, so this test needs no built apps/player-web/dist (a clean checkout has none)
+  const site = join(root, 'player-site');
+  mkdirSync(site, { recursive: true });
+  const indexHtml = '<!doctype html><title>stub</title>';
+  writeFileSync(join(site, 'index.html'), indexHtml);
+  writeFileSync(
+    join(site, 'player-manifest.json'),
+    JSON.stringify({ version: 1, files: { 'index.html': sha(Buffer.from(indexHtml)) } }),
+  );
+  let app = new WebProviderServer(store, config, clock, runner, undefined, undefined, undefined, site);
   await app.listen();
   t.after(() => app.close());
 

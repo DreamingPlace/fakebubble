@@ -135,7 +135,9 @@ try {
       tableOverflow: Math.max(
         0,
         ...Array.from(document.querySelectorAll('.rh-counts')).map(
-          (t) => t.scrollWidth - (t.parentElement?.clientWidth ?? 0),
+          // Part 44 (named exception, owner decision): inside `.rh-scroll` the table is meant to be wider than the panel and scrolls there
+          (t) =>
+            t.parentElement?.classList.contains('rh-scroll') ? 0 : t.scrollWidth - (t.parentElement?.clientWidth ?? 0),
         ),
       ),
     }));

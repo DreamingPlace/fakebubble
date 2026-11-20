@@ -571,6 +571,42 @@ export function rehearsalView(host: RehearsalHost) {
     }
     return box;
   };
+  /**
+   * Part 44: every result table scrolls sideways inside its own box (wheel, trackpad, keyboard, or the bar below). The box's own
+   * scrollbar would sit under the LAST row, out of sight on a long table, so it is hidden and `.rh-hbar` stands in for it: a plain
+   * scrollbar, sticky at the bottom of the panel while any of the table is on screen, kept in step with the box both ways.
+   */
+  const scrollBox = (inner: HTMLElement) => {
+    const box = h(
+      'div',
+      { class: 'rh-scroll', attrs: { tabindex: '0', role: 'region', 'aria-label': '结果表' } },
+      inner,
+    );
+    const fill = h('i');
+    const bar = h('div', { class: 'rh-hbar', attrs: { 'aria-hidden': 'true' } }, fill);
+    let from: 'box' | 'bar' | null = null;
+    const sync = (source: 'box' | 'bar', a: HTMLElement, b: HTMLElement) => () => {
+      if (from && from !== source) return;
+      from = source;
+      b.scrollLeft = a.scrollLeft;
+      requestAnimationFrame(() => {
+        from = null;
+      });
+    };
+    box.addEventListener('scroll', sync('box', box, bar));
+    bar.addEventListener('scroll', sync('bar', bar, box));
+    const size = () => {
+      // the same distance to scroll on both: the bar is a little wider than the box (the box has a border)
+      fill.style.setProperty('--rh-fill', `${bar.clientWidth + box.scrollWidth - box.clientWidth}px`);
+      bar.hidden = box.scrollWidth <= box.clientWidth + 1;
+    };
+    if (typeof ResizeObserver !== 'undefined') {
+      const watch = new ResizeObserver(size);
+      watch.observe(box);
+      watch.observe(inner);
+    }
+    return h('div', { class: 'rh-scrollwrap' }, box, bar);
+  };
   const conversation = (d: RehearsalRunDetail) => {
     const grid = h('div', { class: 'rh-grid', attrs: { role: 'table' } });
     grid.style.setProperty('--rh-cols', String(d.columns.length));
@@ -592,7 +628,7 @@ export function rehearsalView(host: RehearsalHost) {
       for (const c of d.columns) row.append(bubbleList(c.cells[i]!, `${i}:${c.key}`));
       grid.append(row);
     });
-    return grid;
+    return scrollBox(grid);
   };
   type Column = RehearsalRunDetail['columns'][number];
   /** One row of the counts table: its label, an optional note under it, and per column the shown text and the number that rolls. */
@@ -679,6 +715,7 @@ export function rehearsalView(host: RehearsalHost) {
   const STYLE_LABELS = new Set(['说了自己的事', '主动起话题', '情绪起伏']);
   const countsTable = (d: RehearsalRunDetail) => {
     const table = h('table', { class: 'rh-counts' });
+    table.style.setProperty('--rh-cols', String(d.columns.length));
     table.append(
       h('thead', {}, h('tr', {}, h('th', { text: '' }), ...d.columns.map((c) => h('th', { text: c.label })))),
     );
@@ -782,6 +819,7 @@ export function rehearsalView(host: RehearsalHost) {
   };
   const memeTable = (d: RehearsalRunDetail) => {
     const table = h('table', { class: 'rh-counts rh-memes' });
+    table.style.setProperty('--rh-cols', String(d.columns.length));
     table.append(
       h(
         'thead',
@@ -879,7 +917,7 @@ export function rehearsalView(host: RehearsalHost) {
   const chipsSigOf = () => JSON.stringify([current, runs.map((r) => [r.runId, r.scriptName, r.createdAt])]);
   /** Counts and the hit / miss table are replaced as one piece, and only when their numbers changed. */
   const paneTable = (d: RehearsalRunDetail) =>
-    tab === 'counts' ? countsTable(d) : tab === 'memes' ? memeTable(d) : null;
+    tab === 'counts' ? scrollBox(countsTable(d)) : tab === 'memes' ? scrollBox(memeTable(d)) : null;
   const paneSigOf = (d: RehearsalRunDetail) =>
     tab === 'counts'
       ? JSON.stringify(d.columns.map((c) => [c.label, c.counts]))

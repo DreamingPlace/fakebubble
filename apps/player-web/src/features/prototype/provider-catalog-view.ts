@@ -1,3 +1,4 @@
+import { NAME_SIZE_MAX } from './card-name.ts';
 import { isPortraitUrl } from '../brand/portrait.ts';
 import type { WebProviderBootstrap } from '../../../../../packages/contracts/web-provider.ts';
 import { derivePalette, nightAura } from '../brand/character-colour.ts';
@@ -71,14 +72,6 @@ const palettes: Record<
     night: ['#8B5CFF', '#FF4FB8', '#4B2BC9', '#B18CFF'],
   },
 };
-/**
- * The name's size as a fraction of the card's width: two Chinese characters are the biggest, a longer name shrinks so it stays on
- * one line (a Latin capital is about 0.68 of a Chinese character's width).
- */
-function nameSize(name: string) {
-  const ems = [...name].reduce((sum, char) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/.test(char) ? 1 : 0.68), 0);
-  return Math.min(0.36, 0.84 / Math.max(ems, 1));
-}
 export function providerPeople(view: Pick<WebProviderBootstrap, 'characters' | 'slots'>): Person[] {
   const byId = new Map(view.characters.map((character) => [character.characterId, character]));
   // Characters the palette table does not know are numbered after the three it does, in catalog order.
@@ -129,7 +122,7 @@ export function providerPeople(view: Pick<WebProviderBootstrap, 'characters' | '
         aura: derived ? derived.aura : known ? known.aura : NEUTRAL_AURA,
         // A published colour gets a night aura derived from it; otherwise the design's own night colours (or the neutral ones).
         night: derived ? nightAura(derived.aura) : known ? known.night : nightAura(NEUTRAL_AURA),
-        nameSize: nameSize(character.displayName),
+        nameSize: NAME_SIZE_MAX,
       },
       ...(sources.main
         ? {

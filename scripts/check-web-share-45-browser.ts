@@ -320,6 +320,36 @@ try {
       `${name}: the avatar circle and the name are on the card`,
     );
     if (shots) await vpage.screenshot({ path: `${shots}/${name}-5-link.png` });
+    // Part 44's fit-to-width reaches the shared card: a name that is too long for the card shrinks and stays whole inside it
+    const normalSize = Number(
+      await vpage
+        .locator('.share-page .card-slot')
+        .evaluate((el: HTMLElement) => el.style.getPropertyValue('--name-size')),
+    );
+    await vpage.locator('.face-name-text').evaluate((el: HTMLElement) => {
+      el.textContent = 'Maximilian Bartholomew';
+    });
+    await wait(600);
+    const fit = await vpage.evaluate(() => {
+      const card = document.querySelector<HTMLElement>('.share-page .card-face')!.getBoundingClientRect();
+      const text = document.querySelector<HTMLElement>('.share-page .face-name-text')!.getBoundingClientRect();
+      const box = document.querySelector<HTMLElement>('.share-page .face-name')!;
+      return {
+        size: Number(
+          document.querySelector<HTMLElement>('.share-page .card-slot')!.style.getPropertyValue('--name-size'),
+        ),
+        inside: text.left >= card.left - 0.5 && text.right <= card.right + 0.5,
+        clipped: box.scrollWidth > box.clientWidth + 1,
+      };
+    });
+    check(
+      fit.size > 0 && fit.size < normalSize,
+      `${name}: a long name shrinks on the shared card (${normalSize} -> ${fit.size})`,
+    );
+    check(
+      fit.inside && !fit.clipped,
+      `${name}: the long name stays inside the shared card, nothing clipped (${JSON.stringify(fit)})`,
+    );
     // the voice plays
     await vpage.locator('.face-voice').click({ force: true });
     await vpage.waitForFunction(

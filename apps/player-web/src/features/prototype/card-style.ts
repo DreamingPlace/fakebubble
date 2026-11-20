@@ -1,6 +1,7 @@
 import { characterFrame, setFrameProperties } from '../brand/avatar-frame.ts';
 import { mountPortrait } from '../brand/portrait.ts';
 import { mountShapes, setSkinProperties } from '../brand/palette-render.ts';
+import { watchCardName } from './card-name.ts';
 import type { Person } from './provider-catalog-view.ts';
 
 /**
@@ -52,4 +53,6 @@ export function styleCard(card: HTMLElement, person: Person, configured: boolean
       mountShapes(card.querySelector<HTMLElement>('.card-shell')!, person.characterId, 'chat');
     mountShapes(card.querySelector<HTMLElement>('.card-face')!, person.characterId, 'card');
   }
+  // Part 44: the name is fitted to the card's width, on the home card and on Part 45's shared card alike.
+  if (configured) watchCardName(card);
 }

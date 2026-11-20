@@ -732,6 +732,16 @@ export class WebCocreationRelations extends WebCocreation {
       return set;
     });
   }
+  /** Part 44: 上线 / 下线 for a selection of wordings (online status only). One CSRF-checked request; says which ones did not switch. */
+  wordingSetEnabled(auth: Auth, input: { ids: unknown; enabled: unknown }) {
+    const actor = this.wordingActor(auth, 'cocreation.manage');
+    return this.store.transaction(() => {
+      const done = this.pool.setEnabledMany(input.ids, input.enabled);
+      for (const id of done.switched)
+        this.audit(actor.memberId, done.enabled ? 'cocreation-wording-on' : 'cocreation-wording-off', id);
+      return done;
+    });
+  }
   wordingDelete(auth: Auth, input: { id: unknown }) {
     const actor = this.wordingActor(auth, 'cocreation.manage');
     return this.store.transaction(() => {

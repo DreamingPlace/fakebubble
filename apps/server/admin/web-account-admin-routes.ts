@@ -244,6 +244,8 @@ export async function routeWebAccountAdmin(
       return { status: 200, body: relations.wordingEdit(actor, body(['id', 'text']) as never) };
     if (action === 'wordings/toggle')
       return { status: 200, body: relations.wordingToggle(actor, body(['id', 'enabled']) as never) };
+    if (action === 'wordings/set-enabled')
+      return { status: 200, body: relations.wordingSetEnabled(actor, body(['ids', 'enabled']) as never) };
     if (action === 'wordings/delete')
       return { status: 200, body: relations.wordingDelete(actor, body(['id']) as never) };
     if (action === 'wordings/estimate')

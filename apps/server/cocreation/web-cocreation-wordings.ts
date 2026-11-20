@@ -38,6 +38,8 @@ const entry = (row: Row): WordingEntry => ({
   enabled: row.enabled === 1,
   source: row.source,
 });
+/** Wordings one bulk request may name (a character has at most 5 themes × 60 wordings). */
+export const WORDING_BULK_MAX = 300;
 const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const identifierOk = (value: unknown): value is string =>
   typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -169,6 +171,44 @@ export class WordingPool {
           row.id,
         );
       return entry(this.row(row.id));
+    });
+  }
+  /**
+   * Part 44: switch many wordings on or off in one go. ONLY the online status changes (the text is immutable here too). Idempotent: a
+   * wording already in the asked state is `unchanged`, so repeating the request changes nothing and answers the same. An id that is not
+   * a wording is `failed` (NOT_FOUND), never skipped quietly: every id asked for lands in exactly one of the three lists. One
+   * transaction: a storage error undoes the whole request, so there is no silent half-success.
+   */
+  setEnabledMany(ids: unknown, enabled: unknown) {
+    ensure(
+      typeof enabled === 'boolean' &&
+        Array.isArray(ids) &&
+        ids.length >= 1 &&
+        ids.length <= WORDING_BULK_MAX &&
+        new Set(ids).size === ids.length &&
+        ids.every(identifierOk),
+      'INVALID_REQUEST',
+    );
+    return this.store.transaction(() => {
+      const switched: string[] = [],
+        unchanged: string[] = [],
+        failed: { id: string; code: 'NOT_FOUND' }[] = [];
+      const now = this.now();
+      for (const id of ids as string[]) {
+        const row = this.store.get<Row>('SELECT * FROM web_cocreation_wordings WHERE id=?', id);
+        if (!row) failed.push({ id, code: 'NOT_FOUND' });
+        else if ((row.enabled === 1) === enabled) unchanged.push(id);
+        else {
+          this.store.run(
+            'UPDATE web_cocreation_wordings SET enabled=?,updated_at=? WHERE id=?',
+            enabled ? 1 : 0,
+            now,
+            id,
+          );
+          switched.push(id);
+        }
+      }
+      return { enabled: enabled as boolean, switched, unchanged, failed };
     });
   }
   /** Delete one wording; deleting what is already gone is the same answer. */
