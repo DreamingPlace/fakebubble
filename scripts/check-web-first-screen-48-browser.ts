@@ -72,13 +72,13 @@ const decide = async (context: Any, page: Any, options: { turnstile?: boolean } 
 };
 const activePerson = (page: Any) =>
   page.evaluate(() => document.querySelector('.card-slot.is-active')?.getAttribute('data-person'));
-const swipe = async (page: Any) => {
+const swipe = async (page: Any, direction = 1) => {
   const before = await activePerson(page);
   const box = await page.locator('.page-shell:not(.is-skeleton) .carousel').boundingBox();
   const y = box.y + box.height / 2;
   // a finger swipe, as the page sees it: pointer events of a touch on the carousel
   await page.evaluate(
-    async ({ x, y }: { x: number; y: number }) => {
+    async ({ x, y, direction }: { x: number; y: number; direction: number }) => {
       const carousel = document.querySelector('.page-shell:not(.is-skeleton) .carousel')!;
       const fire = (type: string, clientX: number) =>
         carousel.dispatchEvent(
@@ -93,12 +93,12 @@ const swipe = async (page: Any) => {
         );
       fire('pointerdown', x);
       for (let step = 1; step <= 8; step++) {
-        fire('pointermove', x - step * 20);
+        fire('pointermove', x - direction * step * 20);
         await new Promise((r) => setTimeout(r, 16));
       }
-      fire('pointerup', x - 160);
+      fire('pointerup', x - direction * 160);
     },
-    { x: box.x + box.width / 2 + 40, y },
+    { x: box.x + box.width / 2 + 40, y, direction },
   );
   await page.waitForFunction(
     (was: string) => document.querySelector('.card-slot.is-active')?.getAttribute('data-person') !== was,
@@ -318,6 +318,7 @@ try {
     try {
       const [a, b] = await swipe(page);
       check(a !== b, 'the cards swipe with no session');
+      await swipe(page, -1); // and back to the chat card
     } catch {
       problems.push('a swipe did not work with no session');
     }
