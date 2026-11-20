@@ -17759,6 +17759,244 @@ button:not(
 .account-admin-page.admin-shell .rh-inline .rh-setup {
   grid-template-columns: minmax(0, 1fr);
 }
+/* ---- Part 37b: 说话档案 (the adopt box, the 角色工作台 section, the ⭐ buttons). Built on the #57 pieces (drawer, segmented, status
+   badge, hover tip) and the console tokens, so the console restyle applies to it. Motion goes through --ad-motion (0 with reduced motion). */
+.account-admin-page.admin-shell .sp-adopt,
+.account-admin-page.admin-shell .sp-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .sp-adopt > * {
+  animation: adIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .sp-from {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .sp-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .sp-pane[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .sp-lab,
+.account-admin-page.admin-shell .sp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.account-admin-page.admin-shell .sp-lab > span,
+.account-admin-page.admin-shell .sp-field-head {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .sp-field-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .sp-field-head b {
+  color: var(--ad-text);
+  font-size: 14px;
+}
+.account-admin-page.admin-shell .sp-adopt input[type="text"],
+.account-admin-page.admin-shell .sp-adopt select,
+.account-admin-page.admin-shell .sp-panel select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ad-text);
+  font: inherit;
+  font-size: 14px;
+  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sp-panel select {
+  width: auto;
+  min-height: 32px;
+}
+.account-admin-page.admin-shell .sp-text {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 84px;
+  padding: 10px 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ad-text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sp-text:focus,
+.account-admin-page.admin-shell .sp-adopt input[type="text"]:focus,
+.account-admin-page.admin-shell .sp-adopt select:focus {
+  border-color: var(--ad-primary);
+}
+.account-admin-page.admin-shell .sp-now,
+.account-admin-page.admin-shell .sp-hint,
+.account-admin-page.admin-shell .sp-lock,
+.account-admin-page.admin-shell .sp-empty {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .sp-count {
+  margin-left: auto;
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sp-count.is-over,
+.account-admin-page.admin-shell .sp-count.is-full {
+  color: var(--ad-danger);
+  font-weight: 600;
+}
+.account-admin-page.admin-shell .sp-error,
+.account-admin-page.admin-shell .sp-warn {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  animation: adIn calc(200ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .sp-error[hidden],
+.account-admin-page.admin-shell .sp-warn[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .sp-error {
+  background: var(--ad-danger-soft);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .sp-warn {
+  background: #fdf3df;
+  color: #7a5200;
+}
+.account-admin-page.admin-shell .sp-warn p {
+  margin: 4px 0 0;
+}
+.account-admin-page.admin-shell .sp-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .sp-panel {
+  max-width: 760px;
+}
+.account-admin-page.admin-shell .sp-title {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+.account-admin-page.admin-shell .sp-card,
+.account-admin-page.admin-shell .sp-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.account-admin-page.admin-shell .sp-group {
+  padding: 12px 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: 12px;
+  background: var(--ad-surface);
+}
+.account-admin-page.admin-shell .sp-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .sp-samples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell .sp-sample {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ad-bg);
+  animation: adIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
+  transition: background calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .sp-sample:hover {
+  background: var(--ad-tint);
+}
+.account-admin-page.admin-shell .sp-sample-text p {
+  margin: 0;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .sp-player {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell .sp-sample-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .sp-none {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .rh-bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .rh-bubble-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .rh-star,
+.account-admin-page.admin-shell .review-star {
+  flex: none;
+  min-height: 24px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.45;
+  transition:
+    opacity calc(160ms * var(--ad-motion)) var(--ad-ease),
+    background calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .rh-bubble:hover .rh-star,
+.account-admin-page.admin-shell .review-line:hover .review-star,
+.account-admin-page.admin-shell .rh-star:focus-visible,
+.account-admin-page.admin-shell .review-star:focus-visible {
+  opacity: 1;
+  background: var(--ad-tint);
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;
@@ -22009,242 +22247,4 @@ html.theme-fade *::after {
   .shared-card {
     animation: none;
   }
-}
-
-/* ---- Part 37b: 说话档案 (the adopt box, the 角色工作台 section, the ⭐ buttons). Built on the #57 pieces (drawer, segmented, status
-   badge, hover tip) and the console tokens, so the console restyle applies to it. Motion goes through --ad-motion (0 with reduced motion). */
-.account-admin-page.admin-shell .sp-adopt,
-.account-admin-page.admin-shell .sp-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.account-admin-page.admin-shell .sp-adopt > * {
-  animation: adIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell .sp-from {
-  margin: 0;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: var(--ad-tint);
-  color: var(--ad-tint-ink);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.account-admin-page.admin-shell .sp-pane {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.account-admin-page.admin-shell .sp-pane[hidden] {
-  display: none;
-}
-.account-admin-page.admin-shell .sp-lab,
-.account-admin-page.admin-shell .sp-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.account-admin-page.admin-shell .sp-lab > span,
-.account-admin-page.admin-shell .sp-field-head {
-  color: var(--ad-muted);
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .sp-field-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .sp-field-head b {
-  color: var(--ad-text);
-  font-size: 14px;
-}
-.account-admin-page.admin-shell .sp-adopt input[type="text"],
-.account-admin-page.admin-shell .sp-adopt select,
-.account-admin-page.admin-shell .sp-panel select {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 36px;
-  padding: 6px 12px;
-  border: 1px solid var(--ad-border);
-  border-radius: 12px;
-  background: #fff;
-  color: var(--ad-text);
-  font: inherit;
-  font-size: 14px;
-  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
-}
-.account-admin-page.admin-shell .sp-panel select {
-  width: auto;
-  min-height: 32px;
-}
-.account-admin-page.admin-shell .sp-text {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 84px;
-  padding: 10px 14px;
-  border: 1px solid var(--ad-border);
-  border-radius: 12px;
-  background: #fff;
-  color: var(--ad-text);
-  font: inherit;
-  font-size: 14px;
-  line-height: 1.6;
-  resize: vertical;
-  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
-}
-.account-admin-page.admin-shell .sp-text:focus,
-.account-admin-page.admin-shell .sp-adopt input[type="text"]:focus,
-.account-admin-page.admin-shell .sp-adopt select:focus {
-  border-color: var(--ad-primary);
-}
-.account-admin-page.admin-shell .sp-now,
-.account-admin-page.admin-shell .sp-hint,
-.account-admin-page.admin-shell .sp-lock,
-.account-admin-page.admin-shell .sp-empty {
-  margin: 0;
-  color: var(--ad-muted);
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.account-admin-page.admin-shell .sp-count {
-  margin-left: auto;
-  color: var(--ad-muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  transition: color calc(160ms * var(--ad-motion)) var(--ad-ease);
-}
-.account-admin-page.admin-shell .sp-count.is-over,
-.account-admin-page.admin-shell .sp-count.is-full {
-  color: var(--ad-danger);
-  font-weight: 600;
-}
-.account-admin-page.admin-shell .sp-error,
-.account-admin-page.admin-shell .sp-warn {
-  margin: 0;
-  padding: 10px 14px;
-  border-radius: 12px;
-  font-size: 13px;
-  line-height: 1.6;
-  animation: adIn calc(200ms * var(--ad-motion)) var(--ad-ease) both;
-}
-.account-admin-page.admin-shell .sp-error[hidden],
-.account-admin-page.admin-shell .sp-warn[hidden] {
-  display: none;
-}
-.account-admin-page.admin-shell .sp-error {
-  background: var(--ad-danger-soft);
-  color: var(--ad-danger);
-}
-.account-admin-page.admin-shell .sp-warn {
-  background: #fdf3df;
-  color: #7a5200;
-}
-.account-admin-page.admin-shell .sp-warn p {
-  margin: 4px 0 0;
-}
-.account-admin-page.admin-shell .sp-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .sp-panel {
-  max-width: 760px;
-}
-.account-admin-page.admin-shell .sp-title {
-  margin: 4px 0 0;
-  font-size: 15px;
-}
-.account-admin-page.admin-shell .sp-card,
-.account-admin-page.admin-shell .sp-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.account-admin-page.admin-shell .sp-group {
-  padding: 12px 14px;
-  border: 1px solid var(--ad-border);
-  border-radius: 12px;
-  background: var(--ad-surface);
-}
-.account-admin-page.admin-shell .sp-group-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.account-admin-page.admin-shell .sp-samples {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.account-admin-page.admin-shell .sp-sample {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--ad-bg);
-  animation: adIn calc(240ms * var(--ad-motion)) var(--ad-ease) both;
-  transition: background calc(160ms * var(--ad-motion)) var(--ad-ease);
-}
-.account-admin-page.admin-shell .sp-sample:hover {
-  background: var(--ad-tint);
-}
-.account-admin-page.admin-shell .sp-sample-text p {
-  margin: 0;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-.account-admin-page.admin-shell .sp-player {
-  color: var(--ad-muted);
-}
-.account-admin-page.admin-shell .sp-sample-actions {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .sp-none {
-  color: var(--ad-muted);
-  font-size: 13px;
-}
-.account-admin-page.admin-shell .rh-bubble {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-}
-.account-admin-page.admin-shell .rh-bubble-text {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.account-admin-page.admin-shell .rh-star,
-.account-admin-page.admin-shell .review-star {
-  flex: none;
-  min-height: 24px;
-  padding: 0 4px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  background: transparent;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.45;
-  transition:
-    opacity calc(160ms * var(--ad-motion)) var(--ad-ease),
-    background calc(160ms * var(--ad-motion)) var(--ad-ease);
-}
-.account-admin-page.admin-shell .rh-bubble:hover .rh-star,
-.account-admin-page.admin-shell .review-line:hover .review-star,
-.account-admin-page.admin-shell .rh-star:focus-visible,
-.account-admin-page.admin-shell .review-star:focus-visible {
-  opacity: 1;
-  background: var(--ad-tint);
 }
