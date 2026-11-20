@@ -1,5 +1,5 @@
 import { PLAYER_MODEL_IDS, PLAYER_MODELS, isPlayerModelId, type PlayerModelId } from './player-models.ts';
-import type { WriterChoice } from './web-writer.ts';
+import type { WriterLine } from './web-writer.ts';
 
 /**
  * Part 35: 多轮预演. A run is a SCRIPT, an ordered list of player turns (6-20) against ONE character, run on one or more draft
@@ -44,14 +44,14 @@ export const REHEARSAL_MODEL_LABELS: Readonly<Record<PlayerModelId, string>> = O
  * DeepSeek·新 (the v8 writer). The `models` of an estimate, a start and a stored run are column keys. A rehearsal never reads the live
  * 回复写法 switch: it runs what its columns say.
  */
-export const REHEARSAL_WRITER_LABELS: Readonly<Record<WriterChoice, string>> = Object.freeze({ v7: '旧', v8: '新' });
+export const REHEARSAL_WRITER_LABELS: Readonly<Record<WriterLine, string>> = Object.freeze({ v7: '旧', v8: '新' });
 /** Part 37b: the third column of a model, 新+档案 (the v8 writer plus the character's own 核心卡 and examples). Preview only for now. */
 export const REHEARSAL_PROFILE_LABEL = '新+档案';
-export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterChoice, profile = false) =>
+export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterLine, profile = false) =>
   writer === 'v8' ? `${model}-${profile ? 'v8p' : 'v8'}` : model;
 export function parseRehearsalColumn(
   key: unknown,
-): { model: PlayerModelId; writer: WriterChoice; profile: boolean } | null {
+): { model: PlayerModelId; writer: WriterLine; profile: boolean } | null {
   if (typeof key !== 'string') return null;
   const profile = key.endsWith('-v8p');
   const v8 = profile || key.endsWith('-v8');
@@ -266,7 +266,7 @@ export interface RehearsalRunDetail {
     /** The column key: what `memes[].models` is keyed by. */
     key: string;
     model: PlayerModelId;
-    writer: WriterChoice;
+    writer: WriterLine;
     label: string;
     cells: RehearsalCell[];
     counts: RehearsalCounts;

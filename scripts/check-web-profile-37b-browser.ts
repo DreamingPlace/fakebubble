@@ -375,6 +375,45 @@ try {
     (await json('characters/wei-guagua/detail')).published.version === publishedBefore,
     'the 正式版本 still did not change',
   );
+  // ======================= 4. 回复写法: 新+档案 is the third live choice =======================
+  await page.goto(`${f.origin}/?mode=provider-admin#/models`);
+  await page.reload();
+  await page.locator('.models-writer').waitFor({ timeout: 20_000 });
+  await wait(900);
+  const card = page.locator('.models-writer');
+  const choices = await card.locator('.seg-button').allTextContents();
+  check(choices.join(',') === '旧写法,新写法,新+档案', `three choices (${choices})`);
+  check((await card.locator('[data-seg="v7"]').getAttribute('aria-pressed')) === 'true', 'the default (旧) is pressed');
+  await shot('writer-switch-three');
+  await card.locator('[data-seg="v8p"]').click();
+  await wait(500);
+  await page.locator('.models-writer .models-confirm button', { hasText: /确认切换/ }).click();
+  await page.waitForFunction(
+    () => /当前：新\+档案/.test(document.querySelector('.models-writer')?.textContent ?? ''),
+    null,
+    {
+      timeout: 15_000,
+    },
+  );
+  const sentLive = JSON.parse(bodies.filter((b) => /system\/writer-save/.test(b.url)).at(-1)!.body);
+  check(sentLive.writer === 'v8p', `the save carries v8p (${JSON.stringify(sentLive)})`);
+  check(
+    f.store.get<{ writer: string }>('SELECT writer FROM web_writer_setting')?.writer === 'v8p',
+    'the live setting is 新+档案',
+  );
+  await shot('writer-switch-profile');
+  // back to 旧: the production value is what the owner leaves it at
+  await card.locator('[data-seg="v7"]').click();
+  await wait(500);
+  await page.locator('.models-writer .models-confirm button', { hasText: /确认切换/ }).click();
+  await page.waitForFunction(
+    () => /当前：旧写法/.test(document.querySelector('.models-writer')?.textContent ?? ''),
+    null,
+    {
+      timeout: 15_000,
+    },
+  );
+
   check(!(await page.locator('main').innerText()).includes('现行'), 'admin: no 「现行」 on the page');
 
   for (const e of errors.slice(0, 8)) problems.push(e);
