@@ -186,8 +186,11 @@ try {
 
   // the old 「+ 加入草稿」 into 说话风格 (what the 核心卡 is made of) is checked the same way
   {
-    await page.locator('#admin-cocreation .cc-row-open', { hasText: '！！' }).first().click();
+    // (the note is still open from the step above; a second click would close it)
+    if ((await page.locator('.cc-target select').count()) === 0)
+      await page.locator('#admin-cocreation .cc-row-open', { hasText: '！！' }).first().click();
     await wait(500);
+    const speechBefore = JSON.stringify(settingsOf(await draftOf('jojo')).speechStyle ?? null);
     await page.locator('.cc-target select').selectOption('speechStyle');
     await wait(500);
     await page.locator('.cc-detail .cc-adopt-open:not([disabled])').first().click();
@@ -197,7 +200,7 @@ try {
     const legacy = await page.locator('.cc-adopt-error').innerText();
     check(/太像|不能保存/.test(legacy), `the old 加入草稿 is blocked for the same line (${legacy})`);
     check(
-      !settingsOf(await draftOf('jojo')).speechStyle,
+      JSON.stringify(settingsOf(await draftOf('jojo')).speechStyle ?? null) === speechBefore,
       'nothing was written for the other character through the old path either',
     );
     await page.locator('.cc-adopt-cancel').click();
