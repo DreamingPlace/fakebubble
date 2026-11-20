@@ -17602,6 +17602,13 @@ button:not(
 .account-admin-page.admin-shell .rh-counts tbody th > span {
   display: block;
 }
+/* the row's name stays on one line; only its note (under it) wraps in the narrow sticky column */
+.account-admin-page.admin-shell .rh-counts tbody th > span:first-child {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .rh-counts tbody th > .rh-note {
+  white-space: normal;
+}
 .account-admin-page.admin-shell .rh-note {
   display: block;
   font-size: 12px;
