@@ -80,7 +80,7 @@ export function openShareSheet(anchor: HTMLElement, target: ShareTarget, options
   const clipboard = options.clipboard === undefined ? (navigator.clipboard ?? null) : options.clipboard;
   const nativeShare =
     options.nativeShare === undefined
-      ? typeof navigator.share === 'function'
+      ? typeof navigator.share === 'function' && navigator.canShare?.({ url: window.location.origin }) !== false
         ? (data: { url: string }) => navigator.share(data)
         : null
       : options.nativeShare;
@@ -185,6 +185,35 @@ export function openShareSheet(anchor: HTMLElement, target: ShareTarget, options
     };
     document.addEventListener('pointerdown', away, true);
   }
+  // A failure is shown IN the sheet (the page's toast sits under the sheet's scrim, out of sight), as a short state of the button that
+  // was tapped, and it goes back by itself. Nothing in here fails silently.
+  const failTimers = new Map<HTMLButtonElement, number>();
+  const markFailed = (button: HTMLButtonElement, restore: string) => {
+    button.dataset.state = 'failed';
+    button.innerHTML = `<span>${shareCopy.failed}</span>`;
+    options.say(shareCopy.failed);
+    clearTimeout(failTimers.get(button));
+    failTimers.set(
+      button,
+      window.setTimeout(() => {
+        button.dataset.state = '';
+        button.innerHTML = restore;
+      }, 2600),
+    );
+  };
+  /** The old way, still allowed where the clipboard API is not (an insecure page, a webview): select the address and ask to copy it. */
+  const copyBySelection = () => {
+    const range = document.createRange();
+    range.selectNodeContents(linkText);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    try {
+      return document.execCommand('copy');
+    } catch {
+      return false;
+    }
+  };
   const markCopied = () => {
     copy.dataset.state = 'done';
     copy.innerHTML = `${ICON_TICK}<span>${shareCopy.copied}</span>`;
@@ -194,30 +223,37 @@ export function openShareSheet(anchor: HTMLElement, target: ShareTarget, options
       copy.innerHTML = `${ICON_COPY}<span>${shareCopy.copy}</span>`;
     }, 2200);
   };
+  const copyHtml = `${ICON_COPY}<span>${shareCopy.copy}</span>`;
   copy.addEventListener('click', async () => {
     if (!url) return;
+    let done = false;
     try {
       if (!clipboard) throw new Error('NO_CLIPBOARD');
       await clipboard.writeText(url);
+      done = true;
     } catch {
-      // No clipboard permission: select the address so the player can copy it by hand.
-      const range = document.createRange();
-      range.selectNodeContents(linkText);
-      const selection = window.getSelection();
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      options.say(shareCopy.failed);
+      done = copyBySelection();
+    }
+    if (done) markCopied();
+    else markFailed(copy, copyHtml); // the address stays selected, so it can still be copied by hand
+  });
+  const shareHtml = `${ICON_SHARE}<span>${shareCopy.share}</span>`;
+  // navigator.share is called HERE, synchronously inside this tap's own handler (nothing awaited before it): the browser only opens its
+  // sheet for a call made while the tap's user activation is alive.
+  share?.addEventListener('click', () => {
+    if (!url || !nativeShare) return;
+    let sharing: Promise<void>;
+    try {
+      sharing = nativeShare({ url });
+    } catch {
+      markFailed(share!, shareHtml);
       return;
     }
-    markCopied();
-  });
-  share?.addEventListener('click', async () => {
-    if (!url || !nativeShare) return;
-    try {
-      await nativeShare({ url });
-    } catch {
-      /* dismissed: nothing to say */
-    }
+    sharing.catch((error: unknown) => {
+      // the player closing the system sheet is an answer, not a failure
+      if ((error as { name?: string } | null)?.name === 'AbortError') return;
+      markFailed(share!, shareHtml);
+    });
   });
   const requestId = crypto.randomUUID();
   void options.create(requestId).then(
@@ -231,8 +267,11 @@ export function openShareSheet(anchor: HTMLElement, target: ShareTarget, options
       (share ?? copy).focus({ preventScroll: true });
     },
     () => {
+      if (closed) return;
+      // the link could not be made: say so in the sheet's own link line, short; the sheet closes with the next tap
+      link.dataset.state = 'failed';
+      linkText.textContent = shareCopy.failed;
       options.say(shareCopy.failed);
-      close();
     },
   );
   const handle = { close, element: sheet };

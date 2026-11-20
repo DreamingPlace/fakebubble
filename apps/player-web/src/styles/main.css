@@ -18788,6 +18788,10 @@ body.legal-page {
   letter-spacing: -0.02em;
   line-height: 0.95;
   white-space: nowrap;
+  /* Part 46: no phone browser may scale this text on its own (Android's text autosizing / font boost): the fit measures the text
+     against its computed size, so a size the browser changes behind it would make the fit chase it. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 /* Part 44: the text sits in an inner box that is bigger than the line it takes (padding, undone by the same negative margin), so the
    gradient that is clipped to the glyphs also paints the descenders (g, y, p, q), the overhang of the last glyph and the side
@@ -21657,6 +21661,16 @@ html.theme-fade *::after {
   background: var(--s-out, #141414);
   color: var(--bb-paper, #fff);
   border-color: transparent;
+}
+.share-act[data-state="failed"],
+.share-link[data-state="failed"] {
+  color: #b3402f;
+  border-color: rgba(179, 64, 47, 0.45);
+}
+:root[data-theme="dark"] .share-act[data-state="failed"],
+:root[data-theme="dark"] .share-link[data-state="failed"] {
+  color: #ff9d8d;
+  border-color: rgba(255, 157, 141, 0.45);
 }
 .share-act[data-state="done"] {
   background: #3a7667;
