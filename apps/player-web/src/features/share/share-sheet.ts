@@ -9,6 +9,7 @@
  * opens, is used and closes. The link is made when the sheet opens (one request id per opening, so a retry gives the same link); the
  * address is built from the token and the page's own origin. The sharer's nickname, number and id are never put in it.
  */
+import { pushBackLayer } from '../nav/back-layer.ts';
 import { mountPortrait } from '../brand/portrait.ts';
 import { formatDuration } from '../prototype/voice-pill.ts';
 
@@ -145,11 +146,16 @@ export function openShareSheet(anchor: HTMLElement, target: ShareTarget, options
   }
   anchor.dataset.on = 'true';
   let closed = false;
+  // Part 46: the sheet is a history layer: the system back closes it (the chat under it stays), and closing it here takes its entry off
+  let releaseLayer: (() => void) | null = pushBackLayer(() => close());
   let url = '';
   let copiedTimer = 0;
   const close = () => {
     if (closed) return;
     closed = true;
+    const release = releaseLayer;
+    releaseLayer = null;
+    release?.();
     clearTimeout(copiedTimer);
     anchor.removeAttribute('data-on');
     document.removeEventListener('keydown', onKey, true);

@@ -22116,6 +22116,16 @@ html.theme-fade *::after {
   opacity: 0.4;
 }
 
+/* Part 46: a sideways swipe is the app's own (the cards), never the browser's "back": desktop trackpad swipes (Chrome, Edge, Safari) and
+   Android Chrome's in-page swipe-to-go-back are told to leave horizontal overscroll alone. Vertical scrolling and pinch zoom are not touched. */
+html,
+body,
+.carousel,
+.card-deck,
+.avatar-nav {
+  overscroll-behavior-x: none;
+}
+
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
 @media (prefers-reduced-motion: reduce) {
   .card-slot.is-active:not(.is-chat) .face-sheen,

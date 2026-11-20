@@ -264,6 +264,7 @@ try {
       await wait(60);
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     };
+    const lenBefore: number = await page.evaluate(() => history.length);
     const tapped = Date.now();
     await tap(icon);
     const mobile = mobileView;
@@ -338,8 +339,22 @@ try {
       `${name}: the voice message kept playing while the share UI was used (${stillPlaying})`,
     );
     // close: Escape, and the sheet leaves (and still the voice plays)
-    await page.keyboard.press('Escape');
-    await sheet.waitFor({ state: 'detached', timeout: 2_000 });
+    check(
+      (await page.evaluate(() => history.length)) === lenBefore + 1,
+      `${name}: opening the sheet pushes ONE history entry`,
+    );
+    if (mobileView) {
+      // Part 46: the system back closes the sheet; the chat under it stays, the site stays, the voice keeps playing
+      await page.evaluate(() => history.back());
+      await sheet.waitFor({ state: 'detached', timeout: 2_000 });
+      check(
+        (await page.locator('.page-shell[data-phase="chat"]').count()) === 1 && page.url().startsWith(f.origin),
+        `${name}: back closed the sheet and left the chat and the site as they were`,
+      );
+    } else {
+      await page.keyboard.press('Escape');
+      await sheet.waitFor({ state: 'detached', timeout: 2_000 });
+    }
     check((await bar.getAttribute('data-playing')) === 'true', `${name}: and after it closed`);
     // opening again from the same icon: a new request id, a new link; and an unused sheet is closed by a tap away
     const token = copied.split('/s/')[1]!;

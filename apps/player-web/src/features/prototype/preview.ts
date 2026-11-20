@@ -2,6 +2,7 @@
 import { mountShapes, setSkinProperties } from '../brand/palette-render.ts';
 import { orbitStyle, ringOffset } from './orbit.js';
 import { appendLegalLinks, footerNote } from './legal-links.ts';
+import { pushBackLayer } from '../nav/back-layer.ts';
 import { followChatViewport, stackCardWidth, swipeStep, widthChanged } from './mobile-layout.js';
 import type { LiveBinding } from './provider-binding.js';
 import { providerPeople, escapeCardText, type Person } from './provider-catalog-view.js';
@@ -76,6 +77,9 @@ function createCard(person: Person) {
 export function startPrototype(root: HTMLElement, live: LiveBinding) {
   return startShell(root, providerPeople(live.catalog()), live);
 }
+
+/** Part 46: a touch starting within this many px of the screen's left or right edge is left to the system (edge-back). */
+const EDGE_GUTTER = 24;
 
 function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   root.innerHTML = `
@@ -300,12 +304,18 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
       { duration: 340, easing: 'cubic-bezier(.2,.82,.24,1)' },
     );
   };
+  // Part 46: an open chat is a history layer: the system back closes it, and closing it here takes its entry off again
+  let releaseChat: (() => void) | null = null;
   const openChat = (focus = false) => {
     if (phase === 'chat' || phase === 'expanding') return;
     if (!people[active]!.transcript) {
       say('这个位置还没有新朋友');
       return;
     }
+    releaseChat = pushBackLayer(() => {
+      releaseChat = null; // the system back already took the entry off
+      closeChat();
+    });
     if (dragStart && carousel.hasPointerCapture(dragStart.pointerId))
       carousel.releasePointerCapture(dragStart.pointerId);
     dragStart = undefined;
@@ -332,6 +342,9 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   };
   const closeChat = () => {
     if (phase !== 'chat' && phase !== 'expanding') return;
+    const release = releaseChat;
+    releaseChat = null;
+    release?.();
     clearTimeout(settleTimer);
     settleTimer = 0;
     live.stopVoice();
@@ -493,10 +506,11 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
       if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
       const dominant = event.deltaX;
       if (Math.abs(dominant) < 4) return;
-      event.preventDefault();
       const now = performance.now();
       if (now - lastWheel < 310) return;
       lastWheel = now;
+      // Part 46: only an input that moves the swiper is taken (the page's overscroll-behavior-x keeps the rest from being a "back")
+      event.preventDefault();
       switchTo(active + Math.sign(dominant));
     },
     { passive: false },
@@ -504,6 +518,12 @@ function startShell(root: HTMLElement, people: Person[], live: LiveBinding) {
   carousel.addEventListener('pointerdown', (event) => {
     if (phase === 'chat' || phase === 'expanding' || phase === 'collapsing') return;
     if (event.target instanceof Element && event.target.closest('textarea,button')) return;
+    // Part 46: a touch that starts in the edge gutters belongs to the system's edge-back gesture, not to the swiper
+    if (
+      event.pointerType === 'touch' &&
+      (event.clientX < EDGE_GUTTER || event.clientX > window.innerWidth - EDGE_GUTTER)
+    )
+      return;
     dragStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     dragged = false;
   });
