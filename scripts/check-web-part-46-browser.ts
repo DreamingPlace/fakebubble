@@ -204,7 +204,7 @@ try {
                   pointerType: 'touch',
                   isPrimary: true,
                   clientX: x,
-                  clientY: yy,
+                  clientY: yy as number,
                   bubbles: true,
                   cancelable: true,
                 }),
