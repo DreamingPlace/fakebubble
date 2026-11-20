@@ -17435,20 +17435,46 @@ button:not(
 }
 /* Part 44: a result table keeps fixed column widths and scrolls sideways inside its own box (wheel, trackpad, a visible bar). The 玩家
    column (the row labels in the counts tables) stays on the left; a header never truncates. */
+.account-admin-page.admin-shell .rh-scrollwrap {
+  position: relative;
+}
 .account-admin-page.admin-shell .rh-scroll {
   --rh-col: 208px;
   --rh-first: 144px;
-  overflow: auto;
-  max-height: max(320px, calc(100dvh - 330px));
+  overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid var(--ad-border);
   border-radius: 12px;
   background: var(--ad-surface);
-  scrollbar-width: auto;
-  scrollbar-gutter: stable;
+  /* the visible, draggable bar is .rh-hbar (sticky at the bottom of the panel); this one is only the scroll box */
+  scrollbar-width: none;
+}
+.account-admin-page.admin-shell .rh-scroll::-webkit-scrollbar {
+  display: none;
 }
 .account-admin-page.admin-shell .rh-scroll:focus-visible {
   outline: 2px solid var(--ad-primary);
   outline-offset: -2px;
+}
+.account-admin-page.admin-shell .rh-hbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  margin-top: 4px;
+  height: 16px;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  border-radius: 8px;
+  background: var(--ad-bg);
+  scrollbar-width: auto;
+}
+.account-admin-page.admin-shell .rh-hbar[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .rh-hbar > i {
+  display: block;
+  height: 1px;
+  width: var(--rh-fill, 100%);
 }
 .account-admin-page.admin-shell .rh-grid {
   display: grid;

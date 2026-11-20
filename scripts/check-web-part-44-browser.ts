@@ -61,7 +61,7 @@ try {
     /** Everything the owner asked for, for the table that is on screen now. */
     const reach = async (tag: string, headSelector: string, firstSelector: string, columns: number) => {
       const scroller = page.locator('.rh-scroll').first();
-      await scroller.evaluate((el: HTMLElement) => el.scrollIntoView({ block: 'center' }));
+      await scroller.evaluate((el: HTMLElement) => el.scrollIntoView({ block: 'start' }));
       await wait(200);
       await scroller.evaluate((el: HTMLElement) => (el.scrollLeft = 0));
       await wait(150);
@@ -69,7 +69,6 @@ try {
         const heads = [...el.querySelectorAll<HTMLElement>(sel)];
         return {
           scrollable: el.scrollWidth > el.clientWidth + 1,
-          thickness: el.offsetHeight - el.clientHeight - 2,
           heads: heads.length,
           widths: heads.map((h) => Math.round(h.getBoundingClientRect().width)),
           pageScroll: document.documentElement.scrollWidth > innerWidth + 1,
@@ -81,12 +80,24 @@ try {
       check(new Set(facts.widths).size === 1, `${tag}: every column has the same fixed width (${facts.widths})`);
       widthOfColumn = facts.widths[0] ?? widthOfColumn;
       const box = await scroller.boundingBox();
+      // the horizontal scrollbar is visible with the top of the table on screen: inside the viewport AND inside the panel's own frame
+      const hbar = page.locator('.rh-hbar').first();
+      const barBox = await hbar.boundingBox();
+      const vh = (page.viewportSize() as { height: number }).height;
+      const frame = await page.locator('.pw-half-rehearsal').boundingBox();
+      const thickness: number = await hbar.evaluate((el: HTMLElement) => el.offsetHeight - el.clientHeight);
+      check(thickness >= 6, `${tag}: a visible scrollbar (${thickness}px)`);
       check(
-        box.y >= 0 && box.y + box.height <= 900,
-        `${tag}: the whole result panel, scrollbar included, can be on screen (${Math.round(box.y)}+${Math.round(box.height)})`,
+        barBox.y >= 0 &&
+          barBox.y + barBox.height <= vh &&
+          barBox.y >= frame.y &&
+          barBox.y + barBox.height <= frame.y + frame.height + 1,
+        `${tag}: the scrollbar is inside the viewport (${Math.round(barBox.y)}–${Math.round(barBox.y + barBox.height)} of ${vh})`,
       );
-      // the scrollbar is visible and can be dragged
-      check(facts.thickness >= 6, `${tag}: a visible scrollbar (${facts.thickness}px)`);
+      check(
+        Math.abs(barBox.width - box.width) <= 2,
+        `${tag}: the scrollbar is as wide as the table box (${Math.round(barBox.width)} / ${Math.round(box.width)})`,
+      );
       const reached = new Set<number>();
       let lastSeen = '';
       const sweep = async () => {
@@ -121,7 +132,7 @@ try {
           .join(',');
       };
       // by wheel / trackpad: bring each header, in turn, to just after the sticky column, with real wheel events
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.move(box.x + box.width / 2, box.y + 80);
       for (let i = 0; i < columns; i++) {
         const target: number = await scroller.evaluate(
           (el: HTMLElement, [sel, firstSel, n]: [string, string, number]) => {
@@ -133,7 +144,8 @@ try {
           [headSelector, firstSelector, i] as [string, string, number],
         );
         const now: number = await scroller.evaluate((el: HTMLElement) => el.scrollLeft);
-        await page.mouse.wheel(target - now, 0);
+        // the last column is brought to the very end (a wheel past the end just stops there)
+        await page.mouse.wheel(target - now + (i === columns - 1 ? 60 : 0), 0);
         await wait(350);
         await sweep();
       }
@@ -190,10 +202,10 @@ try {
         max: el.scrollWidth - el.clientWidth,
       }));
       const thumb = (geom.cw * geom.cw) / geom.sw;
-      const y = box.y + box.height - 1 - Math.max(3, facts.thickness / 2);
-      await page.mouse.move(box.x + 1 + 16 + thumb / 2, y);
+      const y = barBox.y + barBox.height / 2;
+      await page.mouse.move(barBox.x + 16 + thumb / 2, y);
       await page.mouse.down();
-      await page.mouse.move(box.x + box.width - 4, y, { steps: 8 });
+      await page.mouse.move(barBox.x + barBox.width - 4, y, { steps: 8 });
       await page.mouse.up();
       await wait(150);
       const dragged = await scroller.evaluate((el: HTMLElement) => el.scrollLeft);
@@ -378,12 +390,17 @@ try {
           })),
         );
       check(
-        JSON.stringify(cards.map((c) => c.id)) === JSON.stringify(['theme-know', 'theme-habit']),
-        `player open ${i}: only the themes with an online wording have a card (${cards.map((c) => c.id)})`,
+        JSON.stringify(cards.map((c) => c.id)) ===
+          JSON.stringify(['theme-know', 'theme-experience', 'theme-habit', 'theme-catchphrase', 'theme-recent']),
+        `player open ${i}: one card per theme (${cards.map((c) => c.id)})`,
       );
       for (const c of cards) check(c.prompts.length === 1, `player open ${i}: exactly one wording on ${c.id}`);
       const k = cards.find((c) => c.id === 'theme-know')?.prompts[0] ?? '';
       check(online.has(k), `player open ${i}: an ONLINE wording, never an offline or deleted one (“${k}”)`);
+      check(
+        cards.find((c) => c.id === 'theme-experience')?.prompts[0] === '瓜瓜经历过哪些事？',
+        `player open ${i}: a theme with no online wording shows its plain default`,
+      );
       check(
         cards.find((c) => c.id === 'theme-habit')?.prompts[0] === '瓜瓜习惯问',
         `player open ${i}: a pool of one shows it`,

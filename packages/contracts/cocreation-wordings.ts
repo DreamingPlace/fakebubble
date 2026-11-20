@@ -63,17 +63,5 @@ export function pickWording(theme: CocreationTheme, enabled: readonly string[], 
   return renderWording(at < 0 ? theme.fallback : pool[at]!, name);
 }
 
-/**
- * Part 44: the question a theme shows when the character's wording pool IS known: exactly one entry of `online` (this character's
- * online wordings of the theme, in any order), picked with `random() ∈ [0,1)`; null when none is online, and then the theme has no card.
- * Never an offline wording, never the plain default (that is only for a pool that could not be read: see pickWording).
- */
-export function pickOnlineWording(online: readonly string[], name: string, random: () => number) {
-  const pool = online.filter(cocreationWordingOk);
-  if (pool.length === 0) return null;
-  const at = Math.min(pool.length - 1, Math.max(0, Math.floor(random() * pool.length)));
-  return renderWording(pool[at]!, name);
-}
-
 /** What a player's note records of the question it answered: the exact text shown (the name already filled in). */
 export const COCREATION_SHOWN_MAX = 200;
