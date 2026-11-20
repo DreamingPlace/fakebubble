@@ -1,0 +1,49 @@
+{
+  "cssRequests": [
+    "GET /assets/static-199e152d627b216c60ff9194f9a1b704059b33909f8bcde434e5950f1fcef12f.css"
+  ],
+  "coldFast4G": {
+    "profile": "Fast 4G (9 Mbps down, 1.5 Mbps up, 60 ms RTT) + 4x CPU",
+    "fcpMs": 436,
+    "firstCardMs": 1030,
+    "sessionReadyMs": 3501,
+    "runs": [
+      [
+        444,
+        1130,
+        3723
+      ],
+      [
+        408,
+        1030,
+        3501
+      ],
+      [
+        436,
+        991,
+        3445
+      ]
+    ]
+  },
+  "blocked": {
+    "cards": 15,
+    "sheet": {
+      "line": "验证没有完成",
+      "retry": true,
+      "words": 8,
+      "phase": "browse"
+    },
+    "mean": 161
+  },
+  "script-hangs": "10.3 s",
+  "challenge-silent": "15.2 s",
+  "realTurnstile": {
+    "headed": true,
+    "sessionReadyMs": 2675,
+    "sheetOpened": false
+  },
+  "css": {
+    "playerBytes": 117674,
+    "adminBytes": 587048
+  }
+}
