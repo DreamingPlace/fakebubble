@@ -453,7 +453,24 @@ try {
     watch(page, 'real-turnstile');
     await page.goto(`${f.origin}/`);
     await page.waitForSelector('.card-slot.is-active .face-name-text', { timeout: 20_000 });
+    const rectOf = () =>
+      page.evaluate(() => {
+        // the bar, the stack's box, the avatars and the footer (the front card itself breathes, so its own box is never still)
+        return ['.site-head', '.carousel', '.avatar-nav', '.preview-note'].flatMap((selector) => {
+          const r = document.querySelector(`.page-shell ${selector}`)!.getBoundingClientRect();
+          return [r.top, r.height];
+        });
+      });
+    await page.waitForTimeout(800);
+    const beforeSession = await rectOf();
     await page.waitForSelector('.card-slot[data-ready="true"]', { timeout: 60_000 });
+    await page.waitForTimeout(300);
+    const afterSession = await rectOf();
+    // nothing moves when the session's data swaps in (the footer's words and the account entries arrive with it)
+    check(
+      beforeSession.every((n: number, i: number) => Math.abs(n - afterSession[i]!) <= 1),
+      `nothing moves when the session arrives (the bar, the stack, the avatars, the footer) (${beforeSession} -> ${afterSession})`,
+    );
     const t = await page.evaluate(() => (window as Any).__first);
     check(t.sheet === null, 'the real Turnstile passed in the background: the sheet never opened');
     check(

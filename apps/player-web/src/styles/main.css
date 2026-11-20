@@ -22159,11 +22159,15 @@ html.theme-fade *::after {
   justify-content: center;
   padding-top: 0;
 }
-/* the real bar holds the account row on a phone (68 px), the footer note is one line (32 px) */
-.page-shell.is-skeleton .preview-note {
+/* the real bar holds the account row on a phone (68 px), the footer note is one line (32 px). Both are reserved on the real page too:
+   the footer's words and the account entries arrive with the session, and the cards must not move when they do. */
+.page-shell .preview-note {
   min-height: 32px;
 }
 @media (max-width: 600px) {
+  .page-shell .site-head {
+    min-height: 68px;
+  }
   .page-shell.is-skeleton .site-head {
     height: 68px;
   }
