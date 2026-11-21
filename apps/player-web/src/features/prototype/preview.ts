@@ -686,7 +686,7 @@ function setPillDuration(card: HTMLElement, ms: number | null | undefined) {
   if (!label) {
     label = document.createElement('span');
     label.className = 'face-dur is-new';
-    pill.insertBefore(label, pill.querySelector('.face-progress'));
+    pill.append(label);
   }
   label.textContent = time;
 }
