@@ -266,6 +266,12 @@ export function compileCastViewDetailed(
   return { view, dropped };
 }
 
+/**
+ * Part 37c-1: the character's view with nothing dropped (no cap). Only cast-select.ts reads it: the per-reply selection starts from
+ * everything the character knows and keeps what the recent turns make relevant, within its own budget.
+ */
+export const compileFullView = (doc: CastDoc, characterId: string): CastView => build(doc, characterId).view;
+
 export const compileCastView = (doc: CastDoc, characterId: string): CastView =>
   compileCastViewDetailed(doc, characterId).view;
 

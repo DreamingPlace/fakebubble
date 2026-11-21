@@ -15,6 +15,7 @@ export type AdminPage =
   | 'overview'
   | 'characters'
   | 'cast'
+  | 'memes'
   | 'cocreation'
   | 'invites'
   | 'points'
@@ -80,6 +81,8 @@ export const OPTIONAL_NAV: ReadonlyArray<NavItem & { group: string; first?: bool
   { group: 'ops', page: 'conversations', label: '测试对话' },
   // Part 42: 广播 exists only where the page was given the client (the owner or broadcast.send sees it).
   { group: 'players', page: 'broadcast', label: '广播' },
+  // Part 37c-1: 网络梗 (the dictionary's switches) exists where the page has the cast client; cast.read sees it, cast.edit switches.
+  { group: 'roles', page: 'memes', label: '网络梗' },
 ];
 /** NAV_TREE plus the switch-gated pages, in their groups (an item marked `first` goes before the group's own pages). */
 export const navTree = (): NavGroup[] =>
@@ -130,6 +133,8 @@ export function canSeePage(page: AdminPage, access: NavAccess): boolean {
     case 'characters':
       return owner || hasAnyCharacterPermission(permissions, 'read');
     case 'cast':
+      return access.cast === true && (owner || hasCastPermission(permissions, 'cast.read'));
+    case 'memes':
       return access.cast === true && (owner || hasCastPermission(permissions, 'cast.read'));
     case 'cocreation':
       return access.inbox && (owner || hasCocreationPermission(permissions, 'cocreation.read'));

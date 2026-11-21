@@ -3,6 +3,7 @@ import {
   REHEARSAL_ITEMS_MAX,
   REHEARSAL_SET_LABELS,
   type RehearsalItem,
+  type RehearsalNetSet,
   type RehearsalProfileSet,
   type RehearsalSet,
   type RehearsalSetView,
@@ -89,11 +90,47 @@ const PROFILE: Readonly<Record<string, readonly string[]>> = {
     '谢谢你听我说，这对我很重要',
   ],
 };
+/** Part 37c-1: players talking with 2022+ internet memes (every turn holds at least one entry of the shipped dictionary). */
+const NET: Readonly<Record<string, readonly string[]>> = {
+  'net-daily': [
+    '哈哈你这个嘴替当得也太好了吧',
+    '今天我是 i人 本人，一场社交下来直接电量见底',
+    '周末想找个搭子去 citywalk，你来不来',
+    '最近状态就是摆烂，什么都不想做',
+    '你发的这张图松弛感也太绝了',
+    '家人们，我今天吃到了美拉德色的蛋糕',
+  ],
+  'net-work': [
+    '又是班味很重的一天，下班只想躺着',
+    '领导一开口我就开始精神内耗',
+    '我们组今天又被硬控了三个小时的会',
+    '感觉自己就是个牛马，还是个脆皮大学生一样一累就垮',
+    '老板说他的方案遥遥领先，我只能听劝',
+    '想想还是反向旅游吧，周末去个没人的地方',
+  ],
+  'net-trip': [
+    '最近流行特种兵式旅游，我一天跑了五个景点',
+    '到了景点发现全是人，退退退',
+    '拍照的时候你帮我拿捏好角度哦',
+    '那家店的服务员也太显眼包了吧',
+    '我今天的穿搭走淡人风，你觉得呢',
+    '旅行回来多巴胺都耗光了',
+  ],
+  'net-feelings': [
+    '今天被老板骂了，栓Q',
+    '我现在的精神状态，就是命运的齿轮开始转动的那种',
+    '别人都有偷感很重的好运气，我只有倒霉',
+    '你说话好有活人感，一点都不像机器人',
+    '给我来点电子木鱼，我要放空一下',
+    '算了，已读乱回就已读乱回吧',
+  ],
+};
 const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   chat: CHAT,
   repeat: REPEAT,
   opening: OPENING,
   ...(PROFILE as Record<RehearsalProfileSet, readonly string[]>),
+  ...(NET as Record<RehearsalNetSet, readonly string[]>),
 };
 
 export const builtinSet = (set: RehearsalSet): string[] => [...SETS[set]];

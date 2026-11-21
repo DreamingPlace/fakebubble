@@ -10,6 +10,7 @@ import { membersView } from './members-view.ts';
 import { overviewView } from './overview-view.ts';
 import { pointsView } from './points-view.ts';
 import { broadcastView } from './broadcast-view.ts';
+import { memesView } from './memes-view.ts';
 import { systemView } from './system-view.ts';
 import { costsView } from './costs-view.ts';
 import { modelsView } from './models-view.ts';
@@ -251,6 +252,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     <section data-panel="invites" hidden><p id="admin-no-permissions" hidden>当前账号没有“邀请与额度”权限，请联系主管理员开通。</p><div id="admin-invites"></div></section>
     <section data-panel="characters" hidden><div class="page-head"><h2 id="wb-title">角色工作台</h2><div class="page-head-actions" id="wb-head"></div></div><div id="admin-characters"></div></section>
     <section data-panel="cast" hidden><div id="admin-cast"></div></section>
+    <section data-panel="memes" hidden><div id="admin-memes"></div></section>
     <section data-panel="cocreation" hidden><div id="admin-cocreation"></div></section>
     <section data-panel="members" hidden><div class="page-head"><h2>管理员与权限</h2><div class="page-head-actions" id="admin-members-head"></div></div>
       <form id="admin-member-issue" class="mb-add"><label class="mb-field mb-name-field" for="admin-member-label"><span>新管理员备注</span><input id="admin-member-label" maxlength="80" placeholder="例：共创写手 · 小雨" required></label>
@@ -565,6 +567,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         }
       };
     if (page === 'cast' && port.cast && canSeePage('cast', access())) return () => castPage.load();
+    if (page === 'memes' && port.cast && canSeePage('memes', access())) return () => memes.load();
     if (page === 'cocreation' && inbox && canCocreation('cocreation.read'))
       return () => {
         // #/cocreation/<id> is the inbox filtered to that character (the badge on its card); plain #/cocreation keeps the filter.
@@ -803,6 +806,15 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     headerHost: q('#wb-head'),
     colourOf: (characterId) => rosterColourOf.get(characterId),
     previewMount: previewHost,
+    // Part 37c-1: the 梗 档位 of 说话档案 adds a single-entry setting only for a term the dictionary holds (exact).
+    ...(port.cast
+      ? {
+          memeLookup: async (term: string) =>
+            (await port.cast!.memesList({ query: term, year: null, tag: null, state: 'all', page: 1 })).entries.some(
+              (entry) => entry.term === term,
+            ),
+        }
+      : {}),
     modalParent: () => q('main'),
     canPreview: (characterId) => !!previewBench && canPreview(characterId),
     onSeed: (characterId, seed) => picker.setSeed(characterId, seed),
@@ -997,6 +1009,15 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
   });
+  const memes = memesView(q('#admin-memes'), {
+    api:
+      port.cast ?? (new Proxy({}, { get: () => () => Promise.reject(new Error('ADMIN_MEMES_UNAVAILABLE')) }) as never),
+    canEdit: () =>
+      session?.member.role === 'owner' || (!!session && hasCastPermission(session.member.permissions, 'cast.edit')),
+    newRequestId: () => globalThis.crypto.randomUUID(),
+    disposed: () => disposed,
+    toast: (text) => toasts.show(text, 'ok'),
+  });
   const broadcast = broadcastView(q('#admin-broadcast'), {
     api:
       port.broadcast ??
@@ -1091,6 +1112,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     costs.clear();
     points.clear();
     broadcast.clear();
+    memes.clear();
     reviews.clear();
     models.clear();
     inbox?.clear();

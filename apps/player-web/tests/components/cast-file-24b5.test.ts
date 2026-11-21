@@ -207,7 +207,8 @@ test('import: not a JSON file, too large, or unsaved edits - refused on the page
   await f.view.load();
   await f.choose('{not json');
   assert.ok(f.toasts.some((x) => x.includes('不是合法的 JSON')));
-  await f.choose('{}', 2_000_000);
+  // NAMED EXCEPTION (Part 37c-1): the cast file limit followed the 10x library (CAST_BODY_LIMIT 1,000,000 -> 4,000,000), so "too large" is now over 4 MB.
+  await f.choose('{}', 5_000_000);
   assert.ok(f.toasts.some((x) => x.includes('文件太大')));
   f.view.state.dirty = true;
   await f.choose('{}');

@@ -78,6 +78,10 @@ export const textWriterPolicyHash = (options: TextGenerationPolicyOptions = {}) 
 export const textWriterProfilePolicyHash = (options: TextGenerationPolicyOptions = {}) =>
   writerPolicyHash(JSON.stringify(createTextGenerationPolicy(options)), true);
 
+/** Part 37c-1: and for a 新+档案+梗 reply (adds the pin of the meme words and the selection rules). */
+export const textWriterMemesPolicyHash = (options: TextGenerationPolicyOptions = {}) =>
+  writerPolicyHash(JSON.stringify(createTextGenerationPolicy(options)), true, true);
+
 export function textRequestParameters(policy: TextGenerationPolicy, stage: 'draft' | 'review', outputToolName: string) {
   const { tool_choice: _toolChoice, ...parameters } = policy.stages[stage];
   return { ...parameters, tool_choice: { type: 'function' as const, function: { name: outputToolName } } };

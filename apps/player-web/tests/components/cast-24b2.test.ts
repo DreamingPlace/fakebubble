@@ -551,7 +551,8 @@ test('nav: 关系与故事 follows 角色工作台, needs the client and cast.re
   const roles = navTree().find((g) => g.id === 'roles')!;
   assert.deepEqual(
     roles.items.map((i) => i.page),
-    ['characters', 'cast', 'cocreation'],
+    // NAMED EXCEPTION (Part 37c-1): 网络梗 follows 共创收件箱 through the optional-nav seam (it needs the cast client and cast.read, like 关系与故事).
+    ['characters', 'cast', 'cocreation', 'memes'],
   );
   const access = (permissions: string[], over: Partial<NavAccess> = {}): NavAccess => ({
     owner: false,

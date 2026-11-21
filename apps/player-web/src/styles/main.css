@@ -17997,6 +17997,147 @@ button:not(
   background: var(--ad-tint);
 }
 
+/* Part 37c-1: 网络梗 (the dictionary's switches) and the character's 梗 档位 in 说话档案. Console block: motion under --ad-motion. */
+.account-admin-page.admin-shell #admin-memes {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.account-admin-page.admin-shell #admin-memes .mm-bar {
+  position: static;
+  margin: 0;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell #admin-memes .mm-error {
+  margin: 0;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-memes .mm-on {
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-memes .mm-term {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-meaning {
+  display: block;
+  min-width: 320px;
+  max-width: 560px;
+  color: var(--ad-text);
+  line-height: 1.5;
+  /* the table's cells do not wrap; a meaning is a sentence and must, or it runs under the next column */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell #admin-memes .admin-table td {
+  vertical-align: middle;
+}
+.account-admin-page.admin-shell #admin-memes .mm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 220px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-switch {
+  box-sizing: border-box;
+  min-height: 36px;
+  min-width: 76px;
+  padding: 0 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-muted);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background calc(200ms * var(--ad-motion)) var(--ad-ease),
+    color calc(200ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(200ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-memes .mm-switch[aria-checked="true"] {
+  background: var(--ad-ok-soft);
+  border-color: transparent;
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-memes .mm-switch:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.account-admin-page.admin-shell #admin-memes .mm-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-pager[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .mm-use {
+  display: grid;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .mm-use-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.account-admin-page.admin-shell .mm-use-label {
+  min-width: 96px;
+  font-weight: 500;
+}
+.account-admin-page.admin-shell .mm-use-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.account-admin-page.admin-shell .mm-use-add input,
+.account-admin-page.admin-shell .mm-use-add select {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+}
+.account-admin-page.admin-shell .mm-use-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell .mm-use-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .mm-use-hit {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

@@ -4,7 +4,7 @@ import { ensure } from '../../../packages/domain/errors.ts';
 import type { WriterChoice } from '../../../packages/contracts/web-writer.ts';
 
 /**
- * Part 37a: the owner's switch 「回复写法：旧写法 / 新写法」 (Part 37b: and 新+档案). ONE row, default 旧 (v7). NO numbered migration (expected-migrations is untouched):
+ * Part 37a: the owner's switch 「回复写法：旧写法 / 新写法」 (Part 37b: and 新+档案; Part 37c-1: and 新+档案+梗). ONE row, default 旧 (v7). NO numbered migration (expected-migrations is untouched):
  * the table is installed idempotently at business-object start and checked against the digest of its statement. A mismatch stops the
  * start with WEB_WRITER_SCHEMA_MISMATCH. The row holds the choice, who set it and when: no content, no player data, no world id.
  * The request freezes the choice (`writer` in request_json), so a reply in flight finishes with the writer it started with.
@@ -20,46 +20,56 @@ const stepOne = `CREATE TABLE web_writer_setting(id INTEGER PRIMARY KEY CHECK(id
     changed_by TEXT NOT NULL,changed_at INTEGER NOT NULL) STRICT`;
 const stepTwo = `CREATE TABLE web_writer_setting(id INTEGER PRIMARY KEY CHECK(id=1),writer TEXT NOT NULL CHECK(writer IN ('v7','v8','v8p')),
     changed_by TEXT NOT NULL,changed_at INTEGER NOT NULL) STRICT`;
-const schemaTwo =
-  'CREATE TABLE web_writer_schema(version INTEGER PRIMARY KEY CHECK(version IN (1,2)),sha256 TEXT NOT NULL) STRICT';
+/**
+ * Version 3 (Part 37c-1): the same table with 'v8m' (新+档案+梗) allowed, by the same rebuild. Steps 1 and 2 stay byte for byte.
+ */
+const stepThree = `CREATE TABLE web_writer_setting(id INTEGER PRIMARY KEY CHECK(id=1),writer TEXT NOT NULL CHECK(writer IN ('v7','v8','v8p','v8m')),
+    changed_by TEXT NOT NULL,changed_at INTEGER NOT NULL) STRICT`;
+const schemaThree =
+  'CREATE TABLE web_writer_schema(version INTEGER PRIMARY KEY CHECK(version IN (1,2,3)),sha256 TEXT NOT NULL) STRICT';
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const digestOne = sha([stepOne].join(';\n'));
 const digestTwo = sha([stepTwo].join(';\n'));
+const digestThree = sha([stepThree].join(';\n'));
+const STEPS = [digestOne, digestTwo, digestThree] as const;
 
 export function installWriterSetting(store: BusinessStore) {
   store.transaction(() => {
     if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_writer_schema'")) {
       ensure(!store.get("SELECT 1 FROM sqlite_master WHERE name GLOB 'web_writer_*'"), 'WEB_WRITER_SCHEMA_MISMATCH');
-      store.run(stepTwo);
-      store.run(schemaTwo);
-      store.run('INSERT INTO web_writer_schema VALUES (1,?),(2,?)', digestOne, digestTwo);
+      store.run(stepThree);
+      store.run(schemaThree);
+      store.run('INSERT INTO web_writer_schema VALUES (1,?),(2,?),(3,?)', ...STEPS);
     }
     const found = () =>
       store.all<{ version: number; sha256: string }>('SELECT * FROM web_writer_schema ORDER BY version');
     let rows = found();
-    // An authority that ran step one only (Part 37a): take step two.
-    if (rows.length === 1 && rows[0]!.version === 1 && rows[0]!.sha256 === digestOne) {
+    // An authority that ran step one (Part 37a) or steps one and two (Part 37b) only: take the steps it has not run.
+    if (
+      rows.length >= 1 &&
+      rows.length < STEPS.length &&
+      rows.every((row, at) => row.version === at + 1 && row.sha256 === STEPS[at])
+    ) {
       ensure(
-        !store.get("SELECT 1 FROM sqlite_master WHERE name IN ('web_writer_setting_v1','web_writer_schema_v1')"),
+        !store.get(
+          "SELECT 1 FROM sqlite_master WHERE name IN ('web_writer_setting_v1','web_writer_schema_v1','web_writer_setting_prev','web_writer_schema_prev')",
+        ),
         'WEB_WRITER_SCHEMA_MISMATCH',
       );
-      store.run('ALTER TABLE web_writer_setting RENAME TO web_writer_setting_v1');
-      store.run(stepTwo);
-      store.run('INSERT INTO web_writer_setting SELECT id,writer,changed_by,changed_at FROM web_writer_setting_v1');
-      store.run('DROP TABLE web_writer_setting_v1');
-      store.run('ALTER TABLE web_writer_schema RENAME TO web_writer_schema_v1');
-      store.run(schemaTwo);
-      store.run('INSERT INTO web_writer_schema SELECT version,sha256 FROM web_writer_schema_v1');
-      store.run('INSERT INTO web_writer_schema VALUES (2,?)', digestTwo);
-      store.run('DROP TABLE web_writer_schema_v1');
+      store.run('ALTER TABLE web_writer_setting RENAME TO web_writer_setting_prev');
+      store.run(stepThree);
+      store.run('INSERT INTO web_writer_setting SELECT id,writer,changed_by,changed_at FROM web_writer_setting_prev');
+      store.run('DROP TABLE web_writer_setting_prev');
+      store.run('ALTER TABLE web_writer_schema RENAME TO web_writer_schema_prev');
+      store.run(schemaThree);
+      store.run('INSERT INTO web_writer_schema SELECT version,sha256 FROM web_writer_schema_prev');
+      for (let at = rows.length; at < STEPS.length; at++)
+        store.run('INSERT INTO web_writer_schema VALUES (?,?)', at + 1, STEPS[at]!);
+      store.run('DROP TABLE web_writer_schema_prev');
       rows = found();
     }
     ensure(
-      rows.length === 2 &&
-        rows[0]!.version === 1 &&
-        rows[0]!.sha256 === digestOne &&
-        rows[1]!.version === 2 &&
-        rows[1]!.sha256 === digestTwo,
+      rows.length === STEPS.length && rows.every((row, at) => row.version === at + 1 && row.sha256 === STEPS[at]),
       'WEB_WRITER_SCHEMA_MISMATCH',
     );
   });
