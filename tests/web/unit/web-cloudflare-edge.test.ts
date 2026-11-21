@@ -74,8 +74,12 @@ test('public edge serves only pinned player bytes, no synthetic entry, manifest,
   assert.ok(WEB_CLOUD_COMPATIBILITY_FLAGS.includes('enable_request_signal'));
   for (const method of ['GET', 'HEAD']) {
     const response = await f.call('/', { method });
-    assert.equal(response.status, 302);
-    assert.equal(response.headers.get('location'), '/?mode=provider');
+    // Part 48 (named exception to the old 302 assertion): the bare address serves the player directly. No redirect, same
+    // no-store and same CSP as the explicit ?mode=provider page.
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('location'), null);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    if (method === 'GET') assert.equal(await response.text(), f.files['index.html']);
   }
   const page = await f.call('/?mode=provider');
   assert.equal(page.status, 200);

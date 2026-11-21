@@ -65,7 +65,8 @@ import {
 import { requireWebContent, type WebRetentionRow } from '../admission/web-retention.ts';
 import { bonusRemaining, extraTrialRemaining, freeTier, isRegistered } from '../admission/web-free-tier.ts';
 import { lockedCharacterIds } from '../admission/web-guest-lock.ts';
-import { CATALOG_MAX } from '../../../packages/contracts/web-provider.ts';
+import { CATALOG_MAX, type WebProviderSlot } from '../../../packages/contracts/web-provider.ts';
+import type { WebPublicCatalog } from '../../../packages/contracts/web-public-catalog.ts';
 
 /** A cookie that names nothing recoverable: the transport expires it so the next visit starts from the signed-out page. */
 export class SessionClearedError extends DomainError {
@@ -99,6 +100,15 @@ export interface WebPlayerAccountsConfig {
 
 export const WEB_PROVIDER_API = '/api/web/provider';
 const API = WEB_PROVIDER_API;
+/** Exactly CATALOG_MAX visual slots: the characters first, then the "coming soon" places. The bootstrap and the public catalog share it. */
+const catalogSlots = (characters: { characterId: string }[]): WebProviderSlot[] => [
+  ...characters.map((entry) => ({ kind: 'character' as const, characterId: entry.characterId })),
+  ...Array.from({ length: CATALOG_MAX - characters.length }, (_, index) => ({
+    kind: 'preview' as const,
+    slotId: `preview-${index + 1}`,
+    label: '敬请期待',
+  })),
+];
 export type WebProviderPrincipal = ReturnType<WebIdentity['authenticate']>;
 type Principal = WebProviderPrincipal;
 export const providerCharacterId = isWebProviderCharacterId;
@@ -445,14 +455,7 @@ export class WebProviderApplication {
         csrf: boot.csrf,
         access,
         characters,
-        slots: [
-          ...characters.map((entry) => ({ kind: 'character' as const, characterId: entry.characterId })),
-          ...Array.from({ length: CATALOG_MAX - characters.length }, (_, index) => ({
-            kind: 'preview' as const,
-            slotId: `preview-${index + 1}`,
-            label: '敬请期待',
-          })),
-        ],
+        slots: catalogSlots(characters),
         conversations,
         syncCursor: this.cursor(principal.principalId, high),
       };
@@ -624,6 +627,28 @@ export class WebProviderApplication {
       trialExpiresAt: retention.expires_at ?? null,
       canSend: trialCanSend,
       inaccessible: expired && !retained && !registered,
+    };
+  }
+
+  /**
+   * Part 48: the PUBLIC catalog (no session): only the published characters' card fields, in the bootstrap's own order. It reads the
+   * same catalog the bootstrap and the share page read and copies nothing that names a player, a world or a conversation: no welcome
+   * text, no clip URL, no clip length, no CSRF token. `welcomeClip` only says that a clip exists.
+   */
+  publicCatalog(): WebPublicCatalog {
+    const characters = this.characters();
+    return {
+      characters: characters.map((character) => ({
+        characterId: character.characterId,
+        displayName: character.displayName,
+        portraitUrl: character.portraitUrl,
+        mainColor: character.mainColor,
+        palette: character.palette ?? null,
+        birthDate: character.birthDate ?? null,
+        available: character.availability.state === 'available',
+        welcomeClip: character.welcome.audio.state === 'available',
+      })),
+      slots: catalogSlots(characters),
     };
   }
 

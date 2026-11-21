@@ -192,15 +192,16 @@ test('provider-local 113 over HTTPS: catalog, guest lock, three turns + footer, 
   const anonymous: Client = { cookie: '', csrf: '' };
   for (const method of ['GET', 'HEAD']) {
     const entry = await call(method, '/', anonymous);
-    assert.equal(entry.status, 302);
-    assert.equal(entry.headers.location, '/?mode=provider');
+    // Part 48 (named exception to the old "302 to ?mode=provider" assertion): the bare address now serves the player directly, so
+    // the first paint does not wait for a redirect round trip. It is still never cached and still sets no cookie.
+    assert.notEqual(entry.status, 302);
+    assert.equal(entry.headers.location, undefined);
+    assert.ok([200, 503].includes(entry.status), `no redirect and no fallback page (got ${entry.status})`);
     assert.equal(entry.headers['cache-control'], 'no-store');
     assert.equal(entry.headers['set-cookie'], undefined);
   }
-  assert.equal(
-    (await call('GET', '/index.html?from=invite', anonymous)).headers.location,
-    '/index.html?from=invite&mode=provider',
-  );
+  // (Part 48) the same for /index.html with a query: no redirect either.
+  assert.equal((await call('GET', '/index.html?from=invite', anonymous)).headers.location, undefined);
   for (const mode of ['local-2', 'local-3', 'local-3-admin', 'preview', 'provider&mode=local-3'])
     assert.equal((await call('GET', `/?mode=${mode}`, anonymous)).status, 404);
   assert.equal((await call('GET', '/health', anonymous, undefined, { Host: 'untrusted.example' })).status, 403);
