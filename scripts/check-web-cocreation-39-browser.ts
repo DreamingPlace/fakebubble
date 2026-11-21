@@ -2,7 +2,7 @@ import './player-build-guard.ts';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { startConsoleFixture } from './console-fixture-24b6.ts';
+import { startConsoleFixture, NOW as FIXTURE_NOW } from './console-fixture-24b6.ts';
 import { quietWait, watchRequests } from './console-quiet.ts';
 import { sampleCastRaw } from '../tests/web/fixtures/cast-sample.ts';
 
@@ -52,7 +52,8 @@ try {
   await json('cast/save', { requestId: randomUUID(), expectedRevision: draft0.revision, doc });
 
   // ---- three relation notes straight into the tables (what a player's submit writes) ----
-  const NOW = Date.now();
+  // the fixture's own clock (a fixed NOW, then moving on): real time would date the notes after the server's "now" once it has passed
+  const NOW = FIXTURE_NOW;
   const note = (
     id: string,
     members: string[],
@@ -208,7 +209,10 @@ try {
     // the second note about the same two now says 加入：<group>
     await page.reload();
     await page.locator('.cc-row-open').first().waitFor({ timeout: 20_000 });
-    await page.locator('.cc-row', { hasText: '灌水' }).first().locator('.cc-row-open').click();
+    // the newest note (this one, now that the notes are dated from the fixture's clock) opens by itself; a click would close it
+    await page.waitForTimeout(1500);
+    if ((await page.locator('.cr-panel').count()) === 0)
+      await page.locator('.cc-row', { hasText: '灌水' }).first().locator('.cc-row-open').click();
     await page.locator('.cr-panel').waitFor({ timeout: 15_000 });
     if (at === '1440')
       check(

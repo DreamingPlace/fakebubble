@@ -15,6 +15,12 @@ import {
 import { cocreationTheme } from '../../../../../packages/contracts/cocreation-wordings.ts';
 import { ADOPT_ERROR_TEXT, ADOPT_FIELDS, type AdoptField } from '../../../../../packages/contracts/cocreation-adopt.ts';
 import { draftBox, withField, type DraftBox as Mounted } from './cocreation-draft-box.ts';
+import {
+  OTHERS_UNREADABLE_TEXT,
+  independence,
+  independenceSentences,
+  type OthersReader,
+} from './speech-profile/profile-draft.ts';
 import type {
   InboxAnswer,
   InboxCursor,
@@ -51,6 +57,18 @@ type Deps = {
   /** cast.edit (or the owner): without it 加入关系与故事 is disabled. Default: allowed. */
   canEditCast?: () => boolean;
   characters: Pick<CharacterAdminClient, 'list' | 'detail' | 'save'>;
+  /**
+   * Part 37b: the independence check against the other characters' cards and samples. With it, 加入草稿 into 说话风格, 对话风格 or
+   * 对话示例 (what the 核心卡 / 说话样本 are made of) is blocked for a line another character already has, and asks twice for a close one.
+   */
+  others?: OthersReader;
+  /** Part 37b: opens the 说话档案 adopt box for a note (the page's shared box). Absent = no 加入说话档案 button. */
+  adoptProfile?: (input: {
+    characterId: string;
+    player: string;
+    reply: string;
+    onSaved?: (revision: number) => void | Promise<void>;
+  }) => void;
   /** cocreation.manage (or the owner): status, star, note and adopting. Reading needs only cocreation.read. */
   canManage: () => boolean;
   /** characters.edit for this role (or the owner): without it 加入草稿 is not shown at all. Default: shown. */
@@ -758,6 +776,9 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     }
   }
 
+  /** The fields that make up the 说话档案 (the independence check applies to them). */
+  const PROFILE_FIELDS = new Set<AdoptField>(['speechStyle', 'dialogueStyle', 'dialogueExamples']);
+  let closeWarned = '';
   /** 保存草稿: the field's new value goes through the existing draft save (compare-and-swap on the revision the box was read at). */
   async function saveField(current: InboxDetail, answer: InboxAnswer, field: AdoptField) {
     const entry = boxes.get(boxKey(current.id, answer.ordinal, field));
@@ -790,7 +811,29 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         if (target.revision === null && target.publishedVersion !== null)
           (profile.template as { version: number }).version = target.publishedVersion + 1;
         profile.template = withField(profile.template, field, result.value);
+        if (deps.others && PROFILE_FIELDS.has(field)) {
+          let verdict;
+          try {
+            verdict = await independence(deps.others, current.characterId, target.base.template, profile.template);
+          } catch {
+            fail(OTHERS_UNREADABLE_TEXT);
+            return;
+          }
+          const sentences = independenceSentences(verdict, (id) => nameOf(id)).join('；');
+          if (verdict.level === 'block') {
+            fail(`这句话和别的角色太像了，不能保存。${sentences}`);
+            return;
+          }
+          const sig = `${current.id}:${answer.ordinal}:${field}:${JSON.stringify(result.value)}`;
+          if (verdict.level === 'warn' && closeWarned !== sig) {
+            closeWarned = sig;
+            fail(`和别的角色有点接近：${sentences}。再点一次保存草稿才会存。`);
+            return;
+          }
+          closeWarned = '';
+        }
         const saved_ = await deps.characters.save(current.characterId, target.revision, profile);
+        deps.others?.forget();
         const adoptedNow = entry.inserted;
         if (adoptedNow) {
           try {
@@ -892,6 +935,25 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
             story.disabled = !manage || (deps.canEditCast ? !deps.canEditCast() : false) || answer.adoptedAt !== null;
             story.dataset.locked = String(story.disabled);
             story.addEventListener('click', () => void addStory(current, answer.ordinal));
+            // Part 37b: the same note into the 说话档案 (核心卡 + a field, or 说话样本 + a situation) through the shared adopt box.
+            const profile = h('button', {
+              text: '+ 加入说话档案 →',
+              attrs: { type: 'button' },
+              class: 'cc-adopt-profile',
+            });
+            profile.disabled = !manage || answer.adoptedAt !== null || inserted.has(`${current.id}:${answer.ordinal}`);
+            profile.dataset.locked = String(profile.disabled);
+            profile.addEventListener('click', () => {
+              deps.adoptProfile?.({
+                characterId: current.characterId,
+                player: answer.kind === 'text' ? '' : answer.player,
+                reply: answer.kind === 'text' ? answer.text : answer.replies.join('\n'),
+                onSaved: async () => {
+                  await deps.api.adopt(current.id, answer.ordinal);
+                  stampAdopted(current, answer.ordinal, Date.now());
+                },
+              });
+            });
             const undo = h('button', { text: '取消采用', attrs: { type: 'button' }, class: 'cc-unadopt' });
             undo.disabled = !manage;
             undo.addEventListener('click', () => void unadopt(current, answer.ordinal));
@@ -928,6 +990,11 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                     : deps.canEditCharacter && !deps.canEditCharacter(current.characterId)
                       ? null
                       : add,
+                current.kind === 'memo' || current.kind === 'pair' || !deps.adoptProfile
+                  ? null
+                  : deps.canEditCharacter && !deps.canEditCharacter(current.characterId)
+                    ? null
+                    : profile,
                 answer.adoptedAt !== null ? h('span', { class: 'cc-chip cc-chip-adopted', text: '已采用' }) : null,
                 answer.adoptedAt !== null && current.kind !== 'memo' ? undo : null,
               ),

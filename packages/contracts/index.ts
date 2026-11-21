@@ -195,6 +195,8 @@ export interface TextGenerationRequest {
   // Part 37a: absent = the v7 writer (every byte of the request is what it was). 'v8' = the plain-text writer; frozen with the
   // request, so a reply in flight finishes with the writer it started with.
   writer?: 'v8';
+  // Part 37b: 新+档案 (rehearsal columns only for now): the v8 writer plus the character's own 核心卡 and examples. Absent = 新, untouched.
+  writerProfile?: true;
   // Part 37a (v8, voice only): the frozen voice model of this reply is Drama 3, so a spoken line may carry inline directions.
   voiceDirections?: boolean;
   sceneContext?: import('./scenes.ts').SceneState;

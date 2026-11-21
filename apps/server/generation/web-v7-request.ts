@@ -100,10 +100,10 @@ const withoutTestOverride = <T extends { testOverride?: unknown }>({ testOverrid
  */
 export function framePinsMatch(
   row: { protocol_digest: string; prompt_digest: string },
-  request: Pick<TextGenerationRequest, 'writer'>,
+  request: Pick<TextGenerationRequest, 'writer' | 'writerProfile'>,
 ) {
   if (request.writer === 'v8') {
-    const pins = writerPins();
+    const pins = writerPins(request.writerProfile === true);
     return row.protocol_digest === pins.protocolDigest && row.prompt_digest === pins.promptDigest;
   }
   return (
@@ -375,7 +375,9 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   const introduction = playerIntroduction(userStore(store), scope);
   const facts = recalls ? recallPlayerFacts(userStore(store), scope) : [];
   // Part 37a: the owner's switch is read ONCE, here, and frozen with the request. v7 requests gain no key at all.
-  const v8 = readWriter(store) === 'v8';
+  // Part 37b: 新+档案 ('v8p') is the v8 writer plus the profile flag, frozen with the request (the 多轮预演 column's request).
+  const choice = readWriter(store);
+  const v8 = choice !== 'v7';
   const schemaVersion = store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
   const voiceBinding =
     schemaVersion >= 113
@@ -391,6 +393,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     scope: { worldId: scope.worldId, conversationId: scope.conversationId, characterId: scope.characterId },
     now,
     ...(v8 ? { writer: 'v8' as const } : { relationship }),
+    ...(choice === 'v8p' ? { writerProfile: true as const } : {}),
     ...(v8 && voiceBinding && resolveVoiceModel(voiceBinding.model, siteVoiceModel(store)) === 'drama-3'
       ? { voiceDirections: true }
       : {}),
@@ -430,7 +433,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   const serialized = JSON.stringify(request),
     requestDigest = digest(serialized),
     pins = v8
-      ? writerPins()
+      ? writerPins(choice === 'v8p')
       : { protocolDigest: digest(JSON.stringify(protocolFingerprint())), promptDigest: textPromptHash() };
   const voiceVersion =
     schemaVersion >= 113

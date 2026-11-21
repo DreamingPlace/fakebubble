@@ -39,6 +39,34 @@ import {
  * cast saved as the draft, nine co-creation notes, four invite batches, and a busy history of player counters and consumption.
  * Everything is SYNTHETIC ("[示例]" style); nothing reaches a provider.
  */
+/**
+ * The server's clock on this site is the fixture's: frozen at NOW (2026-11-20T10:00Z), or NOW plus the time since the fixture started
+ * when an offline provider runs. The browser's own clock is real time, which has moved past NOW, so anything a page compares with a
+ * server time (a broadcast that must be scheduled "a minute from now", a note's age, a countdown) would disagree by the days between.
+ * Fixed ONCE, here: every context a script gets from a browser this module launched starts its clock at NOW and lets it run from there
+ * (Playwright's `clock.install({time})` then `resume()`), so no script depends on today's date.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+async function startAtFixtureNow(context: any) {
+  await context.clock.install({ time: NOW });
+  await context.clock.resume();
+}
+// biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+function withFixtureClock(browser: any) {
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (...args: unknown[]) => {
+    const context = await newContext(...args);
+    await startAtFixtureNow(context);
+    return context;
+  };
+  const newPage = browser.newPage.bind(browser);
+  browser.newPage = async (...args: unknown[]) => {
+    const page = await newPage(...args);
+    await startAtFixtureNow(page.context());
+    return page;
+  };
+  return browser;
+}
 // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
 export function loadPlaywright(): any {
   const candidates = [
@@ -49,7 +77,10 @@ export function loadPlaywright(): any {
   ].filter(Boolean) as string[];
   for (const candidate of candidates) {
     try {
-      return createRequire(import.meta.url)(candidate);
+      const playwright = createRequire(import.meta.url)(candidate);
+      const launch = playwright.chromium.launch.bind(playwright.chromium);
+      playwright.chromium.launch = async (...args: unknown[]) => withFixtureClock(await launch(...args));
+      return playwright;
     } catch {
       /* try the next one */
     }
@@ -134,7 +165,10 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
   /** The scripted answer of one column to one turn of a 多轮预演: three different manners, so the columns can be told apart. */
   const rehearsalDraft = (request: { scope: { worldId: string }; messages: Array<{ authorKind: string }> }) => {
     // Part 37a: a 新 column's world ends in -v8; it speaks like its model.
-    const model = request.scope.worldId.replace(/-v8$/, '').split('-').at(-1);
+    const model = request.scope.worldId
+      .replace(/-v8p?$/, '')
+      .split('-')
+      .at(-1);
     const turn = request.messages.filter((m) => m.authorKind === 'player').length;
     const say: Record<string, string[][]> = {
       deepseek: [

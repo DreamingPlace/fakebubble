@@ -251,7 +251,7 @@ export function modelsView(
   }
 
   // ---- 回复写法 (Part 37a, owner only) --------------------------------------------------------------------------
-  const WRITER_LABELS: Record<WriterChoice, string> = { v7: '旧写法', v8: '新写法' };
+  const WRITER_LABELS: Record<WriterChoice, string> = { v7: '旧写法', v8: '新写法', v8p: '新+档案' };
   let writerView: WriterSettingView | null = null;
   /** Part 41: the code of a failed read of the setting. The owner sees it in the card (never a hidden card); anyone else sees no card. */
   let writerFault: string | null = null;

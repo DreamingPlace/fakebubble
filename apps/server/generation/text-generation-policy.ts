@@ -74,6 +74,9 @@ export const textPolicyHash = (options: TextGenerationPolicyOptions = {}) =>
 /** Part 37a: the policy hash of a v8 reply for the same options (see writerPolicyHash). */
 export const textWriterPolicyHash = (options: TextGenerationPolicyOptions = {}) =>
   writerPolicyHash(JSON.stringify(createTextGenerationPolicy(options)));
+/** Part 37b: the same for a 新+档案 reply (adds the pin of the profile words and rules). */
+export const textWriterProfilePolicyHash = (options: TextGenerationPolicyOptions = {}) =>
+  writerPolicyHash(JSON.stringify(createTextGenerationPolicy(options)), true);
 
 export function textRequestParameters(policy: TextGenerationPolicy, stage: 'draft' | 'review', outputToolName: string) {
   const { tool_choice: _toolChoice, ...parameters } = policy.stages[stage];

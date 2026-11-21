@@ -465,9 +465,13 @@ export class WebRehearsal {
     const baseBytes = Buffer.byteLength(JSON.stringify(promptMessages(first)), 'utf8');
     // Part 37a: a 新 column sends the v8 prompt (much shorter) and its second pass is the guard (a bigger prompt, a short answer).
     const v8First = rehearsalRequest(fixed, 'estimate', 'deepseek-v8', 1, players, []);
+    // Part 37b: a 新+档案 column's draft prompt is the same plus the card and the picked examples (the first turn's pick).
+    const v8ProfileFirst = models.some((key) => parseRehearsalColumn(key)?.profile)
+      ? rehearsalRequest(fixed, 'estimate', 'deepseek-v8p', 1, players, [])
+      : v8First;
     // Part 37a-3: the draft prompt carries the addendum of the model that writes it, so its size is per provider.
-    const v8Draft = (provider: WriterDraftProvider) =>
-      Buffer.byteLength(JSON.stringify(writerDraftMessages(v8First, provider)), 'utf8');
+    const v8Draft = (provider: WriterDraftProvider, profile = false) =>
+      Buffer.byteLength(JSON.stringify(writerDraftMessages(profile ? v8ProfileFirst : v8First, provider)), 'utf8');
     const v8Guard = Buffer.byteLength(
       JSON.stringify(
         writerGuardMessages(v8First, { mode: 'casual', bubbles: [], endsSession: false, markups: [] } as WriterDraft),
@@ -484,7 +488,7 @@ export class WebRehearsal {
         const growth = (t - 1) * (REPLY_CHARS * 3 + 2 * 260);
         if (column.writer === 'v8') {
           total += listPriceMicros(ref.provider, ref.model, {
-            inputTokens: Math.ceil((v8Draft(ref.provider) + growth) / 2),
+            inputTokens: Math.ceil((v8Draft(ref.provider, column.profile) + growth) / 2),
             outputTokens: 120 + thinking,
           });
           total += listPriceMicros('deepseek', reviewer, {
@@ -754,7 +758,7 @@ export class WebRehearsal {
         model: column.model,
         writer: column.writer,
         // 旧 / 新 is named only when the run compares writers; a run of 旧 columns reads as it always did.
-        label: info.models.some((k) => k.endsWith('-v8'))
+        label: info.models.some((k) => parseRehearsalColumn(k)?.writer === 'v8')
           ? rehearsalColumnLabel(key)
           : REHEARSAL_MODEL_LABELS[column.model],
         cells,
