@@ -17,6 +17,7 @@ import {
   hasCocreationPermission,
   type CocreationAdminPermission,
 } from '../../../packages/contracts/web-admin-permissions.ts';
+import { dayPartOf } from '../../../packages/contracts/cocreation-day.ts';
 import { RetryAfterError, ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
@@ -159,7 +160,9 @@ export class WebCocreation {
       const dayStart = Math.floor(now / COCREATION_LIMITS.dayMs) * COCREATION_LIMITS.dayMs;
       const untilTomorrow = Math.max(1, dayStart + COCREATION_LIMITS.dayMs - now);
       const answeredToday = this.cardsAnsweredToday(principal.principalId, characterId, dayStart);
-      if (answers.some((answer) => answeredToday.has(answer.cardId)))
+      // Part 47: the six parts of 「一天」 are ONE card for this rule: any part answered today closes the card for the day.
+      const dayDone = [...answeredToday].some((id) => dayPartOf(id) !== null);
+      if (answers.some((answer) => answeredToday.has(answer.cardId) || (dayDone && dayPartOf(answer.cardId) !== null)))
         throw new RetryAfterError('COCREATION_DAILY_LIMIT', untilTomorrow);
       // Anti-abuse: submissions per IP hash per UTC day (a submission row holds no address, so the counter is kept apart).
       if (
@@ -200,9 +203,15 @@ export class WebCocreation {
           );
       });
       // Part 24c: points for the notes, in this same transaction (a refused or rolled-back submission pays nothing).
-      const notes = answers.map((answer) =>
-        'text' in answer ? answer.text : [answer.player, ...answer.replies].join('\n'),
-      );
+      // Part 47: the parts of 「一天」 are one note for points: only the first answered part can pay.
+      let dayPaid = false;
+      const notes = answers.map((answer) => {
+        if (dayPartOf(answer.cardId) !== null) {
+          if (dayPaid) return '';
+          dayPaid = true;
+        }
+        return 'text' in answer ? answer.text : [answer.player, ...answer.replies].join('\n');
+      });
       const earned = this.payNotes(principal.principalId, submissionId, characterScope(characterId), notes, now);
       return { submissionId, answered: answers.length, duplicate: false, ...(earned > 0 ? { earned } : {}) };
     });
@@ -680,7 +689,17 @@ export class WebCocreation {
         row.id,
         answer.ordinal,
       );
-      if (row.kind !== 'memo')
+      // Part 47: the six parts of 「一天」 are one note; adopting one part after another pays the reward once.
+      const dayRewarded =
+        dayPartOf(answer.card_id) !== null &&
+        this.store
+          .all<{ card_id: string; adopt_paid: number }>(
+            'SELECT card_id,adopt_paid FROM web_cocreation_answers WHERE submission_id=? AND ordinal<>?',
+            row.id,
+            answer.ordinal,
+          )
+          .some((other) => other.adopt_paid === 1 && dayPartOf(other.card_id) !== null);
+      if (row.kind !== 'memo' && !dayRewarded)
         awardCocreationPoints(
           this.store,
           now,

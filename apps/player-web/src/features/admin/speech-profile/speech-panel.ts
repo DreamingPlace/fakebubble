@@ -11,8 +11,10 @@ import {
   moveSample,
   readBank,
   readCoreCard,
+  readDailyLife,
   settingsOf,
   writeCoreCard,
+  writeDailyPart,
   type CoreField,
 } from '../../../../../../packages/contracts/speech-profile.ts';
 import {
@@ -24,6 +26,13 @@ import {
   type MemeLevel,
 } from '../../../../../../packages/contracts/web-memes.ts';
 import { segmented } from '../ui/segmented.ts';
+import {
+  DAILY_LIFE_LABEL,
+  DAY_PARTS,
+  DAY_PART_LABELS,
+  DAY_PART_MAX,
+  type DayPart,
+} from '../../../../../../packages/contracts/cocreation-day.ts';
 import type { CharacterAdminClient, CharacterDetail } from '../../../services/character-admin-api.ts';
 import { h } from '../../cocreation/h.ts';
 import { hoverValue } from '../ui/hover-value.ts';
@@ -86,6 +95,8 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
   const locked = () => !deps.canEdit() || deps.unsaved();
   /** The controls that are read-only while the section is locked (the 保存核心卡 button follows its own rule in sync()). */
   const lockables: { disabled: boolean }[] = [];
+  /** Part 47: 一天的安排 (six parts) is checked on every input like the 核心卡. */
+  const syncers: (() => void)[] = [];
 
   const message = h('p', { class: 'sp-error', attrs: { role: 'alert' }, hidden: true });
   const warn = h('div', { class: 'sp-warn', hidden: true, attrs: { role: 'status' } });
@@ -100,6 +111,7 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     lockNote.textContent = deps.unsaved() ? '本页有未保存的修改，先保存草稿，再改说话档案。' : '';
     for (const control of lockables) control.disabled = off;
     sync();
+    for (const run of syncers) run();
     syncUse();
     paintUse();
   };
@@ -288,6 +300,71 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     groups.append(h('section', { class: 'sp-group', attrs: { 'data-situation': tag } }, head, list));
   }
 
+  // ---- 一天的安排 (Part 47): the six parts the owner adopted from 共创 or wrote; part of the settings, live only through 发布 ----
+  const daily = readDailyLife(template);
+  const dayBoxes = new Map<DayPart, HTMLTextAreaElement>();
+  const dayCounters = new Map<DayPart, HTMLElement>();
+  const dayCard = h('div', { class: 'sp-daily', attrs: { 'data-sp': 'daily' } });
+  for (const part of DAY_PARTS) {
+    const box = h('textarea', {
+      class: 'sp-text',
+      attrs: {
+        'aria-label': DAY_PART_LABELS[part],
+        rows: part === 'whole' ? '5' : '3',
+        'data-sp': 'daily-part',
+        'data-part': part,
+      },
+    });
+    box.value = daily.parts[part];
+    if (!daily.editable) box.disabled = true;
+    else lockables.push(box);
+    const counter = h('span', { class: 'sp-count' });
+    dayBoxes.set(part, box);
+    dayCounters.set(part, counter);
+    dayCard.append(
+      h(
+        'label',
+        { class: 'sp-field' },
+        h('span', { class: 'sp-field-head' }, h('b', { text: DAY_PART_LABELS[part] }), counter),
+        box,
+      ),
+    );
+    box.addEventListener('input', () => syncDaily());
+  }
+  const saveDaily = h('button', {
+    class: 'admin-primary',
+    text: `保存${DAILY_LIFE_LABEL}`,
+    attrs: { type: 'button', 'data-sp': 'save-daily' },
+  });
+  hoverValue(saveDaily, '只存进草稿，发布后玩家才看得到');
+  const dayChanged = () => DAY_PARTS.filter((part) => dayBoxes.get(part)!.value.trim() !== daily.parts[part].trim());
+  function syncDaily() {
+    for (const part of DAY_PARTS) {
+      const total = count(dayBoxes.get(part)!.value.trim());
+      const counter = dayCounters.get(part)!;
+      counter.textContent = `${total} / ${DAY_PART_MAX[part]}`;
+      counter.classList.toggle('is-over', total > DAY_PART_MAX[part]);
+    }
+    const changed = dayChanged();
+    saveDaily.disabled =
+      locked() ||
+      !daily.editable ||
+      changed.length === 0 ||
+      changed.some((part) => count(dayBoxes.get(part)!.value.trim()) > DAY_PART_MAX[part]);
+  }
+  syncers.push(syncDaily);
+  saveDaily.addEventListener('click', () =>
+    guarded(async () => {
+      let next: unknown = template;
+      for (const part of dayChanged())
+        next = writeDailyPart(next as object, part, dayBoxes.get(part)!.value, 'replace');
+      const saved = await saveTemplate(deps.characters, characterId, target, next);
+      deps.others.forget();
+      deps.toast(`${DAILY_LIFE_LABEL}已保存（草稿 ${saved.revision}）。发布前玩家看不到。`, 'ok');
+      await deps.reload();
+    }),
+  );
+  syncDaily();
   // ---- 网络梗 (Part 37c-1): the character's own use of the dictionary; 草稿 only, live with 发布 ----
   const savedUse = readMemeUse(template);
   let useLevel: MemeLevel = savedUse.level;
@@ -404,6 +481,9 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     h('div', { class: 'sp-actions' }, saveCard),
     h('h3', { class: 'sp-title', text: '说话样本' }),
     groups,
+    h('h3', { class: 'sp-title', text: DAILY_LIFE_LABEL }),
+    dayCard,
+    h('div', { class: 'sp-actions' }, saveDaily),
     memeSection,
     lockNote,
     warn,

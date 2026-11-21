@@ -301,50 +301,53 @@ try {
   );
   await pshot('sheet-390');
 
-  // C: the dice, then the chips in the console order, the ＋ menu opens to the right only
-  await view.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
-  await view.locator('.cc-rel-dice').click();
-  await view.locator('.cc-rel:not([hidden])').waitFor();
+  // C (Part 47, named exception: the first step is the last card of the deck, shown directly; the dice card, the chip row and the menu
+  // beside ＋ are gone): the sentence names the main character and one partner, the ＋ list holds the others in the console order.
+  await view.locator('[data-card="relation"]').scrollIntoViewIfNeeded();
+  await view.locator('.cc-rel-sentence').waitFor();
   await view.waitForTimeout(500);
-  const chipNames = async (): Promise<string[]> =>
-    (await view.locator('.cc-rel-chips .cc-rel-chip').allInnerTexts()).map((t: string) => t.replace(/[✕\s]/g, ''));
-  const inCatalogOrder = (list: string[]) => list.join('|') === catalogNames.filter((n) => list.includes(n)).join('|');
+  // the names of the sentence: the main character first, then the partners
+  const chipNames = async (): Promise<string[]> => [
+    ...(await view.locator('.cc-rel-me').allInnerTexts()),
+    ...(await view.locator('.cc-rel-slot-name').allInnerTexts()),
+  ];
+  const mainName = (await view.locator('.cc-rel-me').innerText()).trim();
   check(
-    (await chipNames()).length === 2 && inCatalogOrder(await chipNames()),
-    `player: the dice chose two, in console order (${(await chipNames()).join('|')})`,
+    (await chipNames()).length === 2 && catalogNames.includes((await chipNames())[1]!),
+    `player: the card starts with the main character and one partner (${(await chipNames()).join('|')})`,
   );
   await pshot('choose-390');
   await view.locator('.cc-rel-plus').click();
-  await view.locator('.cc-rel-menu').waitFor();
+  await view.locator('.cc-rel-list:not([hidden])').waitFor();
   await view.waitForTimeout(350);
-  const plusBox = await view.locator('.cc-rel-plus').boundingBox();
-  const menuBox = await view.locator('.cc-rel-menu').boundingBox();
-  check(
-    menuBox && plusBox && menuBox.x >= plusBox.x + plusBox.width - 1,
-    'player: the ＋ menu opens to the right only',
+  const options: string[] = (await view.locator('.cc-rel-option').allInnerTexts()).map((t: string) =>
+    t.replace('✓', '').trim(),
   );
-  const options: string[] = await view.locator('.cc-rel-option').allInnerTexts();
   check(
-    options.join('|') === catalogNames.join('|'),
-    `player: the menu lists the console order (${options.slice(0, 4).join('|')})`,
+    options.join('|') === catalogNames.filter((n) => n !== mainName).join('|'),
+    `player: the list holds the others in the console order (${options.slice(0, 4).join('|')})`,
   );
   await pshot('plus-menu-390');
   // a group of three: choose a third, write the story, the name inserts at the cursor
   await view.locator('.cc-rel-option:not(.is-taken)').first().click();
+  await view.locator('.cc-rel-card-next').click();
+  await view.locator('.cc-rel[data-mode="group"]').waitFor();
   check((await view.locator('.cc-rel').getAttribute('data-mode')) === 'group', 'player: three characters make a group');
   check(
     (await view.locator('.cc-rel-area').count()) === 1 &&
       (await view.locator('.cc-rel-stars, .cc-stars').count()) === 0,
     'player: a group has the story only',
   );
-  const groupNames = await chipNames();
+  const groupNames = (await view.locator('.cc-rel-inline-names .cc-rel-name').allInnerTexts()).map((t: string) =>
+    t.trim(),
+  );
   const area = view.locator('.cc-rel-area');
   await area.fill('一起吃泡面。');
   await area.evaluate((el: HTMLTextAreaElement) => {
     el.focus();
     el.setSelectionRange(0, 0);
   });
-  await view.locator('.cc-rel-chips .cc-rel-name').nth(1).click();
+  await view.locator('.cc-rel-inline-names .cc-rel-name').nth(1).click();
   check(
     (await area.inputValue()) === `${groupNames[1]}一起吃泡面。`,
     `player: a name inserts at the cursor (${await area.inputValue()})`,
@@ -372,13 +375,12 @@ try {
     .catch(() => {});
   await view.locator('.card-slot.is-chat .chat-more').click();
   await view.getByRole('menuitem', { name: /一起共创角色/ }).click();
-  await view.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
-  await view.locator('.cc-rel-dice').click();
-  await view.locator('.cc-rel:not([hidden])').waitFor();
+  await view.locator('[data-card="relation"]').scrollIntoViewIfNeeded();
+  await view.locator('.cc-rel-sentence').waitFor();
   const pairNames = await chipNames();
-  check(pairNames.length === 2, 'player: a pair has two chips');
-  check((await view.locator('.cc-rel-next').innerText()).includes('下一步'), 'player: step 1 → 下一步');
-  await view.locator('.cc-rel-next').click();
+  check(pairNames.length === 2, 'player: a pair has two people in the sentence');
+  check((await view.locator('.cc-rel-card-next').innerText()).includes('下一步'), 'player: step 1 → 下一步');
+  await view.locator('.cc-rel-card-next').click();
   await view.locator('.cc-rate').first().waitFor();
   check((await view.locator('.cc-rel-bars i.on').count()) === 2, 'player: step 2 of 4');
   check(await view.locator('.cc-rel-next').isDisabled(), 'player: both ratings are needed before 下一步');
@@ -429,9 +431,8 @@ try {
     .catch(() => {});
   await view.locator('.card-slot.is-chat .chat-more').click();
   await view.getByRole('menuitem', { name: /一起共创角色/ }).click();
-  await view.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
-  await view.locator('.cc-rel-dice').click();
-  await view.locator('.cc-rel-next').click();
+  await view.locator('[data-card="relation"]').scrollIntoViewIfNeeded();
+  await view.locator('.cc-rel-card-next').click();
   await view.locator('.cc-rate').first().waitFor();
   await view.setViewportSize({ width: 1440, height: 900 });
   await view.waitForTimeout(600);
