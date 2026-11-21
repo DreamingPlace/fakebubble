@@ -302,7 +302,8 @@ try {
   await page.locator('.pw-split .pw-half-rehearsal .rh-rail .rh-pick').first().waitFor({ timeout: 20_000 });
   await wait(1200);
   const toggles = await page.locator('.rh-model').first().locator('.rh-toggle').allTextContents();
-  check(toggles.join(',') === '旧,新,新+档案', `three writers per model (${toggles})`);
+  // NAMED EXCEPTION (Part 37c-1): 新+档案+梗 is the fourth writer of each model (the first three are unchanged, in order).
+  check(toggles.join(',') === '旧,新,新+档案,新+档案+梗', `three writers per model (${toggles})`);
   const profileScripts = await page.evaluate(() => {
     const kids = [...document.querySelectorAll('.rh-rail > *')];
     const at = kids.findIndex((el) => el.tagName === 'H4' && /说话档案/.test(el.textContent ?? ''));
@@ -382,7 +383,8 @@ try {
   await wait(900);
   const card = page.locator('.models-writer');
   const choices = await card.locator('.seg-button').allTextContents();
-  check(choices.join(',') === '旧写法,新写法,新+档案', `three choices (${choices})`);
+  // NAMED EXCEPTION (Part 37c-1): 新+档案+梗 is the fourth 回复写法 choice (the first three are unchanged, in order).
+  check(choices.join(',') === '旧写法,新写法,新+档案,新+档案+梗', `three choices (${choices})`);
   check((await card.locator('[data-seg="v7"]').getAttribute('aria-pressed')) === 'true', 'the default (旧) is pressed');
   await shot('writer-switch-three');
   await card.locator('[data-seg="v8p"]').click();

@@ -1,4 +1,4 @@
-import { MEME_DICTIONARY_COMMIT, MEME_DICTIONARY_NOTICE, MEME_DICTIONARY_ROWS } from './meme-dictionary.generated.ts';
+import { MEME_DICTIONARY_ROWS } from './meme-dictionary.generated.ts';
 
 /**
  * Part 37c-1: the shipped dictionary (data/chinese-meme-dict/memes-2022plus.json, CC BY 4.0; see scripts/build-memes.ts). An entry's
@@ -16,4 +16,3 @@ export const MEME_ENTRIES: readonly MemeEntry[] = Object.freeze(
 );
 const byKey = new Map(MEME_ENTRIES.map((entry) => [entry.key, entry] as const));
 export const memeEntry = (key: string): MemeEntry | undefined => byKey.get(key);
-export { MEME_DICTIONARY_COMMIT, MEME_DICTIONARY_NOTICE };

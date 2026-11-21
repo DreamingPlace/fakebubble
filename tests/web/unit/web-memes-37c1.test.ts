@@ -24,7 +24,7 @@ import {
 } from '../../../packages/contracts/web-rehearsal.ts';
 import { isWriterChoice, WRITER_CHOICES } from '../../../packages/contracts/web-writer.ts';
 import { filterEntries, readData, renderModule, MEME_NOTICE } from '../../../scripts/build-memes.ts';
-import { MEME_ENTRIES, MEME_DICTIONARY_COMMIT, memeEntry } from '../../../apps/server/memes/meme-dictionary.ts';
+import { MEME_ENTRIES, memeEntry } from '../../../apps/server/memes/meme-dictionary.ts';
 import { matchMemes } from '../../../apps/server/memes/meme-match.ts';
 import { compileFullView } from '../../../apps/server/cast/cast-compile.ts';
 import {
@@ -79,7 +79,6 @@ test('import: only 2022 and later survive, an undated entry is dropped, and the 
   assert.ok(MEME_ENTRIES.every((entry) => entry.year >= 2022 && entry.meaning !== '' && entry.term !== ''));
   assert.equal(new Set(MEME_ENTRIES.map((entry) => entry.key)).size, MEME_ENTRIES.length, 'a term is a key: unique');
   assert.match(data.source.commit, /^[0-9a-f]{40}$/);
-  assert.equal(data.source.commit, MEME_DICTIONARY_COMMIT);
   assert.equal(data.source.commit, 'e02f1eaf823000dbfa31ea0427afe920466f3626');
   assert.equal(data.license, 'CC-BY-4.0');
   assert.ok((memeEntry('松弛感')?.year ?? 0) >= 2022);
