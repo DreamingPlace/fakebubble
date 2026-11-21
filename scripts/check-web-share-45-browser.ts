@@ -39,6 +39,7 @@ const realNow = f.clock.now.bind(f.clock);
 let offset = 0;
 f.clock.now = () => realNow() + offset;
 const pw = loadPlaywright();
+const webkit = await pw.webkit.launch();
 try {
   const watch = (page: Page, label: string) => {
     page.on('pageerror', (e: unknown) => errors.push(`${label}: ${String(e)}`));
@@ -49,39 +50,32 @@ try {
   };
   const ANDROID_UA =
     'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
-  const configs = shots
-    ? ([
-        [
-          'android-light',
-          'light',
-          {
-            ...pw.devices['Pixel 7'],
-            viewport: { width: 412, height: 915 },
-            deviceScaleFactor: 3.5,
-            userAgent: ANDROID_UA,
-          },
-        ],
-        [
-          'android-dark',
-          'dark',
-          {
-            ...pw.devices['Pixel 7'],
-            viewport: { width: 412, height: 915 },
-            deviceScaleFactor: 3.5,
-            userAgent: ANDROID_UA,
-          },
-        ],
-        ['desktop-light', 'light', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }],
-        ['desktop-dark', 'dark', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }],
-      ] as const)
-    : ([
-        [
-          'phone',
-          'light',
-          { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true },
-        ],
-        ['desktop', 'dark', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }],
-      ] as const);
+  const ANDROID = {
+    ...pw.devices['Pixel 7'],
+    viewport: { width: 412, height: 915 },
+    deviceScaleFactor: 3.5,
+    userAgent: ANDROID_UA,
+  };
+  const IOS = { ...pw.devices['iPhone 14'] };
+  // Part 46: the phones are always driven by real TOUCH (isMobile + hasTouch; a tap, never a mouse click), on Android Chrome emulation
+  // and on iOS WebKit. The review pictures (a screenshot directory) add the night mode and the desktop pair.
+  const configs = (
+    shots
+      ? [
+          ['android-light', 'light', ANDROID],
+          ['android-dark', 'dark', ANDROID],
+          ['ios-light', 'light', IOS],
+          ['desktop-light', 'light', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }],
+          ['desktop-dark', 'dark', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }],
+        ]
+      : [
+          ['android', 'light', ANDROID],
+          ['ios', 'light', IOS],
+          ['desktop', 'dark', { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 }],
+        ]
+  ) as [string, string, Record<string, unknown>][];
+  const isIos = (name: string) => name.startsWith('ios');
+  const engine = (name: string) => (isIos(name) ? webkit : f.browser);
 
   // two characters with a saved draft (the voice speaks from a revision), as the workbench leaves them
   for (const id of ['wei-guagua', 'jojo']) {
@@ -92,8 +86,10 @@ try {
   }
   const players: { name: string; theme: string; ctx: Page; page: Page }[] = [];
   for (const [name, theme, device] of configs) {
-    const ctx = await f.browser.newContext({ ...device, ignoreHTTPSErrors: true });
-    await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: f.origin }).catch(() => undefined);
+    const ctx = await engine(name).newContext({ ...device, ignoreHTTPSErrors: true });
+    await ctx
+      .grantPermissions(isIos(name) ? [] : ['clipboard-read', 'clipboard-write'], { origin: f.origin })
+      .catch(() => undefined);
     const page: Page = await ctx.newPage();
     watch(page, name);
     await page.addInitScript(
@@ -101,6 +97,30 @@ try {
         localStorage.setItem('fakebubble.player-prefs.v1', JSON.stringify({ lastViewed: 'wei-guagua', theme: t })),
       theme,
     );
+    // the system share sheet, where a phone offers one: recorded with whether the tap's user activation was still alive at the call
+    if (device.hasTouch)
+      await page.addInitScript(() => {
+        (window as any).__shared = [];
+        (window as any).__shareMode = 'ok';
+        Object.defineProperty(navigator, 'share', {
+          configurable: true,
+          value: (data: { url: string }) => {
+            (window as any).__shared.push({ url: data.url, active: navigator.userActivation?.isActive ?? true });
+            return (window as any).__shareMode === 'ok'
+              ? Promise.resolve()
+              : Promise.reject(Object.assign(new Error('x'), { name: (window as any).__shareMode }));
+          },
+        });
+      });
+    await page.addInitScript(() => {
+      const board = navigator.clipboard;
+      const write = board?.writeText?.bind(board);
+      if (write)
+        board.writeText = async (text: string) => {
+          (window as any).__copied = text;
+          return write(text);
+        };
+    });
     await page.goto(`${f.origin}/?mode=provider`);
     await page.locator('.card-slot.is-active').waitFor({ timeout: 20_000 });
     players.push({ name, theme, ctx, page });
@@ -211,6 +231,7 @@ try {
     check(rows.ownShare === 0, `${name}: the player's own messages have none`);
     if (shots) await page.screenshot({ path: `${shots}/${name}-1-chat.png` });
     const icon = page.locator('.card-slot.is-active .message-row.incoming:not(.welcome-row) .share-btn').first();
+    const mobileView = (await page.viewportSize()).width < 600;
     const bar = page.locator('.card-slot.is-active .message-row.incoming:not(.welcome-row) .play-button').first();
     const size = await icon.boundingBox();
     check(size && size.width >= 44 && size.height >= 44, `${name}: the icon is a 44px target`);
@@ -224,13 +245,44 @@ try {
       null,
       { timeout: 10_000 },
     );
-    await icon.click();
-    const mobile = (await page.viewportSize()).width < 600;
+    // a real touch on the phones (CDP touchstart, 60 ms, touchend on Chromium; WebKit's own tap), a mouse click on the desktop
+    const tap = async (target: Page) => {
+      if (isIos(name)) return target.tap();
+      if (!mobileView) return target.click();
+      // like a click, wait for the target to stand still (the sheet slides in) before the finger lands on it
+      let box = await target.boundingBox();
+      for (let i = 0; i < 20; i++) {
+        await wait(80);
+        const next = await target.boundingBox();
+        const still = next && box && next.x === box.x && next.y === box.y;
+        box = next;
+        if (still) break;
+      }
+      const cdp = await ctx.newCDPSession(page);
+      const pt = [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt });
+      await wait(60);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    const lenBefore: number = await page.evaluate(() => history.length);
+    const tapped = Date.now();
+    await tap(icon);
+    const mobile = mobileView;
     const sheet = page.locator(mobile ? '.share-sheet' : '.share-pop');
     await sheet.waitFor({ timeout: 5_000 });
+    check(Date.now() - tapped < 1000, `${name}: the sheet opened within 1 s of the tap (${Date.now() - tapped} ms)`);
     check((await sheet.getAttribute('role')) === 'dialog', `${name}: the share UI is a dialog`);
     if (shots) await page.screenshot({ path: `${shots}/${name}-2-sheet-making.png` });
     await page.locator('.share-link[data-state="ready"]').waitFor({ timeout: 10_000 });
+    await wait(500); // the sheet has slid in
+    check(
+      await sheet.evaluate((el: HTMLElement) => {
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 20);
+        return r.bottom <= innerHeight + 1 && r.top >= 0 && !!hit && el.contains(hit);
+      }),
+      `${name}: the sheet is on screen and on top (not clipped, not under anything)`,
+    );
     const shown = (await page.locator('.share-link span').textContent()) ?? '';
     check(/\/s\/[A-Za-z0-9_-]{4}…[A-Za-z0-9_-]{4}$/.test(shown), `${name}: the link is shown shortened: ${shown}`);
     check(
@@ -238,26 +290,71 @@ try {
       `${name}: the small card shows the character's avatar and name`,
     );
     if (shots) await page.screenshot({ path: `${shots}/${name}-3-sheet-ready.png` });
-    await sheet.locator('.share-act').first().click();
+    await tap(sheet.locator('.share-act').first());
     await page.waitForFunction(
       () => document.querySelector('.share-act[data-state="done"]')?.textContent?.includes('已复制'),
       null,
       { timeout: 5_000 },
     );
-    const copied: string = await page.evaluate(() => navigator.clipboard.readText());
+    // what the page handed to the clipboard (WebKit does not let a page read it back); Chromium's real clipboard is read too
+    const copied: string = await page.evaluate(
+      async (ios: boolean) => (ios ? (window as any).__copied : await navigator.clipboard.readText()),
+      isIos(name),
+    );
     check(
       new RegExp(`^${f.origin}/s/[A-Za-z0-9_-]{32}$`).test(copied),
       `${name}: the copied link is the origin and a token only: ${copied}`,
     );
     if (shots) await page.screenshot({ path: `${shots}/${name}-4-sheet-copied.png` });
+    if (mobileView) {
+      // the system share: called directly inside its own tap (the activation alive), with the link; a failure shows, a dismissal does not
+      const main = sheet.locator('.share-act-main');
+      check((await main.count()) === 1, `${name}: the sheet offers the system share`);
+      await tap(main);
+      await page.waitForFunction(() => (window as any).__shared.length === 1, null, { timeout: 3_000 });
+      const shared = await page.evaluate(() => (window as any).__shared);
+      check(shared[0].active === true, `${name}: navigator.share was called inside the tap (user activation alive)`);
+      check(shared[0].url === copied, `${name}: the system share got the link and nothing else`);
+      await page.evaluate(() => ((window as any).__shareMode = 'AbortError'));
+      await tap(main);
+      await wait(400);
+      check((await main.getAttribute('data-state')) !== 'failed', `${name}: closing the system sheet is not a failure`);
+      await page.evaluate(() => ((window as any).__shareMode = 'NotAllowedError'));
+      await tap(main);
+      await page.waitForFunction(
+        () => document.querySelector('.share-act-main')?.getAttribute('data-state') === 'failed',
+        null,
+        {
+          timeout: 3_000,
+        },
+      );
+      check(
+        (await main.textContent())?.trim() === '暂时无法分享',
+        `${name}: a refused system share says so, in a few words: ${await main.textContent()}`,
+      );
+    }
     const stillPlaying = await bar.getAttribute('data-playing');
     check(
       stillPlaying === 'true',
       `${name}: the voice message kept playing while the share UI was used (${stillPlaying})`,
     );
     // close: Escape, and the sheet leaves (and still the voice plays)
-    await page.keyboard.press('Escape');
-    await sheet.waitFor({ state: 'detached', timeout: 2_000 });
+    check(
+      (await page.evaluate(() => history.length)) === lenBefore + 1,
+      `${name}: opening the sheet pushes ONE history entry`,
+    );
+    if (mobileView) {
+      // Part 46: the system back closes the sheet; the chat under it stays, the site stays, the voice keeps playing
+      await page.evaluate(() => history.back());
+      await sheet.waitFor({ state: 'detached', timeout: 2_000 });
+      check(
+        (await page.locator('.page-shell[data-phase="chat"]').count()) === 1 && page.url().startsWith(f.origin),
+        `${name}: back closed the sheet and left the chat and the site as they were`,
+      );
+    } else {
+      await page.keyboard.press('Escape');
+      await sheet.waitFor({ state: 'detached', timeout: 2_000 });
+    }
     check((await bar.getAttribute('data-playing')) === 'true', `${name}: and after it closed`);
     // opening again from the same icon: a new request id, a new link; and an unused sheet is closed by a tap away
     const token = copied.split('/s/')[1]!;
@@ -267,7 +364,7 @@ try {
     });
 
     // ================= the link, in a fresh signed-out context =================
-    const visitor = await f.browser.newContext({ ...(configs[index]![2] as object), ignoreHTTPSErrors: true });
+    const visitor = await engine(name).newContext({ ...(configs[index]![2] as object), ignoreHTTPSErrors: true });
     await visitor.addInitScript(
       (t: string) => localStorage.setItem('fakebubble.player-prefs.v1', JSON.stringify({ theme: t })),
       theme,
@@ -303,7 +400,9 @@ try {
       seen.some((p) => p === `/api/web/provider/shares/${token}`),
       `${name}: it asked the public share route`,
     );
-    const lines: string[] = await visibleLines(vpage);
+    // Part 46 (named exception, iOS WebKit only): WebKit's innerText runs the avatar's initial into the name's line ('瓜' + '瓜瓜'), where
+    // Chromium has two lines; a line of nothing but 瓜 is the name.
+    const lines: string[] = (await visibleLines(vpage)).map((l: string) => (/^瓜{2,3}$/.test(l) ? '瓜瓜' : l));
     check(
       lines.every((l: string) => ALLOWED.has(l) || /^No\.\d{3,4}$/.test(l) || /^\d+:\d\d$/.test(l)),
       `${name}: only the card's own words are on the page: ${lines.join(' | ')}`,
@@ -426,6 +525,12 @@ try {
     await open.locator('.face-voice').click({ force: true });
     await open.locator('.share-page.is-expired').waitFor({ timeout: 10_000 });
     await wait(900);
+    // (named exception, WebKit: its fade can still be running under load, so ask for the settled state rather than a fixed time)
+    await open
+      .waitForFunction(() => Number(getComputedStyle(document.querySelector('.face-main')!).opacity) === 0, null, {
+        timeout: 8_000,
+      })
+      .catch(() => undefined);
     // (the card's own words fade to nothing in place, so they are asked by what shows, not by what is in the page)
     const inPlace = await open.evaluate(() => ({
       sticker: document.querySelector('.share-sticker')?.textContent,
@@ -441,6 +546,7 @@ try {
     await visitor.close();
   }
 } finally {
+  await webkit.close().catch(() => undefined);
   await f.close();
 }
 check(errors.length === 0, `page errors: ${errors.join(' ; ')}`);
@@ -449,3 +555,4 @@ if (problems.length) {
   process.exit(1);
 }
 console.log('check-web-share-45-browser: all checks passed');
+process.exit(0);
