@@ -19,6 +19,8 @@
       "!apps/server/generation/clip-prompts.generated.ts",
       "!apps/server/generation/tidy-prompts.generated.ts",
       "!apps/server/generation/writer-prompts.generated.ts",
+      "!apps/server/memes/meme-dictionary.generated.ts",
+      "!data/chinese-meme-dict",
       "!tests/web/fixtures/prompt-snapshots"
     ]
   },

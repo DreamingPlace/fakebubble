@@ -18,6 +18,15 @@ import {
   type CoreField,
 } from '../../../../../../packages/contracts/speech-profile.ts';
 import {
+  MEME_LEVELS,
+  MEME_LEVEL_LABELS,
+  MEME_OVERRIDES_MAX,
+  readMemeUse,
+  writeMemeUse,
+  type MemeLevel,
+} from '../../../../../../packages/contracts/web-memes.ts';
+import { segmented } from '../ui/segmented.ts';
+import {
   DAILY_LIFE_LABEL,
   DAY_PARTS,
   DAY_PART_LABELS,
@@ -59,6 +68,8 @@ export type SpeechPanelDeps = {
   disposed: () => boolean;
   /** The draft moved: the editor reads the role again. */
   reload: () => Promise<void>;
+  /** Part 37c-1: does the dictionary hold exactly this term? */
+  memeLookup?: (term: string) => Promise<boolean>;
 };
 
 const count = (text: string) => [...text].length;
@@ -101,6 +112,8 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     for (const control of lockables) control.disabled = off;
     sync();
     for (const run of syncers) run();
+    syncUse();
+    paintUse();
   };
 
   /** One save of a changed template, with the independence check (a close line asks twice). */
@@ -352,6 +365,115 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     }),
   );
   syncDaily();
+  // ---- 网络梗 (Part 37c-1): the character's own use of the dictionary; 草稿 only, live with 发布 ----
+  const savedUse = readMemeUse(template);
+  let useLevel: MemeLevel = savedUse.level;
+  const useOverrides: Record<string, MemeLevel> = { ...savedUse.overrides };
+  const useChanged = () =>
+    useLevel !== savedUse.level || JSON.stringify(sorted(useOverrides)) !== JSON.stringify(sorted(savedUse.overrides));
+  const sorted = (record: Record<string, MemeLevel>) => Object.entries(record).sort(([a], [b]) => (a < b ? -1 : 1));
+  const levelSwitch = segmented<MemeLevel>(
+    '默认档位',
+    MEME_LEVELS.map((id) => ({ id, label: MEME_LEVEL_LABELS[id] })),
+    useLevel,
+    (id) => {
+      useLevel = id;
+      syncUse();
+    },
+    'm',
+  );
+  for (const button of levelSwitch.root.querySelectorAll('button')) lockables.push(button as HTMLButtonElement);
+  hoverValue(
+    levelSwitch.root,
+    '会用：听得懂，也可能自己用 · 只懂：听得懂，自己不用 · 不碰：听得懂，自己不用，也不跟着玩',
+  );
+  const useList = h('ul', { class: 'mm-use-list', attrs: { 'aria-label': '单条设置' } });
+  const useTerm = h('input', {
+    attrs: { type: 'text', 'aria-label': '词', placeholder: '词（词库里的原词）', maxlength: '40' },
+  });
+  const useLevelPick = h('select', { attrs: { 'aria-label': '档位' } });
+  for (const id of MEME_LEVELS) useLevelPick.append(h('option', { text: MEME_LEVEL_LABELS[id], attrs: { value: id } }));
+  const useAdd = h('button', {
+    class: 'admin-secondary',
+    text: '添加',
+    attrs: { type: 'button', 'data-sp': 'meme-add' },
+  });
+  const useSave = h('button', {
+    class: 'admin-primary',
+    text: '保存网络梗档位',
+    attrs: { type: 'button', 'data-sp': 'meme-save' },
+  });
+  hoverValue(useSave, '只存进草稿，发布后玩家才看得到');
+  lockables.push(useTerm, useLevelPick);
+  const paintUse = () => {
+    useList.replaceChildren(
+      ...sorted(useOverrides).map(([term, level]) => {
+        const pick = h('select', { attrs: { 'aria-label': `「${term}」的档位` } });
+        for (const id of MEME_LEVELS) pick.append(h('option', { text: MEME_LEVEL_LABELS[id], attrs: { value: id } }));
+        pick.value = level;
+        pick.disabled = locked();
+        pick.addEventListener('change', () => {
+          useOverrides[term] = pick.value as MemeLevel;
+          syncUse();
+        });
+        const drop = h('button', {
+          class: 'admin-secondary',
+          text: '删除',
+          attrs: { type: 'button', 'aria-label': `删除「${term}」的单条设置` },
+        });
+        drop.disabled = locked();
+        drop.addEventListener('click', () => {
+          delete useOverrides[term];
+          paintUse();
+          syncUse();
+        });
+        return h('li', { class: 'mm-use-item', attrs: { 'data-term': term } }, h('b', { text: term }), pick, drop);
+      }),
+    );
+  };
+  function syncUse() {
+    useSave.disabled = locked() || !useChanged();
+    useAdd.disabled = locked() || !deps.memeLookup;
+  }
+  useAdd.addEventListener('click', () =>
+    guarded(async () => {
+      const term = useTerm.value.trim();
+      if (term === '') return;
+      if (Object.keys(useOverrides).length >= MEME_OVERRIDES_MAX && !(term in useOverrides)) {
+        show(`单条设置最多 ${MEME_OVERRIDES_MAX} 条。`);
+        return;
+      }
+      if (!(await deps.memeLookup!(term))) {
+        show('词库里没有这个词，请核对后再添加（要和词库里的原词一样）。');
+        return;
+      }
+      show('');
+      useOverrides[term] = useLevelPick.value as MemeLevel;
+      useTerm.value = '';
+      paintUse();
+      syncUse();
+    }),
+  );
+  useSave.addEventListener('click', () =>
+    guarded(async () => {
+      await commit(
+        writeMemeUse(template, { level: useLevel, overrides: { ...useOverrides } }),
+        `meme:${useLevel}`,
+        '网络梗档位已保存',
+      );
+    }),
+  );
+  const memeSection = h(
+    'section',
+    { class: 'mm-use', attrs: { 'data-sp': 'memes' } },
+    hoverValue(h('h3', { class: 'sp-title', text: '网络梗' }), '词义是共享的；这里只设置这个角色怎么对待它们。'),
+    h('div', { class: 'mm-use-row' }, h('span', { class: 'mm-use-label', text: '默认档位' }), levelSwitch.root),
+    h('h4', { class: 'sp-title', text: '单条设置' }),
+    useList,
+    h('div', { class: 'mm-use-add' }, useTerm, useLevelPick, useAdd),
+    h('div', { class: 'sp-actions' }, useSave),
+  );
+  paintUse();
 
   root.append(
     hoverValue(h('h3', { class: 'sp-title', text: '核心卡' }), '没写的栏目，就用角色现有的设定。'),
@@ -362,6 +484,7 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     h('h3', { class: 'sp-title', text: DAILY_LIFE_LABEL }),
     dayCard,
     h('div', { class: 'sp-actions' }, saveDaily),
+    memeSection,
     lockNote,
     warn,
     message,

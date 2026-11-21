@@ -17992,6 +17992,162 @@ button:not(
   background: var(--ad-tint);
 }
 
+/* Part 37c-1: 网络梗 (the dictionary's switches) and the character's 梗 档位 in 说话档案. Console block: motion under --ad-motion. */
+.account-admin-page.admin-shell #admin-memes {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.account-admin-page.admin-shell #admin-memes .mm-bar {
+  position: static;
+  margin: 0;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+.account-admin-page.admin-shell #admin-memes .mm-error {
+  margin: 0;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-memes .mm-on {
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-memes .mm-termcell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-default-off {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-term {
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-meaning {
+  display: block;
+  min-width: 320px;
+  max-width: 560px;
+  color: var(--ad-text);
+  line-height: 1.5;
+  /* the table's cells do not wrap; a meaning is a sentence and must, or it runs under the next column */
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell #admin-memes .admin-table td {
+  vertical-align: middle;
+}
+.account-admin-page.admin-shell #admin-memes .mm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-width: 220px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-tag {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-switch {
+  box-sizing: border-box;
+  min-height: 36px;
+  min-width: 76px;
+  padding: 0 14px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-muted);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background calc(200ms * var(--ad-motion)) var(--ad-ease),
+    color calc(200ms * var(--ad-motion)) var(--ad-ease),
+    border-color calc(200ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-memes .mm-switch[aria-checked="true"] {
+  background: var(--ad-ok-soft);
+  border-color: transparent;
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-memes .mm-switch:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.account-admin-page.admin-shell #admin-memes .mm-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-pager[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .mm-use {
+  display: grid;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .mm-use-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.account-admin-page.admin-shell .mm-use-label {
+  min-width: 96px;
+  font-weight: 500;
+}
+.account-admin-page.admin-shell .mm-use-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+.account-admin-page.admin-shell .mm-use-add input,
+.account-admin-page.admin-shell .mm-use-add select {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+}
+.account-admin-page.admin-shell .mm-use-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-admin-page.admin-shell .mm-use-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  animation: adPop calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .mm-use-hit {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;
@@ -22586,6 +22742,312 @@ body,
 }
 
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */
+/* ======================================================================================================================
+   Part 48: the first-paint skeleton (static markup in index.html) and its hand-over to the real cards.
+   It uses the real cards' own classes and the same orbit numbers (orbit.ts: offset ±1 = x .382 card widths, y 8, scale .96, opacity .83;
+   the centre card is at rest), so the real cards land exactly where the skeleton's were and nothing moves when the data arrives.
+   ====================================================================================================================== */
+.page-shell.is-skeleton {
+  --card-w: min(376px, calc(100vw - 108px));
+}
+@media (max-width: 600px) {
+  .page-shell.is-skeleton {
+    --card-w: min(300px, calc(100vw - 96px));
+  }
+}
+.page-shell.is-skeleton .sk-aura {
+  --aura-1: #e9e2f2;
+  --aura-2: #f2eee9;
+  --aura-3: #dcd6e6;
+  opacity: 1;
+  transition: none;
+}
+.sk-slot {
+  --orbit-x: 0px;
+  --orbit-y: 0px;
+  --orbit-scale: 1;
+  --orbit-opacity: 1;
+  --accent: #141414;
+  z-index: 100;
+  pointer-events: none;
+  transition: none;
+}
+.sk-slot.sk-left {
+  --orbit-x: calc(var(--card-w) * -0.382);
+  --orbit-y: 8px;
+  --orbit-scale: 0.96;
+  --orbit-opacity: 0.83;
+  --fan: -3.5;
+  z-index: 99;
+}
+.sk-slot.sk-right {
+  --orbit-x: calc(var(--card-w) * 0.382);
+  --orbit-y: 8px;
+  --orbit-scale: 0.96;
+  --orbit-opacity: 0.83;
+  --fan: 3.5;
+  z-index: 99;
+}
+/* The centre skeleton is not "active" (so no script that waits for the real active card ever finds it); these put back what an active
+   card has: its label, its centred column. */
+.page-shell.is-skeleton .sk-slot.sk-center .face-top span:first-child {
+  display: inline;
+}
+.page-shell.is-skeleton .sk-slot.sk-center .face-main {
+  flex: 1;
+  justify-content: center;
+  padding-top: 0;
+}
+/* the real bar holds the account row on a phone (68 px), the footer note is one line (32 px). Both are reserved on the real page too:
+   the footer's words and the account entries arrive with the session, and the cards must not move when they do. */
+.page-shell .preview-note {
+  min-height: 32px;
+}
+@media (max-width: 600px) {
+  .page-shell .site-head {
+    min-height: 68px;
+  }
+  .page-shell.is-skeleton .site-head {
+    height: 68px;
+  }
+  .page-shell.is-skeleton .avatar-nav {
+    height: 86px;
+  }
+}
+/* (a phone hides every card that is not .is-active, and the skeleton's are not) */
+.page-shell.is-skeleton .card-slot.sk-slot {
+  visibility: visible;
+}
+.sk-face {
+  --aura-1: #e9e2f2;
+  --aura-2: #f2eee9;
+  --aura-3: #dcd6e6;
+}
+.sk-bar,
+.sk-portrait,
+.sk-play {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.38) 0%,
+    rgba(255, 255, 255, 0.78) 50%,
+    rgba(255, 255, 255, 0.38) 100%
+  );
+  background-size: 220% 100%;
+  animation: sk-shimmer 1.5s ease-in-out infinite;
+}
+.sk-wordmark {
+  width: 104px;
+  height: 22px;
+}
+.sk-no {
+  width: 44px;
+  height: 10px;
+  margin-top: 1px;
+}
+.sk-portrait {
+  width: 148px;
+  height: 148px;
+  margin: 8px auto 18px;
+  border-radius: 50%;
+}
+.sk-name {
+  width: 58%;
+  height: 30px;
+  border-radius: 12px;
+}
+.sk-latin {
+  width: 34%;
+  height: 18px;
+  margin-top: 10px;
+}
+.sk-voice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 14px 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+}
+.sk-play {
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+.sk-wave {
+  flex: 1;
+  height: 14px;
+}
+@keyframes sk-shimmer {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+/* The hand-over: the real page replaces the skeleton in one frame; the faces ease in over the same card shapes. */
+.page-shell.is-entering .card-face,
+.page-shell.is-entering .site-head .brand {
+  animation: vs-fill-in 240ms cubic-bezier(0.2, 0.82, 0.24, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-bar,
+  .sk-portrait,
+  .sk-play {
+    animation: none;
+  }
+  .page-shell.is-entering .card-face,
+  .page-shell.is-entering .site-head .brand {
+    animation: none;
+  }
+}
+
+/* ======================================================================================================================
+   Part 48: the verification sheet (one short line, the Turnstile widget when it wants a click, 重试 after a failure).
+   Closed it is invisible but laid out, so the check keeps running in the background; every change eases (no motion under reduced
+   motion: the sheet then simply appears and disappears).
+   ====================================================================================================================== */
+.vs-root {
+  position: fixed;
+  inset: 0;
+  z-index: 450;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+  visibility: hidden;
+  transition: visibility 0s 240ms;
+}
+.vs-root[data-open="true"] {
+  pointer-events: auto;
+  visibility: visible;
+  transition: visibility 0s;
+}
+.vs-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(20, 20, 20, 0.34);
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+.vs-root[data-open="true"] .vs-scrim {
+  opacity: 1;
+}
+.vs-sheet {
+  position: relative;
+  box-sizing: border-box;
+  width: min(100%, 420px);
+  margin: 0 0 max(12px, env(safe-area-inset-bottom));
+  padding: 22px 20px 20px;
+  border-radius: 24px;
+  background: #fbf9f8;
+  color: #141414;
+  box-shadow: 0 24px 60px rgba(40, 24, 60, 0.28);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(0.2, 0.82, 0.24, 1);
+}
+.vs-root[data-open="true"] .vs-sheet {
+  opacity: 1;
+  transform: none;
+}
+.vs-sheet:focus {
+  outline: none;
+}
+.vs-line {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+}
+.vs-widget {
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+}
+.vs-retry {
+  min-width: 112px;
+  height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: #141414;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  transition:
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+.vs-retry:active {
+  transform: scale(0.97);
+}
+.vs-retry[hidden] {
+  display: none;
+}
+.vs-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #6a6770;
+}
+.vs-close svg {
+  width: 18px;
+  height: 18px;
+}
+:root[data-theme="dark"] .vs-sheet {
+  background: #1c1b21;
+  color: #f4f2f7;
+}
+:root[data-theme="dark"] .vs-retry {
+  background: #f4f2f7;
+  color: #141414;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vs-scrim,
+  .vs-sheet,
+  .vs-retry,
+  .vs-root {
+    transition: none;
+  }
+  .vs-sheet {
+    transform: none;
+  }
+}
+/* What fills in when the session arrives eases in; nothing around it moves. */
+.face-dur.is-new,
+.preview-note.is-filled {
+  animation: vs-fill-in 200ms ease;
+}
+@keyframes vs-fill-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .face-dur.is-new,
+  .preview-note.is-filled {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card-slot.is-active:not(.is-chat) .face-sheen,
   .page-shell .card-slot.is-active:not(.is-chat),

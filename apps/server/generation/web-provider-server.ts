@@ -456,14 +456,12 @@ export class WebProviderServer {
       }
       if ((req.method === 'GET' || req.method === 'HEAD') && (path === '/' || path === '/index.html')) {
         const modes = url.searchParams.getAll('mode');
-        if (modes.length === 0) {
-          url.searchParams.set('mode', 'provider');
-          res.writeHead(302, { ...privateHeaders, Location: url.pathname + url.search });
-          res.end();
-          return;
-        }
+        // Part 48: the bare address serves the player directly (no 302 to ?mode=provider); the page treats "no mode" as the player.
         // Local demos remain available on the synthetic listener, not on the live service.
-        ensure(modes.length === 1 && ['provider', 'provider-admin'].includes(modes[0]!), 'NOT_FOUND');
+        ensure(
+          modes.length <= 1 && (modes.length === 0 || ['provider', 'provider-admin'].includes(modes[0]!)),
+          'NOT_FOUND',
+        );
       }
       // Part 45: a share link's page is the player's own page; the page reads the token from its address and asks the public route.
       if ((req.method === 'GET' || req.method === 'HEAD') && SHARE_PAGE.test(path) && !url.search) {
@@ -486,6 +484,12 @@ export class WebProviderServer {
         ensure(card, 'NOT_FOUND');
         res.writeHead(200, { ...shareHeaders, 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify(card));
+        return;
+      }
+      // Part 48: the public catalog (the home cards before any session): no cookie is read or set, public card fields only.
+      if (req.method === 'GET' && path === `${API}/catalog`) {
+        res.writeHead(200, { ...shareHeaders, 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(this.application.publicCatalog()));
         return;
       }
       const welcome = path.match(new RegExp(`^${API}/public-audio/([A-Za-z0-9_-]{1,128})$`));

@@ -99,3 +99,17 @@ Everything here goes into the 草稿; **正式版本** changes only with 发布.
 | 共创收件箱 → 加入草稿 on a part | target 「{名字} · 一天的安排 · 早上」; one box with that part of the 草稿 (the note goes on its own line); 保存草稿; nothing reaches players until 发布 |
 | 角色工作台 → 说话档案 | new block 一天的安排: 早上 · 中午 · 下午 · 晚上 · 深夜 · 一整天的故事, counters x / 300 (x / 800), button 保存一天的安排 |
 | errors | 「这一栏太长了，请先精简（早上到深夜每栏最多 300 字，一整天的故事最多 800 字）。」 (`PROFILE_DAILY_TOO_LONG`) · 「一天的安排现有的结构无法自动改写。…」 (`PROFILE_DAILY_SHAPE_UNSUPPORTED`) · 「一天的安排只能写早上、中午、下午、晚上、深夜和一整天的故事，每一栏不能超过字数上限。」 (`INVALID_DAILY_LIFE`) |
+
+## Part 37c-1 — 网络梗
+| Where | Words |
+|---|---|
+| 角色 → **网络梗** (new page, after 共创收件箱; the owner or cast.read sees it, cast.edit switches) | 搜索 · 年份 · 标签 · 状态 (全部 · 已开启 · 已关闭) · columns 词 · 释义 · 年份 · 标签 · 开关 · status line `共 1,806 条 · 已开启 N 条` · 开启所选 / 关闭所选 for the ticked rows · 上一页 / 下一页 · `第 x / y 页 · 符合 n 条（每页 50 条）`. An entry's switch reads 已开启 / 已关闭. No explanation line: the search box has a hover tip (词、释义和标签都会被搜到). |
+| 角色工作台 → 说话档案 → **网络梗** | 默认档位 (**会用** · **只懂** · **不碰**) · 单条设置 (词 + 档位, 添加 · 删除) · 保存网络梗档位 (hover: 只存进草稿，发布后玩家才看得到). The three levels: 会用 = 听得懂，也可能自己用 · 只懂 = 听得懂，自己不用 · 不碰 = 听得懂，自己不用，也不跟着玩 (hover only). A character nobody set up is 只懂. |
+| 多轮预演 | fourth column 「新+档案+梗」 beside 旧 · 新 · 新+档案; rail group 「网络梗 · 四个场景」 (日常 · 职场 · 出游 · 情绪); two rows in 统计, only in a run that has the column: **命中的梗** (按回复累计) · **给出释义** (每条回复最多 3 条), 「—」 for the other columns |
+| 系统 → 模型与价格 → 回复写法 | four options **旧写法 · 新写法 · 新+档案 · 新+档案+梗** (the pill says 当前：新+档案+梗); owner only |
+| refusals | 词库里没有这个词，请核对后再添加（要和词库里的原词一样）。 · 单条设置最多 200 条。 · 词库里没有这一条，请刷新后再试。 |
+
+Player pages: one line on the terms page (the license notice and its link); nothing else.
+
+### Part 37c-1 follow-up — 默认关闭
+网络梗: 状态 gains **默认关闭** (the common words that ship switched off); each such row has a 默认关闭 badge (hover: 常用词，默认不会触发；可以手动开启); the status line adds `默认关闭 N 条`. No explanation line.

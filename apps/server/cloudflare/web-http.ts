@@ -208,6 +208,15 @@ export class WebProviderHTTP {
       const found = await app.avatars.readPublic(image[1]!);
       return new Response(Uint8Array.from(found.bytes), { headers: avatarHeaders(found.bytes.length) });
     }
+    // Part 48: the public catalog (the home cards before any session). No cookie or session is read and none is set; only public
+    // card fields are returned. Rate-limited per IP and globally like the share routes.
+    if (method === 'GET' && path === `${API}/catalog`) {
+      this.limits.rate(`web:catalog:${ipHash}`, LIMITS.catalogPerIpPerMinute);
+      this.limits.rate('web:catalog:global', LIMITS.catalogGlobalPerMinute);
+      return Response.json(app.publicCatalog(), {
+        headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
+      });
+    }
     // Part 45: the two public share reads. No session or cookie is read; the visitor needs only the token. Rate-limited per IP and
     // globally. Unknown, expired and purged links answer identically (NOT_FOUND); nothing is cached and the page is not named.
     const shareRead = path.match(new RegExp(`^${API}/shares/([^/]{1,128})(/audio)?$`));

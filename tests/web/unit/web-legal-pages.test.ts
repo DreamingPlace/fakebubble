@@ -17,7 +17,13 @@ test('both legal pages are static Chinese documents with no script, linked to ea
     assert.match(html, /^<!doctype html>/);
     assert.match(html, /<html lang="zh-CN">/);
     assert.doesNotMatch(html, /<script|javascript:|\son[a-z]+\s*=/i, 'static: nothing executes');
-    assert.doesNotMatch(html, /https?:\/\//, 'no external resource or link');
+    // NAMED EXCEPTION (Part 37c-1): the dictionary's CC BY 4.0 license requires its credit WITH the link, on this page only; that one
+    // address is allowed, every other external resource or link is still refused (and the other page has none at all).
+    assert.doesNotMatch(
+      html.replaceAll('https://github.com/re-skylar/chinese-meme-dict', ''),
+      /https?:\/\//,
+      'no external resource or link',
+    );
     assert.ok(html.includes(`href="/${other}"`), `${name} links ${other}`);
     assert.ok(
       html.includes('href="/apps/player-web/src/styles/main.css"'),

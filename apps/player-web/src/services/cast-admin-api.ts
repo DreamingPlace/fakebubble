@@ -8,6 +8,7 @@ import type {
   CastRequestContext,
   CastValidation,
 } from '../../../../packages/contracts/web-cast.ts';
+import type { MemeListInput, MemeListView } from '../../../../packages/contracts/web-memes.ts';
 import { InviteLocalApiError } from './invite-local-api.ts';
 
 /** Client for 关系与故事 (the Part 24a cast API). Requests go through the admin session; the server checks every permission. */
@@ -123,6 +124,18 @@ export class CastAdminClient {
       counts: counts(r.counts),
       validation: validation(r.validation),
     };
+  }
+  /** Part 37c-1: 网络梗, the shipped dictionary filtered and paged (cast.read). */
+  async memesList(input: MemeListInput): Promise<MemeListView> {
+    const r = object(await this.send('memes-list', { ...input }));
+    if (!Array.isArray(r.entries) || !Array.isArray(r.years) || !Array.isArray(r.tags)) throw invalid();
+    for (const key of ['matching', 'page', 'pages', 'total', 'on']) int(r[key]);
+    return r as unknown as MemeListView;
+  }
+  /** Part 37c-1: switch entries on or off (cast.edit); `requestId` is fixed by the caller so a lost answer retries as the same request. */
+  async memesSet(requestId: string, keys: readonly string[], enabled: boolean): Promise<{ changed: number }> {
+    const r = object(await this.send('memes-set', { requestId, keys: [...keys], enabled }));
+    return { changed: int(r.changed) };
   }
   async versions(): Promise<CastVersionsResult> {
     const r = object(await this.send('versions', {}));

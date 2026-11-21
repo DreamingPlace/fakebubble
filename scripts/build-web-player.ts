@@ -15,7 +15,8 @@ import {
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { buildSync } from 'esbuild';
+import { buildSync, transformSync } from 'esbuild';
+import { playerCss } from './player-css.ts';
 
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const compiler = join(repoRoot, 'node_modules/typescript/bin/tsc');
@@ -146,21 +147,54 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
     walk(bundled, bundled, false);
     let page = readFileSync(html, 'utf8').replace('/apps/player-web/src/app/main.js', '/' + entryName);
     const replacements: [string, string][] = [];
+    const addBytes = (bytes: Uint8Array, dest: string) => {
+      const digest = createHash('sha256').update(bytes).digest('hex');
+      const extension = dest.slice(dest.lastIndexOf('.'));
+      const name = `assets/static-${digest}${extension}`;
+      mkdirSync(join(bundled, 'assets'), { recursive: true });
+      writeFileSync(join(bundled, name), bytes);
+      page = page.replaceAll('/' + dest, '/' + name);
+      replacements.push([dest, name]);
+      if (!files.includes(name)) files.push(name);
+    };
     const addAsset = (path: string, dest: string) => {
       if (!existsSync(path)) throw new Error('PLAYER_ASSET_MISSING');
       assertSourcePath(root, path);
       if (!lstatSync(path).isFile() || lstatSync(path).isSymbolicLink() || lstatSync(path).size > 2_000_000)
         throw new Error('PLAYER_ASSET_UNSAFE');
-      const bytes = readFileSync(path);
-      const digest = createHash('sha256').update(bytes).digest('hex');
-      const extension = dest.slice(dest.lastIndexOf('.'));
-      const name = `assets/static-${digest}${extension}`;
-      mkdirSync(join(bundled, 'assets'), { recursive: true });
-      copyFileSync(path, join(bundled, name));
-      page = page.replaceAll('/' + dest, '/' + name);
-      replacements.push([dest, name]);
-      if (!files.includes(name)) files.push(name);
+      addBytes(readFileSync(path), dest);
     };
+    // Part 48: the one source stylesheet becomes two built files. The player pages (and the legal pages) link the PLAYER one under the
+    // source's own name; the administrator mode finds the whole one through <meta name="admin-css"> and loads it only in its mode.
+    const stylesheet = join(source, 'src/styles/main.css');
+    const styleDest = 'apps/player-web/src/styles/main.css';
+    const adminDest = 'apps/player-web/src/styles/admin.css';
+    const playerSources = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const path = join(dir, entry.name);
+        const rel = relative(source, path).split(sep).join('/');
+        if (entry.isDirectory()) return rel === 'src/features/admin' || rel === 'src/styles' ? [] : playerSources(path);
+        return /\.(?:ts|html)$/.test(entry.name) &&
+          rel !== 'src/app/admin-mode.ts' &&
+          !/-admin-api\.ts$/.test(entry.name)
+          ? [readFileSync(path, 'utf8')]
+          : [];
+      });
+    const splitStyles = existsSync(stylesheet);
+    if (splitStyles) {
+      assertSourcePath(root, stylesheet);
+      if (!lstatSync(stylesheet).isFile() || lstatSync(stylesheet).size > 2_000_000)
+        throw new Error('PLAYER_ASSET_UNSAFE');
+      const whole = readFileSync(stylesheet, 'utf8');
+      const kept = playerCss(whole, playerSources(join(source, 'src')).join('\n'));
+      // Nothing to take out (a tiny stylesheet): the one file serves both, unchanged. Otherwise the player's is minified.
+      const player =
+        kept === whole
+          ? whole
+          : transformSync(kept, { loader: 'css', minify: true, target: ['safari16', 'chrome110'] }).code;
+      addBytes(Buffer.from(player), styleDest);
+      addBytes(Buffer.from(whole), adminDest);
+    }
     // Explicit source allowlist remains the only way non-JS assets enter the build.
     const assetList = join(source, 'player-assets.json');
     const assets: unknown = existsSync(assetList) ? JSON.parse(readFileSync(assetList, 'utf8')) : [];
@@ -175,7 +209,8 @@ export function buildWebPlayer({ root, output }: PlayerBuildOptions) {
       )
     )
       throw new Error('PLAYER_ASSET_LIST_INVALID');
-    for (const name of assets as string[]) addAsset(join(source, name), `apps/player-web/${name}`);
+    for (const name of assets as string[])
+      if (!(splitStyles && name === 'src/styles/main.css')) addAsset(join(source, name), `apps/player-web/${name}`);
     // Optional so minimal fixture sites still build; the repository ships it.
     const icon = join(source, 'src/assets/favicon.ico');
     if (existsSync(icon)) {

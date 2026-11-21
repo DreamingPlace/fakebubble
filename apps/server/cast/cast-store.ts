@@ -6,7 +6,10 @@ import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { castPromptHash } from '../generation/cast-prompt.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import { prepareCastFile, type NewCharacter, type PreparedCastFile } from './cast-file.ts';
+import { packCastDoc, pruneCastDocs, unpackCastDoc } from './cast-doc-store.ts';
+import { castViewOf, emptyPicked, pickCastItems, unionPicked } from './cast-select.ts';
 import {
+  compileFullView,
   compileCastView,
   compileCastViewDetailed,
   castKnowledge,
@@ -84,26 +87,32 @@ export function readDraft(store: ReadStore): CastDraft {
     'SELECT revision,doc_json,updated_at FROM web_cast_draft WHERE singleton=1',
   );
   ensure(row, 'CAST_UNAVAILABLE');
+  // Part 37c-1: a document over the row's own 300,000-character check lives in web_cast_docs (cast-doc-store.ts).
+  const json = unpackCastDoc(store, row.doc_json);
   return {
     revision: row.revision,
-    doc: parse(row.doc_json),
-    digest: castDigest(row.doc_json),
+    doc: parse(json),
+    digest: castDigest(json),
     updatedAt: row.updated_at,
   };
 }
 
-const publication = (row: {
-  version: number;
-  doc_json: string;
-  digest: string;
-  published_at: number;
-  kind: 'publish' | 'rollback';
-  from_version: number | null;
-}): CastPublication => {
-  ensure(castDigest(row.doc_json) === row.digest, 'CAST_STORED_DOC_INVALID');
+const publication = (
+  store: ReadStore,
+  row: {
+    version: number;
+    doc_json: string;
+    digest: string;
+    published_at: number;
+    kind: 'publish' | 'rollback';
+    from_version: number | null;
+  },
+): CastPublication => {
+  const json = unpackCastDoc(store, row.doc_json);
+  ensure(castDigest(json) === row.digest, 'CAST_STORED_DOC_INVALID');
   return {
     version: row.version,
-    doc: parse(row.doc_json),
+    doc: parse(json),
     digest: row.digest,
     publishedAt: row.published_at,
     kind: row.kind,
@@ -111,24 +120,24 @@ const publication = (row: {
   };
 };
 export function latestPublication(store: ReadStore): CastPublication | null {
-  const row = store.get<Parameters<typeof publication>[0]>(
+  const row = store.get<Parameters<typeof publication>[1]>(
     'SELECT * FROM web_cast_publications ORDER BY version DESC LIMIT 1',
   );
-  return row ? publication(row) : null;
+  return row ? publication(store, row) : null;
 }
 export function readPublication(store: ReadStore, version: number): CastPublication {
-  const row = store.get<Parameters<typeof publication>[0]>(
+  const row = store.get<Parameters<typeof publication>[1]>(
     'SELECT * FROM web_cast_publications WHERE version=?',
     version,
   );
   ensure(row, 'NOT_FOUND');
-  return publication(row);
+  return publication(store, row);
 }
 export function listVersions(store: ReadStore) {
   return store
-    .all<Parameters<typeof publication>[0]>('SELECT * FROM web_cast_publications ORDER BY version DESC')
+    .all<Parameters<typeof publication>[1]>('SELECT * FROM web_cast_publications ORDER BY version DESC')
     .map((row) => {
-      const found = publication(row);
+      const found = publication(store, row);
       return {
         version: found.version,
         kind: found.kind,
@@ -175,11 +184,12 @@ function writeDraft(store: Store, now: number, revision: number, doc: CastDoc, v
   const json = canonicalCastJson(doc);
   const changed = store.run(
     'UPDATE web_cast_draft SET revision=revision+1,doc_json=?,updated_at=? WHERE singleton=1 AND revision=?',
-    json,
+    packCastDoc(store, now, json),
     now,
     revision,
   );
   ensure(changed.changes === 1, 'CAST_REVISION_CONFLICT');
+  pruneCastDocs(store);
   return { revision: revision + 1, digest: castDigest(json), counts: castCounts(doc), validation };
 }
 
@@ -204,7 +214,7 @@ function appendPublication(
   store.run(
     'INSERT INTO web_cast_publications(version,doc_json,digest,published_at,kind,from_version) VALUES (?,?,?,?,?,?)',
     version,
-    json,
+    packCastDoc(store, now, json),
     castDigest(json),
     now,
     kind,
@@ -399,6 +409,34 @@ export function castForPreview(
   const json = JSON.stringify(compileCastView(doc, characterId));
   return {
     version,
+    digest: castDigest(json),
+    promptHash: castPromptHash(),
+    view: JSON.parse(json) as CastView,
+  };
+}
+
+/**
+ * Part 37c-1 (多轮预演, 新+档案+梗): the items of the character's FULL view that any turn of a run may select from the cast draft:
+ * the union of what each window of player messages (latest first) selects. A run keeps this pool, and each turn selects its own
+ * context from it, so the run is frozen without carrying a whole cast of hundreds of stories.
+ */
+export function castPoolForPreview(
+  store: ReadStore,
+  characterId: string,
+  windows: readonly (readonly string[])[],
+): CastRequestContext {
+  ensure(castTablesExist(store), 'CAST_UNAVAILABLE');
+  const draft = readDraft(store);
+  ensure(
+    draft.doc.characters.some((c) => c.characterId === characterId),
+    'CAST_CHARACTER_NOT_IN_CAST',
+  );
+  const full = compileFullView(draft.doc, characterId);
+  let picked = emptyPicked();
+  for (const window of windows) picked = unionPicked(picked, pickCastItems(full, window));
+  const json = JSON.stringify(castViewOf(full, picked));
+  return {
+    version: draft.revision,
     digest: castDigest(json),
     promptHash: castPromptHash(),
     view: JSON.parse(json) as CastView,
