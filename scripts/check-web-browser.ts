@@ -339,7 +339,10 @@ try {
     }
     // The welcome is a pill with a waveform and a length - and none of the welcome words is on the card.
     const face = view.locator('.card-slot.is-active .card-face');
-    assert.equal(await face.locator('.face-voice .face-wave').count(), 1);
+    // Part 49 (named exception): the pill's waveform is drawn twice, the grey bars and the played copy over them (.pk-played), so the
+    // single waveform is counted without the played copy; the played copy is asserted on its own.
+    assert.equal(await face.locator('.face-voice .face-wave:not(.pk-played)').count(), 1);
+    assert.equal(await face.locator('.face-voice .face-wave.pk-played').count(), 1);
     assert.match(await face.locator('.face-dur').innerText(), /^\d:\d\d$/);
     const faceText: string = await face.evaluate((el: HTMLElement) => el.textContent ?? '');
     for (const entry of Object.values(WEB_PROVIDER_WELCOME) as { text: string }[])
