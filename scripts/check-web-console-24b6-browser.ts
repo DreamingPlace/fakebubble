@@ -509,6 +509,8 @@ try {
         '其余设定',
         '声音',
         '资料改动',
+        // Named exception (Part 37b): 说话档案 is one more section, before 发布.
+        '说话档案',
         '发布',
         // Named exception (Part 24f): 版本历史 is one more entry of the bar, after 发布.
         '版本历史',
@@ -537,7 +539,13 @@ try {
     check(
       form
         ? showing.fieldsets === 1 && showing.preview === 0 && (voice ? showing.flow <= 2 : showing.flow === 0)
-        : showing.fieldsets === 0 && showing.flow + showing.preview >= 1,
+        : showing.fieldsets === 0 &&
+            (showing.flow + showing.preview >= 1 ||
+              // Named exception (Part 37b): 说话档案 is its own block (.wb-speech), outside the flow and the preview.
+              (tabs[i]!.trim() === '说话档案' &&
+                (await page.evaluate(
+                  () => (document.querySelector('.wb-speech') as HTMLElement | null)?.offsetParent !== null,
+                )))),
       `角色工作台: tab ${tabs[i]} shows ${JSON.stringify(showing)}`,
     );
     const current = await page.locator('.wb-tab[aria-current="true"]').count();
@@ -590,7 +598,8 @@ try {
   );
 
   // 预演: the settings line across the whole width (Part 24b-6c: one column; the results table is the feed below the box)
-  await page.locator('.wb-tab').nth(9).click();
+  // Named exception (Part 37b): one place later (说话档案 is a section before 发布).
+  await page.locator('.wb-tab').nth(10).click();
   await wait(900);
   const preview = await page.evaluate(() => {
     const section = document.querySelector('.wb-preview-section') as HTMLElement;
@@ -607,7 +616,8 @@ try {
   await shot('workbench-preview');
 
   // 发布: 放弃服务器草稿 and 删除角色 sit in danger zones at the bottom; 删除角色 needs the typed name and a hold
-  await page.locator('.wb-tab').nth(8).click();
+  // Named exception (Part 37b): 发布 is one place later (说话档案 is a section before it).
+  await page.locator('.wb-tab').nth(9).click();
   await wait(500);
   check(
     (await page.locator('.wb-tab', { hasText: '删除角色' }).count()) === 0,
@@ -1163,8 +1173,10 @@ try {
   for (const [index, name] of [
     [1, '欢迎内容'],
     [6, '声音'],
-    [8, '发布'],
-    [9, '预演'],
+    // Named exception (Part 37b): one place later (说话档案 is a section before 发布).
+    [9, '发布'],
+    // Named exception (Part 37b): one place later (说话档案 is a section before 发布).
+    [10, '预演'],
   ] as const) {
     await page.locator('.wb-tab').nth(index).click();
     await wait(900);

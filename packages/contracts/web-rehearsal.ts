@@ -1,5 +1,5 @@
 import { PLAYER_MODEL_IDS, PLAYER_MODELS, isPlayerModelId, type PlayerModelId } from './player-models.ts';
-import type { WriterChoice } from './web-writer.ts';
+import type { WriterLine } from './web-writer.ts';
 
 /**
  * Part 35: 多轮预演. A run is a SCRIPT, an ordered list of player turns (6-20) against ONE character, run on one or more draft
@@ -16,7 +16,14 @@ export const REHEARSAL_TURNS_MAX = 20;
  * so it is the one script allowed below REHEARSAL_TURNS_MIN. A script of your own still needs 6.
  */
 export const REHEARSAL_OPENING_TURNS = 5;
-export const rehearsalTurnsMin = (set?: string) => (set === 'opening' ? REHEARSAL_OPENING_TURNS : REHEARSAL_TURNS_MIN);
+/** Part 37b: a 档案 situation script is four turns (one situation, a few lines), the second script allowed below REHEARSAL_TURNS_MIN. */
+export const REHEARSAL_PROFILE_TURNS = 4;
+export const rehearsalTurnsMin = (set?: string) =>
+  set === 'opening'
+    ? REHEARSAL_OPENING_TURNS
+    : (REHEARSAL_PROFILE_SETS as readonly unknown[]).includes(set)
+      ? REHEARSAL_PROFILE_TURNS
+      : REHEARSAL_TURNS_MIN;
 /** Longest player message of a turn, in characters. */
 export const REHEARSAL_TURN_CHARS = 200;
 export const REHEARSAL_NAME_CHARS = 30;
@@ -37,31 +44,65 @@ export const REHEARSAL_MODEL_LABELS: Readonly<Record<PlayerModelId, string>> = O
  * DeepSeek·新 (the v8 writer). The `models` of an estimate, a start and a stored run are column keys. A rehearsal never reads the live
  * 回复写法 switch: it runs what its columns say.
  */
-export const REHEARSAL_WRITER_LABELS: Readonly<Record<WriterChoice, string>> = Object.freeze({ v7: '旧', v8: '新' });
-export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterChoice) =>
-  writer === 'v8' ? `${model}-v8` : model;
-export function parseRehearsalColumn(key: unknown): { model: PlayerModelId; writer: WriterChoice } | null {
+export const REHEARSAL_WRITER_LABELS: Readonly<Record<WriterLine, string>> = Object.freeze({ v7: '旧', v8: '新' });
+/** Part 37b: the third column of a model, 新+档案 (the v8 writer plus the character's own 核心卡 and examples). Preview only for now. */
+export const REHEARSAL_PROFILE_LABEL = '新+档案';
+export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterLine, profile = false) =>
+  writer === 'v8' ? `${model}-${profile ? 'v8p' : 'v8'}` : model;
+export function parseRehearsalColumn(
+  key: unknown,
+): { model: PlayerModelId; writer: WriterLine; profile: boolean } | null {
   if (typeof key !== 'string') return null;
-  const v8 = key.endsWith('-v8');
-  const model = v8 ? key.slice(0, -3) : key;
-  return isPlayerModelId(model) ? { model, writer: v8 ? 'v8' : 'v7' } : null;
+  const profile = key.endsWith('-v8p');
+  const v8 = profile || key.endsWith('-v8');
+  const model = profile ? key.slice(0, -4) : v8 ? key.slice(0, -3) : key;
+  return isPlayerModelId(model) ? { model, writer: v8 ? 'v8' : 'v7', profile } : null;
 }
-/** Every column the console can offer, in display order: each model's 旧 then 新. */
+/** Every column the console can offer, in display order: each model's 旧, 新, then 新+档案. */
 export const REHEARSAL_COLUMN_KEYS: readonly string[] = PLAYER_MODEL_IDS.flatMap((model) => [
   rehearsalColumnKey(model, 'v7'),
   rehearsalColumnKey(model, 'v8'),
+  rehearsalColumnKey(model, 'v8', true),
 ]);
 export const rehearsalColumnLabel = (key: string) => {
   const column = parseRehearsalColumn(key);
-  return column ? `${REHEARSAL_MODEL_LABELS[column.model]}·${REHEARSAL_WRITER_LABELS[column.writer]}` : key;
+  return column
+    ? `${REHEARSAL_MODEL_LABELS[column.model]}·${column.profile ? REHEARSAL_PROFILE_LABEL : REHEARSAL_WRITER_LABELS[column.writer]}`
+    : key;
 };
 
-export const REHEARSAL_SETS = ['chat', 'repeat', 'opening'] as const;
+/**
+ * Part 37b: eight more built-in sets, one per 说话档案 situation (`profile-<tag>`), each a few player turns in a young, casual,
+ * trend-aware voice. They run like any set, so the 37a-3 counts work on them.
+ */
+export const REHEARSAL_PROFILE_SETS = [
+  'profile-daily',
+  'profile-tease',
+  'profile-complain',
+  'profile-comfort',
+  'profile-fight',
+  'profile-share',
+  'profile-inside',
+  'profile-serious',
+] as const;
+export type RehearsalProfileSet = (typeof REHEARSAL_PROFILE_SETS)[number];
+export const REHEARSAL_SETS = ['chat', 'repeat', 'opening', ...REHEARSAL_PROFILE_SETS] as const;
 export type RehearsalSet = (typeof REHEARSAL_SETS)[number];
+export const isProfileSet = (set: unknown): set is RehearsalProfileSet =>
+  (REHEARSAL_PROFILE_SETS as readonly unknown[]).includes(set);
 export const REHEARSAL_SET_LABELS: Readonly<Record<RehearsalSet | 'memes', string>> = Object.freeze({
   chat: '日常闲聊',
   repeat: '重复检测',
   opening: '开场',
+  // (not 「日常闲聊」: the built-in 日常闲聊 script keeps that name to itself, so a rail button is found by it unambiguously)
+  'profile-daily': '档案 · 日常',
+  'profile-tease': '档案 · 调侃',
+  'profile-complain': '档案 · 抱怨',
+  'profile-comfort': '档案 · 安慰',
+  'profile-fight': '档案 · 吵架',
+  'profile-share': '档案 · 分享日常',
+  'profile-inside': '档案 · 内部梗',
+  'profile-serious': '档案 · 认真',
   memes: '梗与故事',
 });
 
@@ -225,7 +266,7 @@ export interface RehearsalRunDetail {
     /** The column key: what `memes[].models` is keyed by. */
     key: string;
     model: PlayerModelId;
-    writer: WriterChoice;
+    writer: WriterLine;
     label: string;
     cells: RehearsalCell[];
     counts: RehearsalCounts;

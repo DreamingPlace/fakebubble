@@ -1,4 +1,4 @@
-import { exactCount } from './ui/hover-value.ts';
+import { exactCount, hoverValue } from './ui/hover-value.ts';
 import type {
   ConversationsAdminClient,
   ReviewKey,
@@ -81,6 +81,8 @@ export function conversationsView(
     isOwner?: () => boolean;
     confirm?: ConfirmInPlace;
     toast?: (text: string, tone?: 'ok' | 'info' | 'warn' | 'danger') => void;
+    /** Part 37b: ⭐ on a character line opens the 说话档案 adopt box for that character's draft. Absent = no ⭐. */
+    adoptLine?: (input: { characterId: string; player: string; reply: string }) => void;
   },
 ) {
   const save = deps.save ?? ((name: string, csv: string) => downloadText(name, csv, 'text/csv'));
@@ -342,8 +344,26 @@ export function conversationsView(
       renderDetail(detail);
     });
   }
-  const lineNode = (line: ReviewLine) => {
+  const lineNode = (line: ReviewLine, before: ReviewLine | null, characterOf: string) => {
     const failed = line.status === 'failed';
+    const star =
+      deps.adoptLine && line.speaker === 'character' && !failed
+        ? h('button', {
+            class: 'review-star',
+            text: '⭐',
+            attrs: { type: 'button', 'aria-label': '加入说话档案', 'data-star': '1' },
+          })
+        : null;
+    if (star) {
+      hoverValue(star, '加入说话档案');
+      star.addEventListener('click', () =>
+        deps.adoptLine!({
+          characterId: characterOf,
+          player: before && before.speaker === 'player' && before.status !== 'failed' ? before.text : '',
+          reply: line.text,
+        }),
+      );
+    }
     return h(
       'li',
       { class: `review-line is-${line.speaker}${failed ? ' is-failed' : ''}` },
@@ -356,6 +376,7 @@ export function conversationsView(
           })
         : h('span', { class: 'review-text', text: line.text }),
       line.reviewChanged ? h('span', { class: 'review-changed', text: conversationsCopy.changed }) : null,
+      star,
     );
   };
   function renderDetail(detail: Awaited<ReturnType<typeof deps.api.detail>>) {
@@ -422,7 +443,11 @@ export function conversationsView(
       ),
       detailConfirm,
       nav(),
-      h('ol', { class: 'review-lines' }, ...detail.lines.map(lineNode)),
+      h(
+        'ol',
+        { class: 'review-lines' },
+        ...detail.lines.map((line, index) => lineNode(line, detail.lines[index - 1] ?? null, detail.characterId)),
+      ),
       nav(),
     );
     listArea.hidden = true;

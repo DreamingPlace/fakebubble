@@ -19,6 +19,8 @@ import { dateTimeText } from './system-format.ts';
 import { publishBlocker, slotLabel, slotState, type SlotState } from './publish-slots.ts';
 import { sectionIndex, type IndexedSection } from './ui/section-index.ts';
 import { versionHistory } from './history/version-history.ts';
+import { speechPanel } from './speech-profile/speech-panel.ts';
+import { othersReader } from './speech-profile/profile-draft.ts';
 import { draftHistory } from './history/draft-history.ts';
 import { readableGroups, withoutIds } from './history/readable.ts';
 import { dangerZone } from './ui/danger-zone.ts';
@@ -195,6 +197,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       host.onDirty?.(dirty);
     }
     editor?.setDisabled(busy || (detail ? !can('edit', id ?? '') : !canCreate()));
+    for (const panel of speechPanels) panel.refresh();
     for (const zone of zones) zone.paint();
     for (const c of controls) {
       if (c.text) c.node.textContent = c.text();
@@ -275,8 +278,12 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     return node;
   }
   const historyViews: { dispose: () => void }[] = [];
+  // Part 37b: the open 说话档案 section (its read-only state follows the form's unsaved changes) and the cache of the other roles.
+  const speechPanels: { refresh: () => void }[] = [];
+  const otherRoles = othersReader(host.api);
   const clearView = () => {
     view++;
+    speechPanels.length = 0;
     for (const panel of historyViews.splice(0)) panel.dispose();
     revokeAudio();
     controls = [];
@@ -798,6 +805,29 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
       if (danger.children.length) {
         flow.append(danger);
         publish.push(danger);
+      }
+      // Part 37b: 说话档案 (核心卡 and 说话样本 of the draft), before 发布.
+      if (snapshot.draft || snapshot.published) {
+        const speechNode = el('div');
+        speechNode.className = 'wb-speech';
+        body.append(speechNode);
+        speechPanels.push(
+          speechPanel(speechNode, {
+            snapshot,
+            characters: host.api,
+            others: otherRoles,
+            nameOf: (characterId) => names.get(characterId) ?? '另一个角色',
+            canEdit: () => can('edit', target),
+            unsaved: () => dirty,
+            run: (work) => host.run(work),
+            toast: (text) => host.status(text),
+            errorText: characterAdminError,
+            disposed: gone,
+            reload: () => open(target),
+          }),
+        );
+        // (id 'profile', not 'speech': the form's own 说话方式 pane already is 'speech')
+        sections.push({ id: 'profile', label: '说话档案', nodes: [speechNode] });
       }
       sections.push({ id: 'publish', label: '发布', nodes: publish });
       // Part 24f: 版本历史 is one more entry of the section bar, after 发布 (and before 预演).
