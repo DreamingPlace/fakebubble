@@ -62,6 +62,8 @@ import { textRequest } from '../../text-fixtures.ts';
 const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const NONE = new Set<string>();
 const KNOW = readMemeUse({});
+/** What a character sees when nobody touched the switches: the common words of the data are off. */
+const DEFAULT_OFF = new Set(MEME_ENTRIES.filter((entry) => entry.defaultOff).map((entry) => entry.key));
 
 // ---- 1. the dictionary ----------------------------------------------------------------------------------------------------------
 
@@ -375,11 +377,11 @@ test('the four 网络梗 scripts: six turns each, every turn holds at least one 
   for (const set of REHEARSAL_NET_SETS) {
     const turns = builtinSet(set);
     assert.equal(turns.length, 6, set);
-    for (const turn of turns) assert.ok(matchMemes([turn], NONE, KNOW).length >= 1, `${set}: ${turn}`);
+    for (const turn of turns) assert.ok(matchMemes([turn], DEFAULT_OFF, KNOW).length >= 1, `${set}: ${turn}`);
   }
   assert.deepEqual(
-    REHEARSAL_NET_SETS.map((set) => builtinSet(set).map((turn) => matchMemes([turn], NONE, KNOW).length)),
-    REHEARSAL_NET_SETS.map((set) => builtinSet(set).map((turn) => matchMemes([turn], NONE, KNOW).length)),
+    REHEARSAL_NET_SETS.map((set) => builtinSet(set).map((turn) => matchMemes([turn], DEFAULT_OFF, KNOW).length)),
+    REHEARSAL_NET_SETS.map((set) => builtinSet(set).map((turn) => matchMemes([turn], DEFAULT_OFF, KNOW).length)),
   );
 });
 
@@ -521,4 +523,41 @@ test('request.cast of 新+档案+梗 is the selected view: the writer prints it 
   const request = memesRequest({ cast, ...latest('你和陈阿杰最近怎么样') });
   const user = JSON.parse(writerDraftMessages(request)[1]!.content) as { cast: { view: unknown } };
   assert.deepEqual(user.cast.view, view);
+});
+
+test('default-off: the shipped common words (jieba frequency >= 20, any length) never match until switched on; the counts follow', () => {
+  const data = readData();
+  assert.equal(data.defaultOff.minFreq, 20);
+  assert.equal(data.defaultOff.source.commit, '67fa2e36e72f69d9134b8a1037b83fbb070b9775');
+  assert.equal(data.defaultOff.count, 72);
+  assert.equal(DEFAULT_OFF.size, 72);
+  for (const term of ['优化', '偷懒', '冥想', '存款', '早市', '估值', '对齐']) assert.ok(DEFAULT_OFF.has(term), term);
+  assert.ok(!DEFAULT_OFF.has('松弛感') && !DEFAULT_OFF.has('摆烂'));
+  assert.deepEqual(matchMemes(['这个优化太离谱，存款没了'], DEFAULT_OFF, KNOW), []);
+  assert.deepEqual(
+    matchMemes(['这个优化太离谱'], new Set(), KNOW).map((h) => h.term),
+    ['优化'],
+    'switched on, it matches',
+  );
+  assert.deepEqual(
+    matchMemes(['松弛感 优化'], DEFAULT_OFF, KNOW).map((h) => h.term),
+    ['松弛感'],
+  );
+  // a 多轮预演 run freezes the effective off list: a default-off word is no hit, switched on it is
+  const template = v8Request().character;
+  const base = { template, baseAt: Date.parse('2026-09-09T12:00:00+08:00') };
+  const off = rehearsalRequest(
+    { ...base, memeOff: [...DEFAULT_OFF] } as never,
+    'run',
+    'deepseek-v8m',
+    1,
+    ['这个优化太离谱'],
+    [],
+  );
+  const on = rehearsalRequest({ ...base, memeOff: [] } as never, 'run', 'deepseek-v8m', 1, ['这个优化太离谱'], []);
+  assert.equal(off.memeHits, undefined);
+  assert.deepEqual(
+    on.memeHits?.map((h) => h.term),
+    ['优化'],
+  );
 });

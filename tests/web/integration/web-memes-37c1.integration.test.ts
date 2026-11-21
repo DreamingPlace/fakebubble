@@ -449,7 +449,7 @@ test('the meme tables are a digest-checked runtime step: idempotent, a foreign t
   const store = fresh(t);
   installMemeStore(store);
   installMemeStore(store);
-  assert.equal(readMemesOff(store).size, 0, 'every entry is on until it is switched off');
+  assert.equal(readMemesOff(store).size, 72, 'every entry is on until it is switched off, but the 72 common words');
   const other = fresh(t);
   other.run('CREATE TABLE web_meme_other(x INTEGER)');
   assert.throws(() => installMemeStore(other), { code: 'WEB_MEME_SCHEMA_MISMATCH' });
@@ -457,7 +457,7 @@ test('the meme tables are a digest-checked runtime step: idempotent, a foreign t
   assert.throws(() => installMemeStore(store), { code: 'WEB_MEME_SCHEMA_MISMATCH' });
   // a database without the table has nothing off (a read never fails there)
   const bare = fresh(t);
-  assert.equal(readMemesOff(bare).size, 0);
+  assert.equal(readMemesOff(bare).size, 72, 'without the table the defaults still hold');
 });
 
 test('网络梗 admin: list (search, year, tag, state), switch one and many, counts, permissions, audit without a term, idempotent', async (t) => {
@@ -478,7 +478,8 @@ test('网络梗 admin: list (search, year, tag, state), switch one and many, cou
     f.cast.memesList(auth, { query: '', year: null, tag: null, state: 'all', page: 1, ...over });
   const all = list();
   assert.equal(all.total, 1806);
-  assert.equal(all.on, 1806);
+  assert.equal(all.on, 1806 - 72, 'the 72 common words ship switched off');
+  assert.equal(all.defaultOff, 72);
   assert.equal(all.entries.length, 50);
   assert.equal(all.pages, Math.ceil(1806 / 50));
   assert.ok(all.years.includes(2023) && all.years.every((y) => y >= 2022));
@@ -504,24 +505,33 @@ test('网络梗 admin: list (search, year, tag, state), switch one and many, cou
     { ...f.cast.memesSet(f.auth, { requestId: 'meme-s-1', keys: ['松弛感'], enabled: false }) },
     { changed: 1, duplicate: false },
   );
-  assert.equal(list().on, 1805);
-  assert.equal(list({ state: 'off' }).matching, 1);
+  assert.equal(list().on, 1733);
+  assert.equal(list({ state: 'off' }).matching, 73);
+  assert.equal(list({ state: 'default-off' }).matching, 72);
+  assert.ok(list({ state: 'default-off' }).entries.every((e) => e.defaultOff && !e.enabled));
   assert.equal(f.cast.memesSet(f.auth, { requestId: 'meme-s-1', keys: ['松弛感'], enabled: false }).duplicate, true);
   assert.throws(
     () => f.cast.memesSet(f.auth, { requestId: 'meme-s-1', keys: ['松弛感'], enabled: true }),
     /IDEMPOTENCY_CONFLICT/,
   );
   const page = all.entries.map((e) => e.key);
+  const pageOn = all.entries.filter((e) => e.enabled && e.term !== '松弛感').length;
+  assert.equal(f.cast.memesSet(f.auth, { requestId: 'meme-s-2', keys: page, enabled: false }).changed, pageOn);
+  assert.equal(list().on, 1733 - pageOn);
+  // both ways: a default-off entry switched on is ON, and switched off again drops back to the default (no row left)
+  const common = list({ state: 'default-off' }).entries[0]!;
+  assert.equal(list({ query: common.term }).entries[0]!.enabled, false);
+  f.cast.memesSet(f.auth, { requestId: 'meme-s-3', keys: [common.key], enabled: true });
+  assert.equal(list({ query: common.term }).entries[0]!.enabled, true);
+  assert.equal(f.store.get<{ n: number }>('SELECT COUNT(*) n FROM web_meme_switch WHERE enabled=1')!.n, 1);
+  f.cast.memesSet(f.auth, { requestId: 'meme-s-6', keys: [common.key], enabled: false });
   assert.equal(
-    f.cast.memesSet(f.auth, { requestId: 'meme-s-2', keys: page, enabled: false }).changed,
-    page.length - (page.includes('松弛感') ? 1 : 0),
+    f.store.get<{ n: number }>('SELECT COUNT(*) n FROM web_meme_switch WHERE entry_key=?', common.key)!.n,
+    0,
   );
-  assert.equal(list().on, 1806 - page.length - (page.includes('松弛感') ? 0 : 1));
-  assert.equal(
-    f.cast.memesSet(f.auth, { requestId: 'meme-s-3', keys: [...page, '松弛感'], enabled: true }).changed,
-    page.length + (page.includes('松弛感') ? 0 : 1),
-  );
-  assert.equal(list().on, 1806);
+  // the page switched back on: everything but the default-off ones is on again
+  f.cast.memesSet(f.auth, { requestId: 'meme-s-7', keys: [...page, '松弛感'], enabled: true });
+  assert.equal(list().on, 1734 + page.filter((k) => all.entries.find((e) => e.key === k)!.defaultOff).length);
   assert.throws(
     () => f.cast.memesSet(f.auth, { requestId: 'meme-s-4', keys: ['不在词库里的词'], enabled: false }),
     /MEME_NOT_FOUND/,
@@ -539,7 +549,7 @@ test('网络梗 admin: list (search, year, tag, state), switch one and many, cou
   const audit = f.store
     .all<{ target_id: string }>("SELECT target_id FROM web_admin_audit WHERE action='memes-set' ORDER BY seq")
     .map((r) => r.target_id);
-  assert.equal(audit.length, 3);
+  assert.equal(audit.length, 5);
   assert.ok(
     audit.every((line) => /^enabled=[01];changed=\d+;asked=\d+$/.test(line)),
     audit.join(' | '),
@@ -562,7 +572,30 @@ test('网络梗 admin: list (search, year, tag, state), switch one and many, cou
     undefined,
     f.cast,
   );
-  assert.equal((routed?.body as { on: number }).on, 1806);
+  assert.equal((routed?.body as { on: number }).on, 1734 + 0 * 1806);
   assert.ok(MEME_ENTRIES.length === 1806);
   void sampleCastRaw;
+});
+
+test('default-off: a common word never matches until switched on; switching works both ways; the live request and a rehearsal respect it', async (t) => {
+  const store = withChoice(t, 'v8m', '这个优化也太离谱了，还有松弛感');
+  // 优化 is a common word (shipped default OFF); 松弛感 is a meme
+  assert.deepEqual(
+    frozenOf(store).request.memeHits?.map((h) => h.term),
+    ['松弛感'],
+  );
+  const on = withChoice(t, 'v8m', '这个优化也太离谱了，还有松弛感');
+  setMemesEnabled(on, FREEZE_NOW, ['优化'], true);
+  assert.deepEqual(
+    frozenOf(on)
+      .request.memeHits?.map((h) => h.term)
+      .sort(),
+    ['优化', '松弛感'],
+  );
+  // both ways: any entry off, a default-off entry on, back to the default
+  setMemesEnabled(on, FREEZE_NOW, ['松弛感'], false);
+  assert.ok(readMemesOff(on).has('松弛感') && !readMemesOff(on).has('优化'));
+  setMemesEnabled(on, FREEZE_NOW, ['优化'], false);
+  assert.ok(readMemesOff(on).has('优化'));
+  assert.equal(on.get<{ n: number }>("SELECT COUNT(*) n FROM web_meme_switch WHERE entry_key='优化'")!.n, 0);
 });

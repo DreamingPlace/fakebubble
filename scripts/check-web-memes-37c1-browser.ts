@@ -67,7 +67,10 @@ try {
   check((await page.locator('#admin-memes .page-head h2').innerText()) === '网络梗', 'the page is titled 网络梗');
   check((await page.locator('#admin-memes .admin-table tbody tr').count()) === 50, 'fifty entries a page');
   const head = await page.locator('#admin-memes .head-status').innerText();
-  check(/共 1,806 条/.test(head) && /已开启 1,806 条/.test(head), `the count of entries (${head})`);
+  check(
+    /共 1,806 条/.test(head) && /已开启 1,734 条/.test(head) && /默认关闭 72 条/.test(head),
+    `the count of entries (${head})`,
+  );
   check(/第 1 \/ 37 页/.test(await page.locator('#admin-memes .mm-page').innerText()), 'the pager says 37 pages');
   await shot('memes-page');
   // search: the exact term first
@@ -84,16 +87,16 @@ try {
   check((await sw.getAttribute('aria-checked')) === 'true', 'an entry is on by default');
   await sw.click();
   await page.waitForFunction(
-    () => /已开启 1,805 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
+    () => /已开启 1,733 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
     null,
     {
       timeout: 10_000,
     },
   );
-  check((await statusOn()) === 1805, 'the count of entries that are on follows the switch');
+  check((await statusOn()) === 1733, 'the count of entries that are on follows the switch');
   check(
     f.store
-      .all<{ entry_key: string }>('SELECT entry_key FROM web_meme_off')
+      .all<{ entry_key: string }>('SELECT entry_key FROM web_meme_switch WHERE enabled=0')
       .map((r) => r.entry_key)
       .join(',') === '松弛感',
     'the switch is stored by the business object',
@@ -107,8 +110,32 @@ try {
   await page.locator('#admin-memes select[aria-label="状态"]').selectOption('off');
   await wait(700);
   check(
-    (await page.locator('#admin-memes .admin-table tbody tr').count()) === 1,
-    'the off filter shows the one entry that is off',
+    (await page.locator('#admin-memes .head-status').innerText()).includes('默认关闭 72 条'),
+    'the status line counts the default-off entries',
+  );
+  check(
+    /符合 73 条/.test(await page.locator('#admin-memes .mm-page').innerText()),
+    'the off filter shows the 72 default-off entries and the one switched off',
+  );
+  await page.locator('#admin-memes select[aria-label="状态"]').selectOption('default-off');
+  await wait(700);
+  check(/符合 72 条/.test(await page.locator('#admin-memes .mm-page').innerText()), 'the 默认关闭 filter lists the 72');
+  check(
+    (await page.locator('#admin-memes .mm-default-off').count()) === 50,
+    'every row of it carries the 默认关闭 badge',
+  );
+  const dsw = page.locator('#admin-memes .admin-table tbody tr').first().locator('.mm-switch');
+  check((await dsw.getAttribute('aria-checked')) === 'false', 'a default-off entry is off');
+  await shot('memes-default-off');
+  await dsw.click();
+  await page.waitForFunction(
+    () => /已开启 1,734 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
+    null,
+    { timeout: 10_000 },
+  );
+  check(
+    f.store.get<{ n: number }>('SELECT COUNT(*) n FROM web_meme_switch WHERE enabled=1')!.n === 1,
+    'a default-off entry turned on is stored as an override',
   );
   await page.locator('#admin-memes input[type="search"]').fill('');
   await page.locator('#admin-memes select[aria-label="状态"]').selectOption('all');
@@ -134,7 +161,7 @@ try {
   await page.locator('#admin-memes .admin-table thead input[type="checkbox"]').check();
   await page.locator('#admin-memes .admin-bulk-bar button', { hasText: '关闭所选' }).click();
   await page.waitForFunction(
-    () => /已开启 1,755 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
+    () => /已开启 1,6\d\d 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
     null,
     {
       timeout: 10_000,
@@ -148,13 +175,13 @@ try {
   await wait(900);
   await page.locator('#admin-memes select[aria-label="状态"]').selectOption('all');
   await wait(700);
-  check((await statusOn()) > 1755, 'a ticked page switches back on');
+  check((await statusOn()) > 1650, 'a ticked page switches back on');
   // put everything back on: one entry (松弛感) stays off for the run below on purpose
   check(
-    f.store.get<{ n: number }>('SELECT COUNT(*) n FROM web_meme_off')!.n >= 1,
+    f.store.get<{ n: number }>('SELECT COUNT(*) n FROM web_meme_switch')!.n >= 1,
     'something is still off for the rehearsal below',
   );
-  f.store.run('DELETE FROM web_meme_off');
+  f.store.run('DELETE FROM web_meme_switch');
   const text1 = await page.locator('#admin-memes').innerText();
   check(!/CC BY|chinese-meme-dict/.test(text1), 'the admin page itself carries no credit text');
   check(!/现行/.test(text1), '网络梗: no 「现行」');
@@ -300,7 +327,10 @@ try {
     'SELECT frozen_json FROM web_rehearsal_runs WHERE id=?',
     runId,
   )!.frozen_json;
-  check(/"memeOff":\[\]/.test(frozenJson), 'the run froze which entries are off');
+  check(
+    JSON.parse(frozenJson).memeOff.includes('优化'),
+    'the run froze which entries are off (the common words included)',
+  );
 
   // ======================= 4. 回复写法: four choices =======================
   await page.goto(`${f.origin}/?mode=provider-admin#/models`);

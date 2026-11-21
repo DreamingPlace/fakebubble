@@ -97,13 +97,15 @@ export interface MemeEntryView {
   year: number;
   tags: string[];
   enabled: boolean;
+  /** A common everyday word: starts switched off (the switch overrides it both ways). */
+  defaultOff: boolean;
 }
 export interface MemeListInput {
   query: string;
   year: number | null;
   tag: string | null;
-  /** 'all' | 'on' | 'off' */
-  state: 'all' | 'on' | 'off';
+  /** 'default-off' lists the entries that ship switched off, whatever their state now. */
+  state: 'all' | 'on' | 'off' | 'default-off';
   page: number;
 }
 export interface MemeListView {
@@ -115,6 +117,8 @@ export interface MemeListView {
   /** The whole dictionary: how many entries there are and how many are on. */
   total: number;
   on: number;
+  /** How many entries ship switched off. */
+  defaultOff: number;
   years: number[];
   /** The most used tags first (at most 40) - every tag stays searchable by typing. */
   tags: { tag: string; count: number }[];

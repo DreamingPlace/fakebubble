@@ -10,9 +10,13 @@ export interface MemeEntry {
   meaning: string;
   year: number;
   tags: readonly string[];
+  /** A common everyday word (jieba frequency, see scripts/build-memes.ts): starts switched OFF; the owner's switch overrides it. */
+  defaultOff: boolean;
 }
 export const MEME_ENTRIES: readonly MemeEntry[] = Object.freeze(
-  MEME_DICTIONARY_ROWS.map(([term, meaning, year, tags]) => Object.freeze({ key: term, term, meaning, year, tags })),
+  MEME_DICTIONARY_ROWS.map(([term, meaning, year, tags, defaultOff]) =>
+    Object.freeze({ key: term, term, meaning, year, tags, defaultOff }),
+  ),
 );
 const byKey = new Map(MEME_ENTRIES.map((entry) => [entry.key, entry] as const));
 export const memeEntry = (key: string): MemeEntry | undefined => byKey.get(key);

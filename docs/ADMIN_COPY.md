@@ -102,3 +102,6 @@ Everything here goes into the 草稿; **正式版本** changes only with 发布.
 | refusals | 词库里没有这个词，请核对后再添加（要和词库里的原词一样）。 · 单条设置最多 200 条。 · 词库里没有这一条，请刷新后再试。 |
 
 Player pages: one line on the terms page (the license notice and its link); nothing else.
+
+### Part 37c-1 follow-up — 默认关闭
+网络梗: 状态 gains **默认关闭** (the common words that ship switched off); each such row has a 默认关闭 badge (hover: 常用词，默认不会触发；可以手动开启); the status line adds `默认关闭 N 条`. No explanation line.

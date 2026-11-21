@@ -296,7 +296,7 @@ export class WebCastAdmin {
         body.query.length <= 100 &&
         (body.year === null || (Number.isSafeInteger(body.year) && (body.year as number) >= 1900)) &&
         (body.tag === null || (typeof body.tag === 'string' && body.tag.length <= 40)) &&
-        (body.state === 'all' || body.state === 'on' || body.state === 'off') &&
+        (body.state === 'all' || body.state === 'on' || body.state === 'off' || body.state === 'default-off') &&
         Number.isSafeInteger(body.page) &&
         (body.page as number) >= 1,
       'INVALID_REQUEST',

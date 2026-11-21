@@ -18017,6 +18017,21 @@ button:not(
 .account-admin-page.admin-shell #admin-memes .mm-on {
   color: var(--ad-ok);
 }
+.account-admin-page.admin-shell #admin-memes .mm-termcell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-default-off {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
 .account-admin-page.admin-shell #admin-memes .mm-term {
   white-space: nowrap;
 }

@@ -27,7 +27,7 @@ export function memesView(root: HTMLElement, deps: Deps) {
   let query = '';
   let year: number | null = null;
   let tag: string | null = null;
-  let state: 'all' | 'on' | 'off' = 'all';
+  let state: 'all' | 'on' | 'off' | 'default-off' = 'all';
   let page = 1;
   let timer: ReturnType<typeof setTimeout> | null = null;
   /** The newest list request: an older answer arriving later never paints over a newer one. */
@@ -52,6 +52,7 @@ export function memesView(root: HTMLElement, deps: Deps) {
     ['all', '全部'],
     ['on', '已开启'],
     ['off', '已关闭'],
+    ['default-off', '默认关闭'],
   ] as const)
     stateSelect.append(h('option', { text, attrs: { value } }));
   const field = (label: string, input: HTMLElement) =>
@@ -82,7 +83,22 @@ export function memesView(root: HTMLElement, deps: Deps) {
   };
   const table = dataTable<MemeEntryView>({
     columns: [
-      { key: 'term', label: '词', render: (row) => h('strong', { class: 'mm-term', text: row.term }) },
+      {
+        key: 'term',
+        label: '词',
+        render: (row) => {
+          const cell = h('span', { class: 'mm-termcell' }, h('strong', { class: 'mm-term', text: row.term }));
+          // A common everyday word ships switched off; the badge stays on the row whatever the switch says now.
+          if (row.defaultOff)
+            cell.append(
+              hoverValue(
+                h('span', { class: 'mm-default-off', text: '默认关闭' }),
+                '常用词，默认不会触发；可以手动开启',
+              ),
+            );
+          return cell;
+        },
+      },
       { key: 'meaning', label: '释义', render: (row) => h('span', { class: 'mm-meaning', text: row.meaning }) },
       { key: 'year', label: '年份', sortable: true, sortValue: (row) => row.year },
       {
@@ -149,6 +165,8 @@ export function memesView(root: HTMLElement, deps: Deps) {
       h('span', { text: `共 ${count(v.total)} 条` }),
       h('i', { class: 'head-sep', attrs: { 'aria-hidden': 'true' } }),
       h('span', { class: 'mm-on', text: `已开启 ${count(v.on)} 条` }),
+      h('i', { class: 'head-sep', attrs: { 'aria-hidden': 'true' } }),
+      h('span', { text: `默认关闭 ${count(v.defaultOff)} 条` }),
     );
   };
 
