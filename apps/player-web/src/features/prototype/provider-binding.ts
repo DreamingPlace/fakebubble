@@ -21,7 +21,7 @@ import { backupNote, modelCopy, modelFooterNote, modelMenuItem, openModelPicker 
 import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
 import { playerPrefs } from '../prefs/player-prefs.ts';
 import { lookCopy, openLookSheet } from './chat-look.ts';
-import { openShareSheet, shareButton } from '../share/share-sheet.ts';
+import { openShareSheet, shareButton, shareCopy } from '../share/share-sheet.ts';
 
 type Shell = {
   say(message: string): void;
@@ -1097,11 +1097,15 @@ export class LiveBinding {
           no: shell.cardNo?.(characterId) ?? '',
           durationMs: message.audio?.durationMs ?? null,
         };
-        openShareSheet(button, target, {
-          say: (text) => shell.say(text),
-          create: (requestId) =>
-            this.api.share({ requestId, conversationId: message.conversationId, messageId: message.messageId }),
-        });
+        try {
+          openShareSheet(button, target, {
+            say: (text) => shell.say(text),
+            create: (requestId) =>
+              this.api.share({ requestId, conversationId: message.conversationId, messageId: message.messageId }),
+          });
+        } catch {
+          shell.say(shareCopy.failed); // never silent: a sheet that could not be built is said
+        }
       });
       row.append(button);
     }
