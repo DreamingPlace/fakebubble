@@ -124,3 +124,13 @@ export const TIMING_SCRIPT = `
       look();
     });
   })();`;
+
+/**
+ * The console fixture starts every browser context's clock at its own frozen date (so pages agree with the server's frozen clock).
+ * Cloudflare's real Turnstile checks the device's time against its own and refuses a clock that is days off (error 200100), so a
+ * context that solves the real widget puts its clock back on real time.
+ */
+export async function realClock(context: Any) {
+  await context.clock.setSystemTime(Date.now());
+  await context.clock.resume();
+}

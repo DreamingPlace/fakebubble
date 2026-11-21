@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadPlaywright, startConsoleFixture } from './console-fixture-24b6.ts';
 import { decodePng } from './png-pixels.ts';
-import { PROFILES, TIMING_SCRIPT, throttle, turnstileRoutes } from './first-screen-48-support.ts';
+import { PROFILES, TIMING_SCRIPT, realClock, throttle, turnstileRoutes } from './first-screen-48-support.ts';
 
 /**
  * Part 48 in REAL browsers: the first screen without a session (the console fixture: the REAL local server and the built player; its
@@ -51,6 +51,7 @@ const phone = { ...pw.devices['Pixel 7'], viewport: { width: 412, height: 915 },
 /** A phone context that lands on 瓜瓜 (a chat card): the fixture's random landing could be a character that is not open yet. */
 const newPhone = async (browser: Any = f.browser) => {
   const ctx = await browser.newContext(phone);
+  await realClock(ctx); // (the real Turnstile compares the clock; see realClock)
   await ctx.addInitScript(() =>
     localStorage.setItem('fakebubble.player-prefs.v1', JSON.stringify({ lastViewed: 'wei-guagua' })),
   );

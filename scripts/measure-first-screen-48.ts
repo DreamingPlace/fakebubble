@@ -1,7 +1,14 @@
 import { mkdirSync, renameSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { loadPlaywright, startConsoleFixture } from './console-fixture-24b6.ts';
-import { PROFILES, TIMING_SCRIPT, throttle, turnstileRoutes, type ProfileName } from './first-screen-48-support.ts';
+import {
+  PROFILES,
+  TIMING_SCRIPT,
+  realClock,
+  throttle,
+  turnstileRoutes,
+  type ProfileName,
+} from './first-screen-48-support.ts';
 
 /**
  * Part 48: a cold, new-visitor mobile load, measured (and optionally filmed).
@@ -38,6 +45,7 @@ try {
     ignoreHTTPSErrors: true,
     ...(video ? { recordVideo: { dir: resolve(video), size: { width: 412, height: 915 } } } : {}),
   });
+  await realClock(context);
   await context.addInitScript(TIMING_SCRIPT);
   const stats = turnstile ? await turnstileRoutes(context, f.origin) : null;
   const page = await context.newPage();
