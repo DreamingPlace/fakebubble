@@ -58,6 +58,8 @@ const fail = (code: string): never => {
   throw new SpeechProfileError(code);
 };
 
+import { DAILY_LIFE_KEY, DAY_PARTS, DAY_PART_MAX, type DayPart } from './cocreation-day.ts';
+
 /** Admin sentences (docs/ADMIN_COPY.md, Part 37b). */
 export const SPEECH_PROFILE_ERROR_TEXT: Record<string, string> = {
   PROFILE_TEXT_REQUIRED: '请先写下要加入的内容。',
@@ -68,6 +70,9 @@ export const SPEECH_PROFILE_ERROR_TEXT: Record<string, string> = {
   PROFILE_FIELD_SHAPE_UNSUPPORTED:
     '这个字段现有的结构既不是文字也不是列表，无法自动改写。请在角色工作台的其他分区手动编辑。',
   PROFILE_SAMPLE_MISSING: '这条样本已经不在草稿里了，请刷新后再试。',
+  // Part 47: 一天的安排.
+  PROFILE_DAILY_TOO_LONG: '这一栏太长了，请先精简（早上到深夜每栏最多 300 字，一整天的故事最多 800 字）。',
+  PROFILE_DAILY_SHAPE_UNSUPPORTED: '一天的安排现有的结构无法自动改写。请在角色工作台的其他分区手动编辑。',
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -321,4 +326,49 @@ export function checkIndependence(
   hits.sort((a, b) => b.score - a.score || (a.characterId < b.characterId ? -1 : 1));
   const level = hits.some((hit) => hit.score >= INDEPENDENCE_BLOCK) ? 'block' : hits.length ? 'warn' : 'ok';
   return { level, hits };
+}
+
+// ---- Part 47: 一天的安排 ----------------------------------------------------------------------------------------------------------
+
+export type DailyLife = Partial<Record<DayPart, string>>;
+/** The six parts as stored (an absent part is ''). False in `editable` when the stored value is not a record of texts. */
+export function readDailyLife(template: unknown): { parts: Record<DayPart, string>; editable: boolean } {
+  const raw = settingsOf(template)[DAILY_LIFE_KEY];
+  const parts = Object.fromEntries(DAY_PARTS.map((part) => [part, ''])) as Record<DayPart, string>;
+  if (raw === undefined) return { parts, editable: true };
+  if (!isObject(raw)) return { parts, editable: false };
+  for (const part of DAY_PARTS) if (typeof raw[part] === 'string') parts[part] = raw[part] as string;
+  return {
+    parts,
+    editable: Object.entries(raw).every(
+      ([key, value]) => (DAY_PARTS as readonly string[]).includes(key) && typeof value === 'string',
+    ),
+  };
+}
+
+/**
+ * Sets (mode 'replace', or '' to clear) or appends on its own line (mode 'append') ONE part. The result may not exceed the part's cap.
+ * Nothing but `settings.dailyLife` changes; an empty record is removed.
+ */
+export function writeDailyPart<T extends object>(
+  template: T,
+  part: DayPart,
+  text: string,
+  mode: 'append' | 'replace' = 'replace',
+): T {
+  const copy = cloneTemplate(template);
+  const settings = settingsForWrite(copy);
+  const stored = settings[DAILY_LIFE_KEY];
+  if (stored !== undefined && !isObject(stored)) fail('PROFILE_DAILY_SHAPE_UNSUPPORTED');
+  const record = (isObject(stored) ? stored : {}) as Record<string, unknown>;
+  const piece = typeof text === 'string' ? text.trim() : '';
+  if (mode === 'append' && piece === '') fail('PROFILE_TEXT_REQUIRED');
+  const before = typeof record[part] === 'string' ? (record[part] as string).trimEnd() : '';
+  const next = mode === 'append' && before !== '' ? `${before}\n${piece}` : piece;
+  if (len(next) > DAY_PART_MAX[part]) fail('PROFILE_DAILY_TOO_LONG');
+  if (next === '') delete record[part];
+  else record[part] = next;
+  if (Object.keys(record).length === 0) delete settings[DAILY_LIFE_KEY];
+  else settings[DAILY_LIFE_KEY] = record;
+  return copy as unknown as T;
 }

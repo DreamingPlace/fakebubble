@@ -2345,9 +2345,6 @@ html.cc-open body {
   gap: 6px;
   margin-bottom: 12px;
 }
-.cc-rel[data-mode="group"] .cc-rel-inline-names {
-  display: none;
-}
 .cc-rel-area {
   box-sizing: border-box;
   display: block;
@@ -2452,9 +2449,6 @@ html.cc-open body {
     gap: 28px;
     max-width: 1100px;
     padding: 28px 40px 40px;
-  }
-  .cc-rel-inline-names {
-    display: none;
   }
   .cc-rel-area {
     min-height: 190px;
@@ -17908,6 +17902,7 @@ button:not(
   font-size: 15px;
 }
 .account-admin-page.admin-shell .sp-card,
+.account-admin-page.admin-shell .sp-daily,
 .account-admin-page.admin-shell .sp-groups {
   display: flex;
   flex-direction: column;
@@ -21933,6 +21928,9 @@ html.theme-fade *::after {
   .bl-row,
   .cc-sheet,
   .cc-sheet .cc-editor,
+  .cc-rel-slot,
+  .cc-rel-mem,
+  .cc-rel-list,
   .share-sticker,
   .share-cta,
   .share-page .share-blank,
@@ -22338,6 +22336,229 @@ html.theme-fade *::after {
 :root[data-platform="android"] .face-sheen {
   mix-blend-mode: normal;
   opacity: 0.4;
+}
+
+/* ---- Part 47: the deck's last card is the first step of the relationship flow (a sentence with a tappable partner slot), and the fixed
+   card 「一天」 has six parts. Pastel faces keep dark ink in both themes (see the .cc-card rule above). ---- */
+.cc-rel-entry-face {
+  min-height: 0;
+  gap: 14px;
+  padding: 18px 16px 16px;
+  cursor: default;
+}
+.cc-rel-sentence {
+  margin: 0;
+  padding-right: 0;
+  line-height: 2.1;
+  overflow-wrap: anywhere;
+}
+.cc-rel-me {
+  font-weight: 900;
+}
+.cc-rel-slot,
+.cc-rel-mem {
+  vertical-align: middle;
+}
+.cc-rel-slot {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  max-width: 100%;
+  margin: 0 2px;
+  padding: 0 12px;
+  border: 1.5px solid #1d2a27;
+  border-radius: 12px;
+  background: #fff;
+  color: #141414;
+  font: inherit;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  animation: cc-rel-pop 240ms var(--bb-ease) both;
+  transition:
+    background 160ms ease,
+    transform 200ms var(--bb-ease);
+}
+.cc-rel-slot:active {
+  transform: scale(0.97);
+}
+.cc-rel-slot.is-open {
+  background: #ece6f8;
+}
+.cc-rel-slot:focus-visible {
+  outline: 3px solid #1d2a27;
+  outline-offset: 2px;
+}
+.cc-rel-caret {
+  display: inline-block;
+  font-style: normal;
+  font-size: 12px;
+  transition: transform 200ms var(--bb-ease);
+}
+.cc-rel-slot.is-open .cc-rel-caret {
+  transform: rotate(180deg);
+}
+.cc-rel-mem {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 2px;
+  border-radius: 12px;
+  background: #fff;
+  animation: cc-rel-pop 240ms var(--bb-ease) both;
+}
+.cc-rel-mem .cc-rel-slot {
+  margin: 0;
+  border-color: transparent;
+  padding-right: 4px;
+  animation: none;
+}
+.cc-rel-sentence .cc-rel-x {
+  width: 32px;
+  height: 32px;
+  margin-right: 4px;
+}
+.cc-rel-sentence .cc-rel-dice {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin-left: 4px;
+  vertical-align: middle;
+  background: #e9e3f7;
+  font-size: 20px;
+  line-height: 1;
+}
+.cc-rel-list {
+  display: grid;
+  gap: 2px;
+  max-height: 232px;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  list-style: none;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(40, 24, 60, 0.2);
+  animation: cc-rel-list-in 220ms var(--bb-ease) both;
+  overscroll-behavior: contain;
+}
+.cc-rel-list[hidden] {
+  display: none;
+}
+.cc-rel-list .cc-rel-option {
+  min-height: 44px;
+  height: auto;
+}
+.cc-rel-list .cc-rel-option.is-mine {
+  background: #ece6f8;
+  font-weight: 800;
+}
+@keyframes cc-rel-list-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+.cc-rel-entry-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cc-rel-entry .cc-rel-plus {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+.cc-rel-entry .cc-rel-plus[hidden] {
+  display: none;
+}
+.cc-rel-card-next {
+  box-sizing: border-box;
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  margin-left: auto;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: #1d2a27;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  transition:
+    opacity 200ms ease,
+    transform 200ms var(--bb-ease);
+}
+.cc-rel-card-next:focus-visible {
+  outline: 3px solid #1d2a27;
+  outline-offset: 2px;
+}
+.cc-rel-card-next:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.cc-rel-card-next:not(:disabled):active {
+  transform: scale(0.97);
+}
+/* 一天: six parts in one card */
+.cc-day-editor {
+  display: grid;
+  gap: 10px;
+}
+.cc-day-part {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.cc-day-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.cc-day-ok {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #8bb5a3;
+  color: #fff;
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 180ms ease,
+    transform 220ms var(--bb-ease);
+}
+.cc-day-ok.is-on {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cc-rel-slot,
+  .cc-rel-caret,
+  .cc-rel-card-next,
+  .cc-day-ok {
+    transition: none;
+  }
 }
 
 /* Last in the file, as the skin's reduced-motion test requires: the rule that cancels every bb- animation (repeated from Part 25b). */

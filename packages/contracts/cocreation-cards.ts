@@ -1,4 +1,5 @@
 import { COCREATION_THEMES, COCREATION_SHOWN_MAX } from './cocreation-wordings.ts';
+import { DAY_PARTS, DAY_PART_LABELS, DAY_PART_MAX, DAY_PROMPT, dayCardId, type DayPart } from './cocreation-day.ts';
 
 /**
  * Co-creation ("共创") cards: players write ideas that make an official character more like themselves.
@@ -27,6 +28,8 @@ export type CocreationCard = {
   kind: CocreationKind;
   /** Part 39b: one of the five themes. A theme answer also carries the exact wording that was shown (`wording`). */
   theme?: true;
+  /** Part 47: one part of the fixed 「一天」 card; answered like a text card, capped by its own part limit. */
+  day?: DayPart;
 };
 
 /**
@@ -56,7 +59,15 @@ const THEME_CARDS: readonly CocreationCard[] = COCREATION_THEMES.map((theme) => 
   kind: 'text' as const,
   theme: true as const,
 }));
-const byId = new Map([...COCREATION_CARDS, ...THEME_CARDS].map((card) => [card.id, card]));
+/** Part 47: the six parts of the fixed 「一天」 card. Each is its own text answer (existing kind), routed to 「一天的安排」 by `day`. */
+const DAY_CARDS: readonly CocreationCard[] = DAY_PARTS.map((part) => ({
+  id: dayCardId(part),
+  prompt: `${DAY_PROMPT}（${DAY_PART_LABELS[part]}）`,
+  targetField: 'free' as const,
+  kind: 'text' as const,
+  day: part,
+}));
+const byId = new Map([...COCREATION_CARDS, ...THEME_CARDS, ...DAY_CARDS].map((card) => [card.id, card]));
 export const cocreationCard = (id: string) => byId.get(id);
 export const cocreationPrompt = (card: CocreationCard, name: string) => card.prompt.replaceAll('{name}', name);
 
@@ -120,8 +131,12 @@ export function validateCocreationAnswers(value: unknown): CocreationValidation 
     const keys = Object.keys(entry).sort().join(',');
     if (card.kind === 'text') {
       if (keys !== (card.theme ? 'cardId,text,wording' : 'cardId,text')) return bad('INVALID_REQUEST');
-      if (!cocreationTextOk(entry.text, card.id === 'free' ? COCREATION_LIMITS.free : COCREATION_LIMITS.text))
-        return bad('COCREATION_TEXT_INVALID');
+      const max = card.day
+        ? DAY_PART_MAX[card.day]
+        : card.id === 'free'
+          ? COCREATION_LIMITS.free
+          : COCREATION_LIMITS.text;
+      if (!cocreationTextOk(entry.text, max)) return bad('COCREATION_TEXT_INVALID');
       if (card.theme) {
         if (!cocreationTextOk(entry.wording, COCREATION_SHOWN_MAX)) return bad('COCREATION_WORDING_INVALID');
         answers.push({ cardId: card.id, text: entry.text, wording: entry.wording });

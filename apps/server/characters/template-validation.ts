@@ -4,6 +4,7 @@ import { validateSchedule } from '../../../packages/domain/schedule.ts';
 import { validateAutonomy } from '../../../packages/domain/autonomy.ts';
 import { validateVoiceBinding } from './voices.ts';
 import { validBirthDate } from './characters.ts';
+import { dailyLifeValid } from '../../../packages/contracts/cocreation-day.ts';
 
 export function record(value: unknown): asserts value is Record<string, unknown> {
   ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_ADMIN_REQUEST');
@@ -108,9 +109,15 @@ export function validatedTemplate(value: unknown): CharacterTemplate {
       'fictionalLocations',
       'fictionalPeople',
       'canonEvents',
+      // Part 47: 一天的安排 (six optional texts). It reaches the writer only as part of the settings, like every other key.
+      'dailyLife',
     ]);
     jsonValue(value.authorCanon.settings);
     ensure(JSON.stringify(value.authorCanon.settings).length <= 48_000, 'CHARACTER_CONTEXT_TOO_LARGE');
+    ensure(
+      value.authorCanon.settings.dailyLife === undefined || dailyLifeValid(value.authorCanon.settings.dailyLife),
+      'INVALID_DAILY_LIFE',
+    );
     const identity = value.authorCanon.settings.selfIdentity;
     if (identity !== undefined) {
       record(identity);

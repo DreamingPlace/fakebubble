@@ -21,6 +21,9 @@ export type AdoptDraft =
   | { field: Exclude<AdoptField, 'dialogueExamples'>; text: string }
   | { field: 'dialogueExamples'; situation: string; player: string; reply: string[] };
 
+/** Part 47: a part of 「一天」 is adopted into 一天的安排 (`authorCanon.settings.dailyLife`), not into one of the fields above. */
+export type AdoptTarget = AdoptField | 'dailyLife';
+
 export class CocreationAdoptError extends Error {
   readonly code: string;
   constructor(code: string) {

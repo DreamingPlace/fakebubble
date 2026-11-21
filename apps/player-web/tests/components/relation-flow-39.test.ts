@@ -1,6 +1,10 @@
 // Part 39 / 39b (named exception, owner decision 2026-11-18): the relation flow of the co-creation sheet is opened FROM one character (the
 // anchor). The old tests, which rolled two characters of the whole catalog, are replaced by the tests below: the relation always includes
 // the anchor, 🎲 picks a random OTHER one, the ratings are anchor 对 X and X 对 anchor, the anchor cannot be removed, up to eight.
+// Part 47 (named exception, owner decision 2026-11-21): the first step of the flow is the LAST CARD of the deck, shown directly as the sentence
+// 「A和[X]之间有什么故事？」 (no separate dice card, no chip row, no explanation line). The tests of the removed behaviour (the dice card that
+// opened the screen, the chip row with 🎲 and ＋ beside it, 下一步 of the choose step inside the screen) are replaced by the tests below; the
+// pair and group flows after the card (ratings, reason, story, one send) keep their assertions.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { relationFlow, resetRelationDraft, type RelationSend } from '../../src/features/cocreation/relation-flow.ts';
@@ -32,85 +36,140 @@ function setup(t: test.TestContext, anchor = 'c3', random: () => number = () => 
     onSent: () => {},
   });
   const screen = flow.screen as unknown as FakeElement;
-  const roll = () => (flow.entry as unknown as FakeElement).querySelector('.cc-rel-dice')!.click();
+  const entry = flow.entry as unknown as FakeElement;
   return {
     flow,
     screen,
+    entry,
     sent,
     heads,
-    roll,
-    members: () => screen.querySelectorAll('.cc-rel-chip').map((c) => c.getAttribute('data-member')),
+    /** The people of the sentence: the anchor (plain text) and every slot, in the order shown. */
+    members: () =>
+      entry
+        .querySelectorAll('[data-member]')
+        .filter((n) => n.tagName.toLowerCase() === 'button')
+        .map((c) => c.getAttribute('data-member')),
+    sentence: () => entry.querySelector('.cc-rel-sentence')!.textContent.replaceAll('▾', '').replaceAll('✕', ''),
     q: (selector: string) => screen.querySelector(selector)!,
     all: (selector: string) => screen.querySelectorAll(selector),
+    e: (selector: string) => entry.querySelector(selector)!,
+    eAll: (selector: string) => entry.querySelectorAll(selector),
+    pickOption: (id: string) =>
+      entry
+        .querySelectorAll('.cc-rel-option')
+        .find((o) => o.getAttribute('data-option') === id)!
+        .click(),
   };
 }
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-test('the dice picks a random OTHER character: the relation is the anchor plus that one, in the console order', (t) => {
+test('the card shows the sentence directly: the anchor is fixed text, a random OTHER character is the partner slot; no chip row, no explanation line', (t) => {
   const s = setup(t, 'c3', () => 0);
-  s.roll();
-  assert.equal(s.flow.isOpen(), true);
-  assert.deepEqual(s.members(), ['c0', 'c3'], 'random 0 is the first OTHER character, never the anchor twice');
-  assert.equal(
-    s
-      .all('.cc-rel-chip')
-      .find((c) => c.getAttribute('data-member') === 'c3')!
-      .getAttribute('data-anchor'),
-    'true',
-  );
-  // Every other character is reachable by the roll, uniformly and whatever the catalog order: 8 values of the random number hit 8 different ones.
+  assert.equal(s.flow.available, true);
+  assert.equal(s.flow.isOpen(), false, 'the screen is closed: the card of the deck IS the first step');
+  assert.equal(s.sentence(), '丁和甲🎲之间有什么故事？');
+  assert.equal(s.e('.cc-rel-me').tagName.toLowerCase(), 'span', 'the main character is plain text, not a control');
+  assert.equal(s.e('.cc-rel-me').textContent, '丁');
+  assert.deepEqual(s.members(), ['c0']);
+  assert.equal(s.e('.cc-rel-slot').tagName.toLowerCase(), 'button');
+  assert.equal(s.eAll('.cc-rel-chip').length + s.all('.cc-rel-chips').length, 0, 'no chip row');
+  const words = s.entry.textContent;
+  assert.ok(!words.includes('随机再加一位') && !words.includes('可以打分'), 'no explanation line');
+  assert.ok(!/^🎲/u.test(s.sentence()), 'no 🎲 at the start of any text');
+  for (const node of s.eAll('button'))
+    assert.ok(!node.textContent.trim().startsWith('🎲') || node.textContent.trim() === '🎲');
+  // Every other character can be the first partner, uniformly and whatever the catalog order: 8 values hit 8 different ones.
   const hit = new Set<string>();
   for (let k = 0; k < 8; k++) {
-    const roller = setup(t, 'c3', () => (k + 0.5) / 8);
-    roller.roll();
-    const other = roller.members().find((id) => id !== 'c3')!;
-    assert.ok(other !== 'c3');
-    assert.equal(roller.members().length, 2, 'never two OTHER characters');
-    assert.ok(roller.members().includes('c3'), 'the anchor is always a member');
-    hit.add(other);
+    const built = setup(t, 'c3', () => (k + 0.5) / 8);
+    const other = built.members().find((id) => id !== 'c3')!;
+    assert.equal(built.members().length, 1);
+    hit.add(other!);
   }
   assert.equal(hit.size, 8);
-  // A roll never yields an anchor-less pair, for any random value at the edges.
-  for (const value of [0, 0.999999]) {
-    const edge = setup(t, 'c8', () => value);
-    edge.roll();
-    assert.ok(edge.members().includes('c8') && edge.members().length === 2);
+  for (const value of [0, 0.999999]) assert.equal(setup(t, 'c8', () => value).members().length, 1);
+});
+
+test('tapping the partner name opens the list of every other character; choosing one replaces the partner, the main character is never in it', (t) => {
+  const s = setup(t, 'c3', () => 0);
+  s.e('.cc-rel-slot').click();
+  assert.equal(s.e('.cc-rel-list').hidden, false);
+  const options = s.eAll('.cc-rel-option').map((o) => o.getAttribute('data-option'));
+  assert.deepEqual(
+    options,
+    EVERYONE.filter((p) => p.characterId !== 'c3').map((p) => p.characterId),
+  );
+  assert.equal(s.e('.cc-rel-slot').getAttribute('aria-expanded'), 'true');
+  s.pickOption('c6');
+  assert.equal(s.sentence(), '丁和庚🎲之间有什么故事？');
+  assert.deepEqual(s.members(), ['c6']);
+  assert.equal(s.e('.cc-rel-list').hidden, true, 'the list closes after a choice');
+  // The main character cannot be changed: there is no control for it at all.
+  assert.equal(s.eAll('.cc-rel-me').filter((n) => n.tagName.toLowerCase() === 'button').length, 0);
+});
+
+test('🎲 beside the partner picks another random OTHER character (never the one shown, never the anchor)', (t) => {
+  let n = 0;
+  const s = setup(t, 'c3', () => (n++ === 0 ? 0 : 0.99));
+  assert.deepEqual(s.members(), ['c0']);
+  s.e('.cc-rel-dice').click();
+  const next = s.members();
+  assert.equal(next.length, 1);
+  assert.ok(next[0] !== 'c0' && next[0] !== 'c3');
+  assert.equal(next[0], 'c8', 'random 0.99 over the others without the one shown');
+  // Over many rolls the partner is always another character than the one before.
+  let now = s.members()[0]!;
+  for (let k = 0; k < 20; k++) {
+    s.e('.cc-rel-dice').click();
+    const after = s.members()[0]!;
+    assert.ok(after !== now && after !== 'c3');
+    now = after;
   }
 });
 
-test('the anchor cannot be removed; the others can while two remain; ＋ and 🎲 add up to eight in all', (t) => {
+test('＋ adds people INTO the sentence (「A、B和C」), each can be removed while two remain, up to eight in all; 🎲 is for the pair only', (t) => {
   const s = setup(t, 'c3', () => 0);
-  s.roll();
-  assert.equal(s.all('.cc-rel-x').length, 0, 'two members: nobody can be removed');
-  // 🎲 again adds one more random non-member; ＋ lists everyone and adds the chosen one.
-  s.q('.cc-rel-again').click();
-  assert.equal(s.members().length, 3);
-  assert.ok(s.members().includes('c3'));
-  s.q('.cc-rel-plus').click();
-  s.all('.cc-rel-option')
-    .find((o) => o.getAttribute('data-option') === 'c8')!
-    .click();
-  assert.ok(s.members().includes('c8'), 'chosen directly from the list');
-  const removable = s.all('.cc-rel-chip').filter((c) => c.querySelector('.cc-rel-x'));
-  assert.equal(removable.length, 3, 'every member but the anchor has a ✕');
-  assert.ok(!removable.some((c) => c.getAttribute('data-member') === 'c3'));
-  for (let n = 0; n < 4; n++) s.q('.cc-rel-again').click();
-  assert.equal(s.members().length, 8);
-  assert.equal(s.all('.cc-rel-again').length, 0, 'eight is the most');
-  assert.equal(s.all('.cc-rel-plus').length, 0);
-  assert.ok(s.members().includes('c3'));
-  assert.equal(s.screen.getAttribute('data-mode'), 'group');
-  assert.equal(s.all('.cc-star').length, 0, 'a group has no stars');
-  // Removing others never takes the anchor with them.
-  while (s.all('.cc-rel-x').length > 0) s.q('.cc-rel-x').click();
-  assert.equal(s.members().length, 2);
-  assert.ok(s.members().includes('c3'));
+  assert.equal(s.eAll('.cc-rel-x').length, 0, 'two people: nobody can be removed');
+  s.e('.cc-rel-plus').click();
+  s.pickOption('c8');
+  assert.equal(s.sentence(), '丁、甲和壬之间有什么故事？');
+  assert.deepEqual(s.members(), ['c0', 'c8']);
+  assert.equal(s.eAll('.cc-rel-dice').length, 0, 'a group has no 🎲');
+  assert.equal(s.eAll('.cc-rel-x').length, 2, 'every person but the main character has a ✕');
+  // up to eight in all
+  for (let k = 0; k < 5; k++) {
+    s.e('.cc-rel-plus').click();
+    s.eAll('.cc-rel-option')
+      .find((o) => o.getAttribute('aria-disabled') === 'false')!
+      .click();
+  }
+  assert.equal(s.members().length, 7);
+  assert.equal(s.e('.cc-rel-plus').hidden, true, 'eight is the most');
+  // removing never takes the main character, and stops at two
+  while (s.eAll('.cc-rel-x').length > 0) s.e('.cc-rel-x').click();
+  assert.equal(s.members().length, 1);
+  assert.match(s.sentence(), /^丁和.🎲之间有什么故事？$/u);
+});
+
+test('下一步 on the card: two people go to the ratings, three or more go to the group story', (t) => {
+  const pair = setup(t, 'c3', () => 0);
+  pair.e('.cc-rel-card-next').click();
+  assert.equal(pair.flow.isOpen(), true);
+  assert.equal(pair.screen.getAttribute('data-step'), 'rate');
+  assert.equal(pair.screen.getAttribute('data-mode'), 'pair');
+  const group = setup(t, 'c3', () => 0);
+  group.e('.cc-rel-plus').click();
+  group.pickOption('c8');
+  group.e('.cc-rel-card-next').click();
+  assert.equal(group.flow.isOpen(), true);
+  assert.equal(group.screen.getAttribute('data-step'), 'group');
+  assert.equal(group.screen.getAttribute('data-mode'), 'group');
+  assert.equal(group.all('.cc-star').length, 0, 'a group has no stars');
 });
 
 test('a pair: anchor 对 X, then X 对 anchor, whole stars with their words, reason, story, then one send with both directions', async (t) => {
   const s = setup(t, 'c3', () => 0);
-  s.roll();
-  s.q('.cc-rel-next').click();
+  s.e('.cc-rel-card-next').click();
   assert.equal(s.q('.cc-rel-next').disabled, true, 'both ratings first');
   const rows = s.all('.cc-rate');
   assert.deepEqual(
@@ -145,16 +204,16 @@ test('a pair: anchor 对 X, then X 对 anchor, whole stars with their words, rea
   assert.equal(s.flow.isOpen(), false);
 });
 
-test('the header button goes one step back, then out to the deck; a group sends no ratings and no reason', async (t) => {
+test('the header button goes one step back, then out to the card; a group sends no ratings and no reason', async (t) => {
   const s = setup(t, 'c3', () => 0);
-  s.roll();
-  s.q('.cc-rel-next').click();
+  s.e('.cc-rel-card-next').click();
   assert.equal(s.flow.back(), true);
-  assert.equal(s.screen.getAttribute('data-step'), 'choose');
-  s.q('.cc-rel-plus').click();
-  s.all('.cc-rel-option')
+  assert.equal(s.flow.isOpen(), false, 'the first step of the screen goes back to the card of the deck');
+  s.e('.cc-rel-plus').click();
+  s.eAll('.cc-rel-option')
     .find((o) => o.getAttribute('aria-disabled') === 'false')!
     .click();
+  s.e('.cc-rel-card-next').click();
   s.q('.cc-rel-area').type_('三个人的梗');
   s.q('.cc-rel-next').click();
   await flush();
@@ -167,17 +226,18 @@ test('the header button goes one step back, then out to the deck; a group sends 
   });
 });
 
-test('the back and next buttons are real buttons that answer click and keyboard; a draft of another character is never carried over', (t) => {
+test('the buttons are real buttons that answer click; a draft of another character is never carried over', (t) => {
   const s = setup(t, 'c3', () => 0);
-  s.roll();
-  for (const selector of ['.cc-rel-back', '.cc-rel-next']) assert.equal(s.q(selector).tagName.toLowerCase(), 'button');
-  s.q('.cc-rel-next').click();
+  for (const selector of ['.cc-rel-slot', '.cc-rel-dice', '.cc-rel-plus', '.cc-rel-card-next'])
+    assert.equal(s.e(selector).tagName.toLowerCase(), 'button');
+  s.e('.cc-rel-card-next').click();
   assert.equal(s.screen.getAttribute('data-step'), 'rate');
   s.q('.cc-rel-back').click();
-  assert.equal(s.screen.getAttribute('data-step'), 'choose');
-  // Opened from another character, the earlier draft (anchor c3) is dropped: nothing is open and nothing is chosen.
+  assert.equal(s.flow.isOpen(), false);
+  assert.equal(s.sentence(), '丁和甲🎲之间有什么故事？', 'the choice is kept on the card');
+  // Opened from another character, the earlier draft (anchor c3) is dropped: a new partner is drawn.
   const other = setup(t, 'c5', () => 0, false);
   assert.equal(other.flow.isOpen(), false);
-  other.roll();
-  assert.deepEqual(other.members(), ['c0', 'c5']);
+  assert.deepEqual(other.members(), ['c0']);
+  assert.equal(other.e('.cc-rel-me').textContent, '己');
 });
