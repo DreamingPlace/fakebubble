@@ -109,6 +109,8 @@ try {
   // the state filter
   await page.locator('#admin-memes select[aria-label="状态"]').selectOption('off');
   await wait(700);
+  await page.locator('#admin-memes input[type="search"]').fill('');
+  await wait(900);
   check(
     (await page.locator('#admin-memes .head-status').innerText()).includes('默认关闭 72 条'),
     'the status line counts the default-off entries',
