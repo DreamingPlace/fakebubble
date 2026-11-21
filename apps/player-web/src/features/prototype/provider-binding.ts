@@ -23,7 +23,7 @@ import { playerPrefs } from '../prefs/player-prefs.ts';
 import { lookCopy, openLookSheet } from './chat-look.ts';
 import { openShareSheet, shareButton, shareCopy } from '../share/share-sheet.ts';
 
-type Shell = {
+export type Shell = {
   say(message: string): void;
   head: HTMLElement;
   card(id: WebProviderCharacterId): HTMLElement;
@@ -194,6 +194,11 @@ export class LiveBinding {
   }
   private get deleteEnabled() {
     return this.account.features?.accountDelete === true;
+  }
+  /** Part 48: the real binding is the session itself, so it is always ready (the first paint's deferred binding is not). */
+  readonly ready = true;
+  request() {
+    return Promise.resolve(this);
   }
   catalog() {
     return structuredClone({ characters: this.view.characters, slots: this.view.slots });

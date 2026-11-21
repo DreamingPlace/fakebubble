@@ -22,6 +22,7 @@ import {
   type WebProviderSend,
   type WebProviderSync,
 } from '../../../../packages/contracts/web-provider.ts';
+import { parseWebPublicCatalog, type WebPublicCatalog } from '../../../../packages/contracts/web-public-catalog.ts';
 
 export class ProviderApiError extends Error {
   readonly status: number;
@@ -195,6 +196,26 @@ export class ProviderApi implements WebProviderActions {
       );
     }
     return payload;
+  }
+  /**
+   * Part 48: the public catalog (GET /catalog): the home cards before any session. It carries no cookie of its own and no CSRF token,
+   * never reads a session and never writes; it is the only call the first paint makes. A short time limit: the page does not wait
+   * for it, so a slow answer just means the skeleton stays a little longer.
+   */
+  async publicCatalog(timeoutMs = 8000): Promise<WebPublicCatalog> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await this.fetcher(`/api/web/provider/catalog`, { signal: controller.signal });
+      if (!response.ok) throw new ProviderApiError(response.status, 'CATALOG_UNAVAILABLE');
+      try {
+        return parseWebPublicCatalog(await response.json());
+      } catch {
+        throw new ProviderApiError(response.status, 'PROTOCOL_INVALID');
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
   async bootstrap(): Promise<WebProviderBootstrap> {
     const view = parseWebProviderBootstrap(await this.request('/bootstrap'));

@@ -13,7 +13,7 @@ pnpm web:player:build
 pnpm web:local serve "$ROOT"
 ```
 
-服务为 `https://127.0.0.1:18491/`，使用实例内生成的本地证书。它是**服务端测试装置**（合成人物、离线行为，供 `pnpm check:web:local-http`、`pnpm check:web:restart` 与集成测试使用），**没有浏览器入口**：玩家页面只有 `?mode=provider`（裸网址会跳转到它）和管理页 `?mode=provider-admin`，不再有 `?mode=local-2`、`local-3`、`local-3-admin` 或静态演示原型。本地想看真实页面请用 `scripts/web-provider.ts serve`。
+服务为 `https://127.0.0.1:18491/`，使用实例内生成的本地证书。它是**服务端测试装置**（合成人物、离线行为，供 `pnpm check:web:local-http`、`pnpm check:web:restart` 与集成测试使用），**没有浏览器入口**：玩家页面是裸网址 `/`（Part 48 起直接提供，不再 302 到 `?mode=provider`；`?mode=provider` 仍然可用）和管理页 `?mode=provider-admin`，不再有 `?mode=local-2`、`local-3`、`local-3-admin` 或静态演示原型。本地想看真实页面请用 `scripts/web-provider.ts serve`。
 
 ## Cloudflare 源码包
 

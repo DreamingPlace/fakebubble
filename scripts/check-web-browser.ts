@@ -196,7 +196,9 @@ try {
 
   // The bare URL opens the player (the demo prototype is gone).
   const first = await page.goto(`${origin}/`);
-  assert.equal(new URL(page.url()).searchParams.get('mode'), 'provider', 'the bare URL redirects to ?mode=provider');
+  // Part 48 (named exception to "the bare URL redirects to ?mode=provider"): the bare URL serves the player directly (no 302, no extra
+  // round trip), so the address stays as it was typed; the page is the same player.
+  assert.equal(new URL(page.url()).searchParams.get('mode'), null, 'the bare URL is served directly, with no redirect');
   assert.ok(first && first.status() === 200);
   await page.locator('button:visible').first().waitFor({ timeout: 15_000 });
   const cookieName = config.cookieName;
@@ -533,7 +535,10 @@ try {
         const prev = w.__frames.at(-1);
         if (!prev || Math.abs(prev.x - frame.x) > 0.05 || Math.abs(prev.opacity - frame.opacity) > 0.002) still = now;
         w.__frames.push(frame);
-        if ((now - t0 > 300 && now - still > 250) || now - t0 > 8000) w.__framesDone = true;
+        // Part 48 (named exception): the quiet window may not close before the turn has even begun. On this page the wheel reaches the
+        // page ~200 ms after the recording starts (it was ~100 ms before Part 48: measured with a capture listener), so the first move
+        // can come after 300 ms; 700 ms keeps the "must travel through frames, must not jump" assertions below exactly as they were.
+        if ((now - t0 > 700 && now - still > 250) || now - t0 > 8000) w.__framesDone = true;
         else requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
