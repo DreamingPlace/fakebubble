@@ -1,0 +1,54 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root{--bg:#d7c8b9;--ink:#24302f;--card:rgba(255,255,255,.55);--pill:#fff;--sub:#5c5568;--line:#b9afcb;--send:#1d2a27;--sendfg:#fff}
+:root[data-theme=dark]{--bg:#1c1a24;--ink:#f1eef7;--sub:#b6aecb;--send:#f1eef7;--sendfg:#1c1a24}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,"PingFang SC","Noto Sans CJK SC",sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;
+background-image:radial-gradient(120% 60% at 50% -10%,rgba(255,255,255,.45),transparent 60%)}
+:root[data-theme=dark] body{background-image:radial-gradient(70% 30% at 10% 10%,rgba(139,92,255,.26),transparent 70%)}
+.head{display:flex;justify-content:space-between;padding:14px 18px 6px;font-weight:800;font-size:16px}
+.deck{display:flex;gap:14px;overflow:hidden;padding:14px 22px;align-items:flex-start}
+.card{flex:0 0 calc(100vw - 56px);background:var(--card);border:1px solid #fff;border-radius:22px;padding:6px;box-shadow:0 16px 40px rgba(40,24,60,.14);color:#141414}
+.face{border-radius:19px;padding:18px 16px 16px;background:linear-gradient(160deg,#c6e4ff,#fff);min-height:176px;position:relative}
+.c2 .face{background:linear-gradient(160deg,#dcd2ff,#fff)}.c3 .face{background:linear-gradient(160deg,#d5f6ee,#fff)}.c4 .face{background:linear-gradient(160deg,#ffebc9,#fff)}
+.prompt{font-size:21px;line-height:1.5;font-weight:900;margin:0 0 18px}
+.slot{display:inline-flex;align-items:center;gap:2px;height:36px;padding:0 10px;margin:0 2px;border-radius:12px;background:#fff;border:1.5px solid #1d2a27;font-weight:900;vertical-align:middle;line-height:1}
+.slot i{font-style:normal;font-size:12px}
+.fixed{font-weight:900}
+.dice{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:50%;background:#e9e3f7;vertical-align:middle;margin-left:4px;font-size:18px}
+.mem{display:inline-flex;align-items:center;gap:4px;height:36px;padding:0 4px 0 10px;border-radius:12px;background:#fff;font-weight:900;vertical-align:middle;line-height:1}
+.mem b{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.07);font-size:12px}
+.plus{display:grid;place-items:center;width:44px;height:44px;border-radius:50%;border:1.5px dashed #6c6480;color:#6c6480;font-size:22px}
+.row{display:flex;justify-content:space-between;align-items:center}
+.next{height:44px;padding:0 22px;border-radius:999px;background:var(--send);color:var(--sendfg);font-weight:800;border:0;font-size:15px;display:inline-flex;align-items:center}
+.next.off{opacity:.35}
+.menu{margin-top:10px;background:#fff;border-radius:16px;padding:6px;box-shadow:0 14px 34px rgba(40,24,60,.24)}
+.menu div{height:44px;display:flex;align-items:center;padding:0 12px;border-radius:10px;font-size:15px}
+.menu .on{background:#ece6f8;font-weight:800}.menu .gone{opacity:.4}
+.part{margin:0 0 10px}.part label{display:flex;justify-content:space-between;font-size:13px;font-weight:800;margin-bottom:4px}
+.part label span{font-weight:600;color:#6c6480}
+.ta{background:#fff;border-radius:14px;padding:10px 12px;min-height:44px;font-size:14px;color:#33413d;border:1px solid transparent}
+.ta.filled{border-color:#8bb5a3}.ta.big{min-height:88px}.ta.empty{color:#9a93a8}
+.cta{position:absolute;right:12px;bottom:12px;width:40px;height:40px;border-radius:50%;background:#fff;display:grid;place-items:center;font-size:18px}
+.cap{padding:2px 22px 0;font-size:13px;font-weight:700;opacity:.8}
+.mini{flex:0 0 74px;height:104px;border-radius:14px;background:var(--card);border:1px solid #fff;padding:8px;font-size:11px;font-weight:800;color:#141414;display:flex;align-items:flex-end}
+.mini.me{outline:2px solid var(--ink)}
+</style></head><body>
+<div id="app"></div>
+<script>
+const q=new URLSearchParams(location.search);const s=q.get('s')||'order';
+if(q.get('t')==='dark')document.documentElement.dataset.theme='dark';
+const A=document.getElementById('app');
+const head=t=>`<div class="head"><span>×</span><span>${t}</span><span>↻</span></div>`;
+const S={
+order:()=>head('瓜瓜')+`<p class="cap">卡片顺序：五张主题卡 → 一天 → 关系卡（最后一张，直接显示）</p><div class="deck">${['主题一','主题二','主题三','主题四','主题五'].map((t,i)=>`<div class="mini">${t}</div>`).join('')}</div>
+<div class="deck" style="padding-top:0"><div class="mini me">瓜瓜一天都在干什么？</div><div class="mini me">瓜瓜和 小满 之间有什么故事？</div></div>`,
+rel:()=>head('瓜瓜')+`<div class="deck"><div class="card"><div class="face" style="min-height:0"><p class="prompt"><span class="fixed">瓜瓜</span>和<span class="slot">小满 <i>▾</i></span><span class="dice">🎲</span>之间有什么故事？</p><div class="row"><span class="plus">＋</span><span class="next">下一步</span></div></div></div></div>`,
+pick:()=>head('瓜瓜')+`<div class="deck"><div class="card"><div class="face" style="min-height:0"><p class="prompt"><span class="fixed">瓜瓜</span>和<span class="slot" style="background:#ece6f8">小满 <i>▴</i></span><span class="dice">🎲</span>之间有什么故事？</p><div class="menu"><div>阿北</div><div class="on">小满 ✓</div><div>周周</div><div>木木</div><div class="gone">瓜瓜（本人）</div></div><div class="row" style="margin-top:14px"><span class="plus">＋</span><span class="next">下一步</span></div></div></div></div>`,
+group:()=>head('瓜瓜')+`<div class="deck"><div class="card"><div class="face" style="min-height:0"><p class="prompt"><span class="fixed">瓜瓜</span>、<span class="mem">小满<b>×</b></span>、<span class="mem">阿北<b>×</b></span>和<span class="mem">周周<b>×</b></span>之间有什么故事？</p><div class="row"><span class="plus">＋</span><span class="next">下一步</span></div></div></div></div>`,
+day:()=>head('瓜瓜')+`<div class="deck"><div class="card c4"><div class="face"><p class="prompt">瓜瓜一天都在干什么？</p><span class="cta">✎</span></div></div></div>`,
+dayopen:()=>head('瓜瓜')+`<div class="deck"><div class="card c4"><div class="face" style="min-height:0"><p class="prompt" style="font-size:19px;margin-bottom:12px">瓜瓜一天都在干什么？</p>
+${[['早上','晨起…',1],['中午','',0],['下午','',0],['晚上','',0],['深夜','',0]].map(p=>`<div class="part"><label>${p[0]}<span>${p[2]?'✓':''}</span></label><div class="ta ${p[2]?'filled':'empty'}">${p[2]?'一睁眼先去喂猫，再慢慢煮咖啡':'写几句'}</div></div>`).join('')}
+<div class="part"><label>一整天的故事<span></span></label><div class="ta big empty">写下他的一整天</div></div><div class="row"><span style="font-size:12px;opacity:.7">0/300</span><span class="next">交给我们</span></div></div></div></div>`
+};
+A.innerHTML=S[s]();
+</script></body></html>
