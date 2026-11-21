@@ -42,7 +42,7 @@ export function rehearsalRequest(
   replies: readonly (readonly string[])[],
 ): TextGenerationRequest {
   ensure(turn >= 1 && turn <= players.length && replies.length >= turn - 1, 'REHEARSAL_REQUEST_INVALID');
-  const column = parseRehearsalColumn(model) ?? { model: 'deepseek' as const, writer: 'v7' as const };
+  const column = parseRehearsalColumn(model) ?? { model: 'deepseek' as const, writer: 'v7' as const, profile: false };
   const v8 = column.writer === 'v8';
   const worldId = `admin-rehearsal-${runId}-${model}`;
   const conversationId = `${runId}-${model}`;
@@ -89,6 +89,8 @@ export function rehearsalRequest(
     ...(frozen.cast ? { cast: structuredClone(frozen.cast) } : {}),
     // Part 37a: a 新 column runs the v8 writer, which sends no relationship preset. Never the live switch: the column decides.
     ...(v8 ? { writer: 'v8' as const } : { relationship: NEW_PLAYER_RELATIONSHIP }),
+    // Part 37b: a 新+档案 column adds the character's own 核心卡 and examples (writer-profile.ts); never the live switch.
+    ...(column.profile ? { writerProfile: true as const } : {}),
     requiredMessageIds: [`p${turn}`],
     mustClose: false,
     evidence: [],

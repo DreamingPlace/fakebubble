@@ -238,11 +238,29 @@ test('built-in sets: 日常闲聊 and 重复检测 are 6 to 20 turns, there is n
   assert.deepEqual(
     sets.map((s) => s.label),
     // NAMED EXCEPTION (Part 37a-2): the owner asked for a built-in 「开场」 set, listed after the two that were here.
-    ['日常闲聊', '重复检测', '开场'],
+    // NAMED EXCEPTION (Part 37b): the eight 说话档案 situation sets follow.
+    [
+      '日常闲聊',
+      '重复检测',
+      '开场',
+      '档案 · 日常',
+      '档案 · 调侃',
+      '档案 · 抱怨',
+      '档案 · 安慰',
+      '档案 · 吵架',
+      '档案 · 分享日常',
+      '档案 · 内部梗',
+      '档案 · 认真',
+    ],
   );
   // NAMED EXCEPTION (Part 37a-2): 开场 is 5 player follow-ups (the welcome line is the first, character, message); every other set still needs 6.
+  // NAMED EXCEPTION (Part 37b): a 说话档案 situation script is 4 turns.
   for (const set of sets)
-    assert.ok(set.turns.length >= (set.set === 'opening' ? 5 : 6) && set.turns.length <= 20, set.label);
+    assert.ok(
+      set.turns.length >= (set.set === 'opening' ? 5 : set.set.startsWith('profile-') ? 4 : 6) &&
+        set.turns.length <= 20,
+      set.label,
+    );
   const plan = memeTurnPlan(['a', 'b', 'c']);
   assert.equal(plan.length, 9);
   for (let i = 1; i < plan.length; i++) assert.notEqual(plan[i]!.item, plan[i - 1]!.item);
@@ -397,7 +415,20 @@ test('scripts: save, rename and delete are idempotent per request id; 6 to 20 tu
   assert.deepEqual(
     library.sets.map((s) => s.label),
     // NAMED EXCEPTION (Part 37a-2): the library lists the built-in 开场 set too.
-    ['日常闲聊', '重复检测', '开场'],
+    // NAMED EXCEPTION (Part 37b): and the eight 说话档案 situation sets.
+    [
+      '日常闲聊',
+      '重复检测',
+      '开场',
+      '档案 · 日常',
+      '档案 · 调侃',
+      '档案 · 抱怨',
+      '档案 · 安慰',
+      '档案 · 吵架',
+      '档案 · 分享日常',
+      '档案 · 内部梗',
+      '档案 · 认真',
+    ],
   );
   assert.deepEqual(
     library.models.map((m) => [m.id, m.available]),

@@ -88,6 +88,9 @@ export function validatedTemplate(value: unknown): CharacterTemplate {
       'speechStyle',
       'dialogueStyle',
       'dialogueExamples',
+      // Part 37b: two more fields of the 说话档案 核心卡 (说话习惯 = speechStyle and 回复长短 = dialogueStyle already exist).
+      'humorStyle',
+      'neverSay',
       'appearanceNotes',
       'appearanceMetrics',
       'aliases',

@@ -338,6 +338,8 @@ try {
       !(await page.locator('.vs-root[data-open="true"]').count()),
       'the sheet is NOT shown before the player does anything',
     );
+    const historyBefore = await page.evaluate(() => history.length);
+    const urlBefore = page.url();
     await tapCard(page);
     await page.locator('.vs-root[data-open="true"]').waitFor({ timeout: 5000 });
     await page.waitForTimeout(400);
@@ -367,8 +369,18 @@ try {
 
     // 重试 with Turnstile back: it passes, the sheet goes by itself, the chat opens by itself, a message sends
     await ctx.unroute('https://challenges.cloudflare.com/**');
+    // (Part 46) no history entry may be pushed while the chat is still waiting for the session: the sheet is not a layer, and the chat
+    // is not open yet
+    check(
+      (await page.evaluate(() => history.length)) === historyBefore,
+      'no history entry was pushed while the tapped chat waited for the session',
+    );
     await page.locator('.vs-retry').click();
     await page.locator('.page-shell[data-phase="chat"]').waitFor({ timeout: 60_000 });
+    check(
+      (await page.evaluate(() => history.length)) === historyBefore + 1,
+      'the chat that opened by itself pushed exactly ONE history entry',
+    );
     check(
       !(await page.locator('.vs-root[data-open="true"]').count()),
       'the sheet closed by itself when the session arrived',
@@ -386,6 +398,16 @@ try {
       'the message was sent',
     );
     await shot(page, 'chat-after-retry-phone');
+    // the system back closes the chat and the site stays (it is the chat's layer, not the page)
+    await page.evaluate(() => history.back());
+    await page.waitForFunction(
+      () => document.querySelector('.page-shell')?.getAttribute('data-phase') === 'browse',
+      null,
+      { timeout: 5000 },
+    );
+    check(page.url() === urlBefore, 'the system back closed the chat and left us on the same page');
+    check((await page.locator('.card-slot.is-active').count()) === 1, 'the home cards are still there after the back');
+    check((await page.evaluate(() => history.length)) === historyBefore + 1, 'no further entry was pushed or lost');
     await ctx.close();
   }
 

@@ -3,6 +3,7 @@ import {
   REHEARSAL_ITEMS_MAX,
   REHEARSAL_SET_LABELS,
   type RehearsalItem,
+  type RehearsalProfileSet,
   type RehearsalSet,
   type RehearsalSetView,
 } from '../../../packages/contracts/web-rehearsal.ts';
@@ -48,7 +49,52 @@ const OPENING: readonly string[] = [
   '那你平时都爱干嘛',
   '好啦我先去忙了，下次聊',
 ];
-const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = { chat: CHAT, repeat: REPEAT, opening: OPENING };
+/**
+ * Part 37b: one short script per 说话档案 situation, in the players' own voice (young, trend-aware, casual). Four turns each: enough
+ * to see whether the character answers THIS kind of moment in her own way. Written so the situation picker of the 新+档案 writer
+ * (writer-profile.ts) reads every turn as the script's situation; a unit test holds that.
+ */
+const PROFILE: Readonly<Record<string, readonly string[]>> = {
+  'profile-daily': ['在吗，随便聊聊呗', '你今天心情怎么样', '最近有什么好玩的事吗', '晚上你一般几点睡'],
+  'profile-tease': [
+    '哈哈哈你这人也太会了吧',
+    '笑死，你是不是又在装',
+    '行行行，你最厉害，满意了吧',
+    '就这？我还以为你多厉害呢',
+  ],
+  'profile-complain': [
+    '今天又加班到十点，打工人真的破防了',
+    '地铁挤死我了，人也太多了',
+    '老板又临时加需求，无语了',
+    '这个天气热死了，一点都不想出门',
+  ],
+  'profile-comfort': [
+    '今天有点难过，说不上来为什么',
+    '我好像又搞砸了一件事',
+    '最近老是睡不着，emo 了',
+    '被领导说了一顿，有点委屈😭',
+  ],
+  'profile-fight': ['你够了吧，别再说了', '你凭什么这样说我', '我真的受够了，不想跟你说了', '你再说一遍试试'],
+  'profile-share': [
+    '今天终于把那本书看完了',
+    '刚刚路过一家新开的奶茶店，排了好长的队',
+    '周末去爬山了，风景绝绝子',
+    '我家猫昨晚又半夜跑酷了',
+  ],
+  'profile-inside': ['还记得上次那个梗吗', '又来了又来了，老规矩', '你的口头禅我都会背了', '懂的都懂，嘿嘿'],
+  'profile-serious': [
+    '我想认真问你一件事',
+    '你觉得我该不该辞职',
+    '说实话我最近有点迷茫，不知道未来该怎么办',
+    '谢谢你听我说，这对我很重要',
+  ],
+};
+const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
+  chat: CHAT,
+  repeat: REPEAT,
+  opening: OPENING,
+  ...(PROFILE as Record<RehearsalProfileSet, readonly string[]>),
+};
 
 export const builtinSet = (set: RehearsalSet): string[] => [...SETS[set]];
 export const builtinSets = (): RehearsalSetView[] =>

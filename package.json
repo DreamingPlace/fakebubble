@@ -44,7 +44,9 @@
     "check:web:player-38a": "node scripts/check-web-player-38a-browser.ts",
     "check:web:part-42": "node scripts/check-web-part-42-browser.ts",
     "check:web:part-44": "node scripts/check-web-part-44-browser.ts",
+    "check:web:profile-37b": "node scripts/check-web-profile-37b-browser.ts",
     "check:web:share-45": "node scripts/check-web-share-45-browser.ts",
+    "check:web:part-46": "node scripts/check-web-part-46-browser.ts",
     "check:web:first-screen-48": "node scripts/check-web-first-screen-48-browser.ts"
   },
   "devDependencies": {

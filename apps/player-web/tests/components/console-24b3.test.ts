@@ -115,6 +115,8 @@ test('24b-3 角色工作台: a saved role gets a bar of sections, 发布 among t
     '其余设定',
     '声音',
     '资料改动',
+    // Named exception (Part 37b): 说话档案 is one more entry of the bar, before 发布 (the owner asked for the section).
+    '说话档案',
     '发布',
     // Named exception (Part 24f): 版本历史 is one more entry of the bar, after 发布.
     '版本历史',
@@ -143,6 +145,8 @@ test('24b-3 角色工作台: switching sections keeps what was typed, a dot mark
     '经历',
     '其余设定',
     '声音',
+    // Named exception (Part 37b): 说话档案 is one more entry of the bar, before 发布.
+    '说话档案',
     '发布',
     '版本历史',
   ]);

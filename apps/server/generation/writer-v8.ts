@@ -23,6 +23,13 @@ import {
   reviewSchema,
 } from './accepted-text-protocol.ts';
 import type { ReviewOptions, TextDraft } from './accepted-text-protocol.ts';
+import {
+  canonWithoutProfile,
+  pickExamples,
+  profileCardBlock,
+  profileExamplesBlock,
+  writerProfileHash,
+} from './writer-profile.ts';
 
 /**
  * Part 37a: the v8 writer ("回复写法：新"). One plain-text draft (no tool call, no coverage, no schema around the words), then one
@@ -133,9 +140,17 @@ export const writerPromptHash = () =>
     .update(JSON.stringify([writerPromptBytesHash(), writerProtocolFingerprint()]))
     .digest('hex');
 /** The hash a v8 reply's policy carries (stored with each provider attempt): the resolved v7 policy plus the v8 pin. */
-export const writerPolicyHash = (policyJson: string) =>
+export const writerPolicyHash = (policyJson: string, profile = false) =>
   createHash('sha256')
-    .update(JSON.stringify({ policy: policyJson, writer: WRITER_V8_PROTOCOL_VERSION, prompts: writerPromptHash() }))
+    .update(
+      JSON.stringify({
+        policy: policyJson,
+        writer: WRITER_V8_PROTOCOL_VERSION,
+        prompts: writerPromptHash(),
+        // Part 37b: only a 新+档案 request carries the profile pin; for 旧 and 新 the object (and so the hash) is exactly as it was.
+        ...(profile ? { profile: writerProfileHash() } : {}),
+      }),
+    )
     .digest('hex');
 
 const clock = (minute: number) =>
@@ -223,6 +238,16 @@ const rosterBlock = (request: TextGenerationRequest) =>
       )}`
     : '';
 
+/** 新+档案: the examples block for the player's latest message and the turns before it (this character's own bank only). */
+function profileExamplesFor(request: TextGenerationRequest) {
+  const turns = request.messages.map(({ authorKind, text }) => ({ authorKind, text }));
+  let at = turns.length - 1;
+  while (at >= 0 && turns[at]!.authorKind !== 'player') at--;
+  if (at < 0) return '';
+  const { examples } = pickExamples(request.character, turns[at]!.text, turns.slice(0, at));
+  return profileExamplesBlock(examples, request.character.name);
+}
+
 /** The writer's call: persona first (system), then the pinned rules, then the context. No tool, no schema. */
 export function writerDraftMessages(request: TextGenerationRequest, provider?: WriterDraftProvider) {
   ensure(request.writer === 'v8', 'WRITER_V8_REQUIRED');
@@ -256,15 +281,30 @@ export function writerDraftMessages(request: TextGenerationRequest, provider?: W
     'INVALID_TEXT_REQUEST',
   );
   const { character } = request;
-  const canon = character.authorCanon ? `\n\n作者设定（JSON）：${JSON.stringify(character.authorCanon)}` : '';
+  // Part 37b: 新+档案 only. The 核心卡 goes right after the persona (stable: it changes only on publish) and the canon JSON no
+  // longer repeats it; the picked examples go to the very end of the system message, after everything stable.
+  ensure(
+    request.writerProfile === undefined || (request.writerProfile === true && request.writer === 'v8'),
+    'WRITER_V8_REQUIRED',
+  );
+  const profile = request.writerProfile === true;
+  const card = profile ? profileCardBlock(character.authorCanon) : '';
+  const canonJson = character.authorCanon
+    ? profile
+      ? canonWithoutProfile(character.authorCanon)
+      : character.authorCanon
+    : null;
+  const canon = canonJson ? `\n\n作者设定（JSON）：${JSON.stringify(canonJson)}` : '';
+  const picked = profile ? profileExamplesFor(request) : '';
   const system =
-    `你是${character.name}。\n${character.persona}${canon}\n\n` +
+    `你是${character.name}。\n${character.persona}${card ? `\n\n${card}` : ''}${canon}\n\n` +
     WRITER +
     (provider ? `\n${WRITER_ADDENDA[provider]}` : '') +
     (request.deliveryMode === 'voice' && request.voiceDirections ? DIRECTIONS : '') +
     (request.cast ? `\n${CAST}` : '') +
     (character.seed === true ? `\n${SEED_CHARACTER_PROMPT}` : '') +
-    rosterBlock(request);
+    rosterBlock(request) +
+    (picked ? `\n\n${picked}` : '');
   const content = JSON.stringify(context(request, false));
   ensure(content.length <= 200_000, 'TEXT_CONTEXT_TOO_LARGE');
   return [
@@ -494,7 +534,11 @@ export function applyReview(
 }
 
 /** What a stored v8 request must still match: its prompt and protocol pins, plus the cast prompt hash a frozen cast view carries. */
-export const writerPins = () => ({
+export const writerPins = (profile = false) => ({
   protocolDigest: createHash('sha256').update(JSON.stringify(writerProtocolFingerprint())).digest('hex'),
-  promptDigest: writerPromptHash(),
+  promptDigest: profile
+    ? createHash('sha256')
+        .update(JSON.stringify([writerPromptHash(), writerProfileHash()]))
+        .digest('hex')
+    : writerPromptHash(),
 });

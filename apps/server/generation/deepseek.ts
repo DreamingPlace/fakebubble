@@ -230,9 +230,14 @@ export class DeepSeekTextGenerator implements TextGenerator {
   get writerPolicyHash() {
     return writerPolicyHash(JSON.stringify(this.#policy));
   }
+  /** Part 37b: the policy hash of a 新+档案 reply (the v8 hash plus the pin of the profile words and rules). */
+  get writerProfilePolicyHash() {
+    return writerPolicyHash(JSON.stringify(this.#policy), true);
+  }
   /** The hash a frozen request must carry: v7's policy hash, or the v8 one when the request froze the v8 writer. */
-  policyHashFor(request: Pick<TextGenerationRequest, 'writer'>) {
-    return request.writer === 'v8' ? this.writerPolicyHash : this.policyHash;
+  policyHashFor(request: Pick<TextGenerationRequest, 'writer' | 'writerProfile'>) {
+    if (request.writer !== 'v8') return this.policyHash;
+    return request.writerProfile === true ? this.writerProfilePolicyHash : this.writerPolicyHash;
   }
 
   constructor(
