@@ -535,7 +535,10 @@ try {
         const prev = w.__frames.at(-1);
         if (!prev || Math.abs(prev.x - frame.x) > 0.05 || Math.abs(prev.opacity - frame.opacity) > 0.002) still = now;
         w.__frames.push(frame);
-        if ((now - t0 > 300 && now - still > 250) || now - t0 > 8000) w.__framesDone = true;
+        // Part 48 (named exception): the quiet window may not close before the turn has even begun. On this page the wheel reaches the
+        // page ~200 ms after the recording starts (it was ~100 ms before Part 48: measured with a capture listener), so the first move
+        // can come after 300 ms; 700 ms keeps the "must travel through frames, must not jump" assertions below exactly as they were.
+        if ((now - t0 > 700 && now - still > 250) || now - t0 > 8000) w.__framesDone = true;
         else requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);

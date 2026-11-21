@@ -22514,7 +22514,7 @@ body,
 /* The hand-over: the real page replaces the skeleton in one frame; the faces ease in over the same card shapes. */
 .page-shell.is-entering .card-face,
 .page-shell.is-entering .site-head .brand {
-  animation: vs-fill-in 240ms cubic-bezier(0.2, 0.82, 0.24, 1) both;
+  animation: vs-fill-in 240ms cubic-bezier(0.2, 0.82, 0.24, 1);
 }
 @media (prefers-reduced-motion: reduce) {
   .sk-bar,
@@ -22657,7 +22657,7 @@ body,
 /* What fills in when the session arrives eases in; nothing around it moves. */
 .face-dur.is-new,
 .preview-note.is-filled {
-  animation: vs-fill-in 200ms ease both;
+  animation: vs-fill-in 200ms ease;
 }
 @keyframes vs-fill-in {
   from {
