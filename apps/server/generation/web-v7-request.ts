@@ -27,7 +27,12 @@ import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract
 import { readInputSnapshot } from './web-input-snapshot.ts';
 import { recallsMemory } from '../admission/web-free-tier.ts';
 import { requireWebContent } from '../admission/web-retention.ts';
-import { castRequestContext } from '../cast/cast-store.ts';
+import { castDigest, castRequestContext, readPublication } from '../cast/cast-store.ts';
+import { compileFullView } from '../cast/cast-compile.ts';
+import { selectCastView } from '../cast/cast-select.ts';
+import { readMemesOff } from '../memes/web-meme-store.ts';
+import { matchMemes } from '../memes/meme-match.ts';
+import { MEME_TURNS, readMemeUse, withoutMemeUse } from '../../../packages/contracts/web-memes.ts';
 import { castPromptHash } from './cast-prompt.ts';
 import { frozenOpening, openingForWriter } from './opening-line.ts';
 import { writerRoster } from './writer-roster.ts';
@@ -100,10 +105,10 @@ const withoutTestOverride = <T extends { testOverride?: unknown }>({ testOverrid
  */
 export function framePinsMatch(
   row: { protocol_digest: string; prompt_digest: string },
-  request: Pick<TextGenerationRequest, 'writer' | 'writerProfile'>,
+  request: Pick<TextGenerationRequest, 'writer' | 'writerProfile' | 'writerMemes'>,
 ) {
   if (request.writer === 'v8') {
-    const pins = writerPins(request.writerProfile === true);
+    const pins = writerPins(request.writerProfile === true, request.writerMemes === true);
     return row.protocol_digest === pins.protocolDigest && row.prompt_digest === pins.promptDigest;
   }
   return (
@@ -309,7 +314,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       template.schedule !== undefined,
     'WEB_V7_TEMPLATE_INVALID',
   );
-  const cast = castRequestContext(input);
+  const snapshotCast = castRequestContext(input);
   const relationship = store.get<{ relationship: TextGenerationRequest['relationship'] }>(
     'SELECT relationship FROM world_characters WHERE world_id=? AND character_id=?',
     scope.worldId,
@@ -378,6 +383,30 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   // Part 37b: 新+档案 ('v8p') is the v8 writer plus the profile flag, frozen with the request (the 多轮预演 column's request).
   const choice = readWriter(store);
   const v8 = choice !== 'v7';
+  // Part 37c-1: 新+档案+梗. The player's last messages of THIS window (the published prior turns and the input, nothing unproven),
+  // latest first, are read for dictionary terms and for the cast selection; both results are frozen in the request.
+  const memes = choice === 'v8m';
+  const playerTexts = memes
+    ? selected
+        .filter((row) => row?.author_kind === 'player')
+        .map((row) => row!.body)
+        .reverse()
+        .slice(0, MEME_TURNS)
+    : [];
+  const memeHits = memes ? matchMemes(playerTexts, readMemesOff(store), readMemeUse(template)) : [];
+  // The cast the snapshot froze stays the cast of this reply (its publication version); 新+档案+梗 keeps only what this reply needs.
+  const cast =
+    memes && snapshotCast
+      ? (() => {
+          const published = readPublication(store, snapshotCast.version);
+          ensure(
+            published.doc.characters.some((c) => c.characterId === scope.characterId),
+            'WEB_V7_CAST_INVALID',
+          );
+          const view = selectCastView(compileFullView(published.doc, scope.characterId), playerTexts);
+          return { ...snapshotCast, digest: castDigest(JSON.stringify(view)), view };
+        })()
+      : snapshotCast;
   const schemaVersion = store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1;
   const voiceBinding =
     schemaVersion >= 113
@@ -393,7 +422,8 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     scope: { worldId: scope.worldId, conversationId: scope.conversationId, characterId: scope.characterId },
     now,
     ...(v8 ? { writer: 'v8' as const } : { relationship }),
-    ...(choice === 'v8p' ? { writerProfile: true as const } : {}),
+    ...(choice === 'v8p' || memes ? { writerProfile: true as const } : {}),
+    ...(memes ? { writerMemes: true as const, ...(memeHits.length ? { memeHits } : {}) } : {}),
     ...(v8 && voiceBinding && resolveVoiceModel(voiceBinding.model, siteVoiceModel(store)) === 'drama-3'
       ? { voiceDirections: true }
       : {}),
@@ -403,7 +433,8 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     ...(facts.length ? { playerFacts: facts } : {}),
     deliveryMode: 'voice',
     requiredMessageIds: [input.input_message_id],
-    character: template,
+    // Part 37c-1: the character's own meme settings never reach a prompt; the matched entries carry the level.
+    character: withoutMemeUse(template),
     // Part 24a: only a snapshot that froze a cast view carries `cast`. The key is absent (not null) otherwise, so the serialized
     // request and its digest are what they were before.
     ...(cast ? { cast } : {}),
@@ -433,7 +464,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   const serialized = JSON.stringify(request),
     requestDigest = digest(serialized),
     pins = v8
-      ? writerPins(choice === 'v8p')
+      ? writerPins(choice === 'v8p' || memes, memes)
       : { protocolDigest: digest(JSON.stringify(protocolFingerprint())), promptDigest: textPromptHash() };
   const voiceVersion =
     schemaVersion >= 113

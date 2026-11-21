@@ -60,7 +60,7 @@ type WebTextGenerator = Pick<
   'textProtocol' | 'policyHash' | 'generateAcceptedStages' | 'generateAcceptedReviewFromKnownDraft'
 > &
   // Part 37a: the v8 writer's policy hash. A generator without it (an older one) cannot run a v8 reply: it is refused before a send.
-  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash' | 'writerProfilePolicyHash'>>;
+  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash' | 'writerProfilePolicyHash' | 'writerMemesPolicyHash'>>;
 
 /** Explicit live adapter. Constructing it does not send or read credentials. */
 export function fishTransport(audio: FishAudio): FakeFish {
@@ -154,9 +154,11 @@ export class WebProviderRunner {
     const { request, row, scope } = this.frozen(claim.operationId);
     const policyHash =
       request.writer === 'v8'
-        ? request.writerProfile === true
-          ? this.text.writerProfilePolicyHash
-          : this.text.writerPolicyHash
+        ? request.writerMemes === true
+          ? this.text.writerMemesPolicyHash
+          : request.writerProfile === true
+            ? this.text.writerProfilePolicyHash
+            : this.text.writerPolicyHash
         : this.text.policyHash;
     ensure(policyHash, 'WEB_WRITER_UNSUPPORTED');
     const draftKey = { operationId: claim.operationId, phase: 'draft' as const, ordinal: -1 };

@@ -11,6 +11,8 @@ import {
   REHEARSAL_SET_LABELS,
   REHEARSAL_COLUMN_KEYS,
   REHEARSAL_WRITER_LABELS,
+  REHEARSAL_MEMES_LABEL,
+  REHEARSAL_NET_SETS,
   REHEARSAL_PROFILE_LABEL,
   isProfileSet,
   charLength,
@@ -206,7 +208,8 @@ export function rehearsalView(host: RehearsalHost) {
   };
   const paintRail = () => {
     rail.replaceChildren(h('h4', { text: '内置' }));
-    for (const set of (library?.sets ?? []).filter((s) => !isProfileSet(s.set)))
+    const isNet = (set: string) => (REHEARSAL_NET_SETS as readonly string[]).includes(set);
+    for (const set of (library?.sets ?? []).filter((s) => !isProfileSet(s.set) && !isNet(s.set)))
       rail.append(railButton(set.label, { kind: 'set', set: set.set }, `${set.turns.length} 轮`));
     if (items.available)
       rail.append(railButton(REHEARSAL_SET_LABELS.memes, { kind: 'memes' }, `${items.items.length} 项`));
@@ -217,6 +220,15 @@ export function rehearsalView(host: RehearsalHost) {
       for (const set of profileSets)
         rail.append(
           railButton(set.label.replace('档案 · ', ''), { kind: 'set', set: set.set }, `${set.turns.length} 轮`),
+        );
+    }
+    // Part 37c-1: four scripts of players using 2022+ internet memes, together.
+    const netSets = (library?.sets ?? []).filter((s) => isNet(s.set));
+    if (netSets.length) {
+      rail.append(h('h4', { text: '网络梗 · 四个场景' }));
+      for (const set of netSets)
+        rail.append(
+          railButton(set.label.replace('网络梗 · ', ''), { kind: 'set', set: set.set }, `${set.turns.length} 轮`),
         );
     }
     rail.append(h('h4', { text: '我的脚本' }));
@@ -325,15 +337,16 @@ export function rehearsalView(host: RehearsalHost) {
         { class: 'rh-model', attrs: { role: 'group', 'aria-label': m.label } },
         h('span', { class: 'rh-model-name', text: m.label }),
       );
-      for (const [writer, profile] of [
-        ['v7', false],
-        ['v8', false],
-        ['v8', true],
+      for (const [writer, profile, memes] of [
+        ['v7', false, false],
+        ['v8', false, false],
+        ['v8', true, false],
+        ['v8', true, true],
       ] as const) {
-        const key = rehearsalColumnKey(m.id, writer, profile);
+        const key = rehearsalColumnKey(m.id, writer, profile, memes);
         const b = h('button', {
           class: 'rh-toggle',
-          text: profile ? REHEARSAL_PROFILE_LABEL : REHEARSAL_WRITER_LABELS[writer],
+          text: memes ? REHEARSAL_MEMES_LABEL : profile ? REHEARSAL_PROFILE_LABEL : REHEARSAL_WRITER_LABELS[writer],
           attrs: { type: 'button', 'aria-pressed': String(models.has(key)), 'data-model': key },
         });
         b.disabled = !m.available;
@@ -698,6 +711,17 @@ export function rehearsalView(host: RehearsalHost) {
         (c) => c.unaskedAdvice,
       ),
     },
+    // Part 37c-1: only a 新+档案+梗 column has them (— elsewhere): counted by code from the script, the same on every read.
+    {
+      label: '命中的梗',
+      note: '按回复累计',
+      value: (c) => ({ text: c.netMemes ? String(c.netMemes.matched) : '—', n: c.netMemes?.matched ?? null }),
+    },
+    {
+      label: '给出释义',
+      note: '每条回复最多 3 条',
+      value: (c) => ({ text: c.netMemes ? String(c.netMemes.given) : '—', n: c.netMemes?.given ?? null }),
+    },
     { label: '说了自己的事', note: '自己的生活或看法', value: styleValue((s) => s.sharedOwn) },
     { label: '主动起话题', note: '起了话题或转了话题', value: styleValue((s) => s.startedTopic) },
     { label: '情绪起伏', note: '情绪露在用词里', value: styleValue((s) => s.showedEmotion) },
@@ -755,8 +779,10 @@ export function rehearsalView(host: RehearsalHost) {
     );
     const body = h('tbody');
     const judgesStyle = d.columns.some((c) => c.style.state !== 'none');
+    const hasNet = d.columns.some((c) => c.netMemes !== null);
     for (const row of COUNT_ROWS) {
       if (!judgesStyle && STYLE_LABELS.has(row.label)) continue;
+      if (!hasNet && (row.label === '命中的梗' || row.label === '给出释义')) continue;
       const head = h('th', { attrs: { scope: 'row' } }, h('span', { text: row.label }));
       if (row.note) head.append(h('span', { class: 'rh-note', text: row.note }));
       const tr = h('tr', {}, head);

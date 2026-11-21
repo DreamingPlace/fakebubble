@@ -6,6 +6,7 @@ import {
   castItemProblem,
   CAST_KNOWLEDGE,
   CAST_LIMITS,
+  castDocTooLarge,
   CAST_SCHEMA,
   type CastAlias,
   type CastCharacter,
@@ -412,7 +413,7 @@ export function normalizeCastDoc(rawInput: unknown, ids: IdSource): CastDoc {
     stories: entries(root.stories, 'doc.stories', L.stories, story),
     memes: entries(root.memes, 'doc.memes', L.memes, meme),
   };
-  if (canonicalCastJson(doc).length > L.docMax) fail('doc');
+  if (castDocTooLarge(canonicalCastJson(doc))) fail('doc');
   const totals = castItemTotals(doc);
   if (totals.aliases > L.aliasesTotal) fail('doc.characters', 'CAST_ALIAS_TOTAL');
   if (totals.addresses > L.addressesTotal) fail('doc.directions', 'CAST_ADDRESS_TOTAL');
@@ -593,7 +594,7 @@ export function validateCastDoc(
           code: 'CAST_VIEW_TOO_LARGE',
           path: `characters[${c.characterId}]`,
         });
-  if (canonicalCastJson(doc).length > L.docMax) err('CAST_DOC_TOO_LARGE', 'doc');
+  if (castDocTooLarge(canonicalCastJson(doc))) err('CAST_DOC_TOO_LARGE', 'doc');
   return { errors, warnings };
 }
 

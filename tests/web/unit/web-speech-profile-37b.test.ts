@@ -352,7 +352,8 @@ test('the situation picker: a phrase the character herself said a moment ago is 
 
 test('every turn of the eight built-in 档案 scripts reads as its own situation (and the sets are real sets)', () => {
   assert.equal(REHEARSAL_PROFILE_SETS.length, 8);
-  assert.deepEqual(REHEARSAL_SETS.slice(3), [...REHEARSAL_PROFILE_SETS]);
+  // NAMED EXCEPTION (Part 37c-1): the four 网络梗 sets follow the eight 档案 sets, so the profile sets are slice(3, 11).
+  assert.deepEqual(REHEARSAL_SETS.slice(3, 11), [...REHEARSAL_PROFILE_SETS]);
   REHEARSAL_PROFILE_SETS.forEach((set, i) => {
     const turns = builtinSet(set);
     assert.equal(turns.length, REHEARSAL_PROFILE_TURNS, set);
@@ -604,9 +605,15 @@ test('新+档案 is a column like 新: its key, its label, its parse; 旧 and �
   assert.equal(rehearsalColumnKey('deepseek', 'v7'), 'deepseek');
   assert.equal(rehearsalColumnKey('deepseek', 'v8'), 'deepseek-v8');
   assert.equal(rehearsalColumnKey('deepseek', 'v8', true), 'deepseek-v8p');
-  assert.deepEqual(parseRehearsalColumn('deepseek-v8p'), { model: 'deepseek', writer: 'v8', profile: true });
-  assert.deepEqual(parseRehearsalColumn('xai-v8'), { model: 'xai', writer: 'v8', profile: false });
-  assert.deepEqual(parseRehearsalColumn('gemini'), { model: 'gemini', writer: 'v7', profile: false });
+  // NAMED EXCEPTION (Part 37c-1): a parsed column also says whether it is 新+档案+梗 (`memes`); false for these three, as every field they had is unchanged.
+  assert.deepEqual(parseRehearsalColumn('deepseek-v8p'), {
+    model: 'deepseek',
+    writer: 'v8',
+    profile: true,
+    memes: false,
+  });
+  assert.deepEqual(parseRehearsalColumn('xai-v8'), { model: 'xai', writer: 'v8', profile: false, memes: false });
+  assert.deepEqual(parseRehearsalColumn('gemini'), { model: 'gemini', writer: 'v7', profile: false, memes: false });
   assert.equal(parseRehearsalColumn('deepseek-v9'), null);
   assert.equal(
     rehearsalColumnLabel('deepseek-v8p'),

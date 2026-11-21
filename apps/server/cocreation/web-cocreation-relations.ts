@@ -12,7 +12,7 @@ import {
   RELATION_REASON_MAX,
   RELATION_TEXT_MAX,
 } from '../../../packages/contracts/cocreation-relations.ts';
-import { CAST_LIMITS, type CastDoc, type CastGroup } from '../../../packages/contracts/web-cast.ts';
+import { CAST_LIMITS, castDocTooLarge, type CastDoc, type CastGroup } from '../../../packages/contracts/web-cast.ts';
 import { hasCastPermission } from '../../../packages/contracts/web-admin-permissions.ts';
 import { DetailedError, RetryAfterError, ensure } from '../../../packages/domain/errors.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
@@ -552,7 +552,7 @@ export class WebCocreationRelations extends WebCocreation {
         created = true;
       }
       const next: CastDoc = { ...draft.doc, groups };
-      ensure(canonicalCastJson(next).length <= CAST_LIMITS.docMax, 'COCREATION_CAST_DOC_FULL');
+      ensure(!castDocTooLarge(canonicalCastJson(next)), 'COCREATION_CAST_DOC_FULL');
       const saved = saveDraft(this.store, this.clock.now(), expectedRevision, next);
       const after = readDraft(this.store).doc.groups.find((g) => sameSet(g.members, members));
       ensure(after, 'COCREATION_UNAVAILABLE');

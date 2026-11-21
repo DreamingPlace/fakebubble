@@ -4,6 +4,7 @@ import { validateSchedule } from '../../../packages/domain/schedule.ts';
 import { validateAutonomy } from '../../../packages/domain/autonomy.ts';
 import { validateVoiceBinding } from './voices.ts';
 import { validBirthDate } from './characters.ts';
+import { MEME_OVERRIDES_MAX, isMemeLevel } from '../../../packages/contracts/web-memes.ts';
 
 export function record(value: unknown): asserts value is Record<string, unknown> {
   ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_ADMIN_REQUEST');
@@ -91,6 +92,9 @@ export function validatedTemplate(value: unknown): CharacterTemplate {
       // Part 37b: two more fields of the 说话档案 核心卡 (说话习惯 = speechStyle and 回复长短 = dialogueStyle already exist).
       'humorStyle',
       'neverSay',
+      // Part 37c-1: the character's own use of the internet-meme dictionary (default level, single-entry levels).
+      'memeLevel',
+      'memeOverrides',
       'appearanceNotes',
       'appearanceMetrics',
       'aliases',
@@ -110,6 +114,18 @@ export function validatedTemplate(value: unknown): CharacterTemplate {
       'canonEvents',
     ]);
     jsonValue(value.authorCanon.settings);
+    ensure(
+      value.authorCanon.settings.memeLevel === undefined || isMemeLevel(value.authorCanon.settings.memeLevel),
+      'INVALID_TEMPLATE',
+    );
+    if (value.authorCanon.settings.memeOverrides !== undefined) {
+      const overrides = value.authorCanon.settings.memeOverrides;
+      record(overrides);
+      ensure(
+        Object.keys(overrides).length <= MEME_OVERRIDES_MAX && Object.values(overrides).every(isMemeLevel),
+        'INVALID_TEMPLATE',
+      );
+    }
     ensure(JSON.stringify(value.authorCanon.settings).length <= 48_000, 'CHARACTER_CONTEXT_TOO_LARGE');
     const identity = value.authorCanon.settings.selfIdentity;
     if (identity !== undefined) {

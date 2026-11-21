@@ -777,6 +777,7 @@ test('a snapshot that froze a cast refuses a half-set row (all three columns are
 test('limits that the console will rely on are the ones in the contract', () => {
   assert.equal(CAST_LIMITS.chatCharacters, 15);
   assert.equal(CAST_LIMITS.people, 40);
-  assert.equal(CAST_LIMITS.docMax, 300_000);
+  // NAMED EXCEPTION (Part 37c-1): the 10x library raised the document cap 300,000 -> 640,000 characters (and added a 1,900,000-byte cap, asserted in web-memes-37c1).
+  assert.equal(CAST_LIMITS.docMax, 640_000);
   assert.equal(CAST_LIMITS.viewMax, 24_000);
 });

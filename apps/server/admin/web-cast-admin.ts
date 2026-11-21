@@ -23,6 +23,8 @@ import {
   latestPublication,
   type PublishOutcome,
 } from '../cast/cast-store.ts';
+import { listMemes, setMemesEnabled } from '../memes/web-meme-store.ts';
+import type { MemeListInput } from '../../../packages/contracts/web-memes.ts';
 import { publishedWebCharacters } from '../characters/web-character-catalog.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
 import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
@@ -278,6 +280,62 @@ export class WebCastAdmin {
           }),
         );
         return { ...saved, report: report! };
+      },
+    );
+  }
+
+  /**
+   * 网络梗 (Part 37c-1, cast.read): the shipped dictionary, filtered and paged (text over term, meaning and tags; year; tag; on/off).
+   * Dictionary data only: no player, no id, no message. Entries are ON unless the administrator switched them off.
+   */
+  memesList(auth: Auth, input: unknown): ReturnType<typeof listMemes> {
+    this.actor(auth, 'cast.read');
+    const body = exactly(input, ['query', 'year', 'tag', 'state', 'page']);
+    ensure(
+      typeof body.query === 'string' &&
+        body.query.length <= 100 &&
+        (body.year === null || (Number.isSafeInteger(body.year) && (body.year as number) >= 1900)) &&
+        (body.tag === null || (typeof body.tag === 'string' && body.tag.length <= 40)) &&
+        (body.state === 'all' || body.state === 'on' || body.state === 'off' || body.state === 'default-off') &&
+        Number.isSafeInteger(body.page) &&
+        (body.page as number) >= 1,
+      'INVALID_REQUEST',
+    );
+    return listMemes(this.store, body as unknown as MemeListInput);
+  }
+
+  /**
+   * Switch dictionary entries on or off (cast.edit). Idempotent per request id; the audit row says how many entries changed and the
+   * direction, never a term. Nothing here publishes anything: the switch is live for the next reply (a reply in flight keeps the
+   * entries it froze).
+   */
+  memesSet(auth: Auth, input: unknown) {
+    const actor = this.actor(auth, 'cast.edit');
+    const body = exactly(input, ['requestId', 'keys', 'enabled']);
+    ensure(
+      Array.isArray(body.keys) &&
+        body.keys.length >= 1 &&
+        body.keys.length <= 2_000 &&
+        body.keys.every((key) => typeof key === 'string' && key.length >= 1 && key.length <= 40) &&
+        typeof body.enabled === 'boolean',
+      'INVALID_REQUEST',
+    );
+    const now = this.clock.now();
+    const keys = body.keys as string[];
+    const enabled = body.enabled as boolean;
+    return once(
+      this.store,
+      now,
+      {
+        requestId: body.requestId,
+        action: 'memes-set',
+        hash: requestHash({ action: 'memes-set', keys, enabled }),
+        adminId: actor.memberId,
+      },
+      () => {
+        const changed = setMemesEnabled(this.store, now, keys, enabled);
+        this.audit(actor.memberId, 'memes-set', this.detail({ enabled: enabled ? 1 : 0, changed, asked: keys.length }));
+        return { changed };
       },
     );
   }

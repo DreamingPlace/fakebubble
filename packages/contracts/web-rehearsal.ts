@@ -47,27 +47,32 @@ export const REHEARSAL_MODEL_LABELS: Readonly<Record<PlayerModelId, string>> = O
 export const REHEARSAL_WRITER_LABELS: Readonly<Record<WriterLine, string>> = Object.freeze({ v7: '旧', v8: '新' });
 /** Part 37b: the third column of a model, 新+档案 (the v8 writer plus the character's own 核心卡 and examples). Preview only for now. */
 export const REHEARSAL_PROFILE_LABEL = '新+档案';
-export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterLine, profile = false) =>
-  writer === 'v8' ? `${model}-${profile ? 'v8p' : 'v8'}` : model;
+/** Part 37c-1: the fourth column, 新+档案+梗 (新+档案 plus the matched internet-meme meanings and the selected cast context). */
+export const REHEARSAL_MEMES_LABEL = '新+档案+梗';
+export const rehearsalColumnKey = (model: PlayerModelId, writer: WriterLine, profile = false, memes = false) =>
+  writer === 'v8' ? `${model}-${memes ? 'v8m' : profile ? 'v8p' : 'v8'}` : model;
 export function parseRehearsalColumn(
   key: unknown,
-): { model: PlayerModelId; writer: WriterLine; profile: boolean } | null {
+): { model: PlayerModelId; writer: WriterLine; profile: boolean; memes: boolean } | null {
   if (typeof key !== 'string') return null;
-  const profile = key.endsWith('-v8p');
+  const memes = key.endsWith('-v8m');
+  // 新+档案+梗 is 新+档案 plus the memes: it carries the profile flag too.
+  const profile = memes || key.endsWith('-v8p');
   const v8 = profile || key.endsWith('-v8');
   const model = profile ? key.slice(0, -4) : v8 ? key.slice(0, -3) : key;
-  return isPlayerModelId(model) ? { model, writer: v8 ? 'v8' : 'v7', profile } : null;
+  return isPlayerModelId(model) ? { model, writer: v8 ? 'v8' : 'v7', profile, memes } : null;
 }
-/** Every column the console can offer, in display order: each model's 旧, 新, then 新+档案. */
+/** Every column the console can offer, in display order: each model's 旧, 新, 新+档案, then 新+档案+梗. */
 export const REHEARSAL_COLUMN_KEYS: readonly string[] = PLAYER_MODEL_IDS.flatMap((model) => [
   rehearsalColumnKey(model, 'v7'),
   rehearsalColumnKey(model, 'v8'),
   rehearsalColumnKey(model, 'v8', true),
+  rehearsalColumnKey(model, 'v8', true, true),
 ]);
 export const rehearsalColumnLabel = (key: string) => {
   const column = parseRehearsalColumn(key);
   return column
-    ? `${REHEARSAL_MODEL_LABELS[column.model]}·${column.profile ? REHEARSAL_PROFILE_LABEL : REHEARSAL_WRITER_LABELS[column.writer]}`
+    ? `${REHEARSAL_MODEL_LABELS[column.model]}·${column.memes ? REHEARSAL_MEMES_LABEL : column.profile ? REHEARSAL_PROFILE_LABEL : REHEARSAL_WRITER_LABELS[column.writer]}`
     : key;
 };
 
@@ -86,7 +91,14 @@ export const REHEARSAL_PROFILE_SETS = [
   'profile-serious',
 ] as const;
 export type RehearsalProfileSet = (typeof REHEARSAL_PROFILE_SETS)[number];
-export const REHEARSAL_SETS = ['chat', 'repeat', 'opening', ...REHEARSAL_PROFILE_SETS] as const;
+/**
+ * Part 37c-1: four more built-in sets of players using 2022+ internet memes in casual chat (six turns each, so they need no exception
+ * to the six-turn minimum). Every turn holds at least one entry of the shipped dictionary; a test holds that, and the run page shows
+ * how many memes each column was given the meaning of.
+ */
+export const REHEARSAL_NET_SETS = ['net-daily', 'net-work', 'net-trip', 'net-feelings'] as const;
+export type RehearsalNetSet = (typeof REHEARSAL_NET_SETS)[number];
+export const REHEARSAL_SETS = ['chat', 'repeat', 'opening', ...REHEARSAL_PROFILE_SETS, ...REHEARSAL_NET_SETS] as const;
 export type RehearsalSet = (typeof REHEARSAL_SETS)[number];
 export const isProfileSet = (set: unknown): set is RehearsalProfileSet =>
   (REHEARSAL_PROFILE_SETS as readonly unknown[]).includes(set);
@@ -103,6 +115,10 @@ export const REHEARSAL_SET_LABELS: Readonly<Record<RehearsalSet | 'memes', strin
   'profile-share': '档案 · 分享日常',
   'profile-inside': '档案 · 内部梗',
   'profile-serious': '档案 · 认真',
+  'net-daily': '网络梗 · 日常',
+  'net-work': '网络梗 · 职场',
+  'net-trip': '网络梗 · 出游',
+  'net-feelings': '网络梗 · 情绪',
   memes: '梗与故事',
 });
 
@@ -258,6 +274,18 @@ export interface RehearsalRunInfo {
   /** Part 31b: the published version the run used when there was no draft; null for a run on a saved draft. */
   liveVersion: number | null;
 }
+/**
+ * Part 37c-1 (a 新+档案+梗 column only): what the dictionary did in this run, by code from the script and the frozen settings, so it
+ * is the same on every read: `matched` entries found in the player's messages (before the per-reply cap), `given` meanings that went
+ * into a prompt (at most 3 a reply), and how many of those were 会用 / 只懂 / 不碰 for this character.
+ */
+export interface RehearsalMemeCounts {
+  matched: number;
+  given: number;
+  use: number;
+  know: number;
+  avoid: number;
+}
 export interface RehearsalRunDetail {
   run: RehearsalRunInfo;
   reviewer: string;
@@ -271,6 +299,8 @@ export interface RehearsalRunDetail {
     cells: RehearsalCell[];
     counts: RehearsalCounts;
     style: RehearsalStyle;
+    /** null for a column that is not 新+档案+梗. */
+    netMemes: RehearsalMemeCounts | null;
   }>;
   memes: RehearsalMemeRow[] | null;
 }

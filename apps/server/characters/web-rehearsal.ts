@@ -39,7 +39,10 @@ import { REVIEW_MODEL_LABELS, type ReviewModelId } from '../../../packages/contr
 import type { CastView } from '../../../packages/contracts/web-cast.ts';
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { castForPreview } from '../cast/cast-store.ts';
+import { castForPreview, castPoolForPreview } from '../cast/cast-store.ts';
+import { readMemesOff } from '../memes/web-meme-store.ts';
+import { MEME_TURNS, readMemeUse } from '../../../packages/contracts/web-memes.ts';
+import { matchMemes } from '../memes/meme-match.ts';
 import { currentReviewModel } from '../admission/web-review-model.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
 import { listPriceMicros } from '../generation/model-list-prices.ts';
@@ -420,6 +423,7 @@ export class WebRehearsal {
     const line =
       (source.kind === 'set' && source.set === 'opening' ? lines.find((l) => l.context) : undefined) ?? lines[0];
     const opening = openingFrom(line?.text, line?.context);
+    const memesColumn = models.some((key) => parseRehearsalColumn(key)?.memes === true);
     const frozen: RehearsalFrozen = {
       template: profile.template,
       ...(opening ? { opening } : {}),
@@ -427,6 +431,22 @@ export class WebRehearsal {
         ? { roster: writerRoster(this.store, characterId) }
         : {}),
       ...(cast ? { cast } : {}),
+      // Part 37c-1: what a 新+档案+梗 column needs of the dictionary and the cast, frozen with the run.
+      ...(memesColumn ? { memeOff: [...readMemesOff(this.store)].sort() } : {}),
+      ...(memesColumn && cast
+        ? {
+            castPool: castPoolForPreview(this.store, characterId, [
+              ...turns.map((_, at) =>
+                turns
+                  .slice(Math.max(0, at - MEME_TURNS + 1), at + 1)
+                  .map((turn) => turn.text ?? '')
+                  .reverse(),
+              ),
+              // A 梗与故事 run writes its turns later: its own items are always in the pool.
+              ...(items.length ? [items.map((item) => item.label)] : []),
+            ]),
+          }
+        : {}),
       baseAt: now,
       ...(onLive ? { liveVersion: input.liveVersion as number } : {}),
     };
@@ -469,9 +489,16 @@ export class WebRehearsal {
     const v8ProfileFirst = models.some((key) => parseRehearsalColumn(key)?.profile)
       ? rehearsalRequest(fixed, 'estimate', 'deepseek-v8p', 1, players, [])
       : v8First;
+    // Part 37c-1: a 新+档案+梗 column adds the first turn's matched meanings and its selected cast context.
+    const v8MemesFirst = models.some((key) => parseRehearsalColumn(key)?.memes)
+      ? rehearsalRequest(fixed, 'estimate', 'deepseek-v8m', 1, players, [])
+      : v8ProfileFirst;
     // Part 37a-3: the draft prompt carries the addendum of the model that writes it, so its size is per provider.
-    const v8Draft = (provider: WriterDraftProvider, profile = false) =>
-      Buffer.byteLength(JSON.stringify(writerDraftMessages(profile ? v8ProfileFirst : v8First, provider)), 'utf8');
+    const v8Draft = (provider: WriterDraftProvider, profile = false, memes = false) =>
+      Buffer.byteLength(
+        JSON.stringify(writerDraftMessages(memes ? v8MemesFirst : profile ? v8ProfileFirst : v8First, provider)),
+        'utf8',
+      );
     const v8Guard = Buffer.byteLength(
       JSON.stringify(
         writerGuardMessages(v8First, { mode: 'casual', bubbles: [], endsSession: false, markups: [] } as WriterDraft),
@@ -488,7 +515,7 @@ export class WebRehearsal {
         const growth = (t - 1) * (REPLY_CHARS * 3 + 2 * 260);
         if (column.writer === 'v8') {
           total += listPriceMicros(ref.provider, ref.model, {
-            inputTokens: Math.ceil((v8Draft(ref.provider, column.profile) + growth) / 2),
+            inputTokens: Math.ceil((v8Draft(ref.provider, column.profile, column.memes) + growth) / 2),
             outputTokens: 120 + thinking,
           });
           total += listPriceMicros('deepseek', reviewer, {
@@ -679,6 +706,26 @@ export class WebRehearsal {
     };
   }
 
+  /** Part 37c-1: the dictionary's matches in a run, by code from its turns and what it froze (the same on every read). */
+  private memeCounts(runId: string, players: readonly string[]) {
+    const frozen = JSON.parse(
+      this.store.get<{ frozen_json: string }>('SELECT frozen_json FROM web_rehearsal_runs WHERE id=?', runId)!
+        .frozen_json,
+    ) as RehearsalFrozen;
+    const off = new Set(frozen.memeOff ?? []);
+    const use = readMemeUse(frozen.template);
+    const counts = { matched: 0, given: 0, use: 0, know: 0, avoid: 0 };
+    players.forEach((_, at) => {
+      const window = players.slice(Math.max(0, at - MEME_TURNS + 1), at + 1).reverse();
+      counts.matched += matchMemes(window, off, use, Number.MAX_SAFE_INTEGER).length;
+      for (const hit of matchMemes(window, off, use)) {
+        counts.given++;
+        counts[hit.level]++;
+      }
+    });
+    return counts;
+  }
+
   /** The whole run, computed from what is stored. `characterId` must be the run's: another character's run is not found. */
   detail(characterId: string, runId: unknown): RehearsalRunDetail {
     identifier(characterId);
@@ -768,6 +815,12 @@ export class WebRehearsal {
           codes: errorCodes(cells),
         }),
         style,
+        netMemes: column.memes
+          ? this.memeCounts(
+              runId,
+              turnRows.map((t) => t.text ?? ''),
+            )
+          : null,
       };
     });
     let memes: RehearsalMemeRow[] | null = null;

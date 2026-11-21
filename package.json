@@ -12,9 +12,11 @@
     "test": "node --test --test-concurrency=1 tests/web/unit/*.test.ts tests/web/integration/*.test.ts tests/web/e2e/*.test.ts tests/web/load/*.test.ts apps/player-web/tests/components/*.test.ts",
     "prompts:build": "node scripts/build-prompts.ts",
     "prompts:check": "node scripts/build-prompts.ts --check",
+    "memes:build": "node scripts/build-memes.ts",
+    "memes:check": "node scripts/build-memes.ts --check",
     "check:dead-exports": "node scripts/check-dead-exports.ts",
     "lint": "node scripts/check-lint.ts",
-    "check": "pnpm format:check && pnpm lint && pnpm prompts:check && pnpm check:dead-exports && pnpm typecheck && pnpm test",
+    "check": "pnpm format:check && pnpm lint && pnpm prompts:check && pnpm memes:check && pnpm check:dead-exports && pnpm typecheck && pnpm test",
     "voice:samples": "node scripts/voice-samples.ts",
     "web:local": "node scripts/web-v1.ts",
     "web:player:build": "node scripts/build-web-player.ts",
@@ -47,7 +49,8 @@
     "check:web:profile-37b": "node scripts/check-web-profile-37b-browser.ts",
     "check:web:share-45": "node scripts/check-web-share-45-browser.ts",
     "check:web:part-46": "node scripts/check-web-part-46-browser.ts",
-    "check:web:first-screen-48": "node scripts/check-web-first-screen-48-browser.ts"
+    "check:web:first-screen-48": "node scripts/check-web-first-screen-48-browser.ts",
+    "check:web:memes-37c1": "node scripts/check-web-memes-37c1-browser.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
