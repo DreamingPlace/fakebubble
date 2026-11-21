@@ -79,11 +79,16 @@ try {
     check(before.hasPlayed || button.includes('play-button'), `${label}: the pill has a played copy of its bars`);
     check(before.legacyLine === 0, `${label}: no separate progress line exists`);
     await page.locator(button).click({ force: true });
-    await page.waitForFunction((s: string) => document.querySelector(s)?.getAttribute('data-playing') === 'true', button, {
-      timeout: 10_000,
-    });
     await page.waitForFunction(
-      (s: string) => Number(document.querySelector<HTMLElement>(s)?.style.getPropertyValue('--pk-progress') || 0) > 0.05,
+      (s: string) => document.querySelector(s)?.getAttribute('data-playing') === 'true',
+      button,
+      {
+        timeout: 10_000,
+      },
+    );
+    await page.waitForFunction(
+      (s: string) =>
+        Number(document.querySelector<HTMLElement>(s)?.style.getPropertyValue('--pk-progress') || 0) > 0.05,
       button,
       { timeout: 10_000 },
     );
@@ -200,5 +205,5 @@ if (problems.length) {
   console.error(problems.join('\n'));
   process.exit(1);
 }
-console.log("check-web-wave-49-browser: all checks passed");
+console.log('check-web-wave-49-browser: all checks passed');
 process.exit(0);

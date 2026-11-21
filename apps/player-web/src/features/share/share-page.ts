@@ -76,8 +76,7 @@ export async function startSharePage(
       audio = deps.audio ? deps.audio(blobUrl) : new Audio(blobUrl);
       audio.addEventListener('timeupdate', () => {
         const total = audio!.duration;
-        if (Number.isFinite(total) && total > 0)
-          setVoiceProgress(button, audio!.currentTime / total);
+        if (Number.isFinite(total) && total > 0) setVoiceProgress(button, audio!.currentTime / total);
       });
       audio.addEventListener('ended', stop);
       audio.addEventListener('pause', () => button.removeAttribute('data-playing'));
