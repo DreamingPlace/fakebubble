@@ -4,6 +4,7 @@
  * leaves no card) shows the same page: 链接已过期 and 也来聊聊.
  */
 import { expireSharedCard, renderSharedCard, renderSharedExpired, sharedCardData } from './shared-card.ts';
+import { clearVoiceProgress, setVoiceProgress } from '../prototype/voice-progress.ts';
 import type { PublicShareAnswer } from './shared-card.ts';
 
 export const SHARE_TOKEN = /^[A-Za-z0-9_-]{32}$/;
@@ -48,7 +49,7 @@ export async function startSharePage(
   const stop = () => {
     audio?.pause();
     button.removeAttribute('data-playing');
-    button.style.setProperty('--pk-progress', '0');
+    clearVoiceProgress(button);
   };
   async function toggle() {
     if (audio && !audio.paused) {
@@ -76,7 +77,7 @@ export async function startSharePage(
       audio.addEventListener('timeupdate', () => {
         const total = audio!.duration;
         if (Number.isFinite(total) && total > 0)
-          button.style.setProperty('--pk-progress', String(Math.min(1, audio!.currentTime / total)));
+          setVoiceProgress(button, audio!.currentTime / total);
       });
       audio.addEventListener('ended', stop);
       audio.addEventListener('pause', () => button.removeAttribute('data-playing'));

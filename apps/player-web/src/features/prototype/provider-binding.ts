@@ -21,6 +21,7 @@ import { backupNote, modelCopy, modelFooterNote, modelMenuItem, openModelPicker 
 import { renderSignedOut, type SignedOutApi } from '../account/signed-out-page.ts';
 import { playerPrefs } from '../prefs/player-prefs.ts';
 import { lookCopy, openLookSheet } from './chat-look.ts';
+import { clearVoiceProgress, setVoiceProgress } from './voice-progress.ts';
 import { openShareSheet, shareButton, shareCopy } from '../share/share-sheet.ts';
 
 export type Shell = {
@@ -846,19 +847,9 @@ export class LiveBinding {
   private progressTarget(entry: VoiceEntry | null): HTMLElement | null {
     return (this.welcomeButton ?? entry?.button ?? this.nowPlaying?.button ?? null) as HTMLElement | null;
   }
-  /** The played copy of the bars: the same drawing in the main colour, clipped to the playhead by --pk-progress. */
-  private ensurePlayedBars(button: HTMLElement) {
-    const bars = button.querySelector<HTMLElement>('.sound-bars');
-    const drawing = bars?.querySelector('svg');
-    if (!bars || !drawing || bars.querySelector('.pk-played')) return;
-    const copy = drawing.cloneNode(true) as SVGElement;
-    copy.classList.add('pk-played');
-    copy.setAttribute('aria-hidden', 'true');
-    bars.append(copy);
-  }
   private clearProgress() {
     for (const button of [this.welcomeButton, this.nowPlaying?.button])
-      (button as HTMLElement | null | undefined)?.style?.removeProperty?.('--pk-progress');
+      clearVoiceProgress(button as HTMLElement | null | undefined);
   }
 
   private stopAudio() {
@@ -903,13 +894,12 @@ export class LiveBinding {
       this.stopAudio();
       this.pump();
     };
-    // Part 24k-2: the played part of the pill's progress line and of the chat's sound bars is painted in the character's main.
+    // Part 24k-2: the played part of the waveform (pill and chat bubbles alike) is painted in the character's main.
     audio.addEventListener('timeupdate', () => {
       if (this.audio !== audio) return;
       const button = this.progressTarget(entry);
       if (!button || !(audio.duration > 0)) return;
-      this.ensurePlayedBars(button);
-      button.style.setProperty('--pk-progress', String(Math.min(1, Math.max(0, audio.currentTime / audio.duration))));
+      setVoiceProgress(button, audio.currentTime / audio.duration);
     });
     audio.addEventListener('ended', finish);
     audio.addEventListener('error', finish);

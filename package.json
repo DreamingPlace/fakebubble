@@ -47,7 +47,8 @@
     "check:web:profile-37b": "node scripts/check-web-profile-37b-browser.ts",
     "check:web:share-45": "node scripts/check-web-share-45-browser.ts",
     "check:web:part-46": "node scripts/check-web-part-46-browser.ts",
-    "check:web:first-screen-48": "node scripts/check-web-first-screen-48-browser.ts"
+    "check:web:first-screen-48": "node scripts/check-web-first-screen-48-browser.ts",
+    "check:web:wave-49": "node scripts/check-web-wave-49-browser.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

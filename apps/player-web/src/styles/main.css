@@ -20678,16 +20678,20 @@ html.theme-fade *::after {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
-.face-wave {
+.face-bars {
+  position: relative;
   flex: 1;
   min-width: 0;
   height: 22px;
+  display: block;
+}
+.face-wave {
+  display: block;
+  width: 100%;
+  height: 100%;
   color: rgba(20, 20, 20, 0.24);
-  transition: color 240ms ease;
 }
-.face-voice[data-playing="true"] .face-wave {
-  color: var(--accent);
-}
+/* Part 49: the playing voice is shown by the played part of these bars (.pk-played, below); the grey ones stay as they are. */
 .face-dur {
   font-family: var(--bb-mono);
   font-size: 11px;
@@ -20709,9 +20713,6 @@ html.theme-fade *::after {
 }
 :root[data-theme="dark"] .face-wave {
   color: rgba(255, 255, 255, 0.24);
-}
-:root[data-theme="dark"] .face-voice[data-playing="true"] .face-wave {
-  color: var(--n-accent);
 }
 /* the head's one-line next step (体验已结束 …) and the footer note read on the dark page too */
 :root[data-theme="dark"] .page-shell .site-head .head-hint,
@@ -22209,35 +22210,42 @@ html.theme-fade *::after {
   background: var(--pk-n-main);
   color: var(--pk-n-glyph);
 }
-.face-progress {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  bottom: 5px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--accent);
-  transform: scaleX(var(--pk-progress, 0));
-  transform-origin: left center;
-  transition: transform 180ms linear;
-  pointer-events: none;
-}
-:root[data-theme="dark"] .face-progress {
-  background: var(--n-accent, var(--accent));
-}
 .sound-bars {
   position: relative;
   display: inline-flex;
 }
-.sound-bars .pk-played {
+.sound-bars .pk-played,
+.face-bars .pk-played {
   position: absolute;
   left: 0;
   top: 0;
   color: var(--accent);
   clip-path: inset(0 calc((1 - var(--pk-progress, 0)) * 100%) 0 0);
-  transition: clip-path 180ms linear;
 }
-:root[data-theme="dark"] .sound-bars .pk-played {
+/* Part 49: in the chat the played copy beats the generic playing colour (which painted BOTH layers teal): the unplayed bars step back,
+   the played ones are the character's main at full strength. */
+.page-shell .sound-bars svg:not(.pk-played) {
+  transition: opacity 240ms ease;
+}
+.page-shell .play-button[data-playing="true"] .sound-bars svg:not(.pk-played) {
+  color: var(--accent);
+  opacity: 0.32;
+}
+.page-shell .play-button .sound-bars svg.pk-played {
+  color: var(--accent);
+  opacity: 1;
+}
+:root[data-theme="dark"] .page-shell .play-button[data-playing="true"] .sound-bars svg:not(.pk-played),
+:root[data-theme="dark"] .page-shell .play-button .sound-bars svg.pk-played {
+  color: var(--n-accent, var(--accent));
+}
+/* smooth between the ~4 Hz time updates while it plays; a stop snaps back with no sweep */
+[data-playing="true"] > .sound-bars .pk-played,
+[data-playing="true"] > .face-bars .pk-played {
+  transition: clip-path 260ms linear;
+}
+:root[data-theme="dark"] .sound-bars .pk-played,
+:root[data-theme="dark"] .face-bars .pk-played {
   color: var(--n-accent, var(--accent));
 }
 /* the accents: the Latin name, the No., the sticker tape */
@@ -22285,8 +22293,8 @@ html.theme-fade *::after {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .face-progress,
-  .sound-bars .pk-played {
+  [data-playing="true"] > .sound-bars .pk-played,
+  [data-playing="true"] > .face-bars .pk-played {
     transition: none;
   }
 }
