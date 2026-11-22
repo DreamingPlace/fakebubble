@@ -79,7 +79,12 @@ export type AccountInfo =
       tier?: AccountTier;
     };
 /** The bot check: resolves one fresh Turnstile token for an action, or throws. Installed only on the real page. */
-export type HumanCheck = (siteKey: string, action: 'guest' | 'code' | 'login') => Promise<string>;
+export type HumanCheck = (
+  siteKey: string,
+  action: 'guest' | 'code' | 'login',
+  /** Part 50: called the moment the widget has been rendered (its challenge frame starts). */
+  onRender?: () => void,
+) => Promise<string>;
 const humanAction = (path: string) =>
   path === '/bootstrap'
     ? 'guest'
@@ -133,18 +138,54 @@ const operation = (value: unknown): WebProviderOperation => {
   return row as unknown as WebProviderOperation;
 };
 
+/** Part 50: a boolean hint (no id, no content) that a session was made on this device, so a returning visitor starts no early challenge. */
+const SESSION_SEEN = 'fakebubble.session-seen.v1';
+
 /** Same-origin, cookie-authenticated provider-local transport; CSRF stays in memory only. */
 export class ProviderApi implements WebProviderActions {
   private csrf = '';
   private readonly fetcher: typeof fetch;
   private human: HumanCheck | null = null;
   private siteKey: string | null = null;
+  private warm: (() => void) | null = null;
+  private early: Promise<string> | null = null;
   constructor(fetcher: typeof fetch = (input, init) => fetch(input, init)) {
     this.fetcher = fetcher;
   }
   /** Turnstile (only when the server asks for it): the page installs the widget-backed check once. */
   setHumanCheck(check: HumanCheck | null) {
     this.human = check;
+  }
+  /**
+   * Part 50: the public site key (from the public catalog). The check no longer needs a separate /account read, Cloudflare's script
+   * loads right away, and for a visitor who has not had a session on this device the invisible challenge starts NOW (a new guest will
+   * be refused without a token, so the token is wanted anyway) instead of after the bootstrap's refusal comes back. A returning
+   * visitor (a session was made here before) does not start one: their cookie normally makes it unnecessary. The token is only ever
+   * sent when the server has answered TURNSTILE_REQUIRED, exactly as before: nothing is created, and nothing that costs money runs.
+   */
+  primeHuman(siteKey: string): Promise<void> {
+    if (!/^[0-9A-Za-z_-]{1,64}$/.test(siteKey)) return Promise.resolve();
+    this.siteKey ??= siteKey;
+    this.warm?.();
+    if (!this.human || this.early || this.sessionSeen()) return Promise.resolve();
+    const human = this.human;
+    // Resolves when the widget has been rendered (or the check already failed), so the page can let it start before heavy drawing.
+    return new Promise<void>((started) => {
+      const early = human(siteKey, 'guest', started);
+      this.early = early;
+      early.catch(() => started()); // a failure is reported when (and only if) the token is needed
+    });
+  }
+  /** Part 50: what the page installs to start loading Cloudflare's script early (the widget module's own loader). */
+  setHumanWarmup(warm: (() => void) | null) {
+    this.warm = warm;
+  }
+  private sessionSeen(): boolean {
+    try {
+      return globalThis.localStorage?.getItem(SESSION_SEEN) === '1';
+    } catch {
+      return false;
+    }
   }
   /**
    * With Turnstile on, the server answers a new guest, a code request and a login without a token with
@@ -161,7 +202,10 @@ export class ProviderApi implements WebProviderActions {
       try {
         const siteKey = (this.siteKey ??= (await this.account()).features?.turnstileSiteKey ?? null);
         if (!siteKey) throw error;
-        token = await this.human(siteKey, action);
+        // Part 50: a token the page already started for this very request (a new guest) is used once; otherwise a fresh check runs.
+        const early = action === 'guest' ? this.early : null;
+        this.early = null;
+        token = early ? await early.catch(() => this.human!(siteKey, action)) : await this.human(siteKey, action);
       } catch (failure) {
         if (failure === error) throw error;
         throw new ProviderApiError(0, 'TURNSTILE_FAILED');
@@ -220,6 +264,11 @@ export class ProviderApi implements WebProviderActions {
   async bootstrap(): Promise<WebProviderBootstrap> {
     const view = parseWebProviderBootstrap(await this.request('/bootstrap'));
     this.csrf = view.csrf;
+    try {
+      globalThis.localStorage?.setItem(SESSION_SEEN, '1');
+    } catch {
+      /* private mode: the page simply starts the check after the refusal, as before */
+    }
     return view;
   }
   /** A signed-in player's code adds an ENTITLEMENT: no new session, no receipt. Idempotent on requestId. */

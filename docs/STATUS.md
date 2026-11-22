@@ -1,5 +1,7 @@
 # 验收状态
 
+> Notes of Part 50 and later live in their own files: [`docs/status/`](status/) (`part-XX.md`, one per Part). This file keeps everything written before.
+
 **本次为网页源码公开预览，不是整版验收通过或新版本上线。**
 
 已纳入：玩家与管理员网页、动态角色目录与资料预览发布、邮箱账号、分类权限、邀请、持久化任务、私有音频、预算预占及安全默认值。

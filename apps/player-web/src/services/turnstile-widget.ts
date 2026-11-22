@@ -56,6 +56,13 @@ function load(doc: Document, timeoutMs: number): Promise<TurnstileApi> {
   return loading;
 }
 
+/** Part 50: start loading Cloudflare's script now (async, no widget): called when the public site key is known, before it is needed. */
+export function warmTurnstile(doc: Document = document, loadMs = TURNSTILE_SCRIPT_MS) {
+  load(doc, loadMs).catch(() => {
+    /* the real check reports a failure itself, with its retry */
+  });
+}
+
 export function turnstileCheck(
   options: {
     doc?: Document;
@@ -68,7 +75,7 @@ export function turnstileCheck(
   } = {},
 ): HumanCheck {
   const doc = options.doc ?? document;
-  return async (siteKey, action) => {
+  return async (siteKey, action, onRender) => {
     options.onPhase?.('loading');
     const api = await load(doc, options.loadMs ?? TURNSTILE_SCRIPT_MS);
     const box = doc.createElement('div');
@@ -88,6 +95,8 @@ export function turnstileCheck(
         widget = api.render(box, {
           sitekey: siteKey,
           action,
+          // Part 50: the check runs as soon as it is rendered and stays invisible unless Cloudflare needs a click.
+          execution: 'render',
           appearance: 'interaction-only',
           retry: 'never',
           callback: (token: string) => {
@@ -104,6 +113,7 @@ export function turnstileCheck(
           'expired-callback': fail('TURNSTILE_EXPIRED'),
           'timeout-callback': fail('TURNSTILE_TIMEOUT'),
         });
+        onRender?.();
       });
     } finally {
       if (widget !== null) {

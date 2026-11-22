@@ -15,6 +15,12 @@ pnpm check:web:local-http
 pnpm check:web:restart
 ```
 
+Browser checks: `pnpm web:player:build` first, then `pnpm check:web:all` runs every `scripts/check-web-*-browser.ts` (found by file
+name, one at a time, a few named stale ones skipped with their reason in the script) and prints a table of name / exit code /
+seconds, also written to `work/check-web-all/results.json`; `pnpm check:web:all -- part-44 share-45` runs only the matching ones.
+A new Part adds its script file and no `package.json` line, and writes its status notes to its own `docs/status/part-XX.md`
+instead of appending to `docs/STATUS.md`, so parallel PRs no longer conflict on those two files.
+
 All of these must pass before a change is ready. Tests use offline fixtures only: no real provider calls, no emails, no
 deploys.
 

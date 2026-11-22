@@ -9,7 +9,7 @@
  */
 // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
 type Any = any;
-import { playerCsp } from '../apps/server/cloudflare/web-assets.ts';
+import { playerCsp, playerLink } from '../apps/server/cloudflare/web-assets.ts';
 export const TEST_SITE_KEY = '1x00000000000000000000AA';
 
 /** Chrome DevTools-style profiles. "Fast 4G" is the acceptance profile (with a 4x CPU slowdown); "Slow 4G" is the harsher one. */
@@ -54,7 +54,11 @@ export interface TurnstileStats {
   writes: { call: string; sessionsBefore: number }[];
 }
 
-export async function turnstileRoutes(context: Any, origin: string, options: { siteKey?: string } = {}) {
+export async function turnstileRoutes(
+  context: Any,
+  origin: string,
+  options: { siteKey?: string; catalogKey?: boolean } = {},
+) {
   const stats: TurnstileStats = { refused: 0, withToken: 0, writes: [] };
   let sessions = 0;
   const base = '/api/web/provider';
@@ -67,7 +71,7 @@ export async function turnstileRoutes(context: Any, origin: string, options: { s
       const response = await route.fetch();
       return route.fulfill({
         response,
-        headers: { ...response.headers(), 'content-security-policy': playerCsp(true) },
+        headers: { ...response.headers(), 'content-security-policy': playerCsp(true), link: playerLink(true)! },
       });
     },
   );
@@ -89,6 +93,12 @@ export async function turnstileRoutes(context: Any, origin: string, options: { s
       if (token) stats.withToken++;
       sessions++;
       return route.continue();
+    }
+    // Part 50: the real edge puts the PUBLIC site key into the catalog answer; the local server has no key, so the route adds it.
+    if (path === '/catalog' && options.catalogKey !== false) {
+      const response = await route.fetch();
+      const body = await response.json();
+      return route.fulfill({ response, json: { ...body, turnstileSiteKey: options.siteKey ?? TEST_SITE_KEY } });
     }
     if (path === '/account') {
       const response = await route.fetch();

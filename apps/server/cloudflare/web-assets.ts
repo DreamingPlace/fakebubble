@@ -27,6 +27,14 @@ export function playerCsp(turnstile: boolean) {
     "object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
   );
 }
+/**
+ * Part 50: with Turnstile on, the player document tells the browser (a response header, so the manifest-verified bytes stay as they are)
+ * to start fetching Cloudflare's script and open its connection at once, instead of when the page's own script has run. Without
+ * Turnstile no header is sent (the CSP would refuse the host anyway). The URL is the one the page's loader uses, so the fetch is reused.
+ */
+export const TURNSTILE_SCRIPT_URL = `${TURNSTILE_ORIGIN}/turnstile/v0/api.js?render=explicit`;
+export const playerLink = (turnstile: boolean) =>
+  turnstile ? `<${TURNSTILE_SCRIPT_URL}>; rel=preload; as=script, <${TURNSTILE_ORIGIN}>; rel=preconnect` : null;
 /** The two legal pages (Part 17). They exist in every build but are served only while LEGAL_PAGES_ENABLED is on. */
 export const LEGAL_PAGE_PATHS = ['privacy.html', 'terms.html'] as const;
 export interface CloudWebAssetsOptions {
@@ -125,6 +133,7 @@ export class CloudWebAssets {
         'content-length': String(bytes.byteLength),
         'cache-control': playerAssetCacheControl(path),
         'content-security-policy': playerCsp(this.options.turnstile === true),
+        ...(path === 'index.html' && playerLink(this.options.turnstile === true) ? { link: playerLink(true)! } : {}),
       },
     });
   }

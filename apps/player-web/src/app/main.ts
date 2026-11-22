@@ -2,7 +2,7 @@ import { SessionGate } from '../features/prototype/session-gate.js';
 import { mountVerifySheet } from '../features/prototype/verify-sheet.js';
 import { bootPlayer } from '../features/prototype/first-paint.js';
 import { ProviderApi } from '../services/provider-api.js';
-import { turnstileCheck } from '../services/turnstile-widget.js';
+import { turnstileCheck, warmTurnstile } from '../services/turnstile-widget.js';
 import { playerPrefs } from '../features/prefs/player-prefs.ts';
 import { startTheme } from '../features/prefs/theme.ts';
 
@@ -56,5 +56,6 @@ if (shared) {
   const gate = new SessionGate(api);
   const sheet = mountVerifySheet(gate);
   api.setHumanCheck(turnstileCheck({ host: sheet.widgetHost, onPhase: (phase) => gate.phase(phase) }));
+  api.setHumanWarmup(() => warmTurnstile());
   bootPlayer({ root, api, gate, sheet });
 }
