@@ -229,6 +229,12 @@ export interface TextGenerationRequest {
    * others may use and the cast card's one-liner. No hidden setting, no relationship. Absent on a v7 request.
    */
   roster?: { name: string; aliases: string[]; oneLiner: string }[];
+  /**
+   * Part 51 (v8 only): the character's OWN names, each with its kind (自称 / 别名 / 中性称呼 / 黑称 / 饰演过的角色) and her attitude to it
+   * (likes / ok / dislikes): the published cast file's aliases merged with the profile settings (the cast file wins on a conflict),
+   * whatever CAST_CONTEXT_ENABLED says. Absent on a v7 request and when the character has none.
+   */
+  ownNames?: { text: string; kind: string; attitude: 'likes' | 'ok' | 'dislikes' }[];
   messages: MessageDTO[];
   mustClose: boolean;
   // Untrusted source/memory records, never interpolated as developer instructions.
