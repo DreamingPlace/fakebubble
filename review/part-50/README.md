@@ -1,0 +1,1 @@
+Part 50: no visible change expected. The first tap after the background check (phone, Fast 4G + 4x CPU): the chat opens with no verification sheet. `-0` = catalog answered at once, `-1500` = catalog held back 1.5 s.
