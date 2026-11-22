@@ -98,7 +98,19 @@ export type RehearsalProfileSet = (typeof REHEARSAL_PROFILE_SETS)[number];
  */
 export const REHEARSAL_NET_SETS = ['net-daily', 'net-work', 'net-trip', 'net-feelings'] as const;
 export type RehearsalNetSet = (typeof REHEARSAL_NET_SETS)[number];
-export const REHEARSAL_SETS = ['chat', 'repeat', 'opening', ...REHEARSAL_PROFILE_SETS, ...REHEARSAL_NET_SETS] as const;
+/**
+ * Part 51: 「v8 规则 51」, one fixed script (a real-world event, a shared trip with and without support in the chat, a pet name early
+ * and late, a playful 你是谁, a serious 你是不是AI). Fifteen turns; the owner judges the replies by ear.
+ */
+export const REHEARSAL_RULES_SET = 'rules-51';
+export const REHEARSAL_SETS = [
+  'chat',
+  'repeat',
+  'opening',
+  ...REHEARSAL_PROFILE_SETS,
+  ...REHEARSAL_NET_SETS,
+  REHEARSAL_RULES_SET,
+] as const;
 export type RehearsalSet = (typeof REHEARSAL_SETS)[number];
 export const isProfileSet = (set: unknown): set is RehearsalProfileSet =>
   (REHEARSAL_PROFILE_SETS as readonly unknown[]).includes(set);
@@ -119,6 +131,7 @@ export const REHEARSAL_SET_LABELS: Readonly<Record<RehearsalSet | 'memes', strin
   'net-work': '网络梗 · 职场',
   'net-trip': '网络梗 · 出游',
   'net-feelings': '网络梗 · 情绪',
+  'rules-51': 'v8 规则 51',
   memes: '梗与故事',
 });
 

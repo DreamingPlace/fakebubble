@@ -28,18 +28,18 @@ test('37a-3 pins: every v8 file and the whole set are pinned, and the new pin is
   // Named, deliberate change (Part 37a-3): v8 is not live, so these hashes moved; v7 did not.
   const pinned: Record<string, string> = {
     'cast-context.md': '533488c6a6e27c0fba1ecc01317e24f05d7f9ff6f856cbc8d3d45b2fd0daa42f',
-    'guard.md': 'bcd56b28f4ec016587011f48dfa4c678d0cd5c1394b50a624e519f798e1e7424',
+    'guard.md': '57df00bd6d15811ab2a522d6c08b91b5381a420623fa4ce4a8ef9b8a5f5d1b89',
     'writer-addendum-deepseek.md': '4fa7b9f3497637f3c8ef30d48f69c2af551afa5a5a4a5e302fbf0ab4b105f359',
     'writer-addendum-gemini.md': 'd430a20548be34d725518d1e36bd166be1bd9669d3e0bd44db6bf45e50c601ea',
     'writer-addendum-grok.md': 'af2561424f21aafc8568f4d1b6d5800ca0d1c5fcc03b4dc77306627040bdb70f',
     'writer-directions.md': '1457f247f8cbb1d4bb60ffed958fd059d62b52cad20034a68b807bc86f3a6e00',
-    'writer.md': 'a4cf03592936a87c53ea77342f80a631ea227c61278c0efea0b838c914eba9ef',
+    'writer.md': 'd8e7a54c9b209d30803fc0ebcf6fca9b4f89706b0324b874de50b344cdd477d9',
   };
   assert.deepEqual(readdirSync(V8_DIR).sort(), Object.keys(pinned).sort(), 'a new v8 file must be pinned here');
   for (const [file, hash] of Object.entries(pinned)) assert.equal(sha(readFileSync(new URL(file, V8_DIR))), hash, file);
-  assert.equal(WRITER_V8_PROMPT_SHA256, '5cb15ed6ebc66b4826f7c127fadc1a7c3240d5c7632f1658ac46faa6461432ba');
+  assert.equal(WRITER_V8_PROMPT_SHA256, '482fe03ba4f2d302d3ad26c932e78a8ab80d0384563186b8d8fca1cc4a82637d');
   assert.equal(writerPromptBytesHash(), WRITER_V8_PROMPT_SHA256);
-  assert.equal(writerPromptHash(), '581ed13a73cca783c29b7180ec8e8cdd3e08a5ed8f369edf5b290f338e28d188');
+  assert.equal(writerPromptHash(), '64f475be748d641f58c04801f61fc9fe1b81679c27302a80476f0e568fddbd79');
   const status = readFileSync(new URL('../../../docs/STATUS.md', import.meta.url), 'utf8');
   assert.ok(status.includes(WRITER_V8_PROMPT_SHA256), 'STATUS.md documents the pin');
   assert.ok(status.includes(writerPromptHash()), 'STATUS.md documents the request prompt hash');

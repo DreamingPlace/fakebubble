@@ -391,20 +391,20 @@ const profileRequest = (over: Partial<TextGenerationRequest> = {}) => v8Request(
 test('旧 and 新 are byte-identical to what they were before Part 37b (hashes taken on main before the change)', () => {
   const v8 = v8Request();
   assert.equal(sha(promptMessages(v7Request())), '275253132d301adbf8d888c972c6dc26953ce8bedb497d0bdb5deeda2003214f');
-  assert.equal(sha(writerDraftMessages(v8)), 'e411036c1c2ecc6413352820a23485426614dc351d7051a69570f5a1f316f01e');
+  assert.equal(sha(writerDraftMessages(v8)), '6a2811beec7ce3e606e213050389abd9fae33e82dcc6240fe915377fd9f29d1d');
   assert.equal(
     sha(writerDraftMessages(v8, 'deepseek')),
-    '15c3b6ab11aa91b6ac4e8989900284b638b6ceb3a6b1409b7e2a633d8215b952',
+    'd4162a33a15c86cc3650de3916c9439e4cdde85897d3778fb08eca6e531556c9',
   );
   assert.equal(
     sha(writerDraftMessages(v8, 'gemini')),
-    'bb7f01c8b83f67b1cfa81b98ff0525899ae3d675f306e3efc01494d37e491bac',
+    '111393145f9040be7144a99ad9d5800534ab47cb8d81551c12914b3f72a443ca',
   );
-  assert.equal(sha(writerDraftMessages(v8, 'xai')), '273cb683b1ea10b78796d12f3ca20ecd552eb2f82d88c9ba62d6818e0ee1c57b');
+  assert.equal(sha(writerDraftMessages(v8, 'xai')), 'dfc48dd15a139f2d5924a112437d02eec3bc7fb390541275f500b6de94103faa');
   const { relationship: _r, ...plain } = textRequest();
   assert.equal(
     sha(writerDraftMessages({ ...plain, writer: 'v8' } as TextGenerationRequest)),
-    'dc2b78e9f9ba2694347015bfb7c3a4558e518e08c426866594ef67f0e0c81196',
+    'ac3f62b6cb67ab4e5c9904ce7663a36bf29bbbd6b6e5c39d85662cde4fab0861',
   );
   assert.equal(
     sha(
@@ -415,12 +415,12 @@ test('旧 and 新 are byte-identical to what they were before Part 37b (hashes t
         markups: [null],
       } as never),
     ),
-    '88df581e2b754e85f0b7961df592b79e647067430e589c5ed6ab47555bfb0998',
+    '10e9f910962a1f879fd29794b61a6a9522d75792eb641cc5b19f537dd922de10',
   );
-  assert.equal(writerPolicyHash('{"a":1}'), 'f41cec422c80cb5deaa7577103a6bae5f14069930778ee61c144127a3e5aa084');
+  assert.equal(writerPolicyHash('{"a":1}'), '6526ec04e3351517f5bef375077d27bf8bcbb00c4909aafbf0abdc47df66469b');
   assert.deepEqual(writerPins(), {
     protocolDigest: '698b389cae6b0a77fa3645081ae7971e502a934b3e73bbef149ccfbdb589408a',
-    promptDigest: '581ed13a73cca783c29b7180ec8e8cdd3e08a5ed8f369edf5b290f338e28d188',
+    promptDigest: '64f475be748d641f58c04801f61fc9fe1b81679c27302a80476f0e568fddbd79',
   });
 });
 

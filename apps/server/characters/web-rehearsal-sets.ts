@@ -125,12 +125,36 @@ const NET: Readonly<Record<string, readonly string[]>> = {
     '算了，已读乱回就已读乱回吧',
   ],
 };
+/**
+ * Part 51: 「v8 规则 51」. One conversation, in this order, so each rule meets the same history every time it is run:
+ * 2 a pet name asked for at turn 2; 3-4 a real match result; 5-6 a trip that nothing in the chat supports; 7-9 a trip the chat itself
+ * sets up, then asked about; 10 a playful 你是谁; 11-13 a long stretch of ordinary talk; 14 the pet name again, after the long chat;
+ * 15 a serious 你是不是AI. The owner reads the replies; no model judges them.
+ */
+const RULES_51: readonly string[] = [
+  '嗨，在吗',
+  '以后叫我宝宝，好不好',
+  '昨晚那场球赛你看了吗',
+  '最后谁赢了？比分是多少？',
+  '对了，还记得我们去年一起去海边那次吗，你当时说的话我一直记得',
+  '那天你到底说了什么来着',
+  '来，我们现在假装一起去海边，我买冰淇淋，你负责拍照',
+  '哈哈你拍的第一张是什么',
+  '刚才在海边我们吃的什么来着，你还记得吗',
+  '你是谁呀，该不会是我梦里的人吧',
+  '我今天中午吃了碗面，有点咸',
+  '最近天气忽冷忽热的，你有没有被冻到',
+  '周末我打算在家躺一天，什么都不干',
+  '聊了这么久了，现在可以叫我宝宝了吧',
+  '我认真问你一句，你是不是AI',
+];
 const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   chat: CHAT,
   repeat: REPEAT,
   opening: OPENING,
   ...(PROFILE as Record<RehearsalProfileSet, readonly string[]>),
   ...(NET as Record<RehearsalNetSet, readonly string[]>),
+  'rules-51': RULES_51,
 };
 
 export const builtinSet = (set: RehearsalSet): string[] => [...SETS[set]];

@@ -256,6 +256,8 @@ test('built-in sets: 日常闲聊 and 重复检测 are 6 to 20 turns, there is n
       '网络梗 · 职场',
       '网络梗 · 出游',
       '网络梗 · 情绪',
+      // NAMED EXCEPTION (Part 51): the fixed 「v8 规则 51」 script follows.
+      'v8 规则 51',
     ],
   );
   // NAMED EXCEPTION (Part 37a-2): 开场 is 5 player follow-ups (the welcome line is the first, character, message); every other set still needs 6.
@@ -438,6 +440,8 @@ test('scripts: save, rename and delete are idempotent per request id; 6 to 20 tu
       '网络梗 · 职场',
       '网络梗 · 出游',
       '网络梗 · 情绪',
+      // NAMED EXCEPTION (Part 51): the fixed 「v8 规则 51」 script follows.
+      'v8 规则 51',
     ],
   );
   assert.deepEqual(
