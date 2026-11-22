@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { acceptedAuditEnvelope, draftEnvelope } from '../../text-fixtures.ts';
+import { acceptedAuditEnvelope, draftEnvelope, textRequest } from '../../text-fixtures.ts';
 import { modelFixture, type FetchCall } from '../fixtures/model-choice.ts';
 import { WebProviderOffline } from '../../../apps/server/generation/web-provider-offline.ts';
 import {
@@ -27,14 +27,18 @@ const DRAFT = 'submit_dialogue_draft';
 const PRO = 'deepseek-v4-pro';
 const FLASH = 'deepseek-flash';
 
-const answer = () => (call: FetchCall, _n: number, request: never) =>
+type Handler = (call: FetchCall, n: number, request: ReturnType<typeof textRequest>) => Response;
+const answer = (): Handler => (call, _n, request) =>
   Response.json(call.tool === DRAFT ? draftEnvelope(request) : acceptedAuditEnvelope(request));
 
-/** The V4.1 Flash review price row a switch to Flash needs (the shipped table already carries it; this covers older fixtures). */
+/**
+ * The V4.1 Flash review price row a switch to Flash needs. The shipped table already carries it, so this only covers a fixture
+ * whose prices were seeded before Part 26b; it never creates an overlapping row.
+ */
 function priceFlashReview(f: ReturnType<typeof modelFixture>, now: number) {
   const existing = f.store.get(
     "SELECT 1 FROM web_provider_prices WHERE provider='deepseek' AND model=? AND phase='review' AND currency='USD' AND valid_from<=? AND valid_until>?",
-    'deepseek-flash',
+    FLASH,
     now,
     now,
   );
@@ -55,9 +59,9 @@ function priceFlashReview(f: ReturnType<typeof modelFixture>, now: number) {
 }
 
 /**
- * A fixture whose review model the owner has already switched to `switchTo`, with the review model frozen for `'operation'`
- * at admission. `chosen: null` is the shape of a guest admitted without a model / a signup-bonus reply / a trial_extra reply:
- * no row in web_operation_models.
+ * A fixture whose review model the owner has already switched to `switchTo`, with the review model frozen for `'operation'` at
+ * admission. `chosen: null` is the shape of a guest admitted without a model / a signup-bonus reply / a trial_extra reply: no
+ * row in web_operation_models.
  */
 function fixture(t: TestContext, chosen: PlayerModelId | null, switchTo: 'deepseek-v4-pro' | 'deepseek-flash') {
   const f = modelFixture(t, { chosen, fetch: answer() });
@@ -67,7 +71,7 @@ function fixture(t: TestContext, chosen: PlayerModelId | null, switchTo: 'deepse
   priceFlashReview(f, now);
   if (switchTo !== PRO)
     saveReviewModel(f.store, now, 'admin', {
-      requestId: `switch-${switchTo}`,
+      requestId: `switch-${switchTo}-53`,
       expectedRevision: readReviewModelView(f.store, true)!.revision,
       reviewModel: switchTo,
     });
@@ -75,7 +79,7 @@ function fixture(t: TestContext, chosen: PlayerModelId | null, switchTo: 'deepse
   return { f, now };
 }
 
-const reviewOf = (route: { review: { model: string }[] } | undefined) => route?.review[0]?.model ?? null;
+const reviewOf = (route: { review: readonly { model: string }[] } | undefined) => route?.review[0]?.model ?? null;
 
 test('a reply with no model row (guest without a model, signup bonus, trial_extra) is reviewed by the switched reviewer', (t) => {
   for (const kind of ['guest-without-model', 'signup-bonus', 'trial-extra'] as const) {
@@ -121,7 +125,7 @@ test('an operation admitted before a switch keeps the reviewer it was admitted w
   freezeReviewModel(f.store, 'operation', now);
   // The owner switches to Flash: the operation admitted a moment ago keeps Pro.
   saveReviewModel(f.store, now + 1, 'admin', {
-    requestId: 'switch-after-admission',
+    requestId: 'switch-after-admission-53',
     expectedRevision: readReviewModelView(f.store, true)!.revision,
     reviewModel: FLASH,
   });
@@ -152,6 +156,10 @@ test('the reservation is priced at the chosen reviewer, not at the default one',
   assert.ok(proPrice > flashPrice, 'the Pro review row is dearer than the Flash row');
   // held_micros is the module's own record of the hold; the ratio to the price rows shows which row it used.
   assert.equal(review.held_micros % flashPrice, 0, 'the hold is a whole number of Flash units');
-  assert.equal(review.held_micros % proPrice === 0, false, 'the hold is not a whole number of Pro units, so it is not the Pro price');
+  assert.equal(
+    review.held_micros % proPrice === 0,
+    false,
+    'the hold is not a whole number of Pro units, so it is not the Pro price',
+  );
   assert.equal(review.held_micros / flashPrice, 51_189, 'held at the Flash price (the review token bound)');
 });
