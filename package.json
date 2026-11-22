@@ -51,7 +51,8 @@
     "check:web:share-45": "node scripts/check-web-share-45-browser.ts",
     "check:web:part-46": "node scripts/check-web-part-46-browser.ts",
     "check:web:first-screen-48": "node scripts/check-web-first-screen-48-browser.ts",
-    "check:web:memes-37c1": "node scripts/check-web-memes-37c1-browser.ts"
+    "check:web:memes-37c1": "node scripts/check-web-memes-37c1-browser.ts",
+    "check:web:wave-49": "node scripts/check-web-wave-49-browser.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
