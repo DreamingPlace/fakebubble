@@ -205,7 +205,8 @@ export class ProviderApi implements WebProviderActions {
         // Part 50: a token the page already started for this very request (a new guest) is used once; otherwise a fresh check runs.
         const early = action === 'guest' ? this.early : null;
         this.early = null;
-        token = early ? await early.catch(() => this.human!(siteKey, action)) : await this.human(siteKey, action);
+        // (a failed early check is NOT repeated here: the player's 重试 starts a fresh one, so a failure shows after ONE time limit)
+        token = early ? await early : await this.human(siteKey, action);
       } catch (failure) {
         if (failure === error) throw error;
         throw new ProviderApiError(0, 'TURNSTILE_FAILED');

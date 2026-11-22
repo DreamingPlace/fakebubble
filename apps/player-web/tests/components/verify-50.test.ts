@@ -72,13 +72,17 @@ test("the early token is spent once on a new guest's bootstrap; no /account read
   }
 });
 
-test('an early check that fails is reported as TURNSTILE_FAILED only when its token is needed', async () => {
+test('an early check that fails is reported as TURNSTILE_FAILED only when its token is needed, and is not repeated', async () => {
   const api = new ProviderApi(async () => refuse());
   let n = 0;
   api.setHumanCheck(async () => {
-    if (++n === 1) throw new Error('TURNSTILE_ERROR');
+    n++;
     throw new Error('TURNSTILE_ERROR');
   });
   await api.primeHuman('1x00000000000000000000AA'); // does not throw, nothing is shown yet
   await assert.rejects(api.bootstrap(), (e: unknown) => e instanceof ProviderApiError && e.code === 'TURNSTILE_FAILED');
+  assert.equal(n, 1, 'one time limit, not two: the failure is not retried inside the same request');
+  // the player's 重试: a fresh check (the early one is spent)
+  await assert.rejects(api.bootstrap(), (e: unknown) => e instanceof ProviderApiError && e.code === 'TURNSTILE_FAILED');
+  assert.equal(n, 2);
 });

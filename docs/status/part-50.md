@@ -24,6 +24,8 @@ About 0.4 s (11 %) faster to a ready session. The first card is about 0.2 s late
 
 **Checks.** `scripts/check-web-verify-50-browser.ts` (new, in two visits: catalog at once, and catalog held 1.5 s): the bootstrap request leaves before the catalog answer arrives; the session becomes ready with the Turnstile test key and no user action (no sheet, one refusal and one pass, no `/account` read before the token-carrying bootstrap, no write); the first tap opens the chat with no verification sheet and a message sends after the session; the document carries the preload/preconnect hint. Unit: `apps/player-web/tests/components/verify-50.test.ts` (strict catalog key, the Link header and CSP, the early token used once, a failed early check reported only when needed, no early check for a returning visitor). `scripts/measure-first-screen-48.ts` gained `--catalog-key on|off` and a request timeline.
 
+**Timeouts held.** A failed early check is not repeated inside the same bootstrap (that would have doubled the failure time: the Part 48 check caught 20 s / 30 s instead of 10 s / 15 s); the failure shows after one time limit and 重试 starts a fresh check.
+
 ## 2. Fewer merge conflicts (tooling only)
 
 - `pnpm check:web:all` (`scripts/check-web-all.ts`): finds `scripts/check-web-*-browser.ts` by file name, adds `check-web-browser.ts` and the history check, runs them one at a time, prints a table of name / exit code / seconds and writes `work/check-web-all/results.json` (per-script logs next to it). `pnpm check:web:all -- part-44 share-45` filters by name. Skipped, each with its reason in the script: `admin-24b7c`, `cast-file`, `console-24b2`. New Parts add no `package.json` line; the existing `check:web:*` lines are unchanged.
