@@ -36,6 +36,7 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   INVALID_CHARACTER_ALIASES: '身份别名需包含人设名称，最多 35 个，并明确为虚构角色。',
   INVALID_CANON_EVENTS: '设定事件需明确作者设定、虚构世界及本角色知情范围。',
   INVALID_DAILY_LIFE: '一天的安排只能写早上、中午、下午、晚上、深夜和一整天的故事，每一栏不能超过字数上限。',
+  INVALID_NICKNAMES: '外号最多 20 个：名字 1–20 字且不重复，态度选喜欢 / 无所谓 / 讨厌，备注最多 60 字。',
   PROFILE_CODE_TAKEN: '这个角色代码已被别的角色使用（大小写不分）。',
   INVALID_PROFILE_CODE: '角色代码须是 2–12 位的字母、数字、_ 或 -。',
   // ---- Part 31: 头像, 首页顺序, deleting test records ----

@@ -80,7 +80,7 @@ const sortedPrompts = () => Object.entries(PROMPTS_V8).sort(([a], [b]) => (a < b
 /** sha256 of every prompts/v8 file (name and text). Pinned below and documented in docs/STATUS.md. */
 export const writerPromptBytesHash = () => createHash('sha256').update(JSON.stringify(sortedPrompts())).digest('hex');
 /** The pin: the generation Worker refuses the v8 route when its bundled files do not hash to exactly this. */
-export const WRITER_V8_PROMPT_SHA256 = '482fe03ba4f2d302d3ad26c932e78a8ab80d0384563186b8d8fca1cc4a82637d';
+export const WRITER_V8_PROMPT_SHA256 = '5e98e672b97077dd62551821865283d34d146c0dbcc3f692defb37cfc9621bc7';
 
 const guardReasonSchema = { type: 'string', enum: [...GUARD_REASONS] };
 /** The second pass's output tool: the v7 review schema's bookkeeping fields, without decision, replacement bubbles or coverage. */

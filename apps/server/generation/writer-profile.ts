@@ -7,8 +7,11 @@ import {
   EXAMPLES_PER_SITUATION_MAX,
   SPEECH_SITUATIONS,
   cardText,
+  NICKNAMES_KEY,
   isSpeechSituation,
+  nicknamesValid,
   readBank,
+  readNicknames,
   type Example,
   type SpeechSituation,
 } from '../../../packages/contracts/speech-profile.ts';
@@ -26,6 +29,8 @@ import {
 export const PROFILE_CARD_HEAD = '说话档案（你自己说话的方式，每一句都要符合）：';
 export const PROFILE_EXAMPLES_HEAD = '你在类似场合说过的话（只学语气和长短，不要照抄，也不要提起它们）：';
 export const PROFILE_EXAMPLES_MAX = 3;
+/** Part 51: the card's 外号 line: what others call her, and how she feels about each (喜欢 / 无所谓 / 讨厌, with an optional note). */
+export const PROFILE_NICKNAMES_LABEL = '外号（别人这样叫你，括号里是你对它的态度）';
 
 /** The keys of settings the 档案 block carries itself, so the author-canon JSON does not repeat them. */
 const CARD_KEYS: readonly string[] = CORE_FIELDS.map((field) => CORE_FIELD_KEYS[field]);
@@ -43,6 +48,12 @@ export function profileCardBlock(authorCanon: unknown): string {
   const lines = CORE_FIELDS.map((field) => [field, cardText(settings, field).trim()] as const)
     .filter(([, text]) => text !== '')
     .map(([field, text]) => `- ${CORE_FIELD_LABELS[field]}：${text.replaceAll('\n', '；')}`);
+  // Part 51: 外号 goes in the card as one line (a stored value that is not a valid list stays in the canon JSON, untouched).
+  const nicknames = readNicknames({ authorCanon }).items;
+  if (nicknames.length)
+    lines.push(
+      `- ${PROFILE_NICKNAMES_LABEL}：${nicknames.map((item) => `${item.name}（${item.attitude}${item.note ? `，${item.note}` : ''}）`).join('；')}`,
+    );
   return lines.length ? `${PROFILE_CARD_HEAD}\n${lines.join('\n')}` : '';
 }
 
@@ -60,6 +71,7 @@ export function canonWithoutProfile<T extends { settings?: unknown }>(authorCano
       (typeof value === 'string' || (Array.isArray(value) && value.every((v) => typeof v === 'string')))
     )
       continue;
+    if (key === NICKNAMES_KEY && nicknamesValid(value)) continue;
     if (key === 'dialogueExamples' && Array.isArray(value)) {
       const kept = value.filter((item) => !(isObject(item) && isSpeechSituation(item.situation)));
       if (kept.length) settings[key] = kept;
@@ -166,6 +178,8 @@ export const profileFingerprint = () => [
   PROFILE_CARD_HEAD,
   PROFILE_EXAMPLES_HEAD,
   PROFILE_EXAMPLES_MAX,
+  PROFILE_NICKNAMES_LABEL,
+  NICKNAMES_KEY,
   EXAMPLES_PER_SITUATION_MAX,
   CORE_FIELD_MAX,
   SPEECH_SITUATIONS,
@@ -177,4 +191,4 @@ export const profileFingerprint = () => [
 ];
 export const writerProfileHash = () => createHash('sha256').update(JSON.stringify(profileFingerprint())).digest('hex');
 /** The pin: the generation Worker refuses a 新+档案 request when this file's words and rules do not hash to exactly this. */
-export const WRITER_PROFILE_SHA256 = '87839f8f65481e8b24451d0220a3176292ee2226192dd8e8402fb67ec0e8adbf';
+export const WRITER_PROFILE_SHA256 = 'bf12a1700c8ae593caa0dd37c1d5f6b22632106b53cd450b1150ccf6ddc2c574';

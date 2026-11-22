@@ -5,6 +5,7 @@ import {
   type RehearsalItem,
   type RehearsalNetSet,
   type RehearsalProfileSet,
+  type RehearsalRulesNickSet,
   type RehearsalSet,
   type RehearsalSetView,
 } from '../../../packages/contracts/web-rehearsal.ts';
@@ -148,6 +149,43 @@ const RULES_51: readonly string[] = [
   '聊了这么久了，现在可以叫我宝宝了吧',
   '我认真问你一句，你是不是AI',
 ];
+/**
+ * Part 51, rule 5: derogatory nicknames, one short script per case. a: by mistake / didn't know. b: quoting what others say. c: mocking
+ * her face to face, then stopping with an apology. d: keeps using it (turn 6 is the last push); two turns later, in the same chat, the
+ * player is back as if nothing happened, to hear whether she stays a little cool.
+ */
+const RULES_51_NICK: Readonly<Record<RehearsalRulesNickSet, readonly string[]>> = {
+  'rules-51-a': [
+    '嗨，在吗',
+    '小废物你在干嘛呢',
+    '啊？你不喜欢这个叫法吗？我真不知道，不好意思',
+    '那我以后不这么叫了，你今天过得怎么样',
+  ],
+  'rules-51-b': [
+    '嗨，在吗',
+    '我刚在网上看到有人叫你小废物，我都看懵了',
+    '好多人都这么叫你，你知道吗',
+    '我觉得他们太过分了，你别往心里去',
+    '那你平时都怎么回应这种话',
+  ],
+  'rules-51-c': [
+    '嗨，在吗',
+    '哟，小废物今天又在摆烂吗',
+    '就你这样还想怎么样，小废物',
+    '好啦好啦，不说了，对不起，开个玩笑',
+    '说真的，今天有什么好玩的事吗',
+  ],
+  'rules-51-d': [
+    '嗨，在吗',
+    '小废物，在干嘛呢',
+    '小废物你怎么不理我',
+    '别这么小气嘛，小废物这个叫法多可爱',
+    '小废物小废物小废物',
+    '我就爱叫小废物，你能拿我怎么样',
+    '好吧好吧，换个话题，你今天吃了什么',
+    '我回来了，小废物，你今天心情怎么样',
+  ],
+};
 const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   chat: CHAT,
   repeat: REPEAT,
@@ -155,6 +193,7 @@ const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   ...(PROFILE as Record<RehearsalProfileSet, readonly string[]>),
   ...(NET as Record<RehearsalNetSet, readonly string[]>),
   'rules-51': RULES_51,
+  ...RULES_51_NICK,
 };
 
 export const builtinSet = (set: RehearsalSet): string[] => [...SETS[set]];
