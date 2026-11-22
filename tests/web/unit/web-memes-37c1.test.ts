@@ -252,7 +252,7 @@ test('旧, 新 and 新+档案 are byte-identical to main before this Part (hashe
   const v8 = v8Request();
   // 旧 and 新: the same pins as Part 37b asserted (v7 prompt, 新 system+user, the three addenda, the guard, the pins).
   assert.equal(sha(promptMessages(v7Request())), '275253132d301adbf8d888c972c6dc26953ce8bedb497d0bdb5deeda2003214f');
-  assert.equal(sha(writerDraftMessages(v8)), 'ced3e9955582b754bbd44cacd9e5fa6ca6d5214874363ba0b59cbdad575a85de');
+  assert.equal(sha(writerDraftMessages(v8)), 'fc67c02ce212e2b8df107b4faf9837313396a629b93da26717593ffa334f408b');
   assert.equal(
     sha(
       writerGuardMessages(v8, {
@@ -262,20 +262,20 @@ test('旧, 新 and 新+档案 are byte-identical to main before this Part (hashe
         markups: [null],
       } as never),
     ),
-    '62d74f5288d7a17ec94e07b18ba20ff97d3c8beb12b8dd7c23c7c17ce0d8b55c',
+    '63492a938b7b86cc35499acbbb2da0c182c64e1738ec5c7dd917f7584873a6a5',
   );
-  assert.equal(writerPolicyHash('{"a":1}'), '9d07f6d480d1d14bca2bd1ca2464a242827884acf30a8959f2a427ea4631a470');
+  assert.equal(writerPolicyHash('{"a":1}'), '19004d2f9b4e956fc07aa9f0903c939eb6a2c03d9f1f812e87185561ba1a36e7');
   assert.deepEqual(writerPins(), {
-    protocolDigest: '698b389cae6b0a77fa3645081ae7971e502a934b3e73bbef149ccfbdb589408a',
-    promptDigest: 'b9a6a845235d85c5679270c3bf60a4b3cddc0b47f927a8b2ed5fb7c0a87d814a',
+    protocolDigest: 'e75cd049846d1c6d478187752f03df87c945f295e2fb63445b272d67104e7aa6',
+    promptDigest: '65b3f643b25e1ed98b86e931a135391794c10c9b3054da13dc7d1358f1c7174e',
   });
   // 新+档案: hashes taken on origin/main before this Part.
   const p = profileRequest(latest('哈哈哈你这人也太会了吧'));
   assert.equal(
     sha(writerDraftMessages(p, 'deepseek')),
-    '50fc63eb71fac96211167cd15d13e1817355fb3757d3d37bf0f69ddf089f7b13',
+    'e16318e118c25cc51210869496f1a6ca0c8117c7890c1854d2557d82e77197b3',
   );
-  assert.equal(sha(writerDraftMessages(p)), '7dfbe67d5ad8ea13a8ca4ee3cbf28e0ed9ecbeeb907b84c075be7938e71daac7');
+  assert.equal(sha(writerDraftMessages(p)), 'd761975f92b1f3afffcd2dc1908efeb20a549a42cda33bfee40cc32659ce6225');
   assert.equal(
     sha(
       writerGuardMessages(p, {
@@ -285,12 +285,12 @@ test('旧, 新 and 新+档案 are byte-identical to main before this Part (hashe
         markups: [null],
       } as never),
     ),
-    'fb1969752d015411d5fca6619848a23577d6e87d561e557ffe8b65250d45266c',
+    '07f2b006232581b7c7224befa1ffe82fc06d97d69b5407527f3b74c7f1b92110',
   );
-  assert.equal(writerPolicyHash('{"a":1}', true), '772f654223fbf203c4e9cdf400fcb9b6bc1d01e97d48a2dc1fe93bd8c3bd019c');
+  assert.equal(writerPolicyHash('{"a":1}', true), 'a9ab52b78466b952b50cde8381ee88aaa3aefb183e4ff6c517b9e4bbda2ec59d');
   assert.deepEqual(writerPins(true), {
-    protocolDigest: '698b389cae6b0a77fa3645081ae7971e502a934b3e73bbef149ccfbdb589408a',
-    promptDigest: '4b6ac44e2f33f0d7def7e88818d74878b98a7d6f5b0f4310a63bc0e2dd0ebfb4',
+    protocolDigest: 'e75cd049846d1c6d478187752f03df87c945f295e2fb63445b272d67104e7aa6',
+    promptDigest: '04e3cca28266eeb5173f75559ffdb1895611a69240a1a28c9a9a88817e17f4df',
   });
   assert.equal(writerProfileHash(), WRITER_PROFILE_SHA256);
 });

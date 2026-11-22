@@ -128,7 +128,7 @@ test('51 the guard text: shared history is supported by history or memory, flagg
   // the pet-name check follows the new rule, and keeps its schema name
   assert.ok(text.includes('对方先叫或明说要这样叫、你们已经这样互相称呼、聊得久也自然的，放行'));
   assert.ok(GUARD_REASONS.includes('presumptuous_address' as never));
-  assert.equal(GUARD_REASONS.length, 8);
+  assert.equal(GUARD_REASONS.length, 9);
   assert.equal((text.match(/^- [a-z_]+：/gmu) ?? []).length >= 8, true);
 });
 

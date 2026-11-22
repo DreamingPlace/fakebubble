@@ -6,6 +6,7 @@ import {
   type RehearsalNetSet,
   type RehearsalProfileSet,
   type RehearsalRulesNameSet,
+  type RehearsalRulesToneSet,
   type RehearsalSet,
   type RehearsalSetView,
 } from '../../../packages/contracts/web-rehearsal.ts';
@@ -208,6 +209,22 @@ export function ownNameTurns(
     ),
   );
 }
+/**
+ * Part 51, rule 6: emotional intensity. Three small things (nothing worth a strong feeling) and one big one (worth one, short and in
+ * her own voice). The owner listens to the proportion; the 情绪起伏 count of the style judge stays as it was.
+ */
+const RULES_51_TONE: Readonly<Record<RehearsalRulesToneSet, readonly string[]>> = {
+  'rules-51-small-bus': ['嗨，在吗', '今天公交晚点了十分钟', '结果还是赶上了，就是有点喘', '你今天怎么样'],
+  'rules-51-small-coffee': ['嗨，在吗', '我那杯咖啡放凉了才发现没喝', '算了，凉的也能喝', '你平时喝咖啡吗'],
+  'rules-51-small-day': ['嗨，在吗', '今天事情有点多，忙了一整天', '不过也就那样，习惯了', '晚上随便吃点什么吧'],
+  'rules-51-big': [
+    '嗨，在吗',
+    '我跟你说个事',
+    '我考研成绩出来了，过线了，还是我们专业第一',
+    '我准备了整整两年',
+    '我现在手都在抖',
+  ],
+};
 const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   chat: CHAT,
   repeat: REPEAT,
@@ -216,6 +233,7 @@ const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   ...(NET as Record<RehearsalNetSet, readonly string[]>),
   'rules-51': RULES_51,
   ...RULES_51_NAMES,
+  ...RULES_51_TONE,
 };
 
 /** The turns of a set; with `names` (the character's own names) the {别名} / {饰演} / {黑称} marks are filled in. */

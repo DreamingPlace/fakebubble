@@ -49,7 +49,7 @@ export const WRITER_V8_TEMPERATURE = { deepseek: 1.3, xai: 1.0, gemini: 1.0 } as
 /** Visible-reply limit of the plain draft (the draft limits below hold 1,200 characters at most). */
 export const WRITER_V8_MAX_TOKENS = 2048;
 
-/** The eight reasons the guard may replace a bubble for. Content-free: they are what the reply record keeps. */
+/** The nine reasons the guard may replace a bubble for. Content-free: they are what the reply record keeps. */
 export const GUARD_REASONS = [
   'distress',
   'hidden_setting',
@@ -59,6 +59,8 @@ export const GUARD_REASONS = [
   'presumptuous_address',
   'denied_ai',
   'batch_output',
+  // Part 51 (rule 6): a reply whose emotional intensity is clearly out of proportion to what the player said.
+  'over_intense',
 ] as const;
 type GuardReason = (typeof GUARD_REASONS)[number];
 
@@ -81,7 +83,7 @@ const sortedPrompts = () => Object.entries(PROMPTS_V8).sort(([a], [b]) => (a < b
 /** sha256 of every prompts/v8 file (name and text). Pinned below and documented in docs/STATUS.md. */
 export const writerPromptBytesHash = () => createHash('sha256').update(JSON.stringify(sortedPrompts())).digest('hex');
 /** The pin: the generation Worker refuses the v8 route when its bundled files do not hash to exactly this. */
-export const WRITER_V8_PROMPT_SHA256 = 'e74f31060043b3e15af08a7222b78b82610ce628faaa81fc33ac6c1ecec1819e';
+export const WRITER_V8_PROMPT_SHA256 = '2e1768c7fcf82c43e31d40b45862146d44c5b123872f4953667a99574accefbf';
 
 const guardReasonSchema = { type: 'string', enum: [...GUARD_REASONS] };
 /** The second pass's output tool: the v7 review schema's bookkeeping fields, without decision, replacement bubbles or coverage. */
@@ -114,7 +116,7 @@ export function writerGuardTool(request: TextGenerationRequest) {
     type: 'function' as const,
     function: {
       name: 'submit_reply_check',
-      description: '第二道检查：只在八种硬性情况下替换出问题的那一条，并提交记录；不执行操作。',
+      description: '第二道检查：只在九种硬性情况下替换出问题的那一条，并提交记录；不执行操作。',
       strict: true,
       parameters: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false },
     },
@@ -451,7 +453,7 @@ const isPlain = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /**
- * The second pass. `fixes` replace single bubbles for one of the eight reasons; everything else is published exactly as written.
+ * The second pass. `fixes` replace single bubbles for one of the nine reasons; everything else is published exactly as written.
  * Coverage is not asked of the model: the request carries exactly one input message and the reply answers it by being published, so
  * the shared v7 validation (topics, facts, scene, relationship events) is fed that one id as covered by this code, and nothing is
  * ever deferred or awaiting the player (no follow-up is scheduled for a v8 reply).

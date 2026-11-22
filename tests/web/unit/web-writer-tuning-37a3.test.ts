@@ -28,18 +28,18 @@ test('37a-3 pins: every v8 file and the whole set are pinned, and the new pin is
   // Named, deliberate change (Part 37a-3): v8 is not live, so these hashes moved; v7 did not.
   const pinned: Record<string, string> = {
     'cast-context.md': '533488c6a6e27c0fba1ecc01317e24f05d7f9ff6f856cbc8d3d45b2fd0daa42f',
-    'guard.md': '41922f8c998c2a493f8996c28b1bae6fef86a6dbeb74862afe0043141100b1e4',
+    'guard.md': 'd3fb5ee3593c4a9179ad0540e3484c7d818afbf47324b354d9580804e64c8f08',
     'writer-addendum-deepseek.md': '4fa7b9f3497637f3c8ef30d48f69c2af551afa5a5a4a5e302fbf0ab4b105f359',
     'writer-addendum-gemini.md': 'd430a20548be34d725518d1e36bd166be1bd9669d3e0bd44db6bf45e50c601ea',
     'writer-addendum-grok.md': 'af2561424f21aafc8568f4d1b6d5800ca0d1c5fcc03b4dc77306627040bdb70f',
     'writer-directions.md': '1457f247f8cbb1d4bb60ffed958fd059d62b52cad20034a68b807bc86f3a6e00',
-    'writer.md': '6014684fbe9eca8b1115bd3ddcb80ad1df10f4cf754d5987e0009581ec9044b9',
+    'writer.md': 'b82e980f78a451e0f831f4ef7eba2228c5acfcf81a5e172c9f836a46e1b3a5b1',
   };
   assert.deepEqual(readdirSync(V8_DIR).sort(), Object.keys(pinned).sort(), 'a new v8 file must be pinned here');
   for (const [file, hash] of Object.entries(pinned)) assert.equal(sha(readFileSync(new URL(file, V8_DIR))), hash, file);
-  assert.equal(WRITER_V8_PROMPT_SHA256, 'e74f31060043b3e15af08a7222b78b82610ce628faaa81fc33ac6c1ecec1819e');
+  assert.equal(WRITER_V8_PROMPT_SHA256, '2e1768c7fcf82c43e31d40b45862146d44c5b123872f4953667a99574accefbf');
   assert.equal(writerPromptBytesHash(), WRITER_V8_PROMPT_SHA256);
-  assert.equal(writerPromptHash(), 'b9a6a845235d85c5679270c3bf60a4b3cddc0b47f927a8b2ed5fb7c0a87d814a');
+  assert.equal(writerPromptHash(), '65b3f643b25e1ed98b86e931a135391794c10c9b3054da13dc7d1358f1c7174e');
   const status = readFileSync(new URL('../../../docs/STATUS.md', import.meta.url), 'utf8');
   assert.ok(status.includes(WRITER_V8_PROMPT_SHA256), 'STATUS.md documents the pin');
   assert.ok(status.includes(writerPromptHash()), 'STATUS.md documents the request prompt hash');
@@ -56,7 +56,8 @@ test('37a-3 writer.md says the new things in plain words, and its hard lines are
   const text = PROMPTS_V8.writer;
   for (const phrase of [
     '常带点你自己的东西来聊',
-    '情绪写在字里',
+    // NAMED EXCEPTION (Part 51, rule 6): 「情绪写在字里」 was replaced by the proportion rule.
+    '情绪的强弱要和真正发生的事相称',
     '起个话题',
     '问句偶尔才用，多数回复不以问句收尾',
     '现编',
