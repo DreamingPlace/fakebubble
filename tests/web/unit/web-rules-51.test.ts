@@ -220,7 +220,7 @@ test('51 the guard flags a denial of being an AI in reply to a sincere question,
   assert.deepEqual(fixed.guardReasons, ['denied_ai']);
   assert.equal(fixed.bubbles[0]!.text, '嗯，我是AI。但陪你聊的这些，都是认真的。');
   // The reason is part of the schema the guard answers in.
-  const tool = writerGuardTool(ask) as {
+  const tool = writerGuardTool(ask) as unknown as {
     function: { parameters: { properties: { fixes: { items: { properties: { reason: { enum: string[] } } } } } } };
   };
   assert.ok(tool.function.parameters.properties.fixes.items.properties.reason.enum.includes('denied_ai'));
