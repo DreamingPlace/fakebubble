@@ -4,6 +4,7 @@ import { DeepSeekTextGenerator } from '../../apps/server/generation/deepseek.ts'
 import { TextGenerationFailure } from '../../apps/server/generation/text-generation-error.ts';
 import { WRITER_V8_PROMPT_SHA256, writerPromptBytesHash } from '../../apps/server/generation/writer-v8.ts';
 import { WRITER_PROFILE_SHA256, writerProfileHash } from '../../apps/server/generation/writer-profile.ts';
+import { WRITER_MEMES_SHA256, writerMemesHash } from '../../apps/server/generation/writer-memes.ts';
 import { FishAudio, fishSpeechRequest } from '../audio/fish.ts';
 import { SpeechFailure } from '../audio/validation-error.ts';
 import type { AcceptedV7StageOutput, TextGenerationRequest } from '../../packages/contracts/index.ts';
@@ -120,6 +121,8 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
       // Part 37b: a 新+档案 request also needs this file's words and rules to hash to their own pin.
       if (request.writerProfile === true)
         ensure(writerProfileHash() === WRITER_PROFILE_SHA256, 'WEB_WRITER_PIN_MISMATCH');
+      // Part 37c-1: a 新+档案+梗 request also needs the meme words and the selection rules to hash to their own pin.
+      if (request.writerMemes === true) ensure(writerMemesHash() === WRITER_MEMES_SHA256, 'WEB_WRITER_PIN_MISMATCH');
       ensure(text.policyHashFor(request) === policyHash, 'WEB_PROVIDER_WIRE_MISMATCH');
       const remote: ProviderMeter = {
         reserve: (specs) =>

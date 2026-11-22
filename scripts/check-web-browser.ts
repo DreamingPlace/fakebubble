@@ -818,8 +818,10 @@ try {
       // the relation flow; the same pair story is now written through its four steps (choose, stars, reason, story).
       await view.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
       await view.locator('.cc-rel-dice').click();
-      assert.equal(await view.locator('.cc-rel-chip').count(), 2, 'the dice offers two characters');
-      await view.locator('.cc-rel-next').click();
+      // Named exception (Part 47, owner-approved board): the card is the choose step, a sentence with the fixed main character and one
+      // partner slot (no chip row); 下一步 sits on the card itself.
+      assert.equal(await view.locator('.cc-rel-slot').count(), 1, 'the sentence has one partner slot');
+      await view.locator('.cc-rel-card-next').click();
       await view.locator('.cc-rate').first().waitFor();
       for (const row of await view.locator('.cc-rate').all()) await row.locator('[data-stars="3"]').click();
       await view.locator('.cc-rel-next').click();

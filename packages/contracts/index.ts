@@ -197,6 +197,10 @@ export interface TextGenerationRequest {
   writer?: 'v8';
   // Part 37b: 新+档案 (rehearsal columns only for now): the v8 writer plus the character's own 核心卡 and examples. Absent = 新, untouched.
   writerProfile?: true;
+  // Part 37c-1: 新+档案+梗 (needs writerProfile): the dictionary entries the player's recent messages contain, each with THIS character's
+  // level, frozen with the request. `writerMemes` alone (no hits) is a reply where nothing matched: nothing about memes is printed.
+  writerMemes?: true;
+  memeHits?: import('./web-memes.ts').MemeHit[];
   // Part 37a (v8, voice only): the frozen voice model of this reply is Drama 3, so a spoken line may carry inline directions.
   voiceDirections?: boolean;
   sceneContext?: import('./scenes.ts').SceneState;

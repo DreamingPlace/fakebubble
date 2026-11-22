@@ -166,7 +166,7 @@ export async function startConsoleFixture(options: FixtureOptions = {}) {
   const rehearsalDraft = (request: { scope: { worldId: string }; messages: Array<{ authorKind: string }> }) => {
     // Part 37a: a 新 column's world ends in -v8; it speaks like its model.
     const model = request.scope.worldId
-      .replace(/-v8p?$/, '')
+      .replace(/-v8[pm]?$/, '')
       .split('-')
       .at(-1);
     const turn = request.messages.filter((m) => m.authorKind === 'player').length;

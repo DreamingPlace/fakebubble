@@ -46,7 +46,8 @@ test('an authority that ran step one takes step two: the value stays, 新+档案
   const rows = store.all<{ version: number; sha256: string }>('SELECT * FROM web_writer_schema ORDER BY version');
   assert.deepEqual(
     rows.map((row) => row.version),
-    [1, 2],
+    // NAMED EXCEPTION (Part 37c-1): the same start now also takes step three (新+档案+梗), so the rows are 1, 2, 3; rows 1 and 2 are unchanged.
+    [1, 2, 3],
   );
   assert.equal(rows[0]!.sha256, DIGEST_ONE);
   writeWriter(store, FREEZE_NOW, 'owner', 'v8p');
@@ -83,7 +84,8 @@ test('three choices: each is stored, read back, and a fourth is not a choice', (
     writeWriter(store, FREEZE_NOW, 'owner', choice);
     assert.equal(readWriter(store), choice);
   }
-  assert.deepEqual([...WRITER_CHOICES], ['v7', 'v8', 'v8p']);
+  // NAMED EXCEPTION (Part 37c-1): 新+档案+梗 ('v8m') is the fourth choice (the first three are unchanged, in the same order).
+  assert.deepEqual([...WRITER_CHOICES], ['v7', 'v8', 'v8p', 'v8m']);
   assert.equal(isWriterChoice('v9'), false);
   assert.throws(() => store.run("UPDATE web_writer_setting SET writer='v9'"), /CHECK|constraint/i);
 });

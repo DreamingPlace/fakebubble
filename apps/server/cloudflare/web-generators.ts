@@ -19,6 +19,7 @@ import {
   textPolicyHash,
   textWriterPolicyHash,
   textWriterProfilePolicyHash,
+  textWriterMemesPolicyHash,
 } from '../generation/text-generation-policy.ts';
 import { TextGenerationFailure } from '../generation/text-generation-error.ts';
 import { SpeechFailure } from '../../../workers/audio/validation-error.ts';
@@ -99,6 +100,8 @@ export class WebCloudTextGenerator {
   readonly writerPolicyHash = textWriterPolicyHash();
   /** Part 37b: a 新+档案 reply's policy hash. */
   readonly writerProfilePolicyHash = textWriterProfilePolicyHash();
+  /** Part 37c-1: a 新+档案+梗 reply's policy hash. */
+  readonly writerMemesPolicyHash = textWriterMemesPolicyHash();
   private readonly binding: WebGenerationBinding;
   constructor(binding: WebGenerationBinding) {
     this.binding = binding;
@@ -116,9 +119,11 @@ export class WebCloudTextGenerator {
       const result = await remote.text(
         request,
         request.writer === 'v8'
-          ? request.writerProfile === true
-            ? this.writerProfilePolicyHash
-            : this.writerPolicyHash
+          ? request.writerMemes === true
+            ? this.writerMemesPolicyHash
+            : request.writerProfile === true
+              ? this.writerProfilePolicyHash
+              : this.writerPolicyHash
           : this.policyHash,
         known,
         meterCallbacks(meter, signal),

@@ -234,9 +234,14 @@ export class DeepSeekTextGenerator implements TextGenerator {
   get writerProfilePolicyHash() {
     return writerPolicyHash(JSON.stringify(this.#policy), true);
   }
+  /** Part 37c-1: the policy hash of a 新+档案+梗 reply (the profile hash plus the pin of the meme words and selection rules). */
+  get writerMemesPolicyHash() {
+    return writerPolicyHash(JSON.stringify(this.#policy), true, true);
+  }
   /** The hash a frozen request must carry: v7's policy hash, or the v8 one when the request froze the v8 writer. */
-  policyHashFor(request: Pick<TextGenerationRequest, 'writer' | 'writerProfile'>) {
+  policyHashFor(request: Pick<TextGenerationRequest, 'writer' | 'writerProfile' | 'writerMemes'>) {
     if (request.writer !== 'v8') return this.policyHash;
+    if (request.writerMemes === true) return this.writerMemesPolicyHash;
     return request.writerProfile === true ? this.writerProfilePolicyHash : this.writerPolicyHash;
   }
 

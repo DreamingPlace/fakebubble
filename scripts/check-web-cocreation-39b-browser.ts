@@ -18,6 +18,10 @@ import { quietWait, watchRequests } from './console-quiet.ts';
  *           switched OFF), the inbox shows the theme AND the exact wording of the player's note.
  *   MOTION  under reduced motion no step animates.
  *
+ * Part 47 (named exception, owner decision 2026-11-21): the first step of the relation flow is the LAST CARD of the deck, shown directly as the
+ *   sentence 「瓜瓜和[X]之间有什么故事？」 (no dice card, no chip row); the deck is five themes, 一天 and the relation card (7 cards). The
+ *   assertions of the removed UI are replaced by the same facts read from the sentence; every step after the card is unchanged.
+ *
  * usage: node scripts/check-web-cocreation-39b-browser.ts [screenshot-dir]   (run `pnpm web:player:build` first)
  */
 const shots = process.argv[2] ? resolve(process.argv[2]) : null;
@@ -170,7 +174,10 @@ try {
         JSON.stringify(['theme-know', 'theme-experience', 'theme-habit', 'theme-catchphrase', 'theme-recent']),
       `${tag}: five themes in order (${titles})`,
     );
-    check((await page.locator('.cc-deck .cc-card').count()) === 6, `${tag}: five themes and the relationship card`);
+    check(
+      (await page.locator('.cc-deck .cc-card').count()) === 7,
+      `${tag}: five themes, 一天 and the relationship card`,
+    );
     const prompt = (id: string) => page.locator(`[data-card="${id}"] .cc-prompt`).innerText();
     const know = await prompt('theme-know');
     check(enabledKnow.includes(know), `${tag}: the first theme shows an ENABLED wording, got “${know}”`);
@@ -229,44 +236,41 @@ try {
     }
 
     // ---- the relationship card: 瓜瓜 + one OTHER character ----
-    await page.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
+    await page.locator('[data-card="relation"]').scrollIntoViewIfNeeded();
     await setRandom(0);
-    await press('.cc-rel-dice');
-    await page.locator('.cc-rel[data-step="choose"]').waitFor({ timeout: 5000 });
+    await page.locator('.cc-rel-sentence').waitFor({ timeout: 5000 });
     await wait(500);
+    type Member = { id: string | null; anchor: boolean; x: boolean };
     const chips = async (): Promise<Member[]> =>
-      page.locator('.cc-rel-chip').evaluateAll((els: Element[]) =>
+      page.locator('.cc-rel-me, .cc-rel-slot').evaluateAll((els: Element[]) =>
         els.map((e) => ({
-          id: e.getAttribute('data-member'),
-          anchor: e.getAttribute('data-anchor') === 'true',
-          x: !!e.querySelector('.cc-rel-x'),
+          id: e.classList.contains('cc-rel-me') ? 'wei-guagua' : e.getAttribute('data-member'),
+          anchor: e.classList.contains('cc-rel-me'),
+          x: !!e.parentElement?.querySelector('.cc-rel-x'),
         })),
       );
-    type Member = { id: string | null; anchor: boolean; x: boolean };
     let members: Member[] = await chips();
-    check(members.length === 2, `${tag}: the dice makes a pair (${members.length})`);
+    check(members.length === 2, `${tag}: the card starts as a pair (${members.length})`);
     check(
       members.some((m) => m.id === 'wei-guagua' && m.anchor && !m.x),
       `${tag}: 瓜瓜 is a member and has no ✕`,
     );
     check(members.filter((m) => m.id !== 'wei-guagua').length === 1, `${tag}: exactly one OTHER character`);
-    await layout(page, `${tag}/choose`, width);
     await shot('3-choose');
-    // 🎲 adds one more (a group), ＋ lists everyone and adds the chosen one; 瓜瓜 stays
-    await press('.cc-rel-again');
+    // ＋ lists the others and adds the chosen one to the sentence; 瓜瓜 stays
+    await press('.cc-rel-plus');
+    await page.locator('.cc-rel-list:not([hidden])').waitFor({ timeout: 3000 });
+    await wait(300);
+    const menu = await page.locator('.cc-rel-list').boundingBox();
+    check(menu && menu.x >= 0 && menu.x + menu.width <= width + 1, `${tag}: the ＋ list stays inside the screen`);
+    await shot('4-choose-menu');
+    await press('.cc-rel-list .cc-rel-option:not(.is-taken):not(.is-mine) >> nth=0');
     await wait(300);
     members = await chips();
     check(
       members.length === 3 && members.some((m) => m.id === 'wei-guagua'),
-      `${tag}: 🎲 adds a third member, 瓜瓜 stays`,
+      `${tag}: ＋ adds a third member, 瓜瓜 stays`,
     );
-    await press('.cc-rel-plus');
-    await page.locator('.cc-rel-menu').waitFor({ timeout: 3000 });
-    await wait(300);
-    const menu = await page.locator('.cc-rel-menu').boundingBox();
-    check(menu && menu.x >= 0 && menu.x + menu.width <= width + 1, `${tag}: the ＋ list stays inside the screen`);
-    await shot('4-choose-menu');
-    await page.evaluate(() => document.querySelector<HTMLElement>('.cc-rel-plus[aria-expanded="true"]')?.click());
     // back to a pair: remove the others until two remain (the anchor has no ✕)
     for (let guard = 0; guard < 8 && (await page.locator('.cc-rel-x').count()) > 0; guard++) {
       await page.locator('.cc-rel-x').first().click();
@@ -278,11 +282,11 @@ try {
       `${tag}: removing the others never removes 瓜瓜`,
     );
     const other = members.find((m) => m.id !== 'wei-guagua')!.id!;
-    const otherName = (await page.locator(`.cc-rel-chip[data-member="${other}"] .cc-rel-name`).innerText()).trim();
+    const otherName = (await page.locator(`.cc-rel-slot[data-member="${other}"] .cc-rel-slot-name`).innerText()).trim();
 
     // ---- THE PAIR FLOW, clicked through ----
-    // choose → rate with 下一步 (mouse / tap)
-    await press('.cc-rel-next');
+    // the card → rate with 下一步 (mouse / tap)
+    await press('.cc-rel-card-next');
     await page.locator('.cc-rel[data-step="rate"]').waitFor({ timeout: 5000 });
     await wait(500);
     const groups = await page
@@ -304,8 +308,8 @@ try {
     // 上一步 / 下一步 answer the keyboard too (Enter and Space), here and in every step
     await page.locator('.cc-rel-back').focus();
     await page.keyboard.press('Enter');
-    await page.locator('.cc-rel[data-step="choose"]').waitFor({ timeout: 3000 });
-    await page.locator('.cc-rel-next').focus();
+    await page.locator('.cc-rel-sentence').waitFor({ state: 'visible', timeout: 3000 });
+    await page.locator('.cc-rel-card-next').focus();
     await page.keyboard.press('Space');
     await page.locator('.cc-rel[data-step="rate"]').waitFor({ timeout: 3000 });
     check(
@@ -366,15 +370,16 @@ try {
     await page.locator('.chat-menu-item', { hasText: '一起共创' }).click();
     await page.locator('.cc-sheet').waitFor();
     await wait(600);
-    await page.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
+    await page.locator('[data-card="relation"]').scrollIntoViewIfNeeded();
     await setRandom(0);
-    await press('.cc-rel-dice');
-    await page.locator('.cc-rel[data-step="choose"]').waitFor({ timeout: 5000 });
-    await press('.cc-rel-again');
+    await press('.cc-rel-plus');
+    await press('.cc-rel-list .cc-rel-option:not(.is-taken):not(.is-mine) >> nth=0');
     await wait(450);
-    check((await page.locator('.cc-rel-chip').count()) === 3, `${tag}: a group of three`);
+    check((await page.locator('.cc-rel-slot').count()) === 2, `${tag}: a group of three`);
+    await press('.cc-rel-card-next');
     // with three members the screen IS the group flow: the people and the story on one screen
     await page.locator('.cc-rel[data-mode="group"]').waitFor({ timeout: 3000 });
+    await wait(450); // the screen finishes its own slide-in before its width is measured
     await layout(page, `${tag}/group-choose`, width);
     await shot('10-group-choose');
     const mode = await page.locator('.cc-rel').getAttribute('data-mode');
@@ -420,12 +425,11 @@ try {
           await page.locator('.chat-menu-item', { hasText: '一起共创' }).click();
           await page.locator('.cc-sheet').waitFor();
         }
-        await page.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
-        await press('.cc-rel-dice');
-        await page.locator('.cc-rel[data-step="choose"]').waitFor({ timeout: 5000 });
+        await page.locator('[data-card="relation"]').scrollIntoViewIfNeeded();
         await wait(400);
-        await layout(page, `${w}/choose`, w);
-        await press('.cc-rel-next');
+        // the draft of the card is kept while the page is open (the old dice reset it): back to a pair before the ratings
+        while ((await page.locator('.cc-rel-x').count()) > 0) await page.locator('.cc-rel-x').first().click();
+        await press('.cc-rel-card-next');
         await page.locator('.cc-rel[data-step="rate"]').waitFor({ timeout: 3000 });
         await wait(450);
         await layout(page, `${w}/rate`, w);
@@ -439,8 +443,10 @@ try {
         await press('.cc-rel-back');
         await page.locator('.cc-rel[data-step="rate"]').waitFor({ timeout: 3000 });
         await press('.cc-rel-back');
-        await page.locator('.cc-rel[data-step="choose"]').waitFor({ timeout: 3000 });
-        await press('.cc-rel-again');
+        await page.locator('.cc-rel-sentence').waitFor({ state: 'visible', timeout: 3000 });
+        await press('.cc-rel-plus');
+        await press('.cc-rel-list .cc-rel-option:not(.is-taken):not(.is-mine) >> nth=0');
+        await press('.cc-rel-card-next');
         await page.locator('.cc-rel[data-mode="group"]').waitFor({ timeout: 3000 });
         await wait(450);
         await layout(page, `${w}/group`, w);
@@ -462,10 +468,9 @@ try {
         await page.locator('.cc-sheet').waitFor();
       }
       await wait(500);
-      await page.locator('.cc-rel-dice').scrollIntoViewIfNeeded();
-      await press('.cc-rel-dice');
-      await page.locator('.cc-rel[data-step="choose"]').waitFor({ timeout: 3000 });
-      await press('.cc-rel-next');
+      await page.locator('[data-card="relation"]').scrollIntoViewIfNeeded();
+      while ((await page.locator('.cc-rel-x').count()) > 0) await page.locator('.cc-rel-x').first().click();
+      await press('.cc-rel-card-next');
       await page.locator('.cc-rel[data-step="rate"]').waitFor({ timeout: 3000 });
       const moving: string[] = await page.evaluate(() =>
         [...document.querySelectorAll('.cc-rel, .cc-rel *, .cc-sheet')]

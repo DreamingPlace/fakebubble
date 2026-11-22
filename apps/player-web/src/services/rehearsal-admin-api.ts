@@ -8,6 +8,7 @@ import {
   type RehearsalEstimate,
   type RehearsalItems,
   type RehearsalLibrary,
+  type RehearsalMemeCounts,
   type RehearsalMemeCell,
   type RehearsalMemeRow,
   type RehearsalPhrases,
@@ -138,6 +139,10 @@ const counts = (v: unknown): RehearsalCounts => {
     codes: codes(o.codes),
   };
 };
+const netMemes = (v: unknown): RehearsalMemeCounts => {
+  const o = object(v);
+  return { matched: int(o.matched), given: int(o.given), use: int(o.use), know: int(o.know), avoid: int(o.avoid) };
+};
 const STYLE_STATES = ['none', 'pending', 'judged', 'unconfirmed', 'failed', 'skipped'] as const;
 const style = (v: unknown): RehearsalStyle => {
   const o = object(v);
@@ -263,6 +268,7 @@ export class RehearsalAdminClient {
           cells: rows(x.cells).map(cell),
           counts: counts(x.counts),
           style: style(x.style),
+          netMemes: x.netMemes === null ? null : netMemes(x.netMemes),
         };
       }),
       memes:

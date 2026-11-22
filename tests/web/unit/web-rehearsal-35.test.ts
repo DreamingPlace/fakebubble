@@ -251,6 +251,11 @@ test('built-in sets: 日常闲聊 and 重复检测 are 6 to 20 turns, there is n
       '档案 · 分享日常',
       '档案 · 内部梗',
       '档案 · 认真',
+      // NAMED EXCEPTION (Part 37c-1): the four 网络梗 sets (players using 2022+ internet memes) follow.
+      '网络梗 · 日常',
+      '网络梗 · 职场',
+      '网络梗 · 出游',
+      '网络梗 · 情绪',
     ],
   );
   // NAMED EXCEPTION (Part 37a-2): 开场 is 5 player follow-ups (the welcome line is the first, character, message); every other set still needs 6.
@@ -428,6 +433,11 @@ test('scripts: save, rename and delete are idempotent per request id; 6 to 20 tu
       '档案 · 分享日常',
       '档案 · 内部梗',
       '档案 · 认真',
+      // NAMED EXCEPTION (Part 37c-1): the four 网络梗 sets (players using 2022+ internet memes) follow.
+      '网络梗 · 日常',
+      '网络梗 · 职场',
+      '网络梗 · 出游',
+      '网络梗 · 情绪',
     ],
   );
   assert.deepEqual(

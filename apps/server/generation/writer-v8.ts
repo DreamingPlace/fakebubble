@@ -30,6 +30,7 @@ import {
   profileExamplesBlock,
   writerProfileHash,
 } from './writer-profile.ts';
+import { memesBlock, writerMemesHash } from './writer-memes.ts';
 
 /**
  * Part 37a: the v8 writer ("回复写法：新"). One plain-text draft (no tool call, no coverage, no schema around the words), then one
@@ -140,7 +141,7 @@ export const writerPromptHash = () =>
     .update(JSON.stringify([writerPromptBytesHash(), writerProtocolFingerprint()]))
     .digest('hex');
 /** The hash a v8 reply's policy carries (stored with each provider attempt): the resolved v7 policy plus the v8 pin. */
-export const writerPolicyHash = (policyJson: string, profile = false) =>
+export const writerPolicyHash = (policyJson: string, profile = false, memes = false) =>
   createHash('sha256')
     .update(
       JSON.stringify({
@@ -149,6 +150,8 @@ export const writerPolicyHash = (policyJson: string, profile = false) =>
         prompts: writerPromptHash(),
         // Part 37b: only a 新+档案 request carries the profile pin; for 旧 and 新 the object (and so the hash) is exactly as it was.
         ...(profile ? { profile: writerProfileHash() } : {}),
+        // Part 37c-1: only a 新+档案+梗 request carries the meme pin (it always comes with the profile pin).
+        ...(memes ? { memes: writerMemesHash() } : {}),
       }),
     )
     .digest('hex');
@@ -296,6 +299,10 @@ export function writerDraftMessages(request: TextGenerationRequest, provider?: W
     : null;
   const canon = canonJson ? `\n\n作者设定（JSON）：${JSON.stringify(canonJson)}` : '';
   const picked = profile ? profileExamplesFor(request) : '';
+  // Part 37c-1: 新+档案+梗 only (it is a 新+档案 request): the matched dictionary entries, after everything stable and the examples.
+  ensure(request.writerMemes === undefined || (request.writerMemes === true && profile), 'WRITER_V8_REQUIRED');
+  ensure(request.memeHits === undefined || request.writerMemes === true, 'WRITER_V8_REQUIRED');
+  const memes = request.writerMemes === true ? memesBlock(request.memeHits) : '';
   const system =
     `你是${character.name}。\n${character.persona}${card ? `\n\n${card}` : ''}${canon}\n\n` +
     WRITER +
@@ -304,7 +311,8 @@ export function writerDraftMessages(request: TextGenerationRequest, provider?: W
     (request.cast ? `\n${CAST}` : '') +
     (character.seed === true ? `\n${SEED_CHARACTER_PROMPT}` : '') +
     rosterBlock(request) +
-    (picked ? `\n\n${picked}` : '');
+    (picked ? `\n\n${picked}` : '') +
+    (memes ? `\n\n${memes}` : '');
   const content = JSON.stringify(context(request, false));
   ensure(content.length <= 200_000, 'TEXT_CONTEXT_TOO_LARGE');
   return [
@@ -534,11 +542,17 @@ export function applyReview(
 }
 
 /** What a stored v8 request must still match: its prompt and protocol pins, plus the cast prompt hash a frozen cast view carries. */
-export const writerPins = (profile = false) => ({
+export const writerPins = (profile = false, memes = false) => ({
   protocolDigest: createHash('sha256').update(JSON.stringify(writerProtocolFingerprint())).digest('hex'),
   promptDigest: profile
     ? createHash('sha256')
-        .update(JSON.stringify([writerPromptHash(), writerProfileHash()]))
+        .update(
+          JSON.stringify(
+            memes
+              ? [writerPromptHash(), writerProfileHash(), writerMemesHash()]
+              : [writerPromptHash(), writerProfileHash()],
+          ),
+        )
         .digest('hex')
     : writerPromptHash(),
 });

@@ -77,6 +77,8 @@ type Host = {
   /** Where the paid 预演 lives: shown as the last section when the role may be previewed. */
   previewMount?: HTMLElement;
   canPreview?: (characterId: string) => boolean;
+  /** Part 37c-1: does the dictionary hold exactly this term? Without it the 梗 部分 of 说话档案 cannot add a single-entry setting. */
+  memeLookup?: (term: string) => Promise<boolean>;
   /** Whether the role is 成长中 (seed), as the editor has it now: the rail's dashed ring follows. */
   onSeed?: (characterId: string, seed: boolean) => void;
   /** Where the leave dialog is drawn (default: the editor's own root). */
@@ -824,6 +826,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
             errorText: characterAdminError,
             disposed: gone,
             reload: () => open(target),
+            ...(host.memeLookup ? { memeLookup: host.memeLookup } : {}),
           }),
         );
         // (id 'profile', not 'speech': the form's own 说话方式 pane already is 'speech')

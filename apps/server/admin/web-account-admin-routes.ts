@@ -160,6 +160,9 @@ export async function routeWebAccountAdmin(
     if (action === 'export') return { status: 200, body: cast.exportFile(actor, req.body) };
     if (action === 'import-preview') return { status: 200, body: cast.importPreview(actor, req.body) };
     if (action === 'import-file') return { status: 200, body: cast.importFile(actor, req.body) };
+    // Part 37c-1: 网络梗 (the shipped dictionary's per-entry switch; cast.read / cast.edit).
+    if (action === 'memes-list') return { status: 200, body: cast.memesList(actor, req.body) };
+    if (action === 'memes-set') return { status: 200, body: cast.memesSet(actor, req.body) };
     ensure(false, 'NOT_FOUND');
   }
   if (path.startsWith(`${base}/cocreation/`)) {

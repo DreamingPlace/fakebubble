@@ -40,15 +40,25 @@ export const CAST_ITEM_CODE: Readonly<Record<CastItemProblem, string>> = Object.
 
 /** Per-field caps (JavaScript string length, see above) and counts. The document as a whole is capped by CAST_DOC_MAX. */
 export const CAST_LIMITS = Object.freeze({
-  /** doc_json (and so a draft or a publication) never exceeds this many characters. */
-  docMax: 300_000,
+  /**
+   * doc_json (and so a draft or a publication) never exceeds this many characters ...
+   * Part 37c-1: 300,000 -> 640,000 for the 10x library (stories 600, inside jokes 300, groups 600) ...
+   */
+  docMax: 640_000,
+  /**
+   * ... AND never exceeds this many UTF-8 BYTES. Cloudflare's Durable Object SQLite holds at most 2 MiB (2,097,152 bytes) in one
+   * value, and a 汉字 is 3 bytes, so the count above alone is not enough (640,000 汉字 = 1,920,000 bytes plus the JSON's own marks).
+   * With this check the stored document, draft and every publication alike, is at most 1,900,000 bytes (197,152 under the limit
+   * for the row's other columns), so it is stored inline and read back whole: no R2 object is needed for it.
+   */
+  docBytesMax: 1_900_000,
   /** Compiled view of ONE character, JSON.stringify length (see compileCastView for what is dropped when it is over). */
   viewMax: 24_000,
   chatCharacters: 15,
   people: 40,
-  groups: 120,
-  stories: 60,
-  memes: 30,
+  groups: 600,
+  stories: 600,
+  memes: 300,
   groupStories: 8,
   worldBackground: 1_000,
   idLength: 128,
@@ -104,8 +114,14 @@ export const CAST_LIMITS = Object.freeze({
   memeProhibited: 100,
 });
 
-/** Request body limit of cast/save: a 300,000-character document is at most 900,000 bytes of UTF-8, plus the envelope. */
-export const CAST_BODY_LIMIT = 1_000_000;
+/**
+ * Request body limit of cast/save and of a cast file: a stored document is at most CAST_LIMITS.docBytesMax (1,900,000) bytes; a file
+ * may be written with indentation, which the limit allows for.
+ */
+export const CAST_BODY_LIMIT = 4_000_000;
+/** Is this canonical document JSON over the cast's character or byte limit (Part 37c-1: both apply)? */
+export const castDocTooLarge = (json: string): boolean =>
+  json.length > CAST_LIMITS.docMax || new TextEncoder().encode(json).length > CAST_LIMITS.docBytesMax;
 
 export type CastAliasAttitude = 'likes' | 'ok' | 'dislikes';
 export const CAST_ALIAS_ATTITUDES: readonly CastAliasAttitude[] = ['likes', 'ok', 'dislikes'];

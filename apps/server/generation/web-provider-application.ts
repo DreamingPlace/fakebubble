@@ -11,6 +11,8 @@ import { installWebConversationDeletion } from '../characters/web-conversation-d
 import { installWebOwnerOps } from '../admin/web-owner-ops-schema.ts';
 import { WebBroadcast } from '../broadcast/web-broadcast.ts';
 import { installWebBroadcast } from '../broadcast/web-broadcast-schema.ts';
+import { installMemeStore } from '../memes/web-meme-store.ts';
+import { installCastDocs } from '../cast/cast-doc-store.ts';
 import { installWebShare } from '../share/web-share-schema.ts';
 import { WebShare } from '../share/web-share.ts';
 import { broadcastHistoryRows } from '../broadcast/web-broadcast-read.ts';
@@ -278,6 +280,10 @@ export class WebProviderApplication {
         .update('web-admin-points-lookup-v1')
         .digest(),
     });
+    // Part 37c-1: the dictionary's on/off table (digest-checked runtime step; no numbered migration; STOP WEB_MEME_SCHEMA_MISMATCH).
+    installMemeStore(store);
+    // Part 37c-1: where a cast document over its row's 300,000-character check lives (STOP WEB_CAST_DOC_SCHEMA_MISMATCH).
+    if (castTablesExist(store)) installCastDocs(store);
     this.cast = castTablesExist(store) ? new WebCastAdmin(store, clock, this.inviteAdmin) : null;
     installWebCharacterCatalog(store);
     installWebCharacterMaterials(store);

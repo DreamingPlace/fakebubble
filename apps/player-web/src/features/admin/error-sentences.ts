@@ -35,6 +35,7 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   INVALID_CANON_VALUE: '结构化设定包含无效值，请核对 JSON 层级和字段。',
   INVALID_CHARACTER_ALIASES: '身份别名需包含人设名称，最多 35 个，并明确为虚构角色。',
   INVALID_CANON_EVENTS: '设定事件需明确作者设定、虚构世界及本角色知情范围。',
+  INVALID_DAILY_LIFE: '一天的安排只能写早上、中午、下午、晚上、深夜和一整天的故事，每一栏不能超过字数上限。',
   PROFILE_CODE_TAKEN: '这个角色代码已被别的角色使用（大小写不分）。',
   INVALID_PROFILE_CODE: '角色代码须是 2–12 位的字母、数字、_ 或 -。',
   // ---- Part 31: 头像, 首页顺序, deleting test records ----
@@ -228,6 +229,13 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   WEB_WRITER_UNSUPPORTED: '这个版本的生成服务还不支持「新」回复写法，请先部署生成服务；不会重发。',
   WEB_WRITER_PIN_MISMATCH: '「新」回复写法的提示文件与固定的校验值不一致，已停止；不会重发。',
   WEB_WRITER_SCHEMA_MISMATCH: '这个站点的回复写法设置表与程序不一致，请联系主管理员。',
+  // ---- Part 37c-1: 网络梗 ----
+  WEB_MEME_SCHEMA_MISMATCH: '这个站点的网络梗设置表与程序不一致，请联系主管理员。',
+  WEB_CAST_DOC_SCHEMA_MISMATCH: '这个站点的世界设定大文档表与程序不一致，请联系主管理员。',
+  CAST_DOC_STORE_UNAVAILABLE: '这个站点还不能保存这么大的世界设定，请联系主管理员。',
+  MEME_NOT_FOUND: '词库里没有这一条，请刷新后再试。',
+  MEME_LEVEL_INVALID: '请从会用、只懂、不碰里选一个。',
+  MEME_OVERRIDES_INVALID: '单条设置最多 200 条，且每条都要选一个档位。',
   // ---- Part 39: 关系与故事 co-creation ----
   COCREATION_GROUP_STORIES_FULL: '这个组合的故事已满 8 条，不能再采纳。',
   COCREATION_GROUPS_FULL: '组合已满 120 个，不能新建组合。',
