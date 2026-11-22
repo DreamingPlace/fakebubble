@@ -89,7 +89,12 @@ export function textRouteFor(
     'SELECT chosen FROM web_operation_models WHERE operation_id=?',
     operationId,
   );
-  if (!row || !isPlayerModelId(row.chosen)) return undefined;
+  if (!row || !isPlayerModelId(row.chosen))
+    // Part 53: an operation with no model row (a signup-bonus or trial_extra reply, a guest admitted without a model) is still
+    // reviewed by the house reviewer frozen for it. Drafting stays DeepSeek as today; only the review model is routed, exactly
+    // like the feature-off branch above. Returning undefined here would drop the frozen reviewer and fall back to
+    // DEFAULT_TEXT_MODELS.review, so a switch would never reach those replies.
+    return reviewModel === DEFAULT_REVIEW_MODEL ? undefined : { draft: [REF.draft.deepseek], review: [house] };
   const chain = (phase: 'draft' | 'review', order: PlayerModelId[], frozen?: PlayerModelId) => {
     const skip = new Set(abandoned(phase));
     const refs = [...new Set(order)]
