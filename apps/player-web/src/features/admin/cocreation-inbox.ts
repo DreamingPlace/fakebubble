@@ -13,7 +13,18 @@ import {
   type CocreationTargetField,
 } from '../../../../../packages/contracts/cocreation-cards.ts';
 import { cocreationTheme } from '../../../../../packages/contracts/cocreation-wordings.ts';
-import { ADOPT_ERROR_TEXT, ADOPT_FIELDS, type AdoptField } from '../../../../../packages/contracts/cocreation-adopt.ts';
+import {
+  ADOPT_ERROR_TEXT,
+  ADOPT_FIELDS,
+  type AdoptField,
+  type AdoptTarget,
+} from '../../../../../packages/contracts/cocreation-adopt.ts';
+import {
+  DAILY_LIFE_LABEL,
+  DAY_PART_LABELS,
+  DAY_PROMPT,
+  dayPartOf,
+} from '../../../../../packages/contracts/cocreation-day.ts';
 import { draftBox, withField, type DraftBox as Mounted } from './cocreation-draft-box.ts';
 import {
   OTHERS_UNREADABLE_TEXT,
@@ -583,9 +594,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     const picked = current.answers.find((answer) => answer.ordinal === viewing) ?? current.answers[0];
     if (!picked) return pane_;
     const choiceKey = `${current.id}:${picked.ordinal}`;
-    const field: AdoptField =
-      chosen.get(choiceKey) ?? (picked.targetField === 'free' ? 'persona' : (picked.targetField as AdoptField));
-    const label = h('b', { class: 'cc-target-label', text: `${character} · ${COCREATION_FIELD_LABELS[field]}` });
+    const field: AdoptTarget = fieldOf(current, picked);
+    const dayPart = dayPartOf(picked.cardId);
+    const label = h('b', {
+      class: 'cc-target-label',
+      text: `${character} · ${field === 'dailyLife' ? `${DAILY_LIFE_LABEL} · ${DAY_PART_LABELS[dayPart!]}` : COCREATION_FIELD_LABELS[field]}`,
+    });
     const points = h('span', { class: 'cc-chip cc-chip-points', hidden: true });
     if (deps.adoptPoints) {
       const show = (n: number | null) => {
@@ -617,7 +631,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       ),
     );
     // A free-form note can go to any field: the picker is a compact select above the box, only then.
-    if (picked.targetField === 'free') {
+    if (picked.targetField === 'free' && !dayPart) {
       const pick = h('select', { attrs: { 'aria-label': '加入到哪个字段' } });
       for (const value of ADOPT_FIELDS)
         pick.append(h('option', { text: COCREATION_FIELD_LABELS[value], attrs: { value } }));
@@ -689,8 +703,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   type BoxEntry = { ready: Promise<Mounted | null>; box: Mounted | null; inserted: boolean; onEdit: () => void };
   const boxes = new Map<string, BoxEntry>();
   const chosen = new Map<string, AdoptField>();
-  const boxKey = (id: string, ordinal: number, field: AdoptField) => `${id}:${ordinal}:${field}`;
-  function boxFor(current: InboxDetail, answer: InboxAnswer, field: AdoptField): BoxEntry {
+  const boxKey = (id: string, ordinal: number, field: AdoptTarget) => `${id}:${ordinal}:${field}`;
+  function boxFor(current: InboxDetail, answer: InboxAnswer, field: AdoptTarget): BoxEntry {
     const key = boxKey(current.id, answer.ordinal, field);
     let entry = boxes.get(key);
     if (!entry) {
@@ -702,6 +716,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         made.box = draftBox({
           template: target.template,
           field,
+          ...(dayPartOf(answer.cardId) ? { part: dayPartOf(answer.cardId)! } : {}),
           source,
           character: nameOf(current.characterId),
           readOnly: !deps.canManage() || (deps.canEditCharacter ? !deps.canEditCharacter(current.characterId) : false),
@@ -731,7 +746,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   }
   /** Notes whose text was put into a box and not saved yet: their 加入草稿 stays locked (the draft would carry them twice). */
   const inserted = new Set<string>();
-  const fieldOf = (current: InboxDetail, answer: InboxAnswer): AdoptField =>
+  const fieldOf = (current: InboxDetail, answer: InboxAnswer): AdoptTarget =>
+    (dayPartOf(answer.cardId) ? ('dailyLife' as const) : undefined) ??
     chosen.get(`${current.id}:${answer.ordinal}`) ??
     (answer.targetField === 'free' ? 'persona' : (answer.targetField as AdoptField));
 
@@ -780,7 +796,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   const PROFILE_FIELDS = new Set<AdoptField>(['speechStyle', 'dialogueStyle', 'dialogueExamples']);
   let closeWarned = '';
   /** 保存草稿: the field's new value goes through the existing draft save (compare-and-swap on the revision the box was read at). */
-  async function saveField(current: InboxDetail, answer: InboxAnswer, field: AdoptField) {
+  async function saveField(current: InboxDetail, answer: InboxAnswer, field: AdoptTarget) {
     const entry = boxes.get(boxKey(current.id, answer.ordinal, field));
     const box = entry?.box;
     if (!entry || !box) return;
@@ -810,8 +826,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         // No draft yet: start one from the published version, one version ahead, exactly as the workbench does.
         if (target.revision === null && target.publishedVersion !== null)
           (profile.template as { version: number }).version = target.publishedVersion + 1;
-        profile.template = withField(profile.template, field, result.value);
-        if (deps.others && PROFILE_FIELDS.has(field)) {
+        profile.template = withField(profile.template, field, result.value, dayPartOf(answer.cardId) ?? undefined);
+        if (deps.others && field !== 'dailyLife' && PROFILE_FIELDS.has(field)) {
           let verdict;
           try {
             verdict = await independence(deps.others, current.characterId, target.base.template, profile.template);
@@ -903,10 +919,19 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         return button;
       });
 
-    const groups = COCREATION_TARGET_FIELDS.map((field) => ({
-      field,
-      answers: current.answers.filter((answer) => answer.targetField === field),
-    })).filter((group) => group.answers.length > 0);
+    // Part 47: the parts of 「一天」 form their own group (stored as 自由发挥, but they are adopted into 一天的安排).
+    const groups: { field: string; label: string; answers: InboxAnswer[] }[] = [
+      ...COCREATION_TARGET_FIELDS.map((field) => ({
+        field: field as string,
+        label: COCREATION_FIELD_LABELS[field],
+        answers: current.answers.filter((answer) => answer.targetField === field && !dayPartOf(answer.cardId)),
+      })),
+      {
+        field: 'dailyLife',
+        label: DAILY_LIFE_LABEL,
+        answers: current.answers.filter((answer) => dayPartOf(answer.cardId)),
+      },
+    ].filter((group) => group.answers.length > 0);
 
     const left = h(
       'div',
@@ -915,7 +940,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         h(
           'section',
           { class: 'cc-group', attrs: { 'data-field': group.field } },
-          h('h4', { text: COCREATION_FIELD_LABELS[group.field as CocreationTargetField] }),
+          h('h4', { text: group.label }),
           ...group.answers.map((answer) => {
             const card = cocreationCard(answer.cardId);
             const copy = h('button', { text: '复制', attrs: { type: 'button' }, class: 'cc-copy' });
@@ -968,12 +993,14 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                         ? '给制作组的留言条'
                         : current.kind === 'pair'
                           ? `${nameOf(current.characterId)}和${nameOf(current.partnerId ?? '')}之间的故事`
-                          : // Part 39b: a theme answer shows its theme AND the exact question the player was shown.
-                            cocreationTheme(answer.cardId)
-                            ? `${cocreationTheme(answer.cardId)!.label} · ${answer.wording ?? cocreationPrompt(card!, character)}`
-                            : card
-                              ? cocreationPrompt(card, character)
-                              : '',
+                          : dayPartOf(answer.cardId)
+                            ? `${DAY_PROMPT.replaceAll('{name}', character)} · ${DAY_PART_LABELS[dayPartOf(answer.cardId)!]}`
+                            : // Part 39b: a theme answer shows its theme AND the exact question the player was shown.
+                              cocreationTheme(answer.cardId)
+                              ? `${cocreationTheme(answer.cardId)!.label} · ${answer.wording ?? cocreationPrompt(card!, character)}`
+                              : card
+                                ? cocreationPrompt(card, character)
+                                : '',
                   })
                 : null,
               bubbles(answer, character),
@@ -990,7 +1017,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                     : deps.canEditCharacter && !deps.canEditCharacter(current.characterId)
                       ? null
                       : add,
-                current.kind === 'memo' || current.kind === 'pair' || !deps.adoptProfile
+                current.kind === 'memo' || current.kind === 'pair' || !deps.adoptProfile || dayPartOf(answer.cardId)
                   ? null
                   : deps.canEditCharacter && !deps.canEditCharacter(current.characterId)
                     ? null

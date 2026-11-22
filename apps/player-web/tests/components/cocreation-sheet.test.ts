@@ -2,6 +2,8 @@
 // wording pool, else the plain default) and the relationship card. The tests of the removed behaviour (a shuffled batch of twelve old
 // cards, the free card, the dialogue card, 换一批, the old pair card) are replaced by the tests below; every other test keeps its
 // assertions, with the card ids and the "written / cards on offer" count (n / 5) updated.
+// Part 47 (named exception, owner decision 2026-11-21): the fixed card 「一天」 sits right after the five themes, so the deck lists six cards
+// (the card ids gain 'day') and the progress is "n / 6"; "everything answered today" now also needs a part of 一天 answered. Nothing else changed.
 // Part 25a (named exception): the sheet's header is "让{name}更像{name}" (the chat ⋯ menu entry keeps "共创 · …") and the progress is
 // "written / cards on offer" ("n / 6": a batch of five plus the free card) instead of "已写 n 张" / "写几张都行，不用写完".
 import test from 'node:test';
@@ -98,7 +100,7 @@ const promptOf = (f: { card: (id: string) => FakeElement | null }, id: string) =
 test('the deck is the five themes in order, each with its plain default question while the pool is empty; no routing field is ever shown', async (t) => {
   const f = setup(t);
   await flush();
-  assert.deepEqual(f.ids(), [...COCREATION_THEME_IDS]);
+  assert.deepEqual(f.ids(), [...COCREATION_THEME_IDS, 'day']);
   assert.deepEqual(
     COCREATION_THEMES.map((theme) => theme.label),
     ['认识这个人', '他的经历', '他的习惯', '他的口头禅', '他的近况'],
@@ -122,8 +124,8 @@ test('the sheet opens with the five themes and a gentle progress hint; ↻ repla
   await flush();
   assert.equal(f.root().getAttribute('role'), 'dialog');
   assert.equal(f.root().querySelector('.cc-title')!.textContent, '让瓜瓜更像瓜瓜');
-  assert.equal(f.ids().length, 5);
-  assert.equal(f.progress(), '0 / 5');
+  assert.equal(f.ids().length, 6);
+  assert.equal(f.progress(), '0 / 6');
   assert.equal(f.send().disabled, true, 'nothing written yet');
   assert.equal(f.send().textContent, '交给瓜瓜');
   assert.equal(f.root().querySelector('.cc-shuffle')!.getAttribute('aria-label'), '换一换');
@@ -220,7 +222,7 @@ test('tapping a card opens an inline editor with a character counter; writing ma
   assert.equal(card.querySelector('.cc-count')!.textContent, '4/300');
   assert.ok(card.classList.contains('is-written'), '已写 state');
   assert.equal(card.querySelector('.cc-badge')!.textContent, '已写');
-  assert.equal(f.progress(), '1 / 5');
+  assert.equal(f.progress(), '1 / 6');
   assert.equal(f.send().disabled, false);
   card.querySelector('.cc-done')!.click();
   assert.equal(editor.hidden, true, 'closing the editor keeps the text');
@@ -234,7 +236,7 @@ test('line breaks and control characters become spaces, as chat input would refu
   assert.equal(f.card(id)!.querySelector('textarea')!.value, '第一行 第二行 尾');
   f.write(id, '   ');
   assert.ok(!f.card(id)!.classList.contains('is-written'));
-  assert.equal(f.progress(), '0 / 5');
+  assert.equal(f.progress(), '0 / 6');
   const enter = f.card(id)!.querySelector('textarea')!.dispatch('keydown', { key: 'Enter' });
   assert.equal(enter.defaultPrevented, true, 'Enter finishes the card instead of adding a line break');
   assert.equal(f.card(id)!.querySelector('.cc-editor')!.hidden, true);
@@ -245,11 +247,11 @@ test('skipping is always fine, and clearing a written card takes it back out', (
   const [a, b] = firstTextCards(f.ids()) as [string, string];
   f.write(a, '写了');
   f.write(b, '也写了');
-  assert.equal(f.progress(), '2 / 5');
+  assert.equal(f.progress(), '2 / 6');
   const skip = f.card(b)!.querySelector('.cc-skip')!;
   assert.equal(skip.textContent, '清除这张');
   skip.click();
-  assert.equal(f.progress(), '1 / 5');
+  assert.equal(f.progress(), '1 / 6');
   assert.equal(f.card(b)!.querySelector('textarea')!.value, '');
   assert.ok(!f.card(b)!.classList.contains('is-written'));
   assert.equal(f.card(b)!.querySelector('.cc-skip')!.textContent, '跳过');
@@ -288,7 +290,7 @@ test('after a successful hand-over the draft is spent and a new sheet starts emp
   await new Promise((resolve) => setTimeout(resolve, 5));
   const again = f.open();
   const root = again.element as unknown as FakeElement;
-  assert.equal(root.querySelector('.cc-progress')!.textContent, '0 / 5');
+  assert.equal(root.querySelector('.cc-progress')!.textContent, '0 / 6');
   assert.ok(root.querySelectorAll('textarea').every((area) => area.value === ''));
 });
 
@@ -302,7 +304,7 @@ test('drafts survive closing the sheet while the page is open, live in memory on
   assert.equal(f.calls.length, 0, 'closing submits nothing');
   const again = f.open();
   const root = again.element as unknown as FakeElement;
-  assert.equal(root.querySelector('.cc-progress')!.textContent, '2 / 5');
+  assert.equal(root.querySelector('.cc-progress')!.textContent, '2 / 6');
   assert.equal(root.querySelector(`[data-card="${id}"] textarea`)!.value, '先放在这里');
   assert.equal(root.querySelector('[data-card="theme-recent"] textarea')!.value, '还有一点');
   assert.deepEqual(f.storage, [], 'nothing touched localStorage');
@@ -514,7 +516,7 @@ test('when every card was answered today the sheet says so and cannot send', asy
   const f = setup(t, {
     api: {
       submitCocreation: async () => ({ submissionId: 's', answered: 1, duplicate: false }),
-      cocreationToday: async () => ({ cardIds: [...COCREATION_THEME_IDS] }),
+      cocreationToday: async () => ({ cardIds: [...COCREATION_THEME_IDS, 'day-morning'] }),
     },
   });
   await flush();

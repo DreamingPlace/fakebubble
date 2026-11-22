@@ -92,6 +92,14 @@ Everything here goes into the 草稿; **正式版本** changes only with 发布.
 ### Part 37b follow-up — 回复写法
 系统 → 模型与价格 → 回复写法: three options **旧写法 · 新写法 · 新+档案** (the pill says 当前：新+档案); owner only, one confirmation as before. Nothing else changes.
 
+## Part 47
+| Where | Words |
+|---|---|
+| 共创收件箱, a 「一天」 answer | group 「一天的安排」; each part is labelled 「{名字}的一天都会干什么？ · 早上 / 中午 / 下午 / 晚上 / 深夜 / 一整天的故事」 |
+| 共创收件箱 → 加入草稿 on a part | target 「{名字} · 一天的安排 · 早上」; one box with that part of the 草稿 (the note goes on its own line); 保存草稿; nothing reaches players until 发布 |
+| 角色工作台 → 说话档案 | new block 一天的安排: 早上 · 中午 · 下午 · 晚上 · 深夜 · 一整天的故事, counters x / 300 (x / 800), button 保存一天的安排 |
+| errors | 「这一栏太长了，请先精简（早上到深夜每栏最多 300 字，一整天的故事最多 800 字）。」 (`PROFILE_DAILY_TOO_LONG`) · 「一天的安排现有的结构无法自动改写。…」 (`PROFILE_DAILY_SHAPE_UNSUPPORTED`) · 「一天的安排只能写早上、中午、下午、晚上、深夜和一整天的故事，每一栏不能超过字数上限。」 (`INVALID_DAILY_LIFE`) |
+
 ## Part 37c-1 — 网络梗
 | Where | Words |
 |---|---|

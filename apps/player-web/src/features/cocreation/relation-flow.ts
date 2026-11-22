@@ -1,8 +1,9 @@
 /**
- * Part 39 / 39b: co-creation about the shared world, opened FROM one character (A, the anchor). The dice picks a random OTHER character
- * X (the order of the catalog plays no part) and the relation is A + X; A is always a member and cannot be removed. More members come
- * from rolling again (🎲 beside the chips) or from the list (＋, opens to the right only), up to eight in all. Exactly two members (a
- * pair): choose, rate A 对 X and X 对 A in WHOLE stars 0–5 (a small light label under the stars shows the meaning of the value,
+ * Part 39 / 39b / 47: co-creation about the shared world, opened FROM one character (A, the anchor). Part 47: the LAST card of the deck IS
+ * the first step, shown directly: 「A和[X]之间有什么故事？」. A is fixed text and can never be changed; X (a random OTHER character when the
+ * deck is built; the order of the catalog plays no part) is a tappable slot that opens the list of every other character, and 🎲 right
+ * beside it picks another at random. ＋ below adds more people INTO the sentence (「A、B和C之间…」), each removable while two remain, up to
+ * eight in all. 下一步 on the card opens the screen: exactly two members (a pair): rate A 对 X and X 对 A in WHOLE stars 0–5 (a small light label under the stars shows the meaning of the value,
  * crossfading), a reason, their story. Three to eight (a group): choose, then the story or running joke. The name of a character is a
  * button that inserts it at the cursor of the text box. Drafts live in memory only. Shared canon: it never creates a player-private
  * story, and the stars are opinions the administrators read.
@@ -25,8 +26,9 @@ export type RelationSend = {
   text: string;
 };
 export const relationCopy = {
-  dice: '🎲 掷一下',
-  rollMore: '再掷一位',
+  dice: '🎲',
+  rollMore: '随机换一位',
+  change: '换一位',
   add: '再加一位',
   remove: '去掉',
   next: '下一步',
@@ -35,8 +37,7 @@ export const relationCopy = {
   sending: '正在发送…',
   vs: '对',
   /** What each step asks, in the player's words (Part 39b). */
-  chooseTitle: (name: string) => `${name}和谁之间有故事？`,
-  chooseHint: '🎲 随机再加一位，＋ 自己挑；两位可以打分，三位以上写大家的故事。',
+  sentenceEnd: '之间有什么故事？',
   rateTitle: '他们彼此怎么看？',
   rateHint: (low: string, high: string) => `0 星是「${low}」，5 星是「${high}」，点星星打分。`,
   looks: '怎么看',
@@ -115,13 +116,22 @@ export function relationFlow(options: RelationFlowOptions) {
   if (draft.anchor !== options.anchor) draft = fresh(options.anchor);
   draft.members = ordered(draft.members.filter((id) => people.has(id)));
   if (draft.members.length > 0 && !draft.members.includes(options.anchor)) draft = fresh(options.anchor);
+  // Part 47: the card is shown directly, so it always starts with a partner: a random OTHER character (the draft of an earlier opening of
+  // this sheet is kept as it was). The screen is closed when the flow is built, so the step starts at the card.
+  draft.step = 'choose';
+  if (draft.members.length < RELATION_MIN_MEMBERS) {
+    const pool = options.everyone.filter(
+      (p) => p.characterId !== options.anchor && !draft.members.includes(p.characterId),
+    );
+    const pick = pool[Math.min(pool.length - 1, Math.floor(options.random() * pool.length))];
+    if (pick) draft.members = ordered([...new Set([options.anchor, ...draft.members, pick.characterId])]);
+  }
   /** The one other member of a pair (the anchor is the first side of both ratings). */
   const partner = () => draft.members.find((id) => id !== options.anchor) ?? '';
   /** Characters that can still join. */
   const rest = () => options.everyone.filter((p) => !draft.members.includes(p.characterId));
   let open = false;
   let busy = false;
-  let menuOpen = false;
   let focusArea: HTMLTextAreaElement | null = null;
 
   const group = () => draft.members.length >= RELATION_MIN_MEMBERS + 1;
@@ -133,20 +143,37 @@ export function relationFlow(options: RelationFlowOptions) {
     pair() && draft.stars.has(key(options.anchor, partner())) && draft.stars.has(key(partner(), options.anchor));
   const reasonOk = () => draft.reason.trim() !== '' && length(draft.reason) <= RELATION_REASON_MAX;
 
-  // ---- the entry card of the deck: the dice ----------------------------------------------------------------------------
-  const dice = h('button', { class: 'cc-rel-dice', text: relationCopy.dice, attrs: { type: 'button' } });
+  // ---- the last card of the deck: the first step, shown directly (Part 47) ----------------------------------------------------
+  const sentence = h('p', { class: 'cc-prompt is-shown cc-rel-sentence' });
+  const pickList = h('ul', {
+    class: 'cc-rel-list',
+    attrs: { role: 'listbox', 'aria-label': relationCopy.change },
+    hidden: true,
+  });
+  const plusButton = h('button', {
+    class: 'cc-rel-plus',
+    text: '＋',
+    attrs: { type: 'button', 'aria-label': relationCopy.add, 'aria-haspopup': 'listbox', 'aria-expanded': 'false' },
+  });
+  const cardNext = h('button', {
+    class: 'cc-rel-card-next',
+    text: relationCopy.next,
+    attrs: { type: 'button' },
+  });
   const entry = h(
     'article',
     { class: 'cc-card cc-rel-entry', attrs: { role: 'listitem', 'data-card': 'relation' } },
-    h('div', { class: 'cc-face cc-rel-entry-face' }, dice),
+    h(
+      'div',
+      { class: 'cc-face cc-rel-entry-face' },
+      sentence,
+      pickList,
+      h('div', { class: 'cc-rel-entry-foot' }, plusButton, cardNext),
+    ),
   );
 
   // ---- the screen ---------------------------------------------------------------------------------------------------------
   const world = h('div', { class: 'cc-rel-world', hidden: true });
-  const chipsRow = h('div', { class: 'cc-rel-chips', attrs: { role: 'list', 'aria-label': '角色' } });
-  const chooseHead = h('p', { class: 'cc-rel-prompt', text: relationCopy.chooseTitle(nameOf(options.anchor)) });
-  const chooseHint = h('p', { class: 'cc-rel-hint', text: relationCopy.chooseHint });
-  const chipsCard = h('div', { class: 'cc-rel-card cc-rel-chipscard' }, chooseHead, chooseHint, chipsRow);
   const bars = h('div', { class: 'cc-rel-bars', attrs: { 'aria-hidden': 'true' } }, ...STEPS.map(() => h('i')));
   const stage = h('div', { class: 'cc-rel-stage' });
   const notice = h('p', { class: 'cc-rel-notice', attrs: { role: 'status', 'aria-live': 'polite' }, hidden: true });
@@ -159,7 +186,7 @@ export function relationFlow(options: RelationFlowOptions) {
     h(
       'div',
       { class: 'cc-rel-grid' },
-      h('div', { class: 'cc-rel-left' }, world, chipsCard),
+      h('div', { class: 'cc-rel-left' }, world),
       h('div', { class: 'cc-rel-right' }, bars, stage, notice, foot),
     ),
   );
@@ -215,69 +242,102 @@ export function relationFlow(options: RelationFlowOptions) {
     return button;
   };
 
-  const renderChips = () => {
-    const editable = draft.step === 'choose';
-    chooseHint.hidden = !editable;
-    const chips = draft.members.map((id) => {
-      const chip = h('span', { class: 'cc-rel-chip', attrs: { role: 'listitem', 'data-member': id } }, nameButton(id));
-      if (id === options.anchor) chip.setAttribute('data-anchor', 'true');
-      // The anchor is a member for good; any other can go while two remain.
-      if (editable && id !== options.anchor && draft.members.length > RELATION_MIN_MEMBERS) {
-        const x = h('button', {
-          class: 'cc-rel-x',
-          text: '✕',
-          attrs: { type: 'button', 'aria-label': `${relationCopy.remove}${nameOf(id)}` },
-        });
-        x.addEventListener('click', () => {
-          draft.members = draft.members.filter((m) => m !== id);
-          menuOpen = false;
-          renderAll();
-        });
-        chip.append(x);
+  /**
+   * The sentence of the card. `pickFor` is the member whose list is open ('add' for ＋, '' for none). The anchor is plain text; every
+   * other member is a slot (tap = the list, to REPLACE that person); with exactly two members the slot carries ▾ and 🎲 sits beside it,
+   * with three or more each person carries ✕ (they can go while two remain).
+   */
+  let pickFor = '';
+  const others = () => draft.members.filter((id) => id !== options.anchor);
+  const closePick = () => {
+    pickFor = '';
+  };
+  const swapPartner = (from: string, to: string) => {
+    draft.members = ordered([...draft.members.filter((id) => id !== from), to]);
+    draft.pending = null;
+    closePick();
+    renderAll();
+  };
+  const renderChoose = () => {
+    const names = others();
+    const twoOnly = draft.members.length === RELATION_MIN_MEMBERS;
+    const parts: (Node | string)[] = [h('span', { class: 'cc-rel-me', text: nameOf(options.anchor) })];
+    names.forEach((id, at) => {
+      parts.push(at === names.length - 1 ? '和' : '、');
+      const slot = h(
+        'button',
+        {
+          class: `cc-rel-slot${pickFor === id ? ' is-open' : ''}`,
+          attrs: {
+            type: 'button',
+            'data-member': id,
+            'aria-haspopup': 'listbox',
+            'aria-expanded': String(pickFor === id),
+            'aria-label': `${relationCopy.change}：${nameOf(id)}`,
+          },
+        },
+        h('span', { class: 'cc-rel-slot-name', text: nameOf(id) }),
+        twoOnly ? h('i', { class: 'cc-rel-caret', text: '▾', attrs: { 'aria-hidden': 'true' } }) : null,
+      );
+      slot.addEventListener('click', () => {
+        pickFor = pickFor === id ? '' : id;
+        renderChoose();
+      });
+      if (twoOnly) {
+        parts.push(slot);
+        return;
       }
-      return chip;
+      const x = h('button', {
+        class: 'cc-rel-x',
+        text: '✕',
+        attrs: { type: 'button', 'aria-label': `${relationCopy.remove}${nameOf(id)}` },
+      });
+      x.addEventListener('click', () => {
+        draft.members = draft.members.filter((m) => m !== id);
+        draft.pending = null;
+        closePick();
+        renderAll();
+      });
+      parts.push(h('span', { class: 'cc-rel-mem', attrs: { role: 'group', 'data-member': id } }, slot, x));
     });
-    const free = rest();
-    if (editable && draft.members.length < RELATION_MAX_MEMBERS && free.length > 0) {
+    if (twoOnly) {
       const again = h('button', {
-        class: 'cc-rel-again',
-        text: '🎲',
+        class: 'cc-rel-dice',
+        text: relationCopy.dice,
         attrs: { type: 'button', 'aria-label': relationCopy.rollMore },
       });
       again.addEventListener('click', () => {
-        const pool = rest();
-        if (pool.length === 0 || draft.members.length >= RELATION_MAX_MEMBERS) return;
-        draft.members = ordered([...draft.members, pool[Math.floor(options.random() * pool.length)]!.characterId]);
-        menuOpen = false;
-        draft.pending = null;
-        renderAll();
+        // A uniformly random OTHER character that is not the partner already shown (the order of the catalog plays no part).
+        const partnerNow = partner();
+        const pool = options.everyone.filter((p) => p.characterId !== options.anchor && p.characterId !== partnerNow);
+        const pickFrom = pool.length > 0 ? pool : options.everyone.filter((p) => p.characterId !== options.anchor);
+        if (pickFrom.length === 0) return;
+        const pick = pickFrom[Math.min(pickFrom.length - 1, Math.floor(options.random() * pickFrom.length))]!;
+        swapPartner(partnerNow, pick.characterId);
       });
-      chips.push(again);
-      const plus = h('button', {
-        class: 'cc-rel-plus',
-        text: '＋',
-        attrs: {
-          type: 'button',
-          'aria-label': relationCopy.add,
-          'aria-expanded': String(menuOpen),
-          'aria-haspopup': 'listbox',
-        },
-      });
-      const wrap = h('span', { class: 'cc-rel-plus-wrap' }, plus);
-      plus.addEventListener('click', () => {
-        menuOpen = !menuOpen;
-        renderChips();
-      });
-      if (menuOpen) {
-        // The menu opens to the RIGHT of the plus, never to the left; the list is the console order, the chosen ones are faded.
-        const menu = h('ul', { class: 'cc-rel-menu', attrs: { role: 'listbox', 'aria-label': relationCopy.add } });
-        for (const person of options.everyone) {
-          const taken = draft.members.includes(person.characterId);
+      parts.push(again);
+    }
+    parts.push(relationCopy.sentenceEnd);
+    sentence.replaceChildren(...parts.map((part) => (typeof part === 'string' ? document.createTextNode(part) : part)));
+
+    // The list: every other character in the console order; the members are faded, the one being replaced is ticked.
+    const adding = pickFor === 'add';
+    pickList.hidden = pickFor === '';
+    plusButton.setAttribute('aria-expanded', String(adding));
+    plusButton.hidden = draft.members.length >= RELATION_MAX_MEMBERS || rest().length === 0;
+    if (pickFor === '') pickList.replaceChildren();
+    else {
+      const items = options.everyone
+        .filter((person) => person.characterId !== options.anchor)
+        .map((person) => {
+          const mine = person.characterId === pickFor;
+          const taken = draft.members.includes(person.characterId) && !mine;
           const item = h('li', {
-            class: `cc-rel-option${taken ? ' is-taken' : ''}`,
-            text: person.name,
+            class: `cc-rel-option${taken ? ' is-taken' : ''}${mine ? ' is-mine' : ''}`,
+            text: mine ? `${person.name} ✓` : person.name,
             attrs: {
               role: 'option',
+              'aria-selected': String(mine),
               'aria-disabled': String(taken),
               'data-option': person.characterId,
               tabindex: taken ? '-1' : '0',
@@ -285,10 +345,15 @@ export function relationFlow(options: RelationFlowOptions) {
           });
           if (!taken) {
             const pick = () => {
-              draft.members = ordered([...draft.members, person.characterId]);
-              menuOpen = false;
-              draft.pending = null;
-              renderAll();
+              if (adding) {
+                draft.members = ordered([...draft.members, person.characterId]);
+                draft.pending = null;
+                closePick();
+                renderAll();
+              } else if (mine) {
+                closePick();
+                renderChoose();
+              } else swapPartner(pickFor, person.characterId);
             };
             item.addEventListener('click', pick);
             item.addEventListener('keydown', (event) => {
@@ -297,19 +362,30 @@ export function relationFlow(options: RelationFlowOptions) {
                 event.preventDefault();
                 pick();
               } else if (k === 'Escape') {
-                menuOpen = false;
-                renderChips();
+                closePick();
+                renderChoose();
               }
             });
           }
-          menu.append(item);
-        }
-        wrap.append(menu);
-      }
-      chips.push(wrap);
+          return item;
+        });
+      pickList.replaceChildren(...items);
     }
-    chipsRow.replaceChildren(...chips);
+    cardNext.disabled = busy || !ready();
   };
+  plusButton.addEventListener('click', () => {
+    pickFor = pickFor === 'add' ? '' : 'add';
+    renderChoose();
+  });
+  // 下一步 on the card: into the screen, at the first step the members call for (a pair rates, a group tells the story).
+  cardNext.addEventListener('click', () => {
+    if (busy || !ready()) return;
+    closePick();
+    draft.step = group() ? 'story' : 'rate';
+    showNotice('');
+    open = true;
+    renderAll();
+  });
 
   // ---- stars --------------------------------------------------------------------------------------------------------------
   const rate = (from: string, to: string) => {
@@ -470,7 +546,7 @@ export function relationFlow(options: RelationFlowOptions) {
     Array.from(bars.children).forEach((bar, at) => {
       bar.className = at <= stepIndex() ? 'on' : '';
     });
-    renderChips();
+    renderChoose();
     renderStage();
     paintFoot();
     if (!quiet) paintHead();
@@ -500,9 +576,10 @@ export function relationFlow(options: RelationFlowOptions) {
   };
   const back = (): boolean => {
     if (!open) return false;
-    if (group() || draft.step === 'choose') {
+    // The first step of the screen (a pair's ratings, a group's story) goes back to the card of the deck.
+    if (group() || draft.step === 'choose' || draft.step === 'rate') {
       open = false;
-      menuOpen = false;
+      draft.step = 'choose';
       renderAll();
       return true;
     }
@@ -549,17 +626,6 @@ export function relationFlow(options: RelationFlowOptions) {
     }
   });
 
-  // ---- the dice ---------------------------------------------------------------------------------------------------------------
-  dice.addEventListener('click', () => {
-    // A uniformly random OTHER character: the order of the catalog plays no part in the roll.
-    const others = options.everyone.filter((p) => p.characterId !== options.anchor);
-    if (others.length === 0) return;
-    const pick = others[Math.min(others.length - 1, Math.floor(options.random() * others.length))]!;
-    draft = fresh(options.anchor);
-    draft.members = ordered([options.anchor, pick.characterId]);
-    open = true;
-    renderAll();
-  });
   renderAll(true);
 
   return {

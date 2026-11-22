@@ -1,5 +1,10 @@
-import { ADOPT_ERROR_TEXT, type AdoptField } from '../../../../../packages/contracts/cocreation-adopt.ts';
+import {
+  ADOPT_ERROR_TEXT,
+  type AdoptField,
+  type AdoptTarget,
+} from '../../../../../packages/contracts/cocreation-adopt.ts';
 import { COCREATION_LIMITS } from '../../../../../packages/contracts/cocreation-cards.ts';
+import { DAILY_LIFE_KEY, DAY_PART_MAX, type DayPart } from '../../../../../packages/contracts/cocreation-day.ts';
 import { h } from '../cocreation/h.ts';
 
 /**
@@ -33,11 +38,23 @@ const isExamples = (value: unknown): value is Example[] =>
 
 const TEXT_ONLY = new Set<AdoptField>(['persona']);
 const LISTS = new Set<AdoptField>(['interests', 'boundaries', 'personalityLayers', 'fictionalPeople']);
-const raw = (template: Template | null, field: AdoptField): unknown =>
-  field === 'persona' ? template?.persona : template?.authorCanon?.settings?.[field];
+/** `part` names the one part of 一天的安排 a `dailyLife` box shows (Part 47). */
+const raw = (template: Template | null, field: AdoptTarget, part?: DayPart): unknown => {
+  if (field === 'dailyLife') {
+    const record = template?.authorCanon?.settings?.[DAILY_LIFE_KEY];
+    return part && isObject(record) ? record[part] : record === undefined ? undefined : record;
+  }
+  return field === 'persona' ? template?.persona : template?.authorCanon?.settings?.[field];
+};
 
-export function boxKind(template: Template | null, field: AdoptField): BoxKind {
-  const value = raw(template, field);
+export function boxKind(template: Template | null, field: AdoptTarget, part?: DayPart): BoxKind {
+  const value = raw(template, field, part);
+  // 一天的安排: one text box per part; a stored value that is not a record of texts is left alone.
+  if (field === 'dailyLife') {
+    const record = template?.authorCanon?.settings?.[DAILY_LIFE_KEY];
+    if (record !== undefined && !isObject(record)) return 'unsupported';
+    return value === undefined || typeof value === 'string' ? 'text' : 'unsupported';
+  }
   if (field === 'dialogueExamples') return value === undefined || isExamples(value) ? 'examples' : 'unsupported';
   if (TEXT_ONLY.has(field)) return typeof value === 'string' || value === undefined ? 'text' : 'unsupported';
   if (LISTS.has(field)) return value === undefined || isStrings(value) ? 'strings' : 'unsupported';
@@ -47,8 +64,23 @@ export function boxKind(template: Template | null, field: AdoptField): BoxKind {
 }
 
 /** The template with ONE field replaced by what the boxes hold. Pure: nothing else in the template is touched. */
-export function withField<T extends object>(template: T, field: AdoptField, next: unknown): T {
+export function withField<T extends object>(template: T, field: AdoptTarget, next: unknown, part?: DayPart): T {
   const copy = structuredClone(template) as unknown as Template;
+  if (field === 'dailyLife') {
+    // One part of the record changes; an emptied part is removed, and an empty record with it.
+    const text = typeof next === 'string' ? next.trim() : '';
+    if (!part || (text === '' && !copy.authorCanon?.settings?.[DAILY_LIFE_KEY])) return copy as unknown as T;
+    const canon = (copy.authorCanon ??= { kind: 'author_canon', settings: {} } as unknown as NonNullable<
+      Template['authorCanon']
+    >);
+    const settings = (canon.settings ??= {});
+    const record = (isObject(settings[DAILY_LIFE_KEY]) ? settings[DAILY_LIFE_KEY] : {}) as Record<string, unknown>;
+    if (text === '') delete record[part];
+    else record[part] = text;
+    if (Object.keys(record).length === 0) delete settings[DAILY_LIFE_KEY];
+    else settings[DAILY_LIFE_KEY] = record;
+    return copy as unknown as T;
+  }
   if (field === 'persona') {
     copy.persona = String(next);
     return copy as unknown as T;
@@ -67,6 +99,7 @@ export function withField<T extends object>(template: T, field: AdoptField, next
 export const DRAFT_BOX_ERROR = {
   EXAMPLE_INVALID: '对话示例需要情境、玩家的话，以及一到两句角色的回复，且每句不超过限制长度。',
   UNSUPPORTED: ADOPT_ERROR_TEXT.ADOPT_FIELD_SHAPE_UNSUPPORTED!,
+  DAILY_TOO_LONG: '这一栏太长了，请先精简（早上到深夜每栏最多 300 字，一整天的故事最多 800 字）。',
 } as const;
 
 const HIGHLIGHT_MS = 1500;
@@ -144,15 +177,17 @@ export type DraftBox = {
 
 export function draftBox(options: {
   template: Template | null;
-  field: AdoptField;
+  field: AdoptTarget;
+  /** With field 'dailyLife': the part of 一天的安排 this box holds. */
+  part?: DayPart;
   source: NoteSource;
   character: string;
   readOnly: boolean;
   onEdit: () => void;
 }): DraftBox {
   const { template, field, source, onEdit } = options;
-  const kind = boxKind(template, field);
-  const original = raw(template, field);
+  const kind = boxKind(template, field, options.part);
+  const original = raw(template, field, options.part);
   const noteText =
     'text' in source
       ? source.text
@@ -189,10 +224,13 @@ export function draftBox(options: {
         return true;
       },
       dirty: () => text.area.value !== (typeof original === 'string' ? original : ''),
-      result: () => ({
-        ok: true,
-        value: text.area.value === '' && original === undefined ? undefined : text.area.value,
-      }),
+      result: () =>
+        field === 'dailyLife' && options.part && [...text.area.value.trim()].length > DAY_PART_MAX[options.part]
+          ? { ok: false, error: DRAFT_BOX_ERROR.DAILY_TOO_LONG }
+          : {
+              ok: true,
+              value: text.area.value === '' && original === undefined ? undefined : text.area.value,
+            },
     };
   }
 

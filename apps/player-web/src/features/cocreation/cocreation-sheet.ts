@@ -1,5 +1,6 @@
 /**
- * 共创 sheet: five theme cards for one official character, then the relationship card (🎲). Each theme shows ONE question picked at
+ * 共创 sheet: five theme cards for one official character, then the fixed card 「{name}的一天都会干什么？」 (Part 47: six optional parts), then
+ * the relationship card (the first step of that flow, shown directly). Each theme shows ONE question picked at
  * random from the character's enabled wording pool (the plain default of the theme when the pool is empty), when the sheet opens and on ↻.
  * The player writes what they like, skips the rest, and hands everything written so far over in one go; the note records the theme and the
  * exact question shown. Nothing is reviewed or answered; the only feedback is a thank-you. Drafts live in memory only (never
@@ -16,6 +17,15 @@ import {
   pickWording,
   type CocreationTheme,
 } from '../../../../../packages/contracts/cocreation-wordings.ts';
+import {
+  DAY_PARTS,
+  DAY_PART_LABELS,
+  DAY_PART_MAX,
+  DAY_PROMPT,
+  dayCardId,
+  dayPartOf,
+  type DayPart,
+} from '../../../../../packages/contracts/cocreation-day.ts';
 import { h, length } from './h.ts';
 import { relationFlow, resetRelationDraft, type RelationSend } from './relation-flow.ts';
 
@@ -145,10 +155,22 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
 
   // Cards this player already answered today (UTC) for this character: shown disabled, never part of an answer.
   const used = new Set<string>();
-  const isWritten = (id: string) => !used.has(id) && (draft.text.get(id) ?? '').trim() !== '';
-  const writtenIds = () => draft.order.filter(isWritten);
-  const writtenCount = () => writtenIds().length;
-  const deckIds = () => COCREATION_THEMES.map((theme) => theme.id as string);
+  // Part 47: the fixed card 「一天」 has the id 'day' on the deck; its six parts are kept as the ordinary drafts `day-<part>`.
+  const DAY = 'day';
+  const partWritten = (part: DayPart) => (draft.text.get(dayCardId(part)) ?? '').trim() !== '';
+  const isWritten = (id: string) =>
+    id === DAY
+      ? !used.has(DAY) && DAY_PARTS.some(partWritten)
+      : !used.has(id) && (draft.text.get(id) ?? '').trim() !== '';
+  /** The answers' card ids in the order they were first written (a part of 一天 is one answer of its own). */
+  const writtenIds = () => [
+    ...draft.order.filter((id) => dayPartOf(id) === null && isWritten(id)),
+    // the parts of 一天 always go in the order of the day, whichever was written first
+    ...DAY_PARTS.map(dayCardId).filter((id) => isWritten(DAY) && partWritten(dayPartOf(id)!)),
+  ];
+  /** The deck counts 一天 as ONE card, however many parts are written. */
+  const writtenCount = () => COCREATION_THEMES.filter((theme) => isWritten(theme.id)).length + (isWritten(DAY) ? 1 : 0);
+  const deckIds = () => [...COCREATION_THEMES.map((theme) => theme.id as string), DAY];
 
   // ---- the questions: one enabled wording per theme, picked at random -------------------------------------------------
   let wordings: Record<string, string[]> = {};
@@ -156,7 +178,11 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   /** What each theme shows now ('' until the pool has been asked). */
   const current = new Map<string, string>();
   const questionOf = (id: string) =>
-    isWritten(id) ? (draft.shown.get(id) ?? current.get(id) ?? '') : (current.get(id) ?? '');
+    id === DAY
+      ? DAY_PROMPT.replaceAll('{name}', name)
+      : isWritten(id)
+        ? (draft.shown.get(id) ?? current.get(id) ?? '')
+        : (current.get(id) ?? '');
   /** A theme with a written answer keeps its question: the note records the one it answered. */
   const pickAll = () => {
     if (!ready) return;
@@ -196,7 +222,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     attrs: { role: 'status', 'aria-live': 'polite' },
     hidden: true,
   });
-  const allUsed = () => COCREATION_THEMES.every((theme) => used.has(theme.id));
+  const allUsed = () => COCREATION_THEMES.every((theme) => used.has(theme.id)) && used.has(DAY);
   const sendButton = h('button', { class: 'cc-send', attrs: { type: 'button' }, text: cocreationCopy.send(name) });
   const footer = h('footer', { class: 'cc-foot' }, notice, sendButton);
   const thanksSub = h('p', { class: 'cc-thanks-sub', text: cocreationCopy.thanksSub });
@@ -267,7 +293,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   }
 
   type CardRefs = {
-    theme: CocreationTheme;
+    theme: CocreationTheme | null;
     root: HTMLElement;
     open: HTMLButtonElement;
     prompt: HTMLElement;
@@ -303,7 +329,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     const question = questionOf(id);
     if (ref.prompt.textContent !== question) {
       ref.prompt.textContent = question;
-      ref.area.setAttribute('aria-label', question);
+      if (id !== DAY) ref.area.setAttribute('aria-label', question);
     }
     ref.prompt.className = `cc-prompt${question === '' ? '' : ' is-shown'}`;
   };
@@ -377,6 +403,92 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
     });
     return { theme, root, open: face, prompt, editor, area, skip, cta };
   };
+  /** Part 47: the fixed 「一天」 card. Six optional parts, each its own box; at least one must be written to hand the card in. */
+  const buildDayCard = (): CardRefs => {
+    const badge = h('span', { class: 'cc-badge', text: cocreationCopy.written });
+    const cta = h('span', { class: 'cc-cta', text: cocreationCopy.write });
+    const prompt = h('span', { class: 'cc-prompt' });
+    const face = h(
+      'button',
+      { class: 'cc-face', attrs: { type: 'button', 'aria-expanded': 'false' } },
+      prompt,
+      badge,
+      cta,
+    );
+    const editor = h('div', { class: 'cc-editor cc-day-editor', hidden: true });
+    const done = h('button', { class: 'cc-done', text: cocreationCopy.done, attrs: { type: 'button' } });
+    const skip = h('button', { class: 'cc-skip', text: cocreationCopy.skip, attrs: { type: 'button' } });
+    const rows = DAY_PARTS.map((part, at) => {
+      const id = dayCardId(part);
+      const max = DAY_PART_MAX[part];
+      const mark = h('i', { class: 'cc-day-ok', text: '✓', attrs: { 'aria-hidden': 'true' } });
+      const area = h('textarea', {
+        class: 'cc-area',
+        attrs: {
+          rows: part === 'whole' ? '4' : '2',
+          maxlength: String(max),
+          placeholder: '写在这里…',
+          'aria-label': DAY_PART_LABELS[part],
+          enterkeyhint: at === DAY_PARTS.length - 1 ? 'done' : 'next',
+          'data-part': part,
+        },
+      });
+      area.value = draft.text.get(id) ?? '';
+      const count = h('span', { class: 'cc-count', text: counter(area.value, max), attrs: { 'aria-hidden': 'true' } });
+      const paintMark = () => {
+        mark.classList.toggle('is-on', area.value.trim() !== '');
+      };
+      paintMark();
+      area.addEventListener('focus', () => track(area));
+      area.addEventListener('input', () => {
+        const next = clean(area.value);
+        if (next !== area.value) area.value = next;
+        count.textContent = counter(next, max);
+        draft.text.set(id, next);
+        if (next.trim() !== '' && !draft.order.includes(id)) draft.order.push(id);
+        paintMark();
+        refresh();
+      });
+      return {
+        part,
+        area,
+        count,
+        paintMark,
+        node: h(
+          'label',
+          { class: 'cc-day-part', attrs: { 'data-part': part } },
+          h('span', { class: 'cc-day-label' }, DAY_PART_LABELS[part], mark),
+          area,
+          h('span', { class: 'cc-meta' }, count),
+        ),
+      };
+    });
+    rows.forEach((row, at) =>
+      row.area.addEventListener('keydown', (event) => {
+        const key = event as unknown as { key: string; isComposing?: boolean };
+        // Enter would put a line break into the text, which chat input does not allow: it moves on, and finishes at the last part.
+        if (key.key !== 'Enter' || key.isComposing) return;
+        event.preventDefault();
+        const next = rows[at + 1];
+        if (next) next.area.focus?.();
+        else toggle(DAY, false);
+      }),
+    );
+    editor.append(...rows.map((row) => row.node), h('div', { class: 'cc-actions' }, skip, done));
+    const root = h('article', { class: 'cc-card cc-day', attrs: { role: 'listitem', 'data-card': DAY } }, face, editor);
+    face.addEventListener('click', () => toggle(DAY));
+    done.addEventListener('click', () => toggle(DAY, false));
+    skip.addEventListener('click', () => {
+      for (const row of rows) {
+        draft.text.delete(dayCardId(row.part));
+        row.area.value = '';
+        row.count.textContent = counter('', DAY_PART_MAX[row.part]);
+        row.paintMark();
+      }
+      toggle(DAY, false);
+    });
+    return { theme: null, root, open: face, prompt, editor, area: rows[0]!.area, skip, cta };
+  };
   const noteWritten = (id: string) => {
     if (isWritten(id) && !draft.order.includes(id)) draft.order.push(id);
   };
@@ -440,8 +552,14 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
       refs.set(theme.id, ref);
       return ref.root;
     });
-    deck.replaceChildren(...cards, ...(flow?.available ? [flow.entry] : []));
-    dots.replaceChildren(...ids.map((id) => h('i', { class: id === ids[0] ? 'on' : '', attrs: { 'data-dot': id } })));
+    const day = buildDayCard();
+    refs.set(DAY, day);
+    // The deck: five themes, 一天, and (last) the first step of the relationship flow.
+    deck.replaceChildren(...cards, day.root, ...(flow?.available ? [flow.entry] : []));
+    const dotIds = flow?.available ? [...ids, 'relation'] : ids;
+    dots.replaceChildren(
+      ...dotIds.map((id) => h('i', { class: id === dotIds[0] ? 'on' : '', attrs: { 'data-dot': id } })),
+    );
     refresh();
   };
 
@@ -458,11 +576,11 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   });
 
   const answers = (): CocreationAnswer[] =>
-    writtenIds().map((id) => ({
-      cardId: id,
-      text: (draft.text.get(id) ?? '').trim(),
-      wording: questionOf(id),
-    }));
+    writtenIds().map((id) =>
+      dayPartOf(id)
+        ? { cardId: id, text: (draft.text.get(id) ?? '').trim() }
+        : { cardId: id, text: (draft.text.get(id) ?? '').trim(), wording: questionOf(id) },
+    );
   const show = (message: string) => {
     notice.textContent = message;
     notice.hidden = message === '';
@@ -599,7 +717,7 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
   // The dots follow the card nearest the middle of the deck while swiping.
   deck.addEventListener('scroll', () => {
     const el = deck as unknown as { scrollLeft: number; clientWidth: number; scrollWidth: number };
-    const ids = deckIds();
+    const ids = flow?.available ? [...deckIds(), 'relation'] : deckIds();
     if (!el.clientWidth || ids.length === 0) return;
     const index = Math.round((el.scrollLeft / Math.max(1, el.scrollWidth - el.clientWidth)) * (ids.length - 1));
     Array.from(dots.children).forEach((dot, i) => (dot.className = i === index ? 'on' : ''));
@@ -610,6 +728,8 @@ export function openCocreationSheet(options: CocreationSheetOptions) {
       (today) => {
         if (closed) return;
         for (const id of today.cardIds) used.add(id);
+        // Part 47: any part answered today closes the whole 「一天」 card for the day.
+        if (today.cardIds.some((id) => dayPartOf(id) !== null)) used.add(DAY);
         renderDeck();
       },
       () => {},
