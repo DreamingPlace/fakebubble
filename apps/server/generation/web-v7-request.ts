@@ -35,6 +35,7 @@ import { matchMemes } from '../memes/meme-match.ts';
 import { MEME_TURNS, readMemeUse, withoutMemeUse } from '../../../packages/contracts/web-memes.ts';
 import { castPromptHash } from './cast-prompt.ts';
 import { frozenOpening, openingForWriter } from './opening-line.ts';
+import { writerOwnNames } from './writer-own-names.ts';
 import { writerRoster } from './writer-roster.ts';
 
 /** Messages (published prior turns + the current input) a request carries; the opening is added only when none was cut. */
@@ -90,6 +91,9 @@ function dto(row: MessageRow): MessageDTO {
 }
 
 /** The player's input embedded for this reply: in memory only, produced before the freeze and never stored. */
+/** Part 51: the key is absent (not an empty list) when the character has no names, so the request is what it was. */
+const ownNamesKey = (names: ReturnType<typeof writerOwnNames>) => (names.length ? { ownNames: names } : {});
+
 export interface QueryEmbedding {
   model: string;
   vector: Float32Array;
@@ -443,6 +447,8 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       : {}),
     // Part 37a-2: the v8 writer's teammates (public catalog data); a v7 request gains no key.
     ...(v8 ? { roster: writerRoster(store as never, scope.characterId) } : {}),
+    // Part 51: her own names with kind and attitude (published cast file + profile settings), whatever CAST_CONTEXT_ENABLED says.
+    ...(v8 ? ownNamesKey(writerOwnNames(store as never, scope.characterId, template)) : {}),
     messages: selected.map((row) => dto(row!)),
     mustClose: false,
     evidence: [],

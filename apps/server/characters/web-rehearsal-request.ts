@@ -27,6 +27,8 @@ export interface RehearsalFrozen {
   opening?: { text: string; context?: string };
   /** Part 37a-2: the teammates a 新 column gets (frozen with the run; absent when no 新 column runs). */
   roster?: NonNullable<TextGenerationRequest['roster']>;
+  /** Part 51: her own names for a 新 column (the cast DRAFT's aliases merged with the profile settings). */
+  ownNames?: NonNullable<TextGenerationRequest['ownNames']>;
   cast?: CastRequestContext;
   /**
    * Part 37c-1 (a 新+档案+梗 column only): the items of the character's full cast that any turn of the run may select (the union of
@@ -144,6 +146,7 @@ export function rehearsalRequest(
       ? { opening: openingForWriter(frozen.opening, v8, turn) }
       : {}),
     ...(v8 && frozen.roster ? { roster: structuredClone(frozen.roster) } : {}),
+    ...(v8 && frozen.ownNames?.length ? { ownNames: structuredClone(frozen.ownNames) } : {}),
     messages,
   };
   if (v8) writerDraftMessages(request);

@@ -22,8 +22,8 @@ export const rehearsalTurnsMin = (set?: string) =>
   set === 'opening'
     ? REHEARSAL_OPENING_TURNS
     : (REHEARSAL_PROFILE_SETS as readonly unknown[]).includes(set) ||
-        // Part 51: a 外号 script is a few lines of one situation, like a 档案 script.
-        (REHEARSAL_RULES_NICK_SETS as readonly unknown[]).includes(set)
+        // Part 51: a 名字 / 黑称 script is a few lines of one situation, like a 档案 script.
+        (REHEARSAL_RULES_NAME_SETS as readonly unknown[]).includes(set)
       ? REHEARSAL_PROFILE_TURNS
       : REHEARSAL_TURNS_MIN;
 /** Longest player message of a turn, in characters. */
@@ -106,12 +106,22 @@ export type RehearsalNetSet = (typeof REHEARSAL_NET_SETS)[number];
  */
 export const REHEARSAL_RULES_SET = 'rules-51';
 /**
- * Part 51, rule 5: four short scripts, one per case of a derogatory nickname: a 叫错 / 不知道, b 转述别人的话, c 当面嘲讽, d 明说不喜欢后
- * 还一直叫 (with a later turn in the same chat, to hear the distance). They call her 「小废物」: to hear the writer with a 讨厌 entry, add
- * that nickname to the character's 外号 first; without one she judges from her personality.
+ * Part 51, rule 5 (her own names): three short scripts, one per kind of name a player may call her by (a 别名, a 饰演过的角色, a 黑称),
+ * and four, one per case of a 黑称 (a 叫错 / 不知道, b 转述别人的话, c 当面嘲讽, d 明说不喜欢后还一直叫, with a later turn in the same
+ * chat, to hear the distance). The turns hold {别名} / {饰演} / {黑称}: the run puts in the character's own name of that kind (from the
+ * cast draft and the profile settings), or, when she has none, a stand-in (小可爱 / 那个角色 / 小废物), so she is then called a name that
+ * is not hers.
  */
-export const REHEARSAL_RULES_NICK_SETS = ['rules-51-a', 'rules-51-b', 'rules-51-c', 'rules-51-d'] as const;
-export type RehearsalRulesNickSet = (typeof REHEARSAL_RULES_NICK_SETS)[number];
+export const REHEARSAL_RULES_NAME_SETS = [
+  'rules-51-name-alias',
+  'rules-51-name-role',
+  'rules-51-name-insult',
+  'rules-51-a',
+  'rules-51-b',
+  'rules-51-c',
+  'rules-51-d',
+] as const;
+export type RehearsalRulesNameSet = (typeof REHEARSAL_RULES_NAME_SETS)[number];
 export const REHEARSAL_SETS = [
   'chat',
   'repeat',
@@ -119,7 +129,7 @@ export const REHEARSAL_SETS = [
   ...REHEARSAL_PROFILE_SETS,
   ...REHEARSAL_NET_SETS,
   REHEARSAL_RULES_SET,
-  ...REHEARSAL_RULES_NICK_SETS,
+  ...REHEARSAL_RULES_NAME_SETS,
 ] as const;
 export type RehearsalSet = (typeof REHEARSAL_SETS)[number];
 export const isProfileSet = (set: unknown): set is RehearsalProfileSet =>
@@ -142,10 +152,13 @@ export const REHEARSAL_SET_LABELS: Readonly<Record<RehearsalSet | 'memes', strin
   'net-trip': '网络梗 · 出游',
   'net-feelings': '网络梗 · 情绪',
   'rules-51': 'v8 规则 51',
-  'rules-51-a': 'v8 规则 51 · 外号 a 叫错',
-  'rules-51-b': 'v8 规则 51 · 外号 b 转述',
-  'rules-51-c': 'v8 规则 51 · 外号 c 嘲讽',
-  'rules-51-d': 'v8 规则 51 · 外号 d 一直叫',
+  'rules-51-name-alias': 'v8 规则 51 · 名字 别名',
+  'rules-51-name-role': 'v8 规则 51 · 名字 饰演过的角色',
+  'rules-51-name-insult': 'v8 规则 51 · 名字 黑称',
+  'rules-51-a': 'v8 规则 51 · 黑称 a 叫错',
+  'rules-51-b': 'v8 规则 51 · 黑称 b 转述',
+  'rules-51-c': 'v8 规则 51 · 黑称 c 嘲讽',
+  'rules-51-d': 'v8 规则 51 · 黑称 d 一直叫',
   memes: '梗与故事',
 });
 

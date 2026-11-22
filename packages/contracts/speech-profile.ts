@@ -69,8 +69,6 @@ export const SPEECH_PROFILE_ERROR_TEXT: Record<string, string> = {
   PROFILE_SITUATION_INVALID: '请从八个情境里选一个。',
   PROFILE_FIELD_SHAPE_UNSUPPORTED:
     '这个字段现有的结构既不是文字也不是列表，无法自动改写。请在角色工作台的其他分区手动编辑。',
-  PROFILE_NICKNAME_INVALID: '外号：名字 1–20 字且不重复，态度选喜欢 / 无所谓 / 讨厌，备注最多 60 字。',
-  PROFILE_NICKNAMES_FULL: '外号最多 20 个，请先删掉一个。',
   PROFILE_SAMPLE_MISSING: '这条样本已经不在草稿里了，请刷新后再试。',
   // Part 47: 一天的安排.
   PROFILE_DAILY_TOO_LONG: '这一栏太长了，请先精简（早上到深夜每栏最多 300 字，一整天的故事最多 800 字）。',
@@ -328,57 +326,6 @@ export function checkIndependence(
   hits.sort((a, b) => b.score - a.score || (a.characterId < b.characterId ? -1 : 1));
   const level = hits.some((hit) => hit.score >= INDEPENDENCE_BLOCK) ? 'block' : hits.length ? 'warn' : 'ok';
   return { level, hits };
-}
-
-// ---- Part 51: 外号 (nicknames, and what she thinks of each) -----------------------------------------------------------------------
-
-/** `authorCanon.settings.nicknames`: a list of `{name, attitude, note?}`. No schema change (a free key of the settings JSON). */
-export const NICKNAMES_KEY = 'nicknames';
-export const NICKNAME_ATTITUDES = ['喜欢', '无所谓', '讨厌'] as const;
-export type NicknameAttitude = (typeof NICKNAME_ATTITUDES)[number];
-export const NICKNAMES_MAX = 20;
-export const NICKNAME_NAME_MAX = 20;
-export const NICKNAME_NOTE_MAX = 60;
-export type Nickname = { name: string; attitude: NicknameAttitude; note?: string };
-
-/** The stored shape: at most 20 entries, each `{name (1–20), attitude (one of the three), note? (1–60)}`, no extra key, no repeated name. */
-export function nicknamesValid(value: unknown): value is Nickname[] {
-  if (!Array.isArray(value) || value.length > NICKNAMES_MAX) return false;
-  const seen = new Set<string>();
-  for (const item of value) {
-    if (!isObject(item) || Object.keys(item).some((key) => !['name', 'attitude', 'note'].includes(key))) return false;
-    if (!nonBlank(item.name, NICKNAME_NAME_MAX) || item.name !== item.name.trim()) return false;
-    if (!(NICKNAME_ATTITUDES as readonly unknown[]).includes(item.attitude)) return false;
-    if (item.note !== undefined && (!nonBlank(item.note, NICKNAME_NOTE_MAX) || item.note !== item.note.trim()))
-      return false;
-    if (seen.has(item.name)) return false;
-    seen.add(item.name);
-  }
-  return true;
-}
-/** The stored list (and whether the editor may rewrite it: false when the stored value is not a valid list). */
-export function readNicknames(template: unknown): { items: Nickname[]; editable: boolean } {
-  const raw = settingsOf(template)[NICKNAMES_KEY];
-  if (raw === undefined) return { items: [], editable: true };
-  return nicknamesValid(raw)
-    ? { items: raw.map((item) => ({ ...item })), editable: true }
-    : { items: [], editable: false };
-}
-/** Replaces the whole list (an empty list removes the key). Nothing but `settings.nicknames` changes. */
-export function writeNicknames<T extends object>(template: T, items: readonly Nickname[]): T {
-  const clean = items.map((item) => {
-    const note = typeof item.note === 'string' ? item.note.trim() : '';
-    return { name: String(item.name).trim(), attitude: item.attitude, ...(note ? { note } : {}) };
-  });
-  if (clean.length > NICKNAMES_MAX) fail('PROFILE_NICKNAMES_FULL');
-  if (!nicknamesValid(clean)) fail('PROFILE_NICKNAME_INVALID');
-  const copy = cloneTemplate(template);
-  const stored = settingsOf(copy)[NICKNAMES_KEY];
-  if (stored !== undefined && !nicknamesValid(stored)) fail('PROFILE_FIELD_SHAPE_UNSUPPORTED');
-  const settings = settingsForWrite(copy);
-  if (clean.length === 0) delete settings[NICKNAMES_KEY];
-  else settings[NICKNAMES_KEY] = clean;
-  return copy as unknown as T;
 }
 
 // ---- Part 47: 一天的安排 ----------------------------------------------------------------------------------------------------------

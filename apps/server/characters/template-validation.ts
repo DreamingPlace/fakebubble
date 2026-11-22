@@ -5,7 +5,6 @@ import { validateAutonomy } from '../../../packages/domain/autonomy.ts';
 import { validateVoiceBinding } from './voices.ts';
 import { validBirthDate } from './characters.ts';
 import { dailyLifeValid } from '../../../packages/contracts/cocreation-day.ts';
-import { nicknamesValid } from '../../../packages/contracts/speech-profile.ts';
 import { MEME_OVERRIDES_MAX, isMemeLevel } from '../../../packages/contracts/web-memes.ts';
 
 export function record(value: unknown): asserts value is Record<string, unknown> {
@@ -116,8 +115,6 @@ export function validatedTemplate(value: unknown): CharacterTemplate {
       'canonEvents',
       // Part 47: 一天的安排 (six optional texts). It reaches the writer only as part of the settings, like every other key.
       'dailyLife',
-      // Part 51: 外号, each with the character's attitude (喜欢 / 无所谓 / 讨厌) and an optional short note.
-      'nicknames',
     ]);
     jsonValue(value.authorCanon.settings);
     ensure(
@@ -136,10 +133,6 @@ export function validatedTemplate(value: unknown): CharacterTemplate {
     ensure(
       value.authorCanon.settings.dailyLife === undefined || dailyLifeValid(value.authorCanon.settings.dailyLife),
       'INVALID_DAILY_LIFE',
-    );
-    ensure(
-      value.authorCanon.settings.nicknames === undefined || nicknamesValid(value.authorCanon.settings.nicknames),
-      'INVALID_NICKNAMES',
     );
     const identity = value.authorCanon.settings.selfIdentity;
     if (identity !== undefined) {

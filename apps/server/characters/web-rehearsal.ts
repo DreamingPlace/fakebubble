@@ -47,6 +47,7 @@ import { currentReviewModel } from '../admission/web-review-model.ts';
 import { promptMessages } from '../generation/accepted-text-prompt.ts';
 import { listPriceMicros } from '../generation/model-list-prices.ts';
 import { openingFrom } from '../generation/opening-line.ts';
+import { mergeOwnNames, ownNamesFromAliases, ownNamesFromProfile } from '../generation/writer-own-names.ts';
 import { writerRoster } from '../generation/writer-roster.ts';
 import { modelUsableHere, draftModelRef } from '../generation/web-text-routing.ts';
 import { contentHash } from './admin-content-hash.ts';
@@ -313,6 +314,20 @@ export class WebRehearsal {
   private castOf(characterId: string) {
     return castForPreview(this.store, characterId, 'draft');
   }
+  /**
+   * Part 51: her own names for this run: the cast DRAFT's aliases (what the owner is testing) merged with the profile settings of the
+   * version being rehearsed, the cast winning. Empty when there is no cast file.
+   */
+  private ownNamesOf(characterId: string, template: { name?: string; authorCanon?: unknown }) {
+    let cast: ReturnType<typeof ownNamesFromAliases> = [];
+    try {
+      const view = this.castOf(characterId)?.view;
+      if (view) cast = ownNamesFromAliases(view.self.aliases);
+    } catch {
+      // no cast file: only the profile settings
+    }
+    return mergeOwnNames(ownNamesFromProfile(template), cast);
+  }
   items(characterId: string): RehearsalItems {
     try {
       const cast = this.castOf(characterId);
@@ -381,6 +396,7 @@ export class WebRehearsal {
           hash: input.profileHash as string,
         };
     const profile = based.profile;
+    const ownNames = this.ownNamesOf(characterId, profile.template);
     const withCast = input.withCast as boolean;
     ensure(source.kind !== 'memes' || withCast, 'REHEARSAL_MEMES_NEED_CAST');
     const cast = withCast ? this.castOf(characterId) : undefined;
@@ -397,7 +413,7 @@ export class WebRehearsal {
       turns = (JSON.parse(row.turns_json) as string[]).map((text) => ({ text, role: null, item: null }));
     } else if (source.kind === 'set') {
       scriptName = REHEARSAL_SET_LABELS[source.set];
-      turns = builtinSet(source.set).map((text) => ({ text, role: null, item: null }));
+      turns = builtinSet(source.set, ownNames).map((text) => ({ text, role: null, item: null }));
     } else {
       ensure(cast, 'CAST_CHARACTER_NOT_IN_CAST');
       ensure(memeItemsAllowed(source.items.length), 'INVALID_REHEARSAL_SOURCE');
@@ -430,6 +446,7 @@ export class WebRehearsal {
       ...(models.some((key) => parseRehearsalColumn(key)?.writer === 'v8')
         ? { roster: writerRoster(this.store, characterId) }
         : {}),
+      ...(models.some((key) => parseRehearsalColumn(key)?.writer === 'v8') && ownNames.length ? { ownNames } : {}),
       ...(cast ? { cast } : {}),
       // Part 37c-1: what a 新+档案+梗 column needs of the dictionary and the cast, frozen with the run.
       ...(memesColumn ? { memeOff: [...readMemesOff(this.store)].sort() } : {}),

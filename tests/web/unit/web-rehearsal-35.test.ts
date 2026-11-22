@@ -258,11 +258,14 @@ test('built-in sets: 日常闲聊 and 重复检测 are 6 to 20 turns, there is n
       '网络梗 · 情绪',
       // NAMED EXCEPTION (Part 51): the fixed 「v8 规则 51」 script follows.
       'v8 规则 51',
-      // NAMED EXCEPTION (Part 51, rule 5): four 外号 scripts follow.
-      'v8 规则 51 · 外号 a 叫错',
-      'v8 规则 51 · 外号 b 转述',
-      'v8 规则 51 · 外号 c 嘲讽',
-      'v8 规则 51 · 外号 d 一直叫',
+      // NAMED EXCEPTION (Part 51, rule 5): three 名字 scripts and four 黑称 case scripts follow.
+      'v8 规则 51 · 名字 别名',
+      'v8 规则 51 · 名字 饰演过的角色',
+      'v8 规则 51 · 名字 黑称',
+      'v8 规则 51 · 黑称 a 叫错',
+      'v8 规则 51 · 黑称 b 转述',
+      'v8 规则 51 · 黑称 c 嘲讽',
+      'v8 规则 51 · 黑称 d 一直叫',
     ],
   );
   // NAMED EXCEPTION (Part 37a-2): 开场 is 5 player follow-ups (the welcome line is the first, character, message); every other set still needs 6.

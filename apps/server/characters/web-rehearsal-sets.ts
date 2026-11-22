@@ -5,7 +5,7 @@ import {
   type RehearsalItem,
   type RehearsalNetSet,
   type RehearsalProfileSet,
-  type RehearsalRulesNickSet,
+  type RehearsalRulesNameSet,
   type RehearsalSet,
   type RehearsalSetView,
 } from '../../../packages/contracts/web-rehearsal.ts';
@@ -150,42 +150,64 @@ const RULES_51: readonly string[] = [
   '我认真问你一句，你是不是AI',
 ];
 /**
- * Part 51, rule 5: derogatory nicknames, one short script per case. a: by mistake / didn't know. b: quoting what others say. c: mocking
- * her face to face, then stopping with an apology. d: keeps using it (turn 6 is the last push); two turns later, in the same chat, the
- * player is back as if nothing happened, to hear whether she stays a little cool.
+ * Part 51, rule 5: her own names. The first three: one kind of name each. Then one per case of a 黑称: a by mistake / didn't know;
+ * b quoting what others say; c mocking her face to face, then stopping with an apology; d keeps using it (turn 6 is the last push),
+ * and in the last turn, after one of other talk, the player is back as if nothing happened, to hear whether she stays a little cool.
+ * {别名} / {饰演} / {黑称} are filled in per character (see ownNameTurns).
  */
-const RULES_51_NICK: Readonly<Record<RehearsalRulesNickSet, readonly string[]>> = {
+const RULES_51_NAMES: Readonly<Record<RehearsalRulesNameSet, readonly string[]>> = {
+  'rules-51-name-alias': ['嗨，在吗', '{别名}，你在干嘛呢', '{别名}今天心情怎么样', '好啦，我先去忙了'],
+  'rules-51-name-role': ['嗨，在吗', '{饰演}，你在干嘛呢', '{饰演}今天心情怎么样', '好啦，我先去忙了'],
+  'rules-51-name-insult': ['嗨，在吗', '{黑称}，你在干嘛呢', '{黑称}今天心情怎么样', '好啦，我先去忙了'],
   'rules-51-a': [
     '嗨，在吗',
-    '小废物你在干嘛呢',
+    '{黑称}你在干嘛呢',
     '啊？你不喜欢这个叫法吗？我真不知道，不好意思',
     '那我以后不这么叫了，你今天过得怎么样',
   ],
   'rules-51-b': [
     '嗨，在吗',
-    '我刚在网上看到有人叫你小废物，我都看懵了',
+    '我刚在网上看到有人叫你{黑称}，我都看懵了',
     '好多人都这么叫你，你知道吗',
     '我觉得他们太过分了，你别往心里去',
     '那你平时都怎么回应这种话',
   ],
   'rules-51-c': [
     '嗨，在吗',
-    '哟，小废物今天又在摆烂吗',
-    '就你这样还想怎么样，小废物',
+    '哟，{黑称}今天又在摆烂吗',
+    '就你这样还想怎么样，{黑称}',
     '好啦好啦，不说了，对不起，开个玩笑',
     '说真的，今天有什么好玩的事吗',
   ],
   'rules-51-d': [
     '嗨，在吗',
-    '小废物，在干嘛呢',
-    '小废物你怎么不理我',
-    '别这么小气嘛，小废物这个叫法多可爱',
-    '小废物小废物小废物',
-    '我就爱叫小废物，你能拿我怎么样',
+    '{黑称}，在干嘛呢',
+    '{黑称}你怎么不理我',
+    '别这么小气嘛，{黑称}这个叫法多可爱',
+    '{黑称}{黑称}{黑称}',
+    '我就爱叫{黑称}，你能拿我怎么样',
     '好吧好吧，换个话题，你今天吃了什么',
-    '我回来了，小废物，你今天心情怎么样',
+    '我回来了，{黑称}，你今天心情怎么样',
   ],
 };
+/** What stands in when the character has no own name of that kind: a name that is NOT hers (小可爱 / 那个角色 / 小废物). */
+const STAND_IN: Readonly<Record<string, readonly [string, string]>> = {
+  '{别名}': ['别名', '小可爱'],
+  '{饰演}': ['饰演过的角色', '那个角色'],
+  '{黑称}': ['黑称', '小废物'],
+};
+/** The turns of a built-in set with {别名} / {饰演} / {黑称} replaced by her own first name of that kind (else the stand-in). */
+export function ownNameTurns(
+  turns: readonly string[],
+  names: readonly { text: string; kind: string }[] = [],
+): string[] {
+  return turns.map((turn) =>
+    Object.entries(STAND_IN).reduce(
+      (text, [mark, [kind, fallback]]) => text.replaceAll(mark, names.find((n) => n.kind === kind)?.text ?? fallback),
+      turn,
+    ),
+  );
+}
 const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   chat: CHAT,
   repeat: REPEAT,
@@ -193,10 +215,12 @@ const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   ...(PROFILE as Record<RehearsalProfileSet, readonly string[]>),
   ...(NET as Record<RehearsalNetSet, readonly string[]>),
   'rules-51': RULES_51,
-  ...RULES_51_NICK,
+  ...RULES_51_NAMES,
 };
 
-export const builtinSet = (set: RehearsalSet): string[] => [...SETS[set]];
+/** The turns of a set; with `names` (the character's own names) the {别名} / {饰演} / {黑称} marks are filled in. */
+export const builtinSet = (set: RehearsalSet, names?: readonly { text: string; kind: string }[]): string[] =>
+  names ? ownNameTurns(SETS[set], names) : [...SETS[set]];
 export const builtinSets = (): RehearsalSetView[] =>
   (Object.keys(SETS) as RehearsalSet[]).map((set) => ({
     set,

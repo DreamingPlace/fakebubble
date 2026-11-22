@@ -31,6 +31,7 @@ import {
   writerProfileHash,
 } from './writer-profile.ts';
 import { memesBlock, writerMemesHash } from './writer-memes.ts';
+import { ownNamesValid } from './writer-own-names.ts';
 
 /**
  * Part 37a: the v8 writer ("回复写法：新"). One plain-text draft (no tool call, no coverage, no schema around the words), then one
@@ -80,7 +81,7 @@ const sortedPrompts = () => Object.entries(PROMPTS_V8).sort(([a], [b]) => (a < b
 /** sha256 of every prompts/v8 file (name and text). Pinned below and documented in docs/STATUS.md. */
 export const writerPromptBytesHash = () => createHash('sha256').update(JSON.stringify(sortedPrompts())).digest('hex');
 /** The pin: the generation Worker refuses the v8 route when its bundled files do not hash to exactly this. */
-export const WRITER_V8_PROMPT_SHA256 = '5e98e672b97077dd62551821865283d34d146c0dbcc3f692defb37cfc9621bc7';
+export const WRITER_V8_PROMPT_SHA256 = 'e74f31060043b3e15af08a7222b78b82610ce628faaa81fc33ac6c1ecec1819e';
 
 const guardReasonSchema = { type: 'string', enum: [...GUARD_REASONS] };
 /** The second pass's output tool: the v7 review schema's bookkeeping fields, without decision, replacement bubbles or coverage. */
@@ -241,6 +242,15 @@ const rosterBlock = (request: TextGenerationRequest) =>
       )}`
     : '';
 
+/**
+ * Part 51: her own names with their kind and her attitude (see writer-own-names.ts). Empty when there are none, so a request
+ * without them is exactly what it was.
+ */
+const ownNamesBlock = (request: TextGenerationRequest) =>
+  request.ownNames?.length
+    ? `\n\n你自己的名字和别人对你的叫法（ownNames，JSON：kind是类型，attitude是你对它的态度，likes喜欢、ok可以、dislikes不喜欢）：${JSON.stringify(request.ownNames)}`
+    : '';
+
 /** 新+档案: the examples block for the player's latest message and the turns before it (this character's own bank only). */
 function profileExamplesFor(request: TextGenerationRequest) {
   const turns = request.messages.map(({ authorKind, text }) => ({ authorKind, text }));
@@ -278,6 +288,7 @@ export function writerDraftMessages(request: TextGenerationRequest, provider?: W
         )),
     'INVALID_TEXT_REQUEST',
   );
+  ensure(request.ownNames === undefined || ownNamesValid(request.ownNames), 'INVALID_TEXT_REQUEST');
   ensure(
     request.opening?.context === undefined ||
       (typeof request.opening.context === 'string' && [...request.opening.context].length <= 200),
@@ -310,6 +321,7 @@ export function writerDraftMessages(request: TextGenerationRequest, provider?: W
     (request.deliveryMode === 'voice' && request.voiceDirections ? DIRECTIONS : '') +
     (request.cast ? `\n${CAST}` : '') +
     (character.seed === true ? `\n${SEED_CHARACTER_PROMPT}` : '') +
+    ownNamesBlock(request) +
     rosterBlock(request) +
     (picked ? `\n\n${picked}` : '') +
     (memes ? `\n\n${memes}` : '');
@@ -326,6 +338,7 @@ export function writerGuardMessages(request: TextGenerationRequest, draft: Write
   const content = JSON.stringify({
     character: { id: character.id, name: character.name, authorCanon: character.authorCanon ?? null },
     ...context(request, true),
+    ...(request.ownNames?.length ? { ownNames: request.ownNames } : {}),
     mustClose: request.mustClose,
     delivery: request.deliveryMode ?? 'text',
     draft: draft.bubbles.map((bubble, index) => ({ index, text: bubble.text })),

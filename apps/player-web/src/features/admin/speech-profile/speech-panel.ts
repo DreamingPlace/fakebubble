@@ -3,10 +3,6 @@ import {
   CORE_FIELD_LABELS,
   CORE_FIELD_MAX,
   EXAMPLES_PER_SITUATION_MAX,
-  NICKNAMES_MAX,
-  NICKNAME_ATTITUDES,
-  NICKNAME_NAME_MAX,
-  NICKNAME_NOTE_MAX,
   SPEECH_SITUATIONS,
   UNCATEGORIZED,
   cardEditable,
@@ -16,14 +12,10 @@ import {
   readBank,
   readCoreCard,
   readDailyLife,
-  readNicknames,
   settingsOf,
   writeCoreCard,
   writeDailyPart,
-  writeNicknames,
   type CoreField,
-  type Nickname,
-  type NicknameAttitude,
 } from '../../../../../../packages/contracts/speech-profile.ts';
 import {
   MEME_LEVELS,
@@ -122,7 +114,6 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     for (const run of syncers) run();
     syncUse();
     paintUse();
-    paintNicks();
   };
 
   /** One save of a changed template, with the independence check (a close line asks twice). */
@@ -484,104 +475,6 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
   );
   paintUse();
 
-  // ---- 外号 (Part 51): nicknames and the character's attitude to each; 草稿 only, live with 发布 ----
-  const savedNicks = readNicknames(template);
-  let nicks: Nickname[] = savedNicks.items.map((item) => ({ ...item }));
-  const nickChanged = () => JSON.stringify(nicks) !== JSON.stringify(savedNicks.items);
-  const nickList = h('ul', { class: 'sp-nicks', attrs: { 'aria-label': '外号' } });
-  const nickName = h('input', {
-    attrs: { type: 'text', 'aria-label': '外号名字', placeholder: '外号', maxlength: String(NICKNAME_NAME_MAX) },
-  });
-  const nickAttitude = h('select', { attrs: { 'aria-label': '态度' } });
-  for (const id of NICKNAME_ATTITUDES) nickAttitude.append(h('option', { text: id, attrs: { value: id } }));
-  const nickNote = h('input', {
-    attrs: { type: 'text', 'aria-label': '备注', placeholder: '备注（可不写）', maxlength: String(NICKNAME_NOTE_MAX) },
-  });
-  const nickAdd = h('button', {
-    class: 'admin-secondary',
-    text: '添加',
-    attrs: { type: 'button', 'data-sp': 'nick-add' },
-  });
-  const nickSave = h('button', {
-    class: 'admin-primary',
-    text: '保存外号',
-    attrs: { type: 'button', 'data-sp': 'nick-save' },
-  });
-  hoverValue(nickSave, '只存进草稿，发布后玩家才看得到');
-  lockables.push(nickName, nickAttitude, nickNote);
-  const syncNick = () => {
-    nickSave.disabled = locked() || !savedNicks.editable || !nickChanged();
-    nickAdd.disabled = locked() || !savedNicks.editable;
-  };
-  syncers.push(syncNick);
-  const paintNicks = () => {
-    nickList.replaceChildren(
-      ...(nicks.length ? [] : [h('li', { class: 'sp-none', text: '还没有。没写的外号，她按自己的性格判断。' })]),
-      ...nicks.map((item, index) => {
-        const pick = h('select', { attrs: { 'aria-label': `「${item.name}」的态度` } });
-        for (const id of NICKNAME_ATTITUDES) pick.append(h('option', { text: id, attrs: { value: id } }));
-        pick.value = item.attitude;
-        pick.disabled = locked();
-        pick.addEventListener('change', () => {
-          nicks[index] = { ...item, attitude: pick.value as NicknameAttitude };
-          syncNick();
-        });
-        const drop = h('button', {
-          class: 'admin-secondary',
-          text: '删除',
-          attrs: { type: 'button', 'aria-label': `删除外号「${item.name}」` },
-        });
-        drop.disabled = locked();
-        drop.addEventListener('click', () => {
-          nicks = nicks.filter((_, i) => i !== index);
-          paintNicks();
-          syncNick();
-        });
-        return h(
-          'li',
-          { class: 'sp-nick', attrs: { 'data-nickname': item.name } },
-          h('b', { text: item.name }),
-          pick,
-          h('span', { class: 'sp-nick-note', text: item.note ?? '' }),
-          drop,
-        );
-      }),
-    );
-  };
-  nickAdd.addEventListener('click', () =>
-    guarded(async () => {
-      const name = nickName.value.trim();
-      if (name === '') return;
-      const note = nickNote.value.trim();
-      const next = [...nicks, { name, attitude: nickAttitude.value as NicknameAttitude, ...(note ? { note } : {}) }];
-      // The same checks as the save (limits, no repeated name), so a bad entry is refused here, not after the click.
-      writeNicknames(template, next);
-      show('');
-      nicks = next;
-      nickName.value = '';
-      nickNote.value = '';
-      paintNicks();
-      syncNick();
-    }),
-  );
-  nickSave.addEventListener('click', () =>
-    guarded(async () => {
-      await commit(writeNicknames(template, nicks), `nick:${JSON.stringify(nicks)}`, '外号已保存');
-    }),
-  );
-  const nickSection = h(
-    'section',
-    { class: 'sp-nick-section', attrs: { 'data-sp': 'nicknames' } },
-    hoverValue(
-      h('h3', { class: 'sp-title', text: '外号' }),
-      `别人给她起的外号，和她对每个的态度（喜欢 / 无所谓 / 讨厌）。最多 ${NICKNAMES_MAX} 个。没写的外号，她按自己的性格判断。`,
-    ),
-    nickList,
-    h('div', { class: 'sp-nick-add' }, nickName, nickAttitude, nickNote, nickAdd),
-    h('div', { class: 'sp-actions' }, nickSave),
-  );
-  paintNicks();
-
   root.append(
     hoverValue(h('h3', { class: 'sp-title', text: '核心卡' }), '没写的栏目，就用角色现有的设定。'),
     card,
@@ -592,7 +485,6 @@ export function speechPanel(parent: HTMLElement, deps: SpeechPanelDeps) {
     dayCard,
     h('div', { class: 'sp-actions' }, saveDaily),
     memeSection,
-    nickSection,
     lockNote,
     warn,
     message,

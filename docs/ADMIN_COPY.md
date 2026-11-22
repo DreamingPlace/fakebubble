@@ -99,7 +99,6 @@ Everything here goes into the 草稿; **正式版本** changes only with 发布.
 | 共创收件箱 → 加入草稿 on a part | target 「{名字} · 一天的安排 · 早上」; one box with that part of the 草稿 (the note goes on its own line); 保存草稿; nothing reaches players until 发布 |
 | 角色工作台 → 说话档案 | new block 一天的安排: 早上 · 中午 · 下午 · 晚上 · 深夜 · 一整天的故事, counters x / 300 (x / 800), button 保存一天的安排 |
 | errors | 「这一栏太长了，请先精简（早上到深夜每栏最多 300 字，一整天的故事最多 800 字）。」 (`PROFILE_DAILY_TOO_LONG`) · 「一天的安排现有的结构无法自动改写。…」 (`PROFILE_DAILY_SHAPE_UNSUPPORTED`) · 「一天的安排只能写早上、中午、下午、晚上、深夜和一整天的故事，每一栏不能超过字数上限。」 (`INVALID_DAILY_LIFE`) |
-| 外号 (Part 51) | 区块标题「外号」，悬停：「别人给她起的外号，和她对每个的态度（喜欢 / 无所谓 / 讨厌）。最多 20 个。没写的外号，她按自己的性格判断。」 · 按钮「添加」「保存外号」「删除」 · 提示「已保存」：「外号已保存（草稿 N）。发布前玩家看不到。」 · 空：「还没有。没写的外号，她按自己的性格判断。」 · 错误：「外号：名字 1–20 字且不重复，态度选喜欢 / 无所谓 / 讨厌，备注最多 60 字。」(`PROFILE_NICKNAME_INVALID`) · 「外号最多 20 个，请先删掉一个。」(`PROFILE_NICKNAMES_FULL`) · 「外号最多 20 个：名字 1–20 字且不重复，态度选喜欢 / 无所谓 / 讨厌，备注最多 60 字。」(`INVALID_NICKNAMES`) |
 
 ## Part 37c-1 — 网络梗
 | Where | Words |
