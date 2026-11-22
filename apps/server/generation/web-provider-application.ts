@@ -215,6 +215,7 @@ export class WebProviderApplication {
   readonly graceMs: number;
   /** Null on a database older than schema 118. */
   readonly playerAccounts: WebPlayerAccounts | null;
+  private readonly turnstileSiteKey: string | null;
   /** Part 22c: the statistics counters' write side (daily active markers, cohort close). */
   readonly stats: WebStats;
   constructor(
@@ -334,6 +335,7 @@ export class WebProviderApplication {
       sealKey: Buffer.from(config.sealKey, 'base64url'),
       authorize: this.identity.authorizeInviteAction.bind(this.identity),
     });
+    this.turnstileSiteKey = players.turnstileSiteKey ?? null;
     this.playerAccounts = store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_player_logins'")
       ? new WebPlayerAccounts(store, this.identity, {
           origin: config.origin,
@@ -655,6 +657,9 @@ export class WebProviderApplication {
         welcomeClip: character.welcome.audio.state === 'available',
       })),
       slots: catalogSlots(characters),
+      // Part 50: the PUBLIC Turnstile site key (it is in the page source of every Turnstile site anyway), so the page can start the
+      // check at load without first reading /account. Present only when the server asks for the check.
+      ...(this.turnstileSiteKey ? { turnstileSiteKey: this.turnstileSiteKey } : {}),
     };
   }
 

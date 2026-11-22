@@ -10,10 +10,6 @@ export interface PlayerBoot {
   api: ProviderApi;
   gate: SessionGate;
   sheet: VerifySheet;
-  /** The one place the bootstrap may start from: right after the first paint (or after the grace below if the catalog is slow). */
-  afterPaint?: (run: () => void) => void;
-  /** How long the first paint may hold the background session back (a slow catalog must not delay the session as well). */
-  graceMs?: number;
   /** The page for a failure that is not a retry case (a signed-out player, an expired guest, a refused session). */
   fail?: (error: unknown) => void;
 }
@@ -21,7 +17,7 @@ export interface PlayerBoot {
 /**
  * The player page's start: the cards first, the session behind them. Returns nothing; everything it does is visible on the page.
  *   1. the public catalog is read (no session, no cookie) and the real cards are drawn from it;
- *   2. right after that the session starts in the background (bootstrap, Turnstile when asked);
+ *   2. at the same moment (Part 50: not after it) the session starts in the background (bootstrap, Turnstile when asked);
  *   3. the session arrives: its data swaps into the cards that are already there, and any action the player tapped continues by itself.
  * If the session arrives first, the page is simply drawn from it. If the catalog cannot be read, the skeleton stays and the
  * verification sheet shows at once (with its retry), so the page is never left blank without a way forward.
@@ -42,23 +38,24 @@ export function bootPlayer(boot: PlayerBoot) {
   };
   gate.onChange(arrive);
   gate.onHardFailure(boot.fail ?? ((error) => renderProviderStartError(root, error, undefined, boot.api)));
-  let started = false;
-  const begin = () => {
-    if (started) return;
-    started = true;
-    (boot.afterPaint ?? ((run) => requestAnimationFrame(() => setTimeout(run, 0))))(() => gate.start());
-  };
-  // A slow catalog must not hold the session back as well.
-  const grace = setTimeout(begin, boot.graceMs ?? 800);
-  boot.api.publicCatalog().then(
-    (catalog) => {
-      clearTimeout(grace);
+  // Part 50: the session starts NOW, in parallel with the catalog read (not after it): the first tap no longer waits for a check
+  // that could have been running while the cards were loading. The catalog is requested first (so it is first in the queue) and its
+  // answer hands over the public Turnstile site key, which spares the check a separate /account read.
+  const catalogRead = boot.api.publicCatalog();
+  gate.start();
+  catalogRead.then(
+    async (catalog) => {
+      if (catalog.turnstileSiteKey) {
+        // The invisible challenge starts BEFORE the cards' own drawing work, which on a slow phone holds the main thread for hundreds
+        // of milliseconds (it waits for the widget to be rendered, at most a moment: Cloudflare's script is preloaded).
+        await Promise.race([
+          boot.api.primeHuman(catalog.turnstileSiteKey),
+          new Promise<void>((resolve) => setTimeout(resolve, 120)),
+        ]);
+      }
       if (!arrived) shell = startFirstPaint(root, publicPeople(catalog), deferred);
-      begin();
     },
     () => {
-      clearTimeout(grace);
-      begin();
       // No cards to show: the sheet (widget, one line, retry) is the way forward, at once.
       if (!arrived) void sheet.request().catch(() => {});
     },

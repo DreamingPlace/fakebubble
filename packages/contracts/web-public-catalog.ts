@@ -26,6 +26,8 @@ export interface WebPublicCatalog {
   characters: WebPublicCatalogCharacter[];
   /** Exactly CATALOG_MAX slots, characters first and then the "coming soon" places: the order the bootstrap also uses. */
   slots: WebProviderSlot[];
+  /** Part 50: the PUBLIC Turnstile site key, present only when the server asks for the bot check (so the page can start it at load). */
+  turnstileSiteKey?: string;
 }
 
 const invalid = (): never => {
@@ -42,7 +44,12 @@ const id = (value: unknown): value is string => typeof value === 'string' && /^[
 /** The page's strict reader: anything else than exactly this shape is rejected (the page then simply waits for the session). */
 export function parseWebPublicCatalog(value: unknown): WebPublicCatalog {
   const root = record(value);
-  keys(root, ['characters', 'slots']);
+  keys(root, 'turnstileSiteKey' in root ? ['characters', 'slots', 'turnstileSiteKey'] : ['characters', 'slots']);
+  if (
+    'turnstileSiteKey' in root &&
+    !(typeof root.turnstileSiteKey === 'string' && /^[0-9A-Za-z_-]{1,64}$/.test(root.turnstileSiteKey))
+  )
+    invalid();
   if (!Array.isArray(root.characters) || root.characters.length > CATALOG_MAX) invalid();
   if (!Array.isArray(root.slots) || root.slots.length !== CATALOG_MAX) invalid();
   const seen = new Set<string>();
@@ -116,5 +123,9 @@ export function parseWebPublicCatalog(value: unknown): WebPublicCatalog {
     return { kind: 'preview', slotId: slot.slotId as string, label: slot.label as string };
   });
   if (slotted.size !== seen.size || previews.size !== CATALOG_MAX - seen.size) invalid();
-  return { characters, slots };
+  return {
+    characters,
+    slots,
+    ...('turnstileSiteKey' in root ? { turnstileSiteKey: root.turnstileSiteKey as string } : {}),
+  };
 }

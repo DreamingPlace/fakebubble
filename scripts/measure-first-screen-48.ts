@@ -13,7 +13,7 @@ import {
 /**
  * Part 48: a cold, new-visitor mobile load, measured (and optionally filmed).
  *
- *   node scripts/measure-first-screen-48.ts [--label after] [--profile fast4g|slow4g] [--turnstile on|off] [--video dir] [--shot file]
+ *   node scripts/measure-first-screen-48.ts [--label after] [--profile fast4g|slow4g] [--turnstile on|off] [--catalog-key on|off] [--video dir] [--shot file]
  *
  * It starts the offline console fixture (the REAL local server and the built player in apps/player-web/dist), opens the page in a fresh
  * browser context (cold cache, no cookie, a phone viewport) under the network and CPU profile, and prints one JSON line:
@@ -33,6 +33,7 @@ const arg = (name: string, fallback?: string) => {
 const label = arg('label', 'run')!;
 const profile = arg('profile', 'fast4g') as ProfileName;
 const turnstile = arg('turnstile', 'on') === 'on';
+const catalogKey = arg('catalog-key', 'on') === 'on'; // Part 50: 'off' = the old catalog answer (no site key), for the "before" run
 const video = arg('video');
 const shot = arg('shot');
 if (!(profile in PROFILES)) throw new Error('unknown profile');
@@ -47,10 +48,36 @@ try {
   });
   await realClock(context);
   await context.addInitScript(TIMING_SCRIPT);
-  const stats = turnstile ? await turnstileRoutes(context, f.origin) : null;
+  const stats = turnstile ? await turnstileRoutes(context, f.origin, { catalogKey }) : null;
   const page = await context.newPage();
   await throttle(context, page, profile);
   const started = Date.now();
+  // Part 50: where the time goes, on the node clock from navigation start: when each request left and when it was answered.
+  const marks: { what: string; at: number; end?: number }[] = [];
+  const kind = (url: string) =>
+    url.endsWith('/bootstrap')
+      ? 'bootstrap'
+      : url.endsWith('/provider/catalog')
+        ? 'catalog'
+        : url.endsWith('/provider/account')
+          ? 'account'
+          : url.includes('challenges.cloudflare.com/turnstile/v0/api.js')
+            ? 'turnstile-script'
+            : url.includes('challenges.cloudflare.com')
+              ? 'cloudflare-challenge'
+              : null;
+  const open = new Map<unknown, { what: string; at: number; end?: number }>();
+  page.on('request', (r: { url(): string }) => {
+    const what = kind(r.url());
+    if (!what) return;
+    const mark = { what, at: Date.now() - started };
+    open.set(r, mark);
+    marks.push(mark);
+  });
+  page.on('requestfinished', (r: unknown) => {
+    const mark = open.get(r);
+    if (mark) mark.end = Date.now() - started;
+  });
   await page.goto(`${f.origin}/?mode=provider`, { waitUntil: 'commit' });
   await page.waitForFunction(
     () => (window as unknown as { __first: { card: number | null } }).__first?.card !== null,
@@ -94,6 +121,7 @@ try {
     turnstileScriptMs: script ? Math.round(script.end - script.start) : null,
     bootstraps: boots.length,
     wallFirstCardMs: firstCardAt,
+    timeline: marks.map((m) => `${m.what} ${m.at}${m.end === undefined ? '' : `-${m.end}`}`),
   };
   if (shot) await page.screenshot({ path: resolve(shot) });
   await context.close();
