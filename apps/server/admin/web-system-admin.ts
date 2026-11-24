@@ -28,6 +28,16 @@ import type { PriceRenewal } from '../generation/web-provider-configuration.ts';
 import type { WebAccountAdmin } from './web-account-admin.ts';
 import { once, requestHash, type WebSecurityCounters } from './web-admin-actions.ts';
 import {
+  findUnknownAttempt,
+  installWebUnknownCalls,
+  parseUnknownCallCode,
+  readUnknownCalls,
+  unknownCallCode,
+  unknownCallRef,
+  type UnknownCallsView,
+} from './web-unknown-calls.ts';
+import { WebProviderOffline } from '../generation/web-provider-offline.ts';
+import {
   emailDigest,
   grantToPlayers,
   highestMicrosPerPoint,
@@ -60,6 +70,11 @@ type Store = BusinessStore & ModelFlags;
 export interface WebSystemOps extends WebSystemSources {
   renewPrices(): PriceRenewal[];
   topUp?(requestId: string, provider: 'deepseek' | 'fish', micros: number): Promise<BudgetTopUpResult>;
+  /**
+   * Part 54: settle the shared budget's reservation of an attempt that the owner has just settled locally (reads the local row).
+   * Absent where there is no shared budget (a harness). A failure here is repaired at the next start (recoverKnown).
+   */
+  settleAttempt?(key: { operationId: string; phase: string; ordinal: number }): Promise<void>;
 }
 const object = (value: unknown) => {
   ensure(value !== null && typeof value === 'object' && !Array.isArray(value), 'INVALID_REQUEST');
@@ -111,6 +126,8 @@ export class WebSystemAdmin {
     this.emailKey = options.emailKey;
     // Part 37a: the writer switch's table (digest-checked; STOP WEB_WRITER_SCHEMA_MISMATCH).
     installWriterSetting(store);
+    // Part 54: 未确认的调用 (digest-checked; STOP WEB_UNKNOWN_CALLS_SCHEMA_MISMATCH).
+    installWebUnknownCalls(store);
   }
   private actor(auth: Auth, need: 'any' | 'system' | 'points' | 'stats' | 'owner') {
     const actor = this.admin.authorize(auth.cookie, auth.csrf, auth.origin);
@@ -191,6 +208,64 @@ export class WebSystemAdmin {
     const view = readCosts(this.store, this.clock.now(), parseRange(exactly(input, ['range']).range));
     this.audit(actor.memberId, 'stats-export:costs', `${view.range}d/${view.rows.length}`);
     return { csv: costsCsv(view), rows: view.rows.length };
+  }
+
+  /**
+   * 未确认的调用 (Part 54): the calls whose result is not known and whose money stays held. Read-only; the owner or system.read.
+   * Per call: a short pseudonymous code, provider, model, stage, the held amount, its age and the error code. No id, no email, no
+   * nickname, no IP hash, no content.
+   */
+  unknownCalls(auth: Auth, input: unknown): UnknownCallsView {
+    this.actor(auth, 'system');
+    exactly(input, []);
+    return readUnknownCalls(this.store, this.clock.now());
+  }
+  /**
+   * 已按账单核对 (Part 54), OWNER ONLY, one call at a time, never automatic: the call is settled at the held amount, or at a
+   * lower amount in USD micros read from the provider's bill. The shared budget is settled at the same amount.
+   */
+  async unknownResolve(auth: Auth, input: unknown) {
+    const actor = this.actor(auth, 'owner');
+    const body = exactly(input, ['requestId', 'code', 'settledMicros']);
+    const ref = parseUnknownCallCode(body.code);
+    const attempt = findUnknownAttempt(this.store, ref);
+    ensure(attempt, 'UNKNOWN_CALL_NOT_FOUND');
+    const settled = body.settledMicros === 'held' ? attempt.held_micros : body.settledMicros;
+    ensure(
+      typeof settled === 'number' && Number.isSafeInteger(settled) && settled >= 0 && settled <= attempt.held_micros,
+      'INVALID_REQUEST',
+    );
+    const key = { operationId: attempt.operation_id, phase: attempt.phase, ordinal: attempt.ordinal };
+    const result = once(
+      this.store,
+      this.clock.now(),
+      {
+        requestId: body.requestId,
+        action: 'unknown-resolve',
+        hash: requestHash({ action: 'unknown-resolve', ref, settled }),
+        adminId: actor.memberId,
+      },
+      () => {
+        new WebProviderOffline(this.store, this.clock).reconcileUnknown(key, settled);
+        this.store.run(
+          'INSERT INTO web_unknown_resolutions(ref,held_micros,settled_micros,member_id,resolved_at) VALUES (?,?,?,?,?)',
+          unknownCallRef(key),
+          attempt.held_micros,
+          settled,
+          actor.memberId,
+          this.clock.now(),
+        );
+        this.audit(actor.memberId, 'unknown-resolve', unknownCallCode(ref));
+        return { code: unknownCallCode(ref), heldMicros: attempt.held_micros, settledMicros: settled };
+      },
+    );
+    // The shared budget, after the local settlement; a failure is repaired at the next start (recoverKnown) and reported.
+    try {
+      await this.ops?.settleAttempt?.(key);
+    } catch {
+      throw new DomainError('BUDGET_UNAVAILABLE');
+    }
+    return result;
   }
 
   /** 系统状态: the owner or system.read. Read-only. */

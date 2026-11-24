@@ -24,6 +24,7 @@ import { DROP_INVALID_METADATA } from './accepted-text-protocol.ts';
 import { applyReview, parseDraft } from './writer-v8.ts';
 import { requireWebContent, webCloudContentExpired } from '../admission/web-retention.ts';
 import type { WebStageClaim } from '../admission/web-stage-queue.ts';
+import { noteUnknownCode } from '../admin/web-unknown-calls.ts';
 import { WebDispatchLedger } from '../budget/web-dispatch-ledger.ts';
 import { requireWebRuntime, type WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireCurrentInputSnapshot } from './web-input-snapshot.ts';
@@ -538,7 +539,7 @@ export class WebProviderOffline {
       if (claim.stage === 'audio') checkWebV7SceneAtDispatch(this.store as WebStore, key.operationId, this.now());
     });
   }
-  markUnknown(key: Key, scope: Scope) {
+  markUnknown(key: Key, scope: Scope, code?: string) {
     this.check();
     return this.store.transaction(() => {
       const row = this.attempt(key);
@@ -551,6 +552,60 @@ export class WebProviderOffline {
           key.phase,
           key.ordinal,
         );
+      // Part 54: why it is unknown, for the owner's 未确认的调用 page (a fixed code; a note, never part of the money path).
+      if (code) noteUnknownCode(this.store, key, code, this.now());
+    });
+  }
+  /**
+   * Part 54: the OWNER settled an UNKNOWN call from the provider's bill (at the held amount, or lower). Only ever called from his
+   * explicit action, never automatically. The local hold becomes the charge; the caller then settles the shared budget at the
+   * same amount (settleAttempt reads this row). An UNKNOWN call is not retried and not released any other way.
+   */
+  reconcileUnknown(key: Key, chargedMicros: number) {
+    this.check();
+    return this.store.transaction(() => {
+      const row = this.attempt(key);
+      ensure(row.state === 'unknown', 'WEB_PROVIDER_ATTEMPT_STALE');
+      ensure(
+        Number.isSafeInteger(chargedMicros) && chargedMicros >= 0 && chargedMicros <= row.held_micros,
+        'WEB_PROVIDER_RECEIPT_INVALID',
+      );
+      const receipt = { reconciled: true, source: 'provider_bill', settledMicros: chargedMicros, heldMicros: row.held_micros };
+      ensure(
+        this.store.run(
+          `UPDATE web_provider_attempts SET state='known',outcome='failed',usage_units=0,charged_micros=?,receipt_json=?,settled_at=?
+          WHERE operation_id=? AND phase=? AND ordinal=? AND state='unknown'`,
+          chargedMicros,
+          JSON.stringify(receipt),
+          this.now(),
+          key.operationId,
+          key.phase,
+          key.ordinal,
+        ).changes === 1,
+        'WEB_PROVIDER_ATTEMPT_STALE',
+      );
+      ensure(
+        this.store.run(
+          `UPDATE web_provider_spending SET held_micros=held_micros-?,spent_micros=spent_micros+?
+          WHERE provider=? AND held_micros>=?`,
+          row.held_micros,
+          chargedMicros,
+          row.provider,
+          row.held_micros,
+        ).changes === 1,
+        'WEB_PROVIDER_BUDGET_CONFLICT',
+      );
+      if (row.stage_version !== null)
+        this.capacity.confirm(
+          {
+            operationId: key.operationId,
+            stage: key.phase === 'speech' ? 'audio' : 'text',
+            phase: key.phase,
+            ordinal: key.ordinal,
+          },
+          { outcome: 'failed', receipt, usage: { units: 0 } },
+        );
+      return { heldMicros: row.held_micros, settledMicros: chargedMicros, provider: row.provider };
     });
   }
   /** Release only a reservation proven never to have crossed the dispatch boundary. */

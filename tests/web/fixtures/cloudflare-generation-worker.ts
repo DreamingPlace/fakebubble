@@ -66,11 +66,26 @@ class SyntheticWebSession extends WebIsolatedGenerationSession {
     this.input.request = structuredClone(request);
     return super.text(request, policyHash, known, meter, accept);
   }
+  // Part 54: the reply path is one call with plain data; the same fake provider answers it.
+  override runText(job: Parameters<WebIsolatedGenerationSession['runText']>[0]) {
+    this.input.request = structuredClone(job.request);
+    return super.runText(job);
+  }
 }
 /** Never deployed: configurable fake transport replaces all outbound fetches. */
 export class SyntheticWebGenerationService extends WorkerEntrypoint {
   open() {
     return new SyntheticWebSession();
+  }
+  /** Part 54: the single-call entries the business object uses for a reply, backed by the same synthetic session. */
+  runText(job: Parameters<WebIsolatedGenerationSession['runText']>[0]) {
+    return new SyntheticWebSession().runText(job);
+  }
+  runSpeech(job: { wire: Parameters<WebIsolatedGenerationSession['speech']>[0]; callTimeoutMs: number }) {
+    return new SyntheticWebSession().speech(job.wire, async () => {}, job.callTimeoutMs);
+  }
+  runEmbed(job: { wire: Parameters<WebIsolatedGenerationSession['embed']>[0] }) {
+    return new SyntheticWebSession().embed(job.wire, async () => {});
   }
   configure(value: string) {
     mode = value;

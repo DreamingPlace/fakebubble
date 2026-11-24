@@ -41,6 +41,14 @@ import { webConcurrency } from '../../../config/web-concurrency.ts';
 import type { WebStageRun, WebTextJob, WebTextRun } from '../../../packages/contracts/web-generation-rpc.ts';
 import type { TextRoute } from '../../../packages/contracts/text-route.ts';
 
+/** A fixed code for why a call is UNKNOWN (never a message or content): a domain code, a code-shaped error message, else a generic one. */
+const unknownCode = (error: unknown) =>
+  error instanceof DomainError
+    ? error.code
+    : error instanceof Error && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.message)
+      ? error.message
+      : 'WEB_GENERATION_CALL_UNCONFIRMED';
+
 /** HTTP 429 of any text provider. */
 const isTextRateLimit = (code: string | null | undefined) =>
   code === 'DEEPSEEK_RATE_LIMITED' || code === 'XAI_RATE_LIMITED' || code === 'GEMINI_RATE_LIMITED';
@@ -533,7 +541,7 @@ export class WebProviderRunner {
       const stage: WebStageRun | null = run ? run.stages[phase] : null;
       if (stage === null || stage.state === 'not_sent' || stage.observation === null) {
         // The whole call failed (it may have sent anything), or a stage was handed to the provider and nothing came back.
-        this.ledger.markUnknown(key, scope);
+        this.ledger.markUnknown(key, scope, unknownCode(failure));
         unconfirmed = true;
         continue;
       }
@@ -553,7 +561,7 @@ export class WebProviderRunner {
           usage.outputTokens === null
         ) {
           // A claimed success that cannot be tied to this request is not trusted: the call may have been billed.
-          this.ledger.markUnknown(key, scope);
+          this.ledger.markUnknown(key, scope, 'WEB_PROVIDER_STAGE_UNCONFIRMED');
           unconfirmed = true;
           continue;
         }
@@ -599,7 +607,7 @@ export class WebProviderRunner {
         await settleKnownZero(phase, receipt);
         failedCode = observation.errorCode;
       } else {
-        this.ledger.markUnknown(key, scope);
+        this.ledger.markUnknown(key, scope, observation.errorCode ?? 'WEB_GENERATION_CALL_UNCONFIRMED');
         unconfirmed = true;
       }
     }
@@ -773,7 +781,7 @@ export class WebProviderRunner {
         });
         await this.budget?.settleAttempt(this.store, key);
       }
-      if (this.ledger.attemptState(key, scope) === 'sent') this.ledger.markUnknown(key, scope);
+      if (this.ledger.attemptState(key, scope) === 'sent') this.ledger.markUnknown(key, scope, unknownCode(error));
       throw error;
     }
     if ((this.store as WebStore).providerAudio) await this.ledger.loadKnownAudio(key, scope, audioCache);

@@ -381,6 +381,8 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       retention: () => this.retention.health(),
       renewPrices: () => this.setup.renewPrices(),
       topUp: (requestId, provider, micros) => env.BUDGET.topUp(requestId, provider, micros),
+      // Part 54: the owner's 已按账单核对 settles the shared reservation at the amount he confirmed (the local row was just settled).
+      settleAttempt: (key) => new WebCloudBudgetClient(env.BUDGET).settleAttempt(this.store, key),
     };
   }
   adminGrant(proof: string) {
