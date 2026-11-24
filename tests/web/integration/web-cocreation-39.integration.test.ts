@@ -89,14 +89,8 @@ function setup(t: test.TestContext) {
     });
   const adopter = f.member(['cocreation.manage', 'cocreation.read', 'cast.edit', 'cast.read'], 'Adopter');
   const reader = f.member(['cocreation.read'], 'Reader');
-  const adopt = (id: string, requestId: string, text: string, name: string | null = null, revision?: number) =>
-    co.adoptRelation(adopter, {
-      id,
-      requestId,
-      expectedRevision: revision ?? readDraft(f.store as never).revision,
-      text,
-      groupName: name,
-    });
+  const adopt = (id: string, requestId: string, text: string, name: string | null = null) =>
+    co.adoptRelation(adopter, { id, requestId, text, groupName: name });
   return { f, co, player, draft, send, adopter, reader, adopt, raw, tokens };
 }
 
@@ -284,14 +278,14 @@ test('39 F: matching, 采纳 into a group or a new group; the ratings grid and t
   assert.equal(s.co.relationDetail(s.adopter, join.submissionId).text, '社刊第二期，在旧书店加印。');
   assert.equal(s.co.relationDetail(s.adopter, join.submissionId).originalText, '社刊第二期');
   // Idempotent per request id; another request for the same note is refused.
-  assert.deepEqual(s.adopt(join.submissionId, 'a1', '社刊第二期，在旧书店加印。', null, revision).duplicate, true);
+  assert.deepEqual(s.adopt(join.submissionId, 'a1', '社刊第二期，在旧书店加印。', null).duplicate, true);
   assert.equal(readDraft(s.f.store as never).doc.groups.find((g) => g.name === '文学社')!.stories.length, 2);
   assert.equal(
     code(() => s.adopt(join.submissionId, 'a2', '再来一次')),
     'COCREATION_ALREADY_DECIDED',
   );
   assert.equal(
-    code(() => s.adopt(join.submissionId, 'a1', '换了文字', null, revision)),
+    code(() => s.adopt(join.submissionId, 'a1', '换了文字', null)),
     'IDEMPOTENCY_CONFLICT',
   );
   // A new group, named by the administrator, with the members in console order.
@@ -308,16 +302,14 @@ test('39 F: matching, 采纳 into a group or a new group; the ratings grid and t
     code(() => s.adopt(s.send(bob, 'p8', ['c07', 'c08']).submissionId, 'a5', '好', 'x'.repeat(31))),
     'COCREATION_GROUP_NAME_INVALID',
   );
-  // Stale revision: nothing is written.
+  // Part 55: no revision is sent; the adoption is written at the draft's current revision, so a draft that moved on is no conflict.
   const stale = s.send(bob, 'p7', ['c09', 'c10']);
-  assert.equal(
-    code(() => s.adopt(stale.submissionId, 'a6', '好', '甲乙', 1)),
-    'CAST_REVISION_CONFLICT',
-  );
+  assert.equal(s.adopt(stale.submissionId, 'a6', '好', '甲乙').duplicate, false);
   assert.equal(
     readDraft(s.f.store as never).doc.groups.some((g) => g.name === '甲乙'),
-    false,
+    true,
   );
+  const stale2 = s.send(bob, 'p9', ['c05', 'c06']);
   // The ratings grid is untouched, and nothing was published.
   assert.equal(JSON.stringify(readDraft(s.f.store as never).doc.ratings), gridBefore);
   assert.equal(latestPublication(s.f.store as never), null);
@@ -325,9 +317,8 @@ test('39 F: matching, 采纳 into a group or a new group; the ratings grid and t
   assert.equal(
     code(() =>
       s.co.adoptRelation(s.reader, {
-        id: stale.submissionId,
+        id: stale2.submissionId,
         requestId: 'z1',
-        expectedRevision: 1,
         text: 'x',
         groupName: 'y',
       }),
@@ -338,9 +329,8 @@ test('39 F: matching, 采纳 into a group or a new group; the ratings grid and t
   assert.equal(
     code(() =>
       s.co.adoptRelation(manager, {
-        id: stale.submissionId,
+        id: stale2.submissionId,
         requestId: 'z2',
-        expectedRevision: 1,
         text: 'x',
         groupName: 'y',
       }),
@@ -352,7 +342,7 @@ test('39 F: matching, 采纳 into a group or a new group; the ratings grid and t
     'ok',
   );
   assert.equal(
-    code(() => s.co.setExcluded(s.reader, stale.submissionId, true)),
+    code(() => s.co.setExcluded(s.reader, stale2.submissionId, true)),
     'ADMIN_PERMISSION_REQUIRED',
   );
 });
@@ -608,7 +598,6 @@ test('39 routes: the player routes take exactly their keys (session, CSRF, Origi
   const done = (await admin('relation/adopt', {
     id,
     requestId: 'ad1',
-    expectedRevision: readDraft(s.f.store as never).revision,
     text: '三个人的故事',
     groupName: '三人组',
   }))!.body as { joined: boolean };

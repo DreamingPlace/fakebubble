@@ -125,7 +125,7 @@ type Port = Pick<
   saveModelSettings?: AccountAdminApi['saveModelSettings'];
   /** 共创收件箱. Optional: a page without it simply has no inbox tab. */
   cocreation?: Pick<CocreationAdminClient, 'counts' | 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
-    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory'>>;
+    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory' | 'adoptAnswers'>>;
   /** Part 39: relation notes and 玩家眼中的关系 (optional; without it the inbox has neither). */
   cocreationRelations?: Pick<CocreationRelationsClient, 'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy'>;
   /** Part 39b: 题目, the wording pool of the co-creation themes. */
@@ -904,6 +904,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   inbox = port.cocreation
     ? cocreationInbox(q('#admin-cocreation'), {
         api: port.cocreation,
+        leaveMs: 220,
         characters: port.characters,
         canManage: () => canCocreation('cocreation.manage'),
         canEditCharacter,

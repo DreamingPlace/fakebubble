@@ -14,7 +14,17 @@ import {
 } from '../../../packages/contracts/cocreation-relations.ts';
 import { CAST_LIMITS, castDocTooLarge, type CastDoc, type CastGroup } from '../../../packages/contracts/web-cast.ts';
 import { hasCastPermission } from '../../../packages/contracts/web-admin-permissions.ts';
-import { DetailedError, RetryAfterError, ensure } from '../../../packages/domain/errors.ts';
+import { DetailedError, DomainError, RetryAfterError, ensure } from '../../../packages/domain/errors.ts';
+import {
+  CocreationAdoptError,
+  adoptAnswerIntoTemplate,
+  defaultDestination,
+  type AdoptAnswer,
+  type AdoptDestination,
+} from '../../../packages/contracts/cocreation-adopt.ts';
+import { SpeechProfileError } from '../../../packages/contracts/speech-profile.ts';
+import { DAY_PARTS } from '../../../packages/contracts/cocreation-day.ts';
+import { ADOPT_FIELDS } from '../../../packages/contracts/cocreation-adopt.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import { takeIpDaily } from '../admission/web-ip-daily.ts';
 import { castTablesExist, latestPublication, readDraft, saveDraft } from '../cast/cast-store.ts';
@@ -31,7 +41,14 @@ import type { TidyResult, WebCocreationTidy } from './web-cocreation-tidy.ts';
 import { installCocreationWordings, wordingTablesExist } from './web-cocreation-wordings-schema.ts';
 import { WordingPool } from './web-cocreation-wordings.ts';
 import type { WebCocreationWordingGen } from './web-cocreation-wordings-gen.ts';
-import { WebCocreation, identifier, requestIdOk, type Auth, type SubmissionRow } from './web-cocreation.ts';
+import {
+  WebCocreation,
+  identifier,
+  requestIdOk,
+  type AnswerRow,
+  type Auth,
+  type SubmissionRow,
+} from './web-cocreation.ts';
 
 const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const sameSet = (a: readonly string[], b: readonly string[]) =>
@@ -63,6 +80,23 @@ export type RelationMatch =
  * submission becomes a story of the cast DRAFT, never a player-private story, and the stars players give are opinions that are only
  * counted here, never written into the cast's ratings grid. Nothing here publishes; the administrator publishes the cast as before.
  */
+const BULK_ADOPT_LIMIT = 100;
+/** The destination an administrator picked for one answer, or null (the default of its card). Anything else is refused. */
+function destinationOf(value: unknown): AdoptDestination | null {
+  if (value === undefined || value === null) return null;
+  ensure(typeof value === 'object' && !Array.isArray(value), 'INVALID_REQUEST');
+  const raw = value as { field?: unknown; situation?: unknown; part?: unknown };
+  for (const key of Object.keys(raw)) ensure(['field', 'situation', 'part'].includes(key), 'INVALID_REQUEST');
+  ensure(raw.field === 'dailyLife' || (ADOPT_FIELDS as readonly unknown[]).includes(raw.field), 'INVALID_REQUEST');
+  ensure(raw.situation === undefined || typeof raw.situation === 'string', 'INVALID_REQUEST');
+  ensure(raw.part === undefined || (DAY_PARTS as readonly unknown[]).includes(raw.part), 'INVALID_REQUEST');
+  return {
+    field: raw.field as AdoptDestination['field'],
+    ...(raw.situation !== undefined ? { situation: raw.situation as string } : {}),
+    ...(raw.part !== undefined ? { part: raw.part as NonNullable<AdoptDestination['part']> } : {}),
+  };
+}
+
 export class WebCocreationRelations extends WebCocreation {
   private tidyService: WebCocreationTidy | null = null;
   private wordingGen: WebCocreationWordingGen | null = null;
@@ -480,25 +514,31 @@ export class WebCocreationRelations extends WebCocreation {
    * draft revision the administrator looked at; refused with its own code when a cast limit would be exceeded (nothing is written).
    * Pays the existing adoption points once. Needs cocreation.manage and cast.edit.
    */
-  adoptRelation(
-    auth: Auth,
-    input: { id: unknown; requestId: unknown; expectedRevision: unknown; text: unknown; groupName: unknown },
-  ) {
+  adoptRelation(auth: Auth, input: { id: unknown; requestId: unknown; text: unknown; groupName: unknown }) {
     const actor = this.actor(auth, 'cocreation.manage');
+    this.ensureCastEdit(auth, actor);
+    return this.adoptRelationCore(actor.memberId, input);
+  }
+  private ensureCastEdit(auth: Auth, actor: { role: string }) {
     ensure(
       actor.role === 'owner' || hasCastPermission(this.admin.session(auth.cookie).member.permissions, 'cast.edit'),
       'ADMIN_PERMISSION_REQUIRED',
     );
+  }
+  private adoptRelationCore(
+    actorId: string,
+    input: { id: unknown; requestId: unknown; text: unknown; groupName: unknown },
+  ) {
     ensure(identifier(input.id) && requestIdOk(input.requestId), 'INVALID_REQUEST');
-    ensure(Number.isSafeInteger(input.expectedRevision) && (input.expectedRevision as number) > 0, 'INVALID_REQUEST');
     ensure(input.groupName === null || typeof input.groupName === 'string', 'INVALID_REQUEST');
     ensure(typeof input.text === 'string' && cocreationNoteOk(input.text), 'COCREATION_TEXT_INVALID');
     ensure([...input.text].length <= CAST_LIMITS.storySummary, 'COCREATION_STORY_TOO_LONG');
     const text = input.text,
       requestId = input.requestId,
-      expectedRevision = input.expectedRevision as number,
       groupName = input.groupName as string | null;
-    const hash = sha(['adopt-relation', input.id, text, groupName, expectedRevision]);
+    const hash = sha(['adopt-relation', input.id, text, groupName]);
+    // Part 55: written at the cast draft's CURRENT revision, read inside this transaction: adopting many in a row, or several at
+    // once, never meets a stale revision (the business object runs one request at a time and this is one transaction).
     return this.store.transaction(() => {
       ensure(relationTablesExist(this.store) && castTablesExist(this.store), 'COCREATION_UNAVAILABLE');
       const prior = this.store.get<{
@@ -525,8 +565,6 @@ export class WebCocreationRelations extends WebCocreation {
       ensure(this.relation(row.id)!.decision !== 'adopted', 'COCREATION_ALREADY_DECIDED');
       const members = this.membersOf(row);
       const { draft, match, names } = this.relationContext(members);
-      if (draft.revision !== expectedRevision)
-        throw new DetailedError('CAST_REVISION_CONFLICT', { currentRevision: draft.revision });
       const block = this.adoptBlock(match, draft.doc);
       ensure(block === null, block ?? '');
       const title = clip(names.length === 2 ? `${names[0]}与${names[1]}` : names.join('、'), CAST_LIMITS.storyTitle);
@@ -553,7 +591,7 @@ export class WebCocreationRelations extends WebCocreation {
       }
       const next: CastDoc = { ...draft.doc, groups };
       ensure(!castDocTooLarge(canonicalCastJson(next)), 'COCREATION_CAST_DOC_FULL');
-      const saved = saveDraft(this.store, this.clock.now(), expectedRevision, next);
+      const saved = saveDraft(this.store, this.clock.now(), draft.revision, next);
       const after = readDraft(this.store).doc.groups.find((g) => sameSet(g.members, members));
       ensure(after, 'COCREATION_UNAVAILABLE');
       const now = this.clock.now();
@@ -566,7 +604,7 @@ export class WebCocreationRelations extends WebCocreation {
         after.id,
         created ? 1 : 0,
         saved.revision,
-        actor.memberId,
+        actorId,
         now,
       );
       const original = JSON.parse(
@@ -577,13 +615,13 @@ export class WebCocreationRelations extends WebCocreation {
       ) as string;
       this.store.run(
         "UPDATE web_cocreation_relations SET decision='adopted',decided_by=?,decided_at=?,edited_text=? WHERE submission_id=?",
-        actor.memberId,
+        actorId,
         now,
         text === original ? null : text,
         row.id,
       );
-      this.adopt(actor.memberId, row.id, 0);
-      this.audit(actor.memberId, 'cocreation-cast-group-story', `${row.id};revision=${saved.revision}`);
+      this.adopt(actorId, row.id, 0);
+      this.audit(actorId, 'cocreation-cast-group-story', `${row.id};revision=${saved.revision}`);
       return {
         id: row.id,
         status: 'processed' as const,
@@ -593,6 +631,116 @@ export class WebCocreationRelations extends WebCocreation {
         duplicate: false,
       };
     });
+  }
+
+  /**
+   * Part 55: 采纳 for many answers at once (or one). Each item is its OWN transaction at the draft's CURRENT revision: the answer is
+   * merged into its destination (a character's draft; for a relation note the cast draft), marked adopted and the author paid, all
+   * or nothing. The caller sends no revision, so a long list, or several requests at once, never conflicts. An answer that is
+   * already adopted answers `duplicate` and pays nothing again. A failure is named per item (its code, and for a field both sides
+   * changed the field's name); the other items still go through.
+   */
+  adoptAnswers(auth: Auth, input: { items: unknown }) {
+    const actor = this.actor(auth, 'cocreation.manage');
+    const items = input.items;
+    ensure(Array.isArray(items) && items.length >= 1 && items.length <= BULK_ADOPT_LIMIT, 'INVALID_REQUEST');
+    const seen = new Set<string>();
+    const parsed = (items as unknown[]).map((raw) => {
+      ensure(raw !== null && typeof raw === 'object' && !Array.isArray(raw), 'INVALID_REQUEST');
+      const item = raw as { id?: unknown; ordinal?: unknown; destination?: unknown };
+      for (const key of Object.keys(item)) ensure(['id', 'ordinal', 'destination'].includes(key), 'INVALID_REQUEST');
+      ensure(identifier(item.id), 'INVALID_REQUEST');
+      ensure(
+        Number.isSafeInteger(item.ordinal) && (item.ordinal as number) >= 0 && (item.ordinal as number) <= 11,
+        'INVALID_REQUEST',
+      );
+      ensure(!seen.has(`${item.id}:${item.ordinal}`), 'INVALID_REQUEST');
+      seen.add(`${item.id}:${item.ordinal}`);
+      return {
+        id: item.id as string,
+        ordinal: item.ordinal as number,
+        destination: destinationOf(item.destination),
+      };
+    });
+    const results = parsed.map((item) => {
+      try {
+        return this.store.transaction(() => this.adoptOneAnswer(auth, actor, item));
+      } catch (error) {
+        if (
+          !(error instanceof DomainError) &&
+          !(error instanceof CocreationAdoptError) &&
+          !(error instanceof SpeechProfileError)
+        )
+          throw error;
+        const fields = error instanceof DetailedError ? error.detail.fields : undefined;
+        return {
+          id: item.id,
+          ordinal: item.ordinal,
+          ok: false as const,
+          code: (error as { code: string }).code,
+          ...(Array.isArray(fields) ? { fields: fields as string[] } : {}),
+        };
+      }
+    });
+    return { results, adopted: results.filter((r) => r.ok && !('duplicate' in r && r.duplicate)).length };
+  }
+  private adoptOneAnswer(
+    auth: Auth,
+    actor: { memberId: string; role: string },
+    item: { id: string; ordinal: number; destination: AdoptDestination | null },
+  ) {
+    const row = this.row(item.id);
+    const answer = this.store.get<AnswerRow>(
+      'SELECT * FROM web_cocreation_answers WHERE submission_id=? AND ordinal=?',
+      row.id,
+      item.ordinal,
+    );
+    ensure(answer, 'NOT_FOUND');
+    if (answer.adopted_at !== null) return { id: row.id, ordinal: item.ordinal, ok: true as const, duplicate: true };
+    ensure(row.kind !== 'memo', 'ADOPT_MEMO');
+    if (row.kind === 'pair') {
+      this.ensureCastEdit(auth, actor);
+      const original = JSON.parse(answer.text_json) as string;
+      const done = this.adoptRelationCore(actor.memberId, {
+        id: row.id,
+        requestId: `adopt-${row.id}`,
+        text: original,
+        groupName: null,
+      });
+      return {
+        id: row.id,
+        ordinal: item.ordinal,
+        ok: true as const,
+        duplicate: 'duplicate' in done && done.duplicate === true,
+        target: 'cast' as const,
+      };
+    }
+    ensure(this.characterDrafts, 'COCREATION_UNAVAILABLE');
+    const value = JSON.parse(answer.text_json) as string | { player: string; replies: string[] };
+    const adoptable: AdoptAnswer =
+      typeof value === 'string'
+        ? { kind: 'text', text: value, cardId: answer.card_id, targetField: answer.target_field }
+        : {
+            kind: 'dialogue',
+            player: value.player,
+            replies: value.replies,
+            cardId: answer.card_id,
+            targetField: answer.target_field,
+          };
+    const destination = item.destination ?? defaultDestination(adoptable);
+    const written = this.characterDrafts.adoptIntoDraft(auth, row.character_id, (profile) => ({
+      ...profile,
+      template: adoptAnswerIntoTemplate(profile.template, adoptable, destination, profile.presentation.displayName),
+    }));
+    this.adopt(actor.memberId, row.id, item.ordinal);
+    return {
+      id: row.id,
+      ordinal: item.ordinal,
+      ok: true as const,
+      duplicate: false,
+      target: 'character' as const,
+      revision: written.revision,
+    };
   }
 
   /**

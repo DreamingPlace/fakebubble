@@ -110,6 +110,15 @@ export function characterAdminError(error: unknown): string | null {
     if (code === 'CLIP_SLOT_NOT_APPROVED') return `${slot} 还没批准。`;
     if (code === 'CLIP_TAKE_UNUSABLE') return `${slot} 的选用版本已失效，请重录或另选。`;
   }
+  // Part 55: the server names the field both sides changed; the sentence puts it first.
+  const fields = (error as { detail?: { fields?: unknown } } | null)?.detail?.fields;
+  if (
+    code === 'DRAFT_FIELD_CONFLICT' &&
+    Array.isArray(fields) &&
+    fields.every((f) => typeof f === 'string') &&
+    fields.length
+  )
+    return `「${fields.join('」「')}」在别处也改过，不能自动合并。请重新载入，核对这一栏后再保存。`;
   return ERROR_SENTENCES[code] ?? null;
 }
 

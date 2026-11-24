@@ -189,12 +189,48 @@ export class CocreationAdminClient {
   async unadopt(id: string, ordinal: number) {
     count(object(await this.request('unadopt', { id, ordinal })).ordinal);
   }
-  /** 加入关系与故事: a pair note becomes a story of the cast draft the administrator looked at (revision), never published. */
-  async addToCastStory(id: string, ordinal: number, expectedRevision: number) {
-    const r = object(await this.request('cast-story', { id, ordinal, expectedRevision }));
+  /** 加入关系与故事: a pair note becomes a story of the cast draft (written at its current revision), never published. */
+  async addToCastStory(id: string, ordinal: number) {
+    const r = object(await this.request('cast-story', { id, ordinal }));
     return { ordinal: count(r.ordinal), castRevision: count(r.castRevision) };
   }
+  /**
+   * Part 55: 采纳 of one or many answers. The server merges each into its destination (a character's draft, or the cast draft for a
+   * relation note) at the draft's CURRENT revision, marks it adopted and pays the author, in one transaction per answer. No
+   * revision is sent. A refusal is named per item (`code`, and `fields` when a field was changed on both sides).
+   */
+  async adoptAnswers(items: AdoptItem[]): Promise<{ results: AdoptResult[]; adopted: number }> {
+    const r = object(await this.request('adopt-answers', { items }));
+    return {
+      results: rows(r.results)
+        .map(object)
+        .map((entry) => ({
+          id: string(entry.id),
+          ordinal: count(entry.ordinal),
+          ok: flag(entry.ok),
+          ...(entry.duplicate === true ? { duplicate: true } : {}),
+          ...(typeof entry.code === 'string' ? { code: entry.code } : {}),
+          ...(Array.isArray(entry.fields) ? { fields: entry.fields.map(string) } : {}),
+        })),
+      adopted: count(r.adopted),
+    };
+  }
 }
+
+/** Part 55: where an answer goes (absent = the default of its card). */
+export type AdoptItem = {
+  id: string;
+  ordinal: number;
+  destination?: { field: string; situation?: string; part?: string };
+};
+export type AdoptResult = {
+  id: string;
+  ordinal: number;
+  ok: boolean;
+  duplicate?: boolean;
+  code?: string;
+  fields?: string[];
+};
 
 // ---- Part 39: relation notes (two to eight characters) --------------------------------------------------------------------
 export type RelationMatch =
@@ -310,7 +346,6 @@ export class CocreationRelationsClient {
   async adopt(input: {
     id: string;
     requestId: string;
-    expectedRevision: number;
     text: string;
     groupName: string | null;
   }): Promise<RelationAdopted> {
