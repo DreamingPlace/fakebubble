@@ -922,3 +922,52 @@ test('22b 系统状态 清理: phase / sub / errorName / messageShape and the co
   for (const id of ids) assert.ok(!status.__text.includes(id), 'no principal id on the page');
   assert.equal((await f.call(`${ADMIN}/overview/read`, owner, {})).warnings.retentionFailing, 2);
 });
+
+// Part 54: 未确认的调用 - listed with a pseudonymous code, settled by the OWNER only, at the held amount or a lower one, once.
+test('54 未确认的调用: a code, provider, model, stage, held amount, age and error code; the owner settles one call from the bill; nothing identifies a player', async (t) => {
+  const f = setup(t);
+  await f.fixture('/fixture/assets');
+  await f.fixture('/fixture/players', { signupEnabled: true });
+  await f.fixture('/fixture/cross/choice', { on: true });
+  await f.fixture('/fixture/cross/signup-switch', { on: true });
+  const owner = client();
+  await f.call(`${ADMIN}/login`, owner, { token: (await f.fixture<{ token: string }>('/fixture/grant')).token });
+  const player = client();
+  await f.call(`${API}/bootstrap`, player, undefined, 200);
+  await f.signUp(player, 'unknown54@example.com');
+  const sent = await f.call(
+    `${API}/characters/wei-guagua/operations`,
+    player,
+    { requestId: randomUUID(), text: '你好', delivery: 'voice' },
+    202,
+  );
+  for (let i = 0; i < 300; i++) {
+    if ((await f.call(`${API}/operations/${sent.operation.operationId}`, player)).status === 'published') break;
+    await sleep(100);
+  }
+  const empty = await f.call(`${ADMIN}/system/unknown-calls`, owner, {});
+  assert.deepEqual(empty.calls, []);
+  const { held } = await f.fixture<{ held: number }>('/fixture/system/unknown-held', {});
+  const view = await f.call(`${ADMIN}/system/unknown-calls`, owner, {});
+  assert.equal(view.calls.length, 1);
+  const call = view.calls[0];
+  assert.match(call.code, /^U-[0-9A-F]{5}-[0-9A-F]{5}$/);
+  assert.deepEqual([call.provider, call.stage, call.heldMicros], ['deepseek', 'draft', held]);
+  assert.ok(Math.abs(call.ageMs - 2 * 3_600_000) < 60_000);
+  assert.equal(call.errorCode, 'NOT_RECORDED');
+  assert.doesNotMatch(JSON.stringify(view), /unknown54@example|principal|operation|conversation/i);
+  // More than held, a wrong code and a non-integer are refused; nothing changed.
+  const refused = await f.request(`${ADMIN}/system/unknown-resolve`, owner, { requestId: randomUUID(), code: call.code, settledMicros: held + 1 });
+  assert.equal(refused.status, 400);
+  assert.equal((await f.request(`${ADMIN}/system/unknown-resolve`, owner, { requestId: randomUUID(), code: 'U-00000-00000', settledMicros: 'held' })).status, 404);
+  const before = await f.fixture<{ provider: string; limitMicros: number | null }[]>('/fixture/system/local-limits', {});
+  void before;
+  const requestId = randomUUID();
+  const lower = Math.floor(held / 3);
+  const done = await f.call(`${ADMIN}/system/unknown-resolve`, owner, { requestId, code: call.code, settledMicros: lower });
+  assert.deepEqual(done, { code: call.code, heldMicros: held, settledMicros: lower });
+  // The same click again changes nothing; the call is gone from the list and counted as settled.
+  assert.deepEqual(await f.call(`${ADMIN}/system/unknown-resolve`, owner, { requestId, code: call.code, settledMicros: lower }), done);
+  const after = await f.call(`${ADMIN}/system/unknown-calls`, owner, {});
+  assert.deepEqual([after.calls.length, after.resolved], [0, 1]);
+});
