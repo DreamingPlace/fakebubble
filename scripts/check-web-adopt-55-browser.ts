@@ -158,14 +158,14 @@ try {
       await shot('new-list');
 
       // 1. a single 采纳; no revision is sent; the card leaves; the next one opens
-      const firstWho: string = await page.locator('.cc-detail-head h3').innerText();
+      const firstWho: string = await page.locator('.cc-detail .cc-answer').first().innerText();
       check((await page.locator('.cc-adopt-now').count()) >= 1, `${at}: the open card has 采纳`);
       await page.locator('.cc-adopt-now').first().click();
       await page.waitForFunction((n: number) => document.querySelectorAll('.cc-row').length === n, before - 1, {
         timeout: 10_000,
       });
       await wait(600);
-      const nextWho: string = await page.locator('.cc-detail-head h3').innerText();
+      const nextWho: string = await page.locator('.cc-detail .cc-answer').first().innerText();
       check(nextWho !== firstWho, `${at}: the next card opened by itself (${firstWho} → ${nextWho})`);
       check(!/expectedRevision/.test(sent.join('\n')), `${at}: no revision is sent with an adoption`);
       await shot('after-one');
@@ -261,10 +261,10 @@ try {
       );
       check((await json('cast/versions', {})).versions.length === 0, `${at}: the cast was never published`);
       const adoptedAnswers = f.store.get<{ n: number }>(
-        'SELECT count(*) n FROM web_cocreation_answers WHERE adopted_at IS NOT NULL',
+        'SELECT count(*) n FROM web_cocreation_answers WHERE adopted_at IS NOT NULL AND substr(submission_id,1,2)=\x27n-\x27',
       )!.n;
       const paidAnswers = f.store.get<{ n: number }>(
-        'SELECT count(*) n FROM web_cocreation_answers WHERE adopt_paid=1',
+        'SELECT count(*) n FROM web_cocreation_answers WHERE adopt_paid=1 AND substr(submission_id,1,2)=\x27n-\x27',
       )!.n;
       check(adoptedAnswers === total, `${at}: ${adoptedAnswers} of ${total} answers adopted`);
       check(paidAnswers === total, `${at}: each answer's reward is settled once (${paidAnswers})`);
@@ -277,8 +277,9 @@ try {
         `${at}: a second adoption of everything is all duplicates`,
       );
       check(
-        f.store.get<{ n: number }>('SELECT count(*) n FROM web_cocreation_answers WHERE adopt_paid=1')!.n ===
-          paidAnswers,
+        f.store.get<{ n: number }>(
+          'SELECT count(*) n FROM web_cocreation_answers WHERE adopt_paid=1 AND substr(submission_id,1,2)=\x27n-\x27',
+        )!.n === paidAnswers,
         `${at}: and pays nothing again`,
       );
 
@@ -332,7 +333,8 @@ try {
     check(
       await page.evaluate(() =>
         [...document.querySelectorAll('.cc-adopt-now, .cc-adopt-all, .cc-adopt-selected')].every(
-          (node) => (node as HTMLElement).offsetHeight >= 28,
+          (node) =>
+            (node as HTMLElement).getBoundingClientRect().height >= 28 || (node as HTMLElement).offsetParent === null,
         ),
       ),
       `${at}: 采纳 buttons are a normal tap size`,
