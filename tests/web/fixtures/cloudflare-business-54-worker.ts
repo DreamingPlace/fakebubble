@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { WebBusinessObject as Retention } from './cloudflare-production-retention-worker.ts';
 export { WebOperatorService, default } from './cloudflare-production-retention-worker.ts';
 
@@ -11,7 +12,8 @@ export { WebOperatorService, default } from './cloudflare-production-retention-w
  * CONNECTION_LIMIT=0 turns the model off. The model is shared by every call in the object, which matches production: the alarm
  * runs all stages of every reply inside one invocation (waitUntil).
  */
-class Connections {
+/** One invocation's connections. An invocation is an alarm, a request, or a dispatched stage (startStage): see `contexts`. */
+class Pool {
   inUse = 0;
   peak = 0;
   hungCount = 0;
@@ -60,6 +62,40 @@ class Connections {
       }, this.hungMs);
       this.queue.push(waiter);
     });
+  }
+}
+const contexts = new AsyncLocalStorage<number>();
+let nextContext = 1;
+/** Every invocation entry point of the object runs in its own context, with its own 6 connections. */
+class Connections {
+  readonly pools = new Map<number, Pool>();
+  readonly limit: number;
+  readonly hungMs: number;
+  constructor(limit: number, hungMs: number) {
+    this.limit = limit;
+    this.hungMs = hungMs;
+  }
+  private pool() {
+    const id = contexts.getStore() ?? 0;
+    let pool = this.pools.get(id);
+    if (!pool) this.pools.set(id, (pool = new Pool(this.limit, this.hungMs)));
+    return pool;
+  }
+  acquire() {
+    return this.pool().acquire();
+  }
+  get inUse() {
+    return [...this.pools.values()].reduce((sum, p) => sum + p.inUse, 0);
+  }
+  /** The highest number of connections any ONE invocation had open at once. */
+  get peak() {
+    return Math.max(0, ...[...this.pools.values()].map((p) => p.peak));
+  }
+  get hungCount() {
+    return [...this.pools.values()].reduce((sum, p) => sum + p.hungCount, 0);
+  }
+  get contextCount() {
+    return this.pools.size;
   }
 }
 function limited<T extends object>(target: T, connections: Connections, mode: 'session' | 'call'): T {
@@ -120,9 +156,19 @@ export class WebBusinessObject extends Retention {
   }
   private readonly connections: Connections | null;
   private readonly storage: { sql: { exec(q: string, ...b: unknown[]): { toArray(): any[] } } };
+  override async alarm() {
+    return contexts.run(nextContext++, () => super.alarm());
+  }
+  async startStage(launchId: string): Promise<boolean> {
+    return contexts.run(nextContext++, () => super.startStage(launchId));
+  }
   async fetch(request: Request) {
+    return contexts.run(nextContext++, () => this.fetchInContext(request));
+  }
+  private async fetchInContext(request: Request) {
     if (new URL(request.url).pathname === '/__test/connections')
       return Response.json({
+        contexts: this.connections?.contextCount ?? 0,
         limit: this.connections?.limit ?? 0,
         inUse: this.connections?.inUse ?? 0,
         peak: this.connections?.peak ?? 0,

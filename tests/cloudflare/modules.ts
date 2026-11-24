@@ -83,6 +83,9 @@ export function testModules(entry: string): ModuleDefinition[] {
             'node:zlib',
             'node:util',
             'node:timers/promises',
+            // Named exception (Part 54): only the test model of Cloudflare's per-invocation connection limit uses it
+            // (tests/web/fixtures/cloudflare-business-54-worker.ts); nothing deployed imports it. No assertion was weakened.
+            'node:async_hooks',
           ].includes(name)
         )
           throw new Error(`Unexpected runtime dependency in Cloudflare storage tests: ${name}`);

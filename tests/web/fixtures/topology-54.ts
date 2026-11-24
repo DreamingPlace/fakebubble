@@ -45,7 +45,7 @@ export const REALISTIC: ProviderModel = {
   providerLimit: 0,
 };
 export interface Topology54 {
-  call(value: unknown, status?: number): Promise<Response>;
+  call(value: unknown, status?: number): ReturnType<Miniflare['dispatchFetch']>;
   restart(): Promise<void>;
   install(): Promise<void>;
   configure(model: Partial<ProviderModel>): Promise<void>;
@@ -66,6 +66,8 @@ export interface GenerationStats {
   calls: { stage: string; start: number; end: number; outcome: string }[];
   maxInFlight: number;
   opens: number;
+  /** Calls the business object made to generation for replies (runText + runSpeech). */
+  roundTrips: number;
 }
 export async function topology54(t: TestContext, entry = 'tests/web/fixtures/cloudflare-generation-54-worker.ts', env: Record<string, string> = {}) {
   const root = mkdtempSync(join(tmpdir(), 'web-54-'));
@@ -233,7 +235,7 @@ export async function topology54(t: TestContext, entry = 'tests/web/fixtures/clo
     },
     async stats() {
       const rows = (await (await call({ action: 'generation-stats' })).json()) as string[];
-      return JSON.parse(rows[0] ?? '{"calls":[],"maxInFlight":0,"opens":0}') as GenerationStats;
+      return JSON.parse(rows[0] ?? '{"calls":[],"maxInFlight":0,"opens":0,"roundTrips":0}') as GenerationStats;
     },
     async business(path) {
       return (await call({ action: 'business-http', path })).json();

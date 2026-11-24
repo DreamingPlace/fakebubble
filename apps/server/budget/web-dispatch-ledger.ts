@@ -8,6 +8,7 @@ import type { WebRuntimeStore as WebStore } from '../platform/web-store-contract
 import type { WebCoordinatorLease, WebStageClaim } from '../admission/web-stage-queue.ts';
 import { readInputSnapshot, requireCurrentInputSnapshot } from '../generation/web-input-snapshot.ts';
 import { checkWebV7SceneAtDispatch } from '../generation/web-v7-request.ts';
+import { markExternalAttemptsUnknown, TICKET_FREED } from './web-external-tickets.ts';
 import {
   requireWebContent,
   settleWebLifetimeReservation,
@@ -169,10 +170,17 @@ export class WebDispatchLedger {
           'WEB_VOICE_SEGMENT_STALE',
         );
       }
+      // Part 54: the draft and the review of ONE text claim are reserved together, before the single call to generation, so
+      // an attempt of the SAME claim (same stage version, epoch and token) is not "another call in flight".
       ensure(
         !this.store.get(
-          `SELECT 1 FROM web_external_attempts WHERE operation_id=? AND dispatch_state!='known' LIMIT 1`,
+          `SELECT 1 FROM web_external_attempts WHERE operation_id=? AND dispatch_state!='known'
+          AND NOT (stage='text' AND ?='text' AND stage_version=? AND lease_epoch=? AND lease_token=?) LIMIT 1`,
           claim.operationId,
+          claim.stage,
+          claim.stageVersion,
+          claim.epoch,
+          claim.token,
         ),
         'WEB_DISPATCH_IN_FLIGHT',
       );
@@ -624,6 +632,26 @@ export class WebDispatchLedger {
     });
   }
 
+  /**
+   * Part 54: a text call may have been sent and its result is not known (generation could not observe it, or the whole RPC failed).
+   * The money stays held (each such attempt is UNKNOWN, never retried, never released), the running-slot tickets are freed, and the
+   * REPLY fails now instead of at the stage lease, so the player's next message is served normally. Only for the live claim.
+   */
+  failUnconfirmed(claim: WebStageClaim) {
+    return this.store.transaction(() => {
+      this.schema();
+      if (claim.stage !== 'text') return;
+      markExternalAttemptsUnknown(this.store, { operationId: claim.operationId, stage: 'text' });
+      this.failRunningOperation(
+        claim.operationId,
+        'text',
+        { stage_version: claim.stageVersion, lease_epoch: claim.epoch, lease_token: claim.token },
+        this.now(),
+        true,
+      );
+    });
+  }
+
   private failRunningOperation(
     operationId: string,
     stage: 'text' | 'audio',
@@ -638,6 +666,8 @@ export class WebDispatchLedger {
       input_message_id?: string;
     },
     now: number,
+    /** Part 54: UNKNOWN attempts do not prevent the reply from ending (their money stays held). */
+    allowUnconfirmed = false,
   ) {
     const operation = this.store.get<{
       principal_id: string;
@@ -680,7 +710,8 @@ export class WebDispatchLedger {
       (attempt.conversation_id !== undefined && operation.conversation_id !== attempt.conversation_id) ||
       (attempt.input_message_id !== undefined && operation.input_message_id !== attempt.input_message_id) ||
       this.store.get(
-        `SELECT 1 FROM web_external_attempts WHERE operation_id=? AND dispatch_state!='known' LIMIT 1`,
+        `SELECT 1 FROM web_external_attempts WHERE operation_id=? AND dispatch_state!='known'
+        ${allowUnconfirmed ? "AND dispatch_state<>'unknown'" : ''} LIMIT 1`,
         operationId,
       )
     )
@@ -951,7 +982,7 @@ export class WebDispatchLedger {
     fence: WebOperationFence,
     principalId: string,
     terminal: 'cancelled' | 'failed',
-    reason: 'cancel' | 'expired' | 'system_invalid',
+    reason: 'cancel' | 'expired' | 'system_invalid' | 'unconfirmed',
     errorCode?: 'SCENE_INVALIDATED' | 'INPUT_INVALIDATED' | 'AUTH_REVOKED' | 'INTERNAL_FAILURE',
   ) {
     return this.terminateInternal(coordinator, fence, principalId, terminal, reason, errorCode);
@@ -962,7 +993,7 @@ export class WebDispatchLedger {
     fence: WebOperationFence,
     principalId: string,
     terminal: 'cancelled' | 'failed',
-    reason: 'cancel' | 'expired' | 'recovered_unsent' | 'system_invalid',
+    reason: 'cancel' | 'expired' | 'recovered_unsent' | 'system_invalid' | 'unconfirmed',
     errorCode?: 'SCENE_INVALIDATED' | 'INPUT_INVALIDATED' | 'AUTH_REVOKED' | 'INTERNAL_FAILURE',
   ) {
     return this.store.transaction(() => {
@@ -1164,31 +1195,11 @@ export class WebDispatchLedger {
         }
       }
       if (open.some((attempt) => attempt.dispatch_state !== 'not_sent')) {
-        ensure(
-          this.store.run(
-            `UPDATE web_operations SET status='unknown',stage_version=stage_version+1,
-          lease_epoch=NULL,lease_token=NULL,lease_owner=NULL,lease_expires_at=NULL
-          WHERE id=? AND status=? AND stage_version=? AND principal_id=? AND world_id=? AND conversation_id=?
-          AND character_id=? AND input_message_id=? AND ip_window_id IS ? AND lease_epoch IS ? AND lease_token IS ?`,
-            fence.operationId,
-            fence.status,
-            fence.stageVersion,
-            fence.principalId,
-            fence.worldId,
-            fence.conversationId,
-            fence.characterId,
-            fence.inputMessageId,
-            fence.ipWindowId,
-            fence.leaseEpoch,
-            fence.leaseToken,
-          ).changes === 1,
-          'WEB_OPERATION_STALE',
-        );
-        this.store.run(
-          "UPDATE web_external_attempts SET dispatch_state='unknown' WHERE operation_id=? AND dispatch_state='sent'",
-          fence.operationId,
-        );
-        return { status: 'unknown' as const };
+        // Part 54: a call that may have been sent ends UNKNOWN: its money stays held (the owner reconciles it against the bill),
+        // its running-slot ticket is freed, and the REPLY ends now instead of holding the player's slot until its deadline, so
+        // the player's next message is served normally.
+        markExternalAttemptsUnknown(this.store, { operationId: fence.operationId });
+        return this.terminateInternal(coordinator, fence, fence.principalId, 'failed', 'unconfirmed');
       }
       // No sent attempt exists. Part 43: a stage that provably never crossed the send gate goes back to the queue (bounded,
       // within the operation's deadline) instead of failing the player's reply; anything else terminates as before.
@@ -1487,6 +1498,8 @@ export class WebDispatchLedger {
   }
 
   private releaseBudget(row: AttemptRow) {
+    // Part 54: an UNKNOWN row freed its ticket when it went unknown (see web-external-tickets.ts); a legacy one still holds it.
+    if (row.dispatch_state === 'unknown' && row.usage_json === TICKET_FREED) return;
     ensure(
       this.store.run(
         `UPDATE web_external_budgets SET reserved=reserved-1
@@ -1513,13 +1526,12 @@ export class WebDispatchLedger {
     );
     for (const row of rows) {
       if (row.dispatch_state === 'sent') {
-        this.store.run(
-          "UPDATE web_external_attempts SET dispatch_state='unknown' WHERE operation_id=? AND stage=? AND phase=? AND ordinal=?",
+        markExternalAttemptsUnknown(this.store, {
           operationId,
-          row.stage,
-          row.phase,
-          row.ordinal,
-        );
+          stage: row.stage,
+          phase: row.phase,
+          ordinal: row.ordinal,
+        });
       } else {
         this.store.run(
           `UPDATE web_external_attempts SET dispatch_state='known',outcome='not_dispatched',settled_at=?

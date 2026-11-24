@@ -598,6 +598,11 @@ export class WebProviderOffline {
       );
     });
   }
+  /** Part 54: a call may have been sent and its result is not known: UNKNOWN stays held, the reply ends now. */
+  failUnconfirmed(claim: WebStageClaim) {
+    this.check();
+    this.capacity.failUnconfirmed(claim);
+  }
   /** Part 21d: the whole model chain failed definitely-not-billed before anything more could be sent; end the operation now. */
   failChainExhausted(claim: WebStageClaim) {
     this.check();
@@ -842,11 +847,24 @@ export class WebProviderOffline {
     if (!this.modelChoiceSchema()) return [] as string[];
     return this.store
       .all<{ provider: string }>(
-        'SELECT provider FROM web_provider_backups WHERE operation_id=? AND phase=?',
+        "SELECT provider FROM web_provider_backups WHERE operation_id=? AND phase=? AND code<>'WEB_STAGE_NOT_RUN'",
         operationId,
         phase,
       )
       .map((item) => item.provider);
+  }
+  /** Part 54: how many attempts of this stage were archived so far (the generation of the next shared reservation id). */
+  attemptGeneration(operationId: string, phase: 'draft' | 'review') {
+    if (!this.modelChoiceSchema()) return 0;
+    return this.store.get<{ n: number }>(
+      'SELECT count(*) n FROM web_provider_backups WHERE operation_id=? AND phase=?',
+      operationId,
+      phase,
+    )!.n;
+  }
+  /** True when attempts can be archived (schema 123): see settleNotBilled / archiveNotBilled. */
+  canArchive() {
+    return this.modelChoiceSchema();
   }
 
   /** Zero-charge settlement of an attempt the provider rejected before running it; never ends the operation. */

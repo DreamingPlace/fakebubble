@@ -34,6 +34,7 @@ const calls: { stage: string; start: number; end: number; outcome: string }[] = 
 let inFlight = 0,
   maxInFlight = 0,
   opens = 0,
+  roundTrips = 0,
   seq = 0;
 const perStage: Record<string, number> = {};
 // A small deterministic generator so a run is repeatable.
@@ -105,10 +106,14 @@ class SyntheticWebSession extends WebIsolatedGenerationSession {
     );
     this.input = input;
   }
-  // The first argument of text() is the request in both the old and the new RPC shape.
   override async text(...args: Parameters<WebIsolatedGenerationSession['text']>) {
     this.input.request = structuredClone(args[0]);
     return super.text(...args);
+  }
+  override async runText(job: Parameters<WebIsolatedGenerationSession['runText']>[0]) {
+    this.input.request = structuredClone(job.request);
+    roundTrips++;
+    return super.runText(job);
   }
 }
 export class SyntheticWebGenerationService extends WorkerEntrypoint {
@@ -116,14 +121,22 @@ export class SyntheticWebGenerationService extends WorkerEntrypoint {
     opens++;
     return new SyntheticWebSession();
   }
+  /** Part 54: the reply path, one call and one result. The real session code runs; only the provider network is fake. */
+  runText(job: Parameters<WebIsolatedGenerationSession['runText']>[0]) {
+    return new SyntheticWebSession().runText(job);
+  }
+  runSpeech(job: { wire: Parameters<WebIsolatedGenerationSession['speech']>[0]; callTimeoutMs: number }) {
+    roundTrips++;
+    return new SyntheticWebSession().speech(job.wire, async () => {}, job.callTimeoutMs);
+  }
   configure(value: string) {
     model = { ...model, ...(JSON.parse(value) as Partial<Model>) };
     calls.length = 0;
-    inFlight = maxInFlight = opens = seq = 0;
+    inFlight = maxInFlight = opens = seq = roundTrips = 0;
     for (const key of Object.keys(perStage)) delete perStage[key];
   }
   stats() {
-    return [JSON.stringify({ calls: [...calls], maxInFlight, opens })];
+    return [JSON.stringify({ calls: [...calls], maxInFlight, opens, roundTrips })];
   }
 }
 export default {
