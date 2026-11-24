@@ -135,6 +135,12 @@ export const REHEARSAL_RULES_TONE_SETS = [
   'rules-51-big',
 ] as const;
 export type RehearsalRulesToneSet = (typeof REHEARSAL_RULES_TONE_SETS)[number];
+/**
+ * Part 56: 「v8 规则 56」, one fixed script from the production samples (paraphrased): a pet name at turns 1, 2 and 3 with a feeling each
+ * time, a confession, agreeing on names, a nickname the player gives her, a role name, a name she said of herself earlier, and an
+ * ordinary 「今天吃了什么」. {别名} / {饰演} are filled in like the 名字 scripts. The owner judges the replies by ear.
+ */
+export const REHEARSAL_RULES_56_SET = 'rules-56';
 export const REHEARSAL_SETS = [
   'chat',
   'repeat',
@@ -144,6 +150,7 @@ export const REHEARSAL_SETS = [
   REHEARSAL_RULES_SET,
   ...REHEARSAL_RULES_NAME_SETS,
   ...REHEARSAL_RULES_TONE_SETS,
+  REHEARSAL_RULES_56_SET,
 ] as const;
 export type RehearsalSet = (typeof REHEARSAL_SETS)[number];
 export const isProfileSet = (set: unknown): set is RehearsalProfileSet =>
@@ -177,6 +184,7 @@ export const REHEARSAL_SET_LABELS: Readonly<Record<RehearsalSet | 'memes', strin
   'rules-51-small-coffee': 'v8 规则 51 · 情绪 小事 凉了的咖啡',
   'rules-51-small-day': 'v8 规则 51 · 情绪 小事 忙了一天',
   'rules-51-big': 'v8 规则 51 · 情绪 大事 考试成绩',
+  'rules-56': 'v8 规则 56',
   memes: '梗与故事',
 });
 
