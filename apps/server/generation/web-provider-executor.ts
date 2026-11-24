@@ -270,12 +270,25 @@ export class WebProviderExecutor {
   private launch(launchId: string, body: () => Promise<void>): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       this.launches.set(launchId, () => body().then(resolve, reject));
-      void this.dispatch!(launchId).catch(() => {
-        // The dispatch itself failed (it never reached the stage): run the stage in this context rather than lose it.
+      // A stage is never lost: if the dispatch fails, answers "not started", or has not started it within 5 s, it runs here.
+      const here = () => {
         const run = this.launches.get(launchId);
         this.launches.delete(launchId);
         run?.();
-      });
+      };
+      const timer = setTimeout(here, 5_000);
+      this.dispatch!(launchId).then(
+        (started) => {
+          if (started === false) {
+            clearTimeout(timer);
+            here();
+          } else if (started === true) clearTimeout(timer);
+        },
+        () => {
+          clearTimeout(timer);
+          here();
+        },
+      );
     });
   }
 

@@ -14,7 +14,8 @@ import { topology54, type Player, type Topology54 } from '../fixtures/topology-5
  */
 const SCALE = Number(process.env.LOAD54_SCALE ?? 0.05);
 const MODEL = { CONNECTION_LIMIT: '6', CONNECTION_HUNG_MS: String(Math.round(90_000 * Math.max(SCALE, 0.2))), SIGNUP_BONUS_ENABLED: 'true' };
-const OVERHEAD_MS = 4_000;
+// 4 s of poll interval and workerd overhead, plus the 8 s voice-to-text fallback wait (a Worker var that does not scale with the providers).
+const OVERHEAD_MS = 12_000;
 const percentile = (values: number[], p: number) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted.length ? sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)]! : 0;
@@ -40,8 +41,8 @@ function schedule(scale: number) {
   const perPlayer = new Array<number>(60).fill(0);
   const add = (player: number, at: number) => {
     perPlayer[player]!++;
-    // A fifth of the replies are text only; the rest ask for voice.
-    sends.push({ player, at, voice: rand() > 0.2 });
+    // Every reply asks for voice (the only delivery the app sends); one that cannot get a slot in time is published as text.
+    sends.push({ player, at, voice: true });
   };
   // The burst: 50 different players, one reply each, inside 10 seconds, 40% of the way in.
   const burstAt = window * 0.4;
@@ -68,7 +69,7 @@ async function drive(f: Topology54, players: Player[], plan: ReturnType<typeof s
     const previous = busy.get(step.player) ?? Promise.resolve();
     const run = previous.then(async () => {
       const at = Date.now();
-      const id = await f.send(player, undefined, step.voice ? 'voice' : 'text');
+      const id = await f.send(player, undefined, 'voice');
       const last = await f.poll(player, id, timeoutMs);
       outcomes.push({ status: last?.status ?? 'timeout', ms: Date.now() - at, voice: step.voice });
     });
@@ -103,20 +104,17 @@ test('LOAD: 300 replies from 60 players in 15 minutes with a burst of 50: zero h
   const conn = await f.business('/__test/connections');
   const stats = await f.stats();
   const published = outcomes.filter((o) => o.status === 'published');
-  const text = published.filter((o) => !o.voice).map((o) => o.ms);
-  const voice = published.filter((o) => o.voice).map((o) => o.ms);
+  const all = published.map((o) => o.ms);
   const lines = replyLines(f.logs);
   const voiced = lines.filter((l) => l.outcome === 'published' && l.voice).length;
-  const requestedVoice = outcomes.filter((o) => o.voice && o.status === 'published').length;
+  const requestedVoice = published.length;
   const report = {
     scale: SCALE,
     replies: outcomes.length,
     published: published.length,
     byStatus: outcomes.reduce<Record<string, number>>((a, o) => ((a[o.status] = (a[o.status] ?? 0) + 1), a), {}),
-    textP95Ms: percentile(text, 95),
-    voiceP95Ms: percentile(voice, 95),
-    textP50Ms: percentile(text, 50),
-    voiceP50Ms: percentile(voice, 50),
+    p95Ms: percentile(all, 95),
+    p50Ms: percentile(all, 50),
     voiceRequestedAndPublished: requestedVoice,
     publishedWithVoice: voiced,
     publishedAsTextFallback: requestedVoice - voiced,
@@ -131,8 +129,8 @@ test('LOAD: 300 replies from 60 players in 15 minutes with a burst of 50: zero h
   assert.equal(conn.hung, 0, 'zero hangs: ' + JSON.stringify(report));
   assert.equal(outcomes.length, 300);
   assert.ok(published.length / outcomes.length >= 0.99, '>= 99% published: ' + JSON.stringify(report));
-  assert.ok(report.textP95Ms < 25_000 * SCALE + OVERHEAD_MS, 'text p95: ' + JSON.stringify(report));
-  assert.ok(report.voiceP95Ms < 40_000 * SCALE + OVERHEAD_MS, 'voice p95: ' + JSON.stringify(report));
+  // Every reply asks for voice, so the bound is the voice one (40 s); a reply that fell back to text is faster still.
+  assert.ok(report.p95Ms < 40_000 * SCALE + OVERHEAD_MS, 'p95 to the reply: ' + JSON.stringify(report));
   assert.equal(stats.opens, 0, 'no generation session is opened for a reply: nothing can call back');
 });
 
@@ -144,6 +142,8 @@ test('WEDGE: one provider call never returns, then 50 normal replies all succeed
   const players = await Promise.all(Array.from({ length: 51 }, (_, n) => f.newPlayer(n)));
   const started = Date.now();
   const stuckId = await f.send(players[0]!);
+  // The stuck call is the FIRST draft call: wait until generation has it before the normal replies start.
+  while (!(await f.stats()).calls.some((c) => c.stage === 'draft')) await sleep(100);
   const rest = await Promise.all(players.slice(1).map((p) => f.send(p)));
   const results = await Promise.all(rest.map((id, n) => f.poll(players[1 + n]!, id, 120_000)));
   assert.deepEqual(

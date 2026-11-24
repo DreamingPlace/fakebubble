@@ -754,7 +754,13 @@ export class DeepSeekTextGenerator implements TextGenerator {
       }
     } catch (error) {
       // No draft fallback or hidden third call; retain known first-stage usage if review fails.
-      throw new TextGenerationFailure(errorCode(error), metadata());
+      // Part 54: a call that hit its own per-call limit reports that, not a generic network error.
+      const last = stages.at(-1);
+      const code =
+        last?.status === 'failed' && last.errorCode === 'TEXT_REQUEST_TIMEOUT' && !signal.aborted
+          ? 'TEXT_REQUEST_TIMEOUT'
+          : errorCode(error);
+      throw new TextGenerationFailure(code, metadata());
     }
   }
 }

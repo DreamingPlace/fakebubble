@@ -33,12 +33,14 @@ test('(a) HANG: a burst of 50 replies under the 6-connection limit all publish, 
 });
 
 test('(b) WEDGE: UNKNOWN calls must not use up the running slots; replies keep working afterwards', async (t) => {
-  const f = await topology54(t);
+  const f = await topology54(t, undefined, { TEXT_CALL_TIMEOUT_MS: '4000' });
   await f.install();
   // 21 draft calls never answer (the capacity is 20 text stages). Everything after them is a normal reply.
   await f.configure({ scale: 0.1, slowEvery: 0, hangFirst: 21, hangStage: 'draft' });
   const players = await Promise.all(Array.from({ length: 40 }, (_, n) => f.newPlayer(n)));
-  const stuck = await burst(f, players.slice(0, 21), 200_000);
+  const stuckIds = await Promise.all(players.slice(0, 21).map((p) => f.send(p)));
+  while ((await f.stats()).calls.filter((c) => c.stage === 'draft').length < 20) await new Promise((r) => setTimeout(r, 100));
+  const stuck = await Promise.all(stuckIds.map((id, n) => f.poll(players[n]!, id, 200_000)));
   assert.ok(
     stuck.every((r) => ['failed', 'unknown'].includes(r.status)),
     'stuck replies end (failed/unknown), they are not left running: ' + JSON.stringify(tally(stuck)),
@@ -49,7 +51,7 @@ test('(b) WEDGE: UNKNOWN calls must not use up the running slots; replies keep w
 });
 
 test('(c) a reply that ends UNKNOWN must not block the same player; their next message gets a normal reply', async (t) => {
-  const f = await topology54(t);
+  const f = await topology54(t, undefined, { TEXT_CALL_TIMEOUT_MS: '4000' });
   await f.install();
   await f.configure({ scale: 0.1, slowEvery: 0, hangFirst: 1, hangStage: 'draft' });
   const [player] = await Promise.all([f.newPlayer(0)]);
