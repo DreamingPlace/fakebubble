@@ -9,11 +9,21 @@ import { WRITER_V8_MAX_TOKENS } from './writer-v8.ts';
 /**
  * Part 54: what the business object reserves for the text stages of one reply, BEFORE it calls generation. These are the same
  * bounds DeepSeekTextGenerator.run reserves for the first model of each stage (a test pins the two together), so a reservation
- * made here is an upper bound of anything the generator may send. The input bound is not tightened by the request size (the
- * request does not exist yet: the review's prompt contains the draft); the call is settled at its real usage.
+ * made here is an upper bound of anything the generator may send. The input bound comes from the size of the frozen request (see inputBound);
+ * the call is settled at its real usage.
  */
+/**
+ * The prompt is built from the frozen request plus fixed templates, and a token never costs more than one byte, so the request
+ * size bounds the input: 4 x the request JSON + 100 kB of templates and tools (the review adds the draft: + 60 kB). Generation
+ * REFUSES a call whose body is larger than its limit before sending (WEB_PROVIDER_STAGE_INVALID), so the hold is always an upper bound.
+ */
+const inputBound = (request: unknown, stage: 'draft' | 'review') =>
+  Math.min(
+    DEEPSEEK_INPUT_RESERVATION,
+    4 * Buffer.byteLength(JSON.stringify(request), 'utf8') + 100_000 + (stage === 'review' ? 60_000 : 0),
+  );
 export function textStageLimits(
-  request: Pick<TextGenerationRequest, 'writer'>,
+  request: TextGenerationRequest,
   route: TextRoute | undefined,
   withDraft: boolean,
 ): { draft: WebStageLimit | null; review: WebStageLimit } {
@@ -29,7 +39,7 @@ export function textStageLimits(
     return {
       provider: head.provider,
       model: head.model,
-      inputTokens: DEEPSEEK_INPUT_RESERVATION,
+      inputTokens: inputBound(request, stage),
       outputTokens: outputBound(head.provider, visible),
     };
   };

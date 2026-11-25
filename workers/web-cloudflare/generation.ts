@@ -253,7 +253,6 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
                 call.provider === limit.provider &&
                 call.model === limit.model &&
                 call.bounds.unit === 'tokens' &&
-                call.bounds.inputTokens <= limit.inputTokens &&
                 call.bounds.outputTokens <= limit.outputTokens,
               'WEB_PROVIDER_STAGE_INVALID',
             );
@@ -263,6 +262,9 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
               ensure(
                 (stage === 'draft' || stage === 'review') &&
                   !starts.has(stage) &&
+                  // The hold was sized from the request: a body larger than it is refused BEFORE anything is sent.
+                  Number.isSafeInteger(bytes) &&
+                  bytes! <= job.stages[stage]!.inputTokens &&
                   typeof hash === 'string' &&
                   /^[a-f0-9]{64}$/.test(hash) &&
                   Number.isSafeInteger(bytes) &&

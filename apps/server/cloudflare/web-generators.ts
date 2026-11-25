@@ -60,12 +60,20 @@ async function session<T>(
  * limit on each provider call and returns a structured result, so this only fires when the call itself is lost; the caller then
  * treats the call as UNKNOWN (held, never retried).
  */
-export function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+export function withDeadline<T>(work: Promise<T>, ms: number, signal?: AbortSignal): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
+  let onAbort: (() => void) | undefined;
   const late = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error('WEB_GENERATION_CALL_TIMEOUT')), ms);
+    timer = setTimeout(() => reject(new DomainError('WEB_GENERATION_CALL_TIMEOUT')), ms);
+    // The caller stops waiting when its stage is aborted; the call itself is then UNKNOWN to it (held, never retried).
+    onAbort = () => reject(new DomainError('WEB_PROVIDER_ABORTED'));
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener('abort', onAbort, { once: true });
   });
-  return Promise.race([work, late]).finally(() => clearTimeout(timer));
+  return Promise.race([work, late]).finally(() => {
+    clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
+  });
 }
 async function callback<T>(work: () => T | Promise<T>) {
   try {
@@ -127,9 +135,9 @@ export class WebCloudTextGenerator {
   supportsRunText() {
     return typeof this.binding.runText === 'function';
   }
-  async runText(job: WebTextJob): Promise<WebTextRun> {
+  async runText(job: WebTextJob, signal?: AbortSignal): Promise<WebTextRun> {
     ensure(this.binding.runText, 'WEB_GENERATION_ROUTE_MISSING');
-    return withDeadline(this.binding.runText(job), 2 * job.callTimeoutMs + 10_000);
+    return withDeadline(this.binding.runText(job), 2 * job.callTimeoutMs + 10_000, signal);
   }
   private generate(
     request: TextGenerationRequest,
@@ -193,6 +201,7 @@ export function webCloudSpeech(binding: WebGenerationBinding): FakeFish {
     const result = await withDeadline(
       binding.runSpeech({ reservationId: wire.wireRequestHash, wire, callTimeoutMs }),
       callTimeoutMs + 10_000,
+      signal,
     );
     if (!result.ok) {
       if (result.generation) throw new SpeechFailure(result.code, result.generation);
@@ -228,10 +237,14 @@ export function webCloudEmbeddings(binding: WebGenerationBinding): EmbeddingProv
       } catch (error) {
         throw new EmbeddingFailure(error instanceof DomainError ? error.code : 'WEB_GENERATION_CALLBACK_FAILED', true);
       }
+      // A call that was handed over and then lost or aborted is an UNKNOWN outcome (known = false), never a refusal.
       const result = await withDeadline(
         binding.runEmbed({ reservationId: 'embed', wire: { texts: [...texts], model: EMBEDDING_MODEL } }),
         60_000,
-      );
+        signal,
+      ).catch((error: unknown) => {
+        throw new EmbeddingFailure(error instanceof DomainError ? error.code : 'WEB_GENERATION_CALL_UNCONFIRMED', false);
+      });
       if (!result.ok) throw new EmbeddingFailure(result.code, result.known);
       return {
         vectors: parseEmbeddingVectors(result.value.vectors, texts.length),

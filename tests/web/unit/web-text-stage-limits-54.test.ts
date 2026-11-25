@@ -10,6 +10,7 @@ import type { TextRoute } from '../../../packages/contracts/text-route.ts';
 /** Part 54: what the business object reserves BEFORE the call must be exactly what the generator would reserve itself. */
 async function reserved(route?: TextRoute) {
   const specs: ProviderCallSpec[] = [];
+  const bodies: number[] = [];
   const meter: ProviderMeter = {
     reserve: (calls) => {
       specs.push(...calls);
@@ -22,24 +23,28 @@ async function reserved(route?: TextRoute) {
     keys: { xai: 'offline-only', gemini: 'offline-only' },
     fetch: async (_url, init) => {
       const body = JSON.parse(String(init!.body));
+      bodies.push(String(init!.body).length);
       return Response.json(body.tools[0].function.name === 'submit_dialogue_draft' ? draftEnvelope(request) : acceptedAuditEnvelope(request));
     },
   });
   await generator.generateAcceptedStages(request, AbortSignal.timeout(5000), async () => {}, meter, route);
-  return { specs, request };
+  return { specs, request, bodies };
 }
 
 test('the stage limits reserved by the business object equal what the generator reserves (DeepSeek, no route)', async () => {
-  const { specs, request } = await reserved();
+  const { specs, request, bodies } = await reserved();
   const limits = textStageLimits(request, undefined, true);
+  assert.ok(bodies.every((b, i) => b <= limits[i ? 'review' : 'draft']!.inputTokens), 'the real bodies fit the hold: ' + bodies);
   for (const stage of ['draft', 'review'] as const) {
     const spec = specs.find((s) => s.stage === stage)!;
     assert.equal(spec.bounds.unit, 'tokens');
     if (spec.bounds.unit !== 'tokens') return;
+    // The output bound is exactly the generator's; the input bound is sized from the request and never above the generator's.
     assert.deepEqual(
-      { provider: spec.provider, model: spec.model, inputTokens: spec.bounds.inputTokens, outputTokens: spec.bounds.outputTokens },
-      limits[stage],
+      { provider: spec.provider, model: spec.model, outputTokens: spec.bounds.outputTokens },
+      { provider: limits[stage]!.provider, model: limits[stage]!.model, outputTokens: limits[stage]!.outputTokens },
     );
+    assert.ok(limits[stage]!.inputTokens <= spec.bounds.inputTokens);
   }
 });
 

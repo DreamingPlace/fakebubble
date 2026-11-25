@@ -135,6 +135,15 @@ export class WebSystemFixture extends WebCrossPathFixture {
         row.phase,
         row.ordinal,
       );
+      // Its dispatch-ledger twin, as a call that went UNKNOWN after this part leaves it (the running-slot ticket already freed).
+      store.run(
+        `UPDATE web_external_attempts SET dispatch_state='unknown',outcome=NULL,receipt_json=NULL,usage_json='{"ticketFreed":true}',settled_at=NULL,
+        sent_at=COALESCE(sent_at,?) WHERE operation_id=? AND phase=? AND ordinal=?`,
+        this.clock.now() - 2 * 3_600_000,
+        row.operation_id,
+        row.phase,
+        row.ordinal,
+      );
       store.run(
         'UPDATE web_provider_spending SET held_micros=held_micros+?,spent_micros=spent_micros-? WHERE provider=?',
         row.held,

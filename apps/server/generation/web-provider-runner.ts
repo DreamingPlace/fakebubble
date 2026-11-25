@@ -73,15 +73,14 @@ type WebTextGenerator = Pick<
   DeepSeekTextGenerator,
   'textProtocol' | 'policyHash' | 'generateAcceptedStages' | 'generateAcceptedReviewFromKnownDraft'
 > & {
-    /**
-     * Part 54: the cross-Worker generator (WebCloudTextGenerator) has ONE entry: a call with plain data that returns ONE result.
-     * An in-process generator (local transport, tests) has no such entry and keeps the metered callbacks, which cost nothing there.
-     */
-    runText?(job: WebTextJob): Promise<WebTextRun>;
-    /** False when the generation Worker has no `runText` yet: refused BEFORE anything is reserved. */
-    supportsRunText?(): boolean;
-  } &
-  // Part 37a: the v8 writer's policy hash. A generator without it (an older one) cannot run a v8 reply: it is refused before a send.
+  /**
+   * Part 54: the cross-Worker generator (WebCloudTextGenerator) has ONE entry: a call with plain data that returns ONE result.
+   * An in-process generator (local transport, tests) has no such entry and keeps the metered callbacks, which cost nothing there.
+   */
+  runText?(job: WebTextJob, signal?: AbortSignal): Promise<WebTextRun>;
+  /** False when the generation Worker has no `runText` yet: refused BEFORE anything is reserved. */
+  supportsRunText?(): boolean;
+} & // Part 37a: the v8 writer's policy hash. A generator without it (an older one) cannot run a v8 reply: it is refused before a send.
   Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash' | 'writerProfilePolicyHash' | 'writerMemesPolicyHash'>>;
 
 /** Explicit live adapter. Constructing it does not send or read credentials. */
@@ -446,7 +445,14 @@ export class WebProviderRunner {
     //    hash comes back in the result and is kept in the receipt.
     const pending = (phase: Phase) =>
       createHash('sha256')
-        .update(JSON.stringify(['wire-pending', claim.operationId, phase, this.ledger.attemptGeneration(claim.operationId, phase)]))
+        .update(
+          JSON.stringify([
+            'wire-pending',
+            claim.operationId,
+            phase,
+            this.ledger.attemptGeneration(claim.operationId, phase),
+          ]),
+        )
         .digest('hex');
     this.store.transaction(() => {
       for (const phase of phases) {
@@ -477,15 +483,18 @@ export class WebProviderRunner {
     let run: WebTextRun | null = null;
     let failure: unknown = null;
     try {
-      run = await this.text.runText!({
-        reservationId: `${claim.operationId}:${claim.stageVersion}`,
-        request,
-        policyHash,
-        known: knownDraft,
-        ...(route ? { route: headRoute(route)! } : {}),
-        stages: { draft: limits.draft, review: limits.review },
-        callTimeoutMs: concurrency.textCallTimeoutMs,
-      });
+      run = await this.text.runText!(
+        {
+          reservationId: `${claim.operationId}:${claim.stageVersion}`,
+          request,
+          policyHash,
+          known: knownDraft,
+          ...(route ? { route: headRoute(route)! } : {}),
+          stages: { draft: limits.draft, review: limits.review },
+          callTimeoutMs: concurrency.textCallTimeoutMs,
+        },
+        signal,
+      );
     } catch (error) {
       failure = error;
     }

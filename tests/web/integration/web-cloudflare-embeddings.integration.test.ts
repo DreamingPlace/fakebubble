@@ -48,7 +48,9 @@ test('embeddings RPC: disabled Workers and closed gates send nothing; failures a
     assert.equal(value.ok, false, mode);
     assert.equal(value.known, true, `${mode}: refused before anything was sent`);
     assert.deepEqual(value.calls, [], mode);
-    assert.equal(value.gates, 0, mode);
+    // Part 54 NAMED EXCEPTION: the send gate is checked by the business object immediately BEFORE the single call (no callback),
+    // so a disabled Worker is reached after one gate check; it still sends nothing (calls stays empty, known is true).
+    assert.equal(value.gates, 1, mode);
   }
   const gate = await f.call<Result>('/', { mode: 'gate' });
   assert.equal(gate.ok, false);

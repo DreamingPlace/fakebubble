@@ -965,9 +965,9 @@ test('54 未确认的调用: a code, provider, model, stage, held amount, age an
   const requestId = randomUUID();
   const lower = Math.floor(held / 3);
   const done = await f.call(`${ADMIN}/system/unknown-resolve`, owner, { requestId, code: call.code, settledMicros: lower });
-  assert.deepEqual(done, { code: call.code, heldMicros: held, settledMicros: lower });
+  assert.deepEqual(done, { code: call.code, heldMicros: held, settledMicros: lower, duplicate: false });
   // The same click again changes nothing; the call is gone from the list and counted as settled.
-  assert.deepEqual(await f.call(`${ADMIN}/system/unknown-resolve`, owner, { requestId, code: call.code, settledMicros: lower }), done);
+  assert.equal((await f.call(`${ADMIN}/system/unknown-resolve`, owner, { requestId, code: call.code, settledMicros: lower })).duplicate, true);
   const after = await f.call(`${ADMIN}/system/unknown-calls`, owner, {});
   assert.deepEqual([after.calls.length, after.resolved], [0, 1]);
 });

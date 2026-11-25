@@ -229,7 +229,28 @@ export class WebSystemAdmin {
     const body = exactly(input, ['requestId', 'code', 'settledMicros']);
     const ref = parseUnknownCallCode(body.code);
     const attempt = findUnknownAttempt(this.store, ref);
-    ensure(attempt, 'UNKNOWN_CALL_NOT_FOUND');
+    if (!attempt) {
+      // Already settled: the same click again (same request id) answers what it answered; anything else is not found.
+      const settledBefore = this.store.get<{ held_micros: number }>(
+        'SELECT held_micros FROM web_unknown_resolutions WHERE ref=?',
+        ref,
+      );
+      ensure(settledBefore, 'UNKNOWN_CALL_NOT_FOUND');
+      const replayed = body.settledMicros === 'held' ? settledBefore.held_micros : body.settledMicros;
+      return once(
+        this.store,
+        this.clock.now(),
+        {
+          requestId: body.requestId,
+          action: 'unknown-resolve',
+          hash: requestHash({ action: 'unknown-resolve', ref, settled: replayed }),
+          adminId: actor.memberId,
+        },
+        () => {
+          throw new DomainError('UNKNOWN_CALL_NOT_FOUND');
+        },
+      );
+    }
     const settled = body.settledMicros === 'held' ? attempt.held_micros : body.settledMicros;
     ensure(
       typeof settled === 'number' && Number.isSafeInteger(settled) && settled >= 0 && settled <= attempt.held_micros,

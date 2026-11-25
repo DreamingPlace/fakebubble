@@ -249,14 +249,16 @@ test('Part 43: restart after the send gate stays UNKNOWN, is never resent and ke
   loseDraft(f, true);
   f.restart();
   const { result } = recover(f);
-  assert.deepEqual({ ...result }, { status: 'unknown' });
+  assert.equal(result.status, 'failed'); // Part 54 NAMED EXCEPTION: the reply ends now (see below)
   const before = f.attempts().map((a) => ({ ...a }));
   assert.deepEqual(
     before.map((a) => [a.phase, a.dispatch_state]),
     [['draft', 'unknown']],
   );
-  assert.equal(f.reserved(), 1, 'the UNKNOWN call keeps its ticket');
-  assert.equal(f.status().quota_state, 'reserved');
+  // Part 54 NAMED EXCEPTION: the UNKNOWN call keeps its money held and is never resent, but frees its running-slot ticket, and
+  // its reply ends as failed (quota released) so the player's next message is served. Everything else here is unchanged.
+  assert.equal(f.reserved(), 0, 'the UNKNOWN call no longer keeps its running-slot ticket');
+  assert.equal(f.status().quota_state, 'released');
   assert.deepEqual(f.stageAttempts(), [], 'nothing was re-queued');
   // An executor pass never resends it.
   const executor = new WebLocalExecutor(f.store, f.clock);
@@ -267,8 +269,8 @@ test('Part 43: restart after the send gate stays UNKNOWN, is never resent and ke
     f.attempts().map((a) => ({ ...a })),
     before,
   );
-  assert.equal(f.status().status, 'unknown');
-  assert.equal(f.reserved(), 1);
+  assert.equal(f.status().status, 'failed');
+  assert.equal(f.reserved(), 0);
 });
 
 test('Part 43: text already known and a clip unsent → only the clip is re-queued, text unchanged', (t) => {
