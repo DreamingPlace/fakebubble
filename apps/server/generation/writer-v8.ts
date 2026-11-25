@@ -85,6 +85,19 @@ export const WRITER_ADDENDA = {
 } as const;
 export type WriterDraftProvider = keyof typeof WRITER_ADDENDA;
 
+/**
+ * Part 36 (连发 and 引用): the words the writer gets ONLY when the turn has several bubbles or a quote, appended last to the system
+ * message. A single message without a quote gets exactly the prompt it always did, so every existing pin (the files, the protocol,
+ * the policy and `writerPins`) is untouched; this block has its own pin, `WRITER_BATCH_SHA256`, asserted by `web-turns-36`.
+ */
+export const WRITER_BATCH_NOTE =
+  '这一轮对方连着发了几条消息（requiredMessageIds里的那几条）：你只回一次，像真人看完几条之后回一回。琐碎的略过，有意思的接；之前没理的、其实重要的一件事，你自己想起来了，可以顺口提一句，不用每条都有交代。带replyTo的消息是对方明确引用的这场聊天里的一条旧消息（作者和文字由服务端固定，author是你自己的就是你说过的话）：接的是被引用的那件事，不复述被引用的原文。';
+export const WRITER_BATCH_SHA256 = createHash('sha256').update(WRITER_BATCH_NOTE).digest('hex');
+const batchBlock = (request: TextGenerationRequest) =>
+  request.requiredMessageIds.length > 1 || request.messages.some((message) => message.replyTo)
+    ? `\n\n${WRITER_BATCH_NOTE}`
+    : '';
+
 const sortedPrompts = () => Object.entries(PROMPTS_V8).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 /** sha256 of every prompts/v8 file (name and text). Pinned below and documented in docs/STATUS.md. */
 export const writerPromptBytesHash = () => createHash('sha256').update(JSON.stringify(sortedPrompts())).digest('hex');
@@ -332,7 +345,8 @@ export function writerDraftMessages(request: TextGenerationRequest, provider?: W
     ownNamesBlock(request) +
     rosterBlock(request) +
     (picked ? `\n\n${picked}` : '') +
-    (memes ? `\n\n${memes}` : '');
+    (memes ? `\n\n${memes}` : '') +
+    batchBlock(request);
   const content = JSON.stringify(context(request, false));
   ensure(content.length <= 200_000, 'TEXT_CONTEXT_TOO_LARGE');
   return [
@@ -521,13 +535,17 @@ export function applyWriterGuard(
   ensure(capped.length > 0, 'INVALID_BUBBLES');
   const bubbles = capped.map((line) => bubbleOf(line.text));
   const required = request.requiredMessageIds;
-  ensure(required.length === 1, 'INVALID_COVERAGE');
+  // Part 36: one reply answers a whole turn (up to five bubbles in a row). The model is never asked what it covered: every bubble
+  // of the turn is marked covered by code, the reply being published.
+  ensure(required.length >= 1 && required.length <= 5, 'INVALID_COVERAGE');
   // The quote only has to be a stretch of one final bubble (the shared check); it is chosen here, not by the model.
   const quote = [...bubbles[0]!.text].slice(0, 160).join('');
   const synthetic = {
     decision: 'accept',
     replacementBubbles: [],
-    coverage: { [required[0]!]: { status: 'answered', supportQuote: quote, missingInformation: '' } },
+    coverage: Object.fromEntries(
+      required.map((id) => [id, { status: 'answered', supportQuote: quote, missingInformation: '' }]),
+    ),
     topics: value.topics,
     factOps: value.factOps,
     ...(request.sceneContext ? { sceneUpdate: value.sceneUpdate } : {}),

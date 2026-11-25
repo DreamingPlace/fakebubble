@@ -1,3 +1,4 @@
+import { turnMemberIds } from '../turns/web-turns.ts';
 import { isBroadcastMessage } from '../broadcast/web-broadcast-read.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
 import { createHash, randomUUID } from 'node:crypto';
@@ -640,6 +641,8 @@ export class WebVerticalPublisher {
         input_message_id: claim.inputMessageId,
       });
       const { request, row } = readWebV7Request(this.store, claim.operationId);
+      // Part 36: the turn's bubbles (a single message is its own turn).
+      const members = turnMemberIds(this.store, claim.operationId, claim.inputMessageId);
       for (const message of request.messages) {
         const current = this.store.get<{
           body: string;
@@ -663,7 +666,7 @@ export class WebVerticalPublisher {
             current.media_id === message.mediaId,
           'WEB_PUBLICATION_CONTEXT_CHANGED',
         );
-        if (message.id !== claim.inputMessageId)
+        if (!members.includes(message.id))
           ensure(
             message.authorKind === 'character'
               ? isBroadcastMessage(
@@ -690,8 +693,10 @@ export class WebVerticalPublisher {
                   )
               : this.store.get(
                   `SELECT 1 FROM web_publications p
-            WHERE p.input_message_id=? AND p.principal_id=? AND p.player_id=? AND p.world_id=?
+            WHERE (p.input_message_id=? OR EXISTS (SELECT 1 FROM web_turn_bubbles b WHERE b.message_id=?
+              AND b.state='turn' AND b.operation_id=p.operation_id)) AND p.principal_id=? AND p.player_id=? AND p.world_id=?
               AND p.conversation_id=? AND p.character_id=?`,
+                  message.id,
                   message.id,
                   claim.principalId,
                   claim.playerId,
@@ -859,7 +864,7 @@ export class WebVerticalPublisher {
         claim.epoch,
         op.created_at,
         now,
-        JSON.stringify([claim.inputMessageId]),
+        JSON.stringify(members),
         row.memory_version,
         row.player_context_key,
         row.relationship_version,
@@ -946,7 +951,7 @@ export class WebVerticalPublisher {
       this.store.run('UPDATE jobs SET published_message_id=? WHERE id=?', messageIds[0]!, claim.operationId);
       recordSceneBubble(this.user, scope, claim.operationId, candidate, published, now);
       touchScene(this.user, scope, claim.operationId, now);
-      recordDialogueMemories(this.user, scope, claim.operationId, candidate, published, [claim.inputMessageId], now);
+      recordDialogueMemories(this.user, scope, claim.operationId, candidate, published, members, now);
       recordRelationshipEvents(this.user, scope, claim.operationId, candidate, published, now);
       let footerMessageId: string | null = null;
       if (footerRequired && footer) {

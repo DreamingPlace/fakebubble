@@ -1,3 +1,4 @@
+import { turnMemberIds, turnQuotes } from '../turns/web-turns.ts';
 import { broadcastContextMessages } from '../broadcast/web-broadcast-read.ts';
 import { createHash } from 'node:crypto';
 import type {
@@ -74,6 +75,8 @@ interface RequestRow {
   voice_version: string;
   frozen_at: number;
 }
+const sameIds = (a: string[], b: string[]) => a.length === b.length && a.every((id, at) => id === b[at]);
+
 function dto(row: MessageRow): MessageDTO {
   return {
     id: row.id,
@@ -168,8 +171,11 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
   const orderedIds: string[] = [];
   const priorJobs = new Set(prior.map((row) => row.job_id));
   for (const row of prior) {
-    allowed.add(row.input_message_id);
-    orderedIds.push(row.input_message_id);
+    // Part 36: a prior turn answered every bubble of its batch (a single message answered itself), in the order they were sent.
+    for (const id of turnMemberIds(store, row.operation_id, row.input_message_id)) {
+      allowed.add(id);
+      orderedIds.push(id);
+    }
     for (const item of store.all<{ message_id: string }>(
       `SELECT message_id FROM web_publication_items
       WHERE operation_id=? AND origin IN ('narrative','text_fallback') ORDER BY ordinal`,
@@ -179,7 +185,12 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
       orderedIds.push(item.message_id);
     }
   }
-  orderedIds.push(input.input_message_id);
+  // Part 36: this turn's own bubbles, in order; the last one is the input message.
+  const members = turnMemberIds(store, operationId, input.input_message_id);
+  for (const id of members) {
+    allowed.add(id);
+    orderedIds.push(id);
+  }
   // Part 42: what the character was broadcast to this player is the character's own earlier message in this conversation, in order.
   const broadcast = broadcastContextMessages(
     store,
@@ -421,6 +432,8 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
           scope.characterId,
         )
       : undefined;
+  // Part 36: the quotes of this window's bubbles (same conversation only), as `replyTo`; a request without quotes gains no key.
+  const quotes = turnQuotes(store, scope.worldId, scope.conversationId, ids);
   const request: TextGenerationRequest = {
     jobId: operation.id,
     scope: { worldId: scope.worldId, conversationId: scope.conversationId, characterId: scope.characterId },
@@ -436,7 +449,7 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     ...(introduction ? { playerIntroduction: introduction } : {}),
     ...(facts.length ? { playerFacts: facts } : {}),
     deliveryMode: 'voice',
-    requiredMessageIds: [input.input_message_id],
+    requiredMessageIds: members,
     // Part 37c-1: the character's own meme settings never reach a prompt; the matched entries carry the level.
     character: withoutMemeUse(template),
     // Part 24a: only a snapshot that froze a cast view carries `cast`. The key is absent (not null) otherwise, so the serialized
@@ -449,7 +462,10 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     ...(v8 ? { roster: writerRoster(store as never, scope.characterId) } : {}),
     // Part 51: her own names with kind and attitude (published cast file + profile settings), whatever CAST_CONTEXT_ENABLED says.
     ...(v8 ? ownNamesKey(writerOwnNames(store as never, scope.characterId, template)) : {}),
-    messages: selected.map((row) => dto(row!)),
+    messages: selected.map((row) => {
+      const quote = quotes.get(row!.id);
+      return quote ? { ...dto(row!), replyTo: quote } : dto(row!);
+    }),
     mustClose: false,
     evidence: [],
     memories,
@@ -515,8 +531,7 @@ export function readWebV7Request(
       request.scope.worldId === row.world_id &&
       request.scope.conversationId === row.conversation_id &&
       request.scope.characterId === row.character_id &&
-      request.requiredMessageIds.length === 1 &&
-      request.requiredMessageIds[0] === row.input_message_id,
+      sameIds(request.requiredMessageIds, turnMemberIds(store, operationId, row.input_message_id)),
     'WEB_V7_REQUEST_INVALID',
   );
   return { request, row };

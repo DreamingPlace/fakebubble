@@ -137,7 +137,7 @@ try {
           const m = document.createElement('span');
           m.className = left ? 'b36-mark is-left' : 'b36-mark';
           m.dataset.r = r;
-          m.innerHTML = r === 'up' ? up : down;
+          m.innerHTML = (r === 'up' ? up : down) ?? '';
           holder.append(m);
         };
         const reset = () => {

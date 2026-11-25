@@ -13,6 +13,8 @@ import { WebBroadcast } from '../broadcast/web-broadcast.ts';
 import { installWebBroadcast } from '../broadcast/web-broadcast-schema.ts';
 import { installMemeStore } from '../memes/web-meme-store.ts';
 import { installCastDocs } from '../cast/cast-doc-store.ts';
+import { WebTurns } from '../turns/web-turns.ts';
+import { WebFeedback } from '../turns/web-feedback.ts';
 import { installWebShare } from '../share/web-share-schema.ts';
 import { WebShare } from '../share/web-share.ts';
 import { broadcastHistoryRows } from '../broadcast/web-broadcast-read.ts';
@@ -214,6 +216,9 @@ export class WebProviderApplication {
   readonly exporter: WebExportAdmin;
   /** Part 45: shareable voice-card links (the only writer of the share tables). */
   readonly shares: WebShare;
+  /** Part 36: 连发 (the bubbles of a turn; the only writer of the turn rows) and 👍 / 👎 (the only writer of the feedback rows). */
+  readonly turns: WebTurns;
+  readonly feedback: WebFeedback;
   readonly avatars: WebAvatars;
   /** GUEST_GRACE_ENABLED: 0 when off. */
   readonly graceMs: number;
@@ -269,6 +274,10 @@ export class WebProviderApplication {
     this.stats.start(clock.now());
     this.admission = new WebAdmission(store, clock, () => globalThis.crypto.randomUUID(), this.bonusKey, this.stats);
     this.publisher = new WebVerticalPublisher(store, clock);
+    // Part 36: the turn and feedback tables (digest-checked runtime steps; no numbered migration; STOP WEB_TURN_SCHEMA_MISMATCH /
+    // WEB_FEEDBACK_SCHEMA_MISMATCH).
+    this.turns = new WebTurns(store, clock, this.admission);
+    this.feedback = new WebFeedback(store, clock);
     const chatReviewOn = store.chatReview === true && chatReviewTablesExist(store);
     this.inviteAdmin = new WebAccountAdmin(store, clock, config.origin, {
       ...(mailer ? { mailer } : {}),
@@ -829,6 +838,33 @@ export class WebProviderApplication {
     };
   }
 
+  /** The quotes of these bubbles, read only inside the player's own conversation; a quoted message that is gone has `text: null`. */
+  private bubbleQuotes(principal: Principal, conversationId: string, messageIds: string[]) {
+    const out = new Map<string, NonNullable<WebProviderMessage['quote']>>();
+    if (!messageIds.length) return out;
+    for (const row of this.store.all<{
+      message_id: string;
+      quote_message_id: string;
+      author_kind: 'player' | 'character' | null;
+      body: string | null;
+    }>(
+      `SELECT b.message_id,b.quote_message_id,q.author_kind,q.body FROM web_turn_bubbles b
+      LEFT JOIN messages q ON q.id=b.quote_message_id AND q.world_id=b.world_id AND q.conversation_id=b.conversation_id
+      WHERE b.principal_id=? AND b.world_id=? AND b.conversation_id=? AND b.quote_message_id IS NOT NULL
+        AND b.message_id IN (${messageIds.map(() => '?').join(',')})`,
+      principal.principalId,
+      principal.world_id,
+      conversationId,
+      ...messageIds,
+    ))
+      out.set(row.message_id, {
+        messageId: row.quote_message_id,
+        author: row.author_kind ?? 'player',
+        text: row.body === null ? null : [...row.body].slice(0, 120).join(''),
+      });
+    return out;
+  }
+
   history(principal: Principal, conversationId: string, before: number | null) {
     requireWebContent(this.store, this.clock, principal.principalId, principal.world_id, 'read');
     const conversation = this.store.get<{ private_character_id: string }>(
@@ -887,6 +923,12 @@ export class WebProviderApplication {
         LEFT JOIN web_provider_media_assets a ON a.media_id=i.media_id AND i.origin='narrative'
         LEFT JOIN web_provider_footer_assets f ON f.media_id=i.media_id AND i.origin='trial_footer'
         WHERE p.principal_id=? AND p.player_id=? AND p.world_id=? AND p.conversation_id=? AND m.seq<?
+      UNION ALL
+      SELECT m.seq,m.id,m.body,m.created_at,coalesce(b.operation_id,'') operation_id,'input' origin,NULL ordinal,
+          NULL media_id,NULL duration_ms,0 via_backup,NULL chosen_model,NULL actual_model,NULL price_version
+        FROM web_turn_bubbles b JOIN messages m ON m.id=b.message_id
+        WHERE b.principal_id=? AND b.world_id=? AND b.conversation_id=? AND m.seq<?
+          AND NOT EXISTS (SELECT 1 FROM web_operations o WHERE o.input_message_id=m.id)
       ORDER BY seq DESC LIMIT 51`,
       principal.principalId,
       principal.world_id,
@@ -894,6 +936,10 @@ export class WebProviderApplication {
       before ?? Number.MAX_SAFE_INTEGER,
       principal.principalId,
       principal.player_id,
+      principal.world_id,
+      conversationId,
+      before ?? Number.MAX_SAFE_INTEGER,
+      principal.principalId,
       principal.world_id,
       conversationId,
       before ?? Number.MAX_SAFE_INTEGER,
@@ -922,6 +968,10 @@ export class WebProviderApplication {
     const all = [...rows.map((row) => ({ ...row, broadcast: false })), ...broadcast].sort((a, b) => b.seq - a.seq);
     const page = all.slice(0, 50).reverse();
     const character = conversation.private_character_id as WebProviderCharacterId;
+    // Part 36: the quote a bubble carries (same conversation; text null = the original is gone) and the player's own rating.
+    const pageIds = page.map((row) => row.id);
+    const quotes = this.bubbleQuotes(principal, conversationId, pageIds);
+    const ratings = this.feedback.ratingsOf(principal, pageIds);
     return {
       characterId: character,
       conversationId,
@@ -937,8 +987,10 @@ export class WebProviderApplication {
           conversationId,
           character,
         ),
-        // A broadcast message belongs to no operation.
-        ...(row.broadcast ? { operationId: null } : {}),
+        // A broadcast message belongs to no operation; a bubble still waiting for its turn has none yet either.
+        ...(row.broadcast || row.operation_id === '' ? { operationId: null } : {}),
+        ...(quotes.has(row.id) ? { quote: quotes.get(row.id)! } : {}),
+        ...(ratings.has(row.id) ? { rating: ratings.get(row.id)! } : {}),
       })),
       before: page.length ? this.cursor(principal.principalId, page[0]!.seq, conversationId) : null,
       hasMore: all.length > 50,

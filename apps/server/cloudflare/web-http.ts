@@ -392,6 +392,63 @@ export class WebProviderHTTP {
         );
       });
     }
+    // Part 36: one bubble of a batch (the reply is one turn), where the turn is, and 👍 / 👎.
+    const bubble = path.match(new RegExp(`^${API}/characters/([A-Za-z0-9_-]{1,128})/bubbles$`));
+    if (method === 'POST' && bubble) {
+      ensure(providerCharacterId(bubble[1]!), 'NOT_FOUND');
+      this.write(request);
+      const body = await this.body(request);
+      ensure(
+        typeof body.requestId === 'string' &&
+          typeof body.text === 'string' &&
+          (body.quoteMessageId === undefined || typeof body.quoteMessageId === 'string') &&
+          Object.keys(body).every((key) => ['requestId', 'text', 'quoteMessageId'].includes(key)),
+        'INVALID_REQUEST',
+      );
+      await this.execution.wake();
+      const result = app.store.transaction(() =>
+        app.turns.addBubble(this.write(request), {
+          requestId: body.requestId as string,
+          characterId: bubble[1]!,
+          text: body.text as string,
+          quoteMessageId: (body.quoteMessageId as string | undefined) ?? null,
+          ipHash,
+        }),
+      );
+      // The business object's own alarm closes the batch when the player has been quiet for 4 s (or at once at five bubbles).
+      await this.execution.wake();
+      return Response.json(result, { status: result.duplicate ? 200 : 202 });
+    }
+    const turn = path.match(new RegExp(`^${API}/characters/([A-Za-z0-9_-]{1,128})/turn$`));
+    if (method === 'GET' && turn) {
+      ensure(providerCharacterId(turn[1]!), 'NOT_FOUND');
+      const cookie = this.cookie(request);
+      ensure(cookie, 'AUTH_REQUIRED');
+      return Response.json(app.turns.view(app.identity.authenticate(cookie), turn[1]!));
+    }
+    if (method === 'POST' && path === `${API}/ratings`) {
+      this.write(request);
+      const body = await this.body(request);
+      ensure(
+        typeof body.requestId === 'string' &&
+          typeof body.conversationId === 'string' &&
+          typeof body.messageId === 'string' &&
+          typeof body.rating === 'string' &&
+          Object.keys(body).every((key) => ['requestId', 'conversationId', 'messageId', 'rating', 'target'].includes(key)),
+        'INVALID_REQUEST',
+      );
+      return Response.json(
+        app.store.transaction(() =>
+          app.feedback.rate(this.write(request), {
+            requestId: body.requestId as string,
+            conversationId: body.conversationId as string,
+            messageId: body.messageId as string,
+            rating: body.rating as 'up' | 'down' | 'none',
+            ...(body.target === undefined ? {} : { target: body.target as 'voice' | 'content' }),
+          }),
+        ),
+      );
+    }
     if (method === 'POST' && path === `${API}/shares`) {
       this.write(request);
       const body = await this.body(request);
