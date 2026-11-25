@@ -58,18 +58,8 @@ test('51 the writer says the four rules in plain words', () => {
     '我有点记不清了，你说说？',
   ])
     assert.ok(hard!.includes(phrase), phrase);
-  // 3. forms of address: no push, no blanket ban, no unlock by turn count
-  for (const phrase of [
-    '不硬拉近，也不一概不用',
-    '对方有没有先叫',
-    '你们到现在互相怎么称呼',
-    '聊了多久、多熟',
-    '说话档案、设定',
-    '没有聊满几轮就解锁这回事',
-    '不是命令',
-    '才认识就叫宝宝，进度条也太快了吧',
-    '对方想要、你也觉得自然，就可以叫',
-  ])
+  // 3. forms of address: NAMED EXCEPTION (Part 56): rule 3 is rewritten (see web-rules-56); what stays is no unlock by turn count and the nickname rule
+  for (const phrase of ['对方有昵称，没特别原因就用昵称', '不提“进度条”和关系进展'])
     assert.ok(soft!.includes(phrase), phrase);
   assert.ok(!hard!.includes('不用姐姐、哥哥、宝宝、亲爱的'));
   // 4. AI identity: a playful answer in the owner's line, a sincere one is yes
@@ -126,9 +116,10 @@ test('51 the guard text: shared history is supported by history or memory, flagg
   assert.ok(text.includes('说还没看、没刷到、顺着对方讲的内容反应、不添事实，都不算'));
   assert.ok(text.includes('或说自己刚查了结果'));
   // the pet-name check follows the new rule, and keeps its schema name
-  assert.ok(text.includes('对方先叫或明说要这样叫、你们已经这样互相称呼、聊得久也自然的，放行'));
+  // NAMED EXCEPTION (Part 56): relaxed, a name the player used, asked for or agreed never fires it
+  assert.ok(text.includes('对方用过、要求过、已同意的叫法，永远不算，不要改'));
   assert.ok(GUARD_REASONS.includes('presumptuous_address' as never));
-  assert.equal(GUARD_REASONS.length, 9);
+  assert.equal(GUARD_REASONS.length, 14); // NAMED EXCEPTION (Part 56): five more reasons
   assert.equal((text.match(/^- [a-z_]+：/gmu) ?? []).length >= 8, true);
 });
 

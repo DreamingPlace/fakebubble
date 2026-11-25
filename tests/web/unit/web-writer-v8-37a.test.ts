@@ -247,7 +247,7 @@ test('the guard is closed: unknown reasons, repeats, bad indexes and extra keys 
   );
   assert.throws(() => applyReview({ ...guard(), coverage: {} }, draft, request), { code: 'INVALID_REVIEW_SCHEMA' });
   assert.throws(() => applyReview(guard({ mode: 'loud' }), draft, request), { code: 'INVALID_REPLY_SCHEMA' });
-  assert.equal(GUARD_REASONS.length, 9);
+  assert.equal(GUARD_REASONS.length, 14); // NAMED EXCEPTION (Part 56): five more reasons
 });
 
 test('bookkeeping still runs: topics and fact operations are validated as in v7, and a bad topic costs the memory, not the reply', () => {

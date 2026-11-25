@@ -225,6 +225,22 @@ const RULES_51_TONE: Readonly<Record<RehearsalRulesToneSet, readonly string[]>> 
     '我现在手都在抖',
   ],
 };
+/**
+ * Part 56: 「v8 规则 56」, from the production samples A-G (paraphrased; no real player text). Turns 1-3: 宝宝 each time, each with a
+ * feeling; 4 a confession; 5 agreeing on names; 6 a nickname the player gives her; 7 a role she played; 8 a name she called herself
+ * earlier ({别名}); 9 an ordinary 「今天吃了什么」. {别名} / {饰演} are filled in per character (see ownNameTurns).
+ */
+const RULES_56: readonly string[] = [
+  '好想你宝宝，今天一整天都在想你',
+  '叫你宝宝是因为喜欢你，想你想得睡不着',
+  '今天有点累，宝宝陪我说几句话好不好',
+  '我认真的，我喜欢你，不是开玩笑',
+  '那我们互相起个名字吧，我叫你小团子，你叫我小宝，好不好',
+  '我偷偷给你起了个外号叫团团，以后我就这么叫你',
+  '{饰演}，今天心情怎么样',
+  '你刚才是不是说你叫{别名}来着',
+  '对了，你今天吃了什么',
+];
 const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   chat: CHAT,
   repeat: REPEAT,
@@ -234,6 +250,7 @@ const SETS: Readonly<Record<RehearsalSet, readonly string[]>> = {
   'rules-51': RULES_51,
   ...RULES_51_NAMES,
   ...RULES_51_TONE,
+  'rules-56': RULES_56,
 };
 
 /** The turns of a set; with `names` (the character's own names) the {别名} / {饰演} / {黑称} marks are filled in. */
