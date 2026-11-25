@@ -92,7 +92,7 @@
     },
     {
       "file": "packages/contracts/cocreation-adopt.ts",
-      "names": ["adoptIntoTemplate", "suggestAdoptDraft"],
+      "names": ["suggestAdoptDraft"],
       "reason": "Part 24b-6b: 加入草稿 now inserts the note into the draft's own text in the inbox (cocreation-draft-box.ts). These pure append rules stay, with their unit tests, as the reference for what an adopted note becomes; no server code changed."
     },
     {

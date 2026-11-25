@@ -23,6 +23,7 @@ import type { BusinessStore } from '../platform/store-contract.ts';
 import type { WebAccountAdmin } from '../admin/web-account-admin.ts';
 import type { WebIdentity } from '../identity/web-identity.ts';
 import { webCharacterDeleted } from '../characters/web-character-deleted.ts';
+import type { WebCharacterAdmin } from '../characters/web-character-admin.ts';
 import { takeIpDaily } from '../admission/web-ip-daily.ts';
 import { cocreationTablesExist } from './web-cocreation-purge.ts';
 import { relationTablesExist } from './web-cocreation-relations-schema.ts';
@@ -92,6 +93,11 @@ export class WebCocreation {
   protected readonly admin: WebAccountAdmin;
   private readonly key: Buffer;
   protected readonly id: () => string;
+  /** Part 55: where an adopted answer is written into a character's draft (set by the application; none in a bare test). */
+  protected characterDrafts: Pick<WebCharacterAdmin, 'adoptIntoDraft'> | null = null;
+  enableCharacterDrafts(admin: Pick<WebCharacterAdmin, 'adoptIntoDraft'>) {
+    this.characterDrafts = admin;
+  }
   constructor(
     store: BusinessStore,
     clock: Clock,
@@ -732,16 +738,14 @@ export class WebCocreation {
 
   /**
    * 加入关系与故事: a pair note becomes a story of the cast DRAFT - the two characters as participants, the note as the summary.
-   * Compare-and-swap on the cast draft revision the administrator looked at; a stale revision is refused and nothing (no story, no
-   * adoption, no points) is written. Never publishes. Needs cocreation.manage and cast.edit.
+   * Written at the cast draft's current revision, in one transaction with the adoption and the points. Never publishes. Needs cocreation.manage and cast.edit.
    */
-  addToCastStory(auth: Auth, id: unknown, ordinal: unknown, expectedRevision: unknown) {
+  addToCastStory(auth: Auth, id: unknown, ordinal: unknown) {
     const actor = this.actor(auth, 'cocreation.manage');
     ensure(
       actor.role === 'owner' || hasCastPermission(this.admin.session(auth.cookie).member.permissions, 'cast.edit'),
       'ADMIN_PERMISSION_REQUIRED',
     );
-    ensure(Number.isSafeInteger(expectedRevision) && (expectedRevision as number) > 0, 'INVALID_REQUEST');
     return this.store.transaction(() => {
       const row = this.row(id);
       ensure(row.kind === 'pair' && row.partner_id, 'INVALID_REQUEST');
@@ -755,7 +759,7 @@ export class WebCocreation {
         name = (characterId: string) =>
           draft.doc.characters.find((entry) => entry.characterId === characterId)?.identity.names[0]?.text ??
           characterId;
-      // The story is added to the draft the administrator saw; saveDraft refuses a draft that has moved on.
+      // Part 55: written at the draft's CURRENT revision (read in this transaction), so it never meets a stale one.
       const next = {
         ...draft.doc,
         stories: [
@@ -771,7 +775,7 @@ export class WebCocreation {
           },
         ],
       };
-      const saved = saveDraft(this.store, this.clock.now(), expectedRevision, next);
+      const saved = saveDraft(this.store, this.clock.now(), draft.revision, next);
       const adopted = this.adopt(actor.memberId, row.id, answer.ordinal);
       this.audit(actor.memberId, 'cocreation-cast-story', `${row.id}:${answer.ordinal};revision=${saved.revision}`);
       return { ...adopted, castRevision: saved.revision };

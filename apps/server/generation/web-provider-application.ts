@@ -367,6 +367,7 @@ export class WebProviderApplication {
         .digest(),
       () => globalThis.crypto.randomUUID(),
     );
+    this.cocreation.enableCharacterDrafts(this.characterAdmin);
     this.billing = new WebBilling(store, clock, this.identity);
   }
 

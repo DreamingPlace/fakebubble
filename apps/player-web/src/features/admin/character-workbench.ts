@@ -110,6 +110,15 @@ export function characterAdminError(error: unknown): string | null {
     if (code === 'CLIP_SLOT_NOT_APPROVED') return `${slot} 还没批准。`;
     if (code === 'CLIP_TAKE_UNUSABLE') return `${slot} 的选用版本已失效，请重录或另选。`;
   }
+  // Part 55: the server names the field both sides changed; the sentence puts it first.
+  const fields = (error as { detail?: { fields?: unknown } } | null)?.detail?.fields;
+  if (
+    code === 'DRAFT_FIELD_CONFLICT' &&
+    Array.isArray(fields) &&
+    fields.every((f) => typeof f === 'string') &&
+    fields.length
+  )
+    return `「${fields.join('」「')}」在别处也改过，不能自动合并。请重新载入，核对这一栏后再保存。`;
   return ERROR_SENTENCES[code] ?? null;
 }
 
@@ -209,7 +218,7 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
     }
   };
   /** 草稿已在别处更新: a bar above the editor with 重新载入 (reads the newer draft; the edits on this page are given up). */
-  const showConflict = (role: string) => {
+  const showConflict = (role: string, error?: unknown) => {
     root.querySelector('.wb-conflict')?.remove();
     const bar = el('div'),
       reload = el('button', '重新载入');
@@ -224,7 +233,13 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         await open(role);
       });
     });
-    bar.append(el('span', ERROR_SENTENCES.DRAFT_CONFLICT), reload);
+    // Part 55: a field changed here AND elsewhere is named; the rest of the draft was merged without a word.
+    const fields = (error as { detail?: { fields?: unknown } } | null)?.detail?.fields;
+    const named =
+      Array.isArray(fields) && fields.length && fields.every((f) => typeof f === 'string')
+        ? `草稿已在别处更新：「${fields.join('」「')}」你和别处都改过，不能自动合并。请重新载入；你在本页写的内容不会被覆盖保存。`
+        : ERROR_SENTENCES.DRAFT_CONFLICT;
+    bar.append(el('span', named), reload);
     root.prepend(bar);
   };
   const setDirty = () => {
@@ -497,8 +512,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
         } catch (error) {
           // The draft moved on the server: the edits stay on the page, with a button that reads the newer draft instead. The bar
           // (an alert) says it; no toast repeats it.
-          if (error instanceof InviteLocalApiError && error.code === 'DRAFT_CONFLICT') {
-            showConflict(role);
+          if (
+            error instanceof InviteLocalApiError &&
+            (error.code === 'DRAFT_CONFLICT' || error.code === 'DRAFT_FIELD_CONFLICT')
+          ) {
+            showConflict(role, error);
             return;
           }
           throw error;
@@ -1035,8 +1053,11 @@ export function characterWorkbench(root: HTMLElement, host: Host) {
           try {
             saved = await host.api.save(role, expected, structuredClone(profile));
           } catch (error) {
-            if (error instanceof InviteLocalApiError && error.code === 'DRAFT_CONFLICT') {
-              showConflict(role);
+            if (
+              error instanceof InviteLocalApiError &&
+              (error.code === 'DRAFT_CONFLICT' || error.code === 'DRAFT_FIELD_CONFLICT')
+            ) {
+              showConflict(role, error);
               return;
             }
             throw error;

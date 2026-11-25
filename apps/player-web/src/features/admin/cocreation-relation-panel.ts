@@ -217,7 +217,6 @@ export function relationPanel(initial: RelationDetail, deps: RelationPanelDeps):
         const done = await deps.api.adopt({
           id: detail.id,
           requestId: deps.newId(),
-          expectedRevision: detail.castRevision!,
           text: box.value,
           groupName: match?.kind === 'new' ? name.value : null,
         });

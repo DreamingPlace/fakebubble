@@ -14,6 +14,7 @@ import {
   type CastVersion,
 } from '../../../services/cast-admin-api.ts';
 import { InviteLocalApiError } from '../../../services/invite-local-api.ts';
+import { mergeCastDocs } from '../../../../../../packages/contracts/cast-merge.ts';
 import { browserDownload } from '../invite-tiers-view.ts';
 import { h } from '../../cocreation/h.ts';
 import type { ConfirmInPlace } from '../ui/inline-confirm.ts';
@@ -123,7 +124,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     publishIssues: [] as CastIssue[],
     warnings: 0,
     saveIssues: [] as CastIssue[],
-    conflict: null as { revision: number; doc: CastDoc } | null,
+    conflict: null as { revision: number; doc: CastDoc; fields?: string[] } | null,
     pending: null as { revision: number; json: string; requestId: string } | null,
     sees: null as CastCompilePreviewResult | null,
     seesLoading: false,
@@ -503,7 +504,11 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       const box = h(
         'div',
         { class: 'cs-notice is-bad', attrs: { role: 'alert' } },
-        h('span', { text: `草稿已被另一位管理员存成草稿 ${state.conflict.revision}。你写的内容都还在下面。` }),
+        h('span', {
+          text: state.conflict.fields?.length
+            ? `${state.conflict.fields.slice(0, 3).join('、')}${state.conflict.fields.length > 3 ? ` 等 ${state.conflict.fields.length} 处` : ''}在别处也改过，不能自动合并。你写的内容都还在下面。`
+            : `草稿已被另一位管理员存成草稿 ${state.conflict.revision}。你写的内容都还在下面。`,
+        }),
       );
       if (canEdit()) box.append(keep);
       box.append(take);
@@ -601,7 +606,7 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     state.publishIssues = validation.validation.errors;
     state.warnings = validation.validation.warnings.length;
     if (!state.doc || !state.dirty) adopt(draft.doc, draft.revision);
-    else if (draft.revision !== state.revision) state.conflict = { revision: draft.revision, doc: draft.doc };
+    else if (draft.revision !== state.revision) rebaseOnto(draft.revision, draft.doc);
     paintAll();
     void refreshSees();
   }
@@ -659,29 +664,52 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       state.pending = { revision, json, requestId: globalThis.crypto.randomUUID() };
     return state.pending.requestId;
   };
+  /**
+   * Part 55: the draft on the server moved on (an adoption added a story, another administrator saved). The page's edit is merged into
+   * it, field by field, when no field was changed on both sides: the working copy becomes the merge (still unsaved), its base the
+   * newer draft. Only a field changed on both sides is a conflict, and the notice names it. Returns whether it merged.
+   */
+  function rebaseOnto(revision: number, latest: CastDoc) {
+    const merged = state.base && state.doc ? mergeCastDocs(state.base, state.doc, latest) : null;
+    if (merged?.ok) {
+      state.doc = merged.doc;
+      state.base = structuredClone(latest);
+      state.revision = revision;
+      state.conflict = null;
+      state.pending = null;
+      state.dirty = true;
+      return true;
+    }
+    state.conflict = { revision, doc: latest, ...(merged && !merged.ok ? { fields: merged.conflicts } : {}) };
+    return false;
+  }
   async function saveDraft(force: boolean) {
     if (!host.api || !state.doc || !canEdit() || (!state.dirty && !force)) return;
     await host.run(async () => {
       const api = host.api!;
-      const doc = state.doc!;
-      try {
-        await api.save(state.revision, doc, requestFor(state.revision, doc));
-      } catch (error) {
-        if (gone()) return;
-        if (error instanceof InviteLocalApiError && error.code === 'CAST_REVISION_CONFLICT') {
-          const latest = await api.draft();
+      for (let attempt = 0; ; attempt += 1) {
+        const doc = state.doc!;
+        try {
+          await api.save(state.revision, doc, requestFor(state.revision, doc));
+          break;
+        } catch (error) {
           if (gone()) return;
-          state.conflict = { revision: latest.revision, doc: latest.doc };
-          paintNotice();
-          return;
+          if (error instanceof InviteLocalApiError && error.code === 'CAST_REVISION_CONFLICT') {
+            const latest = await api.draft();
+            if (gone()) return;
+            // No field changed on both sides: save the merge on top of the newer draft (a few tries, if it moves again).
+            if (attempt < 3 && rebaseOnto(latest.revision, latest.doc)) continue;
+            paintNotice();
+            return;
+          }
+          if (error instanceof InviteLocalApiError && error.code === 'CAST_INVALID') {
+            state.saveIssues = castIssues(error);
+            paintNotice();
+            host.status('有些内容不符合要求，没有保存。');
+            return;
+          }
+          throw error;
         }
-        if (error instanceof InviteLocalApiError && error.code === 'CAST_INVALID') {
-          state.saveIssues = castIssues(error);
-          paintNotice();
-          host.status('有些内容不符合要求，没有保存。');
-          return;
-        }
-        throw error;
       }
       await afterChange();
       if (!gone()) host.toast(`草稿 ${state.revision} 已保存`, 'ok');

@@ -524,7 +524,7 @@ test('an unpublished draft survives a restore unchanged; its base is then older 
         expectedRevision: draft.revision,
         profile: { ...draft.profile, template: { ...draft.profile.template, persona: '再改一次' } },
       }),
-    /LIVE_VERSION_CONFLICT|INVALID_DRAFT_VERSION/,
+    /LIVE_VERSION_CONFLICT|INVALID_DRAFT_VERSION|DRAFT_FIELD_CONFLICT/,
   );
 });
 
