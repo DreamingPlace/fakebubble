@@ -32,9 +32,3 @@ export const playersField: ExportField = textField('玩家', 'players', {
   list: true,
   tip: '只导出这些对话编号的玩家（不填就是全部）。',
 });
-export const characterField = (characters: ReadonlyArray<{ characterId: string; label: string }>): ExportField =>
-  selectField(
-    '角色',
-    [{ value: '', label: '全部角色' }, ...characters.map((c) => ({ value: c.characterId, label: c.label }))],
-    'characterId',
-  );
