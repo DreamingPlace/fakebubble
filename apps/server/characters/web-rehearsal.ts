@@ -518,7 +518,13 @@ export class WebRehearsal {
       );
     const v8Guard = Buffer.byteLength(
       JSON.stringify(
-        writerGuardMessages(v8First, { mode: 'casual', bubbles: [], endsSession: false, markups: [], plan: null } as WriterDraft),
+        writerGuardMessages(v8First, {
+          mode: 'casual',
+          bubbles: [],
+          endsSession: false,
+          markups: [],
+          plan: null,
+        } as WriterDraft),
       ),
       'utf8',
     );

@@ -325,7 +325,7 @@ test('a code is never reused while it is live or any archive row still carries i
 
 // ---- transcripts ---------------------------------------------------------------------------------------------------------
 
-test('Part 58: a transcript line carries the writer\'s hidden plan from the stored candidate (nicknames replaced)', (t) => {
+test("Part 58: a transcript line carries the writer's hidden plan from the stored candidate (nicknames replaced)", (t) => {
   const f = fixture(t);
   const p = f.player('a');
   const op = f.round(p, 'jojo', '冷了多穿', ['谢谢，好久没人这么关心我了'], T0, true);
@@ -352,7 +352,6 @@ test('Part 58: a transcript line carries the writer\'s hidden plan from the stor
     'only the reply with a plan, never a player line, never a reply without one',
   );
 });
-
 
 test('a transcript holds the player text, final bubbles, proactive messages and failed replies in order, with local times', (t) => {
   const f = fixture(t);

@@ -105,7 +105,11 @@ const bubblesOf = (value: unknown) =>
 const planOf = (value: unknown) => {
   const plan = value && typeof value === 'object' ? (value as Json) : null;
   return plan && typeof plan.read === 'string' && typeof plan.aim === 'string'
-    ? { read: plan.read, aim: plan.aim, aims: Array.isArray(plan.aims) ? plan.aims.filter((x) => typeof x === 'string') : [] }
+    ? {
+        read: plan.read,
+        aim: plan.aim,
+        aims: Array.isArray(plan.aims) ? plan.aims.filter((x) => typeof x === 'string') : [],
+      }
     : null;
 };
 function finalOf(resultJson: string | null) {

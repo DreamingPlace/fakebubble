@@ -452,7 +452,12 @@ export function freezeWebV7Request(store: WebStore, operationId: string, now: nu
     ...(v8 ? ownNamesKey(writerOwnNames(store as never, scope.characterId, template)) : {}),
     // Part 58: her last few purposes in this conversation, read from the stored candidates of her earlier published replies (the
     // plan rides in the candidate JSON; no new column). Absent when there are none, so such a request is what it was.
-    ...(v8 ? recentAimsKey(store, prior.map((row) => row.operation_id)) : {}),
+    ...(v8
+      ? recentAimsKey(
+          store,
+          prior.map((row) => row.operation_id),
+        )
+      : {}),
     messages: selected.map((row) => dto(row!)),
     mustClose: false,
     evidence: [],

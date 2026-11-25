@@ -3,7 +3,11 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import type { TextGenerationRequest } from '../../../packages/contracts/index.ts';
-import { REHEARSAL_RULES_58_SET, REHEARSAL_SETS, REHEARSAL_SET_LABELS } from '../../../packages/contracts/web-rehearsal.ts';
+import {
+  REHEARSAL_RULES_58_SET,
+  REHEARSAL_SETS,
+  REHEARSAL_SET_LABELS,
+} from '../../../packages/contracts/web-rehearsal.ts';
 import { PROMPTS_V8 } from '../../../apps/server/generation/writer-prompts.generated.ts';
 import { promptMessages, textPromptHash } from '../../../apps/server/generation/accepted-text-prompt.ts';
 import {
@@ -132,7 +136,11 @@ test('58 the plan is stored with the reply (read + aim) and never changes the pu
     reply.bubbles.map((b) => b.text),
     ['有你的爱当外套，我就不会着凉'],
   );
-  assert.deepEqual(reply.plan, { read: '对方在关心我，想被回应', aim: '心动（回撩）：把外套说成他的爱', aims: ['心动'] });
+  assert.deepEqual(reply.plan, {
+    read: '对方在关心我，想被回应',
+    aim: '心动（回撩）：把外套说成他的爱',
+    aims: ['心动'],
+  });
   assert.ok(!JSON.stringify(reply.bubbles).includes('读到'));
   // a replacement from the guard cannot bring a marker in either
   const fixed = applyReview(
@@ -159,7 +167,10 @@ test('58 the guard text and schema: four new reasons, it reads the plan and flag
   assert.ok(text.includes('plan是她写稿前的想法'));
   assert.ok(text.includes('与plan的aim矛盾'));
   const tool = writerGuardTool(v8()) as unknown as {
-    function: { description: string; parameters: { properties: { fixes: { items: { properties: { reason: { enum: string[] } } } } } } };
+    function: {
+      description: string;
+      parameters: { properties: { fixes: { items: { properties: { reason: { enum: string[] } } } } } };
+    };
   };
   assert.deepEqual(tool.function.parameters.properties.fixes.items.properties.reason.enum, [...GUARD_REASONS]);
   assert.ok(tool.function.description.includes('十八种'));
@@ -177,7 +188,10 @@ const flagged = (reason: string, lines: string[], replacement: string[]) => {
     result.bubbles.map((b) => b.text),
     replacement,
   );
-  assert.deepEqual(result.guardReasons, replacement.map(() => reason));
+  assert.deepEqual(
+    result.guardReasons,
+    replacement.map(() => reason),
+  );
   assert.equal(result.reviewChanged, true);
 };
 test('58 guard: dismissive_filler is replaced (行 / 行吧 / 行行行 / 行了行了 ...)', () => {
@@ -194,7 +208,7 @@ test('58 guard: no_emotional_value is replaced', () => {
   flagged('no_emotional_value', ['嗯'], ['有你的爱给我当外套，我就不会着凉']);
 });
 
-test('58 the guard sees the plan (and only the plan\'s read and aim); a plan-less draft sends none', () => {
+test("58 the guard sees the plan (and only the plan's read and aim); a plan-less draft sends none", () => {
   const request = v8();
   const draft = parseDraft({ text: `${PLAN}嗯` }, request) as WriterDraft;
   const withPlan = JSON.parse(writerGuardMessages(request, draft)[1]!.content) as Record<string, unknown>;
@@ -230,9 +244,26 @@ test('58 the writer sees its last few aims; none means the request is what it wa
 });
 
 test('58 the 行-family count is deterministic: openers only, never a word like 行李', () => {
-  for (const bubble of ['行，听你的，我这就套上', '行吧，随你', '行行行，不让动就不动呗', '行了行了，知道了', '好吧好吧', '随你', '得了', '行啊，还给我留了空间', '行'])
+  for (const bubble of [
+    '行，听你的，我这就套上',
+    '行吧，随你',
+    '行行行，不让动就不动呗',
+    '行了行了，知道了',
+    '好吧好吧',
+    '随你',
+    '得了',
+    '行啊，还给我留了空间',
+    '行',
+  ])
     assert.equal(hasFiller([bubble]), true, bubble);
-  for (const bubble of ['我行李还没收', '这样行不行呀', '行动起来吧', '今天不行了，累', '谢谢，好久没人这么关心我了', '你说行我就去买'])
+  for (const bubble of [
+    '我行李还没收',
+    '这样行不行呀',
+    '行动起来吧',
+    '今天不行了，累',
+    '谢谢，好久没人这么关心我了',
+    '你说行我就去买',
+  ])
     assert.equal(hasFiller([bubble]), false, bubble);
   const counts = countReplies(
     [
@@ -245,7 +276,11 @@ test('58 the 行-family count is deterministic: openers only, never a word like 
   );
   assert.equal(counts.fillers, 2);
   assert.deepEqual(counts.aims, { 被接住: 1, 被关心: 1, 心动: 2 });
-  assert.deepEqual(countReplies([{ player: 'a', bubbles: ['好'], answered: true }], DEFAULT_PHRASES, { unconfirmed: 0, failed: 0 }).aims, {});
+  assert.deepEqual(
+    countReplies([{ player: 'a', bubbles: ['好'], answered: true }], DEFAULT_PHRASES, { unconfirmed: 0, failed: 0 })
+      .aims,
+    {},
+  );
 });
 
 test('58 「v8 规则 58」: one fixed script, listed last; no real player text', () => {
@@ -284,6 +319,12 @@ test('58 the export has two new columns 读到 / 目的 at the end; the earlier 
     },
   } as never);
   assert.deepEqual(row.slice(-2), ['想被疼', '被关心：暖一句']);
-  const none = previewCsvRow({ ordinal: 1, status: 'done', cost: { chargedMicros: 0 }, latency: {}, final: null } as never);
+  const none = previewCsvRow({
+    ordinal: 1,
+    status: 'done',
+    cost: { chargedMicros: 0 },
+    latency: {},
+    final: null,
+  } as never);
   assert.deepEqual(none.slice(-2), ['', '']);
 });

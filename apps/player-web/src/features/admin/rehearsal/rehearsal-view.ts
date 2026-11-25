@@ -603,7 +603,8 @@ export function rehearsalView(host: RehearsalHost) {
     if (!gone() && panel.isOpen() && detail?.run.status === 'running')
       timer = setTimer(() => void load(), Math.min(POLL_MS * 1.6 ** idle, POLL_MAX_MS));
   }
-  const cellSig = (cell: RehearsalCell) => JSON.stringify([cell.state, cell.errorCode, cell.bubbles, cell.answered, cell.plan]);
+  const cellSig = (cell: RehearsalCell) =>
+    JSON.stringify([cell.state, cell.errorCode, cell.bubbles, cell.answered, cell.plan]);
   const bubbleList = (cell: RehearsalCell, key = '', player = '') => {
     const box = h('div', {
       class: 'rh-cell',
@@ -632,7 +633,11 @@ export function rehearsalView(host: RehearsalHost) {
       // Part 58: what she read and what she aimed for (owner only; a player never gets this).
       if (cell.plan)
         box.append(
-          h('p', { class: 'rh-plan admin-hint', text: `读到：${cell.plan.read}　目的：${cell.plan.aim}`, attrs: { 'data-plan': '1' } }),
+          h('p', {
+            class: 'rh-plan admin-hint',
+            text: `读到：${cell.plan.read}　目的：${cell.plan.aim}`,
+            attrs: { 'data-plan': '1' },
+          }),
         );
     } else {
       const tone = cell.state === 'unconfirmed' ? 'warn' : cell.state === 'failed' ? 'danger' : 'neutral';
