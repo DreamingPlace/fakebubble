@@ -28,6 +28,7 @@ import {
 import { settleWebLifetimeReservation, webReceiptDigest, type WebRetentionRow } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
 import type { MediaObjectReference } from './media-objects.ts';
+import { markExternalAttemptsUnknown } from '../budget/web-external-tickets.ts';
 import {
   ageBucket,
   backoffDelay,
@@ -636,13 +637,11 @@ export class WebCloudRetention {
         if (attempt.state === 'not_sent') ledger.releaseUnsent(key, scope);
         else {
           ledger.markUnknown(key, scope);
-          this.store.run(
-            `UPDATE web_external_attempts SET dispatch_state='unknown'
-            WHERE operation_id=? AND phase=? AND ordinal=? AND dispatch_state='sent'`,
-            attempt.operation_id,
-            attempt.phase,
-            attempt.ordinal,
-          );
+          markExternalAttemptsUnknown(this.store, {
+            operationId: attempt.operation_id,
+            phase: attempt.phase,
+            ordinal: attempt.ordinal,
+          });
         }
       }
     });

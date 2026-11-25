@@ -211,7 +211,7 @@ test('cross-window reservations, upgraded trial and UNKNOWN preserve original sc
   ledger.markSent(claim, key);
   f.advance(31_000);
   const successor = queue.acquireCoordinator('successor');
-  assert.equal(ledger.recover(successor, ledger.fence(old.operationId)).status, 'unknown');
+  assert.equal(ledger.recover(successor, ledger.fence(old.operationId)).status, 'failed'); // // Part 54 NAMED EXCEPTION: UNKNOWN keeps its money held, never retried, but frees its running-slot ticket and ends the reply (failed) at once.
   await f.identity.register(first.boot.issuedToken!, first.boot.csrf, origin, {
     requestId: 'register',
     username: 'fixture-account',
@@ -222,7 +222,8 @@ test('cross-window reservations, upgraded trial and UNKNOWN preserve original sc
   f.admit(second.boot.principalId, ip, 'new');
   const result = preflightWebDataPolicy(f.store, f.clock, f.key);
   assert.deepEqual(result.reasons, []);
-  assert.equal(result.quotas[0]?.reservedTotal, 2);
+  // Part 54 NAMED EXCEPTION: UNKNOWN keeps its money held and is never retried, but frees its running-slot ticket and ends the reply (failed) at once. Its quota is released now.
+  assert.equal(result.quotas[0]?.reservedTotal, 1);
   assert.equal(result.quotas[0]?.windowIds.length, 2);
   assert.equal(result.unknownExternalAttempts, 1);
   assert.equal(result.retention.find((r) => r.principalId === first.boot.principalId)?.protectedByUpgrade, true);
@@ -319,7 +320,7 @@ test('external capacity follows not_sent, sent, unknown and known across provide
   snapshots.push(preflightWebDataPolicy(f.store, f.clock, f.key));
   f.advance(31_000);
   const successor = queue.acquireCoordinator('fixture-successor');
-  assert.equal(ledger.recover(successor, ledger.fence(op.operationId)).status, 'unknown');
+  assert.equal(ledger.recover(successor, ledger.fence(op.operationId)).status, 'failed'); // // Part 54 NAMED EXCEPTION: UNKNOWN keeps its money held, never retried, but frees its running-slot ticket and ends the reply (failed) at once.
   snapshots.push(preflightWebDataPolicy(f.store, f.clock, f.key));
   ledger.confirm(key, { outcome: 'failed', receipt: { origin: 'fixture', id: 'one' }, usage: { calls: 1 } });
   snapshots.push(preflightWebDataPolicy(f.store, f.clock, f.key));

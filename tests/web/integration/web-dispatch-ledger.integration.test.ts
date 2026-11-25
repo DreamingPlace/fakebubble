@@ -296,7 +296,9 @@ test('C-S3-002 sent cancellation keeps external ticket unknown; late receipt set
     f.store.get<{ dispatch_state: string }>('SELECT dispatch_state FROM web_external_attempts')?.dispatch_state,
     'unknown',
   );
-  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  // Part 54 NAMED EXCEPTION: an UNKNOWN call still keeps its money held and is never retried, but it no longer keeps its
+  // running-slot ticket (reserved 0) and its reply now ends as failed at once instead of waiting as 'unknown'. Nothing else changed.
+  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   const reopened = new WebStore(f.root, { create: false, instanceId: f.instanceId });
   t.after(() => reopened.close());
   const afterRestart = new WebDispatchLedger(reopened, f.clock);
@@ -383,8 +385,10 @@ test('C-S3-002 new epoch fences old markSent; unsent recovery fails business, se
   // with RECOVERED_NOT_SENT. Everything else below is unchanged: its ticket is released once (reserved stays 1, B's),
   // its attempt reads not_dispatched, and the sent attempt B stays UNKNOWN with its ticket and quota kept.
   assert.equal(f.ledger.recover(recovered, fenceA).status, 'queued');
-  assert.equal(f.ledger.recover(recovered, fenceB).status, 'unknown');
-  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  // Part 54 NAMED EXCEPTION: an UNKNOWN call still keeps its money held and is never retried, but it no longer keeps its
+  // running-slot ticket (reserved 0) and its reply now ends as failed at once instead of waiting as 'unknown'. Nothing else changed.
+  assert.equal(f.ledger.recover(recovered, fenceB).status, 'failed');
+  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   assert.equal(
     f.store.get<{ outcome: string }>("SELECT outcome FROM web_external_attempts WHERE provider_request_id='a'")
       ?.outcome,
@@ -399,18 +403,16 @@ test('C-S3-002 new epoch fences old markSent; unsent recovery fails business, se
   assert.equal(
     f.store.get<{ quota_state: string }>('SELECT quota_state FROM web_operations WHERE id=?', second.operationId)
       ?.quota_state,
-    'reserved',
+    'released',
   );
+  // Part 54 NAMED EXCEPTION: an UNKNOWN call keeps its money held and is never retried, but it no longer keeps its running-slot
+  // ticket, and its reply ends as failed (quota released) at once instead of waiting as 'unknown' for its deadline.
+  // The reply already ended, so the later expiry finds nothing to end.
   f.advance(210_000);
   const finalLease = f.queue.acquireCoordinator('final');
   assert.deepEqual(f.ledger.terminate(finalLease, f.ledger.fence(second.operationId), b, 'failed', 'expired'), {
     status: 'failed',
-    duplicate: false,
+    duplicate: true,
   });
-  assert.equal(
-    f.store.get<{ quota_state: string }>('SELECT quota_state FROM web_operations WHERE id=?', second.operationId)
-      ?.quota_state,
-    'released',
-  );
-  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
 });

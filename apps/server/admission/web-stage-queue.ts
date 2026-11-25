@@ -387,10 +387,10 @@ export class WebStageQueue {
             }
             AND (SELECT count(*) FROM web_operations other WHERE other.principal_id=o.principal_id
               AND other.id<>o.id AND other.status IN
-              ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed','unknown'))<?
+              ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed'))<?
             AND (SELECT count(*) FROM web_operations other WHERE other.conversation_id=o.conversation_id
               AND other.id<>o.id AND other.status IN
-              ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed','unknown'))<?
+              ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed'))<?
           ORDER BY CASE WHEN o.principal_id>? THEN 0 ELSE 1 END,o.principal_id,o.admission_seq LIMIT 1`,
         now,
         now,
@@ -503,10 +503,10 @@ export class WebStageQueue {
         ${candidate} ${retention.sql} ${stage === 'text' ? backoffGuard : ''}
         AND (SELECT count(*) FROM web_operations other WHERE other.principal_id=o.principal_id
           AND other.id<>o.id AND other.status IN
-          ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed','unknown'))<?
+          ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed'))<?
         AND (SELECT count(*) FROM web_operations other WHERE other.conversation_id=o.conversation_id
           AND other.id<>o.id AND other.status IN
-          ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed','unknown'))<?
+          ('text_running','text_ready','audio_pending','audio_running','ready_to_publish','retryable_failed'))<?
         ORDER BY CASE WHEN o.principal_id>? THEN 0 ELSE 1 END,o.principal_id,o.admission_seq LIMIT 1`,
         now,
         now,

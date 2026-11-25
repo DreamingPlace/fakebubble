@@ -130,7 +130,8 @@ test('two connections reserve one external ticket; unknown survives business ter
     status: 'cancelled',
     duplicate: true,
   });
-  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  // Part 54 NAMED EXCEPTION: UNKNOWN keeps its money held and is never retried, but frees its running-slot ticket and ends the reply (failed) at once.
+  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   assert.equal(
     f.store.get<{ dispatch_state: string }>('SELECT dispatch_state FROM web_external_attempts')?.dispatch_state,
     'unknown',
@@ -169,8 +170,9 @@ test('not-sent recovery releases capacity and original quota, but sent recovery 
   // Part 43 NAMED EXCEPTION (only change to this test): a provably unsent stage is re-queued instead of failed; the
   // not_dispatched outcome, the released ticket (reserved stays 1) and B's UNKNOWN below are asserted unchanged.
   assert.equal(f.ledger.recover(recovered, fenceA).status, 'queued');
-  assert.equal(f.ledger.recover(recovered, fenceB).status, 'unknown');
-  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  // // Part 54 NAMED EXCEPTION: UNKNOWN keeps its money held, never retried, but frees its running-slot ticket and ends the reply (failed) at once.
+  assert.equal(f.ledger.recover(recovered, fenceB).status, 'failed');
+  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   assert.equal(
     f.store.get<{ outcome: string }>(`SELECT outcome FROM web_external_attempts WHERE provider_request_id='fake-a'`)
       ?.outcome,
@@ -179,11 +181,12 @@ test('not-sent recovery releases capacity and original quota, but sent recovery 
   assert.throws(() => f.ledger.markSent(claimA, keyA), /WEB_COORDINATOR_STALE|WEB_STAGE_STALE/);
   f.advance(210_000);
   const later = f.queue.acquireCoordinator('later');
+  // Part 54 NAMED EXCEPTION: UNKNOWN keeps its money held and is never retried, but frees its running-slot ticket and ends the reply (failed) at once.
   assert.deepEqual(f.ledger.terminate(later, f.ledger.fence(second.operationId), b, 'failed', 'expired'), {
     status: 'failed',
-    duplicate: false,
+    duplicate: true,
   });
-  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   assert.equal(
     f.store.get<{ reserved: number }>(
       'SELECT reserved FROM web_ip_windows WHERE id=(SELECT ip_window_id FROM web_operations WHERE id=?)',

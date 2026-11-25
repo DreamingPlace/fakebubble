@@ -24,6 +24,7 @@ import { DROP_INVALID_METADATA } from './accepted-text-protocol.ts';
 import { applyReview, parseDraft } from './writer-v8.ts';
 import { requireWebContent, webCloudContentExpired } from '../admission/web-retention.ts';
 import type { WebStageClaim } from '../admission/web-stage-queue.ts';
+import { noteUnknownCode } from '../admin/web-unknown-calls.ts';
 import { WebDispatchLedger } from '../budget/web-dispatch-ledger.ts';
 import { requireWebRuntime, type WebRuntimeStore as WebStore } from '../platform/web-store-contract.ts';
 import { requireCurrentInputSnapshot } from './web-input-snapshot.ts';
@@ -442,7 +443,7 @@ export class WebProviderOffline {
     });
   }
   /** Stage lease, active grant and monetary hold share the same SQLite write transaction. */
-  reserveForClaim(claim: WebStageClaim, input: Reserve) {
+  reserveForClaim(claim: WebStageClaim, input: Reserve, together = false) {
     this.check();
     ensure(
       claim.operationId === input.operationId &&
@@ -456,12 +457,16 @@ export class WebProviderOffline {
       const reserved = this.reserve(input);
       if (reserved.duplicate && this.isRewound(input)) this.rebindRewound(claim, input);
       if (!reserved.duplicate) {
-        this.capacity.reserve(claim, {
-          phase: input.phase,
-          ordinal: input.ordinal,
-          provider: input.provider,
-          providerRequestId: `${input.operationId}:${input.phase}:${input.ordinal}`,
-        });
+        this.capacity.reserve(
+          claim,
+          {
+            phase: input.phase,
+            ordinal: input.ordinal,
+            provider: input.provider,
+            providerRequestId: `${input.operationId}:${input.phase}:${input.ordinal}`,
+          },
+          together,
+        );
         this.store.run(
           `UPDATE web_provider_attempts SET stage_version=?,
           lease_epoch=?,lease_token=? WHERE operation_id=? AND phase=? AND ordinal=?
@@ -538,7 +543,7 @@ export class WebProviderOffline {
       if (claim.stage === 'audio') checkWebV7SceneAtDispatch(this.store as WebStore, key.operationId, this.now());
     });
   }
-  markUnknown(key: Key, scope: Scope) {
+  markUnknown(key: Key, scope: Scope, code?: string) {
     this.check();
     return this.store.transaction(() => {
       const row = this.attempt(key);
@@ -551,6 +556,65 @@ export class WebProviderOffline {
           key.phase,
           key.ordinal,
         );
+      // Part 54: why it is unknown, for the owner's 未确认的调用 page (a fixed code; a note, never part of the money path).
+      if (code) noteUnknownCode(this.store, key, code, this.now());
+    });
+  }
+  /**
+   * Part 54: the OWNER settled an UNKNOWN call from the provider's bill (at the held amount, or lower). Only ever called from his
+   * explicit action, never automatically. The local hold becomes the charge; the caller then settles the shared budget at the
+   * same amount (settleAttempt reads this row). An UNKNOWN call is not retried and not released any other way.
+   */
+  reconcileUnknown(key: Key, chargedMicros: number) {
+    this.check();
+    return this.store.transaction(() => {
+      const row = this.attempt(key);
+      ensure(row.state === 'unknown', 'WEB_PROVIDER_ATTEMPT_STALE');
+      ensure(
+        Number.isSafeInteger(chargedMicros) && chargedMicros >= 0 && chargedMicros <= row.held_micros,
+        'WEB_PROVIDER_RECEIPT_INVALID',
+      );
+      const receipt = {
+        reconciled: true,
+        source: 'provider_bill',
+        settledMicros: chargedMicros,
+        heldMicros: row.held_micros,
+      };
+      ensure(
+        this.store.run(
+          `UPDATE web_provider_attempts SET state='known',outcome='failed',usage_units=0,charged_micros=?,receipt_json=?,settled_at=?
+          WHERE operation_id=? AND phase=? AND ordinal=? AND state='unknown'`,
+          chargedMicros,
+          JSON.stringify(receipt),
+          this.now(),
+          key.operationId,
+          key.phase,
+          key.ordinal,
+        ).changes === 1,
+        'WEB_PROVIDER_ATTEMPT_STALE',
+      );
+      ensure(
+        this.store.run(
+          `UPDATE web_provider_spending SET held_micros=held_micros-?,spent_micros=spent_micros+?
+          WHERE provider=? AND held_micros>=?`,
+          row.held_micros,
+          chargedMicros,
+          row.provider,
+          row.held_micros,
+        ).changes === 1,
+        'WEB_PROVIDER_BUDGET_CONFLICT',
+      );
+      if (row.stage_version !== null)
+        this.capacity.confirm(
+          {
+            operationId: key.operationId,
+            stage: key.phase === 'speech' ? 'audio' : 'text',
+            phase: key.phase,
+            ordinal: key.ordinal,
+          },
+          { outcome: 'failed', receipt, usage: { units: 0 } },
+        );
+      return { heldMicros: row.held_micros, settledMicros: chargedMicros, provider: row.provider };
     });
   }
   /** Release only a reservation proven never to have crossed the dispatch boundary. */
@@ -597,6 +661,11 @@ export class WebProviderOffline {
         'WEB_PROVIDER_BUDGET_CONFLICT',
       );
     });
+  }
+  /** Part 54: a call may have been sent and its result is not known: UNKNOWN stays held, the reply ends now. */
+  failUnconfirmed(claim: WebStageClaim) {
+    this.check();
+    this.capacity.failUnconfirmed(claim);
   }
   /** Part 21d: the whole model chain failed definitely-not-billed before anything more could be sent; end the operation now. */
   failChainExhausted(claim: WebStageClaim) {
@@ -842,11 +911,24 @@ export class WebProviderOffline {
     if (!this.modelChoiceSchema()) return [] as string[];
     return this.store
       .all<{ provider: string }>(
-        'SELECT provider FROM web_provider_backups WHERE operation_id=? AND phase=?',
+        "SELECT provider FROM web_provider_backups WHERE operation_id=? AND phase=? AND code<>'WEB_STAGE_NOT_RUN'",
         operationId,
         phase,
       )
       .map((item) => item.provider);
+  }
+  /** Part 54: how many attempts of this stage were archived so far (the generation of the next shared reservation id). */
+  attemptGeneration(operationId: string, phase: 'draft' | 'review') {
+    if (!this.modelChoiceSchema()) return 0;
+    return this.store.get<{ n: number }>(
+      'SELECT count(*) n FROM web_provider_backups WHERE operation_id=? AND phase=?',
+      operationId,
+      phase,
+    )!.n;
+  }
+  /** True when attempts can be archived (schema 123): see settleNotBilled / archiveNotBilled. */
+  canArchive() {
+    return this.modelChoiceSchema();
   }
 
   /** Zero-charge settlement of an attempt the provider rejected before running it; never ends the operation. */

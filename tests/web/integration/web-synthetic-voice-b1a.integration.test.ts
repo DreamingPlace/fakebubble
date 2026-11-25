@@ -231,7 +231,7 @@ test('C-B1a later migration trigger failure rolls back old attempts, clocks and 
   assert104(f);
   assert.deepEqual({ ...f.store.get<Record<string, unknown>>('SELECT * FROM web_external_attempts') }, { ...before });
   assert.equal(f.store.get<{ n: number }>('SELECT count(*) n FROM web_reviewed_candidates')?.n, 1);
-  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0); // Part 54 NAMED EXCEPTION: an UNKNOWN call no longer keeps its running-slot ticket
 });
 
 test('C-B1a unsafe running, missing wait origin, unexpected reference and bad ticket all refuse without erasure', (t) => {

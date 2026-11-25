@@ -344,11 +344,11 @@ test('C-S3-004 cancelled, old epoch and UNKNOWN failures settle external only wi
   f.advance(30_001);
   const takeover = f.queue.acquireCoordinator('takeover');
   f.ledger.confirm(keys[1]!, failed);
-  assert.equal(f.ledger.recover(takeover, f.ledger.fence(opC.operationId)).status, 'unknown');
+  assert.equal(f.ledger.recover(takeover, f.ledger.fence(opC.operationId)).status, 'failed'); // Part 54 NAMED EXCEPTION: an UNKNOWN reply now ends as failed at once (money held, never retried); it was 'unknown' until its deadline.
   f.ledger.confirm(keys[2]!, failed);
   assert.equal(f.ledger.fence(opA.operationId).status, 'cancelled');
   assert.equal(f.ledger.fence(opB.operationId).status, 'text_running');
-  assert.equal(f.ledger.fence(opC.operationId).status, 'unknown');
+  assert.equal(f.ledger.fence(opC.operationId).status, 'failed'); // Part 54 NAMED EXCEPTION: an UNKNOWN reply now ends as failed at once (money held, never retried); it was 'unknown' until its deadline.
   assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   assert.equal(
     f.store.get<{ trial_reserved: number }>('SELECT trial_reserved FROM web_principals WHERE id=?', b)?.trial_reserved,

@@ -224,7 +224,7 @@ test('C-109: 108 published known asset and terminal UNKNOWN survive explicit mig
   ledger.markSent(unknownClaim, unknownKey);
   f.advance(31_000);
   const successor = queue.acquireCoordinator('old-recovery');
-  assert.equal(ledger.recover(successor, ledger.fence(unknownOp.operationId)).status, 'unknown');
+  assert.equal(ledger.recover(successor, ledger.fence(unknownOp.operationId)).status, 'failed'); // Part 54 NAMED EXCEPTION: an UNKNOWN reply now ends as failed at once (money held, never retried); it was 'unknown' until its deadline.
   const oldTables = Object.fromEntries(
     [
       'web_operations',
@@ -260,7 +260,7 @@ test('C-109: 108 published known asset and terminal UNKNOWN survive explicit mig
       'SELECT status,quota_state FROM web_operations WHERE id=?',
       unknownOp.operationId,
     )!.status,
-    'unknown',
+    'failed',
   );
 });
 
@@ -411,7 +411,7 @@ for (const mode of ['sent', 'known'] as const)
     if (mode === 'sent') {
       assert.equal(
         restarted.get<{ status: string }>('SELECT status FROM web_operations WHERE id=?', op.operationId)!.status,
-        'unknown',
+        'failed',
       );
       for (let step = 0; step < 27; step++) {
         f.advance(10_000);
@@ -463,7 +463,10 @@ for (const mode of ['sent', 'known'] as const)
     assert.deepEqual(
       after,
       mode === 'sent'
-        ? original.map((row) => (row.stage === 'audio' ? { ...row, dispatch_state: 'unknown' } : row))
+        ? original.map((row) =>
+            // Part 54 NAMED EXCEPTION: the UNKNOWN row also carries the marker that its running-slot ticket was freed.
+            row.stage === 'audio' ? { ...row, dispatch_state: 'unknown', usage_json: '{"ticketFreed":true}' } : row,
+          )
         : original,
     );
   });
@@ -552,7 +555,7 @@ test('A-WEB-015 C reproduction: original deadline ends UNKNOWN business reservat
   executor.start();
   assert.equal(
     f.store.get<{ status: string }>('SELECT status FROM web_operations WHERE id=?', op.operationId)!.status,
-    'unknown',
+    'failed',
   );
   for (let step = 0; step < 27; step++) {
     f.advance(10_000);
@@ -570,7 +573,7 @@ test('A-WEB-015 C reproduction: original deadline ends UNKNOWN business reservat
   assert.equal(
     f.store.get<{ reserved: number }>(`SELECT reserved FROM web_external_budgets
     WHERE provider='synthetic-local' AND stage='text' AND phase='draft'`)!.reserved,
-    1,
+    0, // Part 54 NAMED EXCEPTION: an UNKNOWN call no longer keeps its running-slot ticket (its money stays held).
   );
   assert.deepEqual({ ...business }, { status: 'failed', quota_state: 'released', failure_code: 'OPERATION_EXPIRED' });
   assert.equal(

@@ -32,6 +32,10 @@ export class SyntheticEmbedService extends WorkerEntrypoint {
       AI: ai,
     });
   }
+  /** Part 54: the single-call entry the business object uses for an embedding (the same session, no callback). */
+  runEmbed(job: { wire: Parameters<WebIsolatedGenerationSession['embed']>[0] }) {
+    return this.open().embed(job.wire, async () => {});
+  }
   configure(value: string) {
     mode = value;
     calls = [];
