@@ -3629,6 +3629,55 @@ body:has(.admin-shell) {
   gap: 8px;
   margin-top: 16px;
 }
+
+/* ---- Part 57: 导出 ---- */
+/* The dialog the page's 导出 button opens: one label column, one control column; it never holds an explanation line (hover only). */
+.account-admin-page.admin-shell .ex-dialog {
+  width: min(560px, 92vw);
+  max-height: 86vh;
+  overflow: auto;
+}
+.account-admin-page.admin-shell .ex-body {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.account-admin-page.admin-shell .ex-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.account-admin-page.admin-shell .ex-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .ex-dialog .ex-input {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.account-admin-page.admin-shell:is(.admin-shell, #ad-layout) .ex-dialog input.admin-date-input {
+  width: 152px;
+  min-width: 152px;
+}
+.account-admin-page.admin-shell .ex-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .ex-to,
+.account-admin-page.admin-shell .ex-zone {
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .rh-export {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 8px;
+}
 /* Part 24m: the leave-with-unsaved-changes dialog opens and closes with a short fade and rise. */
 .admin-leave-backdrop[data-state="open"] {
   animation: admin-leave-fade 160ms ease-out both;

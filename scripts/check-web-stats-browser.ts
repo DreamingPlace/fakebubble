@@ -47,6 +47,22 @@ function loadPlaywright(): any {
 }
 
 const DAY = 86_400_000;
+/** Part 57: the page's 导出 button, the CSV format, the dialog's 导出; resolves with the file the browser saved. */
+async function exportCsv(page: {
+  getByRole: (...a: never[]) => unknown;
+  waitForEvent: (e: string) => Promise<unknown>;
+}) {
+  // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+  const p = page as any;
+  await p.getByRole('button', { name: '导出', exact: true }).click();
+  const dialog = p.getByRole('dialog', { name: '导出' });
+  await dialog.getByRole('button', { name: 'CSV', exact: true }).click();
+  const [download] = await Promise.all([
+    p.waitForEvent('download'),
+    dialog.getByRole('button', { name: '导出', exact: true }).click(),
+  ]);
+  return download as { path: () => Promise<string> };
+}
 const NOW = Date.parse('2026-11-20T10:00:00Z');
 const STARTED = Date.parse('2026-11-03T08:00:00Z');
 const day = (at: number) => new Date(at).toISOString().slice(0, 10);
@@ -223,13 +239,11 @@ try {
   await shot(stats, 'player-stats-by-model');
   const body = await stats.locator('body').innerText();
   for (const id of CHARACTERS) assert.equal(body.includes(id), false, `no character id on the page: ${id}`);
-  const [statsCsv] = await Promise.all([
-    stats.waitForEvent('download'),
-    stats.getByRole('button', { name: '导出表格' }).click(),
-  ]);
+  // Part 57: the page's one 导出 button opens the dialog; CSV carries one table (here 每日统计: a header and one line per day).
+  const statsCsv = await exportCsv(stats);
   const statsBytes = readFileSync(await statsCsv.path());
   assert.deepEqual([...statsBytes.subarray(0, 3)], [0xef, 0xbb, 0xbf], 'a UTF-8 BOM');
-  assert.equal(statsBytes.toString('utf8').trimEnd().split('\r\n').length, 1 + 18 + 1);
+  assert.equal(statsBytes.toString('utf8').trimEnd().split('\r\n').length, 1 + 18);
 
   // ---- 消耗表: the month spans 2026-11-12 ----
   const costs = await open(owner, 'costs');
@@ -242,10 +256,7 @@ try {
   );
   assert.equal(await costs.getByText('Fish Drama 3').count(), 0);
   await shot(costs, 'costs-month-spanning-2026-11-12', true);
-  const [costsCsv] = await Promise.all([
-    costs.waitForEvent('download'),
-    costs.getByRole('button', { name: '导出表格' }).click(),
-  ]);
+  const costsCsv = await exportCsv(costs);
   assert.deepEqual([...readFileSync(await costsCsv.path()).subarray(0, 3)], [0xef, 0xbb, 0xbf]);
 
   // ---- an administrator without stats.read sees neither page ----

@@ -38,6 +38,8 @@ import { drawer } from '../ui/drawer.ts';
 import { hoverValue } from '../ui/hover-value.ts';
 import { paidButton } from '../ui/paid-button.ts';
 import { rollNumber } from '../ui/number-roll.ts';
+import type { MakeExport } from '../export/export-dialog.ts';
+import { REHEARSAL_SHEETS } from '../export/export-sheets.ts';
 import { segmented } from '../ui/segmented.ts';
 import { statusBadge } from '../ui/status-badge.ts';
 
@@ -68,6 +70,8 @@ export type RehearsalHost = {
   poll?: { setTimer?: (fn: () => void, ms: number) => unknown; clearTimer?: (handle: unknown) => void };
   /** Part 37b: ⭐ on a character line opens the adopt box (destination + situation) for this character's draft. Absent = no ⭐. */
   adopt?: (input: { characterId: string; player: string; reply: string }) => void;
+  /** Part 57: this character's runs (lines and scores) as a file. Absent = no 导出 button. */
+  makeExport?: MakeExport;
 };
 type Pick = { kind: 'set'; set: RehearsalSet } | { kind: 'memes' } | { kind: 'script'; id: string } | { kind: 'new' };
 const POLL_MS = 2500;
@@ -169,6 +173,24 @@ export function rehearsalView(host: RehearsalHost) {
   const result = h('div', { class: 'rh-result' });
   const manageHost = host.owner && host.confirm ? h('div', { class: 'pw-manage rh-manage' }) : null;
   main.append(setup);
+  // Part 57: 导出 (the lines and the scores of this character's runs). Outside `result`, which is repainted with every poll.
+  const exportButton = host.makeExport?.(() => {
+    const characterId = host.characterId();
+    return characterId
+      ? [
+          {
+            id: 'rehearsal',
+            label: '多轮预演',
+            kind: 'rehearsal',
+            range: 'none',
+            sheets: REHEARSAL_SHEETS,
+            filters: () => ({ characterId }),
+            tip: '这个角色的预演记录：每一轮的对话行和评分',
+          },
+        ]
+      : [];
+  });
+  if (exportButton) main.append(h('div', { class: 'rh-export' }, exportButton));
   if (manageHost) main.append(manageHost);
   main.append(result);
   const manage =

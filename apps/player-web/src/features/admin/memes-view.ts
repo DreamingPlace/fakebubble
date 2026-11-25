@@ -9,6 +9,7 @@ import { h } from '../cocreation/h.ts';
 import { dataTable } from './ui/data-table.ts';
 import { errorLine } from './ui/error-line.ts';
 import { hoverValue } from './ui/hover-value.ts';
+import type { MakeExport } from './export/export-dialog.ts';
 import { pageHead, statusLine } from './ui/page-head.ts';
 
 type Deps = {
@@ -17,6 +18,8 @@ type Deps = {
   newRequestId: () => string;
   disposed: () => boolean;
   toast: (text: string) => void;
+  /** Part 57: the page's 导出 button (without it there is none). */
+  makeExport?: MakeExport | undefined;
 };
 const codeOf = (error: unknown) =>
   error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : '';
@@ -231,7 +234,17 @@ export function memesView(root: HTMLElement, deps: Deps) {
   });
   hoverValue(search, '词、释义和标签都会被搜到');
 
-  root.replaceChildren(pageHead('网络梗', status), bar, error, table.root, pager);
+  // Part 57: 导出 respects the search, year, tag and state on screen (the whole library, not one page).
+  const exportButton = deps.makeExport?.(() => [
+    {
+      id: 'memes',
+      label: '网络梗',
+      kind: 'memes',
+      range: 'none',
+      filters: () => ({ query, year, tag, state }),
+    },
+  ]);
+  root.replaceChildren(pageHead('网络梗', status, exportButton), bar, error, table.root, pager);
   return {
     // (the shell's own `run` already wraps a page load: a nested one would be skipped as busy)
     load: () => fetchList(),

@@ -122,3 +122,12 @@ Player pages: one line on the terms page (the license notice and its link); noth
 | what could not be adopted | A box 「有 N 条没有采纳」 with one line per item: 「玩家#xxxx · 角色 · 第 N 条：sentence」 (the anonymous code only). Sentences: 这一栏最多 300 字，请先精简现有内容。 · 这个情境已有 6 条样本，请先删掉一条。 · 「<栏目>」在草稿和正式版本里都改过，请先在角色工作台里核对。 · 留言条没有采纳；看完用「标为已处理」收起。 |
 | a save against a draft that moved on | merged without a word when no field was changed on both sides; otherwise 「<栏目>」在别处也改过，不能自动合并。请重新载入，核对这一栏后再保存。 (关系与故事: 「<组合/故事/世界背景…>」在别处也改过，不能自动合并。你写的内容都还在下面。) |
 | the list | opens on **新**; an adopted, processed or archived card leaves it (and is found under 已处理 / 已归档 / 全部). |
+
+## Part 57 — 导出
+| Where | Words |
+|---|---|
+| every page that shows data, top right of the title row | one button **导出** (hover: 把这一页的数据导出为 CSV 或 Excel 文件。) |
+| the dialog | 内容 (only when the page has more than one table: e.g. 对话消息 · 失败的回复 · 调用记录 · 分享链接) · 格式 (**Excel（.xlsx）** · **CSV**) · 表格 (CSV only) · 范围 (开始日期 至 结束日期 **UTC+8**, empty = 不限; or 7 天 · 30 天 · 90 天 on 总览 and 消耗表) · the page's own filters (回复写法 · 模型 · 状态 · 玩家 · 供应商) · 取消 · 导出 (while saving: 导出中 2 / 3) |
+| after | 已导出 N 行。 / 已导出 N 行，分成 M 个文件。 |
+| refusal | 这次导出的行数太多，请缩小日期范围，或加上筛选。 (`EXPORT_TOO_LARGE`) |
+| tables | 每条消息 · 按对话汇总 · 失败的回复 · 模型调用 · 外部调用 · 向量调用 · 结果未知的调用 · 每日统计 · 每小时 · 消耗明细 · 按玩家类型 · 批次 · 邀请码 · 额度 · 预演轮次 · 对话 · 评分. A CSV file name carries an ASCII word for its table (`messages`, `summary`, `hourly` …). No explanation line: hover tips only. |

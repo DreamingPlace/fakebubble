@@ -46,6 +46,7 @@ import { growBox } from '../ui/grow-box.ts';
 import { reviewCompareView } from './review-compare-view.ts';
 import { rehearsalView } from '../rehearsal/rehearsal-view.ts';
 import { STAGE_LABEL, isFinished, progressText, stageOf, type Stage } from './stage.ts';
+import type { MakeExport } from '../export/export-dialog.ts';
 
 export const RUN_MAX = 50;
 const INPUT_MAX = 4000;
@@ -78,6 +79,8 @@ export type PreviewWorkbenchHost = {
   confirm?: ConfirmInPlace;
   /** Part 37b: ⭐ on a 多轮预演 line (the 说话档案 adopt box). */
   adopt?: (input: { characterId: string; player: string; reply: string }) => void;
+  /** Part 57: 多轮预演's 导出 button. */
+  makeExport?: MakeExport;
 };
 const defaultHidden = () => (globalThis as { document?: { hidden?: boolean } }).document?.hidden === true;
 const defaultOnVisible = (fn: () => void) => {
@@ -252,6 +255,7 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
         disposed: () => disposed || host.disposed(),
         modalParent: host.modalParent,
         ...(host.adopt ? { adopt: host.adopt } : {}),
+        ...(host.makeExport ? { makeExport: host.makeExport } : {}),
         ...(rehearsalHalf ? { inline: rehearsalHalf } : {}),
         ...(host.owner && host.confirm
           ? { owner: host.owner, confirm: host.confirm, isOwner: () => host.member()?.role === 'owner' }
