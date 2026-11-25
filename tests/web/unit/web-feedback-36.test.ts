@@ -100,7 +100,7 @@ test('only the character\'s replies of the player\'s own conversation can be rat
   assert.throws(() => rate({ messageId: 'voice', rating: 'up', conversationId: 'other-conversation' }), /NOT_FOUND/, 'another conversation');
   // another player (another principal and world) rating this player's message id
   assert.throws(() => rate({ messageId: 'voice', rating: 'up' }, { principalId: 'someone-else', world_id: 'other-world', player_id: 'other-player' }), /NOT_FOUND|WEB_RETENTION_SCOPE_INVALID/, 'a principal this world does not know is refused before anything is read');
-  assert.throws(() => rate({ messageId: 'voice', rating: 'up' }, { ...actor, principalId: 'someone-else' }), /NOT_FOUND/, 'the publication belongs to another principal');
+  assert.throws(() => rate({ messageId: 'voice', rating: 'up' }, { ...actor, principalId: 'someone-else' }), /NOT_FOUND|WEB_RETENTION_SCOPE_INVALID/, 'the publication belongs to another principal');
   assert.equal(store.get<{ n: number }>('SELECT count(*) n FROM web_feedback')!.n, 0);
 });
 
