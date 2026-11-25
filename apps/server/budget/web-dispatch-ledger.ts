@@ -131,7 +131,12 @@ export class WebDispatchLedger {
   }
 
   /** Budget reservation and not-sent intent are one short transaction after a live stage claim. */
-  reserve(claim: WebStageClaim, input: { phase: Phase; ordinal: number; provider: string; providerRequestId: string }) {
+  reserve(
+    claim: WebStageClaim,
+    input: { phase: Phase; ordinal: number; provider: string; providerRequestId: string },
+    /** Part 54: the draft and the review of ONE text claim are reserved together, before the single call to generation. */
+    together = false,
+  ) {
     ensure(
       validPhase(claim.stage, input.phase, input.ordinal) &&
         input.provider.length > 0 &&
@@ -175,8 +180,9 @@ export class WebDispatchLedger {
       ensure(
         !this.store.get(
           `SELECT 1 FROM web_external_attempts WHERE operation_id=? AND dispatch_state!='known'
-          AND NOT (stage='text' AND ?='text' AND stage_version=? AND lease_epoch=? AND lease_token=?) LIMIT 1`,
+          AND NOT (?=1 AND stage='text' AND ?='text' AND stage_version=? AND lease_epoch=? AND lease_token=?) LIMIT 1`,
           claim.operationId,
+          together ? 1 : 0,
           claim.stage,
           claim.stageVersion,
           claim.epoch,

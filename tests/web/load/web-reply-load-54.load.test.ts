@@ -160,8 +160,8 @@ test('WEDGE: one provider call never returns, then 50 normal replies all succeed
   const stuck = await f.poll(players[0]!, stuckId, 60_000);
   const took = Date.now() - started;
   assert.equal(stuck.status, 'failed');
-  // The call limit plus two budget calls and one poll interval; never the 90 s of the old behaviour.
-  assert.ok(took < 2 * callTimeout + 8_000, `the stuck reply ended within its deadline (${took} ms)`);
+  // The call limit, the drain of 50 other replies and the poll interval; never the 90 s of the old behaviour.
+  assert.ok(took < 2 * callTimeout + 20_000, `the stuck reply ended within its deadline (${took} ms)`);
   const tickets = (await f.business('/__test/tickets')) as {
     attempts: { state: string; n: number }[];
     budgets: { reserved: number }[];

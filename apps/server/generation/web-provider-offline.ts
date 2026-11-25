@@ -443,7 +443,7 @@ export class WebProviderOffline {
     });
   }
   /** Stage lease, active grant and monetary hold share the same SQLite write transaction. */
-  reserveForClaim(claim: WebStageClaim, input: Reserve) {
+  reserveForClaim(claim: WebStageClaim, input: Reserve, together = false) {
     this.check();
     ensure(
       claim.operationId === input.operationId &&
@@ -457,12 +457,16 @@ export class WebProviderOffline {
       const reserved = this.reserve(input);
       if (reserved.duplicate && this.isRewound(input)) this.rebindRewound(claim, input);
       if (!reserved.duplicate) {
-        this.capacity.reserve(claim, {
-          phase: input.phase,
-          ordinal: input.ordinal,
-          provider: input.provider,
-          providerRequestId: `${input.operationId}:${input.phase}:${input.ordinal}`,
-        });
+        this.capacity.reserve(
+          claim,
+          {
+            phase: input.phase,
+            ordinal: input.ordinal,
+            provider: input.provider,
+            providerRequestId: `${input.operationId}:${input.phase}:${input.ordinal}`,
+          },
+          together,
+        );
         this.store.run(
           `UPDATE web_provider_attempts SET stage_version=?,
           lease_epoch=?,lease_token=? WHERE operation_id=? AND phase=? AND ordinal=?

@@ -456,17 +456,21 @@ export class WebProviderRunner {
     this.store.transaction(() => {
       for (const phase of phases) {
         const limit = limitOf(phase);
-        this.ledger.reserveForClaim(claim, {
-          ...keyOf(phase),
-          ...scope,
-          requestDigest: row.request_digest,
-          policyHash,
-          wireRequestHash: pending(phase),
-          voiceVersion: row.voice_version,
-          provider: limit.provider,
-          model: limit.model,
-          maxUnits: limit.inputTokens + limit.outputTokens,
-        });
+        this.ledger.reserveForClaim(
+          claim,
+          {
+            ...keyOf(phase),
+            ...scope,
+            requestDigest: row.request_digest,
+            policyHash,
+            wireRequestHash: pending(phase),
+            voiceVersion: row.voice_version,
+            provider: limit.provider,
+            model: limit.model,
+            maxUnits: limit.inputTokens + limit.outputTokens,
+          },
+          true,
+        );
       }
     });
     // 2. The shared budget, before anything can be sent; then the possible-send boundary for every stage in one transaction.
@@ -592,7 +596,7 @@ export class WebProviderRunner {
           usageUnits: usage.inputTokens + usage.outputTokens,
         });
         await this.budget?.settleAttempt(this.store, key);
-        failedCode = observation.errorCode ?? 'TEXT_STAGE_FAILED';
+        failedCode = observation.errorCode ?? 'TEXT_NETWORK_ERROR';
       } else if (route && isNotBilled(observation.errorCode) && route[phase].length > 1 && this.ledger.canArchive()) {
         // The provider proved it did not run the request: settle at zero, then retry on the next model of the chain.
         const code = observation.errorCode!;
@@ -631,7 +635,7 @@ export class WebProviderRunner {
     if (retry) return 'retry';
     if (again) return 'again';
     if (failedCode || (run && !run.result.ok))
-      throw new DomainError(failedCode ?? (run!.result.ok ? 'TEXT_STAGE_FAILED' : run!.result.code));
+      throw new DomainError(failedCode ?? (run!.result.ok ? 'TEXT_NETWORK_ERROR' : run!.result.code));
     return 'done';
   }
   async runSpeech(claim: WebStageClaim, signal: AbortSignal): Promise<string | null> {

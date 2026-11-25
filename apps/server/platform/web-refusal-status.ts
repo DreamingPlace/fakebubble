@@ -360,6 +360,7 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   UNSUPPORTED_DEEPSEEK_MODEL: 500,
   UNSUPPORTED_SCHEMA: 500,
   UNSUPPORTED_TEXT_PROVIDER: 500,
+  TEXT_NETWORK_ERROR: 500,
   // 503: a service or feature the request needs is not available right now
   ADMIN_EMAIL_UNAVAILABLE: 503,
   ADMIN_EMAIL_UNAVAILABLE_FOR_BINDING: 503,
