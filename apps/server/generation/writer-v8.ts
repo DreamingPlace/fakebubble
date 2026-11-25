@@ -88,11 +88,10 @@ export type WriterDraftProvider = keyof typeof WRITER_ADDENDA;
 /**
  * Part 36 (连发 and 引用): the words the writer gets ONLY when the turn has several bubbles or a quote, appended last to the system
  * message. A single message without a quote gets exactly the prompt it always did, so every existing pin (the files, the protocol,
- * the policy and `writerPins`) is untouched; this block has its own pin, `WRITER_BATCH_SHA256`, asserted by `web-turns-36`.
+ * the policy and `writerPins`) is untouched; this block has its own pin (the sha256 of `WRITER_BATCH_NOTE`, asserted in `web-turns-36` and documented in docs/status/part-36.md).
  */
 export const WRITER_BATCH_NOTE =
   '这一轮对方连着发了几条消息（requiredMessageIds里的那几条）：你只回一次，像真人看完几条之后回一回。琐碎的略过，有意思的接；之前没理的、其实重要的一件事，你自己想起来了，可以顺口提一句，不用每条都有交代。带replyTo的消息是对方明确引用的这场聊天里的一条旧消息（作者和文字由服务端固定，author是你自己的就是你说过的话）：接的是被引用的那件事，不复述被引用的原文。';
-export const WRITER_BATCH_SHA256 = createHash('sha256').update(WRITER_BATCH_NOTE).digest('hex');
 const batchBlock = (request: TextGenerationRequest) =>
   request.requiredMessageIds.length > 1 || request.messages.some((message) => message.replyTo)
     ? `\n\n${WRITER_BATCH_NOTE}`

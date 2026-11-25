@@ -181,6 +181,8 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   BROADCAST_NOT_CANCELLABLE: '这条广播已经开始发送，不能取消。',
   INVALID_BROADCAST_AUDIO: '语音需是 24 kHz 单声道 WAV，有声音，且不超过约 39 秒。',
   WEB_BROADCAST_SCHEMA_MISMATCH: '这个站点的广播表与程序不一致，请联系主管理员。',
+  WEB_TURN_SCHEMA_MISMATCH: '这个站点的连发消息表与程序不一致，请联系主管理员。',
+  WEB_FEEDBACK_SCHEMA_MISMATCH: '这个站点的语音反馈表与程序不一致，请联系主管理员。',
   WEB_SHARE_SCHEMA_MISMATCH: '这个站点的语音小卡链接表与程序不一致，请联系主管理员。',
   WEB_ADMIN_SPEECH_SCHEMA_MISMATCH: '这个站点的朗读表与程序不一致，请联系主管理员。',
   WEB_PROVIDER_BUDGET_CONFLICT: '预算记录异常，朗读已停止。请联系主管理员核对。',

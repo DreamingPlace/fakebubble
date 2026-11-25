@@ -239,6 +239,12 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   // Part 45: shareable voice-card links. The STOP code is a start-up refusal; the limit answers a player with too many live links.
   WEB_SHARE_SCHEMA_MISMATCH: 503,
   SHARE_LIMIT_REACHED: 429,
+  // Part 36: 连发 and 👍 / 👎.
+  QUOTE_UNAVAILABLE: 404,
+  FEEDBACK_TARGET_INVALID: 400,
+  WEB_TURN_BUBBLES_FULL: 429,
+  WEB_TURN_SCHEMA_MISMATCH: 503,
+  WEB_FEEDBACK_SCHEMA_MISMATCH: 503,
   // Part 37c-1: the internet-meme dictionary's on/off table (a start-up refusal) and a switch for an entry the dictionary does not have.
   WEB_MEME_SCHEMA_MISMATCH: 503,
   MEME_NOT_FOUND: 404,
