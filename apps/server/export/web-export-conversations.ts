@@ -50,6 +50,10 @@ export const MESSAGES_HEADER = [
   '改动原因',
   '状态',
   '错误代码',
+  // Part 58: the writer's hidden plan (what she read behind the player's words, what she aimed for). Owner-only; appended so the
+  // earlier columns keep their place. Empty for a 旧 reply, an archived line and a reply with no plan.
+  '读到',
+  '目的',
 ] as const;
 export const CONVERSATIONS_HEADER = [
   '对话编号',
@@ -70,6 +74,17 @@ const GUARD_REASONS = new Set([
   'denied_ai',
   'batch_output',
   'over_intense',
+  // Part 56
+  'cold_to_feeling',
+  'argued_name',
+  'confused_own_name',
+  'denied_own_words',
+  'incoherent_reply',
+  // Part 58
+  'dismissive_filler',
+  'impatient_or_lecturing',
+  'meta_commentary',
+  'no_emotional_value',
 ]);
 const FIXED_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 const MODEL_NAME = /^[A-Za-z0-9._:/-]{1,80}$/;
@@ -172,6 +187,8 @@ export type OpInfo = {
   reviewModel: string;
   changed: boolean | null;
   reasons: string[];
+  /** Part 58: the hidden plan of a 新 reply, as stored in the candidate (null / absent = none). */
+  plan?: { read: string; aim: string } | null;
 };
 type Line = {
   at: number | null;
@@ -180,6 +197,8 @@ type Line = {
   text: string;
   delivery: string;
   op: OpInfo | null;
+  /** Part 58: the plan of this reply with the player's nicknames replaced (character lines only). */
+  plan?: { read: string; aim: string } | null;
   /** 已发布 / 失败 / 结果未知 / 进行中 / 已取消 */
   status: string;
   errorCode: string;
@@ -221,6 +240,8 @@ export function readOperations(store: Reader, where: string, args: (string | num
     memes: number | null;
     changed: number | null;
     reasons: string | null;
+    plan_read: string | null;
+    plan_aim: string | null;
   }>(
     `SELECT o.id,o.status,o.failure_code,o.input_message_id,o.character_id,o.created_at,
       ${models ? '(SELECT x.draft_model FROM web_operation_models x WHERE x.operation_id=o.id)' : 'NULL'} draft_model,
@@ -229,7 +250,9 @@ export function readOperations(store: Reader, where: string, args: (string | num
       ${requests ? "(SELECT json_extract(r.request_json,'$.writerProfile') FROM web_v7_requests r WHERE r.operation_id=o.id)" : 'NULL'} profile,
       ${requests ? "(SELECT json_extract(r.request_json,'$.writerMemes') FROM web_v7_requests r WHERE r.operation_id=o.id)" : 'NULL'} memes,
       ${metrics ? '(SELECT x.review_changed FROM web_operation_metrics x WHERE x.operation_id=o.id)' : 'NULL'} changed,
-      ${candidates ? "(SELECT json_extract(c.candidate_json,'$.guardReasons') FROM web_provider_candidates c WHERE c.operation_id=o.id)" : 'NULL'} reasons
+      ${candidates ? "(SELECT json_extract(c.candidate_json,'$.guardReasons') FROM web_provider_candidates c WHERE c.operation_id=o.id)" : 'NULL'} reasons,
+      ${candidates ? "(SELECT json_extract(c.candidate_json,'$.plan.read') FROM web_provider_candidates c WHERE c.operation_id=o.id)" : 'NULL'} plan_read,
+      ${candidates ? "(SELECT json_extract(c.candidate_json,'$.plan.aim') FROM web_provider_candidates c WHERE c.operation_id=o.id)" : 'NULL'} plan_aim
     FROM web_operations o WHERE ${where}`,
     ...args,
   );
@@ -255,6 +278,10 @@ export function readOperations(store: Reader, where: string, args: (string | num
       reviewModel: row.review_model && MODEL_NAME.test(row.review_model) ? row.review_model : '',
       changed: row.changed === null ? (reasons.length > 0 ? true : null) : row.changed === 1,
       reasons,
+      plan:
+        typeof row.plan_read === 'string' && typeof row.plan_aim === 'string'
+          ? { read: row.plan_read.slice(0, 200), aim: row.plan_aim.slice(0, 200) }
+          : null,
       characterId: row.character_id,
       createdAt: row.created_at,
     });
@@ -304,6 +331,10 @@ function readLines(store: Reader, worldId: string, characterId: string, names: r
       text: redactNicknames(m.body, names),
       delivery: made?.voiced ? '语音' : '文字',
       op,
+      plan:
+        m.author_kind !== 'player' && op?.plan
+          ? { read: redactNicknames(op.plan.read, names), aim: redactNicknames(op.plan.aim, names) }
+          : null,
       status: op ? statusLabel(op.status) : '已发布',
       errorCode: op?.status === 'failed' ? (op.failureCode ?? '') : '',
       placeholder: false,
@@ -463,6 +494,8 @@ export function conversationSheets(conversations: readonly Conversation[]): Shee
         line.op && line.speaker !== '玩家' ? line.op.reasons.join('、') : '',
         line.status,
         line.errorCode,
+        line.speaker !== '玩家' && !line.placeholder ? (line.plan?.read ?? '') : '',
+        line.speaker !== '玩家' && !line.placeholder ? (line.plan?.aim ?? '') : '',
       ]);
       if (line.placeholder) failed++;
       else count++;

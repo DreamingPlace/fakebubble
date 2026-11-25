@@ -325,6 +325,35 @@ test('a code is never reused while it is live or any archive row still carries i
 
 // ---- transcripts ---------------------------------------------------------------------------------------------------------
 
+test('Part 58: a transcript line carries the writer\'s hidden plan from the stored candidate (nicknames replaced)', (t) => {
+  const f = fixture(t);
+  const p = f.player('a');
+  const op = f.round(p, 'jojo', '冷了多穿', ['谢谢，好久没人这么关心我了'], T0, true);
+  f.store.run(
+    `INSERT INTO web_provider_candidates(operation_id,request_digest,candidate_json,candidate_digest,voice_version,draft_output_digest,review_output_digest,reviewed_at)
+    VALUES (?,?,?,?,?,?,?,?)`,
+    op,
+    'd'.repeat(64),
+    JSON.stringify({
+      bubbles: [{ text: '不读候选正文' }],
+      plan: { read: '阿泡在关心我', aim: '被接住：谢谢', aims: ['被接住'] },
+    }),
+    'd'.repeat(64),
+    'v',
+    'd'.repeat(64),
+    'd'.repeat(64),
+    T0,
+  );
+  f.round(p, 'jojo', '晚安', ['晚安～'], T0 + 3_600_000, false);
+  const lines = readTranscript(f.store, p.worldId, 'jojo', ['阿泡']);
+  assert.deepEqual(
+    lines.map((l) => l.plan ?? null),
+    [null, { read: '〔昵称〕在关心我', aim: '被接住：谢谢' }, null, null],
+    'only the reply with a plan, never a player line, never a reply without one',
+  );
+});
+
+
 test('a transcript holds the player text, final bubbles, proactive messages and failed replies in order, with local times', (t) => {
   const f = fixture(t);
   const p = f.player('a');
@@ -428,7 +457,8 @@ test('detail and CSV: both sides in order, the 审核改动 mark, 〔昵称〕 f
   );
   const exported = f.review.export(f.ownerAuth as never, { characterId: 'jojo', code: row.code, archived: false });
   const lines = exported.csv.replace(/^﻿/, '').trim().split('\r\n');
-  assert.equal(lines[0], 'label,time,speaker,text,status,error_code,审核改动');
+  // Part 58 (named exception): the page's CSV gained 读到,目的 at the end (empty here: no plan)
+  assert.equal(lines[0], 'label,time,speaker,text,status,error_code,审核改动,读到,目的');
   assert.equal(lines.length, 6);
   assert.ok(
     lines.every((l) => l.startsWith(row.label) || l === lines[0]),

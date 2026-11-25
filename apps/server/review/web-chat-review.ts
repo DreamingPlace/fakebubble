@@ -139,6 +139,12 @@ export type TranscriptLine = {
   status: 'ok' | 'failed';
   errorCode: string | null;
   reviewChanged: boolean;
+  /**
+   * Part 58: the writer's hidden plan of this reply (what she read, what she aimed for), read from the stored candidate for the
+   * owner's page and export only; nicknames replaced. Absent for a player line, a 旧 reply and a reply with no plan. Never copied
+   * to the archive (it has no column for it), so an archived transcript shows none.
+   */
+  plan?: { read: string; aim: string } | null;
 };
 export type CharacterFacts = { characterId: string; label: string; timeZone: string };
 
@@ -211,6 +217,7 @@ export function readTranscript(
 ): TranscriptLine[] {
   const facts = characterFacts(store, characterId);
   const withMetrics = reviewChangedKnown(store);
+  const withPlan = tableExists(store, 'web_provider_candidates') && tableExists(store, 'web_publication_items');
   const messages = store.all<{
     seq: number;
     id: string;
@@ -219,6 +226,8 @@ export function readTranscript(
     author_kind: 'player' | 'character';
     proactive: number;
     changed: number | null;
+    plan_read: string | null;
+    plan_aim: string | null;
   }>(
     `SELECT m.seq,m.id,m.body,m.created_at,m.author_kind,m.proactive,
       ${
@@ -226,7 +235,19 @@ export function readTranscript(
           ? `(SELECT x.review_changed FROM web_publication_items i
             JOIN web_operation_metrics x ON x.operation_id=i.operation_id WHERE i.message_id=m.id)`
           : 'NULL'
-      } changed
+      } changed,
+      ${
+        withPlan
+          ? `(SELECT json_extract(c.candidate_json,'$.plan.read') FROM web_publication_items i
+            JOIN web_provider_candidates c ON c.operation_id=i.operation_id WHERE i.message_id=m.id)`
+          : 'NULL'
+      } plan_read,
+      ${
+        withPlan
+          ? `(SELECT json_extract(c.candidate_json,'$.plan.aim') FROM web_publication_items i
+            JOIN web_provider_candidates c ON c.operation_id=i.operation_id WHERE i.message_id=m.id)`
+          : 'NULL'
+      } plan_aim
     FROM messages m JOIN conversations c ON c.world_id=m.world_id AND c.id=m.conversation_id
     WHERE m.world_id=? AND c.kind='private' AND c.private_character_id=? ORDER BY m.seq`,
     worldId,
@@ -251,6 +272,13 @@ export function readTranscript(
         status: 'ok',
         errorCode: null,
         reviewChanged: m.author_kind === 'character' && m.changed === 1,
+        plan:
+          m.author_kind === 'character' && typeof m.plan_read === 'string' && typeof m.plan_aim === 'string'
+            ? {
+                read: redactNicknames(m.plan_read.slice(0, 200), names),
+                aim: redactNicknames(m.plan_aim.slice(0, 200), names),
+              }
+            : null,
       },
     });
   // A failed reply belongs right after the player message it answered.
