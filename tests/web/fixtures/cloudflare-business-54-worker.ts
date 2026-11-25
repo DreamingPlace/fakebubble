@@ -52,7 +52,8 @@ class Pool {
           clearTimeout(timer);
           resolve(take());
         },
-        fail: () => reject(new Error('The Workers runtime canceled this request because it detected that your Worker had hung')),
+        fail: () =>
+          reject(new Error('The Workers runtime canceled this request because it detected that your Worker had hung')),
       };
       const timer = setTimeout(() => {
         const at = this.queue.indexOf(waiter);
@@ -152,7 +153,9 @@ export class WebBusinessObject extends Retention {
     }
     super(ctx, wrapped as never);
     this.connections = connectionModel.current;
-    this.storage = (ctx as unknown as { storage: { sql: { exec(q: string, ...b: unknown[]): { toArray(): any[] } } } }).storage;
+    this.storage = (
+      ctx as unknown as { storage: { sql: { exec(q: string, ...b: unknown[]): { toArray(): any[] } } } }
+    ).storage;
   }
   private readonly connections: Connections | null;
   private readonly storage: { sql: { exec(q: string, ...b: unknown[]): { toArray(): any[] } } };

@@ -80,8 +80,7 @@ type WebTextGenerator = Pick<
   runText?(job: WebTextJob, signal?: AbortSignal): Promise<WebTextRun>;
   /** False when the generation Worker has no `runText` yet: refused BEFORE anything is reserved. */
   supportsRunText?(): boolean;
-} & // Part 37a: the v8 writer's policy hash. A generator without it (an older one) cannot run a v8 reply: it is refused before a send.
-  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash' | 'writerProfilePolicyHash' | 'writerMemesPolicyHash'>>;
+} & Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash' | 'writerProfilePolicyHash' | 'writerMemesPolicyHash'>>; // Part 37a: the v8 writer's policy hash. A generator without it (an older one) cannot run a v8 reply: it is refused before a send.
 
 /** Explicit live adapter. Constructing it does not send or read credentials. */
 export function fishTransport(audio: FishAudio): FakeFish {

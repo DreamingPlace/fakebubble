@@ -45,10 +45,12 @@ export function systemView(
     renewPrices: (requestId: string) => Promise<RenewPricesResult>;
     topUp: (input: { requestId: string; provider: 'deepseek' | 'fish'; dollars: number }) => Promise<BudgetTopUpResult>;
     /** Part 54: 未确认的调用 (absent where the server has no such page). */
-    unknownCalls?: {
-      load: Parameters<typeof unknownCallsPanel>[0]['load'];
-      resolve: Parameters<typeof unknownCallsPanel>[0]['resolve'];
-    } | undefined;
+    unknownCalls?:
+      | {
+          load: Parameters<typeof unknownCallsPanel>[0]['load'];
+          resolve: Parameters<typeof unknownCallsPanel>[0]['resolve'];
+        }
+      | undefined;
     isOwner: () => boolean;
     run: (work: () => Promise<void>) => Promise<void>;
     /** 续期 and 预算充值 confirm in place, inside the host they are given (no dialog). */

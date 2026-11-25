@@ -957,17 +957,41 @@ test('54 未确认的调用: a code, provider, model, stage, held amount, age an
   assert.equal(call.errorCode, 'NOT_RECORDED');
   assert.doesNotMatch(JSON.stringify(view), /unknown54@example|principal|operation|conversation/i);
   // More than held, a wrong code and a non-integer are refused; nothing changed.
-  const refused = await f.request(`${ADMIN}/system/unknown-resolve`, owner, { requestId: randomUUID(), code: call.code, settledMicros: held + 1 });
+  const refused = await f.request(`${ADMIN}/system/unknown-resolve`, owner, {
+    requestId: randomUUID(),
+    code: call.code,
+    settledMicros: held + 1,
+  });
   assert.equal(refused.status, 400);
-  assert.equal((await f.request(`${ADMIN}/system/unknown-resolve`, owner, { requestId: randomUUID(), code: 'U-00000-00000', settledMicros: 'held' })).status, 404);
-  const before = await f.fixture<{ provider: string; limitMicros: number | null }[]>('/fixture/system/local-limits', {});
+  assert.equal(
+    (
+      await f.request(`${ADMIN}/system/unknown-resolve`, owner, {
+        requestId: randomUUID(),
+        code: 'U-00000-00000',
+        settledMicros: 'held',
+      })
+    ).status,
+    404,
+  );
+  const before = await f.fixture<{ provider: string; limitMicros: number | null }[]>(
+    '/fixture/system/local-limits',
+    {},
+  );
   void before;
   const requestId = randomUUID();
   const lower = Math.floor(held / 3);
-  const done = await f.call(`${ADMIN}/system/unknown-resolve`, owner, { requestId, code: call.code, settledMicros: lower });
+  const done = await f.call(`${ADMIN}/system/unknown-resolve`, owner, {
+    requestId,
+    code: call.code,
+    settledMicros: lower,
+  });
   assert.deepEqual(done, { code: call.code, heldMicros: held, settledMicros: lower, duplicate: false });
   // The same click again changes nothing; the call is gone from the list and counted as settled.
-  assert.equal((await f.call(`${ADMIN}/system/unknown-resolve`, owner, { requestId, code: call.code, settledMicros: lower })).duplicate, true);
+  assert.equal(
+    (await f.call(`${ADMIN}/system/unknown-resolve`, owner, { requestId, code: call.code, settledMicros: lower }))
+      .duplicate,
+    true,
+  );
   const after = await f.call(`${ADMIN}/system/unknown-calls`, owner, {});
   assert.deepEqual([after.calls.length, after.resolved], [0, 1]);
 });

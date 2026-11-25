@@ -429,7 +429,9 @@ export class WebProviderExecutor {
     // 'unknown' reply still holds its player's slot until its deadline: free the first and end the second now.
     try {
       healLegacyUnknownTickets(this.store);
-      for (const row of this.store.all<{ id: string }>("SELECT id FROM web_operations WHERE status='unknown' LIMIT 16")) {
+      for (const row of this.store.all<{ id: string }>(
+        "SELECT id FROM web_operations WHERE status='unknown' LIMIT 16",
+      )) {
         const fence = this.ledger.fence(row.id);
         this.ledger.terminate(lease, fence, fence.principalId, 'failed', 'unconfirmed');
       }

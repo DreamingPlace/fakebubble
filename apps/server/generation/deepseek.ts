@@ -525,7 +525,9 @@ export class DeepSeekTextGenerator implements TextGenerator {
       // Part 54: the limit of this one provider call (see callTimeoutMs). Starts when the call is about to be sent.
       let callTimeout: AbortSignal | undefined;
       const callFailed = (error: unknown) =>
-        callTimeout?.aborted && !signal.aborted && !(error instanceof DomainError && error.code === 'COST_RECORDING_FAILED')
+        callTimeout?.aborted &&
+        !signal.aborted &&
+        !(error instanceof DomainError && error.code === 'COST_RECORDING_FAILED')
           ? 'TEXT_REQUEST_TIMEOUT'
           : errorCode(error);
       const callAborted = () => combined.aborted || callTimeout?.aborted === true;

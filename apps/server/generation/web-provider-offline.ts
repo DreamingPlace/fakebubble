@@ -570,7 +570,12 @@ export class WebProviderOffline {
         Number.isSafeInteger(chargedMicros) && chargedMicros >= 0 && chargedMicros <= row.held_micros,
         'WEB_PROVIDER_RECEIPT_INVALID',
       );
-      const receipt = { reconciled: true, source: 'provider_bill', settledMicros: chargedMicros, heldMicros: row.held_micros };
+      const receipt = {
+        reconciled: true,
+        source: 'provider_bill',
+        settledMicros: chargedMicros,
+        heldMicros: row.held_micros,
+      };
       ensure(
         this.store.run(
           `UPDATE web_provider_attempts SET state='known',outcome='failed',usage_units=0,charged_micros=?,receipt_json=?,settled_at=?

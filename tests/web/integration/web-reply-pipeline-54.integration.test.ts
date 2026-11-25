@@ -39,7 +39,8 @@ test('(b) WEDGE: UNKNOWN calls must not use up the running slots; replies keep w
   await f.configure({ scale: 0.1, slowEvery: 0, hangFirst: 21, hangStage: 'draft' });
   const players = await Promise.all(Array.from({ length: 40 }, (_, n) => f.newPlayer(n)));
   const stuckIds = await Promise.all(players.slice(0, 21).map((p) => f.send(p)));
-  while ((await f.stats()).calls.filter((c) => c.stage === 'draft').length < 20) await new Promise((r) => setTimeout(r, 100));
+  while ((await f.stats()).calls.filter((c) => c.stage === 'draft').length < 20)
+    await new Promise((r) => setTimeout(r, 100));
   const stuck = await Promise.all(stuckIds.map((id, n) => f.poll(players[n]!, id, 200_000)));
   assert.ok(
     stuck.every((r) => ['failed', 'unknown'].includes(r.status)),

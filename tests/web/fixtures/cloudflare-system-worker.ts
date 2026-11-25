@@ -123,7 +123,14 @@ export class WebSystemFixture extends WebCrossPathFixture {
     }
     if (path === '/fixture/system/unknown-held') {
       // Part 54: the rows a lost response leaves for ONE call: UNKNOWN again, its hold put back (it was released when it settled).
-      const row = store.get<{ operation_id: string; phase: string; ordinal: number; provider: string; held: number; charged: number }>(
+      const row = store.get<{
+        operation_id: string;
+        phase: string;
+        ordinal: number;
+        provider: string;
+        held: number;
+        charged: number;
+      }>(
         `SELECT operation_id,phase,ordinal,provider,held_micros held,charged_micros charged FROM web_provider_attempts
         WHERE phase='draft' AND state='known' LIMIT 1`,
       )!;

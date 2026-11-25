@@ -20,7 +20,11 @@ export function parseBillAmount(text: string): number | null {
  */
 export function unknownCallsPanel(deps: {
   load: () => Promise<UnknownCallsView>;
-  resolve: (input: { requestId: string; code: string; settledMicros: number | 'held' }) => Promise<UnknownResolveResult>;
+  resolve: (input: {
+    requestId: string;
+    code: string;
+    settledMicros: number | 'held';
+  }) => Promise<UnknownResolveResult>;
   isOwner: () => boolean;
   run: (work: () => Promise<void>) => Promise<void>;
   confirm: ConfirmInPlace;
@@ -112,8 +116,8 @@ export function unknownCallsPanel(deps: {
         h(
           'tr',
           {},
-          ...['编号', '供应商', '模型', '阶段', '预留金额', '已过', '错误码', deps.isOwner() ? '核对' : ''].map((text) =>
-            h('th', { text }),
+          ...['编号', '供应商', '模型', '阶段', '预留金额', '已过', '错误码', deps.isOwner() ? '核对' : ''].map(
+            (text) => h('th', { text }),
           ),
         ),
       ),
@@ -121,9 +125,7 @@ export function unknownCallsPanel(deps: {
     );
     root.replaceChildren(
       head,
-      view.calls.length
-        ? table
-        : h('p', { class: 'admin-hint', text: '没有未确认的调用。' }),
+      view.calls.length ? table : h('p', { class: 'admin-hint', text: '没有未确认的调用。' }),
       ...(view.other.embed > 0
         ? [h('p', { class: 'admin-hint', text: `另有 ${view.other.embed} 条记忆向量化调用结果未知（不在这里核对）。` })]
         : []),

@@ -981,9 +981,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     load: () => (port.systemStatus ? port.systemStatus() : unavailable()),
     renewPrices: (requestId) => (port.renewPrices ? port.renewPrices(requestId) : unavailable()),
     topUp: (input) => (port.budgetTopUp ? port.budgetTopUp(input) : unavailable()),
-    unknownCalls: port.unknownCalls && port.resolveUnknownCall
-      ? { load: () => port.unknownCalls!(), resolve: (input) => port.resolveUnknownCall!(input) }
-      : undefined,
+    unknownCalls:
+      port.unknownCalls && port.resolveUnknownCall
+        ? { load: () => port.unknownCalls!(), resolve: (input) => port.resolveUnknownCall!(input) }
+        : undefined,
     isOwner: () => session?.member.role === 'owner',
     run,
     confirm: (options, host) => inlineConfirm(host, options),

@@ -87,7 +87,9 @@ class SyntheticWebSession extends WebIsolatedGenerationSession {
             });
           if (model.hangFirst > 0 && stage === model.hangStage && nth <= model.hangFirst) await wait(Infinity);
           const slow = model.slowEvery > 0 && seq % model.slowEvery === 0;
-          const ms = slow ? model.slowMs : between(speech ? model.voice : stage === 'draft' ? model.draft : model.review);
+          const ms = slow
+            ? model.slowMs
+            : between(speech ? model.voice : stage === 'draft' ? model.draft : model.review);
           await wait(ms * model.scale);
           done('ok');
           if (speech)

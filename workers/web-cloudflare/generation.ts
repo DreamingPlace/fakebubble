@@ -311,11 +311,7 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
       };
     }
   }
-  async speech(
-    wire: WebSpeechWire,
-    authorize: () => Promise<void>,
-    timeoutMs?: number,
-  ): Promise<SpeechRPCResult> {
+  async speech(wire: WebSpeechWire, authorize: () => Promise<void>, timeoutMs?: number): Promise<SpeechRPCResult> {
     try {
       this.begin();
       wire = structuredClone(wire);

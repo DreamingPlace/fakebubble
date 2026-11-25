@@ -30,7 +30,10 @@ export function installWebUnknownCalls(store: BusinessStore) {
   const digest = createHash('sha256').update(statements.join(';\n')).digest('hex');
   store.transaction(() => {
     if (!store.get("SELECT 1 FROM sqlite_master WHERE name='web_unknown_calls_schema'")) {
-      ensure(!store.get("SELECT 1 FROM sqlite_master WHERE name GLOB 'web_unknown_*'"), 'WEB_UNKNOWN_CALLS_SCHEMA_MISMATCH');
+      ensure(
+        !store.get("SELECT 1 FROM sqlite_master WHERE name GLOB 'web_unknown_*'"),
+        'WEB_UNKNOWN_CALLS_SCHEMA_MISMATCH',
+      );
       for (const sql of statements) store.all(sql);
       store.all(
         'CREATE TABLE web_unknown_calls_schema(version INTEGER PRIMARY KEY CHECK(version=1),sha256 TEXT NOT NULL) STRICT',
@@ -38,7 +41,10 @@ export function installWebUnknownCalls(store: BusinessStore) {
       store.run('INSERT INTO web_unknown_calls_schema VALUES (1,?)', digest);
     }
     const rows = store.all<{ version: number; sha256: string }>('SELECT * FROM web_unknown_calls_schema');
-    ensure(rows.length === 1 && rows[0]!.version === 1 && rows[0]!.sha256 === digest, 'WEB_UNKNOWN_CALLS_SCHEMA_MISMATCH');
+    ensure(
+      rows.length === 1 && rows[0]!.version === 1 && rows[0]!.sha256 === digest,
+      'WEB_UNKNOWN_CALLS_SCHEMA_MISMATCH',
+    );
   });
 }
 export const webUnknownCallsInstalled = (store: BusinessStore) =>
@@ -46,7 +52,11 @@ export const webUnknownCallsInstalled = (store: BusinessStore) =>
 
 /** A short code the owner can read out loud: derived from the call's key by a one-way hash, it identifies nothing outside this database. */
 export const unknownCallRef = (key: { operationId: string; phase: string; ordinal: number }) =>
-  createHash('sha256').update(`unknown-call:${key.operationId}:${key.phase}:${key.ordinal}`).digest('hex').slice(0, 10).toUpperCase();
+  createHash('sha256')
+    .update(`unknown-call:${key.operationId}:${key.phase}:${key.ordinal}`)
+    .digest('hex')
+    .slice(0, 10)
+    .toUpperCase();
 /** `U-XXXXX-XXXXX`: what the page shows and what the owner types back. */
 export const unknownCallCode = (ref: string) => `U-${ref.slice(0, 5)}-${ref.slice(5)}`;
 export const parseUnknownCallCode = (code: unknown) => {
@@ -56,10 +66,20 @@ export const parseUnknownCallCode = (code: unknown) => {
 };
 
 /** Called when a call becomes UNKNOWN; a fixed code only. Never throws (it is a note, not part of the money path). */
-export function noteUnknownCode(store: BusinessStore, key: { operationId: string; phase: string; ordinal: number }, code: string, now: number) {
+export function noteUnknownCode(
+  store: BusinessStore,
+  key: { operationId: string; phase: string; ordinal: number },
+  code: string,
+  now: number,
+) {
   try {
     if (!webUnknownCallsInstalled(store) || !/^[A-Z][A-Z0-9_]{0,63}$/.test(code)) return;
-    store.run('INSERT OR IGNORE INTO web_unknown_codes(ref,code,noted_at) VALUES (?,?,?)', unknownCallRef(key), code, now);
+    store.run(
+      'INSERT OR IGNORE INTO web_unknown_codes(ref,code,noted_at) VALUES (?,?,?)',
+      unknownCallRef(key),
+      code,
+      now,
+    );
   } catch {
     /* a note */
   }
@@ -89,7 +109,9 @@ export function unknownAttempts(store: BusinessStore): Attempt[] {
 
 export function readUnknownCalls(store: BusinessStore, now: number): UnknownCallsView {
   const codes = webUnknownCallsInstalled(store)
-    ? new Map(store.all<{ ref: string; code: string }>('SELECT ref,code FROM web_unknown_codes').map((r) => [r.ref, r.code]))
+    ? new Map(
+        store.all<{ ref: string; code: string }>('SELECT ref,code FROM web_unknown_codes').map((r) => [r.ref, r.code]),
+      )
     : new Map<string, string>();
   const calls = unknownAttempts(store).map((a): UnknownCallRow => {
     const ref = unknownCallRef({ operationId: a.operation_id, phase: a.phase, ordinal: a.ordinal });
@@ -105,12 +127,22 @@ export function readUnknownCalls(store: BusinessStore, now: number): UnknownCall
   });
   return {
     calls,
-    other: { embed: has(store, 'web_embed_attempts') ? (store.get<{ n: number }>("SELECT count(*) n FROM web_embed_attempts WHERE state='unknown'")?.n ?? 0) : 0 },
-    resolved: webUnknownCallsInstalled(store) ? (store.get<{ n: number }>('SELECT count(*) n FROM web_unknown_resolutions')?.n ?? 0) : 0,
+    other: {
+      embed: has(store, 'web_embed_attempts')
+        ? (store.get<{ n: number }>("SELECT count(*) n FROM web_embed_attempts WHERE state='unknown'")?.n ?? 0)
+        : 0,
+    },
+    resolved: webUnknownCallsInstalled(store)
+      ? (store.get<{ n: number }>('SELECT count(*) n FROM web_unknown_resolutions')?.n ?? 0)
+      : 0,
   };
 }
 
 /** The attempt a short code names, or null. The code is derived, so it is looked up among the UNKNOWN calls only. */
 export function findUnknownAttempt(store: BusinessStore, ref: string) {
-  return unknownAttempts(store).find((a) => unknownCallRef({ operationId: a.operation_id, phase: a.phase, ordinal: a.ordinal }) === ref) ?? null;
+  return (
+    unknownAttempts(store).find(
+      (a) => unknownCallRef({ operationId: a.operation_id, phase: a.phase, ordinal: a.ordinal }) === ref,
+    ) ?? null
+  );
 }

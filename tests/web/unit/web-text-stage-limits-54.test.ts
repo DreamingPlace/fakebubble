@@ -24,7 +24,11 @@ async function reserved(route?: TextRoute) {
     fetch: async (_url, init) => {
       const body = JSON.parse(String(init!.body));
       bodies.push(String(init!.body).length);
-      return Response.json(body.tools[0].function.name === 'submit_dialogue_draft' ? draftEnvelope(request) : acceptedAuditEnvelope(request));
+      return Response.json(
+        body.tools[0].function.name === 'submit_dialogue_draft'
+          ? draftEnvelope(request)
+          : acceptedAuditEnvelope(request),
+      );
     },
   });
   await generator.generateAcceptedStages(request, AbortSignal.timeout(5000), async () => {}, meter, route);
@@ -34,7 +38,10 @@ async function reserved(route?: TextRoute) {
 test('the stage limits reserved by the business object equal what the generator reserves (DeepSeek, no route)', async () => {
   const { specs, request, bodies } = await reserved();
   const limits = textStageLimits(request, undefined, true);
-  assert.ok(bodies.every((b, i) => b <= limits[i ? 'review' : 'draft']!.inputTokens), 'the real bodies fit the hold: ' + bodies);
+  assert.ok(
+    bodies.every((b, i) => b <= limits[i ? 'review' : 'draft']!.inputTokens),
+    'the real bodies fit the hold: ' + bodies,
+  );
   for (const stage of ['draft', 'review'] as const) {
     const spec = specs.find((s) => s.stage === stage)!;
     assert.equal(spec.bounds.unit, 'tokens');
@@ -70,7 +77,10 @@ test('with a known draft only the review is reserved; a route is cut to the head
     ],
     review: [{ provider: 'deepseek', model: 'c' }],
   };
-  assert.deepEqual(headRoute(route), { draft: [{ provider: 'xai', model: 'a' }], review: [{ provider: 'deepseek', model: 'c' }] });
+  assert.deepEqual(headRoute(route), {
+    draft: [{ provider: 'xai', model: 'a' }],
+    review: [{ provider: 'deepseek', model: 'c' }],
+  });
   assert.equal(headRoute(undefined), undefined);
 });
 
@@ -102,11 +112,16 @@ test('a provider call that never answers is interrupted at the per-call limit an
     callTimeoutMs: 50,
     fetch: (_url, init) =>
       new Promise((_resolve, reject) => {
-        init!.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+        init!.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), {
+          once: true,
+        });
       }),
   });
   const started = Date.now();
-  await assert.rejects(generator.generateAcceptedStages(textRequest(), new AbortController().signal, async () => {}, meter), /TEXT_REQUEST_TIMEOUT/);
+  await assert.rejects(
+    generator.generateAcceptedStages(textRequest(), new AbortController().signal, async () => {}, meter),
+    /TEXT_REQUEST_TIMEOUT/,
+  );
   assert.ok(Date.now() - started < 2000);
   assert.deepEqual(observed, [{ outcome: 'interrupted', errorCode: 'TEXT_REQUEST_TIMEOUT' }]);
 });

@@ -13,7 +13,11 @@ import { topology54, type Player, type Topology54 } from '../fixtures/topology-5
  * poll interval and workerd overhead, which do not scale).
  */
 const SCALE = Number(process.env.LOAD54_SCALE ?? 0.05);
-const MODEL = { CONNECTION_LIMIT: '6', CONNECTION_HUNG_MS: String(Math.round(90_000 * Math.max(SCALE, 0.2))), SIGNUP_BONUS_ENABLED: 'true' };
+const MODEL = {
+  CONNECTION_LIMIT: '6',
+  CONNECTION_HUNG_MS: String(Math.round(90_000 * Math.max(SCALE, 0.2))),
+  SIGNUP_BONUS_ENABLED: 'true',
+};
 // 4 s of poll interval and workerd overhead, plus the 8 s voice-to-text fallback wait (a Worker var that does not scale with the providers).
 const OVERHEAD_MS = 12_000;
 const percentile = (values: number[], p: number) => {
@@ -36,7 +40,7 @@ interface Outcome {
 function schedule(scale: number) {
   const window = 15 * 60_000 * scale;
   let seed = 540;
-  const rand = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
+  const rand = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
   const sends: { player: number; at: number; voice: boolean }[] = [];
   const perPlayer = new Array<number>(60).fill(0);
   const add = (player: number, at: number) => {
@@ -73,7 +77,10 @@ async function drive(f: Topology54, players: Player[], plan: ReturnType<typeof s
       const last = await f.poll(player, id, timeoutMs);
       outcomes.push({ status: last?.status ?? 'timeout', ms: Date.now() - at, voice: step.voice });
     });
-    busy.set(step.player, run.catch(() => {}));
+    busy.set(
+      step.player,
+      run.catch(() => {}),
+    );
     jobs.push(run);
   }
   await Promise.all(jobs);
@@ -155,9 +162,15 @@ test('WEDGE: one provider call never returns, then 50 normal replies all succeed
   assert.equal(stuck.status, 'failed');
   // The call limit plus two budget calls and one poll interval; never the 90 s of the old behaviour.
   assert.ok(took < 2 * callTimeout + 8_000, `the stuck reply ended within its deadline (${took} ms)`);
-  const tickets = (await f.business('/__test/tickets')) as { attempts: { state: string; n: number }[]; budgets: { reserved: number }[] };
+  const tickets = (await f.business('/__test/tickets')) as {
+    attempts: { state: string; n: number }[];
+    budgets: { reserved: number }[];
+  };
   assert.equal(tickets.attempts.find((a) => a.state === 'unknown')?.n, 1, JSON.stringify(tickets));
-  assert.ok(tickets.budgets.every((b) => b.reserved === 0), 'no running slot is left taken: ' + JSON.stringify(tickets));
+  assert.ok(
+    tickets.budgets.every((b) => b.reserved === 0),
+    'no running slot is left taken: ' + JSON.stringify(tickets),
+  );
   // The money stays held for the UNKNOWN call.
   const state = await f.business('/__test/state');
   assert.ok(state.spending.find((r: { provider: string }) => r.provider === 'deepseek').held_micros > 0);

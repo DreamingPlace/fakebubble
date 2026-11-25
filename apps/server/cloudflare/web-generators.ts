@@ -243,7 +243,10 @@ export function webCloudEmbeddings(binding: WebGenerationBinding): EmbeddingProv
         60_000,
         signal,
       ).catch((error: unknown) => {
-        throw new EmbeddingFailure(error instanceof DomainError ? error.code : 'WEB_GENERATION_CALL_UNCONFIRMED', false);
+        throw new EmbeddingFailure(
+          error instanceof DomainError ? error.code : 'WEB_GENERATION_CALL_UNCONFIRMED',
+          false,
+        );
       });
       if (!result.ok) throw new EmbeddingFailure(result.code, result.known);
       return {

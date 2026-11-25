@@ -69,7 +69,11 @@ export interface GenerationStats {
   /** Calls the business object made to generation for replies (runText + runSpeech). */
   roundTrips: number;
 }
-export async function topology54(t: TestContext, entry = 'tests/web/fixtures/cloudflare-generation-54-worker.ts', env: Record<string, string> = {}) {
+export async function topology54(
+  t: TestContext,
+  entry = 'tests/web/fixtures/cloudflare-generation-54-worker.ts',
+  env: Record<string, string> = {},
+) {
   const root = mkdtempSync(join(tmpdir(), 'web-54-'));
   const wav = syntheticTone(),
     selected = syntheticSelection();
