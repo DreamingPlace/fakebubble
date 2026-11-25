@@ -3,6 +3,8 @@ import type {
   WebGenerationBinding,
   WebGenerationSession,
   WebKnownDraft,
+  WebTextJob,
+  WebTextRun,
 } from '../../../packages/contracts/web-generation-rpc.ts';
 import type { ProviderMeter } from '../../../packages/contracts/provider-calls.ts';
 import type { TextRoute } from '../../../packages/contracts/text-route.ts';
@@ -52,6 +54,26 @@ async function session<T>(
     signal.removeEventListener('abort', cancel);
     remote[Symbol.dispose]();
   }
+}
+/**
+ * Part 54: the business object never waits for generation longer than the call can legitimately take. Generation enforces a
+ * limit on each provider call and returns a structured result, so this only fires when the call itself is lost; the caller then
+ * treats the call as UNKNOWN (held, never retried).
+ */
+export function withDeadline<T>(work: Promise<T>, ms: number, signal?: AbortSignal): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  let onAbort: (() => void) | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new DomainError('WEB_GENERATION_CALL_TIMEOUT')), ms);
+    // The caller stops waiting when its stage is aborted; the call itself is then UNKNOWN to it (held, never retried).
+    onAbort = () => reject(new DomainError('WEB_PROVIDER_ABORTED'));
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener('abort', onAbort, { once: true });
+  });
+  return Promise.race([work, late]).finally(() => {
+    clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
+  });
 }
 async function callback<T>(work: () => T | Promise<T>) {
   try {
@@ -106,6 +128,17 @@ export class WebCloudTextGenerator {
   constructor(binding: WebGenerationBinding) {
     this.binding = binding;
   }
+  /**
+   * Part 54: the reply path. One call, one result: nothing in `job` is a function and generation never calls back while it runs.
+   * The runner has reserved the money for every stage before this call and settles from the returned record after it.
+   */
+  supportsRunText() {
+    return typeof this.binding.runText === 'function';
+  }
+  async runText(job: WebTextJob, signal?: AbortSignal): Promise<WebTextRun> {
+    ensure(this.binding.runText, 'WEB_GENERATION_ROUTE_MISSING');
+    return withDeadline(this.binding.runText(job), 2 * job.callTimeoutMs + 10_000, signal);
+  }
   private generate(
     request: TextGenerationRequest,
     signal: AbortSignal,
@@ -156,35 +189,36 @@ export class WebCloudTextGenerator {
   }
 }
 export function webCloudSpeech(binding: WebGenerationBinding): FakeFish {
-  return (wire, signal, authorize) => {
+  return async (wire, signal, authorize, options) => {
     ensure(authorize, 'WEB_PROVIDER_SEND_GATE_REQUIRED');
-    return session(binding, signal, async (remote) => {
-      const result = await remote.speech(wire, () =>
-        callback(async () => {
-          ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
-          await authorize();
-        }),
-      );
-      if (!result.ok) {
-        if (result.generation) throw new SpeechFailure(result.code, result.generation);
-        throw new DomainError(result.code);
-      }
-      const value = result.value;
-      ensure(
-        value.inputUTF8Bytes === wire.billedTextBytes && value.model === wire.model,
-        'WEB_PROVIDER_USAGE_MISMATCH',
-      );
-      return {
-        audio: value.audio,
-        usageUnits: wire.billedTextBytes,
-        receipt: {
-          requestId: value.requestId,
-          elapsedMs: value.elapsedMs,
-          durationMs: value.durationMs,
-          containerNormalization: value.containerNormalization ?? null,
-        },
-      };
-    });
+    // Part 54: one call, one result, no callback. The send gate is checked HERE, immediately before the call: if it refuses,
+    // nothing was sent.
+    ensure(binding.runSpeech, 'WEB_GENERATION_ROUTE_MISSING');
+    ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
+    await authorize();
+    ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
+    const callTimeoutMs = options?.callTimeoutMs ?? 50_000;
+    const result = await withDeadline(
+      binding.runSpeech({ reservationId: wire.wireRequestHash, wire, callTimeoutMs }),
+      callTimeoutMs + 10_000,
+      signal,
+    );
+    if (!result.ok) {
+      if (result.generation) throw new SpeechFailure(result.code, result.generation);
+      throw new DomainError(result.code);
+    }
+    const value = result.value;
+    ensure(value.inputUTF8Bytes === wire.billedTextBytes && value.model === wire.model, 'WEB_PROVIDER_USAGE_MISMATCH');
+    return {
+      audio: value.audio,
+      usageUnits: wire.billedTextBytes,
+      receipt: {
+        requestId: value.requestId,
+        elapsedMs: value.elapsedMs,
+        durationMs: value.durationMs,
+        containerNormalization: value.containerNormalization ?? null,
+      },
+    };
   };
 }
 
@@ -193,22 +227,33 @@ export function webCloudEmbeddings(binding: WebGenerationBinding): EmbeddingProv
   return {
     model: EMBEDDING_MODEL,
     dims: EMBEDDING_DIMS,
-    embed: (texts, signal, authorize) => {
+    embed: async (texts, signal, authorize) => {
       checkEmbeddingInput(texts);
-      return session(binding, signal, async (remote) => {
-        const result = await remote.embed({ texts: [...texts], model: EMBEDDING_MODEL }, () =>
-          callback(async () => {
-            ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
-            await authorize?.();
-          }),
+      // Part 54: one call, one result. The gate (the ledger's send check) is made here, immediately before the call.
+      ensure(binding.runEmbed, 'WEB_GENERATION_ROUTE_MISSING');
+      ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
+      try {
+        await authorize?.();
+      } catch (error) {
+        throw new EmbeddingFailure(error instanceof DomainError ? error.code : 'WEB_GENERATION_CALLBACK_FAILED', true);
+      }
+      // A call that was handed over and then lost or aborted is an UNKNOWN outcome (known = false), never a refusal.
+      const result = await withDeadline(
+        binding.runEmbed({ reservationId: 'embed', wire: { texts: [...texts], model: EMBEDDING_MODEL } }),
+        60_000,
+        signal,
+      ).catch((error: unknown) => {
+        throw new EmbeddingFailure(
+          error instanceof DomainError ? error.code : 'WEB_GENERATION_CALL_UNCONFIRMED',
+          false,
         );
-        if (!result.ok) throw new EmbeddingFailure(result.code, result.known);
-        return {
-          vectors: parseEmbeddingVectors(result.value.vectors, texts.length),
-          usageTokens: result.value.usageTokens,
-          requestId: result.value.requestId,
-        };
       });
+      if (!result.ok) throw new EmbeddingFailure(result.code, result.known);
+      return {
+        vectors: parseEmbeddingVectors(result.value.vectors, texts.length),
+        usageTokens: result.value.usageTokens,
+        requestId: result.value.requestId,
+      };
     },
   };
 }

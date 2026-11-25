@@ -95,6 +95,11 @@ export interface WebBusinessEnvironment {
   MAX_AUDIO_RUNNING?: string;
   MAX_WAITING_OPERATIONS?: string;
   AUDIO_FALLBACK_WAIT_MS?: string;
+  /** Part 54: the limit of each provider call, enforced by the generation Worker (text 1000-35000, voice 1000-100000 ms). */
+  TEXT_CALL_TIMEOUT_MS?: string;
+  /** 'off' runs every stage inside the alarm invocation again (only for diagnosis; the default dispatches each stage on its own). */
+  STAGE_DISPATCH?: string;
+  SPEECH_CALL_TIMEOUT_MS?: string;
   /** Player-initiated replies per invited player per rolling 24 hours (1–10000, default 100). */
   DAILY_REPLY_LIMIT?: string;
   /** Memory embeddings: off unless 'true' (the generation Worker's AI binding repeats the gate). */
@@ -138,6 +143,8 @@ export interface WebBusinessEnvironment {
   TURNSTILE_SECRET?: string;
   MEDIA: PrivateBucket;
   BUDGET: WebBudgetStatusRPC & WebBudgetTopUpRPC;
+  /** The object's own namespace (already bound for the operator): each stage is started through it, in its own request context. */
+  BUSINESS?: { get(id: unknown): any };
   GENERATION: WebGenerationBinding;
   /** Part 32: this script's own `WebKdfService`, bound to itself. Absent = every password operation answers WEB_KDF_UNAVAILABLE. */
   KDF?: WebKdfBinding;
@@ -374,6 +381,8 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
       retention: () => this.retention.health(),
       renewPrices: () => this.setup.renewPrices(),
       topUp: (requestId, provider, micros) => env.BUDGET.topUp(requestId, provider, micros),
+      // Part 54: the owner's 已按账单核对 settles the shared reservation at the amount he confirmed (the local row was just settled).
+      settleAttempt: (key) => new WebCloudBudgetClient(env.BUDGET).settleAttempt(this.store, key),
     };
   }
   adminGrant(proof: string) {
@@ -506,6 +515,9 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
           () => this.maintenanceDue(),
           previews,
           app.broadcast,
+          this.env.BUSINESS && this.env.STAGE_DISPATCH !== 'off'
+            ? (launchId) => this.env.BUSINESS!.get(this.context.id).startStage(launchId)
+            : undefined,
         );
         const http = new WebProviderHTTP(
           app,
@@ -548,6 +560,19 @@ export class WebBusinessObject extends DurableObject<WebBusinessEnvironment> {
     const probed = await probeModelKeys(this.env.GENERATION);
     this.store.playerModelKeys = probed.keys;
     this.modelKeysAt = probed.ok ? now : now - 55_000;
+  }
+  /**
+   * Part 54: runs ONE parked stage in this invocation (see WebProviderExecutor.launch). The call returns at once, so the caller's
+   * connection is free again; the stage continues here, and this invocation (not the alarm's) owns its outbound connections.
+   * Only a launch id the executor itself parked can start anything; any other value does nothing.
+   */
+  async startStage(launchId: string): Promise<boolean> {
+    if (typeof launchId !== 'string' || launchId.length > 200 || !this.services) return false;
+    const services = await this.services;
+    const running = services.execution.executor.startLaunched(launchId);
+    if (!running) return false;
+    this.context.waitUntil(running.catch(() => {}));
+    return true;
   }
   async alarm() {
     // Privacy cleanup must survive restart, disabled providers and unavailable budget RPC.

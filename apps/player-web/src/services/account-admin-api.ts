@@ -39,6 +39,8 @@ import type {
   SystemShares,
   SystemUnknownKind,
   SystemWarnings,
+  UnknownCallsView,
+  UnknownResolveResult,
 } from '../../../../packages/contracts/web-system.ts';
 import type {
   ChartMetric,
@@ -446,6 +448,18 @@ export class AccountAdminApi extends InviteAdminApi {
     const row = object(await this.request('/system/budget-topup', input));
     if (!Number.isSafeInteger(row.allowanceMicros) || typeof row.duplicate !== 'boolean') throw invalid();
     return row as unknown as BudgetTopUpResult;
+  }
+  /** Part 54: 未确认的调用 (owner or system.read). */
+  async unknownCalls(): Promise<UnknownCallsView> {
+    const row = object(await this.request('/system/unknown-calls', {}));
+    if (!Array.isArray(row.calls) || !Number.isSafeInteger(row.resolved)) throw invalid();
+    return row as unknown as UnknownCallsView;
+  }
+  /** Part 54, owner only: 已按账单核对 one call, at the held amount or a lower amount (USD micros) from the provider's bill. */
+  async resolveUnknownCall(input: { requestId: string; code: string; settledMicros: number | 'held' }) {
+    const row = object(await this.request('/system/unknown-resolve', input));
+    if (!Number.isSafeInteger(row.settledMicros) || typeof row.code !== 'string') throw invalid();
+    return row as unknown as UnknownResolveResult;
   }
   /** What a grant would do, and the one lookup (an email answers 玩家编号, tier and balance only). */
   async pointsPreview(target: PointsTarget, amount: number): Promise<PointsPreview> {

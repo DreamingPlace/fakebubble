@@ -90,6 +90,9 @@ type Port = Pick<
   systemStatus?: AccountAdminApi['systemStatus'];
   renewPrices?: AccountAdminApi['renewPrices'];
   budgetTopUp?: AccountAdminApi['budgetTopUp'];
+  /** Part 54: 未确认的调用 on 系统状态. */
+  unknownCalls?: AccountAdminApi['unknownCalls'];
+  resolveUnknownCall?: AccountAdminApi['resolveUnknownCall'];
   pointsPreview?: AccountAdminApi['pointsPreview'];
   pointsGrant?: AccountAdminApi['pointsGrant'];
   resetPreview?: AccountAdminApi['resetPreview'];
@@ -979,6 +982,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     load: () => (port.systemStatus ? port.systemStatus() : unavailable()),
     renewPrices: (requestId) => (port.renewPrices ? port.renewPrices(requestId) : unavailable()),
     topUp: (input) => (port.budgetTopUp ? port.budgetTopUp(input) : unavailable()),
+    unknownCalls:
+      port.unknownCalls && port.resolveUnknownCall
+        ? { load: () => port.unknownCalls!(), resolve: (input) => port.resolveUnknownCall!(input) }
+        : undefined,
     isOwner: () => session?.member.role === 'owner',
     run,
     confirm: (options, host) => inlineConfirm(host, options),

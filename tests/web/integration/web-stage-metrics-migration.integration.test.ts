@@ -182,6 +182,9 @@ test('Cloudflare runner: both authorities create 114 after 113; Worker vars are 
     maxWaitingOperations: 104,
     maxGlobalReservedOperations: 128,
     audioFallbackWaitMs: 8000,
+    // Part 54 NAMED EXCEPTION: the configuration gained the two per-call timeouts; every earlier value is unchanged.
+    textCallTimeoutMs: 35000,
+    speechCallTimeoutMs: 50000,
   });
   const r2 = await f.call<Record<string, unknown>>('/r2?object=r2');
   assert.equal(r2.metrics, true);
@@ -202,6 +205,9 @@ test('Cloudflare runner: both authorities create 114 after 113; Worker vars are 
     maxWaitingOperations: 104,
     maxGlobalReservedOperations: 114,
     audioFallbackWaitMs: 8000,
+    // Part 54 NAMED EXCEPTION: the configuration gained the two per-call timeouts; every earlier value is unchanged.
+    textCallTimeoutMs: 35000,
+    speechCallTimeoutMs: 50000,
   });
   assert.deepEqual(await f.call('/invalid?object=invalid'), {
     errors: [

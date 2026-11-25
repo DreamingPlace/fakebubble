@@ -151,7 +151,8 @@ for (const combo of COMBOS) {
     await f.fixture('/fixture/stats/provider', { text: 'fail' });
     // A guest has no model row: its reply is exactly what it was before model choice existed, so a DeepSeek error after the send is
     // UNKNOWN (never retried, its reservation never released) whatever the switches say.
-    assert.equal(await f.reply(G, 'wei-guagua'), 'unknown');
+    // Part 54 NAMED EXCEPTION: the reply now ends as failed at once (its money stays held, it is never retried); it was 'unknown'.
+    assert.equal(await f.reply(G, 'wei-guagua'), 'failed');
     await f.fixture('/fixture/stats/provider', { text: 'ok' });
 
     // R: a registered player: two replies; with points on, the second asks for xAI and is answered by the backup model, and a third
@@ -187,12 +188,13 @@ for (const combo of COMBOS) {
     );
     // Replies: counted when they reach their final state, by character and chosen model.
     assert.equal(f.sum(before, 'reply_published'), 3);
-    assert.equal(f.sum(before, 'reply_failed'), chosenXai ? 1 : 0);
-    assert.equal(f.sum(before, 'reply_unknown'), 1);
+    // Part 54 NAMED EXCEPTION: the guest's UNKNOWN reply is counted ONCE, as a failed reply (it ends as failed at once).
+    assert.equal(f.sum(before, 'reply_failed'), chosenXai ? 2 : 1);
+    assert.equal(f.sum(before, 'reply_unknown'), 0);
     assert.equal(f.sum(before, 'reply_voice'), 3, 'all three published replies carry voice');
     assert.equal(f.sum(before, 'reply_published', { characterId: 'wei-guagua' }), 1);
     assert.equal(f.sum(before, 'reply_published', { characterId: 'jojo' }), 2);
-    assert.equal(f.sum(before, 'reply_unknown', { characterId: 'wei-guagua' }), 1);
+    assert.equal(f.sum(before, 'reply_failed', { characterId: 'wei-guagua' }), 1);
     assert.equal(
       f.sum(before, 'reply_failed', { characterId: 'jojo', model: chosenXai ? 'xai' : '' }),
       chosenXai ? 1 : 0,
@@ -234,7 +236,8 @@ for (const combo of COMBOS) {
     assert.equal(row.day, today);
     assert.deepEqual(
       [row.repliesPublished, row.repliesFailed, row.repliesUnknown, row.voiceReplies, row.signups, row.newGuests],
-      [3, chosenXai ? 1 : 0, 1, 3, 2, 3],
+      // Part 54 NAMED EXCEPTION: the guest's UNKNOWN reply is counted once, as failed (replies unknown: 0).
+      [3, chosenXai ? 2 : 1, 0, 3, 2, 3],
     );
     assert.deepEqual(
       [row.activeRegistered, row.activeGuests, row.chatRegistered, row.chatGuests],
@@ -290,7 +293,8 @@ for (const combo of COMBOS) {
     assert.equal(lines.length, players.days.length + 2);
     assert.equal(lines[0]!.split(',').length, 18);
     assert.equal(lines[1]!.split(',')[0], today);
-    const outcomes = chosenXai ? '1,1' : '0,1';
+    // Part 54 NAMED EXCEPTION: failed / unknown columns - the guest's UNKNOWN reply is counted once, as failed.
+    const outcomes = chosenXai ? '2,0' : '1,0';
     assert.equal(lines[1], `${today},2,3,2,1,1,1,3,${outcomes},3,0,0,0,—,—,—,—`);
     assert.equal(lines.at(-1), `合计,2,3,2,1,1,1,3,${outcomes},3,0,0,0,—,—,—,—`);
     const exportedCosts = (await f.call(`${ADMIN}/stats/costs-export`, owner, { range: 30 })) as {
@@ -340,7 +344,8 @@ for (const combo of COMBOS) {
     const day2 = players2.days[0]!;
     assert.deepEqual(
       [day2.repliesPublished, day2.repliesFailed, day2.repliesUnknown, day2.voiceReplies, day2.signups, day2.newGuests],
-      [3, chosenXai ? 1 : 0, 1, 3, 2, 3],
+      // Part 54 NAMED EXCEPTION: the guest's UNKNOWN reply is counted once, as failed (replies unknown: 0).
+      [3, chosenXai ? 2 : 1, 0, 3, 2, 3],
     );
     assert.deepEqual([day2.deletedAccounts, day2.inactivePurged, day2.expiredPurged], [1, 1, 1]);
     assert.deepEqual(

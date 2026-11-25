@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Clock, DialogueCandidate } from '../../../packages/contracts/index.ts';
 import type {
   ProviderCallSpec,
@@ -36,6 +36,18 @@ import type { EmbeddingProvider } from './embedding-provider.ts';
 import { WebEmbedRunner } from './web-embed-runner.ts';
 import { textRouteFor } from './web-text-routing.ts';
 import { isNotBilled } from './text-wire.ts';
+import { headRoute, textStageLimits } from './text-stage-limits.ts';
+import { webConcurrency } from '../../../config/web-concurrency.ts';
+import type { WebStageRun, WebTextJob, WebTextRun } from '../../../packages/contracts/web-generation-rpc.ts';
+import type { TextRoute } from '../../../packages/contracts/text-route.ts';
+
+/** A fixed code for why a call is UNKNOWN (never a message or content): a domain code, a code-shaped error message, else a generic one. */
+const unknownCode = (error: unknown) =>
+  error instanceof DomainError
+    ? error.code
+    : error instanceof Error && /^[A-Z][A-Z0-9_]{0,63}$/.test(error.message)
+      ? error.message
+      : 'WEB_GENERATION_CALL_UNCONFIRMED';
 
 /** HTTP 429 of any text provider. */
 const isTextRateLimit = (code: string | null | undefined) =>
@@ -54,13 +66,21 @@ export type FakeFish = (
   request: WebSpeechWire,
   signal: AbortSignal,
   authorize?: () => void | Promise<void>,
+  /** Part 54: the limit of this one provider call, enforced by the generation Worker. */
+  options?: { callTimeoutMs: number },
 ) => Promise<{ audio: Uint8Array; receipt: unknown; usageUnits: number }>;
 type WebTextGenerator = Pick<
   DeepSeekTextGenerator,
   'textProtocol' | 'policyHash' | 'generateAcceptedStages' | 'generateAcceptedReviewFromKnownDraft'
-> &
-  // Part 37a: the v8 writer's policy hash. A generator without it (an older one) cannot run a v8 reply: it is refused before a send.
-  Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash' | 'writerProfilePolicyHash' | 'writerMemesPolicyHash'>>;
+> & {
+  /**
+   * Part 54: the cross-Worker generator (WebCloudTextGenerator) has ONE entry: a call with plain data that returns ONE result.
+   * An in-process generator (local transport, tests) has no such entry and keeps the metered callbacks, which cost nothing there.
+   */
+  runText?(job: WebTextJob, signal?: AbortSignal): Promise<WebTextRun>;
+  /** False when the generation Worker has no `runText` yet: refused BEFORE anything is reserved. */
+  supportsRunText?(): boolean;
+} & Partial<Pick<DeepSeekTextGenerator, 'writerPolicyHash' | 'writerProfilePolicyHash' | 'writerMemesPolicyHash'>>; // Part 37a: the v8 writer's policy hash. A generator without it (an older one) cannot run a v8 reply: it is refused before a send.
 
 /** Explicit live adapter. Constructing it does not send or read credentials. */
 export function fishTransport(audio: FishAudio): FakeFish {
@@ -149,6 +169,10 @@ export class WebProviderRunner {
     return { request, row, scope };
   }
   async runText(claim: WebStageClaim, signal: AbortSignal): Promise<DialogueCandidate | null> {
+    if (this.text.runText) return this.runTextOnce(claim, signal);
+    return this.runTextCallbacks(claim, signal);
+  }
+  private async runTextCallbacks(claim: WebStageClaim, signal: AbortSignal): Promise<DialogueCandidate | null> {
     await this.whenReady();
     ensure(claim.stage === 'text' && this.text.textProtocol === 'accepted-v7', 'WEB_PROVIDER_STAGE_INVALID');
     const { request, row, scope } = this.frozen(claim.operationId);
@@ -340,6 +364,280 @@ export class WebProviderRunner {
     }
     return this.ledger.commitReviewed(claim, scope);
   }
+
+  /**
+   * Part 54: the reply's text stages without any callback from generation.
+   *
+   *   1. ONE transaction holds the money for EVERY stage of this call (draft and review): local holds, running-slot tickets.
+   *   2. The shared budget is reserved for each stage, then ONE transaction marks them sent (the possible-send boundary).
+   *   3. ONE call to generation with plain data (the limits it may spend, per-call timeout) returns ONE result.
+   *   4. Each stage is settled from that result: known (usage), not sent, or UNKNOWN. An UNKNOWN stage is never retried and its
+   *      hold is never released; the reply ends now (failUnconfirmed), so the player's next message is served normally.
+   *
+   * A stage that proved "not billed" on a model that has a successor in its chain is settled at zero and the chain moves on
+   * as a NEW call with a NEW reservation (a second round), exactly as before; the normal reply makes one call.
+   */
+  private async runTextOnce(claim: WebStageClaim, signal: AbortSignal): Promise<DialogueCandidate | null> {
+    await this.whenReady();
+    ensure(claim.stage === 'text' && this.text.textProtocol === 'accepted-v7', 'WEB_PROVIDER_STAGE_INVALID');
+    const { request, row, scope } = this.frozen(claim.operationId);
+    const policyHash =
+      request.writer === 'v8'
+        ? request.writerMemes === true
+          ? this.text.writerMemesPolicyHash
+          : request.writerProfile === true
+            ? this.text.writerProfilePolicyHash
+            : this.text.writerPolicyHash
+        : this.text.policyHash;
+    ensure(policyHash, 'WEB_WRITER_UNSUPPORTED');
+    ensure(this.text.supportsRunText?.() !== false, 'WEB_GENERATION_ROUTE_MISSING');
+    const keyOf = (phase: Phase) => ({ operationId: claim.operationId, phase, ordinal: -1 });
+    // A chain has at most 3 models; every extra round is a model proven not billed.
+    for (let round = 0; round < 4; round++) {
+      const draftKey = keyOf('draft'),
+        reviewKey = keyOf('review');
+      const draftState = this.ledger.attemptState(draftKey, scope);
+      const reviewState = this.ledger.attemptState(reviewKey, scope);
+      const retryable = (state: string | null, key: { operationId: string; phase: Phase; ordinal: number }) =>
+        state === null || state === 'known' || (state === 'not_sent' && this.ledger.isRewound(key));
+      ensure(
+        retryable(draftState, draftKey) &&
+          retryable(reviewState, reviewKey) &&
+          (reviewState === null || draftState === 'known'),
+        'WEB_PROVIDER_RECOVERY_UNKNOWN',
+      );
+      if (reviewState === 'known') {
+        this.ledger.readKnownTextStage(draftKey, scope);
+        this.ledger.readKnownTextStage(reviewKey, scope);
+        return this.ledger.commitReviewed(claim, scope);
+      }
+      const knownDraft = draftState === 'known' ? this.ledger.readKnownTextStage(draftKey, scope) : null;
+      const route = textRouteFor(this.store, claim.operationId, this.clock.now(), (phase) =>
+        this.ledger.abandonedProviders(claim.operationId, phase),
+      );
+      const outcome = await this.textRound({ claim, signal, request, row, scope, policyHash, knownDraft, route });
+      if (outcome === 'again') continue;
+      if (outcome === 'retry') return null;
+      return this.ledger.commitReviewed(claim, scope);
+    }
+    throw new DomainError('WEB_PROVIDER_STAGE_INVALID');
+  }
+
+  private async textRound(input: {
+    claim: WebStageClaim;
+    signal: AbortSignal;
+    request: ReturnType<WebProviderRunner['frozen']>['request'];
+    row: ReturnType<WebProviderRunner['frozen']>['row'];
+    scope: Scope;
+    policyHash: string;
+    knownDraft: ReturnType<WebProviderOffline['readKnownTextStage']> | null;
+    route: TextRoute | undefined;
+  }): Promise<'done' | 'again' | 'retry'> {
+    const { claim, signal, request, row, scope, policyHash, knownDraft, route } = input;
+    const phases: Phase[] = knownDraft ? ['review'] : ['draft', 'review'];
+    const keyOf = (phase: Phase) => ({ operationId: claim.operationId, phase, ordinal: -1 });
+    const limits = textStageLimits(request, headRoute(route), knownDraft === null);
+    const limitOf = (phase: Phase) => limits[phase]!;
+    const concurrency = webConcurrency(this.store);
+    // 1. The money for every stage, in ONE transaction. The wire request does not exist yet (the review's prompt contains the
+    //    draft), so each hold uses the stage's full bound and a pending request hash that is stable for this attempt; the real
+    //    hash comes back in the result and is kept in the receipt.
+    const pending = (phase: Phase) =>
+      createHash('sha256')
+        .update(
+          JSON.stringify([
+            'wire-pending',
+            claim.operationId,
+            phase,
+            this.ledger.attemptGeneration(claim.operationId, phase),
+          ]),
+        )
+        .digest('hex');
+    this.store.transaction(() => {
+      for (const phase of phases) {
+        const limit = limitOf(phase);
+        this.ledger.reserveForClaim(
+          claim,
+          {
+            ...keyOf(phase),
+            ...scope,
+            requestDigest: row.request_digest,
+            policyHash,
+            wireRequestHash: pending(phase),
+            voiceVersion: row.voice_version,
+            provider: limit.provider,
+            model: limit.model,
+            maxUnits: limit.inputTokens + limit.outputTokens,
+          },
+          true,
+        );
+      }
+    });
+    // 2. The shared budget, before anything can be sent; then the possible-send boundary for every stage in one transaction.
+    for (const phase of phases) {
+      const key = keyOf(phase);
+      await this.budget?.beginAttempt(this.store, key, this.ledger.isRewound(key), this.ledger.isRequeued(key));
+    }
+    ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
+    this.store.transaction(() => {
+      for (const phase of phases) this.ledger.markSentForClaim(claim, keyOf(phase), scope);
+    });
+    // 3. ONE call. Whatever happens in it, every stage is either settled below or left UNKNOWN and held.
+    let run: WebTextRun | null = null;
+    let failure: unknown = null;
+    try {
+      run = await this.text.runText!(
+        {
+          reservationId: `${claim.operationId}:${claim.stageVersion}`,
+          request,
+          policyHash,
+          known: knownDraft,
+          ...(route ? { route: headRoute(route)! } : {}),
+          stages: { draft: limits.draft, review: limits.review },
+          callTimeoutMs: concurrency.textCallTimeoutMs,
+        },
+        signal,
+      );
+    } catch (error) {
+      failure = error;
+    }
+    // 4. Settle from the result.
+    let again = false;
+    let retry = false;
+    let unconfirmed = false;
+    let failedCode: string | null = null;
+    const settleKnownZero = async (phase: Phase, receipt: unknown) => {
+      const key = keyOf(phase);
+      this.ledger.confirm(key, scope, { outcome: 'failed', receipt, usageUnits: 0 });
+      await this.budget?.settleAttempt(this.store, key);
+    };
+    /** Reserved and marked sent but never started: settled at zero and removed, so a later round or retry starts clean. */
+    const releaseNotRun = async (phase: Phase, code: string) => {
+      const key = keyOf(phase);
+      if (this.ledger.attemptState(key, scope) !== 'sent') return;
+      if (this.ledger.canArchive()) {
+        this.ledger.settleNotBilled(claim, key, scope, code);
+        await this.budget?.settleAttempt(this.store, key);
+        this.ledger.archiveNotBilled(key, scope, code);
+      } else await settleKnownZero(phase, { notRun: true, code });
+    };
+    // First: every stage that never started (its hold must be released BEFORE a 429 retry hands the claim back).
+    const first = phases.find((phase) => run && run.stages[phase].state === 'not_sent');
+    for (const phase of phases) {
+      if (!run || run.stages[phase].state !== 'not_sent' || this.ledger.attemptState(keyOf(phase), scope) !== 'sent')
+        continue;
+      const result = run.result;
+      // The stage that failed to START because of a pre-send answer (no key, body too large) is the first one that did not run
+      // while everything before it succeeded.
+      const earlier = phases.slice(0, phases.indexOf(phase));
+      const mine =
+        route !== undefined &&
+        phase === first &&
+        !result.ok &&
+        isNotBilled(result.code) &&
+        earlier.every((p) => {
+          const r = run!.stages[p];
+          return r.state === 'started' && r.observation?.outcome === 'succeeded';
+        });
+      if (mine && !result.ok) {
+        await releaseNotRun(phase, result.code);
+        failedCode = result.code;
+        if (route![phase].length > 1 && this.ledger.canArchive()) again = true;
+        else this.ledger.failChainExhausted(claim);
+      } else await releaseNotRun(phase, 'WEB_STAGE_NOT_RUN');
+    }
+    // Then: every stage that was handed to the provider, in order.
+    for (const phase of phases) {
+      const key = keyOf(phase);
+      if (this.ledger.attemptState(key, scope) !== 'sent') continue;
+      const stage: WebStageRun | null = run ? run.stages[phase] : null;
+      if (stage === null || stage.state === 'not_sent' || stage.observation === null) {
+        // The whole call failed (it may have sent anything), or a stage was handed to the provider and nothing came back.
+        this.ledger.markUnknown(key, scope, unknownCode(failure));
+        unconfirmed = true;
+        continue;
+      }
+      const observation = stage.observation;
+      if (observation.outcome === 'succeeded') {
+        const accepted = stage.accepted;
+        const usage = observation.usage;
+        if (
+          !accepted ||
+          accepted.jobId !== claim.operationId ||
+          accepted.requestDigest !== row.request_digest ||
+          accepted.policyHash !== policyHash ||
+          accepted.stage !== phase ||
+          accepted.wireRequestHash !== stage.wireRequestHash ||
+          usage.unit !== 'tokens' ||
+          usage.inputTokens === null ||
+          usage.outputTokens === null
+        ) {
+          // A claimed success that cannot be tied to this request is not trusted: the call may have been billed.
+          this.ledger.markUnknown(key, scope, 'WEB_PROVIDER_STAGE_UNCONFIRMED');
+          unconfirmed = true;
+          continue;
+        }
+        this.ledger.confirm(key, scope, {
+          outcome: 'succeeded',
+          receipt: { ...observation, wireRequestHash: stage.wireRequestHash },
+          usageUnits: usage.inputTokens + usage.outputTokens,
+          output: accepted.payload,
+          metadata: accepted.metadata,
+        });
+        await this.budget?.settleAttempt(this.store, key);
+        continue;
+      }
+      const receipt = { ...observation, wireRequestHash: stage.wireRequestHash };
+      const usage = observation.usage;
+      if (usage.unit === 'tokens' && usage.inputTokens !== null && usage.outputTokens !== null) {
+        this.ledger.confirm(key, scope, {
+          outcome: 'failed',
+          receipt,
+          usageUnits: usage.inputTokens + usage.outputTokens,
+        });
+        await this.budget?.settleAttempt(this.store, key);
+        failedCode = observation.errorCode ?? 'TEXT_NETWORK_ERROR';
+      } else if (route && isNotBilled(observation.errorCode) && route[phase].length > 1 && this.ledger.canArchive()) {
+        // The provider proved it did not run the request: settle at zero, then retry on the next model of the chain.
+        const code = observation.errorCode!;
+        this.ledger.settleNotBilled(claim, key, scope, code);
+        await this.budget?.settleAttempt(this.store, key);
+        this.ledger.archiveNotBilled(key, scope, code);
+        again = true;
+        failedCode = code;
+      } else if (
+        observation.outcome === 'failed' &&
+        isTextRateLimit(observation.errorCode) &&
+        this.ledger.supportsRateLimitRetry()
+      ) {
+        // HTTP 429: the provider rejected the request before running it. The same 2/4/8 s backoff as before, then give up.
+        const verdict = this.ledger.rejectForRetry(claim, key, scope, 'DEEPSEEK_RATE_LIMITED');
+        if (verdict.action === 'retry') retry = true;
+        else await settleKnownZero(phase, receipt);
+        failedCode = observation.errorCode;
+      } else if (route && isNotBilled(observation.errorCode)) {
+        await settleKnownZero(phase, receipt);
+        failedCode = observation.errorCode;
+      } else {
+        this.ledger.markUnknown(key, scope, observation.errorCode ?? 'WEB_GENERATION_CALL_UNCONFIRMED');
+        unconfirmed = true;
+      }
+    }
+    if (unconfirmed) {
+      // UNKNOWN: held, never retried, never released. The reply ends now.
+      try {
+        this.ledger.failUnconfirmed(claim);
+      } catch {
+        // The stage lease still ends it: recover() treats every sent attempt as UNKNOWN.
+      }
+      throw failure instanceof Error ? failure : new DomainError(failedCode ?? 'WEB_GENERATION_CALL_UNCONFIRMED');
+    }
+    if (retry) return 'retry';
+    if (again) return 'again';
+    if (failedCode || (run && !run.result.ok))
+      throw new DomainError(failedCode ?? (run!.result.ok ? 'TEXT_NETWORK_ERROR' : run!.result.code));
+    return 'done';
+  }
   async runSpeech(claim: WebStageClaim, signal: AbortSignal): Promise<string | null> {
     await this.whenReady();
     ensure(claim.stage === 'audio' && Number.isSafeInteger(claim.ordinal), 'WEB_PROVIDER_STAGE_INVALID');
@@ -433,6 +731,7 @@ export class WebProviderRunner {
           ensure(!signal.aborted, 'WEB_PROVIDER_ABORTED');
           this.ledger.validateSentForClaim(claim, key, scope);
         },
+        { callTimeoutMs: webConcurrency(this.store).speechCallTimeoutMs },
       );
       ensure(result.usageUnits === maxUnits, 'WEB_PROVIDER_USAGE_MISMATCH');
       knownReceipt = { providerReceipt: result.receipt, usageUnits: result.usageUnits };
@@ -494,7 +793,7 @@ export class WebProviderRunner {
         });
         await this.budget?.settleAttempt(this.store, key);
       }
-      if (this.ledger.attemptState(key, scope) === 'sent') this.ledger.markUnknown(key, scope);
+      if (this.ledger.attemptState(key, scope) === 'sent') this.ledger.markUnknown(key, scope, unknownCode(error));
       throw error;
     }
     if ((this.store as WebStore).providerAudio) await this.ledger.loadKnownAudio(key, scope, audioCache);

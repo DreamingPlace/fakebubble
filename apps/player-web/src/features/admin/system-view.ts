@@ -17,6 +17,7 @@ import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { keyValuePanel } from './ui/key-value-panel.ts';
 import { statusBadge } from './ui/status-badge.ts';
 import { pageHead } from './ui/page-head.ts';
+import { unknownCallsPanel } from './unknown-calls-panel.ts';
 
 const onOff = (value: boolean) => statusBadge(value ? '开' : '关', value ? 'ok' : 'neutral');
 const yesNo = (value: boolean) => statusBadge(value ? '有' : '无', value ? 'ok' : 'neutral');
@@ -43,6 +44,13 @@ export function systemView(
     load: () => Promise<SystemStatusView>;
     renewPrices: (requestId: string) => Promise<RenewPricesResult>;
     topUp: (input: { requestId: string; provider: 'deepseek' | 'fish'; dollars: number }) => Promise<BudgetTopUpResult>;
+    /** Part 54: 未确认的调用 (absent where the server has no such page). */
+    unknownCalls?:
+      | {
+          load: Parameters<typeof unknownCallsPanel>[0]['load'];
+          resolve: Parameters<typeof unknownCallsPanel>[0]['resolve'];
+        }
+      | undefined;
     isOwner: () => boolean;
     run: (work: () => Promise<void>) => Promise<void>;
     /** 续期 and 预算充值 confirm in place, inside the host they are given (no dialog). */
@@ -60,6 +68,18 @@ export function systemView(
     pending.set(key, held);
     return held;
   };
+  const unknownPanel = deps.unknownCalls
+    ? unknownCallsPanel({
+        load: deps.unknownCalls.load,
+        resolve: deps.unknownCalls.resolve,
+        isOwner: deps.isOwner,
+        run: deps.run,
+        confirm: deps.confirm,
+        toast: deps.toast,
+        newRequestId: deps.newRequestId,
+        disposed: deps.disposed,
+      })
+    : null;
   const sections = h('div', { class: 'system-sections' });
   const result = h('div', { class: 'system-result', attrs: { role: 'status' } });
   const metricsHost = h('div', { class: 'system-metrics' });
@@ -434,6 +454,7 @@ export function systemView(
     sections.replaceChildren(
       row('top', version, unknown, security),
       row('wide', priceSection(v)),
+      ...(unknownPanel ? [row('wide', unknownPanel.element)] : []),
       row('pair', budgetSection(v), cleanupCard),
       row('wide', section('技术指标', metricsHost)),
     );
@@ -445,6 +466,7 @@ export function systemView(
     if (deps.disposed()) return;
     view = next;
     paint(next);
+    if (unknownPanel) await unknownPanel.load().catch(() => {});
   }
   return {
     load: refresh,
@@ -459,6 +481,7 @@ export function systemView(
       sections.replaceChildren();
       result.replaceChildren();
       metrics.clear();
+      unknownPanel?.clear();
     },
   };
 }

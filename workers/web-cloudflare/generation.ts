@@ -20,6 +20,11 @@ import type {
   WebJudgeWire,
   WebKnownDraft,
   WebSpeechWire,
+  WebEmbedJob,
+  WebSpeechJob,
+  WebStageRun,
+  WebTextJob,
+  WebTextRun,
 } from '../../packages/contracts/web-generation-rpc.ts';
 import {
   EMBEDDING_MODEL,
@@ -169,7 +174,144 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
       };
     }
   }
-  async speech(wire: WebSpeechWire, authorize: () => Promise<void>): Promise<SpeechRPCResult> {
+  /**
+   * Part 54: the reply's text stages as ONE call with ONE result. No function or stub crosses the boundary: the business object
+   * reserved the money for every stage before calling (`job.stages` are the limits it reserved against) and settles from the
+   * returned per-stage record afterwards. This method never waits for the business object, and every provider call in it
+   * carries its own timeout (`job.callTimeoutMs`, below the stage lease and the RPC limit), so it always RETURNS: a call that
+   * could not be observed is reported as started-without-observation (UNKNOWN to the caller), never as a hang.
+   */
+  async runText(job: WebTextJob): Promise<WebTextRun> {
+    const phases = ['draft', 'review'] as const;
+    const starts = new Map<string, { hash: string; bytes: number }>();
+    const observations = new Map<string, import('../../packages/contracts/provider-calls.ts').ProviderObservation>();
+    const accepted = new Map<string, AcceptedV7StageOutput>();
+    const rejected = new Map<string, { raw: string; errorCode: string }>();
+    const stages = (): WebTextRun['stages'] => {
+      const one = (phase: (typeof phases)[number]): WebStageRun => {
+        const started = starts.get(phase);
+        return started
+          ? {
+              state: 'started',
+              wireRequestHash: started.hash,
+              requestBytes: started.bytes,
+              observation: observations.get(phase) ?? null,
+              accepted: accepted.get(phase) ?? null,
+              rejected: rejected.get(phase) ?? null,
+            }
+          : { state: 'not_sent' };
+      };
+      return { draft: one('draft'), review: one('review') };
+    };
+    try {
+      this.begin();
+      job = structuredClone(job);
+      ensure(
+        job &&
+          typeof job.reservationId === 'string' &&
+          job.reservationId.length > 0 &&
+          job.reservationId.length <= 256 &&
+          Number.isSafeInteger(job.callTimeoutMs) &&
+          job.callTimeoutMs >= 1 &&
+          job.callTimeoutMs <= 60_000 &&
+          job.stages?.review &&
+          (job.known ? job.stages.draft === null : job.stages.draft !== null),
+        'WEB_PROVIDER_WIRE_MISMATCH',
+      );
+      const request = job.request;
+      const text = new DeepSeekTextGenerator({
+        apiKey: this.env.DEEPSEEK_API_KEY,
+        fetch: this.fetcher,
+        keys: { xai: this.env.XAI_API_KEY, gemini: this.env.GEMINI_API_KEY },
+        callTimeoutMs: job.callTimeoutMs,
+      });
+      if (request.writer === 'v8')
+        ensure(writerPromptBytesHash() === WRITER_V8_PROMPT_SHA256, 'WEB_WRITER_PIN_MISMATCH');
+      if (request.writerProfile === true)
+        ensure(writerProfileHash() === WRITER_PROFILE_SHA256, 'WEB_WRITER_PIN_MISMATCH');
+      if (request.writerMemes === true) ensure(writerMemesHash() === WRITER_MEMES_SHA256, 'WEB_WRITER_PIN_MISMATCH');
+      ensure(text.policyHashFor(request) === job.policyHash, 'WEB_PROVIDER_WIRE_MISMATCH');
+      // The route is data from the business object, one model per stage. A longer chain is refused: the second model would
+      // need a reservation this call does not have.
+      if (job.route)
+        ensure(
+          phases.every((phase) => job.route![phase].length === 1) &&
+            phases.every(
+              (phase) =>
+                job.stages[phase] === null ||
+                (job.route![phase][0]!.provider === job.stages[phase]!.provider &&
+                  job.route![phase][0]!.model === job.stages[phase]!.model),
+            ),
+          'WEB_PROVIDER_STAGE_INVALID',
+        );
+      const meter: ProviderMeter = {
+        reserve: (calls) => {
+          for (const call of calls) {
+            const limit = (call.stage === 'draft' || call.stage === 'review') && job.stages[call.stage];
+            ensure(
+              limit &&
+                call.provider === limit.provider &&
+                call.model === limit.model &&
+                call.bounds.unit === 'tokens' &&
+                call.bounds.outputTokens <= limit.outputTokens,
+              'WEB_PROVIDER_STAGE_INVALID',
+            );
+          }
+          return {
+            start: (stage, hash, bytes) => {
+              ensure(
+                (stage === 'draft' || stage === 'review') &&
+                  !starts.has(stage) &&
+                  // The hold was sized from the request: a body larger than it is refused BEFORE anything is sent.
+                  Number.isSafeInteger(bytes) &&
+                  bytes! <= job.stages[stage]!.inputTokens &&
+                  typeof hash === 'string' &&
+                  /^[a-f0-9]{64}$/.test(hash) &&
+                  Number.isSafeInteger(bytes) &&
+                  bytes! > 0,
+                'WEB_PROVIDER_STAGE_INVALID',
+              );
+              starts.set(stage, { hash, bytes: bytes! });
+              return {
+                finish: (value) => {
+                  observations.set(stage, value);
+                },
+                rejected: (output) => {
+                  if (typeof output?.raw === 'string' && typeof output.errorCode === 'string')
+                    rejected.set(stage, { raw: output.raw, errorCode: output.errorCode });
+                },
+              };
+            },
+            close() {},
+          };
+        },
+      };
+      const collect = async (stage: AcceptedV7StageOutput) => {
+        accepted.set(stage.stage, structuredClone(stage));
+      };
+      const value = job.known
+        ? await text.generateAcceptedReviewFromKnownDraft(
+            request,
+            this.controller.signal,
+            job.known,
+            collect,
+            meter,
+            job.route,
+          )
+        : await text.generateAcceptedStages(request, this.controller.signal, collect, meter, job.route);
+      return { stages: stages(), result: { ok: true, value } };
+    } catch (error) {
+      return {
+        stages: stages(),
+        result: {
+          ok: false,
+          code: safeCode(error),
+          generation: error instanceof TextGenerationFailure ? error.generation : null,
+        },
+      };
+    }
+  }
+  async speech(wire: WebSpeechWire, authorize: () => Promise<void>, timeoutMs?: number): Promise<SpeechRPCResult> {
     try {
       this.begin();
       wire = structuredClone(wire);
@@ -204,6 +346,7 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
         apiKey: this.env.FISH_API_KEY,
         model: wire.model,
         fetch: this.fetcher,
+        ...(timeoutMs === undefined ? {} : { timeoutMs }),
       }).generate(wire.speech, this.controller.signal, meter);
       ensure(
         value.inputUTF8Bytes === wire.billedTextBytes && value.model === wire.model,
@@ -330,6 +473,24 @@ export class WebIsolatedGenerationSession extends RpcTarget implements WebGenera
   }
 }
 export class WebGenerationService extends WorkerEntrypoint<WebGenerationEnvironment> {
+  /** Part 54: one call, one result (see WebIsolatedGenerationSession.runText). A fresh single-use session per call. */
+  runText(job: WebTextJob): Promise<WebTextRun> {
+    return this.session().runText(job);
+  }
+  async runSpeech(job: WebSpeechJob): Promise<SpeechRPCResult> {
+    ensure(
+      Number.isSafeInteger(job?.callTimeoutMs) && job.callTimeoutMs >= 1 && job.callTimeoutMs <= 120_000,
+      'WEB_PROVIDER_WIRE_MISMATCH',
+    );
+    return this.session().speech(job.wire, async () => {}, job.callTimeoutMs);
+  }
+  async runEmbed(job: WebEmbedJob): Promise<WebEmbedRPCResult> {
+    return this.session().embed(job.wire, async () => {});
+  }
+  /** Overridden only by the test graph, which substitutes the provider network and nothing else. */
+  protected session(): WebIsolatedGenerationSession {
+    return new WebIsolatedGenerationSession(this.env);
+  }
   open() {
     ensure(this.env.EXTERNAL_CALLS === 'true', 'WEB_PROVIDER_LIVE_OPT_IN_REQUIRED');
     return new WebIsolatedGenerationSession(this.env);

@@ -44,6 +44,9 @@ pnpm web:cloudflare:package "$PWD/runtime/cloud-package"
 | `MAX_AUDIO_RUNNING` | 4 | 1–48 | 同时运行的语音阶段（Fish 入门档账户 5 个并发，留 1 个余量） |
 | `MAX_WAITING_OPERATIONS` | 104 | 1–4096 | 运行之外可排队的操作；全局票数 = 文本 + 语音 + 排队 |
 | `AUDIO_FALLBACK_WAIT_MS` | 8000 | 1000–60000 | 语音在这段时间内拿不到名额就改发文字 |
+| `TEXT_CALL_TIMEOUT_MS` | 35000 | 1000–35000 | Part 54：生成 Worker 对**每一次**文字供应商调用的限时（低于 90 秒阶段租约和 RPC 上限；一次回复最多等 2×该值+10 秒） |
+| `SPEECH_CALL_TIMEOUT_MS` | 50000 | 1000–100000 | Part 54：每一次语音供应商调用的限时（低于 120 秒语音租约） |
+| `STAGE_DISPATCH` | （不设） | `off` 或不设 | Part 54：默认每个阶段在自己的请求上下文里运行（经业务对象自身的 `BUSINESS` 绑定）；`off` 仅用于排查，会退回“全部阶段在同一次 alarm 调用里” |
 | `DAILY_REPLY_LIMIT` | 100 | 1–10000 | 每位受邀玩家在滚动 24 小时内可被接纳的主动发起回复数（本地实例在 `local-config.json` 顶层的 `dailyReplyLimit`） |
 
 `DAILY_REPLY_LIMIT` 在操作接纳（admission）处执行，早于任何预算预占和供应商调用：只统计该玩家自己发起、仍占用配额的操作（预占已释放的不计），不含角色主动/定时消息；访客试用仍是 3 次，不受它影响。达到上限返回 `429 WEB_DAILY_LIMIT_REACHED`，`retryAfterMs` 为最早一条计入的操作滑出窗口所需的时间，页面只显示一句“今天聊得够多啦，明天再来找我吧～”，不是错误页。

@@ -406,7 +406,9 @@ function scanWebDataPolicy(
               attempt.settled_at !== null ||
               attempt.outcome !== null ||
               attempt.receipt_json !== null ||
-              attempt.usage_json !== null
+              // Part 54: an UNKNOWN row may carry the marker that its running-slot ticket was freed (its money stays held).
+              (attempt.usage_json !== null &&
+                !(attempt.dispatch_state === 'unknown' && attempt.usage_json === '{"ticketFreed":true}'))
             : attempt.dispatch_state === 'known'
               ? attempt.settled_at === null ||
                 !['succeeded', 'failed', 'not_dispatched'].includes(attempt.outcome ?? '') ||
@@ -419,7 +421,11 @@ function scanWebDataPolicy(
               : true)
       )
         fail('ATTEMPT_STATE_INVALID');
-      if (attempt.dispatch_state !== 'known' && budgetCounts.has(key))
+      if (
+        attempt.dispatch_state !== 'known' &&
+        !(attempt.dispatch_state === 'unknown' && attempt.usage_json === '{"ticketFreed":true}') &&
+        budgetCounts.has(key)
+      )
         budgetCounts.set(key, budgetCounts.get(key)! + 1);
       if (attempt.dispatch_state === 'unknown') result.unknownExternalAttempts++;
     }

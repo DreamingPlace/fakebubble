@@ -121,6 +121,44 @@ export class WebSystemFixture extends WebCrossPathFixture {
         n: store.get<{ n: number }>("SELECT count(*) n FROM web_provider_attempts WHERE state='unknown'")!.n,
       });
     }
+    if (path === '/fixture/system/unknown-held') {
+      // Part 54: the rows a lost response leaves for ONE call: UNKNOWN again, its hold put back (it was released when it settled).
+      const row = store.get<{
+        operation_id: string;
+        phase: string;
+        ordinal: number;
+        provider: string;
+        held: number;
+        charged: number;
+      }>(
+        `SELECT operation_id,phase,ordinal,provider,held_micros held,charged_micros charged FROM web_provider_attempts
+        WHERE phase='draft' AND state='known' LIMIT 1`,
+      )!;
+      store.run(
+        `UPDATE web_provider_attempts SET state='unknown',sent_at=?,settled_at=NULL,outcome=NULL,usage_units=NULL,charged_micros=NULL
+        WHERE operation_id=? AND phase=? AND ordinal=?`,
+        this.clock.now() - 2 * 3_600_000,
+        row.operation_id,
+        row.phase,
+        row.ordinal,
+      );
+      // Its dispatch-ledger twin, as a call that went UNKNOWN after this part leaves it (the running-slot ticket already freed).
+      store.run(
+        `UPDATE web_external_attempts SET dispatch_state='unknown',outcome=NULL,receipt_json=NULL,usage_json='{"ticketFreed":true}',settled_at=NULL,
+        sent_at=COALESCE(sent_at,?) WHERE operation_id=? AND phase=? AND ordinal=?`,
+        this.clock.now() - 2 * 3_600_000,
+        row.operation_id,
+        row.phase,
+        row.ordinal,
+      );
+      store.run(
+        'UPDATE web_provider_spending SET held_micros=held_micros+?,spent_micros=spent_micros-? WHERE provider=?',
+        row.held,
+        row.charged,
+        row.provider,
+      );
+      return Response.json({ held: row.held });
+    }
     return new Response(null, { status: 404 });
   }
 }

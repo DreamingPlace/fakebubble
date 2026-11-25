@@ -62,7 +62,9 @@ test('isolated generation is explicit-live, single transport, wire-bound, cancel
   const tampered = await f.call<Result>('/', { mode: 'tamper', speech: true });
   assert.equal(tampered.code, 'WEB_PROVIDER_WIRE_MISMATCH');
   assert.deepEqual(tampered.calls, []);
-  assert.equal(tampered.gates, 0);
+  // Part 54 NAMED EXCEPTION: the send gate is checked by the business object immediately BEFORE the single call, so it has been
+  // passed once when generation refuses a tampered wire; nothing was sent (calls is empty) and the refusal code is unchanged.
+  assert.equal(tampered.gates, 1);
   const voice = await f.call<Result>('/', { speech: true });
   assert.equal(voice.ok, true);
   assert.equal(voice.gates, 1);

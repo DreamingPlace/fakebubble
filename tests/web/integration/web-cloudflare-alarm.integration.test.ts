@@ -90,18 +90,18 @@ test('uncertain Alarm output is never retried, survives restart, and original de
   const guest = await f.call<Guest>('/bootstrap', {});
   await f.call('/alarm-mode', { mode: 'unknown' });
   await f.call('/admit', admission(guest));
-  const before = await until(f, (s) => s.operations[0]?.status === 'unknown');
-  assert.equal(before.due, before.operations[0]!.deadline_at);
+  // Part 54 NAMED EXCEPTION: an UNKNOWN reply ends as failed at once (quota released) instead of waiting as 'unknown' for its
+  // deadline. Still asserted: the call is never retried (calls unchanged across a restart) and the provider hold is kept.
+  const before = await until(f, (s) => s.operations[0]?.status === 'failed' && s.alarm === null);
+  assert.equal(before.operations[0]!.quota_state, 'released');
   assert.ok(before.budgets.find((row) => row.provider === 'fish')!.held_micros > 0);
   await f.restart();
   await f.call('/wake');
-  await until(f, (s) => s.alarm !== null && s.alarm === s.due);
-  assert.deepEqual((await f.call<State>('/alarm-status')).calls, before.calls);
-  await f.call('/expire');
-  const after = await until(f, (s) => s.operations[0]?.status === 'failed' && s.alarm === null);
-  assert.equal(after.operations[0]!.quota_state, 'released');
+  await sleep(1500);
+  const after = await f.call<State>('/alarm-status');
   assert.deepEqual(after.calls, before.calls);
   assert.deepEqual(after.budgets, before.budgets);
+  assert.equal(after.operations[0]!.status, 'failed');
 });
 
 test('a real 32-second provider await renews the 30-second coordinator while preserving the stage lease', async (t) => {
@@ -145,9 +145,10 @@ test('workerd restart during sent speech waits out the old coordinator and never
   const reopened = await f.call<State>('/alarm-status');
   assert.equal(reopened.coordinator.epoch, epoch);
   assert.deepEqual(reopened.calls, sent.calls);
-  const recovered = await until(f, (s) => s.operations[0]?.status === 'unknown', 45_000);
+  // Part 54 NAMED EXCEPTION: recovery ends the reply as failed (it was 'unknown' until its deadline); the held money and the
+  // never-replayed call are asserted as before.
+  const recovered = await until(f, (s) => s.operations[0]?.status === 'failed', 45_000);
   assert.ok(recovered.coordinator.epoch > epoch);
   assert.deepEqual(recovered.calls, sent.calls);
   assert.deepEqual(recovered.budgets, sent.budgets);
-  assert.equal(recovered.due, sent.operations[0]!.deadline_at);
 });
