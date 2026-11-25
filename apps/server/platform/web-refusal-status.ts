@@ -145,6 +145,7 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   EVAL_SET_NOT_FOUND: 404,
   NOT_FOUND: 404,
   PLAYER_NOT_FOUND: 404,
+  UNKNOWN_CALL_NOT_FOUND: 404,
   // 409: STATE MOVED: the request was fine when it was made, and something it depends on is no longer as it was (a newer revision, a busy slot, an item that exists/is gone, a limit that is full). Resending after reading the new state can succeed.
   ADMIN_EMAIL_ALREADY_BOUND: 409,
   ADMIN_MEMBER_LIMIT: 409,
@@ -360,6 +361,7 @@ export const REFUSAL_STATUS: Readonly<Record<string, number>> = Object.freeze({
   UNSUPPORTED_DEEPSEEK_MODEL: 500,
   UNSUPPORTED_SCHEMA: 500,
   UNSUPPORTED_TEXT_PROVIDER: 500,
+  TEXT_NETWORK_ERROR: 500,
   // 503: a service or feature the request needs is not available right now
   ADMIN_EMAIL_UNAVAILABLE: 503,
   ADMIN_EMAIL_UNAVAILABLE_FOR_BINDING: 503,

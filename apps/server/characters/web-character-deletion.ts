@@ -29,6 +29,7 @@ import {
 import { WebProviderOffline } from '../generation/web-provider-offline.ts';
 import { settleWebLifetimeReservation, webReceiptDigest } from '../admission/web-retention.ts';
 import { checkAudioReference, speechObjectScope } from '../audio/web-provider-media.ts';
+import { markExternalAttemptsUnknown } from '../budget/web-external-tickets.ts';
 import type { MediaObjectReference } from '../cloudflare/media-objects.ts';
 
 type Actor = { memberId: string; sessionId: string };
@@ -316,12 +317,7 @@ export class WebCharacterDeletion {
           ledger.releaseUnsent(key, scope); // Never releases unknown shared reservations.
         else {
           ledger.markUnknown(key, scope);
-          this.store.run(
-            `UPDATE web_external_attempts SET dispatch_state='unknown' WHERE operation_id=? AND phase=? AND ordinal=? AND dispatch_state='sent'`,
-            a.operation_id,
-            a.phase,
-            a.ordinal,
-          );
+          markExternalAttemptsUnknown(this.store, { operationId: a.operation_id, phase: a.phase, ordinal: a.ordinal });
         }
       }
       if (this.store.providerAudio)

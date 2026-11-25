@@ -285,8 +285,10 @@ test('C-B1b late success after epoch takeover and terminal only settles external
   ledger.markSent(second, key1);
   f.advance(31_000);
   const takeover = queue.acquireCoordinator('takeover');
-  assert.equal(ledger.recover(takeover, ledger.fence(op.operationId)).status, 'unknown');
-  assert.equal(reopened.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  // Part 54 NAMED EXCEPTION: an UNKNOWN call keeps its money held and is never retried, but no longer keeps its running-slot
+  // ticket (reserved 0), and its reply ends as failed at once. Nothing else in this test changed.
+  assert.equal(ledger.recover(takeover, ledger.fence(op.operationId)).status, 'failed');
+  assert.equal(reopened.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   assert.deepEqual(ledger.confirm(key1, { outcome: 'succeeded', receipt: { late: true }, usage: { synthetic: 1 } }), {
     duplicate: false,
   });
@@ -303,9 +305,10 @@ test('C-B1b late success after epoch takeover and terminal only settles external
   assert.equal(queue.claimAudio(takeover, 'no-automatic-retry'), null);
   f.advance(269_000);
   const final = queue.acquireCoordinator('final');
+  // Part 54 NAMED EXCEPTION: the reply already ended when it went UNKNOWN, so the later expiry is a duplicate (nothing left to end).
   assert.deepEqual(ledger.terminate(final, ledger.fence(op.operationId), principal, 'failed', 'expired'), {
     status: 'failed',
-    duplicate: false,
+    duplicate: true,
   });
   assert.equal(reopened.get<{ reserved: number }>('SELECT reserved FROM web_ip_windows')?.reserved, 0);
 });
@@ -346,7 +349,9 @@ test('C-B1b cancellation then duplicate late receipt settles only the external t
     status: 'cancelled',
     duplicate: false,
   });
-  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 1);
+  // Part 54 NAMED EXCEPTION: cancelling a SENT call makes it UNKNOWN, which frees its running-slot ticket at once (its money stays
+  // held until the late receipt); the late receipt below still settles exactly once and the count stays 0.
+  assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);
   assert.deepEqual(f.success(key), { duplicate: false });
   assert.deepEqual(f.success(key), { duplicate: true });
   assert.equal(f.store.get<{ reserved: number }>('SELECT reserved FROM web_external_budgets')?.reserved, 0);

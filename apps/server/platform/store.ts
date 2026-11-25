@@ -801,7 +801,8 @@ export class WebStore extends Store {
       ensure(
         !this.get(`SELECT 1 FROM web_external_budgets b WHERE b.reserved<>
         (SELECT count(*) FROM web_external_attempts a WHERE a.provider=b.provider AND a.stage=b.stage
-          AND a.phase=b.phase AND a.dispatch_state!='known') LIMIT 1`),
+          AND a.phase=b.phase AND a.dispatch_state!='known'
+          AND NOT (a.dispatch_state='unknown' AND a.usage_json='{"ticketFreed":true}')) LIMIT 1`),
         'WEB_SYNTHETIC_VOICE_BUDGET_MISMATCH',
       );
       const active = this.all<{
@@ -944,7 +945,8 @@ export class WebStore extends Store {
       ensure(
         !this.get(`SELECT 1 FROM web_external_budgets b WHERE b.reserved<>
         (SELECT count(*) FROM web_external_attempts a WHERE a.provider=b.provider AND a.stage=b.stage
-          AND a.phase=b.phase AND a.dispatch_state!='known') LIMIT 1`),
+          AND a.phase=b.phase AND a.dispatch_state!='known'
+          AND NOT (a.dispatch_state='unknown' AND a.usage_json='{"ticketFreed":true}')) LIMIT 1`),
         'WEB_VERTICAL_BUDGET_MISMATCH',
       );
       // The old trial debit belongs to the original admission, even if its principal is now an account.

@@ -210,11 +210,12 @@ test('replies: a known failure at once (dispatch ledger), UNKNOWN (recovery) and
   unknown.advance(10 * 60_000);
   const ledger = new WebDispatchLedger(unknown.store as WebStore, unknown.clock);
   const takeover = unknown.queue.acquireCoordinator('takeover');
-  assert.equal(ledger.recover(takeover, ledger.fence('operation')).status, 'unknown');
-  assert.deepEqual(all(unknown.store), ['reply_unknown|character|xai|1']);
-  // The operation later expires: unknown is final for the count, so the expiry adds nothing.
+  // Part 54 NAMED EXCEPTION: an UNKNOWN reply now ends as failed at once (its money stays held), so it is counted ONCE as a
+  // failed reply instead of as reply_unknown; a later expiry still adds nothing.
+  assert.equal(ledger.recover(takeover, ledger.fence('operation')).status, 'failed');
+  assert.deepEqual(all(unknown.store), ['reply_failed|character|xai|1']);
   unknown.store.run("UPDATE web_operations SET status='failed',stage_version=stage_version+1 WHERE id='operation'");
-  assert.deepEqual(all(unknown.store), ['reply_unknown|character|xai|1']);
+  assert.deepEqual(all(unknown.store), ['reply_failed|character|xai|1']);
 
   // terminate(): an expired operation fails (counted), a cancelled one counts none.
   for (const [terminal, reason, expected] of [

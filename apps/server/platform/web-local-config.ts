@@ -101,6 +101,8 @@ function initInstance(root: string, mode: WebLocalConfig['mode']) {
       maxWaitingOperations: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.maxWaitingOperations,
       maxGlobalReservedOperations: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.maxGlobalReservedOperations,
       audioFallbackWaitMs: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.audioFallbackWaitMs,
+      textCallTimeoutMs: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.textCallTimeoutMs,
+      speechCallTimeoutMs: WEB_CONCURRENCY_DEPLOYMENT_DEFAULT.speechCallTimeoutMs,
     },
     dailyReplyLimit: WEB_DAILY_REPLY_LIMIT.default,
   };

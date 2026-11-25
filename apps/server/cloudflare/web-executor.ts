@@ -102,11 +102,19 @@ export class WebCloudExecutor {
     previews?: WebCharacterPreviewRunner,
     /** Part 42: 广播 is started and delivered by this alarm (its own batches), with no other request. */
     broadcast?: WebBroadcast,
+    /** Part 54: runs each stage in its own request context (see WebProviderExecutor.dispatch). */
+    dispatch?: (launchId: string) => Promise<unknown>,
   ) {
-    this.executor = new WebProviderExecutor(store, clock, runner, {
-      hold: (task) => ctx.waitUntil(task),
-      settled: () => this.alarmQueue.wake(),
-    });
+    this.executor = new WebProviderExecutor(
+      store,
+      clock,
+      runner,
+      {
+        hold: (task) => ctx.waitUntil(task),
+        settled: () => this.alarmQueue.wake(),
+      },
+      dispatch,
+    );
     if (previews)
       this.previews = new WebCharacterPreviewExecutor(previews, {
         hold: (task) => ctx.waitUntil(task),

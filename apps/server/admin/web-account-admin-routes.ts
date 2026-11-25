@@ -123,6 +123,9 @@ export async function routeWebAccountAdmin(
     if (action === 'system/writer-read') return { status: 200, body: system.writerRead(actor, req.body) };
     if (action === 'system/writer-save') return { status: 200, body: system.writerSave(actor, req.body) };
     if (action === 'system/budget-topup') return { status: 200, body: await system.budgetTopUp(actor, req.body) };
+    // Part 54: 未确认的调用 (read: owner or system.read) and 已按账单核对 (owner only, one call at a time).
+    if (action === 'system/unknown-calls') return { status: 200, body: system.unknownCalls(actor, req.body ?? {}) };
+    if (action === 'system/unknown-resolve') return { status: 200, body: await system.unknownResolve(actor, req.body) };
     if (action === 'points/preview')
       return { status: 200, body: system.pointsPreview(actor, req.body, req.trustedIpHash) };
     if (action === 'points/grant') return { status: 200, body: system.pointsGrant(actor, req.body, req.trustedIpHash) };

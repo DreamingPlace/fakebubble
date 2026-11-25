@@ -1,6 +1,6 @@
 import type { AcceptedV7StageOutput, TextGenerationRequest, TextGenerationStage } from './index.ts';
 import type { FishModel, SpeechRequest } from './audio.ts';
-import type { ProviderMeter } from './provider-calls.ts';
+import type { ProviderMeter, ProviderObservation } from './provider-calls.ts';
 import type { TextRoute } from './text-route.ts';
 import type { TextRPCResult, SpeechRPCResult } from './generation-rpc.ts';
 
@@ -71,7 +71,65 @@ export interface WebGenerationSession {
   cancel(): Promise<void>;
   [Symbol.dispose](): void;
 }
+/**
+ * Part 54: ONE call, ONE result. The business object reserves the money for every stage BEFORE the call and settles from the
+ * result AFTER it; generation never calls back into the business object while a reply is being made.
+ *
+ * Job: plain data only (no functions, no stubs). `stages` are the limits the business object reserved against; generation
+ * refuses to send a request that could cost more than its reservation (WEB_PROVIDER_STAGE_INVALID, nothing sent).
+ */
+export interface WebStageLimit {
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+}
+export interface WebTextJob {
+  /** `${operationId}:${attempt}` - only for correlation and idempotent retries by the caller; carries no content. */
+  reservationId: string;
+  request: TextGenerationRequest;
+  policyHash: string;
+  known: WebKnownDraft | null;
+  /** One model per stage: a model that is proven not billed is retried by the business object as a NEW call and reservation. */
+  route?: TextRoute;
+  stages: { draft: WebStageLimit | null; review: WebStageLimit };
+  /** A limit for each provider call, below the stage lease and the RPC limit. Generation clamps it to 1..60 000. */
+  callTimeoutMs: number;
+}
+/**
+ * What happened to one stage. not_sent: nothing was sent for it (proved by generation: it was never started). started: the request
+ * was handed to the provider; `observation` is what came back, or absent when nothing could be observed (then it is UNKNOWN).
+ */
+export type WebStageRun =
+  | { state: 'not_sent' }
+  | {
+      state: 'started';
+      wireRequestHash: string;
+      requestBytes: number;
+      observation: ProviderObservation | null;
+      /** The validated, accepted stage output (only for a succeeded stage). */
+      accepted: AcceptedV7StageOutput | null;
+      /** Admin diagnosis only: the raw words of a response that failed validation. */
+      rejected: { raw: string; errorCode: string } | null;
+    };
+export interface WebTextRun {
+  stages: { draft: WebStageRun; review: WebStageRun };
+  result: TextRPCResult;
+}
+export interface WebSpeechJob {
+  reservationId: string;
+  wire: WebSpeechWire;
+  callTimeoutMs: number;
+}
+export interface WebEmbedJob {
+  reservationId: string;
+  wire: WebEmbedWire;
+}
 export interface WebGenerationBinding {
+  /** Part 54: the reply path. Absent on an older generation Worker: the reply then fails before anything is sent. */
+  runText?(job: WebTextJob): Promise<WebTextRun>;
+  runSpeech?(job: WebSpeechJob): Promise<SpeechRPCResult>;
+  runEmbed?(job: WebEmbedJob): Promise<WebEmbedRPCResult>;
   open(): Promise<WebGenerationSession>;
   /**
    * Part 21g: which optional text-provider keys the generation Worker holds (booleans only, never a key). The business object

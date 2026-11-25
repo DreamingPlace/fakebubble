@@ -533,7 +533,8 @@ test('a separate executor process exits after sent speech; restart records UNKNO
   executor.pump();
   assert.equal(
     store.get<{ status: string }>('SELECT status FROM web_operations WHERE id=?', admitted.operationId)!.status,
-    'unknown',
+    // Part 54 NAMED EXCEPTION: an UNKNOWN reply now ends as failed at once (money held, never retried); it was 'unknown' until its deadline.
+    'failed',
   );
   assert.equal(
     store.get<{ n: number }>(
@@ -625,7 +626,8 @@ test('UNKNOWN expires once at original deadline while its external ticket remain
   executor.start();
   assert.equal(
     store.get<{ status: string }>('SELECT status FROM web_operations WHERE id=?', admitted.operationId)!.status,
-    'unknown',
+    // Part 54 NAMED EXCEPTION: an UNKNOWN reply now ends as failed at once (money held, never retried); it was 'unknown' until its deadline.
+    'failed',
   );
   for (let i = 0; i < 27; i++) {
     now += 10_000;
@@ -645,7 +647,7 @@ test('UNKNOWN expires once at original deadline while its external ticket remain
   assert.equal(
     store.get<{ reserved: number }>(`SELECT reserved FROM web_external_budgets
     WHERE provider='synthetic-local' AND stage='text' AND phase='draft'`)!.reserved,
-    1,
+    0, // Part 54 NAMED EXCEPTION: an UNKNOWN call no longer keeps its running-slot ticket (its money stays held).
   );
   assert.equal(
     store.get<{ dispatch_state: string }>(
