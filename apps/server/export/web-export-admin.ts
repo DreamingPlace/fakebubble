@@ -234,7 +234,7 @@ export class WebExportAdmin {
         return { sheets: statsSheets(this.store, now, range), base: 'statistics', summary: `range=${range}` };
       }
       case 'memes': {
-        keys(['query', 'year', 'tag', 'state']);
+        keys(['query', 'year', 'tag', 'state', 'category', 'source']);
         const parsed = parseMemeFilters(filters);
         return { sheets: memeSheets(this.store, parsed), base: 'memes', summary: pairs({ ...parsed }) };
       }

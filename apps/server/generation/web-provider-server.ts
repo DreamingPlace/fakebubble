@@ -543,7 +543,7 @@ export class WebProviderServer {
             avatarUpload[1]!,
           );
         const characterWrite =
-          /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save|cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply)|characters\/[A-Za-z0-9_-]{1,128}\/(?:code-save|checklist-dismiss))$/.test(
+          /^\/api\/web\/provider\/admin\/(characters\/[A-Za-z0-9_-]{1,128}\/(save|review-start|run-start)|eval-sets\/save|cast\/(?:save|import-preview|import-file|memes-import-preview|memes-import)|profile-import\/(?:preview|apply)|characters\/[A-Za-z0-9_-]{1,128}\/(?:code-save|checklist-dismiss))$/.test(
             path,
           );
         // A run (up to 50 inputs of 4000 characters) and an eval set are larger than a profile save.
@@ -570,7 +570,7 @@ export class WebProviderServer {
                 ? 8_001_024
                 : path === `${API}/admin/broadcast/upload`
                   ? BROADCAST_UPLOAD_BODY_LIMIT
-                  : /\/admin\/(?:cast\/(?:save|import-preview|import-file)|profile-import\/(?:preview|apply))$/.test(
+                  : /\/admin\/(?:cast\/(?:save|import-preview|import-file|memes-import-preview|memes-import)|profile-import\/(?:preview|apply))$/.test(
                         path,
                       )
                     ? CAST_BODY_LIMIT

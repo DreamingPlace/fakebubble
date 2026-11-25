@@ -166,6 +166,17 @@ export async function routeWebAccountAdmin(
     // Part 37c-1: 网络梗 (the shipped dictionary's per-entry switch; cast.read / cast.edit).
     if (action === 'memes-list') return { status: 200, body: cast.memesList(actor, req.body) };
     if (action === 'memes-set') return { status: 200, body: cast.memesSet(actor, req.body) };
+    // Part 37c-1b: the editable library and the 待审 queue (reads: cast.read / the preview; writes: cast.edit).
+    if (action === 'memes-queue') return { status: 200, body: cast.memesQueue(actor, req.body) };
+    if (action === 'memes-add') return { status: 200, body: cast.memesAdd(actor, req.body) };
+    if (action === 'memes-edit') return { status: 200, body: cast.memesEdit(actor, req.body) };
+    if (action === 'memes-restore-original') return { status: 200, body: cast.memesRestoreOriginal(actor, req.body) };
+    if (action === 'memes-delete') return { status: 200, body: cast.memesDelete(actor, req.body) };
+    if (action === 'memes-restore') return { status: 200, body: cast.memesRestore(actor, req.body) };
+    if (action === 'memes-import-preview') return { status: 200, body: cast.memesImportPreview(actor, req.body) };
+    if (action === 'memes-import') return { status: 200, body: cast.memesImport(actor, req.body) };
+    if (action === 'memes-approve') return { status: 200, body: cast.memesApprove(actor, req.body) };
+    if (action === 'memes-dismiss') return { status: 200, body: cast.memesDismiss(actor, req.body) };
     ensure(false, 'NOT_FOUND');
   }
   if (path.startsWith(`${base}/cocreation/`)) {

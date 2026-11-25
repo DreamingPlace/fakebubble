@@ -17,6 +17,9 @@ import { quietWait } from './console-quiet.ts';
  *  4  系统 → 模型与价格 → 回复写法: four choices, 新+档案+梗 selectable (and put back to 旧).
  *  5  the credit line (the exact notice and the link) is on the terms page and nowhere else.
  *
+ * Part 37c-1b NAMED EXCEPTION: the counts below follow the re-curated default (1,806 entries, 546 ship ON, 1,260 ship OFF), the head line is
+ * 共 N 条 · 已开启 N 条 · 待审 N 条 and the 默认关闭 count moved into the 状态 filter's label. Everything the script checks is the same.
+ *
  * usage: node scripts/check-web-memes-37c1-browser.ts [screenshot-dir]   (run `pnpm web:player:build` first)
  */
 const shots = process.argv[2] ? resolve(process.argv[2]) : null;
@@ -68,7 +71,7 @@ try {
   check((await page.locator('#admin-memes .admin-table tbody tr').count()) === 50, 'fifty entries a page');
   const head = await page.locator('#admin-memes .head-status').innerText();
   check(
-    /共 1,806 条/.test(head) && /已开启 1,734 条/.test(head) && /默认关闭 72 条/.test(head),
+    /共 1,806 条/.test(head) && /已开启 546 条/.test(head) && /待审 0 条/.test(head),
     `the count of entries (${head})`,
   );
   check(/第 1 \/ 37 页/.test(await page.locator('#admin-memes .mm-page').innerText()), 'the pager says 37 pages');
@@ -87,13 +90,13 @@ try {
   check((await sw.getAttribute('aria-checked')) === 'true', 'an entry is on by default');
   await sw.click();
   await page.waitForFunction(
-    () => /已开启 1,733 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
+    () => /已开启 545 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
     null,
     {
       timeout: 10_000,
     },
   );
-  check((await statusOn()) === 1733, 'the count of entries that are on follows the switch');
+  check((await statusOn()) === 545, 'the count of entries that are on follows the switch');
   check(
     f.store
       .all<{ entry_key: string }>('SELECT entry_key FROM web_meme_switch WHERE enabled=0')
@@ -112,16 +115,21 @@ try {
   await page.locator('#admin-memes input[type="search"]').fill('');
   await wait(900);
   check(
-    (await page.locator('#admin-memes .head-status').innerText()).includes('默认关闭 72 条'),
-    'the status line counts the default-off entries',
+    (await page.locator('#admin-memes select[aria-label="状态"] option[value="default-off"]').innerText()).includes(
+      '默认关闭（1,260）',
+    ),
+    'the 状态 filter counts the default-off entries',
   );
   check(
-    /符合 73 条/.test(await page.locator('#admin-memes .mm-page').innerText()),
-    'the off filter shows the 72 default-off entries and the one switched off',
+    /符合 1,261 条/.test(await page.locator('#admin-memes .mm-page').innerText()),
+    'the off filter shows the default-off entries and the one switched off',
   );
   await page.locator('#admin-memes select[aria-label="状态"]').selectOption('default-off');
   await wait(700);
-  check(/符合 72 条/.test(await page.locator('#admin-memes .mm-page').innerText()), 'the 默认关闭 filter lists the 72');
+  check(
+    /符合 1,260 条/.test(await page.locator('#admin-memes .mm-page').innerText()),
+    'the 默认关闭 filter lists them',
+  );
   check(
     (await page.locator('#admin-memes .mm-default-off').count()) === 50,
     'every row of it carries the 默认关闭 badge',
@@ -131,7 +139,7 @@ try {
   await shot('memes-default-off');
   await dsw.click();
   await page.waitForFunction(
-    () => /已开启 1,734 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
+    () => /已开启 546 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
     null,
     { timeout: 10_000 },
   );
@@ -163,7 +171,7 @@ try {
   await page.locator('#admin-memes .admin-table thead input[type="checkbox"]').check();
   await page.locator('#admin-memes .admin-bulk-bar button', { hasText: '关闭所选' }).click();
   await page.waitForFunction(
-    () => /已开启 1,6\d\d 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
+    () => /已开启 [45]\d\d 条/.test(document.querySelector('#admin-memes .head-status')?.textContent ?? ''),
     null,
     {
       timeout: 10_000,
@@ -177,7 +185,7 @@ try {
   await wait(900);
   await page.locator('#admin-memes select[aria-label="状态"]').selectOption('all');
   await wait(700);
-  check((await statusOn()) > 1650, 'a ticked page switches back on');
+  check((await statusOn()) > 500, 'a ticked page switches back on');
   // put everything back on: one entry (松弛感) stays off for the run below on purpose
   check(
     f.store.get<{ n: number }>('SELECT COUNT(*) n FROM web_meme_switch')!.n >= 1,

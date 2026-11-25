@@ -8,7 +8,15 @@ import type {
   CastRequestContext,
   CastValidation,
 } from '../../../../packages/contracts/web-cast.ts';
-import type { MemeListInput, MemeListView } from '../../../../packages/contracts/web-memes.ts';
+import type {
+  MemeImportPreview,
+  MemeListInput,
+  MemeListView,
+  MemeQueueView,
+} from '../../../../packages/contracts/web-memes.ts';
+
+/** An upload as the server reads it: a CSV or pasted rows as text, or the bytes of a .xlsx as base64. */
+export type MemeUploadPayload = { kind: 'text'; text: string } | { kind: 'xlsx'; base64: string };
 import { InviteLocalApiError } from './invite-local-api.ts';
 
 /** Client for 关系与故事 (the Part 24a cast API). Requests go through the admin session; the server checks every permission. */
@@ -136,6 +144,50 @@ export class CastAdminClient {
   async memesSet(requestId: string, keys: readonly string[], enabled: boolean): Promise<{ changed: number }> {
     const r = object(await this.send('memes-set', { requestId, keys: [...keys], enabled }));
     return { changed: int(r.changed) };
+  }
+  // ---- Part 37c-1b: the editable library and the 待审 queue. Every write carries the caller's request id (idempotent). ----
+  async memesQueue(): Promise<MemeQueueView> {
+    const r = object(await this.send('memes-queue', {}));
+    if (!Array.isArray(r.items)) throw invalid();
+    int(r.pending);
+    return r as unknown as MemeQueueView;
+  }
+  async memesAdd(
+    requestId: string,
+    input: { term: string; meaning: string; category: string; year: number | null },
+  ): Promise<{ key: string }> {
+    const r = object(await this.send('memes-add', { requestId, ...input }));
+    return { key: String(r.key) };
+  }
+  async memesEdit(requestId: string, input: { key: string; meaning: string; category: string }) {
+    await this.send('memes-edit', { requestId, ...input });
+  }
+  async memesRestoreOriginal(requestId: string, keys: readonly string[]): Promise<{ changed: number }> {
+    return { changed: int(object(await this.send('memes-restore-original', { requestId, keys: [...keys] })).changed) };
+  }
+  async memesDelete(requestId: string, keys: readonly string[]): Promise<{ changed: number; own: number }> {
+    const r = object(await this.send('memes-delete', { requestId, keys: [...keys] }));
+    return { changed: int(r.changed), own: int(r.own) };
+  }
+  async memesRestore(requestId: string, keys: readonly string[]): Promise<{ changed: number }> {
+    return { changed: int(object(await this.send('memes-restore', { requestId, keys: [...keys] })).changed) };
+  }
+  async memesImportPreview(upload: MemeUploadPayload): Promise<MemeImportPreview> {
+    const r = object(await this.send('memes-import-preview', { upload }));
+    if (!Array.isArray(r.rows)) throw invalid();
+    return r as unknown as MemeImportPreview;
+  }
+  async memesImport(requestId: string, upload: MemeUploadPayload): Promise<{ queued: number }> {
+    return { queued: int(object(await this.send('memes-import', { requestId, upload })).queued) };
+  }
+  async memesApprove(
+    requestId: string,
+    items: readonly { term: string; newTerm?: string; meaning: string; category: string }[],
+  ): Promise<{ changed: number }> {
+    return { changed: int(object(await this.send('memes-approve', { requestId, items: [...items] })).changed) };
+  }
+  async memesDismiss(requestId: string, terms: readonly string[]): Promise<{ changed: number }> {
+    return { changed: int(object(await this.send('memes-dismiss', { requestId, terms: [...terms] })).changed) };
   }
   async versions(): Promise<CastVersionsResult> {
     const r = object(await this.send('versions', {}));

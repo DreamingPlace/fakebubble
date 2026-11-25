@@ -1037,6 +1037,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     newRequestId: () => globalThis.crypto.randomUUID(),
     disposed: () => disposed,
     toast: (text) => toasts.show(text, 'ok'),
+    // Part 37c-1b: the permanent delete of his own entries asks in place.
+    confirm: (options, host) => inlineConfirm(host, options),
   });
   const broadcast = broadcastView(q('#admin-broadcast'), {
     api:

@@ -801,7 +801,8 @@ test('shares, broadcasts and 网络梗: counts only, the library with its filter
   ]);
   assert.ok(!broadcast.includes('SECRET'));
   const memes = parseCsv(call(e, f.ownerAuth, 'memes').content);
-  assert.deepEqual(memes[0], ['词', '释义', '年份', '标签', '状态', '默认关闭']);
+  // Part 37c-1b NAMED EXCEPTION: the 网络梗 export gained 分类, 来源 and 已删除 at the END; the six columns of Part 57 keep their place.
+  assert.deepEqual(memes[0], ['词', '释义', '年份', '标签', '状态', '默认关闭', '分类', '来源', '已删除']);
   assert.ok(memes.length > 1000, 'the whole library, not one page');
   const filtered = parseCsv(call(e, f.ownerAuth, 'memes', { year: 2023, state: 'on' }).content);
   assert.ok(filtered.length > 1 && filtered.length < memes.length);

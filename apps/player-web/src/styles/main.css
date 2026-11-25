@@ -18252,6 +18252,305 @@ button:not(
   font-size: 12px;
 }
 
+/* Part 37c-1b: the editable library (add / edit / delete / 已删除), the upload preview and the 待审 queue. Every transition runs under
+   --ad-motion (0 under prefers-reduced-motion); one control height (36 px) and one gap rhythm (8 / 12 / 16) throughout. */
+.account-admin-page.admin-shell #admin-memes .mm-panel {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.account-admin-page.admin-shell #admin-memes .mm-panel[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-memes .mm-panel-in {
+  animation: mm-in calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+@keyframes mm-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.account-admin-page.admin-shell #admin-memes .mm-bar {
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.account-admin-page.admin-shell #admin-memes .page-head-actions button,
+.account-admin-page.admin-shell #admin-memes .mm-row-actions button,
+.account-admin-page.admin-shell #admin-memes .mm-q-actions button {
+  min-height: 36px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-confirm-host:empty {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-memes .mm-pending {
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell #admin-memes .mm-row-actions,
+.account-admin-page.admin-shell #admin-memes .mm-q-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-danger {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-memes .mm-edited {
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  border-color: transparent;
+}
+.account-admin-page.admin-shell #admin-memes .mm-category,
+.account-admin-page.admin-shell #admin-memes .mm-source {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-tint);
+  color: var(--ad-tint-ink);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell #admin-memes .mm-source {
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-memes .mm-muted {
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-memes .mm-ok {
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell #admin-memes .mm-problem {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-memes .admin-table tbody tr {
+  transition: background calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .mm-form {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.account-admin-page.admin-shell .mm-field {
+  display: grid;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .mm-field-label {
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mm-field input,
+.account-admin-page.admin-shell .mm-field select,
+.account-admin-page.admin-shell .mm-field textarea,
+.account-admin-page.admin-shell .mm-file input,
+.account-admin-page.admin-shell .mm-q-content input,
+.account-admin-page.admin-shell .mm-q-content textarea,
+.account-admin-page.admin-shell .mm-q-content select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-surface);
+  color: var(--ad-text);
+  font: inherit;
+  transition: border-color calc(160ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell .mm-field textarea,
+.account-admin-page.admin-shell .mm-q-content textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+.account-admin-page.admin-shell .mm-q-content select,
+.account-admin-page.admin-shell .mm-field select {
+  min-width: 0;
+}
+.account-admin-page.admin-shell .mm-field input[readonly] {
+  background: var(--ad-bg);
+  color: var(--ad-muted);
+}
+/* the new version of a 待审 item: label row, then term and category side by side, then the meaning */
+.account-admin-page.admin-shell .mm-q-edit {
+  grid-template-columns: minmax(0, 1fr) 150px;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .mm-q-edit .mm-compare-head,
+.account-admin-page.admin-shell .mm-q-edit .mm-q-meaning {
+  grid-column: 1 / -1;
+}
+.account-admin-page.admin-shell .mm-compare-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .mm-field input:focus,
+.account-admin-page.admin-shell .mm-field textarea:focus,
+.account-admin-page.admin-shell .mm-q-content input:focus,
+.account-admin-page.admin-shell .mm-q-content textarea:focus {
+  border-color: var(--ad-accent, var(--ad-tint-ink));
+  outline: none;
+}
+.account-admin-page.admin-shell .mm-count {
+  justify-self: end;
+  color: var(--ad-muted);
+  font-size: 12px;
+}
+.account-admin-page.admin-shell .mm-count-over {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .mm-field-meta {
+  margin: 0;
+  color: var(--ad-muted);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mm-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.account-admin-page.admin-shell .mm-form-actions button {
+  min-height: 36px;
+}
+.account-admin-page.admin-shell .mm-form .mm-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .mm-form .mm-error[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .mm-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ad-tint-ink);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.account-admin-page.admin-shell .mm-import-pick {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: start;
+}
+.account-admin-page.admin-shell .mm-file {
+  display: grid;
+  gap: 6px;
+}
+.account-admin-page.admin-shell .mm-file-name {
+  color: var(--ad-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .mm-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+.account-admin-page.admin-shell .mm-import-summary[hidden],
+.account-admin-page.admin-shell .mm-import-result[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell .mm-import-result {
+  max-height: 52vh;
+  overflow: auto;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  animation: mm-in calc(220ms * var(--ad-motion)) var(--ad-ease) both;
+}
+.account-admin-page.admin-shell .mm-import-table td,
+.account-admin-page.admin-shell .mm-import-table th {
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .mm-import-detail {
+  min-width: 260px;
+}
+.account-admin-page.admin-shell .mm-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ad-bg);
+  border: 1px solid var(--ad-border);
+  color: var(--ad-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.account-admin-page.admin-shell .mm-chip-ok {
+  background: var(--ad-ok-soft);
+  border-color: transparent;
+  color: var(--ad-ok);
+}
+.account-admin-page.admin-shell .mm-chip-update,
+.account-admin-page.admin-shell .mm-chip-revive {
+  background: var(--ad-warn-soft);
+  border-color: transparent;
+  color: var(--ad-warn);
+}
+.account-admin-page.admin-shell .mm-chip-invalid {
+  background: transparent;
+  border-color: var(--ad-danger);
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell .mm-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.account-admin-page.admin-shell .mm-compare-side {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  padding: 8px 12px;
+  border: 1px solid var(--ad-border);
+  border-radius: var(--ad-radius);
+  background: var(--ad-bg);
+}
+.account-admin-page.admin-shell .mm-compare-new {
+  background: var(--ad-surface);
+}
+.account-admin-page.admin-shell .mm-compare-side p {
+  margin: 0;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.account-admin-page.admin-shell .mm-compare-side b {
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+.account-admin-page.admin-shell .mm-compare-side i {
+  color: var(--ad-muted);
+  font-size: 12px;
+  font-style: normal;
+}
+.account-admin-page.admin-shell #admin-memes .mm-q-content {
+  min-width: 460px;
+  max-width: 760px;
+  white-space: normal;
+}
+.account-admin-page.admin-shell #admin-memes .mm-queue {
+  display: grid;
+  gap: 12px;
+}
+.account-admin-page.admin-shell #admin-memes .mm-date {
+  white-space: nowrap;
+  color: var(--ad-muted);
+}
+
 /* Part 15: player only. Desktop chrome/orbit and every admin selector stay unchanged. */
 .page-shell .mobile-account {
   display: none;

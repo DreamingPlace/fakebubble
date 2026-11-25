@@ -63,7 +63,9 @@ const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value
 const NONE = new Set<string>();
 const KNOW = readMemeUse({});
 /** What a character sees when nobody touched the switches: the common words of the data are off. */
-const DEFAULT_OFF = new Set(MEME_ENTRIES.filter((entry) => entry.defaultOff).map((entry) => entry.key));
+// Part 37c-1b NAMED EXCEPTION: `defaultOff` now also holds the entries dropped in the re-curation; this test of Part 37c-1 is about the
+// 72 common everyday words (the jieba list), which still ship off, so it follows the `everyday` flag. Nothing it asserts changed.
+const DEFAULT_OFF = new Set(MEME_ENTRIES.filter((entry) => entry.everyday).map((entry) => entry.key));
 
 // ---- 1. the dictionary ----------------------------------------------------------------------------------------------------------
 

@@ -24,12 +24,10 @@ import { installWriterSetting, readWriter, writeWriter } from '../../../apps/ser
 import { writerDraftMessages, writerPins } from '../../../apps/server/generation/writer-v8.ts';
 import { WebCloudTextGenerator } from '../../../apps/server/cloudflare/web-generators.ts';
 import { installCastDocs } from '../../../apps/server/cast/cast-doc-store.ts';
-import {
-  installMemeStore,
-  listMemes,
-  readMemesOff,
-  setMemesEnabled,
-} from '../../../apps/server/memes/web-meme-store.ts';
+import { installMemeStore } from '../../../apps/server/memes/web-meme-store.ts';
+// Part 37c-1b NAMED EXCEPTION: listing, reading and switching moved to the library module (the page is an editable library now); the
+// calls and what they return are the ones this file always tested.
+import { listMemes, readMemesOff, setMemesEnabled } from '../../../apps/server/memes/web-meme-library.ts';
 import { MEME_ENTRIES } from '../../../apps/server/memes/meme-dictionary.ts';
 import { writeMemeUse } from '../../../packages/contracts/web-memes.ts';
 import type { WebStore } from '../../../apps/server/platform/store.ts';
@@ -443,13 +441,24 @@ test('a cast over the byte cap is refused whole, and the draft is untouched', (t
   assert.equal(readDraft(f.store).digest, before.digest);
 });
 
+// Part 37c-1b NAMED EXCEPTION: these tests of Part 37c-1 pinned the shipped default as "every entry is on but the 72 common words".
+// The re-curation changed that default on purpose (an entry ships on only when it was kept: 572 kept, 26 of them everyday words that
+// still ship off), so the counts below follow the new default. What they test - the switches work both ways, the counts follow the
+// switch, the audit has no term, the request is idempotent - is untouched. The full new-default checks are in web-memes-37c1b.
+const SHIPS_ON = 546;
+const SHIPS_OFF = 1260;
+
 // ---- the dictionary's switches ------------------------------------------------------------------------------------------------------
 
 test('the meme tables are a digest-checked runtime step: idempotent, a foreign table or a changed digest stops the start', (t) => {
   const store = fresh(t);
   installMemeStore(store);
   installMemeStore(store);
-  assert.equal(readMemesOff(store).size, 72, 'every entry is on until it is switched off, but the 72 common words');
+  assert.equal(
+    readMemesOff(store).size,
+    SHIPS_OFF,
+    'every entry is on until it is switched off, but the ones that ship off',
+  );
   const other = fresh(t);
   other.run('CREATE TABLE web_meme_other(x INTEGER)');
   assert.throws(() => installMemeStore(other), { code: 'WEB_MEME_SCHEMA_MISMATCH' });
@@ -457,7 +466,7 @@ test('the meme tables are a digest-checked runtime step: idempotent, a foreign t
   assert.throws(() => installMemeStore(store), { code: 'WEB_MEME_SCHEMA_MISMATCH' });
   // a database without the table has nothing off (a read never fails there)
   const bare = fresh(t);
-  assert.equal(readMemesOff(bare).size, 72, 'without the table the defaults still hold');
+  assert.equal(readMemesOff(bare).size, SHIPS_OFF, 'without the table the defaults still hold');
 });
 
 test('网络梗 admin: list (search, year, tag, state), switch one and many, counts, permissions, audit without a term, idempotent', async (t) => {
@@ -478,8 +487,8 @@ test('网络梗 admin: list (search, year, tag, state), switch one and many, cou
     f.cast.memesList(auth, { query: '', year: null, tag: null, state: 'all', page: 1, ...over });
   const all = list();
   assert.equal(all.total, 1806);
-  assert.equal(all.on, 1806 - 72, 'the 72 common words ship switched off');
-  assert.equal(all.defaultOff, 72);
+  assert.equal(all.on, SHIPS_ON, 'the dropped entries and the 72 common words ship switched off');
+  assert.equal(all.defaultOff, SHIPS_OFF);
   assert.equal(all.entries.length, 50);
   assert.equal(all.pages, Math.ceil(1806 / 50));
   assert.ok(all.years.includes(2023) && all.years.every((y) => y >= 2022));
@@ -505,9 +514,9 @@ test('网络梗 admin: list (search, year, tag, state), switch one and many, cou
     { ...f.cast.memesSet(f.auth, { requestId: 'meme-s-1', keys: ['松弛感'], enabled: false }) },
     { changed: 1, duplicate: false },
   );
-  assert.equal(list().on, 1733);
-  assert.equal(list({ state: 'off' }).matching, 73);
-  assert.equal(list({ state: 'default-off' }).matching, 72);
+  assert.equal(list().on, SHIPS_ON - 1);
+  assert.equal(list({ state: 'off' }).matching, SHIPS_OFF + 1);
+  assert.equal(list({ state: 'default-off' }).matching, SHIPS_OFF);
   assert.ok(list({ state: 'default-off' }).entries.every((e) => e.defaultOff && !e.enabled));
   assert.equal(f.cast.memesSet(f.auth, { requestId: 'meme-s-1', keys: ['松弛感'], enabled: false }).duplicate, true);
   assert.throws(
@@ -517,7 +526,7 @@ test('网络梗 admin: list (search, year, tag, state), switch one and many, cou
   const page = all.entries.map((e) => e.key);
   const pageOn = all.entries.filter((e) => e.enabled && e.term !== '松弛感').length;
   assert.equal(f.cast.memesSet(f.auth, { requestId: 'meme-s-2', keys: page, enabled: false }).changed, pageOn);
-  assert.equal(list().on, 1733 - pageOn);
+  assert.equal(list().on, SHIPS_ON - 1 - pageOn);
   // both ways: a default-off entry switched on is ON, and switched off again drops back to the default (no row left)
   const common = list({ state: 'default-off' }).entries[0]!;
   assert.equal(list({ query: common.term }).entries[0]!.enabled, false);
@@ -531,7 +540,7 @@ test('网络梗 admin: list (search, year, tag, state), switch one and many, cou
   );
   // the page switched back on: everything but the default-off ones is on again
   f.cast.memesSet(f.auth, { requestId: 'meme-s-7', keys: [...page, '松弛感'], enabled: true });
-  assert.equal(list().on, 1734 + page.filter((k) => all.entries.find((e) => e.key === k)!.defaultOff).length);
+  assert.equal(list().on, SHIPS_ON + page.filter((k) => all.entries.find((e) => e.key === k)!.defaultOff).length);
   assert.throws(
     () => f.cast.memesSet(f.auth, { requestId: 'meme-s-4', keys: ['不在词库里的词'], enabled: false }),
     /MEME_NOT_FOUND/,
@@ -572,7 +581,11 @@ test('网络梗 admin: list (search, year, tag, state), switch one and many, cou
     undefined,
     f.cast,
   );
-  assert.equal((routed?.body as { on: number }).on, 1734 + 0 * 1806);
+  // (the page switched back on above turned the default-off entries of that page ON: the first page now holds dropped entries too)
+  assert.equal(
+    (routed?.body as { on: number }).on,
+    SHIPS_ON + page.filter((k) => all.entries.find((e) => e.key === k)!.defaultOff).length,
+  );
   assert.ok(MEME_ENTRIES.length === 1806);
   void sampleCastRaw;
 });

@@ -18,6 +18,10 @@ import { MEME_ENTRIES } from './meme-dictionary.ts';
  *   - messages are read latest first; every entry counts once; at most MEME_HITS_MAX entries;
  *   - an entry that is switched off (`off`) is never matched.
  * Identical input gives identical output.
+ *
+ * Part 37c-1b: the matcher reads an EFFECTIVE library (shipped entries with the owner's meaning edits + the owner's own entries). The
+ * default library is the shipped one, so every earlier call keeps its meaning; `off` already holds the deleted entries and the ones
+ * that are switched off, own and shipped alike. The words and rules above are unchanged, so the 新+档案+梗 pin does not move.
  */
 const norm = (text: string) => text.normalize('NFKC').toLowerCase();
 const WORD = /[A-Za-z0-9]/u;
@@ -31,19 +35,36 @@ interface Candidate {
   units: number;
   boundary: boolean;
 }
-const CANDIDATES: readonly Candidate[] = MEME_ENTRIES.map((entry) => {
-  const needle = norm(entry.term);
+/** The entries a reply may match, longest first (an equal length keeps the code order). */
+export interface MemeMatchLibrary {
+  readonly candidates: readonly Candidate[];
+}
+const candidateOf = (key: string, term: string, meaning: string): Candidate => {
+  const needle = norm(term);
+  return { key, term, meaning, needle, units: needle.length, boundary: ASCII_WORD.test(needle) };
+};
+const byLength = (a: Candidate, b: Candidate) => b.units - a.units || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+/**
+ * The library for the owner's layer: `own` entries are added, `meanings` replaces the text of a shipped entry. An own entry whose
+ * term is also shipped is impossible (the library refuses a duplicate term), but if one ever appeared the own one would be skipped.
+ */
+export function buildMatchLibrary(
+  own: readonly { term: string; meaning: string }[],
+  meanings: ReadonlyMap<string, string>,
+): MemeMatchLibrary {
+  const shipped = new Set(MEME_ENTRIES.map((entry) => entry.key));
   return {
-    key: entry.key,
-    term: entry.term,
-    meaning: entry.meaning,
-    needle,
-    units: needle.length,
-    boundary: ASCII_WORD.test(needle),
+    candidates: [
+      ...MEME_ENTRIES.map((entry) => candidateOf(entry.key, entry.term, meanings.get(entry.key) ?? entry.meaning)),
+      ...own
+        .filter((entry) => !shipped.has(entry.term))
+        .map((entry) => candidateOf(entry.term, entry.term, entry.meaning)),
+    ]
+      .filter((candidate) => [...candidate.needle].length >= MEME_TERM_MIN)
+      .sort(byLength),
   };
-})
-  .filter((candidate) => [...candidate.needle].length >= MEME_TERM_MIN)
-  .sort((a, b) => b.units - a.units || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
+export const SHIPPED_MEME_LIBRARY: MemeMatchLibrary = buildMatchLibrary([], new Map());
 
 /** First position of `needle` in `text` that is not inside a claimed span (and stands alone when it must), or -1. */
 function find(text: string, candidate: Candidate, claimed: ReadonlyArray<readonly [number, number]>): number {
@@ -66,6 +87,7 @@ export function matchMemes(
   off: ReadonlySet<string>,
   use: MemeUse,
   max: number = MEME_HITS_MAX,
+  library: MemeMatchLibrary = SHIPPED_MEME_LIBRARY,
 ): MemeHit[] {
   const hits: MemeHit[] = [];
   const seen = new Set<string>();
@@ -73,14 +95,14 @@ export function matchMemes(
     const text = norm(raw);
     const claimed: Array<readonly [number, number]> = [];
     const found: Array<{ at: number; candidate: Candidate }> = [];
-    for (const candidate of CANDIDATES) {
+    for (const candidate of library.candidates) {
       if (off.has(candidate.key) || seen.has(candidate.key)) continue;
       const at = find(text, candidate, claimed);
       if (at === -1) continue;
       claimed.push([at, at + candidate.needle.length]);
       found.push({ at, candidate });
     }
-    // CANDIDATES is longest first, so `found` is already longest first; an equal length keeps the code order.
+    // the library's candidates are longest first, so `found` is already longest first; an equal length keeps the code order.
     for (const { candidate } of found) {
       if (hits.length >= max) return hits;
       seen.add(candidate.key);
