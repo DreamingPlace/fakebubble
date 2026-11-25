@@ -67,3 +67,11 @@ a reply costs ~20 short SQLite transactions, which is far below its throughput a
   budget settled at the same amount; never automatic. Embedding unknowns are counted, not settled there.
 * Failure-rate alert and daily report count `web_operations` rows (one per reply); an UNKNOWN reply is now terminal `failed`, so it is
   counted once, and a re-queued retry is the same row.
+
+## Results
+
+* Real-time load run (`LOAD54_SCALE=1`, 300 replies from 60 players in 15 minutes, burst of 50 in 10 s, draft/review 2–5 s, voice 3–8 s, every 20th call 15 s, 6-connection model on): **300/300 published, 0 hung, 0 connections cancelled, p50 17.0 s, p95 28.1 s** (all replies ask for voice, bound 40 s); 262 published with voice, **38 published as text** (no voice slot within 8 s, as designed). 562 calls to generation (300 text + 262 voice), 0 sessions opened, at most 24 provider calls in flight (20 text + 4 voice), at most 1 connection in any one invocation.
+* Throughput bound: voice. 4 voice slots at ~5.5 s per clip ≈ 0.7 clips/s; text (20–30 slots, ~7 s per reply) is ≈ 3–4 replies/s. Raising voice means raising the Fish plan's concurrency first.
+* Wedge test: one draft never returns, then 50 replies → 50/50 published; the stuck one ends failed with its attempt UNKNOWN and its money held, within the call limit; no slot left taken.
+* `pnpm check`: 2449 tests, 0 failed. `web:player:build` ok. `check:web:all`: 41/44; the 3 failures (part-46, share-45, wave-49) cannot start because WebKit is not installed in this container (`Executable doesn't exist .../webkit-2359`), not because of this change. expected-migrations unchanged (last step 131, sha256 a6f581dd…0990a).
+* Named test exceptions: every test that asserted the old UNKNOWN behaviour (reply 'unknown' until its deadline, ticket kept) is marked `Part 54 NAMED EXCEPTION`; fixtures gained the single-call entries.
