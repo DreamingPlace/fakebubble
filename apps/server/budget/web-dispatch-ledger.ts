@@ -1064,7 +1064,7 @@ export class WebDispatchLedger {
         this.store.get<{ user_version: number }>('PRAGMA user_version')?.user_version ?? -1,
       );
       const failureCode =
-        reason === 'expired'
+        reason === 'expired' || reason === 'unconfirmed'
           ? 'OPERATION_EXPIRED'
           : reason === 'recovered_unsent'
             ? 'RECOVERED_NOT_SENT'
