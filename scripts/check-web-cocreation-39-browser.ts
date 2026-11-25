@@ -34,6 +34,15 @@ try {
   watchRequests(page);
   const wait = (ms = 600) => quietWait(page, ms);
   const json = async (path: string, body: unknown) => (await f.post(path, body)).json();
+  // Named exception (Part 55, owner-approved): the inbox opens on 新 and an adopted note leaves it; this check follows notes it adopted
+  // itself (the second width, the second note about the same two), so it reads 全部 after each load.
+  const showAll = async () => {
+    await page
+      .locator('.cc-chip-row[aria-label="状态"] .cc-filter-chip')
+      .filter({ hasText: /^全部$/ })
+      .click();
+    await page.locator('.cc-row-open').first().waitFor({ timeout: 20_000 });
+  };
 
   // ---- the cast draft holds the three characters (a story can only name characters the draft has) ----
   const raw = sampleCastRaw();
@@ -134,6 +143,7 @@ try {
     await page.goto(`${f.origin}/?mode=provider-admin#/cocreation`);
     await page.reload();
     await page.locator('.cc-row-open').first().waitFor({ timeout: 20_000 });
+    await showAll();
     await wait(900);
 
     // B: the character chips follow the console's order
@@ -209,6 +219,7 @@ try {
     // the second note about the same two now says 加入：<group>
     await page.reload();
     await page.locator('.cc-row-open').first().waitFor({ timeout: 20_000 });
+    await showAll();
     // the newest note (this one, now that the notes are dated from the fixture's clock) opens by itself; a click would close it
     await page.waitForTimeout(1500);
     if ((await page.locator('.cr-panel').count()) === 0)

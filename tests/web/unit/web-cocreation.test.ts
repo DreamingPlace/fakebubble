@@ -938,7 +938,7 @@ test('adopt → draft: each target field lands in the right place and passes the
           template: adoptIntoTemplate(finalDraft.profile.template, text('interests', '再来一条')),
         },
       }),
-    /DRAFT_CONFLICT/,
+    /DRAFT_FIELD_CONFLICT/, // Part 55: the same field (兴趣话题) changed on both sides is named, not a bare DRAFT_CONFLICT
   );
   // Nothing was published by any of this.
   assert.equal(f.characters.detail(f.ownerAuth, 'wei-guagua').published!.version, published.version);

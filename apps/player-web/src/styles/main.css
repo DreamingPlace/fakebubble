@@ -11380,6 +11380,61 @@ input:not([type="checkbox"], [type="radio"], [type="color"], [type="file"], [typ
   display: none;
 }
 
+/* ---- Part 55: 采纳 (one, all of a card, or every ticked card) and the cards that leave 新 ---- */
+.account-admin-page.admin-shell #admin-cocreation button:is(.cc-adopt-now, .cc-adopt-all, .cc-adopt-selected) {
+  border-color: var(--ad-primary);
+  background: var(--ad-primary);
+  color: #fff;
+  font-weight: 700;
+}
+.account-admin-page.admin-shell
+  #admin-cocreation
+  button:is(.cc-adopt-now, .cc-adopt-all, .cc-adopt-selected):hover:not(:disabled) {
+  background: var(--ad-primary-hover);
+  border-color: var(--ad-primary-hover);
+}
+.account-admin-page.admin-shell #admin-cocreation button:is(.cc-adopt-now, .cc-adopt-all, .cc-adopt-selected):disabled {
+  border-color: var(--ad-border);
+  background: var(--ad-bg);
+  color: var(--ad-muted);
+}
+.account-admin-page.admin-shell #admin-cocreation button.cc-select-all[hidden],
+.account-admin-page.admin-shell #admin-cocreation button.cc-adopt-selected[hidden] {
+  display: none;
+}
+/* a processed card leaves the list: it fades and shrinks for a moment (no motion at all for prefers-reduced-motion) */
+.account-admin-page.admin-shell #admin-cocreation .cc-row.is-leaving {
+  opacity: 0;
+  transform: scale(0.96);
+  pointer-events: none;
+  transition:
+    opacity calc(200ms * var(--ad-motion)) var(--ad-ease),
+    transform calc(200ms * var(--ad-motion)) var(--ad-ease);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt-report {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--ad-danger);
+  border-radius: var(--ad-radius);
+  background: var(--ad-danger-soft);
+  color: var(--ad-text);
+  font-size: 13px;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-adopt-report[hidden] {
+  display: none;
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-report-title {
+  color: var(--ad-danger);
+}
+.account-admin-page.admin-shell #admin-cocreation .cc-report-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .account-admin-page.admin-shell #admin-cocreation button::before,
 .account-admin-page.admin-shell #admin-cocreation button::after {
   content: none;

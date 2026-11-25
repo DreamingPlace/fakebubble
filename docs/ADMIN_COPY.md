@@ -114,6 +114,15 @@ Player pages: one line on the terms page (the license notice and its link); noth
 ### Part 37c-1 follow-up — 默认关闭
 网络梗: 状态 gains **默认关闭** (the common words that ship switched off); each such row has a 默认关闭 badge (hover: 常用词，默认不会触发；可以手动开启); the status line adds `默认关闭 N 条`. No explanation line.
 
+## Part 55 — 采纳
+| Where | Words |
+|---|---|
+| 共创收件箱, every answer | **采纳** (writes into the character's 草稿 at once; nothing reaches players until 发布). 采纳全部（N） on a card with several answers; **采纳所选（N）** and **全选** in the bulk bar. |
+| status line after an adoption | 已采纳 N 条，写进草稿，玩家的积分已发。尚未发布：请到角色工作台或关系与故事里整理后发布。 |
+| what could not be adopted | A box 「有 N 条没有采纳」 with one line per item: 「玩家#xxxx · 角色 · 第 N 条：sentence」 (the anonymous code only). Sentences: 这一栏最多 300 字，请先精简现有内容。 · 这个情境已有 6 条样本，请先删掉一条。 · 「<栏目>」在草稿和正式版本里都改过，请先在角色工作台里核对。 · 留言条没有采纳；看完用「标为已处理」收起。 |
+| a save against a draft that moved on | merged without a word when no field was changed on both sides; otherwise 「<栏目>」在别处也改过，不能自动合并。请重新载入，核对这一栏后再保存。 (关系与故事: 「<组合/故事/世界背景…>」在别处也改过，不能自动合并。你写的内容都还在下面。) |
+| the list | opens on **新**; an adopted, processed or archived card leaves it (and is found under 已处理 / 已归档 / 全部). |
+
 ## Part 57 — 导出
 | Where | Words |
 |---|---|

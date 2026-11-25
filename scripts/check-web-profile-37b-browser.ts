@@ -91,6 +91,19 @@ try {
   await page.locator('#admin-cocreation .cc-row-open').first().waitFor({ timeout: 20_000 });
   await wait(900);
   const openNote = async (text: string, notText = '！！') => {
+    // Named exception (Part 55, owner-approved): the inbox opens on 新, an adopted card leaves it and the NEXT card opens by itself, so the
+    // note asked for may already be open (a click would close it).
+    const openNow: string =
+      (await page
+        .locator('.cc-detail .cc-answer')
+        .first()
+        .innerText()
+        .catch(() => '')) ?? '';
+    if (openNow.includes(text) && !openNow.includes(notText)) {
+      await page.locator('.cc-answer .cc-adopt-profile').first().waitFor({ timeout: 10_000 });
+      await wait(300);
+      return;
+    }
     await page
       .locator('#admin-cocreation .cc-row-open', { hasText: text })
       .filter({ hasNotText: notText })
@@ -135,9 +148,12 @@ try {
     (await json('characters/wei-guagua/detail')).published.version === publishedBefore,
     'the 正式版本 did not change',
   );
+  // Named exception (Part 55, owner-approved): an adopted card leaves 新 at once, so "marked 已采用" is read from the server (the answer
+  // is stamped, the card is 已处理) and from the 已处理 list, where the card is found again.
   check(
-    (await page.locator('.cc-answer .cc-chip-adopted').count()) > 0 ||
-      (await page.locator('#admin-cocreation').innerText()).includes('已采用'),
+    f.store.get<{ n: number }>(
+      "SELECT count(*) n FROM web_cocreation_answers a JOIN web_cocreation_submissions s ON s.id=a.submission_id WHERE s.id='n37b-card' AND a.adopted_at IS NOT NULL AND s.status='processed'",
+    )!.n === 1,
     'the note is marked 已采用',
   );
 
@@ -165,7 +181,17 @@ try {
   // the same line for ANOTHER character: blocked
   let blocked = false;
   {
-    await page.locator('#admin-cocreation .cc-row-open', { hasText: '！！' }).first().click();
+    // Named exception (Part 55): the next card opens by itself after an adoption; a click on the open one would close it.
+    if (
+      !(
+        await page
+          .locator('.cc-detail .cc-answer')
+          .first()
+          .innerText()
+          .catch(() => '')
+      ).includes('！！')
+    )
+      await page.locator('#admin-cocreation .cc-row-open', { hasText: '！！' }).first().click();
     await page.locator('.cc-detail .cc-adopt-profile:not([disabled])').first().waitFor({ timeout: 10_000 });
     await wait(500);
     await page.locator('.cc-detail .cc-adopt-profile:not([disabled])').first().click();

@@ -220,7 +220,7 @@ try {
     );
     check((await current()).endsWith(B), `${w}: 保存 then leaves (${await current()})`);
 
-    // ---- a save that fails (DRAFT_CONFLICT): stay, with the message --------------------------------------------------------
+    // ---- a save that fails (a REAL conflict, Part 55: the same field changed here and elsewhere): stay, with the message --------------------------------------------------------
     await rail(A).click({ force: true });
     await wait(900);
     await edit(`改动冲突 ${w}`);
@@ -238,8 +238,8 @@ try {
     check((await persona().inputValue()).includes('改动冲突'), `${w}: a failed save keeps the edits`);
     const bar = await page.locator('.wb-conflict').innerText();
     check(
-      bar.includes('草稿已在别处更新') && bar.includes('重新载入'),
-      `${w}: DRAFT_CONFLICT says so with 重新载入 (${bar})`,
+      bar.includes('草稿已在别处更新') && bar.includes('人设') && bar.includes('重新载入'),
+      `${w}: the conflict says so with 重新载入 and names the field (${bar})`,
     );
     await shot('draft-conflict');
     await page.locator('.wb-conflict button').click();

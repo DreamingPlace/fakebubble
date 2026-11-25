@@ -72,8 +72,14 @@ test('save, preview and discard preserve published state; strict stale revisions
   const first = f.service.save(f.auth, 'wei-guagua', { expectedRevision: null, profile });
   assert.equal(first.revision, 1);
   assert.deepEqual(f.service.save(f.auth, 'wei-guagua', { expectedRevision: null, profile }), first);
+  // Named exception (Part 55): a stale revision is merged when no field changed on both sides; the same field is refused by name.
+  const clash = structuredClone(profile);
+  clash.presentation.displayName = '另一个名字';
+  assert.throws(
+    () => f.service.save(f.auth, 'wei-guagua', { expectedRevision: null, profile: clash }),
+    /DRAFT_FIELD_CONFLICT/,
+  );
   profile.template.persona += ' 已修改';
-  assert.throws(() => f.service.save(f.auth, 'wei-guagua', { expectedRevision: null, profile }), /DRAFT_CONFLICT/);
   const second = f.service.save(f.auth, 'wei-guagua', { expectedRevision: 1, profile });
   assert.equal(second.revision, 2);
   assert.throws(() => f.service.preview(f.auth, 'wei-guagua', 1), /DRAFT_CONFLICT/);

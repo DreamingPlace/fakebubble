@@ -205,12 +205,16 @@ export async function routeWebAccountAdmin(
     }
     // Part 24c: 加入关系与故事 - a pair note becomes a story of the cast draft (compare-and-swap on its revision; never publishes).
     if (action === 'cast-story') {
-      const value = body(['id', 'ordinal', 'expectedRevision']);
-      return { status: 200, body: cocreation.addToCastStory(actor, value.id, value.ordinal, value.expectedRevision) };
+      const value = body(['id', 'ordinal']);
+      return { status: 200, body: cocreation.addToCastStory(actor, value.id, value.ordinal) };
     }
     // Part 39: relation notes (two to eight characters), 玩家眼中的关系, 不计入, 采纳 / 不采纳, 整理.
-    if (action.startsWith('relation/')) ensure(cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
+    if (action.startsWith('relation/') || action === 'adopt-answers')
+      ensure(cocreation instanceof WebCocreationRelations, 'NOT_FOUND');
     const relations = cocreation as WebCocreationRelations;
+    // Part 55: 采纳 of one or many answers, each into its own destination, written by the server at the draft's current revision.
+    if (action === 'adopt-answers')
+      return { status: 200, body: relations.adoptAnswers(actor, body(['items']) as never) };
     if (action === 'relation/detail') return { status: 200, body: relations.relationDetail(actor, body(['id']).id) };
     if (action === 'relation/stats') {
       body([]);
@@ -228,10 +232,7 @@ export async function routeWebAccountAdmin(
     if (action === 'relation/adopt')
       return {
         status: 200,
-        body: relations.adoptRelation(
-          actor,
-          body(['id', 'requestId', 'expectedRevision', 'text', 'groupName']) as never,
-        ),
+        body: relations.adoptRelation(actor, body(['id', 'requestId', 'text', 'groupName']) as never),
       };
     if (action === 'relation/tidy')
       return { status: 200, body: await relations.tidy(actor, body(['id', 'requestId']) as never) };

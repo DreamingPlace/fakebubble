@@ -171,7 +171,8 @@ function page(
     permissions?: string[];
     doc?: CastDoc;
     revision?: number;
-    conflictOnce?: boolean;
+    /** Someone else saves first: `true` changes another part of the draft (Part 55: merged), 'same-field' the very field being edited. */
+    conflictOnce?: boolean | 'same-field';
     /** Part 24b-4: the character API behind + 角色 (and whether this administrator may create characters). */
     characters?: { saves: { id: string; revision: number | null; name: string }[]; canCreate?: boolean };
   } = {},
@@ -181,7 +182,7 @@ function page(
   let server = { revision: options.revision ?? 7, doc: structuredClone(options.doc ?? sampleCast()) };
   let latest = 2;
   const calls: Calls = { saves: [], publishes: [], rollbacks: [], imports: [] };
-  let conflict = options.conflictOnce === true;
+  let conflict = options.conflictOnce === true || options.conflictOnce === 'same-field';
   const counts = { characters: 15, people: 6, groups: 3, stories: 6, memes: 0 };
   const send = async (path: string, body: Record<string, unknown>): Promise<unknown> => {
     if (path === 'draft')
@@ -221,7 +222,10 @@ function page(
       if (conflict) {
         conflict = false;
         // someone else saved first
-        server = { revision: server.revision + 1, doc: structuredClone(server.doc) };
+        const theirs = structuredClone(server.doc);
+        if (options.conflictOnce === 'same-field') theirs.directions[0]!.addresses[0]!.text = '他改的称呼';
+        else theirs.world = { ...theirs.world, background: `${theirs.world.background}（他加的）` };
+        server = { revision: server.revision + 1, doc: theirs };
         throw new InviteLocalApiError(409, 'CAST_REVISION_CONFLICT');
       }
       if (body.expectedRevision !== server.revision) throw new InviteLocalApiError(409, 'CAST_REVISION_CONFLICT');
@@ -423,8 +427,10 @@ test('page: save sends the whole working copy with the revision it was read at; 
   assert.ok(!f.root.textContent.includes('回滚'), 'no 回滚 anywhere on the page');
 });
 
-test('page: a stale revision shows the conflict and keeps what was typed until the administrator chooses', async (t) => {
-  const f = page(t, { conflictOnce: true });
+// Named exception (Part 55): a save against a draft that moved on is no longer refused when nothing was changed on both sides: it is
+// merged and saved on top of the newer draft. These two tests now use a REAL conflict (the very field was changed on both sides).
+test('page: the same field changed on both sides shows the conflict, names it and keeps what was typed until the administrator chooses', async (t) => {
+  const f = page(t, { conflictOnce: 'same-field' });
   await f.view.load();
   f.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
   // Part 24i: the first input of the direction editor is the first 称呼 item (c01 → c02 has one).
@@ -434,7 +440,7 @@ test('page: a stale revision shows the conflict and keeps what was typed until t
   f.buttons('保存草稿')[0]!.click();
   await flush();
   const notice = f.root.querySelectorAll('.cs-notice.is-bad')[0]!;
-  assert.match(notice.textContent, /草稿 8/); // Named exception (Part 24b-7d round 2, docs/ADMIN_COPY.md): was 「修订 8」
+  assert.match(notice.textContent, /说话方向在别处也改过，不能自动合并/);
   assert.equal(f.view.state.conflict!.revision, 8);
   assert.equal(typed.value, '小满满', 'the field still holds the typed text');
   assert.equal(
@@ -458,7 +464,7 @@ test('page: a stale revision shows the conflict and keeps what was typed until t
 });
 
 test('page: taking the latest drops the typed text, on purpose', async (t) => {
-  const f = page(t, { conflictOnce: true });
+  const f = page(t, { conflictOnce: 'same-field' });
   await f.view.load();
   f.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
   f.root.querySelectorAll('.cs-dir-texts input')[0]!.type_('小满满');
@@ -470,6 +476,30 @@ test('page: taking the latest drops the typed text, on purpose', async (t) => {
   assert.equal(
     f.view.state.doc!.directions.some((d) => d.addresses.some((x) => x.text === '小满满')),
     false,
+  );
+});
+
+test('55 page: a draft that moved on in ANOTHER part is merged and saved at once: no conflict, both edits kept', async (t) => {
+  const f = page(t, { conflictOnce: true });
+  await f.view.load();
+  f.root.querySelectorAll('.cs-cell[data-from]')[0]!.click();
+  f.root.querySelectorAll('.cs-dir-texts input')[0]!.type_('小满满');
+  f.buttons('保存草稿')[0]!.click();
+  await flush();
+  assert.equal(f.root.querySelectorAll('.cs-notice.is-bad').length, 0, 'no conflict notice');
+  assert.equal(f.view.state.conflict, null);
+  assert.deepEqual(
+    f.calls.saves.map((s) => s.revision),
+    [7, 8],
+    'the second try is on top of their revision',
+  );
+  assert.equal(f.view.state.dirty, false);
+  const saved = f.calls.saves[1]!.doc;
+  assert.match(saved.world.background, /（他加的）$/, 'what the other side added is kept');
+  assert.equal(
+    saved.directions.some((d) => d.addresses.some((x) => x.text === '小满满')),
+    true,
+    'and so is what was typed',
   );
 });
 

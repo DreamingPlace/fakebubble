@@ -371,6 +371,7 @@ export class WebProviderApplication {
         .digest(),
       () => globalThis.crypto.randomUUID(),
     );
+    this.cocreation.enableCharacterDrafts(this.characterAdmin);
     this.billing = new WebBilling(store, clock, this.identity);
     // Part 57: every page's 导出. It reads through the pages' own readers and keeps nothing.
     this.exporter = new WebExportAdmin(store, clock, this.inviteAdmin, {

@@ -19,6 +19,8 @@ import {
   type AdoptField,
   type AdoptTarget,
 } from '../../../../../packages/contracts/cocreation-adopt.ts';
+import { SPEECH_PROFILE_ERROR_TEXT } from '../../../../../packages/contracts/speech-profile.ts';
+import { RELATION_ADOPT_ERROR_TEXT } from '../../../../../packages/contracts/cocreation-relations.ts';
 import {
   DAILY_LIFE_LABEL,
   DAY_PART_LABELS,
@@ -63,8 +65,8 @@ import type {
 
 type Deps = {
   api: Pick<CocreationAdminClient, 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
-    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory'>>;
-  /** Part 24c: the revision of the cast draft the administrator is looking at (cast.read); without it 加入关系与故事 is not shown. */
+    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory' | 'adoptAnswers'>>;
+  /** Part 24c: whether the cast draft can be read (cast.read); without it 加入关系与故事 is not shown. The revision itself is never sent (Part 55). */
   castRevision?: () => Promise<number>;
   /** cast.edit (or the owner): without it 加入关系与故事 is disabled. Default: allowed. */
   canEditCast?: () => boolean;
@@ -98,6 +100,8 @@ type Deps = {
   /** Part 39b: 题目, the wording pool of the themes (a third view of this page). Absent = no such view. */
   wordings?: Pick<CocreationWordingsClient, 'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'> &
     Partial<Pick<CocreationWordingsClient, 'setEnabled'>>;
+  /** Part 55: how long a processed card takes to leave the list, in ms (a short motion). 0 or absent = at once. */
+  leaveMs?: number;
   /** A fresh request id (adoption, 整理, 生成); default: crypto.randomUUID. */
   newId?: () => string;
   /** Part 57: the page's 导出 button (the notes under the filters on screen; without it there is none). */
@@ -118,7 +122,8 @@ const isField = (node: unknown) => {
 };
 
 export function cocreationInbox(root: HTMLElement, deps: Deps) {
-  let filter: InboxFilter = { characterId: null, status: null, starred: false, query: '' };
+  // Part 55: the list opens on 新: what is processed leaves it (and is found again under 已处理 / 已归档 / 全部).
+  let filter: InboxFilter = { characterId: null, status: 'new', starred: false, query: '' };
   let items: InboxItem[] = [];
   let next: InboxCursor | null = null;
   let names: Record<string, string> = {};
@@ -163,6 +168,23 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   // The bulk bar (Part 24b-4): shown while rows are ticked, every action written out.
   // Bulk select lives in the title row (Inbox3): while cards are ticked it replaces the counts.
   const bulkCount = h('b', { class: 'cc-bulk-count' });
+  const adoptSelected = h('button', { class: 'cc-adopt-selected', attrs: { type: 'button' }, hidden: true });
+  const selectAll = h('button', {
+    class: 'cc-select-all',
+    text: '全选',
+    attrs: { type: 'button', 'aria-label': '选择列表里的全部想法' },
+    hidden: true,
+  });
+  /** Part 55: what could not be adopted, named per item (never silent); stays until closed. */
+  const reportList = h('ul', { class: 'cc-report-list' });
+  const reportClose = h('button', { class: 'cc-report-close', text: '知道了', attrs: { type: 'button' } });
+  const report = h(
+    'div',
+    { class: 'cc-adopt-report', attrs: { role: 'alert' }, hidden: true },
+    h('b', { class: 'cc-report-title' }),
+    reportList,
+    reportClose,
+  );
   const processSelected = h('button', { class: 'cc-process-selected', attrs: { type: 'button' } });
   const archiveSelected = h('button', {
     text: '归档所选',
@@ -175,6 +197,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     'div',
     { class: 'cc-bulk', attrs: { role: 'group', 'aria-label': '批量处理' }, hidden: true },
     bulkCount,
+    ...(deps.api.adoptAnswers ? [adoptSelected] : []),
     processSelected,
     archiveSelected,
     clearSelected,
@@ -187,7 +210,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   const listColumn = h(
     'div',
     { class: 'cc-list-column' },
-    h('div', { class: 'cc-toolbar' }, characterChips, h('div', { class: 'cc-chip-row' }, statusChips, starChip, query)),
+    h(
+      'div',
+      { class: 'cc-toolbar' },
+      characterChips,
+      h('div', { class: 'cc-chip-row' }, statusChips, starChip, ...(deps.api.adoptAnswers ? [selectAll] : []), query),
+    ),
+    report,
     empty,
     list,
   );
@@ -312,6 +341,10 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         : '还没有玩家的想法。';
     const manage = deps.canManage();
     archiveSelected.hidden = !manage || selected.size === 0;
+    adoptSelected.hidden = archiveSelected.hidden || !deps.api.adoptAnswers;
+    selectAll.hidden = !manage || !deps.api.adoptAnswers || items.length === 0;
+    selectAll.textContent = items.length > 0 && items.every((item) => selected.has(item.id)) ? '取消全选' : '全选';
+    adoptSelected.textContent = `采纳所选（${selected.size}）`;
     bulk.hidden = archiveSelected.hidden || showing !== 'inbox';
     counts.hidden = !bulk.hidden || showing !== 'inbox';
     archiveSelected.textContent = `归档所选（${selected.size}）`;
@@ -492,21 +525,41 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       for (const id of ids) patchItem(id, { status });
       if (detail && ids.includes(detail.id)) detail = { ...detail, status };
       for (const id of ids) selected.delete(id);
-      // A filtered list drops what no longer matches; the cursor moves to a neighbour.
-      if (filter.status && filter.status !== status) {
-        const current = items[active]?.id;
-        items = items.filter((item) => !ids.includes(item.id));
-        active = items.length ? Math.max(0, Math.min(active, items.length - 1)) : -1;
-        if (current && ids.includes(current)) detail = null;
-      }
       renderList();
       renderDetail();
-      if (active >= 0 && detail?.id !== items[active]?.id) void pump();
+      void leaveList(ids);
       changed();
       deps.status(
         ids.length > 1 ? `已把 ${ids.length} 条标为${STATUS_LABEL[status]}。` : `已标为${STATUS_LABEL[status]}。`,
       );
     });
+
+  // ---- Part 55: a processed card leaves the list at once, with a short motion; the next one moves up and opens ------------
+  const reducedMotion = () => globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+  const matchesFilter = (item: InboxItem) => filter.status === null || item.status === filter.status;
+  async function leaveList(ids: string[]) {
+    const leaving = items.filter((item) => ids.includes(item.id) && !matchesFilter(item)).map((item) => item.id);
+    if (leaving.length === 0) return;
+    const ms = reducedMotion() ? 0 : (deps.leaveMs ?? 0);
+    if (ms > 0) {
+      for (const id of leaving) list.querySelector?.(`[data-id="${id}"]`)?.classList.add('is-leaving');
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      if (gone || deps.disposed()) return;
+    }
+    const openId = items[active]?.id;
+    const index = active;
+    items = items.filter((item) => !leaving.includes(item.id));
+    for (const id of leaving) selected.delete(id);
+    if (openId && !leaving.includes(openId)) active = items.findIndex((item) => item.id === openId);
+    else {
+      detail = null;
+      active = items.length ? Math.max(0, Math.min(index, items.length - 1)) : -1;
+    }
+    renderFilters();
+    renderList();
+    renderDetail();
+    if (active >= 0 && detail?.id !== items[active]?.id) void pump();
+  }
   const toggleStar = (current: InboxDetail) =>
     deps.run(async () => {
       await deps.api.star(current.id, !current.starred);
@@ -908,6 +961,9 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     });
   }
 
+  /** characters.edit for this note's character (or the owner): without it 采纳 is not shown. */
+  const canEditHere = (current: InboxDetail) =>
+    deps.canManage() && (!deps.canEditCharacter || deps.canEditCharacter(current.characterId));
   const renderDetail = () => {
     if (!detail || active < 0) {
       pane.replaceChildren();
@@ -937,6 +993,34 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         button.addEventListener('click', () => void setStatus([current.id], status));
         return button;
       });
+
+    // Part 55: 采纳全部 - every answer of this card that is not adopted yet, each into its own destination.
+    const open = current.answers.filter((answer) => answer.adoptedAt === null);
+    const adoptAll =
+      deps.api.adoptAnswers &&
+      current.kind !== 'memo' &&
+      current.kind !== 'pair' &&
+      canEditHere(current) &&
+      open.length > 1
+        ? (() => {
+            const all = h('button', {
+              text: `采纳全部（${open.length}）`,
+              attrs: { type: 'button' },
+              class: 'cc-adopt-all',
+            });
+            all.disabled = !manage;
+            all.dataset.locked = String(all.disabled);
+            all.addEventListener(
+              'click',
+              () =>
+                void adoptNow(
+                  current,
+                  open.map((answer) => answer.ordinal),
+                ),
+            );
+            return all;
+          })()
+        : null;
 
     // Part 47: the parts of 「一天」 form their own group (stored as 自由发挥, but they are adopted into 一天的安排).
     const groups: { field: string; label: string; answers: InboxAnswer[] }[] = [
@@ -998,6 +1082,10 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                 },
               });
             });
+            const now = h('button', { text: '采纳', attrs: { type: 'button' }, class: 'cc-adopt-now' });
+            now.disabled = !manage || answer.adoptedAt !== null || inserted.has(`${current.id}:${answer.ordinal}`);
+            now.dataset.locked = String(now.disabled);
+            now.addEventListener('click', () => void adoptNow(current, [answer.ordinal]));
             const undo = h('button', { text: '取消采用', attrs: { type: 'button' }, class: 'cc-unadopt' });
             undo.disabled = !manage;
             undo.addEventListener('click', () => void unadopt(current, answer.ordinal));
@@ -1027,6 +1115,9 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                 'div',
                 { class: 'cc-answer-actions' },
                 copy,
+                deps.api.adoptAnswers && current.kind !== 'memo' && current.kind !== 'pair' && canEditHere(current)
+                  ? now
+                  : null,
                 current.kind === 'memo'
                   ? null
                   : current.kind === 'pair'
@@ -1064,7 +1155,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         h('p', {
           text: `${when(current.createdAt)}${current.batch ? ` · 邀请批次：${current.batch}` : ''} · ${STATUS_LABEL[current.status]}${current.processedAt ? `（${when(current.processedAt)}）` : ''}`,
         }),
-        h('div', { class: 'cc-detail-actions' }, star, ...statusButtons),
+        h('div', { class: 'cc-detail-actions' }, adoptAll ?? null, star, ...statusButtons),
       ),
       relational
         ? h('div', { class: 'cc-detail-grid is-single' }, relationBody(current))
@@ -1101,6 +1192,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
             if (settled && detail?.id === current.id) detail = { ...detail, status: settled };
             renderList();
             if (settled) renderDetail();
+            if (settled) void leaveList([current.id]);
             changed();
           },
         }),
@@ -1133,13 +1225,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     }
     return nameOf(entry.characterId);
   }
-  /** 加入关系与故事: reads the cast draft's revision, then adds the story to THAT revision (a draft that moved on is refused). */
+  /** 加入关系与故事: the server adds the story to the cast draft at its current revision. */
   async function addStory(current: InboxDetail, ordinal: number) {
     if (!deps.castRevision || !deps.api.addToCastStory) return;
     if (current.answers.find((entry) => entry.ordinal === ordinal)?.adoptedAt) return;
     await deps.run(async () => {
-      const revision = await deps.castRevision!();
-      await deps.api.addToCastStory!(current.id, ordinal, revision);
+      // Part 55: no revision is sent; the server writes the story at the draft's current revision.
+      await deps.api.addToCastStory!(current.id, ordinal);
       stampAdopted(current, ordinal, Date.now());
       deps.status('已加入世界设定草稿的「关系与故事」（未发布）。');
     });
@@ -1165,8 +1257,146 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     });
     renderList();
     renderDetail();
+    void leaveList([current.id]);
     deps.onChanged?.();
   }
+
+  // ---- Part 55: 采纳 (one answer, every answer of a card, or every ticked card) ---------------------------------------------
+  /** The sentence for a refusal named by the server (never the code; a field both sides changed is named). */
+  const sentenceOf = (code: string, fields?: string[]) => {
+    if (code === 'DRAFT_FIELD_CONFLICT' && fields?.length)
+      return `「${fields.join('」「')}」在草稿和正式版本里都改过，请先在角色工作台里核对。`;
+    return (
+      ADOPT_ERROR_TEXT[code] ??
+      SPEECH_PROFILE_ERROR_TEXT[code] ??
+      RELATION_ADOPT_ERROR_TEXT[code] ??
+      characterAdminError({ code }) ??
+      '没有采纳成功，请稍后重试。'
+    );
+  };
+  const showReport = (title: string, lines: string[]) => {
+    (report.querySelector('.cc-report-title') as HTMLElement).textContent = title;
+    reportList.replaceChildren(...lines.map((line) => h('li', { text: line })));
+    report.hidden = lines.length === 0;
+  };
+  reportClose.addEventListener('click', () => {
+    report.hidden = true;
+  });
+  /** Where the administrator sent an answer by the picker above the box; none = the default of its card (decided by the server). */
+  const destinationFor = (current: InboxDetail, answer: InboxAnswer) => {
+    const picked = chosen.get(`${current.id}:${answer.ordinal}`);
+    return picked ? { destination: { field: picked as string } } : {};
+  };
+  const where = (item: { id: string; ordinal: number }) => {
+    const found = items.find((entry) => entry.id === item.id);
+    return found
+      ? `${found.pseudonym} · ${whoOf(found)}${found.answerCount > 1 ? ` · 第 ${item.ordinal + 1} 条` : ''}`
+      : '这一条';
+  };
+  /** Sends the answers (in requests of at most 100) and settles what the server said, item by item. */
+  async function adoptAnswers(entries: { id: string; ordinal: number; destination?: { field: string } }[]) {
+    const results: import('../../services/cocreation-admin-api.ts').AdoptResult[] = [];
+    for (let at = 0; at < entries.length; at += 100)
+      results.push(...(await deps.api.adoptAnswers!(entries.slice(at, at + 100))).results);
+    const stamp = Date.now();
+    const settled = new Set<string>();
+    for (const id of new Set(results.map((result) => result.id))) {
+      const mine = results.filter((result) => result.id === id);
+      const okCount = mine.filter((result) => result.ok).length;
+      if (okCount === 0) continue;
+      settled.add(id);
+      const item = items.find((entry) => entry.id === id);
+      relationCache.delete(id);
+      patchItem(id, {
+        status: 'processed',
+        adoptedCount: Math.max(item?.adoptedCount ?? 0, okCount),
+        ...(item?.kind === 'pair' ? { decision: 'adopted' as const } : {}),
+      });
+      if (detail?.id === id)
+        detail = {
+          ...detail,
+          status: 'processed',
+          answers: detail.answers.map((answer) =>
+            mine.some((result) => result.ok && result.ordinal === answer.ordinal) && answer.adoptedAt === null
+              ? { ...answer, adoptedAt: stamp }
+              : answer,
+          ),
+        };
+    }
+    const failed = results.filter((result) => !result.ok);
+    return { results, settled: [...settled], failed };
+  }
+  const finishAdopt = (outcome: Awaited<ReturnType<typeof adoptAnswers>>, extra: string[] = []) => {
+    const done = outcome.results.filter((result) => result.ok && result.duplicate !== true).length;
+    const lines = [
+      ...outcome.failed.map((result) => `${where(result)}：${sentenceOf(result.code ?? '', result.fields)}`),
+      ...extra,
+    ];
+    for (const id of outcome.settled) selected.delete(id);
+    showReport(lines.length === 1 ? '有 1 条没有采纳' : `有 ${lines.length} 条没有采纳`, lines);
+    renderList();
+    renderDetail();
+    changed();
+    deps.status(
+      done > 0
+        ? `已采纳 ${done} 条，写进草稿，玩家的积分已发。尚未发布：请到角色工作台或关系与故事里整理后发布。`
+        : lines.length
+          ? '没有采纳成功，原因在上面列出。'
+          : '这些已经采纳过了。',
+    );
+    void leaveList(outcome.settled);
+  };
+  /** 采纳 on one answer, or on every answer of the open card that is not adopted yet. */
+  const adoptNow = (current: InboxDetail, ordinals: number[]) =>
+    deps.run(async () => {
+      if (!deps.api.adoptAnswers) return;
+      report.hidden = true;
+      const entries = ordinals.flatMap((ordinal) => {
+        const answer = current.answers.find((entry) => entry.ordinal === ordinal);
+        return answer && answer.adoptedAt === null
+          ? [{ id: current.id, ordinal, ...destinationFor(current, answer) }]
+          : [];
+      });
+      if (entries.length === 0) return;
+      try {
+        finishAdopt(await adoptAnswers(entries));
+      } catch (caught) {
+        showReport('没有采纳成功', [characterAdminError(caught) ?? '没有采纳成功，请稍后重试。']);
+      }
+    });
+  /** 采纳所选: every answer of every ticked card, each into its own destination; a relation note into 关系与故事. */
+  const adoptTicked = () =>
+    deps.run(async () => {
+      if (!deps.api.adoptAnswers || selected.size === 0) return;
+      report.hidden = true;
+      const picked = items.filter((item) => selected.has(item.id));
+      const memos = picked.filter((item) => item.kind === 'memo');
+      const entries = picked
+        .filter((item) => item.kind !== 'memo')
+        .flatMap((item) =>
+          Array.from({ length: item.kind === 'pair' ? 1 : item.answerCount }, (_, ordinal) => ({
+            id: item.id,
+            ordinal,
+          })),
+        );
+      const extra = memos.map((item) => `${where({ id: item.id, ordinal: 0 })}：${sentenceOf('ADOPT_MEMO')}`);
+      for (const item of memos) selected.delete(item.id);
+      if (entries.length === 0) {
+        finishAdopt({ results: [], settled: [], failed: [] }, extra);
+        return;
+      }
+      try {
+        finishAdopt(await adoptAnswers(entries), extra);
+      } catch (caught) {
+        showReport('没有采纳成功', [characterAdminError(caught) ?? '没有采纳成功，请稍后重试。']);
+      }
+    });
+  adoptSelected.addEventListener('click', () => void adoptTicked());
+  selectAll.addEventListener('click', () => {
+    if (items.every((item) => selected.has(item.id))) selected.clear();
+    else for (const item of items) selected.add(item.id);
+    renderList();
+  });
 
   // ---- events ---------------------------------------------------------------------------------------------------
   const reload = () => {
@@ -1245,6 +1475,10 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     /** Filters the list to one character (the badge link); the next load() applies it. */
     showCharacter: (characterId: string | null) => {
       filter = { ...filter, characterId };
+    },
+    /** Which status the list opens on (default 新; null = 全部); the next load() applies it. */
+    showStatus: (status: InboxStatus | null) => {
+      filter = { ...filter, status };
     },
     clear: () => {
       items = [];
