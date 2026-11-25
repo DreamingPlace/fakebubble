@@ -22,6 +22,8 @@ const ICON = (d: string) =>
 const THUMB_UP = ICON('<path d="M7 11v9H4v-9z"/><path d="M7 11l4-7c1.6 0 2.5 1.2 2.2 2.8L12.7 10H19a2 2 0 0 1 2 2.4l-1.3 6A2 2 0 0 1 17.7 20H7"/>');
 const THUMB_DOWN = ICON('<path d="M17 13V4h3v9z"/><path d="M17 13l-4 7c-1.6 0-2.5-1.2-2.2-2.8L11.3 14H5a2 2 0 0 1-2-2.4l1.3-6A2 2 0 0 1 6.3 4H17"/>');
 const QUOTE = ICON('<path d="M9 7 4 12l5 5"/><path d="M4 12h9a7 7 0 0 1 7 7"/>');
+const MIC = ICON('<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>');
+const DOC = ICON('<path d="M6 4h12M6 9h12M6 14h12M6 19h8"/>');
 const CARD = ICON('<rect x="4" y="3.5" width="16" height="17" rx="3.5"/><path d="M8 15.5h8M8 11.5h5"/>');
 
 const CSS = `
@@ -50,7 +52,12 @@ const CSS = `
 @keyframes b36-menu{from{opacity:0;transform:scale(.86) translateY(6px)}to{opacity:1;transform:none}}
 .b36-menu button{height:44px;min-width:44px;padding:0 12px;border:0;border-radius:17px;background:transparent;color:inherit;display:flex;align-items:center;justify-content:center;gap:6px;font:inherit;font-size:14px;font-weight:500;white-space:nowrap}
 .b36-menu .b36-sep{width:1px;height:22px;background:rgba(128,128,128,.3);margin:0 2px}
-.b36-mark{position:absolute;right:-6px;bottom:-9px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--s-solid,#fff);box-shadow:0 1px 4px rgba(0,0,0,.18);color:var(--n-accent,var(--accent));animation:b36-pop 320ms var(--bb-ease) both}
+.b36-mark{position:absolute;left:calc(100% + 6px);bottom:0;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--s-solid,#fff);box-shadow:0 1px 4px rgba(0,0,0,.18);color:var(--n-accent,var(--accent));animation:b36-pop 320ms var(--bb-ease) both}
+.b36-mark.is-left{left:auto;right:calc(100% + 6px)}
+.b36-mine-holder{position:relative;display:block;max-width:calc(100% - 40px)}
+.b36-mine-holder .text-bubble{max-width:100%}
+.page-shell .message-row,.page-shell .message-row.outgoing{align-items:flex-start!important}
+.page-shell .message-row .message-avatar,.page-shell .message-row.outgoing::after{margin-top:0!important;align-self:flex-start!important}
 .b36-mark svg{width:14px;height:14px}
 .b36-mark[data-r="down"]{color:var(--bb-sub)}
 :root[data-theme="dark"] .b36-mark{background:#2d2a36}
@@ -100,7 +107,7 @@ try {
     await wait(1500);
     await page.addStyleTag({ content: CSS });
     await page.evaluate(
-      ([up, down, quote, cardIcon]: string[]) => {
+      ([up, down, quote, cardIcon, mic, doc]: string[]) => {
         const slot = document.querySelector('.card-slot.is-active')!;
         const list = slot.querySelector<HTMLElement>('.sent-messages')!;
         const body = slot.querySelector<HTMLElement>('.chat-body')!;
@@ -112,7 +119,7 @@ try {
         const mine = (text: string, tight: boolean, quoteHtml = '') => {
           const row = document.createElement('div');
           row.className = `message-row outgoing${tight ? ' b36-row-tight' : ''}`;
-          row.innerHTML = `<p class="text-bubble">${quoteHtml}${text}</p>`;
+          row.innerHTML = `<span class="b36-mine-holder"><p class="text-bubble">${quoteHtml}${text}</p></span>`;
           return row;
         };
         const her = (kind: 'voice' | 'text', text: string, secs = 6) => {
@@ -126,9 +133,9 @@ try {
         };
         const q = (from: 'me' | 'her', who: string, text: string) =>
           `<span class="b36-quote" data-from="${from}"><span><b>${who}</b><i>${text}</i></span></span>`;
-        const mark = (holder: Element, r: 'up' | 'down') => {
+        const mark = (holder: Element, r: 'up' | 'down', left = false) => {
           const m = document.createElement('span');
-          m.className = 'b36-mark';
+          m.className = left ? 'b36-mark is-left' : 'b36-mark';
           m.dataset.r = r;
           m.innerHTML = r === 'up' ? up : down;
           holder.append(m);
@@ -175,9 +182,9 @@ try {
           bar.style.setProperty('--ox', `${Math.round(rb.left + rb.width / 2 - left)}px`);
           bar.style.setProperty('--oy', above ? '100%' : '0%');
         };
-        (window as unknown as Record<string, unknown>).__b = { mine, her, q, mark, reset, menu, list, body, title, up, down, quote, cardIcon, name };
+        (window as unknown as Record<string, unknown>).__b = { mine, her, q, mark, reset, menu, list, body, title, up, down, quote, cardIcon, mic, doc, name };
       },
-      [THUMB_UP, THUMB_DOWN, QUOTE, CARD],
+      [THUMB_UP, THUMB_DOWN, QUOTE, CARD, MIC, DOC],
     );
     const shoot = async (label: string) => {
       await wait(500);
@@ -223,14 +230,18 @@ try {
       const voice = b.her('voice', '', 7); b.list.append(voice); b.mark(voice.querySelector('.b36-holder'), 'up');
       const text = b.her('text', '先把鞋脱了，坐下来，慢慢说。'); b.list.append(text); b.mark(text.querySelector('.b36-holder'), 'down');
       b.list.append(b.mine('好～', false, b.q('her', b.name, '先把鞋脱了，坐下来，慢慢说。')));
-      b.list.append(b.mine('对了，刚才说的那个', false, b.q('me', '我', '我刚下班')));
+      const last = b.mine('对了，刚才说的那个', false, b.q('me', '我', '我刚下班')); b.list.append(last); b.mark(last.querySelector('.b36-mine-holder'), 'up', true);
       b.body.scrollTop = b.body.scrollHeight; })(window.__b)`);
     frames.push(await shoot('6-quotes-rated'));
+    // 7. after 👎 in the menu: the menu turns into one question, 语音 or 内容 (a text-fallback reply has no voice, so it skips this)
+    await page.evaluate(`((b) => { b.reset(); (${batchSrc})(b); b.list.append(b.her('voice', '', 7)); b.body.scrollTop = b.body.scrollHeight;
+      b.menu(b.list.lastElementChild, '.voice-bubble', [{ icon: b.down }, { sep: true }, { icon: b.mic, label: '语音' }, { icon: b.doc, label: '内容' }]); })(window.__b)`);
+    frames.push(await shoot('7-thumbs-down-choice'));
     boardImages[name] = frames;
     await ctx.close();
   }
   const boardCtx = await f.browser.newContext({ viewport: { width: 1300, height: 900 }, deviceScaleFactor: 1.5 });
-  const labels = ['连发', '她开始回复', '长按她的语音', '长按我的气泡', '引用中', '已评价 · 引用 · 无分享图标'];
+  const labels = ['连发', '她开始回复', '长按她的语音', '长按我的气泡', '引用中', '已评价 · 引用 · 无分享图标', '点 👎 后选 语音 / 内容'];
   for (const [name, frames] of Object.entries(boardImages)) {
     const desktop = name.startsWith('desktop');
     const dark = name.endsWith('dark');
