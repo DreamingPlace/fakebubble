@@ -52,6 +52,8 @@ import { castTablesExist } from '../cast/cast-store.ts';
 import { WebSecurityCounters, installWebAdminActions } from '../admin/web-admin-actions.ts';
 import { WebInviteTiers } from '../invites/web-invite-tiers.ts';
 import { WebInviteActions } from '../invites/web-invite-actions.ts';
+import { cocreationSheets } from '../cocreation/web-cocreation-export.ts';
+import { WebExportAdmin } from '../export/web-export-admin.ts';
 import { WebCocreationRelations } from '../cocreation/web-cocreation-relations.ts';
 import { WebBilling } from '../admission/web-billing.ts';
 import { chatReviewTablesExist } from '../review/web-chat-review.ts';
@@ -208,6 +210,8 @@ export class WebProviderApplication {
   readonly ownerOps: WebOwnerOps;
   /** Part 42: 广播 (its tables are a digest-checked runtime step; no numbered migration). */
   readonly broadcast: WebBroadcast;
+  /** Part 57: 导出, built once the pages it reads from exist. */
+  readonly exporter: WebExportAdmin;
   /** Part 45: shareable voice-card links (the only writer of the share tables). */
   readonly shares: WebShare;
   readonly avatars: WebAvatars;
@@ -368,6 +372,23 @@ export class WebProviderApplication {
       () => globalThis.crypto.randomUUID(),
     );
     this.billing = new WebBilling(store, clock, this.identity);
+    // Part 57: every page's 导出. It reads through the pages' own readers and keeps nothing.
+    this.exporter = new WebExportAdmin(store, clock, this.inviteAdmin, {
+      chatReview: chatReviewOn,
+      characters: this.characterAdmin as never,
+      broadcast: this.broadcast as never,
+      shareStats: () => this.shares.stats(),
+      cocreation: {
+        exportSheets: (auth, filters) =>
+          cocreationSheets(
+            store,
+            this.inviteAdmin,
+            (principalId) => this.cocreation.pseudonym(principalId),
+            auth,
+            filters as Record<string, unknown>,
+          ),
+      },
+    });
   }
 
   bootstrap(token: string | undefined, ipHash: string) {

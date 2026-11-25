@@ -37,6 +37,7 @@ import type { CastAdminClient } from '../../services/cast-admin-api.ts';
 import type { ProfileImportClient } from '../../services/profile-import-api.ts';
 import { profileImportView } from './profile-import/profile-import-view.ts';
 import { cocreationInbox } from './cocreation-inbox.ts';
+import { exportButton, type MakeExport } from './export/export-dialog.ts';
 import { adoptBox } from './speech-profile/adopt-box.ts';
 import { othersReader } from './speech-profile/profile-draft.ts';
 import { conversationsView } from './conversations-view.ts';
@@ -100,9 +101,9 @@ type Port = Pick<
   broadcast?: AccountAdminApi['broadcast'];
   /** 玩家统计 and 消耗表 (Part 22c): the owner or stats.read. Optional: a page without them has neither in the nav. */
   playerStats?: AccountAdminApi['playerStats'];
-  exportPlayerStats?: AccountAdminApi['exportPlayerStats'];
   costs?: AccountAdminApi['costs'];
-  exportCosts?: AccountAdminApi['exportCosts'];
+  /** Part 57: 导出, the one button of each page. Optional: without it no page has the button. */
+  exports?: AccountAdminApi['exports'];
   /** 总览's chart, 消耗表 by user type and 玩家统计's chat users (Part 22d / 24b-1): the owner or stats.read. Optional like the rest. */
   chart?: AccountAdminApi['chart'];
   spendByType?: AccountAdminApi['spendByType'];
@@ -882,9 +883,19 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     errorText: characterAdminError,
     disposed: () => disposed,
   });
+  // Part 57: every page's 导出 button is made here (one dialog, one place for the words); a page adds its own choices and filters.
+  const makeExport: MakeExport = (choices) =>
+    exportButton({
+      parent: q('main'),
+      api: port.exports,
+      choices,
+      run: (task) => run(task),
+      status: (text) => toasts.show(text, 'ok'),
+    });
   previewBench = port.previews
     ? previewWorkbench(previewHost, {
         adopt: (input) => void profileBox.open(input),
+        makeExport,
         api: port.previews,
         characters: port.characters,
         member: () => session?.member ?? null,
@@ -906,6 +917,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
         api: port.cocreation,
         characters: port.characters,
         canManage: () => canCocreation('cocreation.manage'),
+        makeExport,
         canEditCharacter,
         adoptProfile: (input) => void profileBox.open(input),
         others: profileOthers,
@@ -960,6 +972,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const unavailable = () => Promise.reject(new Error('ADMIN_SYSTEM_UNAVAILABLE'));
   const overview = overviewView(q('#admin-overview'), {
     load: () => (port.overview ? port.overview() : unavailable()),
+    makeExport,
     run,
     disposed: () => disposed,
     chart: port.chart
@@ -968,8 +981,6 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     stats: port.playerStats
       ? {
           load: (range) => port.playerStats!(range),
-          exportCsv: (range) => (port.exportPlayerStats ? port.exportPlayerStats(range) : unavailable()),
-          download: browserDownload,
           available: () => canSeePage('costs', access()),
         }
       : undefined,
@@ -979,6 +990,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     renewPrices: (requestId) => (port.renewPrices ? port.renewPrices(requestId) : unavailable()),
     topUp: (input) => (port.budgetTopUp ? port.budgetTopUp(input) : unavailable()),
     isOwner: () => session?.member.role === 'owner',
+    makeExport,
     run,
     confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
@@ -988,8 +1000,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const costs = costsView(q('#admin-costs'), {
     load: (range) => (port.costs ? port.costs(range) : unavailable()),
     spend: port.spendByType ? (range) => port.spendByType!(range) : undefined,
-    exportCsv: (range) => (port.exportCosts ? port.exportCosts(range) : unavailable()),
-    download: browserDownload,
+    makeExport,
     run,
     disposed: () => disposed,
   });
@@ -1012,6 +1023,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const memes = memesView(q('#admin-memes'), {
     api:
       port.cast ?? (new Proxy({}, { get: () => () => Promise.reject(new Error('ADMIN_MEMES_UNAVAILABLE')) }) as never),
+    makeExport,
     canEdit: () =>
       session?.member.role === 'owner' || (!!session && hasCastPermission(session.member.permissions, 'cast.edit')),
     newRequestId: () => globalThis.crypto.randomUUID(),
@@ -1022,6 +1034,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     api:
       port.broadcast ??
       (new Proxy({}, { get: () => () => Promise.reject(new Error('ADMIN_BROADCAST_UNAVAILABLE')) }) as never),
+    makeExport,
     run,
     confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
@@ -1031,6 +1044,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const tiers = inviteTiersView(q('#admin-invites'), {
     port,
     isOwner: () => session?.member.role === 'owner',
+    makeExport,
     run,
     confirm: (options, host) => inlineConfirm(host, options),
     toast: (text) => toasts.show(text, 'ok'),
@@ -1062,6 +1076,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     },
     run,
     runLatest,
+    makeExport,
     status: (text) => {
       if (!disposed) status.textContent = text;
     },

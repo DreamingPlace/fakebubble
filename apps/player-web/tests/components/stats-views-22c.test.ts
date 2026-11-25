@@ -76,8 +76,6 @@ function mountCosts(t: test.TestContext, view: CostsView) {
   const saved: string[] = [];
   const api = costsView(root, {
     load: async () => view,
-    exportCsv: async (range) => ({ csv: `range ${range}`, rows: 1 }),
-    download: (name) => void saved.push(name),
     run: async (work) => {
       await work();
     },

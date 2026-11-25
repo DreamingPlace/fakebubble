@@ -135,6 +135,8 @@ export const ERROR_SENTENCES: Readonly<Record<string, string>> = {
   CHARACTER_DELETION_INCOMPLETE: '清理暂未完成。原任务保留；刷新核对，不要重新删除。',
   CHARACTER_DELETION_SCOPE_UNSAFE: '删除范围不安全，已停止。请联系主管理员核对。',
   INVALID_DELETE_BATCH: '删除批次无效，请重新获取影响。',
+  // ---- 导出 (Part 57) ----
+  EXPORT_TOO_LARGE: '这次导出的行数太多，请缩小日期范围，或加上筛选。',
   // ---- permissions and the site ----
   ADMIN_OWNER_REQUIRED: '只有主管理员可以做这件事。',
   ADMIN_PERMISSION_REQUIRED: '当前没有这项管理权限。账号仍可登录，请联系主管理员调整权限。',

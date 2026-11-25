@@ -113,3 +113,12 @@ Player pages: one line on the terms page (the license notice and its link); noth
 
 ### Part 37c-1 follow-up — 默认关闭
 网络梗: 状态 gains **默认关闭** (the common words that ship switched off); each such row has a 默认关闭 badge (hover: 常用词，默认不会触发；可以手动开启); the status line adds `默认关闭 N 条`. No explanation line.
+
+## Part 57 — 导出
+| Where | Words |
+|---|---|
+| every page that shows data, top right of the title row | one button **导出** (hover: 把这一页的数据导出为 CSV 或 Excel 文件。) |
+| the dialog | 内容 (only when the page has more than one table: e.g. 对话消息 · 失败的回复 · 调用记录 · 分享链接) · 格式 (**Excel（.xlsx）** · **CSV**) · 表格 (CSV only) · 范围 (开始日期 至 结束日期 **UTC+8**, empty = 不限; or 7 天 · 30 天 · 90 天 on 总览 and 消耗表) · the page's own filters (回复写法 · 模型 · 状态 · 玩家 · 供应商) · 取消 · 导出 (while saving: 导出中 2 / 3) |
+| after | 已导出 N 行。 / 已导出 N 行，分成 M 个文件。 |
+| refusal | 这次导出的行数太多，请缩小日期范围，或加上筛选。 (`EXPORT_TOO_LARGE`) |
+| tables | 每条消息 · 按对话汇总 · 失败的回复 · 模型调用 · 外部调用 · 向量调用 · 结果未知的调用 · 每日统计 · 每小时 · 消耗明细 · 按玩家类型 · 批次 · 邀请码 · 额度 · 预演轮次 · 对话 · 评分. A CSV file name carries an ASCII word for its table (`messages`, `summary`, `hourly` …). No explanation line: hover tips only. |
