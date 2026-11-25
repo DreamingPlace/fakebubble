@@ -48,6 +48,7 @@ import { characterAdminError } from './character-workbench.ts';
 import { disclosureChevron } from './ui/disclosure.ts';
 import { h } from '../cocreation/h.ts';
 import { exactCount, hoverValue } from './ui/hover-value.ts';
+import type { MakeExport } from './export/export-dialog.ts';
 import { fillStatus, pageHead } from './ui/page-head.ts';
 import { dot } from './cast/cast-ui.ts';
 import { rosterColours } from './ui/character-colour.ts';
@@ -103,6 +104,8 @@ type Deps = {
   leaveMs?: number;
   /** A fresh request id (adoption, 整理, 生成); default: crypto.randomUUID. */
   newId?: () => string;
+  /** Part 57: the page's 导出 button (the notes under the filters on screen; without it there is none). */
+  makeExport?: MakeExport;
 };
 
 type Template = { persona?: string; authorCanon?: { settings?: Record<string, unknown> } } & Record<string, unknown>;
@@ -266,8 +269,24 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           },
         )
       : null;
+  // Part 57: 导出 respects the character, status, star and search on screen. Anonymous codes only: the server never reads an id.
+  const exportButton = deps.makeExport?.(() => [
+    {
+      id: 'cocreation',
+      label: '共创收件箱',
+      kind: 'cocreation',
+      range: 'none',
+      filters: () => ({
+        ...(filter.characterId ? { characterId: filter.characterId } : {}),
+        ...(filter.status ? { status: filter.status } : {}),
+        ...(filter.starred ? { starred: true } : {}),
+        ...(filter.query.trim() ? { query: filter.query.trim() } : {}),
+      }),
+      tip: '每条笔记的每个回答一行：卡片、题目、内容、状态、是否采纳和积分；玩家只显示匿名代号',
+    },
+  ]);
   root.replaceChildren(
-    pageHead('共创收件箱', switcher?.root, viewStatus, counts, bulk),
+    pageHead('共创收件箱', switcher?.root, viewStatus, counts, bulk, exportButton),
     layout,
     ...(relations ? [viewHost] : []),
     ...(wordings ? [wordingsHost] : []),

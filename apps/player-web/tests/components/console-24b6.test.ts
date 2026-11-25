@@ -69,9 +69,13 @@ function mount(t: test.TestContext, o: { stats?: boolean; chart?: boolean; empty
   const root = doc.createElement('div') as unknown as HTMLElement;
   const loads: StatsRange[] = [];
   const charts: [ChartMetric, ChartRange][] = [];
-  const exports: StatsRange[] = [];
-  const saved: [string, string][] = [];
+  // Part 57: the page's 导出 button is made by the page; the view only describes what it can export.
+  const exportChoices: unknown[][] = [];
   const api = overviewView(root, {
+    makeExport: (choices) => {
+      exportChoices.push([...choices()]);
+      return doc.createElement('button') as unknown as HTMLButtonElement;
+    },
     load: async () => ({
       day: '2026-11-20',
       today: { replies: 12, voiceReplies: 9, failedReplies: 1, spendMicros: 2_500_000 },
@@ -95,11 +99,6 @@ function mount(t: test.TestContext, o: { stats?: boolean; chart?: boolean; empty
                 ? { ...players(range), since: null, days: [], byCharacter: [], byModel: [] }
                 : players(range);
             },
-            exportCsv: async (range: StatsRange) => {
-              exports.push(range);
-              return { csv: '﻿a,b\r\n', rows: 2 };
-            },
-            download: (name: string, body: string) => void saved.push([name, body]),
           },
         }),
     ...(o.chart === false
@@ -113,7 +112,7 @@ function mount(t: test.TestContext, o: { stats?: boolean; chart?: boolean; empty
           },
         }),
   });
-  return { root, api, loads, charts, exports, saved };
+  return { root, api, loads, charts, exportChoices };
 }
 
 // Supersedes console-24b-1 "总览: one chart card; metric, range and view switch" (14天 range and 表格 view are gone).
@@ -172,18 +171,23 @@ test('24b-6 总览: the 按天 table is newest first with a 合计 row, retentio
   assert.match(text(one(f.root, '.head-status')), /UTC 2026-11-20/);
 });
 
-test('24b-6 总览: 导出表格 saves the CSV of the range that is showing; eight tiles', async (t) => {
+test('24b-6 总览: 导出 is the page-wide button (Part 57): the statistics, a range of days, every table; eight tiles', async (t) => {
   const f = mount(t);
   await f.api.load();
   assert.equal(all(f.root, '.ov-tile').length, 8);
-  press(f.root, '时间范围', '90天');
-  await flush();
-  all(f.root, 'button')
-    .find((b) => b.textContent === '导出表格')!
-    .click();
-  await flush();
-  assert.deepEqual(f.exports, [90]);
-  assert.deepEqual(f.saved, [['玩家统计-最近90天.csv', '﻿a,b\r\n']]);
+  // the dialog reads the choices when it opens, so it always sees the page as it is then
+  assert.deepEqual(f.exportChoices, [
+    [
+      {
+        id: 'stats',
+        label: '统计',
+        kind: 'stats',
+        range: 'days',
+        sheets: ['每日统计', '按角色', '按模型', '每小时', '每日消耗', '消耗明细', '按玩家类型'],
+        tip: '每天、每小时的回复和人数，以及消耗',
+      },
+    ],
+  ]);
 });
 
 test('24b-6 总览: no stats and no chart card without the clients or stats.read; the two numbers of today stay', async (t) => {

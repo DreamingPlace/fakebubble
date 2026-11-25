@@ -8,6 +8,8 @@ import type { ConfirmInPlace } from './ui/inline-confirm.ts';
 import { fillStatus, pageHead } from './ui/page-head.ts';
 import { markDirty } from './ui/unsaved.ts';
 import { statusBadge } from './ui/status-badge.ts';
+import type { MakeExport } from './export/export-dialog.ts';
+import { INVITE_SHEETS } from './export/export-sheets.ts';
 
 /** Limits the server enforces (BATCH_LIMITS in invites/web-invite-tiers.ts); the form only mirrors them. */
 export const TIER_FORM = Object.freeze({
@@ -59,6 +61,8 @@ export function editConfirmation(batch: InviteBatch, dailyAmount: number, cap: n
 }
 
 export interface InviteTiersDeps {
+  /** Part 57: the page's 导出 button (batches, masked codes, allowances; without it there is none). */
+  makeExport?: MakeExport | undefined;
   port: {
     inviteBatches?: () => Promise<InviteBatch[]>;
     inviteBatchDetail?: (batchId: string) => Promise<InviteBatchCode[]>;
@@ -223,7 +227,20 @@ export function inviteTiersView(root: HTMLElement, deps: InviteTiersDeps) {
   const detail = h('section', { class: 'tiers-detail', hidden: true });
   const status = h('span', { class: 'head-status' });
   root.replaceChildren(
-    pageHead('邀请与额度', status),
+    pageHead(
+      '邀请与额度',
+      status,
+      deps.makeExport?.(() => [
+        {
+          id: 'invites',
+          label: '邀请与额度',
+          kind: 'invites',
+          range: 'none',
+          sheets: INVITE_SHEETS,
+          tip: '批次、邀请码（始终遮住）和额度；没有玩家信息',
+        },
+      ]),
+    ),
     form,
     h(
       'div',

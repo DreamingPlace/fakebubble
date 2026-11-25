@@ -16,6 +16,7 @@ import { segmented } from './ui/segmented.ts';
 import { statusBadge, type BadgeTone } from './ui/status-badge.ts';
 import { assignColours } from './ui/character-colour.ts';
 import { exactMoney } from './ui/hover-value.ts';
+import type { MakeExport } from './export/export-dialog.ts';
 
 type Voice = { kind: 'generated' | 'uploaded'; takeId: string | 'keep'; durationMs: number; text: string | null };
 const STATE: Record<BroadcastRow['state'], { text: string; tone: BadgeTone }> = {
@@ -38,6 +39,8 @@ export function broadcastView(
   root: HTMLElement,
   deps: {
     api: BroadcastAdminClient;
+    /** Part 57: the page's 导出 button (the history, counts only; without it there is none). */
+    makeExport?: MakeExport;
     run: (work: () => Promise<void>) => Promise<void>;
     confirm: ConfirmInPlace;
     toast: (text: string) => void;
@@ -553,7 +556,19 @@ export function broadcastView(
   const charField = label('角色', '按首页顺序；只有在线的角色可选。每个角色各发一条。', allButton, characterBox);
   charField.className = 'bc-field bc-charfield';
   root.replaceChildren(
-    pageHead('广播', recipientsLine),
+    pageHead(
+      '广播',
+      recipientsLine,
+      deps.makeExport?.(() => [
+        {
+          id: 'broadcast',
+          label: '广播记录',
+          kind: 'broadcast',
+          range: 'none',
+          tip: '每次广播的状态、时间和人数；没有玩家，也没有消息内容',
+        },
+      ]),
+    ),
     h(
       'section',
       { class: 'bc-compose system-section' },
