@@ -180,7 +180,10 @@ test('durable character drafts, scoped authority and profile preview never mutat
   const newer = structuredClone(profile);
   newer.presentation.publicDescription = '新的草稿';
   await f.call(`${base}/wei-guagua/save`, member, { expectedRevision: 1, profile: newer });
-  await f.call(`${base}/wei-guagua/save`, owner, { expectedRevision: 1, profile }, 409);
+  // Part 55: a stale revision is merged unless the same field changed on both sides (here the 公开简介).
+  const clash = structuredClone(profile);
+  clash.presentation.publicDescription = '另一份草稿';
+  await f.call(`${base}/wei-guagua/save`, owner, { expectedRevision: 1, profile: clash }, 409);
   await f.call(`${base}/wei-guagua/preview`, owner, { expectedRevision: 1 }, 409);
   await f.call(`${API}/admin/members/permissions`, owner, { memberId: invite.memberId, permissions: [] });
   assert.equal((await f.call(`${API}/admin/session`, member)).member.id, invite.memberId);
