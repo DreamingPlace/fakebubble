@@ -828,6 +828,12 @@ export function previewWorkbench(root: HTMLElement, host: PreviewWorkbenchHost) 
       h('pre', { class: 'pw-pre', text: p.input ?? '' }),
       p.note ? h('p', { class: 'admin-hint', text: `备注：${p.note}` }) : (null as never),
     );
+    if (p.final?.plan)
+      section(
+        '她的想法（只有你看得到，玩家看不到）',
+        h('p', { class: 'pw-plan', text: `读到：${p.final.plan.read}` }),
+        h('p', { class: 'pw-plan', text: `想让对方感到：${p.final.plan.aim}` }),
+      );
     const draftTexts = p.draft?.bubbles?.map((b) => b.text) ?? [];
     const finalTexts = p.final?.bubbles.map((b) => b.text) ?? [];
     if (p.final) {
