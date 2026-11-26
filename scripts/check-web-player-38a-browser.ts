@@ -106,22 +106,51 @@ try {
     });
     let nextReplySize = 2;
     let lastBase: Msg = {};
-    await page.route('**/api/web/provider/characters/*/operations', async (route: any) => {
+    // Part 36 NAMED EXCEPTION: a message is a BUBBLE now (POST .../bubbles) and its reply is the turn it makes (GET .../turn, then the
+    // operation). The script answers both the way it answered the old operations route: only the first send reaches the real server
+    // (for the conversation id); every bubble is one turn with a reply of `nextReplySize` voice messages.
+    let openTurn: string | null = null;
+    await page.route('**/api/web/provider/characters/*/bubbles', async (route: any) => {
       if (route.request().method() !== 'POST') return route.fallback();
-      // Only the first send reaches the real server (it tells the conversation id); the offline provider never finishes a real
-      // operation, so asking it again would fill its queue.
       if (!conversationId) {
         const real = await route.fetch();
         const body = await real.json();
-        conversationId = body.operation.conversationId;
-        lastBase = body.operation;
+        conversationId = body.conversationId;
+        lastBase = {
+          ...lastBase,
+          conversationId,
+          requestId: 'r',
+          characterId: 'wei-guagua',
+          acceptedAt: 1,
+          deadlineAt: 9e12,
+          revision: 1,
+        };
       }
       if (submitDelay) await new Promise((r) => setTimeout(r, submitDelay));
       const operationId = reply(nextReplySize);
+      openTurn = operationId;
       await route.fulfill({
         status: 202,
         contentType: 'application/json',
-        body: JSON.stringify({ operation: operationOf(operationId, lastBase), duplicate: false }),
+        body: JSON.stringify({
+          messageId: `bubble-${operationId}`,
+          conversationId,
+          duplicate: false,
+          turn: { state: 'replying', dueAt: null, pending: 1, operationId, errorCode: null },
+        }),
+      });
+    });
+    await page.route('**/api/web/provider/characters/*/turn', async (route: any) => {
+      const operationId = openTurn;
+      openTurn = null;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          operationId
+            ? { state: 'replying', dueAt: null, pending: 0, operationId, errorCode: null }
+            : { state: 'idle', dueAt: null, pending: 0, operationId: null, errorCode: null },
+        ),
       });
     });
     await page.route('**/api/web/provider/operations/*', async (route: any) => {

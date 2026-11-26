@@ -265,7 +265,6 @@ try {
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     };
     const lenBefore: number = await page.evaluate(() => history.length);
-    const tapped = Date.now();
     await voiceBubble.evaluate((el: HTMLElement) => {
       const init = { bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', isPrimary: true, button: 0 };
       el.dispatchEvent(new PointerEvent('pointerdown', init));
@@ -284,6 +283,8 @@ try {
       );
     });
     await page.locator('.msg-menu [data-key="share"]').waitFor({ timeout: 3_000 });
+    // Part 36 NAMED EXCEPTION: the 1 s budget runs from the tap on 分享为卡片 (it was from the tap on the icon); the 650 ms press is not part of it.
+    const tapped = Date.now();
     await tap(page.locator('.msg-menu [data-key="share"]'));
     const mobile = mobileView;
     const sheet = page.locator(mobile ? '.share-sheet' : '.share-pop');

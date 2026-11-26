@@ -121,7 +121,8 @@ try {
     await page.locator('.card-slot.is-chat .send-button').click();
     await page.locator('.card-slot.is-chat .text-bubble', { hasText: '一开页面就验证' }).waitFor({ timeout: 20_000 });
     check(
-      stats.writes.some((w) => /operations/.test(w.call) && w.sessionsBefore >= 1),
+      // Part 36 NAMED EXCEPTION: a message is sent as a BUBBLE now (POST .../bubbles); it was POST .../operations.
+      stats.writes.some((w) => /operations|bubbles/.test(w.call) && w.sessionsBefore >= 1),
       'the message was sent, after the session',
     );
     if (shots) await page.screenshot({ path: `${shots}/chat-verify-50-phone-${CATALOG_HELD_MS}.png` });
