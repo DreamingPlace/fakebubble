@@ -4,6 +4,9 @@ import {
 } from '../../../../packages/contracts/cocreation-cards.ts';
 
 export type InboxStatus = 'new' | 'processed' | 'archived';
+/** Part 59: how an item was handled without being adopted. */
+export type ItemHow = 'rejected' | 'copied' | 'handled';
+const howOf = (v: unknown): ItemHow | null => (v === 'rejected' || v === 'copied' || v === 'handled' ? v : null);
 /** Part 24c: a note about one character (the cards), to the production team (留言条) or about the story between two characters. */
 export type InboxKind = 'character' | 'memo' | 'pair';
 const kindOf = (v: unknown): InboxKind => {
@@ -25,6 +28,9 @@ export type InboxItem = {
   pseudonym: string;
   answerCount: number;
   adoptedCount: number;
+  /** Part 59: the items of the note (its answers, and the reason of a two-person relation note) and how many are handled. */
+  itemCount: number;
+  handledCount: number;
   firstLine: string;
   status: InboxStatus;
   starred: boolean;
@@ -36,6 +42,8 @@ export type InboxAnswer = {
   targetField: CocreationTargetField;
   kind: 'text' | 'dialogue';
   adoptedAt: number | null;
+  /** Part 59: handled without an adoption: 不采纳 / 复制 / 标为已处理. */
+  handled?: ItemHow | null;
   /** Part 39b: the exact question the player was shown (theme answers only). */
   wording?: string;
 } & ({ kind: 'text'; text: string } | { kind: 'dialogue'; player: string; replies: string[] });
@@ -53,6 +61,9 @@ export type InboxDetail = {
   adminNote: string | null;
   processedAt: number | null;
   answers: InboxAnswer[];
+  /** Part 59 (absent on an older server: then every answer is an item and an adopted one is handled). */
+  itemCount?: number;
+  handledCount?: number;
 };
 export type InboxFilter = {
   characterId: string | null;
@@ -103,6 +114,8 @@ const item = (v: unknown): InboxItem => {
     pseudonym: string(r.pseudonym),
     answerCount: count(r.answerCount),
     adoptedCount: count(r.adoptedCount),
+    itemCount: r.itemCount === undefined ? count(r.answerCount) : count(r.itemCount),
+    handledCount: r.handledCount === undefined ? count(r.adoptedCount) : count(r.handledCount),
     firstLine: string(r.firstLine),
     status: status(r.status),
     starred: flag(r.starred),
@@ -118,6 +131,7 @@ const answer = (v: unknown): InboxAnswer => {
     cardId: string(r.cardId),
     targetField: field as CocreationTargetField,
     adoptedAt: r.adoptedAt === null ? null : count(r.adoptedAt),
+    handled: howOf(r.handled),
     ...(typeof r.wording === 'string' ? { wording: r.wording } : {}),
   };
   if (r.kind === 'text') return { ...base, kind: 'text', text: string(r.text) };
@@ -168,7 +182,17 @@ export class CocreationAdminClient {
       adminNote: r.adminNote === null ? null : string(r.adminNote),
       processedAt: r.processedAt === null ? null : count(r.processedAt),
       answers: rows(r.answers).map(answer),
+      ...(r.itemCount === undefined ? {} : { itemCount: count(r.itemCount) }),
+      ...(r.handledCount === undefined ? {} : { handledCount: count(r.handledCount) }),
     };
+  }
+  /**
+   * Part 59: 不采纳 / 复制 / 标为已处理 on ONE item (an answer's ordinal, or 'reason'); `how: null` takes the mark off. The note
+   * moves to 已处理 only when this was its last unhandled item; the answer says where it stands.
+   */
+  async markItem(id: string, item: number | 'reason', how: ItemHow | null) {
+    const r = object(await this.request('mark-item', { id, item, how }));
+    return { status: status(r.status), itemCount: count(r.itemCount), handledCount: count(r.handledCount) };
   }
   async setStatus(ids: string[], next: InboxStatus) {
     const r = object(await this.request('set-status', { ids, status: next }));
@@ -247,6 +271,8 @@ export type RelationDetail = {
   originalText: string;
   excluded: boolean;
   decision: 'adopted' | 'rejected' | null;
+  /** Part 59: how the reason was handled (adopted as the pair's 关系注解, or marked), or null. */
+  reasonMark?: 'adopted' | ItemHow | null;
   match: RelationMatch | null;
   /** The cast limit that would refuse an adoption right now, as its code (null: none). */
   blocked: string | null;
@@ -312,6 +338,7 @@ export class CocreationRelationsClient {
       originalText: string(r.originalText),
       excluded: flag(r.excluded),
       decision: r.decision === null ? null : (string(r.decision) as 'adopted' | 'rejected'),
+      reasonMark: r.reasonMark === 'adopted' ? 'adopted' : howOf(r.reasonMark),
       match: match(r.match),
       blocked: r.blocked === null ? null : string(r.blocked),
       castRevision: r.castRevision === null ? null : count(r.castRevision),
@@ -356,6 +383,19 @@ export class CocreationRelationsClient {
       joined: flag(r.joined),
       castRevision: count(r.castRevision),
       duplicate: flag(r.duplicate),
+    };
+  }
+  /**
+   * Part 59: 采纳 of the players' REASON as the 关系注解 of the pair in the cast draft (never the story; the story is adopted on its
+   * own). Idempotent per request id; written at the draft's current revision; never published.
+   */
+  async adoptReason(input: { id: string; requestId: string; text: string }) {
+    const r = object(await this.request('relation/adopt-reason', input));
+    return {
+      id: string(r.id),
+      status: status(r.status),
+      duplicate: flag(r.duplicate),
+      castRevision: r.castRevision === null ? null : count(r.castRevision),
     };
   }
   /** 整理: one budgeted call; the answer only fills the edit box. */

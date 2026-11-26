@@ -71,6 +71,7 @@ import {
   reauthUrl,
 } from '../../services/admin-connection.ts';
 import { clearAllKeptEdits } from './ui/edit-keeper.ts';
+import { keepScroll } from './ui/keep-scroll.ts';
 
 type Port = Pick<
   AccountAdminApi,
@@ -289,6 +290,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   const q = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
   // Part 24b-7c: every single-line field gets its width class (docs/ADMIN_LAYOUT.md); layout only.
   const stopFieldWidths = watchFieldWidths(root);
+  // Part 59: no click moves the page: every scroller of the console keeps its position through a repaint (ui/keep-scroll.ts).
+  const scroll = keepScroll(root);
   const value = (id: string) => q<HTMLInputElement>(`#${id}`).value;
   const statusLine = q<HTMLElement>('.invite-admin-status');
   // Feedback appears where it happened, one message at a time (the toast), and stays readable by a screen reader in the live
@@ -541,7 +544,9 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     closeMenu();
     if (target === 'characters') picker.select(routeId);
     render();
-    q<HTMLElement>('.admin-content').focus();
+    // Another page is opened on purpose: it starts at the top. (preventScroll: focusing must not scroll by itself.)
+    scroll.reset();
+    q<HTMLElement>('.admin-content').focus({ preventScroll: true });
     const route = here();
     if (route) {
       if (options.replaceUrl) address.replace(route);
@@ -1441,6 +1446,7 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     inbox?.dispose();
     for (const cleanup of cleanups) cleanup();
     stopFieldWidths();
+    scroll.stop();
     root.replaceChildren();
   };
 }

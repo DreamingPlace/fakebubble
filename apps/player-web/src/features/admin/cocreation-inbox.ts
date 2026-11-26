@@ -67,7 +67,7 @@ import type {
 
 type Deps = {
   api: Pick<CocreationAdminClient, 'list' | 'detail' | 'setStatus' | 'star' | 'note' | 'adopt'> &
-    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory' | 'adoptAnswers'>>;
+    Partial<Pick<CocreationAdminClient, 'unadopt' | 'addToCastStory' | 'adoptAnswers' | 'markItem'>>;
   /** Part 24c: whether the cast draft can be read (cast.read); without it 加入关系与故事 is not shown. The revision itself is never sent (Part 55). */
   castRevision?: () => Promise<number>;
   /** cast.edit (or the owner): without it 加入关系与故事 is disabled. Default: allowed. */
@@ -98,7 +98,10 @@ type Deps = {
   /** The points a player gets when a note is adopted (积分发放 → 共创积分); shown as 采用 +N when known. */
   adoptPoints?: () => Promise<number | null>;
   /** Part 39: relation notes (two to eight characters): the panel in the detail and the view 玩家眼中的关系. Absent = neither exists. */
-  relations?: Pick<CocreationRelationsClient, 'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy'>;
+  relations?: Pick<
+    CocreationRelationsClient,
+    'detail' | 'stats' | 'adopt' | 'reject' | 'exclude' | 'tidy' | 'adoptReason'
+  >;
   /** Part 39b: 题目, the wording pool of the themes (a third view of this page). Absent = no such view. */
   wordings?: Pick<CocreationWordingsClient, 'list' | 'add' | 'edit' | 'toggle' | 'remove' | 'estimate' | 'generate'> &
     Partial<Pick<CocreationWordingsClient, 'setEnabled'>>;
@@ -350,7 +353,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     bulk.hidden = archiveSelected.hidden || showing !== 'inbox';
     counts.hidden = !bulk.hidden || showing !== 'inbox';
     archiveSelected.textContent = `归档所选（${selected.size}）`;
-    processSelected.textContent = `标为已处理（${selected.size}）`;
+    processSelected.textContent = `整条标为已处理（${selected.size}）`;
     bulkCount.textContent = `已选 ${selected.size} 条`;
     fillStatus(
       counts,
@@ -409,8 +412,9 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           item.kind === 'pair' && item.decision === 'rejected' ? h('span', { class: 'cc-chip', text: '不采纳' }) : null,
           item.kind === 'pair' && item.excluded ? h('span', { class: 'cc-chip', text: '不计入' }) : null,
           h('span', { class: 'cc-count', text: `${item.answerCount} 条` }),
-          item.adoptedCount > 0
-            ? h('span', { class: 'cc-chip', text: `已采用 ${item.adoptedCount}/${item.answerCount}` })
+          // Part 59: the note stays in 新 until every item is handled; the chip says how far it is.
+          item.status !== 'processed' && item.handledCount > 0 && item.handledCount < item.itemCount
+            ? h('span', { class: 'cc-chip cc-chip-progress', text: `已处理 ${item.handledCount}/${item.itemCount}` })
             : null,
           h('span', { class: 'cc-spacer' }),
           item.starred
@@ -520,6 +524,36 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     items = items.map((item) => (item.id === id ? { ...item, ...change } : item));
   };
   const changed = () => deps.onChanged?.();
+  /**
+   * Part 59: handling is PER ITEM and the SERVER says where a note stands: after any item changed (采纳, 不采纳, 复制, 标为已处理, a
+   * reason) the note is read again, and only a note whose every item is handled leaves 新. (Before, the first 采纳 moved the whole
+   * note, hiding the items nobody had handled.)
+   */
+  const resync = async (id: string) => {
+    try {
+      const fresh = await deps.api.detail(id);
+      if (gone || deps.disposed()) return;
+      patchItem(id, {
+        status: fresh.status,
+        adoptedCount: fresh.answers.filter((a) => a.adoptedAt !== null).length,
+        ...(fresh.itemCount === undefined ? {} : { itemCount: fresh.itemCount }),
+        ...(fresh.handledCount === undefined ? {} : { handledCount: fresh.handledCount }),
+      });
+      if (detail?.id === id) detail = fresh;
+      renderList();
+      renderDetail();
+      void leaveList([id]);
+      changed();
+    } catch {
+      /* the next open of the note reads it again */
+    }
+  };
+  const markItem = (current: InboxDetail, ordinal: number, how: 'rejected' | 'copied' | 'handled' | null) =>
+    deps.run(async () => {
+      if (!deps.api.markItem) return;
+      await deps.api.markItem(current.id, ordinal, how);
+      await resync(current.id);
+    });
 
   const setStatus = (ids: string[], status: InboxStatus) =>
     deps.run(async () => {
@@ -969,19 +1003,19 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
         if (adoptedNow) {
           detail = {
             ...current,
-            status: 'processed',
             answers: current.answers.map((e) => (e.ordinal === answer.ordinal ? { ...e, adoptedAt: stamp } : e)),
           };
-          patchItem(current.id, {
-            status: 'processed',
-            adoptedCount: detail.answers.filter((a) => a.adoptedAt !== null).length,
-          });
+          patchItem(current.id, { adoptedCount: detail.answers.filter((a) => a.adoptedAt !== null).length });
           saved = { ordinal: answer.ordinal, revision: saved_.revision };
         }
         adoptError = '';
         renderList();
         renderDetail();
-        if (adoptedNow) changed();
+        if (adoptedNow) {
+          // Part 59: only the last unhandled item moves the note to 已处理 (the server says).
+          void resync(current.id);
+          changed();
+        }
         deps.status(
           adoptedNow
             ? `已加入草稿 ${saved_.revision}。尚未发布：请在“角色工作台”里预览，确认后再发布。`
@@ -1028,7 +1062,7 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       .map((status) => {
         const button = h('button', {
           class: `cc-set-${status}`,
-          text: status === 'processed' ? '标为已处理' : status === 'archived' ? '归档' : '恢复为新',
+          text: status === 'processed' ? '整条标为已处理' : status === 'archived' ? '归档' : '恢复为新',
           attrs: { type: 'button' },
         });
         button.disabled = !manage;
@@ -1089,7 +1123,27 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           ...group.answers.map((answer) => {
             const card = cocreationCard(answer.cardId);
             const copy = h('button', { text: '复制', attrs: { type: 'button' }, class: 'cc-copy' });
-            copy.addEventListener('click', () => void copyText(plain(answer, character)));
+            copy.addEventListener('click', () => {
+              void copyText(plain(answer, character)).then(() => {
+                // Part 59: 复制 is a way of handling the item.
+                if (manage && answer.adoptedAt === null && !answer.handled && deps.api.markItem)
+                  void deps.api.markItem(current.id, answer.ordinal, 'copied').then(
+                    () => resync(current.id),
+                    () => {},
+                  );
+              });
+            });
+            const reject = h('button', { text: '不采纳', attrs: { type: 'button' }, class: 'cc-item-reject' });
+            const done = h('button', { text: '标为已处理', attrs: { type: 'button' }, class: 'cc-item-done' });
+            const unmark = h('button', { text: '撤销标记', attrs: { type: 'button' }, class: 'cc-unmark' });
+            for (const button of [reject, done]) {
+              button.disabled = !manage || answer.adoptedAt !== null || !!answer.handled;
+              button.dataset.locked = String(button.disabled);
+            }
+            reject.addEventListener('click', () => void markItem(current, answer.ordinal, 'rejected'));
+            done.addEventListener('click', () => void markItem(current, answer.ordinal, 'handled'));
+            unmark.disabled = !manage;
+            unmark.addEventListener('click', () => void markItem(current, answer.ordinal, null));
             const add = h('button', { text: '+ 加入草稿 →', attrs: { type: 'button' }, class: 'cc-adopt-open' });
             // Part 24b-6, round 4: a note that is already adopted cannot be added again (the draft would carry it twice) until 取消采用.
             add.disabled = !manage || answer.adoptedAt !== null || inserted.has(`${current.id}:${answer.ordinal}`);
@@ -1174,7 +1228,20 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
                   : deps.canEditCharacter && !deps.canEditCharacter(current.characterId)
                     ? null
                     : profile,
+                deps.api.markItem && current.kind !== 'pair' && answer.adoptedAt === null && !answer.handled
+                  ? reject
+                  : null,
+                deps.api.markItem && current.kind !== 'pair' && answer.adoptedAt === null && !answer.handled
+                  ? done
+                  : null,
                 answer.adoptedAt !== null ? h('span', { class: 'cc-chip cc-chip-adopted', text: '已采用' }) : null,
+                answer.handled
+                  ? h('span', {
+                      class: 'cc-chip',
+                      text: { rejected: '不采纳', copied: '已复制', handled: '已处理' }[answer.handled],
+                    })
+                  : null,
+                answer.handled ? unmark : null,
                 answer.adoptedAt !== null && current.kind !== 'memo' ? undo : null,
               ),
             );
@@ -1219,6 +1286,9 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       host.replaceChildren(
         relationPanel(found, {
           api: deps.relations!,
+          markReason: async (how) => {
+            await deps.api.markItem?.(current.id, 'reason', how);
+          },
           nameOf,
           colour: colourOf(),
           canManage: deps.canManage,
@@ -1227,15 +1297,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           status: deps.status,
           newId,
           changed: (patch) => {
-            const settled =
-              patch.decision === 'adopted' ? 'processed' : patch.decision === 'rejected' ? 'archived' : null;
             relationCache.set(current.id, { ...(relationCache.get(current.id) ?? found), ...patch } as RelationDetail);
-            patchItem(current.id, { ...patch, ...(settled ? { status: settled } : {}) });
-            if (settled && detail?.id === current.id) detail = { ...detail, status: settled };
+            // The reason and the story are separate items: the server says where the note stands now (Part 59).
+            const { reasonMark: _mark, ...own } = patch;
+            patchItem(current.id, own);
             renderList();
-            if (settled) renderDetail();
-            if (settled) void leaveList([current.id]);
-            changed();
+            void resync(current.id);
           },
         }),
       );
@@ -1290,16 +1357,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     if (!detail || detail.id !== current.id) return;
     detail = {
       ...detail,
-      status: 'processed',
       answers: detail.answers.map((entry) => (entry.ordinal === ordinal ? { ...entry, adoptedAt: stamp } : entry)),
     };
-    patchItem(current.id, {
-      status: 'processed',
-      adoptedCount: detail.answers.filter((entry) => entry.adoptedAt !== null).length,
-    });
+    patchItem(current.id, { adoptedCount: detail.answers.filter((entry) => entry.adoptedAt !== null).length });
     renderList();
     renderDetail();
-    void leaveList([current.id]);
+    // The server decides whether that was the last unhandled item.
+    void resync(current.id);
     deps.onChanged?.();
   }
 
@@ -1350,14 +1414,12 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       const item = items.find((entry) => entry.id === id);
       relationCache.delete(id);
       patchItem(id, {
-        status: 'processed',
         adoptedCount: Math.max(item?.adoptedCount ?? 0, okCount),
         ...(item?.kind === 'pair' ? { decision: 'adopted' as const } : {}),
       });
       if (detail?.id === id)
         detail = {
           ...detail,
-          status: 'processed',
           answers: detail.answers.map((answer) =>
             mine.some((result) => result.ok && result.ordinal === answer.ordinal) && answer.adoptedAt === null
               ? { ...answer, adoptedAt: stamp }
@@ -1365,8 +1427,10 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
           ),
         };
     }
+    // Part 59: per item. The server says which notes are now fully handled (those leave 新); the others stay with their count.
+    for (const id of settled) await resync(id);
     const failed = results.filter((result) => !result.ok);
-    return { results, settled: [...settled], failed };
+    return { results, settled: [], failed };
   }
   const finishAdopt = (outcome: Awaited<ReturnType<typeof adoptAnswers>>, extra: string[] = []) => {
     const done = outcome.results.filter((result) => result.ok && result.duplicate !== true).length;

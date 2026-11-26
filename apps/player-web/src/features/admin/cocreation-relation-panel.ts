@@ -9,7 +9,7 @@ import {
   RELATION_TEXT_MAX,
 } from '../../../../../packages/contracts/cocreation-relations.ts';
 import { CAST_LIMITS } from '../../../../../packages/contracts/web-cast.ts';
-import type { CocreationRelationsClient, RelationDetail } from '../../services/cocreation-admin-api.ts';
+import type { CocreationRelationsClient, ItemHow, RelationDetail } from '../../services/cocreation-admin-api.ts';
 import { h } from '../cocreation/h.ts';
 import { dot } from './cast/cast-ui.ts';
 import { sentenceOf } from './ui/error-line.ts';
@@ -19,7 +19,10 @@ import { paidButton } from './ui/paid-button.ts';
 import { statusBadge } from './ui/status-badge.ts';
 
 export type RelationPanelDeps = {
-  api: Pick<CocreationRelationsClient, 'adopt' | 'reject' | 'exclude' | 'tidy'>;
+  api: Pick<CocreationRelationsClient, 'adopt' | 'reject' | 'exclude' | 'tidy'> &
+    Partial<Pick<CocreationRelationsClient, 'adoptReason'>>;
+  /** Part 59: marks the players' reason 不采纳 / 复制 / 标为已处理 (null takes the mark off). */
+  markReason?: (how: ItemHow | null) => Promise<void>;
   nameOf: (id: string) => string;
   colour: (id: string) => string;
   canManage: () => boolean;
@@ -27,7 +30,11 @@ export type RelationPanelDeps = {
   run: (work: () => Promise<void>) => Promise<void>;
   status: (text: string) => void;
   /** The note changed (decision / 不计入): the list card follows. */
-  changed: (patch: { decision?: 'adopted' | 'rejected' | null; excluded?: boolean }) => void;
+  changed: (patch: {
+    decision?: 'adopted' | 'rejected' | null;
+    excluded?: boolean;
+    reasonMark?: 'adopted' | ItemHow | null;
+  }) => void;
   newId: () => string;
 };
 
@@ -78,8 +85,130 @@ export function relationPanel(initial: RelationDetail, deps: RelationPanelDeps):
         ),
       )
     : null;
+  // Part 59: the players' REASON is its own item. It can be adopted as the 关系注解 of this pair in the cast draft (how fans see the
+  // two), marked 不采纳 / 已处理, and it never adopts or rejects the story below (nor the story the reason).
+  const reasonBox = h('textarea', {
+    class: 'cr-reason-box',
+    attrs: { 'aria-label': '关系注解', 'data-reason-note': '' },
+  });
+  reasonBox.value = detail.reason ?? '';
+  growBox(reasonBox, 'para', { multiline: true });
+  const reasonCount = h('span', { class: 'cr-count is-mono' });
+  const reasonError = h('p', { class: 'cr-error', attrs: { role: 'alert' }, hidden: true });
+  const reasonAdopt = h('button', { class: 'cr-reason-adopt', text: '采纳为关系注解', attrs: { type: 'button' } });
+  const reasonReject = h('button', { class: 'cr-reason-reject', text: '不采纳', attrs: { type: 'button' } });
+  const reasonDone = h('button', { class: 'cr-reason-done', text: '标为已处理', attrs: { type: 'button' } });
+  const reasonUndo = h('button', { class: 'cr-reason-undo', text: '撤销标记', attrs: { type: 'button' } });
+  const reasonMarked = h('span', { class: 'cr-decided' });
+  const REASON_MARK: Record<string, string> = {
+    adopted: '已采纳为关系注解',
+    rejected: '不采纳',
+    copied: '已复制',
+    handled: '已处理',
+  };
+  const reasonLimit = CAST_LIMITS.pairNote;
+  const paintReason = () => {
+    const mark = detail.reasonMark ?? null;
+    const length = [...reasonBox.value].length;
+    reasonCount.textContent = `${length}/${reasonLimit}`;
+    reasonCount.dataset.over = String(length > reasonLimit);
+    reasonMarked.replaceChildren(
+      ...(mark ? [statusBadge(REASON_MARK[mark] ?? '已处理', mark === 'adopted' ? 'ok' : 'neutral')] : []),
+    );
+    reasonAdopt.disabled =
+      busy || !mayAdopt || mark === 'adopted' || reasonBox.value.trim() === '' || length > reasonLimit;
+    reasonAdopt.dataset.locked = String(reasonAdopt.disabled);
+    for (const button of [reasonReject, reasonDone]) {
+      button.disabled = busy || !manage || mark !== null;
+      button.dataset.locked = String(button.disabled);
+    }
+    reasonUndo.hidden = mark === null || mark === 'adopted';
+    reasonUndo.disabled = busy || !manage;
+    reasonUndo.dataset.locked = String(reasonUndo.disabled);
+  };
+  const reasonRun = (work: () => Promise<void>) =>
+    void deps.run(async () => {
+      busy = true;
+      reasonError.hidden = true;
+      paintReason();
+      paint();
+      try {
+        await work();
+      } catch (caught) {
+        reasonError.textContent = RELATION_ADOPT_ERROR_TEXT[codeOf(caught)] ?? sentenceOf(codeOf(caught));
+        reasonError.hidden = false;
+      } finally {
+        busy = false;
+        paintReason();
+        paint();
+      }
+    });
+  reasonBox.addEventListener('input', () => {
+    reasonError.hidden = true;
+    paintReason();
+  });
+  reasonAdopt.addEventListener('click', () => {
+    if (reasonAdopt.disabled || !deps.api.adoptReason) return;
+    reasonRun(async () => {
+      const done = await deps.api.adoptReason!({ id: detail.id, requestId: deps.newId(), text: reasonBox.value });
+      detail = { ...detail, reasonMark: 'adopted' };
+      deps.changed({ reasonMark: 'adopted' });
+      deps.status(
+        done.castRevision === null
+          ? '这条理由已经采纳过了。'
+          : `已作为这一对的关系注解，写进世界设定草稿 ${done.castRevision}。尚未发布；故事没有被采纳。`,
+      );
+    });
+  });
+  for (const [button, how] of [
+    [reasonReject, 'rejected'],
+    [reasonDone, 'handled'],
+  ] as const)
+    button.addEventListener('click', () => {
+      if (button.disabled || !deps.markReason) return;
+      reasonRun(async () => {
+        await deps.markReason!(how);
+        detail = { ...detail, reasonMark: how };
+        deps.changed({ reasonMark: how });
+      });
+    });
+  reasonUndo.addEventListener('click', () => {
+    if (reasonUndo.disabled || !deps.markReason) return;
+    reasonRun(async () => {
+      await deps.markReason!(null);
+      detail = { ...detail, reasonMark: null };
+      deps.changed({ reasonMark: null });
+    });
+  });
   const reason = detail.reason
-    ? h('div', { class: 'cr-reason' }, h('span', { class: 'cr-label', text: '理由' }), h('p', { text: detail.reason }))
+    ? h(
+        'div',
+        { class: 'cr-reason', attrs: { 'data-reason': '' } },
+        h('span', { class: 'cr-label', text: '理由' }),
+        h('p', { class: 'cr-reason-text', text: detail.reason }),
+        manage
+          ? h(
+              'label',
+              { class: 'cr-story-wrap' },
+              h('span', { class: 'cr-label', text: '关系注解（这一对在玩家眼中的关系，会写进两位角色的名片）' }),
+              reasonBox,
+              reasonCount,
+            )
+          : null,
+        reasonError,
+        manage
+          ? h(
+              'div',
+              { class: 'cr-actions' },
+              reasonMarked,
+              reasonUndo,
+              h('span', { class: 'cc-spacer' }),
+              reasonReject,
+              reasonDone,
+              reasonAdopt,
+            )
+          : reasonMarked,
+      )
     : null;
 
   // ---- the story box ---------------------------------------------------------------------------------------------------
@@ -310,5 +439,6 @@ export function relationPanel(initial: RelationDetail, deps: RelationPanelDeps):
     ).filter((node): node is HTMLElement => node !== null),
   );
   paint();
+  paintReason();
   return root;
 }
