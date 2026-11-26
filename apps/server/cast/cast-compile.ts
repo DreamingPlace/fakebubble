@@ -128,13 +128,16 @@ function build(doc: CastDoc, characterId: string): Parts {
   const relations: CastView['relations'] = [];
   for (const id of targets) {
     const direction = doc.directions.find((d) => d.from === characterId && d.to === id);
+    // Part 59: the pair's 关系注解 (an unordered pair), shown to both of its characters.
+    const note = doc.pairNotes?.find((n) => (n.a === characterId && n.b === id) || (n.b === characterId && n.a === id));
     const rating = ratingRow[id];
-    if (rating === undefined && !direction) continue;
+    if (rating === undefined && !direction && !note) continue;
     relations.push({
       to: nameOf(id),
       ...(rating === undefined ? {} : { rating }),
       ...(direction?.addresses.length ? { addresses: direction.addresses.map((a) => a.text) } : {}),
       ...(direction?.treatment ? { treatment: direction.treatment } : {}),
+      ...(note ? { note: note.text } : {}),
     });
     ratings.push(rating ?? null);
   }

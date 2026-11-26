@@ -160,13 +160,16 @@ test('co-creation over real HTTP: open to every session, idempotent, limited per
   assert.ok(!/@|principal|player-|world-/.test(JSON.stringify([listing, guestDetail])), 'no email or id for a guest');
   // Part 24c (named exception): the detail now also says what kind of note it is ('character' | 'memo' | 'pair') and, for a pair, the
   // other character; nothing else about the player is added.
+  // Part 59 (named exception): and two counts, `itemCount` and `handledCount` (items of the note and how many are handled).
   assert.deepEqual(Object.keys(detail).sort(), [
     'adminNote',
     'answers',
     'batch',
     'characterId',
     'createdAt',
+    'handledCount',
     'id',
+    'itemCount',
     'kind',
     'partnerId',
     'processedAt',

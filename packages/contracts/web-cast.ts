@@ -92,6 +92,9 @@ export const CAST_LIMITS = Object.freeze({
   addresses: 6,
   address: 16,
   treatment: 100,
+  /** Part 59: 关系注解 of one pair (how fans see them); at most pairNotes entries, one per unordered pair. */
+  pairNote: 200,
+  pairNotes: 400,
   /** Document totals. 180 is 15 characters x 12 aliases, so it only binds if the character cap is ever raised; 1,200 binds. */
   aliasesTotal: 180,
   addressesTotal: 1_200,
@@ -209,6 +212,16 @@ export interface CastDirection {
   addresses: CastText[];
   treatment: string;
 }
+/**
+ * Part 59: 关系注解 - one note about an UNORDERED pair (a, b), e.g. the reason players give for two characters' relation. Optional in
+ * the document (no migration, no schema bump: a document without it is unchanged); it reaches the cast view of both characters.
+ */
+export interface CastPairNote {
+  id: string;
+  a: string;
+  b: string;
+  text: string;
+}
 export interface CastGroupStory {
   id: string;
   title: string;
@@ -263,6 +276,8 @@ export interface CastDoc {
   groups: CastGroup[];
   stories: CastStory[];
   memes: CastMeme[];
+  /** Part 59 (optional): 关系注解 of pairs. */
+  pairNotes?: CastPairNote[];
 }
 
 export interface CastIssue {
@@ -306,7 +321,7 @@ export interface CastView {
     aliases: { text: string; kind: string; attitude: CastAliasAttitude }[];
   };
   others: CastCard[];
-  relations: { to: string; rating?: number; addresses?: string[]; treatment?: string }[];
+  relations: { to: string; rating?: number; addresses?: string[]; treatment?: string; note?: string }[];
   groups: {
     name: string;
     members: string[];

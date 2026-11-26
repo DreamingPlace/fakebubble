@@ -7,7 +7,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { ensure } from '../../../packages/domain/errors.ts';
 import type { Clock } from '../../../packages/contracts/index.ts';
 import type { BusinessStore } from '../platform/store-contract.ts';
-import { WebInviteAdmin } from '../invites/web-invite-admin.ts';
+import { ADMIN_IDLE_MS, WebInviteAdmin } from '../invites/web-invite-admin.ts';
 import { installWebAdminSchema } from './web-admin-schema.ts';
 import { normalizeEmail, maskEmail } from '../identity/email-address.ts';
 import { adminPasswords, validateAdminPassword, validateAdminLoginPassword } from './web-admin-password.ts';
@@ -484,7 +484,7 @@ export class WebAccountAdmin extends WebInviteAdmin {
       now,
       memberId,
     );
-    this.db.run('INSERT INTO admin_sessions VALUES (?,?,?,?,NULL)', id, hash(cookie), now, now + 8 * 60 * 60_000);
+    this.db.run('INSERT INTO admin_sessions VALUES (?,?,?,?,NULL)', id, hash(cookie), now, now + ADMIN_IDLE_MS);
     this.db.run('INSERT INTO web_admin_session_members VALUES (?,?)', id, memberId);
     return { cookie, ...this.session(cookie) };
   }

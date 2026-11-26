@@ -59,6 +59,12 @@ export function purgeCocreation(
   if (where.length === 0) throw new Error('COCREATION_PURGE_SCOPE_REQUIRED');
   const condition = where.join(' AND ');
   purgeRelations(store, condition, args);
+  // Part 59: the per-item marks go with their submission.
+  if (store.get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='web_cocreation_marks_schema'"))
+    store.run(
+      `DELETE FROM web_cocreation_item_marks WHERE submission_id IN (SELECT id FROM web_cocreation_submissions WHERE ${condition})`,
+      ...args,
+    );
   // Part 39b: the wording a player was shown goes with the answer; a deleted character's pool goes with it (the generation ledger holds no text).
   if (wordingsExist(store)) {
     store.run(

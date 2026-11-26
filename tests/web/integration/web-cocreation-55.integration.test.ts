@@ -257,10 +257,13 @@ test('55: adopt 20 answers one after another, with a publish in between: no conf
   );
   assert.ok(again.every((r) => r.ok && r.duplicate === true));
   list.forEach((entry, n) => assert.equal(s.f.balance(owner(n)), before.get(entry.item.id)! + 20));
-  // Every note left 新.
-  assert.equal(
-    s.f.store.get<{ n: number }>("SELECT count(*) n FROM web_cocreation_submissions WHERE status='new'")!.n,
-    0,
+  // Part 59 (named exception): handling is per ITEM. Every character note left 新; the two relation notes adopted their story,
+  // but each also carries a player's reason, an item nobody handled yet, so they stay in 新 until it is.
+  assert.deepEqual(
+    s.f.store.all<{ id: string; reason: string | null }>(
+      "SELECT s.id,r.reason FROM web_cocreation_submissions s LEFT JOIN web_cocreation_relations r ON r.submission_id=s.id WHERE s.status='new'",
+    ).map((row) => row.reason !== null && row.reason !== ''),
+    [true, true],
   );
 });
 
