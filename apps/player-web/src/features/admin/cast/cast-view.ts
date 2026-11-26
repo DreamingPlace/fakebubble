@@ -144,6 +144,9 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     /** The workbench roster (角色工作台): the fixed grid, with each display name. */
     roster: [] as string[],
     rosterNames: new Map<string, string>(),
+    /** Part 59: the characters that are not live (not launched yet, or delisted), and whether they are shown. */
+    offline: new Set<string>(),
+    showOffline: false,
     /** A chosen cast file and what importing it would do; the server saved nothing yet. */
     importing: null as { file: unknown; preview: CastImportPreview; requestId: string } | null,
   };
@@ -176,6 +179,35 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     world: h('section', { class: 'cs-card cs-world-card' }),
   };
   const side = h('div', { class: 'cs-side' }, frame.pair, frame.sees);
+  // Part 59: ONE compact 「版本」 control in the title row. It opens a popover (over the page, never in its flow) holding the draft
+  // number, the version list with 恢复 and the file actions: no bar about versions ever sits above the content.
+  const versionsButton = h('button', {
+    class: 'cs-versions-btn cs-quiet',
+    text: '版本',
+    attrs: { type: 'button', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'data-versions-button': '' },
+  });
+  const versionsPop = h(
+    'div',
+    { class: 'cs-versions-pop', hidden: true, attrs: { role: 'dialog', 'aria-label': '版本' } },
+    frame.versions,
+  );
+  const versionsWrap = h('span', { class: 'cs-versions-wrap' }, versionsButton, versionsPop);
+  const setVersionsOpen = (open: boolean) => {
+    versionsPop.hidden = !open;
+    versionsButton.setAttribute('aria-expanded', String(open));
+  };
+  versionsButton.addEventListener('click', () => setVersionsOpen(versionsPop.hidden));
+  const closeVersionsOutside = (event: Event) => {
+    if (!versionsPop.hidden && !versionsWrap.contains(event.target as Node)) setVersionsOpen(false);
+  };
+  const closeVersionsKey = (event: Event) => {
+    if ((event as KeyboardEvent).key === 'Escape' && !versionsPop.hidden) {
+      setVersionsOpen(false);
+      versionsButton.focus({ preventScroll: true });
+    }
+  };
+  document.addEventListener('pointerdown', closeVersionsOutside, true);
+  document.addEventListener('keydown', closeVersionsKey);
   const head = h('span', { class: 'cs-head-right' });
   const title = pageHead('关系与故事', head);
   const half = svgNode('svg', { class: 'cs-defs', width: '0', height: '0', 'aria-hidden': 'true' });
@@ -193,7 +225,6 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     { class: 'cs' },
     half,
     title,
-    frame.versions,
     frame.confirm,
     frame.notice,
     frame.start,
@@ -218,7 +249,12 @@ export function castView(root: HTMLElement, host: CastViewHost) {
   const ids = () => {
     const doc = state.doc;
     const own = doc ? doc.characters.map((c) => c.characterId) : [];
-    return [...new Set([...state.roster, ...own])];
+    const all = [...new Set([...state.roster, ...own])];
+    // Part 59: offline characters are hidden from the grid and every picker by default; their data stays in the document untouched
+    // (the document is never filtered, so a save sends them back exactly as they were). The one being looked at is never hidden.
+    return state.showOffline
+      ? all
+      : all.filter((id) => !state.offline.has(id) || id === state.sel || !!state.pair?.includes(id));
   };
   const nameFor = (id: string) =>
     state.doc && state.doc.characters.some((c) => c.characterId === id)
@@ -347,6 +383,23 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       state.dirty ? h('span', { class: 'is-warn', text: changes > 0 ? unsavedText(changes) : '有没保存的修改' }) : null,
     );
     head.append(status);
+    if (state.offline.size) {
+      const toggle = h('button', {
+        class: 'cs-quiet cs-offline-toggle',
+        text: '显示未上线',
+        attrs: { type: 'button', 'aria-pressed': String(state.showOffline), 'data-offline-toggle': '' },
+      });
+      hoverValue(
+        toggle,
+        `未上线或已下线的角色（${state.offline.size} 个）：开着就在格子和选择里列出来；它们的内容不会被改动`,
+      );
+      toggle.addEventListener('click', () => {
+        state.showOffline = !state.showOffline;
+        paintAll();
+      });
+      head.append(toggle);
+    }
+    head.append(versionsWrap);
     if (canEdit()) {
       const save = h('button', { class: 'cs-save', text: '保存草稿', attrs: { type: 'button' } });
       lock(save, !state.dirty);
@@ -606,9 +659,15 @@ export function castView(root: HTMLElement, host: CastViewHost) {
       const order = await (host.characters as { homeOrder?: () => Promise<string[]> }).homeOrder?.().catch(() => []);
       state.roster = consoleOrder(roster.characters, order ?? []).map((c) => c.characterId);
       state.rosterNames = new Map(roster.characters.map((c) => [c.characterId, c.displayName]));
+      state.offline = new Set(
+        roster.characters
+          .filter((c) => (c.group ? c.group !== 'live' : c.publishedVersion === null || c.online === false))
+          .map((c) => c.characterId),
+      );
     } catch {
       state.roster = [];
       state.rosterNames = new Map();
+      state.offline = new Set();
     }
   }
   async function load() {
@@ -979,6 +1038,8 @@ export function castView(root: HTMLElement, host: CastViewHost) {
     /** Unsaved edits block leaving the page the same way an unsaved character does. */
     canLeave: () => !state.dirty,
     dispose() {
+      document.removeEventListener('pointerdown', closeVersionsOutside, true);
+      document.removeEventListener('keydown', closeVersionsKey);
       writer.flush();
       writer.stop();
       disposed = true;

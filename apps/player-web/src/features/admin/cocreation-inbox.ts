@@ -145,6 +145,11 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
   let saved: { ordinal: number; revision: number } | null = null;
   const drafts = new Map<string, Promise<Target | null>>();
   let adoptPoints: number | null | undefined;
+  /** Part 59: the characters that are not live, and whether their notes are shown. */
+  let offlineIds = new Set<string>();
+  let showOffline = false;
+  const involved = (item: InboxItem) => [item.characterId, item.partnerId ?? '', ...(item.memberIds ?? [])];
+  const visible = (item: InboxItem) => showOffline || !involved(item).some((id) => offlineIds.has(id));
 
   const nameOf = (id: string) => names[id] ?? id;
   /** The dot of a character: the same colour as in 角色工作台 and 关系与故事. */
@@ -158,6 +163,13 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     class: 'cc-filter-chip cc-star-filter',
     text: '★ 只看星标',
     attrs: { type: 'button', 'aria-pressed': 'false' },
+  });
+  // Part 59: notes about a character that is not live (not launched yet, or delisted) are hidden unless this is on.
+  const offlineChip = h('button', {
+    class: 'cc-filter-chip cc-offline-filter',
+    text: '显示未上线',
+    attrs: { type: 'button', 'aria-pressed': 'false' },
+    hidden: true,
   });
   const query = h('input', {
     attrs: {
@@ -217,7 +229,15 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       'div',
       { class: 'cc-toolbar' },
       characterChips,
-      h('div', { class: 'cc-chip-row' }, statusChips, starChip, ...(deps.api.adoptAnswers ? [selectAll] : []), query),
+      h(
+        'div',
+        { class: 'cc-chip-row' },
+        statusChips,
+        starChip,
+        offlineChip,
+        ...(deps.api.adoptAnswers ? [selectAll] : []),
+        query,
+      ),
     ),
     report,
     empty,
@@ -317,15 +337,17 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     const fresh = newPer();
     characterChips.replaceChildren(
       chip('全部角色', filter.characterId === null, () => pickFilter({ characterId: null })),
-      ...orderIds.map((id) =>
-        chip(
-          nameOf(id),
-          filter.characterId === id,
-          () => pickFilter({ characterId: id }),
-          fresh.get(id),
-          dot(colourOf()(id), 8),
+      ...orderIds
+        .filter((id) => showOffline || !offlineIds.has(id) || filter.characterId === id)
+        .map((id) =>
+          chip(
+            nameOf(id),
+            filter.characterId === id,
+            () => pickFilter({ characterId: id }),
+            fresh.get(id),
+            dot(colourOf()(id), 8),
+          ),
         ),
-      ),
     );
     statusChips.replaceChildren(
       chip('全部', filter.status === null, () => pickFilter({ status: null })),
@@ -334,6 +356,8 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       ),
     );
     starChip.setAttribute('aria-pressed', String(filter.starred));
+    offlineChip.hidden = offlineIds.size === 0;
+    offlineChip.setAttribute('aria-pressed', String(showOffline));
   };
   const ROW = 3;
   const renderList = () => {
@@ -456,12 +480,20 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
       const roster = consoleOrder(listed, order ?? []);
       names = Object.fromEntries(roster.map((c) => [c.characterId, c.displayName]));
       orderIds = roster.map((c) => c.characterId);
+      offlineIds = new Set(
+        listed
+          .filter((c) =>
+            c.group ? c.group !== 'live' : c.publishedVersion === null || (c as { online?: boolean }).online === false,
+          )
+          .map((c) => c.characterId),
+      );
     } catch {
       /* A reader without character access sees ids instead of names. */
     }
     const result = await deps.api.list(filter, cursor);
     if (gone || deps.disposed()) return;
-    items = cursor ? [...items, ...result.items] : result.items;
+    const shown = result.items.filter(visible);
+    items = cursor ? [...items, ...shown] : shown;
     next = result.next;
     if (!cursor) {
       selected.clear();
@@ -1512,6 +1544,10 @@ export function cocreationInbox(root: HTMLElement, deps: Deps) {
     reload();
   };
   starChip.addEventListener('click', () => pickFilter({ starred: !filter.starred }));
+  offlineChip.addEventListener('click', () => {
+    showOffline = !showOffline;
+    reload();
+  });
   const search = () => {
     filter = { ...filter, query: query.value };
     reload();
