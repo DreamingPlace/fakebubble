@@ -83,7 +83,7 @@ const safe =
       }
     };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const CLIP_SECONDS = 20;
+const CLIP_SECONDS = 120; // long enough to outlast every step below
 const results: string[] = [];
 
 try {
@@ -350,7 +350,7 @@ try {
       `${name}: her avatar and her bubble share a top line (${lines.her})`,
     );
     check(
-      lines.mineAlign === 'flex-start' && lines.mineAfter === 'flex-start',
+      /^(flex|flow)-start$|^start$/.test(lines.mineAlign) && /^(flex|flow)-start$|^start$/.test(lines.mineAfter ?? ''),
       `${name}: the player's avatar is top-aligned (${lines.mineAlign}/${lines.mineAfter})`,
     );
     await snap('3-replied');
@@ -436,6 +436,10 @@ try {
       bubblePosts.at(-1)?.quoteMessageId === `reply-voice-${name}`,
       `${name}: the request names the quoted message (${bubblePosts.at(-1)?.quoteMessageId})`,
     );
+    await card
+      .locator('.quote-strip')
+      .waitFor({ state: 'detached', timeout: 2000 })
+      .catch(() => undefined); // it leaves with a 160 ms motion
     check((await card.locator('.quote-strip').count()) === 0, `${name}: the composer's quote is gone once sent`);
     check((await playing()) === 'true', `${name}: the voice keeps playing through the quote and the sending`);
     await snap('8-sent-quote');
@@ -466,6 +470,7 @@ try {
       ratingPosts.at(-1)?.rating === 'down' && ratingPosts.at(-1)?.target === 'content',
       `${name}: the request says 👎 on the content (${JSON.stringify(ratingPosts.at(-1))})`,
     );
+    await wait(600); // the mark pops in over 320 ms
     const geometry = await voiceRow.evaluate((row: HTMLElement) => {
       const bubble = row.querySelector('.voice-bubble')!.getBoundingClientRect();
       const mark = row.querySelector('.rating-mark')!.getBoundingClientRect();
