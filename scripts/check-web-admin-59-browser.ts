@@ -447,6 +447,7 @@ try {
     check(chip === '已处理 1/10', `共创: the note says 「已处理 1/10」 (${chip})`);
     check((await api('cocreation/detail', { id: 'ten' })).body.status === 'new', '共创: the server keeps it new');
     await shot(page, 'cocreation-1-of-10');
+    if (shots) await rowOf('ten').screenshot({ path: join(shots, 'cocreation-1-of-10-row.png') });
     // another item handled by 标为已处理: 2/10
     await page.locator('article.cc-answer[data-ordinal="1"] .cc-item-done').click();
     await page.waitForTimeout(1500);

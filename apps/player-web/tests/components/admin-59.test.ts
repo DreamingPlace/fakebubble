@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { AccountAdminApi } from '../../src/services/account-admin-api.ts';
 import { adminConnection, isInterrupted } from '../../src/services/admin-connection.ts';
-import { clearAllKeptEdits, editKeeper, hasKeptEdits, overlayEdits } from '../../src/features/admin/ui/edit-keeper.ts';
+import { clearAllKeptEdits, editKeeper, overlayEdits } from '../../src/features/admin/ui/edit-keeper.ts';
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -128,10 +128,10 @@ test('59: kept edits are keyed by page, character, section and revision; the new
   for (const start = Date.now(); Date.now() === start; );
   at(5).put({ n: 2 });
   assert.deepEqual(at(9).find()?.value, { n: 2 });
-  assert.ok(hasKeptEdits());
+  assert.ok(map.size > 0);
   at(9).clear();
   assert.equal(at(3).find(), null, 'a successful save removes every buffer of the character');
-  assert.equal(hasKeptEdits(), false);
+  assert.equal(map.size, 0);
   // a buffer older than 30 days is not offered
   map.set(
     'fb-admin-edits:v1:characters:old::1',
@@ -141,12 +141,12 @@ test('59: kept edits are keyed by page, character, section and revision; the new
 });
 
 test('59: sign-out removes every kept edit; a browser that refuses storage keeps nothing and breaks nothing', () => {
-  storage();
+  const map = storage();
   editKeeper({ page: 'cast', character: 'doc', revision: 1 }).put({ a: 1 });
   editKeeper({ page: 'memes', character: 'library', revision: null }).put({ b: 2 });
-  assert.ok(hasKeptEdits());
+  assert.equal(map.size, 2);
   clearAllKeptEdits();
-  assert.equal(hasKeptEdits(), false);
+  assert.equal(map.size, 0);
   (globalThis as { localStorage?: unknown }).localStorage = {
     getItem: () => {
       throw new Error('blocked');

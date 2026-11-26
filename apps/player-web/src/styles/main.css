@@ -23220,7 +23220,7 @@ body,
 .admin-conn {
   position: fixed;
   z-index: 60;
-  top: 64px;
+  bottom: 84px;
   right: 24px;
   display: flex;
   align-items: center;

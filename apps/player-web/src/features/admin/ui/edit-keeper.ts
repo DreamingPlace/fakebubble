@@ -119,17 +119,6 @@ export function clearAllKeptEdits() {
     /* nothing to remove */
   }
 }
-export const hasKeptEdits = () => {
-  const s = store();
-  if (!s) return false;
-  try {
-    for (let i = 0; i < s.length; i += 1) if (s.key(i)?.startsWith(PREFIX)) return true;
-  } catch {
-    /* none */
-  }
-  return false;
-};
-
 /** A debounced writer: `schedule` after every change, `flush` when the page hides or unloads. */
 export function keepWhileEditing(write: () => void, wait = 300) {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -233,13 +222,13 @@ export function panelKeeper(
     [
       ...panel.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input,textarea,select'),
     ].filter((c) => !['file', 'password', 'button', 'submit', 'hidden'].includes((c as HTMLInputElement).type));
-  const valueOf = (c: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) =>
+  const valueOfControl = (c: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement) =>
     (c as HTMLInputElement).type === 'checkbox' || (c as HTMLInputElement).type === 'radio'
       ? String((c as HTMLInputElement).checked)
       : c.value;
-  let opened = controls().map(valueOf);
+  let opened = controls().map(valueOfControl);
   const keepNow = () => {
-    const now = controls().map(valueOf);
+    const now = controls().map(valueOfControl);
     const changes = now.filter((v, i) => v !== opened[i]).length;
     if (now.length !== opened.length || changes === 0) return keeper.clear();
     keeper.put(now, changes);
@@ -253,7 +242,7 @@ export function panelKeeper(
     /** The panel was saved or given up: what it shows now is the new "unchanged". */
     saved() {
       keeper.clear();
-      opened = controls().map(valueOf);
+      opened = controls().map(valueOfControl);
     },
     /** The line to offer, or null. */
     bar(): HTMLElement | null {
