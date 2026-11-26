@@ -123,6 +123,7 @@ export class LiveBinding {
   }
   /** Characters whose turn this page is following. */
   private readonly watching = new Set<WebProviderCharacterId>();
+  private readonly watches = new Set<Promise<void>>();
   /** The messages this page shows, by id (the long-press menu reads what a bubble is from here). */
   private readonly messageById = new Map<string, WebProviderMessage>();
   /** The player's own 👍 / 👎 on character replies. */
@@ -1429,7 +1430,6 @@ export class LiveBinding {
             ...(quote ? { quoteMessageId: quote.messageId } : {}),
           });
         } catch (error) {
-          // Uncertain receipt: nothing is sent again by this page; the stored bubble shows up with the next history read.
           if (
             error instanceof ProviderApiError &&
             error.status >= 400 &&
@@ -1438,8 +1438,20 @@ export class LiveBinding {
             error.code !== 'PROTOCOL_INVALID'
           )
             throw error;
+          // Uncertain receipt: the SAME request id is sent once more. A bubble is idempotent per request id, so this either finds the
+          // stored one (duplicate) or stores it once; it can never make a second bubble. Still no answer: nothing more is sent.
           uncertain = true;
-          throw new ProviderApiError(0, 'SEND_UNKNOWN');
+          try {
+            receipt = await this.api.sendBubble({
+              requestId,
+              characterId,
+              text,
+              ...(quote ? { quoteMessageId: quote.messageId } : {}),
+            });
+            uncertain = false;
+          } catch {
+            throw new ProviderApiError(0, 'SEND_UNKNOWN');
+          }
         }
         accepted = true;
         // The echo IS the stored bubble now: a later history read skips it.
@@ -1461,7 +1473,9 @@ export class LiveBinding {
         this.attachMenu(characterId, echo, '.text-bubble');
         if (quote) this.clearQuote(characterId, card);
         onAccepted?.();
-        void this.watchTurn(characterId, card);
+        const watch = this.watchTurn(characterId, card);
+        this.watches.add(watch);
+        void watch.finally(() => this.watches.delete(watch));
       } catch (error) {
         if (revision !== this.viewRevision) {
           this.fail(error);
@@ -1486,6 +1500,11 @@ export class LiveBinding {
     })();
     this.sendChain.set(characterId, turn);
     await turn;
+  }
+
+  /** Resolves when no turn is being followed any more (every reply shown or failed). */
+  async settled() {
+    while (this.watches.size) await Promise.all([...this.watches]);
   }
 
   /**
