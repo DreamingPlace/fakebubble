@@ -63,6 +63,14 @@ import {
   type InviteAdminPermission,
 } from '../../../../../packages/contracts/web-admin-permissions.ts';
 import { InviteLocalApiError } from '../../services/invite-local-api.ts';
+import {
+  adminConnection,
+  INTERRUPTED_LINE,
+  INTERRUPTED_LINE_READ,
+  isInterrupted,
+  reauthUrl,
+} from '../../services/admin-connection.ts';
+import { clearAllKeptEdits } from './ui/edit-keeper.ts';
 
 type Port = Pick<
   AccountAdminApi,
@@ -227,6 +235,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       <div class="admin-nav-groups">${navMarkup()}</div>
     </nav>
     <div class="admin-content" tabindex="-1">
+    <section class="admin-conn" id="admin-conn" role="alert" hidden><p id="admin-conn-line"></p>
+      <button type="button" id="admin-conn-open" class="admin-primary">验证 / 重新登录</button></section>
     <section class="admin-access-notice" id="admin-access" role="alert" hidden><p>需要先通过 Cloudflare Access 验证身份。</p>
       <button type="button" id="admin-access-enter">前往验证</button></section>
     <section class="invite-admin-result" id="admin-secret" hidden><span id="admin-secret-label"></span><strong class="invite-admin-code" id="admin-secret-value"></strong>
@@ -299,6 +309,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     window.location.assign('/api/web/provider/admin/enter'),
   );
   const report = (error: unknown) => {
+    // Part 59: an interruption of a console that is signed in is not a failure: the connection line says it (edits are kept).
+    if (isInterrupted(error) && session) {
+      accessNotice.hidden = true;
+      statusLine.textContent = adminConnection.writePending ? INTERRUPTED_LINE : INTERRUPTED_LINE_READ;
+      return;
+    }
     const needsAccess = error instanceof InviteLocalApiError && error.code === 'ACCESS_REQUIRED';
     accessNotice.hidden = !needsAccess;
     statusLine.textContent = needsAccess ? '' : adminAccountError(error);
@@ -604,7 +620,12 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       await work();
     } catch (error) {
       if (disposed) return;
-      if (error instanceof InviteLocalApiError && error.status === 401 && error.code !== 'ADMIN_LOGIN_INVALID') {
+      if (
+        !isInterrupted(error) &&
+        error instanceof InviteLocalApiError &&
+        error.status === 401 &&
+        error.code !== 'ADMIN_LOGIN_INVALID'
+      ) {
         session = null;
         page = 'login';
         clearSecrets();
@@ -660,6 +681,11 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     clearSecrets();
     bindId = null;
     resetId = null;
+    // Part 59: this is the verification / sign-in popup the connection line opened: it did its job, the page that asked carries on.
+    if (window.location.hash === '#/reauth' && window.opener) {
+      window.close();
+      if (window.closed) return;
+    }
     // Reload keeps the place (the address bar); otherwise the first page this administrator may use.
     const wanted = address.read();
     const landing: AdminRoute =
@@ -1142,7 +1168,10 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     unread = {};
   };
   const adoptSession = (current: AccountAdminSession) => {
-    if (session && (session.member.id !== current.member.id || session.csrf !== current.csrf)) {
+    // Part 59: the same administrator signing in again (another tab, a re-verification) only brings a new CSRF token: nothing is reset
+    // (it used to clear the page and send it to 我的账号). A DIFFERENT administrator resets everything, and their kept edits go.
+    if (session && session.member.id !== current.member.id) {
+      clearAllKeptEdits();
       clearSecrets();
       clearManagement();
       bindId = null;
@@ -1268,6 +1297,8 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
     whenLeaveOk(() => {
       void run(async () => {
         clearSecrets();
+        // Part 59: an explicit sign-out removes the edits this browser kept (a session that merely expired keeps them).
+        clearAllKeptEdits();
         await port.logout();
         if (disposed) return;
         session = null;
@@ -1278,23 +1309,41 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
       });
     });
   });
+  /**
+   * Part 59: coming back to the tab (or the window) re-reads the session IN THE BACKGROUND. It used to run as a `run`, which sets
+   * `busy` and disables EVERY control of the page (the 「not-allowed」 cursor) until the answer came; a slow or hung answer (a
+   * Cloudflare challenge, a sleeping connection) froze the page for minutes. Now nothing is disabled, nothing waits for it, the
+   * request has a 15 s deadline, and an interruption only raises the connection line.
+   */
+  let refreshing = false;
   const refresh = () => {
-    if (!session || busy || disposed) return;
-    void run(async () => {
-      const current = await port.restore();
-      if (disposed) return;
-      adoptSession(current);
-      if (current.member.role !== 'owner') {
-        members.clear();
-        if (page === 'members') page = 'account';
-      }
-      // A page whose permission was just taken away is no longer offered; the pages that explain themselves stay.
-      if (isAdminPage(page) && page !== 'invites' && page !== 'characters' && !canSeePage(page, access())) {
-        page = 'account';
-        routeId = null;
-        address.replace({ page, id: null });
-      }
-    });
+    if (!session || disposed || refreshing) return;
+    refreshing = true;
+    void port
+      .restore()
+      .then((current) => {
+        if (disposed) return;
+        const before = JSON.stringify([session?.member.role, session?.member.permissions]);
+        adoptSession(current);
+        if (JSON.stringify([current.member.role, current.member.permissions]) === before) return;
+        if (current.member.role !== 'owner') {
+          members.clear();
+          if (page === 'members') page = 'account';
+        }
+        // A page whose permission was just taken away is no longer offered; the pages that explain themselves stay.
+        if (isAdminPage(page) && page !== 'invites' && page !== 'characters' && !canSeePage(page, access())) {
+          page = 'account';
+          routeId = null;
+          address.replace({ page, id: null });
+        }
+        render();
+      })
+      .catch(() => {
+        /* an interruption raises the connection line; anything else is tried again at the next return */
+      })
+      .finally(() => {
+        refreshing = false;
+      });
   };
   // 总览 and 系统状态 reload by themselves every 60 s while the tab is visible and nothing else is running.
   const tick = setInterval(() => {
@@ -1309,6 +1358,54 @@ export function startAccountAdminPage(root: HTMLElement, port: Port): () => void
   cleanups.push(() => clearInterval(tick));
   window.addEventListener('focus', refresh);
   cleanups.push(() => window.removeEventListener('focus', refresh));
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') refresh();
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  cleanups.push(() => document.removeEventListener('visibilitychange', onVisible));
+  // Part 59: the admin session slides (8 h after the last request, 24 h at most). While the console is in use but quiet (reading,
+  // typing a long text) a request every 10 minutes keeps it alive, so an active owner is never logged out mid-edit.
+  let lastActive = Date.now();
+  const touched = () => {
+    lastActive = Date.now();
+  };
+  for (const type of ['pointerdown', 'keydown', 'scroll'])
+    document.addEventListener(type, touched, { passive: true, capture: true });
+  cleanups.push(() => {
+    for (const type of ['pointerdown', 'keydown', 'scroll']) document.removeEventListener(type, touched, true);
+  });
+  const keepAlive = setInterval(() => {
+    if (session && !disposed && Date.now() - lastActive < 10 * 60_000) refresh();
+  }, 10 * 60_000);
+  (keepAlive as { unref?: () => void }).unref?.();
+  cleanups.push(() => clearInterval(keepAlive));
+  // Part 59: the connection line. While the console cannot reach its API the owner is told once, can verify or sign in again in a
+  // popup (the page itself stays where it is), and every 4 s the session is probed: the moment the API answers, the saves that
+  // were waiting are sent again (see services/admin-connection.ts).
+  const connBox = q<HTMLElement>('#admin-conn');
+  const connLine = q<HTMLElement>('#admin-conn-line');
+  let probe: ReturnType<typeof setInterval> | null = null;
+  const stopProbe = () => {
+    if (probe) clearInterval(probe);
+    probe = null;
+  };
+  const paintConnection = (state: 'ok' | 'interrupted') => {
+    connBox.hidden = state === 'ok' || !session;
+    connLine.textContent = adminConnection.writePending ? INTERRUPTED_LINE : INTERRUPTED_LINE_READ;
+    if (state === 'ok') {
+      stopProbe();
+      if (!disposed && statusLine.textContent === INTERRUPTED_LINE) statusLine.textContent = '';
+    } else if (!probe) {
+      probe = setInterval(refresh, 4000);
+      (probe as { unref?: () => void }).unref?.();
+    }
+  };
+  cleanups.push(adminConnection.on(paintConnection), stopProbe);
+  listen(q('#admin-conn-open'), 'click', () => {
+    const url = reauthUrl(window.location);
+    const popup = window.open(url, 'fb-admin-reauth', 'popup=yes,width=560,height=720');
+    if (!popup) window.open(url, '_blank');
+  });
   q<HTMLElement>('#admin-env').textContent = environmentLabel(window.location?.hostname);
   render();
   void port

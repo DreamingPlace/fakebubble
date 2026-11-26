@@ -23192,3 +23192,49 @@ body,
     animation: none;
   }
 }
+
+/* ---- Part 59: kept edits, the connection line ---- */
+/* 「恢复未保存的修改」: the same amber bar as the conflict bar; it is part of the page's flow only where the editor puts it. */
+.wb-restore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid #d9a441;
+  border-radius: 8px;
+  background: #fdf6e6;
+  font-size: 13px;
+}
+.wb-restore span {
+  flex: 1 1 auto;
+}
+/* The connection line floats over the content (it never pushes the page down, so the scroll position is never moved by it). */
+.admin-conn {
+  position: fixed;
+  z-index: 60;
+  top: 64px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 10px 14px;
+  border: 1px solid #d9a441;
+  border-radius: 8px;
+  background: #fdf6e6;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+}
+.admin-conn[hidden] {
+  display: none;
+}
+.admin-conn p {
+  margin: 0;
+}
+:root[data-theme="dark"] .wb-restore,
+:root[data-theme="dark"] .admin-conn {
+  background: #3a2f17;
+  border-color: #8a6a22;
+}
