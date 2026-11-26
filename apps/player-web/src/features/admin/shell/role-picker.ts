@@ -85,22 +85,7 @@ export function rolePicker(
     const hidden = all.filter((role) => groupOf(role) !== 'live' && role.characterId !== selected);
     const roles_ = showOffline ? all : all.filter((role) => !hidden.includes(role));
     if (!all.length) host.append(h('p', { class: 'admin-empty', text: options.emptyText }));
-    if (all.some((role) => groupOf(role) !== 'live')) {
-      const toggle = h('button', {
-        class: 'admin-pick-toggle',
-        text: '显示未上线',
-        attrs: {
-          type: 'button',
-          'aria-pressed': String(showOffline),
-          title: `未上线或已下线的角色（${all.filter((role) => groupOf(role) !== 'live').length} 个）：开着就列出来，准备上线要用`,
-        },
-      });
-      toggle.addEventListener('click', () => {
-        showOffline = !showOffline;
-        paint();
-      });
-      host.append(toggle);
-    }
+    const offlineCount = all.filter((role) => groupOf(role) !== 'live').length;
     // Part 24l: one block per non-empty group, each with a small heading and its count. The order inside a group is this admin's.
     const lists = new Map<SidebarGroup, HTMLElement>();
     if (options.compact || options.onReorder)
@@ -233,6 +218,28 @@ export function rolePicker(
       });
       out(role, h('div', { class: 'admin-pick-row' }, row, badge));
     });
+    if (offlineCount > 0) {
+      // Part 59: at the foot of the list; on the narrow rail it reads 「未上线」, in the expanded one 「显示未上线」.
+      const toggle = h(
+        'button',
+        {
+          class: 'admin-pick-toggle',
+          attrs: {
+            type: 'button',
+            'aria-pressed': String(showOffline),
+            'aria-label': '显示未上线',
+            title: `显示未上线：未上线或已下线的角色（${offlineCount} 个）。开着就列出来，准备上线要用`,
+          },
+        },
+        h('span', { class: 'short', text: showOffline ? '收起' : '未上线' }),
+        h('span', { class: 'full', text: '显示未上线' }),
+      );
+      toggle.addEventListener('click', () => {
+        showOffline = !showOffline;
+        paint();
+      });
+      host.append(toggle);
+    }
     // the rail scrolls inside itself: the open character is in view after every paint
     keepOpenInView();
     const reorder = options.onReorder;

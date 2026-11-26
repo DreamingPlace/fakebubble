@@ -6,11 +6,15 @@
  *
  * One observer for the whole console fixes every place at once: it remembers where the owner scrolled each box to (a scroll that
  * comes right after a change of the page is the browser's own clamp, not the owner), and after every burst of changes puts a box
- * back where it was, as far as the new contents reach. A box is forgotten 3 s after the last change (the owner's position is then
+ * back where it was, as far as the new contents reach. A box's remembered position is settled 1.2 s after the last change (the owner's position is then
  * whatever it is). Going to another page (`reset`) starts again at the top.
  */
 export function keepScroll(root: HTMLElement) {
   const want = new Map<HTMLElement, number>();
+  // The page itself is the main scroller of the console (the document, not a box inside it): its scroll events do not pass through
+  // `root`, so it is watched on its own.
+  const pageBox = () => (root.ownerDocument.scrollingElement ?? root.ownerDocument.documentElement) as HTMLElement;
+  const win = root.ownerDocument.defaultView;
   let quietUntil = 0;
   let frame = 0;
   let settle: ReturnType<typeof setTimeout> | null = null;
@@ -23,10 +27,16 @@ export function keepScroll(root: HTMLElement) {
     if (box.scrollTop > 0) want.set(box, box.scrollTop);
     else want.delete(box);
   };
+  const onPageScroll = () => {
+    if (now() < quietUntil) return;
+    const box = pageBox();
+    if (box.scrollTop > 0) want.set(box, box.scrollTop);
+    else want.delete(box);
+  };
   const restore = () => {
     frame = 0;
     for (const [box, top] of [...want]) {
-      if (!box.isConnected) {
+      if (!box.isConnected && box !== pageBox()) {
         want.delete(box);
         continue;
       }
@@ -41,23 +51,26 @@ export function keepScroll(root: HTMLElement) {
     // Long after the last change the position is simply where it is: a later, shorter page is not "restored" into.
     settle = setTimeout(() => {
       for (const box of [...want.keys()]) {
-        if (!box.isConnected || box.scrollTop === 0) want.delete(box);
+        if ((!box.isConnected && box !== pageBox()) || box.scrollTop === 0) want.delete(box);
         else want.set(box, box.scrollTop);
       }
-    }, 3000);
+    }, 1200);
     (settle as { unref?: () => void }).unref?.();
   });
   root.addEventListener('scroll', onScroll, true);
+  win?.addEventListener('scroll', onPageScroll, { passive: true });
   observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden'] });
   return {
     /** Another page was opened on purpose: every box starts at the top. */
     reset() {
       want.clear();
       for (const box of root.querySelectorAll<HTMLElement>('.admin-content')) box.scrollTop = 0;
+      pageBox().scrollTop = 0;
     },
     stop() {
       observer.disconnect();
       root.removeEventListener('scroll', onScroll, true);
+      win?.removeEventListener('scroll', onPageScroll);
       if (frame) cancelAnimationFrame(frame);
       if (settle) clearTimeout(settle);
       want.clear();

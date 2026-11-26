@@ -23243,7 +23243,7 @@ body,
 .admin-pick-toggle {
   display: block;
   width: 100%;
-  margin: 0 0 6px;
+  margin: 8px 0 6px;
   padding: 4px 6px;
   border: 1px dashed var(--ad-border, #d7d3c9);
   border-radius: 6px;
@@ -23257,6 +23257,17 @@ body,
 .admin-pick-toggle[aria-pressed="true"] {
   border-style: solid;
   background: var(--ad-warn-soft, #fdf3dc);
+}
+.admin-pick-toggle .full {
+  display: none;
+}
+.wb-roster:hover .admin-pick-toggle .short,
+.wb-roster:focus-within .admin-pick-toggle .short {
+  display: none;
+}
+.wb-roster:hover .admin-pick-toggle .full,
+.wb-roster:focus-within .admin-pick-toggle .full {
+  display: inline;
 }
 
 /* ---- Part 59: the one 「版本」 control of 关系与故事 (a popover over the page, never a bar above it) ---- */
