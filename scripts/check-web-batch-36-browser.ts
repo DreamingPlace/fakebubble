@@ -70,6 +70,18 @@ const configs = [
   ['ios', IOS, true, true],
   ['desktop', DESKTOP, false, false],
 ] as const;
+/** A route handler that outlives its page (the context closes while a poll is in flight) must not end the run. */
+const safe =
+  // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+    (handler: (route: any) => Promise<unknown>) =>
+    // biome-ignore lint/suspicious/noExplicitAny: untyped optional tool
+    async (route: any) => {
+      try {
+        await handler(route);
+      } catch {
+        /* the page is gone */
+      }
+    };
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const CLIP_SECONDS = 20;
 const results: string[] = [];
@@ -111,23 +123,26 @@ try {
       }
     });
     // the operation the turn made never finishes in this fixture: it is answered here once she has "replied" for a moment
-    await page.route('**/api/web/provider/operations/*', async (route: any) => {
-      const id = decodeURIComponent(route.request().url().split('/').pop()!);
-      if (id.includes('by-request')) return route.fallback();
-      const real = await route.fetch();
-      const body = await real.json();
-      operationReads.add(id);
-      realOperation = id;
-      if (!replyFromMs) replyFromMs = Date.now();
-      const done = Date.now() - replyFromMs > 1500;
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(
-          done ? { ...body, status: 'published', canCancel: false, publication: null, errorCode: null } : body,
-        ),
-      });
-    });
+    await page.route(
+      '**/api/web/provider/operations/*',
+      safe(async (route: any) => {
+        const id = decodeURIComponent(route.request().url().split('/').pop()!);
+        if (id.includes('by-request')) return route.fallback();
+        const real = await route.fetch();
+        const body = await real.json();
+        operationReads.add(id);
+        realOperation = id;
+        if (!replyFromMs) replyFromMs = Date.now();
+        const done = Date.now() - replyFromMs > 1500;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(
+            done ? { ...body, status: 'published', canCancel: false, publication: null, errorCode: null } : body,
+          ),
+        });
+      }),
+    );
     const replies = () => {
       const base = {
         conversationId,
@@ -162,17 +177,20 @@ try {
       ];
     };
     const ratingsState = new Map<string, unknown>();
-    await page.route('**/api/web/provider/conversations/*/history*', async (route: any) => {
-      const real = await route.fetch();
-      const body = await real.json();
-      if (realOperation && Date.now() - replyFromMs > 1500)
-        body.messages.push(
-          ...replies().map((m) =>
-            ratingsState.has(m.messageId) ? { ...m, rating: ratingsState.get(m.messageId) } : m,
-          ),
-        );
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-    });
+    await page.route(
+      '**/api/web/provider/conversations/*/history*',
+      safe(async (route: any) => {
+        const real = await route.fetch();
+        const body = await real.json();
+        if (realOperation && Date.now() - replyFromMs > 1500)
+          body.messages.push(
+            ...replies().map((m) =>
+              ratingsState.has(m.messageId) ? { ...m, rating: ratingsState.get(m.messageId) } : m,
+            ),
+          );
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+      }),
+    );
     await page.route('**/api/web/provider/conversations/*/messages/*/audio/*', (route: any) =>
       route.fulfill({ status: 200, contentType: 'audio/wav', body: tone(CLIP_SECONDS) }),
     );
