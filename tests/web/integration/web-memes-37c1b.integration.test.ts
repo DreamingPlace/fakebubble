@@ -20,6 +20,7 @@ import { freezeInputSnapshot } from '../../../apps/server/generation/web-input-s
 import { freezeWebV7Request, readWebV7Request } from '../../../apps/server/generation/web-v7-request.ts';
 import { migrateWebProviderCast } from '../../../apps/server/generation/web-provider-migration.ts';
 import { installWriterSetting, writeWriter } from '../../../apps/server/generation/web-writer-setting.ts';
+import { WRITER_PROFILE_SHA256, writerProfileHash } from '../../../apps/server/generation/writer-profile.ts';
 import { WRITER_MEMES_SHA256, writerMemesHash } from '../../../apps/server/generation/writer-memes.ts';
 import { writerPins } from '../../../apps/server/generation/writer-v8.ts';
 import { MEME_ENTRIES } from '../../../apps/server/memes/meme-dictionary.ts';
@@ -109,7 +110,6 @@ function fixture(t: TestContext) {
   };
 }
 type F = ReturnType<typeof fixture>;
-const sha = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const csv = (rows: string[][]) => `词,释义,分类\r\n${rows.map((r) => r.join(',')).join('\r\n')}\r\n`;
 
 // ---- 1. the re-curation -------------------------------------------------------------------------------------------------------------
@@ -1002,22 +1002,24 @@ test('export: category, source, on/off and deleted columns; uploading the export
 
 // ---- 9. the pins -----------------------------------------------------------------------------------------------------------------------------
 
-test('the pins: 旧, 新 and 新+档案 are what they were on main; 新+档案+梗 is unchanged too (the matcher and the words did not move)', () => {
-  assert.deepEqual(writerPins(), {
-    protocolDigest: 'ce52de214ead5c3e3024a76fd1d321a4e7153dc8cdad3c062571885b5a1587f2',
-    promptDigest: '4186fe6b18b75e9af1d26c57d47b32776a601e73ba6d2dfd75122559ba78b6bb',
-  });
+test("the pins: 旧, 新, 新+档案 and 新+档案+梗 are exactly main's (Part 58 included); this Part moves none of them", () => {
+  // 新 as main pins it after Part 58; the two combined pins are COMPUTED from the pinned parts (profile and memes words), never copied.
+  const PROTOCOL = '3b5c190d0233d0eeb208cb26d593a4f1fd0f15ad16a8a58d384643a4e93d9f03';
+  const NEW_PROMPT = '6cb2cf4724c335db073cf156eeacddfbfcce0fa5622e46e44a2cd6eb6cf1b20f';
+  const combined = (parts: string[]) => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
+  assert.deepEqual(writerPins(), { protocolDigest: PROTOCOL, promptDigest: NEW_PROMPT });
   assert.deepEqual(writerPins(true), {
-    protocolDigest: 'ce52de214ead5c3e3024a76fd1d321a4e7153dc8cdad3c062571885b5a1587f2',
-    promptDigest: 'e8a4e2cbde9166952ed383e4774d015b9fba7add997107967e46553808b13d01',
+    protocolDigest: PROTOCOL,
+    promptDigest: combined([NEW_PROMPT, WRITER_PROFILE_SHA256]),
   });
   assert.deepEqual(writerPins(true, true), {
-    protocolDigest: 'ce52de214ead5c3e3024a76fd1d321a4e7153dc8cdad3c062571885b5a1587f2',
-    promptDigest: '7d90ab32d46991dbf95d47a6343b1175752be391955506129699f635e2d076ce',
+    protocolDigest: PROTOCOL,
+    promptDigest: combined([NEW_PROMPT, WRITER_PROFILE_SHA256, WRITER_MEMES_SHA256]),
   });
+  // the meme words and the profile words are pinned files of their own, and the matcher did not move them
   assert.equal(WRITER_MEMES_SHA256, 'a43554c584cadef62dc5b9ed1041268d1f0505f6cfff59d635502e3c35c6a485');
   assert.equal(writerMemesHash(), WRITER_MEMES_SHA256);
-  void sha;
+  assert.equal(writerProfileHash(), WRITER_PROFILE_SHA256);
 });
 
 void ({} as F);
