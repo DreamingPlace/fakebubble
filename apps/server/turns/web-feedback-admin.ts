@@ -145,6 +145,9 @@ export class WebFeedbackAdmin {
 
   private items(filters: FeedbackFilters, before: number | undefined, limit: number): { items: FeedbackItem[]; hasMore: boolean } {
     const where = this.where(filters, true);
+    const cursor = before
+      ? this.store.get<{ updated_at: number }>('SELECT updated_at FROM web_feedback WHERE rowid=?', before)
+      : undefined;
     const rows = this.store.all<{
       id: number;
       principal_id: string;
@@ -160,9 +163,11 @@ export class WebFeedbackAdmin {
       heard_at: number | null;
     }>(
       `SELECT rowid id,principal_id,world_id,message_id,conversation_id,character_id,operation_id,target,writer,model,updated_at,heard_at
-      FROM web_feedback WHERE ${where.sql}${before ? ' AND rowid<?' : ''} ORDER BY rowid DESC LIMIT ?`,
+      FROM web_feedback WHERE ${where.sql}${
+        cursor ? ' AND (updated_at<? OR (updated_at=? AND rowid<?))' : ''
+      } ORDER BY updated_at DESC,rowid DESC LIMIT ?`,
       ...where.args,
-      ...(before ? [before] : []),
+      ...(cursor ? [cursor.updated_at, cursor.updated_at, before!] : []),
       limit + 1,
     );
     const now = this.clock.now();

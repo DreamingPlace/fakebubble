@@ -78,6 +78,24 @@ export function attachLongPress(target: HTMLElement, open: () => void) {
   });
 }
 
+/**
+ * A copy of a row. A `style` attribute that is COPIED is parsed as markup, which the page's content security policy refuses (WebKit
+ * says so in the console and drops the style): so the attribute is taken off the copy and its declarations are set through the style
+ * object instead, which is allowed.
+ */
+function cloneKeepingStyles(row: HTMLElement): HTMLElement {
+  const copy = row.cloneNode(true) as HTMLElement;
+  const from = [row, ...row.querySelectorAll<HTMLElement>('*')];
+  const to = [copy, ...copy.querySelectorAll<HTMLElement>('*')];
+  from.forEach((source, index) => {
+    const target = to[index];
+    if (!target || !target.hasAttribute('style')) return;
+    target.removeAttribute('style');
+    target.style.cssText = source.style.cssText;
+  });
+  return copy;
+}
+
 let closeCurrent: (() => void) | null = null;
 export const closeMessageMenu = () => closeCurrent?.();
 
@@ -107,7 +125,7 @@ export function openMessageMenu(row: HTMLElement, bubbleSelector: string, initia
   const holder = document.createElement('div');
   holder.className = 'msg-lift-card';
   copyContext(slot, holder);
-  const lifted = row.cloneNode(true) as HTMLElement;
+  const lifted = cloneKeepingStyles(row);
   lifted.classList.add('msg-lift');
   lifted.setAttribute('aria-hidden', 'true');
   lifted.removeAttribute('data-message-id');
